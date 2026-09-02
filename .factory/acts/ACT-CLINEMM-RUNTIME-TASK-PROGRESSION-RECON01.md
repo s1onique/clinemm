@@ -797,3 +797,115 @@ the causal chain.
 - NO touching the protected `stash@{0}` (C2 GREEN from the prior ACT)
 - DO add the canonical ACT ID in the epic detail file's ACT ledger once,
   then stop. Do NOT reopen, rewrite, or expand the epic.
+
+---
+
+## 6. Q1–Q5 bounded authority recon (2026-09-02, in response to
+# Factory reviewer PASS_WITH_ONE_P1_FIX / C1: GO_ARCHITECTURE_RECON)
+
+Entry state at this recon turn:
+
+```text
+ENTRY_HEAD  = 5b97330fa
+SUBJECT_HEAD = 5b97330fa
+HEAD_FREEZE_BEFORE_Q1_Q5 = 5b97330fa
+branch     = main
+working tree = clean
+git diff --check = pass
+```
+
+The single bounded Q1–Q5 recon product is:
+
+```text
+.factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01/background-job-authority-topology.md
+```
+
+Per the prompt's §13 ("Do not create five evidence essays for
+five questions. Prefer one compact table-rich artifact"), this
+file IS the Q1–Q5 evidence. The ACT body below mirrors its
+disposition.
+
+### §15 final report
+
+```text
+ACT = ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
+ENTRY_HEAD = 5b97330fa
+SUBJECT_HEAD = 5b97330fa
+CLOSURE_HEAD = (this commit; HEAD not advanced beyond 5b97330fa
+                for the Q1–Q5 read-only recon; PRODUCTION_DELTA = 0)
+
+Q1_COMMAND_JOB_MANAGER_CARDINALITY = CONTROLLER_SCOPED
+Q1_IMPLICIT_OWNERSHIP               = PROVEN_FALSE for task/session
+                                       (OBJECT_LIFETIME_TOO_BROAD_FOR_TASK_OWNERSHIP = PROVEN)
+
+Q2_IDENTITY_GRAPH = NO jobId↔sessionId/taskId/epoch edges
+Q2_backgroundCommandTaskId_ACTUAL_VALUE = jobId (despite name;
+  frozen as MISLEADING_NAME / STRUCTURAL FACT; DO NOT_RENAME_IN_THIS_ACT)
+
+Q3_TASK_SWITCH = Q3_CASE_C (identity missing; no per-task teardown
+                            of the controller-scoped manager exists)
+Q3_JOB_SURVIVES = YES (by construction; same manager instance
+                      reused for every task/session switch)
+Q3_PROJECTION_SURVIVES = controller-wide fields survive; only user-cancel
+                         or natural terminal completion flips the boolean
+
+Q4_LOWEST_COMPOSITION_SEAM = SdkController (has both authority inputs
+                                            individually but lacks jobId↔owner
+                                            edge; coordinator has zero signal)
+Q4_OWNER_IDENTITY_AVAILABLE = NO
+
+Q5_RED = NOT_AUTHORED (per §14.B; AUTHORITY_IDENTITY_MISSING = PROVEN
+                       means a NEW CONTRACT SLOT is required first, which
+                       §10 forbids until a true Q5 RED; §6 forbids the
+                       dependency injection Q5 would need)
+Q5_CONTROL_NO_JOB = n/a
+Q5_CONTROL_COMPLETED_JOB = n/a
+Q5_CONTROL_OTHER_OWNER = n/a
+
+CASE = STRONG_CANDIDATE / NOT ADJUDICATED  (unchanged from ACAS01)
+
+ROOT_CAUSE_ISOLATED = NO  (cannot be isolated without a contract change)
+REPAIR_AUTHORIZED = NO  (per §10 stop rule + §6 dependency-injection ban)
+
+IF_REPAIRED:
+  REPAIR = n/a (Q5 not authored; no repair authorized)
+  NECESSITY_ABLATION = n/a
+  CONSERVATION = n/a
+
+ACAS01  = preserved-as-calibrated-evidence (4/4 PASS at b072d9807)
+TYPECHECK = clean
+git_diff_check = pass
+
+PRODUCTION_DELTA = 0
+
+NEXT =
+  §14 stop state: AUTHORITY_IDENTITY_MISSING = PROVEN.
+
+  Recommended: a small narrow contract ACT authorized in a future
+  review round that ADDS exactly one optional carrier slot to
+  SdkSessionEventCoordinatorOptions (or sibling carrier):
+    { jobRunning: boolean,
+      ownerSessionId?: string,
+      ownerTaskId?: string }
+  With that contract slot in place, re-run Q5 inside this same
+  umbrella ACT (no new parent ACT) to formulate the real RED
+  with ablations + controls.
+
+  The rename of `backgroundCommandTaskId` (which currently stores
+  jobId) is a Cline-wide API surface decision and should be a
+  SEPARATE contract ACT, frozen here as MISLEADING_NAME / STRUCTURAL FACT.
+
+  AFTER this ACT reaches its terminal disposition (currently
+  AUTHORITY_IDENTITY_MISSING_RECOMMENDS_CONTRACT_ACT), the next
+  lane is:
+    ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
+    (no intervening Factory ceremony unless a new P0 appears).
+```
+
+### Decisive final wording (per §15 stop rule)
+
+```text
+AUTHORITY_IDENTITY_MISSING
+  (with the ACT-RECOMMENDED-NEXT = narrow contract ACT authorized in
+   a future review round; not gated on a new review pass first)
+```
