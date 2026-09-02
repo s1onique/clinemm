@@ -76,25 +76,70 @@ PRIMARY_QUESTION    = does the bar promise "last
                      264.3k is NOT automatically the
                      correct bar value.
 
-RECON_VERDICT       = PASS_WITH_ONE_P1_FIX
-                     (Factory causal reviewer; the prior
-                     verdict HALT_NO_INTENT_FROZEN
-                     overreached)
-                     HEADER_BAR_INTENT  = CURRENT
-                                          CONTEXT-WINDOW
-                                          UTILIZATION
-                                          (frozen via
-                                          ClineMM UI labels
-                                          + upstream
-                                          CHANGELOG entry
-                                          + upstream user
-                                          issue #10637)
-                     C2                  = SELECTED
-                     HALT_NO_INTENT_FROZEN = REJECT
-                     Q4: W_AUTHORITY     = ABSENT AT
+RECON_VERDICT       = RECON_PASS
+                     (Factory causal reviewer, second
+                     pass; the commit `e71ca399b`
+                     disposition PASS_WITH_ONE_P1_FIX
+                     selected C2 from source evidence
+                     alone and that was over-aggressive
+                     — source evidence leaves C1/C2/C3
+                     EQUALLY PLAUSIBLE)
+                     DISPOSITION_v2    = HALT_INTENT_NOT_PROVEN
+                                          reverted to
+                                          PRODUCT_DECISION = C2
+                                          → GO_W_AUTHORITY
+                     HEADER_BAR_INTENT  = AMBIGUOUS
+                                          (corrected this
+                                          turn; the strongest
+                                          literal
+                                          'Current tokens
+                                          used in this
+                                          request' is
+                                          compatible with
+                                          both C1 and C2)
+                     UI_PURPOSE         = context-window
+                                          utilization
+                                          guidance / PROVEN
+                     CURRENT_IMPLEMENTATION =
+                                          P-space last
+                                          request input /
+                                          PROVEN
+                     C1_INTENT          = PLAUSIBLE
+                     C2_INTENT          = PLAUSIBLE
+                     C3_INTENT          = PLAUSIBLE
+                     C2_SELECTED        = NO
+                                          (source intent
+                                          not proven)
+                     C2_SOURCE_INTENT   = NOT PROVEN
+                     HEADER_BAR_NEXT_REQUEST_SEMANTIC =
+                                          NOT PROVEN
+                     W_AUTHORITY        = ABSENT AT
                                           CURRENT WEBVIEW WIRE
-                     H_a ≡ W_e           = NOT PROVEN /
+                                          / PROVEN
+                     H_a ≡ W_e          = NOT PROVEN /
                                           PRESERVE
+                     PRODUCT_DECISION   = C2
+                                          (product
+                                          recommendation
+                                          by Factory
+                                          causal reviewer,
+                                          NOT a source-intent
+                                          claim; rationale:
+                                          a capacity gauge
+                                          that remains at
+                                          364.9k after a
+                                          compaction that
+                                          has demonstrably
+                                          reduced the
+                                          canonical working
+                                          set is
+                                          operationally
+                                          misleading)
+                     W_PRODUCER_ACT     = AUTHORIZED
+                                          (now that
+                                          PRODUCT_DECISION
+                                          = C2)
+                     NO_NEW_RECON       = YES
                      Existing `compaction` say message
                      ALREADY mechanically distinguishes
                      H from P; a `kind` discriminator is
@@ -129,9 +174,9 @@ RECON_VERDICT       = PASS_WITH_ONE_P1_FIX
                      WIRE_LOCATION     = UNDECIDED (chose
                                           after Phase 1
                                           producer recon)
-                     PRODUCTION_REPAIR = AUTHORIZED only
-                                          after producer
-                                          seam is bound
+                     PRODUCTION_REPAIR = AUTHORIZED
+                                          (PRODUCT_DECISION
+                                          = C2 is the gate)
                      NEW_REVIEW_ROUND  = NO
                      C1: GO_W_AUTHORITY
 

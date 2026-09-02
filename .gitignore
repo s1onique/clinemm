@@ -920,6 +920,28 @@ apps/vscode/.factory/evidence/
 # ACT MUST cite it. Production delta: zero (recon-only).
 !/.factory/acts/ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01/
+# 2026-09-02: ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
+# Factory causal reviewer (second pass on commit e71ca399b): HALT_INTENT_
+# NOT_PROVEN reverted to PRODUCT_DECISION=C2 → GO_W_AUTHORITY. The prior
+# disposition that selected C2 from source evidence alone was over-
+# aggressive (source evidence leaves C1/C2/C3 EQUALLY PLAUSIBLE; ClineMM
+# literal `Current tokens used in this request` is compatible with both
+# C1 and C2; upstream #9433 confirms provider-observed request usage is
+# the historical primary authority, NOT a W-space contract). This ACT is
+# therefore authorized by an explicit PRODUCT_DECISION = C2 made by
+# Factory (not by source intent). It binds the producer seam (system
+# prompt + canonical post-compaction messages + tools + request overhead),
+# computes W from that exact next-request shape, publishes W to the
+# context-window header. WIRE_LOCATION = UNDECIDED (chosen after Phase 1
+# producer recon). Conservation: P (364.9k) unchanged; H values
+# (264.3k / 364.9k) unchanged; Strategy-D consumer untouched; H_a ≡ W_e
+# NOT claimed. NO_NEW_RECON = YES (the reviewer forbids another recon).
+# The ACT file AND the evidence directory must be durably tracked for
+# the canonical link to survive a fresh clone, mirroring the prior
+# HEADER-BAR-FRESHNESS-RECON01 durability pattern. Production delta: zero
+# this commit (ACT opening only; Phase 1 + RED + GREEN happen later).
+!/.factory/acts/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01.md
+!/.factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01/
 # 2026-09-02: ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01
 # LIVE specimen taskId 1788292664979_9qbpd, epoch 16: authoritative
 # TurnState streaming + persistent taskHeaderPhase=idle +

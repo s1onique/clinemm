@@ -1,0 +1,149 @@
+ENTRY_HEAD         = <this commit>
+SUBJECT_HEAD        = <this commit>
+WORKTREE            = <this commit, see ACT_DISPOSITION below>
+PRODUCTION_DELTA    = ZERO (this commit is ACT opening only;
+                     Phase 1 producer recon + RED authoring
+                     happen in subsequent commits)
+PURPOSE             = BOUNDED_PRODUCTION_ENGINEERING
+                     (bind producer seam, compute W from
+                     exact next-request shape, publish W
+                     to context-window header)
+
+ACT_DISPOSITION     = OPEN / W_PRODUCER_ACT_AUTHORIZED
+                     / PRODUCT_DECISION_FROZEN /
+                     RECON_PRECEDOR_CLOSED /
+                     NO_NEW_RECON_OPENED
+                     (Factory causal reviewer, second pass
+                     on commit e71ca399b: HALT_INTENT_NOT_
+                     PROVEN reverted to PRODUCT_DECISION=C2
+                     → GO_W_AUTHORITY; the prior disposition
+                     that selected C2 from source evidence
+                     alone was over-aggressive — source
+                     evidence leaves C1/C2/C3 EQUALLY
+                     PLAUSIBLE)
+
+REVIEWER_DISPOSITION
+                   = HALT_INTENT_NOT_PROVEN reverted to
+                     PRODUCT_DECISION=C2 → GO_W_AUTHORITY
+                     (factory causal reviewer, second pass)
+                     NO_NEW_RECON = YES (do not open
+                     another Factory recon; the PRODUCT_
+                     DECISION is made; next move is
+                     engineering)
+
+DEFECT_A            = CLOSED at cb5b52239 (Strategy-D;
+                     consumer-side reconciliation;
+                     getApiMetrics.ts:174-225)
+DEFECT_B            = CLOSED at HEAD (trailing
+                     postStateToWebview at
+                     sdk-compaction-coordinator.ts:380)
+DEFECT_C            = LIVE / consumer-level behaviour
+                     reproduced; full UI production-seam
+                     RED = NOT YET (this ACT's first
+                     task after Phase 1)
+
+UI_PURPOSE          = context-window utilization guidance /
+                     PROVEN
+CURRENT_IMPLEMENTATION
+                   = P-space last request input / PROVEN
+C1_INTENT           = PLAUSIBLE
+C2_INTENT           = PLAUSIBLE
+C3_INTENT           = PLAUSIBLE
+C2_SELECTED         = NO (source intent not proven)
+C2_SOURCE_INTENT    = NOT PROVEN
+HEADER_BAR_INTENT   = AMBIGUOUS
+HEADER_BAR_NEXT_REQUEST_SEMANTIC
+                   = NOT PROVEN
+W_AUTHORITY         = ABSENT AT CURRENT WEBVIEW WIRE /
+                     PROVEN
+H_a ≡ W_e           = NOT PROVEN / PRESERVE
+PRODUCT_DECISION    = C2 (product recommendation by
+                     Factory causal reviewer; rationale:
+                     a capacity gauge that remains at
+                     364.9k after a compaction that has
+                     demonstrably reduced the canonical
+                     working set is operationally
+                     misleading)
+W_PRODUCER_ACT      = AUTHORIZED (gate:
+                     PRODUCT_DECISION = C2)
+NO_NEW_RECON        = YES
+
+WIRE_LOCATION       = UNDECIDED (Phase 1 producer recon
+                     binds it; do NOT preselect)
+WIRE_LOCATION_CANDIDATES
+                   = compaction.payload.workingContextEstimate
+                     / top-level projected
+                     state.currentWorkingContextEstimate /
+                     existing task/header projection /
+                     producer-side calculation feeding a
+                     dedicated presentation field
+PHASE_1_GOAL        = find the lowest production seam
+                     that holds system prompt + canonical
+                     post-compaction messages + tools +
+                     request overhead; prove W can be
+                     computed from THAT exact post-
+                     compaction request shape (NOT from
+                     tokensAfter); choose WIRE_LOCATION
+RED_SHAPE           = Given successful compaction and
+                     no subsequent api_req_started,
+                     currentWorkingContextEstimate MUST
+                     be available to TaskHeader
+                     immediately as a finite authoritative
+                     W estimate
+GREEN_SHAPE         = header = W_before before
+                     compaction; header = W_after after
+                     compaction; header already reflects
+                     W_after before next provider request;
+                     invariant header == authoritative W
+                     (NOT header == H_a)
+
+CONSERVATION        = lastProviderRequestInput P remains
+                     364.9k; compaction H values remain
+                     untouched; cumulative usage unchanged;
+                     provider billing metrics unchanged;
+                     H_a ≡ W_e NOT claimed by arithmetic
+                     coincidence; Strategy-D consumer
+                     (getApiMetrics.ts:174-225) untouched
+
+H_a_TO_W_e_EQUIVALENCE
+                   = UNBOUND (the recon did NOT prove it)
+NEW_WIRE_KIND       = UNBOUND (existing `compaction`
+                     message type already mechanically
+                     distinguishes H from P; no new
+                     discriminator needed at divider level)
+FULL_UI_DOM_RENDER  = OPTIONAL (chain is a pure function;
+                     ContextWindow.test.tsx is the existing
+                     extracted-projection oracle at HEAD)
+
+I6_INVARIANT        = H_a ≡ W_e FORBIDDEN
+                     (compactor H-space ratio forbidden
+                     to transfer to provider/request-input
+                     P/W-space accounting; see
+                     ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-
+                     CONSUMER-REPAIR01)
+
+OUT_OF_SCOPE        = C1 / C3 contract variants
+                     (PRODUCT_DECISION = C2 is the gate);
+                     any new wire `kind` discriminator;
+                     full UI DOM render harness;
+                     HALT_INTENT_NOT_PROVEN /
+                     C2_SOURCE_INTENT_NOT_PROVEN
+                     (already adjudicated by upstream recon)
+
+UPSTREAM_RECON      = ACT-CLINEMM-COMPACTION-HEADER-BAR-
+                     FRESHNESS-RECON01 (RECON_PASS /
+                     DISPOSITION HALT_INTENT_NOT_PROVEN
+                     → PRODUCT_DECISION=C2)
+PREDECESSOR_ACT     = ACT-CLINEMM-COMPACTION-PRESENTATION-
+                     FRESHNESS-EMPIRICAL01 (EMPIRICAL_REPORT
+                     = PASS)
+RELATED_RECON       = ACT-CLINEMM-COMPACTION-TOKEN-
+                     ACCOUNTING-TRUTH-RECON01 (closed
+                     recon; I1-I7 invariants) and
+                     ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-
+                     CONSUMER-REPAIR01 (DEFECT A CLOSED at
+                     cb5b52239)
+
+OWNING_EPIC         = EPIC-CONTEXT-COMPACTION-TOKEN-
+                     ACCOUNTING (see .factory/epics/
+                     context-compaction-token-accounting.md)

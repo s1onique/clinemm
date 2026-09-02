@@ -267,3 +267,50 @@ questions, decisive matrix, P1 calibration, downstream
 repair ladder, and acceptance criteria. EVIDENCE:
 `.factory/evidence/ACT-CLINEMM-COMPACTION-HEADER-BAR-
 FRESHNESS-RECON01/entry-freeze.txt`.
+
+
+## Current frontier update — 2026-09-02 21:00:00Z
+
+**`ACT-CLINEMM-COMPACTION-HEADER-BAR-FRESHNESS-RECON01` is now
+CLOSED** with disposition RECON_PASS + DISPOSITION_v2
+HALT_INTENT_NOT_PROVEN reverted to PRODUCT_DECISION=C2 →
+GO_W_AUTHORITY (factory causal reviewer, second pass on
+commit e71ca399b).
+
+**`ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01`
+is the new current frontier.** It is authorized by an
+explicit PRODUCT_DECISION = C2 (made by Factory this turn,
+NOT a source-intent claim), binds the producer seam
+(system prompt + canonical post-compaction messages + tools
++ request overhead), computes W from that exact next-request
+shape, and publishes W to the context-window header.
+
+Caveats carried into the new ACT:
+
+- HEADER_BAR_INTENT = AMBIGUOUS (source evidence alone
+  leaves C1/C2/C3 EQUALLY PLAUSIBLE)
+- W_PRODUCER_ACT = AUTHORIZED (gate: PRODUCT_DECISION = C2)
+- WIRE_LOCATION = UNDECIDED (Phase 1 producer recon binds
+  it; do NOT preselect)
+- H_a ≡ W_e NOT claimed (I6 invariant from
+  ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01
+  still in force)
+- W = 264.3k NOT required — invariant is
+  header == authoritative W, not header == compaction
+  tokensAfter
+- NO_NEW_RECON = YES (do not open another Factory recon)
+- Strategy-D consumer (getApiMetrics.ts:174-225) untouched
+
+Phase 1 produces RED (currentWorkingContextEstimate MUST be
+available to TaskHeader immediately after successful
+compaction with no subsequent api_req_started). GREEN:
+header = W_before before compaction; header = W_after
+after compaction; header already reflects W_after before
+next provider request.
+
+See `.factory/acts/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+AUTHORITY-PUBLISH01.md` for the full mission, Phase 1
+producer-seam recon plan, RED/GREEN shape, conservation
+invariants, and stop conditions. EVIDENCE:
+`.factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+AUTHORITY-PUBLISH01/entry-freeze.txt`.

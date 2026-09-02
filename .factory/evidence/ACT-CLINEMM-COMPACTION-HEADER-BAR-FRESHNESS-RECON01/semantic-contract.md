@@ -67,33 +67,41 @@ Therefore:
 ## Q5 — verdict
 
 ```text
-HEADER_BAR_INTENT = CURRENT CONTEXT-WINDOW UTILIZATION (frozen)
-C2                 = SELECTED
-HALT_NO_INTENT_FROZEN = REJECT
+UI_PURPOSE                          = context-window utilization guidance / PROVEN
+CURRENT_IMPLEMENTATION              = P-space last request input       / PROVEN
+C1_INTENT                           = PLAUSIBLE
+C2_INTENT                           = PLAUSIBLE
+C3_INTENT                           = PLAUSIBLE
+C2_SELECTED                         = NO  (intent not proven from source)
+C2_SOURCE_INTENT                    = NOT PROVEN
+HEADER_BAR_NEXT_REQUEST_SEMANTIC    = NOT PROVEN
+W_AUTHORITY                         = ABSENT / PROVEN
+H_a ≡ W                             = NOT PROVEN / PRESERVE
+PRODUCT_DECISION                    = C2  (made by Factory this turn, NOT a source claim)
+W_PRODUCER_ACT                      = AUTHORIZED  (now that PRODUCT_DECISION = C2)
+NO_NEW_RECON                        = YES (do not open another Factory recon)
 ```
 
-The ClineMM UI labels alone are not neutral:
+The implementation / recon facts remain excellent:
 
-- `ContextWindow.tsx:175` `title="Current tokens used in this request"` — "current", not "last"
-- `ContextWindow.tsx:199` `aria-label="Context window usage progress"` — "usage", not "history"
-- `ContextWindow.tsx:208` `title="Maximum context window size for this model"` — denominator is model state
-- `ContextWindowSummary.tsx:145` `"Context Window"` / `"Used:"` / `"Total:"` / `"Remaining:"` — three-state utilization
-- `ContextWindowSummary.tsx:129,136` `"Auto Condense Threshold"` / "When the context window usage exceeds this threshold, the task will be automatically condensed." — forward-looking
+- bar producer = P (last `api_req_started` input)
+- H_a = compaction estimator domain
+- W = not published
+- H_a ≡ W = NOT PROVEN
 
-The UI presents the number as **context-window state**, not as a historical accounting record. External corroboration:
+But the strongest ClineMM literal — `ContextWindow.tsx:175` `title="Current tokens used in this request"` — is **ambiguous**. It can naturally mean "the request whose usage was just observed" (C1) as well as "the hypothetical next request if generated now" (C2). The actual producer has long been the last `api_req_started` → provider-reported request input, so source behavior + wording can consistently describe **current / most-recent request context utilization** — much closer to C1 than the previous disposition acknowledged.
 
-- upstream CHANGELOG entry (cline/cline) introduced this as a "Context Window progress bar" to help users understand degradation as context increases; Auto Compact is described as summarizing history to free space when approaching the context limit
-- upstream user issue (cline/cline#10637) describes the bar "running backwards" as evidence of compaction, and reports starting-context count being implausibly high — both readings assume the bar means *current utilization*, not last request input
+External corroboration cuts **both ways** and does not break the tie:
 
-Intent is sufficiently frozen to **SELECT C2**: the bar must mean the best authoritative estimate of what would constrain the *next request*, not necessarily the exact provider truth, and not the most-recent historical request.
+- upstream user issue #9433 (Context Window bar stays at 0% with `usage: null`): the bar's historical primary authority is **provider-observed request usage** (it collapses when usage is null, and the user expectation there is to *add an estimator fallback*) — strong evidence that P-space is the established authority, NOT that a W-space contract already exists
+- upstream user issue #10637 ("bar running backwards as compaction"): user expectation / observation, not numerator semantics
+- upstream CHANGELOG entry ("Context Window progress bar" for understanding degradation as context grows): establishes purpose, not whether the numerator is `P = previous/latest actual request input` or `W = estimated next-request working context`
 
-**Per-contract read**:
+**Per-contract read** (corrected):
 
-- **C1** (provider-observation bar = last `api_req_started`): data is honest P; labels do not match. Reject as the contract.
-- **C2** (current-working-context bar): SELECTED. Implementation currently absent at the post-compaction wire (Q4). The header reads from P only because W is not yet published. The intent–implementation gap is what `WORKING-CONTEXT-AUTHORITY-PUBLISH01` is for; the **consumer** does not need to fabricate W_e — the **producer** must publish it.
-- **C3** (multi-source presentation with both last-request P and current-estimate W/H alongside explicit labels): a valid label-only reading is `Last provider request: 364.9k` / `Compaction estimate: 364.9k → 264.3k` — that requires **better labels**, not necessarily a new W_e field.
-
-So freeze:
+- **C1** (last actual request input): PLAUSIBLE intent. Implementation already at HEAD. No source change required — only label/tooltip wording is in scope if C1 is selected. Bar stays at 364.9k until next request.
+- **C2** (estimated next-request / current-working-context): PLAUSIBLE intent. Implementation currently absent at the post-compaction wire (Q4). The header reads from P only because W is not yet published. If C2 is selected, the consumer must NOT fabricate W (that would revive the cross-scale arithmetic prohibition); the producer must publish it.
+- **C3** (multi-source presentation with explicit semantics): PLAUSIBLE intent. A valid label-only reading is `Last provider request: 364.9k` / `Compaction estimate: 364.9k → 264.3k` — that requires **better labels**, not necessarily a new W_e field.
 
 ```text
 C3_REQUIRES_W               = NOT PROVEN
@@ -103,15 +111,29 @@ C3_REQUIRES_LABEL_CHANGE    = PROVEN
 
 The `compaction` say message **already mechanically distinguishes H-space from P-space** (distinct message type, separate row in the conversation list, different label language via `CompactionRow.tsx:46-47`); a new `kind` discriminator is **not needed** at the divider level.
 
-**Decisive matrix**:
+**Decisive matrix** (corrected — intent column now reflects plausibility, not selection):
 
-| Contract | Compatible with intent? | Compatible with current producer? | Repair class |
-|----------|-------------------------|-----------------------------------|--------------|
-| C1 | No (labels do not match last-request semantics) | Yes | bounded LABEL ACT (de-selected) |
-| **C2** | **Yes — SELECTED** | **No — W authority absent** | **producer-side ACT (publish W)** |
+| Contract | Plausibly consistent with intent? | Compatible with current producer? | Repair class |
+|----------|-------------------------------------|-----------------------------------|--------------|
+| C1 | Yes | Yes | bounded LABEL ACT (no W publishing required) |
+| C2 | Yes | No — W authority absent | producer-side ACT (publish W) |
 | C3 | Yes | No for full; yes for label-only | label-only ACT (C3_REQUIRES_PRODUCER_CHANGE = NOT PROVEN) |
 
+**Why the previous C2 SELECTED was over-aggressive.** Opening a W-authority ACT adds a new production authority and potentially changes what users see **without first establishing that the product wants the bar to represent W**. That violates the Factory causality rule: we would be implementing the prettier hypothesis.
+
+**Product decision (made this turn).** Factory now names the contract:
+
+```text
+PRODUCT_DECISION = C2
+```
+
+This is a **product recommendation** by the Factory causal reviewer, not a source-intent fact. The supporting rationale (recorded for audit): a capacity gauge that remains at 364.9k after a compaction that has demonstrably reduced the canonical working set is operationally misleading, even if 364.9k is historically truthful; users care about "how full am I now?", and the upstream #9433 / #10637 threads both support treating provider-observed request usage as the historical primary authority but wanting a forward-looking fallback when it is absent or stale.
+
+Once `PRODUCT_DECISION = C2` is frozen, `W_PRODUCER_ACT = AUTHORIZED` — but **only that** ACT (not a fresh recon) is opened next.
+
 ## Next ACT
+
+**Authorization frame (corrected this turn).** A prior disposition (this commit lineage, commit `e71ca399b`) selected C2 from source evidence alone. The Factory causal reviewer has since corrected that disposition: source evidence alone leaves C1/C2/C3 **equally plausible**. The next ACT is **authorized by an explicit product decision** (recorded in Q5 above), not by source intent. Do not re-litigate the decision inside the next ACT — its scope is **only** the producer-seam bind and the WIRE_LOCATION selection.
 
 Open:
 
@@ -120,6 +142,8 @@ ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
 ```
 
 Primary purpose: establish one authoritative current-working-context estimate at the post-compaction boundary and project it to the context-window header, without treating `COMPACTION_AFTER_TOKENS` as equivalent by assumption.
+
+**NO_NEW_RECON.** The reviewer explicitly forbids opening another Factory recon before this ACT lands. The PRODUCT_DECISION is made; the next move is engineering.
 
 **Phase 1 — producer recon.** Find the lowest production seam that holds the exact payload that would become the next request:
 
@@ -191,3 +215,18 @@ This directly fixes the observed stale bar without touching Strategy-D or revivi
 - WIRE_LOCATION = UNDECIDED (compaction.payload.workingContextEstimate / top-level projected state.currentWorkingContextEstimate / existing task/header projection / producer-side presentation field — choose after Phase 1 producer recon)
 - NEXT_ACT = ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
 - DISPOSITION = PASS_WITH_ONE_P1_FIX (Factory causal reviewer; the prior verdict HALT_NO_INTENT_FROZEN overreached)
+- HEADER_BAR_INTENT = AMBIGUOUS (corrected this turn; "current tokens used in this request" is compatible with both C1 ("the request whose usage was just observed") and C2 ("the hypothetical next request if generated now"))
+- UI_PURPOSE = context-window utilization guidance / PROVEN
+- CURRENT_IMPLEMENTATION = P-space last request input / PROVEN
+- C1_INTENT = PLAUSIBLE
+- C2_INTENT = PLAUSIBLE
+- C3_INTENT = PLAUSIBLE
+- C2_SELECTED = NO (source intent not proven)
+- C2_SOURCE_INTENT = NOT PROVEN
+- HEADER_BAR_NEXT_REQUEST_SEMANTIC = NOT PROVEN
+- W_AUTHORITY = ABSENT / PROVEN
+- H_a ≡ W = NOT PROVEN / PRESERVE
+- PRODUCT_DECISION = C2 (made by Factory this turn — product recommendation by Factory causal reviewer, NOT a source-intent claim)
+- W_PRODUCER_ACT = AUTHORIZED (now that PRODUCT_DECISION = C2)
+- NO_NEW_RECON = YES (do not open another Factory recon)
+- DISPOSITION_v2 = HALT_INTENT_NOT_PROVEN reverted to PRODUCT_DECISION = C2 → GO_W_AUTHORITY (Factory causal reviewer; commit `e71ca399b`'s `C2 = SELECTED` verdict was over-aggressive; source evidence leaves C1/C2/C3 equally plausible)
