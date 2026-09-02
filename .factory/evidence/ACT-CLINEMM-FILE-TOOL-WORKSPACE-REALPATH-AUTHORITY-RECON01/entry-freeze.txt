@@ -1,1 +1,23 @@
+# ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01 / entry-freeze
+
+# ENTRY (initial ACT opening, on commit 217e7f53c):
 26814d25 217e7f53c q5-resume-red-and-repair-green(factory): close Waiting Q5; bounded composition-seam fix for done-without-completion awaiting_followup; CASE_A ADJUDICATED
+
+# CORRECTION (bounded contract correction, on commit 03af027a9):
+#   Verdict  : HALT_WRONG_AUTHORITY_CONTRACT
+#   Reason   : the original mission framed authority as workspace-
+#              universal containment, which would treat legitimately
+#              global skill / rule / hook creation (e.g. createSkillFile
+#              with isGlobal=true writing to
+#              ~/.cline/skills/aws-deploy/SKILL.md) as escapes.
+#   Replace  : workspace-universal containment
+#              -> capability-specific authorized writable root
+#                 containment
+#   Recon order: Q1 LIVE editor bind FIRST (not the 29-file audit).
+#   Q5 matrix : A/B/C/D (workspace-universal)
+#               -> A/B/C/D/E/F + G/H conservation (per-tool)
+#                  G = global-skill ALLOW (regression-preserving)
+#                  H = workspace-clean ALLOW (regression-preserving)
+#   No production code change in this commit.
+#   No new review round.
+#   See .factory/epic-board.md Updated: 2026-09-02 16:50:00Z entry.
