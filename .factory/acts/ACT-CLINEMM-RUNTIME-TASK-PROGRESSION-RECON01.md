@@ -14,9 +14,14 @@
 >                see .factory/evidence/.../entry-freeze.txt)
 > TRIAGE_HEAD = 15f2adaf6c12dfdc79f47327e9ae93c46be52776
 >               (HEAD at TRIAGE_BIND 2026-08-28, specimen cmd_mtcjhkhygpteq8v9)
-> TRIAGE_HEAD_2 = 76e07c12f7a67b59c555e24b20a60d454d941082
->               (HEAD at TRIAGE_BIND post-terminal-02, 2026-09-02,
->                specimen cmd_mtj6kki83r1bmrfz)
+> SPECIMEN_HEAD_2 = 76e07c12f7a67b59c555e24b20a60d454d941082
+>               (HEAD at the operator's live capture instant, 2026-09-02,
+>                specimen cmd_mtj6kki83r1bmrfz; NOT a TRIAGE_BIND commit)
+> TRIAGE_BIND_COMMIT_2 = 8f5b80d4e631d6fbd044af67f1154d4d1642d2f9
+>               (the commit that durably bound the new specimen;
+>                "triage-bind(factory): ACT-CLINEMM-RUNTIME-TASK-
+>                PROGRESSION-RECON01 post-terminal-02 specimen
+>                cmd_mtj6kki83r1bmrfz (C1: GO_TRIAGE_BIND)")
 > ```
 >
 > Operational state changed from `OPEN / WAITING_FOR_LIVE_EVIDENCE` to
@@ -32,7 +37,8 @@
 > related seams remain UNVERIFIED. The discriminator has NOT yet run.
 >
 > Operational state further changed at TRIAGE_BIND post-terminal-02 on
-> 2026-09-02 (TRIAGE_HEAD_2 `76e07c12f`, specimen `cmd_mtj6kki83r1bmrfz`):
+> 2026-09-02 (SPECIMEN_HEAD_2 `76e07c12f`; bound at TRIAGE_BIND_COMMIT_2
+>  `8f5b80d4e`, specimen `cmd_mtj6kki83r1bmrfz`):
 > the background-command specimen `cmd_mtj6kki83r1bmrfz` was bound into
 > `.factory/evidence/.../live-failure-post-terminal-02.json` as the
 > awaited **post-terminal chronology** for the symptom family. This
@@ -40,8 +46,10 @@
 > four axes — turnState.phase=`awaiting_followup` (not `idle`),
 > backgroundCommandRunning=`false` (not `true`), host_status=`aborted`
 > (not `RUNNING`), writerId=`session-event-turn-complete-resumable-
-> straggler-preserve` (not UNBOUND). The T4..T6 events of the §3b
-> six-event schema are now LIVE; T1..T3 remain UNAVAILABLE_FROM_TRACE
+> straggler-preserve` (not UNBOUND). Of the §3b six-event schema, T4
+> and T6 are LIVE; T5 is UNAVAILABLE_FROM_TRACE (no TSWPD mechanism for
+> non-TurnState emissions; SUPPORTING_NEGATIVE_OBSERVATION recorded); T1..T3
+> remain UNAVAILABLE_FROM_TRACE
 > for THIS specimen. The §3 discriminator's strongest candidate is
 > CASE_A (LOCAL-EXIT AUTHORITY DEFECT — the writer at
 > `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:223` was given
@@ -258,7 +266,7 @@ Shape:
 
 The new background-command specimen `cmd_mtj6kki83r1bmrfz`
 (taskId `1788297479245_hv9w5`, epoch 4) was bound at TRIAGE_BIND
-post-terminal-02 on 2026-09-02 (TRIAGE_HEAD_2 `76e07c12f`) into
+post-terminal-02 on 2026-09-02 (SPECIMEN_HEAD_2 `76e07c12f`; bound at TRIAGE_BIND_COMMIT_2 `8f5b80d4e`) into
 `.factory/evidence/.../live-failure-post-terminal-02.json`. This
 specimen is **the missing post-terminal chronology** for the
 existing symptom family and was captured against a real recurrence
@@ -282,13 +290,23 @@ TSWPD_TRANSITIONS             = idle -> streaming (task-start-init-task)
                                   streaming -> awaiting_followup
                                   (session-event-turn-complete-resumable-straggler-preserve)
 T1..T3                        = UNAVAILABLE_FROM_TRACE
-T4..T6                        = LIVE
+T4                            = LIVE
+T5                            = UNAVAILABLE_FROM_TRACE
+                                  (TSWPD records TurnState writes only;
+                                   SUPPORTING_NEGATIVE_OBSERVATION:
+                                   no continuation-associated writer
+                                   in the TSWPD ring at epoch 4; this
+                                   is an honest negative observation,
+                                   NOT proof)
+T6                            = LIVE
 ```
 
 Promotion gate: this is **PARTIAL_POST_TERMINAL_CHRONOLOGY_BOUND**
 not **LIVE_FAILURE_BOUND = PASS** — the chronology is partial
-(T4..T6 are LIVE, T1..T3 are absent). The operator MAY retroactively
-bind T1..T3 from the host-side log if available; until then, the
+(T4 + T6 are LIVE, T5 is UNAVAILABLE_FROM_TRACE — no TSWPD
+mechanism for non-TurnState emissions; SUPPORTING_NEGATIVE_OBSERVATION
+recorded; T1..T3 are absent). The operator MAY retroactively
+bind T1..T3 + T5 from the host-side log if available; until then, the
 authoritative state is `OPEN / LIVE_RUNNING_STATE_BOUND +
 LIVE_POST_TERMINAL_CHRONOLOGY_BOUND / AUTHORITY_BIND_DEFERRED`.
 
@@ -316,6 +334,81 @@ Required discriminator (next bounded cycle):
 > synthetic-real test pattern at
 > `apps/vscode/src/sdk/__tests__/background-handoff-turnstate-discriminator.bhtd01-synthetic-real.test.ts`.
 > Honest label: `SYNTHETIC_REAL`, not `REAL_PRODUCTION_SEAM`.
+
+Discriminator executed (2026-09-02; ACAS01 series; 4/4 PASS at
+HEAD `8f5b80d4e`):
+
+```text
+ACAS01.1 PRIMARY RED:
+  - Drive real SdkSessionEventCoordinator with done event
+  - Real TurnStateTracker seeded to streaming
+  - Real MessageTranslatorState (so wasAttemptCompletionSeen
+    and wasTerminalResponseCommittedThisTurn return false)
+  - Real TSWPD ring enabled
+  - Assert writerId == session-event-turn-complete-resumable-straggler-preserve
+    AND transition == streaming -> awaiting_followup
+  RESULT: PASS
+  (the production writer at line 223 fires through the real
+   code path and stamps the exact writerId the LIVE specimen
+   recorded)
+
+ACAS01.2 STRUCTURAL:
+  - Read the handleSessionEvent body (lines 101-225) at HEAD
+  - Assert the body does NOT contain "CommandJobManager" /
+    "backgroundCommandRunning" / "backgroundCommandTaskId"
+  RESULT: PASS
+  (the writer's call path is provably absent any
+   background-job liveness probe)
+
+ACAS01.3 DRIFT PIN:
+  - Assert the source contains the writerId string,
+    the comment "The phase is no longer runtime-owned",
+    and the comment "(no work is in flight)"
+  RESULT: PASS
+  (the LIVE-specimen binding is still correct at HEAD)
+
+ACAS01.4 CONTROL (precondition chain):
+  - Mark wasAttemptCompletionSeen = true
+  - Drive done event
+  - Assert writer under test did NOT fire
+    (the production code falls through to
+     session-event-turn-complete-awaiting-followup-liveness
+     at line 169 instead)
+  RESULT: PASS
+  (the precondition chain is honored)
+
+Frozen at: apps/vscode/src/sdk/__tests__/runtime-task-progression-
+          post-terminal-authority-discriminator.acas01-synthetic-real.test.ts
+Honest label: SYNTHETIC_REAL (per Factory reviewer's P0_2 verdict
+              on the prior BHTD01 recon)
+Production delta: ZERO
+Stash@{0}: UNTOUCHED
+
+DISCRIMINATOR VERDICT:
+  ACAS01.1 PASS = the post-terminal-02 specimen's TSWPD writer
+  IS bound to the production writer at
+  apps/vscode/src/sdk/sdk-session-event-coordinator.ts:223.
+  The discriminator confirms the LIVE evidence and the
+  production source are still consistent at HEAD.
+
+  ACAS01.2 PASS = the writer's call path is structurally
+  blind to background-job liveness. This is the strongest
+  available evidence (PROVEN_NO via the call-path body) that
+  background-job liveness is absent from the authority
+  decision at the writer site.
+
+  TOGETHER: the LIVE evidence + the structural probe bound the
+  authority defect to a specific writer site + prove the
+  call path is blind to background-job state. CASE_A is
+  now ADJUDICATED (not yet proven to be a defect, but the
+  contract violation is now structurally proven). The
+  remaining question is the product-contract decision:
+  SHOULD the writer consult background-job liveness? Per the
+  ACT body's `forbidden_repairs_per_reviewer` list and the
+  reviewer's C1 disposition, a NO_REPAIR_NOW verdict holds
+  until a separate bounded contract ACT authorizes the
+  repair. NO production change is authorized by this ACT.
+```
 
 DO NOT open a parallel ACT to host this discriminator until the
 bounded synthetic-real test cycle surfaces a load-bearing seam
@@ -431,7 +524,8 @@ live-failure.json            captured symptom (TRIAGE_BIND 2026-08-28,
                              with all fields above
 live-failure-post-terminal-02.json  captured symptom (TRIAGE_BIND post-terminal-02,
                              2026-09-02, specimen cmd_mtj6kki83r1bmrfz) —
-                             POST-TERMINAL CHRONOLOGY half (T4..T6 LIVE,
+                             POST-TERMINAL CHRONOLOGY half (T4 + T6 LIVE,
+                             T5 UNAVAILABLE_FROM_TRACE,
                              T1..T3 UNAVAILABLE_FROM_TRACE). Falsified
                              contract claim against the writer at
                              sdk-session-event-coordinator.ts:223 documented
@@ -447,9 +541,10 @@ terminal-chronology-<jobId>.json   six-event capture (T1..T6) from §3b,
                                    bearing artifact for promoting
                                    LIVE_FAILURE_BOUND from
                                    RUNNING_STATE_BOUND to PASS. (For the
-                                   post-terminal-02 specimen, T4..T6 are
+                                   post-terminal-02 specimen, T4 + T6 are
                                    LIVE in live-failure-post-terminal-02.json;
-                                   T1..T3 remain to be captured against a
+                                   T5 is UNAVAILABLE_FROM_TRACE; T1..T3
+                                   remain to be captured against a
                                    future deterministic repro of the same
                                    symptom on a host with PTAD fully
                                    enabled.)
