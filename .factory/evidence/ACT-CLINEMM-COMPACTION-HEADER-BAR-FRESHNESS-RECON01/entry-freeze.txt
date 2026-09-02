@@ -217,9 +217,29 @@ RECON_VERDICT       = RECON_PASS
                                           shape, publish W to
                                           header; do NOT
                                           claim H_a ≡ W_e
-                     WIRE_LOCATION     = UNDECIDED (chose
-                                          after Phase 1
-                                          producer recon)
+                     WIRE_LOCATION     = SELECTED at Phase 1
+                                          source bind + GREEN
+                                          producer-seam
+                                          publish = ContextPipelinePrepareTurnResult
+                                          .currentWorkingContextEstimate
+                                          (variant 4 of 4:
+                                          producer-side
+                                          calculation feeding
+                                          a dedicated
+                                          presentation field
+                                          on the prepare-turn
+                                          result; prepare-
+                                          turn seam is the
+                                          authoritative
+                                          publish site;
+                                          sdk/packages/core/src/
+                                          extensions/context/
+                                          compaction.ts:60-75
+                                          [interface],
+                                          :750-764
+                                          [helper],
+                                          :712/:715/:726
+                                          [wiring])
                      PRODUCTION_REPAIR = AUTHORIZED
                                           (PRODUCT_DECISION
                                           = C2 is the gate)

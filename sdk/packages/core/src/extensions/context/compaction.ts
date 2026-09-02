@@ -60,6 +60,19 @@ export interface ContextPipelinePrepareTurnInput {
 export interface ContextPipelinePrepareTurnResult {
 	messages: CoreCompactionContext["messages"];
 	systemPrompt?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01:
+	 * working-context authority published at the prepare-turn seam.
+	 * Computed from the FINAL returned request shape (systemPrompt +
+	 * messages + tools) by CANONICAL_W_ESTIMATOR, NOT from the
+	 * pre-compaction `shouldCompact()` inputs. Independent of provider
+	 * billing / input accounting (structural provider-usage non-
+	 * interference via TokenEstimatedRequest). Optional at the type
+	 * level for back-compat with hosts that have not yet been
+	 * upgraded; the state-aware wrapper always publishes W when the
+	 * upstream `compact` returned a result.
+	 */
+	currentWorkingContextEstimate?: number;
 }
 
 export type ContextPipelinePrepareTurn = (
@@ -696,19 +709,10 @@ export function createCompactionStateAwarePrepareTurn(input: {
 					systemPrompt,
 				});
 				await input.saveState?.(nextState, context.messages);
-				return {
-					...result,
-					...(systemPrompt !== undefined ? { systemPrompt } : {}),
-				};
+				return publishWorkingContextEstimate(result.messages, systemPrompt ?? context.systemPrompt, context.tools);
 			}
-			return {
-				messages: projectedMessages,
-				...(result?.systemPrompt !== undefined
-					? { systemPrompt: result.systemPrompt }
-					: existingState.system_prompt !== undefined
-						? { systemPrompt: existingState.system_prompt }
-						: {}),
-			};
+			const projectedSystemPrompt = result?.systemPrompt ?? existingState.system_prompt;
+			return publishWorkingContextEstimate(projectedMessages, projectedSystemPrompt ?? context.systemPrompt, context.tools);
 		}
 		const result = input.compact ? await input.compact(context) : undefined;
 		if (result?.messages) {
@@ -719,7 +723,42 @@ export function createCompactionStateAwarePrepareTurn(input: {
 				systemPrompt: result.systemPrompt,
 			});
 			await input.saveState?.(nextState, context.messages);
+			return publishWorkingContextEstimate(result.messages, result.systemPrompt ?? context.systemPrompt, context.tools);
 		}
 		return result;
+	};
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01:
+ * Publish currentWorkingContextEstimate on a prepared-turn result
+ * by feeding the FINAL returned request shape (systemPrompt +
+ * messages + tools) into CANONICAL_W_ESTIMATOR. The estimator is
+ * `estimateRequestInputTokens` (sdk/packages/shared/src/llms/
+ * tokens.ts:47); the input contract is TokenEstimatedRequest
+ * (systemPrompt + messages + tools) — no provider-usage slots —
+ * so the result is structurally independent of billing/input
+ * accounting.
+ *
+ * The W estimate must come from the FINAL returned shape, NOT
+ * from the pre-compaction values used at `shouldCompact()` in
+ * createContextPipelinePrepareTurn. The two semantics are
+ * different: shouldCompact triggers against the pre-compaction
+ * shape; W_after is the post-preparation occupancy for the next
+ * provider request.
+ */
+function publishWorkingContextEstimate(
+	messages: CoreCompactionContext["messages"],
+	systemPrompt: string,
+	tools: readonly unknown[],
+): ContextPipelinePrepareTurnResult {
+	return {
+		messages,
+		systemPrompt,
+		currentWorkingContextEstimate: estimateRequestInputTokens({
+			systemPrompt,
+			messages,
+			tools,
+		}),
 	};
 }

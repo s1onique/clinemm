@@ -162,16 +162,35 @@ request overhead
 
 Then ask: can the existing `estimateRequestInputTokens(...)` (or equivalent) produce W from THAT exact post-compaction request shape? If yes, that is promising. But prove `W = estimate of next request input` from identical inputs — not `W = H_a because both happen to use estimators`.
 
-**WIRE_LOCATION = UNDECIDED.** Possible production shapes:
+**WIRE_LOCATION = SELECTED.** Phase 1 source bind + GREEN producer-seam publish (commit 2 of ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01) selected:
+
+```text
+ContextPipelinePrepareTurnResult.currentWorkingContextEstimate
+```
 
 ```text
 compaction.payload.workingContextEstimate
 top-level projected state.currentWorkingContextEstimate
 existing task/header projection
 producer-side calculation feeding a dedicated presentation field
+                                      ^^^^^^^^^^^^^^^^^^^^^^
+                                      SELECTED (variant 4 of 4)
 ```
 
-Choose only after recon of where a truthful W can be computed once and published without duplicating estimation logic.
+W is computed at the prepare-turn seam
+(`createCompactionStateAwarePrepareTurn` at
+`sdk/packages/core/src/extensions/context/compaction.ts:658-728`)
+from the FINAL returned request shape (systemPrompt + messages +
+tools) via `estimateRequestInputTokens` and published as
+`currentWorkingContextEstimate` on the result. The state-aware
+wrapper applies W to every result that flows through it; production
+call sites all go through the wrapper
+(`local-runtime-host.ts:670`).
+
+The upstream `createContextPipelinePrepareTurn` returns the same
+`ContextPipelinePrepareTurnResult` shape but is NOT modified; it
+is reached THROUGH the state-aware wrapper, which is the
+authoritative publish site.
 
 **True RED** (once the producer seam is bound):
 
@@ -218,7 +237,7 @@ This directly fixes the observed stale bar without touching Strategy-D or revivi
 - C3_REQUIRES_W = NOT PROVEN
 - C3_REQUIRES_PRODUCER_CHANGE = NOT PROVEN
 - C3_REQUIRES_LABEL_CHANGE = PROVEN
-- WIRE_LOCATION = UNDECIDED (compaction.payload.workingContextEstimate / top-level projected state.currentWorkingContextEstimate / existing task/header projection / producer-side presentation field — choose after Phase 1 producer recon)
+- WIRE_LOCATION = SELECTED = ContextPipelinePrepareTurnResult.currentWorkingContextEstimate (variant 4 of 4: producer-side calculation feeding a dedicated presentation field on the prepare-turn result; bound at Phase 1 source bind + GREEN producer-seam publish; prepare-turn seam is the authoritative publish site)
 - NEXT_ACT = ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
 - DISPOSITION = PASS_WITH_ONE_P1_FIX (Factory causal reviewer; the prior verdict HALT_NO_INTENT_FROZEN overreached)
 - HEADER_BAR_INTENT = AMBIGUOUS (corrected this turn; "current tokens used in this request" is compatible with both C1 ("the request whose usage was just observed") and C2 ("the hypothetical next request if generated now"))

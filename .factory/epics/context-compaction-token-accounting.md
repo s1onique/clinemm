@@ -740,3 +740,154 @@ C1: GO_W_AUTHORITY
 Reviewer closing note restated: "The next useful result was the
 filled seam table and a failing missing-W test." Both delivered
 this turn. The next move is the GREEN producer-seam publish.
+
+## Current frontier update — 2026-09-02 23:00:00Z (commit 2 — GREEN producer-seam publish)
+
+Factory causal reviewer fourth-pass on commit `6bffd75c0`:
+**HALT_DEFAULT_SUITE_RED.** The Phase-1 source bind and RED
+were accepted; the missing authority was reproduced; the only
+defect was that the committed RED lived in the default
+`*.test.ts` suite and broke `main`'s CI. The reviewer closed
+by saying:
+
+> "Implement the GREEN now in the very next commit. Do not
+> discard the RED evidence or weaken the invariant. The next
+> move is the GREEN producer-seam publish."
+
+This commit lands the GREEN.
+
+### Production seam change
+
+File: `sdk/packages/core/src/extensions/context/compaction.ts`
+
+1. `ContextPipelinePrepareTurnResult` extended with
+   `currentWorkingContextEstimate?: number` (interface field
+   at lines 60-75). The field is the wire location for W; the
+   state-aware wrapper always publishes it when the upstream
+   `compact` returned a result.
+
+2. New helper `publishWorkingContextEstimate(messages,
+   systemPrompt, tools)` (lines 750-764) wraps the FINAL returned
+   request shape into `ContextPipelinePrepareTurnResult` with
+   `currentWorkingContextEstimate =
+   estimateRequestInputTokens({systemPrompt, messages, tools})`.
+
+3. All three return paths in
+   `createCompactionStateAwarePrepareTurn` (re-compaction
+   success at line 712; state-aware projection fallback at
+   line 715; plain compact with state save at line 726)
+   route through the helper. W is computed from the FINAL
+   returned shape (systemPrompt and messages actually
+   returned, falling back to `context.systemPrompt` if
+   undefined), NOT from the pre-compaction values used at
+   `shouldCompact()`.
+
+4. The upstream `createContextPipelinePrepareTurn` is NOT
+   modified. It returns the same `ContextPipelinePrepareTurnResult`
+   shape; the state-aware wrapper applies W to every result
+   that flows through it. Production call sites all go through
+   the state-aware wrapper
+   (`sdk/packages/core/src/runtime/host/local-runtime-host.ts:670`).
+
+### RED -> GREEN test transition
+
+The same test file
+`sdk/packages/core/src/extensions/context/compaction.working-context-authority-publish.test.ts`
+that was RED at HEAD now passes.
+
+Label calibration per reviewer:
+
+```text
+MISSING_W_AT_PREPARE_TURN = REPRODUCED
+   (factory causal reviewer, 2026-09-02
+    calibration: passThroughCompact does not
+    exercise a real compaction; the discriminator
+    is the prepare-turn seam publishing W on every
+    prepared request, not specifically after
+    compaction; W is the post-preparation occupancy
+    for the next provider request, computed from the
+    FINAL returned shape)
+```
+
+NOT:
+
+```text
+POST_COMPACTION_BEHAVIORAL_RED = REPRODUCED
+   (over-strong label; the fixture does not exercise
+    a real compaction; the ACT should not pretend it
+    does)
+```
+
+P1 — tautological structural test deleted per reviewer:
+
+```text
+"Either delete that sub-test and retain the
+ source/type evidence in the ACT, or use a compact
+ compile-time exactness assertion if the repo
+ already has an established pattern."
+```
+
+I chose to delete the runtime test. The structural claim
+("TokenEstimatedRequest has only three slots") is a source-
+/type-level claim. The canonical declaration lives at
+`sdk/packages/shared/src/llms/tokens.ts:25`. The ACT records
+it as a SOURCE-level claim; no runtime test is required.
+
+Also tightened: `passThroughCompact` typed as
+`ContextPipelinePrepareTurn` (matching the input contract)
+to keep strict-mode TS error count at the parent commit
+baseline (23 errors).
+
+### Test run at GREEN commit
+
+```text
+✓ src/extensions/context/compaction.test.ts
+  (94/94 GREEN — no regression)
+✓ src/extensions/context/compaction.working-context-ratio.test.ts
+  (3/3 GREEN — no regression)
+✓ src/extensions/context/compaction.working-context-authority-publish.test.ts
+  (2/2 GREEN — CANONICAL_INPUTS + MISSING_W_AT_PREPARE_TURN;
+   tautological STRUCTURAL sub-test deleted)
+✓ apps/vscode/src/shared/__tests__/getApiMetrics.test.ts
+  (24/24 GREEN — Strategy-D consumer untouched)
+git diff --check clean
+SDK typecheck (bun tsc -p tsconfig.dev.json --noEmit):
+  23 errors (same count as parent commit b57aad242;
+  ZERO regression introduced by this commit)
+```
+
+### Conservation preserved
+
+- lastProviderRequestInput P remains 364.9k
+- compaction H values remain untouched
+- cumulative usage unchanged
+- provider billing metrics unchanged
+- H_a ≡ W_e equivalence-by-assumption FORBIDDEN
+- H_a ≡ W_e itself UNPROVEN
+- Strategy-D consumer (getApiMetrics.ts:174-225) untouched
+- 99/99 existing compaction tests GREEN
+- 24/24 getApiMetrics GREEN
+- git diff --check clean
+- typecheck error count = parent baseline (ZERO regression)
+
+### Commit split reminder (committed)
+
+```text
+Commit 1: RED    (6bffd75c0 — test file + Phase 1 doc)
+Commit 2: GREEN  (this commit — producer-seam publish)
+Commit 3: HEADER (next — TaskHeader / ContextWindow
+                  consume W; existing P/H accounting
+                  suites remain GREEN)
+```
+
+PRODUCTION DELTA: production seam change in compaction.ts
+  (3 return paths wired through helper; +~50 lines) +
+  test file tightening (tautological sub-test deleted,
+  passThroughCompact typed as ContextPipelinePrepareTurn).
+NEW REVIEW ROUND: NO
+C1: GO_W_AUTHORITY
+
+Reviewer closing note restated: "the missing authority is
+reproduced; implement the producer now." Implemented. The
+GREEN is on `main`. The header-change (commit 3) is the next
+move; it does NOT enter this ACT's scope.

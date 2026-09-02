@@ -460,3 +460,155 @@ I6 invariant). Cross-scale ratio arithmetic stays FORBIDDEN.
 - HALT_INTENT_NOT_PROVEN / C2_SOURCE_INTENT_NOT_PROVEN —
   already adjudicated by the upstream recon's second-pass
   disposition; do NOT re-litigate in this ACT
+
+## GREEN (commit 2 — producer seam publishes W)
+
+The factory causal reviewer's third-pass on commit `6bffd75c0`
+issued `HALT_DEFAULT_SUITE_RED` with disposition:
+
+> "Implement the GREEN now in the very next commit."
+> "Do not discard the RED evidence or weaken the invariant."
+> "The next move is the GREEN producer-seam publish."
+
+This commit lands the GREEN.
+
+### Producer seam change
+
+File:
+`sdk/packages/core/src/extensions/context/compaction.ts`
+
+1. Extended the result interface:
+
+   ```ts
+   export interface ContextPipelinePrepareTurnResult {
+     messages: CoreCompactionContext["messages"];
+     systemPrompt?: string;
+     /**
+      * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01:
+      * working-context authority published at the prepare-turn seam.
+      * Computed from the FINAL returned request shape by
+      * CANONICAL_W_ESTIMATOR, NOT from pre-compaction inputs.
+      * Structural provider-usage non-interference via
+      * TokenEstimatedRequest input contract.
+      */
+     currentWorkingContextEstimate?: number;
+   }
+   ```
+
+2. Added a single helper that wraps the final returned shape:
+
+   ```ts
+   function publishWorkingContextEstimate(
+     messages, systemPrompt, tools,
+   ): ContextPipelinePrepareTurnResult {
+     return {
+       messages,
+       systemPrompt,
+       currentWorkingContextEstimate: estimateRequestInputTokens({
+         systemPrompt, messages, tools,
+       }),
+     };
+   }
+   ```
+
+3. Wired the helper into all three return points of
+   `createCompactionStateAwarePrepareTurn`:
+
+   - re-compaction success path
+   - state-aware projection fallback
+   - plain compact path (with state save)
+
+   W is computed from the FINAL returned request shape (the
+   `messages` + `systemPrompt` actually returned, falling back
+   to `context.systemPrompt` if undefined), NOT from the
+   pre-compaction values used at `shouldCompact()`.
+
+4. The upstream `createContextPipelinePrepareTurn` is NOT
+   modified. It returns the same `ContextPipelinePrepareTurnResult`
+   shape; the state-aware wrapper applies W to every result that
+   flows through it. Production call sites all go through the
+   state-aware wrapper
+   (`sdk/packages/core/src/runtime/host/local-runtime-host.ts:670`).
+
+### RED -> GREEN test transition
+
+The same test file
+`sdk/packages/core/src/extensions/context/compaction.working-context-authority-publish.test.ts`
+that was RED at HEAD now passes:
+
+```text
+✓ CANONICAL_INPUTS: prepare-turn seam holds the exact final
+  request shape (systemPrompt + messages + tools)
+✓ MISSING_W_AT_PREPARE_TURN: prepare-turn result carries
+  currentWorkingContextEstimate equal to
+  CANONICAL_W_ESTIMATOR(final request shape)
+```
+
+Label calibration per reviewer:
+
+> "Label the RED: MISSING_W_AT_PREPARE_TURN = REPRODUCED
+> not: POST_COMPACTION_BEHAVIORAL_RED = REPRODUCED"
+
+The passThroughCompact fixture does not actually exercise a
+real compaction; the discriminator is the prepare-turn seam
+publishing W on every prepared request, not specifically after
+compaction. W is the post-preparation occupancy for the next
+provider request, computed from the FINAL returned shape.
+
+P1 — tautological structural test deleted per reviewer:
+
+> "Either delete that sub-test and retain the source/type
+> evidence in the ACT, or use a compact compile-time
+> exactness assertion if the repo already has an
+> established pattern."
+
+I chose to delete the runtime test. The structural claim
+("TokenEstimatedRequest has only three slots") is a source-
+level / type-level claim. The canonical declaration lives at
+`sdk/packages/shared/src/llms/tokens.ts:25`. The ACT records
+it as a SOURCE-level claim.
+
+### Test run at GREEN commit
+
+```text
+✓ src/extensions/context/compaction.test.ts
+  (94/94 GREEN — no regression)
+✓ src/extensions/context/compaction.working-context-ratio.test.ts
+  (3/3 GREEN — no regression)
+✓ src/extensions/context/compaction.working-context-authority-publish.test.ts
+  (2/2 GREEN — CANONICAL_INPUTS + MISSING_W_AT_PREPARE_TURN;
+  tautological STRUCTURAL sub-test deleted)
+✓ apps/vscode/src/shared/__tests__/getApiMetrics.test.ts
+  (24/24 GREEN — Strategy-D consumer untouched)
+git diff --check clean
+SDK typecheck (bun tsc -p tsconfig.dev.json --noEmit):
+  23 errors (same count as parent commit b57aad242;
+  ZERO regression introduced by this commit)
+```
+
+### Wire location
+
+WIRE_LOCATION = `ContextPipelinePrepareTurnResult.currentWorkingContextEstimate`
+
+The factory causal reviewer noted
+`C3_REQUIRES_W = NOT PROVEN` and
+`C3_REQUIRES_PRODUCER_CHANGE = NOT PROVEN` upstream; the
+header-change (commit 3) is the place where those would
+re-enter scope. This commit does NOT touch the UI; it only
+publishes W at the producer seam so commit 3 can read it.
+
+### Negative assertion preserved
+
+W_after need not equal H_a. The two quantities belong to
+different semantic spaces. The GREEN test asserts:
+
+```text
+expect(w).toBe(estimateRequestInputTokens({final shape}))
+```
+
+NOT `expect(w).toBe(H_a)` or any cross-scale equivalence.
+Cross-scale ratio arithmetic remains FORBIDDEN.
+
+### Header change
+
+TASKHEADER_CONTEXTWINDOW = NO CHANGE (deferred to commit 3)

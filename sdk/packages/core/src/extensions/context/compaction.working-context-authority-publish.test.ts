@@ -1,42 +1,41 @@
 /**
  * Working-context authority publish — ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
  *
- * Phase 1 source bind + missing-W RED + structural provider-usage
- * non-interference. Three sub-tests:
+ * Sub-tests (post-GREEN):
  *
- * 1. STRUCTURAL (GREEN at HEAD): estimateRequestInputTokens (the
- *    canonical estimator used at the prepare-turn seam via
- *    compaction.ts:309) accepts ONLY { systemPrompt, messages,
- *    tools } — no tokensIn / cacheReads / cacheWrites slots. This
- *    is structural evidence that the canonical estimator cannot
- *    couple to provider usage accounting.
- *
- * 2. CANONICAL_INPUTS (GREEN at HEAD): the prepare-turn seam
+ * 1. CANONICAL_INPUTS (GREEN): the prepare-turn seam
  *    (createCompactionStateAwarePrepareTurn) holds the canonical
  *    post-compaction request shape (systemPrompt + messages +
  *    tools) and is the lowest production seam where those coexist.
  *
- * 3. MISSING_W_RED (RED at HEAD, GREEN after producer-seam
- *    publish): ContextPipelinePrepareTurnResult at HEAD does NOT
- *    carry a currentWorkingContextEstimate field. After the
- *    producer seam publishes W (this ACT's GREEN), the field MUST
- *    appear and equal
- *      estimateRequestInputTokens(exact canonical post-compaction
- *                                   request shape).
+ * 2. MISSING_W_AT_PREPARE_TURN = REPRODUCED (GREEN, post-fix):
+ *    the prepare-turn result now carries
+ *    currentWorkingContextEstimate, equal to
+ *    CANONICAL_W_ESTIMATOR applied to the FINAL returned request
+ *    shape (systemPrompt + messages + tools). The estimator is
+ *    `estimateRequestInputTokens`; the input contract is
+ *    TokenEstimatedRequest (systemPrompt + messages + tools) —
+ *    structural provider-usage non-interference.
  *
- * RED shape: this is a true missing-authority RED. The structural
- * sub-tests are GREEN at HEAD; the missing-W sub-test is RED at
- * HEAD and will GREEN only after the producer seam publishes W.
+ * Calibration note (factory causal reviewer, 2026-09-02):
+ *   The earlier "POST_COMPACTION_BEHAVIORAL_RED = REPRODUCED"
+ *   label was over-strong; the passThroughCompact fixture does
+ *   not actually exercise a real compaction. The discriminator
+ *   is, more precisely, MISSING_W_AT_PREPARE_TURN — the
+ *   prepare-turn seam publishes W on every prepared request, not
+ *   only after compaction. W is the post-preparation occupancy
+ *   for the next provider request, computed from the FINAL
+ *   returned request shape.
  *
- * To keep CI green at HEAD (no false-positive), the RED is recorded
- * in a "synthetic RED probe" sub-test that mirrors the working-
- * context-ratio pattern (committed RED at HEAD is acceptable in
- * the Factory recon-to-repair bridge pattern; see
- * ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01's
- * RED witness file). Here we commit the structural sub-tests GREEN
- * and the missing-W sub-test as a comment-only RED pointer so
- * the suite is GREEN at HEAD; the producer-seam publish flips the
- * pointer into a live assertion.
+ * P1 (factory causal reviewer, 2026-09-02):
+ *   The earlier "STRUCTURAL: canonical estimator accepts only
+ *   systemPrompt + messages + tools (no provider-usage slots)"
+ *   sub-test was tautological — `keys.length === 3` against an
+ *   Array literal of three strings proves the literal, not the
+ *   type. The structural evidence now lives in the source/type
+ *   declaration of TokenEstimatedRequest
+ *   (sdk/packages/shared/src/llms/tokens.ts:25); the ACT records
+ *   this as a SOURCE-level claim. No runtime test is required.
  *
  * Negative assertion:
  *   W_after need not equal H_a. The two quantities belong to
@@ -56,13 +55,11 @@
  */
 
 import * as LlmsProviders from "@cline/llms";
-import {
-	estimateRequestInputTokens,
-	type TokenEstimatedRequest,
-} from "@cline/shared";
+import { estimateRequestInputTokens } from "@cline/shared";
 import { describe, expect, it } from "vitest";
 import {
 	createCompactionStateAwarePrepareTurn,
+	type ContextPipelinePrepareTurn,
 	type ContextPipelinePrepareTurnResult,
 } from "./compaction";
 
@@ -98,13 +95,14 @@ const CANONICAL: LlmsProviders.Message[] = [
 ];
 
 /** A pass-through compact that returns the canonical messages
- *  unchanged. Used to drive prepareTurn with a stable post-
- *  compaction request shape. */
-function passThroughCompact(context: {
-	messages: LlmsProviders.Message[];
-}): { messages: LlmsProviders.Message[]; systemPrompt?: string } {
+ *  unchanged. Used to drive prepareTurn with a stable final
+ *  request shape. The fixture does not exercise a real
+ *  compaction; the discriminator is the prepare-turn seam
+ *  publishing W on every prepared request, not specifically
+ *  after compaction. */
+const passThroughCompact: ContextPipelinePrepareTurn = async (context) => {
 	return { messages: context.messages };
-}
+};
 
 async function runPrepareTurn(): Promise<ContextPipelinePrepareTurnResult | undefined> {
 	const prepareTurn = createCompactionStateAwarePrepareTurn({
@@ -129,40 +127,19 @@ async function runPrepareTurn(): Promise<ContextPipelinePrepareTurnResult | unde
 }
 
 describe("compaction working-context authority publish", () => {
-	it("STRUCTURAL: canonical estimator accepts only systemPrompt + messages + tools (no provider-usage slots)", () => {
-		// TokenEstimatedRequest has only three slots. There is no
-		// place to pass tokensIn / cacheReads / cacheWrites. This
-		// is structural provider-usage non-interference: the
-		// canonical estimator cannot couple to provider usage
-		// accounting without extending its input contract, which
-		// is itself a code-review boundary.
-		const keys: Array<keyof TokenEstimatedRequest> = [
-			"systemPrompt",
-			"messages",
-			"tools",
-		];
-		expect(keys.length).toBe(3);
-		const w = estimateRequestInputTokens({
-			systemPrompt: SYSTEM_PROMPT,
-			messages: CANONICAL,
-			tools: TOOLS,
-		});
-		expect(w).toBeGreaterThan(0);
-	});
-
-	it("CANONICAL_INPUTS: the prepare-turn seam holds the exact canonical post-compaction request shape", async () => {
+	it("CANONICAL_INPUTS: the prepare-turn seam holds the exact final request shape (systemPrompt + messages + tools)", async () => {
 		// Phase 1 source bind: prove the prepare-turn seam
-		// (createCompactionStateAwarePrepareTurn) has the canonical
-		// post-compaction request shape (systemPrompt + messages +
-		// tools) and is the lowest production seam where those
-		// coexist.
+		// (createCompactionStateAwarePrepareTurn) returns the
+		// canonical final request shape (messages + systemPrompt)
+		// and that the estimator applied to that shape returns a
+		// finite W. The expected W_after value is
+		//   estimateRequestInputTokens({finalSystemPrompt,
+		//                                  finalMessages,
+		//                                  tools}).
 		const prepared = await runPrepareTurn();
 		expect(prepared).toBeDefined();
 		expect(prepared!.messages.length).toBeGreaterThan(0);
-		// The canonical estimator applied to the prepared shape
-		// (post-compaction messages + systemPrompt + tools) returns
-		// a finite W. This is the W_after value once the producer
-		// seam publishes W.
+		expect(prepared!.systemPrompt).toBe(SYSTEM_PROMPT);
 		const wAfter = estimateRequestInputTokens({
 			systemPrompt: prepared!.systemPrompt ?? SYSTEM_PROMPT,
 			messages: prepared!.messages,
@@ -171,16 +148,17 @@ describe("compaction working-context authority publish", () => {
 		expect(wAfter).toBeGreaterThan(0);
 	});
 
-	it("MISSING_W_RED: prepare-turn result carries currentWorkingContextEstimate equal to CANONICAL_W_ESTIMATOR(exact canonical post-compaction request shape) [RED at HEAD; GREEN after producer-seam publish]", async () => {
-		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
-		// Phase 1 RED. At HEAD, the prepare-turn result does not
-		// carry currentWorkingContextEstimate (no producer seam
-		// publishes W). The assertion below is the canonical
-		// missing-authority RED: it asserts the field is present
-		// and equals the canonical estimator applied to the exact
-		// canonical post-compaction request shape. After the
-		// producer-seam publish lands, this assertion flips to
-		// GREEN.
+	it("MISSING_W_AT_PREPARE_TURN: prepare-turn result carries currentWorkingContextEstimate equal to CANONICAL_W_ESTIMATOR(final request shape)", async () => {
+		// GREEN (post-fix): the prepare-turn result MUST carry
+		// currentWorkingContextEstimate, equal to
+		//   estimateRequestInputTokens({finalSystemPrompt,
+		//                                  finalMessages,
+		//                                  tools}).
+		// RED → GREEN transition recorded by commit 2 of this ACT.
+		// The RED witness file (commit 1) intentionally failed at
+		// HEAD because the field was absent; this commit flips it
+		// GREEN by publishing W from the FINAL returned shape at
+		// the prepare-turn seam.
 		const prepared = await runPrepareTurn();
 		expect(prepared).toBeDefined();
 		const result = prepared as unknown as Record<string, unknown>;

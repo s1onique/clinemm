@@ -165,8 +165,18 @@ W_PRODUCER_ACT      = AUTHORIZED (gate:
                      PRODUCT_DECISION = C2)
 NO_NEW_RECON        = YES
 
-WIRE_LOCATION       = UNDECIDED (Phase 1 producer recon
-                     binds it; do NOT preselect)
+WIRE_LOCATION       = ContextPipelinePrepareTurnResult
+                     .currentWorkingContextEstimate
+                     (BOUND at Phase 1 source bind +
+                      GREEN producer-seam publish;
+                      sdk/packages/core/src/extensions/
+                      context/compaction.ts:60-75
+                      [interface field];
+                      :750-764 [publishWorkingContextEstimate
+                      helper];
+                      :712/:715/:726 [wiring into all three
+                      return paths of
+                      createCompactionStateAwarePrepareTurn])
 WIRE_LOCATION_CANDIDATES
                    = compaction.payload.workingContextEstimate
                      / top-level projected
@@ -174,6 +184,15 @@ WIRE_LOCATION_CANDIDATES
                      existing task/header projection /
                      producer-side calculation feeding a
                      dedicated presentation field
+                     [SELECTED: producer-side calculation
+                     feeding a dedicated presentation field
+                     on the prepare-turn result; the upstream
+                     `createContextPipelinePrepareTurn` returns
+                     the same shape and the state-aware
+                     wrapper applies W to every result that
+                     flows through it; production call sites
+                     all go through the state-aware wrapper
+                     at local-runtime-host.ts:670]
 PHASE_1_GOAL        = find the lowest production seam
                      that holds system prompt + canonical
                      post-compaction messages + tools +
@@ -181,17 +200,23 @@ PHASE_1_GOAL        = find the lowest production seam
                      computed from THAT exact post-
                      compaction request shape (NOT from
                      tokensAfter); choose WIRE_LOCATION
-RED_SHAPE           = Given successful compaction and
-                     no subsequent api_req_started,
-                     W_before = estimateRequestInputTokens(
-                       exact canonical pre-compaction
-                       request shape)
-                     W_after = estimateRequestInputTokens(
-                       exact canonical post-compaction
-                       request shape)
-                     projected currentWorkingContextEstimate
-                     == W_after
-                     At HEAD expected RED: projected W = absent
+RED_SHAPE           = MISSING_W_AT_PREPARE_TURN = REPRODUCED
+                     (factory causal reviewer, 2026-09-02
+                     calibration: passThroughCompact does
+                     not exercise a real compaction; the
+                     discriminator is the prepare-turn seam
+                     publishing W on every prepared request,
+                     not specifically after compaction;
+                     W is the post-preparation occupancy
+                     for the next provider request,
+                     computed from the FINAL returned shape)
+                     At HEAD (pre-GREEN): projected W =
+                       absent (RED)
+                     After GREEN: projected W =
+                       estimateRequestInputTokens(
+                         finalSystemPrompt,
+                         finalMessages,
+                         tools)
 GREEN_SHAPE         = commit 1 (producer / projection seam):
                        W_before, W_after available at the
                        producer seam
