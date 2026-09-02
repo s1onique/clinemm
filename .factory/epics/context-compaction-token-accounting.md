@@ -57,14 +57,23 @@
   side repair trial. **Downstream repair ACT =
   ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01**
   (REVIEWER-RETITLED from WIRE-CONTRACT-REPAIR01 since wire is
-  NOT yet proven defective; OPENED with its own entry-freeze
-  and review pass; first trial = option (d) consumer-side
+  NOT yet proven defective; OPENED 2026-09-02 06:30:00Z;
+  P0-CORRECTED 2026-09-02 08:00:00Z per factory causal
+  reviewer's HALT_WRONG_REPAIR_ORACLE — oracle moved from H/W
+  seam to consumer seam; STRATEGY_D =
+  SELECTED_FOR_IMPLEMENTATION; REPAIR_STATUS = NOT_YET_APPLIED;
+  PRODUCTION_DELTA = ZERO at opening commit, APPLIED at the
+  implementation commit; first trial = option (d) consumer-side
   reconciliation, no protocol change; options (a)/(b) escalate
-  only if (d) proves insufficient). R1-R3 territory remains
-  DEFERRED per the reviewer's HALT directive. CASE_B
-  MANUAL_PROJECTION RETRACTED. ACT-CLINEMM-COMPACTION-INPUT-
-  IDENTITY-REPAIR01 RETRACTED (manual entry points are NOT the
-  defect).
+  only if (d) cannot satisfy the G2-G6 necessity/ablation
+  matrix with existing metadata; FROZEN CONTRACT =
+  INCOMPATIBLE_BASELINE → no ratio transfer; NECESSITY CONTROL
+  = committed DEFECT-WITNESS stays GREEN after repair;
+  REPAIR ORACLE = G2 in getApiMetrics.test.ts at consumer seam).
+  R1-R3 territory remains DEFERRED per the reviewer's HALT
+  directive. CASE_B MANUAL_PROJECTION RETRACTED.
+  ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01 RETRACTED
+  (manual entry points are NOT the defect).
 - Priority: **P1** (HIGH value production learning; affects compaction threshold, context-limit safety, long-session behavior). May be promoted to P0 if the discriminator reproduces an actual structural defect.
 - Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` — read-only recon; no production change until the discriminator resolves the S3 question.
 - Blocked by: n/a (the HOST_REQUIRED ratio discriminator is sequenced after the recon's calibrated findings are written; the reviewer explicitly said NOT to author more Factory scaffolding before the discriminator runs).

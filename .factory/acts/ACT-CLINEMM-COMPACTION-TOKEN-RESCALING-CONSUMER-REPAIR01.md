@@ -1,7 +1,7 @@
 # ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01
 
-> Status: **OPEN — REPAIR01_AUTHORIZED / REPRODUCTION_REPLAYED /
-> STRATEGY_D_FIRST_TRIAL / NO_PROTOCOL_CHANGE**.
+> Status: **OPEN — REPAIR01_AUTHORIZED / STRATEGY_D_SELECTED /
+> REPAIR_STATUS_NOT_YET_APPLIED / NO_PROTOCOL_CHANGE**.
 >
 > Epistemic purpose: **BOUNDED_PRODUCTION_REPAIR** (consumer-side
 > reconciliation of the cross-scale compaction ratio defect
@@ -9,16 +9,22 @@
 > ACCOUNTING-TRUTH-RECON01).
 >
 > ```text
-> ENTRY_HEAD            = 51beb1da4 (verified via `git rev-parse HEAD`)
-> ORIGIN_MAIN           = 51beb1da4 (HEAD == origin/main — clean HEAD)
+> ENTRY_HEAD            = 99b3fdf51 (the previous opening commit's
+>                        tip, which preserved recon head 51beb1da4
+>                        as PRE_OPEN_REPAIR_BASE)
+> PRE_OPEN_REPAIR_BASE  = 51beb1da4 (recon closure commit; verified
+>                        via `git rev-parse 51beb1da4`)
+> ORIGIN_MAIN           = 99b3fdf51 (HEAD == origin/main — clean HEAD)
 > BRANCH                = main
 > WORKTREE              = clean (`git status --short` empty)
 > UPSTREAM_RECON        = ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01
 >                        (CLOSED_WITH_RESIDUE 2026-09-02 06:30:00Z;
 >                         see UPSTREAM_RECON_LINKS below)
-> REVIEWER_DISPOSITION  = PASS_WITH_ONE_P1_FIX, then C1: GO
->                        (factory causal reviewer + context-
->                         accounting engineer, 2026-09-02)
+> REVIEWER_DISPOSITION  = PASS_WITH_ONE_P1_FIX, then C1: GO after
+>                        correction (factory causal reviewer +
+>                        context-accounting engineer, 2026-09-02
+>                        fourth-second-pass HALT_WRONG_REPAIR_ORACLE
+>                        resolved by this turn)
 > REPRODUCTION_REPLAYED = YES (committed DEFECT-WITNESS test in
 >                        compaction.working-context-ratio.test.ts
 >                        reproduces the cross-scale mismatch
@@ -50,18 +56,44 @@
 >                         into two fields. (c) RETRACTED.
 > STRATEGY_CHOICE       = (d) CONSUMER-SIDE RECONCILIATION
 >                        (smallest bounded fix; mechanically
->                         testable against the same discriminator)
-> PRODUCTION_DELTA      = APPLIED (this ACT; consumer-side only —
->                        getApiMetrics.ts logic, no protocol change)
+>                        testable against the consumer seam;
+>                        does NOT make H/W agree; makes the
+                        disagreement irrelevant to provider-
+                        input accounting)
+> STRATEGY_D            = SELECTED_FOR_IMPLEMENTATION
+> REPAIR_STATUS         = NOT_YET_APPLIED (this commit opens the
+>                        ACT and authors the consumer-seam
+>                        RED, but does NOT modify
+>                        getApiMetrics.ts)
+> PRODUCTION_DELTA      = ZERO (this opening commit; the
+>                        implementation commit will graduate
+>                        to APPLIED)
 > REPAIR_AUTHORIZED     = YES (per C1: GO above)
 > ```
 >
 > Owned by `EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING`.
 
-> **FROZEN CONTRACT** (semantic condition, NOT mode-name):
-> Do not apply an H-space manual-compaction shrink ratio to
-> provider/request-input token accounting unless the two baselines
-> are known equivalent.
+> **FROZEN CONTRACT** (semantic condition, NOT a manual/auto
+> special-case — the recon only proved the INCOMPATIBLE_BASELINE
+> condition, not the manual vs auto equivalence):
+>
+> ```text
+> INCOMPATIBLE_BASELINE → no ratio transfer
+> ```
+>
+> In words: do NOT apply an H-space (canonical compaction input
+> → compaction output) shrink ratio to provider/request-input
+> P-space accounting when the two baselines are not known
+> equivalent. The repackaging guidance below is the
+> implementation constraint, not the semantic invariant:
+>
+> - If the consumer can determine, from existing metadata,
+>   whether the H baseline is compatible with the P baseline, it
+>   MUST refuse to transfer the ratio on the incompatible
+>   branch.
+> - If the consumer cannot determine compatibility with existing
+>   information, ESCALATE to option (a) tag the field or
+>   (b) split into two fields (these require protocol change).
 >
 > Concretely: stop synthesizing a post-compaction provider-input
 > count by multiplying a previous provider tokensIn by
@@ -75,35 +107,88 @@
 - `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` (commit
   51beb1da4)
 - `sdk/packages/core/src/extensions/context/compaction.working-context-ratio.test.ts`
-  (DEFECT-WITNESS test, GREEN at HEAD; will be inverted to
-  `<= 0.10` as the post-fix regression oracle)
+  (DEFECT-WITNESS test, **GREEN at HEAD AND MUST STAY GREEN** as
+  the **necessity control / ablation premise**; after Strategy D,
+  the underlying H/W scale mismatch still exists, yet the UI
+  accounting is truthful because the consumer no longer transfers
+  an invalid ratio)
 - `.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01/red-witness.txt`
   (`RED_ARITHMETIC_WITNESS = SYNTHETIC`)
 - `.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01/discriminator.md`
   (full causal binding)
 
-## Repair acceptance (mandatory gates)
+## Repair acceptance (mandatory gates — necessity/ablation
+                    matrix per factory causal reviewer's P0)
 
 ```text
-1. Existing DEFECT-WITNESS test goes GREEN under desired
-   invariant:
-     relativeDiff <= tolerance for any ratio actually
-     transferred, OR the incompatible ratio is no longer
-     transferred.
+G1 — NECESSITY CONTROL
+  H/W DEFECT-WITNESS stays GREEN: the underlying scale
+  mismatch still exists. If a future change accidentally made
+  H/W agree, this assertion would correctly RED (i.e., it
+  becomes the negative control). The H/W divergence is the
+  existence condition for the defect; the repair does NOT
+  remove it, it removes the ratio TRANSFER. Evidence class:
+  ABLATION_PREMISE.
 
-2. Small-input POSITIVE CONTROL remains GREEN.
+G2 — CONSUMER RED → GREEN (load-bearing repair oracle)
+  At buggy HEAD (this opening commit):
+    expect(fabricated P_after).not.toEqual(
+      previous P_before × H_after/H_before
+    )
+    → FAILS at buggy HEAD (the fabricated P_after IS present
+      in current getApiMetrics output)
 
-3. Existing compaction suite remains GREEN (no regressions).
+  After Strategy D applied:
+    → PASSES (no fabricated P_after; the consumer refuses to
+      synthesize a request-input count from an H-space ratio
+      whose baseline is incompatible)
 
-4. getApiMetrics tests prove:
-   - no fabricated post-compaction request-input count from
-     an incompatible H ratio;
-   - next genuine provider/request observation restores truth.
+G3 — GENUINE TRUTH RESTORATION
+  When the next genuine provider/request observation arrives,
+  it replaces the stale/unknown post-compaction value via
+  the existing UI contract. No new code path; just verify the
+  existing restoration path still functions when the synthesized
+  post-compaction value is suppressed.
 
-5. No producer/schema/API change for first trial (this ACT).
+G4 — POSITIVE COMPATIBILITY
+  If the H baseline IS demonstrably compatible with the P
+  baseline (e.g., for the auto-mode flow where the recon
+  actually proves compatibility, NOT assumed), existing
+  transfer behavior remains permitted. Concretely: when
+  H_before ≈ W_before (the truncation-doesn't-engage regime,
+  i.e., the DEFECT-WITNESS POSITIVE CONTROL), the ratio
+  transfer can legitimately track the working-context shrink.
 
-6. UI still shows the compaction's own before→after numbers,
-   but does NOT conflate them with provider-input accounting.
+G5 — PRESENTATION CONSERVATION
+  The compaction's own before→after numbers (H_before →
+  H_after) remain visible as their own metric. The repair only
+  blocks the cross-scale transfer, not the underlying metric.
+
+G6 — COLLATERAL
+  Existing compaction suite remains GREEN (no regressions).
+  Existing getApiMetrics tests remain GREEN. No
+  producer/schema/API/.proto change for first trial.
+```
+
+The matrix gives the desired necessity proof:
+
+```text
+BEFORE:
+  H/W mismatch exists
+  +
+  consumer transfers H ratio
+  =
+  false projected P value (the 0.666 relative divergence
+  reported as P_after/P_before)
+
+AFTER (Strategy D applied):
+  H/W mismatch still exists (G1 stays GREEN — ablation premise)
+  +
+  consumer refuses invalid transfer (G2 GREEN — fabricated
+  P_after no longer present)
+  =
+  false projected P value disappears (G3 GREEN — next genuine
+  observation restores truth)
 ```
 
 If consumer-side reconciliation cannot satisfy these gates
@@ -122,11 +207,15 @@ or splitting (b) the wire in a separate repair ACT.
   change.
 - (c) ~~Stop emitting one of the fields~~ RETRACTED (unsafe —
   loses information that other consumers depend on).
-- (d) **Consumer-side reconciliation** — for manual mode, do
-  NOT rescale (use a neutral divider label); for auto mode,
-  preserve existing behavior only if recon/test demonstrates
-  its input scale is compatible. NO protocol change. RECOMMENDED
-  FIRST TRIAL.
+- (d) **Consumer-side reconciliation** — INCOMPATIBLE_BASELINE
+  → no ratio transfer; COMPATIBLE_BASELINE → existing transfer
+  behavior preserved. NO protocol change. RECOMMENDED FIRST
+  TRIAL. Implementation detail (e.g., whether the
+  INCOMPATIBLE_BASELINE discriminator maps to a `manual` flag
+  in current metadata) is recorded as an implementation
+  constraint, NOT the semantic invariant — see FROZEN CONTRACT
+  above. **Does NOT make H/W agree; makes the disagreement
+  irrelevant to provider-input accounting.**
 - (e) Label-only — update UI title + divider label to match
   producer's contract. Only sufficient if S1-LABEL-ONLY is the
   verdict AND no other accounting defects surface from R1-R3.
@@ -134,18 +223,33 @@ or splitting (b) the wire in a separate repair ACT.
   ratio itself is on the wrong scale).
 
 ## Frozen RED for the post-fix regression oracle
+                    (AT THE CONSUMER SEAM, NOT the H/W seam)
 
-When the consumer-side reconciliation is applied, the DEFECT-
-WITNESS test's assertion must be INVERTED to:
+The H/W DEFECT-WITNESS is the **necessity control** — it must
+STAY GREEN throughout (Strategy D does not change H/W scales).
+It is NOT the repair oracle.
+
+The repair oracle lives at the consumer seam. Author the
+following test in `apps/vscode/src/shared/__tests__/getApiMetrics.test.ts`
+(this ACT's implementation turn will write it):
 
 ```ts
-expect(relativeDiff).toBeLessThanOrEqual(RELATIVE_TOLERANCE);
-expect(verdict).toBe("S3_RATIO_TRANSFER_NOT_REPRODUCED");
+// At buggy HEAD (this opening commit):
+expect(fabricatedPostCompactProviderInput).not.toEqual(
+  previousProviderInput × compactionHAfter ÷ compactionHBefore,
+);
+// → FAILS at buggy HEAD (the fabricated P_after IS present in
+//   current getApiMetrics output)
+
+// After Strategy D applied (implementation commit):
+// → PASSES (no fabricated P_after; the consumer refuses to
+//   synthesize a request-input count from an H-space ratio
+//   whose baseline is incompatible)
 ```
 
-This becomes the GREEN post-fix regression oracle. If a future
-change accidentally reintroduces the cross-scale mismatch, this
-assertion will correctly RED.
+This becomes the GREEN post-fix regression oracle at the
+consumer boundary. If a future change accidentally re-enables
+the invalid transfer, this assertion will correctly RED.
 
 ## R1-R3 territory remains DEFERRED
 
@@ -163,33 +267,42 @@ accounting defects) remains DEFERRED per the recon ACT's HALT.
 
 ## Test surface
 
-- INVARIANT TEST (`compaction.working-context-ratio.test.ts`):
-  invert the DEFECT-WITNESS assertion to `<= 0.10` to become
-  the post-fix regression oracle.
-- CONSUMER TEST (`apps/vscode/src/shared/__tests__/getApiMetrics.test.ts`):
-  add the four gates from the reviewer's acceptance list (no
-  fabricated post-compaction count from H ratio; next genuine
-  provider/request observation restores truth; auto-mode compat
-  cases stay green; UI still shows compaction's own before→after
-  numbers but does not conflate with provider-input accounting).
-- EXISTING compaction suite: must remain GREEN.
+- **CONSUMER TEST** (`apps/vscode/src/shared/__tests__/getApiMetrics.test.ts`):
+  the load-bearing repair oracle. The implementation turn of
+  this ACT will author G2 (consumer RED → GREEN), G3
+  (genuine truth restoration), G4 (positive compatibility),
+  and G5 (presentation conservation). This is where the
+  Strategy-D implementation is verified.
+- **NECESSITY CONTROL** (`sdk/packages/core/src/extensions/context/compaction.working-context-ratio.test.ts`):
+  the committed DEFECT-WITNESS test (G1) — **UNCHANGED**.
+  Strategy D does not change H/W scales; this test stays GREEN
+  after the repair as the ablation premise.
+- **EXISTING compaction suite**: must remain GREEN (no regressions).
+- **EXISTING getApiMetrics tests**: must remain GREEN (no
+  regressions in adjacent accounting paths).
 
 ## Production change scope
 
 ```text
-PRODUCTION DELTA =
-  apps/vscode/src/shared/getApiMetrics.ts:174-225 (consumer-side
-                                                    reconciliation
-                                                    only)
-+
-  test:
-    sdk/packages/core/src/extensions/context/compaction.working-
-      context-ratio.test.ts (DEFECT-WITNESS assertion inverted
-                              to <= 0.10, GREEN post-fix)
+PRODUCTION DELTA (this opening commit) = ZERO
+
+PRODUCTION DELTA (this ACT's implementation commit) =
+  apps/vscode/src/shared/getApiMetrics.ts:174-225
+    (consumer-side reconciliation; INCOMPATIBLE_BASELINE → no
+     ratio transfer; COMPATIBLE_BASELINE → existing transfer
+     behavior preserved)
 +
   test:
     apps/vscode/src/shared/__tests__/getApiMetrics.test.ts
-      (four new acceptance gates)
+      (G2/G3/G4/G5 acceptance gates — consumer RED → GREEN +
+       genuine truth restoration + positive compatibility +
+       presentation conservation)
++
+  no test change to:
+    sdk/packages/core/src/extensions/context/compaction.working-
+      context-ratio.test.ts
+    (the DEFECT-WITNESS test STAYS GREEN throughout — it is the
+    necessity control, NOT the repair oracle)
 
 NO CHANGES TO:
   sdk/packages/core/src/extensions/context/compaction.ts
@@ -210,11 +323,38 @@ ROOT_CAUSE_BOUNDED                         = consumer assumes transferable
                                                 supported)
 STRATEGY_CHOICE                            = (d) CONSUMER-SIDE
                                                 RECONCILIATION
-REPAIR_AUTHORIZED                          = YES (C1: GO)
+STRATEGY_D                                 = SELECTED_FOR_IMPLEMENTATION
+REPAIR_STATUS                              = NOT_YET_APPLIED
+                                                (this opening commit;
+                                                 the implementation
+                                                 commit will
+                                                 graduate to APPLIED)
+REPAIR_AUTHORIZED                          = YES (C1: GO after
+                                                P0 correction —
+                                                HALT_WRONG_REPAIR_
+                                                ORACLE resolved)
 PROTOCOL_CHANGE                            = NONE (first trial only)
-PRODUCTION_DELTA                           = APPLIED (this ACT)
+PRODUCTION_DELTA_THIS_COMMIT               = ZERO
+PRODUCTION_DELTA_NEXT_COMMIT               = APPLIED (Strategy D
+                                                consumer-side
+                                                reconciliation)
+NECESSITY_CONTROL                          = DEFECT-WITNESS stays GREEN
+                                                after repair
+                                                (ablation premise)
+REPAIR_ORACLE                              = G2 in getApiMetrics.test.ts
+                                                (consumer seam, not
+                                                 H/W seam)
 NEW_REVIEW_ROUND                           = YES (repair ACT opens its
-                                                own review pass)
-ESCALATION                                 = (a)/(b) only if (d)
-                                                insufficient
+                                                own review pass on the
+                                                implementation commit)
+ESCALATION                                 = (a) tag the field or
+                                                (b) split into two
+                                                fields, only if (d)
+                                                cannot satisfy G2-G6
+                                                with existing metadata
+REOPEN_CONDITION                           = consumer RED mechanically
+                                                reproduces current
+                                                fabricated post-
+                                                compaction request-
+                                                input value
 ```

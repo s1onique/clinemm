@@ -418,3 +418,86 @@ is NOT yet proven defective) opens with its own entry-freeze
 and review pass. First trial = option (d) consumer-side
 reconciliation; no protocol change. Options (a)/(b) escalate
 only if (d) proves insufficient.
+
+## POST-DISCRIMINATOR REVIEWER P0 HALT_WRONG_REPAIR_ORACLE CORRECTION (added 2026-09-02 08:00:00Z)
+
+The factory causal reviewer's fourth-second-pass P0 halt identified
+that the originally opened repair ACT
+(`ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01`)
+proposed inverting the H/W DEFECT-WITNESS assertion to
+`relativeDiff <= 0.10` as the post-fix regression oracle. This
+is INCORRECT: Strategy D changes only the consumer seam
+(`getApiMetrics.ts:174-225`) and does NOT change H/W scales.
+After a correct Strategy-D implementation, the H/W mismatch is
+still 0.666 relative divergence — the inverted assertion would
+RED forever. The test being proposed for GREEN lives UPSTREAM
+of the repaired boundary.
+
+The reviewer's correction reframes the repair as a **necessity /
+ablation matrix** (G1-G6):
+
+```text
+G1 — NECESSITY CONTROL
+  H/W DEFECT-WITNESS stays GREEN after repair (the underlying
+  scale mismatch still exists; the repair does NOT remove it,
+  it removes the ratio TRANSFER). Evidence class: ABLATION_PREMISE.
+
+G2 — CONSUMER RED → GREEN (load-bearing repair oracle)
+  At buggy HEAD:
+    expect(fabricated P_after).not.toEqual(
+      previous P_before × H_after/H_before)
+    → FAILS at buggy HEAD (the fabricated P_after IS present
+      in current getApiMetrics output)
+  After Strategy D applied:
+    → PASSES (no fabricated P_after; the consumer refuses to
+      synthesize a request-input count from an H-space ratio
+      whose baseline is incompatible)
+
+G3 — GENUINE TRUTH RESTORATION
+  When the next genuine provider/request observation arrives,
+  it replaces the stale/unknown post-compaction value via the
+  existing UI contract.
+
+G4 — POSITIVE COMPATIBILITY
+  If the H baseline IS demonstrably compatible with the P
+  baseline, existing transfer behavior remains permitted.
+
+G5 — PRESENTATION CONSERVATION
+  Compaction's own before→after numbers (H_before → H_after)
+  remain visible as their own metric.
+
+G6 — COLLATERAL
+  Existing compaction suite + existing getApiMetrics tests
+  remain GREEN. No producer/schema/API/.proto change for
+  first trial.
+```
+
+The repair ACT's:
+
+- Frozen contract reframed as `INCOMPATIBLE_BASELINE → no ratio
+  transfer` (NOT a manual/auto special-case; the recon only
+  proved INCOMPATIBLE_BASELINE, not manual-vs-auto equivalence).
+- Frozen RED moved from H/W seam (upstream of repaired boundary)
+  to consumer seam (G2).
+- `PRODUCTION_DELTA` corrected to ZERO at opening commit (was
+  incorrectly labelled APPLIED — this opening commit contains
+  no `getApiMetrics.ts` change).
+- `REPAIR_STATUS = NOT_YET_APPLIED`; `STRATEGY_D =
+  SELECTED_FOR_IMPLEMENTATION`. Implementation commit graduates
+  to APPLIED.
+- `REPAIR_AUTHORIZED = YES` (C1: GO after P0 correction).
+
+The seam binding described in this file (BUILD_FOR_API_SIDE_
+CHANNEL_INVARIANT, and the targeted inspection of
+`MessageBuilder.buildForApi`) is UNCHANGED by this P0
+correction — it was already correctly bounded. The P0 halt
+addressed the REPAIR ACT's oracle, not the recon's seam.
+
+C1: GO (after the correction). Review round closed for this
+recon ACT. The implementation commit
+(`getApiMetrics.ts:174-225` consumer-side reconciliation +
+new acceptance gates in `getApiMetrics.test.ts`) opens its own
+review pass.
+
+EOF NEWLINE (added 2026-09-02 08:00:00Z per factory causal
+reviewer's P2 cleanup directive).

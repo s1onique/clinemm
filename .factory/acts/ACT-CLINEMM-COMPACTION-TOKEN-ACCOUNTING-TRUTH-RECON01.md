@@ -2,20 +2,29 @@
 
 > Status: **CLOSED_WITH_RESIDUE** (factory form review hardened,
 >  2026-09-02 06:30:00Z; fourth-second-pass PASS_WITH_ONE_P1_FIX
->  then C1: GO, 2026-09-02)
+>  then C1: GO after P0 HALT_WRONG_REPAIR_ORACLE correction,
+>  2026-09-02 08:00:00Z)
 > Verdict: **CASE_A — Cross-scale ratio-transfer mismatch REPRODUCED
 >  / ROOT_CAUSE = NOT_YET_PROMOTED / REPAIR_AUTHORIZED = YES for
->  the bounded consumer-side reconciliation trial**
+>  the bounded consumer-side reconciliation trial (Strategy D;
+>  repair oracle lives at the consumer seam, NOT at the H/W seam;
+>  necessity control = committed DEFECT-WITNESS stays GREEN after
+>  repair)**
 > Upstream: n/a (factory-internal LIVE symptom, 2026-09-01)
 > Owning epic: [`EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING`](../epics/context-compaction-token-accounting.md)
 > ACT ID: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01`
 > Evidence: `.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01/`
 > Reviewer disposition: PASS_WITH_ONE_P1_FIX (committed test's
->  RED-witness wording was stale); C1: GO to bounded
->  consumer-side repair trial.
+>  RED-witness wording was stale; renamed DEFECT-WITNESS), then
+>  P0 HALT_WRONG_REPAIR_ORACLE (the original repair ACT asked
+>  the H/W test to invert, which Strategy D cannot satisfy),
+>  then C1: GO to bounded consumer-side repair trial after the
+>  repair ACT was corrected (oracle moved to consumer seam).
 > Downstream ACT: `ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-
->  CONSUMER-REPAIR01` (opened 2026-09-02; NOT auto-executed —
->  opens its own review pass).
+>  CONSUMER-REPAIR01` (opened 2026-09-02 06:30:00Z;
+>  P0-corrected 2026-09-02 08:00:00Z; opens its own review pass
+>  on the implementation commit; PRODUCTION_DELTA = ZERO at
+>  opening commit; APPLIED at the implementation commit).
 
 ## §0 — Frozen user-facing invariant (separated truth domains)
 

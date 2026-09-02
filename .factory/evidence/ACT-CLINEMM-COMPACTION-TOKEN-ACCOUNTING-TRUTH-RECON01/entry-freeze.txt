@@ -380,6 +380,50 @@ CONTRACT_CORRECTION=
   address the new P1 candidate (post-compaction TaskHeader projection).
   PRODUCTION_DELTA_SINCE_OPENING: ZERO.
 
+DOWNSTREAM_REPAIR_ACT_STATE_CORRECTION (factory causal reviewer +
+context-accounting engineer, 2026-09-02 08:00:00Z FOURTH-SECOND-PASS
+HALT_WRONG_REPAIR_ORACLE)=
+  Original repair ACT
+  (ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01)
+  asked the wrong test to change:
+    - Inverted DEFECT-WITNESS assertion to
+      `relativeDiff <= 0.10` as the post-fix regression oracle.
+    - This is INCORRECT: Strategy D changes only
+      getApiMetrics.ts (consumer seam) and does NOT change H/W
+      scales. After a correct Strategy-D implementation, the H/W
+      mismatch is still 0.666 relative divergence — the test
+      would RED forever. The test being proposed for GREEN lives
+      UPSTREAM of the repaired boundary.
+  The reviewer's correction (necessity/ablation matrix, G1-G6):
+    - G1 (NECESSITY CONTROL): H/W DEFECT-WITNESS stays GREEN
+      after repair — the underlying scale mismatch still exists.
+      Evidence class: ABLATION_PREMISE.
+    - G2 (CONSUMER RED → GREEN): the load-bearing repair oracle
+      lives at the consumer seam. At buggy HEAD:
+        expect(fabricated P_after).not.toEqual(
+          previous P_before × H_after/H_before)
+        → FAILS at buggy HEAD.
+      After Strategy D applied:
+        → PASSES (no fabricated P_after).
+    - G3-G6: genuine truth restoration, positive compatibility,
+      presentation conservation, collateral.
+  The repair ACT's:
+    - Frozen contract reframed as INCOMPATIBLE_BASELINE → no
+      ratio transfer (NOT a manual/auto special-case; the recon
+      only proved INCOMPATIBLE_BASELINE, not manual-vs-auto
+      equivalence).
+    - Frozen RED moved from H/W seam (upstream of repaired
+      boundary) to consumer seam (G2).
+    - PRODUCTION_DELTA corrected to ZERO at opening commit
+      (was incorrectly labelled APPLIED — this opening commit
+      contains no getApiMetrics.ts change).
+    - REPAIR_STATUS = NOT_YET_APPLIED; STRATEGY_D =
+      SELECTED_FOR_IMPLEMENTATION. Implementation commit
+      graduates to APPLIED.
+    - REPAIR_AUTHORIZED = YES (C1: GO after P0 correction).
+  C1: GO (after the correction). Review round closed for this
+  recon ACT. Implementation commit opens its own review pass.
+
 NEW_CAUSAL_CANDIDATE (factory causal reviewer, 2026-09-02 SECOND REORDERING +
 SECOND REVIEW)=
   The post-compaction TaskHeader rescaling (apps/vscode/src/shared/
