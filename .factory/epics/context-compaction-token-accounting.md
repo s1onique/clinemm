@@ -443,3 +443,149 @@ PRODUCTION DELTA: ZERO (this turn is text-only P1 fix in the
 new ACT's Phase-1 contract; no production code change)
 NEW REVIEW ROUND: NO
 C1: GO_W_AUTHORITY
+
+## Current frontier update — 2026-09-02 22:00:00Z (reviewer P2 disposition)
+
+Factory causal reviewer second-pass on commit `2c1768563`:
+**PASS_WITH_NONBLOCKING_RESIDUE. C1: GO_W_AUTHORITY.** P0/P1 closed.
+P2 = bind the actual `CANONICAL_W_ESTIMATOR` before hard-coding
+`estimateRequestInputTokens` in the RED; plus a tiny `(i)/(iii)/(iii)`
+numbering typo in the new ACT's `entry-freeze.txt`. The reviewer's
+product-decision framing stays accepted: `PRODUCT_DECISION = C2`,
+`SOURCE_INTENT = AMBIGUOUS`, `W_AUTHORITY = ABSENT / PROVEN`. The
+reviewer's `H_a_TO_W_EQUIVALENCE_BY_ASSUMPTION = FORBIDDEN` /
+`H_a_TO_W_EQUIVALENCE = UNPROVEN` nomenclature stays accepted.
+
+### P2 — CANONICAL_W_ESTIMATOR placeholder
+
+The RED shape currently names `estimateRequestInputTokens` as a
+**candidate**, not a hard-coded assumption. Phase 1 must first
+establish:
+
+```text
+CANONICAL_W_ESTIMATOR =
+  <actual function used by next-request context-budget
+   logic at the chosen seam>
+```
+
+If that turns out to be `estimateRequestInputTokens`, great. If
+not, the ACT follows the real authority rather than adapting
+reality to the plan. Do NOT begin the test with any function name
+hard-coded merely because it already exists.
+
+### P2 — NEGATIVE_CONTROL_PROVIDER_USAGE (mandatory Phase 1 control)
+
+```text
+provider usage buckets change (cacheReads / cacheWrites / tokensIn)
+while canonical request content identical
+→ W MUST NOT change
+```
+
+Example synthetic variation: vary `cacheReads`, `cacheWrites`,
+`tokensIn` while keeping system prompt / messages / tools
+identical. Expected: `W1 == W2`. This mechanically proves this
+ACT has not reintroduced provider-accounting dependence. More
+valuable than yet another prose invariant.
+
+### P2 — LIVE_264_3K_USAGE
+
+Do NOT use the live `264.3k` as a target. The screenshot is
+evidence of the UX defect, not an oracle for W. `W_after` is
+required to differ from `H_a`; the test should derive W from the
+canonical request estimator, not embed a live screenshot number.
+
+### P2 — typo fix
+
+`entry-freeze.txt` previously had `(i)/(iii)/(iii)` numbering
+typo. Fixed opportunistically in this turn while the file was
+in scope for the CANONICAL_W_ESTIMATOR / NEGATIVE_CONTROL
+additions. Not a standalone docs commit, per the reviewer
+directive.
+
+### Phase 1 is small now
+
+The reviewer explicitly asked for a small Phase 1, not another
+Factory evidence essay. Inspect the actual next-request
+preparation chain and fill only the seam evaluation table:
+
+```text
+| Candidate          | Has system prompt | Canonical post-compaction messages | Tools | Uses actual budget estimator | Can publish W once? |
+| compaction seam    |                   |                                    |       |                              |                     |
+| prepare-turn seam  |                   |                                    |       |                              |                     |
+| VSCode coordinator |                   |                                    |       |                              |                     |
+```
+
+The decisive question:
+
+> Where is the first production point after compaction where
+> the exact content-bearing next-request shape and the canonical
+> context-budget estimator coexist?
+
+The reviewer's hypothesis (not yet bound): the prepare-turn path
+is stronger than the VS Code coordinator because the coordinator
+is presentation-side and should not learn token-estimation
+semantics. But bind source.
+
+### Then author the true missing-W RED
+
+Once the seam is proven:
+
+```text
+canonical post-compaction request shape
+→ CANONICAL_W_ESTIMATOR
+→ W_after
+```
+
+RED asserts that the value cannot currently reach the projection
+boundary:
+
+```text
+after successful compaction
+and before a subsequent api_req_started
+
+expected:
+  projected currentWorkingContextEstimate = W_after
+
+actual at HEAD:
+  projected currentWorkingContextEstimate = absent
+```
+
+That is a good RED because the missing thing is now an
+authority field, not an arithmetic expectation.
+
+### Commit split remains two-step
+
+```text
+Commit 1:
+  authoritative W exists and is published
+  header still reads P
+  Evidence: RED → GREEN for W publication
+           provider-accounting non-interference control
+
+Commit 2:
+  header switches P → W
+  Evidence: header projection RED → GREEN
+           existing P/H accounting suites remain GREEN
+```
+
+Clean causal isolation.
+
+### Conservation preserved
+
+- DEFECT A (cross-scale ratio transfer): CLOSED at cb5b52239
+  (Strategy-D; getApiMetrics.ts:174-225)
+- DEFECT B (post-restore publication): CLOSED at HEAD
+- Strategy-D consumer untouched
+- 24/24 getApiMetrics bun:test PASS (re-verified)
+- git diff --check clean
+
+PRODUCTION DELTA: ZERO (this turn is text-only P2 disposition
+recording; CANONICAL_W_ESTIMATOR placeholder + NEGATIVE_CONTROL
++ LIVE_264_3K_USAGE + numbering typo fix; no production code
+change)
+NEW REVIEW ROUND: NO
+C1: GO_W_AUTHORITY
+
+Reviewer closing note: "No more Factory planning is needed
+here. The next useful result is the filled seam table and a
+failing missing-W test."

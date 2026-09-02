@@ -127,6 +127,38 @@ RECON_VERDICT       = RECON_PASS
                                           exact inputs +
                                           identical
                                           estimator)
+                     CANONICAL_W_ESTIMATOR
+                                       = UNBOUND (reviewer P2;
+                                          Phase 1 binds it from
+                                          actual next-request
+                                          context-budget logic
+                                          at chosen seam; do NOT
+                                          hard-code
+                                          estimateRequestInputTokens
+                                          before binding;
+                                          carried to WORKING-
+                                          CONTEXT-AUTHORITY-
+                                          PUBLISH01)
+                     NEGATIVE_CONTROL_PROVIDER_USAGE
+                                       = provider usage buckets
+                                          change (cacheReads /
+                                          cacheWrites / tokensIn)
+                                          while canonical
+                                          request content
+                                          identical
+                                          → W MUST NOT change
+                                          (mandatory Phase 1
+                                          control; W1 == W2;
+                                          carried to WORKING-
+                                          CONTEXT-AUTHORITY-
+                                          PUBLISH01)
+                     LIVE_264_3K_USAGE    = DO NOT use the live
+                                          264.3k as a target
+                                          (screenshot is evidence
+                                          of UX defect not an
+                                          oracle for W; carried
+                                          to WORKING-CONTEXT-
+                                          AUTHORITY-PUBLISH01)
                      PRODUCT_DECISION   = C2
                                           (product
                                           recommendation

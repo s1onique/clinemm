@@ -236,12 +236,12 @@ The consumer (TaskHeader / ContextWindow.tsx) must NOT recompute W.
 
 ```text
 W_before =
-  estimateRequestInputTokens(exact canonical pre-compaction
-                             request shape)
+  CANONICAL_W_ESTIMATOR(exact canonical pre-compaction
+                        request shape)
 
 W_after =
-  estimateRequestInputTokens(exact canonical post-compaction
-                             request shape)
+  CANONICAL_W_ESTIMATOR(exact canonical post-compaction
+                        request shape)
 
 after successful compaction:
   projected currentWorkingContextEstimate == W_after
@@ -249,6 +249,14 @@ after successful compaction:
 At HEAD expected RED:
   projected W = absent
 ```
+
+`CANONICAL_W_ESTIMATOR` is bound in Phase 1 from the actual
+function used by next-request context-budget logic at the chosen
+seam. The RED shape names it as a placeholder so the test is not
+allowed to begin with `estimateRequestInputTokens` hard-coded
+merely because that function already exists. If Phase 1 binds the
+estimator to a different function, the ACT follows the real
+authority.
 
 That is a genuine RED once the producer seam is bound.
 
@@ -268,14 +276,65 @@ recreate the cross-scale arithmetic prohibition.
 
 ```text
 RED_AUTHORIZED_AFTER:
-  - the seam evaluation table is filled
-  - WIRE_LOCATION is selected from the table, not preselected
-  - the existing estimator contract that consumes the seam's
-    inputs has been confirmed to include system prompt +
-    canonical messages + tools (with deterministic request-
-    envelope / context overhead only where the estimator
-    already includes it)
+  (i)   the seam evaluation table is filled
+  (ii)  WIRE_LOCATION is selected from the table, not preselected
+  (iii) the existing estimator contract that consumes the seam's
+        inputs has been confirmed to include system prompt +
+        canonical messages + tools (with deterministic request-
+        envelope / context overhead only where the estimator
+        already includes it)
+  (iv)  CANONICAL_W_ESTIMATOR is bound to the actual function
+        used by next-request context-budget logic at the chosen
+        seam (do NOT hard-code estimateRequestInputTokens before
+        this is bound; see CANONICAL_W_ESTIMATOR below)
 ```
+
+### CANONICAL_W_ESTIMATOR (reviewer P2)
+
+The RED shape currently names `estimateRequestInputTokens` as a
+**candidate**, not a hard-coded assumption. Phase 1 must first
+establish:
+
+```text
+CANONICAL_W_ESTIMATOR =
+  <actual function used by next-request context-budget
+   logic at the chosen seam>
+```
+
+If that turns out to be `estimateRequestInputTokens`, great. If
+not, the ACT must follow the real authority rather than adapting
+reality to the plan. Do NOT begin the test with any function name
+hard-coded merely because it already exists.
+
+### NEGATIVE_CONTROL_PROVIDER_USAGE (mandatory Phase 1 control)
+
+The most valuable control is:
+
+```text
+provider usage buckets change
+while canonical request content is identical
+→ W MUST NOT change
+```
+
+Example synthetic variation:
+
+```text
+cacheReads
+cacheWrites
+tokensIn
+```
+
+while keeping system prompt / messages / tools identical.
+Expected: `W1 == W2`. This mechanically proves this ACT has not
+reintroduced provider-accounting dependence. More valuable than
+yet another prose invariant.
+
+### LIVE_264_3K_USAGE
+
+Do NOT use the live `264.3k` as a target. The screenshot is
+evidence of the UX defect, not an oracle for W. `W_after` is
+required to differ from `H_a`; the test should derive W from the
+canonical request estimator, not embed a live screenshot number.
 
 ## Don't touch the header yet
 

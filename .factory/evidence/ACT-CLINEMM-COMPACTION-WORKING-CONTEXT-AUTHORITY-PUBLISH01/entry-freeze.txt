@@ -77,18 +77,25 @@ TASKHEADER_CONTEXTWINDOW
                      consumer switch — separable causality)
 RED_AUTHORIZED_AFTER
                    = (i) seam evaluation table filled;
-                     (iii) WIRE_LOCATION selected from table;
+                     (ii) WIRE_LOCATION selected from table;
                      (iii) existing estimator contract that
                      consumes the seam's inputs confirmed to
                      include system prompt + canonical
                      messages + tools (with deterministic
                      request-envelope overhead only where the
                      estimator already includes it)
+                     (iv) CANONICAL_W_ESTIMATOR bound to the
+                     actual function used by next-request
+                     context-budget logic at the chosen seam
+                     (do NOT hard-code
+                     estimateRequestInputTokens before this
+                     is bound; see CANONICAL_W_ESTIMATOR
+                     below)
 RED_SHAPE           = W_before =
-                     estimateRequestInputTokens(exact canonical
+                     CANONICAL_W_ESTIMATOR(exact canonical
                      pre-compaction request shape)
                      W_after =
-                     estimateRequestInputTokens(exact canonical
+                     CANONICAL_W_ESTIMATOR(exact canonical
                      post-compaction request shape)
                      after successful compaction:
                      projected currentWorkingContextEstimate
@@ -97,6 +104,47 @@ RED_SHAPE           = W_before =
 NEGATIVE_ASSERTION  = W_after need not equal H_a (different
                      semantic spaces; any test that asserts
                      W_after === H_a for a fixture is a smell)
+
+CANONICAL_W_ESTIMATOR
+                   = UNBOUND (reviewer P2)
+                     Phase 1 must first establish:
+                       CANONICAL_W_ESTIMATOR =
+                         <actual function used by
+                          next-request context-budget
+                          logic at the chosen seam>
+                     If that turns out to be
+                     estimateRequestInputTokens, great.
+                     If not, the ACT must follow the real
+                     authority rather than adapting reality
+                     to the plan. Do NOT begin the test with
+                     any function name hard-coded merely
+                     because it already exists.
+
+NEGATIVE_CONTROL_PROVIDER_USAGE
+                   = The most valuable control is:
+                       provider usage buckets change while
+                       canonical request content is identical
+                       → W MUST NOT change
+                     Example synthetic variation:
+                       cacheReads
+                       cacheWrites
+                       tokensIn
+                     while keeping system prompt / messages /
+                     tools identical.
+                     Expected:
+                       W1 == W2
+                     This mechanically proves this ACT has
+                     not reintroduced provider-accounting
+                     dependence. More valuable than yet
+                     another prose invariant.
+
+LIVE_264_3K_USAGE   = DO NOT use the live 264.3k as a
+                     target. The screenshot is evidence of
+                     the UX defect, not an oracle for W.
+                     W_after is required to differ from
+                     H_a; the test should derive W from the
+                     canonical request estimator, not embed
+                     a live screenshot number.
 PRODUCT_DECISION    = C2 (product recommendation by
                      Factory causal reviewer; rationale:
                      a capacity gauge that remains at
