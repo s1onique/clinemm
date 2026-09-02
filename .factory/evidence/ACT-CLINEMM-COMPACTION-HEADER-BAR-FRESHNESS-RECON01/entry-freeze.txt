@@ -76,26 +76,64 @@ PRIMARY_QUESTION    = does the bar promise "last
                      264.3k is NOT automatically the
                      correct bar value.
 
-RECON_VERDICT       = HALT_NO_INTENT_FROZEN_FOR_C2_C3
-                     (see semantic-contract.md Q5)
-                     Q4: W_AUTHORITY = ABSENT;
-                     H_a ≡ W_e = NOT PROVEN.
-                     C2 is UNACHIEVABLE_AT_CURRENT_WIRE.
+RECON_VERDICT       = PASS_WITH_ONE_P1_FIX
+                     (Factory causal reviewer; the prior
+                     verdict HALT_NO_INTENT_FROZEN
+                     overreached)
+                     HEADER_BAR_INTENT  = CURRENT
+                                          CONTEXT-WINDOW
+                                          UTILIZATION
+                                          (frozen via
+                                          ClineMM UI labels
+                                          + upstream
+                                          CHANGELOG entry
+                                          + upstream user
+                                          issue #10637)
+                     C2                  = SELECTED
+                     HALT_NO_INTENT_FROZEN = REJECT
+                     Q4: W_AUTHORITY     = ABSENT AT
+                                          CURRENT WEBVIEW WIRE
+                     H_a ≡ W_e           = NOT PROVEN /
+                                          PRESERVE
                      Existing `compaction` say message
-                     already mechanically distinguishes
+                     ALREADY mechanically distinguishes
                      H from P; a `kind` discriminator is
                      NOT needed at the divider level
                      (NEW_WIRE_KIND stays UNBOUND with
                      NEED_FOR_NEW_DISCRIMINATOR = NOT
-                     PROVEN). Full UI DOM render is
-                     OPTIONAL — extracted projection
-                     test at getLastApiReqContextInputTokens
-                     is sufficient (ContextWindow.test.tsx
-                     already pins the seam). Reviewer
-                     disposition: A (preferred — HALT,
-                     product decision), B (bounded C1
-                     label-only ACT), or C (producer-side
-                     W_e publishing ACT).
+                     PROVEN).
+                     C3_REQUIRES_W               = NOT PROVEN
+                     C3_REQUIRES_PRODUCER_CHANGE = NOT PROVEN
+                     C3_REQUIRES_LABEL_CHANGE    = PROVEN
+                     Full UI DOM render is OPTIONAL —
+                     extracted projection test at
+                     getLastApiReqContextInputTokens is
+                     sufficient (ContextWindow.test.tsx
+                     already pins the seam).
+                     NEXT_ACT          = ACT-CLINEMM-
+                                          COMPACTION-
+                                          WORKING-CONTEXT-
+                                          AUTHORITY-
+                                          PUBLISH01
+                     NEXT_ACT_PURPOSE  = bind producer
+                                          seam (system
+                                          prompt + canonical
+                                          post-compaction
+                                          messages + tools
+                                          + request overhead),
+                                          compute W from that
+                                          exact next-request
+                                          shape, publish W to
+                                          header; do NOT
+                                          claim H_a ≡ W_e
+                     WIRE_LOCATION     = UNDECIDED (chose
+                                          after Phase 1
+                                          producer recon)
+                     PRODUCTION_REPAIR = AUTHORIZED only
+                                          after producer
+                                          seam is bound
+                     NEW_REVIEW_ROUND  = NO
+                     C1: GO_W_AUTHORITY
 
 PREDECESSOR_ACT     = ACT-CLINEMM-COMPACTION-
                      PRESENTATION-FRESHNESS-EMPIRICAL01

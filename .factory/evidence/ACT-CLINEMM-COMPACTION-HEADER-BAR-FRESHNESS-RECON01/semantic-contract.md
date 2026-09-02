@@ -67,46 +67,112 @@ Therefore:
 ## Q5 — verdict
 
 ```text
-HALT_NO_INTENT_FROZEN_FOR_C2_C3
+HEADER_BAR_INTENT = CURRENT CONTEXT-WINDOW UTILIZATION (frozen)
+C2                 = SELECTED
+HALT_NO_INTENT_FROZEN = REJECT
 ```
 
-- **C1** (provider-observation bar): the data is honest P and the producer code documents why (Strategy-D at cb5b52239 closed the prior cross-scale arithmetic defect). Fixing C1 alone would require changing the labels to "last request input" — that is a **label ACT**, not a recon finding.
-- **C2** (current-working-context bar): the contract the labels imply, but it is **UNACHIEVABLE_AT_CURRENT_WIRE** because no W-space authority is published at the post-compaction seam. A consumer-only repair cannot fabricate W_e without violating the cross-domain equivalence prohibition.
-- **C3** (multi-source presentation): requires a producer-side act to publish W_e (or equivalent) alongside P/H. The existing `compaction` say message **already mechanically distinguishes H-space from P-space** (distinct message type, separate row in the conversation list, different label language via `CompactionRow.tsx:46-47`), so a new `kind` discriminator on `api_req_started` is **not needed** at the divider level. What C3 needs is a new W-space field, not a new discriminator.
+The ClineMM UI labels alone are not neutral:
+
+- `ContextWindow.tsx:175` `title="Current tokens used in this request"` — "current", not "last"
+- `ContextWindow.tsx:199` `aria-label="Context window usage progress"` — "usage", not "history"
+- `ContextWindow.tsx:208` `title="Maximum context window size for this model"` — denominator is model state
+- `ContextWindowSummary.tsx:145` `"Context Window"` / `"Used:"` / `"Total:"` / `"Remaining:"` — three-state utilization
+- `ContextWindowSummary.tsx:129,136` `"Auto Condense Threshold"` / "When the context window usage exceeds this threshold, the task will be automatically condensed." — forward-looking
+
+The UI presents the number as **context-window state**, not as a historical accounting record. External corroboration:
+
+- upstream CHANGELOG entry (cline/cline) introduced this as a "Context Window progress bar" to help users understand degradation as context increases; Auto Compact is described as summarizing history to free space when approaching the context limit
+- upstream user issue (cline/cline#10637) describes the bar "running backwards" as evidence of compaction, and reports starting-context count being implausibly high — both readings assume the bar means *current utilization*, not last request input
+
+Intent is sufficiently frozen to **SELECT C2**: the bar must mean the best authoritative estimate of what would constrain the *next request*, not necessarily the exact provider truth, and not the most-recent historical request.
+
+**Per-contract read**:
+
+- **C1** (provider-observation bar = last `api_req_started`): data is honest P; labels do not match. Reject as the contract.
+- **C2** (current-working-context bar): SELECTED. Implementation currently absent at the post-compaction wire (Q4). The header reads from P only because W is not yet published. The intent–implementation gap is what `WORKING-CONTEXT-AUTHORITY-PUBLISH01` is for; the **consumer** does not need to fabricate W_e — the **producer** must publish it.
+- **C3** (multi-source presentation with both last-request P and current-estimate W/H alongside explicit labels): a valid label-only reading is `Last provider request: 364.9k` / `Compaction estimate: 364.9k → 264.3k` — that requires **better labels**, not necessarily a new W_e field.
+
+So freeze:
+
+```text
+C3_REQUIRES_W               = NOT PROVEN
+C3_REQUIRES_PRODUCER_CHANGE = NOT PROVEN
+C3_REQUIRES_LABEL_CHANGE    = PROVEN
+```
+
+The `compaction` say message **already mechanically distinguishes H-space from P-space** (distinct message type, separate row in the conversation list, different label language via `CompactionRow.tsx:46-47`); a new `kind` discriminator is **not needed** at the divider level.
 
 **Decisive matrix**:
 
-| Contract | Compatible with current producer + label? | Repair class |
-|----------|-------------------------------------------|--------------|
-| C1 | Yes (data is honest P; labels lie) | bounded LABEL ACT |
-| C2 | NO — no W authority in wire | producer-side ACT (UNACHIEVABLE_AT_CURRENT_WIRE) |
-| C3 | NO — labels exist; W value does not | producer-side ACT (publish W_e) |
+| Contract | Compatible with intent? | Compatible with current producer? | Repair class |
+|----------|-------------------------|-----------------------------------|--------------|
+| C1 | No (labels do not match last-request semantics) | Yes | bounded LABEL ACT (de-selected) |
+| **C2** | **Yes — SELECTED** | **No — W authority absent** | **producer-side ACT (publish W)** |
+| C3 | Yes | No for full; yes for label-only | label-only ACT (C3_REQUIRES_PRODUCER_CHANGE = NOT PROVEN) |
 
-## Next action (reviewer disposition)
+## Next ACT
+
+Open:
 
 ```text
-Option A (preferred): HALT_NO_INTENT_FROZEN
-  → product decision ACT
-  → "should the bar mean C1 or C2 or C3?"
-  → no Factory repair until the product owner names the contract
-
-Option B (bounded C1-only ACT, conservative):
-  ACT-CLINEMM-COMPACTION-HEADER-LABEL-REPAIR01
-  → only fixes the label/tooltip mismatch
-  → bar says "Last request input", which matches the data
-  → does NOT claim H_a ≡ W_e
-  → does NOT add a kind discriminator
-  → keeps Strategy-D consumer untouched
-
-Option C (producer-side, opt-in):
-  ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
-  → adds a W-space field to the `compaction` say message
-    (e.g. workingContextEstimate: providerScaleTokensAfter)
-  → unlocks C2 and C3 at consumer level
-  → out of recon scope; requires a producer-side ACT
+ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
 ```
 
-This recon recommends **A** because the defect is genuinely a "what does the product promise?" question that Factory should not pre-decide.
+Primary purpose: establish one authoritative current-working-context estimate at the post-compaction boundary and project it to the context-window header, without treating `COMPACTION_AFTER_TOKENS` as equivalent by assumption.
+
+**Phase 1 — producer recon.** Find the lowest production seam that holds the exact payload that would become the next request:
+
+```text
+system prompt
+canonical post-compaction messages
+tools
+request overhead
+```
+
+Then ask: can the existing `estimateRequestInputTokens(...)` (or equivalent) produce W from THAT exact post-compaction request shape? If yes, that is promising. But prove `W = estimate of next request input` from identical inputs — not `W = H_a because both happen to use estimators`.
+
+**WIRE_LOCATION = UNDECIDED.** Possible production shapes:
+
+```text
+compaction.payload.workingContextEstimate
+top-level projected state.currentWorkingContextEstimate
+existing task/header projection
+producer-side calculation feeding a dedicated presentation field
+```
+
+Choose only after recon of where a truthful W can be computed once and published without duplicating estimation logic.
+
+**True RED** (once the producer seam is bound):
+
+```text
+Given:  successful compaction, no subsequent api_req_started
+Then:  currentWorkingContextEstimate MUST be available to TaskHeader
+       immediately, as a finite authoritative W estimate
+At HEAD expected RED: actual = missing; expected = finite W
+```
+
+**Conservation invariants** for the next ACT:
+
+```text
+lastProviderRequestInput P   remains 364.9k
+compaction H values         remain untouched
+cumulative usage            unchanged
+provider billing metrics    unchanged
+H_a ≡ W_e                   NOT claimed by arithmetic coincidence
+```
+
+**Header GREEN** (after W exists):
+
+```text
+before compaction:          header = W_before
+after compaction:           header = W_after
+before next provider request: header already reflects W_after
+```
+
+This directly fixes the observed stale bar without touching Strategy-D or reviving cross-scale ratio arithmetic.
+
+**Do NOT require `W = 264.3k`.** The live divider says `H_a = 264.3k`; the eventual W calculation may produce 263.1k / 267.8k / 264.3k depending on system prompt, tools, overhead, and estimator semantics. The invariant is `header == authoritative W`, not `header == compaction tokensAfter`. That distinction is the entire value of the prior accounting work.
 
 ## Conservation
 
@@ -117,4 +183,11 @@ This recon recommends **A** because the defect is genuinely a "what does the pro
 - H_a_TO_W_e_EQUIVALENCE = UNBOUND (carried forward; the recon did NOT prove it)
 - NEW_WIRE_KIND = UNBOUND (the existing `compaction` message type already mechanically distinguishes H from P; a `kind` discriminator is NOT needed at the divider level)
 - FULL_UI_DOM_RENDER = OPTIONAL (chain is a pure function; `ContextWindow.test.tsx` is the existing extracted-projection oracle at HEAD; no new harness required)
-
+- HEADER_BAR_INTENT = CURRENT CONTEXT-WINDOW UTILIZATION (frozen; ClineMM UI labels + upstream CHANGELOG entry + upstream user issue #10637)
+- C2 = SELECTED (intent sufficiently frozen; implementation gap = absence of W authority at the post-compaction wire)
+- C3_REQUIRES_W = NOT PROVEN
+- C3_REQUIRES_PRODUCER_CHANGE = NOT PROVEN
+- C3_REQUIRES_LABEL_CHANGE = PROVEN
+- WIRE_LOCATION = UNDECIDED (compaction.payload.workingContextEstimate / top-level projected state.currentWorkingContextEstimate / existing task/header projection / producer-side presentation field — choose after Phase 1 producer recon)
+- NEXT_ACT = ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01
+- DISPOSITION = PASS_WITH_ONE_P1_FIX (Factory causal reviewer; the prior verdict HALT_NO_INTENT_FROZEN overreached)
