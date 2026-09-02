@@ -327,7 +327,7 @@ export function selectThinkingPresentation(input: ThinkingPresentationInputs): T
 //      `compacting` label.
 //
 //   2. CANONICAL SHADOW
-//      else if canonicalShadowPhase is defined
+//      else if canonicalShadowPhase is defined AND not UNBOUND-demoting
 //        → phase = canonicalShadowPhase
 //        → source = "shadow"
 //      The canonical shadow substrate (`@cline/agents`
@@ -337,6 +337,20 @@ export function selectThinkingPresentation(input: ThinkingPresentationInputs): T
 //      the legacy `TurnPhase` vocabulary. The shadow's `turnPhase`
 //      is the authority for these phases — even when the legacy
 //      `turnStateTracker` disagrees (T2_LEGACY_INDEPENDENCE).
+//
+//      ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01 adds a
+//      narrow UNBOUND-demotion guard: when the shadow is sampled but
+//      carries no TurnState-domain provenance stamp
+//      (`canonicalShadowObservedTurnSeq === undefined`, which the
+//      `activity.publication.v1` recording seam classifies as
+//      `shadowPublicationBinding = "UNBOUND"`), a TERMINAL shadow
+//      phase (`idle` / `completed` / `error` / `resumable`) cannot
+//      demote an authoritative ACTIVE legacy phase (`streaming` /
+//      `awaiting_approval`). The shadow branch is skipped in that
+//      shape and the selector falls through to the legacy branch.
+//      The explicit-staleness path (REPAIR01-CORRECTION02) remains
+//      the primary mechanism for BOUND-shadow demotion; this gate
+//      only protects the UNBOUND case.
 //
 //   3. ABSENCE FALLBACK
 //      else
@@ -502,6 +516,41 @@ export interface TaskHeaderPresentationInputs {
  * is the only legitimate authority for these two phases; the
  * shadow's projection is acknowledged to be incomplete for them.
  */
+
+/**
+ * ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01:
+ * A TERMINAL shadow phase in the legacy TurnPhase vocabulary --
+ * one that semantically closes the turn lifecycle (idle /
+ * completed / error / resumable). Used by the UNBOUND demotion
+ * guard in `selectTaskHeaderPresentation` to detect when an
+ * UNBOUND shadow would demote an authoritative ACTIVE legacy
+ * phase.
+ *
+ * Note: `awaiting_followup` is intentionally NOT in this set --
+ * it is a user-owned phase that the canonical shadow cannot
+ * represent, and the host override (rule 2) handles it.
+ * `compacting` is similarly handled by rule 1. Both are
+ * demoted to ACTIVE in the rule-3 context only if they survive
+ * rules 1 and 2, which they do not.
+ */
+function isTerminalShadowPhase(phase: TurnPhase): boolean {
+	return phase === "idle" || phase === "completed" || phase === "error" || phase === "resumable"
+}
+
+/**
+ * ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01:
+ * An ACTIVE legacy phase -- one that semantically indicates an
+ * in-progress / non-idle turn that the TaskHeader should not
+ * demote to a terminal state via an UNBOUND shadow.
+ *
+ * `streaming` (model is streaming output) and `awaiting_approval`
+ * (waiting for user tool approval) are the two phases the LIVE
+ * specimen proved to be demoted by an UNBOUND shadow.
+ */
+function isActiveLegacyPhase(phase: TurnPhase): boolean {
+	return phase === "streaming" || phase === "awaiting_approval"
+}
+
 export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs): TaskHeaderPresentationProjection {
 	// 1. HOST COMPACTION OVERRIDE — explicit host authority for the
 	// one phase the canonical shadow cannot represent.
@@ -543,10 +592,35 @@ export function selectTaskHeaderPresentation(input: TaskHeaderPresentationInputs
 	// the SAME TurnState sequence domain — the cross-domain
 	// numeric comparison CORRECTION01 attempted has been
 	// removed.
+	//
+	// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01:
+	// Bound the authority of an UNBOUND shadow (no
+	// `canonicalShadowObservedTurnSeq`) so that an UNBOUND
+	// shadow's TERMINAL phase (`idle` / `completed` / `error` /
+	// `resumable`) cannot demote an authoritative ACTIVE legacy
+	// phase (`streaming` / `awaiting_approval`). The
+	// `activity.publication.v1` recording seam classifies this
+	// shape as `shadowPublicationBinding = "UNBOUND"` (the
+	// shadow was sampled at the seam but its `ArbiterSnapshot`
+	// carries no `stateVersion` / `seq`, so cross-binding to
+	// the snapshot's generation CANNOT be proven). An UNBOUND
+	// shadow therefore lacks the provenance needed to demote
+	// an authoritative active TurnState; the selector falls
+	// through to the legacy branch in that case. The
+	// explicit-staleness path above (REPAIR01-CORRECTION02)
+	// remains the primary mechanism; this UNBOUND gate is a
+	// complementary, narrowly-scoped second condition.
 	if (input.canonicalShadowPhase !== undefined) {
 		const isShadowStale =
 			input.canonicalShadowObservedTurnSeq !== undefined && input.seq > input.canonicalShadowObservedTurnSeq
-		if (!isShadowStale) {
+		// UNBOUND-shadow demotion gate: shadow was sampled but has
+		// no TurnState-domain provenance stamp; it cannot demote
+		// authoritative ACTIVE legacy to a TERMINAL shadow phase.
+		const isUnboundDemotingActiveToTerminal =
+			input.canonicalShadowObservedTurnSeq === undefined &&
+			isTerminalShadowPhase(input.canonicalShadowPhase) &&
+			isActiveLegacyPhase(input.currentLegacyPhase)
+		if (!isShadowStale && !isUnboundDemotingActiveToTerminal) {
 			return {
 				phase: input.canonicalShadowPhase,
 				source: "shadow",

@@ -1022,20 +1022,26 @@ describe("ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTI
 		expect(out).toEqual({ phase: "awaiting_followup", source: "shadow", seq: 7 })
 	})
 
-	it("T14: canonicalShadowObservedTurnSeq === undefined keeps legacy-absent fallback (Hub/Remote)", () => {
+	it("T14: UNBOUND shadow terminal 'idle' MUST NOT demote authoritative legacy 'streaming' → source='legacy'", () => {
 		const out = selectTaskHeaderPresentation(
 			taskHeaderInputs({
 				canonicalShadowPhase: "idle",
 				currentLegacyPhase: "streaming",
 				seq: 1,
 				// canonicalShadowObservedTurnSeq intentionally omitted
+				// (UNBOUND: shadow sampled but no TurnState-domain
+				// provenance stamp; cross-binding to snapshot.stateVersion
+				// CANNOT be proven at the activity.publication.v1 seam).
 			}),
 		)
-		// With undefined canonicalShadowObservedTurnSeq, the
-		// staleness gate does NOT fire — the shadow branch
-		// wins, source="shadow". This is the pre-repair
-		// behavior preserved for the "no observation yet" case.
-		expect(out.phase).toBe("idle")
-		expect(out.source).toBe("shadow")
+		// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01:
+		// the UNBOUND demotion guard added to rule 3 falls through to
+		// the legacy branch when an UNBOUND terminal shadow would
+		// otherwise demote an authoritative ACTIVE legacy phase.
+		// This is the LIVE specimen (taskId 1788292664979_9qbpd,
+		// epoch 16) shape inverts-to-fixed. Hub/Remote absence
+		// (canonicalShadowPhase === undefined) is unchanged.
+		expect(out.phase).toBe("streaming")
+		expect(out.source).toBe("legacy")
 	})
 })

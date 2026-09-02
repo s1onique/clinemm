@@ -151,6 +151,12 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / shadow branc
 				canonicalShadowPhase: "error",
 				currentLegacyPhase: "streaming",
 				seq: 9,
+				// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01:
+				// BOUND-shadow terminal phase wins over stale legacy
+				// when shadow carries same-generation TurnState-domain
+				// provenance stamp (canonicalShadowObservedTurnSeq ===
+				// seq → not stale → shadow wins).
+				canonicalShadowObservedTurnSeq: 9,
 			}),
 		)
 		expect(out).toEqual({ phase: "error", source: "shadow", seq: 9 })
@@ -176,6 +182,12 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / shadow branc
 				canonicalShadowPhase: "completed",
 				currentLegacyPhase: "streaming",
 				seq: 21,
+				// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01:
+				// BOUND-shadow terminal phase wins when shadow carries
+				// same-generation TurnState-domain provenance stamp
+				// (canonicalShadowObservedTurnSeq === seq → not stale
+				// → shadow wins).
+				canonicalShadowObservedTurnSeq: 21,
 			}),
 		)
 		expect(out).toEqual({ phase: "completed", source: "shadow", seq: 21 })
@@ -198,8 +210,21 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / shadow branc
 		const a = selectTaskHeaderPresentation(
 			inputs({ canonicalShadowPhase: "awaiting_followup", currentLegacyPhase: "streaming", seq: 1 }),
 		)
+		// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01:
+		// SHADOW_NECESSITY (T8_NECESSITY) requires a BOUND-shadow
+		// change to be observable. Pass a same-generation TurnState
+		// stamp so the terminal shadow can win the rule-3 branch
+		// without tripping the UNBOUND demotion guard. (The legacy
+		// turn is `streaming` here — pre-repair this test never set
+		// the obs seq, post-repair it MUST be set to assert the
+		// shadow-wins path against an active legacy phase.)
 		const b = selectTaskHeaderPresentation(
-			inputs({ canonicalShadowPhase: "completed", currentLegacyPhase: "streaming", seq: 1 }),
+			inputs({
+				canonicalShadowPhase: "completed",
+				currentLegacyPhase: "streaming",
+				seq: 1,
+				canonicalShadowObservedTurnSeq: 1,
+			}),
 		)
 		expect(a.phase).toBe("awaiting_followup")
 		expect(b.phase).toBe("completed")
