@@ -180,24 +180,39 @@ cacheReads / cacheWrites =
   MUST NOT be added merely because they exist in API metrics
 ```
 
-### Seam evaluation table (Phase 1 must fill)
+### Seam evaluation table (FILLED at Phase 1 source bind)
 
-Phase 1 asks: **is there already one production estimator whose
-inputs are exactly the canonical post-compaction request content that
-would consume context on the next turn?** Start from the existing
-estimator rather than inventing W semantics.
+Phase 1 source bind complete. The decisive question:
+
+> Where is the first production point after compaction where the
+> exact content-bearing next-request shape AND the canonical
+> context-budget estimator coexist?
 
 ```text
-| Candidate seam               | Has system prompt | Has canonical post-compaction messages | Has tools | Uses canonical request-context estimator | Suitable W authority? |
-| ---------------------------- | ----------------- | -------------------------------------- | --------- | ---------------------------------------- | -------------------- |
-| compaction result seam       |                   |                                        |           |                                          |                      |
-| prepare-turn seam            |                   |                                        |           |                                          |                      |
-| coordinator publication seam |                   |                                        |           |                                          |                      |
+| Candidate seam               | Exact canonical request content? | Canonical budget estimator? | Can publish once? |
+| ---------------------------- | -------------------------------- | --------------------------- | ----------------- |
+| compaction result seam       | yes (compaction.ts:309 inputs)   | yes (estimateRequestInputTokens at compaction.ts:309) | yes (add to result) |
+| prepare-turn seam            | yes (ContextPipelinePrepareTurnInput has systemPrompt + messages + tools) | yes (drives compactor → estimateRequestInputTokens) | yes (result.messages + systemPrompt are exact canonical post-compaction shape) |
+| VSCode coordinator           | no (publishes only postStateToWebview; presentation-side) | no (does NOT consult any estimator; presentation-side) | no — presentation-side should not learn token-estimation semantics |
 ```
 
-(The table is intentionally blank — Phase 1 fills it from the
-production source. Do NOT preselect a winner from source code
-alone.)
+**Winner**: the **prepare-turn seam** (`createCompactionStateAwarePrepareTurn` at `sdk/packages/core/src/extensions/context/compaction.ts:658-712`). It returns the exact canonical post-compaction request shape (`messages` + `systemPrompt`), drives the compactor that uses `estimateRequestInputTokens`, and is the lowest production seam where the canonical inputs and the canonical estimator coexist. The compactor result seam is also a viable W authority but is reached *through* the prepare-turn seam, so the prepare-turn seam is lower and more authoritative for the **post-compaction** boundary. The VSCode coordinator is rejected: presentation-side and does not consult any estimator.
+
+```text
+CANONICAL_W_ESTIMATOR = estimateRequestInputTokens
+                        (sdk/packages/shared/src/llms/tokens.ts:47)
+AUTHORITY_CALLSITE   = sdk/packages/core/src/extensions/context/
+                       compaction.ts:309
+INPUTS               = systemPrompt + messages + tools
+                       (TokenEstimatedRequest at
+                        sdk/packages/shared/src/llms/tokens.ts:25)
+PROVIDER_USAGE_INPUTS
+                    = NONE (structural: TokenEstimatedRequest
+                       has no slots for tokensIn / cacheReads /
+                       cacheWrites; provider-usage non-interference
+                       is enforced by the type system, not by
+                       behavioural testing)
+```
 
 Candidate seams to evaluate (Phase 1 outcome will pick one or
 document why none suffice):
@@ -332,9 +347,12 @@ yet another prose invariant.
 ### LIVE_264_3K_USAGE
 
 Do NOT use the live `264.3k` as a target. The screenshot is
-evidence of the UX defect, not an oracle for W. `W_after` is
-required to differ from `H_a`; the test should derive W from the
-canonical request estimator, not embed a live screenshot number.
+evidence of the UX defect, not an oracle for W. `W_after` is NOT
+required to equal or differ from `H_a`; its value must be
+independently derived from `CANONICAL_W_ESTIMATOR`. Equality or
+inequality with `H_a` is irrelevant. This preserves the
+`NEGATIVE_ASSERTION` (W_after need not equal H_a) without
+contradicting it.
 
 ## Don't touch the header yet
 

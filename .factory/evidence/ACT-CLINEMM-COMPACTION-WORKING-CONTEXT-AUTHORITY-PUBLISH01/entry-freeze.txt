@@ -106,19 +106,25 @@ NEGATIVE_ASSERTION  = W_after need not equal H_a (different
                      W_after === H_a for a fixture is a smell)
 
 CANONICAL_W_ESTIMATOR
-                   = UNBOUND (reviewer P2)
-                     Phase 1 must first establish:
-                       CANONICAL_W_ESTIMATOR =
-                         <actual function used by
-                          next-request context-budget
-                          logic at the chosen seam>
-                     If that turns out to be
-                     estimateRequestInputTokens, great.
-                     If not, the ACT must follow the real
-                     authority rather than adapting reality
-                     to the plan. Do NOT begin the test with
-                     any function name hard-coded merely
-                     because it already exists.
+                   = estimateRequestInputTokens
+                     (sdk/packages/shared/src/llms/
+                      tokens.ts:47) — bound at Phase 1
+                     source bind (reviewer P2 satisfied)
+                     AUTHORITY_CALLSITE:
+                       sdk/packages/core/src/extensions/
+                       context/compaction.ts:309
+                     INPUTS:
+                       systemPrompt + messages + tools
+                       (TokenEstimatedRequest at
+                        sdk/packages/shared/src/llms/
+                        tokens.ts:25)
+                     PROVIDER_USAGE_INPUTS:
+                       NONE — structural non-interference.
+                       TokenEstimatedRequest has no slots
+                       for tokensIn / cacheReads /
+                       cacheWrites; the type system enforces
+                       provider-usage non-interference.
+                       No behavioural W1 == W2 control needed.
 
 NEGATIVE_CONTROL_PROVIDER_USAGE
                    = The most valuable control is:
@@ -141,10 +147,13 @@ NEGATIVE_CONTROL_PROVIDER_USAGE
 LIVE_264_3K_USAGE   = DO NOT use the live 264.3k as a
                      target. The screenshot is evidence of
                      the UX defect, not an oracle for W.
-                     W_after is required to differ from
-                     H_a; the test should derive W from the
-                     canonical request estimator, not embed
-                     a live screenshot number.
+                     W_after is NOT required to equal or
+                     differ from H_a; its value must be
+                     independently derived from
+                     CANONICAL_W_ESTIMATOR. Equality or
+                     inequality with H_a is irrelevant
+                     (reviewer P1: fixes the contradiction
+                     with NEGATIVE_ASSERTION).
 PRODUCT_DECISION    = C2 (product recommendation by
                      Factory causal reviewer; rationale:
                      a capacity gauge that remains at

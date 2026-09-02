@@ -128,14 +128,19 @@ RECON_VERDICT       = RECON_PASS
                                           identical
                                           estimator)
                      CANONICAL_W_ESTIMATOR
-                                       = UNBOUND (reviewer P2;
-                                          Phase 1 binds it from
-                                          actual next-request
-                                          context-budget logic
-                                          at chosen seam; do NOT
-                                          hard-code
-                                          estimateRequestInputTokens
-                                          before binding;
+                                       = estimateRequestInputTokens
+                                          (BOUND at Phase 1
+                                          source bind —
+                                          sdk/packages/shared/
+                                          src/llms/tokens.ts:47,
+                                          AUTHORITY_CALLSITE at
+                                          compaction.ts:309;
+                                          provider-usage non-
+                                          interference enforced
+                                          structurally by
+                                          TokenEstimatedRequest
+                                          input contract;
+                                          reviewer P2 satisfied;
                                           carried to WORKING-
                                           CONTEXT-AUTHORITY-
                                           PUBLISH01)

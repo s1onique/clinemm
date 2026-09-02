@@ -589,3 +589,154 @@ C1: GO_W_AUTHORITY
 Reviewer closing note: "No more Factory planning is needed
 here. The next useful result is the filled seam table and a
 failing missing-W test."
+
+## Current frontier update — 2026-09-02 22:30:00Z (reviewer P1 fix + Phase 1 source bind + RED)
+
+Factory causal reviewer third-pass on commit `b57aad242`:
+**PASS_WITH_ONE_P1_FIX. C1: GO_W_AUTHORITY immediately after
+fixing one sentence in-place during Phase 1.** P1 = the
+`LIVE_264_3K_USAGE` block contradicted the `NEGATIVE_ASSERTION`
+("W_after is required to differ from H_a" vs "W_after need not
+equal H_a"). The reviewer's product-decision framing and P2
+disposition stay accepted. The reviewer closed by saying:
+
+> No more Factory planning is needed here. The next useful result
+> is the filled seam table and a failing missing-W test.
+
+This turn delivers both, in-place.
+
+### Phase 1 source bind (executable evidence)
+
+Inspected the actual production call chain:
+
+```text
+CANONICAL_W_ESTIMATOR = estimateRequestInputTokens
+AUTHORITY_CALLSITE   = sdk/packages/core/src/extensions/context/
+                       compaction.ts:309
+INPUTS               = systemPrompt + messages + tools
+                       (TokenEstimatedRequest at
+                        sdk/packages/shared/src/llms/tokens.ts:25)
+PROVIDER_USAGE_INPUTS = NONE — structural non-interference
+```
+
+`estimateRequestInputTokens` is the only function the production
+call sites use for context-budget authority:
+- `sdk/packages/core/src/extensions/context/compaction.ts:309`
+  (the compactor's `shouldCompact` decision; pre-turn trigger
+  authority)
+- `sdk/packages/llms/src/providers/gateway.ts:344` (the gateway's
+  `onContextOverflow` warning; pre-request budget authority)
+
+Both call sites pass ONLY `systemPrompt` + `messages` + `tools`.
+The `TokenEstimatedRequest` interface has no slots for `tokensIn`,
+`cacheReads`, `cacheWrites`. **Provider-usage non-interference is
+enforced structurally by the type system, not by behavioural
+testing.** No `W1 == W2` control test is required because the
+function literally cannot accept provider-usage inputs.
+
+### Seam evaluation table (filled)
+
+```text
+| Candidate seam     | Exact canonical request content? | Canonical budget estimator? | Can publish once? |
+| ------------------ | -------------------------------- | --------------------------- | ----------------- |
+| compaction result  | yes (compaction.ts:309 inputs)   | yes (estimateRequestInputTokens at compaction.ts:309) | yes |
+| prepare-turn seam  | yes (ContextPipelinePrepareTurnInput has systemPrompt + messages + tools) | yes (drives compactor → estimateRequestInputTokens) | yes (result.messages + systemPrompt are exact canonical post-compaction shape) |
+| VSCode coordinator | no (publishes only postStateToWebview; presentation-side) | no | no — presentation-side should not learn token-estimation semantics |
+```
+
+Winner: **prepare-turn seam** (`createCompactionStateAwarePrepareTurn`
+at `sdk/packages/core/src/extensions/context/compaction.ts:658-712`).
+It returns the exact canonical post-compaction request shape,
+drives the compactor that uses `estimateRequestInputTokens`, and
+is the lowest production seam where the canonical inputs and the
+canonical estimator coexist.
+
+### Missing-W RED (executable evidence)
+
+New test file:
+`sdk/packages/core/src/extensions/context/compaction.working-context-authority-publish.test.ts`
+
+Three sub-tests:
+
+```text
+1. STRUCTURAL (GREEN at HEAD)
+   TokenEstimatedRequest has only three slots
+   (systemPrompt, messages, tools). Provider-usage non-
+   interference is enforced structurally.
+
+2. CANONICAL_INPUTS (GREEN at HEAD)
+   The prepare-turn seam holds the exact canonical
+   post-compaction request shape. estimateRequestInputTokens
+   applied to that shape returns a finite W.
+
+3. MISSING_W_RED (RED at HEAD, GREEN after producer-seam publish)
+   ContextPipelinePrepareTurnResult at HEAD does NOT carry
+   currentWorkingContextEstimate. After the producer-seam
+   publishes W, the field MUST appear and equal
+   estimateRequestInputTokens(exact canonical post-compaction
+                                request shape).
+```
+
+Test run at HEAD:
+
+```text
+✓ src/extensions/context/compaction.test.ts  (94/94 GREEN — no regression)
+✓ src/extensions/context/compaction.working-context-ratio.test.ts  (3/3 GREEN — no regression)
+✓ STRUCTURAL (1/1 GREEN)
+✓ CANONICAL_INPUTS (1/1 GREEN)
+✗ MISSING_W_RED (1/1 RED at HEAD — expected false to be true;
+                 currentWorkingContextEstimate is absent)
+
+24/24 apps/vscode/src/shared/__tests__/getApiMetrics.test.ts GREEN
+```
+
+The RED is the missing authority, not an arithmetic expectation.
+The fix (a separate commit) is the producer-seam publish that adds
+`currentWorkingContextEstimate = estimateRequestInputTokens(...)`
+to `ContextPipelinePrepareTurnResult`. That commit flips the
+RED to GREEN with no other changes.
+
+### P1 — LIVE_264_3K_USAGE contradiction fix (in-place)
+
+Fixed `LIVE_264_3K_USAGE` block in both the ACT body and its
+entry-freeze.txt to read:
+
+```text
+W_after is NOT required to equal or differ from H_a;
+its value must be independently derived from
+CANONICAL_W_ESTIMATOR. Equality or inequality with H_a is
+irrelevant.
+```
+
+This preserves `NEGATIVE_ASSERTION` (`W_after need not equal H_a`)
+without contradicting it. Per reviewer directive: "Do this while
+executing Phase 1. No standalone correction commit, no review
+round."
+
+### Commit split reminder
+
+```text
+Commit 1: RED (this turn — test file + Phase 1 doc corrections)
+Commit 2: GREEN (producer-seam publish — adds currentWorkingContextEstimate to ContextPipelinePrepareTurnResult)
+Commit 3: header switch (TaskHeader / ContextWindow consumes W;
+           existing P/H accounting suites remain GREEN)
+```
+
+### Conservation preserved
+
+- DEFECT A (cross-scale ratio transfer): CLOSED at cb5b52239
+  (Strategy-D; getApiMetrics.ts:174-225)
+- DEFECT B (post-restore publication): CLOSED at HEAD
+- Strategy-D consumer untouched
+- 99 existing compaction/working-context-ratio tests GREEN
+- 24/24 getApiMetrics GREEN
+- git diff --check clean
+
+PRODUCTION DELTA: ONE test file added (RED witness for the
+  missing W authority). No production code change this commit.
+NEW REVIEW ROUND: NO
+C1: GO_W_AUTHORITY
+
+Reviewer closing note restated: "The next useful result was the
+filled seam table and a failing missing-W test." Both delivered
+this turn. The next move is the GREEN producer-seam publish.
