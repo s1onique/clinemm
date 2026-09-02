@@ -173,3 +173,149 @@ describe("compaction working-context authority publish", () => {
 		expect(w).toBe(expected);
 	});
 });
+	it("CARRIER_CADENCE: saveState fires only when compaction rewrites messages — NOT on every authoritative prepare-turn W (RED at HEAD)", async () => {
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// cadence discriminator (factory causal reviewer, 2026-09-03
+		// eighth-pass P0 halt: HALT_WRONG_CARRIER_SEMANTICS).
+		//
+		// The reviewer halted the seventh-pass carrier verdict
+		//   GENERIC_REUSABLE_CARRIER = BOUND / SessionCompactionState
+		// on the ground that the audit optimized for reachability
+		// and missed the cadence invariant:
+		//
+		//   for every successful prepareTurn producing authoritative W_n:
+		//     host-visible W eventually = W_n
+		//   without requiring:
+		//     compaction occurred
+		//     provider response arrived
+		//     api_req_started arrived
+		//
+		// This test mechanically proves whether the chosen carrier
+		// moves at W's cadence across three prepare-turns:
+		//   A — compaction rewrites messages (saveState fires today)
+		//   B — no compaction, ordinary canonical growth (W_B != W_A)
+		//   C — no compaction, ordinary canonical growth (W_C != W_B)
+		//
+		// If saveState is invoked at B and C with state semantically
+		// representing W_B / W_C, the carrier survives review.
+		// If saveState is NOT invoked at B and C, the carrier is
+		// wrong for C2 — it would only update on compaction.
+		//
+		// RED at HEAD: saveState is called only inside the
+		// `if (result?.messages)` branches of
+		// createCompactionStateAwarePrepareTurn (compaction.ts:705,
+		// :720). On an ordinary prepare-turn where the upstream
+		// `compact` returned undefined (no compaction needed),
+		// result is undefined → result?.messages is undefined →
+		// saveState skipped. The carrier does NOT move at W's
+		// cadence.
+
+		const saveStateCalls: Array<{
+			sourceMessageCount: number;
+		}> = [];
+
+		const wObserved: Array<number | undefined> = [];
+
+		let compactCalls = 0;
+		const compactAThenSkip: ContextPipelinePrepareTurn = async (context) => {
+			compactCalls += 1;
+			if (compactCalls === 1) {
+				// A: simulate a real compaction by returning
+				// visibly smaller compacted messages. This is the
+				// branch where saveState WOULD fire today.
+				const compacted = context.messages.slice(0, 2);
+				return {
+					messages: compacted,
+					systemPrompt: SYSTEM_PROMPT,
+				};
+			}
+			// B, C: simulate "no compaction needed". Real production
+			// compact returns undefined when shouldCompact is
+			// false. Returning undefined here drives the code
+			// through the no-compaction branch, which returns
+			// `result` (undefined) without calling saveState.
+			return undefined;
+		};
+
+		const prepareTurn = createCompactionStateAwarePrepareTurn({
+			compact: compactAThenSkip,
+			saveState: async (state, sourceMessages) => {
+				saveStateCalls.push({
+					sourceMessageCount: sourceMessages.length,
+				});
+			},
+		});
+
+		// Three prepare-turns: A (compaction), B (no compaction,
+		// ordinary growth), C (no compaction, ordinary growth).
+		// Each call has more canonical messages than the previous,
+		// so W grows monotonically.
+		const buildContext = (
+			iteration: number,
+			extraPaddingTurns: number,
+		): Parameters<ContextPipelinePrepareTurn>[0] => ({
+			agentId: "agent-c-cadence",
+			conversationId: "conv-c-cadence",
+			parentAgentId: null,
+			iteration,
+			abortSignal: new AbortController().signal,
+			systemPrompt: SYSTEM_PROMPT,
+			tools: TOOLS,
+			messages: [
+				...CANONICAL,
+				...Array.from({ length: extraPaddingTurns }, () => ({
+					role: "user" as const,
+					content: "Padding turn. ".repeat(50),
+				})),
+			],
+			apiMessages: [],
+			model: {
+				id: "mock-cadence",
+				provider: "mock",
+				info: { id: "mock-cadence", maxInputTokens: 200_000 },
+			},
+		});
+
+		const resultA = await prepareTurn(buildContext(1, 0));
+		const resultB = await prepareTurn(buildContext(2, 4));
+		const resultC = await prepareTurn(buildContext(3, 8));
+
+		// wObserved[i] is the W value carried on the prepare-turn
+		// RESULT (the value a host could read after every prepare-
+		// turn). Today this is only set when compaction rewrote
+		// messages; the no-compaction branch returns undefined.
+		wObserved.push(
+			(resultA as { currentWorkingContextEstimate?: number } | undefined)
+				?.currentWorkingContextEstimate,
+			(resultB as { currentWorkingContextEstimate?: number } | undefined)
+				?.currentWorkingContextEstimate,
+			(resultC as { currentWorkingContextEstimate?: number } | undefined)
+				?.currentWorkingContextEstimate,
+		);
+
+		// Cadence control: the fixture is constructed so canonical
+		// messages strictly increase. After the C2 fix, W must
+		// also differ across A, B, C — proving the carrier has
+		// something new to carry on each prepare-turn.
+		expect(wObserved[0]).toBeDefined();
+		expect(wObserved[1]).toBeDefined();   // RED at HEAD: undefined
+		expect(wObserved[2]).toBeDefined();   // RED at HEAD: undefined
+		expect(wObserved[1]).not.toBe(wObserved[0]);
+		expect(wObserved[2]).not.toBe(wObserved[1]);
+
+		// THE CADENCE RED.
+		//
+		// Hypothesis: saveState fires on A (compaction rewrote
+		// messages) but NOT on B or C (no compaction).
+		//
+		// If saveState.length === 1 at HEAD, the carrier does not
+		// move at W's cadence. SessionCompactionState is
+		// REACHABILITY_BOUND but NOT C2-cadence-correct — even
+		// after the producer publish-fix is in place, the
+		// persistence-side won't fire on ordinary turns.
+		//
+		// GREEN (cadence-correct) would be saveState.length === 3,
+		// one call per prepare-turn, regardless of whether
+		// compaction rewrote messages.
+		expect(saveStateCalls.length).toBe(3); // RED at HEAD = 1; GREEN = 3.
+	});

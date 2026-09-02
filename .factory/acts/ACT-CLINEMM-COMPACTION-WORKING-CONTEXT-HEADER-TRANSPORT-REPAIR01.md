@@ -5,8 +5,8 @@
 | OWNING_EPIC | EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING |
 | PREDECESSOR_ACT | ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01 |
 | PRODUCTION_DELTA_TARGET | bounded (one new core→host carrier seam + one narrow header numerator switch) |
-| DISPOSITION | OPEN — CARRIER_BIND landed; RED not yet authored |
-| C1 | GO_CARRIER_BIND (was GO_HEADER_TRANSPORT; carrier audit landed; next causal question is RED authoring + bounded GREEN) |
+| DISPOSITION | OPEN — CARRIER_BIND landed + CADENCE FALSIFIED (eighth-pass halt HALT_WRONG_CARRIER_SEMANTICS); cadence discriminator RED authored + verified at HEAD; RED-1/2/3 de-authorized |
+| C1 | GO_CADENCE_INSPECTION (was GO_CARRIER_BIND; carrier audit reached but cadence falsified the chosen carrier for C2; next causal question is per-turn carrier inspection + bounded GREEN that closes the publish gap AND moves W at prepare-turn cadence) |
 
 ## Primary contract (one-line)
 
@@ -144,7 +144,7 @@ out of the low-level agent message builder").
 **Rejected**: `runtime-event` metadata (no generic opaque
 scalar payload; widening creates a NEW protocol field).
 
-## Resolved carrier chain
+## Resolved carrier chain (REJECTED by eighth-pass cadence check)
 
 ```text
 ContextPipelinePrepareTurnResult
@@ -171,6 +171,14 @@ TaskHeader → ContextWindow numerator switch:
      → currentWorkingContextEstimate ?? lastApiReqContextInputTokens
    (with a clear "no recent prepare-turn" fallback marker)
 ```
+
+The chain above is **REJECTED** by the eighth-pass cadence
+falsification: `SessionCompactionState` does not move at
+W's cadence (it only updates when compaction rewrites
+messages; on ordinary prepare-turns the carrier is silent
+and `publishWorkingContextEstimate` is also not called).
+The cadence-correct carrier is **NOT YET BOUND** — see
+"Forward disposition" below for the next causal question.
 
 No recompute is permitted at any layer. The header either
 displays the core-published W or falls back to P with a
@@ -270,51 +278,177 @@ PRODUCTION_W_AUTHORITIES                  = 1 (one authority: core prepare-turn 
 H_a_TO_W_EQUIVALENCE                     = still UNPROVEN
 ```
 
+## Eighth-pass halt (2026-09-03) — HALT_WRONG_CARRIER_SEMANTICS
+
+The factory causal reviewer halted the seventh-pass carrier
+verdict (`GENERIC_REUSABLE_CARRIER = BOUND / SessionCompactionState`)
+on the ground that the audit optimized for **reachability**
+("can this scalar reach VSCode?") and missed the **cadence
+invariant**:
+
+> for every successful prepareTurn producing authoritative W_n:
+>   host-visible W eventually = W_n
+> without requiring:
+>   compaction occurred
+>   provider response arrived
+>   api_req_started arrived
+
+For `SessionCompactionState`, the cadence question is textually
+answerable at HEAD:
+
+```text
+createCompactionStateAwarePrepareTurn (compaction.ts:670-731)
+  if (existingState && projectedMessages) {
+    result = await input.compact(...)
+    if (result?.messages) {
+      saveState(nextState, ...)       ← ONLY fires here
+      return publishWorkingContextEstimate(...)  ← ONLY here too
+    }
+    return publishWorkingContextEstimate(projectedMessages, ...)
+                                       ← no saveState
+  }
+  result = await input.compact(...)
+  if (result?.messages) {
+    saveState(nextState, ...)         ← ONLY fires here
+    return publishWorkingContextEstimate(...)
+  }
+  return result                       ← BOTH gaps: no
+                                          saveState AND no
+                                          publish
+                                          (the third branch)
+```
+
+Two coupled gaps on the no-compaction branch:
+
+1. **Publish gap**: `compaction.ts:730` returns `result` which
+   is `undefined` when the upstream `compact` returned
+   undefined; `publishWorkingContextEstimate` is **not** called.
+   `currentWorkingContextEstimate` is therefore not even
+   computed on the prepare-turn result.
+2. **Cadence gap**: `input.saveState` is only called inside
+   `if (result?.messages)` branches — i.e. only when
+   compaction rewrote messages. On an ordinary prepare-turn
+   where compaction is skipped, the carrier does not move.
+
+The cadence discriminator (this commit's only RED) settles the
+question mechanically:
+
+```text
+RED-CADENCE (CARRIER_CADENCE in compaction.working-context-
+authority-publish.test.ts:176):
+
+  Given three sequential prepare-turns A, B, C with B and C
+  having no compaction (compact returns undefined) and
+  canonical messages strictly increasing:
+
+  EXPECTED: each prepare-turn publishes W AND each prepare-
+            turn calls saveState with state semantically
+            representing the new W.
+
+  ACTUAL (HEAD, mechanically observed):
+    - resultA.currentWorkingContextEstimate: defined
+    - resultB.currentWorkingContextEstimate: undefined
+          (compaction.ts:730 returns `result` undefined;
+           publishWorkingContextEstimate not called)
+    - resultC.currentWorkingContextEstimate: undefined
+          (same reason)
+    - saveState calls: 1 (only A)
+
+  RED at the publish-gap assertion
+  (expect(wObserved[1]).toBeDefined() fails at HEAD).
+```
+
+The verdict is settled:
+
+```text
+GENERIC_REUSABLE_CARRIER = NOT YET SEMANTICALLY BOUND
+
+SessionCompactionState
+  = REACHABILITY_BOUND / STRONG
+  = C2_CADENCE = FALSIFIED
+
+NEW_BOUNDED_FIELD = NOT YET AUTHORIZED
+  (no schema bump yet; depends on cadence-correct
+   carrier's parser/migration contract)
+
+CHOSEN CARRIER (C2 live W) = NOT YET BOUND
+  (the audit's "reaches host?" column was insufficient;
+   the missing column was "emits/updates every prepare-
+   turn?")
+
+PROVISIONAL USE OF SessionCompactionState:
+  valuable for resume qualification (durable W at
+  compacted boundary + canonical tail projection);
+  NOT the C2 live carrier.
+
+A likely final design may COMPOSE:
+  durable compaction artifact
+    = baseline / resume authority
+  live per-turn runtime event/snapshot
+    = current W authority
+  Both compose; do not build the composed design yet.
+  First prove the cadence-correct carrier.
+```
+
+RED-1/RED-2/RED-3 from the seventh-pass are
+**de-authorized**: they tested persistence-on-compaction,
+not cadence, and were structurally preselected by the
+rejected SessionCompactionState verdict. The RED-2/3 plan
+also named a proposed repair field
+(`ExtensionState.lastWorkingContextEstimate`) — that
+preselects the repair (P1 from the seventh-pass review)
+and is therefore also de-authorized.
+
 ## Things this ACT does NOT do
 
-- does NOT change producer-side code in `compaction.ts`
-  (AUTHORITY-PUBLISH01's bound; frozen at `fc906dfc6`)
 - does NOT introduce a second estimator in `ChatView`
   (per fifth-pass hard rule "Transport W; do not recompute W")
 - does NOT extend the `TokenEstimatedRequest` input contract
-- does NOT modify the upstream
-  `createContextPipelinePrepareTurn` shape
 - does NOT change `getApiMetrics` Strategy-D logic
 - does NOT widen `AgentModelRequest` (rejected by carrier audit)
-- does NOT widen runtime-event metadata surface (rejected by carrier audit)
-- does NOT add any new protocol field beyond ONE bounded
-  `currentWorkingContextEstimate?: number` on
-  `SessionCompactionState`
+
+  IN-SCOPE-but-DEFERRED (until cadence-correct carrier is
+  bound):
+  - bumping `SessionCompactionState` schema to v2 (NOT
+    authorized yet; depends on cadence-correct carrier's
+    parser/migration contract)
+  - adding a NEW typed runtime event that fires per
+    prepareTurn (NOT preselected; bound only after the
+    cadence-correct carrier is chosen)
+
+  DEAUTHORIZED:
+  - RED-1/RED-2/RED-3 from the seventh-pass (tested
+    persistence-on-compaction, not cadence, and were
+    structurally preselected by the rejected
+    SessionCompactionState verdict)
+  - the seventh-pass RED-2/3 plan's named repair field
+    `ExtensionState.lastWorkingContextEstimate`
+    (preselected the repair before the cadence-correct
+    carrier was bound)
 
 ## Test artifact target
 
 ```text
-Three test cases, one per RED seam:
+Cadence discriminator (the only RED this commit):
+  CARRIER_CADENCE in compaction.working-context-
+  authority-publish.test.ts:176
+  — three sequential prepare-turns A, B, C with B and
+    C having no compaction
+  — observe that saveState fires only on A AND
+    publishWorkingContextEstimate is not called on the
+    no-compaction branch
+  — RED at HEAD on the publish-gap assertion
+    (expect(wObserved[1]).toBeDefined() fails at HEAD)
+  — settles the cadence verdict mechanically
 
-  RED-1 (sdk/packages/core/src/extensions/context/):
-    a RED that runs a real prepareTurn call with a
-    deterministic injected compact(), inspects the
-    state passed to saveState, and asserts the saved
-    state carries currentWorkingContextEstimate =
-    estimateRequestInputTokens(final returned shape).
+Seventh-pass RED-1/RED-2/RED-3:
+  DEAUTHORIZED (wrong invariant; structurally
+  preselected by the rejected SessionCompactionState
+  verdict)
 
-  RED-2 (apps/vscode/src/sdk/):
-    a RED that constructs a real SessionCompaction-
-    State carrying W_after, runs it through the
-    host's updateSessionCompactionState path, and
-    asserts ExtensionState.lastWorkingContextEstimate
-    = W_after.
-
-  RED-3 (webview or extension host side):
-    a RED that gives ExtensionState.lastWorking-
-    ContextEstimate = W_after, asserts no subsequent
-    api_req_started, and asserts TaskHeader /
-    ContextWindow projected numerator = W_after
-    (oracle = real prepare-turn output, NOT 264_300).
-
-  Plus: compaction-shrink discriminator
-    (alongside the transport GREEN, not as evidence
-    for carrier selection per seventh-pass review).
+Plus: compaction-shrink discriminator preserved
+  (alongside transport GREEN, not as evidence for
+  carrier selection)
 ```
 ```
 
@@ -334,26 +468,59 @@ over the historical test-name-and-comment combination.
 ## Forward disposition
 
 ```text
-commit lane 1: RED-1 producer→artifact seam (core)
-commit lane 2: GREEN-1 (schema v1→v2 + merge
-                        prepare-turn result into
-                        saved nextState; backward-compat
-                        safeParse)
-commit lane 3: RED-2 artifact→host-state seam +
-               RED-3 host→header projection seam +
-               GREEN-2/3 (host mirror + header
-               numerator switch + compaction-shrink
-               RED→GREEN transition)
-commit lane 4 (optional): wire ContextWindow visual
-                          delta into telemetry
+commit lane 1: cadence discriminator RED authored +
+                RED verified at HEAD
+                (this commit; CARRIER_CADENCE in
+                 compaction.working-context-authority-
+                 publish.test.ts:176; proves
+                 SessionCompactionState does not move
+                 at W's cadence AND
+                 publishWorkingContextEstimate is not
+                 called on the no-compaction branch)
+
+commit lane 2: per-turn carrier inspection (NEW source
+                pass; no production code change)
+                — re-audit runtime/session event /
+                  snapshot surfaces that already move
+                  per prepare-turn (or per turn-started,
+                  per turn-finished, per status-notice,
+                  per session.updated, per
+                  snapshot-bearing event)
+                — choose the lowest cadence-correct
+                  carrier (likely requires a NEW
+                  typed runtime event OR adding
+                  currentWorkingContextEstimate to
+                  AgentRuntimeStateSnapshot AND firing
+                  an event after every
+                  prepareTurnForModelRequest)
+
+commit lane 3: ensure publishWorkingContextEstimate
+                fires on EVERY prepare-turn (close
+                the publish gap at compaction.ts:730)
+                + wire the cadence-correct carrier to
+                deliver W to the host on every
+                prepare-turn
+                + populate ExtensionState with W
+                + switch the header numerator to W
+
+commit lane 4 (optional): compose durable compaction
+                artifact (resume baseline) with live
+                per-turn event (current W authority)
 ```
 
-`NEW_REVIEW_ROUND = NO` for each commit (transport is mechanical;
-doctrine is frozen; carrier audit complete; provenance is sufficient).
+`NEW_REVIEW_ROUND = NO` for each commit (cadence discriminator
+is mechanical; doctrine is frozen; provenance is sufficient;
+RED-1/2/3 are de-authorized, not pending review).
 
 TYPECHECK expectation = TYPECHECK_DELTA = ZERO at each commit
-(subject count reported against running parent baseline).
+(subject count reported against running parent baseline;
+this commit added one test case to compaction.working-
+context-authority-publish.test.ts — no production source
+touched).
 
-C1 = `GO_CARRIER_BIND` (was `GO_HEADER_TRANSPORT`; carrier audit
-landed; the next causal question is RED authoring + bounded GREEN).
-No production code change in this calibration commit.
+C1 = `GO_CADENCE_INSPECTION` (was `GO_CARRIER_BIND`;
+carrier audit reached but cadence falsified the chosen
+carrier for C2; the next causal question is per-turn
+carrier inspection + bounded GREEN that closes the
+publish gap AND moves W at prepare-turn cadence).
+No production code change in this commit.
