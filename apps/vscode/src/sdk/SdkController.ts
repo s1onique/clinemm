@@ -149,6 +149,7 @@ import {
 } from "./session-auto-approval"
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
+import { captureTaskHeaderSelectorInput } from "./task-header-selector-input-capture"
 import { TaskOperationFence } from "./task-operation-fence"
 import { createTaskProxy, type TaskProxy } from "./task-proxy"
 import {
@@ -4232,6 +4233,33 @@ export class Controller {
 						data: built.data,
 					})
 				}
+			}
+			// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01:
+			// Synchronized selector-input capture at the SAME `stateVersion`
+			// identity as the activity.publication.v1 emission above. The
+			// capture reads the four selector-input fields the bounded guard
+			// inspects (canonicalShadowPhase, localShadowTurnSeq,
+			// currentLegacyPhase, seq) PLUS the post-selection
+			// phase/source. Gated by
+			// CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1=<truthy>; default
+			// off. No-op when disabled. Read-only: no mutation, no wire
+			// field, no state-post event.
+			{
+				const localShadowPhase = this.getLocalShadowPhase()
+				const localShadowTurnSeq =
+					localShadowPhase !== undefined ? this.getLocalShadowTurnSeqForPhase(localShadowPhase) : undefined
+				const shadowForBinding = this.getLocalShadowProjection()
+				const publicationShadowBinding: "MISSING" | "UNBOUND" = shadowForBinding === undefined ? "MISSING" : "UNBOUND"
+				captureTaskHeaderSelectorInput({
+					stateVersion: snapshot.stateVersion,
+					publicationShadowBinding,
+					canonicalShadowPhase: localShadowPhase,
+					localShadowTurnSeq,
+					currentLegacyPhase: this.turnStateTracker.currentPhase,
+					seq: this.turnStateTracker.get().seq,
+					selectedPhase: snapshot.taskHeaderPresentation?.phase ?? this.turnStateTracker.currentPhase,
+					selectedSource: snapshot.taskHeaderPresentation?.source ?? "legacy",
+				})
 			}
 			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
 			// Synchronized host-ownership capture at the SAME `stateVersion` +

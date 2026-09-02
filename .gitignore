@@ -858,3 +858,24 @@ apps/vscode/.factory/evidence/
 # classification to be confirmed by reviewer).
 !/.factory/acts/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01/
+# 2026-09-02: ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01
+# Reviewer-disposition 2026-09-02 HALT_LIVE_BINDING_NOT_PROVEN: the
+# ACT body overclaimed that the LIVE specimen is closed. The
+# diagnostic `shadowPublicationBinding = "UNBOUND"` is NOT
+# mechanically equivalent to `canonicalShadowObservedTurnSeq ===
+# undefined` (the selector-local input the bounded guard inspects).
+# A second LIVE subcase (shadow's last `idle` observation stamped at
+# the matching `seq`) would not fire the new guard but also does not
+# fire the existing REPAIR01-CORRECTION02 explicit-staleness gate.
+# Required bounded completion: (1) one-shot diagnostic capture
+# script that records the selector-input fields alongside the next
+# `activity.publication.v1` JSONL emission (reads existing fields;
+# no new instrumentation); (2) rename `UNBOUND` to
+# `PUBLICATION_SHADOW_BINDING` vs `LOCAL_SHADOW_TURNSEQ` to remove
+# the documentary ambiguity that hid the P0 gap; (3) downgrade
+# closure verdict to `ROOT_CAUSE_ISOLATED_FOR_GENERIC_SUBCASE /
+# LIVE_BINDING_NOT_PROVEN`. The ACT body + evidence directory + the
+# new capture script must survive a fresh clone so the bounded
+# completion step is durable.
+!/.factory/acts/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01.md
+!/.factory/evidence/ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01/
