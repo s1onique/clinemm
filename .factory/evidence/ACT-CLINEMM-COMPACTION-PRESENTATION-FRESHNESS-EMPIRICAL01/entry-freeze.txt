@@ -1,0 +1,18 @@
+ENTRY_HEAD         = 099baee8ec59741cf4b1543622e45c7d10769c90
+SUBJECT_HEAD       = 099baee8ec59741cf4b1543622e45c7d10769c90
+WORKTREE           = clean (pre-commit; only this evidence file +
+                     .factory/epic-board.md update + .factory/epics/
+                     context-compaction-token-accounting.md status
+                     update are pending)
+PRODUCTION_DELTA   = ZERO
+PURPOSE            = EMPIRICAL_REPORT_ONLY / NOT_A_FORMAL_ACT
+                    (verifies whether the two compaction-token
+                     defects the Factory ACT designer identified
+                     remain RED at HEAD, or whether prior ACTs
+                     already closed them)
+
+REFERENCE_HEAD     = cb5b52239 (the Strategy-D application commit
+                     where DEFECT A was closed; HEAD above carries
+                     that commit)
+
+PROVEN_AT_HEAD     = bun:test + node v26 vitest (see findings.md §1)

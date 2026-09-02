@@ -1,0 +1,13 @@
+VERIFICATION_RUN @ HEAD = 099baee8ec59741cf4b1543622e45c7d10769c90
+
+bun:test getApiMetrics.test.ts               24 pass /  0 fail  (Strategy-D + G1-G5 GREEN; R0-A INVERTED-INVARIANT)
+node v26 vitest restore-publication.test.ts  10 pass /  0 fail  (CSR01-CSR08 + CSR_PROBE_success/failure)
+node v26 vitest thcp11.test.ts                 6 pass /  0 fail  (THCP11-P1a / P1b / P1c / P1d / P1e / P1f)
+bun:test post-compaction-bar.freshness.test.ts 2 pass / 0 fail  (defect C reproduced: bar stays stale at pre-compaction P value)
+
+TOTAL: 42 pass / 0 fail across the three load-bearing suites
+       + 2 pass demonstrating the live defect C behaviour.
+
+Defect A (cross-scale ratio transfer): CLOSED at HEAD
+Defect B (post-restore publication):   CLOSED at HEAD
+Defect C (post-compaction header staleness): LIVE — no repair authored

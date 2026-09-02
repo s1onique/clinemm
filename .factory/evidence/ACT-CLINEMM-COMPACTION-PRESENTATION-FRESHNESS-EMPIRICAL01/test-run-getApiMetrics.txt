@@ -1,0 +1,31 @@
+[0m[32m✓[0m [0mgetApiMetrics[2m >[0m[1m includes subagent_usage in aggregate totals[0m [0m[2m[0.42ms[0m[2m][0m
+[0m[32m✓[0m [0mgetApiMetrics[2m >[0m[1m ignores malformed usage payloads[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqTotalTokens[2m >[0m[1m uses only the latest api_req_started payload[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqTotalTokens[2m >[0m[1m keeps the last request's genuine total when a compaction divider postdates it (no ratio transfer across scales)[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqTotalTokens[2m >[0m[1m does not compound multiple compactions into the last request total (post-repair behavior)[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqTotalTokens[2m >[0m[1m does not grow the request total when a compaction made the estimated context larger (post-repair: stale but truthful)[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqTotalTokens[2m >[0m[1m leaves the request total unscaled when a completed compaction lacks token counters[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqTotalTokens[2m >[0m[1m returns 0 when a compaction completed but no request preceded it[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqTotalTokens[2m >[0m[1m ignores compaction rows without a usable compacted size[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqTotalTokens[2m >[0m[1m prefers a request newer than the last compaction[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m returns tokensIn + cacheReads + cacheWrites from the last api_req_started payload[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m OpenAI-compatible inclusive cache accounting: tokensIn already contains the cached subset[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m Anthropic-native exclusive cache accounting: tokensIn excludes the cached subset[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m Anthropic cache creation: cacheWrites contribute to context-input size[0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m tokensOut never contributes to context-input occupancy[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m keeps the context-input total at the genuine prior observation when a compaction divider postdates it (Strategy-D: no ratio transfer across scales)[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m [R0-A] consumer does not synthesize the LIVE-symptom wrong-scale value (~7.1k) post-repair[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m returns 0 when no api_req_started message exists[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m returns 0 when the api_req_started payload has no tokensIn[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m ignores malformed api_req_started payloads[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m [G2] does not synthesize a post-compaction request-input value by multiplying prior provider observation by the compaction H-space ratio[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m [G3] uses the post-compaction api_req_started observation as ground truth (no retroactive ratio)[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m [G4] returns the genuine prior provider observation when no compaction has occurred[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0mgetLastApiReqContextInputTokens[2m >[0m[1m [G5] preserves disjoint cacheReads/cacheWrites contribution (presentation conservation)[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m 24 pass[0m
+[0m[2m 0 fail[0m
+Ran 24 tests across 1 file. [0m[2m[[1m1216.00ms[0m[2m][0m
+ ✓ src/sdk/sdk-compaction-coordinator.restore-publication.test.ts (10 tests) 8ms
+ ✓ src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts (6 tests) 6ms
+ Test Files  2 passed (2)
+      Tests  16 passed (16)

@@ -10,7 +10,7 @@
 >
 > **PASS_WITH_ONE_P1_FIX (factory causal reviewer, 2026-09-02 SECOND REVIEW — CALIBRATION):** two P1 overclaims corrected: (a) "S1 proven by telemetry docstring" was overclaimed — the docstring establishes unit/scale only, not payload-identity; (b) "S3 = CURRENT_BEST_CLASSIFICATION / ROOT_CAUSE_ISOLATED = AMBIGUOUS_WIRE_CONTRACT" was overclaimed — S3 is PLAUSIBLE but UNPROVEN; ROOT_CAUSE remains UNKNOWN until the ratio discriminator runs. Repair options NOT pre-ranked; Factory doctrine prefers the smallest bounded fix until evidence proves the wire itself needs new semantics.
 >
-> **R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX; third-review DISCRIMINATOR CALIBRATION 2026-09-02T03:30:00Z; fourth-review WORKING-CONTEXT-SEAM CALIBRATION 2026-09-02T04:00:00Z; FACTORY FORM REVIEW HARDENING 2026-09-02T06:30:00Z):** the producer is a transformation on the supplied request (no semantic claim); the UI consumer applies a ratio whose transfer to the provider-context shrink for manual mode is exactly the discriminator's question. Defect (if any) is AMBIGUOUS_WIRE_CONTRACT (CASE_S3, candidate) or SEMANTIC_LABEL (CASE_S1) — pending the ratio discriminator. The defect (if confirmed) is in the schema/wire or the UI label, NOT in the compactor entry points. The PRIMARY discriminator: does `manual_ratio = H_after/H_before` track `working_context_ratio = W_after/W_before`, where W is bound to the REAL production turn-preparation seam (NOT `prepareProviderMessagesForApi`, which is a second-stage transformation that does NOT consult the compaction artifact; canonical history is intentionally append-only/full-fidelity per `sdk/ARCHITECTURE.md:497`). Specifically, the seam is `createCompactionStateAwarePrepareTurn` at `sdk/packages/core/src/extensions/context/compaction.ts:672-712`, driving `projectSessionCompactionState` at `sdk/packages/core/src/session/models/session-compaction.ts:161-193` twice against identical canonical state with exactly one manual compaction applied between captures. P observations (`P_after/P_before`) are NOT a valid causal compaction oracle (intervening turns between compaction and next provider request contaminate the comparison); P observations become LIVE_PROVIDER_QUALIFICATION (conservation check only). C1 GO is NOT yet granted; buildForApi compaction-independence must be confirmed before execution. **DISCRIMINATOR EXECUTED + HARDENED 2026-09-02T05:30:00Z + 06:30:00Z:** cross-scale ratio-transfer mismatch REPRODUCED (case 2 realistic, 66.6% relative divergence). `WIRE_CONTRACT_OVERLOADED` demoted to POSSIBLE REPAIR INTERPRETATION (NOT uniquely proven root cause) per the Factory form review; `LIKELY_CAUSE = CROSS_SCALE_RATIO_TRANSFER_ASSUMPTION`; `ROOT_CAUSE = NOT_YET_PROMOTED`; `BROKEN_CONSUMER_SEAM = getApiMetrics.ts:174-225`. RED witness captured mechanically (`expected 0.666... <= 0.10`) and stored in `red-witness.txt`. Committed test file inverts the invariant (`relativeDiff > 0.10`) so default suite is GREEN at HEAD — would RED if defect ever disappears. Reachability mechanically established; prevalence in production telemetry remains DEFERRED per R1-R3 HALT. Recommended first repair trial: (d) consumer-side reconciliation.
+> **R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX; third-review DISCRIMINATOR CALIBRATION 2026-09-02T03:30:00Z; fourth-review WORKING-CONTEXT-SEAM CALIBRATION 2026-09-02T04:00:00Z; FACTORY FORM REVIEW HARDENING 2026-09-02T06:30:00Z):** the producer is a transformation on the supplied request (no semantic claim); the UI consumer applies a ratio whose transfer to the provider-context shrink for manual mode is exactly the discriminator's question. Defect (if any) is AMBIGUOUS_WIRE_CONTRACT (CASE_S3, candidate) or SEMANTIC_LABEL (CASE_S1) — pending the ratio discriminator. The defect (if confirmed) is in the schema/wire or the UI label, NOT in the compactor entry points. The PRIMARY discriminator: does `manual_ratio = H_after/H_before` track `working_context_ratio = W_after/W_before`, where W is bound to the REAL production turn-preparation seam (NOT `prepareProviderMessagesForApi`, which is a second-stage transformation that does NOT consult the compaction artifact; canonical history is intentionally append-only/full-fidelity per `sdk/ARCHITECTURE.md:497`). Specifically, the seam is `createCompactionStateAwarePrepareTurn` at `sdk/packages/core/src/extensions/context/compaction.ts:672-712`, driving `projectSessionCompactionState` at `sdk/packages/core/src/session/models/session-compaction.ts:161-193` twice against identical canonical state with exactly one manual compaction applied between captures. P observations (`P_after/P_before`) are NOT a valid causal compaction oracle (intervening turns between compaction and next provider request contaminate the comparison); P observations become LIVE_PROVIDER_QUALIFICATION (conservation check only). C1 GO is NOT yet granted; buildForApi compaction-independence must be confirmed before execution. **DISCRIMINATOR EXECUTED + HARDENED 2026-09-02T05:30:00Z + 06:30:00Z:** cross-scale ratio-transfer mismatch REPRODUCED (case 2 realistic, 66.6% relative divergence). `WIRE_CONTRACT_OVERLOADED` demoted to POSSIBLE REPAIR INTERPRETATION (NOT uniquely proven root cause) per the Factory form review; `LIKELY_CAUSE = CROSS_SCALE_RATIO_TRANSFER_ASSUMPTION`; `ROOT_CAUSE = NOT_YET_PROMOTED`; `BROKEN_CONSUMER_SEAM = getApiMetrics.ts:174-225`. RED witness captured mechanically (`expected 0.666... <= 0.10`) and stored in `red-witness.txt`. Committed test file inverts the invariant (`relativeDiff > 0.10`) so default suite is GREEN at HEAD — would RED if defect ever disappears. Reachability mechanically established; prevalence in production telemetry remains DEFERRED per R1-R3 HALT. **2026-09-02 09:00:00Z EMPIRICAL UPDATE:** `ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01` landed at commit `cb5b52239` (Strategy-D applied: cross-scale ratio transfer removed from `getApiMetrics.ts:174-225`; both `getLastApiReqTotalTokens` and `getLastApiReqContextInputTokens` now return genuine disjoint-bucket sums); G2 RED-confirmed at pre-repair HEAD, G3/G4/G5 added; 24/24 getApiMetrics bun:test pass, 97/97 compaction + working-context-ratio tests pass (G1 stays GREEN), 53/53 apps/vscode/src/shared/__tests__/ pass; typecheck clean; ACT CLOSED. DEFECT A (cross-scale arithmetic) is CLOSED at HEAD. DEFECT B (post-restore publication) is also CLOSED at HEAD — `apps/vscode/src/sdk/sdk-compaction-coordinator.ts:365-396` trailing `postStateToWebview()` is unconditional on exit; CSR01-CSR08 + CSR_PROBE_success / CSR_PROBE_failure (10/10 GREEN under node v26 vitest) and THCP11-P1a..P1f (6/6 GREEN) pin the post-restore publication authority. Recommended first repair trial: (d) consumer-side reconciliation.
 >
 > **Distinct from `task-presentation.md`.** That epic owns the rendering of state to the user. This epic owns whether the working-context estimate, the compaction before/after markers, and the session usage counters tell consistent truth — and whether the producers expose semantic quantities that match what the UI fields appear to claim.
 >
@@ -151,3 +151,71 @@ unchanged. The durable conclusion about the producer is that
 payload-identity claim; the durable conclusion about the UI is
 that its `tokensBefore/tokensAfter` rescaling is an implicit
 S2 assumption whose correctness is empirical, not proven.
+
+## Live defect C — post-compaction header-bar staleness (2026-09-02 09:00:00Z)
+
+Even after Strategy-D closes the cross-scale arithmetic defect
+and the post-restore publication closes the TaskHeader-phase
+defect, ONE live UI symptom remains:
+
+```text
+Symptom:    the compaction divider correctly shows
+            "Context compacted (manual) · 364.9k → 264.3k tokens",
+            but the TaskHeader context bar shows 364.9k (the
+            pre-compaction provider observation) — not 264.3k
+            — and stays there until the NEXT api_req_started
+            lands (i.e. until the next ordinary task-state
+            progression).
+
+Root cause: apps/vscode/webview-ui/src/components/chat/ChatView.tsx:120-123
+            walks the LAST api_req_started observation via
+            apps/vscode/src/shared/getApiMetrics.ts:163-186
+            (getLastApiReqContextInputTokens). After a
+            successful compaction, no NEW api_req_started has
+            arrived yet, so the consumer returns the
+            pre-compaction P-space value. The compaction
+            divider's tokensAfter (H-space) is rendered by
+            CompactionRow.tsx but is NOT fed back into the
+            header-bar projection.
+            This is a PROJECTION-COHERENCE defect at the
+            webview seam. It is NOT a token-accounting
+            defect (the §0 frozen contract and I1-I7
+            invariants are preserved: the divider and the
+            bar both tell truthful values in their own
+            domains; the user just reads them as one
+            semantic quantity).
+
+Conservation:  Strategy-D (genuine prior observation,
+               no fabrication) MUST NOT be reverted. The
+               bar should NOT read the divider's H-space
+               value and substitute it for the missing
+               P-space observation; that would violate
+               I1-I3. The honest fix is at the UI / webview
+               projection seam, not at the metrics consumer.
+
+Reproduction:  `.factory/evidence/ACT-CLINEMM-COMPACTION-
+                PRESENTATION-FRESHNESS-EMPIRICAL01/findings.md`
+                §1.3 — 2 bun:test cases GREEN at HEAD,
+                demonstrating the live symptom.
+
+Recommended    Factory causal reviewer should consider:
+next move:     (α) narrow recon-only ACT to bind the actual
+                  projection-coherence boundary;
+               (β) wire-contract ACT that adds a `kind`
+                  discriminator so the consumer can
+                  mechanically distinguish H-space divider
+                  from P-space observation (only fix that
+                  addresses BOTH defect C AND CASE_S1 label
+                  residue in a single bounded change);
+               (γ) HOLD until the file-tool workspace-
+                  realpath lane binds a real creator
+                  (security P0 per disposer's priority
+                  ordering).
+               Proposed ACT
+               ACT-CLINEMM-COMPACTION-PRESENTATION-TRUTH-REPAIR01
+               is NOT opened in this turn — opening it
+               without re-classifying defect A and defect B
+               (both already CLOSED at HEAD) would duplicate
+               already-landed work and violate the Factory
+               doctrine "real/live failure → RED
+               reproduction → repair".

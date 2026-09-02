@@ -340,6 +340,19 @@ apps/examples/desktop-app/.cursor/settings.json
 # .factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md
 # (whitelisted above) AND to the audit-trail entry in .factory/epic-board.md.
 !/.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/
+# ACT-CLINEMM-COMPACTION-PRESENTATION-FRESHNESS-EMPIRICAL01 evidence:
+# EMPIRICAL_REPORT_ONLY sanity check at HEAD = 099baee8e that verifies
+# whether the two compaction-token defects the Factory ACT designer
+# identified (cross-scale arithmetic + post-restore publication) remain
+# RED at HEAD, or whether prior ACTs already closed them and a different
+# defect remains live. EVIDENCE: findings.md (defect A/B/C verdicts +
+# recommended next-move matrix), entry-freeze.txt (HEAD freeze), test-
+# run-summary.txt (42 PASS / 0 FAIL across getApiMetrics + restore-
+# publication + thcp11 + post-compaction-bar freshness). NOT a formal
+# ACT — opening this commit does NOT open the proposed
+# ACT-CLINEMM-COMPACTION-PRESENTATION-TRUTH-REPAIR01. Binds durably
+# to the Context / compaction row in .factory/epic-board.md.
+!/.factory/evidence/ACT-CLINEMM-COMPACTION-PRESENTATION-FRESHNESS-EMPIRICAL01/
 # ACT-CLINEMM-RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE-REPAIR01: repair ACT
 # authored 2026-09-01 against the LIVE epoch-4 evidence captured by the
 # Factory reviewer disposition (2026-09-01 epoch-4 modelStreaming +
