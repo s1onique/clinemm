@@ -519,7 +519,9 @@ CALIBRATION 2026-09-02T04:00:00Z):
     applies ratio to provider-bound tokensIn via
     getApiMetrics.ts:174-225; whether the ratio transfers is
     exactly the discriminator's question).
-  WIRE_CONTRACT                   = S3_PROVEN (CAUSAL, REPRODUCED
+  WIRE_CONTRACT                   = S3_CANDIDATE (CAUSAL evidence
+    supports S3 reproduction; ROOT_CAUSE assignment to the
+    wire is NOT uniquely proven — see LIKELY_CAUSE below).
     by the discriminator; see discriminator.md).
   POST_COMPACTION_WORKING_CONTEXT_SEAM = BOUND (working-context-
     seam-recon.md committed; createCompactionStateAwarePrepareTurn
@@ -539,18 +541,47 @@ CALIBRATION 2026-09-02T04:00:00Z):
     because buildForApi does not transform small inputs; the
     defect only surfaces when the working context is large enough
     to engage buildForApi's truncation budgets).
-  ROOT_CAUSE                      = ISOLATED (WIRE_CONTRACT_OVERLOADED).
-    The producer (core-events.ts:773) emits a ratio on the
-    compactor's input/output scale (raw canonical → tiny summary).
-    The UI consumer (getApiMetrics.ts:174-225) applies that
-    ratio to provider-bound tokensIn (buildForApi output). The
-    two scales differ when buildForApi's truncation has already
-    done some of the shrinkage the compactor assumes is undone.
-    Discriminator (case 2, realistic canonical with assistant
-    text > 200K): manualRatio 0.000210 vs workingContextRatio
-    0.000629, 66.6% relative divergence. The UI consumer would
-    predict ~3× more aggressive shrink than the working context
-    actually achieves. See discriminator.md for the full binding.
+  ROOT_CAUSE                      = NOT_YET_PROMOTED (per Factory
+    form review: mechanical reachability of the cross-scale
+    mismatch is established, but the producer-vs-consumer
+    boundary of responsibility is NOT uniquely proven). See
+    "Causal ownership" in discriminator.md.
+  LIKELY_CAUSE                    = CROSS_SCALE_RATIO_TRANSFER_
+    ASSUMPTION. The producer (core-events.ts:773) emits a ratio
+    on the compactor's input/output scale (raw canonical → tiny
+    summary). The UI consumer (getApiMetrics.ts:174-225)
+    applies that ratio to provider-bound tokensIn (buildForApi
+    output). The two scales differ when buildForApi's
+    truncation has already done some of the shrinkage the
+    compactor assumes is undone. Discriminator (case 2,
+    realistic canonical with assistant text > 200K):
+    manualRatio 0.000210 vs workingContextRatio 0.000629,
+    66.6% relative divergence. The UI consumer would predict
+    ~3× more aggressive shrink than the working context
+    actually achieves. RED witness captured in
+    `red-witness.txt`: `expected 0.6664678440519827 to be less
+    than or equal to 0.1`.
+  BROKEN_CONSUMER_SEAM            = getApiMetrics.ts:174-225
+    applies compactor H-space ratio to provider-input P-space
+    tokensIn.
+  WIRE_CONTRACT_OVERLOADED        = POSSIBLE REPAIR/CONTRACT
+    INTERPRETATION; NOT uniquely proven root cause. The
+    semantic-contract recon established the producer is
+    ALLOWED to report the transformation over its supplied
+    input; whether the published `tokensBefore`/`tokensAfter`
+    are contractually meant to support cross-scale rescaling
+    is a contract-design question not yet mechanically settled.
+  UI_CONSUMER_MATH                = INTERNALLY CONSISTENT GIVEN
+    BAD ASSUMPTION. The rescaling math is not itself wrong; the
+    bug is in the cross-scale ratio-transfer assumption.
+  REACHABILITY_VS_PREVALENCE      = REACHABILITY mechanically
+    established (any canonical history large enough to engage
+    buildForApi's 200K assistant-text cap); PREVALENCE in
+    production telemetry remains DEFERRED per R1-R3 HALT. The
+    recon does NOT claim "real sessions routinely exceed
+    200K of assistant text" — only that the defect is
+    reachable for histories large enough to engage the 200K
+    cap.
 
 NEXT (after the semantic-contract recon): the real-trace RATIO
 DISCRIMINATOR (HOST_REQUIRED) — **EXECUTED 2026-09-02**. See
@@ -795,7 +826,8 @@ CASE_S1 — SEMANTIC_LABEL_DEFECT (UI title vs producer contract)
   → IF ratio non-invariance: S3 is the verdict; S1 presentation-
     only is FALSIFIED.
 
-CASE_S3 — WIRE_CONTRACT_OVERLOADED (CAUSAL REPRODUCED, 2026-09-02)
+CASE_S3 — WIRE_CONTRACT_OVERLOADED (CROSS_SCALE_RATIO_TRANSFER_
+     ASSUMPTION REPRODUCED, NOT_YET_PROMOTED, 2026-09-02)
   R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review
   PASS_WITH_ONE_P1_FIX; third-review discriminator calibration
   2026-09-02T03:30:00Z; fourth-review WORKING-CONTEXT-SEAM
@@ -894,16 +926,24 @@ may freeze a specific behavior, but only if recon proves the seam.
       `createCompactionStateAwarePrepareTurn` at
       `sdk/packages/core/src/extensions/context/compaction.ts:672-712`
       twice against identical canonical state with exactly one
-      manual compaction applied between captures) → S3 PROVEN;
-      `CASE_A` with `S3_PROVEN` residue; `CLOSED_WITH_RESIDUE`.
-      ROOT_CAUSE_ISOLATED at the schema/wire between producer
-      (core-events.ts:773) and UI rescaling consumer
-      (getApiMetrics.ts:174-225).
+      manual compaction applied between captures) → S3 ratio-
+      transfer mismatch REPRODUCED; `CASE_A` with cross-scale
+      mismatch observed; `CLOSED_WITH_RESIDUE`. Cross-scale
+      mismatch is the OBSERVED REPRODUCTION; ROOT_CAUSE remains
+      `NOT_YET_PROMOTED` because the experiment does NOT
+      uniquely assign responsibility to the wire vs the
+      consumer's ratio-transfer assumption. Reachability is
+      mechanically established; prevalence in production
+      telemetry remains DEFERRED per R1-R3 HALT.
       Downstream repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-
-      CONTRACT-REPAIR01` with **options (a) / (b) / (d)** as
+      CONTRACT-REPAIR01` with **options (d) / (a) / (b)** as
       candidate bounded fixes (ranked AFTER the discriminator;
-      Factory doctrine prefers the smallest, which may be (d)
-      consumer-side reconciliation).
+      Factory doctrine prefers the smallest, which is **(d)
+      consumer-side reconciliation — RECOMMENDED FIRST TRIAL**
+      because it is the smallest-bounded fix and is
+      mechanically testable against the same discriminator).
+      (a) and (b) require protocol/wire changes and remain
+      candidates if (d) proves insufficient.
     - **Discriminator shows ratio invariance** (manual_ratio ≈
       working_context_ratio) → `S3_RATIO_TRANSFER_NOT_
       REPRODUCED`. S3 ratio-transfer hypothesis is FALSIFIED. This
@@ -928,39 +968,59 @@ may freeze a specific behavior, but only if recon proves the seam.
       recon to bind the buildForApi seam before running the
       discriminator.
 
-DISCRIMINATOR OUTCOME (executed 2026-09-02; see `discriminator.md`):
+DISCRIMINATOR OUTCOME (executed 2026-09-02; see `discriminator.md`
+and `red-witness.txt`):
   Case 1 (trivial canonical, no buildForApi truncation) →
     S3_RATIO_TRANSFER_NOT_REPRODUCED. The compactor's ratio
     correctly predicts the working-context shrink when buildForApi
-    does not transform the inputs.
+    does not transform the inputs. GREEN positive control.
   Case 2 (realistic canonical, assistant text > 200K cap) →
     S3_REPRODUCED with 66.6% relative divergence. The compactor's
     claim of "99.98% reduction" overstates the actual working-
     context shrink of "99.94%" by ~3×, because buildForApi's
     `truncateAssistantText` (DEFAULT_MAX_ASSISTANT_TEXT_CHARS =
     200K) has already done some of the shrinkage the compactor
-    assumes is undone.
+    assumes is undone. RED WITNESS CAPTURED.
   Trivial-case S3_RATIO_TRANSFER_NOT_REPRODUCED does NOT
   falsify S3; the defect only surfaces when the working
   context is large enough to engage buildForApi's budgets.
-  This is the production regime: real sessions routinely
-  exceed 200K of assistant text. S3 IS REPRODUCED.
 
-VERDICT:
-  CASE_A — S3_PROVEN (WIRE_CONTRACT_OVERLOADED).
-  CLOSED_WITH_RESIDUE — defect isolated at the schema/wire
-    between producer (core-events.ts:773) and UI rescaling
-    consumer (getApiMetrics.ts:174-225).
-  ROOT_CAUSE_ISOLATED.
-  Repair options (a)/(b)/(d) become candidates, ranked smallest
-    first per Factory doctrine. (e) label-only is NOT sufficient
-    because the defect is NOT purely a label issue — the ratio
-    itself is on the wrong scale. (c) RETRACTED as unsafe.
+RED WITNESS (per Factory form review):
+  Reviewer-recommended strong Factory form:
+    expect(relativeDiff).toBeLessThanOrEqual(RELATIVE_TOLERANCE)
+  Captured failure at HEAD (see `red-witness.txt`):
+    AssertionError: expected 0.6664678440519827 to be less than or equal to 0.1
+  The committed test file inverts this invariant (asserts
+  relativeDiff > 0.10) so the default suite is GREEN at HEAD
+  (the defect IS reproducible) and would RED if the defect ever
+  disappears.
+
+VERDICT (CALIBRATED per Factory form review):
+  CASE_A — S3_PROVEN (CROSS_SCALE_RATIO_TRANSFER_ASSUMPTION).
+  CLOSED_WITH_RESIDUE — defect reachability mechanically
+    established; ROOT_CAUSE = NOT_YET_PROMOTED (cannot
+    uniquely assign responsibility to wire vs consumer
+    without contract-level evidence on whether
+    `tokensBefore`/`tokensAfter` are contractually meant to
+    support cross-scale rescaling).
+  BROKEN_CONSUMER_SEAM = getApiMetrics.ts:174-225 (applies
+    H-space ratio to P-space tokensIn).
+  WIRE_CONTRACT_OVERLOADED = POSSIBLE REPAIR INTERPRETATION,
+    NOT proven root cause.
+  Repair options (d)/(a)/(b) become candidates, ranked smallest
+    first per Factory doctrine (option (d) consumer-side
+    reconciliation is RECOMMENDED FIRST TRIAL because it is
+    the smallest-bounded fix and is mechanically testable
+    against the same discriminator). (c) RETRACTED as unsafe.
+    (e) label-only NOT sufficient because the defect is NOT
+    purely a label issue — the ratio itself is on the wrong
+    scale.
   R1-R3 territory remains DEFERRED per the reviewer's HALT
     directive; this S3 verdict does NOT auto-prove S1-LABEL-ONLY
     or eliminate other accounting defects.
+  Production code delta = 0.
   Downstream repair ACT = `ACT-CLINEMM-COMPACTION-WIRE-
-    CONTRACT-REPAIR01` (NOT opened from this ACT).
+    CONTRACT-REPAIR01` (NOT opened from this ACT; (d) first).
   - **R1-R3 RED with structural defect** → `CASE_B` → recon reports
     `ROOT_CAUSE_ISOLATED` (with specific I1-I7 violation +
     file:line). R0' / R0-A do not contribute to this branch.

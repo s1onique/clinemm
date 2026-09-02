@@ -343,3 +343,39 @@ discriminator. It is internally consistent with the prior
 recons (producers.md, semantic-contract-recon.md,
 compaction-input-identity-recon.md, entry-freeze.txt) and the
 upstream architecture doc.
+
+## POST-DISCRIMINATOR FORM REVIEW (added 2026-09-02 06:30:00Z)
+
+The factory causal reviewer's P0/P1 hardening pass identified
+that the committed discriminator test, while correctly reaching
+the real production seam, was logging the verdict without
+**asserting** it. The committed test file has been updated:
+
+- **GREEN positive control** (case 1, small canonical) asserts
+  `relativeDiff ≤ 0.10` — confirms the test harness is correct
+  WHERE IT SHOULD BE.
+- **RED-defect witness** (case 2, realistic canonical, 600K
+  assistant text) asserts `relativeDiff > 0.10` AND
+  `verdict === "S3_REPRODUCED"` — these would RED if the
+  cross-scale mismatch ever disappears.
+- **Causal controls added**:
+  - `wBefore.estimate < hBefore.before` (mechanical proof that
+    buildForApi's truncation has run before compaction)
+  - `manualRatio < workingContextRatio` (mechanical proof
+    that compactor's H scale < working-context W scale)
+  - `relativeDiff > 0.10` (load-bearing witness)
+  - `verdict === "S3_REPRODUCED"` (categorical match)
+- **Strong RED form captured** in `red-witness.txt`:
+  ```
+  AssertionError: expected 0.6664678440519827 to be less
+                  than or equal to 0.1
+  ```
+  This is the reviewer-recommended Factory form RED at HEAD;
+  captured once and removed from the default suite (per
+  Factory doctrine: do not permanently commit intentionally
+  failing tests).
+
+The seam itself (BUILD_FOR_API_SIDE_CHANNEL_INVARIANT, and
+the targeted inspection of `MessageBuilder.buildForApi`) is
+UNCHANGED by this hardening pass — it was already correctly
+bounded. The hardening was about the TEST form, not the seam.

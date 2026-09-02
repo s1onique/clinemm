@@ -98,7 +98,44 @@ TIMESTAMP=2026-09-01T23:55:00Z (opening) /
                                 working-context seam; existing 94
                                 compaction tests still pass;
                                 discriminator.md committed; 3 tests
-                                pass / 0 fail in the new file)
+                                pass / 0 fail in the new file) /
+           2026-09-02T06:30:00Z (FACTORY FORM REVIEW HARDENING
+                                pass: ROOT_CAUSE demoted from
+                                ISOLATED to NOT_YET_PROMOTED per
+                                Factory causal reviewer's P1
+                                ownership overclaim; LIKELY_CAUSE =
+                                CROSS_SCALE_RATIO_TRANSFER_ASSUMPTION;
+                                WIRE_CONTRACT_OVERLOADED demoted to
+                                POSSIBLE REPAIR INTERPRETATION, NOT
+                                uniquely proven root cause;
+                                BROKEN_CONSUMER_SEAM made explicit
+                                (getApiMetrics.ts:174-225 applies
+                                H-space ratio to P-space tokensIn);
+                                UI_CONSUMER_MATH = INTERNALLY
+                                CONSISTENT GIVEN BAD ASSUMPTION;
+                                reachability vs prevalence
+                                distinguished; unsupported "real
+                                sessions routinely exceed 200K" claim
+                                REMOVED (now: "defect reachable for
+                                histories large enough to engage the
+                                200K cap"); RED WITNESS captured
+                                mechanically via strong Factory
+                                form (expect(relativeDiff).toBe
+                                LessThanOrEqual(0.10) → "expected
+                                0.666... to be less than or equal
+                                to 0.1", red-witness.txt);
+                                committed test file inverts the
+                                invariant so default suite is
+                                GREEN-at-HEAD (the defect IS
+                                reproducible; would RED if defect
+                                ever disappears); (d) consumer-side
+                                reconciliation now RECOMMENDED FIRST
+                                TRIAL as smallest-bounded fix;
+                                REPAIR_AUTHORIZED = NO from this
+                                recon, separate ACT
+                                ACT-CLINEMM-COMPACTION-WIRE-
+                                CONTRACT-REPAIR01 (NOT opened from
+                                this ACT); NEW_REVIEW_ROUND = NO)
 REPO_HEAD=7c24ab02f (post-contract-correction; R0 promotion is docs+test)
 OWNER=CONTEXT / COMPACTION / TOKEN-ACCOUNTING
 EPIC=EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING (new epic opened 2026-09-01

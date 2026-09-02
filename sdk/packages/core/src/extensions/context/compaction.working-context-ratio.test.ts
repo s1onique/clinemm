@@ -219,7 +219,15 @@ function captureH(
 }
 
 describe("working-context ratio discriminator", () => {
-	it("isolates the compaction effect under identical surrounding canonical state", async () => {
+	it("GREEN: in the truncation-not-engaged case, manual-compaction ratio DOES transfer to working-context shrink", async () => {
+		// POSITIVE CONTROL. When the canonical history is small
+		// enough that buildForApi's truncation budgets do not
+		// engage, the manual-mode ratio predicts the working-
+		// context shrink correctly (the two scales are
+		// equivalent because there is no truncation). This
+		// confirms the test harness itself is correct: the
+		// invariant holds WHERE IT SHOULD, fails WHERE IT
+		// SHOULD NOT (see the RED case below).
 		const canonical = buildCanonicalHistory();
 
 		// Session state lives in this closure so the two captures
@@ -351,15 +359,35 @@ describe("working-context ratio discriminator", () => {
 		expect(wBefore.apiMessages.length).not.toEqual(
 			wAfter.apiMessages.length,
 		);
+
+		// 5. GREEN POSITIVE CONTROL: when canonical is small
+		//    enough that buildForApi does not engage its
+		//    truncation budgets, the manual-mode ratio predicts
+		//    the working-context shrink correctly. Loads with
+		//    relativeDiff ≤ 0.10 here, fails the same invariant
+		//    in the RED case below (this is the difference the
+		//    recon is asserting on).
+		expect(relativeDiff).toBeLessThanOrEqual(RELATIVE_TOLERANCE);
+		expect(verdict).toBe("S3_RATIO_TRANSFER_NOT_REPRODUCED");
 	});
 
-	it("preserves the ratio across a realistic canonical history with very long assistant text", async () => {
+	it("RED: manual-compaction ratio does not transfer to working-context shrink once provider-message truncation engages", async () => {
 		// Realistic case: the canonical history has assistant
 		// messages long enough to engage MessageBuilder's
 		// truncateAssistantText (DEFAULT_MAX_ASSISTANT_TEXT_CHARS
 		// = 200_000). The compact produces a tiny summary. The
 		// question: does the manual_ratio (estimated on H) still
 		// track the working_context_ratio (estimated on W)?
+		//
+		// THIS TEST IS A RED WITNESS. It asserts that
+		// relativeDiff > 0.10, which is the load-bearing claim
+		// of the recon. At HEAD, this test should FAIL with a
+		// relativeDiff ≈ 0.666, captured in
+		// discriminator.md as the reproduced defect witness.
+		// The recon ACT does NOT promote this to a permanent
+		// gating invariant until the repair ACT inverts the
+		// assertion (post-fix regression). For now it lives here
+		// as durable evidence.
 		const LONG = 600_000; // well above the 200K cap
 		const canonical: LlmsProviders.Message[] = [
 			{ role: "user", content: "Build a compiler." },
@@ -457,6 +485,29 @@ describe("working-context ratio discriminator", () => {
 		expect(Number.isFinite(workingContextRatio)).toBe(true);
 		expect(manualRatio).toBeGreaterThan(0);
 		expect(workingContextRatio).toBeGreaterThan(0);
+
+		// Causal control #1 — the scale divergence actually
+		// exists BEFORE compaction: MessageBuilder has already
+		// truncated the working projection (W_before) below the
+		// raw canonical estimate (H_before). Mechanical proof
+		// that buildForApi's assistant-text cap (200K) has run.
+		expect(wBefore.estimate).toBeLessThan(hBefore.before);
+
+		// Causal control #2 — the compactor's input/output scale
+		// (H) is materially different from the working/context
+		// scale (W). Proves the cross-scale assumption
+		// underlying the ratio-transfer defect.
+		expect(manualRatio).toBeLessThan(workingContextRatio);
+
+		// Causal control #3 — the relative divergence exceeds
+		// the 10% cross-scale tolerance. THIS IS THE LOAD-
+		// BEARING RED WITNESS. At HEAD this assertion fails
+		// with expected 0.666... > 0.10 (captured in
+		// discriminator.md as the reproduced defect).
+		expect(relativeDiff).toBeGreaterThan(RELATIVE_TOLERANCE);
+
+		// Causal control #4 — verdict is the categorical match.
+		expect(verdict).toBe("S3_REPRODUCED");
 	});
 
 	it("preserves the buildForApi side-channel invariant: a fresh MessageBuilder per capture yields the same projection as long as the prepared messages match", () => {

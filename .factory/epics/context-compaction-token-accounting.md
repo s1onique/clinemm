@@ -10,7 +10,7 @@
 >
 > **PASS_WITH_ONE_P1_FIX (factory causal reviewer, 2026-09-02 SECOND REVIEW — CALIBRATION):** two P1 overclaims corrected: (a) "S1 proven by telemetry docstring" was overclaimed — the docstring establishes unit/scale only, not payload-identity; (b) "S3 = CURRENT_BEST_CLASSIFICATION / ROOT_CAUSE_ISOLATED = AMBIGUOUS_WIRE_CONTRACT" was overclaimed — S3 is PLAUSIBLE but UNPROVEN; ROOT_CAUSE remains UNKNOWN until the ratio discriminator runs. Repair options NOT pre-ranked; Factory doctrine prefers the smallest bounded fix until evidence proves the wire itself needs new semantics.
 >
-> **R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX; third-review DISCRIMINATOR CALIBRATION 2026-09-02T03:30:00Z; fourth-review WORKING-CONTEXT-SEAM CALIBRATION 2026-09-02T04:00:00Z):** the producer is a transformation on the supplied request (no semantic claim); the UI consumer applies a ratio whose transfer to the provider-context shrink for manual mode is exactly the discriminator's question. Defect (if any) is AMBIGUOUS_WIRE_CONTRACT (CASE_S3, candidate) or SEMANTIC_LABEL (CASE_S1) — pending the ratio discriminator. The defect (if confirmed) is in the schema/wire or the UI label, NOT in the compactor entry points. The PRIMARY discriminator: does `manual_ratio = H_after/H_before` track `working_context_ratio = W_after/W_before`, where W is bound to the REAL production turn-preparation seam (NOT `prepareProviderMessagesForApi`, which is a second-stage transformation that does NOT consult the compaction artifact; canonical history is intentionally append-only/full-fidelity per `sdk/ARCHITECTURE.md:497`). Specifically, the seam is `createCompactionStateAwarePrepareTurn` at `sdk/packages/core/src/extensions/context/compaction.ts:672-712`, driving `projectSessionCompactionState` at `sdk/packages/core/src/session/models/session-compaction.ts:161-193` twice against identical canonical state with exactly one manual compaction applied between captures. P observations (`P_after/P_before`) are NOT a valid causal compaction oracle (intervening turns between compaction and next provider request contaminate the comparison); P observations become LIVE_PROVIDER_QUALIFICATION (conservation check only). C1 GO is NOT yet granted; buildForApi compaction-independence must be confirmed before execution.
+> **R0' semantic-contract recon (CALIBRATED 2026-09-02 second-review PASS_WITH_ONE_P1_FIX; third-review DISCRIMINATOR CALIBRATION 2026-09-02T03:30:00Z; fourth-review WORKING-CONTEXT-SEAM CALIBRATION 2026-09-02T04:00:00Z; FACTORY FORM REVIEW HARDENING 2026-09-02T06:30:00Z):** the producer is a transformation on the supplied request (no semantic claim); the UI consumer applies a ratio whose transfer to the provider-context shrink for manual mode is exactly the discriminator's question. Defect (if any) is AMBIGUOUS_WIRE_CONTRACT (CASE_S3, candidate) or SEMANTIC_LABEL (CASE_S1) — pending the ratio discriminator. The defect (if confirmed) is in the schema/wire or the UI label, NOT in the compactor entry points. The PRIMARY discriminator: does `manual_ratio = H_after/H_before` track `working_context_ratio = W_after/W_before`, where W is bound to the REAL production turn-preparation seam (NOT `prepareProviderMessagesForApi`, which is a second-stage transformation that does NOT consult the compaction artifact; canonical history is intentionally append-only/full-fidelity per `sdk/ARCHITECTURE.md:497`). Specifically, the seam is `createCompactionStateAwarePrepareTurn` at `sdk/packages/core/src/extensions/context/compaction.ts:672-712`, driving `projectSessionCompactionState` at `sdk/packages/core/src/session/models/session-compaction.ts:161-193` twice against identical canonical state with exactly one manual compaction applied between captures. P observations (`P_after/P_before`) are NOT a valid causal compaction oracle (intervening turns between compaction and next provider request contaminate the comparison); P observations become LIVE_PROVIDER_QUALIFICATION (conservation check only). C1 GO is NOT yet granted; buildForApi compaction-independence must be confirmed before execution. **DISCRIMINATOR EXECUTED + HARDENED 2026-09-02T05:30:00Z + 06:30:00Z:** cross-scale ratio-transfer mismatch REPRODUCED (case 2 realistic, 66.6% relative divergence). `WIRE_CONTRACT_OVERLOADED` demoted to POSSIBLE REPAIR INTERPRETATION (NOT uniquely proven root cause) per the Factory form review; `LIKELY_CAUSE = CROSS_SCALE_RATIO_TRANSFER_ASSUMPTION`; `ROOT_CAUSE = NOT_YET_PROMOTED`; `BROKEN_CONSUMER_SEAM = getApiMetrics.ts:174-225`. RED witness captured mechanically (`expected 0.666... <= 0.10`) and stored in `red-witness.txt`. Committed test file inverts the invariant (`relativeDiff > 0.10`) so default suite is GREEN at HEAD — would RED if defect ever disappears. Reachability mechanically established; prevalence in production telemetry remains DEFERRED per R1-R3 HALT. Recommended first repair trial: (d) consumer-side reconciliation.
 >
 > **Distinct from `task-presentation.md`.** That epic owns the rendering of state to the user. This epic owns whether the working-context estimate, the compaction before/after markers, and the session usage counters tell consistent truth — and whether the producers expose semantic quantities that match what the UI fields appear to claim.
 >
@@ -22,28 +22,38 @@
 
 ## Current status
 
-- Status: DISCRIMINATOR EXECUTED — recon ACT is **CLOSED_WITH_RESIDUE**
-  (CASE_A — S3_PROVEN, ROOT_CAUSE_ISOLATED). Q0A-Q0C producer-binding
-  DONE (commit 901287e15); R0-A witness test DONE (commit 2916fb9fd);
-  R0' source-recon DONE (commit 9083ecd56); R0' semantic-contract
-  recon DONE & CALIBRATED; working-context-seam-recon DONE
-  (commit be15a56a0); ratio discriminator EXECUTED (current commit).
-  Discriminator result: case 1 (trivial canonical) → ratios
-  bit-identical (S3_RATIO_TRANSFER_NOT_REPRODUCED); case 2
-  (realistic canonical, assistant text > 200K cap) → S3_REPRODUCED
-  with 66.6% relative divergence (manualRatio 0.000210 vs
-  workingContextRatio 0.000629). The compactor's input/output scale
-  (raw canonical → tiny summary) differs from buildForApi's output
-  scale (truncated) when assistant text exceeds the 200K cap. UI
-  consumer at getApiMetrics.ts applies the manual compactor's ratio
-  to provider-bound tokensIn, predicting ~3× more aggressive shrink
-  than the working context actually achieves. ROOT_CAUSE_ISOLATED
-  at the wire/schema between producer (core-events.ts:773) and UI
-  rescaling consumer (getApiMetrics.ts:174-225). Downstream repair
-  ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (NOT opened
-  from this ACT). R1-R3 territory remains DEFERRED per the
-  reviewer's HALT directive; this S3 verdict does NOT auto-prove
-  S1-LABEL-ONLY or eliminate other accounting defects. CASE_B.MANUAL_PROJECTION RETRACTED.
+- Status: DISCRIMINATOR EXECUTED + FORM-REVIEW HARDENING — recon
+  ACT is **CLOSED_WITH_RESIDUE** (CASE_A — S3 ratio-transfer
+  mismatch REPRODUCED, LIKELY_CAUSE = CROSS_SCALE_RATIO_TRANSFER_
+  ASSUMPTION, ROOT_CAUSE = NOT_YET_PROMOTED). Q0A-Q0C producer-
+  binding DONE (commit 901287e15); R0-A witness test DONE (commit
+  2916fb9fd); R0' source-recon DONE (commit 9083ecd56); R0'
+  semantic-contract recon DONE & CALIBRATED; working-context-
+  seam-recon DONE (commit be15a56a0); ratio discriminator
+  EXECUTED + form-review HARDENED (current commit). Discriminator
+  result: case 1 (trivial canonical, no truncation engaged) →
+  GREEN positive control (ratios bit-identical, S3_RATIO_TRANSFER_
+  NOT_REPRODUCED); case 2 (realistic canonical, assistant text >
+  200K cap) → RED-defect witness with 66.6% relative divergence
+  (manualRatio 0.000210 vs workingContextRatio 0.000629). The
+  compactor's input/output scale (raw canonical → tiny summary)
+  differs from buildForApi's output scale (truncated) when
+  assistant text exceeds the 200K cap — i.e., cross-scale ratio
+  transfer is invalid for working contexts large enough to
+  engage buildForApi's truncation budgets. BROKEN_CONSUMER_SEAM
+  = `getApiMetrics.ts:174-225` (applies compactor H-space ratio
+  to provider-input P-space tokensIn). UI_CONSUMER_MATH =
+  INTERNALLY CONSISTENT GIVEN BAD ASSUMPTION. WIRE_CONTRACT_
+  OVERLOADED = POSSIBLE REPAIR INTERPRETATION (NOT uniquely
+  proven root cause). Reachability mechanically established
+  (any canonical history large enough to engage buildForApi's
+  200K assistant-text cap); prevalence in production telemetry
+  remains DEFERRED per R1-R3 HALT. Downstream repair ACT =
+  ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (NOT opened from
+  this ACT); (d) consumer-side reconciliation is RECOMMENDED
+  FIRST TRIAL as the smallest-bounded fix. R1-R3 territory
+  remains DEFERRED per the reviewer's HALT directive. CASE_B
+  MANUAL_PROJECTION RETRACTED.
 - Priority: **P1** (HIGH value production learning; affects compaction threshold, context-limit safety, long-session behavior). May be promoted to P0 if the discriminator reproduces an actual structural defect.
 - Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` — read-only recon; no production change until the discriminator resolves the S3 question.
 - Blocked by: n/a (the HOST_REQUIRED ratio discriminator is sequenced after the recon's calibrated findings are written; the reviewer explicitly said NOT to author more Factory scaffolding before the discriminator runs).

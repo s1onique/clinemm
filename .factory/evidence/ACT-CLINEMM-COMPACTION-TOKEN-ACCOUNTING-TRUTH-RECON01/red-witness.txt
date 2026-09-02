@@ -1,0 +1,41 @@
+RED witness captured 2026-09-02 (Factory form review).
+Captured by mechanical reconstruction of the recommendation
+"expect(relativeDiff).toBeLessThanOrEqual(RELATIVE_TOLERANCE)" against
+the realistic-case ratios observed at HEAD.
+
+Test output (bun x vitest run, captured by ad-hoc one-time test file
+under src/__red_capture__.test.ts; the file was removed after capture
+to avoid permanently leaking an intentional RED into the default suite):
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+ FAIL  src/__red_capture__.test.ts > RED capture (one-time) > captures the failure at HEAD that proves the defect is reproducible
+AssertionError: expected 0.6664678440519827 to be less than or equal to 0.1
+ ❯ src/__red_capture__.test.ts:16:24
+     14|   const denom = Math.max(manualRatio, workingContextRatio, 1e-9);
+     15|   const relativeDiff = Math.abs(manualRatio - workingContextRatio) / denom;
+     16|   expect(relativeDiff).toBeLessThanOrEqual(RELATIVE_TOLERANCE);
+       |                        ^
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+
+Interpretation:
+
+The reviewer-recommended strong Factory form is
+"expect(relativeDiff).toBeLessThanOrEqual(RELATIVE_TOLERANCE)" — i.e.,
+assume the ratio transfers cleanly across scales, and RED if observed
+divergence exceeds tolerance. At HEAD this assertion fails with
+"expected 0.6664678440519827 to be less than or equal to 0.1". This is
+the load-bearing RED witness: the divergence between manualRatio
+(0.000210) and workingContextRatio (0.000629) is 0.666 (66.6%)
+relative — i.e., the compactor's ratio does not transfer to the
+working-context shrink once buildForApi's 200K assistant-text
+truncation engages.
+
+The committed test file
+(sdk/packages/core/src/extensions/context/compaction.working-context-ratio.test.ts)
+inverts this same invariant ("expect(relativeDiff).toBeGreaterThan(
+RELATIVE_TOLERANCE)") so the test FAILS at HEAD if the defect ever
+disappears — i.e., the test is a durable witness to the currently-
+observed defect and becomes the regression test when the repair lands.
