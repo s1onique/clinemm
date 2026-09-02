@@ -26,41 +26,73 @@
  * path (lines 101-225 of `sdk-session-event-coordinator.ts`) does NOT
  * consult `CommandJobManager` or any background-job liveness probe.
  *
- * Per the Factory reviewer's P0_2 verdict
- * (`SYNTHETIC_REAL_PRESENTED_AS_REAL_PRODUCTION_SEAM`), this test
- * is honestly relabeled:
+ * FACTORY REVIEWER VERDICT (2026-09-02, HALT_WRONG_DISCRIMINATOR):
  *
- *   WHAT THIS TEST IS
- *     = real SdkSessionEventCoordinator (constructed with stubs for
- *       transport / state-posting seams)
- *     + real TurnStateTracker
- *     + real MessageIdMinter
- *     + real MessageTranslatorState (so wasAttemptCompletionSeen /
- *       wasTerminalResponseCommittedThisTurn return their actual
- *       contract values)
- *     + real TSWPD singleton ring
- *     + real dumpExtensionSideTurnStateWriterProvenanceDiagnostic
- *     + source-extracted production line probes (to drift-pin the
- *       writerId + the absence of background-job authority input)
+ *   "ACAS01 never creates the required RUNNING `CommandJobManager`
+ *   state. ... ACAS01.2 merely proves structurally that the
+ *   handleSessionEvent body does not contain the background-job
+ *   authority input names. That is useful, but it is not the
+ *   discriminator we froze. ... The structural test cannot
+ *   distinguish A (writer is wrong) from B (upstream should never
+ *   emit `turnComplete` while owned background work exists)."
  *
- *   WHAT THIS TEST IS NOT
- *     - it does NOT instantiate the full SdkController
- *     - it does NOT exercise the onBackgroundStateChange hook
- *     - it does NOT replay the LIVE event
- *     - it does NOT prove the writer is wrong (that requires
- *       reproducing the production control flow with a real
- *       CommandJobManager in the loop, which a future
- *       production-seam ACT should attempt)
+ *   "ACAS01.1 = CURRENT_BEHAVIOR_WITNESS — not a Factory RED.
+ *   A true RED would assert the required invariant and fail:
+ *   `expect(after.phase).not.toBe('awaiting_followup')`. Given the
+ *   current harness lacks job state, you cannot even formulate the
+ *   right RED yet."
  *
- * The structural absence claim (the writer never reads background-job
- * liveness) is verified by reading the source of the
- * `handleSessionEvent` call path and asserting that
- * `CommandJobManager` / `backgroundCommandRunning` /
- * `backgroundCommandTaskId` strings are absent.
+ * Per that verdict, ACAS01 establishes:
  *
- * If any of the four tests fail at current HEAD, the
- * post-terminal-02 specimen is no longer correctly bound to the
- * production seam.
+ *   LIVE_WRITER_BIND                = PROVEN
+ *   BACKGROUND_LIVENESS_AT_WRITER   = STRUCTURALLY ABSENT (PROVEN_NO)
+ *   CURRENT_BEHAVIOR_WITNESS        = SYNTHETIC_REAL reproduction
+ *                                     of the trivial "no job input" case
+ *                                     (the same trivial case the
+ *                                     pre-existing CRA02-coord test
+ *                                     already covers; ACAS01 adds
+ *                                     nothing new on that axis)
+ *   PRECONDITION_CHAIN_CONTROL      = PASS
+ *
+ * ACAS01 does NOT establish:
+ *
+ *   3-ROW_OWNED_JOB_DISCRIMINATOR   = NOT EXECUTED
+ *   AUTHORITY_INPUT_MISSING         = NOT YET DECIDED (recon in progress)
+ *   CASE_A                          = STRONG_CANDIDATE, NOT ADJUDICATED
+ *
+ * Per the Factory reviewer: "If `SdkSessionEventCoordinator` has
+ * no access to job ownership by design, do not inject
+ * `CommandJobManager` into it just to make the test possible.
+ * Instead recon upward/downward until you find the real
+ * composition point where both are available."
+ *
+ * Production reconnaissance (2026-09-02) shows:
+ *   - `CommandJobManager` lives on `VscodeSessionHost`
+ *     (`apps/vscode/src/sdk/vscode-session-host.ts:190`), has NO
+ *     `taskId` concept. Row (c) "another task owns RUNNING job" is
+ *     structurally impossible.
+ *   - `SdkController.backgroundCommandRunning` is a real projection
+ *     of `CommandJobManager` liveness, set via
+ *     `updateBackgroundCommandState(true, jobId)` callback (the
+ *     field is misnamed `backgroundCommandTaskId` but is populated
+ *     with `jobId`).
+ *   - Session event listener chain:
+ *       onSessionEvent → this.sessionEvents.handleSessionEvent →
+ *       SdkSessionEventCoordinator.handleSessionEvent → setTurnPhase
+ *     `SdkController` has BOTH `backgroundCommandRunning` AND the
+ *     session event listener but does NOT intervene. There is no
+ *     host-side composition point where both authority inputs
+ *     currently meet.
+ *   - `done` events originate in `@cline/core` (agent runtime),
+ *     which has NO view of `CommandJobManager`. Row (b) "upstream
+ *     should never emit turnComplete while owned background work
+ *     exists" is structurally impossible to implement at the
+ *     agent-runtime layer.
+ *
+ * Per the Factory reviewer's `forbidden_repairs_per_reviewer` list
+ * and the C1 disposition, NO production change is authorized by
+ * this ACT. CASE_A remains `STRONG_CANDIDATE`, NOT ADJUDICATED.
+ * REPAIR_AUTHORIZED = NO.
  */
 
 import { readFileSync } from "node:fs"
@@ -177,7 +209,14 @@ describe("ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / post-terminal-02 specim
 		disableTurnStateWriterProvenanceDiagnostic()
 	})
 
-	it("ACAS01.1: PRIMARY RED — real SdkSessionEventCoordinator + done-without-completion branch fires session-event-turn-complete-resumable-straggler-preserve and transitions to awaiting_followup", async () => {
+	it("ACAS01.1: CURRENT_BEHAVIOR_WITNESS — real SdkSessionEventCoordinator + done-without-completion branch fires session-event-turn-complete-resumable-straggler-preserve and transitions to awaiting_followup", async () => {
+		// NOTE: this is a CURRENT_BEHAVIOR_WITNESS, NOT a Factory RED.
+		// Per the Factory reviewer's HALT_WRONG_DISCRIMINATOR verdict
+		// (2026-09-02): "Given the current harness lacks job state, you
+		// cannot even formulate the right RED yet." This test asserts the
+		// existing behavior under the trivial "no job input" case; it does
+		// NOT adjudicate whether the writer should consult
+		// background-job liveness.
 		enableTurnStateWriterProvenanceDiagnostic()
 		const harness = makeHarness()
 

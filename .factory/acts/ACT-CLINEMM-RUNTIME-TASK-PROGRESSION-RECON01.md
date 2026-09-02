@@ -339,7 +339,7 @@ Discriminator executed (2026-09-02; ACAS01 series; 4/4 PASS at
 HEAD `8f5b80d4e`):
 
 ```text
-ACAS01.1 PRIMARY RED:
+ACAS01.1 CURRENT_BEHAVIOR_WITNESS:
   - Drive real SdkSessionEventCoordinator with done event
   - Real TurnStateTracker seeded to streaming
   - Real MessageTranslatorState (so wasAttemptCompletionSeen
@@ -347,18 +347,25 @@ ACAS01.1 PRIMARY RED:
   - Real TSWPD ring enabled
   - Assert writerId == session-event-turn-complete-resumable-straggler-preserve
     AND transition == streaming -> awaiting_followup
-  RESULT: PASS
-  (the production writer at line 223 fires through the real
-   code path and stamps the exact writerId the LIVE specimen
-   recorded)
+  RESULT: PASS (under the trivial "no job input" case)
+  NOT-A-RED: per the Factory reviewer
+  (HALT_WRONG_DISCRIMINATOR, 2026-09-02): "A true RED would
+  assert the required invariant and fail:
+  `expect(after.phase).not.toBe('awaiting_followup')`. Given
+  the current harness lacks job state, you cannot even
+  formulate the right RED yet."
 
-ACAS01.2 STRUCTURAL:
+ACAS01.2 STRUCTURAL ABSENCE:
   - Read the handleSessionEvent body (lines 101-225) at HEAD
   - Assert the body does NOT contain "CommandJobManager" /
     "backgroundCommandRunning" / "backgroundCommandTaskId"
   RESULT: PASS
   (the writer's call path is provably absent any
-   background-job liveness probe)
+   background-job liveness probe — PROVEN_NO via body slice)
+  CAVEAT (per Factory reviewer): "It is useful, but it is
+  not the discriminator we froze. A structural absence is
+  not the same as a behavior witness of a guard against
+  authority violation. The two are not equivalent."
 
 ACAS01.3 DRIFT PIN:
   - Assert the source contains the writerId string,
@@ -384,30 +391,94 @@ Honest label: SYNTHETIC_REAL (per Factory reviewer's P0_2 verdict
 Production delta: ZERO
 Stash@{0}: UNTOUCHED
 
-DISCRIMINATOR VERDICT:
-  ACAS01.1 PASS = the post-terminal-02 specimen's TSWPD writer
-  IS bound to the production writer at
-  apps/vscode/src/sdk/sdk-session-event-coordinator.ts:223.
-  The discriminator confirms the LIVE evidence and the
-  production source are still consistent at HEAD.
+DISCRIMINATOR VERDICT (corrected post-HALT_WRONG_DISCRIMINATOR):
+  Per the Factory reviewer (2026-09-02): CASE_A is NOT
+  ADJUDICATED. ACAS01 did not exercise the required authority
+  input — there is no CommandJobManager in the harness, so
+  the structural absence probe and the current-behavior
+  witness are not equivalent to running the 3-row owned-job
+  matrix.
 
-  ACAS01.2 PASS = the writer's call path is structurally
-  blind to background-job liveness. This is the strongest
-  available evidence (PROVEN_NO via the call-path body) that
-  background-job liveness is absent from the authority
-  decision at the writer site.
+  The remaining open question is the architecture-level
+  decision: at which host-side seam, if any, do
+  turn-completion authority and background-job ownership
+  authority both currently meet? See "Architecture recon"
+  below.
 
-  TOGETHER: the LIVE evidence + the structural probe bound the
-  authority defect to a specific writer site + prove the
-  call path is blind to background-job state. CASE_A is
-  now ADJUDICATED (not yet proven to be a defect, but the
-  contract violation is now structurally proven). The
-  remaining question is the product-contract decision:
-  SHOULD the writer consult background-job liveness? Per the
-  ACT body's `forbidden_repairs_per_reviewer` list and the
-  reviewer's C1 disposition, a NO_REPAIR_NOW verdict holds
-  until a separate bounded contract ACT authorizes the
-  repair. NO production change is authorized by this ACT.
+ACAS01 ESTABLISHES (durable findings):
+  LIVE_WRITER_BIND                = PROVEN
+  BACKGROUND_LIVENESS_AT_WRITER   = STRUCTURALLY ABSENT (PROVEN_NO)
+  CURRENT_BEHAVIOR_WITNESS        = PASS under trivial case
+                                     (same trivial case the pre-existing
+                                      CRA02-coord test already covers)
+  PRECONDITION_CHAIN_CONTROL      = PASS
+
+ACAS01 DOES NOT ESTABLISH:
+  3-ROW_OWNED_JOB_DISCRIMINATOR   = NOT EXECUTED
+  AUTHORITY_INPUT_MISSING         = NOT YET DECIDED (recon in progress)
+  CASE_A                          = STRONG_CANDIDATE, NOT ADJUDICATED
+
+ARCHITECTURE RECON (2026-09-02, post-ACAS01 verdict):
+  - CommandJobManager lives on VscodeSessionHost
+    (apps/vscode/src/sdk/vscode-session-host.ts:190), has NO
+    taskId concept (grep -n taskId
+    apps/vscode/src/sdk/command-job-manager.ts = empty).
+    Row (c) "another task owns RUNNING job" is STRUCTURALLY
+    IMPOSSIBLE in the current architecture.
+
+  - SdkController.backgroundCommandRunning (line 784) is a
+    real projection of CommandJobManager liveness, set via
+    updateBackgroundCommandState(true, jobId) callback
+    (line 1168). The field backgroundCommandTaskId
+    (line 785) is named taskId but is actually populated
+    with jobId per the callback wiring — MISLEADING NAME.
+    The projection has no current-task ownership filter.
+
+  - Session event listener chain:
+      onSessionEvent(event)         [SdkController.ts:2298]
+        → this.sessionEvents.handleSessionEvent(event)
+                                     [SdkController.ts:1170]
+        → SdkSessionEventCoordinator.handleSessionEvent(event)
+                                     [sdk-session-event-coordinator.ts:52]
+        → setTurnPhase(...)          [SdkController.ts:1627]
+    SdkController has BOTH backgroundCommandRunning AND the
+    session event listener but does NOT intervene. There is
+    NO host-side composition point where both authority
+    inputs currently meet.
+
+  - The done event that triggers turnComplete originates in
+    the agent runtime
+    (apps/vscode/src/sdk/message-translator.ts:2135 for
+    agentEvent.type === "done"). The agent runtime has NO
+    view of CommandJobManager. Row (b) "upstream should never
+    emit turnComplete while owned background work exists" is
+    STRUCTURALLY IMPOSSIBLE to implement at the agent-runtime
+    layer in the current architecture.
+
+  - The only host-side seam where both authority inputs
+    could in principle meet is SdkController. The
+    discriminator must recon to that seam (or to a future
+    seam that exposes the task-owned job relationship).
+    This recon is in progress under a future bounded cycle;
+    this ACT does NOT exercise it.
+
+CORRECTED FACTORY STATE (post-HALT_WRONG_DISCRIMINATOR):
+
+  ACT = ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01
+  LIVE_WRITER_BIND = PASS
+  P1_T5_CALIBRATION = PASS
+  BACKGROUND_LIVENESS_ABSENT_FROM_WRITER = STRUCTURAL / PROVEN
+  REAL_RUNNING_JOB_DISCRIMINATOR = NOT EXECUTED
+  CASE_A = STRONG_CANDIDATE / NOT ADJUDICATED
+  ROOT_CAUSE = NOT YET ISOLATED
+  P0 = discriminator did not exercise the required authority input
+  REPAIR_AUTHORIZED = NO
+  NEXT = find real seam containing BOTH:
+           turn-completion authority
+           background-job ownership authority
+         → execute 3-row owned-job discriminator
+         → then classify A/B
+  VERDICT = HALT_WRONG_DISCRIMINATOR
 ```
 
 DO NOT open a parallel ACT to host this discriminator until the
