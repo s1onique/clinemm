@@ -16,11 +16,36 @@
   form (`expect(relativeDiff).toBeLessThanOrEqual(0.10)`) fails at
   HEAD with `"expected 0.666... to be less than or equal to 0.1"`.
   See `red-witness.txt` for the captured diagnostic.
-- **DEFAULT-SUITE GREEN** — the committed test file uses the
+  **CAVEAT (factory causal reviewer 2026-09-02 fourth-second-pass):**
+  the temporary RED capture file reconstructed the observed ratios
+  from scratch (it was an ad-hoc one-time file removed after
+  capture). The capture is therefore `RED_ARITHMETIC_WITNESS =
+  SYNTHETIC`, NOT a production-seam RED. The production-seam RED
+  IS established by the committed DEFECT-WITNESS test's inverted-
+  invariant GREEN here (which would RED if the defect ever
+  disappears). The composition is:
+
+  ```text
+  SYNTHETIC canonical/manualCompact
+      +
+  REAL production compaction projection (createCompactionStateAwarePrepareTurn)
+      +
+  REAL MessageBuilder (buildForApi)
+      +
+  exact causal assertions
+      =
+  SYNTHETIC_REAL defect reproduction
+  ```
+
+  This SYNTHETIC_REAL classification in the corrected evidence
+  is appropriate; no further RED-capture ceremony is required.
+- **DEFAULT-SUITE GREEN** — the committed test file (renamed
+  DEFECT-WITNESS per the reviewer's P1 wording fix) uses the
   inverse assertion (`expect(relativeDiff).toBeGreaterThan(0.10)`)
   so the suite is GREEN at HEAD today (the defect IS
   reproducible) and would RED if the defect ever disappears. The
-  RED witness is preserved in `red-witness.txt` for posterity.
+  ARITHMETIC RED witness is preserved in `red-witness.txt` for
+  posterity.
 - **ROOT_CAUSE NOT YET PROMOTED** — see "Causal ownership"
   section below.
 
@@ -308,17 +333,46 @@ sdk/packages/core/src/extensions/context/compaction.working-context-ratio.test.t
 ```text
 bun x vitest run sdk/packages/core/src/extensions/context/compaction.working-context-ratio.test.ts
   → 3 tests passed, 0 failed
-    • GREEN: positive control (no truncation engaged)
-    • RED-WITNESS: realistic case (truncation engaged) — asserts
-      the observed mismatch is currently reproducible; would
-      RED if the defect ever disappears
+    • GREEN: positive control (no truncation engaged) — renamed
+      from "isolates the compaction effect under identical
+      surrounding canonical state" (committed, GREEN-at-HEAD,
+      asserts relativeDiff ≤ 0.10)
+    • DEFECT-WITNESS: realistic case (truncation engaged) —
+      renamed from "RED: manual-compaction ratio does not
+      transfer..." per reviewer's P1 wording fix; asserts the
+      observed mismatch is currently reproducible (PASSES at
+      buggy HEAD; would RED if defect ever disappears)
     • buildForApi side-channel invariant confirmation
 
 bun x vitest run sdk/packages/core/src/extensions/context/compaction.test.ts
   → 94 tests passed, 0 failed (no regressions)
 
-One-time RED capture (file removed after capture):
+One-time ARITHMETIC RED capture (file removed after capture):
   → AssertionError: expected 0.6664678440519827 to be less
     than or equal to 0.1
   → Captured in red-witness.txt
+  → Labelled RED_ARITHMETIC_WITNESS = SYNTHETIC per the
+    factory causal reviewer's fourth-second-pass P1 caveat
+    (the capture reconstructed observed ratios from scratch;
+    production-seam RED is established by the DEFECT-WITNESS's
+    inverted-invariant GREEN here).
+
+Reviewer disposition (factory causal reviewer + context-
+accounting engineer, 2026-09-02 fourth-second-pass):
+  PASS_WITH_ONE_P1_FIX (committed test's RED-witness wording
+  was stale; renamed DEFECT-WITNESS, comments corrected in
+  next commit).
+  → C1: GO to bounded consumer-side repair trial.
+  → Downstream repair ACT =
+    ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01
+    (reviewer-retitled from WIRE-CONTRACT-REPAIR01 since
+    wire is NOT yet proven defective; first trial = option
+    (d) consumer-side reconciliation, no protocol change).
+  → REPAIR_AUTHORIZED = YES (for the bounded consumer-side
+    reconciliation trial only; options (a)/(b) escalate if
+    (d) insufficient).
+  → R1-R3 territory remains DEFERRED.
+  → Recon ACT CLOSED_WITH_RESIDUE.
+  → NEW_REVIEW_ROUND = NO for the recon (no further recon
+    ceremony); YES for the repair ACT.
 ```

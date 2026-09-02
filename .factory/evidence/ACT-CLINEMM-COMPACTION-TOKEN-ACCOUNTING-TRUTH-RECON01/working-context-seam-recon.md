@@ -379,3 +379,42 @@ The seam itself (BUILD_FOR_API_SIDE_CHANNEL_INVARIANT, and
 the targeted inspection of `MessageBuilder.buildForApi`) is
 UNCHANGED by this hardening pass — it was already correctly
 bounded. The hardening was about the TEST form, not the seam.
+
+## POST-DISCRIMINATOR REVIEWER DISPOSITION (added 2026-09-02 07:00:00Z)
+
+The factory causal reviewer's fourth-second-pass P1 wording fix
+identified that the committed test's RED-witness comments
+contradicted its actual assertions (the test PASSES at buggy
+HEAD because the defect IS reproducible; comments incorrectly
+described it as a RED). Wording corrected in this turn's
+commit:
+
+- Test renamed: "RED: manual-compaction ratio does not
+  transfer to working-context shrink once provider-message
+  truncation engages" → "DEFECT-WITNESS: cross-scale
+  compaction ratio diverges once provider-message truncation
+  engages"
+- Test description clarified: this is a DEFECT WITNESS, NOT A
+  RED. The assertion `relativeDiff > tolerance` PASSES at
+  current buggy HEAD (relativeDiff ≈ 0.666) because the defect
+  IS reproducible. If a future change accidentally removed
+  the cross-scale mismatch, this test would correctly RED.
+- The temporary RED capture in `red-witness.txt` is labelled
+  `RED_ARITHMETIC_WITNESS = SYNTHETIC` (the temporary capture
+  reconstructed the observed ratios from scratch in an ad-hoc
+  one-time file removed after capture; it is NOT a production-
+  seam RED). The production-seam RED is established by THIS
+  test's inverted-invariant GREEN here. Recon composition:
+  SYNTHETIC canonical/manualCompact + REAL production
+  compaction projection + REAL MessageBuilder + exact causal
+  assertions = SYNTHETIC_REAL defect reproduction.
+- No further RED-capture ceremony required. C1: GO to the
+  bounded consumer-side repair trial.
+
+The downstream repair ACT
+(`ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01`,
+reviewer-retitled from WIRE-CONTRACT-REPAIR01 since the wire
+is NOT yet proven defective) opens with its own entry-freeze
+and review pass. First trial = option (d) consumer-side
+reconciliation; no protocol change. Options (a)/(b) escalate
+only if (d) proves insufficient.

@@ -1,11 +1,21 @@
 # ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01
 
-> Status: **OPEN / RECON_ONLY**
-> Verdict: **PENDING**
+> Status: **CLOSED_WITH_RESIDUE** (factory form review hardened,
+>  2026-09-02 06:30:00Z; fourth-second-pass PASS_WITH_ONE_P1_FIX
+>  then C1: GO, 2026-09-02)
+> Verdict: **CASE_A — Cross-scale ratio-transfer mismatch REPRODUCED
+>  / ROOT_CAUSE = NOT_YET_PROMOTED / REPAIR_AUTHORIZED = YES for
+>  the bounded consumer-side reconciliation trial**
 > Upstream: n/a (factory-internal LIVE symptom, 2026-09-01)
 > Owning epic: [`EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING`](../epics/context-compaction-token-accounting.md)
 > ACT ID: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01`
 > Evidence: `.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01/`
+> Reviewer disposition: PASS_WITH_ONE_P1_FIX (committed test's
+>  RED-witness wording was stale); C1: GO to bounded
+>  consumer-side repair trial.
+> Downstream ACT: `ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-
+>  CONSUMER-REPAIR01` (opened 2026-09-02; NOT auto-executed —
+>  opens its own review pass).
 
 ## §0 — Frozen user-facing invariant (separated truth domains)
 
@@ -587,12 +597,16 @@ NEXT (after the semantic-contract recon): the real-trace RATIO
 DISCRIMINATOR (HOST_REQUIRED) — **EXECUTED 2026-09-02**. See
 discriminator.md for the full binding and verdict. Verdict:
 S3_REPRODUCED at the real production working-context seam.
-REPAIR_ACT = ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (NOT
-opened from this ACT). Downstream repair options (a)/(b)/(d)
-become candidates, ranked smallest first per Factory doctrine.
-R1-R3 remain DEFERRED per the reviewer's HALT directive. This
-S3 verdict does NOT auto-prove S1-LABEL-ONLY or eliminate other
-accounting defects.
+REPAIR_ACT = ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-
+REPAIR01 (NOT opened from this recon ACT; reviewer's P1
+disposition 2026-09-02 retitled WIRE-CONTRACT-REPAIR01 →
+TOKEN-RESCALING-CONSUMER-REPAIR01 since the wire is not yet
+proven defective; first trial = option (d) consumer-side
+reconciliation, no protocol change). Downstream repair options
+(a)/(b) escalate only if (d) proves insufficient. R1-R3 remain
+DEFERRED per the reviewer's HALT directive. This S3 verdict
+does NOT auto-prove S1-LABEL-ONLY or eliminate other accounting
+defects.
   manual_ratio          = H_after / H_before
   working_context_ratio = W_after / W_before
 Ask: Does manual_ratio track working_context_ratio?

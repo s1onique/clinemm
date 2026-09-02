@@ -135,7 +135,43 @@ TIMESTAMP=2026-09-01T23:55:00Z (opening) /
                                 recon, separate ACT
                                 ACT-CLINEMM-COMPACTION-WIRE-
                                 CONTRACT-REPAIR01 (NOT opened from
-                                this ACT); NEW_REVIEW_ROUND = NO)
+                                this ACT); NEW_REVIEW_ROUND = NO) /
+           2026-09-02T07:00:00Z (FOURTH-SECOND-PASS REVIEWER
+                                DISPOSITION PASS_WITH_ONE_P1_FIX,
+                                then C1: GO; Factory has extracted
+                                enough information; P1 = committed
+                                test's RED-witness wording was
+                                stale (the test PASSES at buggy
+                                HEAD because the defect IS
+                                reproducible; comments incorrectly
+                                described it as a RED); fixed in
+                                next commit (test renamed
+                                DEFECT-WITNESS, comments rewritten
+                                to describe the assertion's actual
+                                GREEN-at-buggy-HEAD semantics);
+                                red-witness.txt caveat acknowledged
+                                (RED_ARITHMETIC_WITNESS =
+                                SYNTHETIC; production-seam RED is
+                                established by the committed
+                                DEFECT-WITNESS's inverted-
+                                invariant GREEN; recon composition
+                                = SYNTHETIC canonical/manualCompact
+                                + REAL production compaction
+                                projection + REAL MessageBuilder +
+                                exact causal assertions =
+                                SYNTHETIC_REAL defect
+                                reproduction); C1: GO to bounded
+                                consumer-side repair trial; new
+                                review round for the REPAIR ACT
+                                only; REPAIR_ACT retitled from
+                                WIRE-CONTRACT-REPAIR01 to
+                                TOKEN-RESCALING-CONSUMER-REPAIR01
+                                (wire NOT yet proven defective);
+                                downstream ACT opened:
+                                ACT-CLINEMM-COMPACTION-TOKEN-
+                                RESCALING-CONSUMER-REPAIR01;
+                                R1-R3 still DEFERRED; recon ACT
+                                CLOSED_WITH_RESIDUE)
 REPO_HEAD=7c24ab02f (post-contract-correction; R0 promotion is docs+test)
 OWNER=CONTEXT / COMPACTION / TOKEN-ACCOUNTING
 EPIC=EPIC-CONTEXT-COMPACTION-TOKEN-ACCOUNTING (new epic opened 2026-09-01
@@ -605,15 +641,13 @@ SECOND REVIEW)=
   append-only/full-fidelity).
 
 DOWNSTREAM_ACT=
-  ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (only if CASE_S3 or
-  CASE_S1 with load-bearing residue; with its own scope, entry-freeze,
-  and review; NOT opened from this ACT). Three repair options named
-  in ACT §6 R0' (option a: tag the field; option b: split into two
-  fields; option d: consumer-side reconciliation for manual mode).
-  OR ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-REPAIR01 (only if
-  CASE_B, with its own scope, entry-freeze, and review; NOT opened
-  from this ACT). The two repair ACTs are mutually exclusive; only
-  one will be needed.
+  ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01
+  (REVIEWER-RETITLED 2026-09-02 from WIRE-CONTRACT-REPAIR01 since
+  the wire is NOT yet proven defective; opened 2026-09-02 with
+  its own scope, entry-freeze, and review pass; first trial =
+  option (d) consumer-side reconciliation for manual mode, no
+  protocol change; options (a) tag the field and (b) split into
+  two fields escalate only if (d) proves insufficient).
   ACT-CLINEMM-COMPACTION-INPUT-IDENTITY-REPAIR01 (the previous
   turn's proposed repair) is RETRACTED — the manual entry points
   are NOT the defect.

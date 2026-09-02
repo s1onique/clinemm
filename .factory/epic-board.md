@@ -1,6 +1,6 @@
 # ClineMM Epic Board
 
-Updated: 2026-09-01 (P2_BOARD_READABILITY_MICROFIX + frontier correction per factory causal reviewer: add Approval/MCP and Context/compaction frontier rows; both have new ACT IDs that are NOT derivable from existing epic detail files, per reviewer directive to avoid corrupting TOOL-RUNTIME-RELIABILITY-RECON01 causal ownership)
+Updated: 2026-09-01 (P2_BOARD_READABILITY_MICROFIX + frontier correction per factory causal reviewer: add Approval/MCP and Context/compaction frontier rows; both have new ACT IDs that are NOT derivable from existing epic detail files, per reviewer directive to avoid corrupting TOOL-RUNTIME-RELIABILITY-RECON01 causal ownership) + 2026-09-02 (Context/compaction recon ACT CLOSED_WITH_RESIDUE; reviewer's P1 PASS_WITH_ONE_P1_FIX then C1: GO; downstream repair ACT COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01 OPENED; reviewer-retitled from WIRE-CONTRACT-REPAIR01 since wire is NOT yet proven defective; first trial = option (d) consumer-side reconciliation, no protocol change)
 
 Source-of-truth: `.factory/epics/*.md` (19 files) — the per-epic detail files. **This board is a navigation index, not an archive.**
 Contract: [`.factory/epics/_index-contract.md`](./epics/_index-contract.md) (frozen maintenance law)
@@ -33,7 +33,7 @@ One `NEXT` per lane. Closed items are not `NEXT`. See [`.factory/epics/_index-co
 | Host substrate (host-test runner) | P0 | OPEN | `HOST-TEST RUNNER` (`HOST_REQUIRED`) | [`host-test-infrastructure.md`](./epics/host-test-infrastructure.md) |
 | Build substrate / dogfood | P0 | `CLOSED` | (none) | [`factory-infrastructure.md`](./epics/factory-infrastructure.md) |
 | Approval / MCP | P0 | OPEN | `MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01` (upstream #10499) | [`approval-mcp-authority.md`](./epics/approval-mcp-authority.md) |
-| Context / compaction | P1 | OPEN | `COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` | [`context-compaction-token-accounting.md`](./epics/context-compaction-token-accounting.md) |
+| Context / compaction | P1 | ACTIVE (recon `CLOSED_WITH_RESIDUE`; repair `OPEN`) | `COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` (CLOSED_WITH_RESIDUE 2026-09-02) + `COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01` (OPEN 2026-09-02) | [`context-compaction-token-accounting.md`](./epics/context-compaction-token-accounting.md) |
 
 ---
 

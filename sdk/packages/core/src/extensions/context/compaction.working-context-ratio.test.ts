@@ -227,7 +227,7 @@ describe("working-context ratio discriminator", () => {
 		// equivalent because there is no truncation). This
 		// confirms the test harness itself is correct: the
 		// invariant holds WHERE IT SHOULD, fails WHERE IT
-		// SHOULD NOT (see the RED case below).
+		// SHOULD NOT (see the DEFECT-WITNESS case below).
 		const canonical = buildCanonicalHistory();
 
 		// Session state lives in this closure so the two captures
@@ -360,18 +360,19 @@ describe("working-context ratio discriminator", () => {
 			wAfter.apiMessages.length,
 		);
 
-		// 5. GREEN POSITIVE CONTROL: when canonical is small
+		// 5. POSITIVE CONTROL — GREEN: when canonical is small
 		//    enough that buildForApi does not engage its
 		//    truncation budgets, the manual-mode ratio predicts
 		//    the working-context shrink correctly. Loads with
-		//    relativeDiff ≤ 0.10 here, fails the same invariant
-		//    in the RED case below (this is the difference the
-		//    recon is asserting on).
+		//    relativeDiff ≤ 0.10 here. The DEFECT-WITNESS case
+		//    below inverts this same invariant and asserts
+		//    relativeDiff > 0.10 (it currently PASSES because
+		//    the defect is reproducible at HEAD).
 		expect(relativeDiff).toBeLessThanOrEqual(RELATIVE_TOLERANCE);
 		expect(verdict).toBe("S3_RATIO_TRANSFER_NOT_REPRODUCED");
 	});
 
-	it("RED: manual-compaction ratio does not transfer to working-context shrink once provider-message truncation engages", async () => {
+	it("DEFECT-WITNESS: cross-scale compaction ratio diverges once provider-message truncation engages", async () => {
 		// Realistic case: the canonical history has assistant
 		// messages long enough to engage MessageBuilder's
 		// truncateAssistantText (DEFAULT_MAX_ASSISTANT_TEXT_CHARS
@@ -379,15 +380,26 @@ describe("working-context ratio discriminator", () => {
 		// question: does the manual_ratio (estimated on H) still
 		// track the working_context_ratio (estimated on W)?
 		//
-		// THIS TEST IS A RED WITNESS. It asserts that
-		// relativeDiff > 0.10, which is the load-bearing claim
-		// of the recon. At HEAD, this test should FAIL with a
-		// relativeDiff ≈ 0.666, captured in
-		// discriminator.md as the reproduced defect witness.
-		// The recon ACT does NOT promote this to a permanent
-		// gating invariant until the repair ACT inverts the
-		// assertion (post-fix regression). For now it lives here
-		// as durable evidence.
+		// THIS IS A DEFECT WITNESS, NOT A RED. The assertion
+		// `expect(relativeDiff).toBeGreaterThan(RELATIVE_TOLERANCE)`
+		// PASSES at the current buggy HEAD because the defect
+		// IS reproducible (relativeDiff ≈ 0.666). If a future
+		// change accidentally removed the cross-scale mismatch,
+		// this test would correctly RED.
+		//
+		// At repair time the assertion must be INVERTED
+		// (`expect(relativeDiff).toBeLessThanOrEqual(0.10)`)
+		// to become the post-fix regression oracle — see the
+		// acceptance gate in
+		// ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01.
+		//
+		// The strong Factory form RED was captured mechanically
+		// ONCE in `red-witness.txt` for the recon record and
+		// is labelled RED_ARITHMETIC_WITNESS = SYNTHETIC (the
+		// temporary capture reconstructed the observed ratios;
+		// the production-seam RED is established by THIS test's
+		// inverted-invariant GREEN here). Do not re-run the
+		// synthetic capture on every recon.
 		const LONG = 600_000; // well above the 200K cap
 		const canonical: LlmsProviders.Message[] = [
 			{ role: "user", content: "Build a compiler." },
@@ -501,9 +513,13 @@ describe("working-context ratio discriminator", () => {
 
 		// Causal control #3 — the relative divergence exceeds
 		// the 10% cross-scale tolerance. THIS IS THE LOAD-
-		// BEARING RED WITNESS. At HEAD this assertion fails
-		// with expected 0.666... > 0.10 (captured in
-		// discriminator.md as the reproduced defect).
+		// BEARING DEFECT WITNESS. At HEAD this assertion PASSES
+		// (relativeDiff ≈ 0.666 > 0.10), confirming the cross-
+		// scale mismatch is reproducible. If the defect is
+		// repaired without intent, this assertion would
+		// correctly RED. See the post-fix regression-oracle
+		// path in ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-
+		// CONSUMER-REPAIR01.
 		expect(relativeDiff).toBeGreaterThan(RELATIVE_TOLERANCE);
 
 		// Causal control #4 — verdict is the categorical match.

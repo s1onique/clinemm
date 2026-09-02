@@ -22,38 +22,49 @@
 
 ## Current status
 
-- Status: DISCRIMINATOR EXECUTED + FORM-REVIEW HARDENING — recon
-  ACT is **CLOSED_WITH_RESIDUE** (CASE_A — S3 ratio-transfer
-  mismatch REPRODUCED, LIKELY_CAUSE = CROSS_SCALE_RATIO_TRANSFER_
-  ASSUMPTION, ROOT_CAUSE = NOT_YET_PROMOTED). Q0A-Q0C producer-
-  binding DONE (commit 901287e15); R0-A witness test DONE (commit
-  2916fb9fd); R0' source-recon DONE (commit 9083ecd56); R0'
-  semantic-contract recon DONE & CALIBRATED; working-context-
-  seam-recon DONE (commit be15a56a0); ratio discriminator
-  EXECUTED + form-review HARDENED (current commit). Discriminator
+- Status: DISCRIMINATOR EXECUTED + FORM-REVIEW HARDENED +
+  REVIEWER-DISPOSITION PASS_WITH_ONE_P1_FIX + C1: GO. Recon ACT
+  is **CLOSED_WITH_RESIDUE** (CASE_A — Cross-scale ratio-
+  transfer mismatch REPRODUCED, LIKELY_CAUSE = CROSS_SCALE_RATIO_
+  TRANSFER_ASSUMPTION, ROOT_CAUSE = NOT_YET_PROMOTED).
+  Q0A-Q0C producer-binding DONE (commit 901287e15); R0-A witness
+  test DONE (commit 2916fb9fd); R0' source-recon DONE (commit
+  9083ecd56); R0' semantic-contract recon DONE & CALIBRATED;
+  working-context-seam-recon DONE (commit be15a56a0); ratio
+  discriminator EXECUTED + form-review HARDENED + REVIEWER
+  DISPOSITION PASS_WITH_ONE_P1_FIX (commit 51beb1da4); reviewer's
+  P1 wording fix applied to committed test (DEFECT-WITNESS
+  renamed from RED:; comments rewritten to describe the
+  assertion's actual GREEN-at-buggy-HEAD semantics). Discriminator
   result: case 1 (trivial canonical, no truncation engaged) →
   GREEN positive control (ratios bit-identical, S3_RATIO_TRANSFER_
   NOT_REPRODUCED); case 2 (realistic canonical, assistant text >
-  200K cap) → RED-defect witness with 66.6% relative divergence
-  (manualRatio 0.000210 vs workingContextRatio 0.000629). The
-  compactor's input/output scale (raw canonical → tiny summary)
-  differs from buildForApi's output scale (truncated) when
-  assistant text exceeds the 200K cap — i.e., cross-scale ratio
-  transfer is invalid for working contexts large enough to
-  engage buildForApi's truncation budgets. BROKEN_CONSUMER_SEAM
-  = `getApiMetrics.ts:174-225` (applies compactor H-space ratio
-  to provider-input P-space tokensIn). UI_CONSUMER_MATH =
-  INTERNALLY CONSISTENT GIVEN BAD ASSUMPTION. WIRE_CONTRACT_
-  OVERLOADED = POSSIBLE REPAIR INTERPRETATION (NOT uniquely
-  proven root cause). Reachability mechanically established
-  (any canonical history large enough to engage buildForApi's
-  200K assistant-text cap); prevalence in production telemetry
-  remains DEFERRED per R1-R3 HALT. Downstream repair ACT =
-  ACT-CLINEMM-COMPACTION-WIRE-CONTRACT-REPAIR01 (NOT opened from
-  this ACT); (d) consumer-side reconciliation is RECOMMENDED
-  FIRST TRIAL as the smallest-bounded fix. R1-R3 territory
-  remains DEFERRED per the reviewer's HALT directive. CASE_B
-  MANUAL_PROJECTION RETRACTED.
+  200K cap) → DEFECT-WITNESS with 66.6% relative divergence
+  (manualRatio 0.000210 vs workingContextRatio 0.000629; the
+  committed test PASSES at HEAD because the defect IS
+  reproducible, and would RED if defect ever disappears).
+  Cross-scale ratio transfer is invalid for working contexts
+  large enough to engage buildForApi's truncation budgets.
+  BROKEN_CONSUMER_SEAM = `getApiMetrics.ts:174-225` (applies
+  compactor H-space ratio to provider-input P-space tokensIn).
+  UI_CONSUMER_MATH = INTERNALLY CONSISTENT GIVEN BAD ASSUMPTION.
+  WIRE_CONTRACT_OVERLOADED = POSSIBLE REPAIR INTERPRETATION (NOT
+  uniquely proven root cause). Reachability mechanically
+  established (any canonical history large enough to engage
+  buildForApi's 200K assistant-text cap); prevalence in
+  production telemetry remains DEFERRED per R1-R3 HALT.
+  Reviewer-disposition 2026-09-02 C1: GO to bounded consumer-
+  side repair trial. **Downstream repair ACT =
+  ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01**
+  (REVIEWER-RETITLED from WIRE-CONTRACT-REPAIR01 since wire is
+  NOT yet proven defective; OPENED with its own entry-freeze
+  and review pass; first trial = option (d) consumer-side
+  reconciliation, no protocol change; options (a)/(b) escalate
+  only if (d) proves insufficient). R1-R3 territory remains
+  DEFERRED per the reviewer's HALT directive. CASE_B
+  MANUAL_PROJECTION RETRACTED. ACT-CLINEMM-COMPACTION-INPUT-
+  IDENTITY-REPAIR01 RETRACTED (manual entry points are NOT the
+  defect).
 - Priority: **P1** (HIGH value production learning; affects compaction threshold, context-limit safety, long-session behavior). May be promoted to P0 if the discriminator reproduces an actual structural defect.
 - Current frontier: `ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01` — read-only recon; no production change until the discriminator resolves the S3 question.
 - Blocked by: n/a (the HOST_REQUIRED ratio discriminator is sequenced after the recon's calibrated findings are written; the reviewer explicitly said NOT to author more Factory scaffolding before the discriminator runs).

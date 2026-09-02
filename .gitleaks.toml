@@ -2,3 +2,23 @@ title = "Cline SDK secret scanning"
 
 [extend]
 useDefault = true
+
+# ACT IDs from ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01
+# (and other similar Factory recon/repair ACT IDs) are caught by the
+# default generic-api-key rule because of their hyphenated uppercase
+# entropy. They are not secrets — they are durable Factory ACT
+# identifiers used to bind entry-freeze.txt + evidence to the
+# producing ACT. Allowlisted here so the pre-commit gate does not
+# block legitimate recon/repair ACT body + entry-freeze files.
+[[allowlists]]
+description = "Factory ACT identifiers (recon/repair ACT IDs)"
+targetRules = ["generic-api-key"]
+regexes = [
+  '''ACT-CLINEMM-(COMPACTION-TOKEN-RESCALING-CONSUMER|RUNTIME-EPOCH-TRANSITION-ACTIVE-TURNSTATE|RUNTIME-TASK-HEADER-PROJECTION-COHERENCE|COMPACTION-INPUT-IDENTITY|COMPACTION-WIRE-CONTRACT|COMPACTION-TOKEN-ACCOUNTING)[A-Z0-9-]*''',
+]
+paths = [
+  '''\.factory/acts/.*\.md$''',
+  '''\.factory/evidence/.*\.txt$''',
+  '''\.factory/epics/.*\.md$''',
+  '''\.factory/epic-board\.md$''',
+]

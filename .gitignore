@@ -831,3 +831,13 @@ apps/vscode/.factory/evidence/
 # are all durable.
 !/.factory/acts/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01/
+# 2026-09-02: ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01
+# Reviewer-disposition 2026-09-02 PASS_WITH_ONE_P1_FIX then C1: GO opens
+# this ACT as the bounded consumer-side repair trial for the cross-scale
+# ratio-transfer defect mechanically established by
+# ACT-CLINEMM-COMPACTION-TOKEN-ACCOUNTING-TRUTH-RECON01. Frozen contract
+# (no producer/schema/API change; option (d) consumer-side reconciliation
+# first trial) plus six mandatory acceptance gates must survive a fresh
+# clone so the repair ACT's source-of-truth entry-freeze is durable.
+!/.factory/acts/ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01.md
+!/.factory/evidence/ACT-CLINEMM-COMPACTION-TOKEN-RESCALING-CONSUMER-REPAIR01/
