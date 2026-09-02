@@ -281,7 +281,7 @@ export interface ExtensionState {
 	currentTaskItem?: HistoryItem
 	/**
 	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-	 * (nineteenth-pass):
+	 * (nineteenth-pass, twenty-first-pass):
 	 *
 	 * Authoritative current working-context estimate (W) for the
 	 * active task, mirrored from
@@ -291,27 +291,41 @@ export interface ExtensionState {
 	 * and projected into the webview state payload by
 	 * `getStateToPostToWebview`.
 	 *
-	 * Distinct from `lastApiReqContextInputTokens` (which is the
-	 * disjoint sum `tokensIn + cacheReads + cacheWrites` from the
-	 * last `api_req_started` message — provider-driven P). The
-	 * numerator of the TaskHeader ContextWindow bar consumes W
-	 * INSTEAD OF P (when W is present). When W is `undefined`, the
-	 * fallback policy is left to Boundary 5 (the TaskHeader
-	 * component contract) and UNDEFINED_W_STALE_REUSE is
-	 * FORBIDDEN.
+	 * Field semantics:
+	 *   - `number`:  runtime-published W. Drives the bar
+	 *                numerator (Boundary 5).
+	 *   - `null`:    runtime is active but the latest event
+	 *                carried no W. TaskHeader renders the
+	 *                bar UNAVAILABLE (reviewer
+	 *                twentieth-pass fallback B). P must not
+	 *                masquerade as W.
+	 *   - `undefined`: carrier absent / legacy / classic /
+	 *                no Boundary 3 -> 4 wiring. TaskHeader
+	 *                falls back to P
+	 *                (lastApiReqContextInputTokens) so the
+	 *                legacy bar continues to render.
+	 *
+	 * Distinct from `lastApiReqContextInputTokens` (which is
+	 * the disjoint sum `tokensIn + cacheReads + cacheWrites`
+	 * from the last `api_req_started` message — provider-driven
+	 * P). The numerator of the TaskHeader ContextWindow bar
+	 * consumes W INSTEAD OF P (when W is present). The P
+	 * fallback is the ONLY path where P drives the bar; it
+	 * exists for legacy / classic compatibility, not as a
+	 * silent W-as-P substitution.
 	 *
 	 * Transport-only: the carrier does NOT call
-	 * `estimateRequestInputTokens` or `estimateMessageTokens` to
-	 * derive this value. W is read verbatim from the runtime
-	 * event payload.
+	 * `estimateRequestInputTokens` or `estimateMessageTokens`
+	 * to derive this value. W is read verbatim from the
+	 * runtime event payload.
 	 *
 	 * Fail-closed: the carrier uses unconditional assignment
-	 * semantics (includes undefined), so the host W slot becomes
-	 * undefined when the runtime emits a no-W
-	 * `working-context-state-changed` event. UNDEFINED_W_STALE_
-	 * REUSE is FORBIDDEN.
+	 * semantics (runtime-published `undefined` is normalized
+	 * to `null`), so the host W slot becomes `null` when the
+	 * runtime emits a no-W `working-context-state-changed`
+	 * event. UNDEFINED_W_STALE_REUSE is FORBIDDEN.
 	 */
-	currentWorkingContextEstimate?: number
+	currentWorkingContextEstimate?: number | null
 	mcpMarketplaceEnabled?: boolean
 	mcpDisplayMode: McpDisplayMode
 	planActSeparateModelsSetting: boolean

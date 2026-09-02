@@ -51,8 +51,9 @@
  *   ContextEstimate === undefined`. The carrier uses
  *   UNCONDITIONAL ASSIGNMENT (see
  *   `working-context-host-capture.ts`); the host W
- *   slot becomes undefined. UNDEFINED_W_STALE_REUSE =
- *   FORBIDDEN.
+ *   slot becomes null (Boundary 5
+ *   normalization — the runtime-cleared
+ *   sentinel). UNDEFINED_W_STALE_REUSE = FORBIDDEN.
  */
 
 import type {
@@ -268,37 +269,41 @@ describe("P3 GREEN: WorkingContextHostCapture -> projectWorkingContextStateFromC
 	)
 
 	it(
-		"GREEN: a `working-context-state-changed` event with W=undefined clears the carrier (fail-closed lifetime; UNDEFINED_W_STALE_REUSE = FORBIDDEN)",
+		"GREEN: a `working-context-state-changed` event with W=undefined normalizes the carrier to null (fail-closed lifetime; UNDEFINED_W_STALE_REUSE = FORBIDDEN)",
 		() => {
 			const capture = WorkingContextHostCapture.forTest(100)
 			expect(capture.currentWorkingContextEstimate).toBe(100)
 
 			// Runtime emits a no-W event. Carrier uses
 			// UNCONDITIONAL ASSIGNMENT, so the slot must
-			// become undefined, NOT preserved as 100.
+			// become null (the runtime-cleared sentinel
+			// — Boundary 5 normalization), NOT preserved
+			// as 100.
 			capture.observe(
 				makeWorkingContextEvent(undefined, 100),
 			)
-			expect(capture.currentWorkingContextEstimate).toBeUndefined()
+			expect(capture.currentWorkingContextEstimate).toBeNull()
 
 			const projection = projectWorkingContextStateFromCarrier(capture)
-			expect(projection.currentWorkingContextEstimate).toBeUndefined()
+			expect(projection.currentWorkingContextEstimate).toBeNull()
 		},
 	)
 
 	it(
-		"GREEN: a no-W-first runtime event leaves the carrier at undefined (no FAKE preservation)",
+		"GREEN: a no-W-first runtime event leaves the carrier at null (no FAKE preservation)",
 		() => {
-			// Boot the carrier empty (no event yet) and
-			// drive the first W=undefined event. The
-			// carrier must STAY undefined; it must not
-			// "preserve" a phantom value. This pins the
-			// initial-state half of fail-closed.
+			// Boot the carrier empty (no event yet — the
+			// initial state is `null`, Boundary 5
+			// normalization) and drive the first
+			// W=undefined event. The carrier must STAY
+			// null; it must not "preserve" a phantom
+			// value. This pins the initial-state half of
+			// fail-closed.
 			const capture = new WorkingContextHostCapture()
-			expect(capture.currentWorkingContextEstimate).toBeUndefined()
+			expect(capture.currentWorkingContextEstimate).toBeNull()
 
 			capture.observe(makeWorkingContextEvent(undefined, undefined))
-			expect(capture.currentWorkingContextEstimate).toBeUndefined()
+			expect(capture.currentWorkingContextEstimate).toBeNull()
 		},
 	)
 
@@ -319,12 +324,14 @@ describe("P3 GREEN: WorkingContextHostCapture -> projectWorkingContextStateFromC
 	)
 
 	it(
-		"GREEN: the projection passes a `number | undefined` payload for any value (including undefined) without coercing or dropping",
+		"GREEN: the projection passes a `number | null` payload for any value (including null) without coercing or dropping",
 		() => {
 			// Test the transport-only contract: W of any
-			// shape (number, undefined) is preserved by the
+			// shape (number, null) is preserved by the
 			// projection. The projection MUST NOT estimate
-			// or transform the value.
+			// or transform the value. (Boundary 5
+			// normalization: the carrier's runtime-cleared
+			// sentinel is `null`, not `undefined`.)
 			const capture1 = WorkingContextHostCapture.forTest(0)
 			const projection1 =
 				projectWorkingContextStateFromCarrier(capture1)
@@ -333,35 +340,37 @@ describe("P3 GREEN: WorkingContextHostCapture -> projectWorkingContextStateFromC
 			const capture2 = new WorkingContextHostCapture()
 			const projection2 =
 				projectWorkingContextStateFromCarrier(capture2)
-			expect(projection2.currentWorkingContextEstimate).toBeUndefined()
+			expect(projection2.currentWorkingContextEstimate).toBeNull()
 
 			// And: a missing carrier (legacy / classic path)
 			// is treated as "no W authority". The field is
-			// `undefined`, NEVER a phantom value.
+			// `undefined`, NEVER a phantom value — the
+			// only place where `undefined` survives the
+			// transport.
 			const projection3 = projectWorkingContextStateFromCarrier(undefined)
 			expect(projection3.currentWorkingContextEstimate).toBeUndefined()
 		},
 	)
 
 	it(
-		"GREEN: a sequence of W transitions (W=100, W=undefined, W=200) is mirrored exactly through the carrier and projection (no accumulation, no stale retention)",
+		"GREEN: a sequence of W transitions (W=100, W=null, W=200) is mirrored exactly through the carrier and projection (no accumulation, no stale retention)",
 		() => {
 			const capture = new WorkingContextHostCapture()
-			// Transition 1: undefined -> 100
+			// Transition 1: null -> 100
 			capture.observe(makeWorkingContextEvent(100, undefined))
 			expect(capture.currentWorkingContextEstimate).toBe(100)
 			expect(
 				projectWorkingContextStateFromCarrier(capture)
 					.currentWorkingContextEstimate,
 			).toBe(100)
-			// Transition 2: 100 -> undefined (fail-closed path)
+			// Transition 2: 100 -> null (fail-closed path)
 			capture.observe(makeWorkingContextEvent(undefined, 100))
-			expect(capture.currentWorkingContextEstimate).toBeUndefined()
+			expect(capture.currentWorkingContextEstimate).toBeNull()
 			expect(
 				projectWorkingContextStateFromCarrier(capture)
 					.currentWorkingContextEstimate,
-			).toBeUndefined()
-			// Transition 3: undefined -> 200
+			).toBeNull()
+			// Transition 3: null -> 200
 			capture.observe(makeWorkingContextEvent(200, undefined))
 			expect(capture.currentWorkingContextEstimate).toBe(200)
 			expect(
@@ -555,22 +564,28 @@ describe("P3 A/B NECESSITY/ABLATION (twentieth-pass): getStateToPostToWebview de
 	)
 
 	it(
-		"B (ABLATION) — capture.observe NEVER CALLED → REAL getStateToPostToWebview emits payload.currentWorkingContextEstimate === undefined",
+		"B (ABLATION) — capture.observe NEVER CALLED → REAL getStateToPostToWebview emits payload.currentWorkingContextEstimate === null",
 		async () => {
 			// Same harness, capture has NOT been populated.
 			// (i.e. the Boundary 3 -> 4 edge is ablated.)
+			// The carrier's initial state is `null` (the
+			// Boundary 5 normalization — see
+			// working-context-host-capture.ts
+			// twenty-first-pass). NOT undefined:
+			// undefined would be ambiguous with the
+			// "carrier absent" legacy case.
 			const capture = new WorkingContextHostCapture()
-			expect(capture.currentWorkingContextEstimate).toBeUndefined()
+			expect(capture.currentWorkingContextEstimate).toBeNull()
 
 			const payload = await getStateToPostToWebview(
 				makeStubController(capture),
 			)
 			// The producer's `controller.workingContext
 			// HostCapture?` is provided, but its
-			// `_latest` is undefined, so the projected
-			// state must be undefined — NOT 271337, NOT
+			// `_latest` is null, so the projected
+			// state must be null — NOT 271337, NOT
 			// last-known-value, NOT zero.
-			expect(payload.currentWorkingContextEstimate).toBeUndefined()
+			expect(payload.currentWorkingContextEstimate).toBeNull()
 		},
 	)
 
@@ -581,9 +596,9 @@ describe("P3 A/B NECESSITY/ABLATION (twentieth-pass): getStateToPostToWebview de
 			const controller = makeStubController(capture)
 
 			// 1. Ablated: capture stays empty, projected
-			//    W is undefined.
+			//    W is null (Boundary 5 normalization).
 			const p1 = await getStateToPostToWebview(controller)
-			expect(p1.currentWorkingContextEstimate).toBeUndefined()
+			expect(p1.currentWorkingContextEstimate).toBeNull()
 
 			// 2. Restore: capture observes W=271337.
 			capture.observe(
@@ -658,13 +673,14 @@ describe("P3 A/B NECESSITY/ABLATION (twentieth-pass): getStateToPostToWebview de
 	)
 
 	it(
-		"WIRING WRAP (P1_2) FAIL-CLOSED: a no-W event through the wrap clears the carrier",
+		"WIRING WRAP (P1_2) FAIL-CLOSED: a no-W event through the wrap clears the carrier (to null)",
 		() => {
 			// Same harness, but drive an event whose
 			// snapshot.currentWorkingContextEstimate is
 			// undefined. The carrier must transition to
-			// undefined — pinned by the wrap, not just
-			// by direct .observe().
+			// null (Boundary 5 normalization — the
+			// runtime-cleared sentinel) — pinned by the
+			// wrap, not just by direct .observe().
 			const capture = WorkingContextHostCapture.forTest(100)
 			const baseWiring = makeFakeWiring()
 			const wrappedWiring = makeSdkControllerEventWrap(
@@ -678,7 +694,7 @@ describe("P3 A/B NECESSITY/ABLATION (twentieth-pass): getStateToPostToWebview de
 				event: makeWorkingContextEvent(undefined, 100),
 			})
 
-			expect(capture.currentWorkingContextEstimate).toBeUndefined()
+			expect(capture.currentWorkingContextEstimate).toBeNull()
 			expect(baseWiring.events).toHaveLength(1)
 		},
 	)

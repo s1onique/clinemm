@@ -60,6 +60,15 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 		queuedPrompts,
 		turnState,
 		taskTelemetry,
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (twenty-first-pass): Boundary 5 — pull the
+		// runtime-published W from the webview
+		// ExtensionState (mirrored from the host-side
+		// carrier via getStateToPostToWebview) and pass
+		// it down to TaskSection -> TaskHeader ->
+		// ContextWindow. Distinct from
+		// lastApiReqContextInputTokens (P).
+		currentWorkingContextEstimate,
 	} = useExtensionState()
 	const isProdHostedApp = userInfo?.apiBaseUrl === "https://app.cline.bot"
 	const shouldShowQuickWins = isProdHostedApp && (!taskHistory || taskHistory.length < QUICK_WINS_HISTORY_THRESHOLD)
@@ -394,6 +403,12 @@ const ChatView = ({ isHidden, showAnnouncement, hideAnnouncement, showHistoryVie
 				{task ? (
 					<TaskSection
 						apiMetrics={apiMetrics}
+						// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+						// (twenty-first-pass): Boundary 5 — pass W
+						// (runtime-published current working-context
+						// estimate) through to TaskHeader. Distinct
+						// from P (lastApiReqContextInputTokens).
+						currentWorkingContextEstimate={currentWorkingContextEstimate}
 						lastApiReqContextInputTokens={lastApiReqContextInputTokens}
 						lastApiReqTotalTokens={lastApiReqTotalTokens}
 						messageHandlers={messageHandlers}

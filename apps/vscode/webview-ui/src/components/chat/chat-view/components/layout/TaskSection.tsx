@@ -19,6 +19,12 @@ interface TaskSectionProps {
 	// suitable only for cost / activity telemetry.
 	lastApiReqContextInputTokens?: number
 	lastApiReqTotalTokens?: number
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-first-pass) — Boundary 5: the runtime-published
+	// current working-context estimate (W), passed through to
+	// TaskHeader → ContextWindow. See ContextWindow.tsx for the
+	// precedence rules.
+	currentWorkingContextEstimate?: number | null
 	selectedModelInfo: {
 		supportsPromptCache: boolean
 		supportsImages: boolean
@@ -41,6 +47,7 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 	apiMetrics,
 	lastApiReqContextInputTokens,
 	lastApiReqTotalTokens,
+	currentWorkingContextEstimate,
 	selectedModelInfo,
 	messageHandlers,
 	taskTelemetry,
@@ -50,6 +57,11 @@ export const TaskSection: React.FC<TaskSectionProps> = ({
 		<TaskHeader
 			cacheReads={apiMetrics.totalCacheReads}
 			cacheWrites={apiMetrics.totalCacheWrites}
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+			// (twenty-first-pass): Boundary 5 — pass W through
+			// to TaskHeader so the ContextWindow component can
+			// use it as the bar numerator (W-defined path).
+			currentWorkingContextEstimate={currentWorkingContextEstimate}
 			doesModelSupportPromptCache={selectedModelInfo.supportsPromptCache}
 			lastApiReqContextInputTokens={lastApiReqContextInputTokens}
 			lastApiReqTotalTokens={lastApiReqTotalTokens}

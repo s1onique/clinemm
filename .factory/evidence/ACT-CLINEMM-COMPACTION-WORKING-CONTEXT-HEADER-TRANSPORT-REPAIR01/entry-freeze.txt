@@ -1,34 +1,48 @@
 
 # ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-# Entry-freeze (twentieth-pass, 2026-09-03)
+# Entry-freeze (twenty-first-pass, 2026-09-03)
 #
-# Reviewer on c8897640d:
-#   HALT_REPAIR_WITHOUT_REPRODUCED_RED.
-#   The implementation landed but no executable
-#   RED/necessity witness existed at the production
-#   projection seam. P1: the visible tests exercised
-#   capture + extracted helper, not the actual
-#   getStateToPostToWebview producer.
-#   C1: GO_P3 (NECESSITY_ABLATION_REQUIRED).
+# Reviewer on 1e9ce01a3:
+#   PASS_WITH_NONBLOCKING_RESIDUE.
+#   Boundary 3 -> 4 is closed; P0/P1_1/P1_2 closed
+#   via the A/B ablation test on the REAL
+#   getStateToPostToWebview producer. C1: GO_P3_B5.
+#   SDKCONTROLLER_WRAP classified as SYNTHETIC /
+#   PATTERN-PIN (not EXECUTED_PRODUCTION_METHOD).
+#   Documentary residue in p3-state-after-green.md
+#   is non-blocking; batch at terminal cleanup.
 #
-# Closed in this commit:
-#   P0 — A/B necessity/ablation test added that drives
-#     the REAL getStateToPostToWebview producer.
-#   P1_1 — The ablation test calls the real
-#     getStateToPostToWebview (not just the extracted
-#     helper).
-#   P1_2 — WIRING WRAP tests exercise the actual
-#     SdkController wrap pattern with a
-#     TaskShadowHostWiring-shaped fake.
+# Closed in this commit (twenty-first-pass):
+#   P3_B5 production seam RED -> GREEN at Boundary 5:
+#     - ChatView / TaskSection / TaskHeader /
+#       ContextWindow accept the new
+#       `currentWorkingContextEstimate` prop.
+#     - ContextWindow uses W (when defined) instead
+#       of P (lastApiReqContextInputTokens) as the
+#       bar numerator.
+#     - W undefined fallback: render UNAVAILABLE
+#       (reviewer twentieth-pass fallback B).
+#       P must not masquerade as W.
+#     - P legacy fallback: preserved for the legacy /
+#       classic / no-Boundary-3-4-wiring path.
+#     - Compaction-recurrence dogfood: the bar
+#       follows W_before -> W_after across a
+#       runtime compaction step.
+#   Carrier surface normalized to `number | null`
+#     (Boundary 5) so the webview can distinguish
+#     "runtime cleared" (`null`) from "carrier
+#     absent / legacy path" (`undefined`).
+#   ExtensionState.currentWorkingContextEstimate:
+#     `number | null | undefined`. The legacy
+#     path persists `undefined`; the runtime path
+#     carries `number` or `null`.
 #
-# STATE                = GREEN + NECESSITY_PROVEN
-# P0 / P1              = ALL CLOSED IN THIS COMMIT
+# STATE                = GREEN + B5_CLOSED
+# P0 / P1 / P3         = ALL CLOSED IN PRIOR CYCLES
+# BOUNDARY_3_CAPTURE   = CLOSED
+# BOUNDARY_3_TO_4_TRANSPORT = CLOSED
+# BOUNDARY_4_WEBVIEW_STATE   = CLOSED (B5 GREEN)
 # NECESSITY_OF_HOST_CAPTURE = PROVEN
-# RED                  = HISTORICAL (a04387552)
-# PRE_REPAIR_RED       =
-#   superseded by A/B ablation; the witness was
-#   invalid (vacuous assertion against `{} as
-#   ExtensionState`).
 # POST_HOC_NECESSITY_ABLATION = SYNTHETIC_REAL / PASS
 # GREEN                = SYNTHETIC_REAL / PASS
 # CAUSAL_COMPOSITION   =
@@ -36,8 +50,11 @@
 #   + structural missing host capture at entry
 #   + exact-edge ablation (capture.observe never called)
 #   + GREEN repair (capture.observe fired)
+#   + GREEN numerator swap (W takes precedence over P)
+#   + GREEN W-undefined fallback (render UNAVAILABLE)
+#   + GREEN compaction dogfood
 # NEW_REVIEW_ROUND     = NO
-# C1                   = GO_P3_B5 (next cycle)
+# C1                   = GO_CLEANUP (terminal cleanup only)
 #
 # --- Component disposition ---
 #
@@ -51,63 +68,10 @@
 #   Boundary 3 capture        = CLOSED
 #   Boundary 3 -> 4 transport = CLOSED
 #   Boundary 4 webview state  = CLOSED
-#   Boundary 5 header         = OPEN  (next cycle)
-#
-# --- Commit lineage ---
-#
-#   c7:  STATE_BIND            (aec3ff0c6)
-#   c8:  PUBLICATION_BIND      (05ccaaf66)
-#                                    └─ C1: GO_PUBLICATION_BIND
-#   c9:  TEST_CORRECTION       (bb5588150)
-#                                    └─ C1: GO_P3
-#   c10: P3_GO_SIGNAL          (c3c00cb45)
-#                                    └─ C1: GO_P3
-#   c11: P3_BOUNDARY_BIND      (a04387552)
-#           + P1_TEXT_FIX
-#           + P2_TABLE_HEADING_FIX
-#           + RED_at_FIRST_MISSING_EDGE (synthetic)
-#                                    └─ C1: GO_P3 (real GREEN
-#                                         required; c12 below)
-#   c12: P3_GREEN              (c8897640d)
-#           + REAL_PRODUCTION_SEAM_GREEN
-#           + INTENTIONALLY_FAILING_RED_REMOVED
-#           + RECON_WITNESSES_RETIRED
-#           (reviewer on c8897640d:
-#             HALT_REPAIR_WITHOUT_REPRODUCED_RED;
-#             implementation landed but no
-#             executable RED/necessity witness)
-#                                    └─ C1: GO_P3 (necessity
-#                                         ablation required;
-#                                         c13 below)
-#   c13: P3_NECESSITY_ABLATION (this commit)
-#           + A/B ABLATION ON REAL getStateToPostToWebview
-#           + WIRING WRAP (P1_2) test on
-#             SdkController-style wrap
-#                                    └─ C1: GO_P3_B5 (next cycle)
-#
-# --- Conservation (permanent) ---
-#
-#   apps/vscode MUST NOT import / use:
-#     estimateRequestInputTokens
-#     estimateMessageTokens
-#   for the projection. Enforced permanently by the
-#   estimator-import probe in
-#     apps/vscode/src/sdk/__tests__/
-#     working-context-webview-state-projection.test.ts
-#
-#   UNDEFINED_W_STALE_REUSE = FORBIDDEN:
-#     enforced at the carrier layer (unconditional
-#     assignment in
-#     apps/vscode/src/sdk/working-context-host-capture.ts).
-#     Pinned by:
-#       test #2  (direct .observe(undefined))
-#       test #6  (W sequence with undefined transitions)
-#       WIRING WRAP FAIL-CLOSED (no-W event through
-#         the wrap clears the carrier)
-#
-#   P remains available for provider / request metrics.
-#   H_b / H_a remain compaction telemetry.
-#   getApiMetrics Strategy-D stays untouched.
+#   Boundary 5 header         = CLOSED  (this commit)
+#   Terminal cleanup          = OPEN  (non-blocking;
+#                                       p3-state-after-green.md
+#                                       residue)
 #
 # --- Sentinels ---
 #
@@ -115,103 +79,241 @@
 #   W = 271_337   (synthetic currentWorkingContextEstimate;
 #                   deliberately distinct from live 264.3k)
 #
-# --- A/B ablation (this commit's load-bearing evidence) ---
+# --- Conservation (permanent) ---
 #
-#   A:
-#     capture.observe(W=271337) + REAL
-#       getStateToPostToWebview
-#     → payload.currentWorkingContextEstimate === 271337
+#   apps/vscode MUST NOT import / use:
+#     estimateRequestInputTokens
+#     estimateMessageTokens
+#   for this projection. Enforced permanently by the
+#   estimator-import probes:
+#     apps/vscode/src/sdk/__tests__/
+#     working-context-webview-state-projection.test.ts
+#     apps/vscode/webview-ui/src/components/chat/
+#     task-header/ContextWindow.test.tsx
+#
+#   UNDEFINED_W_STALE_REUSE = FORBIDDEN:
+#     enforced at the carrier layer (unconditional
+#     assignment in
+#     apps/vscode/src/sdk/working-context-host-capture.ts).
+#     The runtime-published `undefined` is normalized
+#     to `null` so the Boundary 5 fallback (reviewer B)
+#     can distinguish "runtime cleared" from "carrier
+#     absent / legacy path". Pinned by:
+#       Boundary 3 -> 4 tests:
+#         - "GREEN: a `working-context-state-changed`
+#            event with W=undefined normalizes the
+#            carrier to null"
+#         - "GREEN: a sequence of W transitions
+#            (W=100, W=null, W=200) is mirrored exactly"
+#         - "WIRING WRAP (P1_2) FAIL-CLOSED"
+#       Boundary 5 tests:
+#         - "RED -> GREEN: W null (runtime-cleared)
+#            -> no bar"
+#         - "RED -> GREEN: W null (runtime-cleared)
+#            -> no W-token leaked into the displayed
+#            used value"
+#
+#   P remains available for provider / request metrics.
+#   H_b / H_a remain compaction telemetry.
+#   getApiMetrics Strategy-D stays untouched.
+#   lastApiReqTotalTokens stays untouched.
+#
+# --- Boundary 5 fallback policy (twenty-first-pass) ---
+#
+#   W = number  -> bar numerator = W (Boundary 5 GREEN)
+#   W = null    -> bar UNAVAILABLE (reviewer B fallback;
+#                   P must not masquerade as W)
+#   W = undefined -> bar falls back to P (legacy path)
+#                    — only place where P drives the bar
+#
+#   Carrier surface: number | null
+#     (Boundary 5 normalization: runtime-published
+#      undefined -> null so the discriminator
+#      distinguishes "runtime cleared" from "legacy
+#      carrier absent")
+#   Projection output: number | null | undefined
+#     (carrier absent -> undefined; carrier present ->
+#      number | null verbatim)
+#   ExtensionState field: number | null | undefined
+#     (legacy path persists undefined)
+#
+# --- A/B ablation (twentieth-pass; preserved) ---
+#
+#   A:   capture.observe(W=271337) + real
+#          getStateToPostToWebview
+#        -> payload.currentWorkingContextEstimate ===
+#           271337
 #
 #   B (ABLATION):
-#     capture.observe NEVER CALLED + REAL
-#       getStateToPostToWebview
-#     → payload.currentWorkingContextEstimate === undefined
+#        capture.observe NEVER CALLED + real producer
+#        -> payload.currentWorkingContextEstimate ===
+#           null (Boundary 5 normalization)
 #
 #   A' (RESTORE):
-#     same capture, observe(W=271337) again + REAL
-#       getStateToPostToWebview
-#     → payload.currentWorkingContextEstimate === 271337
+#        same capture, observe(W=271337) again + real
+#          producer
+#        -> payload.currentWorkingContextEstimate ===
+#           271337
 #
-#   CONTROL (missing carrier):
-#     legacy / classic path with no carrier
-#     → payload.currentWorkingContextEstimate === undefined
-#     (NOT 0, NOT last-known)
+#   CONTROL (no carrier):
+#        legacy path with no carrier
+#        -> payload.currentWorkingContextEstimate ===
+#           undefined (NOT null, NOT 271337)
 #
-#   WIRING WRAP (P1_2):
-#     SdkController wrap pattern over a fake
-#       TaskShadowHostWiring
-#     → capture.observe(event) runs BEFORE
-#       wiring.observeCanonicalRuntimeEvent(input)
-#     → carrier holds W AND wiring saw the same
-#       envelope
+#   WIRING WRAP (P1_2) [SYNTHETIC PATTERN-PIN, see below]:
+#        SdkController wrap pattern over a fake
+#          TaskShadowHostWiring
+#        -> capture.observe(event) runs BEFORE
+#           wiring.observeCanonicalRuntimeEvent(input)
+#        -> carrier holds W AND wiring saw the same
+#           envelope
 #
 #   WIRING WRAP FAIL-CLOSED:
-#     same wrap, drive a no-W event
-#     → carrier transitions to undefined
-#     → wiring saw the event envelope
+#        same wrap, drive a no-W event
+#        -> carrier transitions to null
+#        -> wiring saw the event envelope
 #
-# NECESSITY_OF_HOST_CAPTURE = PROVEN:
-#   Removing the capture.observe call (B) brings back
-#   the defect (payload.W === undefined) on the same
-#   producer; restoring it (A') flips GREEN again.
+# NECESSITY_OF_HOST_CAPTURE = PROVEN.
 #
-# --- Default-suite state ---
+# --- Boundary 5 test summary (twenty-first-pass) ---
 #
-#   GREEN. 13 tests pass in
-#   working-context-webview-state-projection.test.ts:
-#     6 PURE-PATH GREEN tests
-#     1 CONSERVATION probe
-#     6 ABLATION tests (A, B, A', CONTROL, WIRING WRAP,
-#                       WIRING WRAP FAIL-CLOSED)
+#   apps/vscode/webview-ui/src/components/chat/
+#   task-header/ContextWindow.test.tsx:
 #
-# --- Evidence labels ---
+#     Pre-existing (PRESERVED):
+#       - 5 occupancy projection tests (P-driven,
+#         contextWindow=0, etc.) — all GREEN
 #
-#   Boundary 3 capture       = SYNTHETIC_REAL / PASS
-#     (real production capture + synthetic
-#      AgentRuntimeEvent + synthetic W)
-#   Boundary 3 -> 4 transport = SYNTHETIC_REAL / PASS
-#     (real pure projection helper + real
-#      getStateToPostToWebview producer + synthetic
-#      event; A/B ablation)
-#   WIRING WRAP              = SYNTHETIC_REAL / PASS
-#     (real wrap pattern + TaskShadowHostWiring-
-#      shaped fake + synthetic event)
-#   APPs_VSCODE_W_ABSENCE    = SUPERSEDED
-#     (recon witness retired; conservation probe
-#      replaces it)
+#     Boundary 5 (NEW this commit):
+#       1. RED -> GREEN: W defined takes precedence
+#          over P (numerator = W / contextWindow)
+#       2. RED -> GREEN: W defined, the displayed
+#          `used` value is W (not P)
+#       3. RED -> GREEN: W null (runtime-cleared)
+#          -> no bar (reviewer B fallback)
+#       4. RED -> GREEN: W null -> no W-token leaked
+#          (forbidden: silent 364,900-as-W)
+#       5. PRESERVED: no progressbar when
+#          contextWindow is 0
+#       6. PRESERVED (RED -> GREEN): legacy P-only
+#          path — W omitted (undefined), P provided,
+#          bar shows P-driven occupancy
+#       7. DOGFOOD: compaction recurrence —
+#          bar reflects W_before before compaction,
+#          W_after after the runtime emits a fresh W
+#       8. CONSERVATION: no estimator imports in
+#          ContextWindow production code
+#
+#     Total: 13 tests, 13 GREEN.
+#
+# --- Component changes (production) ---
+#
+#   apps/vscode/webview-ui/src/components/chat/
+#   task-header/ContextWindow.tsx:
+#     - New prop: currentWorkingContextEstimate?:
+#       number | null
+#     - tokenData: W > null (unavailable) > P
+#     - percentage rounded to integer (was raw float;
+#       caused display of "135.6685" — now 136)
+#
+#   apps/vscode/webview-ui/src/components/chat/
+#   task-header/TaskHeader.tsx:
+#     - New prop: currentWorkingContextEstimate?:
+#       number | null (forwarded to ContextWindow)
+#
+#   apps/vscode/webview-ui/src/components/chat/
+#   chat-view/components/layout/TaskSection.tsx:
+#     - New prop: currentWorkingContextEstimate?:
+#       number | null (forwarded to TaskHeader)
+#
+#   apps/vscode/webview-ui/src/components/chat/
+#   ChatView.tsx:
+#     - useExtensionState() destructures
+#       currentWorkingContextEstimate
+#     - TaskSection receives
+#       currentWorkingContextEstimate
+#
+#   apps/vscode/src/sdk/working-context-host-
+#   capture.ts:
+#     - Carrier surface: number | null (was number |
+#       undefined). Runtime-published undefined is
+#       normalized to null so the Boundary 5
+#       discriminator distinguishes "runtime cleared"
+#       from "carrier absent".
+#     - Assignment semantics UNCHANGED: still
+#       unconditional (no conditional skip).
+#
+#   apps/vscode/src/core/controller/state/
+#   working-context-state-projection.ts:
+#     - Type updated to `number | null` (was
+#       `number | undefined`) to match the carrier
+#       surface. Projection output type is
+#       `number | null | undefined`.
+#
+#   apps/vscode/src/shared/ExtensionMessage.ts:
+#     - currentWorkingContextEstimate type widened to
+#       `number | null` (was `number`).
+#
+# --- Verification (this commit) ---
+#
+#   $ bunx vitest run (apps/vscode, Boundary 3 -> 4):
+#     Test Files 1 passed (1)
+#     Tests      13 passed (13)
+#
+#   $ bunx vitest run (webview-ui, Boundary 5):
+#     Test Files 1 passed (1)
+#     Tests      13 passed (13)
+#
+#   $ bun tsc --noEmit -p apps/vscode/tsconfig.json:
+#     3 errors (== baseline; pre-existing)
+#
+#   $ bunx vitest run (agents):
+#     Test Files 24 passed (24)
+#     Tests      408 passed (408)
+#
+#   $ bunx vitest run (core/src/extensions/context/):
+#     Test Files 5 passed | 1 skipped (6)
+#     Tests      116 passed | 1 skipped (117)
+#
+#   $ git diff --check: clean
+#
+# --- Documentary residue (non-blocking cleanup) ---
+#
+#   .factory/evidence/.../p3-state-after-green.md
+#   contains stale:
+#     RED = NOT_REPRODUCED_AT_HEAD
+#   wording that is HISTORICAL and superseded by the
+#   A/B ablation taxonomy. Batch this at terminal
+#   cleanup (out of scope for this commit).
 #
 # --- Disposition ---
 #
-#   BOUNDARY_RECON            = PASS / USEFUL
-#   BOUNDARY_3_CAPTURE        = SYNTHETIC_REAL / PASS
-#   BOUNDARY_3_TO_4_TRANSPORT = SYNTHETIC_REAL / PASS
-#   HOST_PUBLICATION          = COMPOSED PROOF / PASS
-#   NECESSITY_OF_HOST_CAPTURE = PROVEN
-#   NO_INDEPENDENT_W_SCALAR   = TRUE
-#   UNDEFINED_W_STALE_REUSE   = FORBIDDEN
-#   RED                       = HISTORICAL
-#                               (a04387552; superseded by
-#                                A/B ablation in this commit)
-#   GREEN                     = SYNTHETIC_REAL / PASS
-#   CAUSAL_COMPOSITION        =
-#     live UX symptom + structural missing host
-#     capture at entry + exact-edge ablation +
-#     GREEN repair
-#   NEW_REVIEW_ROUND          = NO
-#   C1                        = GO_P3_B5 (next cycle)
+#   BOUNDARY_RECON             = PASS / USEFUL
+#   BOUNDARY_3_CAPTURE         =
+#     SYNTHETIC_REAL / PASS
+#   BOUNDARY_3_TO_4_TRANSPORT  =
+#     SYNTHETIC_REAL / PASS
+#   HOST_PUBLICATION           =
+#     COMPOSED PROOF / ACCEPTED
+#   NECESSITY_OF_HOST_CAPTURE  = PROVEN
+#   NO_INDEPENDENT_W_SCALAR    = TRUE
+#   UNDEFINED_W_STALE_REUSE    = FORBIDDEN
 #
-# --- Next bounded cycle (separate commit, NOT here) ---
+#   RED                        = HISTORICAL (a04387552)
+#   GREEN                      = SYNTHETIC_REAL / PASS
+#   CAUSAL_COMPOSITION         =
+#     live UX symptom
+#     + structural missing host capture at entry
+#     + exact-edge ablation (capture.observe never called)
+#     + GREEN repair (capture.observe fired)
+#     + GREEN numerator swap (W takes precedence over P)
+#     + GREEN W-undefined fallback (render UNAVAILABLE)
+#     + GREEN compaction dogfood
 #
-#   Boundary 5: ChatView / TaskHeader consumes W
-#     for the numerator (when present) instead of
-#     P (lastApiReqContextInputTokens).
-#   UNDEFINED_W_FALLBACK:
-#     per reviewer preference (twentieth-pass),
-#     default to B = unavailable/unknown rather
-#     than A = silently fall back to P (P and W
-#     are explicitly different truth domains;
-#     silently swapping them without telling the
-#     user is the category of bug this chain
-#     eliminates).
-#     Decision binds from the existing
-#     ContextWindow.tsx:167 null-fallback contract.
+#   SDKCONTROLLER_WRAP_TEST    =
+#     SYNTHETIC PATTERN-PIN
+#     + STRUCTURAL production composition
+#     (sufficient evidence; not a controller harness)
+#
+#   NEW_REVIEW_ROUND           = NO
+#   C1                         = GO_CLEANUP

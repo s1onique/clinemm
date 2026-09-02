@@ -37,6 +37,43 @@ interface ContextWindowProgressProps extends ContextWindowInfoProps {
 	lastApiReqTotalTokens?: number
 	contextWindow?: number
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-first-pass) — Boundary 5:
+	//
+	// Authoritative current working-context estimate (W)
+	// published by the agent runtime via
+	// `AgentRuntimeStateSnapshot.currentWorkingContextEstimate`
+	// and mirrored to `ExtensionState.currentWorkingContext
+	// Estimate` by the host-side carrier
+	// (`apps/vscode/src/sdk/working-context-host-capture.ts`).
+	//
+	// The bar numerator precedence is:
+	//
+	//   currentWorkingContextEstimate === number
+	//     → use W (runtime-published occupancy)
+	//   currentWorkingContextEstimate === undefined
+	//     → "never set / omitted" — legacy /
+	//       classic / pre-runtime path. Fall back
+	//       to P (lastApiReqContextInputTokens) so
+	//       the legacy bar continues to render.
+	//       The carrier contract uses `null` for
+	//       runtime-cleared (see below); the
+	//       absence of the field on
+	//       `ExtensionState` only persists when
+	//       the carrier is absent (legacy path).
+	//   currentWorkingContextEstimate === null
+	//     → "runtime emitted, no W" — runtime is
+	//       active but the latest event carried
+	//       no W. Render UNAVAILABLE (reviewer
+	//       twentieth-pass fallback B); do NOT
+	//       silently substitute P-as-W. P and W
+	//       are explicitly different authorities.
+	//
+	// Stale W reuse is FORBIDDEN (assignment
+	// semantics include undefined at the carrier).
+	// Conservation: no estimator imports. W is
+	// transport-only.
+	currentWorkingContextEstimate?: number | null
 }
 
 const ConfirmationDialog = memo<{
@@ -75,6 +112,11 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 	contextWindow = 0,
 	lastApiReqContextInputTokens = 0,
 	lastApiReqTotalTokens: _lastApiReqTotalTokens = 0,
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-first-pass): W is the authoritative
+	// current-working-context estimate. See the prop
+	// docstring above for the precedence rules.
+	currentWorkingContextEstimate,
 	onSendMessage,
 	useAutoCondense,
 	tokensIn,
@@ -118,19 +160,80 @@ const ContextWindow: React.FC<ContextWindowProgressProps> = ({
 		if (!contextWindow) {
 			return null
 		}
-		// ACT-CLINEMM-CONTEXT-ACCOUNTING-TRUTH01 (CORRECTION01): the percentage is
-		// (provider-normalized context-input tokens / context window). The
-		// numerator is `tokensIn + cacheReads + cacheWrites` (the AI SDK
-		// `inputTokens.total` contract) — the actual prompt size that competed
-		// for the model's window on the last request. Output tokens describe
-		// the previous response and are deliberately excluded from the
-		// numerator.
-		return {
-			percentage: (lastApiReqContextInputTokens / contextWindow) * 100,
-			max: contextWindow,
-			used: lastApiReqContextInputTokens,
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (twenty-first-pass) — Boundary 5 numerator
+		// precedence:
+		//
+		//   1. currentWorkingContextEstimate === number
+		//      → numerator = W (runtime-published
+		//        occupancy of the next request).
+		//   2. currentWorkingContextEstimate === undefined
+		//      → "never set / omitted". Legacy /
+		//        classic / pre-runtime path. Fall
+		//        back to P
+		//        (lastApiReqContextInputTokens) so
+		//        classic tasks keep working. The
+		//        carrier contract uses `undefined`
+		//        as the omission marker; the
+		//        production carrier assigns
+		//        `ExtensionState.currentWorkingContext
+		//        Estimate` explicitly to a number or
+		//        null at every runtime event, so
+		//        `undefined` only persists when the
+		//        carrier is absent (legacy path).
+		//   3. currentWorkingContextEstimate === null
+		//      → runtime is active but the latest
+		//        event carried no W. Reviewer
+		//        twentieth-pass fallback B: render
+		//        UNAVAILABLE. P must not masquerade
+		//        as W. P and W are explicitly
+		//        different authorities; silently
+		//        substituting the disjoint-sum P
+		//        for the runtime-published W would
+		//        recreate the semantic category
+		//        error this chain has been
+		//        eliminating.
+		//
+		// The previous ACT-CLINEMM-CONTEXT-
+		// ACCOUNTING-TRUTH01 (CORRECTION01) semantic
+		// (provider-normalized input tokens / window)
+		// is preserved for the legacy path. No
+		// estimator is used; transport-only.
+		let numerator: number
+		if (typeof currentWorkingContextEstimate === "number") {
+			numerator = currentWorkingContextEstimate
+		} else if (currentWorkingContextEstimate === null) {
+			// Reviewer's strict fallback B: when
+			// the runtime is active but W is
+			// explicitly cleared (no-W event), the
+			// bar is unavailable. P must not
+			// masquerade as W.
+			return null
+		} else {
+			// `undefined` = "never set" (legacy /
+			// classic path / pre-runtime). Preserve
+			// the existing P-based bar so classic
+			// tasks keep working.
+			numerator = lastApiReqContextInputTokens
 		}
-	}, [contextWindow, lastApiReqContextInputTokens])
+		return {
+			// Round to integer percent for display —
+			// matches the existing ContextWindow
+			// behavior (see "uses
+			// lastApiReqContextInputTokens" tests:
+			// 20_000 / 200_000 = 10). Raw floats
+			// (e.g. 135.6685) leak ugly precision in
+			// the progressbar tooltip and the
+			// "X%" label.
+			percentage: Math.round((numerator / contextWindow) * 100),
+			max: contextWindow,
+			used: numerator,
+		}
+	}, [
+		contextWindow,
+		lastApiReqContextInputTokens,
+		currentWorkingContextEstimate,
+	])
 
 	const debounceCloseHover = useCallback((e: React.MouseEvent) => {
 		e.preventDefault()

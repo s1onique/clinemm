@@ -10,7 +10,7 @@
  *
  * The transport contract is:
  *   - input: a `WorkingContextHostCaptureState` (anything
- *     that exposes `currentWorkingContextEstimate: number | undefined`)
+ *     that exposes `currentWorkingContextEstimate: number | null`)
  *   - output: a partial ExtensionState containing exactly
  *     the W field, plus optional drop-out semantics when
  *     no carrier is provided.
@@ -22,12 +22,20 @@
  * (verified by the production-code probe test).
  *
  * UNDEFINED_W_STALE_REUSE = FORBIDDEN: the projection
- * passes `undefined` through verbatim (assignment
+ * passes the carrier's value through verbatim (assignment
  * semantics); the carrier (see
  * `apps/vscode/src/sdk/working-context-host-capture.ts`)
  * is responsible for keeping the captured value honest
  * (it uses unconditional assignment, no conditional
  * skip).
+ *
+ * (twenty-first-pass) — Boundary 5: the carrier's
+ * surface type is `number | null`. When the carrier
+ * is absent (legacy / classic path), this helper
+ * emits `undefined` so the downstream ChatView can
+ * distinguish "carrier absent" (fall back to P)
+ * from "runtime cleared" (render UNAVAILABLE per
+ * reviewer twentieth-pass fallback B).
  */
 
 import type { ExtensionState } from "@shared/ExtensionMessage"
@@ -58,8 +66,9 @@ export type WorkingContextProjection = Pick<
  *     `UNDEFINED_W_FALLBACK` (decided separately).
  *   - When the carrier is present, the projection
  *     passes the carrier's value through verbatim —
- *     INCLUDING `undefined`, which makes the carrier's
- *     fail-closed lifetime reach the webview state.
+ *     INCLUDING `null`, which the carrier emits when
+ *     the runtime published a no-W
+ *     `working-context-state-changed` event.
  *   - The value is NEVER recomputed, estimated, or
  *     transformed. No estimator imports.
  *

@@ -38,6 +38,18 @@ interface TaskHeaderProps {
 	// for cost / activity telemetry.
 	lastApiReqContextInputTokens?: number
 	lastApiReqTotalTokens?: number
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-first-pass) — Boundary 5: the
+	// runtime-published current working-context estimate
+	// (W) from `ExtensionState.currentWorkingContext
+	// Estimate`. Distinct from `lastApiReqContextInputTokens`.
+	// When W is a number, the ContextWindow bar numerator
+	// uses W. When W is `null` (runtime-cleared), the bar
+	// is unavailable. When W is `undefined` (legacy path),
+	// the bar falls back to P. See
+	// `apps/vscode/webview-ui/src/components/chat/task-header/
+	// ContextWindow.tsx` for the full precedence rules.
+	currentWorkingContextEstimate?: number | null
 	onClose: () => void
 	onSendMessage?: (command: string, files: string[], images: string[]) => void
 	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: host-owned task telemetry
@@ -83,6 +95,11 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	totalCost,
 	lastApiReqContextInputTokens,
 	lastApiReqTotalTokens,
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-first-pass): Boundary 5 — W propagates
+	// from ChatView -> TaskSection -> TaskHeader ->
+	// ContextWindow.
+	currentWorkingContextEstimate,
 	onClose,
 	onSendMessage,
 	taskTelemetry: taskTelemetryProp,
@@ -301,6 +318,13 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 							cacheReads={cacheReads}
 							cacheWrites={cacheWrites}
 							contextWindow={selectedModelInfo?.contextWindow}
+							// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+							// (twenty-first-pass): Boundary 5 — pass W
+							// (runtime-published currentWorkingContext
+							// Estimate) to ContextWindow so the bar
+							// numerator uses W (when defined) instead
+							// of P (lastApiReqContextInputTokens).
+							currentWorkingContextEstimate={currentWorkingContextEstimate}
 							lastApiReqContextInputTokens={lastApiReqContextInputTokens}
 							lastApiReqTotalTokens={lastApiReqTotalTokens}
 							onSendMessage={onSendMessage}

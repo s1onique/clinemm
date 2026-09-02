@@ -59,7 +59,18 @@
  *
  * invariant in the ACT body. This implementation enforces
  * the rule at the type/source level by never branching on
- * `event.snapshot.currentWorkingContextEstimate`.
+ * `event.snapshot.currentWorkingContextEstimate` — every
+ * observed `working-context-state-changed` event REPLACES
+ * the slot unconditionally.
+ *
+ * (twenty-first-pass) — Boundary 5 normalization:
+ * the slot's public surface is `number | null`. The
+ * runtime-published `undefined` is normalized to `null`
+ * in `observe()` so the webview can distinguish
+ * "runtime cleared" (`null`) from "carrier absent /
+ * legacy path" (`undefined` at the projection layer).
+ * The carrier assignment is STILL unconditional — a
+ * conditional skip would resurrect stale-W.
  *
  * NOT RECOMPUTED
  * --------------
@@ -76,17 +87,38 @@ import type { AgentRuntimeEvent } from "@cline/shared"
 /**
  * The host-side projection surface. Implementations only
  * need to expose the latest captured W.
+ *
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+ * (twenty-first-pass) — Boundary 5 normalization:
+ *
+ * The carrier's slot type is `number | null`, where:
+ *   - `number` = runtime published a W value
+ *   - `null`   = runtime emitted a no-W
+ *                `working-context-state-changed` event
+ *                (or the carrier has never observed an
+ *                event since construction). The webview
+ *                interprets `null` as "runtime cleared"
+ *                and renders the bar UNAVAILABLE per
+ *                reviewer twentieth-pass fallback B.
+ *
+ * `undefined` is FORBIDDEN at the carrier surface: the
+ * absence of a value at this layer means "legacy /
+ * classic path / no Boundary 3 -> 4 wiring" — handled
+ * at the projection / producer layer instead. Keeping
+ * `undefined` out of the carrier prevents the
+ * runtime-cleared case from being misclassified as a
+ * legacy-omission case downstream.
  */
 export interface WorkingContextHostCaptureState {
-	readonly currentWorkingContextEstimate: number | undefined
+	readonly currentWorkingContextEstimate: number | null
 }
 
 export class WorkingContextHostCapture
 	implements WorkingContextHostCaptureState
 {
-	private _latest: number | undefined = undefined
+	private _latest: number | null = null
 
-	get currentWorkingContextEstimate(): number | undefined {
+	get currentWorkingContextEstimate(): number | null {
 		return this._latest
 	}
 
@@ -102,15 +134,23 @@ export class WorkingContextHostCapture
 	 * observer captures `event.snapshot.currentWorking
 	 * ContextEstimate` into `_latest` using UNCONDITIONAL
 	 * assignment (see the file-level comment on the
-	 * conservation semantics).
+	 * conservation semantics). When the snapshot's W
+	 * is `undefined` (the runtime's no-W lifetime), the
+	 * carrier normalizes to `null` so the boundary-5
+	 * fallback (reviewer twentieth-pass) can
+	 * distinguish "runtime cleared" from "legacy
+	 * carrier absent" downstream.
 	 */
 	observe(event: AgentRuntimeEvent): void {
 		if (event.type === "working-context-state-changed") {
 			// ASSIGNMENT — do NOT conditionally skip.
-			// Including `undefined` is the only way to
+			// Including `undefined` (normalized to
+			// `null` here) is the only way to
 			// propagate the runtime's fail-closed W
-			// lifetime to the host side.
-			this._latest = event.snapshot.currentWorkingContextEstimate
+			// lifetime to the host side. Stale-W
+			// reuse is FORBIDDEN.
+			const w = event.snapshot.currentWorkingContextEstimate
+			this._latest = typeof w === "number" ? w : null
 		}
 	}
 
@@ -118,7 +158,7 @@ export class WorkingContextHostCapture
 	 * Test seam: build a capture pre-populated with an
 	 * initial value. Production code never calls this.
 	 */
-	static forTest(initial: number | undefined): WorkingContextHostCapture {
+	static forTest(initial: number | null): WorkingContextHostCapture {
 		const c = new WorkingContextHostCapture()
 		c._latest = initial
 		return c
