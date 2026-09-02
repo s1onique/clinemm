@@ -1,5 +1,9 @@
-ENTRY_HEAD         = 9f994b135ddb9175b78d19f619828fed78867369
-SUBJECT_HEAD        = 9f994b135ddb9175b78d19f619828fed78867369
+ENTRY_HEAD         = 2883deb70 (current; production-
+                     equivalent to 9f994b135, intervening
+                     commits are Factory-only)
+SUBJECT_HEAD        = 9f994b135 (the empirical-report HEAD
+                     this ACT executes against; production
+                     source at 2883deb70 is equivalent)
 WORKTREE            = clean (only ACT file + evidence
                      directory + .factory/epic-board.md
                      + .factory/epics/context-compaction-
@@ -71,6 +75,27 @@ PRIMARY_QUESTION    = does the bar promise "last
                      explicit labels (C3)? Until answered,
                      264.3k is NOT automatically the
                      correct bar value.
+
+RECON_VERDICT       = HALT_NO_INTENT_FROZEN_FOR_C2_C3
+                     (see semantic-contract.md Q5)
+                     Q4: W_AUTHORITY = ABSENT;
+                     H_a ≡ W_e = NOT PROVEN.
+                     C2 is UNACHIEVABLE_AT_CURRENT_WIRE.
+                     Existing `compaction` say message
+                     already mechanically distinguishes
+                     H from P; a `kind` discriminator is
+                     NOT needed at the divider level
+                     (NEW_WIRE_KIND stays UNBOUND with
+                     NEED_FOR_NEW_DISCRIMINATOR = NOT
+                     PROVEN). Full UI DOM render is
+                     OPTIONAL — extracted projection
+                     test at getLastApiReqContextInputTokens
+                     is sufficient (ContextWindow.test.tsx
+                     already pins the seam). Reviewer
+                     disposition: A (preferred — HALT,
+                     product decision), B (bounded C1
+                     label-only ACT), or C (producer-side
+                     W_e publishing ACT).
 
 PREDECESSOR_ACT     = ACT-CLINEMM-COMPACTION-
                      PRESENTATION-FRESHNESS-EMPIRICAL01
