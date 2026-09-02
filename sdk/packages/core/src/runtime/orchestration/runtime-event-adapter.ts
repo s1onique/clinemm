@@ -299,6 +299,23 @@ export class RuntimeEventAdapter {
 					// anti-pattern this projection is
 					// designed to prevent.
 					return [];
+				case "working-context-state-changed":
+					// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-
+					// HEADER-TRANSPORT-REPAIR01
+					// (fifteenth-pass): no legacy
+					// `AgentEvent` translation. The
+					// working-context transition is a
+					// runtime-state observation; like
+					// recovery-state-changed and
+					// execution-state-changed, it is read
+					// off the runtime snapshot surface,
+					// not the legacy chat projection.
+					// Truth lives at
+					// `AgentRuntime.snapshot()
+					//   .currentWorkingContextEstimate`;
+					// the broadcast itself is
+					// observation, not prose.
+					return [];
 				default: {
 				const _exhaustive: never = event;
 				return _exhaustive;

@@ -881,3 +881,196 @@ NEW_REVIEW_ROUND                = NO.
 C1                              =
   GO_STATE_BIND (this commit)
   + GO_PUBLICATION_BIND (next cycle)
+
+FIFTEENTH_PASS_PUBLICATION_BIND_LANDED (2026-09-03):
+
+  Reviewer on aec3ff0c6:
+    PASS_WITH_ONE_P1_FIX.
+    C1: GO_PUBLICATION_BIND.
+    STATE_BIND PASS / CLOSED.
+    The boundary + cadence split is final;
+    this commit closes PUBLICATION_BIND.
+
+  P1 (reviewer): the thirteenth/fourteenth-pass
+  implementation preserved the prior captured W when a
+  later prepareTurn omitted it ("last-known-W"). The
+  reviewer requires fail-closed: if a producer
+  unexpectedly stops publishing W, the field MUST
+  become undefined (not stale-preserve). Missing-
+  authority must surface as undefined, not as a
+  stale plausible-looking UI value.
+
+  Closed in this commit.
+
+  Inspector (mechanical):
+    1. existing generic internal notification:
+       ABSENT (only domain-specific
+       emitRecoveryStateChangeIfChanged +
+       emitExecutionStateChangeIfChanged; both
+       domain-named, NOT generic)
+    2. existing generic runtime-state-updated event:
+       ABSENT (AgentRuntimeEvent union has
+       run-started/message-added/turn-started/
+       assistant-text-delta/assistant-reasoning-
+       delta/assistant-media/assistant-message/
+       tool-started/tool-updated/tool-finished/
+       usage-updated/turn-finished/status-notice/
+       run-finished/run-failed, plus the two
+       domain-specific *-state-changed; no generic
+       state-changed)
+    3. new typed AgentRuntimeEvent variant:
+       AUTHORIZED (working-context-state-changed)
+    4. host-specific polling/recompute: forbidden
+
+  → option 3: new typed event variant
+     working-context-state-changed
+     (additive).
+
+FIFTEENTH_PASS_PRODUCTION_DELTA:
+
+  - sdk/packages/shared/src/agent.ts:
+      AgentRuntimeEvent gains
+      working-context-state-changed
+      (additive; mirror of recovery-state-changed
+      and execution-state-changed; authority
+      remains snapshot, never the event payload).
+      Docstring pins the observation-event
+      semantics and the pre-model-stream ordering
+      guarantee.
+
+  - sdk/packages/agents/src/agent-runtime.ts:
+      * emit()'s isObservationEvent set joins
+        working-context-state-changed (mirrors
+        recovery-state-changed +
+        execution-state-changed; per-listener
+        try/catch swallow applies).
+      * Private helper
+        emitWorkingContextStateChangeIfChanged(
+          before: number | undefined)
+        — sole owner of the event. Mirrors
+        emitRecoveryStateChangeIfChanged EXACTLY:
+        async, uses emit(), inner try/catch,
+        outer try/catch swallow (observation
+        must not become control). Dedup: no emit
+        when before === after (state.W post-
+        capture).
+      * prepareTurnForModelRequest: lifetime
+        changed to FAIL-CLOSED.
+          prepareTurn returns W
+            → state.W = W
+          prepareTurn returns no W (undefined
+            result OR result without the field)
+            → state.W = undefined (NOT stale-
+              preserve)
+          new run() and restore() reset to
+            undefined.
+        Capture site calls
+        emitWorkingContextStateChangeIfChanged
+        (before → after) synchronously awaited
+        before the method returns; this pins the
+        ordering guarantee:
+          prepareTurn completes
+            < working-context-state-changed
+              listener invocation
+            < model.stream(...) begins
+            < run-finished
+
+  - sdk/packages/core/src/runtime/orchestration/
+    runtime-event-adapter.ts:
+      Adds the new variant to the legacy
+      AgentEvent translation switch. Like the
+      other *-state-changed variants, it
+      produces no legacy translation (returns
+      []). Truth lives on the runtime snapshot
+      surface, not on the legacy chat projection.
+
+FIFTEENTH_PASS_TEST_ARTIFACT:
+
+  Two committed test files (sized minimally):
+
+  (1) sdk/packages/agents/src/
+      agent-runtime.current-working-context-
+      state-bind.test.ts
+      Adds the FAIL-CLOSED lifetime test (W1=100
+      then prepareTurn-without-W → snapshot.W
+      === undefined). Now 7 tests; PASS.
+
+  (2) NEW sdk/packages/agents/src/
+      agent-runtime.working-context-publication
+      .test.ts
+      3 tests:
+        1. ordering: prepareTurn < W-publication
+           < model.stream < run-finished
+           (verified via a controllable model-
+           stream barrier — listener MUST
+           observe W before the barrier releases)
+        2. dedup: prepareTurn returning the same
+           W produces exactly one emit (the
+           undefined→W_SAME transition)
+        3. observation-event isolation: a
+           throwing subscriber must not unwind
+           the runtime
+      All 3 PASS.
+
+VERIFICATION:
+
+  bunx vitest run on sdk/packages/agents/:
+    Test Files 24 passed (24) [+1 file]
+    Tests      407 passed (407) [+3 tests]
+
+  bunx vitest run on sdk/packages/core/src/
+    extensions/context/:
+    Test Files 5 passed | 1 skipped (6)
+    Tests      116 passed | 1 skipped (117)
+
+  bun tsc -p tsconfig.dev.json --noEmit:
+    sdk/packages/shared  : 0 errors
+    sdk/packages/agents  : 0 errors
+    sdk/packages/core    : 23 errors (== baseline)
+
+  git diff --check: clean
+
+PUBLICATION_BIND_DISPOSITION:
+
+  STATE_BIND                       = PASS / CLOSED
+  PUBLICATION_BIND                 = PASS / CLOSED
+  PUBLICATION_TRIGGER              = BOUND
+  PUBLICATION_NOTIFICATION_PRIM   =
+    emitWorkingContextStateChangeIfChanged
+      (mirrors recovery/execution; new additive
+       working-context-state-changed typed event)
+  PUBLICATION_ORDERING             =
+    prepareTurn completes
+      < W-publication listener
+      < model.stream
+      < run-finished
+  PUBLICATION_AUTHORITY            =
+    runtime.snapshot()
+      .currentWorkingContextEstimate
+    (single source of truth; NOT duplicated on
+     the event payload)
+  PUBLICATION_OBSERVATION_EVENT    =
+    working-context-state-changed joins the
+    isObservationEvent set; throws are
+    swallowed, listeners isolated
+  PUBLICATION_DEDUP                =
+    before === after (post-capture value
+    compared to pre-capture) → no emit
+  NO_RECOMPUTE                     = PASS
+  PRODUCTION_W_AUTHORITIES         = 1
+
+NEXT:
+  C2 header transport (VSCode projection to
+  TaskHeader). With PUBLICATION_BIND closed, the
+  TaskHeader phase-3 plumbing is mechanical: read
+  runtime.snapshot().currentWorkingContextEstimate
+  + subscribe to working-context-state-changed;
+  no host polling; no recompute. P3 phase begins
+  in a separate bounded commit, NOT this one.
+
+NEW_REVIEW_ROUND                = NO
+P0                             = NONE
+P1                             = RESOLVED this commit
+                                (fail-closed lifetime)
+C1                             = GO_PUBLICATION_BIND
+                                  (closed this commit)

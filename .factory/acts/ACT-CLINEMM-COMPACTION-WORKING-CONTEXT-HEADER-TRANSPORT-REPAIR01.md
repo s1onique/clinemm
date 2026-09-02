@@ -1435,3 +1435,232 @@ DEFAULT_SUITE_STATE      = GREEN
 NEW REVIEW ROUND         = NO
 C1                       = GO_STATE_BIND
                           + GO_PUBLICATION_BIND
+
+## Fifteenth-pass (2026-09-03) — PUBLICATION_BIND landed
+
+The factory causal reviewer issued
+`PASS_WITH_ONE_P1_FIX. C1: GO_PUBLICATION_BIND.`
+on `aec3ff0c6`. STATE_BIND is CLOSED. The
+reviewer's P1 (fail-closed lifetime) is fixed in
+this commit. PUBLICATION_BIND is CLOSED.
+
+### Disposition
+
+```text
+STATE_BIND                       = PASS / CLOSED
+PUBLICATION_BIND                 = PASS / CLOSED
+PUBLICATION_TRIGGER              = BOUND
+PUBLICATION_NOTIFICATION_PRIM   =
+  emitWorkingContextStateChangeIfChanged
+    (mirrors recovery/execution helpers;
+     new additive
+     working-context-state-changed typed event)
+PUBLICATION_ORDERING             =
+  prepareTurn completes
+    < W-publication listener
+    < model.stream
+    < run-finished
+PUBLICATION_AUTHORITY            =
+  runtime.snapshot()
+    .currentWorkingContextEstimate
+  (single source of truth; NOT duplicated on
+   the event payload)
+PUBLICATION_OBSERVATION_EVENT    =
+  working-context-state-changed joins the
+  isObservationEvent set; throws are
+  swallowed, listeners isolated
+PUBLICATION_DEDUP                =
+  before === after → no emit
+NO_RECOMPUTE                     = PASS
+PRODUCTION_W_AUTHORITIES         = 1
+P0                               = NONE
+P1                               = RESOLVED this commit
+                                  (fail-closed lifetime:
+                                   missing W → undefined)
+NEW_REVIEW_ROUND                 = NO
+C1                               = GO_PUBLICATION_BIND
+                                    (closed this commit)
+```
+
+### Inspector (mechanical) — the
+### reviewer's hierarchy evaluated
+### rigorously
+
+```text
+1. existing generic internal notification:
+   ABSENT.
+   Emit helpers present are domain-named
+   (emitRecoveryStateChangeIfChanged,
+    emitExecutionStateChangeIfChanged);
+   neither is generic over arbitrary state
+   fields. Reusing either would either widen
+   the domain or specialize the helper, both
+   of which contaminate one projection with
+   another's semantics.
+
+2. existing generic runtime-state-updated
+   event:
+   ABSENT.
+   The AgentRuntimeEvent union has only
+   domain-specific *-state-changed variants
+   (recovery, execution). There is no
+   `state-changed` / `runtime-state-updated`
+   variant to extend with a `workingContext`
+   payload.
+
+3. new typed AgentRuntimeEvent variant:
+   AUTHORIZED.
+   working-context-state-changed (additive)
+   is the smallest typed event that mirrors
+   the existing two precedents. It registers
+   as an observation event in emit() and
+   carries its `previousWorkingContextEstimate`
+   only for transition-rendering convenience
+   (mirroring C1.5/RSMT01 conventions).
+
+4. host-specific polling/recompute:
+   FORBIDDEN. Rejected.
+```
+
+### Production delta (this commit)
+
+```text
+sdk/packages/shared/src/agent.ts:
+  AgentRuntimeEvent gains
+    working-context-state-changed
+      { snapshot,
+        previousWorkingContextEstimate? }
+  Docstring pins:
+    - authority is on snapshot, not on payload
+    - observation-event semantics
+    - pre-model-stream ordering
+
+sdk/packages/agents/src/agent-runtime.ts:
+  emit()'s isObservationEvent set joins the
+    new variant (per-listener try/catch swallow).
+  Private helper
+    emitWorkingContextStateChangeIfChanged(
+      before: number | undefined)
+    mirrors
+    emitRecoveryStateChangeIfChanged
+    EXACTLY:
+      async; uses emit(); inner try/catch +
+      outer try/catch swallow; observation
+      does not become control; dedup on
+      before === after.
+  prepareTurnForModelRequest lifetime
+    changed to FAIL-CLOSED:
+      prepareTurn returns W       → state.W = W
+      prepareTurn returns no W    → state.W = undefined
+                                     (NOT stale-preserve)
+      new run()                  → undefined
+      restore()                  → undefined
+    Capture site calls
+    emitWorkingContextStateChangeIfChanged
+    synchronously awaited before the method
+    returns, which pins:
+      prepareTurn completes
+        < W-publication listener
+        < model.stream
+        < run-finished
+
+sdk/packages/core/src/runtime/orchestration/
+  runtime-event-adapter.ts:
+    Adds the new variant to the legacy
+    AgentEvent translation switch. Like the
+    other *-state-changed variants, it returns
+    []. Truth lives on the runtime snapshot
+    surface, not the legacy chat projection.
+```
+
+### Tests
+
+```text
+(1) state-bind test file:
+    +1 FAIL-CLOSED lifetime test (W1=100
+    then prepareTurn-without-W → undefined).
+    7/7 GREEN.
+
+(2) NEW publication test file:
+    3 tests:
+      1. ordering via model-stream barrier
+      2. dedup (one emit on undefined→W)
+      3. observation-event isolation
+         (throwing subscriber must not
+         unwind runtime)
+    3/3 GREEN.
+```
+
+### Verification
+
+```text
+bunx vitest run on sdk/packages/agents/:
+  Test Files 24 passed (24) [+1 file]
+  Tests      407 passed (407) [+3 tests]
+
+bunx vitest run on sdk/packages/core/
+  src/extensions/context/:
+  Test Files 5 passed | 1 skipped (6)
+  Tests      116 passed | 1 skipped (117)
+
+bun tsc -p tsconfig.dev.json --noEmit:
+  sdk/packages/shared  : 0 errors
+  sdk/packages/agents  : 0 errors
+  sdk/packages/core    : 23 errors
+                          (== baseline)
+
+git diff --check: clean
+```
+
+### Why no host-specific polling
+
+The architecture is event-oriented
+(`AgentRuntimeEvent` is the public
+real-time stream; `runtime.snapshot()` is the
+read surface). Introducing a host-side
+poll/recompute loop would:
+  - duplicate `currentWorkingContextEstimate`
+    authority in two places
+  - cost an extra `setInterval`/rAF per host
+  - violate the existing observation-event
+    architecture that already services
+    recovery and execution in the same way
+
+The reviewer explicitly forbids it.
+
+### Next (separate bounded commit)
+
+VSCode projection to TaskHeader. With
+PUBLICATION_BIND closed, the P3 phase is
+mechanical: subscribe to
+`working-context-state-changed` and read
+`snapshot.currentWorkingContextEstimate`.
+NOT in this commit.
+
+### Commit lineage
+
+```text
+commit 1:    RED              (6bffd75c0)
+...
+commit 6.5:  BOUNDARY_CALIBRATION
+              + PUB_PROBE      (2b15ee89f)
+                                └─ C1: GO_C2_CARRIER_BIND
+commit 7:    STATE_BIND       (aec3ff0c6)
+                                └─ C1: GO_STATE_BIND (closed)
+                                   + GO_PUBLICATION_BIND (open)
+commit 8:    PUBLICATION_BIND (this commit)
+              + LIFETIME_FAIL_CLOSED
+                                └─ C1: GO_PUBLICATION_BIND
+                                   (closed)
+```
+
+PRODUCTION_RUNTIME_DELTA = additive optional
+                            SDK field +
+                            fail-closed lifetime
+                            + new typed event +
+                            internal emitter +
+                            legacy-adapter exhaust
+TYPECHECK_DELTA          = ZERO
+DEFAULT_SUITE_STATE      = GREEN
+NEW_REVIEW_ROUND         = NO
+C1                       = GO_PUBLICATION_BIND (closed)

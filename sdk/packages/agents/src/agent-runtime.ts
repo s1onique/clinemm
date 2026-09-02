@@ -1249,6 +1249,61 @@ export class AgentRuntime {
 		});
 	}
 
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (fifteenth-pass): PUBLICATION_BIND sole owner of
+	 * `working-context-state-changed` emission.
+	 *
+	 * Mirrors `emitRecoveryStateChangeIfChanged` /
+	 * `emitExecutionStateChangeIfChanged` exactly. Sole
+	 * authority on whether the externally-observable
+	 * working-context changed; dedup via direct equality
+	 * on `currentWorkingContextEstimate`.
+	 *
+	 * Ordering contract (pinned by
+	 * `agent-runtime.working-context-publication.test.ts`):
+	 *   - Call AFTER the authoritative capture into
+	 *     `state.currentWorkingContextEstimate`.
+	 *   - Emit a `working-context-state-changed` event
+	 *     carrying the new snapshot BEFORE the caller
+	 *     resumes (i.e. before the model stream begins).
+	 *
+	 * @param before the prior captured W, read from the
+	 *   same `state.currentWorkingContextEstimate` field
+	 *   before the capture mutation. Convenience only;
+	 *   authority is on the embedded `snapshot`.
+	 */
+	private async emitWorkingContextStateChangeIfChanged(
+		before: number | undefined,
+	): Promise<void> {
+		const after = this.state.currentWorkingContextEstimate;
+		if (before === after) {
+			return;
+		}
+		try {
+			await this.emit({
+				type: "working-context-state-changed",
+				snapshot: this.snapshot(),
+				previousWorkingContextEstimate: before,
+			});
+		} catch {
+			// RSMT01 OBSERVATION MUST NOT BECOME CONTROL.
+			//
+			// Mirrors the same swallow used by
+			// `emitRecoveryStateChangeIfChanged` and
+			// `emitExecutionStateChangeIfChanged`. A throwing
+			// subscriber must not become authority over the
+			// preparation result, and must not silence other
+			// listeners. The per-listener isolation is also
+			// applied inside `emit()` itself (since
+			// `working-context-state-changed` is registered
+			// as an observation event there); this outer
+			// try/catch preserves the helper-internal
+			// contract independent of `emit()`'s recognition
+			// set.
+		}
+	}
+
 	private async ensureInitialized(): Promise<void> {
 		this.initialization ??= this.initialize();
 		await this.initialization;
@@ -2344,23 +2399,68 @@ export class AgentRuntime {
 			}
 		}
 		if (!result) {
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+			// TRANSPORT-REPAIR01 (fifteenth-pass): prepareTurn
+			// returned no result at all. Fail closed: W =
+			// undefined for this turn. See the comment below
+			// for the contract.
+			const wBefore = this.state.currentWorkingContextEstimate;
+			this.state.currentWorkingContextEstimate = undefined;
+			// Emit if and only if the no-result case
+			// changed the field. The helper dedups
+			// internally.
+			await this.emitWorkingContextStateChangeIfChanged(wBefore);
 			return request;
 		}
 
 		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
-		// TRANSPORT-REPAIR01 (fourteenth-pass): STATE_BIND.
-		// Capture the exact result-local W from the producer-side
-		// metadata-only helper into runtime state. NO RECOMPUTE.
-		// Per the frozen contract: the agent runtime does NOT
-		// independently re-estimate W. If `result` carries no W
-		// field (legacy / non-publisher prepareTurn), the field
-		// remains at its previous value (the last captured W)
-		// unless reset by a lifecycle transition. This preserves
-		// PRODUCTION_W_AUTHORITIES = 1.
-		if (result.currentWorkingContextEstimate !== undefined) {
-			this.state.currentWorkingContextEstimate =
-				result.currentWorkingContextEstimate;
-		}
+		// TRANSPORT-REPAIR01 (fifteenth-pass): STATE_BIND
+		// LIFETIME FAIL-CLOSED.
+		//
+		// Frozen contract:
+		//   prepareTurn returns W:
+		//     state.W = W
+		//   prepareTurn returns no W:
+		//     state.W = undefined
+		//   prepareTurn returns undefined result:
+		//     state.W = undefined
+		//
+		// This is the "current W" semantics: W_n is the
+		// value returned by the **most recent** prepareTurn
+		// that ran on this runtime. If the producer
+		// unexpectedly stops publishing W on a later
+		// prepareTurn, the field fails CLOSED to
+		// `undefined` rather than preserving a stale
+		// plausible-looking value.
+		//
+		// Why this and not "last-known-W":
+		//   The producer contract requires every prepareTurn
+		//   to publish W. Preserving the prior W when a
+		//   later prepareTurn omits it silently converts a
+		//   missing-authority defect (publisher stopped
+		//   emitting) into a stale-but-plausible UI value.
+		//   That is exactly the failure class C2 (current
+		//   working context) is designed to eliminate. If
+		//   a producer begins to emit no-W regularly, the
+		//   correct consumer behavior is "no current W"
+		//   (= undefined), not "carry the old one forward".
+		//
+		// NO RECOMPUTE on the agent-runtime side:
+		// the runtime captures verbatim; if the producer
+		// published no W this turn, the runtime does not
+		// fabricate one. PRODUCTION_W_AUTHORITIES = 1.
+		const wBefore = this.state.currentWorkingContextEstimate;
+		this.state.currentWorkingContextEstimate =
+			result.currentWorkingContextEstimate;
+		// PUBLICATION_BIND: emit iff the field actually
+		// changed (helper dedups). The await is awaited
+		// before the caller resumes; this guarantees that
+		// when `await prepareTurnForModelRequest(...)`
+		// returns in `generateAssistantMessage`, the
+		// listener has ALREADY received the
+		// `working-context-state-changed` event (or the
+		// helper observed no change and emitted nothing).
+		await this.emitWorkingContextStateChangeIfChanged(wBefore);
 
 		let next = request;
 		if (result.messages) {
@@ -3832,7 +3932,8 @@ export class AgentRuntime {
 		// per-emit try/catch.
 		const isObservationEvent =
 			event.type === "recovery-state-changed" ||
-			event.type === "execution-state-changed";
+			event.type === "execution-state-changed" ||
+			event.type === "working-context-state-changed";
 		for (const listener of this.listeners) {
 			// C1.5 P1: `AgentEventListener` is typed as
 			// `(event: LiveAgentRuntimeEvent) => void`, which is a

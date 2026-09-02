@@ -323,7 +323,8 @@ export interface AgentRuntimeStateSnapshot {
 	execution?: AgentRuntimeExecutionState;
 	/**
 	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-	 * (fourteenth-pass): STATE_BIND.
+	 * (fourteenth/fifteenth-pass): STATE_BIND + LIFETIME
+	 * FAIL-CLOSED.
 	 *
 	 * The exact working-context estimate the agent runtime
 	 * captured from the most recent `prepareTurnForModelRequest`
@@ -336,15 +337,24 @@ export interface AgentRuntimeStateSnapshot {
 	 * host/projection layer can drive the TaskHeader's
 	 * compaction working-context bar.
 	 *
-	 * Lifecycle (pinned by
+	 * Lifetime: FAIL-CLOSED "current W" semantics
+	 * (pinned by
 	 * `agent-runtime.current-working-context-state-bind.test.ts`):
-	 *   - `undefined` initially (no prepareTurn yet)
-	 *   - replaced on every `prepareTurnForModelRequest` return
-	 *     that carries `currentWorkingContextEstimate` in its
-	 *     result
+	 *   - prepareTurn returns W
+	 *         → snapshot.W = W
+	 *   - prepareTurn returns no W (undefined result OR result
+	 *     without `currentWorkingContextEstimate` field)
+	 *         → snapshot.W = undefined
 	 *   - reset to `undefined` on new `run()`, on `restore()`,
-	 *     and on a constructor that has not yet produced a
-	 *     prepareTurn
+	 *     and before any prepareTurn has fired
+	 *
+	 * Why fail-closed (not last-known-W): a producer that
+	 * unexpectedly stops publishing W on a later prepareTurn
+	 * would otherwise leave a stale plausible-looking UI value.
+	 * That is exactly the missing-authority failure class
+	 * this field is designed to surface. The current
+	 * authoritative value is `undefined` until the next
+	 * prepareTurn publishes a fresh W.
 	 *
 	 * ADDITIVE-OPTIONAL API delta on a documented SDK type
 	 * (`agent.snapshot()`). Source-compatible.
@@ -1084,6 +1094,45 @@ export type AgentRuntimeEvent =
 			snapshot: AgentRuntimeStateSnapshot;
 			/** Projection immediately before the authoritative mutation. */
 			previousRecovery: AgentRuntimeRecoverySnapshot;
+	  }
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (fifteenth-pass): PUBLICATION_BIND.
+	 *
+	 * Emitted when the externally-observable working-context
+	 * (`snapshot.currentWorkingContextEstimate`) changes.
+	 * The authoritative payload is the SAME snapshot
+	 * pulled by every other `*-state-changed` family, so
+	 * `runtime.snapshot().currentWorkingContextEstimate`
+	 * remains the single source of truth.
+	 *
+	 * `previousWorkingContextEstimate` is a convenience
+	 * for transition rendering; it is NEVER the source of
+	 * truth (mirrors the C1.5 `previousRecovery` /
+	 * RSMT01 `previousExecution` convention).
+	 *
+	 * Observation event: must NOT throw if a listener
+	 * throws; must NOT block later subscribers. The event
+	 * is registered in `emit()`'s `isObservationEvent`
+	 * set so the same per-listener try/catch swallow
+	 * applies (mirrors `recovery-state-changed` /
+	 * `execution-state-changed`).
+	 *
+	 * Ordering guarantees:
+	 *   - Emitted AFTER the authoritative capture (the
+	 *     snapshot at emission carries the same W the
+	 *     capture stored in `state`).
+	 *   - Emitted BEFORE the corresponding
+	 *     `model.stream()` invocation resumes, so a
+	 *     host/projection consumer observes the new W
+	 *     before any provider-derived event can land
+	 *     (pinned by
+	 *     `agent-runtime.working-context-publication.test.ts`).
+	 */
+	| {
+			type: "working-context-state-changed";
+			snapshot: AgentRuntimeStateSnapshot;
+			previousWorkingContextEstimate?: number;
 	  };
 
 // =============================================================================

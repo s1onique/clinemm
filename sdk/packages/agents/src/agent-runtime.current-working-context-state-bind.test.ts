@@ -117,6 +117,50 @@ describe("AgentRuntime STATE_BIND — currentWorkingContextEstimate", () => {
 		expect(prepareTurn).toHaveBeenCalledTimes(1);
 		expect(snapshot.currentWorkingContextEstimate).toBeUndefined();
 	});
+
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (fifteenth-pass): P1 FIX. The reviewer requested exactly
+	// this test. With fail-closed semantics, a later
+	// prepareTurn that omits W must reset state.W to
+	// `undefined`, not preserve the prior W.
+	it("FAIL-CLOSED: W1=100 then prepareTurn-without-W resets snapshot.W to undefined", async () => {
+		const WByCall: Array<AgentRuntimePrepareTurnResult | undefined> = [
+			{ currentWorkingContextEstimate: 100 },
+			// Second prepareTurn returns no W at all.
+			{ messages: [] },
+		];
+		const prepareTurn = vi.fn(
+			async (): Promise<AgentRuntimePrepareTurnResult | undefined> =>
+				WByCall.shift(),
+		);
+		const model = new FinishingOnlyModel();
+		const runtime = new AgentRuntime({
+			model,
+			prepareTurn: prepareTurn as Parameters<
+				typeof AgentRuntime
+			>[0]["prepareTurn"],
+		});
+
+		// Single run, two prepareTurns (model yields finish:stop,
+		// causing the run loop to terminate; the two prepareTurns
+		// are produced against an execute() lifecycle by running
+		// two consecutive run() invocations).
+		await runtime.run("first");
+		// After the first run, snapshot.W === 100.
+		expect(
+			runtime.snapshot().currentWorkingContextEstimate,
+		).toBe(100);
+
+		// Second run: execute() resets lifecycle state, then
+		// prepareTurn #2 returns `{ messages: [] }` with no
+		// currentWorkingContextEstimate. With fail-closed
+		// semantics, snapshot.W MUST be undefined (NOT 100).
+		await runtime.run("second");
+		const snapshot: AgentRuntimeStateSnapshot = runtime.snapshot();
+		expect(snapshot.currentWorkingContextEstimate).toBeUndefined();
+		// The negative assertion: NOT preserved as 100.
+		expect(snapshot.currentWorkingContextEstimate).not.toBe(100);
+	});
 });
 
 describe("AgentRuntime STATE_BIND — lifetime semantics", () => {
