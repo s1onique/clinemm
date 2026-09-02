@@ -834,3 +834,293 @@ DEFAULT_SUITE_STATE  = GREEN
 NEW_REVIEW_ROUND     = NO
 C1                   = GO_C2_CARRIER_BIND
 ```
+
+## Thirteenth-pass (2026-09-03) — boundary calibration + publication-cadence probe
+
+The factory causal reviewer + SDK runtime/state
+engineer issued **`PASS_WITH_ONE_P1_FIX. C1:
+GO_C2_CARRIER_BIND`** on `77b3e2467`. The reviewer
+accepts the carrier inspection + RED but corrects one
+overclaim and surfaces one load-bearing concern
+discovered through topology inspection.
+
+### P1_1 — boundary calibration
+
+The twelfth-pass RED claim "RED ends at the existing
+host-facing boundary (`runtime.snapshot()`)" is
+calibrated: `runtime.snapshot()` is INSIDE the agent
+runtime. The agent-runtime-state boundary it probes is
+one hop **upstream** of the actual host-facing seam:
+
+```text
+AGENT_RUNTIME_STATE_BOUNDARY = runtime.snapshot()
+                              (in @cline/agents)
+
+W_AT_AGENT_RUNTIME_STATE_BOUNDARY
+  = ABSENT / RED PROVEN (77b3e2467)
+
+HOST_VISIBLE_W               = NOT YET TESTED
+                              (the gap that remains)
+```
+
+The actual host-facing boundary is the LocalRuntimeHost
+projection in `@cline/core`, downstream of both
+`runtime.snapshot()` (pull) and
+`AgentRuntimeEvent` subscriptions (push). A snapshot
+field alone solves state retention but not
+publication.
+
+### P1_2 — publication cadence is load-bearing (not optional)
+
+The twelfth-pass ACT body proposed "(c) optionally
+emit a per-turn event that crosses the agents->core
+seam." This optionality is rejected. Direct probe of
+the LocalRuntimeHost publication mechanics:
+
+  - `LocalRuntimeHost.subscribeRuntimeEvents` (local-
+    runtime-host.ts:1659) fans out `AgentRuntimeEvent`
+    to listeners; the canonical arbiter mapper
+    (`task-state-shadow-host-wiring.ts:755` plus the
+    controller's `getArbiterSnapshot` closure at
+    `SdkController.ts:1104`) reads the live
+    `runtime.snapshot()` SYNCHRONOUSLY when an event
+    fires.
+  - Between `prepareTurnForModelRequest` (agent-
+    runtime.ts:1738) and the model stream, the only
+    signal that fires is `TASK_PROVIDER_REQUEST_STARTED_
+    EVENT` (agent-runtime.ts:1773), which is a
+    `captureTaskLifecycle` TELEMETRY signal — NOT an
+    `AgentRuntimeEvent`. The next `AgentRuntimeEvent`
+    after prepareTurn is `run-finished` (line 1447),
+    which fires ONLY AFTER the model stream completes.
+  - Therefore, mutating `this.state` between
+    `prepareTurnForModelRequest` and `model.stream(...)`
+    propagates the W into the snapshot, but no
+    listener re-reads the snapshot until
+    `run-finished` fires (or a later event).
+
+**Implication:** the host does not see W between
+prepareTurn and provider response. The frozen
+contract:
+
+```text
+for each prepareTurn yielding W_n:
+  downstream host eventually observes W_n
+without requiring:
+  compaction
+  provider response
+  api_req_started
+```
+
+is not satisfied by `snapshot()` field alone.
+
+### P1_3 — API surface classification
+
+`AgentRuntimeStateSnapshot` is exposed via the
+documented `agent.snapshot()` SDK method on the
+`Agent` interface (sdk/clinecore.mdx; agent.mdx). It
+is therefore a genuine public contract — NOT
+internal-only. The proposed field:
+
+```text
+field:
+  currentWorkingContextEstimate?: number
+```
+
+is **additive-optional** (a new field on an existing
+interface, defaulting to `undefined`). This is
+source-compatible and classifies as:
+
+```text
+AGENT_RUNTIME_SNAPSHOT_API_DELTA = ADDITIVE
+```
+
+(it is not `INTERNAL_ONLY`; the existing eleventh-
+pass INTERNAL_ONLY classification applied to
+`ContextPipelinePrepareTurnResult`, which was NOT
+re-exported from `@cline/core`.)
+
+### P2 — RED witness description (cosmetic)
+
+The RED file's header description says "no provider
+response / api_req_started follows." Strictly, the
+scripted model emits `finish: stop`, which is a
+model-stream event (not a provider usage event and
+not an `AgentRuntimeEvent`). The stronger condition
+the fixture actually satisfies is:
+
+```text
+no provider usage / accounting event
+no api_req_started-style AgentRuntimeEvent
+no AgentRuntimeEvent at all until run-finished
+```
+
+The fixture satisfies the spirit of "no post-prepare
+notification triggers"; `prepareTurnCalls: 1` plus
+missing snapshot W is a valid discriminator. P2 only.
+No RED file rewrite required; doc note in
+entry-freeze.txt.
+
+### Split the next repair into two contracts
+
+The reviewer is correct that "snapshot field +
+optionally emit an event" is too weak. The next
+bounded cycle must close TWO contracts:
+
+  STATE_BIND:
+    after prepareTurn returns W_n,
+    AgentRuntimeStateSnapshot
+      .currentWorkingContextEstimate
+      === W_n
+
+  PUBLICATION_BIND:
+    the core/host layer receives a state/event update
+    carrying W_n
+      after that prepareTurn
+      and before provider-response-derived events
+
+The twelfth-pass RED is the GREEN target for
+`STATE_BIND`. `PUBLICATION_BIND` requires either:
+
+  (a) a new typed AgentRuntimeEvent emitted at
+      prepareTurnForModelRequest return (post-prepare
+      notification), OR
+  (b) a change to LocalRuntimeHost publication
+      mechanics to push a `state-changed` snapshot
+      whenever this.state mutates.
+
+The reviewer's preferred shape is the smallest typed
+post-prepare notification (option a):
+
+```text
+prepareTurn
+  → this.state.currentWorkingContextEstimate = W_n
+  → emit one typed current-state/runtime update
+    carrying the same stored W (no recompute)
+  → core LocalRuntimeHost
+  → host/session projection
+```
+
+This preserves `PRODUCTION_W_AUTHORITIES = 1`.
+
+### Next bounded cycle (Phase 2 — separate commit(s))
+
+Per the reviewer's directive:
+
+  1. Add/RED-pin
+     `AgentRuntimeStateSnapshot
+       .currentWorkingContextEstimate` (additive
+     optional field).
+  2. At `prepareTurnForModelRequest`, assign the
+     exact returned W into runtime state.
+  3. Probe `LocalRuntimeHost` publication mechanics
+     and pick option (a) or (b) for PUBLICATION_BIND.
+  4. GREEN the current RED (state bind).
+  5. Add one downstream assertion that core/host sees
+     W BEFORE provider usage arrives
+     (publication bind).
+  6. ONLY then wire VS Code state -> TaskHeader.
+  7. Do NOT switch the header in this same commit.
+
+### Disposition (thirteenth-pass)
+
+```text
+ACT                          =
+  ACT-CLINEMM-COMPACTION-
+  WORKING-CONTEXT-HEADER-
+  TRANSPORT-REPAIR01
+
+77b3e2467                    =
+  PASS_WITH_ONE_P1_FIX
+
+CARRIER_INSPECTION           =
+  PASS
+
+EXISTING_CADENCE_CORRECT_CARRIER =
+  ABSENT / PROVEN
+
+PER_TURN_W_RED               =
+  REPRODUCED at AGENT-RUNTIME
+  STATE BOUNDARY (runtime.
+  snapshot())
+
+P0                           =
+  NONE
+
+P1_1                         =
+  runtime.snapshot() was
+  called "host-facing"; evidence
+  only proves agent-runtime
+  state boundary (one upstream
+  hop from LocalRuntimeHost)
+
+P1_2                         =
+  snapshot field stores W but
+  does NOT notify LocalRuntime
+  Host; notification cadence
+  must be bound, not treated
+  as optional
+
+P1_3                         =
+  AgentRuntimeStateSnapshot is
+  SDK-visible (agent.snapshot
+  () SDK method); field is
+  ADDITIVE not INTERNAL_ONLY
+
+P2                           =
+  RED witness description is
+  loose on "no provider
+  response"; fixture is sound,
+  no rewrite
+
+AUTHORIZED                   =
+  exact-W AgentRuntime state
+  /snapshot field
+  (currentWorkingContext
+  Estimate?: number,
+  ADDITIVE)
+
+CONDITIONAL                  =
+  new typed event / publication
+  trigger depending on
+  LocalRuntimeHost mechanics
+
+HEADER_CHANGE                =
+  NOT YET
+
+NEXT                         =
+  state-field RED->GREEN
+  -> inspect host publication
+     trigger
+  -> prove host sees W pre-
+     provider-response
+  -> then VSCode/header
+     projection
+
+NEW_REVIEW_ROUND             =
+  NO
+
+C1                           =
+  GO_C2_CARRIER_BIND
+```
+
+### Why the factory stops here (not earlier)
+
+The thirteenth-pass commit is INTENTIONALLY
+bounded. It corrects the boundary overclaim + adds
+the publication-cadence probe + splits the next
+repair into STATE_BIND / PUBLICATION_BIND. It does
+NOT make any production code change yet — that is
+the next bounded cycle (Phase 2), as the reviewer
+specified. Adding the snapshot field in this commit
+would force an unwarranted "INTERNAL_ONLY"
+classification (P1_3) AND would not close
+PUBLICATION_BIND (P1_2). Both fixes belong in
+separate, RED-pinned commits.
+
+PRODUCTION_RUNTIME_DELTA = ZERO this commit
+TYPECHECK_DELTA          = ZERO (verified; agents=0,
+                              core=23=baseline)
+DEFAULT_SUITE_STATE      = GREEN
+NEW REVIEW ROUND         = NO
+C1                       = GO_C2_CARRIER_BIND

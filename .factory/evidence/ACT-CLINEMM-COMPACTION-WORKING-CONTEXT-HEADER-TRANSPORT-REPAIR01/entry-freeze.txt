@@ -601,3 +601,107 @@ NEXT_QUESTION = C2 carrier bind
         crosses the agents->core seam
 
 NEW_REVIEW_ROUND = NO.
+
+CARRIER_INSPECTION_BOUNDARY_CALIBRATION (thirteenth-pass 2026-09-03):
+  twelfth-pass claim "RED ends at the existing host-
+    facing boundary (runtime.snapshot())" is
+    CALIBRATED:
+      runtime.snapshot() is INSIDE @cline/agents; it
+      is the AGENT-RUNTIME-STATE boundary, ONE HOP
+      UPSTREAM of the LocalRuntimeHost projection.
+  actual host-facing boundary = LocalRuntimeHost
+    session/runtime projection in @cline/core.
+
+W_AT_AGENT_RUNTIME_STATE_BOUNDARY = ABSENT / RED PROVEN
+HOST_VISIBLE_W                    = NOT YET TESTED
+                                     (next cycle)
+
+PUBLICATION_CADENCE_PROBE (thirteenth-pass):
+  - LocalRuntimeHost.subscribeRuntimeEvents
+    (local-runtime-host.ts:1659) fans out
+    AgentRuntimeEvent; the canonical arbiter mapper
+    (task-state-shadow-host-wiring.ts:755 +
+    SdkController.ts:1104 getArbiterSnapshot
+    closure) reads runtime.snapshot() SYNCHRONOUSLY
+    when an event fires.
+  - Between prepareTurnForModelRequest (line 1738)
+    and model.stream(...), the only signal that fires
+    is TASK_PROVIDER_REQUEST_STARTED_EVENT (line
+    1773) which is a captureTaskLifecycle TELEMETRY
+    signal — NOT an AgentRuntimeEvent.
+  - Next AgentRuntimeEvent after prepareTurn is
+    run-finished (line 1447), which fires only after
+    the model stream completes.
+  - Therefore a snapshot() field alone does NOT
+    notify the host until provider response or later.
+
+FROZEN_CONTRACT (reviewer):
+  for each prepareTurn yielding W_n:
+    downstream host eventually observes W_n
+  without requiring:
+    compaction
+    provider response
+    api_req_started
+
+Implication: STATE_BIND alone is INSUFFICIENT;
+PUBLICATION_BIND is required.
+
+API_SURFACE_CLASSIFICATION (thirteenth-pass):
+  AgentRuntimeStateSnapshot is exposed via the
+  documented agent.snapshot() SDK method
+  (sdk/clinecore.mdx; agent.mdx) on the Agent
+  interface. It is therefore a genuine PUBLIC
+  contract (NOT internal-only).
+  Proposed field currentWorkingContextEstimate?:
+    number is ADDITIVE-OPTIONAL → API_DELTA =
+    ADDITIVE (source-compatible).
+  Eleventh-pass INTERNAL_ONLY classification
+  applied to ContextPipelinePrepareTurnResult
+  (which was NOT re-exported from @cline/core),
+  NOT to AgentRuntimeStateSnapshot. Distinct.
+
+RED_WITNESS_P2_NOTE:
+  Header description "no provider response /
+    api_req_started follows" is loose; the scripted
+    model emits finish: stop (a model-stream event,
+    not a provider usage event, not an AgentRuntime
+    Event). Stronger accurate condition:
+    "no provider usage / accounting event + no
+    AgentRuntimeEvent until run-finished".
+  Fixture satisfies the spirit; prepareTurnCalls: 1
+  + missing snapshot W remains a valid
+  discriminator. No RED file rewrite required.
+
+TWO_CONTRACT_NEXT_BOUNDED_CYCLE:
+  STATE_BIND:
+    after prepareTurn returns W_n,
+    AgentRuntimeStateSnapshot
+      .currentWorkingContextEstimate === W_n
+    (twelfth-pass RED is the GREEN target.)
+
+  PUBLICATION_BIND:
+    the core/host layer receives a state/event
+    update carrying W_n
+      after that prepareTurn
+      and before provider-response-derived events
+
+  PUBLICATION_BIND has two candidate implementations:
+    (a) new typed AgentRuntimeEvent at
+        prepareTurnForModelRequest return
+        (post-prepare notification)
+    (b) change LocalRuntimeHost publication
+        mechanics to push a state-changed snapshot
+        when this.state mutates
+
+  Reviewer-preferred shape: option (a), smallest
+  typed post-prepare notification. Preserves
+  PRODUCTION_W_AUTHORITIES = 1.
+
+C1                        = GO_C2_CARRIER_BIND
+  thirteenth-pass boundary calibration + publication
+  probe COMPLETED; no production code change yet.
+  Next cycle: state-field RED->GREEN, then
+  publication-bind, then host-pre-provider-response
+  witness, then TaskHeader.
+
+NEW_REVIEW_ROUND          = NO.
