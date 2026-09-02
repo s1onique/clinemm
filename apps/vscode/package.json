@@ -1,5 +1,5 @@
 {
-"name": "clinemm",
+	"name": "clinemm",
 	"displayName": "ClineMM",
 	"description": "ClineMM \u2014 a Cline fork for daily local dogfood (MiniMax M3 by default). Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
 	"version": "4.1.16",
@@ -224,6 +224,16 @@
 			{
 				"command": "cline.debug.dumpHostOwnershipDiagnostic",
 				"title": "Cline: Dump Host Ownership Diagnostic",
+				"category": "Cline"
+			},
+			{
+				"command": "cline.debug.dumpTaskHeaderSelectorInputDiagnostic",
+				"title": "Cline Debug: Dump TaskHeader Selector Input Diagnostic",
+				"category": "Cline"
+			},
+			{
+				"command": "cline.debug.clearTaskHeaderSelectorInputDiagnostic",
+				"title": "Cline Debug: Clear TaskHeader Selector Input Diagnostic",
 				"category": "Cline"
 			},
 			{

@@ -4,10 +4,8 @@
 import assert from "node:assert"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
+import { applyTurnStateWriterProvenanceDiagnosticProfile } from "@/sdk/dogfood-diagnostic-profile"
 import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
-import {
-	applyTurnStateWriterProvenanceDiagnosticProfile,
-} from "@/sdk/dogfood-diagnostic-profile"
 import { isDogfoodRuntime } from "@/sdk/dogfood-runtime-profile"
 import {
 	dumpExtensionSideHostOwnershipDiagnostic,
@@ -17,6 +15,10 @@ import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
 } from "@/sdk/post-terminal-authority-diagnostic-runtime"
+import {
+	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
+	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
+} from "@/sdk/task-header-selector-input-capture-runtime"
 import {
 	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
 	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
@@ -109,11 +111,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// the bounded buffer captures the writer identity from the
 	// first observation. Verified by
 	// `order_diagnostic_armed_before_first_writer.test.ts`.
-	applyTurnStateWriterProvenanceDiagnosticProfile(
-		process.env,
-		isDogfoodRuntime(process.env),
-		context,
-	)
+	applyTurnStateWriterProvenanceDiagnosticProfile(process.env, isDogfoodRuntime(process.env), context)
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool
@@ -636,6 +634,40 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[HOHOD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Host-ownership dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01:
+		// Debug commands for the bounded TaskHeader selector-input
+		// diagnostic. Env-var gated (CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1
+		// = <truthy>); the dump command is ALWAYS reachable regardless
+		// of the gate so an operator can inspect an existing ring even
+		// after the diagnostic is disabled.
+		//
+		// REMOVAL_TRIGGER: first successful LIVE binding of
+		// PUBLICATION_SHADOW_BINDING + LOCAL_SHADOW_TURNSEQ for a
+		// recurrence, OR CAPTURE_INSUFFICIENT.
+		vscode.commands.registerCommand(commands.DumpTaskHeaderSelectorInputDiagnostic, async () => {
+			try {
+				const { file, recordCount } = await dumpExtensionSideTaskHeaderSelectorInputDiagnostic(context)
+				void vscode.window.showInformationMessage(
+					`TaskHeader selector-input diagnostic: ${recordCount} record${recordCount === 1 ? "" : "s"} → ${file}.`,
+				)
+			} catch (err) {
+				Logger.error("[THSICAP] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`TaskHeader selector-input dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		vscode.commands.registerCommand(commands.ClearTaskHeaderSelectorInputDiagnostic, async () => {
+			try {
+				const file = await clearExtensionSideTaskHeaderSelectorInputDiagnostic(context)
+				void vscode.window.showInformationMessage(`TaskHeader selector-input diagnostic: cleared → ${file}.`)
+			} catch (err) {
+				Logger.error("[THSICAP] clear failed", err)
+				void vscode.window.showErrorMessage(
+					`TaskHeader selector-input clear failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

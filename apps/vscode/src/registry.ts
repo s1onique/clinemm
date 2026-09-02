@@ -52,6 +52,15 @@ const ClineCommands = {
 	// the bounded ring to <globalStorageUri>/host-ownership-diagnostic.jsonl.
 	ToggleHostOwnershipDiagnostic: prefix + ".debug.toggleHostOwnershipDiagnostic",
 	DumpHostOwnershipDiagnostic: prefix + ".debug.dumpHostOwnershipDiagnostic",
+	// ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01-FIX01:
+	// Debug commands for the bounded TaskHeader selector-input diagnostic.
+	// Default off (env var gate). The dump serializes the bounded ring
+	// to <globalStorageUri>/task-header-selector-input-capture.jsonl.
+	// REMOVAL_TRIGGER: first successful LIVE binding of
+	// PUBLICATION_SHADOW_BINDING + LOCAL_SHADOW_TURNSEQ for a
+	// recurrence, OR CAPTURE_INSUFFICIENT.
+	DumpTaskHeaderSelectorInputDiagnostic: prefix + ".debug.dumpTaskHeaderSelectorInputDiagnostic",
+	ClearTaskHeaderSelectorInputDiagnostic: prefix + ".debug.clearTaskHeaderSelectorInputDiagnostic",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",
