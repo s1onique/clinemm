@@ -300,9 +300,9 @@ async function runOversizedToolResultCompaction(
 		},
 	});
 
-	expect(result?.messages.length).toBeGreaterThan(0);
+	expect(result?.messages?.length).toBeGreaterThan(0);
 	expect(JSON.stringify(result?.messages)).not.toContain(omittedTail);
-	expect(result?.messages[0]).toMatchObject({
+	expect(result?.messages?.[0]).toMatchObject({
 		role: "user",
 		metadata: expect.objectContaining({ kind: "compaction_summary" }),
 	});

@@ -58,7 +58,42 @@ export interface ContextPipelinePrepareTurnInput {
 }
 
 export interface ContextPipelinePrepareTurnResult {
-	messages: CoreCompactionContext["messages"];
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (tenth-pass): `messages` is INTENTIONALLY OPTIONAL at the
+	 * type level. The post-fix runtime contract has three
+	 * return shapes from `prepareTurn`:
+	 *
+	 *   1. `undefined`  — no return at all (no producer-side
+	 *                     W publication possible, used in the
+	 *                     pre-fix compact path before the
+	 *                     producer-cadence GREEN).
+	 *   2. `{ messages, systemPrompt?, currentWorkingContext-
+	 *        Estimate? }` — projection in progress; downstream
+	 *        at agent-runtime.ts:2319-2324 replaces the
+	 *        upstream `request` with the projected shape.
+	 *   3. `{ currentWorkingContextEstimate }` — metadata-
+	 *        only return; `messages` and `systemPrompt` are
+	 *        intentionally NOT set. Downstream falls through
+	 *        the projection branches (`next === request`,
+	 *        semantic conservation) but reads W from the
+	 *        result.
+	 *
+	 * The optionality reflects the actual contract; making
+	 * it required (as it was pre-tenth-pass) forces a type
+	 * lie on the metadata-only return and would require
+	 * either a runtime cast or a structural-subtype
+	 * helper. Type-level optionality is the cleanest
+	 * expression of the contract.
+	 */
+	messages?: CoreCompactionContext["messages"];
+	/**
+	 * Same: optional for the metadata-only return path.
+	 * Downstream at agent-runtime.ts:2323 only replaces the
+	 * upstream `request.systemPrompt` when
+	 * `result.systemPrompt !== undefined`, so a metadata-only
+	 * return preserves the upstream systemPrompt by construction.
+	 */
 	systemPrompt?: string;
 	/**
 	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-AUTHORITY-PUBLISH01:
@@ -725,7 +760,46 @@ export function createCompactionStateAwarePrepareTurn(input: {
 			await input.saveState?.(nextState, context.messages);
 			return publishWorkingContextEstimate(result.messages, result.systemPrompt ?? context.systemPrompt, context.tools);
 		}
-		return result;
+		// No-compaction branch (producer-cadence GREEN;
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+		// TRANSPORT-REPAIR01 tenth-pass). The upstream
+		// `compact` returned either `undefined` (no
+		// compaction needed) or a result without
+		// `messages` (compactor decided not to rewrite).
+		// In both cases there is no projection to transport,
+		// but the prepare-turn result MUST still carry the
+		// authoritative `currentWorkingContextEstimate` so
+		// the producer publishes W on every successful
+		// prepare-turn, regardless of whether compaction
+		// rewrote messages.
+		//
+		// The return uses a metadata-only helper to avoid
+		// two downstream projection branches at agent-
+		// runtime.ts:2319-2324: `if (result.messages)`
+		// triggers cloneMessages, and `if (result.system-
+		// Prompt !== undefined)` triggers replacement.
+		// Setting either field — even with content-equal
+		// values — would shift `next !== request` and break
+		// the no-op projection invariant. The metadata-
+		// only helper sets ONLY `currentWorkingContext-
+		// Estimate`, so downstream falls through both
+		// branches and `next === request` (semantic
+		// conservation).
+		//
+		// saveState is NOT called here. Durable compaction
+		// artifact cadence remains compactions-only by
+		// design, the architectural separation enforced
+		// in the ninth-pass HALT_DEFAULT_SUITE_RED
+		// resolution.
+		//
+		// NO_COMPACTION_REQUEST_SEMANTICS_DELTA = ZERO
+		// (P1_1 control asserted in compaction.working-
+		// context-authority-publish.test.ts:176).
+		return publishWorkingContextEstimateMetadataOnly(
+			context.messages,
+			context.systemPrompt,
+			context.tools,
+		);
 	};
 }
 
@@ -755,6 +829,84 @@ function publishWorkingContextEstimate(
 	return {
 		messages,
 		systemPrompt,
+		currentWorkingContextEstimate: estimateRequestInputTokens({
+			systemPrompt,
+			messages,
+			tools,
+		}),
+	};
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+ * producer-cadence GREEN (tenth-pass):
+ *
+ *   Returns a metadata-only prepare-turn result carrying
+ *   `currentWorkingContextEstimate` for the FINAL request shape
+ *   WITHOUT populating `messages` or `systemPrompt`. The
+ *   downstream consumer at sdk/packages/agents/src/agent-
+ *   runtime.ts:2303-2325 distinguishes:
+ *
+ *     result === undefined
+ *       → no projection; use original `request`
+ *
+ *     result.messages !== undefined
+ *       → projection; cloneMessages(result.messages)
+ *         replaces `request.messages`
+ *
+ *     result.systemPrompt !== undefined
+ *       → projection; result.systemPrompt replaces
+ *         `request.systemPrompt`
+ *
+ *   So returning a result with `messages` or `systemPrompt`
+ *   set — even when those values are content-equal to the
+ *   input — would trigger the projection branch and:
+ *
+ *     (1) clone `messages` (new array reference, same
+ *         content) — semantic delta: any downstream
+ *         reference-equality observation fails.
+ *
+ *     (2) replace `systemPrompt` (new value, content-equal
+ *         if input is unchanged) — semantic delta: any
+ *         reference-equality on systemPrompt fails.
+ *
+ *   The metadata-only return avoids both: the result is
+ *   defined (so downstream skips the `!result` early return)
+ *   but neither `messages` nor `systemPrompt` is set, so
+ *   `next === request` (semantic conservation preserved).
+ *
+ *   W publication cadence = every prepareTurn. Save-state
+ *   cadence = real compactions only (unchanged).
+ *
+ *   NO_COMPACTION_REQUEST_SEMANTICS_DELTA = ZERO
+ *   (P1_1 control asserted in
+ *    compaction.working-context-authority-publish.test.ts:176).
+ */
+function publishWorkingContextEstimateMetadataOnly(
+	messages: CoreCompactionContext["messages"],
+	systemPrompt: string,
+	tools: readonly unknown[],
+): ContextPipelinePrepareTurnResult {
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// tenth-pass: this metadata-only return sets ONLY
+	// `currentWorkingContextEstimate`; `messages` and
+	// `systemPrompt` are intentionally NOT populated. The
+	// `ContextPipelinePrepareTurnResult` type now declares
+	// `messages` and `systemPrompt` as OPTIONAL (per
+	// tenth-pass interface revision), so this return value
+	// satisfies the contract directly.
+	//
+	// The runtime value matches the
+	//   `Pick<ContextPipelinePrepareTurnResult,
+	//     "currentWorkingContextEstimate">`
+	// shape; downstream at agent-runtime.ts:2319 / :2323
+	// only reads `result.messages` / `result.systemPrompt`
+	// when they are defined, so the metadata-only return
+	// is a valid no-op projection signal (semantically
+	// equivalent to the pre-fix `return undefined` for
+	// projection purposes, but publishes W on every
+	// prepareTurn for the producer-cadence invariant).
+	return {
 		currentWorkingContextEstimate: estimateRequestInputTokens({
 			systemPrompt,
 			messages,

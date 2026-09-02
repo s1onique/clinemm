@@ -158,7 +158,7 @@ async function drivePrepareTurn(
 	},
 	compact: (
 		context: { messages: LlmsProviders.Message[] },
-	) => { messages: LlmsProviders.Message[]; systemPrompt?: string } | undefined,
+	) => { messages?: LlmsProviders.Message[]; systemPrompt?: string } | undefined,
 ): Promise<ContextPipelinePrepareTurnResult | undefined> {
 	const prepareTurn = createCompactionStateAwarePrepareTurn({
 		compact,

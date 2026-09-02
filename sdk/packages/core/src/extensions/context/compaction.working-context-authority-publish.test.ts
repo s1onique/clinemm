@@ -138,11 +138,11 @@ describe("compaction working-context authority publish", () => {
 		//                                  tools}).
 		const prepared = await runPrepareTurn();
 		expect(prepared).toBeDefined();
-		expect(prepared!.messages.length).toBeGreaterThan(0);
+		expect(prepared!.messages?.length).toBeGreaterThan(0);
 		expect(prepared!.systemPrompt).toBe(SYSTEM_PROMPT);
 		const wAfter = estimateRequestInputTokens({
 			systemPrompt: prepared!.systemPrompt ?? SYSTEM_PROMPT,
-			messages: prepared!.messages,
+			messages: prepared!.messages ?? CANONICAL,
 			tools: TOOLS,
 		});
 		expect(wAfter).toBeGreaterThan(0);
@@ -167,13 +167,13 @@ describe("compaction working-context authority publish", () => {
 		expect(typeof w).toBe("number");
 		const expected = estimateRequestInputTokens({
 			systemPrompt: prepared!.systemPrompt ?? SYSTEM_PROMPT,
-			messages: prepared!.messages,
+			messages: prepared!.messages ?? CANONICAL,
 			tools: TOOLS,
 		});
 		expect(w).toBe(expected);
 	});
 });
-	it("CARRIER_CADENCE: SessionCompactionState is the durable compaction artifact, NOT the per-turn W carrier (falsification witness)", async () => {
+	it("CARRIER_CADENCE: producer publishes W on every prepareTurn; durable compaction artifact cadence preserved; P1_1 no-op projection conservation (tenth-pass GREEN matrix)", async () => {
 		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 		// cadence falsification witness
 		//   eighth-pass halt (2026-09-03) HALT_WRONG_CARRIER_SEMANTICS
@@ -212,23 +212,42 @@ describe("compaction working-context authority publish", () => {
 		//     per-turn state. Mutating it on every prepareTurn
 		//     would erase the architectural distinction.
 		//
-		// This test is the PASSING FALSIFICATION WITNESS:
-		//   - resultA carries currentWorkingContextEstimate
-		//     (producer-side W publication GREEN already, from
-		//      fc906dfc6)
+		// Tenth-pass (2026-09-03) producer-cadence GREEN:
+		//   PUBLISH_GAP is now FIXED at compaction.ts:730. The
+		//   no-compaction branch returns
+		//     publishWorkingContextEstimateMetadataOnly(
+		//       context.messages,
+		//       context.systemPrompt,
+		//       context.tools,
+		//     )
+		//   which carries W on every prepareTurn but sets ONLY
+		//   `currentWorkingContextEstimate` (messages and
+		//   systemPrompt are NOT populated) so the downstream
+		//   projection branches at agent-runtime.ts:2319-2324
+		//   do NOT fire (`next === request`, semantic
+		//   conservation).
+		//
+		// This test is now the FULL POST-FIX GREEN MATRIX:
+		//   - resultA/B/C all carry currentWorkingContextEstimate
+		//     (producer publishes W on every prepareTurn)
+		//   - B.W != A.W, C.W != B.W (W grows monotonically
+		//     with the canonical message stream)
+		//   - B/C carry messages=undefined + systemPrompt=
+		//     undefined (P1_1 no-op projection conservation)
 		//   - saveState fires ONLY on real compaction
 		//     (durable artifact cadence = compactions only)
 		//
-		// The pre-fix RED evidence (B/C W undefined + the
-		// historical saveStateCalls === 3 discriminator that
-		// falsified the rejected carrier hypothesis) is preserved
-		// at
+		// The ninth-pass HALT_DEFAULT_SUITE_RED evidence file
 		//   .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
 		//     CONTEXT-HEADER-TRANSPORT-REPAIR01/
 		//     cadence-discriminator-red.provenance.ts
-		// outside any default vitest discovery path, per the
-		// "transient RED evidence = good / committed intentionally-
-		// failing default test = not allowed" rule.
+		// was RETIRED in the tenth-pass producer-cadence GREEN
+		// commit. The publish-gap RED it captured is now fixed
+		// in production (compaction.ts:730 returns
+		// publishWorkingContextEstimateMetadataOnly instead of
+		// undefined), and the post-fix GREEN state is asserted
+		// by this committed test (CARRIER_CADENCE). See the
+		// ACT body for the full green-matrix evidence.
 
 		const saveStateCalls: Array<{
 			sourceMessageCount: number;
@@ -315,60 +334,100 @@ describe("compaction working-context authority publish", () => {
 		//   - saveState fires ONLY on real compaction
 		//     (durable artifact cadence = compactions only)
 		//
-		// The pre-fix RED evidence (B/C currentWorkingContext-
-		// Estimate === undefined + historical saveStateCalls === 3
-		// discriminator that falsified the rejected carrier) is
-		// preserved in
+		// The committed assertions below are the FULL POST-FIX
+		// GREEN MATRIX (tenth-pass): the producer-cadence GREEN
+		// is now in place at compaction.ts:730 (returns
+		// publishWorkingContextEstimateMetadataOnly on the
+		// no-compaction branch, carrying W but not populating
+		// messages or systemPrompt — see the P1_1
+		// NO_COMPACTION_REQUEST_SEMANTICS_DELTA control below).
+		//
+		// The ninth-pass HALT_DEFAULT_SUITE_RED evidence file
 		//   .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
 		//     CONTEXT-HEADER-TRANSPORT-REPAIR01/
 		//     cadence-discriminator-red.provenance.ts
-		// which is OUTSIDE any default vitest discovery path
-		// (transient RED evidence = good; committed intentionally-
-		// failing default test = not allowed).
+		// was RETIRED in this same tenth-pass commit (its
+		// captured RED is no longer reproducible after the fix
+		// and the post-fix GREEN state is now authoritative in
+		// this committed test).
 		expect(
 			(resultA as { currentWorkingContextEstimate?: number } | undefined)
 				?.currentWorkingContextEstimate,
 		).toBeDefined();
 
-		// Architectural invariant: durable compaction artifact
-		// moves only on real compactions. This guard is
-		// load-bearing — if a future change forces saveState on
-		// every prepareTurn, this assertion fails and forces the
-		// author to justify erasing the durable / per-turn
-		// lifecycle distinction.
-		expect(saveStateCalls).toHaveLength(1);
+		// POST-TENTH-PASS PRODUCER-CADENCE GREEN
+		//
+		// Compaction.ts:730 now returns a metadata-only
+		// prepare-turn result carrying currentWorkingContext-
+		// Estimate via the new
+		// publishWorkingContextEstimateMetadataOnly helper.
+		// The result is defined (downstream falls past the
+		// `!result` early return at agent-runtime.ts:2303)
+		// but sets ONLY currentWorkingContextEstimate, so
+		// the projection branches at agent-runtime.ts:2319
+		// and :2323 are NOT triggered, and `next ===
+		// request` (semantic conservation).
+		//
+		// P1_1 NO_COMPACTION_REQUEST_SEMANTICS_DELTA = ZERO:
+		//   resultB.messages === undefined
+		//   resultC.messages === undefined
+		//   resultB.systemPrompt === undefined
+		//   resultC.systemPrompt === undefined
+		//
+		// These four assertions are LOAD-BEARING. If any
+		// future change populates result.messages or
+		// result.systemPrompt on the no-compaction branch —
+		// even with content-equal values — the projection
+		// branches fire and downstream observes
+		// `next !== request` (a fresh array clone of
+		// messages + a systemPrompt replacement), violating
+		// the no-op projection invariant the reviewer
+		// demanded as the gate for producer-cadence GREEN.
+		expect(
+			(resultB as { currentWorkingContextEstimate?: number } | undefined)
+				?.currentWorkingContextEstimate,
+		).toBeDefined();
+		expect(
+			(resultC as { currentWorkingContextEstimate?: number } | undefined)
+				?.currentWorkingContextEstimate,
+		).toBeDefined();
+		expect(
+			(resultA as { currentWorkingContextEstimate: number }).currentWorkingContextEstimate,
+		).not.toBe(
+			(resultB as { currentWorkingContextEstimate: number }).currentWorkingContextEstimate,
+		);
+		expect(
+			(resultB as { currentWorkingContextEstimate: number }).currentWorkingContextEstimate,
+		).not.toBe(
+			(resultC as { currentWorkingContextEstimate: number }).currentWorkingContextEstimate,
+		);
 
-		// Future-proofing note for resultB/resultC:
-		//
-		// At HEAD, the no-compaction branch in
-		// createCompactionStateAwarePrepareTurn (compaction.ts:730)
-		// returns the upstream `result` directly, which is
-		// `undefined` when the upstream `compact` returned
-		// undefined. So resultB and resultC are `undefined` at
-		// HEAD — both the prepare-turn RETURN and any embedded
-		// currentWorkingContextEstimate.
-		//
-		// After the producer-cadence fix (the next bounded repair
-		// commit lands at compaction.ts:730 to call
-		// publishWorkingContextEstimate on the no-compaction
-		// branch too), resultB / resultC become defined + carry
-		// currentWorkingContextEstimate.
-		//
-		// At that point, the committed test evolves to:
-		//   expect(resultB? .currentWorkingContextEstimate).toBeDefined()
-		//   expect(resultC? .currentWorkingContextEstimate).toBeDefined()
-		//   expect(resultB? .currentWorkingContextEstimate
-		//     !== resultA? .currentWorkingContextEstimate)
-		//   expect(resultC? .currentWorkingContextEstimate
-		//     !== resultB? .currentWorkingContextEstimate)
-		//   expect(saveStateCalls).toHaveLength(1)  // unchanged
-		//
-		// The RED provenance for the no-compaction branch is
-		// preserved at
-		//   .factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-
-		//     CONTEXT-HEADER-TRANSPORT-REPAIR01/
-		//     cadence-discriminator-red.provenance.ts
-		// outside any default vitest discovery path. resultB /
-		// resultC are intentionally not asserted here — that
-		// would commit an RED in the default suite.
+		// P1_1 NO_COMPACTION_REQUEST_SEMANTICS_DELTA = ZERO
+		// (reviewer-mandated conservation before producer-
+		// cadence GREEN). resultB and resultC MUST be
+		// metadata-only: messages + systemPrompt are NOT
+		// populated, so the downstream projection branches
+		// at agent-runtime.ts:2319-2324 do NOT fire and
+		// `next === request` (semantic conservation).
+		expect(
+			(resultB as { messages?: unknown }).messages,
+		).toBeUndefined();
+		expect(
+			(resultC as { messages?: unknown }).messages,
+		).toBeUndefined();
+		expect(
+			(resultB as { systemPrompt?: unknown }).systemPrompt,
+		).toBeUndefined();
+		expect(
+			(resultC as { systemPrompt?: unknown }).systemPrompt,
+		).toBeUndefined();
+
+		// Architectural invariant: durable compaction
+		// artifact moves only on real compactions. UNCHANGED
+		// by the producer-cadence GREEN. This guard is
+		// load-bearing — if a future change forces
+		// saveState on every prepareTurn, this assertion
+		// fails and forces the author to justify erasing
+		// the durable / per-turn lifecycle distinction.
+		expect(saveStateCalls).toHaveLength(1);
 	});

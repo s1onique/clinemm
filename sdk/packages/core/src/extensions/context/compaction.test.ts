@@ -88,10 +88,15 @@ function overflowRecoveryTranscript(): MessageWithMetadata[] {
 
 /** The compaction produced messages and pruned the marked tool output. */
 function assertBasicCompactionResult(
-	result: { messages: MessageWithMetadata[] } | undefined,
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// tenth-pass: `messages` is OPTIONAL on the result type
+	// (post-fix contract: producer-side metadata-only return
+	// when no projection occurs). The helper narrows back to
+	// defined at the assertion sites.
+	result: { messages?: MessageWithMetadata[] } | undefined,
 ): void {
 	expect(result?.messages).toBeDefined();
-	expect(result?.messages.length).toBeGreaterThan(0);
+	expect(result?.messages?.length).toBeGreaterThan(0);
 	for (const message of result?.messages ?? []) {
 		if (typeof message.content === "string") {
 			expect(message.content).not.toContain(
@@ -1630,7 +1635,7 @@ describe("createContextCompactionPrepareTurn", () => {
 			}),
 		);
 		expect(result?.messages).toHaveLength(5);
-		expect(result?.messages[0]).toMatchObject({
+		expect(result?.messages?.[0]).toMatchObject({
 			role: "user",
 			metadata: expect.objectContaining({
 				kind: "compaction_summary",
@@ -1642,21 +1647,21 @@ describe("createContextCompactionPrepareTurn", () => {
 				},
 			}),
 		});
-		expect(result?.messages[0]?.content).toEqual([
+		expect(result?.messages?.[0]?.content).toEqual([
 			expect.objectContaining({ type: "text" }),
 		]);
-		const summaryContent = Array.isArray(result?.messages[0]?.content)
+		const summaryContent = Array.isArray(result?.messages?.[0]?.content)
 			? result.messages[0].content[0]?.type === "text"
 				? result.messages[0].content[0].text
 				: ""
 			: "";
 		expect(summaryContent).toContain("Context summary:");
 		expect(summaryContent).toContain("## Files");
-		expect(result?.messages[1]).toEqual({
+		expect(result?.messages?.[1]).toEqual({
 			role: "user",
 			content: "Implement the change",
 		});
-		expect(result?.messages[4]).toEqual({
+		expect(result?.messages?.[4]).toEqual({
 			role: "assistant",
 			content: "Recent assistant state",
 		});
@@ -1710,7 +1715,7 @@ describe("createContextCompactionPrepareTurn", () => {
 		});
 
 		expect(result?.messages).toBeDefined();
-		expect(result?.messages[0]?.metadata?.kind).not.toBe("compaction_summary");
+		expect(result?.messages?.[0]?.metadata?.kind).not.toBe("compaction_summary");
 		expect(log).toHaveBeenCalledWith(
 			"Agentic compaction failed; falling back to basic compaction",
 			expect.objectContaining({
@@ -2119,11 +2124,11 @@ describe("createContextCompactionPrepareTurn", () => {
 			"auto-compacted",
 			expect.objectContaining({ kind: "auto_compaction" }),
 		);
-		expect(result?.messages[0]).toMatchObject({
+		expect(result?.messages?.[0]).toMatchObject({
 			role: "user",
 			metadata: expect.objectContaining({ kind: "compaction_summary" }),
 		});
-		expect(result?.messages.length).toBeLessThan(messages.length);
+		expect(result?.messages?.length).toBeLessThan(messages.length);
 		// The preserved tail must not orphan either half of a tool pair.
 		const toolUseIds2 = new Set<string>();
 		const toolResultIds2 = new Set<string>();
@@ -2240,14 +2245,14 @@ describe("createContextCompactionPrepareTurn", () => {
 			"auto-compacted",
 			expect.objectContaining({ kind: "auto_compaction" }),
 		);
-		expect(result?.messages[0]).toMatchObject({
+		expect(result?.messages?.[0]).toMatchObject({
 			role: "user",
 			metadata: expect.objectContaining({
 				kind: "compaction_summary",
 				userRunSpan: 2,
 			}),
 		});
-		expect(result?.messages.length).toBeLessThan(messages.length);
+		expect(result?.messages?.length).toBeLessThan(messages.length);
 	});
 
 	it("uses the configured summarizer model for compaction", async () => {
@@ -3927,13 +3932,13 @@ describe("createContextCompactionPrepareTurn", () => {
 		});
 
 		expect(createHandlerMock).toHaveBeenCalledTimes(1);
-		expect(result?.messages[0]).toMatchObject({
+		expect(result?.messages?.[0]).toMatchObject({
 			role: "user",
 			metadata: expect.objectContaining({
 				kind: "compaction_summary",
 			}),
 		});
-		expect(result?.messages.length).toBeLessThan(4);
+		expect(result?.messages?.length).toBeLessThan(4);
 	});
 
 	it("automatic agentic compaction clamps preservation to a small model budget", async () => {
@@ -3985,11 +3990,11 @@ describe("createContextCompactionPrepareTurn", () => {
 		});
 
 		expect(createHandlerMock).toHaveBeenCalledTimes(1);
-		expect(result?.messages[0]).toMatchObject({
+		expect(result?.messages?.[0]).toMatchObject({
 			role: "user",
 			metadata: expect.objectContaining({ kind: "compaction_summary" }),
 		});
-		expect(result?.messages.length).toBeLessThan(messages.length);
+		expect(result?.messages?.length).toBeLessThan(messages.length);
 	});
 
 	it("drops old user image blocks during basic compaction sanitization", () => {
@@ -4041,14 +4046,14 @@ describe("createContextCompactionPrepareTurn", () => {
 		// The older turn's image is dropped, but its concluding assistant
 		// answer is preserved as a real message.
 		expect(result?.messages).toHaveLength(3);
-		expect(result?.messages[0]?.content).toEqual([
+		expect(result?.messages?.[0]?.content).toEqual([
 			{ type: "text", text: "Older user turn" },
 		]);
-		expect(result?.messages[1]).toMatchObject({
+		expect(result?.messages?.[1]).toMatchObject({
 			role: "assistant",
 			content: "Older assistant response",
 		});
-		expect(result?.messages[2]?.content).toBe("Latest user turn");
+		expect(result?.messages?.[2]?.content).toBe("Latest user turn");
 	});
 
 	it("does not compact when only pre-truncation messages exceed the threshold", async () => {
@@ -4559,7 +4564,7 @@ describe("createContextCompactionPrepareTurn", () => {
 		});
 
 		expect(firstResult?.messages).toBeDefined();
-		const firstAfterTokens = firstResult?.messages.reduce(
+		const firstAfterTokens = firstResult?.messages?.reduce(
 			(total, message) => total + estimateMessageTokens(message),
 			0,
 		);
@@ -4635,6 +4640,25 @@ describe("createContextCompactionPrepareTurn", () => {
 	});
 
 	it("keeps stale sidecar state when replacement compaction returns no result", async () => {
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// tenth-pass: this test pins the post-fix no-op projection
+		// contract. Under the producer-cadence GREEN, the no-compaction
+		// branch returns a metadata-only result
+		// ({ currentWorkingContextEstimate: W } with messages +
+		// systemPrompt NOT populated) so:
+		//   - the producer publishes W on every prepareTurn
+		//     (P1_1 control)
+		//   - downstream at agent-runtime.ts:2303-2324 treats the
+		//     result as a no-op projection (the messages +
+		//     systemPrompt branches do not fire), so
+		//     `next === request` (semantic conservation)
+		//   - the durable compaction artifact cadence is preserved
+		//     (saveState not called)
+		//
+		// The old contract returned `undefined`; the new contract
+		// returns a defined metadata-only result. The functional
+		// behavior is identical for downstream projection logic;
+		// only the type shape changes.
 		const originalMessages: LlmsProviders.Message[] = [
 			{ role: "user", content: "original" },
 		];
@@ -4672,7 +4696,17 @@ describe("createContextCompactionPrepareTurn", () => {
 			},
 		});
 
-		expect(result).toBeUndefined();
+		// Post-fix contract: the result is a metadata-only
+		// object that carries W but does NOT populate messages
+		// or systemPrompt. Downstream's projection branches at
+		// agent-runtime.ts:2319-2324 do not fire, so this is
+		// semantically equivalent to the old `undefined` return
+		// for projection purposes (next === request), but
+		// publishes W for the producer-cadence invariant.
+		expect(result).toBeDefined();
+		expect(result?.currentWorkingContextEstimate).toEqual(expect.any(Number));
+		expect(result?.messages).toBeUndefined();
+		expect(result?.systemPrompt).toBeUndefined();
 		expect(compact).toHaveBeenCalledWith(
 			expect.objectContaining({ messages: currentMessages }),
 		);
