@@ -405,6 +405,48 @@ interface CommandJob {
 	executionCapability?: InternalExecutionCapability
 
 	/**
+	 * ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01: the
+	 * INTERNAL owner identity slot. Captured from
+	 * `AgentToolContext.sessionId` at construction time and used
+	 * only by `hasRunningBackgroundJobForOwner(...)` to answer the
+	 * internal authority question
+	 * "does THIS owner still have a RUNNING job?".
+	 *
+	 * Encapsulation invariant (P1 of the bounded contract
+	 * correction at commit 661780875): this field MUST NOT be
+	 * projected into `CommandJobSnapshot` (the public status
+	 * projection observed by tool consumers / telemetry / UI) or
+	 * into the model-facing tool-result text. The internal
+	 * `snapshot()` function (line 301) and the
+	 * `projectResponseSnapshot()` function (line 358) construct
+	 * their return shapes field-by-field WITHOUT spreading the
+	 * `CommandJob` record, so a new field added here does not
+	 * accidentally leak. Tests assert
+	 * `'ownerSessionId' in snapshot === false`.
+	 *
+	 * `sessionId` is the upstream SDK's "host-owned lifecycle id"
+	 * (per `sdk/packages/shared/src/agent.ts:825-845` docblock).
+	 * It is stable for hub subscriptions, session persistence,
+	 * abort/stop commands, and approval routing — and it can
+	 * differ from `conversationId`, which is transcript
+	 * correlation and "should not be used as the hub/session
+	 * routing key". The fork's
+	 * `sdk-session-lifecycle.ts:124-126` confirms sessionId is
+	 * reused across mode/MCP rebuilds and follow-up resumes.
+	 *
+	 * `conversationId` is intentionally NOT captured: persisting
+	 * both `sessionId` and `conversationId` because both exist
+	 * on `AgentToolContext` is forbidden by the contract ACT
+	 * (see ACT §3 "DO NOT persist BOTH sessionId and
+	 * conversationId" / Q1-Q2 discrimination table).
+	 *
+	 * `taskId` is intentionally NOT captured: no such identity
+	 * exists on `AgentToolContext` at job creation time
+	 * (`sdk/packages/shared/src/agent.ts:348-355`).
+	 */
+	ownerSessionId?: string
+
+	/**
 	 * Latched when the host initiates termination. Survives natural exit.
 	 * First-writer-wins: a cancel that arrives after the deadline has
 	 * already initiated termination does NOT downgrade the recorded
@@ -885,6 +927,22 @@ export class CommandJobManager {
 			// profile temp dir removal). `finalize()` will run it
 			// best-effort. Always `undefined` for non-sandboxed jobs.
 			sandboxCleanup,
+			// ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01:
+			// stamp the INTERNAL owner identity from
+			// `AgentToolContext.sessionId` (the upstream SDK's
+			// host-owned lifecycle id, stable across mode/MCP
+			// rebuilds and follow-up resumes per
+			// sdk-session-lifecycle.ts:124-126). When `context`
+			// is undefined or sessionId is not present, this is
+			// `undefined` — `hasRunningBackgroundJobForOwner`
+			// then returns false for any owner (the graceful
+			// "ProducerHasNoOwnerIdentity" control; the manager
+			// never fabricates an owner). The field is OPTIONAL
+			// so pre-existing call sites that don't supply a
+			// second `context` argument (e.g. the
+			// command-job-manager.test.ts pattern) remain
+			// behaviorally unchanged.
+			ownerSessionId: context?.sessionId,
 		}
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: capture
 		// the cardinality transition at the manager's mutation seam.
@@ -1287,6 +1345,60 @@ export class CommandJobManager {
 	 */
 	getActiveJobIds(): string[] {
 		return Array.from(this.active.keys())
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01:
+	 * encapsulate the owner identity question.
+	 *
+	 * Returns true iff at least one job is currently in the
+	 * ACTIVE map AND still in the `running` state AND carries
+	 * `ownerSessionId === ownerSessionId`. The query does NOT
+	 * leak the underlying owner IDs through the return value —
+	 * callers receive only the boolean authority answer.
+	 *
+	 * Encapsulates the internal owner identity rather than
+	 * exposing raw ownership IDs broadly. This is the
+	 * "consumer asks the authority question; the manager
+	 * answers" shape chosen by the bounded contract
+	 * correction at commit 661780875.
+	 *
+	 * Truth table (frozen, asserted by
+	 * command-job-manager.owner-session-id.test.ts):
+	 *
+	 *   empty manager                       -> false
+	 *   active job in `running` with match  -> true
+	 *   active job in `running` no match    -> false
+	 *   active job in any terminal state    -> false
+	 *     (only `running` counts; even if a job for owner
+	 *      X is retained in the terminal map, X does NOT
+	 *      own a RUNNING job — X owns only completed
+	 *      work, which is authoritatively closed.)
+	 *   multiple active jobs, multiple owners
+	 *     -> each owner with at least one RUNNING match: true
+	 *     -> each owner with no match: false
+	 *   `ownerSessionId` arg undefined/empty  -> false
+	 *     (defensive: never "finds" an owner when the
+	 *      query is degenerate)
+	 *
+	 * Performance note: this is O(n) over the active map.
+	 * Bounded by `activeCount`, which is bounded by the
+	 * number of background commands the host has started
+	 * but not yet completed (typically a small integer;
+	 * multi-job concurrency is rare on the run_commands
+	 * path). No indexing by owner is needed for this
+	 * minimum contract.
+	 */
+	hasRunningBackgroundJobForOwner(ownerSessionId: string | undefined): boolean {
+		if (typeof ownerSessionId !== "string" || ownerSessionId.length === 0) {
+			return false
+		}
+		for (const job of this.active.values()) {
+			if (job.state === "running" && job.ownerSessionId === ownerSessionId) {
+				return true
+			}
+		}
+		return false
 	}
 
 	/**
