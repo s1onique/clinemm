@@ -202,13 +202,34 @@ $ git status --short
 ## 11. Verdict
 
 ```
-ROOT_CAUSE_ISOLATED    = YES
-REPAIR_VERIFIED        = YES
-REPAIR_STATUS          = APPLIED (Strategy-B bounded, ONE-AND-DONE)
-STRATEGY               = UNBOUND-shadow demotion guard at rule 3
-PRODUCTION_DELTA       = +78/-10 lines (3 files; 1 production source)
-                        (RED commit + repair commit)
-CLASSIFICATION         = CASE_A (selector authority defect)
-REPAIR_AUTHORIZED      = YES (RED reproduced at production seam,
-                             bounded semantic delta, all GREEN)
+ROOT_CAUSE_ISOLATED_FOR_GENERIC_SUBCASE  = YES
+                                         (a selector authority defect
+                                          reproduces the LIVE-shape
+                                          presentation contradiction
+                                          in the SYNTHETIC_REAL
+                                          TUSA01 discriminator)
+ROOT_CAUSE_FOR_SPECIFIC_LIVE_SPECIMEN    = NOT FULLY BOUND
+                                         (CORRECTION01:
+                                          ACT-CLINEMM-TASKHEADER-
+                                          UNBOUND-SHADOW-AUTHORITY-
+                                          RECON01-CORRECTION01)
+REPAIR_VERIFIED                          = YES (for the exercised contract)
+REPAIR_STATUS                            = APPLIED (Strategy-B bounded)
+STRATEGY                                 = UNBOUND-shadow demotion guard at rule 3
+PRODUCTION_DELTA                         = +78/-10 lines (3 files; 1 production source)
+                                          (RED commit + repair commit)
+CLASSIFICATION                           = CASE_A (selector authority defect)
+REPAIR_AUTHORIZED                        = YES (RED reproduced at production seam,
+                                            bounded semantic delta, all GREEN)
+LIVE_CLOSURE_VERDICT                     = DOWNGRADED by reviewer disposition
+                                            2026-09-02 HALT_LIVE_BINDING_NOT_PROVEN
+                                          The LIVE specimen is NOT
+                                          closed at this ACT; one
+                                          bounded post-repair dogfood
+                                          cycle must bind the
+                                          selector-input fields to the
+                                          publication. The bounded
+                                          diagnostic capture (HEAD
+                                          84dbaaade) enables that
+                                          cycle mechanically.
 ```

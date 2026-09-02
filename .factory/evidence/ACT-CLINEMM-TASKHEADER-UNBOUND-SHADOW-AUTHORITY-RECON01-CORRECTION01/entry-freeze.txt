@@ -1,0 +1,96 @@
+ENTRY_HEAD              = 0d8130c137fe9a922834650b1cc14a2358389533
+                          (verified via git rev-parse HEAD at CORRECTION01 entry)
+
+DIAG_COMMIT_1           = 82c7a4a68f923e03085a3fa263c1bd7ea76f76ec
+                          (new module + new test file)
+
+DIAG_COMMIT_2           = 84dbaaade038a1213fafe764756fbd0e9636a2bb
+                          (SdkController wiring + .gitignore whitelist)
+
+SUBJECT_HEAD            = 84dbaaade038a1213fafe764756fbd0e9636a2bb
+                          (bounded-completion implementation HEAD)
+
+CLOSURE_HEAD            = 84dbaaade038a1213fafe764756fbd0e9636a2bb
+                          (this ACT closes at the same HEAD; LIVE
+                           closure verdict remains PENDING until
+                           one dogfood cycle binds the selector-input
+                           to the publication)
+
+LIVE specimen (re-cited):
+  taskId                = 1788292664979_9qbpd
+  epoch                 = 16
+  publicationId         = 27546+
+  shadowPublicationBinding = UNBOUND  (diagnostic wire classification)
+  taskHeaderPhase       = idle       (selector OUTPUT)
+  taskHeaderSource      = shadow     (selector OUTPUT)
+  turnPhase             = streaming  (snapshot-derived, authoritative)
+
+Predecessor ACT:
+  ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01
+  HEAD: 6eaa0864 (production-source repair)
+        0d8130c1 (final HEAD with board update)
+  Closure claim: SELECTOR_DEFECT=REPRODUCED + REPAIR=VERIFIED_FOR_EXERCISED_CONTRACT
+
+Reviewer disposition (2026-09-02):
+  VERDICT            = HALT_LIVE_BINDING_NOT_PROVEN
+  ROOT_CAUSE         = ROOT_CAUSE_ISOLATED_FOR_GENERIC_SUBCASE
+  ROOT_CAUSE_LIVE    = ROOT_CAUSE_FOR_SPECIFIC_LIVE_SPECIMEN = NOT FULLY BOUND
+  FRESH_POST_REPAIR  = REQUIRED FOR LIVE CLOSURE
+  PRODUCTION_REWORK  = NONE AUTHORIZED
+
+P0 causal gap (the overclaim):
+  The LIVE activity.publication.v1 record carries
+  shadowPublicationBinding = "UNBOUND", which is mechanically produced
+  as `shadow !== undefined ? "UNBOUND" : "MISSING"` at
+  activity-publication-v1.ts:148.
+
+  The bounded selector guard added at 6eaa0864 fires when
+  canonicalShadowObservedTurnSeq === undefined, which is sourced
+  from getLocalShadowTurnSeqForPhase() (the phase-keyed map at
+  task-state-shadow.ts:386-395).
+
+  These two facts are NOT mechanically equivalent:
+    shadowPublicationBinding = UNBOUND
+        => the ArbiterSnapshot at the seam carried no generation identity
+    canonicalShadowObservedTurnSeq = undefined
+        => the phase-keyed map had no entry for the current projection
+
+  Alternative LIVE-shape subcase that the bounded guard does NOT
+  cover but the LIVE defect shape MIGHT match:
+    canonicalShadowPhase           = idle
+    currentLegacyPhase             = streaming
+    seq                            = 27545
+    canonicalShadowObservedTurnSeq = 27545  (shadow last observed idle at seq 27545)
+  In this case:
+    isShadowStale = (27545 !== undefined && 27545 > 27545) = false
+    isUnboundDemotingActiveToTerminal = false  (obs seq not undefined)
+  Selector still returns { phase: "idle", source: "shadow" }.
+
+P1 documentary ambiguity (now resolved):
+  PUBLICATION_SHADOW_BINDING = UNBOUND | MISSING  (diagnostic wire field)
+  LOCAL_SHADOW_TURNSEQ       = number | MISSING  (selector-local input field)
+
+P1 helper verification:
+  isActiveLegacyPhase covers {streaming, awaiting_approval}.
+  isTerminalShadowPhase covers {idle, completed, error, resumable}.
+  Phases NOT covered: {compacting, awaiting_followup}. Both are
+  handled by selector rules 1 and 2 (host overrides) BEFORE rule 3,
+  so they cannot reach the new UNBOUND-demotion guard. The helper
+  set is therefore exhaustive for the LIVE-shape scope.
+
+Bounded completion (this CORRECTION01):
+  1. New module: apps/vscode/src/sdk/task-header-selector-input-capture.ts
+     - Env-var-gated (CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1=<truthy>)
+     - Default-off in production
+     - 9-field record: stateVersion, publicationShadowBinding,
+       canonicalShadowPhase, localShadowTurnSeq, currentLegacyPhase,
+       seq, selectedPhase, selectedSource, capturedAt
+     - Ring buffer (default 64 records)
+  2. New test: apps/vscode/src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts
+     - 10 tests: gate, capture off, capture on (LIVE path A),
+       LIVE path B, field independence, ring buffer, clear, type surface
+  3. Wired in: apps/vscode/src/sdk/SdkController.ts:getStateToPostToWebview()
+     - Reads the four selector-input fields the bounded guard inspects
+     - Invokes capture at the SAME stateVersion as the
+       activity.publication.v1 emission
+     - Default-off: no state-semantic delta when env not set

@@ -1,0 +1,12 @@
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / gate > TUSIX01-GATE_OFF: default env (no CLINEMM_DIAG_TASKHEADER_SELECTOR_INPUT_V1) returns false 1ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / gate > TUSIX01-GATE_ON: env=1 / true / yes (case-insensitive) returns true 0ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / gate > TUSIX01-GATE_OTHER: env=0 / off / false / empty returns false 0ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / capture > TUSIX01-CAPTURE_OFF: captureTaskHeaderSelectorInput is a complete no-op when disabled 0ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / capture > TUSIX01-CAPTURE_LIVE_PATH_A: the LIVE-shaped tuple is recorded with localShadowTurnSeq=undefined 1ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / capture > TUSIX01-CAPTURE_LIVE_PATH_B: ALTERNATIVE subcase the bounded guard does NOT cover (localShadowTurnSeq=27545) 0ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / capture > TUSIX01-CAPTURE_FIELD_INDEPENDENCE: publicationShadowBinding and localShadowTurnSeq are independent fields 0ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / capture > TUSIX01-RING_BUFFER: setBufferSize truncates oldest entries 0ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / capture > TUSIX01-CLEAR: clear removes all records 0ms
+ ✓ src/sdk/__tests__/task-header-selector-input-capture.tusix01.test.ts > ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01 / type surface > TUSIX01-TYPE: TaskHeaderSelectorInputRecord is readonly + has all nine fields 0ms
+
+Tests  10 passed (10)

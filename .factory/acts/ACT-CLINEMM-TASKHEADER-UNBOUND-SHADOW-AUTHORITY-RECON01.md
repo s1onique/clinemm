@@ -1,6 +1,12 @@
 # ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01
 
-> Status: **CLOSED — ROOT_CAUSE_ISOLATED / REPAIR_VERIFIED**.
+> Status: **CLOSED — ROOT_CAUSE_ISOLATED_FOR_GENERIC_SUBCASE /
+> REPAIR_VERIFIED_FOR_EXERCISED_CONTRACT / LIVE_CLOSURE_PENDING
+> (downgraded by reviewer disposition 2026-09-02
+> HALT_LIVE_BINDING_NOT_PROVEN; bounded completion landed at
+> 84dbaaade via
+> ACT-CLINEMM-TASKHEADER-UNBOUND-SHADOW-AUTHORITY-RECON01-CORRECTION01;
+> LIVE closure verdict waits for one post-repair dogfood cycle).**
 >
 > Epistemic purpose: **RECON + BOUNDED_PRODUCTION_REPAIR**.
 >
@@ -20,7 +26,12 @@
 >                                1 production source file)
 > CLASSIFICATION              = CASE_A (selector authority defect)
 > STRATEGY                    = UNBOUND-shadow demotion guard at selector rule 3
-> VERDICT                     = ROOT_CAUSE_ISOLATED / REPAIR_VERIFIED
+> VERDICT                     = ROOT_CAUSE_ISOLATED_FOR_GENERIC_SUBCASE /
+>                                REPAIR_VERIFIED_FOR_EXERCISED_CONTRACT /
+>                                LIVE_CLOSURE_PENDING
+>                                (CORRECTION01 lands the diagnostic
+>                                 capture; LIVE closure waits for
+>                                 one post-repair dogfood cycle)
 > ```
 
 > See the full evidence chain under
