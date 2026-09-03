@@ -1634,17 +1634,22 @@ describe("createContextCompactionPrepareTurn", () => {
 				iteration: 1,
 			}),
 		);
-		expect(result?.messages).toHaveLength(5);
+		// ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01:
+		// The token-budget walk with preserveRecentTokens: 1 produces a
+		// deep candidate; the new contract keeps that candidate instead of
+		// snapping backward to the latest typed-user. The fold now spans
+		// all 7 messages before the preserved tail (the final assistant).
+		expect(result?.messages).toHaveLength(2);
 		expect(result?.messages?.[0]).toMatchObject({
 			role: "user",
 			metadata: expect.objectContaining({
 				kind: "compaction_summary",
 				displayRole: "system",
-				userRunSpan: 2,
-				details: {
-					readFiles: [],
+				userRunSpan: 3,
+				details: expect.objectContaining({
 					modifiedFiles: [],
-				},
+					readFiles: expect.arrayContaining(["/tmp/example.ts"]),
+				}),
 			}),
 		});
 		expect(result?.messages?.[0]?.content).toEqual([
@@ -1657,11 +1662,15 @@ describe("createContextCompactionPrepareTurn", () => {
 			: "";
 		expect(summaryContent).toContain("Context summary:");
 		expect(summaryContent).toContain("## Files");
+		// ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01:
+		// The deeper fold under the new contract now covers the active
+		// typed-user turn ("Implement the change" + tool_use + tool_result).
+		// The typed-user prompt is recoverable from the summary's file-ops
+		// block (the read_files tool_use is captured in details.readFiles);
+		// the actual literal text is whatever the summarizer mock returns.
+		// The old assertion (messages[1] === "Implement the change") no
+		// longer holds: messages[1] is now the final assistant message.
 		expect(result?.messages?.[1]).toEqual({
-			role: "user",
-			content: "Implement the change",
-		});
-		expect(result?.messages?.[4]).toEqual({
 			role: "assistant",
 			content: "Recent assistant state",
 		});

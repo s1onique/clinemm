@@ -402,18 +402,39 @@ export function findCutIndex(
 		return 0;
 	}
 
-	// Never summarize away the latest typed user prompt: when one exists
-	// past index 0, the cut stays at or before it so that whole turn
-	// survives verbatim. Transcripts without a later typed turn (a single
-	// task followed by one long tool loop, or a projection that starts
-	// with a compaction summary) still cut at the token-budget candidate.
+	// ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01:
+	// Snap FORWARD only when the typed-user sits past the candidate
+	// (i.e. the token-budget walk landed BEFORE the active typed-user turn
+	// and would split it). Never snap BACKWARD: a stale early typed-user
+	// must not reintroduce already-selected compactable prefix into the
+	// retained tail. Tool-use/result atomicity is preserved by the inner
+	// safe-boundary walk at the end.
 	const lastTurnStartIndex = findLastTurnStartIndex(messages);
-	let cut =
-		lastTurnStartIndex > 0
-			? Math.min(candidate, lastTurnStartIndex)
-			: candidate;
-	while (cut > 0 && !isSafeCutBoundary(messages[cut])) {
-		cut -= 1;
+	let cut: number;
+	if (lastTurnStartIndex > 0 && lastTurnStartIndex > candidate) {
+		cut = lastTurnStartIndex;
+	} else {
+		cut = candidate;
+	}
+	// Snap-walk FORWARD from `cut` to the nearest safe boundary at or after
+	// `cut`. A safe boundary is a typed-user or an assistant message; a
+	// tool_result-only user message is unsafe (its matching tool_use sits
+	// in the preceding assistant and would be split off).
+	while (cut < messages.length && !isSafeCutBoundary(messages[cut])) {
+		cut += 1;
+	}
+	// If the snap-forward ran off the tail, fall back to walking BACKWARD
+	// from `cut = candidate` to the nearest safe boundary — this preserves
+	// the token-budget intent as closely as possible without crossing
+	// tool-pair boundaries.
+	if (cut >= messages.length) {
+		cut = candidate;
+		while (cut > 0 && !isSafeCutBoundary(messages[cut])) {
+			cut -= 1;
+		}
+	}
+	if (cut <= 0) {
+		return 0;
 	}
 	return cut;
 }
