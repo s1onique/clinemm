@@ -44,6 +44,7 @@ import {
 } from "@shared/post-terminal-authority-diagnostic"
 import { DeleteAllTaskHistoryCount, type GetTaskHistoryRequest, TaskHistoryArray, TaskResponse } from "@shared/proto/cline/task"
 import type { Settings } from "@shared/storage/state-keys"
+import { resolveActiveTemporaryExternalCanonicalRootsFromBackingFile } from "@shared/storage/temporaryExternalPathAuthorities"
 import type { Mode } from "@shared/storage/types"
 import type { TelemetrySetting } from "@shared/TelemetrySetting"
 import type { ClineCheckpointRestore } from "@shared/WebviewMessage"
@@ -178,6 +179,7 @@ import { emitV2Capture, resolveCapturePathForProfileEffective } from "./v2-captu
 import { createWorkspaceFileReadExecutor } from "./vscode-file-read-executor"
 import { VscodeSessionHost } from "./vscode-session-host"
 import type { VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
+import { installRuntimeWTraceObserverForClineMM } from "./w-carrier-runtime-trace-bridge"
 // ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 // (twenty-seventh-pass): optional Q1..Q4 W-carrier trace observer.
 // The enablement decision is made by the central dogfood
@@ -190,7 +192,6 @@ import {
 	recordWCarrierTrace,
 	type WCarrierTraceContext,
 } from "./w-carrier-trace-runtime"
-import { installRuntimeWTraceObserverForClineMM } from "./w-carrier-runtime-trace-bridge"
 import { WebviewGrpcBridge } from "./webview-grpc-bridge"
 import { WorkingContextHostCapture } from "./working-context-host-capture"
 import { resolveWorkspaceManagerPaths, resolveWorkspaceRootPath } from "./workspace-root"
@@ -1034,12 +1035,36 @@ export class Controller {
 					// stripRequiresApproval so the user's explicit session authority
 					// is not silently downgraded by an advisory model hint.
 					//
+					// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION05:
+					// SINGLE SNAPSHOT — read the temporary-authority durable
+					// state ONCE at the top of this approval evaluation and
+					// thread that exact immutable snapshot into BOTH the
+					// evidence builder AND the host authorization below.
+					// Two independent fresh-reads of the backing JSON file
+					// during one approval decision let a cross-instance
+					// REMOVE race between evidence construction and policy
+					// authorization: the evidence could carry the OLD
+					// authority set while the auth carries the NEW one,
+					// producing a mixed-generation decision that authorizes
+					// from a snapshot the user has already revoked. One
+					// fresh-read, one snapshot, one decision.
+					const activeTempRoots = this.resolveActiveTemporaryExternalCanonicalRoots()
+					//
 					// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
 					// REALPATH_WORKSPACE_CONFINEMENT: build host-produced
 					// realpath evidence. Containment is then tested on
 					// canonical pathnames, which closes the V1
 					// symlink-escape attack.
-					const pathAuthorityEvidence = await this.buildPathAuthorityEvidence(requestInput)
+					const pathAuthorityEvidence = await this.buildPathAuthorityEvidence(
+						requestInput,
+						// CORRECTION05: thread the SAME snapshot the auth will
+						// receive. Without this, evidence.temporaryExternalCanonicalRoots
+						// defaults to [] and the policy re-test that compares
+						// auth.temporaryExternalCanonicalRoots against
+						// evidence.temporaryExternalCanonicalRoots sees a
+						// mismatch.
+						activeTempRoots,
+					)
 					// ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01:
 					// Use the evidence's canonical roots + cwd
 					// (built via fs.realpathSync in the evidence
@@ -1054,6 +1079,12 @@ export class Controller {
 					// command would force ASK.
 					const canonicalRoots = pathAuthorityEvidence?.roots
 					const canonicalCwd = pathAuthorityEvidence?.cwd ?? undefined
+					// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION03 +
+					// CORRECTION05: pass the SAME snapshot to the auth. The
+					// evidence builder above has already embedded it; the
+					// auth re-test reads it from this parameter. Two reads
+					// of the same backing file during one approval evaluation
+					// are structurally eliminated by reading once at the top.
 					let hostAuthorization = getCommandHostAuthorization(
 						_toolName,
 						persisted,
@@ -1062,6 +1093,7 @@ export class Controller {
 							workspaceRoots: canonicalRoots,
 							cwd: canonicalCwd,
 							pathAuthorityEvidence,
+							temporaryExternalCanonicalRoots: activeTempRoots,
 						},
 						requestInput,
 					)
@@ -1134,9 +1166,7 @@ export class Controller {
 		// regression test at
 		// `sdk/packages/agents/src/agent-runtime.w-trace-built-artifact.test.ts`.
 		// When the diagnostic is OFF, the install is a strict no-op.
-		installRuntimeWTraceObserverForClineMM(() =>
-			this.getWCarrierTraceContext(),
-		)
+		installRuntimeWTraceObserverForClineMM(() => this.getWCarrierTraceContext())
 		this.taskStateShadowWiring = createTaskShadowHostWiring({
 			// Pass a self-reference so the wiring can reach back through
 			// `this.sessions` after the lifecycle is constructed. The
@@ -2335,7 +2365,85 @@ export class Controller {
 	 * any path-bearing R0 command (no implicit "any path is
 	 * safe" default).
 	 */
-	private async buildPathAuthorityEvidence(toolInput: unknown): Promise<WorkspacePathAuthorityEvidence | undefined> {
+	/**
+	 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	 *
+	 * Read the persisted `clinemmTemporaryExternalPathAuthorities`
+	 * Settings list, filter expired entries, realpath-canonicalize
+	 * the surviving paths, and return the canonical paths that the
+	 * policy's R0 path-authority gate may treat as containing roots.
+	 *
+	 * Filtering is structural — a stale persisted entry whose
+	 * `expiresAt` is in the past is INACTIVE regardless of UI cleanup.
+	 * Realpath-canonicalization closes the symlink-escape attack: a
+	 * symlink at a temporary-root path resolves to its target, and
+	 * if that target is not inside the temporary root, the operand
+	 * is NOT contained.
+	 *
+	 * Failure modes (each INACTIVE, never throwing):
+	 *   - persisted list missing or malformed → []
+	 *   - entry with `now >= expiresAt` → dropped
+	 *   - entry whose `expiresAt` exceeds now + 24h (tampered persisted
+	 *     state that bypassed the write-time validator) → dropped
+	 *   - entry whose `expiresAt` is unparseable → dropped
+	 *   - entry whose `fs.realpathSync` throws → dropped
+	 *
+	 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION01:
+	 * The 24h hard ceiling is enforced TWICE:
+	 *   1. At WRITE time by `validateTemporaryExternalPathAuthorities`
+	 *      (the UI and CLI both call this before persisting). Write
+	 *      requests with >24h expiry are rejected with a typed error.
+	 *   2. At CONSUMPTION time here — even old or tampered persisted
+	 *      state cannot create effective >24h authority. If an entry's
+	 *      `expiresAt` exceeds `now + 24h`, this function drops it.
+	 *
+	 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION03:
+	 * This is the load-bearing cross-instance seam. The full pipeline
+	 * (read raw from backing JSON file → filter by temporal + 24h
+	 * ceiling invariants → realpath-canonicalize) is performed in
+	 * ONE production function call to
+	 * `resolveActiveTemporaryExternalCanonicalRootsFromBackingFile`.
+	 * No StateManager cache is consulted. No chokidar watcher, no
+	 * debounce, no chronology-based self-write heuristic, no
+	 * cross-instance cache-coherence protocol. Whatever is on disk
+	 * at this moment is what the policy sees — regardless of which
+	 * Codium window wrote it, when, or whether anyone flushed a
+	 * cache. Five running instances therefore converge without
+	 * restart.
+	 */
+	private resolveActiveTemporaryExternalCanonicalRoots(): string[] {
+		// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION03:
+		// Fresh-read from the authoritative backing file. The path is
+		// resolved through StorageContext (so `CLINE_DATA_DIR`,
+		// `CLINE_DIR`, and the JetBrains workspace-storage override
+		// all resolve identically to the writer side, ENG-2332).
+		const backingFilePath = path.join(this.stateManager.getStorageDataDir(), "globalState.json")
+		return resolveActiveTemporaryExternalCanonicalRootsFromBackingFile({
+			backingFilePath,
+			onRealpathFailure: (entry, err) =>
+				Logger.warn(
+					`[SdkController] Temporary external path "${entry.path}" failed realpath resolution; treating as INACTIVE.`,
+					err,
+				),
+		})
+	}
+
+	private async buildPathAuthorityEvidence(
+		toolInput: unknown,
+		// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION05:
+		// The same immutable snapshot the caller will hand to
+		// `getCommandHostAuthorization` MUST be threaded into the
+		// evidence here. The SDK's `buildPathAuthorityEvidence`
+		// embeds `temporaryExternalCanonicalRoots` into the evidence
+		// record so the policy re-test (which compares auth vs
+		// evidence) can verify identity. The caller (resolveHostAuthorization)
+		// reads the durable state once at the top and threads that
+		// exact reference through both the evidence builder and the
+		// auth constructor. Without this, evidence's embedded set
+		// defaults to `[]` and the policy re-test fails closed (or,
+		// worse, fails open in the buggy pre-CORRECTION05 build).
+		temporaryExternalCanonicalRoots: ReadonlyArray<string> = [],
+	): Promise<WorkspacePathAuthorityEvidence | undefined> {
 		let workspaceRoots: string[] = []
 		try {
 			const { paths } = await HostProvider.workspace.getWorkspacePaths({})
@@ -2366,6 +2474,11 @@ export class Controller {
 			// escape that previously masked a P0 throw for shapes the host
 			// did not pre-normalize (e.g. `{ commands: ["pwd"] }`).
 			command: toolInput,
+			// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION05:
+			// Embed the same snapshot the auth will carry. See the
+			// CORRECTION05 block on `resolveHostAuthorization` above
+			// for the causal geometry.
+			temporaryExternalCanonicalRoots,
 		})
 		if (!result.ok) {
 			// ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION02:

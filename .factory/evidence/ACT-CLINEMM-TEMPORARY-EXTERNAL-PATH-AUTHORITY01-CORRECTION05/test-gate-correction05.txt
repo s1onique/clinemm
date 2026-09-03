@@ -1,0 +1,83 @@
+ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION05
+test-gate-correction05                                                  (2026-09-03)
+
+CORRECTION05 RED→GREEN summary:
+
+Before CORRECTION05:
+  - Two fresh-reads of clinemmTemporaryExternalPathAuthorities
+    during one approval evaluation. Mixed-generation decisions
+    possible under cross-instance REMOVE between reads.
+  - classifyTemporaryExternalPathShape used literal `path === "/"`
+    for filesystem-root detection; Windows drive roots and UNC
+    paths classified as `valid`.
+  - path-authority-evidence.ts ended with `}` (no newline).
+
+After CORRECTION05 (RED→GREEN):
+  - ONE fresh-read at the top of resolveHostAuthorization.
+    Same snapshot threaded into both buildPathAuthorityEvidence
+    and getCommandHostAuthorization. Mixed-generation decisions
+    are structurally impossible.
+  - classifyTemporaryExternalPathShape uses
+    path.parse(path).root semantics. POSIX / → filesystem-root.
+    Windows C:\ → filesystem-root. UNC \\server\share →
+    filesystem-root. Extended-length \\?\C:\ → filesystem-root.
+  - path-authority-evidence.ts now ends with `}\n`.
+
+Test files touched:
+  apps/vscode/src/shared/storage/__tests__/temporaryExternalPathAuthorities.test.ts
+    58 tests total (was 47 before CORRECTION05; +11 from CORRECTION05).
+  apps/vscode/src/sdk/__tests__/temporary-external-path-authority01.c2-production-seam.test.ts
+    15 tests total (was 13 before CORRECTION05; +2 from CORRECTION05).
+  apps/vscode/src/core/storage/__tests__/temporaryExternalPathAuthorityCrossInstance.test.ts
+    13 tests total (unchanged — CORRECTION04 invariants preserved).
+
+Combined gate:
+  Test Files  3 passed (3)
+       Tests  86 passed (86)
+
+CORRECTION05 unit-level additions (classifier + filter):
+  + classifyTemporaryExternalPathShape POSIX: '/' is filesystem-root
+  + classifyTemporaryExternalPathShape POSIX: '/private/tmp' is valid
+  + classifyTemporaryExternalPathShape POSIX: trailing-separator path is valid
+  + classifyTemporaryExternalPathShape Windows: 'C:\\' is filesystem-root
+  + classifyTemporaryExternalPathShape Windows: 'D:\\' is filesystem-root
+  + classifyTemporaryExternalPathShape Windows: 'C:\\Users\\me' is valid
+  + classifyTemporaryExternalPathShape Windows: UNC '\\\\server\\share' is filesystem-root
+  + classifyTemporaryExternalPathShape Windows: UNC '\\\\server\\share\\dir' is valid
+  + classifyTemporaryExternalPathShape Windows: extended '\\\\?\\C:\\' is filesystem-root
+  + classifyTemporaryExternalPathShape Windows: 'C:' is not-absolute
+  + filter runtime filter drop witness: Windows drive-root tampered
+    entry would be dropped (mirror via win32)
+
+CORRECTION05 snapshot-identity witnesses (production-seam end-to-end):
+  + evidence and auth carry the SAME snapshot from a single fresh-read
+  + external REMOVE between snapshot capture and downstream use
+    does NOT split generations (snapshot frozen for THIS evaluation;
+    next evaluation observes REMOVE → empty set)
+
+
+TEST-MODE CLASSIFICATION (per Factory review):
+  CROSS_PLATFORM_SEMANTICS = SYNTHETIC_REAL
+    POSIX cases exercise the real production predicate against
+    real `node:path.parse`.
+  WINDOWS_LIVE_RUNTIME     = NOT_EXECUTED
+    Windows cases mirror production logic with `path.win32`
+    helpers so they execute on this POSIX CI host. No live
+    Windows CI runner is part of this ACT. Live Windows
+    execution remains a follow-up; current coverage is
+    sufficient for this ACT.
+
+SNAPSHOT-IDENTITY EVIDENCE COMPOSITION (per Factory review):
+  STRUCTURAL: the production callback
+    `resolveHostAuthorization` contains exactly one call to
+    `this.resolveActiveTemporaryExternalCanonicalRoots()`.
+  SYNTHETIC_REAL: the snapshot-identity witnesses exercise the
+    production durable-read helper plus evidence pipeline and
+    prove the snapshot survives external REMOVE; next fresh
+    evaluation observes `[]`.
+
+CLOSURE-IDENTITY NOTE (per Factory review):
+  This ACT commits ONLY its owned files. Pre-existing
+  factory-in-progress work (e.g. formatting-only
+  `working-context-state-projection.ts`) is excluded from
+  this ACT's commit per the reviewer's direction.

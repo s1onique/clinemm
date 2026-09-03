@@ -140,4 +140,52 @@ export interface WorkspacePathAuthorityEvidence {
 	 * resolved.
 	 */
 	operands: ReadonlyArray<WorkspacePathOperandEvidence>;
+	/**
+	 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	 *
+	 * Already-filtered (now < expiresAt) AND already-canonicalized
+	 * (`fs.realpathSync`) absolute paths from the persisted
+	 * `clinemmTemporaryExternalPathAuthorities` Settings array.
+	 *
+	 * The host (VS Code / CLI) is responsible for:
+	 *   1. Reading the persisted array from StateManager.
+	 *   2. Filtering expired entries (now >= expiresAt → drop).
+	 *   3. Canonicalizing each remaining path via `fs.realpathSync`.
+	 *   4. Passing the surviving canonical paths in here.
+	 *
+	 * Containment is tested against the UNION of `roots` and
+	 * `temporaryExternalCanonicalRoots`. The temporary roots do
+	 * NOT relax containment — they only widen the accepted set.
+	 * An operand outside BOTH sets still reports `contained: false`
+	 * and the policy downgrades the R0 rule to ASK.
+	 *
+	 * Defaults to `[]` (the pre-ACT contract;
+	 * MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0 for the absent-key
+	 * category).
+	 */
+	temporaryExternalCanonicalRoots?: ReadonlyArray<string>;
+}
+
+/**
+ * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+ *
+ * Public type for a single user-enabled temporary external path
+ * authority entry. The host validator rejects entries whose
+ * `expiresAt` exceeds `now + 24h` at write time; the SDK
+ * `filterActiveTemporaryExternalPathEntries` helper (in the
+ * app-layer storage module) re-applies the same temporal +
+ * ceiling invariant at consumption time as defense-in-depth.
+ *
+ * Re-exported from `@cline/core` for use by the host.
+ */
+export interface TemporaryExternalPathAuthority {
+	/** Absolute path on disk. Canonicalized via `fs.realpathSync` at consumption. */
+	path: string;
+	/**
+	 * ISO-8601 timestamp. The entry is INACTIVE iff `Date.parse(expiresAt) <= now`
+	 * OR `Date.parse(expiresAt) > now + 24h`. The host validator rejects
+	 * `expiresAt > now + 24h` at write time so this backstop is rarely
+	 * hit in normal operation.
+	 */
+	expiresAt: string;
 }

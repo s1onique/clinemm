@@ -138,6 +138,36 @@ apps/examples/desktop-app/.cursor/settings.json
 # to survive a fresh clone (mirroring the prior SSH-Authority
 # ACT's durability pattern).
 !/.factory/acts/ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01.md
+# ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01: closed
+# PASS_TEMPORARY_EXTERNAL_PATH_AUTHORITY_V5 (CORRECTION05) at HEAD,
+# binding the temporary-external-path-authority Settings UI + state +
+# proto + persistence + SDK policy surface to the production runtime
+# seam. CORRECTION03 closes the cross-instance-visibility halt by
+# adopting a fresh-read at the decision boundary (no watcher, no
+# debounce, no event attribution, no chronology-based self-write
+# heuristic). CORRECTION04 closes the post-CORRECTION03 P0 by sharing
+# a structural path-shape predicate between the write validator and
+# the runtime filter, so tampered persisted state of "/" or relative
+# paths can no longer widen R0 authority beyond the bounded contract.
+# CORRECTION05 closes the post-CORRECTION04 P0 by reading the
+# temporary-authority durable state ONCE per approval evaluation and
+# threading that exact immutable snapshot into both the evidence
+# builder and the host authorization; cross-instance REMOVE between
+# the two reads can no longer produce mixed-generation decisions.
+# CORRECTION05 also closes the cross-platform filesystem-root P1
+# (Windows drive roots and UNC paths) via path.parse(path).root.
+# The ACT body + CORRECTION01 + CORRECTION02 + CORRECTION03 +
+# CORRECTION04 + CORRECTION05 ACTs must be durably tracked for the
+# contract, the ablation matrix, the load-bearing two-reader /
+# one-backing-store test transcripts, the shared-predicate drift-
+# prevention, and the snapshot-identity invariant to survive a
+# fresh clone.
+!/.factory/acts/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01.md
+!/.factory/acts/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION01.md
+!/.factory/acts/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION02.md
+!/.factory/acts/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION03.md
+!/.factory/acts/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION04.md
+!/.factory/acts/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION05.md
 # ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01: opened
 # 2026-09-02 immediately after the umbrella ACT's Q5 GREEN landing
 # (commit 217e7f53c). Per Factory causal reviewer verdict

@@ -1,0 +1,137 @@
+ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION05
+entry-freeze                                                              (2026-09-03)
+
+ENTRY_HEAD  = 9e036cf50 (factory baseline; CORRECTION05 uncommitted)
+              Note: The working tree contains uncommitted Factory
+              work-in-progress for CORRECTION03 closure alongside
+              CORRECTION04 + CORRECTION05 additions; the CORRECTION05
+              additive work is contained in the files listed in §5 of
+              the ACT body.
+DOCS_HEAD   = 9e036cf50
+ORIGIN_HEAD = 9e036cf50
+BRANCH      = main
+WORKTREE    = dirty (32 modified files from Factory in-progress work
+              plus this ACT file + evidence dir as additions)
+
+REVIEWER HALT (from the Factory reviewer on CORRECTION04)
+  P0 -- HALT_TEMP_AUTHORITY_SNAPSHOT_IDENTITY:
+
+  CORRECTION04 closed the tampered-paths P0. The fresh-read
+  architecture is correctly bounded at cross-instance
+  visibility. But the digest exposes a NEW P0 in the
+  fresh-read architecture: the temporary-authority set is read
+  TWICE during one approval decision (once inside
+  buildPathAuthorityEvidence and once before
+  getCommandHostAuthorization), with no identity binding
+  between the two reads. An external REMOVE between the two
+  reads can produce a mixed-generation decision: the evidence
+  embeds the OLD authority set while the auth carries the NEW
+  one, and the policy re-test authorizes from a snapshot the
+  user has already revoked.
+
+  P1 -- CROSS_PLATFORM_ROOT_SHAPE:
+
+  The CORRECTION04 classifier uses literal `path === "/"` for
+  filesystem-root detection. On Windows the platform root is
+  `C:\` (drive) or `\\server\share` (UNC), not `/`. Granting
+  `C:\` would make the entire drive an external authority root.
+
+  P2 -- EOF newline residue:
+
+  path-authority-evidence.ts ended with `}` (no trailing newline).
+
+PURPOSE OF THIS CORRECTION
+  Bounded single-axis correction. Three minimal changes:
+
+  1. ONE durable temp-authority read per approval evaluation,
+     threaded as one immutable snapshot into both the evidence
+     builder and the host authorization.
+  2. Cross-platform filesystem-root detection via
+     `path.parse(path).root` (handles POSIX `/`, Windows drive
+     roots like `C:\`, UNC roots like `\\server\share`, and
+     extended-length paths like `\\?\C:\`).
+  3. EOF newline cleanup in path-authority-evidence.ts.
+
+  No new persistence mechanism, no watcher, no lock — just
+  one fresh-read, one snapshot, one decision.
+
+PROTECTED LANES (unchanged from CORRECTION04)
+  fresh-read decision-boundary architecture
+  two-reader/one-store ADD
+  stale-removal REMOVE
+  24h write ceiling
+  >24h runtime rejection
+  absolute-path write validation
+  POSIX "/" write rejection
+  shared path-shape predicate (validator + filter)
+  symlink operand escape
+  no watcher
+  CORRECTION04 adversarial matrix (all 19 tests still pass)
+
+LANE STATUS BEFORE CORRECTION
+  CORRECTION04 was halted with new P0
+  HALT_TEMP_AUTHORITY_SNAPSHOT_IDENTITY plus P1
+  CROSS_PLATFORM_ROOT_SHAPE plus P2 EOF residue.
+
+LANE STATUS AFTER CORRECTION (target)
+  PASS / TEMPORARY_EXTERNAL_PATH_AUTHORITY_V5 (CORRECTION05)
+  P0 closed: snapshot frozen for the duration of THIS evaluation;
+    next evaluation observes REMOVE.
+  P1 closed: Windows drive roots and UNC paths classified as
+    filesystem-root via path.parse(path).root semantics.
+  P2 closed: path-authority-evidence.ts now ends with `}\n`.
+  UI_STATE_STALE_CROSS_INSTANCE remains P1 NON-BLOCKING (not
+    addressed in CORRECTION05, per reviewer direction).
+
+RED → GREEN TRACE
+  Pre-CORRECTION05 (the snapshot-identity bug):
+    buildPathAuthorityEvidence() runs → no temp-roots snapshot
+    resolveActiveTemporaryExternalCanonicalRoots() runs AGAIN →
+      possibly different set
+    Two reads can produce different sets under cross-instance
+    revocation between them.
+
+  Post-CORRECTION05 (this fix):
+    ONE fresh-read at the top of resolveHostAuthorization.
+    Same snapshot threaded into both buildPathAuthorityEvidence
+    (via new optional parameter) and getCommandHostAuthorization
+    (via existing temporaryExternalCanonicalRoots parameter).
+    Snapshot frozen for the duration of THIS evaluation.
+    Next evaluation reads fresh from disk and observes REMOVE.
+
+  Snapshot-identity witnesses added to
+  temporary-external-path-authority01.c2-production-seam.test.ts:
+    - evidence and auth carry the SAME snapshot from a single
+      fresh-read
+    - external REMOVE between snapshot capture and downstream use
+      does NOT split generations
+  Both PASS.
+
+PRODUCTION DELTA
+  ~ apps/vscode/src/sdk/SdkController.ts
+      - resolveHostAuthorization: ONE fresh-read at the top;
+        same snapshot passed into both
+        buildPathAuthorityEvidence (new optional parameter) and
+        getCommandHostAuthorization (existing parameter).
+      - buildPathAuthorityEvidence: new optional
+        temporaryExternalCanonicalRoots parameter (default []),
+        forwarded to the SDK helper.
+  ~ apps/vscode/src/shared/storage/temporaryExternalPathAuthorities.ts
+      - classifyTemporaryExternalPathShape: replaced literal
+        `path === "/"` with cross-platform isFilesystemRoot(path)
+        using path.parse(path).root plus trailing-separator
+        tolerance.
+  ~ sdk/packages/core/src/runtime/command-policy/path-authority-evidence.ts
+      - EOF newline: file now ends with `}\n`.
+  + apps/vscode/src/shared/storage/__tests__/temporaryExternalPathAuthorities.test.ts
+      +10 cross-platform tests (POSIX + Windows via path.win32).
+      +1 Windows drive-root runtime filter witness.
+  + apps/vscode/src/sdk/__tests__/temporary-external-path-authority01.c2-production-seam.test.ts
+      +2 snapshot-identity witnesses.
+
+WIRE_SCHEMA_DELTA      = NONE
+PUBLIC_TYPE_SURFACE_DELTA = +1 (isFilesystemRoot helper inside the
+                              shared module; additive, internal)
+P0 = NONE remaining
+P1 = UI_STATE_STALE_CROSS_INSTANCE (NON-BLOCKING; deferred)
+P2 = NONE for CORRECTION05 closure
