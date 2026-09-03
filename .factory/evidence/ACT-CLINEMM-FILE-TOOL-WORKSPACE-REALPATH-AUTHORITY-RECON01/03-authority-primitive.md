@@ -54,12 +54,23 @@ LEXICAL_RESOLUTION   = path.isAbsolute / path.normalize /
 ```
 
 ```text
-BASE_SOURCE          = NONE on the executor side. The closure
-                       receives cwd (== session workspaceRoot)
-                       as the second argument but discards it
-                       when inputPath is absolute. There is no
-                       path.resolve(cwd, inputPath) branch
-                       reachable for absolute inputs.
+BASE_SOURCE          = cwd IS received by the closure as the
+                       second argument (== session
+                       workspaceRoot). It is USED for the
+                       containment check (line 60-62) for
+                       relative inputs. It is INTENTIONALLY
+                       DISCARDED for absolute inputs by the
+                       early bypass at line 56-58. The
+                       defect is NOT the absence of a
+                       path.resolve(cwd, inputPath) call
+                       (that would still return inputPath
+                       unchanged for an absolute input on
+                       Node — see 06-causal-discriminator
+                       for the corrected framing); the
+                       defect is the early bypass of the
+                       containment check that the existing
+                       path.relative test already performs
+                       correctly for relative inputs.
 
 CONTAINMENT_CHECK    = NONE for absolute inputs. For relative
                        inputs only, a lexical containment
@@ -131,13 +142,28 @@ CASE_CLASS              = CASE_E_WRONG_AUTHORIZED_ROOT
 LOAD_BEARING_FRAMING    = the executor's explicit, JSDoc-
                           documented "Absolute paths are
                           always accepted as-is" branch
-                          at line 56-58 of
-                          editor.ts is the framing decision
-                          that yields the bug class.
-                          Defect is at the LEXICAL_RESOLUTION
-                          step (no path.resolve for absolute),
-                          not at the CONTAINMENT_CHECK step
-                          (which is correct for relative paths).
+                          at line 56-58 of editor.ts is
+                          the framing decision that yields
+                          the bug class. Specifically the
+                          defect is at the CONTAINMENT_CHECK
+                          step: the early return at line
+                          56-58 fires BEFORE the
+                          path.relative(cwd, resolved)
+                          containment test at line 60-62.
+                          (Earlier-draft note: an initial
+                          framing said the defect was at
+                          LEXICAL_RESOLUTION — that was
+                          WRONG because path.resolve
+                          ("/ws", "/outside/file") returns
+                          "/outside/file" on Node; swapping
+                          normalize for resolve in the
+                          resolution step would not bind
+                          absolute inputs. The actual defect
+                          is the early bypass of the
+                          containment test, not the choice
+                          of normalize vs resolve. See
+                          06-causal-discriminator for the
+                          corrected ROOT_CAUSE framing.)
 Q3 STATUS               = BOUND
 ```
 

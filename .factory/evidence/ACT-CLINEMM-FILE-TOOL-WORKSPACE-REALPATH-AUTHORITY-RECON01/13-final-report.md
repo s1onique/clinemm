@@ -5,30 +5,50 @@ ACT_ID                =
   ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
 
 VERDICT               =
-  PASS_AUTHORITY_VIOLATION_PROVEN
+  PASS_OUTSIDE_CWD_MUTATION_PROVEN
+  AUTHORITY_VIOLATION   = PENDING_CONTRACT_BIND
   (Q1-Q4 BOUND; Q5 RED REPRODUCED against the production
    createEditorExecutor seam at the LIVE-bound `editor`
-   tool; defect classified; handoff ready for
+   tool; defect classified; HOWEVER, the load-bearing
+   "authority violation" claim is PENDING — see
+   07-effective-destination-invariant.md for the
+   honest ground-truth on what the source actually
+   promises vs. what we asserted in the CYCLE3 verdict.
+   The corrected handoff is
+   ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01
+   (explicit contract introduction; freeze the invariant
+    as a new durable rule) followed by
+   ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-IMPLEMENTATION01
+   (implement the contract at the Q4 seam) — NOT
    ACT-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT-PATH-AUTHORITY-REPAIR01
-   to open and perform the bounded production repair)
+   which overclaims a pre-existing contract violation.)
 
 IDENTITY
   ENTRY_HEAD           = 03af027a9 (pre-existing recon ACT entry,
                                  P1 calibration + handoff)
   ENTRY_TREE           = 479ccebf03baff8402044f785f6f1d5551462bd2
-  FINAL_HEAD           = 684356da8 (conversational current HEAD;
-                                 recon cycle did not advance a
-                                 commit; evidence files written
-                                 only)
-  FINAL_TREE           = not changed (no commit this cycle)
-  WORKTREE_STATUS      = mixed
-                          tracked  : clean
-                          untracked: 1 new test file under
-                                     sdk/packages/core/src/
-                                     extensions/tools/executors/
-                                     editor.realpath-authority.test.ts
-                          expected : test file staged by the
-                                     follow-on repair ACT.
+  CYCLE3_HEAD          = a917f73a6 (cycle3 closure commit:
+                                 "recon(factory): ... Q1 BOUND +
+                                 Q5 RED REPRODUCED"; introduced
+                                 the original 6 RED cases A/B/C/E/F/H;
+                                 verdict was PASS_AUTHORITY_VIOLATION_
+                                 PROVEN which has since been
+                                 downgraded by the Factory reviewer)
+  FINAL_HEAD           = <to be filled at CYCLE4 commit>
+  FINAL_TREE           = <to be filled at CYCLE4 commit>
+  WORKTREE_STATUS      = mixed at start of CYCLE4
+                          tracked  : clean (10 files from CYCLE3 commit
+                                     still in HEAD a917f73a6)
+                          untracked: none
+                          modified : 5 files (this final report +
+                                     03-authority-primitive.md +
+                                     06-causal-discriminator.md +
+                                     05-red-matrix.txt +
+                                     entry-freeze.txt; the test
+                                     file also has +1 new case D)
+                          expected : CYCLE4 commit will fold all
+                                     corrections in one bounded
+                                     commit.
 
 LIVE_BIND
   TASK_ID              = 1788238423825_btxab
@@ -295,38 +315,82 @@ FORCE_PUSHED           = NO
 AMENDED_PUBLISHED_COMMIT = NO
 
 NEXT_RECOMMENDED_ACT   =
-  ACT-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT-PATH-AUTHORITY-REPAIR01
-  (already pre-planned; hard-gate on Q1 completion has just
-   been met by this report)
+  ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01
+  (CYCLE4 CORRECTION — see 07-effective-destination-invariant.md
+   for the disposition rationale; the previous recommendation
+   ACT-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT-PATH-AUTHORITY-REPAIR01
+   overclaims a pre-existing contract violation and was rejected
+   by the Factory reviewer on commit a917f73a6)
+
+  FOLLOWED BY (after (a) closes with the contract frozen):
+
+  ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-IMPLEMENTATION01
+  (implements the contract at the Q4 seam
+   SdkDiffEditCoordinator.executeEditorTool with realpath-based
+   canonical containment — see 06-causal-discriminator.md for
+   why pure lexical containment is insufficient: case D
+   (existing-symlink escape) is RED today, and a lexical-only
+   repair would not close it)
 ```
 
-## Why the repair ACT is the correct handoff, not a separate recon
+## Why the next ACT is a contract ACT, not a repair ACT
 
 ```text
 The decision matrix applied to this recon:
 
   Is the LIVE tool still UNBOUND?                NO  (Q1 BOUND)
-  Is the authorized root still UNDETERMINED?     NO  (Q2 BOUND)
-  Is the path chain still UNDESCRIBED?           NO  (Q3 BOUND)
-  Is the composition seam still UNSELECTED?      NO  (Q4 BOUND)
-  Did the RED reproduce?                         YES (Q5 REPRODUCED)
-  Was the cause isolated with one-variable flip? YES (CASE_E)
-  Is the smallest bounded repair obvious?        YES (it is the
+  Is the LIVE permitted mutation proven?         YES (cases C, D,
+                                                       E RED today)
+  Is a pre-existing contract proven violated?    NO  (the editor
+                                                       has NO code-level
+                                                       invariant today;
+                                                       the user-facing
+                                                       auto-approve
+                                                       policy at
+                                                       docs/features/
+                                                       auto-approve.mdx
+                                                       is the only
+                                                       partial grounding)
+  Was the cause isolated with one-variable flip? YES (CASE_E early
+                                                       bypass at
+                                                       editor.ts:56-58)
+  Is the smallest bounded repair obvious?        YES (delete the
                                                        absolute-bypass
-                                                       line)
+                                                       branch AND add
+                                                       realpath
+                                                       canonicalization
+                                                       for case D)
 
-The repair ACT's first two actions are now:
+The handoff is corrected from "repair a contract violation"
+to "introduce the contract, then implement it":
 
-  1. Open the new test as a controlled RED (already PASSING/FAILING
-     per the matrix captured here).
-  2. Apply the bounded change that turns C and E red-to-green
-     while keeping A/B/F/H green.
+  ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01 must:
+    - freeze the invariant as a new durable rule:
+        editor mutations must remain inside the workspace
+        as EFFECTIVE destination (lexical AND realpath)
+    - explicitly cover case D (lexical-inside but
+      effective-outside via symlink)
+    - explicitly cover cases C and E (absolute-outside,
+      nonexistent-outside-tree)
+    - bind the apply_patch seam symmetrically (conservation)
+    - NOT widen TEMPORARY_EXTERNAL_PATH_AUTHORITY or Seatbelt
 
-If either action fails to author a smaller-than-the-problem
-fix, the repair ACT halts and re-opens the recon lane for
-Q4b (re-select the seam) and Q9b (re-discriminate the
-cause). Per ACT §18, that is the only STOP-mandated
-follow-up.
+  ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-IMPLEMENTATION01 must:
+    - flip cases C, D, E from RED to GREEN while keeping
+      A/B/F/H GREEN
+    - confirm editor.test.ts (adjacent) 13/13 PASS
+    - perform necessity ablation: temporarily disable the
+      wrap -> C, D, E return to RED; restore
+    - dogfood + LIVE qualify on a disposable target
+    - typecheck apps/vscode (SdkController.ts will change)
+    - targeted lint, git diff --check silent
+
+If the contract ACT halts because the invariant is not
+agreed, the recon lane re-opens for Q2b/Q3b. If the
+implementation ACT halts because no smaller-than-the-
+problem fix is available, it re-opens the recon for
+Q4b (re-select seam) and Q9b (re-discriminate cause).
+Per ACT §18, those are the only STOP-mandated follow-ups.
 ```
 
 ## Producer-first discipline note (for the reviewer)
@@ -345,4 +409,62 @@ executeApplyPatchTool) under test, the RED must be RE-authored
 against THAT seam — not against the SDK's default executor
 in isolation — so the test gates the real production path
 the model will hit at runtime.
+```
+
+## CYCLE4 amendment (2026-09-04)
+
+Per Factory causal reviewer verdict on commit `a917f73a6`
+(`HALT_AUTHORITY_CONTRACT_NOT_PROVEN`), CYCLE4 corrections:
+
+1. **Q2 honestly downgraded**: the CYCLE3 verdict
+   `PASS_AUTHORITY_VIOLATION_PROVEN` overclaimed. The editor
+   has NO code-level invariant today enforcing workspace-only
+   mutation; the user-facing `auto-approve.mdx` is the only
+   partial grounding. The corrected verdict is
+   `PASS_OUTSIDE_CWD_MUTATION_PROVEN` +
+   `AUTHORITY_VIOLATION = PENDING_CONTRACT_BIND`.
+
+2. **Case D added**: existing-symlink escape is now RED.
+   This is a deterministic (non-TOCTOU) defect that the
+   factory invariant ("effective destination must remain
+   inside authorized root") explicitly covers. A
+   lexical-only repair would NOT close it; the
+   implementation ACT must use fs.realpath canonicalization.
+
+3. **Causal wording corrected**: the earlier draft claim
+   "path.normalize() in lieu of path.resolve(cwd, ...)"
+   was wrong — `path.resolve("/ws", "/outside")` returns
+   "/outside" on Node (absolute second arg resets the base).
+   The actual defect is the early bypass of
+   `path.relative(cwd, resolved)` containment test for
+   absolute inputs. See `06-causal-discriminator.md` for the
+   corrected framing.
+
+4. **Handoff changed**: from
+   `ACT-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT-PATH-AUTHORITY-REPAIR01`
+   (which implied a pre-existing contract violation) to
+   `ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01`
+   (explicit contract introduction) followed by
+   `ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-IMPLEMENTATION01`
+   (implementation at the Q4 seam with realpath canonical
+   containment).
+
+5. **Conservation explicit**: the read seam
+   (`createWorkspaceFileReadExecutor`) and the apply_patch
+   seam (conservation) both have analogous lexical-only
+   patterns; the implementation ACT must address editor
+   first and may consider whether to widen the read/apply
+   seams symmetrically in a follow-up ACT, NOT in this one.
+
+```text
+EV_VERDICT_CYCLE4     = PASS_OUTSIDE_CWD_MUTATION_PROVEN
+                       AUTHORITY_VIOLATION = PENDING_CONTRACT_BIND
+RED_MATRIX_CYCLE4     = A PASS, B PASS, C FAIL(RED), D FAIL(RED, NEW),
+                       E FAIL(RED), F PASS, H PASS
+                       [3 RED / 4 control PASS]
+ADJACENT_TEST         = editor.test.ts (13 tests) PASS, no regression
+PRODUCTION_FILES      = 0 changed (this ACT is recon-only)
+ENTRY_FREEZE          = updated; CYCLE4 block appended
+NEXT_ACT              = ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01
+                       (followed by IMPLEMENTATION01)
 ```

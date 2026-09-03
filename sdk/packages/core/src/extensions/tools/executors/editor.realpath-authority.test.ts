@@ -8,20 +8,31 @@
  *   03-authority-primitive.md
  *   04-composition-seam.md
  *   05-red-matrix.txt
+ *   06-causal-discriminator.md
+ *   07-effective-destination-invariant.md
  *
  * RED cases (per ACT §6):
  *   A. CLEAN AUTHORIZED WRITE               — PASS (control)
  *   B. LEXICAL TRAVERSAL ESCAPE             — PASS (control today)
  *   C. ABSOLUTE OUTSIDE TARGET              — REPRODUCES (RED)
- *   D. EXISTING SYMLINK ESCAPE              — unobserved (skipped)
+ *   D. EXISTING SYMLINK ESCAPE (absolute,   — REPRODUCES (RED)
+ *      lexical-inside, effective-outside)
  *   E. NONEXISTENT OUTSIDE TREE             — REPRODUCES (RED)
  *   F. IN-ROOT CANONICALIZED PATH           — PASS (control)
- *   G. GLOBAL-CAPABILITY CONSERVATION       — out of scope here
+ *   G. REPAIR-SEAM PROOF                    — separate test
+ *                                              (see 04-composition-seam.md
+ *                                              and apps/vscode/src/sdk/
+ *                                              sdk-diff-edit-coordinator.
+ *                                              test.ts — case G belongs
+ *                                              in apps/vscode workspace,
+ *                                              not here, because the
+ *                                              coordinator type lives
+ *                                              there)
  *   H. ORDINARY WORKSPACE CONSERVATION      — PASS (control)
  *
- * The RED cases C and E are the load-bearing defect observations;
+ * The RED cases C, D, and E are the load-bearing defect observations;
  * cases A/B/F/H are positive controls. Once the production repair
- * is in place, this test must GREEN at C and E (and remain green at
+ * is in place, this test must GREEN at C, D, and E (and remain green at
  * all positive controls).
  *
  * TEMPORARY_EXTERNAL_PATH_AUTHORITY is NOT touched. Seatbelt is NOT
@@ -131,6 +142,43 @@ describe(
 				await expect(fs.access(target)).rejects.toMatchObject({
 					code: "ENOENT",
 				});
+			});
+		});
+
+		it("D. EXISTING SYMLINK ESCAPE — RED: lexical-inside must still be refused (effective destination)", async () => {
+			await withTwoRootFixture(async (authorizedRoot, outsideRoot) => {
+				// Pre-place a symlink authorizedRoot/escape -> outsideRoot.
+				// The symlink exists BEFORE the executor is called, so
+				// this is a deterministic (non-TOCTOU) escape.
+				const escape = path.join(authorizedRoot, "escape");
+				await fs.symlink(outsideRoot, escape, "dir");
+
+				const editor = createEditorExecutor();
+				const target = path.join(escape, "d.txt");
+				// Lexical inspection: path.relative(authorizedRoot,
+				// target) stays "escape/d.txt" (no ".." prefix) — the
+				// LEXICAL containment check would pass on a relative
+				// input. But the input is ABSOLUTE so the early bypass
+				// at editor.ts:56-58 skips containment entirely; the
+				// executor returns the path verbatim; fs.mkdir + fs.
+				// writeFile follow the symlink and the file lands at
+				// outsideRoot/d.txt.
+				//
+				// The factory invariant (EPIC-CLINEMM-FILE-TOOL-
+				// WORKSPACE-REALPATH-AUTHORITY01 — "effective
+				// destination must remain inside authorized root")
+				// requires this case to be refused. Today's executor
+				// has no realpath canonicalization at all.
+				await expect(
+					editor(
+						{ path: target, new_text: "symlink-escape" },
+						authorizedRoot,
+						context,
+					),
+				).rejects.toThrow(/out.*(workspace|authorized)/i);
+				await expect(
+					fs.access(path.join(outsideRoot, "d.txt")),
+				).rejects.toMatchObject({ code: "ENOENT" });
 			});
 		});
 

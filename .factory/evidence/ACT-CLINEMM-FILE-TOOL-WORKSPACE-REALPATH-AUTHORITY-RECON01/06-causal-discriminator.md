@@ -90,12 +90,22 @@ ALT_FRAMING_1: "It's a sanitization defect."
 
 ALT_FRAMING_2: "It's a base source defect — the
   resolver uses the wrong base."
-  - PARTIALLY ACCEPTED. The base source IS missing:
-    for absolute inputs, the closure has no base at
-    all; path.resolve(cwd, inputPath) is unreachable
-    because the isAbsoluteInput branch on line 48-50
-    substitutes path.normalize. This is the
-    CASE_E_WRONG_AUTHORIZED_ROOT classification.
+  - REVISED. The base IS present (cwd passed as
+    the closure's second argument), but it is
+    SKIPPED by the early bypass at line 56-58
+    for absolute inputs. The defect is the
+    CONTAINMENT_CHECK being skipped, NOT the
+    resolution using a wrong base — the resolution
+    step itself is reasonable for an absolute
+    path (normalize is fine); the bug is that
+    the result is returned WITHOUT running the
+    path.relative(cwd, resolved) check that
+    would refuse it. This is the
+    CASE_E_WRONG_AUTHORIZED_ROOT classification
+    (the resolver "trusts" the absolute input as
+    if it were already authorized), reframed as
+    a containment-check bypass rather than a
+    resolution-base defect.
 
 ALT_FRAMING_3: "It's a TOCTOU race."
   - REJECTED for the primary RED. The defect
@@ -126,21 +136,60 @@ FIRST_BROKEN_BOUNDARY         = resolveFilePath at
                                  editor.ts:42-65, the
                                  isAbsoluteInput branch
                                  at line 56-58
-ROOT_CAUSE                    = path.normalize() for
-                                 absolute inputs in lieu
-                                 of path.resolve(cwd, ...)
-                                 + the
-                                 restrictToCwd-bypass
-                                 condition
-DISCRIMINATOR                  = remove the absolute
-                                 bypass; the
+ROOT_CAUSE                    = EARLY BYPASS of the
+                                 path.relative(cwd,
+                                 resolved) containment
+                                 test for absolute
+                                 inputs. The branch
+                                 at line 56-58 returns
+                                 `resolved` BEFORE the
                                  relative-only check
-                                 (line 60-62) refuses
-                                 the LIVE target with
-                                 the same error string
-                                 it already uses for
+                                 at line 60-62 runs.
+                                 (Note: an earlier draft
+                                 of this section claimed
+                                 the defect was
+                                 "path.normalize() in
+                                 lieu of path.resolve
+                                 (cwd, ...)"; that
+                                 framing is WRONG because
+                                 path.resolve("/ws",
+                                 "/outside/file")
+                                 returns "/outside/file"
+                                 on Node — absolute
+                                 second arg resets the
+                                 resolve base. Swapping
+                                 path.normalize for
+                                 path.resolve(cwd, ...)
+                                 would NOT bind absolute
+                                 inputs. The correct
+                                 repair is to DELETE the
+                                 absolute-bypass branch
+                                 (or replace it with
+                                 "recompute resolved =
+                                 path.resolve(cwd,
+                                 inputPath)" so the
+                                 path.relative check
+                                 sees the right base),
+                                 NOT to swap normalize
+                                 for resolve in the
+                                 resolution step.)
+DISCRIMINATOR                  = remove the absolute
+                                 bypass at line 56-58;
+                                 the relative-only
+                                 check (line 60-62)
+                                 refuses the LIVE
+                                 target with the same
+                                 error string it
+                                 already uses for
                                  relative "../..."
-                                 cases.
+                                 cases. The Node
+                                 semantics that make
+                                 this correct:
+                                   path.relative("/ws",
+                                     "/outside/c.txt")
+                                   => "../outside/c.txt"
+                                   (rel starts with
+                                    ".." -> refuse)
 ```
 
 ## STOP-RULE note

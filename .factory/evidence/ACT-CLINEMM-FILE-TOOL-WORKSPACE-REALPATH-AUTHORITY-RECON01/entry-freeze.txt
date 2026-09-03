@@ -36,7 +36,7 @@
 #   C1       : GO_LIVE_BIND
 
 # CYCLE3 (Q1 LIVE_BIND + Q2/Q3/Q4 + Q5 RED on 684356da8):
-#   Verdict  : PASS_AUTHORITY_VIOLATION_PROVEN
+#   Verdict  : PASS_AUTHORITY_VIOLATION_PROVEN (DOWNGRADED in CYCLE4)
 #   Result   : Q1 BOUND (LIVE tool = editor, captured verbatim
 #              in 01-live-bind.md from the durable session
 #              transcript at
@@ -69,3 +69,43 @@
 #              satisfied; that ACT opens next and performs
 #              the bounded repair.
 #   See 01-live-bind.md .. 13-final-report.md
+
+# CYCLE4 (Factory reviewer correction on a917f73a6):
+#   Verdict  : PASS_OUTSIDE_CWD_MUTATION_PROVEN
+#              AUTHORITY_VIOLATION = PENDING_CONTRACT_BIND
+#   Reason   : reviewer correctly noted that the CYCLE3 verdict
+#              "PASS_AUTHORITY_VIOLATION_PROVEN" overclaimed:
+#              the editor has NO code-level invariant enforcing
+#              workspace-only mutation today; the user-facing
+#              docs/features/auto-approve.mdx is the only
+#              partial grounding ("Edit project files" defaults
+#              to workspace-only; "Edit all files" is opt-in).
+#              The reviewer's verdict is
+#              HALT_AUTHORITY_CONTRACT_NOT_PROVEN.
+#   Added    : case D (existing-symlink escape) — deterministic
+#              non-TOCTOU RED. Required because the factory
+#              invariant is "effective destination must remain
+#              inside authorized root" (realpath, not lexical),
+#              and case D is the determinative proof that a
+#              lexical-only repair would not close it.
+#   Corrected: causal wording — defect is the early bypass of
+#              path.relative(cwd, resolved) containment test
+#              for absolute inputs at editor.ts:56-58, NOT a
+#              missing path.resolve(cwd, ...) join (path.resolve
+#              ("/ws", "/outside") returns "/outside" on Node).
+#   Handoff  : ACT-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT-PATH-
+#              AUTHORITY-REPAIR01 (implied contract violation)
+#              REJECTED in favor of:
+#                ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-
+#                CONTRACT01 (explicit contract introduction;
+#                freeze invariant as new durable rule; covers
+#                case D explicitly)
+#                ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-
+#                IMPLEMENTATION01 (implement at Q4 seam with
+#                realpath canonical containment — NOT lexical
+#                only; must close case D)
+#   Production change: 0 (recon-only cycle)
+#   Test delta: +1 case (D) — total 7 tests, 3 RED / 4 PASS
+#   Adjacent editor.test.ts: 13/13 PASS preserved (no regression)
+#   See 07-effective-destination-invariant.md for the full
+#   disposition rationale.

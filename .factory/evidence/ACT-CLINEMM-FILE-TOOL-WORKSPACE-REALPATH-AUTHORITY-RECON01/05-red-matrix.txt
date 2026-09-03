@@ -81,3 +81,130 @@ Error {
 
 [vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/executors/editor.realpath-authority.test.ts.
 [0m[31merror[0m[2m:[0m script [1m"test:unit"[0m exited with code 1[0m
+
+[2m========================================
+CYCLE4 (2026-09-04 — D_EXISTING_SYMLINK added)
+========================================[0m
+
+Adds case D (existing-symlink escape, deterministic non-TOCTOU)
+to the Q5 RED matrix per Factory causal reviewer verdict on
+commit `a917f73a6` ("Q2/Q3 authority contract not yet proven").
+
+RESULT: 3 RED / 4 control PASS.
+  A. control: clean write inside cwd passes                  PASS
+  B. relative lexical traversal escape (../...) is refused   PASS
+  C. ABSOLUTE OUTSIDE TARGET                                 FAIL (RED)
+  D. EXISTING SYMLINK ESCAPE                                 FAIL (RED)
+     [lexical path inside authorized; effective write
+      outside authorized via OS symlink lookup]
+  E. nonexistent descendant of an outside root              FAIL (RED)
+  F. control: in-root canonical variant still passes         PASS
+  H. control: ordinary workspace edit still passes            PASS
+
+$ bunx vitest run src/extensions/tools/executors/editor.realpath-authority.test.ts
+
+(node:3009) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:3010) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts (7 tests | 3 failed) 14ms
+     ✓ A. control: clean write inside cwd passes 4ms
+     ✓ B. relative lexical traversal escape (../...) is refused today 2ms
+     × C. ABSOLUTE OUTSIDE TARGET — RED: must be refused 4ms
+     × D. EXISTING SYMLINK ESCAPE — RED: lexical-inside must still be refused (effective destination) 1ms
+     × E. nonexistent descendant of an outside root — RED: must be refused 1ms
+     ✓ F. control: in-root canonical variant still passes 1ms
+     ✓ H. control: ordinary workspace edit still passes 1ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/executors/editor.realpath-authority.test.ts. Error: kill EPERM
+    at ChildProcess.kill (node:internal/child_process:535:26)
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/vitest@4.1.10+fb605fc5f4a26331/node_modules/vitest/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/vitest@4.1.10+fb605fc5f4a26331/node_modules/vitest/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/vitest@4.1.10+fb605fc5f4a26331/node_modules/vitest/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/vitest@4.1.10+fb605fc5f4a26331/node_modules/vitest/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'kill'
+}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > C. ABSOLUTE OUTSIDE TARGET — RED: must be refused
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-qjkjuA/cline-edit-auth-oYGpCr/outside/c.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:141:6
+    139|       context,
+    140|      ),
+    141|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    142|     await expect(fs.access(target)).rejects.toMatchObject({
+    143|      code: "ENOENT",
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:9
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:125:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > D. EXISTING SYMLINK ESCAPE — RED: lexical-inside must still be refused (effective destination)
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-qjkjuA/cline-edit-auth-lisnCD/authorized/escape/d.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:178:6
+    176|       context,
+    177|      ),
+    178|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    179|     await expect(
+    180|      fs.access(path.join(outsideRoot, "d.txt")),
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:3
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:149:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > E. nonexistent descendant of an outside root — RED: must be refused
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-qjkjuA/cline-edit-auth-4QJdGm/outside/deep/sub/e.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:199:6
+    197|       context,
+    198|      ),
+    199|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    200|     await expect(
+    201|      fs.access(path.join(outsideRoot, "deep")),
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:74:9
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:186:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 4 passed (7)
+   Start at  02:39:43
+   Duration  161ms (transform 22ms, setup 0ms, import 29ms, tests 14ms, environment 0ms)
+
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/executors/editor.realpath-authority.test.ts.
