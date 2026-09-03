@@ -8,7 +8,9 @@
 > Seatbelt, sensitive-file protections, and realpath verification
 > all unchanged.
 >
-> **Final HEAD**: see closure-identity note below.
+> **Final HEAD**: `ad8f3094c6d2c1c1a5d134cc9738067aeb417345`
+> (closure body; lands on top of CORRECTION05 at
+> `08f004a7f25fcf3e14051e94dc6254919e94710e`).
 >
 > **Verdict**: `PASS_TEMPORARY_EXTERNAL_PATH_AUTHORITY_V1`.
 >
@@ -558,6 +560,6 @@ SHA field, if the schema supports it). The two-commit shape preserves
 the actual implementation body as a single, reviewable unit and isolates
 the SHA bookkeeping.
 
-`FINAL_IMPLEMENTATION_HEAD = 08f004a7 + <closure-body-commit>`
+`FINAL_IMPLEMENTATION_HEAD = 08f004a7f25fcf3e14051e94dc6254919e94710e + ad8f3094c6d2c1c1a5d134cc9738067aeb417345`
 `FINAL_STATUS            = PASS_TEMPORARY_EXTERNAL_PATH_AUTHORITY_V5`
 `WORKTREE                = CLEAN`
