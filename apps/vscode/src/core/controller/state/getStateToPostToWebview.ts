@@ -9,14 +9,18 @@ import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
 import type { ExtensionState, Platform } from "@shared/ExtensionMessage"
 import { ClineEnv } from "@/config"
 import { ExtensionRegistryInfo } from "@/registry"
+// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+// (twenty-sixth-pass): optional Q1..Q4 W-carrier trace observer.
+// Default OFF. See apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
+import { recordWCarrierTrace, type WCarrierTraceContext } from "@/sdk/w-carrier-trace-runtime"
+import type { WorkingContextHostCaptureState } from "@/sdk/working-context-host-capture"
 import { BannerService } from "@/services/banner/BannerService"
 import { featureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
 import { getExtensionVariant } from "@/services/telemetry/rollout-metadata"
 import { getLatestAnnouncementId } from "@/utils/announcements"
-import type { WorkingContextHostCaptureState } from "@/sdk/working-context-host-capture"
-import { projectWorkingContextStateFromCarrier } from "./working-context-state-projection"
 import { getClineOnboardingModels } from "../models/getClineOnboardingModels"
+import { projectWorkingContextStateFromCarrier } from "./working-context-state-projection"
 
 /**
  * Builds the ExtensionState object to push to the webview.
@@ -44,6 +48,22 @@ export async function getStateToPostToWebview(controller: {
 	// numer on the TaskHeader bar falls back to P — see
 	// UNDEFINED_W_STALE_REUSE = FORBIDDEN in the ACT).
 	workingContextHostCapture?: WorkingContextHostCaptureState
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-sixth-pass): optional trace context for the
+	// Q4 state_publish row. When the diagnostic is enabled
+	// AND this field is provided by the caller, the
+	// producer emits one trace record per call. The
+	// carrier assignment semantics are unchanged; the
+	// trace is a pure side-channel. See
+	// apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
+	wCarrierTrace?: WCarrierTraceContext
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-sixth-pass): active session id, captured at
+	// the same boundary as Q4 so each trace row is
+	// cross-referenceable with the Q1..Q3 carrier_observe
+	// rows. Optional; only present when the diagnostic
+	// is enabled.
+	sessionIdForTrace?: string | undefined
 }): Promise<ExtensionState> {
 	const stateManager = controller.stateManager
 
@@ -138,9 +158,23 @@ export async function getStateToPostToWebview(controller: {
 	// recompute, NO estimator imports. UNDEFINED_W_STALE_
 	// REUSE = FORBIDDEN is enforced by the carrier's
 	// assignment semantics, not by this producer.
-	const { currentWorkingContextEstimate } = projectWorkingContextStateFromCarrier(
-		controller.workingContextHostCapture,
-	)
+	const { currentWorkingContextEstimate } = projectWorkingContextStateFromCarrier(controller.workingContextHostCapture)
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-sixth-pass): emit one Q4 state_publish trace
+	// record AFTER the projection is computed and BEFORE the
+	// payload is returned. The trace is a pure side-channel;
+	// the producer's output is unchanged. Default OFF: the
+	// `isWCarrierTraceEnabled` check inside `recordWCarrierTrace`
+	// short-circuits when the diagnostic is disabled. See
+	// apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
+	if (controller.wCarrierTrace) {
+		recordWCarrierTrace(controller.wCarrierTrace, {
+			t: Date.now(),
+			kind: "state_publish",
+			sessionId: controller.sessionIdForTrace,
+			publishedW: currentWorkingContextEstimate,
+		})
+	}
 	return {
 		version,
 		extensionVariant: getExtensionVariant(),

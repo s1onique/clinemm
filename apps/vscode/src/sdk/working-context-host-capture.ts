@@ -113,13 +113,43 @@ export interface WorkingContextHostCaptureState {
 	readonly currentWorkingContextEstimate: number | null
 }
 
-export class WorkingContextHostCapture
-	implements WorkingContextHostCaptureState
-{
+/**
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+ * (twenty-sixth-pass) — optional side-channel observer
+ * hook. Called from `observe()` AFTER the carrier
+ * assignment, so the trace captures the post-assignment
+ * state. Used by the temporary Q1..Q4 W-carrier
+ * diagnostic; production code that does not opt in
+ * simply leaves it undefined.
+ */
+export type WorkingContextHostObserveTrace = (info: {
+	eventType: string
+	carrierW: number | null
+	snapshotW: number | undefined
+}) => void
+
+export class WorkingContextHostCapture implements WorkingContextHostCaptureState {
 	private _latest: number | null = null
 
 	get currentWorkingContextEstimate(): number | null {
 		return this._latest
+	}
+
+	/**
+	 * Optional trace observer. Set via `setTraceObserver`.
+	 * The trace is a pure side-channel; it does NOT
+	 * influence carrier assignment semantics.
+	 */
+	private _traceObserver: WorkingContextHostObserveTrace | undefined
+
+	/**
+	 * Wire the optional Q1..Q4 trace observer. Called
+	 * once during SdkController construction when the
+	 * diagnostic is enabled. Production code that does
+	 * not opt in simply leaves this undefined.
+	 */
+	setTraceObserver(observer: WorkingContextHostObserveTrace | undefined): void {
+		this._traceObserver = observer
 	}
 
 	/**
@@ -151,6 +181,20 @@ export class WorkingContextHostCapture
 			// reuse is FORBIDDEN.
 			const w = event.snapshot.currentWorkingContextEstimate
 			this._latest = typeof w === "number" ? w : null
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+			// (twenty-sixth-pass): emit one Q1..Q4 carrier_observe
+			// trace record AFTER the assignment. The carrier
+			// surface value (`this._latest`) is the post-
+			// normalization number | null that the webview
+			// will see; the snapshot value (`w`) is the
+			// raw publisher-side value (number | undefined).
+			// This row answers Q3 (did the event reach the
+			// host?) and Q2 (what did the snapshot carry?).
+			this._traceObserver?.({
+				eventType: event.type,
+				carrierW: this._latest,
+				snapshotW: w,
+			})
 		}
 	}
 

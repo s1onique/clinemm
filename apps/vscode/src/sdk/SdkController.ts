@@ -165,7 +165,11 @@ import {
 	emitTaskRequested,
 	emitTaskReset,
 } from "./task-state-shadow-host-msgs"
-import { createTaskShadowHostWiring, type TaskShadowHostWiring, type TaskShadowHostWiringWithSink } from "./task-state-shadow-host-wiring"
+import {
+	createTaskShadowHostWiring,
+	type TaskShadowHostWiring,
+	type TaskShadowHostWiringWithSink,
+} from "./task-state-shadow-host-wiring"
 import type { ArbiterSnapshot } from "./task-state-shadow-recorder"
 import { TaskTelemetryTracker } from "./task-telemetry-tracker"
 import { syncTelemetrySettingFromSharedGlobalSettings } from "./telemetry-settings-sync"
@@ -173,9 +177,13 @@ import { TurnStateTracker } from "./turn-state-tracker"
 import { emitV2Capture, resolveCapturePathForProfileEffective } from "./v2-capture"
 import { createWorkspaceFileReadExecutor } from "./vscode-file-read-executor"
 import { VscodeSessionHost } from "./vscode-session-host"
-import { WorkingContextHostCapture } from "./working-context-host-capture"
 import type { VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
+// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+// (twenty-sixth-pass): optional Q1..Q4 W-carrier trace observer.
+// Default OFF. See apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
+import { isWCarrierTraceEnabled, recordWCarrierTrace, type WCarrierTraceContext } from "./w-carrier-trace-runtime"
 import { WebviewGrpcBridge } from "./webview-grpc-bridge"
+import { WorkingContextHostCapture } from "./working-context-host-capture"
 import { resolveWorkspaceManagerPaths, resolveWorkspaceRootPath } from "./workspace-root"
 
 /**
@@ -1080,6 +1088,29 @@ export class Controller {
 		// takes effect at the first event.
 		this.taskStateRuntimeEventsSubscription = new CanonicalRuntimeShadowSubscription()
 		this.workingContextHostCapture = new WorkingContextHostCapture()
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (twenty-sixth-pass): wire the optional Q1..Q4 W-carrier
+		// trace observer when the diagnostic is enabled. The
+		// observer is a pure side-channel; the carrier
+		// assignment semantics are unchanged. Default OFF.
+		// See apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
+		if (isWCarrierTraceEnabled(this.context) && typeof this.context.globalStorageUri?.fsPath === "string") {
+			const traceCtx: WCarrierTraceContext = {
+				workspaceState: this.context.workspaceState,
+				globalStorageUri: this.context.globalStorageUri,
+				subscriptions: this.context.subscriptions,
+			}
+			this.workingContextHostCapture.setTraceObserver((info) => {
+				recordWCarrierTrace(traceCtx, {
+					t: Date.now(),
+					kind: "carrier_observe",
+					sessionId: this.sessions?.getActiveSession()?.sessionId,
+					carrierW: info.carrierW,
+					eventType: info.eventType,
+					snapshotW: info.snapshotW,
+				})
+			})
+		}
 		this.taskStateShadowWiring = createTaskShadowHostWiring({
 			// Pass a self-reference so the wiring can reach back through
 			// `this.sessions` after the lifecycle is constructed. The
@@ -1652,9 +1683,11 @@ export class Controller {
 			hasRunningBackgroundJobForOwner: (ownerSessionId) => {
 				const activeSession = this.sessions.getActiveSession()
 				if (!activeSession) return false
-				const host = activeSession.sdkHost as (VscodeSessionHost & {
-					hasRunningBackgroundJobForOwner?: (sessionId: string | undefined) => boolean
-				}) | undefined
+				const host = activeSession.sdkHost as
+					| (VscodeSessionHost & {
+							hasRunningBackgroundJobForOwner?: (sessionId: string | undefined) => boolean
+					  })
+					| undefined
 				if (!host || typeof host.hasRunningBackgroundJobForOwner !== "function") {
 					return false
 				}
@@ -3876,6 +3909,12 @@ export class Controller {
 			}
 			syncTelemetrySettingFromSharedGlobalSettings(this.stateManager)
 			const { getStateToPostToWebview: buildBaseState } = await import("@core/controller/state/getStateToPostToWebview")
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+			// (twenty-sixth-pass): compute the Q4 trace enablement once
+			// BEFORE the producer call. Default OFF. See
+			// apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
+			const wTraceEnabled = isWCarrierTraceEnabled(this.context)
+			const sessionIdForTrace = wTraceEnabled ? this.sessions?.getActiveSession()?.sessionId : undefined
 			const state = await buildBaseState({
 				task: this.task,
 				stateManager: this.stateManager,
@@ -3890,17 +3929,32 @@ export class Controller {
 				// SdkController builds one lazily). The task-header working-directory
 				// badge and anything else keyed on workspaceRoots depend on it.
 				workspaceManager: await this.ensureWorkspaceManager(),
-			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-			// (nineteenth-pass): Boundary 3 -> 4 carrier. The
-			// host-side W capture is populated by the
-			// canonical runtime-event subscription
-			// (`attachCanonicalRuntimeEventSubscription`); this
-			// projection reader transports the captured value
-			// into the `ExtensionState.currentWorkingContext
-			// Estimate` payload that ChatView will consume.
-			workingContextHostCapture: this.workingContextHostCapture,
-		})
-		const sdkTaskHistory = (await this.taskHistory.listHistory({ limit: 100, hydrate: false }))
+				// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+				// (nineteenth-pass): Boundary 3 -> 4 carrier. The
+				// host-side W capture is populated by the
+				// canonical runtime-event subscription
+				// (`attachCanonicalRuntimeEventSubscription`); this
+				// projection reader transports the captured value
+				// into the `ExtensionState.currentWorkingContext
+				// Estimate` payload that ChatView will consume.
+				workingContextHostCapture: this.workingContextHostCapture,
+				// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+				// (twenty-sixth-pass): optional Q4 state_publish
+				// trace hook. The trace context is only forwarded
+				// when the diagnostic is enabled. See
+				// apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
+				...(wTraceEnabled
+					? {
+							wCarrierTrace: {
+								workspaceState: this.context.workspaceState,
+								globalStorageUri: this.context.globalStorageUri,
+								subscriptions: this.context.subscriptions,
+							} as WCarrierTraceContext,
+							sessionIdForTrace,
+						}
+					: {}),
+			})
+			const sdkTaskHistory = (await this.taskHistory.listHistory({ limit: 100, hydrate: false }))
 				.map(sessionHistoryRecordToHistoryItem)
 				.filter((item) => item.ts && item.task)
 				.sort((a, b) => b.ts - a.ts)
