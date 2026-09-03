@@ -31,6 +31,7 @@ import FeatureSettingsSection from "./sections/FeatureSettingsSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
 import { RemoteConfigSection } from "./sections/RemoteConfigSection"
 import SandboxCapabilitiesSection from "./sections/SandboxCapabilitiesSection"
+import TemporaryExternalPathsSection from "./sections/TemporaryExternalPathsSection"
 import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 
 const IS_DEV = process.env.IS_DEV
@@ -145,7 +146,20 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			about: AboutSection,
 			debug: DebugSection,
 			// ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01
-			sandbox: SandboxCapabilitiesSection,
+			// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+			// The sandbox tab composes two sections: the original
+			// SandboxCapabilitiesSection (network/SSH toggles) and
+			// the TemporaryExternalPathsSection (user-enabled,
+			// expiring external-path authority). The Temporary
+			// section is a separate authority class from the
+			// Sandbox toggles; both surface in the same tab because
+			// they are both bounded escape-hatches for the host.
+			sandbox: () => (
+				<>
+					<SandboxCapabilitiesSection />
+					<TemporaryExternalPathsSection />
+				</>
+			),
 		}),
 		[],
 	) // Empty deps - these imports never change

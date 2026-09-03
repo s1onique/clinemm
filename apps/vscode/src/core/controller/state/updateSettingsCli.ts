@@ -74,6 +74,12 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 			// are the only authoritative source of an opinion.
 			clinemmSafeYoloAllowNetwork,
 			clinemmSafeYoloAllowSshAgent,
+			// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+			// dedicated extraction: the wire-format JSON-string
+			// payload needs JSON.parse + validator before
+			// persistence. The generic `simpleSettings` batch
+			// would persist the raw string, so we extract.
+			clinemmTemporaryExternalPathAuthorities,
 			// ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: extract
 			// the ceiling fields so they don't fall into `simpleSettings`
 			// and get persisted via `setGlobalStateBatch` as part of
@@ -267,6 +273,32 @@ export async function updateSettingsCli(controller: Controller, request: UpdateS
 		}
 		if (clinemmSafeYoloAllowSshAgent !== undefined) {
 			controller.stateManager.setGlobalState("clinemmSafeYoloAllowSshAgent", !!clinemmSafeYoloAllowSshAgent)
+		}
+
+		// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+		// CLI parity: same wire-format semantics as the webview path.
+		// Wire: serialized JSON array of { path, expiresAt }.
+		// The host validator REJECTS at persistence time any entry
+		// with expiresAt > now + 24h, with a typed error surfaced
+		// to the CLI operator.
+		if (clinemmTemporaryExternalPathAuthorities !== undefined) {
+			const { validateTemporaryExternalPathAuthorities } = await import("@shared/storage/temporaryExternalPathAuthorities")
+			let parsed: unknown
+			try {
+				parsed = JSON.parse(clinemmTemporaryExternalPathAuthorities)
+			} catch (err) {
+				Logger.error("[updateSettingsCli] failed to parse clinemmTemporaryExternalPathAuthorities wire payload:", err)
+				throw new Error("clinemmTemporaryExternalPathAuthorities wire payload is not valid JSON")
+			}
+			const result = validateTemporaryExternalPathAuthorities(parsed)
+			if (result.errors.length > 0) {
+				throw new Error(
+					`clinemmTemporaryExternalPathAuthorities rejected: ${result.errors
+						.map((e) => `[index ${e.index}] ${e.reason}: ${e.message}`)
+						.join("; ")}`,
+				)
+			}
+			controller.stateManager.setGlobalState("clinemmTemporaryExternalPathAuthorities", [...result.valid])
 		}
 
 		// Update default terminal profile

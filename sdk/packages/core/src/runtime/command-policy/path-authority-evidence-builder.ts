@@ -206,6 +206,25 @@ export interface BuildPathEvidenceOptions {
 	 * normalized value.
 	 */
 	command: unknown;
+	/**
+	 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	 *
+	 * Already-filtered (now < expiresAt) AND already-canonicalized
+	 * (`fs.realpathSync`) absolute paths from the persisted
+	 * `clinemmTemporaryExternalPathAuthorities` Settings array.
+	 *
+	 * The host (VS Code / CLI) is responsible for:
+	 *   1. Reading the persisted array from StateManager.
+	 *   2. Filtering expired entries (now >= expiresAt → drop).
+	 *   3. Canonicalizing each remaining path via `fs.realpathSync`.
+	 *   4. Passing the surviving canonical paths in here.
+	 *
+	 * This builder treats the input as authoritative — it does NOT
+	 * re-canonicalize, re-validate, or consult the filesystem for
+	 * these entries. An empty array (the default) yields the
+	 * pre-ACT contract (MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0).
+	 */
+	temporaryExternalCanonicalRoots?: ReadonlyArray<string>;
 }
 
 export interface BuildPathEvidenceFailure {
@@ -326,7 +345,7 @@ function normalizeForEvidence(
 export function buildPathAuthorityEvidence(
 	options: BuildPathEvidenceOptions,
 ): BuildPathEvidenceResult {
-	const { workspaceRoots, cwd } = options;
+	const { workspaceRoots, cwd, temporaryExternalCanonicalRoots } = options;
 
 	// ACT-CLINEMM-COMMAND-APPROVAL-SPLIT-UNDEFINED-REGRESSION01:
 	// Normalize the raw host input through the canonical normalizer
@@ -344,6 +363,17 @@ export function buildPathAuthorityEvidence(
 			return { ok: false, reason: "no-workspace-roots" };
 		}
 	}
+
+	// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	// The host has already filtered expired entries and
+	// canonicalized each surviving path. We accept the array
+	// as-is and forward it on the evidence record. The V1
+	// authority-context binding (`auth.workspaceRoots ===
+	// evidence.roots`) is preserved byte-equal by NOT including
+	// the temporary roots in `evidence.roots`. Containment is
+	// tested against the UNION below.
+	const canonicalTemporaryRoots: ReadonlyArray<string> =
+		temporaryExternalCanonicalRoots ?? [];
 
 	let canonicalCwd: string | null = cwd;
 	if (cwd !== null) {
@@ -425,7 +455,9 @@ export function buildPathAuthorityEvidence(
 			}
 			const contained = isCanonicalContained(
 				resolved.resolvedRealPath,
-				canonicalRoots,
+				canonicalRoots.length === 0 && canonicalTemporaryRoots.length === 0
+					? canonicalRoots
+					: [...canonicalRoots, ...canonicalTemporaryRoots],
 			);
 			operandEvidence.push({
 				operand: op,
@@ -444,6 +476,7 @@ export function buildPathAuthorityEvidence(
 			roots: canonicalRoots,
 			cwd: canonicalCwd,
 			operands: operandEvidence,
+			temporaryExternalCanonicalRoots: canonicalTemporaryRoots,
 		},
 	};
 }

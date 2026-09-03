@@ -668,7 +668,19 @@ export function evaluateCommandRealpathConformance(
 			continue;
 		}
 		// Containment test on the realpath-resolved string.
-		if (!isLexicallyContained(op.resolvedRealPath, evidence.roots)) {
+		// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+		// Containment is the UNION of workspaceRoots and the
+		// user-enabled temporary external canonical roots. The
+		// temporary roots do NOT relax containment — they only
+		// widen the accepted set. An operand outside BOTH sets
+		// still reports `conforming: false` and the policy
+		// downgrades the R0 rule to ASK.
+		const containmentRoots =
+			evidence.temporaryExternalCanonicalRoots !== undefined &&
+			evidence.temporaryExternalCanonicalRoots.length > 0
+				? [...evidence.roots, ...evidence.temporaryExternalCanonicalRoots]
+				: evidence.roots;
+		if (!isLexicallyContained(op.resolvedRealPath, containmentRoots)) {
 			allConforming = false;
 			results.push({
 				operand: op.operand,

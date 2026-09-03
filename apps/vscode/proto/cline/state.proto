@@ -321,6 +321,15 @@ message Settings {
   // pre-ACT runtime behaviour. Persisted true -> allow / agent.
   optional bool clinemm_safe_yolo_allow_network = 189;
   optional bool clinemm_safe_yolo_allow_ssh_agent = 190;
+  // ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+  // User-enabled, expiring exception to R0 workspace path authority.
+  // Wire format: serialized JSON array of { path, expiresAt }.
+  // The host validator REJECTS at persistence time any entry whose
+  // expiresAt exceeds now + 24h, with a typed error surfaced to
+  // the user / CLI operator. Defaults to [] (the pre-ACT contract;
+  // MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0 for the absent-key
+  // category).
+  optional string clinemm_temporary_external_path_authorities = 191;
 }
 
 message State {
@@ -490,6 +499,11 @@ message UpdateSettingsRequest {
   // pre-ACT runtime selection. Persisted true -> enable the capability.
   optional bool clinemm_safe_yolo_allow_network = 48;
   optional bool clinemm_safe_yolo_allow_ssh_agent = 49;
+  // ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+  // User-enabled, expiring exception to R0 workspace path authority.
+  // Wire format: serialized JSON array of { path, expiresAt }.
+  // See the matching field on the `Settings` message.
+  optional string clinemm_temporary_external_path_authorities = 50;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

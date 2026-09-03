@@ -34,6 +34,10 @@ export default defineConfig({
 			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01
 			"src/shared/host-ownership-diagnostic.live-capture01.test.ts",
 			"src/shared/proto-conversions/models/**/*.test.ts",
+			// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01 (validator unit
+			// tests + cross-instance two-reader / one-backing-store tests):
+			"src/shared/storage/__tests__/temporaryExternalPathAuthorities.test.ts",
+			"src/core/storage/__tests__/temporaryExternalPathAuthorityCrossInstance.test.ts",
 			"src/core/storage/remote-config/**/*.test.ts",
 			"src/core/controller/account/setUserOrganization.test.ts",
 			"src/core/controller/remoteConfig/**/*.test.ts",

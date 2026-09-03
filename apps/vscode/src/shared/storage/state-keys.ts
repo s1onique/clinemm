@@ -8,6 +8,7 @@ import {
 	OpenAiCompatibleModelInfo,
 } from "@shared/api"
 import { BrowserSettings, DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
+import type { TemporaryExternalPathAuthority } from "@cline/core"
 import { ClineRulesToggles } from "@shared/cline-rules"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS, FocusChainSettings } from "@shared/FocusChainSettings"
 import { HistoryItem } from "@shared/HistoryItem"
@@ -314,6 +315,18 @@ const USER_SETTINGS_FIELDS = {
 	// authoritative deny.
 	clinemmSafeYoloAllowNetwork: { default: undefined as boolean | undefined },
 	clinemmSafeYoloAllowSshAgent: { default: undefined as boolean | undefined },
+	// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	// User-enabled, expiring exception to R0 workspace path authority.
+	// Default empty (the pre-ACT contract;
+	// MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0 for the absent-key
+	// category). The host validator REJECTS at write time any entry
+	// whose expiresAt exceeds now + 24h; the runtime filter
+	// (`filterActiveTemporaryExternalPathEntries`) re-applies the same
+	// temporal + ceiling invariant at consumption time as
+	// defense-in-depth.
+	clinemmTemporaryExternalPathAuthorities: {
+		default: [] as TemporaryExternalPathAuthority[],
+	},
 	preferredLanguage: { default: "English" as string },
 	mode: { default: "act" as Mode },
 	focusChainSettings: { default: DEFAULT_FOCUS_CHAIN_SETTINGS as FocusChainSettings },

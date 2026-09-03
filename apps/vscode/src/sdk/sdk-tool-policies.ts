@@ -373,6 +373,15 @@ export function getCommandHostAuthorization(
 		workspaceRoots?: ReadonlyArray<string>
 		cwd?: string
 		pathAuthorityEvidence?: WorkspacePathAuthorityEvidence
+		/**
+		 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+		 * Canonical absolute paths from the user-enabled temporary
+		 * external path authority list. Forwarded to the policy
+		 * layer for containment union against `evidence.roots`.
+		 * Empty/undefined: the user has not enabled any temporary
+		 * external path; the pre-ACT contract holds.
+		 */
+		temporaryExternalCanonicalRoots?: ReadonlyArray<string>
 	},
 	/**
 	 * ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01
@@ -432,6 +441,14 @@ export function getCommandHostAuthorization(
 				// caller does not supply it, the policy layer
 				// falls back to the V1 lexical-only check.
 				pathAuthorityEvidence: workspaceContext?.pathAuthorityEvidence,
+				// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+				// thread the (already-filtered, already-canonical)
+				// temporary external roots to the policy layer
+				// for containment union against `evidence.roots`.
+				// Empty/undefined: the user has not enabled any
+				// temporary external path; the pre-ACT contract
+				// holds.
+				temporaryExternalCanonicalRoots: workspaceContext?.temporaryExternalCanonicalRoots,
 				// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02 +
 				// ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01:
 				// NARROW scope: only attach tempAuthorityEvidence

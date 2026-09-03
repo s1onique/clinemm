@@ -480,6 +480,7 @@ export {
 	safeRealpathSync,
 	type WorkspacePathAuthorityEvidence,
 	type WorkspacePathOperandEvidence,
+	type TemporaryExternalPathAuthority,
 } from "./runtime/command-policy/path-authority-evidence-builder";
 export {
 	evaluateCommandRisk,

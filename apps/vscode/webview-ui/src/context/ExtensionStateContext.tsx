@@ -1,5 +1,6 @@
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
+import type { TemporaryExternalPathAuthority } from "@cline/core"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import {
 	disablePostTerminalAuthorityDiagnostic,
@@ -437,6 +438,13 @@ export const ExtensionStateContextProvider: React.FC<{
 		// are the initial values used until the first state push lands.
 		clinemmSafeYoloAllowNetwork: false,
 		clinemmSafeYoloAllowSshAgent: false,
+		// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+		// Default empty (the pre-ACT contract;
+		// MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0 for the absent-key
+		// category). The authoritative state is pushed by
+		// getStateToPostToWebview; this is the initial value used
+		// until the first state push lands.
+		clinemmTemporaryExternalPathAuthorities: [] as TemporaryExternalPathAuthority[],
 		globalSkillsToggles: {},
 		localSkillsToggles: {},
 

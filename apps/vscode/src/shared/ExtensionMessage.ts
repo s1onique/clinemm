@@ -1,5 +1,6 @@
 // type that represents json data that is sent from extension to webview, called ExtensionMessage and has 'type' enum which can be 'plusButtonClicked' or 'settingsButtonClicked' or 'hello'
 
+import type { TemporaryExternalPathAuthority } from "@cline/core"
 import type { GeneratedMedia } from "@cline/shared"
 import { WorkspaceRoot } from "@shared/multi-root/types"
 import { RemoteConfigFields } from "@shared/storage/state-keys"
@@ -400,6 +401,14 @@ export interface ExtensionState {
 	// user touches the toggle, become true. See state-keys.ts.
 	clinemmSafeYoloAllowNetwork?: boolean
 	clinemmSafeYoloAllowSshAgent?: boolean
+	// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	// User-enabled, expiring exception to R0 workspace path authority.
+	// Defaults to [] (the pre-ACT contract;
+	// MIGRATION_OR_DEFAULT_AUTHORITY_DELTA = 0 for the absent-key
+	// category). The host filters expired entries at policy
+	// evaluation time; the validator REJECTS at write time any
+	// entry whose expiresAt exceeds now + 24h.
+	clinemmTemporaryExternalPathAuthorities?: TemporaryExternalPathAuthority[]
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean

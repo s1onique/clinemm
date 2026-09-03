@@ -518,6 +518,22 @@ export class StateManager {
 	}
 
 	/**
+	 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION03:
+	 * Returns the resolved data directory (e.g. `~/.cline/data`) backing
+	 * this instance's `StorageContext`. The consumer pipeline uses this
+	 * to construct the absolute path of `globalState.json` for the
+	 * cross-instance fresh-read.
+	 *
+	 * Resolution rules (CLINE_DATA_DIR > CLINE_DIR + "/data" >
+	 * ~/.cline/data) match the writer side exactly (see
+	 * `createStorageContext` + `resolveDataDirFromEnv`), so all
+	 * Codium / VS Code instances share the same backing file (ENG-2332).
+	 */
+	public getStorageDataDir(): string {
+		return this.storage.dataDir
+	}
+
+	/**
 	 * Reinitialize the state manager by clearing all state and reloading from disk
 	 * Used for error recovery when write operations fail
 	 */

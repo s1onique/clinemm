@@ -311,6 +311,35 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("clinemmSafeYoloAllowSshAgent", !!request.clinemmSafeYoloAllowSshAgent)
 		}
 
+		// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+		// Wire format: serialized JSON array of
+		//   { path: string, expiresAt: string } entries.
+		// The host validator (`validateTemporaryExternalPathAuthorities`)
+		// runs the 24h ceiling check + the absolute-path + non-root
+		// check BEFORE persistence. Rejections are surfaced to the
+		// user / CLI operator as a typed error.
+		if (request.clinemmTemporaryExternalPathAuthorities !== undefined) {
+			const { validateTemporaryExternalPathAuthorities } = await import("@shared/storage/temporaryExternalPathAuthorities")
+			// The wire shape arrives as a serialized JSON string;
+			// parse it before validating.
+			let parsed: unknown
+			try {
+				parsed = JSON.parse(request.clinemmTemporaryExternalPathAuthorities)
+			} catch (err) {
+				Logger.error("[updateSettings] failed to parse clinemmTemporaryExternalPathAuthorities wire payload:", err)
+				throw new Error("clinemmTemporaryExternalPathAuthorities wire payload is not valid JSON")
+			}
+			const result = validateTemporaryExternalPathAuthorities(parsed)
+			if (result.errors.length > 0) {
+				throw new Error(
+					`clinemmTemporaryExternalPathAuthorities rejected: ${result.errors
+						.map((e) => `[index ${e.index}] ${e.reason}: ${e.message}`)
+						.join("; ")}`,
+				)
+			}
+			controller.stateManager.setGlobalState("clinemmTemporaryExternalPathAuthorities", [...result.valid])
+		}
+
 		// Post updated state to webview
 		await controller.postStateToWebview()
 

@@ -96,6 +96,7 @@ export {
 export type {
 	WorkspacePathAuthorityEvidence,
 	WorkspacePathOperandEvidence,
+	TemporaryExternalPathAuthority,
 } from "./path-authority-evidence";
 // ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
 // REALPATH_WORKSPACE_CONFINEMENT:

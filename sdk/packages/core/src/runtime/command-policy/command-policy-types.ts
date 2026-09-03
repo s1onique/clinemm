@@ -366,6 +366,17 @@ export interface CommandHostAuthorization {
 	 * gate: it only removes ALLOWs, never adds them.
 	 */
 	tempAuthorityEvidence?: TempAuthorityEvidence;
+	/**
+	 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	 *
+	 * Canonical absolute paths from the user-enabled temporary
+	 * external path authority list. The host filters expired
+	 * entries (now >= expiresAt → drop) and realpath-canonicalizes
+	 * the survivors before passing them here. Empty/undefined:
+	 * the user has not enabled any temporary external path; the
+	 * pre-ACT contract holds.
+	 */
+	temporaryExternalCanonicalRoots?: ReadonlyArray<string>;
 }
 
 /**
@@ -544,6 +555,14 @@ export function commandHostAuthorization(params: {
 	cwd?: string;
 	pathAuthorityEvidence?: import("./path-authority-evidence").WorkspacePathAuthorityEvidence;
 	tempAuthorityEvidence?: TempAuthorityEvidence;
+	/**
+	 * ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	 *
+	 * Canonical absolute paths from the user-enabled temporary
+	 * external path authority list. Forwarded to the policy layer
+	 * for containment union against `evidence.roots`.
+	 */
+	temporaryExternalCanonicalRoots?: ReadonlyArray<string>;
 }): CommandHostAuthorization {
 	return {
 		mode: params.mode,
@@ -554,6 +573,7 @@ export function commandHostAuthorization(params: {
 		cwd: params.cwd,
 		pathAuthorityEvidence: params.pathAuthorityEvidence,
 		tempAuthorityEvidence: params.tempAuthorityEvidence,
+		temporaryExternalCanonicalRoots: params.temporaryExternalCanonicalRoots,
 	};
 }
 

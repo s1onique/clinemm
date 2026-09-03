@@ -86,6 +86,12 @@ export async function getStateToPostToWebview(controller: {
 	// selectors in apps/vscode/src/sdk/sandbox-policy.ts.
 	const clinemmSafeYoloAllowNetwork = stateManager.getGlobalStateKey("clinemmSafeYoloAllowNetwork")
 	const clinemmSafeYoloAllowSshAgent = stateManager.getGlobalStateKey("clinemmSafeYoloAllowSshAgent")
+	// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+	// User-enabled, expiring exception to R0 workspace path authority.
+	// The host filters expired entries at policy evaluation time; the
+	// UI shows the raw persisted list so the user can see and remove
+	// expired entries.
+	const clinemmTemporaryExternalPathAuthorities = stateManager.getGlobalStateKey("clinemmTemporaryExternalPathAuthorities")
 	const userInfo = stateManager.getGlobalStateKey("userInfo")
 	const mcpMarketplaceEnabled = stateManager.getGlobalStateKey("mcpMarketplaceEnabled")
 	const mcpDisplayMode = stateManager.getGlobalStateKey("mcpDisplayMode")
@@ -253,6 +259,8 @@ export async function getStateToPostToWebview(controller: {
 		// new "Sandbox & Capabilities" tab can render authoritative state.
 		clinemmSafeYoloAllowNetwork,
 		clinemmSafeYoloAllowSshAgent,
+		// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01
+		clinemmTemporaryExternalPathAuthorities,
 		banners,
 		welcomeBanners,
 		openAiCodexIsAuthenticated,
