@@ -114,6 +114,36 @@ export async function compactSessionMessages(input: CompactSessionMessagesInput)
 	if (!result) {
 		return { compacted: false, messages: input.messages }
 	}
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-third-pass, P0-A): `ContextPipelinePrepareTurnResult`
+	// now declares `messages` and `systemPrompt` as OPTIONAL to
+	// support a metadata-only return shape (just
+	// `currentWorkingContextEstimate`; the projection branches
+	// are skipped). For manual compaction, a metadata-only
+	// return is NOT an actual compaction artifact — it is a
+	// no-op projection signal (semantically equivalent to the
+	// pre-fix `return undefined` for projection purposes, but
+	// publishes W on every prepareTurn for the producer-
+	// cadence invariant). Without this guard the caller would
+	// receive:
+	//
+	//   { compacted: true, messages: undefined, ... }
+	//
+	// which would (a) mis-report a real compaction that never
+	// happened, and (b) build a `compactionState` whose
+	// `compactedMessages` field is undefined (a hard
+	// `MessageWithMetadata[]`-required schema field).
+	//
+	// The bounded contract here is:
+	//
+	//   CompactSessionMessagesResult.compacted
+	//   and CompactSessionMessagesResult.compactionState
+	//   MUST come from an actual message projection
+	//   (`result.messages !== undefined`),
+	//   NOT merely from presence of W metadata.
+	if (!result.messages) {
+		return { compacted: false, messages: input.messages }
+	}
 	return {
 		compacted: true,
 		messages: result.messages,

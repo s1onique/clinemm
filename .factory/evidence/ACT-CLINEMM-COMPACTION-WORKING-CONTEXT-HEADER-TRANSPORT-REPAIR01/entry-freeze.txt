@@ -1,23 +1,83 @@
 
 # ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-# Entry-freeze (twenty-second-pass, 2026-09-03)
+# Entry-freeze (twenty-fourth-pass, 2026-09-03)
 #
-# Reviewer on 2b371761d (twenty-first-pass):
-#   PASS_WITH_ONE_P1_FIX.
-#   The important repair is sound: W now reaches
-#   ContextWindow, a numeric W takes precedence over
-#   provider-derived P, explicit no-W does not silently
-#   masquerade as P, and the legacy/omitted path still
-#   has a P fallback.
-#   ONE P1: remove the unrelated percentage rounding.
-#   TWO P2 (wording only): (a) the DOGFOOD test is
-#   SYNTHETIC_REAL, not LIVE; (b) the `undefined -> P`
-#   legacy path is supported projection shape, but its
-#   production reachability is not shown.
-#   C1: GO_LIVE_QUALIFICATION after one bounded
-#   cleanup of the production delta.
+# Reviewer on the c16 bounded correction cycle: no
+# new review round — bounded P1 fix (regression
+# test) + P2 wording tweak.
 #
-# Closed in this commit (twenty-second-pass):
+# P0-A (sdk-compaction.ts, c16):
+#   Consumer assumed `result.messages` was always
+#   defined. After the producer-cadence GREEN the
+#   type was made OPTIONAL so a metadata-only
+#   return (just `currentWorkingContextEstimate`)
+#   is possible. For manual compaction, a
+#   metadata-only return is NOT a real compaction
+#   artifact. Fix: explicit
+#     if (!result.messages) return
+#       { compacted: false, messages: input.messages }
+#   guard. NO non-null assertion. NO structural-
+#   subtype helper. Real-compaction artifact
+#   semantics preserved (compactedMessages comes
+#   only from a real message projection).
+#
+# P0-B (task-state-shadow-coordinator.ts, c16):
+#   `edgeKeyOf()` exhaustive `never` check tripped
+#   on the new `working-context-state-changed`
+#   union member. The event is a runtime-state
+#   observation (the shadow-adapter already
+#   produces zero TaskMsg for it), NOT a task-
+#   state mutation. Fix: classify alongside the
+#   existing presentational family
+#     case "working-context-state-changed":
+#       return `presentational:${event.type}`
+#   The exhaustive `never` check is PRESERVED
+#   (still catches future additions); the dedup
+#   gate correctly routes the event without
+#   mutating state.
+#
+# P1 (T1 regression test, c17):
+#   P0-A is a real runtime semantic branch, not
+#   merely a type-level accommodation. Without a
+#   directly-owned test, a future change could
+#   regress
+#     metadata-only prepare result
+#     → must remain compacted:false
+#   without necessarily recreating the same
+#   TypeScript error.
+#
+#   Fix: T1 in
+#   apps/vscode/src/sdk/sdk-compaction.test.ts:
+#     "returns compacted=false on metadata-only
+#      prepareTurn result (W publish, no
+#      projection)"
+#   Pins:
+#     result.compacted === false
+#     result.messages === original messages
+#     result.compactionState === undefined
+#     createSessionCompactionState not called
+#
+#   T2 (task-shadow observation-only test)
+#   deferred: the exhaustive `never` check is
+#   compile-pinned and the existing 72/72
+#   task-state suite already covers observation-
+#   only semantics; adding a new test would require
+#   substantial scaffolding for marginal gain.
+#   Out of scope per reviewer.
+#
+# P2 (terminal/wording, c17):
+#   "TYPECHECK_DELTA = NEGATIVE" can be misread
+#   as a regression. Softened to:
+#     TYPECHECK =
+#       ENTRY_BUILD = FAIL / 3 ACT-owned diagnostics
+#       SUBJECT_BUILD = PASS / 0 diagnostics
+#       ACT_OWNED_DIAGNOSTICS = 3 → 0
+#
+# C1: GO_LIVE_QUALIFICATION (no longer blocked on
+# the build; T1 in place as the regression guard for
+# the load-bearing P0-A semantic branch).
+#
+# Closed in this commit (twenty-third-pass):
 #   P1: restored raw percentage ratio in
 #       ContextWindow.tsx:
 #         percentage:

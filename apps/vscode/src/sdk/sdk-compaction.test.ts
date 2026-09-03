@@ -116,4 +116,60 @@ describe("compactSessionMessages", () => {
 
 		expect(result).toEqual({ compacted: false, messages })
 	})
+
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-fourth-pass, P1, T1): regression guard for the
+	// metadata-only prepareTurn result shape. The producer
+	// (`publishWorkingContextEstimateMetadataOnly` in
+	// `@cline/core`) returns
+	//   { currentWorkingContextEstimate }
+	// without `messages` / `systemPrompt` for every
+	// prepareTurn to publish W on the producer-cadence
+	// invariant. For manual compaction, this is a
+	// no-op projection signal — NOT an actual compaction
+	// artifact. The bounded contract:
+	//
+	//   defined ContextPipelinePrepareTurnResult
+	//   ≠
+	//   compaction necessarily occurred
+	//
+	//   real compaction artifact
+	//   requires actual projected messages
+	//
+	// Without this regression test, a future change could
+	// silently allow:
+	//
+	//   { compacted: true, messages: undefined, ... }
+	//
+	// or:
+	//
+	//   compactionState.compactedMessages = undefined
+	//
+	// without necessarily recreating the same TypeScript
+	// error. This test pins the runtime semantic branch
+	// that the typecheck fix in P0-A made possible.
+	it("returns compacted=false on metadata-only prepareTurn result (W publish, no projection)", async () => {
+		const compact = vi.fn().mockResolvedValue({ currentWorkingContextEstimate: 4242 })
+		createContextCompactionPrepareTurn.mockReturnValueOnce(compact)
+
+		const messages = [
+			{ role: "user" as const, content: "1" },
+			{ role: "assistant" as const, content: "2" },
+		]
+		const result = await compactSessionMessages({ config: baseConfig, sessionId: "s1", messages })
+
+		// No real compaction happened — must report
+		// compacted=false, return original messages, and
+		// NOT build a compactionState (that would have
+		// undefined compactedMessages, a hard schema
+		// violation).
+		expect(result.compacted).toBe(false)
+		expect(result.messages).toEqual(messages)
+		expect(result.compactionState).toBeUndefined()
+
+		// The mock helper would have logged the call if
+		// the consumer had mistakenly tried to build a
+		// compactionState; verify it was NOT called.
+		expect(createSessionCompactionState).not.toHaveBeenCalled()
+	})
 })

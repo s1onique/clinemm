@@ -254,6 +254,28 @@ function edgeKeyOf(event: AgentRuntimeEvent): string {
 		case "assistant-media":
 		case "usage-updated":
 		case "status-notice":
+		case "working-context-state-changed":
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+			// (twenty-third-pass, P0-B): `working-context-state-changed`
+			// is a runtime-state observation, NOT a task-state mutation.
+			// The shadow's `TaskModel` does NOT carry W (see
+			// `shadow-adapter.ts`'s `default: break` for this event —
+			// the adapter produces zero TaskMsg). The runtime-event-
+			// adapter in `@cline/core` translates it to the same empty
+			// list (it is read off the runtime snapshot surface, not the
+			// legacy chat projection). So at this layer it is
+			// semantically equivalent to the existing
+			// `presentational:` family: classified here so the dedup
+			// gate and the fallback dedup can route it without
+			// triggering a state mutation, AND so the `never`
+			// exhaustiveness check still passes (removing this case
+			// would re-trigger the failure mode this ACT caught). The
+			// authoritative W lives at
+			// `AgentRuntime.snapshot().currentWorkingContextEstimate`;
+			// see `working-context-host-capture.ts` for the host
+			// side and `apps/vscode/src/core/controller/state/
+			// working-context-state-projection.ts` for the webview
+			// projection. The shadow remains observation-only.
 			return `presentational:${event.type}`
 		default: {
 			// Exhaustive switch on AgentRuntimeEvent.

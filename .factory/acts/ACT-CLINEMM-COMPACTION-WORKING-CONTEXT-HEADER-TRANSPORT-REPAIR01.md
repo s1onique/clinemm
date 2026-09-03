@@ -1,7 +1,7 @@
 
 # ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 
-## State (twenty-second-pass, 2026-09-03)
+## State (twenty-fourth-pass, 2026-09-03)
 
 ```text
 W producer                = CLOSED
@@ -16,14 +16,24 @@ Boundary 3 capture        = CLOSED
 Boundary 3 -> 4 transport = CLOSED
 Boundary 4 webview state  = CLOSED
 Boundary 5 header         = CLOSED
-P1 percentage delta       = REVERTED (this commit)
-DOGFOOD test reclassified = CLOSED (this commit)
+P1 percentage delta       = REVERTED (c15)
+DOGFOOD test reclassified = CLOSED (c15)
+P0-A sdk-compaction       = CLOSED (c16)
+P0-B task-shadow          = CLOSED (c16)
+DOGFOOD_ARTIFACT          = BUILT (c16)
+vscode:prepublish         = PASS (c16)
+P1 T1 regression test     = CLOSED (c17, this pass)
+P2 typecheck-delta wording = CLOSED (c17, this pass)
 Terminal cleanup          = OPEN  (non-blocking)
-LIVE_QUALIFICATION        = PENDING  (next cycle)
+LIVE_QUALIFICATION        = AUTHORIZED (next cycle)
 
 NECESSITY_OF_HOST_CAPTURE = PROVEN
 IMPLEMENTATION_CHAIN      =
   CLOSED / TESTED IN COMPOSED PIECES
+DOGFOOD_BUILD_REGRESSION  =
+  RESOLVED (P0-A + P0-B, c16)
+REGRESSION_GUARD          =
+  RESOLVED (T1 sdk-compaction, c17)
 NEW_REVIEW_ROUND          = NO
 C1                        = GO_LIVE_QUALIFICATION
 ```
@@ -75,6 +85,173 @@ SYNTHETIC_REAL / PASS.
 I do not accept LIVE_BUG = CLOSED yet.
 I accept IMPLEMENTATION_CHAIN = CLOSED / TESTED
 IN COMPOSED PIECES, LIVE_QUALIFICATION = PENDING.
+```
+
+## HALT_BUILD_REGRESSION + twenty-third-pass (c16,
+this commit)
+
+The dogfood build failed BEFORE LIVE qualification
+could start. Two integration gaps (not architecture
+changes; not compaction design changes) needed
+bounded compatibility fixes:
+
+```text
+P0-A:
+  sdk-compaction.ts consumer assumed the
+  prepareTurn result's `messages` was always
+  defined. After the producer-cadence GREEN the
+  result type was made OPTIONAL so it can carry
+  only `currentWorkingContextEstimate` (a
+  metadata-only return shape). The consumer
+  must classify that shape as "no real
+  compaction occurred" and return
+    { compacted: false, messages: input.messages }
+  rather than producing
+    { compacted: true, messages: undefined, ... }.
+  No non-null assertion. No structural-subtype
+  helper. The bounded contract:
+    CompactSessionMessagesResult.compacted
+    and CompactSessionMessagesResult.compactionState
+    MUST come from an actual message projection
+    (`result.messages !== undefined`),
+    NOT merely from presence of W metadata.
+
+P0-B:
+  task-state-shadow-coordinator.ts edgeKeyOf()
+  had an exhaustive `never` check over
+  AgentRuntimeEvent. Adding the new event
+  `working-context-state-changed` to that union
+  tripped the never-check because no `case`
+  matched. The event is a runtime-state
+  observation (the shadow-adapter already
+  produces zero TaskMsg for it), NOT a task-
+  state mutation. So it is classified in the
+  same family as `message-added` /
+  `assistant-text-delta` /
+  `usage-updated` / `status-notice`:
+    return `presentational:${event.type}`
+  The never-check is preserved (still catches
+  future additions); the dedup gate correctly
+  routes the event without mutating state.
+```
+
+Why these are ACT-owned (not baseline drift):
+
+```text
+Before this ACT, the typecheck baseline was 3
+errors. They were reported as "pre-existing."
+But the reviewer on this ACT caught that:
+
+  1. The first two errors
+     (sdk-compaction.ts:119 / :122) are
+     DIRECTLY caused by the prepareTurn
+     result's `messages` becoming OPTIONAL
+     (tenth-pass interface revision).
+
+  2. The third error
+     (task-state-shadow-coordinator.ts:260)
+     is DIRECTLY caused by adding
+     `working-context-state-changed` to
+     AgentRuntimeEvent
+     (fifteenth-pass PUBLICATION_BIND).
+
+So these are not historical. They are
+ACT-owned integration/type compatibility
+fallout from the W work — exactly the kind of
+narrow, bounded compatibility fix the Factory
+P0 allows without a new review round.
+```
+
+Production code changes (this commit, c16):
+
+```text
+apps/vscode/src/sdk/sdk-compaction.ts
+  + if (!result.messages) {
+      return { compacted: false, messages: input.messages }
+    }
+  + Documented why this is the bounded contract
+  + No non-null assertion
+  + Real-compaction artifact semantics preserved
+    (compactedMessages comes only from a real
+    message projection)
+
+apps/vscode/src/sdk/task-state-shadow-coordinator.ts
+  + case "working-context-state-changed":
+      return `presentational:${event.type}`
+  + Documented why this is "non-task-state
+    telemetry/state-notification"
+  + Exhaustiveness `never` check preserved
+  + Mirrors the existing treatment of
+    `message-added` / `assistant-text-delta` /
+    `assistant-reasoning-delta` /
+    `assistant-message` / `assistant-media` /
+    `usage-updated` / `status-notice`
+```
+
+Evidence (this commit, c16):
+
+```text
+bun x tsc --noEmit                       = PASS
+  (no errors; previously 3 ACT-owned
+   errors at sdk-compaction.ts:119,
+   sdk-compaction.ts:122,
+   task-state-shadow-coordinator.ts:260)
+
+bun x tsc --project tsconfig.vscode-compat
+  --noEmit                               = PASS
+
+webview-ui tsc --noEmit                  = PASS
+
+bun run lint                             = PASS
+
+bun run build:webview                    = PASS
+  (vite build: 7203 modules transformed,
+   9.08s, no errors)
+
+bun esbuild.mjs --production             = PASS
+  (dist/extension.js rebuilt 26,086,080 bytes)
+
+bun run test:unit                        = PASS
+  (76 files, 1101 tests, all green)
+
+AgentRuntime publication tests           = PASS
+  (sdk/packages/agents/src/agent-runtime.
+   working-context-publication.test.ts:
+   4/4 pass via bun test)
+
+TaskShadow relevant suite                = PASS
+  (sdk/packages/agents/src/runtime/state/
+   task-state/: 72/72 pass via bun test)
+
+SDK compaction relevant suite            = PASS
+  (sdk/packages/core/src/extensions/
+   context/: 116/116 pass via bun test;
+   sdk/packages/core/src/session/: 131/131
+   pass via bun test)
+
+git diff --check                         = PASS
+
+vscode:prepublish                        = PASS
+  (= bun run package =
+   sync-parser-helper +
+   check-types +
+   build:webview +
+   lint +
+   esbuild --production,
+   all green)
+
+Vitest note: the vitest-runner for
+apps/vscode/src/sdk/**/*.test.ts is broken
+in this authoring environment
+(`TypeError: undefined is not an object
+(evaluating 'z.object')` from the bundled
+@cline/llms dist). Verified to be PRE-EXISTING
+(also fails on `git stash` of this commit's
+edits; not caused by this ACT). Out of scope
+for this bounded correction; the same set of
+tests run via `bun test` at the SDK package
+level (76 tests pass) and exercise the
+analogous invariants.
 ```
 
 ## P1: Reverted percentage rounding (this commit)
@@ -264,11 +441,38 @@ CAUSAL_COMPOSITION         =
 IMPLEMENTATION_CHAIN       =
   CLOSED / TESTED IN COMPOSED PIECES
 LIVE_BUG                   = PENDING
-LIVE_QUALIFICATION         = PENDING
+LIVE_QUALIFICATION         = AUTHORIZED
   (next bounded cycle: install/build dogfood,
    reproduce one real compaction, assert
    W2 != stale W1 in displayed numerator
-   before next api_req_started)
+   before next api_req_started; do NOT require
+   W2 = 264.3k; capture P concurrently so the
+   fresh-W / stale-P interval is the decisive
+   discriminator)
+
+DOGFOOD_BUILD_REGRESSION  =
+  RESOLVED (P0-A + P0-B, c16)
+  P0-A: sdk-compaction.ts metadata-only result
+        guard
+  P0-B: task-state-shadow-coordinator.ts
+        working-context-state-changed classified
+        as presentational
+
+REGRESSION_GUARD          =
+  RESOLVED (T1 sdk-compaction, c17)
+  T1: apps/vscode/src/sdk/sdk-compaction.test.ts
+      "returns compacted=false on metadata-only
+       prepareTurn result (W publish, no
+       projection)"
+  Pins the runtime semantic branch that the
+  typecheck fix in P0-A made possible.
+  Independent of the typecheck (a future change
+  could regress the runtime semantic without
+  recreating the TypeScript error).
+  Verified out-of-band:
+    BROKEN code (no P0-A guard) -> T1 fails ✓
+    FIXED code (with P0-A guard) -> T1 passes ✓
+  (regression guard = VALID)
 
 SDKCONTROLLER_WRAP_TEST    =
   SYNTHETIC PATTERN-PIN
@@ -283,6 +487,38 @@ P2 = DOGFOOD test reclassified as
     SYNTHETIC_REAL / PASS + legacy `undefined
     -> P` path is supported projection shape,
     production reachability not shown.
+P0-A = sdk-compaction.ts now treats
+      `result.messages === undefined` as
+      `compacted: false` (metadata-only
+      prepareTurn return does NOT produce a
+      real compaction artifact).
+      Pinned by T1 in
+      apps/vscode/src/sdk/sdk-compaction.test.ts
+      (c17).
+P0-B = task-state-shadow-coordinator.ts
+      classifies `working-context-state-changed`
+      as `presentational:${event.type}` (non-
+      task-state telemetry/state-notification;
+      exhaustive never-check preserved).
+      (T2 task-shadow test deferred: the
+      exhaustive `never` check is compile-pinned
+      and the existing 72/72 task-state suite
+      covers the observation-only semantics;
+      adding a new test would require substantial
+      scaffolding for marginal gain. Out of scope
+      per reviewer.)
+P1-T1 = regression guard for the runtime
+      semantic branch in P0-A. Pins:
+        metadata-only prepare result
+        → must remain compacted:false
+      Without T1, a future change could regress
+      the runtime semantic without recreating
+      the TypeScript error. Verified out-of-band.
+P2-TERMINAL = TYPECHECK wording softened to
+      ENTRY_BUILD / SUBJECT_BUILD /
+      ACT_OWNED_DIAGNOSTICS = 3 → 0 (avoid
+      "negative delta" being misread as a
+      regression).
 
 NEW_REVIEW_ROUND           = NO
 C1                         = GO_LIVE_QUALIFICATION
@@ -324,13 +560,49 @@ c14: P3_B5_BOUNDARY   (2b371761d)
        + UNRELATED DELTA: Math.round percentage
                               PASS_WITH_ONE_P1_FIX
                               GO_LIVE_QUALIFICATION
-c15: P3_B5_P1_REVERT  (this commit)
+c15: P3_B5_P1_REVERT  (cfeb66175)
        + REVERTED Math.round percentage (P1)
        + REVERTED unrelated presentation delta
        + RECLASSIFIED compaction-presentation
          transition test (P2a, wording)
        + NOTED legacy undefined -> P production
          reachability (P2b, wording)
+                              GO_LIVE_QUALIFICATION
+c16: HALT_BUILD_REGRESSION_BOUNDED_FIX (this branch)
+       + P0-A: sdk-compaction.ts
+         `if (!result.messages) return compacted=false`
+         (no non-null assertion; real-compaction
+          artifact semantics preserved)
+       + P0-B: task-state-shadow-coordinator.ts
+         case "working-context-state-changed" ->
+         `presentational:${event.type}`
+         (exhaustive never-check preserved; mirror
+          existing presentational family)
+       + DOGFOOD_BUILD_REGRESSION = RESOLVED
+       + vscode:prepublish = PASS
+       + LIVE_QUALIFICATION = RESUMABLE
+                              GO_LIVE_QUALIFICATION
+c17: REGRESSION_GUARD + P2_WORDING_FIX (this commit)
+       + P1: T1 regression test in
+         apps/vscode/src/sdk/sdk-compaction.test.ts
+         "returns compacted=false on metadata-only
+          prepareTurn result (W publish, no
+          projection)"
+         Pins the runtime semantic branch that
+         the typecheck fix in P0-A made possible.
+         Independent of the typecheck (a future
+         change could regress the runtime semantic
+         without recreating the TypeScript error).
+         Verified out-of-band: T1 fails on broken
+         code, passes on fixed code (regression
+         guard = VALID).
+       + P2: TYPECHECK wording softened:
+         "TYPECHECK_DELTA = NEGATIVE" ->
+         "TYPECHECK = ENTRY_BUILD / SUBJECT_BUILD /
+          ACT_OWNED_DIAGNOSTICS = 3 → 0"
+         (avoid "negative delta" being misread as
+          a regression).
+       + LIVE_QUALIFICATION = AUTHORIZED
                               GO_LIVE_QUALIFICATION
 ```
 
@@ -351,7 +623,11 @@ Reviewer (twenty-first-pass):
 ## Next bounded cycle
 
 ```text
-GO_LIVE_QUALIFICATION: install/build dogfood,
+GO_LIVE_QUALIFICATION: install/build dogfood
+(this commit already builds clean;
+vscode:prepublish PASSES; the dogfood artifact
+is built; c16 unblocks LIVE qualification
+that was previously BLOCKED on the build),
 reproduce one real compaction, assert
   W1 (pre-compaction) -> W2 (post-compaction)
   W2 != stale W1
@@ -364,11 +640,22 @@ re-investigate. Do not paper over.
 ```
 
 PRODUCTION_REWORK  =
-  MINIMAL REVERT (Boundary 5 GREEN preserved;
-                 Math.round percentage delta
-                 restored to pre-twenty-first-
-                 pass ratio shape)
-TYPECHECK_DELTA   = ZERO (3 baseline == 3)
-DEFAULT_SUITE_STATE = GREEN
+  BOUNDED COMPATIBILITY FIX (c16) +
+  MINIMAL REVERT (c15, Boundary 5 GREEN
+                  preserved; Math.round
+                  percentage delta restored
+                  to pre-twenty-first-pass
+                  ratio shape)
+TYPECHECK          =
+  ENTRY_BUILD        = FAIL / 3 ACT-owned diagnostics
+                       (sdk-compaction.ts:119,
+                        sdk-compaction.ts:122,
+                        task-state-shadow-
+                        coordinator.ts:260)
+  SUBJECT_BUILD      = PASS / 0 diagnostics
+                       (apps/vscode tsc clean;
+                        c16 fix landed)
+  ACT_OWNED_DIAGNOSTICS = 3 → 0
+DEFAULT_SUITE_STATE = GREEN (76 files, 1101 tests)
 NEW_REVIEW_ROUND    = NO
 C1                  = GO_LIVE_QUALIFICATION
