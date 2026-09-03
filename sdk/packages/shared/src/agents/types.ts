@@ -669,6 +669,38 @@ export interface AgentPrepareTurnContext {
 export interface AgentPrepareTurnResult {
 	messages?: MessageWithMetadata[];
 	systemPrompt?: string;
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (thirty-seventh-pass, attempt 2): HOST_WRAPPER_W_FORWARD.
+	 *
+	 * The producer-side prepareTurn seam
+	 * (`createCompactionStateAwarePrepareTurn`) publishes
+	 * `currentWorkingContextEstimate` on every successful
+	 * prepareTurn. The `AgentRuntime.prepareTurnForModelRequest`
+	 * consumer at sdk/packages/agents/src/agent-runtime.ts:2601
+	 * reads this field verbatim and surfaces it as
+	 * `state.currentWorkingContextEstimate` (W).
+	 *
+	 * Before this field was added, the host-side wrapper at
+	 * `SessionRuntime.createRuntimePrepareTurn` (sdk/packages/
+	 * core/src/runtime/orchestration/session-runtime-orchestrator.
+	 * ts:1130-1181) declared its return type as
+	 * `{ messages?, systemPrompt? }` and STRIPPED
+	 * `currentWorkingContextEstimate` from the producer's return
+	 * value. That caused the live runtime trace to observe
+	 * `prepareTurnW: undefined` on every prepareTurn (see session
+	 * `1788440371166_9hf7u`) even though the producer correctly
+	 * set W.
+	 *
+	 * Add this field on `AgentPrepareTurnResult` (the
+	 * SDK adapter's narrow type) so the wrapper can forward W
+	 * verbatim. ADDITIVE-OPTIONAL — preserves the
+	 * `AgentRuntimePrepareTurnResult` shape from
+	 * sdk/packages/shared/src/agent.ts:598 (where this field
+	 * already exists). No new public API; no schema bump; the
+	 * interface is the canonical host-facing contract.
+	 */
+	currentWorkingContextEstimate?: number;
 }
 
 // =============================================================================

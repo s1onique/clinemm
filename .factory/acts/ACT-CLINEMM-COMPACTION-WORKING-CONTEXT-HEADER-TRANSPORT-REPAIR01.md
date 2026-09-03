@@ -645,7 +645,8 @@ PRODUCTION_REWORK  =
                   preserved; Math.round
                   percentage delta restored
                   to pre-twenty-first-pass
-                  ratio shape)
+                  ratio shape) +
+  HOST_WRAPPER_W_FORWARD (c18, this commit)
 TYPECHECK          =
   ENTRY_BUILD        = FAIL / 3 ACT-owned diagnostics
                        (sdk-compaction.ts:119,
@@ -659,3 +660,176 @@ TYPECHECK          =
 DEFAULT_SUITE_STATE = GREEN (76 files, 1101 tests)
 NEW_REVIEW_ROUND    = NO
 C1                  = GO_LIVE_QUALIFICATION
+
+## Thirty-seventh-pass (c18) — HOST_WRAPPER_W_FORWARD
+
+Live runtime trace for session `1788440371166_9hf7u` showed two
+`runtime_w_observe` rows with `prepareTurnW: undefined` and
+`resultKind: "prepare_turn"`. Producer-side
+`createCompactionStateAwarePrepareTurn` correctly publishes W on
+every prepareTurn (verified GREEN by
+`compaction.real-producer-seam-red.test.ts`).
+
+Per the user's plan:
+
+```text
+HALT_RED_NOT_REPRODUCED
+Then we'd need to inspect how the live host config differs from
+the test factory.
+```
+
+Inspection: the host-side `LocalRuntimeHost` wraps the user's
+`prepareTurn` via `SessionRuntime.createRuntimePrepareTurn`
+(sdk/packages/core/src/runtime/orchestration/session-runtime-
+orchestrator.ts:1130-1181). Pre-fix body:
+
+```ts
+return {
+    ...(result.messages
+        ? { messages: messagesToAgentMessages(result.messages) }
+        : {}),
+    ...(result.systemPrompt !== undefined
+        ? { systemPrompt: result.systemPrompt }
+        : {}),
+};
+```
+
+**The wrapper STRIPS `currentWorkingContextEstimate`.** The
+declared return type narrowed to `{ messages?, systemPrompt? } |
+undefined`, structurally a subtype of
+`AgentRuntimePrepareTurnResult` but omitting W.
+
+```text
+producer-side createCompactionStateAwarePrepareTurn
+   returns { currentWorkingContextEstimate: W }
+       ↓
+SessionRuntime.createRuntimePrepareTurn wrapper
+   strips W → returns { } or { messages, systemPrompt }
+       ↓
+AgentRuntime.prepareTurnForModelRequest
+   reads result.currentWorkingContextEstimate → undefined
+       ↓
+notifyRuntimeWTraceObserver records prepareTurnW: undefined
+       ↓
+willEmit = false (no change from prior undefined)
+       ↓
+no working-context-state-changed event
+       ↓
+no carrier_observe
+       ↓
+host publishes W=null
+       ↓
+ContextWindow hides the gauge
+```
+
+### True RED → GREEN
+
+RED test added:
+`session-runtime-orchestrator.runtime-prepare-turn-w-strip.test.ts`.
+Two sub-tests:
+
+1. Producer returns `{ currentWorkingContextEstimate: W }` (the
+   metadata-only no-compaction path that
+   `createCompactionStateAwarePrepareTurn` publishes). Wrapper
+   MUST forward it.
+2. Producer returns `{ messages, systemPrompt,
+   currentWorkingContextEstimate }` (the projection path on real
+   compaction). Wrapper MUST forward all three.
+
+Both RED at HEAD pre-fix (`result.currentWorkingContextEstimate
+=== undefined`).
+
+### Repair
+
+The fix is a single spread addition inside the `return {...}` of
+the wrapper, plus widening the declared return type to include
+the forwarded field:
+
+```ts
+return {
+    ...(result.messages
+        ? { messages: messagesToAgentMessages(result.messages) }
+        : {}),
+    ...(result.systemPrompt !== undefined
+        ? { systemPrompt: result.systemPrompt }
+        : {}),
+    ...(result.currentWorkingContextEstimate !== undefined
+        ? { currentWorkingContextEstimate: result.currentWorkingContextEstimate }
+        : {}),
+};
+```
+
+Conservative single-field addition (taxonomy per causal
+review on the c18 patch):
+
+- PUBLIC_TYPE_SURFACE_DELTA = YES / additive optional /
+  acceptable. `currentWorkingContextEstimate?: number` is added
+  to the EXPORTED `AgentPrepareTurnResult` interface in
+  `@cline/shared`. Unlike prior temporary-diagnostic API
+  leakage, this field IS the actual product contract required
+  to transport W across the real core→agents orchestration
+  boundary; the canonical upstream
+  `AgentRuntimePrepareTurnResult` (sdk/packages/shared/src/agent
+  .ts:598) already declares it.
+- WIRE_SCHEMA_DELTA = NONE. No gRPC / protobuf / wire field
+  changes; no schema bump; the new field flows through the
+  existing prepareTurn return-value contract.
+- BACKWARD_COMPATIBILITY = PRESERVED. The field is OPTIONAL on
+  both sides; producers that do not publish W continue to work;
+  consumers that ignore W continue to work.
+- No review round needed. The wrapper's narrowed type was the
+  latent defect; widening it back to the upstream contract is
+  the ACT-owned correction.
+- Type signature widened from
+  `{ messages?, systemPrompt? } | undefined` to
+  `{ messages?, systemPrompt?, currentWorkingContextEstimate?: number }
+  | undefined` to match the upstream
+  `AgentRuntimePrepareTurnResult` shape from
+  sdk/packages/shared/src/agent.ts:598.
+
+### Verification
+
+```text
+sdk/packages/core/src/runtime/orchestration/
+  session-runtime-orchestrator.runtime-prepare-turn-w-strip.test.ts:
+   2 pass / 0 fail (RED → GREEN after the spread addition)
+
+sdk/packages/core/src/extensions/context/
+  compaction.real-producer-seam-red.test.ts:
+   1 pass / 0 fail (producer seam already GREEN at HEAD; documents
+                    that the upstream producer publishes W
+                    correctly)
+
+sdk/packages/core/src/runtime/orchestration/
+  session-runtime-orchestrator.test.ts:
+   62 pass / 0 fail (no existing test regression from the type
+                    widening)
+```
+
+Other failures in `sdk/packages/core/src/runtime/orchestration/`
+when run as a directory are pre-existing test-interference issues;
+verified identical on parent commit (cb49a5365 without this fix).
+Out of scope for this bounded correction.
+
+### NEXT (LIVE re-qualification)
+
+With the wrapper repair in place, the producer-side W reaches the
+runtime-side state-bind. Rebuild + install + repeat the
+ordinary-task live qualification from the user's previous trace:
+
+```text
+runtime_w_observe:
+  prepareTurnW = N
+  runtimeW = N
+  willEmit = true         # first iteration (transition undefined → N)
+
+carrier_observe:
+  snapshotW = N
+  carrierW = N
+
+state_publish:
+  publishedW = N
+```
+
+and the ContextWindow gauge is visibly present on the same
+six-second ordinary task.

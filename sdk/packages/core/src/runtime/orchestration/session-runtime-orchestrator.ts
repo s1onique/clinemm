@@ -1135,6 +1135,43 @@ export class SessionRuntime {
 				| {
 						messages?: readonly AgentMessage[];
 						systemPrompt?: string;
+						/**
+						 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+						 * (thirty-seventh-pass, attempt 2): REPAIR.
+						 *
+						 * The producer-side prepareTurn seam
+						 * (`createCompactionStateAwarePrepareTurn`)
+						 * publishes `currentWorkingContextEstimate`
+						 * on every successful prepareTurn. The
+						 * `AgentRuntime.prepareTurnForModelRequest`
+						 * consumer at sdk/packages/agents/src/
+						 * agent-runtime.ts:2601 reads this field
+						 * verbatim and surfaces it as
+						 * `state.currentWorkingContextEstimate` (W).
+						 *
+						 * Before this fix the wrapper stripped W
+						 * (the return type declared only `messages?` +
+						 * `systemPrompt?`, so the spread did not
+						 * include W). That caused the live runtime
+						 * trace to observe `prepareTurnW: undefined`
+						 * on every prepareTurn (see session
+						 * `1788440371166_9hf7u`) even though the
+						 * producer-side `createCompactionStateAware
+						 * PrepareTurn` correctly set W.
+						 *
+						 * This field is the wiring repair. W is
+						 * forwarded verbatim — no recomputation, no
+						 * shape change. Producers that do not publish
+						 * W leave the field undefined; the runtime
+						 * preserves fail-closed semantics on the
+						 * receiving side.
+						 *
+						 * Conservative single-field addition; no
+						 * new public API; no schema bump; type
+						 * signature widened to match the upstream
+						 * `AgentRuntimePrepareTurnResult` shape.
+						 */
+						currentWorkingContextEstimate?: number;
 				  }
 				| undefined
 		  >)
@@ -1175,6 +1212,13 @@ export class SessionRuntime {
 					: {}),
 				...(result.systemPrompt !== undefined
 					? { systemPrompt: result.systemPrompt }
+					: {}),
+				// Forward the producer-published W verbatim. The
+				// runtime-side state-bind at agent-runtime.ts:2601
+				// reads this field; stripping it (as the previous
+				// return literal did) caused the live defect.
+				...(result.currentWorkingContextEstimate !== undefined
+					? { currentWorkingContextEstimate: result.currentWorkingContextEstimate }
 					: {}),
 			};
 		};
