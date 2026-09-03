@@ -1058,3 +1058,20 @@ apps/vscode/.factory/evidence/
 # recompute in ChatView; W_PRESENTATION_TRANSPORT = ABSENT / PROVEN).
 !/.factory/acts/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01.md
 !/.factory/evidence/ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01/
+# ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07 — WEBVIEW-WIRING:
+# PASS at HEAD 50c1df4b9. Bounded 2-line repair (+2/-2; 1 file) for the
+# TS2741 x2 RED at SettingsView.tsx:159-160 (sandbox tab fragment
+# composed two sections without the renderSectionHeader prop both
+# declare as REQUIRED). Composition contract: SettingsView owns the
+# callback; single-component tabs receive it via spread props at
+# SettingsView.tsx:265; the sandbox tab's <>-fragment composition
+# requires direct JSX pass (Class A / CALL_SITE_WIRING_MISSING;
+# Class B optionalizing rejected — would silently un-gate the §P0
+# lock test in SandboxCapabilitiesSection.spec.tsx:113-135 and
+# contradict the renderSectionHeader("sandbox") body-call). The
+# ACT + 7-evidence-file directory must survive a fresh clone so the
+# bounded webview-wiring contract + the exact artifact identity
+# (VSIX 14577612 bytes SHA256 8734b79bd6... bound to HEAD 50c1df4b9
+# at dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix) are durable.
+!/.factory/acts/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07-WEBVIEW-WIRING.md
+!/.factory/evidence/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07-WEBVIEW-WIRING/

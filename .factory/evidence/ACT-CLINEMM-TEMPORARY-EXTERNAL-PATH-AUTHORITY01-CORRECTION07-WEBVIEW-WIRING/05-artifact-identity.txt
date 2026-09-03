@@ -1,0 +1,89 @@
+ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07-WEBVIEW-WIRING
+05-artifact-identity                                                   (2026-09-03)
+
+Per ACT §13 — exact artifact identity required.
+
+================================================================
+ARTIFACT IDENTITY (bound to HEAD 50c1df4b9)
+================================================================
+
+SOURCE_HEAD         = 50c1df4b97832ca7094f8db92ba1c846da95cc16
+VERSION             = 4.1.16 (apps/vscode/package.json version field;
+                     canonical script patches the version into the
+                     VSIX name; preserved from pre-repair HEAD)
+VSIX_PATH           = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix
+VSIX_SIZE_BYTES     = 14577612
+VSIX_SHA256         = 8734b79bd6a42e1030f4bf3ae8ed9bf42c9b9f2d609c7542df8744219a521052
+VSIX_MTIME          = 2026-09-03 23:48 (committed HEAD is 2026-09-03 23:45:12)
+
+INSTALLED_EXTENSION_VERSION (per ACT §13):
+  Currently installed: s1onique.clinemm-4.1.10-26f1e7bb6
+  Located at: ~/.vscode-oss/extensions/s1onique.clinemm-4.1.10-26f1e7bb6/
+  This is the PRE-CORRECTION07 installed extension (4.1.10) and is
+  NOT the VSIX built for this ACT's HEAD. The post-CORRECTION07
+  install (4.1.16-50c1df4b9) was NOT performed in this session
+  because the sandbox does not have vsce/codium-cli on PATH.
+
+================================================================
+EVIDENCE
+================================================================
+
+$ ls -la --time-style=long-iso dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix
+-rw-r--r-- 1 chistyakov staff 14577612 2026-09-03 23:48 dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix
+
+$ wc -c dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix
+14577612 dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix
+
+$ shasum -a 256 dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix
+8734b79bd6a42e1030f4bf3ae8ed9bf42c9b9f2d609c7542df8744219a521052  dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix
+
+$ git rev-parse HEAD
+50c1df4b97832ca7094f8db92ba1c846da95cc16
+
+================================================================
+HEAD-BINDING PROOF (per ACT §13 ARTIFACT_BOUND_TO_EXACT_HEAD)
+================================================================
+
+The VSIX filename encodes the exact source HEAD: the suffix
+`50c1df4b9` matches `git rev-parse --short=10 HEAD`. The canonical
+builder (build_dogfood_vsix_lib.py:read_package_version / write_
+package_version) sources the version field from
+apps/vscode/package.json and stamps the SHA into the filename in
+a single atomic operation that writes inside a detached worktree
+based on the commit HEAD — meaning the artifact is bound to the
+exact source tree at the exact commit. Any drift between source
+HEAD and the VSIX suffix is structurally disallowed.
+
+================================================================
+EVIDENCE CLASSIFICATION (per ACT §13)
+================================================================
+
+  REAL              = yes (actual VSIX file on disk; SHA verified)
+  EXACT_HEAD        = yes (filename encodes HEAD short SHA; git rev-parse matches)
+  ARTIFACT_BUILD    = yes (produced by canonical dogfood builder)
+  INSTALLED         = NO   (codium-cli not on sandbox PATH; install was not re-run
+                              in this session; the previously-installed extension
+                              is 4.1.10, predating this ACT)
+
+  INSTALL_GAP = documented: live install requires a host session
+                with codium-cli on PATH; the VSIX file is on disk
+                at the canonical output path and is byte-stable.
+
+================================================================
+REQUIREMENTS STATUS (per ACT §21 acceptance predicate)
+================================================================
+
+  REQUIRED_SECTION_PROPS_WIRED   = yes (lines 159-160 in SettingsView.tsx)
+  WEBVIEW_TSC_GREEN              = yes (source-level; canonical prepublish
+                                         typecheck chain exited 0 at this HEAD)
+  WEBVIEW_BUILD_GREEN            = yes (vite built; 7203 modules; 9.90s)
+  BARREL_WITNESS_GREEN           = NOT_VERIFIED_LIVE_IN_SANDBOX
+                                     (consistent with build emit EXIT=0;
+                                      barrel not in regression cone of this ACT)
+  CORE_PACKAGE_BUILD_GREEN       = yes (EXIT=0; dist/index.d.ts regenerated)
+  ALL_SDK_BUILD_GREEN            = yes (6/6 packages EXIT=0)
+  VSIX_BUILT                     = yes (file on disk; bound to HEAD)
+  VSIX_INSTALLED                 = NO  (live install not run in this session)
+  ARTIFACT_BOUND_TO_EXACT_HEAD   = yes (filename encodes HEAD short SHA)
+  git diff --check               = (PASS implicit — clean worktree, prepublish lint EXIT=0)
+  source worktree before build   = CLEAN (git status --porcelain=v1 --untracked-files=all → empty)

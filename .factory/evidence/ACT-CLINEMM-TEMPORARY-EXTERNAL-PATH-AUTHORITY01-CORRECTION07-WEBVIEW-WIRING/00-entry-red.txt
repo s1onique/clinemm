@@ -1,0 +1,62 @@
+ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07-WEBVIEW-WIRING
+00-entry-red                                                          (2026-09-03)
+
+SOURCE = REAL exact-head dogfood build
+
+COMMAND =
+  python3 scripts/build-dogfood-vsix.py --install
+
+FIRST_BAD_BOUNDARY =
+  apps/vscode webview-ui TypeScript build
+
+ERROR_1 =
+  SettingsView.tsx:159
+  <SandboxCapabilitiesSection />
+  missing renderSectionHeader
+
+ERROR_2 =
+  SettingsView.tsx:160
+  <TemporaryExternalPathsSection />
+  missing renderSectionHeader
+
+DOGFOOD_ARTIFACT =
+  NOT_BUILT
+
+ENTRY_HEAD = 50c1df4b9 (after bounded repair; pre-repair HEAD was ad8f3094c6)
+BRANCH     = main
+WORKTREE   = clean (git status --porcelain=v1 --untracked-files=all → empty)
+
+PRE-REPAIR STATE (git blame -L 157,162 apps/vscode/webview-ui/src/components/settings/SettingsView.tsx):
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 157)             sandbox: () => (
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 158)                 <>
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 159) <SandboxCapabilitiesSection />
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 160) <TemporaryExternalPathsSection />
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 161)                 </>
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 162)             ),
+
+POST-REPAIR STATE (commit 50c1df4b97 = CORRECTION07 fix):
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 157)             sandbox: () => (
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 158)                 <>
+  50c1df4b97 (2026-09-03 23:45:12 +0300) 159) <SandboxCapabilitiesSection renderSectionHeader={renderSectionHeader} />
+  50c1df4b97 (2026-09-03 23:45:12 +0300) 160) <TemporaryExternalPathsSection renderSectionHeader={renderSectionHeader} />
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 161)                 </>
+  ad8f3094c6 (2026-09-03 23:13:13 +0300) 162)             ),
+
+CORRECTION-CLASSIFICATION (per ACT §5 discriminator):
+  CLASS = A / CALL_SITE_WIRING_MISSING
+  CONTRACT = PASS_PROP (every SettingsView section that calls
+    renderSectionHeader(...) declares it as a required prop in
+    its Props interface; SettingsView supplies it via spread
+    props to single-component tabs but the sandbox tab's
+    factory body is a <>-fragment of two sections, so the
+    outer spread has no reach into the two call sites)
+
+DOGFOOD_PROGRESS_AT_ENTRY:
+  CORRECTION06_BARREL_EXPORT = GREEN (build progressed past
+    former TS2305 at sdk/packages/core/src/index.ts:483; barrel
+    split restored byte-for-byte to canonical shape; barrel-witness
+    typecheck wired into @cline/core `typecheck` script)
+  PUBLIC_PACKAGE_BUILD = GREEN (live SDK build green; log retained
+    at dist/.build-sdk.log shows EXIT=0 after all six packages)
+  WEBVIEW_BUILD = RED  ←  this ACT's first bad boundary
+  DOGFOOD_ARTIFACT = NOT_BUILT (no VSIX for post-CORRECTION06 HEAD)

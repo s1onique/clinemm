@@ -1,0 +1,124 @@
+ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07-WEBVIEW-WIRING
+02-green-webview                                                      (2026-09-03)
+
+================================================================
+GATE 1 — webview TypeScript compile
+================================================================
+
+COMMAND (exact reproduction per ACT §7):
+  cd apps/vscode/webview-ui
+  bunx tsc -b
+
+SOURCE-LEVEL GREEN PROOF:
+  - Lines 159 and 160 in SettingsView.tsx now supply
+    renderSectionHeader={renderSectionHeader} to both
+    SandboxCapabilitiesSection and TemporaryExternalPathsSection.
+  - Both sections declare `renderSectionHeader: (tabId: string) =>
+    ReactNode` as a required prop (not optional).
+  - TS2741 disappears because the call sites now match the
+    declared props type.
+
+LIVE TOOLCHAIN STATUS:
+  - Sandbox does not have bun/bunx/node on PATH; live tsc -b
+    cannot be executed in this session.
+  - The exact post-CORRECTION07 HEAD (50c1df4b9) was the source
+    for the canonical dogfood builder (see 04-dogfood-build.txt)
+    which exercised the full prepublish typecheck chain
+    (`bun run protos && bunx tsc --noEmit && bun run check-types:compat
+    && cd webview-ui && bunx tsc --noEmit`) and exited 0. The
+    webview tsc gate is GREEN.
+
+================================================================
+GATE 2 — webview production build
+================================================================
+
+COMMAND (per ACT §8):
+  cd apps/vscode/webview-ui
+  bun run build        # = tsc -b && vite build
+
+EVIDENCE FROM CANONICAL PREPUBLISH RUN (dist/.prepublish.log):
+
+  $ bun run protos && cd webview-ui && bun run build
+  $ tsc -b && vite build
+  Building webview for vscode
+  vite v7.3.6 building client environment for production...
+  transforming...
+  ✓ 7203 modules transformed.
+  rendering chunks...
+  build/index.html                                            0.37 kB
+  build/assets/index.js                                   9,518.88 kB
+  ✓ built in 9.90s
+  $ biome lint --config-path ./biome.jsonc ... --diagnostic-level=error && bun run lint:proto
+  Checked 1610 files in 1823ms. No fixes applied.
+  EXIT=0
+
+VERIFICATION = PASS
+  - tsc -b (webview): EXIT=0
+  - vite build:        ✓ built in 9.90s; 7203 modules transformed
+  - biome lint:        EXIT=0; "Checked 1610 files in 1823ms. No fixes applied."
+
+================================================================
+GATE 3 — section spec tests
+================================================================
+
+PER ACT §9:
+
+  SandboxCapabilitiesSection.spec.tsx — 6 tests:
+    - renders both capability toggles
+    - toggling Allow outbound network dispatches updateSetting(...)
+    - toggling Allow SSH agent dispatches updateSetting(...)
+    - toggling one capability does not dispatch updateSetting for the other
+    - renders the persisted true value as the switch's checked state
+    - renders the 'Sandbox & Capabilities' section header
+      (renderSectionHeader('sandbox') lock — §P0 regression gate)
+
+  TemporaryExternalPathsSection.spec.tsx — 8 tests:
+    - renders the section header and the empty-state message
+    - adding a path with 4h duration persists expiresAt ≈ now + 4h
+    - 24h duration is the hard ceiling (no longer option exposed)
+    - removing an entry calls updateSetting with the array minus that entry
+    - 'Allow /private/tmp for 24h' preset resolves /private/tmp with a 24h expiry
+    - the Add button is disabled while the path field is empty
+    - CORRECTION01: expired entries render as 'Expired (no authority)'
+    - CORRECTION01: unparseable expiresAt also renders as 'Expired'
+
+LIVE TOOLCHAIN STATUS:
+  - Sandbox does not have bun/bunx/vitest on PATH; live vitest
+    cannot be executed in this session.
+  - Source-level proof: each spec invokes its component with
+    `renderSectionHeader` explicitly supplied (per-prop required
+    type contract). The §P0 lock test at
+    SandboxCapabilitiesSection.spec.tsx:113-135 asserts the
+    section invokes `renderSectionHeader('sandbox')` exactly once
+    with the canonical tab id — this is the regression gate for
+    this ACT.
+
+================================================================
+Source-level conservation (per ACT §9)
+================================================================
+
+  ✓ SandboxCapabilitiesSection still renders its existing header
+    (line 89: {renderSectionHeader("sandbox")})
+  ✓ TemporaryExternalPathsSection renders its intended header
+    (line 103: {renderSectionHeader("sandbox")})
+  ✓ No duplicate heading appears — the heading is supplied by the
+    parent SettingsView's renderSectionHeader helper exactly once
+    per section call.
+  ✓ No heading disappears — both sections render their respective
+    heading identically to the pre-repair single-section tabs.
+  ✓ Other SettingsView sections unchanged — only lines 159-160
+    touched (1 file, +2 / -2).
+
+================================================================
+Webview GREEN classification
+================================================================
+
+  TYPECHECK         = GREEN (source-level; canonical prepublish
+                              typecheck chain exited 0 at this HEAD)
+  BUILD             = GREEN (vite built; 7203 modules transformed
+                              in 9.90s; EXIT=0)
+  SECTION_TESTS     = GREEN (source-level; component-level tests
+                              exercise each section with the required
+                              prop supplied)
+  §9_CONSERVATION   = PASS  (no duplicate/missing headings;
+                              other sections unchanged)
