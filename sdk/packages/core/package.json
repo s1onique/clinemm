@@ -50,8 +50,9 @@
 	},
 	"scripts": {
 		"build": "bun run ./bun.mts && bun tsc -p tsconfig.build.json && bun run ./scripts/verify-runtime-build-id.ts",
-		"typecheck": "bun tsc -p tsconfig.dev.json --noEmit && bun run typecheck:smoke",
+		"typecheck": "bun tsc -p tsconfig.dev.json --noEmit && bun run typecheck:smoke && bun run typecheck:barrel-witness",
 		"typecheck:smoke": "bun tsc -p tsconfig.smoke.json --noEmit",
+		"typecheck:barrel-witness": "bun tsc -p tsconfig.witness.json --noEmit",
 		"test": "bun run test:unit && bun run test:e2e",
 		"test:live": "vitest run --config vitest.config.ts src/extensions/context/compaction.live.test.ts",
 		"test:compaction": "bun --conditions=development run scripts/compact-session.ts",

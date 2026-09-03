@@ -1,0 +1,14 @@
+{
+	"extends": "./tsconfig.build.json",
+	"compilerOptions": {
+		"declaration": false,
+		"emitDeclarationOnly": false,
+		"noEmit": true,
+		"rootDir": "./src",
+		"outDir": "./dist"
+	},
+	"include": [
+		"src/index.ts",
+		"src/__compile-witness__/public-barrel-export-witness.ts"
+	]
+}

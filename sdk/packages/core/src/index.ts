@@ -470,18 +470,30 @@ export { buildCommandExecutionPlan } from "./runtime/command-policy/command-exec
 // ACT-CLINEMM-COMMAND-RISK-R0-WORKSPACE-PATH-AUTHORITY01-CORRECTION01
 // REALPATH_WORKSPACE_CONFINEMENT:
 //
-// Re-export the host-produced realpath evidence types and the
-// evidence-builder helper at the top-level so SDK consumers
-// (CLI, VS Code) can import them via `@cline/core`.
+// Re-export the host-side evidence builder so SDK consumers
+// (CLI, VS Code) produce identical realpath-resolution behavior.
+// The builder is the ONLY sanctioned place in the policy stack
+// that calls `fs.realpathSync`.
+//
+// ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION06-BUILD-EXPORT:
+// `TemporaryExternalPathAuthority` is defined in `path-authority-evidence.ts`
+// (NOT in the builder). The builder only re-exports the two workspace
+// evidence interfaces, so the public barrel must source the
+// `TemporaryExternalPathAuthority` type from the evidence module.
+// The sibling sub-index `runtime/command-policy/index.ts` already
+// gets this split right; this correction aligns the top-level barrel
+// with that sub-index and the canonical definitions.
 export {
 	buildPathAuthorityEvidence,
 	type BuildPathEvidenceOptions,
 	type BuildPathEvidenceResult,
 	safeRealpathSync,
-	type WorkspacePathAuthorityEvidence,
-	type WorkspacePathOperandEvidence,
-	type TemporaryExternalPathAuthority,
 } from "./runtime/command-policy/path-authority-evidence-builder";
+export type {
+	TemporaryExternalPathAuthority,
+	WorkspacePathAuthorityEvidence,
+	WorkspacePathOperandEvidence,
+} from "./runtime/command-policy/path-authority-evidence";
 export {
 	evaluateCommandRisk,
 	type EvaluateCommandRiskInput,
