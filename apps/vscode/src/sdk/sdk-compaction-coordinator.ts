@@ -59,6 +59,37 @@ export interface SdkCompactionCoordinatorOptions {
 	getWorkspaceRoot: () => Promise<string>
 	postStateToWebview: () => Promise<void>
 	/**
+	 * ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01 (PASS
+	 * POST_COMPACTION_PUBLICATION_REPAIRED):
+	 *
+	 * Optional: when supplied, the coordinator publishes the post-
+	 * compaction `currentWorkingContextEstimate` to the host-side
+	 * `WorkingContextHostCapture` carrier at the SAME moment the
+	 * terminal divider is published. The carrier is normally only
+	 * fed by `AgentRuntime.prepareTurnForModelRequest` via the
+	 * canonical runtime-event subscription; manual compaction never
+	 * flows through that runtime seam, so this hook is the bounded
+	 * transport-only repair that closes the live-UI gap (divider
+	 * updates to 29.6k, top bar stays at 412.7k) without changing
+	 * the canonical prepareTurn flow.
+	 *
+	 * Caller contract:
+	 *   - The default implementation invokes
+	 *     `WorkingContextHostCapture.observe({
+	 *         type: "working-context-state-changed",
+	 *         snapshot: { currentWorkingContextEstimate: w }
+	 *       })` and the carrier's existing fail-closed assignment
+	 *     handles publication.
+	 *   - The function MUST be non-throwing (log + no-op on
+	 *     failure); the divider publication is the user-visible
+	 *     success indicator and MUST proceed even if W publication
+	 *     fails.
+	 *
+	 * Optional so test constructions / non-VSCode hosts (CLI) keep
+	 * working unchanged.
+	 */
+	publishPostCompactionW?: (w: number) => void
+	/**
 	 * ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01
 	 *
 	 * The canonical turn-phase authority (`TurnStateTracker`). Compaction
@@ -532,6 +563,23 @@ export class SdkCompactionCoordinator {
 				compactionTs,
 				sessionId,
 			)
+			// ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01: surface
+			// the producer's W BEFORE the postStateToWebview so the
+			// extension state payload carries the new W in the very
+			// next publication (no race window). Failure is logged and
+			// swallowed — the divider publication is the user-visible
+			// success indicator and MUST proceed even if W publication
+			// fails.
+			if (typeof result.currentWorkingContextEstimate === "number") {
+				try {
+					this.options.publishPostCompactionW?.(result.currentWorkingContextEstimate)
+				} catch (publishError) {
+					Logger.error(
+						"[SdkController] compactTask: post-compaction W publication failed; divider already published",
+						publishError,
+					)
+				}
+			}
 			await this.options.postStateToWebview()
 
 			Logger.log(`[SdkController] Compacted session ${sessionId}: ${messagesBefore} -> ${result.messages.length} messages`)

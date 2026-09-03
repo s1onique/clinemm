@@ -1670,6 +1670,23 @@ export class Controller {
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			postStateToWebview: () => this.postStateToWebview(),
+			// ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+			// (PASS POST_COMPACTION_PUBLICATION_REPAIRED):
+			// Surface the post-compaction W through the
+			// already-wired `WorkingContextHostCapture` carrier
+			// using the transport-only `setLatest` seam added to
+			// the carrier as part of this ACT. Carrier assignment
+			// semantics (UNDEFINED_W_STALE_REUSE = FORBIDDEN) are
+			// preserved verbatim — no event synthesis, no
+			// estimator recompute; the carrier's fail-closed
+			// assignment handles publication.
+			//
+			// This closes the live-UI gap where the persistent
+			// top bar stays at ≈412.7k after a manual compaction
+			// that produces a 29.6k divider.
+			publishPostCompactionW: (w: number) => {
+				this.workingContextHostCapture.setLatest(w)
+			},
 			// ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01: the compaction
 			// coordinator drives the SAME canonical turn-phase tracker
 			// every other coordinator uses — no second authority.

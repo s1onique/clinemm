@@ -45,6 +45,27 @@ export interface CompactSessionMessagesResult {
 	compacted: boolean
 	messages: SdkMessage[]
 	compactionState?: SessionCompactionState
+	/**
+	 * ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01 (PASS
+	 * POST_COMPACTION_PUBLICATION_REPAIRED):
+	 *
+	 * The post-compaction `currentWorkingContextEstimate` computed by
+	 * the producer seam
+	 * (`sdk/packages/core/src/extensions/context/compaction.ts`:
+	 * `publishWorkingContextEstimate`). Optional: undefined when the
+	 * producer returned no W (legacy / pre-repair path) or when
+	 * `compacted === false` (no projection to publish).
+	 *
+	 * The coordinator (or any consumer driving the
+	 * `WorkingContextHostCapture` carrier via a synthetic
+	 * `working-context-state-changed` event) MUST surface this value
+	 * so the persistent top working-context bar updates at the same
+	 * moment the divider does. Without this field, manual compaction
+	 * leaves the carrier holding the pre-compaction W (typically the
+	 * last prepareTurn value, often large) and the bar visibly lags
+	 * until the next message triggers a fresh prepareTurn.
+	 */
+	currentWorkingContextEstimate?: number
 }
 
 /**
@@ -153,5 +174,13 @@ export async function compactSessionMessages(input: CompactSessionMessagesInput)
 			conversationId: input.sessionId,
 			systemPrompt: result.systemPrompt,
 		}),
+		// ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01: surface
+		// the producer's W so the coordinator can drive the
+		// WorkingContextHostCapture at the same moment the divider
+		// is published. Undefined when the producer returned no W
+		// (pre-repair path / legacy callers); undefined is failure-
+		// closed at the carrier (see working-context-host-capture.ts
+		// `UNDEFINED_W_STALE_REUSE = FORBIDDEN`).
+		currentWorkingContextEstimate: result.currentWorkingContextEstimate,
 	}
 }

@@ -207,4 +207,24 @@ export class WorkingContextHostCapture implements WorkingContextHostCaptureState
 		c._latest = initial
 		return c
 	}
+
+	/**
+	 * ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+	 * (PASS POST_COMPACTION_PUBLICATION_REPAIRED):
+	 *
+	 * PRODUCTION SEAM — write a `currentWorkingContextEstimate`
+	 * that came from outside the canonical runtime-event
+	 * subscription (specifically, the manual-compaction producer
+	 * seam at `apps/vscode/src/sdk/sdk-compaction.ts`). The
+	 * carrier assignment semantics (UNDEFINED_W_STALE_REUSE =
+	 * FORBIDDEN) are preserved verbatim — `null` for non-number
+	 * inputs, unconditional assignment otherwise.
+	 *
+	 * This is the transport-only publication the bounded repair
+	 * uses to drive the host-side webview bar without forcing a
+	 * full runtime-emit round-trip.
+	 */
+	setLatest(estimate: number | null): void {
+		this._latest = typeof estimate === "number" ? estimate : null
+	}
 }
