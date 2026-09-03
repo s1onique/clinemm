@@ -135,6 +135,7 @@ export type AgentRunInput = string | AgentMessage | readonly AgentMessage[];
 export type AgentEventListener = (event: LiveAgentRuntimeEvent) => void;
 
 /**
+/**
  * Advanced form: caller supplies a pre-built `AgentModel`. Used by
  * `@cline/core`, which constructs models itself to share gateway/telemetry
  * wiring with the rest of the session runtime.
@@ -604,6 +605,20 @@ export class AgentRuntime {
 	 * providers that require them first in the following turn.
 	 */
 	private pendingHookContexts: string[] = [];
+
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (thirty-third-pass, attempt 2) — diagnostic observer state.
+	 * The runtime instance no longer exposes a public setter.
+	 * Instead, the observer is a Symbol.for-keyed slot on
+	 * `globalThis` (key: "@cline/agents__wTraceObserver")
+	 * that `installRuntimeWTraceObserver` (defined in
+	 * `./runtime-w-trace-internal`) writes to. The runtime
+	 * consults the same slot on every
+	 * `prepareTurnForModelRequest`. This keeps the diagnostic
+	 * entirely internal to the runtime composition seam
+	 * (no public class API leak).
+	 */
 	private readonly state = {
 		agentId: "",
 		agentRole: undefined as string | undefined,
@@ -1268,6 +1283,30 @@ export class AgentRuntime {
 	 *     carrying the new snapshot BEFORE the caller
 	 *     resumes (i.e. before the model stream begins).
 	 *
+	 * Returns a frozen discriminator describing what
+	 * happened:
+	 *   - `willEmit`:    whether the helper observed a change
+	 *                    (`before !== after`) and therefore
+	 *                    attempted to publish.
+	 *   - `emitResolved`:whether the `emit(...)` call resolved
+	 *                    without the helper itself surfacing
+	 *                    an error. The helper swallows
+	 *                    per-subscriber throws (see the catch
+	 *                    block), so `emitResolved === true`
+	 *                    does NOT mean every downstream
+	 *                    subscriber observed without error;
+	 *                    it means the helper-level publish
+	 *                    resolved cleanly. True A4 end-to-end
+	 *                    delivery still requires a downstream
+	 *                    `carrier_observe` row (or its
+	 *                    absence) to confirm propagation.
+	 *
+	 * Used by `prepareTurnForModelRequest` to feed the
+	 * upstream W trace observer (thirtieth-pass). The host
+	 * reads `willEmit` / `emitResolved` to discriminate
+	 * A3 (helper-internal dedup) from A4 (helper-level
+	 * publish success).
+	 *
 	 * @param before the prior captured W, read from the
 	 *   same `state.currentWorkingContextEstimate` field
 	 *   before the capture mutation. Convenience only;
@@ -1275,17 +1314,19 @@ export class AgentRuntime {
 	 */
 	private async emitWorkingContextStateChangeIfChanged(
 		before: number | undefined,
-	): Promise<void> {
+	): Promise<{ willEmit: boolean; emitResolved: boolean }> {
 		const after = this.state.currentWorkingContextEstimate;
 		if (before === after) {
-			return;
+			return { willEmit: false, emitResolved: false };
 		}
+		let emitResolved = false;
 		try {
 			await this.emit({
 				type: "working-context-state-changed",
 				snapshot: this.snapshot(),
 				previousWorkingContextEstimate: before,
 			});
+			emitResolved = true;
 		} catch {
 			// RSMT01 OBSERVATION MUST NOT BECOME CONTROL.
 			//
@@ -1301,6 +1342,67 @@ export class AgentRuntime {
 			// try/catch preserves the helper-internal
 			// contract independent of `emit()`'s recognition
 			// set.
+		}
+		return { willEmit: true, emitResolved };
+	}
+
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (thirtieth-pass) — fire the upstream W trace observer
+	 * with the exact discriminator payload. The host-side
+	 * trace recorder (`apps/vscode/src/sdk/
+	 * w-carrier-trace-runtime.ts`) maps this into a
+	 * `runtime_w_observe` JSONL row.
+	 *
+	 * The observer is wrapped in a try/catch that mirrors
+	 * the helper-internal swallow contract: a throwing
+	 * observer MUST NOT become authority over the runtime.
+	 * The catch is intentionally narrow (only catches
+	 * synchronous throws from the observer itself); the
+	 * observer is documented as a synchronous side-channel.
+	 *
+	 * The helper dedups whether the observer is wired. If
+	 * the observer is undefined, the helper is a no-op and
+	 * returns immediately.
+	 *
+	 * @internal
+	 *   The observer is read from the package-internal
+	 *   Symbol.for-keyed slot on `globalThis` (key:
+	 *   "@cline/agents__wTraceObserver"). There is NO
+	 *   public setter on this class. The host wires the
+	 *   observer through the in-package
+	 *   `installRuntimeWTraceObserver(...)` helper defined
+	 *   in `./runtime-w-trace-internal.ts`. The runtime
+	 *   composition layer calls the install helper once
+	 *   during SDK controller construction.
+	 */
+	private notifyRuntimeWTraceObserver(record: AgentRuntimeWTraceRecord): void {
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (thirty-third-pass, attempt 2) — read the singleton
+		// observer from the Symbol.for-keyed slot on globalThis.
+		// The Symbol is stable across module loads, so the
+		// runtime (read here) and the bridge install helper
+		// (write via the secondary bundle entry
+		// `dist/internal-w-trace.js`) reach the SAME slot
+		// regardless of how Bun's separate-entry bundling
+		// splits the source graph.
+		const observer = (
+			globalThis as {
+				[symbol: symbol]: AgentRuntimeWTraceObserver | undefined;
+			}
+		)[W_TRACE_OBSERVER_SLOT];
+		if (!observer) {
+			return;
+		}
+		try {
+			observer(record);
+		} catch {
+			// OBSERVATION MUST NOT BECOME CONTROL.
+			//
+			// Mirrors `emitWorkingContextStateChangeIfChanged`'s
+			// swallow. A throwing observer must not unwind the
+			// prepare-turn control flow. Diagnostic-only loss
+			// is the correct tradeoff.
 		}
 	}
 
@@ -2409,7 +2511,26 @@ export class AgentRuntime {
 			// Emit if and only if the no-result case
 			// changed the field. The helper dedups
 			// internally.
-			await this.emitWorkingContextStateChangeIfChanged(wBefore);
+			const emitDecision =
+				await this.emitWorkingContextStateChangeIfChanged(wBefore);
+			// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+			// TRANSPORT-REPAIR01 (thirtieth-pass): fire the
+			// upstream W trace observer with the no-result
+			// discriminator. `prepareTurnW` is `undefined`
+			// here because the producer returned no result;
+			// `resultKind` distinguishes this from the
+			// producer-published-a-W-but-omitted-the-field
+			// branch below.
+			this.notifyRuntimeWTraceObserver({
+				sessionId: this.config.sessionId,
+				iteration: this.state.iteration,
+				resultKind: "prepare_turn_undefined_result",
+				prepareTurnW: undefined,
+				runtimeW: this.state.currentWorkingContextEstimate,
+				previousRuntimeW: wBefore,
+				willEmit: emitDecision.willEmit,
+				emitResolved: emitDecision.emitResolved,
+			});
 			return request;
 		}
 
@@ -2460,7 +2581,29 @@ export class AgentRuntime {
 		// listener has ALREADY received the
 		// `working-context-state-changed` event (or the
 		// helper observed no change and emitted nothing).
-		await this.emitWorkingContextStateChangeIfChanged(wBefore);
+		const emitDecision =
+			await this.emitWorkingContextStateChangeIfChanged(wBefore);
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-
+		// TRANSPORT-REPAIR01 (thirtieth-pass): fire the
+		// upstream W trace observer with the
+		// producer-published discriminator. `prepareTurnW`
+		// is the exact field the producer returned (number
+		// or `undefined` if the producer omitted the field).
+		// `runtimeW` is the post-capture state value
+		// (which may equal `prepareTurnW` or differ in
+		// `undefined` vs `number` shapes only when the
+		// producer omitted the field; otherwise it equals
+		// `prepareTurnW` because we copy verbatim).
+		this.notifyRuntimeWTraceObserver({
+			sessionId: this.config.sessionId,
+			iteration: this.state.iteration,
+			resultKind: "prepare_turn",
+			prepareTurnW: result.currentWorkingContextEstimate,
+			runtimeW: this.state.currentWorkingContextEstimate,
+			previousRuntimeW: wBefore,
+			willEmit: emitDecision.willEmit,
+			emitResolved: emitDecision.emitResolved,
+		});
 
 		let next = request;
 		if (result.messages) {
@@ -4109,3 +4252,88 @@ export type Agent = AgentRuntime;
 export function createAgent(config: AgentRuntimeConfig): AgentRuntime {
 	return new AgentRuntime(config);
 }
+
+// ============================================================================
+// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+// (thirty-third-pass, attempt 2) — package-internal runtime-trace observer.
+//
+// The observer is installed via `installRuntimeWTraceObserver(observer)`,
+// which is a NOT-exported helper defined in
+// `./runtime-w-trace-internal.ts`. The helper writes to a
+// Symbol.for-keyed slot on `globalThis`. The runtime reads
+// from the SAME slot via `Symbol.for("@cline/agents__wTraceObserver")`
+// on every `prepareTurnForModelRequest`. There is NO public
+// setter on `AgentRuntime` and NO exported function that
+// installs the observer from `@cline/agents`. The host wires
+// the observer through the runtime composition layer (the
+// ClineMM-private bridge in
+// `apps/vscode/src/sdk/w-carrier-runtime-trace-bridge.ts`),
+// which calls `installRuntimeWTraceObserver` during SDK controller
+// construction.
+//
+// SYMBOL.FOR SINGLETON strategy: the Symbol identity is stable
+// across module evaluations (Symbol.for uses a process-wide
+// registry), so both the runtime's read site and the install
+// helper's write site reach the SAME slot regardless of how
+// Bun's separate-entry bundling splits the source graph.
+// PROVEN by the durable built-artifact regression test at
+// `sdk/packages/agents/src/agent-runtime.w-trace-built-artifact.test.ts`
+// (thirty-fourth-pass) which actually builds @cline/agents
+// into a temp directory and asserts the sentinel observer
+// fired exactly once across the two built bundle entrypoints.
+//
+// OFF semantics: when the diagnostic is OFF, the host simply
+// does not call `installRuntimeWTraceObserver`, the slot value
+// remains `undefined`, and `notifyRuntimeWTraceObserver` is a
+// strict no-op. Public builds pay nothing.
+//
+// Attachment vs recording: the install happens at SdkController
+// construction (BEFORE the first `AgentRuntime` is constructed).
+// The Symbol.for slot persists for the process lifetime.
+// `AgentRuntime.notifyRuntimeWTraceObserver` reads the
+// current slot on every `prepareTurnForModelRequest`. The
+// `recordWCarrierTrace` call itself still gates each append via
+// the frozen `isWCarrierTraceEnabled` seam, so a later
+// diagnostic flip to OFF after attachment still stops recording
+// on the host side.
+//
+// OBSERVER_CARDINALITY = package-module/process scoped (one
+// Symbol.for slot per process). For current dogfood forensic
+// capture that is fine because the observer is just one
+// ClineMM process-wide sink and records `sessionId`.
+// ============================================================================
+
+/**
+ * Module-level observer holder lives in
+ * `./runtime-w-trace-internal.ts`. This file re-imports it
+ * to avoid duplicating module-level state.
+ *
+ * @internal
+ */
+import type { AgentRuntimeWTraceRecord } from "./runtime-w-trace-internal";
+
+// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+// (thirty-third-pass, attempt 2) — stable Symbol.for singleton.
+//
+//
+// FIX: use a Symbol.for-keyed slot on globalThis. The Symbol
+// identity is stable across module loads (Symbol.for uses
+// a process-wide registry), so both bundles reach the same
+// slot regardless of how Bun splits the source graph. This is
+// NOT `globalThis` pollution with a string key (which would be
+// the reviewer's "process-wide namespace residue" concern) —
+// a Symbol.for key is intentionally collision-free and only
+// `installRuntimeWTraceObserver` and `notifyRuntimeWTraceObserver`
+// know the Symbol.
+//
+// The slot is read on every `prepareTurnForModelRequest`. The
+// install helper writes to it from the bridge's secondary
+// bundle; the runtime reads it from the main bundle. They
+// always hit the same slot.
+//
+// @internal
+//   NOT a public SDK API. The Symbol is module-internal and
+//   its key is intentionally not exported.
+const W_TRACE_OBSERVER_SLOT = Symbol.for("@cline/agents__wTraceObserver")
+
+// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01

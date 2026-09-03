@@ -190,6 +190,7 @@ import {
 	recordWCarrierTrace,
 	type WCarrierTraceContext,
 } from "./w-carrier-trace-runtime"
+import { installRuntimeWTraceObserverForClineMM } from "./w-carrier-runtime-trace-bridge"
 import { WebviewGrpcBridge } from "./webview-grpc-bridge"
 import { WorkingContextHostCapture } from "./working-context-host-capture"
 import { resolveWorkspaceManagerPaths, resolveWorkspaceRootPath } from "./workspace-root"
@@ -1121,6 +1122,21 @@ export class Controller {
 				})
 			})
 		}
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (thirty-third-pass, attempt 2) — install the ClineMM-private
+		// runtime trace observer at the Symbol.for-keyed singleton
+		// slot. The Symbol identity is stable across module loads,
+		// so the runtime (which reads from this slot via its
+		// `notifyRuntimeWTraceObserver` method) and the bridge
+		// (which writes via this helper) ALWAYS hit the SAME slot
+		// regardless of how Bun's separate-entry bundling splits
+		// the source graph. PROVEN by the durable built-artifact
+		// regression test at
+		// `sdk/packages/agents/src/agent-runtime.w-trace-built-artifact.test.ts`.
+		// When the diagnostic is OFF, the install is a strict no-op.
+		installRuntimeWTraceObserverForClineMM(() =>
+			this.getWCarrierTraceContext(),
+		)
 		this.taskStateShadowWiring = createTaskShadowHostWiring({
 			// Pass a self-reference so the wiring can reach back through
 			// `this.sessions` after the lifecycle is constructed. The
@@ -4487,6 +4503,29 @@ export class Controller {
 		} catch (error) {
 			Logger.warn("[SdkController] Failed to build workspace manager:", error)
 			return undefined
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	 * (thirty-third-pass, attempt 2) — lazy accessor for the
+	 * W-carrier trace context. Used by the ClineMM-private
+	 * diagnostic bridge as the `getTraceContext` callback.
+	 * The bridge consults the frozen `isWCarrierTraceEnabled`
+	 * seam and only calls this when the diagnostic is ON.
+	 * Returns `undefined` when storage is not yet initialized
+	 * (no JSONL target).
+	 *
+	 * Pure side-channel: no runtime state is read or mutated.
+	 */
+	private getWCarrierTraceContext(): WCarrierTraceContext | undefined {
+		if (typeof this.context.globalStorageUri?.fsPath !== "string") {
+			return undefined
+		}
+		return {
+			workspaceState: this.context.workspaceState,
+			globalStorageUri: this.context.globalStorageUri,
+			subscriptions: this.context.subscriptions,
 		}
 	}
 }

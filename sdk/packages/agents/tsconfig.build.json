@@ -9,5 +9,10 @@
 		"rootDir": "./src",
 		"incremental": false
 	},
-	"include": ["src/index.ts"]
+	"include": [
+		"src/index.ts",
+		"src/internal-w-trace.ts",
+		"src/runtime-w-trace-internal.ts",
+		"src/agent-runtime.ts"
+	]
 }

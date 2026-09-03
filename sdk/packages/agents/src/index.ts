@@ -48,6 +48,19 @@ export type {
 	AgentRuntimeConfigWithModel,
 	AgentRuntimeConfigWithProvider,
 } from "./agent-runtime";
+
+// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+// (thirty-third-pass, attempt 2): the runtime-w-observer
+// hook is a ClineMM-internal diagnostic, NOT a public SDK API.
+// The types `AgentRuntimeWTraceObserver` /
+// `AgentRuntimeWTraceRecord` and the install helper
+// `installRuntimeWTraceObserver` are defined in
+// `./runtime-w-trace-internal` for in-package use (the bridge
+// module imports `installRuntimeWTraceObserver` via
+// `./internal-w-trace.ts`, which is the SOLE exporter and is
+// NOT registered in the package's `exports` field).
+// External callers cannot reach them through the package
+// barrel.
 export {
 	Agent,
 	AgentRuntime,

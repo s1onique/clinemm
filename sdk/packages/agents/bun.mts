@@ -18,6 +18,27 @@ const builds: Parameters<typeof Bun.build>[0][] = [
 		packages: "bundle",
 		external,
 	},
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (thirty-second-pass) — package-internal entry point that
+	// exports ONLY the runtime-trace install helper. This
+	// subpath is NOT registered in `package.json` `exports`,
+	// so external consumers (CLI, JetBrains, etc.) cannot
+	// reach it via `import("@cline/agents/internal-w-trace")`
+	// (the package system rejects unknown subpaths). The
+	// single intended consumer is the ClineMM bridge, which
+	// imports this file via a relative filesystem path
+	// outside the package barrel.
+	{
+		entrypoints: ["./src/internal-w-trace.ts"],
+		outdir: "./dist",
+		target: "node",
+		minify,
+		sourcemap,
+		packages: "bundle",
+		external,
+		// The entry's own output filename:
+		naming: "internal-w-trace.js",
+	},
 ];
 
 for (const config of builds) {

@@ -1,6 +1,6 @@
 /**
  * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
- * (twenty-eighth-pass) - temporary Q1..Q4 W-carrier trace observer
+ * (thirtieth-pass) - temporary Q1..Q4 W-carrier trace observer
  * for the missing context-gauge live-qualification lane.
  *
  * module-seam default: OFF (fail-closed until activation)
@@ -168,6 +168,50 @@ export function setWCarrierTraceEnabled(enabled: boolean): void {
  * `null` (carrier holds null at producer time = runtime
  * cleared, webview hides bar), `undefined` (no carrier
  * wired = legacy P fallback path).
+ *
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+ * (thirtieth-pass) — `runtime_w_observe` is the upstream
+ * discriminator at the AgentRuntime seam. Captured AFTER
+ * `prepareTurnForModelRequest` has produced a result, AFTER
+ * the runtime has captured it into
+ * `state.currentWorkingContextEstimate`, and AFTER
+ * `emitWorkingContextStateChangeIfChanged` has decided whether
+ * to publish a `working-context-state-changed` event. One
+ * row binds, from the same invocation:
+ *
+ *   - `prepareTurnW`:    what the producer returned
+ *                        (`result.currentWorkingContextEstimate`),
+ *                        or `undefined` if no result / no field.
+ *                        Answers A1.
+ *   - `runtimeW`:        the post-capture value of
+ *                        `state.currentWorkingContextEstimate`.
+ *                        Answers A2.
+ *   - `previousRuntimeW`:the prior captured value (so dedup
+ *                        decision is explainable). Mirrors the
+ *                        `previousWorkingContextEstimate` field on
+ *                        the emitted event.
+ *   - `willEmit`:        whether the helper observed a change
+ *                        (`before !== after`) and therefore
+ *                        WILL publish the event. Answers A3
+ *                        (helper-internal dedup decision).
+ *   - `emitResolved`:    whether the `emit(...)` call resolved
+ *                        without the helper itself surfacing
+ *                        an error. The helper swallows
+ *                        per-subscriber throws; so
+ *                        `emitResolved === true` does NOT mean
+ *                        every downstream subscriber observed
+ *                        without error. True A4 end-to-end
+ *                        delivery still requires a downstream
+ *                        `carrier_observe` row (or its absence).
+ *                        Answers A4 at the AgentRuntime
+ *                        internal boundary.
+ *
+ * Bound together with `sessionId` and `iteration` so the
+ * downstream discriminator rows can be correlated to the
+ * upstream prepareTurn decision without timestamp guessing.
+ * `resultKind` encodes the path that produced the record
+ * (`"prepare_turn"` = normal path,
+ *  `"prepare_turn_undefined_result"` = `result === undefined`).
  */
 export type WCarrierTraceRecord =
 	| {
@@ -184,6 +228,18 @@ export type WCarrierTraceRecord =
 			sessionId: string | undefined
 			publishedW: number | null | undefined
 	  }
+	| {
+			t: number
+			kind: "runtime_w_observe"
+			sessionId: string | undefined
+			iteration: number
+			resultKind: "prepare_turn" | "prepare_turn_undefined_result"
+			prepareTurnW: number | undefined
+			runtimeW: number | undefined
+			previousRuntimeW: number | undefined
+			willEmit: boolean
+			emitResolved: boolean
+	  }
 
 /**
  * The side-channel buffer. Flushed on demand by `dumpWCarrierTrace`.
@@ -196,6 +252,8 @@ let traceBuffer: WCarrierTraceRecord[] = []
  * frozen module seam is OFF. Called from:
  *   - WorkingContextHostCapture.observe (carrier_observe)
  *   - getStateToPostToWebview (state_publish)
+ *   - AgentRuntime.prepareTurnForModelRequest
+ *     (runtime_w_observe, thirtieth-pass)
  * The observer / producer code is responsible for guarding with
  * `isWCarrierTraceEnabled()` before invoking this function. The
  * guard is belt-and-suspenders: this function itself ALSO
