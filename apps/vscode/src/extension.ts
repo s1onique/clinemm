@@ -4,7 +4,11 @@
 import assert from "node:assert"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
-import { applyTaskHeaderSelectorInputCaptureDiagnosticProfile, applyTurnStateWriterProvenanceDiagnosticProfile } from "@/sdk/dogfood-diagnostic-profile"
+import {
+	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
+	applyTurnStateWriterProvenanceDiagnosticProfile,
+	applyWCarrierTraceDiagnosticProfile,
+} from "@/sdk/dogfood-diagnostic-profile"
 import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
 import { isDogfoodRuntime } from "@/sdk/dogfood-runtime-profile"
 import {
@@ -124,6 +128,22 @@ export async function activate(context: vscode.ExtensionContext) {
 	// seam is armed BEFORE the first publication. Verified by
 	// `dogfood-diagnostic-profile-thsicap-activation.test.ts`.
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-seventh-pass): arm the W carrier trace (Q1..Q4) seam
+	// at the SAME EARLIEST initialization seam, BEFORE SdkController
+	// construction. The helper composes the effective trace state
+	// (explicit env override `CLINEMM_W_TRACE` > dogfood profile
+	// default ON > public default OFF) and flips the module seam
+	// idempotently. Dogfood default ON means live qualification
+	// does not require the operator to remember to set
+	// `CLINEMM_W_TRACE=1`; explicit `=0` flips the auto-on default
+	// off (preserved-over-override semantic). The trace is at
+	// the carrier_observe + state_publish seams, so running this
+	// BEFORE SdkController construction guarantees the seam is
+	// armed BEFORE the first observer / producer call. See
+	// `dogfood-diagnostic-profile-w-carrier-activation.test.ts`.
+	applyWCarrierTraceDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool

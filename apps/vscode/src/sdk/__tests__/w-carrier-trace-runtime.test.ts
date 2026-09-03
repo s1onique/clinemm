@@ -1,12 +1,12 @@
 /**
  * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
- * (twenty-sixth-pass) — unit tests for the temporary
+ * (twenty-seventh-pass) — unit tests for the temporary
  * Q1..Q4 W-carrier trace observer.
  *
  * The diagnostic is DEFAULT OFF; these tests cover the
- * gate, the buffer, and the dump semantics. Production
- * code never reads the trace unless the workspace-state
- * toggle OR the env var is set.
+ * frozen module seam semantics. The env-var precedence and
+ * dogfood default are tested in
+ * `dogfood-diagnostic-profile-w-carrier.test.ts`.
  */
 
 import { mkdtempSync, readFileSync } from "node:fs"
@@ -18,8 +18,8 @@ import {
 	_resetWCarrierTrace,
 	dumpWCarrierTrace,
 	isWCarrierTraceEnabled,
-	parseClinemmWTraceEnv,
 	recordWCarrierTrace,
+	setWCarrierTraceEnabled,
 	type WCarrierTraceContext,
 } from "../w-carrier-trace-runtime"
 
@@ -36,28 +36,6 @@ function makeContext(): { ctx: WCarrierTraceContext; dir: string } {
 	return { ctx, dir }
 }
 
-describe("parseClinemmWTraceEnv", () => {
-	const cases: Array<[string | undefined, boolean]> = [
-		[undefined, false],
-		["", false],
-		["0", false],
-		["false", false],
-		["off", false],
-		["garbage", false],
-		["1", true],
-		["true", true],
-		["TRUE", true],
-		["True", true],
-		["  true  ", true],
-	]
-	for (const [input, expected] of cases) {
-		it(`returns ${expected} for ${JSON.stringify(input)}`, () => {
-			const env = input === undefined ? {} : { CLINEMM_W_TRACE: input }
-			expect(parseClinemmWTraceEnv(env)).toBe(expected)
-		})
-	}
-})
-
 describe("WCarrierTraceContext default-off + opt-in", () => {
 	let dirs: string[] = []
 	beforeEach(() => {
@@ -68,33 +46,22 @@ describe("WCarrierTraceContext default-off + opt-in", () => {
 		dirs = []
 	})
 
-	it("is disabled when neither workspace toggle nor env var is set", () => {
-		const { ctx, dir } = makeContext()
-		dirs.push(dir)
-		expect(isWCarrierTraceEnabled(ctx)).toBe(false)
+	it("is disabled by default (frozen seam OFF)", () => {
+		expect(isWCarrierTraceEnabled()).toBe(false)
 	})
 
-	it("is enabled when workspaceState holds `true`", () => {
-		const dir = mkdtempSync(join(tmpdir(), "w-carrier-trace-test-"))
-		dirs.push(dir)
-		const ctx: WCarrierTraceContext = {
-			workspaceState: {
-				get: <T>(key: string) => (key === "wCarrierTraceEnabled" ? (true as T) : undefined),
-				update: async () => {},
-			},
-			globalStorageUri: { fsPath: dir },
-			subscriptions: [],
-		}
-		expect(isWCarrierTraceEnabled(ctx)).toBe(true)
+	it("setWCarrierTraceEnabled flips the seam ON", () => {
+		setWCarrierTraceEnabled(true)
+		expect(isWCarrierTraceEnabled()).toBe(true)
 	})
 
-	it("is enabled when env var is '1'", () => {
-		const { ctx, dir } = makeContext()
-		dirs.push(dir)
-		expect(isWCarrierTraceEnabled(ctx, { CLINEMM_W_TRACE: "1" })).toBe(true)
+	it("setWCarrierTraceEnabled flips the seam back OFF (idempotent)", () => {
+		setWCarrierTraceEnabled(true)
+		setWCarrierTraceEnabled(false)
+		expect(isWCarrierTraceEnabled()).toBe(false)
 	})
 
-	it("recordWCarrierTrace is a no-op when the diagnostic is disabled", async () => {
+	it("recordWCarrierTrace is a no-op when the seam is OFF", async () => {
 		const { ctx, dir } = makeContext()
 		dirs.push(dir)
 		recordWCarrierTrace(ctx, {
@@ -108,17 +75,18 @@ describe("WCarrierTraceContext default-off + opt-in", () => {
 		expect(await dumpWCarrierTrace(ctx)).toBeUndefined()
 	})
 
-	it("records both row kinds and flushes them in order", async () => {
+	it("recordWCarrierTrace appends when the seam is ON", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "w-carrier-trace-test-"))
 		dirs.push(dir)
 		const ctx: WCarrierTraceContext = {
 			workspaceState: {
-				get: <T>(key: string) => (key === "wCarrierTraceEnabled" ? (true as T) : undefined),
+				get: () => undefined as never,
 				update: async () => {},
 			},
 			globalStorageUri: { fsPath: dir },
 			subscriptions: [],
 		}
+		setWCarrierTraceEnabled(true)
 		recordWCarrierTrace(ctx, {
 			t: 100,
 			kind: "carrier_observe",
@@ -173,12 +141,13 @@ describe("WCarrierTraceContext default-off + opt-in", () => {
 		dirs.push(dir)
 		const ctx: WCarrierTraceContext = {
 			workspaceState: {
-				get: <T>(key: string) => (key === "wCarrierTraceEnabled" ? (true as T) : undefined),
+				get: () => undefined as never,
 				update: async () => {},
 			},
 			globalStorageUri: { fsPath: dir },
 			subscriptions: [],
 		}
+		setWCarrierTraceEnabled(true)
 		recordWCarrierTrace(ctx, {
 			t: 1,
 			kind: "state_publish",
@@ -187,6 +156,7 @@ describe("WCarrierTraceContext default-off + opt-in", () => {
 		})
 		await dumpWCarrierTrace(ctx)
 		_resetWCarrierTrace()
+		setWCarrierTraceEnabled(true)
 		recordWCarrierTrace(ctx, {
 			t: 2,
 			kind: "state_publish",

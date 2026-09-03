@@ -121,12 +121,11 @@ import {
 	enableTurnStateWriterProvenanceDiagnostic,
 	isTurnStateWriterProvenanceDiagnosticEnabled,
 } from "@shared/turn-state-writer-provenance"
-import type { TurnStateWriterProvenanceDiagnosticContext } from "./turn-state-writer-provenance-runtime"
 import {
 	isTaskHeaderSelectorInputCaptureEnabled as _isTaskHeaderSelectorInputCaptureEnabled,
 	setTaskHeaderSelectorInputCaptureEnabled,
 } from "./task-header-selector-input-capture"
-
+import type { TurnStateWriterProvenanceDiagnosticContext } from "./turn-state-writer-provenance-runtime"
 
 const ENV_VARS: Readonly<Record<DiagnosticKnob, string>> = {
 	v: "CLINEMM_CAPTURE_V2_PATH",
@@ -300,11 +299,7 @@ export function composeEffectiveDiagnosticKnobs(
 	workspaceToggle: boolean | null | undefined,
 ): EffectiveDiagnosticKnobs {
 	const viap = resolveEffectiveDiagnosticKnobs(env, isDogfood, vCapturePath)
-	const dResolved = resolveEffectiveTurnStateWriterProvenanceD(
-		env,
-		isDogfood,
-		workspaceToggle ?? undefined,
-	)
+	const dResolved = resolveEffectiveTurnStateWriterProvenanceD(env, isDogfood, workspaceToggle ?? undefined)
 	return { ...viap, d: dResolved.d }
 }
 
@@ -561,4 +556,155 @@ export function applyTaskHeaderSelectorInputCaptureDiagnosticProfile(
 		return { enabled: false, source: resolved.source, flipped: true }
 	}
 	return { enabled: resolved.enabled, source: resolved.source, flipped: false }
+}
+
+// ===========================================================================
+// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+// (twenty-seventh-pass) — central dogfood profile resolver for the
+// Q1..Q4 W carrier trace observer.
+//
+// BACKGROUND
+// ----------
+// Live dogfood qualification at HEAD `6760717c2` reported a missing
+// context-window gauge on a running task. The temporary Q1..Q4 trace
+// observer (apps/vscode/src/sdk/w-carrier-trace-runtime.ts) was added
+// to classify the missing-gauge boundary. Without a central profile,
+// every dogfood session requires the operator to remember to set
+// `CLINEMM_W_TRACE=1` — exactly the env-juggling footgun we
+// eliminated for THSICAP and turn-state-writer-provenance.
+//
+// CONTRACT — frozen in this ACT
+// -----------------------------
+//   - The env var `CLINEMM_W_TRACE` is read in EXACTLY ONE place —
+//     `parseClinemmWTraceEnv` below. All other consumers go through
+//     the module-level seam in `w-carrier-trace-runtime.ts`.
+//   - The activation helper (`applyWCarrierTraceDiagnosticProfile`)
+//     is called from `extension.ts:activate` (sibling to the
+//     existing THSICAP / D-knob activations); there is exactly ONE
+//     production activation path, no copied orchestration in tests.
+//
+// Precedence (top wins; deterministic; fail-closed):
+//
+//   1. Explicit env override:
+//        `=1`/`true`/`yes` -> ON (honored in both profiles)
+//        `=0`/`off`/`false` -> OFF (honored in both profiles;
+//                                override-down in dogfood flips
+//                                the auto-on default off)
+//        garbage / unset -> falls through to (2)
+//   2. Profile default:
+//        `isDogfood === true`  -> ON  (auto-on in dogfood)
+//        `isDogfood === false` -> OFF (public default OFF
+//                                  preserved)
+//
+// HONEST STOP RULE (mirrors THSICAP):
+//   Once the live Q1..Q4 capture identifies the missing-gauge
+//   boundary and the proper repair lands, this resolver + activation
+//   helper + the trace module's seam helpers + the wiring in
+//   `extension.ts:activate` MUST be removed TOGETHER. The trace is
+//   temporary forensic scaffolding with a removal trigger; making it
+//   a permanent profile letter risks turning it into permanent
+//   architecture.
+// ===========================================================================
+
+import {
+	isWCarrierTraceEnabled as _publicIsWCarrierTraceEnabled,
+	setWCarrierTraceEnabled as _setWCarrierTraceEnabled,
+	W_TRACE_ENV_VAR,
+} from "./w-carrier-trace-runtime"
+
+export function parseClinemmWTraceEnv(env: NodeJS.ProcessEnv): { enabled: boolean } | undefined {
+	const raw = env[W_TRACE_ENV_VAR]
+	if (typeof raw !== "string" || raw.length === 0) {
+		return undefined
+	}
+	const normalized = raw.trim().toLowerCase()
+	if (TRUTHY_DISABLE.has(normalized)) {
+		return { enabled: false }
+	}
+	if (TRUTHY_ENABLE.has(normalized)) {
+		return { enabled: true }
+	}
+	return undefined
+}
+
+/**
+ * Resolves the EFFECTIVE W carrier trace state from the env var and
+ * the dogfood identity bit. Pure / synchronous / no I/O. The env var
+ * is read in EXACTLY ONE place — this function. All consumers of
+ * the effective state go through this resolver (or the activation
+ * helper below); the trace recorder itself reads ONLY the module
+ * seam set by the activation helper.
+ *
+ * Precedence (top wins; deterministic; fail-closed):
+ *
+ *   1. Explicit env override:
+ *        `=1`/`true`/`yes` -> ON  (honored in both profiles)
+ *        `=0`/`off`/`false` -> OFF (honored in both profiles;
+ *                                override-down in dogfood flips
+ *                                the auto-on default off)
+ *        garbage / unset -> falls through to (2)
+ *   2. Profile default:
+ *        `isDogfood === true`  -> ON  (auto-on in dogfood)
+ *        `isDogfood === false` -> OFF (public default OFF
+ *                                  preserved)
+ */
+export function resolveEffectiveWCarrierTrace(
+	env: NodeJS.ProcessEnv,
+	isDogfood: boolean,
+): { readonly enabled: boolean; readonly source: "env" | "profile" } {
+	// Layer 1: explicit env override.
+	const parsed = parseClinemmWTraceEnv(env)
+	if (parsed !== undefined) {
+		return { enabled: parsed.enabled, source: "env" }
+	}
+	// Layer 2: profile default.
+	return { enabled: isDogfood, source: "profile" }
+}
+
+/**
+ * THE single production activation helper for the W carrier trace
+ * seam. Called from `extension.ts:activate` (sibling to the existing
+ * THSICAP / D-knob activations); there is exactly ONE production
+ * activation path, no copied orchestration in tests.
+ *
+ * Contract:
+ *   - Reads the resolved W carrier state via
+ *     `resolveEffectiveWCarrierTrace(env, isDogfood)`.
+ *   - Flips the module seam in
+ *     `./w-carrier-trace-runtime.ts` via
+ *     `_setWCarrierTraceEnabled(enabled)` — idempotent (only mutates
+ *     when the resolved state diverges from the current seam state).
+ *   - Returns `{ enabled, source, flipped }` for diagnostics.
+ *
+ * Called BEFORE the first `SdkController.getStateToPostToWebview()`
+ * (the producer seam where the trace helper fires) AND BEFORE
+ * `WorkingContextHostCapture.setTraceObserver` (the carrier_observe
+ * seam where the carrier's trace observer fires). Verified by the
+ * `dogfood-diagnostic-profile-w-carrier-activation.test.ts` suite.
+ */
+export function applyWCarrierTraceDiagnosticProfile(
+	env: NodeJS.ProcessEnv,
+	isDogfood: boolean,
+): { readonly enabled: boolean; readonly source: "env" | "profile"; readonly flipped: boolean } {
+	const resolved = resolveEffectiveWCarrierTrace(env, isDogfood)
+	const was = _isWCarrierTraceEnabledForActivation()
+	if (resolved.enabled && !was) {
+		_setWCarrierTraceEnabled(true)
+		return { enabled: true, source: resolved.source, flipped: true }
+	}
+	if (!resolved.enabled && was) {
+		_setWCarrierTraceEnabled(false)
+		return { enabled: false, source: resolved.source, flipped: true }
+	}
+	return { enabled: resolved.enabled, source: resolved.source, flipped: false }
+}
+
+/**
+ * Internal helper used by the activation path to compare against
+ * the current seam state. The recorder module's
+ * `isWCarrierTraceEnabled` is the single authority on the module
+ * seam state.
+ */
+function _isWCarrierTraceEnabledForActivation(): boolean {
+	return _publicIsWCarrierTraceEnabled()
 }

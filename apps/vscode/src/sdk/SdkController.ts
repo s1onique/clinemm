@@ -179,9 +179,17 @@ import { createWorkspaceFileReadExecutor } from "./vscode-file-read-executor"
 import { VscodeSessionHost } from "./vscode-session-host"
 import type { VscodeTerminalExecutionMode } from "./vscode-terminal-execution-mode"
 // ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-// (twenty-sixth-pass): optional Q1..Q4 W-carrier trace observer.
+// (twenty-seventh-pass): optional Q1..Q4 W-carrier trace observer.
+// The enablement decision is made by the central dogfood
+// diagnostic profile resolver at extension activation
+// (apps/vscode/src/sdk/dogfood-diagnostic-profile.ts); this
+// site reads ONLY the activation-frozen module seam.
 // Default OFF. See apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
-import { isWCarrierTraceEnabled, recordWCarrierTrace, type WCarrierTraceContext } from "./w-carrier-trace-runtime"
+import {
+	isWCarrierTraceEnabled as _isWCarrierTraceEnabledModule,
+	recordWCarrierTrace,
+	type WCarrierTraceContext,
+} from "./w-carrier-trace-runtime"
 import { WebviewGrpcBridge } from "./webview-grpc-bridge"
 import { WorkingContextHostCapture } from "./working-context-host-capture"
 import { resolveWorkspaceManagerPaths, resolveWorkspaceRootPath } from "./workspace-root"
@@ -1089,12 +1097,14 @@ export class Controller {
 		this.taskStateRuntimeEventsSubscription = new CanonicalRuntimeShadowSubscription()
 		this.workingContextHostCapture = new WorkingContextHostCapture()
 		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
-		// (twenty-sixth-pass): wire the optional Q1..Q4 W-carrier
-		// trace observer when the diagnostic is enabled. The
-		// observer is a pure side-channel; the carrier
-		// assignment semantics are unchanged. Default OFF.
+		// (twenty-seventh-pass): wire the optional Q1..Q4 W-carrier
+		// trace observer when the activation-frozen module seam
+		// is ON (decision made by the central dogfood diagnostic
+		// profile at extension activation; default dogfood ON,
+		// default public OFF). The observer is a pure side-channel;
+		// the carrier assignment semantics are unchanged.
 		// See apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
-		if (isWCarrierTraceEnabled(this.context) && typeof this.context.globalStorageUri?.fsPath === "string") {
+		if (_isWCarrierTraceEnabledModule() && typeof this.context.globalStorageUri?.fsPath === "string") {
 			const traceCtx: WCarrierTraceContext = {
 				workspaceState: this.context.workspaceState,
 				globalStorageUri: this.context.globalStorageUri,
@@ -3913,7 +3923,7 @@ export class Controller {
 			// (twenty-sixth-pass): compute the Q4 trace enablement once
 			// BEFORE the producer call. Default OFF. See
 			// apps/vscode/src/sdk/w-carrier-trace-runtime.ts.
-			const wTraceEnabled = isWCarrierTraceEnabled(this.context)
+			const wTraceEnabled = _isWCarrierTraceEnabledModule()
 			const sessionIdForTrace = wTraceEnabled ? this.sessions?.getActiveSession()?.sessionId : undefined
 			const state = await buildBaseState({
 				task: this.task,

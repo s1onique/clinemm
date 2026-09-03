@@ -1,6 +1,6 @@
 /**
  * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
- * (twenty-sixth-pass) - temporary DEFAULT_OFF observer for the
+ * (twenty-seventh-pass) - temporary DEFAULT_OFF observer for the
  * W carrier pipeline.
  *
  * CONTEXT
@@ -24,25 +24,42 @@
  * publishes `null`, and the webview's `null -> hide` contract
  * (reviewer twentieth-pass fallback B) suppresses the bar.
  *
- * DESIGN - one env-var-gated, no-architecture observer
- * ----------------------------------------------------
- * This module adds ONE optional observer function
- * (`recordWCarrierTrace`) and ONE workspace-state toggle, in the
- * same shape as the existing post-terminal-authority diagnostic
- * and the turn-state-writer-provenance diagnostic. The observer
- * is a pure side-channel: it does NOT influence the carrier
- * assignment semantics, the producer's `null` publish, or the
- * webview's render contract. It is a JSONL writer that snapshots
- * Q1..Q4 on each observed event.
+ * DESIGN - frozen module seam; central profile resolver
+ * --------------------------------------------------------
+ * The diagnostic ENABLEMENT decision lives in
+ * `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` as
+ * `resolveEffectiveWCarrierTrace` /
+ * `applyWCarrierTraceDiagnosticProfile`. That resolver is the
+ * SOLE parser of the env var (`CLINEMM_W_TRACE`) and the SOLE
+ * place the dogfood identity bit is consulted. At extension
+ * activation the profile helper flips the module-level seam
+ * below.
  *
- *   - Default OFF: nothing reads `process.env.CLINEMM_W_TRACE`
- *     unless the workspace-state toggle is set.
- *   - One file: `<globalStorageUri.fsPath>/w-carrier-trace.jsonl`
- *   - One event shape: `{ t, kind, ... }` where `kind` is one of
- *     "carrier_observe" or "state_publish".
- *   - Sorted by wall-clock `t`; surviving ordering is sufficient
- *     for the Q1..Q4 cross-reference.
- *   - No estimator imports (transport-only by conservation rule).
+ * This module exposes a frozen module seam (`wCarrierTraceEnabled`)
+ * set by `setWCarrierTraceEnabled(enabled: boolean)`. The trace
+ * recorder consults ONLY that seam - the env var is NOT read
+ * here. This mirrors the THSICAP / turn-state-writer-provenance
+ * pattern: the recorder is decision-blind; the activation seam
+ * is decision-frozen; post-activation `process.env` mutation
+ * has no runtime semantic effect.
+ *
+ * Precedence (resolved by `dogfood-diagnostic-profile.ts`,
+ * top wins; deterministic; fail-closed):
+ *
+ *   1. Explicit env override:
+ *        `=1`/`true`/`yes` -> ON (honored in both profiles)
+ *        `=0`/`off`/`false` -> OFF (honored in both profiles;
+ *                                override-down in dogfood flips
+ *                                the auto-on default off)
+ *        garbage / unset -> falls through to (2)
+ *   2. Profile default:
+ *        `isDogfood === true`  -> ON  (auto-on in dogfood)
+ *        `isDogfood === false` -> OFF (public default OFF
+ *                                  preserved)
+ *
+ * The env var is consumed in EXACTLY ONE place
+ * (`dogfood-diagnostic-profile.ts`); the recorder and the
+ * observer / producer sites read ONLY the frozen module seam.
  *
  * CONSERVATION
  * ------------
@@ -50,25 +67,23 @@
  *     unchanged.
  *   - getStateToPostToWebview producer unchanged.
  *   - Webview React rendering unchanged.
- *   - No public surface change.
+ *   - No public surface change (the module-private seam and the
+ *     env-var parser location are the only diffs vs the
+ *     previous pass).
  */
 
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 
-const WORKSPACE_STATE_KEY = "wCarrierTraceEnabled"
-
 const DUMP_FILE = "w-carrier-trace.jsonl"
 
 /**
- * The env-var opt-in. Mirrors `CLINEMM_PTAD` semantics:
- *   - "1" | "true" => enable
- *   - unset / garbage => no env contribution (workspace toggle
- *     decides)
- *   - "0" | "false" => does NOT forcibly disable a persisted
- *     toggle (the existing toggle stays the user preference)
+ * The env-var identifier. Read in EXACTLY ONE place
+ * (`dogfood-diagnostic-profile.ts::parseClinemmWTraceEnv`).
+ * Re-exported here only so the central resolver can locate
+ * the constant without reaching into the runtime module.
  */
-const CLINEMM_W_TRACE_ENV = "CLINEMM_W_TRACE"
+export const W_TRACE_ENV_VAR = "CLINEMM_W_TRACE"
 
 /**
  * Narrow structural context type, mirroring the existing
@@ -84,35 +99,49 @@ export interface WCarrierTraceContext {
 	readonly subscriptions: { dispose(): void }[]
 }
 
+// ---------------------------------------------------------------------------
+// Module-level frozen seam.
+// ---------------------------------------------------------------------------
+// The dogfood diagnostic profile resolver arms this seam once at
+// extension activation. After that, mutating `process.env` has NO
+// effect on the trace recorder - the seam is decision-frozen for
+// the lifetime of the extension host. This is the same pattern
+// as `task-header-selector-input-capture.ts:captureEnabled` and
+// `turn-state-writer-provenance.ts`; preserving it here keeps
+// `isWCarrierTraceEnabled()` a single-bit read with no I/O.
+// ---------------------------------------------------------------------------
+
 /**
- * Pure env-var parser. Returns `true` iff `CLINEMM_W_TRACE` is
- * set to `"1"` or `"true"` (case-insensitive). Anything else
- * returns `false`.
+ * Module-level capture seam. The dogfood diagnostic profile
+ * resolver sets this once at extension activation; production
+ * capture consults this helper (NOT the env var directly).
+ *
+ * Default: OFF (fail-closed until activation).
  */
-export function parseClinemmWTraceEnv(env: NodeJS.ProcessEnv = process.env): boolean {
-	const raw = env[CLINEMM_W_TRACE_ENV]
-	if (raw === undefined) {
-		return false
-	}
-	const normalized = raw.trim().toLowerCase()
-	return normalized === "1" || normalized === "true"
+let wCarrierTraceEnabled = false
+
+/**
+ * Read the frozen module-level seam. Pure bit read; no env-var
+ * reading. The recorder and the observer / producer sites call
+ * this helper instead of the previous workspace/env union.
+ */
+export function isWCarrierTraceEnabled(): boolean {
+	return wCarrierTraceEnabled
 }
 
 /**
- * Returns `true` iff the workspace toggle OR the env var is set.
- * Default off (workspace-state `undefined` + env unset).
+ * Flip the frozen module-level seam. Idempotent. Called from
+ * `applyWCarrierTraceDiagnosticProfile` at extension activation.
+ * Tests that bypass the activation path call this directly.
+ *
+ * CONSERVATION: setting `false` does NOT clear the buffer or
+ * the dump file - the buffer persists across an OFF flip so a
+ * dump after a session still flushes whatever was recorded up
+ * to the OFF flip. This matches the existing THSICAP / TSWPD
+ * patterns.
  */
-export function isWCarrierTraceEnabled(context: WCarrierTraceContext, env: NodeJS.ProcessEnv = process.env): boolean {
-	return context.workspaceState.get<boolean>(WORKSPACE_STATE_KEY) === true || parseClinemmWTraceEnv(env)
-}
-
-/**
- * Toggle the workspace-state flag. NOT used in this commit; the
- * dump command reads regardless of enable state, mirroring the
- * existing diagnostics.
- */
-export async function setWCarrierTraceEnabled(context: WCarrierTraceContext, enabled: boolean): Promise<void> {
-	await context.workspaceState.update(WORKSPACE_STATE_KEY, enabled)
+export function setWCarrierTraceEnabled(enabled: boolean): void {
+	wCarrierTraceEnabled = enabled
 }
 
 /**
@@ -149,14 +178,17 @@ let traceBuffer: WCarrierTraceRecord[] = []
 
 /**
  * Append one record to the trace buffer. No-op when the
- * diagnostic is disabled. Called from:
+ * frozen module seam is OFF. Called from:
  *   - WorkingContextHostCapture.observe (carrier_observe)
  *   - getStateToPostToWebview (state_publish)
  * The observer / producer code is responsible for guarding with
- * `isWCarrierTraceEnabled` before invoking this function.
+ * `isWCarrierTraceEnabled()` before invoking this function. The
+ * guard is belt-and-suspenders: this function itself ALSO
+ * consults the seam, so a caller that forgets the guard still
+ * honors the activation-frozen decision.
  */
 export function recordWCarrierTrace(context: WCarrierTraceContext, record: WCarrierTraceRecord): void {
-	if (!isWCarrierTraceEnabled(context)) {
+	if (!isWCarrierTraceEnabled()) {
 		return
 	}
 	traceBuffer.push(record)
@@ -171,7 +203,7 @@ export function recordWCarrierTrace(context: WCarrierTraceContext, record: WCarr
  * behavior of the existing diagnostics).
  */
 export async function dumpWCarrierTrace(context: WCarrierTraceContext): Promise<string | undefined> {
-	if (!isWCarrierTraceEnabled(context)) {
+	if (!isWCarrierTraceEnabled()) {
 		return undefined
 	}
 	const dir = context.globalStorageUri.fsPath
@@ -188,4 +220,5 @@ export async function dumpWCarrierTrace(context: WCarrierTraceContext): Promise<
  */
 export function _resetWCarrierTrace(): void {
 	traceBuffer = []
+	wCarrierTraceEnabled = false
 }
