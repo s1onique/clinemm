@@ -191,6 +191,22 @@ apps/examples/desktop-app/.cursor/settings.json
 # fresh clone (mirroring the prior SETTINGS-SANDBOX-CAPABILITIES
 # ACT's durability pattern).
 !/.factory/acts/ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01.md
+# ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01: opened 2026-09-04
+# Status CLOSED_HALTED_CLEAN (revised by forty-fourth-pass after
+# factory reviewer verdict HALT_PRODUCTION_HOST_SIGNAL_AUTHORITY_
+# UNAVAILABLE — verdict split into PROCESS_GROUP_ARCHITECTURE_VERIFIED
+# + PRODUCTION_HOST_SIGNAL_AUTHORITY_NOT_DEMONSTRATED_BROKEN +
+# OWNED_PROCESS_TERMINATION_IN_THIS_ENVIRONMENT_SUBSTRATE_GATED +
+# OWNED_PROCESS_TERMINATION_IN_PRODUCTION_PREVIOUSLY_VERIFIED);
+# CORRECTION03 P0 test-gate substrate halt closure with the reviewer
+# orphan-leak fix applied to bash.supervised.test.ts (every setInterval
+# child converted to setTimeout(() => process.exit(0), N) so the child
+# exits naturally within the test's grace window). Durable binding
+# for the canonical link from .factory/epic-board.md
+# (forty-third-pass / forty-fourth-pass) and the
+# `.factory/evidence/ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01/`
+# directory to survive a `git clean`/repo prune.
+!/.factory/acts/ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01.md
 # ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01: launched 2026-08-27.
 # Status NEXT / HIGH (approval-protection lane); recon §2 PASS_RECON_SEAM_MAPPED
 # at HEAD f8dca1fda / TREE 6f2e01b56; live specimen §3 deferred behind the
@@ -740,6 +756,20 @@ apps/examples/desktop-app/.cursor/settings.json
 # the canonical evidence would be local-only on a fresh clone, and
 # the repair narrative would be incomplete.
 !/.factory/evidence/ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01/
+# ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01: same
+# durable-binding reason as its ACT file (whitelisted above): the
+# CORRECTION03 P0 substrate-gate fix evidence (preflight,
+# production-spawn-callgraph, process-topology, RED foreground,
+# RED wait, design-contract, green-matrix, foreign-process-conservation,
+# seatbelt-signal-proof, gates, artifact-identity, live-cancel,
+# final-report, plus the forty-fourth-pass reviewer-fix-orphan-leak)
+# is the canonical documentation for the substrate-halt closure
+# (CLOSED_HALTED_CLEAN per forty-fourth-pass; orphan-leak P0 defect
+# fixed by converting every setInterval child in the conservation +
+# killTree tests to setTimeout(() => process.exit(0), N)); the
+# canonical link from .factory/epic-board.md (forty-third-pass /
+# forty-fourth-pass) must survive a `git clean`/repo prune.
+!/.factory/evidence/ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01/
 # ACT-CLINEMM-SANDBOX-CAPABILITIES-LIVE-REGRESSION01 CORRECTION01:
 # the c4-red-explicit-true-path test (new in CORRECTION01) drives the
 # real production composition (StateManager → closure →
