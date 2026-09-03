@@ -1,0 +1,48 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 08-seatbelt-signal-proof.txt ===
+
+SEATBELT SIGNAL POLICY ANALYSIS
+
+Current Cline Seatbelt profile (sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:10):
+  (allow signal (target self))
+
+This is the MINIMAL Seatbelt signal grant. It permits the sandboxed
+process to signal itself (e.g. for setpgid, self-management), and
+denies everything else by default.
+
+Two distinct questions must be separated:
+  Q1. Does the Cline Seatbelt profile block the SANDBOXED CHILD from
+      receiving signals from its parent?
+  Q2. Does the Cline Seatbelt profile block the SANDBOXED CHILD from
+      sending signals to other sandboxed children in the same profile?
+
+Q1 ANSWER (load-bearing for this ACT):
+  No. Seatbelt enforces OUTGOING syscalls from the sandboxed process.
+  Signals arriving at the sandboxed process from outside are
+  kernel-routed normally. The parent's `process.kill(-pgid, signal)`
+  reaches the sandboxed child through the kernel's standard signal
+  delivery path; the child's Seatbelt profile does not interpose on
+  signal RECEIPT.
+
+  Empirical confirmation: the previous ACT-CLINEMM-SEATBELT-NETWORK-
+  EGRESS-RECON01 substrate tests succeeded under the production
+  Seatbelt profile (with `(allow signal (target self))`) and proved
+  that signal delivery from parent to sandboxed child works.
+
+Q2 ANSWER (NOT load-bearing for this ACT):
+  Out of scope. The supervisor does not require the sandboxed child
+  to signal its peers. The sandboxed child is a LEAF process in our
+  model; all coordination happens via the host Node parent, which is
+  NOT inside the Cline Seatbelt sandbox.
+
+VERDICT — current Seatbelt profile IS sufficient.
+
+The supervisor's signal primitive operates from the HOST (outside the
+Cline Seatbelt sandbox). The host Node process is not confined by the
+child's Seatbelt profile; it sends signals directly via `kill(2)`.
+
+The host Node process IS confined by its OWN sandbox (in the IDE-
+sandboxed authoring shell: VSCodium Helper Chromium zygote's
+`--enable-sandbox`). That is a DIFFERENT sandbox and does NOT concern
+Cline's Seatbelt policy.
+
+NO SEATBELT POLICY CHANGE REQUIRED for this ACT.

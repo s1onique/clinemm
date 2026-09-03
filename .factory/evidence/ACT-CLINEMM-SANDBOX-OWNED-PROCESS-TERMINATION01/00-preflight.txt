@@ -1,0 +1,13 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 00-preflight.txt ===
+
+git status --porcelain=v1 --untracked-files=all:
+(empty)
+
+git branch --show-current: main
+
+git rev-parse HEAD: 09e5d1389035bbdb62ff37b84d47b3a7ca79d6ce
+
+git log -1 --oneline: 09e5d1389 docs(factory): ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07-WEBVIEW-WIRING closure artifacts + durability whitelist
+
+WORKTREE: CLEAN
+HALT_UNEXPECTED_TRACKED_DIRT: not triggered

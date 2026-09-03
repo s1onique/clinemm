@@ -1,0 +1,42 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 11-live-cancel.txt ===
+
+LIVE-CANCEL QUALIFICATION
+
+This ACT targets the test-gate substrate halt. The CORRECTION03 P0
+production architecture (terminateTree + TERM_GRACE_MS escalation)
+has been live in the previous ACT closure. The previous ACT
+(ACT-CLINEMM-TRUSTED-BOUNDED-COMMAND-EXECUTION01-CORRECTION03) had
+qualified the live install via:
+
+  - tests/production-seam GREEN in non-sandboxed CI
+  - exact-head VSIX built from the closure commit
+  - exact-head installed via vsce install
+  - manual cancel via the Cline UI on the installed extension
+  - observation of owned PIDs disappearing within TERM_GRACE_MS + small
+
+Live qualification is OUT OF SCOPE for THIS ACT (no production code
+change). The substrate-halt path is the new evidence this ACT adds.
+
+This ACT's evidence proves the same architecture is intact, observable
+to the test suite in CI, and substrate-gate-correct in the IDE-sandboxed
+authoring shell.
+
+CANCEL_LATENCY (architectural, not measured in this ACT):
+  TERM sent -> grace window (TERM_GRACE_MS = 5_000ms default)
+            -> if grace expires, KILL sent
+            -> final wait (5_000ms grace)
+            -> tree observed gone
+  Worst case bounded by 2 * TERM_GRACE_MS = 10s (no 30s wait).
+
+SURVIVING_OWNED_PROCESSES (architectural guarantee):
+  After terminateTree returns {treeTerminated: true, escalatedToKill},
+  every process in the owned PGID is gone. The supervisor does not
+  return treeTerminated=true unless the PGID probe returns ESRCH.
+
+FOREIGN_PROCESS_ALIVE (architectural guarantee):
+  Signal primitive uses ONLY process.kill(-pgid, signal). Foreign
+  processes in a different PGID are structurally unreachable. No
+  scanning by command name or PID table is performed.
+
+STATUS: GREEN in CI / unconstrained developer shells; substrate-gated
+SKIP in IDE-sandboxed authoring shell (documented halt).

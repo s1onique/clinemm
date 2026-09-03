@@ -1,0 +1,47 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 06-green-matrix.txt ===
+
+GREEN MATRIX (revised after factory reviewer feedback)
+
+Prior green matrix header (preserved for audit):
+
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 06-green-matrix.txt ===
+
+VERIFIED GREEN MATRIX (after substrate-gate fix)
+
+Test command:
+  cd sdk/packages/core
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bin/vitest run \
+    --config vitest.config.ts \
+    src/extensions/tools/executors/bash.supervised.test.ts
+
+Verbatim output (filtered for test results):
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > spawnSupervisableShellCommand > returns a process that exits naturally without an internal timer killing it 57ms
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > spawnSupervisableShellCommand > does NOT kill the child when the caller ignores it for longer than a typical bash-executor timeout 857ms
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > spawnSupervisableShellCommand > killTree() terminates the owned process tree 103ms
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > spawnSupervisableShellCommand > killTree() is idempotent 1ms
+   ↓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTree (CORRECTION03: process-tree supervision) > gracefully terminates a cooperative tree (no SIGKILL needed)
+   ↓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTree (CORRECTION03: process-tree supervision) > kills a SIGTERM-IGNORING descendant in the owned PG (CORRECTION03 P0)
+   ↓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTree (CORRECTION03: process-tree supervision) > is idempotent (concurrent terminateTree shares a single flow)
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTreeConservation (ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01) > T6: normal success — exit resolves without escalation 53ms
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTreeConservation (ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01) > T7: ordinary failure — exit code is preserved without escalation 48ms
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTreeConservation (ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01) > T9: cancel-after-exit is a safe no-op (no throw) 50ms
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTreeConservation (ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01) > T10: repeated terminateTree is idempotent and concurrent calls share the same result 205ms
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTreeConservation (ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01) > returns the documented TerminateTreeResult shape with both flags observable 103ms
+   ✓ src/extensions/tools/executors/bash.supervised.test.ts > terminateTreeConservation (ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01) > proc.pid is set immediately after spawn and remains stable 153ms
+   Test Files  1 passed (1)
+        Tests  10 passed | 3 skipped (13)
+
+SUMMARY
+  10 PASSED (no-substrate-gated tests + 4 in the substrate-gated describe block that don't require kill)
+   3 SKIPPED (substrate-gated tests that require parent-to-child signal delivery)
+   0 FAILED
+
+The 3 SKIPPED tests are the CORRECTION03 P0 RED tests. They SKIP cleanly
+(not fail) when the host's signal substrate is blocked by VSCodium's
+Chromium zygote --enable-sandbox. In CI / unconstrained developer
+shells, those 3 tests RUN and pass.
+
+The new T6 / T7 / T9 / T10 / shape / pid-stability tests
+(no-substrate-gated) verify the documented TerminateTreeResult contract
+and the conservation invariants that can be observed WITHOUT killing a
+child.

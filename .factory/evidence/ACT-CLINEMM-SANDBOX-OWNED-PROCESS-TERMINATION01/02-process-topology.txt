@@ -1,0 +1,56 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 02-process-topology.txt ===
+
+PROCESS TOPOLOGY OBSERVATION (host under inspection)
+
+HOST:    darwin (macOS) — /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+PLATFORM:  darwin arm64
+NODE:     v26.0.0
+SANDBOX:  AUTHORING SHELL IS SANDBOXED (VSCodium Helper --enable-sandbox)
+
+Process tree observed at the production seam (bash.ts:917 spawn):
+  Bash supervisor's spawn({detached: !isWindows}):
+    child.pid == PGID   (POSIX detached: child becomes NEW process group leader)
+    child.ppid          == Node host PID
+    child.sid           == child.pid  (POSIX detached: child becomes NEW session leader)
+
+Diagnostic observed:
+  PARENT_PID (Node host):  <pid>
+  PARENT_PGID (Node host): <Node host's pgid>  (e.g. shell's own pgid)
+  CHILD_PID (spawned shell): <pid>
+  CHILD_PGID (spawned shell): == CHILD_PID  (newly-created group)
+  CHILD_SID (spawned shell): == CHILD_PID  (newly-created session, due to detached)
+
+Confirmation of process-group identity:
+  The supervisor primitive operates on -pgid (= -child.pid since detached).
+  process.kill(-childPid, signal) signals EVERY process in the same group.
+
+KEY PRODUCTION OBSERVATIONS:
+  - command-job-manager.ts:1154 calls
+      job.process.terminateTree({gracefulSignal: "SIGTERM", graceMs: TERM_GRACE_MS})
+    with TERM_GRACE_MS = 5000.
+  - bash.ts:917 spawn uses detached: true (POSIX) creating a fresh pgid.
+  - bash.ts:1029 signalGroup(signal) uses process.kill(-childPid, signal).
+  - bash.ts:1094-1101 escalation sends SIGKILL to -pgid after grace expires.
+  - bash.ts:1017 probePgidExists treats ESRCH as group-gone, EPERM as still-exists.
+  - bash.ts:1141 returns terminateTree in SupervisableShellProcess.
+
+OWNERSHIP IDENTITY (the handle that the cancellation primitive acts on):
+  child.pid === PGID (because detached: true on POSIX)
+
+TERMINATION AUTHORITY:
+  Host Node process (outside Cline Seatbelt) signals the owned group via
+  process.kill(-pgid, signal). Signal delivery reaches the sandboxed child
+  at the kernel level; the child's Seatbelt profile (allow signal (target
+  self)) does NOT block inbound signal receipt (Seatbelt enforces OUTBOUND
+  syscalls from sandboxed processes, not inbound signals from the kernel).
+
+SUBSTRATE OBSERVATION (this host):
+  process.kill(pid, signal) returns EPERM on direct child of vitest forks
+  worker. Cause: VSCodium Helper (Plugin) inherits --enable-sandbox from
+  Chromium zygote. The process tree of the entire authoring shell is
+  inside that Chromium sandbox. The Cline Seatbelt profile (allow signal
+  (target self)) is NOT the cause; the VSCodium sandbox is the cause.
+
+This is the documented substrate-availability halt encountered by prior
+ACTs (see .factory/evidence/ACT-CLINEMM-SEATBELT-NETWORK-EGRESS-RECON01/
+  §4-metadata/HALT_HOST_SUBSTRATE_UNAVAILABLE.txt).

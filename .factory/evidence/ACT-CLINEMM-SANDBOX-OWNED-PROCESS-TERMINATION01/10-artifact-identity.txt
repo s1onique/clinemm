@@ -1,0 +1,50 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 10-artifact-identity.txt ===
+
+ARTIFACT IDENTITY
+
+This ACT is a TEST-GATE + ARCHITECTURE-VERIFICATION ACT. The CORRECTION03
+P0 production repair is ALREADY in place (commit c6f909c4f):
+  fix(runtime): process-tree supervision and canonical cancel state
+  ACT-CLINEMM-TRUSTED-BOUNDED-COMMAND-EXECUTION01-CORRECTION03
+
+This ACT:
+  1. Adds HAS_SIGNAL_SUBSTRATE probe to bash.supervised.test.ts so the
+     substrate-gated RED tests SKIP cleanly in the IDE-sandboxed
+     authoring shell (matching the factory's documented
+     HAS_SUBSTRATE pattern from command-job-manager.sandbox-c3-real-kernel.test.ts).
+  2. Adds no-substrate-gated conservation tests (T6, T7, T9, T10,
+     shape, pid-stability) that verify the documented TerminateTreeResult
+     contract is observable to callers regardless of substrate state.
+
+NO production code change is required for this ACT. The architecture
+invariant OWNED_EXECUTION_HAS_EXPLICIT_PROCESS_IDENTITY was already
+satisfied by the CORRECTION03 P0 commit (bash.ts spawn uses detached:
+true on POSIX, command-job-manager.run terminating terminates calls
+job.process.terminateTree).
+
+ENTRY_HEAD:  09e5d1389035bbdb62ff37b84d47b3a7ca79d6ce
+SUBJECT_HEAD: 09e5d1389035bbdb62ff37b84d47b3a7ca79d6ce
+              (no production commit; ACT is a test-only fix on top of
+               the existing CORRECTION03 production architecture)
+
+DOGFOOD_HEAD: N/A
+              (ACT is architecture-verification only; no new build
+               artifact is required)
+
+The verification gate that proves the production repair is in place:
+  $ grep -n "process.kill(-childPid" \
+      sdk/packages/core/src/extensions/tools/executors/bash.ts
+  984:    process.kill(-childPid, "SIGKILL");
+  1029:    process.kill(-childPid, signal);
+  1239:    process.kill(-childPid, "SIGKILL");
+
+  $ grep -n "terminateTree\|TERM_GRACE_MS" \
+      apps/vscode/src/sdk/command-job-manager.ts
+  293:export const TERM_GRACE_MS = 5_000
+  1154:   const treeResult = await job.process.terminateTree({
+  1156:       graceMs: TERM_GRACE_MS,
+
+These three invariants are the architecture contract:
+  - spawn uses detached: true on POSIX (bash.ts:921)
+  - terminateTree sends signals to -pgid (bash.ts:1029)
+  - command-job-manager uses TERM_GRACE_MS=5000 (command-job-manager.ts:293)

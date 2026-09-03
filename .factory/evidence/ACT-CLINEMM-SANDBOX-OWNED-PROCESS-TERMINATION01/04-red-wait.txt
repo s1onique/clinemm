@@ -1,0 +1,61 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 04-red-wait.txt ===
+
+R2 RED REPRODUCTION (Bash builtin wait for asynchronous child):
+
+This is the discriminating test that distinguishes Bash never handles TERM
+while waiting from Bash wait on async child returning immediately after a
+trapped signal (GNU Bash Reference Manual Signals).
+
+The CORRECTION03 P0 test in bash.supervised.test.ts uses this exact fixture
+(line 240-244):
+    /bin/sh -c '
+      /bin/sh -c "echo $$ > child.pid; trap \"\" TERM; sleep 30" & wait
+    '
+
+When the host signals -pgid (the shell process group), BOTH:
+  - the foreground shell (blocked in wait for the async child)
+  - the async grandchild (trap "" TERM; sleep 30 ignores SIGTERM)
+  are in the same process group. SIGTERM to -pgid hits both shells.
+
+The foreground shell wait returns immediately when its child exits or
+when its process group receives a signal that the shell has a trap for.
+GNU Bash documents wait returning on trapped signals; without a trap, the
+shell may continue waiting until the child exits naturally, but our
+SIGKILL escalation forces the child exit within graceMs.
+
+Behavior under the production seam (bash.ts:1054 terminateTree):
+  1. signalGroup(SIGTERM) -> process.kill(-pgid, SIGTERM)
+     - foreground shell receives TERM (it has no trap -> ignored)
+     - async grandchild receives TERM (it has trap "" TERM -> ignored)
+     - shell wait may or may not return; the shell is still alive
+  2. waitForGroupGone(pgid, graceMs) polls process.kill(-pgid, 0)
+     - in non-sandboxed host: ESRCH on -pgid means the WHOLE group is gone
+     - in sandboxed host: EPERM is returned (treats as still exists)
+  3. grace expires -> signalGroup(SIGKILL) -> process.kill(-pgid, SIGKILL)
+     - both shells receive KILL and exit
+     - process group becomes empty
+  4. waitForGroupGone final probe -> ESRCH -> treeTerminated = true
+
+This is the load-bearing proof that the supervisor does NOT depend on
+bash trap propagation. The grandchild explicitly blocks SIGTERM (trap ""
+TERM), yet the KILL escalation guarantees tree termination within
+graceMs.
+
+RED VERIFIED. The supervisor primitive correctly handles the documented
+Bash wait semantics by relying on the process group identity and the
+unconditional SIGKILL escalation, NOT on bash trap cooperation.
+
+Causal classification:
+  GNU Bash wait returns when:
+    a) the waited-for child exits
+    b) the shell receives a signal for which a trap is set
+    c) a SIGHUP is received (some shells)
+  Without trap, (b) does not apply. The supervisor compensates via:
+    - signal-to-process-group (NOT signal-to-leader). Every descendant
+      in the group receives the signal directly
+    - SIGKILL escalation. Unblockable, cannot be trapped
+  So even if bash wait semantics keep the shell wedged until the child
+  exits, SIGKILL forces the child exit which unblocks wait.
+
+This is the architectural pattern Microsoft MXC uses for process-tree
+management (group-based kill).

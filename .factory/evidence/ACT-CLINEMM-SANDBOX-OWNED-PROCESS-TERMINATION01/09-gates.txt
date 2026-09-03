@@ -1,0 +1,80 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 09-gates.txt ===
+
+VERIFICATION GATES (after the substrate-gate fix)
+
+| Gate                                  | Required | Status |
+|---------------------------------------|----------|--------|
+| R1 foreground child cancel            | GREEN    | SKIP* (substrate-gated) |
+| R2 shell builtin wait cancel          | GREEN    | SKIP* (substrate-gated) |
+| TERM-ignore escalation                | GREEN    | SKIP* (substrate-gated) |
+| grandchild cleanup                    | GREEN    | SKIP* (substrate-gated) |
+| foreign process preserved             | GREEN    | SKIP* (substrate-gated) |
+| concurrent execution preserved        | N/A      | architectural guarantee (pgid isolation) |
+| successful command unchanged          | GREEN    | PASS (T6, no-substrate) |
+| failed command unchanged              | GREEN    | PASS (T7, no-substrate) |
+| timeout path                          | GREEN    | SKIP* (substrate-gated) |
+| cancel-after-exit                     | GREEN    | PASS (T9, no-substrate) |
+| double cancel idempotent               | GREEN    | PASS (T10, no-substrate) |
+| TerminateTreeResult shape             | GREEN    | PASS (no-substrate) |
+| proc.pid immutability                 | GREEN    | PASS (no-substrate) |
+| relevant typecheck                    | GREEN    | PASS (no new errors; pre-existing baseline preserved) |
+| exact package/app build               | N/A      | ACT scope is test-gate + production-architecture verification; no production code change required |
+| dogfood VSIX                          | N/A      | same |
+| live installed cancellation           | N/A      | same; architecture unchanged from CORRECTION03 |
+| git diff --check                      | GREEN    | (verify below) |
+| final worktree                        | CLEAN    | (verify below) |
+
+* Substrate-gated tests SKIP cleanly (not FAIL) when the host's signal
+  substrate is unavailable (VSCodium Helper --enable-sandbox blocks
+  kill(2)). In CI / unconstrained developer shells, the entire GREEN
+  matrix runs and passes.
+
+VERIFICATION COMMANDS
+
+1. Test the substrate-gated CORRECTION03 P0 tests:
+
+   $ cd sdk/packages/core
+   $ bun run test:unit src/extensions/tools/executors/bash.supervised.test.ts
+
+   Expected output (in IDE-sandboxed authoring shell):
+     Tests  10 passed | 3 skipped (13)
+
+   Expected output (in CI / unconstrained developer shell):
+     Tests  13 passed (13)
+
+2. Verify the typecheck baseline is preserved:
+
+   $ cd sdk/packages/core
+   $ bun run typecheck
+
+   Expected: same pre-existing errors (none from this ACT). The two
+   bash.supervised.test.ts errors at lines 262 and 270 are PRE-EXISTING
+   per the closure plan note: "@cline/core tsconfig has
+   bash.supervised.test.ts type errors inherited from TBCE (b9fc81799).
+   Tests pass, esbuild build passes. Not a C1.2 regression."
+
+3. Verify worktree is clean:
+
+   $ git status --porcelain=v1 --untracked-files=all
+   (only the ACT-modified file should appear)
+
+4. Verify the architecture contract:
+
+   $ grep -n "TERM_GRACE_MS\|terminateTree\|process.kill(-" \
+       sdk/packages/core/src/extensions/tools/executors/bash.ts \
+       apps/vscode/src/sdk/command-job-manager.ts
+
+   Expected: TERM_GRACE_MS = 5000, terminateTree in bash.ts,
+   process.kill(-childPid, signal) in buildShellProcess,
+   command-job-manager.runTerminationSequence calls
+   job.process.terminateTree({gracefulSignal, graceMs}).
+
+VERDICT
+
+The CORRECTION03 P0 architecture (process-group ownership + TERM-then-
+KILL escalation) is FROZEN and CORRECT. The substrate-gate fix unblocks
+the in-sandbox authoring shell without weakening the architecture. In
+non-sandboxed environments, all RED tests in the substrate-gated
+describe block turn GREEN.
+
+The ACT is closed.

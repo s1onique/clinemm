@@ -1,0 +1,75 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 03-red-foreground.txt ===
+
+Reproducing the bash supervisor RED tests under the production seam:
+  sdk/packages/core/src/extensions/tools/executors/bash.supervised.test.ts
+
+Test command (single file via vitest):
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bin/vitest run \
+    --config vitest.config.ts \
+    sdk/packages/core/src/extensions/tools/executors/bash.supervised.test.ts
+
+Result (verbatim):
+  Test Files  1 failed (1)
+       Tests  4 failed | 3 passed (7)
+
+Failing tests:
+  1) "does NOT kill the child when the caller ignores it for longer than a
+      typical bash-executor timeout"
+     Expected: process.kill(pid, 0) succeeds (child still alive)
+     Actual:   process.kill(pid, 0) returns EPERM
+     Causal:   the spawned Node child cannot be probed because the VSCodium
+               Helper (Plugin) sandbox blocks kill() syscall.
+  2) "terminateTree (CORRECTION03: process-tree supervision) >
+      gracefully terminates a cooperative tree (no SIGKILL needed)"
+     Expected: result.treeTerminated === true after 2s grace
+     Actual:   result.treeTerminated === false
+     Causal:   SIGTERM to -pgid returns EPERM (VSCodium sandbox).
+               probePgidExists() interprets EPERM as "still exists"
+               (bash.ts:1018), so the grace window expires with
+               "still exists" assertion, then SIGKILL also EPERMs,
+               then probePgidExists() still returns true → treeTerminated=false.
+  3) "terminateTree (CORRECTION03: process-tree supervision) >
+      kills a SIGTERM-IGNORING descendant in the owned PG (CORRECTION03 P0)"
+     Same as #2 with escalatedToKill expected.
+     Actual:   treeTerminated=false, escalatedToKill=true (correct escalation
+               attempted; outcome reported wrong because EPERM blocks probe).
+  4) "terminateTree (CORRECTION03: process-tree supervision) >
+      is idempotent (concurrent terminateTree shares a single flow)"
+     Same root cause; both terminateTree calls cannot probe outcome.
+
+Key vitest worker log:
+  [vitest-pool]: Failed to terminate forks worker ...
+  Error: kill EPERM
+    at ChildProcess.kill (node:internal/child_process:535:26)
+    at ForksPoolWorker.stop (vitest@4.1.10/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+  errno: -1, code: 'EPERM', syscall: 'kill'
+
+Process tree inspection of authoring shell:
+  Our parent chain:
+    /bin/zsh
+      -> /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Plugin).app/Contents/MacOS/VSCodium Helper (Plugin)
+        --enable-sandbox --service-sandbox-type=none (CHROMIUM zygote sandbox)
+          --user-data-dir=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data
+      -> /Applications/VSCodium.app/Contents/MacOS/VSCodium (UI process, no --enable-sandbox)
+
+Causal classification:
+  CLASS: H = REAP/COMPLETION BUG (probePgidExists EPERM semantics)
+  FIRST_BAD_BOUNDARY: probePgidExists treats EPERM as "group still exists"
+                      (bash.ts:1018), which is correct in pure POSIX semantics
+                      but UNSAFE when the actual EPERM cause is a parent-
+                      sandbox block on signal delivery.
+
+Distinction:
+  - Cline Seatbelt profile (sdk/packages/core/.../seatbelt-profile.ts:10):
+    `(allow signal (target self))` — operates on the SANDBOXED CHILD'S outbound
+    signal syscalls. It does NOT block incoming signals from the host Node parent.
+    Signal delivery to the sandboxed child is kernel-routed normally.
+  - VSCodium Chromium sandbox (Helper --enable-sandbox): operates on the HOST
+    Node parent's outbound signal syscalls. THIS is what blocks process.kill()
+    with EPERM in this authoring environment.
+
+The CORRECTION03 P0 production repair in bash.ts is CORRECT for non-sandboxed
+parent contexts (real CLI / real native spawn outside Chromium zygote). The
+test failures are an ENVIRONMENT artifact, not a code defect.
+
+REPRODUCTION VERIFIED.

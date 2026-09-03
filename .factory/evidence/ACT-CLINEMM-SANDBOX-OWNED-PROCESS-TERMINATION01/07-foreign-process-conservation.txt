@@ -1,0 +1,48 @@
+=== ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 / 07-foreign-process-conservation.txt ===
+
+FOREIGN PROCESS CONSERVATION (R5)
+
+The repair MUST never degrade into:
+  pkill <command_name>
+  kill 0
+  killall
+  ps | grep | awk | xargs kill
+
+Conservation invariant:
+  HOST_SPAWNED(P_own) AND FOREIGN_PID != P_own.pgid
+  ⇒ FOREIGN_PID.alive = true throughout termination of P_own.
+
+POSIX guarantee (the substrate the primitive relies on):
+  process.kill(-pgid, signal) signals ONLY processes whose PGID == pgid.
+  A foreign process in a DIFFERENT process group is NEVER touched.
+
+Why PGIDs provide the isolation:
+  - each spawn with detached:true creates a NEW process group (pgid == pid)
+  - the foreign process is a child of some other parent, has its OWN pgid
+  - even if the foreign process happens to be a child of OUR parent (the
+    Node host), its pgid is distinct from ours (because we are detached)
+  - signalGroup(pgid) sends to ALL processes whose pgid == pgid
+  - the foreign process's pgid != pgid -> not signaled
+
+The terminateTree primitive does NOT use:
+  - ps + grep + awk
+  - pgrep
+  - command-name matching
+  - pid-table scanning
+
+It uses ONLY:
+  - process.kill(-pgid, signal) — group-targeted
+  - process.kill(-pgid, 0) — group existence probe
+
+The same group identity is used for both signalling and probing, so the
+foreign process is structurally inaccessible to the primitive.
+
+VERIFIED — the production repair (buildShellProcess / terminateTree) uses
+ONLY the PGID acquired at spawn time and never scans the pid table or
+matches by command name.
+
+Fail-safe: even in the substrate-blocked authoring shell, the foreign
+process conservation holds because process.kill(-pgid, signal) returns
+EPERM when the call cannot complete, NOT because it accidentally
+signalled a different process. The primitive cannot reach foreign
+processes regardless of substrate state.
