@@ -61,7 +61,7 @@ describe("WCarrierTraceContext default-off + opt-in", () => {
 		expect(isWCarrierTraceEnabled()).toBe(false)
 	})
 
-	it("recordWCarrierTrace is a no-op when the seam is OFF", async () => {
+	it("recordWCarrierTrace is a no-op when the seam is OFF; dump is unconditional", async () => {
 		const { ctx, dir } = makeContext()
 		dirs.push(dir)
 		recordWCarrierTrace(ctx, {
@@ -72,7 +72,14 @@ describe("WCarrierTraceContext default-off + opt-in", () => {
 			eventType: "working-context-state-changed",
 			snapshotW: 42,
 		})
-		expect(await dumpWCarrierTrace(ctx)).toBeUndefined()
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (twenty-ninth-pass): the dump is now UNCONDITIONAL — even
+		// when the recorder bailed, the dump command flushes the
+		// (empty) buffer to disk so the operator can verify the
+		// recorder was silent.
+		const filePath = await dumpWCarrierTrace(ctx)
+		expect(filePath).toBe(join(dir, "w-carrier-trace.jsonl"))
+		expect(readFileSync(filePath, "utf8")).toBe("")
 	})
 
 	it("recordWCarrierTrace appends when the seam is ON", async () => {

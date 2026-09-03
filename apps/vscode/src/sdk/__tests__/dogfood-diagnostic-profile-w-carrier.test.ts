@@ -180,7 +180,7 @@ describe("applyWCarrierTraceDiagnosticProfile integration", () => {
 		})
 	})
 
-	it("effective OFF -> recordWCarrierTrace is a no-op; dump returns undefined and writes no file", async () => {
+	it("effective OFF -> recordWCarrierTrace is a no-op; dump is unconditional and writes the empty buffer", async () => {
 		// Activate the public default (no env var).
 		applyWCarrierTraceDiagnosticProfile({}, false)
 		const { ctx, dir } = makeRealContext()
@@ -191,12 +191,19 @@ describe("applyWCarrierTraceDiagnosticProfile integration", () => {
 			sessionId: "session-off",
 			publishedW: 100,
 		})
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (twenty-ninth-pass): the dump is UNCONDITIONAL — the
+		// operator must be able to flush whatever was captured even
+		// after the diagnostic was disabled. The dump returns the
+		// file path; the file is created on disk (with an empty body
+		// when the buffer is empty after the recorder bailed).
 		const filePath = await dumpWCarrierTrace(ctx)
-		expect(filePath).toBeUndefined()
-		// Defensive: the dump path must not have been created on disk
-		// (recordWCarrierTrace bailed; dump returned undefined before
-		// touching fs).
-		expect(existsSync(join(dir, "w-carrier-trace.jsonl"))).toBe(false)
+		expect(filePath).toBe(join(dir, "w-carrier-trace.jsonl"))
+		expect(existsSync(filePath)).toBe(true)
+		const body = readFileSync(filePath, "utf8")
+		// Buffer is empty because the recorder bailed; file is
+		// empty (no sentinels persisted).
+		expect(body).toBe("")
 	})
 
 	it("explicit env override-down flips an ON activation to OFF; subsequent records are no-ops", async () => {
@@ -222,11 +229,11 @@ describe("applyWCarrierTraceDiagnosticProfile integration", () => {
 			sessionId: "s",
 			publishedW: 2,
 		})
-		// dumpWCarrierTrace ALSO gates on the seam, so while OFF
-		// it returns undefined. To inspect the buffer, flip the
-		// seam back ON transiently (preserves the buffer; only the
-		// gate is what matters).
-		applyWCarrierTraceDiagnosticProfile({ CLINEMM_W_TRACE: "1" }, true)
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (twenty-ninth-pass): the dump is now UNCONDITIONAL — the
+		// seam flip is not required to inspect the buffer. Dump
+		// while OFF; only the first sentinel persisted (the second
+		// record was bailed by the OFF recorder seam).
 		const filePath = await dumpWCarrierTrace(ctx)
 		expect(filePath).toBeDefined()
 		const lines = readFileSync(filePath as string, "utf8")
@@ -240,16 +247,21 @@ describe("applyWCarrierTraceDiagnosticProfile integration", () => {
 
 	it("explicit env override-up flips an OFF activation to ON", async () => {
 		applyWCarrierTraceDiagnosticProfile({}, false)
-		const { ctx } = makeRealContext()
+		const { ctx, dir } = makeRealContext()
 		recordWCarrierTrace(ctx, {
 			t: 1,
 			kind: "state_publish",
 			sessionId: "s",
 			publishedW: 1,
 		})
-		// No file should have been written yet.
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (twenty-ninth-pass): the dump is now UNCONDITIONAL — even
+		// with the diagnostic OFF, the dump command writes the (empty
+		// in this case) buffer. The recorder bailed (seam OFF), so the
+		// file should be empty.
 		const filePath0 = await dumpWCarrierTrace(ctx)
-		expect(filePath0).toBeUndefined()
+		expect(filePath0).toBe(join(dir, "w-carrier-trace.jsonl"))
+		expect(readFileSync(filePath0, "utf8")).toBe("")
 		// Re-apply with `CLINEMM_W_TRACE=1` -> override-up.
 		const r = applyWCarrierTraceDiagnosticProfile({ CLINEMM_W_TRACE: "1" }, false)
 		expect(r.flipped).toBe(true)

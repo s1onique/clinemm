@@ -211,22 +211,55 @@ export function recordWCarrierTrace(_context: WCarrierTraceContext, record: WCar
 
 /**
  * Flush the trace buffer to JSONL on disk. Returns the absolute
- * file path that was written, or `undefined` if the diagnostic
- * is disabled.
+ * file path that was written.
+ *
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+ * (twenty-ninth-pass) — UNCONDITIONAL DUMP. Mirrors the
+ * `dumpExtensionSideTurnStateWriterProvenanceDiagnostic` pattern:
+ * the dump is intentionally NOT gated by the module seam. The
+ * operator must be able to inspect whatever was captured even
+ * after the diagnostic was disabled (e.g. via explicit
+ * `CLINEMM_W_TRACE=0` between runs). The recorder's seam gate
+ * controls what gets APPENDED to the buffer; the dump flushes
+ * whatever is in the buffer at the time of the call.
  *
  * Always overwrites the file (single-snapshot dump; matches the
  * behavior of the existing diagnostics).
  */
-export async function dumpWCarrierTrace(context: WCarrierTraceContext): Promise<string | undefined> {
-	if (!isWCarrierTraceEnabled()) {
-		return undefined
-	}
+export async function dumpWCarrierTrace(context: WCarrierTraceContext): Promise<string> {
 	const dir = context.globalStorageUri.fsPath
 	const filePath = join(dir, DUMP_FILE)
 	const lines = traceBuffer.map((r) => JSON.stringify(r)).join("\n")
 	await mkdir(dir, { recursive: true })
 	await writeFile(filePath, lines + (lines ? "\n" : ""), "utf8")
 	return filePath
+}
+
+/**
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+ * (twenty-ninth-pass) — host-side dump entry point. Thin
+ * wrapper around `dumpWCarrierTrace` that returns the encoded
+ * `WCarrierTraceRecord[]` shape alongside the path so the
+ * production command handler can show a useful acknowledgement
+ * (record count + first/last timestamps). Mirrors the
+ * `dumpExtensionSideTurnStateWriterProvenanceDiagnostic`
+ * wrapper used by the TSWPD debug command. Reads the in-memory
+ * buffer via the public record-reader rather than touching the
+ * module-private buffer.
+ */
+export function getWCarrierTraceRecords(): readonly WCarrierTraceRecord[] {
+	return traceBuffer
+}
+
+/**
+ * Host-side dump helper. Returns the absolute path on success.
+ * Used by `extension.ts:activate` to wire the
+ * `cline.debug.dumpWCarrierTrace` command. The dump itself is
+ * unconditional (the in-memory buffer is flushed regardless of
+ * the module seam) — only the recorder's APPEND path is seam-gated.
+ */
+export async function dumpExtensionSideWCarrierTraceDiagnostic(context: WCarrierTraceContext): Promise<string> {
+	return dumpWCarrierTrace(context)
 }
 
 /**

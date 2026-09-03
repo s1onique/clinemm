@@ -28,6 +28,7 @@ import {
 	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
 } from "@/sdk/turn-state-writer-provenance-runtime"
 import { emitCaptureAttach } from "@/sdk/v2-capture"
+import { dumpExtensionSideWCarrierTraceDiagnostic, getWCarrierTraceRecords } from "@/sdk/w-carrier-trace-runtime"
 import { Logger } from "@/shared/services/Logger"
 import { sendAccountButtonClickedEvent } from "./core/controller/ui/subscribeToAccountButtonClicked"
 import { sendChatButtonClickedEvent } from "./core/controller/ui/subscribeToChatButtonClicked"
@@ -641,6 +642,40 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[TSWPD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Turn-state writer-provenance dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+		// (twenty-ninth-pass): debug dump command for the temporary
+		// Q1..Q4 W-carrier trace observer. Mirrors the TSWPD dump
+		// pattern: unconditional flush of the in-memory buffer to
+		// `<globalStorageUri>/w-carrier-trace.jsonl` so the operator
+		// can inspect whatever was captured even when the diagnostic
+		// was disabled (e.g. via `CLINEMM_W_TRACE=0` between runs).
+		// No toggle command — the diagnostic is controlled by the
+		// central dogfood profile + `CLINEMM_W_TRACE` env override.
+		// REMOVAL_TRIGGER (mirrors THSICAP): when the live Q1..Q4
+		// capture identifies the missing-gauge boundary and the
+		// proper repair lands, remove this command + the trace
+		// module + the profile resolver + the wiring in
+		// `extension.ts:activate` TOGETHER.
+		vscode.commands.registerCommand(commands.DumpWCarrierTrace, async () => {
+			try {
+				const records = getWCarrierTraceRecords()
+				const filePath = await dumpExtensionSideWCarrierTraceDiagnostic(context)
+				const count = records.length
+				const first = records[0]
+				const last = records[count - 1]
+				const ack =
+					count === 0
+						? `W carrier trace: buffer is empty (recorder was silent this session). File written → ${filePath}.`
+						: `W carrier trace: ${count} record(s) dumped. first t=${first?.t} last t=${last?.t}. File → ${filePath}.`
+				Logger.log(`[WTRACE] ${ack}`)
+				void vscode.window.showInformationMessage(ack)
+			} catch (err) {
+				Logger.error("[WTRACE] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`W carrier trace dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

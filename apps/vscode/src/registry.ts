@@ -46,6 +46,14 @@ const ClineCommands = {
 	// serializes the bounded ring to <globalStorageUri>/turn-state-writer-provenance.jsonl.
 	ToggleTurnStateWriterProvenanceDiagnostic: prefix + ".debug.toggleTurnStateWriterProvenanceDiagnostic",
 	DumpTurnStateWriterProvenanceDiagnostic: prefix + ".debug.dumpTurnStateWriterProvenanceDiagnostic",
+	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+	// (twenty-ninth-pass) — debug dump command for the temporary
+	// Q1..Q4 W-carrier trace observer. The dump is unconditional
+	// (the operator can always inspect the captured buffer even
+	// after the diagnostic was disabled); the toggle is implicit
+	// via the central dogfood diagnostic profile + `CLINEMM_W_TRACE`
+	// env override (no workspace toggle needed for this ACT).
+	DumpWCarrierTrace: prefix + ".debug.dumpWCarrierTrace",
 	// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION01:
 	// Debug commands for the temporary host-ownership diagnostic. Default
 	// off. The toggle flips a workspace-state flag; the dump serializes
