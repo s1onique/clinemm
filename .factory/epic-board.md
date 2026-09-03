@@ -1,5 +1,31 @@
 # ClineMM Epic Board
 
+Updated: 2026-09-03 fortieth-pass (TEMPORARY-EXTERNAL-PATH-AUTHORITY01 — closure body commit + closure identity commit; worktree CLEAN) — The CORRECTION05 commit (08f004a7f) landed the terminal repair but was too narrowly scoped: the parent feature body and CORRECTION01–03 implementation were still uncommitted in the worktree (17 modified + 9 untracked files; ~25 production files of implementation that 08f004a7 already presumes). One genuinely unrelated formatting residue (`apps/vscode/src/core/controller/state/working-context-state-projection.ts` — biome collapsed a multi-line `Pick<>` to one line) was correctly reverted (not folded in). Per the factory reviewer's closure recipe, two commits were authored:
+
+1. `ad8f3094c feat(sdk): complete temporary external path authority V1-V3 wiring` — the closure body commit. 25 files, +2638 / -4. Lands:
+   - Settings/proto/state plumbing (`state.proto` adds `clinemm_temporary_external_path_authorities`; `getStateToPostToWebview` round-trips the field; `updateSettings` + `updateSettingsCli` add write-time JSON.parse + validator + reject-on-error; `ExtensionMessage` + `ExtensionStateContext` + `state-keys.ts` wire the storage key and webview default).
+   - Write-time validation (`apps/vscode/src/sdk/sdk-tool-policies.ts` — host-side 24h hard-ceiling enforcement + structural filtering).
+   - R0 policy union (`sdk/packages/core/src/runtime/command-policy/{command-policy-types,path-authority,path-authority-evidence-builder,index}.ts`; `sdk/packages/core/src/index.ts` re-export).
+   - Fresh-read backing-store authority (`apps/vscode/src/core/storage/StateManager.ts` — CORRECTION03 cross-instance visibility via read-at-the-decision-boundary, no watcher/debounce/event-attribution/chronology-heuristic).
+   - Sandbox Settings UI (`SettingsView.tsx` + `TemporaryExternalPathsSection.tsx` + `.spec.tsx`).
+   - Vitest harness for new suites (`vitest.config.ts`).
+   - Conservation suite (`sdk/packages/core/src/runtime/command-policy/path-authority.temporary-external.test.ts` — realpath canonicalization + 24h ceiling + `MIGRATION_OR_DEFAULT_AUTHORITY_DELTA` invariants).
+   - Parent + CORRECTION01–04 closure artifacts (`ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01.md` + CORRECTION01–04.md + closure-plan JSON).
+
+2. `6700aa032 fix(factory): ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01 closure identity` — the closure-identity commit. 2 files, +6/-4. Replaces the placeholder "Final HEAD: see closure-identity note below" with the actual SHA chain; fills in §15's `FINAL_IMPLEMENTATION_HEAD` chain in the parent ACT; bumps closure-plan JSON `verdict` V3→V5 to match `FINAL_STATUS`; appends the terminal HEAD chain to `verdict_basis`. Surgical edits only (no JSON reformatting).
+
+Final cleanliness proof:
+- `git status --porcelain=v1 --untracked-files=all` → empty
+- `git diff --check` → empty
+- `git log -2 --oneline` → `6700aa032` (closure identity) on top of `ad8f3094c` (closure body)
+- The unrelated `working-context-state-projection.ts` formatting residue is NOT in either commit (correctly reverted to HEAD content).
+
+`FINAL_IMPLEMENTATION_HEAD = 08f004a7f25fcf3e14051e94dc6254919e94710e + ad8f3094c6d2c1c1a5d134cc9738067aeb417345`
+`FINAL_STATUS            = PASS_TEMPORARY_EXTERNAL_PATH_AUTHORITY_V5`
+`WORKTREE                = CLEAN`
+
+Caveat: `bun run test:vitest` of the new/existing suites FAILS locally with `TypeError: undefined is not an object (evaluating 'z.object')` — but reproduces on HEAD without any of these changes (verified by stash-and-rerun). This is a pre-existing bun-runtime-vs-vitest-CJS-loader issue in the local sandbox (also surfaces as `EPERM: operation not permitted, kill` when vitest tries to terminate forks workers), NOT a regression caused by this ACT's changes. The full feature gate would normally re-prove the 86/86 CORRECTION05 matrix here, but the local infra cannot drive it. Worth flagging for a CI-side re-run before the VSIX dogfood build.
+
 Updated: 2026-09-03 thirty-ninth-pass (TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION05 — single-snapshot identity + cross-platform root) — Per the CORRECTION04 reviewer's halt `HALT_TEMP_AUTHORITY_SNAPSHOT_IDENTITY`: the temporary-authority durable state was being read TWICE during one approval decision (once inside `buildPathAuthorityEvidence` and once before `getCommandHostAuthorization`), with no identity binding. An external REMOVE between the two reads could produce a mixed-generation decision — evidence embedded the OLD authority set while the auth carried the NEW one, and the policy re-test would authorize from a snapshot the user had already revoked. REPAIR (reviewer's Option B): ONE fresh-read at the top of `resolveHostAuthorization`, then thread that exact immutable snapshot into BOTH `buildPathAuthorityEvidence` (via new optional parameter) AND `getCommandHostAuthorization` (existing parameter). Mixed-generation decisions are structurally impossible — there is now exactly one durable read per evaluation, and the snapshot is frozen for the duration of that evaluation; a REMOVE during the evaluation applies to the NEXT evaluation. CORRECTION04 also closed the cross-platform filesystem-root P1 (`C:\` and `\\server\share` were classified as `valid` because the predicate used literal `path === "/"`; now `path.parse(path).root === normalized-path` is used). P2 EOF newline residue in `path-authority-evidence.ts` also fixed.
 
 REPAIR (commit pending — work-in-progress alongside the uncommitted CORRECTION03 closure work):
