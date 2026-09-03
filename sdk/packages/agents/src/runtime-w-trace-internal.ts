@@ -23,7 +23,50 @@
  * @internal
  */
 
-import type { AgentRuntimeWTraceRecord } from "./agent-runtime"
+/**
+ * Frozen discriminator payload emitted by the runtime's
+ * `notifyRuntimeWTraceObserver` per
+ * `prepareTurnForModelRequest` invocation. The discriminator
+ * distinguishes the four A1–A4 scenarios from the causal
+ * review (see `agent-runtime.runtime-w-observe.test.ts`):
+ *
+ *   A1 producer published W?        <- `prepareTurnW`
+ *   A2 runtime captured W?         <- `runtimeW`
+ *   A3 emit-decision helper chose
+ *      to attempt a publish?       <- `willEmit`
+ *   A4 emit() resolved without
+ *      an error?                   <- `emitResolved`
+ *
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+ * (thirty-sixth-pass): this interface is the SINGLE
+ * declaration authority for the W-trace discriminator type.
+ * The previous shape split the authority across
+ * `agent-runtime.ts` and `runtime-w-trace-internal.ts`
+ * (`agent-runtime.ts` imported the type from
+ * `runtime-w-trace-internal.ts` and `runtime-w-trace-internal.ts`
+ * re-imported it from `agent-runtime.ts`), producing TS2303
+ * (circular import alias) and TS2459 (locally declared, not
+ * exported) on a clean detached-tree package build. Both
+ * types now live here; `agent-runtime.ts` imports them
+ * from this module.
+ *
+ * `resultKind` discriminates `prepare_turn_undefined_result`
+ * (the `previousRuntimeW` carry-over branch when
+ * `currentWorkingContextEstimate` is `undefined`) from
+ * the `prepare_turn` row emitted on the normal path.
+ *
+ * @internal
+ */
+export interface AgentRuntimeWTraceRecord {
+	sessionId: string | undefined;
+	iteration: number;
+	resultKind: "prepare_turn" | "prepare_turn_undefined_result";
+	prepareTurnW: number | undefined;
+	runtimeW: number | undefined;
+	previousRuntimeW: number | undefined;
+	willEmit: boolean;
+	emitResolved: boolean;
+}
 
 /**
  * Observer callback type.
@@ -31,14 +74,6 @@ import type { AgentRuntimeWTraceRecord } from "./agent-runtime"
  * @internal
  */
 export type AgentRuntimeWTraceObserver = (record: AgentRuntimeWTraceRecord) => void
-
-/**
- * Re-exported so the runtime can import the type alongside
- * the install helper without coupling to `./agent-runtime.ts`.
- *
- * @internal
- */
-export type { AgentRuntimeWTraceRecord }
 
 /**
  * The Symbol.for key used for the observer slot. MUST match

@@ -1,5 +1,34 @@
 # ClineMM Epic Board
 
+Updated: 2026-09-03 thirty-sixth-pass (W-TRACE TYPE-AUTHORITY CYCLE RED→GREEN — HEADER-TRANSPORT-REPAIR01 BUILD REPAIR) — Detached clean worktree-of-exact-HEAD `3d3a2504e424a596248d5b265a489e16226c68b9` build of `@cline/agents` failed with TS2304 (`Cannot find name 'AgentRuntimeWTraceObserver'`), TS2303 (circular definition of import alias `AgentRuntimeWTraceRecord`), and TS2459 (`AgentRuntimeWTraceRecord declares ... locally, but it is not exported`). Root cause: `agent-runtime.ts` line 1391 referenced `AgentRuntimeWTraceObserver` at the singleton read site but never imported it; `runtime-w-trace-internal.ts` imported `AgentRuntimeWTraceRecord` from `./agent-runtime` while re-exporting it from itself, but `agent-runtime.ts` had no real declaration of the type — TypeScript treats `import type` as not establishing declaration authority. HALT_TYPE_AUTHORITY_MISSING. Public-API redesign: NO. Diagnostic-architecture redesign: NO. NEW_REVIEW_ROUND = NO.
+
+REPAIR (commit `pending`: edits in `sdk/packages/agents/src/runtime-w-trace-internal.ts` + `sdk/packages/agents/src/agent-runtime.ts`):
+- `runtime-w-trace-internal.ts`: removed `import type { AgentRuntimeWTraceRecord } from "./agent-runtime"` (cycle leg) and removed broken `export type { AgentRuntimeWTraceRecord }` self-re-export. Declared `AgentRuntimeWTraceRecord` interface IN-LINE as the SINGLE declaration authority, plus retained `AgentRuntimeWTraceObserver` declared there. Module becomes the type origin; `agent-runtime.ts` and `internal-w-trace.ts` both import from it.
+- `agent-runtime.ts`: extended the existing `import type { ... } from "./runtime-w-trace-internal"` block to include `AgentRuntimeWTraceObserver` (previously only `AgentRuntimeWTraceRecord` was imported). The pre-existing module-scope `const W_TRACE_OBSERVER_SLOT = Symbol.for("@cline/agents__wTraceObserver")` declaration is unchanged (deliberately mirrored between the two files — Symbol.for identity is process-stable).
+
+CLEAN_DEPENDENCY_GRAPH after repair:
+```
+runtime-w-trace-internal.ts
+    owns: AgentRuntimeWTraceRecord + AgentRuntimeWTraceObserver + W_TRACE_OBSERVER_SLOT install helper
+        ↑
+        |
+agent-runtime.ts          (imports both types from runtime-w-trace-internal; reads slot via Symbol.for)
+internal-w-trace.ts       (sole external entry point — re-exports both types + install helper)
+```
+PUBLIC_BARREL (`index.ts`): zero change. `TEMP_DIAGNOSTIC_PUBLIC_DELTA = ZERO` preserved (types and helper stay out of `@cline/agents` package barrel and `exports` field).
+
+VERIFICATION:
+1. `sdk/packages/agents` clean detached-tree build:
+   - Before: RED — `bun tsc -p tsconfig.build.json` exited 2 with the three errors above.
+   - After: GREEN — `bun run bun.mts && bun tsc -p tsconfig.build.json` exits 0. Full set of `dist/*.d.ts` files emitted (`runtime-w-trace-internal.d.ts` declares both types as the authoritative interface + type, `internal-w-trace.d.ts` re-exports them, `index.d.ts` public barrel does NOT export either).
+2. Seam tests: `bunx vitest run src/agent-runtime.runtime-w-observe.test.ts src/agent-runtime.w-trace-built-artifact.test.ts` — **7/7 PASS** (T1-T6 observer scenarios + the durable built-artifact singleton probe confirming sentinel fires exactly once across Bun's separate-entry bundling identity for `Symbol.for("@cline/agents__wTraceObserver")`).
+3. Full `@cline/agents` package test sweep: **24 files / 393 tests, all green**, no `✗` or `FAIL`.
+4. Full SDK build: `bun run build:sdk` exits 0 — all packages (`@cline/shared`, `@cline/llms`, `@cline/agents`, `@cline/ui`, `@cline/sdk`, `@cline/core`) rebuild clean.
+
+CYCLE_CONCLUSION: previous thirty-fifth-pass local test cycle had insufficient generated/dist state coverage to surface the clean-package-declaration build; this is exactly the kind of latent defect the detached exact-head builder earns its keep for. THE PACKAGE COMPILES CLEAN FROM EXACT HEAD. Dogfood VSIX build gated on this — script `scripts/build-dogfood-vsix.py --output-dir dist --force` rejected the dirty source tree, exactly as designed; after this commit lands (per FACTORY-BOARD-DURABILITY rule), the rebuild is unblocked. NEXT: rebuild the exact-head VSIX and reinstall (if the user authorizes `--install`).
+
+EVIDENCE: this entry. Files staged for commit: `sdk/packages/agents/src/agent-runtime.ts`, `sdk/packages/agents/src/runtime-w-trace-internal.ts`, `.factory/epic-board.md` (this file).
+
 Updated: 2026-09-03 twenty-ninth-pass (P0_EXPORTABILITY_FIX_APPLIED + P1_DIAGNOSTIC_ACCOUNTING_CORRECTED) — Per the operator's review on commits `fb8d680a2` + `5fc3faae5` + `adb16a2ef`: PASS_WITH_ONE_P1_FIX. Two HALT conditions applied in commit `e742a4644`:
 
 **P0 FIX — operator-reachable production dump command (TSWPD pattern):**

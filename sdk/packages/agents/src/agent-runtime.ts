@@ -4305,12 +4305,34 @@ export function createAgent(config: AgentRuntimeConfig): AgentRuntime {
 
 /**
  * Module-level observer holder lives in
- * `./runtime-w-trace-internal.ts`. This file re-imports it
- * to avoid duplicating module-level state.
+ * `./runtime-w-trace-internal.ts`. This file re-imports
+ * both W-trace diagnostic types (the record shape and the
+ * observer callback signature) from the SINGLE declaration
+ * authority in `./runtime-w-trace-internal.ts`.
+ *
+ * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
+ * (thirty-sixth-pass): `AgentRuntimeWTraceObserver` was
+ * referenced at the `notifyRuntimeWTraceObserver` use site
+ * but never imported, producing TS2304 on a clean detached
+ * package build. The fix is to extend the existing
+ * `./runtime-w-trace-internal` import to cover both types
+ * (the previous cycle re-exported the record via
+ * `./runtime-w-trace-internal` itself, but the observer was
+ * only declared there and never imported into
+ * `agent-runtime.ts`).
+ *
+ * The runtime's Symbol.for(`"@cline/agents__wTraceObserver"`)
+ * slot is declared in BOTH this file (line below) and
+ * `./runtime-w-trace-internal.ts`. They produce the SAME
+ * Symbol identity via `Symbol.for`; they are NOT two
+ * separate slot bindings.
  *
  * @internal
  */
-import type { AgentRuntimeWTraceRecord } from "./runtime-w-trace-internal";
+import type {
+	AgentRuntimeWTraceObserver,
+	AgentRuntimeWTraceRecord,
+} from "./runtime-w-trace-internal";
 
 // ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 // (thirty-third-pass, attempt 2) — stable Symbol.for singleton.
