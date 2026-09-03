@@ -156,8 +156,8 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 			// they are both bounded escape-hatches for the host.
 			sandbox: () => (
 				<>
-					<SandboxCapabilitiesSection />
-					<TemporaryExternalPathsSection />
+					<SandboxCapabilitiesSection renderSectionHeader={renderSectionHeader} />
+					<TemporaryExternalPathsSection renderSectionHeader={renderSectionHeader} />
 				</>
 			),
 		}),
