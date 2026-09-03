@@ -16,7 +16,10 @@
  *   2. profile default (dogfood -> ON; public -> OFF)
  */
 
+import { existsSync, mkdtempSync, readFileSync } from "node:fs"
 import { rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	applyWCarrierTraceDiagnosticProfile,
@@ -27,7 +30,6 @@ import {
 	_resetWCarrierTrace,
 	dumpWCarrierTrace,
 	recordWCarrierTrace,
-	setWCarrierTraceEnabled,
 	type WCarrierTraceContext,
 } from "../w-carrier-trace-runtime"
 
@@ -130,9 +132,17 @@ describe("applyWCarrierTraceDiagnosticProfile integration", () => {
 		dirs = []
 	})
 
-	function makeContext(): WCarrierTraceContext {
-		const dir = `__unused_w_carrier_dir_${Math.random()}`
-		return {
+	/**
+	 * Build a context whose dump target is a real temporary directory.
+	 * The directory path is registered for cleanup; the dump helper
+	 * writes to `<globalStorageUri.fsPath>/w-carrier-trace.jsonl`
+	 * (mirrors the production path). This is the only way to
+	 * mechanically prove that `recordWCarrierTrace` did NOT bail.
+	 */
+	function makeRealContext(): { ctx: WCarrierTraceContext; dir: string } {
+		const dir = mkdtempSync(join(tmpdir(), "w-carrier-trace-integration-"))
+		dirs.push(dir)
+		const ctx: WCarrierTraceContext = {
 			workspaceState: {
 				get: () => undefined as never,
 				update: async () => {},
@@ -140,40 +150,124 @@ describe("applyWCarrierTraceDiagnosticProfile integration", () => {
 			globalStorageUri: { fsPath: dir },
 			subscriptions: [],
 		}
+		return { ctx, dir }
 	}
 
-	it("effective ON -> recordWCarrierTrace records", () => {
+	it("effective ON -> recordWCarrierTrace appends a sentinel; dump persists it", async () => {
+		// Activate the dogfood default (no env var).
 		applyWCarrierTraceDiagnosticProfile({}, true)
-		const ctx = makeContext()
-		// After dogfood activation the seam is ON; recordWCarrierTrace
-		// must not bail.
+		const { ctx, dir } = makeRealContext()
+		// One sentinel. After activation the seam is ON; the recorder
+		// MUST append. Then we dump and read back the JSONL line.
 		recordWCarrierTrace(ctx, {
-			t: 1,
+			t: 1234,
 			kind: "state_publish",
-			sessionId: "x",
+			sessionId: "session-on",
 			publishedW: 100,
 		})
-		// The recorder consults the same seam; the helper exposes it.
-		expect(dumpWCarrierTrace).toBeDefined()
+		const filePath = await dumpWCarrierTrace(ctx)
+		expect(filePath).toBe(join(dir, "w-carrier-trace.jsonl"))
+		const lines = readFileSync(filePath as string, "utf8")
+			.trim()
+			.split("\n")
+		expect(lines).toHaveLength(1)
+		const parsed = JSON.parse(lines[0])
+		expect(parsed).toEqual({
+			t: 1234,
+			kind: "state_publish",
+			sessionId: "session-on",
+			publishedW: 100,
+		})
 	})
 
-	it("effective OFF -> recordWCarrierTrace is a no-op", () => {
+	it("effective OFF -> recordWCarrierTrace is a no-op; dump returns undefined and writes no file", async () => {
+		// Activate the public default (no env var).
 		applyWCarrierTraceDiagnosticProfile({}, false)
-		// After public activation the seam is OFF; recordWCarrierTrace
-		// must bail.
-		const ctx = makeContext()
+		const { ctx, dir } = makeRealContext()
+		// One sentinel while OFF. The recorder MUST bail.
+		recordWCarrierTrace(ctx, {
+			t: 1234,
+			kind: "state_publish",
+			sessionId: "session-off",
+			publishedW: 100,
+		})
+		const filePath = await dumpWCarrierTrace(ctx)
+		expect(filePath).toBeUndefined()
+		// Defensive: the dump path must not have been created on disk
+		// (recordWCarrierTrace bailed; dump returned undefined before
+		// touching fs).
+		expect(existsSync(join(dir, "w-carrier-trace.jsonl"))).toBe(false)
+	})
+
+	it("explicit env override-down flips an ON activation to OFF; subsequent records are no-ops", async () => {
+		// Start ON (dogfood default).
+		applyWCarrierTraceDiagnosticProfile({}, true)
+		const { ctx } = makeRealContext()
 		recordWCarrierTrace(ctx, {
 			t: 1,
 			kind: "state_publish",
-			sessionId: "x",
-			publishedW: 100,
+			sessionId: "s",
+			publishedW: 1,
 		})
-		// Sanity: explicit override-down still flips ON -> OFF.
-		const before = setWCarrierTraceEnabled
-		setWCarrierTraceEnabled(true)
-		applyWCarrierTraceDiagnosticProfile({ CLINEMM_W_TRACE: "0" }, true)
-		// verify the seam was flipped OFF
-		expect(parseClinemmWTraceEnv({ CLINEMM_W_TRACE: "0" })).toEqual({ enabled: false })
+		// Re-apply with `CLINEMM_W_TRACE=0` -> override-down.
+		const r = applyWCarrierTraceDiagnosticProfile({ CLINEMM_W_TRACE: "0" }, true)
+		expect(r.flipped).toBe(true)
+		expect(r.enabled).toBe(false)
+		// While OFF, recordWCarrierTrace is a no-op (verified via
+		// the OFF integration test above; the recorder consults the
+		// same seam). Try a second record — it MUST be bailed.
+		recordWCarrierTrace(ctx, {
+			t: 2,
+			kind: "state_publish",
+			sessionId: "s",
+			publishedW: 2,
+		})
+		// dumpWCarrierTrace ALSO gates on the seam, so while OFF
+		// it returns undefined. To inspect the buffer, flip the
+		// seam back ON transiently (preserves the buffer; only the
+		// gate is what matters).
+		applyWCarrierTraceDiagnosticProfile({ CLINEMM_W_TRACE: "1" }, true)
+		const filePath = await dumpWCarrierTrace(ctx)
+		expect(filePath).toBeDefined()
+		const lines = readFileSync(filePath as string, "utf8")
+			.trim()
+			.split("\n")
+		// Only the FIRST sentinel is on disk — the second record was
+		// correctly bailed by the OFF seam.
+		expect(lines).toHaveLength(1)
+		expect(JSON.parse(lines[0]).publishedW).toBe(1)
+	})
+
+	it("explicit env override-up flips an OFF activation to ON", async () => {
+		applyWCarrierTraceDiagnosticProfile({}, false)
+		const { ctx } = makeRealContext()
+		recordWCarrierTrace(ctx, {
+			t: 1,
+			kind: "state_publish",
+			sessionId: "s",
+			publishedW: 1,
+		})
+		// No file should have been written yet.
+		const filePath0 = await dumpWCarrierTrace(ctx)
+		expect(filePath0).toBeUndefined()
+		// Re-apply with `CLINEMM_W_TRACE=1` -> override-up.
+		const r = applyWCarrierTraceDiagnosticProfile({ CLINEMM_W_TRACE: "1" }, false)
+		expect(r.flipped).toBe(true)
+		expect(r.enabled).toBe(true)
+		// Subsequent records persist.
+		recordWCarrierTrace(ctx, {
+			t: 2,
+			kind: "state_publish",
+			sessionId: "s",
+			publishedW: 2,
+		})
+		const filePath = await dumpWCarrierTrace(ctx)
+		expect(filePath).toBeDefined()
+		const lines = readFileSync(filePath as string, "utf8")
+			.trim()
+			.split("\n")
+		expect(lines).toHaveLength(1)
+		expect(JSON.parse(lines[0]).publishedW).toBe(2)
 	})
 
 	it("is idempotent (no flip on repeated call with same effective state)", () => {
@@ -183,9 +277,16 @@ describe("applyWCarrierTraceDiagnosticProfile integration", () => {
 		expect(r2.flipped).toBe(false)
 	})
 
-	it("post-activation process.env mutation does NOT change runtime semantic without re-activation", () => {
+	it("post-activation process.env mutation does NOT change runtime semantic without re-activation", async () => {
 		applyWCarrierTraceDiagnosticProfile({}, true)
-		// After activation, mutate process.env.
+		const { ctx } = makeRealContext()
+		recordWCarrierTrace(ctx, {
+			t: 1,
+			kind: "state_publish",
+			sessionId: "s",
+			publishedW: 1,
+		})
+		// Mutate process.env AFTER activation.
 		const envAfter = { CLINEMM_W_TRACE: "0" }
 		// The resolver evaluates the new env as OFF, but the seam
 		// (the recorder's authority) is unchanged unless we call
@@ -195,6 +296,18 @@ describe("applyWCarrierTraceDiagnosticProfile integration", () => {
 			enabled: false,
 			source: "env",
 		})
+		// Prove the seam is still ON by recording and dumping.
+		recordWCarrierTrace(ctx, {
+			t: 2,
+			kind: "state_publish",
+			sessionId: "s",
+			publishedW: 2,
+		})
+		const filePath = await dumpWCarrierTrace(ctx)
+		const lines = readFileSync(filePath as string, "utf8")
+			.trim()
+			.split("\n")
+		expect(lines).toHaveLength(2) // both sentinels persisted (no env replay)
 		// Demonstrate: re-activation with the new env flips the seam.
 		const r = applyWCarrierTraceDiagnosticProfile(envAfter, true)
 		expect(r.flipped).toBe(true)

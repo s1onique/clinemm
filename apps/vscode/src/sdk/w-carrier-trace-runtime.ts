@@ -1,7 +1,16 @@
 /**
  * ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
- * (twenty-seventh-pass) - temporary DEFAULT_OFF observer for the
- * W carrier pipeline.
+ * (twenty-eighth-pass) - temporary Q1..Q4 W-carrier trace observer
+ * for the missing context-gauge live-qualification lane.
+ *
+ * module-seam default: OFF (fail-closed until activation)
+ * dogfood-effective default: ON  (central profile resolver)
+ * public-effective default:  OFF (central profile resolver)
+ * The distinction matters: the raw module seam starts OFF; the
+ * activation helper in `dogfood-diagnostic-profile.ts` flips it
+ * to ON at extension activation in dogfood. After that flip, the
+ * recorder consults ONLY the activation-frozen bit (no env-var
+ * re-read); the env var is read in EXACTLY ONE place.
  *
  * CONTEXT
  * -------
@@ -116,7 +125,13 @@ export interface WCarrierTraceContext {
  * resolver sets this once at extension activation; production
  * capture consults this helper (NOT the env var directly).
  *
- * Default: OFF (fail-closed until activation).
+ * MODULE_SEAM_DEFAULT = OFF (fail-closed until activation).
+ * DOGFOOD_EFFECTIVE_DEFAULT = ON (set by
+ *   `applyWCarrierTraceDiagnosticProfile({...}, isDogfood=true)`
+ *   at extension activation in dogfood builds).
+ * PUBLIC_EFFECTIVE_DEFAULT = OFF (set by
+ *   `applyWCarrierTraceDiagnosticProfile({...}, isDogfood=false)`
+ *   at extension activation in public builds).
  */
 let wCarrierTraceEnabled = false
 
@@ -187,7 +202,7 @@ let traceBuffer: WCarrierTraceRecord[] = []
  * consults the seam, so a caller that forgets the guard still
  * honors the activation-frozen decision.
  */
-export function recordWCarrierTrace(context: WCarrierTraceContext, record: WCarrierTraceRecord): void {
+export function recordWCarrierTrace(_context: WCarrierTraceContext, record: WCarrierTraceRecord): void {
 	if (!isWCarrierTraceEnabled()) {
 		return
 	}
