@@ -74,16 +74,24 @@ export interface SdkCompactionCoordinatorOptions {
 	 * the canonical prepareTurn flow.
 	 *
 	 * Caller contract:
-	 *   - The default implementation invokes
-	 *     `WorkingContextHostCapture.observe({
-	 *         type: "working-context-state-changed",
-	 *         snapshot: { currentWorkingContextEstimate: w }
-	 *       })` and the carrier's existing fail-closed assignment
-	 *     handles publication.
+	 *   - The VS Code host (`SdkController`) wires this option to
+	 *     `WorkingContextHostCapture.setLatest(w)` — the additive
+	 *     transport-only seam added to the carrier as part of this
+	 *     ACT. `setLatest` reuses the carrier's existing fail-closed
+	 *     assignment semantics (UNDEFINED_W_STALE_REUSE = FORBIDDEN)
+	 *     so publication is identical in behavior to feeding the
+	 *     carrier via its runtime-event observer. (Earlier review
+	 *     drafts of this comment said the caller invoked
+	 *     `WorkingContextHostCapture.observe(...)` with a
+	 *     synthesized `working-context-state-changed` event; the
+	 *     implementation landed on the simpler `setLatest(w)` seam
+	 *     and the comment was tightened accordingly.)
 	 *   - The function MUST be non-throwing (log + no-op on
 	 *     failure); the divider publication is the user-visible
 	 *     success indicator and MUST proceed even if W publication
-	 *     fails.
+	 *     fails. The coordinator wraps the call in try/catch and
+	 *     logs via the existing Logger — exceptions do not
+	 *     propagate.
 	 *
 	 * Optional so test constructions / non-VSCode hosts (CLI) keep
 	 * working unchanged.

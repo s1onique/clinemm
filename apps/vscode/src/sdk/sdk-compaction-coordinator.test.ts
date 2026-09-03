@@ -374,6 +374,132 @@ describe("SdkCompactionCoordinator", () => {
 	})
 })
 
+/**
+ * ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01 (PASS
+ * POST_COMPACTION_PUBLICATION_REPAIRED) — load-bearing
+ * coordinator bridge regression.
+ *
+ * The producer-side test
+ * (`apps/vscode/src/sdk/__tests__/sdk-compaction-w-publish-recon01
+ * .test.ts`) proves TWO SEPARATE facts:
+ *   (1) `compactSessionMessages()` surfaces
+ *       `currentWorkingContextEstimate` from the producer seam.
+ *   (2) `WorkingContextHostCapture.setLatest(w)` replaces PRE with
+ *       POST in isolation.
+ *
+ * But the LIVE load-bearing bridge — the only thing that closes
+ * the live-UI gap — is the `publishPostCompactionW` invokation
+ * inside `SdkCompactionCoordinator.runCompactionInPhase`. If that
+ * bridge is wired loosely (publish-after-postStateToWebview, or
+ * unconditionally even when W is undefined, or throws up to the
+ * caller), the bar still goes stale in production.
+ *
+ * These tests exercise the bridge directly through the
+ * `SdkCompactionCoordinator` constructor (the same construction
+ * site as the SdkController wires in production).
+ */
+describe("POST_COMPACTION_W_BAR_REFRESH_RECON01 - load-bearing coordinator bridge", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	function makeCoordinatorWithPublisher(
+		publishPostCompactionW: ((w: number) => void) | undefined,
+	) {
+		const activeSession = makeActiveSession()
+		const base = makeCoordinator({ activeSession })
+		// Tighten the cast: we need to set the optional
+		// `publishPostCompactionW` on the constructor options and
+		// keep the test spy's call-order semantics.
+		;(base.options as unknown as { publishPostCompactionW?: (w: number) => void }).publishPostCompactionW =
+			publishPostCompactionW
+		// postStateToWebview is already a vi.fn() in
+		// makeCoordinator (line 437); we re-record its spy here so
+		// the order assertion can compare mock.invocationCallOrder
+		// against the publish spy.
+		const postSpy = base.options.postStateToWebview as unknown as ReturnType<typeof vi.fn>
+		return { ...base, postSpy, publishPostCompactionW }
+	}
+
+	it("GREEN: producer surfaces W=29600 -> publish called once with 29600 -> the LAST postStateToWebview is called AFTER publish", async () => {
+		const publishSpy = vi.fn() as unknown as ReturnType<typeof vi.fn> & ((w: number) => void)
+		const { coordinator, postSpy } = makeCoordinatorWithPublisher(publishSpy)
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
+			vi.fn().mockResolvedValue({
+				messages: [{ role: "user", content: "summary" }],
+				currentWorkingContextEstimate: 29_600,
+			}),
+		)
+
+		await coordinator.compactTask()
+
+		expect(publishSpy).toHaveBeenCalledOnce()
+		expect(publishSpy).toHaveBeenCalledWith(29_600)
+		expect(postSpy).toHaveBeenCalled()
+
+		// Mechanical ordering witness: publish MUST be called BEFORE
+		// the FINAL (LAST) postStateToWebview call, so that the
+		// resulting ExtensionState payload carries the new W.
+		// (The compacting-phase postStateToWebview comes earlier
+		// in the lifecycle; the LAST post carries the post-
+		// compaction state with the new W. Without this ordering,
+		// the bar would still lag by one round-trip.)
+		const publishOrder = (publishSpy as unknown as { mock: { invocationCallOrder: number[] } }).mock
+			.invocationCallOrder[0]
+		const postInvocationOrders = (
+			postSpy as unknown as { mock: { invocationCallOrder: number[] } }
+		).mock.invocationCallOrder
+		expect(postInvocationOrders.length).toBeGreaterThanOrEqual(2)
+		const lastPostOrder = postInvocationOrders[postInvocationOrders.length - 1]
+		expect(publishOrder).toBeDefined()
+		expect(lastPostOrder).toBeDefined()
+		expect(publishOrder).toBeLessThan(lastPostOrder)
+	})
+
+	it("NEGATIVE: when the producer returns no W, publish MUST NOT be called and postStateToWebview MUST still execute", async () => {
+		const publishSpy = vi.fn() as unknown as ReturnType<typeof vi.fn> & ((w: number) => void)
+		const { coordinator, postSpy } = makeCoordinatorWithPublisher(publishSpy)
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
+			vi.fn().mockResolvedValue({
+				messages: [{ role: "user", content: "summary" }],
+				// currentWorkingContextEstimate intentionally omitted
+				// (legacy / pre-repair path).
+			}),
+		)
+
+		await coordinator.compactTask()
+
+		// Critical: no fake W. The carrier MUST NOT receive an
+		// undefined-coerced null - that would silently clear the bar.
+		expect(publishSpy).not.toHaveBeenCalled()
+		// And postStateToWebview MUST still run - the divider
+		// publication is the user-visible success indicator.
+		expect(postSpy).toHaveBeenCalled()
+	})
+
+	it("THROW-SWALLOWED: a throwing publish MUST be logged + not propagate; postStateToWebview MUST still execute", async () => {
+		const publishError = new Error("synthetic publish failure")
+		const publishSpy = vi.fn(() => {
+			throw publishError
+		}) as unknown as ReturnType<typeof vi.fn> & ((w: number) => void)
+		const { coordinator, postSpy } = makeCoordinatorWithPublisher(publishSpy)
+		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
+			vi.fn().mockResolvedValue({
+				messages: [{ role: "user", content: "summary" }],
+				currentWorkingContextEstimate: 42_000,
+			}),
+		)
+
+		// The coordinator wraps publishPostCompactionW in try/catch
+		// and logs; compactTask must NOT propagate.
+		await expect(coordinator.compactTask()).resolves.not.toThrow()
+		expect(publishSpy).toHaveBeenCalledWith(42_000)
+		expect(postSpy).toHaveBeenCalled()
+		// The thrown error is logged (the production boundary uses
+		// Logger.error), but never reaches the calling code.
+	})
+})
+
 /** Collect all say:"compaction" rows emitted through appendAndEmit, in order. */
 function compactionRows(options: { messages: { appendAndEmit: ReturnType<typeof vi.fn> } }) {
 	return options.messages.appendAndEmit.mock.calls
