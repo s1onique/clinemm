@@ -1,6 +1,8 @@
 /**
  * ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01
- * (CORRECTION01: P1 test-geometry strengthening + P2 metric labelling.)
+ * (CORRECTION01: P1 test-geometry strengthening + P2 metric labelling.
+ *  CORRECTION02: R7 wording tightening — empirical cross-estimator
+ *  witness, not a universal metric-independence claim.)
  *
  * Regression guards for the findCutIndex snap-clause fix.
  *
@@ -14,16 +16,23 @@
  *   Tool-use/result atomicity and preserved-recent-tail invariants remain
  *   unchanged.
  *
- * METRIC NOTE (CORRECTION01 P2):
+ * METRIC NOTE (CORRECTION01 P2 / CORRECTION02 wording tightening):
  *   `estimateJsonTokens` is the deterministic fixture WEIGHT used by R1-R6
  *   to make selection geometry unambiguous. It is JSON-serialized character
- *   length, NOT a token count. The cut selection is a geometry problem and
- *   is invariant under monotonic weight transforms (JSON-length weight and
- *   the real token estimator from `createTokenEstimator()` are both
- *   monotonic per-message positive integer weightings of the same message
- *   shape), so proving the cut with a deterministic weight proves the cut
- *   with any monotonic estimator. R7 explicitly verifies this metric-
- *   independence with the production token estimator.
+ *   length, NOT a token count.
+ *
+ *   The cut selection is NOT invariant under arbitrary monotonic or
+ *   nonlinear per-message weighting. For example, the production token
+ *   estimator uses Math.ceil(N/3) per message, which is nonlinear:
+ *   summing per-message estimates does NOT equal a single estimate of
+ *   the sum. A naive "scales proportionally" comparison is not enough to
+ *   make two weight functions produce the same cut.
+ *
+ *   R1-R6 use the deterministic JSON-length weight to pin selection
+ *   geometry. R7 is an empirical cross-estimator witness: it confirms the
+ *   same repaired L1 geometry survives the actual production token
+ *   estimator. It does NOT claim findCutIndex is invariant under
+ *   arbitrary monotonic or nonlinear per-message weighting.
  */
 
 import { describe, expect, it } from "vitest";
@@ -31,10 +40,10 @@ import { createTokenEstimator, findCutIndex } from "./compaction-shared";
 import type { MessageWithMetadata } from "@cline/shared";
 
 // Deterministic fixture weight: JSON-serialized character length per message.
-// This is a monotonic positive integer weight of the message shape, not a
-// token count. Cut selection is a geometry problem and is invariant under
-// any monotonic per-message weight transform. R7 confirms equivalence with
-// the production token estimator.
+// R1-R6 use this weight to pin selection geometry precisely. R7 compares
+// this weight against the production token estimator (createTokenEstimator)
+// on the L1 fixture to provide an empirical cross-estimator conservation
+// witness.
 const estimateJsonTokens = (m: MessageWithMetadata) => JSON.stringify(m).length;
 
 function typedUser(text: string): MessageWithMetadata {
@@ -202,28 +211,28 @@ describe("ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01 — regression guard
     }
   });
 
-  it("R7 (CORRECTION01): selection geometry is invariant under proportional weight scaling", () => {
-    // The cut selection is a geometry problem (find the index of a
-    // tail-walk threshold crossed first, then snap to a typed-user
-    // boundary). The cut is invariant under PROPORTIONAL scaling of the
-    // per-message weights: if all message weights and the threshold are
-    // multiplied by the same constant k, every "total >= threshold"
-    // comparison has the same truth value at the same index.
+  it("R7 (CORRECTION02): L1 fixture selects the same cut under the production token estimator and proportionally-scaled JSON fixture weight", () => {
+    // Empirical cross-estimator conservation witness for the L1 fixture.
+    // This test does NOT claim findCutIndex is invariant under arbitrary
+    // monotonic or nonlinear per-message weighting. It is a single-fixture
+    // sanity check that the repaired L1 geometry survives when measured
+    // by the actual production token estimator (createTokenEstimator,
+    // which uses Math.ceil(N/3) per message).
     //
-    // The real token estimator divides by CHARS_PER_TOKEN (3) compared to
-    // JSON-length weight. This is NOT proportional — it is a non-linear
-    // monotonic transform (Math.ceil(N/3)) — so the threshold-crossing
-    // index can legitimately differ.
+    // Why the threshold is scaled by CHARS_PER_TOKEN: each message is
+    // weighted independently by Math.ceil(N/3), and summing those
+    // per-message estimates does NOT equal a single estimate of the sum
+    // (sub-additivity of the ceiling). A naive threshold comparison with
+    // an unscaled JSON-length threshold would cross at a different
+    // index. Scaling the JSON threshold by CHARS_PER_TOKEN compensates
+    // for the rounding of individual message weights on this fixture
+    // (where the rounding errors happen to net out), which is an
+    // empirical property of the L1 geometry — NOT a general proof.
     //
-    // To verify metric-independence, this test passes a proportionally
-    // scaled threshold (preserveRecentTokens * CHARS_PER_TOKEN) to the
-    // JSON-length weight, so the tail walk's "total >= threshold" check
-    // is mathematically equivalent to the token estimator's check.
-    //
-    // Result: the cut must be identical across both metrics. If they
-    // differ, the cut selection has a hidden metric dependency
-    // (selection bug) or the estimators are non-monotonic (estimator
-    // bug).
+    // If the production estimator or the L1 fixture changes, this
+    // assertion may legitimately fail; the failure would indicate that
+    // the proportional-scaling approximation no longer holds for this
+    // shape, not a bug in findCutIndex.
     const CHARS_PER_TOKEN = 3;
     const messages = buildLiveShape472();
     const cutJson = findCutIndex(
