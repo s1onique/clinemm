@@ -1,0 +1,83 @@
+[0m[2m[35m$[0m [2m[1mvitest run --config vitest.config.ts src/extensions/tools/executors/editor.realpath-authority.test.ts[0m
+(node:37884) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+(node:37886) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts (6 tests | 2 failed) 15ms
+     ✓ A. control: clean write inside cwd passes 4ms
+     ✓ B. relative lexical traversal escape (../...) is refused today 2ms
+     × C. ABSOLUTE OUTSIDE TARGET — RED: must be refused 4ms
+     × E. nonexistent descendant of an outside root — RED: must be refused 2ms
+     ✓ F. control: in-root canonical variant still passes 1ms
+     ✓ H. control: ordinary workspace edit still passes 1ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/executors/editor.realpath-authority.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > C. ABSOLUTE OUTSIDE TARGET — RED: must be refused
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-gZljoh/cline-edit-auth-sZMWax/outside/c.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:130:6
+    128|       context,
+    129|      ),
+    130|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    131|     await expect(fs.access(target)).rejects.toMatchObject({
+    132|      code: "ENOENT",
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:63:9
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:114:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/extensions/tools/executors/editor.realpath-authority.test.ts > createEditorExecutor — Q5 RED matrix for case-E absolute-outside > E. nonexistent descendant of an outside root — RED: must be refused
+AssertionError: promise resolved "'File created successfully at: /privat…'" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+"File created successfully at: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-gZljoh/cline-edit-auth-Icfoat/outside/deep/sub/e.txt"
+
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:151:6
+    149|       context,
+    150|      ),
+    151|     ).rejects.toThrow(/out.*(workspace|authorized)/i);
+       |      ^
+    152|     await expect(
+    153|      fs.access(path.join(outsideRoot, "deep")),
+ ❯ withTwoRootFixture src/extensions/tools/executors/editor.realpath-authority.test.ts:63:9
+ ❯ src/extensions/tools/executors/editor.realpath-authority.test.ts:138:4
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  02:18:22
+   Duration  163ms (transform 21ms, setup 0ms, import 30ms, tests 15ms, environment 0ms)
+
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/executors/editor.realpath-authority.test.ts.
+[0m[31merror[0m[2m:[0m script [1m"test:unit"[0m exited with code 1[0m

@@ -34,7 +34,38 @@
 #   No production code change in this commit.
 #   No new review round.
 #   C1       : GO_LIVE_BIND
-#
-#   See .factory/epic-board.md Updated: 2026-09-02 16:50:00Z entry
-#   (and the follow-up PASS_WITH_ONE_P1_FIX / GO_LIVE_BIND line
-#    recorded at the next board update).
+
+# CYCLE3 (Q1 LIVE_BIND + Q2/Q3/Q4 + Q5 RED on 684356da8):
+#   Verdict  : PASS_AUTHORITY_VIOLATION_PROVEN
+#   Result   : Q1 BOUND (LIVE tool = editor, captured verbatim
+#              in 01-live-bind.md from the durable session
+#              transcript at
+#              ~/.cline/data/sessions/1788238423825_btxab/
+#              - specimens E1 and E3 in same session, both
+#                absolute-path writes to
+#                /Volumes/.../Projects/Runtime/srs/...
+#                from the openEditorPreview path of the
+#                ClineMM SDK editor tool);
+#              Q2 BOUND (AUTHORIZED_ROOTS =
+#                [/Volumes/.../Projects/Runity/srs],
+#                from session metadata cwd/workspace_root);
+#              Q3 BOUND (CASE_E — wrong authorized root, the
+#                documented "Absolute paths are always accepted
+#                as-is" branch in resolveFilePath at editor.ts
+#                lines 56-58);
+#              Q4 BOUND (LOWEST_AUTHORITY_SEAM =
+#                SdkDiffEditCoordinator.executeEditorTool,
+#                plus symmetric executeApplyPatchTool for the
+                conservation case);
+#              Q5 REPRODUCED — controlled vitest at
+#                sdk/packages/core/src/extensions/tools/
+#                executors/editor.realpath-authority.test.ts
+#                (4 control pass / 2 RED fail / 6 total)
+#                against the production createEditorExecutor.
+#   No production code change in this cycle.
+#   C1 (next): the already-planned repair ACT
+#              ACT-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT-PATH-
+#              AUTHORITY-REPAIR01 hard-gate on Q1 is now
+#              satisfied; that ACT opens next and performs
+#              the bounded repair.
+#   See 01-live-bind.md .. 13-final-report.md
