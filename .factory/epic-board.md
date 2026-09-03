@@ -1,5 +1,53 @@
 # ClineMM Epic Board
 
+Updated: 2026-09-03 twenty-ninth-pass (P0_EXPORTABILITY_FIX_APPLIED + P1_DIAGNOSTIC_ACCOUNTING_CORRECTED) — Per the operator's review on commits `fb8d680a2` + `5fc3faae5` + `adb16a2ef`: PASS_WITH_ONE_P1_FIX. Two HALT conditions applied in commit `e742a4644`:
+
+**P0 FIX — operator-reachable production dump command (TSWPD pattern):**
+- `apps/vscode/src/registry.ts` gains `DumpWCarrierTrace: prefix + ".debug.dumpWCarrierTrace"` (mirrors the existing `DumpTurnStateWriterProvenanceDiagnostic` entry).
+- `apps/vscode/package.json` contributes `cline.debug.dumpWCarrierTrace` under `contributes.commands` with title "Cline Debug: Dump W Carrier Trace" (palette-searchable).
+- `apps/vscode/src/extension.ts:activate` registers the command via `vscode.commands.registerCommand(commands.DumpWCarrierTrace, async () => { ... })` — the same `try/catch` shape as the TSWPD dump command, with `Logger.log` on success and `Logger.error` on failure.
+- `apps/vscode/src/sdk/w-carrier-trace-runtime.ts` gains:
+  - `dumpExtensionSideWCarrierTraceDiagnostic(context): Promise<string>` — host-side dump entry point (mirrors `dumpExtensionSideTurnStateWriterProvenanceDiagnostic`).
+  - `getWCarrierTraceRecords(): readonly WCarrierTraceRecord[]` — public buffer reader (so the command handler can show record count + first/last timestamps in the acknowledgement).
+  - `dumpWCarrierTrace(context): Promise<string>` — **unconditional** dump (no longer returns `undefined` when the seam is OFF). The dump is NOT gated on the module seam; the seam gates the recorder's APPEND path only. Mirrors the TSWPD dump policy: the operator must be able to inspect whatever was captured even when the diagnostic was disabled between runs.
+
+**NEW TESTS:**
+- `apps/vscode/src/sdk/__tests__/w-carrier-trace-production-dump-roundtrip.test.ts` (2 tests) — applies the dogfood profile, records one `carrier_observe` + one `state_publish`, calls `dumpExtensionSideWCarrierTraceDiagnostic`, asserts the JSONL contains both exact records. Second test: override-down + record after OFF + dump → only first sentinel persisted (proves the recorder seam still bails, and the dump is unconditional).
+- `apps/vscode/src/sdk/__tests__/w-carrier-trace-command-registration.test.ts` (3 tests) — source-only witnesses for `package.json` contributes + `registry.ts` exposes `DumpWCarrierTrace` + `extension.ts` registers via `vscode.commands.registerCommand`.
+
+**P1 FIX — ACT_OWNED_DIAGNOSTICS accounting (corrected):**
+Previous pass claimed `ACT_OWNED_DIAGNOSTICS = 0`, but the temporary W-carrier observer IS an ACT-owned diagnostic (with a removal trigger). Honest state:
+```
+ACT_OWNED_DIAGNOSTICS =
+  1 temporary W-carrier observer
+  / MODULE_SEAM_DEFAULT = OFF
+  / DOGFOOD_EFFECTIVE_DEFAULT = ON
+  / PUBLIC_EFFECTIVE_DEFAULT = OFF
+  / LIVE_QUALIFICATION_PENDING
+  / REMOVAL_TRIGGER = first successful LIVE binding of Q1..Q4
+    capture to the missing-gauge boundary + a proper repair,
+    then remove the resolver + activation helper + trace module
+    + extension wiring TOGETHER
+```
+`ACT_OWNED_DIAGNOSTICS = 0` is reserved for terminal ACT closure unless justified; this diagnostic is still actively needed to bind the live failure.
+
+**EV (97/97 PASS across 9 suites):**
+- `w-carrier-trace-runtime.test.ts` (6) — frozen-seam semantics + unconditional dump
+- `dogfood-diagnostic-profile-w-carrier.test.ts` (27) — precedence + integration
+- `w-carrier-trace-production-dump-roundtrip.test.ts` (2) — operator-flow roundtrip
+- `w-carrier-trace-command-registration.test.ts` (3) — source-only witnesses
+- `dogfood-diagnostic-profile.test.ts` (30) — pre-existing dogfood profile tests
+- `runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts` (6) — Q5 background-job-turn-completion-authority
+- `runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts` (4) — pre-existing discriminator
+- `sdk-compaction.test.ts` (6) — pre-existing compaction context test
+- `working-context-webview-state-projection.test.ts` (13) — pre-existing projection test
+
+typecheck clean (`bunx tsc --noEmit` PASS, both `tsconfig.json` and `tsconfig.vscode-compat.json`). `git diff --check` silent. biome check: only pre-existing infos (30); no errors.
+
+CONSERVATION: W_CARRIER_SEMANTICS unchanged (carrier assignment / producer / webview rendering identical); TRACE_SIDE_EFFECT = observation only; public webview rendering unchanged; no new VIAPD letter; removal-trigger doctrine preserved (mirrors THSICAP REMOVAL_TRIGGER comment block); no remote-process or polling additions.
+
+NEW_REVIEW_ROUND = NO. STATE: WAITING_Q5 = CLOSED (preserved); LIVE_QUALIFICATION = EARLY_FAILURE_ON_CONTEXT_GAUGE → operator can now dogfood WITHOUT env juggling, AND the dump is mechanically retrievable via `cline.debug.dumpWCarrierTrace`. NEXT operator action: rebuild VSIX, install, reproduce one real running task, invoke the dump command, classify the missing-gauge boundary per the matrix in twenty-sixth-pass. C1: GO_DOGFOOD. ACT_OWNED_DIAGNOSTICS = 1 (correctly accounted).
+
 Updated: 2026-09-03 twenty-eighth-pass (P1_TEST_QUALITY_FIX_APPLIED + P2_WORDING_FIX_APPLIED) — Per the operator's review on commits `fb8d680a2` + `5fc3faae5`: PASS_WITH_ONE_P1_FIX. P1 applied in commit `adb16a2ef`: the integration test "effective ON records" / "effective OFF no-ops" claims now mechanically inspected via REAL temporary directories and JSONL readback. The ON test now applies the dogfood profile, records one sentinel, dumps, and asserts the file path + JSONL roundtrip equality. The OFF test now applies the public profile, records one sentinel, asserts `dumpWCarrierTrace` returns `undefined`, and asserts the file was never created on disk. Two additional integration tests added for the override-down / override-up flows, also inspecting the JSONL. Test count: 27 (was 25). P2 applied in the same commit: the file header now distinguishes `MODULE_SEAM_DEFAULT = OFF` (raw bit) from `DOGFOOD_EFFECTIVE_DEFAULT = ON` / `PUBLIC_EFFECTIVE_DEFAULT = OFF` (profile-resolved effective state). `recordWCarrierTrace` parameter renamed to `_context` to reflect the recorder's decision-blind posture (the module seam, not the per-call context, gates the write). All 92/92 tests across 7 touched suites still PASS: `w-carrier-trace-runtime.test.ts` (6), `dogfood-diagnostic-profile-w-carrier.test.ts` (27), `dogfood-diagnostic-profile.test.ts` (30), `runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts` (6), `runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts` (4), `sdk-compaction.test.ts` (6), `working-context-webview-state-projection.test.ts` (13). typecheck clean (`bunx tsc --noEmit` PASS, both `tsconfig.json` and `tsconfig.vscode-compat.json`). `git diff --check` silent. biome check clean. CONSERVATION: no production code change (test-only tightening + docs); the operator's verification of the existing `recordWCarrierTrace` signature is `(_context: WCarrierTraceContext, record: WCarrierTraceRecord): void` — same call shape, parameter renamed to reflect that the context is no longer consulted by the recorder (the module seam is the authority). NEW_REVIEW_ROUND = NO. STATE: WAITING_Q5 = CLOSED (preserved); LIVE_QUALIFICATION = EARLY_FAILURE_ON_CONTEXT_GAUGE → next operator action per the operator's ARROW: rebuild VSIX; install; no env juggling (dogfood default ON); reproduce one real running task; dump `<globalStorageUri.fsPath>/w-carrier-trace.jsonl`; classify per the matrix. C1: GO_DOGFOOD. ACT_OWNED_DIAGNOSTICS = 0.
 
 Updated: 2026-09-03 twenty-seventh-pass (W_TRACE_FOLDED_INTO_CENTRAL_DOGFOOD_PROFILE — NO_NEW_ACT) — Per the operator's review on commit `34443fc1e`: fold `CLINEMM_W_TRACE` into the existing central dogfood diagnostic profile, mirroring the THSICAP / turn-state-writer-provenance pattern; eliminate the distributed enablement policy that previously combined workspace-state + env inside the trace module. Production delta:
