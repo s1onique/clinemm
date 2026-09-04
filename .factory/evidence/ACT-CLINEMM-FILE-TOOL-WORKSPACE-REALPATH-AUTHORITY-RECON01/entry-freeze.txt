@@ -159,3 +159,68 @@
 #   See 07-effective-destination-invariant.md for the V1
 #   algorithm and 13-final-report.md for the CYCLE5 amendment
 #   block. Production code change: 0 (recon-only).
+
+# CYCLE6 (Factory reviewer verdict on 78b6361eb — HALT_APPROVAL_POLICY_IS_NOT_PATH_AUTHORITY):
+#   Verdict  : HALT — REOPEN WITH PHASE-0 BIND FROM SOURCE
+#   Reason   : the proposed production ACT was about to make a more
+#              serious semantic mistake than the previous technical
+#              issues. The reviewer correctly observed:
+#                editFilesExternally is an AUTO-APPROVAL setting,
+#                not necessarily an AUTHORIZATION boundary.
+#                editFilesExternally=false does NOT mean "forbidden
+#                outside workspace" — it means MAYBE ASK.
+#              The reviewer demanded a Phase-0 source trace before
+#              opening the production ACT:
+#                inspect current ClineMM editor approval path
+#                and answer:
+#                  editFilesExternally=false
+#                  -> ASK, DENY, or DISABLED?
+#              This CYCLE commits that source trace.
+#   Phase-0  : COMPLETE — see
+#   source     14-phase0-source-trace.md (NEW, 311 lines)
+#   trace      for the four-file chain-by-chain source trace.
+#   Bind    :  editFilesExternally is a NO-OP legacy field.
+#              It is read ONLY in:
+#                - apps/vscode/src/shared/AutoApprovalSettings.ts:18
+#                  (type declaration, marked "Legacy field")
+#                - apps/vscode/src/shared/AutoApprovalSettings.ts:37
+#                  (default value = true)
+#                - apps/vscode/src/hosts/vscode/
+#                  vscode-to-file-migration.ts:301 (persistence
+#                  migration)
+#                - apps/vscode/src/sdk/session-auto-approval.ts:236
+#                  (pass-through into SessionAutoApprovalOverride)
+#              No code path branches on the value. The "Edit all
+#              files" UI toggle is dead.
+#   Actual   :  editFiles is the ONLY gate that matters, evaluated
+#   gate       at apps/vscode/src/sdk/sdk-tool-policies.ts:1081-1083:
+#                  if (isEditTool(toolName)) {
+#                    return !!settings.actions.editFiles
+#                  }
+#              editFiles=true (default) -> silent ALLOW; editor.ts
+#                lexical relative-path check is the ONLY path
+#                classifier, and it is bypassed for absolute inputs.
+#              editFiles=false -> MANUAL ASK UI; no path
+#                classification either way; user decides.
+#   LIVE      :  E1/E3: editFiles=true (default) implies silent
+#   specimen     ALLOW -> fs.writeFile. Path was most-likely
+#   policy       authorized at the policy layer (assuming default
+#                setting). editFilesExternally IS NOT A FACTOR
+#                EITHER WAY.
+#   Two       :  (1) EDITOR_EFFECTIVE_DESTINATION_
+#   sub-         CLASSIFICATION_MISSING (proven by CYCLE5 RED
+#   defects       matrix - classifier absent)
+#              (2) EDITFILES_EXTERNALLY_LEGACY_NOOP_DEADCODE
+#                (proven by this CYCLE6 source trace - UI toggle
+#                 persists but no policy code reads it)
+#   Verdict   :  UPGRADED from PENDING_RUNTIME_POLICY_BIND to
+#   upgrade     SEMANTICS_BOUND_FROM_SOURCE. Phase-0 discriminator
+#                answered from source.
+#   Prod ACT  :  RENAMED to ACT-CLINEMM-EDITOR-EFFECTIVE-
+#   contract     DESTINATION-APPROVAL01 (per reviewer; scope
+#                expanded to also wire editFilesExternally into
+#                the policy gate so the reviewer's expected
+#                lattice becomes enforceable).
+#   See 14-phase0-source-trace.md for the full source trace and
+#   the production-ACT phase plan. Production code change: 0
+#   (still recon-only).

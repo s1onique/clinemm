@@ -6,24 +6,59 @@ ACT_ID                =
 
 VERDICT               =
   PASS_OUTSIDE_CWD_MUTATION_PROVEN
-  AUTHORITY_VIOLATION   = PENDING_RUNTIME_POLICY_BIND
-  (CYCLE5 — per Factory reviewer verdict on commit cf84c996e,
-   this is FURTHER downgraded from CYCLE4's PENDING_CONTRACT_BIND:
-   the LIVE specimens E1/E3 were MOST-LIKELY within the user's
-   effective authority at session time because
-   editFilesExternally=true in the current global state file
-   ("Edit all files" toggle ON). The seam permissiveness is
-   still a real defect (an opt-out user would be unprotected),
-   but the LIVE evidence does NOT prove opt-out failure — it
-   proves only permissive behavior. The honest framing is that
-   the recon has proven editor-seam permissiveness; whether
-   that permissiveness caused an actual violation depends on
-   the runtime setting, which was LIKELY permissive but cannot
-   be durably proven for the original session time.
-   See 07-effective-destination-invariant.md for the full
-   post-CYCLE5 disposition including the corrected V1
-   contract algorithm and the collapsed handoff to a single
-   bounded production ACT.)
+  AUTHORITY_VIOLATION   = SEMANTICS_BOUND_FROM_SOURCE
+  (CYCLE6 — per Factory reviewer verdict on commit 78b6361eb
+   (HALT_APPROVAL_POLICY_IS_NOT_PATH_AUTHORITY), this is
+   UPGRADED from CYCLE5's PENDING_RUNTIME_POLICY_BIND:
+   Phase-0 discriminator has been answered from source.
+   The complete trace is at
+   14-phase0-source-trace.md. Summary of the bind:
+
+   * editFilesExternally is a NO-OP in policy code. It
+     is read ONLY in:
+       - apps/vscode/src/shared/AutoApprovalSettings.ts:18
+         (type declaration, marked "Legacy field")
+       - apps/vscode/src/shared/AutoApprovalSettings.ts:37
+         (default value = true)
+       - apps/vscode/src/hosts/vscode/vscode-to-file-migration.ts:301
+         (persistence migration)
+       - apps/vscode/src/sdk/session-auto-approval.ts:236
+         (pass-through into SessionAutoApprovalOverride)
+     No code path branches on the value. The "Edit all files"
+     UI toggle is dead.
+
+   * The actual authority gate is editFiles ONLY, evaluated
+     at apps/vscode/src/sdk/sdk-tool-policies.ts:1081-1083:
+       if (isEditTool(toolName)) {
+         return !!settings.actions.editFiles   ← never editFilesExternally
+       }
+
+   * editFiles=true (default) -> silent ALLOW; editor.ts
+     lexical relative-path check is the ONLY path classifier,
+     and it is bypassed for absolute inputs (line 56-58).
+   * editFiles=false -> MANUAL ASK UI; no path classification
+     either way; user decides.
+
+   * LIVE specimens E1/E3: editFiles=true (default) implies
+     silent ALLOW -> fs.writeFile. The path was most-likely
+     authorized at the policy layer (assuming default setting),
+     and editFilesExternally IS NOT A FACTOR EITHER WAY.
+
+   * Two independent sub-defects to address in the production ACT:
+       (1) EDITOR_EFFECTIVE_DESTINATION_CLASSIFICATION_MISSING
+           (proven by CYCLE5 RED matrix - classifier absent)
+       (2) EDITFILES_EXTERNALLY_LEGACY_NOOP_DEADCODE
+           (proven by this CYCLE6 source trace - UI toggle
+            persists but no policy code reads it)
+
+   * Production ACT contract re-scoped to introduce BOTH:
+       - canonical inside/outside classifier at the editor-tool
+         policy seam (Phase 1+3)
+       - wire editFilesExternally into the policy gate (Phase 2+3)
+     so the reviewer's expected lattice becomes enforceable.
+
+   See 14-phase0-source-trace.md for the full chain-by-chain
+   source trace and the production-ACT phase plan.)
 
 IDENTITY
   ENTRY_HEAD           = 03af027a9 (pre-existing recon ACT entry,
@@ -36,19 +71,23 @@ IDENTITY
                                  verdict was PASS_AUTHORITY_VIOLATION_
                                  PROVEN which has since been
                                  downgraded by the Factory reviewer)
-  FINAL_HEAD           = <to be filled at CYCLE4 commit>
-  FINAL_TREE           = <to be filled at CYCLE4 commit>
-  WORKTREE_STATUS      = mixed at start of CYCLE4
-                          tracked  : clean (10 files from CYCLE3 commit
-                                     still in HEAD a917f73a6)
+  CYCLE5_HEAD          = 78b6361eb (cycle5 closure commit;
+                                 corrected case D geometry +
+                                 runtime policy bind + V1
+                                 algorithm correction)
+  CYCLE6_HEAD          = <to be filled at CYCLE6 commit>
+                         (cycle6: Phase-0 discriminator answered
+                                  from source; semantics bound)
+  FINAL_HEAD           = <to be filled at CYCLE6 commit>
+  FINAL_TREE           = <to be filled at CYCLE6 commit>
+  WORKTREE_STATUS      = mixed at start of CYCLE6
+                          tracked  : clean (10 files from CYCLE5 commit
+                                     still in HEAD 78b6361eb)
                           untracked: none
-                          modified : 5 files (this final report +
-                                     03-authority-primitive.md +
-                                     06-causal-discriminator.md +
-                                     05-red-matrix.txt +
-                                     entry-freeze.txt; the test
-                                     file also has +1 new case D)
-                          expected : CYCLE4 commit will fold all
+                          modified : 2 files (this final report +
+                                     entry-freeze.txt; NEW file
+                                     14-phase0-source-trace.md added)
+                          expected : CYCLE6 commit will fold all
                                      corrections in one bounded
                                      commit.
 
@@ -590,4 +629,40 @@ NEXT_ACT              = ACT-CLINEMM-EDITOR-WORKSPACE-EFFECTIVE-
                        DESTINATION-AUTHORITY01 (single bounded ACT,
                        Phase 0 freezes contract, Phases 1-4 implement)
 PRODUCTION_FILES      = 0 changed (recon-only)
+```
+
+```text
+EV_VERDICT_CYCLE6     = PASS_OUTSIDE_CWD_MUTATION_PROVEN
+                       AUTHORITY_VIOLATION = SEMANTICS_BOUND_FROM_SOURCE
+                       (CYCLE6 Phase-0 discriminator answered:
+                        editFilesExternally is a NO-OP legacy
+                        field; the actual gate is editFiles,
+                        which controls ASK vs silent ALLOW,
+                        not inside vs outside classification.
+                        Two independent defects identified:
+                        (1) EDITOR_EFFECTIVE_DESTINATION_
+                            CLASSIFICATION_MISSING
+                        (2) EDITFILES_EXTERNALLY_LEGACY_
+                            NOOP_DEADCODE
+                        Both bounded to editor-tool policy
+                        seam; both addressable in one ACT.)
+PHASE0_BIND_FROM_SOURCE = COMPLETE
+                       (see 14-phase0-source-trace.md)
+LIVE_SPECIMEN_E1_E3_POLICY =
+                       editFiles=true (DEFAULT, session-time
+                       snapshot not preserved -> cannot prove
+                       session-time value). editFilesExternally
+                       is NOT a factor either way.
+NEXT_ACT_CYCLE6       = ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-
+                       APPROVAL01 (renamed from
+                       ...WORKSPACE-EFFECTIVE-DESTINATION-
+                       AUTHORITY01 per Factory reviewer's
+                       recommendation; scope expanded to also
+                       wire editFilesExternally into the
+                       policy gate so the reviewer's expected
+                       lattice becomes enforceable.)
+NEW_EVIDENCE          = .factory/evidence/ACT-CLINEMM-FILE-TOOL-
+                       WORKSPACE-REALPATH-AUTHORITY-RECON01/
+                       14-phase0-source-trace.md (NEW, 311 lines)
+PRODUCTION_FILES      = 0 changed (still recon-only)
 ```
