@@ -829,3 +829,105 @@ NEW_REVIEW_ROUND        = NO  (per opener-receiver: "C1: GO.
                           facts, add the multi-target aggregation
                           rule if needed, and get to RED.")
 ```
+
+## 10. Post-CYCLE1-opener-receiver Phase 0 binding review (commit a985e774f)
+
+Per the Factory reviewer's verdict on the production ACT
+Phase 0 binding commit (a985e774f):
+
+```text
+FACTORY_VERDICT   = PASS_WITH_ONE_BOUNDED_P1
+                    (CYCLE1 reviewer on the Phase 0 binding)
+C1                = GO after one bounded correction
+RECON_LANE        = CLOSED (unchanged)
+PRODUCTION_ACT    = GO TO RED
+NEW_REVIEW_ROUND  = NO (per CYCLE1 reviewer: "C1: GO after that
+                    one bounded correction. Then write RED
+                    immediately - no Phase-0 CYCLE2, no new
+                    planning commit, no more contract review.")
+```
+
+### The three bounded corrections
+
+**P1 (first half) — apply_patch movePath target enumeration**
+
+The reviewer's primary load-bearing correction: `apply_patch`
+carries TWO path-bearing locations per move action:
+
+```ts
+interface PatchAction {
+  ...
+  movePath?: string   // apply-patch-parser.ts:36
+}
+
+interface Patch {
+  actions: Record<string, PatchAction>   // apply-patch-parser.ts:46-49
+}
+```
+
+`Object.keys(patch.actions)` alone would miss the move
+destination and silently auto-approve `inside source →
+outside move target` patches. Frozen enumeration (now in
+production ACT phase0 §1.2):
+
+```ts
+for each (sourcePath, action) in patch.actions:
+    targets += sourcePath
+    if action.movePath exists:
+        targets += action.movePath
+```
+
+Load-bearing R1 cases (now in production ACT phase0 §2.1):
+
+| apply_patch shape                  | REQUEST_CLASS |
+|------------------------------------|---------------|
+| inside source -> inside move target  | INSIDE     |
+| inside source -> outside move target | OUTSIDE    |
+| outside source -> inside move target | OUTSIDE    |
+
+**P1 (second half) — isEditTool inventory tightening**
+
+The reviewer's secondary correction: the previous "All five
+share the same classification lattice" sentence was TOO BROAD.
+The inventory now splits:
+
+```text
+CURRENT INCLUDED SURFACE (conservation PROVEN by this ACT):
+  editor
+  apply_patch
+
+LEGACY POLICY NAMES (existing behavior preserved; NO target-
+aware parity claim from this ACT):
+  replace_in_file
+  write_to_file
+  delete_file
+```
+
+**P2 — AsyncLocalStorage not prematurely frozen as carrier**
+
+The reviewer's architectural precision: `AsyncLocalStorage`
+inside `handleRequestToolApproval` is the proven async
+composition seam, but is NOT itself the correct evidence
+carrier. Phase 0 binds the seam; carrier choice is deferred
+to Phase 1-2 with the preferred shape being a local
+immutable variable + direct function parameter passing
+(NOT ambient ALS).
+
+### Disposition
+
+All three corrections were APPLIED in the production ACT
+phase0-reconfirmation.md and §13 verdict block. The production
+ACT is now in `PHASE_0_BOUND_CORRECTED` state and authorized
+to enter Phases 1-4 (RED + GREEN + necessity-ablation) against
+the corrected, bound seams.
+
+```text
+RECON_LANE_STATUS        = CLOSED  (unchanged from CYCLE7)
+PRODUCTION_ACT_STATUS    = OPEN / AUTHORIZED / PHASE_0_BOUND_CORRECTED
+CYCLE1_REVIEWER_VERDICT  = PASS_WITH_ONE_BOUNDED_P1
+NEW_REVIEW_ROUND         = NO
+NEXT                     = Phases 1-4 (RED + GREEN + necessity-ablation)
+                            No new recon cycle.
+                            No new planning commit.
+                            No more contract review.
+```

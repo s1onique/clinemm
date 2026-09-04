@@ -410,18 +410,24 @@ change: 0 (RED tests come in Phase 4).
 
 ```text
 ACT_ID             = ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
-VERDICT            = OPEN / PRODUCTION_ACT_AUTHORIZED / PHASE_0_BOUND
+VERDICT            = OPEN / PRODUCTION_ACT_AUTHORIZED / PHASE_0_BOUND_CORRECTED
 C1                 = GO (per CYCLE7 reviewer verdict
                      PASS_WITH_ONE_BOUNDED_P1 on 72594d509
                      AND opener-receiver PASS_WITH_NO_NEW_P1_AT_C1_GO
-                     on this commit's opening)
+                     on this commit's opening
+                     AND CYCLE1 reviewer PASS_WITH_ONE_BOUNDED_P1
+                     on a985e774f — see §13.1 below)
 PARENT_RECON_ACT   = ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
 PARENT_HEAD        = 72594d50921fe2527b98d5052e09c74969a88fe1
 PARENT_VERDICT     = PASS_CYCLE7 (APPROVAL_SEMANTICS = BOUND_FROM_SOURCE)
 RECON_LANE         = CLOSED (do NOT reopen)
 PHASE              = 0  (six-fact binding COMPLETE; opener-receiver
                      P1 multi-target aggregation + P2 source-confirmed
-                     ABSOLUTE_ONLY also bound)
+                     ABSOLUTE_ONLY bound; CYCLE1 reviewer P1
+                     apply_patch movePath target enumeration + legacy
+                     SUCCESSOR conservation tightening applied;
+                     CYCLE1 reviewer P2 AsyncLocalStorage carrier
+                     caveat applied)
 PHASE_0_DELTA      = (a) wording correction from CYCLE7 reviewer
                        ("non-approved-outside target still refuses"
                         -> "denied approval means executor not invoked")
@@ -430,12 +436,53 @@ PHASE_0_DELTA      = (a) wording correction from CYCLE7 reviewer
                        bound in phase0 §2.1 (unavailable > outside > inside);
                      (c) opener-receiver P2 EDITOR_PATH_CONTRACT = ABSOLUTE_ONLY
                        bound in phase0 §2.2 as a ClineMM-source-confirmed
-                       invariant (NOT upstream-derived).
+                       invariant (NOT upstream-derived);
+                     (d) CYCLE1 reviewer P1 (first half): apply_patch
+                       movePath target enumeration must include BOTH
+                       Patch.actions record key AND PatchAction.movePath;
+                       frozen target enumeration loop in phase0 §1.2;
+                       load-bearing R1 cases (inside→outside, outside→inside)
+                       enumerated in phase0 §2.1;
+                     (e) CYCLE1 reviewer P1 (second half): isEditTool
+                       inventory split into CURRENT INCLUDED SURFACE
+                       (editor + apply_patch — conservation proven)
+                       and LEGACY POLICY NAMES (replace_in_file +
+                       write_to_file + delete_file — existing behavior
+                       preserved; NO target-aware parity claim from
+                       this ACT), applied in phase0 §1.6;
+                     (f) CYCLE1 reviewer P2: AsyncLocalStorage is NOT
+                       frozen as the EditorPathAuthorityEvidence carrier;
+                       preferred shape is local immutable variable +
+                       direct function parameter passing (phase0 §2.4).
 PRODUCTION_CHANGE  = 0 (docs/evidence-only opening)
 NEXT               = Phases 1–4 implement RED/GREEN/necessity-ablation
                      against the bound seams (no new recon, no new review
                      round).
-NEW_REVIEW_ROUND   = NO (per opener-receiver: "C1: GO. No more contract
-                     review. Bind the six facts, add the multi-target
-                     aggregation rule if needed, and get to RED.")
+NEW_REVIEW_ROUND   = NO (per CYCLE1 reviewer: "C1: GO after that one
+                     bounded correction. Then write RED immediately —
+                     no Phase-0 CYCLE2, no new planning commit, no more
+                     contract review.")
 ```
+
+### 13.1 CYCLE1 reviewer verdict (on commit a985e774f, this commit's Phase 0 binding)
+
+```text
+P0                       : NONE
+P1 (apply_patch target enumeration incomplete:
+    movePath destination must participate in classification;
+    legacy SUCCESSOR tools must not be claimed as already conserved)
+                          : BOUNDED CORRECTION APPLIED (see (d) + (e) above)
+P2 (AsyncLocalStorage should not be prematurely frozen as carrier)
+                          : BOUNDED CORRECTION APPLIED (see (f) above)
+PHASE 0                  : PASS subject to the bounded target-enumeration
+                            correction (now applied)
+RECON                    : CLOSED
+PRODUCTION ACT           : GO TO RED (immediately, no further recon
+                            cycle, no new planning commit)
+```
+
+The CYCLE1 reviewer's verbatim disposition:
+
+> C1: GO after that one bounded correction. Then write RED
+> immediately — no Phase-0 CYCLE2, no new planning commit, no
+> more contract review.

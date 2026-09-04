@@ -419,3 +419,69 @@
 #
 # Production code change: 0 (still docs/evidence-only).
 # Test code change: 0 (RED tests come in Phase 4).
+=== CYCLE1-OPENER-RECEIVER-PHASE0-CORRECTION (production ACT Phase 0 binding review) ===
+
+factory_verdict          = PASS_WITH_ONE_BOUNDED_P1 (CYCLE1 reviewer on
+                          commit a985e774f)
+cycle                    = CYCLE1 (production ACT Phase 0 binding review)
+p0                       = NONE
+p1                       = ONE (apply_patch target enumeration incomplete;
+                          movePath destination must participate in
+                          classification; legacy SUCCESSOR tools must not
+                          be claimed as already conserved)
+p2                       = ONE (AsyncLocalStorage should not be prematurely
+                          frozen as carrier)
+phase_0_status           = PASS subject to bounded target-enumeration
+                          correction (now applied in follow-up commit)
+recon_lane               = CLOSED
+production_act           = GO TO RED (no Phase-0 CYCLE2, no new planning
+                          commit, no more contract review)
+parent_recon_verdict     = PASS_CYCLE7 (unchanged)
+new_review_round         = NO
+
+Bounded corrections applied:
+  P1 (first half) : apply_patch must enumerate BOTH Patch.actions record
+                    keys (source paths) AND PatchAction.movePath
+                    (move destinations).
+                    Frozen enumeration:
+                      for each (sourcePath, action) in patch.actions:
+                          targets += sourcePath
+                          if action.movePath exists:
+                              targets += action.movePath
+                    Load-bearing R1 cases enumerated:
+                      inside source -> outside move target -> OUTSIDE
+                      outside source -> inside move target -> OUTSIDE
+  P1 (second half): isEditTool inventory split into
+                    CURRENT INCLUDED SURFACE (editor + apply_patch,
+                      conservation proven by this ACT)
+                    LEGACY POLICY NAMES (replace_in_file +
+                      write_to_file + delete_file, existing behavior
+                      preserved, NO target-aware parity claim).
+  P2               : AsyncLocalStorage is NOT frozen as the evidence
+                    carrier. Phase 0 binds only the async seam.
+                    Preferred Phase 1-2 shape:
+                      await classify(request)
+                          -> local immutable evidence variable
+                          -> feed into pure policy
+                          -> pass via direct function parameters
+                              (NOT ambient async context)
+
+Production ACT §13 verdict updated to:
+  VERDICT          = OPEN / PRODUCTION_ACT_AUTHORIZED /
+                     PHASE_0_BOUND_CORRECTED
+  PHASE_0_DELTA    = + (d) apply_patch movePath enumeration
+                    + (e) isEditTool inventory split
+                    + (f) AsyncLocalStorage carrier caveat
+  NEW_REVIEW_ROUND = NO
+
+Production ACT phase0-reconfirmation.md sections updated:
+  §1.2 - frozen target enumeration loop + movePath justification
+  §1.6 - inventory split (CURRENT INCLUDED SURFACE vs LEGACY POLICY NAMES)
+  §2.1 - 8-row movePath truth table (5th row load-bearing)
+  §2.4 - new section "Evidence carrier (P2) - DO NOT FREEZE AsyncLocalStorage"
+  §3   - contract summary updated
+
+next = Phases 1-4 of the production ACT implement RED + GREEN +
+       necessity-ablation against the corrected, bound seams.
+       No new recon cycle. No new planning commit. No more contract
+       review. RED is authorized to begin immediately.

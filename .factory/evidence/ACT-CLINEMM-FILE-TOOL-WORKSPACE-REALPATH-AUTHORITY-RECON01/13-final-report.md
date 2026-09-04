@@ -1369,3 +1369,112 @@ rule if needed, and get to RED."
 
 The production ACT is now ready to enter Phases 1-4 (RED +
 GREEN + necessity ablation) against the bound seams.
+
+## EV_VERDICT_REVIEWER_ON_PHASE0_BINDING_CYCLE1 (production ACT Phase 0 review)
+
+This block documents the Factory reviewer's verdict on the
+docs/evidence-only Phase 0 binding commit `a985e774f` for
+production ACT ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01.
+
+### Verbatim disposition
+
+```text
+P0                  : NONE
+P1                  : apply_patch target enumeration incomplete:
+                      movePath destination must participate in classification;
+                      legacy SUCCESSOR tools must not be claimed as already conserved
+P2                  : AsyncLocalStorage should not be prematurely frozen as carrier
+PHASE 0             : PASS subject to bounded target-enumeration correction
+RECON               : CLOSED
+PRODUCTION ACT      : GO TO RED
+```
+
+The reviewer explicitly said: "C1: GO after that one bounded
+correction. Then write RED immediately — no Phase-0 CYCLE2,
+no new planning commit, no more contract review."
+
+### What the reviewer required
+
+The reviewer identified ONE load-bearing P1 (with a tightly
+related inventory tightening as a sub-correction) and ONE P2:
+
+**P1 (first half)**: `apply_patch` target enumeration must
+enumerate BOTH `Patch.actions` record keys (source paths) AND
+`PatchAction.movePath` (move destinations). The previous
+algorithm `Object.keys(patch.actions)` would have classified
+`inside source → outside move target` as INSIDE and silently
+auto-approved an outside write, defeating the external-edit
+rule.
+
+Frozen enumeration:
+
+```ts
+for each (sourcePath, action) in patch.actions:
+    targets += sourcePath
+    if action.movePath exists:
+        targets += action.movePath
+```
+
+**P1 (second half)**: The isEditTool inventory split must
+distinguish "conservation proven" (editor + apply_patch) from
+"existing behavior preserved" (replace_in_file + write_to_file
++ delete_file). The previous "All five share the same
+classification lattice … R5 conservation therefore holds for
+the entire `isEditTool` member set" was TOO BROAD.
+
+Frozen inventory:
+
+```text
+CURRENT INCLUDED SURFACE:
+  editor
+  apply_patch
+
+LEGACY POLICY NAMES:
+  replace_in_file
+  write_to_file
+  delete_file
+
+Disposition:
+  preserve existing behavior;
+  do not claim target-aware parity until their actual
+  approval-time translated request shape is executable
+  evidence.
+```
+
+**P2**: AsyncLocalStorage inside `handleRequestToolApproval`
+is the proven async composition seam but is NOT itself the
+correct evidence carrier. Phase 0 binds only the seam; the
+carrier choice is deferred to Phase 1-2 with the preferred
+shape being a local immutable variable + direct function
+parameter passing (NOT ambient ALS).
+
+### Bounded corrections applied in subsequent commit
+
+All three bounded corrections (P1 first half, P1 second half,
+P2) were applied to `phase0-reconfirmation.md` and the
+production ACT §13 in a follow-up commit, after which the
+production ACT is authorized to enter Phases 1-4 (RED + GREEN
++ necessity ablation).
+
+### Factory classification (this reviewer verdict)
+
+```text
+P0                  : NONE
+P1 (apply_patch target enumeration)
+                    : APPLIED (frozen enumeration loop + movePath cases)
+P1 (legacy SUCCESSOR conservation tightening)
+                    : APPLIED (inventory split)
+P2 (AsyncLocalStorage carrier caveat)
+                    : APPLIED (Phase 0 binds seam only; carrier is
+                      deferred to Phase 1-2 with preferred local-
+                      variable shape)
+RECON LANE          : CLOSED
+PRODUCTION ACT      : OPEN / AUTHORIZED / PHASE_0_BOUND_CORRECTED
+NEW_REVIEW_ROUND    : NO
+```
+
+The reviewer's authoritative instruction:
+
+> C1: GO after that one bounded correction. Then write RED
+> immediately — no Phase-0 CYCLE2, no new planning commit, no
+> more contract review.

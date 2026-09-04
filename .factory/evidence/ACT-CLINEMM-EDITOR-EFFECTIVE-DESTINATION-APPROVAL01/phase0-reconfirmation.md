@@ -52,8 +52,27 @@ Source: `sdk/packages/core/src/extensions/tools/schemas.ts`.
 | `delete_file`     | legacy alias — schema not in @cline/core | via translator | NO            |
 
 The `apply_patch` parser produces `Patch.actions: Record<string, PatchAction>`
-keyed by file path (apply-patch-parser.ts:46-49). The classifier
-iterates this record to produce a `TargetEvidence[]`.
+keyed by file path (apply-patch-parser.ts:46-49). **The classifier
+MUST enumerate BOTH the record key (source path) AND any
+`PatchAction.movePath` (move destination)** because `movePath` is
+a SEPARATE path-bearing field stored alongside the source path
+(apply-patch-parser.ts:36 declares `movePath?: string` and line 171
+populates it from the `*** Move to:` marker). Iteration of
+`Object.keys(patch.actions)` alone would miss the move destination
+and produce INCORRECT INSIDE classification for an inside-source →
+outside-move patch, defeating the external-edit rule.
+
+**Frozen target enumeration:**
+
+```ts
+for each (sourcePath, action) in patch.actions:
+    targets += sourcePath
+    if action.movePath exists:
+        targets += action.movePath
+```
+
+This yields a flat `TargetEvidence[]` that the pure policy
+function reduces via the aggregation rule below (Phase 0 §2.1).
 
 ### 1.3 EXTERNAL_POLICY_STORAGE_FIELD — BOUND
 
@@ -137,19 +156,38 @@ set(["editor", "replace_in_file", "write_to_file", "apply_patch", "delete_file"]
 
 | tool              | current ClineMM runtime surface | classification          |
 |-------------------|---------------------------------|-------------------------|
-| `editor`          | first-class (canonical schema `EditFileInputSchema`; executor wired in `sdk-diff-edit-coordinator.ts:102`) | `INCLUDED`     |
-| `apply_patch`     | first-class (canonical schema `ApplyPatchInputSchema`; executor wired in `sdk-diff-edit-coordinator.ts:104`) | `INCLUDED`     |
-| `replace_in_file` | legacy alias (translated by `message-translator.ts:720-724`)         | `SUCCESSOR`    |
-| `write_to_file`   | legacy alias (translated by `message-translator.ts:663-666`)         | `SUCCESSOR`    |
-| `delete_file`     | legacy alias (translated by `message-translator.ts:666`)             | `SUCCESSOR`    |
+| `editor`          | first-class (canonical schema `EditFileInputSchema`; executor wired in `sdk-diff-edit-coordinator.ts:102`) | `CURRENT INCLUDED SURFACE` |
+| `apply_patch`     | first-class (canonical schema `ApplyPatchInputSchema`; executor wired in `sdk-diff-edit-coordinator.ts:104`) | `CURRENT INCLUDED SURFACE` |
+| `replace_in_file` | legacy alias (translated by `message-translator.ts:720-724`)         | `LEGACY POLICY NAME`     |
+| `write_to_file`   | legacy alias (translated by `message-translator.ts:663-666`)         | `LEGACY POLICY NAME`     |
+| `delete_file`     | legacy alias (translated by `message-translator.ts:666`)             | `LEGACY POLICY NAME`     |
 
-All five share the same classification lattice; the legacy
-aliases simply route through the same path after translation.
-R5 conservation therefore holds for the entire `isEditTool`
-member set, including the legacy aliases — the auto-approval
-decision and path-authority classification applied to the
-translated request do not change as a function of the original
-tool name.
+**CURRENT INCLUDED SURFACE** conservation proven by this ACT:
+  `editor` and `apply_patch` both carry the path-aware evaluation
+  implemented in Phases 1-2. R5 conservation ("approved outside
+  STILL WRITES") holds for these two tools.
+
+**LEGACY POLICY NAME** conservation NOT yet proven by this ACT:
+  `replace_in_file` + `write_to_file` + `delete_file` flow through
+  `message-translator.ts` and arrive at the coordinator as a
+  translated request whose approval-time shape is OUT OF SCOPE
+  for Phase 0 binding. This ACT does NOT claim target-aware
+  parity for the three legacy names; it preserves their existing
+  behavior. Disposition:
+
+```text
+  preserve existing behavior;
+  do not claim target-aware parity until their actual
+  approval-time translated request shape is executable
+  evidence.
+```
+
+The previous Phase 0 sentence "All five share the same
+classification lattice … R5 conservation therefore holds for
+the entire `isEditTool` member set" was TOO BROAD. It has been
+corrected to "R5 conservation holds for the CURRENT INCLUDED
+SURFACE (`editor` + `apply_patch`) only." This is the
+CYCLE1 reviewer P1 (second half) bounded correction.
 
 ## 2. Additional CYCLE1 opener-receiver invariants
 
@@ -167,16 +205,39 @@ REQUEST_CLASS =
 
 Truth table:
 
-| targets                          | REQUEST_CLASS |
-|----------------------------------|---------------|
-| inside + inside                  | INSIDE        |
-| inside + outside                 | OUTSIDE       |
-| outside + outside                | OUTSIDE       |
-| inside + unavailable             | UNAVAILABLE   |
-| outside + unavailable            | UNAVAILABLE   |
+| targets                                | REQUEST_CLASS |
+|----------------------------------------|---------------|
+| inside + inside                        | INSIDE        |
+| inside + outside                       | OUTSIDE       |
+| outside + outside                      | OUTSIDE       |
+| inside + unavailable                   | UNAVAILABLE   |
+| outside + unavailable                  | UNAVAILABLE   |
 
 Implementation: keep per-target `TargetEvidence[]` in
 `EditorPathAuthorityEvidence`, then reduce in the pure policy.
+
+**apply_patch movePath cases (load-bearing — frozen from
+CYCLE1 reviewer P1, first half):**
+
+The classifier must enumerate BOTH the `Patch.actions` record
+key (source path) AND `PatchAction.movePath` (move destination).
+A `*** Move to:` patch produces two targets.
+
+| apply_patch shape                         | targets enumerated                 | REQUEST_CLASS |
+|-------------------------------------------|------------------------------------|---------------|
+| inside update                             | inside                             | INSIDE        |
+| inside add                                | inside                             | INSIDE        |
+| outside add                               | outside                            | OUTSIDE       |
+| inside source → inside move target        | inside + inside                    | INSIDE        |
+| inside source → outside move target       | inside + outside                   | **OUTSIDE**   |
+| outside source → inside move target       | outside + inside                   | **OUTSIDE**   |
+| any target unavailable                    | inside + unavailable (or similar)  | UNAVAILABLE   |
+| mixed multi-file inside + outside         | inside + outside                   | OUTSIDE       |
+
+The fifth row is load-bearing: the previous "iterate
+Object.keys(patch.actions)" algorithm would have classified
+`inside source → outside move target` as INSIDE (missed move
+destination) and silently auto-approved an outside write.
 
 ### 2.2 EDITOR_PATH_CONTRACT (P2)
 
@@ -213,22 +274,75 @@ source the executors consume it (`resolveFilePath(cwd, inputPath,
 restrictToCwd)`). On the canonical-realpath containment
 predicate, see the production ACT §5.
 
+### 2.4 Evidence carrier (P2) — DO NOT FREEZE AsyncLocalStorage as the carrier
+
+Per the CYCLE1 reviewer's P2, the existing `AsyncLocalStorage`
+context inside `handleRequestToolApproval`
+(`sdk-interaction-coordinator.ts:344-363`) is the proven async
+composition seam, but it is NOT itself the correct evidence
+carrier for `EditorPathAuthorityEvidence`. Phase 0 binds only:
+
+```text
+handleRequestToolApproval = the lowest usable async composition seam
+                             (proven by source trace)
+```
+
+Phase 0 does NOT freeze `AsyncLocalStorage` as the storage
+location for the evidence carrier. Phase 1-2 will choose the
+simplest bounded mechanism the source permits. The preferred
+shape (per CYCLE1 reviewer) is:
+
+```text
+await classify(request)
+    → local immutable evidence variable
+    → feed evidence into pure policy
+    → pass evidence to coordinator's downstream branches
+        via direct local references (NOT ambient async context)
+```
+
+Rationale: building ambient ALS infrastructure purely because
+ALS happens to exist in the seam is over-engineered. The
+evidence flow is local to a single coordinator call, so
+plain locals + direct function parameters suffice.
+
+ALS-precondition (NOT frozen): if Phase 1-2 implementation
+later needs to thread evidence across an ALS boundary (e.g. to
+a downstream tool called outside the coordinator's local
+scope), that decision is re-evaluated at Phase 1/2 time with
+explicit source evidence; it is NOT pre-committed here.
+
 ## 3. Bound contract summary
 
 ```text
 ASYNC_CLASSIFICATION_SEAM          = apps/vscode/src/sdk/sdk-interaction-coordinator.ts:326
+                                      handleRequestToolApproval
 EDIT_TOOL_REQUEST_PATH_EXTRACTION  = per-tool table above (1.2)
+                                      [apply_patch: actions + movePath both
+                                       enumerated; frozen target enumeration
+                                       loop at §1.2]
 EXTERNAL_POLICY_STORAGE_FIELD      = settings.actions.editFilesExternally
                                       (AutoApprovalSettings.ts:18)
 isToolAutoApproved_sync_OR_async   = SYNC (sdk-tool-policies.ts:1072-1077)
 LOWEST_EXISTING_ASYNC_SEAM         = apps/vscode/src/sdk/sdk-interaction-coordinator.ts:326
                                       (insertion BEFORE the short-circuit at :510/:521)
-isEditTool_members_conserved       = 5-member set, INCLUDED for editor/apply_patch,
-                                      SUCCESSOR for replace_in_file/write_to_file/delete_file
-REQUEST_CLASS_AGGREGATION          = outside-precedence; UNAVAILABLE dominates OUTSIDE
+isEditTool_members_conserved       = CURRENT INCLUDED SURFACE = editor + apply_patch
+                                      LEGACY POLICY NAMES      = replace_in_file +
+                                                                 write_to_file +
+                                                                 delete_file
+                                      (conservation proven only for CURRENT
+                                       INCLUDED SURFACE; legacy names preserve
+                                       existing behavior with NO target-aware
+                                       parity claim from this ACT)
+REQUEST_CLASS_AGGREGATION          = per-target TargetEvidence[] reduced by
+                                      pure policy; precedence =
+                                      UNAVAILABLE > OUTSIDE > INSIDE
+                                      (apply_patch movePath cases frozen in §2.1)
 EDITOR_PATH_CONTRACT               = ABSOLUTE_ONLY (source-confirmed)
 WORKSPACE_ROOT_SOURCE              = getCwd / getWorkspaceRoot (utils/path.ts:106,
                                       SdkController.ts:2310)
+EVIDENCE_CARRIER                   = NOT frozen to AsyncLocalStorage; preferred
+                                      shape is local immutable variable + direct
+                                      function parameter passing (§2.4)
 ```
 
 ## 4. What Phase 0 does NOT yet contain
