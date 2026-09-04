@@ -109,3 +109,53 @@
 #   Adjacent editor.test.ts: 13/13 PASS preserved (no regression)
 #   See 07-effective-destination-invariant.md for the full
 #   disposition rationale.
+
+# CYCLE5 (Factory reviewer verdict on cf84c996e):
+#   Verdict  : PASS_WITH_ONE_BOUNDED_P1 — C1: GO
+#   P1 fixed : case D test now uses a RELATIVE target
+#              ("escape/d.txt") instead of an absolute path.
+#              This isolates the symlink escape from the
+#              absolute-input containment bypass (cases C/E).
+#              The lexical containment check at editor.ts:60-62
+#              now runs and passes; only the OS symlink lookup
+#              at fs.writeFile time reveals the escape.
+#              Case D is now a clean causal discriminator of
+#              EFFECTIVE_DESTINATION_CANONICALIZATION_MISSING.
+#   Runtime  : ~/.cline/data/globalState.json shows
+#   policy     autoApprovalSettings.actions.editFilesExternally
+#   bind       = true ("Edit all files" toggle ON). Modified
+#                2026-09-04 03:00 (3 days AFTER session end);
+#                durable session-time backup not preserved,
+#                but current setting represents the user's
+#                durable intent. Therefore the LIVE specimens
+#                E1 and E3 were MOST-LIKELY within the user's
+#                effective authority at session time.
+#   Verdict   : FURTHER downgraded from PENDING_CONTRACT_BIND
+#   downgrade   to PENDING_RUNTIME_POLICY_BIND (LIVE evidence
+#                proves permissive seam behavior, not active
+#                opt-out failure).
+#   V1 algo   : corrected — realpath(target) is INSUFFICIENT
+#                for newly-created targets (returns ENOENT).
+#                V1 walks UP from target to nearest existing
+#                ancestor, then realpath the ancestor.
+#                O_NOFOLLOW is NOT the answer for parent-chain
+#                symlinks (it only refuses a final-file
+#                symlink). TOCTOU explicitly out of scope.
+#   Class     : corrected CASE_E_WRONG_AUTHORIZED_ROOT (cwd
+#                IS present and correct) to
+#                EDITOR_EFFECTIVE_DESTINATION_AUTHORITY_MISSING
+#                with sub-cases C/E: ABSOLUTE_CONTAINMENT_BYPASS
+#                and D: EFFECTIVE_DESTINATION_CANONICALIZATION_MISSING
+#   Handoff   : COLLAPSED from CYCLE4's two-ACT plan
+#   collapse    (CONTRACT01 + IMPLEMENTATION01) to one bounded
+#                ACT:
+#                  ACT-CLINEMM-EDITOR-WORKSPACE-EFFECTIVE-
+#                  DESTINATION-AUTHORITY01
+#                per Factory reviewer's discipline note
+#                ("Factory exists to increase learning speed,
+#                not turn every invariant into an ACT").
+#                Phase 0 of the new ACT freezes the V1
+#                contract inline; Phases 1-4 implement it.
+#   See 07-effective-destination-invariant.md for the V1
+#   algorithm and 13-final-report.md for the CYCLE5 amendment
+#   block. Production code change: 0 (recon-only).

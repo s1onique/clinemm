@@ -6,22 +6,24 @@ ACT_ID                =
 
 VERDICT               =
   PASS_OUTSIDE_CWD_MUTATION_PROVEN
-  AUTHORITY_VIOLATION   = PENDING_CONTRACT_BIND
-  (Q1-Q4 BOUND; Q5 RED REPRODUCED against the production
-   createEditorExecutor seam at the LIVE-bound `editor`
-   tool; defect classified; HOWEVER, the load-bearing
-   "authority violation" claim is PENDING — see
-   07-effective-destination-invariant.md for the
-   honest ground-truth on what the source actually
-   promises vs. what we asserted in the CYCLE3 verdict.
-   The corrected handoff is
-   ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01
-   (explicit contract introduction; freeze the invariant
-    as a new durable rule) followed by
-   ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-IMPLEMENTATION01
-   (implement the contract at the Q4 seam) — NOT
-   ACT-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT-PATH-AUTHORITY-REPAIR01
-   which overclaims a pre-existing contract violation.)
+  AUTHORITY_VIOLATION   = PENDING_RUNTIME_POLICY_BIND
+  (CYCLE5 — per Factory reviewer verdict on commit cf84c996e,
+   this is FURTHER downgraded from CYCLE4's PENDING_CONTRACT_BIND:
+   the LIVE specimens E1/E3 were MOST-LIKELY within the user's
+   effective authority at session time because
+   editFilesExternally=true in the current global state file
+   ("Edit all files" toggle ON). The seam permissiveness is
+   still a real defect (an opt-out user would be unprotected),
+   but the LIVE evidence does NOT prove opt-out failure — it
+   proves only permissive behavior. The honest framing is that
+   the recon has proven editor-seam permissiveness; whether
+   that permissiveness caused an actual violation depends on
+   the runtime setting, which was LIKELY permissive but cannot
+   be durably proven for the original session time.
+   See 07-effective-destination-invariant.md for the full
+   post-CYCLE5 disposition including the corrected V1
+   contract algorithm and the collapsed handoff to a single
+   bounded production ACT.)
 
 IDENTITY
   ENTRY_HEAD           = 03af027a9 (pre-existing recon ACT entry,
@@ -315,25 +317,18 @@ FORCE_PUSHED           = NO
 AMENDED_PUBLISHED_COMMIT = NO
 
 NEXT_RECOMMENDED_ACT   =
-  ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01
-  (CYCLE4 CORRECTION — see 07-effective-destination-invariant.md
-   for the disposition rationale; the previous recommendation
-   ACT-CLINEMM-FILE-TOOL-AUTHORIZED-ROOT-PATH-AUTHORITY-REPAIR01
-   overclaims a pre-existing contract violation and was rejected
-   by the Factory reviewer on commit a917f73a6)
-
-  FOLLOWED BY (after (a) closes with the contract frozen):
-
-  ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-IMPLEMENTATION01
-  (implements the contract at the Q4 seam
-   SdkDiffEditCoordinator.executeEditorTool with realpath-based
-   canonical containment — see 06-causal-discriminator.md for
-   why pure lexical containment is insufficient: case D
-   (existing-symlink escape) is RED today, and a lexical-only
-   repair would not close it)
+  ACT-CLINEMM-EDITOR-WORKSPACE-EFFECTIVE-DESTINATION-AUTHORITY01
+  (CYCLE5 — collapsed from CYCLE4's two-ACT plan
+   CONTRACT01 + IMPLEMENTATION01 into ONE bounded production
+   ACT, per Factory reviewer's discipline note "Factory exists
+   to increase learning speed, not turn every invariant into
+   an ACT". Phase 0 of the new ACT freezes the V1 contract
+   inline; Phases 1-4 implement it. See
+   07-effective-destination-invariant.md for the V1 algorithm
+   and the corrected defect classification.)
 ```
 
-## Why the next ACT is a contract ACT, not a repair ACT
+## Why the next ACT is collapsed into one (CYCLE5)
 
 ```text
 The decision matrix applied to this recon:
@@ -341,56 +336,86 @@ The decision matrix applied to this recon:
   Is the LIVE tool still UNBOUND?                NO  (Q1 BOUND)
   Is the LIVE permitted mutation proven?         YES (cases C, D,
                                                        E RED today)
-  Is a pre-existing contract proven violated?    NO  (the editor
-                                                       has NO code-level
-                                                       invariant today;
-                                                       the user-facing
-                                                       auto-approve
+  Is the user's effective runtime policy bound?  LIKELY "Edit all
+                                                       files" = ON at
+                                                       session time;
+                                                       LIVE mutations
+                                                       were therefore
+                                                       authorized at
+                                                       the policy
+                                                       layer (this is
+                                                       the CYCLE5
+                                                       finding)
+  Is a pre-existing code-level invariant         NO  (no code-level
+  proven violated?                                   invariant exists
+                                                       today; partial
+                                                       grounding only
+                                                       via auto-approve
                                                        policy at
                                                        docs/features/
                                                        auto-approve.mdx
-                                                       is the only
-                                                       partial grounding)
-  Was the cause isolated with one-variable flip? YES (CASE_E early
+                                                       + global state
+                                                       editFilesExternally
+                                                       toggle)
+  Was the cause isolated with one-variable flip? YES (CYCLE4: early
                                                        bypass at
-                                                       editor.ts:56-58)
-  Is the smallest bounded repair obvious?        YES (delete the
-                                                       absolute-bypass
-                                                       branch AND add
-                                                       realpath
+                                                       editor.ts:56-58
+                                                       — single-variable
+                                                       flip removes it;
+                                                       the V1 algorithm
+                                                       also adds realpath
                                                        canonicalization
                                                        for case D)
+  Is the smallest bounded repair obvious?        YES (V1 algorithm
+                                                       in 07)
 
-The handoff is corrected from "repair a contract violation"
-to "introduce the contract, then implement it":
+The handoff is collapsed to one ACT:
 
-  ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01 must:
-    - freeze the invariant as a new durable rule:
-        editor mutations must remain inside the workspace
-        as EFFECTIVE destination (lexical AND realpath)
-    - explicitly cover case D (lexical-inside but
-      effective-outside via symlink)
-    - explicitly cover cases C and E (absolute-outside,
-      nonexistent-outside-tree)
-    - bind the apply_patch seam symmetrically (conservation)
-    - NOT widen TEMPORARY_EXTERNAL_PATH_AUTHORITY or Seatbelt
+  ACT-CLINEMM-EDITOR-WORKSPACE-EFFECTIVE-DESTINATION-AUTHORITY01:
 
-  ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-IMPLEMENTATION01 must:
-    - flip cases C, D, E from RED to GREEN while keeping
-      A/B/F/H GREEN
-    - confirm editor.test.ts (adjacent) 13/13 PASS
-    - perform necessity ablation: temporarily disable the
-      wrap -> C, D, E return to RED; restore
-    - dogfood + LIVE qualify on a disposable target
-    - typecheck apps/vscode (SdkController.ts will change)
-    - targeted lint, git diff --check silent
+    Phase 0 (in ACT body):
+      - freeze the V1 contract (lexical containment +
+        realpath(authorizedRoot) + realpath(nearest
+        existing ancestor) — see 07 for the full algorithm)
+      - explicitly covers cases C, D, E
+      - explicitly preserves A, B, F, H
+      - explicitly states TOCTOU is out of scope
+      - explicitly states O_NOFOLLOW is not the answer
 
-If the contract ACT halts because the invariant is not
-agreed, the recon lane re-opens for Q2b/Q3b. If the
-implementation ACT halts because no smaller-than-the-
-problem fix is available, it re-opens the recon for
-Q4b (re-select seam) and Q9b (re-discriminate cause).
-Per ACT §18, those are the only STOP-mandated follow-ups.
+    Phase 1:
+      - author the bounded production fix at the Q4 seam
+        (SdkDiffEditCoordinator.executeEditorTool +
+        symmetric executeApplyPatchTool for conservation)
+      - mirror the existing
+        createWorkspaceFileReadExecutor pattern
+      - use the V1 algorithm (realpath on existing ancestor)
+
+    Phase 2:
+      - flip case C, D, E from RED to GREEN
+      - keep A, B, F, H GREEN
+      - confirm editor.test.ts (adjacent) 13/13 PASS
+      - necessity ablation: temporarily disable the wrap
+        -> C, D, E return to RED; restore
+
+    Phase 3:
+      - dogfood + LIVE qualify on a disposable target
+      - verify auto-approve settings interaction:
+        "Edit project files" + outside write -> refused
+        "Edit all files"     + outside write -> allowed
+        (the wrap must NOT masquerade as the broader
+         policy; it must reflect the effective capability)
+
+    Phase 4:
+      - apps/vscode typecheck + targeted lint +
+        git diff --check silent
+
+    Conservation on apply_patch:
+      - answer: does model-driven apply_patch go through
+        SdkDiffEditCoordinator or the exact same
+        canonical-authority primitive? If yes, conservation
+        test in the same ACT. If no, record successor ACT
+        ACT-CLINEMM-APPLY-PATCH-WORKSPACE-AUTHORITY01
+        and do NOT expand scope opportunistically.
 ```
 
 ## Producer-first discipline note (for the reviewer)
@@ -467,4 +492,102 @@ PRODUCTION_FILES      = 0 changed (this ACT is recon-only)
 ENTRY_FREEZE          = updated; CYCLE4 block appended
 NEXT_ACT              = ACT-CLINEMM-EDITOR-WORKSPACE-AUTHORITY-CONTRACT01
                        (followed by IMPLEMENTATION01)
+```
+
+## CYCLE5 amendment (2026-09-04)
+
+Per Factory causal reviewer verdict on commit `cf84c996e`
+(`PASS_WITH_ONE_BOUNDED_P1 — C1: GO`), CYCLE5 corrections:
+
+1. **P1 fixed**: case D test now uses a RELATIVE target
+   (`"escape/d.txt"`) instead of an absolute path. This
+   isolates the symlink escape from the absolute-input
+   containment bypass (cases C/E). The lexical
+   containment check at editor.ts:60-62 now runs and
+   passes; only the OS symlink lookup at fs.writeFile
+   time reveals the escape. With this geometry, case D
+   is a clean causal discriminator of the
+   EFFECTIVE_DESTINATION_CANONICALIZATION_MISSING defect
+   (separate from the absolute-bypass defect).
+
+2. **Runtime policy bind completed**:
+   `~/.cline/data/globalState.json` shows
+   `autoApprovalSettings.actions.editFilesExternally = true`
+   ("Edit all files" toggle ON). This is the current
+   global state, last modified 2026-09-04 03:00 — 3 days
+   after the session ended. Session-time durable backup
+   is not preserved, but the current setting represents
+   the user's durable intent, and no contradictory
+   session-time evidence survives in the session
+   messages or the workspace state file.
+
+   Therefore the LIVE specimens E1 and E3 were
+   MOST-LIKELY within the user's effective authority at
+   session time (the user had explicitly opted in to
+   outside-workspace editing). The mutations were
+   AUTHORIZED at the policy layer, not violations.
+
+   Verdict is FURTHER downgraded to:
+   `AUTHORITY_VIOLATION = PENDING_RUNTIME_POLICY_BIND`
+   (was `PENDING_CONTRACT_BIND` in CYCLE4). The LIVE
+   evidence proves permissive seam behavior, not an
+   active opt-out failure.
+
+3. **V1 contract algorithm corrected**:
+   - `realpath(target)` is INSUFFICIENT for newly-created
+     targets (e.g. `workspace/new/deep/file.ts`) because
+     it returns ENOENT. The correct algorithm walks UP
+     from the target to the nearest existing ancestor,
+     then realpaths the ancestor.
+   - `O_NOFOLLOW` is NOT the answer for the parent-chain
+     symlink defect. It only refuses a final-file
+     symlink; the defect is a parent-directory symlink
+     redirecting the OS lookup. V1 explicitly excludes
+     TOCTOU (race-safe mutation) as out of scope.
+
+4. **Defect classification reclassified**:
+   - Old (CYCLE3): `CASE_E_WRONG_AUTHORIZED_ROOT` —
+     inaccurate, cwd IS present and correct
+   - New (CYCLE5): `EDITOR_EFFECTIVE_DESTINATION_AUTHORITY_MISSING`
+     with sub-cases:
+       - C, E: `ABSOLUTE_CONTAINMENT_BYPASS`
+       - D: `EFFECTIVE_DESTINATION_CANONICALIZATION_MISSING`
+
+5. **Handoff collapsed to ONE bounded ACT**:
+   From CYCLE4's two-ACT plan
+   (`CONTRACT01 + IMPLEMENTATION01`) to one
+   `ACT-CLINEMM-EDITOR-WORKSPACE-EFFECTIVE-DESTINATION-AUTHORITY01`
+   per Factory reviewer's discipline note ("Factory
+   exists to increase learning speed, not turn every
+   invariant into an ACT"). Phase 0 of the new ACT
+   freezes the V1 contract inline; Phases 1-4 implement
+   it at the Q4 seam.
+
+```text
+EV_VERDICT_CYCLE5     = PASS_OUTSIDE_CWD_MUTATION_PROVEN
+                       AUTHORITY_VIOLATION = PENDING_RUNTIME_POLICY_BIND
+                       (LIVE specimens E1/E3 were MOST-LIKELY
+                        within the user's effective runtime
+                        authority at session time because
+                        editFilesExternally=true)
+RED_MATRIX_CYCLE5     = A PASS, B PASS, C FAIL(RED), D FAIL(RED, RELATIVE
+                       target now — isolates symlink escape from
+                       absolute-input bypass), E FAIL(RED), F PASS, H PASS
+                       [3 RED / 4 control PASS]
+CASE_D_GEOMETRY       = RELATIVE TARGET ("escape/d.txt") — the
+                       lexical containment check runs and passes;
+                       only the OS symlink lookup at fs.writeFile
+                       reveals the escape. This isolates the
+                       EFFECTIVE_DESTINATION_CANONICALIZATION_MISSING
+                       defect from the absolute-input bypass.
+V1_ALGORITHM          = realpath(authorizedRoot) + lexical
+                       containment + realpath(nearest existing
+                       ancestor) [NOT realpath(target); NOT O_NOFOLLOW]
+V1_EXCLUSIONS         = TOCTOU (race-safe mutation) explicitly
+                       out of scope; O_NOFOLLOW explicitly NOT
+                       the answer for parent-chain symlinks
+NEXT_ACT              = ACT-CLINEMM-EDITOR-WORKSPACE-EFFECTIVE-
+                       DESTINATION-AUTHORITY01 (single bounded ACT,
+                       Phase 0 freezes contract, Phases 1-4 implement)
+PRODUCTION_FILES      = 0 changed (recon-only)
 ```

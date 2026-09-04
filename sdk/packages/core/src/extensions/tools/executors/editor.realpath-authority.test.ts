@@ -150,25 +150,33 @@ describe(
 				// Pre-place a symlink authorizedRoot/escape -> outsideRoot.
 				// The symlink exists BEFORE the executor is called, so
 				// this is a deterministic (non-TOCTOU) escape.
+				//
+				// CYCLE5 P1 fix per Factory causal reviewer on commit
+				// cf84c996e: use a RELATIVE target so the test
+				// isolates the symlink escape from the absolute-input
+				// bypass. With a relative input the existing
+				// path.relative(cwd, resolved) check at editor.ts:60-62
+				// runs and passes (lexically inside). The symlink
+				// then redirects the OS-level lookup at fs.writeFile
+				// time, landing the file at outsideRoot/d.txt.
+				// Without realpath canonical containment, today's
+				// executor cannot refuse this — proving the
+				// REALPATH/CANONICALIZATION GAP is a separate defect
+				// from the absolute-input bypass (cases C/E).
 				const escape = path.join(authorizedRoot, "escape");
 				await fs.symlink(outsideRoot, escape, "dir");
 
 				const editor = createEditorExecutor();
-				const target = path.join(escape, "d.txt");
-				// Lexical inspection: path.relative(authorizedRoot,
-				// target) stays "escape/d.txt" (no ".." prefix) — the
-				// LEXICAL containment check would pass on a relative
-				// input. But the input is ABSOLUTE so the early bypass
-				// at editor.ts:56-58 skips containment entirely; the
-				// executor returns the path verbatim; fs.mkdir + fs.
-				// writeFile follow the symlink and the file lands at
-				// outsideRoot/d.txt.
-				//
-				// The factory invariant (EPIC-CLINEMM-FILE-TOOL-
-				// WORKSPACE-REALPATH-AUTHORITY01 — "effective
-				// destination must remain inside authorized root")
-				// requires this case to be refused. Today's executor
-				// has no realpath canonicalization at all.
+				// RELATIVE path: "escape/d.txt". path.resolve
+				// (authorizedRoot, "escape/d.txt") ==
+				// "/authorizedRoot/escape/d.txt". The lexical
+				// containment check at line 60-62 would pass
+				// (path.relative(authorizedRoot, ...) starts with
+				// "escape" — no ".."). But fs.mkdir + fs.writeFile
+				// follow the symlink and the file lands at
+				// outsideRoot/d.txt. This isolates case D from
+				// the absolute-input containment bypass (cases C/E).
+				const target = path.join("escape", "d.txt");
 				await expect(
 					editor(
 						{ path: target, new_text: "symlink-escape" },
