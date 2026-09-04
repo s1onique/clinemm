@@ -981,6 +981,24 @@ export class Controller {
 				// manual Reject and clearPending (task cancel/abort) in one place.
 				void this.diffEdits.discardPreview(toolCallId)
 			},
+			// ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 PHASE 2:
+			// Snapshot the LIVE AutoApproveBar settings for the editor +
+			// apply_patch target-aware composition. Reads the same
+			// persisted + session-override resolved snapshot as
+			// shouldAutoApproveTool below so the toggle state matches
+			// across the legacy and target-aware paths. The workspace
+			// root is already wired via the existing `getCwd` option
+			// below; do NOT re-declare it.
+			getAutoApprovalSettings: () => {
+				const persisted = this.stateManager.getGlobalSettingsKey("autoApprovalSettings") ?? DEFAULT_AUTO_APPROVAL_SETTINGS
+				const sessionId = this.sessions.getActiveSession()?.sessionId
+				const override = this.sessionAutoApproval.getOverride(sessionId)
+				const effective = resolveEffectiveAutoApproval(persisted, override)
+				return {
+					editFiles: !!effective.actions.editFiles,
+					editFilesExternally: !!effective.actions.editFilesExternally,
+				}
+			},
 			// ACT-CLINEMM-UPSTREAM-SETTINGS-AUTHORITY-PARITY01:
 			// Non-command tools (read/edit/browser/mcp) consult the live user
 			// settings via isToolAutoApproved, matching upstream's

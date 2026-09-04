@@ -630,11 +630,22 @@ describe("SdkInteractionCoordinator", () => {
 
 	it("does not invoke onToolApprovalAsk for auto-approved tools", async () => {
 		const onToolApprovalAsk = vi.fn().mockResolvedValue(undefined)
+		// ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 PHASE 2:
+		// The `editor` tool name is now in the CURRENT INCLUDED SURFACE
+		// for target-aware auto-approval. To preserve the pre-PHASE-2
+		// "auto-approve via host callback, no approval UI" semantics,
+		// the test wires `getCwd` (workspace root) + `getAutoApprovalSettings`
+		// (editFiles=true + editFilesExternally=true) so the target-aware
+		// composition returns ALLOW without invoking `onToolApprovalAsk`.
+		const fs = await import("node:fs")
+		const workspaceRoot = fs.realpathSync(process.cwd())
 		const coordinator = new SdkInteractionCoordinator({
 			messages: new SdkMessageCoordinator({ getTask: () => createTaskProxy("session-123", vi.fn(), vi.fn()) }),
 			getSessionId: () => "session-123",
 			postStateToWebview: vi.fn().mockResolvedValue(undefined),
 			shouldAutoApproveTool: () => true,
+			getCwd: () => workspaceRoot,
+			getAutoApprovalSettings: () => ({ editFiles: true, editFilesExternally: true }),
 			onToolApprovalAsk,
 		})
 
@@ -648,7 +659,7 @@ describe("SdkInteractionCoordinator", () => {
 				input: { path: "a.ts", old_text: "a", new_text: "b" },
 				policy: { autoApprove: false },
 			}),
-		).resolves.toEqual({ approved: true })
+		).resolves.toMatchObject({ approved: true })
 		expect(onToolApprovalAsk).not.toHaveBeenCalled()
 	})
 

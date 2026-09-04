@@ -1,66 +1,49 @@
 /**
  * ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
  *
- * R0 PRODUCTION-SEAM PRINCIPAL RED (Phase 1 RED — the canonical
- * Factory RED-before-repair ordering required by the reviewer's
- * HALT_RED_BEFORE_IMPLEMENTATION verdict).
+ * R0 PRODUCTION-SEAM REGRESSION (Phase 2 GREEN — the post-repair
+ * regression that proves the bounded repair fixed the load-bearing
+ * silent-ALLOW defect). Runs through the REAL production coordinator
+ * + REAL `shouldAutoApproveTool` wired to REAL `isToolAutoApproved`,
+ * with `getCwd` + `getAutoApprovalSettings` snapshot options wired
+ * exactly as the production `SdkController` does.
  *
- * OBSERVED FAILURE (today, on production):
+ * HISTORY:
+ *   Commit 1aaa65a84 (Phase 1 RED): this file was named
+ *     editor-effective-destination-approval.r0-red.test.ts and
+ *     reproduced the silent ALLOW on OUTSIDE+editFiles=true.
+ *     Observed:
+ *       x R0: expected ASK, currently silently ALLOW (RED_REPRODUCED).
+ *       v R0b: INSIDE+editFiles=true => ALLOW (positive control).
+ *       v R0c: OUTSIDE+editFiles=false => ASK (base-disabled control).
+ *   Commit <this commit> (Phase 2 GREEN): the test was renamed
+ *     editor-effective-destination-approval.r0-green.test.ts and
+ *     the wiring was extended with the new getCwd +
+ *     getAutoApprovalSettings snapshot options that drive the
+ *     classifier → pure-policy → coordinator composition.
  *
- *   The `editor` tool auto-approves based ONLY on
- *   `settings.actions.editFiles === true`. The effective target
- *   (input.path) is never classified as inside or outside the
- *   workspace, so an editor request targeting a file OUTSIDE the
- *   workspace (e.g. /tmp/outside-victim.txt) is silently approved
- *   when the user has the "Edit files" auto-approval toggle on.
+ * LAYER BOUNDARY:
  *
- *   The required behavior (per upstream issue #13114 — the
- *   external-edit rule):
+ *   PRODUCTION-SEAM LOGIC = REAL (real coordinator + real
+ *                            shouldAutoApproveTool wired to real
+ *                            isToolAutoApproved + real
+ *                            classifier + real pure policy).
+ *   FILESYSTEM GEOMETRY   = SYNTHETIC_REAL (constructed via
+ *                            realpathSync + mkdtempSync +
+ *                            writeFileSync — not faked).
+ *   UI APPROVAL SURFACE   = TEST HARNESS (the `tool` ask card
+ *                            is observed via the task's
+ *                            messageStateHandler, which is the
+ *                            canonical publication surface).
  *
- *     editFiles=true  + outside + external=false  → ASK
- *     editFiles=true  + inside                    → ALLOW
- *     editFiles=false + inside OR outside         → ASK
+ * CONSERVATION (R5 — only the CURRENT INCLUDED SURFACE:
+ * editor + apply_patch):
  *
- *   This file reproduces the silent-ALLOW bug THROUGH THE REAL
- *   coordinator + real `shouldAutoApproveTool` callback wired to
- *   real `isToolAutoApproved`. The only thing constructed is the
- *   filesystem geometry (an outside-area victim file whose
- *   `realpathSync` is provably outside the workspace root) so the
- *   eventual classifier has a deterministic target.
- *
- * STOP RULE (per the reviewer's HALT_RED_BEFORE_IMPLEMENTATION):
- *
- *   R0 silently auto-approved (no approval card published) AND
- *     the path is provably outside the workspace
- *     → RED_REPRODUCED. The silent auto-approval bug is the
- *       load-bearing production defect. Halt and proceed to
- *       Phase 2 (bounded repair: classifier + pure policy +
- *       coordinator wiring + apply_patch conservation).
- *
- *   R0 cannot reach the real coordinator seam through the
- *     constructed filesystem geometry
- *     → HALT_RED_NOT_REPRODUCED. Capture why the seam was
- *       unreachable and do NOT fake the seam by replacing
- *       shouldAutoApproveTool with a hand-rolled closure that
- *       embeds the new classification logic.
- *
- * DISPOSITION (this run):
- *
- *   R0 (OUTSIDE + editFiles=true + external=false)
- *     = silent ALLOW (current code path) vs ASK (required)
- *     = RED_REPRODUCED → principal defect confirmed.
- *
- *   R0b (INSIDE + editFiles=true)        = ALLOW (positive control)
- *   R0c (OUTSIDE + editFiles=false)      = ASK (base-disabled control)
- *
- *   Conservation invariant (R5 — only the
- *   CURRENT INCLUDED SURFACE: editor + apply_patch):
- *
- *     If the user APPROVES the ASK card for an OUTSIDE target,
- *     the file MUST still be written by the executor. That is
- *     the load-bearing "approved-outside STILL WRITES"
- *     conservation — proven by R3/R4 in later phases, not in
- *     this RED.
+ *   If the user APPROVES the ASK card for an OUTSIDE target,
+ *   the file MUST still be written by the executor. The test
+ *   resolves the ASK as yesButtonClicked and asserts
+ *   `approved: true` — the executor-side writeback is proven
+ *   in R3/R4 (PHASE 3) and is out of scope here.
  */
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -83,25 +66,24 @@ vi.mock("@core/storage/disk", () => ({
 /**
  * Mirror the production wiring exactly:
  *   shouldAutoApproveTool(request) = isToolAutoApproved(request.toolName, effective)
+ *   getCwd()                        = the workspace root snapshot
+ *   getAutoApprovalSettings()       = the live editFiles + editFilesExternally toggles
  *
- * This is the load-bearing seam that decides authority for the
- * non-command tool path (sdk-interaction-coordinator.ts:521). The
- * RED must drive THIS callback, not a hand-rolled substitute,
- * otherwise the reproduction is not on the production seam.
+ * The legacy boolean short-circuit is REPLACED for `editor` and
+ * `apply_patch` tool names; every other tool keeps the existing
+ * behavior. This test exclusively exercises the `editor` name.
  */
-function makeCoordinator(opts: { sessionId: string }) {
+function makeCoordinator(opts: { sessionId: string; editFiles: boolean; editFilesExternally: boolean }) {
 	const task = createTaskProxy(opts.sessionId, vi.fn(), vi.fn())
 	const messages = new SdkMessageCoordinator({ getTask: () => task })
 	const postStateToWebview = vi.fn().mockResolvedValue(undefined)
+	const workspaceRoot = realpathSync(process.cwd())
 	const persistedSettings = {
 		...DEFAULT_AUTO_APPROVAL_SETTINGS,
 		actions: {
 			...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
-			// editFiles=true: edit tool is enabled for the user. The
-			// production defect is that this single flag governs
-			// every editor request, regardless of whether the
-			// effective target is inside or outside the workspace.
-			editFiles: true,
+			editFiles: opts.editFiles,
+			editFilesExternally: opts.editFilesExternally,
 		},
 	}
 	const coordinator = new SdkInteractionCoordinator({
@@ -109,11 +91,17 @@ function makeCoordinator(opts: { sessionId: string }) {
 		getSessionId: () => opts.sessionId,
 		postStateToWebview,
 		shouldAutoApproveTool: (request) => isToolAutoApproved(request.toolName, persistedSettings),
+		// PHASE 2 wiring — drives the target-aware composition.
+		getCwd: () => workspaceRoot,
+		getAutoApprovalSettings: () => ({
+			editFiles: !!persistedSettings.actions.editFiles,
+			editFilesExternally: !!persistedSettings.actions.editFilesExternally,
+		}),
 	})
-	return { coordinator, task, persistedSettings }
+	return { coordinator, task, persistedSettings, workspaceRoot }
 }
 
-describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 R0 — production-seam principal RED", () => {
+describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 R0 — production-seam GREEN regression", () => {
 	let workspaceRoot: string
 	let outsideDir: string
 	let outsideVictim: string
@@ -162,12 +150,16 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 R0 — production-
 	})
 
 	// -----------------------------------------------------------------
-	// R0 — principal RED: OUTSIDE + editFiles=true + external=false
-	//      CURRENT (BUG): silently auto-approved (no approval card)
-	//      REQUIRED:    ASK (approval card published, await user choice)
+	// R0 — principal regression: OUTSIDE + editFiles=true + external=false
+	//      PHASE 1 (RED): silently auto-approved (no approval card)
+	//      PHASE 2 (GREEN): MUST ASK (approval card published)
 	// -----------------------------------------------------------------
-	it("R0: editor target OUTSIDE workspace + editFiles=true => MUST ASK (currently silently ALLOW)", async () => {
-		const { coordinator, task } = makeCoordinator({ sessionId: "s-r0-outside" })
+	it("R0: editor target OUTSIDE workspace + editFiles=true => MUST ASK", async () => {
+		const { coordinator, task } = makeCoordinator({
+			sessionId: "s-r0-outside",
+			editFiles: true,
+			editFilesExternally: false,
+		})
 		const promise = coordinator.handleRequestToolApproval({
 			agentId: "agent-r0-outside",
 			conversationId: "c-r0-outside",
@@ -186,10 +178,11 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 R0 — production-
 		// task message stream. The ALLOW path returns immediately
 		// without emitting any message.
 		//
-		// REQUIRED: an ask message is published (length grows to 1).
-		// CURRENT (BUG): no ask message is published; the promise
-		//   resolves to { approved: true } and the length stays at 0.
-		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1), { timeout: 500 })
+		// PHASE 2 (GREEN): an ask message is published (length grows to 1).
+		// PHASE 1 (RED):   no ask message was published; the promise
+		//                  resolved to { approved: true } and the
+		//                  length stayed at 0. That defect is now fixed.
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1), { timeout: 1000 })
 
 		// The card was published; resolve it as the user approving
 		// the outside write so we can also observe the resolved
@@ -203,7 +196,11 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 R0 — production-
 	// R0b — positive control: INSIDE + editFiles=true => ALLOW
 	// -----------------------------------------------------------------
 	it("R0b: editor target INSIDE workspace + editFiles=true => ALLOW (positive control)", async () => {
-		const { coordinator, task } = makeCoordinator({ sessionId: "s-r0b-inside" })
+		const { coordinator, task } = makeCoordinator({
+			sessionId: "s-r0b-inside",
+			editFiles: true,
+			editFilesExternally: false,
+		})
 		const promise = coordinator.handleRequestToolApproval({
 			agentId: "agent-r0b-inside",
 			conversationId: "c-r0b-inside",
@@ -227,24 +224,11 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 R0 — production-
 	// R0c — base-disabled control: OUTSIDE + editFiles=false => ASK
 	// -----------------------------------------------------------------
 	it("R0c: editor target OUTSIDE workspace + editFiles=false => ASK (base-disabled control)", async () => {
-		const sessionId = "s-r0c-base-disabled"
-		const task = createTaskProxy(sessionId, vi.fn(), vi.fn())
-		const messages = new SdkMessageCoordinator({ getTask: () => task })
-		const postStateToWebview = vi.fn().mockResolvedValue(undefined)
-		const persistedSettings = {
-			...DEFAULT_AUTO_APPROVAL_SETTINGS,
-			actions: {
-				...DEFAULT_AUTO_APPROVAL_SETTINGS.actions,
-				editFiles: false,
-			},
-		}
-		const coordinator = new SdkInteractionCoordinator({
-			messages,
-			getSessionId: () => sessionId,
-			postStateToWebview,
-			shouldAutoApproveTool: (request) => isToolAutoApproved(request.toolName, persistedSettings),
+		const { coordinator, task } = makeCoordinator({
+			sessionId: "s-r0c-base-disabled",
+			editFiles: false,
+			editFilesExternally: false,
 		})
-
 		const promise = coordinator.handleRequestToolApproval({
 			agentId: "agent-r0c",
 			conversationId: "c-r0c",
@@ -262,5 +246,34 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 R0 — production-
 		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1), { timeout: 500 })
 		expect(coordinator.resolvePendingToolApproval(undefined, "yesButtonClicked")).toBe(true)
 		await expect(promise).resolves.toMatchObject({ approved: true })
+	})
+
+	// -----------------------------------------------------------------
+	// R0d — explicit external authority: OUTSIDE + editFiles=true + external=true => ALLOW
+	//       (the case where the user has explicitly granted outside-edit authority)
+	// -----------------------------------------------------------------
+	it("R0d: editor target OUTSIDE workspace + editFiles=true + external=true => ALLOW (explicit external authority)", async () => {
+		const { coordinator, task } = makeCoordinator({
+			sessionId: "s-r0d-external",
+			editFiles: true,
+			editFilesExternally: true,
+		})
+		const promise = coordinator.handleRequestToolApproval({
+			agentId: "agent-r0d",
+			conversationId: "c-r0d",
+			iteration: 1,
+			toolCallId: "tc-r0d",
+			toolName: "editor",
+			input: {
+				path: outsideVictim,
+				old_text: "outside-victim-original",
+				new_text: "outside-victim-modified-external",
+			},
+			policy: { autoApprove: false },
+		})
+
+		// External=true lifts the outside barrier. ALLOW: no card.
+		await expect(promise).resolves.toMatchObject({ approved: true })
+		expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
 	})
 })

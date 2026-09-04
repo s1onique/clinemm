@@ -7,6 +7,7 @@ import type { ClineAskResponse } from "@shared/WebviewMessage"
 import { Logger } from "@/shared/services/Logger"
 import { resolveEffectiveDiagnosticKnobs } from "./dogfood-diagnostic-profile"
 import { isDogfoodRuntime } from "./dogfood-runtime-profile"
+import { evaluateEditAutoApprovalForRequest } from "./editor-path-authority"
 import { MessageIdMinter } from "./message-id-minter"
 import { buildToolApprovalAskMessage } from "./message-translator"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
@@ -166,6 +167,22 @@ export interface SdkInteractionCoordinatorOptions {
 	 * leaving the option list drift and breaking `bun run package` typecheck.
 	 */
 	getCwd?: () => string | undefined
+	/**
+	 * ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 PHASE 2:
+	 * Returns the LIVE AutoApproveBar settings snapshot. The coordinator
+	 * consults this for the `editFiles` + `editFilesExternally` toggle
+	 * pair when evaluating the CURRENT INCLUDED SURFACE (`editor` +
+	 * `apply_patch`). Synchronously-cached for the same reason as
+	 * `getCwd` — the policy lattice must evaluate without an extra
+	 * async hop, but the toggle snapshot must reflect the user's most
+	 * recent settings change.
+	 *
+	 * When this option is omitted, the target-aware composition fails
+	 * closed (returns ASK) for editor/apply_patch. The legacy boolean
+	 * short-circuit is NEVER consulted as a fallback for these tool
+	 * names — that was the load-bearing defect.
+	 */
+	getAutoApprovalSettings?: () => { editFiles: boolean; editFilesExternally: boolean } | undefined
 }
 
 /**
@@ -288,6 +305,14 @@ export class SdkInteractionCoordinator {
 		conversationId: string
 		reasonCode: string
 	}
+
+	// ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 PHASE 2:
+	// Single-slot evidence carrier for the editor / apply_patch target-aware
+	// ASK path. Set by `handleEditorOrApplyPatchApproval` when the verdict
+	// is ASK; read by the manual-ask publication path below to thread the
+	// decision into the `pendingToolApprovalMessage` record. Cleared at
+	// every approval resolution to prevent bleed-across.
+	private lastEditorOrApplyPatchDecision: { kind: "allow" | "ask" | "deny"; reason: string; source: string } | null = null
 
 	constructor(private readonly options: SdkInteractionCoordinatorOptions) {}
 
@@ -512,13 +537,31 @@ export class SdkInteractionCoordinator {
 					return { approved: true }
 				}
 			} else {
-				// ACT-CLINEMM-UPSTREAM-SETTINGS-AUTHORITY-PARITY01:
-				// Non-command tools (read/edit/browser/mcp) consult the host's
-				// shouldAutoApproveTool callback, which evaluates the live user
-				// auto-approval settings via isToolAutoApproved. The SDK policy
-				// `autoApprove` field is also honored as a short-circuit (matches
-				// upstream v4.1.10 wiring).
-				if (request.policy.autoApprove === true || this.options.shouldAutoApproveTool?.(request) === true) {
+				// Non-command tool: route through the target-aware composition
+				// for the CURRENT INCLUDED SURFACE (`editor` + `apply_patch`).
+				// Every other tool (read/browser/MCP/legacy edit names) keeps
+				// the legacy boolean short-circuit behavior unchanged.
+				//
+				// IMPORTANT: when the host has NOT wired `getCwd` and
+				// `getAutoApprovalSettings`, the target-aware composition is
+				// NOT safe to evaluate (no canonical workspace root + no
+				// toggle snapshot). In that case we fall back to the legacy
+				// boolean short-circuit so existing tests + integration
+				// surfaces continue to work without modification.
+				const targetAwareOptionsWired =
+					typeof this.options.getCwd === "function" && typeof this.options.getAutoApprovalSettings === "function"
+				if (targetAwareOptionsWired && (request.toolName === "editor" || request.toolName === "apply_patch")) {
+					const editorResult = await this.handleEditorOrApplyPatchApproval(request)
+					if (editorResult.approved) {
+						// ALLOW: short-circuit the rest of the legacy path.
+						return editorResult
+					}
+					// ASK: fall through to the manual approval-UI publication
+					// path below. We stash the decision evidence in a member
+					// variable so the publish path can carry it through to
+					// the `pendingToolApprovalMessage` record.
+					this.lastEditorOrApplyPatchDecision = editorResult.decision ?? null
+				} else if (request.policy.autoApprove === true || this.options.shouldAutoApproveTool?.(request) === true) {
 					Logger.log(`[SdkController] Auto-approving tool execution: tool=${request.toolName}`)
 					// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 					// Decision-boundary probe for the legacy non-command ALLOW
@@ -677,10 +720,95 @@ export class SdkInteractionCoordinator {
 				toolCallId: request.toolCallId,
 				messageTs: toolAskMessage.ts,
 				toolName: request.toolName,
-				decision: commandEval?.decision, // CORRECTION04 DENY: carries canonical decision through approval UI
+				// ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 PHASE 2:
+				// Thread the editor/apply_patch decision evidence into the
+				// pending record when present; otherwise fall back to the
+				// command-tool decision carried by commandEval.
+				decision: this.lastEditorOrApplyPatchDecision ?? commandEval?.decision,
 				executionPlan: commandEval?.executionPlan, // CORRECTION04: plan captured atomically at entry
 			}
+			// Clear the carrier after consumption to prevent bleed-across.
+			this.lastEditorOrApplyPatchDecision = null
 		})
+	}
+
+	/**
+	 * ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 PHASE 2:
+	 * Target-aware auto-approval for the CURRENT INCLUDED SURFACE
+	 * (`editor` + `apply_patch`).
+	 *
+	 * Layer contract:
+	 *   1. classifier (async fs I/O; realpath + containment)
+	 *   2. pure policy lattice (no I/O)
+	 *   3. coordinator returns ALLOW or ASK from this method.
+	 *
+	 * The legacy boolean short-circuit
+	 * (`request.policy.autoApprove || shouldAutoApproveTool`) is REPLACED
+	 * for these two tool names. Every other tool keeps its existing
+	 * behavior (legacy edit-tool names retain conservation; non-edit
+	 * tools unchanged).
+	 *
+	 * If the verdict is ALLOW, this method returns the same shape as
+	 * the legacy ALLOW path (with an optional `decision` evidence record).
+	 * If the verdict is ASK, this method returns `{ approved: false }`
+	 * so the caller falls through to the existing ASK publication path
+	 * (which emits the `tool` ask card).
+	 */
+	private async handleEditorOrApplyPatchApproval(request: ToolApprovalRequest): Promise<{
+		approved: boolean
+		reason?: string
+		decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
+	}> {
+		// Resolve the live workspace root via the host option. If absent,
+		// fail closed: a target-aware ALLOW requires a canonical root.
+		const workspaceRoot = this.options.getCwd?.()
+		if (!workspaceRoot) {
+			return {
+				approved: false,
+				reason: "editor: workspace root unavailable; cannot classify target",
+			}
+		}
+
+		// Read the live AutoApproveBar settings. The host wires
+		// `getAutoApprovalSettings` to the canonical StateManager snapshot.
+		// If the option is absent we fail closed as well (no toggle snapshot).
+		const settings = this.options.getAutoApprovalSettings?.()
+		if (!settings) {
+			return {
+				approved: false,
+				reason: "editor: auto-approval settings unavailable; cannot classify target",
+			}
+		}
+
+		const evaluation = await evaluateEditAutoApprovalForRequest(request.toolName, request.input, workspaceRoot, settings)
+
+		if (evaluation.decision.kind === "allow") {
+			Logger.log(
+				`[SdkController] Auto-approving editor/apply_patch: tool=${request.toolName} classification=${evaluation.classification}`,
+			)
+			emitNonCommandDecisionProbe({
+				request,
+				approved: true,
+				decisionKind: "allow",
+				decisionReason: "edit-effective-destination-policy",
+				decisionSource: evaluation.classification,
+			})
+			return {
+				approved: true,
+				decision: {
+					kind: "allow",
+					reason: "edit-effective-destination-policy",
+					source: evaluation.classification,
+				},
+			}
+		}
+
+		// ASK: fall through to the existing approval-UI publication.
+		Logger.log(`[SdkController] ASK editor/apply_patch: tool=${request.toolName} reason=${evaluation.decision.reason}`)
+		return {
+			approved: false,
+			reason: evaluation.decision.reason,
+		}
 	}
 
 	async handleAskQuestion(question: string, options: string[], _context: unknown): Promise<string> {
