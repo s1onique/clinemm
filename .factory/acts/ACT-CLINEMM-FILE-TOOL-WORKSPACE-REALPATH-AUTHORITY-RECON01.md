@@ -800,3 +800,32 @@ NEW_REVIEW_ROUND        = NO (per CYCLE7 reviewer: "No new
                           recon cycle"; the bounded P1 lives
                           in production ACT Phase 0)
 ```
+
+### Post-CYCLE1-opener-receiver update (commit 148e30c17)
+
+Per Factory reviewer verdict on the production ACT opener
+(commit 148e30c17, "CYCLE1 opener"):
+  VERDICT = PASS_WITH_NO_NEW_P1_AT_C1_GO
+  C1      = GO (Phase 0 binding authorized)
+  PHASE_0 = BOUND (six-fact binding + opener-receiver P1/P2
+                   corrections applied in the production ACT's
+                   phase0-reconfirmation.md)
+
+The production ACT's Phase 0 now binds:
+  - Six reconfirmations (1.1..1.6) with file:line evidence
+  - P1 multi-target aggregation (unavailable > outside > inside)
+  - P2 EDITOR_PATH_CONTRACT = ABSOLUTE_ONLY source-confirmed
+
+No change to the recon lane; the recon ACT's terminal bound
+remains CYCLE7.
+
+```text
+RECON_LANE_STATUS       = CLOSED  (unchanged)
+PRODUCTION_ACT_STATUS   = OPEN / AUTHORIZED / PHASE_0_BOUND
+PARENT_RECON_VERDICT    = PASS_WITH_ONE_BOUNDED_P1
+PRODUCTION_ACT_VERDICT  = PASS_WITH_NO_NEW_P1_AT_C1_GO
+NEW_REVIEW_ROUND        = NO  (per opener-receiver: "C1: GO.
+                          No more contract review. Bind the six
+                          facts, add the multi-target aggregation
+                          rule if needed, and get to RED.")
+```

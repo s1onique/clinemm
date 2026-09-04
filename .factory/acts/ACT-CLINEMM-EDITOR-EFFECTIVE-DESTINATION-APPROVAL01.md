@@ -393,31 +393,49 @@ This commit opens the ACT and creates:
     (this file)
 .factory/evidence/ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01/
     phase0-reconfirmation.md
-    (six-fact placeholder + research-path notes for Phase 0
-     to fill BEFORE any RED test is written)
+    (six-fact binding from current ClineMM source +
+     the opener-receiver reviewer's two follow-up corrections:
+      P1 multi-target aggregation,
+      P2 source-confirmed EDITOR_PATH_CONTRACT = ABSOLUTE_ONLY)
 ```
 
+The six-fact binding is in §1.1–§1.6 of the phase0 file, with
+every claim supported by file:line from the current ClineMM
+source. No RED test yet.
+
 Production code change: 0 (still contract-only). Test code
-change: 0 (RED tests come after Phase 0 is bound).
+change: 0 (RED tests come in Phase 4).
 
 ## 13. Verdict (frozen at opening)
 
 ```text
 ACT_ID             = ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
-VERDICT            = OPEN / PRODUCTION_ACT_AUTHORIZED
+VERDICT            = OPEN / PRODUCTION_ACT_AUTHORIZED / PHASE_0_BOUND
 C1                 = GO (per CYCLE7 reviewer verdict
-                     PASS_WITH_ONE_BOUNDED_P1 on 72594d509)
+                     PASS_WITH_ONE_BOUNDED_P1 on 72594d509
+                     AND opener-receiver PASS_WITH_NO_NEW_P1_AT_C1_GO
+                     on this commit's opening)
 PARENT_RECON_ACT   = ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
 PARENT_HEAD        = 72594d50921fe2527b98d5052e09c74969a88fe1
 PARENT_VERDICT     = PASS_CYCLE7 (APPROVAL_SEMANTICS = BOUND_FROM_SOURCE)
 RECON_LANE         = CLOSED (do NOT reopen)
-PHASE              = 0  (six-fact binding pending)
-PHASE_0_DELTA      = the wording correction from CYCLE7 reviewer
-                     ("non-approved-outside target still refuses"
-                      -> "denied approval means executor not invoked")
-                     is applied HERE in §3 and §5 R3 wording.
+PHASE              = 0  (six-fact binding COMPLETE; opener-receiver
+                     P1 multi-target aggregation + P2 source-confirmed
+                     ABSOLUTE_ONLY also bound)
+PHASE_0_DELTA      = (a) wording correction from CYCLE7 reviewer
+                       ("non-approved-outside target still refuses"
+                        -> "denied approval means executor not invoked")
+                       applied in §3 and §5 R3 wording;
+                     (b) opener-receiver P1 multi-target aggregation rule
+                       bound in phase0 §2.1 (unavailable > outside > inside);
+                     (c) opener-receiver P2 EDITOR_PATH_CONTRACT = ABSOLUTE_ONLY
+                       bound in phase0 §2.2 as a ClineMM-source-confirmed
+                       invariant (NOT upstream-derived).
 PRODUCTION_CHANGE  = 0 (docs/evidence-only opening)
-NEXT               = Phase 0 binds the six facts from current
-                     ClineMM source; Phases 1–4 implement RED/GREEN.
-NEW_REVIEW_ROUND   = NO (per CYCLE7 reviewer: "No new recon cycle")
+NEXT               = Phases 1–4 implement RED/GREEN/necessity-ablation
+                     against the bound seams (no new recon, no new review
+                     round).
+NEW_REVIEW_ROUND   = NO (per opener-receiver: "C1: GO. No more contract
+                     review. Bind the six facts, add the multi-target
+                     aggregation rule if needed, and get to RED.")
 ```

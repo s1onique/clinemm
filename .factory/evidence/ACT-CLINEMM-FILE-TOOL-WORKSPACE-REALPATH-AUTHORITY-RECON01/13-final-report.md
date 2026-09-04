@@ -1273,3 +1273,99 @@ complete. The bounded P1 wording correction is the only
 remaining CYCLE7 work, and it lives in the production ACT
 as the first line of Phase 0. The recon lane is closed;
 no further recon cycles are required for this surface.
+
+## EV_VERDICT_REVIEWER_ON_CYCLE1_OPENER (production ACT opening)
+
+This block documents the Factory reviewer's verdict on the
+docs/evidence-only opening of production ACT
+ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 (commit
+148e30c17, "CYCLE1 opener" of the production ACT).
+
+### Verbatim disposition
+
+```text
+P0                : NONE
+P1                : NONE in this opening commit
+PHASE-0 REQUIREMENT : bind multi-target request aggregation
+                      if apply_patch is active
+P2                : ABSOLUTE_ONLY should be confirmed from
+                    ClineMM source, not treated as proven
+                    merely from upstream schema
+RECON LANE        : CLOSED
+PRODUCTION ACT    : OPEN
+NEXT              : PHASE 0 BIND -> RED immediately
+```
+
+### Phase 0 binding status
+
+All six reconfirmations (ASYNC_CLASSIFICATION_SEAM,
+EDIT_TOOL_REQUEST_PATH_EXTRACTION, EXTERNAL_POLICY_STORAGE_FIELD,
+isToolAutoApproved_sync_OR_async, LOWEST_EXISTING_ASYNC_SEAM,
+isEditTool_members_conserved) plus the two follow-up
+corrections (multi-target aggregation; source-confirmed
+ABSOLUTE_ONLY) are BOUND in the production ACT evidence at
+.factory/evidence/ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01/phase0-reconfirmation.md.
+
+Each binding cites the file:line in the current ClineMM source.
+
+### Six-fact binding table (excerpt)
+
+| fact                                 | bound value                                                                                                                                                            |
+|--------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ASYNC_CLASSIFICATION_SEAM            | sdk-interaction-coordinator.ts:326 handleRequestToolApproval                                                                                                          |
+| EDIT_TOOL_REQUEST_PATH_EXTRACTION    | editor: EditFileInputSchema.path; apply_patch: Patch.actions Record<string,PatchAction>; legacy aliases via message-translator.ts:720-724                              |
+| EXTERNAL_POLICY_STORAGE_FIELD        | settings.actions.editFilesExternally (AutoApprovalSettings.ts:18, legacy field reactivated for ClineMM)                                                                |
+| isToolAutoApproved_sync_OR_async     | SYNC (sdk-tool-policies.ts:1072-1077)                                                                                                                                  |
+| LOWEST_EXISTING_ASYNC_SEAM           | sdk-interaction-coordinator.ts:326 handleRequestToolApproval (insert BEFORE the short-circuit at :510/:521)                                                            |
+| isEditTool_members_conserved         | 5-member set at sdk-tool-policies.ts:69, INCLUDED for editor/apply_patch, SUCCESSOR for replace_in_file/write_to_file/delete_file                                      |
+| REQUEST_CLASS_AGGREGATION (P1)       | unavailable > outside > inside (per-target TargetEvidence[] reduced by pure policy)                                                                                    |
+| EDITOR_PATH_CONTRACT (P2)            | ABSOLUTE_ONLY (EditFileInputSchema docstring schemas.ts:205 + executor resolveFilePath absolute-passthrough behavior)                                                  |
+
+### Reviewer's quote on the bound architecture
+
+> The frozen shape is the one I would implement:
+>
+> ASYNC filesystem classification
+>     v
+> immutable evidence
+>     v
+> PURE approval policy
+>     v
+> approval coordinator
+>     v
+> existing executor
+>
+> Do not make isToolAutoApproved() async.
+
+This ACT's Phase 0 binding matches the reviewer's expected
+implementation shape exactly. No edits required to the
+recon lane.
+
+### Confirmation of the CYCLE7 corrections carryover
+
+The CYCLE7 reviewer's P1 wording correction (applied in the
+production ACT §3 and §5 R3) is preserved by this Phase 0
+binding. The opener-receiver reviewer's P1 (multi-target
+aggregation) and P2 (source-confirmed ABSOLUTE_ONLY) are
+new additions that the CYCLE7 reviewer did not flag because
+the production ACT's opener commit had not yet bound the
+relevant seams.
+
+### Factory classification (this reviewer verdict)
+
+```text
+P0                  : NONE
+P1                  : NONE
+PHASE-0 REQUIREMENT : APPLIED (multi-target aggregation)
+P2                  : APPLIED (source-confirmed ABSOLUTE_ONLY)
+RECON LANE          : CLOSED
+PRODUCTION ACT      : OPEN / PHASE_0_BOUND
+NEW_REVIEW_ROUND    : NO
+```
+
+The reviewer explicitly said: "C1: GO. No more contract
+review. Bind the six facts, add the multi-target aggregation
+rule if needed, and get to RED."
+
+The production ACT is now ready to enter Phases 1-4 (RED +
+GREEN + necessity ablation) against the bound seams.

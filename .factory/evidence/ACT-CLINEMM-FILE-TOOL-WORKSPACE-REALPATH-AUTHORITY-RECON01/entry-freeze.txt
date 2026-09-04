@@ -369,3 +369,53 @@
 #   RECON           : CLOSED
 #   APPROVAL_SEMANTICS : BOUND
 #   PRODUCTION_ACT  : AUTHORIZED
+
+# === CYCLE1-OPENER-RECEIVER-VERDICT entry-freeze appended 2026-09-04 ===
+# Per Factory reviewer verdict on commit 148e30c17 (production ACT
+# ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 opening):
+#   VERDICT = PASS_WITH_NO_NEW_P1_AT_C1_GO
+#   C1      = GO  (Phase 0 binding authorized)
+#   PHASE_0 = BOUND (six-fact binding + 2 follow-up corrections applied)
+#   RECON   = CLOSED (no new recon cycle)
+#
+# Reviewer's verbatim disposition:
+#   P0              : NONE
+#   P1              : NONE in this opening commit
+#   PHASE-0 REQUIREMENT : bind multi-target request aggregation if
+#                         apply_patch is active (DONE: phase0 §2.1,
+#                         unavailable > outside > inside)
+#   P2              : ABSOLUTE_ONLY should be confirmed from ClineMM
+#                     source, not treated as proven merely from
+#                     upstream schema (DONE: phase0 §2.2 binds
+#                     EDITOR_PATH_CONTRACT = ABSOLUTE_ONLY with
+#                     EditFileInputSchema docstring
+#                     schemas.ts:205 + executor resolveFilePath
+#                     behavior as source evidence)
+#   RECON LANE      : CLOSED
+#   PRODUCTION ACT  : OPEN
+#   NEXT            : PHASE 0 BIND -> RED immediately
+#                     (no more contract review)
+#
+# Reviewer's quote on the bound architecture:
+#   "The frozen shape is the one I would implement:
+#    ASYNC filesystem classification
+#        v
+#    immutable evidence
+#        v
+#    PURE approval policy
+#        v
+#    approval coordinator
+#        v
+#    existing executor
+#    Do not make isToolAutoApproved() async."
+#
+# This ACT's Phase 0 binding matches the reviewer's expected
+# implementation shape exactly:
+#   - CLASSIFIER  (async fs; produce TargetEvidence[])
+#   - POLICY      (pure; reduce evidence + settings -> ALLOW | ASK)
+#   - COORDINATOR (existing handleRequestToolApproval; threads
+#                  evidence; uses existing ASK/approve/deny flow)
+#   - EXECUTOR    (unchanged; outside writes succeed on approval)
+#
+# Production code change: 0 (still docs/evidence-only).
+# Test code change: 0 (RED tests come in Phase 4).
