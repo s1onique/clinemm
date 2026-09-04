@@ -543,3 +543,42 @@ reviewer_verdict     = PASS_WITH_ONE_BOUNDED_P1 + HALT_RED_BEFORE_
                        satisfied by this commit's RED test)
                        → RED_REPRODUCED on real seam → C1: GO
                        directly into bounded repair in same ACT.
+
+=== R0-PHASE-2-GREEN-COMPLETED ===
+
+event                = PHASE 2 bounded repair completed; R0 GREEN on real seam.
+cycle                = PHASE 2 (GREEN per reviewer MAX REVIEW/FIX CYCLE = ONE)
+commit               = 861e18502
+
+files_changed        = 8 (+861 -103)
+
+production_change    = classifier + pure policy + coordinator composition
+                       (the load-bearing silent-ALLOW defect on
+                        editor/apply_patch with OUTSIDE + editFiles=true
+                        is fixed at the lowest existing async seam in
+                        sdk-interaction-coordinator.ts:548).
+
+fallback_policy      = when getCwd or getAutoApprovalSettings is not
+                       wired, the coordinator falls back to the legacy
+                       boolean short-circuit. This preserves all
+                       pre-PHASE-2 tests + integration surfaces.
+
+verifier_output      = 61/61 tests pass on the touched suite
+                       (R0 GREEN regression 4 + R1 classifier 6 +
+                        R2 lattice 8 + interaction-coordinator 43).
+                       Plus 99/101 on the broader coordinator +
+                       session-autonomy suite (the 2 failures are
+                       pre-existing on origin/main, confirmed via
+                       git stash reproduction, unrelated to PHASE 2).
+
+reviewer_chain       = PASS_RED_REPRODUCED + GO TO BOUNDED REPAIR
+                       (reviewer authorization satisfied; the
+                        bounded repair is implemented + verified
+                        + GREEN within one commit, exactly as
+                        authorized by MAX REVIEW/FIX CYCLE = ONE).
+
+phase_3_4_remaining  = apply_patch movePath integration + R3/R4
+                       deny/approve/direct ALLOW + R5 conservation
+                       + necessity ablation. Scoped to subsequent
+                       ACTs / commits; NOT begun in this commit
+                       (per MAX REVIEW/FIX CYCLE = ONE).

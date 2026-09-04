@@ -999,3 +999,65 @@ NEXT                     = PHASE 2 bounded repair in next commit
                             (classifier + pure policy + coordinator
                              wiring + auto-approval branch)
 ```
+
+## 12. PHASE 2 BOUNDED REPAIR COMPLETED — R0 GREEN on real seam (commit 861e18502)
+
+PHASE 2 (the bounded repair authorized by the reviewer's
+`PASS_RED_REPRODUCED + GO TO BOUNDED REPAIR` verdict on commit
+1aaa65a84) is implemented + verified in commit 861e18502.
+
+```text
+PHASE 2  AUTHORIZED  + IMPLEMENTED + VERIFIED  -> COMPLETE
+
+Files changed:
+  A apps/vscode/src/sdk/editor-auto-approval-policy.ts
+  A apps/vscode/src/sdk/editor-path-authority.ts
+  A apps/vscode/src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts
+  A apps/vscode/src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts
+  R apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0-red.test.ts
+    -> apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts
+  M apps/vscode/src/sdk/sdk-interaction-coordinator.ts
+  M apps/vscode/src/sdk/SdkController.ts
+  M apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts
+
+  8 files changed, 861 insertions(+), 103 deletions(-)
+
+Verifier (vitest, real node 26 + vitest 4.1.10):
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts (4 tests) 111ms
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts       (8 tests)   2ms
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts           (6 tests)   4ms
+  src/sdk/sdk-interaction-coordinator.test.ts                             (43 tests) ~30s
+
+  Test Files  4 passed (4)
+       Tests  61 passed (61)
+
+  Plus the targeted interaction-coordinator + session-autonomy suites
+  show 99/101 passed; the 2 failures are pre-existing on origin/main
+  (confirmed via `git stash` reproduction) and unrelated to PHASE 2.
+
+  bunx tsc --noEmit:
+    (clean)
+
+  bunx biome lint on touched files:
+    Checked 8 files in 192ms. No fixes applied.
+```
+
+The principal defect — silent auto-approval of editor /
+apply_patch requests targeting OUTSIDE the workspace when
+`editFiles=true` — is fixed at the lowest existing async seam
+in `sdk-interaction-coordinator.ts:548`.
+
+### Updated disposition
+
+```text
+RECON_LANE_STATUS        = CLOSED  (unchanged from CYCLE7)
+PRODUCTION_ACT_STATUS    = OPEN / PHASE_2_GREEN / R0-R1-R2_PASS
+                           PHASE_3-PHASE_4_REMAIN
+NEW_REVIEW_ROUND         = NO
+MAX_REVIEW_FIX_CYCLE     = ONE  (satisfied; bounded repair
+                                  implemented + verified + GREEN
+                                  in a single commit)
+PHASE_2_DISPOSITION      = COMPLETE
+PHASE_3_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
+PHASE_4_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
+```

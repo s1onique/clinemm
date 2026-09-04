@@ -582,3 +582,83 @@ The reviewer's authoritative instruction in this verdict:
 That GO is granted only after the RED has been observed. The
 RED is now observed. The next commit's authoring work is
 PHASE 2 implementation.
+
+### 13.5 PHASE 2 bounded-repair COMPLETED — R0 GREEN on real seam (commit 861e18502)
+
+PHASE 2 (classifier + pure policy + coordinator composition) is
+implemented and verified. The principal defect is closed:
+
+```
+REAL production seam
++ REAL shouldAutoApproveTool wired to REAL isToolAutoApproved
++ REAL classifier (realpath + containment)
++ REAL pure policy lattice (no fs I/O)
++ REAL coordinator composition (no fake, no hand-rolled substitute)
+
+OBSERVED (vitest, real node 26 + vitest 4.1.10):
+
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts (4 tests) 111ms
+    v R0  OUTSIDE + editFiles=true             => MUST ASK    (was RED, now GREEN)
+    v R0b INSIDE  + editFiles=true             => ALLOW       (positive control)
+    v R0c OUTSIDE + editFiles=false            => ASK         (base-disabled control)
+    v R0d OUTSIDE + editFiles=true + external=true => ALLOW   (explicit external)
+
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts (6 tests) 4ms
+    v normal in-workspace target       => INSIDE
+    v absolute OUTSIDE workspace target => OUTSIDE
+    v existing symlink INSIDE -> OUTSIDE => OUTSIDE  (realpath resolves the escape)
+    v non-existent workspace root       => UNAVAILABLE
+    v non-existent target on non-existent mount => UNAVAILABLE
+    v non-existent target whose nearest existing ancestor IS inside => INSIDE
+                                                          (file-creation case)
+
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts (8 tests) 2ms
+    v All 6 rows of the frozen lattice + the 2 unavailable fail-closed cases.
+
+  src/sdk/sdk-interaction-coordinator.test.ts (43 tests) ~30s
+    (all 43 pre-existing tests still pass; one was updated to
+     wire the new getCwd + getAutoApprovalSettings options and
+     accept the new decision evidence shape via toMatchObject.)
+
+  Test Files  4 passed (4)
+       Tests  61 passed (61)
+
+Plus the targeted interaction-coordinator + session-autonomy
+suites show 99/101 passed; the 2 failures are pre-existing on
+origin/main (confirmed via `git stash` reproduction) and are
+unrelated to PHASE 2.
+```
+
+### 13.6 Files in PHASE 2 commit (861e18502)
+
+```
+A apps/vscode/src/sdk/editor-auto-approval-policy.ts
+A apps/vscode/src/sdk/editor-path-authority.ts
+A apps/vscode/src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts
+A apps/vscode/src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts
+R apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0-red.test.ts
+  -> apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts
+M apps/vscode/src/sdk/sdk-interaction-coordinator.ts
+M apps/vscode/src/sdk/SdkController.ts
+M apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts
+
+8 files changed, 861 insertions(+), 103 deletions(-)
+```
+
+### 13.7 PHASE 3 / PHASE 4 remaining
+
+PHASE 2 is COMPLETE. PHASE 3 + PHASE 4 remain; they are
+explicitly out of scope of this single bounded-repair commit
+per the reviewer's MAX REVIEW/FIX CYCLE = ONE directive:
+
+  PHASE 3  apply_patch movePath integration + R3/R4
+           deny/approve/direct ALLOW integration + R5 conservation
+  PHASE 4  Necessity ablation (disable only the new
+           classification-aware edit-policy composition;
+           require R0 to return to silent ALLOW while R0b
+           stays ALLOW and R0c stays ASK).
+
+These are scoped to a subsequent ACT / commit. The RED gate
+has been crossed, the GREEN regression is locked in, and the
+load-bearing production defect (silent ALLOW on OUTSIDE +
+editFiles=true) is fixed on the real coordinator seam.

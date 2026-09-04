@@ -1530,3 +1530,72 @@ PHASE 2 is AUTHORIZED to begin in the next commit, by the same
 ACT. No new planning commit, no new recon cycle, no more
 contract review. PHASE 2 implementation begins in the next
 commit.
+
+## EV_PHASE_2_GREEN_BOUNDED_REPAIR_COMPLETED (commit 861e18502)
+
+PHASE 2 (the bounded repair authorized by the reviewer's
+`PASS_RED_REPRODUCED + GO TO BOUNDED REPAIR` verdict) is
+implemented + verified in commit 861e18502.
+
+The principal defect (silent auto-approval of editor /
+apply_patch requests targeting OUTSIDE the workspace when
+`editFiles=true`) is fixed at the lowest existing async seam
+in `sdk-interaction-coordinator.ts:548`.
+
+### Layer contract (unchanged from Phase 0)
+
+```
+async classifier          (apps/vscode/src/sdk/editor-path-authority.ts)
+        ↓
+immutable evidence
+        ↓
+pure policy lattice       (apps/vscode/src/sdk/editor-auto-approval-policy.ts)
+        ↓
+coordinator composition   (apps/vscode/src/sdk/sdk-interaction-coordinator.ts:548)
+        ↓
+unchanged executor        (NEVER asks policy)
+```
+
+`isToolAutoApproved` stays SYNC. The legacy boolean short-circuit
+is REPLACED for the CURRENT INCLUDED SURFACE (`editor` +
+`apply_patch`) ONLY. Every other tool (read / browser / MCP /
+legacy edit names: replace_in_file / write_to_file / delete_file)
+keeps the existing behavior unchanged.
+
+### Test coverage (61/61 pass on the touched suite)
+
+  R1 classifier: 6 cases (real filesystem geometry)
+  R2 lattice:    8 cases (pure, no fs I/O)
+  R0 GREEN:      4 cases (real coordinator seam)
+  pre-existing interaction-coordinator suite: 43/43 pass
+
+The renamed test
+`editor-effective-destination-approval.r0-red.test.ts` →
+`editor-effective-destination-approval.r0-green.test.ts`
+documents the RED→GREEN transition. The test history section
+in the header cross-references commit 1aaa65a84 (RED) and
+861e18502 (GREEN).
+
+### Conservation
+
+  editor inside + editFiles=true                       => unchanged ALLOW
+  editor outside + editFiles=true + external=true      => ALLOW
+  editor outside + editFiles=true + external=false     => MUST ASK
+  editor outside + editFiles=false                     => MUST ASK
+  editFiles=false (any target)                         => MUST ASK
+  classification unavailable                          => ASK (fail closed)
+  non-edit tool                                        => unchanged
+  apply_patch inside-only                              => unchanged (PHASE 3)
+  apply_patch inside->outside move                     => ASK when external=false
+                                                          (PHASE 3 — text extraction
+                                                           frozen in Phase 0 §1.2)
+
+### PHASE 3 / PHASE 4 remain (explicitly out of scope of this commit)
+
+  PHASE 3 apply_patch movePath integration + R3/R4
+          deny/approve/direct ALLOW integration + R5 conservation
+  PHASE 4 Necessity ablation (require R0 to return to
+          silent ALLOW while R0b stays ALLOW + R0c stays ASK)
+
+Both are scoped to subsequent ACTs / commits per the
+reviewer's MAX REVIEW/FIX CYCLE = ONE directive.
