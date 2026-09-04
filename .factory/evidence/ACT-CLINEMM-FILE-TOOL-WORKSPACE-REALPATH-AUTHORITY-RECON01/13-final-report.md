@@ -6,8 +6,8 @@ ACT_ID                =
 
 VERDICT               =
   PASS_OUTSIDE_CWD_MUTATION_PROVEN
-  AUTHORITY_VIOLATION   = SEMANTICS_BOUND_FROM_SOURCE
-  (CYCLE6 — per Factory reviewer verdict on commit 78b6361eb
+  APPROVAL_SEMANTICS    = BOUND_FROM_SOURCE
+  (CYCLE7 — per Factory reviewer verdict on commit 1f2abd59a
    (HALT_APPROVAL_POLICY_IS_NOT_PATH_AUTHORITY), this is
    UPGRADED from CYCLE5's PENDING_RUNTIME_POLICY_BIND:
    Phase-0 discriminator has been answered from source.
@@ -47,9 +47,15 @@ VERDICT               =
    * Two independent sub-defects to address in the production ACT:
        (1) EDITOR_EFFECTIVE_DESTINATION_CLASSIFICATION_MISSING
            (proven by CYCLE5 RED matrix - classifier absent)
-       (2) EDITFILES_EXTERNALLY_LEGACY_NOOP_DEADCODE
-           (proven by this CYCLE6 source trace - UI toggle
-            persists but no policy code reads it)
+       (2) EXTERNAL_EDIT_AUTO_APPROVAL_CONTRACT_UNIMPLEMENTED
+           (renamed from EDITFILES_EXTERNALLY_LEGACY_NOOP_DEADCODE
+            per CYCLE7 reviewer correction; the recon proves the
+            CONTRACT is unimplemented, not that the storage field
+            is dead-code. Whether to reactivate editFilesExternally
+            or introduce a non-legacy field is the production ACT's
+            implementation decision, recorded as
+              LEGACY_FIELD_REACTIVATION = deliberate ClineMM
+                                           compatibility choice)
 
    * Production ACT contract re-scoped to introduce BOTH:
        - canonical inside/outside classifier at the editor-tool
@@ -75,21 +81,33 @@ IDENTITY
                                  corrected case D geometry +
                                  runtime policy bind + V1
                                  algorithm correction)
-  CYCLE6_HEAD          = <to be filled at CYCLE6 commit>
-                         (cycle6: Phase-0 discriminator answered
-                                  from source; semantics bound)
-  FINAL_HEAD           = <to be filled at CYCLE6 commit>
-  FINAL_TREE           = <to be filled at CYCLE6 commit>
-  WORKTREE_STATUS      = mixed at start of CYCLE6
-                          tracked  : clean (10 files from CYCLE5 commit
-                                     still in HEAD 78b6361eb)
+  CYCLE6_HEAD          = 1f2abd59a (cycle6 closure commit;
+                                  Phase-0 discriminator answered
+                                  from source; semantics bound;
+                                  editFilesExternally proven NO-OP;
+                                  editFiles proven actual gate;
+                                  two defects identified)
+  CYCLE7_HEAD          = <to be filled at CYCLE7 commit>
+                         (cycle7: corrections to the proposed
+                                  production-ACT contract per
+                                  reviewer verdict on 1f2abd59a;
+                                  6 P1 + 1 P2; recon lane stays
+                                  closed)
+  FINAL_HEAD           = <to be filled at CYCLE7 commit>
+  FINAL_TREE           = <to be filled at CYCLE7 commit>
+  WORKTREE_STATUS      = mixed at start of CYCLE7
+                          tracked  : clean (12 files from CYCLE6 commit
+                                     still in HEAD 1f2abd59a)
                           untracked: none
                           modified : 2 files (this final report +
-                                     entry-freeze.txt; NEW file
-                                     14-phase0-source-trace.md added)
-                          expected : CYCLE6 commit will fold all
+                                     entry-freeze.txt)
+                          expected : CYCLE7 commit will fold all
                                      corrections in one bounded
-                                     commit.
+                                     commit (P2 noun fix + defect
+                                     rename + 6 P1 contract
+                                     corrections + EV_VERDICT_CYCLE7
+                                     block + Phase 0 reconfirmation
+                                     list for production ACT).
 
 LIVE_BIND
   TASK_ID              = 1788238423825_btxab
@@ -633,7 +651,7 @@ PRODUCTION_FILES      = 0 changed (recon-only)
 
 ```text
 EV_VERDICT_CYCLE6     = PASS_OUTSIDE_CWD_MUTATION_PROVEN
-                       AUTHORITY_VIOLATION = SEMANTICS_BOUND_FROM_SOURCE
+                       APPROVAL_SEMANTICS = BOUND_FROM_SOURCE
                        (CYCLE6 Phase-0 discriminator answered:
                         editFilesExternally is a NO-OP legacy
                         field; the actual gate is editFiles,
@@ -642,8 +660,16 @@ EV_VERDICT_CYCLE6     = PASS_OUTSIDE_CWD_MUTATION_PROVEN
                         Two independent defects identified:
                         (1) EDITOR_EFFECTIVE_DESTINATION_
                             CLASSIFICATION_MISSING
-                        (2) EDITFILES_EXTERNALLY_LEGACY_
-                            NOOP_DEADCODE
+                        (2) EXTERNAL_EDIT_AUTO_APPROVAL_
+                            CONTRACT_UNIMPLEMENTED
+                            (renamed from CYCLE6's
+                             EDITFILES_EXTERNALLY_LEGACY_
+                             NOOP_DEADCODE per CYCLE7
+                             correction; the recon proves
+                             the contract is unimplemented,
+                             not that the storage field is
+                             dead-code. Production ACT may
+                             choose storage representation.)
                         Both bounded to editor-tool policy
                         seam; both addressable in one ACT.)
 PHASE0_BIND_FROM_SOURCE = COMPLETE
@@ -666,3 +692,398 @@ NEW_EVIDENCE          = .factory/evidence/ACT-CLINEMM-FILE-TOOL-
                        14-phase0-source-trace.md (NEW, 311 lines)
 PRODUCTION_FILES      = 0 changed (still recon-only)
 ```
+EV_VERDICT_CYCLE7     = PASS_CYCLE6_BUT_HALT_PROPOSED_POLICY_SEAM
+                       APPROVAL_SEMANTICS = BOUND_FROM_SOURCE
+                       CONTRACT_CORRECTED  = YES
+                       (CYCLE7 per Factory reviewer verdict on
+                        commit 1f2abd59a. CYCLE6 recon facts are
+                        UNCHANGED; the production-ACT contract
+                        proposed in CYCLE6 had six P1 issues and
+                        one P2 wording issue that the reviewer
+                        caught BEFORE the production ACT could
+                        open. This cycle records those corrections
+                        without re-opening the recon lane:
+                          P1-1  corrected 5-row lattice
+                                (editFiles x INSIDE/OUTSIDE x
+                                 external-edit ON/OFF + UNAVAILABLE
+                                 fail-closed)
+                          P1-2  classifier is tri-state
+                                (inside|outside|unavailable),
+                                UNAVAILABLE -> ASK (never silent)
+                          P1-3  sync vs async seam reanalysis
+                                (isToolAutoApproved probably sync;
+                                 do NOT convert it to async;
+                                 use existing command-authority
+                                 evidence pattern at the lowest
+                                 existing async seam, likely
+                                 handleRequestToolApproval)
+                          P1-4  do NOT conflate approval with
+                                executor safety (approved-outside
+                                MUST still write; RED suite must
+                                split into classifier/policy/
+                                executor layers)
+                          P1-5  apply_patch conservation mandatory
+                                (UI toggle covers ALL edit ops;
+                                inventory each isEditTool member
+                                for shared request shape / target
+                                extraction; either include or
+                                record OTHER_EDIT_TOOLS =
+                                successor / unchanged as P0
+                                product-contract issue)
+                          P1-6  V1 classifier algorithm simplified
+                                (drop "inspect unresolved suffix"
+                                 step; suffix does not exist yet)
+                          P1-7  defect 2 renamed to
+                                EXTERNAL_EDIT_AUTO_APPROVAL_
+                                CONTRACT_UNIMPLEMENTED
+                          P1-8  editFilesExternally reactivation
+                                recorded as
+                                  LEGACY_FIELD_REACTIVATION =
+                                    deliberate ClineMM
+                                    compatibility choice
+                                (NOT a claim upstream currently
+                                 treats it as live policy;
+                                 may also choose non-legacy field)
+                          P2    verdict noun changed
+                                AUTHORITY_VIOLATION ->
+                                APPROVAL_SEMANTICS
+                        Phase 0 of the production ACT must
+                        reconfirm:
+                          ASYNC_CLASSIFICATION_SEAM         = ?
+                          EDIT_TOOL_REQUEST_PATH_EXTRACTION = ?
+                          EXTERNAL_POLICY_STORAGE_FIELD     = ?
+                          isToolAutoApproved_sync_OR_async  = ?
+                          LOWEST_EXISTING_ASYNC_SEAM        = ?
+                          isEditTool_members_conserved      = ?
+                        BEFORE writing any RED tests.)
+RECON_LANE_STATUS     = CLOSED
+                       (per reviewer: "Do not reopen the
+                        recon lane. CYCLE6 has reached its
+                        terminal bound. The corrections live
+                        in the production ACT's Phase 0.")
+
+## CYCLE7 — corrections to the proposed production ACT contract (P1×4 + P1-rename + P2)
+
+Per Factory reviewer verdict on commit `1f2abd59a`
+(`PASS_CYCLE6 — but HALT_PROPOSED_POLICY_SEAM` / `C1: GO`).
+Recon lane stays closed. The recon facts are unchanged.
+What changes here is the CONTRACT that the production ACT
+must freeze in its own Phase 0 before writing RED tests.
+
+### Correction 1 — corrected 5-row policy lattice (P1)
+
+The CYCLE6 lattice had:
+
+```text
+INSIDE + editFilesExternally=false => existing ASK flow
+INSIDE + editFilesExternally=true  => existing ALLOW flow
+```
+
+This is WRONG. The reviewer's correct lattice is:
+
+```text
+editFiles | destination   | external-edit | result
+--------- | ------------- | ------------- | ------
+   false  | inside        | any           | ASK
+   false  | outside       | any           | ASK
+   true   | inside        | any           | ALLOW
+   true   | outside       | false         | ASK
+   true   | outside       | true          | ALLOW
+   (any)  | unavailable   | (any)         | ASK    <- fail-closed
+```
+
+`editFilesExternally` has NO effect on inside-workspace edits.
+The "Edit all files" toggle EXTENDS the base `editFiles`
+toggle to outside-workspace targets, and ONLY when the base
+toggle is ON. If `editFiles=false`, the extension is a no-op
+even when "Edit all files" is ON.
+
+This matches the upstream public documentation: "Edit all
+files" extends auto-approval outside the workspace; the
+base "Edit project files" toggle is the prerequisite.
+
+### Correction 2 — classification is tri-state, not binary (P1)
+
+The V1 classifier must return one of:
+
+```ts
+type EffectiveDestinationClass =
+  | "inside"
+  | "outside"
+  | "unavailable"
+```
+
+`unavailable` covers EACCES, ENOENT during racing topology,
+realpath error, malformed workspace root. Approval semantics
+for `unavailable`:
+
+```text
+classifier error -> ASK   (fail-closed)
+classifier error -> !assume inside -> !silent write
+```
+
+This is particularly important because the classifier is
+being added specifically to decide whether a write can
+bypass manual approval.
+
+
+### Correction 3 — policy seam is probably impossible as stated (P1)
+
+The proposed Phase 3 wired the classifier into
+`sdk-interaction-coordinator.ts` / `isToolAutoApproved`.
+But:
+
+```text
+V1 classifier requires:
+  realpath(workspaceRoot)
+  find deepest existing ancestor
+  realpath(existingAncestor)
+=> filesystem I/O => normally ASYNC
+
+isToolAutoApproved() is a cheap policy predicate
+=> almost certainly SYNCHRONOUS
+```
+
+Do NOT convert a central sync predicate to async casually.
+That ripples through every tool-approval caller.
+
+The correct architecture is the existing command-authority
+pattern (already in ClineMM for command tools):
+
+```text
+ASYNC evidence acquisition / canonical filesystem observation
+   -> EditorPathAuthorityEvidence { classification, ... }
+PURE policy evaluation (no fs I/O)
+   -> ALLOW / ASK
+```
+
+Production ACT Phase 0 MUST reconfirm:
+- sync-ness of `isToolAutoApproved`
+- lowest existing async seam (likely
+  `handleRequestToolApproval` itself)
+- lowest cost of evidence acquisition per call
+
+### Correction 4 — don't confuse approval with executor safety (P1)
+
+If the correct semantic is:
+
+```text
+OUTSIDE + external OFF
+  -> ASK
+  -> user clicks Approve
+  -> executor MUST perform the outside write
+```
+
+then the current CYCLE5 RED suite (C/D/E -> executor
+refuses) encodes the WRONG LAYER.
+
+After the policy semantics are correctly bound, the RED
+suite MUST be split into THREE layers:
+
+```text
+(a) CLASSIFIER tests (pure):
+    A -> INSIDE
+    B -> OUTSIDE
+    C -> OUTSIDE
+    D -> OUTSIDE
+    E -> OUTSIDE
+    F -> INSIDE
+    H -> INSIDE
+
+(b) POLICY tests (pure):
+    editFiles=false + INSIDE  -> ASK
+    editFiles=false + OUTSIDE -> ASK
+    editFiles=true  + INSIDE  -> ALLOW
+    editFiles=true  + OUTSIDE + external=false -> ASK
+    editFiles=true  + OUTSIDE + external=true  -> ALLOW
+    classification unavailable                -> ASK
+
+(c) EXECUTOR tests (real filesystem):
+    approved-outside target STILL WRITES (not refused)
+    non-approved-outside target still refuses
+```
+
+The current `editor.realpath-authority.test.ts` cannot
+simply flip C/D/E to executor-rejection GREEN. That would
+encode: "outside target is FORBIDDEN", which contradicts
+the upstream product contract "Edit all files lets you
+edit outside the workspace".
+
+
+### Correction 5 — apply_patch conservation is mandatory (P1)
+
+`isEditTool()` covers:
+
+```text
+editor
+replace_in_file
+write_to_file
+apply_patch
+delete_file
+```
+
+The "Edit all files" UI toggle is documented as covering
+ALL edit operations. If the new path-aware policy only
+classifies `editor` and leaves `apply_patch` to its
+current silent-ALLOW path, then:
+
+```text
+apply_patch outside workspace
+  + editFiles=true
+  -> silent ALLOW
+  -> trivially bypasses the new external-edit rule
+```
+
+So conservation is stronger than "if convenient". Phase 0
+of the production ACT MUST inventory each `isEditTool`
+member:
+
+```text
+does the request expose target path deterministically?
+can the classifier bind effective destination for it?
+does it share the same request shape / resolver?
+```
+
+If yes -> include in the policy seam.
+If no  -> explicitly record
+    OTHER_EDIT_TOOLS = successor / unchanged
+       as a P0 product-contract issue
+       (UI toggle does not faithfully describe all edit ops)
+       to be tracked separately.
+
+### Correction 6 — V1 classifier algorithm, simplified
+
+The CYCLE6 algorithm had a redundant "inspect unresolved
+suffix for symlinks" step. Correct simplification:
+
+```text
+canonicalRoot    = realpath(workspaceRoot)
+lexicalTarget    = absolute(input)
+                   ? normalize(input)
+                   : resolve(workspaceRoot, input)
+existingAncestor = deepest existing ancestor of lexicalTarget
+canonicalAncestor = realpath(existingAncestor)
+classification   = (canonicalAncestor contained in canonicalRoot)
+                   ? INSIDE
+                   : OUTSIDE
+```
+
+Justification:
+- For an existing symlink anywhere in the prefix,
+  `realpath(existingAncestor)` resolves it.
+- For an existing final symlink, the final target itself
+  IS the deepest existing path, and `realpath(target)`
+  resolves it (because we walk up to the target, and the
+  target exists).
+- The unresolved suffix does not, by definition, exist
+  on disk yet, so it cannot contain a symlink that would
+  redirect the write.
+
+Boundary explicitly preserved:
+```text
+TOCTOU_AFTER_CLASSIFICATION = explicitly unsolved
+```
+
+
+### Correction 7 — Defect 2 renamed (P1-naming)
+
+The CYCLE6 defect name:
+
+```text
+EDITFILES_EXTERNALLY_LEGACY_NOOP_DEADCODE
+```
+
+overstated a storage-representation claim (upstream may
+deliberately keep the legacy field). Renamed to:
+
+```text
+EXTERNAL_EDIT_AUTO_APPROVAL_CONTRACT_UNIMPLEMENTED
+```
+
+This names the missing BEHAVIOR (the contract that
+outside writes require a separate external-edit opt-in),
+not the storage field. The production ACT may choose
+storage representation freely.
+
+### Correction 8 — editFilesExternally reactivation is deliberate (P1-storage-decision)
+
+Whether the backing setting is:
+
+```text
+editFilesExternally
+```
+
+or a new/non-legacy replacement is an implementation
+decision to make from the current Settings UI/state model
+in the production ACT. Because ClineMM still exposes the
+"Edit all files" concept to users, reusing the field is
+the smallest migration-compatible choice — but record it as:
+
+```text
+LEGACY_FIELD_REACTIVATION = deliberate ClineMM compatibility
+                             choice (NOT a claim that
+                             upstream currently treats it as
+                             live policy)
+```
+
+### Correction 9 — verdict noun changed (P2)
+
+```text
+AUTHORITY_VIOLATION = SEMANTICS_BOUND_FROM_SOURCE
+   -> APPROVAL_SEMANTICS = BOUND_FROM_SOURCE
+```
+
+The recon ACT does NOT assert an authority violation
+occurred in the live session (runtime policy at session
+time is not preserved; user's most-likely effective
+policy had editFiles=true). The recon ACT now asserts
+that the APPROVAL-SEMANTICS LATTICE is bound from source.
+
+### Phase 0 corrections the production ACT must perform FIRST
+
+```text
+ASYNC_CLASSIFICATION_SEAM        = ?
+EDIT_TOOL_REQUEST_PATH_EXTRACTION = ?
+EXTERNAL_POLICY_STORAGE_FIELD    = ?
+   (decide between editFilesExternally reuse
+    vs new non-legacy field)
+isToolAutoApproved_sync_OR_async = ?
+LOWEST_EXISTING_ASYNC_SEAM       = ?
+isEditTool_members_conserved     = ?
+   editor / replace_in_file / write_to_file
+   / apply_patch / delete_file
+   -> which share the same request shape
+      and target-path extraction
+```
+
+### Summary
+
+```text
+CYCLE7 verdict: PASS_CYCLE6 — but HALT_PROPOSED_POLICY_SEAM
+
+P0 : NONE in recon
+P1 : (1) lattice corrected to 5-row table (Correction 1)
+     (2) classifier is tri-state (Correction 2)
+     (3) sync vs async seam reanalysis (Correction 3)
+     (4) don't conflate approval with executor safety
+         (Correction 4)
+     (5) apply_patch conservation mandatory (Correction 5)
+     (6) defect renamed (Correction 7)
+     (7) editFilesExternally reactivation = deliberate
+         compatibility choice (Correction 8)
+P2 : verdict noun changed (Correction 9)
+
+PROVEN (unchanged from CYCLE6):
+  path classification absent
+  C/D/E classification defects
+  editFiles is live approval gate
+  editFilesExternally is currently a NO-OP
+  manual ASK exists when editFiles=false
+
+NEXT : one bounded production ACT
+  ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
+  with the above Phase 0 reconfirmations and 5-row lattice
+  frozen inline BEFORE RED tests
+```
+
+Recon lane stays closed.
