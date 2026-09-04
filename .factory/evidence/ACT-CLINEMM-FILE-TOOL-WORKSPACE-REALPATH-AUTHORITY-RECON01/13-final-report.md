@@ -1478,3 +1478,55 @@ The reviewer's authoritative instruction:
 > C1: GO after that one bounded correction. Then write RED
 > immediately — no Phase-0 CYCLE2, no new planning commit, no
 > more contract review.
+
+## EV_R0_REPRODUCTION_PRODUCTION_SEAM (post-bounded-corrections R0 RED)
+
+After the CYCLE1 bounded corrections landed (commit e1016a0e6),
+the reviewer issued `HALT_RED_BEFORE_IMPLEMENTATION` and required
+the principal RED to be reproduced THROUGH THE REAL coordinator
+seam BEFORE any implementation work. That RED has now been
+executed and observed:
+
+```text
+Test file:
+  apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0-red.test.ts
+
+Seam: REAL (not mocked):
+  - SdkInteractionCoordinator.handleRequestToolApproval
+    (apps/vscode/src/sdk/sdk-interaction-coordinator.ts:326)
+  - shouldAutoApproveTool wired to isToolAutoApproved
+    (apps/vscode/src/sdk/sdk-interaction-coordinator.ts:521)
+  - isToolAutoApproved
+    (apps/vscode/src/sdk/sdk-tool-policies.ts:1072-1077)
+  - Filesystem geometry constructed via realpathSync +
+    mkdtempSync + writeFileSync
+
+Observed:
+  × R0  OUTSIDE + editFiles=true => expected ASK,
+        currently silently ALLOW (defect confirmed).
+  ✓ R0b INSIDE + editFiles=true => ALLOW (positive control).
+  ✓ R0c OUTSIDE + editFiles=false => ASK (base-disabled control).
+
+Disposition:
+  R0 = RED_REPRODUCED. The silent auto-approval bug is the
+       load-bearing production defect. The reviewer's
+       "HALT_RED_NOT_REPRODUCED" stop rule did NOT fire;
+       the seam was reached through constructed geometry.
+  R0b + R0c = ALREADY_GREEN. They prove the existing seam is
+       wired correctly for the cases it currently handles;
+       the missing branch is the OUTSIDE+editFiles=true case.
+
+Phase ordering updated:
+  PHASE 1 RED FIRST (DONE)
+  PHASE 2 Bounded repair (NEXT, on RED)
+  PHASE 3 apply_patch + R3/R4 integration + R5 conservation
+  PHASE 4 Necessity ablation
+
+The reviewer's authoritative instruction:
+  "Once R0 is demonstrably RED, proceed: PHASE 2 add
+   classifier + pure policy."
+
+PHASE 2 is AUTHORIZED to begin in the next commit, by the same
+ACT. No new planning commit, no new recon cycle, no more
+contract review. PHASE 2 implementation begins in the next
+commit.

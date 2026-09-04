@@ -485,3 +485,61 @@ next = Phases 1-4 of the production ACT implement RED + GREEN +
        necessity-ablation against the corrected, bound seams.
        No new recon cycle. No new planning commit. No more contract
        review. RED is authorized to begin immediately.
+
+=== R0-PRODUCTION-SEAM-RED-REPRODUCED ===
+
+event                = R0 production-seam principal RED observed on
+                       the REAL coordinator seam (per HALT_RED_BEFORE_
+                       IMPLEMENTATION reviewer verdict)
+cycle                = R0 (Phase 1 RED FIRST per new ordering)
+test_file            = apps/vscode/src/sdk/__tests__/editor-effective-
+                       destination-approval.r0-red.test.ts
+seam_components      = REAL (not mocked):
+                       - SdkInteractionCoordinator.handleRequestToolApproval
+                       - shouldAutoApproveTool wired to isToolAutoApproved
+                       - isToolAutoApproved (returns true for any edit tool
+                         when editFiles=true, regardless of target)
+                       - Filesystem geometry constructed via realpathSync
+                         + mkdtempSync + writeFileSync
+
+observed_result      = R0  RED_REPRODUCED
+                         OUTSIDE + editFiles=true => expected ASK,
+                         currently silently ALLOW.
+                         getClineMessages() stayed at length 0; the
+                         ask card was NEVER published. This is the
+                         load-bearing production defect.
+                       R0b ALREADY_GREEN (positive control)
+                         INSIDE + editFiles=true => ALLOW (today
+                         isToolAutoApproved("editor", settings with
+                         editFiles=true) returns true without
+                         consulting the target path).
+                       R0c ALREADY_GREEN (base-disabled control)
+                         OUTSIDE + editFiles=false => ASK (today
+                         isToolAutoApproved correctly returns false
+                         when editFiles=false).
+
+stop_rule_outcome    = RED_REPRODUCED, not HALT_RED_NOT_REPRODUCED.
+                       The real coordinator seam was reached through
+                       constructed filesystem geometry. No mock or
+                       hand-rolled substitute was used.
+
+phase_ordering_now   = PHASE 1 RED FIRST (DONE)
+                       PHASE 2 Bounded repair (NEXT, on RED)
+                       PHASE 3 apply_patch + R3/R4 integration +
+                               R5 conservation
+                       PHASE 4 Necessity ablation
+
+production_change    = 0 (still docs/evidence-only this commit; R0
+                       test file added as load-bearing evidence)
+
+next                 = PHASE 2 is AUTHORIZED to begin in the next
+                       commit, by the same ACT. No new planning
+                       commit, no new recon cycle, no more
+                       contract review. PHASE 2 implementation
+                       begins in the next commit.
+
+reviewer_verdict     = PASS_WITH_ONE_BOUNDED_P1 + HALT_RED_BEFORE_
+                       IMPLEMENTATION (both already applied /
+                       satisfied by this commit's RED test)
+                       → RED_REPRODUCED on real seam → C1: GO
+                       directly into bounded repair in same ACT.

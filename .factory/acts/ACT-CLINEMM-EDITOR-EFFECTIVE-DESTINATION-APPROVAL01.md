@@ -486,3 +486,99 @@ The CYCLE1 reviewer's verbatim disposition:
 > C1: GO after that one bounded correction. Then write RED
 > immediately — no Phase-0 CYCLE2, no new planning commit, no
 > more contract review.
+
+### 13.2 HALT_RED_BEFORE_IMPLEMENTATION verdict (reviewer follow-up after bounded corrections)
+
+After the CYCLE1 bounded corrections landed in commit e1016a0e6,
+the reviewer issued a follow-up verdict:
+`HALT_RED_BEFORE_IMPLEMENTATION` with the new ordering:
+
+```text
+REAL failure
+→ RED reproduction
+→ causal discriminator
+→ implementation
+→ GREEN
+→ necessity / ablation
+→ conservation
+```
+
+Reviewer's verbatim next-step instruction:
+
+> "Then write RED immediately."
+
+And:
+
+> "If you cannot reproduce the silent auto-approval through the
+>  real coordinator: HALT_RED_NOT_REPRODUCED and do not
+>  implement anything."
+
+And:
+
+> "Once R0 is demonstrably RED, proceed: PHASE 2 add classifier +
+>  pure policy."
+
+### 13.3 R0 production-seam RED — REPRODUCED
+
+The R0 RED was written and executed through the REAL production
+seam:
+
+```text
+Test file:
+  apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0-red.test.ts
+
+Seam components (all REAL, no mocks):
+  SdkInteractionCoordinator.handleRequestToolApproval
+    (sdk-interaction-coordinator.ts:326)
+  shouldAutoApproveTool (production-wired to isToolAutoApproved)
+    (sdk-interaction-coordinator.ts:521)
+  isToolAutoApproved (realpathSync-agnostic, today returns true
+    for any edit-tool name when editFiles=true)
+    (sdk-tool-policies.ts:1072-1077)
+  Filesystem geometry constructed via realpathSync + mkdtempSync
+    + writeFileSync (not faked).
+
+Observed result:
+  × R0: OUTSIDE + editFiles=true ⇒ expected ASK, currently
+        silently ALLOW → RED_REPRODUCED
+  ✓ R0b: INSIDE + editFiles=true ⇒ ALLOW (positive control,
+        already GREEN today)
+  ✓ R0c: OUTSIDE + editFiles=false ⇒ ASK (base-disabled control,
+        already GREEN today)
+
+Conclusion:
+  The principal defect is confirmed: editFiles=true is the
+  SINGLE FLAG governing every editor request, regardless of
+  whether the effective target is inside or outside the
+  workspace. The bug is reproduced THROUGH the real coordinator
+  + real policy callback, not via a hand-rolled substitute.
+```
+
+Full RED disposition recorded in
+`.factory/evidence/ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01/phase0-reconfirmation.md` §6.
+
+### 13.4 Updated phase ordering (post-R0-RED)
+
+```text
+PHASE 1  RED FIRST (R0..R3 reproduced on real seam)         [DONE in this ACT]
+PHASE 2  Bounded repair (classifier + pure policy +
+         coordinator wiring + auto-approval branch)          [NEXT, on RED]
+PHASE 3  apply_patch movePath + R3/R4 deny/approve/direct
+         ALLOW integration + R5 conservation                 [POST-REPAIR]
+PHASE 4  Necessity ablation                                  [POST-REPAIR]
+```
+
+PHASE 2 is AUTHORIZED to begin in the NEXT commit by the same
+ACT — no new planning commit, no new recon cycle, no more
+contract review — but PHASE 2 implementation is NOT begun in
+this commit. The RED test file is committed in this commit as
+the load-bearing evidence that the production defect exists
+on the real seam.
+
+The reviewer's authoritative instruction in this verdict:
+
+> "C1: GO directly into the bounded repair in the same ACT."
+
+That GO is granted only after the RED has been observed. The
+RED is now observed. The next commit's authoring work is
+PHASE 2 implementation.

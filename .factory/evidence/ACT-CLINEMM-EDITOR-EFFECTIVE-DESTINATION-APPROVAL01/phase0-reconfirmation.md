@@ -374,3 +374,116 @@ Layer invariants (non-negotiable throughout Phases 1-4):
 - COORDINATOR (§1.5) is the ONLY layer that decides whether
   to invoke the executor.
 - EXECUTOR (§1.2, §1.6) is NEVER asked about policy.
+
+## 6. R0 production-seam principal RED — REPRODUCED on real coordinator
+
+Per the reviewer's HALT_RED_BEFORE_IMPLEMENTATION verdict
+(opener-receiver CYCLE1 follow-up), the principal RED was
+written and executed BEFORE any implementation work. The
+reviewer's required causal chain is:
+
+```text
+REAL failure
+→ RED reproduction
+→ causal discriminator
+→ implementation
+→ GREEN
+→ necessity / ablation
+→ conservation
+```
+
+### R0 file
+
+```text
+apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0-red.test.ts
+```
+
+The test drives the REAL production seam:
+- REAL `SdkInteractionCoordinator.handleRequestToolApproval`
+- REAL `shouldAutoApproveTool` callback wired exactly as
+  production (line 521):
+  `(request) => isToolAutoApproved(request.toolName, effective)`
+- REAL `isToolAutoApproved` from
+  `apps/vscode/src/sdk/sdk-tool-policies.ts:1072-1077`
+- REAL filesystem geometry constructed via `realpathSync`,
+  `mkdtempSync`, `writeFileSync` (not faked in any mock).
+
+### Filesystem geometry constructed
+
+```text
+workspaceRoot = realpathSync(process.cwd())
+             = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+insideVictim   = ${workspaceRoot}/.factory/tmp/r0-red-inside-victim.txt
+              → realpathSync starts with workspaceRoot  ⇒ INSIDE
+
+outsideDir     = mkdtempSync(/tmp/r0-red-outside-XXXXXX)
+outsideVictim  = ${outsideDir}/outside-victim.txt
+              → realpathSync does NOT start with workspaceRoot ⇒ OUTSIDE
+
+The beforeAll assertion `expect(resolvedOutside.startsWith(workspaceRoot + "/")).toBe(false)`
+is the geometric guard that the victim really is OUTSIDE;
+if /tmp is symlinked into the workspace on some macOS host the
+test refuses to run instead of silently flipping to a false
+positive.
+```
+
+### Observed result (commit e1016a0e6 + R0 RED uncommitted)
+
+```text
+× R0: editor target OUTSIDE workspace + editFiles=true => MUST ASK (currently silently ALLOW) 517ms
+✓ R0b: editor target INSIDE workspace + editFiles=true => ALLOW (positive control) 2ms
+✓ R0c: editor target OUTSIDE workspace + editFiles=false => ASK (base-disabled control) 53ms
+
+AssertionError: expected [] to have a length of 1 but got +0
+  at vi.waitFor timeout (src/sdk/__tests__/editor-effective-destination-approval.r0-red.test.ts:192:78)
+```
+
+### Disposition
+
+```text
+R0  = RED_REPRODUCED. The silent auto-approval bug is the
+       load-bearing production defect. The REAL production
+       code path auto-approves an editor request targeting a
+       file OUTSIDE the workspace when editFiles=true.
+
+R0b = already GREEN (positive control: inside + editFiles=true
+       correctly auto-approves today because isToolAutoApproved
+       only consults the editFiles flag, not the target path).
+
+R0c = already GREEN (base-disabled control: editFiles=false
+       correctly refuses today; the bug is purely that
+       editFiles=true is the single flag for every editor
+       request regardless of target).
+```
+
+The defect is reproduced THROUGH THE REAL SEAM. No mock or
+hand-rolled `shouldAutoApproveTool` substitute was used. The
+RED is load-bearing evidence that the production coordinator
++ production `isToolAutoApproved` need a target-aware branch
+BEFORE returning `{ approved: true }`.
+
+## 7. Updated phase ordering (per reviewer's HALT_RED_BEFORE_IMPLEMENTATION)
+
+The reviewer's new ordering replaces the previous
+"Phase 1 implementation / Phase 4 RED" backwards ordering:
+
+```text
+PHASE 1  RED FIRST (R0..R3 reproduced on real seam)        [DONE]
+PHASE 2  Bounded repair (classifier + pure policy +
+         coordinator wiring + auto-approval branch)         [NEXT, on RED]
+PHASE 3  apply_patch movePath + R3/R4 deny/approve/direct
+         ALLOW integration + R5 conservation                [POST-REPAIR]
+PHASE 4  Necessity ablation                                  [POST-REPAIR]
+```
+
+PHASE 2 may NOT begin until this R0 reproduction is recorded
+in the production ACT + parent recon evidence + epic board and
+the RED commit lands. The reviewer explicitly said "C1: GO
+directly into the bounded repair in the same ACT" — that GO
+is granted only after the RED has been observed, which is now
+done in this commit's RED test (file above).
+
+PHASE 2 is NOT begun in this commit. It is authorized to begin
+in the NEXT commit, by the same ACT, with no new planning
+commit, no new recon cycle, no more contract review.

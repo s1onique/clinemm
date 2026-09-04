@@ -931,3 +931,71 @@ NEXT                     = Phases 1-4 (RED + GREEN + necessity-ablation)
                             No new planning commit.
                             No more contract review.
 ```
+
+## 11. Post-HALT_RED_BEFORE_IMPLEMENTATION R0 reproduction (Phase 1 RED FIRST per reviewer)
+
+After the CYCLE1 bounded corrections landed (commit e1016a0e6),
+the reviewer issued `HALT_RED_BEFORE_IMPLEMENTATION` requiring
+the principal RED be reproduced through the REAL coordinator
+seam BEFORE any implementation work. The R0 RED has now been
+executed and observed:
+
+```text
+TEST FILE
+  apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0-red.test.ts
+
+SEAM (all REAL, no mocks)
+  SdkInteractionCoordinator.handleRequestToolApproval
+    apps/vscode/src/sdk/sdk-interaction-coordinator.ts:326
+  shouldAutoApproveTool wired to isToolAutoApproved
+    apps/vscode/src/sdk/sdk-interaction-coordinator.ts:521
+  isToolAutoApproved
+    apps/vscode/src/sdk/sdk-tool-policies.ts:1072-1077
+  Filesystem geometry constructed via realpathSync +
+    mkdtempSync + writeFileSync
+
+OBSERVED
+  × R0  OUTSIDE + editFiles=true => expected ASK,
+        currently silently ALLOW (DEFECT CONFIRMED).
+  ✓ R0b INSIDE + editFiles=true => ALLOW (positive control).
+  ✓ R0c OUTSIDE + editFiles=false => ASK (base-disabled control).
+
+STOP RULE
+  RED_REPRODUCED, not HALT_RED_NOT_REPRODUCED. The seam was
+  reached through constructed filesystem geometry, not a
+  hand-rolled substitute.
+
+PHASE ORDERING (post-R0)
+  PHASE 1 RED FIRST                [DONE]
+  PHASE 2 Bounded repair           [NEXT, on RED]
+  PHASE 3 apply_patch + R3/R4      [POST-REPAIR]
+  PHASE 4 Necessity ablation       [POST-REPAIR]
+```
+
+The reviewer's authoritative instructions in this verdict:
+
+> "Then write RED immediately."
+
+> "If you cannot reproduce the silent auto-approval through
+>  the real coordinator: HALT_RED_NOT_REPRODUCED and do not
+>  implement anything."
+
+> "Once R0 is demonstrably RED, proceed: PHASE 2 add
+>  classifier + pure policy."
+
+> "C1: GO directly into the bounded repair in the same ACT."
+
+PHASE 2 is AUTHORIZED to begin in the next commit by the same
+ACT — no new planning commit, no new recon cycle, no more
+contract review. PHASE 2 implementation begins in the next
+commit.
+
+```text
+RECON_LANE_STATUS        = CLOSED  (unchanged)
+PRODUCTION_ACT_STATUS    = OPEN / AUTHORIZED / R0_RED_REPRODUCED /
+                           PHASE_2_AUTHORIZED
+NEW_REVIEW_ROUND         = NO
+NEXT                     = PHASE 2 bounded repair in next commit
+                            (classifier + pure policy + coordinator
+                             wiring + auto-approval branch)
+```
