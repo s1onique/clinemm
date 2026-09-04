@@ -1087,3 +1087,189 @@ NEXT : one bounded production ACT
 ```
 
 Recon lane stays closed.
+
+
+---
+
+## EV_VERDICT_REVIEWER_ON_CYCLE7 (appended 2026-09-04)
+
+```text
+ACT_ID                = ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
+REVIEWER_CYCLE        = on commit 72594d509 (this ACT's CYCLE7)
+REVIEWER_VERDICT      = PASS_WITH_ONE_BOUNDED_P1
+C1                    = GO (proceed to production ACT)
+RECON_LANE            = CLOSED (do NOT reopen)
+PRODUCTION_ACT        = AUTHORIZED
+                       ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
+PRODUCTION_ACT_OPEN   = this commit (docs-only opening;
+                                    Phase 0 reconfirms 6 facts)
+```
+
+### The bounded P1 (wording/layering)
+
+The CYCLE7 reviewer's only remaining P1 is a single wording
+correction that must land INSIDE the production ACT's Phase 0,
+not in the recon ACT:
+
+```text
+P1 wording correction (applied in production ACT §3):
+  REPLACE  "non-approved-outside target still refuses"
+  WITH     "denied approval means executor not invoked"
+```
+
+This is layer-conflation: the executor must be ignorant of
+the approval policy. The correct three-layer contract is:
+
+```text
+CLASSIFIER
+  path -> inside | outside | unavailable
+
+POLICY
+  classifier result + toggles -> ALLOW | ASK
+
+COORDINATOR / APPROVAL INTEGRATION
+  ASK + deny    -> executor NOT invoked
+  ASK + approve -> executor invoked and outside write succeeds
+  ALLOW         -> executor invoked directly
+
+EXECUTOR
+  approved outside request -> writes successfully
+```
+
+### Other corrections the reviewer affirmed
+
+The reviewer explicitly affirmed CYCLE7's six P1 corrections
+and the P2 verdict noun change. Key affirmations:
+
+- Lattice correction (P1-1): the 5-row table is the
+  contract; the 6th row `unavailable -> ASK` is fail-closed.
+- Tri-state classifier (P1-2): UNAVAILABLE is correct
+  fail-closed semantics for an auto-approval decision.
+- Sync vs async seam (P1-3): do NOT mutate
+  isToolAutoApproved(); use existing async approval seam.
+- isEditTool() conservation (P1-5): production ACT's
+  Phase 0 must inventory each member; either include
+  or explicitly record as successor/unchanged.
+- Path-boundary containment (P1-8): use canonical-realpath
+  predicate (path.relative), NOT string prefix matching.
+- Defect naming (P1-7): EXTERNAL_EDIT_AUTO_APPROVAL_CONTRACT_
+  UNIMPLEMENTED is correct.
+- Legacy field reactivation (P1-8): reuse editFilesExternally
+  as a deliberate ClineMM compatibility choice.
+
+### Important implementation consequence
+
+The reviewer flagged one critical implementation consequence:
+
+```text
+Does the editor executor itself reject relative ../outside
+paths even after approval?
+
+B currently passes by refusing traversal at the lexical
+check (editor.ts:60-62). That creates a potential
+policy/executor mismatch:
+  classifier: ../outside/file -> OUTSIDE
+  policy:     editFiles=true + external=true -> ALLOW
+  executor:   may still reject relative traversal
+
+Because current upstream editor schema describes the tool
+path as an "absolute path", this may simply be an
+invalid-input conservation case rather than a product bug.
+```
+
+This is frozen in the production ACT as:
+
+```text
+EDITOR_PATH_CONTRACT = ABSOLUTE_ONLY
+```
+
+If Phase 0 finds that ClineMM's edit-tool request shape
+ALSO accepts non-absolute paths (legacy aliases or apply_patch
+variants), then the ACT must additionally bind:
+
+```text
+approved relative-outside must be handled consistently
+```
+
+### Phase 0 binding list (frozen from reviewer verdict)
+
+The production ACT's Phase 0 must bind only these six things:
+
+```text
+ASYNC_CLASSIFICATION_SEAM
+EDITOR_PATH_CONTRACT
+EDIT_TOOL_REQUEST_PATH_EXTRACTION
+EXTERNAL_POLICY_STORAGE_FIELD
+isToolAutoApproved_sync_OR_async
+isEditTool_members_conserved
+```
+
+### Required RED layers (frozen from reviewer verdict)
+
+```text
+R1 CLASSIFIER
+  canonical inside
+  absolute outside
+  symlink effective outside
+  nonexistent target
+  unavailable
+
+R2 PURE POLICY
+  exact 5-row lattice + unavailable
+
+R3 COORDINATOR
+  outside/external-off -> ASK
+  deny -> no execution
+  approve -> execution
+
+R4 AUTO-APPROVAL
+  outside/external-on -> direct execution
+
+R5 CONSERVATION
+  inside/editFiles-on unaffected
+  editFiles-off always ASK
+  other real edit tools follow same contract or are
+  explicitly bound as successor
+```
+
+### Necessity ablation (frozen from reviewer verdict)
+
+Disable only the classification -> policy composition:
+
+```text
+outside + external=false
+-> silently auto-approved again
+```
+
+Then restore. That proves the new composition is load-bearing.
+
+### Factory classification (reviewer verdict)
+
+```text
+P0              : NONE
+P1              : wording/layering only
+                  "non-approved outside executor refuses"
+                  must become
+                  "denied approval means executor not invoked"
+P2              : none material
+RECON           : CLOSED
+APPROVAL_SEMANTICS : BOUND
+PRODUCTION_ACT  : AUTHORIZED
+```
+
+### Reviewer's note on tooling residue
+
+> The digest's embedded gate-summary and generator binding
+> remain invalid/non-authoritative, but that is unrelated
+> Factory tooling residue and should not delay this lane.
+
+(Confirmed: the gate-summary.json and generator bindings
+are unrelated; this ACT does not touch them.)
+
+### Final acknowledgement
+
+The recon ACT's CYCLE7 corrections (six P1 + one P2) are
+complete. The bounded P1 wording correction is the only
+remaining CYCLE7 work, and it lives in the production ACT
+as the first line of Phase 0. The recon lane is closed;
+no further recon cycles are required for this surface.

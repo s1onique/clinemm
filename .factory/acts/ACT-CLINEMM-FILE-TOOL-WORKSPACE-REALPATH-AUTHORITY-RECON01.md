@@ -661,3 +661,142 @@ NEW_REVIEW_ROUND =
   (the P1 fix is wording-only + sibling-candidate addition;
    no production code change; no new RED; no new test)
 ```
+
+---
+
+## 9. REVIEWER VERDICT on CYCLE7 (commit 72594d509) — PRODUCTION_ACT_AUTHORIZED
+
+```text
+ACT_ID             = ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
+REVIEWER_CYCLE     = on commit 72594d509 (this ACT's CYCLE7)
+REVIEWER_VERDICT   = PASS_WITH_ONE_BOUNDED_P1
+C1                 = GO (proceed to production ACT)
+RECON_LANE         = CLOSED (do NOT reopen)
+PRODUCTION_ACT     = AUTHORIZED
+                      ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
+PRODUCTION_HEAD    = 72594d509 (this commit; docs-only opening)
+APPROVAL_SEMANTICS = BOUND_FROM_SOURCE
+```
+
+The CYCLE7 reviewer's verdict on the CYCLE7 evidence commit
+(72594d509) accepted all six P1 corrections and the P2
+verdict noun change. The reviewer authorized the production
+ACT to open with **one bounded P1 wording correction** applied
+inside Phase 0 of the production ACT:
+
+```text
+P1 wording correction (applied in production ACT §3):
+  REPLACE  "non-approved-outside target still refuses"
+  WITH     "denied approval means executor not invoked"
+```
+
+This is the only remaining work from the recon lane. The
+production ACT ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
+opens in the same commit (this commit) in docs-only form
+with Phase 0 binding the six reconfirmation facts.
+
+### CYCLE7 factory classification (per reviewer verdict)
+
+```text
+P0               : NONE
+P1               : wording/layering only (1 item; applied
+                   in production ACT §3, no further recon
+                   cycles required)
+P2               : none material
+RECON            : CLOSED
+APPROVAL_SEMANTICS : BOUND
+PRODUCTION_ACT   : AUTHORIZED
+```
+
+### Reviewer's confirmation of the corrected lattice
+
+The reviewer confirmed the 5-row lattice from CYCLE7 P1-1:
+
+```text
+editFiles | destination  | external-edit | result
+--------- | ------------ | ------------- | ------
+   false  | inside       | any           | ASK
+   false  | outside      | any           | ASK
+   true   | inside       | any           | ALLOW
+   true   | outside      | false         | ASK
+   true   | outside      | true          | ALLOW
+   (any)  | unavailable  | (any)         | ASK   (fail-closed)
+```
+
+This is the contract the production ACT must freeze as Phase 0.
+
+### Reviewer's confirmation of the 3-layer split
+
+The reviewer corrected CYCLE7's wording that conflated
+executor safety with approval:
+
+```text
+CLASSIFIER
+  path -> inside | outside | unavailable
+
+POLICY
+  classifier result + toggles -> ALLOW | ASK
+
+COORDINATOR / APPROVAL INTEGRATION
+  ASK + deny    -> executor NOT invoked
+  ASK + approve -> executor invoked and outside write succeeds
+  ALLOW         -> executor invoked directly
+
+EXECUTOR
+  approved outside request -> writes successfully
+```
+
+The executor must NOT know about the approval policy.
+
+### Reviewer's confirmation of the async-evidence architecture
+
+The reviewer confirmed that the correct architecture is:
+
+```text
+ASYNC filesystem observation
+  -> immutable classification evidence
+  -> PURE approval policy
+```
+
+And explicitly forbade mutating isToolAutoApproved() to be
+async (it almost certainly is sync; converting it ripples
+through every tool-approval caller).
+
+### Reviewer's note on tooling residue
+
+The reviewer noted that the digest's embedded gate-summary
+and generator binding remain invalid/non-authoritative but
+are unrelated Factory tooling residue and should not delay
+this lane. (Confirmed: this ACT does not touch them.)
+
+### Production ACT authorization
+
+The production ACT is **AUTHORIZED** to open:
+
+```text
+ACT_ID            = ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
+PARENT_RECON_ACT  = ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01
+PARENT_HEAD       = 72594d50921fe2527b98d5052e09c74969a88fe1
+PHASE_0_DELTA     = 6-fact binding + wording correction
+PRODUCTION_CHANGE = 0 in this commit (docs-only opening)
+NEXT              = Phase 0 binds the 6 facts from source;
+                    Phases 1-4 implement R1..R5 RED + GREEN
+                    + necessity ablation
+```
+
+### Final acknowledgement
+
+CYCLE7 is the recon ACT's terminal bound. The recon lane is
+closed; no further recon cycles are required for this
+surface. The production ACT owns the remaining work.
+
+```text
+RECON_LANE_STATUS       = CLOSED
+PRODUCTION_ACT_STATUS   = OPEN / AUTHORIZED / PHASE_0_BIND_PENDING
+PARENT_RECON_VERDICT    = PASS_WITH_ONE_BOUNDED_P1
+PRODUCTION_ACT_VERDICT  = (to be set by production ACT's own
+                          Factory reviewer verdict)
+NEW_REVIEW_ROUND        = NO (per CYCLE7 reviewer: "No new
+                          recon cycle"; the bounded P1 lives
+                          in production ACT Phase 0)
+```

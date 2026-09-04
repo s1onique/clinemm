@@ -336,3 +336,36 @@
 #
 # Production code change: 0 (still recon-only; corrections
 # live in the contract for the production ACT).
+
+# === CYCLE7-REVIEWER-VERDICT entry-freeze appended 2026-09-04 ===
+# Per Factory reviewer verdict on commit 72594d509 (this ACT):
+#   VERDICT = PASS_WITH_ONE_BOUNDED_P1
+#   C1      = GO (proceed to production ACT)
+#   RECON   = CLOSED (do NOT reopen)
+#
+# CYCLE7's P1x6 + P2 corrections are ACCEPTED. The bounded
+# P1 wording correction is applied in the production ACT's
+# Phase 0 (§3 frozen execution semantics):
+#
+#   REPLACE  "non-approved-outside target still refuses"
+#   WITH     "denied approval means executor not invoked"
+#
+# No new recon cycle. The production ACT
+# ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 is
+# AUTHORIZED and OPENS in this same commit with:
+#
+#   PHASE 0  - 6-fact binding (async seam, path extraction,
+#              storage field, isToolAutoApproved sync-ness,
+#              lowest async seam, isEditTool members)
+#   PHASE 1  - classifier + pure policy function
+#   PHASE 2  - coordinator wiring + auto-approval branch
+#   PHASE 3  - apply_patch conservation
+#   PHASE 4  - RED + GREEN + necessity ablation
+#
+# FACTORY CLASSIFICATION (per CYCLE7 reviewer verdict):
+#   P0              : NONE
+#   P1              : wording/layering only (1 item; applied)
+#   P2              : NONE material
+#   RECON           : CLOSED
+#   APPROVAL_SEMANTICS : BOUND
+#   PRODUCTION_ACT  : AUTHORIZED

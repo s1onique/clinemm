@@ -559,6 +559,19 @@ apps/examples/desktop-app/.cursor/settings.json
 # detail at .factory/epics/file-tool-workspace-realpath-authority.md
 # binds to this evidence directory.
 !/.factory/evidence/ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01/
+# ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01: production ACT
+# opened 2026-09-04 per Factory reviewer CYCLE7 verdict
+# PASS_WITH_ONE_BOUNDED_P1 / C1: GO on commit 72594d509 (parent recon
+# ACT ACT-CLINEMM-FILE-TOOL-WORKSPACE-REALPATH-AUTHORITY-RECON01 CYCLE7).
+# Phase 0 freezes the 5-row lattice + UNAVAILABLE row, the 4-layer
+# CLASSIFIER/POLICY/COORDINATOR/EXECUTOR split, the wording correction
+# ("denied approval means executor not invoked"), the EDITOR_PATH_CONTRACT
+# (ABSOLUTE_ONLY) and TOCTOU_AFTER_CLASSIFICATION (UNSOLVED) invariants,
+# and the R1..R5 RED layer structure. ACT file + evidence directory
+# must be durably tracked: the deferred-work epic detail at
+# .factory/epics/editor-effective-destination-approval.md binds here.
+!/.factory/acts/ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01.md
+!/.factory/evidence/ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01/
 # ACT-CLINEMM-BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01: producer-side
 # contract ACT opened after the Q1-Q5 bounded recon of
 # RUNTIME-TASK-PROGRESSION-RECON01 reached AUTHORITY_IDENTITY_MISSING =
