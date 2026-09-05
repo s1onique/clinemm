@@ -1205,6 +1205,15 @@ apps/vscode/.factory/evidence/
 # with corrected freeze at evidence/12-corrected-freeze.md; reroutes §27
 # Outcome A → Outcome C (foundation ACT first, NOT F4). Production edits
 # STILL FORBIDDEN in this correction. Recon source work preserved.
+# P3 correction (2026-09-05, same day, second-reviewer verdict
+# HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND) appends §6 to the P2
+# correction ACT body (no new ACT body; reviewer said "amend only these
+# fields"); rewrites evidence/12-corrected-freeze.md to v2 (terminal);
+# adds evidence/13-instance-switch-semantic-recon-plan.md (the 5-question
+# RED plan the foundation ACT must execute); surgically amends 09, 10,
+# 11 (P3-relevant parts), and 08-final-report.md. Narrows foundation ACT
+# scope (drops defaultProfileId, Profile CRUD, UI). Production edits
+# STILL FORBIDDEN. Recon source work preserved.
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01.md
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/

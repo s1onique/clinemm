@@ -100,6 +100,43 @@ machinery.
 The recon does NOT pre-decide. The foundation ACT does the source
 survey and freezes the persistence seam.
 
+## Downgrade flagged by second reviewer (P3-3)
+
+A second-reviewer verdict (`HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND`)
+flagged that "Candidate 1 + Candidate 2 recommended" above upgrades
+a candidate into a frozen design before the foundation survey.
+The product invariant is correct (`SESSION_ACTIVE_PROFILE_PERSISTED
+= YES`), but the mechanism is frozen ahead of its evidence:
+
+```text
+SESSION_ACTIVE_PROFILE_PERSISTED        = YES          (product invariant; survives)
+SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM = NOT_YET_BOUND  (this file; foundation discovers)
+
+The recon ACT body / P2 freeze had:
+SESSION_ACTIVE_PROFILE_ID persists in session manifest + taskHistory.json
+which is too specific pre-survey. The v2 freeze (evidence 12) instead
+records:
+SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM = NOT_YET_BOUND
+leaving the discovery to the foundation ACT.
+```
+
+The foundation ACT MUST trace at least these three:
+
+```text
+1. Where is the per-session CoreSessionConfig snapshot rebuilt from?
+   Does it pick up a mid-session activeProfileId change?
+2. What does taskHistory.json's per-task record carry?
+   Can it hold a sessionMetadata block without breaking other readers?
+3. Is there an existing per-session metadata seam (workspaces/<hash>/
+   workspaceState.json is the precedent) that does this with zero
+   blast radius?
+```
+
+Whichever the foundation picks, the implementation ACT wires the
+profile pointer on top. The foundation narrows to: "what is the
+per-session seam for the currently-bound instance?" — the
+profile-pointer wiring is implementation ACT work.
+
 ## Global default profile
 
 `GLOBAL_DEFAULT_PROFILE_ID` is a NEW global state key, separate from
@@ -112,6 +149,12 @@ ONLY by:
 
 It is NOT updated by the footer quick-switch. Footer quick-switch
 updates `SESSION_ACTIVE_PROFILE_ID` only.
+
+Per reviewer (P3-4), `defaultProfileId` belongs to the **Model
+Profiles implementation ACT**, NOT to the foundation ACT. The
+foundation characterizes the per-session instance-binding seam
+only; the profile-pointer seam (which the implementation ACT
+extends from the instance seam) is implementation work.
 
 EVIDENCE CLASS = STRUCTURAL — derives the persistence seam from the
                   existing task/session persistence contract; does

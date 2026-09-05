@@ -135,6 +135,52 @@ SECRETS_STAY_IN_SECURE_MACHINERY = YES  (apiKey / OAuth / secrets.json
                                          unchanged)
 ```
 
+## Open question flagged by second reviewer (P3-2)
+
+A second-reviewer verdict (`HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND`)
+flagged that the credential identity scope is underspecified. The
+P2 freeze alternated between two incompatible framings:
+
+```text
+credentialReference → existing secure machinery
+existing provider credentials are keyed by providerId
+```
+
+For two same-provider instances with different keys:
+
+```text
+openai-compatible/local      → key A
+openai-compatible/corporate  → key B
+```
+
+a credential store keyed only by `providerId = openai-compatible`
+cannot identify both. Option β above quietly introduced the thing
+actually required (`credentialReference.secretsKey =
+provider.litellm-local`), which is a NEW credential-reference
+identity namespace — not merely "use the existing providerId key".
+
+This is fine architecturally, but the foundation ACT must freeze
+the choice honestly:
+
+```text
+PROVIDER_INSTANCE_CREDENTIAL_IDENTITY  = NOT_YET_BOUND  (this file)
+CREDENTIAL_IDENTITY_SCOPE              = NOT_YET_BOUND  (this file)
+                                          Foundation must answer:
+                                          PROVIDER_ID |
+                                          PROVIDER_INSTANCE_ID |
+                                          EXISTING_SECRET_REFERENCE
+                                          Result must permit:
+                                          instance A → secret A,
+                                          instance B → secret B
+                                          without copying either secret
+                                          into the instance record
+```
+
+All three Options above can support `PROVIDER_INSTANCE_ID`
+credential scope (Option β's `secretsKey` field is the natural
+carrier). The foundation ACT picks one Option AND freezes the
+credential identity scope in the same decision.
+
 EVIDENCE CLASS = STRUCTURAL — derives the minimum shape from the
                   product case + the existing persistence contract;
                   does not depend on a live trace. Foundation ACT

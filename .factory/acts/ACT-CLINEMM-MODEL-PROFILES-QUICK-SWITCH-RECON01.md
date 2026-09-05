@@ -65,6 +65,43 @@
 >                                                       ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
 >                                                       (NOT F4)
 >       IMPLEMENTATION_ACT_AUTHORIZED             = NO  (gated on foundation closure)
+>
+>   P3_correction02_pointer:
+>     On 2026-09-05 (later that day) a second reviewer verdict
+>     HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND authorized the foundation
+>     ACT name but with a NARROWER scope, and required honest
+>     NOT_YET_BOUND / NOT_YET_PROVEN framing on three discriminators
+>     that the prior P2 freeze overclaimed:
+>
+>       NEW_P0_1  PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+>                 (existing seams proven for (providerId, modelId) only;
+>                  same-providerId-different-instanceId unproven;
+>                  foundation traces via evidence 13 RED plan)
+>       NEW_P0_2  SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND
+>                 (PROVIDER_INSTANCE_CREDENTIAL_IDENTITY = NOT_YET_BOUND;
+>                  foundation picks CREDENTIAL_IDENTITY_SCOPE = PROVIDER_INSTANCE_ID)
+>       NEW_P1_1  SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM = NOT_YET_BOUND
+>                 (downgraded from "session manifest + taskHistory.json";
+>                  foundation discovers the minimal seam)
+>       NEW_P1_2  defaultProfileId moved out of foundation scope
+>                 (belongs to the implementation ACT, not foundation)
+>
+>     The bounded P3 correction is **§6** of the same correction ACT body
+>     ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01
+>     (no new ACT body; reviewer said "amend only these fields"). The
+>     terminal v2 freeze is at:
+>       .factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/12-corrected-freeze.md
+>     The mechanical RED plan is at:
+>       .factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/13-instance-switch-semantic-recon-plan.md
+>
+>     Post-P3 posture:
+>       FOUNDATION_ACT_AUTHORIZED         = YES  (narrowed scope)
+>       IMPLEMENTATION_ACT_AUTHORIZED     = NO   (still gated on foundation closure)
+>       FOUNDATION_SCOPE                  = identity + credential namespace +
+>                                            runtime instance-switch behavior +
+>                                            per-session instance-binding seam ONLY
+>                                            (NOT defaultProfileId, NOT Profile CRUD,
+>                                             NOT UI)
 > ```
 >
 > Model Profiles recon therefore begins without an upstream architecture blocker,
@@ -1599,3 +1636,54 @@ is NOT authorized and is gated on the foundation ACT's closure.
 
 Recon source work (this ACT body's §1–§34, evidence files 00–07) is preserved
 intact and remains load-bearing.
+
+### P3 correction pointer (amended 2026-09-05 second-reviewer verdict)
+
+A second reviewer, after the P2 correction landed, raised
+`HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND`. That verdict
+authorized the foundation ACT name but with a **narrower scope**,
+and required three honest `NOT_YET_BOUND` / `NOT_YET_PROVEN`
+discriminators in the corrected freeze:
+
+```text
+NEW P0-1  PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+          (existing seams proven for (providerId, modelId) only;
+           same-providerId-different-instanceId is unproven;
+           foundation must trace via evidence 13 RED plan)
+
+NEW P0-2  SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND
+          (credentialReference namespace must be frozen;
+           foundation picks PROVIDER_INSTANCE_ID credential scope,
+           not PROVIDER_ID)
+
+NEW P1-1  session persistence seam frozen ahead of source survey
+          (SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM = NOT_YET_BOUND;
+           foundation discovers the minimal seam)
+
+NEW P1-2  defaultProfileId was incorrectly included in foundation scope
+          (moved to implementation ACT scope)
+```
+
+The bounded P3 correction is **§6** of the same correction ACT
+body `ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01`
+(no new ACT body needed; reviewer said "amend only these fields").
+See §6 for the verbatim updated freeze and the narrowed foundation
+scope, and evidence `12-corrected-freeze.md` (v2) for the terminal
+freeze that supersedes v1 and this recon's original §21.
+
+The mechanical RED plan the foundation ACT must execute is at
+`.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/13-instance-switch-semantic-recon-plan.md`
+(the five-question case: active = A, switch to B where
+`old.providerId === new.providerId` but baseUrl / apiLine /
+headers / region / credential identity differ).
+
+The foundation ACT is `ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01`,
+narrowed to: ProviderConfigurationInstance identity +
+secret-reference identity + runtime instance-switch behavior +
+per-session instance-binding seam only. Does NOT own defaultProfileId,
+Profile CRUD, or UI. The implementation ACT remains
+`ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01` and
+is still NOT authorized.
+
+Recon source work (this ACT body's §1–§34, evidence files 00–07)
+remains preserved intact and load-bearing.

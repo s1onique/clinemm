@@ -47,6 +47,30 @@
 > (new files `09–12` appended; `08-final-report.md` amended to reflect
 > the corrected freeze; existing `00–07` unchanged).
 >
+> ```text
+> Second reviewer verdict (2026-09-05, post-P2):
+>   VERDICT            = HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+>   P2_DISPOSITION     = PASS_BOUNDED_CORRECTION (P0-1, P0-2, P1 lifecycle,
+>                          P1 in-flight closed; foundation ACT authorized)
+>   NEW_P0_1           = PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+>                          (seam not proven for same-providerId-
+>                           different-instanceId switch)
+>   NEW_P0_2           = SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND
+>                          (credentialReference namespace underspecified)
+>   NEW_P1_1           = session persistence seam frozen ahead of source survey
+>   NEW_P1_2           = defaultProfileId was incorrectly included in
+>                          foundation scope
+>   P3_CORRECTION      = §6 of this ACT (amends §2 freeze verbatim to the
+>                          reviewer's amended field list; narrows foundation
+>                          scope; recon source work preserved; production
+>                          untouched; no new tests)
+>   FOUNDATION_ACT     = YES (named ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-
+>                          FOUNDATION01, narrower scope)
+>   IMPL_ACT           = NO (still gated on foundation closure)
+>   EVIDENCE_NEW       = 1 (13-instance-switch-semantic-recon-plan.md)
+>   EVIDENCE_AMENDED   = 4 (08, 09, 10, 12)
+> ```
+>
 > ---
 >
 > ## §0 — What the reviewer said (2026-09-05)
@@ -330,6 +354,321 @@
 > IMPLEMENTATION_ACT_AUTHORIZED           = NO (gated on foundation ACT closure)
 > FOUNDATION_ACT_AUTHORIZED               = YES (named, not yet opened)
 > CORRECTION01_DISPOSITION                = PASS_BOUNDED_CORRECTION (this ACT's verdict)
+> ```
+>
+> ## §6 — P3 amendment (2026-09-05 second-reviewer verdict)
+>
+> A second-reviewer verdict (`HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND`)
+> on this bounded correction authorizes the foundation ACT but raises
+> **two new P0s** and **two P1s** that the corrected freeze as frozen in
+> §2/§12 overclaimed. Per the reviewer's directive ("amend only these
+> fields"), this §6 narrows the corrected freeze to match the exact
+> updated field list the reviewer supplied. Production edits remain
+> FORBIDDEN. NO new tests added. NO production source touched.
+>
+> ### P3-1 NEW P0 — instance change ≠ provider change at the seam level
+>
+> The prior P2 freeze carried forward from the recon:
+>
+> ```text
+> CURRENT_SESSION_SWITCH_SEAM_EXISTS  = YES
+> SWITCH_EFFECTIVE_BOUNDARY           = NEXT_MODEL_REQUEST
+> ```
+>
+> These were proven under the OLD domain `(providerId, modelId)`:
+>
+> ```text
+> same providerId + new modelId
+>   → updateSessionModel / updateConnection
+>
+> different providerId
+>   → SdkProviderChangeCoordinator
+>   → replaceActiveSession
+> ```
+>
+> The corrected product introduces the perfectly valid transition:
+>
+> ```text
+> Instance A
+>   instanceId  = local
+>   providerId  = openai-compatible
+>   baseUrl     = http://local-litellm/
+>   credential  = local-key-ref
+>
+>          ↓ switch
+>
+> Instance B
+>   instanceId  = corporate
+>   providerId  = openai-compatible
+>   baseUrl     = https://corp-litellm/
+>   credential  = corporate-key-ref
+> ```
+>
+> Here `old.providerId === new.providerId`. The existing
+> provider-change discriminator may say "provider unchanged", and the
+> existing same-provider fast path (`updateActiveSessionModel` →
+> `updateSessionConnection`) only mutates the **model**, not the
+> instance-owned fields (`baseUrl`, `headers`, `apiLine`, `region`,
+> `providerSpecificConfig`, `credential identity`). Therefore the
+> P2-corrected `CURRENT_SESSION_SWITCH_SEAM_EXISTS = YES` and
+> `SWITCH_EFFECTIVE_BOUNDARY = NEXT_MODEL_REQUEST` are **premature for
+> profile-instance switching**.
+>
+> Per reviewer, these are the honest discriminators:
+>
+> ```text
+> CURRENT_PROVIDER_MODEL_SWITCH_SEAM_EXISTS      = YES
+> CURRENT_PROVIDER_INSTANCE_SWITCH_SEAM_EXISTS   = NOT_YET_PROVEN
+> ```
+>
+> ### P3-2 NEW P0 — credential identity scope is underspecified
+>
+> The P2 freeze alternated between two incompatible framings:
+>
+> ```text
+> credentialReference → existing secure machinery
+> existing provider credentials are keyed by providerId
+> ```
+>
+> For two same-provider instances with different keys:
+>
+> ```text
+> openai-compatible/local      → key A
+> openai-compatible/corporate  → key B
+> ```
+>
+> a credential store keyed only by `providerId = openai-compatible`
+> cannot identify both. Option β in evidence 09 quietly introduced the
+> thing actually required (`credentialReference.secretsKey =
+> provider.litellm-local`), which is a NEW credential-reference
+> identity namespace — not merely "use the existing providerId key".
+>
+> This is fine architecturally, but must be frozen honestly:
+>
+> ```text
+> PROVIDER_INSTANCE_CREDENTIAL_IDENTITY  = NOT_YET_BOUND
+> CREDENTIAL_IDENTITY_SCOPE              = NOT_YET_BOUND
+>                                         (foundation ACT must answer:
+>                                          PROVIDER_ID |
+>                                          PROVIDER_INSTANCE_ID |
+>                                          EXISTING_SECRET_REFERENCE;
+>                                          the result must permit
+>                                          instance A → secret A,
+>                                          instance B → secret B
+>                                          without copying either secret
+>                                          into the instance record)
+> ```
+>
+> ### P3-3 P1 — session persistence seam is selected too early
+>
+> Evidence 10 says:
+>
+> ```text
+> Candidate 1 + Candidate 2 recommended
+> foundation ACT picks one
+> ```
+>
+> Yet the P2 freeze committed:
+>
+> ```text
+> SESSION_ACTIVE_PROFILE_ID persists in
+> session manifest + taskHistory.json
+> ```
+>
+> That upgrades a **candidate** into a **frozen design** before the
+> foundation survey. Per reviewer, keep the product invariant frozen
+> but downgrade the mechanism:
+>
+> ```text
+> SESSION_ACTIVE_PROFILE_PERSISTED       = YES   (invariant; product contract)
+> SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM = NOT_YET_BOUND
+>                                         (foundation ACT discovers whether
+>                                          task history alone, manifest
+>                                          alone, both, or another existing
+>                                          metadata seam is minimal)
+> ```
+>
+> ### P3-4 P1 — `defaultProfileId` does not belong in the foundation
+>
+> The foundation ACT was over-scoped. `defaultProfileId` belongs to
+> **Model Profiles**, not provider-instance identity. Provider
+> instances can exist perfectly well without any profile default.
+>
+> The foundation narrows to one epistemic purpose:
+>
+> ```text
+> Foundation ACT owns:
+>   - ProviderConfigurationInstance identity
+>   - secret-reference identity (the answer to P3-2)
+>   - runtime instance-switch behavior (the answer to P3-1)
+>   - per-session metadata seam FOR INSTANCE BINDING ONLY
+>     (the answer to P3-3)
+> ```
+>
+> Session `activeProfileId` (the per-session profile pointer) and
+> global `defaultProfileId` (the global default pointer) remain
+> contracts for the Model Profiles implementation ACT unless the
+> source survey proves some shared persistence primitive must land
+> together with the instance seam. The P2 freeze's
+> `SESSION_ACTIVE_PROFILE_PERSISTED` and `GLOBAL_DEFAULT_PROFILE_PERSISTED`
+> move out of the foundation scope into the implementation ACT's
+> preflight.
+>
+> ### Updated freeze (terminal — supersedes §2 and evidence 12 verbatim)
+>
+> Per reviewer's exact amended freeze, with `NOT_YET_BOUND` /
+> `NOT_YET_PROVEN` honesty where the foundation must do source survey:
+>
+> ```text
+> PROFILE_STORAGE_MODEL                                  = I
+>
+> MODEL_PROFILE_REQUIRES_PROVIDER_INSTANCE_IDENTITY      = YES
+>
+> PROFILE_CONTAINS_RAW_SECRET                            = NO
+>
+> CURRENT_PROVIDER_MODEL_SWITCH_SEAM_EXISTS              = YES
+>
+> CURRENT_PROVIDER_INSTANCE_SWITCH_SEAM_EXISTS           = NOT_YET_PROVEN
+>                                                         (foundation must trace
+>                                                          same-providerId-
+>                                                          different-instance
+>                                                          switch path)
+>
+> PROVIDER_INSTANCE_CREDENTIAL_IDENTITY                  = NOT_YET_BOUND
+>                                                         (foundation must answer
+>                                                          CREDENTIAL_IDENTITY_SCOPE)
+>
+> SESSION_ACTIVE_PROFILE_PERSISTED                       = YES
+>
+> SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM                = NOT_YET_BOUND
+>                                                         (foundation discovers
+>                                                          minimal seam)
+>
+> SESSION_PROFILE_APPLICATION                            = SPLIT_ACTION
+>
+> GLOBAL_DEFAULT_PROFILE                                 = SEPARATE_FROM_SESSION_ACTIVE_PROFILE
+>                                                         (implementation ACT,
+>                                                          not foundation)
+>
+> SWITCH_DURING_INFLIGHT_MODEL_REQUEST                   = RESTRICT_UNTIL_IDLE
+>
+> IMPLEMENTATION_SHAPE                                   = FOUNDATION_THEN_MODEL_PROFILES
+>                                                         (foundation gates impl)
+> ```
+>
+> Everything else from the P2 corrected recon survives. The recon
+> source work (evidence 00–07) is unchanged and load-bearing.
+> Evidence 08 is amended once more (now reflects §6 updates).
+> Evidence 09–11 receive surgical amendments to add
+> `NOT_YET_BOUND` / `NOT_YET_PROVEN` honesty. Evidence 12 receives a
+> new terminal version of the freeze matching this §6 verbatim.
+>
+> ### Updated foundation ACT scope (narrowed per reviewer)
+>
+> ```text
+> ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
+>   PRIMARY QUESTION (frozen here):
+>     Can two independently configured instances of the same providerId
+>     coexist and can an active session transition from instance A to
+>     instance B such that the NEXT request uses exactly B's effective
+>     connection + credentials, without duplicating secrets into profiles?
+>
+>   REQUIRED PHASE 0 RECON (before implementation):
+>     Instance identity:
+>       storage candidates α / β / γ
+>       exact read/write blast radius
+>     Credential identity:
+>       how key/token A and key/token B coexist for same providerId
+>       no raw secret in instance metadata
+>     Runtime:
+>       compare A → B where providerId SAME
+>       does current switch logic rebuild?
+>       what fields can updateConnection mutate?
+>       what builds providerConfig / handler?
+>     Persistence:
+>       only characterize possible per-session instance-metadata seam;
+>       do not implement Model Profile fields yet
+>
+>   RED THAT ACTUALLY MATTERS:
+>     Construct the real semantic case:
+>       same providerId, different instanceId, different baseUrl,
+>       different credential reference
+>     Then:
+>       active = A, switch to B, next request effective config = B
+>     Pre-foundation this should either fail or prove that an
+>     existing seam already handles it.
+>
+>   OWNS:
+>     ProviderConfigurationInstance identity
+>     secret-reference identity (P3-2 answer)
+>     runtime instance-switch behavior (P3-1 answer)
+>     per-session metadata seam FOR INSTANCE BINDING ONLY (P3-3 answer)
+>
+>   DOES NOT OWN:
+>     defaultProfileId global key (implementation ACT)
+>     SESSION_ACTIVE_PROFILE_ID persistence wiring for the profile pointer
+>       (implementation ACT — foundation only characterizes the
+>        instance-binding seam; profile-pointer seam is implementation
+>        ACT's preflight unless source survey proves shared primitive)
+>     Profile CRUD, footer quick-switch UI, "Set as default" UI,
+>       Settings "Manage Profiles" page (implementation ACT)
+>
+>   AUTHORIZED = YES (named, narrow scope; NOT yet opened).
+> ```
+>
+> ### §6 verdict
+>
+> ```text
+> HALT_RESOLUTION_SUMMARY                = P0-1 (PRODUCT_SCOPE_LOST) closed in P2;
+>                                          P0-2 (SESSION_GLOBAL_AUTHORITY_COLLAPSE) closed in P2;
+>                                          P1 (lifecycle) closed in P2;
+>                                          P1 (in-flight) closed in P2 via RESTRICT_UNTIL_IDLE.
+> NEW_HALT                               = HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+>                                          (raised by second reviewer 2026-09-05)
+> NEW_P0_1                               = PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+>                                          (seam not proven for same-providerId-
+>                                           different-instanceId switch)
+> NEW_P0_2                               = SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND
+>                                          (credentialReference namespace
+>                                           underspecified)
+> NEW_P1_1                               = session persistence seam frozen ahead of
+>                                          source survey
+> NEW_P1_2                               = defaultProfileId was incorrectly included
+>                                          in foundation scope
+> EVIDENCE_NEW_FILES                     = 1 (13-instance-switch-semantic-recon-plan.md)
+> EVIDENCE_AMENDED_FILES                 = 4 (08-final-report, 09-instance-identity-options,
+>                                           10-session-active-profile-persistence,
+>                                           12-corrected-freeze)
+> P2_CORRECTION_ACT_BODY_AMENDED         = appended §6 with updated freeze verbatim
+> RECON_ACT_BODY_AMENDED                 = §35 pointer paragraph extends with P3 line
+> PRODUCTION_CODE_DELTA                  = 0 lines
+> NEW_DIAGNOSTIC_FILE                    = 0
+> NEW_TEST_FILE                          = 0
+> FOUNDATION_ACT_AUTHORIZED              = YES (named, narrower scope)
+> IMPLEMENTATION_ACT_AUTHORIZED          = NO (still gated on foundation closure)
+> P3_DISPOSITION                         = PASS_BOUNDED_CORRECTION02 (this ACT's verdict)
+> ```
+>
+> ### §35 (P3 amended) — Successor linkage (extended)
+>
+> The recon ACT body's §35 successor linkage gains an additional line:
+>
+> ```text
+> CORRECTION02 (P3 of P2 correction)      = this §6 (narrowed freeze + narrowed
+>                                           foundation scope, second-reviewer verdict)
+> CORRECTION02_VERDICT                   = PASS_BOUNDED_CORRECTION
+> CORRECTION02_SCOPE                     = §6 updates the §2/§12 freeze verbatim
+>                                          to the reviewer's amended field list;
+>                                          amends evidence 09/10/12; adds evidence 13;
+>                                          narrows foundation scope (drops
+>                                          defaultProfileId from foundation;
+>                                          drops SESSION_ACTIVE_PROFILE_ID
+>                                          persistence wiring from foundation);
+>                                          recon source work preserved
+> NEXT                                    = ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
+>                                          (narrower: identity + credential namespace
+>                                           + runtime switch behavior + instance
+>                                           persistence seam only)
 > ```
 >
 > ---
