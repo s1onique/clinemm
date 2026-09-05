@@ -1,0 +1,48 @@
+ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01 — preflight
+==========================================================================
+
+ENTRY_HEAD           = 0debc0cc133ce54f02eff3e6e0d673c2571cbf40
+F0_CLOSURE_HEAD      = 49e7069c1eb56adf753286d72427f7bf17755925
+BRANCH               = main
+WORKTREE             = clean at F1 entry
+F1_MODE              = RECON (NOT direct refactor)
+F1_FIRST_EVIDENCE    = 01-normal-turn-chain.md + 02-manual-compaction-chain.md
+
+Inherited from F0 (verbatim, non-negotiable):
+  WorkingContextHostCapture = CACHE_OR_PROJECTION_WITH_MULTIPLE_WRITE_INGRESSES
+  DUAL_SEMANTIC_AUTHORITY   = NOT_YET_PROVEN
+  SINGLE_INGRESS_DESIRABLE  = HYPOTHESIS_TO_TEST
+
+F0 residue inherited:
+  P0 = NONE
+  P1 = NONE
+  P2 = 7 × blank-at-EOF in F0 evidence files (06, 08, 09, 12, 13, 14, 16)
+       deferred to terminal cleanup per second-C1 reviewer
+       ("the next useful learning is the F1 discriminator, not prettier EOFs")
+
+Production source touched in F1 RECON: NONE.
+Test files added/modified in F1 RECON: NONE.
+New tests permitted only AFTER 03-discriminator.md is complete (RED step).
+
+Tools required for F1 RECON:
+  - text search (already available)
+  - file reads (already available)
+  - .factory evidence writes (no permission check needed; factory infra)
+
+Tools NOT to use in F1 RECON:
+  - any editing of apps/vscode/src/sdk/working-context-host-capture.ts
+  - any editing of apps/vscode/src/sdk/SdkController.ts
+  - any editing of apps/vscode/src/sdk/sdk-compaction-coordinator.ts
+  - any editing of sdk/packages/core/src/extensions/context/compaction.ts
+  - any editing of sdk/packages/agents/src/agent-runtime.ts
+  - any editing of webview-ui/** (the consumer side is OUT of scope for F1)
+
+Whitelist entry to .gitignore:
+  !/.factory/acts/ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01.md
+  !/.factory/evidence/ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01/
+
+F1 traceability rule (from ACT body):
+  Each evidence file ends with:
+    NEXT_EVIDENCE_FILE = <NN-name.md> | END_F1_RECON
+
+NEXT_EVIDENCE_FILE = 01-normal-turn-chain.md

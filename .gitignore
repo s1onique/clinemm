@@ -1132,3 +1132,13 @@ apps/vscode/.factory/evidence/
 # ACTs reference the same evidence.
 !/.factory/acts/ACT-CLINEMM-FACTORIZE-F0-INVENTORY01.md
 !/.factory/evidence/ACT-CLINEMM-FACTORIZE-F0-INVENTORY01/
+# ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01 — RECON →
+# CHARACTERIZATION → BOUNDED FACTORIZATION on the host-side working-context
+# carrier. Predecessor is F0 (PASS_WITH_NONBLOCKING_RESIDUE at 49e7069c1 + P2
+# addendum at 0debc0cc1). F1 first-evidence is the NORMAL chain (chain 1),
+# the MANUAL COMPACTION chain (chain 2), and the frozen SAME_SEMANTIC_STATE /
+# SAME_OWNER / SAME_EVENT_DOMAIN discriminator. No RED until all three
+# discriminator answers are recorded. Survives fresh clone so F2+ can
+# reference F1's chain capture.
+!/.factory/acts/ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01.md
+!/.factory/evidence/ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01/
