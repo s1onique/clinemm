@@ -70,6 +70,28 @@ same instance + model A1 → A2
 
 ## 2. Storage geometry (α / β / γ)
 
+### 2-pre. Authority (precise)
+
+```text
+instances.json =
+  canonical SAVED PROVIDER-INSTANCE definitions
+  (what the user has named and persisted; source of truth
+   for "which instances exist" and "which one is active")
+
+ApiConfiguration (legacy globalState.json) + providers.json =
+  projected LIVE COMPATIBILITY/CONFIGURATION state
+  (what the runtime actually reads when it builds the next
+   request; mirrors of the active instance's fields)
+```
+
+The two are not equivalent. `instances.json` is the
+canonical state; the legacy/projection state is a derived
+view produced by the APPLY path (§4d). Quick-switching
+mutates both, but in distinct phases: the APPLY path
+projects the active instance into the live state, and the
+DEFINE/UPDATE path (§4d) is the only writer that introduces
+or changes an instance credential.
+
 ### 2a. Definitions
 
 ```text
@@ -234,10 +256,12 @@ The projection from an `Instance` to the legacy `ApiConfiguration`
 + `ProviderSettings` pair is a single, testable function:
 
 ```text
-projectInstanceToLiveConfig(instance: Instance): {
+projectInstanceToLiveConfig(
+  instance: Instance,
+  secretValue: string
+): {
   apiConfigPatch: Partial<ApiConfiguration>;
   providerSettingsPatch?: Partial<ProviderSettings>;
-  secretWrite: { name: string; value: string } | null;
 }
 ```
 
@@ -245,7 +269,9 @@ Inputs:
 
 - The instance record.
 - The user's current secret value (resolved by name from the
-  secrets store, see §3).
+  secrets store at the call site — see §4d APPLY step 3).
+  The projection is **given** the resolved value; it does
+  not resolve it itself and it does not write it back.
 
 Outputs:
 
@@ -256,10 +282,12 @@ Outputs:
   field path lives in providers.json rather than legacy
   state — see the openai vs openai-compatible precision
   fix in evidence 05 §11c).
-- `secretWrite`: if the secret for the new instance needs to
-  be (re)written into the secrets store before the projection,
-  this is the write tuple. Most applies will produce a
-  no-op write when the secret is unchanged.
+
+The projection does **not** return a `secretWrite` field.
+Per §4d the APPLY path is read-only with respect to the
+secrets store; the projection's only job is to translate
+the instance record (plus the already-resolved credential
+value) into a live-configuration patch.
 
 The projection is **the** place where the precision fix in
 evidence 05 §11c lives: it routes `openaiHeaders` to legacy
@@ -419,45 +447,134 @@ Future kinds the foundation does **not** implement but does
 
 - `"vault"`: external vault integration (HashiCorp Vault,
   AWS Secrets Manager, etc.). Reserved as a future kind.
-- `"inline"`: explicit literal secret embedded in the
-  instance record. Reserved as a future kind, **never**
-  default, **never** written by the projection. Exists so
-  that if a user wants to migrate a secret from the secrets
-  store into an instance record, the schema can express it
-  without a migration event.
+  Vault-backed credentials do NOT violate
+  `PROFILE_CONTAINS_RAW_SECRET = NO` because the secret
+  value never enters `instances.json` (the profile holds
+  only a vault reference, not the secret itself).
+
+A `"raw"` / `"inline"` discriminator is **explicitly not
+reserved**: any future kind that stores the secret value
+inside the profile record would directly violate the
+`PROFILE_CONTAINS_RAW_SECRET = NO` invariant. If such a
+requirement ever arises, it must be (a) re-justified against
+that invariant and (b) introduced via a `schema_version`
+bump + explicit migration code, not by pre-declaring it
+here.
 
 The schema-versioning discipline is: any new `kind` value
 requires a `schema_version` bump in `instances.json` and
 explicit migration code in `applyProviderConfigurationInstance`.
 
-### 4d. Secret-store write path
+### 4d. Secret-store path (APPLY = read-only; DEFINE = separate write path)
 
-When an instance is applied, the projection decides what to
+The credential store is touched in exactly two phases, and
+the two phases are **distinct code paths**. Conflating them
+— as the original draft did — produces an identity
+tautology (`currentValue == secretValue` by construction),
+so the foundation explicitly forbids it.
+
+#### APPLY (read-only)
+
+The APPLY path runs on every instance switch. It
+**resolves** the credential reference but does **not**
 write to the secrets store:
 
 ```text
 applyProviderConfigurationInstance(instanceId):
+  // 1. Idempotency check: same instance = no-op.
+  if (instanceId === currentActiveInstanceId) return
+
+  // 2. Resolve instance record from instances.json.
   inst = loadInstance(instanceId)
-  secretName = inst.credentialRef.name
-  secretValue = resolveSecretValue(secretName)  // may throw
-                                                 // if missing
   if (inst.credentialRef.kind !== "secret") {
-    // future kinds; not implemented in foundation phase
     throw new Error(`unsupported credentialRef.kind
                     = ${inst.credentialRef.kind}`)
   }
-  // No-op write if the secret already matches.
-  // This keeps the same-instance + model-change fast path
-  // honest: a model-only switch with the same credential
-  // identity does not touch the secrets store at all.
-  currentValue = secrets[secretName]
-  if (currentValue !== secretValue) {
-    setSecret(secretName, secretValue)
+
+  // 3. Resolve credential VALUE from secrets.json (READ-ONLY).
+  //    Missing credential is a hard error — the user must
+  //    have called defineOrUpdateInstanceCredential first.
+  secretValue = stateManager.getInstanceSecret(
+    inst.credentialRef.name
+  )
+  if (!secretValue) {
+    throw new Error(
+      `instance credential not found: name=${inst.credentialRef.name}`
+    )
   }
+
+  // 4. Project instance → live config (single function;
+  //    see §2e — no secretWrite field anymore).
+  patch = projectInstanceToLiveConfig(inst, secretValue)
+  applyApiConfigurationPatch(patch.apiConfigPatch, targetMode)
+  if (patch.providerSettingsPatch) {
+    applyProviderSettingsPatch(patch.providerSettingsPatch)
+  }
+
+  // 5. Set the new active instance id.
+  setActiveInstanceId(instanceId)
+
+  // 6. Rebuild the active session (gated on isRunning === false).
+  rebuildActiveSession({ reason: "instance-switch", ... })
 ```
 
-The secret-store write is **only** triggered when the
-projection needs to change it. A same-instance model switch
+#### DEFINE / UPDATE (separate write path — user-initiated)
+
+The DEFINE/UPDATE path is **never invoked from APPLY**.
+It is the concern of the instance-creation / instance-edit
+UI (future §17), and it is what writes the secret value
+into the secrets store in the first place:
+
+```text
+defineOrUpdateInstanceCredential(credentialRef, secretValue):
+  // credentialRef must be a valid CredentialRef (parsed
+  // against the InstanceSecretNameSchema in §7).
+  if (credentialRef.kind !== "secret") {
+    throw new Error(
+      `unsupported credentialRef.kind = ${credentialRef.kind}`
+    )
+  }
+  stateManager.setInstanceSecret(credentialRef.name, secretValue)
+  // Persists to secrets.json under the reserved "instance:"
+  // prefix (see evidence 06a §7). Same atomic-rename
+  // discipline as the existing setSecret path.
+```
+
+The two phases never overlap:
+
+- APPLY never writes to the secrets store.
+- DEFINE/UPDATE is the only writer of instance credential
+  values, and it is gated on explicit user intent (saving
+  a profile in the UI), not on quick-switch events.
+
+This is consistent with the original product: quick
+switching should not mutate secrets every time the user
+clicks a profile.
+
+#### Why this replaces the prior `secretWrite` algorithm
+
+The prior draft had:
+
+```text
+secretValue = resolveSecretValue(secretName)
+currentValue = secrets[secretName]
+if (currentValue !== secretValue) {
+    setSecret(secretName, secretValue)
+}
+```
+
+`secretValue` and `currentValue` come from the same secret
+entry — barring race/canonicalization differences,
+`currentValue == secretValue` by construction. The block
+is not a mechanism for introducing or changing a credential;
+it is an identity test of a value against itself.
+
+The new shape fixes this by construction: APPLY is
+read-only; DEFINE/UPDATE is the only writer; the two are
+not the same function.
+
+The secret-store write is **only** triggered by an explicit
+DEFINE/UPDATE event. A same-instance model switch
 never enters this branch.
 
 ## 5. Runtime strategy (A / B / C)
@@ -527,18 +644,28 @@ applyProviderConfigurationInstance(instanceId):
     // Same-instance: no rebuild, no projection write.
     return
   }
-  // 1. Project instance to live config (see §2e).
-  patch = projectInstanceToLiveConfig(loadInstance(instanceId))
-  // 2. Apply patch to legacy ApiConfiguration
+  inst = loadInstance(instanceId)
+  if (inst.credentialRef.kind !== "secret") {
+    throw new Error(`unsupported credentialRef.kind
+                    = ${inst.credentialRef.kind}`)
+  }
+  // 1. Resolve credential value (READ-ONLY; per §4d APPLY).
+  secretValue = stateManager.getInstanceSecret(
+    inst.credentialRef.name
+  )
+  if (!secretValue) {
+    throw new Error(
+      `instance credential not found: name=${inst.credentialRef.name}`
+    )
+  }
+  // 2. Project instance + resolved value to live config (see §2e).
+  patch = projectInstanceToLiveConfig(inst, secretValue)
+  // 3. Apply patch to legacy ApiConfiguration
   //    (mode-aware: plan OR act, not both).
   applyApiConfigurationPatch(patch.apiConfigPatch, targetMode)
-  // 3. Apply patch to providers.json (if any).
+  // 4. Apply patch to providers.json (if any).
   if (patch.providerSettingsPatch) {
     applyProviderSettingsPatch(patch.providerSettingsPatch)
-  }
-  // 4. Write the secret if it changed.
-  if (patch.secretWrite) {
-    setSecret(patch.secretWrite.name, patch.secretWrite.value)
   }
   // 5. Persist the new active instance id.
   setActiveInstanceId(instanceId)
@@ -779,17 +906,32 @@ SUCCESSORS          = foundation ACT §13/§14/§15 R1 —
 ## 9. Freeze summary
 
 ```text
-STORAGE_GEOMETRY              = γ (dedicated instances.json) with
-                                β-shaped read path (legacy state +
-                                providers.json remain live mirrors)
+STORAGE_GEOMETRY              = γ (dedicated instances.json)
+                                AUTHORITY = instances.json is the
+                                canonical SAVED INSTANCE state;
+                                legacy ApiConfiguration +
+                                providers.json are projected
+                                LIVE COMPATIBILITY/CONFIGURATION
+                                state (mirrors written by APPLY;
+                                see §2-pre and §4d APPLY phase)
 
 SEMANTIC_CREDENTIAL_IDENTITY  = Instance.credentialRef.name
                                 (not providerId; not raw secret;
                                  not hash)
 
 PHYSICAL_SECRET_ENCODING      = { kind: "secret", name: "<key>" }
-                                (future kinds reserved:
-                                 "vault", "inline")
+                                (future kind reserved: "vault";
+                                 "raw"/"inline" explicitly NOT
+                                 reserved — see §4c)
+
+APPLY_PHASE                   = READ-ONLY with respect to the
+                                secrets store; resolves credential
+                                by name only (see §4d)
+
+DEFINE_UPDATE_PHASE           = separate user-initiated write path
+                                (setInstanceSecret); never invoked
+                                from APPLY; gated on explicit UI
+                                save (see §4d)
 
 RUNTIME_STRATEGY              = B (full session reconstruction on
                                 instanceId change; existing
@@ -808,10 +950,21 @@ R1_FIXTURE_CONSERVATION       = same instance, model A1 → A2
 R1_IN_FLIGHT_SAFETY           = rebuild deferred while isRunning = true
 
 OUT_OF_SCOPE                  = per-mode overrides, instance UI,
-                                user migration, vault/inline kinds,
-                                multi-credential instances
+                                user migration, raw/inline kind
+                                (forever, by invariant), vault
+                                kind (deferred), multi-credential
+                                instances (single credential per
+                                instance is the foundation scope)
 
-FOUNDATION_RECON_PHASE        = CLOSED (§12 frozen)
+CREDENTIAL_STORAGE_PRIMITIVE  = C (minimal instance-scoped secret
+                                namespace; see evidence 06a);
+                                reserved "instance:" prefix in
+                                secrets.json; new typed accessor
+                                pair (getInstanceSecret /
+                                setInstanceSecret); new zod
+                                schema InstanceSecretNameSchema
+
+FOUNDATION_RECON_PHASE        = CLOSED (§12 frozen + bound)
 FOUNDATION_IMPLEMENTATION_PHASE = NOT OPEN (gated on R1 RED)
 R1                            = may proceed; produces evidence
                                 file 07-r1-red-witness.md
@@ -819,4 +972,3 @@ R1                            = may proceed; produces evidence
                                 construction seam
 MODEL_PROFILES_IMPLEMENTATION = NOT AUTHORIZED
 ```
-
