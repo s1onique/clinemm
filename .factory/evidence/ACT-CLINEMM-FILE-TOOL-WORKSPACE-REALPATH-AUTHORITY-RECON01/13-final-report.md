@@ -2087,3 +2087,85 @@ No module mutation.
     - real UI ASK
     - approve -> actual mutation
     - external=true live bypass
+
+## EV_REVIEWER_C1_GO — PASS_WITH_NONBLOCKING_EVIDENCE_RESIDUE (factory review CLOSED)
+
+Per the factory reviewer's verdict on the qualification/closure pass
+(commit 60389ad88):
+
+  FACTORY_REVIEW          = CLOSED
+  IMPLEMENTATION          = PASS
+  TARGETED_TESTS          = 104/104 GREEN
+  TYPECHECK               = GREEN
+  LINT                    = GREEN
+  PRODUCTION_ALGORITHM    = FROZEN
+  LIVE_QUALIFICATION      = PENDING (manual/harness — out of bounded cycle)
+
+Reviewer notes:
+  - no new P0
+  - no reason to touch the classifier again
+  - R3a/R3c particularly useful (real coordinator path, not just lattice)
+  - the lstat vs exists distinction is correct and sound
+  - R3b and R4 wording needs P2 precision only (no defect)
+
+### P2 evidence label precision (no defect, documentation only)
+
+  R3b — APPROVAL GATE, NOT PATCHER EXECUTION
+    R3b proves the approval gate, when user approves via
+    yesButtonClicked, propagates approved=true to the awaiting caller.
+    It does NOT prove that apply_patch actually executed and the
+    filesystem actually mutated.
+
+    MOVE_APPROVAL_GATE_PERMITTED = EXECUTED
+    ACTUAL_PATCH_MOVE            = NOT_EXECUTED  (out of bounded cycle;
+                                                 belongs in live dogfood)
+
+  R4 — NECESSITY OF FALLBACK, NOT UNIQUENESS OF ALGORITHM
+    R4 is an interface-level ablation. It proves that ordinary new-file
+    edits become ASK if nonexistent targets become UNAVAILABLE. It does
+    NOT prove the exact current ancestor-walk is the ONLY possible
+    implementation preserving that behavior.
+
+    NECESSITY_OF_NONEXISTENT_TARGET_RESOLUTION = EXECUTED / PROVEN
+    EXACT_CURRENT_FALLBACK_IMPLEMENTATION
+      = SUFFICIENT + causally justified
+      = not mathematically unique
+
+### TOCTOU remains explicitly NOT CLAIMED (per reviewer confirmation)
+
+  TOCTOU_RACE_HARDENING = NOT_CLAIMED
+
+The classifier refuses to climb past an existing-but-unresolvable
+component. That is the right deterministic V1 boundary. It does not
+claim protection against filesystem topology changing after
+classification.
+
+### Final FACTORY DISPOSITION (frozen)
+
+  ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
+
+  IMPLEMENTATION          = PASS
+  TARGETED_TESTS          = 104/104 GREEN
+  TYPECHECK               = GREEN
+  LINT                    = GREEN
+  PRODUCTION_ALGORITHM    = FROZEN
+
+  FACTORY_REVIEW          = CLOSED
+  LIVE_QUALIFICATION      = PENDING
+
+  P0 = NONE
+  P1 = NONE
+  P2 =
+    R3b means approval-gate authorization, not actual patcher execution
+    R4 proves necessity of nonexistent-target resolution, not uniqueness
+    MISSING_DEPENDENCY_ASK_EVIDENCE_CARRIER remains old residue
+
+### Reviewer chain — FINAL (frozen)
+
+  PASS_RED_REPRODUCED (861e18502)               -> PHASE 2 GREEN
+  HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS          -> CORRECTION01 (93d4bd746 GREEN)
+  HALT_TOOL_POLICY_PRECEDENCE_REGRESSION        -> CORRECTION02 (00d71e51c GREEN)
+  HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS
+                                                 -> CORRECTION03 (fa2710da4 GREEN)
+  PASS_CORRECTION03 C1 GO_TO_QUALIFICATION      -> QUALIFICATION (60389ad88 GREEN)
+  C1 GO                                          -> CLOSED  (this entry)

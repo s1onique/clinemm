@@ -1280,3 +1280,112 @@ This converts:
     MISSING-DEPENDENCY ASK EVIDENCE CARRIER  (no `decision` field on
     {approved:false, reason} when getCwd/getAutoApprovalSettings are
     unavailable; does not affect authority)
+
+### 13.33 Reviewer C1: GO — PASS_WITH_NONBLOCKING_EVIDENCE_RESIDUE (no CORRECTION04)
+
+Per the factory reviewer's PASS_CORRECTION03 — C1 verdict on the
+qualification/closure pass:
+
+  FACTORY_REVIEW          = CLOSED
+  IMPLEMENTATION          = PASS
+  TARGETED_TESTS          = 104/104 GREEN
+  TYPECHECK               = GREEN
+  LINT                    = GREEN
+  PRODUCTION_ALGORITHM    = FROZEN
+  LIVE_QUALIFICATION      = PENDING (manual/harness)
+  C1                      = GO. NO CORRECTION04.
+
+Reviewer notes no new P0 and no reason to touch the classifier again.
+
+### 13.34 P2 evidence label precision (reviewer-flagged, no defect)
+
+Reviewer flagged two precision issues with the wording in §13.28/§13.29.
+The tests themselves are correct; only the labels in this ACT need
+disambiguation. No code change.
+
+  R3b — actual label correction:
+
+    The R3b test does NOT execute the actual apply_patch patcher
+    (it is mechanically impossible without the full task runtime
+    harness; the test fixture explicitly does not pretend to do so).
+    R3b proves:
+
+      ASK -> yesButtonClicked -> pending approval resolves ->
+      approved=true
+
+    i.e. the APPROVAL GATE, when the user approves, propagates an
+    approved=true result to the awaiting caller. It does NOT prove
+    that the patcher actually executed and the filesystem actually
+    mutated.
+
+    Correct labels:
+
+      MOVE_APPROVAL_GATE_PERMITTED = EXECUTED
+      ACTUAL_PATCH_MOVE            = NOT_EXECUTED (out of bounded
+                                     cycle; belongs in live dogfood
+                                     qualification)
+
+    The earlier wording "move permitted/executed" should be read as
+    "approval gate permitted the move", not "the filesystem was
+    mutated".
+
+  R4 — label correction:
+
+    R4 injects a test-local classifier that always returns
+    "unavailable" for nonexistent targets. It is an interface-level
+    ablation.
+
+    It proves very well:
+
+      if nonexistent targets become UNAVAILABLE
+      -> ordinary new-file edits become ASK
+
+    It does NOT uniquely prove that the exact current ancestor-walk
+    implementation is the ONLY possible implementation preserving
+    that behavior.
+
+    Correct labels:
+
+      NECESSITY_OF_NONEXISTENT_TARGET_RESOLUTION = EXECUTED / PROVEN
+
+      EXACT_CURRENT_FALLBACK_IMPLEMENTATION
+        = SUFFICIENT + causally justified
+        = not mathematically unique
+
+    The earlier RED tests (CORRECTION03 dangling-symlink, etc.)
+    establish why the corrected lstat -> realpath-the-deepest-
+    existing-component implementation is necessary for the SPECIFIC
+    dangling-symlink defect. R4 establishes the broader necessity of
+    the category of fallback; not the uniqueness of the algorithm.
+
+### 13.35 TOCTOU remains explicitly NOT CLAIMED
+
+Per reviewer confirmation:
+
+  TOCTOU_RACE_HARDENING = NOT_CLAIMED
+
+The classifier refuses to climb past an existing-but-unresolvable
+component. That is the right deterministic V1 boundary. It does not
+claim protection against filesystem topology changing after
+classification. Do not turn that into descriptor-relative openat
+infrastructure without an actual production RED.
+
+### 13.36 Final FACTORY DISPOSITION (frozen)
+
+  ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01
+
+  IMPLEMENTATION          = PASS
+  TARGETED_TESTS          = 104/104 GREEN
+  TYPECHECK               = GREEN
+  LINT                    = GREEN
+  PRODUCTION_ALGORITHM    = FROZEN
+
+  FACTORY_REVIEW          = CLOSED
+  LIVE_QUALIFICATION      = PENDING (manual/harness — out of bounded cycle)
+
+  P0 = NONE
+  P1 = NONE
+  P2 =
+    R3b means approval-gate authorization, not actual patcher execution
+    R4 proves necessity of nonexistent-target resolution, not uniqueness
+    MISSING_DEPENDENCY_ASK_EVIDENCE_CARRIER remains old residue
