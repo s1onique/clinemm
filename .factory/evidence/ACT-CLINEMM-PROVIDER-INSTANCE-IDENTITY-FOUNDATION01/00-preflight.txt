@@ -1,5 +1,9 @@
 ACT_ID           = ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
 RECORDED_AT      = foundation ACT entry; pre-PROD-EDIT
+                  (preflight v2 amended 2026-09-05 by P1-CORRECTION01
+                   to record evidence 04 v2 + the phase split + the
+                   HALT_R0_FULL_CONNECTION_NOT_PROVEN verdict that the
+                   P1-CORRECTION01 addresses)
 EXPECTED_HEAD    = af1df4a60b73e98190ce5bb1207d7ea1153a61a9
 ACTUAL_HEAD      = af1df4a60b73e98190ce5bb1207d7ea1153a61a9 (matches)
 BRANCH           = main
@@ -8,8 +12,17 @@ RANGE_HYGIENE    = 12 inherited EOF warnings on d8894dd5989d..HEAD (all .factory
                    0 on production/test sources; no new warnings introduced by
                    this ACT's entry commit.
 PRODUCTION_HEAD  = e06af528522ae2aa471aac9eed30acb51e9fdf92 (unchanged)
-PROD_EDITS       = FORBIDDEN for this ACT body
-SCOPE_FIREWALL   = per ACT body §4 (OWNS / DOES NOT OWN)
+PROD_EDITS       = FORBIDDEN IN FOUNDATION_RECON_PHASE (§0..§12)
+                  AUTHORIZED IN FOUNDATION_IMPLEMENTATION_PHASE (§13..§15)
+                    ONLY AFTER R0 component matrix complete +
+                    §12 design freeze recorded +
+                    a genuine R1 RED
+                  (per §4 phase split; amended by P1-CORRECTION01)
+SCOPE_FIREWALL   = per ACT body §4 (OWNS / DOES NOT OWN +
+                               FOUNDATION_RECON_PHASE /
+                               FOUNDATION_IMPLEMENTATION_PHASE /
+                               FOUNDATION_FINAL_REPORT_AND_HANDOFF /
+                               MODEL_PROFILES_IMPLEMENTATION)
 
 PREDECESSOR CHAIN (intact):
   F3 / F3B Factorize                      -> bfa2ad5929aa4f9f1a1bbff58bde2c144c68157e
@@ -21,11 +34,26 @@ PREDECESSOR CHAIN (intact):
 
 FACTORY_DISPOSITION_AT_ENTRY:
   MODEL_PROFILES_RECON                  = CLOSED_FOR_FOUNDATION_HANDOFF
-  FOUNDATION_ACT                        = AUTHORIZED
+  FOUNDATION_ACT                        = AUTHORIZED (with P1-CORRECTION01
+                                                     applied to scope firewall
+                                                     + R0 component matrix)
   MODEL_PROFILES_IMPLEMENTATION         = NOT_AUTHORIZED
-  REVIEW_CYCLE                          = STOP (was; now GO TO FOUNDATION RECON)
-  NEXT                                  = ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
-                                            source recon + R0
+  REVIEW_CYCLE                          = STOP (was; P1-CORRECTION01 closed;
+                                              now GO TO FOUNDATION_RECON_PHASE)
+  NEXT                                  = FOUNDATION_RECON_PHASE (a)+(b)+(c):
+                                            (a) trace the four NOT_PROVEN
+                                                operands (headers, provider
+                                                SpecificConfig, apiLine/routing,
+                                                region) to YES/NO/N/A verdicts;
+                                                evidence 05-r0-remaining-
+                                                operand-trace.md
+                                            (b) record §12 design freeze
+                                                (alpha/beta/gamma + semantic
+                                                credential identity + physical
+                                                secret-key encoding); evidence
+                                                06-design-freeze.md
+                                            (c) gate FOUNDATION_IMPLEMENTATION_
+                                                PHASE open
 
 OUT_OF_SCOPE_ACT_BODIES (still independently registered):
   ACT-CLINEMM-EFFECTIVE-MODEL-CONTEXT-WINDOW-AUTHORITY-RECON01

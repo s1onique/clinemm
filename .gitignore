@@ -1254,3 +1254,50 @@ apps/vscode/.factory/evidence/
 # IMPLEMENTATION01 remains gated on §17 four-gate handoff.
 !/.factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01.md
 !/.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01/
+# ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01:
+# bounded correction after fifth-reviewer verdict
+# HALT_R0_FULL_CONNECTION_NOT_PROVEN (2026-09-05, same day, immediately
+# after the foundation entry commit). Two bounded corrections folded
+# into one commit per reviewer: ("This is P1, not another architecture
+# cycle. Fold it into the same bounded R0 correction."):
+#   P0  R0_FULL_CONNECTION_OVERCLAIM
+#       M2 scalar (CURRENT_SEAM_MUTATES_FULL_CONNECTION = YES) replaced
+#       with a per-component matrix. Three operands proven YES at R0
+#       (baseUrl, credentialValue, modelId via slot-overwrite + fresh-
+#       read construction seam). Four operands NOT_PROVEN (headers,
+#       providerSpecificConfig, apiLine/routing, region) - must be
+#       traced to YES/NO/N/A in FOUNDATION_RECON_PHASE before §12
+#       design freeze. Honest MUTATES_FULL_CONNECTION derivation =
+#       NOT_PROVEN. R0_EVIDENCE = STRUCTURAL; R0_EXECUTED_SWITCH =
+#       NOT_EXECUTED labeled explicitly. "What R0 changes for §12"
+#       reframed: no pre-commit to Outcome A/C or Outcome B; the
+#       trace work is the discriminator.
+#   P1  FOUNDATION_ACT_PHASE_CONTRACT_INCONSISTENT
+#       Reconcile entry preamble's "recon-only / no production edits"
+#       with the same ACT body's R1 RED -> GREEN -> CONSERVATION
+#       contract. Resolved with a two-phase split per the reviewer's
+#       exact phrasing:
+#         FOUNDATION_RECON_PHASE       (§0..§12; prod edits FORBIDDEN)
+#         FOUNDATION_IMPLEMENTATION_PHASE
+#                                      (§13..§15; prod edits AUTHORIZED
+#                                       ONLY after R0 + §12 + genuine
+#                                       R1 RED)
+#         FOUNDATION_FINAL_REPORT_AND_HANDOFF
+#                                      (§16, §17, §35, STOP)
+#       §17 gates reframed to gate FOUNDATION_IMPLEMENTATION_PHASE ->
+#       MODEL_PROFILES_IMPLEMENTATION, not the foundation ACT's own
+#       closure. Production edits STILL FORBIDDEN in this commit
+#       (the foundation ACT body + evidence 04 are amended; no
+#       production source touched; no test source touched).
+# Reviewer's DO NOT list (honored):
+#   DO NOT start R1
+#   DO NOT choose alpha/beta/gamma
+#   DO NOT add persistence
+#   DO NOT open another review cycle
+# Reopen condition (per reviewer, now satisfied by this commit):
+#   "the corrected R0 component matrix is frozen and the ACT phase
+#    contract is coherent"
+#   - R0 component matrix frozen (§10 amended + evidence 04 v2)
+#   - ACT phase contract coherent (§4 phase split + §17 reframed +
+#     entry preamble + §35 successor linkage + STOP)
+!/.factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01.md

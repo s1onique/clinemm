@@ -17,6 +17,51 @@
 > ```
 >
 > ```text
+> P1_correction01_pointer (amended 2026-09-05 fifth-reviewer verdict):
+>   The fifth reviewer on the foundation entry commit issued verdict
+>   HALT_R0_FULL_CONNECTION_NOT_PROVEN. Two bounded corrections folded
+>   into this commit (per reviewer: "Fold it into the same bounded R0
+>   correction. This is P1, not another architecture cycle."):
+>
+>     P0  R0_FULL_CONNECTION_OVERCLAIM
+>         Entry commit froze M2 as CURRENT_SEAM_MUTATES_FULL_CONNECTION
+>         = YES but the source evidence supports only the narrower
+>         CURRENT_SEAM_OVERWRITES_AND_RERESOLVES_PROVIDER_SLOTS = YES
+>         for at least baseUrl, credentialValue, modelId. R0 replaced
+>         with a per-component matrix (see §10 amended); four operands
+>         (headers, providerSpecificConfig, apiLine/routing, region)
+>         are NOT_PROVEN at R0 and must be traced to YES/NO/N/A in
+>         FOUNDATION_RECON_PHASE before §12 design freeze. R0_EVIDENCE
+>         = STRUCTURAL and R0_EXECUTED_SWITCH = NOT_EXECUTED are
+>         labeled explicitly.
+>
+>     P1  FOUNDATION_ACT_PHASE_CONTRACT_INCONSISTENT
+>         Entry preamble said "PROD_EDITS = FORBIDDEN; this ACT is
+>         recon-only" but the same ACT body specified R1 RED -> GREEN
+>         -> CONSERVATION (production edits in the same ACT). Resolved
+>         with a two-phase split per the reviewer's exact phrasing:
+>
+>           FOUNDATION_RECON_PHASE       (§0..§12; prod edits FORBIDDEN)
+>           FOUNDATION_IMPLEMENTATION_PHASE
+>                                        (§13..§15; prod edits AUTHORIZED
+>                                         ONLY after R0 + §12 + genuine
+>                                         R1 RED)
+>           FOUNDATION_FINAL_REPORT_AND_HANDOFF
+>                                        (§16, §17, §35, STOP; report +
+>                                         handoff only)
+>           MODEL_PROFILES_IMPLEMENTATION = separate ACT, NOT_AUTHORIZED,
+>           gated on §17 four-gate handoff.
+>
+>   Bounded P1-CORRECTION01 lives at:
+>     .factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01.md
+>
+>   This ACT body is recon-only IN ITS RECON PHASE. The recon phase
+>   produces R0 + §12 design freeze. Only after both are frozen does
+>   the implementation phase open (R1 RED -> GREEN -> CONSERVATION;
+>   in the same ACT body, in a different phase, with production edits
+>   AUTHORIZED under the phase-split contract). What remains in a
+>   "subsequent ACT" is MODEL_PROFILES_IMPLEMENTATION, gated on §17.
+>
 > PRIMARY_EPISTEMIC_PURPOSE =
 >   Establish a durable provider-instance identity and prove that same-providerId
 >   instance switching reaches the next request's complete effective connection
@@ -279,6 +324,82 @@ GATE_5:  Conservation proof for providerId-only users (no behavior regression)
 
 If any gate fails, this ACT HALts (see §15).
 
+### Foundation ACT phases (reviewer's P1 fix; added in P1-CORRECTION01)
+
+This ACT body has TWO PHASES, not one "recon-only" body followed by a
+separate implementation ACT. The phase split resolves the entry-commit
+lifecycle inconsistency (the entry preamble said "recon-only" but the
+same ACT body specified R1 RED -> GREEN -> CONSERVATION as in-ACT work).
+
+```text
+FOUNDATION_RECON_PHASE =
+  scope:
+    §0..§12 of this ACT body (entry, primary epistemic purpose,
+    frozen question, terminology, scope firewall, semantic-vs-
+    physical credential identity, epistemic sequence, the three
+    recon streams, R0 component matrix, R1 contract definition,
+    design freeze)
+  production edits: FORBIDDEN
+  outputs:
+    R0 frozen (component matrix; honest MUTATES_FULL_CONNECTION;
+               R0_EVIDENCE = STRUCTURAL; R0_EXECUTED_SWITCH =
+               NOT_EXECUTED; NOT_PROVEN operands traced to
+               YES/NO/N/A verdicts via evidence 05-r0-remaining-
+               operand-trace.md)
+    §12 design freeze (alpha/beta/gamma + semantic credential
+                        identity + physical secret-key encoding)
+  output evidence files:
+    00-preflight.txt
+    01-connection-authority.md
+    02-credential-storage-authority.md
+    03-rebuild-discriminator.md
+    04-r0-current-seam-witness.md
+    05-r0-remaining-operand-trace.md    (NEW; produced in
+                                         FOUNDATION_RECON_PHASE before
+                                         §12 design freeze)
+    06-design-freeze.md                 (renumbered from earlier 05;
+                                         produced as part of §12 freeze)
+  gating into FOUNDATION_IMPLEMENTATION_PHASE:
+    R0 frozen (component matrix complete; every operand YES/NO/N/A)
+    AND §12 design freeze recorded
+    AND no halt conditions triggered (§15)
+
+FOUNDATION_IMPLEMENTATION_PHASE =
+  scope:
+    §13..§15 of this ACT body (GREEN, conservation, halt conditions)
+  production edits: AUTHORIZED ONLY AFTER
+                      R0 frozen (component matrix complete) AND
+                      §12 design freeze recorded AND
+                      a genuine R1 RED (with NEXT_EFFECTIVE_CONNECTION
+                                        assertion running against an
+                                        injected/test-local registry;
+                                        not against production code)
+  outputs:
+    GREEN (minimum change only; smallest set of production seams
+                              that satisfies R1)
+    CONSERVATION (existing providerId-only users unchanged)
+  output evidence files:
+    07-green-minimum-change.md
+    08-conservation.md
+
+FOUNDATION_FINAL_REPORT_AND_HANDOFF =
+  scope:
+    §16 evidence directory plan, §17 implementation ACT gates,
+    §35 successor linkage, STOP
+  production edits: none further; this is a report + handoff
+  outputs:
+    09-final-report.md  (the terminal freeze)
+    §17 four-gate handoff to MODEL_PROFILES_IMPLEMENTATION
+
+MODEL_PROFILES_IMPLEMENTATION =
+  ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+  remains separate and NOT_AUTHORIZED, gated on §17 four-gate handoff
+  (reframed in §17 below to gate phase 2 -> MP_IMPLEMENTATION, not the
+   foundation ACT's own closure)
+```
+
+If any gate fails, this ACT HALts (see §15).
+
 ---
 
 # §5 — Semantic vs physical credential identity (reviewer's P2 non-blocking)
@@ -489,23 +610,104 @@ Setup (today's production concepts only — NO ProviderConfigurationInstance yet
           (no new code; no instance abstraction yet).
 ```
 
-**Measure & FREEZE** (R0 result, evidence file `04-r0-current-seam-witness.md`):
+**Measure & FREEZE — component matrix** (R0 result, evidence file
+`04-r0-current-seam-witness.md`):
 
 ```text
-CURRENT_SEAM_CAN_EXPRESS_INSTANCE_IDENTITY = YES | NO
-  Can the current seam distinguish A and B as two identities at the live
-  session boundary? If yes: how (which dimension)? If no: confirmed
-  pre-existing seam gap.
+CURRENT_SEAM_CAN_EXPRESS_INSTANCE_IDENTITY = NO
+  (unchanged; first-class instance identity does not exist; only
+   ProviderId is branded; storage collapses at providerId)
 
-CURRENT_SEAM_MUTATES_FULL_CONNECTION       = YES | NO
-  When the user switches from A to B through the existing path, does the
-  next request's effective connection actually reflect B's baseUrl +
-  credential + modelId? If no: which components did and which didn't?
+CURRENT_SEAM_RERESOLVES_CONNECTION_COMPONENTS =
+  providerId              = SAME    (trivially; A and B share providerId)
+  baseUrl                 = YES     (resolveBaseUrl re-reads on every
+                                     handler construction; slot overwrite
+                                     transport works)
+  credentialValue         = YES     (resolveApiKey re-reads on every
+                                     handler construction; same slot
+                                     overwrite transport; with the caveat
+                                     that credential identity collapses to
+                                     providerId so two same-provider
+                                     instances cannot coexist - the
+                                     SAME_PROVIDER_MULTI_CREDENTIAL_
+                                     IDENTITY_NOT_BOUND finding MP RECON
+                                     P3 named, which §12 must close)
+  modelId                 = YES     (resolveModelId re-reads on every
+                                     handler construction; same transport)
+  headers                 = NOT_PROVEN
+                                     (foundation must trace where headers
+                                     live at handler construction; owned
+                                     by FOUNDATION_RECON_PHASE before §12;
+                                     evidence 05, new file)
+  providerSpecificConfig  = NOT_PROVEN
+                                     (same status as headers; for Bedrock/
+                                     Vertex/GCP includes region + AWS/GCP
+                                     config blocks per sdk-api-handler.ts)
+  apiLine / routing       = NOT_PROVEN
+                                     (apiLine is providerId-specific;
+                                     foundation confirms whether it is or
+                                     isn't a per-instance operand; if no
+                                     provider uses it today: N/A)
+  region                  = NOT_PROVEN
+                                     (Bedrock/Vertex/GCP carry region;
+                                     foundation traces per provider)
 
-CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY   = YES | NO
-  Does the existing rebuild path fire on this switch? Today it is
-  expected to NOT fire because both A and B share the same providerId,
-  but R0 freezes the observation.
+CURRENT_SEAM_MUTATES_FULL_CONNECTION =
+  NOT_PROVEN
+                                     (honest derivation; because headers,
+                                      providerSpecificConfig, apiLine/
+                                      routing, region are all NOT_PROVEN,
+                                      the scalar YES the entry commit
+                                      recorded was an overclaim; corrected
+                                      in P1-CORRECTION01 per reviewer
+                                      verdict HALT_R0_FULL_CONNECTION_NOT_
+                                      PROVEN; becomes YES iff every
+                                      provider-relevant component is YES
+                                      or N/A)
+
+CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY = NO
+  (unchanged; providerId-only discriminant in
+   sdk-provider-change-coordinator.ts; the four rebuild reasons in
+   sdk-session-rebuild-scheduler.ts are
+   provider/mcpTools/terminalExecutionMode/sessionAutoApprovalOverride;
+   none fires on same-providerId config flip)
+
+R0_EVIDENCE              = STRUCTURAL
+R0_EXECUTED_SWITCH       = NOT_EXECUTED
+```
+
+**NOT_PROVEN is a first-class R0 result.** It is NOT a failure of R0; it
+is R0 working correctly by not overclaiming. The four NOT_PROVEN
+operands must be traced to per-component YES/NO/N/A verdicts in the
+FOUNDATION_RECON_PHASE before §12 design freeze; this trace work is
+recon (no production edits) and produces evidence file
+`05-r0-remaining-operand-trace.md` (new).
+
+**What R0 changes for §12 design freeze (corrected, post-P1-CORRECTION01):**
+
+```text
+Three of seven R1 effective-connection operands are proven to follow
+the slot-overwrite + fresh-read construction seam (baseUrl,
+credentialValue, modelId). Four are NOT_PROVEN at R0 and must be
+traced before §12 design freeze. The foundation does NOT yet know
+whether the runtime mechanism needs to be extended beyond
+slot-overwrite; that is exactly the question §12 is supposed to
+answer.
+
+  - If the four NOT_PROVEN operands all trace to N/A or to the same
+    slot-overwrite + fresh-read seam, then Outcome A/C is genuinely
+    cheaper than the entry commit implied, and §12 favors reusing
+    updateConnection (Outcome A) or a bounded runtime switch
+    extension (Outcome C).
+  - If any of the four NOT_PROVEN operands traces to NO (i.e. it is
+    read elsewhere - cached on a long-lived provider object, resolved
+    once per session, etc. - and not refreshed by the slot-overwrite
+    + fresh-read seam), then Outcome B (forced rebuild) becomes
+    causally justified, not merely architectural hygiene.
+
+R0 does NOT pre-commit. R0 + the §10 source-trace work freezes the
+operand-by-operand classification. §12 design freeze consumes that
+classification. R1 RED consumes §12.
 ```
 
 **Reviewer's stated prior (R0 measurement, before evidence):**
@@ -711,35 +913,57 @@ HALT_UNEXPECTED_TRACKED_DIRT
 
 ---
 
-# §17 — Implementation ACT gates (still NOT authorized)
+# §17 — Implementation ACT gates (still NOT authorized; reframed in P1-CORRECTION01)
 
 The Model Profiles implementation ACT
-`ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01` opens ONLY when:
+`ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01` opens ONLY
+after BOTH phases of this foundation ACT close, per §4's phase split:
 
 ```text
+FOUNDATION_RECON_PHASE must be CLOSED first:
+  R0 component matrix complete (every operand YES/NO/N/A;
+                                evidence 04 + evidence 05)
+  §12 design freeze recorded (alpha/beta/gamma + semantic credential
+                              identity + physical secret-key encoding;
+                              evidence 06)
+  §15 no halt conditions triggered during recon phase
+
+THEN FOUNDATION_IMPLEMENTATION_PHASE must be CLOSED:
+  §11 R1 PASS (NEXT_EFFECTIVE_CONNECTION == B's provider-relevant
+               effective tuple; primary assertion; against an
+               injected/test-local registry, not production code)
+  §13 GREEN recorded (minimum change only; smallest set of production
+                     seams satisfying R1)
+  §14 conservation proven (existing providerId-only users unchanged)
+  §15 no halt conditions triggered during implementation phase
+
+THEN the four §17 GATEs gate the handoff to MODEL_PROFILES_IMPLEMENTATION:
+
 GATE_FOUNDATION_CLOSED:
-  §10 R0 frozen
-  §11 R1 PASS (NEXT_EFFECTIVE_CONNECTION == B)
-  §12 design freeze recorded
-  §13 GREEN minimum change recorded
-  §14 conservation proven
-  §15 no halt conditions triggered
+  Both phases above closed.
 
 GATE_SCOPE_TRANSFERRED:
-  ProviderConfigurationInstance schema (α / β / γ choice) handed off
+  ProviderConfigurationInstance schema (alpha / beta / gamma choice) handed off
   Semantic credential identity scope handed off
-  R0 day-0 witness handed off as the baseline citation
-  Per-session instance-binding seam CHARACTERIZED (not bound)
+  R0 component matrix handed off as the baseline citation
+  Per-session instance-binding seam CHARACTERIZED (not bound) handed off
 
 GATE_PERSISTENCE_AUTHORITY:
   Implementation ACT may now bind durable storage location
-  (this ACT's step 7 was only characterization)
+  (this ACT's FOUNDATION_RECON_PHASE step 7 was only characterization;
+   FOUNDATION_IMPLEMENTATION_PHASE produced GREEN with the runtime seam
+   but did not bind durable storage either; durable storage authority
+   transfers to MODEL_PROFILES_IMPLEMENTATION here)
 
 GATE_OUT_OF_SCOPE_STILL_OUT:
   All §4 OWNS / DOES NOT OWN boundaries preserved through the handoff
+  PLUS the FOUNDATION_RECON_PHASE vs FOUNDATION_IMPLEMENTATION_PHASE
+  split is reflected in the implementation ACT's own entry preamble
+  (so a future reader does not hit the same lifecycle contradiction
+   the entry commit's preamble had)
 ```
 
-Until all four gates are met, `IMPLEMENTATION_ACT_AUTHORIZED = NO`.
+Until all four gates are met, `MODEL_PROFILES_IMPLEMENTATION = NOT_AUTHORIZED`.
 
 ---
 
@@ -754,9 +978,90 @@ MP RECON open                            -> b55407d03
 MP RECON P1 wording correction           -> 97f49582e
 MP RECON P2 correction                   -> 830be436d
 MP RECON P3 correction                   -> 951f171e0
-MP RECON P4 correction (FOUNDATION AUTH) -> af1df4a60  (this ACT opens at this commit)
-FOUNDATION ACT entry                     -> <this commit>
+MP RECON P4 correction (FOUNDATION AUTH) -> af1df4a60
+FOUNDATION ACT entry                     -> 40bdeeac2  (R0 frozen;
+                                                     M2 scalar overclaim)
+FOUNDATION ACT P1-CORRECTION01           -> <this commit>
+                                                  (R0 component matrix;
+                                                   phase contract split)
 ```
+
+### Foundation P1-CORRECTION01 pointer (amended 2026-09-05 fifth-reviewer verdict)
+
+The fifth reviewer on the foundation entry commit issued verdict
+`HALT_R0_FULL_CONNECTION_NOT_PROVEN` with two bounded corrections folded
+into the same commit (per reviewer: "Fold it into the same bounded R0
+correction. This is P1, not another architecture cycle."):
+
+```text
+P0  R0_FULL_CONNECTION_OVERCLAIM
+    The entry commit froze CURRENT_SEAM_MUTATES_FULL_CONNECTION = YES
+    (scalar) but the source evidence supports only the narrower
+    CURRENT_SEAM_OVERWRITES_AND_RERESOLVES_PROVIDER_SLOTS = YES for
+    at least baseUrl, credentialValue, modelId. The scalar is replaced
+    with a per-component matrix that names which operands of the R1
+    effective-connection tuple are proven YES, which are YES|N/A|NOT_PROVEN,
+    and which are NO. R0_EVIDENCE = STRUCTURAL and R0_EXECUTED_SWITCH =
+    NOT_EXECUTED are labeled explicitly. Four operands (headers,
+    providerSpecificConfig, apiLine/routing, region) are NOT_PROVEN at
+    R0 and must be traced to per-component YES/NO/N/A verdicts in the
+    FOUNDATION_RECON_PHASE before §12 design freeze; that trace work
+    produces evidence 05-r0-remaining-operand-trace.md (new file, not
+    authored in this commit).
+
+P1  FOUNDATION_ACT_PHASE_CONTRACT_INCONSISTENT
+    The entry preamble's "PROD_EDITS = FORBIDDEN; this ACT is recon-only"
+    conflicted with the same ACT body's R1 RED -> GREEN -> CONSERVATION
+    contract. Reconciled with a two-phase split per the reviewer's
+    exact phrasing:
+      FOUNDATION_RECON_PHASE       (§0..§12; prod edits FORBIDDEN)
+      FOUNDATION_IMPLEMENTATION_PHASE
+                                   (§13..§15; prod edits AUTHORIZED ONLY
+                                    after R0 + §12 + genuine R1 RED)
+      FOUNDATION_FINAL_REPORT_AND_HANDOFF
+                                   (§16, §17, §35, STOP)
+    §17 gates reframed to gate FOUNDATION_IMPLEMENTATION_PHASE ->
+    MODEL_PROFILES_IMPLEMENTATION, not the foundation ACT's own
+    closure.
+
+REVIEWER'S "DO NOT" LIST (verbatim, applied to this commit):
+  DO NOT start R1
+  DO NOT choose alpha/beta/gamma
+  DO NOT add persistence
+  DO NOT open another review cycle
+  All four honored.
+```
+
+Per the reviewer, the foundation design is NOT reopened; no new
+architecture cycle. The bounded P1-CORRECTION01 lives at
+`ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01.md`.
+
+What R0 NOW says (corrected):
+
+```text
+CURRENT_SEAM_CAN_EXPRESS_INSTANCE_IDENTITY = NO
+CURRENT_SEAM_RERESOLVES_CONNECTION_COMPONENTS =
+  providerId              = SAME
+  baseUrl                 = YES
+  credentialValue         = YES
+  modelId                 = YES
+  headers                 = NOT_PROVEN
+  providerSpecificConfig  = NOT_PROVEN
+  apiLine / routing       = NOT_PROVEN
+  region                  = NOT_PROVEN
+CURRENT_SEAM_MUTATES_FULL_CONNECTION = NOT_PROVEN
+CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY = NO
+R0_EVIDENCE              = STRUCTURAL
+R0_EXECUTED_SWITCH       = NOT_EXECUTED
+```
+
+After this commit, the recon phase resumes:
+  (a) trace the four NOT_PROVEN operands to YES/NO/N/A (evidence 05)
+  (b) record §12 design freeze (evidence 06)
+  (c) gate FOUNDATION_IMPLEMENTATION_PHASE open
+
+The implementation phase (R1 RED -> GREEN -> conservation) opens ONLY
+after (a) + (b) + (c) all close, per the corrected §17 gates.
 
 Its successor:
 
@@ -794,10 +1099,61 @@ instance identity change). Not frozen — R1 decides.
 
 ---
 
-# STOP — recon correction cycle CLOSED; foundation ACT OPEN at §0
+# STOP — recon correction cycle CLOSED; foundation ACT OPEN at §0; P1-CORRECTION01 applied
 
-Production edits FORBIDDEN until §13 GREEN + §14 conservation succeed and §17
-gates all open.
+Production edits are FORBIDDEN IN FOUNDATION_RECON_PHASE (§0..§12) and
+AUTHORIZED IN FOUNDATION_IMPLEMENTATION_PHASE (§13..§15) only after R0
+component matrix complete + §12 design freeze + a genuine R1 RED,
+per §4 phase split.
 
-The next useful artifact is **executable R0 evidence** against HEAD's current
-seam, not another documentary amendment.
+The next useful artifact is **NOT** another documentary amendment. The
+next useful artifacts are, in order:
+
+```text
+FOUNDATION_RECON_PHASE (production edits FORBIDDEN):
+  (a) evidence 05-r0-remaining-operand-trace.md
+      trace headers, providerSpecificConfig, apiLine/routing, region
+      to per-component YES/NO/N/A verdicts against HEAD's current
+      source (no runtime test; structural source tracing like R0 v3)
+  (b) evidence 06-design-freeze.md
+      record alpha/beta/gamma + semantic credential identity +
+      physical secret-key encoding choice from the corrected R0
+      matrix (a)
+  (c) gate FOUNDATION_IMPLEMENTATION_PHASE open
+
+FOUNDATION_IMPLEMENTATION_PHASE (production edits AUTHORIZED after (a)+(b)+(c)):
+  (d) evidence 07-r1-red-instance-switch.md (or whatever number the
+      directory lands on; per §16 plan, this slot is taken by
+      "06-green-minimum-change.md" if the renumbering follows)
+      R1 RED against an injected/test-local ProviderConfigurationInstance
+      registry; primary assertion =
+        NEXT_EFFECTIVE_CONNECTION == B's provider-relevant effective tuple
+      secondary assertion (Outcome C discriminator) = no in-flight mutation
+      R1 must begin with R0 citation per the R0 -> R1 ordering constraint
+      in MP RECON evidence 13 v3
+  (e) GREEN (minimum change only)
+  (f) conservation (providerId-only users unchanged)
+
+FOUNDATION_FINAL_REPORT_AND_HANDOFF:
+  (g) terminal freeze (evidence final-report.md)
+  (h) §17 four-gate handoff to MODEL_PROFILES_IMPLEMENTATION
+      (which remains NOT_AUTHORIZED until that handoff)
+```
+
+Reviewer's reopen condition was:
+
+```text
+"the corrected R0 component matrix is frozen and the ACT phase
+ contract is coherent"
+```
+
+Both conditions are met by this commit:
+
+```text
+R0 component matrix    = FROZEN   (this commit; §10 amended + evidence 04)
+ACT phase contract     = COHERENT (this commit; §4 phases block + §17
+                                    reframed + entry preamble + §35)
+```
+
+C1: GO TO FOUNDATION_RECON_PHASE (a)+(b)+(c). No further pre-execution
+review unless this correction exposes a new P0.
