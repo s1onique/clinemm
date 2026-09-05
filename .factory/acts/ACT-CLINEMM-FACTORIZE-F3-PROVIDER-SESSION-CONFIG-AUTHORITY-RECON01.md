@@ -49,27 +49,26 @@ persisted provider configuration
   -> webview (active model displayed)
 ```
 
-## Discriminator freeze (pre-filled, to be completed by recon)
+## Discriminator freeze (POPULATED — mirrors 03-discriminator.md)
 
 ```
-SINGLE_PERSISTED_AUTHORITY            = TBD
-MULTIPLE_EFFECTIVE_CONFIG_DERIVATIONS = TBD   (reviewer: legacy effective-config
-                                               + store.ts + buildSessionConfig
-                                               are at least 3 effective-config
-                                               derivation sites with different
-                                               fallback orderings)
-LEGACY_STATE_STILL_LOAD_BEARING       = TBD   (reviewer: state-migrations.ts,
-                                               ProviderSettingsManager ctor's
-                                               migrateLegacyProviderSettings,
-                                               legacy-state-reader for tasks)
-SESSION_FACTORY_OWNS_POLICY           = TBD
-SESSION_FACTORY_OWNS_TRANSPORT_ONLY   = TBD
-PROVIDERS_JSON_CANONICAL              = TBD
-UPSTREAM_CORE_SETTINGS_SEAM_USABLE    = TBD
-MODEL_PROFILES_BLOCKED_BY_MIGRATION   = TBD
+SINGLE_PERSISTED_AUTHORITY            = NO    (two stores: providers.json canonical in @cline/core
+                                               + globalState.json/secrets.json legacy in host
+                                               StateManager; synchronized via store.write()
+                                               dual-write bridge)
+MULTIPLE_EFFECTIVE_CONFIG_DERIVATIONS = YES   (4 sites with 3 precedence orderings — see 03 §D2)
+LEGACY_STATE_STILL_LOAD_BEARING       = YES   (3 LIVE bridges + 1 DEAD bridge — see 03 §D3)
+SESSION_FACTORY_OWNS_POLICY           = NO    (factory is multi-source assembler)
+SESSION_FACTORY_OWNS_TRANSPORT_ONLY   = PARTIAL (owns transport config, not transport itself)
+PROVIDERS_JSON_CANONICAL              = YES   (with caveats — see 03 §D6)
+UPSTREAM_CORE_SETTINGS_SEAM_USABLE    = YES   (already in use; no missing facility)
+MODEL_PROFILES_BLOCKED_BY_MIGRATION   = NO    (seam ready; gating is product scope)
 
-SELECTED_OUTCOME = TBD
+SELECTED_OUTCOME = B
 ```
+
+The full evidence for each verdict is in
+`.factory/evidence/ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01/03-discriminator.md`.
 
 ## Permitted outcomes (per §17)
 
