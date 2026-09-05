@@ -470,6 +470,40 @@ F3 finding "1 DEAD bridge: migrateProviders"
    Out of F3B predicate; optional terminal cleanup.
 ```
 
+## scope-of-claim precision (per reviewer P2 residue)
+
+```text
+PROVIDER_SESSION_CONFIG_SEAM_GLOBALLY_CLEAN = NOT_CLAIMED
+                                            (F3 itself proved the seam still
+                                             contains: two persisted representations,
+                                             legacy compatibility bridges,
+                                             multiple field-specific derivations,
+                                             and a confirmed dead migrateProviders
+                                             adapter. None of those are touched here.)
+
+FOUR_PROPOSED_CONSOLIDATION_TARGETS =
+  NO_REPAIR_JUSTIFIED
+  (Ollama: already correct;
+   Vertex / apiLine / modelId: semantically different from canonical store.)
+
+T17_BEHAVIORAL_DEFECT =
+  NOT_REPRODUCED
+  (at the proposed first-bad boundary: resolveOllamaProviderConfig.)
+
+F3_FACTORIZATION_REQUIRED =
+  NO
+  (the F3 recon verdict "Outcome B" is preserved in the evidence trail as the
+   historical hypothesis, but its implementation was falsified by F3B.)
+
+EVIDENCE_CLASSIFICATION =
+  RESOLVE_OLLAMA_PROVIDER_CONFIG = REAL_PRODUCTION_SEAM
+  STORE_GEOMETRY                 = SYNTHETIC_REAL
+  FULL_SESSION_COMPOSITION       = NOT_EXECUTED
+  PICKER_TO_SESSION_UI           = NOT_EXECUTED
+  (sufficient to falsify the alleged defect at the proposed first-bad boundary;
+   a live UI exercise is NOT required to close F3B.)
+```
+
 
 ```
 
