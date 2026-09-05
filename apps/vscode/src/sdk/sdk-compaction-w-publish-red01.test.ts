@@ -1,6 +1,24 @@
 /**
  * ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
- * (seventy-seventh-pass): post-compaction W publication RED.
+ * (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+ * post-compaction W publication RED + GREEN matrix.
+ *
+ * CORRECTION02 (seventy-eighth-pass reviewer): R5 was added to
+ * qualify the COMPLETE COMPOSITION:
+ *
+ *   real createContextCompactionPrepareTurn
+ *   -> real successful CoreCompactionResult
+ *   -> compactSessionMessages
+ *   -> explicit W estimate
+ *
+ * R5 uses NO module mock of `@cline/core`; it drives the real
+ * factory with the hermetic `manual` mode + `basic` strategy +
+ * `manualTargetRatio: 0.1` recipe (no LLM call, no provider I/O).
+ *
+ * R1, R2, R3, R4 remain seam-local tests (with hand-rolled
+ * mocks); they qualify the adapter logic in isolation. R5
+ * qualifies the FULL COMPOSITION end-to-end through the real
+ * production factory.
  *
  * Phase: C1_GO_RED_TO_GREEN (per the seventy-seventh-pass
  * reviewer directive):
@@ -52,22 +70,31 @@
  * SESSION-CONFIG-TIME operands (not runtime-composed operands).
  * Quality is APPROXIMATE per POST_COMPACTION_CURRENT_CONFIG_W.
  *
- * Four assertions:
+ * Five assertions:
  *
- *   R1 -- Real-producer W publication (post-repair contract):
+ *   R1 -- Manual-adapter W publication (seam-local, post-repair
+ *         contract):
  *        result.currentWorkingContextEstimate ===
  *        estimateRequestInputTokens({
  *          systemPrompt: input.config.systemPrompt,
  *          messages: result.messages,
  *          tools: input.config.extraTools ?? [],
  *        })
+ *        Drives a hand-rolled mock of
+ *        `createContextCompactionPrepareTurn`. Proves the
+ *        adapter computes W. Does NOT prove the complete
+ *        composition — see R5.
  *
  *   R2 -- Approximation discriminator (architectural freeze,
- *         pure):
+ *         SYNTHETIC_REAL pure):
  *        POST_COMPACTION_CURRENT_CONFIG_W
  *          != CANONICAL_RUNTIME_W
  *        when runtime-added tools exist. Pins the
- *        approximation contract forever.
+ *        approximation contract forever. SYNTHETIC_REAL:
+ *        the runtime geometry is constructed in-test (a
+ *        synthetic MCP tool added to the configured tool set);
+ *        no live runtime session / plugin / MCP registration is
+ *        exercised.
  *
  *   R3 -- Empty-operands negative control (load-bearing
  *         metadata):
@@ -79,6 +106,22 @@
  *        messages === undefined MUST NOT publish optimistic W.
  *        Failure-closed at the carrier
  *        (UNDEFINED_W_STALE_REUSE = FORBIDDEN).
+ *
+ *   R5 -- Real-producer composition witness (CORRECTION02,
+ *         REAL_PRODUCTION_SEAM):
+ *        Drives the REAL
+ *        `createContextCompactionPrepareTurn(...)` factory with
+ *        no module mock. Hermetic manual-mode + basic strategy
+ *        + manualTargetRatio: 0.1 produces a real successful
+ *        CoreCompactionResult; the adapter then computes W.
+ *        No LLM call, no provider I/O, no MCP / plugin
+ *        involvement.
+ *        Classification:
+ *          COMPACTION FACTORY     = REAL_PRODUCTION_SEAM
+ *          MANUAL ADAPTER         = REAL_PRODUCTION_SEAM
+ *          W ESTIMATOR            = REAL
+ *          FIXTURE                = SYNTHETIC_REAL
+ *          LIVE USER SESSION      = NOT_EXECUTED
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -173,7 +216,7 @@ describe("compactSessionMessages -- Option 1 W publication (seventy-seventh-pass
 		vi.useRealTimers()
 	})
 
-	it("R1 -- successful manual compaction returns numeric POST_COMPACTION_CURRENT_CONFIG_W from session-config operands", async () => {
+	it("R1 -- manual adapter computes exact Option-1 W from successful compaction result (seam-local, hand-rolled mock)", async () => {
 		const compact = vi.fn().mockResolvedValue({
 			messages: PROJECTED_MESSAGES,
 			systemPrompt: "rewritten system",
@@ -233,7 +276,7 @@ describe("compactSessionMessages -- Option 1 W publication (seventy-seventh-pass
 		expect(result.currentWorkingContextEstimate).not.toBe(emptyOperandsW)
 	})
 
-	it("R2 -- approximation discriminator (pure, no seam): POST_COMPACTION_CURRENT_CONFIG_W != CANONICAL_RUNTIME_W when runtime-added tools exist", () => {
+	it("R2 -- approximation discriminator (SYNTHETIC_REAL pure, no seam): POST_COMPACTION_CURRENT_CONFIG_W != CANONICAL_RUNTIME_W when runtime-added tools exist", () => {
 		// The contract: sessionConfig.extraTools is a strict
 		// subset of the effective runtime tool set whenever the
 		// runtime adds tools (plugin/MCP/addTools paths). The

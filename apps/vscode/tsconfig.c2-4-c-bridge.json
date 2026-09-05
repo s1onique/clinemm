@@ -49,6 +49,9 @@
 			],
 			"@cline-internal/core/runtime/orchestration/session-runtime-orchestrator": [
 				"../../sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator"
+			],
+			"@cline-internal/core/extensions/context/compaction": [
+				"../../sdk/packages/core/src/extensions/context/compaction"
 			]
 		}
 	},
@@ -89,7 +92,12 @@
 		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION01
 		// / FRSP01-CORRECTION01: Phase 3 bounded repair + Phase 4
 		// ablation + Phase 5 conservation.
-		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts"
+		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
+		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+		// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+		// full-composition witness — REAL factory + REAL
+		// `compactSessionMessages` + REAL W estimator.
+		"src/sdk/__tests__/sdk-compaction-w-publish-red01-real-producer.test.ts"
 	],
 	"exclude": [
 		"node_modules",

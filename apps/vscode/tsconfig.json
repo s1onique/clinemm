@@ -121,6 +121,14 @@
 		"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
 		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
 		"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
+		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+		// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+		// full-composition witness — REAL factory + REAL
+		// `compactSessionMessages` + REAL W estimator. Bridge-only
+		// (requires the `@cline-internal/core/extensions/context/
+		// compaction` alias declared only in
+		// `tsconfig.c2-4-c-bridge.json`).
+		"src/sdk/__tests__/sdk-compaction-w-publish-red01-real-producer.test.ts",
 		// ACT-CLINEMM-DOGFOOD-BUILD-INTEGRATION-REPAIR01 / B1:
 		// The Seatbelt observer test imports `./cline-core-vitest-stub`
 		// via a relative path to drive the live Seatbelt singleton. The

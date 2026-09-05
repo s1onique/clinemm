@@ -21,6 +21,13 @@ const baseConfig = {
 	compaction: undefined,
 	logger: undefined,
 	telemetry: undefined,
+	// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+	// (seventy-seventh-pass, CORRECTION02): Pick<CoreSessionConfig,
+	// "systemPrompt" | "extraTools"> makes these required at the
+	// compile-time boundary. The fixture supplies explicit values
+	// matching the production coordinator's forwarding pattern.
+	systemPrompt: "test system prompt",
+	extraTools: [{ name: "test_tool", description: "tool", input_schema: { type: "object" } }] as never,
 } as unknown as Parameters<typeof compactSessionMessages>[0]["config"]
 
 describe("compactSessionMessages", () => {

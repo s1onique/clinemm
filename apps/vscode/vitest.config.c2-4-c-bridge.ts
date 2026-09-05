@@ -29,6 +29,15 @@ const sdkCoreSessionService = path.resolve(sdkCoreRoot, "session/services/file-s
 const sdkCoreTypesEvents = path.resolve(sdkCoreRoot, "types/events")
 const sdkCoreAgentMessageCodec = path.resolve(sdkCoreRoot, "runtime/config/agent-message-codec")
 const sdkCoreSessionRuntimeOrchestrator = path.resolve(sdkCoreRoot, "runtime/orchestration/session-runtime-orchestrator")
+// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+// resolves to the REAL `createContextCompactionPrepareTurn`
+// factory so the bridge test can drive the FULL COMPOSITION
+// (real factory -> real CoreCompactionResult -> real
+// compactSessionMessages -> explicit W estimate) without
+// the `@cline/core` bundle minifier name-collision or the
+// apps/vscode base-config `@cline/core` stub alias.
+const sdkCoreContextCompaction = path.resolve(sdkCoreRoot, "extensions/context/compaction")
 const appsVscodeRoot = path.resolve(__dirname)
 
 export default defineConfig({
@@ -118,6 +127,13 @@ export default defineConfig({
 			// resolves active session at call time), W5 (callback
 			// called exactly once per successful resume).
 			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
+			// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+			// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+			// full-composition witness — REAL factory + REAL
+			// `compactSessionMessages` + REAL W estimator. The
+			// base config cannot host this test because the
+			// `@cline/core` alias points at the stub.
+			"src/sdk/__tests__/sdk-compaction-w-publish-red01-real-producer.test.ts",
 		],
 		testTimeout: 30_000,
 	},
@@ -131,6 +147,12 @@ export default defineConfig({
 			// resolves to the REAL SessionRuntime orchestrator class
 			// (sdk/packages/core/src/runtime/orchestration/session-runtime-orchestrator.ts).
 			"@cline-internal/core/runtime/orchestration/session-runtime-orchestrator": sdkCoreSessionRuntimeOrchestrator,
+			// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+			// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+			// real `createContextCompactionPrepareTurn` factory,
+			// bypassing the `@cline/core` stub alias and the
+			// minifier name-collision in the bundled dist.
+			"@cline-internal/core/extensions/context/compaction": sdkCoreContextCompaction,
 			// Apps/vscode alias surface needed by AOPC02 PHASE-A-CORRECTION01
 			// to construct a real Controller via vi.mock on the heavy deps.
 			// Same path resolution as the base apps/vscode/vitest.config.ts.

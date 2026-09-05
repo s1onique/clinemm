@@ -107,6 +107,16 @@ export default defineConfig({
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction01.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+			// (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+			// full-composition witness — REAL factory + REAL
+			// `compactSessionMessages` + REAL W estimator. Cannot
+			// run under the base config because `@cline/core` is
+			// aliased to the vitest stub. Runs under
+			// `vitest.config.c2-4-c-bridge.ts` (with the real
+			// `@cline-internal/core/extensions/context/compaction`
+			// resolve alias).
+			"src/sdk/__tests__/sdk-compaction-w-publish-red01-real-producer.test.ts",
 			// ACT-CLINEMM-APPLICATION-OWNERSHIP-CONTROL-COHERENCE01 / AOC02
 			// §3: REAL SdkController producer-object discriminator lives
 			// under src/sdk/__tests__/ and shares the harness shape with

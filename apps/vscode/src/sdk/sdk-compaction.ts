@@ -30,13 +30,29 @@ export interface CompactSessionMessagesInput {
 	 * Provider/model/compaction config for the active session.
 	 *
 	 * ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
-	 * (seventy-seventh-pass): `systemPrompt` and `extraTools` are
-	 * included on the Pick<> so the manual seam can compute
-	 * `POST_COMPACTION_CURRENT_CONFIG_W` via explicit
-	 * `estimateRequestInputTokens(...)` on the success branch.
-	 * These are session-config-time operands (NOT
-	 * runtime-composed operands); the quality of the resulting W
-	 * is APPROXIMATE per the architectural freeze at file-09.
+	 * (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+	 * `systemPrompt` and `extraTools` are picked directly off
+	 * `CoreSessionConfig` (NOT added via a weakening
+	 * intersection). This preserves the source type's
+	 * requiredness:
+	 *
+	 *   - `systemPrompt` is REQUIRED on `CoreSessionConfig`
+	 *     (see `sdk/packages/core/src/types/config.ts:270`).
+	 *     Pick<> propagates that requiredness. The estimator
+	 *     therefore cannot silently degrade to
+	 *     `systemPrompt: undefined` on the success branch.
+	 *   - `extraTools` is OPTIONAL on `CoreSessionConfig`
+	 *     (legitimate "no configured extra tools" case).
+	 *     Pick<> propagates that optionality. The estimator
+	 *     therefore reads `input.config.extraTools ?? []`,
+	 *     matching the reviewer's authorized repair signature.
+	 *
+	 * The runtime coordinator always has both values in scope
+	 * (`config` is a `CoreSessionConfig` from `buildSessionConfig`),
+	 * so the strengthened contract does not introduce any
+	 * production caller with missing operands. Pre-existing test
+	 * fixtures that previously omitted these fields must add
+	 * them — that's the intended compile-time enforcement.
 	 */
 	config: Pick<
 		CoreSessionConfig,
@@ -47,23 +63,9 @@ export interface CompactSessionMessagesInput {
 		| "compaction"
 		| "logger"
 		| "telemetry"
-	> & {
-		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
-		// (seventy-seventh-pass, Option 1 repair): the manual
-		// seam now requires session-config-time operands
-		// (`systemPrompt` and `extraTools`) to compute
-		// POST_COMPACTION_CURRENT_CONFIG_W via explicit
-		// `estimateRequestInputTokens(...)`. These are declared
-		// optional for backwards compatibility with pre-existing
-		// fixtures/tests that construct the input without them;
-		// the runtime coordinator always forwards both. When
-		// callers omit them, the estimator degrades to
-		// `systemPrompt: undefined, tools: []` (no system
-		// contribution, no tool contribution) but still produces
-		// a valid number from the messages alone.
-		systemPrompt?: string
-		extraTools?: CoreSessionConfig["extraTools"]
-	}
+		| "systemPrompt"
+		| "extraTools"
+	>
 	/** The active session id (used for telemetry keying). */
 	sessionId: string
 	/** The conversation transcript to compact (SDK message shape). */
@@ -213,7 +215,8 @@ export async function compactSessionMessages(input: CompactSessionMessagesInput)
 		}
 	}
 	// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
-	// (seventy-seventh-pass, Option 1 repair):
+	// (seventy-seventh-pass, Option 1 repair, CORRECTION02
+	// real-producer-witness):
 	//
 	// The raw compactor returns `CoreCompactionResult`, which by
 	// design carries no `currentWorkingContextEstimate` field --
@@ -241,6 +244,12 @@ export async function compactSessionMessages(input: CompactSessionMessagesInput)
 	// between (a) this manual publication and (b) the next
 	// prepareTurn is short and labeled APPROXIMATE per the
 	// existing semantic name `currentWorkingContextEstimate`.
+	//
+	// CORRECTION02 operand contract: `systemPrompt` is now
+	// required (compile-time enforced via Pick<>); the estimator
+	// receives a real string, not `undefined`. `extraTools` is
+	// optional and falls back to `[]` when the session config
+	// declares no configured extras.
 	const currentWorkingContextEstimate = estimateRequestInputTokens({
 		systemPrompt: input.config.systemPrompt,
 		messages: result.messages,

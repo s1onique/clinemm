@@ -24,6 +24,28 @@
  *      observer.
  *   4. apps/vscode/src/sdk/SdkController.ts — wires the option
  *      to `this.workingContextHostCapture.setLatest(w)`.
+ *
+ * ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+ * (seventy-seventh-pass, CORRECTION02 real-producer-witness):
+ * the post-compaction-W contract is now SEAM-COMPUTED (not
+ * producer-returned). The adapter at `sdk-compaction.ts`
+ * explicitly calls `estimateRequestInputTokens(...)` on the
+ * success branch using SESSION-CONFIG-TIME operands
+ * (`systemPrompt`, `extraTools`). The producer returns
+ * `CoreCompactionResult` (no W field); the adapter adds the
+ * W field. The companion RED test file
+ * `sdk-compaction-w-publish-red01.test.ts` covers the
+ * adapter in isolation (seam-local mocks) and adds R5 in a
+ * dedicated bridge test file
+ * (`sdk-compaction-w-publish-red01-real-producer.test.ts`)
+ * that drives the REAL `createContextCompactionPrepareTurn`
+ * factory end-to-end through the real
+ * `compactSessionMessages`.
+ *
+ * `systemPrompt` is now REQUIRED on the input type
+ * (`Pick<CoreSessionConfig, ..., "systemPrompt", "extraTools">`).
+ * The `makeBaseInput` fixture below provides
+ * `SYSTEM_PROMPT_FOR_RECON01` so this contract is satisfied.
  */
 
 import { createContextCompactionPrepareTurn } from "@cline/core"
