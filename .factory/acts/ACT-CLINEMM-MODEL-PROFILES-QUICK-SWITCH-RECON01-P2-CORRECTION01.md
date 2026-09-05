@@ -692,3 +692,251 @@
 > NEXT                                    = ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
 >                                            (bounded foundation ACT, NOT F4)
 > ```
+
+> ## §7 — P4 amendment (2026-09-05 third-reviewer verdict)
+>
+> A third reviewer (this turn) closed the recon cycle with verdict
+> **PASS_WITH_ONE_BOUNDED_P1 — C1: GO TO FOUNDATION RECON**.
+> The foundation ACT is **AUTHORIZED**. No new P0. One bounded P1
+> refinement (evidence 13 RED split into two stages) and one P2
+> wording correction (overclaim closed != capability closed).
+> The recon correction cycle is now **CLOSED**.
+>
+> ### §7.1 — Bounded P1: split RED into R0 + R1
+>
+> The single most important reviewer refinement is that evidence 13's
+> prior single-stage RED was one abstraction level too high. At
+> foundation entry, **ProviderConfigurationInstance does not yet exist
+> as a production concept**, so there is literally no production action
+> that means `switch(instanceA -> instanceB)`. Using the current
+> selection path with `providerId A == providerId B` can prove today's
+> path cannot express instance identity, but cannot by itself prove the
+> eventual implementation must be Outcome B rather than A/C.
+>
+> Split into two stages:
+>
+> ```text
+> STAGE R0  (current-seam characterization witness — runs BEFORE
+>            any production edits):
+>
+>   setup:
+>     same providerId (current production concept)
+>     different effective baseUrl / credential-bearing configuration
+>     (current production concept: two apiConfigs / two secrets entries
+>      that both reference the same providerId)
+>
+>   action:
+>     attempt to switch from A to B through existing provider/model
+>     selection machinery
+>
+>   measure (FREEZE these, evidence decides):
+>     CURRENT_SEAM_CAN_EXPRESS_INSTANCE_IDENTITY = YES | NO
+>     CURRENT_SEAM_MUTATES_FULL_CONNECTION       = YES | NO
+>     CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY   = YES | NO
+>
+>   prior: NO / NO / NO   (but evidence decides)
+>
+>   purpose:
+>     establish that today's seam truly cannot carry same-provider
+>     different-instance switches, BEFORE the foundation introduces
+>     the instance abstraction. Without R0, a future reader of the
+>     recon evidence will not be able to tell whether the RED is
+>     failing because the instance abstraction is missing or because
+>     the underlying seam genuinely could never have carried it.
+>
+> STAGE R1  (post-identity semantic RED — runs AFTER the instance
+>            abstraction has a test-local candidate representation
+>            OR the minimal production seam needed to express it):
+>
+>   setup:
+>     Instance A:
+>       providerId    = P
+>       endpoint      = A
+>       credential    = A
+>     Instance B:
+>       providerId    = P
+>       endpoint      = B
+>       credential    = B
+>
+>   action:
+>     bind A
+>     switch to B
+>     observe the next request
+>
+>   PRIMARY ASSERTION  (effective configuration tuple, not
+>                        'was restart called'):
+>
+>     NEXT_EFFECTIVE_CONNECTION = {
+>       providerId:                P,
+>       baseUrl:                   B,
+>       credentialIdentity:        B,
+>       headers / providerSpecificConfig: B,
+>       modelId:                   B.modelId
+>     }
+>
+>     i.e. EVERY component of the effective tuple must equal B's,
+>     not A's. Causal distinction between A / B / C reduces to
+>     whether the assertion holds under each candidate
+>     implementation.
+>
+>   secondary assertion (for Outcome C discriminator):
+>     NO mutation of an in-flight request was required to satisfy
+>     NEXT_EFFECTIVE_CONNECTION == B's tuple
+>
+>   outcome mapping (unchanged from P3):
+>     A = reuse updateConnection         -> R1 should pass IF updateConnection
+>                                            is parameterized by full instance
+>                                            tuple, not just modelId
+>     B = forced-rebuild discriminator   -> R1 should pass via the existing
+>                                            rebuild path, gated by instance
+>                                            identity change (not providerId
+>                                            change)
+>     C = bounded runtime-switch extension -> R1 should pass via a new
+>                                            minimal extension that rewires
+>                                            endpoint + credential without
+>                                            session restart
+> ```
+>
+> Reviewer's prior probability for foundation outcome: **B** (forced
+> rebuild on instance change). Justification: the existing architecture
+> already has a well-understood rebuild path for provider identity
+> changes, while a same-provider instance may change endpoint,
+> authentication, headers, routing tier, provider-specific config, and
+> potentially handler construction simultaneously. Trying to hot-patch
+> the entire tuple risks reproducing exactly the "partial semantic value
+> flowing through several independently mutable stages" class that the
+> Factorize work has been removing. Not frozen — the RED decides.
+>
+> ### §7.2 — P2 wording correction: NOT_YET_* != CLOSED
+>
+> The freeze's `NOT_YET_BOUND` / `NOT_YET_PROVEN` fields must be read as
+> "intentionally unresolved; foundation ACT will resolve them", NOT as
+> "the new P0 has been closed". The **overclaim defect** is closed; the
+> **underlying capability** is intentionally unresolved.
+>
+> Mapping (effective immediately, applied to evidence 12 v2 freeze and
+> evidence 08 wherever the wording appears):
+>
+> ```text
+> PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+>   = OPEN_FOUNDATION_QUESTION   (overclaim closed; capability unresolved)
+>
+> SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND
+>   = OPEN_FOUNDATION_QUESTION   (overclaim closed; capability unresolved)
+>
+> SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM_NOT_BOUND
+>   = OPEN_FOUNDATION_QUESTION   (overclaim closed; capability unresolved)
+> ```
+>
+> No semantic change to the freeze itself (still `NOT_YET_*`); this is
+> purely a reading instruction for downstream ACTs and human readers.
+> Factory P2/non-blocking per reviewer's own framing.
+>
+> ### §7.3 — Foundation scope as authorized
+>
+> ```text
+> ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
+>
+>   PRIMARY EPISTEMIC PURPOSE:
+>     establish a durable provider-instance identity and prove
+>     same-providerId instance switching reaches the next request's
+>     complete effective connection without secret duplication.
+>
+>   OWNS:
+>     ProviderConfigurationInstance schema (Option α / β / γ —
+>       picks one based on measured blast radius, not on prior)
+>     secret-reference identity namespace
+>       (CREDENTIAL_IDENTITY_SCOPE = PROVIDER_INSTANCE_ID, NOT
+>       PROVIDER_ID; foundation confirms by source survey)
+>     runtime instance-switch behavior (R0 + R1 per §7.1)
+>     per-session metadata seam FOR INSTANCE BINDING ONLY
+>       (R1 must prove the bind A -> switch to B -> next request
+>        tuple equals B's full effective configuration)
+>
+>   DOES NOT OWN (Model Profiles implementation ACT):
+>     profiles.json / Profile CRUD
+>     defaultProfileId (global default)
+>     activeProfileId profile semantics
+>     picker UI, "Set as default" UI, Settings "Manage Profiles"
+>
+>   EXECUTION ORDER (reviewer-prescribed):
+>     1. recon exact current connection authority
+>     2. R0 current-seam characterization (per §7.1)
+>     3. choose α / β / γ only from measured blast radius
+>     4. bind credential identity namespace
+>     5. RED instance A -> B effective-config transition (R1 per §7.1)
+>     6. minimal repair
+>     7. conservation for existing providerId-only users
+>     8. session-binding seam characterization
+>     9. stop
+>
+>   USEFUL DESIGN BIAS (NOT a frozen answer):
+>     LIKELY_STORAGE            = additive instance registry
+>     LIKELY_CREDENTIAL_SCOPE   = PROVIDER_INSTANCE_ID
+>     LIKELY_SWITCH_POLICY      = FORCE_REBUILD_ON_INSTANCE_CHANGE
+>
+>   GATES:
+>     - PROFILE_CONTAINS_RAW_SECRET = NO must hold after foundation closes
+>     - No secret material in any new file
+>     - Existing providerId-keyed read sites must keep working
+>       (backward compat during transition)
+>     - R1 NEXT_EFFECTIVE_CONNECTION assertion must hold end-to-end
+>
+>   IMPLEMENTATION_ACT_AUTHORIZED = NO (still gated on foundation closure)
+> ```
+>
+> ### §7.4 — Verdict (terminal)
+>
+> ```text
+> P0                                       = NONE NEW
+> P1                                       = FOUNDATION_RED_TOO_HIGH_LEVEL
+>                                             ACTION: split RED into R0 (current-seam
+>                                                     characterization) + R1 (post-
+>                                                     identity semantic RED); applied
+>                                                     to evidence 13 in this commit
+> P2                                       = NOT_YET_* wording should mean
+>                                             OPEN_FOUNDATION_QUESTION (overclaim
+>                                             closed, capability transferred)
+>                                             applied to evidence 12 + 08 in this
+>                                             commit; non-blocking per Factory policy
+> MODEL_PROFILES_RECON                     = CLOSED_FOR_FOUNDATION_HANDOFF
+> FOUNDATION_ACT                           = AUTHORIZED
+>                                               (ACT-CLINEMM-PROVIDER-INSTANCE-
+>                                                IDENTITY-FOUNDATION01, scope per §7.3)
+> MODEL_PROFILES_IMPLEMENTATION            = NOT_AUTHORIZED
+> NEXT                                     = GO TO ACT-CLINEMM-PROVIDER-INSTANCE-
+>                                               IDENTITY-FOUNDATION01 (recon stage)
+> ```
+>
+> ## §35 (re-amended) — Successor linkage
+>
+> The recon ACT body's §35 successor linkage is re-amended with this
+> P4 pointer (P3 pointer still valid above):
+>
+> ```text
+> CORRECTION01                            = ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01
+>                                            (b55407d03-recon + 97f49582e-P1 -> <P2>-P2 -> <P3>-P3)
+> P2_CORRECTION_VERDICT                   = PASS_BOUNDED_CORRECTION
+> P2_CORRECTION_SCOPE                     = §21 freeze amend (R->I, A->D, etc.) +
+>                                            §27 outcome (A -> C) + §35 successor
+>                                            (foundation ACT first, then impl ACT)
+> P3_CORRECTION_VERDICT                   = PASS_BOUNDED_CORRECTION02
+> P3_CORRECTION_SCOPE                     = freeze v2 (reviewer's exact amended field list;
+>                                            CURRENT_PROVIDER_INSTANCE_SWITCH_SEAM_EXISTS
+>                                            split from CURRENT_PROVIDER_MODEL_SWITCH_SEAM_EXISTS;
+>                                            PROVIDER_INSTANCE_CREDENTIAL_IDENTITY
+>                                            NOT_YET_BOUND; SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM
+>                                            NOT_YET_BOUND; defaultProfileId removed from
+>                                            foundation scope); evidence 13 added
+> P4_CORRECTION_VERDICT                   = PASS_WITH_ONE_BOUNDED_P1
+> P4_CORRECTION_SCOPE                     = evidence 13 RED split into R0 (current-seam
+>                                            characterization witness) + R1 (post-identity
+>                                            semantic RED with NEXT_EFFECTIVE_CONNECTION
+>                                            effective-config-tuple assertion); freeze
+>                                            wording reframed as OPEN_FOUNDATION_QUESTION
+>                                            (NOT_YET_*); foundation ACT scope locked
+>                                            per §7.3; recon correction cycle CLOSED
+> NEXT                                    = ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
+>                                            (recon stage; bounded per §7.3)
+> MODEL_PROFILES_IMPLEMENTATION_ACT       = NOT_AUTHORIZED (gated on foundation closure)
+> ```

@@ -102,6 +102,77 @@
 >                                            per-session instance-binding seam ONLY
 >                                            (NOT defaultProfileId, NOT Profile CRUD,
 >                                             NOT UI)
+>
+>   P4_correction03_pointer:
+>     On 2026-09-05 (same day, third reviewer verdict, after the
+>     P3 correction close) the foundation ACT was AUTHORIZED with
+>     verdict PASS_WITH_ONE_BOUNDED_P1 — C1: GO TO FOUNDATION RECON.
+>     Reviewer's verdict on the P3 freeze: "materially honest; the
+>     strongest correction is the split between CURRENT_PROVIDER_MODEL_
+>     SWITCH_SEAM_EXISTS=YES and CURRENT_PROVIDER_INSTANCE_SWITCH_SEAM_
+>     EXISTS=NOT_YET_PROVEN — that is exactly the right epistemic
+>     boundary." No new P0. The recon correction cycle is CLOSED.
+>
+>     One bounded P1 (FOUNDATION_RED_TOO_HIGH_LEVEL):
+>       Evidence 13's single-stage RED is one abstraction level too high.
+>       At foundation entry, ProviderConfigurationInstance does not yet
+>       exist as a production concept, so there is literally no production
+>       action that means switch(instanceA -> instanceB). The RED must be
+>       split into two stages:
+>         R0 = current-seam characterization witness (runs BEFORE any
+>              production edits; measures CURRENT_SEAM_CAN_EXPRESS_INSTANCE_
+>              IDENTITY / CURRENT_SEAM_MUTATES_FULL_CONNECTION /
+>              CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY; prior NO/NO/NO)
+>         R1 = post-identity semantic RED (runs AFTER the instance
+>              abstraction has a test-local candidate representation OR
+>              the minimal production seam needed to express it; primary
+>              assertion = NEXT_EFFECTIVE_CONNECTION effective-configuration
+>              tuple, NOT 'was restart called')
+>       Both stages are now in evidence 13 (split into R0 + R1 sections).
+>
+>     One P2 wording correction (non-blocking per Factory policy):
+>       The freeze's NOT_YET_BOUND / NOT_YET_PROVEN fields must be read as
+>       OPEN_FOUNDATION_QUESTION (overclaim closed, capability unresolved),
+>       not as "the new P0 has been closed". Applied to evidence 12 v3
+>       (and to evidence 08 wherever the wording appears). Pure reading
+>       instruction, no semantic change to the freeze itself.
+>
+>     Reviewer's useful design bias (NOT frozen; the RED decides):
+>       LIKELY_STORAGE            = additive instance registry
+>       LIKELY_CREDENTIAL_SCOPE   = PROVIDER_INSTANCE_ID
+>       LIKELY_SWITCH_POLICY      = FORCE_REBUILD_ON_INSTANCE_CHANGE
+>     Justification: the existing rebuild path for provider identity
+>     changes is well-understood, while a same-provider instance may
+>     change endpoint + auth + headers + routing + provider-specific
+>     config + handler construction simultaneously. Trying to hot-patch
+>     the entire tuple risks reproducing the "partial semantic value
+>     flowing through several independently mutable stages" class that
+>     the Factorize work has been removing.
+>
+>     Reviewer-prescribed foundation execution order:
+>       1. recon exact current connection authority
+>       2. R0 current-seam characterization (per evidence 13 R0)
+>       3. choose α / β / γ only from measured blast radius
+>       4. bind credential identity namespace
+>       5. RED instance A -> B effective-config transition (R1)
+>       6. minimal repair
+>       7. conservation for existing providerId-only users
+>       8. session-binding seam characterization
+>       9. stop
+>
+>     Post-P4 posture:
+>       MODEL_PROFILES_RECON                = CLOSED_FOR_FOUNDATION_HANDOFF
+>       FOUNDATION_ACT                      = AUTHORIZED (narrowed scope per §7.3)
+>       FOUNDATION_SCOPE                    = identity + secret-reference identity +
+>                                               runtime instance-switch behavior
+>                                               (R0 + R1 per evidence 13) +
+>                                               per-session instance-binding seam
+>                                               ONLY (NOT defaultProfileId, NOT
+>                                               activeProfileId profile semantics,
+>                                               NOT Profile CRUD, NOT UI)
+>       IMPLEMENTATION_ACT                  = NOT_AUTHORIZED (gated on foundation
+>                                               closure)
+>       RECON_CORRECTION_CYCLE              = CLOSED
 > ```
 >
 > Model Profiles recon therefore begins without an upstream architecture blocker,
@@ -1687,3 +1758,93 @@ is still NOT authorized.
 
 Recon source work (this ACT body's §1–§34, evidence files 00–07)
 remains preserved intact and load-bearing.
+
+### P4 correction pointer (amended 2026-09-05 third-reviewer verdict)
+
+A third reviewer, after the P3 correction landed, closed the recon
+cycle with verdict `PASS_WITH_ONE_BOUNDED_P1 — C1: GO TO FOUNDATION
+RECON`. The foundation ACT `ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-
+FOUNDATION01` is now **AUTHORIZED** with the narrowed scope from §6
+of the correction ACT body. Reviewer's verdict on the v2 freeze:
+"materially honest; the strongest correction is the split between
+`CURRENT_PROVIDER_MODEL_SWITCH_SEAM_EXISTS=YES` and `CURRENT_PROVIDER_
+INSTANCE_SWITCH_SEAM_EXISTS=NOT_YET_PROVEN` — that is exactly the
+right epistemic boundary." No new P0. The recon correction cycle is
+**CLOSED**.
+
+One bounded P1 (FOUNDATION_RED_TOO_HIGH_LEVEL):
+
+Evidence 13's single-stage RED is one abstraction level too high.
+At foundation entry, `ProviderConfigurationInstance` does not yet
+exist as a production concept, so there is literally no production
+action that means `switch(instanceA -> instanceB)`. The RED must
+be split into two stages:
+
+```text
+R0 = current-seam characterization witness
+     (runs BEFORE any production edits; measures
+      CURRENT_SEAM_CAN_EXPRESS_INSTANCE_IDENTITY,
+      CURRENT_SEAM_MUTATES_FULL_CONNECTION,
+      CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY;
+      prior NO/NO/NO)
+
+R1 = post-identity semantic RED
+     (runs AFTER the instance abstraction has a test-local
+      candidate representation OR the minimal production seam
+      needed to express it; primary assertion = NEXT_EFFECTIVE_
+      CONNECTION effective-configuration tuple, NOT "was restart
+      called")
+```
+
+The split RED lives in the updated evidence 13 (sections R0 and R1
+added; original Q1–Q5 reframed under R1; new R0 metrics added).
+
+One P2 wording correction (non-blocking per Factory policy):
+the freeze's `NOT_YET_BOUND` / `NOT_YET_PROVEN` fields must be read
+as `OPEN_FOUNDATION_QUESTION` (overclaim closed, capability
+transferred to foundation), NOT as "the new P0 has been closed".
+Applied to evidence 12 (now v3 with history block extended) and to
+evidence 08 wherever the wording appears. Pure reading instruction;
+no semantic change to the freeze values themselves.
+
+Reviewer's useful design bias (NOT frozen; the RED decides):
+
+```text
+LIKELY_STORAGE            = additive instance registry
+LIKELY_CREDENTIAL_SCOPE   = PROVIDER_INSTANCE_ID
+LIKELY_SWITCH_POLICY      = FORCE_REBUILD_ON_INSTANCE_CHANGE
+```
+
+Reviewer-prescribed foundation execution order:
+
+```text
+1. recon exact current connection authority
+2. R0 current-seam characterization
+3. choose α / β / γ only from measured blast radius
+4. bind credential identity namespace
+5. RED instance A -> B effective-config transition (R1)
+6. minimal repair
+7. conservation for existing providerId-only users
+8. session-binding seam characterization
+9. stop
+```
+
+Reviewer's prior probability for the foundation outcome: **B**
+(forced rebuild on instance change). Justification: the existing
+rebuild path for provider identity changes is well-understood,
+while a same-provider instance may change endpoint + auth + headers
++ routing tier + provider-specific config + handler construction
+simultaneously. Trying to hot-patch the entire tuple risks
+reproducing the "partial semantic value flowing through several
+independently mutable stages" class that the Factorize work has
+been removing.
+
+Bounded P3 correction lives in **§6** of the correction ACT body
+(no new ACT body; reviewer said "amend only these fields").
+Bounded P4 correction lives in **§7** of the same correction ACT
+body. Final disposition recorded in §7.4 of that body.
+
+The Model Profiles **recon correction cycle is CLOSED**. The next
+useful evidence comes from the real runtime/config/credential
+seams in the foundation ACT recon stage, not from another freeze
+rewrite here.

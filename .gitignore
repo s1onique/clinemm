@@ -1214,6 +1214,24 @@ apps/vscode/.factory/evidence/
 # 11 (P3-relevant parts), and 08-final-report.md. Narrows foundation ACT
 # scope (drops defaultProfileId, Profile CRUD, UI). Production edits
 # STILL FORBIDDEN. Recon source work preserved.
+# P4 correction (2026-09-05, same day, third-reviewer verdict
+# PASS_WITH_ONE_BOUNDED_P1 — C1: GO TO FOUNDATION RECON) appends §7
+# to the P2 correction ACT body (no new ACT body; reviewer said
+# "amend only these fields"); splits evidence 13 RED into R0
+# (current-seam characterization witness; runs BEFORE production
+# edits; measures CURRENT_SEAM_CAN_EXPRESS_INSTANCE_IDENTITY,
+# CURRENT_SEAM_MUTATES_FULL_CONNECTION, CURRENT_SEAM_REBUILDS_ON_
+# CONFIG_IDENTITY) + R1 (post-identity semantic RED with
+# NEXT_EFFECTIVE_CONNECTION effective-config tuple primary assertion);
+# bumps evidence 12 to v3 with the OPEN_FOUNDATION_QUESTION reading
+# instruction for the NOT_YET_* fields; amends 08 with AMENDMENT_NOTICE
+# (v3), source chain summary updated, and Q10 corrected from
+# "AUTHORIZED (named)" to "AUTHORIZED" (full); narrows recon ACT body
+# entry preamble with P4_correction03_pointer and §35 with the P4
+# pointer. Foundation ACT: ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-
+# FOUNDATION01 AUTHORIZED (full, scope locked per §7.3).
+# Recon correction cycle CLOSED. Production edits STILL FORBIDDEN.
+# Recon source work preserved.
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01.md
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/

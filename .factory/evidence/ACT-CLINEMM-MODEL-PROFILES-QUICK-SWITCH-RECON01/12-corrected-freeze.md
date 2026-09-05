@@ -18,18 +18,75 @@ THIS file as the source of truth.
   `PROFILE_STORAGE_MODEL = I`, `SESSION_PROFILE_APPLICATION = D`,
   `RESUME_USES = SESSION_ACTIVE_PROFILE`, etc. Source: prior version
   of THIS file (commit 830be436).
-- v2 (TERMINAL, this version): P3 correction freeze addressing
+- v2 (superseded by v3): P3 correction freeze addressing
   `HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND`. Reviewer
   directive: "amend only these fields". Adds honest
   `NOT_YET_BOUND` / `NOT_YET_PROVEN` framing for the three
   discriminators the foundation ACT must prove by source survey.
-  Source: §6 of `ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01.md`.
+  Source: §6 of `ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01.md`
+  (commit 951f171e).
+- v3 (TERMINAL, this version): P4 wording correction addressing
+  reviewer verdict `PASS_WITH_ONE_BOUNDED_P1` (third-reviewer).
+  No semantic change to any freeze value. Adds the
+  `OPEN_FOUNDATION_QUESTION` reading instruction: every
+  `NOT_YET_BOUND` / `NOT_YET_PROVEN` field below must be read as
+  "overclaim closed; capability transferred to foundation ACT",
+  NOT as "the new P0 has been closed". Foundation ACT scope is
+  also locked per §7.3 of the correction ACT body
+  (`ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01.md`,
+  §7). Source: §7 of the same correction ACT body.
 
 EVIDENCE CLASS = TERMINAL FREEZE (this is the single source of
                   truth going forward; the §21 freeze in
                   `05-product-discriminator.md` is HISTORICAL only).
 
-## v2 — Terminal freeze (per reviewer amended field list)
+## v3 — Reading instruction (per third-reviewer P2 correction)
+
+Every field below whose value is `NOT_YET_BOUND` or `NOT_YET_PROVEN`
+must be read as `OPEN_FOUNDATION_QUESTION`:
+
+```text
+NOT_YET_BOUND   ≠   CLOSED
+NOT_YET_PROVEN  ≠   IMPLEMENTED
+
+PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+  = OPEN_FOUNDATION_QUESTION     (overclaim closed; capability unresolved)
+
+SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND
+  = OPEN_FOUNDATION_QUESTION     (overclaim closed; capability unresolved)
+
+SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM_NOT_BOUND
+  = OPEN_FOUNDATION_QUESTION     (overclaim closed; capability unresolved)
+```
+
+The three open foundation questions are transferred into the
+foundation ACT as the first three R0 + R1 obligations:
+
+```text
+R0 obligation (current-seam characterization witness):
+  freeze CURRENT_SEAM_CAN_EXPRESS_INSTANCE_IDENTITY
+        CURRENT_SEAM_MUTATES_FULL_CONNECTION
+        CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY
+
+R1 obligation (post-identity semantic RED):
+  freeze NEXT_EFFECTIVE_CONNECTION primary assertion
+  for instance A -> B transitions
+  (which resolves all three open questions as a byproduct:
+   - which R0/Outcome path closes the seam gap
+   - which namespace is the credential identity scope
+   - which persistence seam the per-session binding lives in)
+```
+
+No semantic change to the freeze values themselves; this is a
+reading instruction for downstream ACTs and human readers per
+Factory P2/non-blocking policy. Reviewer's note: "no need for
+another correction commit merely for that wording unless you are
+touching those docs anyway. Factory policy makes this P2/non-
+blocking." This commit IS touching these docs (the foundation ACT
+is being authorized and the wording is needed in evidence 12 to
+make the authorization unambiguous).
+
+## v3 — Terminal freeze (reviewer's exact amended field list; same as v2 with wording read as OPEN_FOUNDATION_QUESTION)
 
 ```text
 PROFILE_STORAGE_MODEL                                  = I

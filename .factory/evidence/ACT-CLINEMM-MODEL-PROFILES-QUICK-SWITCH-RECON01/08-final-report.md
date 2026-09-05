@@ -1,7 +1,7 @@
-# 08 — Final Report (§34 terminal review, AMENDED by P2 + P3 corrections)
+# 08 — Final Report (§34 terminal review, AMENDED by P2 + P3 + P4 corrections)
 
 PRODUCTION HEAD = 97f49582e
-RECON CLOSE     = PASS (initial) → AMENDED via P2 CORRECTION01
+RECON CLOSE     = PASS (initial) → AMENDED via P2 CORRECTION01 → CLOSED FOR FOUNDATION HANDOFF (per third-reviewer PASS_WITH_ONE_BOUNDED_P1, C1: GO TO FOUNDATION RECON)
 
 ```text
 AMENDMENT_NOTICE (v1):
@@ -16,15 +16,15 @@ AMENDMENT_NOTICE (v2):
                                   (authorizes foundation ACT, narrower scope)
   P3 correction ACT            = §6 of ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01
   Freeze superseded by         = .factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/12-corrected-freeze.md (v2; terminal)
-  New P0 closed                = PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+  New P0 transferred           = PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
                                   (seam not proven for same-providerId-different-instanceId
                                    switch; foundation ACT must trace via evidence 13 RED plan)
-  New P0 closed                = SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND
+  New P0 transferred           = SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND
                                   (credentialReference namespace must be frozen by foundation)
-  New P1 closed                = session persistence seam frozen ahead of source survey
+  New P1 transferred           = session persistence seam frozen ahead of source survey
                                   (downgraded to SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM
                                    = NOT_YET_BOUND; foundation discovers)
-  New P1 closed                = defaultProfileId was incorrectly included in foundation scope
+  New P1 transferred           = defaultProfileId was incorrectly included in foundation scope
                                   (moved to implementation ACT scope)
   Foundation ACT authorized    = ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
                                   (narrower: identity + credential namespace + runtime
@@ -33,6 +33,34 @@ AMENDMENT_NOTICE (v2):
   New evidence                 = 13-instance-switch-semantic-recon-plan.md
   Amended evidence             = 09, 10, 12 (surgical NOT_YET_BOUND / NOT_YET_PROVEN additions)
   Source chain preserved       = 00..07 unchanged; recon source work survives
+
+AMENDMENT_NOTICE (v3):
+  Reviewer verdict 2026-09-05c = PASS_WITH_ONE_BOUNDED_P1 — C1: GO TO FOUNDATION RECON
+                                  (third reviewer closed the recon cycle)
+  P4 correction ACT            = §7 of ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01
+  Freeze superseded by         = .factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/12-corrected-freeze.md (v3; terminal)
+  Bounded P1 (FOUNDATION_RED_TOO_HIGH_LEVEL):
+                                  evidence 13 single-stage RED split into
+                                  R0 (current-seam characterization witness; runs BEFORE
+                                      production edits; measures
+                                      CURRENT_SEAM_CAN_EXPRESS_INSTANCE_IDENTITY,
+                                      CURRENT_SEAM_MUTATES_FULL_CONNECTION,
+                                      CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY;
+                                      prior NO/NO/NO)
+                                  + R1 (post-identity semantic RED; runs AFTER instance
+                                        abstraction exists; primary assertion =
+                                        NEXT_EFFECTIVE_CONNECTION effective-config tuple)
+  P2 wording correction:
+                                  NOT_YET_BOUND / NOT_YET_PROVEN now read as
+                                  OPEN_FOUNDATION_QUESTION (overclaim closed;
+                                  capability transferred to foundation), NOT as
+                                  "new P0 closed". Applied to evidence 12 v3.
+                                  Pure reading instruction; no semantic change
+                                  to freeze values. Factory P2/non-blocking.
+  Foundation ACT status         = AUTHORIZED (narrowed scope per §7.3 of correction ACT body)
+  Implementation ACT status     = NOT AUTHORIZED (still gated on foundation closure)
+  Recon correction cycle        = CLOSED
+  Source chain preserved        = 00..07 unchanged; recon source work survives
 ```
 
 ## §34 terminal review — answers (corrected)
@@ -164,20 +192,26 @@ AMENDMENT_NOTICE (v2):
 10. What exact implementation ACT follows?
     THREE bounded ACTs (gated):
     (0) ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01 —
-        foundation ACT (NOT F4). NARROWED scope per P3 reviewer:
+        foundation ACT (NOT F4). LOCKED scope per P4 reviewer
+        (PASS_WITH_ONE_BOUNDED_P1, third reviewer, C1: GO TO
+        FOUNDATION RECON; full AUTHORIZATION):
         only owns ProviderConfigurationInstance identity +
         secret-reference identity (CREDENTIAL_IDENTITY_SCOPE) +
-        runtime instance-switch behavior (the 5-Q RED in evidence 13)
+        runtime instance-switch behavior (R0 + R1 RED in evidence 13;
+        R0 = current-seam characterization witness, R1 = post-identity
+        semantic RED with NEXT_EFFECTIVE_CONNECTION primary assertion)
         + per-session instance-binding seam (NOT the profile-pointer
         wiring). Does NOT own defaultProfileId global key, Profile
-        CRUD, or any UI. AUTHORIZED (named).
+        CRUD, activeProfileId profile semantics, or any UI.
+        AUTHORIZED.
     (1) ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 —
         implementation ACT (NOT yet authorized). Owns Profile CRUD,
         defaultProfileId global key, SESSION_ACTIVE_PROFILE_ID
         profile-pointer wiring (extending the foundation's
         instance-binding seam), footer quick-switch (SPLIT_ACTION),
         "Set as default" UI, Settings "Manage Profiles" page.
-        Gated on (0) closing with all invariants green.
+        Gated on (0) closing with all invariants green AND R0/R1
+        freezing their results.
     IMPLEMENTATION_SHAPE = FOUNDATION_THEN_MODEL_PROFILES
     (renamed from SPLIT for clarity).
 
@@ -212,10 +246,16 @@ AMENDMENT_NOTICE (v2):
                                                   (RESTRICT_UNTIL_IDLE for V1;
                                                    characterization for in-place path
                                                    justified but not blocking)
-12-corrected-freeze.md                          → TERMINAL CORRECTED FREEZE (v2)
-                                                  (this is the source of truth going forward)
+12-corrected-freeze.md                          → TERMINAL CORRECTED FREEZE (v3)
+                                                  (this is the source of truth going forward;
+                                                   v2 → v3 was a P2/non-blocking wording
+                                                   correction: NOT_YET_* now read as
+                                                   OPEN_FOUNDATION_QUESTION per third reviewer)
 13-instance-switch-semantic-recon-plan.md         → mechanical RED plan the foundation ACT
-                                                  must execute (P3-1); answers Q1-Q5 about
+                                                  must execute (v3: split into R0 current-seam
+                                                  characterization witness + R1 post-identity
+                                                  semantic RED with NEXT_EFFECTIVE_CONNECTION
+                                                  primary assertion); answers Q1-Q5 about
                                                   same-providerId-different-instanceId switch
 ```
 
@@ -227,9 +267,18 @@ F3B  (321ad2dd5)  PASS_F3B_NO_REPAIR_NEEDED  (T17=NOT_REPRODUCED)
 F3B  (bfa2ad592)  P2 closure-evidence precision
 MP   (b55407d03)  open
 MP   (97f49582e)  P1 wording correction
-MP   (<prior-commit>) P2 correction (HALT_MODEL_PROFILE_CONTRACT_NOT_COHERENT
+MP   (830be436d)  P2 correction (HALT_MODEL_PROFILE_CONTRACT_NOT_COHERENT
                       resolved via bounded correction01; recon source work
                       preserved; freeze amended; foundation ACT authorized)
+MP   (951f171e0)  P3 correction (HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
+                      resolved via bounded correction02; freeze v2 with
+                      honest NOT_YET_BOUND/NOT_YET_PROVEN framing;
+                      evidence 13 added; foundation ACT scope narrowed)
+MP   (<this-commit>) P4 correction (PASS_WITH_ONE_BOUNDED_P1 third-reviewer
+                      verdict; evidence 13 RED split into R0 + R1;
+                      freeze v3 with OPEN_FOUNDATION_QUESTION reading
+                      instruction; foundation ACT scope locked per §7.3;
+                      recon correction cycle CLOSED)
 MP   (<this-commit>)  P3 correction (HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND
                       resolved via bounded correction02 = §6 of P2 correction ACT;
                       freeze narrowed to reviewer's amended field list;
@@ -246,23 +295,52 @@ MP   (<this-commit>)  P3 correction (HALT_PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUN
     (WAITING_WITHOUT_WAKE_SOURCE): stays separate, unaffected.
     Profile application uses existing async ownership paths.
 
-## Next action (corrected)
+## Next action (corrected — closed for foundation handoff per P4)
 
-NOT authorized as a single implementation ACT. The recon closes at
-the P2-corrected freeze (file 12). The next ACT to open is the
-**foundation ACT**:
+The recon correction cycle is **CLOSED** per third-reviewer
+PASS_WITH_ONE_BOUNDED_P1 (C1: GO TO FOUNDATION RECON). The next ACT
+to open is the **foundation ACT** (now AUTHORIZED per §7.3 of the
+correction ACT body):
 
 ```text
 ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
-  (NOT F4; bounded; NARROWED scope per P3 reviewer:
-   ProviderConfigurationInstance identity +
-   secret-reference identity (CREDENTIAL_IDENTITY_SCOPE) +
-   runtime instance-switch behavior (evidence 13 RED plan) +
-   per-session instance-binding seam only.
-   Does NOT own defaultProfileId, Profile CRUD, or UI.)
+  (NOT F4; bounded; AUTHORIZED per P4 verdict;
+   scope LOCKED per §7.3:
+   - ProviderConfigurationInstance identity
+   - secret-reference identity (CREDENTIAL_IDENTITY_SCOPE = PROVIDER_INSTANCE_ID)
+   - runtime instance-switch behavior (evidence 13 R0 + R1 plan)
+   - per-session instance-binding seam only
+
+   Does NOT own:
+   - profiles.json / Profile CRUD
+   - defaultProfileId (global default)
+   - activeProfileId profile semantics
+   - picker UI, "Set as default" UI, Settings "Manage Profiles"
+
+   USEFUL DESIGN BIAS (NOT frozen; the RED decides):
+     LIKELY_STORAGE            = additive instance registry
+     LIKELY_CREDENTIAL_SCOPE   = PROVIDER_INSTANCE_ID
+     LIKELY_SWITCH_POLICY      = FORCE_REBUILD_ON_INSTANCE_CHANGE
+
+   EXECUTION ORDER (reviewer-prescribed):
+     1. recon exact current connection authority
+     2. R0 current-seam characterization (per evidence 13 R0)
+     3. choose α / β / γ only from measured blast radius
+     4. bind credential identity namespace
+     5. RED instance A -> B effective-config transition (R1)
+     6. minimal repair
+     7. conservation for existing providerId-only users
+     8. session-binding seam characterization
+     9. stop
+
+   OPEN_FOUNDATION_QUESTIONS (from evidence 12 v3):
+     - PROVIDER_INSTANCE_SWITCH_SEAM_NOT_BOUND     (R0 + R1)
+     - SAME_PROVIDER_MULTI_CREDENTIAL_IDENTITY_NOT_BOUND  (R1 byproduct)
+     - SESSION_ACTIVE_PROFILE_PERSISTENCE_SEAM_NOT_BOUND  (R1 byproduct)
 ```
 
-Only after the foundation ACT closes with all invariants green may
-the implementation ACT
+Only after the foundation ACT closes with all invariants green AND
+the R0/R1 obligations freeze their results may the implementation
+ACT
 (`ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01`) be
 authorized.
