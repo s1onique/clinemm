@@ -1,0 +1,34 @@
+ACT_ID            = ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01
+ENTRY_HEAD        = 97f49582ed56dc669635172a96c2f85a74e5be38   (P1 wording-correction commit landed)
+PREFLIGHT_TIME    = 2026-09-05T12:55:25Z
+PREFLIGHT_OPERATOR= recon (no human in loop; production edits FORBIDDEN)
+
+GIT TOP-LEVEL     = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH            = main
+WORKTREE          = clean (no porcelain entries; no untracked)
+STASH LIST        = empty
+GIT DIFF --CHECK  = 0 warnings on HEAD
+
+FACTORY DIR       = clean baseline (no uncommitted .factory/ residue introduced by this ACT)
+
+PREDECESSOR CHAIN (unchanged load-bearing facts)
+  F3   (256943c5c)  PASS_F3_RECON_OUTCOME_B
+  F3B  (321ad2dd5)  PASS_F3B_NO_REPAIR_NEEDED  (T17=NOT_REPRODUCED, T18=REJECTED_AS_NON_SEMANTIC_METRIC)
+  F3B  (bfa2ad592)  P2 closure-evidence precision (NOT_CLAIMED framing)
+  MP   (b55407d03)  open
+  MP   (97f49582e)  P1 in-place wording correction  ← ENTRY HEAD
+
+POSTURE FREEZES (from ACT preamble)
+  MODEL_PROFILES_ARCHITECTURAL_BLOCKER   = NONE_PROVEN
+  PROVIDER_SESSION_CONFIG_GLOBALLY_CLEAN = NOT_CLAIMED
+  FACTORIZE_PREREQUISITE_REPAIR_REQUIRED = NO
+  F4                                     = DOES_NOT_EXIST
+
+EXPECTED PRODUCTION HEAD = 97f49582ed56dc669635172a96c2f85a74e5be38
+ACTUAL PRODUCTION HEAD   = 97f49582ed56dc669635172a96c2f85a74e5be38
+MATCH                    = YES
+
+PRODUCTION_EDIT = FORBIDDEN  (recon-only ACT)
+TEST_EDIT       = characterization only if needed to answer a lifecycle question; none needed yet
+
+NO RED SUITE WILL BE WRITTEN. NO TESTS WILL BE ADDED. NO PRODUCTION SOURCE WILL BE TOUCHED.

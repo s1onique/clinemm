@@ -1200,5 +1200,11 @@ apps/vscode/.factory/evidence/
 #               MiniMax 1.3M→24.6k bug (EFFECTIVE-MODEL-CONTEXT-WINDOW-AUTHORITY-RECON01)
 #               and the WAITING_WITHOUT_WAKE_SOURCE task progression bug
 #               (RUNTIME-TASK-PROGRESSION-ASYNC-JOB-WAKE-OWNERSHIP-RECON01).
+# P2 correction ACT (2026-09-05) adds bounded correction after reviewer
+# HALT_MODEL_PROFILE_CONTRACT_NOT_COHERENT verdict; supersedes §21 freeze
+# with corrected freeze at evidence/12-corrected-freeze.md; reroutes §27
+# Outcome A → Outcome C (foundation ACT first, NOT F4). Production edits
+# STILL FORBIDDEN in this correction. Recon source work preserved.
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01.md
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/

@@ -30,6 +30,41 @@
 >   Modeling this ACT's posture toward those facts:
 >     MODEL_PROFILES_ARCHITECTURAL_BLOCKER     = NONE_PROVEN
 >     PROVIDER_SESSION_CONFIG_GLOBALLY_CLEAN   = NOT_CLAIMED
+>
+>   P2_correction01_pointer:
+>     On 2026-09-05 the reviewer's HALT_MODEL_PROFILE_CONTRACT_NOT_COHERENT
+>     verdict identified that the §21 freeze below (PROFILE_STORAGE_MODEL = R,
+>     SESSION_PROFILE_APPLICATION = A, RESUME_USES = SESSION_LAST_PROFILE via a
+>     single global lastUsedProfileId, SWITCH_DURING_INFLIGHT_MODEL_REQUEST =
+>     QUEUE_FOR_NEXT_REQUEST for the provider-change path, IMPLEMENTATION_SHAPE
+>     = SINGLE_ACT) contradicts both the original product contract (multiple
+>     configurations of the same provider must coexist) and the session/global
+>     authority requirement (per-task/session activeProfileId must not collapse
+>     into a single global pointer).
+>
+>     The bounded correction is at:
+>       ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01
+>     The corrected freeze (terminal, supersedes §21 below) is at:
+>       .factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/12-corrected-freeze.md
+>
+>     Post-correction posture:
+>       MODEL_PROFILES_PRODUCT_SCOPE              = RESTORED  (R -> I; provider-instance
+>                                                          identity is a foundation prerequisite)
+>       SESSION_PROFILE_BINDING                   = PER_SESSION_NOT_GLOBAL  (activeProfileId
+>                                                          is per-task/session, not global)
+>       GLOBAL_DEFAULT_PROFILE                    = SEPARATE_FIELD  (defaultProfileId is its
+>                                                          own global state key)
+>       LIFECYCLE_APPLICATION                     = D_SPLIT_ACTION  (footer quick-switch
+>                                                          updates session only; explicit
+>                                                          "Set as default" updates global)
+>       INFLIGHT_SEMANTIC                         = RESTRICT_UNTIL_IDLE  (conservative;
+>                                                          characterization for in-place
+>                                                          path optional)
+>       IMPLEMENTATION_SHAPE                      = SPLIT (foundation + impl), NOT SINGLE_ACT
+>       FOUNDATION_ACT_REQUIRED                   = YES
+>                                                       ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
+>                                                       (NOT F4)
+>       IMPLEMENTATION_ACT_AUTHORIZED             = NO  (gated on foundation closure)
 > ```
 >
 > Model Profiles recon therefore begins without an upstream architecture blocker,
@@ -1544,3 +1579,23 @@ The reviewer's F3B verdict explicitly opened this lane:
 This ACT is that lane's recon entry. No F4 exists; the Factorize chain terminates
 by falsification (`PASS_F3_NO_FACTORIZATION_NEEDED`). Product recon begins here
 without an upstream architecture blocker.
+
+### P2 correction pointer (amended 2026-09-05)
+
+The §21 freeze recorded by this recon ACT body (PROFILE_STORAGE_MODEL = R,
+SESSION_PROFILE_APPLICATION = A, IMPLEMENTATION_SHAPE = SINGLE_ACT, etc.)
+has been **SUPERSEDED** by the corrected freeze at
+`.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/12-corrected-freeze.md`,
+per the reviewer's verdict `HALT_MODEL_PROFILE_CONTRACT_NOT_COHERENT`.
+
+The bounded correction is `ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01`.
+See its §2 for the BEFORE → AFTER delta and §4 for the reroute from §27 Outcome A
+(SINGLE IMPLEMENTATION ACT) to §27 Outcome C (provider-instance identity is a
+real prerequisite; open one bounded foundation ACT before profiles, NOT F4).
+
+The next ACT to open is `ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01`.
+The implementation ACT `ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01`
+is NOT authorized and is gated on the foundation ACT's closure.
+
+Recon source work (this ACT body's §1–§34, evidence files 00–07) is preserved
+intact and remains load-bearing.
