@@ -1170,3 +1170,13 @@ apps/vscode/.factory/evidence/
 # clone so F3B ACT can reference F3's discriminator freeze + T-matrix.
 !/.factory/acts/ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01.md
 !/.factory/evidence/ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01/
+# ACT-CLINEMM-FACTORIZE-F3B-PROVIDER-SESSION-CONFIG-AUTHORITY-CONSOLIDATE01 —
+# Production ACT authorized by reviewer (PASS_WITH_ONE_BOUNDED_P1 — C1: GO TO
+# F3B, WITH A NARROWER CONTRACT). T18 rejected as RED/invariant (reviewer P1:
+# bypass ratio is recon metric only, not semantic contract). T17 promoted to
+# RED-first with HALT_RED_NOT_REPRODUCED stop rule. Four-site discriminator
+# characterized in ACT body: sites 2/3/4 are NOT store-equivalent (opposite
+# precedence; shared-field fallback; different scope). Production edits gated
+# on T17 reproduction. Survives fresh clone so F3B's contract and stop-rule
+# are durable alongside the F3 recon dossier.
+!/.factory/acts/ACT-CLINEMM-FACTORIZE-F3B-PROVIDER-SESSION-CONFIG-AUTHORITY-CONSOLIDATE01.md

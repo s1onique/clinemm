@@ -211,6 +211,45 @@ describe("buildStartSessionInput", () => {
 		expect(result.interactive).toBe(true)
 	})
 
+	// ACT-CLINEMM-FACTORIZE-F3B-PROVIDER-SESSION-CONFIG-AUTHORITY-CONSOLIDATE01:
+	// T17 — Ollama contextWindow fallback divergence between picker and session.
+	//
+	// Frozen scenario (per F3 recon): legacy StateManager `ollamaApiOptionsCtxNum`
+	// is set, providers.json has no `ollama.contextWindow`. Canonical effective-config
+	// rule: providers.json PRIMARY, StateManager FALLBACK. The session factory must
+	// surface the legacy 384000 to the running session so the Ollama gateway gets
+	// the user-requested `num_ctx` (matching what the picker shows).
+	//
+	// Resolution: this test calls the REAL `resolveOllamaProviderConfig` against
+	// a stubbed ProviderSettingsManager + StateManager that simulate the documented
+	// divergent geometry. If the production function returns `384000`, the picker
+	// and the session agree and no repair is needed. If it returns the default,
+	// F3B has reproduced the F3-recon dossier's predicted divergence.
+	//
+	// T17_RESULT = NOT_REPRODUCED
+	// EXECUTED   = YES (vitest src/sdk/cline-session-factory.test.ts)
+	// OUTCOME    = PASS — production function correctly implements the canonical
+	//              fallback (settingsContextWindow ?? legacyContextWindow ??
+	//              OLLAMA_DEFAULT_CONTEXT_WINDOW) at cline-session-factory.ts:668.
+	//              The F3 recon dossier's prediction was over-confident: both code
+	//              paths share the same fallback rule. No repair needed.
+	// HALT       = HALT_RED_NOT_REPRODUCED   (preserved as passing witness)
+	it("T17 [F3B]: resolveOllamaProviderConfig falls back to legacy ollamaApiOptionsCtxNum when providers.json has no ollama contextWindow", async () => {
+		const { resolveOllamaProviderConfig } = await import("./cline-session-factory")
+
+		mocks.providerSettingsManager.getProviderSettings.mockReturnValue(undefined)
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			ollamaApiOptionsCtxNum: "384000",
+		})
+
+		const result = resolveOllamaProviderConfig(
+			mocks.stateManager.getApiConfiguration(),
+			"qwen2.5:7b",
+		)
+
+		expect(result.modelInfo?.contextWindow).toBe(384000)
+	})
+
 	it("handles undefined prompt", () => {
 		const config = makeBaseConfig()
 		const input = { cwd: "/tmp/workspace" }
