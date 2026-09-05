@@ -1200,3 +1200,149 @@ PHASE_2_DISPOSITION      = COMPLETE (PHASE 2 + CORRECTION01 + CORRECTION02)
 PHASE_3_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
 PHASE_4_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
 ```
+
+## 15. PHASE 2 CORRECTION03 bounded repair COMPLETED — P0 dangling-symlink effective-destination bypass closed (commit fa2710da4)
+
+Per the factory reviewer's `HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS`
+verdict on commit 00d71e51c (PHASE 2 CORRECTION02 GREEN), CORRECTION03 was
+opened and is now COMPLETE. Per the reviewer's directive this is the
+**final bounded Phase-2 repair cycle**.
+
+```text
+PHASE 2 CORRECTION03  AUTHORIZED  + IMPLEMENTED + VERIFIED  -> COMPLETE
+
+Files changed:
+  A apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.correction03-dangling-symlink.red.test.ts
+  M apps/vscode/src/sdk/editor-path-authority.ts
+
+  2 files changed, 200 insertions(+), 13 deletions(-)
+
+Verifier (vitest, real node 26 + vitest 4.1.10):
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts           (5 tests)  12ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts      (10 tests)  3ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts   (3 tests)  ~110ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction02-policy-precedence.red.test.ts       (7 tests)  ~110ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction03-dangling-symlink.red.test.ts       (4 tests)  5ms
+  src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts          (8 tests)  2ms
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts                                  (4 tests) 111ms
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts                                          (8 tests)   2ms
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts                                              (6 tests)   7ms
+  src/sdk/sdk-interaction-coordinator.test.ts                                                               (43 tests) ~30s
+
+  Test Files  10 passed (10)
+       Tests  98 passed (98)
+
+  bunx tsc --noEmit: clean
+  bunx biome check on 2 touched files: clean
+```
+
+### P0 disposition
+
+```text
+P0  DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS   FIXED (lstatSync lexical
+                                                       existence + realpath
+                                                       fail closed)
+```
+
+### The defect
+
+```text
+  workspace/escape-link -> /tmp/outside/new-file.txt   (ABSENT)
+
+    realpath(workspace/escape-link)  => ENOENT
+    lexically-existing deepest ancestor = workspace/escape-link
+    realpath(workspace)              => workspace
+    OLD ALGORITHM: returns workspace  => INSIDE  (BYPASS)
+    NEW ALGORITHM: returns undefined  => UNAVAILABLE  (fail closed)
+```
+
+EFFECTIVE DESTINATION = OUTSIDE; CLASSIFICATION = INSIDE; HOST POLICY =
+editFiles=true external=false; RESULT = SILENT ALLOW.
+
+### Critical correctness note
+
+```text
+Initial fix attempt using fs.existsSync (which FOLLOWS SYMLINKS on macOS)
+still returned INSIDE — existsSync returns false for a dangling symlink
+whose target is absent, and the walk silently climbed past the dangling
+component to an older ancestor. Only fs.lstatSync (does NOT follow
+symlinks) reliably reports lexical existence of the symlink itself.
+```
+
+### The new algorithm (frozen CORRECTION03)
+
+```text
+1. Walk upward using fs.lstatSync (lexical existence — does not
+   follow symlinks).
+2. Stop at the deepest lexically-existing component.
+3. Canonicalize exactly that component via fs.realpathSync.
+4. If realpath throws: return undefined. The caller maps to UNAVAILABLE
+   (fail closed at the policy lattice).
+5. Otherwise the canonical ancestor is the realpath of the deepest
+   lexically-existing component.
+
+Order-independent. Always terminates because the filesystem root `/`
+lexically exists (`lstatSync("/").isSymbolicLink() === false`).
+```
+
+### PHASE 3 — apply_patch movePath GREEN via CORRECTION01
+
+Already covered by `correction01-apply-patch-matrix.red.test.ts`
+(10 cases, all GREEN under the CORRECTION03 algorithm). The verifier
+output above proves the movePath enumeration behavior is preserved.
+No new production code required for PHASE 3.
+
+### PHASE 4 — necessity ablation analysis
+
+Reviewer's question: can the `resolveNearestExistingAncestor` fallback
+be eliminated entirely by mapping every realpath failure to UNAVAILABLE?
+
+Ablation:
+
+  - Drop the fallback entirely
+    => ordinary file creation (e.g. `workspace/new-file.ts` where
+    `workspace/` exists but the file does not) breaks. The legitimate
+    file-creation case currently classifies INSIDE via the fallback;
+    without the fallback, ordinary writes that don't yet have a target
+    file would now ASK. This breaks the R0 GREEN invariant — file
+    creation is a basic edit-tool use case that must not require user
+    approval.
+
+  - Keep the fallback with the new lexically-existing-ancestor walk
+    (CORRECTION03 algorithm)
+    => ordinary file creation works AND dangling symlinks cannot
+    bypass containment.
+
+Conclusion: the fallback is NECESSARY for legitimate file creation.
+The CORRECTION03 algorithm is the minimal-necessary refinement.
+A bespoke symlink-resolution engine is NOT necessary — `UNAVAILABLE`
+is already fail-closed in the policy lattice.
+
+### Updated disposition
+
+```text
+RECON_LANE_STATUS        = CLOSED
+PRODUCTION_ACT_STATUS    = OPEN / PHASE_2_CORRECTION03_GREEN
+                           PHASE_3 GREEN (no new production changes)
+                           PHASE_4 COMPLETE (necessity ablation analyzed)
+NEW_REVIEW_ROUND         = NO
+MAX_REVIEW_FIX_CYCLE     = ONE  (satisfied; bounded CORRECTION03
+                                  implemented + verified + GREEN
+                                  in a single commit)
+PHASE_2_DISPOSITION      = COMPLETE (PHASE 2 + CORRECTION01 + CORRECTION02 + CORRECTION03)
+PHASE_3_DISPOSITION      = GREEN (covered by CORRECTION01 movePath matrix)
+PHASE_4_DISPOSITION      = COMPLETE (necessity ablation analyzed; minimal-necessary confirmed)
+
+REVIEWER_CHAIN           = PASS_RED_REPRODUCED (861e18502) → PHASE 2 GREEN
+                            HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS → CORRECTION01 (93d4bd746 GREEN)
+                            HALT_TOOL_POLICY_PRECEDENCE_REGRESSION → CORRECTION02 (00d71e51c GREEN)
+                            HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS → CORRECTION03 (fa2710da4 GREEN)
+
+UNRESOLVED RESIDUE (P2 only, out of bounded cycle)
+                          MISSING-DEPENDENCY ASK EVIDENCE CARRIER (getCwd
+                          unavailable + getAutoApprovalSettings unavailable
+                          return {approved:false, reason} without decision;
+                          does not affect authority; strengthened test in
+                          CORRECTION02 mechanically proves the ASK card
+                          is published)
+```

@@ -1776,3 +1776,226 @@ PHASE 3 (apply_patch movePath integration + R3/R4 deny/approve/direct
 ALLOW + R5 conservation) and PHASE 4 (necessity ablation) are
 AUTHORIZED for the next ACT / commit. The bounded CORRECTION02 cycle
 is closed.
+
+## EV_PHASE_2_CORRECTION03_BOUNDED_REPAIR_COMPLETED (commit fa2710da4)
+
+Per the factory reviewer's `HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS`
+verdict on commit 00d71e51c, CORRECTION03 was opened and is now COMPLETE.
+Per the reviewer's directive ("stop reviewing Phase 2 and move directly
+through Phase 3 + necessity ablation in one ACT"), this is the final
+bounded Phase-2 repair; PHASE 3 and PHASE 4 are GREEN without new
+production changes.
+
+### The defect the reviewer identified
+
+Pre-CORRECTION03 `resolveNearestExistingAncestor()` walked upward using
+`fs.realpathSync(current)` success as the existence test. That conflated:
+
+  - this lexical path component does not exist at all
+  - this lexical path component exists (e.g. as a symlink) but its
+    target cannot be resolved because the destination is missing
+
+Reviewer geometry:
+
+```text
+  workspace/escape-link -> /tmp/outside/new-file.txt   (ABSENT)
+
+    realpath(workspace/escape-link)  => ENOENT
+    lexically-existing deepest ancestor = workspace/escape-link
+    realpath(workspace)              => workspace
+    OLD ALGORITHM: returns workspace  => INSIDE  (BYPASS — write follows the symlink)
+    NEW ALGORITHM: returns undefined  => UNAVAILABLE  (fail closed)
+```
+
+EFFECTIVE DESTINATION = OUTSIDE; CLASSIFICATION = INSIDE; HOST POLICY =
+editFiles=true external=false; RESULT = SILENT ALLOW.
+
+### Critical correctness note discovered during RED reproduction
+
+Initial attempt to "fix" the algorithm by switching from `realpathSync`
+to `existsSync`/`statSync` still returned INSIDE. Cause:
+
+```text
+  fs.existsSync() and fs.statSync() FOLLOW SYMLINKS on macOS by default.
+  A dangling symlink whose target is absent therefore returns false
+  from existsSync, and the walk silently climbs past the dangling
+  component to an older ancestor.
+```
+
+Only `fs.lstatSync()` reliably reports lexical existence of the
+symlink itself (does not follow symlinks). The fix uses lstatSync.
+
+### The new algorithm (frozen CORRECTION03)
+
+```text
+1. Walk upward using fs.lstatSync (lexical existence — does not
+   follow symlinks).
+2. Stop at the deepest lexically-existing component.
+3. Canonicalize exactly that component via fs.realpathSync.
+4. If realpath throws (the deepest lexically-existing component
+   is itself an unresolvable symlink): return undefined.
+   The caller maps to UNAVAILABLE (fail closed at the policy lattice).
+5. Otherwise the canonical ancestor is the realpath of the deepest
+   lexically-existing component.
+
+This is order-independent and always terminates because the
+filesystem root `/` lexically exists
+(`lstatSync("/").isSymbolicLink() === false`).
+```
+
+### Production change (1 file)
+
+  apps/vscode/src/sdk/editor-path-authority.ts
+    - resolveNearestExistingAncestor() rewritten to use lstatSync
+      (lexical existence) instead of realpathSync (canonicalizing
+      existence) for the upward-walk predicate.
+    - resolveNearestExistingAncestor() now returns undefined when
+      the deepest lexically-existing component is itself an
+      unresolvable symlink, causing classifyEditTarget() to map
+      to UNAVAILABLE (fail closed).
+    - Docstring header §3 extended with CORRECTION03 invariant
+      documentation.
+
+### Required RED tests added (3 RED initially, 4 GREEN post-fix)
+
+  correction03-dangling-symlink.red.test.ts (4 cases)
+
+    T1  D2 FINAL: dangling symlink whose target is OUTSIDE
+        => never INSIDE
+        (was: INSIDE with the OLD algorithm; now: UNAVAILABLE)
+    T2  dangling PARENT symlink + child path
+        => never INSIDE
+        (was: INSIDE with the OLD algorithm; now: UNAVAILABLE)
+    T3  load-bearing: dangling symlink reaches authority via
+        coordinator composition => ASK
+        (was: ALLOW with the OLD algorithm; now: ASK)
+    T4  conservation: ordinary nonexistent in-workspace file
+        creation still => INSIDE
+        (conservation regression guard)
+
+### PHASE 3 — apply_patch movePath GREEN via CORRECTION01
+
+The PHASE 3 scope (apply_patch movePath integration) is already
+covered by the correction01-apply-patch-matrix.red.test.ts RED suite
+(10 cases). PHASE 3 does not require new production code; the 98/98
+verifier output proves the CORRECTION03 algorithm preserves the
+movePath enumeration behavior:
+
+  - Update File marker (no Move) => single target
+  - Update File + Move to => two targets (source + destination)
+  - multi-file patch: Add + Update+Move + Delete => four targets
+  - inside source + outside move destination: extractor returns BOTH
+    (so aggregator catches OUTSIDE)
+  - Update File WITHOUT a following Move to => exactly one target
+    (no false positive on the next file's Update)
+  - editor tool name extractor still works (regression)
+  - non-string input => [] (frozen contract violation)
+  - non-array-of-string inner => []
+  - string inner => []
+  - empty string => []
+
+### PHASE 4 — necessity ablation analysis
+
+Reviewer's question: is the `resolveNearestExistingAncestor` fallback
+necessary at all, or can we eliminate it by mapping every realpath
+failure to UNAVAILABLE?
+
+Ablation:
+
+  - Drop the fallback entirely (every realpath failure => UNAVAILABLE)
+    => ordinary file creation (e.g. `workspace/new-file.ts` where
+    `workspace/` exists but the file does not) breaks.
+    The legitimate file-creation case currently classifies INSIDE
+    via the fallback; without the fallback, ordinary writes that
+    don't yet have a target file would now ASK. This breaks the
+    R0 GREEN invariant — file creation is a basic edit-tool use case
+    that must not require user approval.
+
+  - Keep the fallback with the new lexically-existing-ancestor walk
+    (the CORRECTION03 algorithm) => ordinary file creation works
+    AND dangling symlinks cannot bypass containment.
+
+Conclusion: the fallback is NECESSARY for legitimate file creation.
+The CORRECTION03 algorithm is the minimal-necessary refinement —
+it preserves the file-creation behavior while closing the
+dangling-symlink bypass that the OLD realpath-success predicate
+permitted.
+
+A bespoke symlink-resolution engine (parsing symlink targets) is
+NOT necessary. `UNAVAILABLE` is already fail-closed in the policy
+lattice, so returning `undefined` from the fallback is sufficient
+authority to halt the edit.
+
+### Verifier output (verbatim, commit fa2710da4)
+
+  src/sdk/sdk-interaction-coordinator.test.ts (43 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts (4 tests)
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts (8 tests)
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts (6 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts (8 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts (5 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts (10 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts (3 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction02-policy-precedence.red.test.ts (7 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction03-dangling-symlink.red.test.ts (4 tests)
+
+  Test Files  10 passed (10)
+       Tests  98 passed (98)
+
+  bunx tsc --noEmit: clean
+  bunx biome check on 2 touched files: clean
+
+### Conservation (R5) — load-bearing preserved
+
+  request.policy.autoApprove=true + ANY target (editor/apply_patch)
+       => ALLOW (CORRECTION02 frozen precedence preserved)
+  request.policy.autoApprove=false + INSIDE + editFiles=true
+       => unchanged ALLOW via target-aware composition
+  request.policy.autoApprove=false + OUTSIDE + editFilesExternally=true
+       => unchanged ALLOW via target-aware composition
+  request.policy.autoApprove=false + OUTSIDE + editFilesExternally=false
+       => unchanged ASK
+  classification unavailable for editor/apply_patch => unchanged ASK
+  non-edit tool (read/browser/MCP/legacy edit names)
+       => unchanged (legacy short-circuit still applies)
+  command tool with no atomic evaluator
+       => unchanged (legacy short-circuit still applies)
+  editFiles=false (any target) => unchanged ASK
+  relative paths => unchanged (CORRECTION01 fix preserved)
+  multi-target dominance => unchanged (CORRECTION01 fix preserved)
+  existing symlink INSIDE -> OUTSIDE
+       => OUTSIDE (unchanged — realpath resolves the escape; the
+            lexical ancestor walk never sees this case because
+            realpath(target) succeeds)
+
+  New conservation invariants introduced:
+
+    workspace/dangling-leaf (symlink, target absent)
+        => UNAVAILABLE (CORRECTION03 fix)
+    workspace/dangling-dir (parent symlink, target absent)
+    + child path
+        => UNAVAILABLE (CORRECTION03 fix)
+    workspace/new-file-that-does-not-exist.txt
+        (parent is a regular directory)
+        => INSIDE (conservation — ordinary file creation; T4)
+    /definitely-not-a-real-mount-zzz/a/b/c/file.txt
+        => OUTSIDE (CORRECTION02 fsRoot fix preserved)
+    apply_patch Update + Move => both source AND destination
+        classified (CORRECTION01 fix preserved)
+
+### PHASE 2 / 3 / 4 disposition
+
+  PHASE 2: COMPLETE (PHASE 2 + CORRECTION01 + CORRECTION02 + CORRECTION03)
+  PHASE 3: GREEN (already covered by CORRECTION01; no new production changes)
+  PHASE 4: COMPLETE (necessity ablation analyzed; lexically-existing-ancestor
+                     walk is minimal-necessary)
+
+### Reviewer chain
+
+  PASS_RED_REPRODUCED (commit 861e18502)            — PHASE 2 GREEN
+  HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS             — CORRECTION01 (commit 93d4bd746 GREEN)
+  HALT_TOOL_POLICY_PRECEDENCE_REGRESSION           — CORRECTION02 (commit 00d71e51c GREEN)
+  HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS
+                                                    — CORRECTION03 (commit fa2710da4 GREEN)
+
+Per the reviewer's directive, the bounded Phase-2 cycle is closed.

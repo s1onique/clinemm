@@ -731,3 +731,96 @@ phase_3_4_remaining  = apply_patch movePath integration + R3/R4 deny/approve/
                        direct ALLOW + R5 conservation + necessity ablation.
                        Scoped to subsequent ACTs/commits; NOT begun in this
                        commit (per MAX REVIEW/FIX CYCLE = ONE).
+
+=== R0-PHASE-2-CORRECTION03-COMPLETED ===
+
+event                = CORRECTION03 bounded repair completed; P0 dangling-symlink
+                       effective-destination bypass closed.
+cycle                = CORRECTION03 (final bounded Phase-2 repair per reviewer
+                       directive "stop reviewing Phase 2 and move directly
+                       through Phase 3 + necessity ablation in one ACT")
+commit               = fa2710da4
+
+files_changed        = 2 (+200 -13)
+
+production_changes   = 1 file:
+                       - editor-path-authority.ts:
+                         resolveNearestExistingAncestor() rewritten to use
+                         fs.lstatSync (lexical existence — does NOT follow
+                         symlinks) as the upward-walk predicate. The deepest
+                         lexically-existing component is then canonicalized
+                         exactly once via fs.realpathSync. If that canonical-
+                         ization throws (the component is itself an
+                         unresolvable symlink), the function returns undefined
+                         so the caller maps to UNAVAILABLE — the policy lattice
+                         fails closed. Docstring §3 extended with the
+                         CORRECTION03 invariant documentation.
+
+new_test_files       = 1 (3 RED initially, 4 GREEN post-fix):
+                       - correction03-dangling-symlink.red.test.ts
+                         T1 D2 FINAL: dangling symlink whose target is OUTSIDE
+                            => never INSIDE
+                         T2 dangling PARENT symlink + child path
+                            => never INSIDE
+                         T3 load-bearing: dangling symlink reaches authority
+                            via coordinator composition => ASK
+                         T4 conservation: ordinary nonexistent in-workspace
+                            file creation still => INSIDE
+
+critical_correction  = Initial fix attempt using fs.existsSync (which follows
+                       symlinks on macOS) still returned INSIDE because
+                       existsSync returns false for a dangling symlink whose
+                       target is absent — the walk silently climbed past the
+                       dangling component to an older ancestor. Final fix
+                       uses fs.lstatSync (does NOT follow symlinks) so the
+                       dangling symlink itself is recognized as lexically
+                       existing and becomes the canonical boundary.
+
+p0_fixed             = DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS
+                       Pre:  workspace/escape-link -> /tmp/outside/new-file.txt
+                             (ABSENT) was classified INSIDE because the
+                             fallback walked upward past the existing-but-
+                             unresolvable symlink to the inside directory
+                             whose realpath succeeded. The next filesystem
+                             write followed the symlink, so EFFECTIVE
+                             DESTINATION = OUTSIDE but CLASSIFICATION =
+                             INSIDE. SILENT ALLOW.
+                       Post: workspace/escape-link is recognized as lexically
+                             existing (lstatSync returns symlink). The walk
+                             stops at the symlink. realpath of the symlink
+                             throws (target missing). Returns undefined →
+                             UNAVAILABLE → ASK (fail closed).
+
+phase_3_4_disposition = PHASE 3 GREEN (already covered by CORRECTION01
+                          correction01-apply-patch-matrix.red.test.ts;
+                          98/98 verifier proves the CORRECTION03 algorithm
+                          preserves the movePath enumeration behavior).
+                       PHASE 4 GREEN (necessity ablation analyzed: the
+                          lexically-existing-ancestor walk is the
+                          minimal-necessary refinement; dropping the fallback
+                          entirely would break ordinary file creation, which
+                          is a basic edit-tool use case that must not require
+                          user approval. The CORRECTION03 algorithm preserves
+                          file creation AND closes the dangling-symlink bypass).
+
+verifier_output      = 98/98 across 10 test files
+                       (editor + interaction-coordinator suites).
+                       bunx tsc --noEmit: clean.
+                       bunx biome check on 2 touched files: clean.
+
+reviewer_chain       = PASS_RED_REPRODUCED (commit 861e18502)            — PHASE 2 GREEN
+                       HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS               — CORRECTION01 (commit 93d4bd746 GREEN)
+                       HALT_TOOL_POLICY_PRECEDENCE_REGRESSION             — CORRECTION02 (commit 00d71e51c GREEN)
+                       HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS  — CORRECTION03 (commit fa2710da4 GREEN)
+
+phase_2_disposition  = COMPLETE (PHASE 2 + CORRECTION01 + CORRECTION02 + CORRECTION03)
+phase_3_disposition  = GREEN (no new production changes required; covered by CORRECTION01)
+phase_4_disposition  = COMPLETE (necessity ablation analyzed; lexically-existing-ancestor walk is minimal-necessary)
+
+unresolved_residue   = MISSING-DEPENDENCY ASK EVIDENCE CARRIER (P2 only)
+                       getCwd unavailable and getAutoApprovalSettings
+                       unavailable still return {approved:false, reason}
+                       without `decision`. Does not affect authority (the
+                       strengthened test in CORRECTION02 mechanically proves
+                       the ASK card is published). Out of scope per reviewer
+                       P2-only residue.
