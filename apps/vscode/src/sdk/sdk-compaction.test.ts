@@ -72,7 +72,20 @@ describe("compactSessionMessages", () => {
 			compacted: true,
 			messages: [{ role: "user", content: "summary" }],
 			compactionState: { version: 1, input: expect.anything() },
+			// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+			// (seventy-seventh-pass, Option 1 repair): the manual
+			// seam now explicitly computes W via
+			// `estimateRequestInputTokens(...)` on the success
+			// branch. The returned value is
+			// POST_COMPACTION_CURRENT_CONFIG_W (quality =
+			// APPROXIMATE). Assert it's a positive number here;
+			// the precise value is bound to
+			// systemPrompt/messages/tools operands and is pinned
+			// by the dedicated RED test
+			// (sdk-compaction-w-publish-red01.test.ts).
+			currentWorkingContextEstimate: expect.any(Number),
 		})
+		expect(result.currentWorkingContextEstimate).toBeGreaterThan(0)
 	})
 
 	it("preserves context-only model limits for the shared resolver", async () => {

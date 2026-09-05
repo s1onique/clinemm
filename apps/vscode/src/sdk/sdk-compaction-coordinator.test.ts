@@ -421,29 +421,43 @@ describe("POST_COMPACTION_W_BAR_REFRESH_RECON01 - load-bearing coordinator bridg
 		return { ...base, postSpy, publishPostCompactionW }
 	}
 
-	it("GREEN: producer surfaces W=29600 -> publish called once with 29600 -> the LAST postStateToWebview is called AFTER publish", async () => {
+	it("GREEN: Option 1 W publication -- publish called once with the seam-computed POST_COMPACTION_CURRENT_CONFIG_W; LAST postStateToWebview AFTER publish", async () => {
+		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+		// (seventy-seventh-pass, Option 1 contract): the manual
+		// seam computes W via explicit `estimateRequestInputTokens
+		// (...)` on the success branch using SESSION-CONFIG-TIME
+		// operands (systemPrompt + messages + extraTools). The
+		// producer mock no longer carries W; the seam owns it.
 		const publishSpy = vi.fn() as unknown as ReturnType<typeof vi.fn> & ((w: number) => void)
 		const { coordinator, postSpy } = makeCoordinatorWithPublisher(publishSpy)
+		const projectedMessages = [{ role: "user", content: "summary" }]
 		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
 			vi.fn().mockResolvedValue({
-				messages: [{ role: "user", content: "summary" }],
-				currentWorkingContextEstimate: 29_600,
+				messages: projectedMessages,
+				systemPrompt: "rewritten system",
 			}),
 		)
 
 		await coordinator.compactTask()
 
+		// Compute the expected W with the SAME operands the seam
+		// will use (session-config systemPrompt + extraTools from
+		// the makeCoordinator fixture + the projected messages).
+		const { estimateRequestInputTokens } = await import("@cline/shared")
+		const expectedW = estimateRequestInputTokens({
+			systemPrompt: "test system prompt",
+			messages: projectedMessages,
+			tools: [{ name: "test_tool", description: "tool", input_schema: { type: "object" } }],
+		})
+
 		expect(publishSpy).toHaveBeenCalledOnce()
-		expect(publishSpy).toHaveBeenCalledWith(29_600)
+		expect(publishSpy).toHaveBeenCalledWith(expectedW)
+		expect(expectedW).toBeGreaterThan(0)
 		expect(postSpy).toHaveBeenCalled()
 
 		// Mechanical ordering witness: publish MUST be called BEFORE
 		// the FINAL (LAST) postStateToWebview call, so that the
 		// resulting ExtensionState payload carries the new W.
-		// (The compacting-phase postStateToWebview comes earlier
-		// in the lifecycle; the LAST post carries the post-
-		// compaction state with the new W. Without this ordering,
-		// the bar would still lag by one round-trip.)
 		const publishOrder = (publishSpy as unknown as { mock: { invocationCallOrder: number[] } }).mock
 			.invocationCallOrder[0]
 		const postInvocationOrders = (
@@ -456,21 +470,34 @@ describe("POST_COMPACTION_W_BAR_REFRESH_RECON01 - load-bearing coordinator bridg
 		expect(publishOrder).toBeLessThan(lastPostOrder)
 	})
 
-	it("NEGATIVE: when the producer returns no W, publish MUST NOT be called and postStateToWebview MUST still execute", async () => {
+	it("NEGATIVE: when the producer returns no messages (metadata-only), publish MUST NOT be called and postStateToWebview MUST still execute", async () => {
+		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+		// (seventy-seventh-pass, Option 1 contract): the
+		// `messages === undefined` branch (metadata-only
+		// prepareTurn return) is a "no real compaction happened"
+		// signal for manual mode. The seam MUST NOT publish W
+		// in that branch. The carrier is failure-closed at the
+		// downstream boundary
+		// (UNDEFINED_W_STALE_REUSE = FORBIDDEN).
+		//
+		// Pre-repair semantics: the producer itself returned no W
+		// and the seam propagated undefined. Post-repair: the
+		// producer never had W; the seam computes W only when
+		// `result.messages` is defined (a real projection
+		// happened).
 		const publishSpy = vi.fn() as unknown as ReturnType<typeof vi.fn> & ((w: number) => void)
 		const { coordinator, postSpy } = makeCoordinatorWithPublisher(publishSpy)
 		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
 			vi.fn().mockResolvedValue({
-				messages: [{ role: "user", content: "summary" }],
-				// currentWorkingContextEstimate intentionally omitted
-				// (legacy / pre-repair path).
+				// metadata-only return: W-only, no projection
+				currentWorkingContextEstimate: 1234,
+				// messages intentionally omitted
 			}),
 		)
 
 		await coordinator.compactTask()
 
-		// Critical: no fake W. The carrier MUST NOT receive an
-		// undefined-coerced null - that would silently clear the bar.
+		// Critical: no fake W on the no-op branch.
 		expect(publishSpy).not.toHaveBeenCalled()
 		// And postStateToWebview MUST still run - the divider
 		// publication is the user-visible success indicator.
@@ -483,17 +510,26 @@ describe("POST_COMPACTION_W_BAR_REFRESH_RECON01 - load-bearing coordinator bridg
 			throw publishError
 		}) as unknown as ReturnType<typeof vi.fn> & ((w: number) => void)
 		const { coordinator, postSpy } = makeCoordinatorWithPublisher(publishSpy)
+		const projectedMessages = [{ role: "user", content: "summary" }]
 		mockCreateContextCompactionPrepareTurn.mockReturnValueOnce(
 			vi.fn().mockResolvedValue({
-				messages: [{ role: "user", content: "summary" }],
-				currentWorkingContextEstimate: 42_000,
+				messages: projectedMessages,
+				systemPrompt: "rewritten system",
 			}),
 		)
+
+		// Compute the expected W with the same operands.
+		const { estimateRequestInputTokens } = await import("@cline/shared")
+		const expectedW = estimateRequestInputTokens({
+			systemPrompt: "test system prompt",
+			messages: projectedMessages,
+			tools: [{ name: "test_tool", description: "tool", input_schema: { type: "object" } }],
+		})
 
 		// The coordinator wraps publishPostCompactionW in try/catch
 		// and logs; compactTask must NOT propagate.
 		await expect(coordinator.compactTask()).resolves.not.toThrow()
-		expect(publishSpy).toHaveBeenCalledWith(42_000)
+		expect(publishSpy).toHaveBeenCalledWith(expectedW)
 		expect(postSpy).toHaveBeenCalled()
 		// The thrown error is logged (the production boundary uses
 		// Logger.error), but never reaches the calling code.
@@ -527,6 +563,13 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		logger: undefined,
 		telemetry: undefined,
 		sessionId: undefined as string | undefined,
+		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+		// (seventy-seventh-pass, Option 1 repair): forward
+		// session-config-time operands so the manual seam can
+		// compute POST_COMPACTION_CURRENT_CONFIG_W via
+		// `estimateRequestInputTokens(...)`.
+		systemPrompt: "test system prompt",
+		extraTools: [{ name: "test_tool", description: "tool", input_schema: { type: "object" } }] as never,
 	}
 	const options = {
 		stateManager: {

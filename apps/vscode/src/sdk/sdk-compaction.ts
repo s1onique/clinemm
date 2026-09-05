@@ -16,6 +16,7 @@ import {
 	createSessionCompactionState,
 	type SessionCompactionState,
 } from "@cline/core"
+import { estimateRequestInputTokens } from "@cline/shared"
 import type { Message as SdkMessage, ModelInfo as SdkModelInfo } from "@cline/llms"
 import { Logger } from "@/shared/services/Logger"
 
@@ -25,11 +26,44 @@ import { Logger } from "@/shared/services/Logger"
 const FALLBACK_MANUAL_COMPACTION_MAX_INPUT_TOKENS = 64_000
 
 export interface CompactSessionMessagesInput {
-	/** Provider/model/compaction config for the active session. */
+	/**
+	 * Provider/model/compaction config for the active session.
+	 *
+	 * ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+	 * (seventy-seventh-pass): `systemPrompt` and `extraTools` are
+	 * included on the Pick<> so the manual seam can compute
+	 * `POST_COMPACTION_CURRENT_CONFIG_W` via explicit
+	 * `estimateRequestInputTokens(...)` on the success branch.
+	 * These are session-config-time operands (NOT
+	 * runtime-composed operands); the quality of the resulting W
+	 * is APPROXIMATE per the architectural freeze at file-09.
+	 */
 	config: Pick<
 		CoreSessionConfig,
-		"providerConfig" | "providerId" | "modelId" | "knownModels" | "compaction" | "logger" | "telemetry"
-	>
+		| "providerConfig"
+		| "providerId"
+		| "modelId"
+		| "knownModels"
+		| "compaction"
+		| "logger"
+		| "telemetry"
+	> & {
+		// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+		// (seventy-seventh-pass, Option 1 repair): the manual
+		// seam now requires session-config-time operands
+		// (`systemPrompt` and `extraTools`) to compute
+		// POST_COMPACTION_CURRENT_CONFIG_W via explicit
+		// `estimateRequestInputTokens(...)`. These are declared
+		// optional for backwards compatibility with pre-existing
+		// fixtures/tests that construct the input without them;
+		// the runtime coordinator always forwards both. When
+		// callers omit them, the estimator degrades to
+		// `systemPrompt: undefined, tools: []` (no system
+		// contribution, no tool contribution) but still produces
+		// a valid number from the messages alone.
+		systemPrompt?: string
+		extraTools?: CoreSessionConfig["extraTools"]
+	}
 	/** The active session id (used for telemetry keying). */
 	sessionId: string
 	/** The conversation transcript to compact (SDK message shape). */
@@ -163,8 +197,55 @@ export async function compactSessionMessages(input: CompactSessionMessagesInput)
 	//   (`result.messages !== undefined`),
 	//   NOT merely from presence of W metadata.
 	if (!result.messages) {
-		return { compacted: false, messages: input.messages }
+		return {
+			compacted: false,
+			messages: input.messages,
+			// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+			// (seventy-seventh-pass, Option 1 contract): the
+			// `messages === undefined` branch is a metadata-only
+			// prepareTurn return (no real projection happened for
+			// manual mode). It MUST NOT publish optimistic W -- the
+			// manual seam did not produce one and the carrier is
+			// failure-closed (UNDEFINED_W_STALE_REUSE = FORBIDDEN).
+			// Set the field explicitly to undefined so surface
+			// mutation cannot leak a metadata-only W through.
+			currentWorkingContextEstimate: undefined,
+		}
 	}
+	// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+	// (seventy-seventh-pass, Option 1 repair):
+	//
+	// The raw compactor returns `CoreCompactionResult`, which by
+	// design carries no `currentWorkingContextEstimate` field --
+	// the W has to be computed at the seam that has the operands
+	// in scope. Per the reviewer's authorized repair, the manual
+	// seam now explicitly calls `estimateRequestInputTokens(...)`
+	// on the success branch using SESSION-CONFIG-TIME operands:
+	//
+	//   W = estimateRequestInputTokens({
+	//     systemPrompt: input.config.systemPrompt,
+	//     messages:     result.messages,
+	//     tools:        input.config.extraTools ?? [],
+	//   })
+	//
+	// This is `POST_COMPACTION_CURRENT_CONFIG_W`, with quality =
+	// APPROXIMATE per the architectural freeze at file-09. The
+	// approximation discriminator test (R2) proves this value
+	// differs from CANONICAL_RUNTIME_W whenever the runtime has
+	// appended tool definitions (plugin/MCP/addTools paths).
+	//
+	// The next prepareTurn boundary replaces this approximation
+	// with CANONICAL_RUNTIME_W via the existing runtime-event
+	// subscription path inside `subscribeRuntimeEvents` ->
+	// `WorkingContextHostCapture.observe`. The bar interval
+	// between (a) this manual publication and (b) the next
+	// prepareTurn is short and labeled APPROXIMATE per the
+	// existing semantic name `currentWorkingContextEstimate`.
+	const currentWorkingContextEstimate = estimateRequestInputTokens({
+		systemPrompt: input.config.systemPrompt,
+		messages: result.messages,
+		tools: input.config.extraTools ?? [],
+	})
 	return {
 		compacted: true,
 		messages: result.messages,
@@ -174,13 +255,8 @@ export async function compactSessionMessages(input: CompactSessionMessagesInput)
 			conversationId: input.sessionId,
 			systemPrompt: result.systemPrompt,
 		}),
-		// ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01: surface
-		// the producer's W so the coordinator can drive the
-		// WorkingContextHostCapture at the same moment the divider
-		// is published. Undefined when the producer returned no W
-		// (pre-repair path / legacy callers); undefined is failure-
-		// closed at the carrier (see working-context-host-capture.ts
-		// `UNDEFINED_W_STALE_REUSE = FORBIDDEN`).
-		currentWorkingContextEstimate: result.currentWorkingContextEstimate,
+		// POST_COMPACTION_CURRENT_CONFIG_W -- APPROXIMATE quality.
+		// The next prepareTurn overwrites with CANONICAL_RUNTIME_W.
+		currentWorkingContextEstimate,
 	}
 }

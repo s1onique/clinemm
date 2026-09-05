@@ -63,6 +63,13 @@ function buildMessages(count: number) {
 	}))
 }
 
+// Session-config-time operands used by the manual seam to compute
+// POST_COMPACTION_CURRENT_CONFIG_W per Option 1.
+const SYSTEM_PROMPT_FOR_RECON01 = "system"
+const EXTRA_TOOLS_FOR_RECON01 = [
+	{ name: "test_tool", description: "t", input_schema: { type: "object" } },
+] as never
+
 function makeBaseInput(messages: CompactSessionMessagesInput["messages"]): CompactSessionMessagesInput {
 	return {
 		sessionId: "session-recon01",
@@ -81,6 +88,12 @@ function makeBaseInput(messages: CompactSessionMessagesInput["messages"]): Compa
 				error: () => {},
 			} as CompactSessionMessagesInput["config"]["logger"],
 			telemetry: undefined,
+			// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+			// (seventy-seventh-pass, Option 1): forward
+			// session-config-time operands so the manual seam
+			// can compute POST_COMPACTION_CURRENT_CONFIG_W.
+			systemPrompt: SYSTEM_PROMPT_FOR_RECON01,
+			extraTools: EXTRA_TOOLS_FOR_RECON01,
 		},
 	}
 }
@@ -90,30 +103,45 @@ describe("RECON01 R1: compactSessionMessages surfaces W from the producer seam",
 		vi.clearAllMocks()
 	})
 
-	it("returns currentWorkingContextEstimate as a number on success (green)", async () => {
-		const W_POST = 29_600
+	it("returns currentWorkingContextEstimate as a number on success (green, Option 1 seam-computed)", async () => {
 		mockCreateContextCompactionPrepareTurn.mockReturnValue(() =>
 			Promise.resolve({
 				messages: buildMessages(20),
-				systemPrompt: "system",
-				currentWorkingContextEstimate: W_POST,
+				systemPrompt: "rewritten system",
+				// Pre-repair: producer purported to return W here.
+				// Post-repair: this field is ignored -- the seam
+				// computes W from session-config operands. Mock
+				// omits it to prove the seam owns W.
 			}),
 		)
 		const result = await compactSessionMessages(makeBaseInput(buildMessages(60)))
 		expect(result.compacted).toBe(true)
-		expect(result.currentWorkingContextEstimate).toBe(W_POST)
+		expect(typeof result.currentWorkingContextEstimate).toBe("number")
+		expect(result.currentWorkingContextEstimate).toBeGreaterThan(0)
+		// Exact Option-1 product contract: W is computed from
+		// session-config operands (systemPrompt + projected
+		// messages + extraTools), not from the producer's
+		// alleged W (which is undefined for CoreCompactionResult).
+		const { estimateRequestInputTokens } = await import("@cline/shared")
+		const expectedW = estimateRequestInputTokens({
+			systemPrompt: SYSTEM_PROMPT_FOR_RECON01,
+			messages: buildMessages(20),
+			tools: EXTRA_TOOLS_FOR_RECON01,
+		})
+		expect(result.currentWorkingContextEstimate).toBe(expectedW)
 	})
 
-	it("returns currentWorkingContextEstimate undefined when the producer returned no W (legacy path)", async () => {
+	it("returns currentWorkingContextEstimate undefined when result.messages is undefined (no-op / metadata-only branch)", async () => {
 		mockCreateContextCompactionPrepareTurn.mockReturnValue(() =>
 			Promise.resolve({
-				messages: buildMessages(20),
-				systemPrompt: "system",
-				// NO currentWorkingContextEstimate
+				// metadata-only return: no projection, no W
+				currentWorkingContextEstimate: 12_345,
 			}),
 		)
 		const result = await compactSessionMessages(makeBaseInput(buildMessages(60)))
-		expect(result.compacted).toBe(true)
+		// No real projection happened. The seam must NOT publish
+		// optimistic W -- the carrier is failure-closed.
+		expect(result.compacted).toBe(false)
 		expect(result.currentWorkingContextEstimate).toBeUndefined()
 	})
 })
@@ -136,24 +164,31 @@ describe("RECON01 R2 + R3: post-compaction W reaches the host-side carrier via s
 		expect(capture.currentWorkingContextEstimate).not.toBe(PRE)
 	})
 
-	it("W value is the producer number verbatim — no recompute, no transform", async () => {
-		const W_POST = 42
+	it("W value is the seam-computed POST_COMPACTION_CURRENT_CONFIG_W (Option 1)", async () => {
 		mockCreateContextCompactionPrepareTurn.mockReturnValue(() =>
 			Promise.resolve({
 				messages: buildMessages(20),
-				systemPrompt: "system",
-				currentWorkingContextEstimate: W_POST,
+				systemPrompt: "rewritten system",
+				// Producer never carries W (CoreCompactionResult
+				// lacks the field). Seam computes it.
 			}),
 		)
 		const result = await compactSessionMessages(makeBaseInput(buildMessages(60)))
-		expect(result.currentWorkingContextEstimate).toBe(W_POST)
-		// The carrier assignment carries the same value with no
-		// estimator recompute.
+		expect(typeof result.currentWorkingContextEstimate).toBe("number")
+		// The carrier assignment carries the seam-computed
+		// value (no producer-side recompute).
 		const capture = new WorkingContextHostCapture()
 		if (typeof result.currentWorkingContextEstimate === "number") {
 			capture.setLatest(result.currentWorkingContextEstimate)
 		}
-		expect(capture.currentWorkingContextEstimate).toBe(W_POST)
+		// The carrier MUST hold exactly the seam-computed value.
+		const { estimateRequestInputTokens } = await import("@cline/shared")
+		const expectedW = estimateRequestInputTokens({
+			systemPrompt: SYSTEM_PROMPT_FOR_RECON01,
+			messages: buildMessages(20),
+			tools: EXTRA_TOOLS_FOR_RECON01,
+		})
+		expect(capture.currentWorkingContextEstimate).toBe(expectedW)
 	})
 
 	it("setLatest with a non-number normalizes to null (transport-only fail-closed)", () => {

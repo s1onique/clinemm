@@ -531,6 +531,13 @@ export class SdkCompactionCoordinator {
 					compaction: config.compaction,
 					logger: config.logger,
 					telemetry: config.telemetry,
+					// ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+					// (seventy-seventh-pass, Option 1 repair): forward
+					// the session-config-time operands so the manual
+					// seam can compute POST_COMPACTION_CURRENT_CONFIG_W
+					// via explicit `estimateRequestInputTokens(...)`.
+					systemPrompt: config.systemPrompt,
+					extraTools: config.extraTools,
 				},
 				sessionId,
 				messages,
