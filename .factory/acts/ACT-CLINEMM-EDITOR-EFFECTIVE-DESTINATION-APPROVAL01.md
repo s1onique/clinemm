@@ -784,3 +784,154 @@ on commit 861e18502 (PHASE 2 GREEN), CORRECTION01 was opened to close:
 The bounded CORRECTION01 cycle is COMPLETE. Per the reviewer's
 MAX REVIEW/FIX CYCLE = ONE directive, this cycle is closed and the
 next ACT can pick up PHASE 3 / PHASE 4.
+
+### 13.12 PHASE 2 CORRECTION02 bounded repair COMPLETED — P0 precedence frozen + P1 fallback tests strengthened + P2 dead-code cleanup (commit 00d71e51c)
+
+Per the factory reviewer's `HALT_TOOL_POLICY_PRECEDENCE_REGRESSION` verdict
+on commit 93d4bd746 (PHASE 2 CORRECTION01 GREEN), CORRECTION02 was
+opened to close:
+
+  P0  TOOL_POLICY_PRECEDENCE_REGRESSION
+        `request.policy.autoApprove === true` was silently ignored for
+        `editor` and `apply_patch` because the post-CORRECTION01
+        branch (lines 551-569) evaluated only `getAutoApprovalSettings`
+        + effective-destination classification, while non-editor tools
+        still honored the disjunct.
+
+  P1  fallback test proves non-resolution rather than actual ASK publication
+        The 100 ms Promise.race timeout accepted "promise didn't
+        resolve" as success. A different hang could pass.
+
+  P2  editor/apply_patch ASK decision carrier is effectively dead
+        handleEditorOrApplyPatchApproval() returned `{ approved: false,
+        reason }` on ASK (no decision), so the carrier was always
+        `null` when read at pendingToolApprovalMessage.
+
+  P2  nearest-existing-ancestor skips filesystem root
+        resolveNearestExistingAncestor() exited when `current ===
+        fsRoot` without trying the filesystem root itself.
+
+### 13.13 Frozen ClineMM EDIT-TOOL precedence (CORRECTION02)
+
+Resolution: **Option B (path authority is hard safety envelope) WITH
+explicit host-level escape hatch (priority 1)**:
+
+```text
+  1.  request.policy.autoApprove === true
+        => ALLOW  (host-level escape hatch; explicit override
+            beats every safety envelope).
+
+  2.  otherwise (default ClineMM host wiring forces
+      autoApprove=false for editor/apply_patch at the SDK seam):
+
+      a.  getCwd() unavailable          => ASK (fail closed)
+      b.  getAutoApprovalSettings() unavailable => ASK
+      c.  classification=inside + editFiles=true => ALLOW
+      d.  classification=outside + editFilesExternally=true => ALLOW
+      e.  classification=outside + editFilesExternally=false => ASK
+      f.  classification=unavailable    => ASK (fail closed)
+
+  The legacy boolean short-circuit
+  (request.policy.autoApprove || shouldAutoApproveTool)
+  is NEVER consulted as a fallback for editor/apply_patch when
+  policy.autoApprove is false (or undefined).
+```
+
+NOTE on upstream SDK docs: `permission-handling.mdx` describes the SDK
+contract where the host's `toolPolicies` map flows unchanged into the
+runtime. ClineMM intentionally diverges for native edit tools by routing
+them through the target-aware composition. This is the product contract
+already resolved as `E3 PASS_BY_PRODUCT_CONTRACT` in
+ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01 §E3 and is preserved
+verbatim in CORRECTION02 — the override escape hatch (priority 1) lets
+an explicit `autoApprove=true` propagate when an upstream consumer
+chooses to set it.
+
+### 13.14 Production fixes in CORRECTION02 (commit 00d71e51c)
+
+  apps/vscode/src/sdk/sdk-interaction-coordinator.ts
+    - handleEditorOrApplyPatchApproval() opens with the explicit
+      `request.policy.autoApprove === true` override branch.
+    - JSDoc on getAutoApprovalSettings extended with the frozen
+      CORRECTION02 precedence (priority 1 + 2a-2f).
+    - ASK return path now carries `decision: { kind: "ask", reason,
+      source }` so the pendingToolApprovalMessage record receives
+      non-null evidence (was previously always null).
+
+  apps/vscode/src/sdk/editor-path-authority.ts
+    - resolveNearestExistingAncestor() loop now tries fsRoot before
+      giving up. Comment updated to document the rationale.
+
+### 13.15 Required RED tests added (7 RED -> 7 GREEN in CORRECTION02)
+
+  1. correction02-policy-precedence.red.test.ts  (7 cases)
+     T1 editor + autoApprove=true + INSIDE + editFiles=false => ALLOW
+       (priority 1 explicit override)
+     T2 editor + autoApprove=true + OUTSIDE + editFilesExternally=false
+       => ALLOW (priority 1 explicit override beats safety envelope)
+     T3 apply_patch + autoApprove=true + INSIDE => ALLOW
+       (priority 1 explicit override)
+     T4 editor + autoApprove=false + INSIDE + editFiles=true
+       => ALLOW via target-aware composition (priority 2c)
+     T5 editor + autoApprove=false + OUTSIDE + editFilesExternally=false
+       => ASK (priority 2e; mechanically asserts ask card was published)
+     T6 apply_patch + autoApprove=false + INSIDE + editFiles=true
+       => ALLOW via target-aware composition (priority 2c)
+     T7 apply_patch + autoApprove=false + OUTSIDE + editFilesExternally=false
+       => ASK (priority 2e)
+
+Updated tests:
+
+  2. correction01-fallback-fails-closed.red.test.ts
+     Helper now returns the task; assertions now check
+     `task.messageStateHandler.getClineMessages().length === 1`
+     instead of Promise.race timeout. autoApprove on the request
+     changed from true to false (under the new CORRECTION02 precedence
+     the override-hatch would fire first otherwise).
+
+  3. editor-path-authority.r1-classifier.test.ts
+     "non-existent target on non-existent mount" updated from
+     UNAVAILABLE to OUTSIDE (CORRECTION02 P2 fsRoot fix).
+
+### 13.16 Verifier output (verbatim, commit 00d71e51c)
+
+  src/sdk/sdk-interaction-coordinator.test.ts (43 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts (4 tests)
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts (8 tests)
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts (6 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts (8 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts (5 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts (10 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts (3 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction02-policy-precedence.red.test.ts (7 tests)
+
+  Test Files  9 passed (9)
+       Tests  94 passed (94)
+
+  bunx tsc --noEmit: clean
+  bunx biome check on 5 touched files: 0 fixes applied
+
+### 13.17 Updated disposition
+
+  PHASE 2 CORRECTION02: COMPLETE (commit 00d71e51c)
+    P0  TOOL_POLICY_PRECEDENCE_REGRESSION           FIXED (frozen precedence)
+    P1  fallback test proves non-resolution rather than actual ASK publication
+                                                      FIXED (mechanical ASK
+                                                             publication assertion)
+    P2  editor/apply_patch ASK decision carrier is effectively dead
+                                                      FIXED (decision carried on
+                                                             ASK return path)
+    P2  nearest-existing-ancestor skips filesystem root
+                                                      FIXED (loop now tries
+                                                             fsRoot before giving up)
+
+  PHASE 3: AUTHORIZED for the next ACT
+    apply_patch movePath integration + R3/R4 deny/approve/direct
+    ALLOW + R5 conservation
+
+  PHASE 4: AUTHORIZED for the next ACT
+    Necessity ablation
+
+The bounded CORRECTION02 cycle is COMPLETE. Per the reviewer's
+MAX REVIEW/FIX CYCLE = ONE directive, this cycle is closed and the
+next ACT can pick up PHASE 3 / PHASE 4.

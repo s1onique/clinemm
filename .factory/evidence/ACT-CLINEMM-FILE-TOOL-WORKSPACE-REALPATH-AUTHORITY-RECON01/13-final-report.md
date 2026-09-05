@@ -1672,3 +1672,107 @@ PHASE 3 (apply_patch movePath integration + R3/R4 deny/approve/direct
 ALLOW + R5 conservation) and PHASE 4 (necessity ablation) are
 AUTHORIZED for the next ACT / commit. The bounded CORRECTION01 cycle
 is closed.
+
+## EV_PHASE_2_CORRECTION02_BOUNDED_REPAIR_COMPLETED (commit 00d71e51c)
+
+Per the factory reviewer's `HALT_TOOL_POLICY_PRECEDENCE_REGRESSION` verdict
+on commit 93d4bd746, CORRECTION02 was opened and is now COMPLETE.
+
+### Frozen ClineMM EDIT-TOOL precedence (CORRECTION02)
+
+Resolution: **Option B (path authority is hard safety envelope) WITH
+explicit host-level escape hatch (priority 1)**.
+
+```text
+1.  request.policy.autoApprove === true                => ALLOW (override)
+2.  otherwise (default ClineMM host wiring forces
+    autoApprove=false for editor/apply_patch at SDK seam):
+
+    a.  getCwd() unavailable          => ASK (fail closed)
+    b.  getAutoApprovalSettings() unavailable => ASK
+    c.  classification=inside + editFiles=true => ALLOW
+    d.  classification=outside + editFilesExternally=true => ALLOW
+    e.  classification=outside + editFilesExternally=false => ASK
+    f.  classification=unavailable    => ASK (fail closed)
+```
+
+The default ClineMM VSCode host wiring forces `autoApprove=false` for
+editor/apply_patch at the SDK seam (`sdk-tool-policies.ts:64`), so the
+priority-1 override is a no-op in the VSCode host path. It exists so
+embedded/JetBrains consumers that wire `toolPolicies` directly (without
+`buildToolPolicies`) get the documented SDK behavior.
+
+### P0 closed
+
+`request.policy.autoApprove === true` is now the OUTERMOST priority for
+editor/apply_patch. The new override branch returns ALLOW with
+`decision.source = "sdk-policy-autoApprove"`. Non-edit tools, command
+tools, and editor/apply_patch with `autoApprove=false` all retain
+their existing behavior.
+
+### P1 closed (test-quality improvement)
+
+The missing-options fallback tests previously used a 100 ms Promise.race
+timeout. CORRECTION02 changes the helper to return the task proxy and
+the assertions now mechanically check:
+
+```ts
+await vi.waitFor(
+    () => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1)
+)
+const [message] = task.messageStateHandler.getClineMessages()
+expect(message).toMatchObject({ type: "ask", ask: "tool", partial: false })
+expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+await expect(promise).resolves.toMatchObject({ approved: false })
+```
+
+A timeout-based assertion can no longer pass for an unrelated hang.
+
+### P2 closed (ASK-decision carrier residue)
+
+`handleEditorOrApplyPatchApproval()`'s ASK return path now carries
+`decision: { kind: "ask", reason, source }` matching the shape the
+`pendingToolApprovalMessage` consumer expects. The dead/null carrier
+residue is gone.
+
+### P2 closed (nearest-existing-ancestor fsRoot skip)
+
+`resolveNearestExistingAncestor()` now tries `fsRoot` itself before
+giving up. `/does/not/exist` resolves to canonical `/`, which lies
+OUTSIDE any real workspace, so the verdict becomes OUTSIDE instead of
+UNAVAILABLE. The r1-classifier test expectation is updated accordingly.
+
+### Verifier output (verbatim)
+
+  Test Files  9 passed (9)
+       Tests  94 passed (94)
+
+  bunx tsc --noEmit: clean
+  bunx biome check on 5 touched files: 0 fixes applied
+
+### Conservation (R5) — load-bearing preserved
+
+  request.policy.autoApprove=true + ANY target (editor/apply_patch)
+       => ALLOW (NEW; explicit override)
+  request.policy.autoApprove=false + INSIDE + editFiles=true (editor/apply_patch)
+       => unchanged ALLOW via target-aware composition
+  request.policy.autoApprove=false + OUTSIDE + editFilesExternally=true
+       => ALLOW via target-aware composition
+  request.policy.autoApprove=false + OUTSIDE + editFilesExternally=false
+       => unchanged ASK
+  classification unavailable for editor/apply_patch => unchanged ASK
+  non-edit tool (read/browser/MCP/legacy edit names)
+       => unchanged (legacy short-circuit still applies)
+  command tool with no atomic evaluator
+       => unchanged (legacy short-circuit still applies)
+  editFiles=false (any target) => unchanged ASK
+  relative paths => unchanged (CORRECTION01 fix preserved)
+  multi-target dominance => unchanged (CORRECTION01 fix preserved)
+  nearest-existing-ancestor => OUTSIDE for /-reachable ancestors (CORRECTION02 fix)
+
+### PHASE 3 / PHASE 4 remain
+
+PHASE 3 (apply_patch movePath integration + R3/R4 deny/approve/direct
+ALLOW + R5 conservation) and PHASE 4 (necessity ablation) are
+AUTHORIZED for the next ACT / commit. The bounded CORRECTION02 cycle
+is closed.

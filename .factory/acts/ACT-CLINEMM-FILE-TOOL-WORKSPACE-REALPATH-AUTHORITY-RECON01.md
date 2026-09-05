@@ -1122,3 +1122,81 @@ PHASE_2_DISPOSITION      = COMPLETE (PHASE 2 + CORRECTION01)
 PHASE_3_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
 PHASE_4_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
 ```
+
+## 14. PHASE 2 CORRECTION02 bounded repair COMPLETED — P0 precedence frozen + P1 fallback test strengthening + P2 dead-code cleanup (commit 00d71e51c)
+
+Per the factory reviewer's HALT_TOOL_POLICY_PRECEDENCE_REGRESSION verdict
+on commit 93d4bd746 (PHASE 2 CORRECTION01 GREEN), CORRECTION02 was opened
+and is now COMPLETE.
+
+```text
+PHASE 2 CORRECTION02  AUTHORIZED  + IMPLEMENTED + VERIFIED  -> COMPLETE
+
+Files changed:
+  A apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.correction02-policy-precedence.red.test.ts
+  M apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts
+  M apps/vscode/src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts
+  M apps/vscode/src/sdk/editor-path-authority.ts
+  M apps/vscode/src/sdk/sdk-interaction-coordinator.ts
+
+  5 files changed, 488 insertions(+), 47 deletions(-)
+
+Verifier (vitest, real node 26 + vitest 4.1.10):
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts           (5 tests)  11ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts      (10 tests)  3ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts   (3 tests)  ~110ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction02-policy-precedence.red.test.ts       (7 tests)  ~110ms
+  src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts          (8 tests)  2ms
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts                                  (4 tests) 111ms
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts                                          (8 tests)   2ms
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts                                              (6 tests)   7ms
+  src/sdk/sdk-interaction-coordinator.test.ts                                                               (43 tests) ~30s
+
+  Test Files  9 passed (9)
+       Tests  94 passed (94)
+
+  bunx tsc --noEmit: clean
+  bunx biome check on 5 touched files: 0 fixes applied
+```
+
+### P0 + P1 + P2 disposition
+
+```text
+P0  TOOL_POLICY_PRECEDENCE_REGRESSION                  FIXED (frozen precedence)
+P1  fallback test proves non-resolution                FIXED (mechanical ASK
+                                                        publication assertion)
+P2  editor/apply_patch ASK decision carrier residue    FIXED (decision carried
+                                                        on ASK return path)
+P2  nearest-existing-ancestor skips fsRoot             FIXED (loop now tries
+                                                        fsRoot before giving up)
+```
+
+### Frozen ClineMM EDIT-TOOL precedence (CORRECTION02)
+
+```text
+1.  request.policy.autoApprove === true                => ALLOW (override)
+2.  otherwise (default ClineMM host wiring forces
+    autoApprove=false for editor/apply_patch at SDK seam):
+
+    a.  getCwd() unavailable          => ASK (fail closed)
+    b.  getAutoApprovalSettings() unavailable => ASK
+    c.  classification=inside + editFiles=true => ALLOW
+    d.  classification=outside + editFilesExternally=true => ALLOW
+    e.  classification=outside + editFilesExternally=false => ASK
+    f.  classification=unavailable    => ASK (fail closed)
+```
+
+### Updated disposition
+
+```text
+RECON_LANE_STATUS        = CLOSED
+PRODUCTION_ACT_STATUS    = OPEN / PHASE_2_CORRECTION02_GREEN
+                           PHASE_3-PHASE_4_REMAIN
+NEW_REVIEW_ROUND         = NO
+MAX_REVIEW_FIX_CYCLE     = ONE  (satisfied; bounded CORRECTION02
+                                  implemented + verified + GREEN
+                                  in a single commit)
+PHASE_2_DISPOSITION      = COMPLETE (PHASE 2 + CORRECTION01 + CORRECTION02)
+PHASE_3_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
+PHASE_4_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
+```

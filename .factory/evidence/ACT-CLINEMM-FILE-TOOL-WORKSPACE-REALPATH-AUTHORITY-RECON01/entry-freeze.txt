@@ -646,3 +646,88 @@ phase_3_4_remaining  = apply_patch movePath integration + R3/R4 deny/approve/
                        direct ALLOW + R5 conservation + necessity ablation.
                        Scoped to subsequent ACTs/commits; NOT begun in this
                        commit (per MAX REVIEW/FIX CYCLE = ONE).
+
+=== R0-PHASE-2-CORRECTION02-COMPLETED ===
+
+event                = CORRECTION02 bounded repair completed; P0 policy
+                       precedence frozen + P1 fallback test strengthening
+                       + P2 dead-code cleanup.
+cycle                = CORRECTION02 (bounded per reviewer MAX REVIEW/FIX CYCLE = ONE)
+commit               = 00d71e51c
+
+files_changed        = 5 (+488 -47)
+
+production_changes   = 2 files:
+                       - sdk-interaction-coordinator.ts:
+                         handleEditorOrApplyPatchApproval() opens with
+                         the explicit request.policy.autoApprove === true
+                         override branch (priority 1 of the frozen
+                         precedence). JSDoc on getAutoApprovalSettings
+                         extended with the frozen precedence. ASK return
+                         path now carries a decision field (was previously
+                         always null).
+                       - editor-path-authority.ts:
+                         resolveNearestExistingAncestor() loop now tries
+                         fsRoot before giving up. Comment updated.
+
+new_test_files       = 1 (7 RED->GREEN cases covering the full frozen
+                       precedence matrix):
+                       - correction02-policy-precedence.red.test.ts
+
+updated_test_files   = 2:
+                       - correction01-fallback-fails-closed.red.test.ts
+                         (helper returns task; assertions check
+                         messageStateHandler.getClineMessages().length === 1
+                         instead of Promise.race timeout; autoApprove on
+                         the request changed from true to false to skip
+                         the new CORRECTION02 override-hatch).
+                       - editor-path-authority.r1-classifier.test.ts
+                         ("non-existent target on non-existent mount"
+                         updated from UNAVAILABLE to OUTSIDE per the
+                         CORRECTION02 fsRoot fix).
+
+p0_fixed             = TOOL_POLICY_PRECEDENCE_REGRESSION
+                       Pre:  request.policy.autoApprove=true for editor/apply_patch
+                             was ignored. The post-CORRECTION01 branch
+                             evaluated only getAutoApprovalSettings +
+                             effective-destination classification.
+                       Post: request.policy.autoApprove=true is the
+                             OUTERMOST priority escape hatch (priority 1).
+                             It returns ALLOW with source="sdk-policy-autoApprove".
+                             Otherwise (default ClineMM host wiring forces
+                             autoApprove=false for editor/apply_patch at
+                             the SDK seam), the safety envelope applies
+                             (priority 2a-2f, fail closed).
+
+p1_fixed             = (a) fallback tests now prove ASK publication, not
+                            just non-resolution (mechanical assertion via
+                            task.messageStateHandler.getClineMessages()).
+                       (b) ASK return path now carries a decision field so
+                            the pendingToolApprovalMessage record receives
+                            non-null evidence (was always null).
+
+p2_fixed             = resolveNearestExistingAncestor() loop now tries
+                       fsRoot before giving up. "/does/not/exist" now
+                       resolves to canonical "/" (which lies OUTSIDE any
+                       real workspace), so the verdict is OUTSIDE not
+                       UNAVAILABLE.
+
+verifier_output      = 94/94 across the 9 touched test files
+                       (editor + interaction-coordinator suites).
+                       bunx tsc --noEmit: clean.
+                       bunx biome check on 5 touched files: 0 fixes applied.
+                       Pre-existing unrelated failures (OWN01, session-autonomy)
+                       unchanged from origin/main (confirmed via git stash baseline).
+
+reviewer_chain       = PASS_RED_REPRODUCED + GO TO BOUNDED REPAIR (commit 861e18502)
+                       then reviewer HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS
+                       opened CORRECTION01 (commit 93d4bd746 GREEN).
+                       then reviewer HALT_TOOL_POLICY_PRECEDENCE_REGRESSION
+                       opened CORRECTION02.
+                       CORRECTION02 closed P0 + P1 + 2 P2s in a single
+                       commit (00d71e51c), exactly as bounded.
+
+phase_3_4_remaining  = apply_patch movePath integration + R3/R4 deny/approve/
+                       direct ALLOW + R5 conservation + necessity ablation.
+                       Scoped to subsequent ACTs/commits; NOT begun in this
+                       commit (per MAX REVIEW/FIX CYCLE = ONE).
