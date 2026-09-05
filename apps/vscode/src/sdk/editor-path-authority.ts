@@ -36,6 +36,28 @@
  *      containment semantics for new files while still defeating symlink
  *      escapes (because the resolved ancestor is realpath canonical).
  *
+ *      CORRECTION03 (factory review `HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS`):
+ *      The "nearest existing ancestor" walk uses LEXICAL existence
+ *      (`fs.existsSync`), not `fs.realpathSync` success. A lexically-existing
+ *      component whose realpath fails (e.g. a dangling symlink) is treated
+ *      as the deepest existing ancestor, and the caller's realpath attempt
+ *      on that component is what determines canonicalization. If the deepest
+ *      lexically-existing component's realpath fails (it is an unresolvable
+ *      symlink), the classifier maps to `unavailable` (fail closed) rather
+ *      than climbing past it to an older ancestor. This closes the geometry:
+ *
+ *        workspace/escape-link -> /outside/new-file.txt   (ABSENT)
+ *
+ *          realpath(workspace/escape-link)            => ENOENT
+ *          deepest lexically-existing ancestor         => workspace/escape-link
+ *          realpath(workspace/escape-link)            => throws (unresolvable)
+ *          OLD algorithm climbs past, returns workspace => INSIDE   (bypass)
+ *          NEW algorithm returns undefined              => UNAVAILABLE
+ *
+ *      The "ordinary in-workspace file creation" case is preserved: a
+ *      plain missing file whose parent directory exists and is a real
+ *      directory still resolves to INSIDE.
+ *
  *   4. Any unexpected error (ENOENT deeper than expected, EACCES on the
  *      ancestor, EPERM) maps to "unavailable" — NOT to "inside" or "outside".
  *      The pure policy treats unavailable as ASK (fail closed).
@@ -128,26 +150,81 @@ export async function classifyEditTarget(requestedPath: string, workspaceRoot: s
 }
 
 function resolveNearestExistingAncestor(p: string): string | undefined {
-	let current = path.dirname(p)
-	// Walk up the ancestor chain until we find one that exists. We also
-	// test the filesystem root itself (`/`) before giving up; the prior
-	// implementation exited the loop `current !== fsRoot` and never tried
-	// the root, which made `/does/not/exist` UNREACHABLE for resolution
-	// even though `/` always exists. Fail-closed in both cases; the
-	// difference is just whether `/` itself is observable as the
-	// canonical ancestor (CORRECTION02 P2 residue cleanup).
 	const fsRoot: string = path.parse(p).root || "/"
-	while (current) {
+	// CORRECTION03 (factory review `HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS`):
+	//
+	// Walk up the ancestor chain using LEXICAL EXISTENCE — that is,
+	// `fs.lstatSync` (does NOT follow symlinks) succeeds on the path
+	// component. `fs.existsSync` and `fs.statSync` follow symlinks, so
+	// they return false for a dangling symlink whose target is absent
+	// — which would cause the walk to silently climb past the dangling
+	// component to an older ancestor (the bypass bug the reviewer
+	// flagged).
+	//
+	// Two distinct conditions the previous implementation conflated:
+	//
+	//   - "this lexical path component does not exist at all"
+	//   - "this lexical path component exists (e.g. as a symlink) but
+	//      its target cannot be resolved because the destination is
+	//      missing"
+	//
+	// For security we need to treat BOTH as a hard stop. The deepest
+	// lexically-existing component (per `lstat`) is the canonical
+	// boundary. If the next filesystem write would follow a symlink
+	// chain through it, the classifier must either resolve exactly
+	// that component via realpath, OR fail closed.
+	//
+	// Reviewer geometry:
+	//
+	//   workspace/escape-link -> /tmp/outside/new-file.txt   (ABSENT)
+	//
+	//     lstatSync(workspace/escape-link).isSymbolicLink() = true  ← LEXICALLY EXISTS
+	//     realpathSync(workspace/escape-link)             = throws  (target missing)
+	//     lstatSync(dirname).isSymbolicLink()              = false   (regular dir)
+	//     realpathSync(dirname)                            = workspace  (succeeds)
+	//
+	//   OLD ALGORITHM: realpath succeeds on workspace → returns workspace
+	//                  => INSIDE  (BYPASS — write follows the symlink)
+	//   NEW ALGORITHM: deepest lexically-existing component = escape-link
+	//                  => realpath of escape-link throws
+	//                  => returns undefined
+	//                  => caller maps to UNAVAILABLE  (fail closed)
+	//
+	// Order-independent. Always terminates because the filesystem root
+	// `/` lexically exists (lstatSync("/") succeeds with isSymbolicLink()=false).
+	let deepest = p
+	while (deepest !== fsRoot) {
 		try {
-			return fs.realpathSync(current)
+			const lst = fs.lstatSync(deepest)
+			// Lexically exists (regular dir, file, or symlink). Stop.
+			void lst
+			break
 		} catch {
-			if (current === fsRoot) {
+			const parent = path.dirname(deepest)
+			if (parent === deepest) {
+				// Defensive: filesystem root must exist, but never recurse
+				// forever.
 				return undefined
 			}
-			current = path.dirname(current)
+			deepest = parent
 		}
 	}
-	return undefined
+	// Now `deepest` is the deepest lexically-existing component.
+	try {
+		fs.lstatSync(deepest)
+	} catch {
+		// Even the filesystem root does not lexically exist (impossible
+		// on a sane system, but fail closed).
+		return undefined
+	}
+	// Canonicalize exactly that component. If it is a symlink whose
+	// target cannot be resolved, we MUST NOT climb past it — return
+	// undefined so the caller maps to UNAVAILABLE.
+	try {
+		return fs.realpathSync(deepest)
+	} catch {
+		return undefined
+	}
 }
 
 /**
