@@ -1142,3 +1142,15 @@ apps/vscode/.factory/evidence/
 # reference F1's chain capture.
 !/.factory/acts/ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01.md
 !/.factory/evidence/ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01/
+
+# ACT-CLINEMM-FACTORIZE-F2-TEMPORARY-EXTERNAL-PATH-AUTHORITY01 — RECON →
+# Outcome D (PASS_F2_NO_FACTORIZATION_NEEDED). Predecessor is F1
+# (CLOSED_CLEAN at c6ced3f7a). F2 evidence confirms HEAD already exhibits
+# the converged one-owner / one-validator / one-fresh-read / one-snapshot
+# / evidence+auth-consumers / core-defense-in-depth shape that
+# CORRECTION03–05 were converging on. The historical correction-density
+# F0 picked up was real evidence of a multi-step convergence — but the
+# convergence has landed. Survives fresh clone so F3+ can reference F2's
+# discriminator freeze and frozen question answer.
+!/.factory/acts/ACT-CLINEMM-FACTORIZE-F2-TEMPORARY-EXTERNAL-PATH-AUTHORITY01.md
+!/.factory/evidence/ACT-CLINEMM-FACTORIZE-F2-TEMPORARY-EXTERNAL-PATH-AUTHORITY01/

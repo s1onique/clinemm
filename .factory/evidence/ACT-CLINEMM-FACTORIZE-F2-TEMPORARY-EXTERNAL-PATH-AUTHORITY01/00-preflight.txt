@@ -1,0 +1,10 @@
+=== PREFLIGHT (per §7) ===
+toplevel: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD:     e06af528522ae2aa471aac9eed30acb51e9fdf92
+branch:   main
+worktree: clean (no untracked, no modified, no staged)
+stash:    empty
+diff-check: clean (exit 0)
+
+EXPECTED_ENTRY_HEAD = e06af528522ae2aa471aac9eed30acb51e9fdf92  (matches ACTUAL)
+PREDECESSOR F1 closure commit (c6ced3f7a) is an ancestor of HEAD (verified via cherry-pick lineage).

@@ -1,0 +1,209 @@
+=== §10 RECON Q3 — Producer/Transform/Consumer Table ===
+
+Function: validateTemporaryExternalPathAuthorities
+  Layer: HOST-VALIDATOR (shared)
+  Reads durable? NO (input is wire-payload)
+  Mutates durable? NO
+  Validates? YES (24h ceiling + structural + temporal + parseable)
+  Canonicalizes? NO (pure, side-effect-free, no node:fs)
+  Transports? NO
+  Policy decision? NO
+  Primary role: VALIDATOR
+
+Function: validateEntry
+  Layer: HOST-VALIDATOR helper
+  Reads durable? NO
+  Mutates durable? NO
+  Validates? YES (per-entry)
+  Canonicalizes? NO
+  Transports? NO
+  Policy decision? NO
+  Primary role: VALIDATOR
+
+Function: classifyTemporaryExternalPathShape
+  Layer: HOST-VALIDATOR+FILTER shared predicate (CORRECTION04)
+  Reads durable? NO
+  Mutates durable? NO
+  Validates? YES (structural: string/empty/absolute/non-root)
+  Canonicalizes? NO
+  Transports? NO
+  Policy decision? NO
+  Primary role: VALIDATOR
+
+Function: isFilesystemRoot
+  Layer: HOST-VALIDATOR helper
+  Reads durable? NO
+  Mutates durable? NO
+  Validates? YES (platform-aware parse root comparison)
+  Canonicalizes? NO
+  Transports? NO
+  Policy decision? NO
+  Primary role: VALIDATOR
+
+Function: isWithinTwentyFourHourCeiling
+  Layer: HOST-VALIDATOR helper (24h hard ceiling predicate)
+  Reads durable? NO
+  Mutates durable? NO
+  Validates? YES (finite future, within ceiling)
+  Canonicalizes? NO
+  Transports? NO
+  Policy decision? NO
+  Primary role: VALIDATOR
+
+Function: filterActiveTemporaryExternalPathEntries
+  Layer: HOST-FILTER (defense-in-depth at consumption)
+  Reads durable? NO (input is the already-parsed value)
+  Mutates durable? NO
+  Validates? YES (defense-in-depth: shape + temporal + ceiling)
+  Canonicalizes? NO
+  Transports? NO
+  Policy decision? NO
+  Primary role: READER (defense-in-depth filter on already-read value)
+
+Function: resolveActiveTemporaryExternalCanonicalRootsFromBackingFile
+  Layer: HOST-RESOLVER (public wrapper)
+  Reads durable? YES (delegates to impl)
+  Mutates durable? NO
+  Validates? (delegates)
+  Canonicalizes? (delegates)
+  Transports? YES (lazy-requires node:fs)
+  Policy decision? NO
+  Primary role: TRANSPORT (re-exports impl)
+
+Function: resolveActiveTemporaryExternalCanonicalRootsFromBackingFileImpl
+  Layer: HOST-RESOLVER impl
+  Reads durable? YES (readFileSync from backing JSON)
+  Mutates durable? NO
+  Validates? YES (calls filter)
+  Canonicalizes? YES (realpathSync per entry)
+  Transports? YES (parses JSON, lazy-requires node:fs)
+  Policy decision? NO
+  Primary role: READER (one-shot fresh-read pipeline)
+
+Function: readTemporaryExternalPathAuthoritiesRawFromBackingFile
+  Layer: HOST-RAW-READER (UI display only)
+  Reads durable? YES (readFileSync from backing JSON)
+  Mutates durable? NO
+  Validates? NO (returns raw value)
+  Canonicalizes? NO
+  Transports? YES
+  Policy decision? NO
+  Primary role: UI_PROJECTION (no derivation of active canonical roots)
+
+Function: SdkController.resolveActiveTemporaryExternalCanonicalRoots
+  Layer: HOST-CONTROLLER bridge
+  Reads durable? (delegates)
+  Mutates durable? NO
+  Validates? (delegates)
+  Canonicalizes? (delegates)
+  Transports? YES (resolves backingFilePath via getStorageDataDir)
+  Policy decision? NO
+  Primary role: TRANSPORT (host→seam bridge, log on realpath failure)
+
+Function: SdkController.buildPathAuthorityEvidence
+  Layer: HOST-CONTROLLER bridge
+  Reads durable? NO
+  Mutates durable? NO
+  Validates? NO
+  Canonicalizes? NO (receives already-canonical snapshot)
+  Transports? YES (threads snapshot into SDK)
+  Policy decision? NO
+  Primary role: TRANSPORT (host→SDK evidence bridge)
+
+Function: getCommandHostAuthorization (sdk-tool-policies.ts)
+  Layer: HOST-CONTROLLER bridge (auth constructor)
+  Reads durable? NO (uses pre-fetched persisted)
+  Mutates durable? NO
+  Validates? NO (factory)
+  Canonicalizes? NO
+  Transports? YES (passes snapshot into auth record)
+  Policy decision? NO
+  Primary role: TRANSPORT (host→SDK auth bridge)
+
+Function: buildPathAuthorityEvidence (sdk/.../path-authority-evidence-builder.ts)
+  Layer: SDK-CORE evidence builder
+  Reads durable? NO
+  Mutates durable? NO
+  Validates? NO
+  Canonicalizes? YES (realpath of workspaceRoots; temp roots passed verbatim)
+  Transports? YES (embeds snapshot on evidence record)
+  Policy decision? NO
+  Primary role: EVIDENCE_BUILDER
+
+Function: createCommandHostAuthorization (sdk/.../command-policy-types.ts:565)
+  Layer: SDK-CORE auth factory
+  Reads durable? NO
+  Mutates durable? NO
+  Validates? NO
+  Canonicalizes? NO
+  Transports? YES (forwards snapshot onto auth record)
+  Policy decision? NO
+  Primary role: TRANSPORT (factory pass-through)
+
+Function: R0 path-bearing containment (sdk/.../path-authority.ts:679-684)
+  Layer: SDK-CORE policy gate
+  Reads durable? NO (reads evidence record)
+  Mutates durable? NO
+  Validates? YES (containment union)
+  Canonicalizes? NO (operates on already-canonical paths)
+  Transports? NO
+  Policy decision? YES (conforming: true|false → ALLOW/ASK/DENY)
+  Primary role: POLICY_CONSUMER
+
+Function: updateSettings (apps/vscode/src/core/controller/state/updateSettings.ts:321-340)
+  Layer: HOST-WRITE handler
+  Reads durable? NO (input from wire)
+  Mutates durable? YES (setGlobalState)
+  Validates? YES (calls validateTemporaryExternalPathAuthorities)
+  Canonicalizes? NO
+  Transports? YES (parses JSON wire)
+  Policy decision? NO
+  Primary role: OWNER (write path; calls validator)
+
+Function: updateSettingsCli (apps/vscode/src/core/controller/state/updateSettingsCli.ts:284-301)
+  Layer: HOST-WRITE handler
+  Reads durable? NO (input from CLI env)
+  Mutates durable? YES (setGlobalState)
+  Validates? YES (calls validateTemporaryExternalPathAuthorities)
+  Canonicalizes? NO
+  Transports? YES (parses JSON wire)
+  Policy decision? NO
+  Primary role: OWNER (write path; calls same validator)
+
+Function: TemporaryExternalPathsSection (webview-ui)
+  Layer: WEBVIEW-UI
+  Reads durable? NO (reads from ExtensionState, ultimately from StateManager.getGlobalState)
+  Mutates durable? NO (sends updateSetting message)
+  Validates? NO (UI-side clamp on duration; backend is authoritative)
+  Canonicalizes? NO
+  Transports? YES (JSON.stringify, send updateSetting)
+  Policy decision? NO
+  Primary role: UI_PROJECTION
+
+=== §10 semantic-duplication classification ===
+
+TRUE_SEMANTIC_DUPLICATION = NONE
+
+STRUCTURAL_DUPLICATION:
+  classifyTemporaryExternalPathShape — ONE shared predicate, called from
+  two places (validator + filter) BY DESIGN (CORRECTION04 explicitly unified
+  these to eliminate drift risk). Not duplication.
+
+TRANSPORT_REPETITION:
+  activeTempRoots snapshot → evidence record → auth record. Three transports
+  of the SAME immutable string[] reference, by design (CORRECTION05). Removing
+  any one breaks generation-consistency guarantee.
+
+NECESSARY_DEFENSE_IN_DEPTH:
+  - path shape: validator + filter (different vantage points; one write-time,
+    one consumption-time)
+  - 24h ceiling: validator + filter (write rejects, filter drops tampered state)
+  - expiry parseable: filter drops NaN without throwing
+  - containment re-test in core path-authority: operates on its OWN
+    realpath-resolved operands, defense-in-depth against any divergence
+    between host canonicalization and core canonicalization
+
+=== §10 conclusion ===
+
+No semantic owner duplication, no multiple effective-root derivations,
+no transport redundancy that can be removed without breaking invariants.
