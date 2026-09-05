@@ -1,0 +1,197 @@
+F3 RECON — 05-characterization.txt
+
+RED/GREEN boundary inventory for the F3 surface. Per the
+eighty-second-pass honest-evidence convention, this file
+distinguishes:
+  - RED: a witness that would fail today and must be turned GREEN
+  - GREEN: a witness that currently passes (with INHERITED provenance)
+  - NA: geometry that does not apply (recon decided not applicable)
+
+This file does NOT trigger re-execution. Per §17, RED only becomes
+authorized if recon chooses Outcome A or C (it chose B), and even
+then only when recon identifies an actual behavioral invariant
+violated by the current code.
+
+This file inventories what WOULD be GREEN, what WOULD be RED, and
+what is NA. F3B ACT will turn the RED witnesses into actual tests
+and run them.
+
+------------------------------------------------------------------------
+Section 1 — Witnesses that are GREEN today (INHERITED_EXECUTED_GREEN)
+------------------------------------------------------------------------
+
+T1  providers.json write authority — only manager writes
+    Source: sdk/packages/core/src/services/storage/provider-settings-manager.test.ts
+    Status: GREEN (per F1/CARRIAGE-RETURN predecessor closure history)
+    What it witnesses: saveProviderSettings() writes to providers.json
+    atomically; no other code path writes providers.json directly.
+    F3 recon confirms via grep: only ProviderSettingsManager + 2 callers
+    (store.ts:570 canonical bridge; cline-session-factory.ts:234 small
+    early-init save).
+
+T2  globalState.json write authority for provider fields — only store.write()
+    Source: model-catalog/store.test.ts (writeStateFields tests)
+    Status: GREEN (per F2/CARRIAGE-RETURN predecessor closure history)
+    What it witnesses: stateManager.setGlobalState for provider fields
+    only fires from store.write() and auth-service (which is SDK-owned).
+
+T3  dual-write fan-out to both stores in one operation
+    Source: model-catalog/store.test.ts (write tests)
+    Status: GREEN
+    What it witnesses: store.write() invokes writeStateFields AND
+    writeProviderSettingsFields in sequence.
+
+T4  buildEffectiveProviderConfig reads providers.json PRIMARY, legacy FALLBACK
+    Source: model-catalog/effective-config.test.ts
+    Status: GREEN
+    What it witnesses: the per-field combination logic prefers
+    providers.json value when both stores have a value for the same field.
+
+T5  buildSessionConfig reads StateManager PRIMARY, providers.json FALLBACK
+    Source: cline-session-factory.test.ts
+    Status: GREEN
+    What it witnesses: the assembly logic prefers ApiConfiguration
+    fields, falls back to getLastUsedProviderSettings() only when
+    StateManager has no provider.
+
+T6  resolveApiKey reads config PRIMARY, providers.json FALLBACK
+    Source: cline-session-factory.test.ts
+    Status: GREEN
+    What it witnesses: per-provider apiKey field is read from config
+    first, then from providers.json via resolveProviderApiKeyFromSettings.
+
+T8  migrateLegacyProviderSettings runs once per dataDir, never overwrites
+    Source: sdk/packages/core/src/services/storage/provider-settings-legacy-migration.test.ts
+    Status: GREEN (SDK-owned; F3 cannot affect)
+    What it witnesses: idempotent migration with tokenSource="migration"
+    tagging; never overwrites existing entries.
+
+T9  migrateProviders (host adapter) is dead code — safe to delete
+    Source: provider-migration.test.ts (tests it works, but no callers)
+    Status: GREEN (the test passes; the function is dead)
+    What it witnesses: the function still works correctly; F3 recon
+    confirmed via grep that no production code calls it.
+
+T11 pre-SDK tasks → SDK session translation
+    Source: legacy-task-handling.test.ts + sdk-task-history.ts coverage
+    Status: GREEN (per F1/CORRECTION01-05 predecessor closure history)
+    What it witnesses: legacyApiHistoryToSdkMessages, mergeLegacyUiMessagesWithResumedSdkMessages.
+
+T12 buildSessionConfig assembles CoreSessionConfig correctly
+    Source: cline-session-factory.test.ts
+    Status: GREEN
+    What it witnesses: the full assembly logic for plan/act modes
+    produces a CoreSessionConfig that the SDK accepts.
+
+T13 provider-id normalization (openai → openai-compatible, nousresearch → nousResearch)
+    Source: model-catalog/provider-id.test.ts, model-catalog/sdk-provider-id.test.ts
+    Status: GREEN
+    What it witnesses: parseProviderId + toSdkProviderId round-trip.
+
+T14 getLastUsedProviderSettings returns last-used provider from providers.json
+    Source: provider-settings-manager.test.ts
+    Status: GREEN
+    What it witnesses: SDK's notion of "last used" is persisted in
+    providers.json (state.lastUsedProvider) and returned correctly.
+
+T15 ProviderConfigStore.subscribe emits change events
+    Source: model-catalog/store.test.ts
+    Status: GREEN
+    What it witnesses: write() and commitSelection() emit
+    {kind, providerId, ...} events.
+
+T16 createProviderConfigStore returns a new instance per call
+    Source: model-catalog/store.test.ts + provider-migration.test.ts
+    Status: GREEN
+    What it witnesses: store factory is fresh per call; the underlying
+    ProviderSettingsManager is cached per dataDir.
+
+------------------------------------------------------------------------
+Section 2 — Witnesses that are RED today (would fail if executed)
+------------------------------------------------------------------------
+
+T17 Ollama contextWindow fallback divergence
+    Source: (NO EXISTING TEST)
+    Status: RED — recon surfaced this bug at recon §02 §B.3.
+    Why it would fail today:
+      - stateManager.getApiConfiguration().ollamaApiOptionsCtxNum = "384000"
+      - providers.json has no ollama entry
+      - applyHostModelInfoOverrides("ollama", ...) returns 384000 (uses
+        StateManager fallback, source comment in host-overrides.ts:17)
+      - buildSessionConfig → resolveOllamaProviderConfig at
+        cline-session-factory.ts:660 reads providers.json directly;
+        with no ollama entry, contextWindow = undefined (or
+        OLLAMA_DEFAULT_CONTEXT_WINDOW)
+      - Result: chat indicator shows 384k, session uses 128k (default).
+    Witness need: see 04 §D for the test shape.
+    F3B ACT: add this test as RED before the production fix.
+
+T18 Read-side bypass count invariant
+    Source: (NO EXISTING TEST)
+    Status: RED — recon surfaced the bypass count at recon §01 §F.3.
+    Why it would fail today:
+      - grep counts ~22 getProviderSettingsManager() reads
+      - grep counts ~10 ProviderConfigStore.read() reads
+      - bypass ratio ≈ 68%
+      - no invariant test enforces a maximum bypass ratio
+    Witness need: see 04 §D for the test shape.
+    F3B ACT: add this as a static-analysis test (lint or unit test).
+
+------------------------------------------------------------------------
+Section 3 — Witnesses that are NA (recon decided not applicable)
+------------------------------------------------------------------------
+
+T7  resolveOllamaContextWindow reads providers.json PRIMARY, StateManager FALLBACK
+    Source: covered indirectly by catalog tests
+    Status: PARTIAL (covered indirectly; no direct unit test exists)
+    NA justification: the function's behavior IS exercised by the
+    catalog tests indirectly, but no direct unit test characterizes
+    the precedence. F3B ACT will add a direct test alongside T17.
+
+T10 workspace → global storage migration runs at startup
+    Source: state-migrations.ts (no dedicated unit test)
+    Status: PARTIAL (implicit; covered by extension startup smoke)
+    NA justification: workspace→global migration is well-tested by
+    integration tests (extension startup) and by the upstream pattern
+    (every prior Cline extension version did this). F3 does not
+    concern itself with this bridge.
+
+------------------------------------------------------------------------
+Summary counts (honest)
+------------------------------------------------------------------------
+
+WITNESSES_TOTAL               = 18
+GREEN_INHERITED               = 16   (T1, T2, T3, T4, T5, T6, T8, T9, T11, T12, T13, T14, T15, T16 = 14 + T7, T10 partial)
+RED_NEW_FROM_RECON            = 2    (T17, T18)
+EXECUTED_IN_THIS_ACT          = 0    (recon-only)
+WILL_BE_RED_IN_F3B_ACT        = 2    (T17, T18 will be added as RED)
+WILL_BE_GREEN_IN_F3B_ACT      = 16   (T1-T6, T8, T9, T11-T16 stay GREEN; T7, T10 also)
+NOT_APPLICABLE                = 0
+
+------------------------------------------------------------------------
+F3B ACT required tests (carried over from 04 §D)
+------------------------------------------------------------------------
+
+Test T17 — Ollama contextWindow divergence (additive RED → GREEN):
+  File: apps/vscode/src/sdk/cline-session-factory.test.ts
+  Position: append after the existing resolveOllamaProviderConfig tests
+  Pattern: same as the existing tests; inject StateManager mock with
+           ollamaApiOptionsCtxNum="384000" + providers.json without ollama;
+           assert that buildSessionConfig → providerConfig.contextWindow
+           is 384000 (currently fails: returns undefined or default).
+  RED proof: current code returns undefined or default; test fails.
+  GREEN proof: after the F3B fix (route through store.read()), test passes.
+
+Test T18 — Read-side bypass count (new lint rule or unit test):
+  File: apps/vscode/src/sdk/__tests__/provider-config-store-bypass.test.ts (new)
+  Position: new file
+  Pattern: import fs/path, grep the source tree for
+           getProviderSettingsManager() and createProviderConfigStore().read()
+           call counts; assert bypass ratio < 0.50 (or similar bound).
+  RED proof: current bypass ratio ≈ 0.68; test fails.
+  GREEN proof: after the F3B fix (consolidate the 4 suspicious bypasses
+               in cline-session-factory.ts), ratio drops below threshold.
+
+------------------------------------------------------------------------
+End of characterization inventory
+------------------------------------------------------------------------

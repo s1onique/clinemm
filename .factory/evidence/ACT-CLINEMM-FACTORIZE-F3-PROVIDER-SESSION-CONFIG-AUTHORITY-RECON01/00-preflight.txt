@@ -1,0 +1,37 @@
+F3 RECON — 00-preflight.txt
+
+Recorded: 2026-09-05 (F3 recon start)
+ACT: ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01
+
+REPO                 = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH               = main
+F1 closure SHA       = e06af528522ae2aa471aac9eed30acb51e9fdf92 (= PRODUCTION_HEAD)
+F2 closure-evidence
+  correction SHA     = c102f9fa0fe50d0a1619a083d43826f793ef4850
+F2 epic-board
+  transition SHA     = 6917d0c4e22a06953bd467b618017ec4e0412a9c
+CURRENT HEAD         = 6917d0c4e22a06953bd467b618017ec4e0412a9c
+
+F2 verdict           = PASS_F2_NO_FACTORIZATION_NEEDED
+F2 state             = CLOSED
+F3 state             = RECON_IN_PROGRESS
+
+WORKTREE             = clean
+RANGE HYGIENE        = 12 EOF warnings on d8894dd5..HEAD
+                       (all inherited F0/F1 .factory/ paths,
+                        0 on production, 0 on test, 0 from F2/F3)
+F3 OWN EOF TARGET    = 0
+EVIDENCE DIRECTORY   = .factory/evidence/ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01/
+                       (created, 7 files pending)
+
+REFERENCE (F2 ACT)   = .factory/evidence/ACT-CLINEMM-FACTORIZE-F2-TEMPORARY-EXTERNAL-PATH-AUTHORITY01/
+                       (7 evidence files; F2 ACT body at .factory/acts/)
+
+DOCUMENTARY CHAIN    = F3 ACT body + 7 evidence files + epic-board prepend row
+                       (no new .gitignore patterns needed; .factory/ already whitelisted)
+                       = single bounded closure commit at end of F3 recon
+
+RECON-COMPLETENESS   = Phase 1 reader/writer trace   : PENDING
+                       Phase 2 precedence-ordering   : PENDING
+                       Phase 3 legacy-bridge class   : PENDING
+                       Phase 4 discriminator freeze  : PENDING

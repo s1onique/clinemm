@@ -1154,3 +1154,19 @@ apps/vscode/.factory/evidence/
 # discriminator freeze and frozen question answer.
 !/.factory/acts/ACT-CLINEMM-FACTORIZE-F2-TEMPORARY-EXTERNAL-PATH-AUTHORITY01.md
 !/.factory/evidence/ACT-CLINEMM-FACTORIZE-F2-TEMPORARY-EXTERNAL-PATH-AUTHORITY01/
+
+# ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01 —
+# RECON → Outcome B (PASS_F3_RECON_OUTCOME_B). Predecessor is F2
+# (PASS_F2_NO_FACTORIZATION_NEEDED at 6917d0c4e). F3 recon traces the
+# provider/session configuration seam (cline-session-factory.ts +
+# model-catalog/{effective-config,store,host-overrides}.ts +
+# legacy-state-reader.ts + provider-migration.ts + ProviderSettingsManager
+# in @cline/core). Finding: write-side authority is converged (store.write()
+# is the single dual-write fan-out); read-side authority is fragmented
+# across 4 sites with 3 different precedence orderings. Selects Outcome B
+# (consolidate effective-config derivation); surfaces one small UX bug
+# (ollama contextWindow fallback divergence) and one dead bridge
+# (host migrateProviders()) for the F3B production ACT. Survives fresh
+# clone so F3B ACT can reference F3's discriminator freeze + T-matrix.
+!/.factory/acts/ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01/
