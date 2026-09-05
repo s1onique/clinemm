@@ -292,20 +292,35 @@ CURRENT_SEAM_RERESOLVES_CONNECTION_COMPONENTS =
                                      surface it as a per-instance
                                      operand; the foundation must
                                      confirm whether it is or isn't)
-  region                  = YES | N/A depending on provider
-                                     (Bedrock / Vertex / GCP carry
-                                     region; the foundation traces
-                                     region resolution and classifies it
-                                     per provider)
+  region                  = NOT_PROVEN
+                                     (Bedrock / Vertex / GCP may make
+                                     region provider-relevant; evidence 05
+                                     must classify the relevant cases
+                                     YES / NO / N/A; NOT_PROVEN is the
+                                     canonical pre-trace state; per
+                                     reviewer of this correction ACT,
+                                     classifying region YES | N/A before
+                                     evidence 05 is premature and
+                                     contradicts the corrected foundation
+                                     body, evidence-04 v2, the executive
+                                     summary, and the next-work contract
+                                     which all freeze NOT_PROVEN)
 
 CURRENT_SEAM_MUTATES_FULL_CONNECTION =
   NOT_PROVEN
                                      (because headers, providerSpecificConfig,
-                                      and apiLine/routing are all
+                                      apiLine/routing, AND region are all
                                       NOT_PROVEN, the honest derivation
                                       is NOT_PROVEN; the scalar YES that
                                       the foundation entry committed was
-                                      an overclaim)
+                                      an overclaim; even the "N/A | YES
+                                      depending on provider" region escape
+                                      that a pre-trace reader might have
+                                      assumed is removed - region is
+                                      NOT_PROVEN like the other three,
+                                      and evidence 05 must complete all
+                                      four before MUTATES_FULL_CONNECTION
+                                      can honestly be derived YES or NO)
 
 CURRENT_SEAM_REBUILDS_ON_CONFIG_IDENTITY = NO
   (unchanged from prior freeze; providerId-only discriminant in
@@ -819,3 +834,110 @@ ACT phase contract    = COHERENT  (this commit, §4 + §13 + §17 + entry
 
 C1: GO TO §12 DESIGN FREEZE + R1 RED. No further pre-execution review
 unless this correction exposes a new P0.
+
+---
+
+## §7.5 — Amendment record (post-review, in-place bounded fix)
+
+```text
+AMENDED_BY = seventh-pass reviewer verdict (PASS_WITH_ONE_BOUNDED_P1)
+
+REVIEWER_FINDING =
+  "The §2a matrix says 'region = YES | N/A depending on provider' while
+   the actual corrected foundation body, evidence-04 v2, executive
+   summary, and next-work contract all freeze 'region = NOT_PROVEN'.
+   The latter is correct. The trace has not happened yet. Therefore
+   'YES | N/A depending on provider' is premature."
+
+P1_IN_THIS_CORRECTION =
+  CORRECTION01_REGION_PRETRACE_CONTRADICTION
+    one occurrence in §2a said YES | N/A before evidence 05;
+    canonical corrected state is NOT_PROVEN
+    ACTION: one-line bounded correction (§2a matrix entry +
+    downstream CURRENT_SEAM_MUTATES_FULL_CONNECTION list of
+    NOT_PROVEN operands expanded to include region; now lists
+    headers + providerSpecificConfig + apiLine/routing + region,
+    all NOT_PROVEN)
+    NOT_P0_BECAUSE = the operative foundation ACT and evidence-04 v2
+                     already carry the safe NOT_PROVEN value; the
+                     implementation gate was not accidentally opened;
+                     the contradiction was only inside the correction
+                     ACT's own §2a matrix narrative
+
+FIX_APPLIED =
+  - §2a region row: "YES | N/A depending on provider" ->
+                    "NOT_PROVEN  (Bedrock / Vertex / GCP may make
+                     region provider-relevant; evidence 05 must
+                     classify the relevant cases YES / NO / N/A;
+                     NOT_PROVEN is the canonical pre-trace state;
+                     per reviewer of this correction ACT, classifying
+                     region YES | N/A before evidence 05 is premature
+                     and contradicts the corrected foundation body,
+                     evidence-04 v2, the executive summary, and the
+                     next-work contract which all freeze NOT_PROVEN)"
+  - §2a CURRENT_SEAM_MUTATES_FULL_CONNECTION list expanded:
+      was: "headers, providerSpecificConfig, and apiLine/routing are
+            all NOT_PROVEN"
+      now: "headers, providerSpecificConfig, apiLine/routing, AND
+            region are all NOT_PROVEN ... even the 'N/A | YES
+            depending on provider' region escape that a pre-trace
+            reader might have assumed is removed - region is
+            NOT_PROVEN like the other three, and evidence 05 must
+            complete all four before MUTATES_FULL_CONNECTION can
+            honestly be derived YES or NO"
+
+NO_OTHER_FILES_TOUCHED =
+  - the foundation ACT body, evidence-04 v2, evidence-00 v2, the
+    entry preamble, §35, §4 phase split, §17 gates, .gitignore, and
+    the 89th-pass board row are all UNCHANGED by this amendment
+    (they already freeze region = NOT_PROVEN)
+  - this amendment exists ONLY inside this correction ACT body;
+    the canonical frozen state was already correct everywhere else
+
+PHASE_SEQUENCE_FROZEN (per reviewer):
+  FOUNDATION_RECON_PHASE =
+    R0 component tracing
+    -> §12 DESIGN FREEZE
+    -> R1 RED (test-only; no production edit)
+  FOUNDATION_IMPLEMENTATION_PHASE =
+    opens ONLY AFTER genuine R1 RED
+    -> bounded production GREEN
+    -> conservation
+  FOUNDATION_FINAL_REPORT_AND_HANDOFF =
+    -> characterize session-binding seam
+    -> §17 gates
+    -> Model Profiles implementation authorization
+
+EVIDENCE_05_CAUTION_FROZEN (per reviewer):
+  Do NOT classify an operand YES merely because it exists in
+  ProviderConfig. For each provider-relevant operand the proof
+  needs to be:
+    source value B
+    -> active configuration B
+    -> handler/config construction reads B
+    -> next request consumes B
+  or a composed structural proof with boundaries named.
+  Presence in the unified type is insufficient.
+  Especially for apiLine/routingProviderId: do NOT collapse into one
+  generic 'routing' operand if ClineMM's current seam treats them
+  differently.
+
+REOPEN_AFTER_AMENDMENT =
+  - previous P0 (R0_FULL_CONNECTION_OVERCLAIM) = CLOSED
+  - previous P1 (PHASE_CONTRACT_INCONSISTENT) = CLOSED
+  - this amendment's P1 (REGION_PRETRACE_CONTRADICTION) = CLOSED
+    (one-line bounded correction; the operative foundation ACT
+     was already correct)
+  - P0 in this review = NONE
+  - P2 in this review = NONE worth acting on
+
+DISPOSITION =
+  P1-CORRECTION01 AMENDED; C1 unchanged;
+  Maximum pre-execution review/fix cycle is exhausted.
+  Proceed directly to evidence 05 unless that step exposes a NEW P0.
+```
+
+After this amendment the correction ACT's §2a matrix is internally
+consistent with the foundation ACT body, evidence-04 v2, evidence-00
+v2, the executive summary, and the next-work contract. C1 unchanged:
+GO TO §12 DESIGN FREEZE + R1 RED.
