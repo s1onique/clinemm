@@ -1180,3 +1180,25 @@ apps/vscode/.factory/evidence/
 # on T17 reproduction. Survives fresh clone so F3B's contract and stop-rule
 # are durable alongside the F3 recon dossier.
 !/.factory/acts/ACT-CLINEMM-FACTORIZE-F3B-PROVIDER-SESSION-CONFIG-AUTHORITY-CONSOLIDATE01.md
+# ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01 — Product recon ACT opened
+# after F3/F3B Factorize falsification closure (PASS_F3_NO_FACTORIZATION_NEEDED).
+# Predecessors: ACT-CLINEMM-FACTORIZE-F3-PROVIDER-SESSION-CONFIG-AUTHORITY-RECON01
+#               (recon, 256943c5c) and
+#               ACT-CLINEMM-FACTORIZE-F3B-PROVIDER-SESSION-CONFIG-AUTHORITY-CONSOLIDATE01
+#               (production ACT, 321ad2dd5). Reviewer verdict on F3B:
+#               PASS_WITH_NONBLOCKING_RESIDUE — C1: GO TO MODEL-PROFILES PRODUCT
+#               RECON. This ACT freezes (a) what a Model Profile owns, (b) how
+#               same-provider multiple configurations are represented, (c) what
+#               current-session switch semantics mean, (d) credential/reference
+#               storage model, (e) resume semantics, (f) migration delta for
+#               existing users — BEFORE any schema, proto, or UI design. Production
+#               edits FORBIDDEN in this ACT. Tests allowed only as characterization
+#               for lifecycle questions (no RED suite). Survives fresh clone so the
+#               recon ACT body and its evidence directory (00-preflight.txt,
+#               01..08 source-chain artifacts per §22) remain durable alongside the
+#               F3/F3B Factorize chain. Out of scope (separately registered): the
+#               MiniMax 1.3M→24.6k bug (EFFECTIVE-MODEL-CONTEXT-WINDOW-AUTHORITY-RECON01)
+#               and the WAITING_WITHOUT_WAKE_SOURCE task progression bug
+#               (RUNTIME-TASK-PROGRESSION-ASYNC-JOB-WAKE-OWNERSHIP-RECON01).
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01.md
+!/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/
