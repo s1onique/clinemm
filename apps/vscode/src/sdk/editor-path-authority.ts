@@ -70,10 +70,7 @@ export type {
 } from "./editor-auto-approval-policy"
 export { evaluateEditAutoApproval, extractEditTargets } from "./editor-auto-approval-policy"
 
-export async function classifyEditTarget(
-	absoluteRequestedPath: string,
-	workspaceRoot: string,
-): Promise<EditTargetClassification> {
+export async function classifyEditTarget(requestedPath: string, workspaceRoot: string): Promise<EditTargetClassification> {
 	return await new Promise<EditTargetClassification>((resolve) => {
 		try {
 			// 1. Resolve the workspace root.
@@ -86,13 +83,25 @@ export async function classifyEditTarget(
 				return
 			}
 
+			// CORRECTION01 (factory review `HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS`):
+			// Resolve the requested path against `workspaceRoot` BEFORE
+			// canonicalization. Previously `classifyEditTarget` accepted
+			// `absoluteRequestedPath` but never enforced absoluteness, so a
+			// relative input was resolved by Node against `process.cwd()`
+			// instead of the session workspace. The correct lexical target
+			// is the workspace-root-joined path; we operate on that for the
+			// realpath + containment test.
+			const lexicalTarget = path.isAbsolute(requestedPath)
+				? path.normalize(requestedPath)
+				: path.resolve(canonicalRoot, requestedPath)
+
 			// 2. Resolve the requested path. If it doesn't exist (legitimate
 			//    file-creation case), resolve its nearest existing ancestor.
 			let canonicalRequested: string | undefined
 			try {
-				canonicalRequested = fs.realpathSync(absoluteRequestedPath)
+				canonicalRequested = fs.realpathSync(lexicalTarget)
 			} catch {
-				canonicalRequested = resolveNearestExistingAncestor(absoluteRequestedPath)
+				canonicalRequested = resolveNearestExistingAncestor(lexicalTarget)
 			}
 			if (canonicalRequested === undefined) {
 				// No existing ancestor at all — absolute target is on a
@@ -134,6 +143,36 @@ function resolveNearestExistingAncestor(p: string): string | undefined {
 }
 
 /**
+ * CORRECTION01 (factory review `HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS`):
+ *
+ * Order-independent dominance aggregation across N target classifications.
+ *
+ * Severity ordering (highest authority first):
+ *
+ *   UNAVAILABLE > OUTSIDE > INSIDE
+ *
+ * The aggregate is the most-severe classification in the set. Empty input
+ * is treated as UNAVAILABLE (the policy fails closed).
+ *
+ * Two invariants the previous implementation violated:
+ *
+ *   FAIL_CLOSED          — UNAVAILABLE must dominate, regardless of
+ *                          order or external authority.
+ *   PERMUTATION_INVARIANCE — verdict must not depend on iteration order
+ *                            over the targets array.
+ *
+ * Both invariants now hold because the aggregate is a Set test, not a
+ * fold: `classifications.includes("unavailable")` is invariant under
+ * permutation.
+ */
+export function aggregateClassifications(classifications: EditTargetClassification[]): EditTargetClassification {
+	if (classifications.length === 0) return "unavailable"
+	if (classifications.includes("unavailable")) return "unavailable"
+	if (classifications.includes("outside")) return "outside"
+	return "inside"
+}
+
+/**
  * Composition entry point used by the coordinator. Drives:
  *
  *   1. extractEditTargets(toolName, input) -> string[]
@@ -145,11 +184,21 @@ function resolveNearestExistingAncestor(p: string): string | undefined {
  *
  * Aggregation rule for apply_patch (multi-target):
  *
- *   - If ANY target classifies as OUTSIDE, the aggregate classification is
- *     OUTSIDE (mirrors the Phase 0 §2.1 multi-target truth table).
- *   - If no target exists (input shape unrecognized), aggregate is UNAVAILABLE
- *     and the policy fails closed.
- *   - Otherwise the aggregate is the unanimous verdict across targets.
+ *   CORRECTION01 (fail-closed dominance, factory review
+ *   `HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS`):
+ *
+ *     UNAVAILABLE > OUTSIDE > INSIDE
+ *
+ *   `>` means "dominates for approval safety." Any UNAVAILABLE → aggregate
+ *   UNAVAILABLE. Else any OUTSIDE → aggregate OUTSIDE. Else INSIDE.
+ *
+ *   This is order-independent. The pre-CORRECTION01 implementation was
+ *   mutation-order dependent and could erase UNAVAILABLE by a later
+ *   OUTSIDE (the exact attack flagged by the reviewer). Both invariants
+ *   (FAIL_CLOSED, PERMUTATION_INVARIANCE) now hold.
+ *
+ *   If no target exists (input shape unrecognized), aggregate is UNAVAILABLE
+ *   and the policy fails closed.
  *
  * The decision + the per-target evidence are returned so the coordinator
  * can emit them on the existing `tool` ask card without inventing a new
@@ -166,6 +215,15 @@ export async function evaluateEditAutoApprovalForRequest(
 	input: unknown,
 	workspaceRoot: string,
 	settings: EditApprovalSettings,
+	/**
+	 * Optional per-target classifier injection point. Defaults to the
+	 * real `classifyEditTarget`. Used by tests that need to drive the
+	 * AGGREGATOR with deterministic per-target verdicts (the R0/P0 RED).
+	 *
+	 * Production callers MUST omit this option — the real filesystem
+	 * classifier is the only source of authority.
+	 */
+	classifier: (target: string, root: string) => Promise<EditTargetClassification> = classifyEditTarget,
 ): Promise<EditEffectiveDestinationEvaluation> {
 	const targets = extractEditTargets(toolName, input)
 	if (targets.length === 0) {
@@ -180,17 +238,16 @@ export async function evaluateEditAutoApprovalForRequest(
 		}
 	}
 	const perTarget: { path: string; classification: EditTargetClassification }[] = []
-	let aggregate: EditTargetClassification = "inside"
+	const classifications: EditTargetClassification[] = []
 	for (const t of targets) {
-		const c = await classifyEditTarget(t, workspaceRoot)
+		const c = await classifier(t, workspaceRoot)
 		perTarget.push({ path: t, classification: c })
-		if (c === "unavailable") {
-			aggregate = "unavailable"
-		} else if (c === "outside") {
-			aggregate = "outside"
-		}
-		// "inside" leaves the aggregate unchanged (already inside by default).
+		classifications.push(c)
 	}
+	// CORRECTION01: order-independent dominance aggregation.
+	// UNAVAILABLE > OUTSIDE > INSIDE. Computed from the full set, not by
+	// mutation, so any permutation of the same input yields the same verdict.
+	const aggregate = aggregateClassifications(classifications)
 	const decision = evaluateEditAutoApproval({
 		editFiles: !!settings.editFiles,
 		editFilesExternally: !!settings.editFilesExternally,

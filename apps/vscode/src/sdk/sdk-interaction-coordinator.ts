@@ -177,10 +177,17 @@ export interface SdkInteractionCoordinatorOptions {
 	 * async hop, but the toggle snapshot must reflect the user's most
 	 * recent settings change.
 	 *
-	 * When this option is omitted, the target-aware composition fails
-	 * closed (returns ASK) for editor/apply_patch. The legacy boolean
-	 * short-circuit is NEVER consulted as a fallback for these tool
-	 * names — that was the load-bearing defect.
+	 * CORRECTION01 (factory review `HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS`):
+	 * This option is MANDATORY for editor/apply_patch. When it is
+	 * omitted (or returns undefined) the coordinator returns ASK
+	 * ("auto-approval settings unavailable; cannot classify target").
+	 * The legacy boolean short-circuit is NEVER consulted as a fallback
+	 * for these tool names — that was the load-bearing defect this ACT
+	 * exists to eliminate.
+	 *
+	 * (Same constraint applies to `getCwd`: omitting it for editor/
+	 * apply_patch produces ASK with reason "workspace root unavailable;
+	 * cannot classify target".)
 	 */
 	getAutoApprovalSettings?: () => { editFiles: boolean; editFilesExternally: boolean } | undefined
 }
@@ -541,16 +548,15 @@ export class SdkInteractionCoordinator {
 				// for the CURRENT INCLUDED SURFACE (`editor` + `apply_patch`).
 				// Every other tool (read/browser/MCP/legacy edit names) keeps
 				// the legacy boolean short-circuit behavior unchanged.
-				//
-				// IMPORTANT: when the host has NOT wired `getCwd` and
-				// `getAutoApprovalSettings`, the target-aware composition is
-				// NOT safe to evaluate (no canonical workspace root + no
-				// toggle snapshot). In that case we fall back to the legacy
-				// boolean short-circuit so existing tests + integration
-				// surfaces continue to work without modification.
-				const targetAwareOptionsWired =
-					typeof this.options.getCwd === "function" && typeof this.options.getAutoApprovalSettings === "function"
-				if (targetAwareOptionsWired && (request.toolName === "editor" || request.toolName === "apply_patch")) {
+				if (request.toolName === "editor" || request.toolName === "apply_patch") {
+					// CORRECTION01 (factory review `HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS`):
+					// For the CURRENT INCLUDED SURFACE (`editor` + `apply_patch`),
+					// the target-aware composition is MANDATORY. The legacy
+					// boolean short-circuit is NEVER consulted as a fallback for
+					// these tool names — that was the load-bearing defect this
+					// ACT exists to eliminate. If `getCwd` or
+					// `getAutoApprovalSettings` is missing, we ASK (fail closed)
+					// with an explicit "missing target-aware authority" reason.
 					const editorResult = await this.handleEditorOrApplyPatchApproval(request)
 					if (editorResult.approved) {
 						// ALLOW: short-circuit the rest of the legacy path.

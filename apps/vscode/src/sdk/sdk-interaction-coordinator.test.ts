@@ -1277,7 +1277,15 @@ describe("SdkInteractionCoordinator", () => {
 		// must honor the host shouldAutoApproveTool callback. Upstream v4.1.10 wires
 		// this to isToolAutoApproved; ClineMM must do the same so that the AutoApprove
 		// menu truthfully governs runtime authority.
-		it("non-command edit with shouldAutoApproveTool=true => auto-approved", async () => {
+		//
+		// CORRECTION01 (ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01): the
+		// editor/apply_patch names are EXCLUDED from the legacy short-circuit —
+		// they require the target-aware composition (`getCwd` +
+		// `getAutoApprovalSettings`) to be wired. Other non-edit tools
+		// (read/browser/MCP/legacy edit names) keep the legacy behavior. This
+		// test now exercises a NON-edit tool to preserve the
+		// EDIT-AUTOAPPROVE-AUTHORITY-REGRESSION01 contract for that surface.
+		it("non-command non-edit tool (read_file) with shouldAutoApproveTool=true => auto-approved", async () => {
 			const task = createTaskProxy("session-nonc-edit", vi.fn(), vi.fn())
 			const messages = new SdkMessageCoordinator({ getTask: () => task })
 			const coordinator = new SdkInteractionCoordinator({
@@ -1292,8 +1300,8 @@ describe("SdkInteractionCoordinator", () => {
 				conversationId: "conversation",
 				iteration: 1,
 				toolCallId: "tool-nonc-edit",
-				toolName: "editor",
-				input: { path: "a.ts", old_text: "a", new_text: "b" },
+				toolName: "read_file",
+				input: { path: "a.ts" },
 				policy: { autoApprove: false },
 			})
 			await expect(promise).resolves.toEqual({ approved: true })
