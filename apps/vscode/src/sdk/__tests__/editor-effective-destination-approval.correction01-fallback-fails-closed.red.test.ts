@@ -100,13 +100,21 @@ afterAll(() => {
  * (shouldn't matter, but a hostile harness might set it), the legacy
  * short-circuit would silently ALLOW this OUTSIDE target. After the
  * fix, it MUST ASK.
+ *
+ * Returns the task proxy so the caller can assert on the canonical
+ * UI publication surface (`task.messageStateHandler.getClineMessages()`)
+ * — see CORRECTION02 test-quality improvement (factory reviewer
+ * `HALT_TOOL_POLICY_PRECEDENCE_REGRESSION` P1).
  */
-function makeCoordinatorWithoutTargetAwareOptions(): { coordinator: SdkInteractionCoordinator } {
-	const task = createTaskProxy("s-correction01-fallback", vi.fn(), vi.fn())
+function makeCoordinatorWithoutTargetAwareOptions(): {
+	coordinator: SdkInteractionCoordinator
+	task: ReturnType<typeof createTaskProxy>
+} {
+	const task = createTaskProxy(`s-correction01-fallback-${Math.random().toString(36).slice(2)}`, vi.fn(), vi.fn())
 	const messages = new SdkMessageCoordinator({ getTask: () => task })
 	const coordinator = new SdkInteractionCoordinator({
 		messages,
-		getSessionId: () => "s-correction01-fallback",
+		getSessionId: () => task.taskId,
 		postStateToWebview: async () => {},
 		// `shouldAutoApproveTool` is the LEGACY path. The reviewer's
 		// concern: if the host only wires this (not getCwd/getAutoApprovalSettings)
@@ -116,12 +124,16 @@ function makeCoordinatorWithoutTargetAwareOptions(): { coordinator: SdkInteracti
 		shouldAutoApproveTool: (request) => isToolAutoApproved(request.toolName, DEFAULT_AUTO_APPROVAL_SETTINGS),
 		// getCwd + getAutoApprovalSettings are deliberately NOT wired.
 	})
-	return { coordinator }
+	return { coordinator, task }
 }
 
 describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 CORRECTION01 — missing-options fallback fails closed", () => {
+	// NOTE: per CORRECTION02 frozen precedence, `request.policy.autoApprove === true`
+	// is the outermost priority (explicit host-level escape hatch) and ALWAYS wins.
+	// To exercise the missing-options ASK path we must use `autoApprove: false`
+	// (the default ClineMM host wiring) so the override does not fire first.
 	it("editor tool WITHOUT getCwd/getAutoApprovalSettings + OUTSIDE target + editFiles=true => ASK (no legacy silent ALLOW)", async () => {
-		const { coordinator } = makeCoordinatorWithoutTargetAwareOptions()
+		const { coordinator, task } = makeCoordinatorWithoutTargetAwareOptions()
 		// Drive a tool approval for editor targeting the OUTSIDE victim.
 		const promise = coordinator.handleRequestToolApproval({
 			agentId: "agent-c01-fallback",
@@ -134,33 +146,25 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 CORRECTION01 — m
 				old_text: "outside-original",
 				new_text: "outside-modified",
 			},
-			policy: { autoApprove: true },
+			policy: { autoApprove: false },
 		})
 
-		// The handle returns a Promise that resolves when the user
-		// approves/rejects. With the ASK card published we expect the
-		// Promise to NOT have resolved yet.
-		const result = await Promise.race([
-			promise.then((r) => ({ resolved: true as const, value: r })),
-			new Promise<{ resolved: false }>((resolve) => setTimeout(() => resolve({ resolved: false }), 100)),
-		])
+		// CORRECTION02 test-quality improvement: mechanically prove the
+		// ASK card was actually published — not just that the promise
+		// didn't resolve within a timeout. The card lives at the canonical
+		// publication surface (task.messageStateHandler). A timeout-based
+		// assertion could pass for any unrelated reason; this is precise.
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+		const [message] = task.messageStateHandler.getClineMessages()
+		expect(message).toMatchObject({ type: "ask", ask: "tool", partial: false })
 
-		// The promise MUST NOT have resolved silently with approved=true.
-		// If it did, that means the legacy short-circuit was hit and the
-		// bug is back. If it timed out, the ASK card is awaiting user
-		// input (correct fail-closed behavior).
-		if (result.resolved) {
-			expect(result.value.approved).toBe(false)
-		} else {
-			expect(result.resolved).toBe(false)
-		}
-
-		// Clean up any pending approval to avoid leaking into the next test.
-		coordinator.clearPending?.("test-cleanup")
+		// Resolve pending so the test does not leak into the next case.
+		expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+		await expect(promise).resolves.toMatchObject({ approved: false })
 	})
 
 	it("apply_patch tool WITHOUT getCwd/getAutoApprovalSettings + OUTSIDE target in patch + editFiles=true => ASK", async () => {
-		const { coordinator } = makeCoordinatorWithoutTargetAwareOptions()
+		const { coordinator, task } = makeCoordinatorWithoutTargetAwareOptions()
 		const patchText = [
 			"*** Begin Patch",
 			`*** Update File: ${outsideVictim}`,
@@ -176,18 +180,14 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 CORRECTION01 — m
 			toolCallId: "tc-c01-fallback-ap",
 			toolName: "apply_patch",
 			input: patchText,
-			policy: { autoApprove: true },
+			policy: { autoApprove: false },
 		})
-		const result = await Promise.race([
-			promise.then((r) => ({ resolved: true as const, value: r })),
-			new Promise<{ resolved: false }>((resolve) => setTimeout(() => resolve({ resolved: false }), 100)),
-		])
-		if (result.resolved) {
-			expect(result.value.approved).toBe(false)
-		} else {
-			expect(result.resolved).toBe(false)
-		}
-		coordinator.clearPending?.("test-cleanup")
+		// Same mechanical proof as the editor test above.
+		await vi.waitFor(() => expect(task.messageStateHandler.getClineMessages()).toHaveLength(1))
+		const [message] = task.messageStateHandler.getClineMessages()
+		expect(message).toMatchObject({ type: "ask", ask: "tool", partial: false })
+		expect(coordinator.resolvePendingToolApproval(undefined, "noButtonClicked")).toBe(true)
+		await expect(promise).resolves.toMatchObject({ approved: false })
 	})
 
 	it("non-edit tool (read_file) WITHOUT getCwd/getAutoApprovalSettings + legacy ALLOW path intact (no false regression)", async () => {
@@ -204,7 +204,7 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 CORRECTION01 — m
 			shouldAutoApproveTool: (request) => isToolAutoApproved(request.toolName, DEFAULT_AUTO_APPROVAL_SETTINGS),
 			// getCwd + getAutoApprovalSettings NOT wired.
 		})
-		const promise = coordinator.handleRequestToolApproval({
+		const result = await coordinator.handleRequestToolApproval({
 			agentId: "agent-c01-noned",
 			conversationId: "c-c01-noned",
 			iteration: 1,
@@ -214,6 +214,8 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 CORRECTION01 — m
 			policy: { autoApprove: true },
 		})
 		// read_file with autoApprove=true should ALLOW (default behavior).
-		await expect(promise).resolves.toMatchObject({ approved: true })
+		expect(result.approved).toBe(true)
+		// No UI surface published on ALLOW.
+		expect(task.messageStateHandler.getClineMessages()).toHaveLength(0)
 	})
 })

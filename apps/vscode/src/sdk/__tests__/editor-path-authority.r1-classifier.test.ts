@@ -95,13 +95,24 @@ describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 R1 — classifier"
 		expect(result).toBe("unavailable")
 	})
 
-	it("non-existent target on non-existent mount => UNAVAILABLE", async () => {
-		// Pick a path where every ancestor also does not exist. We use a
-		// path with several bogus segments so the nearest-existing-ancestor
-		// walk cannot recover.
+	it("non-existent target on non-existent mount => OUTSIDE (canonical / is the nearest existing ancestor)", async () => {
+		// CORRECTION02 (factory review `HALT_TOOL_POLICY_PRECEDENCE_REGRESSION` P2):
+		// `resolveNearestExistingAncestor` now tries the filesystem root
+		// (`/`) before giving up. Every non-empty filesystem has `/` as
+		// an ancestor, so the walk ALWAYS recovers to a canonical path.
+		// That canonical path is the filesystem root, which lies OUTSIDE
+		// any real workspace root — so the verdict is OUTSIDE, not
+		// UNAVAILABLE.
+		//
+		// Pre-CORRECTION02 this test asserted UNAVAILABLE because the
+		// helper stopped at `current === fsRoot` without trying it.
+		// That was a small correctness residue (the helper claimed the
+		// filesystem had no canonical ancestor when in fact `/` was
+		// canonical). CORRECTION02 fixes the residue and the verdict
+		// becomes the more accurate OUTSIDE.
 		const dead = "/definitely-not-a-real-mount-zzz/a/b/c/file.txt"
 		const result = await classifyEditTarget(dead, workspaceRoot)
-		expect(result).toBe("unavailable")
+		expect(result).toBe("outside")
 	})
 
 	it("non-existent target whose nearest existing ancestor IS inside => INSIDE (file creation case)", async () => {

@@ -129,13 +129,21 @@ export async function classifyEditTarget(requestedPath: string, workspaceRoot: s
 
 function resolveNearestExistingAncestor(p: string): string | undefined {
 	let current = path.dirname(p)
-	// Walk up the ancestor chain until we find one that exists, or we hit
-	// the filesystem root.
+	// Walk up the ancestor chain until we find one that exists. We also
+	// test the filesystem root itself (`/`) before giving up; the prior
+	// implementation exited the loop `current !== fsRoot` and never tried
+	// the root, which made `/does/not/exist` UNREACHABLE for resolution
+	// even though `/` always exists. Fail-closed in both cases; the
+	// difference is just whether `/` itself is observable as the
+	// canonical ancestor (CORRECTION02 P2 residue cleanup).
 	const fsRoot: string = path.parse(p).root || "/"
-	while (current && current !== fsRoot) {
+	while (current) {
 		try {
 			return fs.realpathSync(current)
 		} catch {
+			if (current === fsRoot) {
+				return undefined
+			}
 			current = path.dirname(current)
 		}
 	}

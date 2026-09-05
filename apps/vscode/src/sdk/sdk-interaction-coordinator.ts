@@ -185,6 +185,26 @@ export interface SdkInteractionCoordinatorOptions {
 	 * for these tool names — that was the load-bearing defect this ACT
 	 * exists to eliminate.
 	 *
+	 * CORRECTION02 (factory review `HALT_TOOL_POLICY_PRECEDENCE_REGRESSION`):
+	 * Adds an explicit `request.policy.autoApprove === true` OUTERMOST
+	 * priority escape hatch. When set, the coordinator returns ALLOW
+	 * without consulting `getAutoApprovalSettings` or `getCwd`. The
+	 * default ClineMM host wiring forces `autoApprove=false` for
+	 * `editor`/`apply_patch` at the SDK seam, so this is a no-op in the
+	 * VSCode host path; it preserves the documented SDK contract for
+	 * embedded / JetBrains consumers that wire `toolPolicies` directly.
+	 *
+	 * FROZEN ClineMM EDIT-TOOL PRECEDENCE (CORRECTION02):
+	 *
+	 *   1.  request.policy.autoApprove === true          => ALLOW
+	 *   2.  otherwise (default ClineMM host wiring):
+	 *       a.  getCwd() unavailable          => ASK (fail closed)
+	 *       b.  getAutoApprovalSettings() unavailable     => ASK
+	 *       c.  classification=inside + editFiles=true    => ALLOW
+	 *       d.  classification=outside + editFilesExternally=true  => ALLOW
+	 *       e.  classification=outside + editFilesExternally=false => ASK
+	 *       f.  classification=unavailable                => ASK (fail closed)
+	 *
 	 * (Same constraint applies to `getCwd`: omitting it for editor/
 	 * apply_patch produces ASK with reason "workspace root unavailable;
 	 * cannot classify target".)
@@ -765,6 +785,38 @@ export class SdkInteractionCoordinator {
 		reason?: string
 		decision?: { kind: "allow" | "ask" | "deny"; reason: string; source: string }
 	}> {
+		// CORRECTION02 (factory review `HALT_TOOL_POLICY_PRECEDENCE_REGRESSION`):
+		// Outermost priority is `request.policy.autoApprove === true`. When
+		// the host's upstream SDK contract surfaces an explicit per-tool
+		// `autoApprove=true`, that signal is authoritative — it beats the
+		// edit-target safety envelope (priority 1 in the frozen precedence).
+		//
+		// The default ClineMM host wiring forces `autoApprove=false` for
+		// `editor`/`apply_patch` at the SDK seam (see
+		// `apps/vscode/src/sdk/sdk-tool-policies.ts:64`), so this branch is
+		// unreachable in the standard VSCode host path. It exists so that
+		// an embedded or JetBrains consumer wiring `toolPolicies` directly
+		// (without `buildToolPolicies`) still gets the documented SDK
+		// behavior — `autoApprove=true` => ALLOW.
+		if (request.policy.autoApprove === true) {
+			Logger.log(`[SdkController] Auto-approving editor/apply_patch via policy.autoApprove: tool=${request.toolName}`)
+			emitNonCommandDecisionProbe({
+				request,
+				approved: true,
+				decisionKind: "allow",
+				decisionReason: "sdk-policy-autoApprove",
+				decisionSource: "sdk-policy-autoApprove",
+			})
+			return {
+				approved: true,
+				decision: {
+					kind: "allow",
+					reason: "sdk-policy-autoApprove",
+					source: "sdk-policy-autoApprove",
+				},
+			}
+		}
+
 		// Resolve the live workspace root via the host option. If absent,
 		// fail closed: a target-aware ALLOW requires a canonical root.
 		const workspaceRoot = this.options.getCwd?.()
@@ -810,10 +862,19 @@ export class SdkInteractionCoordinator {
 		}
 
 		// ASK: fall through to the existing approval-UI publication.
+		// Carry the decision evidence so the pendingToolApprovalMessage
+		// record at the manual-ask publication path receives it (it
+		// previously received `null` because this method only attached
+		// `decision` on the ALLOW branch; see CORRECTION02).
 		Logger.log(`[SdkController] ASK editor/apply_patch: tool=${request.toolName} reason=${evaluation.decision.reason}`)
 		return {
 			approved: false,
 			reason: evaluation.decision.reason,
+			decision: {
+				kind: "ask",
+				reason: evaluation.decision.reason,
+				source: evaluation.classification,
+			},
 		}
 	}
 
