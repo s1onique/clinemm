@@ -1999,3 +1999,91 @@ authority to halt the edit.
                                                     — CORRECTION03 (commit fa2710da4 GREEN)
 
 Per the reviewer's directive, the bounded Phase-2 cycle is closed.
+
+## EV_PHASE_2_CORRECTION03_QUALIFICATION_COMPLETED (commit 60389ad88)
+
+Per the factory reviewer's `PASS_CORRECTION03 — C1: GO TO QUALIFICATION`
+verdict, the production algorithm is FROZEN. No more production review
+cycles. Stop changing the classifier.
+
+The qualification/closure pass executes:
+
+  P1  PHASE_3_COMPOSED_MOVEPATH_FLOW    EXECUTED (R3a/R3b/R3c)
+  P1  PHASE_4 necessity ablation        EXECUTED (R4-1/R4-2/R4-3)
+  P2  CORRECTION03 fixture cleanup      CLOSED (rmSync insideDir)
+  P2  Stale fs.existsSync wording       CLOSED (header now says fs.lstatSync)
+
+### R3 — composed apply_patch Move to: approval/execution flow (NEW)
+
+Three new GREEN tests against the REAL coordinator seam. The 10-case
+correction01-apply-patch-matrix proves target extraction. CORRECTION02
+proves the priority 2c/2d/2e policy components individually. R3 proves
+the COMPOSED flow end-to-end on the real coordinator boundary.
+
+  R3a inside source + outside move + editFilesExternally=false
+       => ASK
+       (mechanically proven via messageStateHandler card publication;
+        resolves to approved=false via noButtonClicked)
+
+  R3b inside source + outside move + editFilesExternally=false +
+       yesButtonClicked
+       => move permitted (approved=true propagates through the
+          pending resolve)
+       (proves the gate, when approved by the user, actually permits
+        the operation)
+
+  R3c same move + editFilesExternally=true
+       => direct ALLOW (priority 2d outside+external bypass)
+
+### R4 — necessity ablation (NEW, executed not just argued)
+
+The structural argument that the ancestor fallback is necessary for
+ordinary file creation is now backed by an EXECUTED ablation.
+
+  R4-1 baseline: real classifier classifies ordinary nonexistent
+       in-workspace file as INSIDE (preserved)
+  R4-2 ablation:  classifier WITHOUT ancestor fallback classifies
+       ordinary nonexistent in-workspace file as UNAVAILABLE
+       (conservation broken)
+  R4-3 production surface unchanged: real classifier after ablation
+       still classifies ordinary creation as INSIDE
+
+Method: injection of a test-local classifier into the real
+evaluateEditAutoApprovalForRequest composition layer via the
+production classifier parameter. No production switch. No env flag.
+No module mutation.
+
+  NECESSITY_ARGUMENT = PROVEN_STRUCTURALLY
+  NECESSITY_ABLATION = PROVEN_BY_EXECUTED_ABLATION          (was: NOT_EXECUTED)
+
+### P2 hygiene (NEW, closed)
+
+  - correction03 test now rmSync(insideDir) in afterAll() alongside
+    outsideDir. Per-run residue eliminated.
+  - editor-path-authority.ts header §3 replaced the failed first-repair
+    primitive reference (fs.existsSync, which FOLLOWS SYMLINKS on macOS)
+    with the actual CORRECTION03 primitive (fs.lstatSync, which does
+    NOT follow symlinks) plus an explanation of why existsSync was wrong.
+
+### Verifier output (verbatim, commit 60389ad88)
+
+  Test Files  12 passed (12)
+       Tests  104 passed (104)        (was: 98 passed across 10 files)
+
+  bunx tsc --noEmit: clean
+  bunx biome check on 4 touched files: clean
+
+### Disposition
+
+  PHASE 2: COMPLETE
+  PHASE 3: GREEN
+  PHASE 4: COMPLETE
+  REVIEWER CYCLE: CLOSED (PASS_CORRECTION03 — C1 GO_TO_QUALIFICATION)
+  PRODUCTION ALGORITHM: FROZEN (no more production review cycles)
+
+  Remaining (live qualification, out of bounded cycle):
+    - exact-head VSIX build
+    - installed source binding
+    - real UI ASK
+    - approve -> actual mutation
+    - external=true live bypass

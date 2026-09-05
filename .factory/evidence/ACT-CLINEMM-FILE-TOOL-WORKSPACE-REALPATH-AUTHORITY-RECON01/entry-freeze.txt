@@ -824,3 +824,72 @@ unresolved_residue   = MISSING-DEPENDENCY ASK EVIDENCE CARRIER (P2 only)
                        strengthened test in CORRECTION02 mechanically proves
                        the ASK card is published). Out of scope per reviewer
                        P2-only residue.
+
+=== R0-PHASE-2-CORRECTION03-QUALIFICATION-COMPLETED ===
+
+event                = CORRECTION03 qualification/closure pass completed
+                       per reviewer PASS_CORRECTION03 — C1: GO TO
+                       QUALIFICATION directive. Production algorithm
+                       is frozen; no more production review cycles.
+cycle                = QUALIFICATION (3 R3 + 3 R4 witnesses + 2 P2 hygiene fixes)
+commit               = 60389ad88
+
+new_test_files       = 2:
+                       - editor-effective-destination-approval.r3-composed-movepath.qual.test.ts (3 tests, GREEN)
+                         R3a inside source + outside move + external=false => ASK
+                         R3b inside source + outside move + external=false +
+                              yesButtonClicked => move permitted (approved=true)
+                         R3c same move + external=true => direct ALLOW
+                       - editor-effective-destination-approval.r4-necessity-ablation.qual.test.ts (3 tests, GREEN)
+                         R4-1 baseline: real classifier classifies ordinary
+                               nonexistent in-workspace file as INSIDE
+                         R4-2 ablation: classifier WITHOUT ancestor fallback
+                               classifies ordinary nonexistent as UNAVAILABLE
+                         R4-3 production surface unchanged after ablation
+
+modified_files       = 2:
+                       - editor-path-authority.ts
+                         header §3 wording: fs.existsSync -> fs.lstatSync
+                         with explanation (matches the actual primitive +
+                         the failed-first-repair diagnosis)
+                       - correction03-dangling-symlink.red.test.ts
+                         afterAll: rmSync(insideDir) added (eliminate
+                         per-run residue)
+
+phase_3_disposition  = GREEN (target extraction + policy components +
+                       composed movePath flow all directly executed)
+phase_4_disposition  = COMPLETE (executed ablation proves fallback
+                       necessary; was: structural argument only)
+
+p2_hygiene           = CLOSED
+                       - correction03 fixture cleanup (rmSync insideDir)
+                       - stale fs.existsSync wording replaced with
+                         fs.lstatSync + explanation
+
+verifier_output      = 104/104 across 12 test files
+                       (was 98/98 across 10 files).
+                       bunx tsc --noEmit: clean.
+                       bunx biome check on 4 touched files: clean.
+
+reviewer_concerns_resolved =
+  P1  PHASE_3_COMPOSED_MOVEPATH_FLOW  RESOLVED (R3a/R3b/R3c GREEN)
+  P1  PHASE_4 NECESSITY ABLATION       RESOLVED (R4-1/R4-2/R4-3 GREEN)
+  P2  CORRECTION03 fixture cleanup     RESOLVED (rmSync insideDir)
+  P2  Stale fs.existsSync wording      RESOLVED (replaced with fs.lstatSync)
+
+unresolved_residue   = MISSING-DEPENDENCY ASK EVIDENCE CARRIER (P2 only,
+                       out of bounded cycle; does not affect authority)
+
+remaining_live_qualification =
+                       - exact-head VSIX build
+                       - installed source binding
+                       - real UI ASK
+                       - approve -> actual mutation
+                       - external=true live bypass
+
+reviewer_chain       = PASS_RED_REPRODUCED (861e18502)            -> PHASE 2 GREEN
+                       HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS       -> CORRECTION01 (93d4bd746 GREEN)
+                       HALT_TOOL_POLICY_PRECEDENCE_REGRESSION     -> CORRECTION02 (00d71e51c GREEN)
+                       HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS
+                                                                  -> CORRECTION03 (fa2710da4 GREEN)
+                       PASS_CORRECTION03 C1 GO_TO_QUALIFICATION    -> QUALIFICATION (60389ad88 GREEN)

@@ -1346,3 +1346,107 @@ UNRESOLVED RESIDUE (P2 only, out of bounded cycle)
                           CORRECTION02 mechanically proves the ASK card
                           is published)
 ```
+
+## 16. PHASE 2 CORRECTION03 qualification pass COMPLETED — C1: GO TO QUALIFICATION satisfied (commit 60389ad88)
+
+Per the factory reviewer's `PASS_CORRECTION03 — C1: GO TO QUALIFICATION`
+verdict, the production algorithm is FROZEN. No more production review
+cycles. Stop changing the classifier.
+
+The qualification/closure pass executes:
+
+  P1  PHASE_3_COMPOSED_MOVEPATH_FLOW    EXECUTED (R3a/R3b/R3c)
+  P1  PHASE_4 necessity ablation        EXECUTED (R4-1/R4-2/R4-3)
+  P2  CORRECTION03 fixture cleanup      CLOSED (rmSync insideDir)
+  P2  Stale fs.existsSync wording       CLOSED (header now says fs.lstatSync)
+
+```text
+PHASE 2 CORRECTION03  PRODUCTION  FROZEN  (commit fa2710da4)
+R3 COMPOSED MOVEPATH  QUALIFIED    (commit 60389ad88)
+R4 NECESSITY ABLATION  EXECUTED     (commit 60389ad88)
+P2 HYGIENE             CLOSED       (commit 60389ad88)
+```
+
+### Verifier output (verbatim, commit 60389ad88)
+
+```text
+Test Files  12 passed (12)
+     Tests  104 passed (104)        (was: 98 passed across 10 files)
+bunx tsc --noEmit: clean
+bunx biome check on 4 touched files: clean
+```
+
+### R3 — composed apply_patch Move to: approval/execution flow
+
+  R3a inside source + outside move + editFilesExternally=false => ASK
+       (mechanically proven via messageStateHandler card publication;
+        resolves to approved=false via noButtonClicked)
+  R3b inside source + outside move + editFilesExternally=false +
+       yesButtonClicked => move permitted (approved=true propagates)
+  R3c same move + editFilesExternally=true => direct ALLOW
+       (priority 2d outside+external bypass)
+
+### R4 — necessity ablation (executed)
+
+  R4-1 baseline: real classifier classifies ordinary nonexistent
+       in-workspace file as INSIDE
+  R4-2 ablation:  classifier WITHOUT ancestor fallback classifies
+       ordinary nonexistent in-workspace file as UNAVAILABLE
+       (conservation broken)
+  R4-3 production surface unchanged after ablation
+
+  NECESSITY_ARGUMENT = PROVEN_STRUCTURALLY
+  NECESSITY_ABLATION = PROVEN_BY_EXECUTED_ABLATION          (was: NOT_EXECUTED)
+
+### P2 hygiene (closed)
+
+  - correction03 test: rmSync(insideDir) added to afterAll
+  - editor-path-authority.ts header §3: fs.existsSync -> fs.lstatSync
+    with explanation (matches actual primitive + failed-first-repair
+    diagnosis)
+
+### Updated disposition
+
+```text
+RECON_LANE_STATUS        = CLOSED
+PRODUCTION_ACT_STATUS    = PHASE_2_CORRECTION03_PRODUCTION_FROZEN
+                           PHASE_3 GREEN
+                           PHASE_4 COMPLETE (executed ablation)
+                           QUALIFICATION PASS COMPLETE
+NEW_REVIEW_ROUND         = NO
+MAX_REVIEW_FIX_CYCLE     = SATISFIED (bounded CORRECTION03 implemented
+                                       + verified + GREEN + qualified)
+PHASE_2_DISPOSITION      = COMPLETE
+PHASE_3_DISPOSITION      = GREEN (target extraction + policy components
+                                  + composed movePath flow)
+PHASE_4_DISPOSITION      = COMPLETE (executed ablation proves fallback
+                                      necessary)
+
+REVIEWER_CHAIN           = PASS_RED_REPRODUCED (861e18502)            -> PHASE 2 GREEN
+                            HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS       -> CORRECTION01 (93d4bd746 GREEN)
+                            HALT_TOOL_POLICY_PRECEDENCE_REGRESSION     -> CORRECTION02 (00d71e51c GREEN)
+                            HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS
+                                                                       -> CORRECTION03 (fa2710da4 GREEN)
+                            PASS_CORRECTION03 C1 GO_TO_QUALIFICATION    -> QUALIFICATION (60389ad88 GREEN)
+
+CLOSED ISSUES
+  HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS                    (CORRECTION01)
+  HALT_TOOL_POLICY_PRECEDENCE_REGRESSION                  (CORRECTION02)
+  HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS      (CORRECTION03)
+
+UNRESOLVED RESIDUE (P2 only, out of bounded cycle)
+  MISSING-DEPENDENCY ASK EVIDENCE CARRIER  (no `decision` field on
+  {approved:false, reason} when getCwd/getAutoApprovalSettings are
+  unavailable; does not affect authority)
+```
+
+### Remaining (live qualification, out of bounded cycle)
+
+  - exact-head VSIX build
+  - installed source binding
+  - real UI ASK
+  - approve -> actual mutation
+  - external=true live bypass
+
+These are downstream of the bounded correction cycle and require
+manual / harness-driven qualification, not more production changes.

@@ -1144,3 +1144,139 @@ GREEN without new production changes.
                                                     CORRECTION02 mechanically
                                                     proves the ASK card is
                                                     published)
+
+### 13.27 R3 + R4 qualification pass COMPLETED — C1: GO TO QUALIFICATION satisfied (commit 60389ad88)
+
+Per the factory reviewer's `PASS_CORRECTION03 — C1: GO TO QUALIFICATION`
+verdict, the production algorithm is frozen and the next action is the
+**qualification/closure pass only**. Per the reviewer's directive:
+
+  * No more production review cycles.
+  * The classifier is frozen.
+  * Stop changing the classifier.
+
+This commit executes the qualification pass.
+
+```text
+PHASE 2 CORRECTION03  PRODUCTION  FROZEN  (commit fa2710da4)
+R3 COMPOSED MOVEPATH  QUALIFIED    (commit 60389ad88)
+R4 NECESSITY ABLATION  EXECUTED     (commit 60389ad88)
+P2 HYGIENE             CLOSED       (commit 60389ad88)
+```
+
+### 13.28 R3 — composed apply_patch Move to: approval/execution flow (PHASE_3_COMPOSED_MOVEPATH_FLOW = EXECUTED)
+
+Three new GREEN tests against the REAL coordinator seam:
+
+  R3a inside source + outside move + editFilesExternally=false
+       => ASK
+       (mechanically proven via messageStateHandler card publication;
+        resolves to approved=false via noButtonClicked)
+
+  R3b inside source + outside move + editFilesExternally=false +
+       yesButtonClicked
+       => move permitted (approved=true propagates through the
+          pending resolve)
+       (proves the gate, when approved by the user, actually permits
+        the operation — the load-bearing assertion the reviewer asked
+        for)
+
+  R3c same move + editFilesExternally=true
+       => direct ALLOW (priority 2d outside+external bypass)
+
+This converts:
+
+  PHASE_3_TARGET_EXTRACTION      = EXECUTED
+  PHASE_3_POLICY_COMPONENTS      = EXECUTED
+  PHASE_3_COMPOSED_MOVEPATH_FLOW = EXECUTED             (was: NOT YET)
+
+### 13.29 R4 — necessity ablation (executed, not just argued)
+
+The structural argument that the ancestor fallback is necessary for
+ordinary file creation is now backed by an EXECUTED ablation.
+
+  R4-1 baseline: real classifier classifies ordinary nonexistent
+       in-workspace file as INSIDE (preserved)
+  R4-2 ablation:  classifier WITHOUT ancestor fallback classifies
+       ordinary nonexistent in-workspace file as UNAVAILABLE
+       (conservation broken)
+  R4-3 production surface unchanged: real classifier after ablation
+       still classifies ordinary creation as INSIDE
+
+Method: injection of a test-local classifier into the real
+evaluateEditAutoApprovalForRequest composition layer via the
+production classifier parameter (the same one CORRECTION01 already
+supports for R0/P0 dominance tests).
+
+  NO production switch.
+  NO env flag.
+  NO module mutation.
+  The ablation runs in-process, returns to the real classifier on
+  the next call.
+
+This converts:
+
+  NECESSITY_ARGUMENT = PROVEN_STRUCTURALLY
+  NECESSITY_ABLATION = PROVEN_BY_EXECUTED_ABLATION          (was: NOT_EXECUTED)
+
+### 13.30 P2 hygiene — fixture cleanup + header wording
+
+  - correction03 test now rmSync(insideDir) in afterAll() alongside
+    outsideDir. Per-run residue (.factory/tmp/r3-inside-* + dangling
+    symlinks) is eliminated.
+  - editor-path-authority.ts header §3 said the CORRECTION03 primitive
+    was fs.existsSync, which was literally the failed first-repair
+    attempt. Replaced with fs.lstatSync (the actual primitive) plus
+    an explanation of why existsSync was wrong (follows symlinks;
+    returns false for dangling symlinks whose target is absent —
+    silent climb past the dangling component). The detailed comment
+    in resolveNearestExistingAncestor was already correct; this
+    brings the header into alignment.
+
+### 13.31 Verifier output (verbatim, commit 60389ad88)
+
+  src/sdk/sdk-interaction-coordinator.test.ts (43 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts (4 tests)
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts (8 tests)
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts (6 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts (8 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts (5 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts (10 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts (3 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction02-policy-precedence.red.test.ts (7 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction03-dangling-symlink.red.test.ts (4 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r3-composed-movepath.qual.test.ts (3 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r4-necessity-ablation.qual.test.ts (3 tests)
+
+  Test Files  12 passed (12)
+       Tests  104 passed (104)        (was: 98 passed across 10 files)
+
+  bunx tsc --noEmit: clean
+  bunx biome check on 4 touched files: clean
+
+### 13.32 Disposition — QUALIFICATION pass complete
+
+  PHASE 2: COMPLETE (PHASE 2 + CORRECTION01 + CORRECTION02 + CORRECTION03)
+  PHASE 3: GREEN (target extraction + policy components + composed movePath flow)
+  PHASE 4: COMPLETE (executed ablation proves fallback necessary)
+
+  CLOSED ISSUES
+    HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS                  (CORRECTION01)
+    HALT_TOOL_POLICY_PRECEDENCE_REGRESSION                (CORRECTION02)
+    HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS    (CORRECTION03)
+
+  P2 HYGIENE (reviewer-flagged, now CLOSED)
+    CORRECTION03 fixture cleanup
+    Stale fs.existsSync wording in module header
+
+  REMAINING (live qualification, out of bounded cycle)
+    exact-head VSIX build
+    installed source binding
+    real UI ASK
+    approve -> actual mutation
+    external=true live bypass
+
+  UNRESOLVED RESIDUE (P2 only, out of bounded cycle)
+    MISSING-DEPENDENCY ASK EVIDENCE CARRIER  (no `decision` field on
+    {approved:false, reason} when getCwd/getAutoApprovalSettings are
+    unavailable; does not affect authority)
