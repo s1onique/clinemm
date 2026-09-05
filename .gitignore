@@ -1235,3 +1235,22 @@ apps/vscode/.factory/evidence/
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01.md
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01-P2-CORRECTION01.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/
+# ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01: opened 2026-09-05
+# (same day, immediately after MP RECON P4 close; reviewer verdict
+# PASS — C1: GO TO FOUNDATION RECON). Recon-only ACT. Scope per §7.3
+# of the MP correction ACT body: owns ProviderConfigurationInstance
+# schema + semantic credential identity scope + runtime instance-switch
+# behavior + per-session metadata seam (CHARACTERIZATION only).
+# Reviewer-prescribed execution sequence: RECON -> R0 -> DESIGN FREEZE
+# -> R1 RED -> GREEN -> CONSERVATION -> PERSISTENCE CHARACTERIZATION ->
+# STOP. R0 frozen in this entry commit (M1=NO, M2=YES(slot-overwrite),
+# M3=NO). Next evidence is R1 RED (NEXT_EFFECTIVE_CONNECTION tuple)
+# + design freeze (alpha/beta/gamma + physical secret-key encoding).
+# Production edits FORBIDDEN until R1 PASS + GREEN + CONSERVATION.
+# Out of scope here (implementation ACT scope; still NOT authorized):
+# ModelProfile, profiles.json, defaultProfileId, activeProfileId,
+# picker UI, "Set as default" UI, Settings "Manage Profiles" UI.
+# MP IMPLEMENTATION ACT ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-
+# IMPLEMENTATION01 remains gated on §17 four-gate handoff.
+!/.factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01.md
+!/.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01/
