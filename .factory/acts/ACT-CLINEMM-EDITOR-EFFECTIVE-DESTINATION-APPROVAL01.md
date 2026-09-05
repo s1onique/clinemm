@@ -662,3 +662,125 @@ These are scoped to a subsequent ACT / commit. The RED gate
 has been crossed, the GREEN regression is locked in, and the
 load-bearing production defect (silent ALLOW on OUTSIDE +
 editFiles=true) is fixed on the real coordinator seam.
+
+### 13.7 PHASE 2 CORRECTION01 bounded repair COMPLETED — P0 + P1s closed on real seam (commit 93d4bd746)
+
+Per the factory reviewer's HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS verdict
+on commit 861e18502 (PHASE 2 GREEN), CORRECTION01 was opened to close:
+
+  P0  MULTI_TARGET_UNAVAILABLE_ORDER_BYPASS
+        The multi-target aggregator was mutation-order dependent:
+          let aggregate = "inside"
+          for (const t of targets) {
+              const c = await classifyEditTarget(t, workspaceRoot)
+              if (c === "unavailable") aggregate = "unavailable"
+              else if (c === "outside") aggregate = "outside"
+          }
+        So [UNAVAILABLE, OUTSIDE] → aggregate = "outside" (last-wins).
+        That violated FAIL_CLOSED + PERMUTATION_INVARIANCE simultaneously.
+        Load-bearing attack: editFiles=true + external=true + [UNAVAILABLE,
+        OUTSIDE] silently ALLOWed an unclassifiable edit just because the
+        next target resolved cleanly. Reintroduced the exact defect the
+        ACT exists to eliminate.
+
+  P1  RELATIVE PATHS RESOLVED AGAINST process.cwd() RATHER THAN workspaceRoot
+        classifyEditTarget took absoluteRequestedPath but never enforced
+        absoluteness. Relative inputs were Node-resolved against
+        process.cwd(), not the session workspace. apply_patch uses
+        relative paths in its textual grammar, so every apply_patch
+        call was classified against the wrong root.
+
+  P1  apply_patch EXTRACTOR CLAIMED BEFORE QUALIFICATION
+        The hand-rolled extractApplyPatchTargets had no canonical
+        grammar test matrix. CORRECTION01 adds a 10-test qualification
+        suite that locks in Add / Delete / Update / Update+Move /
+        multi-file / malformed / inside-source-outside-move-destination /
+        Update-without-Move-no-false-positive.
+
+  P1  MISSING-OPTIONS FALLBACK RE-ENABLES OLD UNSAFE BOOLEAN PATH
+        The JSDoc said "when this option is omitted, target-aware
+        composition fails closed (returns ASK) for editor/apply_patch.
+        The legacy boolean short-circuit is NEVER consulted as a
+        fallback." But the implementation did exactly that:
+          if (targetAwareOptionsWired && (editor | apply_patch)) {
+              // target-aware
+          } else if (autoApprove || shouldAutoApproveTool) {
+              ALLOW  // <-- the bug
+          }
+        So missing getCwd or getAutoApprovalSettings restored the old
+        silent-ALLOW behavior for editor/apply_patch.
+
+### 13.8 Production fixes in CORRECTION01 (commit 93d4bd746)
+
+  apps/vscode/src/sdk/editor-path-authority.ts
+    - aggregateClassifications() helper exported: Set-test dominance
+      ordering UNAVAILABLE > OUTSIDE > INSIDE. Computed once from the
+      complete classification array, NOT by mutation across iterations.
+    - evaluateEditAutoApprovalForRequest now classifies every target
+      first into an array, then calls aggregateClassifications(array)
+      for the verdict. The mutation counter no longer exists.
+    - Optional `classifier` parameter added to evaluateEditAutoApprovalForRequest
+      so the R0/P0 RED test can drive the aggregator with deterministic
+      per-target verdicts.
+    - classifyEditTarget parameter renamed absoluteRequestedPath ->
+      requestedPath. The body now resolves relative paths against
+      canonicalRoot BEFORE realpath + containment.
+
+  apps/vscode/src/sdk/sdk-interaction-coordinator.ts
+    - The non-command / non-atomic-evaluator branch:
+        if (request.toolName === "editor" || request.toolName === "apply_patch") {
+            // target-aware composition is MANDATORY
+            const editorResult = await this.handleEditorOrApplyPatchApproval(request)
+            ...
+        } else if (autoApprove || shouldAutoApproveTool) { ALLOW }
+      The legacy targetAwareOptionsWired condition is GONE.
+    - JSDoc on getAutoApprovalSettings updated to match.
+
+  apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts
+    - The "non-command edit with shouldAutoApproveTool=true => auto-approved"
+      test is renamed to exercise read_file (a non-edit tool). The legacy
+      short-circuit still applies to non-edit tools; this preserves the
+      EDIT-AUTOAPPROVE-AUTHORITY-REGRESSION01 contract for that surface.
+
+### 13.9 Required RED tests added (all RED on commit 861e18502, GREEN here)
+
+  1. r0p0-multi-target-dominance.red.test.ts                  (8 cases)
+  2. correction01-relative-paths.red.test.ts                 (5 cases)
+  3. correction01-apply-patch-matrix.red.test.ts             (10 cases)
+  4. correction01-fallback-fails-closed.red.test.ts          (3 cases)
+
+### 13.10 Verifier output (verbatim, commit 93d4bd746)
+
+  src/sdk/sdk-interaction-coordinator.test.ts (43 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts (4 tests)
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts (8 tests)
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts (6 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts (8 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts (5 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts (10 tests)
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts (3 tests)
+
+  Test Files  8 passed (8)
+       Tests  87 passed (87)
+
+  bunx tsc --noEmit: clean
+  bunx biome lint on touched files: 11 files, 0 fixes applied
+
+### 13.11 Updated disposition
+
+  PHASE 2 CORRECTION01: COMPLETE (commit 93d4bd746)
+    P0  MULTI_TARGET_UNAVAILABLE_ORDER_BYPASS    FIXED
+    P1  relative paths                           FIXED
+    P1  apply_patch extractor                    QUALIFIED
+    P1  missing-options fallback                 FIXED
+
+  PHASE 3: AUTHORIZED for the next ACT
+    apply_patch movePath integration + R3/R4
+    deny/approve/direct ALLOW + R5 conservation
+
+  PHASE 4: AUTHORIZED for the next ACT
+    Necessity ablation
+
+The bounded CORRECTION01 cycle is COMPLETE. Per the reviewer's
+MAX REVIEW/FIX CYCLE = ONE directive, this cycle is closed and the
+next ACT can pick up PHASE 3 / PHASE 4.

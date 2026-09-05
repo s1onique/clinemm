@@ -1599,3 +1599,76 @@ in the header cross-references commit 1aaa65a84 (RED) and
 
 Both are scoped to subsequent ACTs / commits per the
 reviewer's MAX REVIEW/FIX CYCLE = ONE directive.
+
+## EV_PHASE_2_CORRECTION01_BOUNDED_REPAIR_COMPLETED (commit 93d4bd746)
+
+Per the factory reviewer's `HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS` verdict
+on commit 861e18502, CORRECTION01 was opened and is now COMPLETE.
+
+### P0 closed
+
+MULTI_TARGET_UNAVAILABLE_ORDER_BYPASS. The pre-CORRECTION01 aggregator
+was mutation-order dependent; `[UNAVAILABLE, OUTSIDE]` produced aggregate
+`outside` (last-wins). The lattice then ALLOWed the request under
+`editFiles=true + editFilesExternally=true`. Two invariants violated:
+
+  FAIL_CLOSED          — UNAVAILABLE must dominate
+  PERMUTATION_INVARIANCE — verdict must not depend on iteration order
+
+Post-CORRECTION01: `aggregateClassifications(classifications)` is a
+Set-test over the complete array; any permutation yields the same
+verdict. Severity: UNAVAILABLE > OUTSIDE > INSIDE.
+
+### P1 (relative paths) closed
+
+`classifyEditTarget` now resolves the requested path against
+`canonicalRoot` BEFORE realpath + containment. The parameter is renamed
+from `absoluteRequestedPath` to `requestedPath` to reflect the new
+contract.
+
+### P1 (apply_patch extractor) qualified
+
+10-test grammar matrix added (Add / Delete / Update / Update+Move /
+multi-file / malformed / inside-source-outside-move-destination /
+Update-without-Move-no-false-positive / editor regression / non-edit-
+tool-empty). All GREEN on the existing extractor; the suite is the
+qualification evidence.
+
+### P1 (fallback) closed
+
+The `targetAwareOptionsWired` guard around the editor/apply_patch
+composition is REMOVED. The legacy boolean short-circuit NEVER applies
+to editor/apply_patch. Missing options now produce ASK with explicit
+"workspace root unavailable" / "auto-approval settings unavailable"
+reasons.
+
+### Verifier output (verbatim)
+
+  Test Files  8 passed (8)
+       Tests  87 passed (87)
+
+  bunx tsc --noEmit: clean
+  bunx biome lint on 11 touched files: 0 fixes applied
+
+### Conservation (R5) — load-bearing preserved
+
+  editor inside + editFiles=true                  => unchanged ALLOW
+  editor outside + editFiles=true + external=true => ALLOW
+  editor outside + editFiles=true + external=false=> MUST ASK
+  editor outside + editFiles=false                => MUST ASK
+  editFiles=false (any target)                    => MUST ASK
+  classification unavailable                     => ASK (fail closed)
+  non-edit tool                                   => unchanged
+  apply_patch inside-only                         => unchanged
+  apply_patch inside->outside move                => ASK when external=false
+  RELATIVE target inside workspace                => INSIDE (NEW)
+  RELATIVE target outside workspace               => OUTSIDE (NEW)
+  MULTI-TARGET [UNAVAILABLE, OUTSIDE]             => UNAVAILABLE (NEW; P0)
+  missing getCwd/getAutoApprovalSettings          => ASK (NEW; P1 fallback)
+
+### PHASE 3 / PHASE 4 remain
+
+PHASE 3 (apply_patch movePath integration + R3/R4 deny/approve/direct
+ALLOW + R5 conservation) and PHASE 4 (necessity ablation) are
+AUTHORIZED for the next ACT / commit. The bounded CORRECTION01 cycle
+is closed.

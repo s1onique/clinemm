@@ -1061,3 +1061,64 @@ PHASE_2_DISPOSITION      = COMPLETE
 PHASE_3_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
 PHASE_4_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
 ```
+
+## 13. PHASE 2 CORRECTION01 bounded repair COMPLETED — P0 + P1s closed on real seam (commit 93d4bd746)
+
+Per the factory reviewer's HALT_MULTI_TARGET_FAIL_CLOSED_BYPASS verdict
+on commit 861e18502 (PHASE 2 GREEN), CORRECTION01 was opened and is now
+COMPLETE.
+
+```text
+PHASE 2 CORRECTION01  AUTHORIZED  + IMPLEMENTED + VERIFIED  -> COMPLETE
+
+Files changed:
+  A apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts
+  A apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts
+  A apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts
+  A apps/vscode/src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts
+  M apps/vscode/src/sdk/editor-path-authority.ts
+  M apps/vscode/src/sdk/sdk-interaction-coordinator.ts
+  M apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts
+
+  7 files changed, 792 insertions(+), 36 deletions(-)
+
+Verifier (vitest, real node 26 + vitest 4.1.10):
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-relative-paths.red.test.ts           (5 tests)  11ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-apply-patch-matrix.red.test.ts      (10 tests)  3ms
+  src/sdk/__tests__/editor-effective-destination-approval.correction01-fallback-fails-closed.red.test.ts   (3 tests) 210ms
+  src/sdk/__tests__/editor-effective-destination-approval.r0p0-multi-target-dominance.red.test.ts          (8 tests)  2ms
+  src/sdk/__tests__/editor-effective-destination-approval.r0-green.test.ts                                  (4 tests) 111ms
+  src/sdk/__tests__/editor-auto-approval-policy.r2-lattice.test.ts                                          (8 tests)   2ms
+  src/sdk/__tests__/editor-path-authority.r1-classifier.test.ts                                              (6 tests)   4ms
+  src/sdk/sdk-interaction-coordinator.test.ts                                                               (43 tests) ~30s
+
+  Test Files  8 passed (8)
+       Tests  87 passed (87)
+
+  bunx tsc --noEmit: clean
+  bunx biome lint on touched files: 11 files, 0 fixes applied
+```
+
+### P0 + P1 disposition
+
+```text
+P0  MULTI_TARGET_UNAVAILABLE_ORDER_BYPASS            FIXED
+P1  relative paths                                   FIXED
+P1  apply_patch extractor                            QUALIFIED
+P1  missing-options fallback                         FIXED
+```
+
+### Updated disposition
+
+```text
+RECON_LANE_STATUS        = CLOSED
+PRODUCTION_ACT_STATUS    = OPEN / PHASE_2_CORRECTION01_GREEN
+                           PHASE_3-PHASE_4_REMAIN
+NEW_REVIEW_ROUND         = NO
+MAX_REVIEW_FIX_CYCLE     = ONE  (satisfied; bounded CORRECTION01
+                                  implemented + verified + GREEN
+                                  in a single commit)
+PHASE_2_DISPOSITION      = COMPLETE (PHASE 2 + CORRECTION01)
+PHASE_3_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
+PHASE_4_DISPOSITION      = AUTHORIZED_FOR_NEXT_ACT
+```
