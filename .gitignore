@@ -1118,3 +1118,17 @@ apps/vscode/.factory/evidence/
 # at dist/dogfood/clinemm-4.1.16-50c1df4b9.vsix) are durable.
 !/.factory/acts/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07-WEBVIEW-WIRING.md
 !/.factory/evidence/ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION07-WEBVIEW-WIRING/
+# ACT-CLINEMM-FACTORIZE-F0-INVENTORY01 — RECON-ONLY inventory ACT. The 18
+# evidence files in this directory are the durable measured architecture map
+# (package inventory, dep graph, fork delta, fork-only nouns, coordinator
+# inventory, state-authority map, compatibility/shadow inventory, semantic
+# duplication, change radius, correction density, test seams, upstream
+# friction, SdkController responsibility map, package boundary diff,
+# factorization scorecard, local architecture invariants, recommendation,
+# final report). Recommended successor:
+# ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-AUTHORITY01
+# (working-context capture single-writer consolidation; F0 score 65/75).
+# ACT body file at .factory/acts/. Survives fresh clone so future F-series
+# ACTs reference the same evidence.
+!/.factory/acts/ACT-CLINEMM-FACTORIZE-F0-INVENTORY01.md
+!/.factory/evidence/ACT-CLINEMM-FACTORIZE-F0-INVENTORY01/
