@@ -195,14 +195,56 @@ MANUAL_RESULT_ABSENCE_SEMANTICS  = "no W publication => no setLatest =>
                                     prior carrier slot stays"
 ```
 
-Both contracts preserve the prior carrier slot when no new value is
-produced. They are NOT identical at the producer boundary (one is
-dedup-on-equality at the runtime emitter; the other is guard-on-undefined
-at the coordinator), but their **end-state effect on the carrier slot is
-the same**: keep the prior authoritative value.
+The mechanical end-state on `this._latest` is the same: both contracts
+preserve the prior carrier slot when no new value is produced. They
+are NOT identical at the producer boundary (one is dedup-on-equality at
+the runtime emitter; the other is guard-on-undefined at the
+coordinator).
 
-**ABSENCE_SEMANTICS_EQUAL = YES (at the carrier slot, not at the
-producer boundary).** This is the property the F1 outcome must preserve.
+**But that mechanical-equivalence argument conflates two different
+semantic claims:**
+
+- Normal absence claims: **the authoritative runtime W was evaluated
+  and did not change** (`before === after`). Keeping the previous
+  carrier value is therefore justified by *runtime equality*.
+- Manual absence claims: **no new W value was supplied** by the
+  producer (the guard fires because the field is non-numeric). It
+  does **NOT**, by itself, establish that the new W equals the
+  previous W. Manual compaction may have just radically changed the
+  effective message projection.
+
+So:
+
+```
+NO_VALUE
+≠
+VALUE_UNCHANGED
+```
+
+This is exactly the distinction the post-compaction bug exploited:
+compaction changed the effective context but the host retained the
+old W. Canonizing "retain previous W" merely because both code paths
+happen to leave `_latest` untouched would have prevented us from
+seeing that bug.
+
+**ABSENCE_SEMANTICS_EQUAL = NOT_YET_PROVEN** at the producer-boundary
+semantic level. The mechanical end-state is the same, but the
+*justification* for preserving the prior value is different, and
+whether manual absence is reachable when manual compaction succeeded
+is itself an open question.
+
+The next ACT (F1-CHARACTERIZATION) must answer the bounded question:
+
+> **Can successful manual compaction on current production code ever
+> return `currentWorkingContextEstimate === undefined`?**
+
+- If structurally unreachable
+  → `MANUAL_ABSENCE_ON_SUCCESS = UNREACHABLE`
+  → the absence distinction becomes irrelevant to Outcome B.
+- If reachable
+  → a separate contract question opens (retain old W? clear W?
+    mark W unavailable?). Do **not** silently answer it during
+    factorization.
 
 ## 3.7 Architectural prior (per third-C1)
 
@@ -237,14 +279,14 @@ OWNERSHIP of the resulting W is different:
 
 ## 3.8 Frozen discriminator table
 
-| Discriminator                    | Answer | Load-bearing evidence |
-| -------------------------------- | ------ | --------------------- |
-| `SAME_SEMANTIC_STATE`            | YES    | Both represent host-visible working-context occupancy for the compacted transcript. Same producer (`publishWorkingContextEstimate` / `publishWorkingContextEstimateMetadataOnly` in `compaction.ts:824-915`) computes both. Same lifetime: "until the next normal prepare-turn" (chain 2 §2.3; `sdk-compaction.ts:62-66`). |
-| `SAME_OWNER`                     | NO     | Normal: agents-owned (`state.currentWorkingContextEstimate`, `working-context-state-changed` event payload). Manual: vscode-owned (coordinator `publishPostCompactionW` callback projection value from core producer). The runtime is not invoked. Upstream: `@cline/core` owns compaction; `@cline/agents` owns the turn loop + runtime events (`sdk/packages/README.md:13-16`). |
-| `SAME_EVENT_DOMAIN`              | NO     | `working-context-state-changed` is emitted by `AgentRuntime` from its OWN state (`agent-runtime.ts:1315-1347`); manual compaction does NOT mutate that state (trace 1) and CANNOT legitimately emit the event (trace 3). Fabricating one would require writing to `state.currentWorkingContextEstimate` from outside the runtime OR emitting a synthesized snapshot that lies about runtime state — both layering/semantic violations. |
-| `ABSENCE_SEMANTICS_EQUAL`        | YES    | At the carrier slot: both contracts preserve the prior authoritative value when no new value is produced. NORMAL_EVENT_ABSENCE = dedup-on-equality at runtime emitter. MANUAL_RESULT_ABSENCE = guard-on-undefined at coordinator (line 582). Different producer-boundary contracts, same carrier-slot end-state. |
-| `SHARED_PUBLICATION_SEAM_EXISTS` | NO     | No shared seam exists that would carry both. Normal publishes via the `working-context-state-changed` runtime event from `AgentRuntime`. Manual publishes via a coordinator `publishPostCompactionW` callback. The only candidate seam — synthesizing a runtime event from manual compaction — would require violating `agent-runtime.ts:945` (state bind) AND trace 3 (subscription legitimacy). |
-| `SELECTED_OUTCOME`               | B      | See §3.9. |
+| Discriminator                    | Answer          | Load-bearing evidence |
+| -------------------------------- | --------------- | --------------------- |
+| `SAME_SEMANTIC_VALUE`            | YES             | Both represent host-visible working-context occupancy for the compacted transcript. Same producer (`publishWorkingContextEstimate` / `publishWorkingContextEstimateMetadataOnly` in `compaction.ts:824-915`) computes both. Same lifetime: "until the next normal prepare-turn" (chain 2 §2.3; `sdk-compaction.ts:62-66`). **The semantic *quantity* is the same; the semantic *state-owner* is not** (see `SAME_OWNER` below). |
+| `SAME_STATE_OWNER`               | NO              | Normal: agents-owned (`state.currentWorkingContextEstimate`, `working-context-state-changed` event payload). Manual: vscode-owned (coordinator `publishPostCompactionW` callback projection value from core producer). The runtime is not invoked. Upstream: `@cline/core` owns compaction; `@cline/agents` owns the turn loop + runtime events (`sdk/packages/README.md:13-16`). |
+| `SAME_EVENT_DOMAIN`              | NO              | `working-context-state-changed` is emitted by `AgentRuntime` from its OWN state (`agent-runtime.ts:1315-1347`); manual compaction does NOT mutate that state (trace 1) and CANNOT legitimately emit the event (trace 3). Fabricating one would require writing to `state.currentWorkingContextEstimate` from outside the runtime OR emitting a synthesized snapshot that lies about runtime state — both layering/semantic violations. |
+| `ABSENCE_SEMANTICS_EQUAL`        | **NOT_YET_PROVEN** | Mechanical end-state on `this._latest` is the same (both contracts preserve prior carrier value on no-new-W), but the *justification* differs: normal absence = runtime equality (`before === after`); manual absence = no value supplied (guard on `typeof !== "number"`). `NO_VALUE ≠ VALUE_UNCHANGED`. See §3.6.3. **Pending discriminator: `SUCCESS_WITHOUT_W_REACHABLE` (F1-CHARACTERIZATION).** If structurally unreachable, this row becomes IRRELEVANT_TO_OUTCOME_B. |
+| `SHARED_PUBLICATION_SEAM_EXISTS` | NO              | No shared seam exists that would carry both. Normal publishes via the `working-context-state-changed` runtime event from `AgentRuntime`. Manual publishes via a coordinator `publishPostCompactionW` callback. The only candidate seam — synthesizing a runtime event from manual compaction — would require violating `agent-runtime.ts:945` (state bind) AND trace 3 (subscription legitimacy). |
+| `SELECTED_OUTCOME`               | B               | See §3.9. |
 
 ## 3.9 Selected outcome: B (one carrier assignment primitive, two legitimate producer ingresses, do NOT fabricate event)
 
@@ -292,71 +334,152 @@ In this case:
 
 - Both ingresses already converge on the SAME carrier slot
   (`this._latest` in `WorkingContextHostCapture`).
-- The carrier-slot absence semantics are equivalent (trace 5).
-- The two ingresses are mechanically compatible (both take a number | null
-  and write unconditionally; both preserve `UNDEFINED_W_STALE_REUSE = FORBIDDEN`).
+- The carrier-slot **mechanical** absence semantics are equivalent
+  (both preserve prior value on no-new-W), but their *semantic
+  justifications* differ (normal = runtime equality; manual = no
+  value supplied) — see §3.6.3. This is why
+  `ABSENCE_SEMANTICS_EQUAL = NOT_YET_PROVEN` rather than YES, and is
+  the bounded P1 carried into F1-CHARACTERIZATION.
+- The two ingresses are mechanically compatible at the carrier slot
+  (both take a number | null and write unconditionally; both preserve
+  `UNDEFINED_W_STALE_REUSE = FORBIDDEN`).
 
 There IS therefore a single carrier slot with two legitimate producer
-ingresses. That is exactly Outcome B's definition. B-prime is not
-appropriate because the factor that IS shared (the carrier slot) is the
-factor B-prime would deny.
+ingresses. That is exactly Outcome B's definition. **Outcome B does
+NOT depend on absence-semantics equality at the producer boundary**;
+it depends only on:
+
+```
+two honest producers
+one host cache
+one mutation primitive (per §3.9.4)
+```
+
+The common factor can still be just the assignment of an actual W
+value; the absence case is separately handled by the
+`SUCCESS_WITHOUT_W_REACHABLE` discriminator.
+
+B-prime is not appropriate because the factor that IS shared (the
+carrier slot) is the factor B-prime would deny.
 
 ### 3.9.4 B implementation skeleton (for the next ACT, not this one)
 
-Outcome B, with the discriminator frozen, becomes:
+Per the fourth-C1 design correction: keep the B factorization
+**smaller**. The architectural prior is the same (two legitimate
+producer ingresses → one mutation primitive → one cache); but the
+implementation does NOT need new state, new enums, or new public
+surface to achieve it.
 
-- **Keep** both ingresses: `observe(event)` (canonical, runtime-emit)
-  and `setLatest(estimate)` (transport-only bypass for the manual
-  compaction producer seam).
-- **Unify** their semantics on the carrier slot:
-  - Both write `this._latest = typeof w === "number" ? w : null`
-    (already true; the carrier code preserves this invariant).
-  - Both treat absence as "leave the prior value alone" (already true
-    at runtime emit time via `agent-runtime.ts:1319` dedup and at
-    coordinator call time via `sdk-compaction-coordinator.ts:582`
-    guard).
-- **Add provenance**: each `this._latest = ...` write records the
-  ingress source (the `W_INGRESS` enum: `RUNTIME_EVENT` |
-  `MANUAL_COMPACTION`), so the host can mechanically distinguish the
-  two producer sources when needed (e.g. for the post-restore test
-  that asserts the bar reflects the manual compaction W).
-- **Rename for clarity**: keep `setLatest` as a testable public seam
-  but rename to something provenance-revealing, e.g.
-  `setLatestFromManualProjection(estimate)`. The runtime ingress
-  keeps `observe(event)`. Both feed the same carrier slot.
-- **Do NOT** delete `setLatest`. **Do NOT** fabricate a runtime event.
-- **Do NOT** change the runtime event's payload contract
+**PROVEN_TARGET = ONE_ASSIGNMENT_PRIMITIVE** (minimal, justified by
+the discriminator):
+
+```ts
+private assign(estimate: number | undefined): void {
+    this._latest = typeof estimate === "number" ? estimate : null
+}
+
+observe(event) {
+    this.assign(event.snapshot.currentWorkingContextEstimate)
+}
+
+setLatest(estimate) {
+    this.assign(estimate)
+}
+```
+
+(A rename of `setLatest` to a more accurate seam name, e.g.
+`setLatestFromManualProjection`, is acceptable — naming is not
+state. Justification for the rename is observability, not
+provenance.)
+
+**NOT_YET_JUSTIFIED** (deferred until a real downstream consumer or
+invariant demands it):
+
+- Provenance recording per write (`W_INGRESS` enum).
+- A second mutable provenance field alongside `_latest`.
+- A public W_INGRESS enum surface.
+- A new projection field on the carrier.
+
+If tests need to prove which ingress executed, use injection/spies at
+the ingress boundary (e.g. count `assign` calls with a probe
+parameter; spy on `setLatest` directly). **Do not turn test
+observability into architecture.**
+
+Before/after shape (for the ACT that lands it, not this one):
+
+```
+MUTATION SEMANTICS BEFORE = duplicated
+  (observe: number|null normalization; setLatest: number|null
+   normalization — same intent, two sites)
+
+MUTATION SEMANTICS AFTER  = one primitive
+  (private assign() owns the unconditional normalization)
+
+PRODUCERS                  = still two, legitimately
+  (observe from runtime event; setLatest from manual projection
+   callback)
+
+NEW STATE                  = zero
+  (no provenance field, no ingress enum, no projection field)
+```
+
+The factorization objective is **two honest producers writing one
+host cache through one assignment primitive**. Provenance is a
+different problem.
+
+**Do NOT**:
+
+- Delete `setLatest` (F0 deletion predicate preserved).
+- Fabricate a runtime event from manual compaction.
+- Change the runtime event's payload contract
   (`snapshot: this.snapshot()`).
+- Add provenance state, a `W_INGRESS` enum, or a new projection
+  field.
 
-### 3.9.5 Restated non-circular deletion predicate for B
+### 3.9.5 Minimal-B soundness predicate
 
-Because B does NOT delete `setLatest`, the deletion predicate from
-F0 §19.3 is reframed for B's consolidation contract:
+Per the fourth-C1 correction: the predicate for B is smaller than the
+proposed 7-condition version. Provenance constraints (former 6) and
+runtime-event-contract constraints (former 7) are NOT part of the B
+predicate — they belong to either:
 
-> The B-consolidation is sound when ALL of the following hold (none of
-> which depend on the consolidation itself for their truth):
+- the F0 deletion predicate (if we were deleting `setLatest`), or
+- a future invariant justified by a real downstream consumer.
+
+The B soundness predicate is:
+
+> The minimal-B factorization is sound when ALL of the following hold
+> (none of which depend on the factorization itself for their truth):
 >
 > 1. Every successful producer of host-visible W can reach one of the
 >    two legitimate ingresses (runtime event OR manual projection
 >    callback) WITHOUT going through the other.
-> 2. Both ingresses preserve `UNDEFINED_W_STALE_REUSE = FORBIDDEN`
->    (unconditional assignment semantics, prior value retained on
->    no-new-W cases).
+> 2. Both ingresses normalize to the same carrier-slot write
+>    (`typeof === "number" ? value : null`) via the shared
+>    `assign()` primitive — i.e. **MUTATION_SEMANTICS are unified**, no
+>    longer duplicated.
 > 3. Manual compaction updates the bar BEFORE the divider's
 >    `postStateToWebview()` so the next published `ExtensionState`
 >    carries the new W.
-> 4. Normal prepare-turn publication via runtime event remains
->    unchanged in payload contract, dedup, and timing.
-> 5. Skipped/failed compaction publishes NO W (the carrier slot keeps
->    its prior authoritative value from the runtime event stream).
-> 6. (B-specific) The carrier slot records provenance per write so
->    downstream observers can distinguish the two ingresses.
-> 7. (B-specific) The runtime event's payload contract is unchanged;
->    manual compaction does NOT fabricate events.
+> 4. Skipped/failed compaction publishes NO W; the carrier slot keeps
+>    its prior authoritative value from the runtime event stream.
 
-Conditions 1–5 are the original F0 deletion predicate restated (none
-deleted because B is not deletion); 6–7 are the additional B-specific
-constraints.
+Conditions 1, 3, 4 are the original F0 §19.3 non-circular deletion
+conditions, restated for B's *consolidation* contract (B does not
+delete `setLatest`; condition 2 is the consolidation's own
+contribution).
+
+The four conditions together guarantee:
+
+```
+PRODUCERS                  = two honest ingresses
+MUTATION SEMANTICS         = one primitive
+CARRIER STATE              = one cache value, no provenance
+RUNTIME EVENT              = unchanged
+FABRICATED EVENT           = zero
+```
+
+Which is exactly the B factorization objective — nothing more.
 
 ## 3.10 What this commit does NOT do
 
@@ -370,6 +493,11 @@ constraints.
 - NO `setLatest` deletion.
 - NO runtime event fabrication.
 - NO refactor of either ingress.
+- NO `assign()` primitive introduced (deferred to the ACT that lands
+  the factorization).
+- NO `W_INGRESS` enum, NO per-write provenance field, NO new
+  projection field on the carrier (deferred to a future ACT that
+  demonstrates a real downstream consumer need).
 - NO cleanup of F0's blank-at-EOF residue (P2 deferred per third-C1).
 - NO repair of `.factory/gate-summary.json`.
 
@@ -379,9 +507,186 @@ ENTRY_HEAD         = b8d11710e7c9ad6a58ebd1f636670cc5529c2f52
 FROZEN_AT          = b8d11710e7c9ad6a58ebd1f636670cc5529c2f52
 DESCENDS_FROM      = F0 §19.3 frozen replacement language + F0 §17
                      recommendation + F0 §18 final report + third-C1
-                     reviewer's load-bearing sharpening
-PRODUCED_BY        = F1 RECON discriminator freeze (no production
-                     touched)
+                     reviewer's load-bearing sharpening + fourth-C1
+                     reviewer's bounded P1 + design correction
+PRODUCED_BY        = F1 RECON discriminator freeze + fourth-C1
+                     correction landing (no production touched)
 NEXT_EVIDENCE_FILE = (none — F1 RECON complete; next ACT is
-                     F1-CHARACTERIZATION with GREEN characterization
-                     + selected-outcome documentation)
+                     F1-CHARACTERIZATION with the bounded
+                     `SUCCESS_WITHOUT_W_REACHABLE` discriminator +
+                     selected-outcome documentation)
+
+## 3.12 Fourth-C1 correction log (PASS_WITH_ONE_BOUNDED_P1)
+
+### 3.12.1 Reviewer verdict (verbatim)
+
+> PASS_WITH_ONE_BOUNDED_P1 — C1: GO TO F1 CHARACTERIZATION
+
+The architectural prior (Outcome B) survived the review. One bounded
+P1 was identified (`ABSENCE_SEMANTICS_EQUAL` overclaimed) and one
+design correction (provenance recording was speculative).
+
+### 3.12.2 Bounded P1: ABSENCE_SEMANTICS_EQUAL overclaimed
+
+**Claim frozen by third-C1**:
+> "ABSENCE_SEMANTICS_EQUAL = YES (at the carrier slot, not at the
+> producer boundary)."
+
+**Fourth-C1 finding**: the claim conflates two different semantic
+justifications.
+
+- Normal absence: `before === after` ⇒ authoritative runtime W was
+  evaluated and did not change. Carrier retains prior value by
+  *runtime equality*.
+- Manual absence: `typeof !== "number"` ⇒ no new W was supplied.
+  Carrier retains prior value by *absence of input*. **It does NOT
+  establish `new W == previous W`.**
+
+```
+NO_VALUE      ≠     VALUE_UNCHANGED
+```
+
+**Correction applied**:
+- §3.6.3 reframed: ABSENCE_SEMANTICS_EQUAL = **NOT_YET_PROVEN** at
+  the producer-boundary semantic level.
+- §3.8 frozen table: row updated from YES → NOT_YET_PROVEN with the
+  pending discriminator `SUCCESS_WITHOUT_W_REACHABLE` (F1-CHARACTERIZATION).
+
+### 3.12.3 Bounded P1 does NOT refute Outcome B
+
+The fourth-C1 explicitly verified that Outcome B does NOT depend on
+absence-semantics equality:
+
+> "Because Outcome B depends on the fact that there are:
+>   two honest producers
+>   one host cache
+> It does not depend on their no-value boundary semantics being
+> identical."
+
+So Outcome B is preserved. What changes:
+
+- §3.9.5 predicate: shrunk from 7 conditions to **4** (B-specific
+  provenance + runtime-event-contract conditions removed; they
+  belong elsewhere).
+- §3.9.4 implementation skeleton: shrunk to **PROVEN_TARGET =
+  ONE_ASSIGNMENT_PRIMITIVE** with explicit **NOT_YET_JUSTIFIED**
+  list (provenance, ingress enum, projection field).
+
+### 3.12.4 Design correction: provenance is not yet justified
+
+**Claim frozen by third-C1** (in §3.9.4):
+> "add `W_INGRESS = RUNTIME_EVENT | MANUAL_COMPACTION` and record
+> provenance per write."
+
+**Fourth-C1 finding**: nothing in the discriminator demonstrates a
+consumer that needs provenance. Adding provenance would yield:
+
+```
+one cache value
++ a second mutable provenance value
++ consistency invariant between them
++ tests
++ future consumers
+```
+
+That is the opposite of the current ACT's purpose. The factorization
+objective is:
+
+```
+two legitimate producer ingresses
+→ one mutation primitive
+→ one cache
+```
+
+Achieved minimally by a single private `assign()` method called from
+both ingresses — **zero new state**.
+
+**Correction applied**:
+- §3.9.4: speculative provenance REMOVED. The implementation skeleton
+  is now strictly one private primitive + two ingress wrappers.
+- §3.10: explicit "NO `W_INGRESS` enum, NO per-write provenance
+  field, NO new projection field" added.
+- §3.9.5: condition 6 (provenance) removed from the B predicate.
+
+### 3.12.5 Narrowed wording: SAME_SEMANTIC_VALUE vs SAME_STATE_OWNER
+
+**Claim frozen by third-C1**:
+> "SAME_SEMANTIC_STATE = YES"
+
+**Fourth-C1 finding**: the two values are semantically the same
+**quantity** but not the same **state-ownership instance**.
+
+```
+SAME_SEMANTIC_VALUE = YES
+SAME_STATE_OWNER    = NO
+```
+
+is more precise.
+
+**Correction applied**:
+- §3.8 frozen table: row renamed `SAME_SEMANTIC_STATE` →
+  `SAME_SEMANTIC_VALUE` and the split is now explicit; new
+  `SAME_STATE_OWNER` row inserted.
+- No ACT-level rename (the discriminator row stays inside this
+  evidence file only).
+
+### 3.12.6 Next ACT slice (the bounded characterization)
+
+Per the fourth-C1: do NOT open another grand recon. Continue F1 as
+**CHARACTERIZATION** with one epistemic purpose:
+
+> **Can current successful manual compaction on production code ever
+> return `currentWorkingContextEstimate === undefined`?**
+
+The characterization matrix is bounded to four cases:
+
+| Case                                                               | `compacted` | Producer W | Required observation |
+| ------------------------------------------------------------------ | ----------: | ---------: | -------------------- |
+| successful current manual compaction                               |        true |     number | publish exactly that W |
+| no-op / cannot compact                                             |       false |  undefined | no publication       |
+| producer contract violation / injected successful result without W |        true |  undefined | characterize current behavior; do NOT decide policy yet |
+| normal runtime unchanged W                                         |         n/a |  same number | no event; prior carrier retained |
+
+The third row is load-bearing:
+
+- If `compacted=true && W=undefined` is structurally impossible on
+  the current producer seam, then
+  `MANUAL_ABSENCE_ON_SUCCESS = UNREACHABLE` and the absence
+  distinction becomes irrelevant to Outcome B.
+- If it IS reachable, a separate contract question opens (retain old
+  W? clear W? mark W unavailable?). Do NOT silently answer that
+  during factorization.
+
+### 3.12.7 Fourth-C1 verdict (verbatim summary)
+
+```
+ACT              = ACT-CLINEMM-FACTORIZE-F1-WORKING-CONTEXT-CARRIER-
+                   AUTHORITY01
+RECON            = PASS
+OUTCOME_B        = ACCEPTED
+P0               = NONE
+P1               = ABSENCE_SEMANTICS_EQUAL overclaimed;
+                   characterize whether successful current manual
+                   compaction can return no W before freezing that
+                   invariant.
+DESIGN_RESIDUE   = provenance recording NOT justified; do not add it
+                   absent a consumer/invariant.
+P2               = EOF hygiene only
+PRODUCTION_EDIT  = NOT YET
+NEXT             = bounded F1 characterization
+
+C1: GO. Keep Outcome B, but make it smaller: prove the successful-
+manual-compaction absence case, then factorize the assignment
+primitive, not the event topology — and don't invent provenance
+state unless evidence forces it.
+```
+
+### 3.12.8 Repository identity after fourth-C1 corrections
+
+F0_CLOSURE_HEAD          = 49e7069c1eb56adf753286d72427f7bf17755925
+LEAMAS_P2_ADDENDUM_HEAD  = 0debc0cc133ce54f02eff3e6e0d673c2571cbf40
+F1_RECON_HEAD            = b8d11710e7c9ad6a58ebd1f636670cc5529c2f52
+F1_DISCRIMINATOR_HEAD    = f737f43d3a4daf73f62a07b453e9077459625613
+F1_CORRECTION04_HEAD     = (this commit; recorded in epic board line 1)
+BRANCH                   = main
+WORKTREE                 = clean
