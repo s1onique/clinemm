@@ -31,7 +31,9 @@ the useful factorization.
 ```
 SINGLE_SEMANTIC_OWNER         = YES
 MULTIPLE_VALUE_PRODUCERS      = NO
-MULTIPLE_MUTATION_AUTHORITIES = NO
+MULTIPLE_MUTATION_AUTHORITIES = NO   (per §13: 2 write entry points,
+                                       1 semantic mutation rule set,
+                                       not multiple semantic authorities)
 FRESH_READ_REQUIRED           = YES
 REQUEST_BOUND_LIFETIME        = YES
 HOST_CORE_DUPLICATION         = NO

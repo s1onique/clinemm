@@ -33,8 +33,12 @@ There is no proposed refactor. Therefore no ablation is needed.
 ## §19 Conservation matrix — N/A (no GREEN change)
 
 C1–C17 are not evaluated because no production change is proposed. The matrix
-exists in the test corpus already (per file-04 inventory), and every C-item is
-GREEN at HEAD.
+exists in the test corpus already (per file-04 inventory with the relabeled
+honest-evidence convention: SOURCE_MAPPING_VERIFIED = 16/16, INHERITED_EXECUTED_GREEN
+= 16/16 per predecessor CORRECTION01–05 / F0 / F1 closures, EXECUTED_IN_THIS_ACT = 0/16
+because §17 says Outcome D does not require re-execution). Each C-item has
+witness test(s) that have been INHERITED_EXECUTED_GREEN at HEAD but were not
+re-run by this ACT.
 
 ## §25 Review algorithm answers
 
@@ -70,8 +74,10 @@ GREEN at HEAD.
    the converged shape CORRECTION03–05 were aiming for.
 
 8. Do conservation tests remain green?
-   Yes (per file-04 inventory; not re-executed in this ACT because no production
-   edit was made and the existing test corpus was GREEN at predecessor closure).
+   Yes per INHERITED_EXECUTED_GREEN (per file-04 inventory; not re-executed
+   in this ACT because no production edit was made and §17 says Outcome D
+   does not require re-execution). Source-mapping verified 16/16; prior
+   GREEN history inherited from CORRECTION01–05 / F0 / F1 closures.
 
 9. Any hidden public/state/protocol delta?
    No. No new public API, no new protocol field, no new runtime state, no

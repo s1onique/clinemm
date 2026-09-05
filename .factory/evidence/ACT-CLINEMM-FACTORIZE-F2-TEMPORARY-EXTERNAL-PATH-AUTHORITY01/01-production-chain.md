@@ -50,14 +50,31 @@ Declarations:
 ```
 DURABLE_SEMANTIC_OWNER         = clinemmTemporaryExternalPathAuthorities key in
                                  ~/.cline/data/globalState.json
-WRITE_MUTATION_AUTHORITIES     = 2 (both call same validator + same setGlobalState):
+DURABLE_WRITE_ENTRY_POINTS     = 2 (both call same validator + same setGlobalState):
                                  - apps/vscode/src/core/controller/state/updateSettings.ts:340
                                  - apps/vscode/src/core/controller/state/updateSettingsCli.ts:301
-WRITE_VALIDATORS               = 1 shared validator, 2 callers:
+SEMANTIC_MUTATION_RULE_SETS    = 1 (one validator defines all write rules):
                                  - apps/vscode/src/shared/storage/temporaryExternalPathAuthorities.ts:284
                                    (validateTemporaryExternalPathAuthorities)
                                  called from updateSettings.ts:332 and updateSettingsCli.ts:293
+MULTIPLE_MUTATION_AUTHORITIES  = NO
+                                 (precise wording: two write ENTRY POINTS, one
+                                  SEMANTIC MUTATION RULE SET; the validator
+                                  itself does not mutate — the handler at the
+                                  entry point is what mutates via setGlobalState)
 DUPLICATE_WRITE_RULES          = NO
 ```
 
-Multiple callers of one validator is **not** multiple semantic authorities (per §8 distinction).
+Per the eighty-second-pass P2 wording precision: two durable mutation entry
+points (`updateSettings` and `updateSettingsCli`) both execute the same
+validator and the same semantic write contract. So the distinction is:
+
+```text
+DURABLE_WRITE_ENTRY_POINTS   = 2   (two call sites that mutate)
+SEMANTIC_MUTATION_RULE_SETS  = 1   (one validator, one write contract)
+MULTIPLE_MUTATION_AUTHORITIES = NO  (per §13 discriminator definition)
+```
+
+Multiple callers of one validator is **not** multiple semantic authorities
+(per §8 distinction); the validator defines the rules, but the entry points
+are what perform the durable mutation via `setGlobalState`.
