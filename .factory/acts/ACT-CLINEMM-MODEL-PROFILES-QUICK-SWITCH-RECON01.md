@@ -14,9 +14,28 @@
 > TESTS             = characterization only where necessary; no RED suite
 > ```
 >
-> This ACT opens after F3/F3B Factorize falsification closure. The prerequisite seam
-> is clean per reviewer's F3B verdict (`PASS_F3_NO_FACTORIZATION_NEEDED`), so the
-> Model Profiles feature can begin product recon without an upstream blocker.
+> ```text
+> PREDECESSOR_SCOPE =
+>   The Factorize prerequisite is closed: F3B found no production repair
+>   required before Model Profiles. The broader provider/session config seam
+>   is NOT claimed globally clean.
+>
+>   Concretely, the F3B scope-of-claim correction froze:
+>     FACTORIZE_PREREQUISITE_REPAIR_REQUIRED = NO
+>     FOUR_PROPOSED_CONSOLIDATION_TARGETS   = NO_REPAIR_JUSTIFIED
+>     T17                                  = NOT_REPRODUCED
+>     F3_FACTORIZATION_REQUIRED            = NO
+>     PROVIDER_SESSION_CONFIG_SEAM_GLOBALLY_CLEAN = NOT_CLAIMED  (F3B closure framing)
+>
+>   Modeling this ACT's posture toward those facts:
+>     MODEL_PROFILES_ARCHITECTURAL_BLOCKER     = NONE_PROVEN
+>     PROVIDER_SESSION_CONFIG_GLOBALLY_CLEAN   = NOT_CLAIMED
+> ```
+>
+> Model Profiles recon therefore begins without an upstream architecture blocker,
+> but it must not treat the seam as clean. Dual persisted representations, legacy
+> bridges, field-specific derivations, and dead migration residue remain present
+> and will be observed by §6–§13 source recon. They do not block this ACT.
 >
 > Two separately-registered live bugs remain **out of scope** and unaffected:
 > `ACT-CLINEMM-EFFECTIVE-MODEL-CONTEXT-WINDOW-AUTHORITY-RECON01` (MiniMax 1.3M→24.6k)
