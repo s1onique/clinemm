@@ -66,6 +66,11 @@ afterAll(() => {
 	} catch {
 		/* ignore */
 	}
+	try {
+		fs.rmSync(insideDir, { recursive: true, force: true })
+	} catch {
+		/* ignore */
+	}
 })
 
 describe("ACT-CLINEMM-EDITOR-EFFECTIVE-DESTINATION-APPROVAL01 CORRECTION03 - dangling symlink classification", () => {

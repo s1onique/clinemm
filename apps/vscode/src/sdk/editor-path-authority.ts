@@ -38,13 +38,22 @@
  *
  *      CORRECTION03 (factory review `HALT_DANGLING_SYMLINK_EFFECTIVE_DESTINATION_BYPASS`):
  *      The "nearest existing ancestor" walk uses LEXICAL existence
- *      (`fs.existsSync`), not `fs.realpathSync` success. A lexically-existing
- *      component whose realpath fails (e.g. a dangling symlink) is treated
- *      as the deepest existing ancestor, and the caller's realpath attempt
- *      on that component is what determines canonicalization. If the deepest
- *      lexically-existing component's realpath fails (it is an unresolvable
- *      symlink), the classifier maps to `unavailable` (fail closed) rather
- *      than climbing past it to an older ancestor. This closes the geometry:
+ *      (`fs.lstatSync`, which does NOT follow symlinks — NOT
+ *      `fs.existsSync`, which DOES follow symlinks on macOS by
+ *      default). The lstat vs existsSync distinction is critical:
+ *      `existsSync` returns false for a dangling symlink whose target
+ *      is absent, so a walk keyed on `existsSync` would silently climb
+ *      past the dangling component to an older ancestor (the exact
+ *      bypass the reviewer flagged). Only `lstatSync` reliably
+ *      reports the lexical existence of the symlink itself.
+ *
+ *      A lexically-existing component whose realpath fails (e.g. a
+ *      dangling symlink) is treated as the deepest existing ancestor,
+ *      and the caller's realpath attempt on that component is what
+ *      determines canonicalization. If the deepest lexically-existing
+ *      component's realpath fails (it is an unresolvable symlink), the
+ *      classifier maps to `unavailable` (fail closed) rather than
+ *      climbing past it to an older ancestor. This closes the geometry:
  *
  *        workspace/escape-link -> /outside/new-file.txt   (ABSENT)
  *
