@@ -1,6 +1,6 @@
 # Evidence 06a — Credential Storage Capability Discriminator
 
-> Bounded evidence file. Answers the five yes/no/source-bound questions raised by the §12 design freeze review (HALT_PROVIDER_INSTANCE_CREDENTIAL_STORE_NOT_BOUND), from the ClineMM source of truth at ACT_HEAD_AT_AUTHOR.
+> Bounded evidence file. Answers the five yes/no/source-bound questions raised by the §12 design freeze review (HALT_PROVIDER_INSTANCE_CREDENTIAL_STORE_NOT_BOUND), from the ClineMM source of truth at ACT_HEAD_AT_AUTHOR. Also folds in the active-instance binding authority correction raised by the seventh reviewer's HALT_GLOBAL_ACTIVE_INSTANCE_REINTRODUCES_SESSION_AUTHORITY_COLLAPSE.
 >
 > This file does not rewrite `06-design-freeze.md`. It supplies the discriminator the §12 freeze skipped and binds the runtime/storage decision the reviewer demanded before the foundation implementation phase can open.
 
@@ -304,9 +304,12 @@ Importantly: C does not require rewriting §12's `storage geometry γ` or `seman
 ### `instances.json` shape (per §12 γ + this discriminator)
 
 ```text
+// NOTE: NO activeInstanceId field. instances.json is
+// definition storage ONLY. Active-instance binding is the
+// caller's responsibility (see 06-design-freeze.md §2-pre
+// Authority).
 {
   "version": 1,
-  "activeInstanceId": "anthropic-prod",
   "instances": {
     "anthropic-prod": {
       "instanceId":   "anthropic-prod",
@@ -341,12 +344,21 @@ This is the smallest viable C. It does **not** touch `SECRETS_KEYS`, does **not*
 ### Read path (APPLY phase — read-only)
 
 ```text
-applyProviderConfigurationInstance(instanceId):
-  // 1. Resolve instance record from instances.json (idempotent: same instance = no-op).
-  inst = loadInstance(instanceId)
-  if (instanceId === currentActiveInstanceId) return
+// fromInstanceId and toInstanceId are BOTH supplied by the
+// caller. Foundation does NOT consult or maintain a global
+// "current active" pointer (see 06-design-freeze.md §2-pre
+// Authority). Whoever owns the active-instance binding
+// (per-session, global default, profile pointer, R1 harness)
+// invokes this with both ids.
+applyProviderConfigurationInstance(fromInstanceId, toInstanceId):
+  // 1. Idempotency: caller asked for the same instance it
+  //    already has active = no-op.
+  if (toInstanceId === fromInstanceId) return
 
-  // 2. Resolve credential VALUE from secrets.json (READ-ONLY).
+  // 2. Resolve instance record from instances.json.
+  inst = loadInstance(toInstanceId)
+
+  // 3. Resolve credential VALUE from secrets.json (READ-ONLY).
   secretValue = stateManager.getInstanceSecret(inst.credentialRef.name)
   if (!secretValue) {
     throw new Error(
@@ -354,16 +366,21 @@ applyProviderConfigurationInstance(instanceId):
     )
   }
 
-  // 3. Project to legacy ApiConfiguration + ProviderSettings (single function).
+  // 4. Project to legacy ApiConfiguration + ProviderSettings
+  //    (single function).
   patch = projectInstanceToLiveConfig(inst, secretValue)
   applyApiConfigurationPatch(patch.apiConfigPatch, targetMode)
   if (patch.providerSettingsPatch) applyProviderSettingsPatch(...)
 
-  // 4. Set new active id.
-  setActiveInstanceId(instanceId)
-
   // 5. Rebuild active session (gated on isRunning === false).
-  rebuildActiveSession({ reason: "instance-switch", ... })
+  //    NOTE: NO setActiveInstanceId here. The caller owns the
+  //    active-instance binding; the Foundation does not
+  //    consult or maintain any global pointer.
+  rebuildActiveSession({
+    reason: "instance-switch",
+    fromInstanceId,
+    toInstanceId,
+  })
 ```
 
 ### DEFINE/UPDATE phase (separate code path — explicit, out of APPLY)
@@ -468,12 +485,38 @@ PRESERVED_INVARIANTS =
   PRODUCTION_HEAD                            (unchanged: e06af528...)
   ACT_HEAD_AT_AUTHOR                         (unchanged: 0a3d9c2a5)
   RUNTIME_STRATEGY_B                         (unchanged)
-  STORAGE_GEOMETRY_γ                         (unchanged at file level;
-                                             refined at authority wording)
+  STORAGE_GEOMETRY_γ                         (definitions-only; active
+                                             binding explicitly NOT
+                                             owned by foundation —
+                                             see GLOBAL_ACTIVE_INSTANCE_ID
+                                             = FORBIDDEN below)
   SEMANTIC_CREDENTIAL_IDENTITY               (unchanged: credentialRef.name)
   R1_GEOMETRY                                (unchanged; now even cleaner)
+  MODEL_PROFILES_PER_SESSION_BINDING         (preserved; foundation does
+                                             not introduce a parallel
+                                             global pointer at the
+                                             instance layer)
 
-FOUNDATION_RECON_PHASE          = CLOSED (§12 frozen + bound)
+INSTANCE_DEFINITION_AUTHORITY  = instances.json
+ACTIVE_INSTANCE_BINDING        = CALLER/SESSION-SCOPED,
+                                 NOT OWNED BY FOUNDATION
+                                 (caller supplies both
+                                  fromInstanceId and toInstanceId
+                                  to applyProviderConfigurationInstance)
+GLOBAL_ACTIVE_INSTANCE_ID      = FORBIDDEN
+                                 (would re-collapse per-session
+                                  authority the Model Profiles
+                                  correction closed at the profile
+                                  layer; see .factory/evidence/
+                                  ACT-CLINEMM-MODEL-PROFILES-
+                                  QUICK-SWITCH-RECON01/
+                                  12-corrected-freeze.md
+                                  §RESUME_USES / §NEW_SESSION_USES /
+                                  §SESSION_PROFILE_APPLICATION
+                                  = SPLIT_ACTION)
+
+FOUNDATION_RECON_PHASE          = CLOSED (§12 frozen + bound;
+                                       active-binding fix folded in)
 FOUNDATION_IMPLEMENTATION_PHASE = NOT OPEN (gated on R1 RED)
 R1                              = may proceed; produces evidence
                                   file 07-r1-red-witness.md
@@ -489,15 +532,15 @@ MODEL_PROFILES_IMPLEMENTATION   = NOT AUTHORIZED
 | Item | Value |
 |------|-------|
 | Files added | `06a-credential-storage-capability.md` (this file) |
-| Files amended | `06-design-freeze.md` (3 P1 surgical edits + 1 P2 strip; total diff ~190 insertions / ~46 deletions — larger than a one-line patch because §4d's algorithm and §2e's projection signature were rewritten for the APPLY/DEFINE split; each edit is still localized to one subsection, no rewrites of §5 / §6 / §7 / §8) |
+| Files amended | `06-design-freeze.md` (active-instance binding authority correction + 3 P1 surgical edits + 1 P2 strip; total diff ~210 insertions / ~55 deletions; each edit localized to one subsection, no rewrites of §5 / §6 / §8) |
 | Files NOT touched | any source / test / config file |
 | `git status --short` after this commit | (re-verified at commit time) |
 | `git diff --stat` after this commit | (re-verified at commit time) |
-| New P0 from this commit | NONE |
-| New P1 from this commit | NONE (the three P1s are corrections, not additions) |
-| Pre-execution review triggered? | NO — per reviewer: "No more pre-execution review. Only a new P0 from §12 source evidence or the genuine R1 result should interrupt execution." |
-| Halt condition? | NONE — the discriminator is bound, the outcome is selected, and the §4 amendments are small. |
-| Next step | R1 RED on the §6b primary fixture (A vs B with same providerId+modelId, diverging baseUrl/credential/headers) |
+| New P0 from this commit | NONE (the global-active-instance correction is the closing of a P0 the prior cycle reopened; not a new P0) |
+| New P1 from this commit | NONE (the three P1s from the prior cycle and the active-binding correction are all closure of existing P0/P1) |
+| Pre-execution review triggered? | NO — per reviewer: "Only a new P0 from §12 source evidence or the genuine R1 result should interrupt execution." |
+| Halt condition? | NONE — the credential-storage discriminator is bound, the active-binding authority is now precise, the §4 amendments are localized. |
+| Next step | R1 RED on the §6b primary fixture (A vs B with same providerId+modelId, diverging baseUrl/credential/headers). Per the reviewer, the R1 harness passes the desired instance B **explicitly** to the switch operation; no persisted active pointer is necessary. |
 
 If R1 RED reproduces → `FOUNDATION_IMPLEMENTATION_PHASE = OPEN` with the minimal C primitive as the bounded GREEN scope.
 

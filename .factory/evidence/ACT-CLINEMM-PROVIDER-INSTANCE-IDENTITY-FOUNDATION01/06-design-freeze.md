@@ -74,23 +74,74 @@ same instance + model A1 → A2
 
 ```text
 instances.json =
-  canonical SAVED PROVIDER-INSTANCE definitions
+  canonical SAVED PROVIDER-INSTANCE DEFINITIONS only
   (what the user has named and persisted; source of truth
-   for "which instances exist" and "which one is active")
+   for "which instances exist" — NOT for "which one is
+   active")
 
 ApiConfiguration (legacy globalState.json) + providers.json =
   projected LIVE COMPATIBILITY/CONFIGURATION state
   (what the runtime actually reads when it builds the next
-   request; mirrors of the active instance's fields)
+   request; mirrors of whatever instance the caller most
+   recently asked to be applied)
 ```
 
 The two are not equivalent. `instances.json` is the
-canonical state; the legacy/projection state is a derived
-view produced by the APPLY path (§4d). Quick-switching
-mutates both, but in distinct phases: the APPLY path
-projects the active instance into the live state, and the
-DEFINE/UPDATE path (§4d) is the only writer that introduces
-or changes an instance credential.
+canonical definition store; the legacy/projection state
+is a derived view produced by the APPLY path (§4d).
+
+### Active-instance binding authority (FOUNDATION DOES NOT OWN)
+
+The Foundation explicitly does **not** own the active-
+instance binding. Concretely:
+
+```text
+INSTANCE_DEFINITION_AUTHORITY      = instances.json
+ACTIVE_INSTANCE_BINDING            = CALLER/SESSION-SCOPED,
+                                     NOT OWNED BY FOUNDATION
+GLOBAL_ACTIVE_INSTANCE_ID          = FORBIDDEN
+                                     (would recreate the same
+                                      per-session authority
+                                      collapse the Model
+                                      Profiles correction
+                                      already closed at the
+                                      profile layer — see
+                                      .factory/evidence/
+                                      ACT-CLINEMM-MODEL-
+                                      PROFILES-QUICK-SWITCH-
+                                      RECON01/12-corrected-
+                                      freeze.md §RESUME_USES /
+                                      §NEW_SESSION_USES /
+                                      §SESSION_PROFILE_APPLI-
+                                      CATION = SPLIT_ACTION)
+```
+
+A single global `instances.json.activeInstanceId` is
+forbidden for exactly the same reason a single global
+`lastUsedProfileId` was forbidden in the predecessor
+recon: it would re-collapse the per-task/session binding
+authority one layer lower. The Model Profiles contract
+already froze `RESUME_USES = SESSION_ACTIVE_PROFILE (+ GLOBAL
+fallback)` and `NEW_SESSION_USES = GLOBAL_DEFAULT_PROFILE`;
+the Foundation must not introduce a parallel global
+pointer at the instance layer that the implementation ACT
+would then have to undo.
+
+Concrete consequence: `applyProviderConfigurationInstance`
+takes **both** `fromInstanceId` and `toInstanceId` as
+explicit arguments. The caller — which may be a
+session-bound binding, a global-default binding, an
+implementation-ACT-level profile pointer, or the R1 RED
+harness — is the only thing that knows what "currently
+active" means in its context. The Foundation just applies
+the transition.
+
+Quick-switching mutates `instances.json` (via DEFINE/
+UPDATE) and the projected live state (via APPLY), in
+distinct phases: the APPLY path projects the chosen
+instance into the live state, and the DEFINE/UPDATE path
+(§4d) is the only writer that introduces or changes an
+instance credential.
 
 ### 2a. Definitions
 
@@ -201,9 +252,12 @@ SDK ProviderSettings) do not change. The only new code is:
 
 ```text
 // ~/.cline/data/instances.json
+//
+// NOTE: NO active_instance_id field. instances.json is
+// definition storage ONLY. Active-instance binding is the
+// caller's responsibility (see §2-pre Authority).
 {
   "schema_version": 1,
-  "active_instance_id": "corp-llm",
   "instances": {
     "local-ollama": {
       "instanceId": "local-ollama",
@@ -477,15 +531,20 @@ so the foundation explicitly forbids it.
 
 The APPLY path runs on every instance switch. It
 **resolves** the credential reference but does **not**
-write to the secrets store:
+write to the secrets store, and it does **not** own any
+active-instance binding:
 
 ```text
-applyProviderConfigurationInstance(instanceId):
-  // 1. Idempotency check: same instance = no-op.
-  if (instanceId === currentActiveInstanceId) return
+// fromInstanceId and toInstanceId are BOTH supplied by the
+// caller. The Foundation does not consult or maintain a
+// global "current active" pointer (see §2-pre Authority).
+applyProviderConfigurationInstance(fromInstanceId, toInstanceId):
+  // 1. Idempotency check: caller asked for the same instance
+  //    it already has active = no-op.
+  if (toInstanceId === fromInstanceId) return
 
   // 2. Resolve instance record from instances.json.
-  inst = loadInstance(instanceId)
+  inst = loadInstance(toInstanceId)
   if (inst.credentialRef.kind !== "secret") {
     throw new Error(`unsupported credentialRef.kind
                     = ${inst.credentialRef.kind}`)
@@ -511,11 +570,15 @@ applyProviderConfigurationInstance(instanceId):
     applyProviderSettingsPatch(patch.providerSettingsPatch)
   }
 
-  // 5. Set the new active instance id.
-  setActiveInstanceId(instanceId)
-
-  // 6. Rebuild the active session (gated on isRunning === false).
-  rebuildActiveSession({ reason: "instance-switch", ... })
+  // 5. Rebuild the active session (gated on isRunning === false).
+  //    NOTE: there is intentionally NO setActiveInstanceId step
+  //    here. The caller — not the Foundation — owns whatever
+  //    session/global binding it needs (see §2-pre Authority).
+  rebuildActiveSession({
+    reason:     "instance-switch",
+    fromInstanceId,
+    toInstanceId,
+  })
 ```
 
 #### DEFINE / UPDATE (separate write path — user-initiated)
@@ -635,16 +698,18 @@ from evidence 05:
 
 ### 5c. Rebuild semantics
 
-The rebuild is invoked **only** on an `instanceId` change.
-The fast path on a same-instance model switch is untouched.
+The rebuild is invoked **only** on an `instanceId` change
+(`toInstanceId !== fromInstanceId`, both supplied by the
+caller — see §2-pre Authority and §4d APPLY). The fast path
+on a same-instance model switch is untouched.
 
 ```text
-applyProviderConfigurationInstance(instanceId):
-  if (instanceId === currentActiveInstanceId) {
+applyProviderConfigurationInstance(fromInstanceId, toInstanceId):
+  if (toInstanceId === fromInstanceId) {
     // Same-instance: no rebuild, no projection write.
     return
   }
-  inst = loadInstance(instanceId)
+  inst = loadInstance(toInstanceId)
   if (inst.credentialRef.kind !== "secret") {
     throw new Error(`unsupported credentialRef.kind
                     = ${inst.credentialRef.kind}`)
@@ -667,13 +732,13 @@ applyProviderConfigurationInstance(instanceId):
   if (patch.providerSettingsPatch) {
     applyProviderSettingsPatch(patch.providerSettingsPatch)
   }
-  // 5. Persist the new active instance id.
-  setActiveInstanceId(instanceId)
-  // 6. Rebuild the active session from the projected config.
+  // 5. Rebuild the active session from the projected config.
+  //    NOTE: NO setActiveInstanceId here. The Foundation does
+  //    not own active-instance binding (see §2-pre Authority).
   rebuildActiveSession({
     reason: "instance-switch",
-    fromInstanceId: currentActiveInstanceId,
-    toInstanceId:   instanceId,
+    fromInstanceId,
+    toInstanceId,
   })
 ```
 
@@ -880,6 +945,18 @@ instanceId-change rebuild too.
 - Multi-credential instances (one instance, multiple
   credentials). Each instance owns exactly one credential
   identity in this foundation.
+- **Active-instance binding authority** — per-session
+  metadata, session-manifest pointer, global default,
+  per-task persistence, profile-to-instance linking,
+  resume-from-instance, "Set as default" UI, footer
+  quick-switch SPLIT_ACTION semantics. These are
+  implementation-ACT scope. The Foundation only provides
+  the `applyProviderConfigurationInstance(from, to)`
+  function; whoever owns the active-instance binding
+  invokes it. See §2-pre Authority and the Model Profiles
+  recon freeze
+  (`.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-RECON01/12-corrected-freeze.md`)
+  for the per-session / global-default split.
 
 ## 8. Pre-flight (this evidence file)
 
@@ -908,12 +985,25 @@ SUCCESSORS          = foundation ACT §13/§14/§15 R1 —
 ```text
 STORAGE_GEOMETRY              = γ (dedicated instances.json)
                                 AUTHORITY = instances.json is the
-                                canonical SAVED INSTANCE state;
-                                legacy ApiConfiguration +
-                                providers.json are projected
-                                LIVE COMPATIBILITY/CONFIGURATION
-                                state (mirrors written by APPLY;
-                                see §2-pre and §4d APPLY phase)
+                                canonical SAVED INSTANCE
+                                DEFINITIONS store; legacy
+                                ApiConfiguration + providers.json
+                                are projected LIVE COMPATIBILITY/
+                                CONFIGURATION state (mirrors
+                                written by APPLY; see §2-pre and
+                                §4d APPLY phase)
+
+INSTANCE_DEFINITION_AUTHORITY = instances.json
+ACTIVE_INSTANCE_BINDING       = CALLER/SESSION-SCOPED,
+                                NOT OWNED BY FOUNDATION
+                                (caller supplies both
+                                 fromInstanceId and toInstanceId
+                                 to applyProviderConfigurationInstance)
+GLOBAL_ACTIVE_INSTANCE_ID     = FORBIDDEN
+                                (would re-collapse the per-session
+                                 authority the Model Profiles
+                                 correction already closed at the
+                                 profile layer; see §2-pre)
 
 SEMANTIC_CREDENTIAL_IDENTITY  = Instance.credentialRef.name
                                 (not providerId; not raw secret;
@@ -954,7 +1044,17 @@ OUT_OF_SCOPE                  = per-mode overrides, instance UI,
                                 (forever, by invariant), vault
                                 kind (deferred), multi-credential
                                 instances (single credential per
-                                instance is the foundation scope)
+                                instance is the foundation scope),
+                                ACTIVE-INSTANCE BINDING AUTHORITY
+                                (per-session binding, global
+                                default, profile-pointer wiring,
+                                resume/new-session binding,
+                                "Set as default" UI, footer
+                                quick-switch SPLIT_ACTION — all
+                                implementation-ACT scope per the
+                                Model Profiles recon freeze
+                                §RESUME_USES / §NEW_SESSION_USES /
+                                §SESSION_PROFILE_APPLICATION)
 
 CREDENTIAL_STORAGE_PRIMITIVE  = C (minimal instance-scoped secret
                                 namespace; see evidence 06a);
@@ -964,7 +1064,15 @@ CREDENTIAL_STORAGE_PRIMITIVE  = C (minimal instance-scoped secret
                                 setInstanceSecret); new zod
                                 schema InstanceSecretNameSchema
 
-FOUNDATION_RECON_PHASE        = CLOSED (§12 frozen + bound)
+FOUNDATION_RECON_PHASE        = CLOSED (§12 frozen + bound;
+                                active-instance binding authority
+                                explicitly NOT OWNED by foundation;
+                                foundation owns definition storage
+                                only; §2-pre Authority freezes the
+                                GLOBAL_ACTIVE_INSTANCE_ID = FORBIDDEN
+                                invariant to prevent re-collapsing
+                                the per-session authority the Model
+                                Profiles correction closed)
 FOUNDATION_IMPLEMENTATION_PHASE = NOT OPEN (gated on R1 RED)
 R1                            = may proceed; produces evidence
                                 file 07-r1-red-witness.md
