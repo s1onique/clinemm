@@ -186,6 +186,13 @@ export default defineConfig({
 			// schema tests for consistency with the recon-phase
 			// pre-existing infra quirk.
 			"src/core/storage/__tests__/state-manager-instance-secret-durable.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R-REPLACE
+			// (fourteenth-reviewer C1 "GO TO R-REPLACE"): the real
+			// composed-lifecycle witness drives
+			// SdkSessionConfigBuilder.build + SdkSessionLifecycle.replaceActiveSession
+			// together, with mocked VscodeSessionHost.create / StateManager.
+			// Bridge-only (same alias requirement as R2p / R5).
+			"src/sdk/__tests__/provider-instance-identity-r-replace-real-lifecycle.piif01.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

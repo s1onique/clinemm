@@ -412,3 +412,170 @@ P0-3: Tests were rewritten to freeze the CORRECT invariant.
     caller bypasses the builder and passes `undefined`/`null`/
     `""` via `as unknown as string`. Defense in depth.
   - `.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01/09-twelfth-reviewer-correction-witness.md`
+
+## §7. R-REPLACE Composed Lifecycle Witness (fourteenth reviewer, C1: GO TO R-REPLACE, this pass)
+
+The fourteenth reviewer (on commit 50623cf39, this pass's
+predecessor) classified the thirteenth-reviewer halt as CLOSED and
+authorized the real composed lifecycle qualification with the
+directive: "C1: GO TO R-REPLACE — Do the real composed lifecycle
+qualification now. If positive B replacement, missing-secret
+no-replacement, running-session refusal, and model-only conservation
+all pass, you should be very close to Foundation closure + §17
+handoff to Model Profiles rather than another architecture pass."
+
+The reviewer's scope was explicitly tight: "Do not open another
+correction cycle. Fold one negative case into R-replace: ... That
+closes the P1 as part of the already-required lifecycle
+qualification."
+
+### §7.1 Production seams driven (this pass)
+
+This is a TEST-ONLY qualification pass. No production source files
+touched. The new test file drives:
+
+```
+SdkSessionConfigBuilder.build                    = REAL_PRODUCTION_SEAM
+applyTypedProviderInstanceToConfig               = REAL_PRODUCTION_SEAM
+MissingProviderInstanceCredentialError           = REAL_PRODUCTION_SEAM
+SdkSessionLifecycle.replaceActiveSession         = REAL_PRODUCTION_SEAM
+SdkSessionLifecycle.startNewSession              = REAL_PRODUCTION_SEAM
+SdkSessionLifecycle.endActiveSession             = REAL_PRODUCTION_SEAM
+SdkSessionLifecycle.updateActiveSessionModel     = REAL_PRODUCTION_SEAM
+```
+
+Collaborators stubbed: `buildSessionConfig` (returns baseline A),
+`buildAgentHooks` (returns no-op), `VscodeSessionHost.create`
+(returns fake `sdkHost` with programmable `start()`),
+`StateManager.get` (only `autoApprovalSettings` is read; stubbed
+to return undefined).
+
+### §7.2 The four witnesses
+
+The new file
+`apps/vscode/src/sdk/__tests__/provider-instance-identity-r-replace-real-lifecycle.piif01.test.ts`
+contains four witnesses:
+
+1. **R_REPLACE_POSITIVE**: full composed A → B. After
+   `replaceActiveSession`, the lifecycle's `activeSession` is the
+   NEW session returned by `host.start()` (with B's identity in
+   `startConfig`), and the active-session reference is a new object
+   (not the same as A).
+
+2. **R_REPLACE_NEGATIVE_MISSING_CREDENTIAL**: when
+   `getInstanceSecret(...) === undefined`, the builder rejects
+   with `MissingProviderInstanceCredentialError`. The test asserts
+   that the lifecycle's `activeSession` is the SAME object
+   reference as before the attempt — closing the P1 carry-over the
+   thirteenth reviewer left. This is the
+   "active-session-stays-unchanged" invariant observed through the
+   LIFECYCLE seam (not just the builder seam as the R5 file does).
+
+3. **R_REPLACE_RUNNING_SESSION_REFUSAL**: with `isRunning = true`,
+   `replaceActiveSession` returns `undefined` and never reaches
+   `host.start`. The active-session reference is unchanged. No
+   deferred queue is invented.
+
+4. **R_REPLACE_CONSERVATION_MODEL_ONLY**: same-instance model
+   mutation (A.modelId A1 → A2) goes through
+   `updateActiveSessionModel` (the fast lane) — `host.start` is
+   NOT called, the active-session reference is unchanged. This
+   pins the conservation invariant the reviewer called out as the
+   last required witness.
+
+### §7.3 What is no longer halted (post this pass)
+
+- `R-REPLACE = GREEN` (this pass — composed lifecycle qualification)
+- `R3 + R4 + R5 + R2p + R-REPLACE = ALL GREEN`
+- `FOUNDATION_IMPLEMENTATION_PHASE = OPEN` — the four R-class
+  witnesses required for §17 four-gate handoff to Model Profiles
+  are now GREEN.
+- `NO_REPLACEMENT_ON_MISSING_SECRET = GREEN at lifecycle seam` —
+  the active-session reference invariance is proven through the
+  real lifecycle (object-identity equality), not just structurally.
+
+### §7.4 Test counts (bridge)
+
+| Suite | Before | After |
+| ----- | ------ | ----- |
+| `typed-projector.test.ts` | 7 | 7 |
+| `instances-store.test.ts` | 10 | 10 |
+| `instance-secret.test.ts` | 7 | 7 |
+| `state-manager-instance-secret-durable.test.ts` | 5 | 5 |
+| `r2p-real-projector.piif01.test.ts` | 5 | 5 |
+| `r5-missing-credential-fails-closed.piif01.test.ts` | 4 | 4 |
+| `r-replace-real-lifecycle.piif01.test.ts` | (NEW) | 4 |
+| **Total** | **38** | **42** |
+
+All 42 GREEN across 7 bridge files. `bun run check-types:c2-4-c-bridge`
+exits 0 with 0 diagnostic drift.
+
+### §7.5 Composition table (post this pass)
+
+```
+ProviderConfigurationInstance.credentialRef
+        ↓
+StateManager.getInstanceSecret(...)
+        ↓
+undefined / "" ─────→ THROW MissingProviderInstanceCredentialError
+        │                       │
+        │                       └─ (now proven at BOTH the builder
+        │                           seam (R5) AND the lifecycle
+        │                           seam (R-REPLACE) — same object
+        │                           reference preservation through
+        │                           the real lifecycle)
+        │
+        └─ non-empty secret
+                ↓
+        typed projector(resolvedSecret: string)
+                ↓
+        CoreSessionConfig.apiKey = physical secret
+                ↓
+        SdkSessionLifecycle.replaceActiveSession(...)
+                ↓
+        NEW active session installed (R-REPLACE POSITIVE)
+```
+
+The composition is now coherent end-to-end through two real
+production seams (the builder and the lifecycle). Foundation
+qualification is structurally complete.
+
+### §7.6 P1 follow-ons (NOT blocking; unchanged from thirteenth reviewer)
+
+- `R4_RELOAD_READ = NOT_EXECUTED` (process-restart-roundtrip
+  witness for StateManager instance secrets).
+- Generic-provider scope overclaim (claim should be
+  `API_KEY_BACKED_INSTANCE_IDENTITY = SUPPORTED` only).
+- Structured-provider projection overclaim (R5 covers common-field
+  geometry only).
+
+### §7.7 P2 cleanup (this pass)
+
+The fourteenth reviewer flagged 2 blank-at-EOF diagnostics from
+the prior commit on:
+
+- `10-thirteenth-reviewer-fail-closed-witness.md`
+- `provider-instance-identity-r5-missing-credential-fails-closed.piif01.test.ts`
+
+Both fixed opportunistically in this commit by trimming the
+trailing extra newline. `git diff --check` is clean (no whitespace
+errors).
+
+### §7.8 Evidence
+
+`.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01/11-r-replace-composed-lifecycle-witness.md`
+(NEW).
+
+### §7.9 Halt inventory (post this pass)
+
+- `HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN = CLOSED` (this pass's
+  predecessor, commit 50623cf39)
+- `HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED = CLOSED` (unchanged)
+- `CREDENTIAL_AUTHORITY_DUPLICATED = CLOSED` (unchanged)
+- `R-REPLACE = GREEN` (this pass)
+- `NO_REPLACEMENT_ON_MISSING_SECRET = GREEN at lifecycle seam` (this pass)
+- `MODEL_ONLY_CONSERVATION = GREEN` (this pass)
+- `FOUNDATION_IMPLEMENTATION_PHASE = OPEN` — the four R-class
+  witnesses required for §17 four-gate handoff to Model Profiles
+  are GREEN. The next reviewer should authorize §17 handoff to
+  Model Profiles, or name any remaining structural halt.

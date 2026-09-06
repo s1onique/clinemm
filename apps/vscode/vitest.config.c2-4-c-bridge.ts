@@ -202,6 +202,29 @@ export default defineConfig({
 			// P1: the prior R4 suite exercised the schema but not
 			// the durable layer.
 			"src/core/storage/__tests__/state-manager-instance-secret-durable.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R-REPLACE
+			// (fourteenth-reviewer C1 "GO TO R-REPLACE"): drives the
+			// REAL SdkSessionConfigBuilder.build() + REAL
+			// SdkSessionLifecycle.replaceActiveSession composition.
+			// 4 witnesses:
+			//   R_REPLACE_POSITIVE — composed A → B through the
+			//     real lifecycle installs B and tears down A.
+			//   R_REPLACE_NEGATIVE_MISSING_CREDENTIAL — the builder
+			//     throws MissingProviderInstanceCredentialError
+			//     BEFORE replaceActiveSession; the lifecycle's
+			//     active session is the SAME object reference as
+			//     before the attempt (extends the R5 builder-level
+			//     witness to the lifecycle seam — closes the
+			//     reviewer-required "active session remains
+			//     unchanged" invariant).
+			//   R_REPLACE_RUNNING_SESSION_REFUSAL — replaceActiveSession
+			//     returns undefined while isRunning=true; no
+			//     replacement attempt reaches host.start.
+			//   R_REPLACE_CONSERVATION_MODEL_ONLY — same-instance
+			//     model swap (A.modelId A1 → A2) goes through
+			//     updateActiveSessionModel (no host.start, no
+			//     replacement) — pins the fast-lane conservation.
+			"src/sdk/__tests__/provider-instance-identity-r-replace-real-lifecycle.piif01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

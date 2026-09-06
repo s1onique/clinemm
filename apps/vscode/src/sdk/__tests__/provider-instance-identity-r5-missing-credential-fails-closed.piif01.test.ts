@@ -182,4 +182,3 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5", () => {
 		expect(baselineRef.providerId).toBe("openai-compatible")
 	})
 })
-

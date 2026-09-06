@@ -147,6 +147,14 @@
 		// consistency with the recon-phase pre-existing infra
 		// quirk.
 		"src/core/storage/__tests__/state-manager-instance-secret-durable.test.ts",
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R-REPLACE
+		// (fourteenth-reviewer C1 "GO TO R-REPLACE"): the real
+		// composed-lifecycle witness drives
+		// SdkSessionConfigBuilder.build + SdkSessionLifecycle.replaceActiveSession
+		// together with mocked VscodeSessionHost.create /
+		// StateManager. Runs in the bridge config for consistency
+		// with R2p / R5.
+		"src/sdk/__tests__/provider-instance-identity-r-replace-real-lifecycle.piif01.test.ts",
 		// ACT-CLINEMM-DOGFOOD-BUILD-INTEGRATION-REPAIR01 / B1:
 		// The Seatbelt observer test imports `./cline-core-vitest-stub`
 		// via a relative path to drive the live Seatbelt singleton. The
