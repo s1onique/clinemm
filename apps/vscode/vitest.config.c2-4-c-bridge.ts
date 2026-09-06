@@ -134,6 +134,20 @@ export default defineConfig({
 			// base config cannot host this test because the
 			// `@cline/core` alias points at the stub.
 			"src/sdk/__tests__/sdk-compaction-w-publish-red01-real-producer.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01
+			// / PIIF01: real-production-seam RED witness for the
+			// same-provider config-mutation defect. Drives the
+			// REAL LocalRuntimeHost.startSession (captures input
+			// config into in-memory ActiveSession.config) and the
+			// REAL SdkProviderChangeCoordinator
+			// .handleApiConfigurationChanged. The failing assertion
+			// (R1a) is that `active.config.model.{apiKey, baseUrl,
+			// headers}` still equal A's values after mutating to B,
+			// because the coordinator early-returns at line 48-50
+			// on `previousProvider === nextProvider`. The base
+			// config cannot host this test because the `@cline/core`
+			// alias points at the stub (no LocalRuntimeHost).
+			"src/sdk/__tests__/provider-instance-identity-r1a-red.piif01.test.ts",
 		],
 		testTimeout: 30_000,
 	},
