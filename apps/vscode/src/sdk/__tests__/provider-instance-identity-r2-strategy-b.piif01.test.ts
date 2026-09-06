@@ -1,88 +1,84 @@
 /**
  * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R2-STRATEGY-B / PIIF01 —
  * R2 GREEN contract test for the Strategy-B explicit instance-apply
- * seam added in this ninety-sixth pass.
+ * seam (ninety-seventh pass, with binding).
  *
- * The eighth reviewer required that the actual GREEN contract be:
+ * The eighth reviewer required:
  *   "explicit instance A→B apply ⇒ full reconstruction ⇒ resulting
  *    connection B."
  *
- * This file is exactly that test.
+ * The ninth reviewer (on commit 919c62ae7) correctly raised
+ * HALT_R2_INPUT_NOT_BOUND_TO_RECONSTRUCTION: the production seam
+ * ignored `next` entirely, and the R2 test mechanically passed
+ * because the stubbed `sessionConfigBuilder.build` returned B
+ * regardless of arguments, while the test called
+ * `applyProviderConfigurationInstance(configA, configA)`.
  *
- * CLASSIFICATION:
+ * This file (ninety-seventh pass) closes that halt by:
  *
- *   R2_STRATEGY_B_CONTRACT_GUARD = REAL.
+ *   1. Updating the production seam (and the builder layer) so
+ *      `next` is actually threaded into the resolved config
+ *      (see sdk-provider-change-coordinator.ts and
+ *      sdk-session-config-builder.ts).
  *
- *   LEGACY_SAME_PROVIDER_FIELD_EDIT_BEHAVIOR (frozen here):
+ *   2. Replacing the prior single "echoes whatever the stub
+ *      returns" test with three tests:
+ *        a. PIIF01_R2_STRATEGY_B_CONTRACT: builder state at A,
+ *           next = B ⇒ reconstructed session = B. This is the
+ *           GREEN contract.
+ *        b. PIIF01_R2_BINDING_INVERSION_NEXT_A_GLOBAL_B:
+ *           builder state at B-global, next = A ⇒ reconstructed
+ *           session = A. This is the discriminator proving the
+ *           coordinator is not merely parroting whatever the
+ *           builder happens to resolve.
+ *        c. PIIF01_R2_SESSION_RUNNING_REFUSAL +
+ *           PIIF01_R2_NO_ACTIVE_SESSION: unchanged conservation
+ *           guards.
+ *
+ * CLASSIFICATION (revised ninety-seventh pass):
+ *
+ *   PROVEN_HERE:
+ *     SESSION_RECONSTRUCTION_FROM_NEXT_BUILDER_OUTPUT = GREEN
+ *     INSTANCE_TO_CONNECTION_BINDING (next -> builder input
+ *       -> CoreSessionConfig -> ActiveSession.config) = GREEN
+ *
+ *   NOT_PROVEN_HERE (out of scope for the minimum probe):
+ *     SdkSessionLifecycle.replaceActiveSession itself
+ *       (stubbed; it does dispose/fence/task-proxy work the
+ *       stub omits)
+ *     Durable ProviderConfigurationInstance persistence
+ *     Definition resolver / credential resolver /
+ *       projectInstanceToLiveConfig (gated on (k)-(n) in the
+ *       foundation causal chain)
+ *
+ *   LEGACY_SAME_PROVIDER_FIELD_EDIT_BEHAVIOR (frozen):
  *     OUT_OF_SCOPE_FOR_FOUNDATION.
- *     This test does NOT exercise the legacy generic
- *     `handleApiConfigurationChanged` path; that is the diagnostic
- *     witness in
- *     `provider-instance-identity-r1a-red.piif01.test.ts`. The
- *     Foundation only guarantees that an explicit
- *     `applyProviderConfigurationInstance` call reconstructs the
- *     active session.
  *
  * PRODUCTION SEAMS DRIVEN (real, not synthetic):
  *
- *   INSTANCE-APPLY SEAM     = real SdkProviderChangeCoordinator
- *                             .applyProviderConfigurationInstance
- *                             (apps/vscode/src/sdk/
- *                              sdk-provider-change-coordinator.ts:
- *                              ninety-sixth-pass addition).
- *                             Strategy B: calls `replaceActiveSession`
- *                             with a startInput built from B's config,
- *                             which causes `LocalRuntimeHost.startSession`
- *                             to capture B into the new active session's
- *                             in-memory config.
+ *   INSTANCE-APPLY COORDINATOR       = REAL_PRODUCTION_SEAM
+ *                                       (SdkProviderChangeCoordinator
+ *                                        .applyProviderConfigurationInstance)
+ *   SESSION-LIFECYCLE BUILDER MERGE  = REAL_PRODUCTION_SEAM
+ *                                       (SdkSessionConfigBuilder.build
+ *                                        + applyProviderConfigurationInstance
+ *                                        ToConfig — the merge that makes
+ *                                        `next` load-bearing)
+ *   LOCAL RUNTIME startSession       = REAL_PRODUCTION_SEAM
+ *                                       (LocalRuntimeHost.startSession
+ *                                        captures the merged config into
+ *                                        the in-memory ActiveSession.config)
+ *   SdkSessionLifecycle.replaceActiveSession
+ *                                    = SYNTHETIC_REAL (stubbed; does
+ *                                       dispose/fence/task-proxy work
+ *                                       the stub omits)
+ *   FULL REPLACEMENT LIFECYCLE       = NOT_EXECUTED (the stub performs
+ *                                       a forward host.startSession; a
+ *                                       future qualification will exercise
+ *                                       the real replaceActiveSession once
+ *                                       persistence is wired)
  *
- *   SESSION LIFECYCLE SEAM  = real LocalRuntimeHost.startSession
- *                             (sdk/packages/core/src/runtime/host/
- *                              local-runtime-host.ts:398-428).
- *
- *   RUNTIME CONNECTION SEAM = in-memory ActiveSession.config
- *                             (CoreSessionConfig, extending
- *                             CoreModelConfig).
- *
- * SYNTHETIC_REAL (acknowledged):
- *
- *   - createAgent stub: returns a minimal SessionRuntime-shaped
- *     object. SessionRuntime is never INVOKED in this test.
- *
- *   - sessionService stub: provides the bare minimum surface
- *     needed by startResolvedSession to write the manifest.
- *
- *   - stateManager stub: returns `mode = "act"` so the
- *     coordinator's `getCurrentMode()` resolves correctly.
- *
- *   - sessionConfigBuilder.build stub: returns a SessionConfig
- *     whose `config` field carries B's effective values (apiKey /
- *     baseUrl / headers / providerId / modelId) when invoked.
- *     This is the only way the coordinator can route B through
- *     `replaceActiveSession` without introducing the real
- *     `providerConfigStore` projection; it's an explicit probe
- *     seam and is named `buildForApply` for clarity.
- *
- *   - replaceActiveSession stub: simulates replacement by calling
- *     `host.startSession(...)` with the new startInput, which
- *     captures B into a new in-memory active session on the same
- *     host. (The real `SdkSessionLifecycle.replaceActiveSession`
- *     does much more — dispose old, fence races, manage task
- *     proxy — but for this contract test we only need the
- *     observable outcome: a new active session on the host with
- *     B's connection captured.)
- *
- * NOT_EXERCISED (acknowledged):
- *
- *   - Network provider request. The contract is observable entirely
- *     in the configuration-projection + session-lifecycle seams.
- *   - AgentRuntime. The SessionRuntime is stubbed; never invoked.
- *   - Live user session.
- *   - Persistence. The Foundation's durable persistence layer is
- *     intentionally NOT yet added (50-line probe only); this test
- *     only proves the in-memory instance-apply routing works.
- *
- * ACT-OWNED TS DIAGNOSTICS (per eighth reviewer's reopen
+ * ACT-OWNED TS DIAGNOSTICS (per eighth reviewer\'s reopen
  * condition #3): zero.
  *
  *   This file does NOT import from `@cline/shared` or
@@ -386,6 +382,180 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R2-STRATEGY-B / PI
 			expect(newActive!.config.apiKey).toBe("key-B")
 			expect(newActive!.config.baseUrl).toBe("https://endpoint-B")
 			expect(newActive!.config.headers).toEqual(headersB)
+
+			void agent
+		} finally {
+			await host.dispose()
+		}
+	})
+
+	// R2 binding ablation #1: when the builder'''s underlying state holds B but
+	// the caller passes next = A, the reconstructed session must carry A — NOT
+	// B. This is the discriminator that proves the coordinator is not merely
+	// parroting whatever the builder happens to resolve.
+	it("PIIF01_R2_BINDING_INVERSION_NEXT_A_GLOBAL_B: applyProviderConfigurationInstance(A, A) when builder state is B reconstructs to A", async () => {
+		const sessionsDir = join(isolatedHomeDir, "sessions")
+		const { host, agent } = makeHost(sessionsDir)
+
+		try {
+			const headersA = { "X-Org": "A", "X-Tenant": "tenant-a" }
+			const configA: ApiConfiguration = {
+				actModeApiProvider: "openai" as never,
+				actModeApiModelId: "model-A",
+				openAiBaseUrl: "https://endpoint-A",
+				openAiApiKey: "key-A",
+				openAiHeaders: JSON.stringify(headersA),
+			} as unknown as ApiConfiguration
+
+			const headersB = { "X-Auth": "b", "X-Tenant": "tenant-b" }
+
+			const sessionId = "sess-piif01-r2-binding-inv"
+			await host.startSession({
+				config: {
+					sessionId,
+					providerId: "openai-compatible",
+					modelId: "model-A",
+					apiKey: "key-A",
+					baseUrl: "https://endpoint-A",
+					headers: headersA,
+					enableTools: true,
+					enableSpawnAgent: false,
+					enableAgentTeams: false,
+				} as never,
+				source: "vscode",
+				interactive: true,
+			})
+
+			const newSessionId = "sess-piif01-r2-binding-inv-after-apply"
+
+			// Builder stub: StateManager (modeled) holds B-global, so without
+			// an instance override the resolved frame would carry B. With the
+			// instance override (A), the projection must carry A.
+			const sessionConfigBuilder = {
+				build: vi.fn(async (input: { providerConfigurationInstance?: ApiConfiguration }) => {
+					if (input.providerConfigurationInstance) {
+						const inst = input.providerConfigurationInstance as unknown as {
+							actModeApiProvider?: string
+							actModeApiModelId?: string
+							openAiApiKey?: string
+							openAiBaseUrl?: string
+							openAiHeaders?: string
+						}
+						const parsedHeaders: Record<string, string> = inst.openAiHeaders
+							? (JSON.parse(inst.openAiHeaders) as Record<string, string>)
+							: {}
+						return {
+							sessionId: "",
+							config: {
+								providerId: inst.actModeApiProvider ?? "openai-compatible",
+								modelId: inst.actModeApiModelId ?? "model-A",
+								apiKey: inst.openAiApiKey,
+								baseUrl: inst.openAiBaseUrl,
+								headers: parsedHeaders,
+								enableTools: true,
+								enableSpawnAgent: false,
+								enableAgentTeams: false,
+							},
+						}
+					}
+					// No instance: returns the (modeled) StateManager-held B.
+					return {
+						sessionId: "",
+						config: {
+							providerId: "openai-compatible",
+							modelId: "model-B-global",
+							apiKey: "key-B-global",
+							baseUrl: "https://endpoint-B-global",
+							headers: headersB,
+							enableTools: true,
+							enableSpawnAgent: false,
+							enableAgentTeams: false,
+						},
+					}
+				}),
+			}
+
+			const replaceActiveSession = vi.fn(async (opts: unknown) => {
+				const o = opts as {
+					startInput: {
+						config: {
+							providerId: string
+							modelId: string
+							apiKey: string
+							baseUrl: string
+							headers: Record<string, string>
+						}
+					}
+				}
+				const newStart = await host.startSession({
+					config: { ...o.startInput.config, sessionId: newSessionId } as never,
+					source: "vscode",
+					interactive: true,
+				})
+				return {
+					oldSessionId: sessionId,
+					startResult: newStart,
+					sdkHost: { get: (sid: string) => host.getSession(sid) } as never,
+				}
+			})
+
+			const coordinator = new SdkProviderChangeCoordinator({
+				stateManager: {
+					getGlobalSettingsKey: vi.fn(() => "act"),
+				} as never,
+				sessions: {
+					getActiveSession: () => ({
+						sessionId,
+						sdkHost: { get: (sid: string) => host.getSession(sid) } as never,
+						unsubscribe: () => {},
+						startResult: { sessionId },
+						isRunning: false,
+					}),
+					replaceActiveSession,
+				} as never,
+				messages: { appendAndEmit: vi.fn() } as never,
+				sessionConfigBuilder: sessionConfigBuilder as never,
+				getTask: () => undefined,
+				getWorkspaceRoot: vi.fn().mockResolvedValue("/workspace"),
+				loadInitialMessages: vi.fn().mockResolvedValue(undefined),
+				buildStartSessionInput: vi.fn((config: unknown) => ({
+					config: (config as { config: unknown }).config,
+				})) as never,
+				postStateToWebview: vi.fn().mockResolvedValue(undefined),
+				rebuilds: { request: vi.fn() } as never,
+			})
+
+			// Call with next = A. Builder state held at B-global. The coordinator
+			// must thread A through, overriding B-global.
+			const result = await coordinator.applyProviderConfigurationInstance(configA, configA)
+			expect(result.applied).toBe(true)
+			if (!result.applied) {
+				throw new Error(`applyProviderConfigurationInstance returned ${result.reason}`)
+			}
+
+			const sessions = (
+				host as unknown as {
+					sessions: Map<
+						string,
+						{
+							config: {
+								apiKey: string
+								baseUrl: string
+								headers: Record<string, string>
+								providerId: string
+								modelId: string
+							}
+						}
+					>
+				}
+			).sessions
+			const newActive = sessions.get(newSessionId)
+			expect(newActive).toBeDefined()
+			expect(newActive!.config.providerId).toBe("openai")
+			expect(newActive!.config.modelId).toBe("model-A")
+			expect(newActive!.config.apiKey).toBe("key-A")
+			expect(newActive!.config.baseUrl).toBe("https://endpoint-A")
+			expect(newActive!.config.headers).toEqual(headersA)
 
 			void agent
 		} finally {

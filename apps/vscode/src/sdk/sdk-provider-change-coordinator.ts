@@ -42,7 +42,7 @@ export class SdkProviderChangeCoordinator {
 
 	/**
 	 * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01 / PIIF01
-	 * (ninety-sixth pass, R2 GREEN probe):
+	 * (ninety-seventh pass, R2 GREEN contract with binding):
 	 *
 	 * Explicit instance-apply seam. Routes A → B through full
 	 * session reconstruction (Strategy B), independent of the
@@ -52,16 +52,19 @@ export class SdkProviderChangeCoordinator {
 	 *   - Idle-gated: refuses to apply while a turn is in flight
 	 *     (the session is "running"); callers must wait for the
 	 *     next idle or cancel the running turn.
-	 *   - Full reconstruction: calls
-	 *     `this.options.sessions.replaceActiveSession(...)` with a
-	 *     `startInput` built from `next` (B), so the new active
-	 *     session's in-memory `ActiveSession.config` reflects B's
-	 *     connection fields (apiKey / baseUrl / headers / modelId /
-	 *     providerId / reasoningEffort / thinkingBudgetTokens).
+	 *   - Full reconstruction with instance-bound input: calls
+	 *     `this.options.sessionConfigBuilder.build({ cwd, mode,
+	 *     providerConfigurationInstance: next })` so the resolved
+	 *     `CoreSessionConfig` reflects B's identity/connection
+	 *     fields (providerId / modelId / apiKey / baseUrl /
+	 *     headers) regardless of what the StateManager currently
+	 *     holds. The rebuilt session then captures B via
+	 *     `replaceActiveSession(...)` →
+	 *     `LocalRuntimeHost.startSession(...)`.
 	 *   - No persistence: this probe does NOT touch instances.json,
 	 *     the secret store, or any new global state. It is a
-	 *     minimum 50-line instance-apply probe ahead of the
-	 *     Foundation's durable persistence layer.
+	 *     bounded minimum probe ahead of the Foundation's durable
+	 *     persistence layer.
 	 *   - Same-instance / model-only fast path conservation: a
 	 *     caller that wants to swap only the modelId should use the
 	 *     existing `SdkSessionLifecycle.updateActiveSessionModel`
@@ -80,7 +83,7 @@ export class SdkProviderChangeCoordinator {
 	 *     active session is mid-turn (caller must wait)
 	 *   - `{ applied: false, reason: "reconstruction_failed" }` if
 	 *     the underlying `replaceActiveSession` returned undefined
-	 *     (e.g. concurrent supersession)
+	 *     (e.g. concurrent supersession) or `build` threw
 	 */
 	async applyProviderConfigurationInstance(
 		_previous: ApiConfiguration,
@@ -108,7 +111,19 @@ export class SdkProviderChangeCoordinator {
 		const mode = this.getCurrentMode()
 
 		try {
-			const config = await this.options.sessionConfigBuilder.build({ cwd, mode })
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01 (R2
+			// GREEN contract, ninth reviewer reopen): pass `next` as
+			// `providerConfigurationInstance` so the builder projects
+			// B's identity/connection onto the resolved config —
+			// this is what makes `next` load-bearing on the
+			// reconstructed session. Without this, the builder would
+			// resolve from StateManager and the GREEN contract would
+			// silently degrade to "whatever the StateManager says".
+			const config = await this.options.sessionConfigBuilder.build({
+				cwd,
+				mode,
+				providerConfigurationInstance: next,
+			})
 			config.sessionId = activeSession.sessionId
 
 			const initialMessages = await this.options.loadInitialMessages(activeSession.sdkHost, activeSession.sessionId)

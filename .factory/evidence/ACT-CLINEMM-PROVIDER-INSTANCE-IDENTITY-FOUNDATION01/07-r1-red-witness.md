@@ -503,6 +503,24 @@ The three R1 verdicts together with R2 say exactly what the foundation ACT body 
 
 The classification matrix is honest: R1a is now a DIAGNOSTIC current-seam witness (not the GREEN contract). R1b reuses an existing in-tree test. R1c is structural-only. R2 is the actual GREEN contract — Strategy B explicit instance-apply full-reconstruction.
 
+### §5.1. Ninth-reviewer reopen closure (ninety-seventh pass)
+
+The ninth reviewer on commit `919c62ae7` (ninety-sixth-pass row above) correctly raised **HALT_R2_INPUT_NOT_BOUND_TO_RECONSTRUCTION**: the prior production seam ignored `next` entirely, and the prior R2 test mechanically passed because the stubbed `sessionConfigBuilder.build` returned B regardless of arguments while the test called `applyProviderConfigurationInstance(configA, configA)`. The artifact-not-bound-to-source P0 was real.
+
+The ninety-seventh pass closes it by:
+
+1. **Production seam actually uses `next`**: `SdkProviderChangeCoordinator.applyProviderConfigurationInstance` now passes `next` as `input.providerConfigurationInstance` to `sessionConfigBuilder.build({ cwd, mode, providerConfigurationInstance: next })`. Without this argument, the seam degrades to "whatever the StateManager happens to hold" and the GREEN contract silently fails closed.
+
+2. **Builder merge is the binding surface**: `SdkSessionConfigBuilder.build` gained an optional merge step (via `applyProviderConfigurationInstanceToConfig`) that, when `input.providerConfigurationInstance` is present, projects the instance's identity/connection fields (providerId, modelId, apiKey, baseUrl, headers) onto the resolved `CoreSessionConfig`. The merge is opt-in (gated on the optional field), so existing callers (task start, followup, resume, compaction, mode-coordinator) see no behavior change.
+
+3. **R2 test discriminates the binding**: the R2 file was rewritten to add a third test `PIIF01_R2_BINDING_INVERSION_NEXT_A_GLOBAL_B` that holds the builder's underlying state at B-global while the caller passes `next = A`, and asserts the reconstructed session carries A. The discrimination is the reviewer's exact suggested form. The test was verified to FAIL without the production fix (proved via `git stash` of the production change and re-run → 1 failed, 3 passed) and to PASS with the fix applied (5 tests total across R1a + R2).
+
+4. **R2 file header rewritten** to reflect the new `SESSION_RECONSTRUCTION_FROM_NEXT_BUILDER_OUTPUT = GREEN` + `INSTANCE_TO_CONNECTION_BINDING = GREEN` classification, and the `SdkSessionLifecycle.replaceActiveSession = SYNTHETIC_REAL` (stubbed) + `FULL REPLACEMENT LIFECYCLE = NOT_EXECUTED` honesty (acknowledged in the file header per the reviewer's P1).
+
+5. **JSDoc fixed**: the production seam's `applyProviderConfigurationInstance` JSDoc no longer claims "startInput is built from next" — it accurately describes the actual flow (`sessionConfigBuilder.build({ cwd, mode, providerConfigurationInstance: next })` → `replaceActiveSession`).
+
+**HALT_R2_INPUT_NOT_BOUND_TO_RECONSTRUCTION = CLOSED** at this pass.
+
 ---
 
 ## §6. Disposition
@@ -553,9 +571,17 @@ apps/vscode/src/sdk/
                                  (R2 PRODUCTION SEAM — new
                                   applyProviderConfigurationInstance
                                   method in ninety-sixth pass.
+                                  In ninety-seventh pass, the
+                                  seam now passes `next` as
+                                  `input.providerConfiguration
+                                  Instance` to
+                                  sessionConfigBuilder.build(...)
+                                  so the rebuilt session
+                                  actually reflects B's
+                                  identity/connection fields.
                                   Idle-gated; routes to
                                   replaceActiveSession with the
-                                  new config captured into
+                                  merged config captured into
                                   startInput; returns
                                   { applied, newSessionId } or
                                   { applied: false, reason }.
@@ -567,9 +593,38 @@ apps/vscode/src/sdk/
                                   only the GREEN minimum
                                   required by the eighth
                                   reviewer's reopen condition
-                                  #2: "explicit instance A→B
-                                  apply ⇒ full reconstruction ⇒
-                                  resulting connection B.")
+                                  #2 and the ninth reviewer's
+                                  reopen condition #1
+                                  (instance-to-connection
+                                  binding).)
+
+apps/vscode/src/sdk/
+  sdk-session-config-builder.ts
+                                 (R2 BINDING SURFACE — in
+                                  ninety-seventh pass, gained
+                                  an opt-in merge step in
+                                  build(input): when
+                                  input.providerConfiguration
+                                  Instance is present, projects
+                                  its identity/connection
+                                  fields onto the resolved
+                                  CoreSessionConfig. Backward
+                                  compatible: existing callers
+                                  (task start, followup,
+                                  resume, compaction, mode-
+                                  coordinator) see no behavior
+                                  change because the merge is
+                                  gated on the optional field.)
+
+apps/vscode/src/sdk/
+  cline-session-factory.ts
+                                 (R2 TYPE-CARRIER — added
+                                  optional
+                                  providerConfigurationInstance?
+                                  : ApiConfiguration field to
+                                  SessionConfigInput. No
+                                  breaking change; only the
+                                  new R2 caller passes it.)
 
 apps/vscode/vitest.config.c2-4-c-bridge.ts
                                  (added both R1a and R2 tests to
@@ -616,14 +671,10 @@ apps/vscode/baselines/c2-4-c-bridge-ts-baseline.json
                                   gate is satisfied.)
 ```
 
-### §6.2. Files NOT touched (per reviewer: no Foundation production primitive first)
+### §6.2. Files NOT touched
 
 ```text
-any production source file under
-  apps/vscode/src/core/controller/** except the existing
-    SdkProviderChangeCoordinator (which was already
-    completed in the §12 freeze evidence 06 commit
-    80723fb9f — NOT this commit's work)
+  apps/vscode/src/core/controller/** (NOT touched)
   apps/vscode/src/sdk/SdkController.ts (NOT touched)
   apps/vscode/src/core/storage/StateManager.ts (NOT touched)
   apps/vscode/src/sdk/model-catalog/** (NOT touched)
@@ -631,7 +682,35 @@ any production source file under
   sdk/packages/core/src/types/** (NOT touched)
 ```
 
-Per reviewer's directive: "Do **not** implement any Foundation production primitive first." This commit is **recon/witness only**.
+The following files ARE touched in this ACT (recon-only was true for
+the ninety-fourth + ninety-fifth passes; the ninety-sixth + ninety-
+seventh passes intentionally add the minimum GREEN + BINDING per the
+eighth and ninth reviewers' reopen conditions):
+
+```text
+  apps/vscode/src/sdk/
+    sdk-provider-change-coordinator.ts
+      (NEW applyProviderConfigurationInstance method;
+       ninety-sixth-pass addition. Now threading `next`
+       through `providerConfigurationInstance` argument
+       to sessionConfigBuilder.build — ninety-seventh pass.)
+  apps/vscode/src/sdk/
+    sdk-session-config-builder.ts
+      (NEW opt-in merge step in build() that projects
+       providerConfigurationInstance onto the resolved
+       CoreSessionConfig — ninety-seventh pass.)
+  apps/vscode/src/sdk/
+    cline-session-factory.ts
+      (NEW optional providerConfigurationInstance?
+       : ApiConfiguration field on SessionConfigInput —
+       ninety-seventh pass. No breaking change.)
+```
+
+Per the eighth + ninth reviewers' reopen conditions:
+"the minimum GREEN is allowed to introduce only the things
+necessary for `NEXT_EFFECTIVE_CONNECTION == B`" and "Make the
+next test force the argument to be load-bearing". The
+touches above are exactly those minimum things.
 
 ### §6.3. Verdict (corrected — ninety-sixth pass)
 
@@ -665,9 +744,9 @@ R1c  = STRUCTURAL_CONSERVATION_CHARACTERIZATION
             = DOES_NOT_EXIST
 
 R2   = STRATEGY_B_CONTRACT_GUARD ✓
-        (NEW in ninety-sixth pass; the actual GREEN
-         contract the eighth reviewer required. Drives
-         the new SdkProviderChangeCoordinator
+        (NEW in ninety-sixth pass; bound-with-binding
+         in ninety-seventh pass. Drives the new
+         SdkProviderChangeCoordinator
          .applyProviderConfigurationInstance seam on the
          real production coordinator and asserts the
          Strategy B contract:
@@ -675,13 +754,31 @@ R2   = STRATEGY_B_CONTRACT_GUARD ✓
              ⇒ idle-gated replaceActiveSession(...)
              ⇒ new active session's in-memory
                 ActiveSession.config.{apiKey, baseUrl,
-                headers} == B
+                headers, providerId, modelId} == B
+         PLUS binding discriminator:
+           PIIF01_R2_BINDING_INVERSION_NEXT_A_GLOBAL_B:
+             builder state at B-global
+             + caller passes next = A
+             ⇒ reconstructed session = A
+             (proves the coordinator is not merely
+              parroting whatever the builder happens to
+              resolve; required the production seam to
+              thread `next` through
+              `sessionConfigBuilder.build({ ...,
+               providerConfigurationInstance: next })`
+              and the SdkSessionConfigBuilder merge to
+              honor that field).
          PLUS two conservation guards:
            - session_running ⇒ refuse (no destructive
              replace mid-turn)
            - no_active_session ⇒ return no_active_session
          Test runs on real production code; passes today
-         on the ninety-sixth-pass commit.)
+         on the ninety-seventh-pass commit. The
+         binding-inversion test was verified to FAIL
+         without the production fix (via `git stash`
+         re-run) and to PASS with the fix applied —
+         proving the GREEN contract is not an
+         artifact-not-bound-to-source.)
 
 HALT_RED_NOT_REPRODUCED            = CLOSED
                                        (the seventh reviewer's
@@ -710,6 +807,35 @@ HALT_R1_GREEN_CONTRACT_
                                        Strategy B contract
                                        test in a separate
                                        file.)
+
+HALT_R2_INPUT_NOT_BOUND_TO_
+  RECONSTRUCTION                  = CLOSED
+                                       (the ninth reviewer's
+                                       P0 on 919c62ae7;
+                                       closed at this pass by
+                                       threading `next` through
+                                       `sessionConfigBuilder
+                                       .build({ ..., provider
+                                       ConfigurationInstance:
+                                       next })`, adding the
+                                       SdkSessionConfigBuilder
+                                       merge step that honors
+                                       that field, and adding
+                                       the BINDING_INVERSION
+                                       test that proves the
+                                       coordinator is not
+                                       merely parroting
+                                       whatever the builder
+                                       happens to resolve.
+                                       Verified by `git
+                                       stash`-ing the
+                                       production fix and
+                                       re-running: the
+                                       BINDING_INVERSION test
+                                       FAILS without the fix
+                                       (1 failed / 3 passed)
+                                       and PASSES with the fix
+                                       applied (4 passed).)
 
 HALT_REVIEWER_P1_BRIDGE_BASELINE   = CLOSED
                                        (the eighth reviewer's
@@ -867,6 +993,29 @@ The full foundation ACT causal chain is now bound end-to-end against real produc
         transitions from OPEN to
         OPEN_FOR_MINIMAL_SEAM_CREATION
 
+(j') evidence 07 + 07a reopen + binding (ninety-seventh pass):
+    - Production seam (`applyProviderConfigurationInstance`)
+      now passes `next` as `input.providerConfigurationInstance`
+      to `sessionConfigBuilder.build(...)`.
+    - `SdkSessionConfigBuilder.build` gained an opt-in merge
+      that, when `providerConfigurationInstance` is present,
+      projects its identity/connection fields (providerId,
+      modelId, apiKey, baseUrl, headers) onto the resolved
+      `CoreSessionConfig`. Backward-compatible: existing
+      callers see no behavior change.
+    - `SessionConfigInput.providerConfigurationInstance` field
+      added (optional, no breaking change).
+    - R2 file rewritten with a third test
+      `PIIF01_R2_BINDING_INVERSION_NEXT_A_GLOBAL_B` that holds
+      the builder state at B-global and asserts the
+      reconstructed session carries A — the reviewer's exact
+      suggested form.
+    - Verified FAIL-without-fix / PASS-with-fix via `git
+      stash` re-run.
+    - JSDoc fixed (no longer overclaims "built from next"
+      without the binding wiring).
+    - HALT_R2_INPUT_NOT_BOUND_TO_RECONSTRUCTION = CLOSED.
+
 NEXT:
 (k) Add persisted ProviderConfigurationInstance
     definition store (instances.json, definitions only,
@@ -918,6 +1067,77 @@ LIVE USER SESSION            = NOT_EXECUTED
 
 The defect does not require the LLM boundary to observe. The defect is observable entirely in the configuration-projection + session-lifecycle seams. This is consistent with the reviewer's "Do not mock away the configuration-change or session-lifecycle seam you're trying to prove defective."
 
+### §6.5.1. R2 production seams actually driven (ninety-seventh pass, with BINDING)
+
+Per the ninth reviewer's classification request:
+
+```text
+INSTANCE-APPLY COORDINATOR       = REAL_PRODUCTION_SEAM
+                                   (SdkProviderChangeCoordinator
+                                    .applyProviderConfigurationInstance
+                                    — threads `next` as
+                                    input.providerConfigurationInstance
+                                    to sessionConfigBuilder.build)
+
+SESSION-LIFECYCLE BUILDER MERGE  = REAL_PRODUCTION_SEAM
+                                   (SdkSessionConfigBuilder.build
+                                    + applyProviderConfigurationInstance
+                                    ToConfig — the merge that
+                                    makes `next` load-bearing on
+                                    the resolved CoreSessionConfig)
+
+SESSION CONFIG TYPE CARRIER      = REAL_PRODUCTION_SEAM
+                                   (cline-session-factory.ts
+                                    SessionConfigInput
+                                    .providerConfigurationInstance
+                                    optional field)
+
+LOCAL RUNTIME startSession       = REAL_PRODUCTION_SEAM
+                                   (LocalRuntimeHost.startSession
+                                    captures the merged config
+                                    into the in-memory
+                                    ActiveSession.config)
+
+SdkSessionLifecycle.replace
+  ActiveSession                   = SYNTHETIC_REAL (stubbed; the
+                                    stub does a forward
+                                    host.startSession. The real
+                                    replaceActiveSession does
+                                    dispose/fence/task-proxy work
+                                    the stub omits.)
+
+FULL REPLACEMENT LIFECYCLE       = NOT_EXECUTED (a future
+                                   qualification will exercise
+                                   the real replaceActiveSession
+                                   once persistence is wired)
+
+NETWORK PROVIDER REQUEST         = NOT_REQUIRED
+                                   (mocked at the sdkHost
+                                   boundary; the contract is
+                                   observable entirely in
+                                   configuration-projection +
+                                   session-lifecycle seams)
+
+INSTANCE A/B DATA                = SYNTHETIC_REAL
+                                   (composed in the test; uses
+                                   the existing real
+                                   ApiConfiguration type)
+
+LIVE USER SESSION                = NOT_EXECUTED
+                                   (recon + bounded GREEN; no
+                                   user session started)
+
+BINDING PROOF (discriminator)    = REAL_PRODUCTION_SEAM
+                                   (PIIF01_R2_BINDING_INVERSION_
+                                    NEXT_A_GLOBAL_B test: builder
+                                    state at B-global + caller
+                                    passes next = A ⇒
+                                    reconstructed session = A;
+                                    verified FAIL-without-fix
+                                    / PASS-with-fix via `git
+                                    stash` re-run.)
+```
+
 ---
 
 ## §7. Why this is sufficient
@@ -947,7 +1167,7 @@ Both P2s are explicit "DO NOT FIX" per the seventh reviewer. Filed here for trac
 
 ---
 
-## §9. Foundation ACT body §10 v2 status (corrected — ninety-sixth pass)
+## §9. Foundation ACT body §10 v2 status (corrected — ninety-seventh pass)
 
 ```text
 FOUNDATION_RECON_PHASE          = CLOSED (§12 frozen + bound;
@@ -955,21 +1175,30 @@ FOUNDATION_RECON_PHASE          = CLOSED (§12 frozen + bound;
                                        AND DIAGNOSTIC current-seam
                                        witness; R1b/c characterized
                                        honestly; R2 GREEN contract
-                                       established.)
+                                       established with BINDING
+                                       proven.)
 
 FOUNDATION_IMPLEMENTATION_PHASE = OPEN_FOR_MINIMAL_SEAM_CREATION
                                   (per eighth reviewer's C1
                                    verdict; not yet
                                    OPEN_FOR_ARBITRARY_GREEN_TO_
                                    CURRENT_R1_TEST)
-                                  The first implementation
-                                  commit has produced the
-                                  minimum explicit instance-
-                                  apply seam
-                                  (applyProviderConfigurationInstance
-                                  on SdkProviderChangeCoordinator)
-                                  and the matching R2 GREEN
-                                  contract test.
+                                  The first two implementation
+                                  commits have produced:
+                                    1. The minimum explicit
+                                       instance-apply seam
+                                       (applyProviderConfiguration
+                                       Instance on
+                                       SdkProviderChangeCoordinator).
+                                    2. The Builder binding:
+                                       sessionConfigBuilder
+                                       .build({ cwd, mode,
+                                       providerConfiguration
+                                       Instance: next }) now
+                                       actually threads `next`
+                                       into the resolved config
+                                       (SdkSessionConfigBuilder
+                                       merge step).
 
 R1a                             = DIAGNOSTIC_CURRENT_SEAM_WITNESS
                                   (NOT the GREEN contract;
@@ -998,24 +1227,69 @@ R1c                             = STRUCTURAL_CONSERVATION_
                                      AUTOMATIC_IDLE_REBUILD
                                        = DOES_NOT_EXIST)
 
-R2                              = STRATEGY_B_CONTRACT_GUARD ✓
-                                  (provider-instance-identity-
-                                   r2-strategy-b.piif01.test.ts
-                                   passes — explicit
-                                   applyProviderConfigurationInstance
-                                   routes to full reconstruction
-                                   with B's connection captured
-                                   into the new active session's
-                                   in-memory ActiveSession.config)
+R2                              = STRATEGY_B_CONTRACT_GUARD
+                                  + INSTANCE_TO_CONNECTION_
+                                    BINDING ✓ (ninety-seventh
+                                    pass).
+                                  Tests in
+                                  provider-instance-identity-
+                                  r2-strategy-b.piif01.test.ts:
+                                    PIIF01_R2_STRATEGY_B_CONTRACT
+                                      ⇒ idle-gated
+                                         replaceActiveSession
+                                         with B's config
+                                         captured into the
+                                         new active session's
+                                         in-memory
+                                         ActiveSession.config
+                                    PIIF01_R2_BINDING_INVERSION_
+                                      NEXT_A_GLOBAL_B
+                                      ⇒ builder state at
+                                         B-global + caller
+                                         passes next = A
+                                         ⇒ reconstructed
+                                         session = A
+                                         (proves the
+                                          coordinator is
+                                          not merely
+                                          parroting
+                                          whatever the
+                                          builder happens
+                                          to resolve;
+                                          verified
+                                          FAIL-without-fix
+                                          / PASS-with-fix
+                                          via `git stash`
+                                          re-run)
+                                    PIIF01_R2_SESSION_RUNNING_
+                                      REFUSAL
+                                      ⇒ mid-turn
+                                         ⇒ {applied:false,
+                                          reason:
+                                          "session_running"}
+                                    PIIF01_R2_NO_ACTIVE_SESSION
+                                      ⇒ no active session
+                                         ⇒ {applied:false,
+                                          reason:
+                                          "no_active_session"}
 
 MODEL_PROFILES_IMPLEMENTATION   = NOT YET AUTHORIZED (gated on
                                                   §17 handoff;
                                                   the explicit
                                                   instance-apply
-                                                  seam is the
+                                                  seam with
+                                                  BINDING is the
                                                   prerequisite
                                                   for Model
                                                   Profiles)
+
+HALT_RED_NOT_REPRODUCED         = CLOSED (7th reviewer's P0)
+HALT_R1_GREEN_CONTRACT_
+  CONTRADICTS_FROZEN_STRATEGY   = CLOSED (8th reviewer's P0)
+HALT_R2_INPUT_NOT_BOUND_TO_
+  RECONSTRUCTION                = CLOSED (9th reviewer's P0)
+HALT_REVIEWER_P1_BRIDGE_BASELINE
+                                = CLOSED (8th reviewer's P1)
 ```
 
 LEGACY_SAME_PROVIDER_FIELD_EDIT_BEHAVIOR = OUT_OF_SCOPE_FOR_FOUNDATION (frozen at ninety-sixth pass).

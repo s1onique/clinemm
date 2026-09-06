@@ -13,6 +13,7 @@ import {
 	type ClineCoreStartInput,
 	type CoreSessionConfig,
 	getProviderAuthHandler,
+	getSandboxBackend,
 	type ProviderSettings,
 	readCompactionStrategyGlobally,
 	resolveProviderApiKeyFromSettings,
@@ -55,7 +56,6 @@ import { resolveExperimentalSandboxMode } from "./sandbox-policy"
 import { buildSapProviderConfig, type SapProviderConfig } from "./sap-config"
 import { deriveExplicitCompletionAuthority, type SessionAutoApprovalOverride } from "./session-auto-approval"
 import type { SdkSessionHost } from "./session-host"
-import { getSandboxBackend } from "@cline/core"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -100,6 +100,26 @@ export interface SessionConfigInput {
 	 * pure and testable.
 	 */
 	sessionAutoApprovalOverride?: SessionAutoApprovalOverride
+	/**
+	 * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01 (R2
+	 * GREEN contract, ninth reviewer reopen):
+	 *
+	 * Optional explicit provider-configuration-instance override
+	 * used by the explicit instance-apply seam
+	 * (`SdkProviderChangeCoordinator.applyProviderConfigurationInstance`).
+	 *
+	 * When present, the SdkSessionConfigBuilder projects this onto
+	 * the resolved CoreSessionConfig, overriding the provider/model
+	 * identity fields (providerId, modelId, apiKey, baseUrl,
+	 * headers) so that the reconstructed session reflects the
+	 * requested instance rather than whatever is currently in the
+	 * StateManager.
+	 *
+	 * When undefined (the default for ALL existing callers — task
+	 * start, followup, resume, compaction, mode-coordinator, etc.),
+	 * the resolved config is identical to today's behavior.
+	 */
+	providerConfigurationInstance?: ApiConfiguration
 }
 
 /** Active session state tracked by the factory */
@@ -1058,12 +1078,11 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	// This keeps the buildSessionConfig seam pure and the CAI-01B
 	// "override=all" route observable end-to-end (GREEN).
 	const seatbeltSelected = resolveExperimentalSandboxMode() === "seatbelt-experimental"
-	const seatbeltBackend =
-		seatbeltSelected
-			? await getSandboxBackend("seatbelt-experimental", {
-					mode: "seatbelt-experimental",
-				})
-			: undefined
+	const seatbeltBackend = seatbeltSelected
+		? await getSandboxBackend("seatbelt-experimental", {
+				mode: "seatbelt-experimental",
+			})
+		: undefined
 	const seatbeltAvailable = seatbeltBackend !== undefined
 	const autoApprovalSettings = StateManager.get().getGlobalSettingsKey("autoApprovalSettings")
 	const enableSubmitAndExit =
