@@ -40,6 +40,121 @@ function providerForMode(config: ApiConfiguration, mode: Mode): string | undefin
 export class SdkProviderChangeCoordinator {
 	constructor(private readonly options: SdkProviderChangeCoordinatorOptions) {}
 
+	/**
+	 * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01 / PIIF01
+	 * (ninety-sixth pass, R2 GREEN probe):
+	 *
+	 * Explicit instance-apply seam. Routes A → B through full
+	 * session reconstruction (Strategy B), independent of the
+	 * providerId-only discriminator that gates
+	 * `handleApiConfigurationChanged`.
+	 *
+	 *   - Idle-gated: refuses to apply while a turn is in flight
+	 *     (the session is "running"); callers must wait for the
+	 *     next idle or cancel the running turn.
+	 *   - Full reconstruction: calls
+	 *     `this.options.sessions.replaceActiveSession(...)` with a
+	 *     `startInput` built from `next` (B), so the new active
+	 *     session's in-memory `ActiveSession.config` reflects B's
+	 *     connection fields (apiKey / baseUrl / headers / modelId /
+	 *     providerId / reasoningEffort / thinkingBudgetTokens).
+	 *   - No persistence: this probe does NOT touch instances.json,
+	 *     the secret store, or any new global state. It is a
+	 *     minimum 50-line instance-apply probe ahead of the
+	 *     Foundation's durable persistence layer.
+	 *   - Same-instance / model-only fast path conservation: a
+	 *     caller that wants to swap only the modelId should use the
+	 *     existing `SdkSessionLifecycle.updateActiveSessionModel`
+	 *     → `sdkHost.updateSessionModel` path, which the
+	 *     conservation test
+	 *     `sdk-session-lifecycle.test.ts:544-556` already exercises.
+	 *     This probe is for explicit provider-instance APPLY, not
+	 *     for model-only mutations.
+	 *
+	 * Returns:
+	 *   - `{ applied: true, newSessionId }` on success
+	 *   - `{ applied: false, reason: "no_active_session" }` if no
+	 *     active session exists (caller is expected to start a new
+	 *     one with B's config)
+	 *   - `{ applied: false, reason: "session_running" }` if the
+	 *     active session is mid-turn (caller must wait)
+	 *   - `{ applied: false, reason: "reconstruction_failed" }` if
+	 *     the underlying `replaceActiveSession` returned undefined
+	 *     (e.g. concurrent supersession)
+	 */
+	async applyProviderConfigurationInstance(
+		_previous: ApiConfiguration,
+		next: ApiConfiguration,
+	): Promise<
+		| { applied: true; newSessionId: string }
+		| { applied: false; reason: "no_active_session" | "session_running" | "reconstruction_failed" }
+	> {
+		const activeSession = this.options.sessions.getActiveSession()
+		if (!activeSession) {
+			Logger.log(
+				"[SdkController] applyProviderConfigurationInstance: no active session; caller must start a new session with the new config",
+			)
+			return { applied: false, reason: "no_active_session" }
+		}
+
+		if (activeSession.isRunning) {
+			Logger.warn(
+				"[SdkController] applyProviderConfigurationInstance: active session is running; refusing to destructively replace mid-turn",
+			)
+			return { applied: false, reason: "session_running" }
+		}
+
+		const cwd = await this.options.getWorkspaceRoot()
+		const mode = this.getCurrentMode()
+
+		try {
+			const config = await this.options.sessionConfigBuilder.build({ cwd, mode })
+			config.sessionId = activeSession.sessionId
+
+			const initialMessages = await this.options.loadInitialMessages(activeSession.sdkHost, activeSession.sessionId)
+			const startInput = this.options.buildStartSessionInput(config, { cwd, mode })
+			const restartResult = await this.options.sessions.replaceActiveSession({
+				expectedSession: activeSession,
+				startInput,
+				...(initialMessages ? { initialMessages } : {}),
+				disposeReason: "providerInstanceApply",
+			})
+			if (!restartResult) {
+				return { applied: false, reason: "reconstruction_failed" }
+			}
+
+			const { startResult } = restartResult
+			const task = this.options.getTask()
+			if (task && task.taskId !== startResult.sessionId) {
+				task.taskId = startResult.sessionId
+			}
+
+			await this.options.postStateToWebview()
+			Logger.log(
+				`[SdkController] Applied provider-instance config; session reconstructed: ${activeSession.sessionId} -> ${startResult.sessionId}`,
+			)
+			return { applied: true, newSessionId: startResult.sessionId }
+		} catch (error) {
+			Logger.error("[SdkController] applyProviderConfigurationInstance failed:", error)
+			this.options.messages.appendAndEmit(
+				[
+					{
+						ts: Date.now(),
+						type: "say",
+						say: "error",
+						text: `Failed to apply provider-instance configuration: ${
+							error instanceof Error ? error.message : String(error)
+						}. The active session may still use the previous configuration.`,
+						partial: false,
+					},
+				],
+				{ type: "status", payload: { sessionId: activeSession.sessionId, status: "error" } },
+			)
+			await this.options.postStateToWebview()
+			return { applied: false, reason: "reconstruction_failed" }
+		}
+	}
+
 	handleApiConfigurationChanged(previous: ApiConfiguration, next: ApiConfiguration): void {
 		const mode = this.getCurrentMode()
 		const previousProvider = providerForMode(previous, mode)

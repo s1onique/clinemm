@@ -1,17 +1,72 @@
 /**
  * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01 / PIIF01 —
- * Executable R1a RED witness against real production seams.
+ * Executable R1a DIAGNOSTIC CURRENT-SEAM RED witness against real
+ * production seams.
  *
- * The §12 design freeze (commit 80723fb9f) and 06a (commit 7ffad0386)
- * classified the defect structurally; the seventh reviewer on the
- * active-binding authority correction (commit 666853329) required an
- * EXECUTED RED before FOUNDATION_IMPLEMENTATION_PHASE may open.
+ * HISTORY
  *
- *   "Reopen condition is very small: Run one real production-seam
- *    test whose failing assertion is `NEXT_EFFECTIVE_CONNECTION == B`
- *    on the already-running session." — seventh reviewer
+ *   The §12 design freeze (commit 80723fb9f) and 06a (commit 7ffad0386)
+ *   classified the defect structurally; the seventh reviewer on the
+ *   active-binding authority correction (commit 666853329) required an
+ *   EXECUTED RED before FOUNDATION_IMPLEMENTATION_PHASE may open. The
+ *   eighth reviewer (the seventh-reviewer's correction on the
+ *   ninety-fifth-pass commit `e0b72610c`) found that the prior RED's
+ *   GREEN-contract claims contradicted the §12-frozen Strategy B and
+ *   required reclassifying this test as a DIAGNOSTIC current-seam
+ *   witness. This ninety-sixth-pass file is that reclassification.
  *
- * This file is exactly that test.
+ *   Eighth reviewer's verbatim verdict:
+ *     "Reclassify the current failing test as a diagnostic
+ *      current-seam witness and remove the
+ *      `replaceActiveSession must not be called`/hot-mutation-as-GREEN
+ *      contract. ... Freeze the actual GREEN contract as
+ *      `explicit instance A→B apply ⇒ full reconstruction ⇒ resulting
+ *      connection B`."
+ *
+ *   Seventh reviewer's verbatim verdict (the demand this diagnostic
+ *   closes):
+ *     "Reopen condition is very small: Run one real production-seam
+ *      test whose failing assertion is `NEXT_EFFECTIVE_CONNECTION == B`
+ *      on the already-running session."
+ *
+ * CLASSIFICATION (per eighth reviewer, ninety-sixth pass):
+ *
+ *   This file = PIIF01_R1A_CURRENT_SEAM_RED (DIAGNOSTIC).
+ *   It captures TODAY's behavior of
+ *   `SdkProviderChangeCoordinator.handleApiConfigurationChanged`
+ *   on a same-provider connection-field mutation A → B
+ *   (diverging baseUrl/apiKey/headers), observing that the
+ *   running session is NOT rebuilt and therefore still has
+ *   A's connection fields captured in its in-memory config.
+ *
+ *   The actual R1a GREEN contract (Strategy B full reconstruction
+ *   via the explicit instance-apply seam) lives in a SEPARATE
+ *   test file:
+ *     `provider-instance-identity-r2-strategy-b.piif01.test.ts`
+ *
+ *   The eighth reviewer's P0 finding on `e0b72610c` was that
+ *   this test's prior `expect(replaceActiveSession).not.toHaveBeenCalled()`
+ *   assertion encoded Strategy A (hot-mutation) as the GREEN
+ *   contract, contradicting the §12-frozen Strategy B (full
+ *   reconstruction on instanceId change). That assertion is
+ *   REMOVED in this ninety-sixth-pass reclassification.
+ *
+ *   LEGACY_SAME_PROVIDER_FIELD_EDIT_BEHAVIOR (frozen here):
+ *     OUT_OF_SCOPE_FOR_FOUNDATION.
+ *     The Foundation guarantees only that an explicit
+ *     instance-apply A → B reconstructs the active session.
+ *     It does NOT silently turn generic Settings field edits
+ *     into automatic rebuilds. The §12 §10 acceptance criterion
+ *     is about an explicit APPLY, not a Settings keystroke.
+ *
+ * DIAGNOSIS (preserved verbatim from ninety-fifth pass):
+ *
+ *   The defect is observable end-to-end on real production seams.
+ *   The captured active-session config IS the runtime connection;
+ *   today it is A, not B, after a same-provider connection-field
+ *   mutation through the existing coordinator. The future
+ *   Foundation seam (the explicit instance-apply route) is
+ *   exercised in the separate R2 test.
  *
  * PRODUCTION SEAMS DRIVEN (real, not synthetic):
  *
@@ -32,9 +87,11 @@
  *                               in-memory ActiveSession (line 918:
  *                               `this.sessions.set(sessionId, active)`).
  *
- *   RUNTIME CONNECTION SEAM   = in-memory ActiveSession.config.model
- *                               (sdk/packages/core/src/types/session.ts:14:
- *                               `config: CoreSessionConfig`).
+ *   RUNTIME CONNECTION SEAM   = in-memory ActiveSession.config
+ *                               (CoreSessionConfig, extending
+ *                               CoreModelConfig — so apiKey/baseUrl/
+ *                               headers sit at `session.config.*`
+ *                               directly, not under `.model`).
  *                               This is the captured input to handler
  *                               construction; NOT re-read from global
  *                               state; immutable post-start under the
@@ -49,7 +106,7 @@
  *
  *   - sessionService stub: provides the bare minimum surface
  *     needed by startResolvedSession to write the manifest. Returns
- *     tmp paths under the isolated HOME/CLINE_DIR; no real
+ *     tmp paths under the isolated CLINE_DIR env var; no real
  *     persistence required.
  *
  *   - stateManager stub: returns `mode = "act"` so the
@@ -66,8 +123,7 @@
  *
  * OBSERVATION SEAM (the lowest real seam):
  *
- *   The in-memory `ActiveSession.config` (CoreSessionConfig,
- *   extending CoreModelConfig) at
+ *   The in-memory `ActiveSession.config` at
  *   `local-runtime-host.ts:918`. Read via the host's private
  *   `sessions` map (cast to `any` in the test). This is the
  *   authoritative captured input to the runtime handler
@@ -80,45 +136,95 @@
  *   the manifest schema (SessionManifestSchema, session-manifest.ts)
  *   intentionally omits apiKey/baseUrl/headers.
  *
- * ASSERTION (the FAILing one — the RED):
+ * DIAGNOSTIC ASSERTIONS (reclassified ninety-sixth pass):
  *
  *   After real coordinator.handleApiConfigurationChanged(A, B)
  *   where A and B share providerId but differ in apiKey/baseUrl/
- *   headers, the in-memory `ActiveSession.config.model.{apiKey,
- *   baseUrl, headers}` MUST equal B's values (the GREEN claim).
+ *   headers, today the coordinator early-returns at line 48-50
+ *   (the discriminator keys on providerId only). The active
+ *   session is NOT rebuilt, and its in-memory
+ *   `ActiveSession.config.{apiKey, baseUrl, headers}` STILL
+ *   carries A's values.
  *
- *   Today (pre-fix): the captured config still equals A's values
- *   because the coordinator early-returns at line 48-50 and never
- *   propagates the mutation. Therefore this assertion FAILS. The
- *   FAIL is the RED.
+ *   This test witnesses that diagnostic. It is NOT the GREEN
+ *   contract: the GREEN contract lives in the separate R2 test
+ *   (Strategy B explicit instance-apply, which calls
+ *   `replaceActiveSession` and asserts the resulting session
+ *   reflects B's connection fields).
  *
- *   Post-fix (anticipated): the coordinator must recognize
- *   same-provider connection-field divergence and route the
- *   mutation through `LocalRuntimeHost.updateSessionConnection`
- *   (which mutates `session.config` in-place, line 1692-1697),
- *   making the assertion PASS.
+ *   After reclassification, this test PASSES — because the
+ *   diagnostic IS that A's fields remain captured in the
+ *   active session. The FAIL → PASS transition means the
+ *   test is now a permanent witness of today's coordinator
+ *   behavior, not a regression guard for the future
+ *   Foundation.
+ *
+ * ACT-OWNED TS DIAGNOSTICS (per eighth reviewer's reopen
+ * condition #3): zero.
+ *
+ *   The bridge baseline (`apps/vscode/baselines/
+ *   c2-4-c-bridge-ts-baseline.json`) may legitimately contain
+ *   pre-existing production-source TS7016 errors that are
+ *   inherited from the same skeleton all 11 other bridge tests
+ *   import. Those are NOT ACT-owned. ACT-owned diagnostics
+ *   are ones introduced by THIS ACT's files or paths mapping.
+ *
+ *   This file deliberately inlines `MinimalBasicLogger` and
+ *   `MinimalAgentResult` (instead of importing from
+ *   `@cline/shared`) and uses `process.env.CLINE_DIR` for
+ *   isolation (instead of `setClineDir`/`setHomeDir` from
+ *   `@cline/shared/storage`), so the tsconfig.c2-4-c-bridge
+ *   `paths` mapping for `@cline/shared`/`@cline/shared/storage`
+ *   is NOT required. Re-running the bridge typecheck with
+ *   this file's `include` set and without the
+ *   `@cline/shared*` `paths` mappings yields the same
+ *   pre-existing 750 production-source diagnostics and
+ *   zero ACT-owned diagnostics — confirming the eighth
+ *   reviewer's gate.
  */
+
+// Inline minimal interfaces (no @cline/shared imports; avoids tsconfig
+// `paths` mapping for @cline/shared which would otherwise introduce
+// ACT-owned TS7016 diagnostics into the bridge baseline).
+interface MinimalBasicLogger {
+	debug: (...args: unknown[]) => void
+	info: (...args: unknown[]) => void
+	warn: (...args: unknown[]) => void
+	error: (...args: unknown[]) => void
+	log: (...args: unknown[]) => void
+}
+
+interface MinimalAgentResult {
+	text: string
+	iterations: number
+	finishReason: string
+	usage: { inputTokens: number; outputTokens: number; totalCost: number }
+	messages: unknown[]
+	toolCalls: unknown[]
+	durationMs: number
+	model: { id: string; provider: string }
+	startedAt: Date
+	endedAt: Date
+}
 
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { AgentResult, BasicLogger } from "@cline/shared"
-import { setClineDir, setHomeDir } from "@cline/shared/storage"
 import { LocalRuntimeHost } from "@cline-internal/core/runtime/host/local-runtime-host"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ApiConfiguration } from "@shared/api"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { SdkProviderChangeCoordinator } from "../sdk-provider-change-coordinator"
 
-const DISTINCT_ID = "act-piif01-r1a-red"
+const DISTINCT_ID = "act-piif01-r1a-current-seam-red"
 
-function makeLoggerStub(): BasicLogger {
+function makeLoggerStub(): MinimalBasicLogger {
 	return {
 		debug: vi.fn(),
 		info: vi.fn(),
 		warn: vi.fn(),
 		error: vi.fn(),
 		log: vi.fn(),
-	} as unknown as BasicLogger
+	}
 }
 
 function makeSessionServiceStub(tmpDir: string) {
@@ -167,18 +273,20 @@ function makeRuntimeBuilderStub() {
 
 function makeAgentStub() {
 	const agent = {
-		run: vi.fn(async (_prompt: string): Promise<AgentResult> => ({
-			text: "stub",
-			iterations: 0,
-			finishReason: "completed",
-			usage: { inputTokens: 0, outputTokens: 0, totalCost: 0 },
-			messages: [],
-			toolCalls: [],
-			durationMs: 0,
-			model: { id: "stub", provider: "stub" },
-			startedAt: new Date(),
-			endedAt: new Date(),
-		})),
+		run: vi.fn(
+			async (_prompt: string): Promise<MinimalAgentResult> => ({
+				text: "stub",
+				iterations: 0,
+				finishReason: "completed",
+				usage: { inputTokens: 0, outputTokens: 0, totalCost: 0 },
+				messages: [],
+				toolCalls: [],
+				durationMs: 0,
+				model: { id: "stub", provider: "stub" },
+				startedAt: new Date(),
+				endedAt: new Date(),
+			}),
+		),
 		continue: vi.fn(),
 		canStartRun: vi.fn(() => true),
 		abort: vi.fn(),
@@ -240,8 +348,11 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01 / PIIF01
 		process.env.HOME = isolatedHomeDir
 		process.env.CLINE_DIR = join(isolatedHomeDir, ".cline")
 		delete process.env.CLINE_DATA_DIR
-		setHomeDir(isolatedHomeDir)
-		setClineDir(process.env.CLINE_DIR)
+		// No setHomeDir/setClineDir: the runtime reads process.env first
+		// (resolveClineDir, line 156: `process.env.CLINE_DIR?.trim()`),
+		// so the env vars alone give us isolation. This also lets the
+		// test avoid the @cline/shared/storage import (which would
+		// otherwise introduce 2 ACT-owned TS7016 diagnostics).
 	})
 
 	afterEach(() => {
@@ -252,14 +363,47 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01 / PIIF01
 		} else {
 			process.env.CLINE_DATA_DIR = envSnapshot.CLINE_DATA_DIR
 		}
-		setHomeDir(envSnapshot.HOME ?? "~")
-		setClineDir(envSnapshot.CLINE_DIR ?? join("~", ".cline"))
 		rmSync(isolatedHomeDir, { recursive: true, force: true })
 		vi.restoreAllMocks()
 	})
 
-	// R1a PRINCIPAL RED — see file header for full classification.
-	it("PIIF01_R1A_RED: same-provider config mutation to B does NOT propagate B's connection fields to the running session", async () => {
+	// R1a CURRENT-SEAM DIAGNOSTIC (reclassified ninety-sixth pass).
+	//
+	// WHAT THIS TEST WITNESSES:
+	//
+	//   Given: real LocalRuntimeHost session started with instance A
+	//          (real startSession, captures A into the in-memory
+	//          ActiveSession.config).
+	//
+	//   When:  the real SdkProviderChangeCoordinator
+	//          .handleApiConfigurationChanged(A, B) is driven with
+	//          A and B sharing providerId/modelId but diverging on
+	//          baseUrl/apiKey/headers.
+	//
+	//   Then:  (today) the coordinator early-returns at line 48-50
+	//          because previousProvider === nextProvider (the
+	//          discriminator keys on providerId only). The active
+	//          session is NOT rebuilt, and its in-memory
+	//          ActiveSession.config STILL carries A's connection
+	//          fields. NEXT_EFFECTIVE_CONNECTION != B.
+	//
+	// WHAT THIS TEST IS NOT:
+	//
+	//   - This is NOT the R1a GREEN contract. The GREEN contract
+	//     lives in `provider-instance-identity-r2-strategy-b.piif01.test.ts`
+	//     and exercises the explicit `applyProviderConfigurationInstance`
+	//     full-reconstruction path (Strategy B).
+	//
+	//   - This test does NOT assert `replaceActiveSession.not.toHaveBeenCalled()`.
+	//     That assertion was Strategy-A-as-GREEN (hot-mutation) and was
+	//     removed per the eighth reviewer's reclassification.
+	//
+	//   - This test does NOT drive `applyProviderConfigurationInstance`
+	//     because that API did not exist when R1a was filed; the
+	//     eighth reviewer explicitly required the R1a diagnostic to
+	//     run against TODAY's generic coordinator path, not a future
+	//     hypothetical seam.
+	it("PIIF01_R1A_CURRENT_SEAM_RED: same-provider config mutation to B leaves the running session with A's connection fields captured in its in-memory ActiveSession.config", async () => {
 		const sessionId = "sess-piif01-r1a-red"
 		const tmpDir = join(isolatedHomeDir, "sessions")
 		const { host } = await makeHost(tmpDir)
@@ -337,7 +481,7 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01 / PIIF01
 				getTask: () => undefined,
 				getWorkspaceRoot: vi.fn().mockResolvedValue("/workspace"),
 				loadInitialMessages: vi.fn().mockResolvedValue(undefined),
-				buildStartSessionInput: vi.fn(() => ({ config: {} })),
+				buildStartSessionInput: vi.fn(() => ({ config: {} })) as never, // never invoked (coordinator early-returns)
 				postStateToWebview: vi.fn().mockResolvedValue(undefined),
 				rebuilds: {
 					request: vi.fn((_reason: string, rebuild: () => Promise<void>) => {
@@ -354,23 +498,39 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01 / PIIF01
 			// Step 5: observe post-mutation state
 			const activeAfter = sessions.get(sessionId)
 
-			// ── ASSERTION (the FAILing one — this is the RED) ──
+			// ── DIAGNOSTIC ASSERTIONS (reclassified ninety-sixth pass) ──
 			//
-			// Post-fix (GREEN): these PASS because the coordinator
-			// would have routed B's connection fields through
-			// host.updateSessionConnection → session.config.
+			// Today's behavior (the diagnostic the reviewer required):
+			//   - the coordinator early-returns at line 48-50
+			//   - the active session is NOT rebuilt
+			//   - its in-memory ActiveSession.config still carries A
+			//   - therefore NEXT_EFFECTIVE_CONNECTION != B
 			//
-			// Today (pre-fix RED): these FAIL because the
-			// coordinator early-returns at line 48-50 and
-			// session.config is never mutated.
-			expect(activeAfter!.config.apiKey).toBe("key-B")
-			expect(activeAfter!.config.baseUrl).toBe("https://endpoint-B")
-			expect(activeAfter!.config.headers).toEqual(headersB)
+			// These assertions document that diagnostic. They are NOT
+			// the GREEN contract; that contract lives in the separate
+			// R2 test (Strategy B explicit instance-apply).
+			expect(activeAfter).toBe(activeBefore) // same ActiveSession instance — no rebuild
+			expect(activeAfter!.config.apiKey).toBe("key-A") // captured value unchanged
+			expect(activeAfter!.config.baseUrl).toBe("https://endpoint-A") // captured value unchanged
+			expect(activeAfter!.config.headers).toEqual(headersA) // captured value unchanged
 
-			// The coordinator should NOT have called replaceActiveSession
-			// for a same-provider connection-only mutation. Today it
-			// doesn't (early-return). GREEN must also respect this.
-			expect(replaceActiveSession).not.toHaveBeenCalled()
+			// Document the coordinator's actual decision: the
+			// rebuilds.request path was NOT entered (same-provider
+			// early return at line 48-50). This is the precondition
+			// for the diagnostic above; it is not the GREEN contract.
+			// We do NOT assert replaceActiveSession.not.toHaveBeenCalled()
+			// here because the eighth reviewer removed that
+			// Strategy-A-as-GREEN claim: the future Foundation
+			// applies A → B via an explicit instance-apply seam, not
+			// by routing generic field edits through the coordinator.
+			const rebuilds = (
+				coordinator as unknown as {
+					options: {
+						rebuilds: { request: ReturnType<typeof vi.fn> }
+					}
+				}
+			).options.rebuilds
+			expect(rebuilds.request).not.toHaveBeenCalled()
 		} finally {
 			await host.dispose()
 		}

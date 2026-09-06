@@ -35,12 +35,6 @@
 			"@utils/*": [
 				"./src/utils/*"
 			],
-			"@cline/shared/storage": [
-				"../../sdk/packages/shared/dist/storage/index.js"
-			],
-			"@cline/shared": [
-				"../../sdk/packages/shared/dist/index.js"
-			],
 			"@cline-internal/core/runtime/host/local-runtime-host": [
 				"../../sdk/packages/core/src/runtime/host/local-runtime-host"
 			],
@@ -105,11 +99,17 @@
 		// `compactSessionMessages` + REAL W estimator.
 		"src/sdk/__tests__/sdk-compaction-w-publish-red01-real-producer.test.ts",
 		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01
-		// / PIIF01: real-production-seam RED witness for the
-		// same-provider config-mutation defect. See
+		// / PIIF01: real-production-seam DIAGNOSTIC current-seam
+		// witness (reclassified ninety-sixth pass per eighth
+		// reviewer). See
 		// apps/vscode/src/sdk/__tests__/provider-instance-identity-r1a-red.piif01.test.ts
 		// for the test body and full classification.
-		"src/sdk/__tests__/provider-instance-identity-r1a-red.piif01.test.ts"
+		"src/sdk/__tests__/provider-instance-identity-r1a-red.piif01.test.ts",
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R2-STRATEGY-B
+		// / PIIF01 (ninety-sixth pass, R2 GREEN contract): explicit
+		// instance-apply Strategy B contract test. See
+		// apps/vscode/src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts.
+		"src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts"
 	],
 	"exclude": [
 		"node_modules",

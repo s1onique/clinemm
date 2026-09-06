@@ -135,19 +135,27 @@ export default defineConfig({
 			// `@cline/core` alias points at the stub.
 			"src/sdk/__tests__/sdk-compaction-w-publish-red01-real-producer.test.ts",
 			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01
-			// / PIIF01: real-production-seam RED witness for the
-			// same-provider config-mutation defect. Drives the
-			// REAL LocalRuntimeHost.startSession (captures input
-			// config into in-memory ActiveSession.config) and the
-			// REAL SdkProviderChangeCoordinator
-			// .handleApiConfigurationChanged. The failing assertion
-			// (R1a) is that `active.config.model.{apiKey, baseUrl,
-			// headers}` still equal A's values after mutating to B,
-			// because the coordinator early-returns at line 48-50
-			// on `previousProvider === nextProvider`. The base
+			// / PIIF01: real-production-seam DIAGNOSTIC current-seam
+			// witness (reclassified ninety-sixth pass per eighth
+			// reviewer). Drives the REAL LocalRuntimeHost.startSession
+			// and the REAL SdkProviderChangeCoordinator
+			// .handleApiConfigurationChanged; asserts that the
+			// running session retains A's connection fields after a
+			// same-provider coordinator mutation (because the
+			// coordinator early-returns at line 48-50). This is a
+			// diagnostic witness, NOT the GREEN contract. The base
 			// config cannot host this test because the `@cline/core`
 			// alias points at the stub (no LocalRuntimeHost).
 			"src/sdk/__tests__/provider-instance-identity-r1a-red.piif01.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R2-STRATEGY-B
+			// / PIIF01 (ninety-sixth pass, R2 GREEN contract): drives
+			// the new SdkProviderChangeCoordinator
+			// .applyProviderConfigurationInstance (the explicit
+			// instance-apply seam added in this pass) and asserts
+			// the Strategy B contract: explicit A→B apply ⇒
+			// full reconstruction ⇒ resulting connection == B.
+			// Same bridge alias requirement as the R1a witness.
+			"src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts",
 		],
 		testTimeout: 30_000,
 	},
