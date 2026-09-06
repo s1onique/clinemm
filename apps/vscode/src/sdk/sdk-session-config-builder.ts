@@ -45,7 +45,7 @@ export class SdkSessionConfigBuilder {
 		// active session's in-memory ActiveSession.config — see
 		// `provider-instance-identity-r2-strategy-b.piif01.test.ts`.
 		if (input.providerConfigurationInstance) {
-			applyProviderConfigurationInstanceToConfig(config, input.providerConfigurationInstance)
+			applyProviderConfigurationInstanceToConfig(config, input.providerConfigurationInstance, input.mode)
 		}
 
 		return config
@@ -56,6 +56,32 @@ export class SdkSessionConfigBuilder {
  * Project the provider-identity fields of an explicit
  * `ApiConfiguration` instance onto an already-resolved
  * `CoreSessionConfig`.
+ *
+ * TEMP_API_CONFIGURATION_PROJECTOR = OPENAI_ONLY_PROBE
+ *   This projector only overlays five fields
+ *   (providerId, modelId, apiKey, baseUrl, headers) extracted from
+ *   legacy OpenAI-shaped fields (`openAiApiKey`, `openAiBaseUrl`,
+ *   `openAiHeaders`). It is NOT the generic provider-instance
+ *   projection required by the product case (local-litellm,
+ *   corporate-litellm, lab-litellm, etc.) — `ApiConfiguration` is
+ *   only useful as a temporary carrier here because the
+ *   explicit-instance seam has to ship before the persisted
+ *   `ProviderConfigurationInstance` representation lands. Once that
+ *   representation exists, this projector will be REPLACED by the
+ *   frozen typed projector, not expanded.
+ *
+ * Mode discriminator:
+ *   The instance carries both plan and act selections
+ *   (`planModeApiProvider` / `actModeApiProvider`). The mode
+ *   parameter selects which one drives the projection. When
+ *   `mode === "plan"`, the plan fields are projected (only the plan
+ *   field of the instance; act fields are NOT also projected). This
+ *   prevents a single `ApiConfiguration` from projecting an
+ *   act-selected model into a plan session (defect surfaced by the
+ *   ninth reviewer and the R2p3 mode discriminator test).
+ *
+ *   When `mode` is undefined, the projector uses the act fields,
+ *   which matches the default mode of the SDK session factory.
  *
  * This is intentionally a side-effect mutation of `config` (rather
  * than a re-resolution through `resolveApiKey` /
@@ -72,8 +98,20 @@ export class SdkSessionConfigBuilder {
  * Undefined fields on the instance are NOT applied (so that the
  * underlying StateManager-resolved value is preserved if the caller
  * only wants to override a subset — e.g. just the modelId).
+ *
+ * KNOWN LIMITATION (clearing semantics, R2p2):
+ *   Because `ApiConfiguration` does not distinguish "field absent"
+ *   from "field present and undefined", a caller that wants to
+ *   *clear* a field on the resolved config cannot do so through
+ *   this projector. The persisted `ProviderConfigurationInstance`
+ *   representation must include an explicit clearing form
+ *   (e.g. `{ headers: null }`) before this constraint is relaxed.
  */
-function applyProviderConfigurationInstanceToConfig(config: CoreSessionConfig, instance: ApiConfiguration): void {
+function applyProviderConfigurationInstanceToConfig(
+	config: CoreSessionConfig,
+	instance: ApiConfiguration,
+	mode: "plan" | "act" | undefined,
+): void {
 	const instAny = instance as Record<string, unknown>
 	const cfgAny = config as unknown as Record<string, unknown>
 
@@ -83,22 +121,38 @@ function applyProviderConfigurationInstanceToConfig(config: CoreSessionConfig, i
 		}
 	}
 
-	// Identity: providerId + modelId.
-	if (instAny.actModeApiProvider !== undefined) {
-		setIfDefined("providerId", instAny.actModeApiProvider)
-	}
-	if (instAny.actModeApiModelId !== undefined) {
-		setIfDefined("modelId", instAny.actModeApiModelId)
-	}
-	if (instAny.planModeApiProvider !== undefined && !instAny.actModeApiProvider) {
-		// Only override plan provider if caller did not also pass act.
-		setIfDefined("providerId", instAny.planModeApiProvider)
-	}
-	if (instAny.planModeApiModelId !== undefined && !instAny.actModeApiModelId) {
-		setIfDefined("modelId", instAny.planModeApiModelId)
+	// Identity: providerId + modelId — select the field that matches
+	// the requested mode. Do NOT project the other mode's field onto
+	// the config (it would silently override a planned act session
+	// with the act selection even when the caller asked for plan).
+	if (mode === "plan") {
+		if (instAny.planModeApiProvider !== undefined) {
+			setIfDefined("providerId", instAny.planModeApiProvider)
+		}
+		if (instAny.planModeApiModelId !== undefined) {
+			setIfDefined("modelId", instAny.planModeApiModelId)
+		}
+	} else {
+		// mode === "act" or undefined: act is the default for SDK
+		// session lifecycle (mode defaults to "act" in
+		// buildSessionConfig). Fall back to plan when act is
+		// absent, so a plan-only `ApiConfiguration` still projects
+		// cleanly.
+		if (instAny.actModeApiProvider !== undefined) {
+			setIfDefined("providerId", instAny.actModeApiProvider)
+		} else if (instAny.planModeApiProvider !== undefined) {
+			setIfDefined("providerId", instAny.planModeApiProvider)
+		}
+		if (instAny.actModeApiModelId !== undefined) {
+			setIfDefined("modelId", instAny.actModeApiModelId)
+		} else if (instAny.planModeApiModelId !== undefined) {
+			setIfDefined("modelId", instAny.planModeApiModelId)
+		}
 	}
 
-	// Connection: apiKey + baseUrl + headers (OpenAI-compatible shape).
+	// Connection: apiKey + baseUrl + headers (OpenAI-compatible
+	// shape). These are mode-independent in `ApiConfiguration`; the
+	// provider settings UI keeps a single credential per provider.
 	if (instAny.openAiApiKey !== undefined) {
 		setIfDefined("apiKey", instAny.openAiApiKey)
 	}

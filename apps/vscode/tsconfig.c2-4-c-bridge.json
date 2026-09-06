@@ -109,7 +109,15 @@
 		// / PIIF01 (ninety-sixth pass, R2 GREEN contract): explicit
 		// instance-apply Strategy B contract test. See
 		// apps/vscode/src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts.
-		"src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts"
+		"src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts",
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R2P / PIIF01
+		// (ninety-eighth pass, R2p real-projector characterization):
+		// exercises the REAL SdkSessionConfigBuilder.build +
+		// REAL applyProviderConfigurationInstanceToConfig chain
+		// against controlled baselines. Closes the tenth reviewer's
+		// HALT_R2_REAL_PROJECTION_NOT_PROVEN. See
+		// apps/vscode/src/sdk/__tests__/provider-instance-identity-r2p-real-projector.piif01.test.ts.
+		"src/sdk/__tests__/provider-instance-identity-r2p-real-projector.piif01.test.ts"
 	],
 	"exclude": [
 		"node_modules",

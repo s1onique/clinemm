@@ -156,6 +156,18 @@ export default defineConfig({
 			// full reconstruction ⇒ resulting connection == B.
 			// Same bridge alias requirement as the R1a witness.
 			"src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R2P / PIIF01
+			// (ninety-eighth pass, R2p real-projector characterization):
+			// drives the REAL SdkSessionConfigBuilder.build +
+			// REAL applyProviderConfigurationInstanceToConfig chain
+			// against controlled baselines. Closes the tenth
+			// reviewer's HALT_R2_REAL_PROJECTION_NOT_PROVEN. Stubs
+			// only the underlying buildSessionConfig (returns
+			// baseline A) and buildAgentHooks (no-op). Imports from
+			// `@cline/core`, `@shared/api`, `@shared/storage/types`,
+			// and `../sdk-session-config-builder` — all already
+			// aliased by the bridge config.
+			"src/sdk/__tests__/provider-instance-identity-r2p-real-projector.piif01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

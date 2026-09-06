@@ -522,6 +522,59 @@ The ninety-seventh pass closes it by:
 **HALT_R2_INPUT_NOT_BOUND_TO_RECONSTRUCTION = CLOSED** at this pass.
 
 ---
+### §5.2. Tenth-reviewer reopen closure (ninety-eighth pass)
+
+The tenth reviewer on commit `353245457` (this commit\'s previous row) correctly raised **HALT_R2_REAL_PROJECTION_NOT_PROVEN**: the prior R2 file proved the coordinator is load-bearing on `next`, but the `sessionConfigBuilder` injected into the test was a HAND-WRITTEN test stub that re-implemented the projection logic inline. The production `SdkSessionConfigBuilder.build` -> `applyProviderConfigurationInstanceToConfig` chain was never executed by the test, so the GREEN did not actually bind to the production projector. The reviewer also surfaced three concrete defects in the projector itself:
+
+1. The projector overlays only five fields (providerId, modelId, apiKey, baseUrl, headers) extracted from legacy OpenAI-shaped fields (`openAiApiKey`, `openAiBaseUrl`, `openAiHeaders`). The frozen Foundation recon proved provider identity is broader than that (`apiLine`, region, structured provider-specific configuration, etc.). The current `ApiConfiguration` carrier cannot carry the generic ProviderConfigurationInstance representation; it is `OPENAI_ONLY_PROBE`.
+2. The projector only writes fields when defined; target omission silently preserves baseline values. For provider-instance switching, A\'s credential/header material can bleed into B.
+3. The projector does not receive `mode`. An `ApiConfiguration` carrying both plan and act selections projects the ACT model/provider into a PLAN session, since the projector always preferred act when present.
+
+The ninety-eighth pass closes the halt by:
+
+1. **Real `SdkSessionConfigBuilder` projection discriminator** (new R2p file `provider-instance-identity-r2p-real-projector.piif01.test.ts`). Drives the REAL `SdkSessionConfigBuilder.build` + REAL `applyProviderConfigurationInstanceToConfig` against controlled baselines (only `vi.mock`\'d collaborators are `buildSessionConfig`, which returns a known baseline A, and `buildAgentHooks`, which is a no-op). Four scenarios from the reviewer plus a conservation guard:
+   - **R2p1**: positive binding - baseline A -> instance B => result on all five identity-bearing fields == B.
+   - **R2p2**: clearing semantics - when instance omits `openAiHeaders`/`openAiApiKey`, baseline A\'s headers/apiKey are preserved. **PINNED AS `OPENAI_ONLY_PROBE` KNOWN LIMITATION** - once the persisted `ProviderConfigurationInstance` representation brings an explicit clearing form (e.g. `headers: null`), this assertion flips.
+   - **R2p3**: mode discriminator - instance with `planModeApiModelId=X` and `actModeApiModelId=Y`; `mode="plan"` => result.modelId=X (act-Y must not leak); `mode="act"` => result.modelId=Y (plan-X must not leak). This is the defect the reviewer surfaced: without the mode parameter the projector always projected act-Y into a plan session.
+   - **R2p4**: generic provider boundary - instance with `actModeApiProvider="anthropic"` and no openAi* fields => result.providerId="anthropic" but connection fields are baseline A\'s. PINNED AS `OPENAI_ONLY_PROBE` boundary - anthropic\'s credential shape (and claudeCode, aws*, gcp*, sapAiCore, ollama, etc.) is not carried by the current probe; the frozen `ProviderConfigurationInstance` typed projector brings them in.
+   - **Conservation**: when caller does NOT pass `providerConfigurationInstance`, baseline returned unchanged (back-compat invariant for the other 12 call sites of `SdkSessionConfigBuilder.build`).
+   All 5 tests pass on the production projector.
+
+2. **Mode discriminator fix in production projector**: `applyProviderConfigurationInstanceToConfig` now takes a `mode: "plan" | "act" | undefined` parameter. The call site `SdkSessionConfigBuilder.build` passes `input.mode`. When `mode === "plan"`, only `planModeApiProvider` / `planModeApiModelId` are projected (act fields are NOT also projected onto a plan session). When `mode === "act"` (or undefined, matching the SDK factory default), act fields project; plan fields fall back only when act is absent. This is the bounded minimal fix for the defect the reviewer surfaced - verified via `git stash` ablation: with the fix removed, R2p3 FAILS with `AssertionError: expected \'openai\' to be \'anthropic\'` (the act-mode leak into a plan session the reviewer flagged); with the fix applied, all 5 R2p tests PASS.
+
+3. **Projector honesty classification**: the production helper\'s JSDoc is rewritten to classify the helper as `TEMP_API_CONFIGURATION_PROJECTOR = OPENAI_ONLY_PROBE`, document the clearing-semantics limitation, document the mode parameter, and state that the persisted `ProviderConfigurationInstance` representation will REPLACE (not extend) this probe. Per the reviewer\'s directive: "Do not expand it into a giant generic mapper."
+
+4. **R2 file header rewritten** to honestly reflect that the builder injected into the R2 test is `SYNTHETIC_STUB_AT_COORDINATOR` (a hand-written test stub that re-implements the projection inline), and that the REAL `SdkSessionConfigBuilder.build` projector is characterized by the R2p file, not by the R2 file. The R2 file proves the coordinator is load-bearing on `next`, NOT that the production projector performs the merge. The header now also lists the `PRODUCTION_PROJECTOR_SEMANTICS = TEMP_API_CONFIGURATION_PROJECTOR = OPENAI_ONLY_PROBE` classification.
+
+5. **Bridge typecheck + test stream updated**: `tsconfig.c2-4-c-bridge.json` and `vitest.config.c2-4-c-bridge.ts` include the new R2p test. The existing 3 `sdk-session-config-builder.test.ts` tests still pass (the `mode` parameter is optional, so the public surface is backward-compatible).
+
+**HALT_R2_REAL_PROJECTION_NOT_PROVEN = CLOSED** at this pass.
+
+**Disambiguation from the previous halt**:
+
+```text
+HALT_R2_INPUT_NOT_BOUND_TO_RECONSTRUCTION (ninth reviewer, 919c62ae7)
+  = "the coordinator ignored `next`"
+  = CLOSED at coordinator-boundary by ninety-seventh pass
+  (verified FAIL-without-fix / PASS-with-fix on the
+  PIIF01_R2_BINDING_INVERSION_NEXT_A_GLOBAL_B test).
+
+HALT_R2_REAL_PROJECTION_NOT_PROVEN (tenth reviewer, 353245457)
+  = "the test hand-implemented the projection"
+  = CLOSED at projector-boundary by ninety-eighth pass
+  (verified FAIL-without-fix / PASS-with-fix on the
+  PIIF01_R2P3_MODE_DISCRIMINATOR test, which exercises the
+  REAL production projector).
+
+The two halts are at different seams and have different
+discriminator tests, but they share the same downstream
+GREEN: SESSION_RECONSTRUCTION_FROM_NEXT_BUILDER_OUTPUT
++ INSTANCE_TO_CONNECTION_BINDING.
+```
+
+---
+
+
 
 ## §6. Disposition
 
@@ -564,7 +617,44 @@ apps/vscode/src/sdk/__tests__/
                                   full reconstruction ⇒ resulting
                                   connection == B. PASSES today
                                   on the ninety-sixth-pass
-                                  production code.)
+                                  production code. Header
+                                  rewritten in ninety-eighth
+                                  pass to honestly reflect that
+                                  the builder injected into
+                                  this file is
+                                  SYNTHETIC_STUB_AT_COORDINATOR
+                                  (the R2p file proves the
+                                  production projector; the R2
+                                  file proves the coordinator
+                                  boundary).)
+
+  provider-instance-identity-r2p-real-projector.piif01.test.ts
+                                 (R2p REAL-PROJECTOR
+                                  characterization test — new
+                                  in ninety-eighth pass. Drives
+                                  the REAL
+                                  SdkSessionConfigBuilder.build
+                                  + REAL
+                                  applyProviderConfiguration
+                                  InstanceToConfig against
+                                  controlled baselines (only
+                                  buildSessionConfig and
+                                  buildAgentHooks are vi.mock'd).
+                                  Four reviewer-specified
+                                  scenarios from R2p1
+                                  (positive binding) through
+                                  R2p4 (generic provider
+                                  boundary) plus a
+                                  conservation guard for the
+                                  no-override case. Closes the
+                                  tenth reviewer's
+                                  HALT_R2_REAL_PROJECTION_NOT_PROVEN.
+                                  R2p3 verified
+                                  FAIL-without-fix /
+                                  PASS-with-fix via `git
+                                  stash` of the mode-parameter
+                                  change in the production
+                                  projector.)
 
 apps/vscode/src/sdk/
   sdk-provider-change-coordinator.ts
@@ -614,7 +704,24 @@ apps/vscode/src/sdk/
                                   resume, compaction, mode-
                                   coordinator) see no behavior
                                   change because the merge is
-                                  gated on the optional field.)
+                                  gated on the optional field.
+                                  In ninety-eighth pass, the
+                                  projector gained a `mode`
+                                  parameter so it no longer
+                                  projects the act selection
+                                  into a plan session; the
+                                  call site passes
+                                  `input.mode`. The
+                                  projector JSDoc now
+                                  classifies the helper as
+                                  `TEMP_API_CONFIGURATION_PROJECTOR
+                                  = OPENAI_ONLY_PROBE` and
+                                  documents the
+                                  clearing-semantics
+                                  limitation; the frozen
+                                  `ProviderConfigurationInstance`
+                                  representation will REPLACE
+                                  this probe, not extend it.)
 
 apps/vscode/src/sdk/
   cline-session-factory.ts
@@ -837,6 +944,44 @@ HALT_R2_INPUT_NOT_BOUND_TO_
                                        and PASSES with the fix
                                        applied (4 passed).)
 
+HALT_R2_REAL_PROJECTION_NOT_PROVEN = CLOSED
+                                       (the tenth reviewer's
+                                       P0 on 353245457;
+                                       closed at this pass by
+                                       adding the R2p file
+                                       that drives the REAL
+                                       `SdkSessionConfigBuilder.build`
+                                       + REAL
+                                       `applyProviderConfiguration
+                                       InstanceToConfig` chain
+                                       against controlled
+                                       baselines, and adding
+                                       the `mode` parameter
+                                       to the production
+                                       projector so it no
+                                       longer projects the
+                                       ACT selection into a
+                                       PLAN session. Verified
+                                       via `git stash` of the
+                                       mode-parameter fix:
+                                       PIIF01_R2P3_MODE_DISCRIMINATOR
+                                       FAILS without the fix
+                                       (AssertionError: expected
+                                       'openai' to be 'anthropic')
+                                       and PASSES with the
+                                       fix applied (5 R2p
+                                       tests pass). Full
+                                       bridge stream: 3 test
+                                       files / 10 tests pass
+                                       (R1a DIAGNOSTIC + R2's
+                                       4 tests + R2p's 5
+                                       tests). The two halts
+                                       are at different seams
+                                       and have different
+                                       discriminator tests;
+                                       see §5.2 for the full
+                                       disambiguation.)
+
 HALT_REVIEWER_P1_BRIDGE_BASELINE   = CLOSED
                                        (the eighth reviewer's
                                        P1 on the bridge
@@ -908,30 +1053,50 @@ LEGACY_SAME_PROVIDER_FIELD_EDIT_
                                        previousProvider
                                        !== nextProvider)
 
-NEXT PASS: continue the bounded GREEN scope per eighth reviewer's
-sequence. Recommended next minimal commits:
-  (i) Refresh bridge baseline to `[]` (DONE in this commit).
+NEXT PASS: per the tenth reviewer's directive ("One bounded
+correction only: execute and qualify the real projector,
+fixing only the semantics those tests expose. Then, if
+GREEN, proceed directly to the frozen
+`ProviderConfigurationInstance` definition store +
+instance-secret persistence. No new architecture review."),
+the next steps are the persisted representation + secret
+namespace:
+  (i) Refresh bridge baseline to `[]` (DONE in ninety-
+       seventh pass).
   (ii) Document the LEGACY_SAME_PROVIDER_FIELD_EDIT_BEHAVIOR
        = OUT_OF_SCOPE_FOR_FOUNDATION freeze (DONE in §6.1
        and §9 of this witness).
-  (iii) Add the persisted ProviderConfigurationInstance
-        definition store (instances.json, definitions only,
-        NO activeInstanceId field).
-  (iv) Add the minimal instance-secret namespace
+  (iii) Real-projector characterization + mode discriminator
+       fix (DONE in ninety-eighth pass — this commit; the
+       production projector is qualified by the R2p file
+       with 5 tests, including the FAIL-without-fix /
+       PASS-with-fix mode discriminator).
+  (iv) Add the persisted ProviderConfigurationInstance
+       definition store (instances.json, definitions only,
+       NO activeInstanceId field). The current
+       `ApiConfiguration` carrier is OPENAI_ONLY_PROBE and
+       will be REPLACED (not extended) by the typed
+       representation. The replacement projector must include
+       an explicit clearing form (e.g. `headers: null`) so
+       R2p2's limitation can be relaxed.
+  (v) Add the minimal instance-secret namespace
        (getInstanceSecret / setInstanceSecret /
         InstanceSecretNameSchema with "instance:" prefix).
-  (v) Wire applyProviderConfigurationInstance to read from
-      the persisted definition store instead of the
-      sessionConfigBuilder probe seam.
-  (vi) Add conservation tests for (iii)-(v) following the
-       same R2 STRATEGY_B_CONTRACT_GUARD pattern.
+  (vi) Wire applyProviderConfigurationInstance to read from
+       the persisted definition store instead of the
+       `sessionConfigBuilder` probe seam.
+  (vii) Add conservation tests for (iv)-(vi) following the
+        same R2 STRATEGY_B_CONTRACT_GUARD + R2p REAL_PROJECTOR
+        pattern.
 
-FOUNDATION_FINAL_REPORT_AND_HANDOFF  = pending (iii)-(vi)
+FOUNDATION_FINAL_REPORT_AND_HANDOFF  = pending (iv)-(vii)
 
 MODEL_PROFILES_IMPLEMENTATION       = NOT YET AUTHORIZED
                                        (gated on §17 four-gate
                                        handoff after the full
-                                       GREEN cycle)
+                                       GREEN cycle; the R2p
+                                       real-projector gate is
+                                       now GREEN)
 ```
 
 ### §6.4. Causal-chain closure
@@ -1015,6 +1180,44 @@ The full foundation ACT causal chain is now bound end-to-end against real produc
     - JSDoc fixed (no longer overclaims "built from next"
       without the binding wiring).
     - HALT_R2_INPUT_NOT_BOUND_TO_RECONSTRUCTION = CLOSED.
+
+(j'') evidence 07 + 07b real-projector characterization
+     (ninety-eighth pass — this commit):
+    - New R2p file `provider-instance-identity-r2p-real-
+      projector.piif01.test.ts` drives the REAL
+      `SdkSessionConfigBuilder.build` + REAL
+      `applyProviderConfigurationInstanceToConfig` chain
+      against controlled baselines (only `vi.mock`'d
+      collaborators are `buildSessionConfig` and
+      `buildAgentHooks`).
+    - Four reviewer-specified scenarios + a conservation
+      guard: R2p1 positive binding, R2p2 clearing semantics
+      (KNOWN LIMITATION, OPENAI_ONLY_PROBE), R2p3 mode
+      discriminator, R2p4 generic provider boundary
+      (OPENAI_ONLY_PROBE), and conservation-no-override.
+    - Production projector now takes a `mode: "plan" |
+      "act" | undefined` parameter; the call site passes
+      `input.mode`. When `mode === "plan"`, only plan fields
+      project (act fields do NOT also project onto a plan
+      session — the defect the reviewer surfaced).
+    - Projector JSDoc rewritten to classify the helper as
+      `TEMP_API_CONFIGURATION_PROJECTOR = OPENAI_ONLY_PROBE`
+      and document the clearing-semantics limitation. The
+      frozen `ProviderConfigurationInstance` representation
+      will REPLACE this probe (not extend it).
+    - Verified FAIL-without-fix / PASS-with-fix via
+      `git stash` of the mode-parameter change:
+      PIIF01_R2P3_MODE_DISCRIMINATOR FAILS with
+      `AssertionError: expected 'openai' to be 'anthropic'`
+      (act-mode leak into a plan session) and PASSES with
+      the fix applied (all 5 R2p tests pass).
+    - R2 file header rewritten to honestly reflect that
+      the builder injected into the R2 test is
+      `SYNTHETIC_STUB_AT_COORDINATOR` (the R2 file proves
+      the coordinator is load-bearing on `next`; the R2p
+      file proves the production projector performs the
+      merge end-to-end).
+    - HALT_R2_REAL_PROJECTION_NOT_PROVEN = CLOSED.
 
 NEXT:
 (k) Add persisted ProviderConfigurationInstance
@@ -1138,6 +1341,113 @@ BINDING PROOF (discriminator)    = REAL_PRODUCTION_SEAM
                                     stash` re-run.)
 ```
 
+### §6.5.2. R2p production seams actually driven (ninety-eighth pass, real-projector characterization)
+
+Per the tenth reviewer\'s "P1 honesty request" - the R2 file\'s hand-written builder stub was replaced by a dedicated R2p file that drives the REAL production chain. The R2 file is now honestly classified above (§6.5.1) as `SESSION-LIFECYCLE BUILDER MERGE = SYNTHETIC_STUB_AT_COORDINATOR` because that file only proves the coordinator boundary; the R2p file proves the production projector.
+
+```text
+SdkSessionConfigBuilder.build                  = REAL_PRODUCTION_SEAM
+                                                 (exercised end-to-end
+                                                  by the R2p file)
+
+applyProviderConfigurationInstanceToConfig    = REAL_PRODUCTION_SEAM
+                                                 (the projector; called
+                                                  from
+                                                  SdkSessionConfigBuilder
+                                                  .build with
+                                                  (config, instance,
+                                                  mode) - three
+                                                  arguments now,
+                                                  with mode
+                                                  discriminator)
+
+buildSessionConfig (= baseline A)             = SYNTHETIC
+                                                 (vi.mock\'d by the R2p
+                                                  file; returns a
+                                                  controlled
+                                                  baseline so the
+                                                  projector can be
+                                                  exercised
+                                                  deterministically)
+
+buildAgentHooks (= no-op)                      = SYNTHETIC
+                                                 (vi.mock\'d; the
+                                                  test does not
+                                                  need real
+                                                  StateManager for
+                                                  hook discovery)
+```
+
+
+PRODUCTION_PROJECTOR_SEMANTICS (R2p characterization):
+  R2p1_POSITIVE_BINDING          = REAL (baseline A -> instance B =>
+                                         result on all 5 fields == B)
+  R2p2_CLEARING_SEMANTICS        = OPENAI_ONLY_PROBE (instance
+                                          omitting openAi* fields
+                                          preserves baseline A\'s
+                                          connection; replacement
+                                          projector needs an
+                                          explicit clearing form
+                                          e.g. headers: null)
+  R2p3_MODE_DISCRIMINATOR        = REAL (instance with both plan +
+                                         act selections; mode=plan
+                                         projects plan; mode=act
+                                         projects act. Defect
+                                         surfaced by tenth reviewer:
+                                         without the mode parameter,
+                                         the projector always picked
+                                         act when present and leaked
+                                         act-Y into a plan session.
+                                         Verified FAIL-without-fix /
+                                         PASS-with-fix via `git
+                                         stash` of the mode-parameter
+                                         change.)
+  R2p4_GENERIC_PROVIDER_BOUNDARY = OPENAI_ONLY_PROBE (anthropic /
+                                          claudeCode / aws* / gcp* /
+                                          sapAiCore / ollama
+                                          credential shapes are NOT
+                                          carried by the current
+                                          probe; the frozen
+                                          ProviderConfigurationInstance
+                                          typed projector brings
+                                          them in)
+  R2p_CONSERVATION_NO_OVERRIDE   = REAL (no instance override =>
+                                          baseline returned
+                                          unchanged; pins the
+                                          back-compat invariant
+                                          for the other 12 call
+                                          sites of
+                                          SdkSessionConfigBuilder
+                                          .build)
+
+  TEMP_API_CONFIGURATION_PROJECTOR = OPENAI_ONLY_PROBE (frozen
+                                                       classification
+                                                       at this pass;
+                                                       the frozen
+                                                       ProviderConfiguration
+                                                       Instance
+                                                       representation
+                                                       will REPLACE
+                                                       this probe,
+                                                       not extend it)
+
+FULL REPLACEMENT LIFECYCLE       = NOT_EXECUTED (unchanged from
+                                   §6.5.1; a future qualification
+                                   will exercise the real
+                                   replaceActiveSession once
+                                   persistence is wired)
+
+NETWORK PROVIDER REQUEST         = NOT_REQUIRED (unchanged)
+
+INSTANCE A/B DATA                = SYNTHETIC_REAL (unchanged;
+                                   composed in the test using
+                                   the existing real
+                                   ApiConfiguration type)
+
+LIVE USER SESSION                = NOT_EXECUTED (unchanged)
+```
+
+
 ---
 
 ## §7. Why this is sufficient
@@ -1167,7 +1477,7 @@ Both P2s are explicit "DO NOT FIX" per the seventh reviewer. Filed here for trac
 
 ---
 
-## §9. Foundation ACT body §10 v2 status (corrected — ninety-seventh pass)
+## §9. Foundation ACT body §10 v2 status (corrected — ninety-eighth pass)
 
 ```text
 FOUNDATION_RECON_PHASE          = CLOSED (§12 frozen + bound;
@@ -1288,8 +1598,91 @@ HALT_R1_GREEN_CONTRACT_
   CONTRADICTS_FROZEN_STRATEGY   = CLOSED (8th reviewer's P0)
 HALT_R2_INPUT_NOT_BOUND_TO_
   RECONSTRUCTION                = CLOSED (9th reviewer's P0)
+HALT_R2_REAL_PROJECTION_NOT_PROVEN
+                                = CLOSED (10th reviewer's P0)
 HALT_REVIEWER_P1_BRIDGE_BASELINE
                                 = CLOSED (8th reviewer's P1)
+
+R2p                             = REAL_PROJECTOR_CHARACTERIZATION
+                                  (NEW in ninety-eighth pass.
+                                   Drives the REAL
+                                   SdkSessionConfigBuilder.build
+                                   + REAL
+                                   applyProviderConfiguration
+                                   InstanceToConfig against
+                                   controlled baselines.)
+                                  Tests in
+                                  provider-instance-identity-
+                                  r2p-real-projector.piif01.test.ts:
+                                    PIIF01_R2P1_REAL_BUILDER_
+                                      POSITIVE_BINDING
+                                      ⇒ baseline A + instance B
+                                         ⇒ result on all 5
+                                            identity-bearing
+                                            fields == B
+                                    PIIF01_R2P2_CLEARING_
+                                      SEMANTICS
+                                      ⇒ instance omits
+                                         openAiHeaders/
+                                         openAiApiKey
+                                         ⇒ baseline A's headers/
+                                            apiKey preserved
+                                            (PINNED AS
+                                             OPENAI_ONLY_PROBE
+                                             KNOWN LIMITATION)
+                                    PIIF01_R2P3_MODE_DISCRIMINATOR
+                                      ⇒ instance carries
+                                         planModeApiProvider=X
+                                         + actModeApiProvider=Y
+                                         ⇒ mode="plan" ⇒
+                                            result.modelId=X
+                                            (act-Y must NOT
+                                             leak)
+                                         ⇒ mode="act" ⇒
+                                            result.modelId=Y
+                                            (plan-X must NOT
+                                             leak)
+                                         (verified
+                                          FAIL-without-fix /
+                                          PASS-with-fix via
+                                          `git stash` re-run;
+                                          the defect the
+                                          reviewer surfaced
+                                          was the act-mode
+                                          leak into a plan
+                                          session)
+                                    PIIF01_R2P4_GENERIC_
+                                      PROVIDER_BOUNDARY
+                                      ⇒ instance with
+                                         actModeApiProvider=
+                                         "anthropic" + no openAi*
+                                         ⇒ result.providerId=
+                                            "anthropic" but
+                                            connection fields
+                                            are baseline A's
+                                            (PINNED AS
+                                             OPENAI_ONLY_PROBE)
+                                    PIIF01_R2P_CONSERVATION_
+                                      NO_OVERRIDE
+                                      ⇒ no instance override
+                                         ⇒ baseline returned
+                                            unchanged
+                                            (back-compat
+                                             invariant for the
+                                             other 12 call
+                                             sites of
+                                             SdkSessionConfigBuilder
+                                             .build)
+                                  TEMP_API_CONFIGURATION_PROJECTOR
+                                    = OPENAI_ONLY_PROBE
+                                    (frozen at this pass; the
+                                     frozen ProviderConfiguration
+                                     Instance representation will
+                                     REPLACE this probe, not
+                                     extend it)
+
+ACT_OWNED_TYPESCRIPT_DIAGNOSTICS = 0 (proven; bridge typecheck
+                                       exits 0; baseline `[]`)
 ```
 
 LEGACY_SAME_PROVIDER_FIELD_EDIT_BEHAVIOR = OUT_OF_SCOPE_FOR_FOUNDATION (frozen at ninety-sixth pass).

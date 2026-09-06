@@ -35,12 +35,23 @@
  *           PIIF01_R2_NO_ACTIVE_SESSION: unchanged conservation
  *           guards.
  *
- * CLASSIFICATION (revised ninety-seventh pass):
+ * CLASSIFICATION (revised ninety-eighth pass):
  *
  *   PROVEN_HERE:
+ *     COORDINATOR_NEXT_ARGUMENT_BINDING = GREEN
+ *       The coordinator passes `next` (B) to
+ *       `sessionConfigBuilder.build(...)`. This is what the
+ *       ninth reviewer asked the ninety-seventh pass to prove.
+ *
+ *   PROVEN_BY_PAIRING_WITH_R2P_FILE (ninety-eighth pass):
  *     SESSION_RECONSTRUCTION_FROM_NEXT_BUILDER_OUTPUT = GREEN
- *     INSTANCE_TO_CONNECTION_BINDING (next -> builder input
- *       -> CoreSessionConfig -> ActiveSession.config) = GREEN
+ *       (R2 file) drives the coordinator with a hand-written
+ *       builder stub that returns the merged config; the
+ *       new R2p file drives the REAL
+ *       `SdkSessionConfigBuilder.build` + REAL
+ *       `applyProviderConfigurationInstanceToConfig` against
+ *       the same input shape and confirms the projector
+ *       performs the merge end-to-end.
  *
  *   NOT_PROVEN_HERE (out of scope for the minimum probe):
  *     SdkSessionLifecycle.replaceActiveSession itself
@@ -54,20 +65,41 @@
  *   LEGACY_SAME_PROVIDER_FIELD_EDIT_BEHAVIOR (frozen):
  *     OUT_OF_SCOPE_FOR_FOUNDATION.
  *
+ *   PRODUCTION_PROJECTOR_SEMANTICS (R2p, see
+ *     `provider-instance-identity-r2p-real-projector.piif01.test.ts`):
+ *     TEMP_API_CONFIGURATION_PROJECTOR = OPENAI_ONLY_PROBE.
+ *     Clearing semantics (R2p2) cannot distinguish "field
+ *     absent" from "field present and undefined" through
+ *     `ApiConfiguration`; the persisted `ProviderConfigurationInstance`
+ *     representation must include an explicit clearing form
+ *     (e.g. `headers: null`) before this constraint is relaxed.
+ *     Generic providers (R2p4) are not carried by the current
+ *     probe — anthropic, claudeCode, aws*, gcp*, sapAiCore, ollama,
+ *     etc. each need their own credential shape; the replacement
+ *     typed projector brings them in.
+ *
  * PRODUCTION SEAMS DRIVEN (real, not synthetic):
  *
  *   INSTANCE-APPLY COORDINATOR       = REAL_PRODUCTION_SEAM
  *                                       (SdkProviderChangeCoordinator
  *                                        .applyProviderConfigurationInstance)
- *   SESSION-LIFECYCLE BUILDER MERGE  = REAL_PRODUCTION_SEAM
- *                                       (SdkSessionConfigBuilder.build
- *                                        + applyProviderConfigurationInstance
- *                                        ToConfig — the merge that makes
- *                                        `next` load-bearing)
  *   LOCAL RUNTIME startSession       = REAL_PRODUCTION_SEAM
  *                                       (LocalRuntimeHost.startSession
  *                                        captures the merged config into
  *                                        the in-memory ActiveSession.config)
+ *   SESSION-LIFECYCLE BUILDER MERGE  = SYNTHETIC_STUB_AT_COORDINATOR
+ *                                       (the `sessionConfigBuilder`
+ *                                        injected here is a hand-written
+ *                                        test stub that re-implements the
+ *                                        projection inline; the real
+ *                                        `SdkSessionConfigBuilder.build`
+ *                                        projector is characterized by the
+ *                                        R2p file, not by this file. The
+ *                                        tenth reviewer correctly flagged
+ *                                        this — the R2 file proves the
+ *                                        coordinator is load-bearing on
+ *                                        `next`, NOT that the production
+ *                                        projector performs the merge.)
  *   SdkSessionLifecycle.replaceActiveSession
  *                                    = SYNTHETIC_REAL (stubbed; does
  *                                       dispose/fence/task-proxy work
