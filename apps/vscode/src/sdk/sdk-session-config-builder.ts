@@ -37,8 +37,19 @@ export class SdkSessionConfigBuilder {
 		// provider shapes (anthropic, claudecode, aws, gcp, oca,
 		// sap, ...) and honors explicit `null` clearing semantics
 		// for connection fields (the R5 RED witness).
+		//
+		// CREDENTIAL RESOLUTION (twelfth reviewer,
+		// HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED):
+		// The builder is the SOLE credential-resolution authority.
+		// The projector MUST NOT touch `instance.credentialRef` --
+		// it only receives the resolved physical secret value (or
+		// `undefined`). This makes the wrong contract
+		// `cfg.apiKey === "instance:inst-B-key"` physically
+		// impossible to produce from this code path.
 		if (input.providerConfigurationInstanceTyped) {
-			applyTypedProviderInstanceToConfig(config, input.providerConfigurationInstanceTyped)
+			const instance = input.providerConfigurationInstanceTyped
+			const resolvedApiKey = this.options.stateManager.getInstanceSecret(instance.credentialRef.name)
+			applyTypedProviderInstanceToConfig(config, instance, resolvedApiKey)
 			return config
 		}
 

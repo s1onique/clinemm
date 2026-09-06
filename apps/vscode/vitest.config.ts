@@ -172,6 +172,13 @@ export default defineConfig({
 			// (instance-secret namespace): paired with R3 / R5 in
 			// the bridge config (see vitest.config.c2-4-c-bridge.ts).
 			"src/shared/storage/__tests__/instance-secret.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+			// (durable): real StateManager.setInstanceSecret /
+			// getInstanceSecret / flushPendingState roundtrip. Runs
+			// under the dedicated bridge config alongside the
+			// schema tests for consistency with the recon-phase
+			// pre-existing infra quirk.
+			"src/core/storage/__tests__/state-manager-instance-secret-durable.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

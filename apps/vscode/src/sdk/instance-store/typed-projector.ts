@@ -32,6 +32,31 @@
  * header for context) is lifted here: the typed projector knows
  * about the provider-specific subset the legacy `ApiConfiguration`
  * could not carry.
+ *
+ * ===========================================================================
+ *  CREDENTIAL RESOLUTION CONTRACT (twelfth reviewer)
+ * ===========================================================================
+ *  Per `HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED`, this projector
+ *  does NOT read `instance.credentialRef` itself. The caller
+ *  (the SdkSessionConfigBuilder) is the sole credential-resolution
+ *  authority:
+ *
+ *      const resolved = stateManager.getInstanceSecret(
+ *          instance.credentialRef.name,
+ *      )  // returns string | undefined
+ *
+ *  The physical secret value is passed in here as the second
+ *  argument. The projector writes the resolved STRING into
+ *  `CoreSessionConfig.apiKey`. If the caller's lookup returned
+ *  `undefined`, the projector writes `null` to the apiKey slot
+ *  (explicit clearing -- never the reference name, never `""`,
+ *  never the prefix string). This makes the wrong contract
+ *  `cfg.apiKey === "instance:inst-B-key"` physically impossible.
+ *
+ *  The only way to bypass this is to call
+ *  `applyTypedProviderInstanceToConfig` with the wrong argument,
+ *  which is a typing violation guarded by the function signature.
+ * ===========================================================================
  */
 
 import type { CoreSessionConfig } from "@cline/core"
@@ -76,6 +101,7 @@ type Settable =
 export function applyTypedProviderInstanceToConfig(
 	config: CoreSessionConfig,
 	instance: ProviderConfigurationInstance,
+	resolvedApiKey: string | undefined,
 ): void {
 	const cfgAny = config as unknown as Record<string, unknown>
 	const conn = instance.connection ?? ({} as ProviderConnection)
@@ -96,22 +122,30 @@ export function applyTypedProviderInstanceToConfig(
 	// apiLine/providerSpecificConfig on `CoreSessionConfig`; this
 	// projector just routes the typed connection onto those slots
 	// with explicit clearing semantics.
+	//
+	// The credential slot ALWAYS receives the resolved physical
+	// secret value (or `null` if no credential is stored). It
+	// NEVER receives the reference name `credentialRef.name` --
+	// that was the twelfth reviewer's HALT
+	// (TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED).
+	const apiKeyValue: string | null = resolvedApiKey === undefined ? null : resolvedApiKey
 	const isOpenAiCompatible = isOpenAiCompatibleProvider(instance.providerId)
 
 	if (isOpenAiCompatible) {
-		setOrClear(cfgAny, "apiKey", conn.apiKeyRef?.name)
+		// OpenAI-compatible family uses apiKey/baseUrl/headers
+		// directly on the config.
+		setOrClear(cfgAny, "apiKey", apiKeyValue)
 		setOrClear(cfgAny, "baseUrl", conn.baseUrl)
 		setOrClear(cfgAny, "headers", conn.headers)
 	} else {
 		// For non-OpenAI providers (anthropic, claudecode, aws*,
 		// gcp, oca, sap, ollama, etc.), the apiKey value lives in
 		// the per-provider ProviderSettings.apiKey slot, NOT in
-		// the legacy openAiApiKey. We surface the resolved key
-		// name (under secrets.json) as a hint the runtime can
-		// resolve at startup; the actual physical secret is
-		// resolved by StateManager.getInstanceSecret at apply
-		// time.
-		setOrClear(cfgAny, "apiKey", conn.apiKeyRef?.name)
+		// the legacy openAiApiKey. We surface the resolved
+		// physical secret value here so the runtime's
+		// SdkProviderConfigBuilder can copy it into the right
+		// per-provider slot at startup.
+		setOrClear(cfgAny, "apiKey", apiKeyValue)
 		if (conn.baseUrl !== undefined) {
 			setOrClear(cfgAny, "baseUrl", conn.baseUrl)
 		}

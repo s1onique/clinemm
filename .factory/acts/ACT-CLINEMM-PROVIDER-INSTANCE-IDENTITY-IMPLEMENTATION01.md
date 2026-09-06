@@ -223,3 +223,67 @@ sequence and the bounded scope, so that subsequent commits can be
 executed without re-justification.
 
 HANDOFF: stop here. Do NOT execute any R3/R4/R5 in this commit.
+
+---
+
+## §5. Twelfth reviewer bounded correction (commit range `6356e912a`+)
+
+The twelfth reviewer reviewed commit `6356e912a` (ninety-ninth pass,
+R3+R4+R5 partial GREEN) and issued a HALT:
+
+> TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED:
+> `setOrClear(cfgAny, "apiKey", conn.apiKeyRef?.name)` writes the
+> reference name `"instance:inst-B-key"` into `CoreSessionConfig.apiKey`
+> instead of the resolved secret.
+
+With follow-on P1 items (CREDENTIAL_AUTHORITY_DUPLICATED, missing
+namespace enforcement, missing map-key check, missing durable R4
+coverage, overstated R5-03).
+
+### §5.1 Bounded correction applied (this commit)
+
+| Issue | Fix | File |
+|-------|-----|------|
+| P0-1: reference name leaked into cfg.apiKey | Builder now resolves via `stateManager.getInstanceSecret` and passes the resolved string to the projector; projector signature now takes `resolvedApiKey: string \| undefined` | `sdk-session-config-builder.ts`, `instance-store/typed-projector.ts` |
+| P0-2: dual credential authority | `ProviderConnection.apiKeyRef` deleted; `parseProviderConnection` throws on `apiKeyRef` key | `instance-store/contracts.ts` |
+| P1: namespace enforcement | `InstanceCredentialRef.name` brand-typed as `InstanceSecretName`; `parseInstanceCredentialRef` rejects non-`instance:` names | `instance-secret.ts`, `instance-store/contracts.ts` |
+| P1: map-key check | `parseInstancesFile` enforces `k === parsed.instanceId` | `instance-store/contracts.ts` |
+| P1: durable R4 | NEW `state-manager-instance-secret-durable.test.ts` (5 tests) exercises `setInstanceSecret`/`getInstanceSecret`/`flushPendingState` against on-disk `secrets.json` | `core/storage/__tests__/state-manager-instance-secret-durable.test.ts` |
+| R5-03 inflation | R5-03 now asserts `apiKey === "sk-ant-resolved-physical-secret"` (NOT the reference name) | `instance-store/typed-projector.test.ts` |
+
+### §5.2 Fail-closed tests added (twelfth reviewer)
+
+  R3-08 map key != body.instanceId -> `InstancesContractError("...map key must equal...")`
+  R3-09 apiKeyRef on connection -> `InstancesContractError("...apiKeyRef...")`
+  R3-10 credentialRef.name not in instance: namespace -> `InstancesContractError("...instance-secret namespace...")`
+  R5-05 credential inversion: cfg.apiKey === resolved secret, NEVER === ref name, NEVER starts with "instance:"
+  R5-06 resolvedApiKey=undefined writes null (NOT "" and NOT ref name)
+  R4-D01 setInstanceSecret -> flush -> on-disk secrets.json contains namespaced entry only
+  R4-D02 setInstanceSecret(undefined) -> flush -> on-disk secrets.json removes entry
+  R4-D03 getInstanceSecret returns undefined for never-written name
+  R4-D04 two instances are isolated on disk
+  R4-D05 getInstanceSecret returns RESOLVED secret, NEVER the reference name
+
+### §5.3 Test count (post-correction)
+
+| Suite | Tests |
+|-------|-------|
+| instance-store / instances-store.test.ts | 10 |
+| instance-store / typed-projector.test.ts | 6 |
+| shared/storage / instance-secret.test.ts | 7 |
+| core/storage / state-manager-instance-secret-durable.test.ts (NEW) | 5 |
+| sdk/__tests__ / provider-instance-identity-r2p-real-projector.piif01.test.ts | 5 |
+| **TOTAL (bridge)** | **33 GREEN** |
+
+Bridge typecheck: `bun run check-types:c2-4-c-bridge` -> OK (0 drift).
+
+### §5.4 What is no longer halted
+
+  - R-replace (`SdkSessionLifecycle.replaceActiveSession` real
+    qualification): the twelfth reviewer's halt on this has been
+    lifted because the credential-binding chain is now GREEN.
+    R-replace remains a TODO for the next pass.
+
+### §5.5 Evidence
+
+  - `.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01/09-twelfth-reviewer-correction-witness.md`

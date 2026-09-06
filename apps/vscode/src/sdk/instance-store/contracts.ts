@@ -28,6 +28,12 @@
 // Errors
 // ---------------------------------------------------------------------------
 
+import {
+	INSTANCE_SECRET_NAME_PATTERN,
+	type InstanceSecretName,
+	isInstanceSecretName,
+} from "@/shared/storage/instance-secret"
+
 /**
  * Thrown by the contract validators on malformed input. The
  * fail-closed invariant means the store / projector do NOT
@@ -61,11 +67,19 @@ export type InstanceCredentialRefKind = (typeof kInstanceCredentialRefKinds)[num
 
 /**
  * A credential reference. Currently the only legal shape is
- * `{ kind: "secret", name: string }`.
+ * `{ kind: "secret", name: InstanceSecretName }`.
+ *
+ * `name` is a brand-typed `InstanceSecretName` (must match
+ * `INSTANCE_SECRET_NAME_PATTERN`). This is the type-system
+ * side of the twelfth reviewer's
+ * HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED: a malformed
+ * instance record cannot alias the closed `SECRETS_KEYS` union,
+ * because the brand can only be constructed via `parseInstanceSecretName`
+ * / `nameFor(instanceId)` / `isInstanceSecretName(...)`.
  */
 export interface InstanceCredentialRef {
 	kind: InstanceCredentialRefKind
-	name: string
+	name: InstanceSecretName
 }
 
 export function parseInstanceCredentialRef(
@@ -88,7 +102,21 @@ export function parseInstanceCredentialRef(
 			`${path}.name`,
 		)
 	}
-	return { kind: "secret", name: obj.name }
+	// Per the twelfth reviewer
+	// (HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED), the
+	// credentialRef.name MUST live under the reserved
+	// "instance:" prefix in secrets.json. Generic keys like
+	// "openAiApiKey" or "apiKey" must be rejected at the
+	// persistence boundary so a malformed instance file can
+	// never accidentally alias the closed SECRETS_KEYS union.
+	const instanceSecretName = isInstanceSecretName(obj.name)
+	if (!instanceSecretName) {
+		throw new InstancesContractError(
+			`${path}.name: must match the instance-secret namespace (${INSTANCE_SECRET_NAME_PATTERN.source}); got ${JSON.stringify(obj.name)}`,
+			`${path}.name`,
+		)
+	}
+	return { kind: "secret", name: instanceSecretName }
 }
 
 // ---------------------------------------------------------------------------
@@ -107,15 +135,18 @@ export function parseInstanceCredentialRef(
  * is honored by the typed projector -- this is the inverse of
  * the legacy `setIfDefined` semantics that the OPENAI_ONLY_PROBE
  * inherited from `ApiConfiguration`.
+ *
+ * The credential is NOT a per-connection field. Per the twelfth
+ * reviewer (HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED), there
+ * is exactly ONE credential authority on a `ProviderConfigurationInstance`
+ * -- the top-level `credentialRef`. The physical secret value
+ * is resolved at apply time by `StateManager.getInstanceSecret(credentialRef.name)`
+ * and is NEVER embedded in the instance record nor in the
+ * connection shape (PROFILE_CONTAINS_RAW_SECRET = NO).
  */
 export interface ProviderConnection {
 	/** Provider endpoint. `null` = clear (do not inherit). */
 	baseUrl?: string | null
-	/** Provider credential reference (the physical secret value
-	 * is stored in secrets.json under `credentialRef.name`; this
-	 * field is intentionally NOT a place to put a raw secret --
-	 * see `PROFILE_CONTAINS_RAW_SECRET = NO` invariant). */
-	apiKeyRef?: InstanceCredentialRef
 	/** The model selection for this instance. */
 	modelId?: string
 	/** AWS / GCP / OCA / SAP region. `null` = clear. */
@@ -185,7 +216,16 @@ export function parseProviderConnection(
 		}
 	}
 	if ("apiKeyRef" in obj) {
-		conn.apiKeyRef = parseInstanceCredentialRef(obj.apiKeyRef, `${path}.apiKeyRef`)
+		// Per the twelfth reviewer
+		// (HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED),
+		// `apiKeyRef` is NOT a valid per-connection field.
+		// The single credential authority is the top-level
+		// `ProviderConfigurationInstance.credentialRef`. Reject
+		// the duplicate field at the persistence boundary.
+		throw new InstancesContractError(
+			`${path}.apiKeyRef: not a valid field; the credential reference lives at the top-level ProviderConfigurationInstance.credentialRef`,
+			`${path}.apiKeyRef`,
+		)
 	}
 	if ("modelId" in obj) {
 		const v = obj.modelId
@@ -365,7 +405,21 @@ export function parseInstancesFile(raw: unknown, path = "instancesFile"): Instan
 	}
 	const instances: Record<string, ProviderConfigurationInstance> = {}
 	for (const [k, v] of Object.entries(obj.instances as Record<string, unknown>)) {
-		instances[k] = parseProviderConfigurationInstance(v, `${path}.instances.${k}`)
+		const parsed = parseProviderConfigurationInstance(v, `${path}.instances.${k}`)
+		// Per the twelfth reviewer
+		// (HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED, follow-on):
+		// the durable identity is the JSON map KEY. The body's
+		// `instanceId` field is metadata, NOT authority. If the
+		// body drifts from the key we fail-closed at the
+		// persistence boundary so a tampered file cannot create a
+		// shadow instance under a different key.
+		if (k !== parsed.instanceId) {
+			throw new InstancesContractError(
+				`${path}.instances.${k}.instanceId: map key must equal parsed instanceId (got key=${JSON.stringify(k)}, body.instanceId=${JSON.stringify(parsed.instanceId)})`,
+				`${path}.instances.${k}.instanceId`,
+			)
+		}
+		instances[k] = parsed
 	}
 	return { version: 1, instances }
 }

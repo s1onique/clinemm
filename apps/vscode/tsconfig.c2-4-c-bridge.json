@@ -123,7 +123,11 @@
 		"src/sdk/instance-store/instances-store.test.ts",
 		"src/sdk/instance-store/typed-projector.test.ts",
 		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
-		"src/shared/storage/__tests__/instance-secret.test.ts"
+		"src/shared/storage/__tests__/instance-secret.test.ts",
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+		// (durable): real StateManager.setInstanceSecret /
+		// getInstanceSecret / flushPendingState roundtrip.
+		"src/core/storage/__tests__/state-manager-instance-secret-durable.test.ts"
 	],
 	"exclude": [
 		"node_modules",

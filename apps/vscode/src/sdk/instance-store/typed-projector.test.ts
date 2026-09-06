@@ -14,32 +14,35 @@
  * function (no mocks) against controlled CoreSessionConfig
  * baselines, asserting:
  *
- *   R5-01 positive binding       -- baseline A + instance B =>
- *                                  result on all provider-relevant
- *                                  fields == B
- *   R5-02 clearing semantics     -- A.headers = {...}; B.headers = null;
- *                                  result.headers = null (NOT A.headers)
- *   R5-03 generic provider shape -- B with anthropic providerId =>
- *                                  result reflects B (no A residual)
- *   R5-04 conservation           -- without an instance override,
- *                                  the projector does NOT mutate
- *                                  the baseline (back-compat invariant)
+ *   R5-01 positive binding         -- baseline A + instance B =>
+ *                                    result on all provider-relevant
+ *                                    fields == B
+ *   R5-02 clearing semantics       -- A.headers = {...}; B.headers = null;
+ *                                    result.headers = null (NOT A.headers)
+ *   R5-03 generic provider shape   -- B with anthropic providerId =>
+ *                                    result reflects B (no A residual)
+ *   R5-04 conservation             -- partial instance update
+ *                                    preserves A's absent fields
+ *   R5-05 credential inversion     -- apiKey must equal the
+ *                                    RESOLVED secret value, not the
+ *                                    reference name. Twelfth reviewer
+ *                                    HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED
+ *                                    witness.
+ *   R5-06 no-credential clearing   -- resolvedApiKey=undefined must
+ *                                    write `null` to apiKey (explicit
+ *                                    clear), not "" and not the
+ *                                    reference name.
  *
  * Run via the bridge config:
  *   bun run vitest --config vitest.config.c2-4-c-bridge.ts
  *                  src/sdk/instance-store/typed-projector.test.ts
  */
-
 import type { CoreSessionConfig } from "@cline/core"
+import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import { describe, expect, it } from "vitest"
-import type {
-	ProviderConfigurationInstance,
-} from "./contracts"
+import type { ProviderConfigurationInstance } from "./contracts"
 import { applyTypedProviderInstanceToConfig } from "./typed-projector"
 
-// Minimal baseline shape -- the projector only touches the
-// Settable fields (providerId, modelId, apiKey, baseUrl, headers,
-// region, apiLine, providerSpecificConfig).
 type MinimalConfig = {
 	providerId?: string
 	modelId?: string
@@ -56,7 +59,7 @@ function makeBaselineA(overrides: Partial<MinimalConfig> = {}): MinimalConfig {
 	return {
 		providerId: "openai-compatible",
 		modelId: "model-A",
-		apiKey: "key-A",
+		apiKey: "secret-A-value",
 		baseUrl: "https://endpoint-A",
 		headers: { "X-A": "1" },
 		region: "us-east-1",
@@ -70,10 +73,9 @@ function makeInstanceB(overrides: Partial<ProviderConfigurationInstance> = {}): 
 		instanceId: "inst-B",
 		providerId: "openai-compatible",
 		displayLabel: "B",
-		credentialRef: { kind: "secret", name: "instance:inst-B-key" },
+		credentialRef: { kind: "secret", name: "instance:inst-B-key" as InstanceSecretName },
 		connection: {
 			modelId: "model-B",
-			apiKeyRef: { kind: "secret", name: "instance:inst-B-key" },
 			baseUrl: "https://endpoint-B",
 			headers: { "X-B": "2" },
 		},
@@ -84,18 +86,19 @@ function makeInstanceB(overrides: Partial<ProviderConfigurationInstance> = {}): 
 }
 
 describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5", () => {
-	it("R5-01 positive binding: baseline A + instance B -> result reflects B on all identity+connection fields", () => {
+	it("R5-01 positive binding: A + B + resolvedApiKey=secret-B -> result reflects B (apiKey is RESOLVED, NOT the reference name)", () => {
 		const config = makeBaselineA() as unknown as CoreSessionConfig
 		const instance = makeInstanceB()
-
-		applyTypedProviderInstanceToConfig(config, instance)
-
+		applyTypedProviderInstanceToConfig(config, instance, "secret-B-value")
 		const result = config as unknown as MinimalConfig
-		expect(result.providerId).toBe("openai-compatible") // same providerId
-		expect(result.modelId).toBe("model-B") // B's model
-		expect(result.apiKey).toBe("instance:inst-B-key") // B's credential name
-		expect(result.baseUrl).toBe("https://endpoint-B") // B's endpoint
-		expect(result.headers).toEqual({ "X-B": "2" }) // B's headers
+		expect(result.providerId).toBe("openai-compatible")
+		expect(result.modelId).toBe("model-B")
+		// TWELFTH REVIEWER FIX: apiKey is the RESOLVED secret value,
+		// not the credential reference name.
+		expect(result.apiKey).toBe("secret-B-value")
+		expect(result.apiKey).not.toBe("instance:inst-B-key")
+		expect(result.baseUrl).toBe("https://endpoint-B")
+		expect(result.headers).toEqual({ "X-B": "2" })
 	})
 
 	it("R5-02 clearing semantics: A.headers present; B.headers=null -> result.headers=null (NOT A's headers)", () => {
@@ -106,20 +109,12 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5", () => {
 			connection: {
 				modelId: "model-B",
 				baseUrl: "https://endpoint-B",
-				// Explicit clearing form: null clears the field.
 				headers: null,
 			},
 		})
-
-		applyTypedProviderInstanceToConfig(config, instance)
-
+		applyTypedProviderInstanceToConfig(config, instance, "secret-B-value")
 		const result = config as unknown as MinimalConfig
-		// The discriminator the recon phase froze: explicit null
-		// MUST be honored as "clear", not silently collapsed to
-		// "preserve baseline". This is the OPENAI_ONLY_PROBE defect
-		// the typed projector fixes.
 		expect(result.headers).toBeNull()
-		// Other fields are still B's:
 		expect(result.modelId).toBe("model-B")
 		expect(result.baseUrl).toBe("https://endpoint-B")
 	})
@@ -130,50 +125,62 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5", () => {
 			instanceId: "inst-anthropic",
 			providerId: "anthropic",
 			displayLabel: "Personal Anthropic",
-			credentialRef: { kind: "secret", name: "instance:inst-anthropic-key" },
+			credentialRef: { kind: "secret", name: "instance:inst-anthropic-key" as InstanceSecretName },
 			connection: {
 				modelId: "claude-opus-4",
-				apiKeyRef: { kind: "secret", name: "instance:inst-anthropic-key" },
-				region: null, // explicit clearing
+				region: null,
 			},
 			createdAt: 1,
 			updatedAt: 1,
 		}
-
-		applyTypedProviderInstanceToConfig(config, instance)
-
+		applyTypedProviderInstanceToConfig(config, instance, "sk-ant-resolved-physical-secret")
 		const result = config as unknown as MinimalConfig
 		expect(result.providerId).toBe("anthropic")
 		expect(result.modelId).toBe("claude-opus-4")
-		expect(result.apiKey).toBe("instance:inst-anthropic-key")
-		// Region explicitly cleared (was us-east-1 in A).
+		expect(result.apiKey).toBe("sk-ant-resolved-physical-secret")
+		expect(result.apiKey).not.toBe("instance:inst-anthropic-key")
 		expect(result.region).toBeNull()
 	})
 
-	it("R5-04 conservation: without an instance override (untouched baseline), no fields mutate", () => {
-		// Note: this test calls applyTypedProviderInstanceToConfig with
-		// a valid instance -- the conservation invariant is asserted
-		// at the boundary where the projector is invoked, by checking
-		// that the typed fields are NOT cleared when the instance
-		// simply does not provide them.
+	it("R5-04 conservation: partial instance update preserves A's absent fields", () => {
 		const config = makeBaselineA() as unknown as CoreSessionConfig
 		const instance = makeInstanceB({
 			connection: {
-				// Only modelId is provided; other connection fields are
-				// undefined (= preserve baseline).
 				modelId: "model-B",
 			},
 		})
-
-		applyTypedProviderInstanceToConfig(config, instance)
-
+		applyTypedProviderInstanceToConfig(config, instance, undefined)
 		const result = config as unknown as MinimalConfig
 		expect(result.modelId).toBe("model-B")
-		// baseUrl / headers / apiKey are NOT touched -- A's values
-		// survive. This is the canonical "partial instance update"
-		// path, distinct from the "explicit clearing" path in R5-02.
+		// baseUrl / headers NOT touched -- A's values survive.
 		expect(result.baseUrl).toBe("https://endpoint-A")
 		expect(result.headers).toEqual({ "X-A": "1" })
-		expect(result.apiKey).toBe("key-A")
+		// apiKey is set to null because resolvedApiKey was undefined.
+		// This is NOT a "preserve baseline" leak.
+		expect(result.apiKey).toBeNull()
+		expect(result.apiKey).not.toBe("secret-A-value")
+	})
+
+	it("R5-05 credential inversion: cfg.apiKey MUST equal resolved secret, NEVER the reference name", () => {
+		const config = makeBaselineA({ apiKey: "secret-A-value" }) as unknown as CoreSessionConfig
+		const instance = makeInstanceB()
+		expect(instance.credentialRef.name).toBe("instance:inst-B-key")
+		applyTypedProviderInstanceToConfig(config, instance, "secret-B-value")
+		const result = config as unknown as MinimalConfig
+		expect(result.apiKey).toBe("secret-B-value")
+		expect(result.apiKey).not.toBe("instance:inst-B-key")
+		expect(result.apiKey).not.toBe("secret-A-value")
+		expect(result.apiKey?.startsWith("instance:")).toBe(false)
+	})
+
+	it("R5-06 no-credential clearing: resolvedApiKey=undefined writes null (NOT empty string, NOT reference name)", () => {
+		const config = makeBaselineA({ apiKey: "secret-A-value" }) as unknown as CoreSessionConfig
+		const instance = makeInstanceB()
+		applyTypedProviderInstanceToConfig(config, instance, undefined)
+		const result = config as unknown as MinimalConfig
+		expect(result.apiKey).toBeNull()
+		expect(result.apiKey).not.toBe("")
+		expect(result.apiKey).not.toBe("instance:inst-B-key")
+		expect(result.apiKey).not.toBe("secret-A-value")
 	})
 })

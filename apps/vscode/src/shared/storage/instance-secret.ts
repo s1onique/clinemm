@@ -66,6 +66,19 @@ export function parseInstanceSecretName(raw: string): InstanceSecretName {
 }
 
 /**
+ * Non-throwing parse -- returns the branded name on success,
+ * or `null` on malformed input. Use this when you want to
+ * validate a string that you don't yet trust (e.g. an arbitrary
+ * key read from a parsed JSON file) without the call site
+ * having to wrap in try/catch.
+ */
+export function isInstanceSecretName(raw: unknown): InstanceSecretName | null {
+	if (typeof raw !== "string") return null
+	if (!INSTANCE_SECRET_NAME_PATTERN.test(raw)) return null
+	return raw as InstanceSecretName
+}
+
+/**
  * Construct an instance-scoped secret name from an instanceId.
  * This is the canonical helper for the APPLY path's
  * `credentialRef.name` field:

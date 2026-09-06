@@ -129,6 +129,24 @@
 		// compaction` alias declared only in
 		// `tsconfig.c2-4-c-bridge.json`).
 		"src/sdk/__tests__/sdk-compaction-w-publish-red01-real-producer.test.ts",
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3-R5
+		// (persistence phase): the instance-store / typed-projector /
+		// instance-secret tests run under the dedicated
+		// `vitest.config.c2-4-c-bridge.ts` config and are excluded
+		// here to keep the base config's @cline/core stub alias in
+		// scope (the bridge config has the
+		// `@cline-internal/core/...` aliases the REAL projector
+		// needs).
+		"src/sdk/instance-store/instances-store.test.ts",
+		"src/sdk/instance-store/typed-projector.test.ts",
+		"src/shared/storage/__tests__/instance-secret.test.ts",
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+		// (durable): real StateManager.setInstanceSecret /
+		// getInstanceSecret / flushPendingState roundtrip. Runs in
+		// the bridge config alongside the schema tests for
+		// consistency with the recon-phase pre-existing infra
+		// quirk.
+		"src/core/storage/__tests__/state-manager-instance-secret-durable.test.ts",
 		// ACT-CLINEMM-DOGFOOD-BUILD-INTEGRATION-REPAIR01 / B1:
 		// The Seatbelt observer test imports `./cline-core-vitest-stub`
 		// via a relative path to drive the live Seatbelt singleton. The

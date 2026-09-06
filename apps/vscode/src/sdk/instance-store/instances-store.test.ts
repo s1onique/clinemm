@@ -20,6 +20,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { nameFor } from "@/shared/storage/instance-secret"
 import {
 	emptyInstancesFile,
 	type ProviderConfigurationInstance,
@@ -40,7 +41,7 @@ function makeInstance(
 		instanceId,
 		providerId,
 		displayLabel,
-		credentialRef: { kind: "secret", name: `instance:${instanceId}-key` },
+		credentialRef: { kind: "secret", name: nameFor(`${instanceId}-key`) },
 		connection: {},
 		createdAt: now,
 		updatedAt: now,
@@ -153,5 +154,88 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3", () => {
 		// initial in-memory state equals the schema's empty seed.
 		const store = new InstancesStore({ filePath: storePath })
 		expect(store.snapshot()).toEqual(emptyInstancesFile())
+	})
+
+	it("R3-08 (twelfth reviewer): map key MUST equal parsed instanceId -- fail-closed on drift", () => {
+		// Per the twelfth reviewer:
+		// HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED, follow-on:
+		// the durable identity is the JSON map KEY. The body's
+		// `instanceId` field is metadata, NOT authority. If the
+		// body drifts from the key we fail-closed at the
+		// persistence boundary so a tampered file cannot create a
+		// shadow instance under a different key.
+		// Write a tampered file directly: map key says "inst-A",
+		// body says instanceId="inst-EVIL".
+		const tampered = {
+			version: 1,
+			instances: {
+				"inst-A": {
+					instanceId: "inst-EVIL", // <-- body drift
+					providerId: "openai-compatible",
+					displayLabel: "Shadow",
+					credentialRef: { kind: "secret", name: "instance:inst-EVIL-key" },
+					connection: { modelId: "m" },
+					createdAt: 1,
+					updatedAt: 1,
+				},
+			},
+		}
+		writeFileSync(storePath, JSON.stringify(tampered), "utf-8")
+		expect(() => new InstancesStore({ filePath: storePath })).toThrow(/map key must equal/)
+	})
+
+	it("R3-09 (twelfth reviewer): apiKeyRef on a connection fails closed (no duplicate credential authority)", () => {
+		// Per the twelfth reviewer:
+		// HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED: a per-
+		// connection `apiKeyRef` is FORBIDDEN. The credential
+		// authority is the top-level `credentialRef` only. This
+		// guards against silent acceptance of legacy shapes that
+		// would create a duplicate authority.
+		const tampered = {
+			version: 1,
+			instances: {
+				"inst-A": {
+					instanceId: "inst-A",
+					providerId: "openai-compatible",
+					displayLabel: "A",
+					credentialRef: { kind: "secret", name: "instance:inst-A-key" },
+					connection: {
+						modelId: "m",
+						apiKeyRef: { kind: "secret", name: "instance:inst-A-conn-key" },
+					},
+					createdAt: 1,
+					updatedAt: 1,
+				},
+			},
+		}
+		writeFileSync(storePath, JSON.stringify(tampered), "utf-8")
+		expect(() => new InstancesStore({ filePath: storePath })).toThrow(/apiKeyRef/)
+	})
+
+	it("R3-10 (twelfth reviewer): credentialRef.name without instance: prefix fails closed", () => {
+		// Per the twelfth reviewer:
+		// HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED: a
+		// credentialRef.name that does not live under the
+		// reserved "instance:" namespace MUST be rejected at the
+		// persistence boundary. Otherwise a malformed file could
+		// alias the closed SECRETS_KEYS union.
+		const tampered = {
+			version: 1,
+			instances: {
+				"inst-A": {
+					instanceId: "inst-A",
+					providerId: "openai-compatible",
+					displayLabel: "A",
+					credentialRef: { kind: "secret", name: "openAiApiKey" }, // BAD
+					connection: { modelId: "m" },
+					createdAt: 1,
+					updatedAt: 1,
+				},
+			},
+		}
+		writeFileSync(storePath, JSON.stringify(tampered), "utf-8")
+		expect(() => new InstancesStore({ filePath: storePath })).toThrow(
+			/instance-secret namespace/,
+		)
 	})
 })

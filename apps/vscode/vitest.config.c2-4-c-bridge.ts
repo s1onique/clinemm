@@ -182,6 +182,14 @@ export default defineConfig({
 			// config alongside R3 / R5 for consistency with the
 			// recon-phase pre-existing infra quirk.
 			"src/shared/storage/__tests__/instance-secret.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+			// (durable): real StateManager.setInstanceSecret /
+			// getInstanceSecret / flushPendingState roundtrip on
+			// disk. Twelfth reviewer
+			// HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED, follow-on
+			// P1: the prior R4 suite exercised the schema but not
+			// the durable layer.
+			"src/core/storage/__tests__/state-manager-instance-secret-durable.test.ts",
 		],
 		testTimeout: 30_000,
 	},
