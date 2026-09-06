@@ -1,6 +1,7 @@
 export * from "./ClineBlobStorage"
 export * from "./ClineFileStorage"
 export * from "./ClineStorage"
+export * from "./instance-secret"
 export * from "./provider-keys"
 export * from "./state-keys"
 export * from "./storage-context"

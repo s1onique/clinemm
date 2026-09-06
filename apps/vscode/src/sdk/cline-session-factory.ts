@@ -120,6 +120,25 @@ export interface SessionConfigInput {
 	 * the resolved config is identical to today's behavior.
 	 */
 	providerConfigurationInstance?: ApiConfiguration
+	/**
+	 * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5
+	 *
+	 * Typed provider-instance override. Mutually exclusive with
+	 * `providerConfigurationInstance` (the legacy OPENAI_ONLY_PROBE
+	 * carrier). When present, the SdkSessionConfigBuilder routes
+	 * through `applyTypedProviderInstanceToConfig`, which:
+	 *
+	 *   - honors explicit null clearing semantics (R5 RED witness)
+	 *   - covers non-OpenAI-compatible provider shapes (anthropic,
+	 *     claudecode, aws, gcp, oca, sap, ollama, ...)
+	 *   - replaces the OPENAI_ONLY_PROBE limitation entirely
+	 *
+	 * When `providerConfigurationInstanceTyped` is present, the
+	 * legacy `providerConfigurationInstance` field is IGNORED (the
+	 * typed path is authoritative). This keeps the recon R2/R2p
+	 * tests (which exercise the legacy OPENAI_ONLY_PROBE) intact.
+	 */
+	providerConfigurationInstanceTyped?: import("@/sdk/instance-store/contracts").ProviderConfigurationInstance
 }
 
 /** Active session state tracked by the factory */

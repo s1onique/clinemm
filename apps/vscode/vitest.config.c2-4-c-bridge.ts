@@ -168,6 +168,20 @@ export default defineConfig({
 			// and `../sdk-session-config-builder` — all already
 			// aliased by the bridge config.
 			"src/sdk/__tests__/provider-instance-identity-r2p-real-projector.piif01.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3-R5
+			// (persistence phase): instance-store contract + typed
+			// projector. Placed in the bridge config because the
+			// base config's @cline/core stub alias strips zod (a
+			// pre-existing infra issue surfaced by the eleventh
+			// reviewer); the bridge config has the aliases needed
+			// to exercise the REAL typed projector end-to-end.
+			"src/sdk/instance-store/instances-store.test.ts",
+			"src/sdk/instance-store/typed-projector.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+			// (instance-secret namespace): placed in the bridge
+			// config alongside R3 / R5 for consistency with the
+			// recon-phase pre-existing infra quirk.
+			"src/shared/storage/__tests__/instance-secret.test.ts",
 		],
 		testTimeout: 30_000,
 	},

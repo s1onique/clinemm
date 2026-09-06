@@ -1254,6 +1254,12 @@ apps/vscode/.factory/evidence/
 # IMPLEMENTATION01 remains gated on §17 four-gate handoff.
 !/.factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01.md
 !/.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01/
+# ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01: opened 2026-09-06
+# persistence-phase ACT body + R3/R4/R5 evidence file. Both must
+# survive `git clean`/repo prune per the durable-ACT convention
+# used by the foundation ACT entry.
+!/.factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01.md
+!/.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01/
 # ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01:
 # bounded correction after fifth-reviewer verdict
 # HALT_R0_FULL_CONNECTION_NOT_PROVEN (2026-09-05, same day, immediately
@@ -1301,3 +1307,5 @@ apps/vscode/.factory/evidence/
 #   - ACT phase contract coherent (§4 phase split + §17 reframed +
 #     entry preamble + §35 successor linkage + STOP)
 !/.factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01.md
+.bun-tmp/
+.bun-install/

@@ -19,6 +19,11 @@ import type { StorageContext } from "@shared/storage/storage-context"
 import { FSWatcher } from "chokidar"
 import { initializeDistinctId } from "@/services/logging/distinctId"
 import { Logger } from "@/shared/services/Logger"
+import {
+	INSTANCE_SECRET_NAME_PATTERN,
+	type InstanceSecretName,
+	parseInstanceSecretName,
+} from "@/shared/storage/instance-secret"
 import { AgentConfigLoader } from "../task/tools/subagent/AgentConfigLoader"
 import { readTaskSettingsFromStorage, writeTaskSettingsToStorage } from "./disk"
 import { STATE_MANAGER_NOT_INITIALIZED } from "./error-messages"
@@ -58,6 +63,13 @@ export class StateManager {
 	private remoteConfigCache: Partial<RemoteConfigFields> = {} as RemoteConfigFields
 	private secretsCache: Secrets = {} as Secrets
 	private workspaceStateCache: LocalState = {} as LocalState
+	// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4:
+	// Instance-scoped secret namespace. Keyed by `InstanceSecretName`
+	// (always matches `^instance:.+$`); persisted to the same
+	// secrets.json (mode 0o600, atomic-rename) under that prefix.
+	// The closed `SECRETS_KEYS` union is intentionally NOT extended
+	// -- this is the typed accessor pair called out by evidence 06a.
+	private instanceSecretsCache: Map<InstanceSecretName, string | undefined> = new Map()
 
 	/**
 	 * File-backed storage context. All reads/writes to persistent state go through here.
@@ -71,6 +83,7 @@ export class StateManager {
 	private pendingTaskState = new Map<string, Set<SettingsKey>>()
 	private pendingSecrets = new Set<SecretKey>()
 	private pendingWorkspaceState = new Set<LocalStateKey>()
+	private pendingInstanceSecrets = new Set<InstanceSecretName>()
 	private persistenceTimeout: NodeJS.Timeout | null = null
 	private readonly PERSISTENCE_DELAY_MS = 500
 	private taskHistoryWatcher: FSWatcher | null = null
@@ -309,6 +322,65 @@ export class StateManager {
 
 		// Schedule debounced persistence
 		this.scheduleDebouncedPersistence()
+	}
+
+	/**
+	 * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+	 *
+	 * Set an instance-scoped secret. Used by the DEFINE/UPDATE
+	 * phase (instance creation / editing UI -- future §17 work).
+	 * The APPLY path MUST NOT call this; see evidence 06a for the
+	 * discriminator that motivates keeping the two phases distinct.
+	 *
+	 * The key MUST be a valid `InstanceSecretName` (matches
+	 * `^instance:.+$`); invalid names throw `InstanceSecretError`
+	 * and are never persisted.
+	 */
+	setInstanceSecret(name: InstanceSecretName, value: string | undefined): void {
+		if (!this.isInitialized) {
+			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
+		}
+		// Brand-check at runtime: the TypeScript brand is erased
+		// at runtime, so callers MUST go through parseInstanceSecretName
+		// (or the `nameFor` helper) to get a valid name.
+		parseInstanceSecretName(name)
+
+		if (value === undefined || value === "") {
+			this.instanceSecretsCache.delete(name)
+		} else {
+			this.instanceSecretsCache.set(name, value)
+		}
+		this.pendingInstanceSecrets.add(name)
+		this.scheduleDebouncedPersistence()
+	}
+
+	/**
+	 * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+	 *
+	 * Read an instance-scoped secret. Used by the APPLY phase to
+	 * resolve `Instance.credentialRef.name` to a physical secret
+	 * value at instance-switch time. Returns `undefined` if the
+	 * secret is missing -- callers MUST treat this as a hard error
+	 * (the user must call `setInstanceSecret` first via the
+	 * DEFINE/UPDATE path).
+	 */
+	getInstanceSecret(name: InstanceSecretName): string | undefined {
+		if (!this.isInitialized) {
+			throw new Error(STATE_MANAGER_NOT_INITIALIZED)
+		}
+		parseInstanceSecretName(name) // brand check
+		return this.instanceSecretsCache.get(name)
+	}
+
+	/**
+	 * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+	 *
+	 * List the names of all instance-scoped secrets currently
+	 * cached. Used by tests and diagnostics; production callers
+	 * should prefer `getInstanceSecret`.
+	 */
+	listInstanceSecretNames(): readonly InstanceSecretName[] {
+		return Array.from(this.instanceSecretsCache.keys())
 	}
 
 	/**
@@ -592,7 +664,8 @@ export class StateManager {
 			this.pendingGlobalState.size === 0 &&
 			this.pendingSecrets.size === 0 &&
 			this.pendingWorkspaceState.size === 0 &&
-			this.pendingTaskState.size === 0
+			this.pendingTaskState.size === 0 &&
+			this.pendingInstanceSecrets.size === 0
 		) {
 			return
 		}
@@ -603,6 +676,7 @@ export class StateManager {
 			this.persistSecretsBatch(this.pendingSecrets),
 			this.persistWorkspaceStateBatch(this.pendingWorkspaceState),
 			this.persistTaskStateBatch(this.pendingTaskState),
+			this.persistInstanceSecretsBatch(this.pendingInstanceSecrets),
 		])
 
 		// Clear pending sets after successful persistence
@@ -610,6 +684,7 @@ export class StateManager {
 		this.pendingSecrets.clear()
 		this.pendingWorkspaceState.clear()
 		this.pendingTaskState.clear()
+		this.pendingInstanceSecrets.clear()
 	}
 
 	/**
@@ -711,6 +786,25 @@ export class StateManager {
 	}
 
 	/**
+	 * ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+	 *
+	 * Persist instance-scoped secrets to the file-backed store.
+	 * Reuses the same `setBatch` write path as `persistSecretsBatch`
+	 * so the secrets.json file gets a single atomic-rename write
+	 * combining legacy + instance keys. The mode 0o600 file
+	 * permission is inherited from the existing storage context.
+	 */
+	private async persistInstanceSecretsBatch(keys: Set<InstanceSecretName>): Promise<void> {
+		if (keys.size === 0) return
+		const entries: Record<string, string | undefined> = {}
+		for (const key of keys) {
+			const value = this.instanceSecretsCache.get(key)
+			entries[key] = value || undefined
+		}
+		this.storage.secrets.setBatch(entries)
+	}
+
+	/**
 	 * Persist workspace state to the file-backed store.
 	 * Uses setBatch for efficiency (single disk write).
 	 */
@@ -730,6 +824,19 @@ export class StateManager {
 		Object.assign(this.globalStateCache, globalState)
 		Object.assign(this.secretsCache, secrets)
 		Object.assign(this.workspaceStateCache, workspaceState)
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4:
+		// Sweep secrets.json for keys matching the "instance:" prefix
+		// and seed the typed instance-secrets cache. Keys that don't
+		// parse as InstanceSecretName are silently ignored -- this
+		// keeps the cache clean if a future migration introduces a
+		// new prefix and we still have legacy entries.
+		const keys = this.storage.secrets.keys()
+		for (const key of keys) {
+			if (INSTANCE_SECRET_NAME_PATTERN.test(key)) {
+				const value = this.storage.secrets.get(key)
+				this.instanceSecretsCache.set(key as InstanceSecretName, value)
+			}
+		}
 	}
 
 	/**

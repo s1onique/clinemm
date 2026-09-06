@@ -3,6 +3,7 @@ import type { ApiConfiguration } from "@shared/api"
 import type { StateManager } from "@/core/storage/StateManager"
 import { buildSessionConfig, type SessionConfigInput } from "./cline-session-factory"
 import { buildAgentHooks, type HookMessageEmitter } from "./hooks-adapter"
+import { applyTypedProviderInstanceToConfig } from "./instance-store/typed-projector"
 
 export interface SdkSessionConfigBuilderOptions {
 	stateManager: StateManager
@@ -28,10 +29,23 @@ export class SdkSessionConfigBuilder {
 
 		config.hooks = buildAgentHooks(this.options.stateManager, this.options.emitHookMessage, input.cwd)
 
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 (R5):
+		// When the caller passes the TYPED instance
+		// (`providerConfigurationInstanceTyped`), route through the
+		// typed projector. The typed path replaces the
+		// OPENAI_ONLY_PROBE probe: it covers non-OpenAI-compatible
+		// provider shapes (anthropic, claudecode, aws, gcp, oca,
+		// sap, ...) and honors explicit `null` clearing semantics
+		// for connection fields (the R5 RED witness).
+		if (input.providerConfigurationInstanceTyped) {
+			applyTypedProviderInstanceToConfig(config, input.providerConfigurationInstanceTyped)
+			return config
+		}
+
 		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01 (R2 GREEN
 		// contract, ninth reviewer reopen):
 		//
-		// When the caller passes an explicit
+		// When the caller passes the LEGACY
 		// `providerConfigurationInstance`, project it onto the resolved
 		// config so that `applyProviderConfigurationInstance(A, B)` is
 		// actually load-bearing on `next` (B): the reconstructed
@@ -42,7 +56,7 @@ export class SdkSessionConfigBuilder {
 		// durable persistence layer. The five identity-bearing fields
 		// (providerId, modelId, apiKey, baseUrl, headers) are exactly
 		// the ones R2 STRATEGY_B_CONTRACT_GUARD asserts on the new
-		// active session's in-memory ActiveSession.config — see
+		// active session's in-memory ActiveSession.config -- see
 		// `provider-instance-identity-r2-strategy-b.piif01.test.ts`.
 		if (input.providerConfigurationInstance) {
 			applyProviderConfigurationInstanceToConfig(config, input.providerConfigurationInstance, input.mode)

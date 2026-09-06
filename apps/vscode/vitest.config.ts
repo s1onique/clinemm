@@ -160,6 +160,18 @@ export default defineConfig({
 			"src/sdk/__tests__/runtime-shadow-reactivation.rsr01-correction01.test.ts",
 			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01.test.ts",
 			"src/sdk/__tests__/runtime-followup-resume-subscription-parity.frsp01-correction01.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R3-R5
+			// (persistence phase): the instance-store + typed-projector
+			// tests run under the dedicated
+			// `vitest.config.c2-4-c-bridge.ts` config (which has the
+			// @cline-internal/core/... aliases). Excluded here to
+			// keep the base config's @cline/core stub alias in scope.
+			"src/sdk/instance-store/instances-store.test.ts",
+			"src/sdk/instance-store/typed-projector.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
+			// (instance-secret namespace): paired with R3 / R5 in
+			// the bridge config (see vitest.config.c2-4-c-bridge.ts).
+			"src/shared/storage/__tests__/instance-secret.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy
