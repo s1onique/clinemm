@@ -168,6 +168,13 @@ export default defineConfig({
 			// keep the base config's @cline/core stub alias in scope.
 			"src/sdk/instance-store/instances-store.test.ts",
 			"src/sdk/instance-store/typed-projector.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5
+			// (thirteenth-reviewer halt witness,
+			// HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN): the
+			// builder-level fail-closed witness drives the REAL
+			// SdkSessionConfigBuilder + REAL MissingProviderInstanceCredentialError.
+			// Bridge-only (same alias requirement as R2p above).
+			"src/sdk/__tests__/provider-instance-identity-r5-missing-credential-fails-closed.piif01.test.ts",
 			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
 			// (instance-secret namespace): paired with R3 / R5 in
 			// the bridge config (see vitest.config.c2-4-c-bridge.ts).

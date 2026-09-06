@@ -177,6 +177,18 @@ export default defineConfig({
 			// to exercise the REAL typed projector end-to-end.
 			"src/sdk/instance-store/instances-store.test.ts",
 			"src/sdk/instance-store/typed-projector.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5
+			// (thirteenth-reviewer halt witness,
+			// HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN):
+			// drives the REAL SdkSessionConfigBuilder.build() with
+			// providerConfigurationInstanceTyped. Asserts that
+			// getInstanceSecret returning undefined => builder
+			// REJECTS with MissingProviderInstanceCredentialError,
+			// NOT silently projects cfg.apiKey=null. Closes the
+			// P0 halt the thirteenth reviewer raised on
+			// fa61ff5be (the previous R5-06 test froze the
+			// wrong invariant).
+			"src/sdk/__tests__/provider-instance-identity-r5-missing-credential-fails-closed.piif01.test.ts",
 			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4
 			// (instance-secret namespace): placed in the bridge
 			// config alongside R3 / R5 for consistency with the

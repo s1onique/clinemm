@@ -28,10 +28,13 @@
  *                                    reference name. Twelfth reviewer
  *                                    HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED
  *                                    witness.
- *   R5-06 no-credential clearing   -- resolvedApiKey=undefined must
- *                                    write `null` to apiKey (explicit
- *                                    clear), not "" and not the
- *                                    reference name.
+ *   R5-06 missing-secret fails closed -- resolvedApiKey=undefined
+ *                                    must THROW
+ *                                    MissingProviderInstanceCredentialError
+ *                                    (NOT silently write null to apiKey).
+ *                                    Thirteenth reviewer
+ *                                    HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN
+ *                                    witness.
  *
  * Run via the bridge config:
  *   bun run vitest --config vitest.config.c2-4-c-bridge.ts
@@ -40,7 +43,7 @@
 import type { CoreSessionConfig } from "@cline/core"
 import type { InstanceSecretName } from "@/shared/storage/instance-secret"
 import { describe, expect, it } from "vitest"
-import type { ProviderConfigurationInstance } from "./contracts"
+import { MissingProviderInstanceCredentialError, type ProviderConfigurationInstance } from "./contracts"
 import { applyTypedProviderInstanceToConfig } from "./typed-projector"
 
 type MinimalConfig = {
@@ -142,23 +145,28 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5", () => {
 		expect(result.region).toBeNull()
 	})
 
-	it("R5-04 conservation: partial instance update preserves A's absent fields", () => {
+	it("R5-04 conservation: partial instance update preserves A's absent fields, but missing credential fails closed", () => {
 		const config = makeBaselineA() as unknown as CoreSessionConfig
 		const instance = makeInstanceB({
 			connection: {
 				modelId: "model-B",
 			},
 		})
-		applyTypedProviderInstanceToConfig(config, instance, undefined)
+		// Per thirteenth reviewer HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN:
+		// the runtime guard rejects undefined / empty / null BEFORE
+		// any projection happens. baseUrl / headers / apiKey are
+		// left untouched because the call THROWS, not because
+		// "undefined == preserve baseline" (that was the wrong
+		// invariant the previous R5-06 test pinned).
+		expect(() => applyTypedProviderInstanceToConfig(config, instance, undefined as unknown as string)).toThrow(
+			MissingProviderInstanceCredentialError,
+		)
 		const result = config as unknown as MinimalConfig
-		expect(result.modelId).toBe("model-B")
-		// baseUrl / headers NOT touched -- A's values survive.
+		// baseUrl / headers / apiKey NOT touched -- the call threw
+		// before reaching setOrClear.
 		expect(result.baseUrl).toBe("https://endpoint-A")
 		expect(result.headers).toEqual({ "X-A": "1" })
-		// apiKey is set to null because resolvedApiKey was undefined.
-		// This is NOT a "preserve baseline" leak.
-		expect(result.apiKey).toBeNull()
-		expect(result.apiKey).not.toBe("secret-A-value")
+		expect(result.apiKey).toBe("secret-A-value")
 	})
 
 	it("R5-05 credential inversion: cfg.apiKey MUST equal resolved secret, NEVER the reference name", () => {
@@ -173,14 +181,40 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5", () => {
 		expect(result.apiKey?.startsWith("instance:")).toBe(false)
 	})
 
-	it("R5-06 no-credential clearing: resolvedApiKey=undefined writes null (NOT empty string, NOT reference name)", () => {
+	it("R5-06 missing-secret fails closed: resolvedApiKey=undefined THROWS MissingProviderInstanceCredentialError (NOT silently apiKey=null)", () => {
 		const config = makeBaselineA({ apiKey: "secret-A-value" }) as unknown as CoreSessionConfig
 		const instance = makeInstanceB()
-		applyTypedProviderInstanceToConfig(config, instance, undefined)
+		// The previous version of this test froze the WRONG invariant
+		// (resolvedApiKey=undefined => apiKey=null, reconstruction
+		// proceeds). The thirteenth reviewer's
+		// HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN closed that
+		// invariant: because credentialRef is MANDATORY for every
+		// typed ProviderConfigurationInstance, a missing physical
+		// secret means the durable instance is broken. Reconstruction
+		// MUST NOT silently proceed with apiKey=null.
+		expect(() => applyTypedProviderInstanceToConfig(config, instance, undefined as unknown as string)).toThrow(
+			MissingProviderInstanceCredentialError,
+		)
 		const result = config as unknown as MinimalConfig
-		expect(result.apiKey).toBeNull()
+		// The throw happens before any setOrClear, so apiKey /
+		// baseUrl / headers are LEFT UNTOUCHED -- not nulled out,
+		// not cleared. (The reconstruction that called us aborts
+		// via the rejected Promise; the active session remains
+		// unchanged.)
+		expect(result.apiKey).toBe("secret-A-value")
+		expect(result.apiKey).not.toBeNull()
 		expect(result.apiKey).not.toBe("")
 		expect(result.apiKey).not.toBe("instance:inst-B-key")
-		expect(result.apiKey).not.toBe("secret-A-value")
+	})
+
+	it("R5-07 empty-string secret fails closed: resolvedApiKey='' is treated as missing", () => {
+		// An empty string is not a valid credential -- refuse to
+		// project it onto the apiKey slot. Same error class as
+		// undefined; same fail-closed semantics.
+		const config = makeBaselineA({ apiKey: "secret-A-value" }) as unknown as CoreSessionConfig
+		const instance = makeInstanceB()
+		expect(() => applyTypedProviderInstanceToConfig(config, instance, "")).toThrow(
+			MissingProviderInstanceCredentialError,
+		)
 	})
 })

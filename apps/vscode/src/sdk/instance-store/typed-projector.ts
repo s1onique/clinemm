@@ -34,33 +34,38 @@
  * could not carry.
  *
  * ===========================================================================
- *  CREDENTIAL RESOLUTION CONTRACT (twelfth reviewer)
+ *  CREDENTIAL RESOLUTION CONTRACT (twelfth + thirteenth reviewer)
  * ===========================================================================
- *  Per `HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED`, this projector
- *  does NOT read `instance.credentialRef` itself. The caller
- *  (the SdkSessionConfigBuilder) is the sole credential-resolution
- *  authority:
+ *  Per `HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED` (twelfth), this
+ *  projector does NOT read `instance.credentialRef` itself. The
+ *  caller (the SdkSessionConfigBuilder) is the sole credential-
+ *  resolution authority:
  *
  *      const resolved = stateManager.getInstanceSecret(
  *          instance.credentialRef.name,
- *      )  // returns string | undefined
+ *      )
  *
- *  The physical secret value is passed in here as the second
- *  argument. The projector writes the resolved STRING into
- *  `CoreSessionConfig.apiKey`. If the caller's lookup returned
- *  `undefined`, the projector writes `null` to the apiKey slot
- *  (explicit clearing -- never the reference name, never `""`,
- *  never the prefix string). This makes the wrong contract
+ *  Per `HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN` (thirteenth):
+ *  because `credentialRef` is MANDATORY for every
+ *  ProviderConfigurationInstance, a missing physical secret means
+ *  the durable instance is broken. The builder MUST treat
+ *  `getInstanceSecret(...) === undefined` as a HARD ERROR and
+ *  throw `MissingProviderInstanceCredentialError` BEFORE invoking
+ *  this projector. The projector therefore takes a non-nullable
+ *  `resolvedApiKey: string` -- passing `undefined` or `null` is a
+ *  contract violation and is rejected by an internal runtime
+ *  guard as well.
+ *
+ *  With this guard in place the projector ALWAYS writes a real
+ *  physical secret value to `CoreSessionConfig.apiKey`. It NEVER
+ *  receives the reference name (`credentialRef.name`), never
+ *  `""`, and never `null`. That makes the wrong contract
  *  `cfg.apiKey === "instance:inst-B-key"` physically impossible.
- *
- *  The only way to bypass this is to call
- *  `applyTypedProviderInstanceToConfig` with the wrong argument,
- *  which is a typing violation guarded by the function signature.
  * ===========================================================================
  */
 
 import type { CoreSessionConfig } from "@cline/core"
-import type { ProviderConfigurationInstance, ProviderConnection } from "./contracts"
+import { MissingProviderInstanceCredentialError, type ProviderConfigurationInstance, type ProviderConnection } from "./contracts"
 
 /**
  * The shape this projector applies onto the resolved
@@ -101,8 +106,21 @@ type Settable =
 export function applyTypedProviderInstanceToConfig(
 	config: CoreSessionConfig,
 	instance: ProviderConfigurationInstance,
-	resolvedApiKey: string | undefined,
+	resolvedApiKey: string,
 ): void {
+	// RUNTIME GUARD (thirteenth reviewer, HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN):
+	// the type signature is `resolvedApiKey: string` (non-nullable),
+	// but a caller could still bypass the builder and pass
+	// `undefined as never` or `null`. Reject it here rather than
+	// silently write `null` to apiKey and let reconstruction
+	// proceed with a broken durable instance.
+	if (resolvedApiKey === undefined || resolvedApiKey === null || resolvedApiKey === "") {
+		throw new MissingProviderInstanceCredentialError(
+			instance.instanceId,
+			instance.credentialRef.name,
+		)
+	}
+
 	const cfgAny = config as unknown as Record<string, unknown>
 	const conn = instance.connection ?? ({} as ProviderConnection)
 
@@ -124,17 +142,15 @@ export function applyTypedProviderInstanceToConfig(
 	// with explicit clearing semantics.
 	//
 	// The credential slot ALWAYS receives the resolved physical
-	// secret value (or `null` if no credential is stored). It
-	// NEVER receives the reference name `credentialRef.name` --
-	// that was the twelfth reviewer's HALT
-	// (TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED).
-	const apiKeyValue: string | null = resolvedApiKey === undefined ? null : resolvedApiKey
+	// secret value (guaranteed non-empty by the runtime guard
+	// above). It NEVER receives the reference name
+	// `credentialRef.name`, never `null`, and never `""`.
 	const isOpenAiCompatible = isOpenAiCompatibleProvider(instance.providerId)
 
 	if (isOpenAiCompatible) {
 		// OpenAI-compatible family uses apiKey/baseUrl/headers
 		// directly on the config.
-		setOrClear(cfgAny, "apiKey", apiKeyValue)
+		setOrClear(cfgAny, "apiKey", resolvedApiKey)
 		setOrClear(cfgAny, "baseUrl", conn.baseUrl)
 		setOrClear(cfgAny, "headers", conn.headers)
 	} else {
@@ -145,7 +161,7 @@ export function applyTypedProviderInstanceToConfig(
 		// physical secret value here so the runtime's
 		// SdkProviderConfigBuilder can copy it into the right
 		// per-provider slot at startup.
-		setOrClear(cfgAny, "apiKey", apiKeyValue)
+		setOrClear(cfgAny, "apiKey", resolvedApiKey)
 		if (conn.baseUrl !== undefined) {
 			setOrClear(cfgAny, "baseUrl", conn.baseUrl)
 		}

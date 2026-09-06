@@ -3,6 +3,7 @@ import type { ApiConfiguration } from "@shared/api"
 import type { StateManager } from "@/core/storage/StateManager"
 import { buildSessionConfig, type SessionConfigInput } from "./cline-session-factory"
 import { buildAgentHooks, type HookMessageEmitter } from "./hooks-adapter"
+import { MissingProviderInstanceCredentialError } from "./instance-store/contracts"
 import { applyTypedProviderInstanceToConfig } from "./instance-store/typed-projector"
 
 export interface SdkSessionConfigBuilderOptions {
@@ -39,16 +40,29 @@ export class SdkSessionConfigBuilder {
 		// for connection fields (the R5 RED witness).
 		//
 		// CREDENTIAL RESOLUTION (twelfth reviewer,
-		// HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED):
+		// HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED +
+		// thirteenth reviewer, HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN):
 		// The builder is the SOLE credential-resolution authority.
 		// The projector MUST NOT touch `instance.credentialRef` --
-		// it only receives the resolved physical secret value (or
-		// `undefined`). This makes the wrong contract
-		// `cfg.apiKey === "instance:inst-B-key"` physically
-		// impossible to produce from this code path.
+		// it only receives the resolved physical secret value.
+		//
+		// Because `credentialRef` is MANDATORY for every typed
+		// ProviderConfigurationInstance, a missing physical secret
+		// means the durable instance is broken. The builder MUST
+		// NOT silently project `cfg.apiKey = null` and let
+		// reconstruction proceed; instead it throws
+		// `MissingProviderInstanceCredentialError`. The error
+		// rejects the returned Promise so no replacement occurs
+		// and the current active session remains unchanged.
 		if (input.providerConfigurationInstanceTyped) {
 			const instance = input.providerConfigurationInstanceTyped
 			const resolvedApiKey = this.options.stateManager.getInstanceSecret(instance.credentialRef.name)
+			if (resolvedApiKey === undefined || resolvedApiKey === "") {
+				throw new MissingProviderInstanceCredentialError(
+					instance.instanceId,
+					instance.credentialRef.name,
+				)
+			}
 			applyTypedProviderInstanceToConfig(config, instance, resolvedApiKey)
 			return config
 		}

@@ -50,6 +50,45 @@ export class InstancesContractError extends Error {
 	}
 }
 
+/**
+ * Thrown by `SdkSessionConfigBuilder.build()` when a typed
+ * `ProviderConfigurationInstance` carries a `credentialRef` whose
+ * referenced physical secret is missing from the durable
+ * instance-secret store.
+ *
+ * Per the thirteenth reviewer (HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN
+ * on commit fa61ff5be): the `credentialRef` is MANDATORY for every
+ * ProviderConfigurationInstance, so a missing physical secret
+ * means the durable instance is broken. Reconstruction must NOT
+ * silently produce `cfg.apiKey = null` and proceed — that
+ * contradicts the contract under which `credentialRef` was made
+ * required in the first place.
+ *
+ * SdkSessionConfigBuilder is the SOLE resolver of this error.
+ * Catch sites should:
+ *   - surface it to the user as a clear "broken instance"
+ *     error,
+ *   - abort the rebuild (no replacement occurs; the current
+ *     active session remains unchanged), and
+ *   - never retry automatically — the durable record must be
+ *     repaired (re-set the secret under
+ *     `instance.credentialRef.name`) before reconstruction.
+ */
+export class MissingProviderInstanceCredentialError extends Error {
+	override readonly name = "MissingProviderInstanceCredentialError"
+	readonly instanceId: string
+	readonly credentialRefName: string
+	constructor(instanceId: string, credentialRefName: string) {
+		super(
+			`ProviderConfigurationInstance '${instanceId}' requires credential '${credentialRefName}' but no physical secret is stored under that name. ` +
+				`The durable instance is broken; rebuild aborted. ` +
+				`Repair by setting the secret via stateManager.setInstanceSecret('${credentialRefName}', value).`,
+		)
+		this.instanceId = instanceId
+		this.credentialRefName = credentialRefName
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Credential reference (R4 input shape)
 // ---------------------------------------------------------------------------

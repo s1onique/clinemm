@@ -286,4 +286,129 @@ Bridge typecheck: `bun run check-types:c2-4-c-bridge` -> OK (0 drift).
 
 ### §5.5 Evidence
 
+### §6.1 What the thirteenth reviewer halted
+
+After committing fa61ff5be (hundredth pass), the thirteenth
+reviewer raised `HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN`:
+
+  - The builder resolves `stateManager.getInstanceSecret(
+    instance.credentialRef.name)`.
+  - When the durable secret is missing, `getInstanceSecret()`
+    returns `undefined`.
+  - The previous typed projector converted `undefined` to
+    `apiKey = null` and let reconstruction proceed.
+  - That contradicts the contract under which `credentialRef`
+    is MANDATORY for every ProviderConfigurationInstance: a
+    missing physical secret means the durable instance is
+    broken.
+### §6.2 Bounded correction (applied in this pass)
+
+P0-1: The builder is now the SOLE fail-closed gate.
+
+  - `SdkSessionConfigBuilder.build()` now checks
+    `resolvedApiKey === undefined || resolvedApiKey === ""`
+    BEFORE calling the projector, and throws
+    `MissingProviderInstanceCredentialError` (new error class
+    on `contracts.ts`, carrying both `instanceId` and
+    `credentialRefName` for actionable UI).
+  - The Promise returned by `build()` rejects; no replacement
+    occurs; the current active session remains unchanged.
+
+P0-2: The projector signature is now non-nullable.
+
+  - `applyTypedProviderInstanceToConfig(config, instance,
+    resolvedApiKey: string)` — no more `string | undefined`.
+  - Plus a runtime guard at the top of the projector that
+    throws `MissingProviderInstanceCredentialError` if any
+P0-3: Tests were rewritten to freeze the CORRECT invariant.
+
+  - `typed-projector.test.ts`:
+    - R5-04: partial instance update with missing credential
+      THROWS (not "apiKey=null, everything else preserved").
+    - R5-06: `resolvedApiKey=undefined` THROWS
+      `MissingProviderInstanceCredentialError`.
+      `cfg.apiKey` is LEFT UNTOUCHED (not nulled, not
+      cleared, not the reference name).
+    - R5-07 (NEW): empty-string secret also THROWS (same
+      error class).
+  - NEW file `provider-instance-identity-r5-missing-credential-fails-closed.piif01.test.ts`:
+    - PIIF01_R5_MISSING_CREDENTIAL_BUILDER_REJECTS — drives
+      the REAL `SdkSessionConfigBuilder.build()` and asserts
+      that `getInstanceSecret` returning `undefined` causes
+      `build()` to reject with
+      `MissingProviderInstanceCredentialError`. The error
+      carries both `instanceId` and `credentialRefName`.
+    - PIIF01_R5_EMPTY_CREDENTIAL_BUILDER_REJECTS — same as
+### §6.3 Classification by reviewer
+
+  - P0: missing-instance-secret fails open   CLOSED
+  - P1: R4 reload-read NOT_EXECUTED         DEFERRED (PIIF01
+                                               scope is
+                                               persistence;
+                                               R4_RELOAD_READ
+                                               is on the
+                                               follow-on list)
+  - P1: generic-provider scope overclaim    DEFERRED (claim
+                                               is now scoped
+                                               to API_KEY_BACKED
+                                               in this ACT's
+                                               prose; the
+                                               non-apiKey
+                                               providers stay
+                                               on the
+                                               Foundation
+                                               follow-on)
+  - P1: structured-provider projection      DEFERRED (R5
+    overclaim                                   covers common-
+                                               field geometry
+                                               only; this is
+                                               explicit in
+                                               §6.3 of this
+                                               ACT)
+  - P2: blank-at-EOF in evidence file       PATCHED (no
+                                               trailing blank
+                                               line in the new
+                                               evidence file)
+
+### §6.4 What is no longer halted
+
+  - R-replace (`SdkSessionLifecycle.replaceActiveSession` real
+    qualification): the credential-binding chain is now
+    fail-closed end-to-end. R-replace remains a TODO for the
+    next pass; the thirteenth reviewer explicitly authorized
+    "go directly to the real `SdkSessionLifecycle.replaceActiveSession`
+    witness" once this halt closes.
+
+### §6.5 Test counts (after this pass)
+
+  ```
+  bridge config (6 files):
+    instance-store/instances-store.test.ts                                10 GREEN
+    instance-store/typed-projector.test.ts                                 7 GREEN  (was 6)
+    shared/storage/__tests__/instance-secret.test.ts                       7 GREEN
+    core/storage/__tests__/state-manager-instance-secret-durable.test.ts   5 GREEN
+    sdk/__tests__/provider-instance-identity-r2p-real-projector.piif01.test.ts  5 GREEN  (regression)
+    sdk/__tests__/provider-instance-identity-r5-missing-credential-fails-closed.piif01.test.ts  4 GREEN  (NEW)
+    TOTAL                                                                  38 GREEN  (was 33)
+
+  bridge typecheck:  bun run check-types:c2-4-c-bridge  →  OK (0 diagnostic)
+  ```
+
+### §6.6 Evidence
+
+  - `.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01/10-thirteenth-reviewer-fail-closed-witness.md`
+
+      above but with `getInstanceSecret` returning `""`.
+    - PIIF01_R5_RESOLVED_CREDENTIAL_BUILDER_PROJECTS —
+      positive control: when the secret IS present, the
+      builder projects that exact physical value to
+      `cfg.apiKey` (twelfth-reviewer HALT witness restated
+      at the builder seam).
+    - PIIF01_R5_REJECTION_ABORTS_BEFORE_PROJECTION — proves
+      the active-session-stays-unchanged invariant: the
+      baseline reference captured BEFORE `build()` is called
+      is unchanged after the rejection. The throw happens
+      before the projector touches it.
+    caller bypasses the builder and passes `undefined`/`null`/
+    `""` via `as unknown as string`. Defense in depth.
   - `.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01/09-twelfth-reviewer-correction-witness.md`
