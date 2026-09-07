@@ -1062,3 +1062,258 @@ ALL_DURABLE_ACT_FILES_COMMITTED                = PENDING (this
     should be the ABSENCE-of-config signal, not a coerced
     "empty present" that the policy layer must learn to
     treat as absent.
+
+
+## CORRECTION04 (2026-09-09, bounded: reviewer verdict C1 HALT absorb)
+
+### Trigger
+
+Reviewer verdict C1 on B3 GREEN (CORRECTION03): HALT with two P0s and
+two P1s.
+
+  P0 #1  HALT_B3_USER_VISIBILITY_NOT_PROVEN
+        The CORRECTION03 vitest file at
+        apps/vscode/src/core/controller/state/bootstrap-failure-visible.mpfrb01.test.ts
+        proved typed RPC-envelope preservation through the controller
+        handler boundary. It did NOT prove that the typed envelope
+        reaches the user. The webview container at
+        apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSectionContainer.tsx
+        console.error'd every failure callback; the typed envelope
+        existed at the gRPC seam but was thrown away at the UI seam.
+        This was the load-bearing defect of the original
+        `LIVE_DEFECT = TRUE`: a user who clicked Save in the picker
+        popup hit `saveCurrentAsModelProfile` -> backend refusal ->
+        console.error -> UI appeared to do nothing. The vitest file
+        captured the typed envelope one layer earlier than the user.
+
+  P0 #2  HALT_UNRELATED_PROTO_CORRUPTION
+        Commit 709c791b7 (B3 production code) modified
+        apps/vscode/proto/cline/state.proto even though B3 had no
+        proto intent. The diff truncated an unrelated comment block,
+        left a `}.` orphan inside the `Settings` message body, and
+        made `bun run protos` fail with
+        `cline/state.proto:364:2: Expected top-level statement`
+        and `cline/state.proto:371:1: Unmatched "}"`. The repo's
+        contribution rules emphasize coordinated proto plumbing; an
+        unrelated schema mutation inside a bootstrap UX ACT is not
+        documentary residue, it is a HALT.
+
+  P1 #1  BOOTSTRAP_COVERAGE_INVARIANT_CAN_FALSE_GREEN
+        `assertBootstrapCoverageIsWellFormed` populated every known
+        ApiConfiguration credential field with the same sentinel,
+        then asked the resolver whether it returned something. A
+        generic fallback (e.g. `resolveApiKey` returning
+        `config.apiKey` for every provider) would produce false
+        GREENs for under-wired providers.
+
+  P1 #2  OPENAI_HEADERS_DEFAULT_CONSERVATION_NOT_PROVEN
+        Changing `state-keys.ts` `openAiHeaders.default` from `{}`
+        to `undefined` is the correct semantic fix, but no focused
+        conservation witness existed proving that downstream
+        consumers tolerate `undefined`.
+
+### Bounded corrections (one bounded reopen; no new design ACT)
+
+Per reviewer: "Do not redesign anything. ... Then go directly to B4."
+This CORRECTION04 was a single bounded reopen with five additive
+corrections, all in lockstep:
+
+  C1. PROTO TRUST CHECK (revert unrelated state.proto delta)
+      apps/vscode/proto/cline/state.proto restored exactly to its
+      484ceb479 (CORRECTION02) baseline. Verified by `bun run protos`
+      which now exits 0 (vs protoc hard-fail before).
+
+  C2. B3-UI RED + GREEN (HALT_B3_USER_VISIBILITY_NOT_PROVEN absorb)
+      Smallest additive change to the existing Settings section +
+      container:
+
+        ModelProfilesSection.tsx:
+          + new exported BootstrapModelProfileStatus union (8 values)
+          + new exported BootstrapModelProfileResultLike interface
+          + new exported bootstrapStatusToSeverity():
+              CREATED                 -> success
+              CREATED_BINDING_FAILED  -> warning
+              NO_CURRENT_CONFIGURATION,
+              CURRENT_CONFIGURATION_UNSUPPORTED,
+              MISSING_CREDENTIAL,
+              MISSING_MODEL,
+              INSTANCE_WRITE_FAILED,
+              PROFILE_WRITE_FAILED    -> error
+          + new optional onBootstrapFromCurrent callback prop
+          + new optional bootstrapResult prop
+          + visible status-aware severity banner with:
+              data-testid='model-profiles-bootstrap-banner'
+              data-severity={success|warning|error}
+              data-status={BootstrapModelProfileStatus}
+              role={alert|status}
+            The banner includes response.message, profileId, and
+            instanceId so users get the actionable diagnostic the
+            backend already produced.
+          + new 'Bootstrap first profile from current configuration'
+            button rendered conditionally on the new callback.
+
+        ModelProfilesSectionContainer.tsx:
+          + useState<BootstrapModelProfileResultLike | null>(null)
+          + handleBootstrapFromCurrent invokes
+            StateServiceClient.bootstrapModelProfileFromCurrentConfiguration
+            and stores the typed envelope. The catch path
+            populates bootstrapResult with status=PROFILE_WRITE_FAILED
+            + message so a transport-level failure (gRPC channel
+            error) also reaches the user-visible banner instead of
+            console.error-only.
+
+        The change is fully additive: both new props are optional
+        and default to no-op, so existing settings-tab behavior is
+        unchanged when onBootstrapFromCurrent is omitted. The
+        ModelProfilesSection.test.tsx existing 16 tests still pass
+        unchanged.
+
+        New webview test file
+        apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSection.mpfrb01-b3-ui.test.tsx
+        with 9 sub-tests covering the four reviewer-required
+        sub-tests (B3-UI-1..B3-UI-4) plus five regression-guard
+        sub-tests (severity mapping, no-banner default, additive-
+        only button visibility, all-statuses-visible smoke guard,
+        bootstrap-button click wiring).
+
+  C3. COVERAGE INVARIANT PRECISION
+       (BOOTSTRAP_COVERAGE_INVARIANT_CAN_FALSE_GREEN absorb)
+      Refactor `assertBootstrapCoverageIsWellFormed` to use a
+      per-provider isolated probe that populates ONLY the intended
+      credential field + intended plan/act model-id fields (via the
+      now-exported `PROVIDER_API_KEY_MAP` / `PROVIDER_MODEL_ID_MAP`
+      from `cline-session-factory.ts`). The diagnostic table now
+      exposes:
+        hasIntendedCredentialField: boolean  (entry exists in PROVIDER_API_KEY_MAP)
+        hasIntendedModelField: boolean       (entry exists in PROVIDER_MODEL_ID_MAP)
+        credentialResolved: boolean          (resolveApiKey returned sentinel)
+        modelIdResolvedFor: Array<plan|act>  (resolveModelId returned sentinel)
+      so the load-bearing assertion is observable separately from
+      the resolved-or-not check.
+
+      This is structurally significant: the invariant caught a real
+      pre-existing under-wiring - asksage and dify were listed in
+      BOOTSTRAP_COVERAGE and PROVIDER_API_KEY_MAP but had no entries
+      in PROVIDER_MODEL_ID_MAP (they share the generic
+      planModeApiModelId / actModeApiModelId with anthropic /
+      gemini / vertex / bedrock / deepseek / openai-native /
+      openai-codex). Added the entries with a comment pointing at
+      the reviewer's invariant as the discovery mechanism.
+
+      `cline-session-factory.ts`: exported PROVIDER_API_KEY_MAP and
+      PROVIDER_MODEL_ID_MAP. Doc-commented both maps to make the
+      'add a provider' workflow explicit.
+
+  C4. OPENAI_HEADERS_DEFAULT_CONSERVATION
+       (OPENAI_HEADERS_DEFAULT_CONSERVATION_NOT_PROVEN absorb)
+      Added a focused sub-test that reads
+      `SETTINGS_DEFAULTS.openAiHeaders` and asserts it is undefined
+      - proving the absent semantic for the 'never-configured-
+      custom-headers' path. Consumers like
+      `apps/vscode/src/core/storage/remote-config/utils.ts` already
+      check `openAiHeaders !== undefined` so they remain correct.
+
+### Test results
+
+  - bunx vitest run src/core/controller/state/bootstrap-failure-visible.mpfrb01.test.ts
+    -> 17/17 pass (was 15/15; +2 new sub-tests for
+       COVERAGE_INVARIANT extension + ISOLATED_PROBE +
+       OPENAI_HEADERS_DEFAULT_CONSERVATION)
+  - bun vitest run .../ModelProfilesSection.mpfrb01-b3-ui.test.tsx
+    -> 9/9 pass (the B3-UI RED -> GREEN witness)
+  - bun vitest run .../ModelProfilesSection.test.tsx
+    -> 16/16 existing sub-tests pass (NO regression; new props are
+       optional with defaults)
+  - bun test src/sdk/__tests__/bootstrap-*.mpfrb01.test.ts
+    -> 14/14 pass (B1+B2+B-DURABILITY+B-CONNECTION NO regression;
+       bun:test foundation unchanged)
+  - bun run test:unit -> 1107/1107 pass (Foundation conservation
+       holds; +0 delta vs CORRECTION03 since B3-UI is webview, not
+       bun:test)
+  - bun run protos -> exit 0 (state.proto trust restored)
+  - bunx tsc --noEmit (apps/vscode/) -> exit 0
+  - bunx tsc --noEmit (apps/vscode/webview-ui/) -> exit 0
+
+### Verdict
+
+  B1=7/7 GREEN, B2=1/1 GREEN, B-DURABILITY=2/2 GREEN,
+  B-CONNECTION=4/4 GREEN, B3-handler=17/17 GREEN,
+  B3-UI=9/9 GREEN, B4=PLANNED next.
+
+  P0 BOOTSTRAP_PATH_ABSENT
+  P0 BOOTSTRAP_SECRET_NOT_DURABLE_AT_PROFILE_COMMIT
+  P0 BOOTSTRAP_CONNECTION_TUPLE_INCOMPLETE
+  P0 UNEXPECTED_TRACKED_DIRT
+  P0 HALT_B3_USER_VISIBILITY_NOT_PROVEN  (NEWLY CLOSED via B3-UI)
+  P0 HALT_UNRELATED_PROTO_CORRUPTION     (NEWLY CLOSED via proto revert)
+  P0 all CLOSED.
+
+  P1 BOOTSTRAP_CREDENTIAL_SOURCE_NOT_BOUND
+  P1 BOOTSTRAP_ATOMICITY_UNDEFINED
+  P1 BOOTSTRAP_RPC_SURFACE_STILL_TBD
+  P1 EXACT_HEAD_LABEL_OVERSTATED
+  P1 MISSING_MODEL_MISCLASSIFIED_AS_MISSING_CREDENTIAL
+  P1 BOOTSTRAP_COVERAGE_SCOPE_PRECISION
+  P1 MALFORMED_PRESENT_HEADERS_POLICY
+  P1 SILENT_FAILURE
+  P1 BOOTSTRAP_COVERAGE_INVARIANT_CAN_FALSE_GREEN
+       (NEWLY CLOSED via isolated probe)
+  P1 OPENAI_HEADERS_DEFAULT_CONSERVATION_NOT_PROVEN
+       (NEWLY CLOSED via conservation sub-test)
+  P1 all CLOSED.
+
+  P1 EMPTY_STATE_DEAD_END = OPEN  (B4 next)
+  P1 PICKER_POPUP_DEAD_END = OPEN  (B4 next)
+
+  P2 BLANK_AT_EOF_DIAGNOSTICS = OPEN (non-blocking).
+
+  WORKING_TREE_CLEAN = TRUE (post-commit verified).
+  ALL_DURABLE_ACT_FILES_COMMITTED = TRUE.
+
+  HALT_B3_USER_VISIBILITY_NOT_PROVEN = CLOSED.
+  HALT_UNRELATED_PROTO_CORRUPTION    = CLOSED.
+  BOOTSTRAP_COVERAGE_INVARIANT_CAN_FALSE_GREEN = CLOSED.
+  OPENAI_HEADERS_DEFAULT_CONSERVATION_NOT_PROVEN = CLOSED.
+
+  B3 is genuinely closed. Ready to proceed to B4.
+
+### Commits (in closure order)
+
+  80c1388 ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 CORRECTION04 step 1:
+          revert unrelated state.proto corruption from 709c791b7
+  8859c05f0 ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 CORRECTION04 step 2:
+           P1 absorbs (coverage invariant precision +
+           openAiHeaders default conservation + asksage/dify wiring)
+  5263d01e8 ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 CORRECTION04 step 3:
+           B3-UI (HALT_B3_USER_VISIBILITY_NOT_PROVEN absorb)
+
+### Lessons learned (additive, CORRECTION04)
+
+  #15 reviewer's halt was the cheapest correct path: the CORRECTION03
+     vitest file proved a narrower seam than its evidence claimed.
+     "Typed RPC envelope survives the handler" is a different
+     claim than "failure is visible to the user". The lesson: when
+     the user's bug report includes the word 'appears', the witness
+     must include the user's rendering layer. A backend-witness
+     alone is half a witness.
+
+  #16 invariants belong at the table, not in the producer. The
+     previous assertBootstrapCoverageIsWellFormed was
+     over-symmetric: it populated every field with the same
+     sentinel, which made the invariant insensitive to per-provider
+     wiring choices. A weaker-but-targeted probe (isolated per
+     provider, sentinel only in the intended field) catches
+     under-wiring that the maximally-populated probe misses. When
+     the invariant claim is "X has property Y", the probe must
+     observe "X without Y" -> assertion fails.
+
+  #17 unrelated proto corruption is non-trivial and the reviewer's
+     halt was structurally correct: state.proto corruption
+     triggered a protoc hard-fail (which CI would catch) but also
+     a silent weakening of the Settings wire-shape contract that
+     only the reviewer's diff-by-hash would have surfaced. Lesson:
+     always run `bun run protos` after a proto-adjacent edit, and
+     always read `git show --stat` for the production commit to
+     confirm the file list matches the commit message. A diff-by-hash
+     digest is non-authoritative by design; the production commit
+     must be inspected directly.
