@@ -8,9 +8,9 @@
  * WITHOUT providerId-equality matching against any pre-existing
  * instance (which is the MPWC01 C3 identity-collapse bug).
  *
- * CONTRACT FREEZES (per the 2026-09-07 in-place amendment; do not
- * silently mutate any of these - they are the load-bearing invariants
- * the reviewer panel pinned):
+ * CONTRACT FREEZES (per the 2026-09-07 in-place amendment + 2026-09-08
+ * CORRECTION02 in-place amendment; do not silently mutate any of these
+ * - they are the load-bearing invariants the reviewer panel pinned):
  *
  *   1. CURRENT_PHYSICAL_CREDENTIAL_SOURCE
  *      The physical API key written to the new instance-scoped secret
@@ -24,11 +24,26 @@
  *      `getInstanceSecret(NEW_NAME)`, `credentialRef` recursion,
  *      providerId-based lookup, any other inference path.
  *
- *   2. BOOTSTRAP_COMMIT_MODEL
+ *   2. BOOTSTRAP_COMMIT_MODEL (load-bearing amended 2026-09-08)
  *      The bootstrap is NOT transactional. There is no rollback path
  *      on partial failure. The durable commit boundary is the
- *      `ProfilesStore.upsert(profile)` call. Steps that follow the
- *      profile write (active-task binding via
+ *      `ProfilesStore.upsert(profile)` call.
+ *
+ *      SUB-RULE (CORRECTION02 P0-1): PROFILE_COMMIT IMPLIES
+ *      REFERENCED_SECRET_ALREADY_DURABLE. Before the instance and
+ *      profile writes, the bootstrap MUST await a persistence barrier
+ *      that drains `setInstanceSecret`'s debounced flush so that the
+ *      referenced physical secret exists physically in `secrets.json`
+ *      before the profile record references it. The barrier is the
+ *      injected `flushInstanceSecrets` dep, wired in production to
+ *      `StateManager.flushPendingState()`. The 500ms debounce on
+ *      `setInstanceSecret` is NOT a sufficient commit boundary: an
+ *      extension death between `setInstanceSecret` and the next
+ *      debounce tick would yield `profiles.json == P` with no
+ *      `secrets.json[P.credentialRef.name]`, breaking the durability
+ *      contract under which `CREATED` was returned to the user.
+ *
+ *      Steps that follow the profile write (active-task binding via
  *      `writeActiveProfileIdToHistoryItem`, ExtensionState
  *      publication via `postStateToWebview`) are post-commit
  *      composition: they may fail independently without invalidating
@@ -46,6 +61,26 @@
  *      RPC remains fail-closed and requires an authoritative
  *      providerInstanceId. Two operations, two RPCs.
  *
+ *   4. EXACT_CONNECTION_CAPTURE (load-bearing added 2026-09-08)
+ *      The bootstrap captures the V1 connection tuple (modelId,
+ *      baseUrl, headers, region, apiLine, providerSpecificConfig)
+ *      from the source `ApiConfiguration` for every field that the
+ *      V1 `ProviderConnection` contract supports and that the
+ *      legacy config has a corresponding field for. Specifically
+ *      (CORRECTION02 P0-2): for the `openai` (OpenAI-Compatible)
+ *      provider, the bootstrap MUST capture `config.openAiHeaders`
+ *      (which the legacy config stores as a JSON-encoded string)
+ *      and emit it on `connection.headers` as a
+ *      `Record<string, string>` when the source has headers, and
+ *      leave `connection.headers` absent (NOT empty-object, NOT
+ *      null) when the source has no headers. The Foundation's
+ *      typed projector (`ProviderConnection.headers`) is exactly
+ *      what makes custom-headers-bearing instances materially
+ *      distinguishable from headerless instances pointing at the
+ *      same baseUrl - losing headers would silently re-introduce
+ *      the MPWC01 C3 identity-collapse bug for OpenAI-Compatible
+ *      users.
+ *
  * CAUSAL CHAIN (mandatory order - do not reorder):
  *
  *     current-config-authority
@@ -59,6 +94,8 @@
  *     derive InstanceSecretName = nameFor(instanceId)
  *       |
  *     stateManager.setInstanceSecret(name, value)
+ *       |
+ *     await flushInstanceSecrets()  // CORRECTION02 P0-1: drain debounced flush BEFORE profile commit
  *       |
  *     instancesStore.upsert({ instanceId, providerId, ..., credentialRef: { kind: "secret", name }, connection })
  *       |
@@ -76,6 +113,7 @@
  *   NO_CURRENT_CONFIGURATION             - active mode's provider is unset
  *   CURRENT_CONFIGURATION_UNSUPPORTED    - provider is not in the bootstrap-coverage table
  *   MISSING_CREDENTIAL                   - current config exists but the resolved credential seam returned undefined
+ *   MISSING_MODEL                        - current config has a provider/credential but no model id selected for the active mode
  *   INSTANCE_WRITE_FAILED                - InstancesStore.upsert threw (rare)
  *   PROFILE_WRITE_FAILED                 - ProfilesStore.upsert threw (rare)
  *
@@ -87,11 +125,10 @@
  *   - Roll back partially-completed state on durable-commit failure (we accept tolerable garbage)
  */
 
-
 import type { ApiConfiguration, ApiProvider } from "@shared/api"
 import type { HistoryItem } from "@shared/HistoryItem"
 import { Logger } from "@/shared/services/Logger"
-import { nameFor, parseInstanceSecretName, type InstanceSecretName } from "@/shared/storage/instance-secret"
+import { type InstanceSecretName, nameFor, parseInstanceSecretName } from "@/shared/storage/instance-secret"
 import { resolveApiKey, resolveBaseUrl, resolveModelId } from "../cline-session-factory"
 import type { ProviderConfigurationInstance, ProviderConnection } from "../instance-store/contracts"
 import { type InstancesStore } from "../instance-store/instances-store"
@@ -120,6 +157,7 @@ export type BootstrapModelProfileStatus =
 	| "NO_CURRENT_CONFIGURATION"
 	| "CURRENT_CONFIGURATION_UNSUPPORTED"
 	| "MISSING_CREDENTIAL"
+	| "MISSING_MODEL"
 	| "INSTANCE_WRITE_FAILED"
 	| "PROFILE_WRITE_FAILED"
 
@@ -142,6 +180,7 @@ export type BootstrapModelProfileResult =
 				| "NO_CURRENT_CONFIGURATION"
 				| "CURRENT_CONFIGURATION_UNSUPPORTED"
 				| "MISSING_CREDENTIAL"
+				| "MISSING_MODEL"
 				| "INSTANCE_WRITE_FAILED"
 				| "PROFILE_WRITE_FAILED"
 			message: string
@@ -203,8 +242,30 @@ export interface BootstrapModelProfileDeps {
 	/**
 	 * The StateManager's setInstanceSecret seam. Wraps the
 	 * durable `secrets.json` (mode 0o600) write.
+	 *
+	 * NOTE: this seam only mutates the in-memory cache and
+	 * schedules a debounced persistence. Callers MUST also
+	 * provide `flushInstanceSecrets` (below) so that the
+	 * bootstrap can drain the debounce before the profile
+	 * commit boundary.
 	 */
 	setInstanceSecret: (name: InstanceSecretName, value: string) => void
+
+	/**
+	 * The persistence barrier that drains the
+	 * `setInstanceSecret` debounce to disk. Wired in production
+	 * to `StateManager.flushPendingState()`.
+	 *
+	 * Per freeze BOOTSTRAP_COMMIT_MODEL (CORRECTION02 P0-1):
+	 * the bootstrap awaits this barrier BEFORE writing the
+	 * instance and profile records, so that the
+	 * `CREATED`/profile-commit semantics carry through to a
+	 * cold restart: a process death between bootstrap return
+	 * and the next debounce tick would otherwise leave
+	 * `profiles.json == P` referencing a non-existent
+	 * `secrets.json[P.credentialRef.name]`.
+	 */
+	flushInstanceSecrets: () => Promise<void>
 
 	/**
 	 * The Foundation's InstancesStore. `upsert(instance)`
@@ -260,6 +321,64 @@ export interface BootstrapModelProfileDeps {
 // ---------------------------------------------------------------------------
 
 /**
+ * Parse the OpenAI-Compatible headers field, which the legacy
+ * `ApiConfiguration` stores as either:
+ *
+ *   - a JSON-encoded string (`'{"X-Tenant": "C", ...}'`)
+ *     - the format produced by the legacy webview Settings panel
+ *       and by the SDK provider-settings migration; or
+ *   - a plain `Record<string, string>` (already-parsed form),
+ *     sometimes seen in test fixtures and in-memory callers.
+ *
+ * Returns `undefined` (NOT empty-object, NOT null) when the
+ * source has no headers - the typed projector treats `undefined`
+ * as "field wasn't on the source" and preserves its default
+ * inheritance; `{}` would be a deliberate empty-map clear (not
+ * the bootstrap's intent), and `null` would be an explicit clear
+ * with the same aggressive semantics.
+ *
+ * Returns `Record<string, string>` only when the parse produces
+ * a non-empty object. A JSON-parse failure or non-object
+ * payload yields `undefined` (and a logged warning) so the
+ * bootstrap stays fail-soft rather than crashing on a malformed
+ * legacy string.
+ */
+function captureOpenAiHeaders(config: ApiConfiguration): Record<string, string> | undefined {
+	const raw = (config as { openAiHeaders?: unknown }).openAiHeaders
+	if (raw === undefined || raw === null) return undefined
+	if (typeof raw === "string") {
+		const trimmed = raw.trim()
+		if (trimmed.length === 0) return undefined
+		try {
+			const parsed = JSON.parse(trimmed)
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+				Logger.warn("[bootstrapModelProfile] openAiHeaders JSON parsed to non-object; treating as absent")
+				return undefined
+			}
+			const out: Record<string, string> = {}
+			for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+				if (typeof v === "string") out[k] = v
+			}
+			return Object.keys(out).length > 0 ? out : undefined
+		} catch (err) {
+			Logger.warn(
+				"[bootstrapModelProfile] openAiHeaders JSON.parse failed; treating as absent:",
+				err instanceof Error ? err.message : String(err),
+			)
+			return undefined
+		}
+	}
+	if (typeof raw === "object" && !Array.isArray(raw)) {
+		const out: Record<string, string> = {}
+		for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+			if (typeof v === "string") out[k] = v
+		}
+		return Object.keys(out).length > 0 ? out : undefined
+	}
+	return undefined
+}
+
+/**
  * Resolve the V1 connection tuple (modelId, baseUrl, headers, region,
  * apiLine, providerSpecificConfig) for the given providerId from the
  * current ApiConfiguration.
@@ -273,6 +392,15 @@ export interface BootstrapModelProfileDeps {
  * to signal "field wasn't on the source config" (preserve-default
  * semantics) rather than emitting nulls that would aggressively
  * clear the typed projector's inheritance chain.
+ *
+ * CORRECTION02 P0-2 (EXACT_CONNECTION_CAPTURE): for the `openai`
+ * (OpenAI-Compatible) provider, the bootstrap MUST capture
+ * `config.openAiHeaders` as `connection.headers` when present.
+ * The remaining ProviderConnection fields (region, apiLine,
+ * providerSpecificConfig) remain absent on V1: they have no
+ * equivalent top-level field on the legacy `ApiConfiguration` for
+ * the providers currently in `BOOTSTRAP_COVERAGE` and need a
+ * per-provider mapping (out of scope for the bootstrap fix).
  */
 function captureConnection(providerId: ApiProvider, mode: "plan" | "act", config: ApiConfiguration): ProviderConnection {
 	const connection: ProviderConnection = {}
@@ -280,14 +408,17 @@ function captureConnection(providerId: ApiProvider, mode: "plan" | "act", config
 	if (modelId) connection.modelId = modelId
 	const baseUrl = resolveBaseUrl(providerId, config)
 	if (baseUrl) connection.baseUrl = baseUrl
-	// The remaining ProviderConnection fields (region, apiLine,
-	// headers, providerSpecificConfig) are provider-specific and not
-	// centralized in the SessionFactory's resolvers; for V1 we leave
-	// them absent on the bootstrapped instance. A future ACT may
-	// centralize the mapping per-provider, but doing so is out of
-	// scope for the bootstrap fix - the user's credential + baseUrl
-	// + model are the load-bearing fields that make the first
-	// profile usable.
+	// Headers capture: only the OpenAI-Compatible provider has
+	// a legacy-config field for custom HTTP headers
+	// (`config.openAiHeaders`). Other providers in
+	// BOOTSTRAP_COVERAGE either don't support custom headers
+	// (anthropic) or use a different provider-specific path
+	// (e.g. anthropic-specific fields on bedrock are out of
+	// scope here).
+	if (providerId === "openai") {
+		const headers = captureOpenAiHeaders(config)
+		if (headers) connection.headers = headers
+	}
 	return connection
 }
 
@@ -325,8 +456,7 @@ export async function bootstrapModelProfileFromCurrentConfiguration(
 	// -- Step 1: read the current configuration authority
 	const config = deps.getApiConfiguration()
 	const mode = deps.getMode()
-	const rawProviderId: string | undefined =
-		mode === "plan" ? config.planModeApiProvider : config.actModeApiProvider
+	const rawProviderId: string | undefined = mode === "plan" ? config.planModeApiProvider : config.actModeApiProvider
 	if (!rawProviderId || typeof rawProviderId !== "string") {
 		return {
 			status: "NO_CURRENT_CONFIGURATION",
@@ -355,8 +485,13 @@ export async function bootstrapModelProfileFromCurrentConfiguration(
 	const connection = captureConnection(providerId, mode, config)
 	const modelId = connection.modelId
 	if (!modelId) {
+		// CORRECTION02 P1: a missing model is NOT a missing
+		// credential. Returning MISSING_CREDENTIAL here would
+		// mislabel the user-visible error ("No API key is
+		// configured for X" when in fact the API key IS
+		// configured and the model is the missing field).
 		return {
-			status: "MISSING_CREDENTIAL",
+			status: "MISSING_MODEL",
 			message: `No model id is configured for '${providerId}' in ${mode} mode. Pick a model first.`,
 		}
 	}
@@ -388,6 +523,41 @@ export async function bootstrapModelProfileFromCurrentConfiguration(
 	// -- Step 6: write the physical credential under the
 	// instance-scoped namespace (definition step (a))
 	deps.setInstanceSecret(secretName, physicalCredential)
+
+	// -- Step 6b: drain the debounced secret persistence BEFORE
+	// the instance/profile write. Per freeze BOOTSTRAP_COMMIT_MODEL
+	// (CORRECTION02 P0-1):
+	//
+	//   PROFILE_COMMIT IMPLIES REFERENCED_SECRET_ALREADY_DURABLE
+	//
+	// Without this barrier, the durability contract under which
+	// `CREATED` is returned is unenforced: `setInstanceSecret`
+	// only mutates the in-memory cache and schedules a 500ms
+	// debounce. A process death between `setInstanceSecret` and
+	// the next debounce tick would leave the persisted profile
+	// referencing a secret that doesn't exist on disk yet.
+	//
+	// The barrier is the injected `flushInstanceSecrets` dep;
+	// in production this is `StateManager.flushPendingState()`.
+	try {
+		await deps.flushInstanceSecrets()
+	} catch (err) {
+		// If the flush itself fails, we do NOT proceed to the
+		// profile commit: that would return `CREATED` for a
+		// profile whose secret cannot be assumed durable. We
+		// also do NOT roll back the in-memory secret write -
+		// per freeze BOOTSTRAP_COMMIT_MODEL we accept
+		// tolerable garbage rather than introduce a fake
+		// rollback. Surface the failure as a typed result
+		// the user can act on (re-try).
+		Logger.error("[bootstrapModelProfile] flushInstanceSecrets failed:", err)
+		return {
+			status: "INSTANCE_WRITE_FAILED",
+			message:
+				"Could not flush the instance secret to disk before the profile commit. " +
+				(err instanceof Error ? err.message : String(err)),
+		}
+	}
 
 	// -- Step 7: persist the ProviderConfigurationInstance
 	// (definition step (b))

@@ -580,3 +580,280 @@ actually-existing git object.
    never appears as a failure-reason. This is also the
    shape that gRPC's `oneof`/typed-enum projection maps to
    cleanly, so it survives transport translation.
+
+---
+
+## CORRECTION02 (2026-09-08, bounded)
+
+Triggered by the twenty-second reviewer's
+`HALT_BOOTSTRAP_DURABILITY_AND_CONNECTION_FIDELITY` verdict,
+which closed CORRECTION01's B1/B2 GREEN status and reopened
+the ACT with three new P0s:
+
+```
+P0-1  BOOTSTRAP_SECRET_NOT_DURABLE_AT_PROFILE_COMMIT
+P0-2  BOOTSTRAP_CONNECTION_TUPLE_INCOMPLETE
+P0-3  UNEXPECTED_TRACKED_DIRT  (.gitignore whitelist missed
+                                 from the B1+B2 commit)
+
+P1    MISSING_MODEL_MISCLASSIFIED_AS_MISSING_CREDENTIAL
+```
+
+The reviewer explicitly authorized a bounded correction
+(not a fresh ACT): "Do one correction, not another design
+ACT." Scope was tight: prove the two causal invariants,
+clean the worktree, fix the missing-model status label,
+rerun the test suite, proceed to B3.
+
+### Bounded corrections applied
+
+**C-1 (P0-1, durability barrier):**
+
+Added `flushInstanceSecrets: () => Promise<void>` to
+`BootstrapModelProfileDeps` and awaited it between
+`setInstanceSecret` and `instancesStore.upsert`. Wired
+in production to `StateManager.flushPendingState()`.
+
+The causal chain is now:
+
+```
+current-config-authority
+  -> resolveCurrentProviderAndCredential(providerId, config)
+  -> resolveCurrentConnection(providerId, config)  // modelId, baseUrl, headers, ...
+  -> generate opaque instanceId
+  -> derive InstanceSecretName = nameFor(instanceId)
+  -> stateManager.setInstanceSecret(name, value)   // cache + 500ms debounce
+  -> await flushInstanceSecrets()                  // NEW (CORRECTION02 P0-1)
+  -> instancesStore.upsert({ ... connection })
+  -> profilesStore.upsert({ ... })
+  -> [POST-COMMIT] writeActiveProfileIdToHistoryItem(currentTaskHistoryItem, profileId)
+  -> [POST-COMMIT] postStateToWebview()
+```
+
+The freeze is restated as:
+
+```
+PROFILE_COMMIT IMPLIES REFERENCED_SECRET_ALREADY_DURABLE
+```
+
+A flush failure surfaces as `INSTANCE_WRITE_FAILED` with a
+human-readable message ("Could not flush the instance secret
+to disk before the profile commit. ..."). Per the existing
+BOOTSTRAP_COMMIT_MODEL freeze we do NOT roll back the
+in-memory secret write; the user re-tries, and the bounded
+garbage-tolerance rule applies.
+
+The witness is `bootstrap-secret-durable.mpfrb01.test.ts`:
+real `StateManager` + real `ClineFileStorage` on a tmpfs data
+dir, `flushInstanceSecrets` wired to
+`stateManager.flushPendingState()`. After `CREATED`,
+`secrets.json`, `instances.json`, AND `profiles.json` all
+three contain the new records (2/2 sub-tests pass, including
+a cold-reload assertion that a fresh `ClineFileStorage` reads
+the durable secret back from disk).
+
+**C-2 (P0-2, exact connection capture):**
+
+Extended `captureConnection` to also capture `headers` for
+the `openai` (OpenAI-Compatible) provider. The legacy
+`ApiConfiguration` stores `openAiHeaders` as a JSON-encoded
+string; the capture path parses both that string form and
+the in-memory plain-object form and emits
+`connection.headers` as a `Record<string, string>` when the
+source has headers. The capture leaves `connection.headers`
+absent (NOT `{}`, NOT `null`) when the source has no headers
+— the typed-projector distinction between "field wasn't on
+the source" (`undefined`, preserve-default) and "explicit
+clear" (`null`) is preserved.
+
+The B2 test fixture was also extended to include
+`openAiHeaders: JSON.stringify({ "X-Tenant": "tenant-C", "X-Region": "eu" })`
+on the CURRENT config, so the B2 invariant now also pins
+"headers must survive a same-providerId, same-baseUrl,
+different-headers bootstrap."
+
+The new freeze:
+
+```
+EXACT_CONNECTION_CAPTURE
+```
+
+pins the V1 connection tuple capture. The remaining fields
+(region, apiLine, providerSpecificConfig) remain absent on
+V1 — they have no equivalent top-level field on the legacy
+`ApiConfiguration` for the providers currently in
+`BOOTSTRAP_COVERAGE` and need a per-provider mapping (out of
+scope for this ACT).
+
+The witness is `bootstrap-connection-tuples.mpfrb01.test.ts`
+(4/4 sub-tests pass: JSON-string form, no-headers, Anthropic-
+no-headers, plain-object form).
+
+**C-3 (P0-3, repository trust):**
+
+The durable-ACT whitelist entry for the bootstrap ACT was
+omitted from commit `f0c12c957` (B1+B2 GREEN commit). Without
+it, `.factory/acts/ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01.md`
+and its evidence dir would be silently swallowed by the
+repo-wide DEFAULT-DENY `.gitignore` policy
+(.gitignore lines 115-125 + 347-348). The fix is a small
+follow-up commit landing the whitelist (analogous to the
+PIIF01 IMPL01 and MPWC01 opening commits, both of which made
+similar split commits). After this commit:
+
+```
+$ git status --short
+(empty)
+```
+
+**C-4 (P1, missing-model status):**
+
+Added `MISSING_MODEL` to the discriminated
+`BootstrapModelProfileStatus` union and the
+`BootstrapModelProfileResult` failure-shape. The branch that
+returned `MISSING_CREDENTIAL` when `connection.modelId` was
+absent now returns `MISSING_MODEL`. The user-visible message
+is unchanged: "No model id is configured for 'anthropic' in
+act mode. Pick a model first." The discriminator is now
+honest — a missing model does not look like a missing API
+key in the UI.
+
+A new sub-test in `bootstrap-first-profile.mpfrb01.test.ts`
+pins this:
+
+```
+MPFRB01_B1_MISSING_MODEL: missing model returns MISSING_MODEL,
+not MISSING_CREDENTIAL
+```
+
+### CORRECTION02 test results
+
+```
+$ cd apps/vscode && TMPDIR=/tmp bun test \
+    src/sdk/__tests__/bootstrap-first-profile.mpfrb01.test.ts \
+    src/sdk/__tests__/bootstrap-no-provider-id-collapse.mpfrb01.test.ts \
+    src/sdk/__tests__/bootstrap-secret-durable.mpfrb01.test.ts \
+    src/sdk/__tests__/bootstrap-connection-tuples.mpfrb01.test.ts
+
+ 14 pass
+  0 fail
+105 expect() calls
+Ran 14 tests across 4 files.
+```
+
+Per-file:
+- `bootstrap-first-profile.mpfrb01.test.ts`           7/7 pass (B1 happy path + 6 typed-failure paths, including new MISSING_MODEL)
+- `bootstrap-no-provider-id-collapse.mpfrb01.test.ts` 1/1 pass (B2 with headers verification on instance C)
+- `bootstrap-secret-durable.mpfrb01.test.ts`          2/2 pass (real StateManager, real ClineFileStorage, real flushPendingState)
+- `bootstrap-connection-tuples.mpfrb01.test.ts`       4/4 pass (JSON string / no headers / Anthropic / plain object)
+
+Conservation:
+
+```
+$ cd apps/vscode && TMPDIR=/tmp bun run test:unit
+Files: 78   Pass: 1107   Fail: 0
+All unit test files passed.
+
+$ cd apps/vscode && bun x tsc --noEmit
+exit=0
+```
+
+(Foundation went from 1101/1101 at CORRECTION01 close to
+1107/1107 at CORRECTION02 close — the +6 delta is the new
+B-DURABILITY and B-CONNECTION witnesses; the B1 MISSING_MODEL
+addition lands inside the existing B1 file.)
+
+### CORRECTION02 verdict
+
+```
+# Witness status
+B1  bootstrap-first-profile.mpfrb01            = GREEN (7/7,
+                                                  P1 added:
+                                                  MISSING_MODEL)
+B2  bootstrap-no-provider-id-collapse.mpfrb01  = GREEN (1/1,
+                                                  headers
+                                                  verified)
+B-DURABILITY bootstrap-secret-durable.mpfrb01  = GREEN (2/2,
+                                                  real
+                                                  StateManager
+                                                  + real
+                                                  ClineFileStorage)
+B-CONNECTION bootstrap-connection-tuples.mpfrb01 = GREEN (4/4)
+B3  bootstrap-failure-visible.mpfrb01          = PLANNED (next)
+B4  empty-state-cta.mpfrb01                    = PLANNED (after
+                                                  B3)
+
+# P-class hierarchy
+P0  BOOTSTRAP_PATH_ABSENT                       = CLOSED (B1 GREEN,
+                                                   B2 GREEN)
+P0  BOOTSTRAP_SECRET_NOT_DURABLE_AT_PROFILE_COMMIT = CLOSED (B-DURABILITY GREEN)
+P0  BOOTSTRAP_CONNECTION_TUPLE_INCOMPLETE       = CLOSED (B-CONNECTION GREEN)
+P0  UNEXPECTED_TRACKED_DIRT                     = CLOSED (whitelist committed)
+P1  BOOTSTRAP_CREDENTIAL_SOURCE_NOT_BOUND       = CLOSED (by freezes)
+P1  BOOTSTRAP_ATOMICITY_UNDEFINED               = CLOSED (by freeze)
+P1  BOOTSTRAP_RPC_SURFACE_STILL_TBD             = CLOSED (by freeze)
+P1  EXACT_HEAD_LABEL_OVERSTATED                 = CLOSED (rebinding)
+P1  MISSING_MODEL_MISCLASSIFIED_AS_MISSING_CREDENTIAL = CLOSED (P1 added
+                                                   MISSING_MODEL status)
+P1  EMPTY_STATE_DEAD_END                        = OPEN (B4)
+P1  SILENT_FAILURE                              = OPEN (B3 next)
+P1  PICKER_POPUP_DEAD_END                       = OPEN (B4)
+P2  BLANK_AT_EOF_DIAGNOSTICS                    = OPEN (terminal cleanup)
+
+# Repository trust
+WORKING_TREE_CLEAN                             = TRUE
+ALL_DURABLE_ACT_FILES_COMMITTED                = TRUE
+```
+
+### CORRECTION02 lessons learned (additive)
+
+8. **The "instant `setInstanceSecret` returns, secret is durable"
+   intuition is wrong on top of a debounced persistence layer.**
+   `setInstanceSecret` mutates the in-memory cache and schedules
+   a 500ms debounce; it does NOT block until `secrets.json`
+   contains the entry. For any operation that "commits" by
+   referencing the secret — including the bootstrap primitive
+   — the caller MUST await an explicit persistence barrier
+   (`StateManager.flushPendingState()`) before returning
+   `CREATED`. The barrier is the only thing that turns the
+   in-memory `pendingInstanceSecrets` Set into a durable
+   `secrets.json` entry. Without it, the `CREATED` semantics
+   are unenforced — a process death in the debounce window
+   silently desynchronizes the profile from its credential.
+
+9. **Capture-code paths need to enumerate the full V1 contract,
+   not just the fields the test fixture happens to exercise.**
+   The CORRECTION01 `captureConnection` left `headers` absent
+   because the B1 fixture used Anthropic, which doesn't have
+   custom HTTP headers in the legacy config. The loss was
+   invisible to B1 but load-bearing for OpenAI-Compatible
+   users (LiteLLM, corporate gateways, per-route routing
+   hints). The fix is to enumerate every V1 contract field
+   for which the legacy config has a corresponding source,
+   and capture each one explicitly. A "captures only what
+   the test covers" capture path is a trap.
+
+10. **"Atomic without rollback" is the right primitive for
+    a multi-step bootstrap, but it MUST be paired with an
+    explicit durability barrier between the cache-mutating
+    step and the commit step.** Without the barrier, the
+    "atomic" semantic is unenforced for the parts that
+    actually take time (persistence I/O). The result is a
+    half-committed state that fails-closed on the next
+    read. The barrier closes the gap; the "without
+    rollback" rule is preserved by accepting the tolerable
+    garbage if the barrier itself fails.
+
+11. **The repository-trust halt is structural, not ceremonial.**
+    An unstaged tracked `.gitignore` modification is exactly
+    the kind of dirt that triggers a fresh-clone `git
+    status` to disagree with the durable-ACT evidence. The
+    durable-ACT convention requires the whitelist to be
+    committed in lockstep with the ACT body it protects —
+    not in a follow-up cleanup commit — so the convention
+    is upheld by automated tooling, not by reviewers
+    noticing the omission. (The CORRECTION02 commit landed
+    the whitelist as a small follow-up commit because the
+    reviewer explicitly authorized a bounded correction,
+    not a full re-open; the durable-ACT policy above
+    remains the cleaner default.)

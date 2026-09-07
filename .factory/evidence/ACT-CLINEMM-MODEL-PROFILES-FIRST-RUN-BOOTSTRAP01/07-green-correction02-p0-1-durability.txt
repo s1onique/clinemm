@@ -1,0 +1,157 @@
+ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 - CORRECTION02 P0-1 GREEN
+=================================================================
+Recorded at: 2026-09-08 (CORRECTION02 bounded reopen)
+Triggered by: twenty-second reviewer verdict
+  HALT_BOOTSTRAP_DURABILITY_AND_CONNECTION_FIDELITY
+  -> P0-1 BOOTSTRAP_SECRET_NOT_DURABLE_AT_PROFILE_COMMIT
+
+WHAT WENT GREEN
+---------------
+P0-1: today `CREATED` could describe a profile whose secret
+hadn't hit disk. The bootstrap captured `setInstanceSecret`
+but did NOT await the persistence barrier before returning
+CREATED. The fix is an explicit persistence barrier between
+the cache-mutating step and the commit-boundary step.
+
+CAUSAL CHAIN (post-CORRECTION02)
+--------------------------------
+  1. read current config authority (deps.getApiConfiguration())
+  2. select providerId from active mode's *ModeApiProvider field
+  3. validate providerId is in BOOTSTRAP_COVERAGE
+  4. resolveApiKey(providerId, config) -> physical credential
+  5. resolveModelId(providerId, mode, config) -> modelId
+  6. resolveBaseUrl(providerId, config) -> optional baseUrl
+  7. captureConnection(providerId, mode, config) -> ProviderConnection
+  8. generate opaque instanceId = `inst-<random>`
+  9. derive InstanceSecretName = nameFor(instanceId)
+  10. validate name matches INSTANCE_SECRET_NAME_PATTERN
+  11. setInstanceSecret(name, physical-credential)
+      -- IN-MEMORY CACHE MUTATED; debounced 500ms flush scheduled --
+  12. await flushInstanceSecrets()             <- NEW (CORRECTION02 P0-1)
+      -- secrets.json DRAINED BEFORE COMMIT --
+  13. instancesStore.upsert({ ... })
+  14. profilesStore.upsert({ ... })
+      -- DURABLE COMMIT BOUNDARY --
+  15. POST-COMMIT: writeActiveProfileIdToHistoryItem(...) if currentTask
+  16. POST-COMMIT: postStateToWebview() (silent best-effort)
+
+FREEZE (BOOTSTRAP_COMMIT_MODEL sub-rule, NEW 2026-09-08)
+--------------------------------------------------------
+  PROFILE_COMMIT IMPLIES REFERENCED_SECRET_ALREADY_DURABLE
+
+  Before the instance and profile writes, the bootstrap MUST
+  await a persistence barrier that drains setInstanceSecret's
+  debounced flush so that the referenced physical secret exists
+  physically in secrets.json before the profile record
+  references it.
+
+A flush failure surfaces as INSTANCE_WRITE_FAILED with a
+human-readable message. Per the existing BOOTSTRAP_COMMIT_MODEL
+freeze we do NOT roll back the in-memory secret write; the
+user re-tries, tolerable garbage-tolerance applies.
+
+CODE CHANGE (bounded)
+---------------------
+  apps/vscode/src/sdk/profile-store/bootstrap.ts:
+    * Added `flushInstanceSecrets: () => Promise<void>` to
+      `BootstrapModelProfileDeps` (required dep).
+    * Added step 12 (await flushInstanceSecrets()) between
+      setInstanceSecret and instancesStore.upsert.
+    * Failure path: returns { status: "INSTANCE_WRITE_FAILED",
+      message: "Could not flush the instance secret to disk
+      before the profile commit. ..." }.
+    * Updated freeze BOOTSTRAP_COMMIT_MODEL with the new
+      sub-rule.
+
+  apps/vscode/src/core/controller/state/bootstrapModelProfileFromCurrentConfiguration.ts:
+    * Wired `flushInstanceSecrets: () => stateManager.flushPendingState()`.
+
+  All existing test fixtures for BootstrapModelProfileDeps
+  extended with `flushInstanceSecrets: async () => {}` to
+  satisfy the new required dep.
+
+NEW WITNESS FILE
+----------------
+  apps/vscode/src/sdk/__tests__/bootstrap-secret-durable.mpfrb01.test.ts
+
+  - Imports from "bun:test" so the canonical bun-based unit
+    test runner picks it up.
+  - Uses the REAL StateManager via
+    `createStorageContext({ clineDir: tmpDir })` and
+    `StateManager.initialize(ctx)`.
+  - Uses the REAL ClineFileStorage via `createStorageContext`.
+  - `flushInstanceSecrets` wired to
+    `stateManager.flushPendingState()` -- exactly the
+    production wiring.
+  - `setInstanceSecret` wired to the real
+    `stateManager.setInstanceSecret(name, value)`.
+  - Stubs `@/services/logging/distinctId` via `mock.module`
+    so StateManager.initialize() can run without the VS Code host.
+
+TESTS RUNNING
+-------------
+  $ cd apps/vscode && TMPDIR=/tmp bun test \
+      src/sdk/__tests__/bootstrap-secret-durable.mpfrb01.test.ts
+
+  (pass) MPFRB01_BDURABLE_CREATED_DURABLE: after CREATED,
+         secrets.json contains the referenced physical key on
+         disk.
+  (pass) MPFRB01_BDURABLE_COLD_RELOAD: a fresh ClineFileStorage
+         reads the durable secret back.
+
+   2 pass
+   0 fail
+  18 expect() calls
+  Ran 2 tests across 1 file.
+
+The two assertions load-bearing for P0-1:
+  1. After CREATED, secrets.json[instance:inst-deterministic-...]
+     === physical key.
+  2. A fresh read of secrets.json (cold-reload) returns the
+     same physical key.
+
+FOUNDATION CONSERVATION
+-----------------------
+  * Foundation: 1101/1101 -> 1107/1107 bun unit tests pass.
+  * All existing model-profile tests still pass.
+  * bun x tsc --noEmit exit=0.
+
+WHY THIS IS A REAL FIX AND NOT A STUB
+-------------------------------------
+The test uses the REAL StateManager.setInstanceSecret (which
+schedules a 500ms debounced flush) and the REAL
+StateManager.flushPendingState (which cancels the debounce
+and forces an immediate write).
+
+Before the fix, the bootstrap would have called
+`setInstanceSecret` (cache + debounce) and then immediately
+`instancesStore.upsert` + `profilesStore.upsert`, returning
+CREATED before secrets.json was written. With the fix, the
+`await flushInstanceSecrets()` barrier drains the debounce
+BEFORE the instance/profile writes, so the secrets.json entry
+exists by the time CREATED is returned. The test exercises the
+post-CREATED read directly to assert this.
+
+REPOSITORY TRUST
+----------------
+  $ git status --short (after whitelist commit 346f731)
+  (empty)
+
+PRODUCTION-EDITS COUNT (delta vs CORRECTION01)
+----------------------------------------------
+  * 1 amended freeze (BOOTSTRAP_COMMIT_MODEL sub-rule)
+  * 1 new dep on BootstrapModelProfileDeps
+  * 1 new helper step in the causal chain
+  * 1 new bun:test witness file
+  * 5 test fixtures updated with flushInstanceSecrets: async () => {}
+
+NEXT
+----
+  P0-1 closed. Witness GREEN. P0-2 (connection tuple) and P0-3
+  (.gitignore) handled in sibling evidence files 08 and 09.
+
+ENTRY HEAD (CORRECTION02 close)
+-------------------------------
+LIVE_OBS_SUBJECT  = c47e219f76dafffe4f9bced6dc4d05eac73bb4d2
+ENTRY_HEAD        = 052da8958d096fad6fe475d1be78bfb53957086b
+CORRECTION02_HEAD = 346f731 (whitelist) + bounded-correction commit

@@ -1,0 +1,155 @@
+ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 - CORRECTION02 P0-2 GREEN
+=================================================================
+Recorded at: 2026-09-08 (CORRECTION02 bounded reopen)
+Triggered by: twenty-second reviewer verdict
+  HALT_BOOTSTRAP_DURABILITY_AND_CONNECTION_FIDELITY
+  -> P0-2 BOOTSTRAP_CONNECTION_TUPLE_INCOMPLETE
+
+WHAT WENT GREEN
+---------------
+P0-2: today's `captureConnection` left `connection.headers`
+absent for the OpenAI-Compatible provider even when the
+legacy ApiConfiguration had `openAiHeaders` populated. The
+loss was invisible to B1 (Anthropic fixture) but load-bearing
+for OpenAI-Compatible users (LiteLLM, corporate gateways,
+per-route routing hints).
+
+FIX
+---
+Extended `captureConnection` to capture `headers` for the
+`openai` (OpenAI-Compatible) provider. The capture path
+handles both the JSON-encoded string form (legacy webview
+storage) and the plain-object form (in-memory callers,
+SDK migration, tests) and emits `connection.headers` as a
+`Record<string, string>` when the source has headers.
+
+NEW FREEZE (EXACT_CONNECTION_CAPTURE)
+-------------------------------------
+  captureConnection emits the exact ProviderConnection shape
+  the SDK consumes. For V1 the captured fields are:
+    - providerId    (always)
+    - modelId       (when present)
+    - baseUrl       (when present)
+    - headers       (when present, openai only)
+  The remaining fields (region, apiLine,
+  providerSpecificConfig) remain absent on V1 -- no legacy
+  equivalent for BOOTSTRAP_COVERAGE providers.
+
+CAPTURE-OPENAI-HEADERS HELPER (NEW)
+-----------------------------------
+The helper handles three forms:
+  - JSON string: JSON.parse(s) -> Record<string,string>
+  - Plain object: returned as-is, validated to be a
+    Record<string,string>
+  - Empty / undefined / invalid: returns undefined
+    (NOT {}, NOT null)
+
+This matches `parseProviderConnection`'s `undefined = "field
+not on source"` semantic. The typed projector can then
+distinguish "field wasn't on the source" from "explicit
+clear" (which would be null).
+
+NEW WITNESS FILE
+----------------
+  apps/vscode/src/sdk/__tests__/bootstrap-connection-tuples.mpfrb01.test.ts
+
+  Four sub-tests pinning the V1 contract:
+
+  MPFRB01_BCONN_OPENAI_WITH_JSON_STRING_HEADERS:
+    currentConfig has openAiHeaders: JSON.stringify({
+      "X-Tenant": "tenant-C", "X-Region": "eu" })
+    bootstrap returns CREATED
+    inst.connection.providerId === "openai"
+    inst.connection.modelId === "gpt-4o"
+    inst.connection.baseUrl === "https://api.openai.com/v1"
+    inst.connection.headers === {
+      "X-Tenant": "tenant-C", "X-Region": "eu" }
+
+  MPFRB01_BCONN_OPENAI_WITHOUT_HEADERS:
+    currentConfig has openAiHeaders: undefined
+    bootstrap returns CREATED
+    inst.connection.headers === undefined
+    (NOT {}, NOT null -- the absence is what the projector
+     reads as "use default")
+
+  MPFRB01_BCONN_ANTHROPIC_HAS_NO_HEADERS:
+    currentConfig has anthropic provider, no headers field
+    bootstrap returns CREATED
+    inst.connection.providerId === "anthropic"
+    inst.connection.headers === undefined
+    (Anthropic doesn't expose a custom headers field on the
+     legacy config; the capture path correctly leaves it
+     absent rather than synthesizing an empty object.)
+
+  MPFRB01_BCONN_OPENAI_WITH_OBJECT_FORM_HEADERS:
+    currentConfig has openAiHeaders: { "X-Route": "primary" }
+    (plain object, not JSON string)
+    bootstrap returns CREATED
+    inst.connection.headers === { "X-Route": "primary" }
+
+B2 FIXTURE EXTENDED
+-------------------
+The existing B2 test
+(`bootstrap-no-provider-id-collapse.mpfrb01.test.ts`) was
+extended in-place: instance C's CURRENT config now includes
+  openAiHeaders: JSON.stringify({
+    "X-Tenant": "tenant-C", "X-Region": "eu" })
+and the witness asserts
+  instC.connection.headers === {
+    "X-Tenant": "tenant-C", "X-Region": "eu" }
+This pins "headers must survive a same-providerId,
+same-baseUrl, different-headers bootstrap."
+
+TESTS RUNNING
+-------------
+  $ cd apps/vscode && TMPDIR=/tmp bun test \
+      src/sdk/__tests__/bootstrap-connection-tuples.mpfrb01.test.ts
+
+  (pass) MPFRB01_BCONN_OPENAI_WITH_JSON_STRING_HEADERS
+  (pass) MPFRB01_BCONN_OPENAI_WITHOUT_HEADERS
+  (pass) MPFRB01_BCONN_ANTHROPIC_HAS_NO_HEADERS
+  (pass) MPFRB01_BCONN_OPENAI_WITH_OBJECT_FORM_HEADERS
+
+   4 pass
+   0 fail
+  Ran 4 tests across 1 file.
+
+B2 (extended) running:
+  $ cd apps/vscode && TMPDIR=/tmp bun test \
+      src/sdk/__tests__/bootstrap-no-provider-id-collapse.mpfrb01.test.ts
+
+  (pass) MPFRB01_B2_SAME_PROVIDERID_BASEURL_DIFFERENT_HEADERS_NOT_COLLAPSED
+
+   1 pass
+   0 fail
+
+FOUNDATION CONSERVATION
+-----------------------
+  * Foundation: 1101/1101 -> 1107/1107 bun unit tests pass.
+  * All existing model-profile tests still pass.
+  * bun x tsc --noEmit exit=0.
+
+REPOSITORY TRUST
+----------------
+  $ git status --short (after whitelist commit 346f731)
+  (empty)
+
+PRODUCTION-EDITS COUNT (delta vs CORRECTION01)
+----------------------------------------------
+  * 1 new freeze (EXACT_CONNECTION_CAPTURE)
+  * 1 new helper (captureOpenAiHeaders, ~50 lines)
+  * 1 new branch in captureConnection (openai provider headers)
+  * 1 new bun:test witness file
+  * 1 B2 fixture extended with openAiHeaders + headers assertion
+
+NEXT
+----
+  P0-2 closed. Witness GREEN. P0-3 (.gitignore) handled in
+  sibling evidence file 09. P1 MISSING_MODEL handled in B1
+  file (see evidence 05 update).
+
+ENTRY HEAD (CORRECTION02 close)
+-------------------------------
+LIVE_OBS_SUBJECT  = c47e219f76dafffe4f9bced6dc4d05eac73bb4d2
+ENTRY_HEAD        = 052da8958d096fad6fe475d1be78bfb53957086b
+CORRECTION02_HEAD = 346f731 (whitelist) + bounded-correction commit

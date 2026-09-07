@@ -1,0 +1,95 @@
+ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 - CORRECTION02 P0-3 + P1 GREEN
+==============================================================================
+Recorded at: 2026-09-08 (CORRECTION02 bounded reopen)
+Triggered by: twenty-second reviewer verdict
+  HALT_BOOTSTRAP_DURABILITY_AND_CONNECTION_FIDELITY
+  -> P0-3 UNEXPECTED_TRACKED_DIRT
+  -> P1   MISSING_MODEL_MISCLASSIFIED_AS_MISSING_CREDENTIAL
+
+PART 1: P0-3 UNEXPECTED_TRACKED_DIRT (.gitignore whitelist)
+----------------------------------------------------------
+WHAT WENT GREEN
+The durable-ACT whitelist entry for the bootstrap ACT was
+omitted from commit f0c12c957 (B1+B2 GREEN commit). Without
+it, .factory/acts/ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01.md
+and its evidence dir would be silently swallowed by the
+repo-wide DEFAULT-DENY .gitignore policy.
+
+FIX
+Committed the .gitignore whitelist as standalone commit
+346f731. After this commit:
+
+  $ git status --short
+  (empty)
+
+PART 2: P1 MISSING_MODEL_MISCLASSIFIED_AS_MISSING_CREDENTIAL
+-----------------------------------------------------------
+WHAT WENT GREEN
+The bootstrap's branch that returned `MISSING_CREDENTIAL`
+when `connection.modelId` was absent now returns
+`MISSING_MODEL`. The user-visible message is unchanged:
+"No model id is configured for 'anthropic' in act mode.
+Pick a model first." The discriminator is now honest --
+a missing model does not look like a missing API key in
+the UI.
+
+CODE CHANGE
+  apps/vscode/src/sdk/profile-store/bootstrap.ts:
+    * Added MISSING_MODEL to BootstrapModelProfileStatus union
+      and BootstrapModelProfileResult failure-shape.
+    * Replaced the MISSING_CREDENTIAL branch (when modelId is
+      absent) with MISSING_MODEL. The user-visible message is
+      unchanged.
+
+  apps/vscode/src/sdk/__tests__/bootstrap-first-profile.mpfrb01.test.ts:
+    * Added MPFRB01_B1_MISSING_MODEL sub-test:
+      currentConfig has planModeApiProvider: "anthropic" but
+      actModeApiModelId: undefined.
+      bootstrap returns status: "MISSING_MODEL", NOT
+      status: "MISSING_CREDENTIAL". Zero instances, zero
+      profiles on disk (fail-closed).
+
+TESTS RUNNING
+-------------
+  $ cd apps/vscode && TMPDIR=/tmp bun test \
+      src/sdk/__tests__/bootstrap-first-profile.mpfrb01.test.ts
+
+  (pass) MPFRB01_B1_HAPPY_PATH
+  (pass) MPFRB01_B1_NO_CURRENT_TASK
+  (pass) MPFRB01_B1_NO_CURRENT_CONFIGURATION
+  (pass) MPFRB01_B1_MISSING_CREDENTIAL
+  (pass) MPFRB01_B1_CURRENT_CONFIGURATION_UNSUPPORTED
+  (pass) MPFRB01_B1_BOUNDARY
+  (pass) MPFRB01_B1_MISSING_MODEL                       <- NEW CORRECTION02
+
+   7 pass
+   0 fail
+
+FOUNDATION CONSERVATION
+-----------------------
+  * Foundation: 1101/1101 -> 1107/1107 bun unit tests pass.
+  * All existing model-profile tests still pass.
+  * bun x tsc --noEmit exit=0.
+
+REPOSITORY TRUST
+----------------
+  $ git status --short (after whitelist commit 346f731)
+  (empty)
+
+PRODUCTION-EDITS COUNT (delta vs CORRECTION01)
+----------------------------------------------
+  * 1 new failure status (MISSING_MODEL)
+  * 1 new branch in primitive (no-model returns MISSING_MODEL)
+  * 1 new sub-test in B1 file
+
+NEXT
+----
+  P0-3 closed (whitelist committed).
+  P1 MISSING_MODEL closed.
+  B3 (failure-visible) next ACT deliverable.
+
+ENTRY HEAD (CORRECTION02 close)
+-------------------------------
+LIVE_OBS_SUBJECT  = c47e219f76dafffe4f9bced6dc4d05eac73bb4d2
+ENTRY_HEAD        = 052da8958d096fad6fe475d1be78bfb53957086b
+CORRECTION02_HEAD = 346f731 (whitelist) + bounded-correction commit

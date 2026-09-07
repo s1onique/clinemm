@@ -58,18 +58,14 @@
  *   postStateToWebview                 = SYNTHETIC (no-op)
  */
 
-
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import {
-	bootstrapModelProfileFromCurrentConfiguration,
-	type BootstrapModelProfileDeps,
-} from "../profile-store/bootstrap"
+import { type InstanceSecretName, nameFor } from "@/shared/storage/instance-secret"
 import { InstancesStore } from "../instance-store/instances-store"
+import { type BootstrapModelProfileDeps, bootstrapModelProfileFromCurrentConfiguration } from "../profile-store/bootstrap"
 import { ProfilesStore } from "../profile-store/profiles-store"
-import { nameFor, type InstanceSecretName } from "@/shared/storage/instance-secret"
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -94,10 +90,7 @@ interface PreExistingInstance {
 	apiKey: string
 }
 
-function seedPreExistingInstance(
-	instancesStore: InstancesStore,
-	spec: PreExistingInstance,
-): void {
+function seedPreExistingInstance(instancesStore: InstancesStore, spec: PreExistingInstance): void {
 	instancesStore.upsert({
 		instanceId: spec.instanceId,
 		providerId: "openai-compatible",
@@ -169,6 +162,12 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B2 no-providerId-co
 			actModeOpenAiModelId: "model-C",
 			openAiApiKey: "physical-key-C-XXXXXXXXXXXX",
 			openAiBaseUrl: "https://endpoint-C.example/v1",
+			// CORRECTION02 P0-2: instance C carries custom headers
+			// that materially distinguish it from A and B even
+			// though A and B also use the openai providerId. This
+			// is the load-bearing regression case for the
+			// EXACT_CONNECTION_CAPTURE freeze.
+			openAiHeaders: JSON.stringify({ "X-Tenant": "tenant-C", "X-Region": "eu" }),
 		}
 
 		const deps: BootstrapModelProfileDeps = {
@@ -177,6 +176,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B2 no-providerId-co
 			setInstanceSecret: (name, value) => {
 				secretsWritten.set(name as string, value)
 			},
+			flushInstanceSecrets: async () => {},
 			instancesStore,
 			profilesStore,
 			getCurrentTaskHistoryItem: () => undefined,
@@ -206,11 +206,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B2 no-providerId-co
 		// -- Step 3: a THIRD instance now exists (A, B, and the
 		// new one - three in total)
 		const instances = instancesStore.list()
-		expect(Object.keys(instances).sort()).toEqual([
-			"inst-A",
-			"inst-B",
-			"inst-deterministic-1",
-		])
+		expect(Object.keys(instances).sort()).toEqual(["inst-A", "inst-B", "inst-deterministic-1"])
 
 		// -- Step 4: A and B are UNTOUCHED (no aliasing, no field
 		// mutation). This is the regression guard for the B2
@@ -224,11 +220,14 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B2 no-providerId-co
 		expect(instances["inst-B"].connection.modelId).toBe("model-inst-B")
 
 		// -- Step 5: the new instance matches the CURRENT config
-		// exactly (providerId, modelId, baseUrl)
+		// exactly (providerId, modelId, baseUrl, headers).
+		// CORRECTION02 P0-2: connection.headers MUST carry the
+		// JSON-parsed openAiHeaders from the current config.
 		const instC = instances["inst-deterministic-1"]
 		expect(instC.providerId).toBe("openai")
 		expect(instC.connection.modelId).toBe("model-C")
 		expect(instC.connection.baseUrl).toBe("https://endpoint-C.example/v1")
+		expect(instC.connection.headers).toEqual({ "X-Tenant": "tenant-C", "X-Region": "eu" })
 
 		// -- Step 6: the credentialRef resolves to the CURRENT
 		// config's credential (physical-key-C), NOT to A's or B's
@@ -238,9 +237,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B2 no-providerId-co
 			kind: "secret",
 			name: expectedSecretName,
 		})
-		expect(secretsWritten.get(expectedSecretName)).toBe(
-			"physical-key-C-XXXXXXXXXXXX",
-		)
+		expect(secretsWritten.get(expectedSecretName)).toBe("physical-key-C-XXXXXXXXXXXX")
 		expect(secretsWritten.get(expectedSecretName)).not.toBe("physical-key-A")
 		expect(secretsWritten.get(expectedSecretName)).not.toBe("physical-key-B")
 

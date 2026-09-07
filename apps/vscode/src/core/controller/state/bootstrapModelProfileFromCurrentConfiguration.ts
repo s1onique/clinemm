@@ -36,14 +36,14 @@
  * `status` string with a human-readable `message`.
  */
 
-import { Logger } from "@/shared/services/Logger"
-import { BootstrapModelProfileRequest, BootstrapModelProfileResponse } from "@/shared/proto/cline/state"
 import { StateManager } from "@/core/storage/StateManager"
-import type { Controller } from ".."
 import {
-	bootstrapModelProfileFromCurrentConfiguration as bootstrapPrimitive,
 	type BootstrapModelProfileDeps,
+	bootstrapModelProfileFromCurrentConfiguration as bootstrapPrimitive,
 } from "@/sdk/profile-store/bootstrap"
+import { BootstrapModelProfileRequest, BootstrapModelProfileResponse } from "@/shared/proto/cline/state"
+import { Logger } from "@/shared/services/Logger"
+import type { Controller } from ".."
 
 export async function bootstrapModelProfileFromCurrentConfiguration(
 	controller: Controller,
@@ -83,6 +83,10 @@ export async function bootstrapModelProfileFromCurrentConfiguration(
 		setInstanceSecret: (name, value) => {
 			stateManager.setInstanceSecret(name, value)
 		},
+		// CORRECTION02 P0-1: drain the debounced secret persistence
+		// BEFORE the profile commit boundary, so the durable
+		// `CREATED` semantics carry through a cold restart.
+		flushInstanceSecrets: () => stateManager.flushPendingState(),
 		instancesStore: owner.instancesStore,
 		profilesStore: owner.profilesStore,
 		getCurrentTaskHistoryItem: () => owner.getCurrentTaskHistoryItem(),

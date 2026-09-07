@@ -55,22 +55,14 @@
  *   postStateToWebview                 = SYNTHETIC (no-op)
  */
 
-
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import {
-	bootstrapModelProfileFromCurrentConfiguration,
-	type BootstrapModelProfileDeps,
-} from "../profile-store/bootstrap"
+import { INSTANCE_SECRET_NAME_PATTERN, type InstanceSecretName, nameFor } from "@/shared/storage/instance-secret"
 import { InstancesStore } from "../instance-store/instances-store"
+import { type BootstrapModelProfileDeps, bootstrapModelProfileFromCurrentConfiguration } from "../profile-store/bootstrap"
 import { ProfilesStore } from "../profile-store/profiles-store"
-import {
-	INSTANCE_SECRET_NAME_PATTERN,
-	nameFor,
-	type InstanceSecretName,
-} from "@/shared/storage/instance-secret"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -141,6 +133,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B1 first-profile ca
 			setInstanceSecret: (name, value) => {
 				secretsWritten.set(name as string, value)
 			},
+			flushInstanceSecrets: async () => {},
 			instancesStore,
 			profilesStore,
 			getCurrentTaskHistoryItem: () => undefined,
@@ -174,9 +167,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B1 first-profile ca
 		// and written to the NEW instance-scoped namespace
 		const expectedSecretName = nameFor(result.instanceId) as InstanceSecretName
 		expect(secretsWritten.has(expectedSecretName)).toBe(true)
-		expect(secretsWritten.get(expectedSecretName)).toBe(
-			"sk-ant-physical-key-B-XXXXXXXXXXXX",
-		)
+		expect(secretsWritten.get(expectedSecretName)).toBe("sk-ant-physical-key-B-XXXXXXXXXXXX")
 		// The stored secret MUST be the literal physical key, not
 		// the reference name and not empty.
 		expect(secretsWritten.get(expectedSecretName)).not.toBe(expectedSecretName)
@@ -229,6 +220,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B1 first-profile ca
 			getApiConfiguration: () => config as unknown as ReturnType<BootstrapModelProfileDeps["getApiConfiguration"]>,
 			getMode: () => "act",
 			setInstanceSecret: () => {},
+			flushInstanceSecrets: async () => {},
 			instancesStore,
 			profilesStore,
 			getCurrentTaskHistoryItem: () => undefined, // no task
@@ -252,6 +244,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B1 first-profile ca
 			getApiConfiguration: () => config as unknown as ReturnType<BootstrapModelProfileDeps["getApiConfiguration"]>,
 			getMode: () => "act",
 			setInstanceSecret: () => {},
+			flushInstanceSecrets: async () => {},
 			instancesStore,
 			profilesStore,
 		}
@@ -284,6 +277,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B1 first-profile ca
 			getApiConfiguration: () => config as unknown as ReturnType<BootstrapModelProfileDeps["getApiConfiguration"]>,
 			getMode: () => "act",
 			setInstanceSecret: () => {},
+			flushInstanceSecrets: async () => {},
 			instancesStore,
 			profilesStore,
 		}
@@ -314,6 +308,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B1 first-profile ca
 			getApiConfiguration: () => config as unknown as ReturnType<BootstrapModelProfileDeps["getApiConfiguration"]>,
 			getMode: () => "act",
 			setInstanceSecret: () => {},
+			flushInstanceSecrets: async () => {},
 			instancesStore,
 			profilesStore,
 		}
@@ -322,6 +317,41 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B1 first-profile ca
 		expect(result.status).toBe("CURRENT_CONFIGURATION_UNSUPPORTED")
 		if (result.status !== "CURRENT_CONFIGURATION_UNSUPPORTED") throw new Error("unreachable")
 		expect(result.message).toMatch(/Provider 'together' is not covered/)
+	})
+
+	it("MPFRB01_B1_MISSING_MODEL (CORRECTION02 P1): missing model returns MISSING_MODEL, not MISSING_CREDENTIAL", async () => {
+		// CORRECTION02 P1: a missing model is NOT a missing
+		// credential. Returning MISSING_CREDENTIAL would mislabel
+		// the user-visible error ("No API key is configured for X"
+		// when in fact the API key IS configured and the model is
+		// the missing field). The new MISSING_MODEL status makes
+		// the failure mode honest.
+		const config = {
+			actModeApiProvider: "anthropic",
+			// actModeApiModelId INTENTIONALLY UNSET
+			apiKey: "sk-ant-XXXX",
+		}
+		const instancesStore = makeInstancesStore(dataDir)
+		const profilesStore = makeProfilesStore(dataDir)
+
+		const deps: BootstrapModelProfileDeps = {
+			getApiConfiguration: () => config as unknown as ReturnType<BootstrapModelProfileDeps["getApiConfiguration"]>,
+			getMode: () => "act",
+			setInstanceSecret: () => {},
+			flushInstanceSecrets: async () => {},
+			instancesStore,
+			profilesStore,
+		}
+
+		const result = await bootstrapModelProfileFromCurrentConfiguration(deps, "My first")
+		expect(result.status).toBe("MISSING_MODEL")
+		if (result.status !== "MISSING_MODEL") throw new Error("unreachable")
+		expect(result.message).toMatch(/No model id is configured for 'anthropic'/)
+		expect(result.message).not.toMatch(/No API key/)
+
+		// -- Conservation: zero instances, zero profiles on disk
+		expect(Object.keys(instancesStore.list())).toHaveLength(0)
+		expect(Object.keys(profilesStore.list())).toHaveLength(0)
 	})
 
 	it("MPFRB01_B1_BOUNDARY: bootstrap does NOT use providerId-equality matching when an existing unrelated instance has the same providerId", async () => {
@@ -349,6 +379,7 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B1 first-profile ca
 			getApiConfiguration: () => config as unknown as ReturnType<BootstrapModelProfileDeps["getApiConfiguration"]>,
 			getMode: () => "act",
 			setInstanceSecret: () => {},
+			flushInstanceSecrets: async () => {},
 			instancesStore,
 			profilesStore,
 			now: () => 1700000000000,
