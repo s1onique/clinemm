@@ -82,7 +82,8 @@
  *      users.
  *
  *   5. MALFORMED_HEADERS_POLICY (load-bearing added 2026-09-09
- *      with B3 reviewer's bounded P1 absorb)
+ *      with B3 reviewer's bounded P1 absorb; CORRECTION05
+ *      2026-09-09 in-place amendment per live-found P0)
  *      The bootstrap advertises "exact capture" via freeze #4.
  *      When `providerId === "openai"` AND `config.openAiHeaders`
  *      is PRESENT (a non-empty string) but its JSON payload is
@@ -99,9 +100,28 @@
  *      antipattern the exact-capture freeze exists to prevent.
  *      Plain-object (non-string) inputs that are not objects
  *      (arrays, primitives) follow the same refuse policy for
- *      symmetry. The empty-string and absent cases remain
- *      "treat as absent" (the user simply has no custom
- *      headers), per freeze #4.
+ *      symmetry. The empty-string, empty plain-object ({}),
+ *      empty JSON ("{}") and absent cases all canonicalize to
+ *      ABSENT (the user simply has no custom headers) per
+ *      freeze #4 and CORRECTION05.
+ *
+ *      CORRECTION05 LIVE-FOUND AMENDMENT (2026-09-09): the
+ *      CORRECTION03 policy refused `{}` (and `"{}"`) as
+ *      malformed because they had zero string-valued entries.
+ *      Live dogfood falsified that: the runtime authority
+ *      composes `...(openAiHeaders || {})`, so absent and empty
+ *      are semantically identical. A user with a valid
+ *      OpenAI-compatible configuration whose legacy persisted
+ *      `openAiHeaders` was `{}` hit
+ *      CURRENT_CONFIGURATION_UNSUPPORTED on first-run bootstrap.
+ *      The fix: EMPTY = ABSENT (canonicalization); only
+ *      NON-EMPTY + ALL-VALUES-UNUSABLE refuses (e.g.
+ *      `{ X: 123 }` because the user intended SOMETHING but
+ *      stored garbage). The genuinely-malformed-present refuse
+ *      policy is preserved for the load-bearing silent-weaken
+ *      antipattern; the load-bearing empty-canonicalize fix is
+ *      the missing absent equivalence that the runtime has
+ *      always observed.
  *
  * CAUSAL CHAIN (mandatory order - do not reorder):
  *
@@ -384,6 +404,45 @@ type OpenAiHeadersParseResult =
  * `Record | undefined`) so the caller can distinguish
  * "absent" (commit with headers absent) from "malformed"
  * (refuse per MALFORMED_HEADERS_POLICY).
+ *
+ * SEMANTIC ALGEBRA (CORRECTION05, live-found bug fix):
+ *
+ *   absent / null / undefined  -> ABSENT
+ *   empty string / "{}"        -> ABSENT  (canonicalization: empty
+ *                                          representations mean
+ *                                          "no custom headers")
+ *   {}                          -> ABSENT  (legacy persisted empty
+ *                                          plain object)
+ *   { "X-Tenant": "foo" }      -> CAPTURED
+ *   '{"X-Tenant":"foo"}'        -> CAPTURED
+ *
+ *   The previous CORRECTION03 policy treated `{}` (and `"{}"`) as
+ *   MALFORMED because it had zero string-valued entries. That
+ *   disagreed with the runtime authority: the OpenAI provider
+ *   composes `...(openAiHeaders || {})`, so an empty header map is
+ *   semantically equivalent to absent. Treating empty as malformed
+ *   refused legitimate OpenAI-compatible configurations whose
+ *   legacy `openAiHeaders` happened to be `{}` (a representation
+ *   that the legacy settings panel has historically produced).
+ *
+ *   Genuinely malformed PRESENT payloads (the user intended
+ *   headers but stored garbage) STILL refuse:
+ *
+ *   "{broken json"             -> MALFORMED  (JSON.parse threw)
+ *   "[]"                       -> MALFORMED  (parsed but not a
+ *                                           plain object)
+ *   42 / true / null-as-string -> MALFORMED  (wrong shape entirely)
+ *   { "X": 123 }               -> MALFORMED  (non-empty plain
+ *                                           object with NO
+ *                                           string-valued entries:
+ *                                           the user stored
+ *                                           garbage - we cannot
+ *                                           canonicalize away
+ *                                           value type because
+ *                                           they intended SOMETHING)
+ *
+ *   General rule: EMPTY = canonicalization (absent);
+ *   NON-EMPTY + ALL-VALUES-UNUSABLE = refuse.
  */
 function parseOpenAiHeaders(config: ApiConfiguration): OpenAiHeadersParseResult {
 	const raw = (config as { openAiHeaders?: unknown }).openAiHeaders
@@ -391,41 +450,67 @@ function parseOpenAiHeaders(config: ApiConfiguration): OpenAiHeadersParseResult 
 	if (typeof raw === "string") {
 		const trimmed = raw.trim()
 		if (trimmed.length === 0) return { kind: "absent" }
+		let parsed: unknown
 		try {
-			const parsed = JSON.parse(trimmed)
-			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-				return {
-					kind: "malformed",
-					reason: "openAiHeaders JSON parsed to a non-object payload (expected a plain JSON object of string keys to string values)",
-				}
-			}
-			const out: Record<string, string> = {}
-			for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-				if (typeof v === "string") out[k] = v
-			}
-			if (Object.keys(out).length === 0) {
-				return {
-					kind: "malformed",
-					reason: "openAiHeaders JSON object contained zero string-valued entries (expected at least one string-valued header)",
-				}
-			}
-			return { kind: "captured", headers: out }
+			parsed = JSON.parse(trimmed)
 		} catch (err) {
 			return {
 				kind: "malformed",
 				reason: `openAiHeaders JSON.parse failed: ${err instanceof Error ? err.message : String(err)}`,
 			}
 		}
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			return {
+				kind: "malformed",
+				reason:
+					"openAiHeaders JSON parsed to a non-object payload (expected a plain JSON object of string keys to string values)",
+			}
+		}
+		const out: Record<string, string> = {}
+		for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+			if (typeof v === "string") out[k] = v
+		}
+		// CORRECTION05: an empty parsed JSON object ("{}" or " { } ")
+		// canonicalizes to ABSENT. The runtime composes
+		// `...(openAiHeaders || {})`, so {} and undefined produce
+		// identical outbound behavior. Refusing {} would refuse
+		// legitimate legacy-persisted configurations.
+		if (Object.keys(out).length === 0) {
+			if (Object.keys(parsed as Record<string, unknown>).length === 0) {
+				return { kind: "absent" }
+			}
+			// The parsed object had keys but ZERO string-valued
+			// entries (e.g. '{"X": 123}'): the user intended
+			// headers but stored garbage. Per MALFORMED_HEADERS_POLICY,
+			// refuse rather than silently weaken.
+			return {
+				kind: "malformed",
+				reason:
+					"openAiHeaders JSON object contained zero string-valued entries (expected at least one string-valued header)",
+			}
+		}
+		return { kind: "captured", headers: out }
 	}
 	if (typeof raw === "object" && !Array.isArray(raw)) {
 		const out: Record<string, string> = {}
 		for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
 			if (typeof v === "string") out[k] = v
 		}
+		// CORRECTION05: an empty plain object ({}) canonicalizes to
+		// ABSENT. This is the load-bearing fix for the live failure
+		// (legacy persisted {} must succeed, not refuse).
 		if (Object.keys(out).length === 0) {
+			if (Object.keys(raw as Record<string, unknown>).length === 0) {
+				return { kind: "absent" }
+			}
+			// The plain object had keys but ZERO string-valued
+			// entries (e.g. { X: 123 }): the user intended headers
+			// but stored garbage. Per MALFORMED_HEADERS_POLICY,
+			// refuse.
 			return {
 				kind: "malformed",
-				reason: "openAiHeaders plain-object payload contained zero string-valued entries (expected at least one string-valued header)",
+				reason:
+					"openAiHeaders plain-object payload contained zero string-valued entries (expected at least one string-valued header)",
 			}
 		}
 		return { kind: "captured", headers: out }

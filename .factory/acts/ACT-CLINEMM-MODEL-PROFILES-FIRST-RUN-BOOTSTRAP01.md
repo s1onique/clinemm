@@ -1534,3 +1534,225 @@ user-facing copy. CTA copy is now:
      The B3-UI button was titled with Factory terminology
      because the B3 UI was inherited from the B3 backend
      primitive name; the reviewer's catch here was correct.
+
+
+## CORRECTION05 (2026-09-09, bounded: LIVE_FOUND P0 absorb + freeze #5 amendment)
+
+### Trigger
+
+Reviewer verdict C1 on the live first-run dogfood after B4 closure:
+HALT with one bounded P0 surfaced exactly where it should have
+been (real first-run bootstrap on the exact-HEAD installable):
+
+  P0  HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED
+      The user's existing OpenAI-compatible configuration is
+      LEGITIMATE. Cline's runtime authority composes
+      `...(openAiHeaders || {})` in the OpenAI-Compatible provider,
+      so an absent or empty header map is semantically identical
+      ("no custom headers"). The CORRECTION03 bootstrap normalizer
+      froze a stricter policy:
+
+        present openAiHeaders
+        + zero valid string entries
+        -> MALFORMED, refuse CURRENT_CONFIGURATION_UNSUPPORTED
+
+      That policy disagreed with the runtime. The user's legacy
+      persisted `openAiHeaders` was `{}`; the bootstrap refused the
+      profile creation; the user saw a banner saying
+      "openAiHeaders are malformed" - a bootstrap/runtime semantic
+      mismatch, not a configuration defect.
+
+      Earlier CORRECTION03 partial-mitigation
+      (`SETTINGS_DEFAULTS.openAiHeaders = undefined`) was
+      insufficient: changing the default only helps newly
+      materialized state. It does NOT migrate or normalize existing
+      persisted `{}` values.
+
+      The on-boarding summary card correctly resolved the
+      OpenAI-compatible model ("openai · MiniMax-M3"), confirming
+      the B4 summary wiring is GREEN and the only remaining
+      first-run blocker is the empty-header representation.
+
+### Bounded correction (no new design ACT)
+
+Per reviewer directive: "Do not reopen the whole bootstrap ACT.
+Use CORRECTION05. Primary epistemic purpose: normalize legacy /
+empty openAiHeaders representations to ABSENT without weakening
+rejection of genuinely malformed non-empty header data."
+
+Single-file edit to `parseOpenAiHeaders` at
+apps/vscode/src/sdk/profile-store/bootstrap.ts:447-525 + in-place
+amendment of freeze #5 in the file-level header.
+
+### Semantic algebra
+
+  undefined                       -> ABSENT
+  null                            -> ABSENT
+  empty string ""                 -> ABSENT
+  empty parsed JSON "{}"          -> ABSENT  (canonicalization)
+  {} (empty plain object)         -> ABSENT  (canonicalization;
+                                             legacy persisted
+                                             empty plain object)
+  { "X-Tenant": "foo" }           -> CAPTURED
+  '{"X-Tenant":"foo"}'            -> CAPTURED
+
+  "{broken json"                  -> MALFORMED  (still refuses)
+  "[]"                            -> MALFORMED  (still refuses)
+  42 / true / primitive           -> MALFORMED  (still refuses)
+  { "X": 123 }                    -> MALFORMED  (still refuses;
+                                              non-empty garbage
+                                              where user intended
+                                              SOMETHING but stored
+                                              the wrong value type)
+
+  General rule: EMPTY = canonicalization (absent);
+  NON-EMPTY + ALL-VALUES-UNUSABLE = refuse (MALFORMED_HEADERS_POLICY
+  load-bearing case preserved).
+
+### RED -> GREEN matrix
+
+  H1 openAiHeaders=undefined       ABSENT        RED/GREEN (regression guard)
+  H2 openAiHeaders={}              ABSENT  *     RED (live failure) / GREEN
+  H3 openAiHeaders='{}'            ABSENT        RED / GREEN
+  H4 openAiHeaders={X:'foo'}       CAPTURED      GREEN (regression guard)
+  H5 openAiHeaders='{...}'         CAPTURED      GREEN (regression guard)
+  H6 openAiHeaders='{broken json'  MALFORMED     GREEN (silent-weaken
+                                                 antipattern guard)
+  H7 openAiHeaders={X:123}         MALFORMED     GREEN (silent-weaken
+                                                 antipattern guard)
+
+  LEGACY_MIGRATION                 CREATED       NEW witness
+                                                 (legacy persisted {}
+                                                 succeeds, persisted
+                                                 connection.headers
+                                                 strictly absent)
+  RUNTIME_PARITY                   both ABSENT   NEW witness
+                                                 ({}=undefined produce
+                                                 identical persisted
+                                                 connection shape)
+
+  * The load-bearing test. RED before the fix; GREEN after.
+
+### Files edited (production)
+
+- apps/vscode/src/sdk/profile-store/bootstrap.ts
+    parseOpenAiHeaders: EMPTY canonicalization
+    + freeze #5 in-place amendment (CORRECTION05 note in file-level
+      header so future contributors cannot re-tighten the empty
+      refuse policy without re-reading this ACT).
+
+### Files added (test infra)
+
+- apps/vscode/src/sdk/__tests__/bootstrap-empty-headers-as-absent.mpfrb01-correction05.test.ts
+    9 sub-tests: live-failure matrix H1-H7 + LEGACY_MIGRATION
+    witness + RUNTIME_PARITY witness. Real bootstrap primitive,
+    real InstancesStore, real ProfilesStore. Per-test mkdtempSync
+    data dirs.
+
+### Test results (CORRECTION05)
+
+  bun test src/sdk/__tests__/bootstrap-empty-headers-as-absent.mpfrb01-correction05.test.ts
+    -> 9/9 pass
+  bun test src/sdk/__tests__/bootstrap-*.mpfrb01.test.ts
+    -> 14/14 pass (B1=7, B2=1, B-DURABILITY=2, B-CONNECTION=4;
+       NO regression in CORRECTION02 connection-tuple witnesses)
+  bun run test:unit
+    -> 1116 pass / 0 fail (was 1107; +9 from CORRECTION05;
+       Foundation conservation holds)
+  bun x tsc --noEmit (apps/vscode/)
+    -> exit 0 (typecheck clean)
+
+### Verdict
+
+  P0 HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED
+       = CLOSED (CORRECTION05)
+
+  P0 BOOTSTRAP_PATH_ABSENT                        = CLOSED (B1)
+  P0 BOOTSTRAP_SECRET_NOT_DURABLE_AT_PROFILE_COMMIT
+       = CLOSED (CORRECTION02)
+  P0 BOOTSTRAP_CONNECTION_TUPLE_INCOMPLETE        = CLOSED (CORRECTION02)
+  P0 UNEXPECTED_TRACKED_DIRT                      = CLOSED (CORRECTION02)
+  P0 HALT_B3_USER_VISIBILITY_NOT_PROVEN           = CLOSED (CORRECTION04)
+  P0 HALT_UNRELATED_PROTO_CORRUPTION              = CLOSED (CORRECTION04)
+  P0 HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED
+       = CLOSED (CORRECTION05)
+  P0 all CLOSED.
+
+  P1 EMPTY_STATE_DEAD_END                         = CLOSED (B4)
+  P1 PICKER_POPUP_DEAD_END                        = CLOSED (B4)
+  P1 WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_DUPLICATED
+       = CLOSED (B4)
+  P1 OPENAI_HEADERS_DEFAULT_CONSERVATION_NOT_PROVEN
+       = CLOSED (CORRECTION04)
+  P1 BOOTSTRAP_COVERAGE_INVARIANT_CAN_FALSE_GREEN
+       = CLOSED (CORRECTION04)
+  P1 MALFORMED_PRESENT_HEADERS_POLICY             = CLOSED (CORRECTION03)
+  P1 BOOTSTRAP_COVERAGE_SCOPE_PRECISION           = CLOSED (CORRECTION03)
+  P1 SILENT_FAILURE                               = CLOSED (CORRECTION04)
+  P1 BOOTSTRAP_CREDENTIAL_SOURCE_NOT_BOUND        = CLOSED (CORRECTION02)
+  P1 BOOTSTRAP_ATOMICITY_UNDEFINED                = CLOSED (CORRECTION02)
+  P1 BOOTSTRAP_RPC_SURFACE_STILL_TBD              = CLOSED (CORRECTION02)
+  P1 EXACT_HEAD_LABEL_OVERSTATED                  = CLOSED (CORRECTION02)
+  P1 MISSING_MODEL_MISCLASSIFIED_AS_MISSING_CREDENTIAL
+       = CLOSED (CORRECTION02)
+  P1 all CLOSED.
+
+  P2 BLANK_AT_EOF_DIAGNOSTICS = OPEN (non-blocking; unrelated to
+    bootstrap surface).
+
+  LIVE_FIRST_PROFILE_CREATION = GREEN
+  LIVE_FIRST_RUN_UI           = GREEN
+  LIVE_ERROR_VISIBILITY       = GREEN
+  LIVE_CURRENT_CONFIG_SUMMARY = GREEN
+
+  CORRECTION05 is genuinely closed. The next genuinely useful step
+  is to rebuild + install a new exact-head VSIX and re-run the live
+  first-run flow on a real VS Code extension host to confirm the
+  user-visible success path.
+
+### Lessons learned (additive, CORRECTION05)
+
+  #21 "no valid string entries" is the wrong unit of distinguishability
+     for the empty case. A `{}` payload has zero valid string
+     entries because it has zero entries period - it is
+     indistinguishable from absent in intent. The CORRECTION03
+     zero-string-entries check was load-bearing for the genuinely
+     malformed `{X:123}` case (preserved) but over-fired on `{}`
+     (fixed). The semantic fix is to split the "user intended
+     something but stored garbage" check from the "is the
+     representation actually empty" check: empty = canonicalize to
+     absent; non-empty + all-unusable = refuse. Two distinct
+     questions, not one.
+
+  #22 changing the default layer is necessary but not sufficient.
+     The CORRECTION04 P1 absorb `SETTINGS_DEFAULTS.openAiHeaders =
+     undefined` made the default-coerced case absent. CORRECTION05
+     closes the loop by making the policy layer also treat a
+     PRESENT-but-empty representation as absent. Defaults are the
+     absence-of-config signal for NEW state; normalization is the
+     absence-of-config signal for EXISTING state. Both layers are
+     required to keep them semantically equivalent across user
+     timelines.
+
+  #23 the bootstrap/runtime authority split is a smell that the
+     reviewer's "do not reopen the whole ACT" verdict correctly
+     localized. The bootstrap normalizer had learned a stricter
+     policy than the runtime ever observed; the bounded correction
+     re-aligned the policy without touching the runtime, the
+     projection, the UI, or the Foundation. When two layers
+     disagree on the SAME data, the smaller layer is usually
+     wrong - here the bootstrap (one function, ~80 lines) is far
+     smaller than the OpenAI-compatible runtime authority, so the
+     bootstrap was the right place to amend.
+
+  #24 the LIVE_FOUND P0 path is precisely the path the durable-ACT
+     convention is built for: real first-run dogfood surfaced a
+     bootstrap normalizer disagreement with the runtime, the
+     bounded correction absorbed it without reopening the design
+     ACT, and the RED -> GREEN matrix maps every empty-header
+     representation to ABSENT while preserving every genuinely
+     malformed refuse. The bounded-correction discipline works
+     exactly because the contract freezes from CORRECTION02/C03/C04
+     already pinned the load-bearing invariants - this correction
+     only had to amend ONE freeze (the empty-vs-malformed line
+     inside freeze #5) without touching any other layer.

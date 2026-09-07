@@ -1,0 +1,58 @@
+GREEN witness for ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION05
+
+Bounded fix: apps/vscode/src/sdk/profile-store/bootstrap.ts:447-525
+  parseOpenAiHeaders now canonicalizes EMPTY header representations
+  (plain-object {} AND parsed JSON "{}") to ABSENT. Genuinely
+  malformed PRESENT payloads (e.g. { X: 123 } where the user
+  intended SOMETHING but stored garbage) STILL refuse per
+  MALFORMED_HEADERS_POLICY.
+
+Test results (CORRECTION05):
+  bun test src/sdk/__tests__/bootstrap-empty-headers-as-absent.mpfrb01-correction05.test.ts
+    -> 9/9 pass (live-failure matrix + migration witness +
+       runtime-parity witness)
+
+  H1 openAiHeaders=undefined          -> ABSENT  GREEN (regression guard)
+  H2 openAiHeaders={}                 -> ABSENT  GREEN (the load-bearing fix;
+                                                    legacy persisted {}
+                                                    now bootstraps cleanly)
+  H3 openAiHeaders='{}'               -> ABSENT  GREEN (parsed JSON empty object
+                                                    canonicalizes)
+  H4 openAiHeaders={'X-Tenant':'foo'} -> CAPTURED  GREEN (non-empty object
+                                                       still captured)
+  H5 openAiHeaders='{"X-Tenant":"foo"}' -> CAPTURED  GREEN (non-empty JSON
+                                                          still captured)
+  H6 openAiHeaders='{broken json'     -> MALFORMED  GREEN (invalid JSON still
+                                                          refuses; preserves
+                                                          MALFORMED_HEADERS_POLICY)
+  H7 openAiHeaders={X:123}            -> MALFORMED  GREEN (non-empty garbage
+                                                          still refuses;
+                                                          preserves silent-weaken
+                                                          antipattern guard)
+  LEGACY_MIGRATION:
+    legacy persisted {} -> CREATED,
+    persisted connection.headers is strictly absent  GREEN (the
+    exact migration the user observed live)
+  RUNTIME_PARITY:
+    openAiHeaders={} and openAiHeaders=undefined produce
+    identical persisted connection shape (both have headers
+    strictly absent, NOT {})  GREEN (runtime semantic alignment)
+
+Foundation conservation:
+  bun test src/sdk/__tests__/bootstrap-*.mpfrb01.test.ts
+    -> 14/14 pass (B1=7, B2=1, B-DURABILITY=2, B-CONNECTION=4)
+       No regression in CORRECTION02 connection-tuple witnesses,
+       B-CONNECTION object-form headers test still passes (the
+       non-empty {} case was always CAPTURED).
+  bun run test:unit
+    -> 1116 pass / 0 fail (was 1107; +9 from CORRECTION05
+       empty-headers-as-absent file; no regression across the
+       Foundation)
+  bun x tsc --noEmit (apps/vscode/)
+    -> exit 0 (typecheck clean)
+
+The bounded correction is COMPLETE. CORRECTION05 closes the
+LIVE_FOUND P0 HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED
+without weakening MALFORMED_HEADERS_POLICY (genuine malformed-present
+payloads continue to refuse) and without redesigning the bootstrap
+RPC, the projection, the UI, or the Foundation.

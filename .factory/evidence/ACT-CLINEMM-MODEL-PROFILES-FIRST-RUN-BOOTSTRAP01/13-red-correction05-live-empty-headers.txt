@@ -1,0 +1,39 @@
+RED witness for ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION05
+
+LIVE_FOUND P0:
+  HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED
+
+Repro (live first-run dogfood, exact-HEAD install from B4 closure):
+
+  1. Fresh user installs the exact-HEAD VSIX.
+  2. Configures OpenAI-compatible provider (MiniMax-M3 endpoint) with
+     a real API key.
+  3. Opens Settings > Model Profiles.
+  4. Sees the B4 onboarding pane with summary card
+     "openai · MiniMax-M3" (proving B4-A and B4 summary wiring GREEN).
+  5. Clicks "Create first profile", types a name, clicks the CTA.
+  6. Result: live banner says
+        "openAiHeaders are malformed: openAiHeaders plain-object
+         payload contained zero string-valued entries (expected at
+         least one string-valued header). Fix the headers in Settings
+         > API Configuration > OpenAI Compatible, or remove the
+         field entirely, and re-run the bootstrap."
+
+The bootstrap refused (CURRENT_CONFIGURATION_UNSUPPORTED) because
+the user's legacy persisted openAiHeaders was `{}`. The runtime
+authority `...(openAiHeaders || {})` treats empty and absent as
+identical, so this refusal is a bootstrap/runtime semantic mismatch,
+not a legitimate user-config issue.
+
+Repro test (RED before the fix):
+  MPFRB01_C05_H2_EMPTY_PLAIN_OBJECT:
+    openAiHeaders={}
+    -> bootstrap returns CURRENT_CONFIGURATION_UNSUPPORTED
+    -> live banner says "openAiHeaders are malformed"
+
+Capture the exact bootstrap-primitive return value when handed the
+minimal MiniMax-shaped legacy config. The bug is in
+`parseOpenAiHeaders` at
+apps/vscode/src/sdk/profile-store/bootstrap.ts:425-430 (the
+CORRECTION03 zero-string-valued-entries check that fired on
+Object.keys(raw).length === 0).
