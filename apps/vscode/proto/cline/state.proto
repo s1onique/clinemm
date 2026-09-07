@@ -347,6 +347,15 @@ message Settings {
   optional int32 open_telemetry_log_batch_timeout = 170;
   optional int32 open_telemetry_log_max_queue_size = 171;
   optional bool worktrees_enabled = 172;
+  // ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: restoring the unrelated
+  // `auto_approve_all_toggled = 174` field that was deleted by the same
+  // commit that introduced the user-context ceiling. The deletion was
+  // out of scope for the ceiling feature; the legacy migration at
+  // `src/hosts/vscode/vscode-to-file-migration.ts:289` still reads
+  // `autoApproveAllToggled` from VSCode globalState, so the proto field
+  // is kept to preserve the wire-shape contract for any client that may
+  // have persisted it.
+  optional bool auto_approve_all_toggled = 174;
   map<string, string> open_ai_headers = 177;
   optional string plan_mode_cline_model_id = 178;
   optional OpenRouterModelInfo plan_mode_cline_model_info = 179;
@@ -358,10 +367,28 @@ message Settings {
   optional string act_mode_cline_pass_model_id = 185;
   optional OpenRouterModelInfo act_mode_cline_pass_model_info = 186;
   optional int32 user_context_ceiling = 187;
+  // ACT-CLINEMM-USER-CONTEXT-CEILING01-CORRECTION01: explicit Auto/reset
+  // signal. Mirrors the sibling on `UpdateSettingsRequest`. When true, the
+  // persistence handler deletes the persisted user-context ceiling key.
+  // See the matching comment on `UpdateSettingsRequest.clear_user_context_ceiling`
+  // for the proto3 presence rationale and the mutually-exclusive invariant
+  // (a request may carry `user_context_ceiling` OR
+  // `clear_user_context_ceiling`, never both — carrying both is a
+  // typed-error rejection at the persistence seam).
+  optional bool clear_user_context_ceiling = 188;
+  // ACT-CLINEMM-SETTINGS-SANDBOX-CAPABILITIES-IMPLEMENTATION01:
+  // Persisted Settings values that bind to the two capability
+  // selectors in apps/vscode/src/sdk/sandbox-policy.ts:
+  //   - clinemm_safe_yolo_allow_network   -> SandboxNetwork 'allow' | 'deny'
+  //   - clinemm_safe_yolo_allow_ssh_agent  -> SshAuthenticationAuthority 'agent' | undefined
+  // Defaults are absent / undefined, which the resolver interprets as
+  // "no opt-in" -> deny (network), deny (ssh-agent) — exactly the
+  // pre-ACT runtime behaviour. Persisted true -> allow / agent.
   optional bool clinemm_safe_yolo_allow_network = 189;
   optional bool clinemm_safe_yolo_allow_ssh_agent = 190;
-  optional string clinemm_temporary_external_path_authorities = 191;
-}.
+  // ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01:
+  // User-enabled, expiring exception to R0 workspace path authority.
+  // Wire format: serialized JSON array of { path, expiresAt }.
   // The host validator REJECTS at persistence time any entry whose
   // expiresAt exceeds now + 24h, with a typed error surfaced to
   // the user / CLI operator. Defaults to [] (the pre-ACT contract;
