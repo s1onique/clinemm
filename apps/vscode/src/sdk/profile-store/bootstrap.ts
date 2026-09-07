@@ -81,6 +81,28 @@
  *      the MPWC01 C3 identity-collapse bug for OpenAI-Compatible
  *      users.
  *
+ *   5. MALFORMED_HEADERS_POLICY (load-bearing added 2026-09-09
+ *      with B3 reviewer's bounded P1 absorb)
+ *      The bootstrap advertises "exact capture" via freeze #4.
+ *      When `providerId === "openai"` AND `config.openAiHeaders`
+ *      is PRESENT (a non-empty string) but its JSON payload is
+ *      malformed (JSON.parse throws OR the parsed value is not a
+ *      plain object), the bootstrap MUST refuse with
+ *      `CURRENT_CONFIGURATION_UNSUPPORTED` and a human-readable
+ *      message identifying the field. Rationale: silently
+ *      treating malformed headers as "absent" would commit a
+ *      profile with weakened connection semantics that the user
+ *      cannot detect - they configured custom headers, the
+ *      settings panel stored them as garbage JSON, and the
+ *      bootstrap would emit a profile pointing at the baseUrl
+ *      WITHOUT those headers. That is the silent-weaken
+ *      antipattern the exact-capture freeze exists to prevent.
+ *      Plain-object (non-string) inputs that are not objects
+ *      (arrays, primitives) follow the same refuse policy for
+ *      symmetry. The empty-string and absent cases remain
+ *      "treat as absent" (the user simply has no custom
+ *      headers), per freeze #4.
+ *
  * CAUSAL CHAIN (mandatory order - do not reorder):
  *
  *     current-config-authority
@@ -216,6 +238,11 @@ export const BOOTSTRAP_COVERAGE: ReadonlySet<ApiProvider> = new Set<ApiProvider>
 	"dify",
 ])
 
+// Re-export the bootstrap-coverage scope-precision self-check so
+// callers (tests, CI hooks) can audit the invariant directly.
+// See bootstrap-coverage-invariants.ts for the contract.
+export { assertBootstrapCoverageIsWellFormed } from "./bootstrap-coverage-invariants"
+
 // ---------------------------------------------------------------------------
 // Dependencies (dependency-injected - keeps this module free of
 // circular imports on SdkController / StateManager)
@@ -321,6 +348,29 @@ export interface BootstrapModelProfileDeps {
 // ---------------------------------------------------------------------------
 
 /**
+ * Tagged result of attempting to extract the OpenAI-Compatible
+ * headers from the legacy `ApiConfiguration`. The three states
+ * are intentionally distinct so the caller (captureConnection)
+ * can apply the correct MALFORMED_HEADERS_POLICY:
+ *
+ *   { kind: "absent" }        - field is unset, null, or empty string
+ *                               -> treat as "no headers configured";
+ *                                  commit normally with headers absent.
+ *   { kind: "captured", ... } - field is present, parses cleanly, has
+ *                               at least one string-valued key
+ *                               -> capture as connection.headers.
+ *   { kind: "malformed", ... } - field is present but the JSON.parse
+ *                                threw OR the parsed value is not a
+ *                                plain object (array, primitive, etc.)
+ *                                -> REFUSE with CURRENT_CONFIGURATION_UNSUPPORTED
+ *                                per freeze MALFORMED_HEADERS_POLICY.
+ */
+type OpenAiHeadersParseResult =
+	| { kind: "absent" }
+	| { kind: "captured"; headers: Record<string, string> }
+	| { kind: "malformed"; reason: string }
+
+/**
  * Parse the OpenAI-Compatible headers field, which the legacy
  * `ApiConfiguration` stores as either:
  *
@@ -330,42 +380,41 @@ export interface BootstrapModelProfileDeps {
  *   - a plain `Record<string, string>` (already-parsed form),
  *     sometimes seen in test fixtures and in-memory callers.
  *
- * Returns `undefined` (NOT empty-object, NOT null) when the
- * source has no headers - the typed projector treats `undefined`
- * as "field wasn't on the source" and preserves its default
- * inheritance; `{}` would be a deliberate empty-map clear (not
- * the bootstrap's intent), and `null` would be an explicit clear
- * with the same aggressive semantics.
- *
- * Returns `Record<string, string>` only when the parse produces
- * a non-empty object. A JSON-parse failure or non-object
- * payload yields `undefined` (and a logged warning) so the
- * bootstrap stays fail-soft rather than crashing on a malformed
- * legacy string.
+ * Returns a tagged `OpenAiHeadersParseResult` (NOT a bare
+ * `Record | undefined`) so the caller can distinguish
+ * "absent" (commit with headers absent) from "malformed"
+ * (refuse per MALFORMED_HEADERS_POLICY).
  */
-function captureOpenAiHeaders(config: ApiConfiguration): Record<string, string> | undefined {
+function parseOpenAiHeaders(config: ApiConfiguration): OpenAiHeadersParseResult {
 	const raw = (config as { openAiHeaders?: unknown }).openAiHeaders
-	if (raw === undefined || raw === null) return undefined
+	if (raw === undefined || raw === null) return { kind: "absent" }
 	if (typeof raw === "string") {
 		const trimmed = raw.trim()
-		if (trimmed.length === 0) return undefined
+		if (trimmed.length === 0) return { kind: "absent" }
 		try {
 			const parsed = JSON.parse(trimmed)
 			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-				Logger.warn("[bootstrapModelProfile] openAiHeaders JSON parsed to non-object; treating as absent")
-				return undefined
+				return {
+					kind: "malformed",
+					reason: "openAiHeaders JSON parsed to a non-object payload (expected a plain JSON object of string keys to string values)",
+				}
 			}
 			const out: Record<string, string> = {}
 			for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
 				if (typeof v === "string") out[k] = v
 			}
-			return Object.keys(out).length > 0 ? out : undefined
+			if (Object.keys(out).length === 0) {
+				return {
+					kind: "malformed",
+					reason: "openAiHeaders JSON object contained zero string-valued entries (expected at least one string-valued header)",
+				}
+			}
+			return { kind: "captured", headers: out }
 		} catch (err) {
-			Logger.warn(
-				"[bootstrapModelProfile] openAiHeaders JSON.parse failed; treating as absent:",
-				err instanceof Error ? err.message : String(err),
-			)
-			return undefined
+			return {
+				kind: "malformed",
+				reason: `openAiHeaders JSON.parse failed: ${err instanceof Error ? err.message : String(err)}`,
+			}
 		}
 	}
 	if (typeof raw === "object" && !Array.isArray(raw)) {
@@ -373,10 +422,36 @@ function captureOpenAiHeaders(config: ApiConfiguration): Record<string, string> 
 		for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
 			if (typeof v === "string") out[k] = v
 		}
-		return Object.keys(out).length > 0 ? out : undefined
+		if (Object.keys(out).length === 0) {
+			return {
+				kind: "malformed",
+				reason: "openAiHeaders plain-object payload contained zero string-valued entries (expected at least one string-valued header)",
+			}
+		}
+		return { kind: "captured", headers: out }
 	}
-	return undefined
+	// A primitive (number, boolean, etc.) or array reached us - the
+	// user must have stored a non-object value under openAiHeaders.
+	// This is the malformed-present case: refuse.
+	return {
+		kind: "malformed",
+		reason: `openAiHeaders has an unsupported shape (got ${Array.isArray(raw) ? "array" : typeof raw}); expected a JSON object of string keys to string values, or empty/absent`,
+	}
 }
+
+/**
+ * Discriminated outcome of `captureConnection`. Either the
+ * connection tuple was assembled cleanly OR a malformed
+ * present-field refuses the bootstrap per freeze
+ * MALFORMED_HEADERS_POLICY.
+ *
+ *   { kind: "ok", connection }          - proceed with the commit
+ *   { kind: "refused", status, message } - caller returns this
+ *                                         failure envelope directly
+ */
+type CaptureConnectionResult =
+	| { kind: "ok"; connection: ProviderConnection }
+	| { kind: "refused"; status: "CURRENT_CONFIGURATION_UNSUPPORTED"; message: string }
 
 /**
  * Resolve the V1 connection tuple (modelId, baseUrl, headers, region,
@@ -401,8 +476,14 @@ function captureOpenAiHeaders(config: ApiConfiguration): Record<string, string> 
  * equivalent top-level field on the legacy `ApiConfiguration` for
  * the providers currently in `BOOTSTRAP_COVERAGE` and need a
  * per-provider mapping (out of scope for the bootstrap fix).
+ *
+ * B3 reviewer bounded P1 (MALFORMED_HEADERS_POLICY): if the
+ * `openAiHeaders` field is PRESENT but malformed, the helper
+ * refuses the connection (does NOT commit a profile with
+ * silently weakened headers). The caller propagates this as
+ * a `CURRENT_CONFIGURATION_UNSUPPORTED` failure envelope.
  */
-function captureConnection(providerId: ApiProvider, mode: "plan" | "act", config: ApiConfiguration): ProviderConnection {
+function captureConnection(providerId: ApiProvider, mode: "plan" | "act", config: ApiConfiguration): CaptureConnectionResult {
 	const connection: ProviderConnection = {}
 	const modelId = resolveModelId(providerId, mode, config)
 	if (modelId) connection.modelId = modelId
@@ -416,10 +497,29 @@ function captureConnection(providerId: ApiProvider, mode: "plan" | "act", config
 	// (e.g. anthropic-specific fields on bedrock are out of
 	// scope here).
 	if (providerId === "openai") {
-		const headers = captureOpenAiHeaders(config)
-		if (headers) connection.headers = headers
+		const parsed = parseOpenAiHeaders(config)
+		if (parsed.kind === "malformed") {
+			// Per freeze MALFORMED_HEADERS_POLICY: refuse the
+			// bootstrap with CURRENT_CONFIGURATION_UNSUPPORTED.
+			// We refuse rather than committing with weakened
+			// headers because the exact-capture freeze (#4)
+			// explicitly advertises fidelity for custom-headers
+			// OpenAI-Compatible users; silently dropping
+			// malformed-present headers would re-introduce the
+			// MPWC01 C3 identity-collapse bug under a different
+			// name.
+			return {
+				kind: "refused",
+				status: "CURRENT_CONFIGURATION_UNSUPPORTED",
+				message: `openAiHeaders are malformed: ${parsed.reason}. Fix the headers in Settings > API Configuration > OpenAI Compatible, or remove the field entirely, and re-run the bootstrap.`,
+			}
+		}
+		if (parsed.kind === "captured") {
+			connection.headers = parsed.headers
+		}
+		// parsed.kind === "absent" -> leave connection.headers unset
 	}
-	return connection
+	return { kind: "ok", connection }
 }
 
 // ---------------------------------------------------------------------------
@@ -482,7 +582,16 @@ export async function bootstrapModelProfileFromCurrentConfiguration(
 	}
 
 	// -- Step 3: capture the V1 connection tuple
-	const connection = captureConnection(providerId, mode, config)
+	const connectionResult = captureConnection(providerId, mode, config)
+	if (connectionResult.kind === "refused") {
+		// Per freeze MALFORMED_HEADERS_POLICY (B3 bounded P1):
+		// a malformed present-field refuses the bootstrap with
+		// CURRENT_CONFIGURATION_UNSUPPORTED rather than committing
+		// a profile with silently weakened headers.
+		Logger.warn(`[bootstrapModelProfile] connection capture refused for '${providerId}': ${connectionResult.message}`)
+		return connectionResult
+	}
+	const connection = connectionResult.connection
 	const modelId = connection.modelId
 	if (!modelId) {
 		// CORRECTION02 P1: a missing model is NOT a missing

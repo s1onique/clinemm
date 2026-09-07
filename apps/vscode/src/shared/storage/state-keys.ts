@@ -1,3 +1,4 @@
+import type { TemporaryExternalPathAuthority } from "@cline/core"
 import { AutoApprovalSettings, DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import {
 	ApiProvider,
@@ -8,7 +9,6 @@ import {
 	OpenAiCompatibleModelInfo,
 } from "@shared/api"
 import { BrowserSettings, DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
-import type { TemporaryExternalPathAuthority } from "@cline/core"
 import { ClineRulesToggles } from "@shared/cline-rules"
 import { DEFAULT_FOCUS_CHAIN_SETTINGS, FocusChainSettings } from "@shared/FocusChainSettings"
 import { HistoryItem } from "@shared/HistoryItem"
@@ -112,7 +112,7 @@ const API_HANDLER_SETTINGS_FIELDS = {
 	// Global configuration (not mode-specific)
 	liteLlmBaseUrl: { default: undefined as string | undefined },
 	liteLlmUsePromptCache: { default: undefined as boolean | undefined },
-	openAiHeaders: { default: {} as Record<string, string> },
+	openAiHeaders: { default: undefined as Record<string, string> | undefined },
 	anthropicBaseUrl: { default: undefined as string | undefined },
 	openRouterProviderSorting: { default: undefined as string | undefined },
 	awsRegion: { default: undefined as string | undefined },
