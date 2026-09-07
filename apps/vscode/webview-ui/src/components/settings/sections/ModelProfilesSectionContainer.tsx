@@ -20,22 +20,29 @@
  *   - onRename:                 StateServiceClient.renameModelProfile
  *   - onUpdateFromCurrent:      StateServiceClient.updateModelProfileFromCurrent
  *   - onDelete:                 StateServiceClient.deleteModelProfile
+ *   - onBootstrapFromCurrent:
+ *       ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04:
+ *       StateServiceClient.bootstrapModelProfileFromCurrentConfiguration
+ *       (typed envelope -> status-aware severity banner; the previous
+ *       console.error-only swallow was the HALT_B3_USER_VISIBILITY_NOT_PROVEN
+ *       P0 blocker)
  */
 
 import { EmptyRequest } from "@shared/proto/cline/common"
 import {
 	ApplyModelProfileRequest,
+	BootstrapModelProfileRequest,
 	DeleteModelProfileRequest,
 	RenameModelProfileRequest,
 	SaveCurrentAsModelProfileRequest,
 	SetDefaultModelProfileRequest,
 	UpdateModelProfileFromCurrentRequest,
 } from "@shared/proto/cline/state"
-import { type ReactNode, useCallback, useMemo } from "react"
+import { type ReactNode, useCallback, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import type { ModelProfileSummary } from "@/services/model-profile-types"
-import { ModelProfilesSection } from "./ModelProfilesSection"
+import { type BootstrapModelProfileResultLike, ModelProfilesSection } from "./ModelProfilesSection"
 
 export interface ModelProfilesSectionContainerProps {
 	canApplyLive?: boolean
@@ -57,6 +64,32 @@ export function ModelProfilesSectionContainer(props: ModelProfilesSectionContain
 	const { modelProfiles, activeModelProfileId, defaultModelProfileId } = useExtensionState()
 
 	const profiles = useMemo<ModelProfileSummary[]>(() => modelProfiles ?? [], [modelProfiles])
+
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04:
+	// typed envelope state for the bootstrap RPC. The section renders a
+	// status-aware severity banner when this is non-null; the previous
+	// console.error-only swallow left bootstrap failures invisible.
+	const [bootstrapResult, setBootstrapResult] = useState<BootstrapModelProfileResultLike | null>(null)
+
+	const handleBootstrapFromCurrent = useCallback(async () => {
+		try {
+			const response = await StateServiceClient.bootstrapModelProfileFromCurrentConfiguration(
+				BootstrapModelProfileRequest.create({ name: "Default" }),
+			)
+			setBootstrapResult({
+				status: response.status as BootstrapModelProfileResultLike["status"],
+				profileId: response.profileId || undefined,
+				instanceId: response.instanceId || undefined,
+				message: response.message || undefined,
+			})
+		} catch (error) {
+			console.error("[ModelProfilesSectionContainer] bootstrapModelProfileFromCurrentConfiguration failed:", error)
+			setBootstrapResult({
+				status: "PROFILE_WRITE_FAILED",
+				message: error instanceof Error ? error.message : String(error),
+			})
+		}
+	}, [])
 
 	const handleSaveCurrentAsProfile = useCallback(async (name: string) => {
 		try {
@@ -126,8 +159,10 @@ export function ModelProfilesSectionContainer(props: ModelProfilesSectionContain
 
 	return (
 		<ModelProfilesSection
+			bootstrapResult={bootstrapResult}
 			canApplyLive={canApplyLive}
 			canCreateFromCurrent={canCreateFromCurrent}
+			onBootstrapFromCurrent={handleBootstrapFromCurrent}
 			onClearDefault={handleClearDefault}
 			onDelete={handleDelete}
 			onRename={handleRename}
