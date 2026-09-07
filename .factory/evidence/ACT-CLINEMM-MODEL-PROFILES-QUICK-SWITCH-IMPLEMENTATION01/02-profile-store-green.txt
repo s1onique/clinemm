@@ -1,0 +1,59 @@
+ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+PHASE A — PROFILE DOMAIN/STORE (GREEN)
+=======================================
+
+Production seams driven:
+  ProfilesStore                 = REAL_PRODUCTION_SEAM
+  ProfilesFile / parseProfilesFile = REAL_PRODUCTION_SEAM
+  parseModelProfile             = REAL_PRODUCTION_SEAM
+  parseInstanceSecretName (transitive, for branded re-export) = REAL
+
+Command:
+  bun run test:vitest:c2-4-c-bridge 2>&1 | grep model-profiles-store
+
+Result:
+  ✓ src/sdk/__tests__/model-profiles-store.mpqs01.test.ts (11 tests) 11ms
+
+Witnesses:
+  MPQS01_PROFILES_HAVE_NO_SECRET_FIELDS_AT_CONTRACT_LEVEL
+    parseModelProfile rejects apiKey, headers, credentialRef fields
+    (defense-in-depth against PROFILE_CONTAINS_RAW_SECRET = NO)
+  MPQS01_PROFILES_STORE_NEVER_WRITES_APIKEY_LITERAL
+    On-disk profiles.json never contains the substring "apiKey"
+  MPQS01_ZERO_DELTA_MISSING_FILE_OK
+    Constructing store with no file on disk yields empty profiles map
+  MPQS01_ZERO_DELTA_EMPTY_MAP_KEYMATCH
+    An empty profiles.json is valid
+  MPQS01_TWO_PROFILES_SAME_PROVIDER_COEXIST
+    prof-A and prof-B (different instances) both persist durably
+  MPQS01_KEYMATCH_TAMPER_FAILS_CLOSED
+    parseProfilesFile rejects mismatched key vs body.profileId
+  MPQS01_KEYMATCH_HAPPY_PATH
+    Matching key and body.profileId accepted
+  MPQS01_CORRUPT_FILE_FAILS_CLOSED
+    profiles.json that parses but is invalid throws ProfilesStoreError
+  MPQS01_MALFORMED_JSON_FAILS_CLOSED
+    profiles.json that does not parse throws ProfilesStoreError
+  MPQS01_RENAME_CHANGES_NAME_NOT_ID
+    rename keeps profileId stable; only name changes
+  MPQS01_DELETE_REMOVES_PROFILE
+    delete removes from in-memory + disk; reopen shows absence
+
+Invariants verified:
+  - map key == body.profileId (Foundation mirror)
+  - PROFILE_CONTAINS_RAW_SECRET = NO (apikey/headers/credentialRef rejected)
+  - missing profiles.json = valid empty state (zero-delta)
+  - corruption fails closed at construction time
+  - rename does not touch identity or credential
+  - delete removes the profile durably
+
+Files created:
+  apps/vscode/src/sdk/profile-store/contracts.ts       (134 lines)
+  apps/vscode/src/sdk/profile-store/profiles-store.ts  (176 lines)
+  apps/vscode/src/sdk/__tests__/model-profiles-store.mpqs01.test.ts (260 lines)
+
+Files modified:
+  apps/vscode/vitest.config.ts                          (excluded new test)
+  apps/vscode/vitest.config.c2-4-c-bridge.ts            (included new test)
+
+PHASE A = GREEN.

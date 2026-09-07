@@ -1,0 +1,92 @@
+ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+PHASE F — SETTINGS MANAGEMENT (GREEN)
+======================================
+
+Production seams driven:
+  ModelProfilesSection component = REAL_PRODUCTION_SEAM
+
+Command:
+  cd apps/vscode/webview-ui && bun vitest run src/components/settings/sections/ModelProfilesSection.test.tsx
+
+Result:
+  ✓ src/components/settings/sections/ModelProfilesSection.test.tsx (15 tests) 170ms
+
+Witnesses:
+  MPQS01_SECT_RENDERS_ROWS
+    List contains one row per profile
+  MPQS01_SECT_DEFAULT_BADGE
+    Default profile shows Default badge
+  MPQS01_SECT_SAVE_CURRENT
+    Typing a name and clicking save calls onSaveCurrentAsProfile
+  MPQS01_SECT_USE_BUTTON
+    Use button calls onUse(profileId)
+  MPQS01_SECT_USE_DISABLED_FOR_ACTIVE
+    Use button disabled for the active profile (cannot re-use)
+  MPQS01_SECT_USE_DISABLED_WHEN_BUSY
+    Use buttons disabled when canApplyLive=false (busy state)
+  MPQS01_SECT_SET_AS_DEFAULT
+    Set as default button calls onSetAsDefault
+  MPQS01_SECT_NO_DEFAULT_BUTTON_FOR_DEFAULT
+    Default profile does NOT show Set as default
+  MPQS01_SECT_CLEAR_DEFAULT
+    Clear default calls onClearDefault
+  MPQS01_SECT_RENAME
+    Rename + Enter commits via onRename
+  MPQS01_SECT_UPDATE_FROM_CURRENT
+    Update from current calls onUpdateFromCurrent
+  MPQS01_SECT_DELETE_DISABLED_FOR_ACTIVE
+    Delete button disabled for active profile (refuse delete current)
+  MPQS01_SECT_DELETE_OK_FOR_INACTIVE
+    Delete enabled for inactive profiles
+  MPQS01_SECT_UNSUPPORTED_CONFIG_NOTICE
+    canCreateFromCurrent=false shows the unsupported notice
+  MPQS01_SECT_EMPTY_LIST
+    Zero profiles -> empty-state placeholder
+
+Invariants verified:
+  - Save current as profile (primary creation flow)
+  - Use / Set as default / Rename / Update / Delete actions present
+  - Use button respects busy state (canApplyLive flag)
+  - Active profile cannot be deleted (refuse current)
+  - Default profile does not show "Set as default" again
+  - Unsupported non-API-key configurations explicitly rejected
+
+Files created:
+  apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSection.tsx (~205 lines)
+  apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSection.test.tsx (~190 lines)
+
+PHASE F = GREEN.
+
+PHASE E — FOOTER QUICK-SWITCH UI (GREEN)
+=========================================
+
+Production seams driven:
+  ModelProfileQuickSwitch component = REAL_PRODUCTION_SEAM
+
+Command:
+  cd apps/vscode/webview-ui && bun vitest run src/components/chat/ModelProfileQuickSwitch.test.tsx
+
+Result:
+  ✓ src/components/chat/ModelProfileQuickSwitch.test.tsx (12 tests) 175ms
+
+Files created:
+  apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.tsx (~165 lines)
+  apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.test.tsx (~225 lines)
+  apps/vscode/webview-ui/src/services/model-profile-types.ts (~30 lines)
+
+PHASE E = GREEN.
+=========================================================
+
+Production seams driven:
+  ModelProfileQuickSwitch component = REAL_PRODUCTION_SEAM
+
+Command:
+  cd apps/vscode/webview-ui && bun vitest run src/components/chat/ModelProfileQuickSwitch.test.tsx
+
+Result:
+  ✓ src/components/chat/ModelProfileQuickSwitch.test.tsx (12 tests) 175ms
+
+Files created:
+  apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.tsx (~165 lines)
+  apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.test.tsx (~225 lines)
+  apps/vscode/webview-ui/src/services/model-profile-types.ts (~30 lines)

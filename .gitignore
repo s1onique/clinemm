@@ -1260,6 +1260,26 @@ apps/vscode/.factory/evidence/
 # used by the foundation ACT entry.
 !/.factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01.md
 !/.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01/
+# ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01: product
+# implementation ACT opened 2026-09-07 on top of the closed_clean
+# PIIF01 Foundation. Bounded reopen on commit 632b37f78 fixed the
+# typed-foundation bypass (P0-2), default-profile-delete UI bug (P1),
+# and keyboard-navigation test weakness (P1). 76 GREEN tests
+# (48 backend + 28 webview) including the MP-C1 typed-foundation
+# composition witness. Evidence directory must survive `git clean`/repo
+# prune per the durable-ACT convention used by the foundation ACT entry.
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01.md
+!/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01/
+# ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01: bounded successor
+# per the sixteenth-reviewer verdict (PASS_WITH_REMAINING_P0S —
+# C1: GO TO PRODUCTION WIRING). Production UI/RPC reachability +
+# resume/new-task lifecycle composition + evidence exact-head binding.
+# Authorized production edits: chat parent integration, Settings
+# registry integration, RPC plumbing, state projection, SdkController
+# owner for ProfilesStore, cline-session-factory.ts binding the
+# active profile + global default into CoreSessionConfig.
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01.md
+!/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01/
 # ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01:
 # bounded correction after fifth-reviewer verdict
 # HALT_R0_FULL_CONNECTION_NOT_PROVEN (2026-09-05, same day, immediately

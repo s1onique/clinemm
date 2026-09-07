@@ -115,6 +115,7 @@ import { SdkMcpCoordinator } from "./sdk-mcp-coordinator"
 import { SdkMessageCoordinator, type SessionEventListener } from "./sdk-message-coordinator"
 import { SdkModeCoordinator } from "./sdk-mode-coordinator"
 import { SdkProviderChangeCoordinator } from "./sdk-provider-change-coordinator"
+import { createProductionModelProfilesOwner, type ModelProfilesOwnerDeps } from "./profile-store/owner"
 import { SdkSessionAutoApprovalCoordinator } from "./sdk-session-auto-approval-coordinator"
 import { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import { SdkSessionEventCoordinator } from "./sdk-session-event-coordinator"
@@ -792,6 +793,15 @@ export class Controller {
 	authService: AuthService
 	ocaAuthService: OcaAuthService
 	readonly stateManager: StateManager
+
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+	 * Production owner for ModelProfile state. Lazy-initialized in the
+	 * constructor (after `sessions`, `providerChanges`, `taskHistory`,
+	 * and `sessionRebuilds` are constructed). gRPC handlers read this
+	 * field; if undefined they fall back to a defensive empty result.
+	 */
+	modelProfilesOwner?: ModelProfilesOwnerDeps
 
 	// Lazy terminal manager for foreground (VS Code terminal) command execution.
 	// Created on first use; shared across all sessions in this Controller's lifetime.
@@ -1507,6 +1517,31 @@ export class Controller {
 			buildStartSessionInput,
 			postStateToWebview: () => this.postStateToWebview(),
 			rebuilds: this.sessionRebuilds,
+		})
+
+		// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+		// Initialize the ModelProfilesOwner — the SINGLE composition
+		// authority that the gRPC handlers delegate to. The owner
+		// owns the lifetime of `ProfilesStore` and wires together:
+		//   - ProfilesStore (durable definitions)
+		//   - InstancesStore (Foundation; lazily constructed below)
+		//   - SdkProviderChangeCoordinator (typed apply seam)
+		//   - SdkSessionLifecycle (idle check + reconstruction)
+		//   - SdkSessionConfigBuilder (typed projector lives here)
+		//   - SdkSessionRebuildScheduler (fast-lane update)
+		//   - StateManager.getInstanceSecret (physical secret)
+		this.modelProfilesOwner = createProductionModelProfilesOwner({
+			stateManager: this.stateManager,
+			sessions: this.sessions,
+			providerChange: this.providerChanges,
+			sessionConfigBuilder: this.sessionConfigBuilder,
+			sessionRebuilds: this.sessionRebuilds,
+			taskHistory: this.taskHistory,
+			task: () => this.task,
+			getWorkspaceRoot: () => this.getWorkspaceRoot(),
+			getMode: () => (this.stateManager.getGlobalSettingsKey("mode") === "plan" ? "plan" : "act"),
+			getCurrentTaskProviderInstanceId: () => this.getCurrentTaskProviderInstanceId(),
+			postStateToWebview: () => this.postStateToWebview(),
 		})
 		this.followups = new SdkFollowupCoordinator({
 			stateManager: this.stateManager,
@@ -2558,6 +2593,40 @@ export class Controller {
 	private getTaskModelId(): string | undefined {
 		const modelId = this.task?.api?.getModel?.().id?.trim()
 		return modelId && modelId !== "unknown" ? modelId : undefined
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+	 * Get the providerInstanceId currently driving the active task.
+	 * Resolves from the task's bound ModelProfile (preferred) or
+	 * falls back to the active session's startConfig.providerId.
+	 *
+	 * Used by the model-profile application coordinator to decide
+	 * between the same-instance fast path and full Strategy B
+	 * reconstruction.
+	 */
+	getCurrentTaskProviderInstanceId(): string | undefined {
+		if (!this.modelProfilesOwner) return undefined
+		// 1. Try the task's bound profile first.
+		const task = this.task
+		if (task?.taskId) {
+			const item = this.modelProfilesOwner.getCurrentTaskHistoryItem()
+			const profileId = item?.activeProfileId
+			if (profileId) {
+				const profile = this.modelProfilesOwner.profilesStore.read(profileId)
+				if (profile?.providerInstanceId) return profile.providerInstanceId
+			}
+		}
+		// 2. Fall back to the active session's startConfig.
+		const activeSession = this.sessions.getActiveSession()
+		const providerId = activeSession?.startConfig?.providerId
+		if (!providerId) return undefined
+		// 3. Look up an instance whose providerId matches (best-effort).
+		const instances = this.modelProfilesOwner.instancesStore.list()
+		for (const inst of Object.values(instances)) {
+			if (inst.providerId === providerId) return inst.instanceId
+		}
+		return undefined
 	}
 
 	private getSessionProviderId(sessionId?: string): string | undefined {

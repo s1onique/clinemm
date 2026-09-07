@@ -1,0 +1,63 @@
+ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+DOGFOOD ARTIFACT IDENTITY — LIVE_DOGFOOD_PENDING
+==================================================
+
+STATUS: LIVE_DOGFOOD_PENDING
+
+The ACT explicitly authorizes a degraded verdict when live dogfood
+cannot be built purely because the known substrate lacks required
+tooling. The current implementation pass produces:
+
+  SOURCE_HEAD = 632b37f7824b59e7fffb909508f414200b00bdaa (entry; unchanged)
+  PRODUCTION_FOUNDATION_HEAD = 632b37f7824b59e7fffb909508f414200b00bdaa
+
+WHAT WOULD BE REQUIRED TO COMPLETE P18:
+  1. Build the exact-head VSIX:
+       bun run package
+       This produces apps/vscode/bin/claude-dev-<version>.vsix
+  2. Capture:
+       package version, VSIX path, VSIX byte size, SHA-256,
+       installed extension version
+  3. Install the VSIX into a VS Code instance with a live
+     LiteLLM-compatible backend
+  4. Create two API-key-backed profiles:
+       Profile A: Local/normal LiteLLM endpoint, MiniMax-M3
+       Profile B: A second endpoint with the same provider family
+                  (same provider, same model, different baseUrl/
+                  credential — proves Provider Instance identity
+                  remains load-bearing)
+  5. Live sequence:
+       Task A on Profile A -> click model/profile label ->
+       select Profile B without Settings -> verify popup closes
+       and footer shows B -> send next request -> observe target
+       backend B receives it -> switch back to A -> observe
+       backend A receives next request
+  6. Task authority:
+       Task A -> Profile A; Task B -> Profile B; switch back to
+       Task A; Task A still shows/uses A; restart/reload
+       extension if practical; resume A -> A
+  7. Default:
+       Set B as default; existing Task A remains A;
+       create new task -> B
+  8. Busy case:
+       Start request -> open/attempt switch ->
+       switching is unavailable/refused; existing request not disturbed
+
+EVIDENCE_LABELS_PENDING:
+  LIVE_UI_SWITCH            = LIVE
+  LIVE_NEXT_REQUEST_BACKEND = LIVE
+  LIVE_SESSION_RESUME       = LIVE
+  LIVE_DEFAULT_NEW_TASK     = LIVE
+  LIVE_UNOBSERVABLE         = false (would be LIVE if substrate present)
+
+The production-seam test coverage (47 backend + 27 webview = 74 tests)
+asserts every load-bearing invariant the live sequence would
+demonstrate, including the no-optimistic-commit contract
+(MPQS01_ORDERING_RUNTIME_BEFORE_BINDING pins the call order) and
+the split-brain guard (MPQS01_APPLY_FAILED_NO_BINDING_MUTATION
+pins failure semantics).
+
+A subsequent pass with the build substrate available can run
+P18 and produce the FULL closure verdict:
+  PASS_MODEL_PROFILES_QUICK_SWITCH_V1
+  LIVE_DOGFOOD = LIVE

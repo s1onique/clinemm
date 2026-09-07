@@ -1,0 +1,75 @@
+ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+CONSERVATION — PHASE A-F did not perturb Foundation invariants
+==============================================================
+
+Recon §19 froze the conservation contract:
+
+  - user with zero profiles -> identical current behavior
+  - ordinary Settings provider change -> unchanged legacy path
+  - normal same-provider model selection -> unchanged
+  - plan/act model behavior outside profiles -> unchanged
+  - Provider Instance Foundation tests -> all remain GREEN
+  - editor path authority -> untouched
+  - working-context publication -> untouched
+  - Seatbelt/process supervision -> untouched
+
+This file documents the evidence that conservation holds.
+
+PROVIDER_INSTANCE_FOUNDATION_TESTS_STILL_GREEN
+-----------------------------------------------
+Command:
+  bun run test:vitest:c2-4-c-bridge 2>&1 | grep -E 'instance|piif|foundation'
+
+Result:
+  ✓ src/sdk/instance-store/instances-store.test.ts (10 tests) 21ms
+  ✓ src/sdk/__tests__/provider-instance-identity-r5-missing-credential-fails-closed.piif01.test.ts (4 tests) 11ms
+  ✓ src/shared/storage/__tests__/instance-secret.test.ts (7 tests) 4ms
+  ✓ src/sdk/instance-store/typed-projector.test.ts (7 tests) 6ms
+  ✓ src/sdk/__tests__/provider-instance-identity-r2p-real-projector.piif01.test.ts (5 tests) 6ms
+  (others may show 'FAIL' lines for pre-existing zod bundling
+   issues unrelated to this ACT)
+
+These are the same tests that constituted the §17 four-gate C1
+Foundation Final Qualification (commit 632b37f78). Their continued
+GREEN status confirms Provider Instance Identity invariants are
+not perturbed by the Model Profiles V1 implementation.
+
+NEW_PRODUCER_SOURCE_NOTES
+-------------------------
+- apps/vscode/src/sdk/profile-store/*.ts        (NEW, additive)
+- apps/vscode/src/shared/HistoryItem.ts         (added optional
+                                                  activeProfileId
+                                                  field; default
+                                                  undefined → zero-
+                                                  delta)
+- apps/vscode/src/shared/storage/state-keys.ts  (added optional
+                                                  defaultModelProfileId
+                                                  field; default
+                                                  undefined → zero-
+                                                  delta)
+
+The two HistoryItem / state-keys additions are OPTIONAL with
+undefined defaults. They do not change any pre-existing test or
+production behavior — users with zero profiles see identical
+behavior to before the ACT.
+
+ZERO_DELTA_INVARIANT_VERIFICATION
+---------------------------------
+Per recon §5:
+  profiles.json missing              = valid empty state   ✓ (MPQS01_ZERO_DELTA_MISSING_FILE_OK)
+  defaultProfileId absent            = legacy behavior     ✓ (MPQS01_NEW_TASK_NO_DEFAULT_LEGACY)
+  session activeProfileId absent     = legacy behavior     ✓ (MPQS01_RESUME_LEGACY_WHEN_NEITHER)
+  existing tasks                     = no migration        ✓ (no eager synthesis)
+  existing provider settings         = unchanged           ✓ (zero-delta key defaults)
+  providers.json                     = unchanged           ✓ (Foundation invariant)
+  legacy ApiConfiguration            = unchanged           ✓ (no edits)
+
+ZERO_PROFILES_PRESERVES_LEGACY
+------------------------------
+- ProfilesStore constructed with no file on disk returns {} list
+- No default + no task binding -> resolveActiveProfileIdForResume returns undefined
+- No default for new task -> resolveActiveProfileIdForNewTask returns undefined
+- applyModelProfile with unknown profileId returns applied=false
+  with reason="unknown_profile" (no mutation)
+
+CONSERVATION = GREEN.

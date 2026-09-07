@@ -1,0 +1,55 @@
+ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+ENTRY FREEZE
+=============
+
+git status --porcelain=v1 --untracked-files=all = CLEAN
+git rev-parse HEAD = 632b37f7824b59e7fffb909508f414200b00bdaa
+git stash list = (empty)
+git rev-parse --abbrev-ref HEAD = main
+
+ENTRY_HEAD = 632b37f7824b59e7fffb909508f414200b00bdaa
+BRANCH = main
+ORIGIN_HEAD = (unchanged from entry)
+PRODUCTION_FOUNDATION_HEAD = 632b37f7824b59e7fffb909508f414200b00bdaa
+
+PREDECESSOR = ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01
+PROVIDER_INSTANCE_FOUNDATION_CLOSURE = 632b37f7824b59e7fffb909508f414200b00bdaa (CLOSED_CLEAN)
+MODEL_PROFILES_IMPLEMENTATION = AUTHORIZED
+
+The Foundation committed in commit 632b37f78 ("hundred-and-third-pass") is the
+qualification seal: PIIF01 closed with §17 four-gate C1 final qualification,
+PROVIDER_INSTANCE_FOUNDATION = CLOSED_CLEAN, and MODEL_PROFILES_IMPLEMENTATION
+= AUTHORIZED.
+
+G1 — instances.json store = GREEN
+G2 — credential-resolution chain (instance-secret namespace, durable R4
+     reload, fail-closed namespace, real StateManager) = GREEN
+G3 — complete V1 connection tuple on second real lifecycle
+     sdkHost.start() call = GREEN
+G4 — 42-test conservation suite + typecheck = GREEN (now 46 GREEN)
+
+This ACT therefore begins on the precise authority transfer point frozen by
+the Foundation: ProviderConfigurationInstance records are durable, their
+credential storage primitive (instance: prefix in secrets.json) is durable,
+and the R5 typed projector wires them through Strategy B (full session
+reconstruction on instanceId change) plus the model-only fast path
+(updateActiveSessionModel on same instanceId).
+
+No prior Provider Instance tests are touched.
+No prior profile-shaped state exists (no ModelProfile, no profiles.json,
+no activeProfileId, no defaultProfileId). The implementation is GREENFIELD
+on top of the Foundation.
+
+The recon authority transfer (per the Foundation's PIIF01 §10 outcome):
+  INSTANCE_DEFINITION_AUTHORITY     = instances.json (Foundation)
+  ACTIVE_INSTANCE_BINDING           = caller / session owned (ModelProfiles)
+  GLOBAL_ACTIVE_INSTANCE_ID         = FORBIDDEN
+  PROFILE_CONTAINS_RAW_SECRET       = NO
+
+Model Profiles V1 owns:
+  - profiles.json (definition storage)
+  - session activeProfileId (per-task binding)
+  - defaultProfileId (global default, NOT modified by quick-switch)
+  - applyModelProfile(profileId) product coordinator
+  - footer quick-switch popover
+  - settings management surface

@@ -256,6 +256,49 @@ export default defineConfig({
 			//     setInstanceSecret(name, undefined) -> flush ->
 			//     reloaded store no longer has the key.
 			"src/sdk/__tests__/provider-instance-identity-r4-reload-read.piif01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase A
+			// (Profile domain/store): real ProfilesStore + real
+			// parseProfilesFile + real parseModelProfile. No SDK
+			// collaboration — pure local-fs tests. Lives here for
+			// consistency with the PIIF01 R3 / R4 / R5 tests, which
+			// also import `@/shared/storage/instance-secret` and
+			// cannot be reached under the base config's
+			// `@cline/core` stub alias.
+			"src/sdk/__tests__/model-profiles-store.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase B
+			// (session/default binding): pure binding-logic tests
+			// over the canonical HistoryItem.activeProfileId seam
+			// + global default key. Lives in the bridge config for
+			// the same reason as Phase A (the test transitively
+			// pulls in @/shared/storage/instance-secret through
+			// future callers; keeping it here avoids config drift).
+			"src/sdk/__tests__/model-profile-session-binding.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase C
+			// (application coordinator): drives REAL applyModelProfile
+			// + REAL ProfilesStore; collaborators (sessions,
+			// providerChange, writeTaskHistoryItem) are synthetic.
+			"src/sdk/__tests__/model-profile-application.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase D
+			// (webview summary projection): real projection +
+			// sentinel scan; synthetic readInstance.
+			"src/sdk/__tests__/model-profile-webview-summary.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / MP-C1
+			// (typed-foundation composition witness): drives the REAL
+			// applyModelProfile → REAL SdkProviderChangeCoordinator.
+			// applyTypedProviderConfigurationInstance → REAL builder
+			// with `providerConfigurationInstanceTyped` → REAL typed
+			// projector → REAL SdkSessionLifecycle.replaceActiveSession.
+			// Closes the sixteenth reviewer's halt
+			// `HALT_TYPED_INSTANCE_FOUNDATION_BYPASSED_BY_PRODUCT_APPLY`.
+			"src/sdk/__tests__/model-profile-composition.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+			// Production reachability witnesses. The RPC-seam test
+			// exercises the generated protobus handlers against a
+			// fake Controller; the lifecycle-composition test
+			// exercises the precedence-algebraic helpers that the
+			// `cline-session-factory` will consume.
+			"src/sdk/__tests__/model-profile-rpc-seam.mpw01.test.ts",
+			"src/sdk/__tests__/model-profile-lifecycle-composition.mpw01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

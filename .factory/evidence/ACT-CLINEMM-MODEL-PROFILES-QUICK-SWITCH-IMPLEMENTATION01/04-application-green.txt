@@ -1,0 +1,57 @@
+ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+PHASE C — APPLICATION COORDINATOR (GREEN)
+==========================================
+
+Production seams driven:
+  applyModelProfile          = REAL_PRODUCTION_SEAM
+  ProfileApplicationOptions  = REAL_PRODUCTION_SEAM
+  ApplyModelProfileResult    = REAL_PRODUCTION_SEAM
+  ProfilesStore              = REAL_PRODUCTION_SEAM
+
+Command:
+  bun run test:vitest:c2-4-c-bridge 2>&1 | grep model-profile-application
+
+Result:
+  ✓ src/sdk/__tests__/model-profile-application.mpqs01.test.ts (8 tests) 41ms
+
+Witnesses:
+  MPQS01_APPLY_DIFFERENT_INSTANCE_STRATEGY_B
+    Different instanceId -> applyProviderConfigurationInstance called,
+    binding persisted AFTER runtime success, usedFastPath=false
+  MPQS01_RUNNING_SESSION_REFUSED
+    isRunning=true -> applied=false with reason "session_running";
+    no binding mutation, no webview publication, no runtime calls
+  MPQS01_SAME_INSTANCE_DIFF_MODEL_FAST_PATH
+    Same instance + different model -> updateActiveSessionModel
+    (NOT Strategy B); usedFastPath=true
+  MPQS01_APPLY_FAILED_NO_BINDING_MUTATION
+    Strategy B returning applied=false -> writeTaskHistoryItem
+    and postStateToWebview are NOT called
+  MPQS01_MISSING_CREDENTIAL_REJECTED
+    Missing physical secret -> applied=false with reason
+    "missing_credential"; no runtime mutation
+  MPQS01_UNKNOWN_PROFILE_REJECTED
+    profileId not in store -> applied=false with reason
+    "unknown_profile"
+  MPQS01_ORDERING_RUNTIME_BEFORE_BINDING
+    call order: ["apply", "write", "postState"] — runtime success
+    BEFORE binding mutation, BEFORE webview publication
+  MPQS01_QUICK_SWITCH_NO_DEFAULT_MUTATION
+    applyModelProfile never invokes setGlobalState on the
+    defaultModelProfileId key
+
+Invariants verified:
+  - Strategy B reconstruction on instance change
+  - Same-instance model-only fast path
+  - Running task refuses switch (preserves current session)
+  - Failed apply does NOT mutate binding (no split-brain)
+  - Missing credential fails closed before runtime mutation
+  - Unknown profile rejected at the boundary
+  - Ordering: runtime -> binding -> webview (no inverted commits)
+  - Quick-switch does NOT mutate global default (conservation)
+
+Files created:
+  apps/vscode/src/sdk/profile-store/profile-application.ts   (~310 lines)
+  apps/vscode/src/sdk/__tests__/model-profile-application.mpqs01.test.ts (~370 lines)
+
+PHASE C = GREEN.

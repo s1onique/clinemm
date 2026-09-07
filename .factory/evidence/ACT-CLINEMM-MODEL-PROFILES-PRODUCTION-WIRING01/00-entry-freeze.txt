@@ -1,0 +1,48 @@
+ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01
+ENTRY FREEZE
+============
+
+ACT_ID               = ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01
+ENTRY_HEAD           = 632b37f7824b59e7fffb909508f414200b00bdaa
+PREDECESSOR_ACT      = ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+PREDECESSOR_HEAD     = 632b37f7824b59e7fffb909508f414200b00bdaa
+PREDECESSOR_STATE    = COMPONENT_IMPLEMENTATION = GREEN
+                       DOMAIN_IMPLEMENTATION    = GREEN
+                       PRODUCTION_REACHABILITY  = NOT YET (P0-1, this ACT)
+                       SESSION_BINDING_COMPOSITION = NOT YET (P0-3, this ACT)
+                       P0-2 TYPED_INSTANCE_FOUNDATION_BYPASS = CLOSED
+                       P0-4 UNEXPECTED_TRACKED_DIRT          = CLOSED
+                       P1 default-profile-delete             = CLOSED
+                       P1 keyboard-witness                   = CLOSED
+                       P0-5 FINAL_EVIDENCE_BOUND_TO_SUBJECT  = OPEN (closes in §D)
+
+REVIEWER_VERDICT_SCOPE =
+  PASS_WITH_REMAINING_P0S — C1: GO TO PRODUCTION WIRING
+  Sixteenth reviewer on commit 632b37f78.
+  No more review loop on profile store / typed projector / standalone
+  components unless new composed RED contradicts them. Next value comes
+  from wiring into the two real authority chains:
+    - user action → runtime apply
+    - task/default binding → session construction
+
+PRODUCTION_EDITS     = AUTHORIZED
+  - chat parent integration (footer)
+  - Settings registry integration
+  - RPC plumbing (proto regen + handlers + generated client)
+  - state projection (ExtensionState.modelProfiles)
+  - SdkController production owner for ProfilesStore
+  - SdkController exposure of InstancesStore reader
+  - StateManager.getInstanceSecret exposure
+  - cline-session-factory.ts bind active profile + default
+
+OUT_OF_SCOPE         =
+  - live VSIX dogfood (out of substrate)
+  - non-API-key auth providers (out of V1 per PIIF01 freeze)
+  - profile telemetry / usage metering
+
+EVIDENCE_DIR         = .factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01/
+PREFLIGHT_GITIGNORE  = must whitelist this evidence directory
+
+PRODUCTION_FOUNDATION_HEAD = 632b37f7824b59e7fffb909508f414200b00bdaa
+MPQS01_HEAD                = 632b37f7824b59e7fffb909508f414200b00bdaa
+PIIF01_FOUNDATION_HEAD     = 632b37f7824b59e7fffb909508f414200b00bdaa

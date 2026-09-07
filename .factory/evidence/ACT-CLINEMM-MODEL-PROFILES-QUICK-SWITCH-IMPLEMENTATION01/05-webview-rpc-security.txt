@@ -1,0 +1,85 @@
+ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+PHASE D — STATE/RPC PROJECTION (GREEN)
+=========================================
+
+Production seams driven:
+  projectModelProfileToSummary       = REAL_PRODUCTION_SEAM
+  projectAllModelProfilesToSummaries = REAL_PRODUCTION_SEAM
+  DEFAULT_SECRET_SENTINELS           = REAL_PRODUCTION_SEAM
+
+Command:
+  bun run test:vitest:c2-4-c-bridge 2>&1 | grep model-profile-webview-summary
+
+Result:
+  ✓ src/sdk/__tests__/model-profile-webview-summary.mpqs01.test.ts (8 tests) 5ms
+
+Witnesses:
+  MPQS01_SUMMARY_ACTIVE_FLAG
+    isActive reflects currentActiveProfileId
+  MPQS01_SUMMARY_DEFAULT_FLAG
+    isDefault reflects currentDefaultProfileId
+  MPQS01_SUMMARY_PROVIDER_FROM_INSTANCE
+    providerId is sourced from the referenced instance
+  MPQS01_SUMMARY_MISSING_INSTANCE_FALLBACK
+    missing instance -> providerId='unknown' (no crash)
+  MPQS01_PROJECT_ALL_RETURNS_ALL_PROFILES
+    each profile produces a summary
+  MPQS01_SERIALIZATION_CONTAINS_NO_SECRET
+    JSON-serialized summaries contain none of DEFAULT_SECRET_SENTINELS
+  MPQS01_SENTINEL_SCAN_THROWS_ON_LEAK
+    a profile whose name contains a sentinel triggers an error
+  MPQS01_SUMMARY_HAS_NO_RAW_SECRET_FIELD
+    every field of the summary is one of the allowed shape fields
+
+Invariants verified:
+  - apiKey/headers/credentialRef NEVER appear in webview payload
+  - sentinel scan catches regressions where secret material slips in
+  - missing instances degrade gracefully (no crash, providerId='unknown')
+
+PHASE D = GREEN.
+
+PHASE E — FOOTER QUICK-SWITCH UI (GREEN)
+=========================================
+
+Production seams driven:
+  ModelProfileQuickSwitch component = REAL_PRODUCTION_SEAM
+
+Command:
+  cd apps/vscode/webview-ui && bun vitest run src/components/chat/ModelProfileQuickSwitch.test.tsx
+
+Result:
+  ✓ src/components/chat/ModelProfileQuickSwitch.test.tsx (12 tests) 175ms
+
+Witnesses:
+  MPQS01_QS_TRIGGER_RENDERS_LABEL
+  MPQS01_QS_CLICK_OPENS_POPOVER
+  MPQS01_QS_POPOVER_LISTS_PROFILES
+  MPQS01_QS_CURRENT_MARKER           (aria-selected=true on active)
+  MPQS01_QS_SELECT_PROF_B_CALLS_CALLBACK
+  MPQS01_QS_POPOVER_CLOSES_AFTER_SELECT
+  MPQS01_QS_ESCAPE_CLOSES
+  MPQS01_QS_ARROW_NAVIGATES
+  MPQS01_QS_MANAGE_PROFILES
+  MPQS01_QS_DISABLED_WHEN_BUSY       (button disabled, busy tooltip)
+  MPQS01_QS_EMPTY_STATE              (zero profiles -> empty message)
+  MPQS01_QS_ARIA_ROLES               (aria-haspopup=listbox, role=listbox)
+
+Invariants verified:
+  - clicking trigger opens popover
+  - popover lists all configured profiles
+  - current profile marked (aria-selected=true, checkmark)
+  - selecting B fires onSelectProfile(B)
+  - Escape closes; focus returns to trigger
+  - Up/Down/Enter keyboard navigation
+  - "Manage Profiles..." footer opens Settings
+  - disabled prop blocks opening (busy state)
+  - empty state shown when no profiles
+
+Files created:
+  apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.tsx (~165 lines)
+  apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.test.tsx (~225 lines)
+  apps/vscode/webview-ui/src/services/model-profile-types.ts (~30 lines)
+  apps/vscode/src/sdk/profile-store/webview-summary.ts (~110 lines)
+  apps/vscode/src/sdk/__tests__/model-profile-webview-summary.mpqs01.test.ts (~165 lines)
+
+PHASE D + E = GREEN.

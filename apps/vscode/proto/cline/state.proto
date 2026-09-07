@@ -43,6 +43,49 @@ service StateService {
   // session id, and destroyed by clearTask/cancelTask. The override is a
   // projection over AutoApprove; hard DENY / execution_plan_invalid still DENY.
   rpc setSessionAutoApprovalOverride(SetSessionAutoApprovalOverrideRequest) returns (Empty);
+
+  // ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+  // Apply a ModelProfile to the current task. Drives the typed
+  // ProviderConfigurationInstance + resolved secret through the
+  // Foundation's applyTypedProviderConfigurationInstance seam.
+  // Returns ApplyModelProfileResponse with applied bool + reason.
+  rpc applyModelProfile(ApplyModelProfileRequest) returns (ApplyModelProfileResponse);
+
+  // ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+  // Snapshot read of all defined ModelProfiles plus the active + default
+  // binding identifiers. Webview consumes this from ExtensionState; the
+  // RPC exists for explicit refresh / on-demand reads.
+  rpc listModelProfiles(ListModelProfilesRequest) returns (ListModelProfilesResponse);
+
+  // ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+  // Persist a new ModelProfile from the current task's effective
+  // configuration (current provider instance + model id).
+  rpc saveCurrentAsModelProfile(SaveCurrentAsModelProfileRequest) returns (ModelProfile);
+
+  // ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+  // Set the global default profile. New tasks created with no
+  // HistoryItem.activeProfileId inherit from the default.
+  rpc setDefaultModelProfile(SetDefaultModelProfileRequest) returns (Empty);
+
+  // ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+  // Clear the global default profile. New tasks fall back to legacy
+  // resolution (current ApiConfiguration).
+  rpc clearDefaultModelProfile(EmptyRequest) returns (Empty);
+
+  // ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+  // Rename a ModelProfile. Identity (profileId) is preserved.
+  rpc renameModelProfile(RenameModelProfileRequest) returns (ModelProfile);
+
+  // ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+  // Update a ModelProfile's providerInstanceId/modelId from the current
+  // task's effective configuration. Name is preserved.
+  rpc updateModelProfileFromCurrent(UpdateModelProfileFromCurrentRequest) returns (ModelProfile);
+
+  // ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+  // Delete a ModelProfile by id. Active and default profiles cannot be
+  // deleted (returns Empty with applied=false on refusal — caller reads
+  // the DeleteModelProfileResponse).
+  rpc deleteModelProfile(DeleteModelProfileRequest) returns (DeleteModelProfileResponse);
 }
 
 message AutoApprovalActions {
@@ -570,4 +613,89 @@ message TestConnectionResult {
 // rejected by the controller (treated as "none").
 message SetSessionAutoApprovalOverrideRequest {
   string override = 1;
+}
+
+// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+//
+// ModelProfile RPC messages. All fields are intentionally minimal:
+//   - profileId         durable opaque identity
+//   - name              user-facing, mutable, rename-safe
+//   - providerInstanceId reference into the Foundation's
+//                       instances.json (NOT a connection material)
+//   - modelId           model selected when this profile is applied
+//
+// NO apiKey, NO headers, NO credential material of any kind.
+//
+// The webview consumes `ModelProfileSummary` (a derived shape with
+// the model label resolved from the catalog) via ExtensionState; the
+// RPCs return raw `ModelProfile` so the host is the sole credential
+// owner.
+message ModelProfile {
+  string profile_id = 1;
+  string name = 2;
+  string provider_instance_id = 3;
+  string model_id = 4;
+}
+
+message ApplyModelProfileRequest {
+  string profile_id = 1;
+}
+
+message ApplyModelProfileResponse {
+  bool applied = 1;
+  // Empty when applied=true; populated with the failure reason
+  // when applied=false.
+  string reason = 2;
+  // Empty when applied=true; populated with a human-readable
+  // failure message when applied=false.
+  string message = 3;
+  // Populated when applied=true so the webview can refresh.
+  string new_session_id = 4;
+  // true when the profile shares the same provider instance as the
+  // active session and the apply took the fast-path (model-only
+  // update, no full session reconstruction).
+  bool used_fast_path = 5;
+}
+
+message ListModelProfilesRequest {
+  // Empty for now; reserved for future filters.
+}
+
+message ListModelProfilesResponse {
+  repeated ModelProfile profiles = 1;
+  // The currently-active profile id for this task (from
+  // HistoryItem.activeProfileId). Empty string when no active
+  // profile is bound.
+  string active_profile_id = 2;
+  // The global default profile id. Empty string when no default is
+  // set.
+  string default_profile_id = 3;
+}
+
+message SaveCurrentAsModelProfileRequest {
+  string name = 1;
+}
+
+message SetDefaultModelProfileRequest {
+  string profile_id = 1;
+}
+
+message RenameModelProfileRequest {
+  string profile_id = 1;
+  string new_name = 2;
+}
+
+message UpdateModelProfileFromCurrentRequest {
+  string profile_id = 1;
+}
+
+message DeleteModelProfileRequest {
+  string profile_id = 1;
+}
+
+message DeleteModelProfileResponse {
+  // true on successful delete; false on refusal (active or default).
+  bool deleted = 1;
+  // Empty on successful delete; populated with refusal reason.
+  string reason = 2;
 }

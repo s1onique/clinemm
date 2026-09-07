@@ -181,6 +181,64 @@ export async function getStateToPostToWebview(controller: {
 			publishedW: currentWorkingContextEstimate,
 		})
 	}
+
+	// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+	// Project ModelProfiles + active/default binding onto
+	// ExtensionState. The webview consumes these via the
+	// `modelProfiles`, `defaultModelProfileId`, `activeModelProfileId`
+	// fields. The projection is computed ONLY when the controller
+	// owns a `modelProfilesOwner` — otherwise the webview sees
+	// `undefined` and falls back to its local defaults.
+	const modelProfilesOwner = (
+		controller as { modelProfilesOwner?: { profilesStore: unknown; instancesStore: unknown } }
+	).modelProfilesOwner
+	let modelProfilesProjection: {
+		modelProfiles: ExtensionState["modelProfiles"]
+		defaultModelProfileId: ExtensionState["defaultModelProfileId"]
+		activeModelProfileId: ExtensionState["activeModelProfileId"]
+	} = {
+		modelProfiles: [],
+		defaultModelProfileId: null,
+		activeModelProfileId: null,
+	}
+	if (
+		modelProfilesOwner &&
+		typeof (modelProfilesOwner as { profilesStore?: { list?: unknown } }).profilesStore?.list === "function"
+	) {
+		try {
+			const owner = modelProfilesOwner as unknown as Parameters<
+				typeof import("@/sdk/profile-store/owner").projectExtensionStateModelProfiles
+			>[0] extends infer T
+				? T extends { profilesStore: infer _P }
+					? NonNullable<T>
+					: never
+				: never
+			const defaultProfileId = (
+				controller.stateManager as {
+					getGlobalStateKey(key: "defaultModelProfileId"): string | undefined
+				}
+			).getGlobalStateKey("defaultModelProfileId")
+			const taskHistoryItem = (controller.task as { taskId?: string } | undefined)?.taskId
+				? (
+						owner as unknown as {
+							getCurrentTaskHistoryItem?: () => { activeProfileId?: string } | undefined
+						}
+					).getCurrentTaskHistoryItem?.()
+				: undefined
+			const projection = (
+				await import("@/sdk/profile-store/owner")
+			).projectExtensionStateModelProfiles({
+				profilesStore: (owner as { profilesStore: unknown }).profilesStore as never,
+				instancesStore: (owner as { instancesStore: unknown }).instancesStore as never,
+				defaultProfileId,
+				historyItem: taskHistoryItem as never,
+			})
+			modelProfilesProjection = projection
+		} catch {
+			// Defensive: a projection failure MUST NOT take down the
+			// entire state push. Fall back to empty projection.
+		}
+	}
 	return {
 		version,
 		extensionVariant: getExtensionVariant(),
@@ -194,6 +252,11 @@ export async function getStateToPostToWebview(controller: {
 		preferredLanguage,
 		mode,
 		useAutoCondense,
+		// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+		// Webview-facing ModelProfile projection.
+		modelProfiles: modelProfilesProjection.modelProfiles,
+		defaultModelProfileId: modelProfilesProjection.defaultModelProfileId,
+		activeModelProfileId: modelProfilesProjection.activeModelProfileId,
 		compactionStrategy,
 		userContextCeiling,
 		webSearchEnabled,

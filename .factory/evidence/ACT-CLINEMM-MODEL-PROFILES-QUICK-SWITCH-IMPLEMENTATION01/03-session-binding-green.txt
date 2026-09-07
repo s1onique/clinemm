@@ -1,0 +1,74 @@
+ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01
+PHASE B — SESSION/DEFAULT BINDING (GREEN)
+==========================================
+
+Production seams driven:
+  writeActiveProfileIdToHistoryItem  = REAL_PRODUCTION_SEAM
+  readActiveProfileIdFromHistoryItem = REAL_PRODUCTION_SEAM
+  resolveActiveProfileIdForResume    = REAL_PRODUCTION_SEAM
+  resolveActiveProfileIdForNewTask   = REAL_PRODUCTION_SEAM
+  readDefaultModelProfileId          = REAL_PRODUCTION_SEAM
+  writeDefaultModelProfileId         = REAL_PRODUCTION_SEAM
+  isKnownProfileId                   = REAL_PRODUCTION_SEAM
+
+Command:
+  bun run test:vitest:c2-4-c-bridge 2>&1 | grep model-profile-session-binding
+
+Result:
+  ✓ src/sdk/__tests__/model-profile-session-binding.mpqs01.test.ts (20 tests) 7ms
+
+Witnesses:
+  MPQS01_BIND_WRITE_READ_ROUNDTRIP
+    write then read returns the same id
+  MPQS01_BIND_WRITE_DOES_NOT_MUTATE_ORIGINAL
+    write returns a fresh object (caller cannot mutate by ref)
+  MPQS01_BIND_CLEAR_REMOVES_FIELD
+    passing undefined deletes the key (does not leave field=false)
+  MPQS01_BIND_EMPTY_STRING_REJECTED
+    empty string throws
+  MPQS01_DEFAULT_WRITE_READ_ROUNDTRIP
+    global default round-trip
+  MPQS01_DEFAULT_CLEAR_REMOVES
+    clear removes the value
+  MPQS01_DEFAULT_QUICK_SWITCH_DOES_NOT_MUTATE
+    per-task write does not touch global default key
+  MPQS01_RESUME_TASK_BINDING_WINS
+    task binding beats default on resume
+  MPQS01_RESUME_DEFAULT_WHEN_TASK_MISSING
+    default used when task binding missing
+  MPQS01_RESUME_LEGACY_WHEN_NEITHER
+    undefined when neither present -> legacy
+  MPQS01_RESUME_DELETED_TASK_PROFILE_FALLS_BACK_TO_DEFAULT
+    deleted profile in task -> default
+  MPQS01_RESUME_DELETED_BOTH_FALLS_BACK_TO_LEGACY
+    deleted both -> legacy
+  MPQS01_RESUME_TASK_A_B_INDEPENDENCE
+    task A and task B retain independent profile identities
+  MPQS01_NEW_TASK_USES_DEFAULT
+    new task uses explicit default
+  MPQS01_NEW_TASK_NO_DEFAULT_LEGACY
+    new task without default -> legacy
+  MPQS01_NEW_TASK_DELETED_DEFAULT_LEGACY
+    deleted default -> legacy
+  MPQS01_KNOWN_TRUE/FALSE/UNDEFINED/EMPTY
+    isKnownProfileId discriminates correctly
+
+Invariants verified:
+  - activeProfileId is per-task (A=A, B=B, independent)
+  - defaultModelProfileId is global (NOT mutated by quick-switch)
+  - resume restores task's own profile (even if default differs)
+  - deleted profile falls back to default/legacy (no crash)
+  - empty-string bindings are rejected at the boundary
+  - HistoryItem mutations are shallow clones (no aliasing)
+
+Files created:
+  apps/vscode/src/sdk/profile-store/session-binding.ts   (~140 lines)
+  apps/vscode/src/sdk/__tests__/model-profile-session-binding.mpqs01.test.ts (~245 lines)
+
+Files modified:
+  apps/vscode/src/shared/HistoryItem.ts                  (added optional activeProfileId)
+  apps/vscode/src/shared/storage/state-keys.ts           (added defaultModelProfileId)
+  apps/vscode/vitest.config.ts                           (excluded new test)
+  apps/vscode/vitest.config.c2-4-c-bridge.ts             (included new test)
+
+PHASE B = GREEN.

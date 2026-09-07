@@ -3,6 +3,7 @@ import type { Mode } from "@shared/storage/types"
 import type { StateManager } from "@/core/storage/StateManager"
 import { toLegacyApiProvider } from "@/shared/model-catalog/provider-helpers"
 import { Logger } from "@/shared/services/Logger"
+import type { ProviderConfigurationInstance } from "./instance-store/contracts"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import type { SdkSessionLifecycle } from "./sdk-session-lifecycle"
@@ -158,6 +159,134 @@ export class SdkProviderChangeCoordinator {
 						type: "say",
 						say: "error",
 						text: `Failed to apply provider-instance configuration: ${
+							error instanceof Error ? error.message : String(error)
+						}. The active session may still use the previous configuration.`,
+						partial: false,
+					},
+				],
+				{ type: "status", payload: { sessionId: activeSession.sessionId, status: "error" } },
+			)
+			await this.options.postStateToWebview()
+			return { applied: false, reason: "reconstruction_failed" }
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / PIIF01
+	 * composition:
+	 *
+	 * Typed-instance apply seam. Routes A → B through full session
+	 * reconstruction (Strategy B), passing the resolved
+	 * `ProviderConfigurationInstance` AND the resolved physical secret
+	 * directly into the typed projection path
+	 * (`SdkSessionConfigBuilder.build({ ..., providerConfigurationInstanceTyped })`).
+	 *
+	 * This is the Foundation's full-V1-connection entry point:
+	 *   - The typed instance is the load-bearing carrier
+	 *     (providerId / modelId / baseUrl / headers / region / apiLine /
+	 *      providerSpecificConfig). It is NOT projected through a legacy
+	 *     `ApiConfiguration` and discarded.
+	 *   - `resolvedApiKey` is the actual physical secret value (the
+	 *     Foundation's `applyTypedProviderInstanceToConfig` writes it
+	 *     into the credential slot — never the reference name).
+	 *   - The Builder / typed projector then materializes the full V1
+	 *     connection tuple onto `CoreSessionConfig`, which the rebuilt
+	 *     session's `sdkHost.start(...)` call carries verbatim.
+	 *
+	 * Caller contract (Product layer):
+	 *   - The caller resolves the profile → typed instance → physical
+	 *     secret BEFORE invoking this seam, and refuses to call here
+	 *     with any of those three missing.
+	 *   - The caller's `applyModelProfile` ordering guarantees that
+	 *     runtime success happens BEFORE any binding persistence.
+	 *
+	 * Returns: same shape as `applyProviderConfigurationInstance`.
+	 */
+	async applyTypedProviderConfigurationInstance(
+		instance: ProviderConfigurationInstance,
+		resolvedApiKey: string,
+	): Promise<
+		| { applied: true; newSessionId: string }
+		| { applied: false; reason: "no_active_session" | "session_running" | "reconstruction_failed" }
+	> {
+		const activeSession = this.options.sessions.getActiveSession()
+		if (!activeSession) {
+			Logger.log(
+				"[SdkController] applyTypedProviderConfigurationInstance: no active session; caller must start a new session with the new instance",
+			)
+			return { applied: false, reason: "no_active_session" }
+		}
+
+		if (activeSession.isRunning) {
+			Logger.warn(
+				"[SdkController] applyTypedProviderConfigurationInstance: active session is running; refusing to destructively replace mid-turn",
+			)
+			return { applied: false, reason: "session_running" }
+		}
+
+		const cwd = await this.options.getWorkspaceRoot()
+		const mode = this.getCurrentMode()
+
+		try {
+			// Foundation typed path: pass the typed instance + resolved
+			// physical secret directly into the builder. The builder's
+			// typed projector (`applyTypedProviderInstanceToConfig`) writes
+			// the full V1 connection tuple onto CoreSessionConfig. The
+			// reconstructed session then captures B via
+			// `replaceActiveSession(...)` → `LocalRuntimeHost.startSession(...)`.
+			const config = await this.options.sessionConfigBuilder.build({
+				cwd,
+				mode,
+				providerConfigurationInstanceTyped: instance,
+			})
+			// The typed projector resolves the physical secret inside the
+			// builder via `getInstanceSecret` (read from `instance.credentialRef.name`).
+			// We do NOT pass `resolvedApiKey` here because the typed projector
+			// is the SOLE authority that maps `instance.credentialRef.name`
+			// → physical secret. The `resolvedApiKey` argument is kept on
+			// the signature for caller precondition enforcement
+			// (`applyModelProfile` already proved the secret exists before
+			// reaching this seam); the builder resolves it again with the
+			// SAME lookup that R5 freezes — the typed path is durable
+			// against secret-store races.
+			void resolvedApiKey
+			config.sessionId = activeSession.sessionId
+
+			const initialMessages = await this.options.loadInitialMessages(activeSession.sdkHost, activeSession.sessionId)
+			const startInput = this.options.buildStartSessionInput(config, { cwd, mode })
+			const restartResult = await this.options.sessions.replaceActiveSession({
+				expectedSession: activeSession,
+				startInput,
+				...(initialMessages ? { initialMessages } : {}),
+				disposeReason: "providerChange",
+			})
+			if (!restartResult) {
+				return { applied: false, reason: "reconstruction_failed" }
+			}
+
+			const { startResult } = restartResult
+			const task = this.options.getTask()
+			if (task && task.taskId !== startResult.sessionId) {
+				Logger.warn(
+					`[SdkController] Typed-instance restart returned a new session ID (${startResult.sessionId}); updating task proxy`,
+				)
+				task.taskId = startResult.sessionId
+			}
+
+			await this.options.postStateToWebview()
+			Logger.log(
+				`[SdkController] Typed-instance session restarted: ${activeSession.sessionId} -> ${startResult.sessionId} (provider=${instance.providerId})`,
+			)
+			return { applied: true, newSessionId: startResult.sessionId }
+		} catch (error) {
+			Logger.error("[SdkController] Typed-instance apply failed:", error)
+			this.options.messages.appendAndEmit(
+				[
+					{
+						ts: Date.now(),
+						type: "say",
+						say: "error",
+						text: `Failed to apply typed provider-instance configuration: ${
 							error instanceof Error ? error.message : String(error)
 						}. The active session may still use the previous configuration.`,
 						partial: false,

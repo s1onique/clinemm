@@ -9,6 +9,23 @@ import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import { ApiConfiguration } from "./api"
 
 /**
+ * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+ * Webview-safe summary shape for a ModelProfile. Defined here (in
+ * the shared module that both host and webview import) so the wire
+ * contract has a single source of truth. Mirrors the canonical
+ * `ModelProfileSummary` produced by
+ * `apps/vscode/src/sdk/profile-store/webview-summary.ts`.
+ */
+export interface ModelProfileSummary {
+	profileId: string
+	name: string
+	providerId: string
+	modelId: string
+	isActive: boolean
+	isDefault: boolean
+}
+
+/**
  * ACT-CLINEMM-SESSION-AUTONOMY01:
  * Runtime mirror of the host-owned session auto-approval override.
  * The webview MUST NOT use this as the security authority — it is a
@@ -149,6 +166,50 @@ export interface ExtensionState {
 		readonly p: boolean
 		readonly d: boolean
 	}
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+	 *
+	 * The webview-facing projection of defined ModelProfiles, computed
+	 * host-side by `SdkController.modelProfilesOwner`. The shape is
+	 * the canonical `ModelProfileSummary` (no secret material — see
+	 * `apps/vscode/src/sdk/profile-store/webview-summary.ts`).
+	 *
+	 * Webview consumers:
+	 *   - `ModelProfileQuickSwitch` (chat footer) — list + selection
+	 *   - `ModelProfilesSection` (Settings) — list + CRUD
+	 *
+	 * Source authority: `projectModelProfilesForWebview` in
+	 * `apps/vscode/src/sdk/profile-store/owner.ts`. The webview MUST
+	 * NOT recompute `isActive`/`isDefault` — these flags are baked in
+	 * by the host projection.
+	 *
+	 * Empty array is a valid state (no profiles defined yet — legacy
+	 * behavior preserved).
+	 */
+	modelProfiles?: ModelProfileSummary[]
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+	 *
+	 * The globally-bound default ModelProfile id. New tasks created
+	 * without an `activeProfileId` HistoryItem binding inherit this
+	 * profile.
+	 *
+	 * `null` (NOT undefined) is the explicit "no default set" state.
+	 * The Settings UI uses this to render the "Set as default" toggle
+	 * correctly.
+	 */
+	defaultModelProfileId?: string | null
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+	 *
+	 * The currently-active ModelProfile id for the current task,
+	 * sourced from `HistoryItem.activeProfileId`. `null` when no
+	 * profile is bound.
+	 *
+	 * The chat footer quick-switch uses this to render the
+	 * "current profile" affordance.
+	 */
+	activeModelProfileId?: string | null
 	/**
 	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E7.1-WEBVIEW-SHADOW-PROJECTION-CUTOVER01:
 	 *

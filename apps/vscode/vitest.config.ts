@@ -202,6 +202,35 @@ export default defineConfig({
 			// Bridge-only for consistency with the prior R4-D
 			// durable suite.
 			"src/sdk/__tests__/provider-instance-identity-r4-reload-read.piif01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase A
+			// (Profile domain/store): pure local-fs tests for the
+			// ProfilesStore + parseProfilesFile. Lives in the
+			// bridge config (see vitest.config.c2-4-c-bridge.ts)
+			// because the test imports the Foundation's
+			// `@/shared/storage/instance-secret` module which
+			// transitively resolves through the same alias chain
+			// the PIIF01 R3 / R4 / R5 tests need.
+			"src/sdk/__tests__/model-profiles-store.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase B
+			// (session/default binding). Bridge-only for the same
+			// alias-chain reason as Phase A.
+			"src/sdk/__tests__/model-profile-session-binding.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase C
+			// (application coordinator). Bridge-only.
+			"src/sdk/__tests__/model-profile-application.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase D
+			// (webview summary). Bridge-only.
+			"src/sdk/__tests__/model-profile-webview-summary.mpqs01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / MP-C1
+			// (typed-foundation composition witness). Drives the REAL
+			// applyModelProfile → REAL SdkProviderChangeCoordinator.
+			// applyTypedProviderConfigurationInstance → REAL builder
+			// with `providerConfigurationInstanceTyped` → REAL typed
+			// projector → REAL SdkSessionLifecycle.replaceActiveSession.
+			// Bridge-only: the chain pulls in `StateManager` which
+			// transitively requires the `@cline/core` real bundle
+			// aliasing not available under the base config.
+			"src/sdk/__tests__/model-profile-composition.mpqs01.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

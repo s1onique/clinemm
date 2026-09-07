@@ -72,6 +72,13 @@ const GLOBAL_STATE_FIELDS = {
 	taskHistory: { default: [] as HistoryItem[], isAsync: true },
 	userInfo: { default: undefined as UserInfo | undefined },
 	favoritedModelIds: { default: [] as string[] },
+	// ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01:
+	// global default profile id. Mutated ONLY by the explicit
+	// "Set as default" / "Clear default" actions; quick-switch
+	// does NOT touch this key. Read/write via
+	// apps/vscode/src/sdk/profile-store/session-binding.ts
+	// (the canonical reader/writer pair).
+	defaultModelProfileId: { default: undefined as string | undefined },
 	mcpMarketplaceEnabled: { default: true as boolean },
 	mcpResponsesCollapsed: { default: false as boolean },
 	terminalReuseEnabled: { default: true as boolean },
