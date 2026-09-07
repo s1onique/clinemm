@@ -44,7 +44,7 @@ import {
 } from "@/utils/slash-commands"
 import ClineRulesToggleModal from "../cline-rules/ClineRulesToggleModal"
 import { getModeToggleDraftAction } from "./chat-textarea-mode-toggle"
-import ModelProfileQuickSwitchContainer from "./ModelProfileQuickSwitchContainer"
+import { useModelProfileQuickSwitchHost } from "./ModelProfileQuickSwitchContainer"
 import ServersToggleModal from "./ServersToggleModal"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
@@ -1122,9 +1122,23 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			updateHighlights()
 		}, [inputValue, handleInputChange, updateHighlights])
 
-		const handleModelButtonClick = () => {
-			navigateToSettingsModelPicker({ targetSection: "api-config" })
-		}
+		// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+		// (C5 EXISTING_MODEL_LABEL_TRIGGER):
+		// Bind the existing `<ModelDisplayButton>` (the current-model
+		// label under the chat box) as the profile-picker trigger.
+		// The `modelDisplayName` is used as the visible label, but
+		// the triggerProps from the hook supply the aria-* / onClick
+		// / data-testid bindings. The popover is rendered as a
+		// sibling inside `ModelContainer` so the outside-click
+		// detector can find it. NO second / neighboring trigger is
+		// added — the existing model button becomes the picker.
+		const profileSwitchHost = useModelProfileQuickSwitchHost(
+			modelDisplayName,
+			undefined,
+			() => navigateToSettingsModelPicker({ targetSection: "api-config" }),
+		)
+		const profileSwitchTriggerProps = profileSwitchHost.state.triggerProps
+		const profileSwitchPopover = profileSwitchHost.state.popover
 
 		// Get model display name
 		const modelDisplayName = useMemo(() => {
@@ -1639,28 +1653,34 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 							<ClineRulesToggleModal />
 
-							{/*
-							 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
-							 * (C1 CHAT_PARENT_REACHABILITY):
-							 * Mount the ModelProfileQuickSwitchContainer in the
-							 * real chat parent footer so users can switch
-							 * profiles directly from the chat composer without
-							 * navigating to Settings. The container is a
-							 * drop-in composition that wires the StateServiceClient
-							 * RPC + the canonical ModelProfileQuickSwitch UI.
-							 */}
-							<ModelProfileQuickSwitchContainer />
-
 							<ModelContainer>
 								<ModelButtonWrapper>
+									{/*
+									 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+									 * (C5 EXISTING_MODEL_LABEL_TRIGGER):
+									 * The existing `<ModelDisplayButton>` IS the
+									 * profile-picker trigger. Clicking it opens
+									 * the popover (not Settings). The
+									 * `triggerProps` from
+									 * `useModelProfileQuickSwitchHost` supply
+									 * onClick + aria-* + data-testid, replacing
+									 * the previous `handleModelButtonClick` that
+									 * routed to Settings.
+									 */}
 									<ModelDisplayButton
-										disabled={false}
-										onClick={handleModelButtonClick}
+										{...profileSwitchTriggerProps}
+										onClick={(e) => {
+											profileSwitchTriggerProps.onClick()
+											e.preventDefault()
+										}}
 										role="button"
 										tabIndex={0}
-										title="Open API Settings">
+										title={profileSwitchTriggerProps.title}>
 										<ModelButtonContent className="text-xs">{modelDisplayName}</ModelButtonContent>
 									</ModelDisplayButton>
+									{/* Popover is a sibling inside ModelContainer so
+									    the outside-click detector can find it. */}
+									{profileSwitchPopover}
 								</ModelButtonWrapper>
 							</ModelContainer>
 						</ButtonGroup>

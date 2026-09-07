@@ -5,6 +5,14 @@
  *
  * RED: the captured input does NOT have `providerConfigurationInstanceTyped`.
  * GREEN: it does.
+ *
+ * CORRECTION02 honesty note: this test exercises the REAL
+ * `SdkTaskStartCoordinator.initTask` against a TEST DOUBLE for
+ * `sessionConfigBuilder`. It proves the typed instance is
+ * threaded through the seam — but the typed projector +
+ * `SdkSessionConfigBuilder` themselves are NOT exercised. A
+ * future bounded correction should add a composed real-builder
+ * assertion if stronger evidence is needed.
  */
 
 import { describe, expect, it } from "vitest"
@@ -15,7 +23,7 @@ import { SdkTaskStartCoordinator } from "@/sdk/sdk-task-start-coordinator"
 import type { SessionConfigInput } from "@/sdk/cline-session-factory"
 import { TaskOperationFence } from "@/sdk/task-operation-fence"
 import type { HistoryItem } from "@shared/HistoryItem"
-import { resolveActiveInstanceTyped } from "@/sdk/profile-store/owner"
+import { resolveActiveInstanceTypedDiscriminated } from "@/sdk/profile-store/owner"
 import { ProfilesStore } from "@/sdk/profile-store/profiles-store"
 import { InstancesStore } from "@/sdk/instance-store/instances-store"
 
@@ -51,12 +59,14 @@ function makeCoordinator(opts: {
 	profilesStore: ProfilesStore
 	instancesStore: InstancesStore
 	defaultProfileId: string | undefined
-	captured: { input?: SessionConfigInput }
+	captured: { input?: SessionConfigInput; buildCalled: boolean }
+	authError?: { message: string } | undefined
 }): SdkTaskStartCoordinator {
-	const { profilesStore, instancesStore, defaultProfileId, captured } = opts
+	const { profilesStore, instancesStore, defaultProfileId, captured, authError } = opts
 	const sessionConfigBuilder = {
 		build: async (input: SessionConfigInput) => {
 			captured.input = input
+			captured.buildCalled = true
 			return {
 				providerId: input.providerConfigurationInstanceTyped?.providerId ?? "fallback",
 				modelId: input.providerConfigurationInstanceTyped?.connection?.modelId ?? "fallback",
@@ -93,11 +103,21 @@ function makeCoordinator(opts: {
 		loadInitialMessages: async () => undefined,
 		resolveContextMentions: async (t: string) => t,
 		isClineManagedProviderActive: () => false,
-		emitClineAuthError: () => {},
+		emitClineAuthError: (msg?: string) => {
+			if (authError) {
+				authError.message = msg ?? ""
+			}
+		},
 		postStateToWebview: async () => {},
 		setTurnPhase: () => {},
 		resolveProviderInstanceTyped: ({ historyItem, isResume }) => {
-			return resolveActiveInstanceTyped(profilesStore, instancesStore, defaultProfileId, historyItem, isResume)
+			return resolveActiveInstanceTypedDiscriminated(
+				profilesStore,
+				instancesStore,
+				defaultProfileId,
+				historyItem,
+				isResume,
+			)
 		},
 	})
 }
@@ -121,7 +141,7 @@ describe("MPWC01_C4_FACTORY_RESUME_EFFECTIVE_CONNECTION", () => {
 			activeProfileId: "prof-B",
 		} as unknown as HistoryItem
 
-		const captured: { input?: SessionConfigInput } = {}
+		const captured: { input?: SessionConfigInput; buildCalled: boolean } = { buildCalled: false }
 		const coordinator = makeCoordinator({
 			profilesStore,
 			instancesStore,
@@ -139,6 +159,7 @@ describe("MPWC01_C4_FACTORY_RESUME_EFFECTIVE_CONNECTION", () => {
 
 		// Always assert: if build was reached, the typed instance
 		// must have been threaded through.
+		expect(captured.buildCalled).toBe(true)
 		expect(captured.input).toBeDefined()
 		expect(captured.input?.providerConfigurationInstanceTyped?.instanceId).toBe("inst-B")
 	})
@@ -151,17 +172,20 @@ describe("MPWC01_C4_FACTORY_RESUME_EFFECTIVE_CONNECTION", () => {
 		profilesStore.upsert({ profileId: "prof-B", name: "B", providerInstanceId: "inst-B", modelId: "model-B" })
 		const instancesStore = makeInstancesStore([instA, instB])
 
-		const resolvedTyped = resolveActiveInstanceTyped(profilesStore, instancesStore, "prof-A", undefined, false)
-		expect(resolvedTyped?.instanceId).toBe("inst-A")
+		const result = resolveActiveInstanceTypedDiscriminated(profilesStore, instancesStore, "prof-A", undefined, false)
+		expect(result.kind).toBe("RESOLVED")
+		if (result.kind === "RESOLVED") {
+			expect(result.instance.instanceId).toBe("inst-A")
+		}
 	})
 
-	it("no bound profile + no default returns undefined", () => {
+	it("no bound profile + no default returns NONE_BOUND", () => {
 		const instA = makeInst("inst-A", "model-A")
 		const profilesStore = makeProfilesStore()
 		profilesStore.upsert({ profileId: "prof-A", name: "A", providerInstanceId: "inst-A", modelId: "model-A" })
 		const instancesStore = makeInstancesStore([instA])
 
-		const resolvedTyped = resolveActiveInstanceTyped(profilesStore, instancesStore, undefined, undefined, true)
-		expect(resolvedTyped).toBeUndefined()
+		const result = resolveActiveInstanceTypedDiscriminated(profilesStore, instancesStore, undefined, undefined, true)
+		expect(result.kind).toBe("NONE_BOUND")
 	})
 })

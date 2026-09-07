@@ -7,6 +7,16 @@
  * presentational `ModelProfileQuickSwitch` into a production
  * reachable affordance.
  *
+ * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+ * (C5 EXISTING_MODEL_LABEL_TRIGGER):
+ *
+ * The container now exposes `useModelProfileQuickSwitchHost()`
+ * so that `ChatTextArea` can bind the existing
+ * `<ModelDisplayButton>` as the trigger (the previous
+ * implementation rendered a SIBLING trigger, which left the
+ * existing model button functioning as a Settings-routing
+ * shortcut — the wrong seam for a profile picker).
+ *
  * Wiring:
  *   - profile list:     `useExtensionState().modelProfiles ?? []`
  *   - active profile:   `useExtensionState().activeModelProfileId`
@@ -21,7 +31,7 @@
  */
 
 import { useCallback, useMemo } from "react"
-import { ModelProfileQuickSwitch } from "./ModelProfileQuickSwitch"
+import { useModelProfileQuickSwitch, type ModelProfileQuickSwitchState } from "./ModelProfileQuickSwitch"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import { ApplyModelProfileRequest } from "@shared/proto/cline/state"
@@ -48,8 +58,20 @@ function buildCurrentLabel(
 	return `${active.name} (${active.modelId})`
 }
 
-export function ModelProfileQuickSwitchContainer(props: ModelProfileQuickSwitchContainerProps) {
-	const { disabled, currentLabel, onOpenManageProfiles } = props
+/**
+ * Hook consumed by `ChatTextArea` (and other surfaces that want
+ * to bind the popover to an EXISTING trigger element).
+ * Returns the spreadable `triggerProps` + the popover node,
+ * plus the current label.
+ */
+export function useModelProfileQuickSwitchHost(
+	currentLabel: string,
+	disabled?: boolean,
+	onOpenManageProfiles?: () => void,
+): {
+	label: string
+	state: ModelProfileQuickSwitchState
+} {
 	const { modelProfiles, activeModelProfileId } = useExtensionState()
 
 	const profiles = useMemo<ModelProfileSummary[]>(() => modelProfiles ?? [], [modelProfiles])
@@ -68,34 +90,42 @@ export function ModelProfileQuickSwitchContainer(props: ModelProfileQuickSwitchC
 	}, [])
 
 	const handleOpenManageProfiles = useCallback(() => {
-		// Production wiring note: the parent should provide a router
-		// seam here. The webview does not own the routing state;
-		// the host (SdkController) is responsible for navigating
-		// the user to the Settings > Model Profiles view.
 		if (onOpenManageProfiles) {
 			onOpenManageProfiles()
 			return
 		}
-		// Defensive: if the parent did not wire a router, fall
-		// back to the Settings tab navigation RPC.
 		try {
-			// Tab navigation is intentionally left as a future
-			// enhancement. For now, the Settings UI is reached
-			// via the Settings button in the activity bar.
 			console.warn("[ModelProfileQuickSwitchContainer] onOpenManageProfiles not wired")
 		} catch (error) {
 			console.error("[ModelProfileQuickSwitchContainer] openManageProfiles failed:", error)
 		}
 	}, [onOpenManageProfiles])
 
+	const state = useModelProfileQuickSwitch({
+		profiles,
+		currentLabel: label,
+		disabled,
+		onSelectProfile: handleSelectProfile,
+		onOpenManageProfiles: handleOpenManageProfiles,
+	})
+
+	return { label, state }
+}
+
+/**
+ * Self-contained container rendering its own trigger. Retained
+ * for back-compat surfaces that don't have an existing trigger
+ * element (e.g. Settings preview). ChatTextArea now uses
+ * `useModelProfileQuickSwitchHost` instead.
+ */
+export function ModelProfileQuickSwitchContainer(props: ModelProfileQuickSwitchContainerProps) {
+	const { disabled, currentLabel, onOpenManageProfiles } = props
+	const { label, state } = useModelProfileQuickSwitchHost(currentLabel, disabled, onOpenManageProfiles)
 	return (
-		<ModelProfileQuickSwitch
-			profiles={profiles}
-			currentLabel={label}
-			disabled={disabled}
-			onSelectProfile={handleSelectProfile}
-			onOpenManageProfiles={handleOpenManageProfiles}
-		/>
+		<div className="relative inline-block">
+			<button {...state.triggerProps}>{label}</button>
+			{state.popover}
+		</div>
 	)
 }
 

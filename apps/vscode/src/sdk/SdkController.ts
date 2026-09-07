@@ -1664,13 +1664,21 @@ export class Controller {
 			// routes through the typed projector — the legacy
 			// StateManager.getApiConfiguration() path is BYPASSED.
 			resolveProviderInstanceTyped: ({ historyItem, isResume }) => {
-				if (!this.modelProfilesOwner) return undefined
+				// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+				// (C6 BOUND_PROFILE_MISSING_INSTANCE_FAIL_CLOSED):
+				// When no owner is wired, treat as NONE_BOUND (legacy
+				// fallback to ApiConfiguration is correct). The factory
+				// handles the NONE_BOUND case via the
+				// `resolveProviderInstanceTyped` discriminated result.
+				if (!this.modelProfilesOwner) return { kind: "NONE_BOUND" } as const
 				const defaultProfileId = this.modelProfilesOwner.getDefaultProfileId?.()
-				return this.modelProfilesOwner.resolveActiveInstanceTyped?.({
-					historyItem,
-					isResume,
-					defaultProfileId,
-				})
+				return (
+					this.modelProfilesOwner.resolveActiveInstanceTyped?.({
+						historyItem,
+						isResume,
+						defaultProfileId,
+					}) ?? ({ kind: "NONE_BOUND" } as const)
+				)
 			},
 			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: share the same
 			// task-operation fence with SdkTaskControlCoordinator and

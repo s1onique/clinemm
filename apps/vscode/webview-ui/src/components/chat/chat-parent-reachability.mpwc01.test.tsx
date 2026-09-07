@@ -4,19 +4,23 @@
  * C1: CHAT_PARENT_REACHABILITY (RED witness)
  *
  * The real chat parent (`ChatTextArea.tsx`'s `ModelContainer`) MUST
- * render `<ModelProfileQuickSwitchContainer>` so the user can click
- * the footer to switch profiles without navigating to Settings.
+ * wire the profile picker. Originally the test asserted a sibling
+ * `<ModelProfileQuickSwitchContainer />` mount — but per the
+ * sixteenth reviewer's CORRECTION02 verdict
+ * (`HALT_MODEL_PROFILE_TRIGGER_SEAM_WRONG`), that was the wrong
+ * seam: clicking the existing current-model label still routed to
+ * Settings, and the picker lived NEXT TO the existing model
+ * button instead of replacing it.
  *
- * Discriminator: assert the chat parent SOURCE contains an
- * unconditional import + render of the container. This is a static
- * source check, not a behavior test, because the existing
- * `ChatTextArea.test.tsx` integration suite already exercises the
- * surrounding footer row behavior. The point is that the container
- * is actually mounted in the parent — not just present as an
- * orphaned module.
+ * CORRECTION02 fixes this by binding the popover to the EXISTING
+ * `<ModelDisplayButton>` via `useModelProfileQuickSwitchHost`.
+ * The picker is reachable by clicking the visible model label.
  *
- * RED: the source contains no `<ModelProfileQuickSwitchContainer>`
- * JSX. GREEN: the source contains the JSX.
+ * This file is retained as the reachability contract: the chat
+ * parent source MUST contain the picker wiring. The CORRECTION02
+ * behavioral witness lives in
+ * `chat-existing-model-label-trigger.mpwc02.test.tsx` and proves
+ * the click → popover behavior end-to-end.
  */
 
 import { readFileSync } from "node:fs"
@@ -27,14 +31,19 @@ import { describe, expect, it } from "vitest"
 // → webview-ui/src/components/chat/ChatTextArea.tsx
 const CHAT_TEXT_AREA_PATH = join(__dirname, "ChatTextArea.tsx")
 
-describe("MPWC01_C1_CHAT_PARENT_REACHABILITY", () => {
-	it("imports ModelProfileQuickSwitchContainer in ChatTextArea.tsx", () => {
+describe("MPWC01_C1_CHAT_PARENT_REACHABILITY (superseded-by-correction02)", () => {
+	it("ChatTextArea.tsx imports useModelProfileQuickSwitchHost from the picker container", () => {
 		const source = readFileSync(CHAT_TEXT_AREA_PATH, "utf8")
-		expect(source).toMatch(/from\s+["'].*ModelProfileQuickSwitchContainer["']/)
+		expect(source).toMatch(/useModelProfileQuickSwitchHost/)
 	})
 
-	it("renders <ModelProfileQuickSwitchContainer> JSX in ChatTextArea.tsx", () => {
+	it("ChatTextArea.tsx spreads triggerProps onto the existing ModelDisplayButton (the picker trigger IS the model label)", () => {
 		const source = readFileSync(CHAT_TEXT_AREA_PATH, "utf8")
-		expect(source).toMatch(/<ModelProfileQuickSwitchContainer[\s>]/)
+		expect(source).toMatch(/ModelDisplayButton[\s\S]*?\{\.\.\.profileSwitchTriggerProps\}/)
+	})
+
+	it("ChatTextArea.tsx renders the popover inside ModelContainer (sibling of the trigger, same DOM subtree)", () => {
+		const source = readFileSync(CHAT_TEXT_AREA_PATH, "utf8")
+		expect(source).toMatch(/profileSwitchPopover/)
 	})
 })

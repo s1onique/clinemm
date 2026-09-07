@@ -83,21 +83,24 @@ export interface ModelProfilesOwnerDeps {
 	 */
 	getDefaultProfileId?: () => string | undefined
 	/**
-	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
-	 * (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+	 * (C6 BOUND_PROFILE_MISSING_INSTANCE_FAIL_CLOSED):
 	 *
 	 * Resolve the typed `ProviderConfigurationInstance` for a new
 	 * task or resume session. Wired by SdkController to the
 	 * precedence-algebraic helper + profile → instance translation
 	 * so `SdkTaskStartCoordinator.initTask` and
 	 * `reinitExistingTaskFromId` thread the typed instance through
-	 * the builder.
+	 * the builder. Returns the discriminated
+	 * `ResolveActiveInstanceResult` — the factory MUST distinguish
+	 * NONE_BOUND (legacy fallback OK) from BOUND_BUT_BROKEN (fail
+	 * closed with explicit error).
 	 */
 	resolveActiveInstanceTyped?: (input: {
 		historyItem?: HistoryItem
 		isResume: boolean
 		defaultProfileId: string | undefined
-	}) => ProviderConfigurationInstance | undefined
+	}) => ResolveActiveInstanceResult
 }
 
 /**
@@ -182,6 +185,94 @@ export function resolveActiveProfileForNewTask(
 }
 
 /**
+ * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+ * (C6 BOUND_PROFILE_MISSING_INSTANCE_FAIL_CLOSED):
+ *
+ * Discriminated result of resolving the typed
+ * `ProviderConfigurationInstance` for a new task or resume
+ * session. Three cases MUST be distinguished — collapsing them
+ * into a single `undefined` return caused the
+ * `HALT_BOUND_PROFILE_MISSING_INSTANCE_FAILS_OPEN` P0 (the
+ * factory silently fell back to the legacy ApiConfiguration
+ * when a bound profile's instance was deleted/corrupt, which
+ * splits task-metadata authority from runtime authority):
+ *
+ *   - RESOLVED      → typed instance exists, apply it
+ *   - NONE_BOUND    → no authoritative profile (legacy fallback OK)
+ *   - BOUND_BUT_BROKEN → profile is bound but its providerInstanceId
+ *                        is missing OR the instance can't be read;
+ *                        legacy fallback is NOT correct — the caller
+ *                        MUST fail closed with an explicit error.
+ */
+export type ResolveActiveInstanceResult =
+	| { kind: "RESOLVED"; instance: ProviderConfigurationInstance }
+	| { kind: "NONE_BOUND" }
+	| {
+			kind: "BOUND_BUT_BROKEN"
+			reason:
+				| "profile_missing_providerInstanceId"
+				| "instance_not_found"
+			profileId: string
+			profileName: string
+			referencedInstanceId: string | undefined
+	  }
+
+/**
+ * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+ * (C6 BOUND_PROFILE_MISSING_INSTANCE_FAIL_CLOSED):
+ *
+ * Discriminated variant of the legacy `resolveActiveInstanceTyped`.
+ * Returns one of three cases — see `ResolveActiveInstanceResult`.
+ * The factory (SdkTaskStartCoordinator) MUST distinguish NONE_BOUND
+ * (legacy fallback OK) from BOUND_BUT_BROKEN (fail closed).
+ *
+ * Precedence:
+ *   - Resume: task binding > default > NONE_BOUND
+ *   - New task: default > NONE_BOUND
+ */
+export function resolveActiveInstanceTypedDiscriminated(
+	profilesStore: ProfilesStore,
+	instancesStore: InstancesStore,
+	defaultProfileId: string | undefined,
+	historyItem: HistoryItem | undefined,
+	isResume: boolean,
+): ResolveActiveInstanceResult {
+	const profile = isResume
+		? resolveActiveProfileForResume(profilesStore, defaultProfileId, historyItem)
+		: resolveActiveProfileForNewTask(profilesStore, defaultProfileId)
+	if (!profile) {
+		return { kind: "NONE_BOUND" }
+	}
+	if (!profile.providerInstanceId) {
+		// The precedence-algebraic helper layer returned a profile,
+		// but the profile itself has no instance binding. This is
+		// a corruption case (or a profile that was migrated before
+		// the typed seam landed). NOT a NONE_BOUND scenario.
+		return {
+			kind: "BOUND_BUT_BROKEN",
+			reason: "profile_missing_providerInstanceId",
+			profileId: profile.profileId,
+			profileName: profile.name,
+			referencedInstanceId: undefined,
+		}
+	}
+	const instance = instancesStore.read(profile.providerInstanceId)
+	if (!instance) {
+		// The profile references an instance that no longer exists
+		// in the instances store (deleted, corrupted, or migrated).
+		// This is the canonical "broken binding" case.
+		return {
+			kind: "BOUND_BUT_BROKEN",
+			reason: "instance_not_found",
+			profileId: profile.profileId,
+			profileName: profile.name,
+			referencedInstanceId: profile.providerInstanceId,
+		}
+	}
+	return { kind: "RESOLVED", instance }
+}
+
+/**
  * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
  * (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
  *
@@ -192,6 +283,13 @@ export function resolveActiveProfileForNewTask(
  * the profile → typed-instance translation. Returns `undefined`
  * when no authoritative profile is bound (legacy behavior — the
  * factory falls back to the StateManager's ApiConfiguration).
+ *
+ * PREFERS the discriminated variant `resolveActiveInstanceTypedDiscriminated`
+ * which distinguishes NONE_BOUND from BOUND_BUT_BROKEN. This
+ * legacy wrapper is kept for callers that have not yet migrated;
+ * it loses the BOUND_BUT_BROKEN signal by collapsing it to
+ * `undefined`. New callers (e.g. SdkTaskStartCoordinator) MUST
+ * use the discriminated variant.
  *
  * Precedence:
  *   - Resume: task binding > default > undefined
@@ -204,11 +302,14 @@ export function resolveActiveInstanceTyped(
 	historyItem: HistoryItem | undefined,
 	isResume: boolean,
 ): ProviderConfigurationInstance | undefined {
-	const profile = isResume
-		? resolveActiveProfileForResume(profilesStore, defaultProfileId, historyItem)
-		: resolveActiveProfileForNewTask(profilesStore, defaultProfileId)
-	if (!profile?.providerInstanceId) return undefined
-	return instancesStore.read(profile.providerInstanceId)
+	const result = resolveActiveInstanceTypedDiscriminated(
+		profilesStore,
+		instancesStore,
+		defaultProfileId,
+		historyItem,
+		isResume,
+	)
+	return result.kind === "RESOLVED" ? result.instance : undefined
 }
 
 /**
@@ -532,7 +633,7 @@ export function createProductionModelProfilesOwner(deps: ProductionOwnerDeps): M
 		// projector.
 		getDefaultProfileId: () => deps.stateManager.getGlobalStateKey(DEFAULT_MODEL_PROFILE_ID_KEY),
 		resolveActiveInstanceTyped: ({ historyItem, isResume, defaultProfileId }) =>
-			resolveActiveInstanceTyped(profilesStore, instancesStore, defaultProfileId, historyItem, isResume),
+			resolveActiveInstanceTypedDiscriminated(profilesStore, instancesStore, defaultProfileId, historyItem, isResume),
 	}
 }
 

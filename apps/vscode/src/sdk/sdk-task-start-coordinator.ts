@@ -9,7 +9,6 @@ import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { isDirectory } from "@/utils/fs"
-import type { ProviderConfigurationInstance } from "./instance-store/contracts"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
@@ -48,23 +47,34 @@ export interface SdkTaskStartCoordinatorOptions {
 	 */
 	resolveSessionAutoApprovalOverride: () => SessionAutoApprovalOverride
 	/**
-	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
-	 * (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+	 * (C6 BOUND_PROFILE_MISSING_INSTANCE_FAIL_CLOSED):
 	 *
 	 * Resolves the typed `ProviderConfigurationInstance` to apply
-	 * to the new task / resume session, if any. Returns `undefined`
-	 * when no authoritative profile is bound (legacy behavior — the
-	 * factory falls back to the StateManager's ApiConfiguration).
+	 * to the new task / resume session. Returns a discriminated
+	 * `ResolveActiveInstanceResult`:
 	 *
-	 * The host wires this to `ModelProfilesOwner.resolveActiveInstanceTyped`
-	 * which encapsulates the precedence-algebraic helper layer
+	 *   - RESOLVED       → apply this typed instance via the
+	 *                       `providerConfigurationInstanceTyped`
+	 *                       seam.
+	 *   - NONE_BOUND     → no authoritative profile (legacy
+	 *                       fallback to StateManager.getApiConfiguration
+	 *                       is correct).
+	 *   - BOUND_BUT_BROKEN → profile is bound but its instance is
+	 *                       missing/corrupt. Legacy fallback is NOT
+	 *                       correct — the factory MUST fail closed
+	 *                       with an explicit error.
+	 *
+	 * The host wires this to
+	 * `ModelProfilesOwner.resolveActiveInstanceTyped` which
+	 * encapsulates the precedence-algebraic helper layer
 	 * (`resolveActiveProfileIdForResume` / `ForNewTask`) and the
 	 * profile → instance → typed-seam translation.
 	 */
 	resolveProviderInstanceTyped?: (input: {
 		historyItem?: HistoryItem
 		isResume: boolean
-	}) => ProviderConfigurationInstance | undefined
+	}) => import("./profile-store/owner").ResolveActiveInstanceResult
 	/**
 	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: shared task-operation
 	 * generation authority. The coordinator calls `fence.begin()` at
@@ -151,21 +161,54 @@ export class SdkTaskStartCoordinator {
 			const cwd = await this.options.getWorkspaceRoot()
 			const mode = this.getCurrentMode()
 			Logger.log(`[SdkController] Building session config: mode=${mode}, cwd=${cwd}`)
-			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
-			// (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+			// (C6 BOUND_PROFILE_MISSING_INSTANCE_FAIL_CLOSED):
 			// Resolve the typed provider instance from the active
 			// profile binding (resume precedence: task binding >
-			// default; new task precedence: default only). When the
-			// owner returns a typed instance, the builder's typed
-			// projector overlays B's identity/connection onto the
-			// resolved CoreSessionConfig — the legacy
-			// StateManager.getApiConfiguration() path is BYPASSED
-			// entirely. When the owner returns undefined, the
-			// builder falls back to the legacy path.
-			const providerInstanceTyped = this.options.resolveProviderInstanceTyped?.({
+			// default; new task precedence: default only). The
+			// resolver returns a discriminated
+			// `ResolveActiveInstanceResult`:
+			//
+			//   - RESOLVED       → apply via
+			//                       `providerConfigurationInstanceTyped`,
+			//                       bypass legacy
+			//                       StateManager.getApiConfiguration()
+			//                       path entirely.
+			//   - NONE_BOUND     → no profile binding (legacy
+			//                       fallback to ApiConfiguration is
+			//                       correct).
+			//   - BOUND_BUT_BROKEN → profile is bound but its
+			//                       instance is missing/corrupt.
+			//                       Legacy fallback would split
+			//                       metadata authority from runtime
+			//                       authority — MUST fail closed with
+			//                       an explicit error and abort the
+			//                       session start.
+			const providerInstanceResult = this.options.resolveProviderInstanceTyped?.({
 				historyItem,
 				isResume: !!historyItem,
 			})
+			if (providerInstanceResult && providerInstanceResult.kind === "BOUND_BUT_BROKEN") {
+				const r = providerInstanceResult
+				const referenced = r.referencedInstanceId ? `'${r.referencedInstanceId}'` : "none"
+				Logger.error(
+					`[SdkController] initTask: refusing to start session — bound profile '${r.profileName}' (${r.profileId}) ` +
+						`references missing instance (${referenced}, reason=${r.reason}). ` +
+						`This is a broken profile→instance binding; the task cannot start under a different ` +
+						`(unrelated legacy) configuration. ` +
+						`Either rebind the profile to a valid instance, clear the profile binding, or repair the instance store.`,
+				)
+				this.options.emitClineAuthError(
+					`Model profile '${r.profileName}' references a missing provider instance ` +
+						`(${referenced}). The task cannot start. ` +
+						`Rebind the profile or clear its binding in Model Profiles settings.`,
+				)
+				return undefined
+			}
+			const providerInstanceTyped =
+				providerInstanceResult && providerInstanceResult.kind === "RESOLVED"
+					? providerInstanceResult.instance
+					: undefined
 			const config = await this.options.sessionConfigBuilder.build({
 				prompt,
 				images,
@@ -350,16 +393,36 @@ export class SdkTaskStartCoordinator {
 			// workspace root instead.
 			const storedCwd = historyItem.cwdOnTaskInitialization
 			const cwd = storedCwd && (await isDirectory(storedCwd)) ? storedCwd : await this.options.getWorkspaceRoot()
-			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
-			// (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+			// (C6 BOUND_PROFILE_MISSING_INSTANCE_FAIL_CLOSED):
 			// Resume path — resolve the typed instance from the
 			// task's bound profile (resume precedence: task binding
-			// > default). Threaded through the same `providerConfigurationInstanceTyped`
-			// seam as `initTask`.
-			const providerInstanceTyped = this.options.resolveProviderInstanceTyped?.({
+			// > default). Threaded through the same
+			// `providerConfigurationInstanceTyped` seam as
+			// `initTask`. BOUND_BUT_BROKEN aborts the resume with
+			// an explicit error — silent legacy substitution would
+			// split the persisted metadata authority from the
+			// runtime authority.
+			const providerInstanceResult = this.options.resolveProviderInstanceTyped?.({
 				historyItem,
 				isResume: true,
 			})
+			if (providerInstanceResult && providerInstanceResult.kind === "BOUND_BUT_BROKEN") {
+				const r = providerInstanceResult
+				const referenced = r.referencedInstanceId ? `'${r.referencedInstanceId}'` : "none"
+				Logger.error(
+					`[SdkController] reinitExistingTaskFromId(${taskId}): refusing to resume — bound profile ` +
+						`'${r.profileName}' (${r.profileId}) references missing instance ` +
+						`(${referenced}, reason=${r.reason}). The task cannot resume under a different ` +
+						`(unrelated legacy) configuration. ` +
+						`Either rebind the profile to a valid instance, clear the profile binding, or repair the instance store.`,
+				)
+				return
+			}
+			const providerInstanceTyped =
+				providerInstanceResult && providerInstanceResult.kind === "RESOLVED"
+					? providerInstanceResult.instance
+					: undefined
 			const config = await this.options.sessionConfigBuilder.build({
 				cwd,
 				mode: "act",

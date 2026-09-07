@@ -306,6 +306,7 @@ export default defineConfig({
 			// effective tuple matches the resolved profile.
 			"src/sdk/__tests__/save-current-identity-inversion.mpwc01.test.ts",
 			"src/sdk/__tests__/factory-resume-effective-connection.mpwc01.test.ts",
+			"src/sdk/__tests__/bound-profile-missing-instance.mpwc02.test.ts",
 		],
 		testTimeout: 30_000,
 	},
