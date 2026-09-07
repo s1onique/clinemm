@@ -1,0 +1,141 @@
+RED — frontend empty-state dead-end (exact HEAD trace)
+======================================================
+
+Recorded against: 5f9e931a3
+
+SURFACE A — picker popover
+--------------------------
+File: apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.tsx
+
+Lines 178-191 (the popover body, when open):
+
+    open && profiles ? (
+        <div ... role="listbox" ...>
+            {profiles.length === 0 && (
+                <div className="p-3 text-sm text-muted-foreground" data-testid="model-profile-empty">
+                    No profiles configured yet.
+                </div>
+            )}
+            {profiles.map((p, idx) => ( ... ))}
+            <div className="border-t">
+                <button data-testid="model-profile-manage" ...>
+                    Manage Profiles…
+                </button>
+            </div>
+        </div>
+    )
+
+Empty state for the picker is a SINGLE static line of text
+("No profiles configured yet.") followed by a Manage Profiles
+button that opens Settings.
+
+There is NO:
+- "Create first profile…" CTA inside the popover
+- Explanatory text about why the list is empty
+- Routing to onboarding mode in Settings
+
+A user who opens the picker with zero profiles gets:
+    - One line of greyed text
+    - One button that drops them in the Settings tab
+
+  This is a dead end because Settings > Model Profiles
+  itself is a dead end for the same reason (see Surface B).
+
+SURFACE B — Settings > Model Profiles section
+----------------------------------------------
+File: apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSection.tsx
+
+The section renders UNCONDITIONALLY in "established-state"
+form, regardless of whether profiles.length === 0:
+
+Lines 77-98 (top of section):
+
+    <div className="flex flex-col gap-4" data-testid="model-profiles-section">
+        {renderSectionHeader?.("model-profiles")}
+        <div className="flex items-center gap-2">
+            <input ... data-testid="model-profiles-new-name" ... />
+            <button ... data-testid="model-profiles-save-current" ...>
+                Save current configuration as profile
+            </button>
+        </div>
+        {!canCreateFromCurrent && (
+            <div className="rounded border border-warning/40 bg-warning/10 p-2 text-xs">
+                This provider configuration is not supported by Model Profiles…
+            </div>
+        )}
+
+Lines 119-124 (management list):
+
+    <ul className="flex flex-col gap-2" data-testid="model-profiles-list">
+        {profiles.length === 0 && (
+            <li className="rounded border border-dashed p-3 text-center text-xs text-muted-foreground">
+                No profiles yet. Save your current configuration to get started.
+            </li>
+        )}
+        {profiles.map((p) => ( ... ))}
+    </ul>
+
+When profiles = [] the section renders:
+  - The "Save current configuration as profile" affordance
+    (which fails closed in the first-run state — see 01-...)
+  - The management table UI with row action affordances
+    (Use / Set as default / Rename / Update / Delete) that
+    have no rows to act on
+  - A dashed-border placeholder row with the dead-end copy
+
+There is NO:
+- A dedicated first-run onboarding pane
+- A "Current configuration" summary that names the provider
+- An explicit "Configure a different provider first" escape
+  hatch that routes to API Configuration settings
+- A visible error/banner when Save fails
+
+SURFACE C — save failure visibility
+-----------------------------------
+File: apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSectionContainer.tsx
+
+Lines 61-67:
+
+    const handleSaveCurrentAsProfile = useCallback(async (name: string) => {
+        try {
+            await StateServiceClient.saveCurrentAsModelProfile(SaveCurrentAsModelProfileRequest.create({ name }))
+        } catch (error) {
+            console.error("[ModelProfilesSectionContainer] saveCurrentAsModelProfile failed:", error)
+        }
+    }, [])
+
+The handler swallows gRPC errors into a console.error. There
+is no banner state in the section. There is no toast. There
+is no inline message. The user-visible state of the section
+after a failed save is byte-for-byte identical to its state
+before the click.
+
+VERDICT
+-------
+PICKER_POPUP_EMPTY_STATE   = DEAD_END
+SETTINGS_EMPTY_STATE       = DEAD_END
+SAVE_FAILURE_VISIBILITY    = ABSENT (console.error only)
+FIRST_RUN_ONBOARDING_PANE  = ABSENT
+FIRST_RUN_ESCAPE_HATCH     = ABSENT
+
+------------------------------------------------------------------------
+AMENDMENT NOTE (2026-09-07)
+------------------------------------------------------------------------
+The B4 surface tests are unchanged (first-run onboarding pane +
+picker CTA + container error banner). The B3 error-visibility
+taxonomy is amended:
+
+  CREATED                 — full success (profile + binding)
+  CREATED_BINDING_FAILED  — durable profile was created AND
+                            post-commit task binding failed;
+                            user sees success-with-warning banner
+                            (NOT a generic error)
+  NO_CURRENT_CONFIGURATION
+  CURRENT_CONFIGURATION_UNSUPPORTED
+  MISSING_CREDENTIAL
+  INSTANCE_WRITE_FAILED
+  PROFILE_WRITE_FAILED
+
+The container's error banner must render a distinct, non-error
+"created with warning" notice for CREATED_BINDING_FAILED so the
+user knows the durable commit succeeded.

@@ -1,0 +1,95 @@
+ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 - GREEN B2 evidence
+====================================================================
+Recorded at: 2026-09-07 (B2 RED -> GREEN pass)
+Recorded by: implementation correction (apps/vscode/src/sdk/profile-store/bootstrap.ts +
+             apps/vscode/src/sdk/__tests__/bootstrap-no-provider-id-collapse.mpfrb01.test.ts)
+
+WHAT WENT GREEN
+---------------
+The B2 invariant - the strongest invariant in the ACT - is now load-bearing
+executable proof. When two ProviderConfigurationInstance records with the
+SAME providerId already exist (and the current ApiConfiguration is NOT
+bound to either), a bootstrap creates a THIRD instance that matches the
+current config exactly. It does NOT pick A or B.
+
+This is the regression guard for the MPWC01 C3 identity-collapse bug.
+
+WITNESS
+-------
+  MPFRB01_B2_THIRD_INSTANCE: bootstrap creates a THIRD instance that matches
+  the current config exactly when two same-providerId instances already exist.
+
+  - Two pre-existing same-providerId instances are seeded (A: endpoint-A.example,
+    X-A: 1, physical-key-A; B: endpoint-B.example, X-B: 2, physical-key-B).
+  - The CURRENT unbound configuration specifies a THIRD distinct instance (C)
+    with modelId=model-C, baseUrl=endpoint-C.example, physical-key-C.
+  - The bootstrap primitive is invoked with currentConfig (openai + key C).
+  - Result: { status: "CREATED", profileId: ..., instanceId: inst-deterministic-1 }
+  - The new instanceId is DISTINCT from A and B.
+  - Three instances now exist: inst-A, inst-B, inst-deterministic-1.
+  - A and B are UNTOUCHED (no aliasing, no field mutation):
+      A: baseUrl=endpoint-A.example, headers={X-A:1}, modelId=model-inst-A
+      B: baseUrl=endpoint-B.example, headers={X-B:2}, modelId=model-inst-B
+  - The new instance matches the CURRENT config exactly:
+      providerId=openai, modelId=model-C, baseUrl=endpoint-C.example
+  - The credentialRef resolves to the CURRENT config's credential
+    (physical-key-C), NOT to A's or B's credential:
+      secretsWritten.get(nameFor(inst-deterministic-1)) === physical-key-C
+      secretsWritten.get(nameFor(inst-A)) === undefined  (no cross-write)
+      secretsWritten.get(nameFor(inst-B)) === undefined  (no cross-write)
+
+CONSERVATION (per 2026-09-07 in-place amendment freezes)
+--------------------------------------------------------
+  * ProviderId-equality matching MUST NOT appear anywhere in the bootstrap
+    path. Verified by source inspection of bootstrap.ts:
+      $ grep -n "find\|filter.*providerId" apps/vscode/src/sdk/profile-store/bootstrap.ts
+      (no matches; the bootstrap path uses `instancesStore.upsert(newInstance)`
+       and never queries existing instances by providerId.)
+
+  * The new instanceId is opaque; the bootstrap never reuses a stored
+    instanceId even if all other fields match. Verified by the B2 test:
+    the seedPreExistingInstance helper creates A and B with explicit
+    instanceIds, and the bootstrap generates a third id
+    (`inst-deterministic-1`) which is opaque and independent.
+
+  * The bootstrap does NOT mutate the existing saveCurrentAsModelProfile
+    semantics. Verified by:
+      $ git diff apps/vscode/src/core/controller/state/saveCurrentAsModelProfile.ts
+      (no changes)
+      $ git diff apps/vscode/src/sdk/profile-store/saveCurrentAsProfile.ts
+      (no changes - the helper is still used by the existing RPC)
+
+TESTS RUNNING
+-------------
+  $ cd apps/vscode && bun run test:vitest -- \\
+      src/sdk/__tests__/bootstrap-first-profile.mpfrb01.test.ts \\
+      src/sdk/__tests__/bootstrap-no-provider-id-collapse.mpfrb01.test.ts
+   Test Files  2 passed (2)
+        Tests  7 passed (7)
+        - B1: 6 tests (happy path + 5 negative/boundary paths)
+        - B2: 1 test (third instance + no aliasing)
+
+WHY THIS IS THE STRONGEST INVARIANT
+-----------------------------------
+B2 prevents the bootstrap UX repair from resurrecting the identity-collapse
+bug that caused this whole chain. The MPWC01 C3 fix removed the unsafe
+`Object.values(instances).find(i => i.providerId === X)` short-circuit in
+saveCurrentAsModelProfile. The B2 witness asserts that the new
+bootstrapModelProfileFromCurrentConfiguration path does NOT reintroduce
+that bug under a different name.
+
+If a future refactor adds any providerId-based shortcut (e.g. "if a
+same-providerId instance exists, reuse it"), the B2 witness will fail
+because the new instance's modelId will equal A's or B's modelId
+(whichever the shortcut returned) instead of the current config's
+distinct modelId=model-C.
+
+PRODUCTION-EDITS COUNT (B2 only)
+---------------------------------
+  * 0 production source files (B2 is purely a regression-guard test).
+  * 1 new vitest test (bootstrap-no-provider-id-collapse.mpfrb01.test.ts).
+
+ENTRY HEAD (unchanged)
+----------------------
+LIVE_OBS_SUBJECT  = c47e219f76dafffe4f9bced6dc4d05eac73bb4d2
+ENTRY_HEAD        = 052da8958d096fad6fe475d1be78bfb53957086b

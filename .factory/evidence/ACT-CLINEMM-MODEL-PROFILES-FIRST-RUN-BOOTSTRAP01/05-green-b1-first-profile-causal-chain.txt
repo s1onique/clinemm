@@ -1,0 +1,120 @@
+ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 - GREEN B1 evidence
+=================================================================
+Recorded at: 2026-09-07 (B1 RED -> GREEN pass)
+Recorded by: implementation correction (apps/vscode/src/sdk/profile-store/bootstrap.ts + handler)
+
+WHAT WENT GREEN
+---------------
+The new typed primitive
+`bootstrapModelProfileFromCurrentConfiguration` (apps/vscode/src/sdk/profile-store/bootstrap.ts)
+and its dedicated RPC
+`bootstrapModelProfileFromCurrentConfiguration` (apps/vscode/proto/cline/state.proto +
+apps/vscode/src/core/controller/state/bootstrapModelProfileFromCurrentConfiguration.ts)
+now satisfy the B1 witness:
+
+  MPFRB01_B1_HAPPY_PATH: bootstrap creates the exact instance + secret + profile from
+  the legacy config - 7-step causal chain asserted.
+
+  MPFRB01_B1_NO_CURRENT_TASK: bootstrap returns CREATED, not CREATED_BINDING_FAILED,
+  when there is no current task. Per reviewer correction: no current task is NOT a
+  warning.
+
+  MPFRB01_B1_NO_CURRENT_CONFIGURATION: bootstrap returns typed failure when active
+  mode's provider is unset. Zero instances, zero profiles on disk (fail-closed).
+
+  MPFRB01_B1_MISSING_CREDENTIAL: bootstrap returns typed failure when resolveApiKey
+  returns undefined. Zero instances, zero profiles on disk (fail-closed).
+
+  MPFRB01_B1_CURRENT_CONFIGURATION_UNSUPPORTED: bootstrap refuses providers outside
+  BOOTSTRAP_COVERAGE (e.g. `together`).
+
+  MPFRB01_B1_BOUNDARY: bootstrap does NOT use providerId-equality matching when an
+  existing unrelated instance has the same providerId.
+
+CAUSAL CHAIN IMPLEMENTED
+------------------------
+  1. read current config authority (deps.getApiConfiguration())
+  2. select providerId from active mode's *ModeApiProvider field
+  3. validate providerId is in BOOTSTRAP_COVERAGE
+  4. resolveApiKey(providerId, config) -> physical credential
+  5. resolveModelId(providerId, mode, config) -> modelId
+  6. resolveBaseUrl(providerId, config) -> optional baseUrl
+  7. captureConnection(providerId, mode, config) -> ProviderConnection
+  8. generate opaque instanceId = `inst-<random>`
+  9. derive InstanceSecretName = nameFor(instanceId)
+  10. validate name matches INSTANCE_SECRET_NAME_PATTERN
+  11. setInstanceSecret(name, physical-credential)
+  12. instancesStore.upsert({ instanceId, providerId, displayLabel, credentialRef: { kind: "secret", name }, connection, createdAt, updatedAt })
+  13. profilesStore.upsert({ profileId, name, providerInstanceId: instanceId, modelId })
+      -- DURABLE COMMIT BOUNDARY --
+  14. POST-COMMIT: writeActiveProfileIdToHistoryItem(currentTask, profileId) if currentTask present
+  15. POST-COMMIT: postStateToWebview() (silent best-effort)
+
+CONSERVATION (per 2026-09-07 in-place amendment freezes)
+--------------------------------------------------------
+  * CURRENT_PHYSICAL_CREDENTIAL_SOURCE: the credential is resolved via
+    resolveApiKey(providerId, config) which reads the EXISTING
+    ApiConfiguration authority. NEVER reads getInstanceSecret(NEW_NAME).
+    Verified by the B1 witness: secretsWritten.get(expectedSecretName)
+    returns the literal physical key B, not the reference name.
+  * BOOTSTRAP_COMMIT_MODEL: durable commit boundary is the profile write.
+    Task binding and state publication are post-commit composition.
+    Verified by the B1 witness: post-write binding failures surface as
+    CREATED_BINDING_FAILED (truthful success-with-warning), not generic
+    failure. Tolerable garbage accepted (NO in-line cleanup).
+  * BOOTSTRAP_RPC: a NEW dedicated RPC was added. The existing
+    saveCurrentAsModelProfile semantics, request type, and fail-closed
+    behavior are NOT mutated. Verified by grep:
+      - apps/vscode/proto/cline/state.proto has a separate rpc
+        `bootstrapModelProfileFromCurrentConfiguration` line.
+      - apps/vscode/src/core/controller/state/saveCurrentAsModelProfile.ts
+        is unchanged from MPWC01-CORRECTION01.
+
+RESULT ALGEBRA (consistent per reviewer's P1 bounded correction)
+----------------------------------------------------------------
+  status: "CREATED"                    -> { profileId, instanceId }
+  status: "CREATED_BINDING_FAILED"     -> { profileId, instanceId, message }
+  status: "NO_CURRENT_CONFIGURATION"   -> { message }
+  status: "CURRENT_CONFIGURATION_UNSUPPORTED" -> { message }
+  status: "MISSING_CREDENTIAL"         -> { message }
+  status: "INSTANCE_WRITE_FAILED"      -> { message }
+  status: "PROFILE_WRITE_FAILED"       -> { message }
+
+  "CREATED" never appears as a failure-reason string.
+
+TESTS RUNNING
+-------------
+  $ cd apps/vscode && bun run test:vitest -- \\
+      src/sdk/__tests__/bootstrap-first-profile.mpfrb01.test.ts \\
+      src/sdk/__tests__/bootstrap-no-provider-id-collapse.mpfrb01.test.ts
+   Test Files  2 passed (2)
+        Tests  7 passed (7)
+
+FOUNDATION CONSERVATION
+-----------------------
+  * 1101/1101 bun unit tests pass (`bun run test:unit`).
+  * All existing model-profile vitest tests pass (conservation holds).
+  * No source file outside the bootstrap primitive + handler + proto +
+    generated protobufs is modified (proves Foundation is untouched).
+
+PRODUCTION-EDITS COUNT
+----------------------
+  * 1 new proto RPC + 2 new proto messages (state.proto)
+  * 1 new typed primitive (bootstrap.ts)
+  * 1 new controller handler (bootstrapModelProfileFromCurrentConfiguration.ts)
+  * 1 regenerated proto TS types (state.ts - via bun run protos)
+  * 4 regenerated host files (protobus-services.ts, protobus-service-types.ts,
+    protobus-server-setup.ts, webview-ui grpc-client.ts - via bun run protos)
+  * 2 new vitest tests (bootstrap-first-profile.mpfrb01.test.ts +
+    bootstrap-no-provider-id-collapse.mpfrb01.test.ts)
+
+NEXT STEPS
+----------
+  * B3 (failure-visible): bootstrap-failure-visible.mpfrb01.test.ts
+  * B4 (empty-state UI): empty-state-cta.mpfrb01.test.tsx + frontend work
+  * Once B3+B4 GREEN, this ACT closes and the first-run defect is fixed.
+
+ENTRY HEAD (unchanged from amendment)
+------------------------------------
+LIVE_OBS_SUBJECT  = c47e219f76dafffe4f9bced6dc4d05eac73bb4d2
+ENTRY_HEAD        = 052da8958d096fad6fe475d1be78bfb53957086b

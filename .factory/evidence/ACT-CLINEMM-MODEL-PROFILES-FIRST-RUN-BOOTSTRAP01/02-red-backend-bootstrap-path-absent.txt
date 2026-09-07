@@ -1,0 +1,135 @@
+RED — backend bootstrap path absent (exact HEAD trace)
+======================================================
+
+Recorded against: 5f9e931a3
+
+QUESTION
+--------
+Is there ANY code path on the exact HEAD that, given an
+existing legacy/current API configuration AND zero existing
+profiles, creates a stable ProviderConfigurationInstance +
+ModelProfile + instance-bound secret + active-task binding
+in one operation?
+
+ANSWER
+------
+NO.
+
+EVIDENCE — search of profile-store + state controller
+------------------------------------------------------
+$ grep -rn "bootstrapModelProfile\|bootstrap.*Profile\|bootstrap.*Instance\|bootstrapFromCurrent" \
+      apps/vscode/src/sdk/profile-store/ \
+      apps/vscode/src/core/controller/state/ \
+      apps/vscode/src/sdk/SdkController.ts
+
+(no matches — bootstrap primitive does not exist)
+
+EVIDENCE — what `saveCurrentAsModelProfile` does for first-run
+---------------------------------------------------------------
+File: apps/vscode/src/core/controller/state/saveCurrentAsModelProfile.ts
+
+Lines 37-46 (active session read):
+    active session exists ✓
+    providerId = "openai-compatible" ✓
+    modelId    = "model-X" ✓
+
+Lines 65-76 (C3 fail-closed binding path):
+    currentHistoryItem.activeProfileId = undefined
+    activeProfile = undefined
+    providerInstanceId = undefined
+    → throw new Error("...cannot derive an authoritative providerInstanceId...")
+
+  The handler REFUSES the operation. It does not provide a
+  bootstrap alternative. There is no `else` branch that
+  materializes an instance from the current config.
+
+EVIDENCE — what InstancesStore.write would need (Foundation has it)
+--------------------------------------------------------------------
+File: apps/vscode/src/sdk/instance-store/contracts.ts
+File: apps/vscode/src/sdk/instance-store/instances-store.ts
+
+InstancesStore.write(instance) exists and accepts arbitrary
+opaque `instanceId` strings. The bootstrap primitive could
+write a new instance WITHOUT changing any Foundation code.
+
+The only missing piece is a CALLER that:
+  (1) derives the instance from the legacy/current config,
+  (2) names it (opaque id generation),
+  (3) persists the physical credential under the instance
+      namespace via StateManager.setInstanceSecret(...),
+  (4) calls InstancesStore.write,
+  (5) creates the ModelProfile referencing the new id,
+  (6) binds the active task's HistoryItem.activeProfileId,
+  (7) publishes state.
+
+No such caller exists on the exact HEAD.
+
+EVIDENCE — what saveCurrentAsProfile (helper) expects
+-----------------------------------------------------
+File: apps/vscode/src/sdk/profile-store/owner.ts
+
+saveCurrentAsProfile(store, name, providerInstanceId, modelId)
+    — REQUIRES a non-null providerInstanceId argument.
+    — Does NOT bootstrap one.
+
+The helper is correct for its purpose (creating a profile
+given a known instance). It is the wrong abstraction for
+the first-run case, where the instance does not yet exist.
+
+EVIDENCE — what would have provided this previously
+---------------------------------------------------
+The REMOVED code path (per the C3 fix comment at
+saveCurrentAsModelProfile.ts:54-64):
+
+    Object.values(instances).find(i => i.providerId === providerId)
+
+That fallback was unsound (providerId collapse across multiple
+same-provider instances), but it WAS the only path that could
+answer "What instance is the current config?" for a first-run
+user.
+
+Removing it was correct. Replacing it with a typed bootstrap
+that preserves the no-collapse invariant is the work this ACT
+exists to do.
+
+VERDICT
+-------
+BACKEND_BOOTSTRAP_PATH   = ABSENT
+FOUNDATION_PRIMITIVES    = READY (InstancesStore.write supports arbitrary ids)
+HELPER_ABSTRACTION       = READY (saveCurrentAsProfile accepts explicit ids)
+MISSING_PIECE            = a single caller that composes the
+                           (legacy config) → (new opaque id) →
+                           (write credential) → (write instance) →
+                           (create profile) → (bind active task)
+                           pipeline.
+
+------------------------------------------------------------------------
+AMENDMENT NOTE (2026-09-07)
+------------------------------------------------------------------------
+The atomic ordering described above (six steps, ending with task
+binding) is amended to a two-phase model:
+
+  definition commit (durable):
+    (1) read current/legacy ApiConfiguration
+    (2) resolve physical credential from CURRENT_CONFIGURATION
+        authority (NOT the new instance-secret namespace — the
+        namespace does not yet exist)
+    (3) generate opaque instanceId
+    (4) derive InstanceSecretName = nameFor(instanceId)
+    (5) setInstanceSecret(name, physical-credential)
+    (6) InstancesStore.write with credentialRef.name === name
+    (7) ProfilesStore write referencing new instanceId
+        → profile creation is the durable commit boundary
+
+  post-commit composition (best-effort):
+    (8) writeActiveProfileIdToHistoryItem — may fail independently
+    (9) postStateToWebview — may fail independently
+        → if either fails, return CREATED_BINDING_FAILED instead
+          of a generic failure (truthful success-with-warning)
+
+The Foundation primitives remain unchanged:
+  - InstancesStore.write supports arbitrary opaque instance ids
+  - setInstanceSecret / getInstanceSecret form the namespaced
+    secret authority
+  - ProfilesStore write + parser unchanged
+AMENDMENT (2026-09-07, correction01): Algebra correction applied mechanically during B1/B3 typed-contract creation. The originally-spec'd `{ ok, reason, warning }` envelope was replaced with a single `status`-keyed discriminated union (`BootstrapModelProfileStatus`). See ACT body §Contract freezes (updated) for the corrected result-algebra taxonomy. No separate review round needed — applied during type authoring per reviewer verdict C1 ("fix once while writing B1/B3 types").

@@ -1,0 +1,182 @@
+RED — live-dogfood defect trace (exact HEAD)
+=============================================
+
+Recorded against: 5f9e931a3 (MPWC02 correction03 closure HEAD)
+Installed via: dist/clinemm-4.1.16-dogfood-c47e219f7.vsix
+                 (UNBLOCK02 VSIX is the latest production-reachable
+                  build; MPWC02 correction03 sources no production
+                  diffs that affect this defect path)
+Date observed: 2026-09-07
+
+The repro was performed by a fresh user with:
+- An installed VSIX.
+- A configured OpenAI-compatible provider ("Granelle"-style
+  endpoint) with a real API key stored in legacy/global state.
+- A task session that had been opened at least once so
+  `owner.sessions.getActiveSession()` returns a non-null
+  session.
+- ZERO Model Profiles (no row in the profiles table).
+- ZERO ProviderConfigurationInstances in instances.json
+  (because profiles have never been created).
+
+USER FLOW
+---------
+1. Open Cline sidebar. Open the chat footer.
+2. Click the model label (e.g. "MiniMax M3 · openai-compatible").
+   → ModelProfileQuickSwitch popover opens.
+3. Popover shows ONE row of static text:
+
+       No profiles configured yet.
+   (apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.tsx:189
+    — `data-testid="model-profile-empty"`)
+
+   The "Manage Profiles…" button at the bottom of the popover
+   routes to Settings > Model Profiles via
+   `setSection("model-profiles")` — which is correct, but
+   offers no in-popover escape hatch and no explanation.
+
+4. Settings > Model Profiles opens. The section renders:
+
+       [renderSectionHeader("model-profiles")]
+       [Profile name input        ]
+       [Save current configuration as profile]
+       "This provider configuration is not supported by
+        Model Profiles" warning (only if canCreateFromCurrent=false)
+
+   (apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSection.tsx:77-105)
+
+   The management table renders below with the dashed-empty-state
+   placeholder:
+
+       "No profiles yet. Save your current configuration to get started."
+   (apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSection.tsx:121-124)
+
+5. The user types a name (e.g. "Granelle primary") and clicks
+   "Save current configuration as profile".
+
+6. The button is wired to
+   `onSaveCurrentAsProfile("Granelle primary")` →
+   `ModelProfilesSectionContainer.handleSaveCurrentAsProfile("Granelle primary")` →
+   `StateServiceClient.saveCurrentAsModelProfile({ name: "Granelle primary" })`
+   (apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSectionContainer.tsx:61-67).
+
+7. The gRPC handler
+   `apps/vscode/src/core/controller/state/saveCurrentAsModelProfile.ts`
+   enters the active session, derives providerId/modelId from
+   `startConfig` (lines 37-46 — these succeed), then enters
+   the C3 fail-closed binding path (lines 65-76):
+
+       const currentHistoryItem = owner.getCurrentTaskHistoryItem()
+       const activeProfileId = currentHistoryItem?.activeProfileId
+       // activeProfileId = undefined (no profile ever bound)
+       const activeProfile = activeProfileId ? owner.profilesStore.read(activeProfileId) : undefined
+       // activeProfile = undefined
+       const providerInstanceId = activeProfile?.providerInstanceId
+       // providerInstanceId = undefined
+
+       if (!providerInstanceId) {
+           throw new Error(
+               `saveCurrentAsModelProfile: cannot derive an authoritative providerInstanceId for the current task. ` +
+                   `The task has no bound ModelProfile (activeProfileId=${activeProfileId ?? "<none>"}). ` +
+                   `Bind a profile first (or use Settings → API Configuration to apply one) so the active session carries a stable identity.`,
+           )
+       }
+
+8. The throw propagates over gRPC. The webview container
+   catches it at
+   `apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSectionContainer.tsx:64-66`:
+
+       } catch (error) {
+           console.error("[ModelProfilesSectionContainer] saveCurrentAsModelProfile failed:", error)
+       }
+
+   The error goes to the browser DevTools console. NO banner
+   appears in the section. NO toast appears. The input
+   field is cleared by the section's setNewProfileName("")
+   on line 59.
+
+9. The user sees the input field clear but no profile row
+   appears. The empty-state placeholder persists. Conclusion:
+   "the button does nothing."
+
+WHAT THE USER SEES
+------------------
+Empty state message: "No profiles yet. Save your current
+configuration to get started."
+→ click Save → input clears, message unchanged, no banner.
+
+WHAT THE USER DOES NOT SEE
+--------------------------
+- That the request actually fired.
+- That the request actually failed (and why).
+- That the system is REFUSING to guess the provider instance.
+- That the only path forward (in the current implementation)
+  is to first bind a profile, which… requires creating a
+  profile, which… requires a provider instance.
+
+WHY THE DEFECT IS A P0
+----------------------
+The defect blocks ALL first-run usage of the Model Profiles
+feature. The chat-label picker is the primary user-facing
+surface; the Settings section is the only management surface.
+A user with a working legacy/current API configuration cannot
+promote that configuration into a profile.
+
+WHY THIS WAS NOT CAUGHT EARLIER
+-------------------------------
+- The MPWC01 C3 fail-closed fix
+  (`ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01`)
+  correctly removed the unsafe `providerId === providerId`
+  fallback in `saveCurrentAsModelProfile.ts`.
+- The fix landed behind C3/C4 source-check witnesses and a
+  typed-foundation composition witness.
+- But the C3 RED/GREEN scope was "did the unsafe fallback
+  go away" — NOT "can a first-run user succeed end-to-end".
+  The full end-to-end path was not exercised in any test
+  because the tests assumed an existing bound profile (or
+  exercised the typed apply path directly).
+- The defect only manifests when:
+    (a) profiles = []
+    (b) no bound profile
+    (c) no existing ProviderConfigurationInstance
+    (d) a legacy/current API configuration IS available
+
+  This is the FIRST-RUN state — exactly the state a fresh
+  install puts the user in.
+
+VERDICT
+-------
+LIVE_DEFECT         = TRUE
+HALT_REGISTERED     = HALT_MODEL_PROFILE_FIRST_RUN_BOOTSTRAP_ABSENT
+BOOTSTRAP_PATH      = ABSENT
+EMPTY_STATE_UX      = DEAD_END
+SAVE_FAILURE_VISIBILITY = NONE (console.error only)
+
+
+------------------------------------------------------------------------
+AMENDMENT NOTE (2026-09-07) — IDENTITY CORRECTION
+------------------------------------------------------------------------
+The opening registration cited 5f9e931a32a07d0b9bf2f55f7bc1a31d4f4c1e6b
+as the entry head. That long-form hash does NOT resolve to a git
+object (`git cat-file -t` fails). The amended identity is:
+
+  LIVE_OBS_SUBJECT  = c47e219f76dafffe4f9bced6dc4d05eac73bb4d2
+                      (DOGFOOD-VSIX-TYPECHECK-UNBLOCK01 closure —
+                       the VSIX that was installed and exercised
+                       when the live defect was observed)
+  ENTRY_HEAD        = 052da8958d096fad6fe475d1be78bfb53957086b
+                      (DOGFOOD-VSIX-TYPECHECK-UNBLOCK02 closure —
+                       current repository HEAD at amendment time)
+
+This does NOT weaken the defect (the screenshots + mechanically
+matching source path confirm the live observation against the
+UNBLOCK01 install). It just rebinds the EXACT-HEAD label to an
+actually-existing git object. The line-numbered code citations
+above remain authoritative for the live defect geometry; the
+UNBLOCK01 source tree matches them line-for-line.
+
+The CREDENTIAL SOURCE for bootstrap is amended per the
+CURRENT_PHYSICAL_CREDENTIAL_SOURCE freeze: bootstrap reads the
+physical API key from the existing current/legacy
+ApiConfiguration / provider-settings authority, NOT from any
+new instance-secret namespace.

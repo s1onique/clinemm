@@ -1,0 +1,77 @@
+ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 — entry freeze
+=============================================================
+
+Recorded at: 2026-09-07 (initial registration)
+Amended at:  2026-09-07 (in-place amendment, identity correction
+                          + three contract freezes per reviewer panel)
+Recorded by: factory registration (ACT body opening commit)
+
+ENTRY HEAD (post-amendment)
+---------------------------
+LIVE_OBS_SUBJECT  = c47e219f76dafffe4f9bced6dc4d05eac73bb4d2
+                    (DOGFOOD-VSIX-TYPECHECK-UNBLOCK01 closure HEAD —
+                     the VSIX that was installed and exercised when
+                     the live defect was observed)
+ENTRY_HEAD        = 052da8958d096fad6fe475d1be78bfb53957086b
+                    (DOGFOOD-VSIX-TYPECHECK-UNBLOCK02 closure HEAD —
+                     the current repository HEAD at amendment time)
+
+Identity correction note:
+The opening registration cited
+5f9e931a32a07d0b9bf2f55f7bc1a31d4f4c1e6b as the entry head. That
+long-form hash does NOT resolve to a git object:
+  git cat-file -t 5f9e931a32a07d0b9bf2f55f7bc1a31d4f4c1e6b
+  → fatal: could not get object info
+The short-form 5f9e931a3 IS a real commit (MPWC02 bounded
+correction03, 5f9e931a3df0a84a358502e3183cd49d88ccc41b) but it is
+not the current HEAD. The amendment rebinds to the two SHAs above,
+both of which `git cat-file -t` accepts as commits.
+
+PREDECESSORS
+------------
+ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+    closes P0 fail-closed binding — the very fix that
+    surfaced the missing bootstrap path.
+
+PREDECESSOR STATE (frozen at entry)
+-----------------------------------
+COMPONENT_IMPLEMENTATION                = PASS
+DOMAIN_IMPLEMENTATION                   = PASS
+PRODUCTION_COMPOSITION                  = PASS (typed-foundation composition witness)
+PROVIDER_ID_COLLAPSE_FALLBACK_REMOVED   = TRUE (C3 fail-closed)
+P0-1 PRODUCTION_REACHABILITY            = deferred to this ACT
+P0-3 SESSION_BINDING_LIFECYCLE          = deferred to this ACT
+SECRET_ISOLATION                        = PASS
+FOUNDATION_CONSERVATION                 = 24/24 GREEN
+LIVE_DOGFOOD                            = NOT_READY (live defect observed)
+
+LIVE DEFECT (the HALT)
+----------------------
+HALT_MODEL_PROFILE_FIRST_RUN_BOOTSTRAP_ABSENT
+
+A user with zero existing Model Profiles and a valid legacy/current
+API configuration cannot create the first Model Profile. The Save
+button appears to do nothing. The picker popup shows only
+"No profiles configured yet." with no CTA. The Settings > Model
+Profiles section renders a management-table-shaped panel that
+presupposes profiles already exist.
+
+ENTRY SCOPE (frozen)
+--------------------
+- Add bootstrapModelProfileFromCurrentConfiguration (typed).
+- Add first-run onboarding pane + error banner to section.
+- Add picker-popup CTA that opens Settings onboarding.
+- Add typed error visibility to the container.
+- DO NOT change providerId inference rules.
+- DO NOT change Foundation primitives.
+- DO NOT change chat-parent trigger seam.
+
+EXIT CRITERIA (deferred — captured here for the next correction)
+----------------------------------------------------------------
+- B1 GREEN (bootstrap creates exact instance + first profile)
+- B2 GREEN (no providerId collapse during bootstrap)
+- B3 GREEN (bootstrap failure visible to user)
+- B4 GREEN (empty-state CTA present in both surfaces)
+- Foundation conservation: 24/24 GREEN
+- TYPECHECK: 0 new errors
+- git diff --check: clean

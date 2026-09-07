@@ -1,0 +1,178 @@
+RED — bootstrap primitive signature absent (exact HEAD)
+=======================================================
+
+Recorded against: 5f9e931a3
+
+PURPOSE
+-------
+This evidence file pins the EXACT surface that this ACT will
+introduce. It does NOT yet exist on the HEAD; the RED witness
+for B1/B2 will assert (against the bootstrap module this ACT
+will create) that calling the primitive with the right inputs
+produces the right outputs.
+
+TARGET SIGNATURE (the contract this ACT must satisfy)
+------------------------------------------------------
+
+  // apps/vscode/src/sdk/profile-store/bootstrap.ts (target)
+
+  export type BootstrapFailureReason =
+      | "NO_CURRENT_CONFIGURATION"
+      | "CURRENT_CONFIGURATION_UNSUPPORTED"
+      | "MISSING_CREDENTIAL"
+      | "INSTANCE_BOOTSTRAP_FAILED"
+      | "PROFILE_WRITE_FAILED"
+
+  export type BootstrapModelProfileResult =
+      | { ok: true; profileId: string; instanceId: string }
+      | { ok: false; reason: BootstrapFailureReason; message?: string }
+
+  export interface BootstrapModelProfileOptions {
+      profilesStore: ProfilesStore
+      instancesStore: InstancesStore
+      getCurrentApiConfiguration: () => ApiConfiguration | undefined
+      getInstanceSecret: (name: InstanceSecretName) => string | undefined
+      writeInstanceSecret: (name: InstanceSecretName, value: string) => Promise<void>
+      getCurrentTaskHistoryItem: () => HistoryItem | undefined
+      writeTaskHistoryItem: (item: HistoryItem) => Promise<void>
+      postStateToWebview: () => Promise<void>
+      /** ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 §10:
+       *  only API-key-backed providers are in V1 scope. */
+      isSupportedProvider: (providerId: string) => boolean
+      /** Whitelist of fields that participate in the connection
+       *  geometry captured into the new instance. */
+      captureConnection: (apiConfig: ApiConfiguration) => ProviderConfigurationInstance | undefined
+      /** Opaque id generator — host decides the namespace policy. */
+      generateInstanceId: () => string
+      /** Opaque profile-id generator. */
+      generateProfileId: () => string
+  }
+
+  export async function bootstrapModelProfileFromCurrentConfiguration(
+      options: BootstrapModelProfileOptions,
+      name: string,
+  ): Promise<BootstrapModelProfileResult>
+
+ATOMIC ORDER (frozen — also called out in the ACT body)
+-------------------------------------------------------
+1. validate current configuration exists
+2. validate provider is in V1 support set
+3. validate physical credential resolves
+4. capture exact connection geometry
+5. generate stable opaque instanceId
+6. persist physical credential under instance:<instanceId>
+   secret namespace
+7. persist ProviderConfigurationInstance
+8. generate profileId
+9. persist ModelProfile referencing instanceId
+10. bind current task via writeActiveProfileIdToHistoryItem
+11. publish ExtensionState
+
+On failure of any step:
+  - the half-created instance/profile must not become visible
+    as usable (the caller MUST check the typed result before
+    displaying the new profile).
+  - secret/instance/profile rows are NOT cleaned up by the
+    primitive; the caller decides whether to garbage-collect
+    or tolerate unreachable garbage. (Trade-off: cleanup
+    complicates the atomicity story and risks cascading
+    failure. The fail-closed contract is on the visibility
+    surface, not on the underlying storage.)
+
+FAILURE-MODE MAPPING
+--------------------
+NO_CURRENT_CONFIGURATION
+    current config is undefined. User-facing: "No provider
+    is configured yet. Set up an API key first in Settings."
+CURRENT_CONFIGURATION_UNSUPPORTED
+    isSupportedProvider(providerId) returns false. User-facing:
+    "Model Profiles does not yet support this provider.
+    Only API-key-backed providers are available in V1."
+MISSING_CREDENTIAL
+    getInstanceSecret resolves to undefined OR the resolved
+    secret is empty. User-facing: "This provider is missing
+    an API key. Add one in Settings → API Configuration."
+INSTANCE_BOOTSTRAP_FAILED
+    captureConnection returned undefined OR InstancesStore.write
+    threw. User-facing: "Could not capture the current
+    configuration. Try again."
+PROFILE_WRITE_FAILED
+    ProfilesStore.write threw. User-facing: "Profile write
+    failed. Try again or check logs."
+
+CONSERVATION
+------------
+The new primitive must NOT:
+- introduce a new persistence key
+- modify the typed-foundation composition seam
+- modify SdkTaskStartCoordinator
+- modify the chat-parent trigger seam
+- introduce a new gRPC method on the existing
+  StateService (reuses SaveCurrentAsModelProfileRequest
+  with a new result envelope, OR adds a new method
+  bootstrapFirstModelProfile — TBD by bounded correction)
+
+VERDICT
+-------
+TARGET_SIGNATURE         = FROZEN (this file)
+TARGET_FILE              = DOES_NOT_EXIST_YET (apps/vscode/src/sdk/profile-store/bootstrap.ts)
+B1_RED_WITNESS           = READY (will assert bootstrap creates
+                              exact instance + first profile)
+B2_RED_WITNESS           = READY (will assert bootstrap creates
+                              a THIRD instance under two-existing
+                              scenario, never collapsing by
+                              providerId)
+
+------------------------------------------------------------------------
+AMENDMENT NOTE (2026-09-07)
+------------------------------------------------------------------------
+The reviewer panel flagged three contract issues with this target
+signature. The amended freezes (see ACT body §Contract freezes):
+
+  CURRENT_PHYSICAL_CREDENTIAL_SOURCE
+    The `resolveCredentialFromCurrentConfig` seam MUST resolve the
+    physical API key from the existing current/legacy
+    ApiConfiguration / provider-settings authority, NOT from the
+    new instance-secret namespace. The amended causal chain is:
+
+        CURRENT/LEGACY CONFIGURATION AUTHORITY
+            ↓
+        resolve CURRENT physical credential
+            ↓
+        generate new opaque instanceId
+            ↓
+        derive instance:<opaque-id> secret name
+            ↓
+        write physical credential there
+            ↓
+        persist instance whose credentialRef.name === name
+            ↓
+        persist profile referencing new instanceId
+
+    NOT: getInstanceSecret(NEW_NAME) ← reads from a namespace that
+                                       the operation is creating.
+
+  BOOTSTRAP_COMMIT_MODEL
+    The atomic 11-step order is replaced by the two-phase model:
+      definition commit  = secret + instance + profile
+      post-commit        = task binding + state publication
+    Task-binding failure returns CREATED_BINDING_FAILED (truthful
+    success-with-warning), NOT a generic failure that hides the
+    durable commit. The atomic ordering in this file should be
+    read as describing the definition-commit phase only.
+
+  BOOTSTRAP_RPC
+    A new dedicated `bootstrapModelProfileFromCurrentConfiguration`
+    RPC is added in apps/vscode/proto/cline/state.proto. The
+    existing `saveCurrentAsModelProfile` semantics, request type,
+    and fail-closed behavior are NOT mutated. The two operations
+    have different preconditions and different failure taxonomies;
+    they are not two modes of the same RPC.
+
+The frozen failure-mode mapping is also amended:
+    CREATED_BINDING_FAILED  — durable commit succeeded, task
+                               binding failed; success-with-warning
+    (replaces INSTANCE_BOOTSTRAP_FAILED)
+The remaining failure reasons stay the same (NO_CURRENT_CONFIGURATION,
+CURRENT_CONFIGURATION_UNSUPPORTED, MISSING_CREDENTIAL).
+AMENDMENT (2026-09-07, correction01): The bootstrap primitive signature uses the algebra-corrected `BootstrapModelProfileStatus` + `BootstrapModelProfileResult` discriminated-union return type (NOT `{ ok, reason, warning }`). See ACT body §Contract freezes (updated). Implementation file: apps/vscode/src/sdk/profile-store/bootstrap.ts. GREEN witness: ../05-green-b1-first-profile-causal-chain.txt.
