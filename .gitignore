@@ -1291,6 +1291,22 @@ apps/vscode/.factory/evidence/
 # exact-head evidence rebinding.
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01/
+# ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02: bounded
+# correction after sixteenth-reviewer verdict
+# HALT_MODEL_PROFILE_TRIGGER_AND_RESUME_AUTHORITY. Three load-bearing
+# defects addressed in one correction: (1) trigger seam — the existing
+# current-model LABEL becomes the picker trigger via
+# useModelProfileQuickSwitch hook (no sibling button); (2) fail-closed
+# on broken profile→instance binding — discriminated
+# ResolveActiveInstanceResult distinguishes RESOLVED / NONE_BOUND /
+# BOUND_BUT_BROKEN; factory refuses to call sessionConfigBuilder.build
+# when binding is broken; (3) C4 evidence label is now explicit that
+# the test exercises a TEST DOUBLE for sessionConfigBuilder (the typed
+# projector + real builder are not driven by C4 — a future bounded
+# correction can add a composed real-builder assertion if stronger
+# evidence is needed).
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02.md
+!/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02/
 # ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01:
 # bounded correction after fifth-reviewer verdict
 # HALT_R0_FULL_CONNECTION_NOT_PROVEN (2026-09-05, same day, immediately

@@ -1,0 +1,89 @@
+ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+EXACT-HEAD EVIDENCE BINDING
+============================
+
+PRODUCTION_SUBJECT_HEAD = 2359b6431 (this commit owns the production source)
+CLOSURE_HEAD            = (latest repository HEAD; may carry later evidence-only commits)
+
+PRODUCTION-SOURCE DELTAS (relative to MPWC01 HEAD 428117691):
+  M apps/vscode/src/sdk/profile-store/owner.ts
+      Added ResolveActiveInstanceResult discriminated union.
+      Added resolveActiveInstanceTypedDiscriminated helper.
+      ModelProfilesOwnerDeps.resolveActiveInstanceTyped callback
+      now returns the discriminated result.
+      Production owner factory exposes the discriminated variant.
+
+  M apps/vscode/src/sdk/sdk-task-start-coordinator.ts
+      resolveProviderInstanceTyped option return type changed
+      to ResolveActiveInstanceResult.
+      Both initTask and reinitExistingTaskFromId handle
+      BOUND_BUT_BROKEN: Logger.error + emitClineAuthError with
+      actionable guidance + early return. sessionConfigBuilder.build
+      is NEVER called on a broken binding. NONE_BOUND falls back
+      to legacy; RESOLVED threads the typed instance.
+
+  M apps/vscode/src/sdk/SdkController.ts
+      resolveProviderInstanceTyped callback returns
+      { kind: "NONE_BOUND" } when no modelProfilesOwner is wired
+      (preserves the legacy fallback path).
+
+  M apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.tsx
+      Refactored to use useModelProfileQuickSwitch() hook
+      internally (back-compat preserved).
+      Exported useModelProfileQuickSwitch() and
+      ModelProfileQuickSwitchState type.
+
+  M apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitchContainer.tsx
+      Exposed useModelProfileQuickSwitchHost() hook so the chat
+      parent can bind an EXISTING trigger element.
+
+  M apps/vscode/webview-ui/src/components/chat/ChatTextArea.tsx
+      Existing <ModelDisplayButton> IS the picker trigger.
+      triggerProps spread onto the button (NOT a sibling).
+      Popover rendered as sibling inside ModelContainer.
+      Dead handleModelButtonClick removed.
+      onOpenManageProfiles callback wires the Settings route.
+
+UPDATED TESTS:
+  M apps/vscode/src/sdk/__tests__/factory-resume-effective-connection.mpwc01.test.ts
+      Docstring honestly labels the test as exercising a TEST
+      DOUBLE for sessionConfigBuilder (C4 P1 evidence correction).
+      Helper-level tests use resolveActiveInstanceTypedDiscriminated
+      + assert on the discriminated kind.
+
+  M apps/vscode/webview-ui/src/components/chat/chat-parent-reachability.mpwc01.test.tsx
+      Rewritten to assert the CORRECTED trigger seam:
+      imports useModelProfileQuickSwitchHost, spreads
+      triggerProps onto ModelDisplayButton, no standalone sibling.
+
+NEW TEST FILES:
+  + apps/vscode/src/sdk/__tests__/bound-profile-missing-instance.mpwc02.test.ts
+      5 tests covering discriminated resolver + factory
+      fail-closed on broken binding (initTask + reinit) +
+      NONE_BOUND legacy fallback verification.
+
+  + apps/vscode/webview-ui/src/components/chat/chat-existing-model-label-trigger.mpwc02.test.tsx
+      8 tests covering click-existing-label -> popover-visible,
+      aria-expanded reflects state, onSelectProfile fires on
+      the trigger surface, Manage Profiles routes to parent,
+      and source-check assertions for the corrected wiring.
+
+VITEST CONFIG:
+  M apps/vscode/vitest.config.c2-4-c-bridge.ts
+      Added bound-profile-missing-instance.mpwc02.test.ts entry.
+
+EVIDENCE FILES (NEW):
+  + .factory/acts/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02.md
+  + .factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02/15-exact-head-binding.txt
+
+P0 / P1 / P2 STATUS:
+  P0-1 HALT_MODEL_PROFILE_TRIGGER_SEAM_WRONG         = CLOSED (C5)
+  P0-2 HALT_BOUND_PROFILE_MISSING_INSTANCE_FAILS_OPEN = CLOSED (C6)
+  P1   C4_EVIDENCE_LABEL_OVERCLAIM                   = CLOSED
+  P2   SUBJECT_VS_CLOSURE_HEAD_WORDING               = CLOSED
+  EARLIER MPW01 + MPWC01 P0s                         = PRESERVED
+
+No further production-source edits are pending after this commit.
+The closure HEAD may carry additional evidence-only commits
+(e.g. ACT body + epic-board updates), but they do not modify
+production source.
