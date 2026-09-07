@@ -66,7 +66,6 @@ function makeFakeOwner(overrides?: Partial<ModelProfilesOwnerDeps>): ModelProfil
 		instancesStore,
 		providerChange: {
 			applyTypedProviderConfigurationInstance: applyTyped,
-			applyProviderConfigurationInstance: applyTyped,
 		},
 		sessions: {} as never,
 		sessionConfigBuilder: {} as never,

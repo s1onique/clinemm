@@ -57,7 +57,13 @@ import { projectAllModelProfilesToSummaries } from "./webview-summary"
 export interface ModelProfilesOwnerDeps {
 	profilesStore: ProfilesStore
 	instancesStore: InstancesStore
-	providerChange: SdkProviderChangeCoordinator
+	/**
+	 * Only `applyTypedProviderConfigurationInstance` is required.
+	 * `applyProviderConfigurationInstance` is kept as an optional
+	 * fallback in the underlying coordinator (and tests) but the
+	 * product path always uses the typed seam.
+	 */
+	providerChange: Pick<SdkProviderChangeCoordinator, "applyTypedProviderConfigurationInstance">
 	sessions: SdkSessionLifecycle
 	sessionConfigBuilder: SdkSessionConfigBuilder
 	sessionRebuilds: SdkSessionRebuildScheduler
