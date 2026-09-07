@@ -9,6 +9,7 @@ import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
 import type { StateManager } from "@/core/storage/StateManager"
 import { Logger } from "@/shared/services/Logger"
 import { isDirectory } from "@/utils/fs"
+import type { ProviderConfigurationInstance } from "./instance-store/contracts"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
 import type { SdkMessageCoordinator } from "./sdk-message-coordinator"
 import type { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
@@ -46,6 +47,24 @@ export interface SdkTaskStartCoordinatorOptions {
 	 * when `consumePendingOverride` fires.
 	 */
 	resolveSessionAutoApprovalOverride: () => SessionAutoApprovalOverride
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+	 * (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+	 *
+	 * Resolves the typed `ProviderConfigurationInstance` to apply
+	 * to the new task / resume session, if any. Returns `undefined`
+	 * when no authoritative profile is bound (legacy behavior — the
+	 * factory falls back to the StateManager's ApiConfiguration).
+	 *
+	 * The host wires this to `ModelProfilesOwner.resolveActiveInstanceTyped`
+	 * which encapsulates the precedence-algebraic helper layer
+	 * (`resolveActiveProfileIdForResume` / `ForNewTask`) and the
+	 * profile → instance → typed-seam translation.
+	 */
+	resolveProviderInstanceTyped?: (input: {
+		historyItem?: HistoryItem
+		isResume: boolean
+	}) => ProviderConfigurationInstance | undefined
 	/**
 	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: shared task-operation
 	 * generation authority. The coordinator calls `fence.begin()` at
@@ -132,6 +151,21 @@ export class SdkTaskStartCoordinator {
 			const cwd = await this.options.getWorkspaceRoot()
 			const mode = this.getCurrentMode()
 			Logger.log(`[SdkController] Building session config: mode=${mode}, cwd=${cwd}`)
+			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+			// (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+			// Resolve the typed provider instance from the active
+			// profile binding (resume precedence: task binding >
+			// default; new task precedence: default only). When the
+			// owner returns a typed instance, the builder's typed
+			// projector overlays B's identity/connection onto the
+			// resolved CoreSessionConfig — the legacy
+			// StateManager.getApiConfiguration() path is BYPASSED
+			// entirely. When the owner returns undefined, the
+			// builder falls back to the legacy path.
+			const providerInstanceTyped = this.options.resolveProviderInstanceTyped?.({
+				historyItem,
+				isResume: !!historyItem,
+			})
 			const config = await this.options.sessionConfigBuilder.build({
 				prompt,
 				images,
@@ -147,6 +181,7 @@ export class SdkTaskStartCoordinator {
 				// `consumePendingOverride(sessionId)` at session-id allocation,
 				// which happens later in `startNewSession`.
 				sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride(),
+				...(providerInstanceTyped ? { providerConfigurationInstanceTyped: providerInstanceTyped } : {}),
 			})
 			providerId = config.providerId
 			modelId = config.modelId
@@ -315,9 +350,20 @@ export class SdkTaskStartCoordinator {
 			// workspace root instead.
 			const storedCwd = historyItem.cwdOnTaskInitialization
 			const cwd = storedCwd && (await isDirectory(storedCwd)) ? storedCwd : await this.options.getWorkspaceRoot()
+			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+			// (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+			// Resume path — resolve the typed instance from the
+			// task's bound profile (resume precedence: task binding
+			// > default). Threaded through the same `providerConfigurationInstanceTyped`
+			// seam as `initTask`.
+			const providerInstanceTyped = this.options.resolveProviderInstanceTyped?.({
+				historyItem,
+				isResume: true,
+			})
 			const config = await this.options.sessionConfigBuilder.build({
 				cwd,
 				mode: "act",
+				...(providerInstanceTyped ? { providerConfigurationInstanceTyped: providerInstanceTyped } : {}),
 			})
 
 			const tempManager = await this.options.createTempSessionHost()

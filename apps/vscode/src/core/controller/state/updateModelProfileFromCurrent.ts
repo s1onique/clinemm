@@ -38,20 +38,23 @@ export async function updateModelProfileFromCurrent(
 	}
 
 	// Resolve the providerInstanceId (mirrors saveCurrentAsModelProfile).
+	//
+	// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+	// (C3 SAVE_CURRENT_IDENTITY_INVERSION): same fix as
+	// `saveCurrentAsModelProfile` — fail closed when no authoritative
+	// `providerInstanceId` is available. Never guess via providerId
+	// matching.
 	const currentHistoryItem = owner.getCurrentTaskHistoryItem()
 	const activeProfileId = currentHistoryItem?.activeProfileId
 	const activeProfile = activeProfileId ? owner.profilesStore.read(activeProfileId) : undefined
-	let providerInstanceId = activeProfile?.providerInstanceId
+	const providerInstanceId = activeProfile?.providerInstanceId
 
 	if (!providerInstanceId) {
-		const allInstances = owner.instancesStore.list()
-		const match = Object.values(allInstances).find(
-			(i: { providerId: string; instanceId: string }) => i.providerId === providerId,
+		throw new Error(
+			`updateModelProfileFromCurrent: cannot derive an authoritative providerInstanceId for the current task. ` +
+				`The task has no bound ModelProfile (activeProfileId=${activeProfileId ?? "<none>"}). ` +
+				`Bind a profile first so the active session carries a stable identity.`,
 		)
-		if (!match) {
-			throw new Error(`updateModelProfileFromCurrent: no ProviderConfigurationInstance for providerId='${providerId}'`)
-		}
-		providerInstanceId = match.instanceId
 	}
 
 	const updated = updateInOwner(owner.profilesStore, profileId, providerInstanceId, modelId)

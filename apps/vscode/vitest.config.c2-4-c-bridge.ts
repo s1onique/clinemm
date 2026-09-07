@@ -299,6 +299,13 @@ export default defineConfig({
 			// `cline-session-factory` will consume.
 			"src/sdk/__tests__/model-profile-rpc-seam.mpw01.test.ts",
 			"src/sdk/__tests__/model-profile-lifecycle-composition.mpw01.test.ts",
+			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01:
+			// Real factory integration witnesses (P0-3 closes here).
+			// C4 drives the REAL SdkSessionConfigBuilder with
+			// `providerConfigurationInstanceTyped` and asserts the
+			// effective tuple matches the resolved profile.
+			"src/sdk/__tests__/save-current-identity-inversion.mpwc01.test.ts",
+			"src/sdk/__tests__/factory-resume-effective-connection.mpwc01.test.ts",
 		],
 		testTimeout: 30_000,
 	},

@@ -47,7 +47,10 @@ import type { WorkingContextHostCaptureState } from "@/sdk/working-context-host-
  * the bigger ExtensionState projection produced by
  * `getStateToPostToWebview`.
  */
-export type WorkingContextProjection = Pick<ExtensionState, "currentWorkingContextEstimate">
+export type WorkingContextProjection = Pick<
+	ExtensionState,
+	"currentWorkingContextEstimate"
+>
 
 /**
  * Project the current working-context estimate (W) from

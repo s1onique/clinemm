@@ -74,6 +74,30 @@ export interface ModelProfilesOwnerDeps {
 	getCurrentTaskHistoryItem: () => HistoryItem | undefined
 	writeTaskHistoryItem: (item: HistoryItem) => Promise<void>
 	postStateToWebview: () => Promise<void>
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+	 * (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+	 *
+	 * Resolve the global default `ModelProfile.id`. Wired to
+	 * `StateManager.getGlobalStateKey("defaultModelProfileId")`.
+	 */
+	getDefaultProfileId?: () => string | undefined
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+	 * (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+	 *
+	 * Resolve the typed `ProviderConfigurationInstance` for a new
+	 * task or resume session. Wired by SdkController to the
+	 * precedence-algebraic helper + profile → instance translation
+	 * so `SdkTaskStartCoordinator.initTask` and
+	 * `reinitExistingTaskFromId` thread the typed instance through
+	 * the builder.
+	 */
+	resolveActiveInstanceTyped?: (input: {
+		historyItem?: HistoryItem
+		isResume: boolean
+		defaultProfileId: string | undefined
+	}) => ProviderConfigurationInstance | undefined
 }
 
 /**
@@ -155,6 +179,36 @@ export function resolveActiveProfileForNewTask(
 	)
 	if (!resolvedId) return undefined
 	return profilesStore.read(resolvedId)
+}
+
+/**
+ * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+ * (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+ *
+ * Resolve the typed `ProviderConfigurationInstance` for a new task
+ * or resume session. This is the canonical entry point the
+ * `SdkTaskStartCoordinator` calls via its `resolveProviderInstanceTyped`
+ * option — the precedence-algebraic helper layer combined with
+ * the profile → typed-instance translation. Returns `undefined`
+ * when no authoritative profile is bound (legacy behavior — the
+ * factory falls back to the StateManager's ApiConfiguration).
+ *
+ * Precedence:
+ *   - Resume: task binding > default > undefined
+ *   - New task: default > undefined
+ */
+export function resolveActiveInstanceTyped(
+	profilesStore: ProfilesStore,
+	instancesStore: InstancesStore,
+	defaultProfileId: string | undefined,
+	historyItem: HistoryItem | undefined,
+	isResume: boolean,
+): ProviderConfigurationInstance | undefined {
+	const profile = isResume
+		? resolveActiveProfileForResume(profilesStore, defaultProfileId, historyItem)
+		: resolveActiveProfileForNewTask(profilesStore, defaultProfileId)
+	if (!profile?.providerInstanceId) return undefined
+	return instancesStore.read(profile.providerInstanceId)
 }
 
 /**
@@ -468,6 +522,17 @@ export function createProductionModelProfilesOwner(deps: ProductionOwnerDeps): M
 			cachedItemTaskId = item.id
 		},
 		postStateToWebview: deps.postStateToWebview,
+		// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+		// (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION): expose the
+		// default-profile-id read through StateManager and the
+		// helper-layer-backed typed-instance resolver so
+		// `SdkTaskStartCoordinator.initTask` and
+		// `reinitExistingTaskFromId` can thread the resolved
+		// `ProviderConfigurationInstance` through the typed
+		// projector.
+		getDefaultProfileId: () => deps.stateManager.getGlobalStateKey(DEFAULT_MODEL_PROFILE_ID_KEY),
+		resolveActiveInstanceTyped: ({ historyItem, isResume, defaultProfileId }) =>
+			resolveActiveInstanceTyped(profilesStore, instancesStore, defaultProfileId, historyItem, isResume),
 	}
 }
 

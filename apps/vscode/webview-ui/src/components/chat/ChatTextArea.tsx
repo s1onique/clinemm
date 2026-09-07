@@ -44,6 +44,7 @@ import {
 } from "@/utils/slash-commands"
 import ClineRulesToggleModal from "../cline-rules/ClineRulesToggleModal"
 import { getModeToggleDraftAction } from "./chat-textarea-mode-toggle"
+import ModelProfileQuickSwitchContainer from "./ModelProfileQuickSwitchContainer"
 import ServersToggleModal from "./ServersToggleModal"
 
 const { MAX_IMAGES_AND_FILES_PER_MESSAGE } = CHAT_CONSTANTS
@@ -1637,6 +1638,18 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							<ServersToggleModal />
 
 							<ClineRulesToggleModal />
+
+							{/*
+							 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+							 * (C1 CHAT_PARENT_REACHABILITY):
+							 * Mount the ModelProfileQuickSwitchContainer in the
+							 * real chat parent footer so users can switch
+							 * profiles directly from the chat composer without
+							 * navigating to Settings. The container is a
+							 * drop-in composition that wires the StateServiceClient
+							 * RPC + the canonical ModelProfileQuickSwitch UI.
+							 */}
+							<ModelProfileQuickSwitchContainer />
 
 							<ModelContainer>
 								<ModelButtonWrapper>

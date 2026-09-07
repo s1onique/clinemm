@@ -11,6 +11,7 @@ import {
 	ShieldCheck,
 	SlidersHorizontal,
 	SquareTerminal,
+	UserCircle2,
 	Wrench,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -29,6 +30,7 @@ import ApiConfigurationSection from "./sections/ApiConfigurationSection"
 import DebugSection from "./sections/DebugSection"
 import FeatureSettingsSection from "./sections/FeatureSettingsSection"
 import GeneralSettingsSection from "./sections/GeneralSettingsSection"
+import ModelProfilesSectionContainer from "./sections/ModelProfilesSectionContainer"
 import { RemoteConfigSection } from "./sections/RemoteConfigSection"
 import SandboxCapabilitiesSection from "./sections/SandboxCapabilitiesSection"
 import TemporaryExternalPathsSection from "./sections/TemporaryExternalPathsSection"
@@ -37,7 +39,7 @@ import TerminalSettingsSection from "./sections/TerminalSettingsSection"
 const IS_DEV = process.env.IS_DEV
 
 // Tab definitions
-type SettingsTabID = "api-config" | "features" | "terminal" | "general" | "about" | "debug" | "remote-config" | "sandbox"
+type SettingsTabID = "api-config" | "features" | "terminal" | "general" | "about" | "debug" | "remote-config" | "sandbox" | "model-profiles"
 interface SettingsTab {
 	id: SettingsTabID
 	name: string
@@ -110,6 +112,21 @@ const SETTINGS_TABS: SettingsTab[] = [
 		headerText: "Sandbox & Capabilities",
 		icon: ShieldCheck,
 	},
+	// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+	// (C2 SETTINGS_PARENT_REACHABILITY):
+	// New tab mounting `ModelProfilesSectionContainer` so the
+	// user can navigate to the model profiles list directly from
+	// Settings. The container wires the StateServiceClient RPC
+	// (listModelProfiles / saveCurrentAsModelProfile /
+	// setDefaultModelProfile / etc.) and supplies the canonical
+	// ModelProfilesSection UI.
+	{
+		id: "model-profiles",
+		name: "Model Profiles",
+		tooltipText: "Saved Model Profiles",
+		headerText: "Model Profiles",
+		icon: UserCircle2,
+	},
 ]
 
 type SettingsViewProps = {
@@ -159,6 +176,13 @@ const SettingsView = ({ onDone, targetSection }: SettingsViewProps) => {
 					<SandboxCapabilitiesSection renderSectionHeader={renderSectionHeader} />
 					<TemporaryExternalPathsSection renderSectionHeader={renderSectionHeader} />
 				</>
+			),
+			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+			// (C2 SETTINGS_PARENT_REACHABILITY): mount the
+			// container that wraps the StateServiceClient RPC +
+			// the canonical ModelProfilesSection UI.
+			"model-profiles": () => (
+				<ModelProfilesSectionContainer renderSectionHeader={renderSectionHeader} />
 			),
 		}),
 		[],

@@ -1654,6 +1654,24 @@ export class Controller {
 			// allocation; both peek and consume go through the canonical
 			// SessionAutoApprovalStore (this.sessionAutoApproval).
 			resolveSessionAutoApprovalOverride: () => this.sessionAutoApproval.peekArmed(),
+			// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+			// (C4 FACTORY_RESUME_EFFECTIVE_CONNECTION):
+			// Production owner resolves the typed
+			// `ProviderConfigurationInstance` from the active profile
+			// binding (resume precedence: task binding > default; new
+			// task precedence: default only). When the owner returns
+			// a typed instance, `SdkSessionConfigBuilder.build`
+			// routes through the typed projector — the legacy
+			// StateManager.getApiConfiguration() path is BYPASSED.
+			resolveProviderInstanceTyped: ({ historyItem, isResume }) => {
+				if (!this.modelProfilesOwner) return undefined
+				const defaultProfileId = this.modelProfilesOwner.getDefaultProfileId?.()
+				return this.modelProfilesOwner.resolveActiveInstanceTyped?.({
+					historyItem,
+					isResume,
+					defaultProfileId,
+				})
+			},
 			// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: share the same
 			// task-operation fence with SdkTaskControlCoordinator and
 			// SdkSessionLifecycle so the latest-user-intent-wins invariant
@@ -2596,10 +2614,22 @@ export class Controller {
 	}
 
 	/**
-	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+	 * ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01
+	 * (CORRECTION01: C3 SAVE_CURRENT_IDENTITY_INVERSION):
+	 *
 	 * Get the providerInstanceId currently driving the active task.
-	 * Resolves from the task's bound ModelProfile (preferred) or
-	 * falls back to the active session's startConfig.providerId.
+	 * Resolves from the task's bound ModelProfile ONLY.
+	 *
+	 * The previous implementation also fell back to "look up an
+	 * instance whose providerId matches" (providerId-matching
+	 * fallback). That was INVALID under the Foundation contract:
+	 * two same-provider instances A and B exist, and the lookup
+	 * would always pick the first same-provider instance, returning
+	 * the wrong identity for a session running on B. The repair
+	 * fails closed: when no bound profile exists, return
+	 * `undefined` and let the caller decide what to do (e.g. the
+	 * RPC handlers reject the save-current / update-from-current
+	 * with an explicit error). The user must bind a profile first.
 	 *
 	 * Used by the model-profile application coordinator to decide
 	 * between the same-instance fast path and full Strategy B
@@ -2617,15 +2647,8 @@ export class Controller {
 				if (profile?.providerInstanceId) return profile.providerInstanceId
 			}
 		}
-		// 2. Fall back to the active session's startConfig.
-		const activeSession = this.sessions.getActiveSession()
-		const providerId = activeSession?.startConfig?.providerId
-		if (!providerId) return undefined
-		// 3. Look up an instance whose providerId matches (best-effort).
-		const instances = this.modelProfilesOwner.instancesStore.list()
-		for (const inst of Object.values(instances)) {
-			if (inst.providerId === providerId) return inst.instanceId
-		}
+		// 2. No bound profile: fail closed. Never guess via providerId
+		//    matching — that recreates the providerId-collapse bug.
 		return undefined
 	}
 

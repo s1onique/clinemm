@@ -47,24 +47,32 @@ export async function saveCurrentAsModelProfile(
 
 	// Resolve the providerInstanceId from the active session binding.
 	// The session binding flow ties an activeProfileId → providerInstanceId.
-	// For "save current", we walk the active profile (if any) or fall
-	// back to the active SDK session's instance binding.
+	//
+	// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+	// (C3 SAVE_CURRENT_IDENTITY_INVERSION):
+	//
+	// The previous implementation fell back to
+	//   Object.values(instances).find(i => i.providerId === providerId)
+	// when no profile was bound. That was INVALID under the
+	// Foundation contract: two same-provider instances A and B exist,
+	// and `find` would always pick the first same-provider instance,
+	// capturing a running session on B as A (the providerId-collapse
+	// bug). The repair fails closed: when no authoritative
+	// `providerInstanceId` is available from the bound profile, we
+	// surface an explicit unsupported-result error. The user can
+	// either (a) bind a profile first, or (b) navigate to Settings
+	// to apply a profile (which uses the typed seam correctly).
 	const currentHistoryItem = owner.getCurrentTaskHistoryItem()
 	const activeProfileId = currentHistoryItem?.activeProfileId
 	const activeProfile = activeProfileId ? owner.profilesStore.read(activeProfileId) : undefined
-	let providerInstanceId = activeProfile?.providerInstanceId
+	const providerInstanceId = activeProfile?.providerInstanceId
 
 	if (!providerInstanceId) {
-		// No profile binding — try to find an instance whose
-		// providerId matches the active session's providerId.
-		const allInstances = owner.instancesStore.list()
-		const match = Object.values(allInstances).find(
-			(i: { providerId: string; instanceId: string }) => i.providerId === providerId,
+		throw new Error(
+			`saveCurrentAsModelProfile: cannot derive an authoritative providerInstanceId for the current task. ` +
+				`The task has no bound ModelProfile (activeProfileId=${activeProfileId ?? "<none>"}). ` +
+				`Bind a profile first (or use Settings → API Configuration to apply one) so the active session carries a stable identity.`,
 		)
-		if (!match) {
-			throw new Error(`saveCurrentAsModelProfile: no ProviderConfigurationInstance found for providerId='${providerId}'`)
-		}
-		providerInstanceId = match.instanceId
 	}
 
 	const saved = saveCurrentAsProfile(owner.profilesStore, trimmedName, providerInstanceId, modelId)
