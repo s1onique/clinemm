@@ -1861,6 +1861,16 @@ LESSONS LEARNED ADDENDUM (post C1 review):
      claim into "what this test proves" vs "what is structurally
      corroborated upstream" is the right discipline.
 
+  #27 (added 2026-09-09 per C2 reviewer caution) pinning witnesses
+     for a CURRENT asymmetry are CHARACTERIZATION, not PERMANENT
+     COMPATIBILITY. When CORRECTION06 eventually changes the policy,
+     the two MPFRB01_C05_P1_PARTIALLY_MALFORMED_ASYMMETRY_* witnesses
+     must be REWRITTEN into the new RED -> GREEN invariant (e.g.
+     "any present non-string-valued entry -> MALFORMED"). Do NOT keep
+     them asserting the OLD silent-drop behavior as a historical
+     contract — that would re-bake the antipattern into the test
+     suite. The witnesses are scaffolding, not load-bearing.
+
 C1: GO TO EXACT-HEAD BUILD/INSTALL -> REPEAT LIVE FIRST-PROFILE CREATION.
    The next genuinely useful step is to build/install a new exact-head
    VSIX from commit 2ba7e3be0 (or its post-C1-acceptance successor) and
