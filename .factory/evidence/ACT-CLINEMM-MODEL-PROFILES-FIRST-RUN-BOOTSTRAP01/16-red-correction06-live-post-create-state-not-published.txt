@@ -1,0 +1,77 @@
+RED witness for ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION06
+
+LIVE_FOUND P0:
+  HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED
+
+Repro (live first-run dogfood, exact-HEAD install from C2 closure):
+
+  1. Fresh user installs the exact-HEAD VSIX (post-CORRECTION05 C2).
+  2. Configures OpenAI-compatible provider (MiniMax-M3 endpoint) with
+     a real API key. Legacy persisted `openAiHeaders` is `{}` (now
+     canonically ABSENT per CORRECTION05).
+  3. Opens Settings > Model Profiles.
+  4. Sees the B4 onboarding pane with the "Create first profile" CTA
+     and the "openai · MiniMax-M3" current-config summary card (both
+     B4 GREEN from the prior closure).
+  5. Clicks the CTA, types a name, clicks Create.
+  6. Result:
+       Live banner:     "Profile created."          (success toast)
+       Profiles list:   empty, still showing the
+                        "Create first profile" CTA (zero-profile
+                        onboarding pane re-rendered)
+
+Backend state at this point:
+  profiles.json     = { profiles: { 'prof-XXXX': { ... } } }   (durable write OK)
+  instances.json    = { instances: { 'inst-XXXX': { ... } } } (durable write OK)
+  secrets.json      = { 'instance:inst-XXXX': 'sk-...' }      (durable write OK)
+  ExtensionState    = { modelProfiles: [], defaultModelProfileId: null,
+                        activeModelProfileId: null }          (BUG: state push
+                                                                carries empty list)
+
+AUTHORITY BOUNDARY:
+  The post-create state push from SdkController.getStateToPostToWebview()
+  to the base state builder (apps/vscode/src/core/controller/state/
+  getStateToPostToWebview.ts) silently drops `modelProfilesOwner`
+  because the SdkController's inline-object call site at line 4192
+  omits the field. The base builder's projection at line 192-194
+  then sees `controller.modelProfilesOwner === undefined` and falls
+  through to the empty default — producing the screenshot mismatch.
+
+FIRST-BAD-LINE TRACE:
+  bootstrapModelProfileFromCurrentConfiguration.handler (SdkController.ts:4192-4230)
+    -- calls `buildBaseState({...})` with an inline object literal that
+       omits `modelProfilesOwner: this.modelProfilesOwner`
+  buildBaseState (getStateToPostToWebview.ts:192-194)
+    -- reads `controller.modelProfilesOwner` via unsafe `as { ... }` cast
+       that was hiding the missing field on the caller side
+  Falls through to empty default (line 219-223)
+  sendStateUpdate ships `modelProfiles: []` to the webview
+  Webview's useExtensionState().modelProfiles is empty
+  ModelProfilesSectionContainer shows the onboarding pane
+
+NOT A TWO-STORE BUG:
+  The leading hypothesis was that the bootstrap writes through one
+  ProfilesStore and getStateToPostToWebview reads from another.
+  Inspection confirms both paths use `controller.modelProfilesOwner.profilesStore`
+  (the SAME instance via the production owner). The defect is purely
+  on the publication side: the call site failed to thread the owner
+  through to the projection.
+
+EXECUTABLE RED:
+  MPFRB01_C06_PUBLICATION_THREADS_OWNER
+    bootstrap returns CREATED
+    subsequent getStateToPostToWebview call
+    -> ExtensionState.modelProfiles contains the freshly-created profile
+    RED ACTUAL (before fix):
+      buildBaseState receives NO modelProfilesOwner (omitted from
+      inline object literal call site)
+      projection falls through to empty default
+      modelProfiles.length === 0 (NOT the freshly-written profile)
+
+CAUGHT AT THE BOUNDARY:
+  The defect is at the LHS call site
+  (SdkController.getStateToPostToWebview -> buildBaseState argument),
+  not at the RHS projection (which is correct in isolation given a
+  properly-threaded owner). The CORRECTION06 fix is bounded to
+  threading `modelProfilesOwner: this.modelProfilesOwner` into the
+  inline object literal.

@@ -1887,3 +1887,294 @@ C1: GO TO EXACT-HEAD BUILD/INSTALL -> REPEAT LIVE FIRST-PROFILE CREATION.
    Only after L-C05-1/2/3 succeed should dogfood proceed to A/B
    switching and the PARTIALLY_MALFORMED_HEADERS_POLICY review (post-
    dogfood decision, not pre-dogfood).
+
+## CORRECTION06 (2026-09-09, bounded: LIVE_FOUND P0 absorb)
+
+### Trigger (LIVE_FOUND during L-C05-1 dogfood retest)
+
+The reviewer-directed dogfood retest surfaced a SECOND live defect.
+The exact-HEAD VSIX post-C1-acceptance (commit 01e724049) reported:
+
+  - Bootstrap RPC returns CREATED                              (success banner)
+  - profiles.json / instances.json / secrets.json all on disk (durable OK)
+  - ExtensionState.modelProfiles = []                          (BUG)
+  - Webview re-renders the zero-profile onboarding pane         (visible)
+
+This is a NEW failure class from the previous corrections. The
+write succeeded, the success envelope reached the webview, but
+the post-create state push still shipped `modelProfiles: []`.
+The user's report:
+
+  ```
+  bootstrap RPC        = SUCCESS
+  durable creation     = apparently SUCCESS
+  success banner       = visible
+  webview profile list = still EMPTY
+  ```
+
+### Classification
+
+```text
+LIVE_PROFILE_WRITE                  = PASS
+LIVE_BOOTSTRAP_RESPONSE             = CREATED
+LIVE_SUCCESS_BANNER                 = PASS
+LIVE_WEBVIEW_PROFILE_CONVERGENCE    = FAIL
+
+P0 = HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED
+```
+
+### First-bad-boundary trace (mechanical, not assumed)
+
+Inspected the write -> publication chain:
+
+```text
+bootstrapModelProfileFromCurrentConfiguration.handler
+  -- reads controller.modelProfilesOwner                    [OK, exists]
+  -- calls bootstrapPrimitive(deps, name) with deps.profilesStore
+     = owner.profilesStore                                 [OK, same instance]
+  -- primitive awaits deps.profilesStore.upsert(profile)    [OK, disk updated]
+  -- primitive awaits deps.postStateToWebview()             [enqueues via
+                                                              debouncer, returns]
+  -- debouncer fires after 50ms:
+       flushStateToWebview() ->
+         this.getStateToPostToWebview() (SdkController method)
+         -- buildBaseState({...inline object...})           [BUG]
+         -- sends state to webview via sendStateUpdate()
+```
+
+The BUG is at the `buildBaseState({...})` call site at
+`apps/vscode/src/sdk/SdkController.ts:4192-4230`. The
+inline-object literal DOES NOT include `modelProfilesOwner`.
+
+The base builder at `apps/vscode/src/core/controller/state/
+getStateToPostToWebview.ts:192-194` reads
+`controller.modelProfilesOwner` via an unsafe `as { ... }` cast.
+The cast was hiding the missing field on the caller side. The
+projection at line 205-241 sees
+`controller.modelProfilesOwner === undefined`, falls through to
+the empty default, and ships `modelProfiles: []`.
+
+NOT the leading "two ProfilesStore instances with stale in-memory
+state" hypothesis: both write and read paths use
+`controller.modelProfilesOwner.profilesStore` -- the SAME
+instance via the production owner
+(`createProductionModelProfilesOwner` returns the single
+`profilesStore` it constructed; both the bootstrap handler and
+the getStateToPostToWebview caller dereference the same field).
+
+NOT a stale-cache issue: `ProfilesStore` has a single in-memory
+`cache` field that is mutated immediately by `upsert()`. There
+is no debounced cache invalidation gap to chase.
+
+NOT a postStateToWebview not-awaited issue: the bootstrap awaits
+`deps.postStateToWebview()`, which goes through the
+`StatePostDebouncer.post()` -> `flushStateToWebview()` ->
+`this.getStateToPostToWebview()` chain. The await resolves
+when the snapshot has been shipped.
+
+The defect is purely a publication-side wiring defect: the
+`modelProfilesOwner` field was not threaded through to the
+projection. Unsafe `as { ... }` cast hid the missing field from
+the type system for the entire prior PR chain.
+
+### Bounded correction (no new design ACT)
+
+Per reviewer directive ("Do NOT reopen the whole bootstrap ACT.
+Use CORRECTION06."):
+
+  (1) SdkController.getStateToPostToWebview() (apps/vscode/src/sdk/
+      SdkController.ts:4192-4230): add `modelProfilesOwner:
+      this.modelProfilesOwner` to the `buildBaseState({...})`
+      argument list. This is the single load-bearing production
+      code change.
+
+  (2) getStateToPostToWebview parameter type
+      (apps/vscode/src/core/controller/state/
+      getStateToPostToWebview.ts:48): add `modelProfilesOwner?:
+      { profilesStore; instancesStore; getCurrentTaskHistoryItem? }`
+      to the formal controller parameter shape. This makes the
+      previously-hidden field visible at the type level so future
+      callers cannot silently omit it again.
+
+  (3) getStateToPostToWebview projection
+      (apps/vscode/src/core/controller/state/
+      getStateToPostToWebview.ts:205-241): remove the unsafe
+      `as { ... }` cast chain. Read `controller.modelProfilesOwner`
+      directly. The runtime guard `typeof ... list === "function"`
+      is preserved as defensive programming.
+
+  (4) NEW RED -> GREEN witness:
+      MPFRB01_C06_PUBLICATION_THREADS_OWNER (added to
+      apps/vscode/src/sdk/SdkController.test.ts) -- drives
+      SdkController.prototype.getStateToPostToWebview.call() with
+      a mock `modelProfilesOwner` on the controller, records the
+      `buildBaseState` call args, asserts `modelProfilesOwner`
+      was threaded through. RED ACTUAL before the fix
+      (the field was missing from the inline-object literal);
+      GREEN after.
+
+  (5) NEW RHS projection witness:
+      MPFRB01_C06_POST_CREATE_STATE_CONVERGENCE
+      (apps/vscode/src/core/controller/state/
+      post-create-state-convergence.mpfrb01-correction06.test.ts)
+      -- drives the REAL bootstrap handler + REAL
+      getStateToPostToWebview against a fake controller that wires
+      the SAME ProfilesStore. Asserts the post-create state payload
+      contains the freshly-created profile. RHS witness; would
+      have been GREEN before the fix too (the projection is
+      correct in isolation), so it serves as a regression guard
+      rather than a RED witness. The RED witness is the LHS one.
+
+### RED -> GREEN matrix
+
+```text
+                                        before fix    after fix
+MPFRB01_C06_PUBLICATION_THREADS_OWNER      RED          GREEN
+MPFRB01_C06_POST_CREATE_STATE_CONVERGENCE  GREEN*       GREEN
+                                          (* RHS; was
+                                           never the
+                                           bug site)
+```
+
+### Files edited (production)
+
+  apps/vscode/src/sdk/SdkController.ts:4205-4217
+    + modelProfilesOwner: this.modelProfilesOwner (with comment
+      block referencing CORRECTION06 + the LIVE_FOUND P0)
+
+  apps/vscode/src/core/controller/state/getStateToPostToWebview.ts:40-59
+    + modelProfilesOwner?: { ... } formal parameter type
+
+  apps/vscode/src/core/controller/state/getStateToPostToWebview.ts:205-251
+    - the unsafe `as { modelProfilesOwner?: ... }` cast chain
+    + direct read of `controller.modelProfilesOwner`
+    + CORRECTION06 in-line comment
+
+### Files added (test infra)
+
+  apps/vscode/src/sdk/SdkController.test.ts
+    + MPFRB01_C06_PUBLICATION_THREADS_OWNER (1 test, RED -> GREEN)
+
+  apps/vscode/src/core/controller/state/post-create-state-convergence.mpfrb01-correction06.test.ts
+    + MPFRB01_C06_POST_CREATE_STATE_CONVERGENCE (1 test, RHS regression guard)
+
+### Test results (CORRECTION06)
+
+```text
+$ cd apps/vscode && PATH=/opt/homebrew/bin:$PATH bunx vitest run \
+    src/sdk/SdkController.test.ts -t "MPFRB01_C06"
+
+  Tests  1 passed | 19 skipped (20)
+
+$ cd apps/vscode && PATH=/opt/homebrew/bin:$PATH bunx vitest run \
+    src/core/controller/state/post-create-state-convergence.mpfrb01-correction06.test.ts
+
+  Tests  1 passed (1)
+
+$ cd apps/vscode && PATH=/opt/homebrew/bin:$PATH bunx vitest run \
+    src/core/controller/state/
+
+  Test Files  8 passed (8)
+       Tests  45 passed (45)
+
+$ cd apps/vscode && PATH=/opt/homebrew/bin:$PATH bun test \
+    src/sdk/__tests__/bootstrap-*.test.ts \
+    src/sdk/__tests__/bootstrap-empty-headers-as-absent.mpfrb01-correction05.test.ts
+
+  25 pass / 0 fail
+
+$ cd apps/vscode && PATH=/opt/homebrew/bin:$PATH bun test \
+    src/sdk/__tests__/model-profile-*.test.ts \
+    src/sdk/__tests__/model-profiles-store.mpqs01.test.ts
+
+  57 pass / 0 fail
+
+$ cd apps/vscode && PATH=/opt/homebrew/bin:$PATH bun x tsc --noEmit; echo exit=$?
+  exit=0
+```
+
+### Verdict (post CORRECTION06)
+
+```text
+P0:
+  HALT_BOOTSTRAP_EMPTY_HEADERS_REJECTED                = CLOSED (CORRECTION05)
+  HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED = CLOSED (CORRECTION05)
+  HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED   = CLOSED (CORRECTION06)
+
+P1:
+  PARTIALLY_MALFORMED_HEADERS_POLICY                   = OPEN, NON-BLOCKING
+    freeze #6 added; pinning witnesses added; deferred to
+    post-dogfood (likely future CORRECTION07).
+
+P2:
+  BLANK_AT_EOF_DIAGNOSTICS                             = OPEN, NON-BLOCKING
+```
+
+### Lessons learned (additive, CORRECTION06)
+
+#28 an unsafe `as { field?: T }` cast on a function parameter is
+   effectively an unchecked escape hatch: it lets callers silently
+   omit the field and the function compiles fine, the type system
+   has no opinion, and the runtime falls through to the empty
+   default. The cast was hiding a load-bearing wiring defect for
+   the entire prior PR chain (B1, B2, CORRECTION02, CORRECTION03,
+   CORRECTION04, B3, B4, CORRECTION05). The fix is NOT just to
+   thread the field through -- it is also to PROMOTE the field
+   to a formal parameter type so future callers cannot omit it
+   silently. Both halves of the fix are needed; doing only the
+   first would leave the cast as a trip wire for the next defect.
+
+#29 the leading hypothesis for a "writes OK but reads stale" bug
+   is often "two stores with stale in-memory cache". For a single
+   owner composition where both paths dereference the SAME field,
+   that hypothesis is wrong -- the bug is on the publication side,
+   not on the storage side. The lesson: when the wiring is a
+   single-owner composition, trace the WRITE side first to confirm
+   the field identity, then trace the READ side's argument
+   construction. The defect is almost always at the argument
+   construction site, not at the store identity.
+
+#30 state-publication seams are NOT tested by tests that drive
+   the standalone state builder directly. A test that calls
+   `getStateToPostToWebview(controller)` exercises the projection
+   seam in isolation -- which is necessary but not sufficient.
+   The full path goes through `SdkController.getStateToPostToWebview()`
+   which has its own argument-construction logic. To test the
+   full path, the test must drive the SdkController method with
+   `SdkController.prototype.getStateToPostToWebview.call(...)`
+   and inspect the args passed to `buildBaseState` (the inner
+   state-builder call). MPFRB01_C06_PUBLICATION_THREADS_OWNER is
+   the LHS witness for this seam; the projection-side witness
+   (MPFRB01_C06_POST_CREATE_STATE_CONVERGENCE) is the RHS.
+
+#31 (RED -> GREEN discipline) when a bounded correction is
+   LATERAL -- i.e., closes a defect that the prior chain
+   unintentionally surfaced -- do NOT expand it into a sweep
+   that also fixes latent antipatterns. CORRECTION06 had two
+   tempting adjacent fixes: (a) refactor the projection to use
+   a real typed projection helper, (b) close the
+   PARTIALLY_MALFORMED_HEADERS_POLICY P1 by refusing non-string-
+   valued entries instead of silently dropping them. Neither is
+   in scope; both are deferred to their own bounded ACT. The
+   correction is "thread the owner through, period". This
+   preserves the bounded-correction discipline established in
+   CORRECTION05.
+
+### Next step
+
+CORRECTION06 closes the LIVE_FOUND P0 surfaced by the L-C05-1
+dogfood retest. The next genuinely useful step is to rebuild +
+install the new exact-head VSIX (post-CORRECTION06) and re-run
+the L-C05 dogfood flow:
+
+  L-C05-1   legacy openAiHeaders={} -> Settings > Model Profiles ->
+            Create first profile -> CREATED -> profile appears in
+            the list (NOT empty anymore).
+  L-C05-2   reload VS Code -> profile still present -> credential
+            still resolves.
+  L-C05-3   use created profile -> next real MiniMax request
+            succeeds.
+
+Only after L-C05-1/2/3 succeed should dogfood proceed to A/B
+switching (L-C05-4) and the PARTIALLY_MALFORMED_HEADERS_POLICY
+review (post-dogfood decision, not pre-dogfood).

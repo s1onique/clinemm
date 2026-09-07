@@ -93,6 +93,7 @@ import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
 import { isPostTerminalAuthorityDiagnosticEffectivelyEnabled } from "./post-terminal-authority-diagnostic-runtime"
+import { createProductionModelProfilesOwner, type ModelProfilesOwnerDeps } from "./profile-store/owner"
 import {
 	PROVIDER_FAILURE_ERROR_TYPE,
 	PROVIDER_FAILURE_PHASE,
@@ -115,7 +116,6 @@ import { SdkMcpCoordinator } from "./sdk-mcp-coordinator"
 import { SdkMessageCoordinator, type SessionEventListener } from "./sdk-message-coordinator"
 import { SdkModeCoordinator } from "./sdk-mode-coordinator"
 import { SdkProviderChangeCoordinator } from "./sdk-provider-change-coordinator"
-import { createProductionModelProfilesOwner, type ModelProfilesOwnerDeps } from "./profile-store/owner"
 import { SdkSessionAutoApprovalCoordinator } from "./sdk-session-auto-approval-coordinator"
 import { SdkSessionConfigBuilder } from "./sdk-session-config-builder"
 import { SdkSessionEventCoordinator } from "./sdk-session-event-coordinator"
@@ -4203,6 +4203,18 @@ export class Controller {
 				// SdkController builds one lazily). The task-header working-directory
 				// badge and anything else keyed on workspaceRoots depend on it.
 				workspaceManager: await this.ensureWorkspaceManager(),
+				// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION06:
+				// Thread the production `modelProfilesOwner` into the base
+				// state builder so `ExtensionState.modelProfiles` /
+				// `defaultModelProfileId` / `activeModelProfileId` are
+				// projected from the freshly-written `profiles.json`
+				// after a bootstrap or CRUD RPC. Without this, the
+				// projection at `getStateToPostToWebview.ts:192-194`
+				// sees `controller.modelProfilesOwner === undefined` and
+				// the webview gets `modelProfiles: []` even though the
+				// durable write succeeded (live dogfood
+				// HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED).
+				modelProfilesOwner: this.modelProfilesOwner,
 				// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 				// (nineteenth-pass): Boundary 3 -> 4 carrier. The
 				// host-side W capture is populated by the

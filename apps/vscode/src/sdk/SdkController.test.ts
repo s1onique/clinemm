@@ -36,6 +36,78 @@ vi.mock("@core/controller/state/getStateToPostToWebview", () => ({
 	getStateToPostToWebview: buildBaseStateMock,
 }))
 
+// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION06 (live-found P0):
+// State publication must thread `modelProfilesOwner` through to the base
+// state builder, so the post-create ExtensionState.modelProfiles projection
+// reads the freshly-written profiles. Without this, the bootstrap RPC
+// returns CREATED but the next state push still carries modelProfiles=[],
+// and the webview re-renders the zero-profile onboarding pane (live dogfood).
+describe("SDK state publication threads modelProfilesOwner through", () => {
+	it("MPFRB01_C06_PUBLICATION_THREADS_OWNER: SdkController.getStateToPostToWebview passes modelProfilesOwner to the base state builder", async () => {
+		// The mock resolves successfully AND records the call args; the
+		// first call is the one we care about. We do NOT need to wait
+		// for the rest of SdkController.getStateToPostToWebview to
+		// complete (it touches several other collaborators whose
+		// mocks would otherwise need to be exhaustive); instead we
+		// arrange for the next collaborator access to throw and let
+		// the test catch the throw, then assert on the recorded args.
+		let recordedArgs: unknown
+		;(
+			buildBaseStateMock as unknown as { mockImplementationOnce: (fn: (...a: unknown[]) => unknown) => void }
+		).mockImplementationOnce(async (args: unknown) => {
+			recordedArgs = args
+			// Throw after recording so the rest of
+			// getStateToPostToWebview short-circuits; we don't care
+			// about the throw - only about what was passed to us.
+			throw new Error("STOP_AFTER_RECORD")
+		})
+		const fakeOwner = {
+			profilesStore: { list: () => ({}) },
+			instancesStore: { read: () => undefined, list: () => ({}) },
+		}
+		const controller = {
+			// SdkController.getStateToPostToWebview reads
+			// `this.context.workspaceState` for the diagnostic toggle
+			// sync; the mock below satisfies the read and lets the test
+			// reach the load-bearing `buildBaseState` call.
+			context: {
+				workspaceState: { get: () => undefined, update: () => undefined },
+				globalStorageUri: { fsPath: "/tmp" },
+				subscriptions: [],
+			},
+			stateManager: {
+				getGlobalSettingsKey: () => undefined,
+				getRemoteConfigSettings: () => ({}),
+				setGlobalState: vi.fn(),
+			},
+			backgroundCommandRunning: false,
+			backgroundCommandTaskId: undefined,
+			foregroundCommands: { isRunning: false },
+			isRemoteConfigAvailable: false,
+			currentRemoteConfigRevision: 0,
+			ensureWorkspaceManager: async () => undefined,
+			taskHistory: { listHistory: async () => [] },
+			sessions: { getActiveSession: () => undefined },
+			turnStateTracker: { get: () => undefined },
+			messageTranslatorState: { getMinter: () => ({ epoch: 1, nextSeq: () => 1 }) },
+			modelProfilesOwner: fakeOwner,
+		}
+
+		// Catch the synthetic STOP_AFTER_RECORD - the buildBaseState
+		// call has already happened by the time it propagates.
+		await SdkController.prototype.getStateToPostToWebview.call(controller as never).catch((err: Error) => {
+			if (err.message !== "STOP_AFTER_RECORD") throw err
+		})
+
+		// Load-bearing assertion: the owner MUST be threaded into the
+		// base state builder so the projection at
+		// `getStateToPostToWebview.ts:192-194` finds it. Without this,
+		// every post-create state push has modelProfiles=[].
+		expect(recordedArgs).toBeDefined()
+		expect((recordedArgs as { modelProfilesOwner?: unknown }).modelProfilesOwner).toBe(fakeOwner)
+	})
+})
+
 describe("SDK remote-config coordination", () => {
 	it("posts the current remote-config revision to the webview", async () => {
 		const controller = {

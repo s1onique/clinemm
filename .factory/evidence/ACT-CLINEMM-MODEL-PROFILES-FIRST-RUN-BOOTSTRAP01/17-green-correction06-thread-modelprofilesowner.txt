@@ -1,0 +1,85 @@
+GREEN witness for ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION06
+
+Bounded fix (3 files):
+
+  apps/vscode/src/sdk/SdkController.ts:4192-4230
+    Added `modelProfilesOwner: this.modelProfilesOwner` to the
+    inline-object argument of `buildBaseState({...})`. The
+    SdkController.getStateToPostToWebview() method now threads
+    the production owner into the base state builder, so the
+    projection at `getStateToPostToWebview.ts:205-241` reads
+    the freshly-written profiles.json and projects them into
+    ExtensionState.modelProfiles.
+
+  apps/vscode/src/core/controller/state/getStateToPostToWebview.ts
+    (a) Parameter type (line 48): added `modelProfilesOwner?: { ... }`
+        to the formal controller parameter shape. Previously this
+        field was only accessible via an unsafe `as { ... }` cast
+        at line 192-194, which hid the wiring defect.
+    (b) Projection (line 205-241): removed the unsafe cast chain
+        (the `as { modelProfilesOwner?: ... }` pattern that was
+        papering over the missing field) and read the owner directly
+        off `controller.modelProfilesOwner`. The runtime guard
+        `typeof modelProfilesOwner?.profilesStore?.list === "function"`
+        is preserved as defensive programming.
+
+  apps/vscode/src/sdk/SdkController.test.ts (NEW TEST)
+    MPFRB01_C06_PUBLICATION_THREADS_OWNER:
+      Stub-mocks `buildBaseState`, drives
+      `SdkController.prototype.getStateToPostToWebview.call(controller)`,
+      records the call args, asserts that `modelProfilesOwner` is in
+      the recorded args. Was RED before the fix (the inline-object
+      call site omitted the field); GREEN after.
+
+  apps/vscode/src/core/controller/state/post-create-state-convergence.mpfrb01-correction06.test.ts (NEW FILE)
+    End-to-end projection-side witness. Drives the REAL bootstrap
+    handler + REAL getStateToPostToWebview against a fake
+    controller that wires the SAME ProfilesStore. Asserts that the
+    post-create state payload contains the freshly-created profile
+    (name="My first", modelId="claude-sonnet-4-6", isActive=false,
+    isDefault=false). This is the RHS witness; the LHS witness
+    (MPFRB01_C06_PUBLICATION_THREADS_OWNER above) is the one that
+    was RED before the fix.
+
+Test results (CORRECTION06):
+  bunx vitest run src/sdk/SdkController.test.ts -t "MPFRB01_C06"
+    -> 1 passed (the new RED->GREEN witness)
+
+  bunx vitest run src/core/controller/state/post-create-state-convergence.mpfrb01-correction06.test.ts
+    -> 1 passed (the new RHS projection witness)
+
+  bunx vitest run src/core/controller/state/
+    -> 45 passed / 0 fail (all controller-state tests stay green;
+       the new file is the 45th)
+
+  bunx vitest run src/sdk/SdkController.test.ts
+    -> 17 passed + 1 new (MPFRB01_C06) = 18 passed,
+       3 pre-existing failures (in tests that exercise paths
+       unrelated to modelProfilesOwner - those failures predate
+       CORRECTION06 and are not addressed by this bounded fix)
+
+  bun test src/sdk/__tests__/bootstrap-*.test.ts
+    -> 25/25 pass (full bootstrap regression suite stays GREEN)
+
+  bun test src/sdk/__tests__/model-profile-*.test.ts
+    -> 57/57 pass (model-profile composition + RPC + summary
+       + lifecycle + application tests stay GREEN)
+
+  bun x tsc --noEmit (apps/vscode/)
+    -> exit 0 (typecheck clean; the new
+       `modelProfilesOwner?: { ... }` parameter is the formal
+       wire shape that future callers MUST thread through)
+
+CORRECTION06 closes the LIVE_FOUND P0
+HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED without:
+  - redesigning the bootstrap RPC
+  - redesigning the projection
+  - redesigning the UI / onboarding pane
+  - changing the ProfilesStore identity (the store is the same
+    on both write and read sides)
+  - adding React local state to patch the symptom
+
+The only behavior change: the post-create state push now carries
+the freshly-written profile. CREATED_RESPONSE_MEANS_DURABLE_WRITE
+remains YES (unchanged from CORRECTION02); CREATED_RESPONSE_MEANS_UI_CONVERGED
+flips from NO to YES (the bug fix is what closes the gap).

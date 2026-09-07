@@ -37,6 +37,26 @@ export async function getStateToPostToWebview(controller: {
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
 	isRemoteConfigAvailable?: boolean
 	currentRemoteConfigRevision?: number
+	// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01 / CORRECTION06:
+	// Production `modelProfilesOwner` (SINGLE composition authority for
+	// profile + instance + stateManager). The projection at lines 192-241
+	// reads `controller.modelProfilesOwner?.profilesStore.list()` to
+	// produce the webview-safe `ModelProfileSummary[]` payload.
+	// MUST be threaded in by SdkController.getStateToPostToWebview;
+	// when undefined, the projection falls through to the empty default
+	// (live-found P0 HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED).
+	modelProfilesOwner?: {
+		profilesStore: {
+			list(): Record<string, unknown>
+			read(profileId: string): unknown
+		}
+		instancesStore: {
+			read(instanceId: string): unknown
+			list(): Record<string, unknown>
+		}
+		// Optional helpers used by the projection for active/default binding.
+		getCurrentTaskHistoryItem?: () => unknown
+	}
 	// ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01
 	// (nineteenth-pass): Boundary 3 -> 4 carrier for the
 	// authoritative current working-context estimate (W).
@@ -182,16 +202,23 @@ export async function getStateToPostToWebview(controller: {
 		})
 	}
 
-	// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01:
+	// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01 / CORRECTION06:
 	// Project ModelProfiles + active/default binding onto
 	// ExtensionState. The webview consumes these via the
 	// `modelProfiles`, `defaultModelProfileId`, `activeModelProfileId`
 	// fields. The projection is computed ONLY when the controller
 	// owns a `modelProfilesOwner` — otherwise the webview sees
 	// `undefined` and falls back to its local defaults.
-	const modelProfilesOwner = (
-		controller as { modelProfilesOwner?: { profilesStore: unknown; instancesStore: unknown } }
-	).modelProfilesOwner
+	//
+	// CORRECTION06 (live-found P0
+	// HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED): the
+	// owner is now part of the formal controller parameter type
+	// (line 48 above), so SdkController.getStateToPostToWebview
+	// MUST thread it through. The `modelProfilesOwner` field is
+	// read here directly without the previous unsafe `as { ... }`
+	// cast — the cast was hiding a wiring defect where the
+	// inline-object call site omitted the owner and the projection
+	// silently fell through to the empty default.
 	let modelProfilesProjection: {
 		modelProfiles: ExtensionState["modelProfiles"]
 		defaultModelProfileId: ExtensionState["defaultModelProfileId"]
@@ -201,35 +228,20 @@ export async function getStateToPostToWebview(controller: {
 		defaultModelProfileId: null,
 		activeModelProfileId: null,
 	}
-	if (
-		modelProfilesOwner &&
-		typeof (modelProfilesOwner as { profilesStore?: { list?: unknown } }).profilesStore?.list === "function"
-	) {
+	const modelProfilesOwner = controller.modelProfilesOwner
+	if (modelProfilesOwner && typeof modelProfilesOwner.profilesStore?.list === "function") {
 		try {
-			const owner = modelProfilesOwner as unknown as Parameters<
-				typeof import("@/sdk/profile-store/owner").projectExtensionStateModelProfiles
-			>[0] extends infer T
-				? T extends { profilesStore: infer _P }
-					? NonNullable<T>
-					: never
-				: never
 			const defaultProfileId = (
 				controller.stateManager as {
 					getGlobalStateKey(key: "defaultModelProfileId"): string | undefined
 				}
 			).getGlobalStateKey("defaultModelProfileId")
 			const taskHistoryItem = (controller.task as { taskId?: string } | undefined)?.taskId
-				? (
-						owner as unknown as {
-							getCurrentTaskHistoryItem?: () => { activeProfileId?: string } | undefined
-						}
-					).getCurrentTaskHistoryItem?.()
+				? modelProfilesOwner.getCurrentTaskHistoryItem?.()
 				: undefined
-			const projection = (
-				await import("@/sdk/profile-store/owner")
-			).projectExtensionStateModelProfiles({
-				profilesStore: (owner as { profilesStore: unknown }).profilesStore as never,
-				instancesStore: (owner as { instancesStore: unknown }).instancesStore as never,
+			const projection = (await import("@/sdk/profile-store/owner")).projectExtensionStateModelProfiles({
+				profilesStore: modelProfilesOwner.profilesStore as never,
+				instancesStore: modelProfilesOwner.instancesStore as never,
 				defaultProfileId,
 				historyItem: taskHistoryItem as never,
 			})
