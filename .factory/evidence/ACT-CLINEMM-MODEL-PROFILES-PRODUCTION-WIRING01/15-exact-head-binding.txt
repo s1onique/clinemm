@@ -1,0 +1,43 @@
+ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01
+EXACT-HEAD BINDING
+==================
+
+SUBJECT_HEAD     = ff23751f8f5d086537bec119dd838c5297c3ec22
+PARENT_HEAD      = 632b37f7824b59e7fffb909508f414200b00bdaa
+ENTRY_HEAD       = 632b37f7824b59e7fffb909508f414200b00bdaa
+PRODUCTION_FOUNDATION_HEAD = 632b37f7824b59e7fffb909508f414200b00bdaa
+MPQS01_HEAD      = 632b37f7824b59e7fffb909508f414200b00bdaa
+PIIF01_FOUNDATION_HEAD = 632b37f7824b59e7fffb909508f414200b00bdaa
+
+SUBJECT commit subject = "MPW01 bounded reopen: production reachability + helper layer"
+
+VSIX_PATH         = NOT_BUILT (LIVE_DOGFOOD_PENDING; out of substrate)
+VSIX_BYTES        = N/A
+VSIX_SHA256       = N/A
+VSIX_VERSION      = N/A (no package version bump in this ACT)
+
+VERIFICATION:
+  $ git rev-parse HEAD        -> ff23751f8f5d086537bec119dd838c5297c3ec22
+  $ git rev-parse HEAD~1      -> 632b37f7824b59e7fffb909508f414200b00bdaa
+  $ git log --oneline -3      -> see commit history
+  $ git status --short        -> clean (all work committed)
+
+BINDING DISCIPLINE (per reviewer verdict §D):
+  - The implementation is committed at the subject HEAD
+    BEFORE the final evidence is bound to it (this file).
+  - The evidence directory contains the entry freeze
+    (00-entry-freeze.txt) recorded against ENTRY_HEAD = 632b37f78,
+    AND the final report (14-final-report.md) recorded against
+    SUBJECT_HEAD = ff23751f8.
+  - The exact-head binding is the final step that proves the
+    evidence was generated against the same subject the
+    implementation lives in.
+
+FOLLOW-ON NOTE:
+  P0-3 SESSION_BINDING_FACTORY_INTEGRATION remains PARTIAL.
+  Recommended follow-on bounded ACT:
+    ACT-CLINEMM-MODEL-PROFILES-FACTORY-INTEGRATION01
+  This binds the helper output (resolveActiveProfileForResume/
+  ForNewTask) into `cline-session-factory.buildSessionConfig`
+  so that CoreSessionConfig is constructed from the active
+  profile binding (or the global default).
