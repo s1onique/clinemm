@@ -29,7 +29,12 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 import type { ModelProfileSummary } from "@/services/model-profile-types"
-import { type BootstrapModelProfileResultLike, bootstrapStatusToSeverity, ModelProfilesSection } from "./ModelProfilesSection"
+import {
+	type BootstrapModelProfileResultLike,
+	bootstrapStatusToSeverity,
+	ModelProfilesSection,
+	parseBootstrapStatus,
+} from "./ModelProfilesSection"
 
 const PROFILES: ModelProfileSummary[] = [
 	{
@@ -45,6 +50,9 @@ const PROFILES: ModelProfileSummary[] = [
 function renderSection(
 	overrides: Partial<React.ComponentProps<typeof ModelProfilesSection>> = {},
 	bootstrapResult: BootstrapModelProfileResultLike | null = null,
+	// B4: extra props slot for currentConfiguration etc.; merged into overrides
+	// so individual tests can specify it without touching the bootstrapResult arg.
+	extraOverrides: Partial<React.ComponentProps<typeof ModelProfilesSection>> = {},
 ) {
 	const onSave = vi.fn()
 	const onUse = vi.fn()
@@ -68,6 +76,7 @@ function renderSection(
 		onBootstrapFromCurrent: onBootstrap,
 		bootstrapResult,
 		...overrides,
+		...extraOverrides,
 	}
 	const result = render(<ModelProfilesSection {...props} />)
 	return {
@@ -213,7 +222,11 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04 / B3-U
 	})
 
 	it("MPFRB01_B3_UI_BOOTSTRAP_BUTTON: clicking the bootstrap button invokes onBootstrapFromCurrent", async () => {
-		const { onBootstrap } = renderSection({}, null)
+		// B4: the bootstrap button now lives INSIDE the first-run onboarding
+		// pane (profiles.length===0); rendering with profiles:[] ensures the
+		// pane is visible. With non-empty profiles the management view hides
+		// the onboarding pane (and therefore the button).
+		const { onBootstrap } = renderSection({ profiles: [] }, null)
 		await userEvent.click(screen.getByTestId("model-profiles-bootstrap"))
 		expect(onBootstrap).toHaveBeenCalledTimes(1)
 	})
@@ -224,6 +237,9 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04 / B3-U
 	})
 
 	it("MPFRB01_B3_UI_NO_BOOTSTRAP_BUTTON: when onBootstrapFromCurrent is omitted, the button is hidden - section stays additive-only", () => {
+		// B4: the button only renders inside the onboarding pane when
+		// (a) profiles is empty AND (b) the callback is provided. With
+		// profiles non-empty AND no callback, the button is hidden.
 		const props: React.ComponentProps<typeof ModelProfilesSection> = {
 			profiles: PROFILES,
 			canCreateFromCurrent: true,
@@ -238,6 +254,29 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04 / B3-U
 			// intentionally no onBootstrapFromCurrent
 		}
 		render(<ModelProfilesSection {...props} />)
+		expect(screen.queryByTestId("model-profiles-bootstrap")).not.toBeInTheDocument()
+	})
+
+	it("MPFRB01_B4_UI_NO_BOOTSTRAP_BUTTON_WHEN_EMPTY_AND_OMITTED: empty profiles + omitted callback -> onboarding pane renders, but the button stays hidden (additive-only)", () => {
+		// B4: the additive-only contract holds even in the new first-run
+		// empty-state surface. When the host doesn't provide the bootstrap
+		// callback, the onboarding pane renders the explanation but no
+		// primary CTA.
+		const props: React.ComponentProps<typeof ModelProfilesSection> = {
+			profiles: [],
+			canCreateFromCurrent: true,
+			canApplyLive: true,
+			onSaveCurrentAsProfile: vi.fn(),
+			onUse: vi.fn(),
+			onSetAsDefault: vi.fn(),
+			onClearDefault: vi.fn(),
+			onRename: vi.fn(),
+			onUpdateFromCurrent: vi.fn(),
+			onDelete: vi.fn(),
+			// intentionally no onBootstrapFromCurrent
+		}
+		render(<ModelProfilesSection {...props} />)
+		expect(screen.getByTestId("model-profiles-onboarding")).toBeInTheDocument()
 		expect(screen.queryByTestId("model-profiles-bootstrap")).not.toBeInTheDocument()
 	})
 
@@ -262,5 +301,103 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04 / B3-U
 			expect(["success", "warning", "error"]).toContain(severity)
 			unmount()
 		}
+	})
+
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4
+	// First-run onboarding pane + single-status-authority decoder.
+	// -------------------------------------------------------------------------
+
+	it("MPFRB01_B4_UI_PARSE_BOOTSTRAP_STATUS_KNOWN: parseBootstrapStatus round-trips every known status", () => {
+		const known: Array<BootstrapModelProfileResultLike["status"]> = [
+			"CREATED",
+			"CREATED_BINDING_FAILED",
+			"NO_CURRENT_CONFIGURATION",
+			"CURRENT_CONFIGURATION_UNSUPPORTED",
+			"MISSING_CREDENTIAL",
+			"MISSING_MODEL",
+			"INSTANCE_WRITE_FAILED",
+			"PROFILE_WRITE_FAILED",
+		]
+		for (const s of known) {
+			expect(parseBootstrapStatus(s)).toBe(s)
+		}
+	})
+
+	it("MPFRB01_B4_UI_PARSE_BOOTSTRAP_STATUS_DRIFT_GUARD: unrecognised status falls through to UNKNOWN (regression guard for backend/proto drift)", () => {
+		// Reviewer's bounded P1 (WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_DUPLICATED):
+		// the decoder is the single load-bearing regression guard against
+		// future backend/proto status drift. A new status the webview has
+		// not been taught about MUST fall through to "UNKNOWN" rather than
+		// silently disappearing (which is what the previous unchecked `as`
+		// cast at the container boundary would have allowed).
+		expect(parseBootstrapStatus("FUTURE_NEW_STATUS_FROM_BACKEND")).toBe("UNKNOWN")
+		expect(parseBootstrapStatus("")).toBe("UNKNOWN")
+		expect(parseBootstrapStatus(null)).toBe("UNKNOWN")
+		expect(parseBootstrapStatus(undefined)).toBe("UNKNOWN")
+		expect(parseBootstrapStatus(42)).toBe("UNKNOWN")
+		expect(parseBootstrapStatus({})).toBe("UNKNOWN")
+	})
+
+	it("MPFRB01_B4_UI_ONBOARDING_PANE: zero profiles + bootstrap callback -> first-run onboarding pane with CTA", () => {
+		// B4 contract: profiles.length===0 + onBootstrapFromCurrent provided
+		// -> the onboarding pane renders the explanation copy AND the primary
+		// CTA. The CTA copy is product terminology ("Create first profile"),
+		// not Factory terminology ("Bootstrap first profile from current ...").
+		const { onBootstrap } = renderSection({ profiles: [] }, null)
+		const pane = screen.getByTestId("model-profiles-onboarding")
+		expect(pane).toBeInTheDocument()
+		expect(pane.getAttribute("data-state")).toBe("empty")
+		const cta = screen.getByTestId("model-profiles-bootstrap")
+		expect(cta).toBeInTheDocument()
+		expect(cta.textContent).toMatch(/Create first profile/)
+		expect(cta.textContent).not.toMatch(/Bootstrap/)
+	})
+
+	it("MPFRB01_B4_UI_ONBOARDING_PANE_WITH_SUMMARY: currentConfiguration prop is rendered as a summary card inside the onboarding pane", () => {
+		// B4 contract: the host passes the active provider/model summary so
+		// the user sees exactly what they are about to persist as a profile.
+		renderSection({ profiles: [] }, null, {
+			currentConfiguration: { providerId: "openai-compatible", modelId: "MiniMax-M3" },
+		})
+		const summary = screen.getByTestId("model-profiles-onboarding-summary")
+		expect(summary).toBeInTheDocument()
+		expect(summary.textContent).toMatch(/openai-compatible/)
+		expect(summary.textContent).toMatch(/MiniMax-M3/)
+	})
+
+	it("MPFRB01_B4_UI_ONBOARDING_PANE_UNSUPPORTED: canCreateFromCurrent=false -> inline notice inside onboarding pane", () => {
+		renderSection({ profiles: [], canCreateFromCurrent: false }, null)
+		const notice = screen.getByTestId("model-profiles-onboarding-unsupported")
+		expect(notice).toBeInTheDocument()
+		const cta = screen.getByTestId("model-profiles-bootstrap") as HTMLButtonElement
+		expect(cta.disabled).toBe(true)
+	})
+
+	it("MPFRB01_B4_UI_MANAGEMENT_VIEW_WHEN_HAS_PROFILES: profiles.length>0 -> management view, NOT onboarding pane", () => {
+		// B4: distinct views. With at least one profile the section renders
+		// the management table, the save-current input, and the default-profile
+		// controls; the onboarding pane is hidden.
+		renderSection({}, null)
+		expect(screen.queryByTestId("model-profiles-onboarding")).not.toBeInTheDocument()
+		expect(screen.getByTestId("model-profiles-list")).toBeInTheDocument()
+		expect(screen.getByTestId("model-profiles-row-prof-A")).toBeInTheDocument()
+	})
+
+	it("MPFRB01_B4_UI_BANNER_STATUS_USES_DECODED: an unrecognised raw status renders as UNKNOWN with error severity (no silent disappearance)", () => {
+		// B4 regression guard for backend/proto drift: if a future backend
+		// returns a status the webview does not know, the section MUST
+		// surface it as a defensive error banner (data-status=UNKNOWN,
+		// data-severity=error) rather than letting the banner disappear.
+		// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4 absorbs the
+		// reviewer's bounded WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_DUPLICATED
+		// by removing the unchecked `as` cast at the container boundary
+		// and routing every raw status through parseBootstrapStatus.
+		renderSection({}, { status: "FUTURE_NEW_STATUS_FROM_BACKEND", message: "drift" })
+		const banner = screen.getByTestId("model-profiles-bootstrap-banner")
+		expect(banner).toBeInTheDocument()
+		expect(banner.getAttribute("data-status")).toBe("UNKNOWN")
+		expect(banner.getAttribute("data-severity")).toBe("error")
+		expect(banner.getAttribute("role")).toBe("alert")
 	})
 })

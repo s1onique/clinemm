@@ -185,8 +185,16 @@ export function useModelProfileQuickSwitch(
 				role="listbox"
 				tabIndex={-1}>
 				{profiles.length === 0 && (
-					<div className="p-3 text-sm text-muted-foreground" data-testid="model-profile-empty">
-						No profiles configured yet.
+					<div className="flex flex-col gap-2 p-3 text-sm" data-testid="model-profile-empty">
+						<span className="text-muted-foreground">No profiles configured yet.</span>
+						<button
+							className="self-start rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+							data-testid="model-profile-empty-create"
+							disabled={!!disabled}
+							onClick={handleManage}
+							type="button">
+							Create first profile…
+						</button>
 					</div>
 				)}
 				{profiles.map((p, idx) => (

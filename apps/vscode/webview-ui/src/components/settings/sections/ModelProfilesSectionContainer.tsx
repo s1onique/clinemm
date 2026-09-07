@@ -42,7 +42,11 @@ import { type ReactNode, useCallback, useMemo, useState } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
 import type { ModelProfileSummary } from "@/services/model-profile-types"
-import { type BootstrapModelProfileResultLike, ModelProfilesSection } from "./ModelProfilesSection"
+import {
+	type BootstrapModelProfileResultLike,
+	type CurrentConfigurationSummary,
+	ModelProfilesSection,
+} from "./ModelProfilesSection"
 
 export interface ModelProfilesSectionContainerProps {
 	canApplyLive?: boolean
@@ -61,14 +65,35 @@ export interface ModelProfilesSectionContainerProps {
 
 export function ModelProfilesSectionContainer(props: ModelProfilesSectionContainerProps) {
 	const { canApplyLive = true, canCreateFromCurrent = true, renderSectionHeader } = props
-	const { modelProfiles, activeModelProfileId, defaultModelProfileId } = useExtensionState()
+	const { modelProfiles, activeModelProfileId, defaultModelProfileId, apiConfiguration } = useExtensionState()
 
 	const profiles = useMemo<ModelProfileSummary[]>(() => modelProfiles ?? [], [modelProfiles])
+
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4: surface the
+	// current active provider/model in the first-run onboarding pane so the
+	// user sees exactly what they are about to persist as a profile. We
+	// read the same fields the host's bootstrap primitive will read.
+	const currentConfiguration = useMemo<CurrentConfigurationSummary | null>(() => {
+		const providerId =
+			(apiConfiguration as { planModeApiProvider?: string; actModeApiProvider?: string } | undefined)?.actModeApiProvider ??
+			""
+		const modelId =
+			(apiConfiguration as { planModeApiModelId?: string; actModeApiModelId?: string } | undefined)?.actModeApiModelId ?? ""
+		if (!providerId || !modelId) return null
+		return { providerId, modelId }
+	}, [apiConfiguration])
 
 	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04:
 	// typed envelope state for the bootstrap RPC. The section renders a
 	// status-aware severity banner when this is non-null; the previous
 	// console.error-only swallow left bootstrap failures invisible.
+	//
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4: the typed
+	// envelope is now passed verbatim (no `as` cast). The section's
+	// parseBootstrapStatus decoder is the single authority that maps
+	// raw response.status -> a known status string; unknown values
+	// fall through to "UNKNOWN" which renders as a defensive error
+	// banner instead of silently disappearing.
 	const [bootstrapResult, setBootstrapResult] = useState<BootstrapModelProfileResultLike | null>(null)
 
 	const handleBootstrapFromCurrent = useCallback(async () => {
@@ -77,7 +102,7 @@ export function ModelProfilesSectionContainer(props: ModelProfilesSectionContain
 				BootstrapModelProfileRequest.create({ name: "Default" }),
 			)
 			setBootstrapResult({
-				status: response.status as BootstrapModelProfileResultLike["status"],
+				status: response.status,
 				profileId: response.profileId || undefined,
 				instanceId: response.instanceId || undefined,
 				message: response.message || undefined,
@@ -162,6 +187,7 @@ export function ModelProfilesSectionContainer(props: ModelProfilesSectionContain
 			bootstrapResult={bootstrapResult}
 			canApplyLive={canApplyLive}
 			canCreateFromCurrent={canCreateFromCurrent}
+			currentConfiguration={currentConfiguration}
 			onBootstrapFromCurrent={handleBootstrapFromCurrent}
 			onClearDefault={handleClearDefault}
 			onDelete={handleDelete}

@@ -10,22 +10,36 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
-import { ModelProfileQuickSwitch } from "./ModelProfileQuickSwitch"
 import type { ModelProfileSummary } from "@/services/model-profile-types"
+import { ModelProfileQuickSwitch } from "./ModelProfileQuickSwitch"
 
 const PROFILES: ModelProfileSummary[] = [
-	{ profileId: "prof-A", name: "Corporate MiniMax", providerId: "openai-compatible", modelId: "MiniMax-M3", isActive: true, isDefault: false },
-	{ profileId: "prof-B", name: "Local Qwen", providerId: "openai-compatible", modelId: "qwen3-coder", isActive: false, isDefault: true },
+	{
+		profileId: "prof-A",
+		name: "Corporate MiniMax",
+		providerId: "openai-compatible",
+		modelId: "MiniMax-M3",
+		isActive: true,
+		isDefault: false,
+	},
+	{
+		profileId: "prof-B",
+		name: "Local Qwen",
+		providerId: "openai-compatible",
+		modelId: "qwen3-coder",
+		isActive: false,
+		isDefault: true,
+	},
 ]
 
 describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", () => {
 	it("MPQS01_QS_TRIGGER_RENDERS_LABEL: trigger button shows the current label", () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="openai-compat:MiniMax-M3"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		expect(screen.getByTestId("model-profile-trigger")).toHaveTextContent("openai-compat:MiniMax-M3")
@@ -34,10 +48,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 	it("MPQS01_QS_CLICK_OPENS_POPOVER: clicking trigger opens the popover", async () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
@@ -47,10 +61,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 	it("MPQS01_QS_POPOVER_LISTS_PROFILES: popover contains one row per profile", async () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
@@ -61,10 +75,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 	it("MPQS01_QS_CURRENT_MARKER: current profile shows checkmark (aria-selected=true)", async () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
@@ -76,10 +90,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 		const onSelect = vi.fn()
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={onSelect}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={onSelect}
+				profiles={PROFILES}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
@@ -90,10 +104,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 	it("MPQS01_QS_POPOVER_CLOSES_AFTER_SELECT: clicking an option closes the popover", async () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
@@ -104,10 +118,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 	it("MPQS01_QS_ESCAPE_CLOSES: pressing Escape closes the popover", async () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
@@ -119,10 +133,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 		const onSelect = vi.fn()
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={onSelect}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={onSelect}
+				profiles={PROFILES}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
@@ -148,10 +162,10 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 		const onManage = vi.fn()
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={onManage}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
@@ -162,11 +176,11 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 	it("MPQS01_QS_DISABLED_WHEN_BUSY: disabled prop disables the trigger", () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
 				disabled={true}
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		const trigger = screen.getByTestId("model-profile-trigger") as HTMLButtonElement
@@ -177,23 +191,46 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase E", (
 	it("MPQS01_QS_EMPTY_STATE: zero profiles -> empty-state message inside popover", async () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={[]}
 				currentLabel="label"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={[]}
 			/>,
 		)
 		await userEvent.click(screen.getByTestId("model-profile-trigger"))
 		expect(screen.getByTestId("model-profile-empty")).toBeInTheDocument()
 	})
 
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4-B:
+	// The picker empty state must NOT be a dead-end. It must
+	// surface a CTA that routes the user to Settings onboarding.
+	it("MPFRB01_B4_QS_EMPTY_STATE_CTA: zero profiles -> empty-state CTA routes to Settings onboarding (onOpenManageProfiles)", async () => {
+		const onOpenManageProfiles = vi.fn()
+		render(
+			<ModelProfileQuickSwitch
+				currentLabel="label"
+				onOpenManageProfiles={onOpenManageProfiles}
+				onSelectProfile={() => {}}
+				profiles={[]}
+			/>,
+		)
+		await userEvent.click(screen.getByTestId("model-profile-trigger"))
+		const cta = screen.getByTestId("model-profile-empty-create")
+		expect(cta).toBeInTheDocument()
+		// Copy is product terminology, not Factory terminology.
+		expect(cta.textContent).toMatch(/Create first profile/)
+		expect(cta.textContent).not.toMatch(/Bootstrap/)
+		await userEvent.click(cta)
+		expect(onOpenManageProfiles).toHaveBeenCalledTimes(1)
+	})
+
 	it("MPQS01_QS_ARIA_ROLES: trigger aria-haspopup=listbox; popover role=listbox", async () => {
 		render(
 			<ModelProfileQuickSwitch
-				profiles={PROFILES}
 				currentLabel="label"
-				onSelectProfile={() => {}}
 				onOpenManageProfiles={() => {}}
+				onSelectProfile={() => {}}
+				profiles={PROFILES}
 			/>,
 		)
 		const trigger = screen.getByTestId("model-profile-trigger")

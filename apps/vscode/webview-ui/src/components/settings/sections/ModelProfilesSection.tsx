@@ -21,6 +21,18 @@ import type { ModelProfileSummary } from "@/services/model-profile-types"
  * renders a status-aware severity banner when this prop is set;
  * the previous behavior was a console.error-only swallow that
  * made bootstrap failures invisible.
+ *
+ * ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4 (bounded
+ * reviewer's WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_DUPLICATED absorb):
+ * the union below is the SINGLE AUTHORITATIVE source of bootstrap
+ * status strings for the webview. Backend code (apps/vscode/src/sdk/
+ * profile-store/bootstrap.ts) produces the SAME union; future drift
+ * is caught by `parseBootstrapStatus` at the section entry point,
+ * which returns `UNKNOWN` for any unrecognised raw string. The
+ * previous design duplicated the union on the webview side AND
+ * used an unchecked `as` cast at the container boundary, which
+ * silently accepted backend drift and left the banner without a
+ * severity tier.
  */
 export type BootstrapModelProfileStatus =
 	| "CREATED"
@@ -31,12 +43,41 @@ export type BootstrapModelProfileStatus =
 	| "MISSING_MODEL"
 	| "INSTANCE_WRITE_FAILED"
 	| "PROFILE_WRITE_FAILED"
+	| "UNKNOWN"
 
 export interface BootstrapModelProfileResultLike {
-	status: BootstrapModelProfileStatus
+	status: string
 	profileId?: string
 	instanceId?: string
 	message?: string
+}
+
+const KNOWN_STATUSES = new Set<BootstrapModelProfileStatus>([
+	"CREATED",
+	"CREATED_BINDING_FAILED",
+	"NO_CURRENT_CONFIGURATION",
+	"CURRENT_CONFIGURATION_UNSUPPORTED",
+	"MISSING_CREDENTIAL",
+	"MISSING_MODEL",
+	"INSTANCE_WRITE_FAILED",
+	"PROFILE_WRITE_FAILED",
+])
+
+/**
+ * Runtime decoder — single status-authority entry point.
+ *
+ * Returns the typed status string when `raw` matches a known
+ * value; returns "UNKNOWN" otherwise. The decoder is the load-
+ * bearing regression guard against future backend/proto status
+ * drift: a new backend status the webview has not been taught
+ * about falls through to "UNKNOWN", which renders as a defensive
+ * error banner instead of silently disappearing.
+ */
+export function parseBootstrapStatus(raw: unknown): BootstrapModelProfileStatus {
+	if (typeof raw === "string" && KNOWN_STATUSES.has(raw as BootstrapModelProfileStatus)) {
+		return raw as BootstrapModelProfileStatus
+	}
+	return "UNKNOWN"
 }
 
 export type BootstrapBannerSeverity = "success" | "warning" | "error" | null
@@ -52,6 +93,15 @@ export interface ModelProfilesSectionProps {
 	onRename: (profileId: string, newName: string) => void | Promise<void>
 	onUpdateFromCurrent: (profileId: string) => void | Promise<void>
 	onDelete: (profileId: string) => void | Promise<void>
+	/**
+	 * ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4:
+	 * Optional summary of the user's current active provider/model.
+	 * Rendered inside the first-run onboarding pane to make the
+	 * "save this as a reusable profile" intent concrete. When
+	 * omitted, the pane renders without the summary card. The host
+	 * computes this from `useExtensionState().apiConfiguration`.
+	 */
+	currentConfiguration?: CurrentConfigurationSummary | null
 	/**
 	 * ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04:
 	 * The first-run bootstrap RPC. Distinct from `onSaveCurrentAsProfile`
@@ -105,8 +155,28 @@ export function bootstrapStatusToSeverity(status: BootstrapModelProfileStatus): 
 		case "MISSING_MODEL":
 		case "INSTANCE_WRITE_FAILED":
 		case "PROFILE_WRITE_FAILED":
+		case "UNKNOWN":
 			return "error"
 	}
+}
+
+/**
+ * Summary of the CURRENT active provider/model so the first-run
+ * onboarding pane can show the user what they are about to persist
+ * as a profile. Computed on the webview side; the values are
+ * already mirrored into ExtensionState by the host projection.
+ *
+ * ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4: this is
+ * an OPT-IN summary — the section renders the onboarding pane
+ * whether or not a current configuration exists, but the
+ * "Current configuration" panel only renders when both fields are
+ * present. When the current configuration is not supported by
+ * Model Profiles V1 (canCreateFromCurrent=false), the pane shows
+ * an inline notice.
+ */
+export interface CurrentConfigurationSummary {
+	providerId: string
+	modelId: string
 }
 
 export function ModelProfilesSection(props: ModelProfilesSectionProps) {
@@ -124,6 +194,7 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 		onBootstrapFromCurrent,
 		bootstrapResult,
 		renderSectionHeader,
+		currentConfiguration,
 	} = props
 
 	const [newProfileName, setNewProfileName] = useState("")
@@ -151,7 +222,14 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 	}
 
 	const defaultProfile = profiles.find((p) => p.isDefault)
-	const bootstrapSeverity = bootstrapResult ? bootstrapStatusToSeverity(bootstrapResult.status) : null
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4: the
+	// typed status is recovered via parseBootstrapStatus so any
+	// unrecognised raw status (drift) becomes "UNKNOWN" rather than
+	// a silent fall-through. The container no longer needs an `as`
+	// cast — bootstrapResult.status is now `string`.
+	const decodedBootstrapStatus = bootstrapResult ? parseBootstrapStatus(bootstrapResult.status) : null
+	const bootstrapSeverity = decodedBootstrapStatus ? bootstrapStatusToSeverity(decodedBootstrapStatus) : null
+	const hasProfiles = profiles.length > 0
 
 	return (
 		<div className="flex flex-col gap-4" data-testid="model-profiles-section">
@@ -167,7 +245,7 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 								: "rounded border border-error/40 bg-error/10 p-2 text-xs"
 					}
 					data-severity={bootstrapSeverity}
-					data-status={bootstrapResult.status}
+					data-status={decodedBootstrapStatus}
 					data-testid="model-profiles-bootstrap-banner"
 					role={bootstrapSeverity === "error" ? "alert" : "status"}>
 					<div className="flex flex-col gap-1">
@@ -176,7 +254,9 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 								? "Profile created."
 								: bootstrapSeverity === "warning"
 									? "Profile created, but binding to the current task did not complete."
-									: "Could not create a profile from the current configuration."}
+									: decodedBootstrapStatus === "UNKNOWN"
+										? "Profile bootstrap returned an unrecognized status. Please retry."
+										: "Could not create a profile from the current configuration."}
 						</span>
 						{bootstrapResult.message && (
 							<span data-testid="model-profiles-bootstrap-message">{bootstrapResult.message}</span>
@@ -192,40 +272,76 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 				</div>
 			)}
 
-			{onBootstrapFromCurrent && (
+			{/* ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4: dedicated
+			    first-run onboarding pane. Distinct from the management view
+			    so a zero-profile user does NOT see an inert management table.
+			    Shows the current provider/model summary when available, then
+			    the primary CTA "Create first profile" -> onBootstrapFromCurrent. */}
+			{!hasProfiles && (
+				<div
+					className="flex flex-col gap-3 rounded border border-dashed p-4"
+					data-state="empty"
+					data-testid="model-profiles-onboarding">
+					<div className="flex flex-col gap-1">
+						<span className="text-sm font-medium">Save your current setup as a reusable profile</span>
+						<span className="text-xs text-muted-foreground">
+							A Model Profile captures your provider, model, endpoint, and credentials so you can switch between
+							setups in one click.
+						</span>
+					</div>
+					{currentConfiguration?.providerId && currentConfiguration?.modelId && (
+						<div
+							className="flex flex-col gap-0.5 rounded border bg-muted/30 p-2 text-xs"
+							data-testid="model-profiles-onboarding-summary">
+							<span className="text-muted-foreground">Current configuration</span>
+							<span className="font-mono">
+								{currentConfiguration.providerId} · {currentConfiguration.modelId}
+							</span>
+						</div>
+					)}
+					{!canCreateFromCurrent && (
+						<div
+							className="rounded border border-warning/40 bg-warning/10 p-2 text-xs"
+							data-testid="model-profiles-onboarding-unsupported">
+							This provider configuration is not supported by Model Profiles.
+						</div>
+					)}
+					{onBootstrapFromCurrent && (
+						<button
+							className="self-start rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+							data-testid="model-profiles-bootstrap"
+							disabled={!canCreateFromCurrent}
+							onClick={() => void onBootstrapFromCurrent()}
+							type="button">
+							Create first profile
+						</button>
+					)}
+				</div>
+			)}
+
+			{hasProfiles && (
 				<div className="flex items-center gap-2">
-					<button
-						className="rounded border border-primary/40 bg-primary/10 px-3 py-1 text-sm text-primary disabled:opacity-50"
-						data-testid="model-profiles-bootstrap"
+					<input
+						className="flex-1 rounded border px-2 py-1 text-sm"
+						data-testid="model-profiles-new-name"
 						disabled={!canCreateFromCurrent}
-						onClick={() => void onBootstrapFromCurrent()}
+						onChange={(e) => setNewProfileName(e.target.value)}
+						placeholder="Profile name"
+						type="text"
+						value={newProfileName}
+					/>
+					<button
+						className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
+						data-testid="model-profiles-save-current"
+						disabled={!canCreateFromCurrent || newProfileName.trim().length === 0}
+						onClick={handleSave}
 						type="button">
-						Bootstrap first profile from current configuration
+						Save current configuration as profile
 					</button>
 				</div>
 			)}
 
-			<div className="flex items-center gap-2">
-				<input
-					className="flex-1 rounded border px-2 py-1 text-sm"
-					data-testid="model-profiles-new-name"
-					disabled={!canCreateFromCurrent}
-					onChange={(e) => setNewProfileName(e.target.value)}
-					placeholder="Profile name"
-					type="text"
-					value={newProfileName}
-				/>
-				<button
-					className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
-					data-testid="model-profiles-save-current"
-					disabled={!canCreateFromCurrent || newProfileName.trim().length === 0}
-					onClick={handleSave}
-					type="button">
-					Save current configuration as profile
-				</button>
-			</div>
-
-			{!canCreateFromCurrent && (
+			{hasProfiles && !canCreateFromCurrent && (
 				<div className="rounded border border-warning/40 bg-warning/10 p-2 text-xs">
 					This provider configuration is not supported by Model Profiles V1.
 				</div>
@@ -245,11 +361,6 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 			)}
 
 			<ul className="flex flex-col gap-2" data-testid="model-profiles-list">
-				{profiles.length === 0 && (
-					<li className="rounded border border-dashed p-3 text-center text-xs text-muted-foreground">
-						No profiles yet. Save your current configuration to get started.
-					</li>
-				)}
 				{profiles.map((p) => (
 					<li
 						className="flex items-center gap-3 rounded border px-3 py-2"

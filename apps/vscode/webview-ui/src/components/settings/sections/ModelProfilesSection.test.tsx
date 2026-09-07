@@ -12,12 +12,26 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
-import { ModelProfilesSection } from "./ModelProfilesSection"
 import type { ModelProfileSummary } from "@/services/model-profile-types"
+import { ModelProfilesSection } from "./ModelProfilesSection"
 
 const PROFILES: ModelProfileSummary[] = [
-	{ profileId: "prof-A", name: "Corporate MiniMax", providerId: "openai-compatible", modelId: "MiniMax-M3", isActive: true, isDefault: false },
-	{ profileId: "prof-B", name: "Local Qwen", providerId: "openai-compatible", modelId: "qwen3-coder", isActive: false, isDefault: true },
+	{
+		profileId: "prof-A",
+		name: "Corporate MiniMax",
+		providerId: "openai-compatible",
+		modelId: "MiniMax-M3",
+		isActive: true,
+		isDefault: false,
+	},
+	{
+		profileId: "prof-B",
+		name: "Local Qwen",
+		providerId: "openai-compatible",
+		modelId: "qwen3-coder",
+		isActive: false,
+		isDefault: true,
+	},
 ]
 
 function renderSection(overrides: Partial<React.ComponentProps<typeof ModelProfilesSection>> = {}) {
@@ -156,8 +170,16 @@ describe("ACT-CLINEMM-MODEL-PROFILES-QUICK-SWITCH-IMPLEMENTATION01 / Phase F", (
 		expect(screen.getByText(/not supported by Model Profiles V1/)).toBeInTheDocument()
 	})
 
-	it("MPQS01_SECT_EMPTY_LIST: zero profiles -> empty-state placeholder", () => {
+	it("MPQS01_SECT_EMPTY_LIST: zero profiles -> onboarding pane renders the explanation", () => {
+		// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / B4:
+		// the inert "No profiles yet" placeholder is replaced by a
+		// dedicated first-run onboarding pane. The pane renders the
+		// explanation copy so the user understands what a Model
+		// Profile is. The CTA itself depends on the host providing
+		// `onBootstrapFromCurrent`; this test omits the callback
+		// to assert the additive-only contract.
 		renderSection({ profiles: [] })
-		expect(screen.getByText(/No profiles yet/)).toBeInTheDocument()
+		expect(screen.getByTestId("model-profiles-onboarding")).toBeInTheDocument()
+		expect(screen.getByText(/Save your current setup as a reusable profile/)).toBeInTheDocument()
 	})
 })
