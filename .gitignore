@@ -1418,5 +1418,17 @@ apps/vscode/.factory/evidence/
 #   - ACT phase contract coherent (§4 phase split + §17 reframed +
 #     entry preamble + §35 successor linkage + STOP)
 !/.factory/acts/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01.md
+# ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01: bounded ACT opened
+# after live-dogfood evidence HALT_MODEL_PROFILE_FIRST_RUN_BOOTSTRAP_ABSENT
+# (2026-09-07, immediately after the MPWC02 correction03 closure at
+# 5f9e931a3). Primary purpose: make a user with zero profiles and a
+# valid existing API configuration able to create the first Model
+# Profile without guessing provider-instance identity. RED witnesses
+# cover: B1 first-profile bootstrap from legacy/current config,
+# B2 no providerId collapse during bootstrap, B3 bootstrap failure
+# visible to the user, B4 empty-state CTA. Durably tracked per the
+# durable-ACT convention (mirrors PIIF01 entry + MPWC01 patterns).
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01.md
+!/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01/
 .bun-tmp/
 .bun-install/
