@@ -1,0 +1,129 @@
+ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK01 — RED & GREEN typecheck evidence
+
+Captured from the local repo state at exact source HEAD (this commit).
+Subject HEAD: <this-commit> (test/tsconfig hygiene only; no production
+source edit).
+
+================================================================
+RED — captured at dogfood attempt (before this ACT)
+================================================================
+
+Command:
+  $ bun run check-types
+    (script: bun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit)
+
+Stdout (tail, the bunx tsc --noEmit segment that failed):
+  src/sdk/__tests__/provider-instance-identity-r1a-red.piif01.test.ts(213,34): error TS2307: Cannot find module '@cline-internal/core/runtime/host/local-runtime-host' or its corresponding type declarations.
+  src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts(150,34): error TS2307: Cannot find module '@cline-internal/core/runtime/host/local-runtime-host' or its corresponding type declarations.
+  src/sdk/cline-session-factory.test.ts(242,4): error TS2353: Object literal may only specify known properties, and 'ollamaApiOptionsCtxNum' does not exist in type '{ actModeApiProvider: string; actModeApiModelId: string; apiKey: string; }'.
+  src/sdk/cline-session-factory.test.ts(246,4): error TS2345: Argument of type '{ actModeApiProvider: string; actModeApiModelId: string; apiKey: string; }' is not assignable to parameter of type 'ApiHandlerOptions'.
+    Types of property 'actModeApiProvider' are incompatible.
+      Type 'string' is not assignable to type 'ApiProvider | undefined'.
+
+Exit code: nonzero → bun run check-types FAILED.
+
+Consequence:
+  bun run package (alias for vscode:prepublish) runs check-types first
+  and refuses to manufacture the VSIX. EXACT-HEAD VSIX = NOT_BUILT.
+  LIVE_DOGFOOD = NOT_STARTED.
+
+================================================================
+GREEN — after this ACT
+================================================================
+
+Command 1: canonical apps/vscode check-types
+  $ cd apps/vscode && bun ./node_modules/typescript/bin/tsc --noEmit
+
+Stdout: (empty)
+Exit code: 0
+
+Command 2: compat check
+  $ cd apps/vscode && bun ./node_modules/typescript/bin/tsc --project tsconfig.vscode-compat.json --noEmit
+
+Stdout: (empty)
+Exit code: 0
+
+Command 3: webview typecheck
+  $ cd apps/vscode/webview-ui && bun ./node_modules/.bin/tsc --noEmit
+
+Stdout: (empty)
+Exit code: 0
+
+Command 4: bridge baseline wrapper (the authoritative home of the
+two PIIF tests now excluded from the base config)
+  $ cd apps/vscode && bun run check-types:c2-4-c-bridge
+
+Stdout:
+  $ bun scripts/check-types-bridge-with-baseline.ts
+  [check-types-bridge-with-baseline] OK — 0 diagnostic(s) match the frozen baseline.
+
+Exit code: 0
+
+Command 5: full prepublish script (the gate that was RED)
+  $ cd apps/vscode && bun run check-types
+    (script: bun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit)
+
+Stdout (last lines):
+  $ bun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit
+  $ node scripts/build-proto.mjs
+  Compiling Protocol Buffers...
+  Processing 24 proto files from /…/apps/vscode/proto
+  Generated ProtoBus files at:
+  - /…/apps/vscode/webview-ui/src/services/grpc-client.ts
+  - /…/apps/vscode/src/generated/hosts/vscode/protobus-service-types.ts
+  - /…/apps/vscode/src/generated/hosts/vscode/protobus-services.ts
+  - /…/apps/vscode/src/generated/hosts/standalone/protobus-server-setup.ts
+  Generated Host Bridge client files at:
+  - /…/apps/vscode/src/generated/hosts/host-bridge-client-types.ts
+  - /…/apps/vscode/src/generated/hosts/standalone/host-bridge-clients.ts
+  - /…/apps/vscode/src/generated/hosts/vscode/hostbridge-grpc-service-config.ts
+  $ biome format --config-path ./biome.jsonc src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched
+  Formatted 326 files in 41ms. Fixed 1 file.
+  $ bunx tsc --noEmit
+  $ bun run check-types:compat
+  $ bunx tsc --project tsconfig.vscode-compat.json --noEmit
+  $ cd webview-ui && bunx tsc --noEmit
+
+(No TS2307, TS2353, or TS2345 errors.)
+Exit code: 0
+
+(Note: `bun run protos` triggered a biome format pass on regenerated
+proto-derived files. Two Model Profiles V1 production files had their
+long-form expressions reformatted onto single lines. Those were NOT
+semantic edits — they were cosmetic-only. To preserve
+`UNRELATED_TRACKED_DIRT = ABSENT`, both files were reverted via
+`git checkout -- …` immediately after the format pass. The final
+working-tree diff contains ONLY the two intended fixes:
+  apps/vscode/tsconfig.json
+  apps/vscode/src/sdk/cline-session-factory.test.ts
+)
+
+================================================================
+Diff size (the bounded correction in scope)
+================================================================
+
+  $ git diff --stat
+   apps/vscode/src/sdk/cline-session-factory.test.ts  | 22 +++++++++++++++-------
+   apps/vscode/tsconfig.json                          | 14 ++++++++++++++
+   2 files changed, 29 insertions(+), 7 deletions(-)
+
+  $ git diff --check
+   (no output)
+
+Production source files modified: 0.
+
+================================================================
+Verdict
+================================================================
+
+P0  HALT_DOGFOOD_VSIX_TYPECHECK_GATE_RED          = CLOSED
+P0  HALT_MODEL_PROFILE_TRIGGER_SEAM_WRONG         = CLOSED (unchanged)
+P0  HALT_BOUND_PROFILE_MISSING_INSTANCE_FAILS_OPEN = CLOSED (unchanged)
+P0  HALT_CHAT_PARENT_TDZ                          = CLOSED (unchanged)
+P1  C4_EVIDENCE_LABEL_OVERCLAIM                   = CLOSED (unchanged)
+P1  MANAGE_PROFILES_TARGETS_MODEL_PROFILES        = CLOSED (unchanged)
+P2  SUBJECT_VS_CLOSURE_HEAD_WORDING               = CLOSED (unchanged)
+UNEXPECTED_TRACKED_DIRT                           = ABSENT
+PATCH_HYGIENE                                     = PASS
+
+C1: GO TO EXACT-HEAD VSIX DOGFOOD.

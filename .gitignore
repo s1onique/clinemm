@@ -1307,6 +1307,25 @@ apps/vscode/.factory/evidence/
 # evidence is needed).
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02/
+# ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK01: bounded build-unblock
+# correction after eighteenth-reviewer verdict
+# HALT_DOGFOOD_VSIX_TYPECHECK_GATE_RED (2026-09-07, immediately after
+# MPWC02 correction03 closure). Two surgical fixes, ZERO production
+# Model Profiles code touched:
+#   (A) apps/vscode/tsconfig.json — exclude the two PIIF bridge-only
+#       tests (r1a-red + r2-strategy-b) from the base config; they
+#       remain in tsconfig.c2-4-c-bridge.json and run under
+#       bun run check-types:c2-4-c-bridge.
+#   (B) apps/vscode/src/sdk/cline-session-factory.test.ts — type the
+#       T17 [F3B] fixture as `ApiConfiguration` (re-exported
+#       `ApiHandlerOptions` from @shared/api) so the real
+#       `ollamaApiOptionsCtxNum` field is recognized. Removes both
+#       TS2353 (literal) and TS2345 (ApiProvider) diagnostics.
+# Resolves the 4 pre-existing typecheck diagnostics that were
+# promoted to a real packaging dependency by the `vsce package`
+# invocation. Durably tracked per the durable-ACT convention.
+!/.factory/acts/ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK01.md
+!/.factory/evidence/ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK01/
 # ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01:
 # bounded correction after fifth-reviewer verdict
 # HALT_R0_FULL_CONNECTION_NOT_PROVEN (2026-09-05, same day, immediately

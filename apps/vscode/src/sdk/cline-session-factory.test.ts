@@ -3,6 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import type { CoreSessionConfig } from "@cline/core"
 import * as LlmsModels from "@cline/llms"
+import type { ApiConfiguration } from "@shared/api"
 import { ApiFormat } from "@shared/proto/cline/models"
 import { Logger } from "@shared/services/Logger"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -237,15 +238,22 @@ describe("buildStartSessionInput", () => {
 	it("T17 [F3B]: resolveOllamaProviderConfig falls back to legacy ollamaApiOptionsCtxNum when providers.json has no ollama contextWindow", async () => {
 		const { resolveOllamaProviderConfig } = await import("./cline-session-factory")
 
-		mocks.providerSettingsManager.getProviderSettings.mockReturnValue(undefined)
-		mocks.stateManager.getApiConfiguration.mockReturnValue({
+		// Type the fixture as the canonical `ApiConfiguration` so
+		// `ollamaApiOptionsCtxNum` (a real `ApiHandlerOptions` field
+		// consumed by `resolveOllamaProviderConfig`) is recognized.
+		// Without this, the untyped mock's inferred return type rejects
+		// both the `mockReturnValue` literal (TS2353) and the eventual
+		// call-site argument (TS2345). The state mock plumbing below
+		// is not consumed by `resolveOllamaProviderConfig` (it reads
+		// `providers.json` via the providerSettingsManager), so we
+		// pass the typed `fixture` directly to the production function.
+		const fixture: ApiConfiguration = {
 			ollamaApiOptionsCtxNum: "384000",
-		})
+		}
 
-		const result = resolveOllamaProviderConfig(
-			mocks.stateManager.getApiConfiguration(),
-			"qwen2.5:7b",
-		)
+		mocks.providerSettingsManager.getProviderSettings.mockReturnValue(undefined)
+
+		const result = resolveOllamaProviderConfig(fixture, "qwen2.5:7b")
 
 		expect(result.modelInfo?.contextWindow).toBe(384000)
 	})

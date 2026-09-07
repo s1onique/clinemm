@@ -147,6 +147,20 @@
 		// consistency with the recon-phase pre-existing infra
 		// quirk.
 		"src/core/storage/__tests__/state-manager-instance-secret-durable.test.ts",
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R1A-RED01
+		// / PIIF01: real-production-seam DIAGNOSTIC current-seam
+		// witness. Imports the bridge-only `@cline-internal/core/
+		// runtime/host/local-runtime-host` alias, which only exists
+		// in `tsconfig.c2-4-c-bridge.json`. Runs under that bridge
+		// config; excluded here to keep the base packaging/tsconfig
+		// domain free of internal aliases (matches the existing
+		// PIIF R2p / R-REPLACE / R4-RR pattern below).
+		"src/sdk/__tests__/provider-instance-identity-r1a-red.piif01.test.ts",
+		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-R2-STRATEGY-B
+		// / PIIF01: explicit instance-apply Strategy B contract
+		// test. Same bridge-only alias dependency as R1A-RED01.
+		// Runs under `tsconfig.c2-4-c-bridge.json`; excluded here.
+		"src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts",
 		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R-REPLACE
 		// (fourteenth-reviewer C1 "GO TO R-REPLACE"): the real
 		// composed-lifecycle witness drives
