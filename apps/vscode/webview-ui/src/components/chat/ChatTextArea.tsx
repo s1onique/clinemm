@@ -1132,15 +1132,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		// sibling inside `ModelContainer` so the outside-click
 		// detector can find it. NO second / neighboring trigger is
 		// added — the existing model button becomes the picker.
-		const profileSwitchHost = useModelProfileQuickSwitchHost(
-			modelDisplayName,
-			undefined,
-			() => navigateToSettingsModelPicker({ targetSection: "api-config" }),
-		)
-		const profileSwitchTriggerProps = profileSwitchHost.state.triggerProps
-		const profileSwitchPopover = profileSwitchHost.state.popover
 
-		// Get model display name
+		// Get model display name — MUST be declared BEFORE any reference
+		// to it (TDZ: `const`/`let` are hoisted but uninitialized; reading
+		// before the declaration throws ReferenceError). Declared first
+		// so the hook below can read it as an argument.
 		const modelDisplayName = useMemo(() => {
 			const {
 				vsCodeLmModelSelector,
@@ -1187,6 +1183,21 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					return `${selectedProvider}:${selectedModelId}`
 			}
 		}, [apiConfiguration, mode, selectedProvider, selectedModelId])
+
+		// ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+		// (C5 EXISTING_MODEL_LABEL_TRIGGER) - DECLARED AFTER modelDisplayName
+		// so the TDZ access does not throw ReferenceError on render.
+		// (Seventeenth-reviewer verdict HALT_CHAT_PARENT_TDZ.)
+		const profileSwitchHost = useModelProfileQuickSwitchHost(
+			modelDisplayName,
+			undefined,
+			// Routes to the dedicated Model Profiles tab (SettingsView accepts
+			// targetSection="model-profiles" directly). Using "api-config" would
+			// land the user in API Configuration, not the profile management UI.
+			() => navigateToSettingsModelPicker({ targetSection: "model-profiles" }),
+		)
+		const profileSwitchTriggerProps = profileSwitchHost.state.triggerProps
+		const profileSwitchPopover = profileSwitchHost.state.popover
 
 		// Function to show error message for unsupported files for drag and drop
 		const showUnsupportedFileErrorMessage = () => {
