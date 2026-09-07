@@ -579,3 +579,185 @@ errors).
   witnesses required for §17 four-gate handoff to Model Profiles
   are GREEN. The next reviewer should authorize §17 handoff to
   Model Profiles, or name any remaining structural halt.
+
+## §8. Foundation Final Qualification — §17 Four-Gate Final Report (fifteenth reviewer, C1: GO TO FOUNDATION FINAL QUALIFICATION, this pass)
+
+The fifteenth reviewer (on commit `c10458fd0`, this pass's
+predecessor) authorized one bounded terminal Foundation
+qualification pass with the directive: "Do one **terminal
+Foundation qualification**, containing only: (1) assert the
+complete B connection tuple on the second real lifecycle
+`sdkHost.start()` call; (2) execute the persisted instance-secret
+reload witness; (3) run the existing 42-test conservation set +
+typecheck; (4) write the §17 final report. If those are GREEN, my
+expected terminal verdict is: `PASS_PROVIDER_INSTANCE_IDENTITY_FOUNDATION`,
+`FOUNDATION = CLOSED_CLEAN`, `MODEL_PROFILES_IMPLEMENTATION = AUTHORIZED`."
+
+This pass produces exactly that bounded qualification.
+
+### §8.1 Four-gate evaluation
+
+| Gate | Description | Status | Evidence |
+| ---- | ----------- | ------ | -------- |
+| G1   | DEFINITION_IDENTITY: instances.json roundtrip + map/body identity | **PASS** | `instances-store.test.ts` (10), `typed-projector.test.ts` (7) |
+| G2   | CREDENTIAL_IDENTITY: opaque ref -> durable physical secret + restart/reload | **GREEN** | `instance-secret.test.ts` (7), `state-manager-instance-secret-durable.test.ts` (5), `r4-reload-read.piif01.test.ts` (4, NEW) |
+| G3   | EFFECTIVE_CONNECTION: typed instance B -> complete B tuple at sdkHost.start | **GREEN** | `r2p-real-projector.piif01.test.ts` (5), `r-replace-real-lifecycle.piif01.test.ts` R_REPLACE_POSITIVE (augmented this pass) |
+| G4   | LIFECYCLE: idle switch / running refusal / missing preservation / model-only fast path | **PASS** | `r-replace-real-lifecycle.piif01.test.ts` (4) |
+
+### §8.2 What is no longer halted (post this pass)
+
+- `R-REPLACE = GREEN` (predecessor pass)
+- `NO_REPLACEMENT_ON_MISSING_SECRET = GREEN at lifecycle seam` (predecessor)
+- `MODEL_ONLY_CONSERVATION = GREEN` (predecessor)
+- `R4_DURABLE_WRITE = GREEN` (prior pass)
+- `R4_RELOAD_READ = GREEN` (this pass — closes the load-bearing P1 carry-over)
+- `COMPLETE_V1_CONNECTION_AT_HOST_START = GREEN` (this pass — closes the second P1 carry-over)
+
+**Both P1 carry-overs from the predecessor reviewer are now CLOSED.**
+
+### §8.3 Foundation scope freeze (per the predecessor reviewer)
+
+The predecessor reviewer explicitly directed: "Freeze V1 as:
+`MODEL_PROFILES_V1_PROVIDER_INSTANCE_SCOPE = API_KEY_BACKED_CONNECTIONS`,
+`NON_API_KEY_AUTH = NOT_YET_SUPPORTED_BY_INSTANCE_FOUNDATION`,
+`STRUCTURED_PROVIDER_SPECIFIC_FIELDS = NOT_CLAIMED GENERICALLY`. That
+turns the old 'generic-provider overclaim' into an explicit product
+boundary rather than more Foundation work."
+
+This Foundation therefore freezes at the API-key-backed connections
+scope (i.e. OpenAI-compatible configurations around endpoint, API
+key, and model ID). AWS/GCP/Azure and other structured-provider-
+specific fields are explicitly NOT claimed by this Foundation and
+remain future Model Profiles work, if and when §17 hand-off
+authorizes them.
+
+### §8.4 Test counts (bridge, this pass)
+
+| Suite | Before | After |
+| ----- | ------ | ----- |
+| `typed-projector.test.ts` | 7 | 7 |
+| `instances-store.test.ts` | 10 | 10 |
+| `instance-secret.test.ts` | 7 | 7 |
+| `state-manager-instance-secret-durable.test.ts` | 5 | 5 |
+| `r2p-real-projector.piif01.test.ts` | 5 | 5 |
+| `r5-missing-credential-fails-closed.piif01.test.ts` | 4 | 4 |
+| `r-replace-real-lifecycle.piif01.test.ts` | 4 | 4 (augmented in place) |
+| `r4-reload-read.piif01.test.ts` | (NEW) | 4 |
+| **Total** | **42** | **46** |
+
+All 46 GREEN across 8 bridge files. `bun run check-types:c2-4-c-bridge`
+exits 0 with 0 diagnostic drift.
+
+### §8.5 The R4-RR file (this pass, NEW)
+
+`provider-instance-identity-r4-reload-read.piif01.test.ts`
+exercises the lowest production reload seam BENEATH the
+StateManager singleton, per the predecessor reviewer's explicit
+authorization: "test the lowest production reload seam beneath it
+rather than adding a test-only reset API."
+
+The seam is a fresh `ClineFileStorage` constructed from the same
+`secrets.json` disk path that `createStorageContext()` would use
+on restart, sweeping `keys()` exactly the way
+`StateManager.populateCache()` does (`StateManager.ts:833-839`).
+
+The seam is BENEATH the singleton because re-reading the file is
+exactly what `populateCache` does — it does not know or care
+about the previous process's in-memory cache. If the on-disk file
+is roundtrippable through this seam, `populateCache` will see the
+value on the next startup.
+
+Four witnesses:
+
+  - **R4-RR-01** — on-disk `secrets.json` contains the entry
+    under the namespaced key matching
+    `INSTANCE_SECRET_NAME_PATTERN`. Predicate is the exact one
+    `populateCache` uses to sweep the secrets file on reload.
+  - **R4-RR-02** — a FRESH `ClineFileStorage` constructed from
+    the same disk path returns the physical secret via
+    `.get(name)`.
+  - **R4-RR-03** — the full credential-resolution chain survives
+    a restart: opaque reference name still resolves to the
+    physical secret value via the same `populateCache` sweep.
+  - **R4-RR-04** — deletion survives reload:
+    `setInstanceSecret(name, undefined) -> flushPendingState ->
+    reloaded store no longer has the key`.
+
+### §8.6 The R_REPLACE_POSITIVE augmentation (this pass, in place)
+
+`R_REPLACE_POSITIVE` in
+`provider-instance-identity-r-replace-real-lifecycle.piif01.test.ts`
+now also asserts the SECOND call to `fakeHost.start` (the B
+install) carries the complete B connection tuple:
+
+```
+secondStartCall.config: {
+  providerId: "openai-compatible",
+  modelId:    "model-B",
+  apiKey:     "physical-key-B",       // <- resolved physical secret
+  baseUrl:    "https://endpoint-B",
+  headers:    { "X-B": "2" },
+  sessionId:  "sess-B",
+}
+```
+
+with the additional fail-closed sanity that
+`secondStartCall.config.apiKey === "physical-key-B"` (and NOT
+`"instance:inst-B-key"`). This freezes
+`COMPLETE_V1_CONNECTION_AT_HOST_START` and is the same fail-closed
+invariant the R5 file freezes at the builder seam, observed at the
+lifecycle boundary.
+
+### §8.7 Terminal disposition (post this pass)
+
+```
+PASS_PROVIDER_INSTANCE_IDENTITY_FOUNDATION
+FOUNDATION = CLOSED_CLEAN
+MODEL_PROFILES_IMPLEMENTATION = AUTHORIZED
+```
+
+Per the predecessor reviewer's explicit expected terminal verdict,
+with all four §17 gates GREEN and no remaining P1 carry-overs,
+this ACT closes the Provider Instance Identity Foundation and
+authorizes Model Profiles implementation as the next authorized
+work stream.
+
+### §8.8 Evidence
+
+`.factory/evidence/ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01/12-foundation-final-qualification-gates.md`
+(NEW).
+
+### §8.9 Production source files NOT touched (this pass)
+
+Same as the predecessor pass — this is a witness + typecheck +
+report pass, no production changes. Specifically unchanged:
+
+`apps/vscode/src/sdk/instance-store/**`,
+`apps/vscode/src/sdk/sdk-session-config-builder.ts`,
+`apps/vscode/src/sdk/sdk-session-lifecycle.ts`,
+`apps/vscode/src/sdk/sdk-provider-change-coordinator.ts`,
+`apps/vscode/src/core/storage/StateManager.ts`,
+`apps/vscode/src/shared/storage/instance-secret.ts`,
+`apps/vscode/src/shared/storage/ClineFileStorage.ts`,
+`apps/vscode/src/shared/storage/storage-context.ts`,
+`apps/vscode/src/core/controller/**`,
+`apps/vscode/src/sdk/SdkController.ts`,
+`apps/vscode/src/sdk/cline-session-factory.ts`.
+
+### §8.10 Halt inventory (post this pass)
+
+- `HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN = CLOSED` (this ACT's P0 close, prior passes)
+- `HALT_TYPED_INSTANCE_CREDENTIAL_NOT_RESOLVED = CLOSED` (unchanged)
+- `CREDENTIAL_AUTHORITY_DUPLICATED = CLOSED` (unchanged)
+- `R-REPLACE = GREEN` (predecessor)
+- `NO_REPLACEMENT_ON_MISSING_SECRET = GREEN at lifecycle seam` (predecessor)
+- `MODEL_ONLY_CONSERVATION = GREEN` (predecessor)
+- `R4_DURABLE_WRITE = GREEN` (prior)
+- `R4_RELOAD_READ = GREEN` (this pass — closes P1 carry-over)
+- `COMPLETE_V1_CONNECTION_AT_HOST_START = GREEN` (this pass — closes P1 carry-over)
+- `FOUNDATION_IMPLEMENTATION_PHASE = CLOSED_CLEAN` (this pass)
+- `MODEL_PROFILES_IMPLEMENTATION = AUTHORIZED` (this pass)
+- `OPENAI_ONLY_PROBE = CHARACTERIZED + BACK-COMPAT + NON-BLOCKING` (unchanged)
+- `FOUNDATION_V1_PROVIDER_SCOPE = API_KEY_BACKED_CONNECTIONS` (this pass)
+- `NON_API_KEY_AUTH = NOT_YET_SUPPORTED_BY_INSTANCE_FOUNDATION` (this pass)
+- `STRUCTURED_PROVIDER_SPECIFIC_FIELDS = NOT_CLAIMED GENERICALLY` (this pass)

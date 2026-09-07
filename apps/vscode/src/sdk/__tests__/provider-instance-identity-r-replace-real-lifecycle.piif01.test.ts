@@ -261,6 +261,53 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R-REPLACE", 
 
 		// host.start was called exactly twice (once for A, once for B).
 		expect(fakeHost.start).toHaveBeenCalledTimes(2)
+
+		// ─── COMPLETE_V1_CONNECTION_AT_HOST_START ───
+		// The fourteenth reviewer (this pass's predecessor) noted the
+		// prior positive witness only asserted { providerId, modelId }
+		// at the lifecycle layer (because `ActiveSession.startConfig`
+		// intentionally only stores those two). Production source
+		// already establishes passthrough -- `startNewSession` calls
+		// `sdkHost.start({ ...startInput, ...(toolPolicies ? {...} : {}) })`
+		// at sdk-session-lifecycle.ts:317 -- but the prior file only
+		// verified it structurally. This block converts that
+		// structural proof to an executable one.
+		//
+		// Production shape (per `startNewSession` at
+		// sdk-session-lifecycle.ts:287-317):
+		//   sdkHost.start({ ...startInput, ...(toolPolicies ? {...} : {}) })
+		// where startInput has the form
+		//   { config: { ..., sessionId, providerId, modelId, ... },
+		//     source, interactive, ... }
+		// `startInput.config.sessionId` is what the lifecycle pulls out
+		// for the active session's sessionId (line 287: `requestedSessionId =
+		// startInput.config?.sessionId?.trim()`). The full config object
+		// is forwarded to host.start as-is.
+		expect(fakeHost.start).toHaveBeenCalledTimes(2)
+		const secondStartCall = fakeHost.start.mock.calls[1]?.[0] as
+			| { config?: Record<string, unknown>; source?: string; interactive?: boolean }
+			| undefined
+		expect(secondStartCall).toBeDefined()
+		// The complete B connection tuple crosses the lifecycle boundary
+		// into host.start -- providerId, modelId, apiKey (the resolved
+		// physical secret), baseUrl, headers. This freezes
+		// COMPLETE_V1_CONNECTION_AT_HOST_START.
+		expect(secondStartCall?.config).toMatchObject({
+			providerId: "openai-compatible",
+			modelId: "model-B",
+			apiKey: "physical-key-B",
+			baseUrl: "https://endpoint-B",
+			headers: { "X-B": "2" },
+			sessionId: "sess-B",
+		})
+
+		// Sanity: the apiKey in the startConfig carried to host.start
+		// is the PHYSICAL secret value, not the reference name.
+		// This is the same fail-closed invariant the R5 file
+		// freezes at the builder seam, observed at the lifecycle
+		// boundary.
+		expect(secondStartCall?.config?.apiKey).toBe("physical-key-B")
+		expect(secondStartCall?.config?.apiKey).not.toBe("instance:inst-B-key")
 	})
 
 	it("R_REPLACE_NEGATIVE_MISSING_CREDENTIAL: builder rejects; lifecycle active session is the SAME object reference as before the attempted apply", async () => {

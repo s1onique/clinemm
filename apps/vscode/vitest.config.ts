@@ -193,6 +193,15 @@ export default defineConfig({
 			// together, with mocked VscodeSessionHost.create / StateManager.
 			// Bridge-only (same alias requirement as R2p / R5).
 			"src/sdk/__tests__/provider-instance-identity-r-replace-real-lifecycle.piif01.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4-RR
+			// (fifteenth reviewer, C1 "GO TO FOUNDATION FINAL
+			// QUALIFICATION", this pass): persisted instance-secret
+			// RELOAD witness. Tests the lowest production reload
+			// seam beneath the StateManager singleton (fresh
+			// ClineFileStorage from same secrets.json disk path).
+			// Bridge-only for consistency with the prior R4-D
+			// durable suite.
+			"src/sdk/__tests__/provider-instance-identity-r4-reload-read.piif01.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

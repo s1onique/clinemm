@@ -208,7 +208,15 @@ export default defineConfig({
 			// SdkSessionLifecycle.replaceActiveSession composition.
 			// 4 witnesses:
 			//   R_REPLACE_POSITIVE — composed A → B through the
-			//     real lifecycle installs B and tears down A.
+			//     real lifecycle installs B and tears down A;
+			//     COMPLETE_V1_CONNECTION_AT_HOST_START — the full
+			//     B tuple (apiKey, baseUrl, headers, providerId,
+			//     modelId) crosses the lifecycle boundary into
+			//     sdkHost.start, asserting the second mock call
+			//     arguments (this pass's predecessor reviewer
+			//     flagged the prior positive witness only
+			//     asserted { providerId, modelId } at the
+			//     lifecycle layer).
 			//   R_REPLACE_NEGATIVE_MISSING_CREDENTIAL — the builder
 			//     throws MissingProviderInstanceCredentialError
 			//     BEFORE replaceActiveSession; the lifecycle's
@@ -225,6 +233,29 @@ export default defineConfig({
 			//     updateActiveSessionModel (no host.start, no
 			//     replacement) — pins the fast-lane conservation.
 			"src/sdk/__tests__/provider-instance-identity-r-replace-real-lifecycle.piif01.test.ts",
+			// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R4-RR
+			// (fifteenth reviewer, C1 "GO TO FOUNDATION FINAL
+			// QUALIFICATION", this pass): persisted instance-secret
+			// RELOAD witness. Closes R4_RELOAD_READ that has been
+			// carried as P1 for several passes. Tests the lowest
+			// production reload seam BENEATH the StateManager
+			// singleton: a fresh `ClineFileStorage` constructed
+			// from the same secrets.json disk path that
+			// createStorageContext() would use on restart, sweeping
+			// `keys()` exactly the way StateManager.populateCache()
+			// does. 4 witnesses:
+			//   R4-RR-01 — on-disk secrets.json contains the
+			//     entry under the namespaced key matching
+			//     INSTANCE_SECRET_NAME_PATTERN.
+			//   R4-RR-02 — fresh ClineFileStorage from the same
+			//     path returns the physical secret via .get(name).
+			//   R4-RR-03 — the full credential-resolution chain
+			//     survives a restart: opaque reference name still
+			//     resolves to the physical secret value.
+			//   R4-RR-04 — deletion survives reload:
+			//     setInstanceSecret(name, undefined) -> flush ->
+			//     reloaded store no longer has the key.
+			"src/sdk/__tests__/provider-instance-identity-r4-reload-read.piif01.test.ts",
 		],
 		testTimeout: 30_000,
 	},
