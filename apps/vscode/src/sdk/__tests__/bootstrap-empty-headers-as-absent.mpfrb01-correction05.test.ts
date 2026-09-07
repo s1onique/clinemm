@@ -20,6 +20,31 @@
  * strictly absent (NOT {}, NOT null). Genuinely malformed non-empty
  * payloads continue to refuse per MALFORMED_HEADERS_POLICY.
  *
+ * EVIDENCE-PRECISION NOTES (per reviewer P2, 2026-09-09):
+ *
+ *   BOOTSTRAP_PERSISTED_SHAPE_PARITY = EXECUTED
+ *     This test suite asserts that {} and undefined produce
+ *     IDENTICAL persisted instance.connection shapes. That is
+ *     fully proven below (no live provider call is made).
+ *
+ *   RUNTIME_BEHAVIOR_EQUIVALENCE = STRUCTURALLY_CORROBORATED
+ *     The assertion that the user observes "identical runtime
+ *     behavior" between {} and undefined is NOT proven by these
+ *     tests. It is structurally corroborated by reading the
+ *     runtime composes `...(openAiHeaders || {})`, which is
+ *     exactly the absent-equivalence rule the empty-canonicalize
+ *     fix restores at the bootstrap layer. Outbound HTTP
+ *     behavior parity is upstream evidence (OpenAI-Compatible
+ *     provider), not asserted in this file.
+ *
+ *   PARTIALLY_MALFORMED_HEADERS_POLICY = PINNED (non-blocking P1)
+ *     The MPFRB01_C05_P1_PARTIALLY_MALFORMED_ASYMMETRY_* witnesses
+ *     pin the CURRENT observed parser asymmetry (silent-drop of
+ *     non-string-valued entries) as a freeze, not an endorsement.
+ *     See freeze #6 in the production file header. The likely
+ *     CORRECTION06 (post-dogfood) will refuse partially-malformed
+ *     input rather than silently drop bad entries.
+ *
  * Run via:
  *   cd apps/vscode && TMPDIR=/tmp bun test \
  *     src/sdk/__tests__/bootstrap-empty-headers-as-absent.mpfrb01-correction05.test.ts
@@ -217,11 +242,16 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION05 / EMPT
     expect("headers" in persisted.connection).toBe(false)
   })
 
-  it("MPFRB01_C05_RUNTIME_PARITY: a user with openAiHeaders={} observes identical runtime behavior to openAiHeaders=undefined", async () => {
-    // Witness: the runtime composes ...(openAiHeaders || {}), so
-    // both representations produce zero outbound custom headers.
-    // The bootstrap must produce the SAME persisted connection shape
-    // for both.
+  it("MPFRB01_C05_BOOTSTRAP_PERSISTED_SHAPE_PARITY: openAiHeaders={} and openAiHeaders=undefined produce IDENTICAL persisted instance.connection shape", async () => {
+    // EVIDENCE-PRECISION (reviewer P2, 2026-09-09):
+    //   BOOTSTRAP_PERSISTED_SHAPE_PARITY = EXECUTED here.
+    //   RUNTIME_BEHAVIOR_EQUIVALENCE    = STRUCTURALLY_CORROBORATED
+    //     (upstream OpenAI-Compatible provider composes
+    //      ...(openAiHeaders || {}); not asserted in this test).
+    //
+    // This test proves the bootstrap writes the same persisted
+    // connection shape for both empty-plain-object and absent
+    // representations. It does NOT execute a real provider call.
     const cfgEmptyObj = {
       actModeApiProvider: "openai" as const,
       actModeOpenAiModelId: "MiniMax-M3",
@@ -249,5 +279,68 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION05 / EMPT
     // The rest of the connection tuple is identical (modelId, baseUrl).
     expect(p1.connection.modelId).toBe(p2.connection.modelId)
     expect(p1.connection.baseUrl).toBe(p2.connection.baseUrl)
+  })
+
+  // -----------------------------------------------------------------
+  // P1 PARTIALLY_MALFORMED_HEADERS_POLICY pinning witnesses
+  //   Per reviewer P1 (2026-09-09): freeze the CURRENT observed
+  //   asymmetry of the parser (silent-drop of non-string-valued
+  //   entries) so future contributors cannot silently change it.
+  //   Likely CORRECTION06 (post-dogfood, NOT this ACT) will
+  //   change these witnesses from GREEN to RED->GREEN when the
+  //   parser refuses partially-malformed input instead of silently
+  //   dropping bad entries. Reviewer directive: "Do NOT fix before
+  //   live retest. It is not the user's observed geometry."
+  // -----------------------------------------------------------------
+
+  it("MPFRB01_C05_P1_PARTIALLY_MALFORMED_ASYMMETRY_PLAIN_OBJECT: openAiHeaders={'X-Good':'foo', 'X-Bad':123} -> CAPTURED with 'X-Good' only (CURRENT asymmetric behavior pinned)", async () => {
+    // CURRENT asymmetry: parser keeps string-valued entries and
+    // SILENTLY drops non-string-valued entries. This is asymmetric
+    // with freeze #5 ("NON-EMPTY + ALL-VALUES-UNUSABLE refuses")
+    // because partially-malformed input does NOT refuse.
+    //
+    // Likely desired (CORRECTION06): MALFORMED + refuse rather
+    // than silently drop. Until then, this witness pins the
+    // current behavior.
+    const cfg = {
+      actModeApiProvider: "openai" as const,
+      actModeOpenAiModelId: "MiniMax-M3",
+      openAiApiKey: "sk-XXXXX",
+      openAiBaseUrl: "https://api.MiniMax.example/v1",
+      openAiHeaders: { "X-Good": "foo", "X-Bad": 123 } as Record<string, unknown>,
+    }
+    const deps = makeDeps(tmpDataDir(), cfg)
+    const result = await bootstrapModelProfileFromCurrentConfiguration(deps, "PartiallyMalformed")
+    expect(result.status).toBe("CREATED")
+    if (result.status !== "CREATED") throw new Error("unreachable")
+    const profile = deps.instancesStore.list()[result.instanceId]
+    // CURRENT pinned behavior: connection.headers exists, contains
+    // only "X-Good", "X-Bad" was silently dropped.
+    expect(profile.connection.headers).toEqual({ "X-Good": "foo" })
+    // Explicit anti-assertion so future CORRECTION06 visibility:
+    // when CORRECTION06 lands, this expect will FAIL because the
+    // status will be CURRENT_CONFIGURATION_UNSUPPORTED instead of
+    // CREATED. That RED is the intended gate for the next ACT.
+    expect(result.status).not.toBe("CURRENT_CONFIGURATION_UNSUPPORTED")
+  })
+
+  it("MPFRB01_C05_P1_PARTIALLY_MALFORMED_ASYMMETRY_JSON_STRING: openAiHeaders='{\"X-Good\":\"foo\",\"X-Bad\":123}' -> CAPTURED with 'X-Good' only (CURRENT asymmetric behavior pinned)", async () => {
+    // Mirror of the plain-object witness, exercising the JSON-string
+    // form (legacy settings-panel storage). Pins the same
+    // silent-drop asymmetry on the parse path.
+    const cfg = {
+      actModeApiProvider: "openai" as const,
+      actModeOpenAiModelId: "MiniMax-M3",
+      openAiApiKey: "sk-XXXXX",
+      openAiBaseUrl: "https://api.MiniMax.example/v1",
+      openAiHeaders: '{"X-Good":"foo","X-Bad":123}' as unknown as Record<string, string>,
+    }
+    const deps = makeDeps(tmpDataDir(), cfg)
+    const result = await bootstrapModelProfileFromCurrentConfiguration(deps, "PartiallyMalformedJson")
+    expect(result.status).toBe("CREATED")
+    if (result.status !== "CREATED") throw new Error("unreachable")
+    const profile = deps.instancesStore.list()[result.instanceId]
+    expect(profile.connection.headers).toEqual({ "X-Good": "foo" })
+    expect(result.status).not.toBe("CURRENT_CONFIGURATION_UNSUPPORTED")
   })
 })

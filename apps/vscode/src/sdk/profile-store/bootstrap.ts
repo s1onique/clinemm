@@ -123,6 +123,44 @@
  *      the missing absent equivalence that the runtime has
  *      always observed.
  *
+ *   6. PARTIALLY_MALFORMED_HEADERS_POLICY_OBSERVED_ASYMMETRY
+ *      (added 2026-09-09 per reviewer P1 PARTIALLY_MALFORMED_HEADERS_POLICY,
+ *      non-blocking on dogfood)
+ *      Freeze the CURRENT observed asymmetry of the parser so it
+ *      cannot be silently changed without re-reading this ACT.
+ *
+ *      Current behavior (load-bearing parsed):
+ *
+ *        {"X-Good":"foo", "X-Bad":123}
+ *          -> CAPTURED { "X-Good": "foo" }
+ *
+ *      The parser keeps string-valued entries and SILENTLY drops
+ *      non-string-valued entries. This is asymmetric with the
+ *      freeze #5 rule "NON-EMPTY + ALL-VALUES-UNUSABLE refuses"
+ *      because partially-malformed input does not refuse - one
+ *      requested header can disappear silently while another
+ *      survives. Custom headers are explicitly used for
+ *      authentication and corporate proxy routing, so the
+ *      silent-drop is a load-bearing silent-weaken antipattern
+ *      similar in kind to the one freeze #5 prevents.
+ *
+ *      The desired policy (likely CORRECTION06, NOT this ACT):
+ *
+ *        any present non-string-valued entry
+ *          -> MALFORMED  (refuse, surface the bad value)
+ *
+ *      Reviewer directive (2026-09-09): "Do NOT fix before live
+ *      retest. It is not the user's observed geometry, and
+ *      another pre-dogfood loop would slow learning." The
+ *      asymmetry is recorded here as a freeze of CURRENT
+ *      behavior, not as an endorsement; the next ACT
+ *      (post-dogfood) will decide whether to fix.
+ *
+ *      Witness pinning current behavior:
+ *      apps/vscode/src/sdk/__tests__/bootstrap-empty-headers-as-absent.mpfrb01-correction05.test.ts
+ *        MPFRB01_C05_P1_PARTIALLY_MALFORMED_ASYMMETRY_PLAIN_OBJECT
+ *        MPFRB01_C05_P1_PARTIALLY_MALFORMED_ASYMMETRY_JSON_STRING
+ *
  * CAUSAL CHAIN (mandatory order - do not reorder):
  *
  *     current-config-authority

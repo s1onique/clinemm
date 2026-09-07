@@ -1756,3 +1756,124 @@ amendment of freeze #5 in the file-level header.
      already pinned the load-bearing invariants - this correction
      only had to amend ONE freeze (the empty-vs-malformed line
      inside freeze #5) without touching any other layer.
+
+## CORRECTION05 REVIEWER C1 ACCEPTANCE (2026-09-09)
+
+Reviewer verdict: PASS_WITH_ONE_BOUNDED_P1 — C1: GO BACK TO LIVE DOGFOOD.
+
+P0 HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED = CLOSED
+  (the live-found P0 that triggered CORRECTION05 is genuinely closed
+   and the empty-canonicalize fix is correctly scoped; the three
+   semantic classes ABSENT / CAPTURED / MALFORMED are consistent with
+   OpenAI-Compatible configuration semantics - custom headers are
+   optional - and the model-catalog store scopes headers to the
+   `openai` provider, matching the parser scope).
+
+P1 PARTIALLY_MALFORMED_HEADERS_POLICY = OPEN, NON-BLOCKING
+  Reviewer observed that the parser's behavior on partially-malformed
+  input is asymmetric with freeze #5's "NON-EMPTY + ALL-VALUES-UNUSABLE
+  refuses" rule:
+
+    {"X-Good":"foo", "X-Bad":123}
+      -> CAPTURED { "X-Good": "foo" }   (silent drop of X-Bad)
+
+  This silent-drop is a load-bearing silent-weaken antipattern similar
+  in kind to the one freeze #5 prevents: one requested header can
+  disappear silently while another survives, and custom headers are
+  explicitly used for authentication and corporate proxy routing.
+
+  Likely desired policy (likely CORRECTION06, post-dogfood):
+
+    any present non-string-valued entry
+      -> MALFORMED  (refuse, surface the bad value)
+
+  Reviewer directive: "Do NOT fix before live retest. It is not the
+  user's observed geometry, and another pre-dogfood loop would slow
+  learning." Recorded here as a freeze of CURRENT behavior, not as an
+  endorsement.
+
+  Action taken this commit (non-behavior change):
+
+  1. New freeze #6 PARTIALLY_MALFORMED_HEADERS_POLICY_OBSERVED_ASYMMETRY
+     added to the file-level header of
+     apps/vscode/src/sdk/profile-store/bootstrap.ts. It pins the
+     current silent-drop behavior, names the likely-desired policy,
+     records the reviewer directive verbatim, and cross-references
+     the pinning witnesses.
+
+  2. Two new pinning witnesses added to the CORRECTION05 test file
+     (currently GREEN, designed to go RED -> GREEN when CORRECTION06
+     eventually lands):
+       MPFRB01_C05_P1_PARTIALLY_MALFORMED_ASYMMETRY_PLAIN_OBJECT
+       MPFRB01_C05_P1_PARTIALLY_MALFORMED_ASYMMETRY_JSON_STRING
+
+     Both witness a `{"X-Good":"foo","X-Bad":123}` payload and assert
+     CURRENT behavior (CAPTURED with `X-Good` only, status CREATED).
+     Both add an explicit anti-assertion
+     `expect(result.status).not.toBe("CURRENT_CONFIGURATION_UNSUPPORTED")`
+     so the next ACT has a visible RED gate to chase.
+
+P2 RUNTIME_PARITY evidence label slightly overstated = CORRECTED
+  Reviewer precision fix: the original witness named
+  `MPFRB01_C05_RUNTIME_PARITY` and its in-body comment claimed
+  "identical runtime behavior" - but the test only asserts that the
+  bootstrap writes the same persisted connection shape for both {} and
+  undefined; it does not execute a real provider call. Outbound HTTP
+  behavior parity is upstream evidence (OpenAI-Compatible provider
+  composes `...(openAiHeaders || {})`), not asserted in this file.
+
+  Renames + label split (no behavior change):
+
+    Test ID:
+      MPFRB01_C05_RUNTIME_PARITY
+        -> MPFRB01_C05_BOOTSTRAP_PERSISTED_SHAPE_PARITY
+
+    Evidence labels in the file header:
+      BOOTSTRAP_PERSISTED_SHAPE_PARITY = EXECUTED  (this file)
+      RUNTIME_BEHAVIOR_EQUIVALENCE     = STRUCTURALLY_CORROBORATED
+                                          (upstream provider;
+                                           not asserted here)
+
+VERDICT (post C1 acceptance):
+  P0: HALT_BOOTSTRAP_EMPTY_HEADERS_REJECTED              = CLOSED
+      HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED = CLOSED
+  P1: PARTIALLY_MALFORMED_HEADERS_POLICY                 = OPEN, NON-BLOCKING
+      (freeze #6 added; pinning witnesses added; deferred to post-dogfood)
+  P2: BLANK_AT_EOF_DIAGNOSTICS                           = OPEN, NON-BLOCKING
+      RUNTIME_PARITY evidence label                       = CORRECTED
+
+LESSONS LEARNED ADDENDUM (post C1 review):
+
+  #25 even when the bounded correction closes the live-found P0 cleanly,
+     the reviewer will surface asymmetric load-bearing antipatterns that
+     were not in the user's observed geometry. The right response is
+     NOT to fix them in the same bounded correction - it is to FREEZE
+     the current behavior so the asymmetry cannot drift, and to add
+     pinning witnesses that will RED -> GREEN when the next ACT decides
+     to address it. This preserves the bounded-correction discipline
+     (do not reopen the design ACT) while making the latent antipattern
+     visible at the next decision point.
+
+  #26 evidence-precision reviews are cheap and load-bearing: claiming
+     "RUNTIME_PARITY = EXECUTED" when the test only proves "persisted
+     shape parity" overstates the assertion and erodes the trust chain
+     between reviewer panel and Foundation conservation. Splitting the
+     claim into "what this test proves" vs "what is structurally
+     corroborated upstream" is the right discipline.
+
+C1: GO TO EXACT-HEAD BUILD/INSTALL -> REPEAT LIVE FIRST-PROFILE CREATION.
+   The next genuinely useful step is to build/install a new exact-head
+   VSIX from commit 2ba7e3be0 (or its post-C1-acceptance successor) and
+   re-run the original live first-run flow on a real VS Code extension
+   host with the MiniMax/OpenAI-compatible configuration that
+   originally surfaced the bug.
+
+   L-C05-1   legacy openAiHeaders={} -> Settings > Model Profiles ->
+             Create first profile -> CREATED -> profile appears.
+   L-C05-2   reload VS Code -> profile still present -> credential
+             still resolves.
+   L-C05-3   use created profile -> next real MiniMax request succeeds.
+
+   Only after L-C05-1/2/3 succeed should dogfood proceed to A/B
+   switching and the PARTIALLY_MALFORMED_HEADERS_POLICY review (post-
+   dogfood decision, not pre-dogfood).
