@@ -1,0 +1,74 @@
+ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01
+EXACT-HEAD EVIDENCE BINDING
+============================
+
+Subject HEAD: 97b6f16125a3... (see `git rev-parse HEAD`)
+Production source after this commit: this exact commit.
+No later production-source edits exist.
+
+This binding supersedes the previous MPW01 binding (subject HEAD
+ff23751f8) — that earlier HEAD did NOT include the C1/C2/C3/C4
+production-source changes. The sixteenth reviewer correctly
+flagged that the earlier evidence was bound to a stale subject.
+
+Now:
+  git log --oneline -5:
+    97b6f1612 MPWC01 bounded correction01: real UI parents + fail-closed identity + factory integration
+    99abfb77d epic-board: MPW01 entry (production wiring + helper layer closed)
+    0217ec6fd MPW01 tighten owner type to Pick (required method only)
+    cf181f8d4 MPW01 conservation evidence file
+    72ffc03cb MPW01 exact-head binding (closes P0-5)
+
+PRODUCTION-SOURCE DELTAS (relative to MPW01 HEAD ff23751f8):
+  M apps/vscode/src/core/controller/state/saveCurrentAsModelProfile.ts
+      Removed Object.values(instances).find(providerId === providerId) fallback.
+      Now fails closed with explicit "authoritative providerInstanceId" error.
+
+  M apps/vscode/src/core/controller/state/updateModelProfileFromCurrent.ts
+      Same fix.
+
+  M apps/vscode/src/core/controller/state/working-context-state-projection.ts
+      Reverted unrelated cosmetic change (single-line Pick -> multiline Pick).
+
+  M apps/vscode/src/sdk/SdkController.ts
+      Removed providerId-matching fallback in getCurrentTaskProviderInstanceId.
+      Added resolveProviderInstanceTyped wiring in SdkTaskStartCoordinator ctor.
+
+  M apps/vscode/src/sdk/profile-store/owner.ts
+      Added getDefaultProfileId + resolveActiveInstanceTyped to ModelProfilesOwnerDeps.
+      Exported resolveActiveInstanceTyped helper.
+      Wired in createProductionModelProfilesOwner factory.
+
+  M apps/vscode/src/sdk/sdk-task-start-coordinator.ts
+      Added resolveProviderInstanceTyped option.
+      Threads providerConfigurationInstanceTyped into sessionConfigBuilder.build
+      in BOTH initTask AND reinitExistingTaskFromId.
+
+  M apps/vscode/webview-ui/src/components/chat/ChatTextArea.tsx
+      Mounts <ModelProfileQuickSwitchContainer /> in the chat parent footer.
+
+  M apps/vscode/webview-ui/src/components/settings/SettingsView.tsx
+      New "model-profiles" tab registering <ModelProfilesSectionContainer />.
+
+NEW TEST FILES:
+  + apps/vscode/src/sdk/__tests__/save-current-identity-inversion.mpwc01.test.ts (3 tests)
+  + apps/vscode/src/sdk/__tests__/factory-resume-effective-connection.mpwc01.test.ts (3 tests)
+  + apps/vscode/webview-ui/src/components/chat/chat-parent-reachability.mpwc01.test.tsx (2 tests)
+  + apps/vscode/webview-ui/src/components/settings/settings-parent-reachability.mpwc01.test.tsx (2 tests)
+
+VITEST CONFIG:
+  M apps/vscode/vitest.config.c2-4-c-bridge.ts
+      Added C3 + C4 test entries to the bridge config include list.
+
+EVIDENCE FILES:
+  + .factory/acts/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01.md (NEW ACT body)
+  + .factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01/* (NEW evidence dir)
+
+P0 STATUS:
+  P0-1 (UI parents)              = CLOSED
+  P0-3 (factory integration)     = CLOSED
+  P0-5 (evidence binding)        = CLOSED (this file)
+  NEW (instance identity)        = CLOSED
+  P2 (unrelated dirt)            = CLOSED
+
+No further production-source edits are pending; this is the FINAL HEAD.

@@ -1280,6 +1280,17 @@ apps/vscode/.factory/evidence/
 # active profile + global default into CoreSessionConfig.
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01/
+# ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01: bounded
+# correction after sixteenth-reviewer verdict
+# HALT_PRODUCTION_WIRING_NOT_CLOSED. Five P0s addressed in one
+# correction: real chat parent mount, real Settings tab registry,
+# fail-closed instance identity capture (was providerId-matching
+# which collapsed two same-provider instances to one), real factory
+# integration (resolveActiveInstanceTyped threads through
+# SdkTaskStartCoordinator.initTask + reinitExistingTaskFromId), and
+# exact-head evidence rebinding.
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01.md
+!/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION01/
 # ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01:
 # bounded correction after fifth-reviewer verdict
 # HALT_R0_FULL_CONNECTION_NOT_PROVEN (2026-09-05, same day, immediately
