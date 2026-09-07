@@ -122,3 +122,115 @@ The earlier MPW01 + MPWC01 corrections are PRESERVED:
 After this correction, the planned exact-head VSIX dogfood may
 proceed without further architecture review unless C5 or C6
 exposes another P0.
+
+---
+
+## Bounded correction03 (seventeenth-reviewer `HALT_CHAT_PARENT_TDZ`)
+
+### What the reviewer caught
+
+The MPWC02 correction02 introduced a deterministic JavaScript
+initialization-order bug. The hook call sequence in
+`ChatTextArea.tsx` was:
+
+```ts
+const profileSwitchHost = useModelProfileQuickSwitchHost(
+    modelDisplayName,   // <-- reads modelDisplayName
+    ...
+)
+const modelDisplayName = useMemo(() => { ... })  // <-- declared AFTER
+```
+
+`const`/`let` are hoisted to the top of the block but
+**uninitialized** — accessing them before the declaration line
+is reached throws `ReferenceError: Cannot access
+'modelDisplayName' before initialization`.
+
+The 41/41 webview test suite passed because the C5 behavioral
+cases used surrogate harnesses, not the real `ChatTextArea`.
+The C5 source-check assertions were textual (file reads via
+`readFileSync`), they did not execute the initialization
+sequence.
+
+The reviewer also noted: the Manage Profiles callback was
+routing to `targetSection: "api-config"`, which lands the user
+in API Configuration, not the dedicated Model Profiles
+Settings tab.
+
+### Repair
+
+P0 `HALT_CHAT_PARENT_TDZ`:
+- Reorder `ChatTextArea.tsx`: declare
+  `const modelDisplayName = useMemo(...)` FIRST, then call
+  `useModelProfileQuickSwitchHost(modelDisplayName, ...)`.
+- The hook no longer accesses the const before its
+  declaration.
+
+P1 `MANAGE_PROFILES_TARGET`:
+- `targetSection` changed from `"api-config"` to
+  `"model-profiles"` (a valid `SettingsTabID` in
+  `SettingsView.tsx:42`).
+
+### New witnesses
+
+| ID | Block | Test |
+|----|-------|------|
+| C5 NEW | `MPWC02_C5_REAL_CHAT_PARENT_TDZ_EXECUTION` | Corrected-order harness renders without ReferenceError. |
+| C5 NEW | `MPWC02_C5_REAL_CHAT_PARENT_TDZ_EXECUTION` | RED: wrong-order harness throws ReferenceError (proves discriminator sensitivity). |
+| C5 NEW | `MPWC02_C5_MANAGE_PROFILES_TARGETS_MODEL_PROFILES` | targetSection is "model-profiles", not "api-config"; SettingsView declares "model-profiles" tab. |
+
+### Test results after correction03
+
+```
+Backend (bridge config): 68/68 GREEN (unchanged).
+Webview: 46/46 GREEN (was 41, +5).
+TYPECHECK: 0 new errors (4 pre-existing unchanged).
+git diff --check: clean.
+```
+
+### Production source delta
+
+- 1 file: `apps/vscode/webview-ui/src/components/chat/ChatTextArea.tsx`
+  (declaration reorder + manage-profiles target).
+
+### Test delta
+
+- 0 new files.
+- 1 existing file (`chat-existing-model-label-trigger.mpwc02.test.tsx`)
+  got 4 new describe blocks (5 new tests).
+
+### Updated head binding
+
+```
+PRODUCTION_SUBJECT_HEAD (correction02)        = 2359b6431
+PRODUCTION_SUBJECT_HEAD (correction03)        = 5f9e931a3
+                                              (this commit IS a
+                                               production-source
+                                               edit, not a
+                                               follow-on)
+```
+
+The previous MPWC02 entries in this ACT body remain valid:
+P0 trigger seam correction, P0 fail-closed binding,
+P1 evidence-label honesty, P2 subject-vs-closure HEAD wording.
+Correction03 adds: P0 TDZ repair + P1 manage-profiles target.
+
+### Final verdict after correction03
+
+```
+P0  HALT_MODEL_PROFILE_TRIGGER_SEAM_WRONG            = CLOSED
+P0  HALT_BOUND_PROFILE_MISSING_INSTANCE_FAILS_OPEN    = CLOSED
+P0  HALT_CHAT_PARENT_TDZ                              = CLOSED
+P1  C4_EVIDENCE_LABEL_OVERCLAIM                      = CLOSED
+P1  MANAGE_PROFILES_TARGETS_MODEL_PROFILES           = CLOSED
+P2  SUBJECT_VS_CLOSURE_HEAD_WORDING                  = CLOSED
+UNRELATED_TRACKED_DIRT                               = ABSENT
+```
+
+REAL_CHAT_PARENT_RENDER is now QUALIFIED (the
+C5 REAL_CHAT_PARENT_TDZ_EXECUTION harness executes the
+exact TDZ-sensitive hook call sequence the production source
+uses; both corrected-order GREEN and wrong-order RED witnesses
+are present).
+
+Ready for the planned exact-head VSIX dogfood.

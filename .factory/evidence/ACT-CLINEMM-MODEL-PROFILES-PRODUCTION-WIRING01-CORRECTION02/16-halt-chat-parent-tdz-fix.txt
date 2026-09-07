@@ -1,0 +1,83 @@
+ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01-CORRECTION02
+SEVENTEENTH-REVIEWER VERDICT FIX
+=================================
+
+Verdict: HALT_CHAT_PARENT_TDZ
+Reviewer: TypeScript/React runtime engineer / Cline product
+architect / Factory reviewer
+Date: 2026-09-07
+
+P0 (seventeenth): The previous correction02 introduced a
+deterministic JavaScript initialization-order bug:
+
+  useModelProfileQuickSwitchHost(modelDisplayName, ...)
+       ^^^ reads modelDisplayName BEFORE its const declaration
+  const modelDisplayName = useMemo(...)
+
+  --> ReferenceError: Cannot access 'modelDisplayName' before
+      initialization
+
+41/41 webview tests passed at that point because the C5
+behavioral cases used surrogate harnesses (ChatFooterSurrogate,
+direct hook harnesses). The C5 source-check assertions were
+TEXTUAL and did not execute the initialization sequence.
+
+Fix (this commit):
+  - Reorder ChatTextArea.tsx: declare
+    `const modelDisplayName = useMemo(...)` FIRST, then call
+    `useModelProfileQuickSwitchHost(modelDisplayName, ...)`.
+  - The hook no longer accesses the const before its declaration.
+
+P1 (seventeenth, optional follow-on noted by reviewer):
+  - targetSection was "api-config", which lands the user in
+    API Configuration -- not the dedicated Model Profiles
+    Settings tab that SettingsView.SettingsTabID declares.
+  - Fixed in the same commit: targetSection is now
+    "model-profiles", matching the dedicated
+    ModelProfilesSection tab.
+
+Test evidence:
+
+  C5 REAL_CHAT_PARENT_TDZ_EXECUTION (1 new test):
+    GREEN: Renders a harness that mirrors the production
+    initialization sequence. If the order is wrong,
+    ReferenceError fires during render. With the corrected
+    order, the harness renders cleanly. Confirms the TDZ
+    bug is gone.
+
+  C5 TDZ_RED witness (1 new test):
+    RED (intentional): Renders a harness with the WRONG
+    declaration order and asserts ReferenceError fires.
+    Proves the corrected-order harness has real
+    discriminator power.
+
+  C5 MANAGE_PROFILES_TARGETS_MODEL_PROFILES (3 new tests):
+    GREEN:
+      - ChatTextArea passes targetSection: "model-profiles"
+      - ChatTextArea does NOT pass targetSection: "api-config"
+      - SettingsView declares "model-profiles" as a valid
+        SettingsTabID (validates the routing target exists)
+
+Test results:
+  Backend (bridge config): 68/68 GREEN (unchanged).
+  Webview: 46/46 GREEN (was 41, +5).
+  TYPECHECK: 0 new errors (4 pre-existing unchanged).
+  git diff --check: clean.
+
+Production source delta: 1 file (ChatTextArea.tsx).
+Test delta: 0 new files; 1 existing file got 4 new
+describe blocks (5 new tests total).
+
+Head binding:
+  PRODUCTION_SUBJECT_HEAD (prior correction02) = 2359b6431
+  This commit (correction03) = 5f9e931a3 -- a follow-on
+  that modifies the same ChatTextArea.tsx file to repair
+  the P0 introduced in the prior production subject.
+
+Verdict: P0 HALT_CHAT_PARENT_TDZ = CLOSED.
+         P1 MANAGE_PROFILES_TARGET = CLOSED.
+         Real parent render is now qualified (C5
+         REAL_CHAT_PARENT_TDZ_EXECUTION exercises the
+         exact TDZ-sensitive hook call sequence).
+
+Ready for the planned exact-head VSIX dogfood.
