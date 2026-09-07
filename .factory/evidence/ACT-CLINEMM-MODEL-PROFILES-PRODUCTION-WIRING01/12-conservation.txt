@@ -1,0 +1,116 @@
+ACT-CLINEMM-MODEL-PROFILES-PRODUCTION-WIRING01
+CONSERVATION
+============
+
+Subject HEAD: ff23751f8f5d086537bec119dd838c5297c3ec22
+
+REGRESSION TEST SUMMARY
+-----------------------
+
+Run with: `bunx vitest run --config vitest.config.c2-4-c-bridge.ts`
+
+All 7 model profile test files (48 prior + 9 new = 57 tests):
+
+  ✓ model-profiles-store.mpqs01.test.ts            11 tests  GREEN
+  ✓ model-profile-session-binding.mpqs01.test.ts    20 tests  GREEN
+  ✓ model-profile-application.mpqs01.test.ts        8 tests   GREEN
+  ✓ model-profile-webview-summary.mpqs01.test.ts    8 tests   GREEN
+  ✓ model-profile-composition.mpqs01.test.ts        1 test    GREEN
+  ✓ model-profile-rpc-seam.mpw01.test.ts            3 tests   GREEN  (NEW)
+  ✓ model-profile-lifecycle-composition.mpw01.test.ts  6 tests  GREEN  (NEW)
+
+Total: 57/57 GREEN
+
+WEBVIEW TESTS
+-------------
+
+Run with: `bunx vitest run` from apps/vscode/webview-ui
+
+  ✓ src/components/chat/ModelProfileQuickSwitch.test.tsx          12 tests  GREEN
+  ✓ src/components/settings/sections/ModelProfilesSection.test.tsx 16 tests  GREEN
+
+Total: 28/28 GREEN
+
+PRE-EXISTING (from MPQS01 / PIIF01, unchanged):
+  - 24 PIIF01 Foundation conservation tests remain GREEN
+  - Zero-delta invariant: legacy ApiConfiguration path unchanged
+
+TYPECHECK
+---------
+
+Run with: `bunx tsc --noEmit` from apps/vscode
+
+New errors introduced by this ACT: 0
+
+Pre-existing errors (unchanged from commit 632b37f78):
+  - src/sdk/__tests__/provider-instance-identity-r1a-red.piif01.test.ts
+    (Cannot find module '@cline-internal/core/runtime/host/local-runtime-host')
+  - src/sdk/__tests__/provider-instance-identity-r2-strategy-b.piif01.test.ts
+    (same)
+  - src/sdk/cline-session-factory.test.ts
+    (ollamaApiOptionsCtxNum not in ApiHandlerOptions)
+
+These errors are NOT introduced by this ACT. They exist in commit
+632b37f78 and are out of scope.
+
+Webview typecheck (apps/vscode/webview-ui): 0 errors.
+
+PROTO REGEN
+-----------
+
+`bun run protos` regenerated cleanly:
+  - src/shared/proto/cline/state.ts (added ModelProfile +
+    ApplyModelProfileRequest/Response + ListModelProfiles* +
+    SaveCurrentAsModelProfile + SetDefaultModelProfile +
+    RenameModelProfile + UpdateModelProfileFromCurrent +
+    DeleteModelProfile* messages)
+  - src/generated/hosts/vscode/protobus-service-types.ts
+    (8 new handler types)
+  - src/generated/hosts/vscode/protobus-services.ts
+    (8 new handler imports + registrations)
+  - webview-ui/src/services/grpc-client.ts
+    (8 new generated client methods)
+
+SECRET SENTINEL SCAN
+---------------------
+
+Manual grep across all new code:
+  - "sk-"          : 0 hits (false-positive "task-1" pattern only)
+  - "sk-ant-"      : 0 hits
+  - "sk-proj-"     : 0 hits
+  - "x-api-key"    : 0 hits
+  - "Bearer "      : 0 hits
+  - "apiKey"       : 0 hits in new code
+  - "credentialRef" : 0 hits in new code (the wire payload
+                       intentionally omits credential material)
+
+The ModelProfileSummary projection uses the same canonical
+projection that the MPQS01 webview-summary tests pass with
+(including the secret-sentinel scan at the array level).
+
+ZERO-DELTA INVARIANT
+--------------------
+
+Users who have NEVER defined a ModelProfile see:
+  - modelProfiles: [] (empty array, not undefined)
+  - defaultModelProfileId: null
+  - activeModelProfileId: null
+
+This is byte-equivalent to the pre-ACT ExtensionState (no fields
+present) modulo the empty-array projection. The webview
+components handle this state gracefully (the chat footer
+quick-switch simply doesn't render a popover trigger when the
+profile list is empty).
+
+The Foundation seam (applyTypedProviderConfigurationInstance →
+SdkSessionConfigBuilder → typed projector → CoreSessionConfig) is
+unchanged. The new ModelProfilesOwner is a thin wrapper that
+composes the existing seams; it does NOT introduce new
+architecture.
+
+GIT DIFF CHECK
+--------------
+
+`git diff --check` output: clean
+
+No whitespace errors, no line-ending inconsistencies.
