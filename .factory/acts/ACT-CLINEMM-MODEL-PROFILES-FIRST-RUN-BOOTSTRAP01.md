@@ -1317,3 +1317,220 @@ corrections, all in lockstep:
      confirm the file list matches the commit message. A diff-by-hash
      digest is non-authoritative by design; the production commit
      must be inspected directly.
+
+
+## B4 (2026-09-09, EMPTY_STATE_DEAD_END + PICKER_POPUP_DEAD_END + WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_DUPLICATED)
+
+### Reviewer verdict on CORRECTION04
+
+C1: PASS_WITH_ONE_BOUNDED_P1 — GO TO B4. Two P0s from CORRECTION03
+HALT are now CLOSED; one bounded P1 (WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_
+DUPLICATED) was accepted to be absorbed in lockstep with B4.
+
+Reviewer evidence evaluation:
+  HANDLER_TO_RPC_RESPONSE          = EXECUTED (17/17 vitest)
+  RPC_RESPONSE_TO_CONTAINER_STATE  = STRUCTURALLY_PROVEN (production
+    ModelProfilesSectionContainer calls
+    StateServiceClient.bootstrapModelProfileFromCurrentConfiguration
+    and stores the typed envelope; the previous console.error-only
+    swallow is structurally excluded)
+  CONTAINER_STATE_TO_VISIBLE_DOM   = EXECUTED (9/9 webview vitest)
+  COMPOSED_USER_VISIBILITY_PROOF   = PASS
+
+### Implementation (one bounded reopen; no new design ACT)
+
+Three additive changes in a single commit (ce98f54b5):
+
+**B4-A Settings first-run onboarding pane.**
+
+profiles.length === 0 -> dedicated onboarding pane
+(data-testid='model-profiles-onboarding', data-state='empty')
+containing:
+
+  - explanation copy: "Save your current setup as a reusable profile"
+  - description: "A Model Profile captures your provider, model,
+    endpoint, and credentials so you can switch between setups in
+    one click."
+  - optional current-configuration summary card showing the active
+    provider/model when the host passes `currentConfiguration`
+    (data-testid='model-profiles-onboarding-summary')
+  - inline unsupported-provider notice when canCreateFromCurrent=false
+    (data-testid='model-profiles-onboarding-unsupported')
+  - primary CTA "Create first profile" -> onBootstrapFromCurrent
+
+profiles.length > 0 -> management view unchanged (per reviewer: not a
+giant management table plus a bootstrap button above it; zero-profiles
+is a distinct view).
+
+**B4-B Picker empty-state CTA.**
+
+The picker's zero-profile empty state now contains a primary CTA
+"Create first profile..." (data-testid='model-profile-empty-create')
+that invokes onOpenManageProfiles (the existing path to Settings). The
+picker is no longer a dead-end.
+
+**Bounded P1 absorb: WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_DUPLICATED.**
+
+The webview previously carried a hand-written duplicate of the backend
+BootstrapModelProfileStatus union AND an unchecked `as` cast at the
+container boundary. Future backend/proto status drift could silently
+slip past the cast and leave the banner without a severity tier
+(undefined severity -> banner condition fails -> user-visible result
+disappears). The exact regression mode the reviewer flagged.
+
+Refactor:
+
+  - new exported parseBootstrapStatus(raw: unknown): BootstrapModelProfileStatus
+    is the single status-authority entry point. Returns the typed
+    status for known values; returns "UNKNOWN" otherwise. It is the
+    load-bearing regression guard against future drift.
+  - BootstrapModelProfileResultLike.status is now typed as `string`
+    (was BootstrapModelProfileStatus) so the container can pass the
+    raw response verbatim with no `as` cast.
+  - bootstrapStatusToSeverity adds an explicit UNKNOWN -> "error"
+    case. An unrecognised status renders as a visible error banner
+    with role=alert, not a silent disappearance.
+  - The banner's data-status attribute now reports the DECODED status
+    so UNKNOWN drift is observable in the DOM via
+    `getByTestId("model-profiles-bootstrap-banner").getAttribute("data-status")`
+    == "UNKNOWN".
+
+### UX detail (per reviewer)
+
+"Bootstrap" is Factory/engineering terminology and is removed from
+user-facing copy. CTA copy is now:
+
+  - Settings onboarding: "Create first profile"
+  - Picker empty state: "Create first profile..."
+
+### Test results
+
+  bun run test:unit: 1107/1107 (foundation conservation, +0 delta)
+  bun test bootstrap-*.mpfrb01.test.ts: 14/14
+    (B1=7, B2=1, B-DURABILITY=2, B-CONNECTION=4)
+  bunx vitest run src/core/controller/state/bootstrap-failure-visible.mpfrb01.test.ts:
+    17/17 (handler boundary; unchanged from CORRECTION04)
+  bun vitest run ModelProfilesSection.mpfrb01-b3-ui.test.tsx:
+    17/17 (was 10/10; +7 new B4 sub-tests:
+      MPFRB01_B4_UI_PARSE_BOOTSTRAP_STATUS_KNOWN
+      MPFRB01_B4_UI_PARSE_BOOTSTRAP_STATUS_DRIFT_GUARD
+      MPFRB01_B4_UI_ONBOARDING_PANE
+      MPFRB01_B4_UI_ONBOARDING_PANE_WITH_SUMMARY
+      MPFRB01_B4_UI_ONBOARDING_PANE_UNSUPPORTED
+      MPFRB01_B4_UI_MANAGEMENT_VIEW_WHEN_HAS_PROFILES
+      MPFRB01_B4_UI_BANNER_STATUS_USES_DECODED
+    plus MPFRB01_B4_UI_NO_BOOTSTRAP_BUTTON_WHEN_EMPTY_AND_OMITTED
+    demonstrating the additive-only contract holds even in the new
+    empty-state surface, plus the existing
+    MPFRB01_B3_UI_BOOTSTRAP_BUTTON updated to use profiles:[] because
+    the CTA now lives inside the onboarding pane).
+  bun vitest run ModelProfilesSection.test.tsx: 16/16 (NO regression;
+    new currentConfiguration + parseBootstrapStatus surface are
+    additive-only)
+  bun vitest run ModelProfileQuickSwitch.test.tsx: 13/13 (was 12/12;
+    +1 new B4-B sub-test MPFRB01_B4_QS_EMPTY_STATE_CTA)
+  bunx tsc --noEmit (apps/vscode): exit 0
+  bunx tsc --noEmit (webview-ui): exit 0
+  bun run protos: exit 0 (state.proto trust preserved)
+
+### Defense-in-depth regression guards
+
+  parseBootstrapStatus fallback to UNKNOWN
+    Future backend/proto status drift -> UNKNOWN -> defensive error
+    banner. Documented in MPFRB01_B4_UI_PARSE_BOOTSTRAP_STATUS_DRIFT_GUARD
+    which exercises 6 unrecognised inputs (FUTURE_NEW_STATUS_FROM_BACKEND,
+    empty string, null, undefined, 42, {}) and asserts UNKNOWN.
+
+  Banner data-status reports the DECODED status
+    `data-status="UNKNOWN"` is observable in the DOM via
+    `getByTestId("model-profiles-bootstrap-banner").getAttribute("data-status")`,
+    so a drift regression would surface as a DOM-data assertion
+    failure in MPFRB01_B4_UI_BANNER_STATUS_USES_DECODED.
+
+  No `as` cast at the container boundary
+    The container now passes `status: response.status` verbatim (the
+    field is typed as `string`). The unchecked cast that the reviewer
+    flagged is gone.
+
+### P-class verdict (post-B4)
+
+  P0 all CLOSED (unchanged from CORRECTION04):
+    BOOTSTRAP_PATH_ABSENT
+    BOOTSTRAP_SECRET_NOT_DURABLE_AT_PROFILE_COMMIT
+    BOOTSTRAP_CONNECTION_TUPLE_INCOMPLETE
+    UNEXPECTED_TRACKED_DIRT
+    HALT_B3_USER_VISIBILITY_NOT_PROVEN
+    HALT_UNRELATED_PROTO_CORRUPTION
+
+  P1:
+    BOOTSTRAP_CREDENTIAL_SOURCE_NOT_BOUND         = CLOSED (CORRECTION02)
+    BOOTSTRAP_ATOMICITY_UNDEFINED                 = CLOSED (CORRECTION02)
+    BOOTSTRAP_RPC_SURFACE_STILL_TBD               = CLOSED (CORRECTION02)
+    EXACT_HEAD_LABEL_OVERSTATED                   = CLOSED (CORRECTION02)
+    MISSING_MODEL_MISCLASSIFIED_AS_MISSING_CREDENTIAL = CLOSED (CORRECTION02)
+    BOOTSTRAP_COVERAGE_SCOPE_PRECISION            = CLOSED (CORRECTION02)
+    MALFORMED_PRESENT_HEADERS_POLICY              = CLOSED (CORRECTION03)
+    SILENT_FAILURE                                = CLOSED (CORRECTION04)
+    BOOTSTRAP_COVERAGE_INVARIANT_CAN_FALSE_GREEN  = CLOSED (CORRECTION04)
+    OPENAI_HEADERS_DEFAULT_CONSERVATION_NOT_PROVEN = CLOSED (CORRECTION04)
+    WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_DUPLICATED = CLOSED (B4)
+    EMPTY_STATE_DEAD_END                          = CLOSED (B4)
+    PICKER_POPUP_DEAD_END                         = CLOSED (B4)
+
+  P1 all CLOSED.
+
+  P2 BLANK_AT_EOF_DIAGNOSTICS = OPEN (non-blocking; unrelated to
+    bootstrap surface).
+
+  WORKING_TREE_CLEAN = TRUE (post-commit verified; only the
+    unrelated clinemm-outside-* test artifact directories remain
+    from a separate agent; they are not staged).
+
+  ALL_DURABLE_ACT_FILES_COMMITTED = TRUE (post this commit).
+
+  HALT_B3_USER_VISIBILITY_NOT_PROVEN              = CLOSED (CORRECTION04)
+  HALT_UNRELATED_PROTO_CORRUPTION                 = CLOSED (CORRECTION04)
+  BOOTSTRAP_COVERAGE_INVARIANT_CAN_FALSE_GREEN    = CLOSED (CORRECTION04)
+  OPENAI_HEADERS_DEFAULT_CONSERVATION_NOT_PROVEN  = CLOSED (CORRECTION04)
+  WEBVIEW_BOOTSTRAP_STATUS_AUTHORITY_DUPLICATED   = CLOSED (B4)
+  EMPTY_STATE_DEAD_END                            = CLOSED (B4)
+  PICKER_POPUP_DEAD_END                           = CLOSED (B4)
+
+  B4 is genuinely closed. Per the reviewer's directive, the next
+  genuinely useful step is to build/install a new exact-head VSIX
+  and repeat the original live first-run flow on a real VS Code
+  extension host.
+
+### Production commit
+
+  ce98f54b5 ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 B4:
+          empty-state onboarding + picker CTA + single-status-
+          authority decoder
+
+### Lessons learned (additive, B4)
+
+  #18 reviewer's "B4 should be small and visual, not another
+     backend ACT" was the right framing. The bounded P1 absorb
+     (status-authority single source of truth) is structurally
+     small - one exported decoder function plus a tweak to the
+     existing severity switch - and folds cleanly into the
+     empty-state onboarding work. A separate correction cycle
+     for the bounded P1 would have been a waste of review
+     bandwidth; doing both in one commit is the same
+     "actor-and-witness-of-the-actor compose into one test"
+     discipline as B3.
+
+  #19 the empty-state pane IS the new first-run UX. It is not
+     a "stub while waiting for the real implementation". The
+     current provider/model summary card + primary CTA +
+     explanation copy is what a fresh-install user sees, and it
+     has to be coherent on its own. The reviewer's "do not put a
+     giant management table plus a bootstrap button above it"
+     guidance was structurally right: distinct views, not stacked
+     widgets.
+
+  #20 product terminology matters. "Bootstrap" is Factory/
+     engineering vocabulary; users see "Create first profile".
+     The B3-UI button was titled with Factory terminology
+     because the B3 UI was inherited from the B3 backend
+     primitive name; the reviewer's catch here was correct.
