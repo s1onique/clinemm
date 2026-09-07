@@ -857,3 +857,208 @@ ALL_DURABLE_ACT_FILES_COMMITTED                = TRUE
     reviewer explicitly authorized a bounded correction,
     not a full re-open; the durable-ACT policy above
     remains the cleaner default.)
+
+## CORRECTION03 (2026-09-09, bounded: B3 + freeze #5 + coverage invariant)
+
+### Trigger
+
+Reviewer verdict C1 on the CORRECTION02 close identified two
+bounded P1s that ride along on B3 (the
+transport-to-user-semantics witness), neither of which required
+opening a new review cycle:
+
+  - `BOOTSTRAP_COVERAGE_SCOPE_PRECISION`: every entry in
+    `BOOTSTRAP_COVERAGE` must have BOTH a wired `resolveApiKey`
+    seam AND a wired `resolveModelId` seam. Without a witness,
+    drift between the set and the resolver maps is invisible
+    until a user happens to pick an unwired provider.
+  - `MALFORMED_PRESENT_HEADERS_POLICY`: the
+    `captureOpenAiHeaders` path previously log-and-swallowed
+    `JSON.parse` failures, committing a profile with weakened
+    connection semantics for OpenAI-Compatible users who
+    configured custom headers but stored them as garbage JSON.
+    The "absent headers" intent was implicit; the
+    "present-but-malformed" intent was missing.
+
+### Bounded corrections applied
+
+1. **Freeze #5 `MALFORMED_HEADERS_POLICY` (load-bearing).**
+   When `providerId === "openai"` AND `config.openAiHeaders`
+   is PRESENT but its JSON payload is malformed (parse throws
+   OR parsed value is not a plain object), the bootstrap MUST
+   refuse with `CURRENT_CONFIGURATION_UNSUPPORTED` and a
+   human-readable message naming the field. Plain-object
+   (non-string) inputs that aren't objects (arrays,
+   primitives) follow the same refuse policy. Empty-string
+   and absent remain "treat as absent" per freeze #4.
+
+2. **`captureOpenAiHeaders` → `parseOpenAiHeaders` tagged
+   result.** The new return type is
+   `{kind:"absent"} | {kind:"captured",headers} | {kind:"malformed",reason}`,
+   letting the caller apply the right policy per state rather
+   than logging-and-swallowing.
+
+3. **`captureConnection` → `CaptureConnectionResult`.** The
+   connection-tuple capture now returns
+   `{kind:"ok",connection} | {kind:"refused",status,message}`;
+   the call site propagates the discriminated refusal as
+   `CURRENT_CONFIGURATION_UNSUPPORTED` before the
+   `MISSING_MODEL` branch.
+
+4. **`state-keys.ts openAiHeaders` default.** Changed from
+   `{}` to `undefined`. Without this, the
+   `readGlobalStateFromStorage` default layer coerced
+   "user never configured custom headers" into a zero-entry
+   plain object that freeze #5 (correctly) refused as
+   malformed. The empty plain object is still refused when
+   the user explicitly stores it; only the default-coerced
+   case is gone.
+
+5. **`assertBootstrapCoverageIsWellFormed` invariant.** New
+   `bootstrap-coverage-invariants.ts` module synthesizes a
+   probe `ApiConfiguration` populating every candidate
+   api-key field and every plan/act model-id field with
+   sentinels, then exercises the public
+   `resolveApiKey`/`resolveModelId` resolvers to confirm
+   every `BOOTSTRAP_COVERAGE` entry has both wired seams.
+   Re-exported from `bootstrap.ts` for direct audit.
+
+### Files added / edited (production)
+
+- `apps/vscode/src/sdk/profile-store/bootstrap.ts` — freeze #5
+  doc block, `parseOpenAiHeaders` tagged result,
+  `CaptureConnectionResult` discriminated outcome,
+  re-export of `assertBootstrapCoverageIsWellFormed`.
+- `apps/vscode/src/sdk/profile-store/bootstrap-coverage-invariants.ts`
+  — new file (~190 lines), probe-config builder,
+  `assertBootstrapCoverageIsWellFormed()`.
+- `apps/vscode/src/shared/storage/state-keys.ts` — `openAiHeaders`
+  default `{}` → `undefined`.
+
+### Files added (test infra, additive, zero-delta to runtime)
+
+- `apps/vscode/src/core/controller/state/bootstrap-failure-visible.mpfrb01.test.ts`
+  — vitest, controller-handler boundary, 15 sub-tests, one
+  per `BootstrapModelProfileStatus` value plus the bounded
+  P1 absorbs. Real `StateManager` + real
+  `InstancesStore`/`ProfilesStore`; faked
+  `modelProfilesOwner`. Per-test `mkdtempSync` data dirs
+  for store isolation. Per-test fresh `StateManager`
+  via singleton reassignment. Cross-scenario cache cleanup
+  via direct cache mutation (necessary because
+  `setApiConfiguration` skips undefined values).
+
+### CORRECTION03 test results (2026-09-09)
+
+```
+bun run test:unit (bun:test files):           1107 pass / 0 fail
+                                              (NO regression; +0
+                                              vs CORRECTION02)
+src/core/controller/state/bootstrap-failure-visible.mpfrb01.test.ts
+  vitest (single-file run):                   15 pass / 0 fail
+                                              (B3 GREEN)
+src/sdk/__tests__/bootstrap-*.mpfrb01.test.ts
+  bun test (single-file runs):                14 pass / 0 fail
+                                              (B1+B2+B-CONNECTION+B-DURABILITY
+                                              NO regression)
+bunx tsc --noEmit:                            exit 0
+                                              (no type regression)
+```
+
+Pre-existing test failures observed but unrelated:
+`OWN01 RED` in `sdk-session-event-coordinator.test.ts`
+(confirmed by stashing all CORRECTION03 changes and re-running
+the same file: identical failure with zero local changes);
+several bun:test files collected by vitest's glob
+(`v2-capture.cache-ordering`, `provider-instance-identity-r1a-red`,
+etc.) — these run under `bun run test:unit` and pass there;
+the vitest mis-collection is pre-existing.
+
+### CORRECTION03 verdict
+
+```
+# Witness status
+B1  bootstrap-first-profile.mpfrb01            = GREEN (7/7)
+B2  bootstrap-no-provider-id-collapse.mpfrb01  = GREEN (1/1)
+B-DURABILITY bootstrap-secret-durable.mpfrb01  = GREEN (2/2)
+B-CONNECTION bootstrap-connection-tuples.mpfrb01 = GREEN (4/4)
+B3  bootstrap-failure-visible.mpfrb01          = GREEN (15/15)
+B4  empty-state-cta.mpfrb01                    = PLANNED (next)
+
+# P-class hierarchy
+P0  BOOTSTRAP_PATH_ABSENT                       = CLOSED (B1 GREEN,
+                                                   B2 GREEN)
+P0  BOOTSTRAP_SECRET_NOT_DURABLE_AT_PROFILE_COMMIT = CLOSED (B-DURABILITY GREEN)
+P0  BOOTSTRAP_CONNECTION_TUPLE_INCOMPLETE       = CLOSED (B-CONNECTION GREEN)
+P0  UNEXPECTED_TRACKED_DIRT                     = CLOSED (whitelist committed)
+P1  BOOTSTRAP_CREDENTIAL_SOURCE_NOT_BOUND       = CLOSED (by freezes)
+P1  BOOTSTRAP_ATOMICITY_UNDEFINED               = CLOSED (by freeze)
+P1  BOOTSTRAP_RPC_SURFACE_STILL_TBD             = CLOSED (by freeze)
+P1  EXACT_HEAD_LABEL_OVERSTATED                 = CLOSED (rebinding)
+P1  MISSING_MODEL_MISCLASSIFIED_AS_MISSING_CREDENTIAL = CLOSED (P1 added
+                                                   MISSING_MODEL status)
+P1  BOOTSTRAP_COVERAGE_SCOPE_PRECISION          = CLOSED (B3 GREEN,
+                                                   assertBootstrapCoverageIsWellFormed
+                                                   witness)
+P1  MALFORMED_PRESENT_HEADERS_POLICY            = CLOSED (B3 GREEN,
+                                                   freeze #5)
+P1  SILENT_FAILURE                              = CLOSED (B3 GREEN,
+                                                   15/15 typed-envelope
+                                                   witness)
+P1  EMPTY_STATE_DEAD_END                        = OPEN (B4)
+P1  PICKER_POPUP_DEAD_END                       = OPEN (B4)
+P2  BLANK_AT_EOF_DIAGNOSTICS                    = OPEN (terminal cleanup)
+
+# Repository trust
+WORKING_TREE_CLEAN                             = TRUE
+ALL_DURABLE_ACT_FILES_COMMITTED                = PENDING (this
+                                                   section + epic-board
+                                                   + evidence file)
+```
+
+### CORRECTION03 lessons learned (additive)
+
+12. **The "transport-to-user semantics" witness must include
+    the entire enum, not just the success path.** A regression
+    test that only exercises `CREATED` is a happy-path test;
+    it cannot catch the "thrown exception instead of typed
+    envelope" antipattern. B3's 15 sub-tests are deliberately
+    exhaustive — one per `BootstrapModelProfileStatus` value
+    plus the bounded P1 absorbs — so the witness fails
+    loudly if a future refactor accidentally:
+    (a) throws instead of returning a typed envelope,
+    (b) silently captures malformed headers as absent
+        (freeze #5 regression), or
+    (c) drops a coverage entry's resolver seam
+        (BOOTSTRAP_COVERAGE_SCOPE_PRECISION regression).
+
+13. **Invariants belong at the table, not in the producer.**
+    `assertBootstrapCoverageIsWellFormed` does NOT read
+    `PROVIDER_API_KEY_MAP` or `PROVIDER_MODEL_ID_MAP`
+    directly; instead, it synthesizes a probe
+    `ApiConfiguration` and asks the PUBLIC
+    `resolveApiKey`/`resolveModelId` resolvers to find each
+    entry's seam. This pins the invariant "every
+    `BOOTSTRAP_COVERAGE` entry has wired seams" without
+    coupling the witness to the producer's internal data
+    structures — if a future refactor moves the resolver
+    from a static map to a generated provider descriptor,
+    the witness continues to work without changes. The
+    tradeoff is that the witness relies on the resolver
+    functions' stability, which is itself a contract
+    worth preserving.
+
+14. **The default-layer coercion of "absent" → "present with
+    garbage" is a cross-layer silent-weakening antipattern.**
+    `state-keys.ts`'s `openAiHeaders: { default: {} }` looked
+    harmless until freeze #5 made the empty plain object a
+    refusing case. The default layer (which runs in
+    `readGlobalStateFromStorage` at StateManager.initialize
+    time) and the policy layer (which runs in `bootstrap.ts`
+    at request time) became coupled through a value that
+    neither layer explicitly constructed. The fix is to
+    make defaults `undefined` and let the policy layer
+    decide what "no value" means. General rule: defaults
+    should be the ABSENCE-of-config signal, not a coerced
+    "empty present" that the policy layer must learn to
+    treat as absent.
