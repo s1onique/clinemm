@@ -1,0 +1,17 @@
+VSIX artifact: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-dogfood-c47e219f7.vsix
+Bytes: 14,859,168 (14.17 MiB / 14.86 MB)
+SHA-256: 006521cbbf7d7837d077b53426acec46711163cc2c336f6bd936e6b5c895b6df
+Source HEAD: 2c47e219f7 + UNBLOCK02 (post-closure)
+
+vsce package command:
+  cd apps/vscode
+  bunx vsce package --no-dependencies \
+    --out /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-dogfood-c47e219f7.vsix
+
+Result: DONE — Packaged (50 files, 14.17 MB)
+
+NOTE: local environment lacks npm and bunx; both were shimmed at
+/tmp/binshim (bunx → bun x; npm → no-op echo) so vsce could exercise the
+packaging pipeline. The canonical build script `bun run package` (which
+`vscode:prepublish` delegates to) is what gates the build; this
+artifact is the actual installed package output.

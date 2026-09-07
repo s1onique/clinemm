@@ -35,8 +35,8 @@
  * RPC and the applyModelProfile coordinator.
  */
 
-import type { ModelProfileSummary } from "@/services/model-profile-types"
 import { useCallback, useEffect, useRef, useState } from "react"
+import type { ModelProfileSummary } from "@/services/model-profile-types"
 
 export interface ModelProfileQuickSwitchProps {
 	profiles: ModelProfileSummary[]
@@ -46,18 +46,20 @@ export interface ModelProfileQuickSwitchProps {
 	onOpenManageProfiles: () => void
 }
 
+export interface ModelProfileTriggerProps {
+	/** Spread onto the trigger element (onClick, aria-*, data-testid). */
+	"data-testid": string
+	"aria-haspopup": "listbox"
+	"aria-expanded": boolean
+	"aria-label": string
+	title: string
+	disabled: boolean
+	onClick: () => void
+}
+
 export interface ModelProfileQuickSwitchState {
-	/** Spread onto the trigger button (onClick, aria-*, data-testid). */
-	triggerProps: {
-		"data-testid": string
-		"aria-haspopup": "listbox"
-		"aria-expanded": boolean
-		"aria-label": string
-		title: string
-		disabled: boolean
-		onClick: () => void
-		ref: React.RefObject<HTMLElement | null>
-	}
+	/** Spread onto the trigger element (onClick, aria-*, data-testid). */
+	triggerProps: ModelProfileTriggerProps
 	/** Render the popover somewhere in the same DOM subtree as the trigger. */
 	popover: React.ReactNode
 	/** True while the popover is visible (used by tests + debugging). */
@@ -70,15 +72,27 @@ export interface ModelProfileQuickSwitchState {
  * spread `triggerProps`; the parent renders `popover` somewhere in
  * the same DOM subtree (typically a sibling) so the outside-click
  * detector finds it.
+ *
+ * ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02:
+ * `triggerProps` is intentionally element-agnostic — it carries ONLY
+ * behavioral attributes (aria-*, onClick, data-testid). Element-ref
+ * ownership is delegated to the caller: pass a correctly-typed
+ * `triggerRef` for the concrete trigger element (e.g.
+ * `RefObject<HTMLButtonElement | null>` for a `<button>`,
+ * `RefObject<HTMLAnchorElement | null>` for an `<a>`). When the
+ * caller omits the ref, the hook uses a local fallback ref (tests
+ * that don't need outside-click / focus-restoration can omit it).
  */
 export function useModelProfileQuickSwitch(
 	props: ModelProfileQuickSwitchProps,
+	options?: { triggerRef?: React.RefObject<HTMLElement | null> },
 ): ModelProfileQuickSwitchState {
 	const { profiles, currentLabel, disabled, onSelectProfile, onOpenManageProfiles } = props
 	const [open, setOpen] = useState(false)
 	const [focusIndex, setFocusIndex] = useState(0)
 	const popoverRef = useRef<HTMLDivElement | null>(null)
-	const triggerRef = useRef<HTMLElement | null>(null)
+	const fallbackTriggerRef = useRef<HTMLElement | null>(null)
+	const triggerRef = options?.triggerRef ?? fallbackTriggerRef
 
 	useEffect(() => {
 		if (!open) return
@@ -158,19 +172,18 @@ export function useModelProfileQuickSwitch(
 		title: disabled ? "Available when the current request finishes" : "Switch model profile",
 		disabled: !!disabled,
 		onClick: handleTriggerClick,
-		ref: triggerRef as unknown as React.RefObject<HTMLElement | null>,
 	}
 
 	const popoverNode =
 		open && profiles ? (
 			<div
+				aria-label="Model profiles"
+				className="absolute z-50 mt-1 min-w-[280px] rounded border bg-background shadow-lg"
+				data-testid="model-profile-popover"
+				onKeyDown={handleKeyDown}
 				ref={popoverRef}
 				role="listbox"
-				aria-label="Model profiles"
-				tabIndex={-1}
-				onKeyDown={handleKeyDown}
-				data-testid="model-profile-popover"
-				className="absolute z-50 mt-1 min-w-[280px] rounded border bg-background shadow-lg">
+				tabIndex={-1}>
 				{profiles.length === 0 && (
 					<div className="p-3 text-sm text-muted-foreground" data-testid="model-profile-empty">
 						No profiles configured yet.
@@ -178,17 +191,16 @@ export function useModelProfileQuickSwitch(
 				)}
 				{profiles.map((p, idx) => (
 					<div
-						key={p.profileId}
-						role="option"
 						aria-selected={p.isActive}
-						data-testid={`model-profile-option-${p.profileId}`}
-						data-focused={focusIndex === idx ? "true" : undefined}
-						onMouseEnter={() => setFocusIndex(idx)}
-						onClick={() => handleSelect(p.profileId)}
 						className={
-							"flex cursor-pointer items-start gap-2 px-3 py-2 text-sm " +
-							(focusIndex === idx ? "bg-accent" : "")
-						}>
+							"flex cursor-pointer items-start gap-2 px-3 py-2 text-sm " + (focusIndex === idx ? "bg-accent" : "")
+						}
+						data-focused={focusIndex === idx ? "true" : undefined}
+						data-testid={`model-profile-option-${p.profileId}`}
+						key={p.profileId}
+						onClick={() => handleSelect(p.profileId)}
+						onMouseEnter={() => setFocusIndex(idx)}
+						role="option">
 						<span aria-hidden className="mt-0.5 w-4 text-center">
 							{p.isActive ? "✓" : ""}
 						</span>
@@ -203,10 +215,10 @@ export function useModelProfileQuickSwitch(
 				))}
 				<div className="border-t">
 					<button
-						type="button"
-						data-testid="model-profile-manage"
 						className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
-						onClick={handleManage}>
+						data-testid="model-profile-manage"
+						onClick={handleManage}
+						type="button">
 						Manage Profiles…
 					</button>
 				</div>
@@ -221,7 +233,9 @@ export function useModelProfileQuickSwitch(
 		popover: (
 			<>
 				{popoverNode}
-				<span hidden data-testid="model-profile-current">{currentProfile?.profileId ?? ""}</span>
+				<span data-testid="model-profile-current" hidden>
+					{currentProfile?.profileId ?? ""}
+				</span>
 			</>
 		),
 		isOpen: open,
@@ -230,11 +244,17 @@ export function useModelProfileQuickSwitch(
 
 export function ModelProfileQuickSwitch(props: ModelProfileQuickSwitchProps) {
 	const { currentLabel } = props
-	const { triggerProps, popover, isOpen } = useModelProfileQuickSwitch(props)
+	// ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02: the standalone
+	// trigger owns an HTMLButtonElement ref and forwards it to the
+	// hook so outside-click + focus-restoration work end-to-end.
+	const triggerButtonRef = useRef<HTMLButtonElement | null>(null)
+	const { triggerProps, popover, isOpen } = useModelProfileQuickSwitch(props, { triggerRef: triggerButtonRef })
 	void isOpen
 	return (
 		<div className="relative inline-block">
-			<button {...triggerProps}>{currentLabel}</button>
+			<button {...triggerProps} ref={triggerButtonRef}>
+				{currentLabel}
+			</button>
 			{popover}
 		</div>
 	)

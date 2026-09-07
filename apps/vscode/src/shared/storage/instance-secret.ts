@@ -22,8 +22,6 @@
  * for the discriminator that produced this primitive.
  */
 
-import { ClineFileStorage } from "./ClineFileStorage"
-
 /**
  * The regex that defines an instance-scoped secret name. Must
  * start with the reserved "instance:" prefix and have at least

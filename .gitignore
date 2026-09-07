@@ -1326,6 +1326,51 @@ apps/vscode/.factory/evidence/
 # invocation. Durably tracked per the durable-ACT convention.
 !/.factory/acts/ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK01.md
 !/.factory/evidence/ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK01/
+# ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02: bounded build-unblock
+# correction after nineteenth-reviewer verdict
+# HALT_DOGFOOD_WEBVIEW_TYPECHECK_GATE_RED (2026-09-07, immediately
+# after the UNBLOCK01 closure at c47e219f7). Three root-cause fixes +
+# adjacent bounded cleanup:
+#   (A) apps/vscode/webview-ui/src/components/chat/ModelProfileQuickSwitch.tsx
+#       — split behavioral trigger props from element ref ownership.
+#       triggerProps is now element-agnostic (no `ref`); hook accepts
+#       an optional correctly-typed `triggerRef` parameter that each
+#       caller creates with its concrete element type. Standalone
+#       button components use HTMLButtonElement; ChatTextArea uses
+#       HTMLAnchorElement (because ModelDisplayButton is `styled.a`).
+#       Resolves 3 × TS2769/TS2322 ref-incompatibility errors.
+#   (B) apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSectionContainer.tsx
+#       — remove dead `ClearDefaultModelProfileRequest` import. The
+#       proto declares `rpc clearDefaultModelProfile(EmptyRequest)
+#       returns (Empty)`; the actual call already uses
+#       `EmptyRequest.create({})`. The dead import was only caught
+#       by the canonical webview tsc -b gate. Resolves 1 × TS2724.
+#   (C) apps/vscode/webview-ui/src/components/settings/sections/ModelProfilesSection{Container,}.tsx
+#       — add `renderSectionHeader?: (tabId: string) => ReactNode`
+#       prop matching the convention used by SandboxCapabilitiesSection
+#       and TemporaryExternalPathsSection. SettingsView was already
+#       passing it; the container just never declared it. Resolves
+#       1 × TS2322.
+# Adjacent bounded cleanups so bun run package reaches EXIT 0:
+#   - apps/vscode/.vscodeignore — add `.factory/**` (vsce packaging
+#     hygiene: the leftover apps/vscode/.factory/tmp/r1-inside-*
+#     symlink-escape probes from earlier PIIF tests fail vsce's
+#     "currentLevel is undefined" safety check otherwise).
+#   - 3 pre-existing unused-import lint failures in MPWC files
+#     (profile-application.ts:53, session-binding.ts:24,
+#     instance-secret.ts:25) — trivial no-op removals.
+#   - 2 pre-existing unused-import + 1 TDZ-discriminator biome-ignore
+#     lint cleanups in chat-existing-model-label-trigger.mpwc02.test.tsx
+#     (the TDZ test DELIBERATELY reads modelDisplayName before its
+#     const declaration to assert ReferenceError on render; annotated
+#     with a biome-ignore comment on the use-site).
+# Results: bun run package EXIT 0 (the decisive gate). bunx vsce
+# package BUILT the VSIX (50 files, 14.17 MB) at
+# dist/clinemm-4.1.16-dogfood-c47e219f7.vsix
+# (SHA-256 = 006521cbbf7d7837d077b53426acec46711163cc2c336f6bd936e6b5c895b6df).
+# Durably tracked per the durable-ACT convention.
+!/.factory/acts/ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02.md
+!/.factory/evidence/ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02/
 # ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-FOUNDATION01-P1-CORRECTION01:
 # bounded correction after fifth-reviewer verdict
 # HALT_R0_FULL_CONNECTION_NOT_PROVEN (2026-09-05, same day, immediately

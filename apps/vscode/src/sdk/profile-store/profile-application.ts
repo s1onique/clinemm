@@ -44,14 +44,14 @@
 
 import type { HistoryItem } from "@shared/HistoryItem"
 import { Logger } from "@/shared/services/Logger"
-import type { SdkProviderChangeCoordinator } from "../sdk-provider-change-coordinator"
-import type { SdkSessionLifecycle } from "../sdk-session-lifecycle"
-import type { SdkSessionConfigBuilder } from "../sdk-session-config-builder"
-import type { SdkSessionRebuildScheduler } from "../sdk-session-rebuild-scheduler"
 import type { ProviderConfigurationInstance } from "../instance-store/contracts"
+import type { SdkProviderChangeCoordinator } from "../sdk-provider-change-coordinator"
+import type { SdkSessionConfigBuilder } from "../sdk-session-config-builder"
+import type { SdkSessionLifecycle } from "../sdk-session-lifecycle"
+import type { SdkSessionRebuildScheduler } from "../sdk-session-rebuild-scheduler"
 import type { ModelProfile } from "./contracts"
-import { isKnownProfileId, readDefaultModelProfileId, writeActiveProfileIdToHistoryItem } from "./session-binding"
 import type { ProfilesStore } from "./profiles-store"
+import { isKnownProfileId, writeActiveProfileIdToHistoryItem } from "./session-binding"
 
 export type ApplyModelProfileResult =
 	| { applied: true; profileId: string; sessionId: string; usedFastPath: boolean }
@@ -102,10 +102,7 @@ export interface ApplyModelProfileOptions {
 	 * physical-secret. The legacy `applyProviderConfigurationInstance`
 	 * is kept as a fallback only.
 	 */
-	providerChange: Pick<
-		SdkProviderChangeCoordinator,
-		"applyTypedProviderConfigurationInstance"
-	> & {
+	providerChange: Pick<SdkProviderChangeCoordinator, "applyTypedProviderConfigurationInstance"> & {
 		applyProviderConfigurationInstance?: SdkProviderChangeCoordinator["applyProviderConfigurationInstance"]
 	}
 	/**
@@ -173,10 +170,7 @@ export class ApplyModelProfileError extends Error {
  * remains the previous value, the runtime stays on the previous
  * connection, and an explicit failure reason is returned.
  */
-export async function applyModelProfile(
-	profileId: string,
-	options: ApplyModelProfileOptions,
-): Promise<ApplyModelProfileResult> {
+export async function applyModelProfile(profileId: string, options: ApplyModelProfileOptions): Promise<ApplyModelProfileResult> {
 	// -------------------------------------------------------------------------
 	// 1. Resolve profile
 	// -------------------------------------------------------------------------
@@ -242,8 +236,7 @@ export async function applyModelProfile(
 	// supplying it via getCurrentTaskProviderInstanceId().
 	const currentProviderInstanceId = options.getCurrentTaskProviderInstanceId?.()
 	const currentModelId = activeSession.startConfig?.modelId
-	const sameInstance =
-		currentProviderInstanceId !== undefined && currentProviderInstanceId === profile.providerInstanceId
+	const sameInstance = currentProviderInstanceId !== undefined && currentProviderInstanceId === profile.providerInstanceId
 	const sameModel = currentModelId !== undefined && currentModelId === profile.modelId
 
 	if (sameInstance && sameModel) {
@@ -267,9 +260,7 @@ export async function applyModelProfile(
 		try {
 			await options.sessions.updateActiveSessionModel(profile.modelId)
 			await persistActiveBindingAndPublish(options, profile.profileId)
-			Logger.log(
-				`[applyModelProfile] Fast-path model update: ${profile.profileId} (modelId=${profile.modelId})`,
-			)
+			Logger.log(`[applyModelProfile] Fast-path model update: ${profile.profileId} (modelId=${profile.modelId})`)
 			return {
 				applied: true,
 				profileId: profile.profileId,
@@ -351,10 +342,7 @@ export async function applyModelProfile(
  * step 6 (runtime apply) succeeds. Calling it before runtime success
  * would create HALT_PROFILE_RUNTIME_BINDING_SPLIT_BRAIN.
  */
-async function persistActiveBindingAndPublish(
-	options: ApplyModelProfileOptions,
-	profileId: string,
-): Promise<void> {
+async function persistActiveBindingAndPublish(options: ApplyModelProfileOptions, profileId: string): Promise<void> {
 	if (options.writeTaskHistoryItem && options.getCurrentTaskHistoryItem) {
 		const current = options.getCurrentTaskHistoryItem()
 		if (current) {

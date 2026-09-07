@@ -105,3 +105,6 @@ webview-ui/.vite-port
 *storybook.log
 storybook-static
 **/StorybookDecorator.tsx
+
+# Factory ACT bodies and ephemeral test artifacts
+.factory/**

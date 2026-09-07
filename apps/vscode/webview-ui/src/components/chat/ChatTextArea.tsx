@@ -1188,6 +1188,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		// (C5 EXISTING_MODEL_LABEL_TRIGGER) - DECLARED AFTER modelDisplayName
 		// so the TDZ access does not throw ReferenceError on render.
 		// (Seventeenth-reviewer verdict HALT_CHAT_PARENT_TDZ.)
+		// ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02: the existing
+		// <ModelDisplayButton> renders as an HTMLAnchorElement (`styled.a`),
+		// so the trigger ref must be typed for anchor ownership; the hook
+		// reads `.current` as `HTMLElement | null` internally.
+		const modelButtonRef = useRef<HTMLAnchorElement | null>(null)
 		const profileSwitchHost = useModelProfileQuickSwitchHost(
 			modelDisplayName,
 			undefined,
@@ -1195,6 +1200,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			// targetSection="model-profiles" directly). Using "api-config" would
 			// land the user in API Configuration, not the profile management UI.
 			() => navigateToSettingsModelPicker({ targetSection: "model-profiles" }),
+			modelButtonRef,
 		)
 		const profileSwitchTriggerProps = profileSwitchHost.state.triggerProps
 		const profileSwitchPopover = profileSwitchHost.state.popover
@@ -1684,6 +1690,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 											profileSwitchTriggerProps.onClick()
 											e.preventDefault()
 										}}
+										ref={modelButtonRef}
 										role="button"
 										tabIndex={0}
 										title={profileSwitchTriggerProps.title}>

@@ -10,8 +10,8 @@
  * coordinator. The component does NOT call any backend directly.
  */
 
+import { type ReactNode, useState } from "react"
 import type { ModelProfileSummary } from "@/services/model-profile-types"
-import { useState } from "react"
 
 export interface ModelProfilesSectionProps {
 	profiles: ModelProfileSummary[]
@@ -24,6 +24,13 @@ export interface ModelProfilesSectionProps {
 	onRename: (profileId: string, newName: string) => void | Promise<void>
 	onUpdateFromCurrent: (profileId: string) => void | Promise<void>
 	onDelete: (profileId: string) => void | Promise<void>
+	/**
+	 * ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02:
+	 * Optional callback forwarded from `ModelProfilesSectionContainer`
+	 * (originally from `SettingsView`) that renders the standard
+	 * `<SectionHeader>` matching the neighboring sections.
+	 */
+	renderSectionHeader?: (tabId: string) => ReactNode
 }
 
 export function ModelProfilesSection(props: ModelProfilesSectionProps) {
@@ -38,6 +45,7 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 		onRename,
 		onUpdateFromCurrent,
 		onDelete,
+		renderSectionHeader,
 	} = props
 
 	const [newProfileName, setNewProfileName] = useState("")
@@ -68,22 +76,23 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 
 	return (
 		<div className="flex flex-col gap-4" data-testid="model-profiles-section">
+			{renderSectionHeader?.("model-profiles")}
 			<div className="flex items-center gap-2">
 				<input
-					type="text"
-					data-testid="model-profiles-new-name"
-					placeholder="Profile name"
-					value={newProfileName}
-					onChange={(e) => setNewProfileName(e.target.value)}
 					className="flex-1 rounded border px-2 py-1 text-sm"
+					data-testid="model-profiles-new-name"
 					disabled={!canCreateFromCurrent}
+					onChange={(e) => setNewProfileName(e.target.value)}
+					placeholder="Profile name"
+					type="text"
+					value={newProfileName}
 				/>
 				<button
-					type="button"
+					className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
 					data-testid="model-profiles-save-current"
 					disabled={!canCreateFromCurrent || newProfileName.trim().length === 0}
 					onClick={handleSave}
-					className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50">
+					type="button">
 					Save current configuration as profile
 				</button>
 			</div>
@@ -98,10 +107,10 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 				<div className="text-xs text-muted-foreground">
 					Default profile: <strong>{defaultProfile.name}</strong>{" "}
 					<button
-						type="button"
 						className="ml-2 underline"
+						data-testid="model-profiles-clear-default"
 						onClick={() => void onClearDefault()}
-						data-testid="model-profiles-clear-default">
+						type="button">
 						Clear default
 					</button>
 				</div>
@@ -115,16 +124,17 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 				)}
 				{profiles.map((p) => (
 					<li
-						key={p.profileId}
+						className="flex items-center gap-3 rounded border px-3 py-2"
 						data-testid={`model-profiles-row-${p.profileId}`}
-						className="flex items-center gap-3 rounded border px-3 py-2">
+						key={p.profileId}>
 						<div className="flex-1">
 							{renamingId === p.profileId ? (
 								<input
+									autoFocus
+									className="w-full rounded border px-2 py-1 text-sm"
 									data-testid={`model-profiles-rename-input-${p.profileId}`}
-									value={renameDraft}
-									onChange={(e) => setRenameDraft(e.target.value)}
 									onBlur={commitRename}
+									onChange={(e) => setRenameDraft(e.target.value)}
 									onKeyDown={(e) => {
 										if (e.key === "Enter") commitRename()
 										if (e.key === "Escape") {
@@ -132,8 +142,7 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 											setRenameDraft("")
 										}
 									}}
-									className="w-full rounded border px-2 py-1 text-sm"
-									autoFocus
+									value={renameDraft}
 								/>
 							) : (
 								<div className="flex flex-col">
@@ -151,9 +160,10 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 						</div>
 						<div className="flex items-center gap-1">
 							<button
-								type="button"
+								className="rounded border px-2 py-1 text-xs disabled:opacity-50"
 								data-testid={`model-profiles-use-${p.profileId}`}
 								disabled={!canApplyLive || p.isActive}
+								onClick={() => void onUse(p.profileId)}
 								title={
 									!canApplyLive
 										? "Available when the current request finishes"
@@ -161,41 +171,46 @@ export function ModelProfilesSection(props: ModelProfilesSectionProps) {
 											? "Already in use"
 											: "Use this profile for the current task"
 								}
-								onClick={() => void onUse(p.profileId)}
-								className="rounded border px-2 py-1 text-xs disabled:opacity-50">
+								type="button">
 								Use
 							</button>
 							{!p.isDefault && (
 								<button
-									type="button"
+									className="rounded border px-2 py-1 text-xs"
 									data-testid={`model-profiles-set-default-${p.profileId}`}
 									onClick={() => void onSetAsDefault(p.profileId)}
-									className="rounded border px-2 py-1 text-xs">
+									type="button">
 									Set as default
 								</button>
 							)}
 							<button
-								type="button"
+								className="rounded border px-2 py-1 text-xs"
 								data-testid={`model-profiles-rename-${p.profileId}`}
 								onClick={() => beginRename(p.profileId, p.name)}
-								className="rounded border px-2 py-1 text-xs">
+								type="button">
 								Rename
 							</button>
 							<button
-								type="button"
+								className="rounded border px-2 py-1 text-xs disabled:opacity-50"
 								data-testid={`model-profiles-update-${p.profileId}`}
 								disabled={!canCreateFromCurrent}
 								onClick={() => void onUpdateFromCurrent(p.profileId)}
-								className="rounded border px-2 py-1 text-xs disabled:opacity-50">
+								type="button">
 								Update from current
 							</button>
 							<button
-								type="button"
+								className="rounded border px-2 py-1 text-xs text-error disabled:opacity-50"
 								data-testid={`model-profiles-delete-${p.profileId}`}
 								disabled={p.isActive || p.isDefault}
-								title={p.isActive ? "Cannot delete the active profile" : p.isDefault ? "Cannot delete the default profile" : "Delete profile"}
 								onClick={() => void onDelete(p.profileId)}
-								className="rounded border px-2 py-1 text-xs text-error disabled:opacity-50">
+								title={
+									p.isActive
+										? "Cannot delete the active profile"
+										: p.isDefault
+											? "Cannot delete the default profile"
+											: "Delete profile"
+								}
+								type="button">
 								Delete
 							</button>
 						</div>

@@ -30,12 +30,12 @@
  * webview is a pure mirror.
  */
 
-import { useCallback, useMemo } from "react"
-import { useModelProfileQuickSwitch, type ModelProfileQuickSwitchState } from "./ModelProfileQuickSwitch"
+import { ApplyModelProfileRequest } from "@shared/proto/cline/state"
+import { useCallback, useMemo, useRef } from "react"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { StateServiceClient } from "@/services/grpc-client"
-import { ApplyModelProfileRequest } from "@shared/proto/cline/state"
 import type { ModelProfileSummary } from "@/services/model-profile-types"
+import { type ModelProfileQuickSwitchState, useModelProfileQuickSwitch } from "./ModelProfileQuickSwitch"
 
 export interface ModelProfileQuickSwitchContainerProps {
 	disabled?: boolean
@@ -63,11 +63,20 @@ function buildCurrentLabel(
  * to bind the popover to an EXISTING trigger element).
  * Returns the spreadable `triggerProps` + the popover node,
  * plus the current label.
+ *
+ * ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02:
+ * `triggerRef` is an optional correctly-typed ref for the caller's
+ * trigger element. The hook reads `.current` as `HTMLElement | null`
+ * internally for outside-click + focus-restoration; the caller
+ * keeps element-type ownership. When omitted, the hook uses a
+ * fallback ref (suitable for tests that don't exercise focus or
+ * outside-click semantics).
  */
 export function useModelProfileQuickSwitchHost(
 	currentLabel: string,
 	disabled?: boolean,
 	onOpenManageProfiles?: () => void,
+	triggerRef?: React.RefObject<HTMLElement | null>,
 ): {
 	label: string
 	state: ModelProfileQuickSwitchState
@@ -101,13 +110,16 @@ export function useModelProfileQuickSwitchHost(
 		}
 	}, [onOpenManageProfiles])
 
-	const state = useModelProfileQuickSwitch({
-		profiles,
-		currentLabel: label,
-		disabled,
-		onSelectProfile: handleSelectProfile,
-		onOpenManageProfiles: handleOpenManageProfiles,
-	})
+	const state = useModelProfileQuickSwitch(
+		{
+			profiles,
+			currentLabel: label,
+			disabled,
+			onSelectProfile: handleSelectProfile,
+			onOpenManageProfiles: handleOpenManageProfiles,
+		},
+		{ triggerRef },
+	)
 
 	return { label, state }
 }
@@ -117,13 +129,20 @@ export function useModelProfileQuickSwitchHost(
  * for back-compat surfaces that don't have an existing trigger
  * element (e.g. Settings preview). ChatTextArea now uses
  * `useModelProfileQuickSwitchHost` instead.
+ *
+ * ACT-CLINEMM-DOGFOOD-VSIX-TYPECHECK-UNBLOCK02: the container
+ * now owns an HTMLButtonElement ref and forwards it to the hook,
+ * so outside-click detection + focus restoration work end-to-end.
  */
 export function ModelProfileQuickSwitchContainer(props: ModelProfileQuickSwitchContainerProps) {
 	const { disabled, currentLabel, onOpenManageProfiles } = props
-	const { label, state } = useModelProfileQuickSwitchHost(currentLabel, disabled, onOpenManageProfiles)
+	const triggerButtonRef = useRef<HTMLButtonElement | null>(null)
+	const { label, state } = useModelProfileQuickSwitchHost(currentLabel, disabled, onOpenManageProfiles, triggerButtonRef)
 	return (
 		<div className="relative inline-block">
-			<button {...state.triggerProps}>{label}</button>
+			<button {...state.triggerProps} ref={triggerButtonRef}>
+				{label}
+			</button>
 			{state.popover}
 		</div>
 	)

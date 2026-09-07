@@ -19,17 +19,28 @@
 
 import { fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { useMemo } from "react"
 import { describe, expect, it, vi } from "vitest"
-import { useMemo, useState } from "react"
 import type { ModelProfileSummary } from "@/services/model-profile-types"
-import {
-	ModelProfileQuickSwitch,
-	useModelProfileQuickSwitch,
-} from "./ModelProfileQuickSwitch"
+import { useModelProfileQuickSwitch } from "./ModelProfileQuickSwitch"
 
 const PROFILES: ModelProfileSummary[] = [
-	{ profileId: "prof-A", name: "Corporate MiniMax", providerId: "openai-compatible", modelId: "MiniMax-M3", isActive: true, isDefault: false },
-	{ profileId: "prof-B", name: "Local Qwen", providerId: "openai-compatible", modelId: "qwen3-coder", isActive: false, isDefault: true },
+	{
+		profileId: "prof-A",
+		name: "Corporate MiniMax",
+		providerId: "openai-compatible",
+		modelId: "MiniMax-M3",
+		isActive: true,
+		isDefault: false,
+	},
+	{
+		profileId: "prof-B",
+		name: "Local Qwen",
+		providerId: "openai-compatible",
+		modelId: "qwen3-coder",
+		isActive: false,
+		isDefault: true,
+	},
 ]
 
 /**
@@ -106,7 +117,9 @@ describe("MPWC02_C5_EXISTING_MODEL_LABEL_TRIGGER", () => {
 			})
 			return (
 				<div>
-					<button type="button" {...triggerProps}>label</button>
+					<button type="button" {...triggerProps}>
+						label
+					</button>
 					{popover}
 				</div>
 			)
@@ -130,7 +143,9 @@ describe("MPWC02_C5_EXISTING_MODEL_LABEL_TRIGGER", () => {
 			})
 			return (
 				<div>
-					<button type="button" {...triggerProps}>label</button>
+					<button type="button" {...triggerProps}>
+						label
+					</button>
 					{popover}
 				</div>
 			)
@@ -211,9 +226,12 @@ describe("MPWC02_C5_REAL_CHAT_PARENT_TDZ_EXECUTION", () => {
 		// the production ChatTextArea (post-CORRECTION02 reorder).
 		function ChatTextAreaExecutionSurrogate() {
 			// 1. Declare modelDisplayName FIRST.
-			const modelDisplayName = useMemo(() => "openai:gpt-4o", [
-				/* deps: apiConfiguration, mode, selectedProvider, selectedModelId */
-			])
+			const modelDisplayName = useMemo(
+				() => "openai:gpt-4o",
+				[
+					/* deps: apiConfiguration, mode, selectedProvider, selectedModelId */
+				],
+			)
 			// 2. THEN pass it to the hook.
 			const host = useModelProfileQuickSwitch({
 				profiles: PROFILES,
@@ -253,7 +271,8 @@ describe("MPWC02_C5_REAL_CHAT_PARENT_TDZ_EXECUTION", () => {
 			// 1. Hook call BEFORE declaration -- the buggy shape.
 			const host = useModelProfileQuickSwitch({
 				profiles: PROFILES,
-				currentLabel: (modelDisplayName as unknown as string),
+				// biome-ignore lint/correctness/noInvalidUseBeforeDeclaration: this test DELIBERATELY exercises a TDZ-violating shape so the harness can prove the discriminator is sensitive (the read of modelDisplayName below throws ReferenceError on render, and the test asserts toThrow(ReferenceError)).
+				currentLabel: modelDisplayName as unknown as string,
 				onSelectProfile: () => {},
 				onOpenManageProfiles: () => {},
 			})
@@ -292,10 +311,7 @@ describe("MPWC02_C5_MANAGE_PROFILES_TARGETS_MODEL_PROFILES", () => {
 	it("SettingsView declares model-profiles as a valid targetSection", async () => {
 		const { readFileSync } = await import("node:fs")
 		const { join } = await import("node:path")
-		const source = readFileSync(
-			join(__dirname, "..", "settings", "SettingsView.tsx"),
-			"utf8",
-		)
+		const source = readFileSync(join(__dirname, "..", "settings", "SettingsView.tsx"), "utf8")
 		expect(source).toMatch(/"model-profiles"/)
 	})
 })

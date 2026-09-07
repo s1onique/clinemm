@@ -21,7 +21,6 @@
  */
 
 import type { HistoryItem } from "@shared/HistoryItem"
-import type { GlobalState } from "@shared/storage/state-keys"
 
 // ---------------------------------------------------------------------------
 // Default profile (global) — key, default, and typed accessor pair
@@ -66,10 +65,7 @@ export function writeDefaultModelProfileId(
  * original by reference. Pass the returned item back to the
  * taskHistory adapter for durable write.
  */
-export function writeActiveProfileIdToHistoryItem(
-	item: HistoryItem,
-	profileId: string | undefined,
-): HistoryItem {
+export function writeActiveProfileIdToHistoryItem(item: HistoryItem, profileId: string | undefined): HistoryItem {
 	if (profileId !== undefined && (typeof profileId !== "string" || profileId.length === 0)) {
 		throw new Error("activeProfileId must be a non-empty string or undefined")
 	}
@@ -87,9 +83,7 @@ export function writeActiveProfileIdToHistoryItem(
  * Returns undefined when the task was created before Model Profiles V1
  * or when the field was explicitly cleared.
  */
-export function readActiveProfileIdFromHistoryItem(
-	item: Pick<HistoryItem, "activeProfileId">,
-): string | undefined {
+export function readActiveProfileIdFromHistoryItem(item: Pick<HistoryItem, "activeProfileId">): string | undefined {
 	const v = item.activeProfileId
 	return typeof v === "string" && v.length > 0 ? v : undefined
 }
@@ -143,12 +137,9 @@ export function resolveActiveProfileIdForNewTask(
  * supplied dictionary. Used by the application coordinator before
  * mutating either the active binding or the runtime.
  */
-export function isKnownProfileId(
-	profileId: string | undefined,
-	profiles: Record<string, { profileId: string }>,
-): boolean {
+export function isKnownProfileId(profileId: string | undefined, profiles: Record<string, { profileId: string }>): boolean {
 	if (typeof profileId !== "string" || profileId.length === 0) return false
-	return Object.prototype.hasOwnProperty.call(profiles, profileId)
+	return Object.hasOwn(profiles, profileId)
 }
 
 /**
