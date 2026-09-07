@@ -5,13 +5,17 @@
  * Self-check invariant: for every provider declared
  * `BOOTSTRAP_COVERAGE`, either:
  *
- *   - credential resolution is demonstrably supported (the
+ *   - credential resolution is demonstrably supported: the
  *     exported `resolveApiKey` returns a non-empty string for
- *     a synthetic ApiConfiguration that fills in only the
- *     corresponding key field), AND
- *   - model id resolution is demonstrably supported (the
+ *     a synthetic ApiConfiguration populated ONLY with that
+ *     provider's intended credential field
+ *     (`PROVIDER_API_KEY_MAP[provider]`), AND
+ *   - model id resolution is demonstrably supported: the
  *     exported `resolveModelId` returns a non-empty string
- *     for at least one of {plan, act}).
+ *     for at least one of {plan, act} when the synthetic
+ *     ApiConfiguration is populated ONLY with that provider's
+ *     intended model field
+ *     (`PROVIDER_MODEL_ID_MAP[provider]`).
  *
  * OR the provider must not be advertised as bootstrap-supported.
  *
@@ -24,16 +28,15 @@
  * `MISSING_MODEL` for a user who legitimately selected that
  * provider.
  *
- * Implementation: synthesize an ApiConfiguration where the
- * union of all known ApiConfiguration key fields (across all
- * providers, not just BOOTSTRAP_COVERAGE) is populated with
- * sentinel non-empty strings. The resolver functions stop at
- * the first match in their respective maps
- * (`PROVIDER_API_KEY_MAP`, `PROVIDER_MODEL_ID_MAP`,
- * `baseUrlMap`) so over-population does not cause false
- * negatives. A misconfigured provider (no entry in any of
- * the three maps) would fail to resolve, surfacing as a
- * well-typed diagnostic.
+ * Why "isolated probe" instead of "maximally populated probe":
+ *   The previous implementation populated every known
+ *   credential field with the same sentinel. That made a
+ *   generic fallback (e.g. `resolveApiKey` returning
+ *   `config.apiKey` for any provider) produce false GREENs
+ *   for under-wired providers. The reviewer is right that
+ *   the invariant is stronger if the probe contains ONLY the
+ *   intended field — then the resolver must actually consult
+ *   the per-provider wiring.
  *
  * The function returns the per-provider diagnostic table
  * rather than throwing so the B3 witness can produce a
@@ -42,12 +45,18 @@
  */
 
 import type { ApiConfiguration, ApiProvider } from "@shared/api"
-import { resolveApiKey, resolveModelId } from "../cline-session-factory"
+import { PROVIDER_API_KEY_MAP, PROVIDER_MODEL_ID_MAP, resolveApiKey, resolveModelId } from "../cline-session-factory"
 import { BOOTSTRAP_COVERAGE } from "./bootstrap"
 
 export interface BootstrapCoverageDiagnostic {
 	provider: ApiProvider
+	/** True iff the provider has an entry in `PROVIDER_API_KEY_MAP`. */
+	hasIntendedCredentialField: boolean
+	/** True iff `resolveApiKey` returned the sentinel for the isolated probe. */
 	credentialResolved: boolean
+	/** True iff the provider has an entry in `PROVIDER_MODEL_ID_MAP`. */
+	hasIntendedModelField: boolean
+	/** Which of plan/act resolved the sentinel for the isolated probe. */
 	modelIdResolvedFor: Array<"plan" | "act">
 }
 
@@ -56,110 +65,32 @@ export interface BootstrapCoverageInvariantResult {
 	diagnostics: BootstrapCoverageDiagnostic[]
 }
 
-/**
- * The union of every ApiConfiguration key that any provider's
- * `PROVIDER_API_KEY_MAP` entry might consult. Kept in sync
- * with `apps/vscode/src/sdk/cline-session-factory.ts` by code
- * review - if you add a new entry to `PROVIDER_API_KEY_MAP`,
- * add it here too.
- *
- * (We don't import the map directly because it isn't exported
- * from `cline-session-factory.ts`. Importing it would require
- * changing that file's export surface. The static-key list is
- * a small price for keeping the surface stable.)
- */
-const CANDIDATE_API_KEY_FIELDS: ReadonlyArray<string> = [
-	"apiKey",
-	"openRouterApiKey",
-	"openAiApiKey",
-	"openAiNativeApiKey",
-	"awsBedrockApiKey",
-	"geminiApiKey",
-	"deepSeekApiKey",
-	"clineApiKey",
-	"ollamaApiKey",
-	"requestyApiKey",
-	"togetherApiKey",
-	"fireworksApiKey",
-	"qwenApiKey",
-	"doubaoApiKey",
-	"mistralApiKey",
-	"liteLlmApiKey",
-	"asksageApiKey",
-	"xaiApiKey",
-	"moonshotApiKey",
-	"zaiApiKey",
-	"huggingFaceApiKey",
-	"nebiusApiKey",
-	"sambanovaApiKey",
-	"cerebrasApiKey",
-	"groqApiKey",
-	"basetenApiKey",
-	"difyApiKey",
-	"aihubmixApiKey",
-	"ocaApiKey",
-]
-
-/**
- * The union of every ApiConfiguration key that any provider's
- * `PROVIDER_MODEL_ID_MAP` entry might consult, for the plan
- * and act modes. Kept in sync with
- * `apps/vscode/src/sdk/cline-session-factory.ts`.
- */
-const CANDIDATE_PLAN_MODEL_ID_FIELDS: ReadonlyArray<string> = [
-	"planModeApiModelId",
-	"planModeOpenRouterModelId",
-	"planModeOpenAiModelId",
-	"planModeOllamaModelId",
-	"planModeLmStudioModelId",
-	"planModeLiteLlmModelId",
-	"planModeRequestyModelId",
-	"planModeClineModelId",
-	"planModeClinePassModelId",
-	"planModeTogetherModelId",
-	"planModeFireworksModelId",
-	"planModeGroqModelId",
-	"planModeBasetenModelId",
-	"planModeHuggingFaceModelId",
-	"planModeHuaweiCloudMaasModelId",
-	"planModeOcaModelId",
-	"planModeAihubmixModelId",
-	"planModeHicapModelId",
-	"planModeNousResearchModelId",
-	"planModeVercelAiGatewayModelId",
-]
-
-const CANDIDATE_ACT_MODEL_ID_FIELDS: ReadonlyArray<string> = [
-	"actModeApiModelId",
-	"actModeOpenRouterModelId",
-	"actModeOpenAiModelId",
-	"actModeOllamaModelId",
-	"actModeLmStudioModelId",
-	"actModeLiteLlmModelId",
-	"actModeRequestyModelId",
-	"actModeClineModelId",
-	"actModeClinePassModelId",
-	"actModeTogetherModelId",
-	"actModeFireworksModelId",
-	"actModeGroqModelId",
-	"actModeBasetenModelId",
-	"actModeHuggingFaceModelId",
-	"actModeHuaweiCloudMaasModelId",
-	"actModeOcaModelId",
-	"actModeAihubmixModelId",
-	"actModeHicapModelId",
-	"actModeNousResearchModelId",
-	"actModeVercelAiGatewayModelId",
-]
-
 const PROBE_CREDENTIAL_SENTINEL = "probe-credential-value"
 const PROBE_MODEL_SENTINEL = "probe-model-id"
 
-function buildProbeConfig(): ApiConfiguration {
+/**
+ * Build an isolated ApiConfiguration containing ONLY the
+ * intended credential field + intended plan/act model
+ * fields for the given provider, each populated with the
+ * corresponding sentinel. Everything else is absent.
+ *
+ * This is the structural load-bearing piece of the
+ * invariant: if the resolver is wired generically (e.g. it
+ * returns `config.apiKey` for every provider), then for a
+ * provider whose intended credential field is e.g.
+ * `qwenApiKey`, the isolated probe will NOT have `apiKey`
+ * set, the resolver will return undefined, and the invariant
+ * will correctly report the provider as under-wired.
+ */
+function buildIsolatedProbe(provider: ApiProvider): ApiConfiguration {
 	const probeConfig = {} as Record<string, unknown>
-	for (const f of CANDIDATE_API_KEY_FIELDS) probeConfig[f] = PROBE_CREDENTIAL_SENTINEL
-	for (const f of CANDIDATE_PLAN_MODEL_ID_FIELDS) probeConfig[f] = PROBE_MODEL_SENTINEL
-	for (const f of CANDIDATE_ACT_MODEL_ID_FIELDS) probeConfig[f] = PROBE_MODEL_SENTINEL
+	const credentialField = PROVIDER_API_KEY_MAP[provider]
+	if (credentialField) probeConfig[credentialField] = PROBE_CREDENTIAL_SENTINEL
+	const modelFields = PROVIDER_MODEL_ID_MAP[provider]
+	if (modelFields) {
+		probeConfig[modelFields.plan] = PROBE_MODEL_SENTINEL
+		probeConfig[modelFields.act] = PROBE_MODEL_SENTINEL
+	}
 	return probeConfig as unknown as ApiConfiguration
 }
 
@@ -168,19 +99,34 @@ function buildProbeConfig(): ApiConfiguration {
  * Returns the per-provider diagnostic table.
  */
 export function assertBootstrapCoverageIsWellFormed(): BootstrapCoverageInvariantResult {
-	const probeConfig = buildProbeConfig()
 	const diagnostics: BootstrapCoverageDiagnostic[] = []
 	let ok = true
 	for (const provider of BOOTSTRAP_COVERAGE) {
+		const credentialField = PROVIDER_API_KEY_MAP[provider]
+		const modelFields = PROVIDER_MODEL_ID_MAP[provider]
+		const probeConfig = buildIsolatedProbe(provider)
+
 		const credential = resolveApiKey(provider, probeConfig)
 		const credentialResolved = typeof credential === "string" && credential.length > 0
+
 		const planModel = resolveModelId(provider, "plan", probeConfig)
 		const actModel = resolveModelId(provider, "act", probeConfig)
 		const modelIdResolvedFor: Array<"plan" | "act"> = []
 		if (typeof planModel === "string" && planModel.length > 0) modelIdResolvedFor.push("plan")
 		if (typeof actModel === "string" && actModel.length > 0) modelIdResolvedFor.push("act")
-		if (!credentialResolved || modelIdResolvedFor.length === 0) ok = false
-		diagnostics.push({ provider, credentialResolved, modelIdResolvedFor })
+
+		const hasIntendedCredentialField = Boolean(credentialField)
+		const hasIntendedModelField = Boolean(modelFields)
+		if (!hasIntendedCredentialField || !hasIntendedModelField || !credentialResolved || modelIdResolvedFor.length === 0) {
+			ok = false
+		}
+		diagnostics.push({
+			provider,
+			hasIntendedCredentialField,
+			credentialResolved,
+			hasIntendedModelField,
+			modelIdResolvedFor,
+		})
 	}
 	return { ok, diagnostics }
 }

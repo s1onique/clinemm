@@ -404,8 +404,16 @@ function resolveCommittedRuntimeModel(
 /**
  * Maps a provider ID to the corresponding API key field name in ApiConfiguration.
  * This covers all 30+ providers supported by the classic extension.
+ *
+ * EXPORTED so external invariants (e.g.
+ * `assertBootstrapCoverageIsWellFormed`) can probe per-provider
+ * with the EXACT intended credential field — preventing a
+ * generic fallback (e.g. always returning `apiKey`) from making
+ * the coverage invariant GREEN for under-wired providers.
+ * If you add a new provider here, you almost certainly also
+ * need to add it to `PROVIDER_MODEL_ID_MAP` and `BOOTSTRAP_COVERAGE`.
  */
-const PROVIDER_API_KEY_MAP: Record<string, keyof ApiConfiguration> = {
+export const PROVIDER_API_KEY_MAP: Record<string, keyof ApiConfiguration> = {
 	anthropic: "apiKey",
 	openrouter: "openRouterApiKey",
 	openai: "openAiApiKey",
@@ -451,8 +459,13 @@ const PROVIDER_API_KEY_MAP: Record<string, keyof ApiConfiguration> = {
 /**
  * Maps a provider ID to the mode-specific model ID field name in ApiConfiguration.
  * For providers that have dedicated model ID fields per mode.
+ *
+ * EXPORTED so external invariants (e.g.
+ * `assertBootstrapCoverageIsWellFormed`) can probe per-provider
+ * with the EXACT intended model field — same rationale as
+ * `PROVIDER_API_KEY_MAP`'s export.
  */
-const PROVIDER_MODEL_ID_MAP: Record<string, { plan: keyof ApiConfiguration; act: keyof ApiConfiguration }> = {
+export const PROVIDER_MODEL_ID_MAP: Record<string, { plan: keyof ApiConfiguration; act: keyof ApiConfiguration }> = {
 	anthropic: { plan: "planModeApiModelId", act: "actModeApiModelId" },
 	openrouter: { plan: "planModeOpenRouterModelId", act: "actModeOpenRouterModelId" },
 	openai: { plan: "planModeOpenAiModelId", act: "actModeOpenAiModelId" },
@@ -479,6 +492,16 @@ const PROVIDER_MODEL_ID_MAP: Record<string, { plan: keyof ApiConfiguration; act:
 	hicap: { plan: "planModeHicapModelId", act: "actModeHicapModelId" },
 	nousResearch: { plan: "planModeNousResearchModelId", act: "actModeNousResearchModelId" },
 	"vercel-ai-gateway": { plan: "planModeVercelAiGatewayModelId", act: "actModeVercelAiGatewayModelId" },
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04:
+	// `asksage` and `dify` are listed in BOOTSTRAP_COVERAGE but have no
+	// dedicated plan/act model-id fields in ApiConfiguration (they share
+	// the generic `planModeApiModelId` / `actModeApiModelId` with
+	// anthropic / gemini / vertex / bedrock / deepseek / openai-native /
+	// openai-codex). The isolated-probe coverage invariant caught this
+	// pre-existing under-wiring; the fix is to register the entries here
+	// so the resolvers can return a non-empty model id from the probe.
+	asksage: { plan: "planModeApiModelId", act: "actModeApiModelId" },
+	dify: { plan: "planModeApiModelId", act: "actModeApiModelId" },
 }
 
 // ---------------------------------------------------------------------------
