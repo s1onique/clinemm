@@ -62,9 +62,35 @@
  *  `""`, and never `null`. That makes the wrong contract
  *  `cfg.apiKey === "instance:inst-B-key"` physically impossible.
  * ===========================================================================
+ * ===========================================================================
+ *  PROVIDER-ID NORMALIZATION CONTRACT (CORRECTION07)
+ * ===========================================================================
+ *  Per `HALT_MODEL_PROFILE_PROVIDER_ID_NOT_CANONICAL` (CORRECTION07):
+ *  this projector normalizes `instance.providerId` through
+ *  `toSdkProviderId` before writing it onto `CoreSessionConfig.providerId`.
+ *  The SDK registry keys built-in providers by their canonical SDK
+ *  ids (e.g. `openai-compatible`, `nousResearch`); the extension's
+ *  `ApiConfiguration` stores legacy spellings (e.g. `openai`,
+ *  `nousresearch`). Without normalization, the legacy spelling
+ *  escapes to the SDK gateway and the gateway rejects the request
+ *  with `Unknown or disabled provider "<id>"` (the exact error
+ *  observed during live first-run dogfood after CORRECTION06).
+ *
+ *  The durable `ProviderConfigurationInstance.providerId` may carry
+ *  either spelling depending on the writer (the bootstrap path
+ *  captures the legacy `actModeApiProvider` verbatim, the typed-
+ *  projector test fixtures use canonical `openai-compatible`).
+ *  `toSdkProviderId` is idempotent on already-canonical ids, so
+ *  existing canonical writers pass through unchanged. This makes
+ *  the projection the single point of truth for runtime provider
+ *  identity and mirrors the legacy non-profile path at
+ *  `cline-session-factory.ts:1053` (the proven fix that has been
+ *  working since the legacy path was wired).
+ * ===========================================================================
  */
 
 import type { CoreSessionConfig } from "@cline/core"
+import { toSdkProviderId } from "../model-catalog/sdk-provider-id"
 import { MissingProviderInstanceCredentialError, type ProviderConfigurationInstance, type ProviderConnection } from "./contracts"
 
 /**
@@ -131,7 +157,33 @@ export function applyTypedProviderInstanceToConfig(
 	// with ApiConfiguration, but the typed instance has ONE
 	// selection -- the session mode is governed by the caller,
 	// not by per-instance fields).
-	setOrClear(cfgAny, "providerId", instance.providerId)
+	//
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07
+	// (HALT_MODEL_PROFILE_PROVIDER_ID_NOT_CANONICAL):
+	//
+	// The typed projector is the SINGLE authority boundary that
+	// converts typed `ProviderConfigurationInstance` records into
+	// runtime `CoreSessionConfig`. The SDK registry keys built-in
+	// providers by their canonical SDK ids (e.g. `openai-compatible`,
+	// `nousResearch`); the extension's `ApiConfiguration` stores
+	// the legacy spellings (e.g. `openai`, `nousresearch`). The
+	// bootstrap path captures the legacy `actModeApiProvider` /
+	// `planModeApiProvider` verbatim, so durable `ProviderConfigurationInstance`
+	// records may carry either spelling depending on which path
+	// wrote them (legacy bootstrap captures `openai`; the typed
+	// projector test fixtures use `openai-compatible`).
+	//
+	// Normalizing at the projector boundary mirrors the legacy
+	// non-profile path at `cline-session-factory.ts:1053`
+	// (`toSdkProviderId(providerId)`), which is the proven fix
+	// that has been working since the legacy path was wired. By
+	// placing the normalization here (rather than at every writer
+	// of `ProviderConfigurationInstance.providerId`), the projection
+	// is the single point of truth and the durable contract is
+	// tolerant of either spelling — `toSdkProviderId` is idempotent
+	// on already-canonical ids, so existing canonical writers
+	// (and the typed-projector test fixtures) pass through unchanged.
+	setOrClear(cfgAny, "providerId", toSdkProviderId(instance.providerId))
 	setOrClear(cfgAny, "modelId", conn.modelId)
 
 	// Connection fields: the per-provider projection depends on

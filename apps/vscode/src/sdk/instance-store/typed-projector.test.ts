@@ -35,6 +35,34 @@
  *                                    Thirteenth reviewer
  *                                    HALT_MISSING_INSTANCE_SECRET_FAILS_OPEN
  *                                    witness.
+ *   R5-07 empty-string secret fails closed -- resolvedApiKey=""
+ *                                    throws (treated as missing;
+ *                                    same error class as undefined).
+ *   R5-08 legacy-alias normalization -- instance.providerId="openai"
+ *                                    (legacy extension spelling) is
+ *                                    normalized to the SDK canonical
+ *                                    "openai-compatible" before being
+ *                                    written to CoreSessionConfig.providerId.
+ *                                    Mirrors the legacy non-profile
+ *                                    path at cline-session-factory.ts:1053
+ *                                    (toSdkProviderId). Live first-run
+ *                                    dogfood (post-CORRECTION06) failed
+ *                                    with "Unknown or disabled provider
+ *                                    'openai'" because the bootstrap
+ *                                    captured the legacy spelling verbatim
+ *                                    and the typed projector passed it
+ *                                    through unchanged.
+ *   R5-09 canonical idempotence    -- instance.providerId="openai-compatible"
+ *                                    (already canonical) is unchanged
+ *                                    on output. toSdkProviderId is
+ *                                    idempotent on canonical ids, so
+ *                                    existing canonical writers pass
+ *                                    through unchanged.
+ *   R5-10 legacy nousResearch     -- instance.providerId="nousresearch"
+ *                                    is normalized to "nousResearch"
+ *                                    (the SDK canonical). The other
+ *                                    alias in the EXTENSION_TO_SDK_PROVIDER_ID
+ *                                    table.
  *
  * Run via the bridge config:
  *   bun run vitest --config vitest.config.c2-4-c-bridge.ts
@@ -216,5 +244,55 @@ describe("ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 / R5", () => {
 		expect(() => applyTypedProviderInstanceToConfig(config, instance, "")).toThrow(
 			MissingProviderInstanceCredentialError,
 		)
+	})
+
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07
+	// (HALT_MODEL_PROFILE_PROVIDER_ID_NOT_CANONICAL):
+	//
+	// The bootstrap captures `config.actModeApiProvider` (legacy
+	// spelling "openai") into `instance.providerId` verbatim. The
+	// SDK registry only knows the canonical "openai-compatible".
+	// Without normalization at the projector boundary, the legacy
+	// spelling escapes to the SDK gateway which rejects the request
+	// with "Unknown or disabled provider 'openai'". This is the
+	// exact error observed live after CORRECTION06.
+	it("R5-08 legacy-alias normalization: instance.providerId='openai' (legacy extension spelling) is normalized to 'openai-compatible' on cfg.providerId", () => {
+		const config = makeBaselineA({ providerId: undefined }) as unknown as CoreSessionConfig
+		const instance = makeInstanceB({
+			providerId: "openai", // legacy extension spelling (the bootstrap's raw capture)
+		})
+		applyTypedProviderInstanceToConfig(config, instance, "secret-B-value")
+		const result = config as unknown as MinimalConfig
+		// CRITICAL: the runtime cfg.providerId MUST be the SDK canonical.
+		// Without normalization this is "openai" and the gateway fails
+		// with "Unknown or disabled provider 'openai'".
+		expect(result.providerId).toBe("openai-compatible")
+		// RED guard: explicit anti-regression that the legacy spelling
+		// does NOT survive into the runtime config.
+		expect(result.providerId).not.toBe("openai")
+	})
+
+	it("R5-09 canonical idempotence: instance.providerId='openai-compatible' (already canonical) is unchanged on cfg.providerId", () => {
+		const config = makeBaselineA({ providerId: undefined }) as unknown as CoreSessionConfig
+		const instance = makeInstanceB({
+			providerId: "openai-compatible", // already canonical (test fixture default)
+		})
+		applyTypedProviderInstanceToConfig(config, instance, "secret-B-value")
+		const result = config as unknown as MinimalConfig
+		// toSdkProviderId is idempotent on canonical ids, so existing
+		// canonical writers (and the typed-projector test fixtures)
+		// pass through unchanged.
+		expect(result.providerId).toBe("openai-compatible")
+	})
+
+	it("R5-10 legacy nousResearch: instance.providerId='nousresearch' is normalized to 'nousResearch' (SDK canonical)", () => {
+		const config = makeBaselineA({ providerId: undefined }) as unknown as CoreSessionConfig
+		const instance = makeInstanceB({
+			providerId: "nousresearch", // legacy lowercase spelling (matches KNOWN_API_PROVIDERS)
+		})
+		applyTypedProviderInstanceToConfig(config, instance, "secret-B-value")
+		const result = config as unknown as MinimalConfig
+		// The other alias in the EXTENSION_TO_SDK_PROVIDER_ID table.
+		expect(result.providerId).toBe("nousResearch")
 	})
 })

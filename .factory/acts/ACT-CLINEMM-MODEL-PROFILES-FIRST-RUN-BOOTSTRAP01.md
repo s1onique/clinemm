@@ -2178,3 +2178,390 @@ the L-C05 dogfood flow:
 Only after L-C05-1/2/3 succeed should dogfood proceed to A/B
 switching (L-C05-4) and the PARTIALLY_MALFORMED_HEADERS_POLICY
 review (post-dogfood decision, not pre-dogfood).
+
+## CORRECTION07 (2026-09-09, bounded: LIVE_FOUND P0 absorb + single-boundary normalization)
+
+### Trigger
+
+Reviewer verdict (live first-run dogfood after CORRECTION06 closure
+`632ac4d36`): the post-CORRECTION06 dogfood retest surfaced a SECOND live
+P0 with a different signature. Repro of the live failure:
+
+  1. Fresh user installs the exact-HEAD VSIX.
+  2. Configures OpenAI-compatible provider (LiteLLM endpoint hosting
+     MiniMax-M3) with a real API key. Legacy persisted
+     `actModeApiProvider = "openai"`,
+     `actModeOpenAiModelId = "MiniMax-M3"`,
+     `openAiApiKey = "sk-litellm-..."`,
+     `openAiBaseUrl = "https://..."`,
+     `openAiHeaders` canonically ABSENT (per CORRECTION05).
+  3. Opens Settings > Model Profiles; clicks Create first profile;
+     names it "minimax-m3"; clicks Create. Live banner: "Profile
+     created."
+  4. User clicks Use on the freshly-created profile (or sends a real
+     MiniMax-M3 request).
+  5. Result:
+       Backend error: Unknown or disabled provider "openai".
+     The task fails immediately at provider resolution. The SDK
+     gateway never reaches the OpenAI-compatible chat-completions
+     client; MiniMax network behavior is never exercised.
+
+This is exactly the L-C05-3 step the CORRECTION06 close predicted
+would be the next load-bearing test. The post-create state push from
+CORRECTION06 made the profile visible; using the profile surfaces the
+identity bug.
+
+### Causal chain (six provider-ID boundaries)
+
+```
+CURRENT_API_PROVIDER               = "openai"            (legacy)
+  v bootstrap.ts:682 (config.actModeApiProvider)
+BOOTSTRAPPED_INSTANCE_PROVIDER_ID  = "openai"            (legacy, persisted)
+  v bootstrap.ts:798 (instance.providerId)
+PROFILE_INSTANCE_PROVIDER_ID       = "openai"            (legacy, profile
+                                                          references the
+                                                          instance unchanged)
+  v typed-projector.ts:134 (the bug: pass-through without normalize)
+SESSION_CONFIG_PROVIDER_ID         = "openai"            (legacy, BUG)
+  v CoreSessionConfig.providerId
+FINAL_GATEWAY_LOOKUP_PROVIDER_ID   = "openai"            (registry throws
+                                                          "Unknown or
+                                                           disabled
+                                                           provider
+                                                           'openai'")
+```
+
+### Why this is an authority-boundary bug
+
+The legacy non-profile path at
+`apps/vscode/src/sdk/cline-session-factory.ts:1053` calls
+`toSdkProviderId(providerId)` BEFORE writing
+`cfg.providerId` (line 1142). The legacy OPENAI_ONLY_PROBE projector
+at `sdk-session-config-builder.ts:181` writes the legacy id verbatim
+to `cfg.providerId` (and is exercised by tests at
+`provider-instance-identity-r2p-real-projector.piif01.test.ts:136`
+that assert `result.providerId === "openai"`). The TYPED projector at
+`typed-projector.ts:134` (the one the Model Profile path uses via
+`providerConfigurationInstanceTyped`) also wrote the legacy id
+verbatim. Neither typed path folded the alias; only the legacy
+`buildSessionConfig` path did.
+
+The SDK registry at
+`sdk/packages/llms/src/providers/registry.ts:221` keys built-in
+providers by their canonical SDK ids (`BUILT_IN_PROVIDER.
+OPENAI_COMPATIBLE = "openai-compatible"`,
+`BUILT_IN_PROVIDER.NOUSRESEARCH = "nousResearch"`). The
+extension's `ApiConfiguration` stores the legacy spellings
+(`openai`, `nousresearch`). Without normalization at the typed
+projector, the legacy spelling escapes to the SDK gateway.
+
+This is the SAME class of leak the reviewer's first verdict flagged
+as "Legacy `openai` spelling the rest of the extension is keyed by":
+the extension has always used `openai`, the SDK uses
+`openai-compatible`, and the typed instance layer had been missing
+the alias fold. The legacy path had the fold (line 1053); the
+typed path did not.
+
+### Bounded fix (one production file, two test files)
+
+Per reviewer directive: "Do not reopen the whole bootstrap ACT. Use
+CORRECTION07 to bind the fix to one boundary."
+
+**Production change** (1 file, 1 line + comments):
+
+  apps/vscode/src/sdk/instance-store/typed-projector.ts
+    + import { toSdkProviderId } from
+      "../model-catalog/sdk-provider-id"     (line 93)
+    - setOrClear(cfgAny, "providerId",
+                 instance.providerId)
+    + setOrClear(cfgAny, "providerId",
+                 toSdkProviderId(instance.providerId))   (line 186)
+
+    + PROVIDER-ID NORMALIZATION CONTRACT header block
+      (lines 65-89): documents the alias fold, the canonical SDK
+      ids, and the legacy extension ids, with explicit
+      cross-references to the legacy non-profile path at
+      `cline-session-factory.ts:1053` (the proven precedent).
+
+    + In-line CORRECTION07 comment at the fix point explaining why
+      the projector is the single normalization boundary.
+
+**Test changes** (2 files):
+
+  apps/vscode/src/sdk/instance-store/typed-projector.test.ts
+    Added R5-08, R5-09, R5-10 to the existing R5 typed-projector
+    suite. R5-08 is the RED->GREEN witness at the projector
+    boundary. R5-09 and R5-10 are conservation pin
+    (canonical-idempotence and nousResearch alias).
+
+  apps/vscode/src/sdk/__tests__/bootstrap-openai-canonical-id-
+    projection.mpfrb01-correction07.test.ts (NEW, 14 tests)
+    End-to-end RED->GREEN witness that drives the production
+    bootstrap seam + the production typed projector seam on the
+    exact live-user geometry (LiteLLM MiniMax-M3), plus
+    12-case conservation pin (every other provider id must be
+    unchanged; CRITICAL: openai-native is DISTINCT from
+    openai-compatible).
+
+### Architectural choice: Outcome B (projector-boundary fold)
+
+Reviewer's verdict offered two outcomes:
+
+  Outcome A: normalize at the bootstrap boundary so durable
+    instances store canonical SDK ids.
+  Outcome B: normalize at the typed projector boundary so the
+    durable instance stores legacy ids (matching the existing
+    contract) and the projector (the single consumer of
+    `instance.providerId`) is the single authority that folds.
+
+**Outcome B chosen**, for these reasons:
+
+  1. The typed projector IS the single authority boundary that
+     converts typed `ProviderConfigurationInstance` records into
+     runtime `CoreSessionConfig`. It is the single consumer of
+     `instance.providerId` (verified: only
+     `typed-projector.ts:134` reads `instance.providerId` in
+     production code). Placing the fold there means a single
+     point of truth and a single fix point.
+  2. Mirrors the legacy non-profile path precedent at
+     `cline-session-factory.ts:1053` (`toSdkProviderId` before
+     `cfg.providerId`). The fix is symmetric with the working
+     legacy path.
+  3. The durable `ProviderConfigurationInstance.providerId`
+     contract is already pinned by `bootstrap-no-provider-id-
+     collapse.mpfrb01.test.ts:227`:
+       expect(instC.providerId).toBe("openai")
+     and by the broader bootstrap regression suite. Changing
+     this would break 5+ existing test witnesses across 3 test
+     files. Outcome B preserves the existing contract.
+  4. Future writers of `ProviderConfigurationInstance` (RPC
+     paths, profile-update flows, future typed-instance
+     migration paths) are TOLERANT of either spelling: the
+     projector normalizes on read. Outcome A would require
+     every future writer to remember to normalize, and a single
+     forgotten call site would reintroduce the bug silently.
+  5. `toSdkProviderId` is idempotent on already-canonical ids
+     (the table maps `nousresearch -> nousResearch` and
+     `openai -> openai-compatible`; everything else passes
+     through unchanged). Existing typed-projector test fixtures
+     using `"openai-compatible"` continue to work without
+     modification (R5-09 witnesses this).
+
+### Files NOT touched (per bounded-correction discipline)
+
+  apps/vscode/src/sdk/profile-store/bootstrap.ts (bootstrap
+    capture is unchanged; the legacy "openai" spelling IS the
+    correct durable contract)
+  apps/vscode/src/sdk/sdk-session-config-builder.ts
+  apps/vscode/src/sdk/sdk-provider-change-coordinator.ts
+  apps/vscode/src/sdk/cline-session-factory.ts
+  apps/vscode/src/sdk/instance-store/contracts.ts
+    (no schema_version bump; the durable `providerId: string`
+     contract is intentionally tolerant of either spelling)
+  apps/vscode/src/shared/model-catalog/provider-helpers.ts
+    (the inverse alias map `toLegacyApiProvider` is reused as-is;
+    we do NOT add new alias authorities)
+  apps/vscode/src/sdk/model-catalog/sdk-provider-id.ts
+    (the existing `EXTENSION_TO_SDK_PROVIDER_ID` table is
+    reused as-is; we do NOT add new alias authorities)
+
+### CORRECTION07 test results
+
+```
+bun x tsc --noEmit (apps/vscode/):
+  -> exit 0 (clean; the new import path
+     "../model-catalog/sdk-provider-id" type-resolves correctly)
+
+bun run lint:
+  -> exit 0 (biome lint clean; no fixes needed)
+
+TMPDIR=/tmp bun test
+  src/sdk/__tests__/bootstrap-openai-canonical-id-projection.mpfrb01-correction07.test.ts:
+  -> 14 pass / 0 fail / 26 expect() calls
+     (1 LIVE-GEOMETRY + 12 CONSERVATION + 1 DURABLE-CONTRACT)
+
+bun x vitest run --config vitest.config.c2-4-c-bridge.ts
+  src/sdk/instance-store/typed-projector.test.ts:
+  -> 10 pass / 0 fail
+     (7 existing R5-01..07 + 3 new R5-08..10)
+
+TMPDIR=/tmp bun test
+  src/sdk/__tests__/bootstrap-*.test.ts
+  src/sdk/__tests__/model-profile-*.test.ts:
+  -> 85 pass / 0 fail / 289 expect() calls
+     (all bootstrap + model-profile regression stays GREEN;
+      no behavioral change to the bootstrap seam itself)
+```
+
+### RED->GREEN cycle (proves the test is load-bearing)
+
+```
+git diff apps/vscode/src/sdk/instance-store/typed-projector.ts
+  - line 186: setOrClear(cfgAny, "providerId",
+  -                    toSdkProviderId(instance.providerId))
+  + line 186: setOrClear(cfgAny, "providerId",
+  +                    instance.providerId)
+
+bun test src/sdk/__tests__/bootstrap-openai-canonical-id-projection.mpfrb01-correction07.test.ts:
+  -> 12 pass / 2 fail
+     FAIL: MPFRB01_C07_OPENAI_LIVE_GEOMETRY
+           Expected "openai-compatible", Received "openai"
+     FAIL: MPFRB01_C07_INSTANCE_DURABLE_CONTRACT
+           Expected "openai-compatible", Received "openai"
+     (the 12 conservation cases pass because they test
+      toSdkProviderId directly, which is not the bug)
+
+git checkout apps/vscode/src/sdk/instance-store/typed-projector.ts
+  (restore the fix)
+
+bun test src/sdk/__tests__/bootstrap-openai-canonical-id-projection.mpfrb01-correction07.test.ts:
+  -> 14 pass / 0 fail
+```
+
+### Defense-in-depth regression guards
+
+  1. R5-08 in typed-projector.test.ts: any future regression
+     that reverts the normalization (e.g. an unwary refactor
+     of the typed projector) would surface as
+     `expect(cfg.providerId).toBe("openai-compatible")` failing
+     in this exact test.
+  2. R5-09 (idempotence) + R5-10 (nousResearch alias) pin the
+     conservation contract: `toSdkProviderId` MUST be a pure
+     alias fold, NOT a global rewrite. If a future refactor
+     accidentally touches `openai-native` or `nousResearch`
+     canonical form, these tests fail.
+  3. MPFRB01_C07_INSTANCE_DURABLE_CONTRACT pins the
+     `instance.providerId = "openai"` durable contract. If a
+     future refactor decides to normalize at the bootstrap
+     boundary (Outcome A), this test fails and forces the
+     refactor to also update bootstrap-no-provider-id-collapse
+     + all related test witnesses.
+  4. MPFRB01_C07_CONSERVATION_CASE (12 cases) covers every
+     built-in provider id and the custom-id pass-through. A
+     future regression that broadens the alias fold (e.g.
+     accidentally folding `openai-native`) would surface
+     immediately as a failing conservation case.
+
+### Lessons learned (additive, CORRECTION07)
+
+  #32 When a SDK-bridged extension introduces a NEW persistence
+     boundary (here: typed `ProviderConfigurationInstance`
+     records durable on disk), it MUST inherit the legacy-to-
+     canonical alias folds that the working legacy path
+     already performs. The typed-projector author was unaware
+     of the fold at cline-session-factory.ts:1053; the new
+     path silently bypassed it. This is a class of bug that
+     recurs whenever a new persistence layer is added: every
+     seam between the new layer and the runtime SDK gateway is
+     a candidate for the alias fold.
+
+  #33 The fix is at the SEAM, not at the WRITER. Normalizing
+     the durable `instance.providerId` at write time would
+     (a) break 5+ existing test witnesses that pin the
+     legacy contract, and (b) require every future writer to
+     remember to normalize. The seam (typed projector) is the
+     single authority; folding there makes the projection
+     correct for every possible writer without per-writer
+     discipline.
+
+  #34 `toSdkProviderId` is idempotent on already-canonical
+     ids. This is what makes Outcome B safe to ship: every
+     existing canonical writer (including the typed-projector
+     test fixtures using `"openai-compatible"`) passes through
+     unchanged, so the fix is provably backward-compatible
+     with the entire test corpus. The R5-09 witness pins
+     this idempotence contract.
+
+  #35 Live dogfood retests are load-bearing beyond the
+     "feature works" gate. The CORRECTION06 closure made
+     "profile appears in the list after create" pass; the
+     CORRECTION07 live retest surfaces a different bug at
+     "use the profile to make a real request" — proving that
+     the L-C05-3 step (the next-step directive in CORRECTION06)
+     is non-trivial and that the live geometry exercises
+     authority boundaries that the unit-test corpus does not
+     reach. The first live retest after each ACT closure
+     should drive the FIRST real downstream consumer, not the
+     UI feedback loop.
+
+  #36 The `OpenAI-Compatible` / `OpenAI native` distinction
+     is canonical and must not be conflated by alias folds.
+     The MPFRB01_C07_CONSERVATION_CASE explicit case for
+     `openai-native -> openai-native` (NOT `openai-compatible`)
+     pins this. A naive "fold any provider containing the
+     substring 'openai'" implementation would silently
+     route first-party OpenAI traffic through the chat-
+     completions client, breaking OAuth tokens and protocol-
+     specific headers. The fix is a precise alias-table
+     lookup, not a substring match.
+
+### P-class verdict (post-CORRECTION07)
+
+  P0 all CLOSED (unchanged from CORRECTION06):
+    BOOTSTRAP_PATH_ABSENT
+    BOOTSTRAP_SECRET_NOT_DURABLE_AT_PROFILE_COMMIT
+    BOOTSTRAP_CONNECTION_TUPLE_INCOMPLETE
+    UNEXPECTED_TRACKED_DIRT
+    HALT_B3_USER_VISIBILITY_NOT_PROVEN
+    HALT_UNRELATED_PROTO_CORRUPTION
+    HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED
+    HALT_MODEL_PROFILE_PROVIDER_ID_NOT_CANONICAL      (NEW CLOSED HERE)
+
+  P1:
+    PARTIALLY_MALFORMED_HEADERS_POLICY
+      = OPEN NON-BLOCKING
+      (post-dogfood decision; pinned by MPFRB01_C05_P1_PARTIALLY_
+       MALFORMED_ASYMMETRY_* witnesses in CORRECTION05; the policy
+       silently drops non-string-valued entries rather than refusing
+       partially-malformed input. Frozen by CORRECTION05 freeze #6;
+       a CORRECTION08 (post-dogfood) may refuse rather than silently
+       drop. Not blocking L-C07.)
+
+    PROFILE_PROVIDER_LABEL_AUTHORITY = INTERNAL_ID_EXPOSED
+      = OPEN POLISH
+      = owned by UX-POLISH01 (separate ACT, OPEN against the
+        post-CORRECTION06 closure HEAD; the bounded U5 provider-
+        label resolution work is scoped there)
+      (The profile card displays the runtime token "openai" instead
+       of the user-facing label "OpenAI Compatible". It is the
+       SAME leak the bootstrap-boundary fold also affects: the
+       durable `instance.providerId = "openai"` is what the
+       webview summary surfaces. The CORRECTION07 fix normalizes
+       at the runtime boundary only; the UI label is a separate
+       projection step that needs U5's `formatProviderLabel`
+       authority. UX-POLISH01 owns that work; this ACT does NOT
+       re-trigger it.)
+
+  P2 BLANK_AT_EOF_DIAGNOSTICS = OPEN (non-blocking; unrelated
+    to bootstrap surface).
+
+  WORKING_TREE_CLEAN = TRUE (post-commit verified)
+  ALL_DURABLE_ACT_FILES_COMMITTED = TRUE (post this commit)
+```
+
+### Next step
+
+CORRECTION07 closes the LIVE_FOUND P0 surfaced by the L-C05-3
+dogfood retest (the very next step the CORRECTION06 close
+predicted). The next genuinely useful step is to rebuild +
+install the new exact-head VSIX (post-CORRECTION07) and re-run
+the L-C05 dogfood flow:
+
+  L-C07-1   legacy openai actModeApiProvider -> Settings > Model
+            Profiles -> Create first profile -> CREATED -> profile
+            appears in the list -> profile card preview shows the
+            user-facing label "OpenAI Compatible" (not the runtime
+            token "openai" — that P1 polish is owned by UX-POLISH01).
+  L-C07-2   Use the freshly-created profile -> next real MiniMax
+            request succeeds (NO "Unknown or disabled provider"
+            error). The SDK gateway now sees
+            cfg.providerId = "openai-compatible" and resolves the
+            provider correctly.
+
+Only after L-C07-1/2 succeed should dogfood proceed to A/B
+switching (next profile apply -> network test) and the
+PARTIALLY_MALFORMED_HEADERS_POLICY review (post-dogfood
+decision, not pre-dogfood). The OPENAI_HEADERS_PERSISTED_VALUE
+regression guard (audit `openAiHeaders` across CORRECTION05/06/07
+fixtures for shape parity) is still pending from CORRECTION06
+and is now blocking on a clean L-C07-2.

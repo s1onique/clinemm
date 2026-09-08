@@ -1,0 +1,196 @@
+GREEN witness for ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07
+
+Bounded fix (2 files modified, 2 files added):
+
+  apps/vscode/src/sdk/instance-store/typed-projector.ts
+    Added `import { toSdkProviderId } from "../model-catalog/
+    sdk-provider-id"` at line 93 (the existing canonical alias
+    authority; see also apps/vscode/src/sdk/model-catalog/sdk-provider-id.ts:20
+    EXTENSION_TO_SDK_PROVIDER_ID, which is the inverse of
+    apps/vscode/src/shared/model-catalog/provider-helpers.ts:14
+    SDK_PROVIDER_ID_TO_LEGACY_API_PROVIDER).
+
+    Changed line 134 from:
+      setOrClear(cfgAny, "providerId", instance.providerId)
+    to:
+      setOrClear(cfgAny, "providerId",
+                 toSdkProviderId(instance.providerId))
+
+    Added a PROVIDER-ID NORMALIZATION CONTRACT header block
+    (lines 65-89) documenting the alias fold, the canonical
+    SDK ids ("openai-compatible", "nousResearch"), and the
+    legacy extension ids ("openai", "nousresearch"), with
+    explicit cross-references to the legacy non-profile path
+    at cline-session-factory.ts:1053 (the proven precedent).
+
+    Added an in-line CORRECTION07 comment at the fix point
+    explaining why the projector is the single normalization
+    boundary (it is the SINGLE authority that converts typed
+    ProviderConfigurationInstance records into runtime
+    CoreSessionConfig; mirrors the legacy path's call to
+    toSdkProviderId before assigning cfg.providerId).
+
+  apps/vscode/src/sdk/instance-store/typed-projector.test.ts
+    Added three witnesses (R5-08/09/10) to the existing
+    R5 typed-projector suite:
+      R5-08 legacy-alias normalization:
+        instance.providerId="openai" -> cfg.providerId="openai-compatible"
+      R5-09 canonical idempotence:
+        instance.providerId="openai-compatible" -> cfg.providerId="openai-compatible"
+      R5-10 legacy nousResearch:
+        instance.providerId="nousresearch" -> cfg.providerId="nousResearch"
+
+  apps/vscode/src/sdk/__tests__/bootstrap-openai-canonical-id-projection.
+    mpfrb01-correction07.test.ts (NEW FILE, 14 tests):
+    End-to-end RED->GREEN witness that drives the production
+    bootstrap seam + the production typed projector seam on
+    the exact live-user geometry:
+      MPFRB01_C07_OPENAI_LIVE_GEOMETRY:
+        bootstrap from actModeApiProvider="openai" (LiteLLM
+        MiniMax-M3) -> persisted instance.providerId = "openai"
+        -> applyTypedProviderInstanceToConfig ->
+        cfg.providerId = "openai-compatible"
+      MPFRB01_C07_INSTANCE_DURABLE_CONTRACT:
+        PINS the existing bootstrap contract (instances store
+        the legacy "openai") so a future "let's just normalize
+        at the bootstrap" refactor does not silently rewrite
+        instance.providerId on disk. Asserts both:
+          - persisted instance.providerId = "openai"
+          - projected cfg.providerId = "openai-compatible"
+      MPFRB01_C07_CONSERVATION_CASE (12 sub-cases):
+        PINS every other provider id as unchanged
+        (anthropic, openrouter, openai-native, minimax, ollama,
+         cline, vscode-lm, custom-corp-proxy) plus the
+        canonical-idempotence and nousresearch aliases. The
+        fix MUST be a pure alias fold, not a global rewrite.
+        CRITICAL: openai-native is explicitly asserted as
+        DISTINCT from openai-compatible (substr must not match).
+
+  (No changes to bootstrap.ts, sdk-session-config-builder.ts,
+   sdk-provider-change-coordinator.ts, cline-session-factory.ts,
+   or any other production file. The fix is bounded to the
+   single consumer of `instance.providerId` writing to
+   `cfg.providerId` per the canonical authority-boundary
+   principle: the typed projector IS the seam, the seam IS
+   normalized.)
+
+RED-GREEN CYCLE (proves the test is load-bearing):
+
+  Revert the fix (line 186 to `instance.providerId`):
+    bun test src/sdk/__tests__/bootstrap-openai-canonical-id-projection.
+                mpfrb01-correction07.test.ts
+      -> 12 pass / 2 fail
+         FAIL: MPFRB01_C07_OPENAI_LIVE_GEOMETRY
+               Expected "openai-compatible", Received "openai"
+         FAIL: MPFRB01_C07_INSTANCE_DURABLE_CONTRACT
+               Expected "openai-compatible", Received "openai"
+         (the 12 conservation cases pass because they test
+          toSdkProviderId directly, which is not the bug)
+
+  Restore the fix (line 186 to toSdkProviderId(instance.providerId)):
+    bun test src/sdk/__tests__/bootstrap-openai-canonical-id-projection.
+                mpfrb01-correction07.test.ts
+      -> 14 pass / 0 fail
+
+    bun x vitest run --config vitest.config.c2-4-c-bridge.ts \
+        src/sdk/instance-store/typed-projector.test.ts
+      -> 10 pass / 0 fail (7 existing + 3 new R5-08/09/10)
+
+    TMPDIR=/tmp bun test src/sdk/__tests__/bootstrap-*.test.ts
+                src/sdk/__tests__/model-profile-*.test.ts
+      -> 85 pass / 0 fail (full bootstrap + model-profile
+         regression suite stays GREEN)
+
+Test results summary (CORRECTION07):
+
+  bun x tsc --noEmit (apps/vscode/):
+    -> exit 0 (clean; the new import path
+       "../model-catalog/sdk-provider-id" type-resolves
+       correctly)
+
+  bun run lint:
+    -> exit 0 (biome lint clean; no fixes needed)
+
+  TMPDIR=/tmp bun test
+                src/sdk/__tests__/bootstrap-openai-canonical-id-projection.mpfrb01-correction07.test.ts:
+    -> 14 pass / 0 fail / 26 expect() calls
+       (1 LIVE-GEOMETRY + 12 CONSERVATION + 1 DURABLE-CONTRACT)
+
+  bun x vitest run --config vitest.config.c2-4-c-bridge.ts
+                src/sdk/instance-store/typed-projector.test.ts:
+    -> 10 pass / 0 fail
+       (7 existing R5-01..07 + 3 new R5-08..10)
+
+  TMPDIR=/tmp bun test
+                src/sdk/__tests__/bootstrap-*.test.ts
+                src/sdk/__tests__/model-profile-*.test.ts:
+    -> 85 pass / 0 fail / 289 expect() calls
+       (all bootstrap + model-profile regression stays GREEN;
+        no behavioral change to the bootstrap seam itself)
+
+CORRECTION07 closes the LIVE_FOUND P0
+HALT_MODEL_PROFILE_PROVIDER_ID_NOT_CANONICAL without:
+
+  - registering a duplicate "openai" provider in the SDK registry
+  - rewriting the durable `ProviderConfigurationInstance.providerId`
+    at write time (which would break
+    `bootstrap-no-provider-id-collapse.mpfrb01` line 227:
+    `expect(instC.providerId).toBe("openai")`)
+  - special-casing MiniMax (the fix is a pure alias fold that
+    applies to every legacy `openai` user, not just MiniMax)
+  - weakening provider validation (the registry's
+    "Unknown or disabled provider" error remains the correct
+    behavior; the typed projector was failing to feed it the
+    right id)
+  - opening a new architecture ACT (the fix lives inside the
+    existing typed-projector contract freeze; the
+    EXTENSION_TO_SDK_PROVIDER_ID table is reused as-is)
+
+P-class verdict (post-CORRECTION07):
+
+  P0 all CLOSED (incl. HALT_MODEL_PROFILE_PROVIDER_ID_NOT_CANONICAL
+    NEW CLOSED HERE; unchanged from CORRECTION06 for the rest).
+
+  P1:
+    PARTIALLY_MALFORMED_HEADERS_POLICY
+      = OPEN NON-BLOCKING
+      (CORRECTION05 freeze #6; a CORRECTION08 (post-dogfood)
+       may refuse rather than silently drop. Not blocking L-C07.)
+
+    PROFILE_PROVIDER_LABEL_AUTHORITY = INTERNAL_ID_EXPOSED
+      = OPEN POLISH
+      = owned by UX-POLISH01 (separate ACT; the runtime vs UI
+        label surfaces are separate projection steps; UX-POLISH01
+        owns the `formatProviderLabel` authority for the webview
+        summary path)
+
+  P2 BLANK_AT_EOF_DIAGNOSTICS = OPEN (non-blocking; unrelated
+    to bootstrap surface).
+
+The only behavior change:
+
+  - Profile-typed `CoreSessionConfig.providerId` now carries the
+    SDK canonical id (`openai-compatible`, `nousResearch`,
+    etc.) instead of the legacy extension id (`openai`,
+    `nousresearch`).
+  - The legacy non-profile path was already correct
+    (cline-session-factory.ts:1053); the typed-profile path
+    is now symmetric with it.
+  - Durable `ProviderConfigurationInstance.providerId` is
+    unchanged (still legacy spelling). This is intentional:
+    the durable instance is the user-facing schema, and the
+    legacy spelling is the existing contract pinned by
+    `bootstrap-no-provider-id-collapse.mpfrb01` and
+    `MPFRB01_C07_INSTANCE_DURABLE_CONTRACT`. The canonical
+    id is produced at the PROJECTION boundary, not the
+    PERSISTENCE boundary.
+  - The webview summary path still surfaces the legacy
+    `instance.providerId` (i.e. "openai" still appears in the
+    profile card). That is the P1 polish-class leak owned by
+    UX-POLISH01 (`formatProviderLabel` for the webview
+    summary); CORRECTION07 deliberately does NOT touch the
+    webview summary projection because doing so would
+    either (a) require a schema change to the durable
+    instance or (b) introduce a UI-side alias authority that
+    duplicates the SDK-side fold. The bounded CORRECTION07
+    fix is intentionally limited to the runtime boundary.

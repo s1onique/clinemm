@@ -1,0 +1,123 @@
+RED witness for ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION07
+
+LIVE_FOUND P0:
+  HALT_MODEL_PROFILE_PROVIDER_ID_NOT_CANONICAL
+
+Repro (live first-run dogfood, post-CORRECTION06):
+
+  1. Fresh user installs the exact-HEAD VSIX (post-CORRECTION06 closure
+     `632ac4d36`).
+  2. Configures OpenAI-compatible provider (LiteLLM endpoint hosting
+     MiniMax-M3) with a real API key. Legacy persisted
+     `actModeApiProvider = "openai"`, `actModeOpenAiModelId = "MiniMax-M3"`,
+     `openAiApiKey = "sk-litellm-..."`, `openAiBaseUrl = "https://..."`,
+     `openAiHeaders` canonically ABSENT.
+  3. Opens Settings > Model Profiles.
+  4. Clicks the (post-B4) "Create first profile" CTA.
+  5. Names the profile "minimax-m3", clicks Create.
+  6. Live banner: "Profile created." (success toast).
+  7. Profiles list now shows the new profile.
+  8. Profile card preview shows:
+       minimax-m3 · openai
+     rather than:
+       minimax-m3 · OpenAI Compatible
+     The profile card leaks the runtime token "openai" instead of
+     displaying the user-facing label "OpenAI Compatible".
+     (This is the P1 polish-class leak surfaced in the UX-POLISH01 ACT;
+     the CORRECTION07 bug is the SAME leak's downstream consequence.)
+  9. User clicks "Use" on the freshly-created profile (or sends a
+     real MiniMax-M3 request).
+  10. Result:
+        Backend error:
+          Unknown or disabled provider "openai".
+        The task fails immediately at provider resolution. The SDK
+        gateway never reaches the OpenAI-compatible chat-completions
+        client; MiniMax network behavior is never exercised.
+
+SIX PROVIDER-ID BOUNDARIES (RED GEOMETRY):
+
+  CURRENT_API_PROVIDER               = "openai"            (legacy)
+    v bootstrap.ts:682 (config.actModeApiProvider)
+  BOOTSTRAPPED_INSTANCE_PROVIDER_ID  = "openai"            (legacy, persisted)
+    v bootstrap.ts:798 (instance.providerId)
+  PROFILE_INSTANCE_PROVIDER_ID       = "openai"            (legacy, profile
+                                                               references the
+                                                               instance unchanged)
+    v typed-projector.ts:186 (the bug: pass-through without normalize)
+  SESSION_CONFIG_PROVIDER_ID         = "openai"            (legacy, BUG)
+    v CoreSessionConfig.providerId
+  FINAL_GATEWAY_LOOKUP_PROVIDER_ID   = "openai"            (registry throws
+                                                               "Unknown or
+                                                                disabled
+                                                                provider
+                                                                'openai'")
+
+AUTHORITY BOUNDARY:
+  The typed projector at `apps/vscode/src/sdk/instance-store/
+  typed-projector.ts:134` (pre-fix) wrote the raw
+  `instance.providerId` (= "openai") to
+  `CoreSessionConfig.providerId`. The SDK registry at
+  `sdk/packages/llms/src/providers/registry.ts:221` keys built-in
+  providers by their canonical SDK ids and only knows
+  "openai-compatible" (NOT "openai"). The legacy non-profile path
+  at `cline-session-factory.ts:1053` calls `toSdkProviderId()`
+  before writing `cfg.providerId`; the typed projector path does
+  not. The new Model Profile typed projection is therefore
+  asymmetric with the working legacy path.
+
+EXECUTABLE RED:
+  apps/vscode/src/sdk/instance-store/typed-projector.test.ts:R5-08
+    instance.providerId = "openai"
+    -> applyTypedProviderInstanceToConfig
+    -> cfg.providerId  MUST equal "openai-compatible"
+    RED ACTUAL (before fix):
+      cfg.providerId = "openai"
+      (the registry would throw "Unknown or disabled provider 'openai'")
+
+  apps/vscode/src/sdk/__tests__/bootstrap-openai-canonical-id-projection.
+    mpfrb01-correction07.test.ts:MPFRB01_C07_OPENAI_LIVE_GEOMETRY
+    bootstrap with actModeApiProvider="openai" (live user's geometry)
+    -> persisted instance.providerId = "openai"
+    -> applyTypedProviderInstanceToConfig(instance, ...)
+    -> cfg.providerId  MUST equal "openai-compatible"
+    RED ACTUAL (before fix):
+      cfg.providerId = "openai"
+      (the registry would throw)
+
+NOT A TWO-STORE BUG:
+  The legacy `openai` spelling is NOT introduced by the typed
+  instance layer. It is the existing legacy `ApiConfiguration`
+  spelling preserved by the bootstrap capture (CORRECTION02
+  pinned this behavior — `bootstrap-no-provider-id-collapse.mpfrb01`
+  asserts `expect(instC.providerId).toBe("openai")` at line 227).
+  The defect is purely at the projection boundary: the typed
+  projector is the single seam between the durable typed-instance
+  representation and the SDK runtime config, and it lacks the
+  legacy-to-canonical alias fold that the legacy
+  `buildSessionConfig` path performs at line 1053.
+
+CAUGHT AT THE BOUNDARY:
+  The fix point is `apps/vscode/src/sdk/instance-store/
+  typed-projector.ts:134` (the call `setOrClear(cfgAny,
+  "providerId", instance.providerId)`). Normalizing the input
+  through `toSdkProviderId(instance.providerId)` makes the
+  projector the SINGLE authority for runtime provider identity,
+  matches the legacy non-profile path precedent, and is
+  idempotent on already-canonical ids (so existing typed-
+  projector test fixtures using "openai-compatible" pass through
+  unchanged).
+
+DO NOT:
+  - register a duplicate "openai" provider in the SDK registry
+    (would create two identities for one provider)
+  - special-case MiniMax (the fix must work for ANY legacy
+    OpenAI-compatible user, not just MiniMax)
+  - weaken provider validation (the registry's "unknown
+    provider" error is correct behavior; the typed projector
+    was failing to feed it the right id)
+  - rewrite the durable `ProviderConfigurationInstance.providerId`
+    at write time (would break
+    `bootstrap-no-provider-id-collapse.mpfrb01` which asserts
+    `expect(instC.providerId).toBe("openai")` at line 227;
+    the canonical id belongs at the PROJECTION boundary, not
+    the persistence boundary)
