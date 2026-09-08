@@ -1448,5 +1448,24 @@ apps/vscode/.factory/evidence/
 # default, rename, update, delete, or A/B switching. Durably tracked
 # per the durable-ACT convention (mirrors MPFRB01 entry pattern).
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-UX-POLISH01.md
+# ACT-CLINEMM-MODEL-PROFILES-SECOND-PROFILE-CREATION-CORRECTION01: bounded
+# correction after seventeenth-reviewer verdict
+# HALT_MODEL_PROFILE_SECOND_INSTANCE_CREATION_ABSENT +
+# SECOND_PROFILE_SAVE_FAILURE_NOT_USER_VISIBLE. Bounded fix = webview-only
+# route change in ModelProfilesSectionContainer.tsx so the Settings "Save
+# current configuration as profile" action goes through the canonical
+# bootstrapModelProfileFromCurrentConfiguration creation seam (the same
+# seam the first-run CTA already uses), instead of the narrow fail-closed
+# saveCurrentAsModelProfile path which requires an already-bound
+# providerInstanceId — task-scoped and ephemeral after the first profile
+# exists, hence the old path silently failed after 1→2 with a console.error
+# swallow. Conservation invariants: saveCurrentAsModelProfile controller
+# untouched, bootstrapModelProfileFromCurrentConfiguration controller
+# untouched, proto/RPC surface unchanged, no new RPC, no new duplicate
+# creation algorithm, no providerId -> find-existing-instance collapse,
+# SettingsView / popover / picker plumbing untouched. New webview test
+# ModelProfilesSection.mpsp01-second-profile-creation.test.tsx covers the
+# 3 RED->GREEN witnesses at the container routing boundary.
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-SECOND-PROFILE-CREATION-CORRECTION01.md
 .bun-tmp/
 .bun-install/

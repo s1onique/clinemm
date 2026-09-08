@@ -13,7 +13,17 @@
  *   - active profile:  `useExtensionState().activeModelProfileId`
  *   - canCreateFromCurrent: a session is active + no error
  *   - canApplyLive:     no session is currently running
- *   - onSaveCurrentAsProfile:   StateServiceClient.saveCurrentAsModelProfile
+ *   - onSaveCurrentAsProfile:
+ *       ACT-CLINEMM-MODEL-PROFILES-SECOND-PROFILE-CREATION-CORRECTION01:
+ *       StateServiceClient.bootstrapModelProfileFromCurrentConfiguration
+ *       (canonical creation seam -- "Save current configuration as
+ *       profile" must materialize a NEW independent
+ *       ProviderConfigurationInstance + physical credential + profile,
+ *       NOT a fail-closed saveCurrentAs that requires an already-bound
+ *       providerInstanceId). The bootstrap RPC returns a typed envelope
+ *       which feeds the existing status-aware severity banner; the
+ *       previous console.error-only swallow was the
+ *       HALT_MODEL_PROFILE_SECOND_INSTANCE_CREATION_ABSENT P0.
  *   - onUse:                    StateServiceClient.applyModelProfile
  *   - onSetAsDefault:           StateServiceClient.setDefaultModelProfile
  *   - onClearDefault:           StateServiceClient.clearDefaultModelProfile
@@ -23,9 +33,11 @@
  *   - onBootstrapFromCurrent:
  *       ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION04:
  *       StateServiceClient.bootstrapModelProfileFromCurrentConfiguration
- *       (typed envelope -> status-aware severity banner; the previous
- *       console.error-only swallow was the HALT_B3_USER_VISIBILITY_NOT_PROVEN
- *       P0 blocker)
+ *       (the FIRST-RUN CTA "Create first profile" routes through the
+ *       SAME canonical creation seam; the bootstrap RPC is not
+ *       first-run-only -- it is the single authority for "create a
+ *       profile from the current API configuration", regardless of
+ *       whether the user has 0, 1, or 17 profiles already).
  */
 
 import { EmptyRequest } from "@shared/proto/cline/common"
@@ -34,7 +46,6 @@ import {
 	BootstrapModelProfileRequest,
 	DeleteModelProfileRequest,
 	RenameModelProfileRequest,
-	SaveCurrentAsModelProfileRequest,
 	SetDefaultModelProfileRequest,
 	UpdateModelProfileFromCurrentRequest,
 } from "@shared/proto/cline/state"
@@ -116,11 +127,45 @@ export function ModelProfilesSectionContainer(props: ModelProfilesSectionContain
 		}
 	}, [])
 
+	// ACT-CLINEMM-MODEL-PROFILES-SECOND-PROFILE-CREATION-CORRECTION01:
+	// "Save current configuration as profile" routes through the SAME
+	// canonical creation seam as the first-run CTA. The previous
+	// implementation called `saveCurrentAsModelProfile`, which is the
+	// narrow fail-closed primitive that REQUIRES an already-bound
+	// providerInstanceId. After the first profile exists, the current
+	// task is normally NOT bound to any profile (the binding is task-
+	// scoped and ephemeral), so the old path threw "cannot derive an
+	// authoritative providerInstanceId" into console.error with NO
+	// visible banner -- the
+	// HALT_MODEL_PROFILE_SECOND_INSTANCE_CREATION_ABSENT defect.
+	//
+	// The bootstrap RPC is the correct semantic for "create a profile
+	// from the current API configuration": it reads the CURRENT
+	// ApiConfiguration (not any pre-existing instance), generates a
+	// FRESH opaque instanceId, durably persists the instance-scoped
+	// secret, persists the instance + profile, and returns a typed
+	// envelope that the section's status-aware banner renders
+	// (success/warning/error -- the
+	// HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED CORRECTION06
+	// plumbing already covers the success path, and the B3-UI
+	// plumbing already covers the error path).
 	const handleSaveCurrentAsProfile = useCallback(async (name: string) => {
 		try {
-			await StateServiceClient.saveCurrentAsModelProfile(SaveCurrentAsModelProfileRequest.create({ name }))
+			const response = await StateServiceClient.bootstrapModelProfileFromCurrentConfiguration(
+				BootstrapModelProfileRequest.create({ name }),
+			)
+			setBootstrapResult({
+				status: response.status,
+				profileId: response.profileId || undefined,
+				instanceId: response.instanceId || undefined,
+				message: response.message || undefined,
+			})
 		} catch (error) {
-			console.error("[ModelProfilesSectionContainer] saveCurrentAsModelProfile failed:", error)
+			console.error("[ModelProfilesSectionContainer] bootstrapModelProfileFromCurrentConfiguration failed:", error)
+			setBootstrapResult({
+				status: "PROFILE_WRITE_FAILED",
+				message: error instanceof Error ? error.message : String(error),
+			})
 		}
 	}, [])
 
