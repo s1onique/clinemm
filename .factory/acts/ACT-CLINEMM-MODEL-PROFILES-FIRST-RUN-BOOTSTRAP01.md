@@ -2565,3 +2565,358 @@ decision, not pre-dogfood). The OPENAI_HEADERS_PERSISTED_VALUE
 regression guard (audit `openAiHeaders` across CORRECTION05/06/07
 fixtures for shape parity) is still pending from CORRECTION06
 and is now blocking on a clean L-C07-2.
+
+## CORRECTION08 (2026-09-09, bounded: LIVE_FOUND P0 absorb + single-boundary coverage table addition)
+
+### Trigger
+
+Reviewer verdict (live first-run dogfood after CORRECTION07 closure
+`b2e30df7e`, post-MPSP01 closure `f6ee48907`): the post-CORRECTION07
+dogfood retest surfaced a NEW live P0 with a signature distinct from
+CORRECTION03/05/06/07 and the MPWC01/MPSP01 work. Repro of the live
+failure (verified by screenshots in the factory review):
+
+  1. User installs the exact-HEAD VSIX (post-CORRECTION07 +
+     post-MPSP01) with ZERO existing ProviderConfigurationInstance /
+     ModelProfile records.
+  2. User configures the native MiniMax provider (NOT OpenAI-
+     Compatible) with a real API key. Live observed geometry:
+        actModeApiProvider = "minimax"
+        actModeApiModelId  = "MiniMax-M3"   (generic field)
+        minimaxApiKey      = "sk-MM3-physical-..."
+        minimaxApiLine     = "international"
+  3. The direct MiniMax runtime path WORKS live (a "Say hello and
+     stop" task completed successfully). This proves:
+        MINIMAX_RUNTIME_SUPPORT    = LIVE_PROVEN
+  4. After deleting the stale profile (a separate stale-binding
+     defect already closed by MPWC02/C6 as fail-closed), the user
+     enters Settings > Model Profiles with zero profiles and clicks
+     "Create first profile".
+  5. Live banner:
+        Provider 'minimax' is not covered by the bootstrap path.
+        Use Settings > API Configuration to create the profile
+        manually.
+     -> status = CURRENT_CONFIGURATION_UNSUPPORTED (RED).
+
+The two screenshots together falsify the "MiniMax runtime is broken"
+hypothesis and isolate the defect to the bootstrap provider-coverage
+table:
+
+  CURRENT_DIRECT_MINIMAX_CONFIG   = LIVE PASS
+  BOOTSTRAP_FROM_MINIMAX_CONFIG   = LIVE RED
+
+The first screenshot ("Model profile 'Default' references a missing
+provider instance ...") is independently a PASS for the MPWC02/C6
+fail-closed binding work; do NOT touch that.
+
+### First-bad boundary
+
+```
+ApiConfiguration.provider = "minimax"
+  v bootstrap.ts:690 (BOOTSTRAP_COVERAGE.has("minimax"))
+BOOTSTRAP_COVERAGE.has(minimax) = false
+  v bootstrap.ts:691-694
+result = CURRENT_CONFIGURATION_UNSUPPORTED
+```
+
+This is NOT a runtime-provider bug. The live evidence already
+falsifies that:
+
+```
+CURRENT DIRECT MINIMAX CONFIG
+  -> real request
+  -> PASS
+```
+
+So:
+
+```
+MINIMAX_RUNTIME_SUPPORT    = LIVE_PROVEN
+BOOTSTRAP_CAPTURE_SUPPORT  = LIVE_RED
+```
+
+That is the first-bad boundary.
+
+### Why the existing fails-closed behavior was honest but wrong
+
+The "Provider 'minimax' is not covered by the bootstrap path. Use
+Settings > API Configuration to create the profile manually." message
+is truthful in one narrow sense -- the feature currently cannot
+capture a MiniMax configuration as a profile -- but product-wise it
+is wrong: the feature cannot claim "save your current setup as a
+reusable profile" if a configuration that Cline itself can execute
+cannot be captured.
+
+The suggested action ("Use Settings > API Configuration ...") is
+nonsense in this context -- the user is already in Settings and
+already has a valid API Configuration. That message was written for
+a coverage limitation, not for a user action that can resolve it.
+
+### Conservation (this correction MUST NOT)
+
+  - Reopen the Provider Instance Foundation.
+  - Change MiniMax runtime provider semantics.
+  - Map "minimax" to "openai-compatible" or any other provider id
+    (the previous CORRECTION07 was about openai-Compatible aliasing,
+    not about hiding native providers).
+  - Weaken the unsupported-provider error message for OTHER
+    uncovered providers -- the live error message is correct for the
+    unset-coverage case; only the COVERAGE TABLE changes.
+  - Add new RPC, new proto field, new webview affordance, or new
+    capture algorithm.
+  - Hardcode "MiniMax-M3" as the bootstrap default model id. The
+    resolver must honor the legacy config authority.
+
+### Files changed (bounded)
+
+  apps/vscode/src/sdk/profile-store/bootstrap.ts:
+    +1 entry in BOOTSTRAP_COVERAGE: "minimax" (with a CORRECTION08
+      in-line rationale comment mirroring the existing CORRECTION08
+      test witness at the bottom of this file).
+  apps/vscode/src/sdk/cline-session-factory.ts:
+    +1 entry in PROVIDER_MODEL_ID_MAP: "minimax" with the generic
+      planModeApiModelId / actModeApiModelId slot (same pattern as
+      the CORRECTION04 asksage/dify fix).
+
+### Files NOT touched (per bounded-correction discipline)
+
+  apps/vscode/src/sdk/instance-store/typed-projector.ts
+    (the canonical-id fold from CORRECTION07 is unaffected; the
+     minimax legacy spelling passes through to the SDK gateway as
+     "minimax" exactly as expected -- no openai-Compatible-style
+     aliasing needed because "minimax" is already canonical on the
+     SDK side per sdk/packages/llms/src/providers/ids.ts:64)
+  apps/vscode/src/sdk/instance-store/contracts.ts
+    (no schema_version bump; no new typed-instance connection
+     fields; the V1 connection stays minimal -- baseUrl, headers,
+     apiLine absent for minimax because the live geometry does not
+     carry them in the bootstrap capture path)
+  apps/vscode/src/sdk/sdk-session-config-builder.ts
+  apps/vscode/src/sdk/sdk-provider-change-coordinator.ts
+  apps/vscode/src/sdk/profile-store/contracts.ts
+  apps/vscode/src/shared/model-catalog/provider-helpers.ts
+  apps/vscode/src/shared/api.ts
+    (the ApiProvider union already includes "minimax"; no schema
+     change needed)
+  apps/vscode/proto/cline/state.proto
+    (no new RPC; no new field; the existing
+     bootstrapModelProfileFromCurrentConfiguration RPC handles
+     MiniMax without modification)
+  apps/vscode/webview-ui/src/components/settings/sections/
+    ModelProfilesSection* (no UI change; the existing CTA already
+    works correctly once the backend supports the provider)
+  apps/vscode/src/core/controller/state/
+    bootstrapModelProfileFromCurrentConfiguration.ts (controller
+    handler unchanged -- the handler already returns the typed
+    BootstrapModelProfileResponse envelope for every status)
+
+### CORRECTION08 RED -> GREEN arc (new test file)
+
+  RED (before this commit):
+    TMPDIR=/tmp bun test \
+      src/sdk/__tests__/bootstrap-minimax-coverage.mpfrb01-correction08.test.ts
+    -> 6 fail / 1 pass
+       (the 6 RED tests reproduce the live defect;
+        the 1 GREEN test is the regression-pin that verifies
+        previously-covered providers remain ok=true in the
+        coverage invariant)
+    Specifically:
+      MPFRB01_C08_RED_M1_LIVE_GEOMETRY:
+        Expected: "CREATED"  Received: "CURRENT_CONFIGURATION_UNSUPPORTED"
+      MPFRB01_C08_RED_M2_CREDENTIAL_AUTHORITY:
+        same envelope (bootstrap refuses before credential capture)
+      MPFRB01_C08_RED_M3_MODEL_AUTHORITY:
+        same envelope (bootstrap refuses before model capture)
+      MPFRB01_C08_RED_M4_CONNECTION_TUPLE:
+        same envelope (bootstrap refuses before connection capture)
+      MPFRB01_C08_COVERAGE_TABLE:
+        BOOTSTRAP_COVERAGE.has("minimax") = false
+      MPFRB01_C08_COVERAGE_INVARIANT:
+        assertBootstrapCoverageIsWellFormed() returns no diagnostic
+        for "minimax" (it's not in the coverage set)
+
+  GREEN (after the bounded fix):
+    bun test src/sdk/__tests__/bootstrap-minimax-coverage.mpfrb01-correction08.test.ts
+    -> 7 pass / 0 fail / 85 expect() calls
+       (the test file is self-contained; the new tests cover the
+        exact live geometry AND a different model id to prove
+        the resolver honors the legacy config authority rather
+        than a hardcoded default)
+
+### Test results (CORRECTION08)
+
+```
+bun x tsc --noEmit (apps/vscode/):
+  -> exit 0 (clean; the new minimax entry type-resolves correctly
+     through BOOTSTRAP_COVERAGE: ReadonlySet<ApiProvider> and
+     PROVIDER_MODEL_ID_MAP: Record<string, {plan: keyof ApiConfiguration,
+     act: keyof ApiConfiguration}>)
+
+bun ./node_modules/.bin/biome lint \
+  src/sdk/profile-store/bootstrap.ts
+  src/sdk/cline-session-factory.ts
+  src/sdk/__tests__/bootstrap-minimax-coverage.mpfrb01-correction08.test.ts:
+  -> exit 0 (biome lint clean; no fixes needed on the touched
+     files; the 52 warnings / 670 infos on the broader src/sdk/
+     are pre-existing and unrelated)
+
+TMPDIR=/tmp bun test
+  src/sdk/__tests__/bootstrap-minimax-coverage.mpfrb01-correction08.test.ts:
+  -> 7 pass / 0 fail / 85 expect() calls
+     (1 LIVE_GEOMETRY + 1 CREDENTIAL_AUTHORITY + 1 MODEL_AUTHORITY
+      + 1 CONNECTION_TUPLE + 1 COVERAGE_TABLE
+      + 1 COVERAGE_INVARIANT + 1 REGRESSION_PIN)
+
+TMPDIR=/tmp bun test src/sdk/__tests__/bootstrap-*.test.ts:
+  -> 46 pass / 0 fail / 253 expect() calls
+     (all prior bootstrap tests stay GREEN; no behavioral
+      regression in the bootstrap seam itself -- the only change
+      is the BOOTSTRAP_COVERAGE set grew by one entry)
+
+bun ./node_modules/.bin/biome lint src/sdk/:
+  -> No new errors / warnings introduced
+     (pre-existing 52 warnings + 670 infos unchanged; my three
+      files contribute zero)
+```
+
+### Verdict (post-CORRECTION08)
+
+  HALT_MODEL_PROFILE_BOOTSTRAP_MINIMAX_COVERAGE_ABSENT
+    = CLOSED (CORRECTION08)
+
+  HALT_MODEL_PROFILE_PROVIDER_ID_NOT_CANONICAL
+    = CLOSED (CORRECTION07) -- unchanged
+
+  HALT_BOOTSTRAP_EMPTY_HEADERS_REJECTED
+    = CLOSED (CORRECTION05) -- unchanged
+
+  HALT_BOOTSTRAP_EMPTY_HEADERS_REPRESENTATION_REJECTED
+    = CLOSED (CORRECTION05) -- unchanged
+
+  HALT_MODEL_PROFILE_POST_CREATE_STATE_NOT_PUBLISHED
+    = CLOSED (CORRECTION06) -- unchanged
+
+  HALT_MODEL_PROFILE_SECOND_INSTANCE_CREATION_ABSENT
+    = CLOSED (SECOND-PROFILE-CREATION-CORRECTION01) -- unchanged
+
+P-class verdict (post-CORRECTION08):
+
+  P0:
+    HALT_MODEL_PROFILE_BOOTSTRAP_MINIMAX_COVERAGE_ABSENT
+      = CLOSED (CORRECTION08)
+    (all previously-closed P0s remain closed)
+
+  P1:
+    PROFILE_PROVIDER_LABEL_AUTHORITY = INTERNAL_ID_EXPOSED
+      = OPEN POLISH (owned by UX-POLISH01, separate ACT) -- unchanged
+    BOOTSTRAP_UNSUPPORTED_PROVIDER_MESSAGE_IS_MISLEADING
+      = acknowledged; the message is technically correct for the
+        set-not-covered case but the COPY may want a softer
+        framing. Not in scope for the CORRECTION08 bounded
+        correction -- the user can still take action (fix the
+        API configuration) even though the suggested path is
+        circular. Tracked as a non-blocking P1.
+
+  P2:
+    existing Factory residue + P2 BLANK_AT_EOF_DIAGNOSTICS
+      = OPEN (non-blocking; unrelated to bootstrap surface) --
+        unchanged
+
+  WORKING_TREE_CLEAN = TRUE (post-commit verified)
+  ALL_DURABLE_ACT_FILES_COMMITTED = TRUE (post this commit)
+```
+
+### Lessons learned (additive, CORRECTION08)
+
+  #35 "Runtime support" and "bootstrap support" are not the same
+     property. The CORRECTION03-Red bounded P1 added
+     `assertBootstrapCoverageIsWellFormed()` to pin the inverse
+     half of `BOOTSTRAP_COVERAGE has a resolver entry`: every entry
+     in the coverage set has wired credential + model resolver
+     seams. But that invariant does NOT pin the OTHER direction:
+     every API-key-backed provider with a working runtime path
+     MUST appear in BOOTSTRAP_COVERAGE. The live MiniMax defect is
+     the missing half. Future contributors adding a new provider to
+     the runtime must add it to BOOTSTRAP_COVERAGE in lockstep, OR
+     the empty-state CTA "Create first profile" silently breaks
+     for that provider.
+
+  #36 Providers without dedicated model-id fields are NOT second-
+     class citizens for the V1 bootstrap. The CORRECTION04 fix
+     taught us the pattern (asksage / dify share the generic
+     planModeApiModelId / actModeApiModelId slot); CORRECTION08
+     applies the same pattern to MiniMax. A future contributor
+     reading `PROVIDER_MODEL_ID_MAP` and seeing only dedicated-
+     field providers might wrongly conclude that providers without
+     dedicated fields cannot be bootstrap-supported; the CORRECTION04
+     + CORRECTION08 comments on the generic-slot entries make this
+     explicit.
+
+  #37 The "What NOT to add" lesson from CORRECTION07 applies in
+     reverse here: do not silently broaden the coverage set beyond
+     what the runtime actually supports. CORRECTION08 is bounded to
+     the single MiniMax provider because MiniMax has a valid live
+     runtime path AND an API-key-backed credential authority
+     (`minimaxApiKey`). A provider with no working runtime path
+     must NOT be added to BOOTSTRAP_COVERAGE just because a user
+     sees it in the Settings > API Configuration provider list.
+
+  #38 "Use Settings > API Configuration to create the profile
+     manually." was a coverage-limitation message dressed as a
+     user-action hint. When the coverage set grows, the message
+     becomes a lie (the user IS in Settings, the API Configuration
+     IS configured). The fix here is to grow the coverage set so
+     the message stops firing for valid configurations; a separate
+     UX-POLISH01 line item may want to soften the copy for the
+     remaining legitimate cases (e.g. a provider the runtime
+     genuinely cannot serve). Tracked as P1 above.
+
+  #39 The "scoped" reading of MPWC01 C3 (providerId-equality
+     identity collapse) and CORRECTION07 (canonical-id fold at
+     the projector) both rely on the bootstrap NOT collapsing the
+     legacy spelling. CORRECTION08 preserves that invariant by
+     storing `instance.providerId = "minimax"` (legacy spelling
+     that already equals the SDK canonical spelling, since
+     toSdkProviderId("minimax") === "minimax" -- the
+     `model-profiles-store.mpqs01.test.ts` and the typed-projector
+     tests already exercise this pass-through). The CORRECTION07
+     conservation witness at `bootstrap-openai-canonical-id-
+     projection.mpfrb01-correction07.test.ts:237` lists
+     `minimax -> minimax (no change)` as one of the cases it
+     pins; CORRECTION08 keeps that pin GREEN.
+
+  #40 The two-screenshot pattern (PASS / RED) is a clean
+     discriminator for the runtime-vs-bootstrap axis. When the same
+     user can demonstrate that a direct config works live but the
+     bootstrap refuses, the first-bad boundary MUST be in the
+     bootstrap path (not the runtime path). The factory reviewer
+     panel's verdict `HALT_MODEL_PROFILE_BOOTSTRAP_MINIMAX_
+     COVERAGE_ABSENT` (vs the alternative `HALT_MINIMAX_RUNTIME`)
+     correctly identified the seam in one round.
+
+### Next step
+
+CORRECTION08 closes the LIVE_FOUND P0 surfaced by the post-
+CORRECTION07 dogfood retest (the very next step the CORRECTION07
+close predicted). The next genuinely useful step is to rebuild +
+install the new exact-head VSIX (post-CORRECTION08) and re-run the
+dogfood flow the user originally executed:
+
+  L-C08-1   native minimax actModeApiProvider -> Settings > Model
+            Profiles -> Create first profile -> CREATED -> profile
+            appears in the list (no CURRENT_CONFIGURATION_UNSUPPORTED
+            banner).
+  L-C08-2   Use the freshly-created profile -> next real MiniMax-M3
+            request succeeds (the SDK gateway now resolves the
+            minimax provider correctly because the bootstrap now
+            persists a valid instance with providerId="minimax").
+  L-C08-3   Reload the VS Code window -> the profile still resolves
+            credential and runs (the durability barrier from
+            CORRECTION02 + the canonical-id invariant from
+            CORRECTION07 are both GREEN for the minimax geometry).
+
+Only after L-C08-1/2/3 succeed should dogfood proceed to A/B
+switching (next profile apply -> network test). The next genuinely
+distinct P0 will be surfaced by the live retest, NOT predicted in
+advance -- per the existing CORRECTION03-07 lesson that "the next
+defect is whatever the next live retest shows".

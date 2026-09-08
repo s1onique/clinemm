@@ -294,6 +294,20 @@ export const BOOTSTRAP_COVERAGE: ReadonlySet<ApiProvider> = new Set<ApiProvider>
 	"oca",
 	"aihubmix",
 	"dify",
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION08
+	// (HALT_MODEL_PROFILE_BOOTSTRAP_MINIMAX_COVERAGE_ABSENT):
+	// the native MiniMax provider is supported by the runtime
+	// (the live direct-MiniMax config ran a "Say hello and stop"
+	// task end-to-end) but was absent from this coverage table,
+	// so "Create first profile" refused with
+	// CURRENT_CONFIGURATION_UNSUPPORTED. MiniMax is API-key-backed
+	// under V1 (PROVIDER_API_KEY_MAP.minimax = "minimaxApiKey"),
+	// shares the generic planModeApiModelId / actModeApiModelId
+	// slot via PROVIDER_MODEL_ID_MAP.minimax (set in
+	// cline-session-factory.ts:503), and resolveApiKey already
+	// returns the literal config.minimaxApiKey value -- so
+	// adding it here is the single, minimal-coverage-surface fix.
+	"minimax",
 ])
 
 // Re-export the bootstrap-coverage scope-precision self-check so
@@ -500,8 +514,7 @@ function parseOpenAiHeaders(config: ApiConfiguration): OpenAiHeadersParseResult 
 		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
 			return {
 				kind: "malformed",
-				reason:
-					"openAiHeaders JSON parsed to a non-object payload (expected a plain JSON object of string keys to string values)",
+				reason: "openAiHeaders JSON parsed to a non-object payload (expected a plain JSON object of string keys to string values)",
 			}
 		}
 		const out: Record<string, string> = {}
@@ -523,8 +536,7 @@ function parseOpenAiHeaders(config: ApiConfiguration): OpenAiHeadersParseResult 
 			// refuse rather than silently weaken.
 			return {
 				kind: "malformed",
-				reason:
-					"openAiHeaders JSON object contained zero string-valued entries (expected at least one string-valued header)",
+				reason: "openAiHeaders JSON object contained zero string-valued entries (expected at least one string-valued header)",
 			}
 		}
 		return { kind: "captured", headers: out }
@@ -547,8 +559,7 @@ function parseOpenAiHeaders(config: ApiConfiguration): OpenAiHeadersParseResult 
 			// refuse.
 			return {
 				kind: "malformed",
-				reason:
-					"openAiHeaders plain-object payload contained zero string-valued entries (expected at least one string-valued header)",
+				reason: "openAiHeaders plain-object payload contained zero string-valued entries (expected at least one string-valued header)",
 			}
 		}
 		return { kind: "captured", headers: out }

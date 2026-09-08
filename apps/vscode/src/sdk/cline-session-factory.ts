@@ -502,6 +502,17 @@ export const PROVIDER_MODEL_ID_MAP: Record<string, { plan: keyof ApiConfiguratio
 	// so the resolvers can return a non-empty model id from the probe.
 	asksage: { plan: "planModeApiModelId", act: "actModeApiModelId" },
 	dify: { plan: "planModeApiModelId", act: "actModeApiModelId" },
+	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION08
+	// (HALT_MODEL_PROFILE_BOOTSTRAP_MINIMAX_COVERAGE_ABSENT):
+	// `minimax` shares the generic planModeApiModelId /
+	// actModeApiModelId slot with asksage / dify (same
+	// pattern as the CORRECTION04 fix). MiniMax has no
+	// dedicated planModeMinimaxModelId / actModeMinimaxModelId
+	// field in ApiConfiguration; the legacy settings UI stores
+	// the user's selected MiniMax model (e.g. "MiniMax-M3",
+	// "MiniMax-M2") in the generic slot, exactly as the user
+	// observed in the live defect screenshot.
+	minimax: { plan: "planModeApiModelId", act: "actModeApiModelId" },
 }
 
 // ---------------------------------------------------------------------------
