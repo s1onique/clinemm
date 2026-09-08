@@ -1430,5 +1430,23 @@ apps/vscode/.factory/evidence/
 # durable-ACT convention (mirrors PIIF01 entry + MPWC01 patterns).
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01/
+# ACT-CLINEMM-MODEL-PROFILES-UX-POLISH01: bounded pure-presentation
+# UX polish ACT opened 2026-09-09 against the post-MPFRB01-CORRECTION06
+# closure HEAD `632ac4d36`. The model-profile feature is functionally
+# recognizable as working (bootstrap RPC, persistence, projection, chat
+# quick-switch popover, Settings section, secret-isolated projection,
+# live first-run dogfood — all GREEN). The remaining problem is
+# presentation: three user jobs (SWITCH/CREATE/MANAGE) mixed into one
+# horizontal strip, action-heavy profile cards, weak state signals, and
+# `providerId` leaking into the UI as the runtime token `openai`
+# instead of the user-facing label "OpenAI Compatible". This ACT freezes
+# five acceptance classes (U1 creation discoverability, U2 chooser
+# semantics, U3 chooser creation path, U4 management-action hierarchy,
+# U5 presentation labels) and a strict bounded scope: backend store,
+# proto, gRPC client, ExtensionStateContext are all FROZEN; only the
+# webview changes. No semantic change to bootstrap, apply, set/clear
+# default, rename, update, delete, or A/B switching. Durably tracked
+# per the durable-ACT convention (mirrors MPFRB01 entry pattern).
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-UX-POLISH01.md
 .bun-tmp/
 .bun-install/
