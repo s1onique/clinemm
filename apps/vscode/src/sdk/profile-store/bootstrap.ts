@@ -61,7 +61,10 @@
  *      RPC remains fail-closed and requires an authoritative
  *      providerInstanceId. Two operations, two RPCs.
  *
- *   4. EXACT_CONNECTION_CAPTURE (load-bearing added 2026-09-08)
+ *   4. EXACT_CONNECTION_CAPTURE (load-bearing added 2026-09-08;
+ *      CORRECTION09 amendment 2026-09-09: `apiLine` is now also
+ *      captured for providers whose legacy config carries a
+ *      regional API-line field -- qwen, moonshot, zai, minimax)
  *      The bootstrap captures the V1 connection tuple (modelId,
  *      baseUrl, headers, region, apiLine, providerSpecificConfig)
  *      from the source `ApiConfiguration` for every field that the
@@ -209,7 +212,7 @@ import type { ApiConfiguration, ApiProvider } from "@shared/api"
 import type { HistoryItem } from "@shared/HistoryItem"
 import { Logger } from "@/shared/services/Logger"
 import { type InstanceSecretName, nameFor, parseInstanceSecretName } from "@/shared/storage/instance-secret"
-import { resolveApiKey, resolveBaseUrl, resolveModelId } from "../cline-session-factory"
+import { resolveApiKey, resolveApiLine, resolveBaseUrl, resolveModelId } from "../cline-session-factory"
 import type { ProviderConfigurationInstance, ProviderConnection } from "../instance-store/contracts"
 import { type InstancesStore } from "../instance-store/instances-store"
 import type { ModelProfile } from "./contracts"
@@ -295,7 +298,8 @@ export const BOOTSTRAP_COVERAGE: ReadonlySet<ApiProvider> = new Set<ApiProvider>
 	"aihubmix",
 	"dify",
 	// ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION08
-	// (HALT_MODEL_PROFILE_BOOTSTRAP_MINIMAX_COVERAGE_ABSENT):
+	// (HALT_MODEL_PROFILE_BOOTSTRAP_MINIMAX_COVERAGE_ABSENT)
+	// + CORRECTION09 (HALT_MINIMAX_APILINE_NOT_CAPTURED):
 	// the native MiniMax provider is supported by the runtime
 	// (the live direct-MiniMax config ran a "Say hello and stop"
 	// task end-to-end) but was absent from this coverage table,
@@ -307,6 +311,13 @@ export const BOOTSTRAP_COVERAGE: ReadonlySet<ApiProvider> = new Set<ApiProvider>
 	// cline-session-factory.ts:503), and resolveApiKey already
 	// returns the literal config.minimaxApiKey value -- so
 	// adding it here is the single, minimal-coverage-surface fix.
+	//
+	// CORRECTION09 tightens this further: the bootstrap also
+	// captures config.minimaxApiLine as connection.apiLine so
+	// the profile carries the profile-bound routing line instead
+	// of inheriting the global ambient apiLine (which would
+	// re-introduce the ambient-collapse authority the Provider
+	// Instance Foundation was introduced to eliminate).
 	"minimax",
 ])
 
@@ -605,11 +616,16 @@ type CaptureConnectionResult =
  * CORRECTION02 P0-2 (EXACT_CONNECTION_CAPTURE): for the `openai`
  * (OpenAI-Compatible) provider, the bootstrap MUST capture
  * `config.openAiHeaders` as `connection.headers` when present.
- * The remaining ProviderConnection fields (region, apiLine,
- * providerSpecificConfig) remain absent on V1: they have no
- * equivalent top-level field on the legacy `ApiConfiguration` for
- * the providers currently in `BOOTSTRAP_COVERAGE` and need a
- * per-provider mapping (out of scope for the bootstrap fix).
+ *
+ * CORRECTION09 (HALT_MINIMAX_APILINE_NOT_CAPTURED): for providers
+ * whose legacy config carries a regional API-line field (qwen,
+ * moonshot, zai, minimax), the bootstrap MUST capture
+ * `config[<provider>ApiLine]` as `connection.apiLine` when
+ * present. Without this, a profile's effective connection would
+ * silently inherit the global ambient `apiLine` (instead of
+ * carrying the profile-bound routing line), recreating exactly
+ * the ambient-collapse authority the Provider Instance
+ * Foundation was introduced to eliminate.
  *
  * B3 reviewer bounded P1 (MALFORMED_HEADERS_POLICY): if the
  * `openAiHeaders` field is PRESENT but malformed, the helper
@@ -623,6 +639,15 @@ function captureConnection(providerId: ApiProvider, mode: "plan" | "act", config
 	if (modelId) connection.modelId = modelId
 	const baseUrl = resolveBaseUrl(providerId, config)
 	if (baseUrl) connection.baseUrl = baseUrl
+	// CORRECTION09 (apiLine capture): for qwen/moonshot/zai/minimax
+	// the legacy ApiConfiguration stores the user's regional routing
+	// choice (china | international) under the per-provider
+	// `<provider>ApiLine` field. resolveApiLine already understands
+	// this mapping (see cline-session-factory.ts:810). Capture it
+	// onto the typed connection so applying the profile later
+	// surfaces the bound line rather than the global ambient line.
+	const apiLine = resolveApiLine(providerId, config)
+	if (apiLine) connection.apiLine = apiLine
 	// Headers capture: only the OpenAI-Compatible provider has
 	// a legacy-config field for custom HTTP headers
 	// (`config.openAiHeaders`). Other providers in

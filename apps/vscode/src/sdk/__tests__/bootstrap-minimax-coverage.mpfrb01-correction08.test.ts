@@ -132,6 +132,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { InstancesStore } from "../instance-store/instances-store"
+import { applyTypedProviderInstanceToConfig } from "../instance-store/typed-projector"
 import {
 	assertBootstrapCoverageIsWellFormed,
 	BOOTSTRAP_COVERAGE,
@@ -372,19 +373,30 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION08 / MINI
 	//   modelId              (connection.modelId, generic field)
 	//   apiLine              (regional routing line, if present)
 	//
+	// CORRECTION09 (HALT_MINIMAX_APILINE_NOT_CAPTURED): the V1
+	// ProviderConnection contract exposes `apiLine?: string | null`
+	// at `instance-store/contracts.ts:194`. The Foundation
+	// contemplated `apiLine` as a load-bearing field for providers
+	// with regional routing (qwen, moonshot, zai, minimax), and
+	// the typed projector at `instance-store/typed-projector.ts:230`
+	// honors it as `cfg.apiLine`. The bootstrap MUST capture the
+	// live fixture's `config.minimaxApiLine = "international"` onto
+	// `connection.apiLine`. Without this, the persisted profile is
+	// incomplete: applying it can only produce the correct
+	// MiniMax routing line by inheriting the GLOBAL ambient line,
+	// which is the exact authority collapse the Foundation was
+	// introduced to eliminate.
+	//
 	// The bootstrap captures the durable providerId as the legacy
 	// "minimax" spelling (same contract the CORRECTION07
-	// bootstrap-no-id-collapse witnesses pin). The apiLine is NOT
-	// yet a typed-instance connection field for MiniMax; the
-	// ProviderConnection contract only exposes it for providers that
-	// pin it at the projection boundary today. We DO pin that
-	// connection.baseUrl / connection.headers are absent (no current
-	// MiniMax native-endpoint geometry in the bootstrap V1 surface)
-	// so a future contributor cannot silently introduce an OpenAI-
+	// bootstrap-no-id-collapse witnesses pin). connection.baseUrl /
+	// connection.headers remain absent (no current MiniMax
+	// native-endpoint geometry in the bootstrap V1 surface) so a
+	// future contributor cannot silently introduce an OpenAI-
 	// Compatible-fallback capture path here.
 	// -------------------------------------------------------------------------
 
-	it("MPFRB01_C08_RED_M4_CONNECTION_TUPLE: captured instance has providerId=minimax, modelId=MiniMax-M3, and no spurious baseUrl/headers capture", async () => {
+	it("MPFRB01_C08_RED_M4_CONNECTION_TUPLE: captured instance has providerId=minimax, modelId=MiniMax-M3, apiLine=international, and no spurious baseUrl/headers capture", async () => {
 		const dataDirLocal = tmpDataDir()
 		const instancesStore = makeInstancesStore(dataDirLocal)
 		const profilesStore = makeProfilesStore(dataDirLocal)
@@ -424,20 +436,121 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION08 / MINI
 		// Model id: literal read of config.actModeApiModelId.
 		expect(persisted?.connection.modelId).toBe("MiniMax-M3")
 
+		// CORRECTION09: apiLine MUST be captured. The live
+		// fixture sets minimaxApiLine="international"; the
+		// profile must carry it. Without this assertion, the
+		// profile is incomplete and applying it would silently
+		// inherit the global ambient apiLine -- the exact
+		// authority collapse the Foundation eliminates.
+		expect(persisted?.connection.apiLine).toBe("international")
+
 		// No spurious connection captures: the native MiniMax
-		// provider has no legacy baseUrl / headers / apiLine
-		// slot that the V1 bootstrap should materialise.
-		// (apiLine may be added in a future V2 contract bump;
-		// for V1 the typed-instance connection stays minimal.)
+		// provider has no legacy baseUrl / headers slot that
+		// the V1 bootstrap should materialise. Pinning these
+		// as absent prevents a future contributor from silently
+		// introducing an OpenAI-Compatible-fallback capture
+		// path here.
 		expect(persisted?.connection.baseUrl).toBeUndefined()
 		expect(persisted?.connection.headers).toBeUndefined()
-		expect(persisted?.connection.apiLine).toBeUndefined()
 
 		// Credential ref: well-formed namespace reference (the
 		// name format pin is owned by the MPWC02 fail-closed
 		// binding work; here we just confirm the namespace).
 		expect(persisted?.credentialRef.kind).toBe("secret")
 		expect(persisted?.credentialRef.name).toMatch(/^instance:/)
+	})
+
+	// -------------------------------------------------------------------------
+	// CORRECTION09 M5 (projection inversion): the captured profile's
+	// apiLine MUST win over the global ambient apiLine at projection
+	// time. This is the reviewer-requested discriminator: a successful
+	// first request would not prove the profile is self-contained
+	// unless the projection overrides a CONFLICTING ambient apiLine.
+	//
+	//   baseline CoreSessionConfig.apiLine = "china"
+	//   persisted instance B.connection.apiLine = "international"
+	//   applyTypedProviderInstanceToConfig(baseline, B, ...)
+	//   EXPECT result.apiLine === "international"
+	//
+	// If the projection silently inherited the baseline, the result
+	// would be "china" and the test would fail with a clear
+	// ambient-collapse signal.
+	//
+	// Without this witness, a future contributor could break the
+	// projection half (typed-projector.ts:230's setOrClear on
+	// cfgAny["apiLine"]) and the bootstrap half's apiLine capture
+	// would be invisible to the runtime -- the defect would stay
+	// hidden in immediate dogfood because the ambient setting
+	// happens to match the captured one.
+	// -------------------------------------------------------------------------
+
+	it("MPFRB01_C08_RED_M5_PROJECTION_INVERSION: profile apiLine='international' overrides ambient apiLine='china' at projection time", async () => {
+		// Step 1: bootstrap a profile whose captured apiLine is
+		// "international" (from the live MiniMax fixture).
+		const dataDirLocal = tmpDataDir()
+		const instancesStore = makeInstancesStore(dataDirLocal)
+		const profilesStore = makeProfilesStore(dataDirLocal)
+		const deps: BootstrapModelProfileDeps = {
+			getApiConfiguration: () => makeCurrentMinimaxConfig() as never,
+			getMode: () => "act",
+			setInstanceSecret: () => {},
+			flushInstanceSecrets: async () => {},
+			instancesStore,
+			profilesStore,
+			getCurrentTaskHistoryItem: () => undefined,
+			writeTaskHistoryItem: undefined,
+			postStateToWebview: undefined,
+			now: () => 1700000000000,
+			generateId: (() => {
+				let n = 0
+				return () => {
+					n++
+					return `deterministic-m5-${n}`
+				}
+			})(),
+		}
+
+		const result = await bootstrapModelProfileFromCurrentConfiguration(deps, "minimax-m3")
+		expect(result.status).toBe("CREATED")
+		if (result.status !== "CREATED") {
+			throw new Error(`unreachable: status guard (got ${result.status}: ${result.message})`)
+		}
+		const persisted = instancesStore.read(result.instanceId)
+		expect(persisted?.connection.apiLine).toBe("international")
+
+		// Step 2: build a baseline CoreSessionConfig with a
+		// CONFLICTING apiLine ("china"). This simulates a user
+		// whose global ambient apiLine differs from the
+		// profile-bound line. If the projection collapses to the
+		// baseline, the test fails.
+		const baseline: Record<string, unknown> = {
+			providerId: "openai-compatible", // ambient providerId, distinct from "minimax"
+			modelId: "ambient-model",
+			apiKey: "ambient-secret-value",
+			apiLine: "china", // CONFLICTING ambient apiLine
+		}
+
+		// Step 3: drive the REAL typed projector (no mocks).
+		// applyTypedProviderInstanceToConfig mutates the
+		// baseline in place, honoring the explicit clearing
+		// semantics the Foundation froze: when the instance
+		// has apiLine="international", the baseline's
+		// apiLine="china" is REPLACED, not preserved.
+		applyTypedProviderInstanceToConfig(baseline as never, persisted as never, "resolved-physical-secret-B")
+
+		// Step 4: assert the result. The discriminator:
+		// result.apiLine MUST be "international" (the profile-
+		// bound value), NOT "china" (the ambient value).
+		expect(baseline.apiLine).toBe("international")
+		expect(baseline.apiLine).not.toBe("china")
+		// And the rest of the projection honored the persisted
+		// instance (providerId, modelId) -- not the baseline.
+		expect(baseline.providerId).toBe("minimax")
+		expect(baseline.modelId).toBe("MiniMax-M3")
+		// Credential resolved to the physical secret value, not
+		// the reference name -- twelfth reviewer invariant.
+		expect(baseline.apiKey).toBe("resolved-physical-secret-B")
+		expect(baseline.apiKey).not.toBe(persisted?.credentialRef.name)
 	})
 
 	// -------------------------------------------------------------------------
@@ -494,6 +607,13 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION08 / MINI
 		// by the probe; both plan/act are filled in the model-id
 		// map because MiniMax shares the generic slot).
 		expect(minimaxDiag?.modelIdResolvedFor.length).toBeGreaterThan(0)
+		// CORRECTION09: apiLineRequired AND apiLineResolved must
+		// both be true for the new invariant to be ok=true.
+		// Without apiLineResolved the invariant would still pass
+		// for providers without an apiLine field (anthropic, ...),
+		// but for minimax the probe must produce the sentinel.
+		expect(minimaxDiag?.apiLineRequired).toBe(true)
+		expect(minimaxDiag?.apiLineResolved).toBe(true)
 	})
 
 	// -------------------------------------------------------------------------
@@ -512,6 +632,16 @@ describe("ACT-CLINEMM-MODEL-PROFILES-FIRST-RUN-BOOTSTRAP01 / CORRECTION08 / MINI
 			expect(diag.credentialResolved).toBe(true)
 			expect(diag.hasIntendedModelField).toBe(true)
 			expect(diag.modelIdResolvedFor.length).toBeGreaterThan(0)
+			// CORRECTION09: every previously-covered provider
+			// that requires an apiLine (qwen/moonshot/zai) must
+			// also still resolve its apiLine, AND providers
+			// that don't require one (anthropic/ollama/...) must
+			// keep apiLineRequired=false.
+			if (diag.apiLineRequired) {
+				expect(diag.apiLineResolved).toBe(true)
+			} else {
+				expect(diag.apiLineResolved).toBe(false)
+			}
 		}
 	})
 })

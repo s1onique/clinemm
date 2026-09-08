@@ -45,7 +45,13 @@
  */
 
 import type { ApiConfiguration, ApiProvider } from "@shared/api"
-import { PROVIDER_API_KEY_MAP, PROVIDER_MODEL_ID_MAP, resolveApiKey, resolveModelId } from "../cline-session-factory"
+import {
+	PROVIDER_API_KEY_MAP,
+	PROVIDER_MODEL_ID_MAP,
+	resolveApiKey,
+	resolveApiLine,
+	resolveModelId,
+} from "../cline-session-factory"
 import { BOOTSTRAP_COVERAGE } from "./bootstrap"
 
 export interface BootstrapCoverageDiagnostic {
@@ -58,6 +64,24 @@ export interface BootstrapCoverageDiagnostic {
 	hasIntendedModelField: boolean
 	/** Which of plan/act resolved the sentinel for the isolated probe. */
 	modelIdResolvedFor: Array<"plan" | "act">
+	/**
+	 * CORRECTION09 (HALT_MINIMAX_APILINE_NOT_CAPTURED):
+	 * For providers whose `resolveApiLine` returns a non-empty string
+	 * on the isolated probe (qwen, moonshot, zai, minimax), the
+	 * bootstrap MUST capture that line onto `connection.apiLine`.
+	 * Without this invariant, a future contributor could add a new
+	 * provider to `BOOTSTRAP_COVERAGE` that has an apiLine field
+	 * but the bootstrap would silently lose it -- re-introducing
+	 * the ambient-collapse authority the Foundation eliminated.
+	 *
+	 * Providers without an apiLine field (anthropic, ollama, ...)
+	 * have `apiLineRequired === false` and the bootstrap captures
+	 * `connection.apiLine = undefined`. This is by design: the
+	 * V1 contract tolerates "absent" fields as "preserve-default"
+	 * at the typed-projector boundary.
+	 */
+	apiLineRequired: boolean
+	apiLineResolved: boolean
 }
 
 export interface BootstrapCoverageInvariantResult {
@@ -67,12 +91,33 @@ export interface BootstrapCoverageInvariantResult {
 
 const PROBE_CREDENTIAL_SENTINEL = "probe-credential-value"
 const PROBE_MODEL_SENTINEL = "probe-model-id"
+const PROBE_APILINE_SENTINEL = "international"
+
+/**
+ * Per-provider `<provider>ApiLine` legacy-config field mapping.
+ * The full mapping (with the providers.json fallback) lives at
+ * `cline-session-factory.ts:810` inside `resolveApiLine`. Here we
+ * pin the LEGACY-field name so the isolated probe can pre-set the
+ * sentinel without depending on the SDK's ProviderSettingsManager
+ * (which may not be initialized in the bun test runtime).
+ *
+ * Adding a new provider with an apiLine field to
+ * `BOOTSTRAP_COVERAGE` requires an entry here AND a wired
+ * `resolveApiLine` branch -- the probe enforces both.
+ */
+const PROVIDER_APILINE_FIELD: Record<string, keyof ApiConfiguration> = {
+	qwen: "qwenApiLine",
+	moonshot: "moonshotApiLine",
+	zai: "zaiApiLine",
+	minimax: "minimaxApiLine",
+}
 
 /**
  * Build an isolated ApiConfiguration containing ONLY the
  * intended credential field + intended plan/act model
- * fields for the given provider, each populated with the
- * corresponding sentinel. Everything else is absent.
+ * fields + (if applicable) the intended apiLine field for
+ * the given provider, each populated with the corresponding
+ * sentinel. Everything else is absent.
  *
  * This is the structural load-bearing piece of the
  * invariant: if the resolver is wired generically (e.g. it
@@ -81,6 +126,17 @@ const PROBE_MODEL_SENTINEL = "probe-model-id"
  * `qwenApiKey`, the isolated probe will NOT have `apiKey`
  * set, the resolver will return undefined, and the invariant
  * will correctly report the provider as under-wired.
+ *
+ * For the apiLine probe (CORRECTION09): the probe sets the
+ * per-provider `<provider>ApiLine` field (e.g. `qwenApiLine`,
+ * `minimaxApiLine`) to the sentinel whenever the provider has
+ * an entry in `PROVIDER_APILINE_FIELD`. That way:
+ *   - providers with an apiLine field (qwen/moonshot/zai/minimax):
+ *     apiLine probe sentinel set; resolveApiLine must return
+ *     the sentinel; otherwise ok=false.
+ *   - providers without an apiLine field (anthropic/ollama/...):
+ *     apiLine probe sentinel NOT set; resolveApiLine returns
+ *     undefined; apiLineRequired=false; no contribution to ok.
  */
 function buildIsolatedProbe(provider: ApiProvider): ApiConfiguration {
 	const probeConfig = {} as Record<string, unknown>
@@ -91,6 +147,16 @@ function buildIsolatedProbe(provider: ApiProvider): ApiConfiguration {
 		probeConfig[modelFields.plan] = PROBE_MODEL_SENTINEL
 		probeConfig[modelFields.act] = PROBE_MODEL_SENTINEL
 	}
+	// CORRECTION09: probe the apiLine path so that adding a
+	// provider with an apiLine field to BOOTSTRAP_COVERAGE
+	// requires the resolver seam to be wired. The mapping
+	// is owned by PROVIDER_APILINE_FIELD (above) so the
+	// probe is decoupled from the SDK's ProviderSettingsManager
+	// initialization state -- the bun test runtime may not
+	// have an active providers.json, but the legacy-config
+	// field name is what `captureConnection` reads from.
+	const apiLineField = PROVIDER_APILINE_FIELD[provider]
+	if (apiLineField) probeConfig[apiLineField] = PROBE_APILINE_SENTINEL
 	return probeConfig as unknown as ApiConfiguration
 }
 
@@ -115,9 +181,22 @@ export function assertBootstrapCoverageIsWellFormed(): BootstrapCoverageInvarian
 		if (typeof planModel === "string" && planModel.length > 0) modelIdResolvedFor.push("plan")
 		if (typeof actModel === "string" && actModel.length > 0) modelIdResolvedFor.push("act")
 
+		// CORRECTION09 (apiLine probe): the probe sets the
+		// apiLine field on the synthetic config; resolveApiLine
+		// must return the sentinel for the invariant to be ok.
+		const apiLine = resolveApiLine(provider, probeConfig)
+		const apiLineResolved = typeof apiLine === "string" && apiLine.length > 0
+		const apiLineRequired = apiLineResolved
+
 		const hasIntendedCredentialField = Boolean(credentialField)
 		const hasIntendedModelField = Boolean(modelFields)
-		if (!hasIntendedCredentialField || !hasIntendedModelField || !credentialResolved || modelIdResolvedFor.length === 0) {
+		if (
+			!hasIntendedCredentialField ||
+			!hasIntendedModelField ||
+			!credentialResolved ||
+			modelIdResolvedFor.length === 0 ||
+			(apiLineRequired && !apiLineResolved)
+		) {
 			ok = false
 		}
 		diagnostics.push({
@@ -126,6 +205,8 @@ export function assertBootstrapCoverageIsWellFormed(): BootstrapCoverageInvarian
 			credentialResolved,
 			hasIntendedModelField,
 			modelIdResolvedFor,
+			apiLineRequired,
+			apiLineResolved,
 		})
 	}
 	return { ok, diagnostics }

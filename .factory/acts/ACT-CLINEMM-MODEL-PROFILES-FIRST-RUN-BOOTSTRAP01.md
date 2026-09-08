@@ -2894,13 +2894,221 @@ P-class verdict (post-CORRECTION08):
      COVERAGE_ABSENT` (vs the alternative `HALT_MINIMAX_RUNTIME`)
      correctly identified the seam in one round.
 
+## CORRECTION09: HALT_MINIMAX_APILINE_NOT_CAPTURED (LIVE_FOUND P0 reopen)
+
+### Trigger
+
+Reviewer-panel review of the CORRECTION08 commit surfaced a NEW
+LIVE_FOUND P0: even with `minimax` in `BOOTSTRAP_COVERAGE`, the
+bootstrap captured `instance.connection = { modelId }` -- WITHOUT
+the `apiLine` field. The persisted profile was therefore
+incomplete: applying it could only produce the correct MiniMax
+routing line (`international`) by inheriting the GLOBAL ambient
+`apiLine` from the user's current config. That recreates exactly
+the ambient-collapse authority the Provider Instance Foundation
+was introduced to eliminate.
+
+The two-screenshot discriminator (PASS / RED on the same user's
+geometry) cleanly falsifies the "MiniMax runtime is broken"
+hypothesis AND isolates the bootstrap defect to a specific
+sub-field: the runtime supports MiniMax, the bootstrap supports
+the MiniMax providerId, but the bootstrap does NOT capture the
+profile-bound apiLine so the persisted instance is incomplete.
+
+### First-bad boundary
+
+  ApiConfiguration has
+      provider      = "minimax"
+      modelId       = "MiniMax-M3"
+      apiKey        = "sk-MM3-physical-..."
+      apiLine       = "international"
+  bootstrap.ts:captureConnection(providerId, mode, config)
+      resolved modelId  = "MiniMax-M3"            -> captured OK
+      resolved baseUrl  = undefined                -> connection.baseUrl undefined (correct)
+      resolved apiLine  = undefined                -> connection.apiLine MISSING (DEFECT)
+      resolved headers  = n/a (openai-only)        -> connection.headers undefined (correct)
+
+The captured `connection = { modelId: "MiniMax-M3" }` is then
+persisted to `instances.json`. On apply, the typed projector
+writes `cfg.apiKey = resolved-secret-B` and `cfg.modelId = "MiniMax-M3"`
+but leaves `cfg.apiLine = <baseline>` -- silently inheriting the
+ambient `apiLine` from the user's current global config.
+
+### Bounded correction
+
+  apps/vscode/src/sdk/profile-store/bootstrap.ts:
+    +1 import: resolveApiLine (already exported from cline-session-factory)
+    +1 call inside captureConnection: const apiLine = resolveApiLine(providerId, config); if (apiLine) connection.apiLine = apiLine
+    + comment block update at the EXACT_CONNECTION_CAPTURE freeze
+      (line ~64) to advertise the new field for providers with
+      legacy apiLine fields.
+    + comment block update inside captureConnection (line ~605)
+      to describe the CORRECTION09 semantics.
+    + comment block update inside BOOTSTRAP_COVERAGE for "minimax"
+      (line ~298) noting the apiLine capture is part of the
+      coverage-table fix.
+
+  apps/vscode/src/sdk/profile-store/bootstrap-coverage-invariants.ts:
+    + new fields apiLineRequired + apiLineResolved on BootstrapCoverageDiagnostic.
+    + new sentinel PROBE_APILINE_SENTINEL = "international".
+    + new mapping PROVIDER_APILINE_FIELD (qwen/moonshot/zai/minimax).
+    + buildIsolatedProbe now sets the per-provider `<provider>ApiLine`
+      field to the sentinel whenever the provider has an entry in
+      PROVIDER_APILINE_FIELD. The probe is decoupled from the
+      SDK's ProviderSettingsManager (which may not be initialized
+      in the bun test runtime); the legacy-config field name is
+      what `captureConnection` reads from, so this is the right
+      probe geometry.
+    + assertBootstrapCoverageIsWellFormed now requires apiLineResolved
+      whenever apiLineRequired is true. ok=false otherwise. The
+      probe is isolated so a generic fallback cannot falsely GREEN.
+
+  apps/vscode/src/sdk/__tests__/bootstrap-minimax-coverage.mpfrb01-correction08.test.ts:
+    + rewritten M4 (RED -> GREEN): the captured instance has
+      connection.apiLine === "international" (was toBeUndefined()).
+      This was the original M4 miswitness -- the RED test failed
+      under the new bootstrap semantics, proving the fix.
+    + new M5 (RED -> GREEN projection inversion): baseline
+      apiLine="china" + persisted instance apiLine="international"
+      -> applyTypedProviderInstanceToConfig -> result.apiLine ===
+      "international". Without M5, a future contributor could
+      silently regress the projection half (typed-projector.ts:230)
+      and the defect would stay hidden in immediate dogfood
+      because the ambient setting happens to match the captured one.
+    + COVERAGE_INVARIANT updated: minimax diagnostic now also
+      asserts apiLineRequired=true AND apiLineResolved=true.
+    + REGRESSION_PIN updated: for every previously-covered provider,
+      if apiLineRequired then apiLineResolved, else
+      !apiLineResolved. (For the current BOOTSTRAP_COVERAGE, only
+      minimax has an apiLine field; the others pin apiLineRequired=false.)
+
+### RED -> GREEN arc
+
+  Phase A (RED for the wrong reason): bootstrap does NOT capture
+        apiLine + test asserts toBeUndefined -> PASS (GREEN).
+        This is the CORRECTION08 commit state, where the
+        assertion was wrong but the test was "green".
+
+  Phase B (RED for the right reason): bootstrap DOES capture
+        apiLine + test asserts toBeUndefined -> FAIL (RED).
+        This was the moment of the reviewer intervention --
+        the assertion was wrong AND now the implementation
+        contradicts the wrong assertion.
+
+  Phase C (GREEN): bootstrap DOES capture apiLine + test asserts
+        toBe("international") -> PASS (GREEN). This is the
+        CORRECTION09 commit state.
+
+M5 is a NEW witness that did not exist before CORRECTION09. It
+fails (RED) if a future contributor breaks the projection half
+(`cfgAny["apiLine"] = conn.apiLine` at typed-projector.ts:230).
+The reviewer-requested "inversion discriminator" is the structural
+piece: the baseline's apiLine="china" is CONFLICTING with the
+profile's apiLine="international", so the projection must REPLACE
+the baseline value, not inherit it.
+
+### Test results (CORRECTION09)
+
+  bootstrap-minimax-coverage.mpfrb01-correction08.test.ts:
+    8 pass / 0 fail / 106 expect() calls.
+    Tests: M1 LIVE_GEOMETRY + M2 CREDENTIAL_AUTHORITY + M3 MODEL_AUTHORITY
+           + M4 CONNECTION_TUPLE (with apiLine assertion) + M5 PROJECTION_INVERSION
+           + COVERAGE_TABLE + COVERAGE_INVARIANT (with apiLine assertion)
+           + REGRESSION_PIN (with apiLine assertion).
+
+  bootstrap suite + typed-projector (regression):
+    57 pass / 0 fail / 307 expect() calls (the same 46 bootstrap
+    tests + 10 typed-projector tests + the additional M5 = 57 total).
+    The CORRECTION07 R5-08..10 legacy-alias witnesses stay GREEN
+    (the apiLine probe does not touch them).
+
+  apps/vscode typecheck: exit 0.
+  biome --write on touched files: exit 0 (minor import reformat
+    on bootstrap-coverage-invariants.ts).
+
+### Conservation
+
+This is NOT a re-architecture: the Foundation already contemplated
+`apiLine` as a load-bearing V1 connection field (see
+`instance-store/contracts.ts:194` defining
+`apiLine?: string | null` and the comment "API line for region-
+specific routing (e.g., 'china' | 'international' for Qwen)" at
+`sdk/packages/llms/src/providers/config.ts:149`). The CORRECTION09
+fix just makes the bootstrap actually populate the field for
+providers whose legacy `ApiConfiguration` carries one (qwen,
+moonshot, zai, minimax).
+
+### Files NOT touched (conservation)
+
+  - typed-projector.ts: the apiLine projection half
+    (setOrClear(cfgAny, "apiLine", conn.apiLine) at line 230) was
+    ALREADY in place; CORRECTION09 only feeds it a non-undefined
+    value for the first time on the minimax geometry.
+  - instance-store/contracts.ts: the V1 ProviderConnection contract
+    already had `apiLine?: string | null`. No schema bump needed.
+  - cline-session-factory.ts: no changes; resolveApiLine was already
+    exported and already had a minimax branch.
+  - proto/, webview-ui/, settings UI: untouched.
+  - bootstrap-minimax-coverage.mpfrb01-correction08.test.ts
+    M1/M2/M3 RED tests: untouched (they were correctly written
+    in CORRECTION08; only M4 was wrong).
+
+### Verdict
+
+  HALT_MINIMAX_APILINE_NOT_CAPTURED = CLOSED
+  CORRECTION08 = REOPENED -> CLOSED via CORRECTION09
+  SUBJECT_COMMITTED = PASS (post this commit)
+  TYPE_REGRESSION = NONE
+  CONSERVATION = INTACT (typed-projector + instance-store + proto
+    + UI all untouched)
+
+### Lessons learned (additive, CORRECTION09)
+
+  #41 The "minimal-coverage-surface" framing from CORRECTION08
+     missed that the V1 ProviderConnection contract already
+     contemplated `apiLine` (it was in the schema and the typed
+     projector already honored it). The reviewer's "the Foundation
+     already contemplated `apiLine`; this is not a schema
+     invention" framing is the right corrective. When a field
+     is on the V1 contract AND on the legacy config, the
+     bootstrap must capture it -- not opt out for "minimality".
+
+  #42 The reviewer-requested inversion discriminator (baseline
+     ambient value CONFLICTS with the captured value) is a
+     stronger witness than a same-value comparison. Same-value
+     tests pass for the wrong reason (ambient inherits naturally
+     into the result). Inversion tests fail when the projection
+     collapses to ambient, even if both halves of the wiring are
+     correct individually. Future projection tests should prefer
+     inversion over same-value.
+
+  #43 "V1 connection stays minimal" was the wrong conservation
+     claim. The V1 connection is "minimal but accurate": every
+     field on the contract that has a corresponding legacy-config
+     field MUST be captured when present. "Minimal" only refers
+     to NOT capturing fields that have no legacy-config source
+     (e.g., providerSpecificConfig is V1-only).
+
+  #44 The probe-only isolation invariant from B3 reviewer
+     (`buildIsolatedProbe`) extends gracefully to the apiLine
+     field by using a hardcoded `<provider>ApiLine` field-name
+     mapping decoupled from the SDK's ProviderSettingsManager.
+     Decoupling from the runtime provider-settings registry was
+     necessary because the bun test runtime doesn't have an
+     initialized providers.json, and `resolveApiLine`'s
+     fallback to `getProviderSettings()` would have returned
+     undefined even for providers that DO have an apiLine
+     field.
+
 ### Next step
 
-CORRECTION08 closes the LIVE_FOUND P0 surfaced by the post-
-CORRECTION07 dogfood retest (the very next step the CORRECTION07
-close predicted). The next genuinely useful step is to rebuild +
-install the new exact-head VSIX (post-CORRECTION08) and re-run the
-dogfood flow the user originally executed:
+CORRECTION09 closes the LIVE_FOUND P0 surfaced by the reviewer
+panel on the CORRECTION08 commit (the reviewer did NOT need a
+new live dogfood retest -- the defect was visible in the existing
+fixture's `minimaxApiLine = "international"` setting combined with
+the original M4's `toBeUndefined` assertion). The next genuinely
+useful step is to rebuild + install the new exact-head VSIX
+(post-CORRECTION09) and re-run the dogfood flow:
 
   L-C08-1   native minimax actModeApiProvider -> Settings > Model
             Profiles -> Create first profile -> CREATED -> profile
@@ -2909,11 +3117,23 @@ dogfood flow the user originally executed:
   L-C08-2   Use the freshly-created profile -> next real MiniMax-M3
             request succeeds (the SDK gateway now resolves the
             minimax provider correctly because the bootstrap now
-            persists a valid instance with providerId="minimax").
+            persists a valid instance with providerId="minimax",
+            AND because the apply path now projects
+            connection.apiLine="international" onto the active
+            session config -- proving the M5 inversion witness
+            holds end-to-end).
   L-C08-3   Reload the VS Code window -> the profile still resolves
-            credential and runs (the durability barrier from
-            CORRECTION02 + the canonical-id invariant from
-            CORRECTION07 are both GREEN for the minimax geometry).
+            credential AND the apiLine AND runs (the durability
+            barrier from CORRECTION02 + the canonical-id invariant
+            from CORRECTION07 + the apiLine capture from
+            CORRECTION09 are all GREEN for the minimax geometry).
+  L-C08-4   Stronger discriminator: switch the user's global
+            ambient apiLine to "china" (via Settings > API
+            Configuration for MiniMax) -> Use the same profile ->
+            the next MiniMax request must STILL hit the
+            international endpoint (the profile-bound apiLine
+            must override the conflicting ambient apiLine; this
+            is the M5 inversion witness proven live).
 
 Only after L-C08-1/2/3 succeed should dogfood proceed to A/B
 switching (next profile apply -> network test). The next genuinely
