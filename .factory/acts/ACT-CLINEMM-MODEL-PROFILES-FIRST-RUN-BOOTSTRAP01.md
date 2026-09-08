@@ -3140,3 +3140,68 @@ switching (next profile apply -> network test). The next genuinely
 distinct P0 will be surfaced by the live retest, NOT predicted in
 advance -- per the existing CORRECTION03-07 lesson that "the next
 defect is whatever the next live retest shows".
+
+### CORRECTION09-FIXUP (reviewer-panel P1 BOOTSTRAP_APILINE_COVERAGE_INVARIANT_TAUTOLOGICAL)
+
+Reviewer flag on the CORRECTION09 commit: the meta-invariant
+guard `(apiLineRequired && !apiLineResolved)` was tautological in
+the first commit because `apiLineRequired = apiLineResolved`
+(derived from the same string). If `resolveApiLine("minimax", ...)`
+regresses to undefined, the guard would silently pass.
+
+Bounded fix (one commit, one file + one new negative discriminator
+test):
+
+  apps/vscode/src/sdk/profile-store/bootstrap-coverage-invariants.ts:
+    - apiLineRequired = Boolean(PROVIDER_APILINE_FIELD[provider])
+      (the authority declaring "this provider OWNS an apiLine
+      legacy field", NOT derived from resolution result)
+    - apiLineResolved = apiLine === PROBE_APILINE_SENTINEL
+      (exact sentinel equality, NOT mere length > 0; also catches
+      a resolver returning the wrong hard-coded line)
+    - added 9-line comment block explaining the fix
+
+  apps/vscode/src/sdk/__tests__/bootstrap-apiline-coverage-invariant-not-tautological.mpfrb01-correction09.test.ts
+    (NEW file, focused negative discriminator):
+    - stubs `resolveApiLine` via `bun:test` `mock.module` to return
+      undefined
+    - asserts `assertBootstrapCoverageIsWellFormed().ok === false`
+    - asserts `apiLineRequired === true && apiLineResolved === false`
+      on the minimax diagnostic
+    - PROVES the guard is no longer tautological: under the old
+      code (apiLineRequired = apiLineResolved) this test would
+      have reported ok=true (BUG). Under the new code it reports
+      ok=false (CORRECT).
+
+RED -> GREEN arc for this fixup:
+  Phase A (CORRECTION09 first commit): the meta-invariant is
+    tautological. Negative discriminator would FAIL (RED) -- the
+    test reports ok=true even with a stubbed undefined resolver.
+  Phase B (this fixup): the meta-invariant derives apiLineRequired
+    from the authority. Negative discriminator PASSES (GREEN).
+
+Test results:
+  bootstrap-apiline-coverage-invariant-not-tautological.correction09: 1/1 GREEN
+  bootstrap-minimax-coverage.correction08: 8/8 GREEN (unchanged)
+  bootstrap-failure-visible.mpfrb01: 17/17 GREEN (unchanged)
+  bootstrap-* suite + typed-projector (regression, isolated per
+    file via `bun scripts/run-bun-unit-tests.ts`): all GREEN.
+  bun x tsc --noEmit: exit 0.
+
+Unrelated: pre-existing failures in src/core/hooks/__tests__/
+(hook-factory / taskcancel / taskcomplete / taskresume /
+taskstart / user-prompt-submit) -- 12/16, 3/14, 4/10, 2/14, 3/11,
+3/11. Confirmed pre-existing at parent commit (verified via
+`git stash` + re-run); NOT introduced by CORRECTION09. Tracked
+as P2 NON-BLOCKING (separate future ACT).
+
+Verdict:
+  HALT_MINIMAX_APILINE_NOT_CAPTURED = CLOSED
+  BOOTSTRAP_APILINE_COVERAGE_INVARIANT_TAUTOLOGICAL = CLOSED
+  CORRECTION09 = TECHNICALLY PASS
+  SUBJECT_COMMITTED = PASS (after this fixup commit)
+  TYPE_REGRESSION = NONE
+  CONSERVATION = INTACT (only the invariant tightening + new
+    test file; no production-code behavior change other than
+    making the guard non-tautological and the resolved-check
+    exact-sentinel)

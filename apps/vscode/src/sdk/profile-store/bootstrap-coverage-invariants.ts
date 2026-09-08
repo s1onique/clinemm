@@ -183,10 +183,19 @@ export function assertBootstrapCoverageIsWellFormed(): BootstrapCoverageInvarian
 
 		// CORRECTION09 (apiLine probe): the probe sets the
 		// apiLine field on the synthetic config; resolveApiLine
-		// must return the sentinel for the invariant to be ok.
+		// must return the EXACT PROBE_APILINE_SENTINEL for the
+		// invariant to be ok. CRITICAL: apiLineRequired must
+		// come from PROVIDER_APILINE_FIELD (the authority that
+		// declares "this provider OWNS an apiLine legacy field"),
+		// NOT from whether resolveApiLine happened to return a
+		// non-empty string. The previous implementation
+		// (`apiLineRequired = apiLineResolved`) made the guard
+		// tautological: a regression that returned undefined for
+		// minimax would set apiLineRequired=false and still
+		// pass. Reviewer-flagged P1 BOOTSTRAP_APILINE_COVERAGE_INVARIANT_TAUTOLOGICAL.
 		const apiLine = resolveApiLine(provider, probeConfig)
-		const apiLineResolved = typeof apiLine === "string" && apiLine.length > 0
-		const apiLineRequired = apiLineResolved
+		const apiLineRequired = Boolean(PROVIDER_APILINE_FIELD[provider])
+		const apiLineResolved = apiLine === PROBE_APILINE_SENTINEL
 
 		const hasIntendedCredentialField = Boolean(credentialField)
 		const hasIntendedModelField = Boolean(modelFields)
