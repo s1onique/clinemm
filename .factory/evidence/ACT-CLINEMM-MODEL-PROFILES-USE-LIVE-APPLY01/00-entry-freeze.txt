@@ -1,0 +1,11 @@
+ENTRY_HEAD=ab0531bb41fe0710a4670cd0c4cf8ed9f96fdf69
+WORKTREE=clean (3 commits ahead of origin/main)
+PRODUCTION_FOUNDATION_HEAD=ab0531bb41fe0710a4670cd0c4cf8ed9f96fdf69 (CORRECTION09-FIXUP)
+ACT_HEAD_AT_AUTHOR=ab0531bb41fe0710a4670cd0c4cf8ed9f96fdf69
+DOGFOOD_FAILURE=LIVE
+FAILURE=L-C08-2 (Use profile -> 405 Method Not Allowed)
+CONTROL=L-C08-2-control (Set as default + new task -> succeeds when ambient apiLine matches)
+OBSERVATION=Use B -> real MiniMax-M3 request returns 405 Method Not Allowed
+INFERRED_HYPOTHESIS=applyTypedProviderInstanceToConfig writes cfg.apiLine (top-level) but NOT cfg.providerConfig.apiLine; the @cline/core gateway reads apiLine from providerConfig.apiLine via buildGatewayProviderOptions, so the typed instance's apiLine never reaches the runtime's regional routing decision.
+
+PRIMARY_EPISEMIC_PURPOSE=reproduction + causal boundary classification. Identify the FIRST divergence between "Use" and "Set as default + new task" that produces a 405.

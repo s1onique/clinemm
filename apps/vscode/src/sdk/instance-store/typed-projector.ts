@@ -105,14 +105,7 @@ import { MissingProviderInstanceCredentialError, type ProviderConfigurationInsta
  * `undefined` (the field is absent) means "do not touch the baseline".
  * This is the inverse of the legacy `setIfDefined` semantics.
  */
-type Settable =
-	| "providerId"
-	| "modelId"
-	| "apiKey"
-	| "baseUrl"
-	| "headers"
-	| "region"
-	| "apiLine"
+type Settable = "providerId" | "modelId" | "apiKey" | "baseUrl" | "headers" | "region" | "apiLine"
 
 /**
  * Apply the typed provider-instance projection onto an already-
@@ -141,10 +134,7 @@ export function applyTypedProviderInstanceToConfig(
 	// silently write `null` to apiKey and let reconstruction
 	// proceed with a broken durable instance.
 	if (resolvedApiKey === undefined || resolvedApiKey === null || resolvedApiKey === "") {
-		throw new MissingProviderInstanceCredentialError(
-			instance.instanceId,
-			instance.credentialRef.name,
-		)
+		throw new MissingProviderInstanceCredentialError(instance.instanceId, instance.credentialRef.name)
 	}
 
 	const cfgAny = config as unknown as Record<string, unknown>
@@ -231,6 +221,61 @@ export function applyTypedProviderInstanceToConfig(
 	if (conn.providerSpecificConfig !== undefined) {
 		cfgAny["providerSpecificConfig"] = conn.providerSpecificConfig
 	}
+
+	// ===========================================================================
+	// ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01 (CORRECTION10)
+	// (HALT_PROFILE_USE_NOT_APPLIED):
+	//
+	// The typed projector writes the V1 connection tuple onto the
+	// TOP-LEVEL CoreSessionConfig (cfg.providerId, cfg.modelId,
+	// cfg.apiKey, cfg.apiLine, ...). But the @cline/core runtime
+	// reads regional routing and connection material from
+	// `config.providerConfig` (NOT from the top-level fields). See
+	// sdk/packages/core/src/services/llms/handler-factory.ts:35-43
+	// (`buildGatewayProviderOptions`) which reads `apiLine` /
+	// `region` from `config.providerConfig`, and
+	// `createAgentModelFromConfig` at line 202-220 which merges
+	// `providerConfig` into the gateway-facing `ProviderConfig`.
+	//
+	// `config.providerConfig` is pre-populated by
+	// `buildSessionConfig` from LEGACY global state via
+	// `resolveApiLine(providerId, apiConfig)` at
+	// apps/vscode/src/sdk/cline-session-factory.ts:810-848. The
+	// legacy path therefore dominates `config.providerConfig`
+	// unless the typed projector explicitly overwrites it.
+	//
+	// Without this overlay, the typed apply path silently leaks
+	// LEGACY `providerConfig.{providerId, modelId, apiLine, region}`
+	// into the rebuilt session, even after the typed instance's
+	// values are written at the top level. The resulting gateway
+	// call routes against the wrong provider/region (e.g. MiniMax
+	// "china" instead of "international") and the upstream returns
+	// 405 Method Not Allowed.
+	//
+	// This overlay is bounded:
+	//   - It writes ONLY the fields that the typed instance binds
+	//     (providerId, modelId, apiLine, region). It does NOT
+	//     touch credentials, baseUrl, headers, or
+	//     providerSpecificConfig — those continue to be driven
+	//     by the top-level `setOrClear` writes above (which the
+	//     `createAgentModelFromConfig` merge already picks up via
+	//     the `config.apiKey ?? baseProviderConfig?.apiKey` chain).
+	//   - It uses the SAME clearing semantics (`setOrClear`):
+	//     explicit `null` clears, `undefined` preserves the
+	//     legacy baseline. This preserves partial-instance updates
+	//     (R5 partial-instance contract).
+	//   - It is idempotent on existing canonical writers: a typed
+	//     instance whose values already match the legacy baseline
+	//     (e.g. the "Set as default" control when the user's
+	//     ambient apiLine matches the profile-bound apiLine) is a
+	//     no-op at runtime.
+	// ===========================================================================
+	const pcAny = (cfgAny["providerConfig"] ?? {}) as Record<string, unknown>
+	setOrClear(pcAny, "providerId", toSdkProviderId(instance.providerId))
+	setOrClear(pcAny, "modelId", conn.modelId)
+	setOrClear(pcAny, "apiLine", conn.apiLine)
+	setOrClear(pcAny, "region", conn.region)
+	cfgAny["providerConfig"] = pcAny
 }
 
 /**

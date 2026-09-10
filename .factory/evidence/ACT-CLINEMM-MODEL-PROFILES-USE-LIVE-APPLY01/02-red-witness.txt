@@ -1,0 +1,28 @@
+RED WITNESS: tests/typed-projector.test.ts (existing) and the new mpfrb01-test file:
+
+Before fix — typed projector applies instance:
+  config = { providerId: "openai-compatible", apiLine: "china", providerConfig: { providerId: "openai-compatible", apiLine: "china", ... } }
+  instance = { connection: { apiLine: "international", modelId: "MiniMax-M3", ... } }
+  applyTypedProviderInstanceToConfig(config, instance, secret)
+After:
+  config.providerId       = "minimax"               (TYPED, projected)
+  config.modelId          = "MiniMax-M3"            (TYPED, projected)
+  config.apiLine          = "international"         (TYPED, projected — TOP LEVEL ONLY)
+  config.providerConfig.apiLine = "china"           (LEGACY — NEVER UPDATED)  <-- BUG
+
+NEW test file: apps/vscode/src/sdk/__tests__/use-profile-apiline-runtime-routing.mpfrb01-test-apply-live01.test.ts
+
+Test MPULA01_RED:
+  expect(cfg.providerConfig?.apiLine).toBe("international")
+  Result WITHOUT fix: FAIL — received "china"
+
+This was the OBSERVED bug in production: the @cline/core gateway routed requests to the
+china regional endpoint (based on the stale providerConfig.apiLine = "china") when the user
+intended "international" via the typed instance bound to the profile.
+
+Direct test failure trace (pre-fix):
+  bun test src/sdk/__tests__/use-profile-apiline-runtime-routing.mpfrb01-test-apply-live01.test.ts
+  > MPULA01_RED: applying a typed instance with connection.apiLine='international' MUST override the legacy config.providerConfig.apiLine='china' on the resolved config
+  Expected: "international"
+  Received: "china"
+  FAIL — 1 test failed, 0 passed

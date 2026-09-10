@@ -1,0 +1,32 @@
+GREEN CONFIRMATION:
+
+bun test src/sdk/__tests__/use-profile-apiline-runtime-routing.mpfrb01-test-apply-live01.test.ts
+
+(pass) MPULA01_RED: applying a typed instance with connection.apiLine='international' MUST override the legacy config.providerConfig.apiLine='china' on the resolved config [0.25ms]
+(pass) MPULA02_CONSERVATION_CLEARING: applying a typed instance with connection.apiLine=null MUST clear the legacy config.providerConfig.apiLine (R5 explicit clearing semantics) [0.03ms]
+(pass) MPULA03_CONSERVATION_PARTIAL: applying a typed instance WITHOUT a connection.apiLine MUST preserve the legacy config.providerConfig.apiLine (R5 partial-instance contract) [0.03ms]
+(pass) MPULA04_CONSERVATION_PROVIDER_ID: applying a typed instance MUST update config.providerConfig.providerId so createAgentModelFromConfig's baseProviderConfig match succeeds [0.04ms]
+(pass) MPULA05_USE_MUST_NOT_BECOME_SET_DEFAULT: applying profile B via typed apply MUST update config.providerConfig to B's values, not retain A's legacy values [0.05ms]
+
+ 5 pass
+ 0 fail
+ 19 expect() calls
+
+WIDER SWEEP:
+
+bun test src/sdk/instance-store/ src/sdk/profile-store/ src/sdk/__tests__/bootstrap- src/sdk/__tests__/model-profile- src/sdk/__tests__/use-profile-apiline-runtime-routing
+
+ 119 pass
+ 0 fail
+ 471 expect() calls
+Ran 119 tests across 17 files. [1.64s]
+
+Pre-existing failures observed (NOT caused by this fix):
+  - provider-instance-identity-r1a-red.piif01.test.ts: Cannot find module '@cline-internal/core/runtime/host/local-runtime-host'
+  - provider-instance-identity-r2-strategy-b.piif01.test.ts: Cannot find module '@cline-internal/core/runtime/host/local-runtime-host'
+  - provider-instance-identity-r4-reload-read.piif01.test.ts: same bridge-config alias issue
+  - These fail with the same error message BEFORE and AFTER the fix; verified by stash-checking the fix out and rerunning.
+
+TYPECHECK:
+  bun x tsc --noEmit
+  (no output — passes)

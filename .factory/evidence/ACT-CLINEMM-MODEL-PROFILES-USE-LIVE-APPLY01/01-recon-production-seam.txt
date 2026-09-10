@@ -1,0 +1,57 @@
+RECON of the Use -> 405 path:
+
+Use click (webview footer / settings)
+  -> StateServiceClient.applyModelProfile(...)
+  -> server handler: apps/vscode/src/core/controller/state/applyModelProfile.ts
+     -> applyModelProfileViaOwner (apps/vscode/src/sdk/profile-store/owner.ts)
+        -> applyModelProfile coordinator (apps/vscode/src/sdk/profile-store/profile-application.ts)
+           -> SdkProviderChangeCoordinator.applyTypedProviderConfigurationInstance (sdk-provider-change-coordinator.ts:205)
+              -> SdkSessionConfigBuilder.build({ cwd, mode, providerConfigurationInstanceTyped: instance }) (sdk-session-config-builder.ts:25)
+                 -> buildSessionConfig (cline-session-factory.ts:864)
+                    -> apiConfig = stateManager.getApiConfiguration()       <-- LEGACY STATE READ
+                    -> providerId = toLegacyApiProvider(modeProvider)         <-- LEGACY providerId
+                    -> apiLine = resolveApiLine(providerId, apiConfig)         <-- LEGACY apiLine
+                    -> config.providerConfig = { providerId, modelId, apiKey, baseUrl, apiLine, ... }   <-- LEGACY values populated
+                 -> applyTypedProviderInstanceToConfig(config, instance, resolvedApiKey)   <-- writes top-level fields only
+                    -> cfg.providerId = "minimax" (TYPED)
+                    -> cfg.modelId = "MiniMax-M3" (TYPED)
+                    -> cfg.apiKey = physical secret (TYPED)
+                    -> cfg.apiLine = "international" (TYPED)  <-- TOP-LEVEL ONLY
+                    -> cfg.providerConfig.apiLine = "china" (LEGACY, untouched)
+              -> sessions.replaceActiveSession({ startInput: { config: { ...config, sessionId } } })
+                 -> sdkHost.start(startInput)
+                    -> LocalRuntimeHost.startSession(...)
+                       -> createAgentModelFromConfig (handler-factory.ts:197)
+                          -> const pc = config.providerConfig
+                          -> const baseProviderConfig = pc?.providerId === config.providerId ? pc : undefined
+                             -> if pc.providerId === config.providerId: baseProviderConfig = pc
+                                -> normalizedProviderConfig.apiLine = pc.apiLine = "china" (LEGACY!)
+                             -> if pc.providerId !== config.providerId: baseProviderConfig = undefined
+                                -> normalizedProviderConfig.apiLine = undefined
+                          -> buildGatewayProviderOptions(normalizedProviderConfig) reads config.apiLine
+                          -> gateway receives apiLine = "china" or undefined (NEVER "international")
+                          -> upstream returns 405 Method Not Allowed
+
+KEY OBSERVATION: The typed projector writes cfg.apiLine (top-level) but the @cline/core runtime
+reads providerConfig.apiLine (nested). The typed projector does NOT propagate the typed
+instance's apiLine onto config.providerConfig. This is the FIRST divergence.
+
+CONTROL: Set as default + new task
+  -> StateServiceClient.setDefaultModelProfile (setDefaultModelProfile.ts)
+     -> setGlobalDefaultProfileId(stateManager, profileId)  <-- writes defaultModelProfileId
+  -> User clicks "+" (new task)
+     -> initTask (sdk-task-start-coordinator.ts)
+        -> resolveProviderInstanceTyped(...) returns the typed instance from the default profile
+        -> sessionConfigBuilder.build({ cwd, mode, providerConfigurationInstanceTyped: instance }) <-- SAME path as Use
+           -> buildSessionConfig reads LEGACY state
+           -> applyTypedProviderInstanceToConfig writes top-level only
+        -> startNewSession -> sdkHost.start
+
+NOTE: Both paths produce the same config structure. The "Set as default works" observation from
+the user is presumed to be a state-coincidence case: when the user's ambient apiLine (in
+apiConfig.minimaxApiLine) ALREADY matches the profile's bound apiLine (captured at bootstrap),
+both code paths converge on the same correct value. The "Use fails" case is when they DIVERGE.
+
+This is NOT a one-vs-the-other distinction — both paths have the bug. The discriminator is
+"does the typed apply update providerConfig?" and the answer is NO. Fixing the typed apply
+seam closes both paths.

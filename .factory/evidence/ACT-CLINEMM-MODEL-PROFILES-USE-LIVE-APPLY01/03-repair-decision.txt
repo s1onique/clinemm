@@ -1,0 +1,60 @@
+REPAIR DECISION: Apply the typed projector overlay to BOTH top-level fields AND providerConfig.
+
+Location: apps/vscode/src/sdk/instance-store/typed-projector.ts
+Function: applyTypedProviderInstanceToConfig
+
+Pre-existing structure (top-level overlay):
+  const cfgAny = config as any
+  setOrClear(cfgAny, "providerId", inst.providerId)
+  setOrClear(cfgAny, "modelId", conn.modelId)
+  setOrClear(cfgAny, "apiKey", secret)
+  setOrClear(cfgAny, "baseUrl", conn.baseUrl)
+  setOrClear(cfgAny, "apiLine", conn.apiLine)
+  setOrClear(cfgAny, "region", conn.region)
+
+ADDED (CORRECTION10): providerConfig carrier overlay. The @cline/core runtime reads
+apiLine/providerId/region/modelId/baseUrl from config.providerConfig (the legacy carrier)
+during createAgentModelFromConfig's baseProviderConfig matching at
+sdk/packages/core/src/services/llms/handler-factory.ts:202-220.
+
+  // CORRECTION10 / ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01:
+  // The @cline/core runtime's regional routing (buildGatewayProviderOptions at
+  // handler-factory.ts:40) reads `apiLine` from `config.providerConfig`, not from
+  // the top-level `config.apiLine`. buildSessionConfig pre-fills `providerConfig`
+  // from LEGACY global state (apiConfig.minimaxApiLine etc.), so unless the typed
+  // projector also overlays onto `providerConfig`, the gateway-facing carrier
+  // retains the stale LEGACY apiLine while the top-level cfg.apiLine shows the
+  // typed value — producing "Use" routing to the wrong regional endpoint and
+  // the upstream returning 405 Method Not Allowed.
+  //
+  // The overlay mirrors the top-level setOrClear calls so R5 partial-instance
+  // semantics are preserved: undefined values are no-ops (legacy is kept), null
+  // values clear (legacy is overwritten with null), and present values replace.
+  const pcAny = (config.providerConfig ?? {}) as Record<string, unknown>
+  setOrClear(pcAny, "providerId", inst.providerId)
+  setOrClear(pcAny, "modelId", conn.modelId)
+  setOrClear(pcAny, "apiKey", secret)
+  setOrClear(pcAny, "baseUrl", conn.baseUrl)
+  setOrClear(pcAny, "apiLine", conn.apiLine)
+  setOrClear(pcAny, "region", conn.region)
+  config.providerConfig = pcAny as CoreSessionConfig["providerConfig"]
+
+DESIGN CHOICES:
+  1. Mirror the top-level overlay exactly — same setOrClear semantics, same field
+     set, same R5 contract. This is the minimal change that closes the bug.
+  2. Initialize `pcAny = config.providerConfig ?? {}` defensively — if
+     buildSessionConfig hasn't pre-populated it (e.g. some test scenarios),
+     we still write the typed values onto a fresh object rather than crashing.
+  3. Reassign `config.providerConfig = pcAny` to ensure the reference survives
+     (in case it was originally undefined and we created a new object).
+  4. Use `Record<string, unknown>` + cast at boundary to avoid widening the
+     CoreSessionConfig type signature for an internal seam.
+
+NON-CHANGES:
+  - buildSessionConfig is unchanged. It still pre-fills providerConfig from LEGACY
+    state. That is correct for the bootstrap path (where there is no typed instance).
+  - The LEGACY state read is unchanged. Profiles with no typed instance still use
+    legacy values directly.
+  - The "Set as default + new task" path is unchanged structurally — the fix closes
+    both paths via the same seam because both go through applyTypedProviderInstanceToConfig.
+  - setOrClear is unchanged. We leverage its existing R5 contract.

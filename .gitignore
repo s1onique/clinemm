@@ -1467,5 +1467,20 @@ apps/vscode/.factory/evidence/
 # ModelProfilesSection.mpsp01-second-profile-creation.test.tsx covers the
 # 3 RED->GREEN witnesses at the container routing boundary.
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-SECOND-PROFILE-CREATION-CORRECTION01.md
+# ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01: repair live P0 where "Use"
+# on a non-default profile routes MiniMax requests to the wrong regional
+# endpoint and returns 405 Method Not Allowed. Root cause: typed projector
+# writes top-level cfg.apiLine but NOT cfg.providerConfig.apiLine; the
+# @cline/core runtime reads apiLine from providerConfig via
+# buildGatewayProviderOptions at handler-factory.ts:40, so the typed
+# instance's apiLine never reaches the gateway's regional routing decision.
+# Fix: extend applyTypedProviderInstanceToConfig to also overlay typed
+# values onto config.providerConfig.{providerId,modelId,apiKey,baseUrl,
+# apiLine,region} via setOrClear (preserves R5 partial-instance contract).
+# New test file use-profile-apiline-runtime-routing.mpfrb01-test-apply-live01.test.ts
+# captures RED (legacy leak) + 4 conservation invariants (clearing,
+# partial, providerId propagation, Use != Set-as-default).
+!/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01.md
+!/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01/
 .bun-tmp/
 .bun-install/
