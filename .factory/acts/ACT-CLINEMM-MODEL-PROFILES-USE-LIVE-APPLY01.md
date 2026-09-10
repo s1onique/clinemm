@@ -49,16 +49,36 @@ The RED state is the live bug: the runtime was reading the stale LEGACY
 
 ## GATE 3 — Repair Decision
 Extend `applyTypedProviderInstanceToConfig` to ALSO overlay typed values onto
-`config.providerConfig.{providerId, modelId, apiKey, baseUrl, apiLine, region}` using
-the same `setOrClear` helper as the top-level overlay. This:
+`config.providerConfig.{providerId, modelId, apiLine, region}` using the same
+`setOrClear` helper as the top-level overlay. This:
 
-- Mirrors the existing top-level overlay exactly.
+- Mirrors the top-level overlay for the four fields that `buildSessionConfig`
+  pre-populates from LEGACY state and that the `@cline/core` runtime reads
+  through `config.providerConfig` (`buildGatewayProviderOptions` and
+  `createAgentModelFromConfig`'s `baseProviderConfig` merge). These are the
+  ONLY four fields that exhibit the live "Use" divergence: identity
+  (`providerId`, `modelId`) and regional routing (`apiLine`, `region`).
 - Preserves R5 partial-instance semantics (`undefined` = no-op, `null` = clear,
   present = replace).
 - Initializes `pcAny` defensively to `config.providerConfig ?? {}` so test/edge cases
   without a pre-populated `providerConfig` still work.
 - Reassigns `config.providerConfig = pcAny` to ensure the reference survives
   in the original-undefined case.
+
+**Bounded scope (CORRECTION11 evidence-boundary clarification, see GATE 7):**
+
+The `providerConfig` overlay is intentionally **4 fields, not 6**. `apiKey`,
+`baseUrl`, `headers`, and `providerSpecificConfig` are **NOT** propagated onto
+`config.providerConfig` by this overlay. They are already written at the
+top level by the existing top-level `setOrClear` block, and
+`createAgentModelFromConfig` reads them through the
+`config.apiKey ?? baseProviderConfig?.apiKey` chain. Duplicating them onto
+`providerConfig` is unnecessary and would risk double-writes that diverge
+across the two slots if a future LEGACY-state pre-fill ever sets them
+before the typed apply runs. The first-bad boundary that produces the live
+P0 is the regional-routing carrier (`apiLine`/`region`) and the identity
+match (`providerId`/`modelId`); credentials and baseUrl are not on the
+critical path for `405 Method Not Allowed`.
 
 The fix does NOT change `buildSessionConfig`, the LEGACY state read, the `setOrClear`
 helper, the bootstrap path, or the "Set as default" path. It only adds the missing
@@ -114,6 +134,70 @@ The fix does not break any of the following (all asserted as `pass` in the test 
 - **Top-level + providerConfig stay in sync**: `cfg.apiLine === cfg.providerConfig.apiLine`
   after apply, regardless of which path produced the values. (Covered by all 5 tests.)
 
+## GATE 7 — CORRECTION11 Evidence-Boundary Clarification (docs/evidence only)
+
+The original GATE 3 prose and `.factory/evidence/.../03-repair-decision.txt`
+claimed the `providerConfig` overlay covered six fields:
+`{providerId, modelId, apiKey, baseUrl, apiLine, region}`. The reviewer
+verified the actual production code at
+`apps/vscode/src/sdk/instance-store/typed-projector.ts` (the comment block at
+~lines 225-272 and the `setOrClear` block at ~lines 273-278) overlays only the
+four fields that constitute the first-bad boundary for the live `405`:
+
+```ts
+const pcAny = (cfgAny["providerConfig"] ?? {}) as Record<string, unknown>
+setOrClear(pcAny, "providerId", toSdkProviderId(instance.providerId))
+setOrClear(pcAny, "modelId", conn.modelId)
+setOrClear(pcAny, "apiLine", conn.apiLine)
+setOrClear(pcAny, "region", conn.region)
+cfgAny["providerConfig"] = pcAny
+```
+
+`apiKey`, `baseUrl`, `headers`, and `providerSpecificConfig` are
+intentionally NOT duplicated into `providerConfig`. The production comment
+explains the bounded scope:
+
+> It writes ONLY the fields that the typed instance binds
+> (providerId, modelId, apiLine, region). It does NOT
+> touch credentials, baseUrl, headers, or
+> providerSpecificConfig — those continue to be driven
+> by the top-level `setOrClear` writes above (which the
+> `createAgentModelFromConfig` merge already picks up via
+> the `config.apiKey ?? baseProviderConfig?.apiKey` chain).
+
+The five RED→GREEN witnesses in
+`apps/vscode/src/sdk/__tests__/use-profile-apiline-runtime-routing.mpfrb01-test-apply-live01.test.ts`
+assert exactly this four-field boundary: `MPULA01_RED` (apiLine),
+`MPULA02_CONSERVATION_CLEARING` (apiLine R5 null), `MPULA03_CONSERVATION_PARTIAL`
+(apiLine R5 partial), `MPULA04_CONSERVATION_PROVIDER_ID` (providerId + apiLine),
+`MPULA05_USE_MUST_NOT_BECOME_SET_DEFAULT` (providerId + modelId + apiLine).
+None of them asserts on `config.providerConfig.apiKey` or `.baseUrl`, and
+that's the correct shape: those fields don't appear on the critical path for
+`405 Method Not Allowed`.
+
+### What CORRECTION11 changed (docs/evidence only, no production code, no tests)
+1. This ACT (GATE 3 above) rewritten to claim the **4-field overlay** and
+   state explicitly why `apiKey/baseUrl/headers/providerSpecificConfig`
+   are intentionally NOT duplicated into `providerConfig`.
+2. `.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01/03-repair-decision.txt`
+   rewritten to mirror the 4-field overlay and add the same explicit
+   `apiKey/baseUrl` boundary note.
+3. `.factory/epic-board.md` — the existing 2026-09-09 ACT line (line 1) still
+   claims the broader 6-field overlay; that line is left in place as the
+   original closure record, but a new CORRECTION11 row above it clarifies
+   that the production overlay is bounded to 4 fields and explains why.
+
+### What CORRECTION11 did NOT change
+- `apps/vscode/src/sdk/instance-store/typed-projector.ts` — production code
+  untouched. The 4-field overlay at ~lines 273-278 is the implementation.
+- `apps/vscode/src/sdk/__tests__/use-profile-apiline-runtime-routing.mpfrb01-test-apply-live01.test.ts`
+  — tests untouched. They already assert the correct 4-field boundary.
+- `buildSessionConfig`, `setOrClear`, LEGACY state read, bootstrap path,
+  "Set as default" path, proto/UI/webview surface, CORRECTION09 closure.
+- Test results (5/5 GREEN on targeted, 119/119 GREEN on wider sweep,
+  typecheck clean) — all still GREEN, no re-run needed because no
+  production or test code changed.
+
 ## Files Changed
 
 ### Modified
@@ -130,6 +214,15 @@ The fix does not break any of the following (all asserted as `pass` in the test 
 - `.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01/02-red-witness.txt`
 - `.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01/03-repair-decision.txt`
 - `.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01/04-green-confirm.txt`
+
+### Modified by CORRECTION11 (docs/evidence only, 2026-09-09 second pass)
+- `.factory/acts/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01.md` — GATE 3 rewritten to claim
+  the bounded 4-field overlay; new GATE 7 added documenting the evidence-boundary correction.
+- `.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01/03-repair-decision.txt` —
+  rewritten to mirror the 4-field overlay and explain why apiKey/baseUrl are top-level-only.
+- `.factory/epic-board.md` — new CORRECTION11 row prepended (HALT_EVIDENCE_CONTRACT_MISMATCH
+  CLOSED); inline `[CORRECTION11 NOTE]` marker added to the original 2026-09-09 six-field
+  claim so the original closure record is no longer actively misleading.
 
 ## Live Verification (pending)
 Dogfood step: reload VS Code, create a MiniMax profile with `apiLine="international"`,

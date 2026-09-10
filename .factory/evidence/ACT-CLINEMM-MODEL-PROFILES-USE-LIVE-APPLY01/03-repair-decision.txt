@@ -13,7 +13,7 @@ Pre-existing structure (top-level overlay):
   setOrClear(cfgAny, "region", conn.region)
 
 ADDED (CORRECTION10): providerConfig carrier overlay. The @cline/core runtime reads
-apiLine/providerId/region/modelId/baseUrl from config.providerConfig (the legacy carrier)
+apiLine/providerId/region/modelId from config.providerConfig (the legacy carrier)
 during createAgentModelFromConfig's baseProviderConfig matching at
 sdk/packages/core/src/services/llms/handler-factory.ts:202-220.
 
@@ -27,27 +27,42 @@ sdk/packages/core/src/services/llms/handler-factory.ts:202-220.
   // typed value — producing "Use" routing to the wrong regional endpoint and
   // the upstream returning 405 Method Not Allowed.
   //
-  // The overlay mirrors the top-level setOrClear calls so R5 partial-instance
-  // semantics are preserved: undefined values are no-ops (legacy is kept), null
-  // values clear (legacy is overwritten with null), and present values replace.
+  // The overlay mirrors the top-level setOrClear calls for the FOUR fields on
+  // the critical path for the live `405`: identity (providerId, modelId) and
+  // regional routing (apiLine, region). It is intentionally NARROWER than the
+  // top-level overlay — apiKey, baseUrl, headers, and providerSpecificConfig
+  // are NOT propagated onto `providerConfig`. They are already written at the
+  // top level by the existing top-level setOrClear block, and
+  // createAgentModelFromConfig reads them through the
+  // `config.apiKey ?? baseProviderConfig?.apiKey` chain. Duplicating them onto
+  // providerConfig would risk double-writes that diverge across the two slots
+  // if a future LEGACY-state pre-fill ever sets them before the typed apply.
+  //
+  // The overlay uses the SAME setOrClear semantics for the four fields it does
+  // touch, so R5 partial-instance semantics are preserved: undefined values are
+  // no-ops (legacy is kept), null values clear (legacy is overwritten with
+  // null), and present values replace.
   const pcAny = (config.providerConfig ?? {}) as Record<string, unknown>
   setOrClear(pcAny, "providerId", inst.providerId)
   setOrClear(pcAny, "modelId", conn.modelId)
-  setOrClear(pcAny, "apiKey", secret)
-  setOrClear(pcAny, "baseUrl", conn.baseUrl)
   setOrClear(pcAny, "apiLine", conn.apiLine)
   setOrClear(pcAny, "region", conn.region)
   config.providerConfig = pcAny as CoreSessionConfig["providerConfig"]
 
 DESIGN CHOICES:
-  1. Mirror the top-level overlay exactly — same setOrClear semantics, same field
-     set, same R5 contract. This is the minimal change that closes the bug.
-  2. Initialize `pcAny = config.providerConfig ?? {}` defensively — if
+  1. Overlay exactly the four fields on the live `405` critical path (providerId,
+     modelId, apiLine, region). The first-bad boundary that produces 405 is the
+     regional-routing carrier (apiLine/region) and the identity match
+     (providerId/modelId); credentials and baseUrl are not on that path.
+  2. Mirror the top-level setOrClear semantics for those four fields so the R5
+     contract is identical at both levels. This is the minimal change that
+     closes the bug.
+  3. Initialize `pcAny = config.providerConfig ?? {}` defensively — if
      buildSessionConfig hasn't pre-populated it (e.g. some test scenarios),
      we still write the typed values onto a fresh object rather than crashing.
-  3. Reassign `config.providerConfig = pcAny` to ensure the reference survives
+  4. Reassign `config.providerConfig = pcAny` to ensure the reference survives
      (in case it was originally undefined and we created a new object).
-  4. Use `Record<string, unknown>` + cast at boundary to avoid widening the
+  5. Use `Record<string, unknown>` + cast at boundary to avoid widening the
      CoreSessionConfig type signature for an internal seam.
 
 NON-CHANGES:
@@ -58,3 +73,8 @@ NON-CHANGES:
   - The "Set as default + new task" path is unchanged structurally — the fix closes
     both paths via the same seam because both go through applyTypedProviderInstanceToConfig.
   - setOrClear is unchanged. We leverage its existing R5 contract.
+  - apiKey/baseUrl/headers/providerSpecificConfig propagation is NOT changed.
+    They remain top-level-only. They are NOT added to the providerConfig overlay
+    because the downstream merge (config.apiKey ?? baseProviderConfig?.apiKey)
+    already picks them up from the top level, and adding them here would risk
+    divergence between the two slots.
