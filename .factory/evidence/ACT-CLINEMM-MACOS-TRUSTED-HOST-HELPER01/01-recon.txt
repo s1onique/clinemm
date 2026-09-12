@@ -1,0 +1,104 @@
+ACT_ID=ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01
+
+ACTUAL_SEATBELT_SEAM=
+  Production Seatbelt profile generator lives at
+    sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts
+  and is wired into the executor at
+    sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts
+    (SeatbeltSandboxBackendExperimental.prepare)
+  CLI-facing capability selector:
+    apps/vscode/src/sdk/sandbox-policy.ts
+      - resolveExperimentalSandboxMode() (default-on)
+      - buildExperimentalReconCapability() (active workspace)
+      - resolveSafeYoloSshAgentOptIn() (SSH-agent opt-in)
+
+ACTUAL_CODIUM_LAUNCH_SEAM=
+  VSCodium is at /Applications/VSCodium.app (Contents/Resources/app/bin/codium).
+  Two seatbelt-relevant launch seams exist:
+    (1) scripts/install-vscodium-dev.sh — installs the dogfood VSIX into the
+        user's VSCodium profile (`codium --install-extension`).
+    (2) apps/vscode/scripts/run-extension-host.sh — runs headed Codium with
+        --extensionDevelopmentPath pointing at the local repo.
+  Neither wrapper currently composes a sandbox-exec profile; the sandbox is
+  applied to INDIVIDUAL COMMAND INVOCATIONS (run via CommandJobManager), not
+  to the Codium process itself.
+  => This ACT does not need a seatbelted-Codium-process seam. The seatbelted
+     seam is per-command (CommandJobManager.spawn(...)/sandbox-exec -f profile
+     <command>), so the RED witness runs from a `sandbox-exec -f <profile>
+     /usr/bin/env node client.js` child, which is exactly the same substrate
+     the production executor uses.
+
+EXISTING_SOCKET_AUTHORITY_IMPLEMENTATION=
+  The ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01 family
+  (sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts lines
+  ~376-411) emits the canonical exact-socket SBPL pair:
+    (allow system-socket (socket-domain AF_UNIX))
+    (allow network-outbound
+      (remote unix-socket (path-literal "<CANONICAL>")))
+  paired with the canonicalization+isSocket gate in
+  seatbelt-backend.ts (lstat S_IFSOCK mask). This ACT reuses the same
+  shape via a NEW capability field
+    CommandCapability.hostHelperAuthority: { mode: "exact-socket",
+                                            canonicalSocketPath: string }
+  so the SSH-agent and host-helper rules share one canonical generator
+  function. No new SBPL grammar is introduced.
+
+HELPER_SUBSTRATE=
+  Repository convention is TypeScript end-to-end with bun as the runner.
+  The helper is implemented in TypeScript and shipped as a tiny source file
+  executed directly by `bun tools/macos-host-helper/server.ts` (no compile
+  step required for the prototype). It uses ONLY Node's `net` builtin for
+  the AF_UNIX listener and `node:os`/`node:crypto` for diagnostics. No
+  external dependencies — keeps the launchd job footprint tiny and
+  trivially auditable.
+
+PROPOSED_SOCKET_ENDPOINT=
+  $HOME/.clinemm/host-helper.sock
+  - Owned by the current user (uid matches helper uid).
+  - Mode 0600 (SockPathMode 384 decimal in the LaunchAgent plist).
+  - Parent dir ~/.clinemm is created by the install script (idempotent).
+  - Single source of truth: env var CLINEMM_HOST_HELPER_SOCKET.
+    The backend reads this env var (mirrors SSH_AUTH_SOCK pattern),
+    canonicalizes it via canonicalizeSandboxRoot, lstat-validates S_IFSOCK,
+    and emits a SINGLE path-literal rule scoped to the resolved vnode.
+  - The LaunchAgent plist owns the socket via its `Sockets` dict and
+    launches the helper with launch_activate_socket() so the helper
+    inherits the activated fd rather than racing to bind().
+
+OBSERVABILITY_AVAILABLE=
+  - launchctl bootstrap/bootout/print (programmatic but exit-status only)
+  - launchd Sockets fd activation via launch_activate_socket() (stdlib)
+  - /usr/bin/sandbox-exec -f <profile> (kernel-level verdict; SBPL output
+    appears on stderr as `sandbox-exec: deny(1) ...` or silently allowed)
+  - File mode/owner via lstat
+  - Connect via `node -e "require('net').connect(...)"` or a small helper
+    client for the GREEN witness
+
+OBSERVABILITY_UNAVAILABLE=
+  - launchctl print/list does NOT promise stable parseable output
+    (rejected per ACT §6 — must rely on exit status + actual socket
+    behaviour for evidence).
+
+GATE_RESULT=ACTUAL_PRODUCTION_SEAM_MATCHES_ASSUMED_SEAM_PASS
+HALT_WRONG_PRODUCTION_SEAM=NOT_TRIGGERED
+
+DESIGN_FREEZE=
+  - protocol_version: 1
+  - methods: ["health"] (anything else -> METHOD_NOT_ALLOWED, fail-closed)
+  - envelope:
+      req  = { version: 1, request_id: string, method: "health" }
+      resp = { version: 1, request_id: <echo>, ok: true,
+               service: "clinemm-host-helper", pid, uid }
+  - max request bytes: 4096 (single-shot, read fully)
+  - transport: AF_UNIX stream socket (no TCP listener)
+  - auth: LOCAL_UID_PLUS_EXACT_SOCKET_CAPABILITY (per ACT §12):
+      socket owner == current uid AND socket mode 0600 AND helper uid
+      == current uid AND no broad client population. All four will be
+      proven in the GREEN witness.
+
+REPO_CONVENTIONS_REUSED=
+  - TypeScript end-to-end; bun as the runner (`bun file.ts`)
+  - Bash scripts in scripts/ (cf. install-vscodium-dev.sh style)
+  - SBPL generators in sdk/packages/core/src/runtime/sandbox/macos/
+  - ACT evidence under .factory/evidence/ACT-.../
+  - Existing AF_UNIX path-literal SBPL pair (ssh-agent)

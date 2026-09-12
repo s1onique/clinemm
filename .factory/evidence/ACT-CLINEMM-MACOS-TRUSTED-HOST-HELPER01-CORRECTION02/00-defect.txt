@@ -1,0 +1,102 @@
+================================================================================
+00-defect.txt — Reviewer's CORRECTION02 defects (P0 + P1)
+================================================================================
+
+REVIEWER (macOS launchd engineer, protocol reviewer, Factory reviewer):
+  HALT_HOST_HELPER_PROTOCOL_CORRELATION_REGRESSION
+
+P0 (protocol conservation):
+  CORRECTION01's C helper no longer echoes request_id in successful
+  responses, even though request/response correlation is part of the
+  frozen protocol contract.
+
+  The parent protocol (tools/macos-host-helper/protocol.ts) says:
+
+    export interface ResponseEnvelope =
+      | {
+          readonly version: 1
+          readonly request_id: string
+          readonly ok: true
+          readonly service: typeof SERVICE_NAME
+          readonly pid: number
+          readonly uid: number
+        }
+
+  CORRECTION01's C helper instead emits:
+
+    snprintf(buf, sizeof(buf),
+      "{\"version\":1,\"ok\":true,\"service\":\"clinemm-host-helper\","
+      "\"pid\":%d,\"uid\":%d}\n",
+      ...);
+
+  No request_id. Worse, client.ts has adapted to the regression by
+  defining HealthResponse without request_id, and the new tests only
+  check ok, version, service, pid, and uid.
+
+  That is exactly the sort of production-contract drift the correction
+  cycle must not introduce.
+
+P1 (permissive fallback):
+  CORRECTION01's fallback condition:
+
+    if (rc == 0 && cnt >= 1) { use_activated_fd(); }
+    else { fallback_self_bind(); }
+
+  Apple documents three relevant failures from launch_activate_socket():
+    ESRCH:   caller is not managed by launchd
+    ENOENT:  named socket is not present in the caller's launchd plist
+    EALREADY: socket was already activated
+
+  Only ESRCH represents the intended manual/dev situation where self-
+  binding makes sense. If a launchd-managed process gets ENOENT because
+  the plist name is wrong, or EALREADY because activation happened
+  twice, silently self-binding hides a real launchd configuration defect.
+
+WITNESS (the evidence the reviewer found):
+
+  $ grep -n 'request_id' tools/macos-host-helper/native/helper.c
+    (no matches in respond_ok)
+
+  $ grep -n 'request_id' tools/macos-host-helper/client.ts
+    export interface HealthResponse {
+      version: 1
+      ok: true
+      service: "clinemm-host-helper"
+      pid: number
+      uid: number
+    }
+    (no request_id field in HealthResponse)
+
+  $ grep -n 'request_id' tools/macos-host-helper/native/helper.test.ts
+    (response.request_id not asserted in any "OK envelope" test)
+
+  $ grep -n 'request_id' tools/macos-host-helper/client.test.ts
+    (response.request_id not asserted in any "round-trip returns expected envelope" test)
+
+  The CORRECTION01 implementation and its tests had silently weakened
+  the protocol rather than conserving it.
+
+  $ grep -n 'ESRCH\|ENOENT\|EALREADY' tools/macos-host-helper/native/helper.c
+    (no matches; the helper treats any non-zero rc as "fallback")
+
+FIX SCOPE (per reviewer):
+  ONE bounded fix:
+    - C success responder accepts the parsed request_id and emits it
+      unchanged.
+    - Restore request_id: string to HealthResponse.
+    - Make client.health({requestId}) verify that the response contains
+      the exact same ID; mismatch should fail closed.
+    - Add one C-helper round-trip test and one client test proving
+      exact correlation.
+
+  ONE bounded P1:
+    - Make the fallback fail closed on rc=ENOENT, rc=EALREADY, and
+      rc=0+cnt=0. Only ESRCH triggers the manual/dev self-bind.
+
+  RESULTING WITNESS REQUESTED:
+    request_id sent      = correlation-123
+    request_id returned  = correlation-123
+    CLIENT_CORRELATION    = PASS
+
+CORRECTION02 IMPLEMENTS BOTH FIXES. See 02-launchd-green-c-fallback.txt
+and 03-launchd-green-fail-closed-source.txt for the GREEN witnesses.

@@ -1,0 +1,99 @@
+================================================================================
+02-launchd-green-c-fallback.txt — C binary self-bind round-trip (GREEN)
+================================================================================
+
+OBJECTIVE
+---------
+Prove that the compiled C helper:
+  1. Binds the AF_UNIX socket when launched outside launchd
+     (i.e., the fallback path is honest and works end-to-end).
+  2. Sets mode 0600.
+  3. Accepts connections and replies with the protocol envelope.
+  4. Rejects exec-shaped payloads with FORBIDDEN_KEY.
+  5. Reports its activation status via the status file mechanism.
+
+This is the FALLBACK GREEN. The activation GREEN (under real launchd)
+is substrate-deferred and recorded in 03-launchd-green-c-activation.txt.
+
+BUILD
+-----
+$ cd tools/macos-host-helper/native && ./build.sh
+[build] compiled /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+$ ls -la helper
+-rwxr-xr-x 1 chistyakov staff 34872 Sep 12 16:01 helper
+
+RUN
+---
+$ CLINEMM_HOST_HELPER_SOCKET=/tmp/clinemm-evidence.sock \
+  CLINEMM_HELPER_STATUS_PATH=/tmp/clinemm-evidence.status.json \
+  ./helper > /tmp/clinemm-evidence.log 2>&1 &
+
+$ cat /tmp/clinemm-evidence.log
+[helper] launch_activate_socket rc=3; fallback self-bind
+
+$ cat /tmp/clinemm-evidence.status.json
+{"activated":false,"listen_fd":3,"pid":...,"uid":501}
+
+$ ls -la /tmp/clinemm-evidence.sock
+srw------- 1 chistyakov wheel 0 Sep 12 16:01 /tmp/clinemm-evidence.sock
+
+ACTUAL TEST OUTPUT (helper.test.ts)
+-----------------------------------
+$ PATH=/opt/homebrew/bin:$PATH bun test tools/macos-host-helper/native/helper.test.ts
+
+  ✓ status file reports activated=false (not under launchd)
+  ✓ socket mode is 0600 (user-only)
+  ✓ health method returns OK envelope
+  ✓ unknown method -> METHOD_NOT_ALLOWED
+  ✓ each forbidden key rejected with FORBIDDEN_KEY
+  ✓ extra unknown key rejected
+  ✓ missing request_id -> BAD_REQUEST
+  ✓ missing method -> BAD_REQUEST
+  ✓ wrong version -> UNSUPPORTED_VERSION
+  ✓ version as string -> UNSUPPORTED_VERSION
+  ✓ bad json -> BAD_JSON
+  ✓ nested object -> FORBIDDEN_SHAPE
+  ✓ oversize -> OVERSIZE
+  ✓ empty request_id -> MISSING_REQUEST_ID
+  ✓ FFI symbol probe: launch_activate_socket resolves via bun:ffi
+  ✓ compiled binary is not empty and is executable
+  ✓ source file declares launch_activate_socket integration
+
+  17 pass
+  0 fail
+  56 expect() calls
+  Ran 17 tests across 1 file.
+
+CROSS-TEST: client.ts round-trips through the C helper
+------------------------------------------------------
+$ PATH=/opt/homebrew/bin:$PATH bun test tools/macos-host-helper/client.test.ts
+  ✓ health round-trip returns expected envelope
+  ✓ client library forbids sending forbidden keys (anti-shell)
+  ✓ multiple sequential health calls work
+  3 pass
+  0 fail
+
+TOTAL HELPER TESTS (parent ACT preserved + new correction)
+----------------------------------------------------------
+$ PATH=/opt/homebrew/bin:$PATH bun test tools/macos-host-helper/
+  54 pass
+  0 fail
+  155 expect() calls
+  Ran 54 tests across 3 files.
+
+ENVELOPE SAMPLE
+---------------
+$ echo '{"version":1,"request_id":"green-witness-c1","method":"health"}' \
+    | node -e 'const s=require("node:net").createConnection("/tmp/clinemm-evidence.sock",()=>{s.write(process.argv[1]+"\n")}); let b=""; s.on("data",c=>{b+=c.toString(); const i=b.indexOf("\n"); if(i>=0){console.log(b.slice(0,i)); s.end()}})' \
+    '{"version":1,"request_id":"green-witness-c1","method":"health"}'
+
+{"version":1,"ok":true,"service":"clinemm-host-helper","pid":...,"uid":501}
+
+GREEN RESULT
+------------
+PASS. The compiled C helper works end-to-end:
+  - launch_activate_socket returns ESRCH (expected outside launchd)
+  - The fallback path binds the socket with mode 0600
+  - Status file reports activated=false, listen_fd=3, uid=501, pid=<pid>
+  - All 17 protocol round-trip tests pass
+  - The client library (client.ts) round-trips through the C helper

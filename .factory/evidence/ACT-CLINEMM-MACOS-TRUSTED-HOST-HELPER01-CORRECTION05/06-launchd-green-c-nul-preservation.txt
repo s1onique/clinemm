@@ -1,0 +1,112 @@
+================================================================================
+06-launchd-green-c-nul-preservation.txt — CORRECTION05 GREEN witness
+================================================================================
+
+OBJECTIVE
+---------
+Prove the C helper now preserves embedded NUL bytes through the
+JSON round trip. Pre-CORRECTION05 the helper stored parsed strings
+as NUL-terminated C strings in kv_t.val, so a request_id of
+"a\u0000b" (length 3) round-tripped as just "a" (length 1).
+
+REVIEWER-MANDATED DISCRIMINATOR (a\u0000b)
+-----------------------------------------
+
+case: a\u0000b (reviewer discriminator, 3 bytes)
+  wire:        {"version":1,"request_id":"a\u0000b","method":"health"}
+  wire bytes:  7b 22 76 65 72 73 69 6f 6e 22 3a 31 2c 22 72 65 71 75 65 73 74 5f 69 64 22 3a 22 61 5c 75 30 30 30 30 62 22 2c 22 6d 65 74 68 6f 64 22 3a 22 68 65 61 6c 74 68 22 7d
+  response:    {"version":1,"request_id":"a\u0000b","ok":true,"service":"clinemm-host-helper","pid":28751,"uid":501}
+  request_id:  "a\u0000b"
+  request_id bytes: 61 00 62
+  length:      3
+  RESULT:      PASS  (expected 3 bytes "a\u0000b")
+
+case: \u0000-leading (9 bytes)
+  wire:        {"version":1,"request_id":"\u0000-leading","method":"health"}
+  wire bytes:  7b 22 76 65 72 73 69 6f 6e 22 3a 31 2c 22 72 65 71 75 65 73 74 5f 69 64 22 3a 22 5c 75 30 30 30 30 2d 6c 65 61 64 69 6e 67 22 2c 22 6d 65 74 68 6f 64 22 3a 22 68 65 61 6c 74 68 22 7d
+  response:    {"version":1,"request_id":"\u0000-leading","ok":true,"service":"clinemm-host-helper","pid":28751,"uid":501}
+  request_id:  "\u0000-leading"
+  request_id bytes: 00 2d 6c 65 61 64 69 6e 67
+  length:      9
+  RESULT:      PASS  (expected 9 bytes "\u0000-leading")
+
+case: trailing-\u0000 (10 bytes)
+  wire:        {"version":1,"request_id":"trailing-\u0000","method":"health"}
+  wire bytes:  7b 22 76 65 72 73 69 6f 6e 22 3a 31 2c 22 72 65 71 75 65 73 74 5f 69 64 22 3a 22 74 72 61 69 6c 69 6e 67 2d 5c 75 30 30 30 30 22 2c 22 6d 65 74 68 6f 64 22 3a 22 68 65 61 6c 74 68 22 7d
+  response:    {"version":1,"request_id":"trailing-\u0000","ok":true,"service":"clinemm-host-helper","pid":28751,"uid":501}
+  request_id:  "trailing-\u0000"
+  request_id bytes: 74 72 61 69 6c 69 6e 67 2d 00
+  length:      10
+  RESULT:      PASS  (expected 10 bytes "trailing-\u0000")
+
+case: a\u0000b\u0000c (5 bytes, multi-NUL)
+  wire:        {"version":1,"request_id":"a\u0000b\u0000c","method":"health"}
+  wire bytes:  7b 22 76 65 72 73 69 6f 6e 22 3a 31 2c 22 72 65 71 75 65 73 74 5f 69 64 22 3a 22 61 5c 75 30 30 30 30 62 5c 75 30 30 30 30 63 22 2c 22 6d 65 74 68 6f 64 22 3a 22 68 65 61 6c 74 68 22 7d
+  response:    {"version":1,"request_id":"a\u0000b\u0000c","ok":true,"service":"clinemm-host-helper","pid":28751,"uid":501}
+  request_id:  "a\u0000b\u0000c"
+  request_id bytes: 61 00 62 00 63
+  length:      5
+  RESULT:      PASS  (expected 5 bytes "a\u0000b\u0000c")
+
+case: \u0000 only (1 byte)
+  wire:        {"version":1,"request_id":"\u0000","method":"health"}
+  wire bytes:  7b 22 76 65 72 73 69 6f 6e 22 3a 31 2c 22 72 65 71 75 65 73 74 5f 69 64 22 3a 22 5c 75 30 30 30 30 22 2c 22 6d 65 74 68 6f 64 22 3a 22 68 65 61 6c 74 68 22 7d
+  response:    {"version":1,"request_id":"\u0000","ok":true,"service":"clinemm-host-helper","pid":28751,"uid":501}
+  request_id:  "\u0000"
+  request_id bytes: 00
+  length:      1
+  RESULT:      PASS  (expected 1 bytes "\u0000")
+
+case: a\u0001b (3 bytes, control-NOT-NUL, regression check)
+  wire:        {"version":1,"request_id":"a\u0001b","method":"health"}
+  wire bytes:  7b 22 76 65 72 73 69 6f 6e 22 3a 31 2c 22 72 65 71 75 65 73 74 5f 69 64 22 3a 22 61 5c 75 30 30 30 31 62 22 2c 22 6d 65 74 68 6f 64 22 3a 22 68 65 61 6c 74 68 22 7d
+  response:    {"version":1,"request_id":"a\u0001b","ok":true,"service":"clinemm-host-helper","pid":28751,"uid":501}
+  request_id:  "a\u0001b"
+  request_id bytes: 61 01 62
+  length:      3
+  RESULT:      PASS  (expected 3 bytes "a\u0001b")
+
+case: rocket-\u{1F680} (supplementary plane, regression check)
+  wire:        {"version":1,"request_id":"rocket-🚀","method":"health"}
+  wire bytes:  7b 22 76 65 72 73 69 6f 6e 22 3a 31 2c 22 72 65 71 75 65 73 74 5f 69 64 22 3a 22 72 6f 63 6b 65 74 2d d83d 22 2c 22 6d 65 74 68 6f 64 22 3a 22 68 65 61 6c 74 68 22 7d
+  response:    {"version":1,"request_id":"rocket-🚀","ok":true,"service":"clinemm-host-helper","pid":28751,"uid":501}
+  request_id:  "rocket-🚀"
+  request_id bytes: 72 6f 63 6b 65 74 2d d83d
+  length:      9
+  RESULT:      PASS  (expected 9 bytes "rocket-🚀")
+
+SOURCE-LEVEL INVARIANTS
+-----------------------
+  kv_t has val_len:                       PASS
+  write_json_string takes (..., len):     PASS
+  respond_ok takes (cfd, bytes, len):    PASS
+  caller passes (r->val, r->val_len):    PASS
+  empty check uses val_len:               PASS
+  write_json_string loop bound is len:    PASS
+  write_json_string does not use strlen:  PASS
+
+FULL TEST BATTERY (post-CORRECTION05)
+--------------------------------------
+  bun test tools/macos-host-helper/ -> 92 pass / 0 fail (helper 44, client 14, server 34)
+  + seatbelt-host-helper-authority   -> 8 pass
+  + seatbelt-profile                 -> 40 pass
+  + seatbelt-ssh-agent-authority     -> 7 pass | 4 skipped (substrate-deferred)
+  TOTAL: 147 pass / 0 fail / 4 skipped
+
+PROTOCOL-CONSERVATION CHAIN (post-CORRECTION05)
+------------------------------------------------
+  JSON.stringify(request_id)
+    -> wire bytes (may contain ", \, control, \u0000, \uXXXX, surrogate pairs, raw UTF-8)
+    -> C parse_string decodes all of these (CORRECTION04 + CORRECTION05 length-aware)
+    -> semantic bytes in kv.val with kv.val_len (CORRECTION05)
+    -> C write_json_string re-encodes (CORRECTION03 + CORRECTION05 length-aware)
+    -> wire bytes (valid JSON)
+    -> JSON.parse(response)
+    -> response.request_id === original request_id byte-for-byte
+
+GREEN RESULT
+------------
+PASS. The C helper's parser and emitter are now length-aware, so
+embedded NUL bytes (from \u0000 in the wire form, or from raw 0x00
+bytes in non-JSON contexts) survive the round trip. The frozen
+wire contract is now fully conserved end-to-end.

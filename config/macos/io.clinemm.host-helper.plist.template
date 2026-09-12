@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION01
+  Per-user LaunchAgent for the trusted host helper.
+
+  Reverse-DNS label: io.clinemm.host-helper
+  Authority:         user (NOT root, NOT system)
+  Socket owner:      LaunchAgent (Sockets dict + launch_activate_socket)
+  Helper program:    compiled C binary (helper.c)
+
+  The Sockets dictionary owns the AF_UNIX endpoint; the helper inherits
+  the activated fd via launch_activate_socket() and accepts on it.
+  Under launchd, the helper does NOT call bind() — that would race
+  with launchd which has already bound the socket.
+
+  Socket mode 384 decimal = 0600 octal — user-only.
+
+  Placeholders resolved by scripts/macos/clinemm-host-helper install:
+    __SOCKET_PATH__  absolute, canonical path of the AF_UNIX socket
+    __HELPER_PATH__  absolute path to the compiled helper binary
+    __LOG_PATH__     absolute path to the helper log file
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.clinemm.host-helper</string>
+
+    <!--
+      The compiled C helper is invoked directly. It calls
+      launch_activate_socket("Listener") and accepts on the fd.
+      The CLINEMM_HOST_HELPER_SOCKET env var is set as a fallback
+      only — when launchd hands us the activated fd, the env var is
+      unused. The self-bind fallback exists for dev/test use without
+      launchd.
+    -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HELPER_PATH__</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CLINEMM_HOST_HELPER_SOCKET</key>
+        <string>__SOCKET_PATH__</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <!--
+      Socket ownership + mode are owned by launchd via the Sockets
+      dict. The SockPathMode 384 (decimal) = 0600 (octal) — user-only,
+      matching the helper's auth model
+      (LOCAL_UID_PLUS_EXACT_SOCKET_CAPABILITY per ACT §12).
+
+      On-demand launch: KeepAlive is NOT set. The agent is launched
+      on the first connection to Listener (per launchd's Sockets
+      dict semantics). A stuck helper is observable via the socket
+      failing to respond, not by being restarted.
+    -->
+    <key>Sockets</key>
+    <dict>
+        <key>Listener</key>
+        <dict>
+            <key>SockPathName</key>
+            <string>__SOCKET_PATH__</string>
+            <key>SockType</key>
+            <string>stream</string>
+            <key>SockPathMode</key>
+            <integer>384</integer>
+        </dict>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_PATH__</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_PATH__</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
+

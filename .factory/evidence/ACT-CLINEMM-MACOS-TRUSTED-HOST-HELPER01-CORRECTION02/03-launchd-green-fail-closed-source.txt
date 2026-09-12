@@ -1,0 +1,126 @@
+================================================================================
+03-launchd-green-fail-closed-source.txt — Source-level fail-closed matrix
+================================================================================
+
+OBJECTIVE
+---------
+CORRECTION02 P1: prove the C helper's main() discriminates between
+launch_activate_socket's three documented failure modes and a
+launchd-success-with-no-fd edge case.
+
+  rc=0      && cnt>=1  → use launchd-activated fd (PRIMARY)
+  rc=0      && cnt==0  → fail closed (launchd bug)
+  rc=ESRCH  (3)        → self-bind via $CLINEMM_HOST_HELPER_SOCKET (manual/dev)
+  rc=ENOENT (2)        → fail closed (plist Sockets.Listener missing)
+  rc=EALREADY          → fail closed (already activated)
+  anything else        → fail closed (unknown)
+
+The reviewer noted that silently self-binding on ENOENT/EALREADY
+would hide a real launchd configuration defect.
+
+WHAT WAS VERIFIED IN THIS SESSION
+---------------------------------
+The dev sandbox cannot simulate rc=ENOENT or rc=EALREADY outside a
+real launchd-managed process. The strongest unit-level witness is a
+source-level invariant check that the helper encodes the matrix.
+
+LIVE: ESRCH BRANCH (manual/dev fallback) — recorded 2026-09-12
+-------------------------------------------------------------
+$ CLINEMM_HOST_HELPER_SOCKET=/tmp/c2-evidence.sock \
+    CLINEMM_HELPER_STATUS_PATH=/tmp/c2-evidence.status.json \
+    ./tools/macos-host-helper/native/helper > /tmp/c2-evidence.log 2>&1 &
+
+$ cat /tmp/c2-evidence.log
+[helper] launch_activate_socket ESRCH; manual/dev fallback self-bind
+
+$ cat /tmp/c2-evidence.status.json
+{"activated":false,"listen_fd":3,"pid":33284,"uid":501,"launchd_rc":3}
+
+$ echo '{"version":1,"request_id":"correlation-123","method":"health"}' | \
+    bun -e '<read-correlation-123.snip>'
+{"version":1,"request_id":"correlation-123","ok":true,"service":"clinemm-host-helper","pid":33284,"uid":501}
+
+The helper takes the ESRCH branch and self-binds correctly.
+
+SUBSTRATE-DEFERRED: ENOENT / EALREADY / rc=0+cnt=0 BRANCHES
+----------------------------------------------------------
+On a real launchd-managed process:
+  - rc=ENOENT(2): the helper would log "FAIL_CLOSED: launch_activate_socket
+    rc=2 cnt=0; expected rc=0+fd under launchd, or ESRCH for manual/dev mode.
+    rc=ENOENT or rc=EALREADY indicates a launchd configuration defect
+    (plist Sockets.Listener missing or already activated). Refusing to
+    self-bind to avoid masking a real bug." and exit with code 2.
+  - rc=EALREADY: same as above.
+  - rc=0, cnt=0: same as above (the `if (rc == 0 && cnt >= 1)` test
+    fails, falling into the else branch).
+
+SOURCE-LEVEL MATRIX (test asserts all of these):
+------------------------------------------------
+$ bun test tools/macos-host-helper/native/helper.test.ts \
+    -t 'fail-closed fallback matrix is encoded in source'
+
+  ✓ CORRECTION02: fail-closed fallback matrix is encoded in source
+
+This test reads the source and asserts:
+  expect(src).toContain("ESRCH")
+  expect(src).toContain("ENOENT")
+  expect(src).toContain("EALREADY")
+  expect(src).toContain("FAIL_CLOSED")
+  expect(src).toMatch(/return 2[^0-9]/)
+
+RELEVANT SOURCE BLOCK (helper.c main()):
+----------------------------------------
+if (rc == 0 && cnt >= 1) {
+  listen_fd = fds[0];
+  activated = 1;
+  fprintf(stderr, "[helper] launch_activate_socket activated_fd=%d cnt=%zu\n",
+          listen_fd, cnt);
+} else if (rc == ESRCH) {
+  fprintf(stderr, "[helper] launch_activate_socket ESRCH; manual/dev fallback self-bind\n");
+  const char *path = getenv("CLINEMM_HOST_HELPER_SOCKET");
+  if (!path || !*path) path = "/tmp/clinemm-host-helper.sock";
+  unlink(path);
+  listen_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (listen_fd < 0) { perror("socket"); goto fail_closed; }
+  struct sockaddr_un addr = { 0 };
+  addr.sun_family = AF_UNIX;
+  strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+  if (bind(listen_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) { perror("bind"); goto fail_closed; }
+  chmod(path, 0600);
+  if (listen(listen_fd, 8) < 0) { perror("listen"); goto fail_closed; }
+} else {
+  // rc != 0, or rc == 0 with cnt == 0. Treat as configuration defect.
+  fprintf(stderr,
+    "[helper] FAIL_CLOSED: launch_activate_socket rc=%d cnt=%zu; "
+    "expected rc=0+fd under launchd, or ESRCH for manual/dev mode. "
+    "rc=ENOENT or rc=EALREADY indicates a launchd configuration defect "
+    "(plist Sockets.Listener missing or already activated). "
+    "Refusing to self-bind to avoid masking a real bug.\n",
+    rc, cnt);
+  if (fds) free(fds);
+  return 2; // distinct exit code: 0=ok, 1=bind/listen error, 2=launchd config defect
+}
+
+EXIT CODE TABLE:
+  0  =  ok (rc=0+cnt>=1 OR rc=ESRCH+self-bind success)
+  1  =  bind/listen/socket error in ESRCH branch
+  2  =  launchd configuration defect (rc=ENOENT, rc=EALREADY, rc=0+cnt=0, or unknown)
+
+STATUS FILE FORENSICS:
+  {"activated":<bool>, "listen_fd":<n>, "pid":<n>, "uid":<n>, "launchd_rc":<n>}
+
+  activated=true  iff rc=0+cnt>=1 (launchd-managed, primary path)
+  activated=false iff rc=ESRCH (manual/dev fallback)
+  activated=false AND exit code 2 → launchd configuration defect
+  launchd_rc records the raw launch_activate_socket return value
+
+GREEN RESULT (P1)
+-----------------
+PASS-WITH-LIVE-SUBSTRATE-DEFERRED. The fail-closed matrix is encoded
+in the helper source and exercised live for the ESRCH branch. Under
+real launchd (substrate-eligible shell), the ENOENT / EALREADY /
+rc=0+cnt=0 branches trigger the FAIL_CLOSED path with exit code 2
+and a stderr message that names the suspected defect. Operators can
+distinguish a real launchd configuration defect from a normal
+manual/dev fallback by inspecting either the exit code (2 vs 0) or
+the status file's activated+launchd_rc fields.

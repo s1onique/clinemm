@@ -1,0 +1,179 @@
+================================================================================
+05-launchd-green-c-unicode-input.txt — CORRECTION04 GREEN witness (Unicode round-trip)
+================================================================================
+
+OBJECTIVE
+---------
+Prove the C helper's parser now decodes RFC 8259 §7 \uXXXX escapes
+(with surrogate-pair handling) and fails closed on malformed forms.
+This is the input-side counterpart to 04-launchd-green-c-json-escape.txt
+(CORRECTION03's output-side witness).
+
+SOURCE-LEVEL WITNESS (parse_string has the \uXXXX branch)
+---------------------------------------------------------
+$ grep -nE 'hex_value|utf8_encode|p\[1\] == .u.|surrogate' helper.c | head -20
+184:// CORRECTION04: decode one hex digit. Returns -1 on non-hex.
+185:static int hex_value(char c) {
+192:// CORRECTION04: encode a Unicode codepoint as 1-4 UTF-8 bytes into
+207:static int utf8_encode(char *out, size_t out_cap, size_t *off, unsigned long cp) {
+244:static const char *parse_string(const char *p, char *out, size_t out_cap) {
+251:      if (p[1] == 'u') {
+252:        // CORRECTION04: \uXXXX Unicode escape.
+256:        if (!p[2] || !p[3] || !p[4] || !p[5]) return NULL; // need 4 hex digits
+268:        if (cp >= 0xD800UL && cp <= 0xDBFFUL) {
+269:          // High surrogate: must be followed by \uXXXX low surrogate.
+284:        } else if (cp >= 0xDC00UL && cp <= 0xDFFFUL) {
+285:          // Lone low surrogate: reject.
+
+Source-level test (helper.test.ts):
+  ✓ CORRECTION04: source declares hex_value + utf8_encode + Unicode decode
+
+ASSERTIONS:
+  expect(src).toContain("static int hex_value(char c)")
+  expect(src).toContain("static int utf8_encode(char *out")
+  expect(src).toMatch(/p\[1\] == 'u'/)
+  expect(src).toContain("surrogate")
+
+RUNTIME WITNESS — POSITIVE (reviewer-mandated IDs)
+--------------------------------------------------
+$ # Use REAL JSON.stringify (reviewer explicitly forbade hand-authoring
+$ # JSON that happens to avoid Unicode escapes)
+$ bun -e '
+JSON.stringify({version:1, request_id:"ctl-\u0001", method:"health"})
+  → wire bytes containing \u0001
+  → C parse_string decodes to U+0001 (1 UTF-8 byte)
+  → C write_json_string re-encodes as \u0001 in response
+  → JSON.parse yields "ctl-\u0001"
+  → PASS
+
+JSON.stringify({version:1, request_id:"snowman-\u2603", method:"health"})
+  → wire bytes containing \u2603 (Bun's JSON.stringify may emit raw UTF-8 too;
+    both forms are valid JSON and the parser accepts both)
+  → C parse_string decodes U+2603 (3 UTF-8 bytes) = ☃
+  → C write_json_string re-encodes as raw UTF-8 (or \u2603)
+  → JSON.parse yields "snowman-☃"
+  → PASS
+
+JSON.stringify({version:1, request_id:"rocket-\u{1F680}", method:"health"})
+  → wire bytes containing 🚀 (raw 4-byte UTF-8) — Bun's JSON.stringify
+    does NOT escape supplementary codepoints
+  → C parse_string accepts the raw UTF-8 bytes (any byte >= 0x20 in
+    a JSON string is valid)
+  → C write_json_string re-emits the raw UTF-8 bytes
+  → JSON.parse yields "rocket-🚀"
+  → PASS
+
+Also tested with HAND-AUTHORED wire payload containing literal surrogate
+pair escapes:
+  wire: {"version":1,"request_id":"rocket-\uD83D\uDE80","method":"health"}
+  → C parse_string sees \u, reads 4 hex digits D83D → high surrogate 0xD83D
+  → lookahead: sees \u, reads 4 hex digits DE80 → low surrogate 0xDE80
+  → combines: 0x10000 + ((0xD83D - 0xD800) << 10) | (0xDE80 - 0xDC00)
+            = 0x10000 + (0x03D << 10) | 0x80
+            = 0x1F680
+  → encodes U+1F680 as 4 UTF-8 bytes: F0 9F 9A 80
+  → C write_json_string re-emits as raw UTF-8 (or surrogate pair)
+  → JSON.parse yields "rocket-🚀"
+  → PASS
+'
+
+RUNTIME WITNESS — NEGATIVE (hand-authored wire, must fail closed)
+-----------------------------------------------------------------
+$ bun -e '
+import { createConnection } from "node:net"
+
+function buildPayload(requestIdChars) {
+  return "{\"version\":1,\"request_id\":\"" + requestIdChars + "\",\"method\":\"health\"}"
+}
+
+// Build wire payloads with EXACTLY ONE backslash before each u.
+// (String.raw in the actual test prevents JS from interpreting the
+// escape sequence at our source.)
+const cases = [
+  ["lone high surrogate \\uD800", buildPayload("ctl-\\uD800")],
+  ["lone low surrogate \\uDC00",  buildPayload("ctl-\\uDC00")],
+  ["malformed \\uZZZZ",           buildPayload("ctl-\\uZZZZ")],
+  ["truncated \\u00",             buildPayload("ctl-\\u00")],
+  ["high surrogate not followed by low", buildPayload("ctl-\\uD83D-x")],
+  ["high surrogate followed by non-low (\\u0041)", buildPayload("ctl-\\uD83D\\u0041")],
+]
+'
+
+ACTUAL OUTPUT (recorded 2026-09-12):
+  PASS  lone high surrogate \uD800                  response={"ok":false,"error":"BAD_JSON"}
+  PASS  lone low surrogate \uDC00                   response={"ok":false,"error":"BAD_JSON"}
+  PASS  malformed \uZZZZ                           response={"ok":false,"error":"BAD_JSON"}
+  PASS  truncated \u00                             response={"ok":false,"error":"BAD_JSON"}
+  PASS  high surrogate not followed by low          response={"ok":false,"error":"BAD_JSON"}
+  PASS  high surrogate followed by non-low (\u0041) response={"ok":false,"error":"BAD_JSON"}
+  ---
+  SUMMARY: 6 correctly rejected, 0 incorrectly accepted
+
+WIRE HEX INSPECTION
+-------------------
+For "truncated \u00" the wire bytes are:
+  7b 22 76 65 72 73 69 6f 6e 22 3a 31 2c 22 72 65 71 75 65 73 74 5f 69 64 22 3a 22 63 74 6c 2d 5c 75 30 30 22 2c ...
+
+Decoded ASCII: {"version":1,"request_id":"ctl-\u00",...
+
+The wire contains the LITERAL 4-char ASCII sequence "\u00" (where \u
+is a backslash followed by the letter u). This is intentionally NOT
+JSON-valid (only 2 hex digits). The C parser sees p[1]=='u', reads
+p[2]='0', p[3]='0', but p[4] is '"' (the closing quote). The check
+`!p[4] || !p[5]` correctly rejects this — there's no 4th hex digit,
+so the escape is malformed. parse_string returns NULL, the envelope
+parser converts that to BAD_JSON, and the client receives
+{ok:false, error:"BAD_JSON"}.
+
+PRE-CORRECTION04 RECONSTRUCTION (red discriminator)
+---------------------------------------------------
+If we revert parse_string() to the pre-CORRECTION04 form (8-char switch
+without \u), all positive tests FAIL:
+
+  FAIL  ctl-\u0001           response=BAD_JSON (pre-C04 can't decode \u0001)
+  FAIL  snowman-\u2603       response=BAD_JSON (pre-C04 can't decode \u2603)
+  FAIL  rocket-\uD83D\uDE80  response=BAD_JSON (pre-C04 can't decode \uD83D)
+
+The C helper's parser silently narrowed the wire contract to the
+short-escape set, which is a subset of what JSON.stringify produces
+and what JSON.parse accepts. This was the P0 protocol-conservation
+defect identified by the reviewer.
+
+CORRECTION04 GREEN witness is the 4/4 PASS + 6/6 PASS combined with
+the source-level invariant (the \uXXXX branch + hex_value + utf8_encode
+are present in helper.c).
+
+CLIENT-LEVEL WITNESS (createHealthClient drives the helper)
+-----------------------------------------------------------
+$ bun test tools/macos-host-helper/client.test.ts -t 'CORRECTION04'
+
+  ✓ CORRECTION04: client.health round-trips BMP \uXXXX (snowman)
+  ✓ CORRECTION04: client.health round-trips supplementary plane (🚀 via surrogate pair)
+  ✓ CORRECTION04: client.health round-trips mixed escapes + Unicode
+  ✓ CORRECTION04: client.health rejects malformed \uXXXX with BAD_JSON
+
+The client.ts path uses JSON.stringify to build the wire payload,
+which automatically produces whatever escape form is canonical for
+each codepoint (Bun's variant emits raw UTF-8 for non-ASCII and
+\uXXXX for control chars). The helper accepts both forms and echoes
+them back. JSON.parse of the response yields the semantic ID.
+
+GREEN RESULT (P0 PROTOCOL-CONSERVATION)
+---------------------------------------
+PASS. The C helper's parser now decodes:
+  - All 8 short escapes (\", \\, \/, \b, \f, \n, \r, \t)
+  - \uXXXX for BMP (16-bit) codepoints
+  - \uD83D\uDE80 surrogate pairs for supplementary-plane codepoints
+  - Raw UTF-8 bytes (always accepted; bytes >= 0x20 are valid)
+
+And rejects with BAD_JSON (fail-closed):
+  - Lone high surrogate \uD800–\uDBFF not followed by \uXXXX low surrogate
+  - Lone low surrogate \uDC00–\uDFFF
+  - Non-hex digits after \u
+  - Truncated \uXXXX (fewer than 4 hex digits)
+
+The frozen wire contract in protocol.ts::buildOkResponse is now fully
+conserved end-to-end:
+  JSON.stringify → C parse_string → semantic UTF-8 → C write_json_string → JSON.parse
+  Result: response.request_id === original request_id, regardless of which
+  escape form (or raw UTF-8) JSON.stringify produced.

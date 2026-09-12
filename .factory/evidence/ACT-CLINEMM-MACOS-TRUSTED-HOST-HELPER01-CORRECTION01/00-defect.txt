@@ -1,0 +1,94 @@
+================================================================================
+00-defect.txt — parent ACT defect acknowledged
+================================================================================
+
+REVIEWER OBSERVATION (verbatim, paraphrased)
+--------------------------------------------
+> The LaunchAgent claims launchd owns the socket via Sockets, but server.ts
+> never calls launch_activate_socket() and main() never supplies
+> activatedFd. Your plist defines Sockets dict with a Listener entry, but
+> the actual entrypoint does createHelperServer({ socketPath, log }) and
+> handle.listen() — so activatedFd = undefined and the server takes the
+> server.listen({ path: options.socketPath }) branch instead of
+> server.listen({ fd: launchdOwnedFd }).
+>
+> LIVE_AF_UNIX_SELF_BIND      = PROVEN
+> LAUNCHAGENT_SOCKET_ACTIVATION = NOT_PROVEN / NOT_IMPLEMENTED
+>
+> The current report promotes the former into the latter.
+
+This is a P0 load-bearing defect: the central runtime claim
+"LaunchAgent-owned via Sockets dict + launch_activate_socket()" was not
+implemented by the parent ACT's server.ts.
+
+PROBES showing Node/Bun cannot adopt pre-bound AF_UNIX fds
+----------------------------------------------------------
+
+Bun 1.3.14 `net.Server.listen({ fd })`:
+   ERROR: bun does not support listening on a file descriptor
+
+Node v26 `net.Server.listen({ fd })` (pre-bound fd from sibling process):
+   ERROR: listen ENOTTY: inappropriate ioctl for device
+
+Node v26 `Socket({ fd })` (already-listening fd):
+   ERROR: TypeError [ERR_INVALID_FD_TYPE]: Unsupported fd type: UNKNOWN
+
+Node v26 in-process pre-bound AF_UNIX:
+   ERROR: listen EINVAL: invalid argument
+
+Both runtimes treat `listen({ fd })` as "create a new listening socket
+on this fd number" rather than "adopt an existing listening socket bound
+by another process". launchd's `launch_activate_socket()` returns the
+latter — Node/Bun have no public API to receive it.
+
+PROBE commands (reproducible)
+-----------------------------
+# Probe 1: Bun FFI symbol resolution
+bun -e '
+import { dlopen, FFIType, ptr } from "bun:ffi"
+const lib = dlopen("libSystem.B.dylib", {
+  launch_activate_socket: {
+    args: [FFIType.cstring, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.int,
+  },
+})
+const rc = lib.symbols.launch_activate_socket(
+  ptr(new TextEncoder().encode("Listener\0")),
+  ptr(new BigUint64Array(1)),
+  ptr(new BigUint64Array(1))
+)
+console.log("rc:", rc)  // 3 = ESRCH (caller not under launchd) — expected
+'
+
+# Probe 2: Node listen({ fd }) against a C-bound AF_UNIX fd
+# (source /tmp/launchd-real-test.c omitted; binds + listens on a path,
+#  prints fd, sleeps 5s)
+cc -O2 -o /tmp/launchd-real-test /tmp/launchd-real-test.c
+/tmp/launchd-real-test /tmp/launchd-real-test.sock > /tmp/fdnum.txt 2>&1 &
+FD=$(cat /tmp/fdnum.txt)
+node -e "const {createServer}=require('node:net'); const s=createServer(c=>c.end('pong')); s.listen({fd:$FD},()=>console.log('OK'))"
+# Output: ERR=listen ENOTTY: inappropriate ioctl for device
+
+PARENT ACT SOURCE — DEFECT CONFIRMED
+-------------------------------------
+$ grep -c launch_activate_socket tools/macos-host-helper/server.ts
+0
+$ grep -c 'listen({ path' tools/macos-host-helper/server.ts
+1
+
+The parent ACT's server.ts does not reference launch_activate_socket at
+all. The plist + Seatbelt layers are correct; only the helper's
+runtime seam is missing.
+
+CORRECTION PATH
+---------------
+Replace the helper's core with a C binary that:
+1. Calls launch_activate_socket("Listener") via libSystem (via <launch.h>).
+2. On rc=0 + cnt>=1, accepts on the activated fd.
+3. On ESRCH or empty cnt, falls back to self-binding the path from
+   $CLINEMM_HOST_HELPER_SOCKET (for dev/test without launchd).
+4. Reads LF-terminated JSON frames, validates the envelope (structural
+   anti-shell), writes the response.
+
+No FFI dance. No fd-passing. Direct launchd integration.
+

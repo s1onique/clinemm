@@ -487,6 +487,45 @@ apps/examples/desktop-app/.cursor/settings.json
 # (whitelisted above per ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-RECON01),
 # so the evidence directory must also be durably tracked.
 !/.factory/evidence/ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01/
+# ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01: per-user LaunchAgent
+# helper ACT. Evidence (00-entry, 01-recon, 02-red, 03-green,
+# 04-adversarial, 05-gates) binds durably to the whitelisted ACT
+# body in .factory/acts/.
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01/
+# ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 (closed ACT body):
+# first trusted host-side capability broker for seatbelted ClineMM.
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01.md
+# ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION01:
+# wires launch_activate_socket() honestly via a C helper binary
+# (correction to the parent ACT's structural-substitute claim).
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION01.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION01/
+# ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION02:
+# restores request_id echo + fail-closed fallback matrix that
+# CORRECTION01 silently weakened.
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION02.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION02/
+# ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION03:
+# adds JSON-escape on output so escape-shaped request_ids (",
+# \, control) round-trip without breaking the wire contract.
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION03.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION03/
+# ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION04:
+# adds RFC 8259 §7 \uXXXX Unicode escape decoding on input
+# (with surrogate-pair handling) so JSON.stringify-produced
+# Unicode escapes round-trip without rejection.
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION04.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION04/
+# ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION05:
+# makes parsed JSON strings length-aware so embedded NUL
+# bytes (\u0000) survive the round trip. kv_t gains val_len,
+# parse_string/write_json_string/respond_ok all accept
+# (bytes, len) instead of NUL-terminated C strings.
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION05.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION05/
+# Compiled C helper binary (build artifact). Source is helper.c; build
+# via tools/macos-host-helper/native/build.sh.
+/tools/macos-host-helper/native/helper
 # Same durable-binding reason: gate-summary.json records the
 # authoritative test counts (passed/failed/skipped/todo/total per
 # file) for the IMPLEMENTATION01 production-reach + pure-functional

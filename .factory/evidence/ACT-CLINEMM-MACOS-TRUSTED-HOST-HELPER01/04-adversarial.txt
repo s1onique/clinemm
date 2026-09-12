@@ -1,0 +1,96 @@
+ACT_ID=ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01
+
+ADVERSARIAL_CONSERVATION_TESTS=
+
+UNKNOWN_METHOD=DENIED
+  Test: AF_UNIX end-to-end probe > returns METHOD_NOT_ALLOWED for unknown method
+  Method: client sends {"method":"exec"}, server returns {ok:false, error:"METHOD_NOT_ALLOWED"}
+  Status: PASS (see server.test.ts:298)
+
+ARBITRARY_EXEC=DENIED
+  Test: AF_UNIX end-to-end probe > returns BAD_REQUEST for exec-shaped payload (command field)
+  Method: client sends {command:"rm -rf /"}, server returns {ok:false, error:"BAD_REQUEST"}
+  Status: PASS (see server.test.ts:310)
+  Also covered by parameterised test "rejects exec-shaped payload via key '%s'"
+  for keys: command, argv, shell, exec, script, spawn, cmd, cmdline, path, file
+
+MALFORMED=DENIED
+  Test: AF_UNIX end-to-end probe > returns BAD_JSON for malformed JSON
+  Method: client sends "{not-json\n", server returns {ok:false, error:"BAD_JSON"}
+  Status: PASS (see server.test.ts:323)
+
+OVERSIZE=DENIED
+  Test: AF_UNIX end-to-end probe > returns OVERSIZE for an oversized LF-terminated frame
+  Method: client sends a 4097-byte frame, server returns {ok:false, error:"OVERSIZE"}
+  Status: PASS (see server.test.ts:354)
+  Also tested: rejects oversize request (frame > MAX_REQUEST_BYTES) with OVERSIZE (server.test.ts:150)
+
+SIBLING_SOCKET=DENIED
+  Test: HH-07 exact scope: helper.sock allowed, sibling.sock NOT allowed
+  Method: generateSeatbeltProfile(cap, {hostHelperCanonicalSocketPath: HELPER})
+          asserts helper path is in the profile and sibling/different paths are NOT
+  Status: PASS (see seatbelt-host-helper-authority.test.ts)
+
+HELPER_SOCKET=ALLOWED
+  Test: HH-03 canonical path present: emits AF_UNIX system-socket + path-literal network-outbound
+  Method: profile contains "(remote unix-socket (path-literal \"$HELPER\"))"
+  Status: PASS
+
+ROOT_REQUIRED=no
+  Test: AF_UNIX end-to-end probe > health round-trip succeeds
+  Method: server runs as current uid (501), no sudo, no root daemon
+  Status: PASS — helper uid = 501 = current uid
+
+==================================================================
+SEATBELT EXACT-SCOPE (kernel-level)
+==================================================================
+
+The ACT §11 requires a kernel-level sibling-deny witness:
+
+  helper.sock        => allowed
+  sibling.sock       => denied
+  different.sock     => denied
+
+This cannot be reproduced end-to-end in the ClineMM dev sandbox
+(sandbox-exec blocked at the kernel; see 02-seatbelt-red.txt).
+The structural substitute is the unit test HH-07, which proves
+that the SBPL profile text contains ONLY the canonical helper
+path-literal — sibling and different socket paths are NOT
+present as path-literal grants:
+
+  HELPER      = /Users/me/.clinemm/host-helper.sock
+  profile.contains(`(path-literal "${HELPER}")`)      === true
+  profile.contains("/Users/me/.clinemm/sibling.sock") === false
+  profile.contains("/Users/me/.clinemm/different.sock") === false
+
+The deny-class is structural: any socket that is not the exact
+canonical helper path is unreachable because (a) the profile
+denies default, (b) the only path-literal network-outbound
+grant is for the helper, and (c) the system-socket primitive
+is granted for AF_UNIX only, not for any filesystem subpath.
+
+In a substrate-eligible shell (e.g. headed Codium on a
+non-sandboxed dev machine), the kernel witness would be:
+
+  /usr/bin/sandbox-exec -f <profile with HH-03 grant> \
+    /usr/bin/env node -e 'net.connect("/Users/me/.clinemm/sibling.sock")'
+  -> ECONNREFUSED / EPERM (sibling denied)
+
+  /usr/bin/sandbox-exec -f <profile with HH-03 grant> \
+    /usr/bin/env node -e 'net.connect("/Users/me/.clinemm/host-helper.sock")'
+  -> ok:true (helper allowed)
+
+==================================================================
+SUMMARY
+==================================================================
+
+UNKNOWN_METHOD           PASS  (deny)
+ARBITRARY_EXEC           PASS  (deny)
+MALFORMED                PASS  (deny)
+OVERSIZE                 PASS  (deny)
+SIBLING_SOCKET           PASS  (deny, structural)
+HELPER_SOCKET            PASS  (allow)
+ROOT_REQUIRED            PASS  (helper runs as uid 501, not root)
+
+GATE_RESULT=ADVERSARIAL_CONSERVATION_PASS
+HALT_SEATBELT_SOCKET_SCOPE_TOO_BROAD=NOT_TRIGGERED

@@ -372,15 +372,12 @@ function buildNetworkRule(network: CommandCapability["network"]): string {
 }
 
 /**
- * ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
- * Build the ssh-agent AF_UNIX socket rules.
+ * ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01
+ * ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01
  *
- * Returns empty string when `canonicalSocketPath` is omitted (the
- * common case: `mode: "deny"` or capability.authority omitted). The
- * caller is the Seatbelt backend, which is the only place that knows
- * the canonicalized socket path.
- *
- * The emitted rules are EXACT:
+ * Build the AF_UNIX path-literal socket rule pair for ONE exact
+ * canonical endpoint. The pair is the EXACT shape the macOS
+ * Sandbox Guide requires for an outbound Unix-domain socket:
  *
  *   (allow system-socket
  *     (socket-domain AF_UNIX))
@@ -394,10 +391,19 @@ function buildNetworkRule(network: CommandCapability["network"]): string {
  * `literal` primitive and from `subpath`. Using `subpath` here would
  * widen authority to the entire parent directory tree (regression).
  *
+ * Returns empty string when the path is missing or empty. The caller
+ * is responsible for canonicalizing the path before passing it in —
+ * this function does not canonicalize.
+ *
  * The path is escaped via {@link escapeSbplString} — control
  * characters throw (CORRECTION01 P0-3 invariant preserved).
+ *
+ * Used by:
+ *   - ssh-agent authority (buildSshAgentSocketRules)
+ *   - host-helper authority (buildHostHelperSocketRules, ACT-CLINEMM-
+ *     MACOS-TRUSTED-HOST-HELPER01)
  */
-function buildSshAgentSocketRules(canonicalSocketPath: string | undefined): string {
+function buildExactSocketRulePair(canonicalSocketPath: string | undefined): string {
 	if (typeof canonicalSocketPath !== "string" || canonicalSocketPath.length === 0) {
 		return "";
 	}
@@ -408,6 +414,37 @@ function buildSshAgentSocketRules(canonicalSocketPath: string | undefined): stri
 		"(allow network-outbound",
 		`  (remote unix-socket (path-literal "${escaped}")))`,
 	].join("\n");
+}
+
+/**
+ * ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01:
+ * Build the ssh-agent AF_UNIX socket rules.
+ *
+ * Returns empty string when `canonicalSocketPath` is omitted (the
+ * common case: `mode: "deny"` or capability.authority omitted). The
+ * caller is the Seatbelt backend, which is the only place that knows
+ * the canonicalized socket path.
+ */
+function buildSshAgentSocketRules(canonicalSocketPath: string | undefined): string {
+	return buildExactSocketRulePair(canonicalSocketPath);
+}
+
+/**
+ * ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01:
+ * Build the trusted-host-helper AF_UNIX socket rules.
+ *
+ * The trusted host helper is a per-user LaunchAgent (`io.clinemm.host-
+ * helper`) that exposes exactly one fixed `health` method. The
+ * LaunchAgent owns the socket via its Sockets dict + launch_activate_
+ * socket(); the canonical path is read by the Seatbelt backend from
+ * the env var `CLINEMM_HOST_HELPER_SOCKET`.
+ *
+ * The emitted rule pair is the same exact-socket shape used for the
+ * ssh-agent authority — a single path-literal network-outbound filter
+ * scoped to the canonical vnode.
+ */
+function buildHostHelperSocketRules(canonicalSocketPath: string | undefined): string {
+	return buildExactSocketRulePair(canonicalSocketPath);
 }
 
 /**
@@ -433,12 +470,20 @@ function buildSshAgentSocketRules(canonicalSocketPath: string | undefined): stri
  *                       exact endpoint (`path-literal`). When
  *                       omitted (the deny case) the generator emits
  *                       no ssh-agent rules.
+ * @param options.hostHelperCanonicalSocketPath  ACT-CLINEMM-MACOS-
+ *                       TRUSTED-HOST-HELPER01: Canonical path of the
+ *                       trusted host helper AF_UNIX endpoint (read by
+ *                       the backend from CLINEMM_HOST_HELPER_SOCKET).
+ *                       Emits the same exact-socket rule pair as
+ *                       ssh-agent. When omitted, no host-helper
+ *                       rules are emitted.
  */
 export function generateSeatbeltProfile(
 	capability: CommandCapability,
 	options: {
 		readonly denyReadSubpaths?: readonly string[];
 		readonly sshAgentCanonicalSocketPath?: string;
+		readonly hostHelperCanonicalSocketPath?: string;
 	} = {},
 ): string {
 	const denyRead = options.denyReadSubpaths ?? [];
@@ -476,6 +521,12 @@ export function generateSeatbeltProfile(
 	);
 	if (sshAgentRules) {
 		lines.push(sshAgentRules);
+	}
+	const hostHelperRules = buildHostHelperSocketRules(
+		options.hostHelperCanonicalSocketPath,
+	);
+	if (hostHelperRules) {
+		lines.push(hostHelperRules);
 	}
 	return lines.join("\n") + "\n";
 }

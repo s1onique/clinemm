@@ -1,0 +1,56 @@
+================================================================================
+01-launchd-red.txt — FFI symbol probe (RED discriminator, unchanged from C01)
+================================================================================
+
+OBJECTIVE
+---------
+Same RED discriminator as CORRECTION01: prove launch_activate_socket()
+IS available through bun:ffi against libSystem.B.dylib. The symbol must
+resolve; the call must return ESRCH(3) outside launchd context.
+
+CORRECTION02 does not change this discriminator. It adds two new
+discs (request_id echo + fail-closed fallback) which are documented
+in 02-launchd-green-c-fallback.txt and 03-launchd-green-fail-closed-source.txt.
+
+TEST
+----
+$ bun -e '
+import { dlopen, FFIType, ptr } from "bun:ffi"
+const lib = dlopen("libSystem.B.dylib", {
+  launch_activate_socket: {
+    args: [FFIType.cstring, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.int,
+  },
+})
+const fdsBuf = new BigUint64Array(1)
+const cntBuf = new BigUint64Array(1)
+const nameBuf = new TextEncoder().encode("Listener\0")
+const rc = lib.symbols.launch_activate_socket(
+  ptr(nameBuf), ptr(fdsBuf), ptr(cntBuf)
+)
+console.log("rc:", rc)
+'
+
+ACTUAL OUTPUT (recorded 2026-09-12):
+  rc: 3
+
+INTERPRETATION
+--------------
+rc=3 is ESRCH (caller not under launchd). This is the EXPECTED response
+when running outside a launchd-managed process. Proves:
+  1. Symbol resolves through bun:ffi against libSystem.B.dylib.
+  2. Call shape is correct (3 args: name, *fds, *cnt).
+  3. The helper's runtime CAN call launch_activate_socket() once spawned
+     by launchd — at which point rc will be 0.
+
+CORRECTION02 ADDITION (NOT relevant to the FFI probe, but recorded):
+  CORRECTION02 distinguishes rc=ESRCH (legitimate manual/dev fallback)
+  from rc=ENOENT / rc=EALREADY / rc=0+cnt=0 (fail closed).
+  The FFI probe only exercises the ESRCH path; the other paths can
+  only be exercised under real launchd (substrate-deferred in this
+  dev sandbox). See 03-launchd-green-fail-closed-source.txt for the
+  source-level invariant that proves the fail-closed matrix.
+
+RED RESULT
+----------
+PASS. Same as CORRECTION01. The seam is implementable.

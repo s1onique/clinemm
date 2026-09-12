@@ -1,0 +1,78 @@
+================================================================================
+00-defect.txt — CORRECTION04: reviewer's P0 Unicode-input defect
+================================================================================
+
+REVIEWER'S VERDICT
+------------------
+HALT_HOST_HELPER_JSON_UNICODE_ESCAPE_PARSE
+
+THE BUG
+-------
+CORRECTION03 fixed the OUTPUT side: write_json_string() emits JSON-escaped
+request_id on response. But the INPUT side still has the original defect:
+parse_string() only decodes the short escapes (\", \\, \/, \n, \t, \r, \b,
+\f) and falls through to `default: return NULL` for anything else. So
+\uXXXX (RFC 8259 §7) is rejected as BAD_JSON.
+
+EXAMPLES (LEGITIMATE JSON REJECTED BY THE PARSER)
+-------------------------------------------------
+Input frame (valid JSON, JSON.stringify output):
+  {"version":1,"request_id":"ctl-\u0001","method":"health"}
+
+Output:  {"ok":false,"error":"BAD_JSON"}
+
+But this is a perfectly valid JSON request. JSON.stringify produces
+\u0001 for control char SOH. RFC 8259 §7 explicitly defines \uXXXX
+as part of the JSON string grammar. Any consumer that emits these
+escapes is correct; the C parser silently narrowed the protocol.
+
+AFFECTED CASES
+--------------
+1. Control chars (BMP < 0x20):
+   JSON.stringify("\x01") === '"\\u0001"'  → C parser: BAD_JSON
+2. BMP non-ASCII:
+   JSON.stringify("☃") === '"☃"'  (Bun leaves raw) OR '"\\u2603"'  (V8)
+   → C parser: BAD_JSON for the \uXXXX form
+3. Supplementary plane (U+10000–U+10FFFF):
+   JSON.stringify("🚀") === '"🚀"' (Bun) OR '"\\uD83D\\uDE80"' (some impls)
+   → C parser: BAD_JSON for the surrogate-pair form
+
+INJECTION-SHAPED \uXXXX VALUES (must fail closed)
+-------------------------------------------------
+- \uD800        lone high surrogate (invalid per RFC 8259 §7)
+- \uDC00        lone low surrogate (invalid per RFC 8259 §7)
+- \uZZZZ        non-hex digits (malformed)
+- \u00          truncated (only 2 hex digits, need 4)
+- \uD83D-x      high surrogate not followed by \uXXXX
+- \uD83D\u0041  high surrogate followed by non-low surrogate
+
+FIX SHAPE
+---------
+Extend parse_string() with a \uXXXX decoder that:
+  1. Reads exactly 4 hex digits after \u.
+  2. If high surrogate (0xD800–0xDBFF), requires \uXXXX where XXXX is a
+     low surrogate (0xDC00–0xDFFF); combines via UTF-16 surrogate pair
+     arithmetic.
+  3. If lone low surrogate, rejects.
+  4. Otherwise, encodes the codepoint as 1–4 UTF-8 bytes into out[].
+
+Add hex_value() and utf8_encode() helpers. utf8_encode rejects
+codepoints outside [0, 0x110000) and surrogate code units (already
+detected by parse_string).
+
+SCOPE (BOUNDED)
+---------------
+- helper.c only: add hex_value, utf8_encode, extend parse_string.
+- helper.test.ts: 8 new tests.
+- client.test.ts: 4 new tests.
+- DO NOT touch launchd activation, ESRCH/ENOENT/EALREADY matrix,
+  Seatbelt profiles, Tart, capability model, or TypeScript
+  client/server.
+
+OUT OF SCOPE (RE-AFFIRMED)
+--------------------------
+- launch_activate_socket integration (CORRECTION01, GREEN)
+- fail-closed fallback matrix (CORRECTION02, GREEN)
+- JSON-escape on output (CORRECTION03, GREEN)
+- protocol envelope shape (parent, frozen)
+- anti-shell forbidden-keys check (parent)

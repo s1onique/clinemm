@@ -1,0 +1,21 @@
+ACT_ID=ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01
+
+ENTRY_HEAD=ca50785034e78440dbb3675b1e85219f1df50266
+ENTRY_BRANCH=main
+WORKTREE_STATUS=clean
+WORKTREE=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+MACOS_VERSION=14.7.4 (Build 23H420)
+ARCH=arm64
+KERNEL=Darwin Kernel Version 23.6.0 (RELEASE_ARM64_T6031)
+
+CODIUM_PATH=/Applications/VSCodium.app
+CODIUM_BINARY=/Applications/VSCodium.app/Contents/Resources/app/bin/codium
+CLINEMM_EXTENSION_ID=s1onique.clinemm
+
+GATE_RESULT=EXPECTED_TRACKED_DIRT_ABSENT_PASS
+
+PREFLIGHT_NOTES=
+- sw_vers reports macOS 14.7.4 on arm64; launchd is the per-user LaunchAgent host
+- VSCodium.app is present at /Applications/VSCodium.app (no `codium` on PATH by default)
+- working tree is clean at HEAD ca50785
+- no `claude-dev` / `clinemm-host-helper` / `io.clinemm.*` artifacts exist in the repo yet (search_codebase returned 0 hits for those patterns)

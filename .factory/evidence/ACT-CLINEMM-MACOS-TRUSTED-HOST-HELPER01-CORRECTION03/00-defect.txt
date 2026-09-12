@@ -1,0 +1,88 @@
+================================================================================
+00-defect.txt — CORRECTION03: reviewer's P0 JSON-escape defect
+================================================================================
+
+REVIEWER'S VERDICT
+------------------
+HALT_HOST_HELPER_REQUEST_ID_JSON_ESCAPE
+
+THE BUG
+-------
+CORRECTION02 wired request_id echo in the C helper through snprintf:
+    snprintf(buf, sizeof(buf),
+      "{\"version\":1,\"request_id\":\"%s\",\"ok\":true,...}",
+      request_id, ...);
+
+parse_string() decodes JSON escapes into the SEMANTIC request_id.
+But respond_ok() then emits the semantic value via %s WITHOUT
+re-escaping JSON specials. This silently narrows the frozen wire
+contract to "request_id must not contain ", \, or any control byte"
+without declaring it.
+
+EXAMPLE
+-------
+Input frame (valid JSON):
+    {"version":1,"request_id":"a\"b","method":"health"}
+
+parse_string() decodes "a\"b" into semantic: a"b
+
+respond_ok() emits via %s:
+    {"version":1,"request_id":"a"b","ok":true,...}
+
+This is INVALID JSON. The client's JSON.parse throws SyntaxError.
+The frozen wire contract in protocol.ts::buildOkResponse treats
+request_id as opaque; JSON.stringify on the TS side always escapes,
+so the C side drifted.
+
+AFFECTED IDS (all legal per the frozen protocol)
+------------------------------------------------
+- quote-"inside     → parser: a"b   → emit:  {...request_id":"a"b",...}
+- backslash-\-inside → parser: a\b   → emit:  {...request_id":"a\b",...}
+- newline-\n-inside  → parser: a<LF>b → emit:  wire-fragmented by \n
+- tab-\t-inside      → parser: a<HT>b → emit:  invalid JSON
+
+INJECTION-SHAPED VALUE
+----------------------
+Input request_id = x","ok":false,"request_id":"evil
+
+After decode:    x","ok":false,"request_id":"evil
+After %s emit:   {"version":1,"request_id":"x","ok":false,"request_id":"evil",...}
+
+The response now contains a second request_id AND a false ok —
+complete response-structure corruption.
+
+WHY THIS IS P0 (NOT P1)
+-----------------------
+1. Any caller using a UUID generator that emits "-" (legal in
+   RFC 4122) is fine, but most production systems include other
+   metadata in request_ids (e.g. traceparent, MiMi-prefixed IDs).
+   Even one of these IDs in a smoke test breaks correlation.
+2. The narrow-fix stance (reject on input) would change the
+   protocol in a backward-incompatible way. The correct fix is
+   escape on output (smaller change, protocol-conservation).
+
+FIX SHAPE
+---------
+Add write_json_string(out, out_cap, s) — a tiny RFC 8259 §7 string
+emitter handling ", \, /, \b, \f, \n, \r, \t, and \u00XX for any
+other byte < 0x20.
+
+Refactor respond_ok() to call write_json_string() for the request_id
+field. No regex restriction. No input-side change. The response
+envelope shape stays frozen.
+
+SCOPE (BOUNDED)
+---------------
+- helper.c only (add emitter, refactor respond_ok)
+- helper.test.ts: 4 new tests
+- client.test.ts: 3 new tests
+- DO NOT touch launchd activation, ESRCH/ENOENT/EALREADY matrix,
+  Seatbelt profiles, Tart, capability model, or TypeScript
+  client/server.
+
+OUT OF SCOPE (RE-AFFIRMED)
+--------------------------
+- launch_activate_socket integration (CORRECTION01, GREEN)
+- fail-closed fallback matrix (CORRECTION02, GREEN)
+- protocol envelope shape (parent, frozen)
+- anti-shell forbidden-keys check (parent)

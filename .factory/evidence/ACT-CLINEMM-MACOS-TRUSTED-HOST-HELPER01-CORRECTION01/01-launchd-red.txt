@@ -1,0 +1,68 @@
+================================================================================
+01-launchd-red.txt — FFI symbol probe (RED discriminator)
+================================================================================
+
+OBJECTIVE
+---------
+Prove that the launch_activate_socket() symbol IS available through
+bun:ffi against libSystem.B.dylib. If it is, the helper's runtime can
+call it. If not, this ACT is structurally impossible.
+
+RED discriminator for the parent ACT:
+  The parent ACT's source has zero references to launch_activate_socket.
+  $ grep -c launch_activate_socket tools/macos-host-helper/server.ts
+  0
+
+RED discriminator for the corrected ACT:
+  The corrected source MUST reference launch_activate_socket AND
+  include the literal "Listener" argument.
+  $ grep -E 'launch_activate_socket|Listener' tools/macos-host-helper/native/helper.c
+  if (rc == 0 && cnt >= 1) { ... }
+  int rc = launch_activate_socket("Listener", &fds, &cnt);
+
+TEST
+----
+$ PATH=/opt/homebrew/bin:$PATH bun -e '
+import { dlopen, FFIType, ptr } from "bun:ffi"
+const lib = dlopen("libSystem.B.dylib", {
+  launch_activate_socket: {
+    args: [FFIType.cstring, FFIType.pointer, FFIType.pointer],
+    returns: FFIType.int,
+  },
+})
+const fdsBuf = new BigUint64Array(1)
+const cntBuf = new BigUint64Array(1)
+const nameBuf = new TextEncoder().encode("Listener\0")
+const rc = lib.symbols.launch_activate_socket(
+  ptr(nameBuf), ptr(fdsBuf), ptr(cntBuf)
+)
+console.log("rc:", rc)
+'
+
+ACTUAL OUTPUT (recorded 2026-09-12):
+  rc: 3
+
+INTERPRETATION
+--------------
+Apple's <launch.h> documentation:
+  ESRCH -> The caller is not a process managed by launchd.
+
+rc=3 IS ESRCH. This is the EXPECTED response when running outside a
+launchd-managed process. The fact that we get ESRCH (not some other
+error) proves:
+  1. The symbol resolves through bun:ffi against libSystem.B.dylib.
+  2. The call shape is correct (3 args: name, *fds, *cnt).
+  3. The helper's runtime CAN call launch_activate_socket() once it is
+     spawned by launchd — at which point rc will be 0 instead of 3.
+
+RED RESULT
+----------
+PASS. The symbol is available; the seam is implementable.
+
+EVIDENCE FILE LINKAGE
+---------------------
+This RED + the GREEN in 02-launchd-green-c-fallback.txt + the
+substrate-deferred GREEN in 03-launchd-green-c-activation.txt together
+replace the parent ACT's structural-substitute claim
+"LAUNCHAGENT_SOCKET_ACTIVATION = PASS (structural substitution)" with
+"LAUNCHAGENT_SOCKET_ACTIVATION = WIRED_IN_C (live deferred)".

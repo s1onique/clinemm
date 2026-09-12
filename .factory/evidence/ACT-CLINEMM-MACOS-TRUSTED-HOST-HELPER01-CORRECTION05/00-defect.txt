@@ -1,0 +1,123 @@
+================================================================================
+00-defect.txt — CORRECTION05: reviewer's P0 embedded-NUL defect
+================================================================================
+
+REVIEWER'S VERDICT
+------------------
+HALT_HOST_HELPER_REQUEST_ID_NUL_TRUNCATION
+
+THE BUG
+-------
+CORRECTION04 fixed the input parser to accept RFC 8259 §7 \uXXXX escapes,
+including \u0000. The C parser now decodes the wire form
+  {"version":1,"request_id":"a\u0000b","method":"health"}
+into the THREE-byte semantic value a\u0000b. But the C helper stores
+parsed strings as NUL-terminated C strings in kv_t.val, so the embedded
+NUL truncates the value:
+
+  kv_t.val = "a\u0000b" stored as:
+    val[0] = 'a'
+    val[1] = 0x00   <-- C NUL terminator
+    val[2] = 'b'
+    val[3] = 0x00   <-- defensive NUL after parse_string's out[off]=0
+
+  Any later code using C-string semantics (strlen, strcmp, printf %s,
+  etc.) sees only "a" — the remaining bytes (including 'b') are
+  invisible.
+
+The response writes the request_id back to the client via
+respond_ok() → write_json_string(), which uses strcmp-like iteration.
+So the wire response for the example above is:
+
+  {"version":1,"request_id":"a","ok":true,...}
+
+instead of the correct:
+
+  {"version":1,"request_id":"a\u0000b","ok":true,...}
+
+The client's JSON.parse yields "a" (length 1) for request_id instead
+of "a\u0000b" (length 3). Correlation silently fails.
+
+REVIEWER'S DISCRIMINATOR
+------------------------
+request semantic ID = "a\u0000b"
+
+wire:
+{"version":1,"request_id":"a\u0000b","method":"health"}
+
+expected after round trip:
+response.request_id.length === 3
+response.request_id === "a\u0000b"
+
+The pre-CORRECTION05 helper returns "a" (length 1) — exactly the
+bug predicted by the reviewer.
+
+FIX SHAPE (REVIEWER'S BOUNDED PRESCRIPTION)
+-------------------------------------------
+Make parsed JSON strings length-aware instead of NUL-terminated.
+Minimal shape:
+  typedef struct {
+    char val[MAX_VAL_LEN];
+    size_t val_len;
+    value_kind kind;
+  } kv_t;
+
+Then:
+  - parse_string() returns decoded byte length;
+  - request_id validation checks val_len > 0;
+  - write_json_string() accepts (bytes, len), not just const char *;
+  - response correlation preserves embedded NUL;
+  - key/method handling may remain ordinary strings if those grammar
+    tokens cannot contain embedded NUL (they cannot — JSON keys come
+    from a small fixed set and method is "health").
+
+REQUIRED CASES (REVIEWER)
+-------------------------
+  "\u0000"             -- lone NUL (val_len=1, non-empty)
+  "a\u0000b"           -- reviewer discriminator (val_len=3)
+  "\u0000-leading"     -- leading NUL (val_len=9)
+  "trailing-\u0000"    -- trailing NUL (val_len=10)
+  "a\u0001b"           -- control-NOT-NUL (regression check, val_len=3)
+  "rocket-\u{1F680}"   -- supplementary plane (regression check)
+
+ALL must round-trip semantically.
+
+REVIEWER'S CORRECTION TO PREVIOUS REVIEW
+----------------------------------------
+The reviewer noted that CORRECTION04's "lone surrogates = malformed
+JSON" requirement was over-prescribed. RFC 8259 §7 PERMITS lone
+surrogates (they are "non-interoperable Unicode content", not
+syntactic errors). For this helper the reviewer favors:
+
+  Protocol restricts request IDs to Unicode scalar values →
+  lone surrogates intentionally rejected; or
+  exact JSON.parse compatibility →
+  represent them accordingly.
+
+We adopt the first (unchanged from CORRECTION04). Lone surrogates
+continue to be rejected as BAD_JSON. This is a bounded protocol
+clarification, not a reason to redesign the helper.
+
+SCOPE (BOUNDED)
+---------------
+- helper.c only: add val_len to kv_t, change parse_string +
+  parse_number + write_json_string + respond_ok to be length-aware.
+- helper.test.ts: 10 new CORRECTION05 tests.
+- client.test.ts: existing tests use the client API; no new tests
+  needed there because the API surface is unchanged (client.ts
+  already passes JSON through JSON.stringify/JSON.parse which are
+  length-aware).
+- DO NOT touch launchd activation, ESRCH/ENOENT/EALREADY matrix,
+  Seatbelt profiles, Tart, capability model, JSON envelope shape,
+  TypeScript client/server, or protocol vocabulary.
+
+OUT OF SCOPE (RE-AFFIRMED)
+--------------------------
+- launch_activate_socket integration (CORRECTION01, GREEN)
+- fail-closed fallback matrix (CORRECTION02, GREEN)
+- JSON-escape on output (CORRECTION03, GREEN)
+- RFC 8259 §7 \uXXXX Unicode escape on input (CORRECTION04, GREEN)
+- protocol envelope shape (parent, frozen)
+- anti-shell forbidden-keys check (parent)
+- lone surrogate handling (CORRECTION04: BAD_JSON — reviewer's
+  explicitly-approved protocol clarification)

@@ -504,6 +504,81 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 				}
 			}
 
+			// ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01:
+			// Resolve the trusted host-helper AF_UNIX endpoint.
+			//
+			// Mirror of the ssh-agent path: single source of truth is
+			// the parent env `CLINEMM_HOST_HELPER_SOCKET` (set by the
+			// per-user LaunchAgent `io.clinemm.host-helper`). When the
+			// variable is set, canonicalize the path, validate the
+			// inode is an AF_UNIX socket via lstat S_IFSOCK, and pass
+			// the canonical vnode to `generateSeatbeltProfile` so it
+			// can emit the same path-literal AF_UNIX rule pair used
+			// for the ssh-agent.
+			//
+			// The capability does NOT carry the socket path field —
+			// the env var is the single source of truth (same shape as
+			// `SSH_AUTH_SOCK`). This eliminates divergence between the
+			// profile path-literal and the runtime connect(2) target.
+			let hostHelperCanonicalSocketPath: string | undefined;
+			const hostHelperRaw = process.env.CLINEMM_HOST_HELPER_SOCKET;
+			if (
+				typeof hostHelperRaw === "string" &&
+				hostHelperRaw.length > 0
+			) {
+				let hhCanonical: string;
+				try {
+					hhCanonical = canonicalizeSandboxRoot(hostHelperRaw);
+				} catch (cause) {
+					throw new SandboxError(
+						`Seatbelt: failed to canonicalize CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hostHelperRaw)}`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+							cause,
+						},
+					);
+				}
+				let hhSt;
+				try {
+					hhSt = lstatSync(hhCanonical);
+				} catch (cause) {
+					throw new SandboxError(
+						`Seatbelt: CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hhCanonical)} not accessible for type check`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+							cause,
+						},
+					);
+				}
+				const hhIsSocket = (hhSt.mode & 0o170000) === 0o140000;
+				if (!hhIsSocket) {
+					throw new SandboxError(
+						`Seatbelt: CLINEMM_HOST_HELPER_SOCKET=${JSON.stringify(hhCanonical)} is not an AF_UNIX socket (mode=${hhSt.mode.toString(8)}); host-helper authority requires a real Unix-domain socket`,
+						{
+							backendId: SEATBELT_BACKEND_ID,
+							reason: "canonicalization-failed",
+						},
+					);
+				}
+				hostHelperCanonicalSocketPath = hhCanonical;
+				// Reintroduce CLINEMM_HOST_HELPER_SOCKET via the existing
+				// allow-list path so the child inherits the endpoint.
+				if (
+					cap.environment.mode === "sanitized" &&
+					!cap.environment.allow.includes("CLINEMM_HOST_HELPER_SOCKET")
+				) {
+					effectiveEnvironmentCapability = {
+						mode: "sanitized",
+						allow: [
+							...cap.environment.allow,
+							"CLINEMM_HOST_HELPER_SOCKET",
+						],
+					};
+				}
+			}
+
 			// ACT-CLINEMM-SEATBELT-NETWORK-LIVE-DOWNSTREAM-RECON01:
 			// Diagnostic observer seam 1/3 — onPrepareInput.
 			// Fired AFTER all canonicalization is complete (so the
@@ -541,6 +616,7 @@ export const SeatbeltSandboxBackendExperimental: SandboxBackend =
 					{
 						denyReadSubpaths,
 						sshAgentCanonicalSocketPath,
+						hostHelperCanonicalSocketPath,
 					},
 				);
 
