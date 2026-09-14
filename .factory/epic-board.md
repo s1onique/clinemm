@@ -131,6 +131,47 @@ Cache-provenance contract (the forcing condition, post-reviewer-verdict #3):
 - Consider a one-time `/usr/bin/go clean -cache` invocation to age the now-shared native cache. Not load-bearing.
 - Consider GOMODCACHE (`GOPATH/pkg/mod`) evaluation as a separate ACT if `go mod download` failures surface. Out of scope here.
 
+## ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01-CORRECTION03 — P1 FIX ONCE — 2026-09-14
+
+**Status:** C1 GREEN (continues from CORRECTION02); P1 test-contract defect closed.
+
+**Scope:** dogfood packaging build seam (`bun run vscode:prepublish`). NOT a new architectural round; NOT a CORRECTION03 design cycle. Folded into the existing correction as one bounded P1 per reviewer-verdict #4.
+
+**The defect:** `apps/vscode/src/sdk/__tests__/darwin-seatbelt-go-default-cache-authority01.c1-green.test.ts` declared `interface SandboxRun { signal: NodeJS.Signals | null }` but the real `CommandJobSnapshot` (`apps/vscode/src/sdk/command-job-manager.ts:69`) models `signal` as `string | undefined` (POSIX signal name). The new kernel-witness test then tried to assign `s.signal` (string | undefined) into the local SandboxRun (Signals | null) and failed typecheck:
+
+```
+Type 'string | undefined' is not assignable to type 'Signals | null'.
+  Type 'undefined' is not assignable to type 'Signals | null'.
+```
+
+The dogfood build got through `build:sdk` and failed during `vscode:prepublish` (specifically inside `bun run check-types`). Production Seatbelt repair NOT implicated — the failure is in the new test only.
+
+**Production delta implicated:** NO. The structural Seatbelt repair, the canonical-path generation, the 4-phase rule ordering, the conservation sentinel, and the 61 targeted Seatbelt tests are all unchanged.
+
+**Smallest correct fix:** the local `SandboxRun` projection is only read by G1/G2/G3 (which inspect `exitCode`, `stdout`, `stderr`, `state` — never `signal`). The unused `signal` field was deleted from both the interface and the returned object. A comment was added explaining why the field is intentionally omitted (production snapshot uses `string | undefined`, Node child_process APIs use `NodeJS.Signals | null`, neither is needed by the kernel-witness assertions, and a future witness that needs termination-cause discrimination should derive the type from the production snapshot rather than re-declare a test-local subprocess contract). This is exactly the "smaller shape" fix the verdict preferred over `signal: s.signal as NodeJS.Signals` (which would have silently weakened the discriminator).
+
+**Files touched (single-file change):**
+- `apps/vscode/src/sdk/__tests__/darwin-seatbelt-go-default-cache-authority01.c1-green.test.ts` — `SandboxRun` interface + `runSandboxed` return object (12 lines deleted, 11 lines of doc comment added, net −1).
+
+**Required rerun (per verdict):** `bun run vscode:prepublish` from `apps/vscode`.
+
+**Observed results:**
+- `sync-parser-helper` → ✅ copied 5 binaries.
+- `bun run check-types` (protos + `bunx tsc --noEmit` + compat + webview tsc) → ✅ GREEN. The previously failing typecheck seam is now GREEN.
+- `bun run build:webview` (vite) → ✅ 7208 modules transformed, built in 18.10s.
+- `bun run lint` (biome + proto-lint) → ✅ 1886 files clean, no fixes applied.
+- `bun esbuild.mjs --production` → ✅ `dist/extension.js` (26,163,044 bytes) bundled.
+- `bun run vscode:prepublish` → ✅ **exitCode 0**, full prepublish GREEN.
+- `bunx vitest run src/sdk/__tests__/darwin-seatbelt-go-default-cache-authority01.c1-green.test.ts` → ✅ file imports cleanly, 3 tests correctly skipped under `describe.skipIf(!HAS_SUBSTRATE)` (LIVE_UNOBSERVABLE_HERE on this nested-sandboxed host is expected).
+
+**Required-result ledger:**
+- `NEW_KERNEL_WITNESS_TEST_TYPECHECK` = **GREEN**.
+- `VSCODE_PREPUBLISH` = **GREEN**.
+- `DOGFOOD_BUILD` = **GREEN** (the full `bun run vscode:prepublish` ran the previously failing seam to completion; the canonical `bun run vscode:prepublish --cwd stage/apps/vscode` invocation that `scripts/build_dogfood_vsix_lib.py:run_canonical_build` invokes is the same script and now goes green too).
+- 61/61 targeted Seatbelt tests **preserved** (no production-side change).
+
+**Disposition:** FIX ONCE + CONTINUE. No HALT on the Seatbelt repair; no CORRECTION03 design cycle. Resume commit / live-kernel qualification path per the §120 live-kernel qualification checklist above.
+
 ## ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION03 — ROUND 9 — 2026-05-XX (PROBE01)
 
 **Status:** ROUND-9 P0 closed (structural green), full code harness GREEN.

@@ -131,9 +131,20 @@ function withSandboxOptIn<T>(
 	}
 }
 
+/**
+ * Minimal projection of `CommandJobSnapshot` (apps/vscode/src/sdk/command-job-manager.ts)
+ * carrying only the fields the kernel-witness assertions below actually read.
+ *
+ * NOTE: this struct deliberately omits `signal`. The production snapshot
+ * models `signal` as `string | undefined` (POSIX signal name), while the
+ * Node child_process APIs model it as `NodeJS.Signals | null`. Neither
+ * form is consulted by G1/G2/G3 below, so projecting it here would force
+ * a test-local subprocess contract the assertions don't need. If a future
+ * witness needs to discriminate on termination cause, derive it from the
+ * production snapshot type rather than re-declaring it here.
+ */
 interface SandboxRun {
 	exitCode: number | null
-	signal: NodeJS.Signals | null
 	stdout: string
 	stderr: string
 	state: string
@@ -166,7 +177,6 @@ async function runSandboxed(opts: {
 			const s = statusResult.snapshot
 			return {
 				exitCode: s.exitCode ?? null,
-				signal: s.signal,
 				stdout: s.stdout,
 				stderr: s.stderr,
 				state: s.state,
