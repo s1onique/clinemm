@@ -1,0 +1,76 @@
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01 — gates
+
+## 1. Unit-test gate (Bun)
+
+  $ bun test tools/macos-host-helper/ tools/macos-vsix-testbed/
+  ...
+  ✓ CORRECTION05: source declares val_len + length-aware write_json_string
+  ✓ CORRECTION05: kv_t uses length, not NUL termination, at the consume site
+  ✓ CORRECTION05: client API round-trips embedded NUL
+  ✓ CORRECTION05: a\u0000b\u0000c -- multiple embedded NULs
+  ✓ PROBE01: testbed.run-installed-vsix-smoke invokes runner and splices result
+  ✓ PROBE01: testbed method rejects non-existent runner with RUNNER_NOT_FOUND
+  ✓ PROBE01: testbed method rejects runner with non-zero exit with INTERNAL_ERROR
+  ✓ PROBE01: testbed method rejects envelope with traversal .. with BAD_REQUEST
+  ✓ PROBE01: testbed method rejects envelope with non-.vsix path
+  ✓ PROBE01: testbed method rejects envelope with forbidden keys (anti-shell)
+  ✓ PROBE01: health method unaffected by testbed changes (regression)
+
+   129 pass
+     0 fail
+   496 expect() calls
+  Ran 129 tests across 5 files.  [6.32s]
+
+Breakdown:
+  tools/macos-host-helper/server.test.ts         (PROTOCOL):  91 tests
+  tools/macos-host-helper/native/helper.test.ts  (C HELPER):  12 tests
+  tools/macos-host-helper/client.test.ts         (CLIENT):     8 tests
+  tools/macos-vsix-testbed/path-validation.test.ts            9 tests
+  tools/macos-vsix-testbed/runner.test.ts                     9 tests
+                                                     total: 129 tests
+
+## 2. Build gate (C helper)
+
+  $ bash tools/macos-host-helper/native/build.sh
+  [build] compiled /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+
+  $ file tools/macos-host-helper/native/helper
+  tools/macos-host-helper/native/helper: Mach-O 64-bit executable arm64
+
+  $ ls -la tools/macos-host-helper/native/helper
+  -rwxr-xr-x 1 chistyakov staff 36072 Sep 12 18:51 tools/macos-host-helper/native/helper
+
+## 3. Anti-shell invariant gate (parser)
+
+  Confirmed in protocol.ts:
+    - 10 forbidden keys (command, argv, path, cwd, env, args, shell,
+      script, bash, sudo) still rejected BEFORE value parsing.
+    - METHOD_REQUIRED_KEYS for testbed.run-installed-vsix-smoke only
+      adds: subject_head, vsix_path, vsix_sha256.
+    - Per-method validation runs AFTER the forbidden-key guard.
+
+  Confirmed in C helper:
+    - is_recognized_key() includes the 3 new keys.
+    - validate_testbed_fields() runs after the per-method required-keys
+      check.
+    - No system(), no popen(), no execve("/bin/sh").
+    - Only fork+execve with caller-controlled argv against ONE fixed
+      runner path. envp is fixed 3-entry array.
+
+## 4. Anti-shell integration test
+
+  ✓ PROBE01: testbed method rejects envelope with forbidden keys (anti-shell)
+
+## 5. Health-method regression
+
+  ✓ PROBE01: health method unaffected by testbed changes (regression)
+
+## 6. Substrate residue
+
+  Tart substrate cannot run in this Background session:
+    - NetworkStorageDB write to $HOME/Library/Caches/tart/Cache.db fails
+      (APFS `protect` flag)
+    - ghcr.io/cirruslabs/macos-sonoma-base:14.5 returns 404 in this env
+      (registry auth not configured)
+
+  Live kernel qualification is blocked; structural gates are all green.

@@ -1,0 +1,57 @@
+{
+  "act_id": "ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION02",
+  "act_parent": "ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01",
+  "verdict_in": "HALT_VSIX_TRANSFER_ARGMAX",
+  "result": "HALT_BASE_IMAGE_NOT_READY",
+  "disposition": "CLOSED_HALTED_CLEAN",
+  "qualification": {
+    "implementation_substrate": "STRUCTURAL_GREEN",
+    "path_validation": "STRUCTURAL_GREEN",
+    "host_helper_testbed_dispatch": "SYNTHETIC_REAL_TESTED",
+    "vsix_transfer_seam": "STRUCTURAL_GREEN",
+    "vsix_transfer_real_vm": "NOT_EXECUTED",
+    "tart_live_vm": "HALT_BASE_IMAGE_NOT_READY",
+    "installed_vsix": "NOT_EXECUTED",
+    "real_extension_activation": "NOT_EXECUTED"
+  },
+  "p0_fixed": {
+    "id": "P0-1",
+    "summary": "Replaced inline base64 argv VSIX transport with ssh stdin byte-stream transport",
+    "files": [
+      "tools/macos-vsix-testbed/guest-smoke.ts"
+    ],
+    "new_helpers": [
+      "scpVsixToGuest(hostPath, guestIp, guestTmpPath, budgetMs)",
+      "streamBytesOverSsh(cmd, hostBytes, budgetMs)"
+    ],
+    "invariant_enforced": "VSIX bytes travel as a stdin byte stream; never enter the command line."
+  },
+  "substrate_residue": {
+    "blocking": [
+      "kill(-pid, SIGKILL) returns EPERM in this Background session (launchd restriction).",
+      "$HOME/Library/Caches/tart/Cache.db writes fail with APFS NetworkStorageDB Error=14 (protect flag on /Volumes/UserData).",
+      "ghcr.io registry auth not configured in this Background session."
+    ],
+    "nonblocking": [
+      "All structural code is correct and exercised by 133/133 unit tests.",
+      "16-MiB synthetic payload streamed byte-perfectly through streamBytesOverSsh in 133 ms.",
+      "Activation witness, image digest, bounded lifecycle NOT re-opened (reviewer explicit instruction)."
+    ]
+  },
+  "tests": {
+    "total": 133,
+    "pass": 133,
+    "fail": 0,
+    "skip_documented": 1,
+    "new_in_correction02": 2
+  },
+  "evidence_files": [
+    "00-entry.txt",
+    "01-recon.txt",
+    "02-corrections.txt",
+    "06-large-file-test.txt",
+    "10-gates.txt",
+    "result.json"
+  ],
+  "reopen_condition": "Live Tart VM with this exact transfer seam: REAL_VSIX_SIZE recorded, TRANSFER_METHOD=ssh_stdin_stream, HOST_SHA256 == GUEST_SHA256 for the actual dogfood VSIX."
+}

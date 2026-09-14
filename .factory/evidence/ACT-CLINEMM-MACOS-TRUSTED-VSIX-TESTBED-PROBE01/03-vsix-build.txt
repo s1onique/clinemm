@@ -1,0 +1,41 @@
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01 — VSIX build substrate
+
+Builder (no changes to the builder in this ACT):
+  apps/vscode/scripts/build-dogfood-vsix.py
+  apps/vscode/scripts/build_dogfood_vsix_lib.py
+  apps/vscode/scripts/requirements-build.txt
+
+Latest committed VSIX (used for downstream smoke):
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-fa66f7a62.vsix
+  size:  see apps/vscode/dist
+  sha256: 66fb4cb73ffb8f9cfe9907f9abaa09033a836261a26951dca126c83ca0fe321f
+
+Subject head (commit pinned at build time):
+  fa66f7a62 (matches the VSIX short-sha; see scripts/build_dogfood_vsix_lib.py
+  for the exact derivation: --git-rev short hash from the build environment).
+
+Build output location (committed to repo, NOT gitignored):
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/
+
+The PROBE01 testbed runner, when given
+  --subject fa66f7a62
+  --vsix  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-fa66f7a62.vsix
+  --sha256 66fb4cb73ffb8f9cfe9907f9abaa09033a836261a26951dca126c83ca0fe321f
+
+  would:
+  1. validateVsixPath() — confirms the file is under ~/.clinemm/artifacts,
+     is a regular file, owned by current uid, ≤ 256 MiB, sha256 matches.
+  2. tart clone ghcr.io/cirruslabs/macos-sonoma-base:14.5 clinemm-probe-fa66f7a62-<ts>
+  3. tart run --no-graphics <vm>
+  4. wait for VM IP via tart ip <vm>
+  5. base64-scp the VSIX into /tmp/clinemm-testbed-<vm>.vsix
+  6. verify guest-side shasum -a 256 matches the host sha
+  7. RED smoke: launch code in isolated profile, assert s1onique.clinemm absent
+  8. install via: code --user-data-dir <dir> --extensions-dir <dir>
+                  --install-extension /tmp/clinemm-testbed-<vm>.vsix
+  9. GREEN smoke: re-launch code, assert
+     `s1onique.clinemm@<version>` appears in --list-extensions --show-versions
+  10. cleanup: tart stop <vm>; tart delete <vm>
+
+This ACT lands all 10 steps structurally. They will execute live on a
+substrate-eligible developer Mac.

@@ -1,0 +1,183 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION03 — qualified image + production-seam contract
+
+=========================================================================
+1. Qualified testbed image contract (round 1)
+=========================================================================
+
+The testbed owns a QUALIFIED immutable base, not the generic
+Cirrus Sonoma `-base` image. The qualified image is:
+
+  - An OCI artifact published via `tart push`. Local VM names
+    are NOT immutable registry digests. Push flow documented in
+    testbed-image.ts.
+  - Pinned by its `registry/path@sha256:<digest>` form.
+  - Has a pinned SSH public key installed for the `admin` user
+    (ssh-ed25519; ssh-dss is explicitly forbidden).
+  - Has VS Code (or VSCodium) installed at the pinned absolute
+    path; `editor --version` produces the pinned exact semver.
+  - Verified at qualification time to NOT contain any
+    `s1onique.clinemm-*` extension.
+
+=========================================================================
+2. Qualified testbed CONFIG file (round 2 — production seam)
+=========================================================================
+
+The runner reads its qualified-testbed contract from a single
+trusted artifact:
+
+  $HOME/.clinemm/testbed/config.json
+
+Schema (schema_version: 1):
+
+  {
+    "schema_version":  1,
+    "image":           "registry/path@sha256:<digest>",
+    "ssh_key_path":    "/absolute/path/to/private/key",
+    "editor_binary":   "/absolute/path/to/editor",
+    "editor_version":  "<exact-semver>"
+  }
+
+Security-critical checks (all fail closed):
+
+  - path is fixed under HOME (no env override; HOME is the
+    only testbed-relevant var forwarded by the C helper)
+  - file must exist, be a regular file
+  - mode must NOT have group/other write (defense vs. operator
+    MITM): mode & 0o022 must equal 0. Both 0o644 and 0o600
+    are accepted.
+  - owner uid must equal current uid (defense vs. non-owner
+    crafted configs); skipped on systems without getuid
+  - JSON parse OK
+  - schema_version === 1
+  - image contains "@sha256:" (refuses tag-only OCI refs)
+  - ssh_key_path, editor_binary are absolute
+  - editor_version matches strict semver regex
+
+Why this design:
+
+  - The C helper's execve(2) seam preserves the FROZEN envp
+    invariant defended since HOST-HELPER01: only
+    CLINEMM_TESTBED_RUNNER=1, PATH, HOME. No arbitrary env
+    passthrough.
+  - HOME is already forwarded. The qualified testbed config
+    file lives under HOME, so the authority flows through the
+    one channel that already exists.
+  - The config file is treated as a security-critical trusted
+    artifact (mode + owner + schema checks), not as data.
+
+Resolution order at run() gate:
+
+  1. $HOME/.clinemm/testbed/config.json (production authority;
+     produced by testbed-image.ts after live qualification)
+  2. CLINEMM_TART_TESTBED_IMAGE / CLINEMM_TESTBED_SSH_KEY_PATH
+     / CLINEMM_TESTBED_EDITOR_BINARY / CLINEMM_TESTBED_EDITOR_VERSION
+     (developer override for unit tests; cannot reach production
+     because the C helper does not forward them)
+  3. null → fail closed with BASE_IMAGE_NOT_READY
+
+When a valid config is loaded, env overrides are IGNORED with
+a stderr warning (they cannot reach production anyway).
+
+=========================================================================
+3. Live qualification flow (for the developer Mac operator)
+=========================================================================
+
+  1. ssh-keygen -t ed25519 -N '' \
+       -f $HOME/.clinemm/testbed/id_ed25519
+     (The corresponding public key is what gets installed
+     into the qualified image.)
+
+  2. Run `bun tools/macos-vsix-testbed/testbed-image.ts` once
+     on a developer Mac. It validates the SSH public key
+     shape (rejects ssh-dss, malformed bodies), validates
+     the VS Code version is semver, and emits the
+     qualification protocol as runnable comment lines.
+
+  3. The operator runs the qualification protocol:
+       - tart clone $TART_BASE_IMAGE $vm_name
+       - tart run --no-graphics $vm_name (boot)
+       - sshpass -p admin ssh admin@$ip ... (bootstrap)
+       - install pinned public key into admin's
+         ~/.ssh/authorized_keys
+       - download and install VS Code at pinned version
+       - verify ~/.vscode/extensions has NO s1onique.clinemm-*
+         directory
+       - tart stop $vm_name (shutdown)
+
+  4. PUSH the qualified VM to an OCI registry for an
+     immutable OCI identity:
+       - docker login registry.example OR gh auth login ...
+       - oci_ref="registry.example/clinemm-testbed:$qualifier"
+       - tart push $vm_name $oci_ref
+       - digest=$(tart list --format json | \
+                    jq -r '.[] | select(.Name=="'$vm_name'") | .Digest')
+       - qualified_image="${oci_ref}@sha256:${digest}"
+     (Per https://github.com/openai/tart/blob/main/docs/quick-start.md
+      tart push is the supported flow for an immutable OCI
+      identity. A local VM name is NOT such an identity.)
+
+  5. Write the trusted testbed config from the captured digest:
+       - bun -e '
+           import("./testbed-image.ts").then(m =>
+             m.writeTrustedTestbedConfig({
+               homeDir: process.env.HOME,
+               image: process.env.QUALIFIED_IMAGE,
+               sshKeyPath: process.env.SSH_KEY_PATH,
+               editorBinary: "/Applications/...",
+               editorVersion: process.env.CLINEMM_TESTBED_IMAGE_VSCODE_VERSION,
+             }))'
+
+  6. PROBE01 now clones `qualified_image` (digest only) and
+     reads its contract from `$HOME/.clinemm/testbed/config.json`.
+     The runner fails closed with BASE_IMAGE_NOT_READY if the
+     config is absent, corrupt, group-writable, or has any
+     schema violation.
+
+=========================================================================
+4. Production-seam discriminator (proven by helper.test.ts)
+=========================================================================
+
+Reviewer-required discriminator: "Add one production-seam
+test that launches the C helper, not run() directly, and
+asserts the four pinned values reach the runner."
+
+Implemented as three new tests in tools/macos-host-helper/
+native/helper.test.ts:
+
+  - positive: launch C helper with HOME=tempdir(valid config),
+    observe runner's env + its read of the trusted config.
+    Asserts HOME is forwarded AND the four CLINEMM_* env vars
+    are NOT forwarded AND the four pinned values come from
+    the trusted config (image, ssh_key_path, editor_binary,
+    editor_version).
+
+  - negative A: launch C helper with HOME=tempdir(no config),
+    REAL runner.ts in the wrapper. C helper reports
+    INTERNAL_ERROR (because runner exits 2 on
+    BASE_IMAGE_NOT_READY). Proves the gate fires through the
+    production execve seam BEFORE any Tart call.
+
+  - negative B: launch C helper with HOME=tempdir(group-
+    writable config), REAL runner.ts in the wrapper. C helper
+    reports INTERNAL_ERROR (operator-MITM defense). Proves the
+    mode check fires through the production seam.
+
+All three tests use the REAL C helper binary, the REAL
+runner.ts (in negative tests) or a fake runner that exercises
+the production PATH (in the positive test). The fake runner in
+the positive test uses POSIX-portable sed/printf (NOT jq)
+because the C helper's frozen PATH
+(/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin) does not
+include jq on most systems.
+
+=========================================================================
+5. What is NOT modified
+=========================================================================
+
+  - tools/macos-host-helper/native/helper.c: C helper's frozen
+    envp preserved exactly. The execve(2) seam is not widened.
+  - VSIX transfer seam (CORRECTION02): unchanged.
+  - Activation witness (CORRECTION01): unchanged.
+  - Image digest binding (CORRECTION01): unchanged.
+  - Bounded subprocess lifecycle (CORRECTION01): unchanged.
+  - host-helper protocol: unchanged.

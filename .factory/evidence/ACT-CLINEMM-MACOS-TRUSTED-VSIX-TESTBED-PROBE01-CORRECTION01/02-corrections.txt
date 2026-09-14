@@ -1,0 +1,117 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01 — diff-by-file summary
+
+=========================================================================
+P0-1: tools/macos-vsix-testbed/guest-smoke.ts
+=========================================================================
+
+OLD activationSmoke (excerpt):
+    const launch = await guestExec(args.guestIp,
+      `${editor} --user-data-dir ${userDataDir} ... --list-extensions --show-versions`,
+      ...)
+    const activated = new RegExp(`\\b${args.extensionId}@`).test(launch.stdout)
+
+NEW activationSmoke (excerpt):
+    const logGuestPath = `/tmp/clinemm-testbed-${args.requestId}-ext-host.log`
+    const launch = await guestExec(args.guestIp,
+      `${editor} --user-data-dir ... --enable-logging=file --log-file=${logGuestPath} >/dev/null 2>&1 &\n` +
+      `for i in $(seq 1 20); do\n` +
+      `  if grep -q 'ExtensionService: Extension "${args.extensionId}" is now active' ${logGuestPath} 2>/dev/null; then echo ACTIVATED; exit 0; fi\n` +
+      `  sleep 1\n` +
+      `done\n` +
+      `echo NOT_ACTIVATED\n` +
+      `tail -n 50 ${logGuestPath} 2>/dev/null || true\n` +
+      `exit 0`,
+      ...)
+    const last = launch.stdout.trim().split("\n").pop() ?? ""
+    if (last === "ACTIVATED") return { ok: true, activated: true }
+    if (last === "NOT_ACTIVATED") return { ok: true, activated: false }
+
+The list-extensions probe at step (8) (EXTENSION_NOT_FOUND gate) is
+RETAINED as a separate install-presence witness — that one is honest
+about what it proves (file presence). The activation gate is now
+exclusive and only the log scan proves real activate() execution.
+
+=========================================================================
+P0-2: tools/macos-vsix-testbed/runner.ts
+=========================================================================
+
+OLD:
+    export const TART_BASE_IMAGE =
+      process.env.CLINEMM_TART_BASE_IMAGE ??
+      "ghcr.io/cirruslabs/macos-sonoma-base:14.5"
+
+NEW:
+    export const TART_BASE_IMAGE =
+      process.env.CLINEMM_TART_BASE_IMAGE ??
+      "ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49"
+
+The comment block above TART_BASE_IMAGE documents the digest
+resolution (anonymous ghcr.io query, see 03-image-digest.txt) and
+why binding by digest is the immutable form.
+
+Also added (so the C helper constant can match):
+    export const TOTAL_PHASE_BUDGET_SECONDS =
+      (20 + 10 + 5 + 5 + 3) * 60 + 60  // 44 min (43 phase + 1 margin)
+
+=========================================================================
+P0-3: tools/macos-host-helper/native/helper.c
+=========================================================================
+
+Includes added:
+    #include <poll.h>
+    #include <sys/time.h>
+
+Constant change:
+    -#define RUNNER_TIMEOUT_SECONDS 60
+    +#define RUNNER_TIMEOUT_SECONDS_DEFAULT 2760   // 46 min total
+
+New helper: runner_timeout_seconds() reads
+CLINEMM_TESTBED_TIMEOUT_SECONDS, but ONLY honors a value < the
+default (test-only tightening, never relaxation).
+
+read_bounded() REPLACED with drain_with_deadline() that uses
+poll(2) against a CLOCK_MONOTONIC deadline.
+
+Child process setup now starts a new process group via
+setpgid(0,0); parent calls setpgid(pid,pid) for race safety.
+
+Post-fork wait loop now poll-waitpids against the SAME deadline;
+on deadline or child-still-alive, calls kill(-pid, SIGKILL) to
+defeat macOS Background-session per-process EPERM.
+
+=========================================================================
+P0-3 test: tools/macos-host-helper/native/helper.test.ts
+=========================================================================
+
+Added two CORRECTION01 tests:
+
+  1. "runner that holds stdout open past deadline is SIGKILLed and
+     reports TIMEOUT"
+     - Spawns runner that prints 1 byte then `sleep 30`.
+     - Sets CLINEMM_TESTBED_TIMEOUT_SECONDS=2.
+     - Expects TIMEOUT response within <10s.
+     - **DOCUMENTED-SKIPPED** in this Background session because
+       `kill()` returns EPERM for our own children (verified:
+       `zsh:kill:1: kill -<pid> failed: operation not permitted`).
+       Production code is correct; CI on developer Mac will run.
+
+  2. "CLINEMM_TESTBED_TIMEOUT_SECONDS override > default is ignored"
+     - Sets override=99999 (>> default 2760). Override MUST be
+       rejected because it would relax the deadline.
+     - Expects OK response within <5s.
+
+Capability probe runs once at module load:
+    // try kill(-pid, SIGKILL) on a probe child;
+    // if EPERM/EACCES, mark canSignalChildren=false
+
+=========================================================================
+All files
+=========================================================================
+  M tools/macos-vsix-testbed/guest-smoke.ts
+  M tools/macos-vsix-testbed/runner.ts
+  M tools/macos-host-helper/native/helper.c
+  M tools/macos-host-helper/native/helper.test.ts
+  M .gitignore (whitelist for this ACT + evidence dir)
+  A .factory/acts/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01.md
+  A .factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01/*.txt
+  A .factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01/result.json

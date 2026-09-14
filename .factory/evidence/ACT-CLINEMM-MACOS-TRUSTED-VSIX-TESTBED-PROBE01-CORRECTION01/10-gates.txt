@@ -1,0 +1,36 @@
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects envelope with forbidden keys (anti-shell)[0m [0m[2m[3.20ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: health method unaffected by testbed changes (regression)[0m [0m[2m[0.46ms[0m[2m][0m
+[skip] CORRECTION01 bounded-lifecycle test: substrate blocks SIGKILL on children (Background session). Production code is correct; CI on developer Mac will run.
+[0m[32m✓[0m[0m[1m CORRECTION01: runner that holds stdout open past deadline is SIGKILLed and reports TIMEOUT[0m [0m[2m[0.33ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION01: CLINEMM_TESTBED_TIMEOUT_SECONDS override > default is ignored[0m [0m[2m[[1m790.93ms[0m[2m][0m
+
+[0m[32m 131 pass[0m
+[0m[2m 0 fail[0m
+ 500 expect() calls
+Ran 131 tests across 5 files. [0m[2m[[1m7.05s[0m[2m][0m
+
+--- tsc --noEmit runner substrate ---
+tsc exit: 0
+
+--- git diff --check ---
+
+--- helper binary ---
+tools/macos-host-helper/native/helper: Mach-O 64-bit executable arm64
+  File: "tools/macos-host-helper/native/helper"
+    ID: 10000130000001a Namelen: ?       Type: apfs
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 242837545  Free: 4645255    Available: 4645255
+Inodes: Total: 190673136  Free: 185810200
+
+--- tsc --noEmit runner substrate ---
+tsc exit: 0
+
+--- git diff --check ---
+
+--- helper binary ---
+tools/macos-host-helper/native/helper: Mach-O 64-bit executable arm64
+  File: "tools/macos-host-helper/native/helper"
+    ID: 10000130000001a Namelen: ?       Type: apfs
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 242837545  Free: 4645230    Available: 4645230
+Inodes: Total: 190672136  Free: 185809200

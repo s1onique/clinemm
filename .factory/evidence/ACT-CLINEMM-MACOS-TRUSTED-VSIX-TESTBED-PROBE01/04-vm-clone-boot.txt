@@ -1,0 +1,80 @@
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01 — Tart substrate witness
+
+Tart binary:  /run/current-system/sw/bin/tart  (v2.34.0)
+Tart IS installed but cannot complete a VM clone in this Background session.
+
+Reproducer (from this dev session):
+
+  $ TART_HOME=/tmp/clinemm-testbed-tart-home timeout 60 \
+      tart clone ghcr.io/cirruslabs/macos-sonoma-base:14.5 clinemm-probe-test
+  pulling manifest...
+  2026-09-12 18:48:38.324 tart[3754:105813778] NetworkStorageDB:_openDBReadConnections:
+      failed to open read connection to DB @
+      /Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db.
+      Error=14. Cause=unable to open database file
+  2026-09-12 18:48:38.325 tart[3754:105813778] The read-connection to the DB=
+      /Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db is NOT valid.
+      Unable to determine schema version.
+  ...
+  Failed to retrieve credentials using Keychain credentials provider,
+      authentication may fail: Failed(message: "Keychain returned unsuccessful
+      status -67674")
+  ...
+  Error: UnexpectedHTTPStatusCode(when: "pulling manifest", code: 404, details:
+      "{\"errors\":[{\"code\":\"MANIFEST_UNKNOWN\",\"message\":\"manifest unknown\"}]}\n")
+
+Substrate limits observed (both apply):
+
+  (1) APFS `protect` flag on /Volumes/UserData blocks writes to
+      $HOME/Library/Caches/tart/Cache.db. NetworkStorageDB cannot open a
+      read OR write connection. TART_HOME override only partially works —
+      the cache directory is hard-coded in Tart's Cache.db location, NOT
+      TART_HOME.
+
+  (2) ghcr.io/cirruslabs/macos-sonoma-base:14.5 is not pullable from this
+      dev environment: 404 MANIFEST_UNKNOWN. The base image registry is
+      not configured for unauthenticated pulls in this sandbox.
+
+Both limits cause the runner's tartEnvSane() probe to fail closed BEFORE
+any I/O. The structured error returned is:
+
+  {
+    "error": "BASE_IMAGE_NOT_READY",
+    "message": "tart substrate unavailable: <reason>",
+    "detail": "On substrates where Tart cannot write $HOME/Library/Caches
+              (e.g. APFS `protect` volumes), the testbed cannot run.
+              Re-run on a developer machine."
+  }
+
+This is exactly the HALT_BASE_IMAGE_NOT_READY signal that the ACT's
+"nonblocking live kernel residue" clause anticipates. On a developer Mac:
+
+  $ TART_HOME=$HOME/.tart bash scripts/macos/clinemm-host-helper install
+  $ bash scripts/macos/clinemm-host-helper status
+    socket bound; helper accepting
+  $ bash scripts/macos/clinemm-host-helper testbed run-installed-vsix-smoke \
+      --subject fa66f7a62 \
+      --vsix  /path/to/clinemm-4.1.16-fa66f7a62.vsix \
+      --sha256 66fb4cb73ffb8f9cfe9907f9abaa09033a836261a26951dca126c83ca0fe321f
+
+  would produce a `result` envelope with:
+    { "result": {
+        "subject_head": "fa66f7a62...",
+        "vsix_sha256": "66fb...",
+        "host_sha256": "66fb...",
+        "guest_vsix_sha256": "66fb...",
+        "extension_id": "s1onique.clinemm",
+        "extension_version": "4.1.16",
+        "guest_image": "ghcr.io/cirruslabs/macos-sonoma-base:14.5",
+        "guest_macos_version": "...",
+        "vscode_version": "...",
+        "activation": "pass",
+        "red_without_extension": "pass",
+        "cleanup": "pass",
+        "ephemeral_vm_name": "clinemm-probe-...",
+        "tart_invocations": ~10,
+        "host_hostname": "<dev-mac>"
+    }}
+
+The structural layers are landed in this ACT. Live execution waits on
+substrate.

@@ -1,0 +1,75 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION02 — recon
+
+Reviewer verdict on CORRECTION01: structural closure on the three
+P0s (activation witness, image digest, bounded lifecycle), but a
+new P0 was identified at the real artifact-transfer seam:
+
+  The VSIX is not actually streamed to the VM.
+  guest-smoke.ts does this:
+    const vsixB64 = readFileSync(args.vsixHostPath).toString("base64")
+    guestExec(guestIp,
+      `echo '${vsixB64}' | base64 -d > ${guestTmpPath}; ...`)
+  So the entire VSIX, inflated by ~33% from Base64, becomes part
+  of a single remote command string passed to ssh.
+
+Reviewer's specific evidence:
+  - getconf ARG_MAX on macOS = 262144 bytes
+  - Runner allows VSIX up to 256 MiB
+  - 256 MiB base64 = ~341 MiB of command text
+  - Local argv + ssh command-length limits both bite
+
+Reviewer's bounded fix (verbatim):
+  scp exact-file admin@guest:tmp/...
+  or
+  ssh admin@guest 'cat > /tmp/foo.vsix' < exact-file
+
+The invariant the reviewer requires:
+  VSIX bytes travel as a byte stream/file, not as command-line text.
+
+Reviewer's discriminator (verbatim):
+  REAL_VSIX_SIZE=<actual current dogfood VSIX size>
+  TRANSFER_METHOD=scp|stdin_stream
+  HOST_SHA256=<H1>
+  GUEST_SHA256=<H2>
+  H1==H2
+
+And (also verbatim):
+  "add one synthetic large-file transport test if the real VSIX is
+  unusually tiny — e.g. 16–32 MiB is enough to prove you are no
+  longer stuffing artifact bytes into the command line."
+
+Nonblocking note from reviewer (verbatim):
+  "I would not re-review the activation witness again until you
+  can run it live in the guest. That is exactly what the current
+  halted state is for."
+
+This ACT applies ONLY the bounded transfer fix. Activation
+witness, image digest, bounded lifecycle, and host-helper protocol
+are NOT re-opened (per reviewer explicit instruction).
+
+Approach chosen: ssh stdin byte-stream transport (reviewer's
+second option). Reason: it is one process invocation, the
+existing ssh argv already includes admin@guest, and the file
+appears on the guest through the same channel ssh itself uses
+for client→server copies.
+
+Implementation:
+  - new exported function streamBytesOverSsh(cmd, hostBytes, budgetMs)
+    that uses Bun.spawn({ cmd, stdin: hostBytes, ... }) and waits
+    for exit under the existing withTimeout helper.
+  - new exported function scpVsixToGuest(hostPath, guestIp,
+    guestTmpPath, budgetMs) that calls streamBytesOverSsh with
+    the ssh command and the host file as stdin, then shasum on
+    the guest.
+  - Inline base64 argv path removed from guest-smoke.ts.
+  - Path validation: guestTmpPath must match
+    /^\/[A-Za-z0-9._\-+/@]+$/ (defense in depth; server-controlled
+    literal, never host content).
+  - Unused `readFileSync` import removed.
+
+New test file: tools/macos-vsix-testbed/guest-smoke.test.ts
+  - 16-MiB synthetic payload streamed through streamBytesOverSsh
+    to a local "sink" Bun script (stand-in for ssh + cat).
+  - Asserts: byte-perfect length match, SHA-256 match, and
+    payload bytes do NOT appear in spawned process argv.
+  - Second test: 1 KiB and 1 MiB sizes — both round-trip cleanly.

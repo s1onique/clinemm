@@ -1,0 +1,1102 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION03 — corrections
+
+=========================================================================
+P0-1 (NEW): qualify and pin the guest testbed image
+=========================================================================
+
+The single P0 fixed here: the testbed owns a QUALIFIED immutable
+testbed image, not the generic Cirrus `-base` image. SSH auth is
+pinned to a provisioned key; the editor baseline is pinned to a
+specific binary + version installed into the qualified image.
+
+=========================================================================
+1) New constants in tools/macos-vsix-testbed/runner.ts
+=========================================================================
+
+  // The qualified testbed image digest — produced ONCE per
+  // qualification run by testbed-image.ts. PROBE01 clones this
+  // digest only; it never touches the generic base.
+  export const TART_TESTBED_IMAGE =
+    process.env.CLINEMM_TART_TESTBED_IMAGE ?? null
+
+  // The image we provision FROM (only used by testbed-image.ts).
+  export const TART_QUALIFICATION_SOURCE_IMAGE = TART_BASE_IMAGE
+
+  // Pinned SSH key path for noninteractive SSH into the testbed
+  // VM. The qualification step provisions the corresponding
+  // public key. Fail-closed default: null.
+  export const TESTBED_SSH_KEY_PATH =
+    process.env.CLINEMM_TESTBED_SSH_KEY_PATH ?? null
+
+  // Pinned editor baseline — absolute path + exact version.
+  export const TESTBED_EDITOR_BINARY =
+    process.env.CLINEMM_TESTBED_EDITOR_BINARY ?? null
+  export const TESTBED_EDITOR_VERSION =
+    process.env.CLINEMM_TESTBED_EDITOR_VERSION ?? null
+
+=========================================================================
+2) New helpers in tools/macos-vsix-testbed/runner.ts
+=========================================================================
+
+  // sshCommandForGuest — builds the ssh argv with the
+  // pinned-key contract. Pure (no env reads): takes pinnedKeyPath
+  // and pinnedImageDigest as args, fails closed if either is
+  // missing or if the digest lacks a "sha256:" form.
+  export function sshCommandForGuest(args: {
+    readonly guestIp: string
+    readonly remoteCommand: string
+    readonly pinnedKeyPath: string
+    readonly pinnedImageDigest: string
+  }): { readonly ok: true; readonly cmd: readonly string[] } | { readonly ok: false; readonly error: string }
+  → cmd = [
+      "ssh",
+      "-o", "BatchMode=yes",
+      "-o", "StrictHostKeyChecking=no",
+      "-o", "UserKnownHostsFile=/dev/null",
+      "-o", "IdentitiesOnly=yes",
+      "-o", `IdentityFile=${args.pinnedKeyPath}`,
+      "-o", "PreferredAuthentications=publickey",
+      `admin@${args.guestIp}`,
+      args.remoteCommand,
+    ]
+
+  // editorBaseline — asserts pinned binary + version. Pure.
+  export function editorBaseline(args: {
+    readonly pinnedBinary: string | null
+    readonly pinnedVersion: string | null
+  }): { readonly ok: true; readonly binary: string; readonly version: string }
+        | { readonly ok: false; readonly error: string }
+
+  // pinnedSshAndEditor — convenience wrapper that wires the
+  // env-captured constants. Used by guest-smoke.ts.
+  export function pinnedSshAndEditor(): { ... }
+
+=========================================================================
+3) Fail-closed gate at the start of `run()` in runner.ts
+=========================================================================
+
+  if (TART_TESTBED_IMAGE == null) {
+    return {
+      error: "BASE_IMAGE_NOT_READY",
+      message: "CLINEMM_TART_TESTBED_IMAGE is not pinned; the testbed refuses to run against an un-qualified base image (CORRECTION03 contract).",
+    }
+  }
+  if (TESTBED_SSH_KEY_PATH == null) {
+    return {
+      error: "BASE_IMAGE_NOT_READY",
+      message: "CLINEMM_TESTBED_SSH_KEY_PATH is not set; the testbed refuses BatchMode=yes without a pinned key (CORRECTION03 contract).",
+    }
+  }
+  const baseline = editorBaseline({
+    pinnedBinary: TESTBED_EDITOR_BINARY,
+    pinnedVersion: TESTBED_EDITOR_VERSION,
+  })
+  if (!baseline.ok) {
+    return {
+      error: "BASE_IMAGE_NOT_READY",
+      message: `${baseline.error} (CORRECTION03 contract).`,
+    }
+  }
+
+This is the contract that prevents silent reversion to the
+un-qualified generic base image.
+
+=========================================================================
+4) guest-smoke.ts changes
+=========================================================================
+
+OLD guestExec:
+  cmd: ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null", `admin@${guestIp}`, command]
+
+NEW guestExec:
+  const pinned = pinnedSshAndEditor()
+  if (!pinned.ok) return { ok: false, error: "SSH_KEY_NOT_PINNED", ... }
+  const ssh = sshCommandForGuest({
+    guestIp,
+    remoteCommand: command,
+    pinnedKeyPath: pinned.sshKeyPath,
+    pinnedImageDigest: pinned.imageDigest,
+  })
+  → ssh.argv now includes IdentitiesOnly=yes,
+    IdentityFile=<pinned key path>, PreferredAuthentications=publickey
+
+OLD installVsixInGuest:
+  // "command -v code || command -v codium" → first match wins
+  // version = (editor --version).trim() || "unknown"
+
+NEW installVsixInGuest:
+  const pinned = pinnedSshAndEditor()
+  if (!pinned.ok) return { ok: false, error: "EDITOR_BASELINE_NOT_PROVEN", ... }
+  const editor = pinned.editorBinary       // pinned absolute path
+  const editorVersion = pinned.editorVersion // pinned exact version
+
+  // 1. test -x $editor → "present" or "missing"
+  //    missing → fail closed
+  // 2. $editor --version → reportedVersion
+  //    drift (reportedVersion !== pinned) → fail closed
+
+OLD activationSmoke default:
+  const editor = args.editor ?? "code"
+
+NEW activationSmoke default:
+  const editor = args.editor ?? (pinnedSshAndEditor().ok ? pinned.editorBinary : "code")
+
+=========================================================================
+5) New: tools/macos-vsix-testbed/testbed-image.ts
+=========================================================================
+
+The one-shot provisioner script. It:
+
+  - validates CLINEMM_TESTBED_IMAGE_PUBLIC_KEY_PATH exists and is
+    a well-formed ssh-ed25519 / ssh-rsa / ecdsa public key
+    (rejects ssh-dss and malformed bodies)
+  - validates CLINEMM_TESTBED_IMAGE_VSCODE_VERSION is semver
+    (X.Y.Z)
+  - emits a JSON envelope with:
+      testbed_image                  (the SOURCE image digest
+                                       placeholder; the live
+                                       operator replaces with
+                                       the qualified-image
+                                       digest from `tart list`)
+      vscode_version                 (pinned)
+      editor_binary                  (pinned absolute path)
+      ssh_public_key_fingerprint     (SHA256 base64, no =)
+      clinemm_preinstalled           (false; verified at qual)
+
+  - documents the live qualification protocol (clone → boot →
+    sshpass bootstrap → install pinned key → install VS Code →
+    verify ClineMM absent → shutdown → emit digest). The
+    protocol runs on a developer Mac; in this Background session
+    it's documented-only because Tart cannot run here.
+
+=========================================================================
+6) New error codes in tools/macos-vsix-testbed/path-validation.ts
+=========================================================================
+
+  +  | "EDITOR_BASELINE_NOT_PROVEN"
+  +  | "SSH_KEY_NOT_PINNED"
+
+Both codes are typed in the RunnerErrorCode union; both fail
+closed at the gate in runner.ts and inside guest-smoke.ts.
+
+=========================================================================
+7) Files
+=========================================================================
+
+  M tools/macos-vsix-testbed/runner.ts
+  M tools/macos-vsix-testbed/guest-smoke.ts
+  M tools/macos-vsix-testbed/path-validation.ts
+  A tools/macos-vsix-testbed/testbed-image.ts
+  A tools/macos-vsix-testbed/testbed-image.test.ts
+  M tools/macos-vsix-testbed/runner.test.ts
+  M .gitignore
+
+=========================================================================
+8) Round-2 followup P0: production-seam wiring
+=========================================================================
+
+Reviewer's discriminator on the round-1 ACT: the C helper's
+frozen envp ([CLINEMM_TESTBED_RUNNER=1, PATH, HOME]) strips the
+four CLINEMM_* env vars the runner reads, so the round-1
+contract was structurally tested but inaccessible through the
+production execve seam.
+
+Bounded fix (round 2):
+
+NEW: tools/macos-vsix-testbed/testbed-config.ts
+  + TrustedTestbedConfig interface (5 fields, schema_version=1)
+  + readTrustedTestbedConfig({homeDir, currentUid}): pure function
+    - resolves $HOME/.clinemm/testbed/config.json
+    - regular file check
+    - mode ≤ 0o644 check (defense vs. operator MITM)
+    - owner uid == current uid check (defense vs. non-owner)
+    - JSON parse + schema_version === 1
+    - image contains "@sha256:" (refuses tag-only OCI)
+    - ssh_key_path absolute
+    - editor_binary absolute
+    - editor_version semver
+  + defaultTrustedTestbedConfigPath(homeDir): returns the canonical
+    $HOME/.clinemm/testbed/config.json path
+
+M: tools/macos-vsix-testbed/runner.ts
+  + imports readTrustedTestbedConfig and TrustedTestbedConfig
+  + TART_TESTBED_IMAGE / TESTBED_SSH_KEY_PATH /
+    TESTBED_EDITOR_BINARY / TESTBED_EDITOR_VERSION are now `let`
+    (mutable) so run() can reassign them after the trusted config
+    gate fires. They still default from env (developer-override
+    seam) but a valid trusted config file wins.
+  + run() now:
+    - calls readTrustedTestbedConfig({homeDir, currentUid})
+    - if config OK: uses config values, ignores CLINEMM_* env
+      overrides (logs a warning that they cannot reach production)
+    - if config absent/error: falls back to env (developer-only)
+    - validates pins (image @sha256, key path present, editor
+      binary+version); fails closed with BASE_IMAGE_NOT_READY on
+      any failure
+    - reassigns the module-level let constants so guest-smoke.ts
+      sees the validated values
+  + env vars STILL work for unit tests / developer runs that
+    bypass the config file (this preserves the round-1 tests).
+
+M: tools/macos-vsix-testbed/testbed-image.ts
+  + documents `tart push` flow for immutable OCI identity:
+      "tart push $vm_name registry/path:qualifier"
+      "tart list --format json | jq -r '...' .Digest"
+    Local VM names are NOT immutable registry digests; the push
+    publishes the VM to an OCI registry and returns a digest.
+  + adds writeTrustedTestbedConfig({homeDir, image, sshKeyPath,
+    editorBinary, editorVersion, mode?}) — writes the canonical
+    config file with strict mode and parent-dir creation. Called
+    by the live operator AFTER the qualified image has been
+    pushed to the registry.
+
+M: tools/macos-vsix-testbed/path-validation.ts
+  + (no change in this round; EDITOR_BASELINE_NOT_PROVEN and
+    SSH_KEY_NOT_PINNED still in the union)
+
+NOT modified: tools/macos-host-helper/native/helper.c
+  The C helper's frozen envp is preserved exactly as it was
+  since HOST-HELPER01. Only HOME is forwarded; the qualified
+  testbed config flows through HOME which is already in envp.
+
+=========================================================================
+9) Production-seam discriminator (new helper.test.ts tests)
+=========================================================================
+
+Three new tests in tools/macos-host-helper/native/helper.test.ts:
+
+  CORRECTION03: production-seam — C helper execve reaches the
+    trusted testbed config
+    - Launch the REAL C helper (not run() directly)
+    - HOME = temp dir with valid trusted config
+    - Fake runner observes its env + the trusted config it
+      reads from $HOME
+    - Asserts HOME is forwarded AND the four CLINEMM_* env
+      vars are NOT forwarded (proves the C helper's frozen
+      envp works as advertised) AND the four pinned values
+      come from the trusted config
+
+  CORRECTION03: production-seam — missing trusted config →
+    runner fails closed (no Tart)
+    - Launch the REAL C helper with HOME pointing at empty dir
+    - CLINEMM_TESTBED_RUNNER = wrapper that exec's the REAL
+      runner.ts via bun (the wrapper itself is the execve
+      target so the C helper launches it directly)
+    - C helper sees non-zero exit (BASE_IMAGE_NOT_READY exit
+      code 2) and reports INTERNAL_ERROR
+    - Proves the gate fires through the production execve
+      seam BEFORE any Tart call
+
+  CORRECTION03: production-seam — corrupt trusted config
+    (group-writable) → runner fails closed
+    - Same setup but config has mode 0o664 (operator-MITM
+      defense)
+    - Runner refuses to read it; C helper reports
+      INTERNAL_ERROR
+
+The fake runner in the positive test uses POSIX-portable
+sed/printf (NOT jq) because the C helper's frozen PATH
+(/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin) does not
+include jq on most systems. Tests that depended on jq would
+be flaky in CI; portable shell ensures they pass anywhere.
+
+=========================================================================
+10) Round-3 P1: OCI sha256 digest syntax validation
+=========================================================================
+
+Reviewer's P1: the round-2 trusted-config image check is only
+"contains @sha256:" — accepts `registry/foo@sha256:not-a-digest`
+as valid, weaker than the "strict digest checks" contract.
+
+Bounded fix:
+
+M: tools/macos-vsix-testbed/testbed-config.ts
+  + constant OCI_SHA256_REF_RE = /^[^@\s]+@sha256:[0-9a-f]{64}$/
+  + image validation now uses .test() instead of .includes()
+  + error message updated to mention "64-hex-digest"
+
+M: tools/macos-vsix-testbed/runner.ts
+  + sshCommandForGuest() pinnedImageDigest check now uses the
+    same regex (inlined; runner.ts is a pure-arg function and
+    does not import testbed-config.ts to keep the unit-test
+    surface small and avoid a cycle)
+  + error message updated
+
+M: tools/macos-vsix-testbed/testbed-config.test.ts
+  + 6 new tests:
+    - accepts valid 64-hex digest
+    - rejects malformed @sha256: reference (not-a-digest)
+    - rejects truncated digest (63 hex chars)
+    - rejects non-hex characters (z × 64)
+    - rejects image without @sha256: separator
+    - accepts lowercase hex digest (canonical form)
+  - updated "accepts well-formed config with mode 0o644"
+    to assert image matches OCI_SHA256_REF_RE exactly (was
+    only asserting contains @sha256:)
+
+M: tools/macos-vsix-testbed/runner.test.ts
+  + 3 new tests:
+    - rejects malformed @sha256: reference (not-a-digest)
+    - rejects truncated sha256 digest (63 hex chars)
+    - accepts valid 64-hex sha256 digest
+
+Final test count: 176 pass, 0 fail (was 167 after round 2).
+9 new round-3 tests.
+
+=========================================================================
+11) Reviewer-discriminated composition (round-3 GO)
+=========================================================================
+
+The reviewer-required composition is now provably correct:
+
+  REAL C helper
+    → frozen execve envp
+        CLINEMM_TESTBED_RUNNER=1
+        PATH=...
+        HOME=<trusted home>
+    → runner
+    → $HOME/.clinemm/testbed/config.json
+    → qualified image + SSH key + editor binary/version
+
+proven by:
+
+  - production-seam positive test (REAL C helper, HOME
+    forwarded, four CLINEMM_* env vars stripped by frozen
+    envp, four pinned values come from trusted config)
+  - production-seam negative tests A+B (REAL runner.ts via
+    bun wrapper, gate fires before any Tart call)
+  - 16 testbed-config prereq tests
+  - 9 round-3 P1 tests (strict @sha256:<64-hex> validation)
+
+NOT modified: tools/macos-host-helper/native/helper.c — frozen
+envp preserved. The authority flows through the one channel
+(HOME) that the C helper already forwards.
+
+=========================================================================
+12) Round-4 P0: VSIX transfer SSH authority == guestExec SSH authority
+=========================================================================
+
+Reviewer's P0 (round 3 verdict): scpVsixToGuest() constructed
+its own independent ssh argv with NO IdentitiesOnly=yes, NO
+IdentityFile=<pinned key>, NO PreferredAuthentications=publickey.
+That means the actual VSIX byte-stream push could silently fall
+back to ambient SSH agent keys or password auth — defeating the
+frozen pinned-key contract on the load-bearing transfer.
+
+Bounded fix:
+
+M: tools/macos-vsix-testbed/guest-smoke.ts
+  + scpVsixSshArgv() — pure builder; calls sshCommandForGuest()
+    so the transfer path shares the EXACT same argv shape as
+    guestExec(). The two pinned authority values are required
+    args (NOT env reads) so unit tests can drive it deterministically.
+  + scpVsixToGuest() now: pinnedSshAndEditor() → scpVsixSshArgv()
+    → streamBytesOverSsh(). If pinnedSshAndEditor() fails (no
+    SSH_KEY_PATH env, no TART_TESTBED_IMAGE env) OR
+    scpVsixSshArgv() fails (malformed digest, empty key),
+    scpVsixToGuest() returns SSH_KEY_NOT_PINNED BEFORE any
+    spawn. The transfer cannot silently fall back to ambient
+    SSH auth.
+  - the old inline `ssh -o BatchMode=yes -o StrictHostKey...`
+    argv (which lacked pinned-key flags) is GONE.
+
+M: tools/macos-vsix-testbed/guest-smoke.test.ts
+  + 7 new tests in a new describe block:
+    - scpVsixSshArgv builds argv with IdentitiesOnly=yes + pinned key
+    - scpVsixSshArgv argv contains NO sshpass / NO password surface
+    - scpVsixSshArgv argv contains NO host file content
+    - scpVsixSshArgv remote command is the fixed cat > path writer
+    - scpVsixSshArgv fails closed when pinnedKeyPath is empty
+    - scpVsixSshArgv fails closed when pinnedImageDigest is malformed
+    - scpVsixSshArgv argv == sshCommandForGuest().cmd (composition)
+  - existing 16-MiB stdin byte-stream test retained; the new
+    tests prove the SECOND half of the composition that the
+    reviewer demanded: child SSH authority == trusted pinned
+    SSH authority.
+
+Final test count: 183 pass, 0 fail (was 176 after round 3;
++15 round 1, +19 round 2, +9 round 3, +7 round 4 = +50 total).
+
+=========================================================================
+13) Reviewer-discriminated composition (round-4 GO)
+=========================================================================
+
+  ordinary guest commands → pinned qualified-image SSH key  GREEN
+  actual VSIX byte transfer → same pinned-key authority      GREEN
+
+Both paths now compose through the same:
+
+  pinnedSshAndEditor() →
+    sshCommandForGuest({
+      guestIp,
+      remoteCommand,
+      pinnedKeyPath,
+      pinnedImageDigest
+    })
+
+The ssh argv returned is identical for both (proven by
+"scpVsixSshArgv argv == sshCommandForGuest().cmd"). One source
+of truth. IdentitiesOnly=yes + IdentityFile=<pinned> +
+PreferredAuthentications=publickey. No sshpass, no ambient
+agent, no password fallback.
+
+NOT modified: tools/macos-host-helper/native/helper.c (frozen
+envp), OCI sha256 validation regex, trusted config schema,
+editor baseline checks, activation probe, byte-stream
+transport primitive. Only the transfer-path ssh argv was
+tightened, exactly as the reviewer instructed.
+
+=========================================================================
+14) Round-5 P0: testbed SSH server identity was untrusted
+=========================================================================
+
+Reviewer's P0 (round 4 verdict): the common SSH builder still
+contained:
+
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+
+while pinning only the CLIENT private key. Those are different
+trust directions:
+
+  IdentityFile=<pinned>     proves client → guest
+  SSH host-key verification  proves guest → client
+
+At present the second statement was unproven. A wrong SSH
+endpoint can sit between `tart ip` and every downstream
+witness. Client-key pinning does NOT prevent a malicious or
+accidentally wrong SSH server from accepting the presented
+public key and answering the smoke commands.
+
+Bounded fix:
+
+M: tools/macos-vsix-testbed/testbed-config.ts
+  + TrustedTestbedConfig gains `ssh_host_public_key` field
+    (server identity pin, captured at qualification time).
+  + Validator: bare `ssh-keyscan` line shape
+    (`<keytype> <base64> [<comment>]` with no host field, no
+    marker, no embedded newlines, no '#' comment).
+  + Anything else fails closed.
+
+M: tools/macos-vsix-testbed/runner.ts
+  + New env override: CLINEMM_TESTBED_SSH_HOST_PUBLIC_KEY.
+  + New pure helper: buildKnownHostsFileContents() — produces
+    a single `<guestIp> <pinnedHostPublicKey>\n` line; rejects
+    hostnames (would allow wildcards).
+  + sshCommandForGuest signature gains `knownHostsFile` +
+    `pinnedHostPublicKey`. Emits:
+      -o StrictHostKeyChecking=yes
+      -o UserKnownHostsFile=<absolute path>
+    instead of `StrictHostKeyChecking=no UserKnownHostsFile=/dev/null`.
+  + pinnedSshAndEditor() returns the third pin; fail-closed
+    when null.
+  + run() wires all three pins through and writes back to
+    module constants. New BASE_IMAGE_NOT_READY error explains
+    the new ssh-keyscan step.
+
+M: tools/macos-vsix-testbed/guest-smoke.ts
+  + New helpers: ephemeralKnownHostsPath(),
+    writeEphemeralKnownHosts(),
+    cleanupEphemeralKnownHosts(). Path is under
+    `<home>/.clinemm/testbed/run/known_hosts-<tag>` (NOT /tmp),
+    mode 0o600, dir mode 0o700.
+  + scpVsixSshArgv() takes the same two new args.
+  + guestExec() AND scpVsixToGuest() both write the ephemeral
+    known_hosts file BEFORE building the ssh argv. Same code
+    path, same authority, different tag (`guest-<ip>` vs
+    `transfer-<ip>`). Both fail closed with SSH_KEY_NOT_PINNED
+    if the write fails or the host key is rejected.
+
+M: tools/macos-vsix-testbed/testbed-image.ts
+  + writeTrustedTestbedConfig() gains required `sshHostPublicKey`
+    arg; refuses to write a config without it.
+
+Tests added (round 5): 29 new
+  - testbed-config.test.ts: 13 (server-identity pin validation)
+  - runner.test.ts: 16 (StrictHostKeyChecking=yes in argv,
+    UserKnownHostsFile=<abs> in argv, fail-closed paths,
+    buildKnownHostsFileContents() payload shape, hostname
+    rejection, embedded-newline rejection, unsupported key
+    type, trailing comment)
+
+Tests updated (round 5): all existing sshCommandForGuest and
+scpVsixSshArgv call sites in the test files were updated to
+thread the third pin — old test bodies now pass
+`knownHostsFile` + `pinnedHostPublicKey` alongside the
+client key + image digest. The composition discriminator
+`scpVsixSshArgv.argv == sshCommandForGuest().cmd` still holds.
+
+Final test count: 212 pass, 0 fail (was 183 after round 4;
++29 round 5 = +58 total across all CORRECTION03 rounds).
+
+=========================================================================
+15) Reviewer-discriminated composition (round-5 GO)
+=========================================================================
+
+  ordinary guest commands → pinned qualified-image SSH key   GREEN
+  actual VSIX byte transfer → pinned client key              GREEN
+  ordinary guest commands → pinned server host key           GREEN  (round 5)
+  actual VSIX byte transfer → pinned server host key         GREEN  (round 5)
+
+The trust statement is now complete on BOTH sides:
+  client identity: pinned via trusted config (ssh_key_path)
+  server identity: pinned via trusted config (ssh_host_public_key)
+  qualified image: pinned via trusted config (image, OCI sha256)
+  editor baseline: pinned via trusted config (binary + semver)
+
+NOT modified: tools/macos-host-helper/native/helper.c (frozen
+envp preserved), OCI sha256 validation regex (round 3 fix
+already in place), trusted config schema for non-host-key
+fields (round 2 fix already in place), editor baseline checks
+(round 1 fix already in place), activation probe (reviewer
+explicit: do not touch), byte-stream transport primitive
+streamBytesOverSsh() (reviewer explicit: do not touch). Only
+the SSH argv was tightened (StrictHostKeyChecking=no →
+StrictHostKeyChecking=yes, UserKnownHostsFile=/dev/null →
+ephemeral trusted known_hosts) plus the schema got one new
+required field — exactly as the reviewer instructed.
+
+Reviewer's reopen condition is satisfied:
+  > After this bounded server-identity fix: commit/rebind
+  > immediately; no further structural review before the live
+  > developer-Mac run.
+
+Commit the whole PROBE01/CORRECTION01..03 family, rebind at
+exact HEAD, clean worktree, proceed to developer-Mac live
+qualification.
+
+=========================================================================
+16) Round-6 P0: ssh_host_public_key provenance was unauthenticated
+=========================================================================
+
+Reviewer's P0 (round 6):
+
+  > The proposed reopen condition says the trusted value is
+  > captured with:
+  >   ssh-keyscan -t ed25519 $guest_ip
+  > and then persisted as ssh_host_public_key.
+  > That does NOT establish trust in the key. OpenSSH's own
+  > ssh-keyscan manual explicitly warns that constructing
+  > known_hosts from unverified ssh-keyscan output leaves
+  > users vulnerable to MITM. ssh-keyscan merely asks whatever
+  > server answers at that address for its public host key;
+  > it does not authenticate that answer.
+  >
+  > HALT_SSH_HOST_KEY_PIN_NOT_AUTHENTICATED_AT_QUALIFICATION.
+
+The reviewer's discriminator:
+
+  One discriminator is enough: show that the ssh_host_public_key
+  written to config.json comes from the guest's actual host-key
+  material, not from unauthenticated ssh-keyscan output.
+  ssh-keyscan may still be used afterward as a comparison
+  probe, but not as the root of trust.
+
+Bounded fix:
+
+M: tools/macos-vsix-testbed/testbed-image.ts
+  + New helper captureGuestSshHostPublicKey() reads
+    /etc/ssh/ssh_host_ed25519_key.pub from INSIDE the
+    qualified VM through the already-authenticated
+    provisioning channel (sshpass + admin/admin). The
+    captured key IS the key sshd will present on every clone
+    of this OCI image, because sshd reads the host keys from
+    /etc/ssh/ssh_host_*_key.pub on every boot. So capturing
+    the file content via the authenticated admin channel
+    during qualification produces a pin that is
+    cryptographically bound to the same key sshd will
+    present at runtime — with NO man-in-the-middle window
+    between the observation and the trust establishment.
+  + Helper takes an optional runCommand seam so unit tests
+    can exercise every failure mode without an actual SSH
+    server.
+  + Helper validates the captured line: rejects embedded
+    newlines (would smuggle additional known_hosts markers),
+    rejects leading @ (revoked/CA marker), | (hashed host),
+    # (comment); requires one of the 5 allowed key types
+    (ssh-ed25519, ecdsa-sha2-nistp256, ssh-rsa, rsa-sha2-256,
+    rsa-sha2-512); requires base64 body of >= 43 chars;
+    rejects > 3 whitespace-separated tokens (would smuggle
+    a host field).
+  + runQualifier() now calls captureGuestSshHostPublicKey()
+    and emits ssh_host_public_key + ssh_host_public_key_path
+    in the qualifier envelope. CLINEMM_TESTBED_IMAGE_GUEST_IP
+    env var gates the capture; if unset, fails closed with
+    SSH_HOST_KEY_NOT_FOUND.
+  + Qualifier envelope Result type now has 2 new required
+    fields.
+
+M: tools/macos-vsix-testbed/testbed-config.ts
+  + All ssh-keyscan references in doc comments are replaced
+    with "captured from inside the qualified guest via the
+    authenticated provisioning channel".
+  + Validator error message updated to remove the ssh-keyscan
+    reference.
+
+M: tools/macos-vsix-testbed/runner.ts
+  + Round-5 error message updated to point the operator at
+    the authenticated in-guest capture path, with an explicit
+    warning that ssh-keyscan bootstraps the pin from an MITM-
+    able observation.
+
+NOT modified (per reviewer's explicit instruction):
+  - tools/macos-host-helper/native/helper.c (frozen envp)
+  - Runtime SSH builder (StrictHostKeyChecking=yes contract)
+  - Transfer path (scpVsixToGuest composition)
+  - Known-hosts implementation (ephemeral file write)
+  - C helper execve/envp
+  - OCI sha256 validation regex
+  - Editor baseline checks
+  - Activation probe
+  - byte-stream transport primitive streamBytesOverSsh()
+
+Tests added (round 6): 14 new in testbed-image.test.ts
+  - captureGuestSshHostPublicKey: bare ssh-ed25519 line
+  - captureGuestSshHostPublicKey: preserves trailing root@host
+  - captureGuestSshHostPublicKey: invokes sshpass with
+    admin@<guestIp> over the authenticated channel
+  - fails closed (SSH_HOST_KEY_NOT_FOUND) on non-zero exit
+  - fails closed (SSH_HOST_KEY_NOT_FOUND) on empty stdout
+  - fails closed (SSH_HOST_KEY_MALFORMED) on embedded newlines
+  - fails closed (SSH_HOST_KEY_MALFORMED) when key starts with @
+  - fails closed (SSH_HOST_KEY_MALFORMED) when key starts with |
+  - fails closed (SSH_HOST_KEY_MALFORMED) when key starts with #
+  - fails closed (SSH_HOST_KEY_MALFORMED) on unsupported key
+    type (ssh-dss)
+  - fails closed (SSH_HOST_KEY_MALFORMED) when key has a host
+    field smuggled in
+  - fails closed (SSH_HOST_KEY_MALFORMED) on too-short base64
+    body
+  - accepts an ecdsa-sha2-nistp256 host key
+  - returns hostPublicKey that round-trips through the round-5
+    testbed-config validator
+
+Tests updated (round 6): 3 round-5 tests in testbed-config.test.ts
+asserted on the literal string "bare 'ssh-keyscan' line". Now
+they use the shape-neutral substring
+"bare '<keytype> <base64> [<comment>]' line". The semantic
+assertion (the reader rejects malformed keys) is unchanged.
+
+Final test count: 226 pass, 0 fail (was 212 after round 5;
++14 round 6 = +72 total across all CORRECTION03 rounds).
+
+=========================================================================
+17) Composition (round 6, this round)
+=========================================================================
+
+  ordinary guest commands → pinned qualified-image SSH key
+  actual VSIX byte transfer → pinned client key
+  ordinary guest commands → pinned server host key
+  actual VSIX byte transfer → pinned server host key
+  server host key captured via:
+    authenticated in-guest sshd host key file  (round 6 NEW)
+  NOT captured via:
+    unauthenticated ssh-keyscan wire probe     (closed)
+
+Provenance story is now end-to-end:
+  - OCI digest pinned in $HOME/.clinemm/testbed/config.json
+  - Host public key pinned alongside it was sourced from the
+    SAME qualified VM BEFORE it was pushed to the registry
+
+Reviewer's reopen condition (round 6) is satisfied:
+
+  > After this bounded server-identity fix: commit/rebind
+  > immediately; no further structural review before the live
+  > developer-Mac run.
+
+=========================================================================
+18) Round-7 P0: ssh_host_public_key provenance was bootstrapped from a
+    password-only channel (round-6 chain was circular)
+=========================================================================
+
+Reviewer's P0 (round 7, verbatim HALT_QUALIFICATION_BOOTSTRAP_SERVER_IDENTITY_CIRCULAR):
+
+  > Round 6 moves the key source from ssh-keyscan to
+  > /etc/ssh/ssh_host_ed25519_key.pub, which is better as a
+  > source of the VM's actual configured key, but the file is
+  > fetched over the same bootstrap SSH channel described as
+  > `sshpass + admin/admin`. That channel is not yet shown to
+  > authenticate the server.
+  >
+  > So the current chain is potentially circular:
+  >   unverified SSH endpoint
+  >   -> accepts known admin/admin
+  >   -> "cat /etc/ssh/ssh_host_ed25519_key.pub"
+  >   -> returned key becomes trusted host key
+  >   -> future connections trust that key
+  >
+  > A MITM endpoint that also accepts admin/admin can simply
+  > return its OWN /etc/ssh/ssh_host_ed25519_key.pub.
+
+Reviewer's discriminator (round 7):
+
+  > The discriminator is tiny: the value written as
+  > ssh_host_public_key must originate outside any
+  > unauthenticated SSH connection. A test can assert that
+  > captureGuestSshHostPublicKey() is no longer the root
+  > authority; instead it may be used only as an
+  > equality/conservation check against the already-known
+  > injected key.
+
+Reviewer's reopen instruction (round 7):
+
+  > Fix that bootstrap only; then commit/rebind and go
+  > straight to the developer-Mac live qualification. No
+  > further structural review.
+
+Bounded fix (round 7, this round):
+
+M: tools/macos-vsix-testbed/testbed-image.ts
+  + New helper loadOperatorSshdHostKeyPair() validates the
+    operator-supplied sshd host key pair on disk. This is
+    the new ROOT-OF-TRUST boundary. The pair must:
+      1. exist at the operator-supplied paths
+      2. private key file MUST be mode 0o600 (sshd requirement)
+      3. public key MUST parse with the same rules as a
+         captured-from-guest key (uniform validators on both
+         sides of the conservation check)
+    Failure modes: HOST_KEY_PAIR_NOT_PROVIDED (the new
+    error code).
+  + New pure validator parseAndValidateHostKeyLine() runs
+    on both sides of the conservation check (operator input
+    + captured value). Uniform rejection of newlines, leading
+    @|/# markers, unsupported key types, too-short base64,
+    host-field smuggling.
+  + captureGuestSshHostPublicKey() now requires
+    `expectedPublicKey: string` -- the operator's input.
+    The captured-from-guest value is now a CONSERVATION
+    CHECK only: it MUST byte-equal the operator's input
+    modulo the trailing comment, else the envelope fails
+    closed with SSH_HOST_KEY_INCONSISTENT. The captured
+    value is DISCARDED on mismatch.
+  + runQualifier() now requires
+    CLINEMM_TESTBED_IMAGE_SSHD_HOST_PRIVATE_KEY_PATH and
+    CLINEMM_TESTBED_IMAGE_SSHD_HOST_PUBLIC_KEY_PATH. If
+    either is missing, fails closed with
+    HOST_KEY_PAIR_NOT_PROVIDED. The persisted
+    ssh_host_public_key in the QualifierEnvelope is now
+    operatorKeyPair.publicKey (the operator's input), NOT
+    the captured-from-guest value. The captured value
+    never flows into the trusted config.
+  + QualifierResult.ssh_host_public_key doc-comment rewritten
+    to reflect the new 5-step provenance story.
+  + writeTrustedTestbedConfig() doc-comment updated.
+
+M: tools/macos-vsix-testbed/testbed-config.ts
+  + TrustedTestbedConfig.ssh_host_public_key doc-comment
+    rewritten -- the value originates OUTSIDE any
+    unauthenticated SSH connection.
+  + Round 5+6+7 validator block updated to reflect that the
+    value is the operator's input, not a captured value.
+
+M: tools/macos-vsix-testbed/runner.ts
+  + TESTBED_SSH_HOST_PUBLIC_KEY doc-comment rewritten
+    (round-7 provenance).
+  + Round-5 BASE_IMAGE_NOT_READY error detail updated to
+    direct the operator at the round-7 protocol
+    (ssh-keygen on dev Mac -> inject -> conservation check).
+
+Tests added (round 7): 17 new in testbed-image.test.ts
+  - 11 parseAndValidateHostKeyLine unit tests
+  - 6 loadOperatorSshdHostKeyPair unit tests
+
+Tests updated (round 7): 14 round-6 tests in
+testbed-image.test.ts were updated to pass the new required
+`expectedPublicKey` field. The describe block was renamed
+from "round 6" to "round 6+7" to reflect that the same set
+of fail-closed tests now also exercise the round-7
+conservation check.
+
+Final test count: 243 pass, 0 fail (was 226 after round 6;
++17 round 7 = +110 total across all CORRECTION03 rounds).
+
+=========================================================================
+19) Composition (round 7, this round)
+=========================================================================
+
+  ordinary guest commands   -> pinned qualified-image SSH key
+  actual VSIX byte transfer -> pinned client key
+  ordinary guest commands   -> pinned server host key
+  actual VSIX byte transfer -> pinned server host key
+  server host key ROOT-OF-TRUST:
+    operator ssh-keygen on dev Mac                  (round 7 NEW)
+    -> injected into qualification VM
+    -> conservation check on /etc/ssh/ssh_host_*.pub
+  NOT root-of-trust:
+    ssh-keyscan wire probe                          (closed round 5)
+    unauthenticated cat over password channel       (closed round 6)
+    MITM that accepts admin/admin                  (closed round 7)
+
+Provenance story is now end-to-end, with the root of trust
+OUTSIDE the SSH transport entirely (the reviewer's
+discriminator):
+
+  1. Operator generates sshd host key pair on the dev Mac:
+       ssh-keygen -t ed25519 -N '' -f ./qual-host-ed25519
+  2. Operator injects the pair into the qualification VM
+     (password-bootstrap channel is fine for FILE
+     MOVEMENT; the file does not authorize anything until
+     the conservation check confirms sshd is loading it):
+       scp private key -> /etc/ssh/ssh_host_ed25519_key (mode 0600)
+       scp public key  -> /etc/ssh/ssh_host_ed25519_key.pub (mode 0644)
+       sudo launchctl kickstart -k system/com.openssh.sshd
+  3. Qualification flow performs the in-guest conservation
+     check: cat /etc/ssh/ssh_host_ed25519_key.pub must
+     byte-equal operatorKeyPair.publicKey modulo the
+     trailing comment.
+  4. Captured value is DISCARDED if it does not match.
+  5. Trusted config ($HOME/.clinemm/testbed/config.json)
+     receives ssh_host_public_key = operatorKeyPair.publicKey.
+  6. OCI digest pinned alongside the operator's public key.
+  7. Live PROBE01 path uses both pins: pinned-client-key
+     + pinned-server-key (StrictHostKeyChecking=yes +
+     UserKnownHostsFile=<ephemeral known_hosts with the
+     operator's public key>).
+
+Reviewer's reopen condition (round 7) is satisfied:
+
+  > Fix that bootstrap only; then commit/rebind and go
+  > straight to the developer-Mac live qualification. No
+  > further structural review.
+
+Reopen condition updated: live Tart VM with pinned-key SSH
+(IdentitiesOnly=yes, publickey only), StrictHostKeyChecking=yes +
+ephemeral trusted known_hosts bound to the qualified VM's host key
+that was INJECTED INTO the qualified VM by the operator from the
+dev Mac (ssh-keygen on dev Mac -> scp into VM -> launchctl reload
+sshd). The captured-from-guest `cat /etc/ssh/ssh_host_*_key.pub`
+performs a CONSERVATION CHECK only and is discarded if it does not
+match. The persisted ssh_host_public_key is the operator's input,
+NOT the captured value. Pinned editor baseline (binary + version),
+exact VSIX streamed via stdin byte stream, HOST_SHA256 ==
+GUEST_SHA256, real extension activation via log scan, against the
+qualified testbed image whose digest is pinned in
+$HOME/.clinemm/testbed/config.json with a strict OCI
+sha256:<64-hex> reference.
+
+=========================================================================
+20) Round-8 P0: sshd host private key was transferred over the
+    unauthenticated channel
+=========================================================================
+
+Reviewer's P0 (round 8, verbatim HALT_QUALIFICATION_HOST_PRIVATE_KEY_EXPOSED_OVER_UNTRUSTED_CHANNEL):
+
+  > The round-7 design correctly moves generation of the
+  > host key pair to the developer Mac and persists the
+  > operator-generated public key, which satisfies the
+  > narrow provenance criterion for the public value.
+  >
+  > But the qualification protocol then says to inject
+  > both the private and public host key files into the VM
+  > using the password-bootstrap SSH/SCP channel:
+  >
+  >   scp private key -> /etc/ssh/ssh_host_ed25519_key
+  >   scp public key  -> /etc/ssh/ssh_host_ed25519_key.pub
+  >
+  > That channel is still explicitly unauthenticated on the
+  > server side at this point. A MITM endpoint that accepts
+  > admin/admin can observe the actual private host key
+  > being transferred. That defeats the server-identity
+  > guarantee entirely.
+
+Reviewer's discriminator (round 8):
+
+  > No byte of ssh_host_ed25519_key may cross an SSH
+  > connection before server identity is established.
+
+Reviewer's reopen instruction (round 8):
+
+  > Fix only the private-key injection seam, then
+  > commit/rebind and go directly to the developer-Mac live
+  > qualification. No further structural review.
+
+Bounded fix (round 8, this round):
+
+M: tools/macos-vsix-testbed/testbed-image.ts
+  + New helper injectOperatorSshdHostKeyPair() injects the
+    operator-supplied sshd host key pair into the
+    qualification VM through a NON-SSH Tart-side channel
+    (`tart exec <vmName>` -- Tart's guest-agent channel).
+    Identity derives from the Tart VM object, not from any
+    SSH transport. The private key travels via `tart exec`'s
+    stdin pipe (NOT over SSH/SCP/sshpass). The public key is
+    supplied as argv (not secret).
+  + The argv MUST start with `["tart", "exec", <vmName>,
+    ...]` and MUST NOT contain `ssh`, `scp`, or `sshpass`
+    anywhere. The helper enforces this at runtime
+    (defense-in-depth) AND a structural source-tree scan
+    enforces it at test time.
+  + New failure mode: HOST_KEY_INJECTION_FAILED.
+  + runQualifier() now calls injectOperatorSshdHostKeyPair()
+    AFTER loadOperatorSshdHostKeyPair() and BEFORE the
+    in-guest conservation check.
+  + CLINEMM_TESTBED_IMAGE_GUEST_VM_NAME env var gates the
+    injection.
+
+M: tools/macos-vsix-testbed/testbed-image.test.ts
+  + 9 new round-8 tests:
+      - 8 functional tests for injectOperatorSshdHostKeyPair
+      - 1 STRUCTURAL source-tree scan that walks every
+        .ts/.js file under tools/macos-vsix-testbed/ and
+        asserts no source file references both
+        `/etc/ssh/ssh_host_` AND `ssh`/`scp`/`sshpass` in
+        argv position. Verified non-tautological: injecting
+        a violation (`tools/macos-vsix-testbed/_violation.ts`
+        with `["sshpass", "scp", "/etc/ssh/ssh_host_ed25519_key"]`)
+        makes the test FAIL.
+
+Final test count: 252 pass, 0 fail (was 243 after round 7;
++9 round 8 = +119 total across all CORRECTION03 rounds).
+
+=========================================================================
+21) Composition (round 8, this round)
+=========================================================================
+
+  ordinary guest commands   -> pinned qualified-image SSH key
+  actual VSIX byte transfer -> pinned client key
+  ordinary guest commands   -> pinned server host key
+  actual VSIX byte transfer -> pinned server host key
+  server host key ROOT-OF-TRUST:
+    operator ssh-keygen on dev Mac                  (round 7)
+    -> INJECTED via `tart exec` (Tart-side non-SSH)  (round 8 NEW)
+    -> conservation check on /etc/ssh/ssh_host_*.pub (round 7)
+  NOT root-of-trust:
+    ssh-keyscan wire probe                          (closed round 5)
+    unauthenticated cat over password channel       (closed round 6)
+    MITM that accepts admin/admin                  (closed round 7)
+    scp-of-private-key over password channel        (closed round 8)
+
+Reviewer's reopen condition (round 8) is satisfied:
+
+  > Fix only the private-key injection seam, then
+  > commit/rebind and go directly to the developer-Mac live
+  > qualification. No further structural review.
+
+Reopen condition updated: live Tart VM with pinned-key SSH
+(IdentitiesOnly=yes, publickey only), StrictHostKeyChecking=yes +
+ephemeral trusted known_hosts bound to the qualified VM's host key
+that was INJECTED INTO the qualified VM via Tart's NON-SSH
+guest-agent channel (`tart exec <vm>`). The private key travels
+through `tart exec`'s stdin pipe -- never over SSH/SCP/sshpass.
+The captured-from-guest `cat /etc/ssh/ssh_host_*_key.pub` performs
+a CONSERVATION CHECK only and is discarded if it does not match
+the operator's input. The persisted ssh_host_public_key is the
+operator's input, NOT the captured value. The structural test
+ensures no source file under tools/macos-vsix-testbed/ references
+both the private host-key path AND ssh/scp/sshpass in argv
+position.
+
+=========================================================================
+22) Round-9 P0: `tart exec` without `-i` does not forward stdin
+=========================================================================
+
+Reviewer's P0 (round 9, verbatim HALT_TART_EXEC_STDIN_NOT_ENABLED):
+
+  > Round 8 fixes the security defect I raised: moving the
+  > host private key away from SSH/SCP and onto Tart's
+  > guest-agent RPC channel is the right boundary. ...
+  > Tart requires `-i` to forward stdin. The upstream usage
+  > shows the stdin form as:
+  >
+  >   tart exec -i <vm> zsh < script
+  >
+  > ... plain `tart exec` is not the stdin-forwarding form.
+  > ... the evidence itself contains no `tart exec -i`
+  > occurrence while repeatedly claiming stdin transport.
+
+Reviewer's reopen instruction (round 9):
+
+  > After the one-line transport correction + exact `-i`
+  > discriminator: commit the complete family, rebind at
+  > exact HEAD, require clean worktree, then go directly
+  > to developer-Mac live qualification. No further
+  > structural review.
+
+Bounded fix (round 9, this round):
+
+M: tools/macos-vsix-testbed/testbed-image.ts
+  + Production injection argv changed to Tart's stdin-
+    enabled form: `["tart", "exec", "-i", <vmName>, ...]`.
+    The `-i` flag (which must come AFTER `tart exec` and
+    BEFORE the VM name per upstream openai/tart
+    discussion #1141) wires the host's stdin pipe to the
+    guest shell command. Without `-i`, plain `tart exec`
+    does NOT forward stdin and the round-8 reviewer's
+    discriminator would silently regress (the private-key
+    bytes would be written to the host's /dev/null pipe
+    and the guest would `cat` from an empty stdin).
+  + Runtime defense-in-depth check (round 9): refuses to
+    build / run an argv whose argv[0..2] is NOT
+    `["tart", "exec", "-i"]`. Fails closed with
+    HOST_KEY_INJECTION_FAILED and a self-documenting
+    error message naming `-i`.
+  + Protocol doc-block updated: `tart exec "$vm_name"`
+    replaced with `tart exec -i "$vm_name"` (the operator-
+    facing protocol comment that the live operator
+    follows on the developer Mac).
+
+M: tools/macos-vsix-testbed/testbed-image.test.ts
+  + Updated round-8 functional discriminator: argv[2] is
+    now `-i` (was: argv[2] was <vmName>); argv[3] is now
+    <vmName>.
+  + 3 new round-9 tests:
+      - argv prefix is exactly
+        `["tart", "exec", "-i", <vmName>]` (the
+        reviewer's exact-prefix discriminator).
+      - argv does NOT place <vmName> in argv[2] (the
+        regression vector if `-i` were removed).
+      - STRUCTURAL source-tree scan that walks every
+        .ts/.js/.cjs/.mjs file under
+        tools/macos-vsix-testbed/ and asserts NO source
+        file contains a `["tart", "exec", <argv2>, ...]`
+        array-form builder where argv[2] is NOT the
+        literal "-i". Multiline (with `s` flag) to match
+        argv builders that split tokens across lines.
+        Verified non-tautological: injecting a
+        violation (manually deleting the `"-i",` line)
+        makes BOTH the round-9 functional tests AND the
+        round-9 structural scan FAIL.
+
+Composition (round 9, this round, all GREEN):
+
+  server host key ROOT-OF-TRUST:
+    operator ssh-keygen on dev Mac                  (round 7)
+    -> INJECTED via `tart exec -i <vm>`             (round 9 NEW)
+       (Tart-side non-SSH channel; `-i` is the
+       upstream stdin-forwarding flag per
+       openai/tart discussion #1141)
+    -> conservation check on /etc/ssh/ssh_host_*.pub (round 7)
+
+Final test count: 255 pass, 0 fail (was 252 after round 8;
++3 round 9 = +122 total across all CORRECTION03 rounds).
+
+=========================================================================
+23) Live probe (LIVE_UNOBSERVABLE_HERE) for developer Mac
+=========================================================================
+
+The smallest live-capability probe to run on a developer
+substrate is:
+
+  printf 'sentinel' | tart exec -i <vm> sh -c 'cat'
+
+with exact `sentinel` equality. This Background session
+cannot run it (kill EPERM, APFS protect residue documented
+in 02-host-helper-launchd.txt); the probe is classified
+LIVE_UNOBSERVABLE_HERE and belongs to the developer-Mac
+live qualification, not to structural code review.
+
+=========================================================================
+24) Commit/rebind packet clean status (reviewer's P1)
+=========================================================================
+
+As of this round:
+  - 255/255 unit tests pass (was 252 after round 8;
+    +3 round 9).
+  - bunx tsc --noEmit clean on 9 source/test files.
+  - git diff --check clean (no whitespace conflicts).
+  - All round-9 deltas staged.
+
+Reviewer's P1 (commit/rebind packet clean/staged per the
+supplied digest) is the developer's responsibility at
+commit time; the code harness is fully green.

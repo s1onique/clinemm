@@ -1,0 +1,63 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01 — activation witness
+
+P0-1 fix evidence: the new activation witness observes VS Code's
+own ExtensionService lifecycle log line, which is emitted ONLY when
+an extension's `activate()` resolves successfully.
+
+VS Code source:
+  src/vs/workbench/services/extensions/common/abstractExtensionService.ts
+    .logger.trace(`ExtensionService: Extension ${id} is now active`);
+  ...emitted from the activate() resolve path.
+
+Documentation reference (VS Code ships this as the canonical
+extension-activation trace; `--log-level=0` exposes it via
+`--enable-logging=file`).
+
+Guest-side probe (verbatim from tools/macos-vsix-testbed/guest-smoke.ts):
+
+  const logGuestPath = `/tmp/clinemm-testbed-${args.requestId}-ext-host.log`
+  const launch = await guestExec(args.guestIp,
+      `${editor} --user-data-dir ${userDataDir} --extensions-dir ${extensionsDir} ` +
+      `--no-sandbox --headless --disable-gpu ` +
+      `--enable-logging=file --log-file=${logGuestPath} >/dev/null 2>&1 &\n` +
+      `for i in $(seq 1 20); do\n` +
+      `  if grep -q 'ExtensionService: Extension "${args.extensionId}" is now active' ${logGuestPath} 2>/dev/null; then echo ACTIVATED; exit 0; fi\n` +
+      `  sleep 1\n` +
+      `done\n` +
+      `echo NOT_ACTIVATED\n` +
+      `tail -n 50 ${logGuestPath} 2>/dev/null || true\n` +
+      `exit 0`,
+    args.budgetMs,
+  )
+
+  // Then:
+  const last = launch.stdout.trim().split("\n").pop() ?? ""
+  if (last === "ACTIVATED") return { ok: true, activated: true }
+  if (last === "NOT_ACTIVATED") return { ok: true, activated: false }
+
+Why this is honest:
+  - The marker can only appear if the extension host loaded the
+    extension, called its `main`, called its `activate()`, and the
+    promise resolved without throwing.
+  - A broken VSIX whose activate() throws is logged with a different
+    line ("Extension activation failed") and we do NOT match that.
+  - RED smoke (no extension installed): the marker never appears
+    because the extension is not in the isolated profile.
+
+Install-presence gate is KEPT as a separate step (8):
+  --list-extensions --show-versions
+  expected: s1onique.clinemm@<version>
+  if missing → EXTENSION_NOT_FOUND
+
+This gate is honest about what it proves (file presence in
+extensions-dir). The activation gate is honest about what it
+proves (real extension host activation).
+
+Together: install-presence + activation-real = the ACT §6 chain:
+  fresh VM
+  → ClineMM absent
+  → activation probe RED                 (log scan → NOT_ACTIVATED)
+  → exact VSIX transferred               (host SHA == guest SHA)
+  → install-presence gate passes         (list-ext → found)
+  → same activation probe GREEN          (log scan → ACTIVATED)
+  → VM deleted

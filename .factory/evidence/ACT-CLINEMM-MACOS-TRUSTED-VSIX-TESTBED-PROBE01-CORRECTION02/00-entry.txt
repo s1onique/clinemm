@@ -1,0 +1,15 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION02
+
+verdict_in : HALT_VSIX_TRANSFER_ARGMAX (CORRECTION01 reviewer follow-up)
+p0_scope   : exactly one — the VSIX transfer seam.
+status     : CLOSED_HALTED_CLEAN
+result     : HALT_BASE_IMAGE_NOT_READY (unchanged — substrate residue
+             in this Background session still blocks live Tart
+             qualification: APFS `protect` flag on
+             $HOME/Library/Caches, ghcr.io auth, launchd
+             Background-session kill() EPERM on children)
+
+Reopen condition: live Tart VM with this exact transfer seam:
+  REAL_VSIX_SIZE     = <actual current dogfood VSIX size>
+  TRANSFER_METHOD    = ssh_stdin_stream
+  HOST_SHA256 == GUEST_SHA256

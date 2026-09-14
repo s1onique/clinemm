@@ -1,0 +1,120 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION03 — recon
+
+Reviewer verdict on CORRECTION02: structural closure on the
+transfer seam. Then identified a new P0 with two coupled parts:
+
+1. SSH auth: `BatchMode=yes` requires a non-interactive auth
+   mechanism. The Cirrus Sonoma base ships admin/admin; the
+   documented mechanism is `sshpass -p admin ssh ...`. The
+   current `guestExec()` uses BatchMode=yes with no key path,
+   no password, no agent. With the documented default
+   credential model this is expected to fail.
+
+2. Editor baseline: the Cirrus `macos-*-base` template installs
+   Homebrew + wget/unzip/cmake/gcc/git-lfs/jq/gh/node/ruby —
+   not VS Code or VSCodium. The current code's
+   `command -v code || command -v codium` finds nothing; the
+   testbed would emit `EXTENSION_NOT_FOUND` before any
+   ClineMM code ran.
+
+Reviewer-prescribed fix (verbatim):
+  "the testbed owns a qualified immutable base, not rely on
+  the generic Cirrus `-base` image to coincidentally contain
+  what we need."
+  Corrected chain:
+    Cirrus Sonoma base @ digest
+    → one-time testbed image qualification
+        - SSH automation method proven
+        - exact editor installed
+        - editor version recorded
+        - ClineMM absent
+    → resulting testbed image pinned by digest
+    → PROBE01 clones that digest only
+
+Reviewer's discriminator (verbatim):
+  Before qualification:
+    SSH_AUTH_METHOD       = password_only
+    BATCHMODE_CONNECTION  = FAIL
+    EDITOR_PRESENT        = false
+
+  After provisioning:
+    SSH_AUTH_METHOD       = <sshpass|pinned-key>
+    SSH_NONINTERACTIVE    = PASS
+    EDITOR_BINARY         = <absolute path>
+    EDITOR_VERSION        = <exact version>
+    CLINEMM_PREINSTALLED  = false
+    BASE_IMAGE_DIGEST     = sha256:...
+
+Reviewer's note on digest staleness:
+  "the current Sonoma base digest in your correction evidence
+   is already stale relative to the package's currently
+   published `latest` digest ... that is another reason the
+   qualified testbed image should itself be pinned immutably
+   rather than derived ad hoc from `latest` each run."
+
+Reviewer's reopen condition (verbatim):
+  "Reopen condition: exact VSIX is transferred as a real byte
+  stream/file, host/guest hashes match, then proceed directly
+  to the live Tart qualification."
+
+Approach chosen in this ACT:
+  - Provision a dedicated SSH public key into the qualified
+    image during qualification (not sshpass). Use BatchMode=yes
+    + IdentitiesOnly=yes + PreferredAuthentications=publickey
+    for the live PROBE01 path. sshpass is used ONCE during
+    qualification to bootstrap the key, never per-test-run.
+  - Install VS Code (default) at a pinned version during
+    qualification. The qualified image bakes the editor
+    absolute path and version; the runner pins matching
+    constants in runner.ts.
+  - The qualified-image digest is captured via `tart list`
+    after qualification. PROBE01 clones only that digest.
+  - New error codes added: `EDITOR_BASELINE_NOT_PROVEN`,
+    `SSH_KEY_NOT_PINNED`. Both fail-closed at the gate in
+    runner.ts and inside guest-smoke.ts.
+
+Implementation files (NOT re-opened: helper.c, transfer seam,
+activation witness, image digest binding, bounded lifecycle,
+host-helper protocol):
+  M tools/macos-vsix-testbed/runner.ts
+      - new constants: TART_TESTBED_IMAGE, TESTBED_SSH_KEY_PATH,
+        TESTBED_EDITOR_BINARY, TESTBED_EDITOR_VERSION
+      - new helpers: sshCommandForGuest(), editorBaseline(),
+        pinnedSshAndEditor()
+      - new fail-closed gate at the start of `run()` that
+        refuses to clone anything until all three pins are
+        set
+  M tools/macos-vsix-testbed/guest-smoke.ts
+      - guestExec() now uses pinnedSshAndEditor() +
+        sshCommandForGuest() (BatchMode=yes,
+        IdentitiesOnly=yes, publickey only)
+      - installVsixInGuest() asserts the editor baseline at
+        the pinned absolute path AND verifies the editor's
+        reported version matches the pinned version
+      - activationSmoke() default editor now comes from the
+        pinned baseline, not "code"
+  A tools/macos-vsix-testbed/testbed-image.ts
+      - one-shot provisioner script. Reads CLINEMM_TESTBED_IMAGE_PUBLIC_KEY_PATH
+        and CLINEMM_TESTBED_IMAGE_VSCODE_VERSION. Validates the
+        SSH public key shape, validates the VS Code version is
+        semver. Emits a JSON envelope with the qualified-image
+        digest placeholder + the editor binary path + the SSH
+        key fingerprint. The live operator runs this on a
+        developer Mac; the resulting digest is pinned in
+        runner.ts as TART_TESTBED_IMAGE.
+  A tools/macos-vsix-testbed/testbed-image.test.ts
+      - 8 prereq-validation tests (fail-closed on missing key,
+        malformed key, DSA key, missing/non-semver VS Code
+        version; accept ssh-ed25519 / ssh-rsa)
+  M tools/macos-vsix-testbed/runner.test.ts
+      - 4 sshCommandForGuest contract tests (BatchMode=yes,
+        IdentitiesOnly=yes, no password, no sshpass; rejects
+        digest without sha256:; rejects empty key path)
+      - 3 editorBaseline contract tests (accept when both
+        args provided; reject when pinnedBinary or
+        pinnedVersion null)
+  M tools/macos-vsix-testbed/path-validation.ts
+      - added error codes EDITOR_BASELINE_NOT_PROVEN,
+        SSH_KEY_NOT_PINNED
+  M .gitignore
+      - whitelist for this ACT + evidence dir

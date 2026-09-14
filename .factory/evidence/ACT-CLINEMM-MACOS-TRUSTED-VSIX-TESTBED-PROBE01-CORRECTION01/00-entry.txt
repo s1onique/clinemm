@@ -1,0 +1,40 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01 — entry
+
+Goal: Land three P0 corrections to PROBE01 that the on-call expert
+verifier flagged in their review:
+
+  P0-1: replace --list-extensions post-hoc probe with a real
+        activation witness (ExtensionService log line scan).
+  P0-2: pin the Tart base image by digest; remove fictional :14.5.
+  P0-3: harden the C-helper subprocess lifecycle to a wallclock
+        deadline around both pipe drain and waitpid; SIGKILL the
+        child's process group via kill(-pid, SIGKILL) so macOS
+        Background-session EPERM doesn't leak.
+
+Disposition:
+  CLOSED_HALTED_CLEAN (structurally complete; substrate residue
+  in this Background session remains nonblocking — same as PROBE01:
+  APFS `protect` flag on /Volumes/UserData blocks $HOME/Library/Caches
+  writes; ghcr.io registry auth not configured; kill() blocked by
+  launchd for child processes).
+
+  Live-kernel qualification (REAL_INSTALLED_ARTIFACT) requires a
+  developer Mac without the substrate limits; all source changes
+  required to make that probe pass are now landed.
+
+Key files:
+  ACT:  .factory/acts/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01.md
+  EVID: .factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01/
+
+Reviewer-required progression (re-stated for closure discipline):
+  fresh VM
+  → ClineMM absent
+  → activation probe RED          (now honest: log scan, not list-ext)
+  → exact VSIX transferred        (host SHA == guest SHA)
+  → exact VSIX installed          (EXTENSION_NOT_FOUND gate: list-ext)
+  → same activation probe GREEN   (now honest: log scan)
+  → VM deleted
+
+Until the substrate residue clears, the live chain halts at
+"fresh VM" (tart clone) and the runner emits
+HALT_BASE_IMAGE_NOT_READY. That is the only remaining gate.

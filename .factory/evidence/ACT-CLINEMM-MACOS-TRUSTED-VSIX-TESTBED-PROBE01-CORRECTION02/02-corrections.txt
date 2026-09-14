@@ -1,0 +1,119 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION02 — corrections
+
+=========================================================================
+P0-1 (NEW): VSIX transfer seam — ssh stdin byte-stream transport
+=========================================================================
+
+The single P0 fixed here: replace inline-base64 argv transport
+with ssh stdin byte-stream transport. Bytes never enter the
+command line.
+
+OLD (tools/macos-vsix-testbed/guest-smoke.ts):
+  import { readFileSync } from "node:fs"
+  ...
+  // (4) Transfer the VSIX into the guest and verify SHA.
+  // First, base64-encode the host file and `scp` it in via
+  // `tart exec`. We deliberately avoid mounting host dirs into
+  // the guest because Tart's `--dir` semantics differ between
+  // macOS and Linux guests, and we want a transfer whose SHA
+  // can be independently verified on both sides.
+  const vsixB64 = readFileSync(args.vsixHostPath).toString("base64")
+  const guestTmpPath = `/tmp/clinemm-testbed-${args.vmName}.vsix`
+  const writeOk = await guestExec(
+    guestIp,
+    `set -e; umask 077; mkdir -p /tmp/clinemm-testbed-staging; ` +
+      `echo '${vsixB64}' | base64 -d > ${guestTmpPath}; ` +
+      `shasum -a 256 ${guestTmpPath}`,
+    args.phaseBudgetMs.install,
+  )
+
+Defect: the entire VSIX, base64-inflated by ~33%, becomes part of
+the SSH command string. Local argv limit (getconf ARG_MAX =
+262144 on macOS) and SSH command-length limits both bite before
+the file ever reaches the guest. MAX_VSIX_BYTES is 256 MiB;
+inflated command text is ~341 MiB. This fails for real
+artifacts admitted by the path validator.
+
+NEW:
+  // guest-smoke.ts (excerpt)
+  // Internal byte-stream primitive (exported for tests).
+  export async function streamBytesOverSsh(args: {
+    readonly cmd: readonly string[]
+    readonly hostBytes: Uint8Array
+    readonly budgetMs: number
+  }): Promise<number> {
+    const proc = spawn({
+      cmd: args.cmd as string[],
+      stdin: args.hostBytes,                 // <-- bytes on stdin
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    return withTimeout(proc, args.budgetMs, "VSIX_INSTALL_FAILED")
+  }
+
+  // Live-path helper.
+  export async function scpVsixToGuest(args: {...}): Promise<GuestExecResult> {
+    if (!/^\/[A-Za-z0-9._\-+/@]+$/.test(args.guestTmpPath)) { ... }
+    const hostFile = Bun.file(args.hostPath)
+    if (!(await hostFile.exists())) { ... VSIX_NOT_FOUND ... }
+    const hostBytes = new Uint8Array(await hostFile.arrayBuffer())
+
+    const pushCode = await streamBytesOverSsh({
+      cmd: [
+        "ssh",
+        "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        `admin@${args.guestIp}`,
+        `set -e; umask 077; mkdir -p /tmp/clinemm-testbed-staging; cat > ${args.guestTmpPath}`,
+      ],
+      hostBytes,                              // <-- bytes on stdin
+      budgetMs: args.budgetMs,
+    })
+    if (pushCode !== 0) { ... VSIX_INSTALL_FAILED ... }
+
+    // Then shasum -a 256 on the guest in a separate small ssh call.
+    return guestExec(args.guestIp,
+      `shasum -a 256 ${args.guestTmpPath}`, args.budgetMs)
+  }
+
+  // Call site (was: inline base64 + guestExec; now: scpVsixToGuest).
+  const writeOk = await scpVsixToGuest({
+    hostPath: args.vsixHostPath,
+    guestIp,
+    guestTmpPath,
+    budgetMs: args.phaseBudgetMs.install,
+  })
+
+Invariant now enforced:
+  host VSIX → ssh stdin (byte stream)
+           → remote `cat > /tmp/.../foo.vsix`
+           → guest bytes
+Bytes never enter the command line.
+
+Defense in depth:
+  - guestTmpPath validated against allow-list regex (server-
+    controlled literal, never host content).
+  - hostFile.exists() check before opening.
+  - shasum -a 256 still runs on the guest; HOST_SHA == GUEST_SHA
+    is the transfer discriminator (unchanged contract).
+
+Removed: `import { readFileSync } from "node:fs"` (now unused
+in guest-smoke.ts).
+
+=========================================================================
+Files changed
+=========================================================================
+
+M tools/macos-vsix-testbed/guest-smoke.ts
+    - removed inline base64 path
+    - added scpVsixToGuest() (exported)
+    - added streamBytesOverSsh() (exported; pure byte-stream primitive)
+    - removed unused readFileSync import
+
+A tools/macos-vsix-testbed/guest-smoke.test.ts
+    - 16-MiB synthetic-payload discrimination test
+    - 1 KiB + 1 MiB size-independence test
+
+M .gitignore
+    - whitelist for this ACT + evidence directory

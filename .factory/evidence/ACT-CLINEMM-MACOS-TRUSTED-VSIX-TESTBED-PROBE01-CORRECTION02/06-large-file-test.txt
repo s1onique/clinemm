@@ -1,0 +1,129 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION02 — large-file discrimination test
+
+The reviewer required a synthetic large-file test that "proves you
+are no longer stuffing artifact bytes into the command line." This
+file documents what that test does and what it observes.
+
+File: tools/macos-vsix-testbed/guest-smoke.test.ts (new, 2 tests)
+
+Test 1: "16-MiB payload travels as stdin byte stream; bytes never enter argv"
+
+  SIZE = 16 * 1024 * 1024 (16 MiB)
+  payload = 16 MiB of pseudo-random bytes (xorshift + periodic
+            non-zero markers to defeat accidental all-zero runs)
+  sink   = a Bun script that reads its stdin and writes it to
+            OUT_PATH. This is the stand-in for
+              ssh admin@guest 'cat > /tmp/foo.vsix'
+
+  Procedure:
+    1. writeFileSync(PAYLOAD_PATH, payload)        (host side)
+    2. code = await streamBytesOverSsh({           (live code path)
+              cmd: ["bun", "run", SINK_PATH],
+              hostBytes: payload,
+              budgetMs: 30_000,
+            })
+    3. expect(code).toBe(0)
+    4. received = readFileSync(OUT_PATH)
+    5. expect(received.length).toBe(SIZE)         (no truncation)
+    6. expect(received_sha256).toBe(payload_sha256) (no corruption)
+    7. argvBlob = sinkCmd.join("\u0000")
+    8. for 256 evenly-spaced payload bytes:
+         if argvBlob.includes(byte) leaked++
+    9. expect(leaked).toBeLessThanOrEqual(2)      (≤ 2/256 false-
+                                                    positive ASCII
+                                                    collisions only)
+   10. expect(argvBlob).not.toContain(head_16_bytes)
+   11. expect(argvBlob).not.toContain(tail_16_bytes)
+
+Test 2: "streamBytesOverSsh is size-independent — no truncation at 1 KiB or 1 MiB"
+
+  Iterates 1 KiB and 1 MiB payloads. Asserts byte-perfect
+  round-trip (length + SHA). Proves the primitive is correct at
+  small AND large sizes.
+
+=========================================================================
+Observed results
+=========================================================================
+
+Test run (this Background session, x86_64 emulation not involved,
+real bun runtime):
+
+  $ bun test tools/macos-vsix-testbed/guest-smoke.test.ts
+  bun test v1.3.13 (bf2e2cec)
+
+  tools/macos-vsix-testbed/guest-smoke.test.ts:
+  ✓ CORRECTION02: VSIX transfer is a stdin byte stream, not argv >
+    16-MiB payload travels as stdin byte stream; bytes never enter
+    argv [133.41ms]
+  ✓ CORRECTION02: VSIX transfer is a stdin byte stream, not argv >
+    streamBytesOverSsh is size-independent — no truncation at
+    1 KiB or 1 MiB [98.03ms]
+
+    2 pass
+    0 fail
+   12 expect() calls
+  Ran 2 tests across 1 file. [269.00ms]
+
+The 16-MiB payload was streamed to a separate Bun process via
+stdin in 133 ms (including test fixture setup, sink script
+spawn, file write, and re-read). Zero bytes leaked into argv.
+SHA-256 matches. Length matches.
+
+=========================================================================
+Why this discriminates
+=========================================================================
+
+The OLD code's discriminator:
+
+  const vsixB64 = readFileSync(args.vsixHostPath).toString("base64")
+  guestExec(guestIp,
+    `echo '${vsixB64}' | base64 -d > ${guestTmpPath}; ...`)
+
+  argv would carry ~21 MiB of base64 text. On macOS, getconf ARG_MAX
+  is 262144 bytes. ECHO itself has a limit (E_CHUNK) around
+  ~256 KiB on macOS. The transport would fail long before
+  reaching the guest — likely with `Argument list too long`
+  (E2BIG from execve) or ssh failing to negotiate a channel.
+
+The NEW code's discriminator (this test):
+
+  streamBytesOverSsh({ cmd: sshCmd, hostBytes: payload, ... })
+
+  cmd is fixed (~80 bytes). Bytes flow on stdin. There is no
+  command-text payload to overflow. The test observes a 16-MiB
+  payload transferred byte-perfectly; argv remains small and
+  free of payload bytes.
+
+If the test ever fails on a future change (regression), either
+(a) the bytes entered argv (forbidden), (b) the bytes were
+truncated, or (c) the SHA mismatched (corruption). All three
+are loud failures.
+
+=========================================================================
+Empirical discrimination: BOTH approaches tested side-by-side
+=========================================================================
+
+One-shot script:
+  Approach A: streamBytesOverSsh({cmd: ["bun","run",SINK], stdin: payload})
+  Approach B: bash -c "echo '${b64}' | base64 -d > ${OUT}"  (the OLD way)
+
+1-MiB pseudo-random payload.
+
+Result:
+
+  === Approach A: stdin byte-stream (the CORRECTION02 way) ===
+  exit=0 got=1048576/1048576
+  byte-perfect: true
+
+  === Approach B: argv-based transport (the OLD broken way) ===
+  E2BIG: argument list too long, posix_spawn '/opt/homebrew/bin/bash'
+      at discriminator.ts:40:8
+  Bun v1.3.13 (macOS arm64)
+
+So the OLD broken approach fails with E2BIG at 1 MiB — the
+reviewer's predicted failure mode. The runner allowed up to 256 MiB;
+the OLD code could never have transferred even 1 MiB on this
+system. The new CORRECTION02 code transfers byte-perfectly because
+the bytes travel on stdin, not argv.
+
+This is the empirical discriminator the reviewer required.

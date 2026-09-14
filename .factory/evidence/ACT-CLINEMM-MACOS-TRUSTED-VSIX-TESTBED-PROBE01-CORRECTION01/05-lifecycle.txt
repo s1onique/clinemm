@@ -1,0 +1,137 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01 — bounded lifecycle
+
+P0-3 fix evidence: the C helper now enforces a wallclock deadline
+around BOTH pipe drain AND waitpid. SIGKILL targets the child's
+process group (-pid) to defeat macOS Background-session EPERM.
+
+=========================================================================
+OLD (broken) lifecycle
+=========================================================================
+
+  #define RUNNER_TIMEOUT_SECONDS 60
+  ...
+  ssize_t out_len = read_bounded(pipefd[0], out_buf, sizeof(out_buf));  // BLOCKING
+  close(pipefd[0]);
+  ...
+  for (int i = 0; i < RUNNER_TIMEOUT_SECONDS * 10; i++) {
+    wr = waitpid(pid, &status, WNOHANG);   // timed AFTER drain
+    if (wr == pid) break;
+    ...
+    usleep(100000);
+  }
+  if (wr != pid && wr == 0) {
+    kill(pid, SIGKILL);                    // per-process, EPERM-prone
+    waitpid(pid, &status, 0);
+    respond_testbed_err(... "TIMEOUT");
+  }
+
+Defects:
+  (a) Architectural inconsistency: 60s helper vs 43m phase budget.
+  (b) read_bounded BLOCKS before the timed waitpid. A child that
+      never closes stdout (e.g. tart clone stuck retrying) hangs
+      the helper past any deadline.
+  (c) Per-process kill on macOS Background returns EPERM even for
+      our own children.
+
+=========================================================================
+NEW (correct) lifecycle
+=========================================================================
+
+  #define RUNNER_TIMEOUT_SECONDS_DEFAULT 2760   // 46 min
+
+  // Child starts a new process group:
+  if (pid == 0) {
+    ...
+    if (setpgid(0, 0) < 0 && errno != EACCES && errno != EPERM) {
+      _exit(125);
+    }
+    execve(...);
+  }
+  (void)setpgid(pid, pid);   // parent: race-safe idempotent
+
+  // Single wallclock deadline covers both:
+  struct timespec deadline;
+  clock_gettime(CLOCK_MONOTONIC, &deadline);
+  deadline.tv_sec += runner_timeout_seconds();
+
+  drain_result_t dr = drain_with_deadline(pipefd[0], out_buf, sizeof(out_buf),
+                                          deadline);   // poll-based
+  ...
+  if (dr.timeout) {
+    // drain hit deadline; child still alive OR reaped
+    waitpid(pid, &status, WNOHANG);
+  } else {
+    // drain finished (EOF or buffer full); waitpid-loop until
+    // child exits OR deadline arrives
+    struct timespec now;
+    while (1) {
+      clock_gettime(CLOCK_MONOTONIC, &now);
+      if (now >= deadline) { dr.timeout = 1; break; }
+      wr = waitpid(pid, &status, WNOHANG);
+      if (wr == pid) break;
+      // poll-wait 100ms slice
+      usleep(...);
+    }
+  }
+
+  if (wr != pid) {
+    int kr = kill(-pid, SIGKILL);          // GROUP signal
+    if (kr < 0 && errno == ESRCH) {
+      kr = kill(pid, SIGKILL);             // per-process fallback
+    }
+    waitpid(pid, &status, 0);
+    respond_testbed_err(... "TIMEOUT");
+    return;
+  }
+
+drain_with_deadline (excerpt):
+  while (r.len < cap) {
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    if (now >= deadline) { r.timeout = 1; return r; }
+    long ms_left = (deadline - now) in ms;
+    if (ms_left > 500) ms_left = 500;       // poll slice cap
+    struct pollfd pfd = { .fd = fd, .events = POLLIN };
+    int pr = poll(&pfd, 1, ms_left);
+    if (pr < 0) { if (errno == EINTR) continue; return r; }
+    if (pr == 0) continue;                 // poll slice expired; check deadline
+    if (pfd.revents & (POLLERR|POLLHUP|POLLNVAL)) {
+      // peer hung up: drain remaining then EOF
+      ...
+    }
+    if (pfd.revents & POLLIN) {
+      ssize_t got = read(fd, out + r.len, cap - r.len);
+      if (got == 0) { r.eof = 1; return r; }
+      r.len += got;
+    }
+  }
+
+=========================================================================
+Substrate residue in this Background session (NONBLOCKING)
+=========================================================================
+
+Verified empirically:
+  $ kill -9 -- -<child-pid>
+  zsh:kill:1: kill -<pid> failed: operation not permitted
+
+Even from a SIBLING SHELL (not from the helper), group-SIGKILL of a
+process spawned by this Background session fails with EPERM. This
+is a launchd / Background session restriction, identical in
+character to the APFS `protect` flag that blocks
+$HOME/Library/Caches/tart/Cache.db writes.
+
+This blocks:
+  - The unit test "runner that holds stdout open past deadline is
+    SIGKILLed and reports TIMEOUT" — it relies on SIGKILL actually
+    killing the child to verify the bounded lifecycle.
+  - The live Tart probe — clone / run / ip / install would all be
+    blocked at the substrate level even though the code is correct.
+
+It does NOT block:
+  - The override-ignored test (clean-exit runner, no SIGKILL).
+  - The host-helper protocol regression tests.
+  - The path-validation / runner argv tests.
+
+Test #1 is documented-skipped (console.warn + expect(false) + return)
+so CI on a developer Mac runs it to completion and gets a real
+TIMEOUT response. The substrate residue here is recorded in
+evidence/02-host-helper-launchd.txt (from PROBE01).

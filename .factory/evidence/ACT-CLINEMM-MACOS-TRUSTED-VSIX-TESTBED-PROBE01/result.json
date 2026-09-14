@@ -1,0 +1,191 @@
+{
+  "act_id": "ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01",
+  "result": "HALT_BASE_IMAGE_NOT_READY",
+  "disposition": "CLOSED_HALTED_CLEAN",
+  "honest_classification": {
+    "comment": "Per CORRECTION01 reviewer verdict, the prior disposition 'PASS_WITH_NONBLOCKING_LIVE_KERNEL_RESIDUE' was contradictory with the HALT_BASE_IMAGE_NOT_READY primary ACT qualification. This rebinds the disposition to CLOSED_HALTED_CLEAN and lists the actual qualification state per layer.",
+    "implementation_substrate": "STRUCTURAL_GREEN",
+    "path_validation": "STRUCTURAL_GREEN",
+    "host_helper_testbed_dispatch": "SYNTHETIC_REAL_TESTED",
+    "tart_live_vm": "HALT_BASE_IMAGE_NOT_READY",
+    "installed_vsix": "NOT_EXECUTED",
+    "real_extension_activation": "NOT_EXECUTED"
+  },
+  "supersedes": "ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01 lands three P0 corrections to make this classification defensible.",
+  "predecessor_act_ids": [
+    "ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01",
+    "ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION01",
+    "ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION02",
+    "ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION03",
+    "ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION04",
+    "ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION05"
+  ],
+  "structural_layers_landed": {
+    "protocol": {
+      "method": "testbed.run-installed-vsix-smoke",
+      "required_keys": ["subject_head", "vsix_path", "vsix_sha256"],
+      "new_error_codes": [
+        "MISSING_REQUIRED_FIELD",
+        "UNKNOWN_FIELD",
+        "BAD_FIELD_TYPE"
+      ],
+      "files": ["tools/macos-host-helper/protocol.ts"]
+    },
+    "server": {
+      "max_request_bytes": 8192,
+      "files": ["tools/macos-host-helper/server.ts"]
+    },
+    "c_helper": {
+      "fork_execve_runner": true,
+      "runner_argv_size": 6,
+      "fixed_envp_size": 4,
+      "max_runner_stdout": 8192,
+      "runner_timeout_seconds": 60,
+      "runner_timeout_seconds_note": "This was the PROBE01-era value, superseded by CORRECTION01 to RUNNER_TIMEOUT_SECONDS_DEFAULT=2760 (46 min, matches TOTAL_PHASE_BUDGET_SECONDS + 1 min margin). The 60s value was architecturally inconsistent with the 43 min runner phase budget AND blocked by the read_bounded() blocking-before-waitpid defect — see CORRECTION01 evidence/05-lifecycle.txt.",
+      "files": ["tools/macos-host-helper/native/helper.c"]
+    },
+    "client": {
+      "renamed_to": "createHelperClient",
+      "deprecated_alias": "createHealthClient",
+      "new_method": "testbedRunInstalledVsixSmoke",
+      "files": ["tools/macos-host-helper/client.ts"]
+    },
+    "runner_substrate": {
+      "modules": [
+        "tools/macos-vsix-testbed/path-validation.ts",
+        "tools/macos-vsix-testbed/runner.ts",
+        "tools/macos-vsix-testbed/guest-smoke.ts"
+      ],
+      "tests": [
+        "tools/macos-vsix-testbed/path-validation.test.ts",
+        "tools/macos-vsix-testbed/runner.test.ts"
+      ]
+    }
+  },
+  "tests": {
+    "host_helper_regression": {
+      "file": "tools/macos-host-helper/",
+      "pass": 111,
+      "fail": 0
+    },
+    "probe01_protocol": {
+      "file": "tools/macos-host-helper/server.test.ts",
+      "pass": 12,
+      "fail": 0
+    },
+    "probe01_c_helper": {
+      "file": "tools/macos-host-helper/native/helper.test.ts",
+      "pass": 7,
+      "fail": 0
+    },
+    "testbed_runner": {
+      "files": [
+        "tools/macos-vsix-testbed/path-validation.test.ts",
+        "tools/macos-vsix-testbed/runner.test.ts"
+      ],
+      "pass": 18,
+      "fail": 0
+    },
+    "total": {
+      "pass": 129,
+      "fail": 0
+    }
+  },
+  "build": {
+    "c_helper_binary": "tools/macos-host-helper/native/helper",
+    "size_bytes": 36072,
+    "machine": "Mach-O 64-bit executable arm64",
+    "build_command": "bash tools/macos-host-helper/native/build.sh",
+    "rebuilt_at": "2026-09-12T18:51:00Z"
+  },
+  "anti_shell_invariants_preserved": {
+    "forbidden_keys_still_rejected": [
+      "command",
+      "argv",
+      "path",
+      "cwd",
+      "env",
+      "args",
+      "shell",
+      "script",
+      "bash",
+      "sudo"
+    ],
+    "no_system_call": true,
+    "no_shell_invocation": true,
+    "fixed_envp_size": 3,
+    "fixed_argv_size": 6,
+    "runner_path_env_override_allowed": true
+  },
+  "bounded_error_symbols": [
+    "MISSING_REQUIRED_FIELD",
+    "UNKNOWN_FIELD",
+    "BAD_FIELD_TYPE",
+    "VSIX_NOT_FOUND",
+    "VSIX_HASH_MISMATCH",
+    "RUNNER_NOT_FOUND",
+    "RUNNER_NOT_AVAILABLE",
+    "TART_NOT_AVAILABLE",
+    "VM_CLONE_FAILED",
+    "VM_BOOT_FAILED",
+    "GUEST_UNREACHABLE",
+    "GUEST_HASH_MISMATCH",
+    "VSIX_INSTALL_FAILED",
+    "EXTENSION_NOT_FOUND",
+    "ACTIVATION_FAILED",
+    "TIMEOUT",
+    "INTERNAL_ERROR",
+    "BASE_IMAGE_NOT_READY",
+    "BASE_IMAGE_CONTAMINATED"
+  ],
+  "substrate_residue": {
+    "tart_apfs_protect": {
+      "observed": true,
+      "error": "NetworkStorageDB:_openDBReadConnections: failed to open read connection to DB @ /Volumes/UserData/Users/chistyakov/Library/Caches/tart/Cache.db. Error=14. Cause=unable to open database file",
+      "fix": "On a developer Mac (without APFS `protect`), this passes."
+    },
+    "ghcr_anonymous_pull": {
+      "observed": true,
+      "error": "UnexpectedHTTPStatusCode(when: \"pulling manifest\", code: 404, details: \"{\\\"errors\\\":[{\\\"code\\\":\\\"MANIFEST_UNKNOWN\\\",\\\"message\\\":\\\"manifest unknown\\\"}]}\")",
+      "fix": "Configure anonymous pulls, or pin a private registry."
+    },
+    "launchd_background_session": {
+      "observed": true,
+      "error": "mkdir: cannot create directory '/Volumes/UserData/Users/chistyakov/.clinemm': Operation not permitted",
+      "fix": "Run on a developer Mac (not Background session)."
+    }
+  },
+  "evidence_files": [
+    "00-entry.txt",
+    "01-recon.txt",
+    "02-host-helper-launchd.txt",
+    "03-vsix-build.txt",
+    "04-vm-clone-boot.txt",
+    "10-gates.txt",
+    "result.json"
+  ],
+  "expected_pass_envelope_on_developer_mac": {
+    "result": {
+      "subject_head": "<40-hex>",
+      "vsix_sha256": "<64-hex>",
+      "host_sha256": "<64-hex>",
+      "guest_vsix_sha256": "<64-hex>",
+      "extension_id": "s1onique.clinemm",
+      "extension_version": "<semver>",
+      "guest_image": "ghcr.io/cirruslabs/macos-sonoma-base:14.5",
+      "base_image": "ghcr.io/cirruslabs/macos-sonoma-base:14.5",
+      "guest_image_corrected": "ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49",
+      "base_image_corrected": "ghcr.io/cirruslabs/macos-sonoma-base@sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49",
+      "image_note": "The literal :14.5 tag never existed in the ghcr.io registry (only :latest does). CORRECTION01 binds the immutable @sha256: form. See CORRECTION01 evidence/03-image-digest.txt.",
+      "guest_macos_version": "<sw_vers output>",
+      "vscode_version": "<editor --version>",
+      "activation": "pass",
+      "red_without_extension": "pass",
+      "cleanup": "pass",
+      "ephemeral_vm_name": "clinemm-probe-<request-id>-<ts>",
+      "tart_invocations": "<int ~10>",
+      "host_hostname": "<dev-mac hostname>"
+    }
+  },
+  "next_act_recommendation": "Re-run on a developer Mac to flip HALT_BASE_IMAGE_NOT_READY -> PASS_WITH_LIVE_KERNEL_QUALIFICATION. Source changes required FIRST: see ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01 for the three P0 fixes (activation witness, image digest, bounded lifecycle)."
+}

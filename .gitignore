@@ -523,6 +523,45 @@ apps/examples/desktop-app/.cursor/settings.json
 # (bytes, len) instead of NUL-terminated C strings.
 !/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION05.md
 !/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION05/
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01: adds the
+# `testbed.run-installed-vsix-smoke` capability to the host
+# helper, plus the Tart-orchestrated runner that installs the
+# exact committed VSIX in a real editor and proves activation.
+# Substrate residue: Tart cannot run in this Background
+# session (APFS `protect` blocks $HOME/Library/Caches writes);
+# the ACT closes structurally and emits HALT_BASE_IMAGE_NOT_READY.
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01/
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01:
+# three P0 fixes:
+#   (1) replace --list-extensions post-hoc probe with a real
+#       activation witness (extension-host log scan).
+#   (2) pin the Tart base image by digest (the literal `:14.5`
+#       tag never existed in the registry; only `:latest` does).
+#   (3) harden the C-helper subprocess lifecycle to a wallclock
+#       deadline with poll() over nonblocking pipes (the old
+#       read_bounded() blocked indefinitely on a child that kept
+#       writing after stdout close).
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01/
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION02:
+# bounded fix for HALT_VSIX_TRANSFER_ARGMAX. Replaces the inline
+# base64 argv transport with ssh stdin byte-stream transport so
+# real artifacts up to MAX_VSIX_BYTES (256 MiB) can be transferred
+# without hitting local argv/SSH-command-length limits. Adds a
+# synthetic 16-MiB transfer-discrimination test.
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION02.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION02/
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION03:
+# bounded fix for HALT_GUEST_ACCESS_AND_EDITOR_BASELINE_NOT_PROVEN.
+# The testbed now owns a qualified immutable image:
+#   - SSH key provisioned (IdentitiesOnly=yes; no password fallback)
+#   - exact VS Code installed at pinned version (asserted before RED)
+#   - resulting image pinned by digest in runner.ts
+# The qualification script testbed-image.ts is the ONE-SHOT
+# provisioner (NOT per-test-run); it emits the new digest.
+!/.factory/acts/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION03.md
+!/.factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION03/
 # Compiled C helper binary (build artifact). Source is helper.c; build
 # via tools/macos-host-helper/native/build.sh.
 /tools/macos-host-helper/native/helper

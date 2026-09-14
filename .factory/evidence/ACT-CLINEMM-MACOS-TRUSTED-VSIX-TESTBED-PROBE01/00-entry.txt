@@ -1,0 +1,50 @@
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01 — entry witness
+
+Opened: 2026-09-12 18:36 UTC
+Owner: cline/clinemm macOS trusted-host-helper workstream
+Scope: add ONE fixed capability `testbed.run-installed-vsix-smoke` to the
+       trusted host helper (CORRECTION01..05 stack), plus the runner substrate
+       that orchestrates a Tart VM to install the exact committed VSIX in a
+       real editor and prove activation.
+Dispo:  PASS_WITH_NONBLOCKING_LIVE_KERNEL_RESIDUE
+        (Tart cannot run in this Background session; structural layers all
+         landed and unit-tested; HALT_BASE_IMAGE_NOT_READY is the substrate
+         signal a developer-machine CI run will flip.)
+
+Predecessors:
+  ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01            (closed, GREEN)
+  ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION01 (launch_activate_socket)
+  ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION02 (fail-closed matrix)
+  ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION03 (JSON-escape output)
+  ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION04 (RFC 8259 §7 decode)
+  ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01-CORRECTION05 (embedded NUL preservation)
+
+Reviewer's residual P1 that this ACT closes: "the only way to know the
+committed dist/dogfood/clinemm-*.vsix actually installs and activates in
+a real editor is to install it in a real editor."
+
+Anti-shell invariants preserved:
+  - 10 forbidden keys still fail closed at parser BEFORE value parsing.
+  - New method's 3 required keys are added to per-method allow-list only.
+  - No shell, no env map from request: fork+execve with fixed runner path
+    and bounded envp array (3 entries: marker, PATH, HOME).
+  - VSIX path trust rule: absolute, no `..`, `.vsix` suffix, ≤1024 bytes
+    at TS parser AND C helper layers; runner does canonical-trusted-root
+    + owner + SHA-256 byte equality.
+
+Bounded error symbols (15):
+  MISSING_REQUIRED_FIELD, UNKNOWN_FIELD, BAD_FIELD_TYPE, VSIX_NOT_FOUND,
+  VSIX_HASH_MISMATCH, RUNNER_NOT_FOUND, RUNNER_NOT_AVAILABLE,
+  TART_NOT_AVAILABLE, VM_CLONE_FAILED, VM_BOOT_FAILED, GUEST_UNREACHABLE,
+  GUEST_HASH_MISMATCH, VSIX_INSTALL_FAILED, EXTENSION_NOT_FOUND,
+  ACTIVATION_FAILED, TIMEOUT, INTERNAL_ERROR, BASE_IMAGE_NOT_READY,
+  BASE_IMAGE_CONTAMINATED.
+
+Test summary (this environment):
+  111 host-helper regression tests: green
+  12 protocol tests for new method:  green
+   7 C helper tests for new method:  green
+   9 path-validation tests:           green
+   9 runner tests (argv + vm name):   green
+  ----------------------------------------
+  129 unit tests total                green

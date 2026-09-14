@@ -15,11 +15,14 @@ import { join } from "node:path"
 import { createConnection, type Socket } from "node:net"
 
 import {
+	ALLOWED_METHODS,
 	buildErrorResponse,
 	buildOkResponse,
 	dispatch,
 	errorCodeFor,
+	FORBIDDEN_REQUEST_KEYS,
 	MAX_REQUEST_BYTES,
+	METHOD_REQUIRED_KEYS,
 	parseRequest,
 	type ParsedRequest,
 	type ResponseEnvelope,
@@ -106,7 +109,11 @@ describe("ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol", () => {
 		expect(errorCodeFor(r.error)).toBe("METHOD_NOT_ALLOWED")
 	})
 
-	it("rejects extra/unknown keys with WRONG_TYPE", () => {
+	it("rejects extra/unknown keys with WRONG_TYPE/UNKNOWN_FIELD", () => {
+		// PROBE01: the parser distinguishes WRONG_TYPE (bad method /
+		// bad version / non-object) from UNKNOWN_FIELD (extra key not
+		// on the per-method allow-list). Both map to BAD_REQUEST on
+		// the wire; the test accepts either internal classification.
 		const r = parseRequest(
 			JSON.stringify({
 				version: 1,
@@ -116,7 +123,7 @@ describe("ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol", () => {
 			}),
 		)
 		expect(r.ok).toBe(false)
-		if (!r.ok) expect(r.error).toBe("WRONG_TYPE")
+		if (!r.ok) expect(["WRONG_TYPE", "UNKNOWN_FIELD"]).toContain(r.error)
 	})
 
 	it.each([
@@ -374,6 +381,204 @@ describe("AF_UNIX end-to-end probe", () => {
 		if (!probeResult.response.ok) {
 			expect(probeResult.response.error).toBe("OVERSIZE")
 		}
+	})
+})
+
+// =============================================================================
+// PROBE01: tests for the new testbed.run-installed-vsix-smoke method.
+// =============================================================================
+
+describe("PROBE01: testbed.run-installed-vsix-smoke protocol", () => {
+	const SAMPLE_HEAD = "0123456789abcdef0123456789abcdef01234567"
+	const SAMPLE_SHA = "a".repeat(64)
+	const SAMPLE_PATH = "/Users/s1onique/dist/clinemm-4.1.16-fa66f7a62.vsix"
+
+	it("accepts a valid testbed envelope", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "testbed-1",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: SAMPLE_HEAD,
+				vsix_path: SAMPLE_PATH,
+				vsix_sha256: SAMPLE_SHA,
+			}),
+		)
+		expect(r.ok).toBe(true)
+		if (r.ok) {
+			expect(r.value.method).toBe("testbed.run-installed-vsix-smoke")
+			expect(r.value.subject_head).toBe(SAMPLE_HEAD)
+			expect(r.value.vsix_sha256).toBe(SAMPLE_SHA)
+			expect(r.value.vsix_path).toBe(SAMPLE_PATH)
+		}
+	})
+
+	it("rejects a testbed envelope missing subject_head", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				vsix_path: SAMPLE_PATH,
+				vsix_sha256: SAMPLE_SHA,
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (!r.ok) {
+			expect(errorCodeFor(r.error)).toBe("BAD_REQUEST")
+		}
+	})
+
+	it("rejects a testbed envelope with non-hex subject_head", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: "not-hex",
+				vsix_path: SAMPLE_PATH,
+				vsix_sha256: SAMPLE_SHA,
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (!r.ok) {
+			expect(errorCodeFor(r.error)).toBe("BAD_REQUEST")
+		}
+	})
+
+	it("rejects a testbed envelope with malformed vsix_sha256 (wrong length)", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: SAMPLE_HEAD,
+				vsix_path: SAMPLE_PATH,
+				vsix_sha256: "abc",
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (!r.ok) {
+			expect(errorCodeFor(r.error)).toBe("BAD_REQUEST")
+		}
+	})
+
+	it("rejects a testbed envelope with relative vsix_path", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: SAMPLE_HEAD,
+				vsix_path: "relative/path.vsix",
+				vsix_sha256: SAMPLE_SHA,
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (!r.ok) {
+			expect(errorCodeFor(r.error)).toBe("BAD_REQUEST")
+		}
+	})
+
+	it("rejects a testbed envelope with vsix_path traversal '..'", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: SAMPLE_HEAD,
+				vsix_path: "/etc/../etc/passwd.vsix",
+				vsix_sha256: SAMPLE_SHA,
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (!r.ok) {
+			expect(errorCodeFor(r.error)).toBe("BAD_REQUEST")
+		}
+	})
+
+	it("rejects a testbed envelope with vsix_path missing .vsix ext", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: SAMPLE_HEAD,
+				vsix_path: "/Users/s1onique/dist/clinemm.zip",
+				vsix_sha256: SAMPLE_SHA,
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (!r.ok) {
+			expect(errorCodeFor(r.error)).toBe("BAD_REQUEST")
+		}
+	})
+
+	it("rejects a testbed envelope with vsix_path that is /etc/passwd", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: SAMPLE_HEAD,
+				vsix_path: "/etc/passwd",
+				vsix_sha256: SAMPLE_SHA,
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (!r.ok) {
+			expect(errorCodeFor(r.error)).toBe("BAD_REQUEST")
+		}
+	})
+
+	it("rejects a testbed envelope with extra/unknown keys", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: SAMPLE_HEAD,
+				vsix_path: SAMPLE_PATH,
+				vsix_sha256: SAMPLE_SHA,
+				command: "rm -rf /",
+			}),
+		)
+		expect(r.ok).toBe(false)
+		if (!r.ok) {
+			// `command` is a forbidden key from ACT-01 anti-shell.
+			expect(errorCodeFor(r.error)).toBe("BAD_REQUEST")
+		}
+	})
+
+	it("lower-cases hex fields for canonical downstream use", () => {
+		const r = parseRequest(
+			JSON.stringify({
+				version: 1,
+				request_id: "x",
+				method: "testbed.run-installed-vsix-smoke",
+				subject_head: SAMPLE_HEAD.toUpperCase(),
+				vsix_path: SAMPLE_PATH,
+				vsix_sha256: SAMPLE_SHA.toUpperCase(),
+			}),
+		)
+		expect(r.ok).toBe(true)
+		if (r.ok) {
+			expect(r.value.subject_head).toBe(SAMPLE_HEAD.toLowerCase())
+			expect(r.value.vsix_sha256).toBe(SAMPLE_SHA.toLowerCase())
+		}
+	})
+
+	it("METHOD_REQUIRED_KEYS exposes the testbed envelope", () => {
+		const required = METHOD_REQUIRED_KEYS["testbed.run-installed-vsix-smoke"]
+		expect(required).toBeDefined()
+		expect(required?.has("subject_head")).toBe(true)
+		expect(required?.has("vsix_path")).toBe(true)
+		expect(required?.has("vsix_sha256")).toBe(true)
+	})
+
+	it("ALLOWED_METHODS includes both methods", () => {
+		expect(ALLOWED_METHODS.has("health")).toBe(true)
+		expect(ALLOWED_METHODS.has("testbed.run-installed-vsix-smoke")).toBe(true)
 	})
 })
 

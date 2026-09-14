@@ -1,0 +1,31 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION03
+
+verdict_in : HALT_GUEST_ACCESS_AND_EDITOR_BASELINE_NOT_PROVEN
+p0_scope   : exactly one bounded correction — qualify and pin the
+             guest testbed image so that SSH automation and
+             editor baseline are part of the immutable substrate.
+status     : CLOSED_HALTED_CLEAN
+result     : HALT_BASE_IMAGE_NOT_READY (unchanged — substrate
+             residue in this Background session still blocks live
+             Tart qualification: APFS `protect` flag, ghcr.io
+             auth, launchd Background-session kill() EPERM).
+             A real testbed image can now be produced on a
+             developer Mac via `bun tools/macos-vsix-testbed/
+             testbed-image.ts`.
+
+CORRECTION02 verdict reaffirmed : CLOSED (do not reopen).
+CORRECTION01 verdicts reaffirmed: CLOSED (do not reopen).
+Reviewer note: source digest e2ebdfc4d354b336... is already stale
+relative to current `latest`; this ACT pivots to a qualified
+testbed image so reproducibility comes from binding the immutable
+digest of the QUALIFIED image, not from re-pulling `:latest`.
+
+Reopen condition: live Tart VM with this exact transfer seam,
+qualification protocol, and SSH+editor pinned contracts:
+  SSH_AUTH_METHOD       = pinned-key
+  SSH_NONINTERACTIVE    = PASS
+  EDITOR_BINARY         = <absolute path in qualified image>
+  EDITOR_VERSION        = <exact semver>
+  CLINEMM_PREINSTALLED  = false
+  TESTBED_IMAGE_DIGEST  = sha256:<from tart list>
+  HOST_SHA256 == GUEST_SHA256

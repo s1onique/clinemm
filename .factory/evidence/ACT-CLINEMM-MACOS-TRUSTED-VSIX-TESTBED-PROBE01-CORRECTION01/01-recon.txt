@@ -1,0 +1,79 @@
+ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01 — recon
+
+The expert reviewer (VS Code extension test architect, Tart/macOS
+engineer, Factory reviewer) returned verdict:
+
+  HALT_PROBE01_NOT_QUALIFIED
+
+with three load-bearing P0s:
+
+  P0-1 — the "activation" witness does not observe activation
+    The old code ran:
+      code --list-extensions --show-versions
+    and asserted:
+      const activated = /\bs1onique\.clinemm@/.test(launch.stdout)
+    That proves the extension is INSTALLED, not that its
+    `activate()` ran. A broken VSIX whose activate() throws
+    would still show in the list. The comments + ACT claim
+    "known UI marker / real activation" — that claim was
+    unsupported.
+
+    Required: observe something that can only exist after
+    `activate()` resolves. Chosen seam: VS Code's own
+    ExtensionService log line
+      ExtensionService: Extension "<id>" is now active
+    emitted into the log file by ExtensionService when
+    activate() resolves successfully.
+
+  P0-2 — the pinned Tart image is not a valid pinned image
+    The runner hard-coded:
+      ghcr.io/cirruslabs/macos-sonoma-base:14.5
+    and the captured execution got:
+      404 MANIFEST_UNKNOWN
+    The reviewer correctly identified that Cirrus Labs publishes
+    ONLY `:latest` for this base; version-style tags do not
+    exist. Source change required.
+
+    Resolution (see 03-image-digest.txt): anonymous query to
+    ghcr.io registry returns exactly one tag (`latest`) with
+    digest sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49.
+    Binding by digest is the immutable form.
+
+  P0-3 — the runner timeout contract is broken
+    The C helper said:
+      #define RUNNER_TIMEOUT_SECONDS 60
+    while the runner budgets alone are:
+      clone 20m, boot 10m, sshReady 5m, install 5m, activate 3m
+    Architecturally inconsistent (helper 1min vs runner 43min).
+
+    Worse, the timeout wasn't actually guarding execution:
+      out_len = read_bounded(pipefd[0], ...)   // BLOCKING
+      for (...) { waitpid(pid, &status, WNOHANG) ... }
+    A child that never closed stdout (e.g. tart clone stuck
+    retrying) would block read_bounded indefinitely, NEVER
+    reaching the 60-second timeout logic.
+
+    Required: deadline covers BOTH pipe drain AND waitpid;
+    SIGKILL on deadline; helper timeout consistent with
+    runner budgets. "Do not solve by setting
+    RUNNER_TIMEOUT_SECONDS=2700." — actual deadline-based
+    fix required.
+
+Closure-classification fix:
+  evidence/result.json says HALT_BASE_IMAGE_NOT_READY but
+  disposition said PASS_WITH_NONBLOCKING_LIVE_KERNEL_RESIDUE.
+  These cannot both describe the primary ACT qualification.
+  Correct classification:
+    IMPLEMENTATION_SUBSTRATE        = PARTIAL / STRUCTURAL GREEN
+    PATH_VALIDATION                 = STRUCTURAL GREEN
+    HOST_HELPER_TESTBED_DISPATCH    = SYNTHETIC_REAL / TESTED
+    TART_LIVE_VM                    = HALT_BASE_IMAGE_NOT_READY
+    INSTALLED_VSIX                  = NOT_EXECUTED
+    REAL_EXTENSION_ACTIVATION       = NOT_EXECUTED
+    ACT RESULT                      = CLOSED_HALTED_CLEAN
+                                     or HALT_BASE_IMAGE_NOT_READY
+
+  This correction updates result.json to that classification.
+
+Evidence identity also needs rebinding; git status must be
+fully clean before commit. Folded into final commit below.

@@ -1,0 +1,33 @@
+=== bun test summary (after round-9 P0 fix) ===
+
+[0m[32m 255 pass[0m
+[0m[2m 0 fail[0m
+ 836 expect() calls
+Ran 255 tests across 8 files. [0m[2m[[1m10.17s[0m[2m][0m
+
+=== CORRECTION03 round-8 P0 tests ===
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m >[0m[1m injects via `tart exec -i <vm>` (Tart-side non-SSH channel with stdin forwarding)[0m [0m[2m[0.74ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m >[0m[1m argv NEVER contains `ssh`, `scp`, or `sshpass` (private key never crosses SSH)[0m [0m[2m[0.40ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m >[0m[1m the in-guest shell command references `/etc/ssh/ssh_host_ed25519_key` (the private key path) but NOT the private key content[0m [0m[2m[0.25ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m >[0m[1m fails closed (HOST_KEY_INJECTION_FAILED) when `tart exec` returns non-zero[0m [0m[2m[0.43ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m >[0m[1m fails closed (HOST_KEY_INJECTION_FAILED) when the OK marker is missing[0m [0m[2m[0.40ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m >[0m[1m fails closed (HOST_KEY_INJECTION_FAILED) when the public key file does not exist[0m [0m[2m[0.58ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m >[0m[1m fails closed (HOST_KEY_INJECTION_FAILED) when vmName is empty[0m [0m[2m[0.33ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m >[0m[1m custom hostKeyPath is honored (the in-guest path is configurable)[0m [0m[2m[0.36ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m > [0mCORRECTION03 round 9: injectOperatorSshdHostKeyPair — `tart exec -i` stdin-enabled form[2m >[0m[1m argv prefix is exactly ["tart", "exec", "-i", <vmName>] (stdin-enabled form, reviewer's exact-prefix discriminator)[0m [0m[2m[0.34ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m > [0mCORRECTION03 round 9: injectOperatorSshdHostKeyPair — `tart exec -i` stdin-enabled form[2m >[0m[1m argv does NOT place <vmName> in argv[2] (would mean `-i` is missing and stdin is silently dropped)[0m [0m[2m[0.24ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: structural — private host-key path never appears in any ssh/scp/sshpass argv[2m >[0m[1m no source file references both /etc/ssh/ssh_host_ and ssh/scp/sshpass in argv position[0m [0m[2m[0.97ms[0m[2m][0m
+
+=== CORRECTION03 round-9 P0 tests ===
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m > [0mCORRECTION03 round 9: injectOperatorSshdHostKeyPair — `tart exec -i` stdin-enabled form[2m >[0m[1m argv prefix is exactly ["tart", "exec", "-i", <vmName>] (stdin-enabled form, reviewer's exact-prefix discriminator)[0m [0m[2m[0.34ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 8: injectOperatorSshdHostKeyPair — non-SSH Tart-side channel[2m > [0mCORRECTION03 round 9: injectOperatorSshdHostKeyPair — `tart exec -i` stdin-enabled form[2m >[0m[1m argv does NOT place <vmName> in argv[2] (would mean `-i` is missing and stdin is silently dropped)[0m [0m[2m[0.24ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION03 round 9: structural — every `tart exec` argv in source uses `-i` (stdin-enabled form)[2m >[0m[1m no source file contains a `tart exec` argv that omits the `-i` stdin-forwarding flag[0m [0m[2m[0.23ms[0m[2m][0m
+
+Round-8 tests passed: 11
+Round-9 tests passed: 3
+
+=== tsc --noEmit ===
+tsc exit: 0
+
+=== git diff --check ===
+OK

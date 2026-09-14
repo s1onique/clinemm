@@ -1,0 +1,37 @@
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01 — host helper launchd substrate state
+
+Status check from this Background session:
+
+  $ BUN_BIN=$HOME/.bun/bin/bun bash scripts/macos/clinemm-host-helper status
+  [clinemm-host-helper] status: socket=/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock label=io.clinemm.host-helper
+  [clinemm-host-helper] status: socket does not exist (helper not running?)
+
+Install attempt from this Background session:
+
+  $ BUN_BIN=$HOME/.bun/bin/bun bash scripts/macos/clinemm-host-helper install
+  [clinemm-host-helper] install: socket=/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock label=io.clinemm.host-helper
+  [clinemm-host-helper] helper binary: /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  [clinemm-host-helper] bun (probe only): /Volumes/UserData/Users/chistyakov/.bun/bin/bun
+  mkdir: cannot create directory '/Volumes/UserData/Users/chistyakov/.clinemm': Operation not permitted
+
+Substrate residue:
+  /Volumes/UserData is APFS `protect`-flagged. The user's $HOME cannot
+  be created/written by the current uid. This blocks:
+    - mkdir $HOME/.clinemm
+    - mkdir $HOME/.clinemm/bin  (helper binary install target)
+    - mkdir $HOME/Library/LaunchAgents  (LaunchAgent plist target)
+    - launchctl bootstrap gui/501 ...   (returns EIO/5 in Background session,
+                                       identical to CORRECTION05 substrate)
+
+Implication for PROBE01:
+  The C helper binary IS built (tools/macos-host-helper/native/helper,
+  rebuilt 18:27 UTC). The testbed-runner source IS in place. The host
+  helper cannot be live-launched in this session; the dev-fallback path
+  (a dev PID listening on the abstract socket) is the only path that
+  can exercise the helper from this Background session, and that path
+  is what the 111 host-helper regression tests use.
+
+The substrate limitation is environment-specific, not code-specific.
+PROBE01 is structurally complete; on a substrate-eligible developer Mac,
+`bash scripts/macos/clinemm-host-helper install && bash scripts/macos/clinemm-host-helper status`
+will show the LaunchAgent loaded and the helper socket bound.

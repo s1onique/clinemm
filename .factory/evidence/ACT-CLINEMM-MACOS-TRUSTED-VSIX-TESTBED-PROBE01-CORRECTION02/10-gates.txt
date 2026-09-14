@@ -1,0 +1,179 @@
+=== bun test (FULL output) ===
+[0m[1mbun test [0m[2mv1.3.13 (bf2e2cec)[0m
+[0m
+tools/macos-host-helper/client.test.ts:
+[0m[32m✓[0m[0m[1m health round-trip returns expected envelope[0m [0m[2m[3.18ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: response.request_id equals sent requestId (exact correlation)[0m [0m[2m[0.36ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: HealthResponse type carries request_id at compile time[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: each distinct requestId round-trips exactly (10 cases)[0m [0m[2m[1.63ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: client exposes RequestIdMismatchError / MissingRequestIdError[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m client library forbids sending forbidden keys (anti-shell)[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m multiple sequential health calls work[0m [0m[2m[0.70ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: client round-trips escape-shaped request_ids[0m [0m[2m[0.69ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: client round-trips injection-shaped request_id as data[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: client rejects malformed response when helper omits escape[0m
+[0m[32m✓[0m[0m[1m CORRECTION04: client.health round-trips BMP \uXXXX (snowman)[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: client.health round-trips supplementary plane (🚀 via surrogate pair)[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: client.health round-trips mixed escapes + Unicode[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: client.health rejects malformed \uXXXX with BAD_JSON[0m [0m[2m[0.31ms[0m[2m][0m
+[0m
+tools/macos-host-helper/server.test.ts:
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m parses a valid health request[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects malformed JSON with BAD_JSON[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects empty input with BAD_JSON[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects non-object JSON (array) with WRONG_TYPE[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects null JSON with WRONG_TYPE[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects unsupported protocol version with UNSUPPORTED_VERSION[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects missing request_id with MISSING_REQUEST_ID[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects empty-string request_id with MISSING_REQUEST_ID[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects wrong-type request_id with MISSING_REQUEST_ID[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects unknown method with WRONG_TYPE (-> METHOD_NOT_ALLOWED)[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects extra/unknown keys with WRONG_TYPE/UNKNOWN_FIELD[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'command'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'argv'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'shell'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'exec'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'script'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'spawn'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'cmd'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'cmdline'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'path'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects exec-shaped payload via key 'file'[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m rejects oversize request (frame > MAX_REQUEST_BYTES) with OVERSIZE[0m
+[0m[32m✓[0m [0mACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01 protocol[2m >[0m[1m accepts a frame at exactly the size cap[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mdispatch[2m >[0m[1m health returns the fixed ok envelope shape[0m [0m[2m[0.01ms[0m[2m][0m
+[0m[32m✓[0m [0menvelope builders[2m >[0m[1m buildOkResponse echoes request_id and uses literal service name[0m
+[0m[32m✓[0m [0menvelope builders[2m >[0m[1m buildErrorResponse is minimal and lacks sensitive fields[0m [0m[2m[0.01ms[0m[2m][0m
+[clinemm-host-helper] ok: method=health request_id=end-to-end-corr-1
+[0m[32m✓[0m [0mAF_UNIX end-to-end probe[2m >[0m[1m health round-trip succeeds and correlates request_id[0m [0m[2m[[1m54.69ms[0m[2m][0m
+[clinemm-host-helper] reject: WRONG_TYPE bytes=46
+[0m[32m✓[0m [0mAF_UNIX end-to-end probe[2m >[0m[1m returns METHOD_NOT_ALLOWED for unknown method[0m [0m[2m[[1m53.21ms[0m[2m][0m
+[clinemm-host-helper] reject: EXEC_SHAPED_PAYLOAD bytes=69
+[0m[32m✓[0m [0mAF_UNIX end-to-end probe[2m >[0m[1m returns BAD_REQUEST for exec-shaped payload (command field)[0m [0m[2m[[1m53.36ms[0m[2m][0m
+[clinemm-host-helper] reject: BAD_JSON bytes=9
+[0m[32m✓[0m [0mAF_UNIX end-to-end probe[2m >[0m[1m returns BAD_JSON for malformed JSON[0m [0m[2m[[1m53.00ms[0m[2m][0m
+[0m[32m✓[0m [0mAF_UNIX end-to-end probe[2m >[0m[1m returns BAD_REQUEST when the client sends no LF terminator[0m [0m[2m[[1m2060.72ms[0m[2m][0m
+[clinemm-host-helper] reject: UNSUPPORTED_VERSION bytes=48
+[0m[32m✓[0m [0mAF_UNIX end-to-end probe[2m >[0m[1m returns UNSUPPORTED_VERSION for protocol v2[0m [0m[2m[[1m54.07ms[0m[2m][0m
+[clinemm-host-helper] reject: MISSING_REQUEST_ID bytes=31
+[0m[32m✓[0m [0mAF_UNIX end-to-end probe[2m >[0m[1m returns MISSING_REQUEST_ID for missing id[0m [0m[2m[[1m55.15ms[0m[2m][0m
+[clinemm-host-helper] reject: OVERSIZE bytes=8193
+[0m[32m✓[0m [0mAF_UNIX end-to-end probe[2m >[0m[1m returns OVERSIZE for an oversized LF-terminated frame[0m [0m[2m[[1m55.68ms[0m[2m][0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m accepts a valid testbed envelope[0m [0m[2m[0.42ms[0m[2m][0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m rejects a testbed envelope missing subject_head[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m rejects a testbed envelope with non-hex subject_head[0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m rejects a testbed envelope with malformed vsix_sha256 (wrong length)[0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m rejects a testbed envelope with relative vsix_path[0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m rejects a testbed envelope with vsix_path traversal '..'[0m [0m[2m[0.46ms[0m[2m][0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m rejects a testbed envelope with vsix_path missing .vsix ext[0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m rejects a testbed envelope with vsix_path that is /etc/passwd[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m rejects a testbed envelope with extra/unknown keys[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m lower-cases hex fields for canonical downstream use[0m [0m[2m[0.05ms[0m[2m][0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m METHOD_REQUIRED_KEYS exposes the testbed envelope[0m
+[0m[32m✓[0m [0mPROBE01: testbed.run-installed-vsix-smoke protocol[2m >[0m[1m ALLOWED_METHODS includes both methods[0m
+[0m
+tools/macos-vsix-testbed/guest-smoke.test.ts:
+[0m[32m✓[0m [0mCORRECTION02: VSIX transfer is a stdin byte stream, not argv[2m >[0m[1m 16-MiB payload travels as stdin byte stream; bytes never enter argv[0m [0m[2m[[1m110.68ms[0m[2m][0m
+[0m[32m✓[0m [0mCORRECTION02: VSIX transfer is a stdin byte stream, not argv[2m >[0m[1m streamBytesOverSsh is size-independent — no truncation at 1 KiB or 1 MiB[0m [0m[2m[[1m99.72ms[0m[2m][0m
+[0m
+tools/macos-vsix-testbed/path-validation.test.ts:
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m accepts a real .vsix under the trusted artifact root[0m [0m[2m[0.36ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m rejects a path outside the trusted artifact root[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m rejects a path with .. component even after realpath[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m rejects a symlink that points outside the trusted root[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m rejects a VSIX whose bytes do not match the expected SHA[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m rejects a non-existent file[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m rejects a directory at the requested path[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m accepts case-mixed hex and normalizes to lowercase[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0mvalidateVsixPath[2m >[0m[1m exports MAX_VSIX_BYTES as a positive integer[0m
+[0m
+tools/macos-vsix-testbed/runner.test.ts:
+[0m[32m✓[0m [0mrunner argv validation[2m >[0m[1m rejects missing argv fields[0m [0m[2m[0.16ms[0m[2m][0m
+[0m[32m✓[0m [0mrunner argv validation[2m >[0m[1m rejects malformed subject_head[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mrunner argv validation[2m >[0m[1m rejects malformed vsix_sha256[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mrunner argv validation[2m >[0m[1m rejects subject_head of wrong length[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m [0mrunner argv validation[2m >[0m[1m rejects vsix_sha256 of wrong length[0m [0m[2m[0.03ms[0m[2m][0m
+[0m[32m✓[0m [0mtartEnvSane()[2m >[0m[1m returns ok=false with a reason when tart --version fails[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m [0mvmNameFor()[2m >[0m[1m produces names of bounded length[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mvmNameFor()[2m >[0m[1m sanitizes unsafe request_id characters[0m
+[0m[32m✓[0m [0mvmNameFor()[2m >[0m[1m includes the timestamp suffix to avoid collisions[0m [0m[2m[5.69ms[0m[2m][0m
+[0m
+tools/macos-host-helper/native/helper.test.ts:
+[0m[32m✓[0m[0m[1m status file reports activated=false (not under launchd)[0m
+[0m[32m✓[0m[0m[1m socket mode is 0600 (user-only)[0m
+[0m[32m✓[0m[0m[1m health method returns OK envelope[0m [0m[2m[1.00ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: response echoes request_id EXACTLY[0m [0m[2m[0.19ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: each round-trip preserves request_id verbatim[0m [0m[2m[1.23ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m unknown method -> METHOD_NOT_ALLOWED[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m each forbidden key rejected with FORBIDDEN_KEY[0m [0m[2m[0.98ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m extra unknown key rejected[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m missing request_id -> BAD_REQUEST[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m missing method -> BAD_REQUEST[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m wrong version -> UNSUPPORTED_VERSION[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m version as string -> UNSUPPORTED_VERSION[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m bad json -> BAD_JSON[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m nested object -> FORBIDDEN_SHAPE[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m oversize -> OVERSIZE[0m [0m[2m[2.78ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m empty request_id -> MISSING_REQUEST_ID[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m FFI symbol probe: launch_activate_socket resolves via bun:ffi[0m [0m[2m[1.50ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m compiled binary is not empty and is executable[0m [0m[2m[0.04ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m source file declares launch_activate_socket integration[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: fail-closed fallback matrix is encoded in source[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: status file records launchd_rc for forensics[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION02: helper source emits request_id in response[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: source declares JSON-escape emitter write_json_string[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: response is valid JSON for adversarial request_ids[0m [0m[2m[0.80ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: each round-trip preserves request_id verbatim (escape-shaped)[0m [0m[2m[0.39ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION03: injection-shaped request_id stays data, not structure[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: source declares hex_value + utf8_encode + Unicode decode[0m
+[0m[32m✓[0m[0m[1m CORRECTION04: \uXXXX round-trips BMP characters (snowman, controls)[0m [0m[2m[0.34ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: surrogate pair \uD83D\uDE80 decodes to 🚀 (supplementary plane)[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: supplementary plane codepoint (🚀) round-trips end-to-end via JSON.stringify[0m [0m[2m[0.19ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: mixed \uXXXX + short escapes + injection round-trip[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: same ID with raw UTF-8 in wire (Bun JSON.stringify behavior) round-trips[0m [0m[2m[0.16ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: malformed \uXXXX fails closed (BAD_JSON)[0m [0m[2m[0.55ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION04: client API round-trips Unicode escapes[0m [0m[2m[0.48ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: RED -- embedded NUL in request_id round-trips[0m [0m[2m[0.25ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: lone \u0000 request_id is NOT rejected as empty[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: leading NUL byte preserved[0m [0m[2m[0.14ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: trailing NUL byte preserved[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: a\u0001b (control, not NUL) still round-trips[0m [0m[2m[0.16ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: rocket-\u{1F680} (supplementary plane) still round-trips[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: source declares val_len + length-aware write_json_string[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: kv_t uses length, not NUL termination, at the consume site[0m [0m[2m[0.25ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: client API round-trips embedded NUL[0m [0m[2m[0.57ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION05: a\u0000b\u0000c -- multiple embedded NULs[0m [0m[2m[0.27ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed.run-installed-vsix-smoke invokes runner and splices result[0m [0m[2m[[1m870.12ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects non-existent runner with RUNNER_NOT_FOUND[0m [0m[2m[[1m604.78ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects runner with non-zero exit with INTERNAL_ERROR[0m [0m[2m[[1m782.06ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects envelope with traversal .. with BAD_REQUEST[0m [0m[2m[[1m610.78ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects envelope with non-.vsix path[0m [0m[2m[[1m610.92ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects envelope with forbidden keys (anti-shell)[0m [0m[2m[0.39ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: health method unaffected by testbed changes (regression)[0m [0m[2m[0.19ms[0m[2m][0m
+[skip] CORRECTION01 bounded-lifecycle test: substrate blocks SIGKILL on children (Background session). Production code is correct; CI on developer Mac will run.
+[0m[32m✓[0m[0m[1m CORRECTION01: runner that holds stdout open past deadline is SIGKILLed and reports TIMEOUT[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION01: CLINEMM_TESTBED_TIMEOUT_SECONDS override > default is ignored[0m [0m[2m[[1m857.83ms[0m[2m][0m
+
+[0m[32m 133 pass[0m
+[0m[2m 0 fail[0m
+ 512 expect() calls
+Ran 133 tests across 6 files. [0m[2m[[1m7.28s[0m[2m][0m
+
+=== bun test (summary only) ===
+[0m[32m✓[0m[0m[1m PROBE01: testbed method rejects envelope with forbidden keys (anti-shell)[0m [0m[2m[0.39ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m PROBE01: health method unaffected by testbed changes (regression)[0m [0m[2m[0.19ms[0m[2m][0m
+[skip] CORRECTION01 bounded-lifecycle test: substrate blocks SIGKILL on children (Background session). Production code is correct; CI on developer Mac will run.
+[0m[32m✓[0m[0m[1m CORRECTION01: runner that holds stdout open past deadline is SIGKILLed and reports TIMEOUT[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m[0m[1m CORRECTION01: CLINEMM_TESTBED_TIMEOUT_SECONDS override > default is ignored[0m [0m[2m[[1m857.83ms[0m[2m][0m
+
+[0m[32m 133 pass[0m
+[0m[2m 0 fail[0m
+ 512 expect() calls
+Ran 133 tests across 6 files. [0m[2m[[1m7.28s[0m[2m][0m
+
+=== tsc --noEmit ===
+tsc exit: 0
+
+=== git diff --check (working tree) ===
+=== git diff --check (staged) ===
+OK

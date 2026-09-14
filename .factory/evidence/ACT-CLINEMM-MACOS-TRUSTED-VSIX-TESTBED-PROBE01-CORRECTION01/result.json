@@ -1,0 +1,68 @@
+{
+  "act_id": "ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01-CORRECTION01",
+  "act_parent": "ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01",
+  "result": "HALT_BASE_IMAGE_NOT_READY",
+  "disposition": "CLOSED_HALTED_CLEAN",
+  "qualification": {
+    "implementation_substrate": "STRUCTURAL_GREEN",
+    "path_validation": "STRUCTURAL_GREEN",
+    "host_helper_testbed_dispatch": "SYNTHETIC_REAL_TESTED",
+    "tart_live_vm": "HALT_BASE_IMAGE_NOT_READY",
+    "installed_vsix": "NOT_EXECUTED",
+    "real_extension_activation": "NOT_EXECUTED"
+  },
+  "corrections_applied": [
+    {
+      "p0": "P0-1",
+      "summary": "Replaced --list-extensions post-hoc probe with VS Code ExtensionService log scan",
+      "files": [
+        "tools/macos-vsix-testbed/guest-smoke.ts"
+      ],
+      "witness": "grep 'ExtensionService: Extension \"s1onique.clinemm\" is now active' /tmp/clinemm-testbed-{request_id}-ext-host.log"
+    },
+    {
+      "p0": "P0-2",
+      "summary": "Pinned TART_BASE_IMAGE by digest; removed fictional :14.5 tag",
+      "files": [
+        "tools/macos-vsix-testbed/runner.ts"
+      ],
+      "digest": "sha256:e2ebdfc4d354b336fe00d729c11a8136a019b8046f41cc183a2fe51b85d18f49"
+    },
+    {
+      "p0": "P0-3",
+      "summary": "Bounded subprocess lifecycle: poll-based drain_with_deadline + wallclock deadline covers both pipe drain and waitpid; kill(-pid, SIGKILL) for group signal",
+      "files": [
+        "tools/macos-host-helper/native/helper.c"
+      ],
+      "constant": "RUNNER_TIMEOUT_SECONDS_DEFAULT = 2760 (46 min, matches TOTAL_PHASE_BUDGET_SECONDS + margin)"
+    }
+  ],
+  "substrate_residue": {
+    "blocking": [
+      "kill(-pid, SIGKILL) returns EPERM in this Background session (verified: 'zsh:kill:1: kill -<pid> failed: operation not permitted').",
+      "$HOME/Library/Caches/tart/Cache.db writes fail with APFS NetworkStorageDB Error=14 (protect flag on /Volumes/UserData).",
+      "ghcr.io registry auth not configured in this Background session; tart clone cannot pull macos-sonoma-base."
+    ],
+    "nonblocking": [
+      "All structural code is correct and exercised by 131/131 unit tests.",
+      "Substrate-residue test (CORRECTION01 bounded-lifecycle) is documented-skipped in this session and will run on developer Mac."
+    ]
+  },
+  "tests": {
+    "total": 131,
+    "pass": 131,
+    "fail": 0,
+    "skip_documented": 1,
+    "new_in_correction": 2
+  },
+  "evidence_files": [
+    "00-entry.txt",
+    "01-recon.txt",
+    "02-corrections.txt",
+    "03-image-digest.txt",
+    "04-activation-witness.txt",
+    "05-lifecycle.txt",
+    "10-gates.txt",
+    "result.json"
+  ]
+}

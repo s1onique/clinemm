@@ -23,6 +23,7 @@ import { createServer, type Socket } from "node:net"
 import {
 	buildErrorResponse,
 	dispatch,
+	MAX_REQUEST_BYTES,
 	parseRequest,
 	type ParsedRequest,
 	type ResponseEnvelope,
@@ -58,7 +59,7 @@ function readOneFrame(sock: Socket): Promise<string | null> {
 				finish(buf.slice(0, nlIdx))
 				return
 			}
-			if (buf.length > 4096) {
+			if (buf.length > MAX_REQUEST_BYTES) {
 				finish(null)
 				return
 			}

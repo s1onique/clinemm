@@ -1,0 +1,83 @@
+# ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01 — recon witness
+
+Reconnaissance for the bounded change. All findings stay inside the substrate.
+
+## 1. Extension identity (apps/vscode/package.json)
+
+   publisher: s1onique
+   name:      clinemm
+   displayName: ClineMM
+   description: Cline (worktree aware) - MM
+   version:  4.1.16
+
+## 2. Canonical VSIX builder
+
+   apps/vscode/scripts/build-dogfood-vsix.py    (entry)
+   apps/vscode/scripts/build_dogfood_vsix_lib.py (library)
+   apps/vscode/scripts/requirements-build.txt   (deps)
+
+   Produces:
+     apps/vscode/dist/dogfood/clinemm-<version>-<short-sha>.vsix
+
+## 3. Existing dist artifact
+
+   apps/vscode/dist/dogfood/clinemm-4.1.16-fa66f7a62.vsix
+   sha256:  4d9c8b40ad2e386e3cb98ff55d92aeb21c5dc1c29291efb5d49b9af1afd65bb6
+
+## 4. E2E seam (existing)
+
+   apps/vscode/src/test/e2e/utils/helpers.ts
+   - executablePath: absolute path to a VS Code / VSCodium binary
+   - launchArgs:    ['--user-data-dir', ..., '--extensions-dir', ...]
+   - Closes the gap that the guest-smoke.ts ACT implements for Tart guests.
+
+## 5. Host helper substrate (existing)
+
+   tools/macos-host-helper/
+   - protocol.ts            (allow-list + per-method required keys + error codes)
+   - server.ts              (line-framed socket, MAX_REQUEST_BYTES constant)
+   - client.ts              (createHelperClient + per-method wrappers)
+   - native/helper.c        (parser + fork+execve + bounded output)
+   - native/build.sh        (build script; runs clang)
+
+   All four files modified for PROBE01. C helper binary rebuilt at 18:27 UTC.
+
+## 6. Substrate limits (this Background session)
+
+   a. /Volumes/UserData is APFS `protect`-flagged:
+        $HOME/Library/Caches/... → unwritable
+        ~/.tart/                 → unwritable
+        Tart NetworkStorageDB    → cannot init
+
+   b. launchctl bootstrap gui/501 returns EIO/5 from this Background
+      session, identical to the CORRECTION05 substrate limit.
+
+   Both limits mean this ACT cannot reach PASS_WITH_LIVE_KERNEL_QUALIFICATION
+   from this environment. The structural fix lands; the substrate-limited
+   dev-fallback path exercises the helper via a dev PID listening on the
+   abstract socket.
+
+## 7. Trust boundary (this ACT's purpose)
+
+   The PROBE01 capability is the SOLE substrate that takes a VSIX path
+   string and a SHA-256, and proves that those bytes are the bytes the
+   editor activated against. Before PROBE01, the only path to that
+   evidence was: a human opens the VSIX in a real editor, watches it
+   activate, and writes a sentence in a release note. PROBE01 makes
+   that path automatable, hermetic, and bounded.
+
+## 8. Recon strategy
+
+   - No fuzzy searches across apps/vscode/src/ outside the e2e seam.
+   - No changes to apps/vscode/src/ in this ACT.
+   - All changes confined to:
+       tools/macos-host-helper/{protocol.ts,server.ts,client.ts}
+       tools/macos-host-helper/native/helper.c
+       tools/macos-host-helper/server.test.ts
+       tools/macos-host-helper/native/helper.test.ts
+       tools/macos-host-helper/client.test.ts
+       tools/macos-vsix-testbed/{path-validation.ts,runner.ts,guest-smoke.ts}
+       tools/macos-vsix-testbed/{path-validation.test.ts,runner.test.ts}
+       .factory/acts/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01.md
+       .factory/evidence/ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01/
+       .gitignore (whitelist)
