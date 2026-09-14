@@ -41,6 +41,7 @@
  */
 
 import { realpathSync } from "node:fs";
+import { homedir } from "node:os";
 
 import type { CommandCapability } from "../types";
 import { SandboxError } from "../types";
@@ -141,6 +142,106 @@ const ALWAYS_WRITABLE_TEMP_SUBPATHS: readonly string[] = Object.freeze(
 		try {
 			return [realpathSync("/tmp")];
 		} catch {
+			return [];
+		}
+	})(),
+);
+
+/**
+ * ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01:
+ *
+ * Canonical Go build-cache subtree granted as an always-writable
+ * subpath in the Seatbelt workspace-write mode. This is the SINGLE
+ * bounded repair for the /private/tmp/go-cache-* / gocache-* leak
+ * documented in the ACT: without this grant, the Seatbelt profile
+ * denies writes to Go's NATIVE default cache location
+ * (`os.UserCacheDir() + "/go-build"` = `$HOME/Library/Caches/go-build`
+ * on macOS), so `go` invocations either fail or are steered into
+ * per-project /tmp overrides that accumulate hundreds of MiB of
+ * dependency-build artifacts in the shared system temp dir.
+ *
+ * The grant is INTENTIONALLY narrow:
+ *
+ *   1. Path-scope: ONLY the canonical `<HOME>/Library/Caches/go-build`
+ *      subtree. Sibling subtrees under `<HOME>/Library/Caches/` (e.g.
+ *      `~/Library/Caches/com.apple.Safari`, `~/Library/Caches/Google`,
+ *      any user-installed cache) remain DENIED. The kernel semantics
+ *      of `(subpath X)` is "descendant OR self" — so this single
+ *      grant cannot widen to the parent `~/Library/Caches/` directory
+ *      or to any other subtree under HOME.
+ *
+ *   2. Operation-scope: file-write* (covers file-write-data,
+ *      file-write-create, file-write-unlink, etc.) — exactly the
+ *      operations Go performs on its build cache. Read access is
+ *      already granted by the broad `(allow file-read*)` prelude.
+ *
+ *   3. Identity-scope (CORRECTION01): the path is canonicalized by
+ *      `realpathSync`'ing the EXISTING trusted ancestor
+ *      `<HOME>/Library/Caches` at module load, then appending the
+ *      FIXED leaf `go-build`. macOS exposes `~/Library/Caches` as a
+ *      synthetic symlink chain in some configurations (e.g. on APFS
+ *      volume mounts, `os.homedir()` returns `/Volumes/...` instead
+ *      of `/Users/...`). Seatbelt's `(subpath ...)` matches the
+ *      resolved vnode path, so an un-canonicalized textual HOME
+ *      would silently fail to match the kernel's resolved vnode —
+ *      the #1 implementation gotcha per `../canonical-paths.ts` and
+ *      the recon final-assessment.md. Canonicalizing the ancestor
+ *      (not the leaf) preserves this identity defense while still
+ *      allowing Go to `MkdirAll` the leaf on first use.
+ *
+ *   4. Failure-scope: if `realpathSync` of the trusted ancestor
+ *      `<HOME>/Library/Caches` fails (extremely unusual — that
+ *      directory is created by macOS at user account creation and
+ *      is essentially always present), we DO NOT create it. The
+ *      constant stays empty and the Seatbelt profile emits no
+ *      Go-cache rule. The next `go` invocation will fail with
+ *      EPERM in the same way it does today, but no false allow is
+ *      emitted.
+ *
+ *   5. Out-of-scope by design (the ACT's CONSERVATION BOUNDARY):
+ *      - `~/Library/Caches/**` blanket grant           DENIED
+ *      - `GOMODCACHE` (lives under `GOPATH/pkg/mod`,   unchanged
+ *        not under Go build cache)
+ *      - `GOPATH`                                     unchanged
+ *      - npm / pnpm / bun caches                      unchanged
+ *      - Cargo, Python, other toolchain caches        unchanged
+ *      - Seatbelt network policy                      unchanged
+ *      - ssh-agent, host-helper socket authority      unchanged
+ *
+ * Module-private: the constant is consumed only by
+ * {@link buildGoDefaultCacheAllowRule}. Test coverage asserts on
+ * the RENDERED profile SBPL (the real authority surface), not on
+ * this constant's contents — no SDK surface is added for test
+ * introspection. This mirrors the `ALWAYS_WRITABLE_TEMP_SUBPATHS`
+ * precedent (T1..T9 in `seatbelt-profile.test.ts`).
+ */
+const ALWAYS_WRITABLE_GO_BUILD_CACHE_SUBPATHS: readonly string[] = Object.freeze(
+	(() => {
+		try {
+			// CORRECTION01 (load-bearing change): canonicalize the
+			// EXISTING trusted ancestor (`<HOME>/Library/Caches`)
+			// and append the FIXED leaf `go-build` — NOT
+			// `realpathSync(${homedir()}/Library/Caches/go-build)`.
+			// Reason: Go itself creates the leaf directory on first
+			// use via `os.MkdirAll(dir, 0o777)` in
+			// `cmd/go/internal/cache/default.go`, after computing
+			// `os.UserCacheDir() + "/go-build"`. Canonicalizing the
+			// full leaf fails with ENOENT on a fresh user account,
+			// which would silently drop the rule — meaning Go's
+			// first use would itself be denied, exactly the
+			// contract defect this ACT was created to fix.
+			//
+			// We do NOT hard-code `/Users/...` or `/private/var/...`
+			// — the canonical HOME-derived path is the only correct
+			// identity under macOS volume aliasing.
+			const canonicalCachesParent = realpathSync(
+				`${homedir()}/Library/Caches`,
+			);
+			return [`${canonicalCachesParent}/go-build`];
+		} catch {
+			// realpathSync fails when the trusted ancestor itself
+			// is unavailable. Return an empty array — no Go-cache
+			// rule is emitted. See failure-scope above.
 			return [];
 		}
 	})(),
@@ -255,14 +356,37 @@ function buildWriteDenyRule(readonlyRoots: readonly string[]): string {
 }
 
 /**
- * Build the write-permission rule.
+ * Build the write-permission rules.
  *
- * Emits `(allow file-write* ...)` with explicit subpaths and literals
- * (the capability's `writableRoots`, the capability's `tempRoot`, and
- * the always-writable set), followed by `(deny file-write* (subpath
- * "<readonlyRoot>"))` for each readonlyRoot. The deny-after-allow
- * ordering makes the readonlyRoots contract load-bearing: even if a
- * readonlyRoot is a descendant of a writableRoot, the deny wins.
+ * Emits, in order:
+ *
+ *   1. `(allow file-write* ...)` — broad write allow with the
+ *      capability's `writableRoots`, `tempRoot`, and the
+ *      always-writable set (literals, system subpaths, canonical
+ *      `/tmp`).
+ *
+ *   2. `(allow file-write* (subpath "<canonical-go-build>"))` —
+ *      the focused Go-default-cache allow
+ *      (ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01). Optional — only
+ *      emitted when the canonical ancestor resolves.
+ *
+ *   3. `(allow file-write-create (subpath "<createOnlyRoot>"))` —
+ *      narrower `file-write-create` allow for `createOnlyRoots`
+ *      (ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2).
+ *      Optional — only emitted when the capability has any.
+ *
+ *   4. `(deny file-write* (subpath "<readonlyRoot>"))` — per
+ *      readonlyRoot. Emitted LAST so Seatbelt's "last match wins"
+ *      semantics guarantee readonly descendants stay denied. The
+ *      deny is authoritative even if a readonlyRoot is a
+ *      descendant of a writableRoot, the Go-cache root, OR a
+ *      createOnlyRoot (P1 fix from CORRECTION01 review: the
+ *      previous shape placed `createOnlyAllow` after the deny,
+ *      which silently violated this invariant for any
+ *      readonlyRoot that overlapped a createOnlyRoot).
+ *
+ * The deny-after-everything-allow ordering makes the
+ * readonlyRoots contract load-bearing.
  */
 function buildWriteRule(
 	writableRoots: readonly string[],
@@ -305,27 +429,64 @@ function buildWriteRule(
 		subpaths.push(`(subpath "${escapeSbplString(p)}")`);
 	}
 	const allowPart = `(allow file-write*\n  ${subpaths.join("\n  ")})`;
-	const denyPart = buildWriteDenyRule(readonlyRoots);
-	const writeRule = denyPart.length > 0 ? `${allowPart}\n${denyPart}` : allowPart;
+
+	// ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01 (CORRECTION01):
+	// emit the focused Go-default-cache allow BEFORE the readonlyRoots
+	// deny. Reason: Seatbelt evaluates rules top-to-bottom and "last
+	// match wins". If a caller passes a readonlyRoot that is a
+	// descendant of the canonical Go cache, the deny MUST win — so
+	// the deny must come AFTER this allow. The earlier ordering
+	// (broad allow → readonly deny → go-cache allow) violated this
+	// invariant: a go-cache allow emitted AFTER a readonly deny would
+	// re-open any readonly descendant of the canonical cache.
+	//
+	// This rule is computed at module load from a single canonical
+	// host-derived path (`realpathSync(${homedir()}/Library/Caches)`
+	// + fixed leaf `go-build`), so it cannot be tampered with by a
+	// malicious capability.
+	//
+	// When the canonical ancestor is unavailable (failure-scope) the
+	// rule is empty and we omit it.
+	const goCacheAllow = buildGoDefaultCacheAllowRule();
 
 	// ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2:
 	// emit the narrower `file-write-create` allow. The kernel op
 	// `file-write-create` covers mkstemp / mkdir / creat / atomic
 	// rename-into-place but does NOT cover file-write-data against
 	// existing files. This is the proven primitive from the C1
-	// kernel matrix (c1 seatbelt-operation-matrix.tsv). Adding the
-	// narrower allow AFTER the broad allow is strictly permissive
-	// (additive, not widening): it grants ONE MORE operation
-	// (file-write-create) but does not affect existing-file
-	// mutations because the broad `file-write*` allow never granted
-	// `file-write-data` on the `createOnlyRoots` (`writableRoots`
-	// is disjoint from `createOnlyRoots` by construction; see
-	// CommandJobManager.start).
+	// kernel matrix (c1 seatbelt-operation-matrix.tsv). It is
+	// emitted BEFORE the readonlyRoots deny so the deny remains
+	// authoritative under last-match-wins.
 	const createOnlyAllow = buildCreateOnlyAllowRule(createOnlyRoots);
 
-	return createOnlyAllow.length > 0
-		? `${writeRule}\n${createOnlyAllow}`
-		: writeRule;
+	// ReadonlyRoots deny (LAST so descendants stay denied).
+	// P1 fix from CORRECTION01 review: the previous shape emitted
+	// the createOnlyAllow AFTER the readonlyRoots deny, which made
+	// the "always LAST" docstring a lie. The fixed shape is:
+	//
+	//   broad allow
+	//   → go-cache allow
+	//   → createOnly allow
+	//   → readonlyRoots deny        ← truly LAST
+	//
+	// Under this ordering, any readonlyRoot that overlaps a
+	// writableRoot, the Go-cache root, OR a createOnlyRoot is
+	// guaranteed DENIED — Seatbelt's last-match-wins semantics
+	// makes the deny authoritative.
+	const denyPart = buildWriteDenyRule(readonlyRoots);
+
+	const parts: string[] = [allowPart];
+	if (goCacheAllow.length > 0) {
+		parts.push(goCacheAllow);
+	}
+	if (createOnlyAllow.length > 0) {
+		parts.push(createOnlyAllow);
+	}
+	if (denyPart.length > 0) {
+		parts.push(denyPart);
+	}
+
+	return parts.join("\n");
 }
 
 /**
@@ -351,6 +512,48 @@ function buildCreateOnlyAllowRule(createOnlyRoots: readonly string[] | undefined
 	}
 	const subpaths = createOnlyRoots.map((p) => `(subpath "${escapeSbplString(p)}")`);
 	return `(allow file-write-create\n  ${subpaths.join("\n  ")})`;
+}
+
+/**
+ * ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01:
+ *
+ * Build the (allow file-write* (subpath "<canonical-go-build>")) rule
+ * that grants write authority to Go's NATIVE default build cache
+ * location (`<HOME>/Library/Caches/go-build` on darwin).
+ *
+ * Returns empty string when the canonical path is unavailable
+ * (the trusted ancestor `<HOME>/Library/Caches` could not be
+ * canonicalized — extremely unusual; see {@link
+ * ALWAYS_WRITABLE_GO_BUILD_CACHE_SUBPATHS} failure-scope rationale).
+ *
+ * The grant is emitted as a separate `(allow file-write* ...)` line
+ * rather than folded into the broad write allow so:
+ *
+ *   (a) it can be added or removed atomically with a single
+ *       constant edit (no per-capability plumbing);
+ *   (b) it appears BEFORE the readonlyRoots deny (CORRECTION01)
+ *       so that "last match wins" makes any readonlyRoot
+ *       descendant of the canonical Go cache a guaranteed DENY —
+ *       the previous ordering (broad allow → readonly deny →
+ *       go-cache allow) violated this invariant;
+ *   (c) the conservation invariant of the GO-CACHE-NN test suite can
+ *       assert on its absence as a sentinel (negative tests rely on
+ *       a stable rendering site, not on a fold-into-another-rule).
+ *
+ * The `(subpath ...)` primitive matches the path AND all descendants
+ * (kernel semantics); Go's build cache is a flat fan-out under
+ * `<cache>/00/...`, `<cache>/01/...`, ... `<cache>/ff/...`, all of
+ * which are descendants of the canonical `<cache>` directory — so
+ * a single subpath grant is sufficient.
+ */
+function buildGoDefaultCacheAllowRule(): string {
+	if (ALWAYS_WRITABLE_GO_BUILD_CACHE_SUBPATHS.length === 0) {
+		return "";
+	}
+	const subpaths = ALWAYS_WRITABLE_GO_BUILD_CACHE_SUBPATHS.map(
+		(p) => `(subpath "${escapeSbplString(p)}")`,
+	);
+	return `(allow file-write*\n  ${subpaths.join("\n  ")})`;
 }
 
 /**
