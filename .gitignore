@@ -1594,5 +1594,14 @@ apps/vscode/.factory/evidence/
 # .factory/epic-board.md (2026-09-16 entry).
 !/.factory/acts/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01.md
 !/.factory/evidence/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/
+# ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01 (CLOSED_HALTED_CLEAN):
+# halt at §5 because the existing trusted host helper has no
+# signal-authority advantage over the spawning substrate on this
+# developer Mac. ACT body + evidence + probe scripts are the
+# canonical diagnostic proof and must survive a git clean / repo
+# prune so the closure (and the reviewer's binding correction)
+# remains auditable. See .factory/epic-board.md 2026-09-16 entry.
+!/.factory/acts/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01.md
+!/.factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/
 .bun-tmp/
 .bun-install/

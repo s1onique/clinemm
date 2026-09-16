@@ -1,0 +1,115 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01
+§6 NO-SANDBOX DIAGNOSTIC CONTROL
+=================================
+
+CONTROL DEFINITION
+------------------
+Per ACT §6: launch a disposable VSCodium instance with Chromium
+sandbox disabled and rerun the same real command/cancel sequence.
+Expected:
+  VSCODIUM_SANDBOXED:    extension_host kill(-pgid) = EPERM
+  VSCODIUM_NO_SANDBOX:   extension_host kill(-pgid) = PASS
+Classification: DIAGNOSTIC_CONTROL_ONLY — must not become the
+operational fix.
+
+WHY THIS CONTROL WAS NOT EXECUTED
+---------------------------------
+The §5 helper authority probe returned EPERM for BOTH the
+spawning substrate and the helper-spawned runner. The
+discriminator
+
+  EXTENSION_HOST_KILL = EPERM
+  HOST_HELPER_KILL    = PASS
+  GROUP_AFTER_HELPER  = ESRCH
+
+was NOT satisfied (HOST_HELPER_KILL = EPERM, not PASS).
+
+Per ACT §5 "If helper also gets EPERM: HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE"
+the ACT halts before the §6 control is run. The control would only
+be load-bearing IF the helper had a signal advantage that the
+extension host lacked — which is precisely the hypothesis the
+§5 probe falsified.
+
+If the §6 control were run anyway, its expected output on this
+developer Mac would be:
+  VSCODIUM_SANDBOXED:        direct kill = EPERM (matches §3)
+  VSCODIUM_NO_SANDBOX_CONTROL: direct kill = ?
+  STOCK_VSCODE:              classify only if actually measured
+                             (remains NOT_PROVEN per
+                              ACT-CLINEMM-SEATBELT-OWNED-
+                              SIGNAL-AUTHORITY01)
+
+The VSCODIUM_NO_SANDBOX row cannot be tested here without
+launching a fresh VSCodium instance with --no-sandbox and
+triggering a real `bash.supervised` command from the chat UI
+(both heavyweight and out of scope for a halted probe ACT).
+It is recorded as NOT_EXECUTED.
+
+CROSS-SESSION SIGNAL OBSERVATION (developer-Mac, CORRECTED)
+----------------------------------------------------------
+What was actually observed on this developer Mac (narrow):
+
+  - spawning process (Background session bun), kill(-childPgid, ...): EPERM
+  - sibling shell process (same Background session), kill(-otherPgid, ...): EPERM
+  - helper-spawned runner (Background session, grandchild with
+    its own setpgid(0,0) session leader), kill(-otherPgid, ...): EPERM
+  - helper-spawned runner, kill(-ownPgid, ...): PASS
+
+CORRECTION: the first closure framed this as "macOS Background
+sessions impose additional restrictions on signal delivery to
+processes spawned by other processes (even within the same
+launchd session)" and "the Background session imposes cross-
+process signal restrictions that the helper's existing posix_
+spawn / setpgid / kill(-pid, ...) idiom cannot bypass". Both
+phrasings overreached. The narrower observation is:
+
+  THIS HELPER, IN THIS CONFIGURATION, CANNOT SIGNAL AN EXTERNAL
+  PGID OWNED BY A BACKGROUND-SESSION SIBLING PROCESS ON THIS
+  SUBSTRATE.
+
+What is NOT proven by this ACT:
+
+  - That "Background session" is the unique kernel cause. The
+    helper's own spawned runner is itself a new-session-leader
+    grandchild (helper.c:841 setpgid(0,0)); the kernel may be
+    enforcing a rule at the new-session boundary rather than at
+    the Background-session attribution.
+
+  - That a helper bootstrap-launched into gui/501 or the system
+    LaunchDaemon domain would be subject to the same restriction.
+    (launchctl bootstrap into gui/501 was attempted and failed
+    with "Bootstrap failed: 5: Input/output error" on this
+    substrate; not diagnosed further.)
+
+  - A universal macOS rule. Apple's developer documentation
+    distinguishes LaunchAgent (per logged-in user) from
+    LaunchDaemon (system-wide, higher privilege) execution
+    environments, but does not enumerate the kernel-level signal
+    rules this test would need to attribute the EPERM to.
+
+The honest statement is:
+
+  HELPER_SIGNAL_ADVANTAGE        = REFUTED on current substrate
+  ROOT_CAUSE_BACKGROUND_SESSION  = INFERRED, NOT PROVEN
+  EXACT_KERNEL_CAUSE             = NOT_ISOLATED
+
+POSSIBLE FUTURE REPAIR SURFACES (out of scope for this halted ACT)
+------------------------------------------------------------------
+1. SMJobLaunchDaemon-style privileged helper (root daemon) that
+   is bootstrap-launched into the system domain. Has uid 0 and
+   full signal authority. Cost: requires admin install / TCC.
+2. kernel-level session unification — launchctl asuser into
+   the user's Aqua session. Requires a graphical anchor.
+3. Use the macOS `taskpolicy(1)` / procmod setpgid chain —
+   forces the PGID to be set to a value the calling session
+   can signal. Does not actually expand the caller's authority.
+4. Re-architecture: do not rely on signal delivery for
+   cancellation; use a control socket / IPC to ask the child
+   to exit voluntarily. Already partially supported by the
+   existing bash supervisor's child.kill() fallback (bash.ts:986)
+   for cooperative processes; not a fix for SIGTERM-ignoring
+   descendants.
+
+None of these is justified yet. They would require their own
+ACT and would only proceed if a future ACT proves the
+authority gap must be closed.

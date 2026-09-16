@@ -1,0 +1,151 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01
+§5 HELPER-SIDE AUTHORITY PROBE
+==============================
+
+PROBE DESIGN
+------------
+The ACT allows a one-off local probe run under the same LaunchAgent
+identity. We used the helper's own testbed-runner pathway:
+
+  - helper.c:823-845 already implements posix_spawn + setpgid(0,0)
+    + execve(CLINEMM_TESTBED_RUNNER). The runner runs as the helper's
+    child in a NEW process group that the helper's testbed code can
+    signal. We wired a "killer-runner" shell script as the testbed
+    runner; the runner reads the target PGID from subject_head and
+    attempts kill(-PGID, ...).
+  - This isolates "can the helper-spawned process signal an external
+    PGID" from "can the helper itself signal an external PGID".
+    The two are functionally equivalent because the runner inherits
+    the helper's launchd session + uid + credentials.
+
+PHASE 1: RED (from spawning bun process)
+----------------------------------------
+COMMAND_JOB_ID=n/a (probe does not invoke CommandJobManager; it
+                     uses Node child_process.spawn directly, which
+                     is the EXACT production primitive from
+                     bash.ts:917)
+SPAWNED_ROOT_PID=47349
+SPAWNED_PGID=47349
+CHILD_PID=47350  (grandchild sleep 300)
+DIRECT_PROBE=FAIL CODE=EPERM    (process.kill(-pgid, 0))
+DIRECT_TERM=FAIL CODE=EPERM    (process.kill(-pgid, SIGTERM))
+MEMBERS_AFTER_DIRECT=47349 47347 47349 sleep 300|47350 47349 47349 sleep 300
+PGID_AFTER_CANCEL=ALIVE
+
+PHASE 2: HELPER PROBE (helper-spawned testbed runner)
+-----------------------------------------------------
+The helper-spawned killer-runner attempted to kill the same PGID
+47349. Its result file:
+  killer_pid=60586
+  target_pgid=47349
+  kill -0 -PGID (group):   rc=1  (EPERM, "Operation not permitted")
+  kill -TERM -PGID (group): rc=1 (EPERM)
+  kill -KILL -PGID (group): rc=1 (EPERM)
+  kill -0 -PGID (final):   rc=1 (EPERM)
+
+  Members AFTER helper kill: 47349 + 47350 still alive (group NOT gone)
+
+PHASE 3: HELPER INTRA-SESSION PROBE (sanity)
+--------------------------------------------
+A second testbed runner was configured to kill ITS OWN PGID (the
+runner itself). Result:
+  self_pid=76477
+  kill -0 -PID (self):  rc=0
+  kill -TERM -PID (self): delivered (script exited)
+
+This proves the helper's spawn surface WORKS WITHIN its own
+session. The failure to reach PGID 47349 is NOT a helper
+implementation defect — it is the launchd SESSION BOUNDARY.
+
+SUBSTRATE CONCLUSION
+--------------------
+EXTENSION_HOST_KILL = EPERM  (spawning bun process — Background session)
+HOST_HELPER_KILL    = EPERM  (helper-spawned runner — same Background session)
+GROUP_AFTER_HELPER  = ALIVE  (PGID 47349 still has root + grandchild)
+
+The helper does NOT have a signal-authority advantage over the
+spawning substrate on this developer Mac. Both are confined by
+the same launchd Background session.
+
+ROOT CAUSE — CORRECTED (was overreached)
+---------------------------------------
+What this evidence actually proves is NARROWER than the first
+closure claimed:
+
+  PROVEN (live, on this substrate):
+    - spawning parent (Background session) → external PGID = EPERM
+    - helper-launched runner (Background session) → same external PGID = EPERM
+    - helper-spawned runner → its own descendants = PASS
+    - this existing helper has NO signal-authority advantage over
+      the spawning substrate for THIS PGID on THIS substrate
+
+  NOT PROVEN (was claimed too broadly in the first closure):
+    - that "Background session" is the unique kernel cause
+    - a universal macOS rule about cross-session signal delivery
+    - that a helper bootstrap-launched into gui/501 or the system
+      LaunchDaemon domain would be subject to the same restriction
+      (launchctl bootstrap into gui/501 was attempted and failed
+      with "Bootstrap failed: 5: Input/output error" on this
+      substrate; not diagnosed further)
+
+CORRECTED ROOT_CAUSE_BACKGROUND_SESSION = INFERRED, NOT PROVEN
+CORRECTED EXACT_KERNEL_CAUSE            = NOT_ISOLATED
+
+macOS launchd does run user interactive processes under the
+user's Aqua/GUI session. The Apple-documented distinction between
+LaunchAgents (per-logged-in-user) and LaunchDaemons (system-wide,
+higher-privilege) is real and is not challenged here. But the
+specific kernel-level signal rule that produces the EPERM in this
+test was not isolated by this ACT. Possible contributing layers
+that were not separately tested include:
+
+  - the session-attribute flag on processes spawned from a
+    Background sub-session;
+  - whether the helper's `posix_spawn`+`setpgid(0,0)` makes its
+    runner a grandchild in its OWN new session, which may itself
+    be the boundary the kernel enforces;
+  - any sandbox profile attached to the spawning bun that the
+    helper does not carry (the helper's own comment at
+    helper.c:836-841 documents the same EPERM in its own session-
+    internal signal path, suggesting the restriction is broader
+    than Background-session attribution alone).
+
+A future ACT targeting the exact kernel cause would need to vary
+the helper's launchd domain (gui/501 bootstrap, system daemon,
+etc.) and the spawning substrate independently to localize the
+layer.
+
+GATE RESULT
+-----------
+EXTENSION_HOST_KILL = EPERM      (expected)
+HOST_HELPER_KILL    = EPERM      (NOT PASS — discriminator FAILED)
+GROUP_AFTER_HELPER  = ALIVE      (NOT ESRCH — discriminator FAILED)
+
+This ACT's §5 discriminator is NOT satisfied. The minimum
+required condition
+
+  EXTENSION_HOST_KILL = EPERM
+  HOST_HELPER_KILL    = PASS
+  GROUP_AFTER_HELPER  = ESRCH
+
+is FALSE. The existing host helper does NOT have a signal
+authority advantage over the spawning substrate on this substrate
+class.
+
+VERDICT (per ACT §30)
+---------------------
+HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE
+
+Adding a process-group.terminate-owned method to the existing
+helper would NOT close the gap. The gap is at the launchd-session
+boundary, not the helper-vs-extension-host boundary. The fix
+surface must be at a different layer (kernel-level session
+unification, an SMJobLaunchDaemon-style system helper, or
+out-of-process signaling via a service that already lives in the
+target session).
+
+CLOSURE
+-------
+CLOSED_HALTED_CLEAN
+HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE
+No host-helper termination capability was added.

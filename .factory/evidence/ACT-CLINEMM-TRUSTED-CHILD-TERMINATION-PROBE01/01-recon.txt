@@ -1,0 +1,112 @@
+REAL_COMMAND_SPAWN_SEAM=
+  sdk/packages/core/src/extensions/tools/executors/bash.ts:917
+    const child = spawn(config.executable, config.args, {
+      cwd: config.cwd,
+      env: childEnv,
+      stdio: ["pipe", "pipe", "pipe"],
+      detached: !isWindows,        // ← child becomes its own PGID leader
+      windowsHide: true,
+    });
+  // Posix: -childPid IS the process group of the supervised shell
+  // (the shell forks descendants into that group; supervisor
+  // signals -childPid to terminate the whole tree).
+
+REAL_CANCEL_SEAM=
+  apps/vscode/src/sdk/command-job-manager.ts:1313
+    async cancel(options): Promise<...>
+      -> terminate(job, "cancel")
+        -> terminateTree({ gracefulSignal: "SIGTERM", graceMs: TERM_GRACE_MS })
+          -> signalGroup("SIGTERM")                 (bash.ts:1029, kill(-childPid, "SIGTERM"))
+          -> waitForGroupGone(childPid, 5000)
+          -> if alive: signalGroup("SIGKILL")
+                       process.kill(-childPid, "SIGKILL")   (bash.ts:984)
+
+  CommandJobManager.cancel() is invoked through the SDK's
+  run_commands background path
+  (apps/vscode/src/sdk/vscode-run-commands-tool.ts) and the
+  separate cancel_command tool (command-status-tool.ts).
+  Long-lived jobs are also exposed via get_background_command /
+  delete_background_command (sdk/examples/plugins/background-terminal.ts)
+  for non-VSCode surfaces.
+
+REAL_PGID_CAPTURE_SEAM=
+  childPid = child.pid from spawn() above. The bash executor
+  uses -childPid (the negative form) as the process group for
+  both signaling and probing. The CommandJob record stores the
+  SupervisableShellProcess but does not separately capture PGID
+  — it is the negative of the child PID by POSIX semantics.
+
+REAL_TERMINATION_FUNCTION=
+  - PRIMARY: process.kill(-childPid, signal)
+             bash.ts:984  (escalation)
+             bash.ts:1029 (graceful)
+  - FALLBACK (if -pid signal fails): child.kill(signal)
+             bash.ts:986 / 1033
+  - PGID probe: process.kill(-pgid, 0) -> ESRCH/EPERM/0
+             bash.ts:1011
+
+REAL_HOST_HELPER_DISPATCH_SEAM=
+  Load-bearing: tools/macos-host-helper/native/helper.c
+    (the C LaunchAgent-managed helper).
+    - AF_UNIX listener (launchd Sockets dict, 0600).
+    - dispatch on (method, request_id) in C.
+    - Currently serves: health, testbed.run-installed-vsix-smoke.
+    - Existing posix_spawn + setpgid + kill(-pid, ...) pattern
+      proven at helper.c:823-845 for the testbed runner's own
+      bounded lifecycle.
+
+  Dev/test fallback: tools/macos-host-helper/server.ts + protocol.ts
+    (TypeScript). For new capabilities, the TS fallback is
+    intentionally NOT load-bearing — it returns
+    METHOD_NOT_AVAILABLE_IN_TS_FALLBACK for capabilities wired
+    only in the C helper (see protocol.ts:352-360).
+    Both layers share the parse/validate pipeline.
+
+CURRENT_HELPER_PROTOCOL_AUTHORITY=
+  - ALLOWED_METHODS = {health, testbed.run-installed-vsix-smoke}
+    (protocol.ts:40-43).
+  - FORBIDDEN_REQUEST_KEYS = {command, argv, shell, exec,
+                              script, spawn, cmd, cmdline,
+                              path, file} (protocol.ts:52-63)
+    checked BEFORE method dispatch → structural anti-shell
+    guarantee.
+  - METHOD_REQUIRED_KEYS is per-method exhaustive; missing/extra
+    fields fail closed (protocol.ts:84-93, 193-203).
+  - Per-field validation (regex / path / extension checks) runs
+    in the parser, NOT in the handler — fail closed without
+    a subprocess round-trip (protocol.ts:218-264).
+  - request_id correlation: every response carries the same
+    request_id as the request (envelope buildOkResponse /
+    buildErrorResponse). Adversarial request_ids are round-tripped
+    safely because the server treats them as opaque strings.
+  - Socket: AF_UNIX, 0600, owner-only (server.ts:194-201,
+    plist Sockets dict).
+  - LaunchAgent activation: server.ts:184-191 uses
+    launch_activate_socket() fd when available.
+
+RECONCLUSIONS=
+  1. The bash executor's `spawn(..., {detached: !isWindows})` IS
+     the real production command seam. The CommandJobManager
+     wraps it with deadline / wait-budget / id / snapshot.
+     This ACT's RED must drive CommandJobManager.start(...) with
+     a long-lived child, not a separate node -e analog.
+  2. The real cancel seam is CommandJobManager.cancel(jobId).
+  3. Termination reaches the kernel through ONE place:
+     process.kill(-childPid, signal). That is where the EPERM
+     (if any) is swallowed by the current try/catch — the bug
+     surface for this ACT.
+  4. The host helper's authority surface is the C LaunchAgent
+     helper at tools/macos-host-helper/native/helper.c. It
+     already speaks the posix_spawn + setpgid + kill(-pid, ...)
+     idiom for its OWN testbed runner. The pattern is proven
+     there — that is exactly the substrate capability that
+     VSCodium-sandboxed extension host lacks.
+  5. The helper currently exposes only {health, testbed.*}.
+     Adding process-group.terminate-owned requires:
+       - ALLOWED_METHODS += "process-group.terminate-owned"
+         (and a paired register method)
+       - FORBIDDEN_REQUEST_KEYS unchanged (no shell/argv/cmd
+         is ever accepted)
+       - per-method required fields with opaque token only
+       - C-side dispatch in helper.c
+       - registration lifecycle owned by helper process memory

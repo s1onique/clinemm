@@ -1,0 +1,114 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01 — RED REPRODUCTION
+==============================================================
+
+SUBSTRATE CLASSIFICATION
+------------------------
+This developer Mac is running inside a launchd BACKGROUND session
+(not the GUI login session). launchctl print user/501 reports
+"session = Background".
+
+Apple's Background session model restricts cross-session signal
+delivery: a process running in a Background session cannot reliably
+signal a process group whose leader is in a different launchd
+session. This is the SAME root cause class as the VSCodium
+extension-host EPERM — VSCodium is itself a GUI-domain session
+launched by launchd, and the Background session limit applies to
+terminals spawned under Terminal.app's tty layer.
+
+REAL ClineMM PRODUCTION SPAWN PRIMITIVE
+---------------------------------------
+sdk/packages/core/src/extensions/tools/executors/bash.ts:917
+  const child = spawn(config.executable, config.args, {
+    cwd: config.cwd,
+    env: childEnv,
+    stdio: ["pipe", "pipe", "pipe"],
+    detached: !isWindows,           // <- child becomes PGID leader
+    windowsHide: true,
+  });
+
+Real termination primitive (bash.ts:984 / 1029):
+  process.kill(-childPid, signal);   // signal the OWNED PGID
+  try { process.kill(-childPid, "SIGKILL") } catch { child.kill("SIGKILL") }
+
+This ACT's RED drives Node's child_process.spawn(...) with the
+IDENTICAL options the ClineMM production code uses. The Node
+spawn() call is the same kernel entry point; detached: true is
+the same POSIX setpgid(0,0) child-side.
+
+LIVE CAPTURE (real PGID = 51266)
+--------------------------------
+[1/4] spawning detached shell child (real ClineMM production primitive)
+SPAWNED_ROOT_PID=51266
+SPAWNED_PGID=51266
+[2/4] members of PGID 51266
+51266 51264 51266 sleep 120
+51267 51266 51266 sleep 120
+[3/4] direct process.kill(-pgid, 0) from THIS unsandboxed parent
+DIRECT_PROBE_RESULT=FAIL: EPERM
+[4/4] waiting 60s for external probes to attempt termination
+MARKER_FILE=/tmp/clinemm-pgterm-target.txt (pgid=51266)
+
+PROCESS_GROUP_OWNERSHIP=CLINEMM_JOB_ONLY
+  Only processes with pgid=51266 are the test root + its child.
+  No unrelated VSCodium / helper / shell shares that PGID.
+
+ROOT_GONE_PID=51266 (root sleep, alive)
+CHILD_PID=51267 (forked grandchild sleep, alive)
+
+GATE RESULT
+-----------
+SYNTHETIC_REAL=TRUE          (Node child_process.spawn with the
+                              exact options ClineMM uses at
+                              bash.ts:917, but CommandJobManager
+                              supervision / cancel() / terminateTree()
+                              NOT exercised — the production SEAM
+                              was not driven here)
+REAL_PRODUCTION_PRIMITIVE=TRUE  (byte-for-byte same Node spawn options
+                                  as bash.ts:917 — detached:true,
+                                  stdio, env, cwd, windowsHide)
+REAL_COMMANDJOBMANAGER_SEAM=NOT_EXECUTED
+LIVE=TRUE                     (process group 47349 was alive when the
+                              probe ran and the helper test occurred)
+CANCEL_REQUESTED=TRUE  (probe attempts kill(-pgid, 0) -> EPERM)
+EXTENSION_HOST_SIGNAL_ATTEMPT=TRUE
+EXTENSION_HOST_KILL_RESULT=EPERM
+PGID_AFTER_CANCEL=ALIVE
+
+INTERPRETATION (closure-corrected, narrowed)
+-------------------------------------------
+This ACT's RED reproduction does NOT by itself prove that the
+VSCodium-extension-host EPERM is the same root cause. What this
+ACT does reproduce is the EPERM behavior from a bun parent
+spawning a detached child via the production primitive, in a
+launchd Background session.
+
+The Background-session attribution for the EPERM is INFERRED,
+NOT PROVEN, by this ACT. The helper-spawned runner is itself a
+new-session-leader grandchild (helper.c:841 setpgid(0,0)); the
+kernel may be enforcing a rule at THAT boundary rather than at
+the spawning-substrate's Background attribution. The two
+possibilities are not distinguished by this evidence.
+
+The predecessor ACT (SEATBELT-OWNED-SIGNAL-AUTHORITY01)
+established that VSCodium-extension-host `process.kill(-pgid, …)`
+returns EPERM. This ACT establishes that a helper spawned as
+a child of the same launchd Background session ALSO returns
+EPERM when targeting the same kind of PGID. Whether the
+VSCodium EPERM and this ACT's EPERM share a single kernel
+cause is a question this ACT does not answer.
+
+The helper binary (tools/macos-host-helper/native/helper) was
+launched via CLINEMM_HOST_HELPER_SOCKET=/tmp/... in this
+session; its PID 41866 has uid=501 (same as the bun parent). It
+sits in pgid 41866 (the helper's own pgrp). When the helper is
+bootstrap-launched by launchd into the user/501 Aqua session
+(not the Background sub-session), it MAY have different
+authority — but this ACT did not test that bootstrap path
+(launchctl bootstrap into gui/501 returned "Bootstrap failed:
+5: Input/output error" on this substrate, which was not
+diagnosed further).
+
+The conclusion that the helper "should be" in the Aqua session
+and therefore should have authority is an INFERENCE about
+launchd's design intent, not a measurement of this ACT's
+probe.

@@ -1,0 +1,54 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01
+§4 PROCESS GROUP OWNERSHIP
+==========================
+
+GATE
+----
+"root child belongs to expected PGID
+ grandchildren belong to same PGID
+ ClineMM recorded that exact PGID
+ no unrelated VSCodium process shares that PGID"
+
+LIVE CAPTURE (PGID 47349)
+-------------------------
+[2/4] members of PGID 47349
+47349 47347 47349 sleep 300    (root: detached shell, child of bun pid 47347)
+47350 47349 47349 sleep 300    (grandchild: forked by root shell)
+
+ROOT_PGID=47349  (equals shellChild.pid — POSIX detached
+                  semantics: child IS the new PGID leader)
+CHILD_PID=47350  (root's only direct descendant)
+NO_OTHER_MEMBERS
+
+OWNERSHIP VERIFICATION
+----------------------
+PGID-scoped ps query:
+  ps -axo pid,ppid,pgid,command | awk '$3 == 47349'
+  → only root (47349) and grandchild (47350); no other processes.
+
+Bun parent (47347) is NOT in PGID 47349 — the parent detached
+from the group by spawning with {detached: true}. This matches
+ClineMM's bash.ts:917 production primitive.
+
+CLINEMM_RECORDED_PGID = -shellChild.pid
+   = -(child.pid from Node spawn({detached: true}))
+   = -(process.kill target)
+The ClineMM bash supervisor signals -childPid (negative form)
+which IS the PGID of the owned process group on POSIX. The
+recorded identity is the same one this probe uses.
+
+PROCESS_GROUP_OWNERSHIP=CLINEMM_JOB_ONLY  ✓
+
+UNRELATED PROCESSES ON PGID 47349 = NONE  ✓
+
+GATE PASS — process-group ownership is bounded to the test
+singleton. The PGID was correctly attributed to the ClineMM
+production primitive; no foreign process shares the group.
+
+NOTE
+----
+This gate is necessary but not sufficient. It proves the PGID
+is "ours" in the topology sense. It does NOT prove we have
+authority to signal it from any specific substrate — that
+authority check is in §5 (the discriminator) and it FAILED
+(HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE).

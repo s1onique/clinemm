@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "act_id": "ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01",
+
+  "subject_head": "a4d8d246a0ffb18576cefb25020f3b150f18f8a2",
+
+  "phase": "REPRODUCTION_AND_EVIDENCE_ACQUISITION",
+
+  "result": "HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE",
+  "closure": "CLOSED_HALTED_CLEAN",
+  "labels": {
+    "red_reproduction":            "SYNTHETIC_REAL",
+    "real_production_primitive":   true,
+    "real_commandjobmanager_seam": "NOT_EXECUTED",
+    "live":                        true,
+    "host_helper_external_pgid":   "LIVE_EPERM",
+    "helper_signal_advantage":     "REFUTED on current substrate",
+    "root_cause_background_session": "INFERRED, NOT PROVEN",
+    "exact_kernel_cause":          "NOT_ISOLATED"
+  },
+  "closure_correction": {
+    "previous_closure_commit": "3b09cb7cf864a06031aeb154fc80fde4735a282c",
+    "defects_corrected": [
+      "labels overstated what the evidence proves; RED was the production primitive, not the production seam",
+      "cause statement claimed a universal macOS rule; what was actually proven is narrower (this helper, this substrate, this PGID)",
+      "evidence not bound to the closure commit (binding defect same as ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01)"
+    ],
+    "binding_correction_step": "this commit + .gitignore whitelist delta bind ACT body, result.json, all evidence files, and both probe scripts durably"
+  },
+
+  "entry": {
+    "head": "a4d8d246a0ffb18576cefb25020f3b150f18f8a2",
+    "branch": "main",
+    "worktree_status": "CLEAN",
+    "vscodium_main_pid_observed": 22604,
+    "host_helper_status_at_entry": "RUNNING (LaunchAgent-managed; not bootstrapped by this probe)"
+  },
+
+  "substrate": {
+    "developer_mac_launchd_session": "Background",
+    "helper_subprocess_session": "Background (inherits parent)",
+    "cross_session_signal_authority_observed": "DENIED for external PGIDs",
+    "intra_session_signal_authority_observed": "ALLOWED",
+    "exact_kernel_cause_isolated": false
+  },
+
+  "red": {
+    "real_command_seam": true,
+    "spawn_primitive": "Node child_process.spawn({detached: true}) — identical to bash.ts:917",
+    "spawned_pgid": 47349,
+    "spawned_root_pid": 47349,
+    "spawned_grandchild_pid": 47350,
+    "extension_host_kill": "EPERM",
+    "group_alive_after_direct_cancel": true,
+    "direct_probe_rc": 1,
+    "direct_probe_code": "EPERM",
+    "direct_term_rc": 1,
+    "direct_term_code": "EPERM"
+  },
+
+  "process_group_ownership": {
+    "pgid_bounded_to_clinemm_job": true,
+    "unrelated_pgid_members": false,
+    "members": [
+      {"pid": 47349, "ppid": 47347, "pgid": 47349, "command": "sleep 300"},
+      {"pid": 47350, "ppid": 47349, "pgid": 47349, "command": "sleep 300"}
+    ]
+  },
+
+  "helper_probe": {
+    "method": "testbed.run-installed-vsix-smoke",
+    "killer_runner_pid": 60586,
+    "killer_runner_path": "/tmp/clinemm-pgterm-fixture/killer-runner",
+    "kill_term_rc": 1,
+    "kill_term_code": "EPERM",
+    "kill_kill_rc": 1,
+    "kill_kill_code": "EPERM",
+    "kill_probe_initial_rc": 1,
+    "kill_probe_final_rc": 1,
+    "group_after_helper": "ALIVE",
+    "same_pgid": true,
+    "helper_kill": "EPERM"
+  },
+
+  "helper_intra_session_sanity": {
+    "self_pgid_kill_rc": 0,
+    "self_pgid_signal_delivered": true,
+    "comment": "helper-spawned runner CAN signal its own PGID; fails to reach external PGIDs"
+  },
+
+  "ownership": {
+    "foreign_pgid_denied": "n/a (no helper capability added)",
+    "opaque_token_required": "n/a (no helper capability added)",
+    "generic_pid_kill_surface": false,
+    "arbitrary_signal_surface": false,
+    "shell_capability_surface": false
+  },
+
+  "control": {
+    "no_sandbox_direct_kill": "NOT_EXECUTED",
+    "reason": "§5 discriminator halted before §6 control ran"
+  },
+
+  "substrate_matrix": {
+    "VSCODIUM_SANDBOXED": "NOT_MEASURED_HERE (inherited: EPERM per ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01)",
+    "VSCODIUM_NO_SANDBOX_CONTROL": "NOT_EXECUTED",
+    "STOCK_VSCODE": "NOT_PROVEN (inherited from ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01)"
+  },
+
+  "real_seam_artifacts": [
+    "SYNTHETIC_REAL — Node child_process.spawn with the exact options ClineMM uses at bash.ts:917, but CommandJobManager / bash.supervised supervision / cancel() / terminateTree() were NOT exercised",
+    "REAL_PRODUCTION_PRIMITIVE — byte-for-byte identical Node spawn options (detached:true, stdio, env, cwd, windowsHide)",
+    "LIVE — process group 47349 was alive when the probe ran"
+  ],
+
+  "halt_reason": "This existing trusted host helper has no signal-authority advantage over the spawning substrate for THIS PGID on THIS substrate. The exact kernel cause was NOT isolated. A new helper method is not justified by this evidence; what this evidence proves is that THIS helper in THIS configuration cannot reach THIS PGID, which is exactly the surface any new method would exercise.",
+
+  "files": [
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/00-entry.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/01-recon.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/02-real-command-red.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/03-process-group-ownership.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/04-helper-authority-probe.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/05-no-sandbox-control.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/09-gates.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/scripts/01-spawn-detached.mjs",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/scripts/02-real-red-green.mjs",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/result.json"
+  ]
+}

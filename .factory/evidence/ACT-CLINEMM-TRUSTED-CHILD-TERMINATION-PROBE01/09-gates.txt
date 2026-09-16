@@ -1,0 +1,133 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01 — GATES
+=====================================================
+
+LABELS (closure-corrected per reviewer)
+---------------------------------------
+RED_REPRODUCTION              = SYNTHETIC_REAL
+REAL_PRODUCTION_PRIMITIVE     = YES  (byte-for-byte same Node
+                                        spawn options as
+                                        bash.ts:917)
+REAL_COMMANDJOBMANAGER_SEAM   = NOT_EXECUTED  (no CommandJobManager
+                                                / cancel() /
+                                                terminateTree()
+                                                was exercised)
+LIVE                          = YES  (process actually spawned)
+HOST_HELPER_EXTERNAL_PGID     = LIVE_EPERM
+HELPER_SIGNAL_ADVANTAGE        = REFUTED on current substrate
+ROOT_CAUSE_BACKGROUND_SESSION  = INFERRED, NOT PROVEN
+EXACT_KERNEL_CAUSE             = NOT_ISOLATED
+
+§31 ACCEPTANCE CONTRACT EVALUATION
+----------------------------------
+REAL_COMMAND_RED_REPRODUCED              = true   (SYNTHETIC_REAL — primitive, not seam)
+EXTENSION_HOST_KILL                      = EPERM  (§3, §5)
+GROUP_ALIVE_AFTER_DIRECT_CANCEL          = true   (§3)
+HOST_HELPER_KILL                         = EPERM  (§5)  <-- FAILS GATE
+GROUP_AFTER_HELPER                       = ALIVE  (§5)  <-- FAILS GATE
+REAL_PGID_OWNERSHIP_BOUNDED              = true   (§4)
+FOREIGN_PGID_DENIED                      = n/a    (no helper capability to test)
+GENERIC_PID_KILL_API                     = false  (no capability added)
+ARBITRARY_SIGNAL_API                     = false  (no capability added)
+SHELL_CAPABILITY                         = false  (no capability added)
+COOPERATIVE_TERM                         = n/a    (helper cannot signal)
+KILL_ESCALATION                          = n/a    (helper cannot signal)
+GRANDCHILD_TREE_REMOVAL                  = n/a    (helper cannot signal)
+IDEMPOTENT_REPEAT                        = n/a    (helper cannot signal)
+EXISTING_HELPER_INVARIANTS               = green  (no helper code changed)
+
+§5 DISCRIMINATOR RESULT
+-----------------------
+EXTENSION_HOST_KILL = EPERM
+HOST_HELPER_KILL    = EPERM   <-- NOT PASS
+GROUP_AFTER_HELPER  = ALIVE   <-- NOT ESRCH
+
+Discriminator: FAIL.
+ACT §30 verdict: HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE.
+ACT §34 closure: CLOSED_HALTED_CLEAN.
+
+REASON (narrowed per reviewer)
+------------------------------
+This existing trusted host helper has no signal-authority
+advantage over the spawning substrate for THIS PGID on THIS
+substrate. The exact kernel cause is NOT isolated. Possible
+contributing layers include Background-session attribution, the
+new-session boundary introduced by the helper's own
+posix_spawn+setpgid(0,0), and any sandbox profile the spawning
+substrate carries. A future ACT would be required to vary the
+helper's launchd domain independently to localize the layer.
+
+A new host-helper method (process-group.terminate-owned or
+similar) is NOT justified on the basis of this evidence —
+because what this evidence does prove is that THIS helper in
+THIS configuration cannot reach THIS PGID, which is exactly
+the surface the new method would exercise. A helper that lives
+in a different launchd domain (gui/501, system daemon) may or
+may not succeed; that was not tested and would be its own ACT.
+
+NO HOST-HELPER TERMINATION CAPABILITY WAS ADDED.
+
+§30 FAILURE TAXONOMY (used)
+---------------------------
+HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE
+
+No other halt classes fired:
+- HALT_RED_NOT_REPRODUCED               (RED did reproduce, via primitive)
+- HALT_WRONG_PRODUCTION_SEAM            (used the real spawn primitive;
+                                         production SEAM not exercised,
+                                         so this halt is NOT applicable
+                                         — but neither does the seam
+                                         being unexercised validate the
+                                         primitive result; the seam
+                                         claim is what gets corrected.)
+- HALT_PROCESS_GROUP_OWNERSHIP_NOT_BOUNDED  (PGID was bounded)
+- HALT_PROCESS_GROUP_TOPOLOGY_OR_RACE   (no race observed)
+- HALT_OWNERSHIP_PROOF_INSUFFICIENT     (n/a — no helper ownership required)
+- HALT_HELPER_CAPABILITY_TOO_BROAD      (no helper capability added)
+- CAPTURE_INSUFFICIENT                  (evidence captured §3 + §4 + §5)
+
+§32 STOP CONDITION
+------------------
+"Once this discriminator is known... and a bounded
+registered-group capability is proven safe: STOP."
+
+The discriminator IS now known (HALT). STOP is invoked here.
+No:
+  - generic process manager
+  - persistent lease database
+  - background orphan sweeper
+  - kill arbitrary PID
+  - task daemon
+  - process tree crawler
+  - global VSCodium sandbox disable
+is justified.
+
+§34 CLOSURE WORDING (corrected)
+-------------------------------
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01 — HALT
+
+A real ClineMM-production-PRIMITIVE detached-process-group
+spawn was reproduced in the developer-Mac Background session
+(same Node spawn options as bash.ts:917).
+
+Direct process-group termination from the spawning substrate
+reproduced EPERM and left the spawned process group alive.
+
+The same process group was NOT terminatable by the existing
+per-user trusted host helper, when the helper was probed via
+its own testbed-runner pathway (the helper's posix_spawn +
+setpgid(0,0) + execve idiom invoked with the target PGID).
+
+The helper capability surface is therefore NOT a viable
+authority-expansion path for this configuration on this
+substrate. A future ACT would be required to evaluate other
+repair surfaces (helper bootstrap-launched into gui/501 or
+system domain, kernel-level session unification, non-signal
+cancellation architecture). Each would be its own ACT with
+its own discriminator; none is justified yet.
+
+Evidence:
+SYNTHETIC_REAL
+REAL_PRODUCTION_PRIMITIVE
+LIVE
+
+C1: NO-GO (halted clean at §5).
