@@ -1,0 +1,15 @@
+=== ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01 / sig-authority-discriminator ===
+PARENT_PID=17761
+PARENT_PPID=17757
+PARENT_CMDLINE=/bin/zsh -c /opt/homebrew/bin/node .factory/tmp/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/sig-authority-discriminator.cjs > .factory/evidence/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/04-discriminator.out 2>&1; echo "EXIT=$?"\012/opt/homebrew/bin/node .factory/tmp/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/t2-only.cjs > .factory/evidence/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/04-t2-standalone.out 2>&1\012ls -la .factory/evidence/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/
+
+--- T1: host → unsandboxed detached child ---
+CHILD_PID=17849
+PROBE_BEFORE=EXISTS_DENIED_EPERM
+KILL_PGID_SIGTERM=ERR_EPERM
+PROBE_AFTER_TERM=EXISTS_DENIED_EPERM
+CHILD_OUTPUT_AFTER_TERM="READY\nALIVE\nALIVE\nALIVE\nALIVE\nALIVE\nALIVE\nALIVE\n"
+PROBE_FINAL=EXISTS_DENIED_EPERM
+
+--- T2: nested fork — child attempts to signal its own grandchild ---
+GRANDCHILD_READY pid=17761\\nFATAL: timeout

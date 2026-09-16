@@ -1560,5 +1560,39 @@ apps/vscode/.factory/evidence/
 # partial, providerId propagation, Use != Set-as-default).
 !/.factory/acts/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01.md
 !/.factory/evidence/ACT-CLINEMM-MODEL-PROFILES-USE-LIVE-APPLY01/
+# ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01: opened 2026-09-16
+# Status CLOSED / HYPOTHESIS_REFUTED_AT_CLINE_PROFILE_LAYER /
+# NO_REPAIR_REQUIRED_AT_CLINE_SEATBELT_PROFILE. Reopened
+# ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATION01 with the user's
+# "dozens of orphaned node processes" screenshot symptom. Live
+# reproduction from inside the VSCodium Helper (Plugin) extension
+# host (PID 25108) confirmed process.kill(-pgid, SIGTERM) and
+# process.kill(-pgid, SIGKILL) BOTH return EPERM, but the denial
+# layer is Chromium's --enable-sandbox on the HOST, NOT ClineMM's
+# (allow signal (target self)) on the spawned child. Discovered by:
+# (a) T1 discriminator with a plain unsandboxed node child (no
+# ClineMM profile) reproduces identical EPERM; (b) sandbox-exec -f
+# returns sandbox_apply: Operation not permitted under Chromium
+# --enable-sandbox, so the ClineMM profile is never even applied
+# to the child; (c) ps -A shows the leaked processes in the
+# screenshot are VSCodium renderers / language servers (PPID 24389,
+# PGID 24389), not ClineMM-spawned children. Cline profile
+# production change: NONE. Substrate discriminator: vitest itself
+# fails to terminate its forks worker with kill EPERM in this same
+# substrate (07-bash-supervised-test-gate.out), proving the halt
+# is general Chromium-sandbox, not ClineMM-specific. Evidence
+# (01-live-repro.cjs + 02-live-repro.out + 03-clinemm-process-tree.txt
+# + 04-discriminator.out + 04-t2-standalone.out + 05-current-sbpl-excerpt.txt
+# + 06-verdict.md + 07-bash-supervised-test-gate.out) is the canonical
+# diagnostic proof and must survive a git clean / repo prune so the
+# prior ACT closure and this ACT's refutation chain remain auditable.
+# Open follow-up for the residual Cline-cancellation gap:
+# ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01 (Expert panel
+# recommendation — verify through the real CommandJobManager /
+# bash.supervised spawn seam + host-helper kill, NOT a generic PID
+# terminator). Durable binding for the canonical link from
+# .factory/epic-board.md (2026-09-16 entry).
+!/.factory/acts/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01.md
+!/.factory/evidence/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/
 .bun-tmp/
 .bun-install/

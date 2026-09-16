@@ -1,0 +1,50 @@
+=== ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01 / live-repro ===
+PARENT_PID=76640
+PARENT_PPID=76639
+PPID_CMDLINE=/bin/zsh -c /opt/homebrew/bin/node .factory/tmp/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/live-repro.cjs > .factory/tmp/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/live-repro.out 2>&1; echo "EXIT=$?"; echo '--- verdict lines ---'; grep -E '^(PARENT|CHILD|PPID|PROBE|KILL|RED|AMBER|GREEN|INDET|PS|VERDICT)' .factory/tmp/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/live-repro.out
+CHILD_SPAWNED pid=76644
+CHILD_PGID=76644
+
+[NOTE: lines 5..3080 (and 3081..3796) were full-system `ps -A -o pid,ppid,pgid,command`
+ dumps captured by live-repro.cjs to show the substrate state at child-spawn and
+ post-SIGTERM/post-SIGKILL. They have been ELIDED from this durable evidence copy
+ because:
+   (a) they capture unrelated system processes (Figma / Sentry DSN / Keycloak /
+       Runity OTLP receiver / Python profilers / etc.) that are not ClineMM-owned
+       and are not load-bearing to the diagnostic, and
+   (b) a pre-commit gitleaks scan flagged a third-party Sentry DSN embedded in
+       a Figma crashpad-handler command line (`sentry_key=<redacted>`) which
+       has no relationship to this ACT.
+ The full capture is preserved at
+   .factory/tmp/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/redacted-source/02-live-repro.full.out
+ (local-only, gitignored). The PGID-relevant slice is preserved below.]
+
+  PGID-scoped `ps` slice (lines matching PGID=76644 from the broader capture):
+  76639 25108 76639 /bin/zsh -c /opt/homebrew/bin/node .factory/tmp/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/live-repro.cjs ...
+  76640 76639 76639 /opt/homebrew/bin/node .factory/tmp/ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01/live-repro.cjs
+  76644 76640 76644 fake-clineowned-node
+  76647 76640 76639 ps -axo pid,ppid,pgid,command
+
+PROBE_PGID_0=ERR_EPERM
+KILL_PGID_SIGTERM=ERR_EPERM
+CHILD_OUTPUT_AFTER_TERM:
+CHILD_PID=76644
+
+PROBE_PGID_0_AFTER_TERM=EXISTS_DENIED_EPERM
+KILL_PGID_SIGKILL=ERR_EPERM
+PROBE_PGID_0_AFTER_KILL=EXISTS_DENIED_EPERM
+PS_PGID_MATCH_COUNT=1
+  76644 76640 76644 fake-clineowned-node
+
+=== VERDICT ===
+RED: BOTH SIGTERM AND SIGKILL BLOCKED by Seatbelt — child CANNOT be killed by parent
+RED: this is the LIVE failure: Cline-owned node processes accumulate as orphans
+RED: this matches the screenshot pattern (~60 GiB resident, ~71 GiB swap)
+
+=== POST-REDACTION NOTE ===
+Reviewer correctly distinguished that the live RED here is at the HOST's sandbox
+layer (Chromium --enable-sandbox on the VSCodium Helper (Plugin) parent that
+hosts PID 25108 = this extension host), NOT at the ClineMM Seatbelt profile
+layer. The ClineMM profile is never even applied in this substrate
+(sandbox-exec returns `sandbox_apply: Operation not permitted`). See
+ACT body §"Root cause analysis" / §"Why `target same-sandbox` would not help".

@@ -1,0 +1,34 @@
+(node:52984) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+(node:53075) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ |@cline/core| src/extensions/tools/executors/bash.supervised.test.ts (13 tests | 3 skipped) 1997ms
+     ✓ does NOT kill the child when the caller ignores it for longer than a typical bash-executor timeout  849ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed | 3 skipped (13)
+   Start at  21:58:43
+   Duration  2.33s (transform 152ms, setup 0ms, import 225ms, tests 2.00s, environment 0ms)
+
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/executors/bash.supervised.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop [90m(file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/[39mnode_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8[90m)[39m
+    at [90mfile:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/[39mnode_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ [90m(file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/[39mnode_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27[90m)[39m
+    at PoolRunner.stop [90m(file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/[39mnode_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23[90m)[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async Promise.all (index 0)
+    at Pool.cancel [90m(file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/[39mnode_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3509:3[90m)[39m
+    at Pool.close [90m(file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/[39mnode_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3516:3[90m)[39m
+    at async Promise.all (index 0) {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/extensions/tools/executors/bash.supervised.test.ts.

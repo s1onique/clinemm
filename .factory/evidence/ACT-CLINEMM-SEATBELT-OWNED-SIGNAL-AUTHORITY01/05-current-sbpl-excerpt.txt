@@ -1,0 +1,21 @@
+		"(allow signal (target self))",
+		"(allow sysctl-read)",
+		"(allow mach-lookup)",
+		// CORRECTION01 (P0-1): Read permission — broad allow with
+		// deny-subpaths carve-outs. The deny list IS the secure
+		// boundary; see buildReadRule doc.
+		buildReadRule(denyRead),
+		// Write permission — explicit allowlist plus deny-rules for
+		// readonlyRoots (load-bearing meaning of "readonly").
+		buildWriteRule(
+			capability.writableRoots,
+			capability.tempRoot,
+			capability.readonlyRoots,
+			capability.createOnlyRoots,
+		),
+		// File metadata read for path resolution (stat, lstat).
+		"(allow file-read-metadata (subpath \"/\"))",
+	];
+	const networkRule = buildNetworkRule(capability.network);
+	if (networkRule) {
+		lines.push(networkRule);
