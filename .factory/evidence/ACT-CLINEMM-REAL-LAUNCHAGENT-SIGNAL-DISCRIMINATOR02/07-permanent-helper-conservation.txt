@@ -1,0 +1,49 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — Permanent-helper conservation
+
+The temporary probe (`io.clinemm.signal-authority-probe02`) was operated
+exclusively in its own LaunchAgent context. The permanent singleton
+helper (`io.clinemm.host-helper`) was NEVER touched during this ACT.
+
+BEFORE PROBE (00-entry.txt, .factory/tmp/.../permanent-helper-before.txt):
+  label  = io.clinemm.host-helper
+  pid    = 14133
+  path   = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  domain = gui/501 [100109]
+  socket = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+  state  = running
+
+AFTER PROBE (.factory/tmp/.../permanent-helper-after.txt, captured post-experiment):
+  label  = io.clinemm.host-helper
+  pid    = 14133
+  path   = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  domain = gui/501 [100109]
+  socket = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+  state  = running
+
+LOAD-BEARING IDENTITY COMPARISON:
+  FIELD              | BEFORE                  | AFTER                   | CONSERVED
+  -------------------|-------------------------|-------------------------|----------
+  label              | io.clinemm.host-helper  | io.clinemm.host-helper  | PASS
+  path               | ~/.clinemm/bin/...      | ~/.clinemm/bin/...      | PASS
+  domain             | gui/501 [100109]        | gui/501 [100109]        | PASS
+  socket path        | ~/.clinemm/host-helper.sock | ~/.clinemm/host-helper.sock | PASS
+  state              | running                 | running                 | PASS
+  pid                | 14133                   | 14133                   | PASS (NOT required, see below)
+
+PID 14133 happens to be identical because launchd did not need to restart
+the helper during the experiment. The ACT explicitly notes:
+  "PID may legitimately change, so do not require PID equality."
+
+The fact that it did not change is incidental, not required. What is
+required is that the helper remained reachable, which it did.
+
+REQUIRED:
+  PERMANENT_HELPER_REGISTRATION_CONSERVED = true   PASS
+  PERMANENT_HELPER_NEVER_BOOTED_OUT       = true   PASS  (operator only touched io.clinemm.signal-authority-probe02)
+  PERMANENT_HELPER_FINAL_HEALTH           = PASS   PASS  (state=running, socket bound, domain intact)
+
+Cross-check (separate verifications):
+  $ pgrep -fl 'clinemm-host-helper|macos-host-helper/native/helper'
+  14133 /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  -> INSTALLED_HELPER_COUNT = 1   PASS
+  -> REPO_HELPER_COUNT      = 0   PASS  (no leaked repo-local helpers)

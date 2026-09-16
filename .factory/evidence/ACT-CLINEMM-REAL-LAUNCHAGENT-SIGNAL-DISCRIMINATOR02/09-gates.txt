@@ -1,0 +1,112 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — Acceptance contract gates
+
+ACCEPTANCE CONTRACT (ACT §17, reviewer-corrected):
+
+  PERMANENT_HELPER_ENTRY_HEALTH           = PASS
+  PERMANENT_HELPER_SINGLETON              = PASS
+  REAL_COMMANDJOBMANAGER_SEAM             = NOT_EXECUTED   <-- reviewer-corrected
+  REAL_PRODUCTION_FUNCTION_REPRODUCED     = PASS           <-- the spawnSupervisableShellCommand call
+  PRODUCTION_TERMINATION_PRIMITIVE_REPRODUCED = PASS       <-- bash.ts:1029 / bash.ts:984 process.kill call sites
+  TARGET_PGID_BOUNDED                     = PASS
+  DIRECT_CANCEL_EPERM                     = PASS           <-- EPERM captured at bash.ts:1029/984 call sites
+  TARGET_SURVIVES_DIRECT_CANCEL           = PASS
+  TEMP_PROBE_COMPILES                     = PASS
+  TEMP_PROBE_GUI_LAUNCHAGENT              = PASS           <-- operator bootstrap from unsandboxed Terminal
+  SIGNAL_RESULT_OBSERVED                  = PASS           <-- probe term.rc=0, final=ESRCH
+  PERMANENT_HELPER_NEVER_BOOTED_OUT       = PASS
+  PERMANENT_HELPER_FINAL_HEALTH           = PASS
+  TEMP_PROBE_REMOVED                      = PASS           <-- operator cleanup complete (probe dir gone, label unregistered)
+  REPO_HELPER_RESIDUE                     = 0 PASS
+
+DECISIVE BIT (ACT §21 STOP rule):
+
+  GUI_LAUNCHAGENT_SIGNAL_ADVANTAGE        = PROVEN
+
+COMPOSED CAUSAL PROOF (ACT §16, reviewer-corrected labels):
+
+  TARGET_SPAWN         = REAL | LIVE | REAL_PRODUCTION_FUNCTION
+                         (driver imported and called the production
+                          spawnSupervisableShellCommand function from
+                          bash.ts:1550 — the same function
+                          CommandJobManager.start calls at
+                          command-job-manager.ts:835)
+  DIRECT_CANCEL_RED    = SYNTHETIC_REAL | PRODUCTION_TERMINATION_PRIMITIVE
+                         (driver invoked the production call sites
+                          bash.ts:1029 process.kill(-childPid, SIGTERM)
+                          and bash.ts:984 process.kill(-childPid, SIGKILL)
+                          DIRECTLY, without instantiating CommandJobManager
+                          or going through the registered-job state machine)
+  LAUNCHAGENT_PROBE    = REAL | LIVE
+                         (probe was launched by launchd under gui/501 as
+                          a real LaunchAgent; UID 501; PID 65461)
+  COMPOSED_CAUSAL_PROOF =
+    Cline sandbox       -> EPERM  (at bash.ts:1029 / bash.ts:984 call sites)
+    same exact PGID     -> 78326
+    gui/501 LaunchAgent -> PASS   (probe term.rc=0, after_term=ESRCH,
+                                   final.rc=-1 errno=3 ESRCH)
+
+Why this is not a hand-written equivalent (and not the full
+CommandJobManager seam either): the driver imports and calls the
+production function `spawnSupervisableShellCommand` from
+`sdk/packages/core/src/extensions/tools/executors/bash.ts:1550`, AND
+the production call sites `bash.ts:1029` and `bash.ts:984` for the kill
+primitive. That is stronger than a hand-written `child_process.spawn`
+because the EXACT production options (detached:true, env merging,
+stdio pipes) and EXACT kill-call shape (-childPid, signal) are used.
+It is NOT the registered-job state machine because the driver did not
+instantiate `CommandJobManager`, did not call `CommandJobManager.start`
+(no registered-job insertion in `active` map, no deadline timer, no
+sandbox integration), did not call `CommandJobManager.cancel` (no
+termination reason latch, no `terminationPromise`), and did not observe
+`job.process.exit` for terminal-state classification. That end-to-end
+chain is the load-bearing test for
+ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01.
+
+PERMANENT_HELPER_BOOTOUT_REFERENCES_IN_OPERATOR_PACKET = 0
+  (grep verification: operator-target.json contains the strings
+   "io.clinemm.host-helper" only inside the forbidden-list and the
+   "NEVER disturbed" verify step. No launchctl bootout/bootstrap/kickstart
+   against the permanent label appears anywhere in the generated scripts.)
+
+PRODUCTION_CODE_CHANGE       : NONE (verified by git diff, no source file edits)
+HOST_HELPER_PROTOCOL_CHANGE  : NONE
+PERMANENT_HELPER_BOOTOUT     : NEVER (verified by permanent-helper-before.txt == permanent-helper-after.txt)
+PERMANENT_HELPER_UNINSTALL   : NEVER
+ROOT/SUDO                    : NEVER (launchctl bootstrap ran as uid 501 from gui/501)
+CHROMIUM_SANDBOX_DISABLE     : N/A (no Cline-side sandbox change)
+GENERIC_KILL_CAPABILITY      : NEVER (helper architecture not changed in this ACT)
+
+POST-OPERATOR CLEANUP STATE (verified):
+  /tmp/clinemm-signal-authority-probe02/                       : removed
+  launchctl print gui/501/io.clinemm.signal-authority-probe02  : "Could not find service"
+  orphan PGIDs 31589, 38078                                    : terminated (verified empty ps)
+  scripts/macos/clinemm-host-helper status                     : singleton still healthy (PID 14133)
+  REPO_HELPER_RESIDUE                                          : 0 (no leaked repo-local helpers)
+  driver.log / pgid.json / spawn.log                           : removed (root-artifact cleanup)
+
+AUTHORIZED SUCCESSOR ACT (reviewer-corrected mandate):
+  ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
+  Open when ready to implement the production repair.
+  The load-bearing test for the successor MUST exercise the REAL
+  CommandJobManager seam:
+    CommandJobManager.start
+      ↓
+    real registered PGID
+      ↓
+    CommandJobManager.cancel
+      ↓
+    direct terminateTree
+      ↓ EPERM only
+    shared gui/501 host helper
+      ↓
+    opaque ownership capability → registered PGID
+      ↓
+    TERM → grace → KILL if needed
+      ↓
+    ESRCH
+      ↓
+    CommandJobManager terminal state
+  Client isolation is P0 (not optional):
+    CLIENT_A_TOKEN cannot address CLIENT_B_PGID
+    (one helper serves codium-clinemm, codium-roz, codium-granele, ...)
+  No naked PGID API. No arbitrary PID. No arbitrary signal. No shell.

@@ -1,0 +1,63 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02
+§4 EVIDENCE-CONTRACT FIXES (came along for the ride)
+======================================================
+
+DEFECT (i) — `real_command_seam` field contradicts `real_commandjobmanager_seam`
+-------------------------------------------------------------------------------
+PROBE01 result.json contains:
+
+  "labels": {
+    "real_commandjobmanager_seam": "NOT_EXECUTED",
+    ...
+  },
+  "red": {
+    "real_command_seam": true,    <-- CONTRADICTS the labels block
+    "spawn_primitive": "Node child_process.spawn({detached: true}) ...",
+    ...
+  }
+
+These two fields cannot coexist. The labels block correctly says the
+production SEAM (CommandJobManager supervision / cancel() / terminateTree())
+was NOT exercised. The red block says real_command_seam = true, which
+collapses the SEAM and the PRIMITIVE into one term.
+
+Reviewer's recommended resolution: rename `red.real_command_seam`
+to `red.real_production_primitive` (matching the labels block's
+existing `real_production_primitive: true` field). Apply in the
+corrected result.json below (05-result.json).
+
+DEFECT (ii) — "stock VS Code does not exhibit the symptom" overclaim
+--------------------------------------------------------------------
+PROBE01 ACT body §"What is justified" still says:
+
+  "The current `bash.supervised` production architecture ... is
+   correct on stock VS Code and on substrates that do not impose
+   cross-process signal restrictions. The VSCodium extension-host
+   EPERM observed by the predecessor ACT is a substrate artifact,
+   not a ClineMM defect."
+
+Predecessor ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01 explicitly
+established STOCK_VSCODE_SIGNALING = NOT_PROVEN. The cited reasoning
+("stock VS Code does not exhibit the symptom") is an INFERENCE from
+VSCodium behavior, not a measurement of stock VS Code.
+
+Per the reviewer: "Public VS Code process captures show stock Code
+Helper processes can also carry --enable-sandbox, so stock behavior
+must remain NOT_PROVEN until measured. Do not infer it from VSCodium."
+
+CORRECTED wording (applied in the ACT body for this CORRECTION02):
+
+  "The current `bash.supervised` production architecture is NOT
+   being changed by this halt. Whether stock VS Code exhibits the
+   same EPERM is NOT_PROVEN (inherited from
+   ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01) and remains an
+   open measurement, not a settled result."
+
+NO OTHER LABELS CHANGED
+-----------------------
+All other labels in PROBE01 result.json are accepted as is. The
+narrowing of ROOT_CAUSE_BACKGROUND_SESSION to INFERRED, NOT PROVEN
+and EXACT_KERNEL_CAUSE to NOT_ISOLATED are preserved (these are
+CORRECTION01's load-bearing correct narrowings and the reviewer
+explicitly kept them). The substrate-classification block is the
+ONLY block whose values change in CORRECTION02.

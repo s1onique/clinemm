@@ -1,0 +1,64 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — Operator handoff packet
+
+Hand-off context: this ACT IS NOT a single-machine operation. The substrate
+split (ACT §10) is load-bearing because the codium-clinemm extension (and
+this Factory driver) runs inside an Apple sandbox that BOTH blocks signal
+delivery to its own children AND blocks launchctl bootstrap of new
+LaunchAgents. The unsandboxed Terminal must execute the launchctl bootstrap
+and bootout. The sandboxed substrate cannot do it.
+
+THIS SHELL (sandboxed, runs Factory / Cline / the driver):
+  CAN do:
+    - spawn the fixture shell (via spawnSupervisableShellCommand)
+    - capture PGID
+    - attempt the cancel (observe EPERM)
+    - write the probe source + plist
+  CANNOT do:
+    - launchctl bootstrap (Bootstrap failed: 5: Input/output error)
+    - launchctl bootout (same restriction)
+    - launchctl kickstart (same restriction)
+    - kill the spawned shell (EPERM — the RED itself)
+
+OPERATOR'S UNSANDBOXED TERMINAL must do exactly:
+
+  # 1. cd into the prepared packet directory
+  cd /tmp/clinemm-signal-authority-probe02
+
+  # 2. Compile the probe
+  cc -O2 -Wall -Wextra -o probe probe.c
+
+  # 3. Lint the plist
+  plutil -lint io.clinemm.signal-authority-probe02.plist
+
+  # 4. Bootstrap ONLY the temporary label
+  launchctl bootstrap "gui/$(id -u)" "$PWD/io.clinemm.signal-authority-probe02.plist"
+
+  # 5. Verify the probe is launchd-managed
+  launchctl print "gui/$(id -u)/io.clinemm.signal-authority-probe02"
+  # Expect: type=LaunchAgent, state=running, domain=gui/501, pid=<some_pid>
+
+  # 6. Wait for result.json (poll up to 5s)
+  for i in {1..50}; do
+    test -s /tmp/clinemm-signal-authority-probe02/result.json && break
+    sleep 0.1
+  done
+  cat /tmp/clinemm-signal-authority-probe02/result.json
+
+  # 7. Cleanup ONLY the temporary label
+  launchctl bootout "gui/$(id -u)/io.clinemm.signal-authority-probe02" 2>/dev/null || true
+  rm -rf /tmp/clinemm-signal-authority-probe02
+
+  # 8. Verify permanent helper was NEVER disturbed
+  scripts/macos/clinemm-host-helper status
+  pgrep -fl 'clinemm-host-helper|macos-host-helper/native/helper'
+  # Expect: PERMANENT_HELPER_HEALTH=PASS, INSTALLED_HELPER_COUNT=1
+
+PERMANENT_HELPER_BOOTOUT / UNINSTALL is FORBIDDEN (would silently break the
+existing production invariant that the singleton helper runs at all times).
+
+TARGET SPECIFICATION (operator-target.json):
+  PGID: 78326
+  UID:  501
+  PROCESS TREE (bounded):
+    78326 /bin/sh -c sleep 600 & echo CHILD_PID=$!; wait
+    78327 sleep 600

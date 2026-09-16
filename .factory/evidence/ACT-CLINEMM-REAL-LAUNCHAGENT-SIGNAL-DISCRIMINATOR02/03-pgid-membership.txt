@@ -1,0 +1,33 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — PGID bounded membership check
+
+Captured at: 2026-09-16T20:35:00Z
+Target PGID: 78326
+
+Result:
+  TARGET_GROUP_EXISTS        = true
+  TARGET_GROUP_IS_CLINEMM_JOB = true   (production spawnSupervisableShellCommand fixture)
+  FOREIGN_PROCESS_IN_GROUP   = false   (no VSCodium Helper / Renderer / GPU)
+
+Members (via ps -o pid,ppid,pgid,command -p <pid>):
+  PID    PPID  PGID   COMMAND
+  78326  1     78326  /bin/sh -c sleep 600 & echo CHILD_PID=$!; wait
+  78327  78326 78326  sleep 600
+
+Process tree:
+  bun driver (PID 78323, PGID 78322)  -- the spawning bun process
+   └─ sh (PID 78326, PGID 78326 = leader)  -- detached:true makes shell the pgid leader
+       └─ sleep 600 (PID 78327, PGID 78326)
+
+After the bun driver exited (capturing EPERM, writing result.json),
+the orphaned sh (PID 78326) was reparented to launchd (PID 1). The
+process group remained intact: PGID 78326 is still alive with both
+sh and sleep members.
+
+No VSCodium Helper / Renderer / GPU process shares this PGID.
+
+(Independent of the target PGID, two earlier-orphaned drivers from
+sandboxed-shell exploration also survive with PGIDs 31589 and 38078.
+Those are intentionally NOT the target of this probe — they are
+excluded by ACT §7's "ONE bounded target" rule.)
+
+CAPTURED FILE: /tmp/clinemm-signal-authority-probe02/02-pgid-membership.txt

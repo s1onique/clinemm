@@ -1,0 +1,94 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02
+§3 BOOTSTRAP-ATTEMPT MEASUREMENT
+==================================
+
+GOAL
+----
+To run the reviewer's §5 discriminator honestly, we need a real
+LaunchAgent-managed instance of the helper. The only way to produce
+one is `launchctl bootstrap <domain> <plist-or-binary>`. This section
+captures whether that operation can succeed on this substrate.
+
+PROBE 1 — `launchctl bootstrap gui/501 <helper-binary>`
+-------------------------------------------------------
+Command:   launchctl bootstrap gui/501 tools/macos-host-helper/native/helper
+Result:    Bootstrap failed: 5: Input/output error
+           Try re-running the command as root for richer errors.
+Exit code: 5
+Log:       10-bootstrap-attempt-reproduction.log
+
+PROBE 2 — variant bootstraps
+----------------------------
+Command A: launchctl bootstrap user/501 tools/macos-host-helper/native/helper
+Result:    Bootstrap failed: 5: Input/output error
+           Try re-running the command as root for richer errors.
+
+Command B: launchctl bootstrap gui/501 tools/macos-host-helper/native/helper
+Result:    Bootstrap failed: 5: Input/output error
+
+Command C: launchctl bootout gui/501 tools/macos-host-helper/native/helper
+Result:    Boot-out failed: 5: Input/output error
+Log:       11-bootstrap-attempt-variants.log
+
+PROBE 3 — bootstrap with a properly-formed plist (not bare binary)
+------------------------------------------------------------------
+A minimal LaunchAgent plist was written to
+/tmp/clinemm-helper-bootstrap-probe/com.clinemm.probe.plist with:
+  Label=com.clinemm.host-helper.probe
+  ProgramArguments=[helper-binary-path]
+  RunAtLoad=false, KeepAlive=false
+  StandardOutPath / StandardErrorPath under /tmp/clinemm-helper-bootstrap-probe/
+
+Command A: launchctl bootstrap user/501 com.clinemm.probe.plist
+Result:    Bootstrap failed: 5: Input/output error
+
+Command B: launchctl bootstrap gui/501 com.clinemm.probe.plist
+Result:    Bootstrap failed: 5: Input/output error
+Log:       12-bootstrap-with-plist.log
+
+ROOT PRIVILEGE GATE
+-------------------
+The bootstrap error message recommends "Try re-running the command as
+root for richer errors." Sudo is denied in this Background shell:
+
+Command: sudo -n launchctl bootstrap user/501 com.clinemm.probe.plist
+Result:  zsh:2: operation not permitted: sudo
+         (sudoers cannot be queried non-interactively in this shell)
+
+`launchctl asuser 501 launchctl bootstrap user/501 <plist>` was also
+attempted and returned the same rc=5 "Input/output error" — `asuser`
+does NOT elevate privilege to launchd-bootstrap-capable.
+
+CAN THE SUBSTRATE PRODUCE A REAL LAUNCHAGENT HELPER?
+----------------------------------------------------
+NO. Every variant of the bootstrap operation fails with rc=5 in this
+Background shell, and the recovery path (sudo as root for richer
+errors) is not available. The substrate cannot bootstrap a real
+LaunchAgent-managed helper from this shell.
+
+The PROBE01 ACT's note "launchctl bootstrap into gui/501 was
+attempted and failed with Bootstrap failed: 5: Input/output error"
+is REPRODUCED here exactly (10-bootstrap-attempt-reproduction.log).
+The previous ACT's failure was real, not a transient — it is a
+persistent property of this substrate.
+
+CONSEQUENCE FOR THE §5 DISCRIMINATOR
+-------------------------------------
+Per the reviewer's verdict:
+  "If your current development sandbox cannot bootstrap/access the
+   real LaunchAgent: CAPTURE_INSUFFICIENT — not
+   HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE."
+
+The substrate cannot produce a real LaunchAgent helper; therefore
+the discriminator cannot be honestly run. The correct verdict is
+CAPTURE_INSUFFICIENT, not HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE.
+
+NO BYPASS WAS ATTEMPTED
+-----------------------
+- The probe plist was written under /tmp/ (NOT ~/Library/LaunchAgents)
+  so no production LaunchAgent installation occurred.
+- No plist was placed in any persistent location.
+- The plist's RunAtLoad=false and KeepAlive=false mean it could not
+  have been auto-started by anything else.
+- No capability was added to helper.c.
+- No production code was modified.

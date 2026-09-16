@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "act_id": "ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02",
+  "predecessor_act_id": "ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01",
+  "predecessor_closure_head": "540327d4f1217a094ec7fbe0d9da19c4cdabc7ac",
+  "predecessor_verdict": "HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE",
+  "correction_kind": "reopen_with_substrate_classification",
+
+  "subject_head": "540327d4f1217a094ec7fbe0d9da19c4cdabc7ac",
+
+  "phase": "REOPEN_WITH_SUBSTRATE_CLASSIFICATION",
+
+  "result": "CAPTURE_INSUFFICIENT",
+  "closure": "REOPENED_TO_INSUFFICIENT_EVIDENCE",
+  "labels": {
+    "red_reproduction":              "SYNTHETIC_REAL (inherited from PROBE01)",
+    "real_production_primitive":     true,
+    "real_commandjobmanager_seam":   "NOT_EXECUTED",
+    "live":                          true,
+    "host_helper_external_pgid":     "LIVE_EPERM (Background-session helper, inherited from PROBE01)",
+    "background_subprocess_helper_signal_advantage": "REFUTED (inherited from PROBE01)",
+    "real_launchagent_helper_signal_advantage":      "NOT_EXECUTED",
+    "helper_signal_advantage":       "NOT YET DECIDED",
+    "root_cause_background_session": "INFERRED, NOT PROVEN (inherited from PROBE01)",
+    "exact_kernel_cause":            "NOT_ISOLATED"
+  },
+
+  "substrate": {
+    "developer_mac_launchd_session": "Background (this shell)",
+    "gui_501_launchd_session":       "Aqua (different domain, login-window owner)",
+    "helper_subprocess_session":     "Background (ad-hoc spawn from this shell; the 'LaunchAgent-managed' label in PROBE01's entry freeze is structurally wrong)",
+    "real_launchagent_helper_on_substrate": false,
+    "bootstrap_capability_on_substrate":     false,
+    "bootstrap_attempts_observed": [
+      {"command": "launchctl bootstrap gui/501 <helper-binary>", "exit": 5, "stderr": "Bootstrap failed: 5: Input/output error"},
+      {"command": "launchctl bootstrap user/501 <helper-binary>", "exit": 5, "stderr": "Bootstrap failed: 5: Input/output error"},
+      {"command": "launchctl bootstrap gui/501 <probe.plist>", "exit": 5, "stderr": "Bootstrap failed: 5: Input/output error"},
+      {"command": "launchctl bootstrap user/501 <probe.plist>", "exit": 5, "stderr": "Bootstrap failed: 5: Input/output error"},
+      {"command": "sudo launchctl bootstrap user/501 <plist>", "exit": -1, "stderr": "operation not permitted: sudo"}
+    ],
+    "cross_session_signal_authority_observed": "DENIED for external PGIDs (Background-session probe)",
+    "intra_session_signal_authority_observed": "ALLOWED (Background-session probe)",
+    "exact_kernel_cause_isolated": false
+  },
+
+  "real_seam_artifacts": [
+    "SYNTHETIC_REAL — Node child_process.spawn with the exact options ClineMM uses at bash.ts:917, but CommandJobManager / bash.supervised supervision / cancel() / terminateTree() were NOT exercised (inherited from PROBE01)",
+    "REAL_PRODUCTION_PRIMITIVE — byte-for-byte identical Node spawn options (inherited from PROBE01)",
+    "LIVE — process group 47349 was alive when the probe ran (inherited from PROBE01)",
+    "NEW: red.real_command_seam field renamed to red.real_production_primitive in this corrected result.json to fix the field-name contradiction with labels.real_commandjobmanager_seam=NOT_EXECUTED"
+  ],
+
+  "halt_reason": "The substrate cannot produce a real LaunchAgent-managed helper instance (every variant of launchctl bootstrap returns rc=5 'Input/output error' and sudo is denied), so the §5 discriminator that would compare Background-subprocess helper vs Aqua-session LaunchAgent helper cannot be honestly run. The previous verdict HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE was overreached: the evidence supports only BACKGROUND_SUBPROCESS_HELPER_SIGNAL_ADVANTAGE = REFUTED, not a universal claim about all helpers. Corrected verdict: CAPTURE_INSUFFICIENT — the §5 discriminator is not executable on this substrate; do not build the helper-based termination capability on this evidence; do not close the helper-advantage branch as impossible either.",
+
+  "fixes_applied_in_correction02": [
+    "labels.result: HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE -> CAPTURE_INSUFFICIENT",
+    "labels.helper_signal_advantage: REFUTED on current substrate -> NOT YET DECIDED",
+    "NEW labels.background_subprocess_helper_signal_advantage = REFUTED (narrowed, not removed)",
+    "NEW labels.real_launchagent_helper_signal_advantage = NOT_EXECUTED",
+    "substrate.helper_subprocess_session: 'Background (inherits parent)' -> 'Background (ad-hoc spawn from this shell; the LaunchAgent-managed label in PROBE01's entry freeze is structurally wrong)'",
+    "substrate.real_launchagent_helper_on_substrate = false",
+    "substrate.bootstrap_capability_on_substrate = false",
+    "substrate.bootstrap_attempts_observed = [5 entries, all rc=5]",
+    "red.real_command_seam: true -> red.real_production_primitive: true (renamed to match labels block; eliminates the contradiction with labels.real_commandjobmanager_seam=NOT_EXECUTED)",
+    "ACT body: 'stock VS Code does not exhibit the symptom' -> 'STOCK_VSCODE_SIGNALING = NOT_PROVEN (inherited)'"
+  ],
+
+  "files": [
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/00-entry.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/01-reopen.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/02-substrate-classification.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/03-bootstrap-attempt.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/04-evidence-contract-fixes.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/05-result.json",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/06-gates.txt",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/10-bootstrap-attempt-reproduction.log",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/11-bootstrap-attempt-variants.log",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/12-bootstrap-with-plist.log",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/13-substrate-mismatch.log",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/com.clinemm.probe.plist",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/scripts/01-bootstrap-attempt-reproduction.sh",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/scripts/02-bootstrap-attempt-variants.sh",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/scripts/03-bootstrap-with-plist.sh",
+    ".factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/scripts/04-substrate-mismatch.sh"
+  ]
+}

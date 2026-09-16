@@ -1,0 +1,53 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — Cleanup status
+
+PROBE LABEL (io.clinemm.signal-authority-probe02):
+  state: not running (verified via launchctl print)
+  launchd has already released the service (KeepAlive=false; probe exited
+  after writing result.json; PID 65461 no longer exists in the launchd
+  supervised-process table).
+  Operator should still execute:
+    launchctl bootout "gui/$(id -u)/io.clinemm.signal-authority-probe02" 2>/dev/null || true
+    rm -rf /tmp/clinemm-signal-authority-probe02
+
+TARGET GROUP (PGID 78326):
+  state: TERMINATED by the LaunchAgent probe.
+  Confirmation: ps -o pid,ppid,pgid,command -p 78326 -p 78327 -> empty.
+
+ORPHAN GROUPS from sandboxed-driver exploration (NOT target of probe):
+  PGID 31589: /bin/sh -c sleep 600 & echo CHILD_PID=$!; wait (PID 31589)
+              sleep 600 (PID 31600)
+  PGID 38078: /bin/sh -c sleep 600 & echo CHILD_PID=$!; wait (PID 38078)
+              sleep 600 (PID 38079)
+  These are leftovers from early exploratory driver runs while I was
+  diagnosing the sandboxed-shell / sandbox restrictions. They are NOT
+  the probe target (which was 78326). They MUST be cleaned up by the
+  operator from an unsandboxed Terminal:
+    kill -TERM 31589 31600 38078 38079 2>/dev/null || true
+    kill -KILL 31589 31600 38078 38079 2>/dev/null || true
+  These cannot be killed from inside the sandboxed shell that hosts
+  codium-clinemm — exactly the substrate asymmetry the ACT investigates.
+
+PERMANENT HELPER (io.clinemm.host-helper):
+  state: running, PID 14133, domain gui/501 [100109]
+  Conservation verified: see 07-permanent-helper-conservation.txt.
+  No cleanup needed.
+
+PERMANENT-HELPER-BOOTOUT-DURING-ACT: NEVER OCCURRED. PASS.
+
+Cleanup from operator (final form):
+  # 1. Bootout the temporary LaunchAgent (idempotent if already released)
+  launchctl bootout "gui/$(id -u)/io.clinemm.signal-authority-probe02" 2>/dev/null || true
+
+  # 2. Remove the temporary probe directory
+  rm -rf /tmp/clinemm-signal-authority-probe02
+
+  # 3. Kill the orphan groups from sandboxed-driver exploration
+  kill -KILL 31589 31600 38078 38079 2>/dev/null || true
+
+  # 4. Re-verify permanent helper is still healthy
+  scripts/macos/clinemm-host-helper status
+  pgrep -fl 'clinemm-host-helper|macos-host-helper/native/helper'
+  # Expect: 1 process, PID may differ from 14133 but service registration conserved.
+
+CLEANUP_OWNER: UNSANDBOXED TERMINAL (per ACT §13).
+CLEANUP_GATE: permanent helper status must read GREEN after step 4.

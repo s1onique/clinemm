@@ -1,0 +1,12 @@
+=== BOOTSTRAP_PROBE_2_START 2026-09-16T19:41:49Z ===
+--- attempt 1: launchctl bootstrap user/501 with the helper binary ---
+USER501_RC=5 OUTPUT=Bootstrap failed: 5: Input/output error
+Try re-running the command as root for richer errors.
+--- attempt 2: launchctl bootstrap (no domain) with the helper binary ---
+GUI501_RC=5 OUTPUT=Bootstrap failed: 5: Input/output error
+Try re-running the command as root for richer errors.
+--- check if helper is registered in user/501 ---
+--- check whether bootout of the previously-failed entry helps ---
+BOOTOUT_RC=5 OUTPUT=Boot-out failed: 5: Input/output error
+Try re-running the command as root for richer errors.
+=== BOOTSTRAP_PROBE_2_END ===

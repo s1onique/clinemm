@@ -1,0 +1,10 @@
+=== BOOTSTRAP_PROBE_3_START 2026-09-16T19:41:58Z ===
+--- attempt: bootstrap with a real plist file into user/501 ---
+USER501_RC=5 OUTPUT=Bootstrap failed: 5: Input/output error
+Try re-running the command as root for richer errors.
+--- check if probe plist service is registered in user/501 ---
+--- attempt: bootstrap with a real plist file into gui/501 ---
+GUI501_RC=5 OUTPUT=Bootstrap failed: 5: Input/output error
+Try re-running the command as root for richer errors.
+--- check if probe plist service is registered in gui/501 ---
+=== BOOTSTRAP_PROBE_3_END ===

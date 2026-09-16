@@ -1,0 +1,39 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — LaunchAgent registration (verdict A)
+
+LaunchAgent `io.clinemm.signal-authority-probe02` was bootstrapped by the
+operator from an UNSANDBOXED Terminal. From the sandboxed substrate the
+following read-only confirmation is available via `launchctl print`:
+
+  gui/501/io.clinemm.signal-authority-probe02 = {
+    active count = 0
+    path = /private/tmp/clinemm-signal-authority-probe02/io.clinemm.signal-authority-probe02.plist
+    type = LaunchAgent
+    state = not running    (probe completed; KeepAlive=false; launchd released it)
+    program = /tmp/clinemm-signal-authority-probe02/probe
+    arguments = {
+      /tmp/clinemm-signal-authority-probe02/probe
+      78326                                  <-- target PGID from operator-target.json
+      /tmp/clinemm-signal-authority-probe02/result.json
+    }
+    stdout path = /tmp/clinemm-signal-authority-probe02/stdout.log
+    stderr path = /tmp/clinemm-signal-authority-probe02/stderr.log
+    inherited environment = {
+      DISPLAY => /private/tmp/com.apple.launchd.krFAgqi1wS/org.xquartz:0
+      SSH_AUTH_SOCK => /private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners
+    }
+  }
+
+Required by ACT §11:
+  LAUNCHD_MANAGED = true   PASS  (type=LaunchAgent, path resolved by launchd to /private/tmp/...)
+  DOMAIN          = gui/501  PASS  (inherited from the operator's launchctl bootstrap)
+  PID             = 65461    PASS  (probe_pid from result.json, was the launched process)
+  STATE           = not running  PASS  (probe exited cleanly after writing result.json)
+
+NOTE: launchd resolved /tmp -> /private/tmp in the path field. The probe
+binary itself ran from /tmp/clinemm-signal-authority-probe02/probe (Apple
+launchd normalizes symlinks; the operational path is identical).
+
+The probe ran in the SAME `gui/501` session as the codium-clinemm extension
+but with a DIFFERENT substrate: the LaunchAgent runs OUTSIDE the chromium
+sandbox that traps the extension's signal(2) call. This is the structural
+difference the ACT was probing.

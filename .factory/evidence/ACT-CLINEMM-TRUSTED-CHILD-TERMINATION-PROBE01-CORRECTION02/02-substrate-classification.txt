@@ -1,0 +1,81 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02
+§2 SUBSTRATE CLASSIFICATION (measured, not inferred)
+====================================================
+
+This substrate, at ENTRY_HEAD = 540327d4f1217a094ec7fbe0d9da19c4cdabc7ac
+on 2026-09-16:
+
+A. THIS shell is in launchd Background session.
+   launchctl print user/501 -> "session = Background"
+   launchctl managername   -> "Aqua" (this shell's management attribute;
+                                          not the same as launchd session)
+
+B. The Aqua session (gui/501) exists, with session = Aqua.
+   launchctl print gui/501 -> "session = Aqua"
+   This is the logged-in GUI user's Aqua session, distinct from user/501
+   (which is the per-uid launchd domain; user/501 happens to currently
+   be bound to a Background session because no GUI app has triggered
+   a domain switch since boot).
+
+C. ZERO com.clinemm.* services are registered in EITHER domain.
+   launchctl print user/501 -> grep com.clinemm -> (none)
+   launchctl print gui/501  -> grep com.clinemm -> (none)
+   There is NO real LaunchAgent installation of clinemm on this Mac.
+
+D. ZERO com.clinemm.* plist files exist in any standard LaunchAgent path.
+   find ~/Library/LaunchAgents /Library/LaunchAgents -name 'com.clinemm*' -> (none)
+   find /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools -name '*.plist' -> (none)
+
+E. Running "host-helper" processes on this Mac are ad-hoc, not domain-managed.
+   The long-running helper that PROBE01's entry freeze cited (pgid 99137,
+   sampled PID 641) has launchctl print pid/641 -> type = pid (NOT a
+   "user" or "gui" service), creator = launchctl[17064] (ad-hoc
+   invocation, not a launchd-on-behalf-of-user bootstrap). All ~250
+   host-helper processes on this Mac have ppid = 1 (orphaned to launchd)
+   but the launchctl context records them as type = pid with no domain
+   services entry.
+
+F. The helper.c itself documents the Background-session limitation.
+   helper.c lines 836-841 (verified in 13-substrate-mismatch.log §C):
+     // Start a new process group so the parent can signal the
+     // whole subtree (kill(-pid, SIGKILL)) without killing
+     // itself. On macOS Background sessions the per-process
+     // kill() returns EPERM even for our own children; signaling
+     // the group via -pid routes through the session.
+   The helper is engineered AROUND the Background-session limitation,
+   not AGAINST it. The "testbed-runner pathway" used by PROBE01 §5 is
+   the helper's own acknowledgment of this limitation.
+
+SUBSTRATE CLASSIFICATION FOR PROBE01'S §5 DISCRIMINATOR
+------------------------------------------------------
+PROBE01 §5 tested:
+   Background-session bun parent
+     -> Background-session helper binary (ad-hoc spawn, NOT LaunchAgent)
+        -> Background-session testbed runner
+           -> Background-session -> external PGID kill
+This is the wrong substrate for the §5 discriminator's hypothesis.
+
+The reviewer's discriminator requires:
+   LaunchAgent-managed helper (Aqua-session, gui/501)
+     -> external PGID kill
+which was NEVER tested. There is no LaunchAgent-managed helper
+instance on this developer Mac to test against, and the bootstrap
+operation that would create one is itself denied (see §3).
+
+CORRECTED LABEL TABLE
+---------------------
+PROBE01 said:                          CORRECTION02 says:
+HOST_HELPER_STATUS = "LaunchAgent-     NO HOST-HELPER IS LAUNCHAGENT-
+  managed"                              MANAGED ON THIS SUBSTRATE
+helper_subprocess_session =            helper_subprocess_session =
+  "Background (inherits parent)"        "Background (ad-hoc spawn)"
+                                       (the "LaunchAgent-managed"
+                                        label in the entry freeze
+                                        is structurally wrong)
+HELPER_SIGNAL_ADVANTAGE =              HELPER_SIGNAL_ADVANTAGE =
+  REFUTED on current substrate          NOT YET DECIDED
+                                       (background-subprocess
+                                        helper: REFUTED;
+                                        real LaunchAgent helper:
+                                        NOT_EXECUTED)
+HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE    CAPTURE_INSUFFICIENT

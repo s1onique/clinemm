@@ -1,0 +1,146 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02 — GATES
+=================================================================
+
+LABELS (reopened + corrected)
+-----------------------------
+REAL_PRODUCTION_PRIMITIVE                = YES  (inherited from PROBE01; byte-for-byte
+                                                   same Node spawn options as bash.ts:917)
+REAL_COMMANDJOBMANAGER_SEAM              = NOT_EXECUTED  (inherited from PROBE01; no
+                                                            CommandJobManager / cancel() /
+                                                            terminateTree() exercised)
+LIVE                                     = YES  (inherited from PROBE01)
+BACKGROUND_SUBPROCESS_HELPER_EXTERNAL_PGID = LIVE_EPERM  (inherited from PROBE01;
+                                                          Background-session helper)
+REAL_LAUNCHAGENT_HELPER_EXTERNAL_PGID    = NOT_EXECUTED  (NEW; bootstrap denied on substrate)
+HELPER_SIGNAL_ADVANTAGE                  = NOT YET DECIDED  (NEW; was "REFUTED on current
+                                                                 substrate" in PROBE01)
+ROOT_CAUSE_BACKGROUND_SESSION            = INFERRED, NOT PROVEN  (inherited from PROBE01)
+EXACT_KERNEL_CAUSE                       = NOT_ISOLATED  (inherited from PROBE01)
+
+§31 ACCEPTANCE CONTRACT EVALUATION (corrected)
+-----------------------------------------------
+REAL_COMMAND_RED_REPRODUCED              = true   (SYNTHETIC_REAL — primitive, not seam)
+EXTENSION_HOST_KILL                      = EPERM  (Background-session bun parent)
+GROUP_ALIVE_AFTER_DIRECT_CANCEL          = true
+BACKGROUND_SUBPROCESS_HOST_HELPER_KILL   = EPERM  (helper-spawned runner in Background)
+REAL_LAUNCHAGENT_HOST_HELPER_KILL        = NOT_EXECUTED  (NEW; bootstrap denied)
+GROUP_AFTER_REAL_LAUNCHAGENT_HELPER      = NOT_EXECUTED  (NEW; bootstrap denied)
+REAL_PGID_OWNERSHIP_BOUNDED              = true   (PGID 47349 was bounded)
+FOREIGN_PGID_DENIED                      = n/a    (no helper capability to test)
+GENERIC_PID_KILL_API                     = false  (no capability added)
+ARBITRARY_SIGNAL_API                     = false  (no capability added)
+SHELL_CAPABILITY                         = false  (no capability added)
+COOPERATIVE_TERM                         = n/a
+KILL_ESCALATION                          = n/a
+GRANDCHILD_TREE_REMOVAL                  = n/a
+IDEMPOTENT_REPEAT                        = n/a
+EXISTING_HELPER_INVARIANTS               = green  (no helper code changed)
+
+§5 DISCRIMINATOR RESULT (corrected)
+-----------------------------------
+Required (per reviewer's reopen):
+   EXTENSION_HOST_KILL                  = EPERM
+   REAL_LAUNCHAGENT_HELPER_KILL         = PASS
+   GROUP_AFTER_REAL_LAUNCHAGENT_HELPER  = ESRCH
+
+Observed:
+   EXTENSION_HOST_KILL                  = EPERM  ✓ (matches required)
+   REAL_LAUNCHAGENT_HELPER_KILL         = NOT_EXECUTED  (NOT PASS; substrate cannot produce)
+   GROUP_AFTER_REAL_LAUNCHAGENT_HELPER  = NOT_EXECUTED  (NOT ESRCH; substrate cannot produce)
+
+Discriminator: NOT_EXECUTABLE_ON_THIS_SUBSTRATE.
+   Per reviewer: "If your current development sandbox cannot bootstrap/access
+   the real LaunchAgent: CAPTURE_INSUFFICIENT — not HALT."
+
+ACT verdict: CAPTURE_INSUFFICIENT
+ACT closure: REOPENED_TO_INSUFFICIENT_EVIDENCE
+
+CORRECTION02 REASON
+-------------------
+The substrate cannot produce a real LaunchAgent-managed helper instance.
+Every variant of `launchctl bootstrap <domain> <plist-or-binary>` returns
+rc=5 "Bootstrap failed: 5: Input/output error" with the diagnostic
+"Try re-running the command as root for richer errors"; sudo is denied
+in this Background shell; launchctl asuser does not elevate to
+bootstrap-capable. There is no com.clinemm.* plist anywhere on the system
+and no com.clinemm.* service registered in any launchd domain. Therefore
+the §5 discriminator's required REAL_LAUNCHAGENT_HELPER arm cannot be
+honestly exercised on this substrate.
+
+§30 FAILURE TAXONOMY (used)
+---------------------------
+CAPTURE_INSUFFICIENT
+
+Why this and not HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE:
+   HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE requires that the helper signal
+   authority has been MEASURED and is no better than the spawning
+   substrate. The PROBE01 §5 probe measured only the Background-
+   subprocess helper. The REAL LaunchAgent helper arm was never
+   measured because the substrate cannot produce one. CAPTURE_INSUFFICIENT
+   is the reviewer's mandated label for exactly this situation.
+
+What is now REFUTED (narrow, real, evidence-backed):
+   BACKGROUND_SUBPROCESS_HELPER_SIGNAL_ADVANTAGE = REFUTED
+   (a helper binary manually spawned from a Background session, in
+    the same launchd session as the spawning bun, cannot reach an
+    external PGID; the PGID is still ALIVE after the helper's
+    kill attempt; the helper's own EPERM matches the spawning bun's
+    EPERM)
+
+What is NOT YET DECIDED:
+   REAL_LAUNCHAGENT_HELPER_SIGNAL_ADVANTAGE
+   (a real LaunchAgent plist bootstrapped into user/501 Aqua or gui/501
+    may sit in a different security context and may or may not be able
+    to reach external PGIDs; this measurement is structurally blocked
+    on this developer Mac)
+
+§32 STOP CONDITION (inherited + reaffirmed)
+-------------------------------------------
+"Once this discriminator is known... and a bounded registered-group
+capability is proven safe: STOP."
+
+The discriminator is NOT YET KNOWN. STOP does not fire. No:
+  - generic process manager
+  - persistent lease database
+  - background orphan sweeper
+  - kill arbitrary PID
+  - task daemon
+  - process tree crawler
+  - global VSCodium sandbox disable
+is justified. NO helper-fallback `process-group.terminate-owned` is
+justified either. The substrate cannot honestly produce the §5
+discriminator's required measurement.
+
+§34 CLOSURE WORDING (corrected)
+-------------------------------
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02 — CAPTURE_INSUFFICIENT
+
+A real ClineMM-production-PRIMITIVE detached-process-group spawn was
+reproduced (inherited from PROBE01). Direct process-group termination
+from the spawning Background-session substrate returned EPERM and left
+the spawned process group alive (inherited).
+
+The same process group was NOT terminatable by the Background-subprocess
+helper (inherited). The kernel cause was NOT isolated.
+
+The REAL LaunchAgent helper arm of the §5 discriminator was NOT
+EXECUTED because the substrate cannot bootstrap a LaunchAgent-managed
+helper instance: every variant of `launchctl bootstrap` returns rc=5
+"Input/output error" and sudo is denied in this Background shell.
+
+Whether a real LaunchAgent-managed helper has signal-authority
+advantage over the Background-session bun parent is therefore NOT
+YET DECIDED. The HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE verdict of
+PROBE01 was OVERREACHED; the narrower correct verdict is
+BACKGROUND_SUBPROCESS_HELPER_SIGNAL_ADVANTAGE = REFUTED.
+
+No host-helper termination capability was added. The current
+`bash.supervised` production architecture is NOT being changed by
+this correction. Whether stock VS Code exhibits the same EPERM is
+NOT_PROVEN (inherited from ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-
+AUTHORITY01) and remains an open measurement, not a settled result.
+
+Evidence:
+  .factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/
+  ACT body:
+  .factory/acts/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02.md

@@ -1,0 +1,105 @@
+=== SUBSTRATE_MISMATCH_PROBE_START 2026-09-16T19:42:18Z ===
+
+--- A. THIS shell's launchd context (the spawning substrate) ---
+managername=Aqua
+user/501 session line:
+	session = Background
+Our pid's launchd context:
+pid/16981 = {
+	type = pid
+	handle = 16981
+	active count = 1
+	on-demand count = 1
+	creator = launchctl[16987]
+	creator euid = 501
+	uniqueid = 121843122
+	security context = {
+		uid = 501
+		asid = 100109
+	}
+
+	death port = 0x7d60f
+
+	services = {
+	}
+
+	unmanaged processes = {
+	}
+
+	endpoints = {
+	}
+
+	task-special ports = {
+
+--- B. ALL host-helper processes on this substrate ---
+(filtering to com.clinemm-managed + ad-hoc helper binaries)
+
+B.1 Are there any registered com.clinemm.* services in user/501?
+(none)
+
+B.2 Are there any registered com.clinemm.* services in gui/501?
+(none)
+
+B.3 Are there any com.clinemm.* plist files in standard LaunchAgent paths?
+
+B.4 sample helper binary process + its launchd domain
+SAMPLE_PID=641
+ps:
+  PID  PPID  PGID   SESS COMMAND
+  641     1 99137      0 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+launchctl print pid/641:
+pid/641 = {
+	type = pid
+	handle = 641
+	active count = 1
+	on-demand count = 1
+	creator = launchctl[17064]
+	creator euid = 501
+	uniqueid = 42290292
+	security context = {
+		uid = 501
+		asid = 100109
+	}
+
+	death port = 0xe982b
+
+	services = {
+	}
+
+	unmanaged processes = {
+	}
+
+	endpoints = {
+	}
+
+	task-special ports = {
+
+B.5 distribution of helper processes by creator
+  641     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+ 1002     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+ 1282     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+ 1584     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+ 1975     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+ 2015     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+ 2315     1 ./tools/macos-host-helper/native/helper
+ 3565     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+ 3709     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+ 3710     1 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/helper
+
+--- C. Does the helper.c itself document the Background-session limitation? ---
+(helper.c:836-841 setpgid comment)
+    // Start a new process group so the parent can signal the
+    // whole subtree (kill(-pid, SIGKILL)) without killing
+    // itself. On macOS Background sessions the per-process
+    // kill() returns EPERM even for our own children; signaling
+    // the group via -pid routes through the session.
+    if (setpgid(0, 0) < 0 && errno != EACCES && errno != EPERM) {
+      // EACCES/EPERM mean we are already a group leader;
+      // anything else is fatal.
+      _exit(125);
+    }
+
+--- D. Our session attribute ---
+ps -o sess= -p $$ =      0
+
+=== SUBSTRATE_MISMATCH_PROBE_END ===

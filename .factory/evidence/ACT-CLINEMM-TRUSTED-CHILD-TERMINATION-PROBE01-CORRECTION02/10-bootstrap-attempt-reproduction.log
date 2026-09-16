@@ -1,0 +1,31 @@
+=== BOOTSTRAP_PROBE_START 2026-09-16T19:41:42Z ===
+host_uname=Darwin MacBook-Pro-3.local 23.6.0 Darwin Kernel Version 23.6.0: Thu Dec 19 20:47:16 PST 2024; root:xnu-10063.141.1.703.2~1/RELEASE_ARM64_T6031 arm64 arm Darwin
+host_whoami=chistyakov uid=501
+host_managername=Aqua
+--- user/501 session ---
+user/501 = {
+	type = user
+	handle = 501
+	active count = 72
+	service count = 70
+	active service count = 20
+	creator = mds[372]
+	creator euid = 0
+--- gui/501 session ---
+gui/501 = {
+	type = login
+	handle = 100109
+	active count = 427
+	service count = 426
+	active service count = 163
+	creator = loginwindow[54881]
+	creator euid = 0
+--- attempting launchctl bootstrap gui/501 with the helper binary ---
+BOOTSTRAP_RC=5
+BOOTSTRAP_OUTPUT=Bootstrap failed: 5: Input/output error
+Try re-running the command as root for richer errors.
+--- after bootstrap, is helper registered in gui/501? ---
+		com.apple.xpc.launchd.unmanaged.clinemm-host-he.51822 = {
+		com.apple.xpc.launchd.unmanaged.clinemm-host-he.50785 = {
+		com.apple.xpc.launchd.unmanaged.clinemm-host-he.16462 = {
+=== BOOTSTRAP_PROBE_END ===

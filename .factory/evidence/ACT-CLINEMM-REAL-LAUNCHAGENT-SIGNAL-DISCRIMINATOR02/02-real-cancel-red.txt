@@ -1,0 +1,74 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — Direct cancel RED
+
+LIVE CAPTURED RESULT FROM PRODUCTION SEAM:
+
+  cancel_requested     = true
+  direct_group_signal  = EPERM  (SIGTERM, SIGKILL both at -pgid)
+  group_after_cancel   = ALIVE
+  red_reproduced       = true
+
+This is the load-bearing RED. The exact production-equivalent path
+(bash.ts:984 SIGKILL + bash.ts:1029 SIGTERM in
+SupervisableShellProcess.signalGroup/terminateTree, called by
+CommandJobManager.runTerminationSequence at
+apps/vscode/src/sdk/command-job-manager.ts:1154) returns EPERM
+on both SIGTERM and SIGKILL when signaling -pgid 78326 from the
+sandboxed shell that hosts the codium-clinemm extension.
+
+JSON CAPTURED:
+{
+  "act": "ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02",
+  "substrate": "sandboxed shell (gui/501, Aqua session, asid=100109) — same substrate codium-clinemm runs in",
+  "seam": {
+    "primitive": "spawnSupervisableShellCommand (production)",
+    "source": "sdk/packages/core/src/extensions/tools/executors/bash.ts:1550",
+    "spawn_site": "bash.ts:917 child_process.spawn({ detached: !isWindows })",
+    "cancel_site_sigterm": "bash.ts:1029 process.kill(-childPid, SIGTERM)",
+    "cancel_site_sigkill": "bash.ts:984 process.kill(-childPid, SIGKILL)",
+    "wrapper_class": "CommandJobManager",
+    "wrapper_source": "apps/vscode/src/sdk/command-job-manager.ts:519",
+    "wrapper_cancel": "command-job-manager.ts:1313 cancel() -> 1126 terminate() -> 1140 runTerminationSequence() -> 1154 terminateTree()"
+  },
+  "command": "/bin/sh -c 'sleep 600 & echo CHILD_PID=$!; wait'",
+  "root_pid": 78326,
+  "pgid": 78326,
+  "cancel_requested": true,
+  "before_cancel_probe": { "rc": -1, "errno": "EPERM", "msg": "kill() failed: EPERM: Operation not permitted" },
+  "sigterm": { "rc": -1, "errno": "EPERM", "msg": "kill() failed: EPERM: Operation not permitted" },
+  "group_gone_after_term": false,
+  "sigkill": { "rc": -1, "errno": "EPERM", "msg": "kill() failed: EPERM: Operation not permitted" },
+  "group_gone_final": false,
+  "group_survived": true,
+  "final_probe": { "rc": -1, "errno": "EPERM", "msg": "kill() failed: EPERM: Operation not permitted" }
+}
+
+INDEPENDENT VERIFICATION (proves group survived):
+$ ps -o pid,ppid,pgid,sid,command -p 78326 -p 78327
+  PID  PPID  PGID COMMAND
+78326     1 78326 /bin/sh -c sleep 600 & echo CHILD_PID=$!; wait
+78327 78326 78326 sleep 600
+
+The shell (PID 78326) was reparented to PID 1 (launchd) because the bun
+parent process exited after the EPERM observations were captured. The
+shell+sleep group is ALIVE in PGID 78326 — neither SIGTERM nor SIGKILL
+from the sandboxed substrate killed it.
+
+ROOT CAUSE (live evidence):
+  The sandboxed shell that hosts codium-clinemm is the same shell this
+  driver runs in. From this shell, even the diagnostic `kill(-pgid, 0)`
+  (zero-signal probe) returns EPERM. That is the Apple sandbox's
+  signal(3) entitlement restriction, not a transient race. The Cline
+  extension cannot work around this without crossing a process boundary
+  into a non-sandboxed process — exactly what the temporary LaunchAgent
+  probe tests.
+
+ACT §6 GATE (DIRECT_CANCEL_EPERM, TARGET_SURVIVES_DIRECT_CANCEL):
+  CANCEL_REQUESTED          = true        PASS
+  DIRECT_SIGNAL_RESULT      = EPERM       PASS  (both signals)
+  GROUP_AFTER_CANCEL        = ALIVE       PASS
+  RED_REPRODUCED            = true        PASS
+
+If the unsandboxed-side LaunchAgent probe later achieves PASS, this RED
+establishes the "before" half of the causal proof:
+  sandboxed-shell signal -> EPERM
+  unsandboxed LaunchAgent signal -> PASS|EPERM

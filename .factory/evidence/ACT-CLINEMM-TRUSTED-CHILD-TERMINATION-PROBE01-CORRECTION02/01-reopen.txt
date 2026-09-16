@@ -1,0 +1,81 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02
+§1 REOPEN FROM REVIEWER
+=========================
+
+REVIEWER VERDICT (verbatim summary)
+-----------------------------------
+HALT_HELPER_AUTHORITY_PROBE_USED_WRONG_SUBSTRATE
+
+Three load-bearing claims, each independently dispositive:
+
+CLAIM 1 — substrate contradiction.
+  PROBE01 entry freeze says:
+    "HOST_HELPER_STATUS=RUNNING (LaunchAgent-managed; helper pgid 99137)"
+  PROBE01 result.json substrate block says:
+    "helper_subprocess_session": "Background (inherits parent)"
+  These are mutually exclusive: a real LaunchAgent-managed helper would
+  NOT inherit a Background session from the spawning bun shell. Either
+  the entry freeze is wrong, or the substrate block is wrong. Both
+  cannot be true on the same substrate.
+
+CLAIM 2 — wrong substrate was tested.
+  The §5 discriminator tested:
+    Background-session bun parent
+      -> spawns helper binary manually via CLINEMM_HOST_HELPER_SOCKET
+      -> helper's posix_spawn+setpgid(0,0) testbed runner
+      -> helper-spawned runner attempts kill(-externalPGID, ...)
+  What it SHOULD have tested (per reviewer's §5 discriminator):
+    installed LaunchAgent in Aqua/login context
+      -> external PGID kill
+  The actual probe tested a Background-session helper, NOT a
+  LaunchAgent-managed helper. A real LaunchAgent-installed helper
+  may sit in gui/501 / user/501-Aqua; that authority boundary was
+  not measured.
+
+CLAIM 3 — labels overstate what was proven.
+  PROBE01 §30 closure wording was:
+    HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE
+  The honest statement the evidence actually supports:
+    BACKGROUND_SUBPROCESS_HELPER_SIGNAL_ADVANTAGE = REFUTED
+  Not a universal claim about ALL helpers; only about THIS helper
+  configuration on THIS substrate. The reviewer's "Outcome A" vs
+  "Outcome B" discriminator was NEVER RUN against a real LaunchAgent
+  helper because none is installed here.
+
+INTERNAL EVIDENCE-CONTRACT DEFECTS (came along for the ride)
+------------------------------------------------------------
+DEFECT (i) — result.json contains contradictory fields:
+  labels.real_commandjobmanager_seam = "NOT_EXECUTED"
+  red.real_command_seam              = true
+  These cannot coexist. The previous ACT body correctly relabels the
+  primitive as "REAL_PRODUCTION_PRIMITIVE = YES"; the result.json
+  field name "real_command_seam" needs to be renamed to match.
+
+DEFECT (ii) — ACT body still claims stock VS Code is unaffected:
+  ACT body §"What is justified" still says
+    "stock VS Code does not exhibit the symptom"
+  Predecessor ACT-CLINEMM-SEATBELT-OWNED-SIGNAL-AUTHORITY01 explicitly
+  established STOCK_VSCODE_SIGNALING = NOT_PROVEN. Public VS Code
+  Code Helper processes can also carry --enable-sandbox; stock
+  behavior must remain NOT_PROVEN until measured.
+
+CORRECTION02 SCOPE (bounded)
+----------------------------
+DO:
+  - Reclassify the verdict from HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE
+    to CAPTURE_INSUFFICIENT (reviewer's mandated label when the real
+    LaunchAgent helper cannot be accessed from this substrate).
+  - Document the substrate mismatch with measurements.
+  - Fix both internal evidence-contract defects.
+  - Re-state "stock VS Code" as NOT_PROVEN, not as "does not exhibit
+    the symptom".
+
+DO NOT:
+  - Add any production capability. No process-group.terminate-owned
+    method. No helper.c changes. No protocol.ts changes. No plist
+    installation.
+  - Reopen process-group ownership, protocol design, or ClineMM
+    Seatbelt. The reviewer explicitly forbade all three.
+  - Conclude "the helper has no signal advantage"; the corrected
+    label is "the substrate cannot produce the discriminating
+    measurement".

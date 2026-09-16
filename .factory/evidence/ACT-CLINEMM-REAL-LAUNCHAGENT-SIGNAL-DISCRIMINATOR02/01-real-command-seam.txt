@@ -1,0 +1,81 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — Real production-function spawn + cancel RED
+
+This file documents the LIVE reproduction inside the sandboxed substrate.
+Not a hand-written equivalent. The driver calls the production function
+`spawnSupervisableShellCommand` from the SDK at:
+    sdk/packages/core/src/extensions/tools/executors/bash.ts:1550
+That function (at bash.ts:917) calls child_process.spawn with `detached: true`,
+which is EXACTLY what CommandJobManager.start uses at:
+    apps/vscode/src/sdk/command-job-manager.ts:835
+
+The cancel reproduction invokes the EXACT production call sites:
+    bash.ts:1029 process.kill(-childPid, SIGTERM)   (matches terminateTree's signalGroup)
+    bash.ts:984  process.kill(-childPid, SIGKILL)   (matches terminateTree's escalation)
+
+What this driver does NOT exercise (the full CommandJobManager seam, to
+be proven in ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01):
+  - Instantiating CommandJobManager
+  - Calling CommandJobManager.start (no registered-job state machine)
+  - Calling CommandJobManager.cancel (no termination reason latch)
+  - Observing job.process.exit for terminal-state classification
+
+DRIVER (deep-relative import):
+    bun /tmp/clinemm-signal-authority-probe02/01-real-seam-driver.ts
+
+SUBSTRATE IDENTIFICATION:
+    The shell executing the driver is the SAME substrate the codium-clinemm
+    extension runs in: a sandboxed shell inside gui/501. Evidence:
+      - sandbox-exec -p '(...)' /bin/echo -> exit 71 (Operation not permitted)
+      - /bin/ps -axo -> "operation not permitted" (no process-info entitlement)
+      - kill <other-uid-501-process> -> "operation not permitted" (no signal entitlement)
+      - sample <other-uid-501-process> -> "no appropriate privileges" (no sample entitlement)
+      - launchctl bootstrap -> "Bootstrap failed: 5: Input/output error"
+    All of these are the SAME sandbox restrictions the Cline extension sees.
+
+CAPTURED PGID (current driver):
+    pgid = 78326
+    root_pid = 78326  (/bin/sh -c 'sleep 600 & echo CHILD_PID=$!; wait')
+    child_pid = 78327  (sleep 600)
+
+LIVE CAPTURE (01-real-seam-driver.json):
+  substrate: sandboxed shell (gui/501, Aqua session, asid=100109) — same substrate codium-clinemm runs in
+  seam.primitive: spawnSupervisableShellCommand (production)
+  seam.source: sdk/packages/core/src/extensions/tools/executors/bash.ts:1550
+  seam.spawn_site: bash.ts:917 child_process.spawn({ detached: !isWindows })
+  seam.cancel_site_sigterm: bash.ts:1029 process.kill(-childPid, SIGTERM)
+  seam.cancel_site_sigkill: bash.ts:984 process.kill(-childPid, SIGKILL)
+  seam.wrapper_class: CommandJobManager
+  seam.wrapper_source: apps/vscode/src/sdk/command-job-manager.ts:519
+  seam.wrapper_cancel: command-job-manager.ts:1313 cancel() -> 1126 terminate() -> 1140 runTerminationSequence() -> 1154 terminateTree()
+  command: /bin/sh -c 'sleep 600 & echo CHILD_PID=$!; wait'
+  command_resolved: { executable: /bin/sh, args: [-c, "sleep 600 & echo CHILD_PID=$!; wait"] }
+  cwd: /tmp
+  host_pid: 78323
+  host_uid: 501
+  host_pgid: 78322
+  root_pid: 78326
+  pgid: 78326
+
+CANCEL CHAIN CAPTURE (REAL, LIVE; classification = SYNTHETIC_REAL over
+PRODUCTION_TERMINATION_PRIMITIVE — see 09-gates.txt for the honest label):
+  cancel_requested: true
+  cancel_started_ms: 1789590913969
+  before_cancel_probe: { rc: -1, errno: "EPERM", msg: "kill() failed: EPERM: Operation not permitted" }
+  sigterm: { rc: -1, errno: "EPERM", msg: "kill() failed: EPERM: Operation not permitted" }
+  term_probes (all 5 within 5000ms grace): all EPERM
+  group_gone_after_term: false
+  sigkill: { rc: -1, errno: "EPERM", msg: "kill() failed: EPERM: Operation not permitted" }
+  group_gone_final: false
+  group_survived: true
+  final_probe: { rc: -1, errno: "EPERM", msg: "kill() failed: EPERM: Operation not permitted" }
+
+RED REPRODUCED:
+  CANCEL_REQUESTED       = true
+  DIRECT_GROUP_SIGNAL    = EPERM  (both SIGTERM and SIGKILL, both at -pgid 78326)
+  GROUP_AFTER_DIRECT_CANCEL = ALIVE
+  RED_REPRODUCED         = true
+
+EVIDENCE FILES:
+  /tmp/clinemm-signal-authority-probe02/01-real-seam-driver.json     (full capture)
+  /tmp/clinemm-signal-authority-probe02/01-real-seam-driver.ts       (driver source)
+  /tmp/clinemm-signal-authority-probe02/02-pgid-membership.txt       (bounded membership)

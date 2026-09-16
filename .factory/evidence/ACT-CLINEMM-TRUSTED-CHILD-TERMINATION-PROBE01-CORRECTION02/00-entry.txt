@@ -1,0 +1,42 @@
+ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02 — ENTRY FREEZE
+=======================================================================
+ENTRY_HEAD=540327d4f1217a094ec7fbe0d9da19c4cdabc7ac
+ENTRY_BRANCH=main
+WORKTREE_STATUS=CLEAN
+REOPEN_FROM_REVIEWER=HALT_HELPER_AUTHORITY_PROBE_USED_WRONG_SUBSTRATE
+PREVIOUS_VERDICT=HALT_HELPER_HAS_NO_SIGNAL_ADVANTAGE
+CORRECTED_VERDICT=CAPTURE_INSUFFICIENT
+
+SUBSTRATE_AT_ENTRY=
+  launchctl print user/501  -> "session = Background"
+  launchctl print gui/501   -> "session = Aqua"   (different domain, login-window owner)
+  launchctl managername     -> "Aqua"             (this shell's management attribute)
+
+REAL_HELPER_PRESENT_AT_ENTRY=
+  entry freeze (PROBE01) cited "HOST_HELPER_STATUS=RUNNING (LaunchAgent-managed; helper pgid 99137)"
+  CORRECTION02 substrate probe (13-substrate-mismatch.log) shows:
+    B.1 zero com.clinemm.* services registered in user/501
+    B.2 zero com.clinemm.* services registered in gui/501
+    B.3 zero com.clinemm.* plist files in any standard LaunchAgent path
+    B.4 sample helper pid 641 (pgid 99137) has launchctl print pid/641 -> type=pid,
+        creator=launchctl[17064] (ad-hoc invocation, not a domain-managed service)
+
+PROBE_CAPABILITY_AT_ENTRY=
+  Bootstrap-attempt measurement reproduced (10-bootstrap-attempt-reproduction.log,
+  11-bootstrap-attempt-variants.log, 12-bootstrap-with-plist.log):
+    launchctl bootstrap user/501 <helper>           -> rc=5 "Bootstrap failed: 5: Input/output error"
+    launchctl bootstrap gui/501  <helper>           -> rc=5 "Bootstrap failed: 5: Input/output error"
+    launchctl bootstrap user/501 <probe.plist>      -> rc=5 "Bootstrap failed: 5: Input/output error"
+    launchctl bootstrap gui/501  <probe.plist>      -> rc=5 "Bootstrap failed: 5: Input/output error"
+    launchctl asuser 501 launchctl bootstrap user/501 <plist> -> rc=5 "Bootstrap failed: 5: Input/output error"
+    sudo                                              -> "operation not permitted: sudo"
+  ALL FOUR bootstrap attempts returned rc=5 with the diagnostic
+  "Try re-running the command as root for richer errors." sudo is denied
+  in this Background shell, so the richer error cannot be obtained here.
+
+PREDECESSOR=
+  ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01 (CLOSED_HALTED_CLEAN in
+  commit 540327d4f1217a094ec7fbe0d9da19c4cdabc7ac, evidence binding
+  corrected at that commit).
+
+EOF_PURPOSE=reopen_with_substrate_classification_evidence

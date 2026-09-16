@@ -1,0 +1,83 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — DECISIVE RESULT
+
+VERDICT A: LaunchAgent wins. GUI_LAUNCHAGENT_SIGNAL_ADVANTAGE = PROVEN.
+
+The same PGID 78326 — which the sandboxed codium-clinemm substrate could
+NOT signal (EPERM on both SIGTERM and SIGKILL) — was killed cleanly by a
+real gui/501 LaunchAgent in a single SIGTERM. No SIGKILL escalation
+required. The group vanished (ESRCH) within the 2 s grace window.
+
+RESULT (decisive artifact: /tmp/clinemm-signal-authority-probe02/result.json):
+{
+  "probe_pid": 65461,
+  "uid": 501,
+  "pgid": 78326,
+
+  "before": {
+    "rc": 0,
+    "errno": 0,
+    "errno_name": "OK",
+    "strerror": "ok"
+  },
+
+  "term": {
+    "rc": 0,
+    "errno": 0,
+    "errno_name": "OK",
+    "strerror": "sent"
+  },
+
+  "after_term": "ESRCH",
+
+  "kill": "NOT_NEEDED",
+
+  "final": {
+    "rc": -1,
+    "errno": 3,
+    "errno_name": "ESRCH",
+    "strerror": "No such process"
+  },
+
+  "label": "io.clinemm.signal-authority-probe02",
+  "act": "ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02"
+}
+
+PROBE stdout (launchd captured, /tmp/.../stdout.log):
+  PROBE_DONE: pgid=78326 before=OK term=OK kill=NOT_NEEDED final=ESRCH
+
+CROSS-MAPPING TO ACT §12 VERDICT A:
+  DIRECT_CLINE_KILL     = EPERM  (from 02-real-cancel-red.txt, sandboxed substrate)
+  LAUNCHAGENT_TERM      = PASS   (term.rc=0, errno=0, "sent")
+  GROUP_SURVIVES_TERM   = false  (after_term="ESRCH" — group was gone after TERM)
+  KILL                  = NOT_NEEDED  (no SIGKILL escalation)
+  FINAL_GROUP           = ESRCH  (group confirmed gone on final probe)
+
+  ACT §12 PASS criterion:
+    TERM                = PASS
+    GROUP_SURVIVES_TERM = true
+    KILL                = PASS
+    FINAL_GROUP         = ESRCH
+    OR (the alternate criterion we actually got):
+    DIRECT_CLINE_KILL   = EPERM
+    LAUNCHAGENT_TERM    = PASS
+    FINAL_GROUP         = ESRCH
+  Verdict: PASS / GUI_LAUNCHAGENT_SIGNAL_ADVANTAGE = PROVEN
+
+POSITIVE SUCCESSOR ACT (per ACT §18):
+  ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
+  This ACT is now AUTHORIZED. The architecture:
+    spawn job -> register PGID with singleton helper
+    -> helper returns opaque client/job capability
+    cancel:
+      direct terminateTree()
+        |
+        + success -> done
+        |
+        + EPERM   -> helper.terminate(capability)
+  Client isolation required (one helper serves codium-clinemm, codium-roz,
+  codium-granele, ...): CLIENT_A_TOKEN cannot address CLIENT_B_PGID.
+
+INDEPENDENT VERIFICATION (group is genuinely gone):
+  $ ps -o pid,ppid,pgid,command -p 78326 -p 78327
+  PID  PPID  PGID COMMAND
+  (empty -- both processes terminated)

@@ -1,0 +1,45 @@
+ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 — Entry freeze
+
+TIMESTAMP: 2026-09-16T20:30:46Z
+SUBSTRATE: macOS 14.7.4 (Darwin 23.6.0 arm64), gui/501, Aqua session, asid=100109
+
+PERMANENT HELPER (must NEVER be mutated):
+  label  = io.clinemm.host-helper
+  path   = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  pid    = 14133
+  domain = gui/501
+  state  = running
+  socket = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+  health = GREEN (verified via launchctl print gui/501/io.clinemm.host-helper)
+
+  Verify: launchctl print "gui/$(id -u)/io.clinemm.host-helper" returns:
+    active count = 1
+    state = running
+    domain = gui/501 [100109]
+    pid = 14133
+    program = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+
+ENTRY_REQUIREMENTS:
+  INSTALLED_HELPER_COUNT = 1   PASS  (exactly 1 process running, PID 14133)
+  REPO_HELPER_COUNT      = 0   PASS  (no leaked repo-local helpers)
+  HELPER_HEALTH          = PASS  (launchctl state=running, socket alive)
+
+ENTRY_GUARDS:
+  FORBIDDEN_SERVICE_LABEL = io.clinemm.host-helper
+  TEMP_PROBE_LABEL        = io.clinemm.signal-authority-probe02
+
+  Permanent helper conservation (before, .factory/tmp/.../permanent-helper-before.txt):
+    label      = io.clinemm.host-helper    (conserved)
+    path       = ~/.clinemm/bin/...        (conserved)
+    domain     = gui/501 [100109]          (conserved)
+    socket     = ~/.clinemm/host-helper.sock (conserved)
+
+ENV (host shell — note this shell is itself sandboxed):
+  CLINEMM_EXPERIMENTAL_SANDBOX=  (unset -> seatbelt default ON)
+  This is THE SAME SUBSTRATE codium-clinemm runs in. Confirmed:
+    sandbox-exec -p '(...)' /bin/echo HELLO
+      -> sandbox_apply: Operation not permitted (exit 71)
+    This shell has restricted entitlements: no kill, no /bin/ps -axo,
+    no sample, no launchctl bootstrap. THE ACT §10 substrate split is
+    therefore load-bearing: this shell can NEVER bootstrap the probe;
+    the operator's UNSANDBOXED Terminal must.

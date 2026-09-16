@@ -1603,5 +1603,28 @@ apps/vscode/.factory/evidence/
 # remains auditable. See .factory/epic-board.md 2026-09-16 entry.
 !/.factory/acts/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01.md
 !/.factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01/
+# ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02
+# (REOPENED_TO_INSUFFICIENT_EVIDENCE): reviewer verdict
+# HALT_HELPER_AUTHORITY_PROBE_USED_WRONG_SUBSTRATE reopened the
+# closure because the §5 discriminator measured a Background-
+# subprocess helper, not a real LaunchAgent-managed helper, and the
+# substrate cannot bootstrap a real LaunchAgent helper (every variant
+# of `launchctl bootstrap` returns rc=5 "Input/output error" in this
+# Background shell; sudo is denied). Reclassified verdict:
+# CAPTURE_INSUFFICIENT. ACT body + evidence + bootstrap-attempt logs
+# + substrate-mismatch log + 4 probe scripts + probe plist are the
+# canonical diagnostic proof and must survive a git clean / repo
+# prune so the reopened closure remains auditable. See
+# .factory/epic-board.md 2026-09-16 entry.
+!/.factory/acts/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02.md
+!/.factory/evidence/ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02/
+# ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 (C1 GREEN 2026-09-16):
+# the resolved verdict on the gate left open by the CORRECTION02 reopen.
+# Verdict A (LaunchAgent wins): GUI_LAUNCHAGENT_SIGNAL_ADVANTAGE = PROVEN.
+# ACT body + evidence + probe source + plist + result.json are the canonical
+# diagnostic proof and must survive a git clean / repo prune so the closure
+# remains auditable. See .factory/epic-board.md 2026-09-16 entry.
+!/.factory/acts/ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02.md
+!/.factory/evidence/ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02/
 .bun-tmp/
 .bun-install/
