@@ -189,3 +189,30 @@ structurally blocked at §17 from the IDE sandboxed shell.
   - `15-conservation-pgrep.log`, `15-conservation-launchctl.log` — final state
   - `16-gates.txt` — gate-by-gate results
   - `result.json` — machine-readable outcome
+
+## Bounded correction (CORRECTION01)
+
+The §12 cross-client test in this ACT was structurally invalid — it
+used `coA.client_token` (a client token) in the `job_token` slot, so
+the helper's `DENY_UNKNOWN_JOB` was indistinguishable from ordinary
+unknown-job rejection and did NOT prove foreign-ownership enforcement.
+
+**CORRECTION01** at commit `<pending>` rebinds the seam labels and
+the isolation claim honestly:
+
+```text
+CLIENT_ISOLATION (parent)    : LIVE PASS          (now with real A job_token)
+PARENT_DRIVER_CLASS          : SYNTHETIC_REAL
+                                + REAL_PRODUCTION_FUNCTION
+                                + REAL_LAUNCHAGENT
+                                + REAL_KERNEL
+REAL_EXTENSION_HOST          : LIVE_UNOBSERVABLE (per §11)
+```
+
+Full corrected ACT body and evidence at
+`.factory/acts/ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01.md`
+and its evidence directory.
+
+The TERMINATION-HALF PASS and HELPER_SELF_RESTART PASS remain
+unchanged — those were independently proven live and not reopened
+by the correction.

@@ -1,0 +1,116 @@
+{
+  "act": "ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01",
+  "subject_head": "47ca5add2903339a5f6280fcafdd6122d404c265",
+  "parent_act": "ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01",
+  "subject_message": "fix(macos): terminate owned process groups via host helper",
+  "outcome": "PASS",
+  "halt": null,
+  "summary": "Bounded correction to the parent ACT. (P0-A) The prior §12 cross-client test was structurally invalid: it used client A's client_token as if it were a job_token, so the helper's DENY_UNKNOWN_JOB response was structurally indistinguishable from ordinary unknown-job rejection. Re-ran the OLD discriminator against the live helper and reproduced the same invalid shape (01-old-discriminator-red.txt). Built the corrected discriminator: (i) opened a real helper client via the production wire provider; (ii) registered the SAME PGID for that client so we have a real, A-owned job_token JA; (iii) spawned a SEPARATE Bun subprocess (different kernel peer_pid) that opens its OWN helper client and attempts terminate(CB, JA_real) — the helper correctly returns DENY_FOREIGN_JOB; (iv) verified A's PGID still alive after B's rejected attempt; (v) had A invoke terminate(CA, JA_real) — TERMINATED_TERM; (vi) verified A's PGID is now gone. (P0-B) Relabeled the seam honestly: SYNTHETIC_REAL driver + REAL_PRODUCTION_FUNCTION (CommandJobManager + provider + wire) + REAL_LAUNCHAGENT + REAL_KERNEL + REAL_EXTENSION_HOST = LIVE_UNOBSERVABLE (no codium-clinemm extension-host was launched). Per §11, LIVE_UNOBSERVABLE is acceptable; the narrower classification is honestly bound to evidence.",
+  "corrections": [
+    {
+      "id": "P0-A",
+      "claim": "CLIENT_ISOLATION = LIVE PASS (parent ACT)",
+      "defect": "Discriminator used client_token in job_token slot. The helper returned DENY_UNKNOWN_JOB because no job was ever registered under that 32-hex string; this is structurally indistinguishable from ordinary unknown-job rejection and does NOT prove foreign-ownership enforcement.",
+      "fix": "Constructed a real A-owned job via CommandJobManager.start() + wire.registerOwned() so the helper issues a real (clientTokenA, jobTokenJA) pair. Spawned a separate Bun subprocess (peer_pid_B != peer_pid_A) that opens its own client_token_B and attempts terminate(CB, jobTokenJA_real). Helper returned DENY_FOREIGN_JOB — the canonical foreign-ownership denial. PGID_A still alive after B's rejected attempt (foreign-group conservation). A's positive-control terminate(CA, JA) returned TERMINATED_TERM and PGID_A is now gone.",
+      "evidence": "01-old-discriminator-red.txt, 02-client-a-registration.txt, 03-client-b-identity.txt, 04-cross-client-deny.txt, 05-owner-positive-control.txt, 06-cleanup.txt, live-driver-full.log"
+    },
+    {
+      "id": "P0-B",
+      "claim": "REAL_EXTENSION_HOST_END_TO_END (parent ACT implicit)",
+      "defect": "The driver is a standalone Bun harness that directly imports production modules and forces CLINEMM_EXPERIMENTAL_SANDBOX='off' before instantiation. It does not exercise the extension-host lifecycle (codium-clinemm → vscode-session-host → task creation → CommandJobManager).",
+      "fix": "Honestly rebound the seam labels per §10: COMMANDJOBMANAGER_CODE = REAL_PRODUCTION_FUNCTION; HELPER_ADAPTER = REAL_PRODUCTION_FUNCTION; LAUNCHAGENT = REAL | LIVE; KERNEL_SIGNALING = REAL | LIVE; DRIVER = SYNTHETIC_REAL; REAL_EXTENSION_HOST_END_TO_END = NOT_EXECUTED. Per §11, attempted no intrusive instrumentation and recorded REAL_EXTENSION_HOST_WIRING = LIVE_UNOBSERVABLE.",
+      "evidence": "08-classification-rebind.txt, 07-extension-host-witness.txt"
+    }
+  ],
+  "passing_gates": [
+    "A_REGISTRATION (real CommandJobManager.start issued a job with running state, pgid > 0, leader_pid == pgid)",
+    "A_JOB_TOKEN_REAL (helper issued a 32-hex-char job_token for the registered PGID)",
+    "TARGET_A_BOUNDED (the registered PGID is bounded by the helper's authority check)",
+    "B_PEER_PID_DIFFERS (peer_pid_B != peer_pid_A; subprocess B is a different kernel peer)",
+    "B_USING_A_REAL_JOB_TOKEN_DENY (B's terminate(CB, JA_real) was correctly denied)",
+    "B_FOREIGN_JOB_ERROR (the canonical cross-ownership denial code was returned: DENY_FOREIGN_JOB)",
+    "A_GROUP_AFTER_B_ATTEMPT (A's PGID is still alive after B's rejected attempt — no signal mutation)",
+    "A_OWN_TERMINATION (A's terminate(CA, JA_real) was correctly allowed and returned TERMINATED_TERM)",
+    "CLIENT_SLOT_BASELINE (the /tmp secret file containing raw tokens was removed in step 6)",
+    "JOB_SLOT_BASELINE (A's PGID is gone after the owner positive control)"
+  ],
+  "halted_gates": [],
+  "frozen_claims_unchanged": [
+    "HELPER_DISCOVERY",
+    "KERNEL_PEER_UID",
+    "KERNEL_PEER_PID",
+    "REAL_COMMANDJOBMANAGER_FUNCTION",
+    "OWNERSHIP_REGISTRATION",
+    "DIRECT_SUBSTRATE_EPERM",
+    "HELPER_FALLBACK",
+    "GROUP_GONE",
+    "JOB_RELEASE",
+    "TERM_TO_KILL_ESCALATION",
+    "HELPER_SELF_RESTART",
+    "LAUNCHD_REGISTRATION_CONSERVED",
+    "PRODUCT_RESTART_LAUNCHCTL_CALLS",
+    "SANDBOX_INSTALL_PATH_WRITE (still HALT_SANDBOX_CANNOT_INSTALL_HELPER_BINARY)"
+  ],
+  "entry_freeze": {
+    "head": "47ca5add2903339a5f6280fcafdd6122d404c265",
+    "tracked_worktree_dirt": 0,
+    "permanent_helper": {
+      "label": "io.clinemm.host-helper",
+      "domain": "gui/501",
+      "healthy": true,
+      "singleton": true,
+      "repo_helper_residue": 0,
+      "pid": 91441
+    },
+    "evidence": "00-entry.txt"
+  },
+  "cross_client_isolation_proof": {
+    "shape": "B + JA_real -> DENY_FOREIGN_JOB ; A + JA_real -> ALLOW (TERMINATED_TERM)",
+    "B_PEER_PID": 25243,
+    "A_PEER_PID": 24876,
+    "peer_pids_differ": true,
+    "PGID_A": 25214,
+    "leader_pid_A": 25214,
+    "A_GROUP_AFTER_B_ATTEMPT": "ALIVE",
+    "PGA_FINAL_after_A_terminate": "GONE",
+    "B_error_code": "DENY_FOREIGN_JOB",
+    "A_error_code": null,
+    "A_outcome": "TERMINATED_TERM"
+  },
+  "durable_evidence_contains_no_tokens": true,
+  "raw_token_persistence_policy": "/tmp/clinemm-cross-client-A-<pid>.json removed in step 6",
+  "seam_classification": {
+    "COMMANDJOBMANAGER_CODE": "REAL_PRODUCTION_FUNCTION",
+    "HELPER_ADAPTER": "REAL_PRODUCTION_FUNCTION",
+    "LAUNCHAGENT": "REAL | LIVE",
+    "KERNEL_SIGNALING": "REAL | LIVE",
+    "DRIVER": "SYNTHETIC_REAL",
+    "REAL_EXTENSION_HOST_END_TO_END": "NOT_EXECUTED"
+  },
+  "real_extension_host_wiring": "LIVE_UNOBSERVABLE",
+  "parent_act_rebind": {
+    "CLIENT_ISOLATION": "LIVE PASS (corrected discriminator with real JA)",
+    "old_client_isolation_label_was": "INVALID_DISCRIMINATOR (CA used as job_token)",
+    "seam_classification_was": "implicit REAL_EXTENSION_HOST_END_TO_END",
+    "seam_classification_now": "SYNTHETIC_REAL + REAL_PRODUCTION_FUNCTION + REAL_LAUNCHAGENT + REAL_KERNEL",
+    "unchanged_good_claims": ["OWNED_PGID_TERMINATION", "HELPER_SELF_RESTART", "SANDBOX_INSTALL_PATH"]
+  },
+  "evidence_files": [
+    "00-entry.txt",
+    "01-old-discriminator-red.mjs",
+    "01-old-discriminator-red.txt",
+    "02-client-a-registration.txt",
+    "03-client-b-distinct-peer.mjs",
+    "03-client-b-identity.txt",
+    "04-cross-client-deny.txt",
+    "05-owner-positive-control.txt",
+    "06-cleanup.txt",
+    "07-extension-host-witness.txt",
+    "08-classification-rebind.txt",
+    "09-gates.txt",
+    "live-driver-correction.mjs",
+    "live-driver-full.log"
+  ],
+  "production_code_delta": "NONE",
+  "next_act": "ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01"
+}

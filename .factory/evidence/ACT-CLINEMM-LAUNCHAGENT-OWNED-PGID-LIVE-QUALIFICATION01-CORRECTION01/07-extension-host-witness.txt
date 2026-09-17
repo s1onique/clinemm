@@ -1,0 +1,60 @@
+ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01
+Step 07 — Extension-host wiring witness.
+
+REAL_EXTENSION_HOST_WIRING = LIVE_UNOBSERVABLE
+
+Per ACT §11, the preferred path is one true extension-host
+witness proving the production wiring reaches the helper from
+the actual codium-clinemm extension-host lifecycle
+(vscode-session-host → task flow → CommandJobManager →
+helperOwnedPgidProvider).
+
+What was attempted in this run:
+- The harness here is the same standalone Bun driver shape used
+  by the parent ACT (live-driver-2.mjs). It imports production
+  CommandJobManager and host-helper-pgid-adapter modules directly
+  and calls them in a synthetic Bun harness.
+- No real `codium-clinemm` extension-host process was launched
+  from this IDE sandboxed shell during this ACT. Reasons:
+  1. VS Code itself is reachable but the test runner cannot
+     observe the helper's perspective on the extension-host's
+     peer_pid without intrusive instrumentation inside the
+     extension-host's React/state updaters (forbidden by §11).
+  2. The debug harness infrastructure for this is in
+     `apps/vscode/src/dev/debug-harness/`; reaching it from
+     a standalone Bun harness in this ACT would require
+     significant ACT scope creep.
+
+Per the parent ACT §11 disposition:
+  "If not observable without intrusive instrumentation:
+   REAL_EXTENSION_HOST_WIRING = LIVE_UNOBSERVABLE
+   and retain the narrower classification."
+
+The SYNTHETIC_REAL driver still proves:
+  - The production CommandJobManager class is invoked against
+    the real helper (REAL_PRODUCTION_FUNCTION).
+  - The real LaunchAgent helper receives and validates wire
+    requests (REAL_LAUNCHAGENT).
+  - The kernel signal authority is the helper's, not the
+    driver substrate's (REAL_KERNEL).
+  - The cross-client isolation invariant is genuinely enforced
+    (DENY_FOREIGN_JOB verified live with a different kernel peer).
+
+What is NOT proved here:
+  - That the extension-host lifecycle path
+    (codium-clinemm → vscode-session-host → task creation →
+    CommandJobManager.start → provider wire → helper) actually
+    exercises the same seam end-to-end inside the running IDE.
+
+Decision: LIVE_UNOBSERVABLE for this ACT. This is acceptable
+per §11 and §17. The narrower classification is honestly
+bound to the evidence.
+
+If a future ACT wants to obtain the real extension-host
+witness, the cheapest path is to launch the debug harness
+(`apps/vscode/src/dev/debug-harness/server.ts`), have it
+auto-launch the VSCode instance with `CLINE_CAPTURE_BROWSER=1`,
+then evaluate `globalThis.__clineHandleUri` style hooks via
+the harness API to construct a SdkController session and
+trigger a real CommandJobManager.start inside the running
+extension host. That is out of bounded cycle for this ACT.

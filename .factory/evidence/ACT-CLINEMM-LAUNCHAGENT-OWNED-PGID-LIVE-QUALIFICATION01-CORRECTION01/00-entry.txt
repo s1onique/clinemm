@@ -1,0 +1,26 @@
+47ca5add2903339a5f6280fcafdd6122d404c265
+---STATUS---
+?? .factory/evidence/ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01/
+---PGREP---
+91441 /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+---LAUNCHCTL---
+gui/501/io.clinemm.host-helper = {
+	active count = 1
+	path = /Volumes/UserData/Users/chistyakov/Library/LaunchAgents/io.clinemm.host-helper.plist
+	type = LaunchAgent
+	state = running
+
+	program = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+	arguments = {
+		/Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+	}
+
+	stdout path = /Volumes/UserData/Users/chistyakov/Library/Logs/clinemm-host-helper.log
+	stderr path = /Volumes/UserData/Users/chistyakov/Library/Logs/clinemm-host-helper.log
+	inherited environment = {
+		DISPLAY => /private/tmp/com.apple.launchd.krFAgqi1wS/org.xquartz:0
+		SSH_AUTH_SOCK => /private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners
+	}
+
+	default environment = {
+		PATH => /usr/bin:/bin:/usr/sbin:/sbin

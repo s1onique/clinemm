@@ -1,0 +1,27 @@
+STEP:03_client_b_distinct_peer
+{
+  "step": "client_b_distinct_peer",
+  "exit_code": 0,
+  "stdout": "{\"step\":\"client_b_distinct_peer\",\"PEER_PID_B\":90850,\"PEER_PID_A\":90810,\"client_token_present\":true,\"peer_uid_B\":501,\"peer_pid_B_wire\":90850,\"peer_pid_match\":true,\"token_lengths\":32,\"tokens_distinct_from_a\":true,\"peer_pids_differ\":true,\"B_TERMINATE_RESULT\":{\"ok\":false,\"error\":\"DENY_FOREIGN_JOB\"},\"B_OK\":false,\"B_ERROR\":\"DENY_FOREIGN_JOB\",\"B_USING_A_REAL_JOB_TOKEN\":\"PASS\",\"DONE\":\"B_DENIED\"}\n",
+  "stderr": "",
+  "parsed": {
+    "step": "client_b_distinct_peer",
+    "PEER_PID_B": 90850,
+    "PEER_PID_A": 90810,
+    "client_token_present": true,
+    "peer_uid_B": 501,
+    "peer_pid_B_wire": 90850,
+    "peer_pid_match": true,
+    "token_lengths": 32,
+    "tokens_distinct_from_a": true,
+    "peer_pids_differ": true,
+    "B_TERMINATE_RESULT": {
+      "ok": false,
+      "error": "DENY_FOREIGN_JOB"
+    },
+    "B_OK": false,
+    "B_ERROR": "DENY_FOREIGN_JOB",
+    "B_USING_A_REAL_JOB_TOKEN": "PASS",
+    "DONE": "B_DENIED"
+  }
+}

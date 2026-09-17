@@ -1,0 +1,126 @@
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+---STEP:02_client_a_registration---
+{
+  "step": "client_a_real_registration",
+  "driver_classification": "SYNTHETIC_REAL",
+  "real_production_function": true,
+  "real_launchagent": true,
+  "real_kernel": true,
+  "real_extension_host": false,
+  "provider_class": "HostHelperPgidProvider",
+  "A_REGISTRATION": "PASS",
+  "TARGET_A_BOUNDED": "PASS",
+  "detached_leader": "PASS",
+  "A_PGID": 90842,
+  "A_LEADER_PID": 90842,
+  "PEER_PID_A": 90810,
+  "client_token_present": true,
+  "peer_uid_A": 501,
+  "peer_pid_A_wire": 90810,
+  "peer_pid_match": true,
+  "job_token_present": true,
+  "A_JOB_TOKEN_REAL": "PASS",
+  "token_lengths": 32,
+  "tokens_distinct": true,
+  "A_SECRET_FILE": "/tmp/clinemm-cross-client-A-90810.json"
+}
+---STEP:03_client_b_distinct_peer---
+{
+  "step": "client_b_distinct_peer",
+  "exit_code": 0,
+  "stdout": "{\"step\":\"client_b_distinct_peer\",\"PEER_PID_B\":90850,\"PEER_PID_A\":90810,\"client_token_present\":true,\"peer_uid_B\":501,\"peer_pid_B_wire\":90850,\"peer_pid_match\":true,\"token_lengths\":32,\"tokens_distinct_from_a\":true,\"peer_pids_differ\":true,\"B_TERMINATE_RESULT\":{\"ok\":false,\"error\":\"DENY_FOREIGN_JOB\"},\"B_OK\":false,\"B_ERROR\":\"DENY_FOREIGN_JOB\",\"B_USING_A_REAL_JOB_TOKEN\":\"PASS\",\"DONE\":\"B_DENIED\"}\n",
+  "stderr": "",
+  "parsed": {
+    "step": "client_b_distinct_peer",
+    "PEER_PID_B": 90850,
+    "PEER_PID_A": 90810,
+    "client_token_present": true,
+    "peer_uid_B": 501,
+    "peer_pid_B_wire": 90850,
+    "peer_pid_match": true,
+    "token_lengths": 32,
+    "tokens_distinct_from_a": true,
+    "peer_pids_differ": true,
+    "B_TERMINATE_RESULT": {
+      "ok": false,
+      "error": "DENY_FOREIGN_JOB"
+    },
+    "B_OK": false,
+    "B_ERROR": "DENY_FOREIGN_JOB",
+    "B_USING_A_REAL_JOB_TOKEN": "PASS",
+    "DONE": "B_DENIED"
+  }
+}
+---STEP:04_foreign_group_survives---
+{
+  "step": "foreign_group_survives",
+  "PGID_A": 90842,
+  "LEADER_PID_A": 90842,
+  "psProbeExit": 0,
+  "psProbeStdout": "PID  PGID COMMAND\n90842 90842 /bin/sh -c sleep 60 & echo CHILD_PID=$!; wait",
+  "helper_active_job_count": 3,
+  "helper_active_client_count": 11,
+  "A_GROUP_AFTER_B_ATTEMPT": "ALIVE"
+}
+---STEP:05_owner_positive_control---
+{
+  "step": "owner_positive_control",
+  "A_OWN_TERMINATE_RESULT": {
+    "version": 1,
+    "request_id": "s5-1789650880631",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "A_OWN_TERMINATE_OK": true,
+  "A_OWN_TERMINATION": "PASS"
+}
+---STEP:06_cleanup---
+{
+  "step": "cleanup",
+  "PGA_FINAL_ps_exit": 1,
+  "PGA_FINAL_ps_stdout": "",
+  "pre_close_active_job_count": 1,
+  "pre_close_active_client_count": 11,
+  "A_SECRET_REMOVED": true,
+  "DONE": "ALL_STEPS_COMPLETE"
+}
+---STEP:09_gates---
+{
+  "verdict": "PASS",
+  "gates": {
+    "A_REGISTRATION": "PASS",
+    "A_JOB_TOKEN_REAL": "PASS",
+    "TARGET_A_BOUNDED": "PASS",
+    "B_PEER_PID_DIFFERS": "PASS",
+    "B_USING_A_REAL_JOB_TOKEN_DENY": "PASS",
+    "B_FOREIGN_JOB_ERROR": "PASS",
+    "A_GROUP_AFTER_B_ATTEMPT": "PASS",
+    "A_OWN_TERMINATION": "PASS",
+    "CLIENT_SLOT_BASELINE": "PASS",
+    "JOB_SLOT_BASELINE": "PASS"
+  },
+  "elapsed_ms": 1097,
+  "pgid_A": 90842,
+  "leader_pid_A": 90842,
+  "peer_pid_A": 90810,
+  "peer_pid_B": 90850,
+  "helper_post_close_active_client_count": 11,
+  "helper_post_close_active_job_count": 1,
+  "client_token_lengths": 32,
+  "job_token_lengths": 32,
+  "tokens_distinct": true,
+  "no_raw_tokens_in_durable_evidence": true,
+  "old_discriminator_invalidated": true,
+  "cross_client_isolation_proven": true,
+  "owner_positive_control_pass": true,
+  "seam_classification": "SYNTHETIC_REAL | REAL_PRODUCTION_FUNCTION | REAL_LAUNCHAGENT | REAL_KERNEL",
+  "real_extension_host_wiring": "LIVE_UNOBSERVABLE"
+}

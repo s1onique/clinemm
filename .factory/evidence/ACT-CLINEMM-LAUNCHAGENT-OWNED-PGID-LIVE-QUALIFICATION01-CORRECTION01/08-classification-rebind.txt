@@ -1,0 +1,77 @@
+ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01
+Step 08 — Seam classification rebind (parent ACT P0-B correction).
+
+The parent ACT (commit 47ca5add2) overclaimed the seam by writing:
+
+  REAL_EXTENSION_HOST_END_TO_END = IMPLICIT (via "live-driver-final.log
+                                         GATE 12.cross_deny=PASS b_using_a_token")
+
+The driver (live-driver-2.mjs) is in fact:
+  - standalone Bun harness
+  - direct imports of CommandJobManager and the provider factory
+  - sets CLINEMM_EXPERIMENTAL_SANDBOX="off" before instantiation
+  - does NOT instantiate vscode-session-host or any extension-host
+    lifecycle class
+
+This ACT rebinds the seam labels honestly per §10:
+
+  COMMANDJOBMANAGER_CODE =
+    REAL_PRODUCTION_FUNCTION          (the class file imported and called is real)
+
+  HELPER_ADAPTER =
+    REAL_PRODUCTION_FUNCTION          (host-helper-pgid-adapter.ts imported is real)
+
+  LAUNCHAGENT =
+    REAL | LIVE                       (the helper socket we connect to is the real
+                                       launchd-managed io.clinemm.host-helper binary)
+
+  KERNEL_SIGNALING =
+    REAL | LIVE                       (terminate signal authority comes from the
+                                       launchd-managed helper, not the substrate)
+
+  DRIVER =
+    SYNTHETIC_REAL                    (standalone Bun harness; not the real
+                                       extension-host lifecycle)
+
+  REAL_EXTENSION_HOST_END_TO_END =
+    NOT_EXECUTED                      (no codium-clinemm extension-host process was
+                                       started or observed during this ACT)
+
+The honest reading is:
+  - The helper mechanics are proven live against the real helper
+    and the real kernel.
+  - The CommandJobManager class is invoked exactly as production
+    code would invoke it (real helper provider wired in).
+  - But the EXTENSION-HOST LIFECYCLE — the path from a real task
+    creation in codium-clinemm through vscode-session-host down
+    to CommandJobManager — is not directly observed in this run.
+
+This is NOT "synthetic-only" evidence. It is "real production
+function + real launchd + real kernel + synthetic driver shell".
+A real extension-host witness would be needed to flip the last
+label to REAL_EXTENSION_HOST_END_TO_END = LIVE PASS. Per §11
+that witness is LIVE_UNOBSERVABLE for this run (see
+07-extension-host-witness.txt).
+
+Why this matters for the parent ACT's labels:
+
+The parent ACT's GATE 12.cross_deny was structurally invalid
+(CA is a client token, not a job token; the helper's
+"no such job" rejection does not discriminate cross-client
+ownership from ordinary unknown-job rejection — see
+01-old-discriminator-red.txt).
+
+This ACT's GATE B_USING_A_REAL_JOB_TOKEN_DENY uses a REAL
+job_token issued to A's client_token. The helper's
+DENY_FOREIGN_JOB rejection is the canonical cross-ownership
+denial code (helper.c:1694). It is the only error code that
+proves foreign-ownership enforcement.
+
+The corrected isolation proof composition is:
+  B + JA_real → DENY_FOREIGN_JOB  (live, distinct kernel peer)
+  A + JA_real → ALLOW (TERMINATED_TERM)
+  A's PGID still alive after B's rejected attempt
+  A's PGID gone after A's positive-control terminate
+
+That composition is the load-bearing proof for
+CLIENT_ISOLATION = LIVE PASS.

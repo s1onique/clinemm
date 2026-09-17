@@ -1,0 +1,8 @@
+COA peer_pid=86696 peer_uid=501 client_token_present=true
+COB peer_pid=86696 peer_uid=501 client_token_present=true
+COA_TOKEN_LEN=32 COB_TOKEN_LEN=32 tokens_distinct=true
+B_USING_A_CLIENT_TOKEN_AS_JOB_TOKEN result={"ok":false,"error":"DENY_UNKNOWN_JOB"}
+DENIED=true error_is_unknown_job=true
+OLD_CROSS_CLIENT_DISCRIMINATOR=INVALID
+REASON=CA is a client_token, not a job_token; denial does not discriminate cross-client ownership from ordinary unknown-job rejection
+DONE OLD_DISC=true DISCRIMINATOR_INVALID=true
