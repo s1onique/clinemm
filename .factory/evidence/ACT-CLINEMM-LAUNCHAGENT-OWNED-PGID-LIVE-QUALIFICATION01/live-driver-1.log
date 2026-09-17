@@ -1,0 +1,31 @@
+Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+      at warnOnDeactivatedColors (internal:tty:33:24)
+      at getColorDepth (internal:tty:42:39)
+      at shouldColorize (internal:util/colors:14:109)
+      at refresh (internal:util/colors:18:31)
+      at internal:util/colors (internal:util/colors:24:16)
+      at internal:assert/assertion_error (internal:assert/assertion_error:2:187)
+      at loadAssertionError (node:assert:28:96)
+
+SUBSTRATE darwin=true sandbox_exec=true helper_socket=true
+SOCKET=/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+GATE 3.factory=PASS provider=HostHelperPgidProvider
+GATE 4.peer_uid=FAIL got=undefined want=501
+GATE 4.peer_pid=FAIL got=undefined want=17900
+GATE 2.identity=FAIL pid=74159 uid=501 build_id=undefined active_jobs=undefined
+GATE 5.start=FAIL state=spawn_failed
+GATE 5.pgid=FAIL pgid=undefined pid=undefined
+GATE 5.detached_leader=PASS pid=undefined pgid=undefined
+GATE 7.registered=FAIL active_job_count=undefined active_client_count=undefined
+GATE 8.cancel.ok=FAIL state=unknown_job
+GATE 8.group_gone=FAIL pgid=undefined helper_reports_GONE=false
+GATE 9.release=FAIL active_job_count=undefined
+GATE 15.restart_ok=FAIL restart_ok=false
+GATE 15.new_pid=FAIL before=74159 after=74159
+GATE 15.same_build=PASS build_id=undefined
+GATE 15.same_uid=PASS uid=501
+GATE 15.zero_baseline=FAIL jobs=undefined clients=undefined
+GATE 16.no_launchctl=PASS Verified: launchctl print gui/501/io.clinemm.host-helper unchanged; only socket demand triggered respawn (helper.restart + AF_UNIX)
+FATAL TypeError: undefined is not an object (evaluating 'coA.client_token.length')
+    at main (/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01/live-driver.mjs:181:77)
+    at processTicksAndRejections (native:7:39)

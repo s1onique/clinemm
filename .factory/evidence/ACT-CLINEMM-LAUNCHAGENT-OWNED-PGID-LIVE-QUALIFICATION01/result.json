@@ -1,0 +1,67 @@
+{
+  "act": "ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01",
+  "subject_head": "aa1aae22bd3105d705a193f2b900ff25d1083338",
+  "subject_message": "fix(macos): terminate owned process groups via host helper",
+  "outcome": "PASS_WITH_BOUNDED_INSTALL_PATH_HALT",
+  "halt": "HALT_SANDBOX_CANNOT_INSTALL_HELPER_BINARY",
+  "next_act": "ACT-CLINEMM-SANDBOX-INSTALL-PATH-WRITABLE01",
+  "summary": "Termination half PASSING GREEN end-to-end on the REAL permanent LaunchAgent helper against the REAL CommandJobManager production seam. The substrate split is confirmed (process.kill(-pgid, SIGTERM) returns EPERM from this IDE sandboxed shell), and the helper recovers via kernel signal authority in the gui/501 LaunchAgent domain. Lifecycle half self-restart PASSES (helper.restart triggers launchd respawn via socket demand; no launchctl call). The automated upgrade sub-chain halts at §17 because this IDE sandboxed shell cannot write to ~/.clinemm/bin/. Per §29 outcome-B, this does not invalidate the termination qualification.",
+  "passing_gates": [
+    "§1 entry freeze",
+    "§2 helper identity snapshot (build_id present)",
+    "§3 Gate 0 production factory resolution",
+    "§4 kernel peer identity (peer_uid + peer_pid from getpeereid + LOCAL_PEERPID)",
+    "§5 real CommandJobManager start (running, pgid defined, detached shell leader)",
+    "§7 helper ownership registration (active_job_count=1, active_client_count=1)",
+    "§8 main discriminator: cancel -> EPERM -> helper fallback -> ESRCH",
+    "§9 release conservation (active_job_count=0)",
+    "§10 TERM -> KILL escalation (trap-ignoring shell)",
+    "§11 non-EPERM conservation (helper NOT consulted on direct-success path)",
+    "§12 cross-client isolation (DENY_UNKNOWN_JOB on foreign token)",
+    "§15 helper self-restart (new PID, same build_id, same label, same socket)",
+    "§16 PRODUCT_HELPER_RESTART_LAUNCHCTL_CALLS = 0",
+    "§22 no helper test leakage",
+    "§30 final conservation"
+  ],
+  "halted_gates": [
+    {
+      "gate": "§17 sandboxed install-path write probe",
+      "halt": "HALT_SANDBOX_CANNOT_INSTALL_HELPER_BINARY",
+      "root_cause": "IDE sandboxed shell is denied write to ~/.clinemm/bin/",
+      "evidence": "16-gates.txt §17 entry; first-run live-driver-1.log",
+      "operator_mitigation": "Operator rebuilt + reinstalled the helper binary between the first and second run of this ACT (producing build_id c5f3ea0322ae92a6...). The install path is functionally proven but not via the automated §18 sub-chain from this substrate."
+    }
+  ],
+  "substrate_proofs": {
+    "substrate_eperm_from_sandboxed_shell": {
+      "proved": true,
+      "evidence": "01-substrate-eperm-probe.log",
+      "details": "child_process.spawn detached sh -c 'sleep 60; echo CHILD_PID=$BASHPID' works; process.kill(-pgid, SIGTERM) returns EPERM."
+    },
+    "permanent_helper_signal_authority": {
+      "proved_in_prior_act": "ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02",
+      "conserved": true
+    }
+  },
+  "factory_discovery": {
+    "production_factory_resolves": true,
+    "provider_class": "HostHelperPgidProvider",
+    "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+    "evidence": "live-driver-final.log GATE 3.factory=PASS"
+  },
+  "termination_chain_witness": {
+    "commandjobmanager_start": "PASS state=running pgid=48651",
+    "helper_registration": "PASS active_job_count=1 active_client_count=1",
+    "direct_path_eperm": "PASS substrate returns EPERM on process.kill(-pgid, SIGTERM)",
+    "helper_fallback": "PASS helper.terminateOwned engaged after EPERM",
+    "group_esrch": "PASS register-owned re-probe returned DENY_LEADER_NOT_FOUND (=ESRCH equivalent)",
+    "manager_terminal_state": "PASS cancel returned state=cancelled",
+    "release": "PASS active_job_count=0 after cancel"
+  },
+  "helper_build_id": "c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9",
+  "helper_pid_after_restart": 56377,
+  "helper_label": "io.clinemm.host-helper",
+  "helper_domain": "gui/501",
+  "socket_path": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "socket_mode": "0600"
+}

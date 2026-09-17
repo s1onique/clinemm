@@ -1,0 +1,59 @@
+SOCKET=/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+PARENT_PID=62666
+PARENT_UID=501
+---
+METHOD health:
+{
+  "version": 1,
+  "request_id": "r-1789646910746",
+  "ok": true,
+  "service": "clinemm-host-helper",
+  "pid": 56377,
+  "uid": 501,
+  "build_id": "c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9",
+  "active_client_count": 0,
+  "active_job_count": 0
+}
+---
+METHOD client.open:
+{
+  "version": 1,
+  "request_id": "r-1789646910747",
+  "client_token": "607189f2659521bd279069ff60da916f",
+  "peer_uid": 501,
+  "peer_pid": 62666,
+  "ok": true
+}
+---
+METHOD client.close:
+{
+  "ok": false,
+  "error": "BAD_REQUEST"
+}
+---
+METHOD process-group.register-owned:
+{
+  "ok": false,
+  "error": "BAD_REQUEST"
+}
+---
+METHOD process-group.terminate-owned:
+{
+  "ok": false,
+  "error": "BAD_REQUEST"
+}
+---
+METHOD process-group.release-owned:
+{
+  "ok": false,
+  "error": "BAD_REQUEST"
+}
+---
+METHOD helper.restart:
+{
+  "version": 1,
+  "request_id": "r-1789646910748",
+  "ok": true,
+  "result": "RESTARTING"
+}
+---

@@ -1,0 +1,3 @@
+PARENT_PID: 38931 CHILD_PID: 38932
+CHILD_OUTPUT: CHILD_PID=
+TERM_EPERM: EPERM kill() failed: EPERM: Operation not permitted

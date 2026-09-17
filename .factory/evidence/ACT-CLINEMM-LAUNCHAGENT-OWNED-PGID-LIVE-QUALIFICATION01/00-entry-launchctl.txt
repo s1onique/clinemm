@@ -1,0 +1,77 @@
+gui/501/io.clinemm.host-helper = {
+	active count = 1
+	path = /Volumes/UserData/Users/chistyakov/Library/LaunchAgents/io.clinemm.host-helper.plist
+	type = LaunchAgent
+	state = running
+
+	program = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+	arguments = {
+		/Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+	}
+
+	stdout path = /Volumes/UserData/Users/chistyakov/Library/Logs/clinemm-host-helper.log
+	stderr path = /Volumes/UserData/Users/chistyakov/Library/Logs/clinemm-host-helper.log
+	inherited environment = {
+		DISPLAY => /private/tmp/com.apple.launchd.krFAgqi1wS/org.xquartz:0
+		SSH_AUTH_SOCK => /private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners
+	}
+
+	default environment = {
+		PATH => /usr/bin:/bin:/usr/sbin:/sbin
+	}
+
+	environment = {
+		PATH => /usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin
+		CLINEMM_HOST_HELPER_SOCKET => /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+		XPC_SERVICE_NAME => io.clinemm.host-helper
+	}
+
+	domain = gui/501 [100109]
+	asid = 100109
+	minimum runtime = 10
+	exit timeout = 5
+	runs = 1
+	pid = 74159
+	immediate reason = ipc (socket)
+	forks = 0
+	execs = 1
+	initialized = 1
+	trampolined = 1
+	started suspended = 0
+	proxy started suspended = 0
+	last exit code = (never exited)
+
+	sockets = {
+		"Listener" = {
+			type = stream
+			path = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+			mode = 600
+			owner uid = 501
+			group id = 20
+
+			sockets = {
+				24 (bytes to read)
+			}
+
+			active = 1
+			passive = 1
+			bonjour = 0
+			ipv4v6 = 0
+			receive_packet_info = 0
+		}
+	}
+
+	spawn type = background (5)
+	jetsam priority = 40
+	jetsam memory limit (active) = (unlimited)
+	jetsam memory limit (inactive) = (unlimited)
+	jetsamproperties category = daemon
+	jetsam thread limit = 32
+	cpumon = default
+	probabilistic guard malloc policy = {
+		activation rate = 1/1000
+		sample rate = 1/0
+	}
+
+	properties = inferred program
+}

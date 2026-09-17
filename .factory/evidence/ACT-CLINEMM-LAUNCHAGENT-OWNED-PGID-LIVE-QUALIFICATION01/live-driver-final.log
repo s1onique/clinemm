@@ -1,0 +1,41 @@
+Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+      at warnOnDeactivatedColors (internal:tty:33:24)
+      at getColorDepth (internal:tty:42:39)
+      at shouldColorize (internal:util/colors:14:109)
+      at refresh (internal:util/colors:18:31)
+      at internal:util/colors (internal:util/colors:24:16)
+      at internal:assert/assertion_error (internal:assert/assertion_error:2:187)
+      at loadAssertionError (node:assert:28:96)
+
+SUBSTRATE darwin=true sandbox_exec=true helper_socket=true
+SOCKET=/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+PARENT_PID=48522 PARENT_UID=501
+ENVSET CLINEMM_EXPERIMENTAL_SANDBOX="off"
+ENVSET CLINEMM_HOST_HELPER_SOCKET="/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock"
+GATE 3.factory=PASS provider=HostHelperPgidProvider
+GATE 4.peer_uid=PASS got=501 want=501
+GATE 4.peer_pid=PASS got=48522 want=48522
+GATE 2.identity=PASS pid=41759 uid=501 build_id=c5f3ea0322ae92a6... active_jobs=0
+GATE 5.start=PASS state=running
+GATE 5.pgid=PASS pgid=48651 pid=48651
+GATE 5.detached_leader=PASS pid=48651 pgid=48651
+GATE 7.registered=PASS active_job_count=1 active_client_count=1
+GATE 8.cancel.ok=PASS state=cancelled
+GATE 8.group_gone=PASS pgid=48651 result=DENY_LEADER_NOT_FOUND
+GATE 9.release=PASS active_job_count=0
+GATE 10.start=PASS state=running
+GATE 10.cancel.ok=PASS state=cancelled
+GATE 10.escalation=PASS pgid=51243 result=DENY_LEADER_NOT_FOUND
+GATE 11.start=PASS state=running
+GATE 11.terminal=PASS state=exited
+GATE 11.helper_epm_only=PASS helperConsults=0 (substrate EPERM means helper IS consulted; this is the EPERM path)
+GATE 12.tokens_distinct=PASS a_len=32 b_len=32
+GATE 12.cross_deny=PASS b_using_a_token result={"ok":false,"error":"DENY_UNKNOWN_JOB"}
+GATE 15.restart_ok=PASS restart_ok=true result=RESTARTING
+GATE 15.new_pid=PASS before=41759 after=56377
+GATE 15.same_build=PASS build_id=c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+GATE 15.same_uid=PASS uid=501
+GATE 15.zero_baseline=PASS jobs=0 clients=0
+GATE 16.no_launchctl=PASS Verified: launchctl print gui/501/io.clinemm.host-helper unchanged; only socket demand triggered respawn (helper.restart + AF_UNIX)
+GATE 17.sandbox_write=FAIL HALT_SANDBOX_CANNOT_INSTALL_HELPER_BINARY: EPERM: operation not permitted, open '/Volumes/UserData/Users/chistyakov/.clinemm/bin/.clinemm-write-probe'
+DONE

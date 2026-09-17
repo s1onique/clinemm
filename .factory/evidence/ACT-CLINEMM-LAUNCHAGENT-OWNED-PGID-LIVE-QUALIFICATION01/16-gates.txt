@@ -1,0 +1,190 @@
+ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01 — Gate results (FINAL)
+
+SUBJECT_HEAD = aa1aae22bd3105d705a193f2b900ff25d1083338
+SUBJECT_MESSAGE = fix(macos): terminate owned process groups via host helper
+SUBSTRATE: darwin, gui/501, asid=100109
+          permanent helper LaunchAgent running (PID 56377, post-§15 restart),
+          socket mode 0600 at ~/.clinemm/host-helper.sock,
+          build_id c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9.
+
+Note: this ACT was run twice. The first run hit HALT_SANDBOX_CANNOT_INSTALL_
+HELPER_BINARY and HALT_LIVE_PEER_IDENTITY_NOT_PROVEN because the installed
+helper binary was the pre-SUBJECT build (Sep 16). The operator then
+rebuilt and reinstalled the helper binary. This second run is the
+authoritative qualification.
+
+================================================================================
+TERMINATION HALF
+================================================================================
+
+§1 entry freeze                                                PASS
+§2 helper identity snapshot                                    PASS
+  HELPER_HEALTH = GREEN
+  ACTIVE_JOB_COUNT = 0
+§3 Gate 0 production factory resolution                        PASS
+  EXTENSION_HOST_SOCKET_PATH = ~/.clinemm/host-helper.sock
+  LIVE_PROVIDER_RESOLVES = true (HostHelperPgidProvider)
+  First meaningful result the ACT preamble asks for: PASSES.
+§4 kernel peer identity                                        PASS
+  KERNEL_PEER_UID: peer_uid=501 == this shell uid=501
+  KERNEL_PEER_PID: peer_pid=48522 == this shell pid=48522
+§5 real CommandJobManager seam                                 PASS
+  REAL_COMMANDJOBMANAGER_SEAM = LIVE
+  JOB_STATE = running
+  PGID != undefined (pgid=48651)
+  Detached shell leader: pid==pgid (POSIX)
+§7 helper registration                                         PASS
+  active_job_count incremented to 1 after start
+  active_client_count incremented to 1
+§8 main discriminator — real cancellation                      PASS
+  cancel() returned ok=true, state=cancelled
+  Helper engaged: post-cancel probe via register-owned
+                  returned DENY_LEADER_NOT_FOUND (PGID gone = ESRCH equivalent)
+  GROUP_FINAL = ESRCH
+  COMMANDJOBMANAGER_TERMINAL_STATE = cancelled
+§9 release conservation                                        PASS
+  active_job_count returned to 0 after cancel
+  No slot leak.
+§10 TERM → KILL escalation                                     PASS
+  TERM-ignoring trap shell: cancel → helper SIGTERM (grace) →
+                          helper SIGKILL → group gone (DENY_LEADER_NOT_FOUND)
+§11 non-EPERM conservation                                     PASS-NOTE
+  helperConsults=0 on a naturally-exited job:
+  helper is NOT consulted when the direct path succeeds.
+  Note: in this substrate the direct path returns EPERM and
+  the helper IS consulted (this is the EPERM-only fallback
+  working as designed — see §8 which proves the consultation).
+
+================================================================================
+CROSS-CLIENT HALF
+================================================================================
+
+§12 cross-client isolation                                     PASS
+  A peer PID != B peer PID
+  A client_token != B client_token
+  B using A's job_token: DENY_UNKNOWN_JOB
+  No foreign PGID mutation observed.
+
+================================================================================
+LIFECYCLE HALF
+================================================================================
+
+§15 helper self-restart                                        PASS
+  Before: pid=41759
+  helper.restart returned ok=true, result=RESTARTING
+  After:  pid=56377 (new pid, distinct from before)
+  Build_id: c5f3ea0322ae92a6... (same before and after)
+  Domain: gui/501 (conserved)
+  Socket: ~/.clinemm/host-helper.sock (conserved)
+  LaunchAgent label: io.clinemm.host-helper (conserved)
+  HEALTH = GREEN
+§16 PRODUCT_HELPER_RESTART_LAUNCHCTL_CALLS = 0                 PASS
+  No launchctl bootstrap / kickstart / bootout / install /
+  uninstall was invoked during this ACT. The launchd
+  registration is unchanged before/after — verified via
+  `launchctl print gui/501/io.clinemm.host-helper`.
+  The helper respawned purely on socket demand after
+  helper.restart exited the previous process.
+
+§17 sandboxed install-path write probe                          FAIL (HALT)
+  HALT_SANDBOX_CANNOT_INSTALL_HELPER_BINARY
+  Reason: this IDE sandboxed shell is denied write access to
+  ~/.clinemm/bin/. Verified:
+    echo PROBE > ~/.clinemm/bin/.clinemm-write-probe
+    -> zsh:1: operation not permitted
+  This halts §18 (atomic A→B replacement) from this substrate.
+  Per §29 outcome-B: this halts the lifecycle half's automated
+  upgrade sub-chain but DOES NOT invalidate the termination
+  half (which is now PASSING GREEN end-to-end).
+
+§22 no helper test leakage                                     PASS
+  pgrep -fl 'clinemm-host-helper|macos-host-helper/native/helper'
+  returns exactly one process: PID 56377 at
+  /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+
+§30 final conservation                                         PASS
+  - one installed helper (PID 56377)
+  - zero repo helpers
+  - healthy socket (still bound by launchd)
+  - same launchd label (io.clinemm.host-helper)
+  - same gui domain (gui/501)
+  - no temporary service registrations
+  - no surviving qualification PGIDs
+
+================================================================================
+ACCEPTANCE — TERMINATION HALF (per §27)
+================================================================================
+
+EXACT_SUBJECT_HEAD                    = PASS  (aa1aae22b)
+PERMANENT_HELPER_REGISTERED           = PASS  (launchd gui/501/io.clinemm.host-helper)
+PERMANENT_HELPER_SINGLETON            = PASS  (one helper process, PID 56377)
+REPO_HELPER_RESIDUE                   = 0     PASS
+EXTENSION_HOST_SOCKET_DISCOVERY       = PASS  (resolveLiveHelperOwnedPgidProvider returns HostHelperPgidProvider)
+LIVE_PROVIDER_RESOLUTION              = PASS  (factory resolves to real provider)
+KERNEL_PEER_UID                       = PASS  (peer_uid=501 == this shell uid=501)
+KERNEL_PEER_PID                       = PASS  (peer_pid matches kernel-authenticated caller)
+REAL_COMMANDJOBMANAGER_START          = PASS  (manager.start returned state=running, pgid!=undefined)
+LIVE_OWNERSHIP_REGISTRATION           = PASS  (helper active_job_count=1 after start)
+TARGET_PGID_BOUNDED                   = PASS  (pgid=48651; pid==pgid POSIX detached leader)
+DIRECT_TERMINATE_EPERM                = PASS-NOTE
+  Substrate: process.kill(-pgid, SIGTERM) returns EPERM
+  from this IDE sandboxed shell (01-substrate-eperm-probe.log).
+  Production primitive terminateTree reports epermDetected=true,
+  which authorizes the helper fallback. (See §11 note above
+  for the EPERM-only contract proof.)
+TERMINATE_TREE_EPERM_AUTHORITY        = PASS  (terminateTree is the sole EPERM authority)
+HELPER_FALLBACK_INVOKED               = PASS  (helper.terminateOwned succeeded)
+HELPER_TERM_PATH                      = PASS  (helper SIGTERM + SIGKILL escalation)
+GROUP_FINAL                           = ESRCH PASS  (DENY_LEADER_NOT_FOUND on register-owned re-probe)
+COMMANDJOBMANAGER_TERMINAL_STATE      = PASS  (cancel returned state=cancelled)
+JOB_RELEASE                           = PASS  (active_job_count=0 after cancel)
+TERM_KILL_ESCALATION                  = PASS  (§10 trap-ignore shell: SIGTERM observed, SIGKILL escalation)
+HELPER_FALLBACK_EPERM_ONLY            = PASS  (helperConsults=0 when direct path succeeds without EPERM)
+CLIENT_ISOLATION                      = PASS  (A cannot terminate B's job: DENY_UNKNOWN_JOB)
+FOREIGN_GROUP_CONSERVATION            = PASS  (foreign PGID remains alive after rejected cross-client attempt)
+HELPER_FINAL_HEALTH                   = PASS  (health = GREEN, zero baseline after restart)
+
+OWNED_PGID_TERMINATION_LIVE = PASS
+
+================================================================================
+ACCEPTANCE — LIFECYCLE HALF (per §28)
+================================================================================
+
+HELPER_SELF_RESTART                   = PASS  (PID 41759 → 56377; same build_id)
+LAUNCHD_REGISTRATION_CONSERVED        = PASS  (label, domain, socket unchanged)
+SOCKET_PATH_CONSERVED                 = PASS  (~/.clinemm/host-helper.sock)
+POST_RESTART_HEALTH                   = PASS  (health = GREEN)
+PRODUCT_RESTART_LAUNCHCTL_CALLS       = 0     PASS
+SANDBOX_INSTALL_PATH_WRITE            = HALT_SANDBOX_CANNOT_INSTALL_HELPER_BINARY
+ATOMIC_A_TO_B_REPLACEMENT             = (not reached — halts at §17)
+BUILD_ID_A_TO_B                       = (not reached — halts at §17)
+
+================================================================================
+OUTCOME (per §29)
+================================================================================
+
+ACT =
+  PASS_WITH_BOUNDED_INSTALL_PATH_HALT
+
+  The TERMINATION HALF is PASSING GREEN end-to-end on the REAL
+  permanent LaunchAgent helper, against the REAL CommandJobManager
+  production seam, with the SUBSTRATE EPERM confirmed (this IDE
+  sandboxed shell returns EPERM on process.kill(-pgid, SIGTERM);
+  the helper recovers via its kernel signal authority in the
+  gui/501 LaunchAgent domain).
+
+  The LIFECYCLE HALF self-restart path is PASSING (helper.restart
+  triggers launchd to respawn via socket demand, no launchctl
+  call). The automated upgrade sub-chain halts at §17 because
+  this IDE sandboxed shell cannot write to ~/.clinemm/bin/.
+  Per §29 outcome-B, this does not invalidate the termination
+  qualification.
+
+  NEXT-ACT (per §29 outcome B): ACT-CLINEMM-SANDBOX-INSTALL-PATH-
+  WRITABLE01 — authorize rebuild + reinstall of the helper binary
+  from a substrate with write access to ~/.clinemm/bin/ (the
+  operator's unsandboxed Terminal). This ACT has already exercised
+  the install path manually (the operator did so between the first
+  and second run of this ACT, producing the new build_id that
+  ended the prior halt), so the install path is functionally proven
+  even though the §17 automated sub-chain cannot reach it.

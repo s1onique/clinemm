@@ -1,0 +1,2 @@
+console.log("CLINEMM_EXPERIMENTAL_SANDBOX=", JSON.stringify(process.env.CLINEMM_EXPERIMENTAL_SANDBOX))
+console.log("CLINEMM_HOST_HELPER_SOCKET=", JSON.stringify(process.env.CLINEMM_HOST_HELPER_SOCKET))

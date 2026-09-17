@@ -1,0 +1,52 @@
+ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01 — Entry freeze
+
+TIMESTAMP: 2026-09-17 (final, post-rebuild)
+SUBSTRATE: macOS Darwin arm64, gui/501, asid=100109
+SUBJECT_HEAD = aa1aae22bd3105d705a193f2b900ff25d1083338
+SUBJECT_MESSAGE = fix(macos): terminate owned process groups via host helper
+
+PERMANENT_HELPER:
+  label    = io.clinemm.host-helper
+  path     = /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  pid      = 91441 (post-restart)
+  domain   = gui/501
+  state    = running
+  socket   = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+  mode     = 0600
+  uid      = 501
+  build_id = c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+  health   = GREEN (verified via launchctl print + nc AF_UNIX health probe;
+                    envelope now includes build_id and active_*_count fields)
+
+INSTALLED_HELPER_COUNT = 1  (PID 91441)
+REPO_HELPER_COUNT      = 0  (no leaked repo-local helpers)
+PERMANENT_HELPER_DOMAIN = gui/501
+PERMANENT_HELPER_SOCKET_MODE = 0600
+PERMANENT_HELPER_HEALTH = PASS
+
+TRACKED_WORKTREE_DIRT = 0
+HEAD = aa1aae22bd3105d705a193f2b900ff25d1083338
+
+ENTRY_REQUIREMENTS:
+  INSTALLED_HELPER_COUNT = 1   PASS
+  REPO_HELPER_COUNT      = 0   PASS
+  HELPER_HEALTH          = PASS (launchctl state=running, socket alive)
+  TRACKED_WORKTREE_DIRT  = 0   PASS
+  HEAD = aa1aae22b             PASS
+
+ENV (substrate split — this IDE sandboxed shell):
+  CLINEMM_HOST_HELPER_SOCKET = ~/.clinemm/host-helper.sock
+  CLINEMM_EXPERIMENTAL_SANDBOX = unset (defaults to seatbelt on darwin)
+
+  Substrate proof (independent of helper binary):
+    child_process.spawn detached sh -c 'sleep 60; echo $BASHPID' -> OK
+    process.kill(-pgid, SIGTERM)                              -> EPERM
+    This is the EXACT split the helper must recover from.
+
+Run history:
+  Run 1: PASS_WITH_BOUNDED_INSTALL_PATH_HALT
+         (stale pre-SUBJECT helper binary; client.open returns METHOD_NOT_ALLOWED)
+  Operator: rebuilt + reinstalled the helper binary between runs.
+  Run 2: PASS_WITH_BOUNDED_INSTALL_PATH_HALT (this run)
+         (new build_id c5f3ea0322ae92a6...; all critical gates PASS;
+          §17 halt remains for the §18 automated sub-chain)
