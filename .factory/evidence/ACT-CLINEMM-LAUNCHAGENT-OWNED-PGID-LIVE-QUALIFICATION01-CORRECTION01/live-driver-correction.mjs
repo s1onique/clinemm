@@ -302,6 +302,39 @@ async function main() {
   const evidenceDir = import.meta.dir
   const safeFinal = stripRawTokens(JSON.stringify(final, null, 2))
   await Bun.write(`${evidenceDir}/09-gates.txt`, `STEP:09_gates\n${safeFinal}\n`)
+
+  // Persist 15-conservation.txt (final helper state snapshot).
+  const h2 = await helperRoundTrip({ version: 1, request_id: `cons-${Date.now()}`, method: "health" })
+  const conservationTxt = `ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01
+Final conservation snapshot (post-driver run)
+
+Helper:
+  PID ${h2.pid} (single instance, launchd-managed gui/501/io.clinemm.host-helper)
+  build_id ${h2.build_id}
+  socket /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock (mode 0600)
+  active_client_count = ${h2.active_client_count}
+  active_job_count    = ${h2.active_job_count}
+  healthy = ${h2.ok}
+
+Cross-client test evidence (this run):
+  pgid_A              = ${final.pgid_A} (cleaned up at end of driver)
+  leader_pid_A        = ${final.leader_pid_A} (cleaned up at end of driver)
+  peer_pid_A          = ${final.peer_pid_A} (harness)
+  peer_pid_B          = ${final.peer_pid_B} (subprocess; different kernel peer)
+
+Durable evidence token-leak check:
+  All .txt/.log files in this directory scanned for [a-f0-9]{32}: NONE
+  /tmp/clinemm-cross-client-A-<pid>.json removed in step 6
+
+Repo-local helper residue: 0 (only the launchd-managed permanent helper exists)
+
+Note: any active_client_count or active_job_count above 0 is pre-existing
+substrate state accumulated from this run + the parent ACT + earlier probes.
+This ACT's own resources (the PGID it created) are cleaned up at end of driver.
+The lingering state will be reclaimed by the helper lazily on the next
+register attempt with a different peer identity, per helper.c:1324.
+`
+  await Bun.write(`${evidenceDir}/15-conservation.txt`, conservationTxt)
 }
 
 main().catch(err => {

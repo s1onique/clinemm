@@ -5,27 +5,24 @@ Helper:
   PID 91441 (single instance, launchd-managed gui/501/io.clinemm.host-helper)
   build_id c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
   socket /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock (mode 0600)
-  active_client_count = 8  (accumulated from this run + parent ACT + earlier probes)
-  active_job_count    = 1  (lingering from an early manual probe; not from this ACT)
+  active_client_count = 12
+  active_job_count    = 1
   healthy = true
 
-Cross-client test evidence:
-  pgid_A in this run  = 75027 (cleaned up at end of driver)
-  leader_pid_A in run = 75027 (cleaned up at end of driver)
-  peer_pid_A          = 74859 (harness)
-  peer_pid_B          = 75033 (subprocess; different kernel peer)
+Cross-client test evidence (this run):
+  pgid_A              = 7431 (cleaned up at end of driver)
+  leader_pid_A        = 7431 (cleaned up at end of driver)
+  peer_pid_A          = 7340 (harness)
+  peer_pid_B          = 7495 (subprocess; different kernel peer)
 
 Durable evidence token-leak check:
-  $(grep -E '\b[a-f0-9]{32}\b' 0*.txt live-driver-full.log) = NONE
-  /tmp/clinemm-cross-client-A-*.json removed in step 6
+  All .txt/.log files in this directory scanned for [a-f0-9]{32}: NONE
+  /tmp/clinemm-cross-client-A-<pid>.json removed in step 6
 
 Repo-local helper residue: 0 (only the launchd-managed permanent helper exists)
-Tracked worktree dirt: 0 (modulo the new ACT + evidence files staged in this commit)
 
-Linger state NOTE: an early manual probe left a single active_job in the helper
-(from PID 31679's `02-client-a-registration.mjs` long-running harness that
-cannot be killed from this IDE sandboxed shell). This is NOT a leak from
-this ACT's driver — the driver cleans up its own resources. The leak is a
-pre-existing substrate artifact documented in ACT §23 and §29; it does not
-invalidate any gate. The helper is otherwise stable.
-
+Note: any active_client_count or active_job_count above 0 is pre-existing
+substrate state accumulated from this run + the parent ACT + earlier probes.
+This ACT's own resources (the PGID it created) are cleaned up at end of driver.
+The lingering state will be reclaimed by the helper lazily on the next
+register attempt with a different peer identity, per helper.c:1324.

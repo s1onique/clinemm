@@ -19,32 +19,32 @@
   "A_REGISTRATION": "PASS",
   "TARGET_A_BOUNDED": "PASS",
   "detached_leader": "PASS",
-  "A_PGID": 90842,
-  "A_LEADER_PID": 90842,
-  "PEER_PID_A": 90810,
+  "A_PGID": 7431,
+  "A_LEADER_PID": 7431,
+  "PEER_PID_A": 7340,
   "client_token_present": true,
   "peer_uid_A": 501,
-  "peer_pid_A_wire": 90810,
+  "peer_pid_A_wire": 7340,
   "peer_pid_match": true,
   "job_token_present": true,
   "A_JOB_TOKEN_REAL": "PASS",
   "token_lengths": 32,
   "tokens_distinct": true,
-  "A_SECRET_FILE": "/tmp/clinemm-cross-client-A-90810.json"
+  "A_SECRET_FILE": "/tmp/clinemm-cross-client-A-7340.json"
 }
 ---STEP:03_client_b_distinct_peer---
 {
   "step": "client_b_distinct_peer",
   "exit_code": 0,
-  "stdout": "{\"step\":\"client_b_distinct_peer\",\"PEER_PID_B\":90850,\"PEER_PID_A\":90810,\"client_token_present\":true,\"peer_uid_B\":501,\"peer_pid_B_wire\":90850,\"peer_pid_match\":true,\"token_lengths\":32,\"tokens_distinct_from_a\":true,\"peer_pids_differ\":true,\"B_TERMINATE_RESULT\":{\"ok\":false,\"error\":\"DENY_FOREIGN_JOB\"},\"B_OK\":false,\"B_ERROR\":\"DENY_FOREIGN_JOB\",\"B_USING_A_REAL_JOB_TOKEN\":\"PASS\",\"DONE\":\"B_DENIED\"}\n",
+  "stdout": "{\"step\":\"client_b_distinct_peer\",\"PEER_PID_B\":7495,\"PEER_PID_A\":7340,\"client_token_present\":true,\"peer_uid_B\":501,\"peer_pid_B_wire\":7495,\"peer_pid_match\":true,\"token_lengths\":32,\"tokens_distinct_from_a\":true,\"peer_pids_differ\":true,\"B_TERMINATE_RESULT\":{\"ok\":false,\"error\":\"DENY_FOREIGN_JOB\"},\"B_OK\":false,\"B_ERROR\":\"DENY_FOREIGN_JOB\",\"B_USING_A_REAL_JOB_TOKEN\":\"PASS\",\"DONE\":\"B_DENIED\"}\n",
   "stderr": "",
   "parsed": {
     "step": "client_b_distinct_peer",
-    "PEER_PID_B": 90850,
-    "PEER_PID_A": 90810,
+    "PEER_PID_B": 7495,
+    "PEER_PID_A": 7340,
     "client_token_present": true,
     "peer_uid_B": 501,
-    "peer_pid_B_wire": 90850,
+    "peer_pid_B_wire": 7495,
     "peer_pid_match": true,
     "token_lengths": 32,
     "tokens_distinct_from_a": true,
@@ -62,12 +62,12 @@
 ---STEP:04_foreign_group_survives---
 {
   "step": "foreign_group_survives",
-  "PGID_A": 90842,
-  "LEADER_PID_A": 90842,
+  "PGID_A": 7431,
+  "LEADER_PID_A": 7431,
   "psProbeExit": 0,
-  "psProbeStdout": "PID  PGID COMMAND\n90842 90842 /bin/sh -c sleep 60 & echo CHILD_PID=$!; wait",
+  "psProbeStdout": "PID  PGID COMMAND\n 7431  7431 /bin/sh -c sleep 60 & echo CHILD_PID=$!; wait",
   "helper_active_job_count": 3,
-  "helper_active_client_count": 11,
+  "helper_active_client_count": 13,
   "A_GROUP_AFTER_B_ATTEMPT": "ALIVE"
 }
 ---STEP:05_owner_positive_control---
@@ -75,7 +75,7 @@
   "step": "owner_positive_control",
   "A_OWN_TERMINATE_RESULT": {
     "version": 1,
-    "request_id": "s5-1789650880631",
+    "request_id": "s5-1789650948147",
     "ok": true,
     "result": "TERMINATED_TERM"
   },
@@ -88,7 +88,7 @@
   "PGA_FINAL_ps_exit": 1,
   "PGA_FINAL_ps_stdout": "",
   "pre_close_active_job_count": 1,
-  "pre_close_active_client_count": 11,
+  "pre_close_active_client_count": 13,
   "A_SECRET_REMOVED": true,
   "DONE": "ALL_STEPS_COMPLETE"
 }
@@ -107,12 +107,12 @@
     "CLIENT_SLOT_BASELINE": "PASS",
     "JOB_SLOT_BASELINE": "PASS"
   },
-  "elapsed_ms": 1097,
-  "pgid_A": 90842,
-  "leader_pid_A": 90842,
-  "peer_pid_A": 90810,
-  "peer_pid_B": 90850,
-  "helper_post_close_active_client_count": 11,
+  "elapsed_ms": 1098,
+  "pgid_A": 7431,
+  "leader_pid_A": 7431,
+  "peer_pid_A": 7340,
+  "peer_pid_B": 7495,
+  "helper_post_close_active_client_count": 13,
   "helper_post_close_active_job_count": 1,
   "client_token_lengths": 32,
   "job_token_lengths": 32,
