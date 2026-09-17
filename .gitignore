@@ -121,3 +121,5 @@ apps/examples/desktop-app/.cursor/settings.json
 /.factory/tmp/
 .bun-tmp/
 .bun-install/
+
+scripts/__pycache__/
