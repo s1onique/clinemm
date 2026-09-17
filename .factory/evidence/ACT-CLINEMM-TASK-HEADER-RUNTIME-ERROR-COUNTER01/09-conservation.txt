@@ -1,56 +1,52 @@
 === ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 09-conservation ===
-
 # Conservation check: ordinary command exits do NOT increment
-
 A command that exits with a non-zero exit code (e.g. `sh -c 'exit 23'`)
 is NOT a runtime error. It is a normal command outcome. The runtime-
 error counter must remain at zero (or stay at its prior value).
-
 # Why this matters
-
 If the counter incremented on every non-zero exit, the user would
 see "⚠ 999" on any task that touched a grep-no-match or a test
 failure — useless noise that drowns the actual EPERM signal.
-
 # The seam
-
 Only ONE path increments the counter: `recordRuntimeError(incident)`.
 That method is only called from `CommandJobManager.reportRuntimeError`,
 which is only called from `runTerminationSequence` when
 `treeResult.epermDetected === true`.
-
 A command that exits normally (or with a non-zero exit code) goes
 through:
   bash.ts:spawnSupervisableShellCommand -> child runs -> child exits
     -> resolve(exit) -> job transitions to "exited"
       -> CommandJobManager.finalize(job, "exited", ...)
         -> NO reportRuntimeError call
-
 The `epermDetected` field of `TerminateTreeResult` is only set when
 the supervisor's `kill(-pgid, sig)` returns EPERM during an active
 termination sequence. A natural exit does not invoke terminateTree
 on the supervisor's behalf.
-
 # Test pins
-
 apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
   REC-BE-08: ordinary exit (no EPERM) does NOT increment — counter stays 0
     - start("sh -c 'exit 23'", ...)
     - status(..., waitMs: 5_000)  // wait for natural exit
     - expect(incidents).toHaveLength(0)
-
 apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
   REC-BE-09: clean direct termination (epermDetected=false) does NOT
     increment
     - spawnFactory returns { epermDetected: false, treeTerminated: true }
     - cancel(jobId)
     - expect(incidents).toHaveLength(0)
-
+# LIVE_EXIT7_UNCHANGED (CORRECTION01)
+apps/vscode/src/sdk/task-telemetry-tracker.live-green.ts is the
+live-green driver referenced by 07-eperm-live-green.txt Layer 2.
+The driver emits:
+  {"step":"exit7_unchanged","wire_unchanged":true,"wire_runtimeErrorCount":2}
+after taking a wire snapshot before and after a non-incident step
+(no recordRuntimeError call between snapshots). The wire is byte-
+identical and runtimeErrorCount stays at the prior value (2).
+This is the LIVE equivalent of the reviewer's `sh -c 'exit 7'`
+discriminator.
 # Conclusion
-
 Conservation is structural: only `epermDetected === true` triggers
 the increment. All other terminal paths (exit, exited-non-zero,
 deadline_exceeded, cancelled-with-clean-termination, spawn_failed)
 do NOT increment. This is the discriminator that gives the ⚠ N
 glyph its signal-to-noise value.
-

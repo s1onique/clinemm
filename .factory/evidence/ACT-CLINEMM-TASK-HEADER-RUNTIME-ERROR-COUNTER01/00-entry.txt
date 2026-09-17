@@ -1,17 +1,27 @@
 ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 00-entry
-
 Goal: add a task-scoped runtime-error counter to the TaskHeader that displays
-"⚠ N" for structured ClineMM runtime incidents (EPERM, EACCES, ENOENT,
-spawn failure, signal failure, etc.) attributable to the current task.
-
+"⚠ N" for structured ClineMM runtime incidents (V1 production-wired: EPERM
+during process-tree termination; schema-reserved for EACCES / ENOENT / spawn
+failure / IPC / timeout but NOT yet production-wired) attributable to the
+current visible task session.
 Recon summary:
   HEADER_RENDER_SEAM     = apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx
-  HEADER_STATE_SOURCE    = TaskHeaderTelemetryStrip (apps/vscode/src/shared/ExtensionMessage.ts:728)
+  HEADER_STATE_SOURCE    = TaskHeaderTelemetryStrip (apps/vscode/src/shared/ExtensionMessage.ts)
   TASK_IDENTITY_SOURCE   = TaskTelemetryTracker (apps/vscode/src/sdk/task-telemetry-tracker.ts)
-  ERROR_AUTHORITY        = TerminateTreeResult.epermDetected (sdk/.../executors/bash.ts:898)
+  ERROR_AUTHORITY        = TerminateTreeResult.epermDetected (sdk/.../executors/bash.ts)
                            + CommandJobManager.cancel() result + spawn_failed (vscode-run-commands-tool.ts)
-  TRANSPORT_SEAM         = SdkController.getStateToPostToWebview() taskTelemetry field (SdkController.ts:4410)
-
+  TRANSPORT_SEAM         = SdkController.getStateToPostToWebview() taskTelemetry field (SdkController.ts)
 STRUCTURED_ERROR_AUTHORITY_FOUND = PASS
 TASK_ID_AVAILABLE_AT_AUTHORITY    = PASS
 runtimeErrorCount currently       = absent
+# CORRECTION01 recon (post-review)
+Reviewer P0: the implementation must produce a LIVE ⚠ 1 observation
+(not just bash primitive + synthetic composition) and the
+task-lifetime contract must be honestly framed (the counter resets
+on task identity change and is NOT durable across switches).
+Resolution: see 07-eperm-live-green.txt (3-layer live composition)
+and 08-task-isolation.txt (current-visible-task-session contract).
+The wire schema is intentionally NOT changed; only the doc language
+in ExtensionMessage.ts and the user-visible tooltip in
+TaskHeaderTelemetry.tsx are updated to reflect the honest
+contract.

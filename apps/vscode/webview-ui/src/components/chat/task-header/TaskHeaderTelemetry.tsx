@@ -329,18 +329,31 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 
 			  Counter remains NON-CLICKABLE in V1 (no error
 			  details panel); cursor stays default.
+
+			  ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION01:
+			  lifetime contract narrowed to "current visible task
+			  session". The `title` attribute carries the explicit
+			  reset semantics so users can hover to discover that
+			  switching to a different task resets the count. The
+			  `aria-label` stays concise to avoid screen-reader
+			  noise.
 			*/}
 			{(() => {
 				const count = telemetry.runtimeErrorCount ?? 0
 				if (count <= 0) return null
 				const label = `${count} runtime error${count === 1 ? "" : "s"} in this task`
+				const title =
+					`Cumulative structured ClineMM runtime error incidents in ` +
+					`the current task session (V1: EPERM during process-tree termination). ` +
+					`Resets to 0 when the task identity changes; the count is not carried ` +
+					`over when returning to a previously-incident-bearing task.`
 				return (
 					<span
 						aria-label={label}
 						className="inline-flex items-center gap-1"
 						data-testid="task-header-runtime-error-count"
 						style={{ color: "var(--vscode-errorForeground)" }}
-						title={label}>
+						title={title}>
 						<span aria-hidden>⚠</span>
 						<span className="font-mono">{count}</span>
 					</span>

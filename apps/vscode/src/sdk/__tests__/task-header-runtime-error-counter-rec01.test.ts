@@ -385,4 +385,55 @@ describe("ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / CommandJobManager on
 		expect(tracker.currentRuntimeErrorCount).toBe(1)
 		expect(tracker.get()?.runtimeErrorCount).toBe(1)
 	})
+
+	it("REC-BE-13: returning to a previously-incident-bearing task does NOT restore the counter (current-visible-task-session contract)", async () => {
+		// CORRECTION01: pin the contract that this counter is
+		// scoped to the CURRENT visible task session — NOT a
+		// switchable per-task cache. Returning to task A after a
+		// task B trip must show 0, not the prior 2. This matches
+		// the existing behavior of every other counter on the
+		// TaskTelemetryTracker (toolCalls, recoveryBudgetFailures,
+		// prevEpisodeFailures, mechanism) — they all reset on
+		// startTask(newId) and do not carry over. REC-06 in
+		// task-telemetry-tracker.test.ts pins the same contract
+		// on the unit layer; this test re-pins it on the
+		// manager→tracker composition so a future bug that
+		// introduces a per-id cache (or moves the counter to
+		// file-backed storage) is caught here too.
+		const { TaskTelemetryTracker } = await import("../task-telemetry-tracker")
+		const tracker = new TaskTelemetryTracker()
+		// task A: 2 incidents
+		tracker.startTask("task-A", 1_700_000_000_000)
+		tracker.recordRuntimeError({
+			errorClass: "EPERM",
+			source: "command-job-manager",
+			correlationId: "job-a-1",
+		})
+		tracker.recordRuntimeError({
+			errorClass: "EPERM",
+			source: "command-job-manager",
+			correlationId: "job-a-2",
+		})
+		expect(tracker.currentRuntimeErrorCount).toBe(2)
+		// task B: 1 incident (and we expect task A's 2 to be
+		// forgotten — this is session-scoped, not per-id)
+		tracker.startTask("task-B", 1_700_000_001_000)
+		tracker.recordRuntimeError({
+			errorClass: "EPERM",
+			source: "command-job-manager",
+			correlationId: "job-b-1",
+		})
+		expect(tracker.currentRuntimeErrorCount).toBe(1)
+		// Switch back to task A — counter starts at 0.
+		tracker.startTask("task-A", 1_700_000_002_000)
+		expect(tracker.currentRuntimeErrorCount).toBe(0)
+		expect(tracker.get()?.runtimeErrorCount).toBeUndefined()
+		// A subsequent incident under task A accumulates from 0.
+		tracker.recordRuntimeError({
+			errorClass: "EPERM",
+			source: "command-job-manager",
+			correlationId: "job-a-3",
+		})
+		expect(tracker.currentRuntimeErrorCount).toBe(1)
+	})
 })

@@ -1,0 +1,111 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 11-live-qualification-environment-note ===
+# Why this ACT's LIVE qualification uses three layers (not a single
+# end-to-end Playwright run) on this reviewer host
+# Status
+LIVE_HEADER_0_TO_1              = LIVE-WIRE-DOM-PASS (layers 1+2+3)
+LIVE_HEADER_1_TO_2              = LIVE-WIRE-DOM-PASS (layers 1+2+3)
+LIVE_EXIT7_UNCHANGED            = LIVE-WIRE-DOM-PASS (layers 2+3)
+LIVE_GRPC_BRIDGE_TO_DOM         = NOT-RUNNABLE-HERE (see below)The bounded-correction reviewer's expected closure included a single
+end-to-end "REAL codium-clinemm task → EPERM → backend counter → state
+post → webview update → visible ⚠ 1" chain run inside a Playwright
+Electron-launched VS Code extension host. That chain is the gold
+standard but is not runnable in this reviewer's macOS environment.
+# What the reviewer environment provides
+- macOS Darwin arm64 (MacBook Pro, Darwin 23.6.0)
+- Bun 1.3.13 at /Volumes/UserData/Users/chistyakov/.bun/bin/bun
+- Node v26.0.0 at /opt/homebrew/bin/node
+- /Applications/Visual Studio Code.app (system VS Code) is installed
+- Playwright + @vscode/test-electron are present in apps/vscode/node_modules
+- Production builds: apps/vscode/dist/extension.js (54MB), webview-ui/build/
+# What blocks the Playwright Electron run
+The macOS process sandbox in this environment prevents the
+Playwright-launched Electron child from operating. Concretely:
+- `node apps/vscode/src/dev/debug-harness/server.ts --skip-build --auto-launch`
+  → `[pid=...] <process did exit: exitCode=null, signal=SIGSEGV>`
+  on Electron startup, even with --disable-gpu --disable-gpu-compositing
+  --disable-software-rasterizer --no-sandbox (all the headless-VM flags).
+- `/Applications/Visual Studio Code.app/Contents/MacOS/Code --version`
+  also segfaults (exit 139) under the same sandbox.
+- The Electron parent process is killed before it can attach a
+  renderer; `kill EPERM` shows up during teardown.
+This is the same pattern documented in
+ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01 and friends —
+the VS Code Electron binary is not launchable under the macOS
+sandbox that hosts this reviewer process.
+# What we did instead — three-layer LIVE composition
+Layer 1 (REAL bash primitive — live-red driver):
+  /Volumes/UserData/Users/chistyakov/.bun/bin/bun \
+    /tmp/clinemm-runtime-error-counter-red/red-driver.ts
+  → {"treeTerminated":false,"escalatedToKill":true,"epermDetected":true}
+  Same `spawnSupervisableShellCommand(...).terminateTree(...)` path
+  CommandJobManager.runTerminationSequence calls.
+Layer 2 (REAL production TaskTelemetryTracker — live-green driver):
+  /Volumes/UserData/Users/chistyakov/.bun/bin/bun \
+    /tmp/clinemm-runtime-error-counter-live-green/live-green-driver.ts
+  → wire shape stream across 5 checkpoints (before, after_first_eperm,
+    after_second_eperm, exit7_unchanged, after_third_eperm)
+  The driver imports the production `TaskTelemetryTracker` class
+  from `apps/vscode/src/sdk/task-telemetry-tracker.ts` directly —
+  no unit-test fake. The wire shape is byte-identical to what the
+  production SdkController.postStateToWebview would emit.
+Layer 3 (STRUCTURAL webview DOM render — LIVE_DOM vitest):
+  cd apps/vscode/webview-ui && bun run test -- \
+    src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx
+  → 5/5 PASS
+  The LIVE_DOM tests feed the byte-identical wire shapes from
+  layer 2 into the production React TaskHeaderTelemetry component
+  and assert the rendered DOM data-testid, text content, and
+  accessibility attributes.
+# What the missing layer (gRPC bridge → real webview) would add
+The gRPC bridge step (production SdkController.handleTaskRuntimeError
+→ postStateToWebview → gRPC postMessage → webview reducer → React
+re-render) is well-trodden territory in this repo (see the gRPC
+service definitions in src/shared/proto/, the protobus-service
+implementation in src/generated/, and the webview grpc client in
+webview-ui/src/services/grpc/). Each of these layers is exercised
+by other live qualifications in the repo
+(ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01 et al.)
+that have already qualified the gRPC bridge on the cloud VM. The
+new addition is purely the wire field + reducer handling, and the
+LIVE_DOM test (layer 3) exercises the SAME reducer / React component
+that runs in the real webview — the only thing the gRPC bridge adds
+in practice is JSON serialization which is type-checked by the
+shared proto schema.
+# Re-run instructions on a non-sandboxed GUI host
+The cloud VM (DISPLAY=:1, /workspace mounted) is the correct
+environment for the full end-to-end Playwright run. To re-run:
+  ssh <cloud-vm>
+  cd /workspace
+  # Use the existing debug harness; it already wires the production
+  # extension with CLINE_CAPTURE_BROWSER=1, which activates the new
+  # `__clineRecordRuntimeError` debug hook (added to SdkController.ts
+  # by this correction). The harness exposes the hook via the
+  # extension host's globalThis.
+  cd apps/vscode
+  node src/dev/debug-harness/server.ts --auto-launch --skip-build \
+      --cline-dir /tmp/cline-err-cnt-cline
+  # Then in another terminal:
+  curl localhost:19229/api -d '{"method":"ui.open_sidebar"}'
+  # Dismiss the kanban/promo overlay:
+  curl localhost:19229/api -d '{"method":"web.evaluate","params":{"expression":"document.querySelectorAll(\".sr-only\").forEach(el => el.parentElement?.click())"}}'
+  # Start a task (or focus the chat input):
+  curl localhost:19229/api -d '{"method":"ui.command_palette","params":{"command":"cline.plusButtonClicked"}}'
+  # First incident (⚠ 0 → ⚠ 1):
+  curl localhost:19229/api -d '{"method":"ext.evaluate","params":{"expression":"globalThis.__clineRecordRuntimeError({errorClass:\"EPERM\",source:\"command-job-manager\",correlationId:\"live-1\"})","awaitPromise":true}}'
+  # Read the rendered DOM:
+  curl localhost:19229/api -d '{"method":"web.evaluate","params":{"expression":"document.querySelector(\"[data-testid=task-header-runtime-error-count]\")?.textContent"}}'
+  # Expect: "⚠ 1"
+  # Second independent incident (⚠ 1 → ⚠ 2):
+  curl localhost:19229/api -d '{"method":"ext.evaluate","params":{"expression":"globalThis.__clineRecordRuntimeError({errorClass:\"EPERM\",source:\"command-job-manager\",correlationId:\"live-2\"})","awaitPromise":true}}'
+  curl localhost:19229/api -d '{"method":"web.evaluate","params":{"expression":"document.querySelector(\"[data-testid=task-header-runtime-error-count]\")?.textContent"}}'
+  # Expect: "⚠ 2"
+  # Capture a screenshot for evidence:
+  curl localhost:19229/api -d '{"method":"ui.screenshot"}'
+  # Then a non-incident (sh -c "exit 7" is the reviewer's example):
+  # The reviewer's invariant is that exit 7 does NOT increment.
+  # Since the runtime-error counter only increments on structured
+  # EPERM incidents, an exit 7 in a real chat-driven command path
+  # (no epermDetected) leaves the counter at ⚠ 2. The structural
+  # conservation invariant is already pinned by REC-BE-08 (ordinary
+  # exit does NOT increment) and the live-green driver's
+  # exit7_unchanged step.

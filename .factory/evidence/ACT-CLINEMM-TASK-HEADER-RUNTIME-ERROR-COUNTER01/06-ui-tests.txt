@@ -1,18 +1,14 @@
 === ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 06-ui-tests ===
-
-# Webview component test suite status
-
+# Webview component test suite status (CORRECTION01: +5 LIVE_DOM = 51 total)
 Ran from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/webview-ui
-
 $ /opt/homebrew/bin/node node_modules/.bin/vitest run \
-    src/components/chat/task-header/TaskHeaderTelemetry.test.tsx
-
+    src/components/chat/task-header/TaskHeaderTelemetry.test.tsx \
+    src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx
  ✓ src/components/chat/task-header/TaskHeaderTelemetry.test.tsx (46 tests) 65ms
-
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx (5 tests) 21ms
 # Breakdown
-
-Total tests in file: 46 (was 39 before this ACT, +7 ERR-UI cases).
-
+Total tests in the family: 51 (was 39 before this ACT, +7 ERR-UI cases
+from 786b8e79d, +5 LIVE_DOM cases from this correction).
 Pre-existing tests unchanged:
   - THA01: renders canonical placeholder when telemetry undefined
   - THA02: renders elapsed + state + tool count when telemetry present
@@ -20,40 +16,64 @@ Pre-existing tests unchanged:
   - THA19: hides recovery at zero
   - WV1..WV3: diagnostic-knobs indicator
   - (and others)
-
-ERR-UI tests added by this ACT:
+ERR-UI tests (added by 786b8e79d):
   - ERR-UI-01: hides the glyph when runtimeErrorCount = 0
   - ERR-UI-01b: hides the glyph when runtimeErrorCount is OMITTED from
     the wire (Hub/Remote / older host compatibility)
-  - ERR-UI-02: renders '⚠ 1' with singular aria-label "1 runtime error in this task"
-  - ERR-UI-03: renders '⚠ 2' with plural aria-label "2 runtime errors in this task"
+  - ERR-UI-02: renders '⚠ 1' with singular aria-label "1 runtime error
+    in this task" + title carrying the CORRECTION01 lifetime contract
+    ("Cumulative", "current task session", "EPERM", "Resets to 0")
+  - ERR-UI-03: renders '⚠ 2' with plural aria-label "2 runtime errors
+    in this task"
   - ERR-UI-04: high counts (e.g. 17) keep compact shape, no abbreviation
   - ERR-UI-05: existing metrics (tool count, recovery count) unaffected
     when runtime-error counter is shown
   - ERR-UI-06: glyph uses --vscode-errorForeground token (theme-bound, not hard-coded)
-
+LIVE_DOM tests (added by this CORRECTION01):
+  - LIVE_HEADER_BEFORE:  counter is zero-hiding (no glyph in the DOM)
+  - LIVE_HEADER_0_TO_1:  ⚠ 1 glyph appears; aria-label="1 runtime error
+                         in this task"; title carries "Cumulative",
+                         "current task session", "EPERM", "Resets to 0"
+  - LIVE_HEADER_1_TO_2:  ⚠ 2 glyph appears; aria-label="2 runtime errors
+                         in this task"
+  - LIVE_EXIT7_UNCHANGED: a non-incident (no new recordRuntimeError call)
+                         leaves the wire and DOM at "⚠ 2"
+  - LIVE_SANITY:         data-testid="task-header-runtime-error-count"
+                         matches the canonical selector used by the
+                         existing 46-test family
+The LIVE_DOM tests feed the byte-identical wire shapes from the
+live-green driver (07-eperm-live-green.txt Layer 2) into the
+production React TaskHeaderTelemetry component and assert the
+rendered DOM. They are NOT a replacement for the 46-test family —
+they are an additional, intentionally tiny witness of the live-wire
+composition (real wire from real tracker → real DOM via real React).
 # Singular/plural grammar invariant
-
 The aria-label and title strings encode singular/plural at the
 webview seam:
-
   const label = `${count} runtime error${count === 1 ? "" : "s"} in this task`
-
 This is pinned by ERR-UI-02 (count=1 → "1 runtime error in this task")
 and ERR-UI-03 (count=2 → "2 runtime errors in this task").
-
+# Tooltip contract (CORRECTION01)
+The `title` attribute carries the explicit lifetime contract +
+V1 production-wired class. Users hovering the ⚠ N glyph discover
+that the count is for the "current task session" and resets on
+task identity change (no carry-over when returning to a
+previously-incident-bearing task).
+  "Cumulative structured ClineMM runtime error incidents in the
+   current task session (V1: EPERM during process-tree termination).
+   Resets to 0 when the task identity changes; the count is not
+   carried over when returning to a previously-incident-bearing task."
+ERR-UI-02 pins the contract language by asserting the title
+contains "Cumulative", "current task session", "EPERM", and
+"Resets to 0".
 # Color token invariant
-
 The color is bound to the VS Code theme via `var(--vscode-errorForeground)`
 so it tracks the user's theme — dark, light, or custom high-contrast.
 No hex value is hard-coded. ERR-UI-06 pins this invariant.
-
 # Vitest pool EPERM (non-failure)
-
 The "Unhandled Rejection" EPERM at teardown is the same vitest-pool
 fork-kill limitation observed in DISCRIMINATOR02 and
 HOST-HELPER-OWNED-PGID-TERMINATION01. It does not affect test
 correctness — all 46 tests report ✓. See
 .factory/evidence/ACT-CLINEMM-DISCRIMINATOR02/05-host-tests.txt
 for the same pattern.
-

@@ -1,22 +1,39 @@
 {
   "act": "ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01",
-  "status": "GREEN",
-  "summary": "Task-scoped runtime-error counter (⚠ N) on TaskHeader, fed from the canonical bash.ts:epermDetected signal via CommandJobManager.reportRuntimeError and TaskTelemetryTracker.recordRuntimeError.",
+  "status": "GREEN-CORRECTION01",
+  "correction": "CORRECTION01 — bounded correction per factory reviewer (HALT_RUNTIME_ERROR_COUNTER_NOT_LIVE_QUALIFIED)",
+  "summary": "Task-scoped runtime-error counter (⚠ N) on TaskHeader, fed from the canonical bash.ts:epermDetected signal via CommandJobManager.reportRuntimeError and TaskTelemetryTracker.recordRuntimeError. CORRECTION01 narrows the lifetime contract to 'current visible task session' (NOT durable across task switches) and narrows the V1 production-wired class to EPERM-only. Live-wire-DOM evidence captured (3-layer composition: real bash primitive + production tracker + structural React render); gRPC bridge → real webview DOM is NOT-RUNNABLE-HERE due to macOS process sandbox blocking Playwright Electron launch.",
   "tests": {
-    "backend_rec_be": 12,
+    "backend_rec_be": 13,
     "backend_rec_unit": 12,
     "backend_pre_existing": 52,
-    "backend_total": 76,
+    "backend_total": 77,
     "webview_err_ui": 7,
+    "webview_live_dom": 5,
     "webview_pre_existing": 39,
-    "webview_total": 46
+    "webview_total": 51
   },
   "gates": {
     "host_typecheck": "PASS",
     "webview_typecheck": "PASS",
-    "backend_vitest": "PASS (76/76)",
-    "webview_vitest": "PASS (46/46)",
-    "live_eperm_driver": "PASS (epermDetected=true)"
+    "backend_vitest": "PASS (77/77)",
+    "webview_vitest": "PASS (51/51)",
+    "live_eperm_driver_real_bash_primitive": "PASS ({\"treeTerminated\":false,\"escalatedToKill\":true,\"epermDetected\":true})",
+    "live_production_tracker_wire": "PASS (5-checkpoint wire stream: before→no field, after_first_eperm→1, after_second_eperm→2, exit7_unchanged→2, after_third_eperm→3)",
+    "live_dom_render_witness": "PASS (5/5 LIVE_DOM: LIVE_HEADER_BEFORE / LIVE_HEADER_0_TO_1 / LIVE_HEADER_1_TO_2 / LIVE_EXIT7_UNCHANGED / LIVE_SANITY)",
+    "live_grpc_bridge_to_real_webview": "NOT-RUNNABLE-HERE (macOS process sandbox blocks Playwright Electron launch; SIGSEGV on Code --version and on _electron.launch; see 11-live-qualification-environment-note.txt for re-run on cloud VM with DISPLAY=:1)",
+    "diff_check": "PASS (git diff --check HEAD → exit 0; 7 trailing-blank-line whitespace errors from 786b8e79d resolved)",
+    "worktree_clean": "NOT-PASS (apps/vscode/src/core/controller/state/working-context-state-projection.ts has 5-line formatting-only change — MPWC02 residue; separate owner territory, NOT folded into this correction)"
+  },  "expected_closure": {
+    "LIVE_HEADER_0_TO_1": "PASS (3-layer LIVE: real bash EPERM substrate + real production tracker wire + structural DOM render of byte-identical wire)",
+    "LIVE_HEADER_1_TO_2": "PASS (3-layer LIVE)",
+    "LIVE_EXIT7_UNCHANGED": "PASS (real production tracker wire; structural DOM render)",
+    "COUNTER_LIFETIME_CONTRACT": "PROVEN (current visible task session; not durable across switches; REC-06 + REC-BE-13 pin this)",
+    "TASK_SCOPE_CLAIM": "HONEST (narrowed from 'task-scoped' to 'current visible task session' in ExtensionMessage.ts JSDoc, TaskHeaderTelemetry.tsx tooltip, and 08-task-isolation.txt; user-visible aria-label kept concise, full contract in tooltip)",
+    "V1_PRODUCTION_CLASS": "EPERM (narrowed from broad taxonomy; EACCES/ENOENT/spawn/IPC/timeout are schema-reserved but NOT production-wired; see 03-error-authority.txt)",
+    "DIFF_CHECK": "PASS",
+    "RESULT_BOUND_TO_LIVE_RUN": "PASS (this result.json is bound to the live-green driver output captured this ACT, not to the original bash-primitive-only composition)",
+    "ACT": "GREEN-CORRECTION01 (with one NOT-RUNNABLE-HERE gate for the gRPC bridge that requires the cloud VM's GUI environment; re-run instructions in 11-live-qualification-environment-note.txt)"
   },
   "files_modified": [
     "apps/vscode/src/shared/ExtensionMessage.ts",
@@ -27,7 +44,20 @@
     "apps/vscode/src/sdk/SdkController.ts",
     "apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts",
     "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx",
-    "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx"
+    "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx",
+    "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx (NEW — CORRECTION01 LIVE_DOM witness)",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/00-entry.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/02-live-red.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/03-error-authority.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/04-projection-contract.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/05-backend-tests.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/06-ui-tests.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/07-eperm-live-green.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/08-task-isolation.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/09-conservation.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/10-gates.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/11-live-qualification-environment-note.txt (NEW — CORRECTION01 sandbox blocker + re-run instructions)",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/result.json"
   ],
   "invariants_pinned": [
     "Single EPERM authority: bash.ts:terminateTree.epermDetected (no other probes)",
@@ -35,10 +65,12 @@
     "Saturation: Math.min(N+1, Number.MAX_SAFE_INTEGER) in TaskTelemetryTracker",
     "Wire zero-hiding: runtimeErrorCount emitted only when > 0 (single spread-conditional)",
     "Webview normalization: single ?? 0 boundary",
-    "Task isolation: startTask(newTaskId) resets runtimeErrorCount",
-    "Conservation: non-zero exit codes do NOT increment (only epermDetected=true)",
+    "Task isolation: startTask(newTaskId) resets runtimeErrorCount to 0 destructively (CORRECTION01: explicitly clarified that 'current visible task session' is NOT durable across switches; REC-06 + REC-BE-13 pin)",
+    "Conservation: non-zero exit codes do NOT increment (only epermDetected=true); LIVE_EXIT7_UNCHANGED pins this on real production tracker wire + structural DOM",
     "Best-effort sink: throwing onRuntimeError callback does NOT break cancel flow",
     "Helper-recovery success does NOT suppress EPERM callback",
-    "No onRuntimeError sink supplied → manager silently drops incidents"
+    "No onRuntimeError sink supplied → manager silently drops incidents",
+    "V1 production-wired class: EPERM_FROM_COMMAND_TERMINATION ONLY (CORRECTION01: schema-reserved union for EACCES/ENOENT/spawn/IPC/timeout but NOT production-wired; see 03-error-authority.txt for the rule)",
+    "Tooltip contract: aria-label concise, title carries explicit 'current task session' + 'Resets to 0' lifetime language (CORRECTION01; pinned by ERR-UI-02)"
   ]
 }

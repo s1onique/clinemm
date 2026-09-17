@@ -1,10 +1,8 @@
 === ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 04-projection-contract ===
-
 # Wire schema: TaskHeaderTelemetryStrip.runtimeErrorCount?
-
 apps/vscode/src/shared/ExtensionMessage.ts
   export interface RuntimeErrorIncident {
-    readonly errorClass: RuntimeErrorClass  // "EPERM" | ... (forward-compat union)
+    readonly errorClass: RuntimeErrorClass  // "EPERM" | ... (forward-compat union, EPERM-only in V1)
     readonly source: RuntimeErrorSource     // "command-job-manager" | ... (forward-compat union)
     readonly correlationId?: string         // job.id of the offending job
   }
@@ -13,9 +11,7 @@ apps/vscode/src/shared/ExtensionMessage.ts
         // prevEpisodeFailures?, mechanism?
     readonly runtimeErrorCount?: number  // ADDED BY THIS ACT
   }
-
 # Wire emission: zero-hiding single spread-conditional
-
 apps/vscode/src/sdk/task-telemetry-tracker.ts:TaskTelemetryTracker.get()
   return {
     startedAt: ...,
@@ -24,39 +20,50 @@ apps/vscode/src/sdk/task-telemetry-tracker.ts:TaskTelemetryTracker.get()
       ? { runtimeErrorCount: this.runtimeErrorCount }
       : {}),
   }
-
 A single conditional decides wire emission. When the counter is 0,
 the field is OMITTED from the wire — no `runtimeErrorCount: 0` is
 ever sent. This is the canonical zero-hiding pattern, matching the
 existing `prevEpisodeFailures` behavior in this same getter.
-
 # Webview normalization: single `?? 0` boundary
-
 apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx
   {(() => {
     const count = telemetry.runtimeErrorCount ?? 0
     if (count <= 0) return null
     const label = `${count} runtime error${count === 1 ? "" : "s"} in this task`
+    const title =
+      `Cumulative structured ClineMM runtime error incidents in ` +
+      `the current task session (V1: EPERM during process-tree termination). ` +
+      `Resets to 0 when the task identity changes; the count is not carried ` +
+      `over when returning to a previously-incident-bearing task.`
     return (
       <span
         aria-label={label}
         className="inline-flex items-center gap-1"
         data-testid="task-header-runtime-error-count"
         style={{ color: "var(--vscode-errorForeground)" }}
-        title={label}>
+        title={title}>
         <span aria-hidden>⚠</span>
         <span className="font-mono">{count}</span>
       </span>
     )
   })()}
-
 The webview normalizes absence via a single `?? 0` boundary. The
 single `if (count <= 0) return null` is the zero-hiding rule on the
 read side. Older webview bundles / Hub/Remote / Remote hosts that
 don't emit the field get the same shape as `runtimeErrorCount: 0`.
-
+# Tooltip contract (CORRECTION01)
+- `aria-label` is kept CONCISE: "1 runtime error in this task" /
+  "2 runtime errors in this task" — single sentence, screen-reader-
+  friendly.
+- `title` carries the explicit lifetime contract + V1 production-
+  wired class. Users hovering the ⚠ N glyph discover that the count
+  is for the "current task session" and resets on task identity
+  change (no carry-over when returning to a previously-incident-
+  bearing task).
+- The new contract is pinned by the existing ERR-UI-02 test which
+  is updated to assert the title contains "Cumulative", "current
+  task session", "EPERM", and "Resets to 0".
 # Backward compatibility
-
 - Hub / Remote: no change to the host-side wire — they continue to
   omit `runtimeErrorCount` (it's optional). The webview renders the
   empty placeholder for them, identical to the pre-ACT behavior.
@@ -65,9 +72,7 @@ don't emit the field get the same shape as `runtimeErrorCount: 0`.
 - Older host with new webview: host does not emit the field, webview
   normalizes to 0, glyph stays hidden. Identical to pre-ACT behavior.
 - New host with new webview: EPERM incidents surface as `⚠ N`.
-
 # Saturated counter wire shape
-
 Saturation at Number.MAX_SAFE_INTEGER is a defensive ceiling only.
 For practical purposes, even a job that EPERMs every command would
 be hard-pressed to hit even 1000 in a single session. The saturation
@@ -75,4 +80,3 @@ prevents the JS Number from accidentally incrementing past 2^53 and
 producing surprising comparisons in the webview (e.g. "999" vs
 "10000000000000001" looking the same to the eye but not to JSON
 sort/compare).
-

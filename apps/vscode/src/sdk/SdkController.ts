@@ -954,6 +954,20 @@ export class Controller {
 		// (elapsed / tool / recovery counters). Lives across the controller
 		// lifetime so webview reconnect / React remount does not reset.
 		this.taskTelemetry = new TaskTelemetryTracker()
+		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: debug-only hook
+		// for the live-ext-host qualification harness. Mirrors the
+		// `__clineHandleUri` precedent in extension.ts:270-272. Lets the
+		// harness synthesize a structured RuntimeErrorIncident from
+		// `ext.evaluate` so the wire / webview path can be exercised
+		// without a real chat-driven EPERM. Gated on CLINE_CAPTURE_BROWSER
+		// so it never ships in production. The hook calls the SAME
+		// `handleTaskRuntimeError` closure the production
+		// `VscodeSessionHost.onRuntimeError` is wired to, so it exercises
+		// the exact same code path a real EPERM would.
+		if (process.env.CLINE_CAPTURE_BROWSER === "1" || process.env.CLINE_CAPTURE_BROWSER === "true") {
+			;(globalThis as Record<string, unknown>).__clineRecordRuntimeError = (incident: RuntimeErrorIncident) =>
+				this.handleTaskRuntimeError(incident)
+		}
 		// ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: construct the shared
 		// task-operation fence BEFORE any coordinator that consumes it.
 		// One instance is shared across all participating owners.

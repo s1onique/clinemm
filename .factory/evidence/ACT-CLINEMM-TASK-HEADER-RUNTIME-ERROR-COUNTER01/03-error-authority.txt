@@ -1,9 +1,6 @@
 === ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 03-error-authority ===
-
 # Authority seam: epermDetected is the single structured EPERM signal
-
 The canonical structured EPERM signal lives at:
-
   sdk/packages/core/src/extensions/tools/executors/bash.ts
     export interface TerminateTreeResult {
       readonly treeTerminated: boolean
@@ -16,15 +13,12 @@ The canonical structured EPERM signal lives at:
        */
       readonly epermDetected: boolean
     }
-
 The supervisor's terminateTree primitive is the ONLY authority. The
 CommandJobManager does NOT spawn a probe or run its own EPERM check;
 it reads `treeResult.epermDetected` exactly once after the termination
 sequence completes. This is the load-bearing contract from
 ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 review-correction04.
-
 # Surfacing chain
-
   bash.ts:spawnSupervisableShellCommand(...).terminateTree(...)
     -> returns TerminateTreeResult { epermDetected: true, ... }
        (when process.kill(-pgid, "SIGTERM") → EPERM)
@@ -43,20 +37,31 @@ ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 review-correction04.
   host sink  (SdkController.handleTaskRuntimeError closure)
     -> TaskTelemetryTracker.recordRuntimeError(incident)
     -> this.runtimeErrorCount = Math.min(this.runtimeErrorCount + 1, MAX_SAFE_INTEGER)
-
-# Why "EPERM only" (not EACCES / ENOENT / spawn failure)
-
-V1 narrows the runtime-error surface to the single signal that
-already drives an existing control-plane branch (the helper fallback).
-Adding other classes (EACCES, ENOENT, spawn-failure) would require
-new authority seams and new structured signals that do not yet exist.
+# V1 production-wired class — EPERM ONLY (CORRECTION01)
+V1_COUNTED_INCIDENTS = EPERM_FROM_COMMAND_TERMINATION
+FUTURE_CLASSES       = schema-reserved (RuntimeErrorClass union),
+                       NOT production-wired
+The runtime-error counter, as it stands in V1, ONLY increments for
+EPERM during process-tree termination (the single signal the bash
+primitive surfaces today). Other classes that were advertised in the
+original ACT's broad taxonomy (EACCES, ENOENT, spawn failure, helper
+IPC failure, bounded subprocess timeout) are schema-reserved via the
+`RuntimeErrorClass` union and the `RuntimeErrorSource` union, but
+they are NOT yet production-wired:
+  - No authority seam reports them today.
+  - Adding each requires a new authority seam (e.g. an
+    `osErrnoReport` primitive in bash.ts, a `spawn_failure`
+    primitive in vscode-run-commands-tool.ts, an IPC-error channel
+    in the helper).
+  - Adding them just to close this ACT would expand the scope
+    significantly without a corresponding authority seam — and
+    would silently inflate the counter on incidents that have not
+    been validated end-to-end.
 The wire schema (`RuntimeErrorClass`) and the manager incident path
 (`errorClass`) are forward-compatible — additional classes can be
 added later by extending the union and the corresponding bash.ts
-primitive — but V1 only fires on EPERM.
-
+primitive. But V1 only fires on EPERM.
 # Latching semantics
-
 Both layers enforce exactly-once-per-job:
 - `job.runtimeErrorReported: boolean` in CommandJob (manager) — set
   before onRuntimeError is invoked; subsequent cancel()s on the
@@ -64,12 +69,9 @@ Both layers enforce exactly-once-per-job:
 - `Math.min(this.runtimeErrorCount + 1, Number.MAX_SAFE_INTEGER)` in
   TaskTelemetryTracker — saturation at the JS integer limit; never
   overflows, never goes negative, never decrements.
-
 # Decision: best-effort sink
-
 `onRuntimeError` is best-effort: a thrown callback is caught and
 logged inside the manager so a tracker bug cannot poison the
 termination flow. This is the load-bearing safety property — EPERM
 recovery is control-plane critical, the runtime-error counter is a
 visualization. REC-BE-06 pins this invariant.
-

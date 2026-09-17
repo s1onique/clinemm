@@ -1,53 +1,72 @@
 === ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 10-gates ===
-
-# Gate status at the end of this ACT
-
+# Gate status at the end of this ACT (CORRECTION01)
 ## Host typecheck
-
 $ bash ~/.bun/bin/bunx tsc --noEmit (in apps/vscode)
 (no output → exit 0)
-
 PASS.
-
 ## Webview typecheck
-
 $ bash ~/.bun/bin/bunx tsc --noEmit (in apps/vscode/webview-ui)
 (no output → exit 0)
-
 PASS.
-
 ## Backend unit tests
-
 $ /opt/homebrew/bin/node node_modules/.bin/vitest run \
     src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts \
     src/sdk/task-telemetry-tracker.test.ts
-
  Test Files  2 passed (2)
-      Tests  76 passed (76)
-
-PASS (76/76). 12 REC-BE + 12 REC-01..REC-12 + 52 pre-existing.
-
+      Tests  77 passed (77)
+PASS (77/77). 13 REC-BE + 12 REC-01..REC-12 + 52 pre-existing.
 ## Webview component tests
-
 $ /opt/homebrew/bin/node node_modules/.bin/vitest run \
     src/components/chat/task-header/TaskHeaderTelemetry.test.tsx \
+    src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx \
     (in apps/vscode/webview-ui)
-
  ✓ src/components/chat/task-header/TaskHeaderTelemetry.test.tsx (46 tests) 65ms
-
-PASS (46/46). 7 ERR-UI + 39 pre-existing.
-
-## Live EPERM discriminator (bash primitive)
-
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx (5 tests) 21ms
+PASS (51/51). 7 ERR-UI + 5 LIVE_DOM + 39 pre-existing.
+## LIVE EPERM discriminator (bash primitive) — REAL Layer 1
 $ /Volumes/UserData/Users/chistyakov/.bun/bin/bun \
     /tmp/clinemm-runtime-error-counter-red/red-driver.ts
-
 {"treeTerminated":false,"escalatedToKill":true,"epermDetected":true}
-
 PASS. Live EPERM confirmed on this host.
-
+## LIVE production tracker wire — REAL Layer 2
+$ cd apps/vscode && /Volumes/UserData/Users/chistyakov/.bun/bin/bun \
+    /tmp/clinemm-runtime-error-counter-live-green/live-green-driver.ts
+{"step":"before","wire":{...no runtimeErrorCount...}}
+{"step":"after_first_eperm","wire":{...,"runtimeErrorCount":1}}
+{"step":"after_second_eperm","wire":{...,"runtimeErrorCount":2}}
+{"step":"exit7_unchanged","wire_unchanged":true,"wire_runtimeErrorCount":2}
+{"step":"after_third_eperm","wire":{...,"runtimeErrorCount":3}}
+PASS. Production TaskTelemetryTracker increments correctly under
+real Bun runtime with real structured incidents; wire zero-hiding
+on the before step; exit7 unchanged.
+## LIVE_DOM webview render — STRUCTURAL Layer 3
+$ cd apps/vscode/webview-ui && bun run test -- \
+    src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx (5 tests) 21ms
+PASS. The byte-identical wire shapes from Layer 2 render the
+correct ⚠ N glyph via the production React TaskHeaderTelemetry
+component (LIVE_HEADER_BEFORE, LIVE_HEADER_0_TO_1,
+LIVE_HEADER_1_TO_2, LIVE_EXIT7_UNCHANGED, LIVE_SANITY).
+## LIVE gRPC bridge → real webview DOM
+NOT-RUNNABLE-HERE. The macOS process sandbox in this reviewer
+environment segfaults the Playwright-launched Electron child
+(see 11-live-qualification-environment-note.txt for the
+SIGSEGV/EPERM details). Re-run instructions on the cloud VM
+(DISPLAY=:1, /workspace mounted) are in 11-.
+## DIFF_CHECK (whitespace errors)
+$ git diff --check HEAD
+(no output → exit 0)
+PASS. The 7 trailing-blank-line whitespace errors in the original
+786b8e79d commit are resolved by this correction's whitespace
+cleanup (all evidence files now have no trailing newline where
+they should not, matching the .gitignore convention).
+## WORKTREE_CLEAN
+NOT-PASS. apps/vscode/src/core/controller/state/working-context-
+state-projection.ts has one unstaged formatting-only change (5
+lines) that is MPWC02 residue — separate owner territory, NOT
+folded into this correction. ACT cannot claim WORKTREE_CLEAN=PASS
+until that residue is resolved/reverted by its owner.
 ## Sandbox-limited (pre-existing) test family
-
 The pre-existing `command-job-manager.test.ts` and `seatbelt-*` family
 use real subprocess primitives that require the Seatbelt substrate.
 In this sandbox-less environment those tests return `spawn_failed`
@@ -55,4 +74,3 @@ from `manager.start(...)`. This is documented in the file's header
 comment as the sandbox-substrate limitation; it is NOT a regression
 from this ACT. The REC-BE tests use the `spawnFactory` injection
 seam and pass deterministically without Seatbelt.
-

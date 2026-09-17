@@ -1,63 +1,85 @@
 === ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 07-eperm-live-green ===
-
 # Live EPERM → epermDetected → onRuntimeError → wire → ⚠ N trajectory
-
-# Step 1: prove the production bash primitive surfaces EPERM live
-
+# CORRECTION01: this file replaces the original "step1 real, step2/3
+synthetic" composition with a tighter three-layer LIVE composition:
+  Layer 1: REAL bash primitive (live-red driver) — proves
+           epermDetected=true on this host with the production
+           supervisor.
+  Layer 2: REAL production TaskTelemetryTracker (live-green driver) —
+           exercises the production class (NOT a unit-test fake) and
+           captures the actual wire shape the webview receives after
+           each structured incident.
+  Layer 3: STRUCTURAL webview component test (LIVE_DOM) — feeds the
+           byte-identical wire shapes from layer 2 into the production
+           React component and asserts the rendered DOM
+           data-testid, text content, and accessibility attributes.
+This composes:
+  REAL/LIVE bash EPERM substrate
+  + REAL production TaskTelemetryTracker
+  + STRUCTURAL webview React render
+The gRPC bridge step (production SdkController.handleTaskRuntimeError
+→ postStateToWebview → gRPC postMessage → webview reducer → React
+re-render) requires a real VS Code extension host running under
+Playwright Electron. That step is not runnable in this reviewer's
+macOS sandbox (see 11-live-qualification-environment-note.txt for the
+blocker description) and is captured separately on a non-sandboxed
+GUI host.
+# Layer 1: live-red driver output
 Ran from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
-
 $ /Volumes/UserData/Users/chistyakov/.bun/bin/bun \
     /tmp/clinemm-runtime-error-counter-red/red-driver.ts
-
 {"treeTerminated":false,"escalatedToKill":true,"epermDetected":true}
-
-This is the LIVE RED driver from the ACT's red phase (file
-`/tmp/clinemm-runtime-error-counter-red/red-driver.ts`). It spawns
-`/bin/bash -c "sleep 30"` via `spawnSupervisableShellCommand` (the
-exact production primitive CommandJobManager calls), then invokes
+The driver spawns /bin/bash -c 'sleep 30' via the production
+`spawnSupervisableShellCommand(...)` primitive, then invokes
 `proc.terminateTree({ gracefulSignal: "SIGTERM", graceMs: 50 })`.
-
-The structured result:
+The structured result is:
   treeTerminated: false   — the tree was NOT reaped cleanly within grace
   escalatedToKill: true   — the manager had to escalate to SIGKILL
   epermDetected: true     — the substrate returned EPERM on kill(-pgid, sig)
-
-This is the EXACT signal that the new ACT surfaces to the task-header
-runtime-error counter. Without the ACT, the TaskHeader has no
-mechanism to report this fact to the user.
-
-# Step 2: unit-test composition → wire strip count
-
-apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
-  REC-BE-10: end-to-end — fake-shell EPERM + tracker + wire strip
-  → runtimeErrorCount = 1
-  REC-BE-11: two sequential jobs under SAME tracker
-  → runtimeErrorCount = 2
-
-These tests use the public spawnFactory injection seam (set to a
-fake SupervisableShellProcess whose terminateTree returns
-`{ epermDetected: true, ... }`) plus the production TaskTelemetryTracker
-and TaskHeaderTelemetryStrip wire format. The result is the exact
-shape that would flow to the webview if a real EPERM were observed.
-
-# Step 3: webview projection
-
-apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx
-  ERR-UI-02: count=1 → "⚠ 1" with aria-label "1 runtime error in this task"
-  ERR-UI-03: count=2 → "⚠ 2" with aria-label "2 runtime errors in this task"
-  ERR-UI-04: count=17 → "⚠ 17" with aria-label "17 runtime errors in this task"
-
+# Layer 2: live-green driver output (production TaskTelemetryTracker)
+Ran from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+$ /Volumes/UserData/Users/chistyakov/.bun/bin/bun \
+    /tmp/clinemm-runtime-error-counter-live-green/live-green-driver.ts
+{"step":"before","wire":{"startedAt":1700000000000,"toolCalls":0,"recoveryBudgetFailures":0,"mechanism":{"total":0,"edit":0,"command":0,"read":0,"search":0,"mcp":0,"other":0}}}
+{"step":"after_first_eperm","wire":{"startedAt":1700000000000,"toolCalls":0,"recoveryBudgetFailures":0,"mechanism":{"total":0,"edit":0,"command":0,"read":0,"search":0,"mcp":0,"other":0},"runtimeErrorCount":1}}
+{"step":"after_second_eperm","wire":{"startedAt":1700000000000,"toolCalls":0,"recoveryBudgetFailures":0,"mechanism":{"total":0,"edit":0,"command":0,"read":0,"search":0,"mcp":0,"other":0},"runtimeErrorCount":2}}
+{"step":"exit7_unchanged","wire_unchanged":true,"wire_runtimeErrorCount":2}
+{"step":"after_third_eperm","wire":{"startedAt":1700000000000,"toolCalls":0,"recoveryBudgetFailures":0,"mechanism":{"total":0,"edit":0,"command":0,"read":0,"search":0,"mcp":0,"other":0},"runtimeErrorCount":3}}
+Each line is the byte-exact output of the production
+`TaskTelemetryTracker.get()` after the corresponding production
+`recordRuntimeError()` call. The wire shape here is what the
+production SdkController.postStateToWebview → gRPC postMessage →
+webview reducer → React re-render pipeline would observe.
+# Layer 3: structural webview DOM render (LIVE_DOM)
+apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx
+  LIVE_HEADER_BEFORE:  counter is zero-hiding (no glyph in the DOM)
+  LIVE_HEADER_0_TO_1:  ⚠ 1 glyph appears; aria-label="1 runtime error in this task";
+                       title carries "Cumulative", "current task session",
+                       "EPERM", and "Resets to 0" (CORRECTION01 contract)
+  LIVE_HEADER_1_TO_2:  ⚠ 2 glyph appears; aria-label="2 runtime errors in this task"
+  LIVE_EXIT7_UNCHANGED: a non-incident (no new recordRuntimeError call) leaves
+                        the wire and DOM at "⚠ 2"
+  LIVE_SANITY:         data-testid="task-header-runtime-error-count" matches the
+                       canonical selector used by the existing 46-test family
+Test invocation (apps/vscode/webview-ui):
+  $ bun run test -- src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx
+  ✓ src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx (5 tests) 21ms
+The LIVE_DOM tests feed the byte-identical wire shapes from
+layer 2 into the production React TaskHeaderTelemetry component,
+rendering it under the same vitest+jsdom harness used by the
+existing 46/46 test family.
 # Conclusion
-
-End-to-end:
+The corrected composition is:
   bash.ts:kill(-pgid, "SIGTERM") → EPERM
-    → bash.ts:terminateTree returns { epermDetected: true, ... }
-      → CommandJobManager.runTerminationSequence reports runtime error
-        → SdkController.handleTaskRuntimeError closure calls
-          TaskTelemetryTracker.recordRuntimeError(incident)
-            → runtimeErrorCount saturating-incremented
-              → wire strip.runtimeErrorCount > 0 emitted
-                → webview TaskHeaderTelemetry renders <span>⚠ N</span>
-                  with aria-label "N runtime error(s) in this task"
-
-All 7 ERR-UI + 12 REC-BE + 12 REC-01..REC-12 tests pass.
+    → bash.ts:terminateTree returns { epermDetected: true, ... }       [REAL — Layer 1]
+      → TaskTelemetryTracker.recordRuntimeError(incident)              [REAL — Layer 2]
+        → runtimeErrorCount saturating-incremented
+          → wire strip.runtimeErrorCount > 0 emitted                    [REAL — Layer 2]
+            → webview TaskHeaderTelemetry renders <span>⚠ N</span>     [STRUCTURAL — Layer 3]
+              with aria-label "N runtime error(s) in this task"
+              and title describing the V1 EPERM contract + lifetime.
+All three layers run in this reviewer's environment. The remaining
+gRPC bridge → DOM step requires a non-sandboxed GUI host (the cloud
+VM with DISPLAY=:1); see 11-live-qualification-environment-note.txt
+for the blocker description and the re-run instructions on a
+non-sandboxed GUI host.

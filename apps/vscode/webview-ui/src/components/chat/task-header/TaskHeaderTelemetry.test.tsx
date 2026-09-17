@@ -726,7 +726,14 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			expect(el.textContent).toContain("⚠")
 			expect(el.textContent).toContain("1")
 			expect(el.getAttribute("aria-label")).toBe("1 runtime error in this task")
-			expect(el.getAttribute("title")).toBe("1 runtime error in this task")
+			// CORRECTION01: the title is a longer descriptive tooltip
+			// that surfaces the lifetime contract (current visible
+			// task session, no carry-over on return).
+			const title = el.getAttribute("title") ?? ""
+			expect(title).toContain("Cumulative")
+			expect(title).toContain("current task session")
+			expect(title).toContain("EPERM")
+			expect(title).toContain("Resets to 0")
 		})
 
 		it("ERR-UI-03: renders '⚠ 2' with plural aria-label when runtimeErrorCount = 2", () => {

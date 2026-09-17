@@ -1,13 +1,34 @@
 === ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 08-task-isolation ===
-
-# Task A and Task B counters do not bleed
-
-The runtime-error counter is bound to the task identity, not the
-process. The seam is `TaskTelemetryTracker.startTask(taskId)` which
-zeroes all per-task counters when the task id changes.
-
+# CORRECTION01: lifetime contract narrowed to "current visible task session"
+The runtime-error counter is bound to the CURRENTLY ACTIVE task
+identity, NOT a switchable per-task cache. Concretely:
+  - startTask(A) — counter zeroes (or stays at 0 if A is fresh).
+  - 2 EPERMs under A — counter is 2.
+  - startTask(B) — counter resets to 0 destructively. A's 2 is GONE.
+  - 1 EPERM under B — counter is 1.
+  - startTask(A) — counter resets to 0 again. The previous A=2 is NOT
+    restored. A subsequent EPERM accumulates from 0.
+This matches the existing pattern of every other counter on the
+tracker (toolCalls, recoveryBudgetFailures, prevEpisodeFailures,
+mechanism): they all reset on a new task identity and there is no
+per-id cache. The tracker is a single session-global instance owned
+by the SdkController for the controller's lifetime.
+# Why "session-scoped" rather than "durable across switches"
+Recon before this correction asked: do we want the ⚠ N count to
+survive across "switch to B and back to A" workflows? Two options:
+  (a) Carry the count across switches (durable, per-id cache or
+      file-backed projection). Requires a new authority seam for
+      durable task telemetry and a new wire field, which the
+      existing TaskTelemetryTracker pattern does not have.
+  (b) Reset on every task identity change (current visible task
+      session, matches existing counters). No new authority seam
+      needed; the counter is purely session-scoped.
+This ACT picks (b) for V1 — the honest framing matches the
+implementation and matches every other counter on the tracker. The
+`runtimeErrorCount` is intentionally NOT projected into
+`state.ts` / `taskHistory.json` because that durable projection
+requires its own authority seam (separate ACT territory).
 # Where the reset lives
-
 apps/vscode/src/sdk/task-telemetry-tracker.ts
   startTask(taskId, startedAt?) {
     const now = startedAt ?? Date.now()
@@ -25,12 +46,26 @@ apps/vscode/src/sdk/task-telemetry-tracker.ts
     // runtime-error counter on a new task identity. Same-task
     // continuation preserves it (the early-return above); only a
     // different task id resets it.
+    //
+    // ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION01:
+    // this is also where the "current visible task session"
+    // contract is enforced destructively. A subsequent
+    // startTask() to a previously-incident-bearing task id will
+    // start at 0 (no per-id cache). REC-06 + REC-BE-13 pin this.
     this.runtimeErrorCount = 0
     return this.get()
   }
-
-# Test pin
-
+# Test pins
+apps/vscode/src/sdk/task-telemetry-tracker.test.ts
+  REC-06: counter resets to 0 on a new task identity AND does NOT
+    carry over when switching back to a previously-incident-bearing
+    task. The test explicitly asserts:
+      t.startTask("task-a", ...); recordRuntimeError × 2
+      expect(currentRuntimeErrorCount).toBe(2)
+      t.startTask("task-b")
+      expect(currentRuntimeErrorCount).toBe(0)
+      t.startTask("task-a")        // switch back
+      expect(currentRuntimeErrorCount).toBe(0)  // NO carry-over
 apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
   REC-BE-12: tracker bound to task A does NOT see EPERM from task B
     - Bind tracker to task-A
@@ -41,22 +76,29 @@ apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
     - Assert get()?.runtimeErrorCount is undefined (wire zero-hide)
     - recordRuntimeError({ errorClass: "EPERM", ..., correlationId: "job-b" })
     - Assert currentRuntimeErrorCount === 1  // task B starts fresh
-
+  REC-BE-13 (CORRECTION01): returning to a previously-incident-
+    bearing task does NOT restore the counter (current-visible-task-
+    session contract). The test exercises the full A → B → A round
+    trip on the manager→tracker composition layer.
 # Live reasoning
-
 In production:
 - SdkController.handleTaskRuntimeError calls
-  stateManager.taskTelemetryTracker.recordRuntimeError(incident)
+  this.taskTelemetry.recordRuntimeError(incident)
 - The tracker is a singleton per session (one SdkController instance
   per session); the currently bound task identity is whatever
   startTask(...) was last called with.
 - When the user starts a new task (or taskId changes), startTask is
   called BEFORE any new EPERM can land. So task B's first EPERM is
   the first increment after the reset.
-
+- When the user re-selects a previously-incident-bearing task from
+  history, `reinitExistingTaskFromId(taskId)` re-runs `startTask` on
+  the SAME id and the early-return preserves the existing counter —
+  but only if the session has been continuously alive. A fresh
+  session (controller restart) starts a brand-new tracker instance,
+  so the counter is 0 regardless of the prior session's history.
 # Conclusion
-
 Task isolation is structural: the reset lives in startTask, and
 recordRuntimeError only touches the currently bound task's counter.
 No global / module-level state. No closures over per-task state.
-
+The "current visible task session" contract is the load-bearing
+invariant for the ⚠ N counter's user-visible meaning.

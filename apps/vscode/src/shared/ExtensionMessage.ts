@@ -722,18 +722,49 @@ export interface TurnState {
  * - `runtimeErrorCount?`    — ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
  *                              cumulative count of structured ClineMM
  *                              runtime error incidents attributable to
- *                              the current task. Examples that count:
- *                              EPERM during process-tree termination,
- *                              EACCES, ENOENT on a critical fs op, spawn
- *                              failure, helper IPC failure, bounded
- *                              subprocess timeout. Examples that DO NOT
- *                              count: ordinary nonzero command exit
+ *                              the **current visible task session**.
+ *
+ *                              Lifetime contract (CORRECTION01):
+ *                              the counter is bound to the currently
+ *                              active task identity — NOT a switchable
+ *                              per-task cache. `startTask(newId)`
+ *                              resets it to 0 destructively, and a
+ *                              later `startTask` to a previously-
+ *                              incident-bearing task id starts at 0.
+ *                              This matches the existing pattern of
+ *                              every other counter on the tracker
+ *                              (`toolCalls`, `recoveryBudgetFailures`,
+ *                              `mechanism`). REC-06 + REC-BE-13 pin
+ *                              this. Durable task telemetry lives in
+ *                              `state.ts` / `taskHistory.json`, which
+ *                              currently does NOT project this counter.
+ *
+ *                              V1 production-wired classes:
+ *                              EPERM during process-tree termination
+ *                              (the only signal the bash primitive
+ *                              currently surfaces). Other classes
+ *                              (EACCES, ENOENT on a critical fs op,
+ *                              spawn failure, helper IPC failure,
+ *                              bounded subprocess timeout) are
+ *                              schema-reserved via the
+ *                              `RuntimeErrorClass` union and the
+ *                              `RuntimeErrorSource` union, but they
+ *                              are NOT yet production-wired — no
+ *                              authority seam reports them today, and
+ *                              adding them requires a new authority
+ *                              seam (see ACT-CLINEMM-TASK-HEADER-
+ *                              RUNTIME-ERROR-COUNTER01 03-error-
+ *                              authority.txt for the rule).
+ *
+ *                              Examples that DO NOT increment the
+ *                              counter: ordinary nonzero command exit
  *                              (e.g. `sh -c 'exit 23'`), expected ESRCH
  *                              on `kill(-pgid, 0)` probe (control-flow
  *                              "already gone"), helper-recovery
- *                              success (the error still happened), user
- *                              cancellation, model/API errors (those
- *                              flow through a separate authority).
+ *                              success (the error still happened),
+ *                              user cancellation, model/API errors
+ *                              (those flow through a separate
+ *                              authority).
  *
  *                              V1 scope: integer count only — NO error
  *                              array, NO error details, NO error
@@ -764,6 +795,12 @@ export interface TaskHeaderTelemetryStrip {
 	 * (saturating) — see
 	 * `apps/vscode/src/sdk/task-telemetry-tracker.ts`
 	 * `recordRuntimeError` for the saturation contract.
+	 *
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION01:
+	 * scope is "current visible task session" — the counter resets
+	 * to 0 when the active task identity changes and there is no
+	 * carry-over when returning to a previously-incident-bearing
+	 * task id (REC-06 + REC-BE-13 pin this contract).
 	 */
 	runtimeErrorCount?: number
 }

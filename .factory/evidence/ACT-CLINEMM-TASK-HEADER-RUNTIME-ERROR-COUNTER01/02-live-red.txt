@@ -1,25 +1,30 @@
 ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 02-live-red
-
 RED driver: /tmp/clinemm-runtime-error-counter-red/red-driver.ts
   - Imports the production spawn primitive `spawnSupervisableShellCommand`
     from sdk/packages/core/src/extensions/tools/executors/bash.ts
     (same primitive CommandJobManager.cancel() calls).
-  - Spawns /bin/bash -c 'sleep 30' (detached, own PGID).
+  - Spawns /bin/bash -c 'sleep 30' via the production
+    SpawnConfig shape (executable: "/bin/bash",
+    args: ["-c", "sleep 30"], cwd, env: {}).
   - Calls `proc.terminateTree({ gracefulSignal: "SIGTERM", graceMs: 50 })`
     (the production kill primitive).
   - Captures the structured TerminateTreeResult.
-
-Driver stdout (JSON):
+Driver stdout (JSON, captured live this ACT):
   {"treeTerminated":false,"escalatedToKill":true,"epermDetected":true}
-
 Classification:
   TARGET_SPAWN         = REAL | LIVE | REAL_PRODUCTION_FUNCTION
   EPERM_DETECTED       = REAL | LIVE | PRODUCTION_PRIMITIVE
   CURRENT_HEADER_ERROR_COUNTER = ABSENT
-    (TaskHeaderTelemetryStrip in ExtensionMessage.ts:728 has no
+    (TaskHeaderTelemetryStrip in ExtensionMessage.ts has no
      `runtimeErrorCount` field; the webview strip has no `⚠` glyph.)
-
 UX RED: a structured ClineMM runtime EPERM happened via the production
 supervisor kill path. The task header currently gives the user NO
 persistent indication that this runtime error incident occurred. This
 is the user-visible defect this ACT repairs.
+# CORRECTION01: what "EPERM" means here
+EPERM in this driver (and in V1 of this ACT) is specifically the
+EPERM returned by the supervisor's `kill(-pgid, sig)` when it tries
+to gracefully terminate the spawned process tree. It is NOT a
+generic "any EPERM anywhere" claim — see 03-error-authority.txt for
+the V1 production-wired class narrowing and the schema-reserved
+forward-compat union.

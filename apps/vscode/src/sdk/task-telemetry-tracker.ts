@@ -13,15 +13,31 @@
  * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
  *  - Adds a fourth cumulative metric: `runtimeErrorCount`, the number
  *    of structured ClineMM runtime error incidents attributable to
- *    the current task (EPERM during process-tree termination, EACCES,
- *    ENOENT, spawn failure, helper IPC failure, bounded subprocess
- *    timeout, …). The webview renders this as a compact "⚠ N" glyph
- *    next to the existing recovery-interventions strip.
+ *    the current visible task session (EPERM during process-tree
+ *    termination, EACCES, ENOENT, spawn failure, helper IPC failure,
+ *    bounded subprocess timeout, …). The webview renders this as a
+ *    compact "⚠ N" glyph next to the existing recovery-interventions
+ *    strip.
  *  - Monotonic within a task, resets only on new task identity,
  *    saturates at `Number.MAX_SAFE_INTEGER` (so a runaway burst can
  *    never wrap). The increment is a pure observer operation — no
  *    React coupling, no functional updater side effects, no log
  *    scraping.
+ *
+ * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION01:
+ *  - Narrows the contract from "task-scoped" to "current visible
+ *    task session". Concretely: `startTask(newId)` is destructive —
+ *    the previous task's count is NOT retained, and a subsequent
+ *    `startTask` to a previously-incident-bearing task starts at 0.
+ *    This matches the existing pattern of every other counter on
+ *    this tracker (`toolCalls`, `recoveryBudgetFailures`,
+ *    `prevEpisodeFailures`, `mechanism`): they all reset on a new
+ *    task identity and there is no per-id cache. The tracker is a
+ *    single session-global instance owned by the SdkController for
+ *    the controller's lifetime; durable task telemetry lives in
+ *    `state.ts` / `taskHistory.json`, which currently does NOT
+ *    project this counter. REC-06 (unit) and REC-BE-13 (composition)
+ *    pin this contract.
  *
  * Host-owned task telemetry accumulator.
  *
@@ -199,6 +215,12 @@ export class TaskTelemetryTracker {
 		// continuation preserves it (the early-return above); only a
 		// different task id resets it. This is the load-bearing
 		// branch for TASK_ERROR_COUNTER_ISOLATION.
+		//
+		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION01:
+		// this is also where the "current visible task session"
+		// contract is enforced destructively. A subsequent
+		// startTask() to a previously-incident-bearing task id will
+		// start at 0 (no per-id cache). REC-06 + REC-BE-13 pin this.
 		this.runtimeErrorCount = 0
 		return this.get()
 	}
