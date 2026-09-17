@@ -1,0 +1,73 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 03-reproducer-recon ===
+# Reproducer recon — bounded search per ACT §6
+
+# R1 already executed (operator-driven, LIVE-NOERROR-01):
+#   sh -c 'echo STARTED; sleep 600; echo FINISHED'
+#   → jobId cmd_mu60thailupf1anw
+#   → SIGTERM succeeded, no EPERM, no ⚠ badge.
+
+# Substrate ground-truth (from ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02):
+#   macOS sandbox denies `kill(-pgid, sig)` against processes that
+#   are NOT in the same sandbox group as the signaling process.
+#   A signal entitlement boundary exists at the
+#   VSCodium-helper → bash-subprocess boundary.
+#
+#   This means:
+#     - a single-process tree (sh+sleep) where sh is a direct child
+#       of the supervisor runs in the SAME sandbox slice as the
+#       supervisor → SIGTERM works.
+#     - a multi-process tree that crosses a sandbox boundary (a
+#       child spawned via a helper, an `ipc` channel, or a fork
+#       that escapes the supervisor's group) → SIGTERM may be
+#       denied with EPERM for that subtree.
+
+# R2 candidate — Node fork tree (this ACT):
+#   PARENT (this script) ─ fork (no detached) ─ CHILD (same script)
+#   Both share the supervisor's PGID. PARENT and CHILD both hold
+#   long-running intervals. Two members in the PGID.
+#   Fixture: .factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/eperm-fork-fixture.cjs
+#
+#   Why this is a real candidate (not a duplicate of R1):
+#     - The supervisor's terminateTree walks the PGID and must
+#       signal every member. Adding a 2nd member increases the
+#       surface area for a per-member EPERM (one member could be
+#       in a different sandbox slice than the parent supervisor
+#       if the fork step crosses a boundary).
+#     - Even if the substrate signal-entitles the parent fork,
+#       the Child's lifecycle hooks and stdio inheritance can
+#       produce a process-tree shape the supervisor's signal
+#       walk has not previously exercised.
+
+# R3 candidate — Vitest/fork-workers (deferred unless R2 fails):
+#   bunx vitest run <preexisting-suite> --pool=forks
+#   Vitest forks are PIDs the supervisor must walk, and they
+#   commonly outlive the chat-agent's chat turn (suites > 30s).
+#   Prior runs in this repo have produced
+#     "[vitest-pool]: Failed to terminate forks worker ... kill EPERM"
+#   in the same Mac/substrate, so this is the strongest candidate
+#   after R2.
+
+# Search order: R2 → R3 (per ACT §6). At most 3 candidates.
+# Each is a CAUSAL step, not fuzzing. We stop at the first
+# candidate whose real `terminateTree()` returns
+# `epermDetected = true` (the canonical authority per ACT §5).
+
+# Authority invariant:
+ONE_EPERM_AUTHORITY = SupervisableShellProcess.terminateTree().epermDetected
+                     (no supplementary probe promoted into counter authority)
+
+# Diagnostic instrumentation contract (per ACT §4):
+#   - the existing __clineRecordRuntimeError hook (added by
+#     CORRECTION01) is the CORRECTION02-required production
+#     observation point. It emits (incident) exactly when the
+#     production `handleTaskRuntimeError` runs, which runs ONLY
+#     when `treeResult.epermDetected === true` and the latch is
+#     held. It is the least-invasive existing seam.
+#   - In addition, the production tracker.get() wire shape can be
+#     observed through the actual webview (data-testid
+#     "task-header-runtime-error-count") — this is the canonical
+#     UI evidence.
+#   - No new instrumentation is being added; existing
+#     instrumentation is being used per ACT §4 "if equivalent
+#     instrumentation already exists, use it rather than adding
+#     another seam".

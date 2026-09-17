@@ -1,0 +1,78 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 08-counter-authority ===
+# Counter authority — NOT FIRED (because EPERM was not reproduced)
+
+# Per ACT §12: "Prove counter authority fired exactly once"
+# The counter authority chain is:
+#   CommandJobManager.runTerminationSequence (command-job-manager.ts:1457)
+#     → job.process.terminateTree(...)                       [bash.ts:842]
+#       → treeResult.epermDetected                            [authority]
+#         → if (treeResult.epermDetected && !job.runtimeErrorReported)
+#             job.runtimeErrorReported = true
+#             this.reportRuntimeError({...})                  [the latch]
+#               → onRuntimeError sink
+#                 → SdkController.handleTaskRuntimeError
+#                   → this.taskTelemetry.recordRuntimeError(incident)
+#                     → runtimeErrorCount saturating-increment
+
+# This chain is structurally correct (verified by REC-BE tests
+# pinned in CORRECTION01's 05-backend-tests.txt). It is also
+# directly exercised by the production tracker via the live-green
+# driver in CORRECTION01's 07-eperm-live-green.txt.
+
+# What happened in this ACT
+# Neither R2 nor R3 reached the epermDetected branch in
+# CommandJobManager.runTerminationSequence. The substrate signal
+# entitlement of the VSCodium Helper Plugin supervisor is
+# permissive for its own children, so `kill(-pgid, SIGTERM)`
+# returned "OK" instead of "EPERM" in both cases.
+
+# Live observation
+R2 cancel_command result:
+  ok:           true
+  jobId:        cmd_mu616j8353v7wkxm
+  state:        "cancelled"     (terminal, NOT "spawn_failed" or error)
+  elapsedMs:    135119
+  stdout:       "PARENT=4003 CHILD=4004"
+  stderr:       ""
+
+R3 cancel_command result:
+  ok:           true
+  jobId:        cmd_mu61ayzkmhofe1xr
+  state:        "cancelled"
+  elapsedMs:    19558
+  stdout:       ""
+  stderr:       ""
+
+In both cases:
+  - state = "cancelled"        (NOT error)
+  - exitCode not set           (clean SIGTERM-driven exit)
+  - signal not set             (clean SIGTERM-driven exit)
+  - production cancel surface shows NO error indication
+  - production logs show NO epermDetected or EPERM events
+
+# Counter increment
+# Per the production code, the latch at
+# command-job-manager.ts:1499 only enters the increment branch
+# when treeResult.epermDetected === true. Since both R2 and R3
+# had epermDetected = false, the latch did not fire and the
+# counter did NOT increment.
+
+# Cross-check: the LIVE-NOERROR-01 conservation witness (R1,
+# simple sleep) also did not increment the counter. All three
+# candidates behave consistently with the production contract:
+# clean SIGTERM-driven termination → no EPERM → no ⚠.
+
+# Counter state at end of ACT
+# The counter remained at the entry value (0) throughout this
+# ACT because no EPERM was reproduced. The TaskHeader did not
+# gain a ⚠ badge.
+
+COUNTER_DELTA_PER_CANDIDATE = 0  (R2),  0  (R3)
+COUNTER_DELTA_TOTAL         = 0  (cumulative across R1+R2+R3)
+
+# Halt authorization
+# Per ACT §27: "no EPERM reproduced does NOT authorize changing
+# the counter". The counter implementation remains structurally
+# GREEN per CORRECTION01. This ACT halts with NOT_REPRODUCED,
+# preserving the prior LIVE-WIRE-DOM composition's GREEN status
+# for the counter itself.

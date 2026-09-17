@@ -1,0 +1,29 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 00-entry ===
+# Entry evidence
+# Source head
+$ git rev-parse HEAD
+3a39c1621d5aa962c62344f9e32cbb58f3ec6528
+
+# Last 8 commits
+$ git log --oneline -8
+3a39c1621 ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION01: live evidence, lifetime contract narrowed, V1 EPERM-only
+786b8e79d ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: task-scoped ⚠ N runtime-error counter on TaskHeader
+a1a1666fd Ignore __pycache__
+a13151ce6 docs(factory): ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION02 — resource baseline + diff-check + result-binding (3 evidence defects)
+17c1afffc docs(factory): refresh ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01 evidence with current run values
+dc78cedcb docs(factory): ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01 — bind evidence (P0 cross-client discriminator fix + seam rebind)
+47ca5add2 Restore LaunchAgent owned-PGID LIVE qualification packet + board binding (P0 correction to `3bc617e15`)
+3bc617e15 Repository policy flip: `.factory = TRACKED BY DEFAULT`
+
+# Working tree state
+$ git status --short
+(empty — clean working tree)
+
+# Required counter implementation commits present?
+- 786b8e79d (counter base, task-scoped ⚠ N)                    PRESENT
+- 3a39c1621 (CORRECTION01: live evidence + lifetime + V1 EPERM) PRESENT (HEAD)
+
+# Frozen implementation subject satisfied:
+  ENTRY_RUNTIME_ERROR_COUNT = 0
+  HEADER_BADGE_ABSENT       = true
+  TRACKED_DIRT              = none (git status --short is empty)

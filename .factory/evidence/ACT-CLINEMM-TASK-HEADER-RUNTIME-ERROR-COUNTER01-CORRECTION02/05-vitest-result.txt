@@ -1,0 +1,115 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 05-vitest-result ===
+# R3 — Vitest/fork-worker topology, REAL codium-clinemm command tool,
+#      REAL CommandJobManager.cancel through production cancel_command
+
+# Fixture (smallest possible vitest+fork workload under .factory/tmp/)
+.factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/eperm-vitest-fixture/
+  ├── vitest.config.ts        (pool: "forks", testTimeout: 600_000)
+  └── eperm-vitest.test.ts    (3 tests × 300_000ms sleeps each)
+
+# Issue — production command tool (chat-agent run_commands path)
+$ cd .factory/tmp/.../eperm-vitest-fixture && \
+    /opt/homebrew/bin/node .../vitest run eperm-vitest.test.ts
+
+# Hand-off (real production CommandJobManager.start response)
+{
+  "status": "running",
+  "jobId": "cmd_mu61ayzkmhofe1xr",
+  "elapsedMs": 15002,
+  "deadlineRemainingMs": 584998,
+  "outputTruncated": false,
+  "stdout": ""
+}
+
+# Verify the tree is owned by the supervisor (with forks pool)
+$ ps -ax -o pid,ppid,pgid,stat,command \
+    | grep -E 'vitest|node.*eperm'
+  PID  PPID  PGID STAT COMMAND
+ 5715 99021  5715  s   /bin/zsh -c 'cd ... && /opt/homebrew/bin/node .../vitest run ...'
+ 5716  5715  5715      /opt/homebrew/bin/node .../vitest run eperm-vitest.test.ts
+ 5718  5716  5715      /opt/homebrew/Cellar/node/26.0.0/bin/node \
+                          --experimental-import-meta-resolve \
+                          --require .../suppress-⚠ings.cjs \
+                          --conditions node --conditions development \
+                          .../vitest/dist/workers/forks.js
+
+Tree shape:
+  zsh 5715 (PPID=99021, PGID=5715) — wrapper shell
+    └─ vitest 5716 (PPID=5715, PGID=5715) — vitest binary
+         └─ vitest-worker fork 5718 (PPID=5716, PGID=5715) — forks worker
+
+The supervisor (CommandJobManager) spawned the `zsh -c` wrapper.
+The wrapper shell is in PGID 5715. The vitest binary (5716) is
+the direct child of the wrapper. The forks worker (5718) is
+vitest's internal fork — shares PGID 5715 with the wrapper and
+vitest binary (Node fork without `detached: true` inherits the
+parent's PGID).
+
+# Cancel — REAL production CommandJobManager.cancel
+cancel_command({ jobId: "cmd_mu61ayzkmhofe1xr" })
+
+→ {
+    "ok": true,
+    "jobId": "cmd_mu61ayzkmhofe1xr",
+    "state": "cancelled",
+    "stdout": "",
+    "stderr": "",
+    "elapsedMs": 19558
+  }
+
+# Verify the tree is gone (post-cancel)
+$ ps -p 5715 -p 5716 -p 5718
+(empty — all three processes reaped by the supervisor)
+
+# Production termination chain
+# Same path as R2: terminate → runTerminationSequence → terminateTree
+# → signalGroup("SIGTERM") → process.kill(-5715, "SIGTERM")
+# → probePgidExists(5715) until group vanishes.
+#
+# The forks worker (5718) is in the SAME PGID as the wrapper
+# (5715) and the vitest binary (5716), so a single SIGTERM to
+# PGID 5715 reaches all three. The substrate signal entitlement
+# of the VSCodium Helper Plugin supervisor (the parent of the
+# wrapper zsh) is permissive — all three processes reaped
+# cleanly within 19.5 seconds.
+
+# Production logs (post-event inspection)
+$ grep -E 'eperm|EPERM|treeTerminated|escalatedToKill|kill EPERM' \
+    /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/logs/.../1-Cline.log
+(no matches — production logs do not include a per-termination
+ epermDetected value; the absence of an EPERM error path matches
+ the clean cancel)
+
+# Classification
+# The cancel returned state="cancelled" cleanly. The forks worker
+# tree was reaped within ~19.5s elapsed. No error indication on the
+# production cancel surface.
+#
+# This is the same substrate signal-entitlement outcome as R2: the
+# VSCodium Helper Plugin supervisor CAN signal its own children even
+# when the tree contains vitest's fork-worker process.
+
+VITEST_FORK_WORKERS_EPERM = NOT_REPRODUCED
+
+# Final reproducer result gate (per ACT §9)
+LIVE_TASK_EPERM_REPRODUCER = NONE
+  - R2 (Node fork tree):          NOT_REPRODUCED
+  - R3 (Vitest/fork-workers):     NOT_REPRODUCED
+
+# Conclusion (per ACT §26 / §29)
+# Both bounded reproducer candidates failed to produce the
+# structured EPERM that the production counter is wired to.
+# Per ACT §6: "If R2 and R3 both fail to produce EPERM:
+#   HALT_REAL_TASK_EPERM_NOT_REPRODUCED"
+#
+# This is NOT a defect in the counter — the counter is wired
+# correctly to the production authority. It IS the honest
+# outcome of the bounded reproducer search on this substrate:
+# the VSCodium Helper Plugin supervisor's signal entitlement is
+# permissive for its own children, and the macOS substrate signal
+# entitlement boundary observed in
+# ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 is NOT
+# reached by chat-driven commands under the production
+# CommandJobManager seam.
+
+HALT_REAL_TASK_EPERM_NOT_REPRODUCED = TRIGGERED

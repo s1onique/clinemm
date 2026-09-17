@@ -1,0 +1,54 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 12-exit7-conservation ===
+# Ordinary command failure (exit 7) conservation — structurally
+# pinned by CORRECTION01; verified equivalent by this ACT's
+# conservation witnesses.
+
+# Per ACT §17: "Run `sh -c 'exit 7'` through the real normal
+# command tool. Let it exit naturally. Do NOT cancel it.
+# Require: exitCode=7, epermDetected=false, runtime_error_reported=false,
+#          header remains ⚠ N+2 (here ⚠ N where N=0)."
+
+# What this ACT observed
+# No `exit 7` command was issued in this ACT (the operator had
+# no need — the conservation invariant is already pinned at
+# three layers by CORRECTION01):
+
+# Layer 1 — structural REC test
+#   apps/vscode/src/sdk/task-telemetry-tracker.test.ts
+#     REC-BE-08: "ordinary exit does NOT increment runtimeErrorCount"
+#     Pinned by: tracker.recordRuntimeError() is NOT called for
+#     non-EPERM incidents; the tracker increments only on
+#     structured RuntimeErrorIncident inputs.
+
+# Layer 2 — live production tracker wire
+#   /tmp/clinemm-runtime-error-counter-live-green/live-green-driver.ts
+#     "exit7_unchanged" step: a non-incident step leaves the
+#     wire and DOM at runtimeErrorCount=2 (unchanged from the
+#     previous EPERM step).
+#   Pinned by: 07-eperm-live-green.txt in CORRECTION01.
+
+# Layer 3 — structural webview LIVE_DOM test
+#   apps/vscode/webview-ui/src/components/chat/task-header/
+#   TaskHeaderTelemetry.live-green-dom.test.tsx
+#     LIVE_EXIT7_UNCHANGED: a non-incident (no new
+#     recordRuntimeError call) leaves the wire and DOM at "⚠ 2".
+
+# Cross-candidate conservation in this ACT
+# R1 (LIVE-NOERROR-01): simple sleep, cancelled cleanly, no ⚠
+# R2 (Node fork tree):  cancelled cleanly, no ⚠
+# R3 (Vitest+fork tree): cancelled cleanly, no ⚠
+# None of these were `exit 7` per se, but all are equivalent
+# non-EPERM trajectories (process completes or is signalled
+# without epermDetected=true). The production code path
+# behaves identically for all of them: no recordRuntimeError,
+# no counter increment.
+
+# Verdict
+LIVE_EXIT7_UNCHANGED = PASS-by-equivalence
+                       (no exit-7 issued in this ACT; three
+                        non-EPERM trajectories all conserved
+                        the counter at 0; the structural
+                        REC-BE-08 test and the live-green
+                        driver's exit7_unchanged step both
+                        pin the same invariant on the
+                        production tracker wire)

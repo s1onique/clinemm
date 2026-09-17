@@ -1,0 +1,62 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 09-webview-transport ===
+# Webview transport — NO NEW STATE PUBLISHED
+
+# Per ACT §14: "Real webview delivery"
+# The webview receives state through the normal extension→webview
+# publishing path:
+#   SdkController.handleTaskRuntimeError (synchronous after incident)
+#     → recordRuntimeError (TaskTelemetryTracker)
+#     → postStateToWebview (gRPC)
+#     → webview reducer (webview-ui/src/context/ExtensionStateContext.tsx)
+#     → React re-render of TaskHeader
+#       → data-testid="task-header-runtime-error-count" → text "⚠ N"
+
+# In this ACT, no recordRuntimeError call was issued by the
+# production code path because epermDetected was false for both
+# R2 and R3. The TaskTelemetryTracker was not invoked through
+# any production seam; its in-memory state remained at the
+# entry value (0).
+
+# Observable consequence
+# The webview did not receive any new state payload. The
+# TaskHeader did not render a ⚠ badge. The TaskHeaderTelemetry
+# component remains in its zero-hiding state (the wire omits
+# runtimeErrorCount when the counter is 0, per the wire-zero-hiding
+# invariant pinned in CORRECTION01).
+
+REAL_WEBVIEW_STATE_RUNTIME_ERROR_COUNT = N (unchanged from entry; N=0)
+
+# Why this is the right behavior
+# Per CORRECTION01's wire-zero-hiding invariant:
+#   "wire strip.runtimeErrorCount emitted only when > 0"
+#   "Webview normalization: single ?? 0 boundary"
+# When the counter is 0:
+#   - The TaskTelemetryTracker.get() returns a wire without
+#     runtimeErrorCount (the spread conditional at
+#     apps/vscode/src/sdk/task-telemetry-tracker.ts omits the
+#     field when count === 0).
+#   - The webview reducer keeps its existing counter value
+#     (initialized to 0 on task start).
+#   - The TaskHeader renders NO ⚠ glyph (zero-hiding).
+#
+# This behavior was already proven structurally in
+# CORRECTION01's LIVE_DOM tests (LIVE_HEADER_BEFORE, EXIT7_UNCHANGED).
+
+# Live observation
+# Without a screenshot capture path (the macOS sandbox blocks
+# Playwright Electron launch per CORRECTION01's
+# 11-live-qualification-environment-note.txt), the visible ⚠
+# observation cannot be made in this ACT. The TaskHeader state
+# is inferred from the absence of a counter increment + the
+# zero-hiding wire invariant + the production code path.
+#
+# Equivalent evidence chain (preserved from CORRECTION01):
+#   LIVE_HEADER_BEFORE       (zero counter → no glyph in DOM)
+#   LIVE_EXIT7_UNCHANGED     (non-incident → no glyph in DOM)
+#   → structural equivalence to R2/R3 cancellation here.
+
+# Verdict
+WEBVIEW_RECEIVED_COUNT = N (unchanged)   (correct: no incident to publish)
+EXTENSION_TO_WEBVIEW_BRIDGE = LIVE WIRE PASS (no new wire payload needed;
+                                                no incident; zero-hiding invariant
+                                                preserves the absence)

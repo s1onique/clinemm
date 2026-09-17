@@ -1,0 +1,154 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 14-gates ===
+# Live gate matrix (per ACT §25)
+
+# Gate                                  Status    Evidence
+# ----------------------------------------------------------------------
+DOGFOOD_BUILD_BOUND                  = PASS    01-dogfood-identity.txt:
+                                                s1onique.clinemm-4.1.16-3a39c1621
+                                                == HEAD 3a39c1621 (short id match)
+                                                bundled extension.js contains
+                                                both epermDetected (2x) and
+                                                __clineRecordRuntimeError (1x)
+
+SIMPLE_CANCEL_DIRECT_SUCCESS         = PASS    02-simple-cancel-conservation.txt:
+                                                LIVE-NOERROR-01:
+                                                sh -c 'sleep 600' -> SIGTERM
+                                                success, no EPERM, no ⚠
+
+SIMPLE_CANCEL_COUNTER_DELTA          = 0       02-simple-cancel-conservation.txt +
+                                                08-counter-authority.txt
+
+REAL_TASK_EPERM_REPRODUCED           = FAIL    04-node-fork-result.txt +
+                                                05-vitest-result.txt:
+                                                R2 NOT_REPRODUCED,
+                                                R3 NOT_REPRODUCED.
+                                                HALT_REAL_TASK_EPERM_NOT_
+                                                REPRODUCED triggered per ACT
+                                                section 6 / section 9.
+
+EPERM_AUTHORITY                      = N/A     06-live-eperm.txt:
+                                                EPERM was not produced on
+                                                this substrate, so the
+                                                authority chain was not
+                                                exercised end-to-end. The
+                                                authority chain itself is
+                                                structurally GREEN (pinned
+                                                by CORRECTION01's
+                                                07-eperm-live-green.txt and
+                                                03-error-authority.txt).
+
+HELPER_FALLBACK_INVOKED              = N/A     07-helper-recovery.txt:
+                                                not invoked (EPERM was not
+                                                reproduced). Helper
+                                                availability PASS (helper
+                                                PID 9582 alive, socket at
+                                                ~/.clinemm/host-helper.sock).
+
+HELPER_RECOVERY                      = N/A     07-helper-recovery.txt:
+                                                not exercised in this ACT.
+                                                Structurally qualified by
+                                                prior ACTs.
+
+RUNTIME_ERROR_CALLBACK               = N/A     08-counter-authority.txt:
+                                                not invoked (production
+                                                cancel did not produce
+                                                epermDetected).
+
+COUNTER_DELTA_1                      = N/A     08-counter-authority.txt
+
+EXTENSION_STATE_COUNT                = N/A     09-webview-transport.txt
+
+WEBVIEW_RECEIVED_COUNT               = N/A     09-webview-transport.txt
+
+VISIBLE_HEADER_INCREMENT_1           = N/A     10-visible-header.txt:
+                                                TaskHeader remained in
+                                                zero-hiding state (no ⚠).
+
+SECOND_REAL_EPERM                    = N/A     11-second-eperm.txt
+
+COUNTER_DELTA_2                      = N/A     11-second-eperm.txt
+
+VISIBLE_HEADER_INCREMENT_2           = N/A     11-second-eperm.txt
+
+EXIT7_EPERM                          = N/A     12-exit7-conservation.txt:
+                                                no exit-7 issued in this
+                                                ACT; structurally pinned by
+                                                REC-BE-08 and
+                                                LIVE_EXIT7_UNCHANGED
+
+EXIT7_COUNTER_DELTA                  = 0       12-exit7-conservation.txt +
+                                                08-counter-authority.txt
+
+VISIBLE_HEADER_AFTER_EXIT7           = unchanged
+                                       10-visible-header.txt +
+                                       12-exit7-conservation.txt
+
+ERROR_EVENT_CARDINALITY              = 1 per termination incident (contractual)
+                                                08-counter-authority.txt:
+                                                the production code at
+                                                command-job-manager.ts:1499
+                                                latches via
+                                                job.runtimeErrorReported;
+                                                one incident -> one count.
+                                                Not exercised in this ACT
+                                                (no incident), but the
+                                                invariant holds by code
+                                                inspection + REC tests.
+
+DIAGNOSTIC_PRODUCTION_DELTA_FINAL    = 0       13-cleanup.txt:
+                                                no temporary diagnostic
+                                                instrumentation was added
+                                                to production code.
+
+TYPECHECK                            = PASS    $ cd apps/vscode && \
+                                                  bun x tsc --noEmit \
+                                                    -p tsconfig.json
+                                                EXIT=0 (no errors)
+                                                $ cd apps/vscode/webview-ui \
+                                                  && bun x tsc --noEmit \
+                                                    -p tsconfig.json
+                                                EXIT=0 (no errors)
+
+TARGETED_TESTS                       = PASS    $ bun test \
+                                                  apps/vscode/src/sdk/\
+                                                  task-telemetry-tracker.test.ts
+                                                64 pass, 0 fail
+
+VSCODE_PREPUBLISH                    = N/A     (no production code change;
+                                                prepublish is exercised by
+                                                CI on commit; not
+                                                authorized by ACT section 0)
+
+DIFF_CHECK                           = PASS    $ git diff --check HEAD
+                                                EXIT=0 (no whitespace
+                                                errors)
+
+EVIDENCE_BOUND                       = PASS    result.json + 14 evidence
+                                                files all reference the
+                                                same dogfood build
+                                                (4.1.16-3a39c1621),
+                                                same chat session
+                                                (1789679672709_x1p0n),
+                                                same jobIds
+                                                (cmd_mu616j8353v7wkxm,
+                                                cmd_mu61ayzkmhofe1xr).
+
+# Halt summary
+# Per ACT section 26 / section 29, the bounded reproducer search
+# found NO real task topology on this substrate that reproduces
+# the structured EPERM the production counter is wired to. The
+# halt condition HALT_REAL_TASK_EPERM_NOT_REPRODUCED is the
+# authoritative outcome.
+#
+# This halt does NOT indicate a defect in the counter. It
+# indicates that the substrate signal entitlement of the VSCodium
+# Helper Plugin supervisor is permissive for its own children on
+# this macOS host, and the production cancel surface
+# (CommandJobManager.cancel -> SupervisableShellProcess.
+#  terminateTree -> signalGroup) succeeds without EPERM for
+# chat-driven commands.
+#
+# Per ACT section 27, no EPERM reproduced does NOT authorize
+# changing the counter. The counter implementation remains
+# structurally GREEN per CORRECTION01's live-wire-DOM composition.
+

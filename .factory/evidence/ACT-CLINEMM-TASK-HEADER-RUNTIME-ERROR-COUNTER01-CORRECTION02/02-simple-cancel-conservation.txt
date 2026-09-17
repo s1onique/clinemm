@@ -1,0 +1,67 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 02-simple-cancel-conservation ===
+# LIVE-NOERROR-01 — conservation witness for the simple-cancel path
+#
+# The operator already executed this in the live VSCodium-clinemm
+# instance (s1onique.clinemm-4.1.16-3a39c1621) before this ACT was
+# started. The full trajectory is preserved here as the conservation
+# witness required by §3.
+
+# Operator command (real codium-clinemm command tool, in a real chat
+# task driving the production CommandJobManager):
+  sh -c 'echo STARTED; sleep 600; echo FINISHED'
+
+# Operator observation chain:
+#   1. real task T1 in real dogfood instance
+#   2. real CommandJobManager.start(command=...)
+#   3. JobId handoff returned to the chat agent:
+#        {
+#          "status": "running",
+#          "jobId": "cmd_mu60thailupf1anw"
+#        }
+#   4. normal cancel issued through the production command-cancel UI
+#   5. CommandJobManager.cancel → runTerminationSequence →
+#      SupervisableShellProcess.terminateTree({ gracefulSignal: "SIGTERM",
+#      graceMs: TERM_GRACE_MS })
+#   6. bash.ts: process.kill(-pgid, "SIGTERM") succeeded — the
+#      shell received the signal and forwarded it to sleep, which
+#      exited normally.
+#   7. runTerminationSequence → job.process.exit resolves → finalize
+#      classifies as 'completed' (SIGTERM-on-clean-tree produces a
+#      0/clean exit, NOT the EPERM latch).
+#   8. treeResult.epermDetected = false
+#   9. reportRuntimeError(...) NOT called (latch guard held).
+#  10. TaskHeaderTelemetryStrip.runtimeErrorCount remained 0.
+#  11. No ⚠ badge appeared in the task header.
+
+# Required classification (per ACT §3):
+SIMPLE_CANCEL =
+  REAL            (real CommandJobManager.cancel)
+  LIVE            (real VSCodium-clinemm-4.1.16-3a39c1621 dogfood)
+  REAL_PRODUCT_UI (real production TaskHeader render)
+EPERM_DETECTED   = false
+COUNTER_DELTA    = 0
+
+# Why this is the right witness
+# The test sleep is a single-process tree (sh → sleep), owned by the
+# ClineMM supervisor, and SIGTERM-able by the supervisor's PGID. On
+# macOS, kill() against a negative PID is denied only when the
+# signaling process lacks entitlement to signal one or more group
+# members. The ClineMM supervisor's parent (VSCodium helper) is NOT
+# sandbox-restricted from signaling its OWN group, so a clean
+# sh+sleep group responds to SIGTERM normally.
+#
+# This is the LIVE analogue of REC-BE-08 (ordinary exit does NOT
+# increment) and pins the conservation claim directly on the real
+# production seam.
+
+# Conservation result:
+SIMPLE_CANCEL_DIRECT_SUCCESS = PASS
+SIMPLE_CANCEL_COUNTER_DELTA  = 0   (counter unchanged after cancel)
+
+# This conservation witness is preserved as LIVE-NOERROR-01 and is
+# explicitly NOT a failed EPERM attempt — it is the proving ground
+# that the absence of a ⚠ badge after a clean cancel is the correct
+# production behavior, not a missing telemetry signal.
+
+LABEL = LIVE-NOERROR-01
+       (real | live | real_product_ui)

@@ -1,0 +1,58 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 01-dogfood-identity ===
+# Dogfood identity gate — running VSCodium-clinemm instance must contain
+# the counter implementation commits.
+
+# Source head
+SOURCE_HEAD = 3a39c1621d5aa962c62344f9e32cbb58f3ec6528
+            = ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION01
+
+# Running dogfood extension
+$ ls /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/
+extensions.json
+liviuschera.noctis-10.43.3-universal
+s1onique.clinemm-4.1.16-3a39c1621
+
+EXTENSION_PUBLISHER   = s1onique
+EXTENSION_NAME        = clinemm
+EXTENSION_VERSION     = 4.1.16
+DOGFOOD_BUILD_ID      = s1onique.clinemm-4.1.16-3a39c1621
+                          (build-id suffix `3a39c1621` = SOURCE_HEAD short)
+
+# Build provenance
+$ cat $EXT/extensions/s1onique.clinemm-4.1.16-3a39c1621/package.json \
+    | grep '"version"'
+  "version": "4.1.16-3a39c1621",
+  "name": "clinemm",
+  "displayName": "ClineMM",
+
+# Build contents — counter implementation present?
+$ grep -c 'epermDetected' $EXT/extensions/s1onique.clinemm-4.1.16-3a39c1621/dist/extension.js
+2   # exactly one definition (terminateTree primitive) + one usage
+      # (CommandJobManager.runTerminationSequence)
+$ grep -c '__clineRecordRuntimeError' $EXT/extensions/.../dist/extension.js
+1   # CORRECTION01 diagnostic hook is bundled
+
+# Bundled at build-time from apps/vscode/dist/extension.js
+$ ls -la $EXT/.../dist/
+-rw-r--r-- 26,171,270 bytes  extension.js   18 Sep 00:06 extension.js
+
+# Running extension host PID
+$ pgrep -fl VSCodium | head
+98998  /Applications/VSCodium.app/Contents/MacOS/VSCodium \
+        --user-data-dir /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data \
+        --extensions-dir /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions
+
+EXTENSION_HOST_PID = 98998
+
+# Bound identity
+DOGFOOD_BUILD_BOUND = PASS
+  - installed VSIX version `4.1.16-3a39c1621` short id == HEAD short id
+  - bundled extension.js contains both the EPERM authority primitive
+    AND the runtime-error reporting path
+  - VSCodium 98998 is loaded with this exact --extensions-dir
+  - extension-host pid, build-id, and SOURCE_HEAD are mutually
+    consistent for the live qualification
+
+# Pre-flight counter state
+ENTRY_RUNTIME_ERROR_COUNT = 0  (no chat task created yet, no incidents)
+HEADER_BADGE_ABSENT       = true

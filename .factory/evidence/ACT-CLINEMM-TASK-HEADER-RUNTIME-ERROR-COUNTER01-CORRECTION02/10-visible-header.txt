@@ -1,0 +1,68 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 10-visible-header ===
+# Visible header witness — NO ⚠ BADGE OBSERVED
+
+# Per ACT §15: "Visible header witness"
+# The codium-clinemm TaskHeader did NOT transition to ⚠ N
+# because no EPERM was reproduced. The TaskHeader remained in
+# its zero-hiding state throughout the ACT.
+
+# What this ACT observed
+# Three real CommandJobManager command jobs were issued through
+# the production chat command tool:
+#   R1 (LIVE-NOERROR-01, operator-driven):
+#       sh -c 'echo STARTED; sleep 600; echo FINISHED'
+#       → cancelled cleanly, no ⚠
+#   R2 (this ACT):
+#       /opt/homebrew/bin/node .factory/tmp/.../eperm-fork-fixture.cjs
+#       → jobId cmd_mu616j8353v7wkxm, cancelled cleanly, no ⚠
+#   R3 (this ACT):
+#       /opt/homebrew/bin/node .../vitest run eperm-vitest.test.ts
+#       → jobId cmd_mu61ayzkmhofe1xr, cancelled cleanly, no ⚠
+
+# Why no ⚠ is the correct behavior
+# Per the production code at command-job-manager.ts:1499-1506:
+#   if (treeResult.epermDetected && !job.runtimeErrorReported) {
+#     job.runtimeErrorReported = true
+#     this.reportRuntimeError({
+#       errorClass: "EPERM",
+#       source: "command-job-manager",
+#       correlationId: job.id,
+#     })
+#   }
+#
+# Since epermDetected = false for all three candidates, the
+# recordRuntimeError path was never entered, the counter did
+# not increment, and the TaskHeader's wire payload never
+# gained the runtimeErrorCount field.
+
+# Cross-check with the wire-zero-hiding invariant
+# Per CORRECTION01's invariants:
+#   "wire strip.runtimeErrorCount emitted only when > 0"
+#   "Webview normalization: single ?? 0 boundary"
+# A counter at 0 produces a wire payload WITHOUT the
+# runtimeErrorCount field. The webview reducer treats this
+# the same as runtimeErrorCount=0, which keeps the TaskHeader
+# in the zero-hiding state (no ⚠ glyph rendered).
+
+# Equivalent LIVE_DOM evidence (preserved from CORRECTION01)
+# apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx
+#   LIVE_HEADER_BEFORE      counter=0 → no glyph
+#   LIVE_EXIT7_UNCHANGED    non-incident → no glyph
+# These structural witnesses are byte-identical to the R1/R2/R3
+# trajectories observed in this ACT (zero counter → no glyph).
+
+# Halt consequence
+# Per ACT §15: "Required: LIVE_VISIBLE_HEADER_INCREMENT = PASS"
+# Since no increment occurred (no EPERM), this required gate
+# cannot be marked PASS. The halt condition
+# HALT_REAL_TASK_EPERM_NOT_REPRODUCED (§26) is triggered,
+# which means VISIBLE_HEADER_INCREMENT_1 and _2 are
+# NOT-RUNNABLE-HERE.
+
+LIVE_VISIBLE_HEADER_INCREMENT_1 = NOT-RUNNABLE-HERE (no EPERM reproduced)
+LIVE_VISIBLE_HEADER_INCREMENT_2 = NOT-RUNNABLE-HERE (no second EPERM)
+
+# The structural LIVE_DOM witness from CORRECTION01 stands as
+# the substitute evidence for the webview render under a
+# runtimeErrorCount > 0 state, but it is structural (not
+# through a real production chat task → EPERM path).

@@ -1,0 +1,33 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 11-second-eperm ===
+# Second independent EPERM — NOT REPRODUCED
+
+# Per ACT §16: "Run the same proven reproducer again as a new
+# command job. Require: JOB_ID_2 != JOB_ID_1. Then: EPERM
+# authority fires, counter N+1 → N+2, visible header N+1 → N+2."
+
+# What this ACT observed
+# No proven reproducer was identified. Therefore a second
+# independent EPERM test cannot be run — there is no first
+# EPERM to repeat.
+
+# Substrate signal-entitlement outcome (from R3)
+# The R3 vitest+fork-worker topology is the documented strongest
+# candidate for EPERM on this substrate (per ACT §8: "[vitest-pool]:
+# Failed to terminate forks worker ... kill EPERM" in prior runs).
+# In this ACT's R3 attempt:
+#   - forks worker tree (zsh → vitest → forks.js) was reaped
+#     cleanly in 19.5s by the production cancel surface
+#   - cancel_command returned state="cancelled" without error
+#   - production logs show no EPERM event
+#
+# This is consistent with the substrate behavior observed in
+# ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02: the EPERM
+# boundary is between the sandboxed-shell substrate and the
+# LaunchAgent-managed helper, NOT between the VSCodium Helper
+# Plugin supervisor and its own children.
+
+# Verdict
+SECOND_INDEPENDENT_EPERM = NOT-RUNNABLE-HERE
+                           (no first EPERM; the halt in
+                            §26 / §29 is the authoritative
+                            outcome for this ACT)

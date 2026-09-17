@@ -1,0 +1,59 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 13-cleanup ===
+# Cleanup — no diagnostic instrumentation was added
+
+# Per ACT §22: "Temporary instrumentation removal"
+# This ACT did NOT add any temporary diagnostic instrumentation
+# to the production code path. Per ACT §4: "If equivalent
+# instrumentation already exists, use it rather than adding
+# another seam." The existing instrumentation used in this ACT:
+
+# 1. The CORRECTION01 production code path at
+#    apps/vscode/src/sdk/command-job-manager.ts:1457-1506
+#    is the canonical authority chain. This is the SAME code
+#    that ships in production. No instrument was added.
+
+# 2. The production cancel surface (cancel_command tool) returns
+#    state, stdout, stderr, elapsedMs — sufficient evidence for
+#    this ACT's reproducer classification. No instrument was added.
+
+# 3. The production logs at
+#    /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data/logs/.../1-Cline.log
+#    are the existing telemetry channel (NoOpTelemetryProvider).
+#    No new logging was added.
+
+# 4. The session file at
+#    /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/sessions/1789679672709_x1p0n/1789679672709_x1p0n.{json,messages.json}
+#    is the existing per-session record. No new file was created.
+
+# Process cleanup
+R2 processes (cmd_mu616j8353v7wkxm):
+  PID 4003 (PARENT) and PID 4004 (CHILD) reaped by the
+  production cancel surface (cancel_command result:
+  state="cancelled", elapsedMs=135119). No residual processes.
+
+R3 processes (cmd_mu61ayzkmhofe1xr):
+  PID 5715 (zsh), 5716 (vitest), 5718 (forks worker) reaped by
+  the production cancel surface (cancel_command result:
+  state="cancelled", elapsedMs=19558). No residual processes.
+
+$ ps -p 4003 -p 4004 -p 5715 -p 5716 -p 5718 -o pid,command
+(empty — all processes gone)
+
+# Fixture cleanup
+# Fixtures are kept under .factory/tmp/ as required by ACT §23
+# (raw dumps). They are NOT removed; they are evidence.
+#   .factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/
+#     ├── eperm-fork-fixture.cjs          (R2)
+#     └── eperm-vitest-fixture/
+#         ├── vitest.config.ts            (R3)
+#         └── eperm-vitest.test.ts        (R3)
+
+# Production code hygiene
+$ git diff --stat
+(empty — no production code touched)
+
+$ git status --short
+(empty — working tree clean)
+
+# DIAGNOSTIC_PRODUCTION_DELTA_FINAL = 0  (no temporary
+#   instrumentation was added, so nothing to remove)

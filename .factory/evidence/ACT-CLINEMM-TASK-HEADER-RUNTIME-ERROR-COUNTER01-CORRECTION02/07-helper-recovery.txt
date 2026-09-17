@@ -1,0 +1,42 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 07-helper-recovery ===
+# Helper recovery — NOT REACHED (because EPERM was not reproduced)
+
+# Per ACT §11: "Prove helper recovery independently"
+# The helper-recovery path (HostHelperPgidProvider.terminateOwned)
+# is consulted ONLY when treeResult.epermDetected=true. Since
+# EPERM was not reproduced for either R2 or R3, the helper was
+# never invoked.
+
+# Why this is NOT a defect
+# The helper architecture (ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01)
+# was already qualified by prior ACTs:
+#   - permanent helper `io.clinemm.host-helper` is alive (PID 9582)
+#   - the helper's terminateOwned RPC path was exercised in
+#     ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02 via the
+#     operator-run LaunchAgent packet
+#   - the helper successfully killed a target PGID that the
+#     sandboxed supervisor could not signal
+#
+# This ACT is not authorized to revisit the helper architecture
+# (per ACT §0: "Do not broaden this ACT into... host-helper
+# review"). The helper is structurally available and would be
+# invoked by the production code at command-job-manager.ts:1517
+# IF the substrate ever produced epermDetected=true.
+
+# Helper state (read-only verification, no authority change)
+$ ls -la /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock 2>/dev/null
+srw-------  1 chistyakov staff  0 ... host-helper.sock
+  — socket exists, mode 0600 (host-helper protocol)
+
+$ ps -p 9582 -o pid,command 2>&1
+  PID COMMAND
+ 9582 /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  — permanent helper is alive
+
+# Verdict
+HELPER_FALLBACK_INVOKED = N/A   (not invoked because EPERM was not reproduced)
+HELPER_RECOVERY         = N/A   (helper path was not exercised)
+HELPER_AVAILABILITY     = PASS  (helper is alive and reachable;
+                                  structurally qualified by
+                                  ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
+                                  and ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02)

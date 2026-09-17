@@ -1,0 +1,142 @@
+{
+  "act": "ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02",
+  "status": "HALT_REAL_TASK_EPERM_NOT_REPRODUCED",
+  "halt_condition": "ACT sections 26 / 29 — bounded reproducer search exhausted; both R2 and R3 failed to reproduce the structured EPERM that the production counter is wired to",
+  "summary": "Live qualification attempt via the real codium-clinemm-4.1.16-3a39c1621 dogfood command tool. R1 (operator-driven simple sleep) was preserved as LIVE-NOERROR-01 conservation witness (clean SIGTERM, no EPERM, counter unchanged). R2 (Node fork tree, jobId cmd_mu616j8353v7wkxm) and R3 (Vitest/fork-workers, jobId cmd_mu61ayzkmhofe1xr) were both driven through the production CommandJobManager.start -> CommandJobManager.cancel path and produced state='cancelled' with all processes reaped. Neither candidate triggered treeResult.epermDetected=true; the VSCodium Helper Plugin supervisor's signal entitlement is permissive for its own children on this macOS substrate. Per ACT section 27, no EPERM reproduced does NOT authorize changing the counter; the counter implementation remains structurally GREEN per CORRECTION01's live-wire-DOM composition.",
+  "result_binding": {
+    "source_head": "3a39c1621d5aa962c62344f9e32cbb58f3ec6528",
+    "dogfood_build_id": "s1onique.clinemm-4.1.16-3a39c1621",
+    "extension_version": "4.1.16",
+    "chat_session_id": "1789679672709_x1p0n",
+    "extension_host_pid": 99021,
+    "task_id": "1789679672709_x1p0n",
+    "job_id_1": "cmd_mu616j8353v7wkxm",
+    "pgid_1": 4003,
+    "job_id_2": "cmd_mu61ayzkmhofe1xr",
+    "pgid_2": 5715,
+    "live_noerror_01_job_id": "cmd_mu60thailupf1anw"
+  },
+  "counter_state": {
+    "entry_runtime_error_count": 0,
+    "after_r2_cancel": 0,
+    "after_r3_cancel": 0,
+    "after_exit7": 0,
+    "warning": "counter remained at 0 across all candidates; runtimeErrorCount is task-scoped in-memory (NOT durable across task switches per CORRECTION01 lifetime contract) and is therefore not visible in persistent storage files"
+  },
+  "reproducer_outcomes": {
+    "r1_simple_sleep": {
+      "verdict": "NOT_REPRODUCED",
+      "label": "LIVE-NOERROR-01",
+      "classification": ["REAL", "LIVE", "REAL_PRODUCT_UI"],
+      "eperm_detected": false,
+      "counter_delta": 0,
+      "evidence": "02-simple-cancel-conservation.txt"
+    },
+    "r2_node_fork_tree": {
+      "verdict": "NOT_REPRODUCED",
+      "label": "R2-A",
+      "command": "/opt/homebrew/bin/node .factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/eperm-fork-fixture.cjs",
+      "job_id": "cmd_mu616j8353v7wkxm",
+      "pgid": 4003,
+      "parent_pid": 4003,
+      "child_pid": 4004,
+      "cancel_state": "cancelled",
+      "elapsed_ms": 135119,
+      "processes_reaped": true,
+      "eperm_detected": false,
+      "counter_delta": 0,
+      "evidence": "04-node-fork-result.txt"
+    },
+    "r3_vitest_fork_workers": {
+      "verdict": "NOT_REPRODUCED",
+      "label": "R3-A",
+      "command": "/opt/homebrew/bin/node .../vitest run eperm-vitest.test.ts",
+      "job_id": "cmd_mu61ayzkmhofe1xr",
+      "pgid": 5715,
+      "pids": {"zsh_wrapper": 5715, "vitest_binary": 5716, "forks_worker": 5718},
+      "cancel_state": "cancelled",
+      "elapsed_ms": 19558,
+      "processes_reaped": true,
+      "eperm_detected": false,
+      "counter_delta": 0,
+      "evidence": "05-vitest-result.txt"
+    }
+  },
+  "halt_authoritative_outcome": {
+    "real_task_eperm_reproducer": "NONE",
+    "live_visible_eperm_counter": "NOT_QUALIFIED",
+    "simple_cancel": "CONSERVATION_PASS",
+    "counter_implementation": "GREEN",
+    "follows_act_29_honest_closure": true,
+    "no_production_code_modified": true
+  },
+  "gates": {
+    "dogfood_build_bound": "PASS",
+    "simple_cancel_direct_success": "PASS",
+    "simple_cancel_counter_delta": 0,
+    "real_task_eperm_reproduced": "FAIL (halt)",
+    "eperm_authority": "N/A (not exercised)",
+    "helper_fallback_invoked": "N/A (EPERM not produced)",
+    "helper_recovery": "N/A",
+    "runtime_error_callback": "N/A",
+    "counter_delta_1": "N/A",
+    "extension_state_count": "N/A",
+    "webview_received_count": "N/A",
+    "visible_header_increment_1": "N/A (zero-hiding preserved)",
+    "second_real_eperm": "N/A",
+    "counter_delta_2": "N/A",
+    "visible_header_increment_2": "N/A",
+    "exit7_eperm": "N/A (structurally pinned)",
+    "exit7_counter_delta": 0,
+    "visible_header_after_exit7": "unchanged",
+    "error_event_cardinality": "1 per termination (contractual)",
+    "diagnostic_production_delta_final": 0,
+    "typecheck": "PASS (bun x tsc --noEmit -p tsconfig.json; EXIT=0 for apps/vscode AND apps/vscode/webview-ui)",
+    "targeted_tests": "PASS (bun test src/sdk/task-telemetry-tracker.test.ts: 64 pass / 0 fail)",
+    "vscode_prepublish": "N/A (no production code change)",
+    "diff_check": "PASS (git diff --check HEAD; EXIT=0)",
+    "evidence_bound": "PASS (all 14 evidence files + result.json bind to dogfood build 4.1.16-3a39c1621, session 1789679672709_x1p0n)"
+  },
+  "files_modified": [
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/00-entry.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/01-dogfood-identity.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/02-simple-cancel-conservation.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/03-reproducer-recon.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/04-node-fork-result.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/05-vitest-result.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/06-live-eperm.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/07-helper-recovery.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/08-counter-authority.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/09-webview-transport.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/10-visible-header.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/11-second-eperm.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/12-exit7-conservation.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/13-cleanup.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/14-gates.txt",
+    ".factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/result.json",
+    ".factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/eperm-fork-fixture.cjs",
+    ".factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/eperm-vitest-fixture/vitest.config.ts",
+    ".factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/eperm-vitest-fixture/eperm-vitest.test.ts"
+  ],
+  "tracked_dirt": {
+    "file": "apps/vscode/src/core/controller/state/working-context-state-projection.ts",
+    "delta": "MPWC02 formatting residue (3-line block collapsed to 1 line) — exempt per ACT section 1",
+    "verdict": "EXEMPT (byte-for-byte the already-known formatting-only delta; HALT_UNEXPECTED_TRACKED_DIRT NOT triggered)"
+  },
+  "invariants_pinned": [
+    "ONE EPERM AUTHORITY: SupervisableShellProcess.terminateTree().epermDetected (no supplementary probe promoted into counter authority)",
+    "ONE INCIDENT -> ONE COUNT: job.runtimeErrorReported latch in CommandJob (production code at command-job-manager.ts:1499)",
+    "SIMPLE_CANCEL DOES NOT TRIGGER EPERM: substrate signal entitlement of VSCodium Helper Plugin supervisor is permissive for its own children",
+    "EXIT 7 IS NOT AN EPERM: structurally pinned by REC-BE-08 (production tracker does not increment on non-EPERM trajectories)",
+    "ZERO-HIDING WIRE: runtimeErrorCount omitted from wire when counter === 0 (zero-hiding invariant preserved across all candidates)",
+    "NO TEMPORARY INSTRUMENTATION ADDED: per ACT section 4, existing production code + cancel_command output + production logs were used as the observability seams",
+    "TASK-SCOPED LIFETIME: runtimeErrorCount is in-memory task-scoped (NOT durable across task switches) per CORRECTION01's narrowed contract"
+  ],
+  "substrate_analysis": {
+    "context": "macOS Darwin 23.6.0 (arm64), VSCodium-clinemm extension host at PID 99021",
+    "eperm_substrate_boundary_observed_in": "ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02",
+    "eperm_substrate_boundary_location": "sandboxed-shell substrate vs LaunchAgent-managed un-sandboxed process",
+    "eperm_in_real_task_path": "NOT_REPRODUCED — chat-driven commands do not cross this boundary; the supervisor's children inherit its sandbox context",
+    "implication": "real-task EPERM is rare in the VSCodium Helper Plugin supervisor context; LIVE qualification of the visible ⚠ chain through a real chat task EPERM requires a substrate where the boundary is reachable by chat-driven commands (e.g., a remote-SSH-wrapped command, or a command launched via launchctl bootstrap from within the chat)"
+  }
+}

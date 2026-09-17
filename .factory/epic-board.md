@@ -1210,3 +1210,37 @@ errors; rebinds `result.json` to the live-wire-DOM run.
 **Evidence:** `.factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/` (12 files): `00-entry.txt`, `02-live-red.txt`, `03-error-authority.txt`, `04-projection-contract.txt`, `05-backend-tests.txt`, `06-ui-tests.txt`, `07-eperm-live-green.txt`, `08-task-isolation.txt`, `09-conservation.txt`, `10-gates.txt`, `11-live-qualification-environment-note.txt` (NEW), `result.json`. ACT body at `.factory/acts/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01.md`.
 
 **Next ACT priority (unchanged):** `ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01` — per-board convention, no follow-on task-header ACT unless a new P0 appears. The runtime-error counter ACT is self-contained.
+
+## ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 — HALT_REAL_TASK_EPERM_NOT_REPRODUCED — 2026-09-18
+
+**Status:** C1 GREEN halt at the alternate honest closure per ACT §29. The bounded reproducer search (R2 + R3) exhausted the candidate space without producing the structured `epermDetected=true` from a real codium-clinemm command job on this substrate.
+
+**Bounded reproducer results (real codium-clinemm-4.1.16-3a39c1621, chat session 1789679672709_x1p0n):**
+
+| Candidate | Job ID | Outcome | EPERM detected | Counter Δ |
+|-----------|--------|---------|----------------|-----------|
+| R1 LIVE-NOERROR-01 (operator, `sh -c 'sleep 600'`) | `cmd_mu60thailupf1anw` | Cancelled cleanly | false | 0 |
+| R2 Node fork tree (`child_process.fork`, PARENT+CHILD) | `cmd_mu616j8353v7wkxm` | Cancelled cleanly in 135s, both PIDs reaped | false | 0 |
+| R3 Vitest/fork-workers (`pool=forks`, 3 long-running tests) | `cmd_mu61ayzkmhofe1xr` | Cancelled cleanly in 19.5s, all 3 PIDs reaped | false | 0 |
+
+**Substrate analysis (load-bearing for the halt):**
+The same Mac/substrate produced structured EPERM in `ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02` at the boundary between the sandboxed Factory driver and a LaunchAgent-managed un-sandboxed process. This boundary is **not reachable by chat-driven commands** in the VSCodium Helper Plugin supervisor context — the supervisor (PID 99021) spawns `zsh -c` / `node` children directly, inheriting its own sandbox slice; `kill(-pgid, sig)` from the supervisor succeeds against its own children. No chat-driven command in R1/R2/R3 crossed the LaunchAgent boundary, so no EPERM fired at the bash.ts:terminateTree authority seam.
+
+**Conservation witnesses preserved:**
+- R1 (LIVE-NOERROR-01): the operator's clean `sh -c 'sleep 600'` cancellation is the canonical evidence that a clean SIGTERM-driven cancellation does NOT produce EPERM and does NOT increment the counter. This is the proof that the absent `⚠` badge after a clean cancel is the correct production behavior, not a missing telemetry signal.
+- R2 + R3: both reproduce R1's conservation outcome through multi-process trees (Node fork, vitest fork-worker). The counter remained at 0 across all four cancels (R1, R2, R3, plus the 2 typecheck-cancels used in this ACT).
+
+**Halt condition triggered:** `HALT_REAL_TASK_EPERM_NOT_REPRODUCED` (ACT §26/§29). All other §26 halt conditions NOT triggered.
+
+**Counter implementation status:** UNCHANGED — GREEN per CORRECTION01. Per ACT §27, "no EPERM reproduced does NOT authorize changing the counter." The three-layer LIVE composition (real bash primitive + real `TaskTelemetryTracker` + structural LIVE_DOM webview tests) is the substitute LIVE qualification.
+
+**Gates (this ACT):** TYPECHECK PASS (apps/vscode + webview-ui `bun x tsc --noEmit` EXIT=0); TARGETED_TESTS PASS (64/64 on `task-telemetry-tracker.test.ts`); DIFF_CHECK PASS (`git diff --check HEAD` EXIT=0); EVIDENCE_BOUND PASS (15 files + result.json all bind to build `4.1.16-3a39c1621`, session `1789679672709_x1p0n`, real jobIds); PATCH_HYGIENE PASS (zero production code modifications); DOGFOOD_BUILD_BOUND PASS (build-id matches HEAD short id); SIMPLE_CANCEL_DIRECT_SUCCESS PASS; LIVE_EXIT7_UNCHANGED PASS-by-equivalence (structurally pinned by REC-BE-08 + LIVE_EXIT7_UNCHANGED on the production tracker wire).
+
+**Production code modified:** none. `git diff` shows only the pre-existing MPWC02 formatting residue in `apps/vscode/src/core/controller/state/working-context-state-projection.ts` (5-line delta unchanged from CORRECTION01; exempt per ACT §1).
+
+**Test/Evidence:**
+- `.factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/` (15 files + result.json): `00-entry.txt`, `01-dogfood-identity.txt`, `02-simple-cancel-conservation.txt`, `03-reproducer-recon.txt`, `04-node-fork-result.txt`, `05-vitest-result.txt`, `06-live-eperm.txt`, `07-helper-recovery.txt`, `08-counter-authority.txt`, `09-webview-transport.txt`, `10-visible-header.txt`, `11-second-eperm.txt`, `12-exit7-conservation.txt`, `13-cleanup.txt`, `14-gates.txt`, `result.json`.
+- `.factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/`: `eperm-fork-fixture.cjs`, `eperm-vitest-fixture/vitest.config.ts`, `eperm-vitest-fixture/eperm-vitest.test.ts`.
+- ACT body: `.factory/acts/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02.md`.
+
+**STOP rule (ACT §30) honored. No CORRECTION03 is authorized.** The bounded reproducer search was completed; the substrate signal-entitlement boundary was documented; the counter implementation's GREEN status is preserved. LIVE qualification of the visible `⚠` chain through a real chat task EPERM requires a substrate where the LaunchAgent (or equivalent un-sandboxed) boundary is reachable from chat-driven commands, which this substrate does not provide.

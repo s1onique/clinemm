@@ -1,0 +1,66 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 06-live-eperm ===
+# Live EPERM event — NOT REPRODUCED
+
+# Per ACT §10 ("Freeze the successful EPERM event"):
+# No real codium-clinemm command job triggered the structured
+# `terminateTree().epermDetected = true` authority on this substrate.
+#
+# Per ACT §6 / §9 reproducer-result gate:
+#   R2 (Node fork tree):       NOT_REPRODUCED
+#   R3 (Vitest/fork-workers):  NOT_REPRODUCED
+#
+# Per ACT §26 halt conditions:
+#   HALT_REAL_TASK_EPERM_NOT_REPRODUCED = TRIGGERED
+#
+# This file preserves the structured outcome so the evidence
+# packet is complete and the halt is reproducible from the
+# recorded jobIds / PIDs / state transitions.
+
+# What the production chain actually observed
+# (from the production CommandJobManager.cancel result):
+
+R2:
+  jobId             = cmd_mu616j8353v7wkxm
+  PID (parent)      = 4003   (Node PARENT)
+  PID (child)       = 4004   (Node CHILD fork)
+  PGID              = 4003   (both members)
+  cancel_command    → { state: "cancelled", elapsedMs: 135119 }
+  processes reaped  = yes (both 4003 and 4004)
+  epermDetected     = false  (production cancel surface shows no
+                              EPERM indication; supervisor signaled
+                              its own children successfully)
+  runtime_error_reported
+                    = false  (counter branch not entered)
+
+R3:
+  jobId             = cmd_mu61ayzkmhofe1xr
+  PID (zsh wrapper) = 5715
+  PID (vitest bin)  = 5716
+  PID (forks work)  = 5718
+  PGID              = 5715   (all three members)
+  cancel_command    → { state: "cancelled", elapsedMs: 19558 }
+  processes reaped  = yes (all three)
+  epermDetected     = false  (same substrate signal-entitlement
+                              outcome as R2)
+  runtime_error_reported
+                    = false
+
+# Why the production cancel succeeded without EPERM
+# Both trees are entirely owned by the VSCodium Helper Plugin
+# supervisor (PID 99021 → zsh → vitest / node fork). On macOS,
+# `kill(-pgid, sig)` from the supervisor against its OWN
+# children succeeds when those children inherit the supervisor's
+# PGID. The substrate signal-entitlement boundary that produced
+# EPERM in ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02
+# was at the boundary between a sandboxed shell (the Factory
+# driver) and an un-sandboxed LaunchAgent-managed process —
+# a boundary that chat-driven commands do NOT cross.
+
+# Per ACT §29 honest closure:
+#   COUNTER_IMPLEMENTATION         = GREEN
+#   LIVE_VISIBLE_EPERM_COUNTER     = NOT_QUALIFIED
+#   SIMPLE_CANCEL                  = CONSERVATION_PASS
+#
+# This is the preferable honest outcome — manufacturing EPERM
+# via a non-production path merely to obtain a screenshot
+# would violate the ACT's explicit acceptance contract (§27).

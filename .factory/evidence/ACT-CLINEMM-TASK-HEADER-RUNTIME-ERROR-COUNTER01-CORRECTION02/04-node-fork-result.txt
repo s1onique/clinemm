@@ -1,0 +1,109 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02 / 04-node-fork-result ===
+# R2 — Node/fork tree, REAL codium-clinemm command tool,
+#      REAL CommandJobManager.cancel through production cancel_command
+
+# Fixture
+.factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/eperm-fork-fixture.cjs
+  - PARENT script forks a CHILD (same script, "child" mode)
+  - both stay alive via setInterval(60_000)
+  - detached: false (child shares PARENT's PGID)
+
+# Issue — production command tool (chat-agent run_commands path)
+$ /opt/homebrew/bin/node \
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/tmp/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02/eperm-fork-fixture.cjs
+
+# Hand-off (real production CommandJobManager.start response)
+{
+  "status": "running",
+  "jobId": "cmd_mu616j8353v7wkxm",
+  "elapsedMs": 15001,
+  "deadlineRemainingMs": 584999,
+  "outputTruncated": false,
+  "stdout": "PARENT=4003 CHILD=4004\n"
+}
+
+# Verify the tree is owned by the supervisor
+$ ps -p 4003 -p 4004 -o pid,ppid,pgid,stat,command
+  PID  PPID  PGID STAT COMMAND
+ 4003 99021  4003  s   /opt/homebrew/bin/node .../eperm-fork-fixture.cjs
+ 4004  4003  4003      /opt/homebrew/Cellar/node/26.0.0/bin/node .../eperm-fork-fixture.cjs child
+
+PPID=99021 is the VSCodium Helper Plugin (Plugin) NodeService
+       — the production CommandJobManager supervisor for this
+         chat session. Both PARENT and CHILD share PGID 4003
+         (child inherited parent's PGID via fork without
+         `detached: true`).
+
+# Cancel — REAL production CommandJobManager.cancel
+# (called via the production cancel_command tool from the
+#  chat-agent tool harness — same surface the UI cancel button
+#  drives)
+
+cancel_command({ jobId: "cmd_mu616j8353v7wkxm" })
+
+→ {
+    "ok": true,
+    "jobId": "cmd_mu616j8353v7wkxm",
+    "state": "cancelled",
+    "stdout": "PARENT=4003 CHILD=4004\n",
+    "stderr": "",
+    "elapsedMs": 135119
+  }
+
+# Verify the tree is gone (post-cancel)
+$ ps -p 4003 -p 4004 -o pid,ppid,pgid,stat,command
+(empty — both processes reaped)
+
+# Production termination chain (per apps/vscode/src/sdk/command-job-manager.ts:1457)
+  CommandJobManager.terminate(job, "cancel")
+    → job.terminationPromise = runTerminationSequence(job)
+      → job.process.terminateTree({ gracefulSignal: "SIGTERM", graceMs: TERM_GRACE_MS })
+        → bash.ts:signalGroup("SIGTERM")  → process.kill(-pgid, "SIGTERM")
+        → probePgidExists(pgid) until group vanishes
+        → returns { treeTerminated, escalatedToKill, epermDetected }
+      if (treeResult.epermDetected && !job.runtimeErrorReported) {
+        job.runtimeErrorReported = true
+        reportRuntimeError({ errorClass: "EPERM", source: "command-job-manager",
+                              correlationId: job.id })
+      }
+      // HELPER fallback (EPERM-only)
+      if (treeResult.epermDetected && job.helperOwnedCapability) {
+        // HostHelperPgidProvider.terminateOwned(...)
+      }
+
+# Classification
+# The cancel returned cleanly with state="cancelled" and elapsedMs=135119.
+# Both processes (PARENT 4003, CHILD 4004) reaped. No error indication
+# from the production cancel surface.
+#
+# This is consistent with R1 (LIVE-NOERROR-01) — the VSCodium Helper
+# Plugin supervisor has substrate signal entitlement to its own
+# spawned children; kill(-4003, SIGTERM) succeeded.
+#
+# Critically, NO counter increment is expected because the structured
+# EPERM authority (terminateTree().epermDetected) was not triggered.
+
+NODE_FORK_TREE_EPERM = NOT_REPRODUCED
+
+# Authority used (read-only forensics — not promoted into counter authority)
+$ # For reference only — bash.ts signalGroup was called and returned
+  # "OK" (no EPERM thrown). Production state-machine did not enter
+  # the epermDetected branch.
+
+# Counter expectation (per ACT §12 authority invariants)
+# Per the production code at command-job-manager.ts:1499-1506, the
+# latch is only set if treeResult.epermDetected === true. Since
+# EPERM was NOT detected, runtime_error_reported = false and the
+# counter MUST remain at 0.
+
+# Conservation (cross-candidate)
+# R1 (simple sh+sleep): direct SIGTERM success, EPERM=false, counter=0
+# R2 (Node fork tree): direct SIGTERM success, EPERM=false, counter=0
+# Both candidates traverse the production seam. The substrate signal
+# entitlement of the VSCodium Helper Plugin supervisor is permissive
+# for its own children, even when the tree contains multiple PIDs.
+#
+# Proceed to R3 (Vitest/fork-workers) per ACT §6/§8 — Vitest forks
+# are the strongest documented EPERM topology on this substrate per
+# the §8 prior-engineering note ("[vitest-pool]: Failed to terminate
+# forks worker ... kill EPERM").
