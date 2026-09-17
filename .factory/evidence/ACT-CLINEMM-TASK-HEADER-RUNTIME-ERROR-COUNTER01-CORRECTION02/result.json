@@ -1,8 +1,8 @@
 {
   "act": "ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02",
   "status": "HALT_REAL_TASK_EPERM_NOT_REPRODUCED",
-  "halt_condition": "ACT sections 26 / 29 — bounded reproducer search exhausted; both R2 and R3 failed to reproduce the structured EPERM that the production counter is wired to",
-  "summary": "Live qualification attempt via the real codium-clinemm-4.1.16-3a39c1621 dogfood command tool. R1 (operator-driven simple sleep) was preserved as LIVE-NOERROR-01 conservation witness (clean SIGTERM, no EPERM, counter unchanged). R2 (Node fork tree, jobId cmd_mu616j8353v7wkxm) and R3 (Vitest/fork-workers, jobId cmd_mu61ayzkmhofe1xr) were both driven through the production CommandJobManager.start -> CommandJobManager.cancel path and produced state='cancelled' with all processes reaped. Neither candidate triggered treeResult.epermDetected=true; the VSCodium Helper Plugin supervisor's signal entitlement is permissive for its own children on this macOS substrate. Per ACT section 27, no EPERM reproduced does NOT authorize changing the counter; the counter implementation remains structurally GREEN per CORRECTION01's live-wire-DOM composition.",
+  "halt_condition": "ACT §26 / §29 — bounded reproducer search exhausted; both R2 and R3 failed to reproduce the structured EPERM that the production counter is wired to",
+  "summary": "Live qualification attempt via the real codium-clinemm-4.1.16-3a39c1621 dogfood command tool. R1 (operator-driven simple sleep) was preserved as LIVE-NOERROR-01 conservation witness (clean SIGTERM, no EPERM, counter unchanged). R2 (Node fork tree, jobId cmd_mu616j8353v7wkxm) and R3 (Vitest/fork-workers, jobId cmd_mu61ayzkmhofe1xr) were both driven through the production CommandJobManager.start -> CommandJobManager.cancel path and produced state='cancelled' with all processes reaped. Neither candidate triggered treeResult.epermDetected=true; the VSCodium Helper Plugin supervisor's signal entitlement is permissive for its own children on this macOS substrate. Per ACT §27, no EPERM reproduced does NOT authorize changing the counter; the counter implementation remains structurally GREEN per CORRECTION01's live-wire-DOM composition.",
   "result_binding": {
     "source_head": "3a39c1621d5aa962c62344f9e32cbb58f3ec6528",
     "dogfood_build_id": "s1onique.clinemm-4.1.16-3a39c1621",
@@ -120,7 +120,7 @@
   ],
   "tracked_dirt": {
     "file": "apps/vscode/src/core/controller/state/working-context-state-projection.ts",
-    "delta": "MPWC02 formatting residue (3-line block collapsed to 1 line) — exempt per ACT section 1",
+    "delta": "MPWC02 formatting residue (3-line block collapsed to 1 line) — exempt per ACT §1",
     "verdict": "EXEMPT (byte-for-byte the already-known formatting-only delta; HALT_UNEXPECTED_TRACKED_DIRT NOT triggered)"
   },
   "invariants_pinned": [
@@ -129,7 +129,7 @@
     "SIMPLE_CANCEL DOES NOT TRIGGER EPERM: substrate signal entitlement of VSCodium Helper Plugin supervisor is permissive for its own children",
     "EXIT 7 IS NOT AN EPERM: structurally pinned by REC-BE-08 (production tracker does not increment on non-EPERM trajectories)",
     "ZERO-HIDING WIRE: runtimeErrorCount omitted from wire when counter === 0 (zero-hiding invariant preserved across all candidates)",
-    "NO TEMPORARY INSTRUMENTATION ADDED: per ACT section 4, existing production code + cancel_command output + production logs were used as the observability seams",
+    "NO TEMPORARY INSTRUMENTATION ADDED: per ACT §4, existing production code + cancel_command output + production logs were used as the observability seams",
     "TASK-SCOPED LIFETIME: runtimeErrorCount is in-memory task-scoped (NOT durable across task switches) per CORRECTION01's narrowed contract"
   ],
   "substrate_analysis": {
