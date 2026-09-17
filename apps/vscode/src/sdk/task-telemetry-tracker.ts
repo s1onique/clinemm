@@ -10,9 +10,22 @@
  *    same-task follow-up resumes ticking. "First terminal wins"
  *    means "first terminal within the current stopped interval".
  *
+ * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+ *  - Adds a fourth cumulative metric: `runtimeErrorCount`, the number
+ *    of structured ClineMM runtime error incidents attributable to
+ *    the current task (EPERM during process-tree termination, EACCES,
+ *    ENOENT, spawn failure, helper IPC failure, bounded subprocess
+ *    timeout, …). The webview renders this as a compact "⚠ N" glyph
+ *    next to the existing recovery-interventions strip.
+ *  - Monotonic within a task, resets only on new task identity,
+ *    saturates at `Number.MAX_SAFE_INTEGER` (so a runaway burst can
+ *    never wrap). The increment is a pure observer operation — no
+ *    React coupling, no functional updater side effects, no log
+ *    scraping.
+ *
  * Host-owned task telemetry accumulator.
  *
- * Tracks three cumulative metrics for the **visible task** (the one the
+ * Tracks four cumulative metrics for the **visible task** (the one the
  * TaskHeader renders):
  *
  *   1. Elapsed time — derived from `startedAt` (and frozen `endedAt`
@@ -27,6 +40,15 @@
  *      plane outcomes are a separate thing entirely: host DENY,
  *      user_rejected, runtime_skipped, runtime_aborted. This metric
  *      is a recovery-policy budget counter.)
+ *   4. Runtime-error count — incremented by `recordRuntimeError()`
+ *      exactly once per structured ClineMM runtime error incident
+ *      attributable to the current task. Helper-recovery success does
+ *      NOT subtract: an EPERM that was successfully resolved by the
+ *      LaunchAgent fallback still counts as a runtime incident
+ *      (the user-visible "this task hit a runtime error" fact).
+ *      Expected control-flow errno (e.g. ESRCH from a
+ *      `kill(-pgid, 0)` probe on an already-departed group) is
+ *      filtered at the call site and never reaches the recorder.
  *
  * The tracker is a pure OBSERVER. It NEVER reads or modifies recovery
  * policy, tool-execution gating, or turn-phase transitions. It has no
@@ -62,7 +84,7 @@
  * Privacy: emits nothing more than bounded integers and timestamps.
  */
 import type { AgentRuntimeRecoverySnapshot } from "@cline/shared"
-import type { TaskHeaderTelemetryStrip, ToolMechanismSummary } from "@shared/ExtensionMessage"
+import type { RuntimeErrorIncident, TaskHeaderTelemetryStrip, ToolMechanismSummary } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { recordMechanism as accumulateMechanism, emptyMechanismSummary } from "./tool-mechanism-classifier"
 
@@ -138,6 +160,15 @@ export class TaskTelemetryTracker {
 	// runtime event. `total` in this summary is conserved against the
 	// `toolCalls` counter; see the TES-IMPL-01 contract.
 	private mechanism: ToolMechanismSummary = emptyMechanismSummary()
+	// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: cumulative count of
+	// structured ClineMM runtime error incidents attributable to the
+	// current task. Saturates at `Number.MAX_SAFE_INTEGER` so a runaway
+	// burst (e.g. a busy-loop helper-fallback race) cannot wrap to a
+	// negative or lossy integer. The field is added to the wire strip
+	// only when non-zero (see `get()`); the webview treats absence as
+	// zero, so a Hub/Remote host that hasn't projected the field yet
+	// still renders a clean header.
+	private runtimeErrorCount = 0
 
 	/**
 	 * Start (or re-start) a task's telemetry window.
@@ -163,6 +194,12 @@ export class TaskTelemetryTracker {
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
 		this.mechanism = emptyMechanismSummary()
+		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: zero the
+		// runtime-error counter on a new task identity. Same-task
+		// continuation preserves it (the early-return above); only a
+		// different task id resets it. This is the load-bearing
+		// branch for TASK_ERROR_COUNTER_ISOLATION.
+		this.runtimeErrorCount = 0
 		return this.get()
 	}
 
@@ -244,6 +281,7 @@ export class TaskTelemetryTracker {
 		this.recoveryBudgetFailures = 0
 		this.prevEpisodeFailures = 0
 		this.mechanism = emptyMechanismSummary()
+		this.runtimeErrorCount = 0
 		return this.get()
 	}
 
@@ -331,8 +369,96 @@ export class TaskTelemetryTracker {
 	}
 
 	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+	 *
+	 * Production seam: record one structured ClineMM runtime error
+	 * incident attributable to the current task. Increments the
+	 * cumulative `runtimeErrorCount` by exactly 1; saturates at
+	 * `Number.MAX_SAFE_INTEGER` so a runaway burst (e.g. a busy-loop
+	 * helper-fallback race) cannot wrap to a negative or lossy integer.
+	 *
+	 * Identity contract:
+	 *
+	 *   - Monotonic within a task. NEVER decremented.
+	 *   - Resets to 0 ONLY on a new task identity (`startTask` with a
+	 *     different id than the current one). It is NOT reset by
+	 *     `endTask`, by `observeTurnPhase`, by helper recovery success,
+	 *     by retry, by UI collapse/expand, or by webview reload.
+	 *   - When the tracker has no active task (`currentTaskId ===
+	 *     undefined`) the call is logged and dropped — mirrors the
+	 *     pre-existing defensive behavior of `recordToolStarted()` so
+	 *     we never fabricate counts against an unowned task identity.
+	 *
+	 * V1 cardinality rule:
+	 *
+	 *   "ONE RUNTIME INCIDENT → AT MOST ONE COUNT INCREMENT."
+	 *
+	 * Call sites are responsible for:
+	 *
+	 *   1. Filtering out expected control-flow errno (e.g. ESRCH from
+	 *      a `kill(-pgid, 0)` probe on an already-departed group;
+	 *      `DENY_LEADER_NOT_FOUND` from a helper "already gone"
+	 *      response) BEFORE calling this method.
+	 *   2. Filtering out ordinary nonzero command exits (the child
+	 *      process itself decided to fail; the runtime behaved
+	 *      correctly). A failing test or build is NOT a ClineMM
+	 *      runtime error.
+	 *   3. NOT calling this method multiple times for one logical
+	 *      incident. The TERM→KILL escalation on the same process tree
+	 *      that hit EPERM is ONE incident; calling twice here would
+	 *      inflate the user-visible "⚠ N" counter.
+	 *
+	 * The structured payload (`errorClass`, `source`,
+	 * `correlationId`) is captured for forensic / future-details-UI
+	 * purposes but is NOT projected to the wire in V1 — the counter
+	 * is the only thing the webview renders. Logging the full
+	 * classification at INFO preserves future inspectability without
+	 * expanding the wire surface.
+	 */
+	recordRuntimeError(incident: RuntimeErrorIncident): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId === undefined) {
+			Logger.debug(
+				`[TaskTelemetryTracker] recordRuntimeError called before startTask; ignored (class=${incident.errorClass}, source=${incident.source})`,
+			)
+			return this.get()
+		}
+		// Saturate at Number.MAX_SAFE_INTEGER rather than wrap. We
+		// use `Math.min` against the next value so a burst that would
+		// otherwise overflow stays bounded and the user-visible
+		// counter remains accurate (e.g. ⚠ 9007199254740991 is still
+		// "a very large number of incidents", not a wrap to a
+		// negative or lossy integer).
+		if (this.runtimeErrorCount < Number.MAX_SAFE_INTEGER) {
+			this.runtimeErrorCount = Math.min(this.runtimeErrorCount + 1, Number.MAX_SAFE_INTEGER)
+		}
+		Logger.info(
+			`[TaskTelemetryTracker] runtime error recorded (class=${incident.errorClass}, source=${incident.source}, correlationId=${incident.correlationId ?? "<none>"}, cumulative=${this.runtimeErrorCount})`,
+		)
+		return this.get()
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+	 *
+	 * Read-only test seam that exposes the current cumulative count
+	 * WITHOUT requiring a task identity. Returns 0 when no task is
+	 * active. Mirrors the same defensive pattern as `recordToolStarted`
+	 * (which returns `this.get()` rather than the raw count) so
+	 * callers don't reach into private state.
+	 */
+	get currentRuntimeErrorCount(): number {
+		return this.runtimeErrorCount
+	}
+
+	/**
 	 * Pure snapshot of the current telemetry state. Returns
 	 * `undefined` when no task has ever been started.
+	 *
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: `runtimeErrorCount`
+	 * is emitted ONLY when > 0 (uses the same spread-conditional
+	 * pattern as `endedAt`). The webview treats absence as zero, so a
+	 * zero-task state (and a Hub/Remote host that hasn't projected
+	 * the field) renders a clean header with no "⚠" glyph.
 	 */
 	get(): TaskHeaderTelemetryStrip | undefined {
 		if (this.currentTaskId === undefined || this.startedAt === undefined) {
@@ -349,6 +475,13 @@ export class TaskTelemetryTracker {
 			// strip when present; Hub/Remote hosts that have not yet
 			// received the new field simply omit it from the strip.
 			mechanism: this.mechanism,
+			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: cumulative
+			// structured runtime error incidents. Emitted only when > 0
+			// so the wire strip stays minimal in the common (zero-error)
+			// case and Hub/Remote hosts that haven't projected the field
+			// still render cleanly (they simply omit it; the webview
+			// normalizes absence to zero at the TaskHeader seam).
+			...(this.runtimeErrorCount > 0 ? { runtimeErrorCount: this.runtimeErrorCount } : {}),
 		}
 	}
 

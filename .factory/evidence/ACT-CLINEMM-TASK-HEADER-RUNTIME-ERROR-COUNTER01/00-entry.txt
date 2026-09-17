@@ -1,0 +1,17 @@
+ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 00-entry
+
+Goal: add a task-scoped runtime-error counter to the TaskHeader that displays
+"⚠ N" for structured ClineMM runtime incidents (EPERM, EACCES, ENOENT,
+spawn failure, signal failure, etc.) attributable to the current task.
+
+Recon summary:
+  HEADER_RENDER_SEAM     = apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx
+  HEADER_STATE_SOURCE    = TaskHeaderTelemetryStrip (apps/vscode/src/shared/ExtensionMessage.ts:728)
+  TASK_IDENTITY_SOURCE   = TaskTelemetryTracker (apps/vscode/src/sdk/task-telemetry-tracker.ts)
+  ERROR_AUTHORITY        = TerminateTreeResult.epermDetected (sdk/.../executors/bash.ts:898)
+                           + CommandJobManager.cancel() result + spawn_failed (vscode-run-commands-tool.ts)
+  TRANSPORT_SEAM         = SdkController.getStateToPostToWebview() taskTelemetry field (SdkController.ts:4410)
+
+STRUCTURED_ERROR_AUTHORITY_FOUND = PASS
+TASK_ID_AVAILABLE_AT_AUTHORITY    = PASS
+runtimeErrorCount currently       = absent

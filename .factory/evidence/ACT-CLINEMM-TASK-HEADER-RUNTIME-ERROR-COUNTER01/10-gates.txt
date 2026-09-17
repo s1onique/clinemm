@@ -1,0 +1,58 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 10-gates ===
+
+# Gate status at the end of this ACT
+
+## Host typecheck
+
+$ bash ~/.bun/bin/bunx tsc --noEmit (in apps/vscode)
+(no output → exit 0)
+
+PASS.
+
+## Webview typecheck
+
+$ bash ~/.bun/bin/bunx tsc --noEmit (in apps/vscode/webview-ui)
+(no output → exit 0)
+
+PASS.
+
+## Backend unit tests
+
+$ /opt/homebrew/bin/node node_modules/.bin/vitest run \
+    src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts \
+    src/sdk/task-telemetry-tracker.test.ts
+
+ Test Files  2 passed (2)
+      Tests  76 passed (76)
+
+PASS (76/76). 12 REC-BE + 12 REC-01..REC-12 + 52 pre-existing.
+
+## Webview component tests
+
+$ /opt/homebrew/bin/node node_modules/.bin/vitest run \
+    src/components/chat/task-header/TaskHeaderTelemetry.test.tsx \
+    (in apps/vscode/webview-ui)
+
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.test.tsx (46 tests) 65ms
+
+PASS (46/46). 7 ERR-UI + 39 pre-existing.
+
+## Live EPERM discriminator (bash primitive)
+
+$ /Volumes/UserData/Users/chistyakov/.bun/bin/bun \
+    /tmp/clinemm-runtime-error-counter-red/red-driver.ts
+
+{"treeTerminated":false,"escalatedToKill":true,"epermDetected":true}
+
+PASS. Live EPERM confirmed on this host.
+
+## Sandbox-limited (pre-existing) test family
+
+The pre-existing `command-job-manager.test.ts` and `seatbelt-*` family
+use real subprocess primitives that require the Seatbelt substrate.
+In this sandbox-less environment those tests return `spawn_failed`
+from `manager.start(...)`. This is documented in the file's header
+comment as the sandbox-substrate limitation; it is NOT a regression
+from this ACT. The REC-BE tests use the `spawnFactory` injection
+seam and pass deterministically without Seatbelt.
+

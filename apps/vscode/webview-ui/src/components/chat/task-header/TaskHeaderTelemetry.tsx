@@ -308,6 +308,44 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 					<span className="font-mono">{telemetry.recoveryBudgetFailures}</span>
 				</span>
 			) : null}
+			{/*
+			  ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+			  Compact runtime-error counter. Normalized at the
+			  webview seam (single `?? 0` boundary per the ACT
+			  contract) so an absent wire field (Hub/Remote, older
+			  host) renders the same as zero. Hidden at zero so
+			  normal tasks stay uncluttered. The glyph is the
+			  Unicode warning sign `⚠` (U+26A0) — already in
+			  widespread VS Code / web typography, rendered as text
+			  (no SVG / font dependency) so the same shape shows
+			  up identically on every host.
+
+			  Color uses the canonical VS Code errorForeground
+			  token, mirroring the same convention the rest of the
+			  task-header telemetry strip follows (no hard-coded
+			  hex). The color does NOT convey meaning on its own —
+			  the `aria-label` and `title` carry the full
+			  semantics for screen readers and hover.
+
+			  Counter remains NON-CLICKABLE in V1 (no error
+			  details panel); cursor stays default.
+			*/}
+			{(() => {
+				const count = telemetry.runtimeErrorCount ?? 0
+				if (count <= 0) return null
+				const label = `${count} runtime error${count === 1 ? "" : "s"} in this task`
+				return (
+					<span
+						aria-label={label}
+						className="inline-flex items-center gap-1"
+						data-testid="task-header-runtime-error-count"
+						style={{ color: "var(--vscode-errorForeground)" }}
+						title={label}>
+						<span aria-hidden>⚠</span>
+						<span className="font-mono">{count}</span>
+					</span>
+				)
+			})()}
 			{/* ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 			    Diagnostic-knob indicator. Rendered ONLY when at least one
 			    knob is ON. In public the field is all-false and the

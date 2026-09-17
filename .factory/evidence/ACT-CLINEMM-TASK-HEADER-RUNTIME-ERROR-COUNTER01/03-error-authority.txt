@@ -1,0 +1,75 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 03-error-authority ===
+
+# Authority seam: epermDetected is the single structured EPERM signal
+
+The canonical structured EPERM signal lives at:
+
+  sdk/packages/core/src/extensions/tools/executors/bash.ts
+    export interface TerminateTreeResult {
+      readonly treeTerminated: boolean
+      readonly escalatedToKill: boolean
+      /**
+       * ... `epermDetected` is true when the caller-supplied subprocess was
+       * unable to signal its own process group (POSIX `kill(-pgid, sig)`
+       * returned EPERM). This is the diagnostic that authorizes the
+       * CommandJobManager to consult a privileged helper for the
+       */
+      readonly epermDetected: boolean
+    }
+
+The supervisor's terminateTree primitive is the ONLY authority. The
+CommandJobManager does NOT spawn a probe or run its own EPERM check;
+it reads `treeResult.epermDetected` exactly once after the termination
+sequence completes. This is the load-bearing contract from
+ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 review-correction04.
+
+# Surfacing chain
+
+  bash.ts:spawnSupervisableShellCommand(...).terminateTree(...)
+    -> returns TerminateTreeResult { epermDetected: true, ... }
+       (when process.kill(-pgid, "SIGTERM") → EPERM)
+  apps/vscode/src/sdk/command-job-manager.ts:runTerminationSequence(...)
+    -> const treeResult = await process.terminateTree({...})
+       if (treeResult.epermDetected === true) reportRuntimeError(...)
+  reportRuntimeError(...)  [helper added by this ACT]
+    -> if (!job.runtimeErrorReported && this.onRuntimeError) {
+         this.onRuntimeError({
+           errorClass: "EPERM",
+           source: "command-job-manager",
+           correlationId: job.id,
+         })
+         job.runtimeErrorReported = true
+       }
+  host sink  (SdkController.handleTaskRuntimeError closure)
+    -> TaskTelemetryTracker.recordRuntimeError(incident)
+    -> this.runtimeErrorCount = Math.min(this.runtimeErrorCount + 1, MAX_SAFE_INTEGER)
+
+# Why "EPERM only" (not EACCES / ENOENT / spawn failure)
+
+V1 narrows the runtime-error surface to the single signal that
+already drives an existing control-plane branch (the helper fallback).
+Adding other classes (EACCES, ENOENT, spawn-failure) would require
+new authority seams and new structured signals that do not yet exist.
+The wire schema (`RuntimeErrorClass`) and the manager incident path
+(`errorClass`) are forward-compatible — additional classes can be
+added later by extending the union and the corresponding bash.ts
+primitive — but V1 only fires on EPERM.
+
+# Latching semantics
+
+Both layers enforce exactly-once-per-job:
+- `job.runtimeErrorReported: boolean` in CommandJob (manager) — set
+  before onRuntimeError is invoked; subsequent cancel()s on the
+  same job no-op.
+- `Math.min(this.runtimeErrorCount + 1, Number.MAX_SAFE_INTEGER)` in
+  TaskTelemetryTracker — saturation at the JS integer limit; never
+  overflows, never goes negative, never decrements.
+
+# Decision: best-effort sink
+
+`onRuntimeError` is best-effort: a thrown callback is caught and
+logged inside the manager so a tracker bug cannot poison the
+termination flow. This is the load-bearing safety property — EPERM
+recovery is control-plane critical, the runtime-error counter is a
+visualization. REC-BE-06 pins this invariant.
+

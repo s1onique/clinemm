@@ -1,0 +1,63 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 07-eperm-live-green ===
+
+# Live EPERM → epermDetected → onRuntimeError → wire → ⚠ N trajectory
+
+# Step 1: prove the production bash primitive surfaces EPERM live
+
+Ran from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+$ /Volumes/UserData/Users/chistyakov/.bun/bin/bun \
+    /tmp/clinemm-runtime-error-counter-red/red-driver.ts
+
+{"treeTerminated":false,"escalatedToKill":true,"epermDetected":true}
+
+This is the LIVE RED driver from the ACT's red phase (file
+`/tmp/clinemm-runtime-error-counter-red/red-driver.ts`). It spawns
+`/bin/bash -c "sleep 30"` via `spawnSupervisableShellCommand` (the
+exact production primitive CommandJobManager calls), then invokes
+`proc.terminateTree({ gracefulSignal: "SIGTERM", graceMs: 50 })`.
+
+The structured result:
+  treeTerminated: false   — the tree was NOT reaped cleanly within grace
+  escalatedToKill: true   — the manager had to escalate to SIGKILL
+  epermDetected: true     — the substrate returned EPERM on kill(-pgid, sig)
+
+This is the EXACT signal that the new ACT surfaces to the task-header
+runtime-error counter. Without the ACT, the TaskHeader has no
+mechanism to report this fact to the user.
+
+# Step 2: unit-test composition → wire strip count
+
+apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
+  REC-BE-10: end-to-end — fake-shell EPERM + tracker + wire strip
+  → runtimeErrorCount = 1
+  REC-BE-11: two sequential jobs under SAME tracker
+  → runtimeErrorCount = 2
+
+These tests use the public spawnFactory injection seam (set to a
+fake SupervisableShellProcess whose terminateTree returns
+`{ epermDetected: true, ... }`) plus the production TaskTelemetryTracker
+and TaskHeaderTelemetryStrip wire format. The result is the exact
+shape that would flow to the webview if a real EPERM were observed.
+
+# Step 3: webview projection
+
+apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx
+  ERR-UI-02: count=1 → "⚠ 1" with aria-label "1 runtime error in this task"
+  ERR-UI-03: count=2 → "⚠ 2" with aria-label "2 runtime errors in this task"
+  ERR-UI-04: count=17 → "⚠ 17" with aria-label "17 runtime errors in this task"
+
+# Conclusion
+
+End-to-end:
+  bash.ts:kill(-pgid, "SIGTERM") → EPERM
+    → bash.ts:terminateTree returns { epermDetected: true, ... }
+      → CommandJobManager.runTerminationSequence reports runtime error
+        → SdkController.handleTaskRuntimeError closure calls
+          TaskTelemetryTracker.recordRuntimeError(incident)
+            → runtimeErrorCount saturating-incremented
+              → wire strip.runtimeErrorCount > 0 emitted
+                → webview TaskHeaderTelemetry renders <span>⚠ N</span>
+                  with aria-label "N runtime error(s) in this task"
+
+All 7 ERR-UI + 12 REC-BE + 12 REC-01..REC-12 tests pass.

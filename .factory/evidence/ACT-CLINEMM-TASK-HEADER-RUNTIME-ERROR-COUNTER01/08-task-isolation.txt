@@ -1,0 +1,62 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 08-task-isolation ===
+
+# Task A and Task B counters do not bleed
+
+The runtime-error counter is bound to the task identity, not the
+process. The seam is `TaskTelemetryTracker.startTask(taskId)` which
+zeroes all per-task counters when the task id changes.
+
+# Where the reset lives
+
+apps/vscode/src/sdk/task-telemetry-tracker.ts
+  startTask(taskId, startedAt?) {
+    const now = startedAt ?? Date.now()
+    if (this.currentTaskId === taskId) {
+      return this.get()  // same-task continuation: NO reset
+    }
+    this.currentTaskId = taskId
+    this.startedAt = now
+    this.endedAt = undefined
+    this.toolCalls = 0
+    this.recoveryBudgetFailures = 0
+    this.prevEpisodeFailures = 0
+    this.mechanism = emptyMechanismSummary()
+    // ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: zero the
+    // runtime-error counter on a new task identity. Same-task
+    // continuation preserves it (the early-return above); only a
+    // different task id resets it.
+    this.runtimeErrorCount = 0
+    return this.get()
+  }
+
+# Test pin
+
+apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
+  REC-BE-12: tracker bound to task A does NOT see EPERM from task B
+    - Bind tracker to task-A
+    - recordRuntimeError({ errorClass: "EPERM", ..., correlationId: "job-a" })
+    - Assert currentRuntimeErrorCount === 1
+    - startTask("task-B", ...)  // task identity changes
+    - Assert currentRuntimeErrorCount === 0  // COUNTER RESET
+    - Assert get()?.runtimeErrorCount is undefined (wire zero-hide)
+    - recordRuntimeError({ errorClass: "EPERM", ..., correlationId: "job-b" })
+    - Assert currentRuntimeErrorCount === 1  // task B starts fresh
+
+# Live reasoning
+
+In production:
+- SdkController.handleTaskRuntimeError calls
+  stateManager.taskTelemetryTracker.recordRuntimeError(incident)
+- The tracker is a singleton per session (one SdkController instance
+  per session); the currently bound task identity is whatever
+  startTask(...) was last called with.
+- When the user starts a new task (or taskId changes), startTask is
+  called BEFORE any new EPERM can land. So task B's first EPERM is
+  the first increment after the reset.
+
+# Conclusion
+
+Task isolation is structural: the reset lives in startTask, and
+recordRuntimeError only touches the currently bound task's counter.
+No global / module-level state. No closures over per-task state.
+

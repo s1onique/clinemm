@@ -1149,3 +1149,53 @@ Updated: 2026-09-16 ACT-CLINEMM-TRUSTED-CHILD-TERMINATION-PROBE01-CORRECTION02 �
 **Per §21 STOP rule:** NO MORE HOST-HELPER PRE-REVIEW unless a new P0 appears. The host-helper work is done.
 
 **Next ACT:** `ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01` — resume from `HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND` and obtain the operator TSWPD live capture. Do NOT prioritize `SANDBOX-INSTALL-PATH-WRITABLE01` ahead of that unless the helper-update path becomes an immediate operational blocker.
+
+---
+
+## ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 — GREEN — 2026-09-17
+
+**Status:** GREEN. **Subject head:** post-MPWC02 production (HEAD as of 2026-09-17).
+
+**Goal achieved:** Task-scoped `⚠ N` runtime-error counter on TaskHeader, fed from the canonical `bash.ts:TerminateTreeResult.epermDetected` signal via `CommandJobManager.reportRuntimeError` and `TaskTelemetryTracker.recordRuntimeError`.
+
+**Authority seam (single, no probes):**
+  `bash.ts:spawnSupervisableShellCommand(...).terminateTree({...})` is the ONLY authority that returns `epermDetected: boolean`. The `CommandJobManager.runTerminationSequence` reads `treeResult.epermDetected` exactly once and invokes `reportRuntimeError(...)` (latched via `job.runtimeErrorReported`). The host sink (`SdkController.handleTaskRuntimeError`) calls `TaskTelemetryTracker.recordRuntimeError(incident)`, which saturating-increments `this.runtimeErrorCount` at `Number.MAX_SAFE_INTEGER`.
+
+**Wire hygiene:**
+  - `TaskHeaderTelemetryStrip.runtimeErrorCount?` is OPTIONAL; emitted only when > 0 (single spread-conditional in `TaskTelemetryTracker.get()`).
+  - Webview normalizes absence via single `?? 0` boundary in `TaskHeaderTelemetry.tsx`. Renders `<span>⚠ N</span>` with `--vscode-errorForeground` color, `aria-label="N runtime error(s) in this task"`, hidden at zero.
+
+**Six call-site wirings:** `SdkController.handleTaskRuntimeError` closure plumbed to `onRuntimeError` on all six `VscodeSessionHost.create` invocations (production host, two session-lifecycle paths, remote-config-aware host, message-edit temp host, checkpoint-comparison temp host).
+
+**Tests (all PASS):**
+  - Backend: 76/76 (`task-telemetry-tracker.test.ts`: 64 = 12 REC + 52 pre-existing; `task-header-runtime-error-counter-rec01.test.ts`: 12 REC-BE).
+  - Webview: 46/46 (`TaskHeaderTelemetry.test.tsx`: 7 ERR-UI + 39 pre-existing).
+  - Live EPERM driver: `{"treeTerminated":false,"escalatedToKill":true,"epermDetected":true}` — production bash primitive surfaces EPERM deterministically on this host.
+
+**Invariants pinned:**
+  - Exactly-once-per-job (`job.runtimeErrorReported` latch).
+  - Saturation at `Number.MAX_SAFE_INTEGER`.
+  - Zero-hide-on-wire + single `?? 0` boundary on webview.
+  - Task isolation (`startTask(newTaskId)` resets counter; REC-BE-12).
+  - Conservation (non-zero exits do NOT increment; REC-BE-08).
+  - Best-effort sink (throwing callback does NOT break cancel; REC-BE-06).
+  - Helper-recovery success does NOT suppress EPERM callback (REC-BE-03).
+
+**Pre-existing infrastructure debt (NOT REGRESSED):** `command-job-manager.test.ts` and `seatbelt-*` family require Seatbelt substrate unavailable in this sandbox; they return `spawn_failed` from `manager.start(...)`. The REC-BE tests use the `spawnFactory` injection seam and pass deterministically without Seatbelt (mirrors `host-helper-pgid-adapter.test.ts` pattern).
+
+**Gates:** `apps/vscode` tsc --noEmit clean; `apps/vscode/webview-ui` tsc --noEmit clean; backend vitest 76/76; webview vitest 46/46; live EPERM driver PASS.
+
+**Files modified (9):**
+  - `apps/vscode/src/shared/ExtensionMessage.ts` — `RuntimeErrorIncident`, `RuntimeErrorClass`, `RuntimeErrorSource`, `TaskHeaderTelemetryStrip.runtimeErrorCount?`.
+  - `apps/vscode/src/sdk/task-telemetry-tracker.ts` — `runtimeErrorCount` state, `recordRuntimeError()` (saturating), `currentRuntimeErrorCount` getter, `startTask` reset, wire emission conditional.
+  - `apps/vscode/src/sdk/task-telemetry-tracker.test.ts` — REC-01..REC-12 (12 new test cases).
+  - `apps/vscode/src/sdk/command-job-manager.ts` — `onRuntimeError` option, `reportRuntimeError()` helper, `runtimeErrorReported` latch on `CommandJob`, invocation in `runTerminationSequence` after `treeResult.epermDetected`.
+  - `apps/vscode/src/sdk/vscode-session-host.ts` — `onRuntimeError` plumbed through to `CommandJobManager`.
+  - `apps/vscode/src/sdk/SdkController.ts` — `handleTaskRuntimeError` closure wired to 6 `VscodeSessionHost.create` call sites.
+  - `apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts` — NEW (REC-BE-01..REC-BE-12, 12 cases).
+  - `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx` — `⚠ N` glyph with `aria-label`, `title`, `--vscode-errorForeground`, hidden at zero.
+  - `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx` — ERR-UI-01..ERR-UI-06 (7 new test cases).
+
+**Evidence:** `.factory/evidence/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01/` (11 files): `00-entry.txt`, `02-live-red.txt`, `03-error-authority.txt`, `04-projection-contract.txt`, `05-backend-tests.txt`, `06-ui-tests.txt`, `07-eperm-live-green.txt`, `08-task-isolation.txt`, `09-conservation.txt`, `10-gates.txt`, `result.json`. ACT body at `.factory/acts/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01.md`.
+
+**Next ACT priority (unchanged):** `ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01` — per-board convention, no follow-on task-header ACT unless a new P0 appears. The runtime-error counter ACT is self-contained.

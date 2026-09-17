@@ -34,7 +34,7 @@ import type { ApiConfiguration } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
 import { CLINE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/ClineAccount"
 import { mentionRegexGlobal } from "@shared/context-mentions"
-import type { ClineApiReqInfo, ClineMessage, ExtensionState, TurnPhase } from "@shared/ExtensionMessage"
+import type { ClineApiReqInfo, ClineMessage, ExtensionState, RuntimeErrorIncident, TurnPhase } from "@shared/ExtensionMessage"
 import type { HistoryItem } from "@shared/HistoryItem"
 import {
 	disablePostTerminalAuthorityDiagnostic,
@@ -1563,6 +1563,12 @@ export class Controller {
 						network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
 						sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
 					}),
+					// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+					// mirror the production wiring — every temp
+					// session host should still surface runtime
+					// incidents so the user-visible ⚠ N does not
+					// silently reset under tool rebuild.
+					onRuntimeError: this.handleTaskRuntimeError,
 				}),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: (sessionHost, taskId) => this.sessionHistory.loadInitialMessages(sessionHost, taskId),
@@ -1712,6 +1718,9 @@ export class Controller {
 						network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
 						sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
 					}),
+					// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+					// mirror the production wiring.
+					onRuntimeError: this.handleTaskRuntimeError,
 				}),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			resolveContextMentions: (text) => this.resolveContextMentions(text),
@@ -1745,6 +1754,9 @@ export class Controller {
 						network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
 						sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
 					}),
+					// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+					// mirror the production wiring.
+					onRuntimeError: this.handleTaskRuntimeError,
 				}),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
@@ -2087,6 +2099,12 @@ export class Controller {
 			mcpHub: this.mcpHub,
 			beforeStartSession: () => this.ensureRemoteConfigForSessionStart(),
 			getRemoteConfigIntegration: () => this.remoteConfigCoreIntegration,
+			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+			// forward runtime incidents reported by the host-owned
+			// CommandJobManager. The remote-config refresh path
+			// creates a temp host with its own CommandJobManager, so
+			// it must carry the same sink as the production host.
+			onRuntimeError: this.handleTaskRuntimeError,
 		})
 	}
 
@@ -3396,6 +3414,12 @@ export class Controller {
 					network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
 					sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
 				}),
+				// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+				// mirror the production wiring — message-edit
+				// rebuilds create a temp host with its own
+				// CommandJobManager, so the runtime-error sink must
+				// follow.
+				onRuntimeError: this.handleTaskRuntimeError,
 			})
 			sessionHost = tempHost
 		}
@@ -3649,6 +3673,11 @@ export class Controller {
 					network: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowNetwork"),
 					sshAgent: this.stateManager.getGlobalSettingsKey("clinemmSafeYoloAllowSshAgent"),
 				}),
+				// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+				// mirror the production wiring — checkpoint
+				// comparison on a stale session creates a temp host
+				// with its own CommandJobManager.
+				onRuntimeError: this.handleTaskRuntimeError,
 			})
 			sessionHost = tempHost
 		}
@@ -4074,6 +4103,39 @@ export class Controller {
 		this.postStateToWebview().catch((error) => {
 			Logger.warn(
 				`[SdkController] Failed to post state after background command state change (running=${running}, taskId=${taskId}): ${error instanceof Error ? error.message : String(error)}`,
+			)
+		})
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+	 *
+	 * Closure passed to `VscodeSessionHost.create({ onRuntimeError })`
+	 * at every call site. Delegates straight to the host-owned
+	 * `TaskTelemetryTracker.recordRuntimeError()` so structured
+	 * incidents reported by the `CommandJobManager` (and any future
+	 * host subsystem) flow through the canonical task-scoped counter.
+	 *
+	 * The tracker owns the "ONE INCIDENT → ONE COUNT" invariant:
+	 *   - it latches on new task identity (the `clear()` reset on
+	 *     `startTask` with a different id)
+	 *   - it saturates at `Number.MAX_SAFE_INTEGER`
+	 *   - it logs each event at INFO for forensic trace
+	 *
+	 * The SdkController only owns the wiring — it does NOT maintain
+	 * its own counter, parse error strings, or increment inside a
+	 * React-side functional updater. Every increment routes through
+	 * the tracker so the webview reads a single source of truth.
+	 *
+	 * Best-effort post to the webview so the user-visible ⚠ N glyph
+	 * flips promptly after each incident; mirrors the
+	 * `updateBackgroundCommandState` post pattern.
+	 */
+	private readonly handleTaskRuntimeError = (incident: RuntimeErrorIncident): void => {
+		this.taskTelemetry.recordRuntimeError(incident)
+		this.postStateToWebview().catch((error) => {
+			Logger.warn(
+				`[SdkController] Failed to post state after runtime error (class=${incident.errorClass}, source=${incident.source}): ${error instanceof Error ? error.message : String(error)}`,
 			)
 		})
 	}

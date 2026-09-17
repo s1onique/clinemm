@@ -1,0 +1,44 @@
+{
+  "act": "ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01",
+  "status": "GREEN",
+  "summary": "Task-scoped runtime-error counter (⚠ N) on TaskHeader, fed from the canonical bash.ts:epermDetected signal via CommandJobManager.reportRuntimeError and TaskTelemetryTracker.recordRuntimeError.",
+  "tests": {
+    "backend_rec_be": 12,
+    "backend_rec_unit": 12,
+    "backend_pre_existing": 52,
+    "backend_total": 76,
+    "webview_err_ui": 7,
+    "webview_pre_existing": 39,
+    "webview_total": 46
+  },
+  "gates": {
+    "host_typecheck": "PASS",
+    "webview_typecheck": "PASS",
+    "backend_vitest": "PASS (76/76)",
+    "webview_vitest": "PASS (46/46)",
+    "live_eperm_driver": "PASS (epermDetected=true)"
+  },
+  "files_modified": [
+    "apps/vscode/src/shared/ExtensionMessage.ts",
+    "apps/vscode/src/sdk/task-telemetry-tracker.ts",
+    "apps/vscode/src/sdk/task-telemetry-tracker.test.ts",
+    "apps/vscode/src/sdk/command-job-manager.ts",
+    "apps/vscode/src/sdk/vscode-session-host.ts",
+    "apps/vscode/src/sdk/SdkController.ts",
+    "apps/vscode/src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts",
+    "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx",
+    "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx"
+  ],
+  "invariants_pinned": [
+    "Single EPERM authority: bash.ts:terminateTree.epermDetected (no other probes)",
+    "Exactly-once-per-job: job.runtimeErrorReported latch in CommandJob",
+    "Saturation: Math.min(N+1, Number.MAX_SAFE_INTEGER) in TaskTelemetryTracker",
+    "Wire zero-hiding: runtimeErrorCount emitted only when > 0 (single spread-conditional)",
+    "Webview normalization: single ?? 0 boundary",
+    "Task isolation: startTask(newTaskId) resets runtimeErrorCount",
+    "Conservation: non-zero exit codes do NOT increment (only epermDetected=true)",
+    "Best-effort sink: throwing onRuntimeError callback does NOT break cancel flow",
+    "Helper-recovery success does NOT suppress EPERM callback",
+    "No onRuntimeError sink supplied → manager silently drops incidents"
+  ]
+}

@@ -39,6 +39,8 @@ import {
 	spawnSupervisableShellCommand,
 } from "@cline/core"
 import { type AgentToolContext, getDefaultShell, getShellInvocation, type InternalExecutionCapability } from "@cline/shared"
+import type { RuntimeErrorIncident } from "@shared/ExtensionMessage"
+import { Logger } from "@/shared/services/Logger"
 import {
 	buildExperimentalReconCapability,
 	defaultSandboxBackendResolver,
@@ -293,6 +295,41 @@ export interface CommandJobManagerOptions {
 		config: Parameters<typeof spawnSupervisableShellCommand>[0],
 		options?: Parameters<typeof spawnSupervisableShellCommand>[1],
 	) => SupervisableShellProcess
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+	 *
+	 * Optional callback invoked exactly once when this manager
+	 * surfaces a structured ClineMM runtime error incident that is
+	 * attributable to the active task. V1 uses:
+	 *
+	 *   - `EPERM` from `command-job-manager` when the direct
+	 *     terminate path returned `epermDetected: true` (the bash
+	 *     supervisor's `TerminateTreeResult.epermDetected` is the
+	 *     single canonical structured EPERM signal — the manager
+	 *     does NOT parse strings or run a parallel `process.kill`
+	 *     probe, by design).
+	 *
+	 * The callback is the narrowest possible seam: it receives a
+	 * fully-classified `RuntimeErrorIncident` and the host (the
+	 * SdkController) is responsible for forwarding it to the
+	 * `TaskTelemetryTracker.recordRuntimeError()` observer. The
+	 * manager itself stays host-decoupled — it does not import the
+	 * tracker, the SDK adapter, or any UI code, so the same
+	 * manager binary can run on substrates without a telemetry
+	 * tracker (Hub/Remote, tests, the SDK CLI).
+	 *
+	 * Cardinality: ONE structured runtime incident → AT MOST ONE
+	 * callback invocation. The TERM→KILL escalation on the SAME
+	 * process tree counts as ONE incident (single kill operation).
+	 * Helper-recovery success does NOT suppress the callback: an
+	 * EPERM that was successfully resolved by the LaunchAgent
+	 * fallback still counts as a runtime incident (the user-visible
+	 * "this task hit a runtime error" fact must be preserved).
+	 *
+	 * Optional. When omitted, the manager silently drops incidents.
+	 * Production callers wire this to the telemetry tracker.
+	 */
+	onRuntimeError?: (incident: RuntimeErrorIncident) => void
 }
 
 /**
@@ -603,6 +640,18 @@ interface CommandJob {
 	}
 	/** Cancellation safety net: see cancel() body. */
 	helperFallbackUsed?: boolean
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: latched to
+	 * `true` the first time this job surfaced a structured runtime
+	 * error incident to the host sink. Guarantees the
+	 * "ONE INCIDENT → ONE COUNT" invariant even under repeated
+	 * termination attempts on the same job (idempotent cancel after
+	 * deadline, retries, etc.). The latched value is NEVER reset
+	 * within the job's lifetime — it survives the helper-fallback
+	 * roundtrip so a successful helper recovery does not allow a
+	 * second EPERM observation to double-count.
+	 */
+	runtimeErrorReported?: boolean
 } /**
  * CommandJobManager — the single host owner of command execution
  * lifetime for the VS Code extension's `run_commands` background path.
@@ -677,6 +726,20 @@ export class CommandJobManager {
 		config: Parameters<typeof spawnSupervisableShellCommand>[0],
 		options?: Parameters<typeof spawnSupervisableShellCommand>[1],
 	) => SupervisableShellProcess
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: optional host
+	 * sink for structured runtime error incidents. When supplied, the
+	 * manager invokes it exactly once per qualifying incident (currently:
+	 * `epermDetected: true` from the supervisor's `terminateTree`).
+	 * When omitted, the manager silently drops incidents — preserving
+	 * the existing pre-ACT behavior on substrates without a telemetry
+	 * tracker (Hub/Remote, tests, the SDK CLI).
+	 *
+	 * The callback is invoked synchronously, but the manager treats it
+	 * as best-effort: a thrown callback is caught and logged so a
+	 * tracker bug cannot poison the termination flow.
+	 */
+	private readonly onRuntimeError: ((incident: RuntimeErrorIncident) => void) | undefined
 	private helperClientToken: string | undefined
 	/**
 	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction03):
@@ -699,6 +762,7 @@ export class CommandJobManager {
 		this.safeYoloCapabilitySource = options.safeYoloCapabilitySource
 		this.helperOwnedPgidProvider = options.helperOwnedPgidProvider
 		this.spawnFactory = options.spawnFactory ?? spawnSupervisableShellCommand
+		this.onRuntimeError = options.onRuntimeError
 	}
 
 	/**
@@ -780,6 +844,30 @@ export class CommandJobManager {
 		} catch {
 			// Helper will reap on its own when the leader dies; this
 			// is best-effort.
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+	 *
+	 * Best-effort invocation of the host-supplied runtime-error
+	 * sink. NEVER throws — a tracker bug cannot poison the
+	 * termination flow. The caller is responsible for the
+	 * "ONE INCIDENT → ONE COUNT" latch (`job.runtimeErrorReported`)
+	 * so this method can be invoked freely from the call site.
+	 */
+	private reportRuntimeError(incident: RuntimeErrorIncident): void {
+		const sink = this.onRuntimeError
+		if (!sink) return
+		try {
+			sink(incident)
+		} catch (err) {
+			// NEVER let a sink failure break the manager. Logger.error
+			// is the only channel; no propagation.
+			Logger.error(
+				`[CommandJobManager] onRuntimeError sink threw; incident dropped (class=${incident.errorClass}, source=${incident.source}, correlationId=${incident.correlationId ?? "<none>"})`,
+				err,
+			)
 		}
 	}
 
@@ -1399,6 +1487,23 @@ export class CommandJobManager {
 			gracefulSignal: "SIGTERM",
 			graceMs: TERM_GRACE_MS,
 		})
+		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: the
+		// supervisor's structured EPERM signal is the canonical
+		// runtime-error authority for process-tree termination. We
+		// surface it to the host sink EXACTLY ONCE per job,
+		// regardless of helper-recovery success — an EPERM that the
+		// LaunchAgent helper successfully recovered is still a real
+		// runtime incident the user should see in the task header.
+		// Guarded by `job.runtimeErrorReported` so a second termination
+		// attempt on the same job (idempotent cancel) cannot double-count.
+		if (treeResult.epermDetected && !job.runtimeErrorReported) {
+			job.runtimeErrorReported = true
+			this.reportRuntimeError({
+				errorClass: "EPERM",
+				source: "command-job-manager",
+				correlationId: job.id,
+			})
+		}
 		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
 		// EPERM-only fallback. The helper is consulted only when:
 		//   - the direct path reported epermDetected (it tried to

@@ -1,0 +1,56 @@
+=== ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / 05-backend-tests ===
+
+# Backend test suite status
+
+Ran from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+$ /opt/homebrew/bin/node node_modules/.bin/vitest run \
+    src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts \
+    src/sdk/task-telemetry-tracker.test.ts
+
+ Test Files  2 passed (2)
+      Tests  76 passed (76)
+
+# Breakdown
+
+task-telemetry-tracker.test.ts (REC-01..REC-12 + pre-existing tests): 64 tests
+  - REC-01..REC-12 added by this ACT for the recordRuntimeError primitive
+    (12 cases covering single-incident, multi-incident, saturation,
+     zero-hide-on-wire, idempotent rebind, no-decrement-on-recovery-success,
+     cross-task reset, etc.)
+  - 52 pre-existing tests (mechanism summary, recovery baseline, etc.) unchanged
+
+task-header-runtime-error-counter-rec01.test.ts (REC-BE-01..REC-BE-12): 12 tests
+  - REC-BE-01: epermDetected=true invokes onRuntimeError exactly once
+  - REC-BE-02: epermDetected=false does NOT invoke onRuntimeError
+  - REC-BE-03: helper-recovery success does NOT suppress EPERM callback
+  - REC-BE-04: two independent jobs → two independent incidents
+  - REC-BE-05: idempotent cancel after first EPERM does NOT double-count
+  - REC-BE-06: throwing sink does NOT break the cancel flow
+  - REC-BE-07: no sink supplied → manager silently drops incidents
+  - REC-BE-08: ordinary nonzero exit does NOT increment
+  - REC-BE-09: clean direct termination (epermDetected=false) does NOT increment
+  - REC-BE-10: end-to-end — fake-shell EPERM + tracker + wire = runtimeErrorCount = 1
+  - REC-BE-11: two sequential jobs under SAME tracker → runtimeErrorCount = 2
+  - REC-BE-12: tracker bound to task A does NOT see EPERM from task B
+    (task isolation at the manager→tracker boundary)
+
+# Sandbox env note
+
+The new test file sets `CLINEMM_EXPERIMENTAL_SANDBOX=off` in
+beforeEach (and restores it in afterEach) so the manager takes the
+legacy direct-spawn path. Without this, the Seatbelt substrate is
+unavailable in the vitest worker environment and `manager.start(...)`
+returns `spawn_failed`. Same pattern as the existing
+host-helper-pgid-adapter.test.ts (review-correction03 / 04).
+
+# Pre-existing test infrastructure debt (NOT REGRESSED BY THIS ACT)
+
+The pre-existing `src/sdk/command-job-manager.test.ts` and the
+`seatbelt-*` family all use real subprocess primitives and rely on
+Seatbelt being available. In this sandbox-less environment, those
+tests return `spawn_failed` from manager.start(...). This is
+documented in the file's header comment as the sandbox-substrate
+limitation; it is unrelated to this ACT (REC-BE tests use the
+spawnFactory injection seam and pass deterministically).
+

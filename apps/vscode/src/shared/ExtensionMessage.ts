@@ -719,6 +719,33 @@ export interface TurnState {
  *                              `edit`). Optional on the wire so
  *                              Hub/Remote hosts that have not yet
  *                              received the field simply omit it.
+ * - `runtimeErrorCount?`    — ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+ *                              cumulative count of structured ClineMM
+ *                              runtime error incidents attributable to
+ *                              the current task. Examples that count:
+ *                              EPERM during process-tree termination,
+ *                              EACCES, ENOENT on a critical fs op, spawn
+ *                              failure, helper IPC failure, bounded
+ *                              subprocess timeout. Examples that DO NOT
+ *                              count: ordinary nonzero command exit
+ *                              (e.g. `sh -c 'exit 23'`), expected ESRCH
+ *                              on `kill(-pgid, 0)` probe (control-flow
+ *                              "already gone"), helper-recovery
+ *                              success (the error still happened), user
+ *                              cancellation, model/API errors (those
+ *                              flow through a separate authority).
+ *
+ *                              V1 scope: integer count only — NO error
+ *                              array, NO error details, NO error
+ *                              severity. The webview renders "⚠ N"
+ *                              only when `runtimeErrorCount > 0`; the
+ *                              count is hidden at zero so normal tasks
+ *                              stay uncluttered. Optional on the wire
+ *                              for backward compatibility with
+ *                              Hub/Remote hosts that have not yet
+ *                              projected the field; the webview
+ *                              normalization at TaskHeaderTelemetry.tsx
+ *                              renders nothing in that case.
  *
  * The transport is intentionally minimal: NO state label (use
  * `turnState.phase`), NO context/token/cost fields (out of scope for
@@ -731,6 +758,14 @@ export interface TaskHeaderTelemetryStrip {
 	toolCalls: number
 	recoveryBudgetFailures: number
 	mechanism?: ToolMechanismSummary
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: see the
+	 * type-level doc above. Bounded to `Number.MAX_SAFE_INTEGER`
+	 * (saturating) — see
+	 * `apps/vscode/src/sdk/task-telemetry-tracker.ts`
+	 * `recordRuntimeError` for the saturation contract.
+	 */
+	runtimeErrorCount?: number
 }
 
 /**
@@ -748,6 +783,81 @@ export interface ToolMechanismSummary {
 	mcp: number
 	other: number
 }
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+ *
+ * Structured description of one ClineMM runtime error incident,
+ * passed into `TaskTelemetryTracker.recordRuntimeError()`. V1 only
+ * projects the cumulative count to the wire; the full classification
+ * is captured for forensic logging and preserved so a future details
+ * UI could answer "why is the counter at N?" without re-running the
+ * host-side incident-detection logic.
+ *
+ * Field semantics:
+ *
+ *   - `errorClass`    — normalized taxonomy. Prefer a canonical errno
+ *                       name when one is available
+ *                       (`EPERM`/`EACCES`/`ENOENT`/`ETIMEDOUT`/...);
+ *                       otherwise one of the structural fallbacks
+ *                       (`SPAWN_ERROR` / `IPC_ERROR` /
+ *                       `HELPER_IPC_ERROR` / `TIMEOUT` /
+ *                       `UNKNOWN_RUNTIME_ERROR`). No raw messages,
+ *                       no user-controlled strings, no filenames, no
+ *                       command text, no stderr.
+ *   - `source`        — narrow subsystem identifier that produced the
+ *                       incident. Frozen V1 values:
+ *                         - `"command-job-manager"` — EPERM / killTree
+ *                           path inside `CommandJobManager.cancel`.
+ *                         - `"run-commands-spawn"`  — `spawn_failed`
+ *                           terminal state in
+ *                           `vscode-run-commands-tool`.
+ *                       Future ACTs may add new sources; the webview
+ *                       MUST NOT render this string.
+ *   - `correlationId` — optional opaque identifier that lets future
+ *                       log search group all reported events for one
+ *                       incident (e.g. the helper's
+ *                       `terminate-owned` request_id, or the
+ *                       `CommandJob.id`). NOT projected to the wire;
+ *                       logged at INFO level only.
+ */
+export interface RuntimeErrorIncident {
+	readonly errorClass: RuntimeErrorClass
+	readonly source: RuntimeErrorSource
+	readonly correlationId?: string
+}
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+ * Frozen V1 normalized error taxonomy. Mirrored on host (tracker
+ * input) and webview (tooltips) so the wire / display / log strings
+ * stay byte-identical across the codebase.
+ */
+export type RuntimeErrorClass =
+	// POSIX errno names — captured only when the runtime actually
+	// surfaces them as a structured field (e.g. `epermDetected` from
+	// the bash supervisor's `TerminateTreeResult`). Random stderr
+	// "EPERM" mentions never qualify.
+	| "EPERM"
+	| "EACCES"
+	| "ENOENT"
+	| "ETIMEDOUT"
+	| "ESRCH" // only for unexpected (NOT the "already gone" probe)
+	// Structural fallbacks — used when the underlying errno is not
+	// recoverable but the incident shape is known.
+	| "SPAWN_ERROR"
+	| "IPC_ERROR"
+	| "HELPER_IPC_ERROR"
+	| "TIMEOUT"
+	| "UNKNOWN_RUNTIME_ERROR"
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+ * Frozen V1 set of host subsystems that may report an incident.
+ * Adding a new source is an additive change; consumers MUST NOT
+ * branch on this string at runtime (the V1 webview ignores it).
+ */
+export type RuntimeErrorSource = "command-job-manager" | "run-commands-spawn"
 
 export interface QueuedPrompt {
 	id: string

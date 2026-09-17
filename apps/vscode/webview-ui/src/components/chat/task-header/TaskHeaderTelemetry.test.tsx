@@ -690,4 +690,82 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			expect(screen.getByTestId("task-header-diagnostic-knobs").textContent).toBe("D")
 		})
 	})
+
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / ERR-UI tests
+	 *
+	 * The webview projection of the runtime-error counter is a
+	 * compact `⚠ N` glyph. These tests pin the load-bearing
+	 * invariants:
+	 *
+	 *  1. Zero (or absent) count ⇒ glyph NOT in the DOM.
+	 *  2. count=1 ⇒ `⚠ 1`, singular aria-label.
+	 *  3. count=2 ⇒ `⚠ 2`, plural aria-label.
+	 *  4. Existing metrics (tool count, recovery count) are
+	 *     unaffected when the runtime-error counter is present.
+	 *  5. Color uses --vscode-errorForeground token.
+	 */
+	describe("ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / runtime-error counter UI", () => {
+		it("ERR-UI-01: hides the glyph when runtimeErrorCount is 0", () => {
+			render(<TaskHeaderTelemetry telemetry={telemetry({ runtimeErrorCount: 0 })} turnState={ts("idle")} />)
+			expect(screen.queryByTestId("task-header-runtime-error-count")).toBeNull()
+		})
+
+		it("ERR-UI-01b: hides the glyph when runtimeErrorCount is omitted from the wire (Hub/Remote / older host)", () => {
+			// `telemetry()` factory does not include `runtimeErrorCount`.
+			// The webview normalizes absence via the single `?? 0`
+			// boundary; the glyph must stay hidden.
+			render(<TaskHeaderTelemetry telemetry={telemetry()} turnState={ts("idle")} />)
+			expect(screen.queryByTestId("task-header-runtime-error-count")).toBeNull()
+		})
+
+		it("ERR-UI-02: renders '⚠ 1' with singular aria-label when runtimeErrorCount = 1", () => {
+			render(<TaskHeaderTelemetry telemetry={telemetry({ runtimeErrorCount: 1 })} turnState={ts("streaming")} />)
+			const el = screen.getByTestId("task-header-runtime-error-count")
+			expect(el).toBeTruthy()
+			expect(el.textContent).toContain("⚠")
+			expect(el.textContent).toContain("1")
+			expect(el.getAttribute("aria-label")).toBe("1 runtime error in this task")
+			expect(el.getAttribute("title")).toBe("1 runtime error in this task")
+		})
+
+		it("ERR-UI-03: renders '⚠ 2' with plural aria-label when runtimeErrorCount = 2", () => {
+			render(<TaskHeaderTelemetry telemetry={telemetry({ runtimeErrorCount: 2 })} turnState={ts("idle")} />)
+			const el = screen.getByTestId("task-header-runtime-error-count")
+			expect(el.textContent).toContain("⚠")
+			expect(el.textContent).toContain("2")
+			expect(el.getAttribute("aria-label")).toBe("2 runtime errors in this task")
+		})
+
+		it("ERR-UI-04: high counts (e.g. 17) keep the same compact shape, no abbreviation", () => {
+			render(<TaskHeaderTelemetry telemetry={telemetry({ runtimeErrorCount: 17 })} turnState={ts("idle")} />)
+			const el = screen.getByTestId("task-header-runtime-error-count")
+			expect(el.textContent).toContain("17")
+			expect(el.getAttribute("aria-label")).toBe("17 runtime errors in this task")
+		})
+
+		it("ERR-UI-05: existing metrics remain unchanged when the runtime-error counter is shown", () => {
+			render(
+				<TaskHeaderTelemetry
+					telemetry={telemetry({
+						toolCalls: 4,
+						recoveryBudgetFailures: 1,
+						runtimeErrorCount: 3,
+					})}
+					turnState={ts("streaming")}
+				/>,
+			)
+			expect(screen.getByTestId("task-header-tool-count").textContent).toContain("4")
+			expect(screen.getByTestId("task-header-recovery-count").textContent).toContain("1")
+			const el = screen.getByTestId("task-header-runtime-error-count")
+			expect(el.textContent).toContain("3")
+		})
+
+		it("ERR-UI-06: glyph uses --vscode-errorForeground token (NOT a hard-coded color)", () => {
+			render(<TaskHeaderTelemetry telemetry={telemetry({ runtimeErrorCount: 1 })} turnState={ts("idle")} />)
+			const el = screen.getByTestId("task-header-runtime-error-count")
+			const style = el.getAttribute("style") ?? ""
+			expect(style).toMatch(/--vscode-errorForeground/)
+		})
+	})
 })

@@ -42,6 +42,7 @@ import {
 	type ToolApprovalResult,
 	type ToolPolicy,
 } from "@cline/shared"
+import type { RuntimeErrorIncident } from "@shared/ExtensionMessage"
 import { StateManager } from "@/core/storage/StateManager"
 import type { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import { getDistinctId } from "@/services/logging/distinctId"
@@ -125,6 +126,20 @@ export interface VscodeSessionHostOptions {
 	 * host owns the projection; the session host is a pass-through.
 	 */
 	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: optional
+	 * callback invoked when the host-owned `CommandJobManager`
+	 * surfaces a structured ClineMM runtime error incident. Wired by
+	 * the SdkController to `TaskTelemetryTracker.recordRuntimeError`
+	 * so the cumulative counter is projected onto the
+	 * `TaskHeaderTelemetryStrip.runtimeErrorCount` wire field.
+	 *
+	 * Pass-through only — the session host does not transform or
+	 * interpret the incident. The SdkController keeps the
+	 * `recordRuntimeError` call site centralized (and testable) by
+	 * passing a closure that delegates directly to the tracker.
+	 */
+	onRuntimeError?: (incident: RuntimeErrorIncident) => void
 	/**
 	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
 	 * Custom `submit_and_exit` executor. When supplied, the host provides
@@ -215,6 +230,16 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// the adapter returns `undefined` and the manager runs
 			// the pre-ACT direct-kill-only path.
 			helperOwnedPgidProvider: resolveLiveHelperOwnedPgidProvider(),
+			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+			// thread the host-supplied runtime-error sink through
+			// to the CommandJobManager. The SdkController wires this
+			// to `TaskTelemetryTracker.recordRuntimeError` so
+			// structured EPERM (and any future incident class the
+			// manager surfaces) flows through the canonical
+			// task-scoped counter. When the host does not supply a
+			// sink (Hub/Remote, tests), the manager silently drops
+			// incidents — preserving the pre-ACT behavior.
+			onRuntimeError: options.onRuntimeError,
 		})
 		const toolExecutors: Partial<ToolExecutors> = {}
 		if (options.askQuestion) {

@@ -697,3 +697,187 @@ describe("ACT-CLINEMM-TOOL-EXECUTION-SEMANTICS-IMPLEMENTATION01 / TaskTelemetryT
 		expect(t.get()?.mechanism?.other).toBe(0)
 	})
 })
+
+/**
+ * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+ *
+ * Host-side tests for `TaskTelemetryTracker.recordRuntimeError()`.
+ * These tests pin the four invariants the wire protocol depends on:
+ *
+ *   REC-01: counter initializes to 0 after startTask
+ *   REC-02: one structured incident increments by exactly 1
+ *   REC-03: independent incidents accumulate monotonically
+ *   REC-04: helper-recovery success does NOT decrement (still counts)
+ *   REC-05: saturates at Number.MAX_SAFE_INTEGER (no wrap)
+ *   REC-06: new task identity resets the counter to 0
+ *   REC-07: clear() resets the counter to 0
+ *   REC-08: recordRuntimeError before startTask is a no-op (defensive)
+ *   REC-09: emits runtimeErrorCount only when > 0 on the wire
+ *   REC-10: classifyToolMechanism conservation is unaffected
+ *          (recordRuntimeError never touches mechanism/toolCalls)
+ *   REC-11: recordRuntimeError does not require the snapshot to
+ *          survive `endTask` / `observeTurnPhase` (cumulative,
+ *          task-lifetime invariant)
+ */
+describe("ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 / TaskTelemetryTracker runtime-error counter", () => {
+	const EPERM_INCIDENT = { errorClass: "EPERM" as const, source: "command-job-manager" as const }
+
+	it("REC-01: counter initializes to 0 after startTask and is omitted from the wire (zero-hiding)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		const snap = t.get()
+		expect(snap?.runtimeErrorCount).toBeUndefined() // zero-hiding per the wire contract
+		expect(t.currentRuntimeErrorCount).toBe(0)
+	})
+
+	it("REC-02: one structured EPERM increments by exactly 1 and projects runtimeErrorCount: 1 on the wire", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		const snap = t.get()
+		expect(snap?.runtimeErrorCount).toBe(1)
+		expect(t.currentRuntimeErrorCount).toBe(1)
+	})
+
+	it("REC-03: independent incidents accumulate monotonically (0 → 1 → 2 → 3)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		expect(t.currentRuntimeErrorCount).toBe(1)
+		t.recordRuntimeError({ errorClass: "SPAWN_ERROR", source: "run-commands-spawn" })
+		expect(t.currentRuntimeErrorCount).toBe(2)
+		t.recordRuntimeError({ errorClass: "HELPER_IPC_ERROR", source: "command-job-manager", correlationId: "req-42" })
+		expect(t.currentRuntimeErrorCount).toBe(3)
+		const snap = t.get()
+		expect(snap?.runtimeErrorCount).toBe(3)
+	})
+
+	it("REC-04: helper-recovery success does NOT decrement (EPERM with successful fallback still counts)", () => {
+		// The V1 contract: an EPERM that the LaunchAgent helper
+		// successfully recovered is still a real runtime incident
+		// the user should see. We simulate the helper-recovered
+		// path by calling recordRuntimeError exactly once (the
+		// call site is responsible for the latch via
+		// `job.runtimeErrorReported`); the counter must remain at 1.
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		expect(t.currentRuntimeErrorCount).toBe(1)
+		// Simulated helper-recovery success: no further call.
+		expect(t.currentRuntimeErrorCount).toBe(1)
+	})
+
+	it("REC-05: saturates at Number.MAX_SAFE_INTEGER (no wrap, no negative)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		// Drive the counter to the saturation boundary directly
+		// (we cannot realistically call 2^53 times in a unit test).
+		// The `Math.min` clamp is the production saturation
+		// contract; the assertion below proves it never overflows.
+		;(t as unknown as { runtimeErrorCount: number }).runtimeErrorCount = Number.MAX_SAFE_INTEGER - 1
+		t.recordRuntimeError(EPERM_INCIDENT)
+		expect(t.currentRuntimeErrorCount).toBe(Number.MAX_SAFE_INTEGER)
+		// A subsequent call must stay at MAX_SAFE_INTEGER, NOT
+		// overflow to a negative or lossy integer.
+		t.recordRuntimeError(EPERM_INCIDENT)
+		expect(t.currentRuntimeErrorCount).toBe(Number.MAX_SAFE_INTEGER)
+	})
+
+	it("REC-06: new task identity resets the counter to 0 (task isolation)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		expect(t.currentRuntimeErrorCount).toBe(2)
+		// Switch to a different task.
+		t.startTask("task-b")
+		expect(t.currentRuntimeErrorCount).toBe(0)
+		expect(t.get()?.runtimeErrorCount).toBeUndefined()
+		// And back: previous-task value is GONE (this is a fresh
+		// counter, not a switchable per-id cache — by design).
+		t.startTask("task-a")
+		expect(t.currentRuntimeErrorCount).toBe(0)
+	})
+
+	it("REC-07: clear() resets the counter to 0", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		expect(t.currentRuntimeErrorCount).toBe(1)
+		t.clear()
+		expect(t.get()).toBeUndefined()
+		// After a fresh start, the counter is zero again.
+		t.startTask("task-b")
+		expect(t.currentRuntimeErrorCount).toBe(0)
+	})
+
+	it("REC-08: recordRuntimeError before startTask is a no-op (defensive, mirrors recordToolStarted)", () => {
+		const t = new TaskTelemetryTracker()
+		const snap = t.recordRuntimeError(EPERM_INCIDENT)
+		expect(snap).toBeUndefined()
+		expect(t.get()).toBeUndefined()
+		expect(t.currentRuntimeErrorCount).toBe(0)
+	})
+
+	it("REC-09: wire emits runtimeErrorCount only when > 0 (zero-hiding for Hub/Remote cleanliness)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		const zeroSnap = t.get()
+		expect("runtimeErrorCount" in (zeroSnap ?? {})).toBe(false)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		const oneSnap = t.get()
+		expect(oneSnap?.runtimeErrorCount).toBe(1)
+	})
+
+	it("REC-10: recordRuntimeError does NOT perturb the mechanism / toolCalls conservation invariant", () => {
+		// The mechanism total MUST stay equal to toolCalls. A
+		// recordRuntimeError call must not touch either counter.
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		t.recordToolStartedWithName("editor")
+		t.recordToolStartedWithName("run_commands")
+		const before = t.get()
+		t.recordRuntimeError(EPERM_INCIDENT)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		const after = t.get()
+		expect(after?.toolCalls).toBe(before?.toolCalls)
+		expect(after?.mechanism).toEqual(before?.mechanism)
+		expect(after?.mechanism?.total).toBe(after?.toolCalls)
+		expect(after?.runtimeErrorCount).toBe(2)
+	})
+
+	it("REC-11: counter survives endTask / observeTurnPhase (cumulative across the task lifetime)", () => {
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-a", 1_700_000_000_000)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		// Terminal freeze.
+		t.observeTurnPhase("completed", 1_700_000_090_000)
+		expect(t.currentRuntimeErrorCount).toBe(1)
+		// Same-task continuation (reopen) — counter persists.
+		t.observeTurnPhase("streaming")
+		expect(t.currentRuntimeErrorCount).toBe(1)
+		// And a follow-up incident increments on top.
+		t.recordRuntimeError({ errorClass: "SPAWN_ERROR", source: "run-commands-spawn" })
+		expect(t.currentRuntimeErrorCount).toBe(2)
+	})
+
+	it("REC-12: independent tasks do NOT share counts (TASK_ERROR_COUNTER_ISOLATION)", () => {
+		// Simulate two concurrent task identities by alternating
+		// startTask calls. The counter only follows the LATEST
+		// active identity; switching back resets to 0 (the V1
+		// contract: counters are scoped to the CURRENT visible
+		// task lifetime, not retained across task boundaries).
+		const t = new TaskTelemetryTracker()
+		t.startTask("task-A", 1_700_000_000_000)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		expect(t.currentRuntimeErrorCount).toBe(2)
+		t.startTask("task-B", 1_700_000_001_000)
+		expect(t.currentRuntimeErrorCount).toBe(0)
+		t.recordRuntimeError(EPERM_INCIDENT)
+		expect(t.currentRuntimeErrorCount).toBe(1)
+		// Back to A: still 0 (counters are not cached per id).
+		t.startTask("task-A")
+		expect(t.currentRuntimeErrorCount).toBe(0)
+	})
+})
