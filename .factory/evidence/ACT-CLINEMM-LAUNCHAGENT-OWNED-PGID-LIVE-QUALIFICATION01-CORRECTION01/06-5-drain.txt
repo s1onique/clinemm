@@ -1,0 +1,13 @@
+STEP:06_5_drain
+{
+  "step": "06_5_drain",
+  "a_close_result": "CLOSED",
+  "manager_disposed": true,
+  "ENTRY_ACTIVE_CLIENT_COUNT": 12,
+  "ENTRY_ACTIVE_JOB_COUNT": 1,
+  "FINAL_ACTIVE_CLIENT_COUNT": 12,
+  "FINAL_ACTIVE_JOB_COUNT": 1,
+  "client_count_delta": 0,
+  "job_count_delta": 0,
+  "drain_elapsed_ms": 1
+}

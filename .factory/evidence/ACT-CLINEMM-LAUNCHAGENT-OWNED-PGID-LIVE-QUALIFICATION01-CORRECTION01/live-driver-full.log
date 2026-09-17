@@ -7,6 +7,15 @@
 [0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
 [0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
 
+---STEP:00_entry_baseline---
+{
+  "step": "00_entry_baseline",
+  "ENTRY_ACTIVE_CLIENT_COUNT": 12,
+  "ENTRY_ACTIVE_JOB_COUNT": 1,
+  "helper_pid": 91441,
+  "helper_build_id": "c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9",
+  "helper_ok": true
+}
 ---STEP:02_client_a_registration---
 {
   "step": "client_a_real_registration",
@@ -19,32 +28,32 @@
   "A_REGISTRATION": "PASS",
   "TARGET_A_BOUNDED": "PASS",
   "detached_leader": "PASS",
-  "A_PGID": 7431,
-  "A_LEADER_PID": 7431,
-  "PEER_PID_A": 7340,
+  "A_PGID": 81896,
+  "A_LEADER_PID": 81896,
+  "PEER_PID_A": 81708,
   "client_token_present": true,
   "peer_uid_A": 501,
-  "peer_pid_A_wire": 7340,
+  "peer_pid_A_wire": 81708,
   "peer_pid_match": true,
   "job_token_present": true,
   "A_JOB_TOKEN_REAL": "PASS",
   "token_lengths": 32,
   "tokens_distinct": true,
-  "A_SECRET_FILE": "/tmp/clinemm-cross-client-A-7340.json"
+  "A_SECRET_FILE": "/tmp/clinemm-cross-client-A-81708.json"
 }
 ---STEP:03_client_b_distinct_peer---
 {
   "step": "client_b_distinct_peer",
   "exit_code": 0,
-  "stdout": "{\"step\":\"client_b_distinct_peer\",\"PEER_PID_B\":7495,\"PEER_PID_A\":7340,\"client_token_present\":true,\"peer_uid_B\":501,\"peer_pid_B_wire\":7495,\"peer_pid_match\":true,\"token_lengths\":32,\"tokens_distinct_from_a\":true,\"peer_pids_differ\":true,\"B_TERMINATE_RESULT\":{\"ok\":false,\"error\":\"DENY_FOREIGN_JOB\"},\"B_OK\":false,\"B_ERROR\":\"DENY_FOREIGN_JOB\",\"B_USING_A_REAL_JOB_TOKEN\":\"PASS\",\"DONE\":\"B_DENIED\"}\n",
+  "stdout": "{\"step\":\"client_b_distinct_peer\",\"PEER_PID_B\":81961,\"PEER_PID_A\":81708,\"client_token_present\":true,\"peer_uid_B\":501,\"peer_pid_B_wire\":81961,\"peer_pid_match\":true,\"token_lengths\":32,\"tokens_distinct_from_a\":true,\"peer_pids_differ\":true,\"B_TERMINATE_RESULT\":{\"ok\":false,\"error\":\"DENY_FOREIGN_JOB\"},\"B_OK\":false,\"B_ERROR\":\"DENY_FOREIGN_JOB\",\"B_USING_A_REAL_JOB_TOKEN\":\"PASS\",\"DONE\":\"B_DENIED\"}\n",
   "stderr": "",
   "parsed": {
     "step": "client_b_distinct_peer",
-    "PEER_PID_B": 7495,
-    "PEER_PID_A": 7340,
+    "PEER_PID_B": 81961,
+    "PEER_PID_A": 81708,
     "client_token_present": true,
     "peer_uid_B": 501,
-    "peer_pid_B_wire": 7495,
+    "peer_pid_B_wire": 81961,
     "peer_pid_match": true,
     "token_lengths": 32,
     "tokens_distinct_from_a": true,
@@ -62,12 +71,12 @@
 ---STEP:04_foreign_group_survives---
 {
   "step": "foreign_group_survives",
-  "PGID_A": 7431,
-  "LEADER_PID_A": 7431,
+  "PGID_A": 81896,
+  "LEADER_PID_A": 81896,
   "psProbeExit": 0,
-  "psProbeStdout": "PID  PGID COMMAND\n 7431  7431 /bin/sh -c sleep 60 & echo CHILD_PID=$!; wait",
+  "psProbeStdout": "PID  PGID COMMAND\n81896 81896 /bin/sh -c sleep 60 & echo CHILD_PID=$!; wait",
   "helper_active_job_count": 3,
-  "helper_active_client_count": 13,
+  "helper_active_client_count": 14,
   "A_GROUP_AFTER_B_ATTEMPT": "ALIVE"
 }
 ---STEP:05_owner_positive_control---
@@ -75,7 +84,7 @@
   "step": "owner_positive_control",
   "A_OWN_TERMINATE_RESULT": {
     "version": 1,
-    "request_id": "s5-1789650948147",
+    "request_id": "s5-1789652066647",
     "ok": true,
     "result": "TERMINATED_TERM"
   },
@@ -88,9 +97,22 @@
   "PGA_FINAL_ps_exit": 1,
   "PGA_FINAL_ps_stdout": "",
   "pre_close_active_job_count": 1,
-  "pre_close_active_client_count": 13,
+  "pre_close_active_client_count": 14,
   "A_SECRET_REMOVED": true,
   "DONE": "ALL_STEPS_COMPLETE"
+}
+---STEP:06_5_drain---
+{
+  "step": "06_5_drain",
+  "a_close_result": "CLOSED",
+  "manager_disposed": true,
+  "ENTRY_ACTIVE_CLIENT_COUNT": 12,
+  "ENTRY_ACTIVE_JOB_COUNT": 1,
+  "FINAL_ACTIVE_CLIENT_COUNT": 12,
+  "FINAL_ACTIVE_JOB_COUNT": 1,
+  "client_count_delta": 0,
+  "job_count_delta": 0,
+  "drain_elapsed_ms": 1
 }
 ---STEP:09_gates---
 {
@@ -104,16 +126,21 @@
     "B_FOREIGN_JOB_ERROR": "PASS",
     "A_GROUP_AFTER_B_ATTEMPT": "PASS",
     "A_OWN_TERMINATION": "PASS",
-    "CLIENT_SLOT_BASELINE": "PASS",
-    "JOB_SLOT_BASELINE": "PASS"
+    "RESOURCE_BASELINE_CONSERVATION": "PASS"
   },
-  "elapsed_ms": 1098,
-  "pgid_A": 7431,
-  "leader_pid_A": 7431,
-  "peer_pid_A": 7340,
-  "peer_pid_B": 7495,
-  "helper_post_close_active_client_count": 13,
-  "helper_post_close_active_job_count": 1,
+  "elapsed_ms": 1145,
+  "pgid_A": 81896,
+  "leader_pid_A": 81896,
+  "peer_pid_A": 81708,
+  "peer_pid_B": 81961,
+  "B_PEER_PID": 81961,
+  "A_PEER_PID": 81708,
+  "ENTRY_ACTIVE_CLIENT_COUNT": 12,
+  "ENTRY_ACTIVE_JOB_COUNT": 1,
+  "FINAL_ACTIVE_CLIENT_COUNT": 12,
+  "FINAL_ACTIVE_JOB_COUNT": 1,
+  "resource_baseline_delta_clients": 0,
+  "resource_baseline_delta_jobs": 0,
   "client_token_lengths": 32,
   "job_token_lengths": 32,
   "tokens_distinct": true,
@@ -121,6 +148,7 @@
   "old_discriminator_invalidated": true,
   "cross_client_isolation_proven": true,
   "owner_positive_control_pass": true,
+  "resource_baseline_conservation_pass": true,
   "seam_classification": "SYNTHETIC_REAL | REAL_PRODUCTION_FUNCTION | REAL_LAUNCHAGENT | REAL_KERNEL",
   "real_extension_host_wiring": "LIVE_UNOBSERVABLE"
 }

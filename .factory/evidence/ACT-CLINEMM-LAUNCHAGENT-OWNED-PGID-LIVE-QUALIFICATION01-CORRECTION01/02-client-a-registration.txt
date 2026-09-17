@@ -10,16 +10,16 @@ STEP:02_client_a_registration
   "A_REGISTRATION": "PASS",
   "TARGET_A_BOUNDED": "PASS",
   "detached_leader": "PASS",
-  "A_PGID": 7431,
-  "A_LEADER_PID": 7431,
-  "PEER_PID_A": 7340,
+  "A_PGID": 81896,
+  "A_LEADER_PID": 81896,
+  "PEER_PID_A": 81708,
   "client_token_present": true,
   "peer_uid_A": 501,
-  "peer_pid_A_wire": 7340,
+  "peer_pid_A_wire": 81708,
   "peer_pid_match": true,
   "job_token_present": true,
   "A_JOB_TOKEN_REAL": "PASS",
   "token_lengths": 32,
   "tokens_distinct": true,
-  "A_SECRET_FILE": "/tmp/clinemm-cross-client-A-7340.json"
+  "A_SECRET_FILE": "/tmp/clinemm-cross-client-A-81708.json"
 }

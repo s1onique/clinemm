@@ -4,7 +4,7 @@ STEP:06_cleanup
   "PGA_FINAL_ps_exit": 1,
   "PGA_FINAL_ps_stdout": "",
   "pre_close_active_job_count": 1,
-  "pre_close_active_client_count": 13,
+  "pre_close_active_client_count": 14,
   "A_SECRET_REMOVED": true,
   "DONE": "ALL_STEPS_COMPLETE"
 }

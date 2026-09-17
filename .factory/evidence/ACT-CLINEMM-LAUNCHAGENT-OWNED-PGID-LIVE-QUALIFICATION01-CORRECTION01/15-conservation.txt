@@ -1,19 +1,23 @@
 ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01
-Final conservation snapshot (post-driver run)
+Final conservation snapshot (post-driver run, bound to this run's evidence)
 
 Helper:
   PID 91441 (single instance, launchd-managed gui/501/io.clinemm.host-helper)
   build_id c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
   socket /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock (mode 0600)
-  active_client_count = 12
-  active_job_count    = 1
+  FINAL_ACTIVE_CLIENT_COUNT = 12
+  FINAL_ACTIVE_JOB_COUNT    = 1
+  ENTRY_ACTIVE_CLIENT_COUNT = 12
+  ENTRY_ACTIVE_JOB_COUNT    = 1
+  client_count_delta        = 0
+  job_count_delta           = 0
   healthy = true
 
 Cross-client test evidence (this run):
-  pgid_A              = 7431 (cleaned up at end of driver)
-  leader_pid_A        = 7431 (cleaned up at end of driver)
-  peer_pid_A          = 7340 (harness)
-  peer_pid_B          = 7495 (subprocess; different kernel peer)
+  pgid_A              = 81896 (cleaned up at end of driver)
+  leader_pid_A        = 81896 (cleaned up at end of driver)
+  peer_pid_A          = 81708 (harness)
+  peer_pid_B          = 81961 (subprocess; different kernel peer)
 
 Durable evidence token-leak check:
   All .txt/.log files in this directory scanned for [a-f0-9]{32}: NONE
@@ -21,8 +25,7 @@ Durable evidence token-leak check:
 
 Repo-local helper residue: 0 (only the launchd-managed permanent helper exists)
 
-Note: any active_client_count or active_job_count above 0 is pre-existing
-substrate state accumulated from this run + the parent ACT + earlier probes.
-This ACT's own resources (the PGID it created) are cleaned up at end of driver.
-The lingering state will be reclaimed by the helper lazily on the next
-register attempt with a different peer identity, per helper.c:1324.
+Resource baseline conservation: ENTRY == FINAL counts, so this ACT leaves
+no own client or job slots allocated in the helper. Any drift at the
+START of a fresh run reflects only pre-existing substrate state from
+prior ACTs or probes (not from this driver).

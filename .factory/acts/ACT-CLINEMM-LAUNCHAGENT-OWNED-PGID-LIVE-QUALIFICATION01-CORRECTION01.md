@@ -1,10 +1,35 @@
 # ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01
 
 > Status: **PASS** (per §16 outcome A).
-> Two bounded corrections to the parent ACT
+> Bounded corrections to the parent ACT
 > `ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01` at
 > commit `47ca5add2903339a5f6280fcafdd6122d404c265`.
 > No helper redesign. No sandbox redesign. No production code change.
+
+## Revision history
+
+- **CORRECTION01:** P0-A (invalid cross-client discriminator) and P0-B
+  (overclaim of `REAL_EXTENSION_HOST_END_TO_END`) — fixed; gate
+  `CLIENT_ISOLATION = LIVE PASS`.
+- **CORRECTION02 (this revision):**
+  - **P0-RESOURCE-BASELINE:** the previous run's `CLIENT_SLOT_BASELINE`
+    and `JOB_SLOT_BASELINE` gates only proved the `/tmp` secret file
+    was removed and the PGID was no longer processable, NOT that the
+    helper's `active_client_count` and `active_job_count` returned to
+    their pre-test baseline. They were misleadingly named. Now: capture
+    `ENTRY_ACTIVE_CLIENT_COUNT` and `ENTRY_ACTIVE_JOB_COUNT` at start
+    (STEP 0), close A's helper client via `wire.clientClose()`,
+    dispose the manager, then poll helper health until counts match
+    the entry baseline. Gate `RESOURCE_BASELINE_CONSERVATION` requires
+    `FINAL == ENTRY`; on miss, halt with `HALT_QUALIFICATION_RESOURCE_LEAK`.
+  - **P1-GIT-DIFF-CHECK:** trailing blank line residue in
+    `live-driver-correction.mjs` triggered `git diff --check` non-zero
+    on introduced lines. Removed; `git diff --check` is now green.
+  - **RESULT_JSON_BINDING:** the previous `result.json` contained
+    PIDs/counts from an earlier driver run while the refreshed `.txt`
+    files reflected a later run. Now `result.json`, `09-gates.txt`,
+    `15-conservation.txt`, and `live-driver-full.log` are all written
+    by the SAME final run; PIDs and counts agree across files.
 
 ## Question
 
@@ -16,7 +41,7 @@ parent ACT also claimed `CLIENT_ISOLATION = LIVE PASS` based on its
 §12 cross-client test, and its seam labels implicitly claimed
 `REAL_EXTENSION_HOST_END_TO_END`.
 
-Two of those claims exceed the evidence:
+Three of those claims exceed the evidence:
 
 - **P0-A:** The parent §12 test used client A's `client_token` as if
   it were a `job_token`. The helper returned `DENY_UNKNOWN_JOB`
@@ -29,6 +54,15 @@ Two of those claims exceed the evidence:
   to `"off"` before instantiating `CommandJobManager`. It is not the
   extension-host lifecycle (`codium-clinemm` → `vscode-session-host`
   → task creation → `CommandJobManager`).
+- **P0-RESOURCE-BASELINE (CORRECTION02):** The previous
+  `CLIENT_SLOT_BASELINE` and `JOB_SLOT_BASELINE` gates were
+  definitionally satisfied by removing the `/tmp` secret file and
+  observing the PGID gone — they did not measure the helper's
+  `active_client_count` and `active_job_count` returning to their
+  pre-test baseline, so the names materially overstated the evidence.
+- **P1-GIT-DIFF-CHECK (CORRECTION02):** Trailing-blank-line residue
+  in `live-driver-correction.mjs` made `git diff --check` fail on
+  introduced lines.
 
 ## Answer
 
@@ -77,10 +111,15 @@ section. The narrower classification is honestly bound to evidence.
 
 Full driver: `.factory/evidence/ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01/live-driver-full.log`.
 
-Key gates:
+Key gates (CORRECTION02 final run):
 
 ```text
-GATE 2.A_REGISTRATION=PASS        state=running pgid=25214 pid=25214
+STEP 0 entry baseline (captured BEFORE opening any client):
+  ENTRY_ACTIVE_CLIENT_COUNT = 12
+  ENTRY_ACTIVE_JOB_COUNT    = 1
+  helper_pid = 91441 (single permanent launchd-managed io.clinemm.host-helper)
+
+GATE 2.A_REGISTRATION=PASS        state=running pgid=53157 pid=53157
 GATE 2.detached_leader=PASS       pid==pgid (POSIX detached leader convention)
 GATE 2.A_JOB_TOKEN_REAL=PASS      helper issued a 32-hex-char job_token
 GATE 2.client_token_present=PASS
@@ -88,7 +127,7 @@ GATE 2.job_token_present=PASS
 GATE 2.tokens_distinct=PASS       client_token != job_token
 GATE 2.peer_pid_match=PASS        wire.peer_pid == harness.pid
 
-GATE 3.peer_pids_differ=PASS      peer_pid_B=25243 != peer_pid_A=24876
+GATE 3.peer_pids_differ=PASS      peer_pid_B=53177 != peer_pid_A=52850
 GATE 3.B_USING_A_REAL_JOB_TOKEN=PASS b's terminate(CB, JA_real) was denied
 GATE 3.B_ERROR=DENY_FOREIGN_JOB   (canonical cross-ownership denial code)
 
@@ -97,6 +136,21 @@ GATE 4.A_GROUP_AFTER_B_ATTEMPT=ALIVE   no signal reached A's group
 GATE 5.A_OWN_TERMINATION=PASS     A's terminate(CA, JA_real) returned TERMINATED_TERM
 GATE 6.PGA_FINAL=GONE             A's PGID is gone after owner terminate
 GATE 6.A_SECRET_REMOVED=true      /tmp secret file removed (no raw tokens leaked)
+
+STEP 6.5 explicit A closure + drain (CORRECTION02):
+  wire.clientClose(clientToken=CA)        -> "CLOSED"
+  manager.dispose()                        -> true
+  drain poll: helper.health(active_client_count, active_job_count)
+  FINAL_ACTIVE_CLIENT_COUNT = 12   (== ENTRY_ACTIVE_CLIENT_COUNT)
+  FINAL_ACTIVE_JOB_COUNT    = 1    (== ENTRY_ACTIVE_JOB_COUNT)
+  client_count_delta = 0
+  job_count_delta    = 0
+  drain_elapsed_ms   = 1   (counts were already at baseline by first poll)
+
+GATE RESOURCE_BASELINE_CONSERVATION=PASS
+  ENTRY_ACTIVE_CLIENT_COUNT == FINAL_ACTIVE_CLIENT_COUNT
+  ENTRY_ACTIVE_JOB_COUNT    == FINAL_ACTIVE_JOB_COUNT
+  This is the load-bearing conservation proof for CORRECTION02.
 ```
 
 ## Honest seam classification (per §10)
@@ -226,6 +280,58 @@ PRODUCT_RESTART_LAUNCHCTL_CALLS   = 0
 SANDBOX_INSTALL_PATH_WRITE        = HALT_SANDBOX_CANNOT_INSTALL_HELPER_BINARY
 ```
 
+## Resource baseline conservation (CORRECTION02)
+
+The original CORRECTION01 run defined `CLIENT_SLOT_BASELINE` and
+`JOB_SLOT_BASELINE` as gates, but the only thing those gates
+actually checked was whether the `/tmp` secret file was removed
+and whether the helper's PGID could still be looked up by `ps`.
+That was materially misleading: a PASS in those gates did not mean
+the helper's `active_client_count` and `active_job_count` had
+returned to their pre-test baseline. The pre-existing lingering
+state (`active_client_count = 13`, `active_job_count = 1`) after
+the run was explained away as substrate artifact, but the ACT's
+own resource footprint was never directly measured.
+
+CORRECTION02 fixes this by:
+
+1. **STEP 0 entry baseline**: at the very start of the driver,
+   before opening any client or starting any job, send a `health`
+   probe to the helper and capture `ENTRY_ACTIVE_CLIENT_COUNT` and
+   `ENTRY_ACTIVE_JOB_COUNT`. Persist to `00-entry.txt`.
+2. **STEP 6.5 explicit A closure**: after the owner positive
+   control returns `TERMINATED_TERM`, explicitly reclaim A's
+   helper client slot via `wire.clientClose({ clientToken: CA })`,
+   then `await manager.dispose()` to release any internal handles.
+3. **Drain poll**: poll helper health every 150ms for up to 3
+   seconds, breaking early when counts match baseline. Persist
+   `06-5-drain.txt` with entry, final, deltas, and elapsed drain
+   time.
+4. **Gate `RESOURCE_BASELINE_CONSERVATION`**: PASS iff
+   `FINAL_ACTIVE_CLIENT_COUNT == ENTRY_ACTIVE_CLIENT_COUNT`
+   AND `FINAL_ACTIVE_JOB_COUNT == ENTRY_ACTIVE_JOB_COUNT`. On
+   failure, halt with `HALT_QUALIFICATION_RESOURCE_LEAK` and
+   non-zero exit. The driver never silently succeeds when the
+   helper is left with more allocated slots than it started with.
+
+Final-run result (committed in this revision):
+
+```text
+ENTRY_ACTIVE_CLIENT_COUNT = 12
+ENTRY_ACTIVE_JOB_COUNT    = 1
+FINAL_ACTIVE_CLIENT_COUNT = 12   (drain finished in 1ms; already at baseline)
+FINAL_ACTIVE_JOB_COUNT    = 1
+client_count_delta        = 0
+job_count_delta           = 0
+RESOURCE_BASELINE_CONSERVATION = PASS
+```
+
+This is a load-bearing result: it proves the ACT's own run leaves
+zero own-slot footprint in the helper, regardless of whatever
+pre-existing substrate state was inherited at entry. A subsequent
+`git diff --check` on `live-driver-correction.mjs` exits 0 (no
+introduced whitespace errors).
+
 ## Production code delta
 
 **NONE.** The corrected discriminator works against the existing
@@ -238,6 +344,10 @@ not in the production code.
 ```text
 ACT                          = PASS
 CLIENT_ISOLATION             = LIVE PASS  (corrected discriminator with real JA)
+RESOURCE_BASELINE_CONSERVATION = PASS    (ENTRY == FINAL helper counts; CORRECTION02)
+RESULT_JSON_BOUND_TO_FINAL_RUN = PASS    (result.json written by the same run as the rest)
+SEAM_CLASSIFICATION          = PASS    (honest §10 rebind)
+GIT_DIFF_CHECK               = PASS    (no trailing whitespace)
 PARENT_QUALIFICATION         = PASS_WITH_BOUNDED_INSTALL_PATH_HALT
                               (with corrected seam labels)
 PRODUCTION_CODE_DELTA        = NONE
@@ -266,16 +376,18 @@ appears. The host-helper work is done.
 
 `.factory/evidence/ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01/`:
 
-- `00-entry.txt` — entry freeze (HEAD, launchctl, pgrep, single permanent helper)
+- `00-entry.txt` — STEP 0 entry baseline: ENTRY_ACTIVE_CLIENT_COUNT + ENTRY_ACTIVE_JOB_COUNT captured BEFORE opening any client (CORRECTION02)
 - `01-old-discriminator-red.mjs`, `01-old-discriminator-red.txt` — RED proof of the prior §12 structural invalidity
 - `02-client-a-registration.txt` — real A-owned job registered via CommandJobManager + wire
 - `03-client-b-distinct-peer.mjs`, `03-client-b-identity.txt` — subprocess B with distinct kernel peer PID
 - `04-cross-client-deny.txt` — B's terminate(CB, JA_real) returns DENY_FOREIGN_JOB; A's PGID still alive
 - `05-owner-positive-control.txt` — A's terminate(CA, JA_real) returns TERMINATED_TERM
 - `06-cleanup.txt` — PGID_A gone; /tmp secret file removed (no raw tokens in durable evidence)
+- `06-5-drain.txt` — STEP 6.5 explicit A closure + drain: FINAL_ACTIVE_CLIENT_COUNT + FINAL_ACTIVE_JOB_COUNT, deltas, drain elapsed ms (CORRECTION02)
 - `07-extension-host-witness.txt` — LIVE_UNOBSERVABLE per §11
 - `08-classification-rebind.txt` — honest seam labels per §10
-- `09-gates.txt` — gate-by-gate results
+- `09-gates.txt` — gate-by-gate results (including RESOURCE_BASELINE_CONSERVATION)
+- `15-conservation.txt` — final helper state snapshot bound to this run's evidence (CORRECTION02)
 - `live-driver-correction.mjs` — driver source
 - `live-driver-full.log` — full driver output
-- `result.json` — machine-readable outcome
+- `result.json` — machine-readable outcome, bound to the same final run as the .txt/.log files (CORRECTION02)

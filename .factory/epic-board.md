@@ -102,6 +102,61 @@ The atomic A→B replacement halts at §17 (`HALT_SANDBOX_CANNOT_INSTALL_HELPER_
 
 **Durable binding:** ACT body + evidence directory were misclassified as "orphan / zero tracked references" in the 2026-09-17 policy-flip commit (`3bc617e15`) because the `git grep -l` test used during migration ran against the pre-commit tree — i.e. the references that should bind this ACT (this board row, the `aa1aae22b` subject_head entry, the `tools/macos-host-helper/` code paths) were not yet tracked when the test ran. The circular-dependency in the migration rule ("canonical if referenced by tracked material") is now patched: this row itself, committed alongside the restored ACT + evidence, is the durable binding. Full 15-gate transcript + driver source + operator-mitigation log in `.factory/evidence/ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01/`.
 
+## ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION02 — PASS — 2026-09-17
+
+**Status:** PASS. **Type:** bounded correction to
+`ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01-CORRECTION01`.
+
+**Closes (from exact 2-commit range review `dc78cedcb..17c1afffc`):**
+
+- **P0-RESOURCE-BASELINE:** previous `CLIENT_SLOT_BASELINE` and
+  `JOB_SLOT_BASELINE` gates were definitionally satisfied by
+  removing the `/tmp` secret file and observing the PGID gone, NOT
+  by measuring `active_client_count` / `active_job_count` returning
+  to pre-test baseline. Misleadingly named. Now: STEP 0 captures
+  `ENTRY_ACTIVE_CLIENT_COUNT` / `ENTRY_ACTIVE_JOB_COUNT` before any
+  client is opened; STEP 6.5 explicitly closes A via
+  `wire.clientClose()`, disposes the manager, then drain-polls
+  helper health until counts match entry. New gate
+  `RESOURCE_BASELINE_CONSERVATION` requires `FINAL == ENTRY`; on
+  miss, halt `HALT_QUALIFICATION_RESOURCE_LEAK`. Final run:
+  `ENTRY=FINAL=12/1`, `delta=(0, 0)`, drain finished in 1ms.
+- **P1-GIT-DIFF-CHECK:** trailing blank line residue in
+  `live-driver-correction.mjs` triggered `git diff --check` non-zero
+  on introduced lines. Removed; `git diff --check` is now green.
+- **RESULT_JSON_BINDING:** previous `result.json` recorded PIDs
+  (`B_PEER_PID=25243`, `A_PEER_PID=24876`, `PGID_A=25214`) from an
+  earlier run while refreshed `.txt` files recorded a different
+  run's values. Now `result.json`, `09-gates.txt`,
+  `15-conservation.txt`, and `live-driver-full.log` are all written
+  by the SAME final run; PIDs and counts agree across files
+  (`pgid_A=53157`, `peer_pid_A=52850`, `peer_pid_B=53177`,
+  `ENTRY=12/1`, `FINAL=12/1`).
+
+```text
+CORRECTION02 verdict:
+  CLIENT_ISOLATION                = LIVE PASS
+  RESOURCE_BASELINE_CONSERVATION  = PASS
+  RESULT_JSON_BOUND_TO_FINAL_RUN  = PASS
+  SEAM_CLASSIFICATION             = PASS
+  GIT_DIFF_CHECK                  = PASS
+  ACT                             = PASS
+```
+
+**Production code delta:** NONE. The defect was in the test
+artifact, not in the production code.
+
+**Honored STOP rule from CORRECTION01:** no host-helper pre-review
+unless a new P0 appears. CORRECTION02 was triggered by an exact
+2-commit range review finding two new evidence defects, not by
+opening the host-helper design.
+
+**Next ACT (per §22, unchanged from CORRECTION01):**
+`ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01` — resume
+from `HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND`. Do NOT prioritize
+`SANDBOX-INSTALL-PATH-WRITABLE01` ahead of that unless the
+helper-update path becomes an operational blocker.
+
 ## Repository policy flip — `.factory = TRACKED BY DEFAULT` — 2026-09-17
 
 **Status:** C1 GREEN. **Type:** architectural / repository-policy fix, no production code touched.

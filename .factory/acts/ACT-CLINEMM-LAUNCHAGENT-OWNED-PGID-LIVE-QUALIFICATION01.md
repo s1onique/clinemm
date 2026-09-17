@@ -190,14 +190,14 @@ structurally blocked at §17 from the IDE sandboxed shell.
   - `16-gates.txt` — gate-by-gate results
   - `result.json` — machine-readable outcome
 
-## Bounded correction (CORRECTION01)
+## Bounded correction (CORRECTION01 + CORRECTION02)
 
 The §12 cross-client test in this ACT was structurally invalid — it
 used `coA.client_token` (a client token) in the `job_token` slot, so
 the helper's `DENY_UNKNOWN_JOB` was indistinguishable from ordinary
 unknown-job rejection and did NOT prove foreign-ownership enforcement.
 
-**CORRECTION01** at commit `<pending>` rebinds the seam labels and
+**CORRECTION01** at commit `dc78cedcb` rebinds the seam labels and
 the isolation claim honestly:
 
 ```text
@@ -207,6 +207,43 @@ PARENT_DRIVER_CLASS          : SYNTHETIC_REAL
                                 + REAL_LAUNCHAGENT
                                 + REAL_KERNEL
 REAL_EXTENSION_HOST          : LIVE_UNOBSERVABLE (per §11)
+```
+
+**CORRECTION02** at commit `<pending>` closes two follow-up evidence
+defects identified by an exact 2-commit range review of
+`dc78cedcb..17c1afffc`:
+
+- **P0-RESOURCE-BASELINE** — the previous
+  `CLIENT_SLOT_BASELINE`/`JOB_SLOT_BASELINE` gates only proved the
+  `/tmp` secret file was removed and the PGID was gone, NOT that the
+  helper's `active_client_count` and `active_job_count` returned to
+  the pre-test baseline. They were misleadingly named. Now: capture
+  `ENTRY_ACTIVE_CLIENT_COUNT` and `ENTRY_ACTIVE_JOB_COUNT` at start
+  (STEP 0), explicitly close A's helper client via
+  `wire.clientClose()`, dispose the manager, then drain-poll helper
+  health until counts match entry. New gate
+  `RESOURCE_BASELINE_CONSERVATION` requires `FINAL == ENTRY`; on
+  miss, halt `HALT_QUALIFICATION_RESOURCE_LEAK`. Final run:
+  `ENTRY=FINAL=12/1`, `delta=(0, 0)`, drain finished in 1ms.
+- **P1-GIT-DIFF-CHECK** — trailing blank line residue in
+  `live-driver-correction.mjs` triggered `git diff --check` non-zero
+  on introduced lines. Removed; `git diff --check` is now green.
+- **RESULT_JSON_BINDING** — the previous `result.json` contained
+  PIDs/counts from an earlier run while the refreshed `.txt` files
+  reflected a later run. Now `result.json`, `09-gates.txt`,
+  `15-conservation.txt`, and `live-driver-full.log` are all written
+  by the SAME final run; PIDs and counts agree across files
+  (pgid_A=53157, peer_pid_A=52850, peer_pid_B=53177,
+  ENTRY=12/1, FINAL=12/1).
+
+```text
+CORRECTION02 verdict:
+  CLIENT_ISOLATION                = LIVE PASS
+  RESOURCE_BASELINE_CONSERVATION  = PASS
+  RESULT_JSON_BOUND_TO_FINAL_RUN  = PASS
+  SEAM_CLASSIFICATION             = PASS
+  GIT_DIFF_CHECK                  = PASS
+  ACT                             = PASS
 ```
 
 Full corrected ACT body and evidence at

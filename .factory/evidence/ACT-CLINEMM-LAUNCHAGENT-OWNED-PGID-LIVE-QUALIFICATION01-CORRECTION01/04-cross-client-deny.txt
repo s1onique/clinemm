@@ -1,11 +1,11 @@
 STEP:04_foreign_group_survives
 {
   "step": "foreign_group_survives",
-  "PGID_A": 7431,
-  "LEADER_PID_A": 7431,
+  "PGID_A": 81896,
+  "LEADER_PID_A": 81896,
   "psProbeExit": 0,
-  "psProbeStdout": "PID  PGID COMMAND\n 7431  7431 /bin/sh -c sleep 60 & echo CHILD_PID=$!; wait",
+  "psProbeStdout": "PID  PGID COMMAND\n81896 81896 /bin/sh -c sleep 60 & echo CHILD_PID=$!; wait",
   "helper_active_job_count": 3,
-  "helper_active_client_count": 13,
+  "helper_active_client_count": 14,
   "A_GROUP_AFTER_B_ATTEMPT": "ALIVE"
 }
