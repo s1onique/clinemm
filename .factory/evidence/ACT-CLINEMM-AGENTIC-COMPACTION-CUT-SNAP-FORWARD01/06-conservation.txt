@@ -1,0 +1,62 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01
+CONSERVATION MATRIX
+================================================
+
+Per ACT charter §21. Each property evaluated post-patch.
+
+Property                                            | Status     | Evidence
+----------------------------------------------------+------------+----------------------------------
+C1  shallow session first-prompt                    | ✓ PRESERVED | R4 (R4 in regression guards) + manual-mode tests
+C2  ordinary balanced conversation                   | ✓ PRESERVED | existing "summarizes older messages" test (updated to new contract)
+C3  tool-heavy conversation geometry preserved      | ✓ PRESERVED | R6 (tool-pair atomicity test) + "compacts a single-task tool loop by cutting at an assistant boundary"
+C4  previous compaction state remains valid          | ✓ PRESERVED | "re-compacts a projection that starts with a compaction summary" test still passes
+C5  canonical transcript remains append-only         | ✓ PRESERVED | compaction always appends a summary; never removes canonical rows
+C6  manual mode semantics unchanged                 | ✓ PRESERVED | "manual mode lowers the agentic preserve budget below the default floor" passes
+C7  basic strategy unchanged                        | ✓ PRESERVED | runBasicCompaction uses a separate cut heuristic; not affected
+C8  summarizer failure fail-closed                  | ✓ PRESERVED | agentic-compaction.ts:259-275 unchanged
+C9  context-window unknown                          | ✓ PRESERVED | DEFAULT_MAX_INPUT_TOKENS = 128_000 fallback unchanged
+C10 no pathological over-compaction                 | ✓ PRESERVED | forward snap-walk can only INCREASE the fold; cannot over-fold
+
+SPECIFIC CONSERVATION CHECKS:
+
+1. TOOL-PAIR ATOMICITY (C3):
+   R6 asserts every tool_use in preservedTail has its matching tool_result,
+   and every tool_result in preservedTail has its matching tool_use.
+   Pre-patch: passes (backward snap-walk already preserves atomicity).
+   Post-patch: passes (forward snap-walk preserves atomicity; tool_result-only
+   user messages are unsafe and skipped forward to next safe boundary).
+
+2. FIRST-PROMPT PRESERVATION (C1):
+   When the active turn is at the start (lastTurnStartIndex > 0 and
+   lastTurnStartIndex > candidate), the forward snap to lastTurnStartIndex
+   preserves the entire active turn verbatim. This is STRONGER than the OLD
+   behavior which also preserved the active turn.
+
+3. NOT OVER-COMPACT (C10):
+   The new algorithm cannot fold more messages than the token-budget walk
+   requested. It either keeps candidate (when typed-user is at or before
+   candidate) or snaps forward to lastTurnStartIndex (when typed-user is
+   past candidate). The forward snap can only INCREASE the fold, not decrease it.
+
+4. PUBLIC API STABILITY:
+   - findCutIndex signature unchanged
+   - No exports added/removed from compaction-shared.ts
+   - @cline/core package barrel unchanged (verified via dist rebuild)
+   - apps/vscode/src/sdk consumers unchanged
+
+REGRESSION GUARD COVERAGE:
+
+  R1: long tool loop -> cut must not collapse        (load-bearing)
+  R2: forward snap to typed-user past candidate      (forward-snap primitive)
+  R3: typed-user boundary preservation                (no-snap case)
+  R4: no typed-user sentinel branch                   (fallback path)
+  R5: L1 fold size ablation                           (load-bearing)
+  R6: tool-pair atomicity                             (atomicity invariant)
+
+EVIDENCE OF NON-REGRESSION:
+
+  Test Files  6 passed | 1 failed (pre-existing script tests)
+       Tests  121 passed | 1 skipped | 2 failed (pre-existing bun ENOENT)
+
+  No new failures introduced. 1 existing test updated to reflect the new
+  contract (test was pinning OLD less-aggressive behavior).

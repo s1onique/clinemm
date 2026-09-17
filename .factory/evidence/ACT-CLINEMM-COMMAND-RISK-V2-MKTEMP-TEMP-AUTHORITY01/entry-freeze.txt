@@ -1,0 +1,29 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01
+
+ENTRY_FREEZE
+
+REPOSITORY_ROOT=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH=main
+
+ENTRY_HEAD=7f1ff13d9d678ea4d27b6449db4c3b4fe0e263a1
+ENTRY_TREE=f0a8cbf07410a7d3ff29a92cb8a2e18534eda788
+ORIGIN_MAIN=7f1ff13d9d678ea4d27b6449db4c3b4fe0e263a1  (synced with HEAD; 6 unpushed local commits)
+
+TRACKED_WORKTREE_STATUS=clean
+(known gitignored evidence dirs in .factory/ are exempt and untouched)
+
+PREDECESSOR_VERDICT (ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01):
+  TEMP_CAPABILITY=PASS_SEATBELT_PRIVATE_TEMP_CAPABILITY CLOSED_CLEAN
+  PRIVATE_TMPDIR=PROVEN REAL_PRODUCTION_SEAM
+  WORKSPACE_WRITE_DENY=PROVEN
+  NETWORK_DENY=PROVEN
+  ENV_SECRET_ABSENT=PROVEN
+  LIFECYCLE_CLEANUP=PASS (CORRECTION01 wrap closed)
+
+The predecessor closed the sandbox half: bare mktemp / mktemp -d reach
+the Seatbelt production seam and succeed (exit 0, private canonical
+TMPDIR). This ACT closes the policy half: bare mktemp / mktemp -d are
+denied at the command-policy seam BEFORE they reach the executor.
+
+DO NOT RE-LITIGATE the predecessor's P0 evidence. The mktemp RED/GREEN
+at the Seatbelt seam is closed.

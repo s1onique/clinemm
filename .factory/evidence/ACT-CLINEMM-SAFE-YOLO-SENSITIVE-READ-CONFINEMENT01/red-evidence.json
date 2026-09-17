@@ -1,0 +1,60 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01",
+  "phase": "C1 RED REPRODUCED",
+  "inputACT": "YQ-QUALIFICATION01-CORRECTION01 (Phase 8 broad-read observation)",
+  "productionSeam": "buildExperimentalReconCapability -> SeatbeltSandboxBackendExperimental.prepare -> /usr/bin/sandbox-exec -f profile.sb /bin/bash script",
+  "fixtures": {
+    "privateKey": "$HOME/.cline-safe-yolo-read-lab-<nonce>/private-key",
+    "cloudToken": "$HOME/.cline-safe-yolo-read-lab-<nonce>/cloud-token",
+    "nestedCredential": "$HOME/.cline-safe-yolo-read-lab-<nonce>/nested/credential"
+  },
+  "REPRODUCED": {
+    "R1": {
+      "claim": "cat synthetic $HOME private-key is READABLE",
+      "today": "SECRET_READABLE",
+      "desired": "SECRET_UNREADABLE",
+      "RED_REPRODUCED": true
+    },
+    "R2": {
+      "claim": "secret exfiltrates to parent TCP listener",
+      "today": "EXFIL_OK",
+      "desired": "EXFIL_READ_BLOCKED",
+      "RED_REPRODUCED": true,
+      "evidence": "full exfiltration path works: secret readable AND open network"
+    },
+    "R3": {
+      "claim": "workspace-region READ must remain true",
+      "today": "WS_READ_OK",
+      "desired": "WS_READ_OK",
+      "GREEN_PRESERVED": true
+    },
+    "R4": {
+      "claim": "network connectivity must remain true",
+      "today": "CONNECTED:$TOKEN",
+      "desired": "CONNECTED:$TOKEN",
+      "GREEN_PRESERVED": true
+    },
+    "R5": {
+      "claim": "$HOME write must remain denied",
+      "today": "WRITE_DENIED",
+      "desired": "WRITE_DENIED",
+      "CARRIED_INVARIANT": true
+    }
+  },
+  "recon": {
+    "READ_POLICY_GENERATOR": "sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:buildReadRule + generateSeatbeltProfile",
+    "READ_POLICY_FLOW": "cap.denyReadSubpaths -> seatbelt-backend.ts:prepare canonicalizes -> generateSeatbeltProfile({denyReadSubpaths}) emits (allow file-read*) + per-denied (deny file-read* (subpath X))",
+    "CURRENT_VALUE": "[] (zero read restrictions)",
+    "HAZARD_PATTERN_PARENT_DENY_CHILD_ALLOW": "NOT PRESENT (reviewer cited Codex #21081; we avoid it by following Anthropic/Codex pattern of broad (allow file-read*) + targeted deny)",
+    "RECOMMENDED_PATTERN": "broad (allow file-read*) + (deny file-read* (subpath \"<secret-path>\")) per secret class, avoiding parent-deny/child-allow precedence hazards"
+  },
+  "reviewerStopRules": {
+    "everything_works": "PASS_SAFE_YOLO_SECRET_READ_CONFINEMENT (future, after fix)",
+    "cantReproduceBroadRead": "HALT_RED_NOT_REPRODUCED (NOT FIRED -- RED clearly reproduced)",
+    "secretStillReadable": "HALT_SECRET_READ_CONFINEMENT_FAILED (current state, RED)",
+    "neededAllowCarveOut": "HALT_SEATBELT_READ_PRECEDENCE_CONFLICT (future, after fix design)",
+    "evidenceAmbiguous": "CAPTURE_INSUFFICIENT (NOT FIRED)"
+  },
+  "verdict": "RED REPRODUCED. Fix design + implementation is the next sub-ACT.",
+  "NEXT_PHASE": "Phase 2 - freeze secret classes (reviewer requires: do not bake all of ~/.ssh, ~/.gnupg, ~/.aws, ~/.kube, ~/.docker, ~/.config/gh into production simply from a list; recon must identify (1) which Cline normally needs, (2) which contain credentials, (3) whether a safe child-path carve-out is necessary). REQUIRED INPUT FROM REVIEWER: which secret classes to freeze as denyReadSubpaths, given the live RED shows any ACT-owned synthetic secret under $HOME is currently exfiltratable."
+}

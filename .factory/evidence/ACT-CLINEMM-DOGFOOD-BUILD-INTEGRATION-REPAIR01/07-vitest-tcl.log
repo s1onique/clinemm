@@ -1,0 +1,20 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts (7 tests) 4ms
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts (3 tests | 2 failed) 12ms
+     × TCL-PARENT01: the real top-level New Task race must NOT produce the wedge 5ms
+     ✓ TCL-PARENT02: through the repaired top-level path, Compact reaches normal coordinator behavior 3ms
+     × TCL-PARENT03: under the fence, racing initTask vs clearTask prevents the wedge; a subsequent fresh initTask produces a clean pair 3ms
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts (6 tests | 6 failed) 18ms
+     × ADVERSARIAL A: init A superseded by clear must leave neither half installed 5ms
+     × ADVERSARIAL B: init A superseded by init B must leave B current; A abandoned 3ms
+     × ADVERSARIAL C: clear during host.start must leave neither half installed 2ms
+     × ADVERSARIAL D: stale A host.start resolves AFTER B is current must NOT replace B 2ms
+     × ADVERSARIAL E: stale-start cleanup failure must conserve B/current state; error observable 3ms
+     × ADVERSARIAL F: stale reinit must NOT terminate current B; B's host.stop must NOT be called 2ms
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  8 failed | 8 passed (16)
+   Start at  19:51:27
+   Duration  4.28s (transform 6.64s, setup 5.45s, import 7.00s, tests 34ms, environment 0ms)

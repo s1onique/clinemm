@@ -1,0 +1,28 @@
+# TMPDIR Insufficiency (spec §5)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01
+
+TIMESTAMP_UTC = 2026-08-26T00:18Z
+
+Controlled host probe (unsandboxed):
+  PRIVATE = /tmp/clinemm-host-probe-TwO7lu
+  TMPDIR="$PRIVATE" /usr/bin/mktemp
+
+OUTPUT:  /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.dbRAWwAXZ8
+
+OBSERVATION:
+  Apple BSD mktemp with no arguments (no -t, no template) writes the
+  created file at <DARWIN_USER_TEMP_DIR>/tmp.XXXXXXXX, NOT at $TMPDIR.
+  This proves $TMPDIR is NOT sufficient to redirect Apple BSD mktemp
+  on darwin for the bare form.
+
+  This is the Darwin mktemp(1) precedence: DARWIN_USER_TEMP_DIR first,
+  TMPDIR only a fallback when a template or -t arg is supplied.
+
+CONSEQUENCE FOR THIS ACT:
+  The previous ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01 only
+  proves the synthesized private TMPDIR works for GNU mktemp (the
+  Linux/non-darwin case). For Apple BSD /usr/bin/mktemp with no
+  arguments, the Seatbelt capability must authorize the canonical
+  _CS_DARWIN_USER_TEMP_DIR directly.
+
+CAPTURE_INSUFFICIENT = NOT_TRIGGERED  (capture is sufficient)

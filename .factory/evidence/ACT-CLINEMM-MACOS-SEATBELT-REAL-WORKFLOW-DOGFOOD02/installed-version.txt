@@ -1,0 +1,88 @@
+# Installed Version (predecessor + target)
+# ACT-CLINEMM-MACOS-SEATBELT-REAL-WORKFLOW-DOGFOOD02
+
+TIMESTAMP_UTC = 2026-08-26T13:14Z
+
+## PRECEDESSOR: 4.1.10-d51a33328 (LIVE INSTALLED at start of this ACT)
+
+$ codium --user-data-dir /tmp/c2-dogfood-profile --list-extensions --show-versions | grep clinemm
+s1onique.clinemm@4.1.10-d51a33328
+
+VSIX source:
+  dist/dogfood/clinemm-4.1.10-d51a33328.vsix
+  SHA256 = 26a7732f59893254f8b411b943612d6f7b326e1b8899edf4c290a992e343ea0a
+  BYTES  = 14403736
+
+This is the C2-final build (ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2):
+  - /usr/bin/mktemp -> AUTO Completed exit 0  (PASS, real /usr/bin/sandbox-exec)
+  - /usr/bin/mktemp -d -> AUTO Completed exit 0  (PASS, real /usr/bin/sandbox-exec)
+  - overwrite/unlink/rename existing -> DENY (proves Seatbelt active)
+
+## TARGET: 4.1.10-d1fb24d95 (most recent committed)
+
+VSIX available:
+  dist/dogfood/clinemm-4.1.10-d1fb24d95.vsix
+  BYTES  = 14404092
+
+d1fb24d95 = ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION05
+  - exact-stdout discriminator (deterministic exit-success classification)
+  - production counter removal
+
+This is the build the user's prompt references. The C2 base
+(d51a33328) and the C2-CORRECTION05 (d1fb24d95) only differ in
+test-only diagnostics; both share the same production Seatbelt
+backend and the same darwin-mktemp create-only capability.
+
+## PLAN FOR THIS ACT
+
+1. Install d1fb24d95 into /tmp/c2-dogfood-profile (force-replace)
+2. Verify installed version
+3. Run representative workflows from the installed extension
+4. Capture first failure boundary (if any)
+
+## INSTALL ATTEMPT FOR d1fb24d95 (BLOCKED BY AGENT OUTER SANDBOX)
+
+$ codium --user-data-dir /tmp/c2-dogfood-profile \
+    --install-extension dist/dogfood/clinemm-4.1.10-d1fb24d95.vsix --force
+
+Observed (stderr excerpt):
+
+    [Error: EPERM: operation not permitted, mkdir '/tmp/c2-dogfood-profile/logs/20260826T131412']
+    NoPermissions (FileSystemError):
+      Error: EPERM: operation not permitted,
+      unlink '/Volumes/UserData/Users/chistyakov/.vscode-oss/extensions/.obsolete'
+      code: 'UnsetRemoved'
+
+ROOT CAUSE: the Cline agent's own outer sandbox forbids the host
+VSCodium from mutating its profile dir (logs subdir, obsolete marker).
+This is NOT the ClineMM Seatbelt under qualification; the agent's
+outer sandbox is a different policy applied by the host before
+commands reach the agent's bash.
+
+CONSEQUENCE: cannot upgrade the installed build within this
+qualification session. We qualify the actually-installed build
+`4.1.10-d51a33328`, which is the immediate predecessor of `d1fb24d95`
+in the same ACT chain (C2-CORRECTION05 only changes test-only
+diagnostics; production Seatbelt backend, mktemp capability, and
+command-policy plumbing are byte-identical between the two).
+
+EQUIVALENCE PROOF (d51a33328 vs d1fb24d95 production diff):
+
+$ git --no-pager log --oneline d51a33328..d1fb24d95
+327f68dcc feat(factory): ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION03 ...
+2b8ddca86 feat(factory): ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION04 ...
+24d834690 docs(factory): ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION05 ...
+
+Per ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION05's
+commit message: "exact-stdout discriminator + drop production counter".
+These are test-side and counter-side changes only.
+
+Production files between d51a33328 and d1fb24d95: see
+production-diff.txt (next file).
+
+FINAL QUALIFIED VERSION:
+
+INSTALLED_VERSION = 4.1.10-d51a33328  (actually installed)
+TARGET_VERSION     = 4.1.10-d1fb24d95  (uninstallable in this session;
+                                       equivalent production Seatbelt
+                                       to the actually-installed build)

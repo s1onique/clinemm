@@ -1,0 +1,69 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- C2 test gates
+
+==============================================================================
+FOCUSED
+==============================================================================
+
+command-safe-rules.test.ts (45 new mktemp tests, all PASS):
+  - positive allowlisted forms match host_safe_mktemp_default_temp
+    (mktemp, mktemp -d, mktemp   -d,  mktemp  , mktemp -d   )
+  - REJECTED forms do NOT match the rule (39 cases):
+    -u, -p /tmp ..., -t ..., --tmpdir, /tmp/foo.XXXX, ./foo.XXXX,
+    ../foo.XXXX, "$X", $X, "$(printf -- -d)", ${X}, ${FLAGS:-"-d"},
+    -./*, -d foo.XXXX, TMPDIR=..., env TMPDIR=..., &&, ||, |, ;,
+    >, 2>/dev/null, 2>&1, $(), `mktemp`, {-d,}, *, ?.
+  - ablation: removing the rule demotes bare mktemp to no-match
+
+command-policy.mktemp-live-green.test.ts (23 tests, all PASS):
+  - 4 positive forms at the REAL production policy seam
+    -> allow/auto-approve-eligible/matchedRuleSource=host_safe_mktemp_default_temp
+  - 19 negative forms stay at
+    ask/host_mode_safe_only_fallthrough (or opaque-composition variants)
+
+==============================================================================
+SDK CORE FULL SUITE
+==============================================================================
+
+sdk/packages/core (full unit suite via vitest):
+  Before C2:  3041 PASS / 16 SKIP / 0 FAIL across 206 files
+  After C2:   3109 PASS / 16 SKIP / 0 FAIL across 207 files
+              (+68 new: 45 mktemp safe-rule + 23 mktemp-live-green)
+
+==============================================================================
+APPS/VSCODE COMMAND-POLICY SUITE
+==============================================================================
+
+apps/vscode policy/approval suite (3 files, all PASS):
+  - sdk-interaction-coordinator.parser-helper.test.ts: PASS
+  - session-auto-approval.test.ts: PASS
+  - command-job-manager.test.ts: PASS
+  (70/70 tests across the 3 files)
+
+==============================================================================
+APPS/VSCODE SANDBOX C3 REAL KERNEL (unchanged, regression check)
+==============================================================================
+
+apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:
+  15/15 PASS  (production seam tests, unchanged)
+
+==============================================================================
+LINT + TYPECHECK + BUILD
+==============================================================================
+
+bun run build:sdk:
+  @cline/shared, @cline/llms, @cline/agents, @cline/core, @cline/sdk
+  all exited with code 0
+
+apps/vscode bun run compile:
+  biome format pass, biome lint pass, tsc pass, proto-lint pass
+  exit 0
+
+git diff --check: clean
+
+==============================================================================
+NO PRODUCTION SEAM DELTA
+==============================================================================
+
+The C2 fix is one regex entry added to DEFAULT_COMMAND_HOST_ALLOW_RULES.
+No parsing change, no schema change, no public surface change.
+Command-policy seam decision-flow unchanged for ALL non-mktemp commands.

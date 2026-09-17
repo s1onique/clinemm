@@ -1,0 +1,54 @@
+# C2 Test Gates Summary (spec §49)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:00Z
+
+## C2 new test files (added in this ACT):
+
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-green.test.ts                          (1 test)
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-kernel-matrix.test.ts                    (8 tests)
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-ablation-conservation.test.ts            (7 tests)
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-mixed-isolation.test.ts                    (4 tests)
+
+## C2 RED->GREEN witness:
+
+  c2-red.test.ts (the original RED witness file) was repurposed
+  as the GREEN witness. The RED state was: mktemp exitCode=1
+  + EPERM. The GREEN state is: mktemp exitCode=0 + parent in
+  canonical DARWIN_ROOT. The RED→GREEN transition proved the
+  wiring is causal (removing the wiring returns EPERM).
+
+## Predecessor tests (must remain GREEN):
+
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-guard-green.test.ts
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-correction01-typed-channel.test.ts
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-correction02-plan-required-guard.test.ts
+
+## Per-command + correlation tests (must remain GREEN):
+
+  apps/vscode/src/sdk/__tests__/execution-capability-binding01.c2-green.test.ts
+  apps/vscode/src/sdk/__tests__/execution-capability-binding01.c2-green-upstream.test.ts
+  apps/vscode/src/sdk/__tests__/execution-capability-binding01.c2-green-discriminator.test.ts
+  apps/vscode/src/sdk/__tests__/execution-capability-binding01.c2-green-multicmd-discriminator.test.ts
+  apps/vscode/src/sdk/__tests__/execution-authority-per-command-binding01.c1-correction01-real-plan-red.test.ts
+  apps/vscode/src/sdk/__tests__/execution-authority-per-command-binding01.c2-green.test.ts
+
+## RESULTS (single combined run):
+
+  apps/vscode/vitest run src/sdk/__tests__/
+    Test Files: 68 passed (68 total)
+    Tests:      691 passed (691 total)
+    Duration:   13.13s
+
+  bun run check-types (apps/vscode):
+    0 errors
+
+  sdk/packages/agents bun run test:
+    Test Files: 20 passed (20)
+    Tests:      387 passed (387)
+
+  git status --porcelain: EMPTY (working tree clean)
+  git diff --check: EMPTY
+
+SUMMARY:
+  PASS_SEATBELT_DARWIN_MKTEMP_CREATE_CAPABILITY_PREQUALIFIED

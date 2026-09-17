@@ -1,0 +1,78 @@
+ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+GREEN PROOF
+================================================
+
+REPRODUCED = YES (Class A: NO_POST_COMPACTION_PUBLICATION)
+REPAIRED  = YES (PASS POST_COMPACTION_PUBLICATION_REPAIRED)
+
+POST-REPAIR TEST OUTPUT:
+
+  $ cd apps/vscode && /opt/homebrew/bin/node ../../node_modules/.bin/vitest run \
+    --config vitest.config.ts \
+    src/sdk/__tests__/sdk-compaction-w-publish-recon01.test.ts
+
+  ✓ R1: compactSessionMessages surfaces W from the producer seam
+        - returns currentWorkingContextEstimate as a number on success (green)
+        - returns currentWorkingContextEstimate undefined when producer
+          returned no W
+  ✓ R2 + R3: post-compaction W reaches the host-side carrier via setLatest
+        - the surfaced W replaces the stale pre-compaction carrier value
+        - W value is the producer number verbatim — no recompute, no transform
+        - setLatest with a non-number normalizes to null (transport-only
+          fail-closed)
+  ✓ R5 (failure): a failed compaction does NOT publish a fake W
+        - empty input returns compacted=false and no W surface
+        - producer returning undefined makes the surface undefined
+
+  Test Files  1 passed (1)
+       Tests  7 passed (7)
+
+FULL COMPACTION + WORKING-CONTEXT SUITE (apps/vscode):
+
+  $ cd apps/vscode && /opt/homebrew/bin/node ../../node_modules/.bin/vitest run \
+    --config vitest.config.ts \
+    src/sdk/__tests__/sdk-compaction-w-publish-recon01.test.ts \
+    src/sdk/__tests__/working-context-webview-state-projection.test.ts \
+    src/sdk/sdk-compaction-coordinator.test.ts \
+    src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts \
+    src/sdk/sdk-compaction-coordinator.restore-publication.test.ts
+
+  Test Files  5 passed (5)
+       Tests  57 passed (57)
+
+TYPECHECK:
+
+  $ cd apps/vscode && /opt/homebrew/bin/node ../../node_modules/.bin/tsc --noEmit
+
+  exit 0 (clean — zero new errors)
+
+DIFF INTEGRITY:
+
+  $ git diff --check
+  (no whitespace issues)
+
+PRODUCTION TYPECHECK (apps/vscode):
+
+  $ cd apps/vscode && /opt/homebrew/bin/node ../../node_modules/.bin/tsc --noEmit
+
+  exit 0 (clean — zero new errors)
+
+RECON GREEN SUMMARY:
+
+  1. compactSessionMessages now surfaces the producer's W in its
+     return type. Pre-patch: W_DROPPED. Post-patch: W_PROPAGATED.
+  2. SdkCompactionCoordinator.runCompactionInPhase invokes the
+     optional publishPostCompactionW callback after a successful
+     compaction, BEFORE the postStateToWebview publication.
+  3. SdkController wires publishPostCompactionW to a tiny carrier
+     setLatest(w) call. WorkingContextHostCapture._latest is replaced
+     unconditionally (UNDEFINED_W_STALE_REUSE = FORBIDDEN).
+  4. The next postStateToWebview includes the new W in
+     ExtensionState.currentWorkingContextEstimate.
+  5. ContextWindow reads W (number) > P (lastApiReqContextInputTokens)
+     > UNAVAILABLE precedence. After the repair, W == post-compaction
+     ≈ divider 29.6k; the bar shows 29.6k.
+  6. Live qualification (operator-side dogfood) is OUT of scope for
+     this ACT. The bounded repair is intended to be installed via
+     `python3 scripts/build-dogfood-vsix.py --install` and verified
+     in a manual compaction scenario.

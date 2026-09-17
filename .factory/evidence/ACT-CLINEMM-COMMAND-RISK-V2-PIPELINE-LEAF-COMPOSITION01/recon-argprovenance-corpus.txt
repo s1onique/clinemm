@@ -1,0 +1,62 @@
+git log --oneline -5
+  name=git args=["log","--oneline","-5"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+git log --oneline -20
+  name=git args=["log","--oneline","-20"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+git log --oneline -5 origin/main
+  name=git args=["log","--oneline","-5","origin/main"] argProvenance=["static","static","static","static"] hasCmdSubst=false redirects=[]
+git log --oneline -20 origin/main
+  name=git args=["log","--oneline","-20","origin/main"] argProvenance=["static","static","static","static"] hasCmdSubst=false redirects=[]
+git log -n 10
+  name=git args=["log","-n","10"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+git log --stat -5
+  name=git args=["log","--stat","-5"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+git diff HEAD~1
+  name=git args=["diff","HEAD~1"] argProvenance=["static","dynamic"] hasCmdSubst=false redirects=[]
+git diff --stat HEAD~1
+  name=git args=["diff","--stat","HEAD~1"] argProvenance=["static","static","dynamic"] hasCmdSubst=false redirects=[]
+git show HEAD
+  name=git args=["show","HEAD"] argProvenance=["static","static"] hasCmdSubst=false redirects=[]
+git show --stat HEAD
+  name=git args=["show","--stat","HEAD"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+git rev-parse HEAD
+  name=git args=["rev-parse","HEAD"] argProvenance=["static","static"] hasCmdSubst=false redirects=[]
+git rev-parse --abbrev-ref HEAD
+  name=git args=["rev-parse","--abbrev-ref","HEAD"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+git rev-list --count HEAD
+  name=git args=["rev-list","--count","HEAD"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+git branch --show-current
+  name=git args=["branch","--show-current"] argProvenance=["static","static"] hasCmdSubst=false redirects=[]
+head -30 some-file
+  name=head args=["-30","some-file"] argProvenance=["static","static"] hasCmdSubst=false redirects=[]
+head -n 30 some-file
+  name=head args=["-n","30","some-file"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+head 30 some-file
+  name=head args=["30","some-file"] argProvenance=["static","static"] hasCmdSubst=false redirects=[]
+cat some-file
+  name=cat args=["some-file"] argProvenance=["static"] hasCmdSubst=false redirects=[]
+wc -l some-file
+  name=wc args=["-l","some-file"] argProvenance=["static","static"] hasCmdSubst=false redirects=[]
+wc -l some-file other-file
+  name=wc args=["-l","some-file","other-file"] argProvenance=["static","static","static"] hasCmdSubst=false redirects=[]
+tail -20 some-file
+  name=tail args=["-20","some-file"] argProvenance=["static","static"] hasCmdSubst=false redirects=[]
+sort some-file
+  name=sort args=["some-file"] argProvenance=["static"] hasCmdSubst=false redirects=[]
+uniq some-file
+  name=uniq args=["some-file"] argProvenance=["static"] hasCmdSubst=false redirects=[]
+head $(rm -rf foo)
+  name=head args=["$(...)"] argProvenance=["dynamic"] hasCmdSubst=true redirects=[]
+head "$HOME"
+  name=head args=["${...}"] argProvenance=["dynamic"] hasCmdSubst=false redirects=[]
+head ${HOME}/file
+  name=head args=["${...}/file"] argProvenance=["dynamic"] hasCmdSubst=false redirects=[]
+head some-file; rm -rf foo
+  name=head args=["some-file"] argProvenance=["static"] hasCmdSubst=false redirects=[]
+NOT-CMD: head some-file | sh
+head some-file > /etc/passwd
+  name=head args=["some-file"] argProvenance=["static"] hasCmdSubst=false redirects=[{"fd":null,"op":">","path":"/etc/passwd","pathProvenance":"static"}]
+NOT-CMD: head some-file 2>&1 | tee /etc/passwd
+head --help
+  name=head args=["--help"] argProvenance=["static"] hasCmdSubst=false redirects=[]
+head --version
+  name=head args=["--version"] argProvenance=["static"] hasCmdSubst=false redirects=[]

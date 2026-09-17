@@ -1,0 +1,173 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03 -- P0-3 RED REPRO
+
+P0-3 was identified by the reviewer in disposition
+HALT_MKTEMP_SHELL_RESOLUTION_IDENTITY_UNPROVEN.
+
+Bash's documented command search order (GNU Bash Reference Manual,
+Command Search and Execution):
+
+  1. shell function (including exported functions inherited by
+     child non-interactive shells via `export -f name`)
+  2. shell builtin
+  3. $PATH lookup
+
+  Source: https://www.gnu.org/software/bash/manual/html_node/Command-Search-and-Execution.html
+
+The CORRECTION02 evidence used `/usr/bin/which mktemp` which
+proves PATH lookup only. The actual executor runs
+`bash -c "mktemp"`. Two channels can shadow the proven
+identity:
+
+CHANNEL 1: exported shell function (export -f)
+  Parent shell:
+    mktemp() { printf "BAD %s\n" "${TMPDIR:-/tmp}"; }
+    export -f mktemp
+  Child non-interactive bash:
+    /usr/bin/which mktemp -> /run/current-system/sw/bin/mktemp
+                              (or /usr/bin/mktemp depending on PATH)
+    type mktemp -> "mktemp is a function"
+    bash -c "mktemp" -> function runs, NOT the binary
+
+CHANNEL 2: BASH_ENV startup file
+  Non-interactive Bash sources the file pointed to by
+  inherited BASH_ENV before executing the command.
+  Source: GNU Bash Reference Manual, Bash Startup Files.
+  The startup file can define a function named `mktemp`,
+  shadowing the binary at lookup time.
+
+LIVE REPRODUCTION on this darwin-arm64 host (2026-08-26)
+========================================================
+
+  $ /usr/bin/which mktemp
+  /run/current-system/sw/bin/mktemp
+
+  CHANNEL 1 (export -f):
+    bash -c '
+    mktemp() {
+      printf "BAD %s\n" "${TMPDIR:-/tmp}" > /tmp/clinemm-mktemp-p0-3-shadow-badfile
+      printf "BAD %s\n" "${TMPDIR:-/tmp}"
+    }
+    export -f mktemp
+    echo "  which mktemp (PATH only):"
+      /usr/bin/which mktemp
+    echo "  type mktemp (BASH function+PATH):"
+      type mktemp
+    echo "  bash -c mktemp:"
+      TMPDIR=/synth bash -c "mktemp"
+    echo "  badfile contents:"
+      cat /tmp/clinemm-mktemp-p0-3-shadow-badfile 2>&1
+    '
+  Output:
+    which mktemp (PATH only):
+    /run/current-system/sw/bin/mktemp
+    type mktemp (BASH function+PATH):
+    mktemp is a function
+    mktemp ()
+    {
+        printf "BAD %s\n" "${TMPDIR:-/tmp}" > /tmp/clinemm-mktemp-p0-3-shadow-badfile;
+        printf "BAD %s\n" "${TMPDIR:-/tmp}"
+    }
+    bash -c mktemp:
+    BAD /synth
+    badfile contents:
+    BAD /synth
+
+  CHANNEL 2 (BASH_ENV):
+    # /tmp/clinemm-mktemp-p0-3-bash_env contents:
+    mktemp() { printf "BASHENV %s\n" "${TMPDIR:-/tmp}"; }
+
+    BASH_ENV=/tmp/clinemm-mktemp-p0-3-bash_env bash -c '
+    echo "  which mktemp:"; /usr/bin/which mktemp
+    echo "  bash -c mktemp (BASH_ENV=set):"
+      BASH_ENV=/tmp/clinemm-mktemp-p0-3-bash_env TMPDIR=/synth bash -c "mktemp"
+    '
+  Output:
+    which mktemp:
+    /run/current-system/sw/bin/mktemp
+    bash -c mktemp (BASH_ENV=set):
+    BASHENV /synth
+
+OBSERVATION
+===========
+
+  Both shadow channels completely bypass the proven
+  identity. The CORRECTION02 gate accepts `/usr/bin/mktemp`
+  identity (or the GNU realpath on PATH-shadowed hosts),
+  promotes to ALLOW, and the executor runs the bash function
+  instead of the binary.
+
+SLASH-BYPASS VERIFICATION (the CORRECTION03 fix)
+=================================================
+
+Bash Reference Manual, Command Search and Execution:
+  "If the command name contains a slash, Bash uses it as a
+   pathname and executes it directly, without performing
+   function or builtin lookup."
+
+Live verification on this darwin-arm64 host:
+
+  $ bash -c '
+  mktemp() { printf "BADFUNC\n"; }
+  export -f mktemp
+  echo "  bash -c mktemp:"
+    bash -c "mktemp"
+  echo "  bash -c /usr/bin/mktemp:"
+    bash -c "/usr/bin/mktemp"
+  '
+  Output:
+    bash -c mktemp:
+    BADFUNC
+    bash -c /usr/bin/mktemp:
+    /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.36Y4sZK7uc
+
+  $ BASH_ENV=/tmp/clinemm-mktemp-bashenv-... bash -c '
+  echo "  bash -c mktemp:"
+    bash -c "mktemp"
+  echo "  bash -c /usr/bin/mktemp:"
+    bash -c "/usr/bin/mktemp"
+  '
+  Output:
+    bash -c mktemp:
+    BASHENV_FUNC
+    bash -c /usr/bin/mktemp:
+    /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.XFxSFBnUG4
+
+The slash-prefixed form BYPASSES both function and BASH_ENV
+lookup. The proven identity (realpath of /usr/bin/mktemp) is
+the identity that actually executes.
+
+CORRECTION02 IMPLICATION
+========================
+
+The CORRECTION02 evidence proved PATH lookup (via
+/usr/bin/which mktemp). The actual executor is bash, and
+bash's lookup order includes shell functions and BASH_ENV
+BEFORE PATH. The proven identity is therefore not bound to
+the executed identity for bare `mktemp` and `mktemp -d`.
+
+The leak reproduces for darwin+/usr/bin/mktemp identity+
+getconf root on hosts where bash is invoked non-interactively
+with `export -f mktemp` or with `BASH_ENV` inherited.
+
+FIX
+===
+
+CORRECTION03 restricts the positive AUTO forms to the
+explicit-path variants:
+  /usr/bin/mktemp        AUTO (slash bypasses lookup)
+  /usr/bin/mktemp -d     AUTO
+
+Bare `mktemp` and `mktemp -d` stay ASK with new source
+host_mktemp_shell_resolution_unbound documenting the
+shell-resolution gap.
+
+EVIDENCE LABEL
+==============
+
+  RED REPRO P0-3 (export -f):     REAL (LEAK reproduced)
+  RED REPRO P0-3 (BASH_ENV):      REAL (LEAK reproduced)
+  SLASH-BYPASS proof:             REAL (slash bypasses lookup)
+  CORRECTION02 evidence broken on bash-with-shadowing:
+                                   YES (gate accepts identity;
+                                        function intercepts at
+                                        executor time)

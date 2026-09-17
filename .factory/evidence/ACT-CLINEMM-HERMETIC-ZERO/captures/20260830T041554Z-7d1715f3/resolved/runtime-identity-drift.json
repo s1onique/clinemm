@@ -1,0 +1,24 @@
+{
+  "capturedAt": "2026-08-30T04:15:55.178264Z",
+  "drift": {
+    "beginRepoHead": "1525ebf4468ffa94ee7e514ffcee420c8d921c32",
+    "beginRepoTree": "1a3177b14407830adf34e32400f0a78a5826b513",
+    "drift": false,
+    "finishRepoHead": "1525ebf4468ffa94ee7e514ffcee420c8d921c32",
+    "finishRepoTree": "1a3177b14407830adf34e32400f0a78a5826b513"
+  },
+  "pending": {
+    "capturedAt": "2026-08-30T04:15:55.049443Z",
+    "clineVersion": "UNAVAILABLE",
+    "pid": "13464",
+    "repoHead": "1525ebf4468ffa94ee7e514ffcee420c8d921c32",
+    "repoTree": "1a3177b14407830adf34e32400f0a78a5826b513"
+  },
+  "resolved": {
+    "capturedAt": "2026-08-30T04:15:55.175977Z",
+    "clineVersion": "UNAVAILABLE",
+    "pid": "13477",
+    "repoHead": "1525ebf4468ffa94ee7e514ffcee420c8d921c32",
+    "repoTree": "1a3177b14407830adf34e32400f0a78a5826b513"
+  }
+}

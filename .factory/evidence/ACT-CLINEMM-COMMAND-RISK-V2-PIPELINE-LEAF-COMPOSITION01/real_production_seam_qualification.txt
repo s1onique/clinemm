@@ -1,0 +1,42 @@
+=== REAL_PRODUCTION_SEAM qualification ===
+helper     : sdk/packages/core/bin/parser-helper/darwin-arm64/cline-parser-helper
+protocol   : v4 (post-CORRECTION01 rebind)
+classifier : production evaluateCommandRiskWithParser
+auth       : safe-only, no path-evidence (so V1 path authority gate inert)
+
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     head -30
+        note: POST-REPAIR: stdin-only reader parser-proven safe.
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     head
+        note: POST-REPAIR: bare head, stdin-only.
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     head -n 30
+        note: POST-REPAIR: head with -n value.
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     head --
+        note: POST-REPAIR: head with explicit end-of-options.
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     tail -20
+        note: POST-REPAIR: tail stdin-only.
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     echo hello | head -30
+        note: POST-REPAIR: pipe composition (echo is V1-safe; head is parser-proven).
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     pwd && head -30
+        note: POST-REPAIR: chain composition (pwd is V1-safe; head is parser-proven).
+PASS  ask/ask                         expected ask                             head some-file
+        note: CONSERVATION: path-bearing, V1 ASK (out of scope per reviewer P0).
+PASS  ask/ask                         expected ask                             cat some-file
+        note: CONSERVATION: cat has no V1 rule; path-bearing not promoted.
+PASS  ask/ask                         expected ask                             head --help
+        note: CONSERVATION: argv-shape reject.
+PASS  ask/ask                         expected ask                             head --version
+        note: CONSERVATION: argv-shape reject.
+PASS  ask/ask                         expected ask                             head -c 100
+        note: CONSERVATION: -c reads bytes, not in stdin-only profile.
+PASS  ask/ask                         expected ask                             head "$HOME"
+        note: CONSERVATION: dynamic arg, fail-closed.
+PASS  ask/ask                         expected ask                             head -30 | sh
+        note: CONSERVATION: pipe-to-shell dangerous sink.
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     pwd
+        note: CONSERVATION: existing V1 host_safe_pwd.
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     git status
+        note: CONSERVATION: existing V1 host_safe_git_status.
+PASS  allow/auto-approve-eligible     expected allow/auto-approve-eligible     echo hello
+        note: CONSERVATION: existing echo parser-proven branch.
+
+=== RESULT: 17/17 pass, 0 fail ===

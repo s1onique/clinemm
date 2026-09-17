@@ -1,0 +1,37 @@
+{
+  "act": "ACT-CLINEMM-HERMETIC-MISMATCH",
+  "approvalTransactionBound": false,
+  "artifactStatus": "PASS",
+  "attachmentProjection": {
+    "clineVersion": "UNAVAILABLE",
+    "emittedAt": "UNAVAILABLE",
+    "repoHead": "UNAVAILABLE",
+    "runtimeInstanceId": "UNAVAILABLE"
+  },
+  "captureId": "20260829T215915Z-3b3f250f",
+  "capturedAt": "2026-08-29T21:59:15.182846Z",
+  "deltaSize": 2,
+  "eventDeltaBound": true,
+  "humanChronologyBound": true,
+  "instrumentationAttachmentBound": false,
+  "pendingApprovalEventCount": 1,
+  "pendingDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-MISMATCH/captures/20260829T215915Z-3b3f250f/pending",
+  "pendingSessionCandidateCount": 1,
+  "qualifyingTransactionCount": 0,
+  "resolvedApprovalEventCount": 3,
+  "resolvedDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-MISMATCH/captures/20260829T215915Z-3b3f250f/resolved",
+  "resolvedSessionCandidateCount": 1,
+  "runtimeIdentityBound": false,
+  "runtimeIdentityProjection": {
+    "capturedAt": "2026-08-29T21:59:15.180732Z",
+    "clineVersion": "UNAVAILABLE",
+    "pid": "91230",
+    "repoHead": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
+    "repoTree": "e753ab01d44291654b2951c8c2e5f0cea78e74e4"
+  },
+  "runtimeSourceDrift": false,
+  "schema": "cline-approval-specimen-binding/v1",
+  "sessionBindingAvailable": true,
+  "specimenBinding": "CAPTURE_INSUFFICIENT",
+  "zeroEventClassification": "Z3_RUNTIME_NOT_BOUND"
+}

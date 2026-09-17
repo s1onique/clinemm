@@ -1,0 +1,54 @@
+{
+  "binding": {
+    "act": "ACT-CLINEMM-HERMETIC-FIXTURE",
+    "approvalTransactionBound": true,
+    "artifactStatus": "PASS",
+    "captureId": "20260828T050400Z-48f346f8",
+    "capturedAt": "2026-08-28T05:04:00.857401Z",
+    "deltaSize": 2,
+    "eventDeltaBound": true,
+    "humanChronologyBound": true,
+    "pendingApprovalEventCount": 2,
+    "pendingDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-FIXTURE/captures/20260828T050400Z-48f346f8/pending",
+    "pendingSessionCandidateCount": 1,
+    "qualifyingTransactionCount": 1,
+    "resolvedApprovalEventCount": 4,
+    "resolvedDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-FIXTURE/captures/20260828T050400Z-48f346f8/resolved",
+    "resolvedSessionCandidateCount": 1,
+    "runtimeIdentityBound": true,
+    "schema": "cline-approval-specimen-binding/v1",
+    "sessionBindingAvailable": true,
+    "specimenBinding": "PASS"
+  },
+  "capturedAt": "2026-08-28T05:04:00.895272Z",
+  "discriminator": {
+    "capturedAt": "2026-08-28T05:04:00.857247Z",
+    "deltaSize": 2,
+    "items": [
+      {
+        "approvalEntryObserved": true,
+        "approvalTerminalObserved": false,
+        "correlationId": "corr-B",
+        "policyAutoApprove": true,
+        "schema": "cline-approval-discriminator/v1",
+        "sessionId": "snake-only-A",
+        "shouldAutoApproveTool": false,
+        "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after/diagnostics/after.jsonl",
+        "toolName": "execute_command"
+      },
+      {
+        "approvalEntryObserved": false,
+        "approvalTerminalObserved": true,
+        "correlationId": "corr-B",
+        "policyAutoApprove": null,
+        "schema": "cline-approval-discriminator/v1",
+        "sessionId": "snake-only-A",
+        "shouldAutoApproveTool": null,
+        "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after/diagnostics/after.jsonl",
+        "toolName": "execute_command"
+      }
+    ],
+    "schema": "cline-approval-discriminator/v1"
+  },
+  "schema": "cline-approval-specimen-report/v1"
+}

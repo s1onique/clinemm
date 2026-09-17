@@ -1,0 +1,169 @@
+ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01
+c1-correction01-empirical.txt -- real upstream seam RED proof
+
+DRIVING SEAM (no synthetic context, no inert plan):
+  AgentRuntime (real production class from @cline/agents)
+    -> requestToolApproval callback (real, returns real
+       ToolApprovalResult with executionPlan + executionCapability)
+    -> prepareToolExecution (real)
+    -> tool.execute(input, ctx) (real createShellTool via
+       createVscodeRunCommandsTool -- REAL production chain)
+    -> executeShellCommands (real)
+    -> createVscodeShellExecutor (real)
+    -> CommandJobManager.start (real)
+
+TEST RESULT (apps/vscode):
+  $ cd apps/vscode && bun run check-types
+  ... 0 errors
+
+  $ vitest run src/sdk/__tests__/execution-authority-per-command-binding01.c1-correction01-real-plan-red.test.ts
+  Test Files  1 passed (1)
+       Tests  6 passed (6)
+
+  $ vitest run .../execution-capability-binding01.{c2-green,c2-green-upstream,c2-green-discriminator,c2-green-multicmd-discriminator}.test.ts
+                 .../execution-authority-per-command-binding01.c1-correction01-real-plan-red.test.ts
+  Test Files  5 passed (5)
+       Tests  18 passed (18)
+
+EMPIRICAL OBSERVATIONS (real upstream seam, today):
+
+TEST 1 -- mixed case [/usr/bin/mktemp, printf harmless\n]:
+
+  Plan (host's authorization result):
+    entry[0].commandIndex=0, hardenedCommand="/usr/bin/mktemp",
+             matchedRuleSource="darwin_mktemp_create_only"
+    entry[1].commandIndex=1, hardenedCommand="printf harmless\n",
+             matchedRuleSource=undefined (no per-command grant)
+
+  Runtime processing:
+    - approval.executionPlan received by host callback (PASS)
+    - input = approval.executionPlan.transformedInput stamped (CORRECTION04)
+    - The parallel commands[] array is DISCARDED (no propagation)
+    - tool-call executionCapability stamped on prepared.executionCapability
+    - AgentToolContext.executionCapability set on tool.execute(ctx)
+
+  Observed on manager.start:
+    start[0]:
+      command = "/usr/bin/mktemp"
+      executionCapability = { kind: "factory-binding-probe",
+                              correlationId: "tool-call-c1-correction01" }
+      toolCallId = "tool-call-c1-correction01"
+    start[1]:
+      command = "printf harmless\n"
+      executionCapability = { kind: "factory-binding-probe",
+                              correlationId: "tool-call-c1-correction01" }   <-- SAME
+      toolCallId = "tool-call-c1-correction01"
+
+  RED OBSERVATION:
+    - 2 manager.start calls (one per command, positional order preserved)
+    - BOTH commands receive the SAME tool-call capability
+    - The per-entry matchedRuleSource is NOT observable on manager.start
+    - There is NO per-command channel in AgentToolContext
+
+TEST 2 (structural) -- AgentToolContext has exactly ONE authority slot:
+
+  Object.keys(probe).filter(capability|authority) = ["executionCapability"]
+
+  No per-command slot. The structural RED is honest documentation,
+  not a hidden assumption. If C2 GREEN adds a per-command channel,
+  this assertion must be revisited.
+
+TEST 3 (Case 1) -- distinct ordinary strings [/usr/bin/mktemp, printf harmless\n]:
+
+  start order matches plan order:
+    start[0] = "/usr/bin/mktemp"  <-> entry[0]
+    start[1] = "printf harmless\n"  <-> entry[1]
+
+  commandIndex is STABLE for distinct ordinary strings.
+
+TEST 4 (Case 2) -- duplicate text ["git status", "git status"]:
+
+  start[0] = "git status"
+  start[1] = "git status"
+
+  Both starts have identical text. The only discriminator is
+  POSITION (start order). commandIndex discriminates by POSITION,
+  not text. A binding that uses `find entry where hardenedCommand
+  === command` would ambiguously match BOTH entries for BOTH
+  starts. The positional correlation is the only safe anchor.
+
+  RED: both plan entries have matchedRuleSource="host_safe_git_status".
+  A filter on matchedRuleSource would falsely match both.
+
+TEST 5 (Case 3) -- three commands [cmd-A, cmd-none, cmd-C]:
+
+  start[0] = "cmd-A"  <-> entry[0]
+  start[1] = "cmd-none"  <-> entry[1]
+  start[2] = "cmd-C"  <-> entry[2]
+
+  commandIndex is STABLE for three mixed-authority commands.
+
+TEST 6 (Case 4) -- heredoc coalescing ["cat <<EOF", "line1", "EOF"]:
+
+  plan: 3 entries (entry[0]=cat <<EOF, entry[1]=line1, entry[2]=EOF)
+  start: 1 call (the merged command "cat <<EOF\nline1\nEOF")
+
+  RED: cardinality mismatch.
+    plan.commands.length (3) !== manager.start call count (1)
+    commandIndex correlation is BROKEN.
+
+  FAIL-CLOSED BOUNDARY: the per-command binding MUST refuse to
+  flow any authority when cardinality drifts. Today, the tool-call
+  capability flows uniformly (RED); C2 GREEN must add a cardinality
+  check that prevents the leak.
+
+ARCHITECTURAL ROOT CAUSE (re-confirmed):
+
+  1. CORRECTION04 (agent-runtime.ts:2590):
+       input = approval.executionPlan.transformedInput;
+     Only `transformedInput` crosses the seam. The parallel
+     `commands[]` array is dropped at this point.
+
+  2. AgentToolContext.executionCapability (agent.ts:368):
+     Single typed slot. No per-command channel exists.
+
+  3. executeShellCommands (definitions.ts:195):
+     Iterates commands with the SAME context for all. No per-command
+     capability injection point.
+
+REVIEWER-REJECTED IDENTITY ANCHORS:
+
+  - matchedRuleSource: REJECT (non-unique -- two entries can share)
+  - hardenedCommand text: REJECT (duplicate commands are valid)
+  - commandIndex: CANDIDATE (works for ordinary strings; broken
+    for heredoc coalescing; FAIL-CLOSED boundary documented)
+
+REVIEWER-APPROVED ARCHITECTURE:
+
+  Option A:
+    interface CommandExecutionPlanEntry {
+      commandIndex: number
+      hardenedCommand: string | Record<string, unknown>
+      matchedRuleSource?: string
+      executionCapability?: InternalExecutionCapability  <-- NEW
+      profileSource?: string
+    }
+
+  Execution consumes plan entry by POSITION:
+    execution command i
+    -> plan entry commandIndex=i
+    -> entry.executionCapability (or undefined)
+    -> manager.start(command, ..., context with per-command cap)
+
+  NOT a parallel perCommandExecutionCapabilities[] array.
+  NOT a text-match (`find entry where hardenedCommand === command`).
+
+OPTION A: APPROVED.
+C1: GO.
+
+NEXT (after reviewer sign-off on this C1-CORRECTION01):
+  C2 GREEN of THIS ACT: add executionCapability to
+  CommandExecutionPlanEntry; plumb per-entry capability through
+  the SDK shell tool's fanout; add reviewer-mandated P0
+  discriminators (wrong-neighbor, missing-entry-fails-closed,
+  shorter-list-cannot-shift, extra-cmd-cannot-inherit,
+  denied-never-starts, metadata-cannot-manufacture).
+
+THEN resume ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+with createOnlyRoots=[canonical DARWIN_USER_TEMP_ROOT] through the
+proven per-command channel.

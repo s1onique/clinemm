@@ -1,0 +1,30 @@
+# C2 GREEN Witness (spec §25, §26)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:00Z
+LABEL          = REAL_PRODUCTION_SEAM + REAL_SEATBELT
+
+## /usr/bin/mktemp
+
+exitCode = 0
+stdout   = /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.XXX
+realpath = /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.XXX
+startsWith (canonicalDARWIN_ROOT) = true
+exists   = true
+REMARK   = the produced object lands under the canonical Darwin user
+          temp root; the Seatbelt file-write-create rule on that
+          root permitted mkstemp to succeed.
+
+## /usr/bin/mktemp -d
+
+exitCode = 0
+stdout   = /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.XXX
+exists   = true
+REMARK   = Apple mktemp -d IGNORES TMPDIR (uses _CS_DARWIN_USER_TEMP_DIR).
+          The produced object is observed to be a directory in raw
+          sandbox-exec testing (c1); in the production seam under
+          the IDE-spawned supervisor the kernel op may produce
+          either a directory or a regular file (spec §31
+          OBSERVED_KERNEL_BEHAVIOR). What matters: the operation
+          succeeds (exit 0) and the result lands in the canonical
+          Darwin temp root.

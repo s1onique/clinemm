@@ -1,0 +1,37 @@
+=== REAL_PRODUCTION_SEAM QUALIFICATION (CORRECTION01) ===
+
+Classification: REAL_PARSER_HELPER + REAL_PRODUCTION_BUNDLE
+AST comes from the vendored mvdan/sh helper, NOT a hand-built fixture.
+
+[1] LIVE 5-leaf && chain through the real parser:
+  git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v
+
+  decision:    allow
+  disposition: auto-approve-eligible
+  source:      risk_v2_structured_promotion
+  reasons:     ["structured-max-risk:auto-approve-eligible:all-branches-safe"]
+
+  PASS: V2 promotion fires for the LIVE command (real parser)
+
+[2] LIVE mixed-risk sentinel:
+  git status --short && git branch -D __CLINEMM_SENTINEL__
+
+  decision:    ask
+  disposition: ask
+  source:      host_mode_safe_only_fallthrough
+
+  PASS: sentinel stays ASK (mutating leaf blocks promotion)
+
+[3] BUNDLE PRESENCE CHECK
+
+  bundle path:    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/dist/runtime/command-policy/command-risk-internal.js
+  bundle size:    30636 bytes
+  bundle sha256:  f5eddceaee8e957726ef9dfa5c09b991ce20e9b78a523bcf4518110ce01dfa70
+  contains host_safe_echo_parsed_argv: true
+
+  PASS: rebuilt SDK bundle contains the argv-semantic echo classifier
+
+=== VERDICT ===
+PASS - REAL_PRODUCTION_SEAM QUALIFICATION SUCCEEDED
+NEXT STEP for true LIVE: dogfood the rebuilt VSIX in the user's installed VSCodium
+and verify no approval card is shown for the exact live command above.

@@ -1,0 +1,56 @@
+# C4 Artifact Identity (spec §50, CORRECTION04)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T12:32Z
+
+DOGFOOD_SOURCE_HEAD = 2b8ddca86...
+DOGFOOD_SOURCE_TREE = (HEAD detached; worktree removed by build script)
+SOURCE_VERSION      = 4.1.10
+DOGFOOD_VERSION     = 4.1.10-2b8ddca86
+VSIX_PATH           = dist/dogfood/clinemm-4.1.10-2b8ddca86.vsix
+VSIX_BYTES          = 14404002
+VSIX_SHA256         = 11e926a0d68b2562b6941ec28e0ca203ea72c980fbc1140d4e3a1ab3d2baddbd
+
+Predecessor artifact SHAs (sanity chain):
+  clinemm-4.1.10-d51a33328.vsix (C2 main)
+  clinemm-4.1.10-327f68dcc.vsix (CORRECTION03)
+  clinemm-4.1.10-2b8ddca86.vsix (CORRECTION04 - this)
+
+CORRECTION04 production files (only additive changes):
+  sdk/packages/core/src/runtime/command-policy/command-execution-plan.ts
+    - resolveExecutableRealpath() gated behind
+      matchedRuleSource === "host_safe_mktemp_default_temp"
+    + __c2RealpathCallCount + _getC2RealpathCallCount + _resetC2RealpathCallCount
+      (test instrumentation only; no production behavior delta)
+
+CORRECTION04 test files:
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-ablation-conservation.test.ts
+    - Network test: REWRITTEN as controlled live-listener causal pair
+      * parent binds 127.0.0.1:<ephemeral>
+      * CONTROL: truly unsandboxed child_process.spawn (not runRealStart;
+        runRealStart routes through the Seatbelt backend even with no cap)
+      * TEST: sandboxed runRealStart under the same Seatbelt capability
+      * failure modes:
+        CONTROL fails to receive TOKEN -> CAPTURE_INSUFFICIENT
+        TEST receives TOKEN -> CAUSAL_DENY_VIOLATION (real C2 fail)
+        TEST does NOT receive TOKEN -> NETWORK_DENY = CAUSAL
+    - Parser-helper test: REWRITTEN as git-diff invariant
+      * `git diff d51a33328..HEAD -- parser-helper/` MUST be empty
+      * ENTRY_HEAD frozen at d51a33328 (C2 main commit)
+  sdk/packages/core/src/runtime/command-policy/command-execution-plan.test.ts
+    + CORRECTION04 narrowing tests (3):
+      * non-mktemp plan entries perform ZERO realpathSync calls
+      * mktemp rule entry performs EXACTLY ONE realpathSync call
+      * mixed [mktemp, pwd] performs EXACTLY ONE realpathSync call
+        (only for mktemp)
+
+PARSER HELPER subtree SHA at HEAD: empty (parser-helper subtree not in
+the repository; git diff invariant: parser-helper subtree diff between
+C2 main (d51a33328) and CORRECTION04 (2b8ddca86) is empty).
+
+Kernel-side wiring preserved verbatim from C2 / C3:
+  CommandCapability.createOnlyRoots
+  buildCreateOnlyAllowRule + (allow file-write-create (subpath ...))
+  canonicalizeSandboxRoot gate
+  capabilityFromJobExecution exhaustive switch
+  assertNeverExhaustiveCapabilityKind

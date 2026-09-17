@@ -1,0 +1,27 @@
+=== REAL_PRODUCTION_SEAM qualification (CORRECTION03) ===
+TMP_ROOT: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction03-ws8wFP
+PROJECT_DIR: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction03-ws8wFP/project
+
+PASS  allow  source=risk_v2_structured_promotion                  echo hello | head -30
+        expected: allow
+        note: pathless composition
+PASS  allow  source=risk_v2_structured_promotion                  pwd && head -30
+        expected: allow
+        note: pathless composition with &&
+PASS  allow  source=risk_v2_structured_promotion                  head -30
+        expected: allow
+        note: standalone stdin-only reader
+PASS  allow  source=risk_v2_structured_promotion                  ls /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction03-ws8wFP/project/inside/ok.ts | head -30
+        expected: allow
+        note: inside-workspace + operand-bound realpath evidence
+PASS  ask    source=host_mode_safe_only_fallthrough               ls /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction03-ws8wFP/project/inside/ok.ts | head -30
+        expected: ask
+        note: no evidence
+PASS  ask    source=host_mode_safe_only_fallthrough               ls /etc/passwd | head -30
+        expected: ask
+        note: CORRECTION03 HALT: pipe operand != evidence operand
+PASS  ask    source=host_mode_safe_only_fallthrough               ls /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction03-ws8wFP/outside | head -30
+        expected: ask
+        note: symlink escape pipe + matching (uncontained) evidence
+
+=== RESULT: 7/7 pass, 0 fail ===

@@ -1,0 +1,80 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01
+patch-delta
+================================================
+
+File 1: sdk/packages/core/src/extensions/context/compaction-shared.ts
+Function: findCutIndex
+Lines: 386-419 (pre-patch) -> 386-441 (post-patch)
+Delta: 43 lines changed (21 inserted, 12 removed, 10 modified)
+
+Pre-patch:
+    const lastTurnStartIndex = findLastTurnStartIndex(messages);
+    let cut =
+        lastTurnStartIndex > 0
+            ? Math.min(candidate, lastTurnStartIndex)
+            : candidate;
+    while (cut > 0 && !isSafeCutBoundary(messages[cut])) {
+        cut -= 1;
+    }
+    return cut;
+
+Post-patch:
+    const lastTurnStartIndex = findLastTurnStartIndex(messages);
+    let cut: number;
+    if (lastTurnStartIndex > 0 && lastTurnStartIndex > candidate) {
+        cut = lastTurnStartIndex;
+    } else {
+        cut = candidate;
+    }
+    // Snap-walk FORWARD from `cut` to the nearest safe boundary at or after `cut`.
+    while (cut < messages.length && !isSafeCutBoundary(messages[cut])) {
+        cut += 1;
+    }
+    // If the snap-forward ran off the tail, fall back to walking BACKWARD.
+    if (cut >= messages.length) {
+        cut = candidate;
+        while (cut > 0 && !isSafeCutBoundary(messages[cut])) {
+            cut -= 1;
+        }
+    }
+    if (cut <= 0) {
+        return 0;
+    }
+    return cut;
+
+Algorithm change summary:
+  OLD: Math.min(candidate, lastTurnStartIndex) -> backward snap to latest typed-user.
+  NEW: forward snap only when typed-user is past candidate; otherwise keep candidate.
+       Forward snap-walk replaces backward snap-walk.
+       Backward snap-walk retained as fallback when forward runs off the tail.
+
+File 2: sdk/packages/core/src/extensions/context/compaction.test.ts
+Test: "summarizes older messages and keeps recent messages" (line 1522)
+Lines: 1637-1668 (pre-patch) -> 1637-1675 (post-patch)
+Delta: 27 lines changed (15 modified, 12 re-written)
+Rationale: test was pinned to OLD less-aggressive behavior (cut=4, length=5).
+           New contract produces cut=7, length=2; typed-user prompt now goes into
+           the summary instead of being preserved verbatim. Updated assertions:
+           - length=5 -> length=2
+           - messages[1] === "Implement the change" -> summaryContent contains
+             "Implement the change" (folded into summary)
+           - messages[4] === assistant("Recent assistant state") -> messages[1]
+           - readFiles: [] -> readFiles: ["/tmp/example.ts"] (tool_use now folded)
+           - userRunSpan: 2 -> userRunSpan: 3 (deeper fold)
+
+File 3: sdk/packages/core/src/extensions/context/compaction.cut-snap-forward.test.ts
+New file: 146 lines
+Purpose: regression guards R1-R6 covering the reviewer's geometric lattice
+
+Public API impact:
+  - compaction-shared.ts: findCutIndex signature unchanged
+    (messages, preserveRecentTokens, estimateMessageTokens) -> number
+  - Public barrel exports unchanged
+  - No @cline/core barrel exports touched
+  - No types changed
+  - No external dependencies added
+
+Build impact:
+  - @cline/core package build: clean
+  - apps/vscode typecheck: clean
+  - webview-ui: not touched (UI unchanged)

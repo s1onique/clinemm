@@ -1,0 +1,43 @@
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+entry-freeze
+
+ENTRY_HEAD        = 7542d1972317ac3d0a08e39540787c387f69ad1a
+ENTRY_TREE        = 57d7e6d5e9d5fa3ce193c4544549dd8b33c133ad
+ORIGIN_MAIN       = f81a8ec016096567cb01a672853d24a64323d8b7
+BRANCH            = main
+WORKTREE_CLEAN    = true (excluding .factory/evidence/* which is gitignored)
+GIT_DIFF_CHECK    = clean
+PREVIOUS_VERDICT  = predecessor ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01 = CLOSED_HALTED_CLEAN
+
+Freeze of the predecessor ACT's durable kernel proof:
+  DARWIN temp root identity       PROVEN  (canonical /private/var/folders/.../T)
+  TMPDIR insufficiency            PROVEN
+  file-write-create sufficient    PROVEN
+  overwrite denied                PROVEN
+  unlink denied                   PROVEN
+  rename denied                   PROVEN
+  workspace conservation          PROVEN
+  ablation                        PROVEN
+
+Binding seam (policy decision -> executor capability) = MISSING.
+This ACT is opened to prove the transport seam only.
+
+SCOPE_OF_THIS_ACT:
+  - transport-only proof
+  - synthetic zero-privilege marker
+  - NO Seatbelt profile change
+  - NO command-policy change
+  - NO parser-helper change
+  - NO actual sandbox permission delta
+  - target verdict: PASS_AUTHORITY_EXECUTION_CAPABILITY_BINDING / CLOSED_CLEAN
+
+HALT_TRIGGERS:
+  HALT_UNEXPECTED_TRACKED_DIRT
+  HALT_RED_NOT_REPRODUCED
+  HALT_BINDING_REQUIRES_GLOBAL_MUTABLE_STATE
+  HALT_BINDING_CORRELATION_AMBIGUOUS
+  HALT_BINDING_CROSSTALK
+  HALT_DENIED_INVOCATION_CAPABILITY_LEAK
+  HALT_BINDING_REQUIRES_PUBLIC_PROTOCOL_CHANGE
+  HALT_BINDING_PROBE_HAS_PRODUCTION_DELTA
+  CAPTURE_INSUFFICIENT

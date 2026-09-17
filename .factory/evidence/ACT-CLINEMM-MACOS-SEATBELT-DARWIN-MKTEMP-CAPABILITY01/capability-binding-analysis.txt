@@ -1,0 +1,102 @@
+# Capability-Binding Analysis (spec §10, §14)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01
+
+TIMESTAMP_UTC = 2026-08-26T00:19Z
+
+QUESTION (spec §10):
+  Does the executor already receive a trustworthy semantic discriminator
+  that says "this invocation was authorized as host_safe_mktemp_default_temp"
+  (or equivalent)?
+
+ANSWER:
+  PARTIAL. The semantic discriminator exists at the approval-evaluation
+  boundary but does NOT reach the capability construction site.
+
+EVIDENCE:
+
+  1. The policy decision carries `matchedRuleSource: "host_safe_mktemp_default_temp"`
+     AND `hostAuthorization.tempAuthorityEvidence.executableRealpath === "/usr/bin/mktemp"`.
+     See sdk/packages/core/src/runtime/command-policy/command-policy-types.ts:177
+     (matchedRuleSource on EvaluatedCommand) and command-execution-plan.ts:90
+     (matchedRuleSource propagates into CommandExecutionPlan).
+
+  2. SdkController.evaluateCommandToolApproval returns the full
+     {approved, decision, executionPlan, hostAuthorization} tuple
+     (apps/vscode/src/sdk/SdkController.ts:~478, see SPEC §10 cite).
+     The hostAuthorization.tempAuthorityEvidence is the strong identity
+     proof (realpath === "/usr/bin/mktemp").
+
+  3. sdk-interaction-coordinator.ts (~330) calls evaluateCommandToolApproval
+     and forwards executionPlan into the approval flow.
+
+  4. CommandJobManager.start(options: StartCommandJobOptions)
+     does NOT receive hostAuthorization or executionPlan.
+     StartCommandJobOptions has:
+       command, cwd, shell, env, waitBudgetMs, executionDeadlineMs,
+       maxOutputChars, maxRetainedOutputChars.
+     It does NOT carry policy-decision metadata.
+
+  5. The capability is built inside CommandJobManager.start() via
+     buildExperimentalReconCapability({cwd, workspaceRoots}) at
+     command-job-manager.ts:555. workspaceRoots comes from the
+     manager's constructor option (experimentalSandboxWorkspaceRoots),
+     not from any per-invocation policy decision.
+
+CONSEQUENCE:
+  The Darwin-temp authority cannot be granted inside the Seatbelt
+  profile generator without ALSO adding a plumbing path that carries
+  the policy-decision metadata from the evaluation boundary to the
+  capability construction site.
+
+  Per spec §10/§14:
+    > "We must not do this:
+    >    SeatbeltBackend.prepare()
+    >      → parse raw command text
+    >      → if it looks like /usr/bin/mktemp
+    >      → grant Darwin temp authority
+    >    That violates the established architecture:
+    >    sandbox consumes capability, not command-text heuristics"
+
+  Therefore the minimal correct path is:
+    a. Add `createOnlyRoots?: readonly string[]` to CommandCapability.
+       Semantics: allow creation of new filesystem objects within
+       canonical roots; does NOT imply modification/deletion of
+       existing objects.
+    b. Add an OPTIONAL `createOnlyRoots?: readonly string[]` field
+       to StartCommandJobOptions.
+    c. Plumb StartCommandJobOptions.createOnlyRoots into the
+       CommandCapability in command-job-manager.ts.
+    d. In SdkController, when evaluateCommandToolApproval returns
+       hostAuthorization.tempAuthorityEvidence with
+       executableRealpath === "/usr/bin/mktemp" AND
+       canonicalDefaultTempRoot, the controller passes
+       createOnlyRoots: [canonicalDefaultTempRoot] into the
+       CommandJobManager.start() call.
+    e. In seatbelt-profile.ts, emit
+         (allow file-write-create (subpath "<root>"))
+       for each createOnlyRoot.
+    f. Existing writableRoots / tempRoot rules remain unchanged
+       (additive, not replacement).
+    g. NEVER pass createOnlyRoots based on parsed command text
+       inside the backend; the discriminator is the
+       hostAuthorization.tempAuthorityEvidence from the
+       evaluated policy decision.
+
+  This binding:
+    - IS strictly execution-bound (the policy decision attached
+      to this specific tool invocation is the only path that
+      grants the authority).
+    - DOES NOT leak to arbitrary commands (only invocations
+      whose policy decision explicitly attached the evidence
+      get the create-only root).
+    - IS NOT a command-text parse inside the sandbox backend.
+
+HALT_MKTEMP_CAPABILITY_BINDING_UNAVAILABLE:
+  NOT triggered in the literal sense — the discriminator EXISTS.
+  But it is NOT REACHABLE from the capability site. The above
+  plumbing is required for the binding to be functional.
+
+C1 OUTCOME:
+  GO_CREATE_ONLY_CAPABILITY   (the kernel-op hypothesis is proven;
+                                the binding seam is identified and
+                                scoped to a minimal additive change)

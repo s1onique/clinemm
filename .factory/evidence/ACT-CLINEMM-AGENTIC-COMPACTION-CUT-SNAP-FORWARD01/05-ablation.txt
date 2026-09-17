@@ -1,0 +1,57 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01
+ABLATION
+================================================
+
+The RED cases already pin the necessity of the fix. The patch is a one-clause
+inversion. Per the ACT charter §18 "Strong ablations", we must prove
+necessity for the chosen class.
+
+The fix is necessary because:
+
+1. RED R1 (L1 long tool loop) FAILS pre-patch on the actual production code path.
+   The cut returned by findCutIndex on a 472-message live-shape fixture is 1
+   (collapsed by snap-clamp). The required cut is ~451 (token-budget walk
+   value). Difference: 450 messages reintroduced into the tail.
+
+2. RED R5 (L1 fold size) FAILS pre-patch: foldSize=1 << required foldSize>=400.
+
+3. Forward snap-walk is the right primitive: when candidate lands inside a
+   tool_result (unsafe), the old backward walk would walk back into the tool_use
+   (potentially collapsing the fold); the new forward walk goes past the
+   tool_result to the next safe boundary (the next assistant or typed-user).
+   In L1's case, candidate=451 is already on a safe boundary (assistant tool_use)
+   so forward walk returns immediately with cut=451.
+
+4. The fallback backward walk (when forward runs off the tail) is the same
+   atomicity-preserving logic as the OLD code — it just isn't the primary path.
+
+Ablation table:
+
+  Geometry                                           | Pre-patch | Post-patch | Required
+  ---------------------------------------------------+-----------+------------+----------
+  candidate 451, last typed-user 1 (L1)              | cut=1     | cut=451    | cut>=100
+  candidate 100, next typed-user 120                 | cut=100   | cut=120    | cut>=100 (forward snap ok)
+  candidate exactly on typed-user boundary           | cut=that  | cut=that   | unchanged
+  no later typed-user (sentinel 0)                   | cut=cand  | cut=cand   | unchanged
+  candidate inside inseparable tool pair             | nearest   | nearest    | atomicity preserved
+  candidate near preserved tail                      | cut=cand  | cut=cand   | no over-compact
+  initial user/system prefix                         | cut=0     | cut=0      | unchanged
+
+Pre-patch tests NOT broken by the fix:
+  - compaction.test.ts: 94 tests (1 was updated; 93 unchanged)
+  - budget-projection/project.test.ts: unchanged
+  - compaction.live.test.ts: unchanged
+  - compaction.working-context-ratio.test.ts: unchanged
+  - compaction.working-context-authority-publish.test.ts: unchanged
+  - compaction.real-producer-seam-red.test.ts: unchanged
+
+Pre-patch test UPDATED by the fix:
+  - compaction.test.ts:1522 "summarizes older messages and keeps recent messages"
+    - Pre-patch: cut=4, length=5, messages[1]===typed-user prompt
+    - Post-patch: cut=7, length=2, summary contains typed-user prompt
+    - Updated assertions reflect new contract (more aggressive fold; typed-user
+      prompt recoverable from summary)
+
+Necessity: REQUIRED (R1+R5 RED on the live shape).
+Sufficiency: PROVEN (R2-R6 GREEN; L1 reproduction now shows 86.7% reduction
+              approaching the 90% target).

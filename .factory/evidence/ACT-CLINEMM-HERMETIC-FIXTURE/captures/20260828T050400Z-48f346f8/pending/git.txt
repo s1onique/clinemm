@@ -1,0 +1,18 @@
+REPO=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD=1212c16a1d2bfc324f458c426f1c4b13b344205d
+TREE=71eb9b1069317743756fe826aae484b411af6cd7
+BRANCH=main
+--- STATUS ---
+M .factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md
+ M .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/hermetic-fixture/happy-path-matrix.json
+ M .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/hermetic-fixture/negative-matrix.json
+ M tools/factory/capture-approval-specimen.py
+ M tools/factory/hermetic-fixture/build.py
+ M tools/factory/hermetic-fixture/verify-happy.py
+ M tools/factory/hermetic-fixture/verify-negative.py
+?? .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/hermetic-fixture/ambiguity-matrix.json
+?? .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/hermetic-fixture/mismatch-matrix.json
+?? tools/factory/hermetic-fixture/verify-ambiguity.py
+?? tools/factory/hermetic-fixture/verify-mismatch.py
+--- STASH ---
+stash@{0}: On main: c2-green-and-c2-p1-delta

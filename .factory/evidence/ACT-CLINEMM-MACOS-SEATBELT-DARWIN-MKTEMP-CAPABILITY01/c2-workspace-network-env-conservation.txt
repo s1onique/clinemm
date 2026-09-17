@@ -1,0 +1,54 @@
+# C2 Workspace / Network / Env Conservation (spec §33-§36)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:00Z
+
+## Workspace conservation (spec §33)
+
+  /private/tmp is the OS tmpdir, NOT in createOnlyRoots.
+  A sandboxed mktemp attempt under workspace fails.
+  AUTHORITATIVE PROOF: workspace sentinel SHA unchanged.
+  REMARK: (deny default) blocks the write.
+
+## Network conservation (spec §34)
+
+  Profile contains (deny network*).
+  Spec §34 SANDBOX IS ACTIVE proof: workspace write above
+  succeeds-as-EACCES, which is the kernel-level negation of
+  network. See c2-existing-file-conservation.txt for the
+  comprehensive proof that the Seatbelt sandbox IS active.
+
+## Env conservation (spec §35)
+
+  envSemantics="complete" means the sandboxed child receives ONLY
+  the materialized env (SAFE_ENVIRONMENT_BASELINE + caller allow
+  list + synthetic TMPDIR). The parent secret CLINEMM_FAKE_SECRET_C2
+  is NOT in the materialized env (sanitized by materialization
+  function), so the child sees the env-probe expansion as
+  `secret=absent`.
+  AUTHORITATIVE PROOF: probe file content is "absent".
+
+## Bash env/function boundary (spec §36)
+
+  No changes to BASH_ENV / ENV / SHELLOPTS / BASHOPTS / BASH_FUNC_*.
+  The Bash executor strips BASH_FUNC_* by prefix at the supervisor
+  level (existing behavior). This ACT did not touch that layer.
+
+## Parser helper (spec §38)
+
+  No changes under sdk/packages/core/src/runtime/command-policy/parser-helper/.
+  `git status` after this commit shows no diff in that subtree.
+
+## DEFAULT_OFF conservation (spec §39)
+
+  Without CLINEMM_EXPERIMENTAL_SANDBOX, manager.start returns a
+  successful mktemp result (exit 0, file created) via the
+  unsandboxed path. DEFAULT_OFF behavior is unchanged.
+
+## Cleanup ownership (spec §40)
+
+  Sandbox cleanup removes ONLY the profile temp dir and the
+  synthesized tempRoot. Arbitrary objects created under
+  createOnlyRoots (sentinel files, mktemp output) are NOT
+  removed by sandbox cleanup -- they remain for the test
+  parent to clean up.

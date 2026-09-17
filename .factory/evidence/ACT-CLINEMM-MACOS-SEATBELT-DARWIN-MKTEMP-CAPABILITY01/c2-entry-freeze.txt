@@ -1,0 +1,61 @@
+# C2 Entry Freeze (spec §2)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T09:55Z
+
+ENTRY_HEAD       = 2babe1a377bc8ae0a49ccea9572d0a5ea3332339
+ENTRY_TREE       = c3b6e0204b71cb5ca2601563c73097cadb0d693e
+PARENT_ACT_HEAD  = 2babe1a37  (CORRECTION02 plan-required guard)
+GRANDPARENT_ACT  = f9b73a4c4  (CORRECTION01 typed-channel separation)
+
+BRANCH           = main
+WORKTREE_CLEAN   = true (git status --porcelain=v1 --untracked-files=all empty)
+PREFLIGHT        = git diff --check HEAD -- empty
+
+# Unexpected tracked/nonignored dirt check:
+HALT_UNEXPECTED_TRACKED_DIRT = NOT_TRIGGERED
+
+# Predecessor invariants (spec §3) frozen; do not reopen:
+#   ToolApprovalResult.executionCapability:       legacy factory-binding-probe only
+#   CommandExecutionPlanEntry.executionCapability: full InternalExecutionCapability
+#   AgentToolContext.executionCapability:          legacy tool-call channel
+#   AgentToolContext.perCommandExecutionCapability: real per-command channel
+#   no plan + real legacy cap:                     ZERO starts  (legacy guard)
+#   no plan + ANY per-command cap:                 ZERO starts  (CORRECTION02 guard)
+#   valid plan:                                    exact positional correlation required
+#   correlation mismatch:                          ZERO starts
+#   model/toolCall.metadata:                       cannot populate either authority channel
+
+PRECONDITIONS:
+  typed channel            PASS  (CORRECTION01)
+  plan-required runtime guard PASS  (CORRECTION02)
+  per-command correlation  PASS  (C1 + CORRECTION01)
+  kernel primitive         PASS  (C1 file-write-create matrix)
+
+RECON ANCHOR POINTS FROZEN:
+  grant point              = sdk/packages/core/src/runtime/command-policy/command-execution-plan.ts
+                             buildCommandExecutionPlan()
+                             lines 87-91 (profile-less entry push)
+                             lines 96-101 (profile-having entry push)
+  capability consumer      = apps/vscode/src/sdk/command-job-manager.ts
+                             start() line 568  buildExperimentalReconCapability()
+                             line 575         backend.prepare({ capability, ... })
+                             line 706-709     jobExecutionCapability (per-command typed)
+  capability type          = sdk/packages/core/src/runtime/sandbox/types.ts
+                             CommandCapability interface line 115
+                             (needs new createOnlyRoots?: readonly string[])
+  profile generator        = sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts
+                             generateSeatbeltProfile() line 252
+                             buildWriteRule() line 195
+                             (needs new file-write-create emission for createOnlyRoots)
+  seatbelt backend         = sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts
+                             prepare() line 108  (canonicalizes every path)
+                             (needs createOnlyRoots canonicalization block)
+
+POLICY RULE (C1 frozen):
+  source    = "host_safe_mktemp_default_temp"
+  pattern   = /^\s*(?:\/usr\/bin\/)?mktemp(?:\s+-d)?\s*$/u
+  decision  = ALLOW on darwin when host evidence present (executableRealpath === /usr/bin/mktemp
+              AND canonicalDarwinUserTempRoot non-empty); ASK otherwise.
+
+EVIDENCE_PATH = .factory/evidence/ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01/

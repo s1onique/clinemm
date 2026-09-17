@@ -1,0 +1,96 @@
+ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 -- C3 test gates
+
+FOCUSED RED-CLOSED TESTS
+========================
+
+bash.supervised.bash-startup-env.test.ts (11 tests, all PASS):
+
+  RED CLOSED: BASH_ENV startup file does NOT run before the
+  authorized command (5 forms):
+    - /usr/bin/mktemp (slash-form AUTO): sentinel empty
+    - /usr/bin/mktemp -d:                   sentinel empty
+    - pwd (general):                        sentinel empty
+    - echo hello (general):                 sentinel empty
+    - /usr/bin/mktemp -d /tmp/foo.XXXXXX:   sentinel empty
+      (template ASK candidate; same path)
+
+  RED CLOSED: ENV (POSIX sh analogue) startup file does NOT run
+  before the authorized command (1 form):
+    - pwd with ENV=<file>: sentinel empty (defensive filter)
+
+  CONSERVATION: ordinary env is preserved (3 tests):
+    - PATH inheritance works
+    - TERM inheritance works
+    - caller-supplied env (config.env) is preserved over inherited
+
+  CONSERVATION: envSemantics='complete' (sanitized Seatbelt)
+  bypasses the filter (1 test):
+    - sanitized Seatbelt path: caller env passed AS-IS,
+      filter does NOT touch it
+
+  CONSERVATION: BASH_FUNC_* is NOT stripped (1 test):
+    - Exported shell functions inherited; CORRECTION03 slash-bypass
+      is the channel that neutralizes them for command-identity
+
+LEGACY SUPERVISOR TESTS
+=======================
+
+bash.supervised.test.ts: 7 PASS / 0 FAIL (unchanged)
+
+SDK CORE FULL SUITE
+===================
+
+sdk/packages/core full vitest:
+  3137 PASS / 16 SKIP / 0 FAIL across 209 files
+  (was 3109 / 16 SKIP / 0 FAIL pre-ACT (post-CORRECTION03 closed);
+   +11 tests, 0 regression)
+
+APPS/VSCODE COMMAND-POLICY SUITE
+================================
+
+apps/vscode policy/approval/sandbox/sdk-tool-policies suites:
+  - sdk-interaction-coordinator.parser-helper.test.ts:  PASS
+  - session-auto-approval.test.ts:  PASS
+  - command-job-manager.test.ts:  PASS
+  - command-job-manager.sandbox-c3-real-kernel.test.ts:  PASS
+    (Seatbelt mktemp composition is GREEN regression check;
+     this ACT is executor-side only; sandbox path is
+     orthogonal and unaffected)
+  - sdk-tool-policies.test.ts:  PASS
+  109/109 PASS across the 5 files combined (unchanged)
+
+LINT + TYPECHECK + BUILD
+========================
+
+bun run build:sdk:
+  @cline/shared, @cline/llms, @cline/agents, @cline/core, @cline/sdk
+  all exited with code 0
+
+apps/vscode bun run check-types:
+  tsc --noEmit exit 0 (biome format pass, biome lint pass)
+
+apps/vscode bun run compile:
+  biome format pass, biome lint pass, tsc pass, proto-lint pass
+  exit 0
+
+git diff --check: clean
+
+NO PRODUCTION SEAM DELTA FOR NON-BASH-STARTUP ENV
+=================================================
+
+The strip is narrowly scoped to:
+  BASH_ENV, ENV, SHELLOPTS, BASHOPTS
+
+Nothing else is touched. Ordinary env (PATH, TERM, LANG, ...),
+caller-supplied env, exported shell functions, and Seatbelt
+sanitized mode are all unchanged.
+
+COMPOSITION WITH PRIOR ACTS
+===========================
+
+CORRECTION01 host-evidence-bound rule:           INTACT
+CORRECTION02 strict-identity-bound rule:         INTACT
+CORRECTION03 slash-bypass rule:                  INTACT
+CORRECTION04 (SafeExecutionProfile mktemp):      INTACT
+Seatbelt mktemp composition:                     INTACT
+Command-policy conservation (1044 tests):        PASS

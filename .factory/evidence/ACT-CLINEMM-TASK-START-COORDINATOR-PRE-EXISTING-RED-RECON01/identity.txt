@@ -1,0 +1,14 @@
+ACT_ID=ACT-CLINEMM-TASK-START-COORDINATOR-PRE-EXISTING-RED-RECON01
+ENTRY_HEAD=aafafeedf89a12b741d41ddef18868ebd44b395a
+ENTRY_TREE=c7d3ad5716ffae81a23b9931132d4e4472cc5044
+BRANCH=main
+ORIGIN_MAIN=aafafeedf89a12b741d41ddef18868ebd44b395a
+IMPLEMENTATION_HEAD=b45c4c714 (test fixture repair)
+DOCS_HEAD=31fbfa30e (board row 24 added)
+FINAL_HEAD=31fbfa30e85e6f8f5d12f13f1c5b80c5d4e44c4e (board entry)
+WORKTREE_STATUS=clean (untracked files belong to ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01, not this ACT)
+VERDICT=PASS_TASK_START_COORDINATOR_STALE_TEST_REPAIR_V1
+DATE=2026-08-30
+COMMIT_CADENCE=
+  commit 1: b45c4c714 (test fixture repair + G11 strict-shape relaxation)
+  commit 2: 31fbfa30e (docs(factory) board entry)

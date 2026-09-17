@@ -1,0 +1,105 @@
+ACT_ID=ACT-CLINEMM-APPROVAL-REJECTION-CORRELATION-FAIL-CLOSED-RECON01
+TIMESTAMP=2026-09-01T20:27:34Z
+REPO_HEAD=507fdd890
+OWNER=APPROVAL / COMMAND-AUTHORITY / SESSION-AUTONOMY
+EPIC=EPIC-APPROVAL-PROTECTION (board row 19 sister; command-policy
+     lane closed at 507fdd890; this ACT is the rejection-correlation
+     lane)
+
+PRIMARY_EPISTEMIC_PURPOSE=VERIFY_APPROVAL_IDENTITY_AND_REJECTION_CORRELATION
+CLASS=RECON_FIRST / SECURITY_BOUNDARY
+
+PRIORITY:
+  P0_IF_REPRODUCED
+  P1_HIGH_IF_STRUCTURAL_ONLY
+
+CAUSE=UNKNOWN (treated as radar-only per upstream #10783)
+
+PRODUCTION_REPAIR=NOT_AUTHORIZED
+
+UPSTREAM_RADAR=cline/cline#10783
+  "Approval prompt is bypassed when the agent retries the same
+   command after the user rejected it the first time"
+  (paraphrased — exact text fetched separately; semantic core:
+   reject-then-retry-of-same-action executes without a second prompt.)
+
+CAUSAL_DISTINCTION=
+  NOT a duplicate of ACT-CLINEMM-COMMAND-APPROVAL-AUTHORITY-FAIL-
+  CLOSED-RECON01 (which proved model-supplied requires_approval=
+  false cannot lower the lattice).
+  THIS ACT asks: can approval/rejection state from request X
+  incorrectly authorize or suppress approval for request Y?
+
+EXPECTED_FIRST_OUTPUT=
+  1. entry-freeze.txt                  (this file)
+  2. Q1-Q12 recon                      → approval-seam-map.md
+  3. trust model                        → trust-model.md
+  4. ONE R1 discriminator test          → command-policy-authority-
+                                         fail-closed-recon01-sister
+                                         test file OR new test file
+                                         (decided after recon)
+  5. executable result
+  6. classification                     → final-report.md
+  7. ACT body                           → ACT-CLINEMM-APPROVAL-
+                                         REJECTION-CORRELATION-FAIL-
+                                         CLOSED-RECON01.md
+
+STOP_RULE=
+  R1 GREEN at the correlation seam (force-routed via ALWAYS_ASK)
+    → CORRELATION_HYPOTHESIS_ELIMINATED, STOP at THIS layer.
+      Note: NOT equivalent to "full #10783 product immunity";
+      see SCOPE_CALIBRATION below. Correlation defect is one
+      plausible root-cause class; the upstream report does not
+      pin which class is the actual root.
+  R1 RED with exact correlation defect bound → ROOT_CAUSE_ISOLATED
+    (within the correlation layer; product-level still open).
+  Cannot exercise real approval seam     → HALT_WRONG_PRODUCTION_SEAM.
+  Correlation key ambiguous              → CAPTURE_INSUFFICIENT.
+
+SCOPE_CALIBRATION=
+  Source: causal-reviewer P1 scope-fix (post-closure review).
+
+  EVIDENCE_CLASS = SYNTHETIC_REAL through REAL_PRODUCTION_SEAM
+    (not bare REAL_PRODUCTION_SEAM, because:
+     - the request identities are synthetic,
+     - the UI responses are synthetic (resolvePendingToolApproval
+       called directly, no webview button),
+     - the auto-approve / policy decision is synthetic
+       (shouldAutoApproveTool = ALWAYS_ASK forces every retry
+       into the interactive correlation seam — the test
+       deliberately excludes the policy/auto-approve path
+       BEFORE the coordinator).
+
+  PROVEN:
+    APPROVAL_REJECTION_CORRELATION = PROVEN_FAIL_CLOSED
+      reject A → new request B → if B requires approval
+      → B receives a fresh approval prompt
+    NO_APPROVAL_CACHE_BY_PAYLOAD = PROVEN
+    STALE_RESPONSE_REPLAY       = PROVEN_BLOCKED
+
+  NOT YET PROVEN:
+    UPSTREAM_10783_PRODUCT_LEVEL_REPRODUCTION:
+      reject A → real retry path → real auto-approval/policy
+      decision → real interaction coordinator → must prompt again.
+      A retry could bypass the coordinator entirely if
+      shouldAutoApproveTool(B) returns true, which this test
+      deliberately excludes.
+
+  VERDICT = APPROVAL_REJECTION_CORRELATION_PROVEN
+          / CORRELATION_DEFECT_NOT_REPRODUCED
+  UPSTREAM_10783 = CORRELATION_HYPOTHESIS_ELIMINATED
+                / PRODUCT-LEVEL IMMUNITY NOT YET PROVEN
+
+  NO new test, NO production change, NO new review round.
+  Test `0bbf3c1d7` keeps its epistemic job (it eliminated one
+  plausible root-cause class); do not count #10783 as fully
+  neutralized yet.
+
+SCOPE=
+  In: approval prompt → reject → retry/replay/new-request correlation
+      in run_commands / execute_command (host approval gate).
+  Out: command-risk lattice (closed at 507fdd890).
+  Out: editor-tool approval (row 19 OPEN).
+  Out: MCP approval (deferred to #10499 ACT).
+  Out: long-session freeze lane.
+  Out: approval UI redesign, Seatbelt, model/provider.

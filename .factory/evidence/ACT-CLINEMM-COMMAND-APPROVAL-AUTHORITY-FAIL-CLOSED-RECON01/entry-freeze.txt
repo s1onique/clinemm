@@ -1,0 +1,80 @@
+ACT_ID=ACT-CLINEMM-COMMAND-APPROVAL-AUTHORITY-FAIL-CLOSED-RECON01
+TIMESTAMP=2026-09-01T22:55:00Z
+REPO_HEAD=2993ec4e1
+OWNER=SAFE-YOLO / COMMAND-RUNTIME / APPROVAL-AUTHORITY
+EPIC=EPIC-APPROVAL-PROTECTION (board row 19 sister; command-policy lane)
+
+PRIMARY_EPISTEMIC_PURPOSE=VERIFY_COMMAND_APPROVAL_AUTHORITY
+CLASS=RECON_FIRST / SECURITY_BOUNDARY
+
+PRIORITY:
+  P0_IF_REPRODUCED
+  P1_HIGH_IF_STRUCTURAL_ONLY
+
+CAUSE=UNKNOWN (treated as radar-only per upstream #12020)
+
+PRODUCTION_REPAIR=NOT_AUTHORIZED
+
+UPSTREAM_RADAR=cline/cline#12020
+  "destructive shell commands run without approval when the model sets
+   requires_approval=false"
+
+CLINEMM_DOCTRINE (frozen from production source):
+  command-policy.ts:120 composition rule is the ONLY model-driven branch.
+  It ONLY checks `effectiveEscalation` (true iff ANY component hint is true).
+  It ONLY fires on allow -> ask (the raise direction).
+  There is no mirror branch that lowers friction.
+
+EXPECTED_OUTCOMES:
+  CASE_A (fail-closed / not-vulnerable): A3 GREEN
+  CASE_B (model hint waives approval): would be RED (we expect NOT to see)
+
+EXECUTABLE_RUN_AT=2026-09-01T23:03:00Z
+EXECUTABLE_RUN_AT_CORRECTED=2026-09-01T23:30:00Z (per Factory causal reviewer round 1)
+EXECUTABLE_RUN_AT_WORDING_FIX=2026-09-01T23:45:00Z (per Factory causal reviewer round 2)
+EXECUTABLE_RUNNER=bun test (bun 1.3.13)
+EXECUTABLE_RESULT=30 pass, 0 fail, 68 expect() calls
+
+LOAD_BEARING_CASES:
+  A3' (SAFE_ONLY lane — DIRECT upstream #12020 reproduction):
+    SAFE_ONLY + unknown-command + model=false ⇒ ASK (positive matcher refused)
+    SAFE_ONLY + rm -rf $HOME (R5 catastrophic) + model=false ⇒ ASK
+    SAFE_ONLY + rm -rf / (R5 root-destruction) + model=false ⇒ ASK
+  A3'' (YOLO lane — STRONGER ClineMM conservation, not #12020):
+    ALL + rm -rf $HOME (R5 catastrophic) + model=false ⇒ ASK (R5 hard floor)
+    ALL + rm -rf / (R5 root-destruction) + model=false ⇒ ASK (R5 hard floor)
+
+ORIGINAL_A3_DEMOTED_TO_CONSERVATION (round 1):
+  Original A3 used mode:"manual" which is tautological (every command
+  asks under MANUAL regardless of classification). Per Factory causal
+  reviewer 2026-09-01 round 1, A3 demoted to a conservation witness;
+  load-bearing surface moved to A3' (SAFE_ONLY, direct #12020) and
+  A3'' (YOLO + R5, stronger ClineMM conservation).
+
+PROOF_RECALIBRATION (round 2):
+  Direct invocation of evaluateCommandRiskWithParser() is not the
+  same as executing the full host-adapter authority chain end to
+  end. Per Factory causal reviewer round 2, evidence is now framed
+  as a composed proof:
+    STRUCTURAL (ACT §8 — production callsite at sdk-tool-policies.ts:633)
+    +  SYNTHETIC_REAL (this discriminator — functional entry point)
+    =  COMPOSED PROOF
+
+SCOPE_FREEZE:
+  PROVEN:
+    model-supplied requires_approval=false
+    cannot waive ClineMM host-required command approval
+  NOT PROVEN BY THIS ACT (out of scope):
+    approval identity / replay safety
+    reject-then-retry correlation
+    cross-command approval reuse
+    (see upstream #10783 et al.)
+
+ENVIRONMENT_NOTE:
+  vitest (vitest 4.1.10) via `bun x vitest` fails to resolve `zod` import
+  in this local shell (`TypeError: undefined is not an object (evaluating
+  'z.string')`). This affects ALL command-policy tests under vitest,
+  not just this ACT's. The issue is environment-specific; bun's
+  built-in test runner resolves imports correctly and is the AGENTS.md-
+  sanctioned path for command-policy/ tests per
+  `.clinerules/bun-and-node.md`.

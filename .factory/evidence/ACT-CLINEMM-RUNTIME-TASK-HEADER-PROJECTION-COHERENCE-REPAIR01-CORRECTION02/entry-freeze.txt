@@ -1,0 +1,53 @@
+ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION02
+entry-freeze
+                                                                          (2026-08-31)
+
+ENTRY_HEAD  = c1c357ccf
+              "fix(sdk): ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-
+               COHERENCE-REPAIR01 - shadow-vs-legacy generation-skeew
+               repair at the publication selectors"
+DOCS_HEAD   = de4066829
+              "docs(factory): ACT-CLINEMM-RUNTIME-TASK-HEADER-
+               PROJECTION-COHERENCE-REPAIR01 - board row update"
+ORIGIN_HEAD = 7caca443b
+BRANCH      = main
+WORKTREE    = clean (excluding .factory/evidence/ which is local)
+
+REVIEWER HALT (from the Factory reviewer)
+  P0 — HALT_SEQ_DOMAIN_IDENTITY_NOT_PROVEN.
+  The previous repair compared two unrelated sequence counters:
+    - TurnStateTracker.seq  (advances on every setTurnPhase())
+    - TaskShadowComparator.seq  (advances on every shadow observation)
+  Different event cardinalities → `5 > 2` does not establish
+  chronology between them. The RED tests manufactured the
+  assumption by hand, encoding the same invalid identity.
+
+PURPOSE OF THIS CORRECTION
+  Bounded single-axis correction. Stamp the shadow's last
+  observation with the **TurnStateTracker.seq** at observation
+  time (the SAME domain the publication uses). Then the
+  selector compares within the TurnState domain only.
+
+  The previous unrelated-counter surface (debugObservedSeq /
+  getLastObservedShadowSeq / canonicalShadowSeq input) is
+  REMOVED. Replaced by:
+
+    canonicalShadowObservedTurnSeq?: number
+    observed under input.seq > canonicalShadowObservedTurnSeq
+
+  Both sides are now in the **TurnState sequence domain**.
+
+PROTECTED LANES (unchanged from REPAIR01)
+  R0 execution-obligation   = CLOSED
+  R5 manual approval        = WATCH_ONLY
+  Multi-element cardinality = CLOSED
+  FORENSICS01               = HALTED historical
+
+LANE STATUS BEFORE CORRECTION
+  REPAIR01 committed but the seq-domain identity is invalid.
+  This correction replaces the invalid seq-source with the valid
+  one and re-runs the RED/GREEN cycle.
+
+LANE STATUS AFTER CORRECTION (target)
+  PASS / REPAIR01_COMMITTED_CORRECTION02
+  LIVE_QUALIFICATION=LIVE_UNAVAILABLE

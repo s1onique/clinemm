@@ -1,0 +1,61 @@
+# C3 Artifact Identity (spec §50, CORRECTION03)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:59Z
+
+DOGFOOD_SOURCE_HEAD = 327f68dcce98f91ad9552733fbfa4700ddfef56b
+DOGFOOD_SOURCE_TREE = (HEAD detached; worktree removed by build script)
+SOURCE_VERSION      = 4.1.10
+DOGFOOD_VERSION     = 4.1.10-327f68dcc
+VSIX_PATH           = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.10-327f68dcc.vsix
+VSIX_BYTES          = 14404077 (13.74 MB)
+VSIX_SHA256         = 950f6cb97c35201600ff102664a0bdffe3829c46789d0addb94c0076144b8885
+
+Build provenance:
+  python3 scripts/build-dogfood-vsix.py --force
+  worktree: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-dogfood-XXXX/worktree
+  source head at build time = 327f68dcce98f91ad9552733fbfa4700ddfef56b
+  working tree clean at build time: yes (git status empty)
+  preflight: git diff --check empty
+
+Predecessor artifact SHAs (sanity chain):
+  clinemm-4.1.10-d51a33328.vsix: 26a7732f59893254f8b411b943612d6f7b326e1b8899edf4c290a992e343ea0a (pre-CORRECTION03)
+  clinemm-4.1.10-327f68dcc.vsix: 950f6cb97c35201600ff102664a0bdffe3829c46789d0addb94c0076144b8885 (CORRECTION03)
+
+Diff: ~341 bytes vs predecessor (additive — production grant seam +
+real upstream GREEN test + hardened weak evidence tests + removed
+perCommandExecutionCapability snapshot leak + deleted stray `---`).
+
+CORRECTION03 production files (additive only):
+  sdk/packages/core/src/runtime/command-policy/command-policy-types.ts
+    + export function buildFilesystemCreateOnlyCapabilityForCommand
+  sdk/packages/core/src/runtime/command-policy/command-execution-plan.ts
+    + third optional arg hostAuthorization
+    + calls buildFilesystemCreateOnlyCapabilityForCommand per entry
+  sdk/packages/core/src/runtime/command-policy/command-execution-plan.test.ts
+    + 8 grant-seam tests
+  apps/vscode/src/sdk/sdk-tool-policies.ts
+    + threads hostAuthorization into planBuilder
+    + planBuilder override signature adds hostAuthorization arg
+  apps/vscode/src/sdk/command-job-manager.ts
+    - REMOVED perCommandExecutionCapability from CommandJobSnapshot
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-green.test.ts
+    REWRITTEN to start at real authorization (not forged cap)
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-kernel-matrix.test.ts
+    T11 replaced: real positive witness via env-probe file
+    T31 hardened: no try/catch swallowing
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-ablation-conservation.test.ts
+    Network test: real causal /dev/tcp probe (no longer mktemp)
+    Parser-helper test: real SHA over git-tracked files
+  ---
+    DELETED (was stray shell artifact; verified absent post-commit)
+
+PARSER HELPER subtree SHA at HEAD: empty (parser-helper subtree not in
+the repository; SHA = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855).
+
+Kernel-side wiring preserved verbatim from C2 main:
+  CommandCapability.createOnlyRoots
+  buildCreateOnlyAllowRule + (allow file-write-create (subpath ...))
+  canonicalizeSandboxRoot gate
+  capabilityFromJobExecution exhaustive switch
+  assertNeverExhaustiveCapabilityKind

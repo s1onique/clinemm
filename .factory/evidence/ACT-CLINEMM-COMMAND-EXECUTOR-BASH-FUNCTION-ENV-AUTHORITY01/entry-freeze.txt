@@ -1,0 +1,95 @@
+ACT-CLINEMM-COMMAND-EXECUTOR-BASH-FUNCTION-ENV-AUTHORITY01
+
+ENTRY_FREEZE
+
+REPOSITORY_ROOT=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH=main
+
+ENTRY_HEAD=622baa703 (C3 of BASH-STARTUP-ENV-AUTHORITY01)
+ORIGIN_MAIN=7f1ff13d9 (unchanged)
+
+TRACKED_WORKTREE_STATUS=clean
+(known gitignored evidence dirs in .factory/ are exempt)
+
+PREDECESSOR VERDICT (BASH-STARTUP-ENV-AUTHORITY01):
+  Status:     CLOSED_CLEAN per C3 docs(factory):C3
+  Verdict:    PASS_BASH_STARTUP_ENV_AUTHORITY
+  Strip set:  BASH_ENV, ENV, SHELLOPTS, BASHOPTS
+  Strip semantics: exact-name match
+  Out of scope: BASH_FUNC_* (reviewer reopened)
+
+REVIEWER DISPOSITION (BASH-FUNCTION-ENV-AUTHORITY01)
+  HALT_AUTHORIZED_BASH_FUNCTION_ENV_UNBOUND
+
+  The earlier "conservation" test for BASH_FUNC_* was
+  structurally wrong: shell parameter expansion parses
+  `$BASH_FUNC_mktemp%%` as variable `$BASH_FUNC_mktemp`
+  followed by literal `%%`, so the test reported non-empty
+  without proving that an imported function actually ran.
+
+  Even if the test had been valid, the slash-bypass
+  rationale only applies to slash-prefixed commands.
+  Bare `pwd`, `git`, `ls`, etc. are still shadowable by
+  exported functions in the parent env, because bash
+  imports the function from `BASH_FUNC_<name>%%` at
+  non-interactive startup and gives it precedence over
+  builtin/PATH lookup (per GNU Bash Reference Manual,
+  Shell Functions).
+
+  Causal mismatch:
+    policy authorized C = "pwd" (general AUTO)
+    bash exec: function pwd (imported) > builtin pwd
+              > PATH lookup pwd (none of these run)
+    imported function executes BEFORE the policy-authorized
+    command can
+
+  This is a general executor-boundary defect, not mktemp-
+  specific, and is broader than the C2 strip set covered.
+
+SCOPE OF THIS ACT
+=================
+
+  Goal: Close the inherited exported-function shadow channel
+        for the production Bash executor (under DEFAULT_OFF /
+        overlay env semantics).
+
+  Approach: extend the existing strip filter in
+            sdk/packages/core/src/extensions/tools/executors/bash.ts
+            to also strip any name with the `BASH_FUNC_` prefix
+            from the inherited process.env layer BEFORE the
+            spread-merge.
+
+  Strip semantics: prefix-match (not enumerable). The function
+                  name space is unbounded, so a prefix match is
+                  the only safe approach. The matching prefix
+                  `BASH_FUNC_` is the documented bash encoding
+                  per GNU Bash Reference Manual, Shell Functions.
+
+CONSERVATION
+============
+
+  Seatbelt sanitized mode         CONSERVED (closed by construction
+                                       on envSemantics:complete)
+  DEFAULT_OFF ordinary env        otherwise preserved
+  stdout/stderr/exit/cancel       CONSERVED
+  command-policy                  UNCHANGED
+  parser helper                   UNCHANGED
+  auth/approval lattice           UNCHANGED
+  CORRECTION03 slash-bypass       CONSERVED (slash-prefixed commands
+                                       run as pathnames regardless
+                                       of inherited functions)
+
+OUT OF SCOPE
+============
+
+  - Filter on config.env (the caller-supplied layer): the
+    production caller is apps/vscode/src/sdk/vscode-run-commands-tool.ts:640
+    which passes `env: { SHELL: shell }` where `shell` comes
+    from `getShellInvocation()` (a fixed host mapping,
+    /bin/bash on Unix, powershell on Windows). NOT user/tool
+    controlled. Provenance FROZEN.
+  - linux mktemp support (separate ACT)
+  - mktemp template forms (separate ACT)
+  - executor-side transformedInput plumbing (separate ACT)
+  - other bash function-exporting variables (none documented
+    beyond BASH_FUNC_<name>%%)

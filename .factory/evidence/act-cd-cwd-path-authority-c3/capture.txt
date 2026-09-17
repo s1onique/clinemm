@@ -1,0 +1,94 @@
+ACT-CLINEMM-COMMAND-RISK-V2-CD-CWD-PATH-AUTHORITY-COMPOSITION01 C3 capture
+========================================================================
+
+SOURCE_IDENTITY
+  REPOSITORY_ROOT: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+  BRANCH:          main
+  SOURCE_HEAD:     260dd6c91b7b0bf7f0ed931f24c427e02f041ac0
+  SOURCE_TREE:     d66c64ee7a77d7302e96d05a2965627e14ea1679
+  ORIGIN_MAIN:     38282d13d0274843a7141d676c99f83c729bacd5
+  AHEAD_BY:        9 commits (C1, C2, plus 7 historical ACTs)
+  WORKTREE:        clean (post-C2)
+  PARSER_HELPER_PROTOCOL_VERSION: 4
+  PARSER_HELPER_SHA256 (darwin-arm64): 874741a388b621596b59cf75c7d59c62cf919931d7f164174a60b1920d7df1d3
+  ALL_5_PLATFORM_SHAS match SOURCE VENDORED_ARTIFACTS_BINDING.json (sourceHead=5904e8760)
+
+ARTIFACT_IDENTITY
+  VERSION:          4.1.10
+  PACKAGE_NAME:     clinemm-4.1.10-cd-cwd-path-authority
+  VSIX_PATH:        apps/vscode/dist/clinemm-4.1.10-cd-cwd-path-authority.vsix
+  VSIX_BYTES:       14394546
+  VSIX_SHA256:      10308f78db1f5c61af012427f4143eb3dc4e694632f8f0a5573fbfac877ce750
+  BUNDLED_PARSER_HELPER_SHA256 (darwin-arm64 inside VSIX): 874741a388b621596b59cf75c7d59c62cf919931d7f164174a60b1920d7df1d3
+  bundled helper SHA == source helper SHA: YES
+
+  VENDORED_ARTIFACTS_BINDING.json (apps/vscode/bin/parser-helper):
+    darwin-arm64: 874741a388b621596b59cf75c7d59c62cf919931d7f164174a60b1920d7df1d3 (2618786 bytes)
+    darwin-amd64: 26a313d12b586c2ab6055ed6ebb27c7caab2a9f59d12be204a35b7d8398af603 (2712800 bytes)
+    linux-amd64:  fcd2eb73c68e00c1cac721b45a576608ee75208d421c9f4dd2209beedfc9c2f2 (2539704 bytes)
+    linux-arm64:  71d5abda09be248c606b213b9447be747ef655b992ec924747234445d02fc5c3 (2425016 bytes)
+    win32-x64:    96f5e3421cd33c091848a480e970a3d2637a85daea743e76956101ffc96d15db (2641408 bytes)
+
+BUILD_PIPELINE
+  bun run sync-parser-helper          (5 platform binaries copied, SHAs match)
+  bun run check-types                 (exit 0; pre-existing TS errors inherited, not new)
+  bun esbuild.mjs --production        (extension.js bundled into apps/vscode/dist/extension.js)
+  bunx vsce package                   (clinemm-4.1.10-cd-cwd-path-authority.vsix created, 50 files, 13.73 MB)
+
+BUNDLED_PROOF_OF_C2_CODE
+  $ grep -c "host_safe_cd_workspace_transition|realpath-failed-not-a-directory|cwdTransitionCount" extension/dist/extension.js
+  4
+  $ grep -o ... extension/dist/extension.js
+  cwdTransitionCount
+  host_safe_cd_workspace_transition
+  realpath-failed-not-a-directory
+
+TEST_GATES
+  C1 frozen RED reproduction:    3 tests RED -> ALLOW post-C2 (in updated test file)
+  C2 GREEN suite:                 23 tests PASS in structured-command-risk.cd-cwd-authority.test.ts
+  sdk/packages/core command-policy/ suite: 976/976 PASS
+  apps/vscode unit tests:         1076/1076 PASS
+  Helper bytes UNCHANGED:         source SHA = bundled SHA = 874741a388b621596b59cf75c7d59c62cf919931d7f164174a60b1920d7df1d3
+
+PRODUCTION_GATES_PASS
+  - quote-pattern-provenance01 ACT regression: unchanged (find quoted-pattern tests still pass)
+  - reader-path-authority ACT regression: unchanged (path-authority-realpath tests still pass)
+  - stderr-devnull-neutral ACT regression: unchanged (redirect stderr 2>/dev/null tests still pass)
+  - pipeline-leaf-composition ACT regression: unchanged (pipeline head/tail tests still pass)
+  - quoted-pattern-provenance CORRECTION01 (find -- root -delete): still ASK
+  - R5 hard floor: cd && rm -rf "$HOME" -> never-auto-approve (verified in E + F sections)
+  - dangerous sibling: cd && git branch -D __CLINEMM_SENTINEL__ -> ASK (verified in F section)
+
+EVIDENCE_CLASSIFICATION
+  parser probe:         REAL_PRODUCTION_SEAM (vendored v4 helper)
+  RED reproduction:     REAL_PRODUCTION_SEAM (vendored v4 helper + buildPathAuthorityEvidence)
+  GREEN verification:   REAL_PRODUCTION_SEAM (vendored v4 helper + buildPathAuthorityEvidence)
+  cwd propagation:      REAL_PRODUCTION_SEAM (vendor v4 helper + StructuredProgram AST)
+  conservation (R5):    REAL_PRODUCTION_SEAM (risk hard-floor matcher)
+  ablation:             SYNTHETIC (code-read of cwdCompositionEligible gate logic)
+
+L1-L4 LIVE QUALIFICATION
+  L1 (cd <inside> && pwd)            : LIVE_UNOBSERVABLE -- not installed in this environment
+  L2 (cd <inside> && find . ...)     : LIVE_UNOBSERVABLE
+  L3 (cd <inside> && find . | head)  : LIVE_UNOBSERVABLE
+  L4 (cd <inside> && head -20 .factory/epic-board.md) : LIVE_UNOBSERVABLE
+  Negative (cd /tmp && pwd)          : LIVE_UNOBSERVABLE
+  Negative (cd "$HOME" && pwd)       : LIVE_UNOBSERVABLE
+
+  The harness here is headless and does not include the VS Code
+  extension-host UI flow. The bundled VSIX is built and verified;
+  the user must install it and observe the auto-approval cards
+  in the editor UI for L1-L4 (and the ASK prompt for the negative
+  cases) to upgrade from LIVE_UNOBSERVABLE to LIVE_VERIFIED.
+
+  Until LIVE_VERIFIED, the strongest non-LIVE evidence is the
+  REAL_PRODUCTION_SEAM harness output:
+    23/23 PASS in structured-command-risk.cd-cwd-authority.test.ts
+  which drives the full pipeline
+    MvdanShHelper.invoke() -> evaluateCommandRiskWithParser()
+  against the vendored v4 helper binary.
+
+  Production contract: when installed and run inside VS Code with
+  a real workspace open, the cd commands above will produce the
+  observed decisions because the production code path is identical
+  to the test pipeline.

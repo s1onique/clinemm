@@ -1,0 +1,80 @@
+ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-POST-RESULT-CONTINUATION-RECON01
+P1_POST_RESULT_CONTINUATION_SCHEDULING — discriminator probe run log
+(CORRECTION01 — reviewer P1 fix applied; semantic-invariant oracle,
+non-strict bookkeeping)
+
+HEAD: 610091e584b9ed10132a51f18423a19a5046fd0c
+Test: sdk/packages/agents/src/agent-runtime.task-progression-post-result-continuation-recon01.test.ts
+
+Command:
+  cd sdk/packages/agents
+  bunx vitest run --config vitest.config.ts \
+    src/agent-runtime.task-progression-post-result-continuation-recon01.test.ts
+
+Output (abridged):
+  RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/agents
+
+   ✓ src/agent-runtime.task-progression-post-result-continuation-recon01.test.ts (1 test) 6ms
+
+  Test Files  1 passed (1)
+       Tests  1 passed (1)
+    Duration  1.77s
+
+(EPERM on forks-worker kill is a sandboxed-shell cleanup artifact,
+unrelated to the test outcome; the test itself ran and asserted
+inside the worker.)
+
+Directly-related suites, re-run together with the discriminator to
+prove no collateral damage:
+
+  ✓ src/agent-runtime.task-progression-post-result-continuation-recon01.test.ts (1 test) 6ms
+  ✓ src/agent-runtime.execution-state.test.ts (22 tests) 15ms
+  ✓ src/agent-runtime.outcome-integration.test.ts (17 tests) 45ms
+  ✓ src/agent-runtime.test.ts (64 tests) 55ms
+
+  Test Files  4 passed (4)
+       Tests  104 passed (104)
+
+Verdict: GREEN
+
+  P1_POST_RESULT_CONTINUATION_SCHEDULING = CONSERVED
+
+  The AgentRuntime.execute() while loop iterates past tool-result
+  publication into a second model request that observes the tool
+  message in its `messages` array, emits `turn-started { iteration: 2 }`
+  on the canonical AgentRuntimeEvent surface, and reaches
+  `result.status === "completed"` — i.e. one of:
+    A. continuation is requested/entered   <-- OBSERVED
+    B. task intentionally transitions to a documented terminal state
+    C. an explicit error is surfaced
+  not a silent stall.
+
+Typecheck gate:
+  cd sdk/packages/agents
+  bunx tsc --noEmit -p tsconfig.json     -> clean
+  bunx tsc --noEmit -p tsconfig.dev.json -> clean
+
+Lint gate:
+  cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+  bunx biome check --write
+    sdk/packages/agents/src/agent-runtime.task-progression-post-result-continuation-recon01.test.ts
+  -> no remaining errors after auto-fix
+
+Production source delta: ZERO
+Test added: 1 file (≈150 lines including imports + helpers + assertions
++ CORRECTION01 narrative comments; ≤50 line discriminator body — the
+`describe` + `it` block).
+
+CORRECTION01 semantic-invariant oracle:
+  continuationObserved flag flipped by second scripted step
+  model.requests.length >= 2
+  turnStartedIterations contains 1 AND some(n > 1)
+  result.status === "completed"
+  result.outputText === "after-tool"
+
+NOT asserted (per reviewer P1):
+  exact listener cardinalities (model.requests.length === 2)
+  exact internal counters (turnStartedIterations === [1, 2])
+  exact object identity
+  exact number of TurnState writes
+  result.iterations === 2 (dropped entirely)

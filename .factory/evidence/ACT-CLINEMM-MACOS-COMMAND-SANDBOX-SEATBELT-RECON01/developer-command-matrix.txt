@@ -1,0 +1,153 @@
+=== ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01 developer-command-matrix ===
+Date: 2026-08-25T00:04:43Z
+INSIDE: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside
+Profile (used for all): /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/git-no-home.sb
+   (allow file-read* (require-not $HOME/.ssh / $HOME/.aws / $HOME/.gnupg))
+   (deny network*)
+   (allow file-write* inside, /dev, /tmp)
+
+--- D1: pwd ---
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside
+  rc=0
+
+--- D2: ls ---
+total 16
+drwxr-xr-x@ 7 chistyakov  staff  224 Aug 25 03:03 .
+drwxr-xr-x@ 5 chistyakov  staff  160 Aug 25 02:58 ..
+lrwxr-xr-x@ 1 chistyakov  staff   10 Aug 25 02:58 link-out -> ../outside
+-rw-r--r--@ 1 chistyakov  staff   16 Aug 25 02:58 readable.txt
+drwxr-xr-x@ 4 chistyakov  staff  128 Aug 25 03:03 repo
+drwxr-xr-x@ 3 chistyakov  staff   96 Aug 25 02:59 subdir
+-rw-r--r--@ 1 chistyakov  staff   18 Aug 25 03:01 writable.txt
+  rc=0
+
+--- D3: find . ---
+.
+./writable.txt
+./subdir
+./subdir/inside-deep.txt
+./link-out
+./repo
+./repo/a.txt
+./repo/.git
+./repo/.git/config
+./repo/.git/objects
+./repo/.git/objects/pack
+./repo/.git/objects/info
+./repo/.git/objects/dc
+./repo/.git/objects/dc/d2b9657587e5371c5b2410185c068acca7dc4d
+./repo/.git/objects/ce
+./repo/.git/objects/ce/013625030ba8dba906f756967f9e9ca394464a
+./repo/.git/objects/2e
+./repo/.git/objects/2e/81171448eb9f2ee3821e3d447aa6b2fe3ddba1
+./repo/.git/HEAD
+./repo/.git/info
+./repo/.git/info/exclude
+./repo/.git/logs
+./repo/.git/logs/HEAD
+./repo/.git/logs/refs
+./repo/.git/logs/refs/heads
+./repo/.git/logs/refs/heads/main
+./repo/.git/description
+./repo/.git/hooks
+./repo/.git/hooks/commit-msg.sample
+./repo/.git/hooks/pre-rebase.sample
+./repo/.git/hooks/sendemail-validate.sample
+./repo/.git/hooks/pre-commit.sample
+./repo/.git/hooks/applypatch-msg.sample
+./repo/.git/hooks/fsmonitor-watchman.sample
+./repo/.git/hooks/pre-receive.sample
+./repo/.git/hooks/prepare-commit-msg.sample
+./repo/.git/hooks/post-update.sample
+./repo/.git/hooks/pre-merge-commit.sample
+./repo/.git/hooks/pre-applypatch.sample
+./repo/.git/hooks/pre-push.sample
+./repo/.git/hooks/update.sample
+./repo/.git/hooks/push-to-checkout.sample
+./repo/.git/refs
+./repo/.git/refs/heads
+./repo/.git/refs/heads/main
+./repo/.git/refs/tags
+./repo/.git/index
+./repo/.git/COMMIT_EDITMSG
+./readable.txt
+  rc=0
+
+--- D4: rg TODO . ---
+  rc=1
+
+--- D5: git status ---
+On branch main
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   a.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+  rc=0
+
+--- D6: git diff --stat ---
+ a.txt | 1 +
+ 1 file changed, 1 insertion(+)
+  rc=0
+
+--- D7: git log --oneline -5 ---
+dcd2b96 first
+  rc=0
+
+--- D8: git fetch (network denied) -- expect DENY ---
+  rc=0
+--- D8b: git fetch with explicit remote (network denied) -- expect DENY ---
+  rc=128
+
+--- D9: cat OUTSIDE (negative control via require-not profile, OUTSIDE not excluded) -- expect PASS (this is a finding) ---
+OUTSIDE-SECRET
+  rc=0
+
+--- D10: env (sample of env-var leak, no filtering expected) ---
+HOME=/Volumes/UserData/Users/chistyakov
+HOMEBREW_CELLAR=/opt/homebrew/Cellar
+HOMEBREW_PREFIX=/opt/homebrew
+HOMEBREW_REPOSITORY=/opt/homebrew
+NIX_PATH=/Volumes/UserData/Users/chistyakov/.nix-defexpr/channels:nixpkgs=/nix/store/ds6zw8983xm46y10dq7aswqkgmry968q-source
+NIX_PROFILES=/nix/var/nix/profiles/default /run/current-system/sw /etc/profiles/per-user/chistyakov /Volumes/UserData/Users/chistyakov/.nix-profile
+NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+NIX_USER_PROFILE_DIR=/nix/var/nix/profiles/per-user/chistyakov
+PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/Volumes/UserData/Users/chistyakov/.nix-profile/bin:/etc/profiles/per-user/chistyakov/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/Ghostty.app/Contents/MacOS
+SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.ScrpzaHuHe/Listeners
+USER=chistyakov
+  rc=0
+
+--- D11: ps (process visibility) ---
+  rc=0
+
+--- D12: kill -0 $$ (signal-self probe) ---
+SIGNAL_SELF_OK
+  rc=0
+
+--- D13: write to /tmp (private temp) ---
+/bin/sh: /tmp/probe-temp-write-20573.txt: Operation not permitted
+  rc=1
+--- D13b: write to /tmp with explicit file-write* (subpath /tmp /private/tmp) ---
+HELLO
+  rc=0
+
+--- D11b: ps (with proc_info allowance) ---
+sandbox-exec: execvp() of '/bin/ps' failed: Operation not permitted
+  rc=0
+
+--- D14: rg with --no-config (config-independent) ---
+ripgrep 15.1.0
+
+features:+pcre2
+simd(compile):+NEON
+simd(runtime):+NEON
+
+PCRE2 10.45 is available (JIT is available)
+  rc=0
+
+--- D15: rg with HOME redirected ---
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/readable.txt:inside-readable
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/subdir/inside-deep.txt:inside-subdir
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/writable.txt:inside-writable
+  rc=0

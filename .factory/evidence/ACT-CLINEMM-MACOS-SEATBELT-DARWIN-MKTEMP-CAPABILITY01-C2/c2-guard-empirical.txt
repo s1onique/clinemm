@@ -1,0 +1,206 @@
+ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 -- C2 GUARD GREEN EMPIRICAL EVIDENCE
+
+================================================================================
+VERDICT: PASS_LEGACY_GUARD_CLOSED_CLEAN_COMMITTED
+================================================================================
+
+GUARD implementation lands BEFORE any real authority-bearing capability
+is attached. Type split + runtime guard ensure real filesystem authority
+cannot leak through the legacy tool-call channel when the union is widened
+with `FilesystemCreateOnlyCapability`.
+
+================================================================================
+REVIEWER-PRESCRIBED RED/GREEN MATRIX (all PROVEN, 6/6 PASS)
+================================================================================
+
+GUARD-1: no plan + factory-binding-probe  -> legacy behavior PASS
+  - toolCallCap = factory-binding-probe("legacy-probe")
+  - executionPlan = absent
+  - result.status === "completed", starts.length > 0
+  - all starts receive toolCallCap
+  - PASS
+
+GUARD-2: no plan + filesystem-create-only -> ZERO starts / fail closed
+  - realCap = filesystem-create-only(roots=[DARWIN_USER_TEMP_ROOT])
+  - executionPlan = absent
+  - BYPASS type split (test only) -- simulates the leak attempt
+  - starts.length === 0
+  - PASS
+
+GUARD-2-NEGATIVE: no plan + no executionCapability -> legacy behavior preserved
+  - no capability, no plan
+  - result.status === "completed", starts.length > 0
+  - all starts receive undefined
+  - PASS
+
+GUARD-3: plan [filesystem-create-only, undefined] -> job[0] real, job[1] none
+  - entry[0].executionCapability = real filesystem-create-only
+  - entry[1].executionCapability = undefined
+  - starts[0].executionCapability === realCap (filesystem-create-only)
+  - starts[1].executionCapability === undefined (no fallback)
+  - PASS
+
+GUARD-4: plan with two real entries -> both flow to their respective jobs
+  - entry[0] filesystem-create-only(roots=[/dir_a])
+  - entry[1] filesystem-create-only(roots=[/dir_b])
+  - starts[0].executionCapability === capA
+  - starts[1].executionCapability === capB
+  - PASS (positional binding, not text-based)
+
+GUARD-5: plan with filesystem-create-only but mismatch -> ZERO starts
+  - Plan order [A,B], model emits [B,A] (reorder with equal cardinality)
+  - Both entries have real filesystem-create-only capability
+  - starts.length === 0 (correlation guard fires before real-capability flow)
+  - PASS
+
+================================================================================
+IMPLEMENTATION CONTRACT
+================================================================================
+
+(1) TYPE SPLIT (compile-time defense):
+
+  leaves:
+    FactoryBindingProbeCapability = { kind: "factory-binding-probe", correlationId: string }
+    FilesystemCreateOnlyCapability = { kind: "filesystem-create-only", roots: ReadonlyArray<string> }
+
+  legacy tool-call channel (factory-binding-probe ONLY):
+    ToolCallExecutionCapability = FactoryBindingProbeCapability
+
+  full union (used by per-command channel):
+    InternalExecutionCapability = FactoryBindingProbeCapability | FilesystemCreateOnlyCapability
+
+  field assignments:
+    ToolApprovalResult.executionCapability:     ToolCallExecutionCapability
+    AgentToolContext.executionCapability:      ToolCallExecutionCapability
+    PreparedToolExecution.executionCapability: ToolCallExecutionCapability
+    CommandExecutionPlanEntry.executionCapability: InternalExecutionCapability
+
+(2) RUNTIME GUARD (actual security boundary):
+
+  In executeShellCommands, BEFORE Promise.all:
+    if (perCommandCaps === null && context.executionCapability !== undefined) {
+      if (context.executionCapability.kind !== "factory-binding-probe") {
+        throw new Error("real_execution_capability_requires_per_command_plan: ...");
+      }
+    }
+
+  This enforces: the legacy tool-call channel may carry ONLY the synthetic
+  probe (or nothing). Any other kind requires a per-command execution plan.
+
+  The runtime guard is the actual security boundary; TypeScript narrows
+  the type system but the runtime defends against JSON deserialization,
+  future code paths that bypass the type check, or any cast that slips
+  through review.
+
+(3) CAST AT EXECUTOR BOUNDARY:
+
+  When perCommandCaps !== null, the per-command context widens back to the
+  full union via an explicit cast at the executor boundary:
+    perCommandContext = { ...context, executionCapability: perCommandCaps[i] } as AgentToolContext
+
+  This is the ONLY place the cast exists. The boundary is documented in the
+  production code. The runtime guard at the top of the function has already
+  enforced the no-plan branch; here, when a plan IS present, the per-command
+  slot IS the authority-bearing channel (which is by design).
+
+================================================================================
+PRODUCTION DELTA (5 files, no out-of-scope changes)
+================================================================================
+
+  sdk/packages/shared/src/llms/tools.ts
+    - Split InternalExecutionCapability into FactoryBindingProbeCapability
+      and FilesystemCreateOnlyCapability as named leaves
+    - Added ToolCallExecutionCapability = FactoryBindingProbeCapability
+    - Narrowed ToolApprovalResult.executionCapability from
+      InternalExecutionCapability to ToolCallExecutionCapability
+    - Updated all comments
+
+  sdk/packages/shared/src/index.ts
+    - Exported FactoryBindingProbeCapability, FilesystemCreateOnlyCapability,
+      ToolCallExecutionCapability
+
+  sdk/packages/shared/src/agent.ts
+    - Narrowed AgentToolContext.executionCapability from
+      InternalExecutionCapability to ToolCallExecutionCapability
+    - Removed unused InternalExecutionCapability import
+    - Updated provenance-classified comment
+
+  sdk/packages/agents/src/agent-runtime.ts
+    - Narrowed PreparedToolExecution.executionCapability and the local
+      executionCapability capture from InternalExecutionCapability to
+      ToolCallExecutionCapability
+    - Added ToolCallExecutionCapability import
+    - Updated provenance-classified comment
+
+  sdk/packages/core/src/extensions/tools/definitions.ts
+    - Added the runtime guard before Promise.all:
+      if (perCommandCaps === null && context.executionCapability !== undefined
+          && context.executionCapability.kind !== "factory-binding-probe")
+        throw new Error("real_execution_capability_requires_per_command_plan: ...")
+    - Documented the cast at the executor boundary (per-command context
+      widens back to InternalExecutionCapability)
+
+================================================================================
+TEST DELTA (1 new, 5 updated)
+================================================================================
+
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-guard-green.test.ts
+    NEW (6 tests, 6/6 PASS, reviewer-prescribed RED/GREEN matrix)
+
+  apps/vscode/src/sdk/__tests__/execution-authority-per-command-binding01.c2-green.test.ts
+    UPDATED: capProbe return type narrowed from InternalExecutionCapability
+    to FactoryBindingProbeCapability so test markers are directly assignable
+    to the narrowed ToolApprovalResult.executionCapability slot.
+
+  apps/vscode/src/sdk/__tests__/execution-authority-per-command-binding01.c1-correction01-real-plan-red.test.ts
+    UPDATED: TRUSTED_TOOL_CALL_CAPABILITY narrowed to FactoryBindingProbeCapability;
+    buildRealUpstreamHarness.executionCapability parameter type narrowed similarly.
+
+  apps/vscode/src/sdk/__tests__/execution-capability-binding01.c2-green.test.ts
+    UPDATED: const marker narrowed to FactoryBindingProbeCapability.
+
+  apps/vscode/src/sdk/__tests__/execution-capability-binding01.c2-green-discriminator.test.ts
+    UPDATED: TRUSTED_A, EVIL_B, MARKER_INV_A, MARKER_INV_B narrowed to
+    FactoryBindingProbeCapability. EVIL_MARKER deliberately kept as
+    InternalExecutionCapability (the metadata-bypass test needs the wider
+    type to simulate a hostile model).
+
+  apps/vscode/src/sdk/__tests__/execution-capability-binding01.c2-green-multicmd-discriminator.test.ts
+    UPDATED: const marker narrowed to FactoryBindingProbeCapability.
+
+  apps/vscode/src/sdk/__tests__/execution-capability-binding01.c2-green-upstream.test.ts
+    UPDATED: TRUSTED_MARKER narrowed to FactoryBindingProbeCapability.
+
+================================================================================
+REGRESSION GATES (post-implementation)
+================================================================================
+
+  apps/vscode bun run check-types              PASS (0 errors)
+  binding + guard suites (7 files)              PASS (38/38 tests)
+  apps/vscode vitest run src/sdk/__tests__/     PASS (660/661 tests)
+  sdk/packages/agents bun run test              PASS (20/20 files, 387/387 tests)
+  git diff --check                              CLEAN
+
+Pre-existing flake: async-command-turn-liveness.acl01.test.ts failed once in
+the full-suite run (status === "running" instead of "done") due to background-
+job scheduling race in parallel test environment; PASSES 5/5 in isolation.
+Pre-existing and unrelated to this ACT.
+
+================================================================================
+NEXT (Darwin real capability)
+================================================================================
+
+The guard is now GREEN. The next step in ACT-CLINEMM-MACOS-SEATBELT-DARWIN-
+MKTEMP-CAPABILITY01-C2 is:
+
+  - Attach FilesystemCreateOnlyCapability(roots=[canonicalDarwinUserTempRoot])
+    ONLY to CommandExecutionPlanEntry.executionCapability for the
+    /usr/bin/mktemp plan entry
+  - Convert that internal capability at CommandJobManager / sandbox capability
+    construction into CommandCapability.createOnlyRoots = [root]
+  - Seatbelt profile emits the already-proven:
+      (allow file-write-create
+        (subpath "<canonical-root>"))
+
+No new Seatbelt recon needed; the real capability just flows through the
+proven per-command channel under the new union.

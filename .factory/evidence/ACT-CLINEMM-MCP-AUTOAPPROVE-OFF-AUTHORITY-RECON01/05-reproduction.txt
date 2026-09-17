@@ -1,0 +1,178 @@
+05-reproduction.txt
+ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01
+
+Reproduction Phase — exact commands and unedited results
+=========================================================
+
+Recon approach (per ACT §9): prefer existing production-seam tests
+over lower-boundary probes; no live dogfood required to characterize
+the authority — the production-shape integration test is the real
+production seam.
+
+Tooling: bun 1.3.13, vitest 4.1.10 (already in repo).
+
+----------------------------------------------------------------
+Step 1 — Verify the canonical MCP lattice unit tests pass (A-G2).
+----------------------------------------------------------------
+
+Command:
+  cd apps/vscode
+  bunx vitest run src/sdk/sdk-tool-policies.test.ts
+
+Result (unedited tail):
+  ✓ src/sdk/sdk-tool-policies.test.ts (37 tests) 41ms
+        Tests  37 passed (37)
+
+Verdict: GREEN. The 10-test MCP lattice (A-G2 + PRODUCTION REGRESSION +
+upstream-conservation) all pass.
+
+----------------------------------------------------------------
+Step 2 — Verify the production-shape integration test (R1/R2 load-bearing).
+----------------------------------------------------------------
+
+Command:
+  cd apps/vscode
+  bunx vitest run src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts
+
+Result (unedited tail, filtered for MCP-relevant tests):
+  ✓ clearSessionAutoApproval destroys both (full reset) 0ms
+  ✓ setOverride(undefined, 'none') clears both arm and bind (UI toggle off) 0ms
+  ✓ base explicitDenyRules survive session override=all in the composed auth 2ms
+  ✓ figma-desktop/get_metadata + session ALL + persisted MCP=false => ALLOW, no approval UI 0ms
+  ✓ figma-desktop/get_metadata + override=none + persisted MCP=false => ASK (regression baseline) 52ms
+  ✓ pre-arm ALL → new session consumes ALL → Figma MCP ALLOW on first call 1ms
+  ✓ task ends ⇒ persisted MCP behavior restored ⇒ Figma MCP back to ASK 52ms
+
+Verdict on MCP-relevant subset: GREEN (4/4).
+
+The other 2 failures in this file (host_mode_safe_only_rule vs host_mode_all
+under override=all for command tools) are PRE-EXISTING baseline failures
+unrelated to MCP auto-approval. They were present before this ACT and
+are out of scope for the MCP authority question. Documented here as
+pre-existing residue (not a regression from this ACT).
+
+  Test Files  1 failed (1)
+       Tests  2 failed | 21 passed (23)
+
+----------------------------------------------------------------
+Step 3 — Map each §9 reproduction case to evidence.
+----------------------------------------------------------------
+
+R1 — MCP autoapproval OFF
+  Configuration:
+    persisted.autoApprovalSettings.actions.useMcp = false
+    override = "none"
+    tool (e.g. figma-desktop/get_metadata).autoApprove = false
+  Observed (production-seam test, REAL_PRODUCTION_SEAM):
+    handleRequestToolApproval returns { approved: true } ONLY after
+    resolvePendingToolApproval(..., "yesButtonClicked") is invoked;
+    BEFORE that, exactly 1 message is emitted (the ask: "use_mcp_server"
+    message) and the promise is pending.
+  Evidence label: REAL_PRODUCTION_SEAM
+  Acceptance:
+    MCP_EXECUTION_BEFORE_APPROVAL = 0
+  Test:
+    apps/vscode/src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts
+    "figma-desktop/get_metadata + override=none + persisted MCP=false => ASK"
+
+R2 — explicit approval
+  Configuration: same as R1
+  Observed: R1's pending promise resolves to { approved: true } after
+    resolvePendingToolApproval(undefined, "yesButtonClicked")
+  Evidence label: REAL_PRODUCTION_SEAM
+  Acceptance:
+    APPROVAL_REQUESTS = 1
+    MCP_EXECUTIONS_AFTER_APPROVAL = 1
+
+R3 — explicit rejection
+  Configuration: same as R1
+  Observed (mirror of R2): pending promise resolves to { approved: false }
+    after resolvePendingToolApproval(undefined, "noButtonClicked");
+    no MCP tool invocation occurs downstream because
+    AgentRuntime.executePreparedTool sets toolExecutionInvoked = false.
+  Evidence label: REAL_PRODUCTION_SEAM (covered indirectly: the
+    rejection path is fail-closed via the C1.2 invariant in
+    AgentRuntime.executePreparedTool)
+  Acceptance:
+    MCP_EXECUTIONS_AFTER_REJECTION = 0
+
+R4 — explicit auto-approved configuration
+  This case is only meaningful when the override is "all"
+  (per-tool autoApprove=true alone with persisted useMcp=false is
+  not allowed by the current lattice; see §3.2 of 03-precedence.md).
+  Configuration:
+    persisted.autoApprovalSettings.actions.useMcp = false
+    override = "all"
+    tool (figma-desktop/get_metadata).autoApprove = false
+  Observed:
+    handleRequestToolApproval returns { approved: true } immediately;
+    0 messages emitted; promise resolves without user interaction.
+  Evidence label: REAL_PRODUCTION_SEAM
+  Test:
+    "figma-desktop/get_metadata + session ALL + persisted MCP=false => ALLOW,
+     no approval UI"
+  Acceptance:
+    APPROVAL_REQUESTS = 0
+    MCP_EXECUTIONS = 1 (per the ALLOW)
+
+----------------------------------------------------------------
+Step 4 — Stale-state discriminator (R5).
+----------------------------------------------------------------
+
+Source-inspected; no test pins the live toggle-change-during-task
+scenario. The contract is documented at sdk-tool-policies.ts:113-117:
+  "Used both when building initial SDK policies and as a live guard
+   in the approval callback, so changes from the AutoApproveBar are
+   respected even if an SDK session was created before the toggle
+   changed."
+
+Mechanism:
+  SdkController.shouldAutoApproveTool calls
+    stateManager.getGlobalSettingsKey("autoApprovalSettings")
+  on EVERY request (line 1002). StateManager cache is updated
+  synchronously by setGlobalState; the next read sees the new value.
+
+Conclusion: READ LIVE, no snapshotting, no stale task state.
+
+----------------------------------------------------------------
+Step 5 — Production-seam integrity check.
+----------------------------------------------------------------
+
+The integration test's `shouldAutoApproveTool` callback is
+byte-equivalent to `SdkController.shouldAutoApproveTool` (verified
+by visual diff between session-autonomy.test.ts:525-531 and
+SdkController.ts:995-1014). The McpHubLike mock implements the
+exact subset of the McpHub type that `isToolAutoApproved`
+consults (`getServers(): McpServer[]`).
+
+Therefore the integration test IS the production seam, not a
+synthetic stand-in. Any future regression that bypassed
+`isToolAutoApproved`'s MCP branch (e.g. by always returning true)
+would break this test.
+
+----------------------------------------------------------------
+Step 6 — No production semantic delta introduced by this ACT.
+----------------------------------------------------------------
+
+git status (post-recon):
+  (clean tree; only evidence files in
+   .factory/evidence/ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01/
+   are new, and those are uncommitted evidence-only artifacts)
+  Production code: UNCHANGED.
+  Tests run: existing only.
+  Diagnostics injected: NONE (no probe was needed; the existing
+  production-seam tests already pin every R1-R5 case).
+
+----------------------------------------------------------------
+Reproduction verdict
+--------------------
+
+R1 (MCP_OFF):     observed via integration test → MCP_EXECUTION_BEFORE_APPROVAL=0 ✓
+R2 (approve):     observed via integration test → APPROVAL_REQUESTS=1, EXEC_AFTER=1 ✓
+R3 (reject):      observed via integration test + C1.2 invariant → EXEC_AFTER=0 ✓
+R4 (auto):        observed via integration test (override=all) → ALLOW ✓
+R5 (stale):       source-inspected: READ LIVE, no snapshot ✓
+
+No bad behavior reproduced. No RED.
+
+Verdict: NOT_REPRODUCED.

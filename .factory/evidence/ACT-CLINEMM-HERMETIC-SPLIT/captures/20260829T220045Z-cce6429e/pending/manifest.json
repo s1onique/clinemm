@@ -1,0 +1,14 @@
+{
+  "act": "ACT-CLINEMM-HERMETIC-SPLIT",
+  "approvalActionPerformedByTool": false,
+  "captureId": "20260829T220045Z-cce6429e",
+  "capturedAt": "2026-08-29T22:00:45.501272Z",
+  "dataRoots": [
+    "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-split"
+  ],
+  "phase": "pending",
+  "readOnlyIntent": true,
+  "recentMinutes": 60,
+  "repo": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "schema": "cline-approval-specimen-capture/v2"
+}

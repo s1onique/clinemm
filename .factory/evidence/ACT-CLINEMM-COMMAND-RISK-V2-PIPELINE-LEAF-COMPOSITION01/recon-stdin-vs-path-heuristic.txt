@@ -1,0 +1,32 @@
+head
+  args=[] argProvenance=[] pathOperandCount=0
+head -30
+  args=["-30"] argProvenance=["static"] pathOperandCount=0
+head -n 30
+  args=["-n","30"] argProvenance=["static","static"] pathOperandCount=0
+head -c 100
+  args=["-c","100"] argProvenance=["static","static"] pathOperandCount=0
+head --
+  args=["--"] argProvenance=["static"] pathOperandCount=0
+head -n 30 --
+  args=["-n","30","--"] argProvenance=["static","static","static"] pathOperandCount=0
+tail -20
+  args=["-20"] argProvenance=["static"] pathOperandCount=0
+tail -n 20
+  args=["-n","20"] argProvenance=["static","static"] pathOperandCount=0
+head some-file
+  args=["some-file"] argProvenance=["static"] pathOperandCount=1
+head -30 some-file
+  args=["-30","some-file"] argProvenance=["static","static"] pathOperandCount=1
+head -n 30 some-file other-file
+  args=["-n","30","some-file","other-file"] argProvenance=["static","static","static","static"] pathOperandCount=2
+tail -20 some-file
+  args=["-20","some-file"] argProvenance=["static","static"] pathOperandCount=1
+cat some-file
+  args=["some-file"] argProvenance=["static"] pathOperandCount=1
+sort some-file
+  args=["some-file"] argProvenance=["static"] pathOperandCount=1
+uniq some-file
+  args=["some-file"] argProvenance=["static"] pathOperandCount=1
+wc -l some-file
+  args=["-l","some-file"] argProvenance=["static","static"] pathOperandCount=1

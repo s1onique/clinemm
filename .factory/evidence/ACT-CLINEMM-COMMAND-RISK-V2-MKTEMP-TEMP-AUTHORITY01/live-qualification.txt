@@ -1,0 +1,110 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- C3 LIVE QUALIFICATION
+
+EVIDENCE_LABELS:
+  COMMAND_POLICY_GREEN:      REAL_PRODUCTION_POLICY_SEAM
+  SEATBELT_EXECUTION:        REAL_PRODUCTION_EXECUTION_SEAM
+  INSTALLED_END_TO_END:      LIVE (composed)
+  CAPTURED_AT:              2026-08-26 00:56 (C3_HEAD = <this commit>)
+  ENTRY_HEAD:               7f1ff13d9 (CORRECTION01)
+  C1_HEAD:                  787f2b2d7
+  C2_HEAD:                  fac25e959
+
+==============================================================================
+SECTION 1: LIVE GREEN AT PRODUCTION POLICY SEAM
+==============================================================================
+
+Driver:  sdk/packages/core/src/runtime/command-policy/_live-qualification-c3.test.ts
+Function: evaluateCommandPolicy(toolInput, hostAuthorization=mode=safe-only,
+           explicitAllowRules=DEFAULT_COMMAND_HOST_ALLOW_RULES)
+
+=== POSITIVE ===
+mktemp            decisionKind=allow   matchedRuleSource=host_safe_mktemp_default_temp
+mktemp -d         decisionKind=allow   matchedRuleSource=host_safe_mktemp_default_temp
+
+=== NEGATIVE (must remain ASK) ===
+mktemp -u         decisionKind=ask    (NOT auto-approved)
+mktemp foo.XXXXXX decisionKind=ask    (NOT auto-approved)
+mktemp -p /tmp    decisionKind=ask    (NOT auto-approved)
+mktemp -t mypref  decisionKind=ask    (NOT auto-approved)
+mktemp /tmp/foo.X decisionKind=ask    (NOT auto-approved)
+TMPDIR=/x mktemp  decisionKind=ask    (NOT auto-approved)
+env TMPDIR=...    decisionKind=ask    (NOT auto-approved)
+
+==============================================================================
+SECTION 2: REAL_SEATBELT COMPOSITION GREEN
+==============================================================================
+
+Driver: apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+        ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01: temp capability GREEN
+
+Tests run (subset relevant to mktemp):
+  GREEN mktemp succeeds under the production resolver;
+    path is descendant of canonical TMPDIR            PASS
+  GREEN mktemp -d succeeds under the production resolver;
+    created dir is inside canonical TMPDIR             PASS
+  GREEN mktemp (and -d) under synthesized TMPDIR,
+    parent/sibling write conserves kernel denial        PASS
+  GREEN workspace write still KERNEL-DENIED             PASS (W01 conservation)
+  GREEN a sibling under the same parent canonical temp is
+    DENIED (no parent authority expansion)              PASS (N01 conservation)
+  GREEN synthesized temp root is removed after the
+    command exits (cleanup)                             PASS (CORRECTION01 P1)
+
+==============================================================================
+SECTION 3: COMPOSITION = POLICY -> EXECUTOR -> SEATBELT
+==============================================================================
+
+End-to-end UX closure:
+
+  interactive: mktemp
+  -> CommandRiskGate.evaluateCommandPolicy(...)
+       kind: "allow"
+       matchedRuleSource: "host_safe_mktemp_default_temp"
+  -> (no approval card for executeSafeCommands=true)
+  -> CommandJobManager.start(...)
+  -> SeatbeltSandboxBackendExperimental.prepare(...)
+       synthesizedTempRoot = /var/folders/.../T/clinemm-sandbox-temp-XXXXXX
+       canonical tempRoot via canonicalizeSandboxRoot(synthesizedTempRoot)
+       profile emits (allow file-write* (subpath "<canonical>"))
+       materializeEnvironment({ syntheticTempDir: tempRoot })
+  -> spawn: sandbox-exec -f <profile> /usr/bin/mktemp
+       TMPDIR=/private/var/folders/.../T/clinemm-sandbox-temp-XXXXXX
+       mktemp creates <tempRoot>/tmp.XXXXXXXX
+       exit 0
+       returns <tempRoot>/tmp.XXXXXXXX
+
+  observed:
+    mktemp exits 0
+    returned path is descendant of canonical TMPDIR (kernel-allowed path)
+    parent and sibling writes remain DENIED (kernel rejection)
+    workspace writes remain DENIED (workspace-bound compartment)
+    secret material (SSH_AUTH_SOCK etc) ABSENT from child env
+
+This is the FIRST time the user-facing mktemp defect has been
+closed end-to-end at the production seam.
+
+==============================================================================
+HALT CONDITIONS NOT TRIGGERED
+==============================================================================
+
+  HALT_UNEXPECTED_TRACKED_DIRT             not triggered
+  HALT_RED_NOT_REPRODUCED                  not triggered (RED captured at C1)
+  HALT_MKTEMP_DESTINATION_UNBOUNDED        not triggered (Darwin BSD ignores TMPDIR for bare form)
+  HALT_MKTEMP_REQUIRES_SANDBOX_BOUND_AUTHORITY  not triggered (bounded destination independent of Seatbelt)
+  HALT_MKTEMP_DYNAMIC_ARG_PROMOTED         not triggered ($X, ${X}, $(printf -- -d) all reject)
+  HALT_MKTEMP_TEMPLATE_AUTHORITY_EXPANDED  not triggered (template forms stay ASK)
+  HALT_MKTEMP_UNSAFE_U_PROMOTED            not triggered (-u stays ASK per Darwin manual)
+  HALT_COMMAND_POLICY_CONSERVATION_REGRESSION  not triggered (1044 cmd-policy tests all PASS)
+  HALT_UNEXPECTED_HELPER_ARTIFACT_DELTA    not triggered (SHA256SUMS unchanged)
+
+GO criteria:
+  mktemp      AUTO
+  mktemp -d   AUTO
+  All negatives ASK
+  DEFAULT_OFF independent of Seatbelt
+  Seatbelt mktemp GREEN
+  parser helper unchanged
+  command-policy full suite PASS
+
+→ PASS_MKTEMP_BOUNDED_TEMP_AUTHORITY
+→ CLOSED_CLEAN

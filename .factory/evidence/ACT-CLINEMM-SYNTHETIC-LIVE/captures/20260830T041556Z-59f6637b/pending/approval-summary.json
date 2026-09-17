@@ -1,0 +1,13 @@
+{
+  "approvalEventCount": 0,
+  "captureId": "20260830T041556Z-59f6637b",
+  "classification": "UNCLASSIFIED",
+  "markers": {
+    "approval.entry.v2": 0,
+    "approval.terminal.v2": 0,
+    "capture.attach.v1": 0
+  },
+  "phase": "pending",
+  "repoHead": "1525ebf4468ffa94ee7e514ffcee420c8d921c32",
+  "sessionCandidateCount": 1
+}

@@ -1,0 +1,14 @@
+{
+  "act": "ACT-CLINEMM-HERMETIC-FIXTURE-NEGATIVE",
+  "approvalActionPerformedByTool": false,
+  "captureId": "20260828T052317Z-1025a58f",
+  "capturedAt": "2026-08-28T05:23:17.634666Z",
+  "dataRoots": [
+    "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before"
+  ],
+  "phase": "resolved",
+  "readOnlyIntent": true,
+  "recentMinutes": 60,
+  "repo": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "schema": "cline-approval-specimen-capture/v2"
+}

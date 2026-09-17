@@ -1,0 +1,36 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+SUBSTRATE UNAVAILABLE FAIL-CLOSED (C2 evidence 4)
+===========================================================
+
+Test file:
+  apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts
+  describe("fail-closed: substrate unavailable")
+
+Two RED -> GREEN transitions:
+
+1. DI injection:
+     CommandJobManager({ sandboxBackendResolver: async () => undefined })
+     With opt-in set, the resolver returns undefined.
+     Expected: command NOT executed, spawn_failed, no unsandboxed retry.
+     Result: ✓ resolver returns undefined: command is not executed (spawn_failed) (0ms)
+     Asserts:
+       - state === "spawn_failed"
+       - stdout === "" (no SHOULD_NOT_RUN)
+       - signal contains "sandbox-unavailable"
+
+2. Real substrate unavailable on non-darwin:
+     CommandJobManager() (default resolver)
+     On linux the Seatbelt availability probe returns false.
+     Expected: same fail-closed behavior.
+     Result: ✓ real substrate unavailable on non-darwin: command is not executed (0ms)
+     Asserts:
+       - state === "spawn_failed"
+       - signal contains "sandbox-unavailable"
+
+The fail-closed path uses buildSandboxUnavailableResult() (private
+helper in command-job-manager.ts:804). It returns a synthetic
+spawn_failed result without ever calling spawnSupervisableShellCommand.
+
+P0 invariant preserved:
+  opt-in recognized + no backend -> spawn count = 0

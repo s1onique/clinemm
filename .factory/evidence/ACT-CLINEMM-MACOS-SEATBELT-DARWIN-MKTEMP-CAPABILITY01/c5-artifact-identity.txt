@@ -1,0 +1,52 @@
+# C5 Artifact Identity (spec §50, CORRECTION05)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T12:45Z
+
+DOGFOOD_SOURCE_HEAD = d1fb24d95
+SOURCE_VERSION      = 4.1.10
+DOGFOOD_VERSION     = 4.1.10-d1fb24d95
+VSIX_PATH           = dist/dogfood/clinemm-4.1.10-d1fb24d95.vsix
+VSIX_BYTES          = 14404092
+VSIX_SHA256         = 8c0637869be7265f89159ed99a4b6259017f87bc96496a57b8e71753f8975911
+
+Predecessor artifact SHAs (sanity chain):
+  clinemm-4.1.10-d51a33328.vsix (C2 main)
+  clinemm-4.1.10-327f68dcc.vsix (CORRECTION03)
+  clinemm-4.1.10-2b8ddca86.vsix (CORRECTION04 - bounded but P0 false-pass hazard)
+  clinemm-4.1.10-d1fb24d95.vsix (CORRECTION05 - this)
+
+CORRECTION05 changes:
+  P0 - exact-stdout network discriminator (apps/vscode/.../c2-ablation-conservation.test.ts)
+    - listener now sends TOKEN\n once per connection (not just TOKEN).
+    - bash script uses `if exec 3<>/dev/tcp/...; then ... else ... fi` so
+      the exit status of the redirection gates the branch (not the brace
+      group, which would continue past the failure).
+    - CONTROL stdout MUST equal `CONNECTED:${TOKEN}\n` with exit 0;
+      any other outcome throws CAPTURE_INSUFFICIENT (not PASS).
+    - TEST stdout MUST equal `DENIED\n` with exit 0;
+      any other outcome throws NETWORK_DENY_VIOLATION (real C2 fail).
+    - Probe-file machinery removed entirely; the discriminator is
+      isolated from file-write-create authority and from any
+      side-effects inside the sandbox.
+  P1 - production counter removed (sdk/packages/core/.../command-execution-plan.ts)
+    - __c2RealpathCallCount, _getC2RealpathCallCount, _resetC2RealpathCallCount
+      DELETED from production source.
+    - test file now uses vi.mock("node:fs") + vi.importActual to spy on
+      realpathSync; the vi.fn reference is module-local to the test
+      file. NO production code observes probe counts; production
+      behavior is unmodified.
+    - Required behavioral matrix unchanged:
+        [pwd, git status]    -> 0 resolver calls
+        [/usr/bin/mktemp]    -> 1
+        [mktemp, pwd]        -> 1
+  P2 - duplicate CONTROL check: deduplicated by the rewrite.
+  P2 - parser-helper SHA anchor d51a33328: kept (reviewer-acknowledged
+    non-blocking; subsequent corrections do not touch parser-helper).
+
+Kernel-side wiring preserved verbatim from C2:
+  CommandCapability.createOnlyRoots
+  buildCreateOnlyAllowRule + (allow file-write-create (subpath ...))
+  canonicalizeSandboxRoot gate
+  capabilityFromJobExecution exhaustive switch
+  assertNeverExhaustiveCapabilityKind

@@ -1,0 +1,38 @@
+ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+LIVE QUALIFICATION
+================================================
+
+STATUS = DEFERRED (operator-side substrate constraint)
+
+The operator-side VSIX build + live qualification step
+(`python3 scripts/build-dogfood-vsix.py --install`) inherits the
+same substrate constraint noted in
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01 closure:
+the sandbox where this evidence directory lives uses an installed
+VS Code under /usr/bin/code only as a desktop window, and the
+holistic dogfood harness is not on the test-runtime bench.
+
+EXPECTED POST-DOGFOUND LIVE OBSERVATIONS:
+  Before compact:
+    bar = pre-compaction W (~382.3k expected for the
+                            pre-repair-state specimen)
+  Trigger /compact (manual).
+  After compact (post-repair):
+    divider = 382.3k -> 29.6k (UNCHANGED)
+    bar     = stale 382.3k -> 29.6k (POST-REPAIR behavior;
+                                     pre-repair stays at ~412.7k)
+  Send a follow-up message.
+  After next turn:
+    bar = next-turn W (Cadence POST-REPAIR: bar updates at
+                       every compaction completion AND at every
+                       successful prepareTurn; pre-repair it was
+                       every prepareTurn only.)
+  RED=BEFORE_REPAIR = bar shows 412.7k after a 29.6k compaction
+  GREEN=AFTER_REPAIR = bar shows 29.6k after the same compaction
+
+QUALIFICATION (operator-side, deferred):
+  python3 scripts/build-dogfood-vsix.py --install
+  capture: source-head, version, vsix-path, vsix-size-bytes,
+           vsix-sha256, installed-version
+  exercise: trigger manual compaction on a session with W_pre > 300k
+  expect:   bar.used == post-compaction-tokensAfter-formatted value

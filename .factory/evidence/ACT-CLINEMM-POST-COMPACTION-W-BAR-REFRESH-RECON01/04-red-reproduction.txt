@@ -1,0 +1,100 @@
+ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+RED REPRODUCTION
+================================================
+
+RED_PROOF_STYLE = SOURCE_LEVEL (production seam defect isolated
+                      by reading the actual code paths)
+
+The defect is reproducible by reading source: there is no path
+that publishes the post-compaction W from the manual-compaction
+producer seam to the host-side WorkingContextHostCapture carrier.
+
+PRODUCTION_SEAM_RED = REAL
+
+The compactSessionMessages function at apps/vscode/src/sdk/sdk-
+compaction.ts:97..156 invokes a ContextPipelinePrepareTurn
+(createContextCompactionPrepareTurn) whose return type at
+sdk/packages/core/src/extensions/context/compaction.ts:60..111
+DECLARES `currentWorkingContextEstimate?: number` as a
+published field. The producer DOES compute W (at
+publishWorkingContextEstimate at compaction.ts:824..838).
+
+PRODUCTION-SEAM CHAIN (truncated, M-steps only; full chain in
+01-production-callgraph.md):
+
+  M4 coordinator.runCompactionInPhase
+    -> M5 compactSessionMessages
+       -> AWAITS compact({...})
+         result = { messages, systemPrompt?, currentWorkingContextEstimate }
+       -> RETURNS { compacted, messages, compactionState }   <-- W DROPPED
+
+  M6 result.currentWorkingContextEstimate
+    has no recipient anywhere; it is GC'd.
+
+  M7 postStateToWebview reads the carrier verbatim
+    (apps/vscode/src/core/controller/state/working-context-state-
+     projection.ts:78..84).
+    The carrier's _latest is from the LAST prepareTurn for the
+    session, never updated by manual compaction.
+
+SOURCE-LEVEL ABSENCE TEST:
+
+  $ grep -c 'currentWorkingContextEstimate' \
+      apps/vscode/src/sdk/sdk-compaction.ts
+  1
+  # That single hit is the COMMENT at line 121 (in the docstring
+  # explaining the producer-cadence GREEN). The actual function
+  # return type at apps/vscode/src/sdk/sdk-compaction.ts:44..48
+  # does NOT include currentWorkingContextEstimate.
+
+  $ grep -n 'currentWorkingContextEstimate' \
+      apps/vscode/src/sdk/sdk-compaction.ts
+  121:	// `currentWorkingContextEstimate`; the projection branches
+  # (one comment-only hit confirming the issue)
+
+  $ grep -n 'observe\b' apps/vscode/src/sdk/working-context-host-capture.ts
+  174:	observe(event: AgentRuntimeEvent): void {
+  # The carrier.observe signature requires an AgentRuntimeEvent
+  # shaped as { type: "working-context-state-changed", snapshot: {...} }.
+
+LIVE-UI evidence (00-live-specimen.md):
+  COMPACTION_POST_W = 29.6k
+  TOP_BAR_POST      = 412.7k
+  DELTA             = ~383.1k
+  EVIDENCE          = LIVE_UI
+
+RED_BOUNDARY = M6 (compactSessionMessages return) — first bad boundary.
+
+PRINCIPAL RED:
+  After successful compaction via the manual-mode path:
+    (a) the compaction divider shows the new tokens (29.6k)
+    (b) the carrier.currentWorkingContextEstimate remains the LAST
+        AgentRuntime prepareTurn value (≈ 412.7k pre-compaction)
+    (c) the ContextWindow bar therefore renders W (≈412.7k)
+        instead of the post-compaction equivalent (~30k)
+
+RECLASSIFICATION SUMMARY:
+  CLASS = A (NO_POST_COMPACTION_PUBLICATION)
+    Production code computes W correctly; the host-side carrier never
+    observes the new W for manual compaction completion.
+  FIRST_BAD_BOUNDARY = M6.
+  STALE_OVERWRITE_RACE = FALSE (no race observed; the W is simply not
+                          published at all after manual compaction)
+  WRONG_UI_AUTHORITY = FALSE (the bar correctly reads W in
+                          precedence; W is the staleness)
+  MEMOIZATION_STALE_CLOSURE = FALSE (ContextWindow compute derives
+                          directly from the spread prop; no local
+                          state captured)
+  DUAL_ESTIMATOR_EXPECTED = FALSE (both divider and bar would
+                          converge on the SAME W estimator if W were
+                          published after manual compaction)
+
+POST-REPAIR EXPECTATION:
+  After the bounded repair:
+    - compactSessionMessages propagates W from result.
+    - The coordinator.synthesizeWorkingContextEvent emits a synthetic
+      working-context-state-changed event observed by the carrier.
+    - The capture.observe step captures the new W; the next
+      postStateToWebview extends ExtensionState with the new W.
+    - The ContextWindow numerator (W) becomes ~30k, the bar shows
+      "~30k" within deterministic tolerance.

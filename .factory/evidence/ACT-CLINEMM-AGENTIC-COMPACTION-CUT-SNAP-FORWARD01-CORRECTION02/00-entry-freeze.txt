@@ -1,0 +1,62 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION02 entry-freeze
+==========================================================================
+
+Date        : 2026-09-03T22:32:40Z
+ENTRY_HEAD  = 58f909d35693d2020844300a8fcdd04774840f21 (post-CORRECTION01)
+ENTRY_TREE  = c32d91c1749c2da75c316dd1ab798ad79aeabc1e
+FINAL_HEAD  = pending commit (test-only + board + evidence)
+
+Branch      = main
+Worktree    = clean
+Stash       = empty
+
+Trust baseline: PASS
+
+REVIEWER VERDICT: PASS_WITH_ONE_NONBLOCKING_TEST-CONTRACT_DEFECT — C1: GO
+
+Reviewer identified that R7's module header and internal comments
+overclaimed mathematical equivalence. The truthful evidence is that R7
+is an empirical cross-estimator conservation witness on the L1 fixture,
+NOT a general proof of metric-independence.
+
+R2 and R3 (CORRECTION01 substantive work) were confirmed good by the
+reviewer. No new ACT; no CORRECTION02 architecture cycle.
+
+Scope (CORRECTION02):
+  sdk/packages/core/src/extensions/context/compaction.cut-snap-forward.test.ts
+    (R7 test name + module header + R7 internal comments; 22 lines wording-only change)
+  .factory/evidence/ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION02/
+    (entry-freeze + wording-fix.txt + test-output + gates + final-report)
+  .factory/epic-board.md (forty-eighth-pass entry)
+
+Out of scope:
+  - compaction-shared.ts (production fix FROZEN; reviewer's PASS on the
+    semantic invariant unchanged)
+  - compaction.test.ts (existing tests unchanged)
+  - R1-R6 test bodies (R2/R3 already precise; reviewer's substantive work
+    accepted)
+
+Wording corrections applied:
+  1. Module header: removed "invariant under monotonic weight transforms"
+     and "any monotonic estimator" claims; added truthful statement that
+     R1-R6 pin selection geometry and R7 is an empirical cross-estimator
+     witness.
+
+  2. R7 title: "selection geometry is invariant under proportional weight
+     scaling" -> "L1 fixture selects the same cut under the production
+     token estimator and proportionally-scaled JSON fixture weight"
+
+  3. R7 internal comments: replaced "metric-independence" claim with
+     truthful description of the proportional-scaling approximation and
+     its empirical (not general) applicability.
+
+Production code: ZERO change.
+
+Pre-existing baseline (post-CORRECTION01):
+  Test Files  1 failed | 6 passed | 1 skipped (8)
+       Tests  2 failed | 122 passed | 1 skipped (125)
+
+Post-CORRECTION02 expected:
+  Test Files  1 failed | 6 passed | 1 skipped (8)
+       Tests  2 failed | 122 passed | 1 skipped (125)
+       (R7 wording-only change; same test outcomes)

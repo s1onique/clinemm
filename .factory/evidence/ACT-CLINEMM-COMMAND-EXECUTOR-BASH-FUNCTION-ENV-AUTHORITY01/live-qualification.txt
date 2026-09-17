@@ -1,0 +1,70 @@
+ACT-CLINEMM-COMMAND-EXECUTOR-BASH-FUNCTION-ENV-AUTHORITY01 -- C3 RED-CLOSED live output
+
+Captured: 2026-08-26 from sdk/packages/core test runner
+File: bash.supervised.bash-startup-env.test.ts
+Total: 17/17 PASS, 0 FAIL, 0 SKIP
+
+RED CLOSED: BASH_ENV startup file does NOT run before the authorized command
+  ✓ /usr/bin/mktemp (slash-form AUTO): BASH_ENV sentinel remains empty
+  ✓ /usr/bin/mktemp -d: BASH_ENV sentinel remains empty
+  ✓ pwd (general): BASH_ENV sentinel remains empty
+  ✓ echo hello (general): BASH_ENV sentinel remains empty
+  ✓ /usr/bin/mktemp -d /tmp/foo.XXXXXX (template ASK candidate): BASH_ENV sentinel remains empty
+
+RED CLOSED: ENV (POSIX sh analogue) startup file does NOT run before the authorized command
+  ✓ pwd with ENV=<file>: ENV sentinel remains empty (defensive filter)
+
+CONSERVATION: ordinary env is preserved
+  ✓ PATH inheritance works (child sees inherited PATH)
+  ✓ TERM inheritance works (child sees inherited TERM)
+  ✓ caller-supplied env (config.env) is preserved over inherited
+
+CONSERVATION: envSemantics='complete' (sanitized Seatbelt) bypasses the filter (no-op)
+  ✓ sanitized Seatbelt path: caller env passed AS-IS, filter does NOT touch it
+
+RED CLOSED: BASH_FUNC_<name>%% inherited exported function does NOT shadow bare AUTO commands
+  ✓ bare `pwd` against BASH_FUNC_pwd%% in parent env: imported function does NOT run
+  ✓ bare `ls /tmp` against BASH_FUNC_ls%% in parent env: imported function does NOT run
+  ✓ bare `git --version` against BASH_FUNC_git%% in parent env: imported function does NOT run
+  ✓ bare `cat /dev/null` against BASH_FUNC_cat%% in parent env: imported function does NOT run
+  ✓ prefix-strip is unbounded: BASH_FUNC_anything%% is stripped (not enumerated)
+  ✓ type -t pwd reports builtin (not function) when BASH_FUNC_pwd%% is in parent env
+  ✓ slash-prefixed `/usr/bin/mktemp` still works (slash-bypass composes with the strip)
+
+NOTES
+=====
+
+The C1 RED reproduction at red-p0-5-bash-function-shadow.txt
+showed BASH_FUNC_pwd%% import at bash -c startup:
+
+  [1. bare `pwd` (general AUTO candidate)]
+    exitCode:        0
+    sentinel:        UNAUTHORIZED pwd
+    LEAK:            ** YES **
+
+  The exported function was encoded as
+  `BASH_FUNC_pwd%%=() { printf 'UNAUTHORIZED pwd' >> ... ; }`
+  in the parent env, and bash imported it on startup.
+
+After C2 (executor-side prefix-match strip), the same
+production executor seam produces empty sentinel for
+bare `pwd`, bare `ls /tmp`, bare `git --version`,
+bare `cat /dev/null`, and arbitrary
+`BASH_FUNC_anything%%`. The `type -t pwd` command in
+the spawned bash reports `builtin`, not `function`.
+Slash-prefixed `/usr/bin/mktemp` still runs the real
+binary (slash-bypass composes with the strip filter).
+
+Strip semantics: exact-match for {BASH_ENV, ENV,
+SHELLOPTS, BASHOPTS} + prefix-match for BASH_FUNC_*.
+Strip is overlay-only; envSemantics: "complete" is
+NO-OP (BASH_FUNC_<name>%% not in
+SAFE_ENVIRONMENT_BASELINE so already excluded by
+construction).
+
+config.env layer provenance FROZEN: production caller
+is apps/vscode/src/sdk/vscode-run-commands-tool.ts:640
+which passes `env: { SHELL: shell }` where shell comes
+from `getShellInvocation()` (fixed host mapping: /bin/bash
+on Unix, powershell on Windows). NOT user/tool-controlled.
+Filter on inherited process.env layer is sufficient.

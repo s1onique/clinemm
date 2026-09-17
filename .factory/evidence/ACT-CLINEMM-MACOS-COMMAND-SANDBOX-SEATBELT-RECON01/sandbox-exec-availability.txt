@@ -1,0 +1,28 @@
+SANDBOX_EXEC_PRESENT=true
+SANDBOX_EXEC_PATH=/usr/bin/sandbox-exec
+MACOS_VERSION=14.7.4 (Build 23H420)
+SDK_VERSION=14.0
+ARCH=arm64 (Darwin 23.6.0)
+KERNEL=Darwin Kernel Version 23.6.0 xnu-10063.141.1.703.2~1
+
+HOST_SUBSTRATE_NOTES:
+  This macOS host runs Nix-Darwin (`/nix/store/...`, `/run/current-system/sw`).
+  Toolchain binaries (rg, git, go) are under /nix/store/<hash>-<pkg>/...
+  python3 is /usr/bin/python3 (system)
+  node is /opt/homebrew/... (Homebrew arm64)
+  Homebrew root is /opt/homebrew (Cellar /opt/homebrew/Cellar)
+  This is the only host available for this recon -- substrate results are
+  therefore biased by Nix path structure. Pure-vanilla-macOS behavior may
+  differ in edge cases; flag this as a follow-up dogfood constraint.
+
+USAGE:
+  /usr/bin/sandbox-exec [options] command [args]
+  Options:
+    -f profile-file     Read profile from file.
+    -n profile-name     Use pre-defined profile.
+    -p profile-string   Specify profile on the command line.
+    -D key=value        Define a profile parameter.
+  Exactly one of -f, -n, -p must be specified.
+
+VERDICT_PRE_PROBE:
+  SANDBOX_EXEC_PRESENT=true => proceed with Q1..Q10 probe.

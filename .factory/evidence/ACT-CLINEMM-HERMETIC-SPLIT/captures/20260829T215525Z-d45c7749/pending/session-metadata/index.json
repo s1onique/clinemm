@@ -1,0 +1,28 @@
+[
+  {
+    "mtime": "2026-08-29T21:55:24.849776+00:00",
+    "projection": {
+      "matchedByShape": true,
+      "mode": "act",
+      "session_id": "session-B",
+      "source": "vscode",
+      "status": "running"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-split",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-split/sessions/session-B/session-B.json"
+  },
+  {
+    "mtime": "2026-08-29T21:55:24.849776+00:00",
+    "projection": {
+      "matchedByShape": true,
+      "mode": "act",
+      "session_id": "session-A",
+      "source": "vscode",
+      "status": "running"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-split",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-split/sessions/session-A/session-A.json"
+  }
+]

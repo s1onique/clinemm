@@ -1,0 +1,54 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+C3 EXACT-HEAD ARTIFACT BIND (REBUILT FROM CLEAN HEAD)
+===========================================================
+
+DOGFOOD_SOURCE_HEAD:  14371d7f79e310718da67da04a9d8830a383f781  (14371d7f7)
+SOURCE_TREE:          /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+                      branch: main
+                      HEAD commit time (epoch): 1787636164
+                      (used as SOURCE_DATE_EPOCH for deterministic packaging)
+
+WORKTREE STATE AT BUILD TIME: CLEAN
+                      `git status --porcelain` returned empty.
+                      The artifact was built from the same bytes HEAD
+                      points to; no uncommitted modifications were
+                      bundled.
+
+VERSION:              clinemm 4.1.10 (apps/vscode/package.json)
+
+VSIX_PATH:            /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-exact-head.vsix
+VSIX_BYTES:           14398716
+VSIX_SHA256:          e7bdd2a83a55f145bd3a6c89cdf6a9cbcd752cfd3aa0ff78424af3ebed0ac238
+
+PARSER_HELPER_SHA256: 874741a388b621596b59cf75c7d59c62cf919931d7f164174a60b1920d7df1d3
+                      (apps/vscode/bin/parser-helper/darwin-arm64/cline-parser-helper)
+                      (byte-identical to the pre-C3 baseline, confirming
+                      this ACT has no parsing work.)
+
+DEFAULT_SANDBOX_MODE: disabled
+EXPERIMENTAL_OPTIN:   CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt
+
+REPRODUCIBILITY:
+  `SOURCE_DATE_EPOCH=1787636164 bunx vsce package --no-dependencies \`
+    `  --out <vsix-path>`
+  produces byte-identical artifact at this HEAD.
+
+POLICY (per C2 stop-point proofs):
+  envSemantics production consumption      GREEN
+  actual sandbox-exec route                GREEN (real /usr/bin/sandbox-exec)
+  unavailable backend                      FAIL-CLOSED
+  prepare failure                          FAIL-CLOSED
+  no unsandboxed retry                     PROVEN
+  DEFAULT_OFF                              IDENTICAL
+  supervision                              CONSERVED
+  command policy                           UNCHANGED
+  parser helper                            BYTE-IDENTICAL (874741a388b621596b59cf75c7d59c62cf919931d7f164174a60b1920d7df1d3)
+
+PACKAGING STEPS EXECUTED (from clean 14371d7f7):
+  bun run build:sdk
+  cd apps/vscode && bun run build:webview
+  bun run sync-parser-helper
+  bun esbuild.mjs --production
+  SOURCE_DATE_EPOCH=1787636164 bunx vsce package --no-dependencies \`
+    `    --out /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-exact-head.vsix`

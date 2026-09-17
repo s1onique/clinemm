@@ -1,0 +1,33 @@
+ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+ARTIFACT IDENTITY
+================================================
+
+PRODUCTION DELTA:
+  apps/vscode/src/sdk/sdk-compaction.ts                       +25 -0
+  apps/vscode/src/sdk/sdk-compaction-coordinator.ts           +21 -0
+  apps/vscode/src/sdk/working-context-host-capture.ts         +20 -0
+  apps/vscode/src/sdk/SdkController.ts                        +15 -0
+
+  (Net +81 lines of production-side change; additive only.)
+
+NEW TEST:
+  apps/vscode/src/sdk/__tests__/sdk-compaction-w-publish-recon01.test.ts
+                                                              +148 -0
+  (7 tests, all PASS; production-seam GREEN for the bounded W repair)
+
+PRE-CHANGE HEAD   = c1eb079bf9700388bd7440daea10808360db7d18
+POST-CHANGE HEAD  = pending commit (verbatim below)
+WORKTREE          = clean post-commit
+BRANCH            = main
+SOURCE_HEAD       = HEAD^{tree}
+
+VSIX (pending operator):
+  python3 scripts/build-dogfood-vsix.py --install
+  (Operator-side, deferred from per-substrate constraint noted in
+  ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01.)
+
+INSTALLED_VERSION (operator-side):
+  pending
+
+SHA256 (operator-side):
+  pending

@@ -1,0 +1,55 @@
+=== REAL_PRODUCTION_SEAM QUALIFICATION (CORRECTION01, 2026-08-24T17:59:40.160Z) ===
+helper         : sdk/packages/core/bin/parser-helper/darwin-arm64/cline-parser-helper
+cwd            : /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+OK P1: ls -la .factory/evidence/ 2>/dev/null
+    cmd       : ls -la .factory/evidence/ 2>/dev/null
+    expect    : allow + auto-approve-eligible
+    protocolV : 4
+    decision  : allow
+    dispos.   : auto-approve-eligible
+
+OK P2: git status 2>/dev/null
+    cmd       : git status 2>/dev/null
+    expect    : allow + auto-approve-eligible
+    protocolV : 4
+    decision  : allow
+    dispos.   : auto-approve-eligible
+
+OK N1: persistent stderr 2>errors.txt
+    cmd       : ls -la .factory/evidence/ 2>errors.txt
+    expect    : ask
+    protocolV : 4
+    decision  : ask
+    dispos.   : ask
+
+OK N2: dynamic target 2>"$NULL_PATH"
+    cmd       : ls -la .factory/evidence/ 2>"$NULL_PATH"
+    expect    : ask
+    protocolV : 4
+    decision  : ask
+    dispos.   : ask
+
+OK N3: dangerous pipeline sibling | sh
+    cmd       : ls -la .factory/evidence/ 2>/dev/null | sh
+    expect    : ask
+    protocolV : 4
+    decision  : ask
+    dispos.   : ask
+
+OK N4: mutating git sibling && git branch -D
+    cmd       : git status 2>/dev/null && git branch -D __CLINEMM_SENTINEL__
+    expect    : ask
+    protocolV : 4
+    decision  : ask
+    dispos.   : ask
+
+OK N5: R5 hard floor rm -rf "$HOME"
+    cmd       : rm -rf "$HOME" 2>/dev/null
+    expect    : ask + never-auto-approve
+    protocolV : 4
+    decision  : ask
+    dispos.   : never-auto-approve
+
+
+=== SUMMARY: 7/7 PASS ===

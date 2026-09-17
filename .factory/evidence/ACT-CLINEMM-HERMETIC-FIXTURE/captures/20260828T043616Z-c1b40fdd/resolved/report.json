@@ -1,0 +1,52 @@
+{
+  "binding": {
+    "act": "ACT-CLINEMM-HERMETIC-FIXTURE",
+    "artifactStatus": "PASS",
+    "captureId": "20260828T043616Z-c1b40fdd",
+    "capturedAt": "2026-08-28T04:36:16.379188Z",
+    "deltaSize": 2,
+    "eventDeltaBound": true,
+    "humanChronologyBound": true,
+    "pendingApprovalEventCount": 2,
+    "pendingDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-FIXTURE/captures/20260828T043616Z-c1b40fdd/pending",
+    "pendingSessionCandidateCount": 1,
+    "resolvedApprovalEventCount": 4,
+    "resolvedDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-FIXTURE/captures/20260828T043616Z-c1b40fdd/resolved",
+    "resolvedSessionCandidateCount": 1,
+    "runtimeIdentityBound": true,
+    "schema": "cline-approval-specimen-binding/v1",
+    "sessionBindingAvailable": true,
+    "specimenBinding": "PASS"
+  },
+  "capturedAt": "2026-08-28T04:36:16.417239Z",
+  "discriminator": {
+    "capturedAt": "2026-08-28T04:36:16.379047Z",
+    "deltaSize": 2,
+    "items": [
+      {
+        "approvalEntryObserved": true,
+        "approvalTerminalObserved": false,
+        "correlationId": "corr-B",
+        "policyAutoApprove": true,
+        "schema": "cline-approval-discriminator/v1",
+        "sessionId": "snake-only-A",
+        "shouldAutoApproveTool": false,
+        "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after/diagnostics/after.jsonl",
+        "toolName": "execute_command"
+      },
+      {
+        "approvalEntryObserved": false,
+        "approvalTerminalObserved": true,
+        "correlationId": "corr-B",
+        "policyAutoApprove": null,
+        "schema": "cline-approval-discriminator/v1",
+        "sessionId": "snake-only-A",
+        "shouldAutoApproveTool": null,
+        "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after/diagnostics/after.jsonl",
+        "toolName": "execute_command"
+      }
+    ],
+    "schema": "cline-approval-discriminator/v1"
+  },
+  "schema": "cline-approval-specimen-report/v1"
+}

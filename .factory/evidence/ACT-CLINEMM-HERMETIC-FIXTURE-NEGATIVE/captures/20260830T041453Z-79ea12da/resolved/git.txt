@@ -1,0 +1,14 @@
+REPO=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD=fc957590445f39788ff7e2b7625be4929b18328d
+TREE=70d4363e6548267c9910de992e3ab57e1346f5f4
+BRANCH=main
+--- STATUS ---
+M .factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md
+ M .factory/epic-board.md
+ M .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/entry-state.json
+ M .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/final-report.json
+ M apps/vscode/src/core/controller/state/getStateToPostToWebview.ts
+ M apps/vscode/src/core/controller/state/updateSettings.ts
+ M apps/vscode/src/core/controller/state/updateSettingsCli.ts
+--- STASH ---
+stash@{0}: On main: c2-green-and-c2-p1-delta

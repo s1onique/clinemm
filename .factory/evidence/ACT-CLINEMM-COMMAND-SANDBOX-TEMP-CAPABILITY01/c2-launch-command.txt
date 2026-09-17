@@ -1,0 +1,7 @@
+DOGFOOD_C2_ENABLED=1 DISPLAY=:1 /Applications/Visual\ Studio\ Code.app/Contents/MacOS/Electron \
+    --no-sandbox \
+    --user-data-dir=/tmp/cline-dogfood-ud-13716 \
+    --extensions-dir=/tmp/cline-dogfood-ext-13716 \
+    --extensionDevelopmentPath=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode \
+    --extensionTestsPath=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/out/dev/dogfood/dogfood-c2-driver.js \
+    /tmp/cline-dogfood-ws-13716

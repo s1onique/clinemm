@@ -1,0 +1,131 @@
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+c2-green.txt -- C2 GREEN evidence
+
+VERDICT:
+  PASS_AUTHORITY_EXECUTION_CAPABILITY_BINDING
+  CLOSED_CLEAN
+
+PIPELINE:
+  authorization/approval execution plan
+        |
+        v
+  ToolApprovalResult.executionCapability  (host-owned typed slot)
+        |
+        v  (runtime-owned writer at agent-runtime.ts:2606-2608)
+  PreparedToolExecution.executionCapability
+        |
+        v  (runtime-owned writer at agent-runtime.ts:2835)
+  AgentToolContext.executionCapability  (closed typed slot)
+        |
+        v  (CommandJobManager.start reads context.executionCapability
+            at command-job-manager.ts:706)
+  CommandJob.executionCapability (recorded on job record)
+        |
+        v  (snapshot function surfaces it)
+  CommandJobSnapshot.executionCapability  (visible to tests)
+
+PROVENANCE GATE (reviewer-prescribed):
+  Source 1 (model-stream metadata): NEVER populates typed slot.
+  Source 2 (runtime-owned keys):    NEVER populates typed slot.
+  Source 3 (host-attached via ToolApprovalResult.executionCapability):
+    IS the only writer. Type-checked at construction site.
+
+TESTS (9 GREEN, all reviewer-prescribed discriminators):
+
+  src/sdk/__tests__/execution-capability-binding01.c2-green.test.ts
+    (downstream half -- AgentToolContext -> CommandJobManager)
+    [G1] GREEN: typed-slot executionCapability in context DOES reach
+         CommandJobManager.start(...) via the AgentToolContext
+         argument, and surfaces on snapshot.executionCapability.
+    [G2] GREEN negative: NO marker in context -> NO marker in
+         manager.start; snapshot.executionCapability is undefined.
+    [G3] GREEN: harness isolation -- two independent managers/tools
+         see their own state. (NOT concurrency; concurrency is G8.)
+
+  src/sdk/__tests__/execution-capability-binding01.c2-green-upstream.test.ts
+    (upstream half -- AgentRuntime stamps typed slot)
+    [G4] GREEN: host-supplied executionCapability crosses the seam
+         into AgentToolContext.executionCapability.
+    [G5] GREEN negative: host callback returns no executionCapability
+         -> typed slot is undefined.
+    [G6] GREEN: host callback DENIES -> typed slot stays undefined
+         (fail-closed contract verified).
+
+  src/sdk/__tests__/execution-capability-binding01.c2-green-discriminator.test.ts
+    (reviewer-prescribed privilege-provenance discriminator)
+    [G7] DISCRIMINATOR 1 (reviewer test 3):
+         malicious generic-metadata marker + empty host capability
+         => typed slot stays EMPTY (no privilege escalation).
+    [G8] DISCRIMINATOR 2 (reviewer test 4):
+         trusted A + malicious generic B => ONLY A reaches the
+         typed slot. The model cannot manufacture authority.
+    [G9] CONCURRENCY (reviewer test 5):
+         same-runtime interleaved invocations see distinct
+         markers, no crossover.
+
+FAIL-CLOSED CONTRACT VERIFIED:
+  - When approval is denied, tool.execute is NEVER called.
+  - When approval is denied with executionCapability set, the
+    runtime still does NOT stamp the typed slot (G6).
+  - When approval is approved but executionCapability is undefined,
+    the typed slot is undefined (G5).
+  - When approval is approved with executionCapability, the typed
+    slot is populated with the host's value (G4).
+
+SOURCE FILES (5 production-code touches, narrow):
+  1. sdk/packages/shared/src/llms/tools.ts
+       - added `InternalExecutionCapability` closed union
+       - added `executionCapability?: InternalExecutionCapability`
+         to `ToolApprovalResult`
+  2. sdk/packages/shared/src/agent.ts
+       - added `executionCapability?: InternalExecutionCapability`
+         to `AgentToolContext`
+  3. sdk/packages/shared/src/index.ts
+       - re-exported `InternalExecutionCapability`
+  4. sdk/packages/agents/src/agent-runtime.ts
+       - imported `InternalExecutionCapability`
+       - added `executionCapability` to `PreparedToolExecution`
+       - captured `approval.executionCapability` (trusted channel)
+       - stamped `prepared.executionCapability` into AgentToolContext
+  5. apps/vscode/src/sdk/command-job-manager.ts
+       - imported `InternalExecutionCapability`
+       - added `executionCapability` to `CommandJobSnapshot`
+       - added `executionCapability` to `CommandJob`
+       - capture `context.executionCapability` into job record
+       - surfaced on snapshot
+
+NO Seatbelt consumption in C2 of THIS ACT. createOnlyRoots resumes
+in ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2.
+
+REGRESSION GATES:
+  apps/vscode tsc --noEmit           PASS
+  bun run build:sdk                  PASS
+  command-job-manager                20/20 PASS
+  vscode-run-commands-tool           46/46 PASS
+  command-job-manager.sandbox-integration  14/14 PASS
+  command-job-manager.sandbox-c3-real-kernel  15/15 PASS
+  invalid-tool-input-preapproval01     18/18 PASS (AgentRuntime regression)
+  C2 GREEN suite                      9/9  PASS
+  git diff --check                    clean
+
+TRUST STATE:
+  HEAD = (pending ACT commit)
+  ENTRY_HEAD = 7f3fa782a (C1-CORRECTION01)
+  ACT_CODE_COMMIT in C2 = this commit (5 narrow source touches)
+  ACT_TEST_COMMIT in C2 = this commit (3 new test files:
+    c2-green.test.ts, c2-green-upstream.test.ts,
+    c2-green-discriminator.test.ts)
+  ACT_BOARD_COMMIT = this commit (board row appended)
+
+PARSER-HELPER:       UNCHANGED
+COMMAND-POLICY:      UNCHANGED
+SEATBELT PROFILE:    UNCHANGED (C2 of THIS ACT only; createOnlyRoots
+                    resumes in DARWIN-MKTEMP-CAPABILITY01-C2)
+COMMAND-CAPABILITY:  UNCHANGED (only InternalExecutionCapability
+                    added at the typed slot)
+
+NEXT:
+  - close this ACT with PASS_AUTHORITY_EXECUTION_CAPABILITY_BINDING
+  - open ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+    to plug `createOnlyRoots=[canonical DARWIN_USER_TEMP_ROOT]`
+    through the proven typed slot

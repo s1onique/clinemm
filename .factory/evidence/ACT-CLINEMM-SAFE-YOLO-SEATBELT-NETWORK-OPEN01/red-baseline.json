@@ -1,0 +1,18 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01",
+  "phase": "RED baseline",
+  "date": "2026-08-26T10:50:50.562Z",
+  "TOKEN": "RED-BASELINE-9069278f0789",
+  "port": 62312,
+  "profileNetworkRule": "(deny network*)",
+  "control": {
+    "stdout": "CONNECTED:RED-BASELINE-9069278f0789\n",
+    "exitCode": 0
+  },
+  "test": {
+    "stdout": "DENIED\n",
+    "exitCode": 0,
+    "stderr": "/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-red-net-sw2G4h/test.sh: connect: Operation not permitted\n/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-red-net-sw2G4h/test.sh: line 4: /dev/tcp/127.0.0.1/62312: Operation not permitted\n"
+  },
+  "verdict": "RED_REPRODUCED"
+}

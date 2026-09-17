@@ -1,0 +1,14 @@
+{
+  "act": "ACT-CLINEMM-HERMETIC-DRIFT",
+  "approvalActionPerformedByTool": false,
+  "captureId": "20260829T215916Z-50bd82e3",
+  "capturedAt": "2026-08-29T21:59:16.351240Z",
+  "dataRoots": [
+    "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-drift"
+  ],
+  "phase": "resolved",
+  "readOnlyIntent": true,
+  "recentMinutes": 60,
+  "repo": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "schema": "cline-approval-specimen-capture/v2"
+}

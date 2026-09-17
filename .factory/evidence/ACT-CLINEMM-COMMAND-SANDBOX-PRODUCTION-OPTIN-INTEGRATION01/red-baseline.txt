@@ -1,0 +1,80 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+RED BASELINE + CHARACTERIZATION (C1)
+===========================================================
+
+FILE UNDER TEST:
+  apps/vscode/src/sdk/command-job-manager.ts
+  apps/vscode/src/sdk/command-job-manager.sandbox-integration.red.test.ts (NEW)
+
+TEST RUN (apps/vscode):
+  $ bunx vitest run src/sdk/command-job-manager.sandbox-integration.red.test.ts
+
+  Test Files  1 failed (1)
+       Tests  4 failed | 2 passed (6)
+
+  PASSED (2) -- conservation witnesses:
+    1. CommandJobManager.start with no sandbox opt-in: sentinel parent env
+       var reaches the child
+       Purpose: Today's DEFAULT_OFF behavior; the seeded
+       CLINEMM_PRODUCTION_TEST_LEAK_VAR reaches the child because the
+       supervisor spreads process.env underneath options.env. This is
+       the invariant C2 MUST preserve when opt-in is absent.
+    2. CommandJobManager.start with invalid opt-in value: still DEFAULT_OFF
+       Purpose: Fuzzy truthy values do not activate the experimental
+       sandbox path. Only the exact recognized value "seatbelt" counts.
+
+  FAILED (4) -- RED targets for C2:
+    1. with seatbelt opt-in set, the actual child does not see
+       CLINEMM_PRODUCTION_TEST_LEAK_VAR
+       Today behavior: command runs unsandboxed, env leaks.
+       GREEN target: child stdout does NOT contain the seeded value.
+    2. with seatbelt opt-in set, AWS_SECRET_ACCESS_KEY seeded in parent
+       is absent in actual child
+       Today behavior: command runs unsandboxed, AWS_SECRET_ACCESS_KEY
+       leaks.
+       GREEN target: child stdout does NOT contain the seeded value.
+    3. with seatbelt opt-in set on darwin, the authoritative spawned
+       executable is /usr/bin/sandbox-exec
+       Today behavior: spawned executable is /bin/sh (the shell).
+       GREEN target: `ps -p <pid> -o comm=` reports "sandbox-exec".
+       The test uses a `sleep 5` command so the child is alive at the
+       moment of inspection.
+    4. with seatbelt opt-in set AND /usr/bin/sandbox-exec forcibly
+       unavailable, command is not executed
+       Today behavior: command runs unsandboxed even though the
+       substrate is unavailable.
+       GREEN target: stdout does NOT contain SHOULD_NOT_RUN;
+       invocation_count = 0.
+
+  C2 RED->GREEN DISCHARGE PLAN:
+    - The env-leak tests become GREEN when the production executor
+      honors prepared.envSemantics === "complete" by using prepared.env
+      AS-IS (no spread-merge) when invoking spawnSupervisableShellCommand.
+    - The sandbox-exec test becomes GREEN when CommandJobManager.start
+      routes through sandbox-exec -f <profile> <orig-exe> <orig-args>.
+    - The substrate-unavailable test becomes GREEN when the production
+      executor checks getSandboxBackend().prepare() availability before
+      spawning, and treats any thrown SandboxError as fail-closed.
+
+═══════════════════════════════════════════════════════════════════════
+REGRESSION CHECK (BASELINE PRESERVED)
+═══════════════════════════════════════════════════════════════════════
+
+  apps/vscode/src/sdk/command-job-manager.test.ts
+    $ bunx vitest run src/sdk/command-job-manager.test.ts
+    Test Files  1 passed (1)
+         Tests  20 passed (20)
+    Zero regression. Existing baseline of 20 production-seam tests
+    remains green at HEAD.
+
+═══════════════════════════════════════════════════════════════════════
+HALT CONDITIONS CHECK
+═══════════════════════════════════════════════════════════════════════
+
+  HALT_UNEXPECTED_TRACKED_DIRT         NOT TRIGGERED (entry-freeze clean)
+  HALT_EXECUTION_SEAM_FRAGMENTED       NOT TRIGGERED (one bg path)
+  HALT_RED_NOT_REPRODUCED              NOT TRIGGERED (4 RED tests fail as
+                                                   designed on the real seam)
+
+C1 is GREEN to close.

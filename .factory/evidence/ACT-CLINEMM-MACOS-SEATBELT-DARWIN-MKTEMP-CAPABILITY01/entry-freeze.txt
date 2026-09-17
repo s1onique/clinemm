@@ -1,0 +1,34 @@
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01 / entry-freeze
+
+TIMESTAMP_UTC = 2026-08-26T00:16:02Z
+
+REPOSITORY_ROOT = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH = main
+ENTRY_HEAD = f10737903efb0c9c6b1dc4e5de99141b8c40f014
+ENTRY_TREE = c4fd8385e2acb8b4cea3f81a568ec77fb7d414cf
+ORIGIN_MAIN = f81a8ec016096567cb01a672853d24a64323d8b7
+
+(Predecessor ACT ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01
+ is committed locally at f10737903 but is AHEAD of origin/main
+ f81a8ec0. Not pushed as of freeze. Push policy is owner-decision.)
+
+TRACKED_WORKTREE = clean
+git status --porcelain=v1 --untracked-files=all = (empty)
+git diff --check = clean
+
+Predecessor claim freeze (per ACT spec §1):
+  MKTEMP_EXPLICIT_PATH_POLICY  CLOSED     (commit f10737903)
+  BASH_ENV_AUTHORITY           CLOSED     (assumed preserved from earlier ACTs)
+  BASH_FUNC_AUTHORITY          CLOSED     (assumed preserved from earlier ACTs)
+  PRIVATE_TMPDIR_CAPABILITY    CLOSED     (assumed preserved from earlier ACTs)
+  SEATBELT_DEFAULT_OFF         PRESERVED  (to be verified in C1)
+
+Per-act own predecessors that must not be reopened:
+  ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01 (PASS)
+  ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03 (PASS)
+  ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 (PASS, predecessor chain)
+  ACT-CLINEMM-COMMAND-RISK-MCP-BASHFUNC-AUTHORITY-CLOSURE01 (assumed closed)
+  ACT-CLINEMM-COMMAND-RISK-MCP-BASHENV-AUTHORITY-CLOSURE01 (assumed closed)
+  ACT-CLINEMM-PRIVATE-TMPDIR-CAPABILITY01 (assumed closed)
+
+HALT_UNEXPECTED_TRACKED_DIRT = NOT_TRIGGERED (working tree clean)

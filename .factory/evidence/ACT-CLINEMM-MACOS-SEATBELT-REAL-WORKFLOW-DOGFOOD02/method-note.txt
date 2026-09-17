@@ -1,0 +1,75 @@
+# Method note
+# ACT-CLINEMM-MACOS-SEATBELT-REAL-WORKFLOW-DOGFOOD02
+
+TIMESTAMP_UTC = 2026-08-26T13:14Z
+
+## IDE INTERACTION IS NOT AVAILABLE IN THIS AGENT SESSION
+
+The user's prompt assumes workflows are driven from the installed
+ClineMM UI. The available evidence paths for driving workflows from
+the IDE are:
+
+  1. Interactive UI clicks (requires human at keyboard)
+  2. Debug harness via Playwright Electron
+     (documented as flaky in cloud containers per
+     .clinerules/debug-harness.md; Playwright Electron launch times
+     out under bun; also requires `env -u` for inherited
+     ELECTRON_RUN_AS_NODE etc.)
+  3. gRPC postMessage via the debug harness's `ui.send_message`
+
+In this session:
+
+  - No human at keyboard (single-agent mode)
+  - Playwright Electron launch via the harness server has not been
+    exercised in this session (the user's prompt did not request it
+  - `ui.send_message` requires the harness server running first
+
+## PRACTICAL METHOD FOR THIS SESSION
+
+We exercise the workflow commands via direct `sandbox-exec`
+invocations of the same Apple substrate (`/usr/bin/sandbox-exec`)
+that the installed ClineMM extension invokes through
+`manager.start()`. Each command is captured in two forms:
+
+  CONTROL: command run in normal shell, no Seatbelt
+  TEST:    command run under `/usr/bin/sandbox-exec -p <profile>`
+
+The Seatbelt profiles for TEST are constructed by hand from the
+production generator's output (`generateSeatbeltProfile`) for the
+real ClineMM capability that the command would receive. This
+exercises:
+
+  - The exact Apple Seatbelt kernel op (file-read*, file-write*,
+    file-write-create, network*, etc.)
+  - The exact canonical paths produced by the production
+    canonicalizer
+  - The exact sandbox profile grammar
+
+This is the substrate test, not the wire test. For wire
+qualification, the install needs to succeed in a session where the
+user can run the harness, or where the agent can drive the UI.
+
+We do NOT substitute this for the IDE qualification. We use it to
+discover the first kernel-level boundary (file, network, temp,
+cache, child) that a real workflow hits. The IDE qualification
+follows in a subsequent session.
+
+## PROFILE USED FOR TEST
+
+We mirror the production `seatbelt-profile.ts` output for the
+relevant capability. For read-only workflows (R01..R04), we use a
+broad read + deny network profile. For write workflows we add the
+specific writable / createOnly / tempRoot grants per the production
+resolver. The exact profile bytes for each row are in
+`profile-*.sb` files.
+
+This is the same profile shape the installed extension emits; the
+canonical paths are realpath-resolved before emission.
+
+## SCOPE
+
+W1-W8 from the user's prompt, exercised via sandbox-exec. The
+installed extension's command-policy layer (which decides AUTO vs
+ASK vs DENY at plan time) is NOT exercised; that layer was
+qualified separately by ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03.
+This ACT focuses on the Seatbelt substrate boundary.

@@ -1,0 +1,63 @@
+ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION05
+entry-freeze
+                                                                          (2026-08-31)
+
+ENTRY_HEAD  = 0a375393d
+              "fix(sdk): ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-
+               COHERENCE-REPAIR01-CORRECTION04 - model-change-bound
+               phase stamp"
+DOCS_HEAD   = 8e56af26a
+              "docs(factory): ACT-CLINEMM-RUNTIME-TASK-HEADER-
+               PROJECTION-COHERENCE-REPAIR01-CORRECTION04 - board
+               row update (PASS, CORRECTION03 superseded)"
+ORIGIN_HEAD = 7caca443b
+BRANCH      = main
+WORKTREE    = clean (excluding .factory/evidence/ which is local)
+
+REVIEWER HALT (from the Factory reviewer on CORRECTION04)
+  New P0 -- HALT_PHASE_STAMP_ADVANCES_ON_NON_PHASE_MUTATION.
+
+  CORRECTION04 closed the previous P0 by stamping on
+  full-model mutation (`isSameTaskModel`). But full-model
+  mutation is over-broad: projectTurnState
+  (selectors.ts:47) reads only FOUR axes
+    activity.awaitingApproval
+    activity.modelStreaming
+    activity.activeToolCallIds (order-sensitive)
+    lifecycle.kind (+ reason when kind=failed)
+  Mutations to recovery/telemetry/identity do NOT
+  participate in phase derivation. recovery_changed
+  (update.ts:355) materially mutates the model but
+  touches NONE of those axes, so the projected phase is
+  unchanged. CORRECTION04 stamped it, restoring the LIVE
+  contradiction.
+
+PURPOSE OF THIS CORRECTION
+  Bounded single-axis correction. Replace
+  `isSameTaskModel` (full-model equality) with the narrower
+  projection-authority check
+  `isSameTurnProjectionAuthority` that compares ONLY the
+  four canonical phase-authority axes. The stamp now
+  advances only when a non-"noop" observation materially
+  changes the canonical phase-authority tuple, OR this is
+  the comparator's very first observation.
+
+  The boundary methods (observeRuntimeEvent, observeTaskMsg)
+  continue to snapshot the shadow model BEFORE replay;
+  compareWith additionally retains the `event !== "noop"`
+  belt-and-braces guard so the adapter sentinel path
+  remains forbidden.
+
+PROTECTED LANES (unchanged from REPAIR01)
+  R0 execution-obligation   = CLOSED
+  R5 manual approval        = WATCH_ONLY
+  Multi-element cardinality = CLOSED
+  FORENSICS01               = HALTED historical
+
+LANE STATUS BEFORE CORRECTION
+  CORRECTION04 was halted with P0
+  HALT_PHASE_STAMP_ADVANCES_ON_NON_PHASE_MUTATION.
+
+LANE STATUS AFTER CORRECTION (target)
+  PASS / REPAIR01_COMMITTED_CORRECTION05
+  LIVE_QUALIFICATION = LIVE_UNAVAILABLE

@@ -1,0 +1,31 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01
+
+ENTRY_FREEZE
+
+REPOSITORY_ROOT=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH=main
+
+ENTRY_HEAD=6562651dc0a397237dabd21073d15fe0c96df659
+ENTRY_TREE=2e3c05d3d97a81dc0188bfd1945beddb2400ee70
+ORIGIN_MAIN=7f1ff13d9d678ea4d27b6449db4c3b4fe0e263a1  (10 unpushed local commits)
+
+TRACKED_WORKTREE_STATUS=clean
+(known gitignored evidence dirs in .factory/ are exempt and untouched)
+
+PREDECESSOR_VERDICT (ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01):
+  Status:     CLOSED but DEFECTIVE per reviewer disposition
+  Defect:     HALT_MKTEMP_DEFAULT_OFF_AUTHORITY_UNPROVEN
+  Verdict:    PASS_MKTEMP_BOUNDED_TEMP_AUTHORITY (REJECTED -- reopen)
+  Root cause: the safe rule host_safe_mktemp_default_temp was a flat
+              cross-platform lexical regex that ignored inherited
+              environment. On GNU mktemp (PATH-resolved on darwin/arm64
+              in the author's shell), the parent's TMPDIR steers the
+              destination outside the command string, breaking the
+              "bounded destination" claim.
+  Lean fix:   darwin AUTO (host-evidence-bound),
+              linux ASK (no separate proof yet),
+              no public knob added, no parser-helper change.
+
+  See ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01/
+  review-disposition.txt for the verbatim reviewer commentary
+  and lean correction.

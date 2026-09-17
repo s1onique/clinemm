@@ -1,0 +1,100 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02 -- P0-2 RED REPRO
+
+CORRECTION01 evidence contained no executable identity binding.
+The policy approved `mktemp` regardless of which mktemp binary
+the host's PATH resolved to.
+
+LIVE reproduction on this darwin-arm64 host (2026-08-26):
+
+  --- which mktemp (PATH default) ---
+  $ which mktemp
+  /run/current-system/sw/bin/mktemp
+
+  $ file /run/current-system/sw/bin/mktemp
+  /run/current-system/sw/bin/mktemp: Mach-O 64-bit executable arm64
+
+  $ realpath /run/current-system/sw/bin/mktemp
+  /nix/store/8xhvpkpg6gbm9q0sk2p3hf6nj9fzgr3n-coreutils-9.8/bin/coreutils
+
+  --- That is GNU coreutils 9.8, NOT Darwin BSD mktemp ---
+
+  --- Shadow with GNU coreutils mktemp ---
+  $ SYNTH=/tmp/clinemm-mktemp-p0-2-red-<ts>; mkdir -p $SYNTH
+  $ cp /run/current-system/sw/bin/mktemp $SYNTH/bin/mktemp
+  $ TMPDIR=$SYNTH PATH=$SYNTH/bin:$PATH /usr/bin/env mktemp
+  /tmp/clinemm-mktemp-p0-2-red-<ts>/tmp.dEvttnrtY8
+  $ ls -la $SYNTH
+  total 0
+  drwxr-xr-x   4 chistyakov wheel  128 Aug 26 01:19 .
+  drwxr-xr-x 1346 root       wheel ... Aug 26 01:19 ..
+  drwxr-xr-x   3 chistyakov wheel   96 Aug 26 01:19 bin
+  -rw-------   1 chistyakov wheel    0 Aug 26 01:19 tmp.dEvttnrtY8
+
+OBSERVATION
+===========
+
+  On this developer's darwin host, `which mktemp` resolves to GNU
+  coreutils 9.8 from a Nix store. The default PATH does NOT resolve
+  to /usr/bin/mktemp. This is reproducible on any host with:
+    - homebrew coreutils installed
+    - Nix coreutils installed
+    - GNU coreutils shadowed via PATH
+
+  When GNU mktemp is invoked with inherited TMPDIR=<synthetic>,
+  it creates the file inside <synthetic>. This is the SAME leak
+  the CORRECTION01 closed for darwin+evidence -- and the user's
+  actual mktemp binary on this host is GNU.
+
+  Even more importantly: the policy-side `realpath /usr/bin/mktemp`
+  is `/usr/bin/mktemp` (BSD). The actual host-resolution
+  `realpath $(which mktemp)` is the GNU binary. The evidence is
+  about executable A; the executor runs executable B.
+
+CORRECTION01 IMPLICATION
+========================
+
+  CORRECTION01 evidence had no executable identity field at all.
+  The policy approved `mktemp` based on platform + non-empty
+  root strings. The platform was darwin (this is a darwin host),
+  but the actual mktemp executable is GNU coreutils.
+
+  So even on darwin, with TMPDIR inherited from the parent:
+    policy:  darwin + non-empty -> ALLOW
+    execute: GNU mktemp honors TMPDIR -> write to <TMPDIR>
+
+  This re-opens the leak on darwin hosts with GNU mktemp shadowing.
+
+FIX
+===
+
+  CORRECTION02 requires the host evidence to include
+    executablePath: string         // raw `which mktemp` result
+    executableRealpath: string     // realpath of executablePath
+  AND the policy gate to require
+    executableRealpath === "/usr/bin/mktemp"
+  (or a positively reviewed allowlist; this ACT proposes only
+  /usr/bin/mktemp).
+
+  The host adapter must:
+    - Run `which mktemp` via subprocess to get PATH-resolved path
+    - fs.realpathSync the result
+    - Compare to /usr/bin/mktemp
+    - If mismatch: return undefined evidence -> policy gate fails
+      closed (ASK with new source
+      host_mktemp_executable_identity_unbound)
+    - If match: build evidence with executable identity and the
+      true Darwin temp root from /usr/bin/getconf DARWIN_USER_TEMP_DIR
+
+  This means the CORRECTION02 evidence proves BOTH:
+    (a) the host will execute /usr/bin/mktemp (Apple's BSD)
+    (b) the destination is bounded by the true Darwin per-user temp
+        authority (independent of inherited TMPDIR/TMP/TEMP)
+
+EVIDENCE LABEL
+==============
+
+  RED REPRO:                  REAL (this darwin-arm64 host)
+  GNU coreutils via PATH:     REAL (which mktemp on this host)
+  GNU honors inherited TMPDIR: REAL (LEAK reproduced)
+  CORRECTION01 evidence broken on darwin-with-GNU-shadowing:
+                              YES (gate approves GNU binary as BSD)

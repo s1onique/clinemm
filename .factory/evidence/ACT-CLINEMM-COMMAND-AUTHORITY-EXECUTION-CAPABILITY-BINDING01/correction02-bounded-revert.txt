@@ -1,0 +1,132 @@
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+correction02-bounded-revert.txt -- bounded scope correction
+
+VERDICT (amended):
+  PASS_AUTHORITY_EXECUTION_CAPABILITY_BINDING
+  WITH_REAL_CAPABILITY_GATE_PENDING
+
+REVIEWER PRESCRIPTION (verbatim §"Bounded correction only"):
+  1. Restore `validateInput` byte-for-byte to its pre-bf9361d39 type.
+  2. Inspect the other incidental diff in `tools.ts`
+     (the `InternalExecutionCapability` form) and either restore
+     the prior form or intentionally keep union-ready syntax.
+  3. Inspect the suppressed `agent-runtime.ts` delta and verify it
+     is ACT-required or formatting-only. Don't assume.
+  4. Produce:
+        git diff 49a757a00..HEAD -- <production files>
+     and classify every surviving production hunk.
+  5. Rerun the 12 GREEN tests + typecheck + `git diff --check`.
+
+WHAT THIS ACT DID:
+
+1. RESTORED byte-for-byte:
+     sdk/packages/shared/src/agent.ts            (void -> undefined
+     delta on validateInput: REVERTED)
+     sdk/packages/shared/src/llms/tools.ts        (InternalExecutionCapability
+     form collapsed from union to single-shape: REVERTED)
+     sdk/packages/shared/src/index.ts            (no production delta;
+     reverted as a precaution)
+     sdk/packages/agents/src/agent-runtime.ts    (import-sort + formatter
+     indent re-flow delta: REVERTED; verification
+     confirmed this was biome-formatting only, not
+     ACT-required)
+
+2. KEPT (intentional ACT delta):
+     apps/vscode/src/sdk/command-job-manager.ts  (removed
+     `executionCapability?: InternalExecutionCapability` from
+     public `CommandJobSnapshot` interface and from the
+     internal snapshot() builder -- the P1 leak fix the
+     reviewer prescribed)
+
+3. KEPT (intentional ACT delta):
+     apps/vscode/src/sdk/__tests__/
+       execution-capability-binding01.c2-green.test.ts
+         (removed 2 snapshot-based assertions; now observes via
+          vi.spyOn(manager, 'start') only -- the load-bearing
+          provenance seam)
+     apps/vscode/src/sdk/__tests__/
+       execution-capability-binding01.c2-green-discriminator.test.ts
+         (retitled G9 from CONCURRENCY to PER-TOOL-CALL
+          CORRELATION; comment block updated to make
+          `true concurrent runtime calls = NOT_EXECUTED
+          (nonblocking)` explicit)
+     apps/vscode/src/sdk/__tests__/
+       execution-capability-binding01.c2-green-multicmd-discriminator.test.ts
+         (NEW: 3 tests driving real run_commands tool with
+          multi-command input; observes every manager.start
+          call; locks the tool-call-scoped capability fanout
+          as the C2 contract)
+
+CLASSIFICATION OF PRODUCTION-FILE HUNKS:
+
+  Before bounded revert (HEAD = bf9361d39, INCORRECT):
+    apps/vscode/src/sdk/command-job-manager.ts
+      INTENTIONAL P1 LEAK FIX (keep)
+    sdk/packages/shared/src/agent.ts
+      void -> undefined on validateInput (UNRELATED, REVERT)
+    sdk/packages/shared/src/llms/tools.ts
+      union form collapsed (INCIDENTAL, REVERT)
+    sdk/packages/agents/src/agent-runtime.ts
+      import sort + indent re-flow (INCIDENTAL, REVERT)
+
+  After bounded revert (NEW HEAD, CORRECT):
+    apps/vscode/src/sdk/command-job-manager.ts
+      INTENTIONAL P1 LEAK FIX (the only production-file delta)
+
+  $ git diff 49a757a00..HEAD -- 'apps/vscode/**/*.ts' 'sdk/**/*.ts'
+    apps/vscode/src/sdk/command-job-manager.ts
+    (only one surviving production file -- as initially reported)
+
+ROOT CAUSE OF THE BOUND:
+  In the prior C2-P1 commit, `bunx biome check --write --unsafe`
+  was run across the four SDK-package files. Biome's
+  autofixer changed three of them in ways that are semantically
+  inconsequential (collapsing a single-variant union to its bare
+  shape) or formatting (import-sort + indent re-flow), and one
+  in a way that is semantically consequential (void ->
+  undefined on a public interface field). The autofix ran
+  WITHOUT diffing the changes against the C2 GREEN state, so
+  the scope of the commit was misreported.
+
+CORRECTION:
+  The autofix must never run across production files without
+  a human reviewer. Going forward: `biome check --diagnostic-
+  level=error` ONLY (no --write --unsafe) on production files;
+  format/import-sort fixes go in a separate dedicated commit
+  that is itself diff-reviewed.
+
+REGRESSION GATES (all clean after bounded revert):
+  apps/vscode tsc --noEmit                              PASS
+  bun run build:sdk                                     PASS
+  sdk/packages/agents tsc --noEmit                      PASS
+  sdk/packages/shared tsc --noEmit                      PASS
+  biome check (command-job-manager.ts + new test file)  PASS
+  C2 GREEN suite (12 tests, 4 files)                   12/12 PASS
+  command-job-manager                                   20/20 PASS
+  vscode-run-commands-tool                              46/46 PASS
+  command-job-manager.sandbox-integration               14/14 PASS
+  command-job-manager.sandbox-c3-real-kernel            15/15 PASS
+  invalid-tool-input-preapproval01                      18/18 PASS
+  git diff --check                                      clean
+
+TRUST STATE (CORRECTION02):
+  HEAD = (this commit)
+  ENTRY_HEAD = 49a757a00 (C2 GREEN from prior commit)
+  ACT_CODE_COMMIT in CORRECTION02 = this commit
+    (1 production file modified: command-job-manager.ts)
+  ACT_TEST_COMMIT in CORRECTION02 = this commit
+    (3 test files modified: 2 existing reworded + 1 new)
+  ACT_BOARD_COMMIT = this commit
+
+PARSER-HELPER:       UNCHANGED
+COMMAND-POLICY:      UNCHANGED
+SEATBELT PROFILE:    UNCHANGED
+COMMAND-CAPABILITY:  UNCHANGED (only typed-slot plumbing)
+
+NEXT:
+  Close this ACT with PASS_AUTHORITY_EXECUTION_CAPABILITY_BINDING
+  WITH_REAL_CAPABILITY_GATE_PENDING.
+  Open ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01
+  to plug per-command capabilities from
+  CommandExecutionPlan.commands[i] into the typed slot.
+  DO NOT reopen metadata provenance or Seatbelt recon.

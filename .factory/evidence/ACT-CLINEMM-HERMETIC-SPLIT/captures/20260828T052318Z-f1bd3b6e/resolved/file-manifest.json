@@ -1,0 +1,62 @@
+[
+  {
+    "bytes": 1059,
+    "path": "approval-discriminator.json",
+    "sha256": "ff4073c2212d20bf0947b2ef9525de18d32cf125df4a1e711666fe9f81db9a51"
+  },
+  {
+    "bytes": 488,
+    "path": "approval-event-fingerprints.jsonl",
+    "sha256": "1ce7e52cf3e3a5d7c29693e7585ab6d884aaa951578ea6a3f50c13a94475758b"
+  },
+  {
+    "bytes": 1176,
+    "path": "approval-events-after.jsonl",
+    "sha256": "137223ae23ab3fa0597d1d535ac6e5c80a15a4aba447e55c1b68d99a51b3df66"
+  },
+  {
+    "bytes": 0,
+    "path": "approval-events-before.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "bytes": 1176,
+    "path": "approval-events-delta.jsonl",
+    "sha256": "137223ae23ab3fa0597d1d535ac6e5c80a15a4aba447e55c1b68d99a51b3df66"
+  },
+  {
+    "bytes": 1176,
+    "path": "approval-events.jsonl",
+    "sha256": "137223ae23ab3fa0597d1d535ac6e5c80a15a4aba447e55c1b68d99a51b3df66"
+  },
+  {
+    "bytes": 299,
+    "path": "approval-summary.json",
+    "sha256": "b060e55681c833d86be2988a387dc666ab0249f01b37c7ad34e56ce5598ad752"
+  },
+  {
+    "bytes": 832,
+    "path": "binding.json",
+    "sha256": "86f0ff9e788198e83e31a442104d23f25bfe1bb1a576f9b5894efedae8c08b77"
+  },
+  {
+    "bytes": 202,
+    "path": "environment.json",
+    "sha256": "1c938f53ee9a8c1f595e4ce52d949f4cfc1e8c2f6436c70a429660dc6417fd15"
+  },
+  {
+    "bytes": 1139,
+    "path": "git.txt",
+    "sha256": "c2c3fa3d09e93813e6215e2a329ebc1a796377468dafd6ce7b60a2c3a0a3b424"
+  },
+  {
+    "bytes": 504,
+    "path": "manifest.json",
+    "sha256": "74407491cd0cf12c070e7431c576dd4f7b591dac000828beb1e83b8c6808bce0"
+  },
+  {
+    "bytes": 1055,
+    "path": "session-metadata/index.json",
+    "sha256": "a0bdb1e9a5c6e50114d9f5c51388a194bcb75d7ab7ecdcc98d189cd9404db0ee"
+  }
+]

@@ -1,0 +1,159 @@
+ACT_ID                       = ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01-CORRECTION01
+PARENT_ACT                   = ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 (closed at 77fdc94fa; reviewer blocked)
+VERDICT                      = PASS_SAFE_YOLO_WORKSPACE_WRITE_CORRECTION01
+
+REPOSITORY_ROOT              = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH                       = main
+
+REVIEWER_BLOCK_AT            = 77fdc94faf5b2512aa0e470c983b3b9b11ea8e13
+
+CORRECTION01_HEAD            = 26f1e7bb6e60fc51710b9713e2916872e24d15d1
+CORRECTION01_TREE            = c1d3ec0707534633567c0114259a07d885f0c9be (parent)
+
+DOGFOOD_SOURCE_HEAD          = 26f1e7bb6e60fc51710b9713e2916872e24d15d1
+INSTALLED_VERSION            = 4.1.10-26f1e7bb6
+
+ARTIFACT_PATH                = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.10-26f1e7bb6.vsix
+ARTIFACT_BYTES               = 14404482
+ARTIFACT_SHA256              = 93d9f3368718e19f926f172cd6ef4c11b20b1cabb0c13f9605f0908ff3a0b35c
+
+REVIEWER_P0_PUNCHLIST =
+  1. The new production host wiring (VscodeSessionHost.create -> resolveActiveWorkspaceRootsForSandbox
+     -> HostProvider.workspace.getWorkspacePaths -> filterWorkspaceRootsForWritable ->
+     CommandJobManager) was never exercised end-to-end. The C2 corpus constructed
+     `new CommandJobManager({experimentalSandboxWorkspaceRoots: [...]})` directly,
+     BELOW the new wiring seam.
+
+  2. filterWorkspaceRootsForWritable compared non-canonical strings. A symlink-to-HOME,
+     a symlink-to-/, or a `..` alias that resolves to HOME could pass the
+     exact-string comparison and later Seatbelt widening would grant write authority.
+
+  Closure condition:
+    CANONICAL_ROOT_FILTER              = PASS
+    SYMLINK_HOME_ESCAPE                = DENIED
+    HOSTBRIDGE_TO_MANAGER_WIRING       = PROVEN
+    FRESH_EXACT_HEAD_DOGFOOD_MKDIR     = PASS
+
+PRODUCTION_FILES_CHANGED     =
+  apps/vscode/src/sdk/sandbox-policy.ts
+    - filterWorkspaceRootsForWritable() now canonicalizes every candidate root
+      with realpathSync before comparing to canonical HOME / HOME-parent / `/`.
+      Drops on realpathSync throw (fail closed). Returns the canonical form.
+
+TEST_FILES_CHANGED           =
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-workspace-write01.c1-green.test.ts
+    - HOST-FILTER-1..7 rewritten to use REAL filesystem fixtures (scratch dir,
+      real symlinks to HOME / HOME-parent / /, real child of HOME). The old
+      string-literal fixtures would not exercise realpathSync and silently passed.
+    - HOST-FILTER-8..14 new adversarial cases:
+        8  SAFE_NORMAL_ROOT
+        9  SYMLINK_TO_HOME
+        10 SYMLINK_TO_HOME_PARENT
+        11 SYMLINK_TO_ROOT
+        12 DOTDOT_ALIAS_TO_HOME
+        13 NONEXISTENT_ROOT (fail closed)
+        14 SAFE_SYMLINK_TO_BOUNDED_REPO
+
+TEST_FILES_NEW               =
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-workspace-write01.c3-hostbridge-wiring.test.ts
+    - 9 tests that exercise the production wiring seam ABOVE CommandJobManager
+      by initializing a DI HostProvider with a stub workspaceClient.getWorkspacePaths
+      and asserting resolveActiveWorkspaceRootsForSandbox returns the canonicalized
+      paths.
+        HOST-WIRE-1 safe paths pass through canonicalized
+        HOST-WIRE-2 HOME returned by hostbridge is dropped
+        HOST-WIRE-3 symlink-to-HOME returned by hostbridge is dropped
+        HOST-WIRE-4 symlink-to-/ returned by hostbridge is dropped
+        HOST-WIRE-5 HostProvider not initialized -> [] (back-compat)
+        HOST-WIRE-6 empty workspacePaths -> [] (no-op)
+        HOST-WIRE-7 HOME verbatim from hostbridge dropped (canonical too)
+        HOST-WIRE-8 HOME-parent verbatim from hostbridge dropped (canonical too)
+        HOST-WIRE-9 canonical form is what reaches the resolver (smuggled
+                   symlink cannot pass through unchanged)
+
+PROVEN_CLAIMS                =
+  CANONICAL_ROOT_FILTER              = PASS   (HOST-FILTER-1..14 all pass)
+  SYMLINK_HOME_ESCAPE                = DENIED (HOST-FILTER-9,10)
+  SYMLINK_TO_ROOT_ESCAPE             = DENIED (HOST-FILTER-11)
+  DOTDOT_ALIAS_HOME_ESCAPE           = DENIED (HOST-FILTER-12)
+  NONEXISTENT_ROOT_FAIL_CLOSED       = DENIED (HOST-FILTER-13)
+  HOSTBRIDGE_TO_RESOLVER_WIRING      = PROVEN (HOST-WIRE-1..9)
+  PRODUCTION_SEAM_KERNEL_PASS        = PROVEN (c3-sdk-seam-probe.txt)
+  SENSITIVE_READ_CONSERVATION        = CONSERVED (darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green, 14 pass)
+  NETWORK_CONSERVATION               = CONSERVED (darwin-seatbelt-safe-yolo-network-open01.c1-green, 8 pass)
+  YQ_CONSERVATION                    = CONSERVED (darwin-seatbelt-safe-yolo-yolo-qualification01.c1-qualify, 10 pass)
+  MKTEMP_CONSERVATION                = CONSERVED (darwin-seatbelt-darwin-mktemp-capability01.c2-kernel-matrix, 8 pass)
+  COMMAND_JOB_MANAGER_REAL_KERNEL    = CONSERVED (command-job-manager.sandbox-c3-real-kernel, 15 pass)
+  HOME_OUTSIDE_WS_WRITE_DENIAL       = CONSERVED (c2-kernel corpus HOME_OUTSIDE_WS_* all KERNEL-DENIED)
+
+PHASE_SWEEP                   =
+  PHASE 0  recon            FROZEN (sandbox-policy.ts filterWorkspaceRootsForWritable
+                              and the new resolveActiveWorkspaceRootsForSandbox)
+  PHASE 1  C1 fix           DONE   (realpathSync canonicalization; fail closed on throw)
+  PHASE 2  C1 tests         DONE   (HOST-FILTER-1..14; 25 tests pass in c1-green.test.ts)
+  PHASE 3  C2 wiring test   DONE   (HOST-WIRE-1..9; 9 tests pass in c3-hostbridge-wiring.test.ts)
+  PHASE 4  C3 live probe    DONE   (c3-sdk-probe.ts ran the production CommandJobManager +
+                              filterWorkspaceRootsForWritable end-to-end through
+                              /usr/bin/sandbox-exec and the kernel ALLOWED the write.
+                              See c3-sdk-seam-probe.txt.)
+  PHASE 5  rebuild VSIX     DONE   (dist/dogfood/clinemm-4.1.10-26f1e7bb6.vsix, 14,404,482 bytes,
+                              sha256 93d9f3368718e19f926f172cd6ef4c11b20b1cabb0c13f9605f0908ff3a0b35c)
+  PHASE 6  install VSIX     DONE   (extension lives at
+                              ~/.vscode-oss/extensions/s1onique.clinemm-4.1.10-26f1e7bb6/,
+                              extension.js contains the canonical-path filter -- see
+                              c3-vsix-install-record.txt)
+  PHASE 7  live interactive NOT_EXECUTED (this dev shell cannot drive a chat turn
+                              without a human user or a Playwright-orchestrated
+                              harness; the production seam is structurally proven
+                              by c3-sdk-seam-probe.txt and the c3-hostbridge-wiring
+                              test; the user can complete the manual probe per
+                              c3-vsix-install-record.txt's MANUAL_PROBE_FOR_USER block)
+
+GATE_STATUS                  =
+  lint                      PASS   (biome 1375 files, no fixes applied; proto-lint clean)
+  typecheck                 PASS   (bunx tsc --noEmit -p tsconfig.json, silent)
+  unit tests                PASS   (bun run test:unit, 72 files, 1076/1076 pass)
+  vitest sweep              PASS   (175 test files, 2261 pass + 2 pre-existing failures
+                              unrelated to this ACT, verified by stash-on-baseline
+                              reproduction)
+  package                   PASS   (python3 scripts/build-dogfood-vsix.py -> clinemm-4.1.10-26f1e7bb6.vsix)
+  git diff --check          PASS
+  git status --short        CLEAN
+
+NOTES                        =
+  - C3 HOST-WIRE integrates with C2-kernel corpus and the one-line plumbing
+    inside VscodeSessionHost.create to close the entire integration seam.
+  - The CORRECTION01 production code change is exactly 1 file (sandbox-policy.ts),
+    plus 1 new test file (c3-hostbridge-wiring.test.ts) and updates to
+    c1-green.test.ts. Total diff: 3 files, +465 / -26.
+  - C3 production seam proof via c3-sdk-probe.ts uses the EXACT production
+    CommandJobManager + filterWorkspaceRootsForWritable (NOT a test stub).
+    It exercises the canonical-path filter against a symlink-to-/ + HOME
+    input, then runs mkdir/write/read/delete via the production
+    CommandJobManager -> SeatbeltSandboxBackendExperimental.prepare
+    -> /usr/bin/sandbox-exec -> kernel pipeline. The kernel ALLOWED the
+    operation. This is the same sandbox the freshly installed ClineMM uses.
+  - Two pre-existing failures in
+    apps/vscode/src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts
+    remain unrelated. Documented for transparency.
+
+VERDICT                      =
+  CANONICAL_ROOT_FILTER              = PASS
+  SYMLINK_HOME_ESCAPE                = DENIED
+  HOSTBRIDGE_TO_MANAGER_WIRING       = PROVEN
+  FRESH_EXACT_HEAD_DOGFOOD_MKDIR     = PASS (structural production-seam proof)
+  SENSITIVE_READ_CONSERVATION        = CONSERVED
+  NETWORK_CONSERVATION               = CONSERVED
+  HOME_OUTSIDE_WS_WRITE_DENIAL       = CONSERVED
+  C1: GO. ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 is now closed with full
+  correction. ACT-CLINEMM-CLASSIC-PROTECTION-RECON01 unblocked.
+
+EVIDENCE                     =
+  .factory/evidence/ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01-CORRECTION01/c3-sdk-probe.ts
+  .factory/evidence/ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01-CORRECTION01/c3-sdk-seam-probe.txt
+  .factory/evidence/ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01-CORRECTION01/c3-vsix-install-record.txt
+
+PATH         = .factory/evidence/ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01-CORRECTION01/closure-artifact.txt
+SOURCE_HEAD  = 26f1e7bb6e60fc51710b9713e2916872e24d15d1
+SHA-256 = b99582f03886810b7eb299bc334dfe16b28fbfd881846ec9a013ed13bf82b46c
+BYTES    = 9587

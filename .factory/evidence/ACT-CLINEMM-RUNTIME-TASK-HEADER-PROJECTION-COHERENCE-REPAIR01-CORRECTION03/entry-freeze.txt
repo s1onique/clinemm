@@ -1,0 +1,64 @@
+ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION03
+entry-freeze
+                                                                          (2026-08-31)
+
+ENTRY_HEAD  = 43bee46bd
+              "fix(sdk): ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-
+               COHERENCE-REPAIR01-CORRECTION02 - bind shadow
+               observation to the TurnState sequence domain"
+DOCS_HEAD   = a7464f5f3
+              "docs(factory): ACT-CLINEMM-RUNTIME-TASK-HEADER-
+               PROJECTION-COHERENCE-REPAIR01-CORRECTION02 - board
+               row update (PASS, REPAIR01 superseded)"
+ORIGIN_HEAD = 7caca443b
+BRANCH      = main
+WORKTREE    = clean (excluding .factory/evidence/ which is local)
+
+REVIEWER HALT (from the Factory reviewer on CORRECTION02)
+  New P0 — HALT_SHADOW_PHASE_STAMP_NOT_BOUND_TO_PROJECTION.
+
+  CORRECTION02 fixed the previous P0 (seq-domain identity), but
+  introduced a narrower defect: the comparator stamps the
+  TurnState-seq on EVERY accepted observation, yet the selector
+  interprets that stamp as bound to the shadow's PROJECTED PHASE.
+  A noop shadow observation (compareWith-shadow-adapter.ts:212
+  in the agents package) under a fresh TurnState generation that
+  leaves the shadow projection unchanged advances the stamp
+  without changing the projected phase — the LIVE contradiction
+  resurfaces.
+
+PURPOSE OF THIS CORRECTION
+  Bounded single-axis correction. Stamp the comparator's
+  TurnState-seq on a PHASE-KEYED basis:
+
+    lastObservedTurnSeq: Map<TurnPhase, number | undefined>
+
+  Updated by `compareWith` ONLY when the observation event is
+  NOT a `"noop"` sentinel — every non-noop observation that
+  yields shadowPhase = P updates the entry
+  `lastObservedTurnSeq[P] = turnSeq`. A noop observation does
+  not update any entry.
+
+  Now the selector's gate compares:
+
+    publication.seq > lastObservedTurnSeqForPhase(canonicalShadowPhase)
+
+  i.e. "is the legacy's current generation newer than the
+  generation under which the PHASE THE SHADOW IS PROJECTING was
+  last established?" — the per-projection invariant the
+  reviewer demanded.
+
+PROTECTED LANES (unchanged from REPAIR01)
+  R0 execution-obligation   = CLOSED
+  R5 manual approval        = WATCH_ONLY
+  Multi-element cardinality = CLOSED
+  FORENSICS01               = HALTED historical
+
+LANE STATUS BEFORE CORRECTION
+  CORRECTION02 was halted with P0
+  HALT_SHADOW_PHASE_STAMP_NOT_BOUND_TO_PROJECTION. The new
+  repair binds the stamp to the projected phase.
+
+LANE STATUS AFTER CORRECTION (target)
+  PASS / REPAIR01_COMMITTED_CORRECTION03
+  LIVE_QUALIFICATION=LIVE_UNAVAILABLE

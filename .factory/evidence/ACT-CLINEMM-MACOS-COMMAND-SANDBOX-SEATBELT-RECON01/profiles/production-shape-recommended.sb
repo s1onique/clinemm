@@ -1,0 +1,16 @@
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*
+  (require-all
+    (require-not (subpath "/Volumes/UserData/Users/chistyakov/.ssh"))
+    (require-not (subpath "/Volumes/UserData/Users/chistyakov/.aws"))
+    (require-not (subpath "/Volumes/UserData/Users/chistyakov/.gnupg"))
+    (require-not (subpath "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside"))))
+(allow file-write* (literal "/dev/null") (literal "/dev/tty") (subpath "/tmp") (subpath "/private/tmp") (subpath "/private/var/folders") (subpath "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside"))
+(deny network*)
+(allow file-read-metadata (subpath "/"))

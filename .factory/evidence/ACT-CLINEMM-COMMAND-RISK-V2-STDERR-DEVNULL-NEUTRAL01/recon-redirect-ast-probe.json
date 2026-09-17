@@ -1,0 +1,143 @@
+{
+  "source": "ls 2\u003e/dev/null",
+  "stmts": [
+    {
+      "n": "2",
+      "nValue": 2,
+      "nIsNil": false,
+      "op": "\u003e",
+      "word": "/dev/null"
+    }
+  ]
+}
+---
+{
+  "source": "ls \u003e/dev/null",
+  "stmts": [
+    {
+      "n": "",
+      "nValue": 0,
+      "nIsNil": true,
+      "op": "\u003e",
+      "word": "/dev/null"
+    }
+  ]
+}
+---
+{
+  "source": "ls 1\u003e/dev/null",
+  "stmts": [
+    {
+      "n": "1",
+      "nValue": 1,
+      "nIsNil": false,
+      "op": "\u003e",
+      "word": "/dev/null"
+    }
+  ]
+}
+---
+{
+  "source": "ls 2\u003e\u003e/dev/null",
+  "stmts": [
+    {
+      "n": "2",
+      "nValue": 2,
+      "nIsNil": false,
+      "op": "\u003e\u003e",
+      "word": "/dev/null"
+    }
+  ]
+}
+---
+{
+  "source": "ls 2\u003eerrors.txt",
+  "stmts": [
+    {
+      "n": "2",
+      "nValue": 2,
+      "nIsNil": false,
+      "op": "\u003e",
+      "word": "errors.txt"
+    }
+  ]
+}
+---
+{
+  "source": "ls 2\u003e\"$NULL_PATH\"",
+  "stmts": [
+    {
+      "n": "2",
+      "nValue": 2,
+      "nIsNil": false,
+      "op": "\u003e",
+      "word": "?*syntax.ParamExp"
+    }
+  ]
+}
+---
+{
+  "source": "ls 2\u003e\u00261",
+  "stmts": [
+    {
+      "n": "2",
+      "nValue": 2,
+      "nIsNil": false,
+      "op": "\u003e\u0026",
+      "word": "1"
+    }
+  ]
+}
+---
+{
+  "source": "ls 2\u003e${NULL_PATH}",
+  "stmts": [
+    {
+      "n": "2",
+      "nValue": 2,
+      "nIsNil": false,
+      "op": "\u003e",
+      "word": "?*syntax.ParamExp"
+    }
+  ]
+}
+---
+{
+  "source": "ls \u0026\u003e/dev/null",
+  "stmts": [
+    {
+      "n": "",
+      "nValue": 0,
+      "nIsNil": true,
+      "op": "\u0026\u003e",
+      "word": "/dev/null"
+    }
+  ]
+}
+---
+{
+  "source": "ls 2\u003e\u003e/dev/null",
+  "stmts": [
+    {
+      "n": "2",
+      "nValue": 2,
+      "nIsNil": false,
+      "op": "\u003e\u003e",
+      "word": "/dev/null"
+    }
+  ]
+}
+---
+{
+  "source": "ls \u003e\u0026/dev/null",
+  "stmts": [
+    {
+      "n": "",
+      "nValue": 0,
+      "nIsNil": true,
+      "op": "\u003e\u0026",
+      "word": "/dev/null"
+    }
+  ]
+}
+---

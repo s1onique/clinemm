@@ -1,0 +1,24 @@
+{
+  "act": "ACT-CLINEMM-COMMAND-RISK-V2-STDERR-DEVNULL-NEUTRAL01",
+  "phase": "C1",
+  "evidenceClassification": "REAL_PRODUCTION_SEAM",
+  "captured": "2026-08-24T19:47:02Z",
+  "headBefore": "3fe4c9d95e41e06530b6789afbbc11b4a4038fd6",
+  "command": "bunx vitest run --config vitest.config.ts src/runtime/command-policy/structured-command-risk.redirect-stderr-devnull.test.ts",
+  "resultSummary": {
+    "testFiles": "1 failed",
+    "tests": "7 failed / 17 passed / 24 total",
+    "failures": [
+      "REAL helper: ls -la .factory/evidence/ 2>/dev/null -> ASK (defect, expected ALLOW)",
+      "REAL helper: git status 2>/dev/null -> ASK (defect, expected ALLOW)",
+      "REAL helper: 3-leaf && chain with `ls -la .factory/evidence/ 2>/dev/null` -> ASK (defect, expected ALLOW)",
+      "SYNTHETIC: ALLOW: `ls 2>/dev/null` with parser-proven fd=2 + pathProvenance=static -> ASK (no classifier patch yet)",
+      "SYNTHETIC: ALLOW: `git status 2>/dev/null` with parser-proven fd=2 + pathProvenance=static -> ASK",
+      "SYNTHETIC: PIPELINE: `ls -la .factory/ 2>/dev/null | head -30` -> ASK (neutral left leaf classification not yet wired)",
+      "(Section A) positive control: `ls -la .factory/evidence/` -> ALLOW (independent control, RED witness)"
+    ],
+    "conservation": "All conservation / structural / fail-closed / R5 / mixed-risk / negative tests pass (17 green)"
+  },
+  "commonBoundary": "explicit fd=2 output redirection to /dev/null",
+  "captureInvariant": "CommonBoundary (explicit fd=2 output redirection to /dev/null)"
+}

@@ -1,0 +1,27 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- LIVE GREEN
+Production command-policy seam @ current exact-head (C2 + safe rule)
+
+Driver:  sdk/packages/core/src/runtime/command-policy/command-policy.mktemp-live-green.test.ts
+Function: evaluateCommandPolicy(toolInput={command:CMD}, hostAuthorization=HOST_AUTH)
+         where HOST_AUTH = commandHostAuthorization({ mode: "safe-only",
+           explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES })
+         (matches the production call-site in apps/vscode/src/sdk/sdk-tool-policies.ts:165
+          when executeSafeCommands=true)
+
+=== POSITIVES (auto-approve-eligible with matchedRuleSource=host_safe_mktemp_default_temp) ===
+
+=== NEGATIVES (kind=ask, source=host_mode_safe_only_fallthrough) ===
+
+OBSERVED (from green-raw.jsonl):
+  - all 4 positives: decisionKind=allow,
+    firstCommandMatchedRuleSource=host_safe_mktemp_default_temp
+  - all 19 negatives: decisionKind=ask,
+    decisionSource=host_mode_safe_only_fallthrough
+    (or risk_opaque_composition for `&&`, `|`, `>`, etc.)
+    NEVER decisionKind=allow
+
+This is the LIVE GREEN at the REAL production policy seam.
+
+EVIDENCE_LABELS:
+  COMMAND_POLICY_GREEN: REAL_PRODUCTION_POLICY_SEAM
+  CAPTURED_AT:          2026-08-26 00:51 (C2_HEAD = <this commit>)

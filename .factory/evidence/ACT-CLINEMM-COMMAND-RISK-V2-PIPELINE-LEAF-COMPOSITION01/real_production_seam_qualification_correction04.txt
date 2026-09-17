@@ -1,0 +1,33 @@
+=== REAL_PRODUCTION_SEAM qualification (CORRECTION04) ===
+TMP_ROOT: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction04-fzD8yV
+PROJECT_DIR: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction04-fzD8yV/project
+
+PASS  allow  source=risk_v2_structured_promotion                  echo hello | head -30
+        expected: allow
+        note: pathless composition
+PASS  allow  source=risk_v2_structured_promotion                  pwd && head -30
+        expected: allow
+        note: pathless composition with &&
+PASS  allow  source=risk_v2_structured_promotion                  head -30
+        expected: allow
+        note: standalone stdin-only reader
+PASS  allow  source=risk_v2_structured_promotion                  ls /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction04-fzD8yV/project/inside/ok.ts | head -30
+        expected: allow
+        note: (A) correct operand + same authority context -> ALLOW
+PASS  ask    source=host_mode_safe_only_fallthrough               ls /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction04-fzD8yV/project/inside/ok.ts | head -30
+        expected: ask
+        note: (B) CORRECTION04 HALT: stale-roots reuse -> ASK
+PASS  ask    source=host_mode_safe_only_fallthrough               ls /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction04-fzD8yV/project/inside/ok.ts | head -30
+        expected: ask
+        note: (C) CORRECTION04 HALT: stale-cwd reuse -> ASK
+PASS  ask    source=host_mode_safe_only_fallthrough               ls /etc/passwd | head -30
+        expected: ask
+        note: (D) CORRECTION03 RED: pipe operand != evidence operand -> ASK
+PASS  ask    source=host_mode_safe_only_fallthrough               ls /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction04-fzD8yV/outside | head -30
+        expected: ask
+        note: (E) symlink escape pipe + matching (uncontained) evidence -> ASK
+PASS  ask    source=host_mode_safe_only_fallthrough               ls /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction04-fzD8yV/project/inside/ok.ts | head -30
+        expected: ask
+        note: (F) no evidence -> ASK
+
+=== RESULT: 9/9 pass, 0 fail ===

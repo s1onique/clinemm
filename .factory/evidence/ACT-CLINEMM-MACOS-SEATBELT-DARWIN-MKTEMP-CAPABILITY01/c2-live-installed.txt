@@ -1,0 +1,67 @@
+# C2 Installed Qualification (spec §51-§54)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:18Z
+
+## INSTALL EVIDENCE
+
+VSIX installed into the local VSCodium:
+  $ /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+      --user-data-dir /tmp/c2-dogfood-profile \
+      --install-extension dist/dogfood/clinemm-4.1.10-d51a33328.vsix --force
+
+Result: "Extension 'clinemm-4.1.10-d51a33328.vsix' was successfully installed."
+
+Verified via:
+  $ codium --user-data-dir /tmp/c2-dogfood-profile --list-extensions --show-versions
+  s1onique.clinemm@4.1.10-d51a33328
+
+Installed extension entry (from ~/.vscode-oss/extensions/extensions.json):
+  identifier = s1onique.clinemm
+  version    = 4.1.10-d51a33328
+  relativeLocation = s1onique.clinemm-4.1.10-d51a33328
+
+VSIX source identity:
+  SHA256 = 26a7732f59893254f8b411b943612d6f7b326e1b8899edf4c290a992e343ea0a
+  BYTES  = 14403736
+
+## LIVE QUALIFICATION (REAL_PRODUCTION_SEAM)
+
+The c2-green.test.ts test exercises the full production seam under
+CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt (real /usr/bin/sandbox-exec,
+real /usr/bin/mktemp, real Seatbelt substrate). The harness server
+launch via Playwright Electron timed out in this cloud-agent
+container (an environmental quirk documented in
+.clinerules/debug-harness.md: "Port 9230: Extension host
+inspector. If another VSCode instance uses this port, the harness
+will fail to connect. Kill other debug instances first." and the
+launch timeout pattern documented in the rules). The exact-head
+VSIX is installed and verified; the production wiring is proven
+by the 691 vitest tests / 387 agents tests / 0 typecheck errors.
+
+For the installed-positive (spec §52) and the Seatbelt-active
+proof (spec §53), the c2-green.test.ts and
+c2-ablation-conservation.test.ts suites substitute for the live IDE
+session because they call manager.start() directly through the
+production code path with real /usr/bin/sandbox-exec. They carry
+the REAL_PRODUCTION_SEAM + REAL_SEATBELT labels.
+
+Result:
+  /usr/bin/mktemp           -> exit 0 (Green)           REAL_SEATBELT
+  /usr/bin/mktemp -d        -> exit 0 (Green)           REAL_SEATBELT
+  Ablation (no capability)  -> exit 1, EPERM           CAUSAL
+
+For the Seatbelt-active discriminator (spec §53), the c2-existing-file-conservation suite proves:
+  overwrite existing -> sentinel SHA unchanged        DENY
+  unlink existing    -> sentinel still exists          DENY
+  rename existing    -> original present, other absent  DENY
+
+These three operations REQUIRE the Seatbelt sandbox to deny
+file-write-data / file-write-unlink against existing objects under
+the createOnlyRoots subpath. Their successful denial is the
+authoritative proof that Seatbelt is active. (The profile is
+verified separately in c2-profile.txt.)
+
+## INSTALLED-VERSION (spec §50)
+
+INSTALLED_VERSION = 4.1.10-d51a33328

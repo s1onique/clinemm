@@ -1,0 +1,53 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01
+RED PROOF
+================================================
+
+RED TEST FILE: sdk/packages/core/src/extensions/context/compaction.cut-snap-forward.test.ts
+
+LOAD-BEARING RED CASES (reviewer's R1/R5 from review-table):
+
+R1: cut must not snap to a stale early typed-user on a long tool loop
+R5: cut never reintroduces already-selected history (L1 ablation)
+
+CAPTURED OUTPUT (pre-patch):
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/vitest run \
+    --config vitest.config.ts src/extensions/context/compaction.cut-snap-forward.test.ts
+
+  × R1 (load-bearing): cut must not snap to a stale early typed-user on a long tool loop 3ms
+  ✓ R2 (load-bearing): cut may snap forward to next typed-user when candidate is before it 0ms
+  ✓ R3: cut on a typed-user boundary remains on the boundary 0ms
+  ✓ R4: cut with no later typed-user retains candidate / nearest safe assistant boundary 0ms
+  × R5: cut never reintroduces already-selected history (L1 ablation) 1ms
+  ✓ R6: tool-pair atomicity is preserved (every tool_use in result has its tool_result) 5ms
+
+  Test Files  1 failed (1)
+       Tests  2 failed | 4 passed (6)
+
+RED GEOMETRY REPRODUCTION:
+
+  L1 fixture (buildLiveShape472):
+    - 472 messages total
+    - typed-user at index 0 (initial task)
+    - typed-user at index 1 (continue with next thing)
+    - indices 2..471: alternating assistant tool_use + user tool_result
+    - tool_result content: "x".repeat(1700) (~452_000 JSON chars total)
+
+  METRIC NOTE: estimateJsonTokens measures JSON-serialized character length,
+  NOT tokens. The numeric measurements below are deterministic fixture
+  weights, not literal tokens. The cut selection is a geometry problem
+  invariant under monotonic weight transforms (verified by R7 in CORRECTION01).
+
+  findCutIndex(messages, 20_000, estimateJsonTokens):
+    PRE-PATCH: returns 1 (the snap-clamp collapses the cut)
+    POST-PATCH: returns ~451 (token-budget walk preserved; snap-forward runs to safe boundary)
+
+  COMPACTION RESULT (full chain via createContextCompactionPrepareTurn):
+    PRE-PATCH: 472 messages, totalAfter ≈ 452_191 chars, reductionPct ≈ -0.08%
+    POST-PATCH: 63 messages, totalAfter ≈ 60_059 chars, reductionPct ≈ 86.7%
+
+  DELIVERED:
+    - L1 RED reproduced exactly (selection geometry)
+    - R2/R3/R4/R6 already passing (no false positives)
+    - R1/R5 explicitly RED
+    - Post-patch: ALL 6 GREEN

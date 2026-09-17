@@ -1,0 +1,81 @@
+ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION06
+entry-freeze
+                                                                          (2026-08-31)
+
+ENTRY_HEAD  = d67559172
+              "fix(sdk): ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-
+               COHERENCE-REPAIR01-CORRECTION05 - projection-authority-bound
+               phase stamp"
+DOCS_HEAD   = 930934293
+              "docs(factory): ACT-CLINEMM-RUNTIME-TASK-HEADER-
+               PROJECTION-COHERENCE-REPAIR01-CORRECTION05 - board
+               row update (PASS, CORRECTION04 superseded; chain
+               of corrections complete)"
+ORIGIN_HEAD = 7caca443b
+BRANCH      = main
+WORKTREE    = clean (excluding .factory/evidence/ which is local)
+
+REVIEWER HALT (from the Factory reviewer on CORRECTION05)
+  New P0 - HALT_PHASE_STAMP_REFRESHED_BY_MASKED_AUTHORITY_MUTATION.
+
+  CORRECTION05 closed the previous P0 by stamping on a
+  narrower projection-authority tuple. But the canonical
+  selector has precedence (selectors.ts:47):
+      awaitingApproval
+          > modelStreaming || tooling
+          > lifecycle
+  A `tool_started` under awaitingApproval=true mutates
+  the LOWER-precedence `activeToolCallIds` without
+  changing the projection. CORRECTION05's helper still
+  detected the mutation and refreshed the awaiting_approval
+  stamp, restoring the LIVE contradiction under a different
+  label.
+
+  Reviewer's action:
+    "DELETE complexity rather than add another exception.
+     The comparator already knows whether the two phase
+     authorities agree; make that agreement the
+     generation stamp."
+
+PURPOSE OF THIS CORRECTION
+  Replace mutation-based stamping with same-generation
+  agreement between the two phase authorities:
+
+    stamp[P] = N
+    iff shadowPhase === legacyPhase === P
+       at TurnState generation N
+
+  plus the retained `event !== "noop"` belt-and-braces
+  guard. The comparator already has all three facts at
+  the observation site (shadowPhase, legacyPhase, turnSeq).
+
+  Also fixed a factual bug surfaced by the reviewer:
+  C05's helper added `lifecycle.reason` comparison for
+  `kind === "failed"`, but `projectTurnState` does not
+  read `lifecycle.reason`. The C06 simplification deletes
+  the helper entirely, eliminating the redundant dependency
+  graph.
+
+  Deletion count vs additions:
+    - deleted: `isSameTurnProjectionAuthority` helper
+               (and its `lifecycle.reason` bug)
+    - deleted: preModel parameter from compareWith
+    - deleted: preModel snapshot in observeRuntimeEvent
+    - deleted: preModel snapshot in observeTaskMsg
+    + added: `THCP11_C06_MASKED_RED`
+    + added: `THCP11_C06_CORROBORATION_POSITIVE`
+    + added: `THCP11_C06_CORROBORATION_AGREEMENT`
+
+PROTECTED LANES (unchanged from REPAIR01)
+  R0 execution-obligation   = CLOSED
+  R5 manual approval        = WATCH_ONLY
+  Multi-element cardinality = CLOSED
+  FORENSICS01               = HALTED historical
+
+LANE STATUS BEFORE CORRECTION
+  CORRECTION05 was halted with P0
+  HALT_PHASE_STAMP_REFRESHED_BY_MASKED_AUTHORITY_MUTATION.
+
+LANE STATUS AFTER CORRECTION (target)
+  PASS / REPAIR01_COMMITTED_CORRECTION06
+  LIVE_QUALIFICATION = LIVE_UNAVAILABLE

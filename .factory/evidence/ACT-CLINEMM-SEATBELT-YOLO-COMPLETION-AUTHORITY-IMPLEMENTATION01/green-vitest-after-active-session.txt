@@ -1,0 +1,269 @@
+(node:46434) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:46437) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46435) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46440) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46439) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46438) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46436) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > new SessionAutoApprovalStore starts inactive 1ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > setOverride('all', sessionId) binds to that session 0ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > CORRECTION01: setOverride('all', undefined) ARMS rather than refuses 0ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > setOverride('none') clears regardless of sessionId (UI deactivation) 0ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > CORRECTION02: clearActiveOverride destroys only the bound override (arm survives) 0ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > CORRECTION02: clearPendingArm destroys only the arm (bound override survives) 0ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > CORRECTION02: clearSessionAutoApproval is the full-reset union 0ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > getOverride returns 'none' for stale sessionId (stale-task leak proof) 0ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > CORRECTION02: getOverride is pure — does NOT consume the arm across reads 0ms
+ ✓ src/sdk/session-auto-approval.controller.test.ts > SessionAutoApprovalStore + Controller choke-points > CORRECTION02: consumePendingOverride is the one-shot consumer 0ms
+ ✓ src/sdk/__tests__/session-auto-approval-active-session-rebuild.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / active-session override transition > ACTIVE-1 CAI-01B active-session: prev='none' → 'all' triggers rebuild + new config carries override='all' 3ms
+ ✓ src/sdk/__tests__/session-auto-approval-active-session-rebuild.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / active-session override transition > ACTIVE-2 CAI-01B active-session conservation: prev='all' → 'none' triggers rebuild + new config carries override='none' 0ms
+ ✓ src/sdk/__tests__/session-auto-approval-active-session-rebuild.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / active-session override transition > ACTIVE-3 active-session: idempotent re-arm (prev=current) does NOT request a rebuild 0ms
+ ✓ src/sdk/__tests__/session-auto-approval-active-session-rebuild.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / active-session override transition > ACTIVE-4 no active session: handleOverrideChanged is a no-op (peekArmed covers next-task) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveAutoApproval > override=none returns the SAME object reference (no allocation) 1ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveAutoApproval > override=all enables ordinary read/edit/web/mcp categories 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveAutoApproval > override=all does NOT mutate the persisted input 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveAutoApproval > override=all returns a new object reference (not the persisted one) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveAutoApproval > override=all preserves the legacy external-file fields exactly 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveAutoApproval > override=all preserves the persisted executeSafeCommands field (host mode projection happens in resolveEffectiveHostMode) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveAutoApproval > disable override: exact persisted values restored (fresh persisted object each time) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveAutoApproval > resolver is idempotent: all(all(x)) == all(x) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveHostMode > override=all yields 'all' host mode 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveHostMode > override=all yields 'all' even when persisted executeSafeCommands=true (override wins) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveHostMode > override=none + executeSafeCommands=true => 'safe-only' 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > resolveEffectiveHostMode > override=none + executeSafeCommands=false => 'manual' 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > starts inactive 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > setOverride('all', sessionId) activates for that session 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > setOverride('all', sessionId) does NOT activate for a different session 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: setOverride('all', undefined) ARMS (does not refuse) and arm survives getOverride 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > setOverride('none') clears the active override regardless of sessionId 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > clearSessionAutoApproval destroys any active override 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > snapshot returns the active override and sessionId 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > snapshot is inert when inactive 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > stale-task leak proof: task A all=true, task B begins => task B override=none 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > stale-task leak proof: clearSessionAutoApproval resets state for next task 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > setOverride(undefined, 'all') arms a one-shot intent (does not bind yet) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > setOverride(sessionId, 'all') binds directly without arming 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > getOverride() is PURE: it does NOT consume the arm 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > consumePendingOverride(newSessionId) binds the arm and clears it 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > consumePendingOverride is a no-op when no arm is set 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > consumePendingOverride is one-shot: second call returns false 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > clearActiveOverride destroys ONLY the bound override (arm survives) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > clearPendingArm destroys ONLY the arm (bound override survives) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > clearSessionAutoApproval destroys BOTH (legacy union; full reset) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: pre-arm intent + lifecycle separation > setOverride(undefined, 'none') clears both arm and bind (UI toggle off) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION01: stripRequiresApproval > strips requires_approval when present 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION01: stripRequiresApproval > returns the same object when requires_approval is absent 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION01: stripRequiresApproval > returns primitives unchanged 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > returns undefined when override is 'none' 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > projects mode:'all' + preserves base explicitAllowRules 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > CORRECTION02: preserves explicitDenyRules from the base (the lattice fix) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > falls back to DEFAULT_COMMAND_HOST_ALLOW_RULES only when base has none 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > does NOT mutate the base authorization 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / isYoloSessionRequested > RED (a.1): persisted all-5-true + override='none' → true (persisted-only path converges) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / isYoloSessionRequested > RED (a.2): persisted mixed + override='all' → true (session override widens intent) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / isYoloSessionRequested > RED (a.3): persisted mixed + override='none' → false (no persisted, no override) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / isYoloSessionRequested > RED (a.4): persisted all-5-true + override='all' → true (both routes agree) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / isYoloSessionRequested > RED (a.5) schema-coverage: each canonical YOLO_REQUEST_ACTION_KEYS key participates in the conjunction 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / isYoloSessionRequested > RED (a.6) legacy-key conservation: legacy compatibility fields do NOT affect YOLO classification 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / deriveExplicitCompletionAuthority > RED (c.1) CAI-13A: YOLO_REQUESTED + SEATBELT NOT selected → authority OFF 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / deriveExplicitCompletionAuthority > RED (c.2) CAI-13B (LOAD-BEARING): YOLO_REQUESTED + SELECTED + substrate broken → authority OFF 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / deriveExplicitCompletionAuthority > RED (c.3) CAI-13C: YOLO_REQUESTED + SEATBELT_SELECTED + SEATBELT_AVAILABLE → authority ON (eligibility) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / deriveExplicitCompletionAuthority > RED (c.4) non-interactive: even with all Seatbelt facts true, authority OFF 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / deriveExplicitCompletionAuthority > RED (c.5) manual/mixed persisted + no Seatbelt: authority OFF (CAI-02 conservation) 0ms
+ ✓ src/sdk/session-auto-approval.test.ts > SessionAutoApprovalStore > CORRECTION02: resolveSessionHostAuthorization composes OVER baseAuth > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / deriveExplicitCompletionAuthority > RED (c.6) session override='all' + Seatbelt selected/available: authority ON (CAI-01B) 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/session-auto-approval.controller.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/session-auto-approval-active-session-rebuild.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/session-auto-approval.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/vscode-session-host.test.ts > VscodeSessionHost telemetry wiring > passes shared telemetry to ClineCore.create 5ms
+ ✓ src/sdk/vscode-session-host.test.ts > VscodeSessionHost telemetry wiring > injects shared telemetry into CoreSessionConfig when remote config did not provide one 0ms
+ ✓ src/sdk/vscode-session-host.test.ts > VscodeSessionHost telemetry wiring > preserves telemetry already supplied by remote config 0ms
+ ✓ src/sdk/vscode-session-host.test.ts > VscodeSessionHost telemetry wiring > passes custom editor and apply_patch executors into tool executor capabilities 0ms
+ ✓ src/sdk/vscode-session-host.test.ts > VscodeSessionHost telemetry wiring > leaves the SDK's default edit executors in place when no overrides are provided 0ms
+ ✓ src/sdk/vscode-session-host.test.ts > VscodeSessionHost telemetry wiring > applies remote config before appending VS Code extra tools 1ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/vscode-session-host.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / buildSessionConfig integration > CAI (c.1) CAI-01A: persisted YOLO + Seatbelt selected/available + mode=act → enableSubmitAndExit=true 7ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / buildSessionConfig integration > CAI (c.2) CAI-02: manual persisted + Seatbelt selected/available → enableSubmitAndExit=false (conservation) 0ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / buildSessionConfig integration > CAI (c.3) CAI-13A: persisted YOLO + Seatbelt NOT selected → enableSubmitAndExit=false 0ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / buildSessionConfig integration > CAI (c.4) CAI-13B (LOAD-BEARING): persisted YOLO + Seatbelt SELECTED + substrate broken → enableSubmitAndExit=false 0ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / buildSessionConfig integration > CAI (c.5) CAI-11: explicit completion authority does NOT flip config.mode away from 'act' 0ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / buildSessionConfig integration > CAI (c.6) Plan-mode conservation: even with all Seatbelt facts true + YOLO persisted, mode=plan → enableSubmitAndExit=false 0ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / buildSessionConfig integration > CAI (c.7) CAI-01B PRODUCTION SEAM: mixed persisted + sessionAutoApprovalOverride='all' + Seatbelt → enableSubmitAndExit=true 0ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / buildSessionConfig integration > CAI (c.8) CAI-01B conservation pair: same mixed persisted + override='none' → enableSubmitAndExit=false 0ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / load-bearing real-runtime seam > CAI (d.1) CAI-13C load-bearing: buildSessionConfig → DefaultRuntimeBuilder → submit_and_exit registered + completionPolicy.requireCompletionTool=true 8ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / load-bearing real-runtime seam > CAI (d.2) CAI-13B conservation: substrate broken → submit_and_exit NOT registered + completionPolicy undefined 2ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / load-bearing real-runtime seam > CAI (d.3) manual persisted → submit_and_exit NOT registered even when Seatbelt selected/available 2ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / load-bearing real-runtime seam > CAI (d.4) CAI-01B production seam (load-bearing): mixed persisted + override='all' → submit_and_exit registered + requireCompletionTool=true 2ms
+ ✓ src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts > ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01 / load-bearing real-runtime seam > CAI (d.5) CAI-01B conservation pair (load-bearing): same mixed persisted + override='none' → submit_and_exit NOT registered 2ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/seatbelt-yolo-completion-authority-integration01.red.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/cline-session-factory.test.ts > getDefaultModelIdForProvider > uses the SDK provider catalog for the Cline default model 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > getDefaultModelIdForProvider > uses the generated Gemini provider default 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > getDefaultModelIdForProvider > returns undefined for unknown providers 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > getDefaultModelIdForProvider > returns no default for local-model-source providers so a cloud-catalog model is never silently selected 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > getDefaultModelIdForProvider > resolves the OpenAI Compatible default through the extension's openai alias 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildStartSessionInput > does not forward the prompt to start() 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildStartSessionInput > includes images and files when provided 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildStartSessionInput > always sets interactive to true 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildStartSessionInput > handles undefined prompt 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildResumeSessionInput > builds resume input with session ID and prompt 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildResumeSessionInput > includes images and files when provided 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeSdkBaseUrl > treats blank base URLs as unset so SDK provider defaults can apply 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeSdkBaseUrl > passes Ollama origins through unchanged (the native-API vendor appends /api itself) 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeSdkBaseUrl > preserves explicit user paths 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeSdkBaseUrl > inherits the AskSage default /server path when the custom URL has no path 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeProviderReasoningSettings > does not emit reasoningEffort when thinking is disabled 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeProviderReasoningSettings > treats effort none as disabled thinking 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeProviderReasoningSettings > passes enabled reasoning with a concrete effort 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeProviderReasoningSettings > leaves explicit effort-only settings enabled by SDK/provider defaults 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeProviderReasoningSettings > honors a migrated legacy budget as thinking-on with a derived effort 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeProviderReasoningSettings > derives an effort from the budget when enabled without an effort 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeProviderReasoningSettings > prefers an explicit effort over a stored budget 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > normalizeProviderReasoningSettings > keeps disabled reasoning off even with a stored budget 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > resolves Cline OAuth credentials after defaulting to the Cline provider 21ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > resolves ClinePass from the shared Cline OAuth credentials 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > preserves explicit ClinePass API keys from state before OAuth storage 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > preserves explicit Cline API keys from state before OAuth storage 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > resolves OpenAI Compatible API keys from migrated SDK provider settings 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > resolves the OpenAI Compatible base URL when the provider is stored under its SDK spelling 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > falls back to the providers.json base URL when legacy state has none 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > resolves the AskSage base URL from the legacy asksageApiUrl state field 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > falls back to the providers.json AskSage base URL when legacy state has none 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > forwards the regional API line from legacy state so the gateway can route to the regional endpoint 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > falls back to the providers.json apiLine when legacy state has none 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > inherits the base provider's legacy apiLine for coding variants 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > prefers the coding variant's own providers.json apiLine over the shared legacy field 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > omits apiLine for unrecognized values 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > exposes knownModels at the top level so manual compaction can budget against the model catalog 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > resolves OpenAI Codex through the shared OAuth provider registry 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > resolves SDK-backed provider API keys from provider-specific settings 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > does not treat OpenAI Codex as OpenAI Native API-key auth 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > preserves rich SDK catalog entries without extension-side replacement 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > keeps session creation non-fatal when known-model lookup fails 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > passes OpenAI Compatible max output tokens as an explicit request limit 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > uses OpenAI Compatible overrides from models.json for runtime request settings 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > keeps -1 OpenAI Compatible values out of request settings and fallback knownModels 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > passes OCA reasoning effort from legacy mode settings to SDK sessions 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > lets legacy OCA none override stale provider reasoning settings 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > builds structured SAP AI Core config from legacy ApiConfiguration fields 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > defaults SAP AI Core to orchestration mode and omits deployment id when mode is unset 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > omits SAP AI Core deployment id when orchestration mode is enabled 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > falls back to legacy SAP-specific model fields when the generic model field is absent 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > preserves an explicitly cleared SAP base URL so stored settings cannot fill it back in 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > does not emit partial SAP overrides when SAP strings are absent 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > uses ClinePass model storage and omits empty nested apiKey so SDK OAuth can fill it 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > enables agentic SDK compaction when global useAutoCondense is true 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > uses the configured SDK compaction strategy when auto condense is enabled 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > falls back to agentic SDK compaction for an invalid stored strategy 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > does not enable SDK compaction when global useAutoCondense is false 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > lets task useAutoCondense override the global setting 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > buildSessionConfig > emits the shared mode-tag instructions in both act and plan system prompts 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > createHistoryItemFromSession > creates a HistoryItem from session data 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > createHistoryItemFromSession > handles missing optional fields 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > createHistoryItemFromSession > creates unique timestamps for different calls 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > getHistoryItemById > returns undefined when task is not found 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > getHistoryItemById > finds a task by ID 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > getHistoryItemById > returns undefined for empty history 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > updateHistoryItem > adds a new item to history 1ms
+ ✓ src/sdk/cline-session-factory.test.ts > updateHistoryItem > updates an existing item in history 0ms
+ ✓ src/sdk/cline-session-factory.test.ts > updateHistoryItem > prepends new items to the beginning of history 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/cline-session-factory.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+ Test Files  6 passed (6)
+      Tests  155 passed (155)
+   Start at  20:29:00
+   Duration  2.36s (transform 6.46s, setup 10.04s, import 1.41s, tests 91ms, environment 0ms)
+
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m
+Emitted 'error' event at:
+    at ChildProcess.emitWorkerError (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3011:22)
+[90m    at ChildProcess.emit (node:events:509:20)[39m
+[90m    at ChildProcess.kill (node:internal/child_process:535:12)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+Node.js v26.0.0

@@ -1,0 +1,77 @@
+ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01
+
+ENTRY_FREEZE
+
+REPOSITORY_ROOT=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH=main
+
+ENTRY_HEAD=e33e322a8 (C3 of CORRECTION03)
+ORIGIN_MAIN=7f1ff13d9
+              (16 unpushed local commits)
+
+TRACKED_WORKTREE_STATUS=clean
+(known gitignored evidence dirs in .factory/ are exempt)
+
+PREDECESSOR VERDICT (CORRECTION03):
+  Status:     CLOSED_CLEAN per CORRECTION03 docs(factory):C3
+  Verdict:    PASS_MKTEMP_BOUNDED_TEMP_AUTHORITY
+  Range:      Three command-policy production files plus tests/board,
+              no parser or sandbox change.
+  Claim:      Slash-bypass closes shell-function lookup shadow
+              (per GNU Bash Reference Manual: command names with
+              a slash are executed as pathnames without function
+              or builtin lookup).
+
+REVIEWER DISPOSITION
+  The slash-bypass proof is correct for the function-lookup
+  channel. However, BASH_ENV is a SEPARATE channel:
+
+    GNU Bash Reference Manual, Bash Startup Files:
+    When Bash is invoked as a non-interactive shell (e.g., via
+    bash -c), it looks for BASH_ENV in the environment, and if
+    it is defined, expands the value of that variable and uses
+    the expanded value as a file to source BEFORE executing the
+    supplied command string.
+
+  Therefore:
+    policy authorized C = "/usr/bin/mktemp"
+    bash executes S + C = "source $BASH_ENV; /usr/bin/mktemp"
+
+  The proven identity IS the final simple command, but the
+  shell can execute arbitrary startup code BEFORE it. Slash
+  bypass closes function lookup but does NOT close startup-file
+  side effects.
+
+  This affects EVERY bash -c invocation -- not just mktemp.
+  Live verification on this darwin-arm64 host shows BASH_ENV
+  runs before pwd, ls, git --version, echo, and
+  /usr/bin/mktemp.
+
+OUT OF SCOPE OF CORRECTION03:
+  - Don't create CORRECTION04 inside the mktemp saga.
+  - The mktemp saga IS genuinely closed at the policy layer;
+    slash-bypass proves what the policy controls.
+  - But the BASH_ENV authority gap is a GENERAL EXECUTOR
+    BOUNDARY, not a mktemp-specific defect.
+
+NEXT ACT: ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01
+  Goal: Ensure deterministic command authorization cannot be
+        preceded or semantically altered by inherited Bash
+        startup authority.
+  Approach: executor-side environment normalization BEFORE
+            bash invocation. NOT command-policy special cases.
+
+  CONSERVATION:
+    Seatbelt sanitized mode         conserved (closed by envSemantics:complete)
+    DEFAULT_OFF ordinary env        otherwise preserved
+    stdout/stderr/exit/cancel       conserved
+    command-policy                  unchanged
+    parser helper                   unchanged
+    auth/approval lattice           unchanged
+
+  OUT OF SCOPE OF THIS ACT:
+    - linux mktemp (separate ACT candidate)
+    - mktemp template forms (separate ACT)
+    - executor-side transformedInput plumbing (separate ACT)
+    - auto-blacklisting every Bash-affecting var; recon first
+      to confirm which matter for the actual invocation mode

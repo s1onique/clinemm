@@ -1,0 +1,73 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- policy-source-proof.txt
+
+THE EXACT PRODUCTION RULE (inserted at C2):
+
+File: sdk/packages/core/src/runtime/command-policy/command-safe-rules.ts
+Line range: ~90-148 (REVIEW STANDARD block + entry)
+
+The entry as inserted:
+  {
+    source: "host_safe_mktemp_default_temp",
+    pattern: /^\s*mktemp(?:\s+-d)?\s*$/u,
+  },
+
+The rule is shipped through the production host adapter at:
+  apps/vscode/src/sdk/sdk-tool-policies.ts:165
+
+  if (settings.actions.executeSafeCommands) {
+    resolved = commandHostAuthorization({
+      mode: "safe-only",
+      explicitAllowRules: DEFAULT_COMMAND_HOST_ALLOW_RULES,
+      workspaceRoots: workspaceContext?.workspaceRoots,
+      cwd: workspaceContext?.cwd,
+      pathAuthorityEvidence: workspaceContext?.pathAuthorityEvidence,
+    })
+  }
+
+So when executeSafeCommands is on, the host-supplied rules array
+includes DEFAULT_COMMAND_HOST_ALLOW_RULES. The new rule is part of
+that set. evaluateCommandPolicy then evaluates per-command:
+
+  evaluateOne() -> match on the rule
+  -> kind: allow
+  -> matchedRuleSource: host_safe_mktemp_default_temp
+  -> safeExecutionProfile: (none; intrinsic command)
+
+When executeSafeCommands is OFF, the host supplies
+  resolved = commandHostAuthorization({ mode: "manual" })
+(no explicitAllowRules), and the safe-rule catalog is NEVER
+consulted. Bare mktemp -> ASK (manual mode requires approval).
+
+This is the exact same architecture as every other safe rule in
+DEFAULT_COMMAND_HOST_ALLOW_RULES (pwd, echo, ls, find, git_*,
+cd_workspace_transition). The mktemp rule slots in alongside them.
+
+NO NEW MECHANISM WAS INTRODUCED
+  - no new op in command-risk.ts
+  - no new field on CommandHostAuthorization
+  - no new path authority evidence
+  - no parser-helper schema change
+  - no protobuf change
+
+The default mode (manual) is unchanged. The safe-only mode now
+includes mktemp in its bounded positive allowlist. The all mode
+was never gated by this rule and remains unchanged.
+
+SOURCE REGISTRY (single source of truth):
+  DEFAULT_COMMAND_HOST_ALLOW_RULES
+    @ sdk/packages/core/src/runtime/command-policy/command-safe-rules.ts
+    -> re-exported from command-policy.ts:661
+    -> consumed by apps/vscode/src/sdk/sdk-tool-policies.ts:165
+
+REMOVAL PROTOCOL (if future ACT decides to tighten):
+  1. Remove the entry from DEFAULT_COMMAND_HOST_ALLOW_RULES
+  2. Remove the REVIEW STANDARD comment block (28 lines)
+  3. Remove the test entries (45 in command-safe-rules.test.ts)
+  4. Optionally remove the live-green test (23 tests)
+     or repurpose for documentation
+
+The rule cannot introduce an authorization leak because it is
+the SAME positive allowlist mechanism every other safe rule
+uses; the executor uses the rule only when executeSafeCommands
+is on (i.e. the user has explicitly opted in to auto-approve
+a bounded set of commands).

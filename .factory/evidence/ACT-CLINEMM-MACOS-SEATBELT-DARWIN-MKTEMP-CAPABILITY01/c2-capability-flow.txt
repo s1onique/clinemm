@@ -1,0 +1,56 @@
+# C2 Capability Flow Trace (spec §17, §21)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:00Z
+
+## End-to-end trace: /usr/bin/mktemp under seatbelt-experimental
+
+1. **Authorization** (apps/vscode/src/sdk/sdk-tool-policies.ts:813)
+   evaluateCommandToolApprovalWithPlan() returns
+     executionPlan.commands[0].executionCapability =
+       filesystem-create-only(roots=[/private/var/folders/.../T])
+
+2. **Approval result stamping** (apps/vscode/src/sdk/.../agent-runtime.ts:2654)
+   ToolApprovalResult is rendered into the AgentToolContext.
+   perCommandExecutionCapability carries the FilesystemCreateOnlyCapability.
+
+3. **Executor-boundary stamping** (sdk/packages/core/src/extensions/tools/definitions.ts:281-285)
+   For each commandIndex i, when commandExecutionPlan is present:
+     perCommandContext = { ...context, executionCapability: undefined,
+                            perCommandExecutionCapability: perCommandCaps[i] }
+   This is the ONLY place that stamps perCommandExecutionCapability on
+   the per-command context the executor sees. The runtime guard at
+   definitions.ts:278-283 (added in CORRECTION02) requires the
+   capability to be paired with a commandExecutionPlan.
+
+4. **Manager.start stamping** (apps/vscode/src/sdk/command-job-manager.ts:756)
+   jobExecutionCapability = context.perCommandExecutionCapability
+                              ?? context.executionCapability
+   Stamped on job.executionCapability at construction time (line 764).
+
+5. **Sandbox backend conversion** (apps/vscode/src/sdk/command-job-manager.ts:592-598)
+   Inside the sandbox-mode block:
+     createOnlyRootsForThisJob = capabilityFromJobExecution(
+       context?.perCommandExecutionCapability
+       ?? context?.executionCapability
+     )
+     // exhaustive switch over InternalExecutionCapability union
+   Then attached to the backend.prepare capability:
+     capability: { ...capability,
+                   ...(createOnlyRootsForThisJob.length > 0
+                     ? { createOnlyRoots: createOnlyRootsForThisJob }
+                     : {}) }
+
+6. **Canonicalization** (sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts:201-229)
+   Each createOnlyRoot is canonicalized via canonicalizeSandboxRoot.
+   ENOENT/EACCES/ELOOP/invalid string -> SandboxError -> ZERO commands
+   execute (fail-closed at prepare() time, before spawn).
+
+7. **Profile generation** (sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:255-260)
+   buildWriteRule(... createOnlyRoots) emits:
+     (allow file-write-create
+       (subpath "<canonical DARWIN_ROOT>"))
+
+8. **Kernel enforcement** (/usr/bin/sandbox-exec -f profile ...)
+   file-write-create (subpath "<canonical>") -> mkstemp permitted,
+   write-data denied. Test: spec §25-§34 matrix.

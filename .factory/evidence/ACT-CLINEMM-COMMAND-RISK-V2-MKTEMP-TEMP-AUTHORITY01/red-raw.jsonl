@@ -1,0 +1,9 @@
+[22m[39m{"cmd":"mktemp","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+[22m[39m{"cmd":"mktemp -d","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+[22m[39m{"cmd":"mktemp -u","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+[22m[39m{"cmd":"mktemp foo.XXXXXX","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+[22m[39m{"cmd":"mktemp -p /tmp foo.XXXXXX","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+[22m[39m{"cmd":"mktemp -t myprefix","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+[22m[39m{"cmd":"TMPDIR=/tmp mktemp","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+[22m[39m{"cmd":"mktemp \"$X\"","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+[90mstdout[2m | src/runtime/command-policy/_red-mktemp-capture.test.ts[2m > [22m[2mLIVE RED: mktemp at command-policy seam (current exact-head)[2m > [22m[2mclassifies: mktemp ${X}

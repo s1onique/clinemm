@@ -1,0 +1,55 @@
+{
+  "fixture_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture",
+  "step1_begin": {
+    "schema": "cline-approval-specimen-capture/v2",
+    "approvalEventCount": 2,
+    "sessionCandidateCount": 1,
+    "fingerprintCount": 2,
+    "sessionProjectionKeys": [
+      "interactive",
+      "matchedByShape",
+      "mode",
+      "model",
+      "provider",
+      "sessionId",
+      "source",
+      "started_at",
+      "status",
+      "taskId",
+      "updated_at"
+    ]
+  },
+  "step2_finish": {
+    "binding": {
+      "act": "ACT-CLINEMM-HERMETIC-FIXTURE",
+      "artifactStatus": "PASS",
+      "captureId": "20260828T041704Z-b6b4a90d",
+      "capturedAt": "2026-08-28T04:17:05.128509Z",
+      "deltaSize": 2,
+      "eventDeltaBound": true,
+      "humanChronologyBound": true,
+      "pendingApprovalEventCount": 2,
+      "pendingDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-FIXTURE/captures/20260828T041704Z-b6b4a90d/pending",
+      "pendingSessionCandidateCount": 1,
+      "resolvedApprovalEventCount": 4,
+      "resolvedDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-FIXTURE/captures/20260828T041704Z-b6b4a90d/resolved",
+      "resolvedSessionCandidateCount": 1,
+      "runtimeIdentityBound": true,
+      "schema": "cline-approval-specimen-binding/v1",
+      "sessionBindingAvailable": true,
+      "specimenBinding": "PASS"
+    },
+    "delta_lines": 2,
+    "before_lines": 2,
+    "after_lines": 4,
+    "discriminator_items": 2,
+    "delta_correlation_ids": [
+      "corr-B"
+    ]
+  },
+  "step3_report": {
+    "report_json_bytes": 2026,
+    "report_txt_bytes": 475,
+    "binding_agrees_with_json": true
+  }
+}

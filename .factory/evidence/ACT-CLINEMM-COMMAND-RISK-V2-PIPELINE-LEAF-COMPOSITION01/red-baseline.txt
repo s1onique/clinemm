@@ -1,0 +1,294 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core[39m
+
+ [31m❯[39m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts [2m([22m[2m42 tests[22m[2m | [22m[31m15 failed[39m[2m)[22m[32m 88[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `head -30` (stdin-only) -> ALLOW[39m[32m 13[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `head` (no args, stdin-only) -> ALLOW[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `head -n 30` (stdin-only) -> ALLOW[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `head --` (stdin-only, explicit end-of-options) -> ALLOW[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `head -n 30 --` (stdin-only with end-of-options) -> ALLOW[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `tail -20` (stdin-only) -> ALLOW[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `tail -n 20` (stdin-only) -> ALLOW[39m[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head some-file` (path-bearing) stays ASK[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head -30 some-file` (path-bearing) stays ASK[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head -n 30 some-file other-file` (multi-path) stays ASK[32m 4[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `cat some-file` (path-bearing) stays ASK[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `tail -20 some-file` (path-bearing) stays ASK[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head $(cmd)` (command-substitution arg) stays ASK[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head "$HOME"` (param-expansion arg) stays ASK[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head ${HOME}/file` (brace-expansion arg) stays ASK[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head --help` stays ASK (option not reviewed)[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head --version` stays ASK (option not reviewed)[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head -c 100` stays ASK (-c not in stdin-only profile)[32m 3[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head -30 > /tmp/x` stays ASK (redirected write)[32m 2[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `echo hello | head -30` -> ALLOW[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `pwd && head -30` -> ALLOW (chain composition)[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m RED->GREEN: `pwd && git status && head -30` -> ALLOW[39m[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `pwd && head -30 && git branch -D sentinel` stays ASK (R5 sibling)[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `head -30 | sh` stays ASK (dangerous-sink pipe)[32m 3[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `ls .factory/ 2>/dev/null | head -30` stays ASK (ls path authority)[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `pwd` -> ALLOW (V1 host_safe_pwd, unchanged)[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `git status` -> ALLOW (V1 host_safe_git_status, unchanged)[32m 2[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `git log --oneline -5` -> ALLOW (existing V1 host_safe_git_log)[32m 3[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `git log --oneline -5 origin/main` stays ASK (positional ref deferred)[32m 2[2mms[22m[39m
+[31m     [31m×[31m ALLOW: `head -30` synthetic with protocolVersion=4 + argProvenance=static[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m ALLOW: `head -n 30` synthetic[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m ALLOW: `tail -20` synthetic[39m[32m 0[2mms[22m[39m
+     [32m✓[39m ASK: `head some-file` synthetic (path-bearing remains ASK)[32m 0[2mms[22m[39m
+     [32m✓[39m ASK: `head --help` synthetic (argv-shape reject)[32m 0[2mms[22m[39m
+     [32m✓[39m ASK: `head -c 100` synthetic (argv-shape reject)[32m 0[2mms[22m[39m
+     [32m✓[39m ASK: `head $(cmd)` synthetic (dynamic arg)[32m 0[2mms[22m[39m
+     [32m✓[39m ASK: `head "$HOME"` synthetic (param-expansion dynamic)[32m 0[2mms[22m[39m
+     [32m✓[39m ASK: `head -30 > /tmp/x` synthetic (redirect present)[32m 0[2mms[22m[39m
+     [32m✓[39m CONSERVATION: `echo hello` synthetic stays ALLOW (existing echo branch unchanged)[32m 0[2mms[22m[39m
+     [32m✓[39m ASK: `head -30` synthetic with protocolVersion=2 stays ASK (v2 injects [unknown])[32m 0[2mms[22m[39m
+[31m     [31m×[31m ALLOW: `head -30` synthetic with protocolVersion=3 -> ALLOW (v3 emits real provenance)[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m ALLOW: `head -30` synthetic with protocolVersion=4 -> ALLOW (v4 additive)[39m[32m 0[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 15 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `head -30` (stdin-only) -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m227:22[22m[39m
+    [90m225|[39m   [90m// POST-REPAIR: ALLOW + auto-approve-eligible.[39m
+    [90m226|[39m   [90m// PRE-REPAIR: ASK (no V1 rule).[39m
+    [90m227|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m228|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m229|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `head` (no args, stdin-only) -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m238:22[22m[39m
+    [90m236|[39m    parserResult[33m:[39m [35mawait[39m helper[33m.[39m[34minvoke[39m({ command[33m:[39m cmd })[33m,[39m
+    [90m237|[39m   })[33m;[39m
+    [90m238|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m239|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m240|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `head -n 30` (stdin-only) -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m249:22[22m[39m
+    [90m247|[39m    parserResult[33m:[39m [35mawait[39m helper[33m.[39m[34minvoke[39m({ command[33m:[39m cmd })[33m,[39m
+    [90m248|[39m   })[33m;[39m
+    [90m249|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m250|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m251|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `head --` (stdin-only, explicit end-of-options) -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m260:22[22m[39m
+    [90m258|[39m    parserResult[33m:[39m [35mawait[39m helper[33m.[39m[34minvoke[39m({ command[33m:[39m cmd })[33m,[39m
+    [90m259|[39m   })[33m;[39m
+    [90m260|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m261|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m262|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `head -n 30 --` (stdin-only with end-of-options) -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m271:22[22m[39m
+    [90m269|[39m    parserResult[33m:[39m [35mawait[39m helper[33m.[39m[34minvoke[39m({ command[33m:[39m cmd })[33m,[39m
+    [90m270|[39m   })[33m;[39m
+    [90m271|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m272|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m273|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `tail -20` (stdin-only) -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m282:22[22m[39m
+    [90m280|[39m    parserResult[33m:[39m [35mawait[39m helper[33m.[39m[34minvoke[39m({ command[33m:[39m cmd })[33m,[39m
+    [90m281|[39m   })[33m;[39m
+    [90m282|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m283|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m284|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `tail -n 20` (stdin-only) -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m293:22[22m[39m
+    [90m291|[39m    parserResult[33m:[39m [35mawait[39m helper[33m.[39m[34minvoke[39m({ command[33m:[39m cmd })[33m,[39m
+    [90m292|[39m   })[33m;[39m
+    [90m293|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m294|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m295|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `echo hello | head -30` -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m447:22[22m[39m
+    [90m445|[39m   })[33m;[39m
+    [90m446|[39m   [90m// POST-REPAIR: ALLOW. PRE-REPAIR: ASK (head not safe).[39m
+    [90m447|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m448|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m449|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `pwd && head -30` -> ALLOW (chain composition)
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m460:22[22m[39m
+    [90m458|[39m   [90m// Both leaves must be parser-proven safe (or already V1-safe):[39m
+    [90m459|[39m   [90m// pwd -> V1 host_safe_pwd; head -30 -> V2 parser-proven stdin-only.[39m
+    [90m460|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m461|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m462|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- REAL parser-helper pipeline-leaf composition RED/GREEN[2m > [22mRED->GREEN: `pwd && git status && head -30` -> ALLOW
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m471:22[22m[39m
+    [90m469|[39m    parserResult[33m:[39m [35mawait[39m helper[33m.[39m[34minvoke[39m({ command[33m:[39m cmd })[33m,[39m
+    [90m470|[39m   })[33m;[39m
+    [90m471|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m472|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m473|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture contract[2m > [22mALLOW: `head -30` synthetic with protocolVersion=4 + argProvenance=static
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m579:22[22m[39m
+    [90m577|[39m    parserResult[33m:[39m parsed[33m,[39m
+    [90m578|[39m   })[33m;[39m
+    [90m579|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m580|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m581|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture contract[2m > [22mALLOW: `head -n 30` synthetic
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m591:22[22m[39m
+    [90m589|[39m    parserResult[33m:[39m parsed[33m,[39m
+    [90m590|[39m   })[33m;[39m
+    [90m591|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m592|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m593|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture contract[2m > [22mALLOW: `tail -20` synthetic
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m603:22[22m[39m
+    [90m601|[39m    parserResult[33m:[39m parsed[33m,[39m
+    [90m602|[39m   })[33m;[39m
+    [90m603|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m604|[39m   [34mexpect[39m(r[33m.[39mdisposition)[33m.[39m[34mtoBe[39m([32m"auto-approve-eligible"[39m)[33m;[39m
+    [90m605|[39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture contract[2m > [22mALLOW: `head -30` synthetic with protocolVersion=3 -> ALLOW (v3 emits real provenance)
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m730:22[22m[39m
+    [90m728|[39m    parserResult[33m:[39m parsed[33m,[39m
+    [90m729|[39m   })[33m;[39m
+    [90m730|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m731|[39m  })[33m;[39m
+    [90m732|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts[2m > [22mstructured-command-risk -- SYNTHETIC_REAL stdin-only reader fixture contract[2m > [22mALLOW: `head -30` synthetic with protocolVersion=4 -> ALLOW (v4 additive)
+[31m[1mAssertionError[22m: expected 'ask' to be 'allow' // Object.is equality[39m
+
+Expected: [32m"a[7mllow[27m"[39m
+Received: [31m"a[7msk[27m"[39m
+
+[36m [2m❯[22m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts:[2m741:22[22m[39m
+    [90m739|[39m    parserResult[33m:[39m parsed[33m,[39m
+    [90m740|[39m   })[33m;[39m
+    [90m741|[39m   [34mexpect[39m(r[33m.[39mdecision)[33m.[39m[34mtoBe[39m([32m"allow"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m742|[39m  })[33m;[39m
+    [90m743|[39m })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/15]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m15 failed[39m[22m[2m | [22m[1m[32m27 passed[39m[22m[90m (42)[39m
+[2m   Start at [22m 22:30:46
+[2m   Duration [22m 466ms[2m (transform 178ms, setup 0ms, import 258ms, tests 88ms, environment 0ms)[22m

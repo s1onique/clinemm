@@ -1,0 +1,20 @@
+[
+  {
+    "mtime": "2026-08-29T22:04:05.523766+00:00",
+    "projection": {
+      "interactive": true,
+      "matchedByShape": true,
+      "mode": "act",
+      "model": "anthropic/claude-sonnet-5",
+      "provider": "openrouter",
+      "session_id": "snake-only-A",
+      "source": "vscode",
+      "started_at": "2026-08-28T00:00:00.000Z",
+      "status": "running",
+      "updated_at": "2026-08-28T00:01:00.000Z"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after/sessions/snake-only-A/snake-only-A.json"
+  }
+]

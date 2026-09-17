@@ -1,0 +1,30 @@
+=== REAL_PRODUCTION_SEAM qualification (CORRECTION02) ===
+TMP_ROOT: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction02-f1uKBa
+PROJECT_DIR: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction02-f1uKBa/project
+
+PASS  allow/auto-approve-eligible  source=risk_v2_structured_promotion                  echo hello | head -30
+        expected: allow
+        note: pathless composition
+PASS  allow/auto-approve-eligible  source=risk_v2_structured_promotion                  pwd && head -30
+        expected: allow
+        note: pathless composition with &&
+PASS  allow/auto-approve-eligible  source=risk_v2_structured_promotion                  head -30
+        expected: allow
+        note: standalone stdin-only reader
+PASS  allow/auto-approve-eligible  source=risk_v2_structured_promotion                  ls /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction02-f1uKBa/project/inside/ok.ts | head -30
+        expected: allow
+        note: inside-workspace + valid realpath evidence
+PASS  ask/ask                    source=host_mode_safe_only_fallthrough               ls /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction02-f1uKBa/project/inside/ok.ts | head -30
+        expected: ask
+        note: CORRECTION02 invariant: no evidence = no promotion
+PASS  ask/ask                    source=host_workspace_realpath_authority             ls /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction02-f1uKBa/outside
+        expected: ask/host_workspace_realpath_authority
+        note: per-command outside operand, no evidence
+PASS  ask/ask                    source=host_mode_safe_only_fallthrough               ls /etc/passwd | head -30
+        expected: ask
+        note: well-known outside path, no evidence
+PASS  ask/ask                    source=host_mode_safe_only_fallthrough               ls /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-correction02-f1uKBa/project/escape-link | head -30
+        expected: ask
+        note: project-internal symlink => outside, no evidence
+
+=== RESULT: 8/8 pass, 0 fail ===

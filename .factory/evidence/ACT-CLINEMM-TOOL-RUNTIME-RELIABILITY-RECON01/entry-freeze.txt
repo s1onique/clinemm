@@ -1,0 +1,11 @@
+9912e1154688217f2d85a0a28859d8ba79b01777
+branch=main
+worktree-state-at-entry=clean
+worktree-state-now=dirty-by-this-ACT
+untracked-on-exit=apps/vscode/src/sdk/tool-runtime-reliability-recon01.production-seam.test.ts
+diff-stat=none-against-HEAD
+production-source-edits=none
+binding-intent=recon-artifacts-local-only; closure-commit-binding-reserved-for-closure-ACT
+test-binding-policy=per-launch-contract §12: recon artifacts are NOT bound by
+  this ACT; the test file is left untracked intentionally so the closure
+  ACT controls exactly which subjects it commits.

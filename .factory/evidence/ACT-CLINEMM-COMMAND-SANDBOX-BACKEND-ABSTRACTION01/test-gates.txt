@@ -1,0 +1,71 @@
+=== ACT-CLINEMM-COMMAND-SANDBOX-BACKEND-ABSTRACTION01 test gates ===
+Date: 2026-08-25T03:38Z
+
+Sandbox unit tests (sdk/packages/core/src/runtime/sandbox/):
+  7 files, 83 passed, 2 skipped (non-darwin platform guards)
+  - canonical-paths.test.ts          (9 tests, 0 fail)
+  - environment.test.ts              (18 tests, 0 fail)
+  - no-sandbox-backend.test.ts       (6 tests, 0 fail)
+  - sandbox-backend.test.ts          (10 tests, 0 fail)
+  - macos/seatbelt-availability.test.ts (5 tests, 1 skipped)
+  - macos/seatbelt-profile.test.ts    (23 tests, 0 fail)
+  - macos/seatbelt-backend.test.ts    (14 tests, 1 skipped — non-darwin)
+
+Real-substrate tests (macos/seatbelt-backend.test.ts, REAL /usr/bin/sandbox-exec):
+  - emits a parseable SBPL profile when prepare() is called           PASS
+  - filesystem: RW inside write PASSES                                  PASS
+  - filesystem: outside read DENIED                                     PASS
+  - filesystem: outside write DENIED (defense-in-depth)                 PASS
+  - filesystem: symlink escape DENIED                                   PASS
+  - network: deny blocks nc-style outbound connectivity                 PASS
+  - inheritance: bash child inherits the deny                            PASS
+  - environment: sanitized mode strips SSH_AUTH_SOCK and AWS_*          PASS
+  - classifier-mistake: outside write via NoSandboxBackend succeeds      PASS (control)
+  - classifier-mistake: same write via SeatbeltBackend is DENIED         PASS (DEFENSE_IN_DEPTH_PROOF)
+  - stdout/stderr/exit conservation for benign commands                  PASS
+  - cleanup hook removes the profile temp dir                           PASS
+  - fail-closed: invalid writableRoot throws SandboxError               PASS
+
+SDK full suite (sdk/packages/core, bunx vitest run --config vitest.config.ts):
+  204 files, 3024 passed, 16 skipped, 0 failed
+
+Command-policy suite (sdk/packages/core/src/runtime/command-policy/, 30 files):
+  976 passed, 0 failed
+
+Bash executor suite (sdk/packages/core/src/extensions/tools/executors/, 6 files):
+  59 passed, 12 skipped (non-darwin), 0 failed
+
+VSCode unit tests (apps/vscode, scripts/run-bun-unit-tests.ts):
+  72 files, 1076 passed, 0 failed
+
+DEFAULT_OFF invariant:
+  DEFAULT_SANDBOX_MODE === "disabled"
+  getSandboxBackend("disabled") returns NoSandboxBackend (NEVER undefined)
+  getSandboxBackend("seatbelt-experimental") without opt-in returns undefined
+  Test: sandbox-backend.test.ts → "DEFAULT_SANDBOX_MODE", "returns the noSandboxBackend instance",
+        "returns undefined (opt-in gate)"
+
+Fail-closed invariant:
+  - Invalid canonical path → throws SandboxError(reason="canonicalization-failed"); command NOT executed.
+  - Backend unavailable on this host → getSandboxBackend returns undefined; command NOT executed.
+  - Profile-write failure → throws SandboxError(reason="profile-write-failed"); command NOT executed.
+  Test: seatbelt-backend.test.ts → "fail-closed: invalid writableRoot throws SandboxError, command NOT executed"
+
+Conservation invariant (NoSandboxBackend):
+  - Returns SpawnConfig byte-equivalent to the input command
+  - Capability is ignored in disabled mode
+  - Fresh copies (no aliasing between input and prepared)
+  Test: no-sandbox-backend.test.ts → all 6 tests pass
+
+PROFILE_DETERMINISM:
+  - generateSeatbeltProfile(same capability) returns identical bytes
+  - PROFILE_SHA256 stable across calls
+  Test: seatbelt-profile.test.ts → "is deterministic: same capability → same profile bytes"
+
+SBPL escape:
+  - Adversarial paths (space, ", \, (, ), newline, tab, unicode, empty) handled correctly
+  - Embedded inside deny rules preserves syntactic correctness
+  Test: seatbelt-profile.test.ts → "survives the recon adversarial fixture matrix end-to-end",
+        "escapes adversarial paths safely inside deny rules"
+
+All gates GREEN. NO REGRESSIONS in command-policy or executor suites.

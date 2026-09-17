@@ -1,0 +1,83 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01",
+  "phase": "FILESYSTEM BASELINE",
+  "date": "2026-08-26T10:51:56.034Z",
+  "workspaceRoot": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-fsbl-ws-eu10F7",
+  "homeFixture": "/Volumes/UserData/Users/chistyakov/.cline-safe-yolo-lab-8d01c24b",
+  "wsProbes": {
+    "create": {
+      "label": "ws-create",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "CREATE_OK",
+      "stderr": ""
+    },
+    "modify": {
+      "label": "ws-modify",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "MODIFY_OK",
+      "stderr": ""
+    },
+    "delete": {
+      "label": "ws-delete",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "DELETE_OK",
+      "stderr": ""
+    },
+    "recreate": {
+      "label": "ws-recreate",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "RECREATE_OK",
+      "stderr": ""
+    }
+  },
+  "homeProbes": {
+    "create": {
+      "label": "home-create",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "HCREATE_DENIED",
+      "stderr": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-fsbl-ws-eu10F7/home-create-3e4894f8.sh: line 2: /Volumes/UserData/Users/chistyakov/.cline-safe-yolo-lab-8d01c24b/home-probe.txt: Operation not permitted"
+    },
+    "modify": {
+      "label": "home-modify",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "HMODIFY_DENIED",
+      "stderr": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-fsbl-ws-eu10F7/home-modify-411a9f3d.sh: line 2: /Volumes/UserData/Users/chistyakov/.cline-safe-yolo-lab-8d01c24b/home-probe.txt: Operation not permitted"
+    },
+    "read": {
+      "label": "home-read",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "HREAD_OK",
+      "stderr": ""
+    },
+    "delete": {
+      "label": "home-delete",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "HDELETE_DENIED",
+      "stderr": ""
+    }
+  },
+  "childProbes": {
+    "workspaceCreate": {
+      "label": "child-ws",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "CWS_OK",
+      "stderr": ""
+    },
+    "homeCreate": {
+      "label": "child-home",
+      "ok": true,
+      "exitCode": 0,
+      "stdout": "CHC_DENIED",
+      "stderr": "/bin/sh: /Volumes/UserData/Users/chistyakov/.cline-safe-yolo-lab-8d01c24b/home-probe.txt: Operation not permitted"
+    }
+  }
+}

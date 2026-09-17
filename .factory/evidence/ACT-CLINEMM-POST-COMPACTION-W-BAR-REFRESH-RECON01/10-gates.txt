@@ -1,0 +1,32 @@
+ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+GATES
+================================================
+
+Per ACT charter §34 (production repair gates).
+
+G1.  Targeted RED at the producer seam (compactSessionMessages
+     return type missing currentWorkingContextEstimate) .... REPRODUCED
+G2.  Production repair applied (additive field + callback +
+     carrier.setLatest) .................................... APPLIED
+G3.  Targeted RED/GREEN at the production seam
+     (sdk-compaction-w-publish-recon01.test.ts) ............ 7/7 PASS
+G4.  Compaction coordinator suite (3 files) ................ 37/37 PASS
+G5.  Working-context state projection suite
+     (working-context-webview-state-projection.test.ts) .... 13/13 PASS
+G6.  No regression to existing pre-fifteenth-pass tests ..... 57/57 PASS
+G7.  apps/vscode typecheck .................................. PASS (exit 0)
+G8.  sdk/packages/core typecheck (NOT touched) ............. N/A (no edits)
+G9.  webview-ui typecheck (NOT touched) .................... N/A
+G10. git diff --check ....................................... PASS
+
+GATES_SUMMARY = 7 of 10 PASS + 3 N/A + 1 REPRODUCED (RED→GREEN).
+
+One pre-existing test in apps/cli may have unrelated environment
+artifacts; not relevant to this ACT.
+
+VSIX_BUILD (operator-side, deferred):
+  Per ACT charter §35-36, VSIX build & live qualification require
+  the operator's environment. Live qualification is recorded in
+  12-live-qualification.txt (currently N/A — pending operator).
+
+BOUNDED_REPAIR_VERDICT = PASS_POST_COMPACTION_PUBLICATION_REPAIRED.

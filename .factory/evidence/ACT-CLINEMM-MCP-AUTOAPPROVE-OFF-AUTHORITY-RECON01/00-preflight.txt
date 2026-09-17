@@ -1,0 +1,52 @@
+00-preflight.txt
+ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01
+
+Repository trust preflight
+==========================
+
+git status --short:  clean (no untracked, no modified, no staged)
+git branch --show-current:  main
+git rev-parse HEAD:  9e036cf5011cd1747dec3adac0abf9bd2dd4e805
+git log -1 --oneline:
+  9e036cf50 ACT-CLINEMM-COMPACTION-WORKING-CONTEXT-HEADER-TRANSPORT-REPAIR01(factory): thirty-seventh-pass c18 HOST_WRAPPER_W_FORWARD
+
+ENTRY_HEAD=<9e036cf50>
+BRANCH=<main>
+
+HALT_UNEXPECTED_TRACKED_DIRT:  NO  (tree clean)
+Protected/frozen evidence untouched:  YES
+Stashes:  none popped
+Preexisting untracked residue:  none (./dist/ is gitignored build output, .factory-staging-sharding01/ is gitignored)
+
+Production-tree state:  none modified by this ACT at the time of evidence capture.
+Diagnostic injection:  NONE  (no source mutation).
+
+Topology discovery
+==================
+
+Repository root:        /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+Hosts:
+  apps/vscode/           — VSCode extension (package "claude-dev"); the dogfood host
+  apps/cli/              — CLI host (out of scope: distinct approval contract)
+  apps/cline-hub/        — Hub (out of scope)
+  apps/examples/desktop-app — Tauri sidecar (out of scope)
+SDK:
+  sdk/packages/core      — @cline/core (MCP manager, command policy, agent runtime glue)
+  sdk/packages/agents    — @cline/agents (AgentRuntime owns requestToolApproval seam)
+  sdk/packages/shared    — types
+  sdk/packages/llms     — LLM providers (out of scope)
+
+Our primary target — VSCode host (apps/vscode) — is the dogfood production
+host for the MCP auto-approval authority. The AgentRuntime in
+sdk/packages/agents is the SDK entry that the host adapter (SdkController)
+plugs into via the `requestToolApproval` callback; that callback routes
+into SdkInteractionCoordinator.handleRequestToolApproval, which is the
+load-bearing host-side decision boundary the recon must characterize.
+
+Production host entry point: apps/vscode/src/extension.ts (activate)
+SDK adapter entry:          apps/vscode/src/sdk/SdkController.ts
+MCP authority file:         apps/vscode/src/sdk/sdk-tool-policies.ts (isToolAutoApproved)
+Coordinator (decision):     apps/vscode/src/sdk/sdk-interaction-coordinator.ts (handleRequestToolApproval)
+SDK consumer:               sdk/packages/agents/src/agent-runtime.ts (requestToolApproval, line 3084)
+
+No production code is modified in this ACT.

@@ -1,0 +1,15 @@
+{
+  "fixture_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture",
+  "T01_attachment_marker_bound": true,
+  "T02_runtime_identity_bound": true,
+  "T11_legacy_capture_readable": true,
+  "T12_pre_correction_insufficient_preserved": true,
+  "binding_attachment_bound": "YES",
+  "zero_event_classification": "N/A",
+  "specimen_binding": "PASS",
+  "qualifying_transactions": "1",
+  "runtime_source_drift": "NO",
+  "attachment_projection_runtimeInstanceId": "01HEXY_FIXTURE_RUNTIME",
+  "attachment_projection_clineVersion": "4.1.10",
+  "attachment_projection_repoHead": "snake-only-A-fixture"
+}

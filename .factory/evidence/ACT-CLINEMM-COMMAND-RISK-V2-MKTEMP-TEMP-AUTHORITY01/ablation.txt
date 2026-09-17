@@ -1,0 +1,34 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- C3 ablation
+
+NECESSITY TEST (Section 40)
+============================
+
+With rule:
+  mktemp   -> match { source: "host_safe_mktemp_default_temp" }
+  mktemp -d -> match { source: "host_safe_mktemp_default_temp" }
+
+Ablated (without rule):
+  const WITHOUT_MKTEMP = DEFAULT_COMMAND_HOST_ALLOW_RULES.filter(
+    r => r.source !== "host_safe_mktemp_default_temp",
+  );
+  findSafeRuleMatch("mktemp", WITHOUT_MKTEMP)  -> undefined
+
+Verified in:
+  sdk/packages/core/src/runtime/command-policy/command-safe-rules.test.ts
+
+  it("ablation: removing the rule demotes bare mktemp to no-match", () => {
+    const WITHOUT_MKTEMP = DEFAULT_COMMAND_HOST_ALLOW_RULES.filter(
+      (r) => r.source !== "host_safe_mktemp_default_temp",
+    );
+    const m = findSafeRuleMatch("mktemp", WITHOUT_MKTEMP);
+    expect(m).toBeUndefined();
+  });
+
+PASS: rule is ablatable. Without the rule, the original
+risk_parse_failed ASK fallback returns. With the rule, the
+auto-approve-eligible ALLOW verdict emerges. The matcher
+constants are not vestigial.
+
+This satisfies Section 40's necessity test:
+  "with source -> mktemp promoted"
+  "ablate source -> original ASK/DENY returns"

@@ -1,0 +1,7 @@
+ ✓ src/sdk/tool-runtime-reliability-recon01.production-seam.test.ts > ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01 / production-seam A1 (terminalClosed mid-command) > real VscodeTerminalProcess settles when terminal is closed mid-command 10210ms
+ ✓ src/sdk/tool-runtime-reliability-recon01.production-seam.test.ts > ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01 / production-seam A2 (read iterator stays open after executionEnd) > real VscodeTerminalProcess settles when shell execution ends while read() remains open 1554ms
+ ✓ src/sdk/tool-runtime-reliability-recon01.production-seam.test.ts > ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01 / production-seam A3 (markerless idle, no C marker, prompt-quiet) > real VscodeTerminalProcess settles via prompt-quiet heuristic when no C marker ever arrives 38004ms
+ ✓ src/sdk/tool-runtime-reliability-recon01.production-seam.test.ts > ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01 / production-seam A4 (shell execution end event never fires) > real VscodeTerminalProcess settles via the EXIT_CODE_EVENT_TIMEOUT_MS race when no end event arrives 7003ms
+ ✓ src/sdk/tool-runtime-reliability-recon01.production-seam.test.ts > ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON01 / structural contract > documents that executeForeground's `await process` is bounded only by the process-promise contract 1051ms
+ Test Files  1 passed (1)
+      Tests  5 passed (5)

@@ -1,0 +1,127 @@
+=== ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01 network-matrix ===
+Date: 2026-08-25T00:02:16Z
+
+Local HTTP server: 127.0.0.1:18929 (python3 BaseHTTPRequestHandler)
+Profiles: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/no-net.sb (deny network*), /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/net-allow.sb (allow network*)
+
+--- N1: nc -w 2 1.1.1.1 53 under no-net -- expect DENY or hang ---
+nc: connectx to 1.1.1.1 port 53 (tcp) failed: Operation not permitted
+  rc=1
+
+--- N2: curl http://127.0.0.1:18929/ under no-net -- expect DENY ---
+curl: (7) Failed to connect to 127.0.0.1 port 18929 after 0 ms: Couldn't connect to server
+  rc=7
+
+--- N3: curl http://127.0.0.1:18929/ under net-allow -- expect PASS (positive control) ---
+INSIDE_HTTP_SERVER_HIT
+  rc=0
+
+--- N4: external outbound under net-allow -- expect connectivity (positive control) ---
+200
+  rc=0
+
+--- N5: external DNS via nslookup under no-net -- expect DENY ---
+/AppleInternal/Library/BuildRoots/289ffcb4-455d-11ef-953d-e2437461156c/Library/Caches/com.apple.xbs/Sources/bind9/bind9/lib/isc/unix/socket.c:5580: bind: Operation not permitted
+/usr/bin/nslookup: isc_socket_bind: unexpected error
+  rc=10
+
+--- N6: external DNS via nslookup under net-allow -- expect PASS ---
+Server:		1.1.1.1
+Address:	1.1.1.1#53
+
+Non-authoritative answer:
+Name:	example.com
+Address: 104.20.23.154
+Name:	example.com
+Address: 172.66.147.243
+
+  rc=0
+
+--- N7: AF_UNIX socket connect under no-net -- expect DENY ---
+UNIX_SOCKET_DENIED: [Errno 2] No such file or directory
+  rc=0
+
+--- N8: AF_UNIX socket connect under net-allow -- expect DENY (network* covers TCP/UDP only?) ---
+UNIX_SOCKET_DENIED: [Errno 2] No such file or directory
+  rc=0
+--- N7b: AF_UNIX connect to a known socket under no-net ---
+--- N7b: no-net profile -- expect DENY ---
+UNIX_SOCKET_FAIL: /var/run/launchd.sock [Errno 2] No such file or directory
+UNIX_SOCKET_FAIL: /private/var/run/launchd.sock [Errno 2] No such file or directory
+  rc=1
+
+--- N8b: net-allow profile -- expect ? ---
+UNIX_SOCKET_FAIL: /var/run/launchd.sock [Errno 2] No such file or directory
+UNIX_SOCKET_FAIL: /private/var/run/launchd.sock [Errno 2] No such file or directory
+  rc=1
+
+--- N9: AF_UNIX socketpair under no-net -- expect ? ---
+UNIX_SOCKETPAIR_OK
+  rc=0
+
+--- N10: AF_UNIX socketpair under net-allow -- expect OK (in-process IPC not blocked by network*) ---
+UNIX_SOCKETPAIR_OK
+  rc=0
+--- N7c: AF_UNIX connect to real socket (filesystemui.socket, world-readable) ---
+--- N7c: no-net profile -- expect DENY ---
+UNIX_SOCKET_FAIL: /var/run/filesystemui.socket PermissionError(1, 'Operation not permitted')
+UNIX_SOCKET_FAIL: /var/run/portmap.socket PermissionError(1, 'Operation not permitted')
+  rc=0
+
+--- N8c: net-allow profile -- expect ? ---
+UNIX_SOCKET_FAIL: /var/run/filesystemui.socket PermissionError(13, 'Permission denied')
+UNIX_SOCKET_CONNECTED: /var/run/portmap.socket
+  rc=0
+
+--- N11: explicit deny (network-outbound (remote ip "*:*")) under profile ---
+sandbox-exec: host must be * or localhost in network address
+
+Backtrace:
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/net-local-only.sb:11:26:
+	(remote ip "127.0.0.1:*")
+
+  rc=65
+
+--- N12: net-local-only profile: curl https://example.com -- expect DENY ---
+sandbox-exec: host must be * or localhost in network address
+
+Backtrace:
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/net-local-only.sb:11:26:
+	(remote ip "127.0.0.1:*")
+
+  rc=65
+
+--- N13: net-local-only profile: curl 127.0.0.1:18929 with server up -- expect 200 ---
+sandbox-exec: host must be * or localhost in network address
+
+Backtrace:
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/net-local-only.sb:11:26:
+	(remote ip "127.0.0.1:*")
+
+  rc=65
+--- N11: net-local-only: curl 127.0.0.1:18929 with server up -- expect PASS ---
+curl: (7) Failed to connect to 127.0.0.1 port 18929 after 0 ms: Couldn't connect to server
+  rc=7
+
+--- N12: net-local-only: curl https://example.com -- expect DENY ---
+curl: (7) Failed to connect to 192.168.229.65 port 3128 after 0 ms: Couldn't connect to server
+000
+  rc=7
+
+--- N13: net-local-only: nc 1.1.1.1 53 -- expect DENY ---
+nc: connectx to 1.1.1.1 port 53 (tcp) failed: Operation not permitted
+  rc=1
+
+--- N14: net-local-only: nslookup example.com 1.1.1.1 -- expect DENY ---
+;; connection timed out; no servers could be reached
+
+  rc=1
+
+--- N11b: net-local-only: curl 127.0.0.1:18929 with server up (env proxies unset) -- expect PASS ---
+INSIDE_HTTP_SERVER_HIT
+  rc=0
+
+--- N15: net-local-only: nslookup example.com via 1.1.1.1 (no proxy env) -- expect DENY ---
+;; connection timed out; no servers could be reached
+
+  rc=1

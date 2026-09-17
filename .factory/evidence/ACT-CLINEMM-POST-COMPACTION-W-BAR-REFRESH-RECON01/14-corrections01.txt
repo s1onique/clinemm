@@ -1,0 +1,123 @@
+ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+CORRECTIONS01 (Reviewer disposition: PASS_WITH_ONE_BOUNDED_P1)
+==================================================
+
+Reviewer (Cline runtime/state engineer + Factory reviewer) verdict:
+
+  Class: PASS_WITH_ONE_BOUNDED_P1 -- C1: GO
+  P0: NONE
+  P1: load-bearing SdkCompactionCoordinator callback path lacks a
+      direct regression test -> fix once, no review spiral
+  P2: observe(...) comment disagrees with setLatest(...)
+      implementation -> commentary drift, no functional impact
+  Production repair verdict: PASS
+  Live dogfood verdict: PENDING (operator-side substrate constraint)
+
+The causal diagnosis was sound: core compaction computes Wpost
+correctly -> compactSessionMessages previously discarded Wpost
+-> manual compaction bypasses AgentRuntime prepareTurn publication
+-> WorkingContextHostCapture retains old W -> webview faithfully
+renders stale carrier.
+
+The production change itself is appropriately narrow.
+
+CORRECTIONS01 DOES (3 things):
+
+1. Apps/vscode/src/sdk/sdk-compaction-coordinator.test.ts - added a
+   new describe('POST_COMPACTION_W_BAR_REFRESH_RECON01 -
+   load-bearing coordinator bridge') block with three tests:
+
+   a. GREEN: producer surfaces W=29600 -> publish called once with
+      29600 -> the LAST postStateToWebview is called AFTER publish.
+      Mechanically exercises the production load-bearing bridge:
+        CompactSessionMessagesResult.currentWorkingContextEstimate
+        -> SdkCompactionCoordinator.runCompactionInPhase guard
+        -> options.publishPostCompactionW(w)
+        -> options.postStateToWebview (last call).
+      Mechanical ordering witness via mock.invocationCallOrder.
+
+   b. NEGATIVE: when the producer returns no W, publish MUST NOT be
+      called and postStateToWebview MUST still execute. This pins
+      the new coordinator contract itself: no fake W on the
+      skip/fail path.
+
+   c. THROW-SWALLOWED: a throwing publish MUST be logged + not
+      propagate; postStateToWebview MUST still execute. Production
+      explicitly promises that behavior (the coordinator wraps the
+      call in try/catch and logs via Logger.error).
+
+2. Apps/vscode/src/sdk/sdk-compaction-coordinator.ts - corrected
+   the publisher-option JSDoc comment. The earlier text said the
+   'default implementation invokes
+   WorkingContextHostCapture.observe(...)'; the production wiring
+   in SdkController.ts calls carrier.setLatest(w) directly. The
+   comment was tightened to reflect the actual wiring and to note
+   that setLatest reuses the carrier's existing fail-closed
+   assignment semantics (UNDEFINED_W_STALE_REUSE = FORBIDDEN). The
+   throw-swallow guarantee (logging via Logger, exception does not
+   propagate) was explicitly documented.
+
+3. Reviewed the existing recon01 evidence (00-13). The
+   GATE_SUMMARY embedded in 10-gates.txt is invalid/unbound for
+   this kind of evidence pack -- the test transcripts in 08 +
+   recon01's tests are the authoritative execution record. The
+   11-artifact-identity file's +262 net-line count was reverified
+   to be 301-114=187 (the recon01 commit) plus the corrections01
+   delta.
+
+PRODUCTION-DELTA = ZERO (no production-side edits).
+TEST-DELTA       = +120 lines (3 new tests).
+DOC-DELTA        = +14 -4 lines in the coordinator interface
+                   comment block.
+
+GREEN PROOF:
+
+  $ cd apps/vscode && /opt/homebrew/bin/node ../../node_modules/.bin/vitest
+    run --config vitest.config.ts src/sdk/__tests__/sdk-compaction-w-
+    publish-recon01.test.ts src/sdk/sdk-compaction-coordinator.test.ts
+    src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts
+    src/sdk/sdk-compaction-coordinator.restore-publication.test.ts
+    src/sdk/__tests__/working-context-webview-state-projection.test.ts
+
+    Test Files  5 passed (5)
+         Tests  60 passed (60)
+         (was 57 pre-corrections01; +3 new bridge tests)
+
+TYPECHECK:
+
+  $ cd apps/vscode && /opt/homebrew/bin/node ../../node_modules/.bin/tsc
+    --noEmit
+
+    exit 0 (clean -- zero new errors)
+
+GIT DIFF --CHECK: clean.
+
+REVIEWER EVIDENCE CLASSIFICATION (per corrections01):
+
+  ROOT_CAUSE                       = PROVEN
+  PRODUCER W SURFACE               = EXECUTED
+  CARRIER REPLACEMENT              = EXECUTED
+  COORDINATOR PUBLICATION BRIDGE   = EXECUTED (post-corrections01;
+                                              was STRUCTURAL)
+  SDKCONTROLLER WIRING             = STRUCTURAL
+  LIVE POST-FIX BAR                = NOT_EXECUTED (operator-side)
+
+FINAL CLASSIFICATION:
+
+  P0                              = NONE
+  P1                              = CLOSED (load-bearing bridge
+                                     regression now mechanically
+                                     exercised)
+  P2                              = CLOSED (setLatest(...) comment
+                                     replaces observe(...) drift)
+
+ROOT CAUSE                        = NO_POST_COMPACTION_PUBLICATION
+                                    CLOSED
+
+PRODUCTION REPAIR                 = PASS
+
+LIVE DOGFOOD                      = PENDING
+
+NEXT = operator-side dogfood install + LIVE RED->GREEN observation
+  on a session where bar.used lags the divider, plus investigation
+  of the separate auto-compaction W-publication defect if any.

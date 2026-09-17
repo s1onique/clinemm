@@ -1,0 +1,68 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01 — security conservation
+
+The temp capability repair MUST preserve every invariant proven by
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01 (P0 audit) and
+ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01 (C1/C2/C3 matrix).
+
+==============================================================================
+PROPERTIES THAT MUST NOT REGRESS (re-runnable from existing C3 tests)
+==============================================================================
+
+W01 (kernel-deny on workspace):
+  GREEN workspace write still KERNEL-DENIED (W01 conservation)
+  -> sandbox profile with synthesized tempRoot still emits
+     (deny file-write* (subpath "<workspaceRoot>")) for the supplied
+     experimentalSandboxWorkspaceRoots. Verified by writing to a sentinel
+     file inside the workspace root: kernel EPERM, bytes unchanged.
+
+N01 (network-deny):
+  The profile still emits (deny network*) regardless of tempRoot.
+  Verified by re-running the existing C3 network-deny test
+  (already in command-job-manager.sandbox-c3-real-kernel.test.ts).
+  Default workspaceRoots=[] so no override happens.
+
+C02 (kernel-deny via nested /bin/sh):
+  The deny ordering is preserved — write-deny entries come AFTER
+  write-allow entries, and the kernel processes them in order.
+  Verified by re-running the existing C3 nested-shell test.
+
+E01 (synthetic-secret-absent):
+  The sanitized env is still constructed by
+  materializeEnvironment({ syntheticTempDir: tempRoot }) and the
+  secret-shaped blocklist is still applied. Verified by the
+  existing C3 sanitized-env conservation test.
+
+==============================================================================
+PROPERTIES THAT WERE NEWLY TESTED BY THIS ACT
+==============================================================================
+
+GREEN a sibling under the same parent canonical temp is DENIED
+  -> The new (subpath ...) write grant is leaf-scoped. A sibling
+     directory (created by mkdtempSync(join(tmpdir(), "sibling-...")))
+     is NOT covered by the grant; writes to it return EPERM.
+
+GREEN synthesized temp root is removed after the command exits (cleanup)
+  -> The backend's cleanup hook best-effort removes the synthesized
+     tempRoot. Verified by polling existsSync after the job ends.
+
+==============================================================================
+PROPERTIES THAT WERE DELIBERATELY NOT CHANGED
+==============================================================================
+
+DEFAULT_OFF behavior:                   unchanged
+Command-policy layer:                    unchanged (separate ACT)
+Network policy:                          unchanged (deny)
+Workspace readonlyRoots semantics:       unchanged
+Synthetic HOME (env HOME rewrite):       NOT introduced (out of scope)
+GOCACHE:                                 unchanged
+Git config / cache allowlists:           unchanged
+Package-manager cache permissions:       unchanged
+/ or /tmp or /private/tmp broad grants:  NOT added
+Parser-helper bytes:                     unchanged
+
+==============================================================================
+SCOPE NOTE (parser-helper)
+==============================================================================
+
+The parser-helper (sandbox-policy.test.ts?) is NOT touched by this
+ACT. The reviewer's PARSER_HELPER_DELTA=NONE invariant is preserved.

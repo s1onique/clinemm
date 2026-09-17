@@ -1,0 +1,38 @@
+REPO=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD=1b701e3a7d09916b593aa2100b9931c3151bb271
+TREE=53f7c2ca0ba1ba56b1fdf55f6751922003ba11f6
+BRANCH=main
+--- STATUS ---
+AM .factory/acts/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01.md
+M  .factory/acts/ACT-CLINEMM-TASK-COST-TRUTH-RECON01.md
+M  .factory/epic-board.md
+M  .factory/epics/approval-protection.md
+M  .factory/epics/product-config-branding.md
+AM .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/hermetic-fixture/happy-path-matrix.json
+AM .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/hermetic-fixture/negative-matrix.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211256Z-9171c6f6/pending/SHA256SUMS
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211256Z-9171c6f6/pending/approval-events.jsonl
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211256Z-9171c6f6/pending/approval-summary.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211256Z-9171c6f6/pending/environment.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211256Z-9171c6f6/pending/file-manifest.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211256Z-9171c6f6/pending/git.txt
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211256Z-9171c6f6/pending/manifest.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211256Z-9171c6f6/pending/session-metadata/index.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211338Z-435b5360/resolved/SHA256SUMS
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211338Z-435b5360/resolved/approval-events.jsonl
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211338Z-435b5360/resolved/approval-summary.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211338Z-435b5360/resolved/environment.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211338Z-435b5360/resolved/file-manifest.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211338Z-435b5360/resolved/git.txt
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211338Z-435b5360/resolved/manifest.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/20260827T211338Z-435b5360/resolved/session-metadata/index.json
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/capture-index.jsonl
+A  .factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/captures/specimen-20260827-command-approval01.json
+A  .factory/evidence/ACT-CLINEMM-TASK-COST-TRUTH-RECON01/probe-minimax-ultra-billing-semantics.md
+M  .gitignore
+A  tools/factory/capture-approval-specimen.py
+A  tools/factory/hermetic-fixture/build.py
+A  tools/factory/hermetic-fixture/verify-happy.py
+A  tools/factory/hermetic-fixture/verify-negative.py
+--- STASH ---
+stash@{0}: On main: c2-green-and-c2-p1-delta

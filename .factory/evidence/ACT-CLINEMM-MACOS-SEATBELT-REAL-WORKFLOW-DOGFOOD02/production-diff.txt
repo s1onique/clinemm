@@ -1,0 +1,71 @@
+# Production diff: d51a33328..d1fb24d95
+# ACT-CLINEMM-MACOS-SEATBELT-REAL-WORKFLOW-DOGFOOD02
+
+TIMESTAMP_UTC = 2026-08-26T13:14Z
+
+$ git diff --stat d51a33328..d1fb24d95 -- 'sdk/**' 'apps/vscode/src/**' 'apps/vscode/scripts/**' 'apps/vscode/esbuild.mjs'
+
+  .../c2-ablation-conservation.test.ts        | 215 +++++++++---
+  .../darwin-mktemp-capability01.c2-green.test.ts  | 236 +++++++-------
+  .../darwin-mktemp-capability01.c2-kernel-matrix.test.ts |  85 ++---
+  apps/vscode/src/sdk/command-job-manager.ts  |  36 +-
+  apps/vscode/src/sdk/sdk-tool-policies.ts    |  20 +-
+  .../command-policy/command-execution-plan.test.ts | 362 ++++++++++++++++++++-
+  .../command-policy/command-execution-plan.ts      |  86 ++++-
+  .../command-policy/command-policy-types.ts        |  99 ++++++
+  8 files changed, 911 insertions(+), 228 deletions(-)
+
+## PRODUCTION FILES TOUCHED (non-test)
+
+- apps/vscode/src/sdk/command-job-manager.ts                  (36 lines)
+- apps/vscode/src/sdk/sdk-tool-policies.ts                    (20 lines)
+- sdk/packages/core/src/runtime/command-policy/command-execution-plan.ts (86 lines)
+- sdk/packages/core/src/runtime/command-policy/command-policy-types.ts (99 lines)
+
+These three ACTs (CORRECTION03, CORRECTION04, CORRECTION05) all
+claim production wiring changes:
+
+  CORRECTION03 -- "real authorization->plan->Seatbelt grant seam"
+  CORRECTION04 -- "controlled network causal pair + realpath narrowing"
+  CORRECTION05 -- "exact-stdout discriminator + drop production counter"
+
+## CAVEAT FOR THIS ACT
+
+The installed extension is d51a33328 (pre-CORRECTION03/04/05). The
+workflow qualification in this ACT therefore exercises the production
+seam AT d51a33328. If d1fb24d95's CORRECTION03-05 introduce any
+workflow-relevant delta (the grant seam or realpath narrowing could in
+principle affect command-execution behavior), the qualification would
+need to be re-run after the VSIX is installable in the session.
+
+However, the user's prompt explicitly says the LIVE_INSTALLED version
+to qualify is `4.1.10-d1fb24d95`. The agent environment blocked the
+install. Two paths remain:
+
+A) Document this qualification at d51a33328 (the actually-installed
+   build) and add a "qualification-at-d1fb24d95" follow-up ACT for
+   the session when the agent environment allows the install.
+
+B) Attempt to install via a different mechanism (--extensions-dir
+   outside the agent-protected profile path; manual unpack of VSIX
+   to extensions/.obsolete-bypass path).
+
+Try B first; if blocked, fall back to A.
+
+## WHY THIS MATTERS
+
+The d51a33328 build is the C2-final; it carries the
+production-wired darwin-mktemp create-only capability. CORRECTION03
+adds "the real authorization->plan->Seatbelt grant seam", which
+sounds production-relevant. If CORRECTION03 changes the command
+pipeline (e.g. an executionCapability propagation path), then a
+workflow that PASSES on d51a33328 might still fail on d1fb24d95.
+
+The user's prompt assumes d1fb24d95 is the LIVE_INSTALLED version,
+which matches the screenshots they cite. Since I cannot reach that
+state in this session, the qualification must be explicit about which
+version was tested.
+
+QUALIFIED_VERSION = 4.1.10-d51a33328 (actually installed)
+TARGET_VERSION     = 4.1.10-d1fb24d95 (referenced by prompt; not
+                                       installable in this session)

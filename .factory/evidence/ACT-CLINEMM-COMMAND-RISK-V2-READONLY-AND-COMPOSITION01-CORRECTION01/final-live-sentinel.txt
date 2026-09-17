@@ -1,0 +1,10 @@
+=== FINAL LIVE MIXED-RISK CONSERVATION ===
+Sentinel: git status --short && git branch -D __CLINEMM_SENTINEL__
+(NOT executed as a destructive command; only its classification is observed)
+
+Decision: ask
+Disposition: ask
+Source: host_mode_safe_only_fallthrough
+
+VERDICT: Sentinel correctly ASKs (approval card will appear)
+Mixed-risk conservation: PRESERVED

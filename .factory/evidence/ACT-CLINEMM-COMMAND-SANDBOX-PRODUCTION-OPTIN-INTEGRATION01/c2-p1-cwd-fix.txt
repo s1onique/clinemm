@@ -1,0 +1,82 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+C2-P1: prepared.cwd is honored end-to-end (real production seam)
+===========================================================
+
+The C2 review surfaced one bounded P1 contract defect:
+  prepared.cwd was being ignored at the supervisor call site.
+  Node's spawn({ cwd }) is the working directory of the spawned
+  child -- not metadata. The Seatbelt backend canonicalizes cwd
+  in prepare(); the canonicalized form must reach spawn().
+
+Fix (apps/vscode/src/sdk/command-job-manager.ts):
+  let spawnCwd = options.cwd
+  ...
+  spawnCwd = prepared.cwd
+  ...
+  spawnSupervisableShellCommand({ ..., cwd: spawnCwd, ... })
+
+Real production seam test
+(apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts,
+ describe("real production seam: prepared cwd reaches the spawned child")):
+
+  Test 1:
+    callerCwd   = mkdtempSync(.../clinemm-cwd-caller-...)
+    backendCwd  = mkdtempSync(.../clinemm-cwd-backend-...)
+    stubBackend.prepare() returns:
+      executable=/bin/sh, args=["-c","pwd"], cwd=backendCwd, ...
+    CommandJobManager.start({ command: "/bin/sh -c 'pwd'", cwd: callerCwd })
+    expect(start.stdout.trim())  (after realpathSync)
+      === realpathSync(backendCwd)
+      !== realpathSync(callerCwd)
+
+    Status: ✓ (5ms)
+
+  Test 2 (DEFAULT_OFF conservation witness):
+    callerCwd   = mkdtempSync(.../clinemm-cwd-default-off-...)
+    No opt-in env. Production default resolver.
+    CommandJobManager.start({ command: "/bin/sh -c 'pwd'", cwd: callerCwd })
+    expect(start.stdout.trim())  (after realpathSync)
+      === realpathSync(callerCwd)
+
+    Status: ✓ (4ms)
+
+PROOF THAT THE TEST WOULD FAIL BEFORE THE FIX:
+  Reverted command-job-manager.ts to use cwd: options.cwd.
+  Test 1 result:
+    × with seatbelt opt-in + backend returning a different cwd,
+      `pwd` reports the backend's cwd (13ms)
+    AssertionError: expected '/private/var/folders/0g/.../clinemm-cwd-caller-OlX3xS'
+       to be '/private/var/folders/0g/.../clinemm-cwd-backend-...'
+    (the spawned child ran `pwd` from the CALLER's cwd, not the
+    backend's -- the contract defect was real.)
+  Restored the fix; test passes.
+
+C2-P2 hygiene (non-blocking):
+  Wrapped spawnSupervisableShellCommand in try/catch:
+    try { childProcess = spawnSupervisableShellCommand(...) }
+    catch (err) {
+      if (sandboxCleanup) void sandboxCleanup().catch(() => {})
+      throw err
+    }
+  Reason: if the supervisor threw synchronously after a successful
+  prepare(), the cleanup hook would be lost. This prevents profile
+  temp dir leaks on synchronous spawn primitive failures.
+
+Evidence-label correction:
+  Renamed describe block to
+    "backend prepared invocation reaches the supervisor (structural)"
+  to clearly indicate the DI captures what was passed to the
+  supervisor, not what spawn() itself received. The two new cwd
+  tests above are labeled "real production seam" because they
+  exercise the full path: CommandJobManager -> supervisor ->
+  node:child_process.spawn -> real /bin/sh pwd.
+
+ALL C2 stop-point proofs after the fix:
+  prepared executable       honored
+  prepared argv             honored
+  prepared cwd              honored   <-- C2-P1 fix
+  prepared env              honored
+  prepared envSemantics     honored
+  prepared input            honored
+  prepared cleanup          wired    <-- C2-P2 hygiene

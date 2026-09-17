@@ -1,0 +1,57 @@
+# Path-trace discriminator
+
+## Standalone instrumented reproducer
+
+Mirror of `makeCoordinator()` from `sdk-task-start-coordinator.test.ts`,
+with P0-P13 boundary markers logged.
+
+## Run 1: WITHOUT `resolveSessionAutoApprovalOverride` (red state)
+
+```
+P1 initTask enter
+P2 clearTaskForOperation entered
+P3 getWorkspaceRoot
+CAPTURE_PROVIDER_API_ERROR: [object Object]    <- thrown into catch
+P7 appendAndEmit: error                          <- error message emitted
+P13 initTask returned: undefined                 <- abort path
+```
+
+`initTask` paused at `sessionConfigBuilder.build` (line 135) because
+`sessionAutoApprovalOverride: this.options.resolveSessionAutoApprovalOverride()`
+threw TypeError ("...is not a function"). The thrown error routed into the
+catch block (line 282), which:
+1. Called `captureProviderApiError` with the TypeError.
+2. Called `handleInitError` which emitted a `say: "error"` message.
+3. Returned `undefined`.
+
+**Result:** initTask never reached createAndSetTask, never reached
+startNewSession, never asserted streaming. Every downstream assertion
+failed because the production path was bypassed.
+
+## Run 2: WITH `resolveSessionAutoApprovalOverride` wired (green state)
+
+```
+P1 initTask enter
+P2 clearTaskForOperation entered
+P3 getWorkspaceRoot
+P4 sessionConfigBuilder.build invoked
+P6 setTask: defined
+P7 appendAndEmit: task
+P10 startNewSession invoked
+PHASE streaming
+P13 initTask returned: 1788111137751_287mn
+```
+
+`initTask` reached every checkpoint the production code documents:
+- `createAndSetTask` (P6) installs the TaskProxy.
+- `emitInitialTaskMessage` (P7) emits `say: "task"` to the messages coordinator.
+- `sessions.startNewSession` (P10) is called.
+- `setTurnPhase("streaming")` (PHASE streaming) is asserted after the session resolves.
+- `initTask` returns a real sessionId.
+
+## Conclusion
+
+The single difference between RED and GREEN is the presence of
+`resolveSessionAutoApprovalOverride`. Production code is correct.
+All 11 REDs share this single causal class. One secondary G11 issue
+(strict shape expectation in test 1) is fixed by `expect.objectContaining`.

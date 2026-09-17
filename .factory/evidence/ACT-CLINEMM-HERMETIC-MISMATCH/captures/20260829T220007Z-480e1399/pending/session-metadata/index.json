@@ -1,0 +1,15 @@
+[
+  {
+    "mtime": "2026-08-29T22:00:07.163680+00:00",
+    "projection": {
+      "matchedByShape": true,
+      "mode": "act",
+      "session_id": "session-A",
+      "source": "vscode",
+      "status": "running"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-mismatch",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-mismatch/sessions/session-A/session-A.json"
+  }
+]

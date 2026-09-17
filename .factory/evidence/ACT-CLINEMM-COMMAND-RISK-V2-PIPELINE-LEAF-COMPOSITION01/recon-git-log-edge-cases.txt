@@ -1,0 +1,44 @@
+git log main..feature
+  args=["log","main..feature"] argProvenance=["static","static"] hasCmdSubst=false
+git log HEAD@{upstream}
+  args=["log","HEAD@{upstream}"] argProvenance=["static","dynamic"] hasCmdSubst=false
+git log --grep foo
+  args=["log","--grep","foo"] argProvenance=["static","static","static"] hasCmdSubst=false
+git log --grep=foo
+  args=["log","--grep=foo"] argProvenance=["static","static"] hasCmdSubst=false
+git log --author=name
+  args=["log","--author=name"] argProvenance=["static","static"] hasCmdSubst=false
+git log --since=2024-01-01
+  args=["log","--since=2024-01-01"] argProvenance=["static","static"] hasCmdSubst=false
+git log --until=2024-01-01
+  args=["log","--until=2024-01-01"] argProvenance=["static","static"] hasCmdSubst=false
+git log -p
+  args=["log","-p"] argProvenance=["static","static"] hasCmdSubst=false
+git log --patch
+  args=["log","--patch"] argProvenance=["static","static"] hasCmdSubst=false
+git log main
+  args=["log","main"] argProvenance=["static","static"] hasCmdSubst=false
+git log main..HEAD
+  args=["log","main..HEAD"] argProvenance=["static","static"] hasCmdSubst=false
+git log HEAD..main
+  args=["log","HEAD..main"] argProvenance=["static","static"] hasCmdSubst=false
+git log --all
+  args=["log","--all"] argProvenance=["static","static"] hasCmdSubst=false
+git log --branches
+  args=["log","--branches"] argProvenance=["static","static"] hasCmdSubst=false
+git log HEAD~1
+  args=["log","HEAD~1"] argProvenance=["static","dynamic"] hasCmdSubst=false
+git log HEAD^
+  args=["log","HEAD^"] argProvenance=["static","static"] hasCmdSubst=false
+git log HEAD^2
+  args=["log","HEAD^2"] argProvenance=["static","static"] hasCmdSubst=false
+git log {main,feature}
+  args=["log","{main,feature}"] argProvenance=["static","dynamic"] hasCmdSubst=false
+git log -- '*.ts'
+  args=["log","--","*.ts"] argProvenance=["static","static","static"] hasCmdSubst=false
+git log -- 'src/**/*.ts'
+  args=["log","--","src/**/*.ts"] argProvenance=["static","static","static"] hasCmdSubst=false
+git log 'main..feature'
+  args=["log","main..feature"] argProvenance=["static","static"] hasCmdSubst=false
+git log "main..feature"
+  args=["log","main..feature"] argProvenance=["static","static"] hasCmdSubst=false

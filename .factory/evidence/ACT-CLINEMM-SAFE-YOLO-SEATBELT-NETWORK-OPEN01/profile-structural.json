@@ -1,0 +1,17 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01",
+  "phase": "PROFILE STRUCTURAL PROOF",
+  "date": "2026-08-26T11:11:41.101Z",
+  "totalLines": 16,
+  "diffs": [
+    {
+      "lineNo": 15,
+      "red": "(deny network*)",
+      "green": "(allow network*)"
+    }
+  ],
+  "diffCount": 1,
+  "onlyNetworkRuleChanged": true,
+  "redHasDeny": true,
+  "greenHasAllow": true
+}

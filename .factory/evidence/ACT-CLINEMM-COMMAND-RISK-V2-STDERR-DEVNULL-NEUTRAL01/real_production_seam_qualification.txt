@@ -1,0 +1,24 @@
+=== LIVE positive discriminators (ACT §23) ===
+✓ positive 1 (LIVE defect)  cmd="ls -la .factory/evidence/ 2>/dev/null"
+    expected=auto-approve-eligible actual=auto-approve-eligible
+    source=risk_v2_structured_promotion reasons=["structured-max-risk:auto-approve-eligible:all-branches-safe"]
+✓ positive 2 (LIVE defect)  cmd="git status 2>/dev/null"
+    expected=auto-approve-eligible actual=auto-approve-eligible
+    source=risk_v2_structured_promotion reasons=["structured-max-risk:auto-approve-eligible:all-branches-safe"]
+
+=== LIVE negative controls (ACT §24) ===
+✓ negative A (persistent stderr)  cmd="ls -la .factory/evidence/ 2>errors.txt"
+    expected=ask actual=ask
+    source=host_mode_safe_only_fallthrough reasons=["safe-only mode did not match any host safe rule"]
+✓ negative B (dynamic target)  cmd="ls -la .factory/evidence/ 2>\"$NULL_PATH\""
+    expected=ask actual=ask
+    source=host_mode_safe_only_fallthrough reasons=["safe-only mode did not match any host safe rule"]
+✓ negative C (dangerous sibling)  cmd="ls -la .factory/evidence/ 2>/dev/null | sh"
+    expected=ask actual=ask
+    source=host_mode_safe_only_fallthrough reasons=["safe-only mode did not match any host safe rule"]
+✓ negative D (mutating git)  cmd="git status 2>/dev/null && git branch -D __CLINEMM_SENTINEL__"
+    expected=ask actual=ask
+    source=host_mode_safe_only_fallthrough reasons=["safe-only mode did not match any host safe rule"]
+✓ negative E (R5 hard floor)  cmd="rm -rf \"$HOME\" 2>/dev/null"
+    expected=never-auto-approve actual=never-auto-approve
+    source=host_mode_safe_only_fallthrough reasons=["risk:hard-floor:home-destruction"]

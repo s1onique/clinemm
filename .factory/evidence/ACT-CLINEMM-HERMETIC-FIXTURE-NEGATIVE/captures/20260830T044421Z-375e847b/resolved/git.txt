@@ -1,0 +1,8 @@
+REPO=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD=a8d526f63903891b8b364b3349684d0b97a2b1ea
+TREE=077f7afd567130e0e020292ca3c7b8b185516167
+BRANCH=main
+--- STATUS ---
+
+--- STASH ---
+stash@{0}: On main: c2-green-and-c2-p1-delta

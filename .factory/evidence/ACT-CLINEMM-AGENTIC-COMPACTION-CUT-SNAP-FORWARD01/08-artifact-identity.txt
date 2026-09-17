@@ -1,0 +1,32 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01
+ARTIFACT IDENTITY
+================================================
+
+SOURCE_HEAD    = 6051eaf9cfaddbca9f177c3b4071ba199faf5dcc
+SOURCE_TREE    = 6168ec99618cf2af125aed086582c4e135f2bb8c
+ENTRY_HEAD     = 9c67e5658b79938513c10e1150b92779dcb3749b (recon-only)
+DELTA          = 6051eaf9c - 9c67e5658b = one commit
+
+COMMIT         = fix(sdk): ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01 - findCutIndex snap-forward
+
+FILES TOUCHED  = 3
+  sdk/packages/core/src/extensions/context/compaction-shared.ts      (43 lines)
+  sdk/packages/core/src/extensions/context/compaction.test.ts       (27 lines)
+  sdk/packages/core/src/extensions/context/compaction.cut-snap-forward.test.ts (146 lines, new)
+
+INSERTIONS    = 196
+DELETIONS     = 20
+
+VSIX          = N/A (substrate lacks `bun`; deferred to operator-side dogfood)
+SHA256        = N/A
+INSTALLED     = N/A
+
+LIVE QUALIFICATION:
+  Substrate lacks `bun` -> VSIX install blocked.
+  Substitute: algorithmic GREEN proof (see 04-green.txt).
+
+BUILD ARTIFACT:
+  @cline/core dist/ rebuilt clean (tsconfig.build.json emit).
+  compaction-shared.d.ts unchanged (signature stable).
+  Public barrel exports unchanged.
+  apps/vscode typecheck unchanged.

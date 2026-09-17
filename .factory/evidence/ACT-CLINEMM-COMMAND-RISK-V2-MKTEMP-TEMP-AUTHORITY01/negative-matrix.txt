@@ -1,0 +1,88 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- negative-matrix.txt
+
+Full negative matrix verified at the rule level
+(command-safe-rules.test.ts REJECTED describe):
+
+  -p path selection
+  ----------------------
+  mktemp -p /tmp                     no match
+  mktemp -p /tmp foo.XXXX            no match
+  mktemp -p /tmp/foo                 no match
+  mktemp -p $HOME                    no match
+
+  -t prefix (template-driven)
+  --------------------------
+  mktemp -t myprefix                 no match
+  mktemp -t myprefix.XXXX            no match
+
+  --tmpdir (GNU)
+  --------------
+  mktemp --tmpdir /tmp               no match
+
+  -u (unsafe)
+  -----------
+  mktemp -u                          no match (Darwin manual: unsafe)
+  mktemp -u foo.XXXX                 no match
+  mktemp -d -u                       no match
+
+  -q (quiet, out of scope)
+  --------
+  mktemp -q                          no match
+  mktemp -q -d                       no match
+
+  Templates (path authority)
+  -------------------------
+  mktemp foo.XXXXXX                  no match
+  mktemp /tmp/foo.XXXXXX             no match
+  mktemp ./foo.XXXX                  no match
+  mktemp ../foo.XXXX                 no match
+  mktemp foo                         no match
+
+  Dynamic operands
+  ----------------
+  mktemp "$X"                        no match (opaque $)
+  mktemp $X                          no match
+  mktemp "$(printf -- -d)"           no match (opaque $( )
+  mktemp ${X}                        no match (opaque ${ )
+  mktemp ${FLAGS:-"-d"}             no match (opaque ${ )
+  mktemp -./*                        no match (glob)
+
+  Combined forms
+  --------------
+  mktemp -d foo.XXXX                 no match
+
+  Assignment prefix (env steering)
+  --------------------------------
+  TMPDIR=/tmp/x mktemp               no match
+  TMPDIR=/tmp/x mktemp -d            no match
+  TMPDIR=$HOME mktemp                no match
+  env TMPDIR=/tmp/x mktemp           no match
+  env -i TMPDIR=/tmp mktemp          no match
+
+  Composition / opaque
+  --------------------
+  mktemp && pwd                       no match (opaque &&)
+  mktemp || pwd                       no match (opaque ||)
+  mktemp | head                       no match (opaque |)
+  mktemp; ls                          no match (opaque ;)
+  mktemp > /tmp/x                     no match (opaque >)
+  mktemp 2>/dev/null                  no match (opaque >)
+  mktemp 2>&1                         no match (opaque >)
+  $(mktemp)                           no match (opaque $( )
+  `mktemp`                            no match (opaque `)
+  mktemp -d\nfoo                      no match (opaque \n via OPAQUE_SHELL_TOKENS)
+
+  Brace / glob (no flattened inference)
+  ------------------------------------
+  mktemp {-d,}                       no match (NO brace expansion flattening)
+  mktemp *                            no match
+  mktemp ?.XXXX                       no match
+
+EVERY entry from the negative matrix is independently verified
+by a vitest it() in command-safe-rules.test.ts REJECTED mktemp
+describe block. 39/39 PASS.
+
+The pattern /^\s*mktemp(?:\s+-d)?\s*$/u does NOT flatten any of
+these forms into a match. The OPAQUE_SHELL_TOKENS guard upstream
+in findSafeRuleMatch short-circuits any input containing
+`&&`, `||`, `|`, `;`, `>`, `<`, `$`, `${`, `bash -c`, etc.

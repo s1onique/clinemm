@@ -1,0 +1,24 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION01
+GATES
+================================================
+
+Per ACT charter §27. Gates evaluated post-CORRECTION01.
+
+G1. P1 R2 strengthened with valid tool pairs and EXACT cut index    ✓ PASS
+G2. P1 R3 strengthened with EXACT typed-user boundary assertion      ✓ PASS
+G3. P2 metric labelling corrected in evidence + test comment          ✓ PASS
+G4. R7 added: cut selection invariant under proportional scaling     ✓ PASS
+G5. Full compaction suite green                                      ✓ PASS (122/125)
+G6. @cline/core package build                                         ✓ PASS (tsc --noEmit exit 0)
+G7. apps/vscode typecheck (not touched)                              N/A
+G8. git diff --check clean                                            ✓ PASS (pending commit)
+
+NEW_PRODUCTION_CODE = ZERO
+  This ACT modifies only test files and evidence documents. No
+  production code change.
+
+CLASSIFICATION = NONBLOCKING_RESIDUE_CLOSURE
+  All three reviewer-flagged items addressed. Repair itself remains
+  PASS_CUT_SELECTION_REPAIRED.
+
+DOGFOOD = PENDING (deferred from CUT-SNAP-FORWARD01, unchanged)

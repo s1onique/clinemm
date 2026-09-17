@@ -1,0 +1,14 @@
+{
+  "manifestVersion": "wave-1-rc1-corre04",
+  "manifestSha256": "7d85bc0d850ff7559f00c278b3577bc59e3c40ca5ffa15c78efc43c155e39ad6",
+  "total": 31,
+  "pass": 27,
+  "expectedDeny": 3,
+  "compatibilityFail": 1,
+  "toolMissing": 0,
+  "timeout": 0,
+  "p0Fail": 0,
+  "causalPairFail": 0,
+  "p0Halted": false,
+  "haltedAtProbeId": null
+}

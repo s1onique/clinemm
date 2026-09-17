@@ -1,0 +1,26 @@
+=== ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01 filesystem-matrix ===
+Date: 2026-08-25T00:01:52Z
+Host: macOS 14.7.4 (Build 23H420) arm64, sandbox-exec 118944 bytes (Feb 4 2025)
+Profiles: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/baseline-rw.sb, /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/baseline-ro.sb
+
+INSIDE=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside
+OUTSIDE=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside
+
+F1: cat inside readable under baseline-rw  (expect PASS)
+inside-readable
+  rc=0
+
+F2: cat outside secret under baseline-rw  (expect DENY)
+cat: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt: Operation not permitted
+  rc=1
+
+F3: append into inside/writable.txt under baseline-RO  (expect DENY)
+/bin/sh: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/writable.txt: Operation not permitted
+  rc=1
+
+F4: append into inside/writable.txt under baseline-RW  (expect PASS)
+  rc=0
+
+F5: append into outside/secret.txt under baseline-RW  (expect DENY)
+/bin/sh: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt: Operation not permitted
+  rc=1

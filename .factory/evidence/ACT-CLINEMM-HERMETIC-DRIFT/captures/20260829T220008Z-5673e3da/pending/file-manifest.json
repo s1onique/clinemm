@@ -1,0 +1,42 @@
+[
+  {
+    "bytes": 0,
+    "path": "approval-event-fingerprints.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "bytes": 0,
+    "path": "approval-events.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "bytes": 326,
+    "path": "approval-summary.json",
+    "sha256": "843b9ae53b594607f919463216c0a8b4eb3ca9119f01f7ff2c65fee64dfcef44"
+  },
+  {
+    "bytes": 202,
+    "path": "environment.json",
+    "sha256": "d42a55d40d81030ed2a2ce3df280fb4148d1d4337c0cfa4ba03aaf84739e2b07"
+  },
+  {
+    "bytes": 929,
+    "path": "git.txt",
+    "sha256": "69faf097060fc51c7823f362b5a19019ffcb38cbaa3b5b2f430c1c3414a34824"
+  },
+  {
+    "bytes": 504,
+    "path": "manifest.json",
+    "sha256": "c4e54aafb19160f75c26be44ee61d38acd381722a295d87be6287347d02257da"
+  },
+  {
+    "bytes": 217,
+    "path": "runtime-identity.json",
+    "sha256": "36300d8ebed5eaaa196a924184d3d6fd6724f482290204a4192cd748553f67f5"
+  },
+  {
+    "bytes": 748,
+    "path": "session-metadata/index.json",
+    "sha256": "7f989a48f6e78c015a2ba7094017634a7f649f131bef020d319cd1ddb1ad5d11"
+  }
+]

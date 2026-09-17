@@ -1,0 +1,27 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01
+
+ENTRY_FREEZE
+
+ENTRY_HEAD = 199af34de1abbc7ffae1b235f7f11a75212f1b3c  (ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-C3 cleanup)
+ENTRY_TREE = 974d339a7a9c6205c2a85011bc0ea248939c871d
+BRANCH     = main
+ORIGIN_MAIN = 7ff1f8d554b71acfcaccd9b32de3815aa0903149 (5 unpushed local commits ahead)
+
+PREVIOUS_VERDICT (PASS_WITH_ONE_BOUNDED_P1):
+  TEMP_CAPABILITY                    REAL_PRODUCTION_SEAM PASS
+  T01 mktemp                         GREEN
+  T02 mktemp -d                      GREEN
+  TMPDIR                             PRIVATE/CANONICAL
+  PARENT/SIBLING WRITE               DENIED
+  WORKSPACE WRITE                    DENIED
+  NETWORK                            DENIED
+  CHILD CONFINEMENT                  PRESERVED
+  ENV SECRET                         ABSENT
+  DEFAULT_OFF                        UNCHANGED
+  PARSER HELPER                      UNCHANGED
+  TEMP HARNESS                       REMOVED
+  P1:
+    failed-prepare synthesized-temp cleanup
+
+DO NOT RE-LITIGATE the previous ACT's P0 evidence.
+DO NOT RUN THE DOGBOOD (the harness was removed in the previous ACT).

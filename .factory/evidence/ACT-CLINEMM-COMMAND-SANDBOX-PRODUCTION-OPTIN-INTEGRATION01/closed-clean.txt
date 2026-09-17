@@ -1,0 +1,71 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+C3-CORRECTION01: CLOSED-CLEAN VERDICT (artifact rebind)
+===========================================================
+
+Reviewer surfaced a P0 artifact-identity defect: the original C3
+VSIX was built from a dirty tree on top of 213380792, but the
+DOGFOOD_SOURCE_HEAD claimed 213380792 itself. The fix is bundled
+in this commit:
+
+  - The one-line `override` modifier on `SandboxError.cause` is
+    now part of HEAD 14371d7f7 (committed atomically with C3).
+  - VSIX was REBUILT from a CLEAN 14371d7f7 (worktree empty).
+  - DOGFOOD_SOURCE_HEAD is now 14371d7f7 -- the same commit
+    that contains the test, the SDK fix, and the C3 closeout.
+  - Packaging uses `SOURCE_DATE_EPOCH=1787636164` (HEAD commit
+    time) for deterministic SHA. Reproducibility confirmed:
+    the same SHA appears on a second build with the same epoch.
+
+All other C3 claims are preserved:
+
+  [x] production resolver -> Seatbelt       REAL_PRODUCTION_SEAM PASS
+  [x] kernel write defense                  REAL_PRODUCTION_SEAM PASS
+  [x] DEFAULT_OFF control                   PASS
+  [x] stdout/stderr/exit                    PASS
+  [x] deadline classification               PASS
+  [x] profile cleanup                       PASS
+  [x] exact-head VSIX source binding        BOUND to clean 14371d7f7
+
+Wording correction (per reviewer):
+  - The deadline tests do NOT directly observe "no orphan
+    descendant". They observe terminal classification and
+    profile cleanup. Orphan absence relies on Apple platform
+    inheritance plus the supervisor's kill tree, which is
+    documented but not independently verified by this suite.
+    Tests are reworded to reflect the actual claim.
+
+Artifact identity (current, definitive):
+  DOGFOOD_SOURCE_HEAD:    14371d7f79e310718da67da04a9d8830a383f781
+  SOURCE_TREE:            /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+  WORKTREE AT BUILD:      CLEAN
+  SOURCE_DATE_EPOCH:      1787636164 (HEAD commit time)
+  VSIX_PATH:              /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-exact-head.vsix
+  VSIX_BYTES:             14398716
+  VSIX_SHA256:            e7bdd2a83a55f145bd3a6c89cdf6a9cbcd752cfd3aa0ff78424af3ebed0ac238
+  PARSER_HELPER_SHA256:   874741a388b621596b59cf75c7d59c62cf919931d7f164174a60b1920d7df1d3
+  DEFAULT_SANDBOX_MODE:   disabled
+  EXPERIMENTAL_OPTIN:     CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt
+
+Evidence files (all updated):
+  .factory/evidence/ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01/exact-head-artifact.txt
+  .factory/evidence/ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01/production-qualification.txt
+  .factory/evidence/ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01/closed-clean.txt
+
+Trust state:
+  HEAD = 14371d7f7 (this commit)
+  Branch: main
+  origin/main: unchanged
+  Working tree: clean (this commit adds only wording correction)
+  NOT pushed.
+
+Verdict:
+  PASS_SANDBOX_PRODUCTION_OPTIN_INTEGRATION
+  CLOSED_CLEAN
+
+Next ACT: ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD01
+  - Smoke-install the exact-head VSIX in the dedicated dogfood profile
+  - Verify a single `pwd` invocation routes through sandbox-exec
+    via the production command-execution path
+  - Exercise real dev tools (git, package managers, build caches,
+    networked tooling, credentials, PTYs, HOME assumptions, temp paths)

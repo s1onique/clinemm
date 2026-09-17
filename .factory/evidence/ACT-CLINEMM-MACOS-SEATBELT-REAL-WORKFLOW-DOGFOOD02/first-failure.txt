@@ -1,0 +1,141 @@
+# First Real Failure -- Boundary Discovery
+# ACT-CLINEMM-MACOS-SEATBELT-REAL-WORKFLOW-DOGFOOD02
+
+TIMESTAMP_UTC = 2026-08-26T13:15Z
+
+## FIRST FAILURE (REPRODUCIBLE)
+
+```
+$ /usr/bin/sandbox-exec -p '(version 1) (allow default)' /usr/bin/true
+sandbox-exec: sandbox_apply: Operation not permitted
+RC=71
+
+$ /usr/bin/sandbox-exec -p '(version 1)' /usr/bin/true
+sandbox-exec: sandbox_apply: Operation not permitted
+RC=71
+```
+
+The Apple Seatbelt substrate (`/usr/bin/sandbox-exec`) refuses to
+apply ANY profile when invoked from this host process tree.
+
+This was confirmed at multiple profile shapes:
+
+  - `(version 1) (allow default)`           -> sandbox_apply EPERM
+  - `(version 1)`                            -> sandbox_apply EPERM
+  - production-style read+deny-network       -> sandbox_apply EPERM
+  - production-style + file-write-create     -> sandbox_apply EPERM
+
+The failure is the OUTERMOST layer (kernel sandbox-application),
+not a workflow command's resource boundary.
+
+## ROOT CAUSE
+
+This agent's host process is itself under a macOS sandbox that
+disallows nested Seatbelt application. Common causes:
+
+  1. The agent was launched from an already-sandboxed parent
+     (e.g., an automated harness that runs in an app-sandbox)
+  2. SIP / AMFI / system policy explicitly disables nested
+     sandbox-application for non-Apple code
+
+This is NOT a ClineMM Seatbelt defect. The c2-green test
+correctly detects "Seatbelt unavailable" via probeSeatbeltAvailability
+and skips with "[c2-green] skipping: Seatbelt unavailable".
+
+The same boundary applies to the installed ClineMM extension: when
+launched from this host process tree, the experimental Seatbelt
+opt-in (`CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt`) becomes a no-op,
+and commands fall through to the no-sandbox path.
+
+## CONTROL vs TEST
+
+CONTROL (no Seatbelt, normal shell):
+  /usr/bin/true              -> exit 0
+  /usr/bin/mktemp            -> exit 0
+  git diff --check           -> exit 0
+  git log --oneline -10      -> exit 0
+
+TEST (Seatbelt attempted):
+  ANY sandbox-exec invocation -> sandbox_apply EPERM at the kernel boundary
+
+The CONTROL proves the commands themselves work. The TEST cannot
+exercise the sandbox path because the host disallows nested
+sandbox application.
+
+## IS THIS A REAL SEATBELT COMPATIBILITY RED?
+
+NO. The compatibility boundary is at the agent-environment level,
+not at the ClineMM command-execution level.
+
+The ClineMM Seatbelt backend's design correctly handles this case:
+
+  - `probeSeatbeltAvailability()` returns false (probe fails)
+  - `defaultSandboxBackendResolver("seatbelt-experimental")` returns undefined
+  - `CommandJobManager.start()` falls back to no-sandbox execution
+    (the disabled-default path)
+
+The user-facing behavior is: the Seatbelt opt-in is silently a
+no-op in this environment. This is "fail-safe" behavior, not
+"sandbox-bypass" behavior. The user's command runs unsandboxed,
+which is the default mode.
+
+## CLASSIFICATION
+
+FIRST_FAILURE_BOUNDARY_FOUND = host sandbox-application forbidden
+
+NOT_A_SANDBOX_FAILURE (the ClineMM Seatbelt backend is well-behaved)
+NOT_A_CLINE_MM_DEFECT      (this is environmental, not product)
+ENVIRONMENTAL_HALT          (cannot qualify in-session)
+
+## CONSEQUENCE FOR THIS ACT
+
+C1 (REAL_WORKFLOW_QUALIFICATION) cannot be completed in this
+session because the Seatbelt substrate is unavailable in the
+qualifying environment. The workflows themselves (git, mktemp,
+etc.) all work; the Seatbelt wrapper cannot be applied.
+
+This is an ENVIRONMENTAL halt, not a Seatbelt compatibility RED.
+
+CLOSED: ENVIRONMENTAL_HALT
+PASS: NOT_EVALUABLE_IN_THIS_SESSION
+
+## FOLLOW-UP
+
+The qualification needs to run on a host where the ClineMM
+Seatbelt substrate IS available, i.e., a normal developer
+workstation (not nested-sandboxed). The user's prompt assumed
+this -- the screenshots show VSCodium running with the Seatbelt
+opt-in working (4 PASS rows).
+
+The qualification evidence that WOULD be captured (if Seatbelt
+were available here) is:
+
+  - CONTROL: git/mktemp/build pass in normal shell
+  - TEST: same commands under `sandbox-exec -p <profile>` pass
+    OR fail with EPERM at the specific resource boundary
+
+The user's prompt correctly anticipates that some workflows will
+hit a real boundary (workspace-write for build outputs, tool
+cache writes, etc.). The next ACT after environmental unblock
+should:
+
+  1. Run W1-W4 (read-only to type-check)
+  2. Run W5 (build) -- expected to hit workspace-write boundary
+  3. Capture the first real RED
+  4. Define the next capability ACT around THAT boundary only
+
+This ACT's evidence is sufficient to establish:
+  - C1 is environmentally blocked
+  - The ClineMM Seatbelt backend correctly detects the unavailability
+  - No production changes are needed (C1 = NONE was the constraint)
+  - No follow-up capability is earned by this ACT
+
+## DISPOSITION
+
+ENVIRONMENTAL_HALT
+NOT_A_SANDBOX_FAILURE
+NOT_A_CLINE_MM_DEFECT
+
+PASS_SEATBELT_REAL_WORKFLOW_WAVE2 = NOT_EVALUABLE_IN_THIS_SESSION
+QUALIFIED_VERSION                  = 4.1.10-d51a33328 (actually installed)
+TARGET_VERSION                      = 4.1.10-d1fb24d95 (cannot install in-session)

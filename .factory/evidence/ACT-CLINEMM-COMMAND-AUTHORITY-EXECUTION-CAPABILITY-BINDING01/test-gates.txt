@@ -1,0 +1,91 @@
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+test-gates.txt -- C1-CORRECTION01 RED evidence (BOTH halves)
+
+GATES RUN (C1-CORRECTION01, RED only -- no production code changes):
+
+1. apps/vscode/src/sdk/__tests__/execution-capability-binding01.c1.test.ts
+   (downstream half -- Loss #2: AgentToolContext.metadata -> start)
+   vitest run --config vitest.config.ts src/sdk/__tests__/execution-capability-binding01.c1.test.ts
+   -> 3 tests passed in 75ms
+   Tests:
+     - synthetic marker in context.metadata.executionCapability is NOT
+       forwarded to manager.start(options) today
+     - second invocation without a marker also sees no executionCapability
+     - harness isolation: two separate managers + tools, A and B see
+       independent (no-marker) start options
+   NOTE: test #3 is HARNESS ISOLATION, NOT concurrency isolation.
+         True concurrency proof (same production runtime, interleaved
+         invocations) deferred to C2.
+
+2. apps/vscode/src/sdk/__tests__/execution-capability-binding01.c1-upstream.test.ts
+   (upstream half -- Loss #1: prepared.toolCall.metadata -> context)
+   vitest run --config vitest.config.ts src/sdk/__tests__/execution-capability-binding01.c1-upstream.test.ts
+   -> 2 tests passed in 7ms
+   Tests:
+     - toolCall.metadata.executionCapability IS preserved on the
+       toolCall side (precondition: half 1 of proof)
+     - tool.execute's AgentToolContext.metadata does NOT contain
+       executionCapability (half 2 of proof: the loss point)
+     - negative case: no marker on toolCall => no marker on context
+   This test drives REAL AgentRuntime (production class via
+   @cline/agents dist) end-to-end with a scripted model that
+   emits tool-call-delta carrying metadata.executionCapability.
+   Captures the actual AgentToolContext via vi.spyOn(tool, "execute").
+   NOT a stub/mapper test; NOT a recon-only test; BOTH halves of
+   the proof are on the production seam.
+
+3. Type check (tsc --noEmit, full tsconfig):
+   apps/vscode/tsconfig.json
+   -> PASS (no errors after fixing import paths in c1-upstream.test.ts
+            to use AgentModelEvent/AgentToolContext/AgentToolRuntimeOutcomeHookContext
+            from @cline/shared rather than @cline/agents)
+
+4. apps/vscode/src/sdk/command-job-manager.test.ts:
+   -> 20 tests passed in 46.40s
+
+5. apps/vscode/src/sdk/vscode-run-commands-tool.test.ts:
+   -> 46 tests passed in 377ms
+
+6. apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts:
+   -> 15 tests passed in 11.51s
+   Confirms sandbox substrate is unaffected by this ACT.
+
+7. Pre-existing failures (UNCHANGED by this ACT, NOT regressions):
+   apps/vscode/src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts
+   -> 2 failed | 21 passed (23)
+   Verified by running with this ACT's test files REMOVED: identical
+   2 failed | 21 passed result. Failures predate this ACT.
+
+8. git diff --check: clean
+
+PROVENANCE GATES (frozen in metadata-provenance.md):
+  Source 1 (model-stream metadata):
+    - Source code reviewed at agent-runtime.ts:1730-1810
+    - Source code reviewed at ai-sdk.ts:1070
+    - Source code reviewed at apihandler-agent-model-adapter.ts:52
+    - Classification: PARTIAL TRUST
+    - Risk: provider SDK heterogeneity on metadata forwarding;
+            host code does not sanitize
+  Source 2 (runtime-owned metadata):
+    - Source code reviewed at agent-runtime.ts:2437-2500
+    - Keys: inputParseError, toolSource.*, executionDisposition
+    - Classification: FULL TRUST
+  Source 3 (host-attached metadata; would-be):
+    - Does not exist today
+    - Classification: TRUSTED IF TYPED SLOT
+    - C2 will introduce via AgentToolContext.executionCapability
+
+C2 GREEN GATES (planned; not executed in CORRECTION01):
+  - Downstream 3 RED tests: assertions flip to
+      `toEqual(expectedMarker)` for the marker-bearing case
+      (negative cases stay toBeUndefined).
+  - Upstream 2 RED tests: assert the new TYPED SLOT on
+    AgentToolContext carries the marker (NOT a shallow metadata
+    merge). The existing metadata bag remains session-wide.
+  - Add: multi-command correlation test (real AgentRuntime, real
+    CommandJobManager, multi-command input).
+  - Add: same-runtime concurrency test (real AgentRuntime.runTurn
+    x2 with Promise.all, distinct markers).
+  - Add: denied-invocation capability conservation test
+    (cancellation propagates; start is NEVER reached with a
+    leftover marker).

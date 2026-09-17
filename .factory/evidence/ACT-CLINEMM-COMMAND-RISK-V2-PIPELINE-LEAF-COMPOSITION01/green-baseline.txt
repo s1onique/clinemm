@@ -1,0 +1,9 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core[39m
+
+ [32m✓[39m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts [2m([22m[2m42 tests[22m[2m)[22m[32m 80[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m42 passed[39m[22m[90m (42)[39m
+[2m   Start at [22m 22:34:09
+[2m   Duration [22m 435ms[2m (transform 172ms, setup 0ms, import 248ms, tests 80ms, environment 0ms)[22m

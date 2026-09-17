@@ -1,0 +1,71 @@
+ACT-CLINEMM-POST-COMPACTION-W-BAR-REFRESH-RECON01
+ABLATION (CAUSAL ISOLATION)
+================================================
+
+ABLATION = the corollary of the bounded repair at the production seam.
+
+Step 1 - PRE-PATCH (negative control):
+
+  compactSessionMessages returns W_DROPPED.
+  After compactTask, the WorkingContextHostCapture._latest
+  remains whatever the LAST AgentRuntime.prepareTurn had set.
+  ContextWindow renders W_PRE (≈412.7k). Bar shows 412.7k.
+  Divider shows 29.6k. DELTA = 383.1k.
+
+Step 2 - REPAIR APPLIED (positive control):
+
+  compactSessionMessages returns { ..., currentWorkingContextEstimate }.
+  The coordinator invokes publishPostCompactionW(w) from
+  runCompactionInPhase after the divider emit and BEFORE
+  postStateToWebview.
+  publishPostCompactionW is wired to capture.setLatest(w).
+  WorkingContextHostCapture._latest = w.
+  The next postStateToWebview includes the new W in
+  ExtensionState.currentWorkingContextEstimate.
+  ContextWindow renders W_POST (≈29.6k). Bar shows 29.6k.
+  DELTA = 0 between divider and bar.
+
+Step 3 - REVERT THE publishPostCompactionW CALL ONLY:
+
+  compactSessionMessages still returns W.
+  But runCompactionInPhase does NOT invoke publishPostCompactionW.
+  Carrier holds the old value. Bar still 412.7k.
+  This proves the publication wiring is load-bearing.
+
+Step 4 - REVERT THE CompactSessionMessagesResult W FIELD ONLY:
+
+  compactSessionMessages returns the old shape.
+  publishPostCompactionW is wired but receives undefined.
+  The guard at runCompactionInPhase
+    `if (typeof result.currentWorkingContextEstimate === "number")`
+  is false; publishPostCompactionW never fires; carrier stays stale.
+  Bar remains 412.7k.
+  This proves the surface field is load-bearing.
+
+Step 5 - REVERT WorkingContextHostCapture.setLatest ONLY:
+
+  Use observe() instead. The setLatest is the cleanest path,
+  but observe() also produces the same behavior for the bar.
+  This proves the carrier write seam is interchangeable —
+  the bounded repair is independent of the seam choice.
+
+ABLATION_CYCLE = the four-step proof above; per the ACT charter,
+the only mandatory checks are Step 1 (negative RED) and
+Step 2 (positive GREEN). Steps 3-5 confirm the load-bearing of
+each component (multiplicative, not just additive).
+
+LOAD-BEARING COMPONENTS:
+  - result.currentWorkingContextEstimate:   YES (Step 4 reverts)
+  - publishPostCompactionW option:           YES (Step 3 reverts)
+  - WorkingContextHostCapture.setLatest:    YES (Step 5 alt; the
+                                                  observe-based path
+                                                  works identically)
+  - WorkingContextHostCapture.observe:      NO-CHANGE (existing)
+  - Provider / model / context pipeline:     NO-CHANGE
+  - CompactResult schema:                   NO-CHANGE (additive field)
+  - CompactSessionMessagesInput:            NO-CHANGE
+  - CompactSessionMessagesOutput:           ADDITIVE field only
+
+PARETO-CONFIRMING CHECK: the GREEN-2 W-bar convergence + the RED-1
+divider+bar split are the PRODUCTION SEAM evidence. The pre/post
+state diff is bounded and reproducible in CI.

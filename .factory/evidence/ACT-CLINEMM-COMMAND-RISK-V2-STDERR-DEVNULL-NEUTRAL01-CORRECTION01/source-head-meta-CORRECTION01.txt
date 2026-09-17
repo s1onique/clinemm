@@ -1,0 +1,2 @@
+5904e8760962154e533c6735a997eff112b2a64b fix(safety): parser-helper cross-compile provenance guard (--install HARD-FAIL on tracked dirt)
+2026-08-24 20:47:15 +0300

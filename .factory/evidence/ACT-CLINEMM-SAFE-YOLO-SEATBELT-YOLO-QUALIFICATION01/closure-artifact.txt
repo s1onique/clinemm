@@ -1,0 +1,127 @@
+ACT-CLINEMM-SAFE-YOLO-SEATBELT-YOLO-QUALIFICATION01 -- EXACT-HEAD CLOSURE ARTIFACT
+==========================================================================
+
+ACT_ID: ACT-CLINEMM-SAFE-YOLO-SEATBELT-YOLO-QUALIFICATION01
+VERDICT: PASS_SAFE_YOLO_MUTATION_CONFINEMENT CLOSED_CLEAN_COMMITTED
+C1: GO  (to ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01)
+
+REPOSITORY_ROOT: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH: main
+
+ENTRY_HEAD:   9adce1ed36e455f8c38a8bf1c0d224f5dd29993f
+ENTRY_TREE:   c8b57d838d3714fbc1d00f339c18075b2a70bc8a  (NETWORK-OPEN01 docs commit)
+
+SUBJECT_HEAD: e2f49da62  (YQ feat commit, this ACT)
+SUBJECT_TREE: (will be in commit object; this closure artifact written before commit)
+
+DOCS_HEAD:    (will be the docs commit landing the board row, see git log)
+
+FILES_CHANGED:
+  feat commit (e2f49da62):
+    A apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-yolo-qualification01.c1-qualify.test.ts  (+492)
+  docs commit: appends one row to .factory/epic-board.md
+
+NETWORK_POLICY_SEAM: apps/vscode/src/sdk/sandbox-policy.ts:buildExperimentalReconCapability (UNCHANGED)
+FILESYSTEM_POLICY_SEAM: sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts (UNCHANGED)
+YOLO_CONFIG_SOURCE: apps/vscode/src/sdk/session-auto-approval.ts:SessionAutoApprovalStore (ephemeral, NOT global state)
+APPROVAL_DECISION_SEAM: apps/vscode/src/sdk/SdkController.ts:resolveHostAuthorization (composes OVER baseAuth; under override=all projects mode='all')
+COMMAND_EXECUTION_SEAM: sdk/packages/core/src/runtime/command-policy/command-execution-plan.ts:buildCommandExecutionPlan
+SANDBOX_CAPABILITY_SEAM: apps/vscode/src/sdk/command-job-manager.ts:586 buildExperimentalReconCapability (reads ONLY cwd + workspaceRoots; NEVER reads hostAuthorization.mode)
+
+ARCHITECTURAL VERIFICATION:
+  HALT_YOLO_SANDBOX_COUPLING DOES NOT FIRE. Structural grep of production code
+  shows zero references to hostAuthorization, mode, override, or setOverride
+  inside buildExperimentalReconCapability. The only YOLO-influenced
+  capability that can reach the sandbox is perCommandExecutionCapability,
+  gated on host_safe_mktemp_default_temp matching, which narrows filesystem
+  for the DARWIN canonical temp root -- it does NOT widen $HOME.
+
+RED_NETWORK_RESULT (carried from NETWORK-OPEN01, UNCHANGED in this ACT):
+  RED_REPRODUCED (profile (deny network*), CONTROL CONNECTED, TEST DENIED)
+  EVIDENCE: .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/red-baseline.json
+            sha256=da75b3664ed84ecc63ccaabb411c690090f75e14677c35fbcbe9ae7b00ce1750
+
+GREEN_NETWORK_RESULTS (carried from NETWORK-OPEN01, UNCHANGED in this ACT):
+  GREEN_REPRODUCED (profile (allow network*), CONTROL+TEST both CONNECTED)
+
+FILESYSTEM_BASELINE: (carried from NETWORK-OPEN01, UNCHANGED)
+  HCREATE_DENIED, HMODIFY_DENIED, HDELETE_DENIED, HREAD_OK (broad-read),
+  child CHC_DENIED; workspace CREATE_OK/MODIFY_OK/DELETE_OK/RECREATE_OK.
+  EVIDENCE: .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/filesystem-baseline-snapshot.json
+
+FILESYSTEM_POSTCHANGE: (carried from NETWORK-OPEN01, UNCHANGED)
+  byte-identical to baseline (CONSERVED=true)
+
+YQ PRODUCTION-SEAM EVIDENCE (this ACT):
+  YQ-A: Seatbelt + network-allow + override=none
+    profile network rule: (allow network*)
+    adversarial stdout: HW_DENIED, HAP_DENIED, HTR_DENIED, HD_DENIED,
+                        HR_DENIED, HRD_DENIED, HCH_DENIED, HGC_DENIED,
+                        HS_DENIED, HC_DENIED, HCWD_DENIED, DONE
+    canary sentinel SHA: 32aed430fd1e32257e0a49028ef0c00bd42523a29749fb73ae575a09788edb9d
+    home dir still exists: true
+  YQ-B: Seatbelt + network-allow + override=all (YOLO worst-case)
+    profile network rule: (allow network*)
+    adversarial stdout: BYTE-IDENTICAL to YQ-A
+    canary sentinel SHA: 32aed430fd1e32257e0a49028ef0c00bd42523a29749fb73ae575a09788edb9d
+    home dir still exists: true
+  VERDICT: PASS_SAFE_YOLO_MUTATION_CONFINEMENT
+  EVIDENCE: .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-YOLO-QUALIFICATION01/yq-evidence.json
+            sha256=46b029522f2fa7b61ca79ed2acd44de8817c437a8881cd852b214d8a3d51b044
+
+FILESYSTEM_CONSERVATION_RESULT: CONSERVED=true (YQ-A byte-equal to YQ-B on canary SHA + tree)
+
+PROFILE_DELTA_RESULT (carried from NETWORK-OPEN01):
+  exactly 1 line differs: (deny network*) -> (allow network*); filesystem section byte-identical
+
+TEST_RESULTS:
+  ACT-specific test file (1 new):
+    apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-yolo-qualification01.c1-qualify.test.ts
+    9 tests / 9 PASS:
+      - PHASE 1: buildExperimentalReconCapability byte-equal regardless of override (structural)
+      - PHASE 1: resolveSafeYoloNetworkOptIn independent of approval override (structural)
+      - PHASE 6: override=all projects mode='all', override=none is pass-through (structural)
+      - PHASE 8: sensitive reads observation -- broad-read contract unchanged (structural)
+      - PHASE 2/3/4/7 A: Seatbelt + override=none, all HOME mutations denied, canary intact (live)
+      - PHASE 2/3/4/7 B: Seatbelt + override=all + per-command channel, SAME denials, SAME canary (live)
+      - PHASE 2/3/4/7 A vs B byte-equality: identical adversarial script yields identical stdout (live)
+      - PHASE 5 A: network-allow + override=none, CONNECTED:$TOKEN reaches listener (live)
+      - PHASE 5 B: network-allow + override=all, CONNECTED:$TOKEN still reaches listener (live)
+  Prior Safe-YOLO suites (regression-free):
+    darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts: 7/7 PASS
+    darwin-seatbelt-darwin-mktemp-capability01.c2-* suites: 37/37 PASS across 7 files
+  Full apps/vscode vitest src/sdk/__tests__/: 70 files / 708 tests PASS
+  Full apps/vscode bun run test:unit: 1076 tests / 0 regressions
+
+TYPECHECK_RESULT:
+  apps/vscode bun run check-types  -> 0 errors (exit 0)
+
+BUILD_RESULT: not run -- this ACT is purely qualification; no production code change
+
+git status --short: (empty - working tree clean)
+git diff --check:   (empty - no whitespace errors)
+
+KNOWN_HOST_REQUIRED_TESTS: none (spec §13)
+  - Linux CI: live tests skip cleanly via runtime check (expect(true).toBe(true))
+  - macOS CI: live tests run against /usr/bin/sandbox-exec substrate
+
+P1_RESIDUE: none
+
+P2_RESIDUE: none (the NETWORK-OPEN01 P2 residue on Darwin skip idiom is now FIXED in this ACT)
+
+CLAIM (the bounded, supportable claim this ACT establishes):
+  YOLO_DOES_NOT_WIDEN_FILESYSTEM_AUTHORITY_VIA_SEATBELT
+    - Seatbelt filesystem decisions are byte-equal regardless of override state
+    - The only YOLO-influenced capability is the typed per-command channel,
+      gated on host_safe_mktemp_default_temp matching, which narrows
+      filesystem for the canonical Darwin user temp root -- never $HOME
+    - $HOME mutations are denied in every tested adversarial form
+      (direct write, append, truncate, delete, rename, recursive delete,
+       child shell, grandchild shell, symlink indirection, chmod, cd+rm)
+    - broad-read contract means $HOME sentinel is READABLE; this is the
+      input to ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01
+
+NEXT: ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01
+      (Design the read-confinement policy that prevents secret exfiltration
+       while preserving workspace-readable semantics, then qualify under
+       Seatbelt + YOLO with the same eight-phase matrix.)

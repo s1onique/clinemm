@@ -1,0 +1,86 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01 — temp path canonicalization
+
+==============================================================================
+INVOCATION:
+==============================================================================
+
+seatbelt-backend.prepare({ capability: { ...buildExperimentalReconCapability(...) } })
+  -> cap.tempRoot is undefined (production builder does not set it)
+  -> backend enters the else branch
+  -> synthesizedTempRoot = mkdtempSync(join(tmpdir(), "clinemm-sandbox-temp-"))
+     tmpdir() on macOS returns /var/folders/0g/.../T (per-user, OS-managed)
+     mkdtempSync returns an absolute path such as:
+       /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-CS2xGq
+  -> tempRoot = canonicalizeSandboxRoot(synthesizedTempRoot)
+     canonicalizeSandboxRoot uses fs.realpathSync
+     /var is a symlink to /private/var on macOS (default install)
+     so realpathSync resolves to:
+       /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-CS2xGq
+
+==============================================================================
+PROFILE WRITE GRANT (one line in the SBPL profile):
+==============================================================================
+
+  (allow file-write*
+    ...
+    (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-CS2xGq")
+    ...)
+
+==============================================================================
+ENV BINDING (materializeEnvironment output):
+==============================================================================
+
+  out.TMPDIR = options.syntheticTempDir        (= the canonical tempRoot)
+
+Sanitized mode (envSemantics=complete) means the child receives ONLY
+this env. No `process.env` is spread underneath.
+
+==============================================================================
+CHILD OBSERVATION:
+==============================================================================
+
+/bin/sh -c 'printf "TMPDIR=%s\\n" "$TMPDIR"'  stdout:
+  TMPDIR=/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-CS2xGq
+
+mktemp (no -d) stdout:
+  /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-CS2xGq/tmp.XXXXXXXXXX
+
+mktemp -d stdout:
+  /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-CS2xGq/tmp.YYYYYYYYYY
+
+==============================================================================
+CANONICAL INVARIANT:
+==============================================================================
+
+The child sees the canonical form (realpath-resolved). The SBPL
+write grant uses the same canonical form. There is NO lexical
+ambiguity: SBPL never sees `/var/folders/...` and the env never sees
+the un-canonical form. Any host that has `/var` aliased elsewhere
+would still produce matching canonical paths on both sides.
+
+==============================================================================
+NO PARENT AUTHORITY EXPANSION:
+==============================================================================
+
+The write grant is `(subpath "<one path>")` — a leaf, not a tree.
+A sibling directory at /private/var/folders/.../T/clinemm-sandbox-temp-OTHER
+is a DIFFERENT subpath and is NOT granted. Verified by:
+
+  GREEN a sibling under the same parent canonical temp is DENIED
+       (no parent authority expansion)
+
+The sibling test writes to a path under tmpRoot (created by
+mkdtempSync(join(tmpdir(), "sibling-"))) which lives in the SAME
+/tmp family but is NOT the synthesized tempRoot. The kernel denies
+the write, proving the grant is leaf-scoped.
+
+==============================================================================
+NO RECURSIVE WIDENING:
+==============================================================================
+
+The grant does NOT include the parent (/private/var/folders/.../T),
+the grandparent (/private/var/folders/...), or /tmp. Verified by:
+
+  GREEN workspace write still KERNEL-DENIED (W01 conservation)
+  GREEN a sibling under the same parent canonical temp is DENIED
+       (no parent authority expansion)

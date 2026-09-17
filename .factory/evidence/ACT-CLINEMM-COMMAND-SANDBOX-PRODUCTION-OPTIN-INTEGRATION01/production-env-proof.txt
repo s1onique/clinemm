@@ -1,0 +1,47 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+PRODUCTION ENVIRONMENT PROOF (C2 evidence 3)
+===========================================================
+
+Test file:
+  apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts
+  describe("env proof: experimental opt-in honors envSemantics=complete end-to-end")
+
+Proof that the actual child (running through the production
+CommandJobManager.start -> spawnSupervisableShellCommand path) does
+NOT see the parent's credential vars under
+CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt:
+
+  1. CLINEMM_PRODUCTION_TEST_LEAK_VAR=PLAINTEXT-MUST-NOT-LEAK
+     seeded in parent process env.
+  2. CommandJobManager.start invoked with command:
+       /bin/sh -c 'printf "%s\n" "$CLINEMM_PRODUCTION_TEST_LEAK_VAR"'
+  3. Default sandboxBackendResolver resolves Seatbelt backend.
+  4. Wave-1 capability built with environment.mode="sanitized".
+  5. backend.prepare() returns SandboxPreparedInvocation with
+     envSemantics="complete" (per CORRECTION01-P1 contract).
+  6. CommandJobManager.start replaces executable/args/env with the
+     prepared invocation and threads envSemantics="complete" through
+     the supervisor.
+  7. spawnSupervisableShellCommand honors envSemantics="complete":
+     it passes prepared.env AS-IS (no spread of process.env).
+  8. Real /usr/bin/sandbox-exec runs the profile and execs /bin/sh.
+  9. /bin/sh's $CLINEMM_PRODUCTION_TEST_LEAK_VAR is empty.
+ 10. stdout does NOT contain PLAINTEXT-MUST-NOT-LEAK.
+
+Same proof for AWS_SECRET_ACCESS_KEY (secret-shaped var in the
+SECRET_BLOCKLIST).
+
+Both tests:
+  ✓ with seatbelt opt-in on darwin, CLINEMM_PRODUCTION_TEST_LEAK_VAR is absent in actual child stdout (28ms)
+  ✓ with seatbelt opt-in on darwin, AWS_SECRET_ACCESS_KEY is absent in actual child stdout (10ms)
+
+CONSERVATION (DEFAULT_OFF):
+  ✓ no sandbox opt-in: seeded parent env var reaches the child (10ms)
+  ✓ invalid opt-in value: still DEFAULT_OFF (3ms)
+
+The CORRECTION01-P1 contract (`envSemantics === "complete"` =>
+use prepared.env AS-IS) is now load-bearing on the production
+executor. The CRITICAL property:
+  spawnEnv = prepared.env (NOT options.env)
+is what keeps parent secrets out of the sandboxed child.

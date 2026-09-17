@@ -1,0 +1,95 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02 -- P0-1 RED REPRO
+
+os.tmpdir() on darwin is ENVIRONMENT-STEERABLE.
+
+Current Node documentation states:
+  On non-Windows systems, os.tmpdir() checks TMPDIR, then TMP,
+  then TEMP, and only falls back to /tmp if none are set.
+
+  Source: https://nodejs.org/api/os.html
+
+LIVE reproduction on this darwin-arm64 host (2026-08-26):
+
+  --- baseline (TMPDIR unset) ---
+  $ node -e 'console.log(require("os").tmpdir())'
+  /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T
+
+  --- TMPDIR=/synthetic/attacker-selected ---
+  $ TMPDIR=/synthetic/attacker-selected node -e 'console.log(require("os").tmpdir())'
+  /synthetic/attacker-selected
+
+  --- TMPDIR=/tmp ---
+  $ TMPDIR=/tmp node -e 'console.log(require("os").tmpdir())'
+  /tmp
+
+  --- TMP=/synthetic/attacker-selected (TMPDIR unset) ---
+  $ unset TMPDIR; TMP=/synthetic/attacker-selected node -e 'console.log(require("os").tmpdir())'
+  /synthetic/attacker-selected
+
+vs. the AUTHORITATIVE source:
+
+  --- confstr(_CS_DARWIN_USER_TEMP_DIR) via Python ctypes ---
+  confstr(_CS_DARWIN_USER_TEMP_DIR): /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/
+
+  --- via shell /usr/bin/getconf DARWIN_USER_TEMP_DIR ---
+  /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/
+
+  --- via shell, with TMPDIR=/synthetic/attacker-selected ---
+  /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/   <-- env IGNORED
+  TMPDIR=/synthetic/attacker-selected                 <-- shell env still set
+
+OBSERVATION
+===========
+
+  os.tmpdir() returns the SYNTHETIC directory when TMPDIR/TMP/TEMP
+  is set externally, on darwin. This is environment-steerable.
+
+  confstr(_CS_DARWIN_USER_TEMP_DIR) returns the TRUE per-user temp
+  directory, regardless of TMPDIR. Apple's Secure Coding Guide
+  explicitly distinguishes this from generic env-steered temp:
+    "Use the confstr() function to retrieve the per-user temporary
+     directory, which is guaranteed to be safe for the user."
+  Source: developer.apple.com Race Conditions and Secure File
+  Operations.
+
+CORRECTION01 IMPLICATION
+========================
+
+  The CORRECTION01 evidence field
+    effectiveDefaultTempRoot = os.tmpdir()
+  returned an environment-steered value, not a verified Darwin
+  per-user temp root. On darwin:
+    parent shell TMPDIR=/synthetic
+    os.tmpdir() -> /synthetic
+    canonicalDefaultTempRoot = realpath(/synthetic) -> /synthetic
+    platform = darwin
+
+  The CORRECTION01 gate:
+    platform === "darwin"          PASS
+    effective non-empty            PASS  (non-empty yes)
+    canonical non-empty            PASS  (non-empty yes)
+
+  -> ALLOW.
+
+  But the actual authoritative Darwin per-user temp root is
+  /var/folders/.../T, which the policy never verified.
+
+FIX
+===
+
+  CORRECTION02 requires the host evidence to source the effective
+  default temp root from /usr/bin/getconf DARWIN_USER_TEMP_DIR
+  (which is confstr(_CS_DARWIN_USER_TEMP_DIR) on darwin) and
+  never from os.tmpdir(). The host adapter uses a subprocess
+  invocation of /usr/bin/getconf to obtain this value; os.tmpdir()
+  is removed from the evidence path entirely.
+
+EVIDENCE LABEL
+==============
+
+  RED REPRO:                  REAL (this darwin-arm64 host)
+  os.tmpdir honors TMPDIR:    REAL (LEAK reproduced)
+  os.tmpdir honors TMP:       REAL (LEAK reproduced)
+  confstr INDEPENDENT of env: REAL (verified)
+  CORRECTION01 evidence broken under inherited TMPDIR:
+                              YES (gate accepts arbitrary root)

@@ -1,0 +1,20 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SEATBELT-YOLO-QUALIFICATION01-CORRECTION01",
+  "purpose": "EVIDENCE_BOUNDARY_CORRECTION",
+  "claim": "REAL upstream YOLO path (SessionAutoApprovalStore -> resolveHostAuthorization -> canonical policy -> buildCommandExecutionPlan -> manager.start -> Seatbelt) denies $HOME overwrite",
+  "witnessPath": "SessionAutoApprovalStore.setOverride(sessionId, 'all') -> resolveSessionHostAuthorization(baseAuth, 'all') -> composedAuth.mode === 'all' -> evaluateCommandToolApprovalWithPlan(TOOL_INPUT, composedAuth) -> plan with executionCapability === undefined -> manager.start({commandExecutionPlan: plan}) -> Seatbelt -> sandboxed bash",
+  "invariant": {
+    "beforeSha": "<computed at runtime>",
+    "afterSha": "<computed at runtime>",
+    "kernelDeniedOverwrite": true,
+    "exitCode": "bash exits 0 because the inner printf redirect failure is not the last command (echo EXIT=$? is). The canary-SHA equality is the authoritative signal.",
+    "planExecutionCapability": "undefined (printf > file matches no host_safe_mktemp_default_temp rule; the canonical planner does NOT widen for arbitrary $HOME mutations)"
+  },
+  "composedSecurityClaim": {
+    "upstreamYoloMapping": "STRUCTURAL_PROVEN + REAL_PRODUCTION_SEAM_PROVEN (via this witness)",
+    "downstreamSeatbeltConfinement": "REAL_PRODUCTION_SEAM_PROVEN (carried from YQ closure, 11-mutation corpus)",
+    "composed": "PROVEN"
+  },
+  "reviewerP1Status": "ADDRESSED",
+  "verdict": "PASS_SAFE_YOLO_MUTATION_CONFINEMENT_BOUNDED_PROOF_NARROWED"
+}

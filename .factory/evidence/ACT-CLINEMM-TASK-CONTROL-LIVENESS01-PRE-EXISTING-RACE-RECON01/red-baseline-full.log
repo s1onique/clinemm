@@ -1,0 +1,240 @@
+(node:99733) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:99736) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:99734) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:99735) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > clearTask does not produce the wedge (real lifecycle, happy path) 2ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > slow sdkHost.stop does not produce the wedge during or after clearTask 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > sdkHost.stop rejection does not produce the wedge (real lifecycle swallows) 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > sdkHost.stop never resolves does not produce the wedge (waitForStop timeout) 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > REACH02 PARENTAL GREEN: concurrent clearTask + startNewSession is fenced — no wedge produced 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > COMMON01: from the wedge state, the second New Task click recovers cleanly 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > KNOWN_HARDENING_RESIDUE: from the wedge state, the real SdkMessageCoordinator boundary CURRENTLY silently drops the divider row 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ × src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level New Task race > TCL-PARENT01: the real top-level New Task race must NOT produce the wedge 5ms
+   → expected undefined to be 'session-B' // Object.is equality
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level New Task race > TCL-PARENT02: through the repaired top-level path, Compact reaches normal coordinator behavior 2ms
+ × src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level New Task race > TCL-PARENT03: under the fence, racing initTask vs clearTask prevents the wedge; a subsequent fresh initTask produces a clean pair 3ms
+   → setTurnPhase("streaming") was not called for the post-wedge New Task. Phase calls: []: expected false to be true // Object.is equality
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ × src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL A: init A superseded by clear must leave neither half installed 5ms
+   → expected undefined to be 'session-A' // Object.is equality
+ × src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL B: init A superseded by init B must leave B current; A abandoned 1ms
+   → expected undefined to be 'session-A' // Object.is equality
+ × src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL C: clear during host.start must leave neither half installed 2ms
+   → expected undefined to be 'session-A' // Object.is equality
+ × src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL D: stale A host.start resolves AFTER B is current must NOT replace B 3ms
+   → Cannot read properties of undefined (reading 'resolve')
+ × src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL E: stale-start cleanup failure must conserve B/current state; error observable 3ms
+   → Cannot read properties of undefined (reading 'resolve')
+ × src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL F: stale reinit must NOT terminate current B; B's host.stop must NOT be called 2ms
+   → expected undefined to be 'session-A' // Object.is equality
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL A: init A superseded by clear must leave neither half installed
+AssertionError: expected undefined to be 'session-A' // Object.is equality
+
+- Expected:
+"session-A"
+
++ Received:
+undefined
+
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts:303:33
+    301|   const initAPromise = fx.taskStart.initTask("prompt A", undefined, un…
+    302|   await awaitInitTaskPaused()
+    303|   expect(fx.state.task?.taskId).toBe("session-A")
+       |                                 ^
+    304|   expect(fx.lifecycle.getActiveSession()).toBeUndefined()
+    305|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL B: init A superseded by init B must leave B current; A abandoned
+AssertionError: expected undefined to be 'session-A' // Object.is equality
+
+- Expected:
+"session-A"
+
++ Received:
+undefined
+
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts:342:33
+    340|   const initAPromise = fx.taskStart.initTask("prompt A", undefined, un…
+    341|   await awaitInitTaskPaused()
+    342|   expect(fx.state.task?.taskId).toBe("session-A")
+       |                                 ^
+    343|   expect(fx.lifecycle.getActiveSession()).toBeUndefined()
+    344|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL C: clear during host.start must leave neither half installed
+AssertionError: expected undefined to be 'session-A' // Object.is equality
+
+- Expected:
+"session-A"
+
++ Received:
+undefined
+
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts:398:33
+    396|   const initAPromise = fx.taskStart.initTask("prompt A", undefined, un…
+    397|   await awaitInitTaskPaused()
+    398|   expect(fx.state.task?.taskId).toBe("session-A")
+       |                                 ^
+    399|
+    400|   const clearPromise = fx.taskControl.clearTask()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL D: stale A host.start resolves AFTER B is current must NOT replace B
+TypeError: Cannot read properties of undefined (reading 'resolve')
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts:446:13
+    444|
+    445|   const bResolver = fx.hostHandle.resolverQueue[1]
+    446|   bResolver.resolve("session-B")
+       |             ^
+    447|   await initBPromise
+    448|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL E: stale-start cleanup failure must conserve B/current state; error observable
+TypeError: Cannot read properties of undefined (reading 'resolve')
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts:495:13
+    493|
+    494|   const bResolver = fx.hostHandle.resolverQueue[1]
+    495|   bResolver.resolve("session-B")
+       |             ^
+    496|   await initBPromise
+    497|   expect(fx.state.task?.taskId).toBe("session-B")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL F: stale reinit must NOT terminate current B; B's host.stop must NOT be called
+AssertionError: expected undefined to be 'session-A' // Object.is equality
+
+- Expected:
+"session-A"
+
++ Received:
+undefined
+
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts:560:33
+    558|   const initAPromise = fx.taskStart.initTask("prompt A", undefined, un…
+    559|   await awaitInitTaskPaused()
+    560|   expect(fx.state.task?.taskId).toBe("session-A")
+       |                                 ^
+    561|   expect(fx.lifecycle.getActiveSession()).toBeUndefined()
+    562|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level New Task race > TCL-PARENT01: the real top-level New Task race must NOT produce the wedge
+AssertionError: expected undefined to be 'session-B' // Object.is equality
+
+- Expected:
+"session-B"
+
++ Received:
+undefined
+
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts:445:35
+    443|   const taskBeforeClear = fx.state.task
+    444|   const activeSessionBeforeClear = fx.lifecycle.getActiveSession()
+    445|   expect(taskBeforeClear?.taskId).toBe("session-B")
+       |                                   ^
+    446|   expect(activeSessionBeforeClear).toBeUndefined()
+    447|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level New Task race > TCL-PARENT03: under the fence, racing initTask vs clearTask prevents the wedge; a subsequent fresh initTask produces a clean pair
+AssertionError: setTurnPhase("streaming") was not called for the post-wedge New Task. Phase calls: []: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts:666:5
+    664|    streamingAsserted,
+    665|    `setTurnPhase("streaming") was not called for the post-wedge New Ta…
+    666|   ).toBe(true)
+       |     ^
+    667|  })
+    668| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  8 failed | 8 passed (16)
+   Start at  20:09:11
+   Duration  4.10s (transform 6.57s, setup 5.63s, import 6.29s, tests 31ms, environment 0ms)
+
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m
+Emitted 'error' event at:
+    at ChildProcess.emitWorkerError (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3011:22)
+[90m    at ChildProcess.emit (node:events:509:20)[39m
+[90m    at ChildProcess.kill (node:internal/child_process:535:12)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+Node.js v26.0.0

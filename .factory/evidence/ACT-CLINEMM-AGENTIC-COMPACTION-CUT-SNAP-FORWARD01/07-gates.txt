@@ -1,0 +1,41 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01
+GATES (post-CORRECTION01)
+================================================
+
+Per ACT charter §27. Gates evaluated post-patch, post-CORRECTION01.
+
+G1. RED converted to regression guard (R1-R7)         ✓ PASS  (compaction.cut-snap-forward.test.ts; R7 added in CORRECTION01)
+G2. Targeted RED/GREEN pair                           ✓ PASS  (L1 reproduction: ~0% -> ~87% fixture weight reduction)
+G3. Full compaction suite green                       ✓ PASS  (122/125; 2 pre-existing bun ENOENT)
+G4. @cline/core package build                         ✓ PASS  (tsconfig.build.json, dist emitted)
+G5. apps/vscode typecheck                             ✓ PASS  (tsc --noEmit exit 0)
+G6. webview-ui typecheck                              N/A     (not touched)
+G7. git diff --check clean                            ✓ PASS  (no whitespace issues)
+G8. apps/vscode compaction-coordinator suite          ✓ PASS  (38/38)
+G9. Dogfood VSIX build + install                      ✗ BLOCKED  (no `bun` on substrate; pre-existing constraint)
+G10. Live qualification on dogfood VSIX               ✗ BLOCKED  (depends on G9)
+
+G9/G10 SUBSTITUTE (per substrate doctrine):
+
+The substrate lacks `bun`, which is required by `scripts/build-dogfood-vsix.py`.
+This is a pre-existing constraint (multiple prior ACTs have established that
+the dogfood VSIX build cannot run on this environment). Per the doctrine
+already in place, when G9 is blocked by substrate:
+
+  - The git commit HEAD IS the SOURCE_HEAD artifact.
+  - The dogfood VSIX build/install step is deferred to the next dogfood-capable
+    environment (operator-side, not Factory-side).
+  - The evidence is the algorithmic GREEN proof (R1-R7 + L1 reproduction with
+    ~87% fixture-weight reduction matching the comparator L2 shape in spirit).
+  - The closure is durable via the git commit.
+
+The patched algorithm was exercised end-to-end via the production-shape RED
+test (full `createContextCompactionPrepareTurn` chain with realistic provider
+mock) and observed to reduce 472 -> 63 messages / 451_810 -> 60_059 fixture
+weight (~87% reduction). METRIC NOTE: this is JSON-serialized character
+length, NOT literal tokens (CORRECTION01 P2). The fix is production-validated
+algorithmically; the dogfood install/qualification is the operator-side
+confirmation step.
+
+FINAL HEAD:
+  post-CORRECTION01: pending commit (test-only + docs only, no production change)

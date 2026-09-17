@@ -1,0 +1,84 @@
+{
+  "fixture_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture",
+  "step1_begin": {
+    "schema": "cline-approval-specimen-capture/v2",
+    "approvalEventCount": 2,
+    "sessionCandidateCount": 1,
+    "fingerprintCount": 2,
+    "sessionProjectionKeys": [
+      "interactive",
+      "matchedByShape",
+      "mode",
+      "model",
+      "provider",
+      "session_id",
+      "source",
+      "started_at",
+      "status",
+      "updated_at"
+    ],
+    "captured_session_identities": [
+      "snake-only-A"
+    ]
+  },
+  "step2_finish": {
+    "binding": {
+      "act": "ACT-CLINEMM-HERMETIC-FIXTURE",
+      "approvalTransactionBound": true,
+      "artifactStatus": "PASS",
+      "attachmentProjection": {
+        "clineVersion": "UNAVAILABLE",
+        "emittedAt": "UNAVAILABLE",
+        "repoHead": "UNAVAILABLE",
+        "runtimeInstanceId": "UNAVAILABLE"
+      },
+      "captureId": "20260829T220709Z-47d5d954",
+      "capturedAt": "2026-08-29T22:07:09.741316Z",
+      "deltaSize": 2,
+      "eventDeltaBound": true,
+      "humanChronologyBound": true,
+      "instrumentationAttachmentBound": false,
+      "pendingApprovalEventCount": 2,
+      "pendingDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-FIXTURE/captures/20260829T220709Z-47d5d954/pending",
+      "pendingSessionCandidateCount": 1,
+      "qualifyingTransactionCount": 1,
+      "resolvedApprovalEventCount": 4,
+      "resolvedDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-FIXTURE/captures/20260829T220709Z-47d5d954/resolved",
+      "resolvedSessionCandidateCount": 1,
+      "runtimeIdentityBound": true,
+      "runtimeIdentityProjection": {
+        "capturedAt": "2026-08-29T22:07:09.739075Z",
+        "clineVersion": "UNAVAILABLE",
+        "pid": "96110",
+        "repoHead": "752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113",
+        "repoTree": "e753ab01d44291654b2951c8c2e5f0cea78e74e4"
+      },
+      "runtimeSourceDrift": false,
+      "schema": "cline-approval-specimen-binding/v1",
+      "sessionBindingAvailable": true,
+      "specimenBinding": "PASS",
+      "zeroEventClassification": "N/A"
+    },
+    "delta_lines": 2,
+    "before_lines": 2,
+    "after_lines": 4,
+    "discriminator_items": 2,
+    "delta_correlation_ids": [
+      "corr-B"
+    ],
+    "discriminator_session_ids": [
+      "snake-only-A"
+    ],
+    "runtime_identity_bound": true,
+    "approval_transaction_bound": true,
+    "qualifying_transaction_count": 1,
+    "P0_closure": "identity_join(snake_case session_id=snake-only-A) succeeded",
+    "P1_closure": "snake_case projection proven (fixture session uses session_id only)",
+    "P0x_closure": "exactly_one_qualifying_transaction(corr-B) identified human action"
+  },
+  "step3_report": {
+    "report_json_bytes": 2676,
+    "report_txt_bytes": 623,
+    "binding_agrees_with_json": true
+  }
+}

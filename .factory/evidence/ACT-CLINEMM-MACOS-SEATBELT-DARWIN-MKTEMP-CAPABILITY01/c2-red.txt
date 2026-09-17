@@ -1,0 +1,57 @@
+# C2 RED Witness (spec §24)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T10:08Z
+LABEL          = REAL_PRODUCTION_SEAM, REAL_SEATBELT
+ENTRY_HEAD     = 2babe1a377
+
+TEST FILE:
+  apps/vscode/src/sdk/__tests__/darwin-seatbelt-darwin-mktemp-capability01.c2-red.test.ts
+
+INPUT:
+  command            = /usr/bin/mktemp
+  args               = []
+  cwd                = canonical OS tmpdir (/private/tmp via realpath)
+  env                = {}
+  waitBudgetMs       = 5000
+  executionDeadlineMs = 10000
+  opt-in             = CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt
+  agent tool context:
+    perCommandExecutionCapability = filesystem-create-only(
+      roots=[/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T]
+    )
+    commandExecutionPlan          = one entry pinned to commandIndex 0,
+                                    matchedRuleSource = host_safe_mktemp_default_temp
+
+OBSERVED:
+  exitCode = 1
+  stderr   = "mktemp: mkstemp failed on /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.3JtjHU14FL: Operation not permitted"
+  stdout   = ""
+  state    = "exited"
+  signal   = undefined
+
+CAUSE (matched C1 LIVE RED):
+  The typed per-command channel carries filesystem-create-only
+  end-to-end. The CommandJobManager stamps it on the job record
+  (job.executionCapability = filesystem-create-only(...)) but
+  does NOT yet convert it into CommandCapability.createOnlyRoots,
+  and the Seatbelt profile generator does NOT yet emit
+  (allow file-write-create (subpath "<canonical>")).
+  The default recon capability is (writableRoots: []), so the
+  kernel denies mkstemp with EPERM.
+
+EVIDENCE OF TYPED CHANNEL REACH:
+  production manager.start() consumed the forged
+  perCommandExecutionCapability (no throw from the CORRECTION02
+  runtime guard because the matching commandExecutionPlan is
+  present and the entry pinned to the /usr/bin/mktemp command
+  carries the same capability).
+
+CONSERVATION:
+  no policy delta
+  no env delta
+  no Bash executor delta
+  parser helper unchanged
+
+HALT_RED_NOT_REPRODUCED = NOT_TRIGGERED
+HALT_CREATE_ONLY_INSUFFICIENT_IN_PRODUCTION = OPEN (GREEN step will close this)

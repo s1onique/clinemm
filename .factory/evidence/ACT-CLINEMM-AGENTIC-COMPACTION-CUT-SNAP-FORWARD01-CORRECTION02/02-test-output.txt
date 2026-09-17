@@ -1,0 +1,42 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION02
+TEST OUTPUT
+================================================
+
+POST-CORRECTION02 OUTPUT:
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/vitest run \
+    --config vitest.config.ts src/extensions/context/compaction.cut-snap-forward.test.ts
+
+  ✓ R1 (load-bearing): cut must not snap to a stale early typed-user on a long tool loop 1ms
+  ✓ R2 (load-bearing): cut snaps FORWARD to a typed-user past the candidate 0ms
+  ✓ R3: cut on a typed-user boundary remains EXACTLY on the boundary 0ms
+  ✓ R4: cut with no later typed-user retains candidate / nearest safe assistant boundary 0ms
+  ✓ R5: cut never reintroduces already-selected history (L1 ablation) 1ms
+  ✓ R6: tool-pair atomicity is preserved (every tool_use in result has its tool_result) 1ms
+  ✓ R7 (CORRECTION02): L1 fixture selects the same cut under the production token estimator and proportionally-scaled JSON fixture weight 4ms
+
+  Test Files  1 passed (1)
+       Tests  7 passed (7)
+
+FULL COMPACTION SUITE (post-CORRECTION02):
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/vitest run \
+    --config vitest.config.ts src/extensions/context/
+
+  Test Files  1 failed | 6 passed | 1 skipped (8)
+       Tests  2 failed | 122 passed | 1 skipped (125)
+
+  The 2 failing tests are pre-existing bun-ENOENT script failures
+  (environmental, unrelated to algorithm).
+
+TYPECHECK (post-CORRECTION02):
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/tsc \
+    -p tsconfig.build.json --noEmit
+
+  exit 0 (clean)
+
+DIFF INTEGRITY:
+
+  $ git diff --check
+  (no whitespace issues)

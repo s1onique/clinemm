@@ -1,0 +1,51 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01 — test gates summary
+
+==============================================================================
+FOCUSED (production seam)
+==============================================================================
+
+apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+  15/15 PASS
+  including 6 new GREEN tests for ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01
+    GREEN mktemp succeeds under the production resolver; path is descendant of canonical TMPDIR
+    GREEN mktemp -d succeeds under the production resolver; created dir is inside canonical TMPDIR
+    GREEN child TMPDIR is set to the canonical private root
+    GREEN workspace write still KERNEL-DENIED (W01 conservation)
+    GREEN a sibling under the same parent canonical temp is DENIED (no parent authority expansion)
+    GREEN synthesized temp root is removed after the command exits (cleanup)
+
+apps/vscode/src/sdk/command-job-manager.test.ts
+  18/18 PASS (no changes, no regressions)
+
+apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts
+  16/16 PASS (no changes, no regressions)
+
+==============================================================================
+SDK CORE
+==============================================================================
+
+sdk/packages/core (full unit suite via vitest):
+  3039 PASS / 16 SKIP / 0 FAIL across 206 files
+  0 unexpected failures
+
+==============================================================================
+LINT + TYPECHECK + COMPILE
+==============================================================================
+
+apps/vscode bun run compile:
+  biome format pass
+  biome lint pass
+  tsc -p tsconfig.vscode-compat.json pass
+  proto-lint pass
+  exit 0
+
+sdk/packages/core bun tsc -p tsconfig.dev.json --noEmit:
+  pre-existing errors only (test files unrelated to this ACT)
+  no errors in seatbelt-backend.ts
+
+==============================================================================
+GIT HYGIENE
+==============================================================================
+
+git diff --check: clean (no whitespace/tab issues)
+tracked worktree: clean before C1 commit

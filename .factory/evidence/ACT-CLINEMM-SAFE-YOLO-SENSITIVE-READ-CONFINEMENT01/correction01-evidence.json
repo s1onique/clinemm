@@ -1,0 +1,61 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01-CORRECTION01",
+  "phase": "CORRECTION01 EVIDENCE",
+  "correctClaim": "Seatbelt experimental + unrestricted network → CURATED_CREDENTIAL_SET_V1 read-denied; independent of approval-mode/YOLO/session override",
+  "fakeHome": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH",
+  "baseline": {
+    "denialsResolved": [
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_rsa",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ecdsa",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ecdsa_sk",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ed25519",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ed25519_sk",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_mldsa44_ed25519",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.gnupg/private-keys-v1.d"
+    ],
+    "invariants": {
+      "containsIdRsa": true,
+      "containsIdEd25519": true,
+      "containsIdEcdsa": true,
+      "containsIdEcdsaSk": true,
+      "containsIdEd25519Sk": true,
+      "containsIdMldsa44Ed25519": true,
+      "containsGnuPGPrivateKeysDir": true,
+      "doesNotContainConfig": true,
+      "doesNotContainKnownHosts": true
+    }
+  },
+  "approvalIndependence": {
+    "overrideAll": [
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_rsa",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ecdsa",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ecdsa_sk",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ed25519",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ed25519_sk",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_mldsa44_ed25519",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.gnupg/private-keys-v1.d"
+    ],
+    "overrideNone": [
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_rsa",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ecdsa",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ecdsa_sk",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ed25519",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ed25519_sk",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_mldsa44_ed25519",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.gnupg/private-keys-v1.d"
+    ],
+    "modeYolo": [
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_rsa",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ecdsa",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ecdsa_sk",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ed25519",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_ed25519_sk",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.ssh/id_mldsa44_ed25519",
+      "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c01-ev-home-6sM3WH/.gnupg/private-keys-v1.d"
+    ],
+    "byteEquivalentAllNone": true,
+    "byteEquivalentAllModeYolo": true
+  },
+  "networkDenyBranch": [],
+  "seatbeltOffBranch": []
+}

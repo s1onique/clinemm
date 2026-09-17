@@ -1,0 +1,73 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION01
+RESIDUE ADDRESSED
+================================================
+
+The reviewer (compaction algorithm engineer) flagged three non-blocking
+residue items. Each is addressed below.
+
+## P1 TEST_GEOMETRY_WEAK — R2 (forward-snap contract)
+
+REVIEWER NOTE:
+  R2 was named "cut may snap forward to next typed-user when candidate is
+  before it" but asserted only `cut >= 100`. That does not distinguish
+  candidate (100) from arbitrary safe assistant (103) from the intended
+  typed-user boundary. Also, its first 100 messages were dangling
+  assistant tool_use messages without matching tool_results, which is not
+  a production-valid transcript shape.
+
+CORRECTION:
+  - Transcript now uses valid tool pairs (assistant tool_use +
+    matching user tool_result) at every tool iteration.
+  - Geometry engineered so the candidate lands BEFORE the latest
+    typed-user (tool_result dominates the tail walk).
+  - EXACT-index assertion: `expect(cut).toBe(6)`.
+  - Pre-patch defect: Math.min(candidate, 6) returns the smaller
+    candidate and the backward snap-walk retreats to the preceding
+    assistant tool_use — folding only 1-2 messages and reintroducing
+    already-selected history into the tail. Pre-patch cut is 1 or 3,
+    NOT 6. The defect is reproduced (load-bearing RED control preserved).
+  - Post-patch: returns exactly 6.
+
+## P1 TEST_GEOMETRY_WEAK — R3 (typed-user boundary preservation)
+
+REVIEWER NOTE:
+  R3 was titled "cut on a typed-user boundary remains on the boundary"
+  but asserted `cut >= 4 && cut < 8` — a range that allows 5 or 6.
+
+CORRECTION:
+  - Same geometry (valid tool pairs, valid transcript shape).
+  - Transcript engineered so candidate lands EXACTLY on the latest
+    typed-user index (index 7).
+  - EXACT-index assertion: `expect(cut).toBe(7)`.
+  - Pre-patch: cut=7 (unchanged — the typed-user boundary preservation
+    was already correct in the OLD code for this geometry).
+  - Post-patch: cut=7 (same — the boundary preservation invariant is
+    preserved).
+
+## P2 evidence label — synthetic JSON-length metric
+
+REVIEWER NOTE:
+  estimateJsonTokens = JSON.stringify(m).length is character-ish
+  serialized size, NOT tokens. The "451_810 -> 60_059 / 86.7%"
+  numbers should be described as synthetic weight/size reduction, not
+  literal token reduction.
+
+CORRECTION:
+  - RED/GREEN/ablation evidence files now use "deterministic fixture
+    weight" instead of "tokens" for all numeric RED/GREEN statements.
+  - compaction.cut-snap-forward.test.ts module comment clarifies the
+    metric:
+      METRIC NOTE: estimateJsonTokens is the deterministic fixture
+      WEIGHT used by R1-R6 to make selection geometry unambiguous. It
+      is JSON-serialized character length, NOT a token count.
+  - New R7 explicitly verifies the cut selection is invariant under
+    PROPORTIONAL weight scaling (the real mathematical claim).
+    - Real token estimator divides by CHARS_PER_TOKEN=3 (non-linear
+      monotonic transform); not directly comparable.
+    - R7 scales the threshold by CHARS_PER_TOKEN to make the
+      threshold-crossing comparison mathematically equivalent.
+    - R7 confirms both metrics produce identical cuts on the L1 fixture.
+  - The live observation remains:
+      LIVE_TOKEN_EFFECT: 452.1k -> 449.5k tokens (previously observed)
+      SYNTHETIC_REDUCTION_METRIC: deterministic fixture weight
+      CUT_GEOMETRY_REPRODUCTION: SYNTHETIC_REAL

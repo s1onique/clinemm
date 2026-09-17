@@ -1,0 +1,67 @@
+ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01-CORRECTION04
+entry-freeze
+                                                                          (2026-08-31)
+
+ENTRY_HEAD  = 5d926c273
+              "fix(sdk): ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-
+               COHERENCE-REPAIR01-CORRECTION03 - phase-key the
+               shadow stamp + reject noop observations"
+DOCS_HEAD   = 08b3172a8
+              "docs(factory): ACT-CLINEMM-RUNTIME-TASK-HEADER-
+               PROJECTION-COHERENCE-REPAIR01-CORRECTION03 - board
+               row update (PASS, CORRECTION02 superseded)"
+ORIGIN_HEAD = 7caca443b
+BRANCH      = main
+WORKTREE    = clean (excluding .factory/evidence/ which is local)
+
+REVIEWER HALT (from the Factory reviewer on CORRECTION03)
+  New P0 -- HALT_PHASE_STAMP_ADVANCES_ON_SEMANTIC_NOOP.
+
+  CORRECTION03 closed the previous P0 by rejecting the
+  adapter-generated `"noop"` sentinel. But the stamping rule
+  was still a label-based proxy for mutation:
+
+      if (event !== "noop") {
+          lastObservedTurnSeqByPhase.set(shadowPhase, turnSeq)
+      }
+
+  The production shadow reducer has documented semantic-noop
+  paths (task-state.update.test.ts:312) -- e.g. "an
+  approval_resolved WITHOUT an active approval is a no-op" --
+  i.e. perfectly valid TaskMsgs with a non-"noop" event
+  label that the reducer accepts but leaves the model
+  untouched. The label-based proxy could not distinguish
+  those from real mutations; they advanced the stamp and
+  restored the LIVE contradiction.
+
+PURPOSE OF THIS CORRECTION
+  Bounded single-axis correction. Replace the
+  `event !== "noop"` label proxy with the canonical
+  structural-equality check `isSameTaskModel`
+  (@cline/agents/runtime/state/task-state/model.ts). The
+  stamp now advances only when the shadow model
+  structurally changed between pre- and post- observation,
+  OR when this is the comparator's very first observation
+  (no pre-model to compare against).
+
+  The boundary methods (observeRuntimeEvent, observeTaskMsg)
+  snapshot the shadow model BEFORE replay, then pass the
+  pre-model into compareWith. compareWith additionally
+  retains the `event !== "noop"` belt-and-braces guard so
+  the adapter sentinel path remains forbidden.
+
+PROTECTED LANES (unchanged from REPAIR01)
+  R0 execution-obligation   = CLOSED
+  R5 manual approval        = WATCH_ONLY
+  Multi-element cardinality = CLOSED
+  FORENSICS01               = HALTED historical
+
+LANE STATUS BEFORE CORRECTION
+  CORRECTION03 was halted with P0
+  HALT_PHASE_STAMP_ADVANCES_ON_SEMANTIC_NOOP. The new
+  repair replaces the label proxy with a model-equality
+  check.
+
+LANE STATUS AFTER CORRECTION (target)
+  PASS / REPAIR01_COMMITTED_CORRECTION04
+  LIVE_QUALIFICATION = LIVE_UNAVAILABLE

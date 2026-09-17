@@ -1,0 +1,33 @@
+=== FILESYSTEM MATRIX (Seatbelt) ===
+OK   F1 RO inside read       : exit=0 (PASS expected)
+OK   F2 RW inside write      : exit=0 (PASS expected)
+OK   F3 outside read         : exit=1 (DENY expected)
+     stderr: cat: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-evidence-YcFCB5/outside/secret.txt: Operation not permitte
+OK   F4 outside write        : exit=1 (DENY expected)
+     stderr: /bin/sh: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-evidence-YcFCB5/outside/secret.txt: Operation not perm
+
+=== SYMLINK MATRIX ===
+OK   F5 symlink escape       : exit=1 (DENY expected)
+     stderr: cat: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-evidence-YcFCB5/inside/link-out/secret.txt: Operation not
+
+=== INHERITANCE MATRIX ===
+OK   I1 bash child outside rd: exit=1 (DENY expected)
+     stderr: cat: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-evidence-YcFCB5/outside/secret.txt: Operation not permitte
+OK   I2 sh child outside rd  : exit=1 (DENY expected)
+     stderr: cat: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-evidence-YcFCB5/outside/secret.txt: Operation not permitte
+
+=== NETWORK MATRIX ===
+OK   N1 net=deny nc 1.1.1.1  : exit=1 (DENY expected)
+
+=== CONSERVATION (no-sandbox control) ===
+     NoSandbox control outside write: exit=0, stdout="OK\n"
+
+=== DEFENSE-IN-DEPTH ===
+OK   D1 Seatbelt denies classifier-mistake write: exit=1 (DENY expected)
+     stderr: /bin/sh: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-evidence-YcFCB5/outside/secret.txt: Operation not perm
+     outside/secret.txt after Seatbelt attempt: "TOP-SECRET\nCONTROL"
+
+=== ENVIRONMENT SCRUB ===
+     OK   SSH_AUTH_SOCK stripped: SSH_AUTH_SOCK=
+     OK   AWS_SECRET_ACCESS_KEY stripped: AWS_SECRET_ACCESS_KEY=
+     OK   PATH preserved: PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/Volumes/UserData/...

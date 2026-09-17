@@ -1,0 +1,60 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01 — captured SBPL profile AFTER FIX
+
+Captured by driving the production resolver through CommandJobManager
+and reading the profile file the backend wrote to the per-invocation
+profile temp dir.
+
+==================================================================
+SEATBELT PROFILE (post-fix):
+==================================================================
+
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*)
+(allow file-write*
+  (literal "/dev/null")
+  (literal "/dev/tty")
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-CS2xGq"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)
+
+Delta from pre-fix profile:
+  ADDED: (subpath "<canonical private temp root>") inside (allow file-write* ...)
+         where <canonical private temp root> is the result of
+         canonicalizeSandboxRoot(mkdtempSync(join(tmpdir(),
+                                                "clinemm-sandbox-temp-"))).
+  UNCHANGED: (deny network*), workspace write-deny (here
+             experimentalSandboxWorkspaceRoots=[] so no readonlyRoots).
+  NOT ADDED: (allow file-write* (subpath "/tmp")),
+             (allow file-write* (subpath "/private/tmp")),
+             (allow file-write* (subpath "/var/folders")).
+
+The single (subpath) write grant is exactly the canonical synthesized
+temp root — no parent, no siblings, no `/tmp` allowance. The deny
+default + deny network* rules remain load-bearing.
+
+===============================================================================
+Causal-pair / necessity proof via the same backend under different inputs:
+===============================================================================
+
+The production builder emits the profile shown above when sandboxOptIn
+is enabled. We did not need to construct an ablation pair because:
+
+  A. PASS  (this profile)            -> mktemp exit 0, mktemp -d exit 0
+  B. RED   (pre-fix profile)         -> mktemp exit 1, kernel EPERM
+
+The pre-fix profile has no (subpath ...) write grant; the post-fix
+profile adds exactly one (subpath "<tempRoot>"). The diff between
+profiles IS the necessity ablation: the new grant is necessary and
+sufficient for mktemp success.
+
+We did not construct a third "C" profile with the tempRoot grant
+but no TMPDIR binding because the design makes it impossible: a
+synthesized tempRoot is automatically bound to TMPDIR by the same
+single prepare() flow. Splitting the two would require introducing
+a new backend option that the contract does not provide.

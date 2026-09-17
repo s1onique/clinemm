@@ -1,0 +1,52 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01 entry-freeze
+=============================================================
+
+Date        : 2026-09-03T22:05:12Z
+ENTRY_HEAD  = 9c67e5658b79938513c10e1150b92779dcb3749b
+ENTRY_TREE  = e5a2640a2805f21b3ab45a4288b2fbee3a6cc9e0
+FINAL_HEAD  = pending commit (to be applied)
+
+Branch      = main
+Worktree    = clean (no porcelain v1 untracked-or-modified files)
+Stash       = empty
+Protected   = N/A (no stashes)
+
+Trust baseline: PASS
+
+Recon ACT    = ACT-CLINEMM-AGENTIC-COMPACTION-DEGENERATE-CUT-RECON01 (PASS)
+Reviewer     = PASS_C1_GO (cut selection repair authorized)
+Verdict      : RED REPRODUCED on the L1 fixture; defect isolated at
+               compaction-shared.ts:411-414 (snap-clause Math.min(candidate, lastTurnStartIndex))
+Repair type  : bounded, one-clause inversion in findCutIndex
+Algorithm    : snap-forward only when typed-user is past candidate;
+               never snap backward across already-selected compactable prefix
+
+Files in scope:
+  sdk/packages/core/src/extensions/context/compaction-shared.ts
+  sdk/packages/core/src/extensions/context/compaction.test.ts (regression guards)
+  .factory/evidence/ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01/ (this ACT)
+  .factory/epic-board.md (board entry at closure)
+
+Out of scope:
+  - basic-compaction.ts (separate cut heuristic; not affected)
+  - sdk-compaction-coordinator (unchanged; uses createContextCompactionPrepareTurn)
+  - sdk-compaction.ts (unchanged; manual entry point uses findCutIndex indirectly)
+  - webview-ui (unchanged; UI consumes the projected W unchanged)
+
+Baseline tests (pre-patch):
+  cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/vitest run \
+    --config vitest.config.ts src/extensions/context/
+
+  Test Files  1 failed | 5 passed | 1 skipped (7)
+       Tests  2 failed | 115 passed | 1 skipped (118)
+  (2 pre-existing failures: compact-session-script.test.ts API-key tests
+   fail with spawnSync bun ENOENT — environmental, unrelated to algorithm)
+
+Per-test status pre-patch:
+  compaction.test.ts                                          94 passed
+  budget-projection/project.test.ts                          ~35 passed
+  compaction.live.test.ts                                     ~10 passed
+  compaction.working-context-ratio.test.ts                    ~10 passed
+  compaction.working-context-authority-publish.test.ts         ~8 passed
+  compaction.real-producer-seam-red.test.ts                    ~3 passed
+  compact-session-script.test.ts                              ~30 passed, 2 pre-existing failed

@@ -1,0 +1,55 @@
+=== ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01 inheritance-matrix ===
+Date: 2026-08-25T00:02:06Z
+
+Goal: every child process started by the sandboxed parent must inherit
+the SAME deny rules. A child cannot escape via exec() or shell sub-eval.
+
+Profile: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/baseline-rw.sb
+OUTSIDE target: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt
+
+--- I1: /bin/bash -c "cat OUTSIDE/secret.txt" -- expect DENY ---
+cat: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt: Operation not permitted
+  rc=1
+
+--- I2: /bin/sh -c "cat OUTSIDE/secret.txt" -- expect DENY ---
+cat: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt: Operation not permitted
+  rc=1
+
+--- I3: /usr/bin/env bash -- bash is on PATH -- then cat -- expect DENY ---
+cat: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt: Operation not permitted
+  rc=1
+
+--- I4: python3 child reads OUTSIDE -- expect DENY ---
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+PermissionError: [Errno 1] Operation not permitted: '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt'
+  rc=1
+
+--- I5: node child reads OUTSIDE -- expect DENY ---
+node:fs:436
+    return binding.readFileUtf8(path, stringToFlags(options.flag));
+                   ^
+
+Error: EPERM: operation not permitted, open '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt'
+    at Object.readFileSync (node:fs:436:20)
+    at [eval]:1:15
+    at runScriptInThisContext (node:internal/vm:219:10)
+    at node:internal/process/execution:483:12
+    at [eval]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:481:60)
+    at evalFunction (node:internal/process/execution:315:30)
+    at evalTypeScript (node:internal/process/execution:327:3)
+    at node:internal/main/eval_string:71:3 {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'open',
+  path: '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/secret.txt'
+}
+
+Node.js v26.0.0
+  rc=1
+
+--- I6: node child reads INSIDE (positive control) -- expect PASS ---
+inside-readable
+
+  rc=0

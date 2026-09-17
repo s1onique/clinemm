@@ -1,0 +1,37 @@
+ACT-CLINEMM-COMMAND-RISK-R0-READER-PATH-AUTHORITY-INTEGRATION01 GREEN baseline
+
+@cline/core command-policy tests:
+  - Total: 912 / 912 PASS (was 853 before this ACT; +59 new tests)
+  - Test files: 28 / 28 PASS
+
+New test files:
+  - structured-command-risk.reader-path-authority.test.ts
+    Section A: GREEN (path-bearing readers with valid evidence)
+    Section B: RED (negative cases: missing evidence, outside,
+                symlink, operand identity, stale context, R5
+                siblings, argv-shape rejects)
+    Section C: conservation (existing R0 still ALLOW)
+    Section D: necessity ablation (disable only reader sources ->
+                ASK)
+    Section E: stdin-only vs path-bearing boundary (don't conflate)
+    Total: 44 tests
+
+  - path-authority-extractor.test.ts
+    Section: extractR0PathOperands per-source dispatcher
+    cat / head / tail / generic fallback
+    Total: 15 tests
+
+REAL_PRODUCTION_SEAM harness: 14 / 14 PASS
+  - 6 GREEN: cat FILE / cat FILE1 FILE2 / head -30 / head -n 30 /
+             tail -20 / tail -n 20
+  - 8 RED: missing evidence, outside-workspace operand (3x),
+           stale-roots, stale-cwd, symlink escape, dangerous-sink
+
+apps/vscode check-types: EXIT=0
+apps/vscode unit tests: 1076 / 1076 PASS (no regressions)
+CLI typecheck: EXIT=0 (no changes to CLI)
+parser-helper binaries: UNCHANGED (no bytes delta)
+
+This ACT IS the bounded path-bearing reader integration per the
+ACT design. C2 work is the production fix already implemented;
+this baseline is the GREEN witness.

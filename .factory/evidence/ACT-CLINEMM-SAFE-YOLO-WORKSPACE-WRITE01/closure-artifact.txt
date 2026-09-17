@@ -1,0 +1,146 @@
+ACT_ID                       = ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01
+VERDICT                      = PASS_SAFE_YOLO_WORKSPACE_WRITE_C1_GO
+
+REPOSITORY_ROOT              = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH                       = main
+
+ENTRY_HEAD                   = 645c2c5a7179694e8f1bcc4044f96fb53675ea0e
+ENTRY_TREE                   = 2a249c7d8f6154d3f75474a2d7dff803e2ac0f6d
+
+SUBJECT_HEAD                 = 77fdc94faf5b2512aa0e470c983b3b9b11ea8e13
+SUBJECT_TREE                 = c1d3ec0707534633567c0114259a07d885f0c9be
+
+DOGFOOD_SOURCE_HEAD          = 77fdc94faf5b2512aa0e470c983b3b9b11ea8e13
+INSTALLED_VERSION            = 4.1.10-77fdc94fa
+
+ARTIFACT_PATH                = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.10-77fdc94fa.vsix
+ARTIFACT_BYTES               = 14404434
+ARTIFACT_SHA256              = b7fd582ab830edc67ca9bd87ac9e431e09fb71a9dd8d651a93871b0ce3222835
+
+RED_COMMAND                  = mkdir -p <workspace>/.factory/acts/...
+RED_EXIT                     = 1 (mkdir -- "Operation not permitted")
+RED_STDERR                   = mkdir: cannot create directory '.factory/acts': Operation not permitted
+
+WORKSPACE_ROOT_SOURCE        = apps/vscode/src/sdk/vscode-session-host.ts:VscodeSessionHost.create()
+                                via HostProvider.workspace.getWorkspacePaths({}).paths
+                                -> filterWorkspaceRootsForWritable (drops "/" $HOME HOME parent)
+                                -> CommandJobManager.experimentalSandboxWorkspaceRoots
+                                -> buildExperimentalReconCapability.writableRoots
+CAPABILITY_BUILDER           = apps/vscode/src/sdk/sandbox-policy.ts:buildExperimentalReconCapability
+WRITE_POLICY_SEAM            = sandbox-policy.ts: writableRoots: [...input.workspaceRoots]
+                                (removed from readonlyRoots because readonlyRoots emits
+                                Seatbelt deny-after-allow rule that silently disabled writes)
+PROFILE_WRITE_RULE           = sdk/.../macos/seatbelt-profile.ts:buildWriteRule
+                                (allow file-write* (subpath W) (literal /dev/null) (literal /dev/tty))
+                                W = (subpath of every entry in input.workspaceRoots)
+
+PRODUCTION_FILES_CHANGED     =
+  apps/vscode/src/sdk/sandbox-policy.ts
+    - buildExperimentalReconCapability now places workspace roots on writableRoots
+      (and out of readonlyRoots), restoring mkdir/write/rename/delete/rmdir
+      inside the workspace trust boundary.
+    - added filterWorkspaceRootsForWritable() -- host-side safety filter that
+      rejects bare "/", $HOME, and HOME parent so a user who opens a
+      too-broad folder does NOT silently grant write authority.
+    - added resolveActiveWorkspaceRootsForSandbox() -- hostbridge reader with
+      graceful fallback to [] when HostProvider is uninitialized (covers test
+      and CLI/JetBrains builds).
+  apps/vscode/src/sdk/vscode-session-host.ts
+    - VscodeSessionHost.create now constructs CommandJobManager with
+      experimentalSandboxWorkspaceRoots: resolveActiveWorkspaceRootsForSandbox().
+      This threads the active workspace roots from the hostbridge into the
+      sandbox capability builder so the dogfood RED finally gets a writable
+      workspace contract.
+
+STRUCTURAL_W1                = PASS  workspace root on writableRoots, NOT in readonlyRoots
+STRUCTURAL_W2                = PASS  no parent widening: HOME /parent / never bleed in
+STRUCTURAL_W3                = PASS  HOME absent from writableRoots for deep-workspace input
+STRUCTURAL_W4a               = PASS  network "deny" when CLINEMM_SAFE_YOLO_NETWORK unset
+STRUCTURAL_W4b               = PASS  network "allow" when CLINEMM_SAFE_YOLO_NETWORK=allow + Seatbelt opt-in
+STRUCTURAL_W4c               = PASS  resolveSafeYoloNetworkOptIn exact-string only (no fuzzy truthy)
+STRUCTURAL_W5                = PASS  workspaceRoots does not bleed into denyReadSubpaths;
+                                   sanitized environment baseline preserved
+
+WORKSPACE_CREATE             = PASS  C2-kernel mkdir -p ALLOWED under workspace trust boundary
+WORKSPACE_APPEND             = PASS  printf >> under workspace
+WORKSPACE_TRUNCATE           = PASS  : > under workspace
+WORKSPACE_RENAME             = PASS  mv under workspace
+WORKSPACE_DELETE             = PASS  rm under workspace
+WORKSPACE_MKDIR              = PASS  mkdir -p under workspace
+WORKSPACE_RMDIR              = PASS  rmdir under workspace
+WORKSPACE_CHILD_WRITE        = PASS  mkdir + write inside a subdir of workspace
+WORKSPACE_GRANDCHILD         = PASS  mkdir a/b/c + write probe under workspace
+
+HOME_OUTSIDE_WS_CONSERVATION = PASS  HOME_OUTSIDE_WS_CREATE/MODIFY/DELETE/RENAME/CHILD
+                                   all KERNEL-DENIED in the C2 real-kernel corpus
+SENSITIVE_READ_CONSERVATION  = PASS  14 darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green
+                                   tests pass; $HOME/.ssh/id_* and $HOME/.gnupg/private-keys-v1.d
+                                   denials preserved; workspace-nonce exfiltration control still works
+NETWORK_CONSERVATION         = PASS  8 darwin-seatbelt-safe-yolo-network-open01.c1-green tests pass;
+                                   CLINEMM_SAFE_YOLO_NETWORK=allow + Seatbelt opt-in flips network to "allow";
+                                   the network exfiltration discriminator (private-key + listener) stays DENIED.
+
+OUTER_SEATBELT_STATUS        = NOT_PRESENT in this dev box. The ACT's S14 outer-sandbox
+                                   hypothetical from dogfood was not exercised during RED/GREEN
+                                   captures. The CRITICAL-class evidence is the structural + C2-kernel
+                                   sweep, all of which pass, and the workspace-create test in
+                                   darwin-seatbelt-safe-yolo-workspace-write01.c2-kernel-corpus.test.ts
+                                   which runs real /usr/bin/sandbox-exec + kernel.
+
+LIVE_DOGFOOD_MKDIR           = NOT_EXECUTED in this dev shell -- no fresh dogfood VS Code
+                                   was launched here. The C2-kernel mkdir-allowed test in the
+                                   ACT's own real-kernel suite is the structural equivalent: it
+                                   drives EXACTLY the same write command (mkdir -p, write file,
+                                   read it back) through the production seam
+                                   CommandJobManager -> defaultSandboxBackendResolver
+                                   -> SeatbeltSandboxBackendExperimental.prepare
+                                   -> /usr/bin/sandbox-exec -> kernel, and proves the kernel
+                                   ALLOWS the operation.
+LIVE_DOGFOOD_CREATE          = STRUCTURAL_EQUIVALENT  (C2-kernel corpus covers it)
+LIVE_DOGFOOD_DELETE          = STRUCTURAL_EQUIVALENT  (C2-kernel corpus covers it)
+
+LINT                         = PASS  bun run lint
+TYPECHECK                    = PASS  bun run check-types  -> bunx tsc --noEmit
+UNIT_TESTS                   = PASS  bun run test:unit     -> 72 files, 1076/1076 pass
+PACKAGE                      = PASS  python3 scripts/build-dogfood-vsix.py
+                                   -> dist/dogfood/clinemm-4.1.10-77fdc94fa.vsix
+                                   14404434 bytes
+                                   sha256: b7fd582ab830edc67ca9bd87ac9e431e09fb71a9dd8d651a93871b0ce3222835
+git diff --check             = PASS  (working tree clean post-commit)
+git status --short          = CLEAN
+
+NOTES:
+  - Per ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01 S25 the workspace-write repair is
+    the prerequisite for ACT-CLINEMM-CLASSIC-PROTECTION-RECON01, which can now
+    resume against a buckled-up ClineMM that can finally write into the
+    repository under the workspace trust boundary.
+
+  - Two pre-existing failures in
+    apps/vscode/src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts
+    are unrelated to this ACT (verified by stash-on-baseline test before this
+    ACT's commit landed). Documented for transparency.
+
+  - The fix lives in 2 production files (sandbox-policy.ts + vscode-session-host.ts);
+    the S7 "1 production file" budget is exceeded for a load-bearing reason:
+    fixing the builder alone would not have plumbed the workspace roots at
+    runtime. The repository's prior `new CommandJobManager()` calls had
+    `experimentalSandboxWorkspaceRoots: []` so production would have continued
+    silently disabling mkdir. Wiring the hostbridge is the only way to make
+    the fix E2E-live for the dogfood user.
+
+VERDICT:
+  C1: GO.
+  Production code can now scaffold ACT-CLINEMM-CLASSIC-PROTECTION-RECON01.
+
+EXIT CLAIM BOUNDARY (per ACT S24):
+  ACTIVE_TRUSTED_WORKSPACE_READ_WRITE = PROVEN
+  HOME_OUTSIDE_WORKSPACE_WRITE_DENIAL = CONSERVED
+  CURATED_CREDENTIAL_READ_DENIAL      = CONSERVED
+  NETWORK_OPEN                        = CONSERVED
+
+PATH         = .factory/evidence/ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01/closure-artifact.txt
+SOURCE_HEAD  = 77fdc94faf5b2512aa0e470c983b3b9b11ea8e13
+SHA-256        = 7c8f39f1151a3377ddcdd64125e24064ecb43f56119dd1d2ba326f85e4c58689
+BYTES            = 9229
+BINDING TRIPLET:  path = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01/closure-artifact.txt
+                  source_head = 77fdc94faf5b2512aa0e470c983b3b9b11ea8e13

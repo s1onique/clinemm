@@ -1,0 +1,81 @@
+{
+  "binding": {
+    "act": "ACT-CLINEMM-HERMETIC-ATTACH",
+    "approvalTransactionBound": true,
+    "artifactStatus": "PASS",
+    "attachmentProjection": {
+      "clineVersion": "4.1.10",
+      "emittedAt": "2026-08-28T00:00:00.000Z",
+      "repoHead": "snake-only-A-fixture",
+      "runtimeInstanceId": "01HEXY_FIXTURE_RUNTIME"
+    },
+    "captureId": "20260830T041554Z-287bd2da",
+    "capturedAt": "2026-08-30T04:15:54.858876Z",
+    "deltaSize": 3,
+    "eventDeltaBound": true,
+    "humanChronologyBound": true,
+    "instrumentationAttachmentBound": true,
+    "pendingApprovalEventCount": 0,
+    "pendingDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-ATTACH/captures/20260830T041554Z-287bd2da/pending",
+    "pendingSessionCandidateCount": 1,
+    "qualifyingTransactionCount": 1,
+    "resolvedApprovalEventCount": 3,
+    "resolvedDir": ".factory/evidence/ACT-CLINEMM-HERMETIC-ATTACH/captures/20260830T041554Z-287bd2da/resolved",
+    "resolvedSessionCandidateCount": 1,
+    "runtimeIdentityBound": true,
+    "runtimeIdentityProjection": {
+      "capturedAt": "2026-08-30T04:15:54.856486Z",
+      "clineVersion": "UNAVAILABLE",
+      "pid": "13451",
+      "repoHead": "1525ebf4468ffa94ee7e514ffcee420c8d921c32",
+      "repoTree": "1a3177b14407830adf34e32400f0a78a5826b513"
+    },
+    "runtimeSourceDrift": false,
+    "schema": "cline-approval-specimen-binding/v1",
+    "sessionBindingAvailable": true,
+    "specimenBinding": "PASS",
+    "zeroEventClassification": "N/A"
+  },
+  "capturedAt": "2026-08-30T04:15:54.902478Z",
+  "discriminator": {
+    "capturedAt": "2026-08-30T04:15:54.858576Z",
+    "deltaSize": 3,
+    "items": [
+      {
+        "approvalEntryObserved": false,
+        "approvalTerminalObserved": false,
+        "correlationId": "no-request",
+        "policyAutoApprove": null,
+        "schema": "cline-approval-discriminator/v1",
+        "sessionId": null,
+        "shouldAutoApproveTool": null,
+        "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-attach/diagnostics/after.jsonl",
+        "toolName": null
+      },
+      {
+        "approvalEntryObserved": true,
+        "approvalTerminalObserved": false,
+        "correlationId": "corr-attach",
+        "policyAutoApprove": false,
+        "schema": "cline-approval-discriminator/v1",
+        "sessionId": "session-attach-A",
+        "shouldAutoApproveTool": false,
+        "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-attach/diagnostics/after.jsonl",
+        "toolName": "editor"
+      },
+      {
+        "approvalEntryObserved": false,
+        "approvalTerminalObserved": true,
+        "correlationId": "corr-attach",
+        "policyAutoApprove": null,
+        "schema": "cline-approval-discriminator/v1",
+        "sessionId": "session-attach-A",
+        "shouldAutoApproveTool": null,
+        "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-attach/diagnostics/after.jsonl",
+        "toolName": "editor"
+      }
+    ],
+    "schema": "cline-approval-discriminator/v1"
+  },
+  "schema": "cline-approval-specimen-report/v1"
+}

@@ -1,0 +1,86 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- default-off-authority.txt
+
+CENTRAL C1 QUESTION:
+  Does auto-approving bare mktemp remain bounded when
+  CLINEMM_EXPERIMENTAL_SANDBOX_MODE is DISABLED?
+
+The reviewer (Section 43, 63) explicitly warned against
+silently granting authorization because Seatbelt usually runs.
+If the exact same policy decision occurs with sandbox=disabled,
+the bare form MUST be independently bounded at the OS layer.
+
+==============================================================================
+DARWIN HOST EVIDENCE (this ACT was authored on darwin-arm64)
+==============================================================================
+
+REAL_MKTEMP_BINARY (PATH default)      /run/current-system/sw/bin/mktemp (GNU coreutils)
+DARWIN_FALLBACK                        /usr/bin/mktemp (BSD mktemp)
+
+BARE `mktemp` with sandbox=disabled:
+  /usr/bin/mktemp            -> /var/folders/0g/.../T/tmp.XXXX
+  /run/current-system/sw/bin/mktemp  -> /var/folders/0g/.../T/tmp.XXXX
+
+BARE `mktemp -d` with sandbox=disabled:
+  /usr/bin/mktemp -d         -> /var/folders/0g/.../T/tmp.XXXX
+  /run/current-system/sw/bin/mktemp -d  -> /var/folders/0g/.../T/tmp.XXXX
+
+BARE `mktemp` with TMPDIR=/somewhere (sandbox=disabled):
+  /usr/bin/mktemp            -> /var/folders/0g/.../T/tmp.XXXX  (IGNORES TMPDIR)
+  /run/current-system/sw/bin/mktemp  -> /somewhere/tmp.XXXX          (HONORS TMPDIR)
+
+==============================================================================
+ANSWER (Outcome A on darwin-arm64, Outcome B on darwin-amd64 etc.)
+==============================================================================
+
+On darwin with /usr/bin/mktemp (BSD):
+  The default destination is _CS_DARWIN_USER_TEMP_DIR (per-user temp).
+  TMPDIR is IGNORED. Caller cannot redirect without using -p/-t/template.
+  -> Outcome A: intrinsic bounded authority.
+
+On darwin with GNU mktemp (PATH-shadowed):
+  TMPDIR is honored; destination can be redirected by setting TMPDIR.
+  Bare form's destination is host-defined (TMPDIR or per-user temp).
+  -> Outcome B: host-evidence-bound authority.
+
+In both cases the form:
+  - never specifies a path via operand
+  - never invokes -p/-t/-u
+  - has no shell expansion
+  - creates exactly one unpredictable name
+
+This ACT scopes to darwin (where defaults are intrinsic).
+For Linux (GNU), the existing ASK/DENY behavior remains
+(see Section 38).
+
+==============================================================================
+EXPLICIT ALLOW UNDER DEFAULT_OFF
+==============================================================================
+
+The new `host_safe_mktemp_default_temp` safe rule MUST be
+  (a) independent of any future sandbox state
+  (b) predicated on the exact rendered shape alone
+  (c) verifiable without invoking mktemp
+
+That is precisely what V1 safe rules are. A positive match
+in V1 emits `auto-approve-eligible` with the bound source label,
+and the canonical policy returns ALLOW regardless of sandbox mode.
+
+There is NO defensible path where granting ALLOW at policy
+silently depends on the executor's later sandbox state.
+
+The Seatbelt composition documented in the predecessor ACT
+(CORRECTION01) provides ADDITIONAL defense-in-depth: the
+executor binds private TMPDIR under Seatbelt, so a benign
+`mktemp` invocation produces an artifact under the per-invocation
+canonical temp root AND the private executor-installed TMPDIR.
+This is layered authority, not authorization-by-sandbox.
+
+==============================================================================
+EVIDENCE_LABELS
+==============================================================================
+
+DESTINATION_LABELS:    REAL (this darwin host)
+MANUAL_CLAIMS:         DOCUMENTED (Keith's xcode-man-pages)
+OUTCOME_ON_DARWIN:     A (intrinsic bounded authority)
+OUTCOME_ON_GNU/DARWIN: B (host-evidence-bound authority)
+GO/NO-GO:              GO (Outcome A supports bounded AUTO for darwin)

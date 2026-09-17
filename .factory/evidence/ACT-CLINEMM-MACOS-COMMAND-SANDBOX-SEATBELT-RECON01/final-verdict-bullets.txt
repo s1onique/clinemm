@@ -1,0 +1,64 @@
+=== ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01 final verdict ===
+Date: 2026-08-25
+
+VERDICT: PASS_SEATBELT_RECON_PRODUCTION_CANDIDATE
+
+CAN_SEATBELT_ENFORCE_WORKSPACE_RO=true
+CAN_SEATBELT_ENFORCE_WORKSPACE_RW=true
+CAN_SEATBELT_BLOCK_OUTSIDE=true (with explicit (deny file-read* (subpath OUTSIDE)))
+CAN_SEATBELT_BLOCK_NETWORK=true (deny network*)
+CHILDREN_INHERIT=true (bash, sh, env, python3, node all inherit deny)
+
+GIT_STATUS_COMPATIBLE=true (under require-all (require-not $HOME/.ssh/.aws/.gnupg) profile)
+COMMON_RECON_COMPATIBLE=true (ls, find, rg, cat, pwd, env, kill -0, /tmp writes all PASS)
+
+DYNAMIC_CAPABILITY_PROFILE_FEASIBLE=true (CommandCapability -> SBPL prototype works)
+
+APPLE_SUPPORT_STATUS=
+  EXPERIMENTAL_UNSUPPORTED_INTERFACE (sandbox-exec is documented but not formally
+  part of the public App Sandbox API; behavior is platform-version-sensitive)
+
+PRODUCTION_BACKEND_RECOMMENDATION=GO
+
+KEY IMPLEMENTATION FINDINGS (load-bearing):
+
+1. PATH-SEMANTICS GOTCHA: macOS symlinks (/tmp -> /private/tmp) bypass (subpath ...)
+   matching when the textual path doesn't match the canonical resolved path.
+   ALWAYS use canonical macOS paths (e.g. /private/tmp, not /tmp).
+
+2. require-not SEMANTICS GOTCHA: Multiple (require-not ...) clauses at the same
+   filter level behave as OR (deny only where ALL match), NOT as AND.
+   For AND semantics (the typical "exclude these roots"), wrap in (require-all ...).
+
+3. DENY-AFTER-ALLOW WORKS: (allow file-read*) (deny file-read* (subpath OUTSIDE))
+   correctly denies OUTSIDE. The deny rule fires for OUTSIDE and symlink targets.
+
+4. NETWORK RULE SYNTAX: (remote ip "localhost:*") works, but "127.0.0.1:*" does
+   NOT (profile parse error). The literal-IP form is host-dependent.
+
+5. NETWORK covers AF_UNIX: (deny network*) blocks AF_UNIX connect() to system
+   sockets; in-process socketpair() still works (no network involved).
+
+6. process-info / ps: even with (allow process-info*) the /bin/ps binary itself
+   cannot be exec'd under a deny-default profile (process exec / image
+   activation blocked). This is a known Seatbelt limitation.
+
+7. ENV ISOLATION: Seatbelt does NOT sanitize environment variables.
+   SSH_AUTH_SOCK, NIX_SSL_CERT_FILE, HOME etc. all pass through to the child.
+   A second layer (env scrubbing) is needed for any production sandbox.
+
+8. EXEC INHERITANCE: bash, sh, env, python3, node children all inherit the
+   sandbox boundary. Child execve() cannot escape.
+
+9. SYMLINK ESCAPE: with explicit (deny file-read* (subpath OUTSIDE)), a symlink
+   at INSIDE/link-out -> ../outside is blocked when reading INSIDE/link-out/secret.
+   Seatbelt evaluates the resolved path, and the deny rule fires.
+
+RECOMMENDED PRODUCTION PROFILE SHAPE: profiles/production-shape-recommended.sb
+
+NEXT ACT IF GO:
+  ACT-CLINEMM-COMMAND-SANDBOX-BACKEND-ABSTRACTION01
+    - SandboxBackend interface
+    - CommandCapability -> profile generator (port the probe)
+    - SeatbeltBackend DEFAULT_OFF
+    - Optional: macOS App-Sandbox helper recon (Apple-supported alternative)

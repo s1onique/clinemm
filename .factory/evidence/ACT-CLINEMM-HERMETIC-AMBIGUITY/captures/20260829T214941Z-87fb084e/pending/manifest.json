@@ -1,0 +1,14 @@
+{
+  "act": "ACT-CLINEMM-HERMETIC-AMBIGUITY",
+  "approvalActionPerformedByTool": false,
+  "captureId": "20260829T214941Z-87fb084e",
+  "capturedAt": "2026-08-29T21:49:41.531382Z",
+  "dataRoots": [
+    "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-ambiguity"
+  ],
+  "phase": "pending",
+  "readOnlyIntent": true,
+  "recentMinutes": 60,
+  "repo": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "schema": "cline-approval-specimen-capture/v2"
+}

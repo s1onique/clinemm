@@ -1,0 +1,37 @@
+{
+  "act": "ACT-CLINEMM-SYNTHETIC-LIVE",
+  "approvalTransactionBound": false,
+  "artifactStatus": "PASS",
+  "attachmentProjection": {
+    "clineVersion": "4.1.10",
+    "emittedAt": "2026-08-29T22:01:00.000Z",
+    "repoHead": "a8d526f63903891b8b364b3349684d0b97a2b1ea",
+    "runtimeInstanceId": "b984c44afb1efe18"
+  },
+  "captureId": "20260830T044424Z-4a38dad1",
+  "capturedAt": "2026-08-30T04:44:24.649558Z",
+  "deltaSize": 1,
+  "eventDeltaBound": true,
+  "humanChronologyBound": true,
+  "instrumentationAttachmentBound": true,
+  "pendingApprovalEventCount": 0,
+  "pendingDir": ".factory/evidence/ACT-CLINEMM-SYNTHETIC-LIVE/captures/20260830T044424Z-4a38dad1/pending",
+  "pendingSessionCandidateCount": 1,
+  "qualifyingTransactionCount": 0,
+  "resolvedApprovalEventCount": 1,
+  "resolvedDir": ".factory/evidence/ACT-CLINEMM-SYNTHETIC-LIVE/captures/20260830T044424Z-4a38dad1/resolved",
+  "resolvedSessionCandidateCount": 1,
+  "runtimeIdentityBound": true,
+  "runtimeIdentityProjection": {
+    "capturedAt": "2026-08-30T04:44:24.647252Z",
+    "clineVersion": "4.1.10",
+    "pid": "26093",
+    "repoHead": "a8d526f63903891b8b364b3349684d0b97a2b1ea",
+    "repoTree": "077f7afd567130e0e020292ca3c7b8b185516167"
+  },
+  "runtimeSourceDrift": false,
+  "schema": "cline-approval-specimen-binding/v1",
+  "sessionBindingAvailable": true,
+  "specimenBinding": "CAPTURE_INSUFFICIENT",
+  "zeroEventClassification": "Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED"
+}

@@ -1,0 +1,65 @@
+ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-COHERENCE-REPAIR01
+entry-freeze
+                                                          (created 2026-08-31)
+
+ENTRY_HEAD         = 7caca443b592360ac02e90d3bc4461af0ef0edda
+                     "docs+recon(factory): ACT-CLINEMM-SEATBELT-ALL-OUTSIDE-
+                      READ-POLICY-RECON01 — close with C1 GO operator verdict
+                      (NOT_A_DEFECT_POLICY_EXPECTED)"
+ENTRY_TREE         = 3bf84fd940b1e340cce901de158a162b1f762233
+ORIGIN_MAIN        = 7caca443b592360ac02e90d3bc4461af0ef0edda
+                     (HEAD^{tree} of origin/main is the same as
+                     ENTRY_HEAD^{tree} — no local divergence at entry)
+BRANCH             = main
+WORKTREE_CLEAN     = true (excluding .factory/evidence/ which is local)
+
+PROTECTED_STASHES  = stash list is empty; nothing to preserve
+
+PROTECTED LANES
+  R0 execution-obligation   = CLOSED / REPAIR01_COMMITTED (f56e87af0+, 7caca443b)
+                              — DO NOT REOPEN
+  R5 manual approval        = CLOSED_EXPECTED at specimen 54T24A8CE5
+                              WATCH_ONLY until a fully-authorized
+                              all-inside unexpected ASK specimen reappears
+                              — DO NOT WORK on R5
+  Multi-element cardinality = CLOSED at f56e87af0+
+  ACT-CLINEMM-RUNTIME-TASK-HEADER-PROJECTION-FORENSICS01
+                           = HALTED (capture-not-ACT-bound mechanism
+                              dropped per REPAIR01 entry-fact 8);
+                              preserved as historical evidence;
+                              DO NOT re-execute that path
+
+LIVE CONTRADICTION (entry-fact 4, frozen)
+  taskId  = 1788189447617_rw5zx
+  epoch   = 2
+
+  publication 13  turnPhase=idle        taskHeaderPhase=idle          (coherent)
+  publication 15  turnPhase=streaming   taskHeaderPhase=idle          (LIVE contradiction)
+  publication 17  turnPhase=streaming   taskHeaderPhase=idle          (LIVE contradiction)
+  publication 21  turnPhase=error       taskHeaderPhase=error          (coherent)
+
+  Additional LIVE contradictions observed at publicationId 33 and 102.
+
+AGGREGATE PRODUCTION OBSERVATIONS (entry-fact 5, frozen)
+  271 idle      -> idle
+   22 streaming -> streaming
+   17 completed -> completed
+   13 completed -> idle
+    7 idle      -> streaming
+    4 streaming -> idle
+    3 error     -> error
+
+  → SAME_PUBLICATION_CONTRADICTION=PROVEN
+  → FIRST_BAD_OBSERVED_BOUNDARY=PRE_WEBVIEW
+
+PRIMARY PURPOSE
+  BOUNDED_REPAIR. Repair the production defect that permits one
+  ExtensionState publication to simultaneously contain:
+
+      turnState.phase              = "streaming"
+      taskHeaderPresentation.phase = "idle"
+
+  when the active task is genuinely progressing.
+
+  FORBIDDEN: any ACT-owned-capture requirement. FORENSICS01's
+  capture-not-ACT-bound mechanism was dropped per entry-fact 8.

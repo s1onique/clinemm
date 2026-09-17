@@ -1,0 +1,43 @@
+# LIVE RED Reproduction (spec §3)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01
+
+TIMESTAMP_UTC = 2026-08-26T00:16Z
+
+COMMAND = /usr/bin/mktemp
+POLICY  = AUTO  (closed by ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-EXPLICIT-PATH-EVIDENCE01)
+EXECUTOR = CommandJobManager (production resolver)
+         + SeatbeltSandboxBackendExperimental (real @cline/core backend)
+         + /usr/bin/sandbox-exec (real macOS sandboxing binary)
+         + kernel Seatbelt
+EXPERIMENTAL_OPT_IN = CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt
+SUBSTRATE = darwin + /usr/bin/sandbox-exec present + probe ok
+
+RESULT:
+  STATE   = exited
+  EXIT    = 1
+  STDOUT  = ""
+  STDERR  = mktemp: mkstemp failed on /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.atiFwm4pMO: Operation not permitted
+  ERROR   = undefined
+  SIGNAL  = undefined
+
+OBSERVATION:
+  Apple BSD mktemp targets /var/folders/.../T/tmp.XXXX even though the
+  sandboxed child has TMPDIR=<private /clinemm-sandbox-temp-XXX>.
+  Apple mktemp ignores $TMPDIR for the bare form (no template supplied):
+  it falls through to _CS_DARWIN_USER_TEMP_DIR per the Darwin mktemp(1)
+  precedence (DARWIN_USER_TEMP_DIR first; TMPDIR only a fallback).
+
+  The Seatbelt profile grants file-write* only on the synthesized private
+  TMPDIR (a single (subpath "/private/.../T/clinemm-sandbox-temp-XXX")
+  inside an (allow file-write* ...)). /var/folders/.../T is NOT in the
+  writableRoots, so the kernel denies the create attempt: EPERM.
+
+EVIDENCE_IDENTITY:
+  LIVE
+  REAL_PRODUCTION_POLICY_SEAM
+  REAL_PRODUCTION_EXECUTION_SEAM
+  REAL_SEATBELT
+
+BOUNDARY = FILESYSTEM CAPABILITY / SEATBELT
+
+RED_NOT_REPRODUCED_HALT = NOT_TRIGGERED  (RED is reproduced exactly as expected)

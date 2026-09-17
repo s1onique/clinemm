@@ -22,3 +22,41 @@ paths = [
   '''\.factory/epics/.*\.md$''',
   '''\.factory/epic-board\.md$''',
 ]
+
+# Safe-YOLO / seatbelt sandbox qualification canaries. The harness
+# scripts under .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-*
+# generate two kinds of synthetic markers that trip the generic-api-key
+# rule but are NOT credentials:
+#
+#   1. The "GREEN-<12-hex>" canary token used by the network-open
+#      qualification test (see green-postchange.json files). The token
+#      is generated locally by the harness, used as an HTTP probe
+#      marker, and is never transmitted to any external service.
+#      Source: scripts under the same ACT directory confirm the
+#      harness writes `"GREEN-" + randomBytes(6).toString("hex")`.
+#
+#   2. The `canarySecretSha` / `canarySentinelSha` / `canaryNestedSha`
+#      fields in yq-evidence.json. These are SHA-256 digests of
+#      synthetic sentinel files (literal content `SYNTHETIC_SECRET`,
+#      `HOME_SENTINEL`, `NESTED_SENTINEL`) used to verify the
+#      production seatbelt sandbox correctly denies file mutation
+#      across the home-root boundary. They are hash outputs, not
+#      credentials; they are not reusable as auth tokens.
+#
+# Allowlisted under .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-*
+# so the pre-commit gate does not block legitimate safe-YOLO
+# qualification evidence. Confirmed not-real-secrets via source review
+# of capture-yq-evidence.ts (line 26: `"SYNTHETIC_SECRET\n"`) and
+# green-postchange.json harness scripts in the same ACT dirs.
+[[allowlists]]
+description = "Safe-YOLO / seatbelt sandbox qualification canaries (synthetic test markers, not credentials)"
+targetRules = ["generic-api-key"]
+regexes = [
+  '''"TOKEN"\s*:\s*"GREEN-[a-f0-9]+"''',
+  '''"canarySecretSha"\s*:\s*"[a-f0-9]{64}"''',
+  '''"canarySentinelSha"\s*:\s*"[a-f0-9]{64}"''',
+  '''"canaryNestedSha"\s*:\s*"[a-f0-9]{64}"''',
+]
+paths = [
+  '''\.factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-.*\.json$''',
+]

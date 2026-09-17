@@ -1,0 +1,141 @@
+=== RECON: CURRENT VERDICTS (V4 helper + production classifier) ===
+helper     : sdk/packages/core/bin/parser-helper/darwin-arm64/cline-parser-helper
+cwd        : /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+Date       : 2026-08-24T19:20:43.605Z
+
+per-stmt V2 source labels reveal which leaf is failing.
+
+[ACT-§12-recon-chain] pwd && git status && git log --oneline -5 origin/main && ls -la .factory/ 2>/dev/null | head -30
+  expected        : ask (mixed-risk: git log with positional ref, head not safe)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=and risk=ask source=aggregated-and
+  note            : Multipoint defect: git log --oneline -5 origin/main has positional ref; head isn't safe; ls needs path authority.
+
+[leaf] pwd
+  expected        : allow + auto-approve-eligible
+  actual verdict  : allow/auto-approve-eligible
+  V2 promoteAllow : true
+  V2 reasons      : ["structured-max-risk:auto-approve-eligible:all-branches-safe"]
+  V2 perStmt      :
+  stmt[0]: kind=cmd risk=auto-approve-eligible source=host_safe_pwd
+  note            : Already V1-safe (host_safe_pwd).
+
+[leaf] git status
+  expected        : allow + auto-approve-eligible
+  actual verdict  : allow/auto-approve-eligible
+  V2 promoteAllow : true
+  V2 reasons      : ["structured-max-risk:auto-approve-eligible:all-branches-safe"]
+  V2 perStmt      :
+  stmt[0]: kind=cmd risk=auto-approve-eligible source=host_safe_git_status
+  note            : Already V1-safe (host_safe_git_status).
+
+[leaf] git log --oneline -5 origin/main
+  expected        : ask (host_safe_git_log rejects positional refs)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=cmd risk=ask source=no-rule-match
+  note            : V1 safe rule doesn't allow positional ref args. V2 parser-proven path could fix this (all args are static literals).
+
+[leaf] ls -la .factory/ 2>/dev/null
+  expected        : ask (path authority requires host evidence)
+  actual verdict  : allow/auto-approve-eligible
+  V2 promoteAllow : true
+  V2 reasons      : ["structured-max-risk:auto-approve-eligible:all-branches-safe"]
+  V2 perStmt      :
+  stmt[0]: kind=cmd risk=auto-approve-eligible source=host_safe_ls
+  note            : V2 says promoteToAllow=true. V1 ASK is from path authority, NOT from V2's promotable surface. NOT this ACT's scope; needs host-adapter evidence.
+
+[leaf] head -30 some-file
+  expected        : ask (no V1 rule, no V2 parser-proven branch for head)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=cmd risk=ask source=no-rule-match
+  note            : head has no V1 rule. ALL args are static (parser-proven). V2 could promote via parser-proven path.
+
+[leaf] cat some-file
+  expected        : ask (no V1 rule)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=cmd risk=ask source=no-rule-match
+  note            : cat has no V1 rule. Could be parser-proven static (literal path).
+
+[composition-pipe] ls -la .factory/evidence/ 2>/dev/null | head -30
+  expected        : ask (right leaf head)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=pipe risk=ask source=aggregated-pipe
+  note            : Pipe aggregation: max(ls auto-approve, head ask) = ask. ACT scope if head gets parser-proven.
+
+[composition-pipe] git log --oneline -5 origin/main | head
+  expected        : ask (both leaves need repair)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=pipe risk=ask source=aggregated-pipe
+  note            : Pipe aggregation. Either leaf fixed independently could move this to ALLOW (both must be safe).
+
+[composition-pipe] echo hello | head
+  expected        : ask (head not safe; echo is V1-safe)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=pipe risk=ask source=aggregated-pipe
+  note            : Pipe aggregation: max(echo auto-approve, head ask) = ask. ACT scope if head gets parser-proven.
+
+[composition-pipe] echo hello | cat
+  expected        : ask (cat not safe; echo is V1-safe)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=pipe risk=ask source=aggregated-pipe
+  note            : Same composition boundary as echo|head.
+
+[conservation-negative] head -30 /etc/passwd
+  expected        : ask (path authority)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=cmd risk=ask source=no-rule-match
+  note            : head on a sensitive path: V1 path authority must block even if V2 says parser-proven. ACT scope must include this conservation.
+
+[conservation-negative] head -30 $(rm -rf foo)
+  expected        : ask (dynamic arg)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : ["structured analysis opaque (command substitution present)"]
+  V2 perStmt      :
+
+  note            : Command substitution in head's arg: V2 parser-proven branch must reject (argProvenance=dynamic).
+
+[conservation-negative] head --help
+  expected        : ask (unknown option)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=cmd risk=ask source=no-rule-match
+  note            : head --help: even if --help is 'safe', it's not in the reviewed whitelist. V2 parser-proven path must reject unknown options.
+
+[conservation-negative] head -30 some-file | sh
+  expected        : ask (dangerous sink sh)
+  actual verdict  : ask/ask
+  V2 promoteAllow : false
+  V2 reasons      : []
+  V2 perStmt      :
+  stmt[0]: kind=pipe risk=ask source=aggregated-pipe
+  note            : head piped to sh. The dangerous-sink boundary is OUT of this ACT's scope (downstream pipe-to-shell is the predicate; see reformulation-classifier.test.ts).

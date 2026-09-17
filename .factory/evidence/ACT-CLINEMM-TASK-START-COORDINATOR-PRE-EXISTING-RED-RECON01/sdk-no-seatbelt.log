@@ -1,0 +1,258 @@
+(node:17352) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:17364) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17362) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17372) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17368) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17365) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17371) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17374) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17370) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17366) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17361) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17367) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17369) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17375) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17373) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17363) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/sdk/command-job-manager.sandbox-integration.test.ts (18 tests | 2 failed) 90ms
+     ✓ explicit opt-out (off): seeded parent env var reaches the child 10ms
+     ✓ invalid opt-in value: selector throws (fail closed; classic is NOT silently selected) 1ms
+     × with seatbelt opt-in on darwin, CLINEMM_PRODUCTION_TEST_LEAK_VAR is absent in actual child stdout 10ms
+     × with seatbelt opt-in on darwin, AWS_SECRET_ACCESS_KEY is absent in actual child stdout 1ms
+     ✓ with seatbelt opt-in, the prepared invocation's executable replaces the original 7ms
+     ✓ prepared envSemantics=complete is honored end-to-end (structurally) 6ms
+     ✓ with seatbelt opt-in + backend returning a different cwd, `pwd` reports the backend's cwd 5ms
+     ✓ explicit opt-out (off): supervisor uses caller's cwd unchanged 9ms
+     ✓ resolver returns undefined: command is not executed (spawn_failed) 0ms
+     ✓ real substrate unavailable on non-darwin: command is not executed 0ms
+     ✓ backend.prepare throws SandboxError: command is not executed (spawn_failed) 0ms
+     ✓ backend.prepare throws arbitrary Error: still fail-closed 0ms
+     ✓ resolver is invoked exactly once per start() when opt-in is set 6ms
+     ✓ resolver is NOT invoked when explicit opt-out (off) is selected 6ms
+     ✓ default (env unset): CommandCapability has NO sshAuthenticationAuthority field 7ms
+     ✓ CLINEMM_SAFE_YOLO_SSH_AGENT=allow: CommandCapability.sshAuthenticationAuthority.mode === 'agent' 7ms
+     ✓ CLINEMM_SAFE_YOLO_SSH_AGENT=deny (or any value other than 'allow'): no agent authority 6ms
+     ✓ CLINEMM_SAFE_YOLO_SSH_AGENT=allow WITHOUT seatbelt mode: no agent authority (mode-gated) 7ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+stdout | src/sdk/__tests__/task-state-shadow-benchmark.test.ts > TaskShadowPerformance — E5-DIFF p50 µs/event gate (R10 + R11) > processes ≥ 10 000 legacy events under the contract < 100 µs p50 budget
+E5-E6 legacy-path perf (R10 fix): N=10000 total=0.005s eventsPerSec=1982292 p50=0.2µs p95=0.6µs p99=1.5µs maxRetained=256 records=0 diagnostic=0
+
+stdout | src/sdk/__tests__/task-state-shadow-benchmark.test.ts > TaskShadowPerformance — E5-DIFF p50 µs/event gate (R10 + R11) > processes ≥ 10 000 canonical events under the contract < 100 µs p50 budget
+E5-E6 canonical-path perf (R10 fix): N=10000 total=0.012s eventsPerSec=821223 p50=0.7µs p95=2.0µs p99=4.1µs records=10000 maxRetained=256
+
+ ✓ src/sdk/__tests__/task-state-shadow-benchmark.test.ts (2 tests) 24ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-state-shadow-benchmark.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ❯ src/sdk/vscode-run-commands-tool.background-state.test.ts (6 tests | 6 failed) 21ms
+     × emits onBackgroundStateChange(true, jobId) when the tool returns RUNNING 13ms
+     × emits onBackgroundStateChange(false, undefined) when the command completes before the wait budget 3ms
+     × RTP-LONG01: console-sh background job survives after the tool call returns and completes naturally (no cancel, no deadline) 1ms
+     × RTP-ASYNC01: when the tool returns RUNNING, the callback fires again with (false, undefined) after the process completes asynchronously 1ms
+     × RTP-MULTI01: projection stays true while at least one background job is still active (terminal-cardinality-safe) 1ms
+     × RTP-MULTI02: projection fires (true, jobId) when jobs start concurrently (0->N race-safe) 1ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ❯ src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts (5 tests | 3 failed) 19ms
+     × RUNNING_JOB_MUST_NOT_BE_SILENTLY_ABANDONED - projection must reset when the background job terminates 14ms
+     × NO_JOB_DONE_YIELDS_TO_USER - fast command completes synchronously, no orphaned job 2ms
+     ✓ INTENTIONAL_DETACH_TYPED_INTENT - production run_commands input schema has no typed intent field 1ms
+     ✓ TOOL_DESCRIPTION_PROVENANCE - production run_commands description mentions long-running + tmp-file guidance (does NOT prove the RUNNING(jobId) contract) 0ms
+     × TERMINAL_EVENT_CARDINALITY - terminalPromise resolves exactly once per job 1ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+(node:17421) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17426) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17429) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17430) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/vscode-lm/register-vscode-lm.test.ts (2 tests) 479ms
+     ✓ does not register when the vscode.lm API is unavailable (e.g. JetBrains)  431ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/vscode-lm/register-vscode-lm.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/vscode-run-commands-tool.test.ts (46 tests) 348ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/vscode-run-commands-tool.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+(node:17448) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/sdk/sdk-session-event-coordinator.test.ts (29 tests | 1 failed) 15ms
+     ✓ translates and emits session messages, then posts state 3ms
+     ✓ filters late completion messages after cancellation 0ms
+     ✓ ignores stale events from inactive sessions 0ms
+     ✓ marks turns complete through the session lifecycle 0ms
+     ✓ posts state on turn end even when the turn-complete event carries NO messages 1ms
+     ✓ resolves the turn phase to 'error' when the turn surfaced a provider error 0ms
+     ✓ marks a submitted queued prompt as a new streaming turn 0ms
+     ✓ posts state for queued prompt turn start even when no transcript message is emitted 0ms
+     ✓ does NOT override the phase on a turn-complete straggler from an already-cancelled session 0ms
+     ✓ resolves the phase when a queued turn completes after its running flag was clobbered 0ms
+     ✓ updates task usage when the active session has a start result 0ms
+     ✓ zeros usage and api request message cost for free Cline models 0ms
+     ✓ leaves mistake-limit recovery to the SDK callback instead of mutating tool-error events 0ms
+     ✓ captures provider failure telemetry for SDK agent errors 0ms
+     ✓ does not capture provider failure telemetry for SDK agent errors without an error payload 0ms
+     ✓ does not capture provider failure telemetry for recoverable error events (mistake notices) 0ms
+     ✓ captures provider failure telemetry when the SDK finishes a turn with reason error 0ms
+     ✓ CRA02-coord: done with no committed terminal response DOES promote to awaiting_followup (liveness-corrected) 0ms
+     ✓ CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result 0ms
+     ✓ CRA03-coord: attemptCompletionSeen but no committed terminal response yields awaiting_followup (liveness-corrected, post-CPL04) 0ms
+     ✓ CPL01: done with no terminal response / no attempt-completion / no error transitions to awaiting_followup (liveness) 0ms
+     ✓ CPL02: done with committed terminal response AND attempt-completion transitions to completed (control: completion-tool path) 0ms
+     ✓ CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (structural/synthetic control) 0ms
+     ✓ CPL04: done with attempt-completion declared but NO committed terminal response yields awaiting_followup (liveness, symmetric to CPL01) 0ms
+     ✓ CPL05: done with error transitions to error (conservation) 0ms
+     × OWN01 RED: bare done + no terminal commit + no attempt_completion + no user-yield authority MUST NOT yield to awaiting_followup 4ms
+     ✓ T2-EXT01-A: terminal-push capture records (true, true); new-turn capture records (false, false); first is immutable 1ms
+     ✓ T2-EXT01-B: when only attempt_completion is observed (no terminal commit), terminal-push records (true, false) 0ms
+     ✓ T2-EXT01-C: a new-turn boundary reset is visible in the NEXT push only (first is immutable) 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ❯ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts (23 tests | 2 failed) 187ms
+       ✓ Read disabled => approval UI opened 57ms
+       ✓ Read disabled + override all => auto-approved without approval UI 1ms
+       ✓ Edit disabled + override all => auto-approved without approval UI 0ms
+       ✓ Web disabled + override all => auto-approved without approval UI 0ms
+       ✓ ordinary unsafe-but-not-hard-denied command + override all => ALLOW 7ms
+       × safe-only persisted + override all => ALLOW (override wins over safe-only mode) 13ms
+       ✓ override all + host_hard_deny rule => DENY (no approval UI) 1ms
+       ✓ override all + execution_plan_invalid => DENY (real mode:all + allow rules) 0ms
+       ✓ simulated clearTask destroys the override (next override=query returns none) 0ms
+       ✓ task B begins with a different session id: override bound to task A does NOT leak 0ms
+       × override all + requires_approval=true => ALLOW (not ASK) 1ms
+       ✓ getOverride is PURE: it does NOT consume the arm across reads 0ms
+       ✓ consumePendingOverride binds the arm to a session id and clears it 0ms
+       ✓ consumePendingOverride is a no-op when no arm is set 0ms
+       ✓ clearActiveOverride destroys the bound override only (arm survives) 0ms
+       ✓ clearPendingArm destroys the arm only (bind survives) 0ms
+       ✓ clearSessionAutoApproval destroys both (full reset) 0ms
+       ✓ setOverride(undefined, 'none') clears both arm and bind (UI toggle off) 0ms
+       ✓ base explicitDenyRules survive session override=all in the composed auth 1ms
+     ✓ figma-desktop/get_metadata + session ALL + persisted MCP=false => ALLOW, no approval UI 0ms
+     ✓ figma-desktop/get_metadata + override=none + persisted MCP=false => ASK (regression baseline) 52ms
+     ✓ pre-arm ALL → new session consumes ALL → Figma MCP ALLOW on first call 0ms
+     ✓ task ends ⇒ persisted MCP behavior restored ⇒ Figma MCP back to ASK 51ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+(node:17466) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17467) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m
+Emitted 'error' event at:
+    at ChildProcess.emitWorkerError (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3011:22)
+[90m    at ChildProcess.emit (node:events:509:20)[39m
+[90m    at ChildProcess.kill (node:internal/child_process:535:12)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+Node.js v26.0.0

@@ -1,0 +1,115 @@
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+c2-p1-multicmd-granularity.txt -- C2-P1 / P0-GUARD EVIDENCE
+
+VERDICT:
+  PASS_AUTHORITY_EXECUTION_CAPABILITY_BINDING
+  WITH_REAL_CAPABILITY_GATE_PENDING
+
+(The reviewer's prescribed amendment.)
+
+REVIEWER CORRECTION:
+  Q: Does C2 earn CLOSED_CLEAN, and can we resume Darwin mktemp?
+  A: Provenance PASS. Multi-command authority granularity: NOT PROVEN.
+     DO NOT start DARWIN-MKTEMP-CAPABILITY01-C2 yet.
+
+EMPIRICAL OBSERVATION (frozen):
+
+  The C2 plumbing channels a single tool-call capability through
+  every manager.start() call produced by a multi-command run_commands
+  invocation. Concretely:
+
+    run_commands toolCall:
+      commands = ["printf 'A\\n'", "printf 'B\\n'"]
+
+    Production seam (real):
+      executeShellCommands(commands, { executor, cwd, context, ... })
+        = commands.map(async (command) => executor(command, cwd, context))
+        = manager.start({command: "printf 'A'\\n'", ...}, context)
+        = manager.start({command: "printf 'B'\\n'", ...}, context)
+
+  The same `context.executionCapability` is passed to every start call.
+  Same toolCallId. Same marker. Same authority.
+
+  Outcome class = B (reviewer's taxonomy):
+    one start per command, SAME capability on all -- uniform fanout.
+
+LOAD-BEARING INVARIANT (locked in by c2-green-multicmd-discriminator.test.ts):
+
+  For a multi-command run_commands tool call:
+    (a) START_CALL_COUNT === commands.length
+    (b) all start calls carry the SAME toolCallId
+    (c) all start calls carry the SAME executionCapability
+    (d) the unified authority reaches every spawned job uniformly
+
+  This is the C2 contract: authority is TOOL-CALL SCOPED, not per-command.
+  All commands in a single run_commands tool call share authority.
+
+PROVENANCE-DISCRIMINATOR TESTS (carried forward):
+  All three still pass on real production seam:
+    [G7] DISCRIMINATOR 1: malicious metadata marker + empty host
+         capability => typed slot stays EMPTY
+    [G8] DISCRIMINATOR 2: trusted A + malicious generic B => ONLY A
+         reaches the typed slot
+    [G9] PER-TOOL-CALL CORRELATION: same-runtime multiple tool calls
+         see distinct markers, no crossover
+
+CONCURRENCY (reworded per reviewer):
+  same-runtime multiple tool calls / correlation = EXECUTED
+  true concurrent runtime calls                = NOT_EXECUTED (nonblocking)
+
+P1 FIX (reviewer-prescribed): REMOVED executionCapability FROM
+                              CommandJobSnapshot.
+
+  Before this ACT:
+    public CommandJobSnapshot.executionCapability was exposed so
+    tests could observe it. This was acceptable when the only
+    variant was the zero-privilege factory-binding-probe, but
+    becomes a leak once real capability variants land
+    (createOnlyRoots, network scopes, etc.).
+
+  After this ACT:
+    CommandJobSnapshot no longer exposes executionCapability.
+    The internal CommandJob record still carries it (private).
+    Tests observe via vi.spyOn(manager, 'start') -- the call-site
+    argument is the canonical seam.
+
+REGRESSION GATES (all clean):
+  apps/vscode tsc --noEmit                              PASS
+  bun run build:sdk                                     PASS
+  sdk/packages/agents tsc --noEmit                      PASS
+  sdk/packages/shared tsc --noEmit                      PASS
+  biome check (all affected files)                      PASS
+  C2 GREEN suite (12 tests, 4 files)                   12/12 PASS
+  command-job-manager                                   20/20 PASS
+  vscode-run-commands-tool                              46/46 PASS
+  command-job-manager.sandbox-integration               14/14 PASS
+  command-job-manager.sandbox-c3-real-kernel            15/15 PASS
+  invalid-tool-input-preapproval01                      18/18 PASS
+  git diff --check                                      clean
+
+TRUST STATE:
+  HEAD = (pending this commit)
+  ENTRY_HEAD = 49a757a00 (C2 GREEN from prior commit)
+  ACT_CODE_COMMIT in C2-P1 = this commit (1 file modified: snapshot
+    field removal)
+  ACT_TEST_COMMIT in C2-P1 = this commit (1 new test file:
+    c2-green-multicmd-discriminator.test.ts, 3 tests)
+  ACT_BOARD_COMMIT = this commit (board row appended)
+
+PARSER-HELPER:       UNCHANGED
+COMMAND-POLICY:      UNCHANGED
+SEATBELT PROFILE:    UNCHANGED
+COMMAND-CAPABILITY:  UNCHANGED (only typed-slot plumbing)
+
+NEXT:
+  - close this ACT with PASS_AUTHORITY_EXECUTION_CAPABILITY_BINDING
+    WITH_REAL_CAPABILITY_GATE_PENDING
+  - open new ACT: ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01
+    to plug per-command capabilities from CommandExecutionPlan into
+    the typed slot BEFORE any real filesystem authority lands.
+  - AFTER per-command binding is GREEN, resume:
+    ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+    carrying createOnlyRoots=[canonical DARWIN_USER_TEMP_ROOT]
+    through the proven channel.
+
+DO NOT reopen metadata provenance or Seatbelt recon.

@@ -1,0 +1,25 @@
+=== ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01 git-compatibility ===
+Date: 2026-08-25T00:03:57Z
+Git repo: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/repo (initialized with one commit)
+Git binary: /nix/store/al1bcfd3gyl1z70kkr3xhrf5hh5m361w-git-2.51.2/bin/git
+
+Profile STRICT (no /Volumes/UserData/Users/chistyakov, no /Volumes/UserData/Users/chistyakov/* except inside):
+/Volumes/UserData/Users/chistyakov = /Volumes/UserData/Users/chistyakov
+
+--- G1s: git status (strict profile) ---
+  rc=134
+
+--- G2s: git log --oneline -3 (strict profile) ---
+  rc=134
+
+--- G3s: git diff --stat (strict profile) ---
+  rc=134
+
+--- G4s: git rev-parse HEAD (strict profile) ---
+  rc=134
+
+--- G5s: git config --get user.name (strict profile) ---
+  rc=134
+
+--- G6s: HOME-isolated git config (XDG_CONFIG_HOME=/dev/null in env) ---
+  rc=134

@@ -1,0 +1,51 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION01
+TEST OUTPUT
+================================================
+
+REDESIGNED TEST FILE:
+  sdk/packages/core/src/extensions/context/compaction.cut-snap-forward.test.ts
+  224 lines, 7 tests (R1-R7)
+
+CAPTURED OUTPUT (post-CORRECTION01):
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/vitest run \
+    --config vitest.config.ts src/extensions/context/compaction.cut-snap-forward.test.ts
+
+  ✓ R1 (load-bearing): cut must not snap to a stale early typed-user on a long tool loop 1ms
+  ✓ R2 (load-bearing): cut snaps FORWARD to a typed-user past the candidate 0ms
+  ✓ R3: cut on a typed-user boundary remains EXACTLY on the boundary 0ms
+  ✓ R4: cut with no later typed-user retains candidate / nearest safe assistant boundary 0ms
+  ✓ R5: cut never reintroduces already-selected history (L1 ablation) 0ms
+  ✓ R6: tool-pair atomicity is preserved (every tool_use in result has its tool_result) 1ms
+  ✓ R7 (CORRECTION01): selection geometry is invariant under proportional weight scaling 4ms
+
+  Test Files  1 passed (1)
+       Tests  7 passed (7)
+
+FULL COMPACTION SUITE (post-CORRECTION01):
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/vitest run \
+    --config vitest.config.ts src/extensions/context/
+
+  Test Files  1 failed | 6 passed | 1 skipped (8)
+       Tests  2 failed | 122 passed | 1 skipped (125)
+
+  The 2 failing tests are pre-existing:
+    - compact-session-script.test.ts: spawnSync bun ENOENT (environmental)
+    - compact-session-script.test.ts: spawnSync bun ENOENT (environmental)
+
+  All compaction algorithm tests pass:
+    - compaction.test.ts: 94 tests pass (unchanged from CUT-SNAP-FORWARD01)
+    - compaction.cut-snap-forward.test.ts: 7 tests pass (R1-R7, was 6)
+    - compaction.live.test.ts: passes
+    - compaction.working-context-ratio.test.ts: passes
+    - compaction.working-context-authority-publish.test.ts: passes
+    - compaction.real-producer-seam-red.test.ts: passes
+    - budget-projection/project.test.ts: passes
+
+TYPECHECK (post-CORRECTION01):
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/tsc \
+    -p tsconfig.build.json --noEmit
+
+  exit 0 (clean)

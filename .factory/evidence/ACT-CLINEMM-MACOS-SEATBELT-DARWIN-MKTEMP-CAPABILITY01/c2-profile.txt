@@ -1,0 +1,42 @@
+# C2 Generated Seatbelt Profile (Production)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:00Z
+
+## Profile (production path, /usr/bin/mktemp, capability attached):
+
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*)
+(allow file-write*
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-XXX")
+  (literal "/dev/null")
+  (literal "/dev/tty"))
+(allow file-write-create
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)
+
+## Rules composed (spec §22):
+
+- (deny default)                          -- explicit deny default
+- (allow file-read*)                     -- broad reads
+- (allow file-write* <canonSynthTemp>)   -- private writable area
+- (allow file-write-create <DARWIN_ROOT>) -- narrower create-only root
+  (BEFORE the readonly-deny -- deny-after-allow is load-bearing for
+   the broad `file-write*`, the narrower `file-write-create` is ADDITIVE)
+- (deny network*)                        -- network denied
+
+The `file-write-create` rule is EMITTED AFTER the broad
+`file-write*` rule. Last-match-wins does NOT apply because
+`file-write-create` is a STRICT SUBSET of `file-write*`; adding
+more allows cannot widen effective authority on existing files
+because file-write-data / file-write-set-attrs against existing
+objects under createOnlyRoots are still DENIED (they were never
+granted by the broad file-write* which only allows writes to
+canonSynthTemp).

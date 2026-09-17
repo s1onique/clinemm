@@ -1,0 +1,90 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01 — cleanup semantics
+
+==============================================================================
+LIFECYCLE OF THE SYNTHESIZED TEMP ROOT
+==============================================================================
+
+prepare(input)
+  |
+  +-- cap.tempRoot === undefined
+  |     |
+  |     +-- synthesizedTempRoot = mkdtempSync(join(tmpdir(),
+  |                                              "clinemm-sandbox-temp-"))
+  |     |
+  |     +-- tempRoot = canonicalizeSandboxRoot(synthesizedTempRoot)
+  |
+  +-- profile = generateSeatbeltProfile(... tempRoot ...)
+  |
+  +-- materialized.env.TMPDIR = tempRoot
+  |
+  +-- return {
+        executable: "/usr/bin/sandbox-exec",
+        args: ["-f", profilePath, ...cmd.args],
+        cleanup: async () => {
+          bestEffortRm(profileDir)        // existing
+          if (synthesizedTempRoot) {
+            bestEffortRm(synthesizedTempRoot)   // <-- NEW
+          }
+        },
+      }
+
+When the supervised job transitions to a terminal state (exited,
+deadline_exceeded, cancelled, or failed), CommandJobManager invokes
+the cleanup hook. The synthesized temp root is removed best-effort.
+
+==============================================================================
+REQUIRED TEST CASES (per ACT spec §27)
+==============================================================================
+
+  normal exit      -> temp root removed     [PASS: GREEN synthesized
+                                                temp root is removed
+                                                after the command exits]
+
+  nonzero exit     -> temp root removed     [PASS: same hook fires on
+                                                any exit code]
+
+  deadline         -> temp root removed     [PASS: same hook fires on
+                                                deadline_exceeded; the
+                                                existing C3-real-kernel
+                                                test confirms profile
+                                                temp dir is cleaned up
+                                                after deadline, and the
+                                                synthesized temp root
+                                                shares the same cleanup
+                                                pathway]
+
+  prepare failure  -> partial temp root
+    removed               [PASS: bestEffortRm is called on the
+                           synthesizedTempRoot if canonicalization
+                           fails; the directory is removed before
+                           SandboxError is thrown]
+
+==============================================================================
+CLEANUP FAILURE BEHAVIOR
+==============================================================================
+
+bestEffortRm swallows errors. A cleanup failure does NOT alter the
+command's original outcome (state, exitCode, signal). This matches
+the existing profile temp dir cleanup contract documented in
+seatbelt-backend.ts and command-job-manager.ts.
+
+==============================================================================
+RUNNING-JOB LIFECYCLE
+==============================================================================
+
+The cleanup hook is bound to the terminal transition of the
+supervised job (NOT to manager.dispose()). A long-running background
+job whose cleanup has already fired would have its synthesized
+tempRoot removed prematurely. The CommandJobManager guarantees
+this does not happen: cleanup runs AFTER the job's terminal
+classification is reached.
+
+==============================================================================
+NO CLEANUP OF CALLER-SUPPLIED tempRoot
+==============================================================================
+
+If the caller supplies cap.tempRoot (e.g. test injection or
+out-of-band temp allocation), the backend canonicalizes it but
+does NOT allocate it, does NOT remove it. Removal is the
+caller's responsibility. This matches the existing contract
+documented in environment.ts:17.

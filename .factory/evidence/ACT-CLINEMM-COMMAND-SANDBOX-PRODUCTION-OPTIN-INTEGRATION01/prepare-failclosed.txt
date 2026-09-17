@@ -1,0 +1,35 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+PREPARE FAILURE FAIL-CLOSED (C2 evidence 5)
+===========================================================
+
+Test file:
+  apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts
+  describe("fail-closed: prepare failure")
+
+Two RED -> GREEN transitions:
+
+1. backend.prepare throws SandboxError:
+     CommandJobManager({ sandboxBackendResolver: async () => failingBackend })
+     failingBackend.prepare throws:
+       new SandboxError("synthetic canonicalize failure", {
+         backendId: "failing-backend",
+         reason: "canonicalization-failed",
+       })
+     Expected: command NOT executed, spawn_failed, reason surfaced in signal.
+     Result: ✓ backend.prepare throws SandboxError: command is not executed (spawn_failed) (0ms)
+     Asserts:
+       - state === "spawn_failed"
+       - signal contains "sandbox-prepare-failed"
+       - signal contains "canonicalization-failed"
+
+2. backend.prepare throws arbitrary Error:
+     Same as above but throws plain Error("synthetic prepare crash").
+     The executor catches and surfaces as "sandbox-prepare-failed" regardless.
+     Result: ✓ backend.prepare throws arbitrary Error: still fail-closed (0ms)
+     Asserts:
+       - state === "spawn_failed"
+       - signal contains "sandbox-prepare-failed"
+
+P0 invariant preserved:
+  prepare throws -> spawn count = 0

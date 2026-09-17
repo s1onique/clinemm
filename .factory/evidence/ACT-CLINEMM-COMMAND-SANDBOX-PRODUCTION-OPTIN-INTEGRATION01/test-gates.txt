@@ -1,0 +1,107 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+TEST GATES (C2 -- after C2-P1 fix + C2-P2 hygiene + label correction)
+===========================================================
+
+FOCUSED TESTS (load-bearing for C2):
+
+  $ cd apps/vscode && bunx vitest run src/sdk/command-job-manager.sandbox-integration.test.ts
+
+  Test Files  1 passed (1)
+       Tests  14 passed (14)
+
+  Breakdown:
+    DEFAULT_OFF conservation (C2 invariance):
+      ✓ no sandbox opt-in: seeded parent env var reaches the child (7ms)
+      ✓ invalid opt-in value: still DEFAULT_OFF (5ms)
+
+    env proof: experimental opt-in honors envSemantics=complete end-to-end:
+      ✓ with seatbelt opt-in on darwin, CLINEMM_PRODUCTION_TEST_LEAK_VAR absent in actual child stdout (29ms)
+      ✓ with seatbelt opt-in on darwin, AWS_SECRET_ACCESS_KEY absent in actual child stdout (12ms)
+
+    backend prepared invocation reaches the supervisor (structural):
+      ✓ with seatbelt opt-in, the prepared invocation's executable replaces the original (2ms)
+      ✓ prepared envSemantics=complete is honored end-to-end (structurally) (2ms)
+
+    real production seam: prepared cwd reaches the spawned child   [C2-P1]
+      ✓ with seatbelt opt-in + backend returning a different cwd, `pwd` reports the backend's cwd (5ms)
+      ✓ DEFAULT_OFF (no opt-in): supervisor uses caller's cwd unchanged (4ms)
+
+    fail-closed: substrate unavailable:
+      ✓ resolver returns undefined: command is not executed (spawn_failed) (0ms)
+      ✓ real substrate unavailable on non-darwin: command is not executed (0ms)
+
+    fail-closed: prepare failure:
+      ✓ backend.prepare throws SandboxError: command is not executed (spawn_failed) (0ms)
+      ✓ backend.prepare throws arbitrary Error: still fail-closed (0ms)
+
+    wiring sanity:
+      ✓ resolver is invoked exactly once per start() when opt-in is set (2ms)
+      ✓ resolver is NOT invoked when opt-in is absent (4ms)
+
+BASELINE TESTS (preservation):
+
+  $ cd apps/vscode && bunx vitest run src/sdk/command-job-manager.test.ts
+
+  Test Files  1 passed (1)
+       Tests  20 passed (20)
+
+SDK FULL:
+
+  $ bun run --filter @cline/core test:unit
+
+  Test Files  205 passed | 1 skipped (206)
+       Tests  3039 passed | 16 skipped (3055)
+  Exited with code 0.
+
+VSCODE UNIT FULL:
+
+  $ cd apps/vscode && bun run test:unit
+
+  Files: 72   Pass: 1076   Fail: 0   Time: 48.3s
+  All unit test files passed.
+
+TYPECHECK:
+
+  $ cd apps/vscode && bun tsc --noEmit
+
+  0 errors. (Exit code 0.)
+
+GIT DIFF CHECK:
+
+  $ git diff --check
+
+  (no output -- clean)
+
+═══════════════════════════════════════════════════════════════════════
+SUMMARY
+═══════════════════════════════════════════════════════════════════════
+
+  C2 production-seam tests:                 14 / 14 passed
+  Pre-existing CommandJobManager baseline:  20 / 20 passed
+  SDK unit suite:                          3039 / 3039 passed (16 skipped)
+  apps/vscode unit suite:                  1076 / 1076 passed
+  typecheck:                              0 errors
+  zero regressions everywhere
+
+═══════════════════════════════════════════════════════════════════════
+STOP-POINT CHECKLIST (per reviewer spec)
+═══════════════════════════════════════════════════════════════════════
+
+  prepared executable       honored      (structural + env proof tests)
+  prepared argv             honored      (structural tests)
+  prepared cwd              honored      (real production seam test -- C2-P1)
+  prepared env              honored      (structural envSemantics test)
+  prepared envSemantics     honored      (env proof tests on real Seatbelt)
+  prepared input            honored      (covered by structural tests)
+  prepared cleanup          wired        (C2-P2 try/catch hygiene)
+
+  envSemantics production consumption      GREEN
+  actual sandbox-exec route                GREEN
+  unavailable backend                      FAIL-CLOSED
+  prepare failure                          FAIL-CLOSED
+  no unsandboxed retry                     PROVEN
+  DEFAULT_OFF                              IDENTICAL
+  supervision                              CONSERVED
+  command policy                           UNCHANGED
+  parser helper                            UNCHANGED

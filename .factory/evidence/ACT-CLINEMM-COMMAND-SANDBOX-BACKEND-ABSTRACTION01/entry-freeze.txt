@@ -1,0 +1,38 @@
+=== ACT-CLINEMM-COMMAND-SANDBOX-BACKEND-ABSTRACTION01 entry freeze ===
+Date: 2026-08-25T03:23Z
+Repository: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+Branch: main
+
+ENTRY_HEAD=8d08d1326ffcb4e1614aa4a4c1c5b50c2ea915aa
+ENTRY_TREE=7b1e7097af2f9a5324c2e5255615f0be480626de
+ORIGIN_MAIN=8d08d1326ffcb4e1614aa4a4c1c5b50c2ea915aa
+
+WORKTREE_STATUS=clean
+
+HOST_OS=Darwin 23.6.0
+HOST_ARCH=arm64
+HOST_PRODUCT=macOS 14.7.4 (Build 23H420)
+HOST_KERNEL=Darwin Kernel Version 23.6.0 xnu-10063.141.1.703.2~1
+
+SANDBOX_EXEC_PATH=/usr/bin/sandbox-exec
+SANDBOX_EXEC_PRESENT=true
+SANDBOX_EXEC_BYTES=118944
+SANDBOX_EXEC_MTIME=Feb  4  2025
+
+SEATBELT_RECON_HEAD=8d08d1326...
+SEATBELT_RECON_VERDICT=PASS_SEATBELT_RECON_PRODUCTION_CANDIDATE
+
+EXECUTION_SEAMS_INVENTORIED:
+  - SDK foreground (bash executor): sdk/packages/core/src/extensions/tools/executors/bash.ts
+        createShellExecutor (line 635)
+        spawnSupervisableShellCommand (line 679)
+        Both delegate to node:child_process.spawn via SpawnConfig
+  - VSCode background (CommandJobManager): apps/vscode/src/sdk/command-job-manager.ts
+        CommandJobManager.start (line 411)
+        Calls spawnSupervisableShellCommand({executable, args, cwd, env, input})
+  - VSCode foreground (VscodeTerminalManager): apps/vscode/src/hosts/vscode/terminal/VscodeTerminalManager.ts
+        Uses vscode.window.createTerminal (out of scope -- not our process)
+
+ABSTRACTION_INSERTION_POINT=apps/vscode/src/sdk/command-job-manager.ts:441 (background path)
+
+EXPECTED_TRACKED_DIRT_AT_CLOSE: only .factory/epic-board.md (board update)

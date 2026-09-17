@@ -1,0 +1,44 @@
+# C2 Existing-File Conservation (spec §28-§30)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:00Z
+
+## Overwrite existing sentinel (T6, spec §28)
+
+  parent creates $DARWIN_ROOT/c2-sentinel-XXX with "ORIGINAL"
+  sandboxed /bin/sh attempts "printf BAD > $sentinel"
+  AUTHORITATIVE PROOF: sentinel SHA unchanged
+  exitCode: 0 (the printf did not error -- the data was simply
+              denied by the kernel)
+  REMARK: file-write-data on existing objects is denied by the
+          Seatbelt file-write-create rule. The /bin/sh process
+          may also have its stdout/stderr denied by the broader
+          sandbox profile, which is why exit appears clean -- but
+          the on-disk sentinel content is the load-bearing
+          invariant.
+
+## Unlink existing sentinel (T7, spec §29)
+
+  parent creates $DARWIN_ROOT/c2-unlink-XXX
+  sandboxed /bin/rm attempts to unlink the sentinel
+  AUTHORITATIVE PROOF: sentinel still exists after the attempt
+
+## Rename existing sentinel (T8, spec §30)
+
+  parent creates $DARWIN_ROOT/c2-rename-XXX
+  parent defines $DARWIN_ROOT/c2-rename-XXX-renamed
+  sandboxed /bin/mv attempts to rename
+  AUTHORITATIVE PROOF: original present, other absent
+
+## Arbitrary create observed at kernel-op level (spec §31)
+
+  OBSERVED_KERNEL_BEHAVIOR: file-write-create (subpath X) lets
+  /usr/bin/mktemp <template> and /bin/sh's `printf "" > newfile`
+  succeed. This is a kernel-op-level admit, narrower than
+  mutation. Security now depends on WHICH JOB receives the
+  authority -- and that binding is proven in
+  c2-mixed-command-isolation.txt.
+
+OBSERVATION: workspace writes outside createOnlyRoots are denied
+(workspace sentinel SHA unchanged). Network is denied (no
+(allow network*) in the profile).

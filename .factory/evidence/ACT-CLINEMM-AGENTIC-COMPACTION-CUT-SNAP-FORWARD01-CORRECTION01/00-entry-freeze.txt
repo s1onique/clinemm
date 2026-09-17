@@ -1,0 +1,72 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION01 entry-freeze
+========================================================================
+
+Date        : 2026-09-03T22:23:02Z
+ENTRY_HEAD  = ff8be33d1deac0c7cf3551a7521e3f3149e24b35 (post-CUT-SNAP-FORWARD01)
+ENTRY_TREE  = 6a7c1fb54dafe3d40d32c0b86da7b56a706b7340
+FINAL_HEAD  = pending commit (to be applied)
+
+Branch      = main
+Worktree    = clean (no porcelain v1 untracked-or-modified files)
+Stash       = empty
+
+Trust baseline: PASS
+
+REVIEWER VERDICT: PASS_WITH_NONBLOCKING_RESIDUE — C1: GO
+
+Non-blocking residue addressed:
+  P1 TEST_GEOMETRY_WEAK (R2, R3)
+    -> R2 redesigned with valid tool pairs and EXACT cut index assertion
+    -> R3 redesigned with EXACT typed-user boundary assertion
+  P2 evidence label (metric naming)
+    -> RED/GREEN/ablation evidence files use "deterministic fixture weight"
+       (not "tokens"); cut-snap-forward.test.ts comment clarifies the metric
+       and proves metric-independence via R7 (proportional scaling).
+
+Files in scope:
+  sdk/packages/core/src/extensions/context/compaction.cut-snap-forward.test.ts
+  .factory/evidence/ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION01/
+  .factory/evidence/ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01/ (label corrections)
+  .factory/epic-board.md (forty-seventh-pass entry)
+
+Out of scope:
+  - compaction-shared.ts (production fix unchanged; reviewer's PASS on the
+    semantic invariant)
+  - compaction.test.ts (existing tests unchanged; "summarizes older messages"
+    still asserts the new contract correctly)
+  - All other files
+
+R2 geometry (CORRECTION01):
+  - Tool pair: assistant(tool_use) + matching user(tool_result)
+  - Typed-user at index 6 is the latest typed-user
+  - Tool_result dominates the tail walk; candidate lands BEFORE index 6
+  - Snap-forward primitive MUST return exactly 6
+  - Pre-patch: Math.min(candidate, 6) + backward snap-walk returns 1-3
+    (load-bearing RED control preserved)
+  - Post-patch: returns 6 (defect fixed)
+
+R3 geometry (CORRECTION01):
+  - Typed-user at index 7 is the latest typed-user
+  - Tail walk with preserveRecentTokens=1 lands at index 7
+  - No snap (lastTurnStartIndex=7 not > candidate=7)
+  - Forward walk: messages[7]=typed-user (safe) -> returns 7
+  - Post-patch: returns 7 (EXACT assertion)
+
+R7 (CORRECTION01):
+  - Cut selection is a geometry problem; invariant under proportional
+    weight scaling.
+  - Real token estimator divides by CHARS_PER_TOKEN=3 (non-linear
+    monotonic transform); not directly comparable to JSON-length weight.
+  - Test passes `preserveRecentTokens * CHARS_PER_TOKEN` to JSON-length
+    weight to make the threshold-crossing comparison mathematically
+    equivalent; verifies both metrics produce identical cuts.
+  - PASS on L1 fixture.
+
+Pre-existing baseline (post-CUT-SNAP-FORWARD01, pre-CORRECTION01):
+  Test Files  1 failed | 6 passed | 1 skipped (8)
+       Tests  2 failed | 121 passed | 1 skipped (124)
+
+Post-CORRECTION01 expected:
+  Test Files  1 failed | 6 passed | 1 skipped (8)
+       Tests  2 failed | 122 passed | 1 skipped (125)
+       (R7 added: 1 new GREEN; 2 pre-existing bun-ENOENT failures unchanged)

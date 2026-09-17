@@ -1,0 +1,125 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01 — lifecycle fix transcript
+
+The fix wraps the post-allocation preparation body in a single
+try/catch so that ANY failure between successful temp-root synthesis
+and the successful return cleans up BOTH the synthesized temp root
+AND the profile temp dir before propagating the cause.
+
+==============================================================
+DIFF SUMMARY:
+==============================================================
+
+  sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts
+    +56 lines (wrap + 6 commentary)
+    -7 lines  (inner cleanup calls subsumed by the wrap)
+
+  sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.test.ts
+    +~120 lines (CORRECTION01 describe block with vi.mock + 2 tests)
+    +statSync, readdirSync imports
+    +vi import
+
+==============================================================
+NEW prepare() FLOW (post-CORRECTION01):
+==============================================================
+
+prepare(input)
+  |
+  +-- canonicalize readonlyRoots (unchanged)
+  +-- canonicalize writableRoots (unchanged)
+  +-- canonicalize denyReadSubpaths (unchanged)
+  |
+  +-- IF cap.tempRoot supplied:
+  |     canonicalize cap.tempRoot
+  |     on failure: throw SandboxError (NOT cleaned; caller owns)
+  |   ELSE:
+  |     synthesizedTempRoot = mkdtempSync(...)
+  |     canonicalize synthesizedTempRoot
+  |     on failure: bestEffortRm(synthesizedTempRoot) + throw
+  |
+  +-- let profileDir, profilePath, materialized = undefined
+  |
+  +-- try {
+  |       profile = generateSeatbeltProfile(...)
+  |       try {
+  |           profileDir = mkdtempSync(...)
+  |         } catch (cause) {
+  |           throw SandboxError("failed to create profile temp dir", ...)
+  |         }
+  |       profilePath = join(profileDir, "profile-XXX.sb")
+  |       try {
+  |           writeFileSync(profilePath, profile, { mode: 0o600 })
+  |         } catch (cause) {
+  |           throw SandboxError("failed to write profile", ...)
+  |         }
+  |       materialized = materializeEnvironment(cap.environment, {...})
+  |     } catch (cause) {
+  |       // *** NEW WRAP ***
+  |       if (profileDir) bestEffortRm(profileDir)
+  |       if (synthesizedTempRoot) bestEffortRm(synthesizedTempRoot)
+  |       throw cause
+  |     }
+  |
+  +-- return {
+        executable: SANDBOX_EXEC_PATH,
+        args: ["-f", profilePath, cmd.executable, ...cmd.args],
+        cwd, env: materialized, ...,
+        cleanup: async () => {
+          bestEffortRm(profileDir)
+          if (synthesizedTempRoot) bestEffortRm(synthesizedTempRoot)
+        },
+      }
+
+==============================================================
+WHY caller-supplied tempRoot IS NEVER CLEANED HERE:
+==============================================================
+
+In the cleanup() hook returned to the caller, the existing code only
+removes `profileDir` and `synthesizedTempRoot` (the dir we allocated).
+A caller-supplied `cap.tempRoot` is the caller's responsibility and
+MUST NOT be touched by the backend; the caller may have set it to a
+path the backend doesn't own (e.g. a workspace-internal scratch dir
+that other concurrent commands also use).
+
+The new wrap follows the same rule:
+  - bestEffortRm(profileDir)  -- profileDir is always backend-owned
+  - bestEffortRm(synthesizedTempRoot)  -- synthesizedTempRoot only
+                                         set when we allocated
+
+cap.tempRoot is NOT touched. CORRECTION01 test #2 enforces this.
+
+==============================================================
+CLEANUP FAILURE BEHAVIOR:
+==============================================================
+
+bestEffortRm swallows errors. A cleanup failure does NOT alter the
+propagated cause (the throw statement at the end of the catch is
+unconditional). This matches the existing bestEffortRm contract
+documented in seatbelt-backend.ts and command-job-manager.ts.
+
+==============================================================
+RUNNING-JOB LIFECYCLE:
+==============================================================
+
+The cleanup hook is bound to the terminal transition of the supervised
+job (NOT to manager.dispose()). Same as before. The wrap does not
+change this; it only fixes the case where prepare() fails before
+returning.
+
+==============================================================
+PROOF:
+==============================================================
+
+Tests in sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.test.ts:
+
+  CORRECTION01: profile generation failure cleans up the synthesized temp root  PASS
+  CORRECTION01: caller-supplied tempRoot is NOT touched on any failure           PASS
+
+Test 1 injects a profile-generation failure (mock throws). The wrap's
+catch fires, removes synthesizedTempRoot, and re-throws. After the
+test returns, no leaked /tmp/clinemm-sandbox-temp-XXXXX dirs are
+present.
+
+Test 2 passes a caller-created dir as cap.tempRoot, triggers the same
+failure, and confirms the caller-created dir is NOT removed by the
+backend. The wrap's conditional `if (synthesizedTempRoot)` correctly
+skips cleaning when no synthesis occurred.

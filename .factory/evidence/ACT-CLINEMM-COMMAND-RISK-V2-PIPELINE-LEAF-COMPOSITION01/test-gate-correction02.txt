@@ -1,0 +1,35 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core[39m
+
+ [32m✓[39m src/runtime/command-policy/command-safe-rules.hostile-filename.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/command-safe-rules.test.ts [2m([22m[2m233 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/path-authority-evidence-builder.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/parser-helper/runtime.structural.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 807[2mms[22m[39m
+     [33m[2m✓[22m[39m rejects a top-level object that is not valid JSON [33m 804[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/command-policy.test.ts [2m([22m[2m47 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/structured-command-risk.test.ts [2m([22m[2m45 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/command-risk-corpus.baseline.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/path-authority.realpath.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/parser-helper/runtime.real-binary.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/structured-command-risk.redirect-stderr-devnull.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/structured-command-risk.real-binary.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 52[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/structured-command-risk-integration.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/command-risk-corpus.v1-contract.test.ts [2m([22m[2m52 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/structured-command-risk.attack-witness.test.ts [2m([22m[2m44 tests[22m[2m)[22m[32m 199[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/safe-execution-profile.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/path-authority.test.ts [2m([22m[2m37 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/reformulation-classifier.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/structured-command-risk.pipeline-leaf-composition.test.ts [2m([22m[2m61 tests[22m[2m)[22m[32m 218[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/structured-command-risk.phase2-provenance.test.ts [2m([22m[2m53 tests[22m[2m)[22m[32m 245[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/command-execution-plan.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/command-risk-corpus.path-authority.test.ts [2m([22m[2m37 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/parser-helper/runtime.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/parser-provenance.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/v1-independence.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/structured-command-risk-attack.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/agent-runtime-integration.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m26 passed[39m[22m[90m (26)[39m
+[2m      Tests [22m [1m[32m845 passed[39m[22m[90m (845)[39m
+[2m   Start at [22m 22:59:58
+[2m   Duration [22m 1.82s[2m (transform 7.16s, setup 0ms, import 12.12s, tests 1.83s, environment 1ms)[22m

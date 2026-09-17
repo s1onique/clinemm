@@ -1,0 +1,30 @@
+=== REAL_PRODUCTION_SEAM qualification (CORRECTION01) ===
+TMP_ROOT: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-pipeline-leaf-correction01-FKJPXQ
+PROJECT_DIR: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-pipeline-leaf-correction01-FKJPXQ/project
+
+PASS  allow/auto-approve-eligible  source=risk_v2_structured_promotion                  echo hello | head -30
+        expected: allow
+        note: no path authority (composition with echo + parser-proven head)
+PASS  allow/auto-approve-eligible  source=risk_v2_structured_promotion                  pwd && head -30
+        expected: allow
+        note: no path authority (pwd + parser-proven head chain)
+PASS  allow/auto-approve-eligible  source=risk_v2_structured_promotion                  head -30
+        expected: allow
+        note: no path authority (standalone stdin-only reader)
+PASS  allow/auto-approve-eligible  source=risk_v2_structured_promotion                  ls /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-pipeline-leaf-correction01-FKJPXQ/project/inside/ok.ts | head -30
+        expected: allow
+        note: inside-workspace + valid realpath evidence
+PASS  ask/ask                    source=host_workspace_realpath_authority             ls /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-pipeline-leaf-correction01-FKJPXQ/project/inside/ok.ts
+        expected: ask/host_workspace_realpath_authority
+        note: per-command host_workspace_realpath_authority (no evidence supplied) -- V2 must NOT override
+PASS  ask/ask                    source=host_workspace_realpath_authority             ls /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-pipeline-leaf-correction01-FKJPXQ/outside
+        expected: ask/host_workspace_realpath_authority
+        note: operand realpath outside workspace roots
+PASS  ask/ask                    source=host_workspace_realpath_authority             ls /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-pipeline-leaf-correction01-FKJPXQ/project/outside-link
+        expected: ask/host_workspace_realpath_authority
+        note: symlink realpath escapes workspace
+PASS  ask/ask                    source=host_workspace_realpath_authority             ls /etc/passwd
+        expected: ask/host_workspace_realpath_authority
+        note: operand under /etc, outside configured roots
+
+=== RESULT: 8/8 pass, 0 fail ===

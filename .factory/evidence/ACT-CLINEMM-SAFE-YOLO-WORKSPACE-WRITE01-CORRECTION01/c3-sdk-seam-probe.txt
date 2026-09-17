@@ -1,0 +1,21 @@
+[c3-sdk] HOME = /Volumes/UserData/Users/chistyakov
+[c3-sdk] SCRATCH = /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c3-sdk-YSKyc2
+[c3-sdk] safeRepo = /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c3-sdk-YSKyc2/safe-repo
+[c3-sdk] symlinkToRoot = /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c3-sdk-YSKyc2/lnk-root exists: true
+[c3-sdk] filterWorkspaceRootsForWritable input : [ "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c3-sdk-YSKyc2/safe-repo",
+  "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c3-sdk-YSKyc2/lnk-root",
+  "/Volumes/UserData/Users/chistyakov", "/"
+]
+[c3-sdk] filterWorkspaceRootsForWritable output: [ "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-c3-sdk-YSKyc2/safe-repo" ]
+[c3-sdk] PASS: canonical-path filter correctly drops symlink-to-/ and HOME, keeps safeRepo
+[c3-sdk] start.exitCode: 0
+[c3-sdk] start.stdout  : XC3_SDK_OK
+
+[c3-sdk] start.stderr  :
+[c3-sdk] PASS: production CommandJobManager -> Seatbelt -> kernel allowed the workspace write
+
+============================================================
+LIVE_DOGFOOD_MKDIR = STRUCTURAL_PRODUCTION_SEAM_PASS
+LIVE_HOME_DENY = PASS
+LIVE_SYM_ROOT_DENY = PASS
+============================================================

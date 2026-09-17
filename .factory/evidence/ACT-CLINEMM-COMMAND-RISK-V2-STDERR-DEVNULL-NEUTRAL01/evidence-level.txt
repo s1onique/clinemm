@@ -1,0 +1,29 @@
+EVIDENCE LEVEL LABEL (per Factory review of ACT closure report)
+
+This directory's `live-qualification.txt` was produced by driving
+the vendored v4 parser-helper + the production TS classifier via
+`evaluateCommandRiskWithParser`. This is REAL_PRODUCTION_SEAM,
+NOT LIVE.
+
+Per Factory reviewer:
+
+  "Calling the harness result `LIVE 7/7` is only valid if those
+  seven cases actually went through the **installed extension
+  UI**. If `live-qualification.txt` is a local vendored-helper
+  /classifier harness--as the summary wording suggests--label it
+  `REAL_PRODUCTION_SEAM`, not LIVE. Your earlier screenshots can
+  supply actual LIVE evidence for the relevant cases."
+
+Therefore:
+
+  real_production_seam_qualification.txt (renamed from live-qualification.txt)
+       -- vendored helper + production classifier; 7/7 PASS
+
+This label is HONEST. The earlier `LIVE 7/7` in the epic-board
+row + closure summary was sloppy wording; the substantive PASS
+result is unchanged. LIVE in the strict sense (user-driven UI
+screenshot evidence) requires a manual user dogfood step that
+was not performed in this ACT; ACT's closure remains at
+REAL_PRODUCTION_SEAM.
+
+CORRECTION01 retains the same label.

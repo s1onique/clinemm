@@ -1,0 +1,139 @@
+# C1 DISPOSITION — HALT (spec §14)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01
+
+TIMESTAMP_UTC = 2026-08-26T00:30Z
+
+C1 KERNEL RESULT:
+  GO_CREATE_ONLY_CAPABILITY (file-write-create on canonical _CS_DARWIN_USER_TEMP_DIR
+  is sufficient for /usr/bin/mktemp and /usr/bin/mktemp -d; ablation returns EPERM
+  without it; conservation holds for overwrite/unlink/rename/workspace-write).
+
+C1 BINDING RESULT:
+  HALT_MKTEMP_CAPABILITY_BINDING_UNAVAILABLE
+
+The two outcomes above are independent. The kernel operation is proven
+sufficient. The binding seam from the policy-decision site to the
+capability-construction site is NOT available in the current architecture
+without a non-trivial cross-cutting change.
+
+WHY BINDING IS UNAVAILABLE TODAY:
+
+  1. The strict semantic discriminator IS computed and available in
+     `hostAuthorization.tempAuthorityEvidence.canonicalDarwinUserTempRoot`
+     (see apps/vscode/src/sdk/SdkController.ts:~861, evaluateCommandToolApproval
+     path) and in `CommandExecutionPlan.commands[i].matchedRuleSource`
+     (see sdk/packages/core/src/runtime/command-policy/command-execution-plan.ts:90).
+
+  2. However, this metadata does NOT reach `CommandJobManager.start(...)`.
+     Tracing the path:
+       SdkController.evaluateCommandToolApproval
+         -> interaction-coordinator.handleToolApprovalRequest
+            -> {approved, executionPlan} returns to SDK runtime
+               -> SDK runtime calls tool.execute(input, context)
+                  -> createShellTool wraps executor(command, cwd, context)
+                     -> createVscodeShellExecutor
+                        -> manager.start({command, cwd, env, ...})
+                           (only fields are command, cwd, env, deadlines)
+
+     StartCommandJobOptions has no field for the policy decision metadata.
+     The agent-runtime passes `context.metadata = config.toolContextMetadata`
+     which is SESSION-WIDE, not per-invocation, so it cannot safely carry
+     per-call createOnlyRoots.
+
+  3. The current code path can be observed to NOT propagate the discriminator:
+     the existing sandbox c3-real-kernel tests at
+     apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+     only test bare `mktemp` (GNU form, which respects $TMPDIR). The slash-
+     prefixed Apple form `/usr/bin/mktemp` reproduces the EPERM RED with
+     the same production seam (see live-red.txt in this directory).
+
+WHY NOT USE A COMMAND-TEXT PARSE IN THE BACKEND:
+
+  Per spec §10 / §14:
+    > "We must not do this:
+    >    SeatbeltBackend.prepare()
+    >      -> parse raw command text
+    >      -> if it looks like /usr/bin/mktemp
+    >      -> grant Darwin temp authority
+    >    That violates the established architecture:
+    >    sandbox consumes capability, not command-text heuristics"
+
+  Adding `createOnlyRoots` parsing to the Seatbelt backend would couple
+  the sandbox layer to command-text patterns -- the exact anti-pattern
+  the spec forbids.
+
+THE CORRECT PATH (out of scope for this ACT):
+
+  The minimal correct path is to plumb a typed per-invocation capability
+  metadata channel from the coordinator's policy-decision site into the
+  executor's `CommandJobManager.start` call. This is exactly the work
+  ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01 exists
+  to do (see .factory/epic-board.md entries for TEMP-AUTHORITY01-CORRECTION01
+  which already flagged this as a separate future ACT).
+
+  The bound architecture is:
+
+    a. Add `createOnlyRoots?: readonly string[]` to CommandCapability
+       (already drafted; not committed).
+    b. Add `createOnlyRoots?: readonly string[]` to StartCommandJobOptions.
+    c. Add a per-call metadata channel (e.g. extending AgentToolContext
+       with `perCallCapabilityMetadata?: Record<string, unknown>`,
+       populated by the runtime from `toolCall.metadata`, with the
+       coordinator setting `toolCall.metadata.createOnlyRoots` from the
+       policy decision's tempAuthorityEvidence). This is the load-bearing
+       plumbing and MUST land before any createOnlyRoots can flow into
+       CommandCapability.
+    d. CommandJobManager.start() plumbs options.createOnlyRoots into
+       the capability it builds.
+    e. SdkController, after the policy decision attaches strict
+       tempAuthorityEvidence, sets createOnlyRoots on the next tool call
+       (or via an interceptor) using the canonical Darwin root.
+    f. Seatbelt profile generator emits `(allow file-write-create ...)`
+       per root when capability.createOnlyRoots is non-empty.
+
+  These are all narrowly-scoped, additive changes. None require public
+  API / wire / proto / settings changes. None require command-policy
+  regex changes. None require a parser-helper change. None require
+  Seatbelt support posture changes. None require command transformation.
+
+  But (c) is the architectural seam the predecessor ACTs already
+  identified as separate future work. Doing it here would expand scope
+  beyond this ACT's review boundary.
+
+WHAT THIS ACT DOES COMMIT (factually frozen):
+
+  - LIVE RED reproduced verbatim (live-red.txt).
+  - Darwin root identity captured (darwin-temp-root.txt).
+  - TMPDIR insufficiency captured (tmpdir-discriminator.txt).
+  - Kernel operation discriminator proven (seatbelt-operation-matrix.tsv
+    + profile-minimal-green.sb + profile-baseline-no-darwin-temp.sb).
+  - Capability binding analysis (capability-binding-analysis.txt).
+  - This halt disposition (c1-disposition.txt).
+
+NO PRODUCTION CODE LANDS in this ACT. The partial edits made during
+investigation (CommandCapability.createOnlyRoots, seatbelt-profile.ts
+createOnlyPart, sandbox-policy.ts createOnlyRoots, command-job-manager.ts
+StartCommandJobOptions.createOnlyRoots) were reverted before commit.
+
+PRODUCED_ARTIFACTS:
+  apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+  -- NOT modified (existing tests continue to pass; new tests for the
+     slash-prefixed Apple form were not added because the binding seam
+     is unavailable, so the test would not drive production).
+  sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts
+  -- NOT modified.
+  apps/vscode/src/sdk/sandbox-policy.ts
+  -- NOT modified.
+  apps/vscode/src/sdk/command-job-manager.ts
+  -- NOT modified.
+  sdk/packages/core/src/runtime/sandbox/types.ts
+  -- NOT modified.
+
+The only ACT-owned artifact is the evidence directory.
+
+DECISION:
+  This ACT halts at C1. The successor ACT is:
+    ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+  When that ACT lands, a successor C2 ACT can complete this work by
+  adding the four narrowly-scoped code changes enumerated above, then
+  re-running the C1 matrix tests against the real production seam.

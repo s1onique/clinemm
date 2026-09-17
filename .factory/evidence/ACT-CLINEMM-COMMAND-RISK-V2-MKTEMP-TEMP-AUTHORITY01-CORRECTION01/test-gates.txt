@@ -1,0 +1,81 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01 -- C3 test gates
+
+FOCUSED
+======
+
+command-policy.mktemp-host-evidence-bound.test.ts (29 tests, all PASS):
+  - darwin WITH evidence -> AUTO (4 positive forms)
+  - darwin WITHOUT evidence -> ASK with host_mktemp_temp_authority_unbound (2)
+  - linux WITH linux evidence -> ASK with host_mktemp_temp_authority_unbound (2)
+  - darwin WITH malformed evidence -> ASK with new source (3 cases)
+  - darwin WITH evidence + negative forms -> ASK (18 negative forms)
+
+_live-qualification-c4.test.ts (6 tests, all PASS):
+  - RED REPROOF: darwin-no-evidence returns ASK with new source
+  - RED REPROOF: linux-with-linux-evidence returns ASK
+  - GREEN: darwin+evidence auto-approves bare mktemp
+  - GREEN: darwin+evidence auto-approves bare mktemp -d
+  - CONSERVATION: mktemp -u stays ASK with darwin evidence
+  - CONSERVATION: mktemp foo.XXXXXX stays ASK with darwin evidence
+
+command-safe-rules.test.ts (278 tests, all PASS):
+  - lexical-layer tests unchanged (the gate is in command-policy.ts
+    evaluateOne, not in findSafeRuleMatch)
+
+SDK CORE FULL SUITE
+===================
+
+sdk/packages/core (full unit suite via vitest):
+  3121 PASS / 16 SKIP / 0 FAIL across 208 files
+  (was 3109 PASS / 16 SKIP / 0 FAIL pre-CORRECTION01;
+   +12 tests, -1 file from rename)
+
+APPS/VSCODE COMMAND-POLICY SUITE
+================================
+
+apps/vscode policy/approval/sandbox suites (4 files, all PASS):
+  - sdk-interaction-coordinator.parser-helper.test.ts:  PASS
+  - session-auto-approval.test.ts:  PASS
+  - command-job-manager.test.ts:  PASS (18 tests)
+  - command-job-manager.sandbox-c3-real-kernel.test.ts:  PASS (15 tests)
+  - 85/85 PASS across the 4 files combined
+
+The Seatbelt c3-real-kernel suite is the load-bearing evidence
+that the production mktemp -> Seatbelt composition remains GREEN.
+The CORRECTION01 closes only the policy-side authority leak;
+the sandbox side is fully unchanged.
+
+LINT + TYPECHECK + BUILD
+========================
+
+bun run build:sdk:
+  @cline/shared, @cline/llms, @cline/agents, @cline/core, @cline/sdk
+  all exited with code 0
+
+apps/vscode bun run check-types:
+  tsc --noEmit exit 0 (biome format pass, biome lint pass)
+
+apps/vscode bun run compile:
+  biome format pass, biome lint pass, tsc pass, proto-lint pass
+  exit 0
+
+git diff --check: clean
+
+NO PRODUCTION SEAM DELTA FOR NON-MKTEMP COMMANDS
+================================================
+
+The CORRECTION01 changes:
+- command-policy-types.ts: +TempAuthorityEvidence interface,
+  +optional tempAuthorityEvidence field on CommandHostAuthorization,
+  +new source value host_mktemp_temp_authority_unbound
+- command-policy.ts: +TEMP_AUTHORITY_HOST_EVIDENCE_BOUND_SOURCES
+  set with one entry, +new branch in evaluateOne that gates the
+  matched rule through host-evidence check
+- command-safe-rules.ts: REVIEW STANDARD block rewritten
+- sdk/packages/core/src/index.ts: +type TempAuthorityEvidence re-export
+- apps/vscode/src/sdk/sdk-tool-policies.ts: +buildTempAuthorityEvidence
+  helper, wired into the safe-only branch of getCommandHostAuthorization
+
+The decision-flow for every other command (pwd, ls, find, cat,
+echo, head, tail, git_*, cd) is unchanged. The 1044 cmd-policy
+tests pass with zero regressions.

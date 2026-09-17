@@ -1,0 +1,11 @@
+{
+  "fixture_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture",
+  "T05_zero_event_with_attachment": true,
+  "T06_zero_event_no_attachment": null,
+  "binding_attachment_bound": "YES",
+  "zero_event_classification": "Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED",
+  "specimen_binding": "CAPTURE_INSUFFICIENT",
+  "approval_transaction_bound": "NO",
+  "runtime_identity_bound": "YES",
+  "new_events": "1"
+}

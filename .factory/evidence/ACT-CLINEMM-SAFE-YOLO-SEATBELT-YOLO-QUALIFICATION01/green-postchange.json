@@ -1,0 +1,18 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01",
+  "phase": "GREEN post-change",
+  "date": "2026-08-26T10:56:10.198Z",
+  "TOKEN": "GREEN-6ca73d6a60ee",
+  "port": 63395,
+  "profileNetworkRule": "(allow network*)",
+  "control": {
+    "stdout": "CONNECTED:GREEN-6ca73d6a60ee\n",
+    "exitCode": 0
+  },
+  "test": {
+    "stdout": "CONNECTED:GREEN-6ca73d6a60ee\n",
+    "exitCode": 0,
+    "stderr": ""
+  },
+  "verdict": "GREEN_REPRODUCED"
+}

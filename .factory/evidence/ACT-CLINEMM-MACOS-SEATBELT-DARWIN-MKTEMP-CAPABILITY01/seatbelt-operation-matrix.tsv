@@ -1,0 +1,49 @@
+# Seatbelt Operation Discriminator (spec §7, §9, §10, §20, §21-§24)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01
+
+DARWIN_CANONICAL	/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T
+PROFILE_USED	profile-minimal-green.sb (file-write-create ONLY on DARWIN_CANONICAL; deny default; deny network*)
+
+operation	command	expected	observed	verdict
+mktemp (bare)	/usr/bin/mktemp	GREEN (exit 0, file in DARWIN_CANONICAL)	exit 0; stdout=/var/folders/.../T/tmp.yUUis7nZNX (parent matches DARWIN_CANONICAL)	PASS
+mktemp -d	/usr/bin/mktemp -d	GREEN (exit 0, dir in DARWIN_CANONICAL)	exit 0; stdout=/var/folders/.../T/tmp.xvvmGevffb (parent matches DARWIN_CANONICAL)	PASS
+
+# §21 EXISTING FILE OVERWRITE CONSERVATION
+operation	command	expected	observed	verdict
+overwrite existing sentinel	/bin/sh -c 'printf BAD > $SENT'	DENY (sentinel SHA unchanged)	exit 1; sentinel SHA 7cc65285... unchanged; stderr "Operation not permitted"	PASS
+
+# §22 UNLINK CONSERVATION
+operation	command	expected	observed	verdict
+unlink existing sentinel	/bin/rm $SENT	DENY (sentinel still exists)	exit 1; sentinel exists after; stderr "Operation not permitted"	PASS
+
+# §23 RENAME CONSERVATION
+operation	command	expected	observed	verdict
+rename existing sentinel	/bin/mv $SENT $OTHER	DENY (original present, other absent)	exit 1; ORIG still exists; OTHER does not; stderr "Operation not permitted"	PASS
+
+# §24 ARBITRARY CREATE (expected: kernel-op-level allows arbitrary create)
+operation	command	expected	observed	verdict
+touch known-name	/usr/bin/touch "$DARWIN_CANONICAL/known-name"	NOT_GRANTED_AT_KERNEL_OP_LEVEL (but is observed at this op level)	exit 0; file exists	OBSERVED_KERNEL_BEHAVIOR (not grant: see security analysis)
+mkdir known-dir	/bin/mkdir "$DARWIN_CANONICAL/known-dir"	NOT_GRANTED_AT_KERNEL_OP_LEVEL (but is observed at this op level)	exit 0; dir exists	OBSERVED_KERNEL_BEHAVIOR
+
+# §20 ABLATION: remove the file-write-create rule, mktemp must revert to EPERM
+operation	command	expected	observed	verdict
+mktemp w/o create rule	/usr/bin/mktemp (profile-baseline-no-darwin-temp.sb)	EPERM	exit 1; stderr "mktemp: mkstemp failed on /var/folders/.../T/tmp.stkB5pM1qt: Operation not permitted"	PASS (causality proven)
+mktemp -d w/o create rule	/usr/bin/mktemp -d (profile-baseline-no-darwin-temp.sb)	EPERM	exit 1; stderr "mktemp: mkdtemp failed on /var/folders/.../T/tmp.QsyCpRl22g: Operation not permitted"	PASS
+
+# §26 WORKSPACE CONSERVATION (workspace write must be DENIED)
+operation	command	expected	observed	verdict
+workspace write	/bin/sh -c 'printf BAD > $WS/sentinel.txt'	DENY (sentinel SHA unchanged)	exit 1; sentinel SHA unchanged	PASS
+
+SUMMARY (spec §51):
+  P1 file-write-create on canonical _CS_DARWIN_USER_TEMP_DIR
+    → /usr/bin/mktemp           GREEN
+    → /usr/bin/mktemp -d        GREEN
+    → overwrite existing        DENY
+    → unlink existing           DENY
+    → rename existing           DENY
+    → workspace write           DENY
+    → no darwin temp rule       EPERM (ablation)
+
+  GO_CREATE_ONLY_CAPABILITY:        ELIGIBLE (file-write-create is sufficient)
+  HALT_DARWIN_MKTEMP_REQUIRES_BROAD_TEMP_WRITE: NOT_TRIGGERED
+  HALT_CREATE_CAPABILITY_NOT_EXECUTION_BOUND:    (see §10 §14 binding analysis)

@@ -1,0 +1,113 @@
+ACT-CLINEMM-DOGFOOD-BUILD-EVIDENCE-IGNORE01 -- P1 HALT REPRODUCTION
+
+Reviewer disposition:
+  P0?  NO
+  P1?  YES -- exact-head builder does not recognize known
+       generated evidence
+  P2?  NO -- this blocks execution, so worth fixing now
+
+BUILD GUARD CONTRACT
+====================
+
+scripts/build_dogfood_vsix_lib.py:238-251 (DOGFOOD01):
+
+    def assert_clean_worktree(
+        repo: Path,
+        *,
+        status_output: Optional[str] = None,
+    ) -> None:
+        """Fail-closed clean-tree check. DOGFOOD01.
+
+        Pass ``status_output`` from a test (or any pre-computed
+        ``git status --porcelain`` string). Empty/whitespace = clean;
+        anything else = dirty = BuildError.
+        """
+        if status_output is None:
+            status_output = _default_run(
+                ["git", "status", "--porcelain=v1", "--untracked-files=all"], repo
+            )
+        if status_output.strip():
+            raise BuildError(
+                "source worktree is dirty; commit/stash first:\n" + status_output
+            )
+
+scripts/build_dogfood_vsix_lib.py:254-280 (D03 / DOGFOOD03b):
+
+    Snapshots ``expected_status`` (the porcelain output captured
+    before the build) and re-runs the same command after the
+    build. Any difference between the two outputs -- including a
+    previously-clean tree becoming dirty -- raises BuildError.
+    This catches mutations to ANY path in the canonical tree, not
+    just package.json.
+
+Git documents `??` as untracked files, and untracked files do
+NOT appear unless --ignored is requested. So the guard's
+behavior is consistent with its implementation, but wrong for
+our trust model: known generated Factory evidence must not
+block exact-head VSIX packaging.
+
+ROOT CAUSE
+==========
+
+The repo-root .gitignore rule (line 102):
+
+    /.factory/*
+    !/.factory/epic-board.md
+
+only matches paths whose first component is `.factory/`. Git's
+anchoring in `/.factory/*` means `apps/vscode/.factory/...`
+is NOT covered by it, so the symmetric rule under apps/vscode/
+falls through unignored.
+
+LIVE HALT REPRODUCTION (before fix)
+====================================
+
+    $ git check-ignore -v \
+        apps/vscode/.factory/evidence/ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01/policy-matrix.tsv
+    (exit=1; no match)
+
+    $ git status --porcelain=v1 --untracked-files=all
+    ?? apps/vscode/.factory/evidence/ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01/policy-matrix.tsv
+    ?? apps/vscode/.factory/evidence/ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01/probe-results.jsonl
+    ?? apps/vscode/.factory/evidence/ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01/summary.json
+
+    $ python3 -c "from build_dogfood_vsix_lib import assert_clean_worktree, BuildError; assert_clean_worktree(repo=Path('.').resolve())"
+    BuildError: source worktree is dirty; commit/stash first:
+    ?? apps/vscode/.factory/evidence/.../policy-matrix.tsv
+    ?? apps/vscode/.factory/evidence/.../probe-results.jsonl
+    ?? apps/vscode/.factory/evidence/.../summary.json
+
+    -> HALT on legitimate, closed-ACT evidence.
+    -> The three files are outputs of
+       ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01 (already
+       closed, evidence durably captured locally).
+
+The same HALT reproduces through the CLI:
+
+    $ python3 scripts/build-dogfood-vsix.py --install
+    ERROR: source worktree is dirty; commit/stash first:
+    ?? apps/vscode/.factory/evidence/.../policy-matrix.tsv
+    ?? apps/vscode/.factory/evidence/.../probe-results.jsonl
+    ?? apps/vscode/.factory/evidence/.../summary.json
+    (exit=2)
+
+PROVENANCE OF THE THREE FILES
+=============================
+
+apps/vscode/.factory/evidence/ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01/
+  policy-matrix.tsv    34 bytes   (closed ACT evidence)
+  probe-results.jsonl  13868 bytes (closed ACT evidence)
+  summary.json         331 bytes  (closed ACT evidence)
+
+These files are local outputs of an already-closed ACT that
+qualifies the seatbelt dogfood pipeline. They are NOT build
+artifacts and NOT source-tree dirt; they are evidence we want
+to keep around locally for reproducibility.
+
+DO NOT WEAKEN THE SCRIPT
+========================
+
+The strong "untracked dirt blocks packaging" invariant is
+good. The right correction is to formally classify this
+specific generated evidence path as ignored, not to weaken
+the script to ignore arbitrary untracked files.

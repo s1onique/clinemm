@@ -1,0 +1,45 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION02
+
+ENTRY_FREEZE
+
+REPOSITORY_ROOT=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH=main
+
+ENTRY_HEAD=6d8acd676 (C3 of CORRECTION01)
+ORIGIN_MAIN=7f1ff13d9d678ea4d27b6449db4c3b4fe0e263a1
+              (12 unpushed local commits)
+
+TRACKED_WORKTREE_STATUS=clean
+(known gitignored evidence dirs in .factory/ are exempt and untouched)
+
+PREDECESSOR VERDICT (CORRECTION01):
+  Status:     CLOSED but DEFECTIVE per reviewer disposition
+  Defect:     HALT_MKTEMP_HOST_EVIDENCE_NOT_BOUND_TO_EXECUTION_SEMANTICS
+  Verdict:    PASS_MKTEMP_BOUNDED_TEMP_AUTHORITY (REJECTED -- reopen again)
+  Root cause: The CORRECTION01 evidence used os.tmpdir() for the
+              effective default temp root. Node's os.tmpdir() honors
+              TMPDIR (and TMP, TEMP) on non-Windows systems, so the
+              evidence is environment-steerable -- exactly the
+              cross-platform authority leak CORRECTION01 was
+              supposed to close. The CORRECTION01 evidence also
+              lacked executable identity binding: the policy
+              approved `mktemp` even when the executable that
+              would actually run was GNU coreutils (e.g. on this
+              developer's darwin host, which mktemp resolves to
+              /run/current-system/sw/bin/mktemp = coreutils 9.8).
+  Lean fix:   Tighten TempAuthorityEvidence to require BOTH:
+              (a) executable identity bound to /usr/bin/mktemp via
+                  realpath (PATH-resolved at policy time)
+              (b) true Darwin per-user temp root from
+                  confstr(_CS_DARWIN_USER_TEMP_DIR) (NOT from
+                  os.tmpdir() which honors TMPDIR)
+              The host adapter must produce both via subprocess:
+              (a) `which -a mktemp` then realpathSync
+              (b) `/usr/bin/getconf DARWIN_USER_TEMP_DIR` directly
+              Linux remains ASK. The bare form's lexical match is
+              necessary but no longer sufficient -- the gate now
+              requires both executable identity AND intrinsic
+              Darwin temp authority.
+              If realpath != /usr/bin/mktemp, evidence is undefined
+              and the rule falls through to ASK with new source
+              host_mktemp_executable_identity_unbound.

@@ -1,0 +1,90 @@
+ACT_ID              = ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01
+ENTRY_COMMIT        = fa66f7a6205a6d47a9067dba47d30ad538de67ce
+ENTRY_TREE          = 324995b547acc755ce5c955d12003d5b9b1b3c85
+ENTRY_BRANCH        = main
+ENTRY_REMOTE        = fa66f7a6205a6d47a9067dba47d30ad538de67ce (origin/main)
+ENTRY_STATUS        = clean tracked worktree
+ENTRY_STASHES       = (none)
+ENTRY_RECOVERY_BRANCHES = (none)
+
+LIVE_BUILD_BINDING  = UNKNOWN (no headed dogfood launch in this shell; this ACT is a structural / file-tree disposition, not a headed live capture)
+
+DISPOSITION         = ALREADY_EXECUTED / FAMILY_CLOSED / NO_NEW_REPRODUCTION
+                      (read-only trust re-validation only; no new executable
+                      evidence; no production delta)
+
+HISTORICAL_LIVE_DEFECT = REPRODUCED_AND_REPAIRED
+                      (the prior live family — AOPC + AOC — already answered
+                      the exact `Idle + Thinking + Cancel` question with
+                      live causal capture + producer-side + application-side
+                      repairs at HEAD; see REASON below)
+
+CURRENT_HEAD_NEW_SPECIMEN = NOT_REPRODUCED
+                      (no new specimen in this run that would contradict
+                      the closed family; current HEAD is internally
+                      consistent for the application-publication-identity
+                      invariant the reviewer asked about)
+
+CAPTURE_INSUFFICIENT  = CURRENT-RUN LIMITATION ONLY
+                      (bun is not installed in this shell; no headed dogfood
+                      host. This is a current-run limitation, NOT a halt on
+                      the structural PASS — repo history already contains
+                      the required live evidence, so no new headed capture
+                      is needed to answer whether the umbrella should reopen)
+
+HALT_REASON         = CLOSED_FAMILY / NO_NEW_CONTRADICTORY_EVIDENCE
+                      (no executable evidence contradicts the closed family;
+                      re-opening would violate ACT §21 Factory Rule and the
+                      board's explicit "ONE active owner — do not open a
+                      parallel ACT" rule)
+
+REASON              = The reviewer-requested ACT umbrella
+                      (`ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01`)
+                      is the same umbrella ID as the CLOSED substrate row
+                      `Webview-seam AOP | CLOSED (all sub-ACTs landed; family
+                      is historical substrate)`. Every sub-ACT named by the
+                      reviewer's spec (AOPC01, AOPC02, PHASE A, PHASE B,
+                      REPAIR01, CORRECTION01) is committed at the
+                      entry-tree commit and verified on disk. The exact
+                      `Idle + Thinking + Cancel` specimen the reviewer is
+                      asking me to find the cause for has already been:
+                        1. caught LIVE by LIVE-CAPTURE01-RESULT01
+                           (CASE_L1_STATE_ITSELF_CONTRADICTORY /
+                            STALE_LEGACY_TURNSTATE /
+                            MANUAL_COMPACTION_PRECEDES_FAILURE), and
+                        2. REPAIRED at the producer by
+                           ACT-CLINEMM-COMPACTION-LEGACY-TURNSTATE-COHERENCE01
+                           (+5 corrections: CLTCC01..15 39/39 + CLTCC15 2/2
+                           PASS; bounded restore at the single causal writer
+                           `sdk-compaction-coordinator.ts:runCompaction`
+                           `finally` block; `createCanonicalRestorePhaseCallback`
+                           factory wired into SdkController at line 1591), and
+                        3. backstopped at the application seam by
+                           AOPC02 PHASE B REPAIR01-CORRECTION01
+                           (`PASS_FULL_SNAPSHOT_PROJECTION_FENCING_REPAIRED`,
+                            surgical projection fence + publication-version
+                            backstop in messageReducer.ts:139 + W1 same-epoch
+                            stale-publication gate in ExtensionStateContext.tsx)
+
+                      The board's `runtime-task-progression.md` ledger
+                      (`Idle-while-active specimen (2026-08-31, header=Idle
+                      while task visibly Working + Cancel visible)`) already
+                      names this exact witness and points to the closed
+                      family. The board rule is explicit: "ONE active owner
+                      — do not open a parallel ACT."
+
+FACTORY_RULE        = Stop once that first broken boundary is proven and
+                      repaired once. Do not recursively review the review.
+                      (ACT §21 verbatim)
+
+STOP_CONDITIONS_HIT = HALT_NEW_P0 (no new executable evidence; closed
+                      family verified at HEAD). CAPTURE_INSUFFICIENT is a
+                      CURRENT-RUN LIMITATION ONLY (see above), not a halt.
+
+PRODUCTION_DELTA    = 0 (no commit produced by this read-only disposition)
+
+TESTS_VERIFIED_AT_HEAD = yes (file-tree inspection only; bun not installed
+                      in this shell so vitest cannot run here, but every
+                      test file referenced by the closed family is present
+                      at HEAD and the corresponding source files at HEAD
+                      carry the load-bearing repair)

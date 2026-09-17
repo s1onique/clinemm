@@ -1,0 +1,11 @@
+{"correlationId":"no-request","commandDigest":"no-input","codePoint":"capture.attach.v1","scope":"process","data":{"runtimeInstanceId":"K0PX20YFSD","clineVersion":"4.1.16-e664bd415","repoHead":"UNAVAILABLE","emittedAt":"2026-08-31T06:55:54.528Z"}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"approval.entry.v2","scope":"request","data":{"toolName":"run_commands","isCommand":true}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"approval.sdk-controller.entry.v2","scope":"request","data":{"sessionId":"1788159393098_ppoz3","toolName":"run_commands"}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"approval.authorization.v2","scope":"request","data":{"toolName":"run_commands","mode":"safe-only","hasExplicitAllowRules":true}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"approval.sdk-controller.authorization.v2","scope":"request","data":{"sessionId":"1788159393098_ppoz3","resolvedMode":"all","sandboxMode":"seatbelt-experimental","mandatorySeatbelt":true,"pathAuthorityEvidenceOk":true}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"approval.sdk-controller.input-shape.v2","scope":"request","data":{"sessionId":"1788159393098_ppoz3","toolName":"run_commands","inputForm":"commands","commandsArrayLength":1,"normalizedCommandsLength":1,"normalizedKinds":["string"]}}
+{"correlationId":"no-request","commandDigest":"no-input","codePoint":"extensionRoot.resolve.v2","scope":"process","data":{"resolved":true,"extensionId":"s1onique.clinemm"}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"parserHelper.acquire-invoke.v2","scope":"request","data":{"entered":true}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"parserHelper.acquire-invoke.v2","scope":"request","data":{"entered":false,"result":"null"}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"hostDecision.compose.v2","scope":"request","data":{"finalDecision":"allow","finalSource":"host_mode_all_seatbelt_required"}}
+{"correlationId":"5NV155DEHD","commandDigest":"9c41ab0a9352","codePoint":"approval.terminal.v2","scope":"request","data":{}}

@@ -1,0 +1,48 @@
+=== REAL_PRODUCTION_SEAM qualification (READER-PATH-AUTHORITY-INTEGRATION01) ===
+TMP_ROOT: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N
+PROJECT_DIR: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project
+
+PASS  allow  source=host_mode_safe_only_rule                      cat /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: allow
+        note: (1) cat FILE + matching evidence -> ALLOW
+PASS  allow  source=host_mode_safe_only_rule                      cat /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/README.md /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: allow
+        note: (2) cat FILE1 FILE2 + matching evidence -> ALLOW
+PASS  allow  source=host_mode_safe_only_rule                      head -30 /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: allow
+        note: (3) head -30 FILE + matching evidence -> ALLOW
+PASS  allow  source=host_mode_safe_only_rule                      head -n 30 /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: allow
+        note: (4) head -n 30 FILE + matching evidence -> ALLOW
+PASS  allow  source=host_mode_safe_only_rule                      tail -20 /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: allow
+        note: (5) tail -20 FILE + matching evidence -> ALLOW
+PASS  allow  source=host_mode_safe_only_rule                      tail -n 20 /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: allow
+        note: (6) tail -n 20 FILE + matching evidence -> ALLOW
+PASS  ask    source=host_workspace_realpath_authority             cat /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: ask
+        note: (7) cat FILE without evidence -> ASK
+PASS  ask    source=host_workspace_realpath_authority             cat /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/outside/secret.txt
+        expected: ask
+        note: (8) cat /outside/file + matching evidence -> ASK (out of roots)
+PASS  ask    source=host_workspace_realpath_authority             head -30 /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/outside/secret.txt
+        expected: ask
+        note: (9) head -30 /outside/file + matching evidence -> ASK (out of roots)
+PASS  ask    source=host_workspace_realpath_authority             tail -20 /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/outside/secret.txt
+        expected: ask
+        note: (10) tail -20 /outside/file + matching evidence -> ASK (out of roots)
+PASS  ask    source=host_workspace_realpath_authority             cat /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: ask
+        note: (11) cat FILE + evidence from BROADER roots -> ASK (CORRECTION04 invariant)
+PASS  ask    source=host_workspace_realpath_authority             cat /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log
+        expected: ask
+        note: (12) cat FILE + evidence from FOREIGN cwd -> ASK (CORRECTION04 invariant)
+PASS  ask    source=host_workspace_realpath_authority             cat /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/outside
+        expected: ask
+        note: (13) cat <symlink-to-outside> + matching evidence -> ASK (symlink escape)
+PASS  ask    source=host_mode_safe_only_fallthrough               cat /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-path-authority-Hhrs1N/project/logs/app.log | sh
+        expected: ask
+        note: (14) cat FILE | sh -> ASK (dangerous-sink)
+
+=== RESULT: 14/14 pass, 0 fail ===

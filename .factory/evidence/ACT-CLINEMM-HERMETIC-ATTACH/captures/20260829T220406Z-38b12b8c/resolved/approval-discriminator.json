@@ -1,0 +1,40 @@
+{
+  "capturedAt": "2026-08-29T22:04:06.983159Z",
+  "deltaSize": 3,
+  "items": [
+    {
+      "approvalEntryObserved": false,
+      "approvalTerminalObserved": false,
+      "correlationId": "no-request",
+      "policyAutoApprove": null,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": null,
+      "shouldAutoApproveTool": null,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-attach/diagnostics/after.jsonl",
+      "toolName": null
+    },
+    {
+      "approvalEntryObserved": true,
+      "approvalTerminalObserved": false,
+      "correlationId": "corr-attach",
+      "policyAutoApprove": false,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": "session-attach-A",
+      "shouldAutoApproveTool": false,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-attach/diagnostics/after.jsonl",
+      "toolName": "editor"
+    },
+    {
+      "approvalEntryObserved": false,
+      "approvalTerminalObserved": true,
+      "correlationId": "corr-attach",
+      "policyAutoApprove": null,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": "session-attach-A",
+      "shouldAutoApproveTool": null,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-attach/diagnostics/after.jsonl",
+      "toolName": "editor"
+    }
+  ],
+  "schema": "cline-approval-discriminator/v1"
+}

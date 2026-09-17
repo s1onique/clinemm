@@ -1,0 +1,75 @@
+ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2-CORRECTION01
+TYPED-CHANNEL SEPARATION -- EMPIRICAL EVIDENCE
+
+================================================================================
+VERDICT: TYPED_CHANNEL_SEPARATION CLOSED_CLEAN_COMMITTED
+================================================================================
+
+The reviewer-prescribed bounded correction has landed. The cast that
+defeated the compile-time type split at the authority-bearing seam has
+been removed; the per-command channel is now a separate typed field.
+
+================================================================================
+REVIEWER-PRESCRIBED BOUNDED CORRECTION (verbatim)
+================================================================================
+
+  Do one type-channel correction. No new recon.
+  Prefer separate typed fields:
+
+    interface AgentToolContext {
+      executionCapability?: ToolCallExecutionCapability
+      perCommandExecutionCapability?: InternalExecutionCapability
+      commandExecutionPlan?: CommandExecutionPlan
+    }
+
+  Then, after successful plan correlation:
+
+    const perCommandContext: AgentToolContext = {
+      ...context,
+      executionCapability: undefined,
+      perCommandExecutionCapability: planEntries[i].executionCapability,
+    }
+
+  No cast.
+
+================================================================================
+REVIEWER-MANDATED DISCRIMINATORS (all PROVEN, 4/4 PASS)
+================================================================================
+
+D1: no plan + filesystem-create-only -> ZERO starts                                 PASS
+D2: plan [fs-create-only, none] -> typed-channel separation                         PASS
+D3: no plan + factory probe -> legacy channel only                                  PASS
+D4: production source grep -> no authority-carrying `as AgentToolContext` cast     PASS
+
+================================================================================
+PRODUCTION DELTA (3 files)
+================================================================================
+
+  sdk/packages/shared/src/agent.ts
+    Added perCommandExecutionCapability?: InternalExecutionCapability to
+    AgentToolContext. Channel-separation contract documented in JSDoc.
+    Two fields now have disjoint type universes:
+      executionCapability              -> factory-binding-probe only
+      perCommandExecutionCapability   -> full InternalExecutionCapability
+
+  sdk/packages/core/src/extensions/tools/definitions.ts
+    REMOVED the `as AgentToolContext` cast. Per-command context now stamped
+    via plain object spread (no widening cast).
+
+  apps/vscode/src/sdk/command-job-manager.ts
+    start() reads perCommandExecutionCapability first, falls back to
+    legacy executionCapability only when per-command is undefined.
+
+================================================================================
+REGRESSION GATES
+================================================================================
+
+  apps/vscode bun run check-types      PASS (0 errors)
+  binding + guard + correction suite    PASS (42/42 tests)
+  full SDK vitest                       PASS (63/63 files, 665/665 tests)
+  agents bun run test                   PASS (387/387 tests)
+  structural grep                       ZERO authority-carrying casts
+
+================================================================================
+NEXT: Darwin real capability wiring UNBLOCKED
+================================================================================

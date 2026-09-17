@@ -1,0 +1,11 @@
+{"cmd":"mktemp","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"mktemp -d","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"mktemp -u","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"mktemp -p /tmp","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"mktemp foo.XXXX","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"mktemp -t myprefix","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"mktemp \"$X\"","protocolVersion":4,"parseStatus":"failed","dialect":"bash","programStatements":null,"errors":["parse failed"]}
+{"cmd":"mktemp ${X}","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"TMPDIR=/tmp mktemp","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"env TMPDIR=/tmp mktemp","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}
+{"cmd":"mktemp -d foo.X","protocolVersion":4,"parseStatus":"complete","dialect":"bash","programStatements":0,"errors":[]}

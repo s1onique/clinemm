@@ -1,0 +1,21 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SENSITIVE-READ-CONFINEMENT01",
+  "phase": "C2 GREEN EVIDENCE",
+  "fakeHome": "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-src-grn-ev-home-zZHc3r",
+  "denialsResolved": [
+    "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-src-grn-ev-home-zZHc3r/.ssh/id_rsa",
+    "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-src-grn-ev-home-zZHc3r/.ssh/id_ecdsa",
+    "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-src-grn-ev-home-zZHc3r/.ssh/id_ecdsa_sk",
+    "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-src-grn-ev-home-zZHc3r/.ssh/id_ed25519",
+    "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-src-grn-ev-home-zZHc3r/.ssh/id_ed25519_sk",
+    "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-src-grn-ev-home-zZHc3r/.ssh/id_mldsa44_ed25519",
+    "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-src-grn-ev-home-zZHc3r/.gnupg/private-keys-v1.d"
+  ],
+  "invariants": {
+    "containsIdRsa": true,
+    "containsIdEd25519": true,
+    "containsGnuPGPrivateKeysDir": true,
+    "doesNotContainConfig": true,
+    "doesNotContainKnownHosts": true
+  }
+}

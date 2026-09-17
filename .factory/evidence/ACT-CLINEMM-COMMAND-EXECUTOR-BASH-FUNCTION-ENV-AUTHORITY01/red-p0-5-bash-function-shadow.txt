@@ -1,0 +1,152 @@
+ACT-CLINEMM-COMMAND-EXECUTOR-BASH-FUNCTION-ENV-AUTHORITY01 -- P0-5 RED REPRO
+
+P0-5 was identified by the reviewer in disposition
+HALT_AUTHORIZED_BASH_FUNCTION_ENV_UNBOUND, on top of the
+BASH-STARTUP-ENV-AUTHORITY01 closure.
+
+REFERENCE (GNU Bash Reference Manual, Shell Functions):
+  https://www.gnu.org/s/bash/manual/html_node/Shell-Functions.html
+
+  "When a function is exported using export -f, its body
+   is encoded and made available to child bash processes
+   via the BASH_FUNC_funcname%% environment variable. The
+   imported function shadows any command of the same name
+   that bash would otherwise find via function, builtin,
+   or PATH lookup."
+
+The slash-bypass from CORRECTION03 only applies to
+slash-prefixed commands ("If the command name contains a
+slash, Bash uses it as a pathname and executes it directly,
+without performing function or builtin lookup"). Bare-form
+commands (pwd, ls, git, cat, ...) are STILL shadowable.
+
+REASONING FOR THE LEAK
+======================
+
+The C2 strip filter in
+sdk/packages/core/src/extensions/tools/executors/bash.ts
+strips BASH_ENV, ENV, SHELLOPTS, BASHOPTS from the
+inherited process.env layer BEFORE the spread-merge.
+BASH_FUNC_<name>%% is not in the exact-match strip set,
+so it propagates to the child. Bash imports the function
+at startup, and bare-form commands execute the function
+instead of the real builtin/external.
+
+LIVE REPRODUCTION (this darwin-arm64 host, 2026-08-26)
+=====================================================
+
+LAYER 1: Direct bash verification
+
+  $ bash -c "
+  > pwd() { printf 'UNAUTHORIZED %s\n' \"\$(date +%N)\" >> /tmp/sentinel; return 0; }
+  > export -f pwd
+  > echo 'parent env:'; env | grep BASH_FUNC_pwd | head -1
+  > echo 'child type -t pwd =' \$(type -t pwd)
+  > pwd
+  > "
+  parent env:
+  BASH_FUNC_pwd%%=() {  printf 'UNAUTHORIZED %s\n' "$(date +%N)" >> /tmp/sentinel;
+  child type -t pwd = function
+  --- after pwd ---
+  sentinel:
+  UNAUTHORIZED 892645000
+
+  -> LEAK CONFIRMED. The exported function is encoded as
+     BASH_FUNC_pwd%%=..., the child bash imports it on
+     startup, and bare `pwd` runs the function instead of
+     the builtin.
+
+LAYER 2: Through the PRODUCTION EXECUTOR SEAM
+
+  Uses spawnSupervisableShellCommand from
+  sdk/packages/core/src/extensions/tools/executors/bash.ts
+  (the SAME function apps/vscode/src/sdk/command-job-manager.ts
+  calls at the supervisor call).
+
+  Test at /tmp/red-c1-p05-bun.mjs sets
+  process.env["BASH_FUNC_<name>%%"] = "() { printf '...' >> $SENTINEL; }"
+  BEFORE invoking the supervisor. The supervisor under
+  DEFAULT_OFF (envSemantics: overlay) passes process.env
+  through, including the BASH_FUNC_<name>%% entries.
+
+  Output:
+
+  [1. bare `pwd` (general AUTO candidate)]
+    bashCmd:               "pwd >/dev/null"
+    exported funcs:        ["pwd"]
+    exitCode:              0
+    stdout:
+    sentinel:              UNAUTHORIZED pwd
+    LEAK:                  ** YES **
+
+  [2. bare `ls /tmp` (general AUTO candidate)]
+    bashCmd:               "ls /tmp >/dev/null"
+    exported funcs:        ["ls"]
+    exitCode:              0
+    stdout:
+    sentinel:              UNAUTHORIZED ls
+    LEAK:                  ** YES **
+
+  [3. bare `git --version` (general AUTO candidate, external)]
+    bashCmd:               "git --version >/dev/null"
+    exported funcs:        ["git"]
+    exitCode:              0
+    stdout:
+    sentinel:              UNAUTHORIZED git
+    LEAK:                  ** YES **
+
+  [4. bare `cat /dev/null` (general AUTO candidate, external)]
+    bashCmd:               "cat /dev/null"
+    exported funcs:        ["cat"]
+    exitCode:              0
+    stdout:
+    sentinel:              UNAUTHORIZED cat
+    LEAK:                  ** YES **
+
+CONFIG.ENV PROVENANCE
+=====================
+
+  apps/vscode/src/sdk/command-job-manager.ts:524:
+    let spawnEnv: Record<string, string> = options.env ?? {}
+
+  apps/vscode/src/sdk/vscode-run-commands-tool.ts:640:
+    env: { SHELL: shell },
+  where `shell` comes from `getShellInvocation()` (a fixed
+  host mapping: /bin/bash on Unix, powershell on Windows).
+  NOT user/tool controlled.
+
+  -> The caller-supplied config.env layer is HOST-TRUSTED
+     FIXED METADATA. Cannot carry BASH_FUNC_<name>%% in
+     any meaningful way.
+
+  Therefore the strip filter is correctly applied to the
+  inherited process.env layer only.
+
+ROOT-CAUSE LINE
+================
+
+  sdk/packages/core/src/extensions/tools/executors/bash.ts
+  buildShellProcess line 295-301:
+    const childEnv =
+      config.envSemantics === "complete"
+        ? config.env
+        : { ...stripBashStartupEnvFromParent(process.env), ...config.env };
+
+  Under overlay semantics, process.env.BASH_FUNC_<name>%%
+  entries leak into the spawned bash. Bash imports the
+  function at startup, and bare-form commands execute the
+  function instead of the real builtin/external.
+
+CORRECTION PROPOSAL (C2 of this ACT)
+====================================
+
+  Extend stripBashStartupEnvFromParent in
+  sdk/packages/core/src/extensions/tools/executors/bash.ts
+  to also strip any name with the BASH_FUNC_ prefix from
+  the inherited process.env layer.
+
+  Strip semantics: prefix-match (not enumerable). The
+  function name space is unbounded.
+
+  The BASH_FUNC_ prefix is bash's documented encoding
+  per GNU Bash Reference Manual, Shell Functions.

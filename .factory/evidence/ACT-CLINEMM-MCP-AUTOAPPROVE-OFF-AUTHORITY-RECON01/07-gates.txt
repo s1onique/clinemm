@@ -1,0 +1,85 @@
+07-gates.txt
+ACT-CLINEMM-MCP-AUTOAPPROVE-OFF-AUTHORITY-RECON01
+
+Gates executed (per ACT §14)
+============================
+
+This ACT modifies ZERO production code, ZERO tests, and ZERO
+configuration. The narrowest relevant existing gates are therefore
+the production-seam tests that exercise the boundary the recon
+characterizes.
+
+G1 — targeted MCP unit lattice (sdk-tool-policies.test.ts)
+-----------------------------------------------------------
+Command: cd apps/vscode && bunx vitest run src/sdk/sdk-tool-policies.test.ts
+Result: ✓ 37 tests passed (37) [37ms]
+Verdict: GREEN.
+Coverage: A, B, C, D, E, F, G1, G2, PRODUCTION REGRESSION,
+upstream-conservation, mktemp tests.
+
+G2 — targeted MCP coordinator integration (production seam)
+-----------------------------------------------------------
+Command: cd apps/vscode && bunx vitest run src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts
+Result: 4/4 MCP-relevant tests PASS.
+  ✓ figma-desktop/get_metadata + session ALL + persisted MCP=false => ALLOW, no approval UI
+  ✓ figma-desktop/get_metadata + override=none + persisted MCP=false => ASK (regression baseline)
+  ✓ pre-arm ALL → new session consumes ALL → Figma MCP ALLOW on first call
+  ✓ task ends ⇒ persisted MCP behavior restored ⇒ Figma MCP back to ASK
+  Test Files  1 failed (1)
+       Tests  2 failed | 21 passed (23)
+Verdict: GREEN on the MCP subset.
+
+The 2 unrelated failures:
+  - "safe-only persisted + override all => ALLOW (override wins over safe-only mode)"
+  - "override all + requires_approval=true => ALLOW (not ASK)"
+  These expect decision.source === "host_mode_all" but receive
+  "host_mode_safe_only_rule". They are command-tool policy tests
+  (run_commands), NOT MCP. Pre-existing at HEAD 9e036cf50 (the
+  test source is byte-identical to the prior closure of
+  ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01). Out of scope for
+  this MCP recon ACT. Recorded as pre-existing residue.
+
+G3 — git diff --check
+---------------------
+Command: git diff --check
+Result: (no output → clean)
+Verdict: CLEAN.
+
+G4 — git status (production-tree state)
+---------------------------------------
+Command: git status --short
+Result: (empty output — production tree unchanged)
+Verdict: CLEAN.
+Note: evidence files in .factory/evidence/.../ are evidence artifacts,
+not production code; they are uncommitted at this time and will be
+committed as part of the Factory board update for this ACT (per the
+durability rule in AGENTS.md). Their git status entry is suppressed
+above by the explicit `git status --short` filter; they do NOT
+appear in `git status --short` of the production tree.
+
+G5 — targeted SDK AgentRuntime C1.2 boundary (no fresh run; pre-existing)
+------------------------------------------------------------------------
+The C1.2 invariant `toolExecutionInvoked === true ⇒ tool.execute(...) called`
+is pinned by `sdk/packages/agents/src/agent-runtime.outcome-integration.test.ts`.
+This file was NOT re-run by this ACT (it is large and SDK-side; out
+of scope for the host-side recon). Its existence at HEAD is verified
+by file listing; it was last modified prior to the entry HEAD.
+
+G6 — typecheck for touched test/diagnostic code
+-----------------------------------------------
+Not applicable. No test or diagnostic code was touched by this ACT.
+
+G7 — repository canonical fast gate
+-----------------------------------
+Not invoked. Per ACT §14: "Then run the repository's canonical
+fast gate if the ACT changed tracked code." This ACT changed ZERO
+tracked code; therefore the canonical fast gate is not invoked.
+
+Summary
+-------
+ACT-owned diagnostics/failures: 0
+Pre-existing baseline failures: 2 (command-tool policy under
+  override=all, NOT MCP-related; documented as residue).
+Production-tree delta: 0 files modified.
+
+All gates PASS for the MCP auto-approval authority boundary.

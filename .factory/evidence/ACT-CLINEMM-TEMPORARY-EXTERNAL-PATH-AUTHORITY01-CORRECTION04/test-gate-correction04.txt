@@ -1,0 +1,56 @@
+ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION04
+test-gate-correction04                                                  (2026-09-03)
+
+CORRECTION04 RED→GREEN summary:
+
+Before CORRECTION04:
+  - runtime filter accepted tampered `"/"`, `"tmp"`, `"../tmp"`, `"."`
+    paths and forwarded them to realpath-canonicalization, widening
+    R0 authority beyond the bounded contract.
+
+After CORRECTION04 (RED→GREEN):
+  - All CORRECTION04 adversarial cases pass.
+  - Validator pre-CORRECTION04 tests still pass (no regression).
+  - Production-seam end-to-end witness passes.
+
+Test files touched:
+  apps/vscode/src/shared/storage/__tests__/temporaryExternalPathAuthorities.test.ts
+    47 tests total (was 32 before CORRECTION04; +15 from CORRECTION04).
+  apps/vscode/src/core/storage/__tests__/temporaryExternalPathAuthorityCrossInstance.test.ts
+    13 tests total (was 7 before CORRECTION04; +6 from CORRECTION04).
+  apps/vscode/src/sdk/__tests__/temporary-external-path-authority01.c2-production-seam.test.ts
+    13 tests total (was 12 before CORRECTION04; +1 from CORRECTION04).
+
+Combined gate:
+  Test Files  3 passed (3)
+       Tests  73 passed (73)
+
+CORRECTION04 unit-level additions (filter + classifier):
+  + classifyTemporaryExternalPathShape returns "valid" for an absolute non-root path
+  + classifyTemporaryExternalPathShape returns "filesystem-root" for exactly "/"
+  + classifyTemporaryExternalPathShape returns "not-absolute" for relative paths
+  + classifyTemporaryExternalPathShape returns "empty" for ""
+  + classifyTemporaryExternalPathShape returns "not-string" for non-string inputs
+  + filter forwards entries whose path is structurally valid
+  + filter drops entries with tampered path="/"
+  + filter drops entries with tampered path="tmp"/"../tmp"/"."
+    (it.each)
+  + filter drops entries whose path is an empty string
+  + filter drops entries whose path is not a string at all
+  + filter still drops expired entries (24h ceiling regression intact)
+  + filter still drops >24h tampered entries (CORRECTION01 backstop intact)
+  + filter drops tampered entries in mixed arrays while keeping valid ones
+
+CORRECTION04 cross-instance adversarial matrix:
+  + tampered path="/" + valid 1h expiry → []
+  + tampered path="tmp" + valid 1h expiry → []
+  + tampered path="../tmp" + valid 1h expiry → []
+  + tampered path="." + valid 1h expiry → []
+  + legitimate path="/private/tmp" + valid expiry → ["/private/tmp"]
+  + legitimate path="/tmp" + valid expiry → non-empty canonical, not "/"
+
+CORRECTION04 policy-level witness (production-seam end-to-end):
+  + persisted "/" lease + out-of-scope operand → ASK (not ALLOW)
+    also: bypass-scenario witness confirms the bug shape would have
+    produced contained:true before CORRECTION04, ruling out any
+    regression to the same bypass.

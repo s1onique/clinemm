@@ -1,0 +1,33 @@
+ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-POST-RESULT-CONTINUATION-RECON01
+ENTRY FREEZE
+
+HEAD: 610091e584b9ed10132a51f18423a19a5046fd0c
+ENGLISH_AT_HEAD: RECON02: correct test contract against real production types
+PARENT_COMMITS:
+  504201a0b fix(sdk): ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON02 — closure-consistency pass
+  9f0e66353 fix(sdk): ACT-CLINEMM-TOOL-RUNTIME-RELIABILITY-RECON02 — CLOSED GREEN, [1]->[3] conserved, handoff to runtime-task-progression
+
+CAUSE_AT_OPENING: UNKNOWN
+REPAIR_AUTHORIZED_AT_OPENING: NO
+
+ENTRY_SEAM: POST_SESSION_EVENT (production-shaped command_output/result
+              message has reached the registered session-event fanout,
+              turn-finished observed, transition to the next iteration
+              must follow — DOES IT?)
+
+OWNED_BOUNDARY: AgentRuntime.execute() while-loop body
+                sdk/packages/agents/src/agent-runtime.ts:1366
+                (the inner loop that re-enters
+                generateAssistantMessageWithOverflowRecovery after
+                each turn-finished when toolCalls.length > 0 and no
+                terminal exit fired)
+
+FIRST_UNTESTED_BOUNDARY: continuation scheduling at [5] in source-seam-map.md
+
+PARALLEL_OPERATOR_GATE: ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01
+                        (HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND;
+                        operator-gated; NOT blocking this ACT)
+
+ACT_BODY: .factory/acts/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-POST-RESULT-CONTINUATION-RECON01.md
+PROBE:    sdk/packages/agents/src/agent-runtime.task-progression-post-result-continuation-recon01.test.ts
+EVIDENCE_DIR: .factory/evidence/ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-POST-RESULT-CONTINUATION-RECON01/

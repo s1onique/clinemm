@@ -1,0 +1,51 @@
+{
+  "capturedAt": "2026-08-29T22:00:45.433114Z",
+  "deltaSize": 4,
+  "items": [
+    {
+      "approvalEntryObserved": true,
+      "approvalTerminalObserved": false,
+      "correlationId": "corr-B",
+      "policyAutoApprove": true,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": "session-A",
+      "shouldAutoApproveTool": false,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-ambiguity/diagnostics/after.jsonl",
+      "toolName": "execute_command"
+    },
+    {
+      "approvalEntryObserved": false,
+      "approvalTerminalObserved": true,
+      "correlationId": "corr-B",
+      "policyAutoApprove": null,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": "session-A",
+      "shouldAutoApproveTool": null,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-ambiguity/diagnostics/after.jsonl",
+      "toolName": "execute_command"
+    },
+    {
+      "approvalEntryObserved": true,
+      "approvalTerminalObserved": false,
+      "correlationId": "corr-C",
+      "policyAutoApprove": true,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": "session-A",
+      "shouldAutoApproveTool": false,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-ambiguity/diagnostics/after.jsonl",
+      "toolName": "execute_command"
+    },
+    {
+      "approvalEntryObserved": false,
+      "approvalTerminalObserved": true,
+      "correlationId": "corr-C",
+      "policyAutoApprove": null,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": "session-A",
+      "shouldAutoApproveTool": null,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-ambiguity/diagnostics/after.jsonl",
+      "toolName": "execute_command"
+    }
+  ],
+  "schema": "cline-approval-discriminator/v1"
+}

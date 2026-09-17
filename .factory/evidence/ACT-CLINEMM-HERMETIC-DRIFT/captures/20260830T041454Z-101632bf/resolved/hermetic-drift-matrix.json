@@ -1,0 +1,10 @@
+{
+  "fixture_root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture",
+  "T03_stale_source_mismatch_detected": true,
+  "attachment_projection_repoHead": "deadbeef00000000000000000000000000000000",
+  "runtime_identity_projection_repoHead": "fc957590445f39788ff7e2b7625be4929b18328d",
+  "runtime_source_drift_field": "NO",
+  "zero_event_classification": "Z1_CONFIRMED_NO_APPROVAL_PATH_EXECUTED",
+  "specimen_binding": "CAPTURE_INSUFFICIENT",
+  "instrumentation_attachment_bound": "YES"
+}

@@ -1,0 +1,94 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01-CORRECTION02
+WORDING FIX
+================================================
+
+The reviewer (compaction algorithm engineer) identified that R7
+overclaimed mathematical equivalence. Three precise wording corrections
+applied; no test bodies changed; no production code changed.
+
+REVIEWER NOTE (paraphrased):
+
+  R7 overclaims mathematical equivalence. The test correctly observes in
+  its own commentary that production weight = ceil(N/3) is NOT a
+  proportional transformation of JSON weight = N, and therefore the
+  threshold-crossing index can differ. But the module-level documentation
+  still says:
+
+    cut selection is invariant under monotonic weight transforms
+
+    proving the cut with a deterministic weight proves the cut with
+    any monotonic estimator
+
+  These statements are false. A monotonic transformation of individual
+  weights does not preserve accumulated-threshold crossings.
+
+  R7 currently proves only:
+
+    ON THIS L1 FIXTURE: JSON-length weighting with threshold 60k and
+    production estimator with threshold 20k happen to select the same
+    cut.
+
+  It does NOT prove: metric independence, or invariance under arbitrary
+  monotonic estimators.
+
+CORRECTION02 applied (test file compaction.cut-snap-forward.test.ts):
+
+1. Module header (lines 17-26 in CORRECTION01) replaced with truthful
+   statement:
+
+   REMOVED:
+     "The cut selection is a geometry problem and is invariant under
+      monotonic weight transforms (JSON-length weight and the real
+      token estimator from createTokenEstimator() are both monotonic
+      per-message positive integer weightings of the same message
+      shape), so proving the cut with a deterministic weight proves
+      the cut with any monotonic estimator. R7 explicitly verifies
+      this metric-independence with the production token estimator."
+
+   REPLACED WITH:
+     "The cut selection is NOT invariant under arbitrary monotonic or
+      nonlinear per-message weighting. For example, the production
+      token estimator uses Math.ceil(N/3) per message, which is
+      nonlinear: summing per-message estimates does NOT equal a single
+      estimate of the sum. A naive 'scales proportionally' comparison
+      is not enough to make two weight functions produce the same cut.
+
+      R1-R6 use the deterministic JSON-length weight to pin selection
+      geometry. R7 is an empirical cross-estimator witness: it confirms
+      the same repaired L1 geometry survives the actual production
+      token estimator. It does NOT claim findCutIndex is invariant
+      under arbitrary monotonic or nonlinear per-message weighting."
+
+2. R7 test title changed:
+
+   OLD: "R7 (CORRECTION01): selection geometry is invariant under
+         proportional weight scaling"
+
+   NEW: "R7 (CORRECTION02): L1 fixture selects the same cut under the
+         production token estimator and proportionally-scaled JSON
+         fixture weight"
+
+3. R7 internal comments rewritten to truthfully describe the empirical
+   nature of the proportional-scaling approximation:
+
+   The new comments:
+   - Explicitly state R7 is an empirical cross-estimator witness, not a
+     general proof.
+   - Explain WHY the threshold is scaled by CHARS_PER_TOKEN (sub-
+     additivity of Math.ceil on individual message weights).
+   - Acknowledge the proportional-scaling approximation may legitimately
+     fail if the production estimator or L1 fixture changes — failure
+     indicates the approximation no longer holds for this shape, NOT a
+     bug in findCutIndex.
+
+PRECISION (CORRECTION02):
+
+  - Removes the false universal claim about monotonic invariance.
+  - Removes the false claim about "any monotonic estimator".
+  - Retains the empirical R7 cross-estimator check (still useful).
+  - Retains R1-R6 deterministic geometry tests (already precise).
+  - Production code unchanged.
+  - All 7 regression guards continue to PASS on the L1 fixture.
+
+The reviewer's verdict on R7 itself: "That is useful evidence." — kept.
+The reviewer's verdict on the documentation overclaim: P2 — fixed.

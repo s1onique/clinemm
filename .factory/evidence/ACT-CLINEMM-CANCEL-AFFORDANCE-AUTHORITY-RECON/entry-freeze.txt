@@ -1,0 +1,183 @@
+ACT_ID            = ACT-CLINEMM-CANCEL-AFFORDANCE-AUTHORITY-RECON (bounded A-probe acquisition cycle, v2)
+ENTRY_COMMIT      = fa66f7a6205a6d47a9067dba47d30ad538de67ce (HEAD)
+ENTRY_TREE        = 324995b547acc755ce5c955d12003d5b9b1b3c85
+ENTRY_BRANCH      = main
+ENTRY_REMOTE      = fa66f7a6205a6d47a9067dba47d30ad538de67ce (origin/main)
+ENTRY_STATUS      = clean tracked worktree, uncommitted bounded-correction delta below
+ENTRY_STASHES     = (none)
+ENTRY_RECOVERY    = (none)
+
+CYCLE             = bounded correction cycle per Factory reviewer verdict
+                    (P0 — HALT_EVIDENCE_CONTRACT_NOT_PROVEN). One correction
+                    cycle only; no further rounds unless a NEW P0 appears.
+
+PREV_CYCLE_P0S    = (i)  shadow fields silently promoted to synchronized
+                         observation without generation identity.
+                    (ii) A4/A5 tests exercised the V2 capture sink
+                         directly instead of the production seam.
+                    (iii) emission was gated by PTAD workspace-state
+                          toggle, not by the A knob (resolver was
+                          decorative).
+PREV_CYCLE_P1S    = (i)  `taskHeaderLabel` schema/comment drift (deleted);
+                    (ii) test-count claim was inflated — corrected.
+
+THIS_CYCLE        = closes all three P0s mechanically and updates evidence
+                    claims to be honest about what the patch proves vs.
+                    what the next live specimen must corroborate.
+
+FILES_TOUCHED     = apps/vscode/src/sdk/SdkController.ts                    (modified)
+                    apps/vscode/src/sdk/dogfood-diagnostic-profile.ts        (modified)
+                    apps/vscode/src/sdk/dogfood-diagnostic-profile.test.ts   (modified)
+                    apps/vscode/src/shared/ExtensionMessage.ts              (modified)
+                    apps/vscode/src/sdk/activity-publication-v1.ts          (NEW — pure builder, 217 LoC)
+                    apps/vscode/src/sdk/activity-publication-v1-capture.test.ts (NEW — 12 cases, 344 LoC)
+
+PRODUCTION_DELTA  = 146 insertions / 31 deletions across 4 modified files;
+                    561 lines across 2 new files. Worktree dirty; HEAD unchanged.
+
+HISTORICAL_LIVE_DEFECT = REPRODUCED_AND_REPAIRED (per
+                    ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01
+                    disposition; AOP umbrella closed).
+
+DISPOSITION       = CORRECTION_CYCLE_LANDED / P0S_MECHANICALLY_CLOSED /
+                    EVIDENCE_LABELS_UPDATED / NO_REPAIR_CYCLE
+
+REVIEWER_REF      = factory-causal-reviewer (ClineMM runtime/UI-state engineer)
+                    verdict: PASS-WITH-FOUR-FIXES (three P0 + two P1).
+                    Resubmit after the bounded correction cycle; if the
+                    P0s close, proceed immediately to NEXT_NOW =
+                    ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01.
+
+RECON             = The production seam is unchanged:
+                    apps/vscode/src/sdk/SdkController.ts:3717
+                    getStateToPostToWebview(). The synchronized identity
+                    tuple (stateVersion, _ptadPushId, taskId, epoch) is
+                    built into `snapshot` at lines 3875-4025. The PTAD
+                    ring-buffer capture (lines 4026-4053) and the
+                    host-ownership capture (lines 4054-4068) sit
+                    inside the same function call. The `A` emission
+                    is inserted between them (lines 4093-4112 in the
+                    patched tree) and delegates ALL payload construction
+                    to the pure builder so the production seam is now
+                    a 14-line wiring block.
+
+CODE_POINT        = activity.publication.v1  (scope: request, JSONL envelope
+                    per apps/vscode/src/sdk/v2-capture.ts:298 V2CaptureRecord).
+
+PAYLOAD_SCHEMA    = identity quadruple (publicationId, ptadPushId, taskId, epoch)
+                    + shadowPublicationBinding honesty stamp
+                      ("MISSING" -> shadow undefined at seam;
+                       "UNBOUND" -> shadow observed but no generation identity)
+                    + host authority (hostStatus, turnPhase, modelStreaming,
+                      toolActive, foregroundCommandRunning, backgroundCommandRunning)
+                    + UI authority (taskHeaderPhase, taskHeaderSource,
+                      thinkingModelStreaming, thinkingSource)
+                    + webview-side fields marked "LIVE_UNOBSERVABLE"
+                      (captured by webview-side PTAD ring buffer; post-capture
+                      join via shared stateVersion is deterministic).
+
+A_KNOB_PRECEDENCE = (mirrors I/P; identity-gated, env-var overridable)
+                      dogfood + CLINEMM_DIAG_ACTIVITY_STATE_V1 truthy -> A=true
+                      dogfood + no env var                              -> A=true
+                      public  + any env var                              -> A=false
+                      public  + no env var                               -> A=false
+                    Override-down: CLINEMM_DIAG_ACTIVITY_STATE_V1=0 flips A off
+                    even in dogfood (same shape as I/P override-down).
+
+HEADER_INDICATOR  = canonical V -> I -> A -> P order
+                      Dogfood + capture ON  -> "VIAP"  (current dogfood render)
+                      Dogfood + capture OFF -> "IAP"   (V off; A still on)
+                      Public  + any         -> ""      (hidden entirely)
+
+EMISSION_GATE     = the EFFECTIVE A knob (resolved at the call site via
+                    resolveEffectiveDiagnosticKnobs(env, isDogfood,
+                    resolveCapturePathForProfileEffective(env))). The gate
+                    is mechanically enforced inside the pure builder:
+                      A=true     -> kind:"emit"
+                      A=false    -> kind:"skip" reason:"A_DISABLED"
+                      A=undefined-> kind:"skip" reason:"A_MISSING"
+                    The PTAD workspace-state toggle is no longer the
+                    emission gate; it remains the gate for the PTAD
+                    ring-buffer capture itself (separate concern,
+                    separate sink).
+
+TESTS             = 12 cases in apps/vscode/src/sdk/activity-publication-v1-capture.test.ts
+                      A1 dogfood + auto path            -> A=true            (RESOLVER)
+                      A2 public  + capture on           -> A=false           (RESOLVER)
+                      A3 header canonical order         -> "VIAP"            (FORMATTER)
+                      A4 A=true -> one emit, A=false -> skip                (BUILDER)
+                      A5 snapshot-derived fields share identity;            (BUILDER)
+                         shadow-derived fields recorded as UNBOUND
+                      A5b shadow undefined at seam -> binding=MISSING       (BUILDER)
+                      S1 sink serializes one record per emit                 (SINK)
+                      S2 sink is a no-op when env unset                     (SINK)
+                      A6 writer failure -> no throw, no semantic delta       (SINK)
+                      A8a V knob still gated on writer's effective path      (REGRESSION)
+                      A8b I/P precedence unchanged                           (REGRESSION)
+                      A8c public defaults remain all OFF                     (REGRESSION)
+                    + 9 updated cases in apps/vscode/src/sdk/dogfood-diagnostic-profile.test.ts
+
+EVIDENCE_LABELS   = RESOLVER   -> proves a diagnostic-profile invariant
+                    FORMATTER  -> proves the indicator rendering
+                    BUILDER    -> proves a production-seam invariant by
+                                  exercising the same pure function the
+                                  production seam calls (single source of
+                                  truth, no duplicate code path)
+                    SINK       -> proves a V2 capture sink conservation
+                                  property (NOT publication evidence)
+
+LIVE_EXIT         = (deferred — same as prior closed-family ACTs; bun is not
+                    installed in this shell so vitest/typecheck/lint cannot
+                    run here, and no headed dogfood host is in scope).
+                    Build/install exact committed HEAD + A-probe delta in
+                    `codium-clinemm` normally. Wait for the Idle-while-progressing
+                    specimen to recur naturally. When it appears, freeze:
+                      screenshot
+                      current JSONL
+                      activity.publication.v1 records spanning control Working
+                        -> BAD Idle
+                    Classify only:
+                      CASE_A_TASKHEADER_STALE
+                      CASE_B_THINKING_CANCEL_STALE
+                      CASE_C_APPLICATION_OWNERSHIP
+                      CASE_D_PUBLICATION_MIX
+                      CASE_HISTORICAL_STALE_TURNSTATE_RECURRED
+                      NOT_REPRODUCED
+                      CAPTURE_INSUFFICIENT
+                    NO PRODUCTION REPAIR until one CASE is bound by one
+                    synchronized record AND the shadowPublicationBinding
+                    state confirms same-generation provenance.
+
+FACTORY_RULE      = Stop once that first broken boundary is proven and
+                    repaired once. Do not recursively review the review.
+                    (ACT §21 verbatim)
+
+STOP_CONDITIONS   = HALT_REPAIR_CYCLE (this ACT is evidence acquisition only;
+                    no behavior repair was attempted; the bounded ACT contract
+                    explicitly forbids production repair in this cycle).
+
+NOTES             = (1) The reviewer explicitly directed this ACT to land the
+                    previously-reserved A knob WITHOUT reopening the closed AOP
+                    umbrella. The owner is `.factory/epics/runtime-task-progression.md`
+                    (existing; no new epic opened).
+                    (2) The editor-tool approval lane remains live-exonerated on
+                    current HEAD (`approved=true / decisionKind=allow / no ui-published`)
+                    and is NOT a contender for "next production ACT" per the reviewer's
+                    NEXT_NOW ordering.
+                    (3) ACT-CLINEMM-SEATBELT-ALL-WORKSPACE-REALPATH-AUTHORITY-CORRECTION02
+                    remains HALT_LIVE_INPUT_SHAPE_UNBOUND / armed-and-waiting for
+                    natural BAD reappearance; this ACT's capture is now active
+                    (independent of the seatbelt capture sink), so the two lanes
+                    correlate cleanly on the next live specimen.
+                    (4) ACT-CLINEMM-SEATBELT-ALL-R0-EXECUTION-OBLIGATION-RECON01
+                    remains the reviewer-prioritized NEXT_NOW lane.
+                    (5) The shadowPublicationBinding honesty stamp is the key
+                    audit trail for the next live specimen. A case classification
+                    that relies on hostStatus/modelStreaming/toolActive MUST
+                    require binding="BOUND" before the case is treated as proven;
+                    "UNBOUND" means "observed, possibly stale, requires corroboration".
+                    (6) A5b (shadow=undefined -> "MISSING") is the Hub/Remote host
+                    collapse contract: those hosts have no canonical shadow and
+                    the activity record MUST carry "MISSING" so the post-capture
+                    join can distinguish "never observed" from "observed but
+                    unbound".

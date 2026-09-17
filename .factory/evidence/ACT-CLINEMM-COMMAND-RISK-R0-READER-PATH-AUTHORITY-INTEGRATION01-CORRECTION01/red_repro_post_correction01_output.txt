@@ -1,0 +1,45 @@
+=== RED HALT_READER_DYNAMIC_OPERAND_AUTHORITY_ALIAS ===
+TMP_ROOT: /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-dyn-op-R0-red-750n6s
+CANONICAL_PROJECT_DIR: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-dyn-op-R0-red-750n6s/project
+
+GREEN_post-CORRECTION01  ask    source=host_mode_safe_only_fallthrough               cat $HOME/secret
+        expected post-CORRECTION01: ask
+        evidence.operands: [{"operand":"$HOME/secret","resolvedRealPath":"/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-dyn-op-R0-red-750n6s/project/$HOME/secret","contained":true,"reason":"resolved-and-contained"}]
+        note: (a) `cat $HOME/secret` -- parameter expansion
+GREEN_post-CORRECTION01  ask    source=host_mode_safe_only_fallthrough               head -30 $HOME/secret
+        expected post-CORRECTION01: ask
+        evidence.operands: [{"operand":"$HOME/secret","resolvedRealPath":"/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-dyn-op-R0-red-750n6s/project/$HOME/secret","contained":true,"reason":"resolved-and-contained"}]
+        note: (b1) `head -30 $HOME/secret` -- parameter expansion
+GREEN_post-CORRECTION01  ask    source=host_mode_safe_only_fallthrough               tail -20 $HOME/secret
+        expected post-CORRECTION01: ask
+        evidence.operands: [{"operand":"$HOME/secret","resolvedRealPath":"/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-dyn-op-R0-red-750n6s/project/$HOME/secret","contained":true,"reason":"resolved-and-contained"}]
+        note: (b2) `tail -20 $HOME/secret` -- parameter expansion
+GREEN_post-CORRECTION01  ask    source=host_mode_safe_only_fallthrough               cat ~/secret
+        expected post-CORRECTION01: ask
+        evidence.operands: [{"operand":"~/secret","resolvedRealPath":null,"contained":false,"reason":"realpath-failed-other"}]
+        note: (c) `cat ~/secret` -- tilde expansion
+GREEN_post-CORRECTION01  ask    source=host_mode_safe_only_fallthrough               cat *
+        expected post-CORRECTION01: ask
+        evidence.operands: [{"operand":"*","resolvedRealPath":null,"contained":false,"reason":"realpath-failed-enoent"}]
+        note: (d) `cat *` -- filename generation
+GREEN_post-CORRECTION01  ask    source=host_mode_safe_only_fallthrough               cat ?.txt
+        expected post-CORRECTION01: ask
+        evidence.operands: [{"operand":"?.txt","resolvedRealPath":null,"contained":false,"reason":"realpath-failed-enoent"}]
+        note: (e) `cat ?.txt` -- filename generation
+ok-pre-fix  ask    source=host_workspace_realpath_authority             cat /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-dyn-op-R0-red-750n6s/project/README.md
+        expected post-CORRECTION01: ask
+        evidence.operands: [{"operand":"/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/cline-reader-dyn-op-R0-red-750n6s/project/README.md","resolvedRealPath":null,"contained":false,"reason":"realpath-failed-enoent"}]
+        note: (CONSERVATION) `cat <inside-file>` -- no evidence, must ASK
+
+=== Side-channel: bash actually executes ===
+  bash -c 'echo "$HOME/secret"' stdout: "/tmp/clinEMM_FAKE_HOME_FOR_RED/secret"
+  bash -c 'echo $HOME' stdout:         "/tmp/clinEMM_FAKE_HOME_FOR_RED"
+  bash-evaluated HOME outside project: true
+
+=== RED SUMMARY ===
+  cases observed:                 7
+  cases currently ASK (post-fix): 7
+  cases currently ALLOW (P0 bug): 0
+  bash evaluates HOME outside ws: true
+  >>> CORRECTION01 FIXED: every shell-active operand rejected at the rule layer <<<
+  bash evaluates HOME outside ws, but policy never ALLOWs because the rule regex rejects.

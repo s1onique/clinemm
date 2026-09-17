@@ -1,0 +1,23 @@
+# C2 Ablation (spec §27)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:00Z
+
+## Ablate: mktemp with NO per-command capability (recon default only)
+
+exitCode = 1
+stderr   = mktemp: mkstemp failed on /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.XXX: Operation not permitted
+
+REMARK: matches the C1 LIVE RED frozen at d31e85e8. The kernel
+denies mkstemp because the recon default capability does NOT grant
+write access to the DARWIN_ROOT. The capability is the sole
+authority.
+
+## Restore: mktemp WITH per-command capability
+
+exitCode = 0
+stdout   = /var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.YYY
+exists   = true
+
+REMARK: PASS returns. The capability is the SOLE authority gating
+file-write-create on the canonical Darwin temp root.

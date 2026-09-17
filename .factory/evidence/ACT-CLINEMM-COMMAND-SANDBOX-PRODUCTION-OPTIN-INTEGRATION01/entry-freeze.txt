@@ -1,0 +1,54 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+C1 ENTRY FREEZE
+===========================================================
+
+REPOSITORY_ROOT = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH          = main
+
+ENTRY_HEAD      = 0373c15c3e749d7ee945a92e45d925493cadfe47
+ENTRY_TREE      = clean (no tracked-file modifications, no untracked files)
+GIT_DIFF_CHECK  = pass (no whitespace/format warnings)
+ORIGIN_MAIN     = unchanged
+
+SANDBOX_ABSTRACTION_HEAD = 0373c15c3e749d7ee945a92e45d925493cadfe47
+  (CORRECTION01-P1: envSemantics is typed metadata, not a magic env key)
+DEFAULT_SANDBOX_MODE     = "disabled"  (DEFAULT_OFF invariant)
+EXPERIMENTAL_OPTINGATE   = CLINEMM_EXPERIMENTAL_SANDBOX
+EXPERIMENTAL_OPTINGATE_RECOGNIZED_VALUES = {"seatbelt"}
+
+PARSER_HELPER_SHA256     = N/A (parser helper for this profile not part of the
+  Wave-1 sandbox scope; recon observes helper binary via the dist-standalone
+  bundle separately; this ACT does not modify the helper)
+
+UNEXPECTED_TRACKED_DIRT  = none
+
+===========================================================
+C1 EPISODE PURPOSE
+===========================================================
+
+OBSERVATION + RED CHARACTERIZATION ONLY. NO PRODUCTION WIRING.
+
+1. Re-trace the actual ClineMM-managed background command execution seam
+   (CommandJobManager.start in background mode) and produce an inventory:
+   where command string becomes executable/argv, where cwd/env enter,
+   where cancellation/stdout/stderr callbacks attach.
+
+2. Confirm there is exactly ONE background command path. Confirm
+   foreground VscodeTerminalManager is the user's own terminal and is
+   OUT OF SCOPE for this ACT.
+
+3. Characterize the DEFAULT_OFF production seam: capture the exact
+   invocation reaching the lower process supervisor before integration.
+   This is the conservation witness.
+
+4. RED tests (still no wiring):
+   - unavailable-backend RED: opt-in set, substrate absent -> spawn_count = 0
+   - envSemantics production-consumption RED: seeded parent secret must
+     NOT appear in the actual child process when the experimental opt-in is
+     active. (Not the test-helper mirror — the REAL production seam.)
+
+5. HALT conditions apply:
+   - HALT_UNEXPECTED_TRACKED_DIRT: any unexpected tracked-file modifications
+   - HALT_EXECUTION_SEAM_FRAGMENTED: a second background command path bypasses the seam
+   - HALT_RED_NOT_REPRODUCED: RED doesn't reproduce on the real seam

@@ -1,0 +1,151 @@
+ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 -- EXACT-HEAD CLOSURE ARTIFACT
+==========================================================================
+
+ACT_ID: ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01
+VERDICT: PASS_NETWORK_OPEN_WITH_FILESYSTEM_CONSERVATION CLOSED_CLEAN_COMMITTED
+C1: GO  (to ACT-CLINEMM-SAFE-YOLO-SEATBELT-YOLO-QUALIFICATION01)
+
+REPOSITORY_ROOT: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH: main
+
+ENTRY_HEAD:   24d83469063b834286978553313f8eb8194756b6
+ENTRY_TREE:   857220d2813d6b12e2a776807dcce78adb172beb
+
+SUBJECT_HEAD: f5315057da198d0a719f5057242fa3e4901b5bd1  (feat commit)
+SUBJECT_TREE: 5ad0f2d2b3c2e4c0464604bb014901e00f6e1097
+
+DOCS_HEAD:    9adce1ed36e455f8c38a8bf1c0d224f5dd29993f  (docs commit, current HEAD)
+DOCS_TREE:    c8b57d838d3714fbc1d00f339c18075b2a70bc8a
+
+FILES_CHANGED:
+  feat commit (f5315057d):
+    M apps/vscode/src/sdk/sandbox-policy.ts                            (+38/-1)
+    A apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts  (+285)
+  docs commit (9adce1ed):
+    M .factory/epic-board.md                                          (one board row appended)
+
+NETWORK_POLICY_SEAM: apps/vscode/src/sdk/sandbox-policy.ts:buildExperimentalReconCapability (single bounded seam; new opt-in via resolveSafeYoloNetworkOptIn())
+FILESYSTEM_POLICY_SEAM: sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:buildReadRule + buildWriteRule (UNCHANGED)
+
+RED_NETWORK_RESULT:
+  REAL_PRODUCTION_SEAM: backend.prepare() -> /usr/bin/sandbox-exec -f profile.sb /bin/bash test.sh
+  PROFILE_NETWORK_RULE: (deny network*)   PRESENT
+  CONTROL stdout: CONNECTED:RED-BASELINE-9069278f0789\n  (exit 0)
+  TEST    stdout: DENIED\n                  (exit 0)
+  VERDICT: RED_REPRODUCED
+  EVIDENCE: .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/red-baseline.json
+            sha256=da75b3664ed84ecc63ccaabb411c690090f75e14677c35fbcbe9ae7b00ce1750
+
+GREEN_NETWORK_RESULTS:
+  REAL_PRODUCTION_SEAM: CommandJobManager.start() with CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt
+                       + CLINEMM_SAFE_YOLO_NETWORK=allow
+  PROFILE_NETWORK_RULE: (allow network*)  PRESENT
+  CONTROL stdout: CONNECTED:GREEN-6ca73d6a60ee\n  (exit 0)
+  TEST    stdout: CONNECTED:GREEN-6ca73d6a60ee\n  (exit 0)
+  VERDICT: GREEN_REPRODUCED
+  EVIDENCE: .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/green-postchange.json
+            sha256=34d55d2d9821aac5147e164216cb5f6d9fccd47e4a9464241d8d5a1cd275d24c
+
+FILESYSTEM_BASELINE:
+  wsProbes.create   = CREATE_OK
+  wsProbes.modify   = MODIFY_OK
+  wsProbes.delete   = DELETE_OK
+  wsProbes.recreate = RECREATE_OK
+  homeProbes.create = HCREATE_DENIED
+  homeProbes.modify = HMODIFY_DENIED
+  homeProbes.read   = HREAD_OK        (broad-read contract per recon)
+  homeProbes.delete = HDELETE_DENIED
+  childProbes.workspaceCreate = CWS_OK
+  childProbes.homeCreate     = CHC_DENIED
+  EVIDENCE: .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/filesystem-baseline-snapshot.json
+            sha256=5697c76536b8d02a6871e55ecd5fb5e3c4fce8d5c247c71e4f209982cd8da473
+
+FILESYSTEM_POSTCHANGE: (same probe results, byte-identical after normalizing ACT-owned fixture nonces)
+  EVIDENCE: .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/filesystem-postchange.json
+            sha256=26991299f01ffe97497c015558926854fe70a7e3b6089cab2a80f7c26df5af65
+
+FILESYSTEM_CONSERVATION_RESULT: CONSERVED=true
+  (normalized probe results byte-identical between baseline and post-change)
+
+PROFILE_DELTA_RESULT:
+  RED profile (deny network*):   profile-red.sb   sha256=ba5b20a04f50592f0fde499f810e4e9fe0cbb261b01b938378fa3880cbe86d46
+  GREEN profile (allow network*): profile-green.sb sha256=a6496f7656ddea08ea9081fb2d5aecbfe3c16564ac7402a34ebccffca6b439b6
+  NORMALIZED DIFF: 1 line (line 15: (deny network*) -> (allow network*))
+  FILESYSTEM SECTION: byte-identical
+  EVIDENCE: .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/profile-structural.json
+            sha256=721c687b512a45396c952bb04223b6a1afd053a898bee9637cdc1cc0bf9b1d84
+
+TEST_RESULTS:
+  ACT-specific test file:
+    apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts
+    7 tests / 7 PASS  (5 structural + 2 production-seam live)
+  Prior Seatbelt suites (regression-free):
+    darwin-seatbelt-darwin-mktemp-capability01.c2-green.test.ts                          2/2 PASS
+    darwin-seatbelt-darwin-mktemp-capability01.c2-guard-green.test.ts                     6/6 PASS
+    darwin-seatbelt-darwin-mktemp-capability01.c2-correction01-typed-channel.test.ts      4/4 PASS
+    darwin-seatbelt-darwin-mktemp-capability01.c2-correction02-plan-required-guard.test.ts 6/6 PASS
+    darwin-seatbelt-darwin-mktemp-capability01.c2-kernel-matrix.test.ts                  8/8 PASS
+    darwin-seatbelt-darwin-mktemp-capability01.c2-mixed-isolation.test.ts                4/4 PASS
+    darwin-seatbelt-darwin-mktemp-capability01.c2-ablation-conservation.test.ts          7/7 PASS
+    TOTAL prior: 37/37 PASS across 7 files
+  Approval-engine conservation (spec §14):
+    session-auto-approval.test.ts  40/40 PASS
+  Full apps/vscode unit-test sweep (bun run test:unit):
+    72 files / 1076 tests / 0 regressions
+  Full apps/vscode src/sdk/__tests__/ sweep:
+    69 -> 70 files (this ACT added 1 file); 699 -> 706 tests; 0 regressions
+
+TYPECHECK_RESULT:
+  apps/vscode bun run check-types  -> 0 errors (exit 0)
+  protos + biome + tsc + webview-ui/tsc  all PASS
+
+BUILD_RESULT:
+  sdk/packages/core bun run build  -> 0 errors (dist rebuilt for dist consistency, source unchanged)
+
+git status --short: (empty - working tree clean)
+git diff --check:   (empty - no whitespace errors)
+
+KNOWN_HOST_REQUIRED_TESTS: none  (spec §13; no A-E classification needed; no host-runner work discovered)
+
+P1_RESIDUE: none
+
+P2_RESIDUE: none
+
+EVIDENCE_BINDING (spec §20 SOURCE_HEAD / path / byte size / SHA-256):
+  Source HEAD (feat commit) = f5315057da198d0a719f5057242fa3e4901b5bd1
+  Source HEAD (docs commit) = 9adce1ed36e455f8c38a8bf1c0d224f5dd29993f
+
+  path: apps/vscode/src/sdk/sandbox-policy.ts
+    production source-level change: +38/-1 (one new exported function + one-line substitution)
+
+  path: apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts
+    byte size: 8700 bytes  (285 lines)
+    sha256: (compute on demand via `shasum -a 256 <path>`)
+
+  Evidence artifacts (path / bytes / sha256) -- all under SOURCE_HEAD feat commit:
+    .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/red-baseline.json
+      683 bytes  sha256=da75b3664ed84ecc63ccaabb411c690090f75e14677c35fbcbe9ae7b00ce1750
+    .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/green-postchange.json
+      444 bytes  sha256=34d55d2d9821aac5147e164216cb5f6d9fccd47e4a9464241d8d5a1cd275d24c
+    .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/filesystem-baseline-snapshot.json
+      2346 bytes sha256=5697c76536b8d02a6871e55ecd5fb5e3c4fce8d5c247c71e4f209982cd8da473
+    .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/filesystem-postchange.json
+      2347 bytes sha256=26991299f01ffe97497c015558926854fe70a7e3b6089cab2a80f7c26df5af65
+    .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/profile-red.sb
+      359 bytes  sha256=ba5b20a04f50592f0fde499f810e4e9fe0cbb261b01b938378fa3880cbe86d46
+    .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/profile-green.sb
+      360 bytes  sha256=a6496f7656ddea08ea9081fb2d5aecbfe3c16564ac7402a34ebccffca6b439b6
+    .factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01/profile-structural.json
+      372 bytes  sha256=721c687b512a45396c952bb04223b6a1afd053a898bee9637cdc1cc0bf9b1d84
+
+CLAIM (the bounded, supportable claim this ACT establishes):
+  NETWORK_OPEN_WITH_FILESYSTEM_CONSERVATION
+    - macOS Seatbelt network can be unrestricted
+      (CLINEMM_SAFE_YOLO_NETWORK=allow + CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt)
+    - while the existing filesystem mutation boundary is preserved byte-for-byte
+      (workspace writes allowed inside writableRoot, home writes DENIED,
+       child-process inheritance unchanged, broad-read contract unchanged)
+    - secret-exfiltration read confinement is explicitly NOT a claim of this ACT
+
+NEXT: ACT-CLINEMM-SAFE-YOLO-SEATBELT-YOLO-QUALIFICATION01
+      (Seatbelt ON + network unrestricted + YOLO ON + adversarial filesystem mutation)

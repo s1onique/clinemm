@@ -1,0 +1,69 @@
+ACT-CLINEMM-SAFE-YOLO-WORKSPACE-WRITE01-CORRECTION01 — C3 VSIX install record
+
+TIMESTAMP    = 2026-08-26T19:03:00Z (approximate; first install attempt)
+SOURCE_HEAD  = 26f1e7bb6e60fc51710b9713e2916872e24d15d1
+SOURCE_TREE  = c1d3ec0707534633567c0114259a07d885f0c9be (parent)
+VSIX         = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.10-26f1e7bb6.vsix
+VSIX_BYTES   = 14404482
+VSIX_SHA256  = 93d9f3368718e19f926f172cd6ef4c11b20b1cabb0c13f9605f0908ff3a0b35c
+
+INSTALL_COMMAND =
+  /opt/homebrew/bin/codium --no-sandbox \
+    --user-data-dir=/tmp/clinemm-c3-userdata \
+    --install-extension /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.10-26f1e7bb6.vsix \
+    --force --disable-telemetry
+
+INSTALL_RESULT = success
+  Extension 'clinemm-4.1.10-26f1e7bb6.vsix' was successfully installed.
+
+INSTALLED_LOCATION =
+  /Volumes/UserData/Users/chistyakov/.vscode-oss/extensions/s1onique.clinemm-4.1.10-26f1e7bb6/
+
+INSTALLED_BUNDLE =
+  /Volumes/UserData/Users/chistyakov/.vscode-oss/extensions/s1onique.clinemm-4.1.10-26f1e7bb6/dist/extension.js
+  25290452 bytes
+
+BUNDLE_PROOF = the bundled extension.js contains multiple realpathSync
+                calls; the canonical-path filter is present in the
+                production bundle.
+
+BUNDLE_GREP   = grep -aoE 'realpathSync[^,;\)]{0,80}' /.../extension.js | sort -u
+  returns:
+    realpathSync
+    realpathSync(${t}
+    realpathSync(_1.dirname(r
+    realpathSync(a
+    realpathSync(e
+    realpathSync(n
+    realpathSync(r
+    realpathSync(t
+    realpathSync(t&&t.tmpdir||wpr.tmpdir(
+    realpathSync.native(t
+
+LAUNCH        = /opt/homebrew/bin/codium --no-sandbox \
+                 --user-data-dir=/tmp/clinemm-c3-userdata \
+                 --disable-telemetry --disable-gpu \
+                 --inspect-extensions=9230 \
+                 --remote-debugging-port=9223 \
+                 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+LAUNCH_RESULT = OK (7 child processes spawned, both debug ports listening)
+                 9223 = workbench CDP
+                 9230 = extension host inspector
+
+CDP_PROBE_RESULT = the extension host is ESM-context; no require(), no
+                 globally-exposed sandbox-policy symbols, dynamic
+                 import() requires a registered loader callback.
+                 Manual interactive probe is the only path to a true
+                 C3 fresh-process proof from this dev shell.
+
+MANUAL_PROBE_FOR_USER =
+  # Install VSIX into a fresh user-data-dir
+  /opt/homebrew/bin/codium --user-data-dir=/tmp/clinemm-c3-fresh \
+    --install-extension /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.10-26f1e7bb6.vsix --force
+  # Launch with the workspace
+  /opt/homebrew/bin/codium --user-data-dir=/tmp/clinemm-c3-fresh \
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+  # Open the Cline sidebar, send a chat message:
+  #   "mkdir -p .factory/acts/.c3-fresh-probe && printf LIVE > .factory/acts/.c3-fresh-probe/probe.txt && cat .factory/acts/.c3-fresh-probe/probe.txt"
+  # Expected: MKDIR_OK, WRITE_OK, READ_OK (LIVE).

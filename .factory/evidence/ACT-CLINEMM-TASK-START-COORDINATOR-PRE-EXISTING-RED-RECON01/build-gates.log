@@ -1,0 +1,9 @@
+=== TYPECHECK ===
+tsc.json PASS
+tsc.compat PASS
+=== LINT ===
+[0m[2m[35m$[0m [2m[1mbiome lint --config-path ./biome.jsonc --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error && bun run lint:proto[0m
+Checked 1428 files in 876ms. No fixes applied.
+[0m[2m[35m$[0m [2m[1mbash ./scripts/proto-lint.sh[0m
+=== DIFF CHECK ===
+diff-check PASS

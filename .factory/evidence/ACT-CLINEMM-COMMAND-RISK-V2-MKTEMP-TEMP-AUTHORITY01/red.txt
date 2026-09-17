@@ -1,0 +1,44 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- LIVE RED
+Production command-policy seam @ current exact-head (7f1ff13d9)
+
+Driver:  sdk/packages/core/src/runtime/command-policy/_red-mktemp-capture.test.ts
+Function: evaluateCommandRisk(toolInput={tool:run_command, params:{command:CMD}})
+         (the actual public production function invoked by the
+         VSCode adapter BEFORE CommandJobManager.start.)
+
+=== RAW OUTPUT (captured at 2026-08-26 00:43, ENTRY_HEAD=7f1ff13d9) ===
+
+{"cmd":"mktemp","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+{"cmd":"mktemp -d","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+{"cmd":"mktemp -u","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+{"cmd":"mktemp foo.XXXXXX","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+{"cmd":"mktemp -p /tmp foo.XXXXXX","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+{"cmd":"mktemp -t myprefix","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+{"cmd":"TMPDIR=/tmp mktemp","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+{"cmd":"mktemp \"$X\"","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+{"cmd":"mktemp ${X}","decision":"ask","disposition":"ask","source":"risk_parse_failed","reasons":["command could not be parsed"]}
+
+OBSERVATION:
+  Every form (positive AND negative) is routed through ASK with
+  source=risk_parse_failed. This is the V1 fallback: no positive
+  matcher hit AND no hard-floor match AND the parser chosen by the
+  V1 layer reports parse failure for mktemp's bare syntax.
+
+The public surface (evaluateCommandRisk) does NOT pass parserResult
+by design (CORRECTION01 HALT_PROVENANCE_GAP). At the public surface,
+mktemp will reach the production approval UI as "ask / could not be
+parsed" rather than a hard deny. The user observes a hard denial or
+confusing UX because the approval system treats parse-failed ASK
+conservatively.
+
+Worse: the parser-helper-aware V2 layer would have classified mktemp
+cleanly (it is well-formed shell), but V1 conflates "no safe rule
+match" with "ask" and that's where mktemp gets stuck today.
+
+The simplest repairable boundary IS the safe-rule engine itself.
+A V1 safe rule for mktemp's exact grammar would let the canonical
+policy emit allow OR ask, NOT the parser-failed ASK fallback.
+
+EVIDENCE_LABELS:
+  COMMAND_POLICY_RED: REAL_PRODUCTION_POLICY_SEAM
+  CAPTURED_AT:        2026-08-26 00:43 (ENTRY_HEAD=7f1ff13d9)

@@ -1,0 +1,151 @@
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+c1-disposition.txt -- C1-CORRECTION01 verdict
+
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+C1_TRANSPORT_SEAM_BOTH_HALVES_REPRODUCED:
+GO_AUTHORIZATION_EXECUTION_BINDING_GAP_BOTH_HALVES_REPRODUCED
+
+OVERALL_AT_C1_CORRECTION01:
+HALT_BINDING_RED_LOAD_BEARING_SEAM_NOW_REPRODUCED
+(no production code yet; both RED halves proven at production
+seam; C2 GREEN plumbing remains for the next iteration; reviewer's
+provenance concern resolved with typed runtime-owned slot, NOT
+shallow metadata merge)
+
+REVIEWER CORRECTION01 ITEMS ADDRESSED:
+  [x] Executable RED through AgentRuntime.executePreparedTool:
+      src/sdk/__tests__/execution-capability-binding01.c1-upstream.test.ts
+      Drives REAL AgentRuntime (production class) with a scripted
+      model that emits tool-call-delta carrying
+      `metadata.executionCapability`. Captures the AgentToolContext
+      actually received by tool.execute via vi.spyOn. Asserts:
+      - toolCall.metadata DOES contain the marker (precondition).
+      - tool.execute's context.metadata does NOT contain the marker.
+      The loss point (Loss #1) is reproduced on the production seam.
+  [x] Provenance of prepared.toolCall.metadata established:
+      Source 1 (model-stream metadata): PARTIALLY trusted.
+      Source 2 (runtime-owned metadata keys): FULLY trusted.
+      Source 3 (host-attached; would-be): trusted IF typed slot.
+      Frozen in metadata-provenance.md.
+  [x] Closed authority field, NOT arbitrary shallow metadata merge:
+      C2 design uses a typed runtime-owned slot on AgentToolContext:
+        executionCapability?: InternalExecutionCapability
+      The slot is owned by the runtime; Source 1 cannot populate it
+      because the runtime owns the writer. Generic metadata stays
+      as-is (no source-B whitelist filter needed). Frozen in
+      binding-design.md (CORRECTION01 revised).
+  [x] Current downstream RED kept:
+      src/sdk/__tests__/execution-capability-binding01.c1.test.ts
+      remains the downstream-half witness (Loss #2: context.metadata
+      -> CommandJobManager.start). Still useful conservation witness.
+  [x] No production code yet. HALT.
+
+WHAT WAS PROVENED IN CORRECTION01:
+  C1 RECON
+    production chain                 PASS  (production-chain.md)
+  C1 RED downstream half
+    context.metadata -> start        PROVEN
+    (3 tests in execution-capability-binding01.c1.test.ts)
+  C1 RED load-bearing upstream half
+    toolCall.metadata -> context     PROVEN
+    (2 tests in execution-capability-binding01.c1-upstream.test.ts)
+  metadata authority provenance
+    FROZEN                          (metadata-provenance.md)
+    classification:
+      Source 1 (model-stream)        PARTIAL TRUST
+      Source 2 (runtime-owned)       FULL TRUST
+      Source 3 (would-be host)       TRUSTED IF TYPED SLOT
+
+DESIGN DECISIONS FROZEN:
+  D1: Marker shape is closed (literal type).
+  D2: Marker placed in a NEW AgentToolContext.executionCapability
+      typed slot, NOT in the generic metadata bag.
+  D3: Per-call override; session-wide metadata not lost (shallow
+      merge preserved for the LEGACY generic fields).
+  D4: Correlation identity = toolCallId (already exists; per-call).
+  D5: No global mutable state. No registry keyed by command text.
+  D6: Production code in CORRECTION01: ZERO.
+  D7: Fail-closed contract frozen for C2 (DARWIN-MKTEMP-CAPABILITY01
+      cascade).
+  D8 (NEW): Authority crosses the seam via a CLOSED typed field;
+            shallow-merge of arbitrary toolCall.metadata is
+            FORBIDDEN. The runtime owns the writer.
+
+THIRD-TEST CAVEAT (reviewer flagged):
+  The "parallel A and B" case in c1.test.ts is harness isolation
+  (two separate managers + tools). It does NOT prove concurrency
+  isolation (same production runtime, two interleaved invocations).
+  True concurrency proof is deferred to C2 same-runtime interleaving
+  tests using AgentRuntime's existing concurrency surface
+  (Promise.all of runTurn calls).
+
+TEST ARCHITECTURE PROVEN:
+  Real production seams exercised in CORRECTION01:
+    Downstream:
+      createShellTool (REAL)
+      -> createVscodeRunCommandsTool (REAL host factory)
+      -> createVscodeShellExecutor (REAL host closure)
+      -> CommandJobManager.start (REAL host class)
+    Upstream:
+      ScriptedModel (REAL interface)
+      -> AgentRuntime (REAL production class)
+      -> AgentRuntime.handleModelStreamEvent (REAL)
+      -> AgentRuntime.prepareToolExecution (REAL)
+      -> AgentRuntime.executePreparedTool (REAL)
+      -> tool.execute(input, context)
+  Spies capture the actual production outputs, not mapper
+  reconstructions.
+
+HALT CONDITIONS CHECKED:
+  HALT_UNEXPECTED_TRACKED_DIRT:           NOT TRIGGERED
+  HALT_RED_NOT_REPRODUCED:                NOT TRIGGERED
+                                          (both halves reproduced)
+  HALT_BINDING_REQUIRES_GLOBAL_MUTABLE_STATE:
+                                          NOT TRIGGERED (typed slot)
+  HALT_BINDING_CORRELATION_AMBIGUOUS:     NOT TRIGGERED (toolCallId)
+  HALT_BINDING_CROSSTALK:                 PARTIAL (downstream
+                                          harness isolation only;
+                                          same-runtime concurrency
+                                          in C2)
+  HALT_DENIED_INVOCATION_CAPABILITY_LEAK: NOT TRIGGERED (test will
+                                          land in C2; C1 covers ALLOW
+                                          paths only)
+  HALT_BINDING_REQUIRES_PUBLIC_PROTOCOL_CHANGE:
+                                          NOT TRIGGERED (no protocol
+                                          field changes; AgentToolContext
+                                          gains one typed slot)
+  HALT_BINDING_PROBE_HAS_PRODUCTION_DELTA:
+                                          NOT TRIGGERED (zero production
+                                          code in C1-CORRECTION01)
+  CAPTURE_INSUFFICIENT:                   NOT TRIGGERED (spy captured
+                                          the real context)
+  HALT_BINDING_RED_DOES_NOT_REPRODUCE_LOAD_BEARING_SEAM:
+                                          RESOLVED (CORRECTION01 added
+                                          the upstream RED)
+
+NEXT STEP (C2 GREEN, narrow):
+  - Add typed runtime-owned slot to AgentToolContext:
+      executionCapability?: InternalExecutionCapability
+  - AgentRuntime.executePreparedTool (agent-runtime.ts:2780) stamps
+    the host-attached value into this slot when the host's
+    `requestToolApproval` returns an `executionCapability`. The
+    host's `evaluateCommandToolApproval` callback is extended
+    (or a sibling hook added) so that the authorization decision
+    produces the typed payload.
+  - createVscodeShellExecutor reads context.executionCapability and
+    forwards into StartCommandJobOptions.executionCapability.
+  - CommandJobManager.start accepts the field and stores it on the
+    job record for test assertion (no Seatbelt consumption in C2 of
+    THIS ACT).
+  - Re-prove the 5 RED tests with the upstream assertions flipped:
+      prepared.toolCall.metadata.executionCapability (still set)
+      AgentToolContext.executionCapability (now present, typed)
+      manager.start options.executionCapability (now present)
+  - Add: multi-command correlation test, same-runtime concurrency
+    test (Promise.all on real AgentRuntime.runTurn), denied-
+    invocation capability conservation test.
+
+PREDECESSOR-FREEZE RESPECTED:
+  Predecessor ACT's frozen kernel matrix is NOT regenerated.
+  Seatbelt, command-policy, parser-helper, CommandCapability:
+  all UNCHANGED in C1-CORRECTION01.

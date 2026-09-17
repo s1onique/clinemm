@@ -1,0 +1,49 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-CORRECTION01 — test gates
+
+==============================================================================
+FOCUSED (lifecycle cleanup)
+==============================================================================
+
+sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.test.ts
+  15 PASS / 1 SKIP / 0 FAIL across 16 tests
+  including 2 new CORRECTION01 tests:
+    CORRECTION01: profile generation failure cleans up the synthesized temp root  PASS
+    CORRECTION01: caller-supplied tempRoot is NOT touched on any failure           PASS
+
+==============================================================================
+SDK CORE FULL SUITE
+==============================================================================
+
+sdk/packages/core (full unit suite via vitest):
+  3041 PASS / 16 SKIP / 0 FAIL across 206 files
+  (was 3039 PASS before this ACT; +2 new CORRECTION01 tests)
+
+==============================================================================
+APPS/VSCODE SANDBOX C3 REAL KERNEL
+==============================================================================
+
+apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+  15/15 PASS  (production seam tests, unchanged)
+
+apps/vscode/src/sdk/command-job-manager.test.ts
+  18/18 PASS  (unchanged)
+
+apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts
+  16/16 PASS  (unchanged)
+
+==============================================================================
+LINT + TYPECHECK + BUILD
+==============================================================================
+
+bun run build:sdk:
+  @cline/shared, @cline/llms, @cline/agents, @cline/core, @cline/sdk
+  all exited with code 0
+
+apps/vscode bun run compile:
+  biome format pass
+  biome lint pass
+  tsc -p tsconfig.vscode-compat.json pass
+  proto-lint pass
+  exit 0
+
+git diff --check: clean

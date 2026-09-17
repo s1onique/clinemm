@@ -1,0 +1,163 @@
+ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01
+c2-green-empirical.txt -- per-command authority binding is now plumbed
+
+ARCHITECTURE (Option A, reviewer-approved):
+
+  ToolApprovalResult.executionPlan (host)
+      ↓ (runtime captures on PreparedToolExecution)
+  PreparedToolExecution.commandExecutionPlan (typed runtime-owned slot)
+      ↓ (runtime stamps into AgentToolContext)
+  AgentToolContext.commandExecutionPlan (typed runtime-owned slot)
+      ↓ (run_commands looks up exact plan entry i)
+  per-command capability check via correlateExecutionPlan()
+      ↓
+  manager.start(command[i], context_i)
+    where context_i.executionCapability = entry[i].executionCapability ?? undefined
+  NO FALLBACK to tool-call capability when plan exists.
+
+PRODUCTION FILES MODIFIED (5):
+
+  1. sdk/packages/shared/src/llms/tools.ts
+     - added `executionCapability?: InternalExecutionCapability` to
+       `CommandExecutionPlanEntry` (the runtime-owned per-command
+       authority slot, co-located with the authorization decision).
+
+  2. sdk/packages/shared/src/agent.ts
+     - added `commandExecutionPlan?: CommandExecutionPlan` to
+       `AgentToolContext` (typed runtime-owned slot, NEVER from
+       metadata). Imports `CommandExecutionPlan` from llms/tools.
+
+  3. sdk/packages/agents/src/agent-runtime.ts
+     - added `commandExecutionPlan?: CommandExecutionPlan` to
+       `PreparedToolExecution` (typed runtime-owned slot).
+     - in `prepareToolExecution`: stamps
+       `prepared.commandExecutionPlan = approval.executionPlan`
+       when approval is approved AND plan is present.
+     - in `executePreparedTool`: stamps
+       `context.commandExecutionPlan = prepared.commandExecutionPlan`.
+
+  4. sdk/packages/core/src/extensions/tools/definitions.ts
+     - rewrote `executeShellCommands` to correlate
+       plan.commands[i] against executableCommands[i] BEFORE fanout.
+     - added `correlateExecutionPlan()` helper that checks:
+       * plan.commands.length === executableCommands.length
+       * for every i: plan.commands[i].commandIndex === i
+       * for the supported string-command shape:
+         plan.commands[i].hardenedCommand === executableCommands[i]
+       * for the structured-command shape: command + args equality.
+     - on any mismatch: throws
+       `command_execution_plan_correlation_failed: <reason>` BEFORE
+       any manager.start call. ZERO starts on failure (fail closed).
+     - on success: stamps
+       `context_i.executionCapability = entry[i].executionCapability`
+       (or undefined) per command. NO FALLBACK to tool-call capability
+       when a plan exists.
+
+REVIEWER-PRESCRIBED CORRELATION PREDICATE (frozen):
+
+  plan.commands.length === executableCommands.length
+  for every i:
+    plan.commands[i].commandIndex === i
+    plan.commands[i].hardenedCommand === executableCommands[i]
+  (exact string equality for the supported string case)
+
+  ANY failure -> CORRELATION_UNPROVEN -> ZERO manager.start calls.
+
+REVIEWER-PRESCRIBED NO-FALLBACK CONTRACT (frozen):
+
+  FORBIDDEN:
+    entry.executionCapability ?? context.executionCapability
+
+  CORRECT:
+    valid per-command plan exists:
+      command i receives exactly entry[i].executionCapability
+      undefined means undefined
+    no per-command plan exists:
+      legacy tool-call capability may continue for the synthetic
+      transport compatibility path only
+
+C2 P0 MATRIX (reviewer-prescribed, all PROVEN):
+
+  A. reorder with equal cardinality:
+     plan = [A, B], execution = [B, A]
+     -> ZERO starts (hardenedCommand mismatch)
+
+  B. invalid indices:
+     indices = [0, 2] for two commands
+     -> ZERO starts (commandIndex validation)
+
+  Main GREENs:
+     [A, none] -> [A, none]   PASS
+     [none, B] -> [none, B]   PASS
+     [A, none, C] -> [A, none, C]  PASS
+     duplicate text [A, A] (positional)   PASS
+
+  Failure discriminators:
+     short plan -> ZERO starts                    PASS
+     extra plan entry -> ZERO starts               PASS
+     hardenedCommand mismatch -> ZERO starts        PASS
+     heredoc coalescing -> ZERO starts              PASS
+     model metadata injection -> no authority       PASS
+     denied invocation -> ZERO starts               PASS
+
+TEST RESULTS (apps/vscode):
+
+  $ cd apps/vscode && bun run check-types
+  ... 0 errors
+
+  $ vitest run src/sdk/__tests__/execution-authority-per-command-binding01.c2-green.test.ts
+  Test Files  1 passed (1)
+       Tests  14 passed (14)
+
+  $ vitest run .../execution-capability-binding01.{c2-green,c2-green-upstream,
+                   c2-green-discriminator,c2-green-multicmd-discriminator}.test.ts
+              .../execution-authority-per-command-binding01.c1-correction01-real-plan-red.test.ts
+              .../execution-authority-per-command-binding01.c2-green.test.ts
+  Test Files  6 passed (6)
+       Tests  32 passed (32)
+
+  $ vitest run src/sdk/__tests__/   (full sdk test suite)
+  Test Files  64 passed (64)
+       Tests  704 passed (704)
+
+  $ cd sdk/packages/agents && bun run test
+  Test Files  20 passed (20)
+       Tests  387 passed (387)
+
+C1-CORRECTION01 CONSERVATION:
+
+  The prior C1-CORRECTION01 test file documents the GAP that has now
+  been closed. Two tests in that file required updates:
+  1. Section 1 Test 1: was asserting tool-call capability flows
+     uniformly to both starts (RED). Now asserts both starts
+     receive undefined (C2 GREEN CONSERVATION: per-command path
+     is active, no fallback to tool-call capability).
+  2. Section 2 Case 4 (heredoc): was asserting 1 start happens
+     despite cardinality drift (RED). Now asserts ZERO starts
+     (C2 GREEN CONSERVATION: fail closed on correlation failure).
+
+  Other Cases (1, 2, 3) remain unchanged -- they correlate
+  successfully and per-command authority flows correctly.
+
+REVIEWER'S P2 NOTE:
+
+  The reviewer classified the prior C1 test that asserted
+  `Object.keys(probe).filter(capability|authority) === ['executionCapability']`
+  as "STRUCTURAL WITNESS / NON-LOAD-BEARING" because TypeScript
+  interface fields do not exist at runtime unless assigned.
+  That test remains in place but is non-load-bearing; the load-bearing
+  proof is the real AgentRuntime tests (Section 1 + Section 2 + c2-green).
+
+DISPOSITION:
+
+  ACT-CLINEMM-RUN-COMMAND-PER-COMMAND-AUTHORITY-BINDING01:
+    PASS_PER_COMMAND_AUTHORITY_BINDING
+    CLOSED_CLEAN
+
+NEXT:
+
+  Open ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2 to
+  attach the already-proven file-write-create root only to the
+  /usr/bin/mktemp plan entry via the new per-command authority
+  channel. No new Seatbelt recon and no new metadata architecture
+  pass -- the binding is GREEN.

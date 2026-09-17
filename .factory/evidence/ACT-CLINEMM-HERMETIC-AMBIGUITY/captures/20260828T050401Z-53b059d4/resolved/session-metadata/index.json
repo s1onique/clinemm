@@ -1,0 +1,15 @@
+[
+  {
+    "mtime": "2026-08-28T05:04:00.612652+00:00",
+    "projection": {
+      "matchedByShape": true,
+      "mode": "act",
+      "session_id": "session-A",
+      "source": "vscode",
+      "status": "running"
+    },
+    "root": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-ambiguity",
+    "shapeMatched": true,
+    "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-ambiguity/sessions/session-A/session-A.json"
+  }
+]

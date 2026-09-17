@@ -1,0 +1,107 @@
+ACT-CLINEMM-TEMPORARY-EXTERNAL-PATH-AUTHORITY01-CORRECTION04
+entry-freeze                                                              (2026-09-03)
+
+ENTRY_HEAD  = 9e036cf50 (factory baseline; CORRECTION04 uncommitted)
+              Note: The working tree contains uncommitted Factory
+              work-in-progress for CORRECTION03 closure alongside
+              CORRECTION04 additions; the CORRECTION04 additive work
+              is contained in the four touched files listed in §5 of
+              the ACT body.
+DOCS_HEAD   = 9e036cf50
+ORIGIN_HEAD = 9e036cf50
+BRANCH      = main
+WORKTREE    = dirty (32 modified files from Factory in-progress work
+              plus this ACT file + evidence dir as additions)
+
+REVIEWER HALT (from the Factory reviewer on CORRECTION03)
+  New P0 -- HALT_RUNTIME_PATH_SHAPE_BYPASS:
+
+  The write validator correctly rejects relative paths and the
+  filesystem root "/" but the runtime defense-in-depth filter
+  (`filterActiveTemporaryExternalPathEntries`) does NOT re-check
+  `isAbsolute(path)` or `path !== "/"`. Therefore tampered
+  persisted state such as
+  `{ "path": "/", "expiresAt": "<now + 1h>" }` would survive the
+  filter, get realpath-canonicalized to "/" (trivially widening
+  R0 authority to every canonical path), and bypass the bounded
+  "narrow escape hatch" contract.
+
+  Likewise tampered `"../tmp"` would acquire CWD-relative meaning
+  during `realpathSync`, recreating the CWD-dependent authority
+  identity CORRECTION02 explicitly closed.
+
+  P1 -- UI_STATE_STALE_CROSS_INSTANCE: cross-instance Settings
+  UI can still display stale authorities (NON-BLOCKING).
+
+PURPOSE OF THIS CORRECTION
+  Bounded single-axis correction. Apply the same structural
+  path-shape constraints (`isAbsolute(path)`, `path !== "/"`) at
+  the runtime consumption filter as the write validator already
+  applies, via a small shared predicate
+  `classifyTemporaryExternalPathShape(path)`. Two enforcement
+  points, one source-of-truth. CORRECTION03 architecture is
+  preserved unchanged.
+
+PROTECTED LANES (unchanged from CORRECTION03)
+  fresh-read decision-boundary architecture
+  two-reader/one-store ADD
+  stale-removal REMOVE
+  24h write ceiling
+  >24h runtime rejection
+  absolute-path write validation
+  "/" write rejection
+  symlink operand escape
+  no watcher
+
+LANE STATUS BEFORE CORRECTION
+  CORRECTION03 was halted with new P0
+  HALT_RUNTIME_PATH_SHAPE_BYPASS.
+
+LANE STATUS AFTER CORRECTION (target)
+  PASS / TEMPORARY_EXTERNAL_PATH_AUTHORITY_V4 (CORRECTION04)
+  P1 remains classified NON-BLOCKING per reviewer's explicit
+  recommendation (deferred to future ACT unless operationally
+  annoying).
+
+RED → GREEN TRACE
+  Pre-CORRECTION04 (the bug):
+    filterActiveTemporaryExternalPathEntries accepts `"/"`,
+    `"tmp"`, `"../tmp"`, `"."` paths that have valid expiry.
+    The downstream realpath-canonicalization step in
+    `resolveActiveTemporaryExternalCanonicalRootsFromBackingFile`
+    then forwards canonical variants as effective temporary
+    roots.
+    realpath("/") = "/"; workspaceRoots ∪ ["/"] trivially
+    contains every canonical path (R0 gateway silently disabled).
+    realpath("../tmp") = CWD-relative (CWD-dependent authority
+    identity reintroduced, violating CORRECTION02 invariant).
+
+  Post-CORRECTION04 (this fix):
+    filterActiveTemporaryExternalPathEntries applies
+    `classifyTemporaryExternalPathShape(entry.path) !== "valid"`
+    and continues on every non-valid shape. Tampered entries
+    never reach realpath-canonicalization. Adversarial tests
+    in §4 of the ACT body are all PASS.
+
+PRODUCTION DELTA
+  + apps/vscode/src/shared/storage/temporaryExternalPathAuthorities.ts
+      - classifyTemporaryExternalPathShape predicate (export)
+      - TemporaryExternalPathShapeClassification type (export)
+      - validateEntry now uses the shared predicate
+      - filterActiveTemporaryExternalPathEntries now drops
+        anything other than "valid" shape before realpath
+  + apps/vscode/src/shared/storage/__tests__/temporaryExternalPathAuthorities.test.ts
+      +15 tests (classifier + filter)
+  + apps/vscode/src/core/storage/__tests__/temporaryExternalPathAuthorityCrossInstance.test.ts
+      +6 tests (adversarial matrix)
+  + apps/vscode/src/sdk/__tests__/temporary-external-path-authority01.c2-production-seam.test.ts
+      +1 test (policy-level witness)
+  = No production wiring changes (validator and filter are in
+    the same module; SdkController consumption is unchanged).
+
+WIRE_SCHEMA_DELTA      = NONE
+PUBLIC_TYPE_SURFACE_DELTA = +1 (TemporaryExternalPathShapeClassification
+                              exported from the shared module; additive)
+P0 = NONE remaining
+P1 = UI_STATE_STALE_CROSS_INSTANCE (NON-BLOCKING, deferred)
+P2 = NONE for CORRECTION04 closure

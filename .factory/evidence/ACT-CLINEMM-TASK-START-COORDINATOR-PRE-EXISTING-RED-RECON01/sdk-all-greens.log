@@ -1,0 +1,366 @@
+(node:16910) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:16917) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16918) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16912) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16915) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16914) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16911) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16919) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16921) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16913) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16922) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16920) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16923) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16924) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16925) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural > absent env var: buildExperimentalReconCapability emits network: 'deny' 2ms
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural > CLINEMM_SAFE_YOLO_NETWORK=allow + Seatbelt opt-in: network flips to 'allow' 0ms
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural > CLINEMM_SAFE_YOLO_NETWORK=allow WITHOUT Seatbelt opt-in (off): still 'deny' 0ms
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural > non-'allow' values are rejected (no fuzzy truthy) 0ms
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural > filesystem policy is unchanged EXCEPT for the credential deny list when the opt-in is set 1ms
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - structural > filesystem policy WITHOUT the opt-in: denyReadSubpaths is empty (CORRECTION01 R11) 1ms
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - REAL production seam GREEN > CommandJobManager.start with CLINEMM_SAFE_YOLO_NETWORK=allow: sandboxed connect reaches CONTROL (CONNECTED:$TOKEN) 35ms
+   → NETWORK_OPEN_FAILED: TEST exact-stdout mismatch; expected="CONNECTED:SYN-0441b6ded6bb\n" got="" exit=undefined state=spawn_failed
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts > ACT-CLINEMM-SAFE-YOLO-SEATBELT-NETWORK-OPEN01 - REAL production seam GREEN > FILESYSTEM CONSERVATION: same production seam with opt-in set, probes match pre-change baseline 1ms
+   → EPERM: operation not permitted, mkdir '/Volumes/UserData/Users/chistyakov/.cline-safe-yolo-lab-5f8a979f'
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-network-open01.c1-green.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > structural: resolveSafeYoloSensitiveReadDenials returns the curated V1 list when Seatbelt mode active 13ms
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R1: SSH private key (~/.ssh/id_rsa) is DENIED under Seatbelt (DENY list fixture) 24ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R1: SSH ed25519 private key (~/.ssh/id_ed25519) is DENIED 3ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R2: GnuPG private-key directory (~/.gnupg/private-keys-v1.d/) is DENIED 3ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R3: ~/.ssh/config remains READABLE (KEEP_READABLE sibling) 3ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R4: ~/.ssh/known_hosts remains READABLE (KEEP_READABLE sibling) 4ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R5: workspace-region READ is ALLOWED (carried invariant) 3ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R6: network connectivity remains OPEN (carried invariant) 11ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R7: $HOME write remains DENIED (carried invariant) 5ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R8: SSH private-key exfiltration is BLOCKED (denied read + open network combine to nothing) 8ms
+   → expected undefined to be +0 // Object.is equality
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > GREEN - curated V1 credential set is denied; non-credential ~/.ssh siblings remain readable > R9: workspace-nonce exfiltration (control leg) is ALLOWED -- proves network still works 4ms
+   → expected undefined to be +0 // Object.is equality
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > CORRECTION01: SAFE_YOLO_SENSITIVE_READ_GUARD_V1 invariant (structural) > R10: denyReadSubpaths is INDEPENDENT of approval-mode / YOLO / session override 0ms
+ ✓ src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > CORRECTION01: SAFE_YOLO_SENSITIVE_READ_GUARD_V1 invariant (structural) > R11: Seatbelt ON + network DENY → denyReadSubpaths = [] (broad-read preserved) 0ms
+ × src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts > CORRECTION01: SAFE_YOLO_SENSITIVE_READ_GUARD_V1 invariant (structural) > R11 (companion): Seatbelt OFF → denyReadSubpaths = [] (defensive default) 3ms
+   → expected [ …(3) ] to deeply equal []
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > ACT-CLINEMM-SEATBELT-DEFAULT-ON01: opt-out + fail-closed conservation > explicit opt-out (off): seeded parent env var reaches the child 29ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > ACT-CLINEMM-SEATBELT-DEFAULT-ON01: opt-out + fail-closed conservation > invalid opt-in value: selector throws (fail closed; classic is NOT silently selected) 1ms
+ × src/sdk/command-job-manager.sandbox-integration.test.ts > env proof: experimental opt-in honors envSemantics=complete end-to-end > with seatbelt opt-in on darwin, CLINEMM_PRODUCTION_TEST_LEAK_VAR is absent in actual child stdout 14ms
+   → expected 'spawn_failed' to be 'exited' // Object.is equality
+ × src/sdk/command-job-manager.sandbox-integration.test.ts > env proof: experimental opt-in honors envSemantics=complete end-to-end > with seatbelt opt-in on darwin, AWS_SECRET_ACCESS_KEY is absent in actual child stdout 0ms
+   → expected 'spawn_failed' to be 'exited' // Object.is equality
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > backend prepared invocation reaches the supervisor (structural) > with seatbelt opt-in, the prepared invocation's executable replaces the original 9ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > backend prepared invocation reaches the supervisor (structural) > prepared envSemantics=complete is honored end-to-end (structurally) 10ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > real production seam: prepared cwd reaches the spawned child > with seatbelt opt-in + backend returning a different cwd, `pwd` reports the backend's cwd 11ms
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > returns EXITED for a fast command and remains queryable 26ms
+   → expected 'spawn_failed' to be 'exited' // Object.is equality
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > returns RUNNING when wait budget expires and the process is still alive 1ms
+   → expected 'spawn_failed' to be 'running' // Object.is equality
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > terminates the owned process tree on deadline with deterministic state 0ms
+   → expected 'spawn_failed' to be 'running' // Object.is equality
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > cancellation is idempotent and terminates the owned process tree 0ms
+   → expected 'spawn_failed' to be 'running' // Object.is equality
+ ✓ src/sdk/command-job-manager.test.ts > CommandJobManager > returns unknown_job for an unrecognized jobId 0ms
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > truncates response output to MAX_RESPONSE_OUTPUT_CHARS and surfaces outputTruncated on every response 0ms
+   → expected 'spawn_failed' to be 'exited' // Object.is equality
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > status with waitMs waits for terminal transition up to the budget 0ms
+   → expected 'spawn_failed' to be 'running' // Object.is equality
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > clamps waitMs above MAX_STATUS_WAIT_MS 0ms
+   → expected 'spawn_failed' to be 'exited' // Object.is equality
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > caps retained terminal jobs via bounded FIFO eviction (injectable maxTerminalJobs) 1ms
+   → expected +0 to be 3 // Object.is equality
+ × src/sdk/command-job-manager.test.ts > CommandJobManager > dispose() cancels every still-running job 0ms
+   → expected 'spawn_failed' to be 'running' // Object.is equality
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/darwin-seatbelt-safe-yolo-sensitive-read-confinement01.c2-green.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > real production seam: prepared cwd reaches the spawned child > explicit opt-out (off): supervisor uses caller's cwd unchanged 24ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > fail-closed: substrate unavailable > resolver returns undefined: command is not executed (spawn_failed) 0ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > fail-closed: substrate unavailable > real substrate unavailable on non-darwin: command is not executed 0ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > fail-closed: prepare failure > backend.prepare throws SandboxError: command is not executed (spawn_failed) 0ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > fail-closed: prepare failure > backend.prepare throws arbitrary Error: still fail-closed 0ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > wiring sanity > resolver is invoked exactly once per start() when opt-in is set 10ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > wiring sanity > resolver is NOT invoked when explicit opt-out (off) is selected 14ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > ACT-IMPL01: sshAuthenticationAuthority reaches the production seam > default (env unset): CommandCapability has NO sshAuthenticationAuthority field 7ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > ACT-IMPL01: sshAuthenticationAuthority reaches the production seam > CLINEMM_SAFE_YOLO_SSH_AGENT=allow: CommandCapability.sshAuthenticationAuthority.mode === 'agent' 6ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > ACT-IMPL01: sshAuthenticationAuthority reaches the production seam > CLINEMM_SAFE_YOLO_SSH_AGENT=deny (or any value other than 'allow'): no agent authority 7ms
+ ✓ src/sdk/command-job-manager.sandbox-integration.test.ts > ACT-IMPL01: sshAuthenticationAuthority reaches the production seam > CLINEMM_SAFE_YOLO_SSH_AGENT=allow WITHOUT seatbelt mode: no agent authority (mode-gated) 11ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+(node:16973) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ × src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts > ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL01 > RUNNING_JOB_MUST_NOT_BE_SILENTLY_ABANDONED - projection must reset when the background job terminates 16ms
+   → Unexpected end of JSON input
+ × src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts > ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL03 > NO_JOB_DONE_YIELDS_TO_USER - fast command completes synchronously, no orphaned job 2ms
+   → expected '' to contain 'done'
+ ✓ src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts > ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL04 > INTENTIONAL_DETACH_TYPED_INTENT - production run_commands input schema has no typed intent field 1ms
+ ✓ src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts > ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL06 > TOOL_DESCRIPTION_PROVENANCE - production run_commands description mentions long-running + tmp-file guidance (does NOT prove the RUNNING(jobId) contract) 0ms
+ × src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts > ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01 / ACL10 > TERMINAL_EVENT_CARDINALITY - terminalPromise resolves exactly once per job 1ms
+   → expected 'spawn_failed' to be 'running' // Object.is equality
+ × src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > emits onBackgroundStateChange(true, jobId) when the tool returns RUNNING 15ms
+   → Unexpected end of JSON input
+ × src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > emits onBackgroundStateChange(false, undefined) when the command completes before the wait budget 2ms
+   → expected '' to contain 'fast-ok'
+ × src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > RTP-LONG01: console-sh background job survives after the tool call returns and completes naturally (no cancel, no deadline) 1ms
+   → Unexpected end of JSON input
+ × src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > RTP-ASYNC01: when the tool returns RUNNING, the callback fires again with (false, undefined) after the process completes asynchronously 2ms
+   → Unexpected end of JSON input
+ × src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > RTP-MULTI01: projection stays true while at least one background job is still active (terminal-cardinality-safe) 1ms
+   → Unexpected end of JSON input
+ × src/sdk/vscode-run-commands-tool.background-state.test.ts > createVscodeRunCommandsTool — background state callback (ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01) > RTP-MULTI02: projection fires (true, jobId) when jobs start concurrently (0->N race-safe) 1ms
+   → Unexpected end of JSON input
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/async-command-turn-liveness.acl01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+(node:16980) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16987) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16988) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16989) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/vscode-lm/register-vscode-lm.test.ts > registerVsCodeLmHandler gating > does not register when the vscode.lm API is unavailable (e.g. JetBrains) 444ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > round-trips write then read with fresh structurally equal objects 107ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > clears string fields from providers.json when they are written as empty strings 22ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > mirrors qwen apiLine writes to both providers.json and the legacy state key 14ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > mirrors moonshot apiLine writes to both providers.json and the legacy state key 15ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > round-trips commitSelection then readSelection for provider-specific model info 12ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > persists host catalog metadata for a dynamic LiteLLM model without turning it into an override 16ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > keeps a persisted litellm private-catalog snapshot authoritative after reload 29ms
+ ✓ src/sdk/vscode-lm/register-vscode-lm.test.ts > registerVsCodeLmHandler gating > registers the catalog provider and handler once when the vscode.lm API is available 43ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/vscode-lm/register-vscode-lm.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/sdk-interaction-coordinator.test.ts > SdkInteractionCoordinator > emits a tool approval ask and resolves approval from askResponse state 62ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > non-command tools: override=none => old per-category behavior > Read disabled => approval UI opened 57ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > non-command tools: override=all => auto-approved even when persisted category disabled > Read disabled + override all => auto-approved without approval UI 2ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > non-command tools: override=all => auto-approved even when persisted category disabled > Edit disabled + override all => auto-approved without approval UI 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > non-command tools: override=all => auto-approved even when persisted category disabled > Web disabled + override all => auto-approved without approval UI 1ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > command tools: override=all places host in 'all' mode > ordinary unsafe-but-not-hard-denied command + override all => ALLOW 7ms
+ × src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > command tools: override=all places host in 'all' mode > safe-only persisted + override all => ALLOW (override wins over safe-only mode) 13ms
+   → expected { approved: true, …(2) } to match object { approved: true, decision: { …(2) } }
+(5 matching properties omitted from actual)
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > command tools: hard DENY must NOT be overridden by session override=all > override all + host_hard_deny rule => DENY (no approval UI) 1ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > command tools: hard DENY must NOT be overridden by session override=all > override all + execution_plan_invalid => DENY (real mode:all + allow rules) 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > lifecycle: override clears when task ends > simulated clearTask destroys the override (next override=query returns none) 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > lifecycle: override clears when task ends > task B begins with a different session id: override bound to task A does NOT leak 0ms
+ × src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION01: model escalation is suppressed under session override=all > override all + requires_approval=true => ALLOW (not ASK) 1ms
+   → expected { approved: true, …(2) } to match object { approved: true, decision: { …(2) } }
+(5 matching properties omitted from actual)
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION02: pre-arm intent + lifecycle separation > getOverride is PURE: it does NOT consume the arm across reads 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION02: pre-arm intent + lifecycle separation > consumePendingOverride binds the arm to a session id and clears it 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION02: pre-arm intent + lifecycle separation > consumePendingOverride is a no-op when no arm is set 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION02: pre-arm intent + lifecycle separation > clearActiveOverride destroys the bound override only (arm survives) 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION02: pre-arm intent + lifecycle separation > clearPendingArm destroys the arm only (bind survives) 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION02: pre-arm intent + lifecycle separation > clearSessionAutoApproval destroys both (full reset) 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION02: pre-arm intent + lifecycle separation > setOverride(undefined, 'none') clears both arm and bind (UI toggle off) 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION01: SdkInteractionCoordinator integration > CORRECTION02: composition over baseAuth preserves explicitDenyRules > base explicitDenyRules survive session override=all in the composed auth 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03: real coordinator proof (Figma MCP) > figma-desktop/get_metadata + session ALL + persisted MCP=false => ALLOW, no approval UI 0ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > keeps a persisted baseten private-catalog snapshot authoritative after reload 49ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > keeps a persisted hicap private-catalog snapshot authoritative after reload 87ms
+(node:16990) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > replaces a single occurrence 2ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > returns new_text verbatim for created files 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > inserts before the one-based boundary line 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > appends at EOF via line_count + 1 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > matches LF-only multi-line old_text in a CRLF file and keeps CRLF endings 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > inserts with the file's CRLF endings 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > inserts $-sequences in new_text literally, like the executor 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > throws for text not found 1ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > throws for ambiguous text 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > throws for missing old_text on an existing file 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > computeNewEditorContent > throws for an out-of-range insert_line 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > types fully-changed content in line by line and ends exactly at rightContent 1ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > caps typing frames for large changes and still ends at rightContent 24ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > renders immediately when many small hunks would exceed the global animation budget 446ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03: real coordinator proof (Figma MCP) > figma-desktop/get_metadata + override=none + persisted MCP=false => ASK (regression baseline) 52ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03: real coordinator proof (Figma MCP) > pre-arm ALL → new session consumes ALL → Figma MCP ALLOW on first call 0ms
+ ✓ src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts > ACT-CLINEMM-SESSION-AUTONOMY01-CORRECTION03: real coordinator proof (Figma MCP) > task ends ⇒ persisted MCP behavior restored ⇒ Figma MCP back to ASK 52ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-interaction-coordinator.session-autonomy.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > translates and emits session messages, then posts state 3ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > filters late completion messages after cancellation 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > ignores stale events from inactive sessions 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > marks turns complete through the session lifecycle 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > posts state on turn end even when the turn-complete event carries NO messages 1ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > resolves the turn phase to 'error' when the turn surfaced a provider error 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > marks a submitted queued prompt as a new streaming turn 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > posts state for queued prompt turn start even when no transcript message is emitted 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > does NOT override the phase on a turn-complete straggler from an already-cancelled session 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > resolves the phase when a queued turn completes after its running flag was clobbered 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > updates task usage when the active session has a start result 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > zeros usage and api request message cost for free Cline models 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > leaves mistake-limit recovery to the SDK callback instead of mutating tool-error events 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > captures provider failure telemetry for SDK agent errors 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > does not capture provider failure telemetry for SDK agent errors without an error payload 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > does not capture provider failure telemetry for recoverable error events (mistake notices) 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > captures provider failure telemetry when the SDK finishes a turn with reason error 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > CRA02-coord: done with no committed terminal response DOES promote to awaiting_followup (liveness-corrected) 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > CRA03-coord: attemptCompletionSeen but no committed terminal response yields awaiting_followup (liveness-corrected, post-CPL04) 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > CPL01: done with no terminal response / no attempt-completion / no error transitions to awaiting_followup (liveness) 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > CPL02: done with committed terminal response AND attempt-completion transitions to completed (control: completion-tool path) 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (structural/synthetic control) 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > CPL04: done with attempt-completion declared but NO committed terminal response yields awaiting_followup (liveness, symmetric to CPL01) 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > CPL05: done with error transitions to error (conservation) 0ms
+ × src/sdk/sdk-session-event-coordinator.test.ts > SdkSessionEventCoordinator > OWN01 RED: bare done + no terminal commit + no attempt_completion + no user-yield authority MUST NOT yield to awaiting_followup 3ms
+   → expected true to be false // Object.is equality
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > T2-EXT01: production-lifecycle PTAD capture order > T2-EXT01-A: terminal-push capture records (true, true); new-turn capture records (false, false); first is immutable 2ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > T2-EXT01: production-lifecycle PTAD capture order > T2-EXT01-B: when only attempt_completion is observed (no terminal commit), terminal-push records (true, false) 0ms
+ ✓ src/sdk/sdk-session-event-coordinator.test.ts > T2-EXT01: production-lifecycle PTAD capture order > T2-EXT01-C: a new-turn boundary reset is visible in the NEXT push only (first is immutable) 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/sdk-interaction-coordinator.test.ts > SdkInteractionCoordinator > records the real approval row timestamp that the translator reuses 54ms
+ ✓ src/sdk/sdk-interaction-coordinator.test.ts > SdkInteractionCoordinator > resolves denied tool approval with the user reason 52ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > lets a public catalog update supersede an older persisted snapshot after reload 37ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > keeps a LiteLLM max-input override ahead of cached catalog metadata without baking it into the base 19ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > does not fabricate maxInputTokens or a metadata snapshot when a dynamic model has no catalog metadata 11ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > round-trips generic provider selections using the in-process modelInfo envelope 18ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > hydrates a generic provider selection from providers.json after reload 12ms
+ ✓ src/sdk/model-catalog/store.test.ts > createProviderConfigStore > does not combine a generic provider's remembered model info with another provider's active model id 24ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > renders immediately before cumulative full-document frames cross the retained-byte budget 3ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > handles new-file previews (empty left) and single-line contents 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > returns a single instant frame for identical content 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > pauses at a pure deletion point and ends at the shrunken content 0ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > zips through unchanged spans and slows through the change (mid-file edit) 2ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > buildEditPreviewAnimation > slows down separately at each hunk of a multi-hunk edit 1ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > opens a populated preview before approval for an existing-file edit 20ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > opens a preview for a multi-line edit in a CRLF file (issue #13296) 3ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > previews new files with an empty left side and skips insert into missing files 4ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > does not open previews when background edit is enabled 4ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > never throws from openForApproval and the executor still applies the edit 8ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > closes the pre-approval preview and delegates the write on execution 5ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > closes the preview even when the write fails 6ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > shows the edited file before closing the preview after a successful write 11ms
+ ✓ src/sdk/sdk-diff-edit-coordinator.test.ts > SdkDiffEditCoordinator > shows the edited file after an auto-approved edit's preview linger 16ms
+(node:16991) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/sdk-interaction-coordinator.test.ts > SdkInteractionCoordinator > denies edit tools with an explicit file-was-not-modified reason 104ms
+ ✓ src/sdk/sdk-interaction-coordinator.test.ts > SdkInteractionCoordinator > routes message responses as queued follow-ups without resolving pending tool approval 52ms
+(node:16992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m
+Emitted 'error' event at:
+    at ChildProcess.emitWorkerError (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3011:22)
+[90m    at ChildProcess.emit (node:events:509:20)[39m
+[90m    at ChildProcess.kill (node:internal/child_process:535:12)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+Node.js v26.0.0

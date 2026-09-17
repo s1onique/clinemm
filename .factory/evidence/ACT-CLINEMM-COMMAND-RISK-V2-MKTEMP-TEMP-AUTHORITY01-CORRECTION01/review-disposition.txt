@@ -1,0 +1,190 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01
+REVIEW DISPOSITION (verbatim from reviewer)
+
+HALT_MKTEMP_DEFAULT_OFF_AUTHORITY_UNPROVEN
+
+The implementation is very small and well-tested, but the central
+safety claim is not actually true cross-platform, and the production
+rule is host-independent.
+
+The digest shows the new rule is literally:
+
+    {
+      source: "host_safe_mktemp_default_temp",
+      pattern: /^\s*mktemp(?:\s+-d)?\s*$/u,
+    }
+
+with comments explicitly saying it promotes the bare form on Linux
+too and that the destination is "host-defined" and therefore bounded.
+
+That is the problem.
+
+P0 - inherited TMPDIR can steer bare GNU mktemp
+
+GNU Coreutils documents that when the template is omitted:
+    "the default template is used and --tmpdir is implied."
+And --tmpdir without an explicit directory uses TMPDIR if available,
+otherwise /tmp.
+
+So this production state is possible:
+
+    process.env.TMPDIR=/some/arbitrary/writable/location
+    command text: mktemp
+
+Your lexical rule sees only: mktemp
+and auto-approves it.
+
+But GNU mktemp can then create the file under
+    /some/arbitrary/writable/location
+without any TMPDIR= assignment appearing in the command string.
+
+Therefore this negative test:
+    TMPDIR=/x mktemp -> ASK
+does NOT protect the actual authority surface.
+
+The steering may already exist in the inherited environment.
+
+That breaks the ACT's core claim:
+    "DEFAULT_OFF authority bounded by rendered shape alone"
+on GNU systems.
+
+Darwin is better, but still not purely lexical
+
+The Darwin manual says bare mktemp behaves as though -t tmp were
+supplied. It normally uses _CS_DARWIN_USER_TEMP_DIR, but if that is
+unavailable it falls back to TMPDIR, then -p, then /tmp; the man
+page explicitly warns about environment-controlled temp locations.
+
+So even on Darwin, the strongest truthful statement is:
+    "usually anchored by _CS_DARWIN_USER_TEMP_DIR"
+not:
+    "independent of environment in all supported states"
+
+Your current source comment says:
+    "bare form on darwin ignores $TMPDIR"
+That overstates the documented contract.
+
+Why this is P0
+
+This is not a portability nit. The ACT explicitly made the decision:
+    AUTO
+rather than ASK because it claimed:
+    no caller-selected pathname
+  + host-defined destination
+  = bounded filesystem authority
+
+But inherited environment is part of execution authority.
+
+The actual causal chain can be:
+    parent environment controls TMPDIR
+        |
+        v
+    rendered command remains exactly "mktemp"
+        |
+        v
+    regex AUTO-approves
+        |
+        v
+    DEFAULT_OFF executor inherits environment
+        |
+        v
+    mktemp writes somewhere chosen outside command text
+
+That is precisely the kind of hidden authority channel the Factory
+rules are meant to catch.
+
+One bounded correction
+
+Do NOT throw away the whole ACT.
+
+There are two sane options.
+
+Preferred: restrict this rule to Darwin with host evidence
+
+Make host_safe_mktemp_default_temp a host-evidence-bound rule, not
+a global lexical regex.
+
+Require something like:
+    platform = darwin
+    effective default temp root resolved
+    canonical root accepted by host policy
+    exact command shape = mktemp | mktemp -d
+
+Then the rule can stay AUTO for the macOS product path you've
+actually qualified.
+
+Linux remains ASK for now.
+
+That is the cleanest correction because the user-facing defect was
+macOS/Seatbelt-driven in the first place.
+
+Alternative: bind authorization to effective environment
+
+If you really want Linux AUTO too, authorization must consider the
+inherited effective TMPDIR, canonicalize it, and prove it is inside
+an acceptable temp authority.
+
+That is a larger authority-evidence change and not worth doing
+merely for symmetry.
+
+So I strongly prefer:
+    darwin AUTO
+    linux ASK
+for this ACT.
+
+Required RED
+
+Add a real discriminator for the hidden environment channel.
+
+On GNU/Linux, or with GNU mktemp if available:
+    mkdir <synthetic-steered-dir>
+    env TMPDIR=<synthetic-steered-dir> mktemp
+
+where the environment is inherited by the executor rather than
+encoded in the command string.
+
+Expected today:
+    policy = AUTO
+    execution destination = synthetic-steered-dir
+
+That reproduces the defect.
+
+Then after correction:
+    linux / unknown host -> NOT AUTO
+unless host evidence independently proves the destination.
+
+For Darwin, also capture the actual effective destination and
+_CS_DARWIN_USER_TEMP_DIR behavior, but don't rely on the manual
+alone.
+
+P1: naming
+
+The new C3 files are named _live-qualification-c3.test.ts and
+command-policy.mktemp-live-green.test.ts, but the digest shows they
+call evaluateCommandPolicy() directly with production-shaped host
+authorization. That's valuable: REAL_PRODUCTION_POLICY_SEAM
+but it is not by itself: LIVE installed UX
+Your chat report contains the true installed Seatbelt composition,
+which may come from separate local evidence, but don't let the
+committed test names overstate what they execute.
+P1 wording only.
+
+Corrected disposition:
+    C1 recon                    GOOD
+    C2 bounded rule             P0 CROSS-PLATFORM AUTHORITY DEFECT
+    C3 policy tests             PASS, evidence label slightly overstated
+
+CURRENT: HALT_MKTEMP_DEFAULT_OFF_AUTHORITY_UNPROVEN
+
+Reopen condition
+
+One bounded CORRECTION01:
+    1. reproduce inherited-TMPDIR steering
+    2. remove unconditional cross-platform lexical AUTO
+    3. bind AUTO to Darwin host evidence OR
+       prove/canonicalize effective temp authority
+    4. Linux remains ASK unless separately proven
+    5. rerun existing 1044 command-policy conservation
+    6. parser helper unchanged
+
+Then: PASS_MKTEMP_BOUNDED_TEMP_AUTHORITY CLOSED_CLEAN

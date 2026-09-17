@@ -1,0 +1,72 @@
+[
+  {
+    "bytes": 130,
+    "path": "approval-discriminator.json",
+    "sha256": "de72e2daba85f11d9ffc81481955f426addb4403817f1c4dfb6778cfd10b223f"
+  },
+  {
+    "bytes": 0,
+    "path": "approval-event-fingerprints.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "bytes": 0,
+    "path": "approval-events-after.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "bytes": 0,
+    "path": "approval-events-before.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "bytes": 0,
+    "path": "approval-events-delta.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "bytes": 0,
+    "path": "approval-events.jsonl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "bytes": 327,
+    "path": "approval-summary.json",
+    "sha256": "7cd31ff81f9ab1240f3c4676643eb4564dcb97ed72da454c0922ce7753e880ff"
+  },
+  {
+    "bytes": 1403,
+    "path": "binding.json",
+    "sha256": "965ac4db0a03b94e29471d616b158e444c154e427d864e19b3382ec8ca2c2d95"
+  },
+  {
+    "bytes": 202,
+    "path": "environment.json",
+    "sha256": "93a5769dea7614f573d73e8d288ac9a55e5da6a827236ab9d08780dc9e98005d"
+  },
+  {
+    "bytes": 1285,
+    "path": "git.txt",
+    "sha256": "85f71087ea0166827af04336ce6dbfe923ef281451e7f5dca26cd8d57ce66559"
+  },
+  {
+    "bytes": 517,
+    "path": "manifest.json",
+    "sha256": "c02ebf5ff598077e2ec5991ecdb2bcefcd5970a1edd26967369d35f0d4f65e3b"
+  },
+  {
+    "bytes": 836,
+    "path": "runtime-identity-drift.json",
+    "sha256": "50b0776dfa33d871ea622c8143aa3aa3360a3b3def2f50a3d622ea547d07e750"
+  },
+  {
+    "bytes": 217,
+    "path": "runtime-identity.json",
+    "sha256": "4b8286cd98dface980bffbaa6bfcf0b384b3efaf4ed855823d66aba46fa172c3"
+  },
+  {
+    "bytes": 761,
+    "path": "session-metadata/index.json",
+    "sha256": "6a0953b6998e025b4e7e32d125a73094a294abdfd8fb2a0445f87faf6d32a9aa"
+  }
+]

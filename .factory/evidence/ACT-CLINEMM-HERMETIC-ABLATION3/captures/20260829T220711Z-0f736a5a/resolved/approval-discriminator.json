@@ -1,0 +1,29 @@
+{
+  "capturedAt": "2026-08-29T22:07:12.114336Z",
+  "deltaSize": 2,
+  "items": [
+    {
+      "approvalEntryObserved": true,
+      "approvalTerminalObserved": false,
+      "correlationId": "corr-B",
+      "policyAutoApprove": null,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": "session-B",
+      "shouldAutoApproveTool": null,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-mismatch/diagnostics/after.jsonl",
+      "toolName": "execute_command"
+    },
+    {
+      "approvalEntryObserved": false,
+      "approvalTerminalObserved": true,
+      "correlationId": "corr-B",
+      "policyAutoApprove": null,
+      "schema": "cline-approval-discriminator/v1",
+      "sessionId": "session-B",
+      "shouldAutoApproveTool": null,
+      "source": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/after-mismatch/diagnostics/after.jsonl",
+      "toolName": "execute_command"
+    }
+  ],
+  "schema": "cline-approval-discriminator/v1"
+}

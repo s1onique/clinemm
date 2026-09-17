@@ -1,0 +1,209 @@
+ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 -- P0-4 RED REPRO
+
+P0-4 was identified by the reviewer in disposition
+HALT_AUTHORIZED_SHELL_STARTUP_ENV_UNBOUND.
+
+Reference: GNU Bash Reference Manual, Bash Startup Files
+(https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html):
+
+  When Bash is invoked as a non-interactive shell (e.g., via
+  bash -c "<command>"), it looks for BASH_ENV in the
+  environment, and if it is defined, expands the value of
+  that variable and uses the expanded value as a file to
+  source BEFORE executing the supplied command string.
+
+The CORRECTION03 review confirmed:
+
+  Slash-bypass (CORRECTION03 fix) only closes the
+  function-lookup channel. It does NOT close the BASH_ENV
+  startup-file channel because bash sources $BASH_ENV
+  BEFORE the final simple command, regardless of whether
+  the final command has a slash.
+
+Causal mismatch:
+  policy authorized C = "/usr/bin/mktemp"
+  bash executes S + C = ". $BASH_ENV; /usr/bin/mktemp"
+  where S is arbitrary startup-file code inherited from
+  the parent environment.
+
+LIVE REPRODUCTION (this darwin-arm64 host, 2026-08-26)
+=====================================================
+
+Two layers of verification were performed:
+
+LAYER 1: Direct bash -c reproduction
+  (proves BASH_ENV semantics under bash itself)
+
+  $ cat > /tmp/bash-env-$$ <<'BEOF'
+  printf 'STARTUP %s\n' "$(date +%N)" >> /tmp/sentinel-$$
+  BEOF
+
+  $ BASH_ENV=/tmp/bash-env-$$ bash -c "/usr/bin/mktemp"
+  /var/folders/.../T/tmp.xxx
+  $ cat /tmp/sentinel-$$
+  STARTUP 996965000
+
+  -> LEAK CONFIRMED. Slash-prefixed mktemp succeeded AND
+     BASH_ENV ran first.
+
+LAYER 2: Through the PRODUCTION EXECUTOR SEAM
+  (uses spawnSupervisableShellCommand from
+  sdk/packages/core/src/extensions/tools/executors/bash.ts
+  -- the SAME function apps/vscode/src/sdk/command-job-manager.ts
+  calls at the supervisor call)
+
+  Test code at /tmp/red-c1-bun.mjs calls
+  spawnSupervisableShellCommand with:
+    executable: "/bin/bash"
+    args: ["-c", "<command>"]
+    cwd: root
+    // envSemantics intentionally omitted (= "overlay")
+
+  Under DEFAULT_OFF (envSemantics: "overlay"),
+  buildShellProcess line 240-241:
+    childEnv = ... ? config.env
+                : { ...process.env, ...config.env }
+
+  So process.env.BASH_ENV leaks into the spawned bash's
+  environment, and bash sources it at startup.
+
+  Output:
+
+  [1. /usr/bin/mktemp (CORRECTION03 slash-form AUTO candidate)]
+    exitCode:       0
+    sentinel:       STARTUP 832219000
+    LEAK:           ** YES **
+
+  [2. /usr/bin/mktemp -d]
+    exitCode:       0
+    sentinel:       STARTUP 844505000
+    LEAK:           ** YES **
+
+  [3. pwd (general)]
+    exitCode:       0
+    sentinel:       STARTUP 852055000
+    LEAK:           ** YES **
+
+  [4. echo hello (general)]
+    exitCode:       0
+    sentinel:       STARTUP 857166000
+    LEAK:           ** YES **
+
+  [5. /usr/bin/mktemp -d /tmp/foo.XXXXXX (ASK candidate)]
+    exitCode:       0
+    sentinel:       STARTUP 861917000
+    LEAK:           ** YES **
+
+OBSERVATION
+===========
+
+  Every bash -c invocation under DEFAULT_OFF / overlay env
+  semantics is preceded by inherited BASH_ENV execution.
+  The slash-bypass fix from CORRECTION03 does NOT close
+  this because bash sources BASH_ENV regardless of the
+  final simple command name.
+
+GENERAL SCOPE (NOT JUST mktemp)
+================================
+
+  This affects EVERY bash -c invocation, not just mktemp:
+    - pwd         -> LEAK
+    - echo hello  -> LEAK
+    - /usr/bin/mktemp        -> LEAK
+    - /usr/bin/mktemp -d     -> LEAK
+    - /usr/bin/mktemp -d /tmp/foo.XXXXXX  -> LEAK
+
+  A hostile or surprising BASH_ENV (or any inherited
+  shell-startup-affecting environment variable) can run
+  arbitrary code before the policy-authorized command.
+
+WHY NOT COVERED BY CORRECTION03
+================================
+
+  CORRECTION03 closed the FUNCTION-LOOKUP channel via
+  slash-bypass (GNU Bash: command names with a slash are
+  executed as pathnames without function or builtin
+  lookup). That fix is correct.
+
+  The BASH_ENV channel is INDEPENDENT of command-name
+  parsing: bash sources $BASH_ENV as part of non-interactive
+  startup, before command-line parsing. Slash-bypass
+  cannot close it.
+
+WHY THIS IS NOT A COMMAND-POLICY DEFECT
+========================================
+
+  The command-policy proves authority over the COMMAND
+  STRING. It cannot prove authority over what bash does
+  before parsing the command string. That's an executor-
+  side concern.
+
+  CORRECTION01-P1: Seatbelt sanitized mode uses
+  envSemantics: "complete" which materializes an env from
+  SAFE_ENVIRONMENT_BASELINE + allow list. BASH_ENV is
+  NOT in that baseline and NOT a typical allow-list entry,
+  so it's already stripped by construction under sanitized
+  Seatbelt mode.
+
+  DEFAULT_OFF uses envSemantics: "overlay" (or undefined)
+  and spreads process.env underneath config.env, so
+  BASH_ENV leaks. This is the gap.
+
+ROOT-CAUSE LINE
+================
+
+  sdk/packages/core/src/extensions/tools/executors/bash.ts
+  line 240-241:
+    const childEnv =
+      config.envSemantics === "complete" ? config.env : { ...process.env, ...config.env }
+
+  The DEFAULT_OFF branch (envSemantics undefined or
+  "overlay") inherits ALL of process.env including
+  BASH_ENV. Bash then sources it at startup.
+
+  This is the SAME class of authority bug we have
+  repeatedly guarded against elsewhere:
+    authority bound to object A (the policy-authorized
+    command string)
+    execution may select object B (the startup file
+    pointed to by BASH_ENV)
+
+CORRECTION PROPOSAL (C2 of this ACT)
+=====================================
+
+  At the spawn boundary in
+  spawnSupervisableShellCommand / buildShellProcess,
+  strip inherited Bash-startup-affecting variables from
+  the childEnv under overlay semantics.
+
+  Variables to strip (RECON BEFORE FINAL LIST):
+    - BASH_ENV (verified live as the load-bearing channel)
+    - ENV (analogous for sh/POSIX; bash-specific but
+          defensive)
+    - SHELLOPTS (Bash sets it from inherited value at
+                 startup; affects subsequent shell behavior)
+    - BASHOPTS (analogous; sets shopt options at startup)
+
+  Variables NOT stripped:
+    - PATH, TERM, LANG, etc. -- ordinary env, conservative
+    - exported shell functions (BASH_FUNC_*): already
+      neutered by CORRECTION03 slash-bypass for the
+      command-identity channel, but ALSO bound by slash
+      bypass because bash functions only intercept
+      command names without slashes
+    - any caller-supplied env (e.g., SHELL override from
+      command-job-manager.ts:640): caller-controlled,
+      trusted
+
+  Note: --noprofile / --norc alone is INSUFFICIENT for
+  BASH_ENV; bash documents BASH_ENV as separate from
+  the profile/rcfile machinery.
+
+EVIDENCE LABEL
+==============
+
+  RED REPRO P0-4 (BASH_ENV startup):  REAL (LEAK reproduced
+                                       through production
+                                       executor seam)
+  CORRECTION03 fixes FUNCTION-LOOKUP channel only,
+  not BASH_ENV. Cross-channel authority gap OPEN.

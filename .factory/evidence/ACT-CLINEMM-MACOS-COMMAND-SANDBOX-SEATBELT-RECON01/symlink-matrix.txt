@@ -1,0 +1,27 @@
+=== ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01 symlink-matrix ===
+Date: 2026-08-25T00:01:56Z
+
+Symlink fixture: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/link-out -> ../outside
+Target: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside
+
+Profile: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/baseline-rw.sb (deny default, allow file-read*, deny file-read*/write* on /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside)
+
+--- S1: cat INSIDE/link-out/secret.txt -- expect DENY (symlink escape blocked) ---
+cat: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/link-out/secret.txt: Operation not permitted
+  rc=1
+
+--- S2: cat INSIDE/../outside/secret.txt -- expect DENY (textual ../) ---
+cat: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/../outside/secret.txt: Operation not permitted
+  rc=1
+
+--- S3: ls INSIDE/link-out -- expect DENY (cannot stat the symlink target dir) ---
+lrwxr-xr-x@ 1 chistyakov  staff  10 Aug 25 02:58 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/link-out -> ../outside
+  rc=0
+
+--- S4: cat INSIDE/link-out (treated as a symlink to a directory) -- expect DENY ---
+cat: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/inside/link-out: Operation not permitted
+  rc=1
+
+--- S5: cat INSIDE/readable.txt (baseline positive control) -- expect PASS ---
+inside-readable
+  rc=0

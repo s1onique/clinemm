@@ -1,0 +1,99 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03 -- C3 test gates
+
+FOCUSED POLICY-SEAM TESTS
+==========================
+
+command-policy.mktemp-host-evidence-bound.test.ts (31 tests, all PASS):
+  - darwin WITH explicit-path identity + true Darwin root
+    -> AUTO (5 positive forms)
+  - BARE mktemp and mktemp -d
+    -> ASK with host_mktemp_shell_resolution_unbound (5 forms)
+  - darwin WITHOUT evidence
+    -> ASK with host_mktemp_temp_authority_unbound (2 forms)
+  - darwin WITH PATH-shadowed mktemp
+    -> ASK with host_mktemp_executable_identity_unbound (3 forms)
+  - darwin WITH empty temp root
+    -> ASK with host_mktemp_temp_authority_unbound (2 forms)
+  - darwin WITH evidence + 14 negative forms
+    -> ASK or DENY (lexical reject / opaque)
+
+_live-qualification-c6.test.ts (9 tests, all PASS):
+  - RED REPROOF P0-3: bare form -> ASK with shell_resolution_unbound (2)
+  - RED REPROOF P0-1/P0-2: PATH-shadowed / missing evidence (2)
+  - GREEN PROOF: explicit-path -> AUTO (2)
+  - CONSERVATION: -u / foo.XXXXXX / TMPDIR= stay ASK (3)
+
+command-safe-rules.test.ts (278 tests, all PASS):
+  - lexical-layer tests unchanged
+
+APPS/VSCODE ADAPTER AUTHENTICITY TESTS
+======================================
+
+apps/vscode/src/sdk/sdk-tool-policies.test.ts (24 tests, all PASS):
+  CORRECTION02: buildTempAuthorityEvidence (host adapter authenticity)
+    - non-darwin: undefined
+    - darwin with /usr/bin first in PATH: identity-bound evidence
+    - darwin with PATH-shadowed: undefined (fail closed)
+    - darwin with TMPDIR steered: getconf wins
+  CORRECTION03: explicit-path slash-bypass (policy seam)
+    - /usr/bin/mktemp + darwin identity + getconf root -> ALLOW
+    - bare `mktemp` + darwin identity
+      -> ASK with host_mktemp_shell_resolution_unbound
+
+SDK CORE FULL SUITE
+===================
+
+sdk/packages/core full vitest:
+  3126 PASS / 16 SKIP / 0 FAIL across 208 files
+  (was 3124 PASS / 16 SKIP / 0 FAIL pre-CORRECTION03;
+   +2 tests, 0 regression)
+
+APPS/VSCODE COMMAND-POLICY SUITE
+================================
+
+apps/vscode policy/approval/sandbox/sdk-tool-policies suites:
+  - sdk-interaction-coordinator.parser-helper.test.ts:  PASS
+  - session-auto-approval.test.ts:  PASS
+  - command-job-manager.test.ts:  PASS
+  - command-job-manager.sandbox-c3-real-kernel.test.ts:  PASS
+    (Seatbelt mktemp composition is GREEN regression check;
+     CORRECTION03 changes are purely policy-side; sandbox side
+     is fully orthogonal)
+  - sdk-tool-policies.test.ts:  PASS
+  - 109/109 PASS across the 5 files combined
+    (was 107/107; +2 from CORRECTION03 slash-bypass tests)
+
+LINT + TYPECHECK + BUILD
+========================
+
+bun run build:sdk:
+  @cline/shared, @cline/llms, @cline/agents, @cline/core, @cline/sdk
+  all exited with code 0
+
+apps/vscode bun run check-types:
+  tsc --noEmit exit 0 (biome format pass, biome lint pass)
+
+apps/vscode bun run compile:
+  biome format pass, biome lint pass, tsc pass, proto-lint pass
+  exit 0
+
+git diff --check: clean
+
+NO PRODUCTION SEAM DELTA FOR NON-MKTEMP COMMANDS
+================================================
+
+The CORRECTION03 changes:
+- command-safe-rules.ts: REWRITE positive regex
+  (now matches both bare and slash-prefixed; gate distinguishes)
+- command-safe-rules.ts: REVIEW STANDARD rewritten
+- command-policy.ts: ADD slash-prefix pre-check at start of
+  host-evidence-bound branch
+- command-policy-types.ts: +new CommandDecisionSource value
+  host_mktemp_shell_resolution_unbound
+- apps/vscode/src/sdk/sdk-tool-policies.ts: (unchanged from
+  CORRECTION02; the helper still sources which+getconf+realpath
+  and the CORRECTION02 evidence contract is intact)
+
+The decision-flow for every other command (pwd, ls, find, cat,
+echo, head, tail, git_*, cd) is unchanged. The 1044 cmd-policy
+tests pass with zero regressions.

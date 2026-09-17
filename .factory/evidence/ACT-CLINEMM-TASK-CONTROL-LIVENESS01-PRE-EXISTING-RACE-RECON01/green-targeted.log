@@ -1,0 +1,157 @@
+(node:4472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:4474) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4475) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4478) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4477) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4473) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/sdk/__tests__/task-control-liveness.tcl09.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL09 — wedge-state silent-no-op > does not silently drop a user-facing message when task is undefined but session is active 2ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-control-liveness.tcl09.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > clearTask does not produce the wedge (real lifecycle, happy path) 2ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > slow sdkHost.stop does not produce the wedge during or after clearTask 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > sdkHost.stop rejection does not produce the wedge (real lifecycle swallows) 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > sdkHost.stop never resolves does not produce the wedge (waitForStop timeout) 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > REACH02 PARENTAL GREEN: concurrent clearTask + startNewSession is fenced — no wedge produced 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > COMMON01: from the wedge state, the second New Task click recovers cleanly 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH02 — real lifecycle wedge reachability > KNOWN_HARDENING_RESIDUE: from the wedge state, the real SdkMessageCoordinator boundary CURRENTLY silently drops the divider row 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-reach02.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level New Task race > TCL-PARENT01: the real top-level New Task race must NOT produce the wedge 4ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level New Task race > TCL-PARENT02: through the repaired top-level path, Compact reaches normal coordinator behavior 2ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-PARENT01-03 — top-level New Task race > TCL-PARENT03: under the fence, racing initTask vs clearTask prevents the wedge; a subsequent fresh initTask produces a clean pair 2ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-parent.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL A: init A superseded by clear must leave neither half installed 3ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL B: init A superseded by init B must leave B current; A abandoned 3ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL C: clear during host.start must leave neither half installed 2ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL D: stale A host.start resolves AFTER B is current must NOT replace B 3ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL E: stale-start cleanup failure must conserve B/current state; error observable 3ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01 / TCL-PARENT-ADVERSARIAL01 > ADVERSARIAL F: stale reinit must NOT terminate current B; B's host.stop must NOT be called 3ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-parent.adversarial.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach01.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH01 — wedge-state reachability > clearTask does not produce the wedge (canonical 'New Task' intent) 2ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach01.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH01 — wedge-state reachability > cancelTask does not produce the wedge (Cancel button only) 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach01.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH01 — wedge-state reachability > cancelTask followed by clearTask does not produce the wedge (Cancel then New Task) 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach01.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH01 — wedge-state reachability > clearTask with slow endActiveSession does not produce the wedge mid-flight 52ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach01.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH01 — wedge-state reachability > concurrent clearTask calls do not produce the wedge 0ms
+ ✓ src/sdk/__tests__/task-control-liveness.tcl-reach01.test.ts > ACT-CLINEMM-TASK-CONTROL-LIVENESS01 / TCL-REACH01 — wedge-state reachability > clearTask with no active session does not produce the wedge (defensive) 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/task-control-liveness.tcl-reach01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > cancels the active session and emits a resume task ask 3ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > cancels a running Cline task when the user signs out 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > does not cancel a non-Cline task when the user signs out 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > raises the cancel fence BEFORE aborting the session (so stragglers are fenced) 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > clears the active session and task proxy without writing classic UI message persistence 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > drops the task-scoped settings overlay when the task is cleared (#13260) 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > drops the outgoing task's settings overlay when switching to another task 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > shows a task by creating a proxy, loading messages, and appending a fresh resume ask 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > clears a pending approval when switching tasks so the new task input is not consumed 53ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > settles a pending question when switching tasks so the outgoing run can unwind 1ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > shows a legacy task with a warning and a resume ask 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > does not show a task that is missing from history 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > appends a resume ask and sets the resumable phase when showing an interrupted (cancelled) task 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > sets the turn phase to resumable when showing a failed task 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > sets the turn phase to completed when showing a completed task 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > sets the turn phase to idle when showing a task with no messages 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > keeps the newest selection when an older open's history lookup resolves last 0ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > abandons a superseded showTaskWithId so the newest selection wins 2ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > abandons a superseded showTaskWithId when the user clears the task 1ms
+ ✓ src/sdk/sdk-task-control-coordinator.test.ts > SdkTaskControlCoordinator > does not install the new task proxy until its messages are loaded 0ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-task-control-coordinator.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+ Test Files  6 passed (6)
+      Tests  43 passed (43)
+   Start at  20:20:08
+   Duration  4.14s (transform 11.91s, setup 11.86s, import 10.14s, tests 154ms, environment 0ms)
+
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m
+Emitted 'error' event at:
+    at ChildProcess.emitWorkerError (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3011:22)
+[90m    at ChildProcess.emit (node:events:509:20)[39m
+[90m    at ChildProcess.kill (node:internal/child_process:535:12)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+Node.js v26.0.0

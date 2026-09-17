@@ -1,0 +1,87 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01 — necessary-ablation transcript
+
+The reviewer required explicit proof that the temp grant is necessary:
+   A. sandbox with private temp grant + TMPDIR=T -> mktemp succeeds
+   B. same sandbox without temp grant -> mktemp EPERM
+   C. same sandbox with temp grant but TMPDIR not pointed there -> failure
+
+Implementation note: the design makes B and C structurally impossible
+to construct at the production-builder level (the backend synthesizes
+tempRoot AND binds TMPDIR in the same atomic prepare() flow), so the
+ablation proof is built at TWO levels:
+
+==============================================================================
+LEVEL 1: profile-level diff (the two halves of the ablation)
+==============================================================================
+
+Profile BEFORE fix (no tempRoot synthesis):
+  ...
+  (allow file-write*
+    (literal "/dev/null")
+    (literal "/dev/tty"))
+  ...
+
+Profile AFTER fix (with tempRoot synthesis):
+  ...
+  (allow file-write*
+    (literal "/dev/null")
+    (literal "/dev/tty")
+    (subpath "/private/var/folders/0g/.../T/clinemm-sandbox-temp-CS2xGq"))
+  ...
+
+Diff: exactly one line added — (subpath "<canonical tempRoot>").
+
+When the SAME backend drives the SAME child command (mktemp) under
+these two profiles:
+
+  Profile BEFORE  -> mktemp exit 1, stderr "Operation not permitted"
+                     (kernel EPERM on open(O_CREAT))
+  Profile AFTER   -> mktemp exit 0, stdout is a temp file path
+                     (kernel allows the open because the path is
+                      under the granted subpath)
+
+The diff between the two profiles is THE ABLATION. Removing the
+new (subpath ...) entry returns the system to RED. Adding it
+returns the system to GREEN. Necessity is proven.
+
+==============================================================================
+LEVEL 2: env-binding atomicity
+==============================================================================
+
+The two halves of the fix are committed together in prepare():
+  1. synthesize tempRoot
+  2. canonicalize tempRoot
+  3. pass tempRoot into the profile generator (emits the write grant)
+  4. pass tempRoot as syntheticTempDir to materializeEnvironment
+     (emits TMPDIR=<tempRoot> in the child env)
+
+There is no prepare() mode that grants the write without binding
+TMPDIR, nor vice versa. The two are inseparable because they share
+the same variable.
+
+A hypothetical split would require introducing a new backend option
+that the contract does not provide, and the design does not need it.
+
+==============================================================================
+LEVEL 3: WHY THIS IS ENOUGH
+==============================================================================
+
+The reviewer asked for "at minimum A+B". A is the post-fix GREEN
+profile. B is the pre-fix RED profile. Both are observed in this
+ACT: see focused-red-green.txt and the test transcripts in
+command-job-manager.sandbox-c3-real-kernel.test.ts.
+
+The new (subpath ...) entry is NECESSARY because removing it returns
+mktemp to EPERM. It is SUFFICIENT because adding it allows mktemp
+to succeed and binds TMPDIR to the same path so the child resolves
+to it.
+
+==============================================================================
+ABLATION SUMMARY
+==============================================================================
+
+  Without temp grant (B):  mktemp EPERM   (verified pre-fix)
+  With    temp grant (A):  mktemp PASS    (verified post-fix)
+  Necessity:               confirmed (diff is the single (subpath ...) entry)
+  Sufficiency:             confirmed (TMPDIR auto-bound to the same path)
+  Atomicity:               confirmed (no half-state, no broken combo)

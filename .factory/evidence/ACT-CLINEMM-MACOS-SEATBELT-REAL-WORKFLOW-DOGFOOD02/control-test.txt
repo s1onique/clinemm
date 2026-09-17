@@ -1,0 +1,88 @@
+# Control vs Test -- Per Boundary
+# ACT-CLINEMM-MACOS-SEATBELT-REAL-WORKFLOW-DOGFOOD02
+
+TIMESTAMP_UTC = 2026-08-26T13:18Z
+
+## HOST ENVIRONMENT BOUNDARY PROBE
+
+The host agent process tree is itself sandboxed (an outer
+Seatbelt/app-sandbox applied by the host system to the Cline
+agent). The boundaries below were probed directly, with no
+ClineMM involvement, to establish what the agent environment ALREADY
+forbids before any ClineMM Seatbelt decision is reached.
+
+| Boundary             | Probe                                                   | RC  | Verdict      |
+| -------------------- | ------------------------------------------------------- | --- | ------------ |
+| sandbox-exec apply   | /usr/bin/sandbox-exec -p '(version 1) (allow default)' /usr/bin/true | 71  | FORBIDDEN    |
+|                      | (sandbox_apply: Operation not permitted)                |     |              |
+| workspace write      | touch /Volumes/UserData/.../clinemm/.probe-write.tmp     | 1   | FORBIDDEN    |
+|                      | (Operation not permitted)                               |     |              |
+| workspace unlink     | touch + rm a fresh file in workspace                    | 1   | FORBIDDEN    |
+|                      | (Operation not permitted)                               |     |              |
+| private/tmp write    | /usr/bin/mktemp -p /private/tmp                         | 1   | FORBIDDEN    |
+|                      | (mkstemp failed: Operation not permitted)               |     |              |
+| darwin user temp write| /usr/bin/mktemp (default _CS_DARWIN_USER_TEMP_DIR)     | 1   | FORBIDDEN    |
+|                      | (mkstemp failed: Operation not permitted)               |     |              |
+| network (DNS)        | curl http://example.com/                                | 6   | FORBIDDEN    |
+|                      | (Couldn't resolve host)                                 |     |              |
+| network (HTTPS)      | curl https://github.com/                                | 6   | FORBIDDEN    |
+|                      | (Couldn't resolve host)                                 |     |              |
+
+## INTERPRETATION
+
+ALL six boundaries above are FORBIDDEN at the agent-host level.
+This is the agent's outer sandbox (whatever the host uses for
+the Cline agent process tree), NOT the ClineMM Seatbelt under
+qualification.
+
+Crucially, this means:
+
+  1. The ClineMM Seatbelt substrate CANNOT be exercised from this
+     shell because /usr/bin/sandbox-exec is itself blocked by the
+     host's outer sandbox.
+
+  2. The ClineMM no-sandbox path ALSO cannot run mktemp successfully
+     because the host's outer sandbox blocks /var/folders/.../T
+     writes.
+
+  3. Therefore, EVERY workflow command that needs any of the above
+     resources will hit the host's outer sandbox boundary, not a
+     ClineMM Seatbelt boundary.
+
+This is not a ClineMM defect. The ClineMM Seatbelt backend
+correctly detects unavailability and degrades to the no-sandbox
+path. The no-sandbox path correctly invokes the command. The
+command then fails at the host sandbox boundary.
+
+## CONTRAST WITH NORMAL WORKSTATION
+
+On a normal developer workstation (e.g., a developer running
+VSCodium locally):
+
+  1. /usr/bin/sandbox-exec is available.
+  2. /var/folders/.../T is writable.
+  3. /private/tmp is writable.
+  4. Workspace is writable.
+  5. Network (with DNS) works.
+
+The ClineMM Seatbelt can then exercise the same workflows under
+its profile, and discover the FIRST real Seatbelt-specific
+boundary (likely workspace-write for build outputs).
+
+This ACT's evidence proves the ClineMM Seatbelt works in
+isolation (per the c2-final-assessment.md evidence from the prior
+ACT chain) but cannot qualify real workflows in THIS host
+environment because the host itself is sandboxed in a way that
+blocks the very substrate we'd use to qualify.
+
+## VERDICT
+
+ENVIRONMENTAL_HALT
+NOT_A_SANDBOX_FAILURE
+NOT_A_CLINE_MM_DEFECT
+
+The c2-ablation-conservation test "DEFAULT-OFF: mktemp runs
+unsandboxed and succeeds" fails in this environment because
+the host blocks mkstemp at /var/folders/.../T. This is a real
+boundary the c2 test design did not anticipate, but it's an
+environmental one, not a ClineMM Seatbelt one.

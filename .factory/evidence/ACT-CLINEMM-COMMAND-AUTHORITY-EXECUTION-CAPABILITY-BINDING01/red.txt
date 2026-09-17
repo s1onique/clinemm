@@ -1,0 +1,71 @@
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+red.txt -- C1 RED evidence
+
+WHAT WAS PROVED:
+  The REAL production seam
+    createShellTool (REAL factory, re-exported by vitest stub from
+                     @cline/core source at
+                     sdk/packages/core/src/extensions/tools/definitions.ts)
+      -> createVscodeRunCommandsTool (REAL host factory at
+          apps/vscode/src/sdk/vscode-run-commands-tool.ts:558)
+        -> createVscodeShellExecutor (REAL host closure at
+            vscode-run-commands-tool.ts:571)
+          -> CommandJobManager.start (REAL host class at
+              apps/vscode/src/sdk/command-job-manager.ts:470)
+  does NOT forward `context.metadata.executionCapability` into
+  `manager.start(options)` today.
+
+HOW IT WAS PROVED:
+  - Test file: apps/vscode/src/sdk/__tests__/execution-capability-binding01.c1.test.ts
+  - Three test cases:
+    1. synthetic marker in context.metadata.executionCapability ->
+       spy on manager.start sees no executionCapability on options
+    2. no marker -> spy sees no executionCapability (negative case)
+    3. two parallel invocations (one with marker, one without)
+       -> each manager.start has no executionCapability (no
+       cross-invocation leak by accident)
+  - The spy captured `startSpy.mock.calls[0][0]` (the actual options
+    object the production adapter passed), proving that the
+    production adapter DROPS the marker before reaching the
+    executor.
+  - Mock fixtures (StateManager, telemetry) only stub the host
+    context; the entire run_commands path is real.
+
+TEST OUTPUT:
+  Test Files  1 passed (1)
+       Tests  3 passed (3)
+  Duration  ~1.5s
+  All 3 assertions: `expect(opts.executionCapability).toBeUndefined()`
+  passed under the production code's current (broken) behavior.
+
+  Important: these tests pass TODAY because the production code
+  does NOT forward the marker. They will FAIL in C2 GREEN after
+  the executor adapter is updated to forward
+  context.metadata.executionCapability into StartCommandJobOptions.
+
+  The C2 GREEN test (green.txt) flips the assertion to:
+    expect(opts.executionCapability).toEqual(expectedMarker)
+
+  In C2:
+    - Test 1: marker A forwarded -> manager.start sees A
+    - Test 2: no marker -> manager.start sees undefined
+    - Test 3: parallel A and B -> each manager.start sees its own
+      marker, no cross-contamination
+
+LOAD-BEARING OBSERVATION:
+  `createVscodeShellExecutor` (vscode-run-commands-tool.ts:571)
+  builds StartCommandJobOptions inline at line ~620 with the
+  closed set of fields the production executor knows about:
+    { command, cwd, shell, env, waitBudgetMs, executionDeadlineMs, maxOutputChars }
+  The `context` argument is read only for `context.signal`
+  (line ~736 in command-job-manager.ts).
+  The metadata channel is not yet plumbed at this seam.
+
+INTERPRETATION:
+  The kernel permission primitive is PROVEN
+  (file-write-create on canonical DARWIN_USER_TEMP_ROOT), and
+  policy authorization evidence is PRODUCED at the coordinator
+  (matchedRuleSource + tempAuthorityEvidence). The gap is the
+  transport channel from policy decision to CommandCapability
+  construction site.
+  This ACT is the dedicated successor that proves the channel.

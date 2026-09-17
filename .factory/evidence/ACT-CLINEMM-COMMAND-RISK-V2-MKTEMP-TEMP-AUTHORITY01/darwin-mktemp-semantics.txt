@@ -1,0 +1,69 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01 -- darwin-mktemp-semantics.txt
+REAL_HOST_BEHAVIOR (Darwin / nix-shell hybrid)
+
+REAL_MKTEMP_BINARY (PATH default)   = /run/current-system/sw/bin/mktemp
+DARWIN_FALLBACK                     = /usr/bin/mktemp
+DARWIN_FALLBACK_PATH_HASH           = Mach-O universal [x86_64+arm64e]
+GNU_PATH_DEFAULT                    = /nix/store/8xhvpkpg6gbm9q0sk2p3hf6nj9fzgr3n-coreutils-9.8/bin/mktemp
+                                    = GNU coreutils 9.8
+
+BARE INVOCATION BEHAVIOR
+------------------------
+  form                  | darwin parent                       | GNU (TMPDIR unset) parent
+  ----------------------+-------------------------------------+----------------------------
+  mktemp                | /var/folders/.../T/tmp.XXXX         | /var/folders/.../T/tmp.XXXX
+  mktemp -d             | /var/folders/.../T/tmp.XXXX         | /var/folders/.../T/tmp.XXXX
+                        |                                     |
+  When TMPDIR=/tmp:     |                                     |
+    mktemp              | /var/folders/.../T/tmp.XXXX (UNCHANGED)
+    mktemp -d           | /var/folders/.../T/tmp.XXXX (UNCHANGED)
+    GNU mktemp          | /tmp/tmp.XXXX                       <- HONORS env override (DIV)
+    GNU mktemp -d       | /tmp/tmp.XXXX                       <- HONORS env override (DIV)
+
+PHIlosophical:
+  - Darwin ignores $TMPDIR for the bare/no-argument form entirely.
+    The default destination is the per-user tempdir via _CS_DARWIN_USER_TEMP_DIR.
+  - GNU honors $TMPDIR for the bare form.
+    The default destination is $TMPDIR if set, else $TMP, else /tmp.
+
+PATH-SELECTING / TEMPLATE FORMS (these are NOT auto-candidates)
+--------------------------------------------------------------
+  /usr/bin/mktemp foo.XXXXXX                   -> foo.XXXXXX (cwd)
+  /usr/bin/mktemp foo.XX                       -> foo.XX (cwd; 0 random chars)
+  /usr/bin/mktemp foo                           -> foo         (cwd; 0 random chars)
+  /usr/bin/mktemp /tmp/foo.XXXXXX              -> /tmp/foo.XXXXXX (path-selecting)
+  /usr/bin/mktemp -p /tmp foo.XXXXXX           -> /tmp/foo.XXXXXX (-p path-selecting)
+  /usr/bin/mktemp -p /tmp                      -> /tmp/tmp.XXXX  (-p alone; no template works)
+  /usr/bin/mktemp -t myprefix                  -> /var/folders/.../T/myprefix.XXX
+                                                  (NOT a path-steering form by itself)
+  /usr/bin/mktemp -u                           -> /var/folders/.../T/tmp.XXX (object absent after)
+
+GNU SPECIFICS (used for option grammar)
+----------------------------------------
+  GNU requires \u22653 X's in template. /usr/bin/mktemp foo.XX -> succeeds.
+                                              mktemp foo.XX -> error: too few X's.
+  GNU supports --help, --version, --tmpdir.   (Not in Darwin.)
+
+WHAT THIS MEANS FOR "BARED" BOUNDED DESTINATION CLAIM
+------------------------------------------------------
+In Darwin, the exact grammar
+  program == "mktemp" AND argv == [] OR argv == ["-d"]
+ALWAYS writes under the per-user temp directory
+(/private/var/folders/.../T) regardless of $TMPDIR.
+
+That makes Darwin's no-argument and -d form INTRINSICALLY BOUNDED
+with respect to caller-selected destination. The destination is
+host-defined and not steerable via the form.
+
+In GNU, this same exact grammar is BOUNDED only if $TMPDIR is unset
+or points under /var/folders/.../T. If $TMPDIR=/tmp is set, the
+form becomes writable under /tmp -- which is a DIFFERENT trust
+boundary.
+
+This ACT scopes to macOS (Darwin) only. GNU/Linux is out of scope.
+
+EVIDENCE_LABELS
+----------------
+  REAL_HOST_BEHAVIOR:   REAL
+  DESTINATION_LABELS:   REAL (this darwin host)
+  MANUAL_CLAIMS:         DOCUMENTED (Keith's xcode-man-pages, GNU coreutils manual)

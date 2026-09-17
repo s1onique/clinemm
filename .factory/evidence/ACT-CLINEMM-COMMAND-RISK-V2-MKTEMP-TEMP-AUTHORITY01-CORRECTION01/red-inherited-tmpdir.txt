@@ -1,0 +1,103 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION01 -- RED REPRO
+
+LIVE reproduction of the inherited-TMPDIR authority defect.
+
+The current production rule at C2/C3 closure:
+
+    {
+      source: "host_safe_mktemp_default_temp",
+      pattern: /^\s*mktemp(?:\s+-d)?\s*$/u,
+    }
+
+auto-approves ANY toolInput whose rendered surface is exactly
+"mktemp" or "mktemp -d", regardless of inherited environment.
+
+Reproduction on this darwin-arm64 host (2026-08-26):
+
+    SYNTH=/tmp/clinemm-mktemp-correction-red-<ts>
+    mkdir -p $SYNTH
+
+    # Darwin BSD /usr/bin/mktemp with inherited TMPDIR=$SYNTH
+    TMPDIR=$SYNTH /usr/bin/mktemp
+    -> /var/folders/0g/.../T/tmp.QtyAaZWJDE
+    ls -la $SYNTH
+    -> empty  (BSD ignores TMPDIR for the bare form)
+
+    # GNU coreutils (PATH-resolved) with inherited TMPDIR=$SYNTH
+    TMPDIR=$SYNTH /run/current-system/sw/bin/mktemp
+    -> /tmp/clinemm-mktemp-correction-red-<ts>/tmp.RzK4yK6H08
+    ls -la $SYNTH
+    -> contains tmp.RzK4yK6H08  (LEAK: GNU honors inherited TMPDIR)
+
+OBSERVATION
+===========
+
+On Darwin, the BSD mktemp binary ignores TMPDIR for the bare form
+and creates at the per-user temp dir regardless. This is the
+Outcome A behavior the original ACT's C1 evidence captured.
+
+But when the parent shell resolves to GNU coreutils mktemp --
+which happens on developer machines with homebrew or nix-shell
+or coreutils-installed dev environments -- the parent's inherited
+TMPDIR steers the destination. The rendered command string is
+exactly "mktemp" (or "mktemp -d"), and the lexical regex
+auto-approves it, but the actual write target is the inherited
+TMPDIR.
+
+CAUSAL CHAIN
+============
+
+    parent shell environment  TMPDIR=/synthetic
+        |
+        v
+    executor inherits environment
+        |
+        v
+    CommandPolicy evaluates toolInput = "mktemp"
+        |
+        v
+    host_safe_mktemp_default_temp regex matches
+        |
+        v
+    decision = allow / auto-approve-eligible
+        |
+        v
+    CommandJobManager runs `mktemp` in child env (TMPDIR inherited)
+        |
+        v
+    GNU mktemp creates /synthetic/tmp.XXXX
+
+This is the EXACT class of authority-channel-leak the Factory
+rules are designed to catch.
+
+CORRECTION01 OBJECTIVE
+======================
+
+Make host_safe_mktemp_default_temp a host-evidence-bound rule.
+The lexical regex still gates the rendered shape (mktemp / mktemp -d),
+but promotion to ALLOW ALSO requires:
+
+    tempAuthorityEvidence.platform === "darwin"
+  + tempAuthorityEvidence.effectiveDefaultTempRoot  is a realpath
+  + tempAuthorityEvidence.canonicalDefaultTempRoot   is a realpath
+
+The host adapter at apps/vscode/src/sdk/sdk-tool-policies.ts
+populates tempAuthorityEvidence using process.platform === "darwin"
+and a host-side probe of the per-user temp dir (this ACT does NOT
+introduce a runtime probe; it requires the host to populate this
+evidence explicitly).
+
+If the evidence is missing OR platform is not "darwin" OR any
+required field is malformed, the rule falls through to ASK with
+source "host_mktemp_temp_authority_unbound".
+
+Linux/Unknown host: ASK (no separate proof; this ACT scopes to
+darwin because the original user-facing defect was macOS-driven).
+
+EVIDENCE LABELS
+===============
+
+  RED REPRO:                  REAL (this darwin-arm64 host)
+  BSD_IGNORES_TMPDIR_FOR_BARE: REAL (confirmed)
+  GNU_HONORS_INHERITED_TMPDIR: REAL (LEAK reproduced)
+  DEFECT_REPRODUCED:           YES

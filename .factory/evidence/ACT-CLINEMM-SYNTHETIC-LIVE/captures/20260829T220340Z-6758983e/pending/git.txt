@@ -1,0 +1,21 @@
+REPO=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+HEAD=752e494816ff5d9b9a8b5a4e9c817d1c7c8ac113
+TREE=e753ab01d44291654b2951c8c2e5f0cea78e74e4
+BRANCH=main
+--- STATUS ---
+M apps/vscode/src/core/controller/state/getStateToPostToWebview.ts
+ M apps/vscode/src/core/controller/state/updateSettings.ts
+ M apps/vscode/src/core/controller/state/updateSettingsCli.ts
+ M apps/vscode/src/extension.ts
+ M apps/vscode/src/sdk/v2-capture.test.ts
+ M apps/vscode/src/sdk/v2-capture.ts
+ M tools/factory/capture-approval-specimen.py
+ M tools/factory/hermetic-fixture/build.py
+?? .factory/evidence/ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01/entry-state.json
+?? tools/factory/hermetic-fixture/synthetic-live-qualify.py
+?? tools/factory/hermetic-fixture/verify-ablation.py
+?? tools/factory/hermetic-fixture/verify-attach.py
+?? tools/factory/hermetic-fixture/verify-drift.py
+?? tools/factory/hermetic-fixture/verify-zero.py
+--- STASH ---
+stash@{0}: On main: c2-green-and-c2-p1-delta

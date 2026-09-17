@@ -1,0 +1,27 @@
+# C2 Artifact Identity (spec §50)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:11Z
+
+DOGFOOD_SOURCE_HEAD = d51a333285dc162a613f63a5e3b29201aaa6768e
+DOGFOOD_SOURCE_TREE = (HEAD detached; worktree was removed by build script)
+SOURCE_VERSION      = 4.1.10
+DOGFOOD_VERSION     = 4.1.10-d51a33328
+VSIX_PATH           = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.10-d51a33328.vsix
+VSIX_BYTES          = 14403736 (13.74 MB, 50 files)
+VSIX_SHA256         = 26a7732f59893254f8b411b943612d6f7b326e1b8899edf4c290a992e343ea0a
+
+Build provenance:
+  python3 scripts/build-dogfood-vsix.py --force
+  worktree: /var/folders/.../T/clinemm-dogfood-0z841s22/worktree
+  source head at build time = d51a333285dc162a613f63a5e3b29201aaa6768e
+  working tree clean at build time: yes (git status empty)
+
+Predecessor artifact SHA (sanity):
+  s1onique.clinemm@4.1.10-a25334aeb (5a17411b2448edd7d4278dcf59a7f65c9c2a7a5aacacc51a29854bf329f8e149, 8885142 bytes)
+  -- from the C1 closure; recorded in the COMPACTION01 / CORRECTION02
+  rows of the board.
+
+This artifact is the binary identity bound to the production
+wiring committed at d51a33328. Re-running scripts/build-dogfood-vsix.py
+from a clean tree at the same HEAD must reproduce the SHA256 above.

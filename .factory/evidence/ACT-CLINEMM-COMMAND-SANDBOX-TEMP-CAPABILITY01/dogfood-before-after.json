@@ -1,0 +1,71 @@
+{
+  "act": "ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01",
+  "phase": "C2 (dogfood ablation)",
+  "subjectHead": "938faa7bb  feat(safety): ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-C1",
+  "manifest": {
+    "version": "wave-1-rc1-corre04",
+    "sha256": "7d85bc0d850ff7559f00c278b3577bc59e3c40ca5ffa15c78efc43c155e39ad6"
+  },
+  "launch": {
+    "binary": "/Applications/Visual Studio Code.app/Contents/MacOS/Electron",
+    "extensionDevelopmentPath": "apps/vscode",
+    "extensionTestsPath": "apps/vscode/out/dev/dogfood/dogfood-c2-driver.js",
+    "envVarsUnset": [
+      "ELECTRON_RUN_AS_NODE",
+      "ELECTRON_NO_ATTACH_CONSOLE",
+      "VSCODE_CLI",
+      "VSCODE_CODE_CACHE_PATH",
+      "VSCODE_CRASH_REPORTER_PROCESS_TYPE",
+      "VSCODE_CWD",
+      "VSCODE_ESM_ENTRYPOINT",
+      "VSCODE_HANDLES_UNCAUGHT_ERRORS",
+      "VSCODE_IPC_HOOK",
+      "VSCODE_NLS_CONFIG",
+      "VSCODE_PID",
+      "VSCODE_L10N_BUNDLE_LOCATION"
+    ],
+    "envVarsSet": ["DOGFOOD_C2_ENABLED=1", "DISPLAY=:1"]
+  },
+  "beforeSummary": {
+    "subjectHead": "4cef3d59c  ACT-CLINEMM-MACOS-SEATBELT-DOGFOOD-AUTOMATED01-C1-CORRECTION04",
+    "manifest_sha256": "7d85bc0d850ff7559f00c278b3577bc59e3c40ca5ffa15c78efc43c155e39ad6",
+    "pass": 23,
+    "expectedDeny": 3,
+    "compatibilityFail": 3,
+    "toolMissing": 2,
+    "p0Fail": 0,
+    "causalPairFail": 0
+  },
+  "afterSummary": {
+    "subjectHead": "938faa7bb  ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01-C1",
+    "manifest_sha256": "7d85bc0d850ff7559f00c278b3577bc59e3c40ca5ffa15c78efc43c155e39ad6",
+    "pass": 27,
+    "expectedDeny": 3,
+    "compatibilityFail": 1,
+    "toolMissing": 0,
+    "p0Fail": 0,
+    "causalPairFail": 0
+  },
+  "matrixDelta": {
+    "T01": { "before": "EPERM / COMPATIBILITY_FAIL", "after": "PASS (exit 0; path under /private/var/folders/.../T/clinemm-sandbox-temp-ygZ6wv/tmp.pz9u9SOBzD)" },
+    "T02": { "before": "EPERM / COMPATIBILITY_FAIL", "after": "PASS (exit 0; same dir layout)" },
+    "E04": { "before": "PASS / TMPDIR= (empty)", "after": "PASS / TMPDIR=/private/var/folders/.../T/clinemm-sandbox-temp-svjiHN (canonical)" },
+    "W01": { "before": "EXPECTED_DENY (kernel EPERM, state-conserved)", "after": "EXPECTED_DENY (unchanged)" },
+    "N01": { "before": "EXPECTED_DENY (network)", "after": "EXPECTED_DENY (unchanged)" },
+    "C02": { "before": "EXPECTED_DENY (nested /bin/sh kernel EPERM)", "after": "EXPECTED_DENY (unchanged)" },
+    "E01": { "before": "PASS (synthetic secret absent)", "after": "PASS (unchanged)" },
+    "G07": { "before": "COMPATIBILITY_FAIL (env has no global user.name)", "after": "COMPATIBILITY_FAIL (unchanged — out of scope)" },
+    "F03": { "before": "TOOL_MISSING (cwd was apps/vscode/, sdk/apps missing)", "after": "RESOLVED (cwd is repo-root, sdk/apps resolve; re-classified)" },
+    "F04": { "before": "TOOL_MISSING (same cwd issue)", "after": "RESOLVED (same)" }
+  },
+  "p0Matrix": {
+    "W01": "EXPECTED_DENY (control-OK + test-deny + state-conserved)",
+    "N01": "EXPECTED_DENY (control-OK + test-deny + state-conserved)",
+    "C02": "EXPECTED_DENY (control-OK + test-deny + state-conserved)",
+    "E01": "PASS (positive witness present, secret absent)",
+    "p0Fail": 0,
+    "causalPairFail": 0,
+    "p0Halted": false
+  },
+  "verdict": "PASS_SEATBELT_PRIVATE_TEMP_CAPABILITY"
+}

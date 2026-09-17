@@ -1,0 +1,95 @@
+ACT-CLINEMM-AGENTIC-COMPACTION-CUT-SNAP-FORWARD01
+GREEN PROOF (post-CORRECTION01 + post-CORRECTION02 wording)
+================================================
+
+GREEN CAPTURED OUTPUT (post-patch, post-CORRECTION01 + CORRECTION02):
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/vitest run \
+    --config vitest.config.ts src/extensions/context/compaction.cut-snap-forward.test.ts
+
+  ✓ R1 (load-bearing): cut must not snap to a stale early typed-user on a long tool loop
+  ✓ R2 (load-bearing): cut snaps FORWARD to a typed-user past the candidate
+  ✓ R3: cut on a typed-user boundary remains EXACTLY on the boundary
+  ✓ R4: cut with no later typed-user retains candidate / nearest safe assistant boundary
+  ✓ R5: cut never reintroduces already-selected history (L1 ablation)
+  ✓ R6: tool-pair atomicity is preserved (every tool_use in result has its tool_result)
+  ✓ R7 (CORRECTION02): L1 fixture selects the same cut under the production token estimator and proportionally-scaled JSON fixture weight
+
+  Test Files  1 passed (1)
+       Tests  7 passed (7)
+
+L1 LIVE-SHAPE SELECTION REPRODUCTION (CORRECTION01: synthetic fixture weight):
+
+  [GREEN] before=472 after=63
+  [GREEN] totalBefore≈451810 totalAfter≈60059 reductionPct=86.707%
+  [GREEN-cut] cutIndex=452
+
+  METRIC NOTE: 451_810 / 60_059 / 86.7% are JSON-serialized character
+  lengths of the fixture, not literal tokens. The live observation
+  (452.1k -> 449.5k tokens) is the canonical literal measurement; this
+  fixture reproduces the SELECTION GEOMETRY that produces the live
+  reduction shape, not an exact token-equivalent reduction.
+
+  CUT_GEOMETRY_REPRODUCTION = SYNTHETIC_REAL
+  REDUCTION_METRIC          = deterministic fixture weight
+  LIVE_TOKEN_EFFECT         = previously observed separately
+
+R7 INTERPRETATION (CORRECTION02 truthful framing):
+
+  R7 is an empirical cross-estimator conservation witness on the L1
+  fixture, NOT a general proof of metric-independence. The real token
+  estimator uses Math.ceil(N/3) per message (nonlinear monotonic), so
+  R7's proportional-scaling threshold comparison is an empirical
+  property of the L1 fixture, not a general theorem. If the estimator
+  or fixture changes, R7 may legitimately fail without indicating a
+  bug in findCutIndex.
+
+FULL COMPACTION SUITE (post-CORRECTION02):
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/vitest run \
+    --config vitest.config.ts src/extensions/context/
+
+  Test Files  1 failed | 6 passed | 1 skipped (8)
+       Tests  2 failed | 122 passed | 1 skipped (125)
+
+  The 2 failing tests are pre-existing:
+    - compact-session-script.test.ts: spawnSync bun ENOENT (environmental)
+    - compact-session-script.test.ts: spawnSync bun ENOENT (environmental)
+
+  All compaction algorithm tests pass:
+    - compaction.test.ts: 94 tests pass (including updated "summarizes older messages")
+    - compaction.cut-snap-forward.test.ts: 7 tests pass (R1-R7)
+    - compaction.live.test.ts: passes
+    - compaction.working-context-ratio.test.ts: passes
+    - compaction.working-context-authority-publish.test.ts: passes
+    - compaction.real-producer-seam-red.test.ts: passes
+    - budget-projection/project.test.ts: passes
+
+APPS/VSCODE COMPACTION-COORDINATOR SUITE:
+
+  $ cd apps/vscode && /opt/homebrew/bin/node ../../node_modules/.bin/vitest run \
+    --config vitest.config.ts \
+    src/sdk/sdk-compaction-coordinator.test.ts \
+    src/sdk/sdk-compaction-coordinator.restore-publication.test.ts \
+    src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts \
+    src/core/controller/slash/condense.test.ts
+
+  Test Files  4 passed (4)
+       Tests  38 passed (38)
+
+TYPECHECK:
+
+  $ cd sdk/packages/core && /opt/homebrew/bin/node ../../../node_modules/.bin/tsc \
+    -p tsconfig.build.json --noEmit
+
+  exit 0 (clean)
+
+  $ cd apps/vscode && /opt/homebrew/bin/node ../../node_modules/.bin/tsc \
+    --noEmit
+
+  exit 0 (clean)
+
+DIFF INTEGRITY:
+
+  $ git diff --check
+  (no whitespace issues)

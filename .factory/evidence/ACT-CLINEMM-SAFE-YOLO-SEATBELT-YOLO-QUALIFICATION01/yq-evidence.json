@@ -1,0 +1,29 @@
+{
+  "ACT": "ACT-CLINEMM-SAFE-YOLO-SEATBELT-YOLO-QUALIFICATION01",
+  "phase": "PRODUCTION SEAM LIVE EVIDENCE",
+  "date": "2026-08-26T12:09:27.082Z",
+  "A": {
+    "profileNetworkRule": "(allow network*)",
+    "stdout": "HW_DENIED\nHAP_DENIED\nHTR_DENIED\nHD_DENIED\nHR_DENIED\nHRD_DENIED\nHCH_DENIED\nHGC_DENIED\nHS_DENIED\nHC_DENIED\nHCWD_DENIED\nDONE\n",
+    "canarySentinelSha": "32aed430fd1e32257e0a49028ef0c00bd42523a29749fb73ae575a09788edb9d",
+    "canaryNestedSha": "8a9a3df73e0351b45b42269c027de0d2014d443337732066304b2d22d94441d3",
+    "canarySecretSha": "ab8f54a09f96de813d9f56688c622207894dee74f33c5330e8c63656f0bb53ee",
+    "homeDirStillExists": true
+  },
+  "B": {
+    "profileNetworkRule": "(allow network*)",
+    "stdout": "HW_DENIED\nHAP_DENIED\nHTR_DENIED\nHD_DENIED\nHR_DENIED\nHRD_DENIED\nHCH_DENIED\nHGC_DENIED\nHS_DENIED\nHC_DENIED\nHCWD_DENIED\nDONE\n",
+    "canarySentinelSha": "32aed430fd1e32257e0a49028ef0c00bd42523a29749fb73ae575a09788edb9d",
+    "canaryNestedSha": "8a9a3df73e0351b45b42269c027de0d2014d443337732066304b2d22d94441d3",
+    "canarySecretSha": "ab8f54a09f96de813d9f56688c622207894dee74f33c5330e8c63656f0bb53ee",
+    "homeDirStillExists": true
+  },
+  "invariant": {
+    "stdoutByteEqual": true,
+    "canarySentinelIdentical": true,
+    "canaryNestedIdentical": true,
+    "canarySecretIdentical": true,
+    "homeDirExistsInBoth": true
+  },
+  "verdict": "PASS_SAFE_YOLO_MUTATION_CONFINEMENT"
+}

@@ -1,0 +1,287 @@
+(node:9274) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:9277) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > initializes a new task, emits the task message, and sends the resolved prompt 7ms
+   → expected undefined to deeply equal Any<String>
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > omits images/files from the task message when the task has no attachments 4ms
+   → expected { Object (ts, type, ...) } to match object { type: 'say', say: 'task', …(1) }
+(2 matching properties omitted from actual)
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a Cline auth error instead of starting when the cline provider has no token 1ms
+   → expected "vi.fn()" to be called with arguments: [ 'needs auth' ]
+
+Number of calls: 0
+
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a Cline auth error instead of starting when ClinePass has no token 1ms
+   → expected "vi.fn()" to be called with arguments: [ 'needs clinepass auth' ]
+
+Number of calls: 0
+
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a plain chat error when session start fails (e.g. provider misconfigured) 2ms
+   → expected "vi.fn()" to be called with arguments: [ { sessionId: undefined, …(5) } ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+    {
+-     "error": Error {
+-       "message": "No model configured for provider openai",
++     "error": TypeError {
++       "message": "this.options.resolveSessionAutoApprovalOverride is not a function",
+      },
+      "errorType": "task_init",
+      "failurePhase": "preflight",
+-     "modelId": "model",
+-     "providerId": "anthropic",
++     "modelId": undefined,
++     "providerId": undefined,
+      "sessionId": undefined,
+    },
+  ]
+
+
+Number of calls: 1
+
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > forwards task useAutoCondense=true into SDK session config inputs 1ms
+   → expected "vi.fn()" to be called with arguments: [ ObjectContaining{…} ]
+
+Number of calls: 0
+
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > forwards task useAutoCondense=false into SDK session config inputs 1ms
+   → expected "vi.fn()" to be called with arguments: [ ObjectContaining{…} ]
+
+Number of calls: 0
+
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > reinitializes an existing task with preserved initial messages 1ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > falls back to the workspace root when a stored task cwd is unavailable 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits Cline auth errors when reinitialization fails due auth 1ms
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-1: setTurnPhase is asserted with streaming at the canonical boundary (after startNewSession) 1ms
+   → expected "vi.fn()" to be called at least once
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-1: setTurnPhase(streaming) is NOT asserted while startNewSession is pending, only after it resolves 1ms
+   → expected "vi.fn()" to be called once, but got 0 times
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-2: exactly one setTurnPhase(streaming) is emitted per logical new-task lifecycle 1ms
+   → expected [] to have a length of 1 but got +0
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-3: a synchronous throw from startNewSession does not assert streaming 0ms
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION03-1: postStateToWebview fires after setTurnPhase(streaming); seed post fires before session resolves 1ms
+   → expected -1 to be greater than or equal to 0
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-2: setTurnPhase is NOT called when session start fails (preflight abort) 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-3: setTurnPhase is NOT called when the Cline auth preflight fires 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-4: reinitExistingTaskFromId also asserts streaming only after startNewSession resolves 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-5: reinitExistingTaskFromId emits exactly one setTurnPhase(streaming) 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-4: reinitExistingTaskFromId also asserts streaming at its boundary 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-6: SdkController.initTask and reinitExistingTaskFromId do NOT write streaming directly 2ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > initializes a new task, emits the task message, and sends the resolved prompt
+AssertionError: expected undefined to deeply equal Any<String>
+
+- Expected:
+Any<String>
+
++ Received:
+undefined
+
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:32:21
+     30|   const sessionId = await coordinator.initTask("hello @file", ["image.…
+     31|
+     32|   expect(sessionId).toEqual(expect.any(String))
+       |                     ^
+     33|   expect(options.clearTaskForOperation).toHaveBeenCalledOnce()
+     34|   expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > omits images/files from the task message when the task has no attachments
+AssertionError: expected { Object (ts, type, ...) } to match object { type: 'say', say: 'task', …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "say": "task",
+-   "text": "plain text task",
++   "say": "error",
++   "text": "Failed to start task: this.options.resolveSessionAutoApprovalOverride is not a function",
+    "type": "say",
+  }
+
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:96:19
+     94|
+     95|   const [emitted] = options.messages.appendAndEmit.mock.calls[0][0] as…
+     96|   expect(emitted).toMatchObject({ type: "say", say: "task", text: "pla…
+       |                   ^
+     97|   expect(emitted).not.toHaveProperty("images")
+     98|   expect(emitted).not.toHaveProperty("files")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a Cline auth error instead of starting when the cline provider has no token
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'needs auth' ]
+
+Number of calls: 0
+
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:107:38
+    105|
+    106|   expect(sessionId).toBeUndefined()
+    107|   expect(options.emitClineAuthError).toHaveBeenCalledWith("needs auth")
+       |                                      ^
+    108|   expect(options.captureProviderApiError).not.toHaveBeenCalled()
+    109|   expect(options.sessions.startNewSession).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a Cline auth error instead of starting when ClinePass has no token
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'needs clinepass auth' ]
+
+Number of calls: 0
+
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:118:38
+    116|
+    117|   expect(sessionId).toBeUndefined()
+    118|   expect(options.emitClineAuthError).toHaveBeenCalledWith("needs cline…
+       |                                      ^
+    119|   expect(options.captureProviderApiError).not.toHaveBeenCalled()
+    120|   expect(options.sessions.startNewSession).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a plain chat error when session start fails (e.g. provider misconfigured)
+AssertionError: expected "vi.fn()" to be called with arguments: [ { sessionId: undefined, …(5) } ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+    {
+-     "error": Error {
+-       "message": "No model configured for provider openai",
++     "error": TypeError {
++       "message": "this.options.resolveSessionAutoApprovalOverride is not a function",
+      },
+      "errorType": "task_init",
+      "failurePhase": "preflight",
+-     "modelId": "model",
+-     "providerId": "anthropic",
++     "modelId": undefined,
++     "providerId": undefined,
+      "sessionId": undefined,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:132:43
+    130|   expect(sessionId).toBeUndefined()
+    131|   expect(options.emitClineAuthError).not.toHaveBeenCalled()
+    132|   expect(options.captureProviderApiError).toHaveBeenCalledWith({
+       |                                           ^
+    133|    sessionId: state.task?.taskId,
+    134|    error,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > forwards task useAutoCondense=true into SDK session config inputs
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > forwards task useAutoCondense=false into SDK session config inputs
+AssertionError: expected "vi.fn()" to be called with arguments: [ ObjectContaining{…} ]
+
+Number of calls: 0
+
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:161:46
+    159|   await coordinator.initTask("hello", undefined, undefined, undefined,…
+    160|
+    161|   expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith(
+       |                                              ^
+    162|    expect.objectContaining({
+    163|     taskSettings,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-1: setTurnPhase is asserted with streaming at the canonical boundary (after startNewSession)
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:316:32
+    314|   await coordinator.initTask("hello")
+    315|
+    316|   expect(options.setTurnPhase).toHaveBeenCalled()
+       |                                ^
+    317|   expect(options.setTurnPhase).toHaveBeenCalledWith("streaming", undef…
+    318|   // setTurnPhase may be called once (lifecycle boundary). It must
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-1: setTurnPhase(streaming) is NOT asserted while startNewSession is pending, only after it resolves
+AssertionError: expected "vi.fn()" to be called once, but got 0 times
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:355:44
+    353|   // Session is still pending — the streaming assertion must NOT have …
+    354|   expect(options.setTurnPhase.mock.calls.some((call) => call[0] === "s…
+    355|   expect(options.sessions.startNewSession).toHaveBeenCalledOnce()
+       |                                            ^
+    356|
+    357|   // Resolve the session — now the canonical boundary has been crossed.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-2: exactly one setTurnPhase(streaming) is emitted per logical new-task lifecycle
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:375:26
+    373|
+    374|   const streamingCalls = options.setTurnPhase.mock.calls.filter(([phas…
+    375|   expect(streamingCalls).toHaveLength(1)
+       |                          ^
+    376|  })
+    377|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION03-1: postStateToWebview fires after setTurnPhase(streaming); seed post fires before session resolves
+AssertionError: expected -1 to be greater than or equal to 0
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:443:26
+    441|
+    442|   const startInvokeIdx = order.indexOf("start:invoke")
+    443|   expect(startInvokeIdx).toBeGreaterThanOrEqual(0)
+       |                          ^
+    444|   expect(order.includes("set:streaming")).toBe(false)
+    445|   // Seed post must have fired BEFORE startNewSession resolves.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  11 failed | 10 passed (21)
+   Start at  20:30:42
+   Duration  3.79s (transform 1.95s, setup 3.36s, import 259ms, tests 26ms, environment 0ms)
+
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-task-start-coordinator.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async Promise.all (index 0)
+    at Pool.cancel (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3509:3)
+    at Pool.close (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3516:3)
+    at async Promise.all (index 0) {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-task-start-coordinator.test.ts.

@@ -1,0 +1,121 @@
+ACT-CLINEMM-COMMAND-AUTHORITY-EXECUTION-CAPABILITY-BINDING01
+red-upstream.txt -- C1-CORRECTION01 UPSTREAM RED evidence
+
+PREVIOUS C1 RED (downstream only):
+  src/sdk/__tests__/execution-capability-binding01.c1.test.ts
+  proves Loss #2 (context.metadata -> CommandJobManager.start)
+  but did NOT exercise Loss #1.
+
+THIS C1-CORRECTION01 RED (upstream):
+  src/sdk/__tests__/execution-capability-binding01.c1-upstream.test.ts
+  proves Loss #1 (prepared.toolCall.metadata -> AgentToolContext.metadata)
+  AT THE PRODUCTION AgentRuntime SEAM (not via recon).
+
+WHAT WAS PROVEN:
+  The REAL `AgentRuntime` (production class via @cline/agents dist)
+  drives a scripted model that emits
+    { type: "tool-call-delta",
+      toolCallId: "upstream-1",
+      toolName: "run_commands",
+      inputText: "...",
+      metadata: { executionCapability: SENTINEL_MARKER } }
+  The runtime:
+    - reads event.metadata
+    - stashes it on AgentToolCallPart.metadata
+    - calls prepareToolExecution
+    - calls executePreparedTool
+    - constructs AgentToolContext with metadata: this.config.toolContextMetadata
+      (session-wide)
+    - calls tool.execute(input, context)
+
+  The test then:
+    1. uses onToolRuntimeOutcome (a real AgentRuntimeHook) to read
+       ctx.toolCall.metadata AFTER the runtime stamped it. This
+       PROVES the marker exists on prepared.toolCall.metadata:
+         expect(toolCallMeta).toEqual(
+           expect.objectContaining({ executionCapability: SENTINEL_MARKER })
+         )
+       -- PASS.
+    2. uses vi.spyOn(tool, "execute") to capture the actual
+       AgentToolContext received by the tool. The production
+       AgentRuntime passes this context. This PROVES the marker
+       is absent on the executor side:
+         expect(ctxMetadata["executionCapability"]).toBeUndefined()
+       -- PASS.
+
+  Both halves of the proof are needed:
+    - Half 1 shows the marker IS preserved on toolCall side
+      (so the loss point is NOT upstream of AgentToolCallPart).
+    - Half 2 shows the marker is NOT propagated into
+      AgentToolContext (so the loss point IS between
+      toolCall.metadata and AgentToolContext.metadata).
+
+REAL PRODUCTION PATH EXERCISED:
+  ScriptedModel.stream
+    -> AgentRuntime.streamingLoop
+       -> AgentRuntime.handleModelStreamEvent("tool-call-delta")
+          -> AgentToolCallPart { metadata: event.metadata }
+       -> AgentRuntime.prepareToolExecution(toolCall)
+          -> requestToolApproval callback (host-side policy)
+          -> prepared: PreparedToolExecution { toolCall: { ...toolCall, ... }, ... }
+       -> AgentRuntime.executePreparedTool(prepared)
+          -> AgentToolContext constructed at agent-runtime.ts:2780-2800
+             metadata: this.config.toolContextMetadata   <-- LOSS POINT
+          -> tool.execute(input, context)
+
+  The spy captured the actual context object handed to tool.execute.
+  This is NOT a reconstructed object; it is the production one.
+
+TEST OUTPUT:
+  Test Files  1 passed (1)
+       Tests  2 passed (2)
+
+  Both tests pass today (RED REPRODUCED). After C2 lands the typed
+  runtime-owned slot, the same tests' assertions flip:
+    "marker is absent"  -> "marker is present (typed slot)"
+    "no false positives" stays the same.
+
+C1-CORRECTION01 RECON PROVENANCE (frozen in metadata-provenance.md):
+  Source 1 (model-stream metadata) is PARTIALLY trusted -- providers
+  can attach arbitrary metadata to tool-call parts, so a model could
+  in principle manufacture executionCapability if it lands in the
+  generic metadata bag.
+
+  Source 2 (runtime-owned keys: inputParseError, toolSource.*,
+  executionDisposition) is FULLY trusted.
+
+  Source 3 (host-attached; does not exist today) WOULD BE trusted
+  if added through a typed slot the runtime owns.
+
+C2 DESIGN (FROZEN, CORRECTION01):
+  DO NOT shallow-merge prepared.toolCall.metadata.
+  DO add a typed runtime-owned field on AgentToolContext:
+    executionCapability?: InternalExecutionCapability
+  The host's authorization callback returns a typed object the
+  runtime stamps into THIS slot, not into generic metadata.
+  The runtime's agent-runtime.ts:2780 site changes from:
+    metadata: this.config.toolContextMetadata
+  to:
+    {
+      ...this.config.toolContextMetadata,
+      executionCapability: ??? <-- typed slot from approval result
+    }
+  (or similar; the key idea is that the new field is a TYPED SLOT
+  the runtime owns, NOT a generic metadata key.)
+
+  Model/stream metadata CANNOT populate this slot because the
+  runtime owns the writer. Generic metadata continues to carry
+  generic runtime context (unchanged).
+
+C1 TEST BUDGET (after CORRECTION01):
+  Downstream (3 tests, conservation witness):
+    - AgentToolContext.metadata is ignored by createVscodeShellExecutor
+    - Same without marker
+    - Harness isolation (NOT concurrency proof; reviewer flagged this)
+  Upstream (2 tests, load-bearing proof):
+    - prepared.toolCall.metadata.executionCapability is NOT propagated
+      into AgentToolContext.metadata
+    - Same without marker (no false positives)
+  Total: 5 RED tests. After C2 GREEN plumbing, the upstream +
+  downstream "with marker" assertions flip to "marker is present
+  on the executor side via the typed slot."

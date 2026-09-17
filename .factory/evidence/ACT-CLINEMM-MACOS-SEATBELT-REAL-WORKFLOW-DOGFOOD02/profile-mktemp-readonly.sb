@@ -1,0 +1,12 @@
+(version 1)
+(deny default)
+(allow process-exec)
+(allow process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup)
+(allow file-read*)
+(allow file-write-create
+  (subpath "/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T"))
+(allow file-read-metadata (subpath "/"))
+(deny network*)

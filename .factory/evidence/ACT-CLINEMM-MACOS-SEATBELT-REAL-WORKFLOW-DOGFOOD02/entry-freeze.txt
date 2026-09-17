@@ -1,0 +1,34 @@
+# Entry Freeze
+# ACT-CLINEMM-MACOS-SEATBELT-REAL-WORKFLOW-DOGFOOD02
+
+TIMESTAMP_UTC = 2026-08-26T13:14Z
+
+DOGFOOD_SOURCE_HEAD       = 24d83469063b834286978553313f8eb8194756b6
+DOGFOOD_SOURCE_HEAD_SHORT = 24d834690
+DOGFOOD_SOURCE_BRANCH     = main
+WORKSPACE                 = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+WORKTREE                  = clean (git status --porcelain = empty)
+SANDBOX_OPTIN             = seatbelt (CLINEMM_EXPERIMENTAL_SANDBOX=seatbelt)
+
+TARGET_INSTALL_VERSION    = 4.1.10-d1fb24d95 (most recent committed VSIX in dist/dogfood/)
+PREVIOUS_INSTALLED        = 4.1.10-d51a33328 (C2 final; promoted by ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2)
+
+VSCODE_PROFILE            = /tmp/c2-dogfood-profile (existing VSCodium user-data-dir)
+VSCODE_BINARY             = /Applications/VSCodium.app/Contents/Resources/app/bin/codium
+SANDBOX_SUBSTRATE         = /usr/bin/sandbox-exec (real macOS substrate)
+
+## AGENT-ENVIRONMENT NOTE
+
+The Cline agent itself operates under its own sandbox (an outer
+Seatbelt-like enforcement; mkdir /tmp/* is denied for the agent;
+existing dirs are read-only). This is NOT the ClineMM sandbox under
+qualification. Evidence files for THIS ACT are written via the editor
+tool (which is permitted to write to .factory/evidence/) and read-only
+shell commands run via run_commands. Command-execution results are
+captured from real run_commands invocations of `sandbox-exec` directly
+to exercise the same Apple substrate that the installed ClineMM
+exercises through manager.start().
+
+## HALT_UNEXPECTED_TRACKED_DIRT
+
+NOT_TRIGGERED (git status --short = empty)

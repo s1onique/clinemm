@@ -1,0 +1,57 @@
+ACT-CLINEMM-COMMAND-EXECUTOR-BASH-STARTUP-ENV-AUTHORITY01 -- C3 RED-CLOSED live output
+
+Captured: 2026-08-26 from sdk/packages/core test runner
+File: bash.supervised.bash-startup-env.test.ts
+Total: 11/11 PASS, 0 FAIL, 0 SKIP
+
+RED CLOSED: BASH_ENV startup file does NOT run before the authorized command
+  ✓ /usr/bin/mktemp (slash-form AUTO): BASH_ENV sentinel remains empty
+  ✓ /usr/bin/mktemp -d: BASH_ENV sentinel remains empty
+  ✓ pwd (general): BASH_ENV sentinel remains empty
+  ✓ echo hello (general): BASH_ENV sentinel remains empty
+  ✓ /usr/bin/mktemp -d /tmp/foo.XXXXXX (template ASK candidate): BASH_ENV sentinel remains empty
+
+RED CLOSED: ENV (POSIX sh analogue) startup file does NOT run before the authorized command
+  ✓ pwd with ENV=<file>: ENV sentinel remains empty (defensive filter)
+
+CONSERVATION: ordinary env is preserved
+  ✓ PATH inheritance works (child sees inherited PATH)
+  ✓ TERM inheritance works (child sees inherited TERM)
+  ✓ caller-supplied env (config.env) is preserved over inherited
+
+CONSERVATION: envSemantics='complete' (sanitized Seatbelt) bypasses the filter (no-op)
+  ✓ sanitized Seatbelt path: caller env passed AS-IS, filter does NOT touch it
+
+CONSERVATION: exported shell function (BASH_FUNC_*) is NOT stripped
+  ✓ BASH_FUNC_* is inherited; CORRECTION03 slash-bypass is the channel that neutralizes it
+
+NOTES
+=====
+
+The C1 RED reproduction at red-p0-4-bash-env-startup.txt showed
+BASH_ENV sentinel MUTATED to "STARTUP <nanos>" for every bash -c
+invocation under DEFAULT_OFF (envSemantics: overlay):
+
+  [1. /usr/bin/mktemp (CORRECTION03 slash-form AUTO candidate)]
+    exitCode:       0
+    sentinel:       STARTUP 832219000
+    LEAK:           ** YES **
+
+After the C2 fix (executor-side narrow strip filter), the same
+production executor seam produces empty sentinel for the same
+inputs. The strip is in
+sdk/packages/core/src/extensions/tools/executors/bash.ts:
+buildShellProcess line 240-241 changed from
+  { ...process.env, ...config.env }
+to
+  { ...stripBashStartupEnvFromParent(process.env), ...config.env }
+
+The strip set is BASH_STARTUP_STRIPPABLE_ENV = { BASH_ENV, ENV,
+SHELLOPTS, BASHOPTS }, narrow and recon-confirmed.
+
+Both CORRECTION03 fixes (slash-bypass for AUTO commands) and
+this ACT's strip filter compose:
+  - bare `mktemp` -> ASK with shell_resolution_unbound
+  - /usr/bin/mktemp + darwin + identity + getconf root -> AUTO
+  - /usr/bin/mktemp + BASH_ENV=<file> -> AUTO; BASH_ENV NOT run
+  - pwd + BASH_ENV=<file> -> ALLOW; BASH_ENV NOT run

@@ -1,0 +1,14 @@
+{
+  "act": "ACT-CLINEMM-HERMETIC-MISMATCH",
+  "approvalActionPerformedByTool": false,
+  "captureId": "20260829T215525Z-7d3d3bef",
+  "capturedAt": "2026-08-29T21:55:25.480748Z",
+  "dataRoots": [
+    "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/.hermetic-fixture/before-mismatch"
+  ],
+  "phase": "pending",
+  "readOnlyIntent": true,
+  "recentMinutes": 60,
+  "repo": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "schema": "cline-approval-specimen-capture/v2"
+}

@@ -1,0 +1,24 @@
+option	production_required	fixture_supplies	fixture_value	semantically_valid	first_used_at
+stateManager	YES	YES	{getGlobalSettingsKey: () => "act"}	YES	getCurrentMode
+sessions	YES	YES	{startNewSession: vi.fn, fireAndForgetSend: vi.fn}	YES	initTask L210/220
+messages	YES	YES	{appendAndEmit, emitSessionEvents}	YES	emitInitialTaskMessage L194
+taskHistory	YES	YES	{findHistoryItem, updateTaskHistory, updateTaskHistoryItem}	YES	initTask L271, reinit L300+
+sessionConfigBuilder	YES	YES	{build: vi.fn}	YES	initTask L135
+buildStartSessionInput	YES	YES	vi.fn	YES	initTask L174
+createHistoryItemFromSession	YES	YES	vi.fn	YES	initTask L265
+clearTask	YES	YES	vi.fn().mockResolvedValue(undefined)	YES	delegate
+clearTaskForOperation	YES	YES	vi.fn().mockResolvedValue(undefined)	YES	initTask L130
+setTask	YES	YES	vi.fn(state mutator)	YES	createAndSetTask L398
+onAskResponse	YES	YES	vi.fn().mockResolvedValue(undefined)	YES	task proxy
+onCancelTask	YES	YES	vi.fn().mockResolvedValue(undefined)	YES	task proxy
+getWorkspaceRoot	YES	YES	vi.fn().mockResolvedValue("/workspace")	YES	initTask L132
+createTempSessionHost	YES	YES	vi.fn().mockResolvedValue(tempHost)	YES	reinit L320+
+loadInitialMessages	YES	YES	vi.fn().mockResolvedValue(...)	YES	reinit L330+
+resolveContextMentions	YES	YES	vi.fn(text=>`resolved: ${text}`)	YES	initTask L276
+isClineManagedProviderActive	YES	YES	vi.fn(()=>false)	YES	reinit
+emitClineAuthError	YES	YES	vi.fn()	YES	initTask L164
+captureProviderApiError	YES (optional)	YES	vi.fn()	YES	initTask catch L283
+postStateToWebview	YES	YES	vi.fn().mockResolvedValue(undefined)	YES	initTask L206/L272/L379
+setTurnPhase	YES (required since CORRECTION03)	YES	vi.fn()	YES	initTask L263, reinit L378
+taskOperationFence	YES	YES	new TaskOperationFence()	YES	initTask L119
+resolveSessionAutoApprovalOverride	YES (CAI-01B)	**NO** (added by this ACT)	n/a (added: vi.fn(()=>({kind:"none"})))	n/a	sessionConfigBuilder.build (initTask L149)

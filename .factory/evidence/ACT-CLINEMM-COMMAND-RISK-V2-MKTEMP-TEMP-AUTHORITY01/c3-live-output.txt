@@ -1,0 +1,44 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90m/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core[39m
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mauto-approves (Wave-1 positive): "mktemp"
+[22m[39m{"phase":"C3-live","cmd":"mktemp","decisionKind":"allow","decisionSource":"host_mode_safe_only_rule","matchedRuleSource":"host_safe_mktemp_default_temp","firstCommandMatchedRuleSource":"host_safe_mktemp_default_temp"}
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mauto-approves (Wave-1 positive): "mktemp -d"
+[22m[39m{"phase":"C3-live","cmd":"mktemp -d","decisionKind":"allow","decisionSource":"host_mode_safe_only_rule","matchedRuleSource":"host_safe_mktemp_default_temp","firstCommandMatchedRuleSource":"host_safe_mktemp_default_temp"}
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mdoes NOT auto-approve: "mktemp -u"
+[22m[39m{"phase":"C3-live","cmd":"mktemp -u","decisionKind":"ask","decisionSource":"host_mode_safe_only_fallthrough"}
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mdoes NOT auto-approve: "mktemp foo.XXXXXX"
+[22m[39m{"phase":"C3-live","cmd":"mktemp foo.XXXXXX","decisionKind":"ask","decisionSource":"host_mode_safe_only_fallthrough"}
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mdoes NOT auto-approve: "mktemp -p /tmp"
+[22m[39m{"phase":"C3-live","cmd":"mktemp -p /tmp","decisionKind":"ask","decisionSource":"host_mode_safe_only_fallthrough"}
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mdoes NOT auto-approve: "mktemp -t myprefix"
+[22m[39m{"phase":"C3-live","cmd":"mktemp -t myprefix","decisionKind":"ask","decisionSource":"host_mode_safe_only_fallthrough"}
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mdoes NOT auto-approve: "mktemp /tmp/foo.XXXX"
+[22m[39m{"phase":"C3-live","cmd":"mktemp /tmp/foo.XXXX","decisionKind":"ask","decisionSource":"host_mode_safe_only_fallthrough"}
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mdoes NOT auto-approve: "TMPDIR=/x mktemp"
+[22m[39m{"phase":"C3-live","cmd":"TMPDIR=/x mktemp","decisionKind":"ask","decisionSource":"host_mode_safe_only_fallthrough"}
+
+[90mstdout[2m | src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22m[2mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22m[2mdoes NOT auto-approve: "env TMPDIR=/x mktemp"
+[22m[39m{"phase":"C3-live","cmd":"env TMPDIR=/x mktemp","decisionKind":"ask","decisionSource":"host_mode_safe_only_fallthrough"}
+
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mauto-approves (Wave-1 positive): "mktemp"[32m 3[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mauto-approves (Wave-1 positive): "mktemp -d"[32m 0[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mdoes NOT auto-approve: "mktemp -u"[32m 2[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mdoes NOT auto-approve: "mktemp foo.XXXXXX"[32m 1[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mdoes NOT auto-approve: "mktemp -p /tmp"[32m 0[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mdoes NOT auto-approve: "mktemp -t myprefix"[32m 0[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mdoes NOT auto-approve: "mktemp /tmp/foo.XXXX"[32m 0[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mdoes NOT auto-approve: "TMPDIR=/x mktemp"[32m 0[2mms[22m[39m
+ [32m✓[39m src/runtime/command-policy/_live-qualification-c3.test.ts[2m > [22mC3 LIVE QUALIFICATION: mktemp end-to-end policy seam[2m > [22mdoes NOT auto-approve: "env TMPDIR=/x mktemp"[32m 0[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m9 passed[39m[22m[90m (9)[39m
+[2m   Start at [22m 00:56:10
+[2m   Duration [22m 368ms[2m (transform 165ms, setup 0ms, import 248ms, tests 8ms, environment 0ms)[22m

@@ -1,0 +1,39 @@
+ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01 — focused RED/GREEN transcript
+
+REAL_PRODUCTION_SEAM (CommandJobManager → production resolver →
+SeatbeltSandboxBackendExperimental → /usr/bin/sandbox-exec → kernel).
+
+==================================================================
+BEFORE FIX (pre-fix source at commit 2f182fb0b = "entry freeze"):
+==================================================================
+
+RED mktemp currently kernel-EPERMs under the production resolver (T01 reproduction)
+  state=exited, exitCode=1
+  stderr matches "Operation not permitted"
+
+RED mktemp -d currently kernel-EPERMs under the production resolver (T02 reproduction)
+  state=exited, exitCode=1
+  stderr matches "Operation not permitted"
+
+RED child TMPDIR is empty under the production resolver today (E04 reproduction)
+  state=exited, stdout contains "TMPDIR=[]"
+
+The first two assertions encode the dogfood RED in tests against the
+production seam itself (not the harness's fake). The third proves
+sanitized env today has no TMPDIR.
+
+==================================================================
+AFTER FIX (seatbelt-backend.ts adds backend auto-synthesis):
+==================================================================
+
+GREEN mktemp succeeds under the production resolver; path is descendant of canonical TMPDIR
+GREEN mktemp -d succeeds under the production resolver; created dir is inside canonical TMPDIR
+GREEN child TMPDIR is set to the canonical private root
+GREEN workspace write still KERNEL-DENIED (W01 conservation)
+GREEN a sibling under the same parent canonical temp is DENIED (no parent authority expansion)
+GREEN synthesized temp root is removed after the command exits (cleanup)
+
+File: apps/vscode/src/sdk/command-job-manager.sandbox-c3-real-kernel.test.ts
+Tests added in the new describe block:
+  "ACT-CLINEMM-COMMAND-SANDBOX-TEMP-CAPABILITY01: temp capability GREEN"
+6 it() blocks; all 6 PASS against the production seam.

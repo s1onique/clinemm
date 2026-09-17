@@ -1,0 +1,36 @@
+# C2 Mixed-Command Isolation (spec §11-§14)
+# ACT-CLINEMM-MACOS-SEATBELT-DARWIN-MKTEMP-CAPABILITY01-C2
+
+TIMESTAMP_UTC = 2026-08-26T11:00Z
+
+## /usr/bin/mktemp + /bin/pwd with plan [fs-create, none]
+
+manager.start call #1:
+  context.perCommandExecutionCapability = filesystem-create-only(DARWIN_ROOT)
+  job[0].executionCapability (alias for perCommandExecutionCapability) = filesystem-create-only(DARWIN_ROOT)
+
+manager.start call #2 (or parallel):
+  context.perCommandExecutionCapability = undefined
+  job[1].executionCapability = undefined
+
+## /bin/pwd + /usr/bin/mktemp with plan [none, fs-create]
+
+job[0].executionCapability = undefined
+job[1].executionCapability = filesystem-create-only(DARWIN_ROOT)
+
+## /usr/bin/mktemp + mktemp -d + pwd + mktemp -> [cap, cap, none, cap]
+
+job[0].cap = filesystem-create-only
+job[1].cap = filesystem-create-only
+job[2].cap = undefined
+job[3].cap = filesystem-create-only
+
+## no plan + cap forged
+
+manager.start() NEVER reached -- CORRECTION02 executor-boundary
+guard fires before manager.start is invoked.
+
+CAUSALITY: real authority is positional (spec §9). It never
+fan-outs. The proof is structural: the per-command channel is
+the ONLY place the authority lives, and the executor-boundary
+stamping picks entry[i] for commandIndex i.

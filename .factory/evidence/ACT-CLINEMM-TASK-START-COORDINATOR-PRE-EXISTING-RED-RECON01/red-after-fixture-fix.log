@@ -1,0 +1,107 @@
+(node:15966) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:15967) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ × src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > initializes a new task, emits the task message, and sends the resolved prompt 8ms
+   → expected "vi.fn()" to be called with arguments: [ { prompt: 'hello @file', …(6) } ]
+
+Received:
+
+  1st vi.fn() call:
+
+@@ -8,8 +8,11 @@
+      "images": [
+        "image.png",
+      ],
+      "mode": "act",
+      "prompt": "hello @file",
++     "sessionAutoApprovalOverride": {
++       "kind": "none",
++     },
+      "taskSettings": undefined,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > omits images/files from the task message when the task has no attachments 1ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a Cline auth error instead of starting when the cline provider has no token 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a Cline auth error instead of starting when ClinePass has no token 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits a plain chat error when session start fails (e.g. provider misconfigured) 1ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > forwards task useAutoCondense=true into SDK session config inputs 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > forwards task useAutoCondense=false into SDK session config inputs 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > reinitializes an existing task with preserved initial messages 1ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > falls back to the workspace root when a stored task cwd is unavailable 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > emits Cline auth errors when reinitialization fails due auth 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-1: setTurnPhase is asserted with streaming at the canonical boundary (after startNewSession) 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-1: setTurnPhase(streaming) is NOT asserted while startNewSession is pending, only after it resolves 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-2: exactly one setTurnPhase(streaming) is emitted per logical new-task lifecycle 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-3: a synchronous throw from startNewSession does not assert streaming 1ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION03-1: postStateToWebview fires after setTurnPhase(streaming); seed post fires before session resolves 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-2: setTurnPhase is NOT called when session start fails (preflight abort) 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-3: setTurnPhase is NOT called when the Cline auth preflight fires 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-4: reinitExistingTaskFromId also asserts streaming only after startNewSession resolves 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-5: reinitExistingTaskFromId emits exactly one setTurnPhase(streaming) 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION01-4: reinitExistingTaskFromId also asserts streaming at its boundary 0ms
+ ✓ src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > CORRECTION02-6: SdkController.initTask and reinitExistingTaskFromId do NOT write streaming directly 2ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-task-start-coordinator.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/sdk/sdk-task-start-coordinator.test.ts > SdkTaskStartCoordinator > initializes a new task, emits the task message, and sends the resolved prompt
+AssertionError: expected "vi.fn()" to be called with arguments: [ { prompt: 'hello @file', …(6) } ]
+
+Received:
+
+  1st vi.fn() call:
+
+@@ -8,8 +8,11 @@
+      "images": [
+        "image.png",
+      ],
+      "mode": "act",
+      "prompt": "hello @file",
++     "sessionAutoApprovalOverride": {
++       "kind": "none",
++     },
+      "taskSettings": undefined,
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/sdk/sdk-task-start-coordinator.test.ts:34:46
+     32|   expect(sessionId).toEqual(expect.any(String))
+     33|   expect(options.clearTaskForOperation).toHaveBeenCalledOnce()
+     34|   expect(options.sessionConfigBuilder.build).toHaveBeenCalledWith({
+       |                                              ^
+     35|    prompt: "hello @file",
+     36|    images: ["image.png"],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 20 passed (21)
+   Start at  20:43:51
+   Duration  2.66s (transform 1.33s, setup 2.34s, import 174ms, tests 18ms, environment 0ms)
+
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/sdk-task-start-coordinator.test.ts.

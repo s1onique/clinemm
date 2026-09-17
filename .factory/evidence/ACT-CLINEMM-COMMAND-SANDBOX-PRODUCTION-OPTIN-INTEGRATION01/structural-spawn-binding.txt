@@ -1,0 +1,53 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+STRUCTURAL SPAWN BINDING (C2 evidence 2 -- reviewer's request)
+===========================================================
+
+The reviewer explicitly asked: "Don't make `ps comm=` the only
+production identity proof. Also capture at the spawn seam:
+executable=/usr/bin/sandbox-exec, args[0..1]=['-f', profile]."
+
+The structural binding is captured via the DI seam:
+  CommandJobManager({ sandboxBackendResolver: ... })
+
+The injected backend's prepare() is called by the production executor.
+The prepared invocation it returns IS what the supervisor's spawn()
+receives (after the executor's structural replacement at
+command-job-manager.ts:589-597). Capturing the prepared invocation
+in a stub backend is therefore equivalent to capturing what the
+supervisor spawned -- without depending on sandbox-exec's
+fork-then-exit pid-orphan behavior.
+
+Test file:
+  apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts
+  describe("structural spawn binding (DI seam)")
+
+Test 1 (✓ 2ms):
+  with seatbelt opt-in, the prepared invocation's executable replaces the original
+  Asserts:
+    capturedPrepared.executable === "/usr/bin/sandbox-exec"
+    capturedPrepared.envSemantics === "complete"
+    start.state !== "spawn_failed" (the command ran through sandbox-exec)
+
+Test 2 (✓ 2ms):
+  prepared envSemantics=complete is honored end-to-end (structurally)
+  Asserts:
+    capturedConfig.envSemantics === "complete"
+    capturedConfig.executable === "/usr/bin/sandbox-exec"
+    capturedConfig.env does NOT have CLINEMM_PRODUCTION_TEST_LEAK_VAR
+      (the parent's leak var is not in the prepared env)
+
+WHY NOT ps -p:
+  On macOS, /usr/bin/sandbox-exec does NOT exec the child in place.
+  It forks, applies the profile, execs the child, and exits. The
+  Node spawn() returns the sandbox-exec pid, but that pid is gone
+  by the time `ps -p <pid>` runs. The child shell is reparented to
+  launchd. Therefore runtime process inspection is not a reliable
+  identity proof -- the structural spawn binding is.
+
+This evidence + the env proof together close the production-seam
+identity requirement:
+  STRUCTURAL spawn binding   (executable=args[0]='-f' profile)
+  + REAL running child       (stdout proves envSemantics=complete
+                              was honored end-to-end)
+  = REAL_PRODUCTION_SEAM

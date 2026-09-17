@@ -1,0 +1,110 @@
+ACT-CLINEMM-COMMAND-EXECUTOR-BASH-FUNCTION-ENV-AUTHORITY01 -- C3 test gates
+
+FOCUSED RED-CLOSED TESTS
+========================
+
+bash.supervised.bash-startup-env.test.ts (17 tests, all PASS):
+
+  From BASH-STARTUP-ENV-AUTHORITY01 (11 tests, all PASS):
+    RED CLOSED: BASH_ENV startup file does NOT run (5 forms)
+    RED CLOSED: ENV startup file does NOT run (1 form)
+    CONSERVATION: PATH/TERM/caller-env preserved (3 tests)
+    CONSERVATION: envSemantics=complete bypasses filter (1 test)
+
+  NEW from BASH-FUNCTION-ENV-AUTHORITY01 (6 tests, all PASS):
+    RED CLOSED: bare `pwd` against BASH_FUNC_pwd%% in parent env
+                sentinel remains empty (function did NOT import)
+    RED CLOSED: bare `ls /tmp` against BASH_FUNC_ls%% in parent env
+                sentinel remains empty
+    RED CLOSED: bare `git --version` against BASH_FUNC_git%% in parent env
+                sentinel remains empty
+    RED CLOSED: bare `cat /dev/null` against BASH_FUNC_cat%% in parent env
+                sentinel remains empty
+    RED CLOSED: prefix-strip is unbounded
+                BASH_FUNC_anything%% stripped (not enumerated)
+    RED CLOSED: type -t pwd reports builtin (not function) when
+                BASH_FUNC_pwd%% is in parent env
+    COMPOSITION: slash-prefixed /usr/bin/mktemp still works
+                slash-bypass composes with the strip
+
+LEGACY SUPERVISOR TESTS
+=======================
+
+bash.supervised.test.ts: 7 PASS / 0 FAIL (unchanged)
+
+SDK CORE FULL SUITE
+===================
+
+sdk/packages/core full vitest:
+  3143 PASS / 16 SKIP / 0 FAIL across 209 files
+  (was 3137 / 16 SKIP / 0 FAIL pre-ACT (post-BASH-STARTUP-ENV closed);
+   +6 tests, 0 regression)
+
+APPS/VSCODE COMMAND-POLICY SUITE
+================================
+
+apps/vscode policy/approval/sandbox/sdk-tool-policies suites:
+  - sdk-interaction-coordinator.parser-helper.test.ts:  PASS
+  - session-auto-approval.test.ts:  PASS
+  - command-job-manager.test.ts:  PASS
+  - command-job-manager.sandbox-c3-real-kernel.test.ts:  PASS
+    (Seatbelt mktemp composition is GREEN regression check;
+     this ACT is executor-side only; sandbox path is
+     orthogonal and unaffected)
+  - sdk-tool-policies.test.ts:  PASS
+  109/109 PASS across the 5 files combined (unchanged)
+
+LINT + TYPECHECK + BUILD
+========================
+
+bun run build:sdk:
+  @cline/shared, @cline/llms, @cline/agents, @cline/core, @cline/sdk
+  all exited with code 0
+
+apps/vscode bun run check-types:
+  tsc --noEmit exit 0 (biome format pass, biome lint pass)
+
+apps/vscode bun run compile:
+  biome format pass, biome lint pass, tsc pass, proto-lint pass
+  exit 0
+
+git diff --check: clean
+
+NO PRODUCTION SEAM DELTA FOR NON-BASH-STARTUP OR NON-FUNCTION ENV
+=================================================================
+
+The strip is narrowly scoped to:
+  - exact-match: BASH_ENV, ENV, SHELLOPTS, BASHOPTS
+  - prefix-match: BASH_FUNC_*
+
+Nothing else is touched. Ordinary env (PATH, TERM, LANG, ...),
+caller-supplied env (host-trusted fixed metadata), and Seatbelt
+sanitized mode are all unchanged.
+
+COMPOSITION WITH PRIOR ACTS
+===========================
+
+CORRECTION01 host-evidence-bound rule:           INTACT
+CORRECTION02 strict-identity-bound rule:         INTACT
+CORRECTION03 slash-bypass rule:                  INTACT (composes)
+BASH-STARTUP-ENV-AUTHORITY01 (BASH_ENV/ENV/etc): INTACT
+Seatbelt mktemp composition:                     INTACT (15/15 GREEN)
+Command-policy conservation (1044 tests):        PASS
+Adapter truthfulness (4 CORRECTION02 apps/vscode tests): PROVEN
+Shell-resolution identity binding (slash-bypass): PROVEN
+Strip semantics: exact + prefix                  PROVEN RED-CLOSED
+
+RED-GREEN CYCLE PROVEN
+======================
+
+Temporarily reverting the entire strip filter
+(stripBashStartupEnvFromParent(process.env)) made
+12 of 17 tests fail:
+  - 6 BASH_ENV tests (red-CLOSE from BASH-STARTUP-ENV-AUTHORITY01)
+  - 1 ENV test (red-CLOSE from BASH-STARTUP-ENV-AUTHORITY01)
+  - 6 new BASH_FUNC_* tests (red-CLOSE from this ACT)
+
+Reapplying the strip filter returns to 17/17 PASS.
+Only the CONSERVATION tests (PATH/TERM/caller-env/sanitized/
+slash-bypass) preserved passing across reversion, as
+expected.

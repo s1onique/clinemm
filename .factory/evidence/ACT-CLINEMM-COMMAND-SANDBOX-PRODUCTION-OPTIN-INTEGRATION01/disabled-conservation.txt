@@ -1,0 +1,36 @@
+ACT-CLINEMM-COMMAND-SANDBOX-PRODUCTION-OPTIN-INTEGRATION01
+===========================================================
+DISABLED CONSERVATION (C2 evidence 1)
+===========================================================
+
+DEFAULT_OFF byte-equivalence: before vs after C2 wiring.
+
+Test file:
+  apps/vscode/src/sdk/command-job-manager.sandbox-integration.test.ts
+  describe("DEFAULT_OFF conservation (C2 invariance)")
+
+Conservation tests:
+  1. ✓ no sandbox opt-in: seeded parent env var reaches the child (10ms)
+     Behavior pre-C2: spread { ...process.env, ...options.env }
+     Behavior post-C2: same (because envSemantics is undefined in
+     supervisor, which keeps the legacy path byte-identical)
+     Tested via:
+       env[CLINEMM_PRODUCTION_TEST_LEAK_VAR] = "PLAINTEXT-LEAK-OK"
+       command: /bin/sh -c 'printf "%s\n" "$CLINEMM_PRODUCTION_TEST_LEAK_VAR"'
+       assert: stdout contains "PLAINTEXT-LEAK-OK"
+
+  2. ✓ invalid opt-in value: still DEFAULT_OFF (3ms)
+     Behavior pre-C2: no opt-in check at all.
+     Behavior post-C2: resolveExperimentalSandboxMode() returns undefined
+     for any value other than "seatbelt". The opt-in discriminator is
+     strict -- fuzzy truthy values do NOT activate the sandbox.
+     Tested via: CLINEMM_EXPERIMENTAL_SANDBOX="1" (the original C1 RED
+     test value). command runs unsandboxed.
+
+Baseline preservation: 20/20 pre-existing CommandJobManager tests pass.
+
+Conservation witnesses work BY CONSTRUCTION:
+  - resolveExperimentalSandboxMode() reads process.env at start() time
+  - For any unset / unrecognized / fuzzy value, returns undefined
+  - The `if (sandboxMode !== undefined)` block is skipped
+  - The supervisor receives undefined envSemantics -> legacy path

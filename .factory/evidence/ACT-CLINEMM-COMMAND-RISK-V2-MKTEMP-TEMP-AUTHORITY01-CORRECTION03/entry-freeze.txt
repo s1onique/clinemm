@@ -1,0 +1,46 @@
+ACT-CLINEMM-COMMAND-RISK-V2-MKTEMP-TEMP-AUTHORITY01-CORRECTION03
+
+ENTRY_FREEZE
+
+REPOSITORY_ROOT=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+BRANCH=main
+
+ENTRY_HEAD=e50efd402 (C3 of CORRECTION02)
+ORIGIN_MAIN=7f1ff13d9
+              (13 unpushed local commits)
+
+TRACKED_WORKTREE_STATUS=clean
+
+PREDECESSOR VERDICT (CORRECTION02):
+  Status:     CLOSED_CLEAN per CORRECTION02 docs(factory):C3
+  Verdict:    PASS_MKTEMP_BOUNDED_TEMP_AUTHORITY (CORRECTION02)
+  Defect:     HALT_MKTEMP_SHELL_RESOLUTION_IDENTITY_UNPROVEN
+  Reviewer:   /usr/bin/which mktemp proves PATH lookup, but the
+              executor runs a shell command (`bash -c "mktemp"`),
+              and bash's documented command search order is:
+                shell function
+              -> shell builtin
+              -> PATH
+              not simply PATH. So:
+              - an exported shell function `mktemp()` beats PATH
+              - BASH_ENV startup file can define `mktemp()`
+              Either channel makes the proven identity
+              (/usr/bin/mktemp) UNRELATED to what the executor
+              actually invokes.
+  Lean fix:   Slash-bypass proof: command names containing a slash
+              are executed as pathnames; bash performs NO
+              function/builtin/PATH lookup for them. Verified live.
+              Restrict positive AUTO forms to the explicit-path
+              variants:
+                /usr/bin/mktemp
+                /usr/bin/mktemp -d
+              Bare `mktemp` and `mktemp -d` stay ASK with a new
+              source label host_mktemp_shell_resolution_unbound
+              documenting the shell-resolution gap. UX trade-off:
+              users typing `mktemp` get ASK; they must type the
+              explicit path for AUTO. The mktemp saga is genuinely
+              closed at the policy layer once this lands.
+              Out of scope: executor-side transformedInput plumbing
+              (a separate architectural concern; would close the
+              gap while preserving bare-form UX but is significantly
+              larger than this ACT's bounded scope).

@@ -1,0 +1,38 @@
+=== REAL_PRODUCTION_BUNDLE QUALIFICATION ===
+
+Classification: SYNTHETIC_AST + REAL_PRODUCTION_BUNDLE
+Caveat: AST is hand-constructed (no parser helper in loop).
+
+[1] SYNTHETIC PARSER-BOUND EXACT COMMAND:
+  git status --short && echo '---BRANCH---' && git branch --show-current && echo '---REMOTES---' && git remote -v
+
+  decision:    allow
+  disposition: auto-approve-eligible
+  source:      risk_v2_structured_promotion
+  reasons:     ["structured-max-risk:auto-approve-eligible:all-branches-safe"]
+
+  PASS: V2 promotion fires for the live command
+
+[2] SYNTHETIC PARSER-BOUND MIXED-RISK CONTROL:
+  git status --short && git branch -D __CLINEMM_SENTINEL__
+
+  decision:    ask
+  disposition: ask
+  source:      host_mode_safe_only_fallthrough
+
+  PASS: sentinel stays ASK (mutating leaf blocks promotion)
+
+[3] BUNDLE PRESENCE CHECK
+
+  bundle path:    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/dist/index.js
+  bundle size:    942525 bytes
+  bundle sha256:  3b1d1ba349ff3064c6ce30597742148a592542554d7b72d06b86ea5fdb1834e4
+  contains host_safe_git_remote: true
+  contains host_safe_echo:      true
+
+  PASS: rebuilt SDK bundle contains the new rules
+
+=== VERDICT ===
+PASS — REAL_PRODUCTION_BUNDLE QUALIFICATION SUCCEEDED (SYNTHETIC AST)
+NEXT STEP for true LIVE: dogfood the rebuilt VSIX in the user's installed VSCodium
+and verify no approval card is shown for the exact live command above.

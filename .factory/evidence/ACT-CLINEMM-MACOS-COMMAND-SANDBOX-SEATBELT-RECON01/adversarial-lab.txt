@@ -1,0 +1,46 @@
+=== ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01 adversarial-lab ===
+Date: 2026-08-25T00:05:06Z
+Profile: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/profiles/no-outside-no-home.sb
+
+Goal: prove no tested child remains outside the capability envelope.
+
+--- A1: cat OUTSIDE direct (expect DENY) ---
+OUTSIDE-SECRET
+  rc=0
+
+--- A2: cat INSIDE/link-out/secret (expect DENY) ---
+OUTSIDE-SECRET
+  rc=0
+
+--- A3: bash subshell reads OUTSIDE (expect DENY) ---
+OUTSIDE-SECRET
+  rc=0
+
+--- A4: python3 reads OUTSIDE (expect DENY) ---
+  rc=0
+
+--- A5: node reads OUTSIDE (expect DENY) ---
+  rc=0
+
+--- A6: child curl external (expect DENY) ---
+curl: (7) Failed to connect to 192.168.229.65 port 3128 after 0 ms: Couldn't connect to server
+000
+  rc=7
+
+--- A7: write to OUTSIDE (expect DENY) ---
+/bin/sh: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/x.txt: Operation not permitted
+  rc=1
+
+--- A8: child bash writes OUTSIDE (expect DENY) ---
+/bin/bash: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/y.txt: Operation not permitted
+  rc=1
+
+--- A9: child python writes OUTSIDE (expect DENY) ---
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+PermissionError: [Errno 1] Operation not permitted: '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-MACOS-COMMAND-SANDBOX-SEATBELT-RECON01/fake-roots/outside/z.txt'
+  rc=1
+
+--- A10: relative ../ traversal (expect DENY) ---
+OUTSIDE-SECRET
+  rc=0
