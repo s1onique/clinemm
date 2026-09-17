@@ -246,6 +246,82 @@ export interface CommandJobManagerOptions {
 		readonly network: boolean | undefined
 		readonly sshAgent: boolean | undefined
 	}
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+	 * Optional helper-owned-PGID capability provider. When supplied,
+	 * the manager will:
+	 *   - call `provider.clientOpen()` exactly once at construction
+	 *     to mint a per-instance client_token
+	 *   - call `provider.registerOwned(pgid)` when each job's owned
+	 *     PGID is established and stash the returned job_token on
+	 *     the job
+	 *   - call `provider.terminateOwned(job_token)` from
+	 *     `runTerminationSequence()` ONLY when the direct path
+	 *     reported `epermDetected` (the EPERM-only fallback)
+	 *   - call `provider.releaseOwned(job_token)` best-effort on
+	 *     natural completion, so the helper's slot is freed
+	 *
+	 * The provider is intentionally opaque: CommandJobManager does
+	 * not import from `tools/macos-host-helper/`. This keeps the
+	 * host→helper boundary injectable and testable, and means the
+	 * same CommandJobManager binary works on non-macOS substrates
+	 * (where the option is simply omitted).
+	 *
+	 * Each method must reject (return a rejected promise or throw)
+	 * on `METHOD_NOT_AVAILABLE_IN_TS_FALLBACK` and any other error
+	 * code; the manager swallows the rejection into the EPERM-only
+	 * fallback branch and records `helperFallbackUsed` for
+	 * telemetry. The fallback is best-effort: if the helper is
+	 * unavailable, the cancellation still completes with whatever
+	 * the direct path achieved, and the job's tree-escapee flag
+	 * surfaces the unresolved kernel state.
+	 */
+	helperOwnedPgidProvider?: HelperOwnedPgidProvider
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction04):
+	 * test-only override for the supervisor's spawn primitive. Default
+	 * is `spawnSupervisableShellCommand` from `@cline/core`. Tests
+	 * inject a fake factory to drive the manager without spawning a
+	 * real subprocess (some CI/sandbox environments cannot reliably
+	 * `process.kill(-pid, ...)` the spawned child — the production
+	 * path works on node but the same code under bun-spawned vitest
+	 * workers hits EPERM).
+	 *
+	 * Not used in production code; surfaced for test determinism.
+	 */
+	spawnFactory?: (
+		config: Parameters<typeof spawnSupervisableShellCommand>[0],
+		options?: Parameters<typeof spawnSupervisableShellCommand>[1],
+	) => SupervisableShellProcess
+}
+
+/**
+ * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+ * Opaque capability provider. Concrete implementations wrap the
+ * C-side helper (see tools/macos-host-helper/client.ts). Tests
+ * inject a fake that simulates EPERM, register denial, or
+ * successful escalation without the AF_UNIX boundary.
+ */
+export interface HelperOwnedPgidProvider {
+	clientOpen(): Promise<{ clientToken: string }>
+	registerOwned(input: { clientToken: string; pgid: number }): Promise<{ jobToken: string }>
+	terminateOwned(input: {
+		clientToken: string
+		jobToken: string
+	}): Promise<{ ok: true; outcome: "TERMINATED_TERM" | "TERMINATED_KILL" } | { ok: false; code: string }>
+	releaseOwned(input: { clientToken: string; jobToken: string }): Promise<void>
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction03):
+	 * Reclaim the per-instance client slot held by `clientOpen()`. Called
+	 * from `CommandJobManager.dispose()` exactly once after every active
+	 * job has been terminated and its job slot released.
+	 *
+	 * Implementations MUST be idempotent and never throw — the manager
+	 * is being torn down and cannot meaningfully surface errors. The
+	 * C-side helper's `client.close` handler is fail-closed (peer
+	 * identity check) and idempotent at the wire level.
+	 */
+	clientClose(clientToken: string): Promise<void>
 }
 
 /**
@@ -507,6 +583,26 @@ interface CommandJob {
 	 * promise instead of post-hoc-querying `getActiveJobIds()`.
 	 */
 	terminalTransitionPromise?: Promise<TerminalTransition>
+
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+	 * helper-owned-PGID capability, attached privately to the job
+	 * when spawn establishes the PGID and the helper verifies the
+	 * ownership. Set by `start()` after a successful register-owned
+	 * call. Read by `cancel()` when direct termination returns EPERM.
+	 *
+	 * Never projected into the public snapshot; never included in
+	 * any tool result text. The opaque tokens are sensitive (a leaked
+	 * token from another connection cannot claim authority on a
+	 * different peer, but defense in depth keeps them off the wire
+	 * to tool consumers).
+	 */
+	helperOwnedCapability?: {
+		readonly clientToken: string
+		readonly jobToken: string
+	}
+	/** Cancellation safety net: see cancel() body. */
+	helperFallbackUsed?: boolean
 } /**
  * CommandJobManager — the single host owner of command execution
  * lifetime for the VS Code extension's `run_commands` background path.
@@ -516,6 +612,7 @@ interface CommandJob {
  * memory; terminal jobs are kept in a bounded LRU so the model can
  * follow up on recently-finished work without unbounded growth.
  */
+
 export class CommandJobManager {
 	private readonly active = new Map<string, CommandJob>()
 	private readonly terminal = new Map<string, CommandJob>()
@@ -564,6 +661,34 @@ export class CommandJobManager {
 				readonly sshAgent: boolean | undefined
 		  })
 		| undefined
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+	 * Opaque helper-owned-PGID provider. Optional. When present,
+	 * the manager will consult it for register-owned at job start
+	 * and terminate-owned on EPERM. When absent, the manager is
+	 * exactly the pre-ACT surface (direct kill(-pgid, sig) only).
+	 *
+	 * Token held in `this.helperClientToken` after the first
+	 * successful `clientOpen()`. Lazy: `clientOpen()` is only
+	 * awaited once, on the first job-start that wants to register.
+	 */
+	private readonly helperOwnedPgidProvider: HelperOwnedPgidProvider | undefined
+	private readonly spawnFactory: (
+		config: Parameters<typeof spawnSupervisableShellCommand>[0],
+		options?: Parameters<typeof spawnSupervisableShellCommand>[1],
+	) => SupervisableShellProcess
+	private helperClientToken: string | undefined
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction03):
+	 * the in-flight `clientOpen()` promise resolves to either a
+	 * `clientToken` (cached) or `undefined` (open failed → caller
+	 * degrades to direct-path-only). The field type is
+	 * `Promise<string | undefined>` to match the
+	 * `.catch(() => undefined)` arm; the prior `Promise<string>`
+	 * caused a typecheck error because undefined is not assignable
+	 * to string.
+	 */
+	private helperClientTokenPromise: Promise<string | undefined> | undefined
 
 	constructor(options: CommandJobManagerOptions = {}) {
 		this.maxTerminalJobs = Math.max(1, options.maxTerminalJobs ?? MAX_TERMINAL_JOBS)
@@ -572,6 +697,90 @@ export class CommandJobManager {
 		this.sandboxBackendResolver = options.sandboxBackendResolver ?? defaultSandboxBackendResolver
 		this.experimentalSandboxWorkspaceRoots = Object.freeze([...(options.experimentalSandboxWorkspaceRoots ?? [])])
 		this.safeYoloCapabilitySource = options.safeYoloCapabilitySource
+		this.helperOwnedPgidProvider = options.helperOwnedPgidProvider
+		this.spawnFactory = options.spawnFactory ?? spawnSupervisableShellCommand
+	}
+
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: lazy + cached
+	 * `clientOpen()`. Returns the cached token on subsequent calls.
+	 * On provider error, clears the in-flight promise so the next
+	 * call retries — and surfaces `undefined` so the caller can
+	 * degrade to direct-path-only.
+	 */
+	private async obtainHelperClientToken(): Promise<string | undefined> {
+		if (!this.helperOwnedPgidProvider) return undefined
+		if (this.helperClientToken) return this.helperClientToken
+		if (!this.helperClientTokenPromise) {
+			this.helperClientTokenPromise = this.helperOwnedPgidProvider
+				.clientOpen()
+				.then((res) => {
+					this.helperClientToken = res.clientToken
+					return res.clientToken
+				})
+				.catch(() => {
+					// Clear so a future call retries (helper may have
+					// come back online via restart).
+					this.helperClientTokenPromise = undefined
+					return undefined
+				})
+		}
+		return this.helperClientTokenPromise
+	}
+
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: best-effort
+	 * register the freshly-spawned job's PGID with the helper.
+	 * Returns undefined when the helper is unavailable or the
+	 * register call denies (foreign UID, non-leader PGID, etc.).
+	 *
+	 * The helper performs all authority checks: we just hand it
+	 * the pgid and the caller-derived client_token. There is no
+	 * client-side validation — even a bad pgid surfaces as
+	 * `undefined` here, which is exactly the desired degradation.
+	 */
+	private async tryRegisterOwnedJob(childProcess: {
+		readonly pgid?: number | undefined
+	}): Promise<{ readonly clientToken: string; readonly jobToken: string } | undefined> {
+		if (!this.helperOwnedPgidProvider) return undefined
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+		// `SupervisableShellProcess.pgid` is the canonical process-group
+		// ID of the spawned shell (POSIX-only; undefined on Windows).
+		// The helper verifies that `getpgid(pgid) === pgid` and that
+		// the leader's UID matches the peer's UID before minting a
+		// job_token.
+		const pgid = childProcess.pgid
+		if (typeof pgid !== "number" || pgid <= 0) return undefined
+		const clientToken = await this.obtainHelperClientToken()
+		if (!clientToken) return undefined
+		try {
+			const res = await this.helperOwnedPgidProvider.registerOwned({ clientToken, pgid })
+			return { clientToken, jobToken: res.jobToken }
+		} catch {
+			// Register denial = no fallback authority. Cancellation
+			// still works on the direct path; treeEscapee surfaces
+			// any unresolved kernel state.
+			return undefined
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: best-effort
+	 * release of a helper-owned job slot. Called from finalize()
+	 * on natural completion. Never throws.
+	 */
+	private async releaseHelperOwnedJob(job: CommandJob): Promise<void> {
+		const cap = job.helperOwnedCapability
+		if (!cap || !this.helperOwnedPgidProvider) return
+		try {
+			await this.helperOwnedPgidProvider.releaseOwned({
+				clientToken: cap.clientToken,
+				jobToken: cap.jobToken,
+			})
+		} catch {
+			// Helper will reap on its own when the leader dies; this
+			// is best-effort.
+		}
 	}
 
 	async start(options: StartCommandJobOptions, context?: AgentToolContext): Promise<StartCommandJobResult> {
@@ -832,7 +1041,7 @@ export class CommandJobManager {
 		// to the job only after this line.
 		let childProcess
 		try {
-			childProcess = spawnSupervisableShellCommand(
+			childProcess = this.spawnFactory(
 				{
 					executable,
 					args,
@@ -862,6 +1071,21 @@ export class CommandJobManager {
 			}
 			throw err
 		}
+
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: register
+		// the freshly-spawned PGID with the helper so the helper
+		// has authority to terminate it later (on EPERM). The
+		// helper verifies:
+		//   - the leader exists
+		//   - the leader's UID matches the calling peer
+		//   - the leader's PGID equals the proposed pgid
+		//   - the leader's start_us is captured for PID reuse
+		//     resistance on re-verification
+		// Failure to register is best-effort: the job still
+		// proceeds with the direct-path termination semantics.
+		// If EPERM hits later, `cancel()` will not be able to
+		// fall back; treeEscapee will be set instead.
+		const helperCapability = await this.tryRegisterOwnedJob(childProcess)
 
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 		// set up the terminal-transition promise BEFORE the active
@@ -943,6 +1167,10 @@ export class CommandJobManager {
 			// command-job-manager.test.ts pattern) remain
 			// behaviorally unchanged.
 			ownerSessionId: context?.sessionId,
+			// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+			// private helper capability attached by `start()`.
+			// Read by `runTerminationSequence()` on EPERM.
+			helperOwnedCapability: helperCapability,
 		}
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: capture
 		// the cardinality transition at the manager's mutation seam.
@@ -1099,10 +1327,11 @@ export class CommandJobManager {
 		const syntheticProcess: SupervisableShellProcess = Object.freeze({
 			exit: never(),
 			killTree: async () => {},
-			terminateTree: async () => ({ treeTerminated: true, escalatedToKill: false }),
+			terminateTree: async () => ({ treeTerminated: true, escalatedToKill: false, epermDetected: false }),
 			stdoutSnapshot: emptySnap,
 			stderrSnapshot: emptySnap,
 			pid: undefined,
+			pgid: undefined,
 		})
 		return {
 			jobId: input.id,
@@ -1147,14 +1376,69 @@ export class CommandJobManager {
 		// The primitive handles PGID existence polling and SIGKILL
 		// escalation internally (see SupervisableShellProcess.terminateTree).
 		// The manager's job here is to:
-		//   1) ask the primitive to terminate the tree
+		//   1) ask the primitive to terminate the tree.
 		//   2) await the canonical terminal transition so the caller
 		//      (cancel/deadline) can read job.state directly without
 		//      synthesizing it.
+		//   3) ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: if
+		//      direct termination reported EPERM and a helper capability
+		//      was registered, ask the helper to terminate the owned
+		//      PG. EPERM-only: the helper is NOT consulted on a clean
+		//      direct termination (saves an IPC) and is NOT consulted
+		//      on tree-escape (helper cannot fix a stuck kernel state;
+		//      treeEscapee remains the diagnostic).
+		//
+		// review-correction04: there is exactly ONE EPERM authority
+		// here — the SDK primitive's `terminateTree`. It owns the
+		// signaling AND the EPERM observation (returning the result
+		// in `TerminateTreeResult.epermDetected`). The pre-correction04
+		// code added a parallel `process.kill(-pgid, "SIGTERM")` probe
+		// in the manager, which sent a duplicate SIGTERM and read its
+		// own EPERM — two competing seams. Removed.
 		const treeResult = await job.process.terminateTree({
 			gracefulSignal: "SIGTERM",
 			graceMs: TERM_GRACE_MS,
 		})
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+		// EPERM-only fallback. The helper is consulted only when:
+		//   - the direct path reported epermDetected (it tried to
+		//     signal -pgid and the kernel refused), AND
+		//   - a helper capability was attached at start time, AND
+		//   - the group did NOT vanish anyway (if it did, EPERM was
+		//     momentary; the helper is unnecessary).
+		//
+		// The fallback is best-effort: on any helper error we
+		// preserve the existing treeEscapee flag and continue.
+		if (treeResult.epermDetected && job.helperOwnedCapability) {
+			job.helperFallbackUsed = true
+			// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction04-followup):
+			// extract the provider into a non-null local so the call site
+			// does not need a `!` non-null assertion (biome lint forbids it).
+			// The gate `job.helperOwnedCapability` is set only when the
+			// helper was used to register (tryRegisterOwnedJob), which
+			// requires a non-null provider; this local is therefore sound.
+			const provider = this.helperOwnedPgidProvider
+			if (!provider) {
+				// Unreachable: tryRegisterOwnedJob sets
+				// helperOwnedCapability only when a provider was used.
+				throw new Error("helper-owned capability set without a provider")
+			}
+			try {
+				await provider.terminateOwned({
+					clientToken: job.helperOwnedCapability.clientToken,
+					jobToken: job.helperOwnedCapability.jobToken,
+				})
+				// Helper succeeded — wait briefly for the kernel
+				// to observe the group gone. We do NOT block here:
+				// `job.process.exit` will catch it; the helper's
+				// own timeout-driven kill on its own task guarantees
+				// the leader goes away in bounded time.
+			} catch {
+				// Helper error (DENY_*, TERMINATION_FAILED, IPC fail,
+				// METHOD_NOT_AVAILABLE_IN_TS_FALLBACK). The direct
+				// path's treeEscapee remains the diagnostic.
+			}
+		}
 		// After terminateTree resolves, the tree is observed gone OR
 		// the escalation completed. The shell's exit promise will
 		// resolve shortly (the shell was part of the tree). Await it
@@ -1214,6 +1498,14 @@ export class CommandJobManager {
 			void cleanup().catch(() => {
 				// Swallow: cleanup failures are non-fatal.
 			})
+		}
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+		// Release the helper-owned job slot best-effort. The helper
+		// reaps when the leader dies regardless, but explicit
+		// release keeps the active_job_count metric accurate and
+		// frees the slot immediately on natural completion.
+		if (job.helperOwnedCapability) {
+			void this.releaseHelperOwnedJob(job)
 		}
 		// Move from active → terminal (bounded FIFO).
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: capture
@@ -1320,6 +1612,18 @@ export class CommandJobManager {
 		if (job.state !== "running") {
 			return { ok: true, state: job.state }
 		}
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+		// EPERM-only fallback. terminate() below tries the direct
+		// path (kill -pgid SIGTERM) first. On EPERM, the
+		// `terminate()` flow consults the registered helper
+		// capability and falls back to helper.terminate_owned().
+		//
+		// We do NOT short-circuit the direct path here; the direct
+		// path remains primary because:
+		//   - it's free (no IPC)
+		//   - it succeeds on any substrate where the helper is not
+		//     available (non-macOS, helper restart in flight, etc.)
+		// The helper is consulted ONLY on EPERM.
 		await this.terminate(job, "cancel")
 		return { ok: true, state: job.state }
 	}
@@ -1423,6 +1727,23 @@ export class CommandJobManager {
 		// job), so these should be empty in practice; this is a
 		// belt-and-suspenders cleanup.
 		this.terminalTransitions.clear()
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction03):
+		// reclaim the per-instance client slot held by `clientOpen()`.
+		// Without this, every Codium (VS Code) instance would leak one
+		// client slot — the helper's 64-slot client pool would exhaust
+		// after ~64 launches. The C-side `handle_client_close` is
+		// fail-closed (peer identity check) and reclaims the slot
+		// atomically (secure-zeroes the token + sets used=0).
+		if (this.helperOwnedPgidProvider && this.helperClientToken) {
+			try {
+				await this.helperOwnedPgidProvider.clientClose(this.helperClientToken)
+			} catch {
+				// dispose() is terminal — best-effort. Helper will reap
+				// on its own when the connection closes.
+			}
+			this.helperClientToken = undefined
+			this.helperClientTokenPromise = undefined
+		}
 	}
 }
 

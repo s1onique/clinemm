@@ -1,45 +1,62 @@
 /**
  * ACT-CLINEMM-MACOS-TRUSTED-HOST-HELPER01
  * ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01
+ * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
  *
  * Protocol constants and the parse/dispatch pipeline for the trusted
  * host helper. PROBE01 adds ONE new fixed method
  * (`testbed.run-installed-vsix-smoke`) to the ACT-01 method set.
- * Both methods share the same parse/dispatch pipeline; both share
- * the structural anti-shell guarantee.
+ * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 adds FIVE more:
  *
- * Wire format (REQUEST v1, health):
- *   { "version": 1, "request_id": "...", "method": "health" }
+ *   - client.open: get an opaque client_token bound to the
+ *     kernel-authenticated peer (UID + PID).
+ *   - process-group.register-owned: register ownership of a
+ *     caller-claimed PGID; helper verifies the leader is alive +
+ *     in the caller's UID + in the claimed PGID + has the
+ *     recorded start time (PID reuse resistance); returns a
+ *     fresh opaque job_token.
+ *   - process-group.terminate-owned: SIGTERM grace, then SIGKILL
+ *     escalation. Caller does NOT select the signal.
+ *   - process-group.release-owned: clear the job slot without
+ *     signaling.
+ *   - helper.restart: validate the request, flush a correlated
+ *     ACK, then exit normally. launchd retains the service
+ *     registration/socket; the next connection restarts the helper.
+ *     REJECTED when active_job_count > 0 (per §19 of the ACT).
  *
- * Wire format (REQUEST v1, testbed.run-installed-vsix-smoke):
- *   { "version": 1, "request_id": "...", "method":
- *     "testbed.run-installed-vsix-smoke",
- *     "subject_head": "<40-hex>",
- *     "vsix_path": "<absolute-path>",
- *     "vsix_sha256": "<64-hex>" }
+ * Wire format additions:
+ *   health now also returns:
+ *     "build_id": "<64-hex sha256 of helper.c + ABI version>"
+ *     "active_client_count": <n>
+ *     "active_job_count": <n>
+ *   so the operator can prove a NEW generation started.
  *
- * Wire format (RESPONSE v1, ok):
- *   { "version": 1, "request_id": "...", "ok": true,
- *     "service": "clinemm-host-helper", "pid": <n>, "uid": <n> }
- *
- * Wire format (RESPONSE v1, testbed ok):
- *   { "version": 1, "request_id": "...", "ok": true,
- *     "result": { "subject_head": "...", "vsix_sha256": "...",
- *                 "guest_vsix_sha256": "...", "extension_id": "...",
- *                 "extension_version": "...", "guest_image": "...",
- *                 "guest_macos_version": "...", "vscode_version": "...",
- *                 "activation": "pass" } }
- *
- * Wire format (RESPONSE v1, error):
- *   { "ok": false, "error": <token> }
+ * Anti-shell invariant: the 10 forbidden keys remain
+ * (command, argv, shell, exec, script, spawn, cmd, cmdline, path,
+ * file). New keys added for ACT-CLINEMM-HOST-HELPER-OWNED-PGID-
+ * TERMINATION01: client_token, job_token, pgid. Of these, only
+ * `pgid` is a caller-supplied identifier that influences authority,
+ * and only as a numeric claim verified by the kernel-authenticated
+ * peer identity.
  */
 
 export const PROTOCOL_VERSION = 1 as const
 
-/** The legal method set. PROBE01 adds testbed.run-installed-vsix-smoke. */
+/** The legal method set. */
 export const ALLOWED_METHODS: ReadonlySet<string> = new Set<string>([
 	"health",
 	"testbed.run-installed-vsix-smoke",
+	// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+	"client.open",
+	// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction02):
+	// client.close reclaims the client slot. Without this, the
+	// 64-slot client pool would exhaust over a long-lived helper
+	// that serves many short-lived Codium sessions.
+	"client.close",
+	"process-group.register-owned",
+	"process-group.terminate-owned",
+	"process-group.release-owned",
+	"helper.restart",
 ])
 
 /** Maximum accepted request frame, in bytes (PROBE01: increased for VSIX SHA256 + path). */
@@ -90,6 +107,16 @@ export const METHOD_REQUIRED_KEYS: Readonly<
 		"vsix_path",
 		"vsix_sha256",
 	]),
+	// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: the new
+	// methods use opaque capability tokens. `pgid` is the only
+	// caller-supplied identifier that influences authority, and
+	// only as a numeric claim verified against the
+	// kernel-authenticated peer identity.
+	"client.open": new Set<string>([]),
+	"process-group.register-owned": new Set<string>(["client_token", "pgid"]),
+	"process-group.terminate-owned": new Set<string>(["client_token", "job_token"]),
+	"process-group.release-owned": new Set<string>(["client_token", "job_token"]),
+	"helper.restart": new Set<string>([]),
 }
 
 export interface ParsedHealthRequest {
@@ -107,7 +134,48 @@ export interface ParsedTestbedRequest {
 	readonly vsix_sha256: string
 }
 
-export type ParsedRequest = ParsedHealthRequest | ParsedTestbedRequest
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: new request shapes.
+export interface ParsedClientOpenRequest {
+	readonly version: 1
+	readonly request_id: string
+	readonly method: "client.open"
+}
+export interface ParsedRegisterOwnedRequest {
+	readonly version: 1
+	readonly request_id: string
+	readonly method: "process-group.register-owned"
+	readonly client_token: string
+	/** Caller-claimed PGID. Verified against kernel-authenticated peer. */
+	readonly pgid: number
+}
+export interface ParsedTerminateOwnedRequest {
+	readonly version: 1
+	readonly request_id: string
+	readonly method: "process-group.terminate-owned"
+	readonly client_token: string
+	readonly job_token: string
+}
+export interface ParsedReleaseOwnedRequest {
+	readonly version: 1
+	readonly request_id: string
+	readonly method: "process-group.release-owned"
+	readonly client_token: string
+	readonly job_token: string
+}
+export interface ParsedHelperRestartRequest {
+	readonly version: 1
+	readonly request_id: string
+	readonly method: "helper.restart"
+}
+
+export type ParsedRequest =
+	| ParsedHealthRequest
+	| ParsedTestbedRequest
+	| ParsedClientOpenRequest
+	| ParsedRegisterOwnedRequest
+	| ParsedTerminateOwnedRequest
+	| ParsedReleaseOwnedRequest
+	| ParsedHelperRestartRequest
 
 export type ParseError =
 	| "BAD_JSON"
@@ -262,6 +330,80 @@ export function parseRequest(raw: string): ParseResult {
 			},
 		}
 	}
+	// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+	// client_token and job_token are 32-character lowercase hex
+	// strings. We validate the format here so the C helper receives
+	// a structurally-clean envelope. The C helper enforces all
+	// authority decisions.
+	if (obj.method === "client.open") {
+		return {
+			ok: true,
+			value: {
+				version: 1,
+				request_id: obj.request_id,
+				method: "client.open",
+			},
+		}
+	}
+	const validateHex32 = (v: unknown): string | null => {
+		if (typeof v !== "string") return null
+		if (!/^[0-9a-f]{32}$/i.test(v)) return null
+		return v.toLowerCase()
+	}
+	if (obj.method === "process-group.register-owned") {
+		const ct = validateHex32(obj.client_token)
+		if (!ct) return { ok: false, error: "BAD_FIELD_TYPE" }
+		// pgid is a JSON number; reject 0/negative/non-integer/non-finite.
+		const pgidRaw = obj.pgid
+		if (
+			typeof pgidRaw !== "number" ||
+			!Number.isInteger(pgidRaw) ||
+			!Number.isFinite(pgidRaw) ||
+			pgidRaw <= 0 ||
+			pgidRaw > 2147483647
+		) {
+			return { ok: false, error: "BAD_FIELD_TYPE" }
+		}
+		return {
+			ok: true,
+			value: {
+				version: 1,
+				request_id: obj.request_id,
+				method: "process-group.register-owned",
+				client_token: ct,
+				pgid: pgidRaw,
+			},
+		}
+	}
+	if (
+		obj.method === "process-group.terminate-owned" ||
+		obj.method === "process-group.release-owned"
+	) {
+		const ct = validateHex32(obj.client_token)
+		const jt = validateHex32(obj.job_token)
+		if (!ct || !jt) return { ok: false, error: "BAD_FIELD_TYPE" }
+		const m = obj.method
+		return {
+			ok: true,
+			value: {
+				version: 1,
+				request_id: obj.request_id,
+				method: m,
+				client_token: ct,
+				job_token: jt,
+			},
+		}
+	}
+	if (obj.method === "helper.restart") {
+		return {
+			ok: true,
+			value: {
+				version: 1,
+				request_id: obj.request_id,
+				method: "helper.restart",
+			},
+		}
+	}
 	return { ok: false, error: "WRONG_TYPE" }
 }
 
@@ -275,6 +417,10 @@ export type ResponseEnvelope =
 			readonly service: typeof SERVICE_NAME
 			readonly pid: number
 			readonly uid: number
+			// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+			readonly build_id: string
+			readonly active_client_count: number
+			readonly active_job_count: number
 	  }
 	| {
 			readonly ok: false
@@ -285,6 +431,9 @@ export function buildOkResponse(
 	requestId: string,
 	pidNum: number,
 	uidNum: number,
+	buildId = "",
+	activeClientCount = 0,
+	activeJobCount = 0,
 ): ResponseEnvelope {
 	return {
 		version: 1,
@@ -293,6 +442,9 @@ export function buildOkResponse(
 		service: SERVICE_NAME,
 		pid: pidNum,
 		uid: uidNum,
+		build_id: buildId,
+		active_client_count: activeClientCount,
+		active_job_count: activeJobCount,
 	}
 }
 
@@ -345,10 +497,14 @@ export function dispatch(
 	parsed: ParsedRequest,
 	pidNum: number,
 	uidNum: number,
+	buildId = "",
+	activeClientCount = 0,
+	activeJobCount = 0,
 ): ResponseEnvelope {
 	switch (parsed.method) {
 		case "health":
-			return buildOkResponse(parsed.request_id, pidNum, uidNum)
+			return buildOkResponse(parsed.request_id, pidNum, uidNum,
+				buildId, activeClientCount, activeJobCount)
 		case "testbed.run-installed-vsix-smoke":
 			// The TS fallback server does NOT support the testbed
 			// capability. The C LaunchAgent helper is the only
@@ -358,6 +514,20 @@ export function dispatch(
 				ok: false,
 				error: "METHOD_NOT_AVAILABLE_IN_TS_FALLBACK",
 			}
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+		// The TS fallback server does NOT support the owned-PGID
+		// capabilities either — these depend on getpeereid() +
+		// LOCAL_PEERPID + kinfo_proc sysctl reads, which the TS
+		// Node.js runtime does not expose. They are launchd-only
+		// capabilities, dispatched exclusively by the C helper.
+		case "client.open":
+		case "process-group.register-owned":
+		case "process-group.terminate-owned":
+		case "process-group.release-owned":
+		case "helper.restart":
+			return {
+				ok: false,
+				error: "METHOD_NOT_AVAILABLE_IN_TS_FALLBACK",
+			}
 	}
 }
-

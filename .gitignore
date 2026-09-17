@@ -347,6 +347,14 @@ apps/examples/desktop-app/.cursor/settings.json
 !/.factory/evidence/
 /.factory/evidence/*
 !/.factory/evidence/ACT-CLINEMM-EDITOR-TOOL-APPROVAL-FRICTION-RECON01/
+# ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: the result.json
+# evidence file is bound to the canonical epic-board row, so it MUST
+# be durable (otherwise the closure claim cannot be re-verified on a
+# fresh clone). Adjacent diagnostic / intermediate files (e.g.
+# capture-*.jsonl, scratch-*.txt) remain local; only the canonical
+# result.json is whitelisted via this directory entry. Mirrors the
+# editor-tool-recon ACT's evidence-directory durability pattern.
+!/.factory/evidence/ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01/
 # ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01 evidence
 # (currently empty; reserved for the future re-open ACT to land). Mirrors
 # the editor-tool-recon ACT's evidence-directory durability pattern.

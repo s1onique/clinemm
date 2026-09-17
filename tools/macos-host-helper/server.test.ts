@@ -185,7 +185,11 @@ describe("dispatch", () => {
 			request_id: "corr-1",
 			method: "health",
 		}
-		const env = dispatch(parsed, 1234, 501)
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: the
+		// ok envelope now also carries build_id,
+		// active_client_count, and active_job_count so the operator
+		// can prove a NEW generation started.
+		const env = dispatch(parsed, 1234, 501, "build-id-test", 0, 0)
 		expect(env).toEqual({
 			version: 1,
 			request_id: "corr-1",
@@ -193,6 +197,9 @@ describe("dispatch", () => {
 			service: "clinemm-host-helper",
 			pid: 1234,
 			uid: 501,
+			build_id: "build-id-test",
+			active_client_count: 0,
+			active_job_count: 0,
 		})
 	})
 })

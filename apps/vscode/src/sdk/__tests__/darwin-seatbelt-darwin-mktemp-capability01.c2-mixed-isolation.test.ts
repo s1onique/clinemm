@@ -221,10 +221,11 @@ async function captureJobRecordsAfterToolExecute(opts: StartOptions): Promise<Ca
 			process: {
 				exit: new Promise<never>(() => {}),
 				killTree: async () => {},
-				terminateTree: async () => ({ treeTerminated: true, escalatedToKill: false }),
+				terminateTree: async () => ({ treeTerminated: true, escalatedToKill: false, epermDetected: false }),
 				stdoutSnapshot: () => ({ text: "", totalChars: 0, dropped: false }),
 				stderrSnapshot: () => ({ text: "", totalChars: 0, dropped: false }),
 				pid: undefined,
+				pgid: undefined,
 			},
 			terminalPromise: new Promise<{ becameIdle: boolean }>(() => {}),
 			becameActive: false,

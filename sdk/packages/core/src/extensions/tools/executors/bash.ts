@@ -849,6 +849,21 @@ export interface SupervisableShellProcess {
 	stderrSnapshot(): { text: string; totalChars: number; dropped: boolean };
 	/** PID of the spawned child, or undefined if spawn failed. */
 	readonly pid: number | undefined;
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+	 * POSIX-only. The process-group ID owned by this supervised
+	 * shell. On POSIX with `detached: true` (the bash executor's
+	 * default), the spawned shell is the leader of its own PG,
+	 * so `pgid === pid`. On Windows, undefined (no PGID semantics).
+	 *
+	 * The helper registration path reads this to call
+	 * `process-group.register-owned(pgid=...)`. The helper then
+	 * verifies that `getpgid(pgid) === pgid` and that the
+	 * leader's UID matches the peer's UID before minting a
+	 * job_token. See `tools/macos-host-helper/native/helper.c`
+	 * for the kernel-authenticated verification.
+	 */
+	readonly pgid: number | undefined;
 }
 
 /**
@@ -859,13 +874,28 @@ export interface SupervisableShellProcess {
  *   completed) within `graceMs`.
  * - `escalatedToKill` is true when the grace expired and a forceful
  *   signal had to be issued to the tree.
+ * - `epermDetected` is true when the caller-supplied subprocess was
+ *   unable to signal its own process group (POSIX `kill(-pgid, sig)`
+ *   returned EPERM). This is the diagnostic that authorizes the
+ *   CommandJobManager to consult a privileged helper for the
+ *   EPERM-only fallback path (ACT-CLINEMM-HOST-HELPER-OWNED-PGID-
+ *   TERMINATION01). Always false on non-POSIX or when the group
+ *   terminated cleanly (in those cases EPERM is not "the group
+ *   survived"; the group is gone).
  *
- * Both flags are observable to callers; the supervisor does not
+ * All three flags are observable to callers; the supervisor does not
  * silently swallow tree state.
  */
 export interface TerminateTreeResult {
 	treeTerminated: boolean;
 	escalatedToKill: boolean;
+	/**
+	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: true when
+	 * the graceful signal to -pgid returned EPERM AND the group was
+	 * still alive after the grace + SIGKILL escalation. This is the
+	 * hook for the host's helper-fallback path.
+	 */
+	epermDetected: boolean;
 }
 
 function buildShellProcess(
@@ -1021,15 +1051,22 @@ function buildShellProcess(
 
 	/**
 	 * Send `signal` to the owned process group. No-op if the group is
-	 * already gone. Never throws.
+	 * already gone. Returns the errno name so callers can distinguish
+	 * EPERM (still exists, we lack permission) from ESRCH (already
+	 * gone) — see ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01.
+	 *
+	 * Never throws.
 	 */
-	const signalGroup = (signal: NodeJS.Signals): void => {
-		if (!childPid) return;
+	const signalGroup = (signal: NodeJS.Signals): "OK" | "EPERM" | "ESRCH" | "OTHER" => {
+		if (!childPid) return "OTHER";
 		try {
 			process.kill(-childPid, signal);
-		} catch {
-			// Group already gone, or we lack permission; both are
-			// best-effort for the graceful signal.
+			return "OK";
+		} catch (err) {
+			const code = (err as NodeJS.ErrnoException).code;
+			if (code === "EPERM") return "EPERM";
+			if (code === "ESRCH") return "ESRCH";
+			return "OTHER";
 		}
 	};
 
@@ -1058,8 +1095,14 @@ function buildShellProcess(
 		if (terminateInFlight) return terminateInFlight;
 		terminateInFlight = (async () => {
 			if (!childPid) {
-				return { treeTerminated: true, escalatedToKill: false };
+				return { treeTerminated: true, escalatedToKill: false, epermDetected: false };
 			}
+			// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: track
+			// EPERM across the SIGTERM and SIGKILL phases. We report
+			// it on the result only when the group ALSO survived.
+			// On Windows there is no portable PGID probe and no
+			// EPERM surface, so epermDetected is always false there.
+			let epermSeen = false;
 			// POSIX: race PGID existence against the grace window.
 			// Windows: defer to taskkill + wait via the existing path.
 			if (isWindows) {
@@ -1084,22 +1127,24 @@ function buildShellProcess(
 					),
 				]);
 				if (exited) {
-					return { treeTerminated: true, escalatedToKill: false };
+					return { treeTerminated: true, escalatedToKill: false, epermDetected: false };
 				}
 				await killProcessTree();
-				return { treeTerminated: true, escalatedToKill: true };
+				return { treeTerminated: true, escalatedToKill: true, epermDetected: false };
 			}
 			// POSIX: send to the owned PG, not just the leader.
-			signalGroup(opts.gracefulSignal);
+			const termRc = signalGroup(opts.gracefulSignal);
+			if (termRc === "EPERM") epermSeen = true;
 			const treeTerminated = await waitForGroupGone(childPid, opts.graceMs);
 			if (treeTerminated) {
-				return { treeTerminated: true, escalatedToKill: false };
+				return { treeTerminated: true, escalatedToKill: false, epermDetected: false };
 			}
 			// Grace expired: escalate. SIGKILL on the PG, then wait
 			// again (up to graceMs) for the group to vanish.
-			signalGroup("SIGKILL");
+			const killRc = signalGroup("SIGKILL");
+			if (killRc === "EPERM") epermSeen = true;
 			const finalGone = await waitForGroupGone(childPid, opts.graceMs);
-			return { treeTerminated: finalGone, escalatedToKill: true };
+			return { treeTerminated: finalGone, escalatedToKill: true, epermDetected: epermSeen && !finalGone };
 		})();
 		return terminateInFlight;
 	};
@@ -1130,6 +1175,11 @@ function buildShellProcess(
 	return {
 		exit: exitPromise,
 		pid: childPid,
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: on POSIX
+		// the shell is the PG leader (detached:true spawn), so the
+		// PGID equals the child PID. On Windows there are no PGID
+		// semantics, so we surface undefined.
+		pgid: isWindows ? undefined : childPid,
 		stdoutSnapshot: () => stdout.snapshot(),
 		stderrSnapshot: () => stderr.snapshot(),
 		killTree: async () => {

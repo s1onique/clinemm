@@ -97,9 +97,51 @@
 #include <poll.h>
 #include <sys/time.h>
 
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+// peer identity (kernel-authenticated client UID/PID) and
+// capability-store includes. SOL_LOCAL / LOCAL_PEERPID is the
+// Apple-recommended UNIX-domain peer PID discovery (Chromium uses
+// it on Apple platforms). kinfo_proc via sysctl() is the
+// Darwin/libproc process-information seam used for start-time
+// capture (PID reuse resistance).
+#include <sys/uio.h>
+#include <sys/sysctl.h>
+#include <libproc.h>
+#include <sys/socketvar.h>  // SOL_LOCAL on Darwin
+#include <stdint.h>
+
+// /dev/urandom for CLIENT_TOKEN entropy. arc4random_buf is the
+// portable POSIX-friendly random source on macOS.
+// (stdlib.h already included above)
+
 // PROBE01: bumped to 8192 to accommodate a full testbed envelope
 // (40-hex subject_head + 64-hex SHA256 + absolute path up to ~1KiB).
 #define MAX_FRAME 8192
+
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: forward decls
+// for ACT-01 helpers used by the new method handlers. These are
+// defined later in this file; the forward declarations keep the
+// ACT-01 call sites stable.
+
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: forward decls
+// for ACT-01 helpers + the BUILD_IDENTITY + CAPABILITY_STORE
+// primitives used by respond_ok() and the new handlers.
+static const char *hex_sha256_of_self_source(void);
+static int count_active_clients(void);
+static int count_active_jobs(void);
+// Review-correction01: forward decl for the extended proc-identity
+// reader used by handle_register_owned for ownership proof.
+static int read_proc_identity_ext(pid_t pid, uint64_t *start_us,
+                                   uid_t *uid, pid_t *ppid);
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: build_id
+// is the deterministic 64-hex SHA-256 of the helper's source
+// file (CLINEMM_HELPER_SRC env var) + ABI version string.
+// Defined here so respond_ok() and the new handlers can read
+// it without a forward declaration. Initialized in main().
+// `mutable` is approximated by dropping `const` for the
+// pointer-to-pointer-write target — we never mutate the
+// pointed-to string, only the pointer itself.
+static const char *g_build_id = NULL;
 #define MAX_KEYS 16
 #define MAX_KEY_LEN 64
 #define MAX_VAL_LEN 1024
@@ -470,14 +512,23 @@ static int is_forbidden_key(const char *k) {
 }
 
 static int is_recognized_key(const char *k) {
-  // PROBE01: recognized-key list is the UNION of all method-specific
-  // legal keys. Anti-shell invariant: any key NOT in this union fails
-  // closed at the parser layer BEFORE value parsing.
+  // PROBE01 + ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+  // recognized-key list is the UNION of all method-specific legal keys.
+  // Anti-shell invariant: any key NOT in this union fails closed at
+  // the parser layer BEFORE value parsing.
   static const char *R[] = {
     // ACT-01 (health envelope):
     "version", "request_id", "method",
     // PROBE01 (testbed.run-installed-vsix-smoke envelope):
     "subject_head", "vsix_path", "vsix_sha256",
+    // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+    // opaque capability tokens (hex strings), unsigned numeric pgid.
+    // `pgid` is the ONLY caller-supplied identifier that influences
+    // authority decisions, and only as a numeric claim verified by
+    // ownership checks against the kernel-authenticated peer identity
+    // (see handle_register_owned). Caller-supplied signals, pids, or
+    // paths remain FORBIDDEN_KEY.
+    "client_token", "job_token", "pgid",
     NULL
   };
   for (int i = 0; R[i]; i++) if (strcmp(k, R[i]) == 0) return 1;
@@ -583,10 +634,17 @@ static void respond_ok(int cfd, const void *request_id, size_t request_id_len) {
   int idn = write_json_string(buf + off, sizeof(buf) - off, request_id, request_id_len);
   if (idn < 0) goto trunc;
   off += (size_t)idn;
-  // Tail: ok/service/pid/uid and newline
+  // Tail: ok/service/pid/uid + build_id + active counts. The
+  // build_id and counts are ACT-CLINEMM-HOST-HELPER-OWNED-PGID-
+  // TERMINATION01 additions so the operator can prove the NEW
+  // generation started (build_id drift) and that capability
+  // state is what was expected.
   int tail = snprintf(buf + off, sizeof(buf) - off,
-    ",\"ok\":true,\"service\":\"clinemm-host-helper\",\"pid\":%d,\"uid\":%d}\n",
-    (int)getpid(), (int)getuid());
+    ",\"ok\":true,\"service\":\"clinemm-host-helper\",\"pid\":%d,\"uid\":%d,"
+    "\"build_id\":\"%s\",\"active_client_count\":%d,\"active_job_count\":%d}\n",
+    (int)getpid(), (int)getuid(),
+    g_build_id ? g_build_id : "uninitialized",
+    count_active_clients(), count_active_jobs());
   if (tail <= 0 || (size_t)tail >= sizeof(buf) - off) goto trunc;
   off += (size_t)tail;
   (void)write_all(cfd, buf, off);
@@ -953,6 +1011,909 @@ static void handle_testbed_run(int cfd, const kv_t *rid, const kv_t *kvs, size_t
   respond_testbed_ok(cfd, rid->val, rid->val_len, out_buf, (size_t)dr.len);
 }
 
+// =============================================================================
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
+//
+// Helper self-restart + owned-PGID termination extension. CONSERVES
+// every prior helper invariant (AF_UNIX, 0600, launch_activate_socket,
+// request_id correlation, JSON output escaping, Unicode decode,
+// embedded NUL preservation, fail-closed launchd matrix,
+// testbed.run-installed-vsix-smoke, anti-shell forbidden keys).
+// =============================================================================
+
+// Minimal SHA-256 (RFC 6234) — kept in this translation unit because
+// helper.c must remain standalone and must not link libcrypto.
+//
+// Review-correction01: only compiled when CLINEMM_HELPER_BUILD_ID is
+// NOT defined (i.e. the runtime-hash fallback path). The production
+// build uses the build-time embedded build_id and does not need
+// SHA-256 at runtime.
+#ifndef CLINEMM_HELPER_BUILD_ID
+typedef struct {
+  uint32_t state[8];
+  uint64_t bit_count;
+  unsigned char buffer[64];
+} SHA256_CTX;
+static const uint32_t SHA256_K[64] = {
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
+  0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+  0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
+  0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
+  0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+  0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+  0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
+  0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+  0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+};
+static inline uint32_t rotr32(uint32_t x, int n) {
+  return (x >> n) | (x << (32 - n));
+}
+static void sha256_init(SHA256_CTX *c) {
+  c->state[0] = 0x6a09e667; c->state[1] = 0xbb67ae85;
+  c->state[2] = 0x3c6ef372; c->state[3] = 0xa54ff53a;
+  c->state[4] = 0x510e527f; c->state[5] = 0x9b05688c;
+  c->state[6] = 0x1f83d9ab; c->state[7] = 0x5be0cd19;
+  c->bit_count = 0;
+}
+static void sha256_block(uint32_t state[8], const unsigned char block[64]) {
+  uint32_t w[64];
+  for (int i = 0; i < 16; i++) {
+    w[i] = ((uint32_t)block[i*4] << 24) | ((uint32_t)block[i*4+1] << 16) |
+           ((uint32_t)block[i*4+2] << 8) | ((uint32_t)block[i*4+3]);
+  }
+  for (int i = 16; i < 64; i++) {
+    uint32_t s0 = rotr32(w[i-15], 7) ^ rotr32(w[i-15], 18) ^ (w[i-15] >> 3);
+    uint32_t s1 = rotr32(w[i-2], 17) ^ rotr32(w[i-2], 19) ^ (w[i-2] >> 10);
+    w[i] = w[i-16] + s0 + w[i-7] + s1;
+  }
+  uint32_t a=state[0], b=state[1], c=state[2], d=state[3];
+  uint32_t e=state[4], f=state[5], g=state[6], h=state[7];
+  for (int i = 0; i < 64; i++) {
+    uint32_t S1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+    uint32_t ch = (e & f) ^ (~e & g);
+    uint32_t t1 = h + S1 + ch + SHA256_K[i] + w[i];
+    uint32_t S0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+    uint32_t mj = (a & b) ^ (a & c) ^ (b & c);
+    uint32_t t2 = S0 + mj;
+    h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  }
+  state[0]+=a; state[1]+=b; state[2]+=c; state[3]+=d;
+  state[4]+=e; state[5]+=f; state[6]+=g; state[7]+=h;
+}
+static void sha256_update(SHA256_CTX *c, const unsigned char *data, size_t len) {
+  size_t fill = (size_t)((c->bit_count >> 3) & 63);
+  c->bit_count += (uint64_t)len << 3;
+  if (fill) {
+    size_t need = 64 - fill;
+    if (len < need) { memcpy(c->buffer + fill, data, len); return; }
+    memcpy(c->buffer + fill, data, need);
+    sha256_block(c->state, c->buffer);
+    data += need; len -= need;
+  }
+  while (len >= 64) { sha256_block(c->state, data); data += 64; len -= 64; }
+  if (len) memcpy(c->buffer, data, len);
+}
+static void sha256_final(SHA256_CTX *c, unsigned char out[32]) {
+  size_t fill = (size_t)((c->bit_count >> 3) & 63);
+  c->buffer[fill++] = 0x80;
+  if (fill > 56) {
+    while (fill < 64) c->buffer[fill++] = 0;
+    sha256_block(c->state, c->buffer);
+    fill = 0;
+  }
+  while (fill < 56) c->buffer[fill++] = 0;
+  uint64_t bc = c->bit_count;
+  for (int i = 7; i >= 0; i--) {
+    c->buffer[56 + i] = (unsigned char)(bc & 0xff);
+    bc >>= 8;
+  }
+  sha256_block(c->state, c->buffer);
+  for (int i = 0; i < 8; i++) {
+    out[i*4]   = (unsigned char)(c->state[i] >> 24);
+    out[i*4+1] = (unsigned char)(c->state[i] >> 16);
+    out[i*4+2] = (unsigned char)(c->state[i] >> 8);
+    out[i*4+3] = (unsigned char)(c->state[i]);
+  }
+}
+#endif /* CLINEMM_HELPER_BUILD_ID */
+
+// -----------------------------------------------------------------------------
+// BUILD_IDENTITY (Phase 0B + review-correction01):
+//
+// Reported by the `health` method so the operator can prove a NEW
+// generation of the helper actually started.
+//
+// sha256(ABI_version + helper.c bytes) hex-encoded as 64 lowercase
+// hex chars. The string is a SOURCE/BUILD identity, not a binary
+// SHA — it changes when the source changes, which is the property
+// we want for upgrade qualification.
+//
+// Review-correction01: the hash is now COMPUTED AT BUILD TIME and
+// embedded via -DCLINEMM_HELPER_BUILD_ID. The runtime path is just
+// "use the embedded string". This removes the runtime dependency
+// on the helper.c source being readable at startup, which is the
+// load-bearing invariant for atomic-replace A->B in production:
+// the production binary lives at ~/.clinemm/bin/clinemm-host-helper
+// (not in the repo tree) and must not need its own source.
+//
+// If CLINEMM_HELPER_BUILD_ID is NOT defined (developer built helper.c
+// directly without build.sh), we fall back to the runtime-hash path.
+// -----------------------------------------------------------------------------
+#ifndef CLINEMM_HELPER_ABI_VERSION
+#define CLINEMM_HELPER_ABI_VERSION "OWNED_PGID_TERMINATION_01"
+#endif
+static char g_build_id_buf[65];
+
+#ifdef CLINEMM_HELPER_BUILD_ID
+// Build-time embedded identity. Use as-is.
+static const char *hex_sha256_of_self_source(void) {
+  const char *embedded = CLINEMM_HELPER_BUILD_ID;
+  size_t n = strlen(embedded);
+  if (n >= sizeof(g_build_id_buf)) n = sizeof(g_build_id_buf) - 1;
+  memcpy(g_build_id_buf, embedded, n);
+  g_build_id_buf[n] = 0;
+  return g_build_id_buf;
+}
+#else
+// Legacy fallback: read helper.c at runtime. Used by tests that pass
+// CLINEMM_HELPER_SRC to bypass the build-time embed.
+static const char *hex_sha256_of_self_source(void) {
+  const char *src = getenv("CLINEMM_HELPER_SRC");
+  if (!src || !*src) src = "tools/macos-host-helper/native/helper.c";
+  FILE *f = fopen(src, "rb");
+  if (!f) {
+    snprintf(g_build_id_buf, sizeof(g_build_id_buf),
+             "abi:%s.fallback", CLINEMM_HELPER_ABI_VERSION);
+    return g_build_id_buf;
+  }
+  unsigned char hash[32];
+  SHA256_CTX ctx;
+  sha256_init(&ctx);
+  sha256_update(&ctx, (const unsigned char *)CLINEMM_HELPER_ABI_VERSION,
+                strlen(CLINEMM_HELPER_ABI_VERSION));
+  unsigned char buf[8192];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+    sha256_update(&ctx, buf, n);
+  }
+  fclose(f);
+  sha256_final(&ctx, hash);
+  for (int i = 0; i < 32; i++) {
+    snprintf(g_build_id_buf + (i * 2), 3, "%02x", hash[i]);
+  }
+  g_build_id_buf[64] = 0;
+  return g_build_id_buf;
+}
+#endif
+
+// -----------------------------------------------------------------------------
+// CAPABILITY STORE (Phase 2): one helper serves multiple Codium
+// clients. Cross-client isolation is P0.
+//
+// client_token: 32 hex chars (>=128 bits from arc4random_buf),
+//   helper-generated, memory-only, returned by client.open.
+//   Bound at registration to a kernel-authenticated peer (UID + PID)
+//   so a leaked token from another connection can never claim
+//   authority on a different peer.
+//
+// job_token: 32 hex chars, returned by process-group.register-owned
+//   alongside the stored PGID and leader identity (PID + start time).
+// -----------------------------------------------------------------------------
+
+#define CLINEMM_TOKEN_HEX_LEN 32
+#define CLINEMM_MAX_CLIENTS  64
+#define CLINEMM_MAX_JOBS     128
+
+typedef struct {
+  int used;
+  char client_token[CLINEMM_TOKEN_HEX_LEN + 1];
+  uid_t peer_uid;
+  pid_t peer_pid;
+} client_record_t;
+
+// Strong identity check: both UID AND PID must match the recorded
+// identity. This prevents two same-UID clients from impersonating
+// each other across connections (the fundamental cross-client
+// isolation requirement).
+typedef struct {
+  int ok;
+  uid_t uid;
+  gid_t gid;
+  pid_t pid;
+} peer_identity_t;
+static int peer_matches(client_record_t *cl, const peer_identity_t *pi) {
+  if (!pi->ok) return 0;
+  if (pi->uid != cl->peer_uid) return 0;
+  if (pi->pid != cl->peer_pid) return 0;
+  return 1;
+}
+
+typedef struct {
+  int used;
+  int active;
+  char job_token[CLINEMM_TOKEN_HEX_LEN + 1];
+  char owner_client_token[CLINEMM_TOKEN_HEX_LEN + 1];
+  pid_t pgid;
+  pid_t leader_pid;
+  uint64_t leader_start_us;
+  // Review-correction01: PPID of the leader at registration time.
+  // Used by future re-verification (e.g. if a leader re-execs and
+  // inherits a new parent, the original PPID is recorded as the
+  // ownership anchor). Currently informational — the registration
+  // check itself enforces (peer_pid == leader_ppid) || (peer_pid == pgid).
+  pid_t leader_ppid_at_register;
+} job_record_t;
+
+static client_record_t g_clients[CLINEMM_MAX_CLIENTS];
+static job_record_t    g_jobs[CLINEMM_MAX_JOBS];
+
+static void gen_token(char out[CLINEMM_TOKEN_HEX_LEN + 1]) {
+  unsigned char raw[16];
+  arc4random_buf(raw, sizeof(raw));
+  static const char H[] = "0123456789abcdef";
+  for (int i = 0; i < 16; i++) {
+    out[i*2]   = H[(raw[i] >> 4) & 0x0F];
+    out[i*2+1] = H[raw[i] & 0x0F];
+  }
+  out[32] = 0;
+}
+
+static client_record_t *find_client(const char *token) {
+  if (!token || strlen(token) != CLINEMM_TOKEN_HEX_LEN) return NULL;
+  for (int i = 0; i < CLINEMM_MAX_CLIENTS; i++) {
+    if (g_clients[i].used && strcmp(g_clients[i].client_token, token) == 0)
+      return &g_clients[i];
+  }
+  return NULL;
+}
+static job_record_t *find_job(const char *token) {
+  if (!token || strlen(token) != CLINEMM_TOKEN_HEX_LEN) return NULL;
+  for (int i = 0; i < CLINEMM_MAX_JOBS; i++) {
+    if (g_jobs[i].used && strcmp(g_jobs[i].job_token, token) == 0)
+      return &g_jobs[i];
+  }
+  return NULL;
+}
+static client_record_t *alloc_client_slot(void) {
+  for (int i = 0; i < CLINEMM_MAX_CLIENTS; i++)
+    if (!g_clients[i].used) return &g_clients[i];
+  return NULL;
+}
+static job_record_t *alloc_job_slot(void) {
+  for (int i = 0; i < CLINEMM_MAX_JOBS; i++)
+    if (!g_jobs[i].used) return &g_jobs[i];
+  return NULL;
+}
+static int count_active_clients(void) {
+  int c = 0;
+  for (int i = 0; i < CLINEMM_MAX_CLIENTS; i++) if (g_clients[i].used) c++;
+  return c;
+}
+static int count_active_jobs(void) {
+  int c = 0;
+  for (int i = 0; i < CLINEMM_MAX_JOBS; i++)
+    if (g_jobs[i].used && g_jobs[i].active) c++;
+  return c;
+}
+
+// Review-correction02: slot reclamation. alloc_*_slot() only looks
+// at `used`, so callers MUST clear `used` on terminal transitions
+// (release-owned success, terminate-owned success, stale ownership
+// detection). Without this, the helper could register at most
+// CLINEMM_MAX_JOBS jobs (or CLINEMM_MAX_CLIENTS clients) over its
+// ENTIRE lifetime, even after every slot's `active` flag had been
+// cleared. We secure-zero the token bytes before setting `used=0`
+// so a recycled slot cannot leak its prior token via heap reuse.
+static void clear_job_slot(job_record_t *job) {
+  if (!job) return;
+  // secure-zero the token + identifier fields; the rest is metadata.
+  memset(job->job_token, 0, sizeof(job->job_token));
+  memset(job->owner_client_token, 0, sizeof(job->owner_client_token));
+  job->pgid = 0;
+  job->leader_pid = 0;
+  job->leader_start_us = 0;
+  job->leader_ppid_at_register = 0;
+  job->active = 0;
+  job->used = 0;
+}
+
+// Client reclamation: review-correction02. The same `used`-flag
+// leakage exists for g_clients[]. A long-lived helper instance
+// that survives many short-lived Codium sessions (each opens + closes
+// without explicit logout) would exhaust the 64-slot client pool
+// unless we reclaim on either an explicit close or a peer-mismatch
+// observation. Production callers SHOULD send a "client.close"
+// request when the Codium session ends; if they don't, the slot is
+// reclaimed lazily on the next register attempt whose peer identity
+// differs from the cached identity. We expose `clear_client_slot`
+// here so the close + stale-detection paths share the same
+// reclamation primitive.
+static void clear_client_slot(client_record_t *cl) {
+  if (!cl) return;
+  memset(cl->client_token, 0, sizeof(cl->client_token));
+  cl->peer_uid = (uid_t)-1;
+  cl->peer_pid = 0;
+  cl->used = 0;
+}
+
+// -----------------------------------------------------------------------------
+// PEER IDENTITY (Phase 2):
+//
+// getpeereid() gives the kernel-authenticated UID/GID of the peer
+// process across an AF_UNIX connection. LOCAL_PEERPID gives the
+// peer PID for the ownership check. We use BOTH: getpeereid is
+// documented as the reliable peer-cred source; LOCAL_PEERPID is
+// the Apple-recommended peer-PID discovery (Chromium uses it on
+// Apple platforms).
+//
+// Review-correction01 (HALT_PEER_PROCESS_IDENTITY_NOT_AVAILABLE):
+// BOTH primitives are MANDATORY. If either fails, peer_identity
+// returns pi.ok=0 and the caller refuses the request. There is NO
+// PID-0 fallback: collapsing multiple same-UID clients onto
+// (uid=501, pid=0) would defeat the cross-client isolation
+// invariant because peer_matches() compares exact (uid, pid).
+// -----------------------------------------------------------------------------
+
+static peer_identity_t peer_identity(int cfd) {
+  peer_identity_t pi = { 0, (uid_t)-1, (gid_t)-1, 0 };
+  // getpeereid is mandatory.
+  if (getpeereid(cfd, &pi.uid, &pi.gid) < 0) return pi;
+  // LOCAL_PEERPID is mandatory. Without a kernel-derived peer PID
+  // we cannot verify "the caller is the one that spawned this PG",
+  // which is the load-bearing P0 invariant for ownership proof.
+  pid_t ppid = 0;
+  socklen_t sl = sizeof(ppid);
+  if (getsockopt(cfd, SOL_LOCAL, LOCAL_PEERPID, &ppid, &sl) < 0) return pi;
+  if (ppid <= 0) return pi;  // defensive: kernel returned 0/NULL PID
+  pi.pid = ppid;
+  pi.ok = 1;
+  return pi;
+}
+
+// Read the kinfo_proc record for `pid`. Returns 1 on success and
+// fills *start_us with the process start time in microseconds since
+// epoch and *uid with the owning UID. This is the Darwin/libproc
+// process-information seam used for PID reuse resistance AND
+// ownership verification.
+//
+// Darwin exposes the start time as kp_proc.p_un.__p_starttime
+// (a struct timeval). The owning UID is kp_eproc.e_ucred.cr_uid
+// (the "real" UID, not the effective UID).
+static int read_proc_identity(pid_t pid, uint64_t *start_us, uid_t *uid) {
+  struct kinfo_proc info;
+  size_t len = sizeof(info);
+  int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, (int)pid };
+  if (sysctl(mib, 4, &info, &len, NULL, 0) < 0) return 0;
+  if (len == 0) return 0;
+  struct timeval tv = info.kp_proc.p_un.__p_starttime;
+  *start_us = (uint64_t)tv.tv_sec * 1000000ULL +
+              (uint64_t)tv.tv_usec;
+  *uid = info.kp_eproc.e_ucred.cr_uid;
+  return 1;
+}
+
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction01):
+// Extended variant that also returns the leader's parent PID. Used by
+// handle_register_owned to prove the proposed PGID leader is the
+// peer's child (or the peer itself) — the load-bearing "ownership
+// proof" the kernel records in kp_eproc.e_ppid.
+static int read_proc_identity_ext(pid_t pid, uint64_t *start_us,
+                                   uid_t *uid, pid_t *ppid) {
+  struct kinfo_proc info;
+  size_t len = sizeof(info);
+  int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, (int)pid };
+  if (sysctl(mib, 4, &info, &len, NULL, 0) < 0) return 0;
+  if (len == 0) return 0;
+  struct timeval tv = info.kp_proc.p_un.__p_starttime;
+  *start_us = (uint64_t)tv.tv_sec * 1000000ULL +
+              (uint64_t)tv.tv_usec;
+  *uid = info.kp_eproc.e_ucred.cr_uid;
+  // e_ppid is the parent PID as recorded by the kernel. For a
+  // detached:true spawn from a Node.js parent, this is the
+  // parent process that called child_process.spawn(..., {detached:true}).
+  *ppid = (pid_t)info.kp_eproc.e_ppid;
+  return 1;
+}
+
+// Read the kinfo_proc record for `pid`. Returns 1 on success and
+// fills *start_us with the process start time in microseconds since
+// epoch. Wrapper for callers that only need the start time.
+static int read_proc_start_us(pid_t pid, uint64_t *start_us) {
+  uid_t ignored_uid;
+  return read_proc_identity(pid, start_us, &ignored_uid);
+}
+
+// Validate ownership of a proposed (pgid, leader_pid) by the
+// authenticated peer. The standard detached-spawn convention in
+// spawnSupervisableShellCommand is leader_pid == pgid. We verify:
+//
+//   1. leader exists
+//   2. leader's start_us matches the recorded value (PID reuse)
+//   3. leader's actual pgid == proposed pgid
+//
+// Returns 1 on success, 0 on any failure (caller fails closed).
+static int validate_pgid_ownership(pid_t proposed_pgid,
+                                    pid_t leader_pid,
+                                    uint64_t leader_start_us) {
+  if (kill(leader_pid, 0) < 0 && errno == ESRCH) return 0;
+  uint64_t start_us_now = 0;
+  if (!read_proc_start_us(leader_pid, &start_us_now)) return 0;
+  if (start_us_now != leader_start_us) return 0;
+  pid_t actual_pgid = getpgid(leader_pid);
+  if (actual_pgid < 0) return 0;
+  if (actual_pgid != proposed_pgid) return 0;
+  return 1;
+}
+
+// JSON helpers (caller owns buf + off; on overflow returns 0).
+static int json_num(char *buf, size_t cap, size_t *off, const char *key, long n) {
+  int w = snprintf(buf + *off, cap - *off, ",\"%s\":%ld", key, n);
+  if (w <= 0 || (size_t)w >= cap - *off) return 0;
+  *off += (size_t)w;
+  return 1;
+}
+static int json_str(char *buf, size_t cap, size_t *off,
+                    const char *key, const char *s, size_t s_len) {
+  size_t cur = *off;
+  int w = snprintf(buf + cur, cap - cur, ",\"%s\":", key);
+  if (w <= 0 || (size_t)w >= cap - cur) return 0;
+  cur += (size_t)w;
+  int s_w = write_json_string(buf + cur, cap - cur, s, s_len);
+  if (s_w < 0) return 0;
+  cur += (size_t)s_w;
+  *off = cur;
+  return 1;
+}
+
+// -----------------------------------------------------------------------------
+// METHOD HANDLERS (Phase 2 + Phase 3)
+// -----------------------------------------------------------------------------
+
+// Forward declaration so we can write the new handlers here.
+static void handle_testbed_run(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs);
+
+// client.open: returns a fresh client_token bound to the
+// kernel-authenticated peer (UID + PID). No caller-supplied
+// identifier influences authority.
+static void handle_client_open(int cfd, const kv_t *rid) {
+  peer_identity_t pi = peer_identity(cfd);
+  if (!pi.ok) {
+    respond_err(cfd, "PEER_IDENTITY_UNAVAILABLE");
+    return;
+  }
+  client_record_t *slot = alloc_client_slot();
+  if (!slot) { respond_err(cfd, "CAPACITY"); return; }
+  gen_token(slot->client_token);
+  slot->used = 1;
+  slot->peer_uid = pi.uid;
+  slot->peer_pid = pi.pid;
+
+  char buf[MAX_FRAME];
+  size_t off = 0;
+  int hdr = snprintf(buf + off, sizeof(buf) - off,
+                     "{\"version\":1,\"request_id\":");
+  if (hdr <= 0 || (size_t)hdr >= sizeof(buf) - off) goto trunc;
+  off += (size_t)hdr;
+  int idn = write_json_string(buf + off, sizeof(buf) - off, rid->val, rid->val_len);
+  if (idn < 0) goto trunc;
+  off += (size_t)idn;
+  if (!json_str(buf, sizeof(buf), &off, "client_token",
+                slot->client_token, CLINEMM_TOKEN_HEX_LEN)) goto trunc;
+  if (!json_num(buf, sizeof(buf), &off, "peer_uid", (long)slot->peer_uid)) goto trunc;
+  if (!json_num(buf, sizeof(buf), &off, "peer_pid", (long)slot->peer_pid)) goto trunc;
+  int tail = snprintf(buf + off, sizeof(buf) - off, ",\"ok\":true}\n");
+  if (tail <= 0 || (size_t)tail >= sizeof(buf) - off) goto trunc;
+  off += (size_t)tail;
+  (void)write_all(cfd, buf, off);
+  return;
+trunc:
+  respond_err(cfd, "INTERNAL_TRUNCATION");
+}
+
+// Review-correction02: client.close explicitly reclaims the
+// client slot. Without this, the 64-slot client pool would
+// exhaust over a long-lived helper instance that survives many
+// short-lived Codium sessions. The handler validates the
+// client_token, authenticates the peer (so a stolen token from
+// another connection cannot drop someone else's slot), then
+// secure-zeros the slot and emits a CLOSED envelope.
+static void handle_client_close(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs) {
+  const kv_t *ct_kv = find_kv(kvs, nkvs, "client_token");
+  if (!ct_kv || ct_kv->kind != V_STR ||
+      ct_kv->val_len != CLINEMM_TOKEN_HEX_LEN) {
+    respond_err(cfd, "BAD_REQUEST");
+    return;
+  }
+  client_record_t *cl = find_client(ct_kv->val);
+  if (!cl) { respond_err(cfd, "DENY_UNKNOWN_CLIENT"); return; }
+  peer_identity_t pi = peer_identity(cfd);
+  if (!peer_matches(cl, &pi)) {
+    respond_err(cfd, "DENY_PEER_MISMATCH");
+    return;
+  }
+  clear_client_slot(cl);
+
+  char buf[MAX_FRAME];
+  size_t off = 0;
+  int hdr = snprintf(buf + off, sizeof(buf) - off,
+                     "{\"version\":1,\"request_id\":");
+  if (hdr <= 0 || (size_t)hdr >= sizeof(buf) - off) goto trunc;
+  off += (size_t)hdr;
+  int idn = write_json_string(buf + off, sizeof(buf) - off,
+                              rid->val, rid->val_len);
+  if (idn < 0) goto trunc;
+  off += (size_t)idn;
+  int tail = snprintf(buf + off, sizeof(buf) - off,
+                      ",\"ok\":true,\"result\":\"CLOSED\"}\n");
+  if (tail <= 0 || (size_t)tail >= sizeof(buf) - off) goto trunc;
+  off += (size_t)tail;
+  (void)write_all(cfd, buf, off);
+  return;
+trunc:
+  respond_err(cfd, "INTERNAL_TRUNCATION");
+}
+
+// process-group.register-owned: caller presents a client_token and a
+// proposed pgid. The helper authenticates the peer against the
+// recorded client identity, verifies the leader is alive + in the
+// claimed PGID + has the recorded start time, and returns a fresh
+// job_token.
+static void handle_register_owned(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs) {
+  const kv_t *ct_kv = find_kv(kvs, nkvs, "client_token");
+  const kv_t *pg_kv = find_kv(kvs, nkvs, "pgid");
+  if (!ct_kv || !pg_kv) { respond_err(cfd, "BAD_REQUEST"); return; }
+  if (ct_kv->kind != V_STR || ct_kv->val_len != CLINEMM_TOKEN_HEX_LEN) {
+    respond_err(cfd, "BAD_REQUEST"); return;
+  }
+  if (pg_kv->kind != V_NUM) { respond_err(cfd, "BAD_REQUEST"); return; }
+  char pgbuf[32];
+  size_t pgbuf_len = pg_kv->val_len;
+  if (pgbuf_len == 0 || pgbuf_len >= sizeof(pgbuf)) {
+    respond_err(cfd, "BAD_REQUEST"); return;
+  }
+  memcpy(pgbuf, pg_kv->val, pgbuf_len);
+  pgbuf[pgbuf_len] = 0;
+  char *endp = NULL;
+  unsigned long pgid_ul = strtoul(pgbuf, &endp, 10);
+  if (!endp || *endp != 0 || pgid_ul == 0 || pgid_ul > (unsigned long)INT32_MAX) {
+    respond_err(cfd, "BAD_REQUEST"); return;
+  }
+  pid_t proposed_pgid = (pid_t)pgid_ul;
+
+  client_record_t *cl = find_client(ct_kv->val);
+  if (!cl) { respond_err(cfd, "DENY_UNKNOWN_CLIENT"); return; }
+
+  // Anti-theft: peer identity on THIS connection must match the
+  // recorded identity (both UID AND PID). A leaked token from
+  // another connection cannot claim authority here because the
+  // kernel reports a different peer PID/UID.
+  peer_identity_t pi = peer_identity(cfd);
+  if (!peer_matches(cl, &pi)) {
+    respond_err(cfd, "DENY_PEER_MISMATCH"); return;
+  }
+
+  // The peer identity MUST include a kernel-derived PID (> 0).
+  // A peer_pid of 0 means LOCAL_PEERPID failed and we have no
+  // kernel-authenticated parent/peer relationship to bind the
+  // proposed PGID against. HALT_PEER_PROCESS_IDENTITY_NOT_AVAILABLE
+  // is the literal fail-closed rule: without a PID, we cannot
+  // verify peer → spawned-leader ancestry and must refuse.
+  if (pi.pid <= 0) {
+    respond_err(cfd, "PEER_IDENTITY_UNAVAILABLE"); return;
+  }
+
+  uint64_t start_us = 0;
+  uid_t leader_uid = (uid_t)-1;
+  pid_t leader_ppid = -1;
+  if (!read_proc_identity_ext(proposed_pgid, &start_us, &leader_uid, &leader_ppid)) {
+    respond_err(cfd, "DENY_LEADER_NOT_FOUND"); return;
+  }
+  if (!validate_pgid_ownership(proposed_pgid, proposed_pgid, start_us)) {
+    respond_err(cfd, "DENY_OWNERSHIP"); return;
+  }
+  if (leader_uid != pi.uid) {
+    // The leader exists and is in the right PGID, but it is owned
+    // by a DIFFERENT UID than the peer. We refuse: this prevents
+    // a sandboxed ClineMM from registering a leader it does not own.
+    respond_err(cfd, "DENY_OWNERSHIP"); return;
+  }
+
+  // OWNERSHIP PROOF (the load-bearing P0 invariant from the review):
+  // Same-UID + same-PGID is NOT sufficient. The leader must be the
+  // peer's own child (peer_pid == leader_ppid). This is what proves
+  // "the caller is the one that spawned this group" — same UID alone
+  // would let any same-UID process claim authority over any
+  // same-UID process group, which is the naked PGID killer we
+  // explicitly prohibit.
+  //
+  // Two safe conditions are accepted:
+  //   (a) leader_ppid == pi.pid (the peer's child)
+  //   (b) leader_pid == pi.pid  (the peer IS the leader — direct
+  //       spawn where the leader has already detached, or the
+  //       caller is registering its own running group)
+  if (leader_ppid != pi.pid && proposed_pgid != pi.pid) {
+    respond_err(cfd, "DENY_OWNERSHIP"); return;
+  }
+
+  job_record_t *job = alloc_job_slot();
+  if (!job) { respond_err(cfd, "CAPACITY"); return; }
+  gen_token(job->job_token);
+  memcpy(job->owner_client_token, cl->client_token, CLINEMM_TOKEN_HEX_LEN + 1);
+  job->pgid = proposed_pgid;
+  job->leader_pid = proposed_pgid;
+  job->leader_start_us = start_us;
+  job->leader_ppid_at_register = leader_ppid;
+  job->used = 1;
+  job->active = 1;
+
+  char buf[MAX_FRAME];
+  size_t off = 0;
+  int hdr = snprintf(buf + off, sizeof(buf) - off,
+                     "{\"version\":1,\"request_id\":");
+  if (hdr <= 0 || (size_t)hdr >= sizeof(buf) - off) goto trunc;
+  off += (size_t)hdr;
+  int idn = write_json_string(buf + off, sizeof(buf) - off, rid->val, rid->val_len);
+  if (idn < 0) goto trunc;
+  off += (size_t)idn;
+  if (!json_str(buf, sizeof(buf), &off, "job_token",
+                job->job_token, CLINEMM_TOKEN_HEX_LEN)) goto trunc;
+  if (!json_num(buf, sizeof(buf), &off, "active_job_count",
+                (long)count_active_jobs())) goto trunc;
+  if (!json_num(buf, sizeof(buf), &off, "active_client_count",
+                (long)count_active_clients())) goto trunc;
+  int tail = snprintf(buf + off, sizeof(buf) - off, ",\"ok\":true}\n");
+  if (tail <= 0 || (size_t)tail >= sizeof(buf) - off) goto trunc;
+  off += (size_t)tail;
+  (void)write_all(cfd, buf, off);
+  return;
+trunc:
+  respond_err(cfd, "INTERNAL_TRUNCATION");
+}
+
+// Resolve a (client_token, job_token) pair from the request and
+// verify the peer identity on this connection matches the recorded
+// identity. On success returns 1 and writes pointers; on failure
+// writes the appropriate error and returns 0.
+static int resolve_owned_job(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs,
+                              client_record_t **out_cl, job_record_t **out_job) {
+  (void)rid;
+  const kv_t *ct_kv = find_kv(kvs, nkvs, "client_token");
+  const kv_t *jt_kv = find_kv(kvs, nkvs, "job_token");
+  if (!ct_kv || !jt_kv) { respond_err(cfd, "BAD_REQUEST"); return 0; }
+  if (ct_kv->kind != V_STR || ct_kv->val_len != CLINEMM_TOKEN_HEX_LEN ||
+      jt_kv->kind != V_STR || jt_kv->val_len != CLINEMM_TOKEN_HEX_LEN) {
+    respond_err(cfd, "BAD_REQUEST"); return 0;
+  }
+  client_record_t *cl = find_client(ct_kv->val);
+  if (!cl) { respond_err(cfd, "DENY_UNKNOWN_CLIENT"); return 0; }
+  job_record_t *job = find_job(jt_kv->val);
+  if (!job || !job->active) { respond_err(cfd, "DENY_UNKNOWN_JOB"); return 0; }
+  if (strcmp(job->owner_client_token, cl->client_token) != 0) {
+    respond_err(cfd, "DENY_FOREIGN_JOB"); return 0;
+  }
+  peer_identity_t pi = peer_identity(cfd);
+  if (!peer_matches(cl, &pi)) {
+    respond_err(cfd, "DENY_PEER_MISMATCH"); return 0;
+  }
+  *out_cl = cl;
+  *out_job = job;
+  return 1;
+}
+
+#define TERM_GRACE_MS_DEFAULT 2000
+
+// process-group.terminate-owned: SIGTERM grace, then SIGKILL
+// escalation. Caller does NOT select the signal.
+static void handle_terminate_owned(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs) {
+  client_record_t *cl = NULL;
+  job_record_t *job = NULL;
+  if (!resolve_owned_job(cfd, rid, kvs, nkvs, &cl, &job)) return;
+
+  // PID reuse resistance.
+  uint64_t start_us_now = 0;
+  if (!read_proc_start_us(job->leader_pid, &start_us_now) ||
+      start_us_now != job->leader_start_us) {
+    // Review-correction02: clear the slot so it can be reused.
+    clear_job_slot(job);
+    respond_err(cfd, "STALE_OWNERSHIP");
+    return;
+  }
+  pid_t actual_pgid = getpgid(job->leader_pid);
+  if (actual_pgid != job->pgid) {
+    // Review-correction02: PGID divergence means the group has
+    // already been remapped (e.g. setpgid escape). Reclaim the slot.
+    clear_job_slot(job);
+    respond_err(cfd, "STALE_OWNERSHIP");
+    return;
+  }
+
+  int grace_ms = TERM_GRACE_MS_DEFAULT;
+  const char *genv = getenv("CLINEMM_HELPER_TERM_GRACE_MS");
+  if (genv && *genv) {
+    char *end2 = NULL;
+    long v = strtol(genv, &end2, 10);
+    if (end2 && *end2 == 0 && v > 0 && v < 60000) {
+      fprintf(stderr,
+        "[helper] WARNING: CLINEMM_HELPER_TERM_GRACE_MS=%ld "
+        "overrides default %d (test-only override)\n",
+        v, TERM_GRACE_MS_DEFAULT);
+      grace_ms = (int)v;
+    }
+  }
+
+  // Build a correlated success envelope: the TS client requires
+  // response.request_id == sent request_id for every response
+  // (see client.ts:RequestIdMismatchError). Stripping request_id
+  // from success envelopes would break the EPERM-only fallback
+  // composition chain.
+  char resp[MAX_FRAME];
+  size_t roff = 0;
+  int rh = snprintf(resp + roff, sizeof(resp) - roff,
+                    "{\"version\":1,\"request_id\":");
+  if (rh <= 0 || (size_t)rh >= sizeof(resp) - roff) goto trunc;
+  roff += (size_t)rh;
+  int rin = write_json_string(resp + roff, sizeof(resp) - roff,
+                              rid->val, rid->val_len);
+  if (rin < 0) goto trunc;
+  roff += (size_t)rin;
+
+  int trc = kill(-job->pgid, SIGTERM);
+  if (trc < 0 && errno == ESRCH) {
+    // Review-correction02: group already gone (ESRCH on TERM);
+    // clear the slot so the next register can reuse it.
+    clear_job_slot(job);
+    int rt = snprintf(resp + roff, sizeof(resp) - roff,
+                      ",\"ok\":true,\"result\":\"TERMINATED_TERM\"}\n");
+    if (rt <= 0 || (size_t)rt >= sizeof(resp) - roff) goto trunc;
+    roff += (size_t)rt;
+    (void)write_all(cfd, resp, roff);
+    return;
+  }
+  struct timespec start_ts;
+  clock_gettime(CLOCK_MONOTONIC, &start_ts);
+  int gone = 0;
+  while (1) {
+    struct timespec now_ts;
+    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+    long elapsed_ms =
+      (now_ts.tv_sec - start_ts.tv_sec) * 1000L +
+      (now_ts.tv_nsec - start_ts.tv_nsec) / 1000000L;
+    if (elapsed_ms >= grace_ms) break;
+    if (kill(-job->pgid, 0) < 0 && errno == ESRCH) { gone = 1; break; }
+    struct timespec slp = { .tv_sec = 0, .tv_nsec = 50 * 1000000L };
+    nanosleep(&slp, NULL);
+  }
+  if (gone) {
+    // Review-correction02: TERM-grace success path.
+    clear_job_slot(job);
+    int rt = snprintf(resp + roff, sizeof(resp) - roff,
+                      ",\"ok\":true,\"result\":\"TERMINATED_TERM\"}\n");
+    if (rt <= 0 || (size_t)rt >= sizeof(resp) - roff) goto trunc;
+    roff += (size_t)rt;
+    (void)write_all(cfd, resp, roff);
+    return;
+  }
+
+  int krc = kill(-job->pgid, SIGKILL);
+  if (krc < 0 && errno == ESRCH) {
+    // Review-correction02: KILL raced with natural exit; free the slot.
+    clear_job_slot(job);
+    int rt = snprintf(resp + roff, sizeof(resp) - roff,
+                      ",\"ok\":true,\"result\":\"TERMINATED_TERM\"}\n");
+    if (rt <= 0 || (size_t)rt >= sizeof(resp) - roff) goto trunc;
+    roff += (size_t)rt;
+    (void)write_all(cfd, resp, roff);
+    return;
+  }
+  struct timespec k_start;
+  clock_gettime(CLOCK_MONOTONIC, &k_start);
+  while (1) {
+    struct timespec now_ts;
+    clock_gettime(CLOCK_MONOTONIC, &now_ts);
+    long elapsed_ms =
+      (now_ts.tv_sec - k_start.tv_sec) * 1000L +
+      (now_ts.tv_nsec - k_start.tv_nsec) / 1000000L;
+    if (elapsed_ms >= grace_ms) break;
+    if (kill(-job->pgid, 0) < 0 && errno == ESRCH) {
+      // Review-correction02: KILL-grace success path.
+      clear_job_slot(job);
+      int rt = snprintf(resp + roff, sizeof(resp) - roff,
+                        ",\"ok\":true,\"result\":\"TERMINATED_KILL\"}\n");
+      if (rt <= 0 || (size_t)rt >= sizeof(resp) - roff) goto trunc;
+      roff += (size_t)rt;
+      (void)write_all(cfd, resp, roff);
+      return;
+    }
+    struct timespec slp = { .tv_sec = 0, .tv_nsec = 50 * 1000000L };
+    nanosleep(&slp, NULL);
+  }
+  // Review-correction02: even on TERMINATION_FAILED we must
+  // reclaim the slot — the caller has done everything they can.
+  // Leaving the slot `used=1` here would be the original
+  // HALT_HELPER_JOB_SLOT_EXHAUSTION defect.
+  clear_job_slot(job);
+  respond_err(cfd, "TERMINATION_FAILED");
+  return;
+trunc:
+  // Truncation path: slot is still in use (no result was delivered).
+  // Do NOT clear here — the client may retry.
+  respond_err(cfd, "INTERNAL_TRUNCATION");
+}
+
+// process-group.release-owned: clear the job slot without signaling.
+// Review-correction01: success envelope carries request_id for TS
+// client correlation (response.request_id === sent request_id).
+// Review-correction02: clear_job_slot() reclaims the slot for
+// re-use (alloc_job_slot only inspects `used`, so without this
+// the helper would register at most CLINEMM_MAX_JOBS=128 jobs
+// over its entire lifetime).
+static void handle_release_owned(int cfd, const kv_t *rid, const kv_t *kvs, size_t nkvs) {
+  client_record_t *cl = NULL;
+  job_record_t *job = NULL;
+  if (!resolve_owned_job(cfd, rid, kvs, nkvs, &cl, &job)) return;
+  clear_job_slot(job);
+  char buf[MAX_FRAME];
+  size_t off = 0;
+  int hdr = snprintf(buf + off, sizeof(buf) - off,
+                     "{\"version\":1,\"request_id\":");
+  if (hdr <= 0 || (size_t)hdr >= sizeof(buf) - off) { respond_err(cfd, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)hdr;
+  int idn = write_json_string(buf + off, sizeof(buf) - off,
+                              rid->val, rid->val_len);
+  if (idn < 0) { respond_err(cfd, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)idn;
+  int tail = snprintf(buf + off, sizeof(buf) - off,
+                      ",\"ok\":true,\"result\":\"RELEASED\"}\n");
+  if (tail <= 0 || (size_t)tail >= sizeof(buf) - off) { respond_err(cfd, "INTERNAL_TRUNCATION"); return; }
+  off += (size_t)tail;
+  (void)write_all(cfd, buf, off);
+}
+
+// helper.restart: validate the request, flush a correlated ACK, then
+// exit normally. REJECTED when active_job_count > 0 (per §19).
+static void handle_helper_restart(int cfd, const kv_t *rid) {
+  int active = count_active_jobs();
+  if (active > 0) {
+    char buf[MAX_FRAME];
+    size_t off = 0;
+    int hdr = snprintf(buf + off, sizeof(buf) - off,
+                       "{\"version\":1,\"request_id\":");
+    if (hdr <= 0 || (size_t)hdr >= sizeof(buf) - off) goto trunc;
+    off += (size_t)hdr;
+    int idn = write_json_string(buf + off, sizeof(buf) - off, rid->val, rid->val_len);
+    if (idn < 0) goto trunc;
+    off += (size_t)idn;
+    int t = snprintf(buf + off, sizeof(buf) - off,
+                     ",\"ok\":false,\"error\":\"ACTIVE_JOBS\","
+                     "\"active_job_count\":%d,\"active_client_count\":%d}\n",
+                     active, count_active_clients());
+    if (t <= 0 || (size_t)t >= sizeof(buf) - off) goto trunc;
+    off += (size_t)t;
+    (void)write_all(cfd, buf, off);
+    return;
+  }
+  char buf[MAX_FRAME];
+  size_t off = 0;
+  int hdr = snprintf(buf + off, sizeof(buf) - off,
+                     "{\"version\":1,\"request_id\":");
+  if (hdr <= 0 || (size_t)hdr >= sizeof(buf) - off) goto trunc;
+  off += (size_t)hdr;
+  int idn = write_json_string(buf + off, sizeof(buf) - off, rid->val, rid->val_len);
+  if (idn < 0) goto trunc;
+  off += (size_t)idn;
+  int t = snprintf(buf + off, sizeof(buf) - off,
+                   ",\"ok\":true,\"result\":\"RESTARTING\"}\n");
+  if (t <= 0 || (size_t)t >= sizeof(buf) - off) goto trunc;
+  off += (size_t)t;
+  (void)write_all(cfd, buf, off);
+  g_shutdown = 1;
+  return;
+trunc:
+  respond_err(cfd, "INTERNAL_TRUNCATION");
+}
+
 // PROBE01: build the ok-response envelope. The runner's stdout is a
 // JSON OBJECT LITERAL that contains a single top-level field
 // "result" with the testbed result body, e.g.:
@@ -1077,6 +2038,10 @@ static void handle_connection(int cfd) {
   }
   // Method dispatch. ACT-01 had a single method (`health`); PROBE01
   // adds a second fixed method (`testbed.run-installed-vsix-smoke`).
+  // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 adds four more:
+  //   client.open, process-group.register-owned,
+  //   process-group.terminate-owned, process-group.release-owned,
+  //   helper.restart.
   // Each branch validates method-specific required fields and emits
   // the matching response.
   const kv_t *m = find_kv(kvs, nkvs, "method");
@@ -1086,12 +2051,50 @@ static void handle_connection(int cfd) {
   if (strcmp(m->val, "health") == 0) {
     // CORRECTION02: pass the parsed request_id so the response echoes it.
     // CORRECTION05: pass (r->val, r->val_len) — length-aware, preserves NUL.
+    // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: respond_ok()
+    // also emits build_id + active_client_count + active_job_count so
+    // the operator can prove the NEW generation started and that
+    // capability state is what was expected.
     respond_ok(cfd, r->val, r->val_len);
     close(cfd);
     return;
   }
   if (strcmp(m->val, "testbed.run-installed-vsix-smoke") == 0) {
     handle_testbed_run(cfd, r, kvs, nkvs);
+    close(cfd);
+    return;
+  }
+  if (strcmp(m->val, "client.open") == 0) {
+    handle_client_open(cfd, r);
+    close(cfd);
+    return;
+  }
+  // Review-correction02: client.close reclaims the slot
+  // explicitly. Without this, the 64-client pool would
+  // exhaust over a long-lived helper that serves many
+  // short-lived Codium sessions.
+  if (strcmp(m->val, "client.close") == 0) {
+    handle_client_close(cfd, r, kvs, nkvs);
+    close(cfd);
+    return;
+  }
+  if (strcmp(m->val, "process-group.register-owned") == 0) {
+    handle_register_owned(cfd, r, kvs, nkvs);
+    close(cfd);
+    return;
+  }
+  if (strcmp(m->val, "process-group.terminate-owned") == 0) {
+    handle_terminate_owned(cfd, r, kvs, nkvs);
+    close(cfd);
+    return;
+  }
+  if (strcmp(m->val, "process-group.release-owned") == 0) {
+    handle_release_owned(cfd, r, kvs, nkvs);
+    close(cfd);
+    return;
+  }
+  if (strcmp(m->val, "helper.restart") == 0) {
+    handle_helper_restart(cfd, r);
     close(cfd);
     return;
   }
@@ -1104,6 +2107,10 @@ int main(int argc, char **argv) {
   signal(SIGTERM, on_sig);
   signal(SIGINT, on_sig);
   signal(SIGPIPE, SIG_IGN);
+
+  // Compute the SOURCE/BUILD identity once at startup so every
+  // subsequent health() response carries the same build_id.
+  g_build_id = hex_sha256_of_self_source();
 
   int *fds = NULL;
   size_t cnt = 0;

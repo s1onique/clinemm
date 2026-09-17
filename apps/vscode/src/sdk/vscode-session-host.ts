@@ -48,6 +48,7 @@ import { getDistinctId } from "@/services/logging/distinctId"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
 import { CommandJobManager } from "./command-job-manager"
+import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
@@ -204,6 +205,16 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// Settings values. When the host does not (test paths), the
 			// builder's env-only fallback runs unchanged.
 			safeYoloCapabilitySource: options.safeYoloCapabilitySource,
+			// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+			// Wire the live EPERM-only fallback. When the env var
+			// `CLINEMM_HOST_HELPER_SOCKET` is set (the per-user
+			// LaunchAgent `io.clinemm.host-helper` exports its
+			// AF_UNIX socket there), the manager can escalate a
+			// direct-kill EPERM into a helper-owned terminate. When
+			// the env var is unset (non-mac, helper not installed),
+			// the adapter returns `undefined` and the manager runs
+			// the pre-ACT direct-kill-only path.
+			helperOwnedPgidProvider: resolveLiveHelperOwnedPgidProvider(),
 		})
 		const toolExecutors: Partial<ToolExecutors> = {}
 		if (options.askQuestion) {

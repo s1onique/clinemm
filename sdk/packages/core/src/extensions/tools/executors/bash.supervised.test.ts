@@ -370,18 +370,20 @@ describe("terminateTreeConservation (ACT-CLINEMM-SANDBOX-OWNED-PROCESS-TERMINATI
 			env: {},
 		});
 		await proc.exit;
-		await expect(
-			proc.terminateTree({ gracefulSignal: "SIGTERM", graceMs: 50 }),
-		).resolves.toMatchObject({
-			treeTerminated: expect.any(Boolean),
-			escalatedToKill: expect.any(Boolean),
-		});
-		await expect(
-			proc.terminateTree({ gracefulSignal: "SIGKILL", graceMs: 50 }),
-		).resolves.toMatchObject({
-			treeTerminated: expect.any(Boolean),
-			escalatedToKill: expect.any(Boolean),
-		});
+		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: after
+		// proc.exit, childPid is reset and both calls hit the
+		// fast-path. The first call's result is cached in
+		// terminateInFlight so the second call shares it. The
+		// result shape is now { treeTerminated, escalatedToKill,
+		// epermDetected } — assert all three explicitly.
+		const r1 = await proc.terminateTree({ gracefulSignal: "SIGTERM", graceMs: 50 });
+		expect(r1.treeTerminated).toBe(true);
+		expect(r1.escalatedToKill).toBe(false);
+		expect(r1.epermDetected).toBe(false);
+		const r2 = await proc.terminateTree({ gracefulSignal: "SIGKILL", graceMs: 50 });
+		expect(r2.treeTerminated).toBe(true);
+		expect(r2.escalatedToKill).toBe(false);
+		expect(r2.epermDetected).toBe(false);
 		await expect(proc.killTree()).resolves.toBeUndefined();
 		await expect(proc.killTree()).resolves.toBeUndefined();
 	});

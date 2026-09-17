@@ -75,6 +75,14 @@ export interface HealthResponse {
   service: "clinemm-host-helper"
   pid: number
   uid: number
+  // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+  // build_id is the SOURCE/BUILD identity of the running helper
+  // generation (sha256 of helper.c + ABI version). It changes when
+  // the source changes, which is the property we want for upgrade
+  // qualification (RESTART-03 contract).
+  build_id: string
+  active_client_count: number
+  active_job_count: number
 }
 
 export interface TestbedOkResponse {
@@ -82,6 +90,73 @@ export interface TestbedOkResponse {
   request_id: string
   ok: true
   result: TestbedRunInstalledVsixSmokeResult
+}
+
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: new response
+// shapes for the owned-PGID capabilities. All are typed as
+// permissive records because the helper may add diagnostic fields
+// without breaking the client; clients consume only the contract.
+export interface ClientOpenResponse {
+  version: 1
+  request_id: string
+  ok: true
+  client_token: string
+  peer_uid: number
+  peer_pid: number
+}
+
+export interface RegisterOwnedResponse {
+  version: 1
+  request_id: string
+  ok: true
+  job_token: string
+  active_client_count: number
+  active_job_count: number
+}
+
+/** Token-based terminate: opaque token, no naked PID/PGID/signal. */
+export type TerminateOwnedResult =
+  | "TERMINATED_TERM"
+  | "TERMINATED_KILL"
+
+export interface TerminateOwnedResponse {
+  version: 1
+  request_id: string
+  ok: true
+  result: TerminateOwnedResult
+}
+
+export interface ReleaseOwnedResponse {
+  version: 1
+  request_id: string
+  ok: true
+  result: "RELEASED"
+}
+
+export interface HelperRestartResponse {
+  version: 1
+  request_id: string
+  ok: true
+  result: "RESTARTING"
+}
+
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction02):
+// response shape for client.close. The helper reclaims the client
+// slot and confirms via the "CLOSED" result string. The token
+// returned by client.open MUST NOT be reused after close (it is
+// already secure-zeroed in the helper).
+export interface ClientCloseResponse {
+  version: 1
+  request_id: string
+  ok: true
+  result: "CLOSED"
+}
+
+export interface ActiveJobsErrorResponse {
+  ok: false
+  error: "ACTIVE_JOBS"
+  active_job_count: number
+  active_client_count: number
 }
 
 export interface ErrorResponse {
@@ -92,6 +167,12 @@ export interface ErrorResponse {
 export type AnyResponse =
   | HealthResponse
   | TestbedOkResponse
+  | ClientOpenResponse
+  | RegisterOwnedResponse
+  | TerminateOwnedResponse
+  | ReleaseOwnedResponse
+  | HelperRestartResponse
+  | ClientCloseResponse
   | ErrorResponse
 
 export class RequestIdMismatchError extends Error {
@@ -127,6 +208,35 @@ export interface HelperClient {
     vsixPath: string
     vsixSha256: string
   }): Promise<TestbedOkResponse>
+  // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: owned-PGID
+  // capability surface. All methods are token-gated; the helper
+  // authenticates the peer on every call and refuses if the
+  // recorded peer identity has changed.
+  clientOpen(opts?: { requestId?: string }): Promise<ClientOpenResponse>
+  // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction02):
+  // clientClose explicitly reclaims the client slot. Without this,
+  // a long-lived helper would exhaust the 64-slot client pool
+  // over many short-lived Codium sessions.
+  clientClose(opts: {
+    requestId: string
+    clientToken: string
+  }): Promise<ClientCloseResponse>
+  registerOwned(opts: {
+    requestId: string
+    clientToken: string
+    pgid: number
+  }): Promise<RegisterOwnedResponse>
+  terminateOwned(opts: {
+    requestId: string
+    clientToken: string
+    jobToken: string
+  }): Promise<TerminateOwnedResponse>
+  releaseOwned(opts: {
+    requestId: string
+    clientToken: string
+    jobToken: string
+  }): Promise<ReleaseOwnedResponse>
+  helperRestart(opts?: { requestId?: string }): Promise<HelperRestartResponse>
   close(): void
 }
 
@@ -215,6 +325,80 @@ export function createHelperClient(opts: HelperClientOptions): HelperClient {
       }
       return testbedResp
     },
+    // ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
+    // The owned-PGID capability surface. Each call returns a fresh
+    // opaque token or, for terminate/release, a result code. Errors
+    // are surfaced as thrown Error("helper error: <code>") so the
+    // caller can branch on the message; the ACT-01 correlation
+    // invariant is preserved by the protocol layer.
+    async clientOpen(cOpts?: { requestId?: string }): Promise<ClientOpenResponse> {
+      const requestId = cOpts?.requestId ?? `client-open-${Date.now().toString(36)}`
+      const env = await roundTrip(buildRequest("client.open", requestId))
+      if (!env.ok) throw new Error(`helper error: ${(env as ErrorResponse).error}`)
+      const resp = env as ClientOpenResponse
+      if (resp.request_id !== requestId) {
+        throw new RequestIdMismatchError(requestId, resp.request_id)
+      }
+      return resp
+    },
+    async registerOwned(rOpts): Promise<RegisterOwnedResponse> {
+      const env = await roundTrip(buildOwnedRequest(
+        "process-group.register-owned", rOpts.requestId,
+        { client_token: rOpts.clientToken, pgid: rOpts.pgid },
+      ))
+      if (!env.ok) throw new Error(`helper error: ${(env as ErrorResponse).error}`)
+      const resp = env as RegisterOwnedResponse
+      if (resp.request_id !== rOpts.requestId) {
+        throw new RequestIdMismatchError(rOpts.requestId, resp.request_id)
+      }
+      return resp
+    },
+    async terminateOwned(tOpts): Promise<TerminateOwnedResponse> {
+      const env = await roundTrip(buildOwnedRequest(
+        "process-group.terminate-owned", tOpts.requestId,
+        { client_token: tOpts.clientToken, job_token: tOpts.jobToken },
+      ))
+      if (!env.ok) throw new Error(`helper error: ${(env as ErrorResponse).error}`)
+      const resp = env as TerminateOwnedResponse
+      if (resp.request_id !== tOpts.requestId) {
+        throw new RequestIdMismatchError(tOpts.requestId, resp.request_id)
+      }
+      return resp
+    },
+    async releaseOwned(rOpts): Promise<ReleaseOwnedResponse> {
+      const env = await roundTrip(buildOwnedRequest(
+        "process-group.release-owned", rOpts.requestId,
+        { client_token: rOpts.clientToken, job_token: rOpts.jobToken },
+      ))
+      if (!env.ok) throw new Error(`helper error: ${(env as ErrorResponse).error}`)
+      const resp = env as ReleaseOwnedResponse
+      if (resp.request_id !== rOpts.requestId) {
+        throw new RequestIdMismatchError(rOpts.requestId, resp.request_id)
+      }
+      return resp
+    },
+    async helperRestart(hOpts?: { requestId?: string }): Promise<HelperRestartResponse> {
+      const requestId = hOpts?.requestId ?? `helper-restart-${Date.now().toString(36)}`
+      const env = await roundTrip(buildRequest("helper.restart", requestId))
+      if (!env.ok) throw new Error(`helper error: ${(env as ErrorResponse).error}`)
+      const resp = env as HelperRestartResponse
+      if (resp.request_id !== requestId) {
+        throw new RequestIdMismatchError(requestId, resp.request_id)
+      }
+      return resp
+    },
+    async clientClose(cOpts): Promise<ClientCloseResponse> {
+      const env = await roundTrip(buildOwnedRequest(
+        "client.close", cOpts.requestId,
+        { client_token: cOpts.clientToken },
+      ))
+      if (!env.ok) throw new Error(`helper error: ${(env as ErrorResponse).error}`)
+      const resp = env as ClientCloseResponse
+      if (resp.request_id !== cOpts.requestId) {
+        throw new RequestIdMismatchError(cOpts.requestId, resp.request_id)
+      }
+      return resp
+    },
     close(): void {
       try { pending?.end() } catch { /* ignore */ }
       pending = null
@@ -238,11 +422,37 @@ function checkForbiddenKeys(obj: unknown, path = ""): void {
   }
 }
 
-function buildRequest(method: "health", requestId: string): string {
+function buildRequest(
+  method: "health" | "client.open" | "helper.restart",
+  requestId: string,
+): string {
   const env: Record<string, unknown> = {
     version: 1,
     request_id: requestId,
     method,
+  }
+  checkForbiddenKeys(env)
+  return JSON.stringify(env)
+}
+
+// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01: shared envelope
+// builder for the owned-PGID methods. The wire-level anti-shell
+// invariant still applies: this client refuses to send a payload
+// that carries any of the 10 forbidden keys (defense in depth; the
+// server enforces the same invariant).
+function buildOwnedRequest(
+  method:
+    | "process-group.register-owned"
+    | "process-group.terminate-owned"
+    | "process-group.release-owned",
+  requestId: string,
+  fields: Record<string, unknown>,
+): string {
+  const env: Record<string, unknown> = {
+    version: 1,
+    request_id: requestId,
+    method,
+    ...fields,
   }
   checkForbiddenKeys(env)
   return JSON.stringify(env)
