@@ -1,0 +1,5 @@
+UI_STATE=Waiting
+USER_QUESTION_PENDING=false
+APPROVAL_PENDING=false
+JOB_ID=cmd_mu6rya7lxxj2j7pt
+LAST_TOOL_STATUS=running

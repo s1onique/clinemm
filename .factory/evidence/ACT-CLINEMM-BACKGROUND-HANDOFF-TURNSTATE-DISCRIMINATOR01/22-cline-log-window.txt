@@ -1,0 +1,85 @@
+2026-09-18T09:48:25.136Z DEBUG Agent event
+2026-09-18T09:48:25.145Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:48:55.152Z DEBUG Agent event
+2026-09-18T09:48:55.154Z DEBUG Agent event
+2026-09-18T09:48:55.190Z DEBUG Agent event
+2026-09-18T09:48:55.211Z DEBUG Context compaction diagnostics
+2026-09-18T09:48:55.211Z DEBUG Agent event
+2026-09-18T09:48:55.212Z DEBUG Agent model request diagnostics
+2026-09-18T09:48:55.213Z DEBUG Agent event
+2026-09-18T09:48:55.224Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:48:56.283Z DEBUG Agent event
+2026-09-18T09:48:56.285Z LOG [SdkController] Task usage: tokensIn=31861, tokensOut=53, cost=0
+2026-09-18T09:48:56.290Z DEBUG Agent event
+2026-09-18T09:48:56.291Z DEBUG Agent event
+2026-09-18T09:48:56.329Z DEBUG Agent event
+2026-09-18T09:48:56.338Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:49:26.341Z DEBUG Agent event
+2026-09-18T09:49:26.343Z DEBUG Agent event
+2026-09-18T09:49:26.382Z DEBUG Agent event
+2026-09-18T09:49:26.403Z DEBUG Context compaction diagnostics
+2026-09-18T09:49:26.403Z DEBUG Agent event
+2026-09-18T09:49:26.404Z DEBUG Agent model request diagnostics
+2026-09-18T09:49:26.405Z DEBUG Agent event
+2026-09-18T09:49:26.416Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:49:27.473Z DEBUG Agent event
+2026-09-18T09:49:27.476Z LOG [SdkController] Task usage: tokensIn=31983, tokensOut=53, cost=0
+2026-09-18T09:49:27.480Z DEBUG Agent event
+2026-09-18T09:49:27.482Z DEBUG Agent event
+2026-09-18T09:49:27.518Z DEBUG Agent event
+2026-09-18T09:49:27.528Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:49:57.528Z DEBUG Agent event
+2026-09-18T09:49:57.530Z DEBUG Agent event
+2026-09-18T09:49:57.568Z DEBUG Agent event
+2026-09-18T09:49:57.588Z DEBUG Context compaction diagnostics
+2026-09-18T09:49:57.589Z DEBUG Agent event
+2026-09-18T09:49:57.590Z DEBUG Agent model request diagnostics
+2026-09-18T09:49:57.590Z DEBUG Agent event
+2026-09-18T09:49:57.601Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:49:58.650Z DEBUG Agent event
+2026-09-18T09:49:58.652Z LOG [SdkController] Task usage: tokensIn=32105, tokensOut=53, cost=0
+2026-09-18T09:49:58.656Z DEBUG Agent event
+2026-09-18T09:49:58.657Z DEBUG Agent event
+2026-09-18T09:49:58.692Z DEBUG Agent event
+2026-09-18T09:49:58.705Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:50:28.703Z DEBUG Agent event
+2026-09-18T09:50:28.705Z DEBUG Agent event
+2026-09-18T09:50:28.741Z DEBUG Agent event
+2026-09-18T09:50:28.760Z DEBUG Context compaction diagnostics
+2026-09-18T09:50:28.761Z DEBUG Agent event
+2026-09-18T09:50:28.762Z DEBUG Agent model request diagnostics
+2026-09-18T09:50:28.762Z DEBUG Agent event
+2026-09-18T09:50:28.772Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:50:29.818Z DEBUG Agent event
+2026-09-18T09:50:29.820Z LOG [SdkController] Task usage: tokensIn=32227, tokensOut=53, cost=0
+2026-09-18T09:50:29.824Z DEBUG Agent event
+2026-09-18T09:50:29.826Z DEBUG Agent event
+2026-09-18T09:50:29.854Z DEBUG Agent event
+2026-09-18T09:50:29.873Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:50:59.866Z DEBUG Agent event
+2026-09-18T09:50:59.868Z DEBUG Agent event
+2026-09-18T09:50:59.904Z DEBUG Agent event
+2026-09-18T09:50:59.924Z DEBUG Context compaction diagnostics
+2026-09-18T09:50:59.924Z DEBUG Agent event
+2026-09-18T09:50:59.925Z DEBUG Agent model request diagnostics
+2026-09-18T09:50:59.925Z DEBUG Agent event
+2026-09-18T09:50:59.936Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:51:00.997Z DEBUG Agent event
+2026-09-18T09:51:01.000Z LOG [SdkController] Task usage: tokensIn=32349, tokensOut=53, cost=0
+2026-09-18T09:51:01.004Z DEBUG Agent event
+2026-09-18T09:51:01.006Z DEBUG Agent event
+2026-09-18T09:51:01.039Z DEBUG Agent event
+2026-09-18T09:51:01.066Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:51:01.100Z DEBUG Agent event
+2026-09-18T09:51:01.100Z DEBUG Agent event
+2026-09-18T09:51:01.122Z LOG Agent loop caught error
+2026-09-18T09:51:01.123Z DEBUG Agent event
+2026-09-18T09:51:01.123Z WARN [SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)
+2026-09-18T09:51:01.157Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T09:51:01.197Z LOG [MessageTranslator] Session status: idle
+2026-09-18T09:51:01.197Z WARN [MessageTranslator] Unhandled session event type: session_snapshot
+2026-09-18T09:51:01.197Z LOG [VscodeSessionHost] send() completed: text=, inputTokens=33196513
+2026-09-18T09:51:01.197Z LOG [SdkController] Agent turn completed for session: 1789683418836_z029q
+2026-09-18T09:51:01.248Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T10:16:48.858Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset
+2026-09-18T11:16:48.870Z DEBUG providers.read providers=[minimax,sapaicore,openai-compatible] lastUsed=minimax clineAuthPresent=false clineAccessTokenHash=unset clineRefreshTokenHash=unset

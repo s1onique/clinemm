@@ -1244,3 +1244,89 @@ The same Mac/substrate produced structured EPERM in `ACT-CLINEMM-REAL-LAUNCHAGEN
 - ACT body: `.factory/acts/ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01-CORRECTION02.md`.
 
 **STOP rule (ACT §30) honored. No CORRECTION03 is authorized.** The bounded reproducer search was completed; the substrate signal-entitlement boundary was documented; the counter implementation's GREEN status is preserved. LIVE qualification of the visible `⚠` chain through a real chat task EPERM requires a substrate where the LaunchAgent (or equivalent un-sandboxed) boundary is reachable from chat-driven commands, which this substrate does not provide.
+
+## ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 — LIVE_FIRST_IDLE_WRITER_BOUND — 2026-09-18
+
+**Status:** `HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND → LIVE_FIRST_IDLE_WRITER_BOUND` (transition, NOT closure). Operator TSWPD live capture succeeded; the LIVE writer is now identified, but the predicate and the wake path are still source-unconfirmed.
+
+**Bind (canonical evidence at `.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/20-…26-…`):**
+
+```text
+FIRST_IDLE_WRITER (LIVE)         = session-event-turn-complete-
+                                   resumable-straggler-preserve
+FIRST_IDLE_WRITER (LIVE)         = BOUND  (operator TSWPD capture,
+                                            2026-09-18T09:51:01.123Z
+                                            = 12:51:01.123 +03:00 local)
+LIVE_TASK_ID                     = 1789683418836_z029q
+LIVE_EPOCH_AT_BIND               = 8
+LIVE_SEQ_AT_BIND                 = 41032
+LIVE_WRITER_PREVIOUS_PHASE       = streaming
+LIVE_WRITER_COMMITTED_PHASE      = awaiting_followup
+```
+
+**Symptom (same publication, LIVE PASS):**
+
+```text
+UI_STATE                  = Waiting
+USER_QUESTION_PENDING     = false
+APPROVAL_PENDING          = false
+JOB_ID                    = cmd_mu6rya7lxxj2j7pt
+LAST_TOOL_STATUS          = running
+WAITING_WITHOUT_QUESTION  = YES (LIVE PASS)
+WAITING_WITHOUT_APPROVAL  = YES (LIVE PASS)
+```
+
+**No-wake witness:** After 09:51:01.248Z the extension-host log is structurally silent until the next `provider.read` at 10:16:48.858Z (~25 min). No follow-up prompt, no terminal-event wake, no further controller action. Canonical extract at `22-cline-log-window.txt`.
+
+**Process topology at capture (23-process-snapshot.txt + 24-job-tree.txt):** parent npm test / Vitest ABSENT; nine long-horizon-harness `ledger-writer-entry.ts` children reparented to PID 1. Consistent with the reviewer-proposed model: foreground command lifecycle ended, long-horizon stragglers survived, the turn-completion detector classified the situation as "resumable straggler" and installed `awaiting_followup`, no wake mechanism fired.
+
+**Critical finding — the LIVE writer is a THIRD candidate, NOT one of the two synthetic A/B:**
+
+```text
+synthetic A  = controller-epoch-transition-reseed       (SdkController.ts:3752)
+synthetic B  = followup-on-follow-up-abandoned         (SdkController.ts:1426)
+LIVE writer  = session-event-turn-complete-
+               resumable-straggler-preserve             (THIRD, source-unconfirmed)
+```
+
+The synthetic-real test (`bhtd01-synthetic-real.test.ts`) does NOT cover the LIVE writer. The TSWPD CAPABILITY proof therefore does NOT cover the LIVE writer. A new synthetic-real test for the resumable-straggler-preserve path is the next substep, AFTER source recon locates the writer in the codebase.
+
+**Honest halt — what the bind did NOT prove:**
+
+```text
+STRAGGLER_CAUSAL_IDENTITY  = INFERRED   (capture shows nine stragglers +
+                                          writer id mentions "resumable
+                                          straggler"; does not prove the
+                                          predicate is keyed on those
+                                          nine PIDs)
+WAKE_PATH                  = UNKNOWN    (no wake fired in 25 min; does
+                                          not prove no wake path exists
+                                          in code)
+ROOT_CAUSE_ISOLATED        = NO         (predicate + wake path both
+                                          required)
+```
+
+**Gates (this transition):** EVIDENCE_BOUND PASS (7 files bind to live capture 2026-09-18 12:51:01 +03:00, taskId 1789683418836_z029q, epoch 8, seq 41032); CAPTURE_CLASS REAL|LIVE confirmed in `26-capture-classification.txt`; LIVE_WRITER_BINDING PASS (TSWPD last entry IS the writer that produced the Waiting state in the same publication); NO_PRODUCTION_CODE_CHANGED PASS; WORKTREE_CLEAN NOT-PASS (pre-existing MPWC02 residue in `working-context-state-projection.ts`, unchanged, exempt per ACT §1).
+
+**Files modified (this transition):**
+  - `.factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md` — status header updated; verdict block updated; §8 board-update block updated; §10 LIVE_BIND section added (10.1 what was proved, 10.2 honest halt, 10.3 writer-inventory change, 10.4 next steps, 10.5 capture-packet inventory, 10.6 status transition).
+  - `.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/` — 7 new tracked files (20-live-waiting-state.txt, 21-turn-state-writer-provenance.jsonl, 22-cline-log-window.txt, 23-process-snapshot.txt, 24-job-tree.txt, 25-live-screenshot-placeholder.txt, 26-capture-classification.txt).
+  - `.factory/epic-board.md` — this section.
+
+**Test/Evidence:**
+  - ACT body: `.factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md` (now 742 lines; §0–§10).
+  - Evidence packet: `.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/` (7 new + 6 pre-existing files).
+  - Classification schema: `26-capture-classification.txt`.
+
+**NEXT (per §10.4 of the ACT, binding):**
+
+  1. Source recon: `rg -n 'session-event-turn-complete-resumable-straggler-preserve|resumable-straggler|awaiting_followup' apps sdk` to locate the writer's exact `setWithWriter(...)` call site.
+  2. Freeze the predicate (boolean expression selecting "resumable straggler preserve" vs the two prior candidates).
+  3. Freeze the straggler object (what process/job/structure the predicate inspects).
+  4. Freeze the wake path (straggler `exit` event vs user-prompt timer vs controller-internal follow-up vs terminal).
+  5. Build one bounded causal discriminator: same completed parent command + no surviving straggler → completed; same + one surviving resumable straggler → awaiting_followup; terminate that straggler → does a wake fire?
+  6. Adjudicate CASE_A / NOT_A_RUNTIME_DEFECT (writer + wake both contract-correct) OR CASE_B/C/D/E (writer or wake is a runtime defect → bounded production-repair child ACT authorized).
+
+The predecessor recon ACT (`ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01`) STILL cannot close on this transition. It can only close after this ACT reaches CASE_A / NOT_A_RUNTIME_DEFECT OR a bounded production-repair child ACT is authorized.
+
+**STOP rule honored.** This is a status transition, not a closure. No CORRECTION01 ACT is authorized at this gate. The transition is durable, the writer is bound, and the next substep is source recon — which is operator-and-author work, not new instrumentation, not a new test, not a new ACT contract.

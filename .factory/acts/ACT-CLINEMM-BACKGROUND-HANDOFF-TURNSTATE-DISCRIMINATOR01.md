@@ -1,10 +1,11 @@
 # ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01
 
-> Status: **HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND /
-> ROOT_CAUSE_ISOLATED = NO / LIVE_CLASSIFICATION = DEFERRED /
+> Status: **LIVE_FIRST_IDLE_WRITER_BOUND /
+> ROOT_CAUSE_ISOLATED = NO (3rd candidate + wake-path unknown) /
+> LIVE_CLASSIFICATION = PARTIAL /
 > PRODUCTION_REPAIR = NOT_AUTHORIZED /
 > UX_STATUS_SEMANTICS_CHILD_ACT = NOT_YET_AUTHORIZED /
-> NEXT = ONE_OPERATOR_TSWPD_LIVE_CAPTURE**.
+> NEXT = SOURCE_RECON_AND_BOUNDED_STRAGGLER_DISCRIMINATOR**.
 >
 > Epistemic purpose: CAUSAL_DISCRIMINATION (per ACT mission).
 >
@@ -31,16 +32,35 @@
 > LIVE_BOUNDARY                              = PROVEN
 > BACKGROUND_LIFETIME_DECOUPLING             = PROVEN / INTENTIONAL
 > IDLE_WRITER_UNION                          = STRUCTURAL / PROVEN
-> CANDIDATES_AFTER_NARROWING                 = TWO
+> CANDIDATES_AFTER_NARROWING (synthetic)     = TWO
 > TSWPD_DISCRIMINATOR_CAPABILITY             = PROVEN / SYNTHETIC_REAL
 > CANDIDATE_A_WRITE_IDENTITY (synthetic)     = controller-epoch-transition-reseed
 > CANDIDATE_B_WRITE_IDENTITY (synthetic)     = followup-on-follow-up-abandoned
-> LIVE_FIRST_IDLE_WRITER                     = UNBOUND
-> ROOT_CAUSE_ISOLATED                        = NO  (LIVE writer unbinded)
+> LIVE_FIRST_IDLE_WRITER                     = BOUND  (operator TSWPD capture,
+>                                                       2026-09-18 12:51:01 +03:00)
+> LIVE_FIRST_IDLE_WRITER_IDENTITY            = session-event-turn-complete-
+>                                               resumable-straggler-preserve
+>                                               (THIRD candidate; neither
+>                                               synthetic A nor synthetic B)
+> LIVE_WRITER_PREVIOUS_PHASE                 = streaming
+> LIVE_WRITER_COMMITTED_PHASE                = awaiting_followup
+> LIVE_TASK_ID                               = 1789683418836_z029q
+> LIVE_EPOCH_AT_BIND                         = 8
+> LIVE_SEQ_AT_BIND                           = 41032
+> WAITING_WITHOUT_QUESTION (LIVE)            = YES (LIVE PASS)
+> WAITING_WITHOUT_APPROVAL (LIVE)            = YES (LIVE PASS)
+> NO_WAKE_WITNESS                            = ~25 min structural silence in
+>                                               1-Cline.log after 09:51:01.248Z
+> STRAGGLER_CAUSAL_IDENTITY                  = INFERRED (not proven by capture)
+> WAKE_PATH                                  = UNKNOWN
+> ROOT_CAUSE_ISOLATED                        = NO  (3rd candidate + wake path)
 > CASE_A (LIVE)                              = NOT YET ADJUDICATED
 > LIVE_FAILURE_SPECIMEN                      = PROVEN  (real + same-publication)
-> NEXT                                       = ONE_OPERATOR_TSWPD_LIVE_CAPTURE
-> FINAL                                      = HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND
+> NEXT                                       = SOURCE_RECON_AND_BOUNDED_
+>                                               STRAGGLER_DISCRIMINATOR
+> FINAL                                      = LIVE_FIRST_IDLE_WRITER_BOUND
+>                                               (wake-path + straggler causality
+>                                               still required for closure)
 > ```
 >
 > **Per-candidate conditional verdicts (contract-only)**:
@@ -420,21 +440,40 @@ The runtime-task-progression epic board row will be updated:
 
   ACT                             = ACT-CLINEMM-BACKGROUND-HANDOFF-
                                     TURNSTATE-DISCRIMINATOR01
-  FIRST_IDLE_WRITER (LIVE)        = UNBOUND (live bind requires operator)
+  FIRST_IDLE_WRITER (LIVE)        = BOUND (operator TSWPD capture,
+                                           2026-09-18 12:51:01 +03:00)
+  FIRST_IDLE_WRITER_IDENTITY      = session-event-turn-complete-
+                                    resumable-straggler-preserve
+                                    (THIRD candidate; synthetic A and
+                                    B do NOT cover it)
   FIRST_IDLE_WRITER (synthetic)   = controller-epoch-transition-reseed
                                     OR followup-on-follow-up-abandoned
-                                    (SYNTHETIC_REAL discriminator)
+                                    (SYNTHETIC_REAL discriminator;
+                                    does NOT cover the LIVE writer)
   TSWPD_DISCRIMINATOR_CAPABILITY  = PROVEN (synthetic-real test PASS)
-  VERDICT                         = HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND
-  ROOT_CAUSE_ISOLATED             = NO  (LIVE writer still unbinded)
-  CLASSIFICATION                  = DEFERRED (pending operator TSWPD
-                                          capture on live recurrence)
+  VERDICT                         = LIVE_FIRST_IDLE_WRITER_BOUND
+  WAITING_WITHOUT_QUESTION (LIVE) = YES (LIVE PASS)
+  WAITING_WITHOUT_APPROVAL (LIVE) = YES (LIVE PASS)
+  NO_WAKE_WITNESS                 = ~25 min structural silence in
+                                    1-Cline.log after 09:51:01.248Z
+  STRAGGLER_CAUSAL_IDENTITY       = INFERRED (not proven by capture)
+  WAKE_PATH                       = UNKNOWN
+  ROOT_CAUSE_ISOLATED             = NO  (3rd candidate + wake path)
+  CLASSIFICATION                  = PARTIAL (writer ID bound;
+                                          predicate + wake path
+                                          still required)
   PRODUCTION_REPAIR               = NOT_AUTHORIZED
   UX_STATUS_SEMANTICS_CHILD_ACT   = NOT YET AUTHORIZED
+  NEXT                            = SOURCE_RECON_AND_BOUNDED_
+                                    STRAGGLER_DISCRIMINATOR
 
 The predecessor recon ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-
 LIVENESS-RECON01 cannot close on this ACT's adjudication; it can
-only close after the LIVE bind is recorded by the operator.
+only close after this ACT reaches CASE_A / NOT_A_RUNTIME_DEFECT
+OR a bounded production-repair child ACT is authorized.
+
+See §10 for the full LIVE_BIND section that supersedes the
+2026-09-01 verdict block at the top of this file.
 
 ## 9. Final disposition
 
@@ -460,3 +499,263 @@ operator-only (no new test, no new ACT, no new instrumentation):
 
 Only after that bind can this ACT reach CASE_A /
 NOT_A_RUNTIME_DEFECT.
+
+## 10. LIVE_BIND (operator TSWPD capture, 2026-09-18)
+
+**Status after operator TSWPD live capture (2026-09-18 12:51:01 +03:00):**
+
+```text
+HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND
+    ->
+LIVE_FIRST_IDLE_WRITER_BOUND
+```
+
+The LIVE bind was obtained by the operator running the TSWPD
+discriminator against the live recurrence. The capture packet
+is attached to this ACT at
+`.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/20-…26-…`.
+
+### 10.1 What the live bind proved
+
+  - The first production write that produces
+    `turnPhase=awaiting_followup` while
+    `backgroundCommandRunning=true` in the LIVE specimen is:
+
+    ```text
+    writerId          = session-event-turn-complete-
+                        resumable-straggler-preserve
+    taskId            = 1789683418836_z029q
+    epoch             = 8
+    previous.phase    = streaming
+    previous.seq      = 28365
+    requested.phase   = awaiting_followup
+    committed.phase   = awaiting_followup
+    committed.seq     = 41032
+    capturedAt        = 2026-09-18T09:51:01.123Z
+                        (= 12:51:01.123 +03:00 local;
+                        epoch ms = 1789725061123)
+    ```
+
+  - The UI in that same publication observed:
+
+    ```text
+    UI_STATE                  = Waiting
+    USER_QUESTION_PENDING     = false
+    APPROVAL_PENDING          = false
+    JOB_ID                    = cmd_mu6rya7lxxj2j7pt
+    LAST_TOOL_STATUS          = running
+    ```
+
+    `WAITING_WITHOUT_QUESTION = LIVE PASS`
+    `WAITING_WITHOUT_APPROVAL = LIVE PASS`
+
+  - The extension-host log around the same instant shows the
+    turn-completion handshake:
+
+    ```text
+    09:51:01.122Z LOG  Agent loop caught error
+    09:51:01.123Z WARN [SdkController] done with no committed
+                          terminal response; yielding turn as
+                          awaiting_followup (liveness)
+    09:51:01.197Z LOG  [MessageTranslator] Session status: idle
+    09:51:01.197Z WARN [MessageTranslator] Unhandled session event
+                          type: session_snapshot
+    09:51:01.197Z LOG  [VscodeSessionHost] send() completed:
+                          text=, inputTokens=33196513
+    09:51:01.197Z LOG  [SdkController] Agent turn completed for
+                          session: 1789683418836_z029q
+    ```
+
+    The very next extension-host log entry after this cluster is
+    at `10:16:48.858Z` — ~25 minutes of structural silence. There
+    is **no follow-up prompt, no terminal-event wake, and no
+    further controller action**. This is the canonical
+    no-wake witness.
+
+  - The process topology at capture (parent npm test / Vitest
+    absent; nine long-horizon-harness `ledger-writer-entry.ts`
+    children reparented to PID 1) is consistent with the model
+    the reviewer proposed: foreground command lifecycle ended,
+    long-horizon stragglers survived, the turn-completion
+    detector classified the situation as "resumable straggler"
+    and installed `awaiting_followup`, and no wake mechanism
+    fired afterwards.
+
+### 10.2 What the live bind did NOT prove (honest halt)
+
+  - **STRAGGLER_CAUSAL_IDENTITY = INFERRED.** The capture shows
+    nine surviving stragglers and a writer whose id mentions
+    "resumable straggler", but it does not prove the writer's
+    "resumable straggler" predicate is keyed on those specific
+    nine PIDs. The exact predicate and the exact object /
+    process / job that satisfies it must be located in source.
+
+  - **WAKE_PATH = UNKNOWN.** The 25-minute silent interval proves
+    a wake did not fire; it does not prove that no wake path
+    exists in code. The source recon must determine whether
+    `awaiting_followup` is supposed to be followed by an
+    event-driven wake that the surviving straggler should
+    eventually emit, or whether `awaiting_followup` is supposed
+    to be terminal until user input.
+
+  - **ROOT_CAUSE_ISOLATED = NO.** Until the straggler predicate
+    and the wake path are both source-confirmed, this ACT
+    cannot adjudicate CASE_A / NOT_A_RUNTIME_DEFECT.
+
+### 10.3 What changed about the writer inventory
+
+  - The synthetic-real test
+    (`background-handoff-turnstate-discriminator.bhtd01-synthetic-real.test.ts`)
+    enumerates TWO candidates:
+      - `controller-epoch-transition-reseed` (SdkController.ts:3752)
+      - `followup-on-follow-up-abandoned`   (SdkController.ts:1426)
+
+  - The LIVE writer is a **THIRD candidate**:
+      - `session-event-turn-complete-resumable-straggler-preserve`
+
+  - This third candidate is NOT covered by the synthetic-real
+    test. The TSWPD CAPABILITY proof therefore does not cover
+    the LIVE writer. The next substep MUST either:
+
+      (a) extend the synthetic-real test to cover the third
+          candidate, OR
+      (b) drive a bounded real-task reproduction through the
+          third candidate's code path and capture TSWPD again.
+
+  - Per the Factory rule that the synthetic-real test must
+    EXACTLY match the production writer-provenance
+    instrumentation, extending the synthetic-real test requires
+    first locating the writer in source — which is the
+    source-recon step already in NEXT.
+
+### 10.4 Next steps (binding, no production code change)
+
+  1. **Source recon.** Search for the literal writer id and
+     related tokens:
+     ```bash
+     rg -n \
+       'session-event-turn-complete-resumable-straggler-preserve|
+        resumable-straggler|
+        awaiting_followup' \
+       apps sdk
+     ```
+     Locate the exact `setWithWriter(...)` call site that
+     produced this writer's provenance line.
+
+  2. **Freeze the predicate.** Record the exact boolean
+     expression that selects "resumable straggler preserve" vs
+     the prior two candidates.
+
+  3. **Freeze the straggler object.** Record what
+     process/job/structure the predicate inspects. Confirm
+     whether the predicate inspects `CommandJobManager` (as
+     candidate A and B do NOT) or whether it inspects something
+     else (a session-level straggler table, a host-level
+     supervisor state, a "resumable subsystem" registry, etc.).
+
+  4. **Freeze the wake path.** Record what is supposed to wake
+     `awaiting_followup` afterward. Possibilities:
+       - a straggler's `exit` event,
+       - a session-level `idle → follow-up` user-prompt timer,
+       - a controller-internal follow-up trigger,
+       - terminal (no wake; user must send next message).
+
+  5. **Build one bounded causal discriminator.**
+     ```
+     same completed parent command + no surviving straggler
+       → completed / continuation
+     same completed parent command + one surviving resumable
+       straggler
+       → awaiting_followup
+     terminate that straggler
+       → does a wake fire?
+     ```
+     Possible outcomes:
+     ```
+     no wake fires after termination
+         → STRAGGLER_PRESERVE installs Waiting WITHOUT a
+            corresponding terminal-event wake
+            (defect boundary = WRITER)
+     wake fires but is ignored
+         → defect moves one boundary downstream
+            (defect boundary = WAKE_CONSUMER)
+     wake fires and is consumed
+         → no defect in the wake path; the writer's
+            `awaiting_followup` is the intended terminal state
+            and the no-witness we observed was actually a
+            long-but-finite idle wait, NOT a defect
+     ```
+
+  6. **Only after steps 1–5** can this ACT adjudicate:
+       - CASE_A / NOT_A_RUNTIME_DEFECT (writer + wake are both
+         contract-correct), or
+       - CASE_B/C/D/E (writer or wake is a runtime defect),
+         which then authorizes a bounded production-repair
+         child ACT.
+
+### 10.5 Capture-packet inventory
+
+  `.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/`
+  (canonical, tracked):
+
+  ```text
+  20-live-waiting-state.txt
+      Mirrored from operator
+      ~/Downloads/clinemm-wait-20260918-142901/live-state.txt
+      (UI_STATE=Waiting + USER_QUESTION_PENDING=false +
+       APPROVAL_PENDING=false + JOB_ID=cmd_mu6rya7lxxj2j7pt +
+       LAST_TOOL_STATUS=running).
+  21-turn-state-writer-provenance.jsonl
+      Mirrored from operator
+      ~/Downloads/turn-state-writer-provenance.jsonl
+      (last entry IS the bound writer; previous entries are
+       preserved as same-publication context).
+  22-cline-log-window.txt
+      Bounded extract from
+      window1/exthost/output_logging_20260918T011647/1-Cline.log,
+      lines 56150–56234 (the decisive cluster at 09:51:01.122Z
+      through 09:51:01.197Z plus the 25-minute no-wake silence
+      that follows up to the next provider.read).
+  23-process-snapshot.txt
+      Mirrored from operator
+      ~/Downloads/clinemm-wait-20260918-142901/processes.txt
+      (parent npm test / Vitest ABSENT; nine
+      ledger-writer-entry.ts stragglers reparented to PID 1).
+  24-job-tree.txt
+      Mirrored from operator
+      ~/Downloads/clinemm-wait-20260918-142901/job-tree.txt
+      (PGID membership table for the surviving stragglers).
+  25-live-screenshot-placeholder.txt
+      Honest note: no rasterized PNG was produced by this
+      capture; the UI state was sampled as structured text into
+      20-live-waiting-state.txt (sufficient for the bind).
+  26-capture-classification.txt
+      CAPTURE_CLASS = REAL | LIVE; full schema for every
+      witness above plus the NEXT plan.
+  ```
+
+  The 0-byte logs (`editSessions.log`, `network-shared.log`,
+  `terminal.log`, `tunnelHostService.log`, `userDataSync.log`,
+  `relevant-log-lines.txt`) in the operator's capture directory
+  are intentionally NOT mirrored — they contain no load-bearing
+  data and would dilute the canonical packet.
+
+### 10.6 Status transition
+
+```text
+HALT_LIVE_FIRST_IDLE_WRITER_STILL_UNBOUND
+    ->
+LIVE_FIRST_IDLE_WRITER_BOUND
+        + WAKE_PATH_UNKNOWN
+        + STRAGGLER_CAUSAL_IDENTITY_INFERRED
+        + 3RD_CANDIDATE_NOT_YET_SYNTHETIC_TESTED
+```
+
+The ACT does **NOT** close on this bind. It transitions to
+`LIVE_FIRST_IDLE_WRITER_BOUND` and the NEXT gate becomes
+`SOURCE_RECON_AND_BOUNDED_STRAGGLER_DISCRIMINATOR`. The
+predecessor recon ACT
+(`ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01`)
+cannot close until this ACT reaches CASE_A /
+NOT_A_RUNTIME_DEFECT OR a bounded production-repair child ACT
+is authorized.

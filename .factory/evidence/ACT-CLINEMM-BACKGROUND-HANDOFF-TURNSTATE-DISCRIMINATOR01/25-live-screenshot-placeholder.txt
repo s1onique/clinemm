@@ -1,0 +1,25 @@
+NO LIVE SCREENSHOT WAS PRODUCED BY THIS CAPTURE.
+
+The operator capture of 2026-09-18 12:51 +03:00 sampled the
+VSCode Cline webview state into structured text:
+
+  20-live-waiting-state.txt
+    UI_STATE=Waiting
+    USER_QUESTION_PENDING=false
+    APPROVAL_PENDING=false
+    JOB_ID=cmd_mu6rya7lxxj2j7pt
+    LAST_TOOL_STATUS=running
+
+That text snapshot is the canonical symptom witness. A rasterized
+PNG would be redundant for the causal-discrimination purpose of
+this ACT; the structured text is fully sufficient to bind the
+WRITER (21-turn-state-writer-provenance.jsonl) to the SYMPTOM
+(20-live-waiting-state.txt) to the EXTENSION LOG (22-cline-log-
+window.txt) to the PROCESS TOPOLOGY (23-process-snapshot.txt +
+24-job-tree.txt).
+
+If a rasterized screenshot is ever required for downstream review
+(for example, to cross-check the webview's exact chip/badge
+render), re-run the capture with the operator harness's
+screenshot step enabled and add it as 25-live-screenshot.png in
+this directory. Do NOT retroactively add a fabricated image.

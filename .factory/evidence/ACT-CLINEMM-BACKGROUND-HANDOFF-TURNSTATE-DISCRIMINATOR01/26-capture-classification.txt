@@ -1,0 +1,101 @@
+CAPTURE_CLASS              = REAL | LIVE
+CAPTURE_KIND               = OPERATOR_TSWPD_LIVE_BIND
+CAPTURE_DATE_UTC           = 2026-09-18T09:51:01.123Z (== 12:51:01.123 +03:00 local)
+TASK_ID                    = 1789683418836_z029q
+EPOCH_AT_BIND              = 8
+SEQ_AT_BIND                = 41032
+
+SYMPTOM =
+  UI_STATE                  = Waiting
+  USER_QUESTION_PENDING     = false
+  APPROVAL_PENDING          = false
+  JOB_ID                    = cmd_mu6rya7lxxj2j7pt
+  LAST_TOOL_STATUS          = running
+  WAITING_WITHOUT_QUESTION  = LIVE PASS
+  WAITING_WITHOUT_APPROVAL  = LIVE PASS
+
+WRITER_BINDING             = LIVE
+FIRST_WAITING_WRITER       = session-event-turn-complete-resumable-straggler-preserve
+WRITER_PREVIOUS_PHASE      = streaming
+WRITER_REQUESTED_PHASE     = awaiting_followup
+WRITER_COMMITTED_PHASE     = awaiting_followup
+WRITER_REQUESTED_AT        = 2026-09-18T09:51:01.123Z (== capturedAt 1789725061123 ms)
+WRITER_PROVENANCE_LINE     = LAST entry in 21-turn-state-writer-provenance.jsonl
+
+CONCURRENT_EXTENSION_LOG_AT_SAME_INSTANT =
+  09:51:01.122Z LOG  Agent loop caught error
+  09:51:01.123Z WARN [SdkController] done with no committed terminal
+                          response; yielding turn as awaiting_followup
+                          (liveness)
+  09:51:01.197Z LOG  [MessageTranslator] Session status: idle
+  09:51:01.197Z WARN [MessageTranslator] Unhandled session event type:
+                          session_snapshot
+  09:51:01.197Z LOG  [VscodeSessionHost] send() completed: text=,
+                          inputTokens=33196513
+  09:51:01.197Z LOG  [SdkController] Agent turn completed for session:
+                          1789683418836_z029q
+  -- end of decisive cluster --
+
+NO_WAKE_WITNESS =
+  Next provider.read after 09:51:01.248Z is 10:16:48.858Z
+  (~25 minutes of structural silence in the extension log,
+   proving the session went idle with no follow-up prompt and
+   no terminal-event wake fired).
+
+PROCESS_TOPOLOGY_AT_CAPTURE (23-process-snapshot.txt + 24-job-tree.txt) =
+  Parent npm test/Vitest is ABSENT.
+  Nine long-running ledger-writer-entry.ts processes survive,
+  reparented to PID 1 (long-horizon-harness stragglers).
+  None of these nine are the parent command that produced the
+  captured turn; they are background survivors from prior harness
+  runs that the foreground turn was orchestrating.
+
+STRAGGLER_CAUSAL_IDENTITY   = INFERRED  (not proven by this capture)
+WAKE_PATH                   = UNKNOWN   (no terminal-event wake observed)
+REPAIR_AUTHORIZED           = NO
+
+NEXT =
+  1. Source recon against the literal writer id
+     `session-event-turn-complete-resumable-straggler-preserve`
+     (search apps + sdk).
+  2. Freeze the exact predicate that selects "resumable straggler
+     preserve" vs the prior two candidates
+     (controller-epoch-transition-reseed,
+      followup-on-follow-up-abandoned).
+  3. Freeze what object/process/job makes that predicate true.
+  4. Freeze what mechanism is supposed to wake `awaiting_followup`
+     afterward.
+  5. Build one tiny bounded causal discriminator:
+     same completed parent command + no surviving straggler
+     → completed / continuation.
+     same completed parent command + one surviving resumable
+     straggler → awaiting_followup.
+     terminate that straggler → does a wake fire?
+  If no wake fires after termination,
+      defect = STRAGGLER_PRESERVE installs Waiting
+               WITHOUT a corresponding terminal-event wake.
+  If a wake fires but is ignored,
+      defect moves one boundary downstream.
+
+REGRESSION_RISK_OF_LIVE_BIND =
+  The LIVE writer is a THIRD candidate, NOT one of the two the
+  synthetic-real test exercises. writer-inventory.md and the
+  bhtd01-synthetic-real test enumerate only
+  controller-epoch-transition-reseed and
+  followup-on-follow-up-abandoned. The synthetic-real capability
+  proof therefore does NOT cover the LIVE writer. A new
+  synthetic-real test for the resumable-straggler-preserve path
+  is the next substep, AFTER the source recon locates the writer
+  in the codebase.
+
+NOTES =
+  - This capture was taken on the LIVE recurrence observed
+    2026-09-18 between 12:51 local (+03:00) and the operator's
+    pause at 14:29 local.
+  - Source files live in operator Downloads and were mirrored
+    into this evidence packet for durability. Raw originals are
+    intentionally NOT mirrored (operator Downloads are scratch).
+  - 25-live-screenshot.png was not produced by this capture; the
+    UI state was sampled as structured text into
+    20-live-waiting-state.txt instead. A placeholder note is at
+    25-live-screenshot-placeholder.txt.
