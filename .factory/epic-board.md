@@ -1330,3 +1330,109 @@ ROOT_CAUSE_ISOLATED        = NO         (predicate + wake path both
 The predecessor recon ACT (`ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01`) STILL cannot close on this transition. It can only close after this ACT reaches CASE_A / NOT_A_RUNTIME_DEFECT OR a bounded production-repair child ACT is authorized.
 
 **STOP rule honored.** This is a status transition, not a closure. No CORRECTION01 ACT is authorized at this gate. The transition is durable, the writer is bound, and the next substep is source recon — which is operator-and-author work, not new instrumentation, not a new test, not a new ACT contract.
+
+## ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 — CASE_A_NOT_A_RUNTIME_DEFECT_CLOSURE — 2026-09-18
+
+**Status:** `LIVE_FIRST_IDLE_WRITER_BOUND + SOURCE_RECON_AND_BOUNDED_STRAGGLER_DISCRIMINATOR → CASE_A / NOT_A_RUNTIME_DEFECT / ACT CLOSED`. The source-recon substep (§11, executed inside the same ACT per reviewer authorization) durably freezes the four facts, runs the bounded causal discriminator against them, and adjudicates the live specimen as contract-correct.
+
+**Four frozen facts (canonical, derived from `.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/27-source-recon-rg-output.txt`):**
+
+```text
+WRITER_SITE         = apps/vscode/src/sdk/sdk-session-event-coordinator.ts:289
+                      (handleSessionEvent done-without-completion branch,
+                       line 286-290; writer id "session-event-turn-complete-
+                       resumable-straggler-preserve")
+
+PREDICATE           = !activeSession.isRunning
+                      && getTurnPhase() !== "resumable"
+                      && !wasErrorSeen()
+                      && !wasAttemptCompletionSeen()
+                      && !hasRunningBackgroundJobForOwner(activeSession.sessionId)
+
+STRAGGLER_AUTHORITY = CommandJobManager.hasRunningBackgroundJobForOwner
+                      (command-job-manager.ts:1801; iterates active.values()
+                       checking job.state === "running" AND
+                       job.ownerSessionId === ownerSessionId)
+                      Composition: SdkController.ts:1861 (duck-typed cast) →
+                      VscodeSessionHost.ts:501 → CommandJobManager.
+                      NOT a PID-enumeration check. The live nine
+                      reparented-to-PID-1 ledger-writer-entry.ts children
+                      are NOT in CommandJobManager and were never
+                      registered as CommandJobs.
+
+WAKE_AUTHORITY      = sdk-session-event-coordinator.ts:111
+                      (session-event-pending-prompt-submitted handler).
+                      USER-DRIVEN, not straggler-driven. There is NO
+                      autonomous wake from a CommandJob exit/terminated
+                      event back to streaming. By design
+                      (shadow-arbiter-mapper.ts:496,529: awaiting_followup
+                      is a USER-OWNED phase).
+```
+
+**Bounded causal discriminator (paper, read-only):**
+
+```text
+CASE_1  predicate false (activeSession owns RUNNING CommandJob)
+        → SUPPRESS branch fires; prior phase preserved.
+        Live equivalent: post-terminal-02 specimen (cmd_mtj6kki83r1bmrfz,
+        taskId 1788297479245_hv9w5). Tested in q5rr01 Q5-A POST-REPAIR.
+
+CASE_2  predicate true (activeSession does NOT own RUNNING CommandJob)
+        → THIS WRITER fires; phase becomes awaiting_followup.
+        Live equivalent: the 09:51:01.123Z capture (this specimen).
+        Tested in q5rr01 Q5-B and Q5-B control.
+
+CASE_3  remove condition (user submits follow-up prompt)
+        → pending_prompt_submitted → setTurnPhase("streaming").
+        Wake fires, consumed normally. Contract-correct.
+
+CASE_4  remove condition via straggler exit event instead
+        → NO event listener exists for straggler → streaming.
+        Phase STAYS awaiting_followup. By design.
+```
+
+**Adjudication:**
+
+```text
+WRITER_BOUNDARY      = CONTRACT-CORRECT  (predicate evaluated correctly
+                                          at 09:51:01.123Z; phase became
+                                          awaiting_followup; UI "Waiting"
+                                          is truthful projection)
+WAKE_PATH            = CONTRACT-CORRECT  (intentionally user-driven; the
+                                          25-min log silence is exactly
+                                          what "no user prompt" looks like)
+STRAGGLER_CAUSALITY  = CONTRACT-RESOLVED (CommandJobManager authority
+                                          is orthogonal to PID enumeration;
+                                          the nine PID-1 stragglers are
+                                          from a different subsystem and
+                                          correctly not in the table)
+ADJUDICATION         = CASE_A / NOT_A_RUNTIME_DEFECT
+```
+
+**Status transitions (in this substep):**
+
+```text
+STRAGGLER_CAUSAL_IDENTITY  : INFERRED          → CONTRACT-RESOLVED
+WAKE_PATH                  : UNKNOWN           → CONTRACT-RESOLVED
+3RD_CANDIDATE              : NOT_YET_SYNTHETIC → SYNTHETIC_TESTED
+                              (q5rr01 Q5-B + Q5-B control cover the
+                              streaming → awaiting_followup transition
+                              via this exact writer id)
+ROOT_CAUSE_ISOLATED        : NO                → YES
+CASE_A (LIVE)              : NOT YET ADJUDICATED → ADJUDICATED
+NEXT                       : SOURCE_RECON...   → ACT CLOSED
+```
+
+**Files modified (this substep):**
+
+  - `.factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md` — status header rewritten to `CASE_A / NOT_A_RUNTIME_DEFECT / ACT CLOSED`; verdict block updated (STRAGGLER_CAUSAL_IDENTITY=CONTRACT-RESOLVED, WAKE_PATH=CONTRACT-RESOLVED, ROOT_CAUSE_ISOLATED=YES, CASE_A=ADJUDICATED, FINAL=CASE_A / NOT_A_RUNTIME_DEFECT); §11 SOURCE_RECON_AND_BOUNDED_STRAGGLER_DISCRIMINATOR added (six sub-sections: §11.1 recon command, §11.2 the four frozen facts, §11.3 bounded causal discriminator, §11.4 adjudication, §11.5 status transition, §11.6 ACT closure).
+  - `.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/27-source-recon-rg-output.txt` — NEW, canonical ripgrep output (630 lines + header) durably capturing the four-fact freeze derivation.
+  - `.factory/epic-board.md` — this section appended below the LIVE_FIRST_IDLE_WRITER_BOUND entry.
+
+**Honest residue (corrected, not suppressed):**
+
+The §10.3 caveat in the LIVE_FIRST_IDLE_WRITER_BOUND entry above says "the synthetic-real test (`bhtd01-synthetic-real.test.ts`) does NOT cover the LIVE writer". This caveat is **literally correct** for `bhtd01` (which targets the two SYNTHETIC candidates only). What §10.3 failed to note is that a SIBLING synthetic-real test from the parent ACT (`q5rr01-synthetic-real.test.ts`, Q5-B + Q5-B control) DOES cover the LIVE writer's exact writer id with `writerFired >= 1` assertions. The ACT body §11.4 / §11.6 records this correction. No board update is required for the §10.3 caveat itself; it remains true in isolation and the broader truth (q5rr01 covers) is now recorded.
+
+**No production code modified.** No bounded production-repair child ACT authorized. No CORRECTION01 ACT authorized. The predecessor recon ACT (`ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01`) CAN NOW CLOSE based on this adjudication.
+
+**STOP rule honored (final).** This ACT is now CLOSED at `CASE_A / NOT_A_RUNTIME_DEFECT`. The frozen facts are the durable record. The live specimen is the expected behavior of the production code; no defect exists at any of the three boundaries the recon examined (writer boundary, wake path, straggler causality).

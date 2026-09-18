@@ -1,0 +1,659 @@
+# Source Recon Output — Canonical Evidence
+#
+# ACT: ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 §11
+# Substep: SOURCE_RECON_AND_BOUNDED_STRAGGLER_DISCRIMINATOR
+# Date: 2026-09-18
+# Generator: ripgrep (rg)
+# Command (verbatim, per ACT §11.1):
+#
+#   rg -n --no-heading --color=never \
+#     -g "!node_modules" -g "!dist" -g "!out" -g "!build" \
+#     -g "!*.map" -g "!*.min.js" \
+#     "session-event-turn-complete-resumable-straggler-preserve|resumable.straggler|awaiting_followup" \
+#     apps sdk
+#
+# 630 lines total. Canonical, durable, tracked.
+#
+# The four frozen facts (§11.2) are derived from this output:
+#   WRITER_SITE         = apps/vscode/src/sdk/sdk-session-event-coordinator.ts:289
+#   STRAGGLER_AUTHORITY = apps/vscode/src/sdk/command-job-manager.ts:1801 (hasRunningBackgroundJobForOwner)
+#                       composition: SdkController.ts:1861 -> VscodeSessionHost.ts:501
+#   WAKE_AUTHORITY      = apps/vscode/src/sdk/sdk-session-event-coordinator.ts:111
+#                       (session-event-pending-prompt-submitted)
+#   PREDICATE           = composite boolean at sdk-session-event-coordinator.ts:145-292
+#
+# Frozen at commit: (will be the §11 substep commit on main)
+#
+#
+--- BEGIN RAW RG OUTPUT ---
+
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:35:	 * completed turn (completed if attempt_completion was used, else awaiting_followup), and on
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:51:	 * `setTurnPhase("awaiting_followup", ...)` call. When this
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:55:	 * turn to `awaiting_followup`, losing the "Proceed While
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:66:	 * pre-Q5 behavior (unconditional `awaiting_followup` in the
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:132:				// simply stopped and is waiting for the user ("awaiting_followup"). Error turns
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:137:				// "resumable" with "awaiting_followup"/"completed" and the footer would lose the
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:179:						// `awaiting_followup`. The completion CONTENT authority
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:192:							"[SdkController] attempt_completion declared but no terminal response committed; yielding turn as awaiting_followup (liveness)",
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:195:							"awaiting_followup",
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:224:					// contract for this case is `awaiting_followup` (see
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:227:					// true for `awaiting_followup`, so the composer stays enabled
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:233:							"awaiting_followup",
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:242:						// committed — `awaiting_followup` truthfully projects
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:251:						// `turnState.phase=awaiting_followup`) captured the
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:253:						// session's phase to `awaiting_followup` while a
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:267:						// branch only asserts `phase !== awaiting_followup`;
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:273:						// unchanged: unconditional `awaiting_followup`.
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:280:								`[SdkController] done with no committed terminal response but active session ${activeSession.sessionId} owns a RUNNING background command; suppressing awaiting_followup transition (Q5 composition seam)`,
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:284:								"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:287:								"awaiting_followup",
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:289:								"session-event-turn-complete-resumable-straggler-preserve",
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:312:		// completed/awaiting_followup/error above; without posting here the webview would stay on
+sdk/packages/agents/src/runtime/state/task-state/selectors.ts:31:	| "awaiting_followup"
+sdk/packages/agents/src/runtime/state/task-state/selectors.ts:90:	if (hostInteraction.awaitingFollowup) return "awaiting_followup";
+apps/vscode/src/sdk/vscode-session-host.ts:474:	 * turn phase to `awaiting_followup`: if the active session still
+apps/vscode/src/sdk/task-state-shadow.ts:79:		case "awaiting_followup":
+apps/vscode/src/sdk/task-state-shadow.ts:80:			return "awaiting_followup"
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:147:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:186:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:232:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:264:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:302:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:340:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:371:		// handleAskQuestion sets the phase to awaiting_followup but blocks the
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:379:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:421:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:447:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:503:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:518:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:538:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:570:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:602:			turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-mode-coordinator.test.ts:718:				turnPhase: "awaiting_followup",
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:386:	 * `awaiting_approval` / `awaiting_followup` / `compacting` /
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:471: *   2. else if currentLegacyPhase === "awaiting_followup"
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:472: *        → phase = "awaiting_followup", source = "host"
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:487: * The two host-override branches ("compacting" + "awaiting_followup")
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:496: *   - `awaiting_followup` is a user-owned phase. The only selector
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:529: * Note: `awaiting_followup` is intentionally NOT in this set --
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:567:	if (input.currentLegacyPhase === "awaiting_followup") {
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:569:			phase: "awaiting_followup",
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:578:	// host-owned phases (compacting / awaiting_followup) are
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:652: * `awaiting_followup`) but produces only the phase value --
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:660: *   2. else if currentLegacyPhase === "awaiting_followup"
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:661: *        → "awaiting_followup"
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:712:	//                           for `awaiting_followup` (host-owned
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:719:	//      awaiting_followup override also does not fire here:
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:723:	//      "awaiting_followup" only when the session-event
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:726:	//      entry. Return `awaiting_followup`.
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:740:	//    reports awaiting_followup ONLY when the session-event
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:743:	//    terminal idle). If the live tracker says awaiting_followup,
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:744:	//    the user has taken ownership -- return awaiting_followup.
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:745:	if (input.currentLegacyPhase === "awaiting_followup") {
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:746:		return "awaiting_followup"
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:752:	//    (awaiting_followup) already fired if applicable.
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:762:	// 3. AWAITING_FOLLOWUP ENTRY -- entry was awaiting_followup;
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:765:	if (input.entryPhase === "awaiting_followup") {
+apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts:766:		return "awaiting_followup"
+apps/vscode/src/sdk/sdk-mode-coordinator.ts:65:	 * Thinking + Cancel instead of the stale awaiting_followup state) and clears
+apps/vscode/src/sdk/sdk-mode-coordinator.ts:149:			// awaiting_followup is also used for non-plan turns, so it is not
+apps/vscode/src/sdk/sdk-mode-coordinator.ts:168:				(turnPhase === "awaiting_followup" || turnPhase === "completed") &&
+apps/vscode/src/sdk/sdk-mode-coordinator.ts:333:				// user_feedback message while the phase still reads awaiting_followup.
+apps/vscode/src/sdk/task-telemetry-tracker.ts:95: *   - `awaiting_followup` does NOT freeze — the agent is paused
+apps/vscode/src/sdk/task-telemetry-tracker.ts:108: * Phases that freeze the elapsed clock. `awaiting_followup` is NOT in
+apps/vscode/src/sdk/task-telemetry-tracker.ts:268:	 *  - The other non-terminal phases (`idle` / `awaiting_followup`)
+apps/vscode/src/sdk/task-telemetry-tracker.ts:270:	 *    active (the tracker is already cleared); `awaiting_followup`
+apps/vscode/src/sdk/sdk-compaction-coordinator.ts:107:	 * left behind (typically `awaiting_followup`), and the TaskHeader
+apps/vscode/src/sdk/sdk-compaction-coordinator.ts:138:	 * (idle / awaiting_followup / completed / resumable / error /
+apps/vscode/src/sdk/sdk-compaction-coordinator.ts:156:	 *                           signal only for `awaiting_followup`
+apps/vscode/src/sdk/sdk-compaction-coordinator.ts:172:	 * (`awaiting_followup`) from it, which is not derivable from
+apps/vscode/src/sdk/sdk-compaction-coordinator.ts:174:	 * awaiting_followup vs idle distinction (it requires the
+apps/vscode/src/sdk/sdk-compaction-coordinator.ts:456:	 *   * entry phase already terminal (idle / awaiting_followup /
+apps/vscode/src/sdk/task-state-shadow-recorder.ts:561: *   D08_FOLLOWUP_EXTERNAL    host awaiting_followup projection
+apps/vscode/src/sdk/task-state-shadow-recorder.ts:570:	if (shadowPhase === "awaiting_followup" || legacyPhase === "awaiting_followup") {
+apps/vscode/src/sdk/task-state-shadow-recorder.ts:584:	// (awaiting_followup and awaiting_approval were eliminated above).
+apps/vscode/src/sdk/task-telemetry-tracker.test.ts:270:	it("THA28b: awaiting_followup does NOT freeze — same task continues", () => {
+apps/vscode/src/sdk/task-telemetry-tracker.test.ts:274:		t.observeTurnPhase("awaiting_followup", 1_700_000_030_000)
+apps/vscode/src/sdk/task-telemetry-tracker.test.ts:442:	it("THA39: idle and awaiting_followup do NOT reopen (terminal freeze is per stopped interval)", () => {
+apps/vscode/src/sdk/task-telemetry-tracker.test.ts:452:		// awaiting_followup: same task continues when user replies;
+apps/vscode/src/sdk/task-telemetry-tracker.test.ts:454:		// awaiting_followup transition does not unfreeze either.
+apps/vscode/src/sdk/task-telemetry-tracker.test.ts:455:		t.observeTurnPhase("awaiting_followup")
+apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts:372:	//   - the ask message is emitted under phase `awaiting_followup`
+apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts:377:	it("emits mistake_limit_reached as awaiting_followup advisory and resolves continue with guidance", async () => {
+apps/vscode/src/sdk/sdk-interaction-coordinator.test.ts:403:		expect(setTurnPhase).toHaveBeenCalledWith("awaiting_followup", ask.ts, expect.any(String))
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:53:		const { coordinator, phaseWhenCompactionStarted } = makeHarness({ entryPhase: "awaiting_followup" })
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:64:		expect(phaseWhenCompactionStarted()).not.toBe("awaiting_followup")
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:68:		const { coordinator, phaseWhenCompactionStarted } = makeHarness({ entryPhase: "awaiting_followup" })
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:94:		const { coordinator, tracker } = makeHarness({ entryPhase: "awaiting_followup", entryAnchorTs: 4242 })
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:101:		expect(tracker.get().phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:106:		const { coordinator, tracker } = makeHarness({ entryPhase: "awaiting_followup", entryAnchorTs: 99 })
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:111:		expect(tracker.get().phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:126:		expect(stateLabel("awaiting_followup").label).toBe("Waiting")
+apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts:137:		const { coordinator, options, phaseWhenCompactionStarted } = makeHarness({ entryPhase: "awaiting_followup" })
+apps/vscode/src/sdk/task-state-shadow-host-wiring.ts:138:	 * phase (completed / awaiting_followup / resumable / error).
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:105:		const entryPhase: TurnPhase = "awaiting_followup"
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:123:		const entryPhase: TurnPhase = "awaiting_followup"
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:143:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:160:		const { coordinator, phaseWhenCompactionStarted } = makeHarness({ entryPhase: "awaiting_followup" })
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:172:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:182:		expect(last.turnState.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:188:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:196:		expect(last.turnState.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:206:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:218:		expect(publications.attempted.map((s) => s.turnState.phase)).toEqual(["compacting", "compacting", "awaiting_followup"])
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:219:		expect(publications.delivered.map((s) => s.turnState.phase)).toEqual(["compacting", "compacting", "awaiting_followup"])
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:222:		expect(publications.delivered.at(-1)!.turnState.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:227:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:242:			"awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:243:			"awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:248:			"awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:249:			"awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:267:		//                               #4 awaiting_followup
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:268:		//   - LAST DELIVERED phase = awaiting_followup
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:275:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:291:		expect(publications.delivered.map((s) => s.turnState.phase)).toEqual(["compacting", "compacting", "awaiting_followup"])
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:295:		expect(publications.delivered.at(-1)!.turnState.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:315:		//                                #4 awaiting_followup]
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:326:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:339:		expect(publications.attempted[2]!.turnState.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/sdk-compaction-coordinator.restore-publication.test.ts:344:		expect(publications.delivered.map((s) => s.turnState.phase)).toEqual(["compacting", "compacting", "awaiting_followup"])
+apps/vscode/src/sdk/message-translator.ts:361:	 * transition to a user-owned phase (awaiting_followup / completed) when this
+apps/vscode/src/sdk/message-translator.ts:1366:					// "awaiting_followup".
+apps/vscode/src/sdk/message-translator.ts:1923:			// used this turn, otherwise awaiting_followup) — never from the message tail.
+apps/vscode/src/sdk/message-translator.ts:1967:			// ThisTurn` stays false; the coordinator refuses the awaiting_followup
+apps/vscode/src/sdk/message-translator.ts:1979:				// gate refuses the awaiting_followup / completed promotion.
+apps/vscode/src/sdk/message-translator.ts:2019:			// (footer shows Retry / Start New Task) instead of awaiting_followup.
+apps/vscode/src/sdk/__tests__/task-header-live-activity-coherence.lac01.helpers.ts:67:		case "awaiting_followup":
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:10: * which fires `setTurnPhase("awaiting_followup",
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:11: * undefined, "session-event-turn-complete-resumable-straggler-preserve")`
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:18: *      A actual = awaiting_followup
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:19: *    and B/C/D also awaiting_followup."
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:28: *    remains only: expect(after.phase).not.toBe('awaiting_followup')."
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:38: *     RED: `after.phase === "awaiting_followup"`. This is the
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:42: *     `() => true`) goes GREEN: `after.phase !== "awaiting_followup"`.
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:44: *   - Cases B, C, D (`awaiting_followup` preservation controls) go
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:52: *      -> RED: phase must NOT become awaiting_followup
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:55: *      -> awaiting_followup preserved (control)
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:58: *      -> awaiting_followup preserved (control; isolation)
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:61: *      -> awaiting_followup preserved (control; terminal state)
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:82: *     `setTurnPhase("awaiting_followup", ...)`. When the active
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:216:		"session-event-turn-complete-resumable-straggler-preserve",
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:218:		(r) => r.previous.phase === "streaming" && r.committed.phase === "awaiting_followup",
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:237:		it("Q5-A PRE-REPAIR baseline: current session owns RUNNING J + done-without-completion -> awaiting_followup (ADJUDICATED RED)", async () => {
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:243:			// `awaiting_followup` transition - confirming the bug.
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:249:			// RED proven: phase became awaiting_followup despite the
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:253:			expect(afterPhase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:257:		it("Q5-A POST-REPAIR: current session owns RUNNING J + done-without-completion -> phase NOT awaiting_followup (GREEN after composition seam repair)", async () => {
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:263:			// wired correctly, the `awaiting_followup` transition is
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:270:			// GREEN: phase did NOT become awaiting_followup. The writer
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:272:			expect(afterPhase, "post-repair MUST NOT transition to awaiting_followup when active session owns RUNNING J").not.toBe(
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:273:				"awaiting_followup",
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:278:		it("Q5-B control: current session owns NO RUNNING J -> awaiting_followup preserved (control / unchanged)", async () => {
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:280:			// session NOT owning a RUNNING job, the `awaiting_followup`
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:289:			expect(afterPhase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:293:		it("Q5-B control (option omitted): current session owns NO RUNNING J -> awaiting_followup preserved (option omitted == pre-Q5 behavior)", async () => {
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:299:			// `awaiting_followup` unconditionally).
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:305:			expect(afterPhase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:309:		it("Q5-C control: another session owns RUNNING J -> awaiting_followup preserved (isolation control)", async () => {
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:317:			// `awaiting_followup` as expected.
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:329:			// `awaiting_followup` because the active session does not
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:331:			expect(afterPhase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:335:		it("Q5-D control: current session's J is completed (terminal state) -> awaiting_followup preserved (terminal state doesn't count)", async () => {
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:340:			// `awaiting_followup` as expected.
+apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts:346:			expect(afterPhase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:86:	it("THCP02: host legacy `compacting` beats canonical shadow `awaiting_followup` → source='host', phase='compacting'", () => {
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:89:				canonicalShadowPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:122:	it("THCP01: shadow `awaiting_followup` beats stale legacy `streaming` → source='shadow', TaskHeader shows Waiting not Working", () => {
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:125:				canonicalShadowPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:130:		expect(out).toEqual({ phase: "awaiting_followup", source: "shadow", seq: 5 })
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:133:	it("THCP03: shadow `awaiting_followup` beats stale legacy `streaming` (user-owned incomplete yield) → source='shadow'", () => {
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:140:				canonicalShadowPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:145:		expect(out).toEqual({ phase: "awaiting_followup", source: "shadow", seq: 11 })
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:198:			inputs({ canonicalShadowPhase: "awaiting_followup", currentLegacyPhase: "streaming", seq: 1 }),
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:201:			inputs({ canonicalShadowPhase: "awaiting_followup", currentLegacyPhase: "idle", seq: 1 }),
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:203:		expect(a.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:204:		expect(b.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:211:			inputs({ canonicalShadowPhase: "awaiting_followup", currentLegacyPhase: "streaming", seq: 1 }),
+apps/vscode/src/sdk/__tests__/task-state-shadow-task-header-presentation.thcp01.test.ts:229:		expect(a.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/SdkController.ts:1806:			// precedent for resolving `compacting` + `awaiting_followup`)
+apps/vscode/src/sdk/SdkController.ts:1815:			//   user-owned `awaiting_followup` distinction the LIVE bug
+apps/vscode/src/sdk/SdkController.ts:1824:			// `awaiting_followup`) and falls back to the canonical shadow
+apps/vscode/src/sdk/SdkController.ts:1852:			// completion` branch can suppress `awaiting_followup`
+apps/vscode/src/sdk/SdkController.ts:3346:		// after a completed / awaiting_followup / resumable / error phase).
+apps/vscode/src/sdk/SdkController.ts:3354:				turnStateBefore.phase === "awaiting_followup")
+apps/vscode/src/sdk/SdkController.ts:3372:		// Thinking + Cancel (and not the stale resumable/completed/awaiting_followup buttons or the
+apps/vscode/src/sdk/SdkController.ts:3374:		// session-event coordinator will set the terminal phase (completed/awaiting_followup/error)
+apps/vscode/src/sdk/SdkController.ts:4581:				//      awaiting_approval / awaiting_followup / completed /
+apps/vscode/src/sdk/__tests__/e7-local-backend-activation.c25-c5-correction01.test.ts:660:			"awaiting_followup",
+apps/vscode/src/sdk/__tests__/post-terminal-authority-diagnostic-pushid.test.ts:81:					turnState: { phase: "awaiting_followup" as const, seq: 15 },
+apps/vscode/src/sdk/__tests__/runtime-epoch-transition-active-turnstate-repair01.synthetic-real.test.ts:383:			writerId: "session-event-turn-complete-resumable-straggler-preserve",
+apps/vscode/src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts:38: *       - whether user ownership is yielded (composer enabled + awaiting_followup)
+apps/vscode/src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts:44: *       CASE_C_EXPLICIT_USER_YIELD      (redundant — awaiting_followup is the contract)
+apps/vscode/src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts:527:	// (not `awaiting_followup`), so the contract is NOT a user yield.
+apps/vscode/src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts:528:	const userOwnershipYielded = inputs.finalStatus === "awaiting_followup"
+apps/vscode/src/sdk/__tests__/task-state-shadow-workload-matrix.test.ts:494:		// from HOST_TASK ingress under awaiting_followup legacy
+apps/vscode/src/sdk/__tests__/task-state-shadow-workload-matrix.test.ts:502:			legacyPhase: () => "awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc15.test.ts:220:			if (live === "awaiting_followup") return "awaiting_followup"
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:15://                              previous.phase=awaiting_followup
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:98://   turnState = awaiting_followup
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:209:			"awaiting_followup",
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:213:		expect(tracker.currentPhase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:249:			"awaiting_followup",
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:253:		expect(tracker.currentPhase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:292:			"awaiting_followup",
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:326:			"awaiting_followup",
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01.test.ts:341:		expect(askResp?.previous.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:4: * (initial-idle → awaiting_followup → post-clearTask-idle).
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:11: *   4. §5 waiting (awaiting_followup) object
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:30: *           (or with documented override -- awaiting_followup + host)
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:42: *   P3. CASE_B1 (awaiting_followup host override) is preserved through
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:44: *       taskHeaderPresentation.phase == awaiting_followup with the
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:67: *   - TCCC01 CASE_B1 awaiting_followup host override preserved (§5).
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:213:		["idle", "streaming", "awaiting_followup", "completed", "resumable", "error", "compacting"],
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:319:		// setTurnPhase("awaiting_followup") per sdk-session-event-coordinator.
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:332:		// Capture 3: WAITING (awaiting_followup). CASE_B1 conservation.
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:392:	it("AOC02-§5-C: WAITING capture sWaiting is REAL (turnState.phase === 'awaiting_followup' after agent_event(done) without attempt_completion)", () => {
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:394:		// Without attempt_completion the phase is "awaiting_followup"
+apps/vscode/src/sdk/__tests__/application-ownership-control-coherence.aoc02.c24-c-bridge.test.ts:398:		expect(sWaiting.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-state-shadow-arbiter-mapper.c25-c5-elm02f.test.ts:177:		for (const phase of ["completed", "error", "resumable", "awaiting_followup"] as const) {
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc01.c24-c-bridge.test.ts:574:			["idle", "completed", "awaiting_followup", "error"].includes(taskHeaderPresentation.phase),
+apps/vscode/src/sdk/__tests__/task-state-shadow-thinking-presentation.e7.1.test.ts:121:		for (const phase of ["idle", "awaiting_approval", "awaiting_followup", "completed", "error", "resumable"] as const) {
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01-c01-real-seam.test.ts:222:		// walk seq to compaction-restore-entry-preserve awaiting_followup,
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01-c01-real-seam.test.ts:235:		turnStateTracker.setWithWriter("awaiting_followup", undefined, {
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01-c01-real-seam.test.ts:298:		turnStateTracker.setWithWriter("awaiting_followup", undefined, {
+apps/vscode/src/sdk/__tests__/ask-response-epoch-turnstate-coherence.aretc01-c01-real-seam.test.ts:355:		turnStateTracker.setWithWriter("awaiting_followup", undefined, {
+apps/vscode/src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts:39://     2. HOST AWAITING_FOLLOWUP OVERRIDE     (currentLegacyPhase === "awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts:196:	it("TUSA01-REG_HOST_AWAITING_FOLLOWUP: host legacy awaiting_followup beats UNBOUND shadow idle", () => {
+apps/vscode/src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts:198:		// awaiting_followup label, regardless of shadow binding.
+apps/vscode/src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts:202:				currentLegacyPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts:206:		expect(out.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts:216:				canonicalShadowPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-header-unbound-shadow-authority.tusa01.test.ts:222:		expect(out.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.test.tsx:493:	it("phase awaiting_followup also routes a follow-up to askResponse", async () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.test.tsx:494:		mockTurnState = { phase: "awaiting_followup", seq: 3 }
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.test.tsx:514:		mockTurnState = { phase: "awaiting_followup", anchorTs: 2, seq: 3 }
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts:328:					// conversation is continuable — phases "completed" / "awaiting_followup" (the
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts:367:								showPendingMessage: turnState?.phase === "completed" || turnState?.phase === "awaiting_followup",
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:74:		expect(computeIsWaitingForResponse(inputsFor([say(1, "text", false)], { phase: "awaiting_followup", seq: 2 }))).toBe(
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:222:		rerender(inputsFor([say(1, "text", false)], { phase: "awaiting_followup", seq: 2 }))
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:244:		const { result, rerender } = renderLoader(inputsFor([userMessage], { phase: "awaiting_followup", seq: 1 }))
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:336:		"awaiting_followup",
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:428:	// STP01: streaming → awaiting_followup (canonical phase flip, no message deletion)
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:429:	it("STP01: shadow modelStreaming=false clears the loader (streaming → awaiting_followup)", () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:431:		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(2), { phase: "awaiting_followup", seq: 2 }))).toBe(
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:448:	// STP04: streaming → compacting → awaiting_followup
+apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useThinkingLoaderRow.test.tsx:459:		expect(computeIsWaitingForResponse(withShadow(conversation, shadowOff(2), { phase: "awaiting_followup", seq: 2 }))).toBe(
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:9: *   extension truth (per push V):   awaiting_followup / seq 15
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:15: * extension's terminal value (`awaiting_followup / seq 15`).
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:22: *   idle/seq2 → awaiting_followup/seq15
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:40:	{ label: "E5", phase: "awaiting_followup", seq: 15 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:65:	it("RED-2: idle/seq2 → awaiting_followup/seq15 advances the replica", () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:68:		s = applyStateSnapshot(s, [], 0, 0, { phase: "awaiting_followup", seq: 15 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:69:		expect(s.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:86:		s = applyStateSnapshot(s, [], 0, 0, { phase: "awaiting_followup", seq: 15 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:88:		expect(s.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:94:		s = applyStateSnapshot(s, [], 0, 0, { phase: "awaiting_followup", seq: 15 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:101:	it("LIVE: exact E1-E9 sequence through the production reducer reaches awaiting_followup/seq15", () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:107:		expect(finalState.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:123:		// after E4: streaming/4 (duplicate); after E5: awaiting_followup/15;
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:124:		// after E6-E9: awaiting_followup/15 (stragglers all rejected by seq gate).
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:129:		expect(trace[4]).toEqual({ label: "E5", phase: "awaiting_followup", seq: 15 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:130:		expect(trace[5]).toEqual({ label: "E6", phase: "awaiting_followup", seq: 15 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:131:		expect(trace[6]).toEqual({ label: "E7", phase: "awaiting_followup", seq: 15 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:132:		expect(trace[7]).toEqual({ label: "E8", phase: "awaiting_followup", seq: 15 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts:133:		expect(trace[8]).toEqual({ label: "E9", phase: "awaiting_followup", seq: 15 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:21: *     turnState.phase                = awaiting_followup
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:23: *     taskHeaderPresentation.phase   = awaiting_followup
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:252:	turnState: makeTurnState("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:253:	taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:306:		expect(committed?.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:308:		expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:330:		// 1. Deliver NEW (awaiting_followup/seq15, stateVersion=5).
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:333:		expect(committed?.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:335:		expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:343:		expect(committed?.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:345:		expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:369:		expect(committed?.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:371:		expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:394:		expect(committed?.turnState?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:396:		expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:524:		turnState: makeTurnState("awaiting_followup", 16),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:525:		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:535:		turnState: makeTurnState("awaiting_followup", 16),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:536:		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 10),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:563:		turnState: makeTurnState("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:564:		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:573:		turnState: makeTurnState("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:574:		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:601:		turnState: makeTurnState("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:602:		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:611:		turnState: makeTurnState("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:643:		turnState: makeTurnState("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:644:		taskHeaderPresentation: makeTaskHeader("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:651:	expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:667:		turnState: makeTurnState("awaiting_followup", 15),
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/aopc02-phase-b-straggler-replay.test.tsx:681:	expect(committed?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/CompletionOutputRow.tsx:36:	 * non-completed runtime state (streaming, awaiting_followup, error,
+apps/vscode/webview-ui/src/components/chat/CompletionOutputRow.tsx:52: * (streaming / awaiting_followup / error / resumable / partial / plan mode),
+apps/vscode/src/sdk/__tests__/task-header-projection-coherence-repair01.tcr01.test.ts:1004:				canonicalShadowPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-header-projection-coherence-repair01.tcr01.test.ts:1016:				canonicalShadowPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-header-projection-coherence-repair01.tcr01.test.ts:1022:		expect(out).toEqual({ phase: "awaiting_followup", source: "shadow", seq: 7 })
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:34: *   AOPC02 W1 projection fencing or CASE_B1 awaiting_followup host
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:211:		// awaiting_followup phase. The production buttonsForPhase path
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:245://   1. W1-A: phase=awaiting_followup/15, taskHeaderPresentation.phase=
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:246://      awaiting_followup (source="host"), thinkingPresentation.modelStreaming=
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:255:	it("AOC01: W1-A awaiting_followup -> W1-B idle — does the committed state reproduce Idle + Cancel?", async () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:269:		// override forces awaiting_followup projection).
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:273:			turnState: { phase: "awaiting_followup", seq: 15, anchorTs: 3 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:274:			taskHeaderPresentation: { phase: "awaiting_followup", source: "host", seq: 15 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:288:		expect(w1aCapture?.turnState?.phase, "W1-A committed turnState.phase").toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:289:		expect(w1aCapture?.taskHeaderPresentation?.phase, "W1-A committed taskHeaderPresentation.phase").toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:298:		// Sanity: at W1-A (awaiting_followup), the production buttons
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:304:		// epoch) that moves the canonical phase from awaiting_followup
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:387:	// newer committed state claims awaiting_followup.
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:397:	it("AOC01-B: stale same-epoch W1 straggler with idle phase cannot downgrade committed awaiting_followup", async () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:409:		// Newer truthful state: awaiting_followup, source="host"
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:413:			turnState: { phase: "awaiting_followup", seq: 30, anchorTs: 3 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:414:			taskHeaderPresentation: { phase: "awaiting_followup", source: "host", seq: 30 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:427:		expect(truthfulCapture?.taskHeaderPresentation?.phase).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:432:		// awaiting_followup.seq=30 is rejected), but this also tests the
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:459:		).toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:550:	// (turnState.phase advanced awaiting_followup -> idle) but the
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:575:			turnState: { phase: "awaiting_followup", seq: 15, anchorTs: 3 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc01.test.tsx:576:			taskHeaderPresentation: { phase: "awaiting_followup", source: "host", seq: 15 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:28: *       initial / active / awaiting_followup / clearTask->idle
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:50: *   - TCCC01 CASE_B1 awaiting_followup host override preserved
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:332:			turnState: { phase: "awaiting_followup", seq: 15, anchorTs: 3 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:333:			taskHeaderPresentation: { phase: "awaiting_followup", source: "host", seq: 15 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:348:		expect(p?.turnStatePhase, "§3 turnState.phase == awaiting_followup (CASE_B1)").toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:349:		expect(p?.taskHeaderPhase, "§3 taskHeader.phase == awaiting_followup").toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:372:			turnState: { phase: "awaiting_followup", seq: 15, anchorTs: 3 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:373:			taskHeaderPresentation: { phase: "awaiting_followup", source: "host", seq: 15 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:417:		expect(p?.turnStatePhase, "§4 turnState.phase unchanged after partial").toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:418:		expect(p?.taskHeaderPhase, "§4 taskHeader.phase unchanged after partial").toBe("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:442:			turnState: { phase: "awaiting_followup", seq: 15, anchorTs: 3 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:443:			taskHeaderPresentation: { phase: "awaiting_followup", source: "host", seq: 15 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:530:			turnState: { phase: "awaiting_followup", seq: 15, anchorTs: 3 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/application-ownership-control-coherence.aoc02.section6.test.tsx:531:			taskHeaderPresentation: { phase: "awaiting_followup", source: "host", seq: 15 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:15: *     W1 host/raw turnState = awaiting_followup/34
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:36: *      awaiting_followup/34 -> idle/3 persists.
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:48: *   R2 - W1 wire stamped with epoch=2, host awaiting_followup/34 -> committed
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:49: *        awaiting_followup/34. Mirrors the live P35 row.
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:322:	// terminal time, carrying turnState=awaiting_followup/34.
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:324:	it("R2: W1 wire stamped epoch=2, prevState epoch=2, host awaiting_followup/34 -> committed awaiting_followup/34", async () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:349:		// with epoch=2, carrying turnState=awaiting_followup/34.
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:356:					turnState: { phase: "awaiting_followup", seq: 34 },
+apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/w1-epoch-domain-mismatch-red-fix01.test.tsx:366:		expect(observed).toEqual({ phase: "awaiting_followup", seq: 34 })
+apps/vscode/webview-ui/src/components/chat/__tests__/RequestStartRow.turnState-lifecycle.test.tsx:123:	it("shimmer is hidden when turnState is awaiting_followup (terminal-ish)", () => {
+apps/vscode/webview-ui/src/components/chat/__tests__/RequestStartRow.turnState-lifecycle.test.tsx:129:			turnState: turnState("awaiting_followup"),
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:16://     legacy compacting + shadow awaiting_followup
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:40://     T0: ordinary state — entry phase = awaiting_followup
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:42://         expected projection: phase = awaiting_followup, source = legacy
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:54://         expected projection: phase = awaiting_followup, source = legacy
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:143:		const entryPhase: TurnPhase = "awaiting_followup"
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:166:		const entryPhase: TurnPhase = "awaiting_followup"
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:188:		const entryPhase: TurnPhase = "awaiting_followup"
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:203:		// the entry phase here is "awaiting_followup", which is a host-
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:207:		// source = "host" (via the new awaiting_followup host-override
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:223:		const { coordinator, captured } = makeHarness({ entryPhase: "awaiting_followup" })
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:244:		// itself a host-owned phase ("awaiting_followup" is the
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:255:		const { coordinator, captured } = makeHarness({ entryPhase: "awaiting_followup" })
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.task-header-projection.thcp11.test.ts:289:		const { coordinator, captured } = makeHarness({ entryPhase: "awaiting_followup" })
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts:63: *                                   ("awaiting_followup") depending on
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts:299:		// event drives setTurnPhase("awaiting_followup") when no
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts:377:	it("AOPC02-CORRECTION02-POSTTURN01: REAL post-turn snapshot B was captured (turnState.phase in {completed, awaiting_followup, error})", () => {
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts:382:		// expected phase is "awaiting_followup".
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction02.c24-c-bridge.test.ts:386:		expect(["completed", "awaiting_followup", "error"]).toContain(postTurnPhase)
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:47:// `"awaiting_followup"` from activity alone. `awaiting_followup` requires
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:50:// activity bit. Idle runtime does not imply awaiting_followup.
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:68://   * When the entry phase is already terminal (idle / awaiting_followup /
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:232:	it("CLTCC01 (CORRECTED): stale legacy 'streaming' + canonical 'idle' -> restore to canonical 'idle' (NOT 'awaiting_followup')", async () => {
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:233:		// CORRECTION01: the canonical projection owns the awaiting_followup
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:235:		// the restore writes idle -- not awaiting_followup. The previous
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:236:		// incarnation of this ACT hardcoded awaiting_followup, which
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:258:		expect(last!.turnState.phase).not.toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:263:	it("CLTCC02 (CORRECTED): stale legacy 'streaming' + canonical 'awaiting_followup' -> restore to canonical 'awaiting_followup'", async () => {
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:265:		// (awaitingFollowup) that distinguishes awaiting_followup from
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:266:		// idle. When the canonical projection reports awaiting_followup,
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:267:		// the restore writes awaiting_followup. This is the second
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:273:			canonicalProjection: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:282:		expect(last.turnState.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:289:		// awaiting_followup destination; it routes whatever the
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:346:		expect(last.turnState.phase).not.toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:349:	it("CLTCC06 (GREEN conservation): entry phase already 'awaiting_followup' (terminal owner) -> preserves phase === 'awaiting_followup'", async () => {
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:350:		// Conservation: the canonical 'awaiting_followup' ->
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:351:		// 'awaiting_followup' round-trip already pinned by
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:356:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:367:		expect(last.turnState.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:449:			entryPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:560://   entry.phase \ canonical | undefined | idle | awaiting_followup | completed | resumable | error
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc01.test.ts:564://   awaiting_followup (T)  | preserve  | preserve | preserve    | preserve  | preserve  | preserve
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.ts:37: * the error phase set — the UI phase is `awaiting_followup`, the same as
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.ts:234:// task). Mistake-limit advisories route through `awaiting_followup` so the
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.ts:389: * `awaiting_followup`, so the input is enabled and the message text drives
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.ts:413:			// mistake_limit_reached is emitted under `awaiting_followup` so the
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.ts:417:		case "awaiting_followup":
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.test.ts:44:	"awaiting_followup",
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.test.ts:134:	// CUI09: awaiting_followup.
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.test.ts:135:	it("CUI09: awaiting_followup is terminal + non-live + follow-up slot", () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.test.ts:136:		const ts = turnState("awaiting_followup")
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.test.ts:158:			awaiting_followup: { live: false, terminal: true, followup: true, queued: false },
+apps/vscode/src/sdk/__tests__/task-header-canonical-task-activity-ownership.cta01.test.ts:27: * undefined` — and mapped it to phase `awaiting_followup` with
+apps/vscode/src/sdk/__tests__/task-header-canonical-task-activity-ownership.cta01.test.ts:42: *      `awaiting_followup` ("Waiting") replaces one defect
+apps/vscode/src/sdk/__tests__/task-header-canonical-task-activity-ownership.cta01.test.ts:46: *   3. The CTA-suite asserted `awaiting_followup` as the
+apps/vscode/src/sdk/__tests__/task-header-canonical-task-activity-ownership.cta01.test.ts:65: * `taskIsActive => awaiting_followup` rule is NOT currently
+apps/vscode/src/sdk/__tests__/task-header-canonical-task-activity-ownership.cta01.test.ts:126:				canonicalShadowPhase: "awaiting_followup",
+apps/vscode/webview-ui/src/components/chat/terminalReportFraming.test.ts:24:const AWAITING_FOLLOWUP_PHASE: TurnState = { phase: "awaiting_followup", seq: 1 }
+apps/vscode/webview-ui/src/components/chat/terminalReportFraming.test.ts:127:	it("awaiting_followup + say completion_result → no Completed framing (terminal but not completed)", () => {
+apps/vscode/webview-ui/src/components/chat/terminalReportFraming.test.ts:395:	it("marker=true + phase=awaiting_followup → visible Completed", () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.test.ts:90:		it("via TurnState, mistake_limit routes through awaiting_followup with follow-up input", () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.test.ts:97:			const turnState: TurnState = { phase: "awaiting_followup", anchorTs: 42, seq: 7 }
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.test.ts:301:		expect(buttonsForPhase(ts("awaiting_followup"), undefined)).toEqual(BUTTON_CONFIGS.followup)
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.test.ts:317:	// In modern SDK runs the advisory surfaces under `awaiting_followup`
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.test.ts:328:	it("awaiting_followup phase with mistake_limit anchor surfaces the advisory", () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.test.ts:335:		expect(buttonsForPhase(ts("awaiting_followup", 8), mistake)).toEqual(
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.mutations.test.ts:37://   M4  Ignore awaiting_followup in `isRunTerminal` (treat it
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.mutations.test.ts:98:	// M4 — awaiting_followup must be terminal. This is the
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.mutations.test.ts:100:	it("M4: awaiting_followup is terminal", () => {
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.mutations.test.ts:101:		expect(isRunTerminal(ts("awaiting_followup"))).toBe(true)
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/buttonConfig.aoc02.test.ts:48: *   awaiting_followup host override, THCP/LAC/RSP/LTZ/task-control,
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.ts:53: * rule: `completed` (after attempt_completion), `awaiting_followup`
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.ts:67:	return turnState.phase === "completed" || turnState.phase === "awaiting_followup" || turnState.phase === "streaming"
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.ts:94: * `resumable`, and `awaiting_followup` are terminal from the
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.ts:120: * Resume is its own surface), and `awaiting_followup` (agent
+apps/vscode/webview-ui/src/components/chat/chat-view/shared/turnStateSelectors.ts:133:		phase === "idle" || phase === "completed" || phase === "error" || phase === "resumable" || phase === "awaiting_followup"
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:117:		// `awaiting_followup` (truthful user-owned incomplete yield) so the
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:130:		// Liveness: phase transitions to `awaiting_followup` (truthful user-
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:132:		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:151:			(options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "awaiting_followup"),
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:215:		// set "awaiting_followup"/"completed" — doing so would clobber "resumable" and the footer
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:247:		// transition to `awaiting_followup` (truthful user-owned incomplete
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:262:		// Liveness: the phase MUST transition to `awaiting_followup` (the
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:265:		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:438:	// Canonical terminal invariant: a coordinator `setTurnPhase("awaiting_followup")`
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:451:	it("CRA02-coord: done with no committed terminal response DOES promote to awaiting_followup (liveness-corrected)", async () => {
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:461:		// contract ("do NOT promote to awaiting_followup when no terminal
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:471:		// yield — phase `awaiting_followup` (the EXISTING phase-enum contract
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:490:		// Liveness: the phase MUST transition to `awaiting_followup`
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:494:		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:500:	it("CRA02-coord-translator-committed: DOES promote to awaiting_followup when the translator committed a terminal completion_result", async () => {
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:504:		// awaiting_followup. This is the ONLY path that produces a successful terminal
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:518:		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:521:	it("CRA03-coord: attemptCompletionSeen but no committed terminal response yields awaiting_followup (liveness-corrected, post-CPL04)", async () => {
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:526:		// `awaiting_followup`, leaving the turn runtime-owned "streaming".
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:537:		// DO yield to `awaiting_followup` (truthful user-owned incomplete
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:556:		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:564:	// to awaiting_followup" — but that contract left `turnState.phase =
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:571:	// `awaiting_followup`, which is the EXISTING phase-enum contract for
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:574:	// `turnAllowsFollowup()` returns true for `awaiting_followup`, so user
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:581:	it("CPL01: done with no terminal response / no attempt-completion / no error transitions to awaiting_followup (liveness)", async () => {
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:611:		// existing user-owned incomplete-yield phase. `awaiting_followup`
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:616:		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:643:	it("CPL03: done with committed terminal response but NO attempt-completion transitions to awaiting_followup (structural/synthetic control)", async () => {
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:656:		// route the corresponding `done` event to `awaiting_followup` (the
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:659:		// (no terminal commit, no completion tool) yields `awaiting_followup`;
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:661:		// also yields `awaiting_followup` (NOT `completed`) when the
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:674:		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:677:	it("CPL04: done with attempt-completion declared but NO committed terminal response yields awaiting_followup (liveness, symmetric to CPL01)", async () => {
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:692:		// incomplete yield as CPL01: `awaiting_followup`. CRITICAL: do NOT
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:715:		// was committed), AND yields to `awaiting_followup` (no runnable
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:718:		expect(options.setTurnPhase).toHaveBeenCalledWith("awaiting_followup", undefined, expect.any(String))
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:755:	//     taskHeaderPresentation.phase=awaiting_followup  ← this transition
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:768:	//   state. The current CPL01 asserts `setTurnPhase("awaiting_followup",…)`
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:774:	//   automatically.'"). The RED only pins that `awaiting_followup` is
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:784:	//   `awaiting_followup` (CPL01/CRA02 paths).
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:788:	//   `awaiting_followup`. That conservation is out of scope here — this
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:791:	it("OWN01 RED: bare done + no terminal commit + no attempt_completion + no user-yield authority MUST NOT yield to awaiting_followup", async () => {
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:811:		// transfer ownership to the user via `awaiting_followup`. The agent
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:819:		// currently calls `setTurnPhase("awaiting_followup",…)` for this
+apps/vscode/src/sdk/sdk-session-event-coordinator.test.ts:824:			(options.setTurnPhase as ReturnType<typeof vi.fn>)!.mock.calls.some((call) => call[0] === "awaiting_followup"),
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:13: *   TSWPD writer     = session-event-turn-complete-resumable-straggler-preserve
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:15: *   turnState phase  = awaiting_followup
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:41: *   `expect(after.phase).not.toBe('awaiting_followup')`. Given the
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:233:	it("ACAS01.1: CURRENT_BEHAVIOR_WITNESS — real SdkSessionEventCoordinator + done-without-completion branch fires session-event-turn-complete-resumable-straggler-preserve and transitions to awaiting_followup", async () => {
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:271:		expect(after.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:275:			"session-event-turn-complete-resumable-straggler-preserve",
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:278:				r.previous.phase === "streaming" && r.committed.phase === "awaiting_followup",
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:282:			"the production done-without-completion branch MUST stamp a TSWPD record with writerId=session-event-turn-complete-resumable-straggler-preserve and transition streaming -> awaiting_followup (matching the LIVE specimen's TSWPD log for task 1788297479245_hv9w5 / epoch 4)",
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:286:		expect(live.committed.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:340:		expect(source).toContain('"session-event-turn-complete-resumable-straggler-preserve"')
+apps/vscode/src/sdk/__tests__/runtime-task-progression-post-terminal-authority-discriminator.acas01-synthetic-real.test.ts:380:			"session-event-turn-complete-resumable-straggler-preserve",
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:4914:// W16 — awaiting follow-up. With legacy phase awaiting_followup,
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5220:	it("legacy phase awaiting_followup + reconstructed envelope -> D08, if any, must be from HOST_TASK only", () => {
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5221:		// awaiting_followup is a host-only phase. The runtime
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5249:			// Host flips the legacy phase to awaiting_followup
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5251:			{ kind: "set-legacy-phase", phase: "awaiting_followup" },
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5255:			// legacy=awaiting_followup vs shadow=streaming.
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5258:			{ kind: "host-task", taskId: "task-W16", which: "continued", legacyPhase: "awaiting_followup" },
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5266:			// arrives under awaiting_followup legacy phase.
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5278:				legacyPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5282:			// under awaiting_followup. Reverse-translator emits
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5290:				legacyPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5321:		// host awaiting_followup projection), never
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5326:		// awaiting_followup legacy phase) drives the shadow
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5328:		// shadow=streaming vs legacy=awaiting_followup
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:5332:		// awaiting_followup vs shadow=streaming). Verify the
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:6406:		// Host flips the legacy phase to awaiting_followup
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:6408:		{ kind: "set-legacy-phase", phase: "awaiting_followup" },
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:6412:		// legacy=awaiting_followup vs shadow=streaming.
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:6415:		{ kind: "host-task", taskId: "task-W16", which: "continued", legacyPhase: "awaiting_followup" },
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:6423:		// arrives under awaiting_followup legacy phase.
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:6435:			legacyPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:6439:		// under awaiting_followup. Reverse-translator emits
+apps/vscode/src/sdk/__tests__/task-state-shadow-correction02-c23-stateful-workloads.test.ts:6447:			legacyPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:39://      - currentLegacyPhase   -> host-owned `awaiting_followup`
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:61://   entry \ canonical | undefined | idle | awaiting_followup | completed | resumable | error
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:67://   awaiting_followup | preserve  | preserv| preserv          | preserve  | preserve  | preserve
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:68://   streaming (NT)    | streaming | idle | awaiting_followup | completed | resumable | error
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:69://   awaiting_approval | awaiting  | idle | awaiting_followup | completed | resumable | error
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:74://   If `currentLegacyPhase == "awaiting_followup"` (host wrote
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:75://   during compaction), `awaiting_followup` wins regardless of
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:129:		"terminal awaiting_followup + canonical idle + live compacting -> awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:130:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:133:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:177:	// (B) HOST-OWNED AWAITING_FOLLOWUP OVERRIDE: currentLegacyPhase = "awaiting_followup"
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:179:	// A legitimate user interaction wrote awaiting_followup during
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:181:	// tracker reads "awaiting_followup" -- this is the ONLY host
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:184:	["awaiting_followup override beats terminal idle entry", "idle", "idle", "awaiting_followup", "awaiting_followup"],
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:186:		"awaiting_followup override beats streaming entry + canonical",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:189:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:190:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:193:		"awaiting_followup override beats non-terminal entry + canonical undefined",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:196:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:197:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:199:	// When entry IS awaiting_followup, the override is redundant
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:200:	// but still returns awaiting_followup (step 1 also returns it).
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:202:		"awaiting_followup override + awaiting_followup entry -> awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:203:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:205:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:206:		"awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:293:	it("factory closure surfaces awaiting_followup host override during compaction", () => {
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:294:		// The session-event coordinator wrote awaiting_followup
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:295:		// during compaction; live tracker reads awaiting_followup;
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:296:		// entry streaming; canonical idle -> awaiting_followup wins.
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:299:			getCurrentLegacyPhase: () => "awaiting_followup",
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:301:		expect(cb("streaming")).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/sdk-compaction-coordinator.legacy-turnstate-coherence.cltcc13.test.ts:493:			if (input.currentLegacyPhase === "awaiting_followup") return "awaiting_followup"
+apps/vscode/src/shared/post-terminal-authority-diagnostic-aoc02-live-capture01.test.ts:115:				taskHeaderPresentation: { phase: "awaiting_followup", seq: 15, source: "host" },
+apps/vscode/src/sdk/message-translator.test.ts:110:		// resolves to awaiting_followup instead of completed and the footer shows no
+apps/vscode/src/sdk/message-translator.test.ts:1356:	// `awaiting_followup` / `completed` promotion. The runtime remains the turn
+apps/vscode/src/sdk/message-translator.test.ts:1489:	// is missing, we must NOT promote to awaiting_followup with the partial completion_result
+apps/vscode/src/sdk/message-translator.test.ts:1509:		// awaiting_followup promotion.
+apps/vscode/src/sdk/message-translator.test.ts:1517:	// runtime-owned (no awaiting_followup promotion by the coordinator).
+apps/vscode/src/sdk/message-translator.test.ts:2199:		// refuses the awaiting_followup promotion.
+apps/vscode/src/sdk/turn-state-tracker.test.ts:144:			// turn coordinator sets completed/error/awaiting_followup —
+apps/vscode/src/sdk/turn-state-tracker.test.ts:152:			for (const terminal of ["error", "resumable", "completed", "awaiting_followup"] as const) {
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:8: *     turnState.phase                = awaiting_followup
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:21: *   side: TaskHeader collapses awaiting_followup to idle.
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:30: *     B.turnState.phase                = awaiting_followup
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:31: *     B.taskHeaderPresentation.phase   = awaiting_followup  <-- NOT idle
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:34: *     tracker.currentPhase             = awaiting_followup
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:39: *   currentLegacyPhase=awaiting_followup produces
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:40: *   taskHeaderPresentation.phase=awaiting_followup.
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:51: *     extension emits:   turnState.phase = awaiting_followup / seq 15
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:55: *   awaiting_followup/seq15. That is a WEBVIEW-REDUCER straggler-
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:313:		// YIELD/TERMINAL PHASE: agent_event(done) -> awaiting_followup.
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:406:	// this would RED (awaiting_followup -> idle). We assert it here so
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:424:	it("THP-B03-HOST-COMPACTION / ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1: if B.taskHeaderPresentation.source === 'host' THEN B.taskHeaderPresentation.phase ∈ {compacting, awaiting_followup}", () => {
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:428:		// "compacting" (THCP11 host-override) and "awaiting_followup"
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:435:			expect(["compacting", "awaiting_followup"]).toContain(proj.phase)
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:473:	it("POSITIVE-CONTROL: selectTaskHeaderPresentation host-overrides awaiting_followup regardless of shadow presence (TCCC01-B1)", () => {
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:475:		// awaiting_followup is a host-owned phase (the canonical
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:479:		// `"legacy"`. The user-visible phase ("awaiting_followup"
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:483:			currentLegacyPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:486:		expect(proj).toEqual({ phase: "awaiting_followup", source: "host", seq: 42 })
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:522:		//   "awaiting_followup".
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:525:		//   B.turnState.phase                = "awaiting_followup"
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:526:		//   B.taskHeaderPresentation.phase   = "awaiting_followup"
+apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts:535:		expect(["awaiting_followup", "completed", "error"]).toContain(snapshotB.turnState!.phase)
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts:9: * THA08 inverted — `awaiting_followup` is now LIVE (same task
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts:72:	it("THA28b: awaiting_followup keeps ticking (no endedAt on the wire)", () => {
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts:105:	it("THA08 (CORRECTION01): awaiting_followup → Waiting (LIVE — same task continues)", () => {
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts:106:		expect(stateLabel("awaiting_followup")).toEqual({ label: "Waiting", glyph: "…", live: true })
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts:155:	it("THCP01 (helper): when projection says awaiting_followup, label is Waiting (not Working from stale streaming)", () => {
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts:158:		// `awaiting_followup`. The helper must follow the projection.
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts:160:		const p = projection("awaiting_followup", "shadow", 5)
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts:5: *   - `awaiting_followup` is now `live: true` — the elapsed clock
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts:134:	 * (`error` / `resumable` / `completed`). `awaiting_followup`
+apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts:154:		case "awaiting_followup":
+apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx:66:			["awaiting_followup", "Waiting"],
+apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx:123:	it("THA28b: awaiting_followup keeps the timer live (no endedAt from the host)", () => {
+apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx:125:		render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("awaiting_followup")} />)
+apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx:134:	// awaiting_followup), the elapsed display must visibly advance at
+apps/vscode/src/sdk/sdk-interaction-coordinator.ts:142:	 * (awaiting_approval / awaiting_followup) and when the user responds (back to streaming).
+apps/vscode/src/sdk/sdk-interaction-coordinator.ts:368:		// `awaiting_followup` puts the input enabled and keeps the session
+apps/vscode/src/sdk/sdk-interaction-coordinator.ts:369:		// resumable (cf. buttonConfig.buttonsForPhase "awaiting_followup").
+apps/vscode/src/sdk/sdk-interaction-coordinator.ts:370:		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts, "interaction-handle-mistake-limit")
+apps/vscode/src/sdk/sdk-interaction-coordinator.ts:898:		this.options.setTurnPhase?.("awaiting_followup", askMessage.ts, "interaction-handle-ask-question")
+apps/vscode/src/sdk/__tests__/task-state-shadow-recorder.test.ts:101:	it("classifies awaiting_followup as D08 (host-only projection) regardless of side", () => {
+apps/vscode/src/sdk/__tests__/task-state-shadow-recorder.test.ts:106:				legacyPhase: "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:19: *   then `turnState.phase === "awaiting_followup"` AND the
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:26: * `currentLegacyPhase === "awaiting_followup"` as an authoritative
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:27: * host-owned label. The shadow cannot represent `awaiting_followup`;
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:55:		case "awaiting_followup":
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:103:	it("P1: at awaiting_followup with observed shadow projecting 'idle', the production selector MUST collapse to awaiting_followup (CASE_B1 RED before repair)", () => {
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:108:		tracker.set("awaiting_followup", askMessageTs)
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:115:		expect.soft(turnState.phase, "legacy phase must be awaiting_followup (real Continue authority)").toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:121:				"taskHeaderPresentation.phase must NOT be 'idle' when legacy is awaiting_followup (CASE_B1)",
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:127:				"taskHeaderPresentation.phase MUST equal 'awaiting_followup' for coherent publication",
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:129:			.toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:130:		expect.soft(taskHeaderProjection.source, "host is the only authority that can represent awaiting_followup").toBe("host")
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:137:	it("P2: at awaiting_followup with NO observed shadow, the selector returns awaiting_followup via the host-override branch (mirroring compaction precedent)", () => {
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:138:		tracker.set("awaiting_followup", 12345)
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:145:		expect.soft(turnState.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:146:		expect.soft(taskHeaderProjection.phase, "user-visible phase MUST surface awaiting_followup").toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:150:				"host override wins when currentLegacyPhase === awaiting_followup (matches compaction precedent)",
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:158:	it("P3: at awaiting_followup with shadow ALSO projecting 'awaiting_followup', the host-override branch still wins (matches compaction precedent)", () => {
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:159:		tracker.set("awaiting_followup", 12345)
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:163:			getCanonicalShadowPhase: () => "awaiting_followup",
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:166:		expect.soft(taskHeaderProjection.phase).toBe("awaiting_followup")
+apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts:170:				"host override wins over shadow for awaiting_followup (same as compaction precedent)",
+sdk/packages/core/src/runtime/host/local-runtime-host.test.ts:5224:		// exercises when the coordinator refuses the awaiting_followup promotion
+apps/vscode/src/shared/turn-state-writer-provenance.ts:71:	| "session-event-turn-complete-resumable-straggler-preserve"
+apps/vscode/src/shared/ExtensionMessage.ts:266:	 * `awaiting_approval` / `awaiting_followup` / `compacting` /
+apps/vscode/src/shared/ExtensionMessage.ts:281:	 *                   awaiting_approval / awaiting_followup /
+apps/vscode/src/shared/ExtensionMessage.ts:569: *                   awaiting_followup / completed / error / resumable).
+apps/vscode/src/shared/ExtensionMessage.ts:589:	 * `awaiting_approval` / `awaiting_followup` / `compacting` /
+apps/vscode/src/shared/ExtensionMessage.ts:617:	| "awaiting_followup" // ask_question / plan_mode_respond / done-without-completion
+apps/vscode/src/shared/ExtensionMessage.ts:622:	// human wait (`awaiting_followup`): no user action is actionable
+apps/vscode/src/shared/ExtensionMessage.ts:671: *                              (`awaiting_followup` — the same task

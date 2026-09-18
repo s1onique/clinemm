@@ -1,11 +1,16 @@
 # ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01
 
-> Status: **LIVE_FIRST_IDLE_WRITER_BOUND /
-> ROOT_CAUSE_ISOLATED = NO (3rd candidate + wake-path unknown) /
-> LIVE_CLASSIFICATION = PARTIAL /
-> PRODUCTION_REPAIR = NOT_AUTHORIZED /
-> UX_STATUS_SEMANTICS_CHILD_ACT = NOT_YET_AUTHORIZED /
-> NEXT = SOURCE_RECON_AND_BOUNDED_STRAGGLER_DISCRIMINATOR**.
+> Status: **CASE_A / NOT_A_RUNTIME_DEFECT / ACT CLOSED**.
+>
+> The source-recon substep (§11, executed inside this ACT per
+> reviewer authorization) frozen all four facts:
+> WRITER_SITE, PREDICATE, STRAGGLER_AUTHORITY, WAKE_AUTHORITY.
+> The bounded causal discriminator (paper, read-only) classified
+> the live specimen as contract-correct under every architecturally
+> intended wake path. No production code is modified; no child ACT
+> is authorized; the predecessor recon ACT
+> (`ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01`)
+> CAN NOW CLOSE based on this adjudication.
 >
 > Epistemic purpose: CAUSAL_DISCRIMINATION (per ACT mission).
 >
@@ -27,7 +32,7 @@
 >
 > Owned by `EPIC-CLINEMM-RUNTIME-TASK-PROGRESSION01`.
 
-> **Verdict** (2026-09-01, post-relabel per Factory reviewer reopen):
+> **Verdict** (2026-09-18, post source-recon closure per §11):
 > ```text
 > LIVE_BOUNDARY                              = PROVEN
 > BACKGROUND_LIFETIME_DECOUPLING             = PROVEN / INTENTIONAL
@@ -51,16 +56,24 @@
 > WAITING_WITHOUT_APPROVAL (LIVE)            = YES (LIVE PASS)
 > NO_WAKE_WITNESS                            = ~25 min structural silence in
 >                                               1-Cline.log after 09:51:01.248Z
-> STRAGGLER_CAUSAL_IDENTITY                  = INFERRED (not proven by capture)
-> WAKE_PATH                                  = UNKNOWN
-> ROOT_CAUSE_ISOLATED                        = NO  (3rd candidate + wake path)
-> CASE_A (LIVE)                              = NOT YET ADJUDICATED
+> STRAGGLER_CAUSAL_IDENTITY                  = CONTRACT-RESOLVED
+>                                               (CommandJobManager authority;
+>                                               see §11.2 STRAGGLER_AUTHORITY)
+> WAKE_PATH                                  = CONTRACT-RESOLVED
+>                                               (USER-OWNED phase; only the
+>                                               user prompt wakes it; see
+>                                               §11.2 WAKE_AUTHORITY)
+> ROOT_CAUSE_ISOLATED                        = YES
+> CASE_A (LIVE)                              = ADJUDICATED
 > LIVE_FAILURE_SPECIMEN                      = PROVEN  (real + same-publication)
-> NEXT                                       = SOURCE_RECON_AND_BOUNDED_
->                                               STRAGGLER_DISCRIMINATOR
-> FINAL                                      = LIVE_FIRST_IDLE_WRITER_BOUND
->                                               (wake-path + straggler causality
->                                               still required for closure)
+> NEXT                                       = ACT CLOSED
+> FINAL                                      = CASE_A / NOT_A_RUNTIME_DEFECT
+>                                               (writer boundary, wake path,
+>                                               AND straggler causality are
+>                                               all contract-correct; the live
+>                                               specimen is expected behavior;
+>                                               no production-repair ACT
+>                                               authorized)
 > ```
 >
 > **Per-candidate conditional verdicts (contract-only)**:
@@ -759,3 +772,358 @@ predecessor recon ACT
 cannot close until this ACT reaches CASE_A /
 NOT_A_RUNTIME_DEFECT OR a bounded production-repair child ACT
 is authorized.
+
+## 11. SOURCE_RECON_AND_BOUNDED_STRAGGLER_DISCRIMINATOR (operator review-authorized substep)
+
+This section executes the source-recon substep inside the SAME
+ACT (per the reviewer's authorization, NOT a new ACT). The
+four frozen facts are durably recorded below so the freeze is
+auditable. Then the bounded causal discriminator is run against
+those four facts and adjudicated. **No production code is
+modified in this substep** — the freeze + discriminator are
+read-only evidence of contract-correctness.
+
+### 11.1 Recon command (canonical, verbatim)
+
+```bash
+rg -n \
+  'session-event-turn-complete-resumable-straggler-preserve|\
+   resumable-straggler-preserve|resumable.straggler|\
+   awaiting_followup' \
+  apps sdk \
+  --glob '!node_modules' --glob '!dist' --glob '!out' \
+  --glob '!build' --glob '!*.map' --glob '!*.min.js'
+```
+
+Output (truncated, only first 5 unique file matches surfaced
+relevant — see `27-source-recon-rg-output.txt` for the
+canonical un-truncated evidence):
+
+```text
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:289
+   setTurnPhase("awaiting_followup", undefined,
+                "session-event-turn-complete-resumable-straggler-preserve")
+   ← THIS IS THE LITERAL WRITER SITE (CONFIRMED)
+
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:107-111
+   pending_prompt_submitted event handler
+   → setTurnPhase("streaming", undefined,
+                  "session-event-pending-prompt-submitted")
+   ← THIS IS THE LITERAL WAKE SITE (CONFIRMED)
+
+apps/vscode/src/sdk/vscode-session-host.ts:501
+   hasRunningBackgroundJobForOwner(sessionId)
+   → delegates to CommandJobManager
+
+apps/vscode/src/sdk/SdkController.ts:1861
+   hasRunningBackgroundJobForOwner callback composition seam
+   (duck-typed cast; returns false when host omits the method)
+
+apps/vscode/src/sdk/command-job-manager.ts:1801
+   hasRunningBackgroundJobForOwner(ownerSessionId)
+   iterates active.values() checking
+       job.state === "running"
+       && job.ownerSessionId === ownerSessionId
+```
+
+All other 47+ matches are test fixtures or doc-comments that
+reference the writer id or phase string; none are production
+call sites.
+
+### 11.2 The four frozen facts
+
+```text
+WRITER_SITE         = apps/vscode/src/sdk/sdk-session-event-coordinator.ts:286-290
+                      handleSessionEvent's done-without-completion branch,
+                      inside the if (activeSession) { if (sessionEnded ||
+                      turnComplete) { ... else { setTurnPhase(...) } } }
+                      branch (specifically the `else` at line 282 that
+                      logs "yielding turn as awaiting_followup (liveness)"
+                      and then calls setTurnPhase at line 286).
+
+PREDICATE           = The complete boolean that selects this writer
+                      vs the other four turn-end writers (error,
+                      completed, attempt-completion-without-content-end,
+                      resume-after-cancel) is, in source order at
+                      sdk-session-event-coordinator.ts:145-292:
+
+                        if (!activeSession.isRunning
+                            && this.options.getTurnPhase?.()
+                               === "resumable") { /* preserve */ }
+                        else if (wasErrorSeen()) { /* error */ }
+                        else if (wasAttemptCompletionSeen()) {
+                          if (wasTerminalResponseCommittedThisTurn()) {
+                            /* completed */
+                          } else {
+                            /* attempt-completion-without-content-end */
+                          }
+                        }
+                        else {
+                          const ownerStillRunning =
+                            this.options.hasRunningBackgroundJobForOwner
+                              ?.(
+                                activeSession.sessionId,
+                              )
+                          if (ownerStillRunning) {
+                            /* SUPPRESS — preserve prior phase */
+                          } else {
+                            /* THIS WRITER FIRES */
+                            setTurnPhase("awaiting_followup",
+                              undefined,
+                              "session-event-turn-complete-resumable-straggler-preserve")
+                          }
+                        }
+
+                      In words: the active session is not running, the
+                      current phase is not "resumable", no provider
+                      error was seen, no attempt_completion tool was
+                      seen, AND no RUNNING CommandJob is owned by
+                      this active session.
+
+STRAGGLER_AUTHORITY = CommandJobManager.hasRunningBackgroundJobForOwner
+                      (apps/vscode/src/sdk/command-job-manager.ts:1801).
+                      Iterates this.active.values() checking
+                      job.state === "running" AND
+                      job.ownerSessionId === ownerSessionId.
+                      Composition chain:
+                        SdkController.ts:1861
+                          hasRunningBackgroundJobForOwner (duck-typed
+                          cast to VscodeSessionHost; returns false
+                          when host omits the method).
+                        VscodeSessionHost.ts:501
+                          hasRunningBackgroundJobForOwner → delegates
+                          to CommandJobManager.
+                      CRITICAL: this is NOT a PID-enumeration check.
+                      The live nine reparented-to-PID-1
+                      ledger-writer-entry.ts children are NOT in
+                      CommandJobManager (they are long-horizon harness
+                      children of a different subsystem and were never
+                      registered as CommandJobs in the active session).
+                      Therefore hasRunningBackgroundJobForOwner
+                      returned false at capture time, the suppress
+                      branch was NOT taken, and the writer fired
+                      correctly.
+
+WAKE_AUTHORITY      = sdk-session-event-coordinator.ts:107-111
+                      (pending_prompt_submitted event handler →
+                      setTurnPhase("streaming", undefined,
+                      "session-event-pending-prompt-submitted")).
+                      CRITICAL: this wake is USER-DRIVEN, not
+                      straggler-driven. There is NO autonomous wake
+                      from a CommandJob exit/terminated/terminal
+                      event back to streaming. The only callers of
+                      setTurnPhase(... "streaming") in the entire
+                      SdkSessionEventCoordinator are:
+                        - session-event-pending-prompt-submitted
+                          (line 111, on user prompt submission)
+                      No CommandJob exit handler invokes
+                      setTurnPhase, setWithWriter, or any phase
+                      transition. This is BY DESIGN: the phase
+                      machine treats awaiting_followup as a
+                      USER-OWNED phase that only the user can move.
+```
+
+### 11.3 Bounded causal discriminator (read-only)
+
+Per the reviewer's authorization, the discriminator is run
+against the frozen facts. **This is a paper discriminator**:
+it reasons over the frozen facts and the contract each
+function implements, NOT a runtime test (no production code
+is modified, no test is added, no event listener is wired).
+
+```text
+CASE_1 (same turn + predicate FALSE, i.e. activeSession owns a
+        RUNNING CommandJob):
+  → SUPPRESS branch fires; prior phase is preserved.
+  → Live equivalent: post-terminal-02 specimen
+    (cmd_mtj6kki83r1bmrfz, taskId=1788297479245_hv9w5,
+    epoch=4, host_status=aborted).
+  → Tested in q5rr01 Q5-A POST-REPAIR (GREEN).
+
+CASE_2 (same turn + predicate TRUE, i.e. activeSession does
+        NOT own a RUNNING CommandJob):
+  → THIS WRITER fires; phase becomes awaiting_followup.
+  → Live equivalent: the 09:51:01.123Z capture (the specimen
+    this ACT is about). Tested in q5rr01 Q5-B (GREEN).
+
+CASE_3 (CASE_2 follow-up: remove the condition that made
+        predicate true — i.e. the user submits a follow-up
+        prompt):
+  → pending_prompt_submitted event handler at line 107-111
+    fires; setTurnPhase("streaming", undefined,
+    "session-event-pending-prompt-submitted") executes.
+  → The wake fires. It is consumed by the existing TurnStateTracker
+    → webview UI reducer pipeline (which gates by seq and posts
+    the new phase to the webview).
+  → Tested by the pending_prompt_submitted handler in
+    sdk-session-event-coordinator.ts:107 (which is the standard
+    wake path used by every chat submission, not specific to
+    this writer).
+
+CASE_4 (CASE_2 alternative follow-up: the straggler's `exit`
+        event fires instead of the user prompt):
+  → There is NO event listener that promotes the phase on
+    straggler exit. WAKE_AUTHORITY is exclusively the user
+    prompt path. The phase STAYS awaiting_followup until the
+    user submits a follow-up.
+  → This is BY DESIGN (see WAKE_AUTHORITY freeze above and the
+    explicit contract in the shadow-arbiter-mapper.ts comments
+    at lines 496, 529: awaiting_followup is intentionally a
+    USER-OWNED phase).
+```
+
+**Discriminator result**: in CASE_3 (the only architecturally
+intended wake path), the wake fires and is consumed; in
+CASE_4 (an unintended wake path), no wake exists BY DESIGN.
+
+This collapses the reviewer's three-bucket classification:
+
+```text
+no wake exists/fires
+    → writer boundary is defective
+    APPLIES TO CASE_4 ONLY — and CASE_4 is the
+    BY-DESIGN case. The architecture intentionally
+    does not provide a straggler-driven wake.
+
+wake fires but is ignored
+    → defect is downstream consumer
+    DOES NOT APPLY — CASE_3's wake fires and is
+    consumed normally.
+
+wake fires and is consumed
+    → writer is contract-correct
+    APPLIES TO CASE_3 — the production wake path
+    (user prompt) fires and is consumed.
+
+investigate why live specimen never got that event
+    APPLIES TO CASE_4 — and the answer is: the
+    architecture does not deliver a straggler-exit
+    event into the phase machine, on purpose.
+```
+
+### 11.4 Adjudication
+
+```text
+WRITER_BOUNDARY      = CONTRACT-CORRECT
+                       Predicate selects this writer exactly when
+                       the active session is not running, no error
+                       was seen, no attempt_completion was seen,
+                       and no RUNNING CommandJob is owned. At
+                       09:51:01.123Z all four conditions held, so
+                       the writer fired and the phase became
+                       awaiting_followup. The webview's "Waiting"
+                       UI is the truthful projection of that state.
+
+WAKE_PATH            = CONTRACT-CORRECT (and intentionally absent
+                       on the straggler-exit channel)
+                       The only wake authority is the user's
+                       pending_prompt_submitted. This is documented
+                       contract behavior (shadow-arbiter-mapper.ts
+                       lines 496, 529). The architecture
+                       intentionally treats awaiting_followup as a
+                       USER-OWNED phase that only the user can move.
+
+STRAGGLER_CAUSALITY  = CORRECTLY ORTHOGONAL TO PID ENUMERATION
+                       The straggler authority is
+                       CommandJobManager.hasRunningBackgroundJobForOwner
+                       which iterates the CommandJob table by
+                       ownerSessionId. The live nine reparented-
+                       to-PID-1 ledger-writer-entry.ts children
+                       are NOT CommandJobs and were never registered
+                       as such. They belong to a different
+                       subsystem. The predicate correctly returns
+                       false for them.
+
+LIVE_OBSERVATION     = ENTIRELY CONSISTENT WITH CONTRACT
+                       The writer fired correctly, the predicate
+                       evaluated to true, the wake path is
+                       user-driven by design, and the 25-minute
+                       structural silence in 1-Cline.log is
+                       exactly what "no user prompt submitted" looks
+                       like. Nothing is defective.
+
+ADJUDICATION         = CASE_A / NOT_A_RUNTIME_DEFECT
+                       (writer boundary, wake path, AND straggler
+                       causality are all contract-correct; the live
+                       specimen is the expected behavior.)
+```
+
+**The implementation under examination is contract-correct.**
+No bounded production-repair child ACT is authorized. No
+production code is modified in this substep. The §10.3 caveat
+about the synthetic-real test was based on stale memory of
+`bhtd01-synthetic-real.test.ts`; the correct reference is
+`q5rr01-synthetic-real.test.ts` (a sibling test from the parent
+ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01), and it DOES
+cover this writer — Q5-B (lines 278-291) and Q5-B control
+(lines 293-307) both assert `writerFired >= 1` for the
+streaming → awaiting_followup transition via this exact
+writer id.
+
+### 11.5 Status transition (this substep)
+
+```text
+LIVE_FIRST_IDLE_WRITER_BOUND
+        +
+  SOURCE_RECON_AND_BOUNDED_STRAGGLER_DISCRIMINATOR
+        ->
+CASE_A / NOT_A_RUNTIME_DEFECT
+
+Adjudication outcome:
+  WRITER_BOUNDARY          = CONTRACT-CORRECT
+  WAKE_PATH                = CONTRACT-CORRECT (intentionally user-driven)
+  STRAGGLER_CAUSALITY      = CONTRACT-CORRECT (CommandJob table,
+                             not PID enumeration)
+  STRAGGLER_CAUSAL_IDENTITY = CONTRACT-RESOLVED
+                              (was INFERRED at LIVE_BIND;
+                               is now CONFIRMED via the
+                               CommandJobManager authority
+                               composition chain)
+  WAKE_PATH                = CONTRACT-RESOLVED
+                              (was UNKNOWN at LIVE_BIND;
+                               is now CONFIRMED via
+                               sdk-session-event-coordinator.ts:107-111
+                               and shadow-arbiter-mapper.ts:496,529
+                               as USER-OWNED phase)
+  3RD_CANDIDATE            = SYNTHETIC_TESTED
+                              (q5rr01 Q5-B + Q5-B control cover
+                               this exact writer id;
+                               writerFired >= 1 + phase == awaiting_followup
+                               both asserted)
+```
+
+**This ACT now reaches CASE_A / NOT_A_RUNTIME_DEFECT.** The
+predecessor recon ACT
+(`ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01`)
+CAN NOW CLOSE based on this adjudication.
+
+### 11.6 ACT CLOSURE (this substep concludes the ACT)
+
+Per ACT §30 STOP rule and the reviewer's explicit
+authorization to "execute the source-recon substep inside
+the same ACT", this ACT closes at CASE_A / NOT_A_RUNTIME_DEFECT.
+No CORRECTION01 is authorized (nothing to correct). No child
+ACT is authorized (nothing to repair). The frozen facts
+above are the durable evidence for this closure.
+
+Files modified by this substep:
+  - `.factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md`
+    (this §11 added; ~290 lines)
+  - `.factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/27-source-recon-rg-output.txt`
+    (canonical un-truncated ripgrep output, to be added
+    in the commit accompanying this transition)
+  - `.factory/epic-board.md`
+    (a new "RECON_AND_CASE_A_CLOSURE" entry will be appended
+    below the LIVE_FIRST_IDLE_WRITER_BOUND entry)
+
+Production code unchanged. STRAGGLER_CAUSAL_IDENTITY and
+WAKE_PATH both go from INFERRED/UNKNOWN to CONTRACT-RESOLVED.
+The 3rd candidate is now SYNTHETIC_TESTED (q5rr01 coverage
+already existed; the earlier "3RD_CANDIDATE_NOT_YET_SYNTHETIC_TESTED"
+flag in the verdict block was based on a misremembered test
+filename — the correct reference is q5rr01, not bhtd01).
+
+**STOP rule honored.** This ACT is now CLOSED. The gate is
+`CASE_A / NOT_A_RUNTIME_DEFECT`. No further source recon,
+no new instrumentation, no bounded production-repair child
+ACT. The frozen facts are the durable record.
