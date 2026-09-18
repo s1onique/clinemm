@@ -1,0 +1,57 @@
+# 03-projection-contract.txt — the one-line change + conservation guarantees
+
+## The change
+
+File: apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
+Function: stateLabel(phase: TurnPhase | undefined): StateLabelProjection
+Line: 165 (was 158)
+
+```diff
+-        case "awaiting_followup":
+-            // CORRECTION01: same task continues — elapsed clock keeps
+-            // ticking so the user sees "how long since the task was
+-            // started", not "how long since the agent last produced".
+-            return { label: "Waiting", glyph: "…", live: true }
++        case "awaiting_followup":
++            // ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01:
++            // The agent has yielded; the user owns the next move. The
++            // label must be user-owned action language, not passive
++            // waiting. The runtime never emits awaiting_followup while
++            // a question or approval is pending (awaiting_approval is a
++            // distinct TurnPhase; stateLabel maps it to "Approval"), and
++            // never while the agent is doing genuine active work
++            // (streaming → "Working", compacting → "Compacting").
++            // Elapsed clock keeps ticking (live: true) — the same task
++            // continues when the user replies (CORRECTION01).
++            return { label: "Your turn", glyph: "↳", live: true }
+```
+
+## The four conservation guarantees (restated)
+
+The fix is bounded to a single label string. The rest of the state machine
+and projection contract is unchanged. Specifically:
+
+1. **Question/approval precedence.** The runtime FSM
+   (sdk-session-event-coordinator.ts) never emits awaiting_followup while
+   a question or approval is pending. awaiting_approval is its own
+   TurnPhase and stateLabel maps it to "Approval" (unchanged). Therefore
+   awaiting_followup only fires when no question and no approval is
+   pending, and the new label "Your turn" applies to the exact same
+   semantic class as the old "Waiting".
+
+2. **Background-work conservation.** stateLabel("streaming") still
+   returns { label: "Working", glyph: "●", live: true }. stateLabel
+   ("compacting") still returns { label: "Compacting", glyph: "⌄",
+   live: true }. Neither phase is relabeled. Active background work is
+   visually distinct from "Your turn".
+
+3. **Terminal-state conservation.** stateLabel("completed"), "error",
+   "resumable", "idle", "undefined" are all unchanged.
+
+4. **Live clock conservation.** The same-task-continues invariant
+   (CORRECTION01) is preserved: live: true on awaiting_followup keeps
+   the elapsed clock ticking.
+
+The wire contract is byte-equivalent. The runtime FSM is unchanged. The
+only consumer-visible change is the rendered text of the TaskHeader
+telemetry strip when the phase is awaiting_followup.

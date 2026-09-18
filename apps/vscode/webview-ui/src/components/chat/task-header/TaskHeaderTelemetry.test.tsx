@@ -63,7 +63,7 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 			["idle", "Idle"],
 			["streaming", "Working"],
 			["awaiting_approval", "Approval"],
-			["awaiting_followup", "Waiting"],
+			["awaiting_followup", "Your turn"],
 			["completed", "Complete"],
 			["error", "Error"],
 			["resumable", "Paused"],
@@ -120,10 +120,10 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / TaskHeaderTelemetry", () => {
 		expect(screen.getByTestId("task-header-elapsed").textContent).toBe(firstText)
 	})
 
-	it("THA28b: awaiting_followup keeps the timer live (no endedAt from the host)", () => {
+	it("THA28b (UX-FOLLOWUP-01: AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01): awaiting_followup keeps the timer live and renders 'Your turn' (no endedAt from the host)", () => {
 		const startedAt = 1_700_000_000_000
 		render(<TaskHeaderTelemetry telemetry={telemetry({ startedAt })} turnState={ts("awaiting_followup")} />)
-		expect(screen.getByTestId("task-header-state").textContent).toContain("Waiting")
+		expect(screen.getByTestId("task-header-state").textContent).toContain("Your turn")
 		expect(screen.getByTestId("task-header-elapsed")).toBeTruthy()
 	})
 

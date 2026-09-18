@@ -1,0 +1,28 @@
+# 04-component-tests.txt — vitest run output
+# ACT: ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01
+# Date: 2026-09-18
+#
+# Webview (apps/vscode/webview-ui):
+#   bun x vitest run src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts
+#
+# Result:
+
+
+# Full TaskHeaderTelemetry.test.tsx (component render, 46 tests):
+#   bun x vitest run --pool=forks --poolOptions.forks.singleFork=true src/components/chat/task-header/TaskHeaderTelemetry.test.tsx
+# Result:
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.test.tsx (46 tests) 81ms
+
+# Breakdown of UX-FOLLOWUP matrix (new describe block at lines 229-308):
+#   UX-FOLLOWUP-01 awaiting_followup → "Your turn"   PASS
+#   UX-FOLLOWUP-02 awaiting_approval → "Approval"      PASS
+#   UX-FOLLOWUP-03 awaiting_followup vs awaiting_approval distinct  PASS
+#   UX-FOLLOWUP-04 streaming/compacting NOT relabeled  PASS
+#   UX-FOLLOWUP-05 streaming → "Working"               PASS
+#   UX-FOLLOWUP-06 completed → "Complete"              PASS
+#   UX-FOLLOWUP-07 awaiting_followup remains live: true PASS
+#   UX-FOLLOWUP-08 glyph is ↳ (single char)            PASS
+#   UX-FOLLOWUP-09 source of truth = phase only        PASS
+#   UX-FOLLOWUP-10 REAL_STATE_PROJECTION_COMPOSITION   PASS
+
+# Total webview tests: 91 PASS, 0 FAIL.

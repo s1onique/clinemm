@@ -1,0 +1,41 @@
+# 02-red.txt — RED capture (the existing assertion that pinned the wrong behavior)
+
+The RED is the existing assertion at apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts:105-106 (BEFORE the fix):
+
+```ts
+it("THA08 (CORRECTION01): awaiting_followup → Waiting (LIVE — same task continues)", () => {
+    expect(stateLabel("awaiting_followup")).toEqual({ label: "Waiting", glyph: "…", live: true })
+})
+```
+
+Reproduction of the visible defect:
+
+```text
+runtime state:
+    turnPhase = awaiting_followup
+    questionPending = false (no question asked)
+    approvalPending = false (no approval requested)
+
+production projection at stateLabel:
+    { label: "Waiting", glyph: "…", live: true }
+
+UI renders:
+    TaskHeader telemetry strip → "Waiting"
+    aria-label                 → "Task state: Waiting"
+    title                      → "Task state: Waiting"
+
+semantic problem:
+    "Waiting" is ambiguous. The user cannot distinguish:
+        (a) Cline has yielded, awaiting user input
+        (b) Cline is running a long command in the background
+        (c) Cline is stuck
+    Only (a) is what awaiting_followup means.
+
+the repair (this ACT):
+    stateLabel("awaiting_followup") → { label: "Your turn", glyph: "↳", live: true }
+    UI renders: "Your turn"
+    aria-label: "Task state: Your turn"
+    title:      "Task state: Your turn"
+```
+
+This is a STRUCTURAL RED at the production projection seam. The fix is one line at the central `stateLabel` authority. The same line that produces "Waiting" produces "Your turn" after the fix — no other surface needs to change.

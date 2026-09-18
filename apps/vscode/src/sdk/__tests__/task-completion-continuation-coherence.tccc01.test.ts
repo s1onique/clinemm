@@ -53,7 +53,7 @@ function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
 		case "awaiting_approval":
 			return { label: "Approval", glyph: "?", live: true }
 		case "awaiting_followup":
-			return { label: "Waiting", glyph: "…", live: true }
+			return { label: "Your turn", glyph: "↳", live: true }
 		case "compacting":
 			return { label: "Compacting", glyph: "⌄", live: true }
 		case "completed":
@@ -130,7 +130,12 @@ describe("ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1", () 
 		expect.soft(taskHeaderProjection.source, "host is the only authority that can represent awaiting_followup").toBe("host")
 
 		const label = taskHeaderPresentationStateLabel(taskHeaderProjection, turnState)
-		expect.soft(label.label, "user-visible TaskHeader label must be 'Waiting' for the continuation state").toBe("Waiting")
+		expect
+			.soft(
+				label.label,
+				"user-visible TaskHeader label must be 'Your turn' for the continuation state (ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01)",
+			)
+			.toBe("Your turn")
 		expect.soft(label.live, "Waiting must be live (elapsed clock keeps ticking while paused for follow-up)").toBe(true)
 	})
 
@@ -152,7 +157,7 @@ describe("ACT-CLINEMM-TASK-COMPLETION-CONTINUATION-COHERENCE01 / TCCC01-B1", () 
 			.toBe("host")
 
 		const label = taskHeaderPresentationStateLabel(taskHeaderProjection, turnState)
-		expect.soft(label.label).toBe("Waiting")
+		expect.soft(label.label).toBe("Your turn")
 	})
 
 	it("P3: at awaiting_followup with shadow ALSO projecting 'awaiting_followup', the host-override branch still wins (matches compaction precedent)", () => {

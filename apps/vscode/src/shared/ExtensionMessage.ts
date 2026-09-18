@@ -234,9 +234,15 @@ export interface ExtensionState {
 	 * is explicitly NOT migrated by E7.1 — its `taskHeaderStateLabel`
 	 * helper consumes the full multi-phase `turnState.phase` vocabulary
 	 * ("Working" / "Approval" / "Complete" / "Error" / "Paused" /
-	 * "Waiting") and is left for an E7.1-2 slice. Migrating it requires
+	 * "Your turn") and is left for an E7.1-2 slice. Migrating it requires
 	 * a richer TurnPhase-shaped projection that is out of scope for
 	 * the current ACT.
+	 *
+	 * ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01: the
+	 * `awaiting_followup` projection at `stateLabel` was changed from
+	 * "Waiting" to "Your turn" (user-owned action language). This is a
+	 * display-only change — the wire `TurnPhase` vocabulary and the
+	 * state-machine contracts are unchanged.
 	 *
 	 * The legacy `turnState` field is retained for non-thinking
 	 * presentation concepts (button set, composer lockout, follow-up
@@ -490,9 +496,14 @@ export interface ExtensionState {
  * (`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`)
  * is explicitly OUT OF SCOPE for E7.1; its `taskHeaderStateLabel` helper
  * consumes the full multi-phase `turnState.phase` vocabulary ("Working" /
- * "Approval" / "Complete" / "Error" / "Paused" / "Waiting") and is left
+ * "Approval" / "Complete" / "Error" / "Paused" / "Your turn") and is left
  * for an E7.1-2 slice. Migrating it requires a richer TurnPhase-shaped
  * projection that the current shape does not carry.
+ *
+ * ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01: the
+ * `awaiting_followup` projection at `stateLabel` was changed from
+ * "Waiting" to "Your turn" — user-owned action language. The wire
+ * `TurnPhase` and the state-machine contracts are unchanged.
  *
  * Two-source rule (frozen):
  *

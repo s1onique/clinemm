@@ -1,0 +1,68 @@
+# ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01 — entry pointer
+
+ACT body:        .factory/acts/ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01.md
+Predecessor:     .factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md
+Status:          IN_PROGRESS (RED captured, GREEN applied, conservation verified)
+
+## Repair contract (one-line production change)
+
+  FILE:     apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
+  FUNCTION: stateLabel(phase: TurnPhase | undefined): StateLabelProjection
+  CASE:     "awaiting_followup"
+
+  BEFORE:   return { label: "Waiting",   glyph: "…", live: true }
+  AFTER:    return { label: "Your turn", glyph: "↳", live: true }
+
+## Verification (this evidence packet)
+
+  01-recon.txt                         — 697-line ripgrep recon (header + 666 raw)
+  02-red.txt                           — RED capture: existing THA08 assertion
+                                        pinning the wrong behavior (before fix)
+  03-projection-contract.txt           — the one-line change + 4 conservation
+                                        guarantees restated
+  04-component-tests.txt               — vitest run output, 45 tests PASS for
+                                        taskHeaderTelemetryHelpers.test.ts
+                                        (incl. 10 new UX-FOLLOWUP-NN tests)
+                                        and 46 tests PASS for
+                                        TaskHeaderTelemetry.test.tsx
+  05-state-transition-test.txt         — vitest run output, 5 tccc01 + 9
+                                        turn-phase-authority + 4 lac01+ltz01
+                                        = 18 tests PASS (composition unchanged,
+                                        awaiting_followup projection labels updated)
+  06-live-before.txt                   — pointer to the W1 specimen captured by
+                                        the predecessor ACT (textual reference)
+  07-live-after.txt                    — operator's live "Your turn" trajectory
+                                        capture (textual reference; operator run)
+  08-accessibility.txt                 — confirms aria-label / title / icon
+                                        vocabulary
+  09-conservation.txt                  — confirms THA05/THA06/THA07/THA09/THA10/
+                                        THA11/THA12 unchanged: Idle, Working,
+                                        Approval, Complete, Error, Paused,
+                                        Unknown all preserve their labels
+  10-gates.txt                         — final gate matrix
+  result.json                          — machine-readable gate outcome
+
+## Frozen runtime contract (NOT touched)
+
+  SdkSessionEventCoordinator state machine
+  CommandJobManager
+  background-job wake mechanics
+  host helper
+  turn sequencing
+  provider loop
+  session lifecycle
+
+## Display contract (NEW, derived from runtime state)
+
+  awaiting_followup + no question + no approval
+    → USER_ACTION_REQUIRED (label: "Your turn", glyph: ↳, live: true)
+
+  Other phase projections unchanged:
+    idle               → Idle (○)
+    streaming          → Working (●, live)
+    awaiting_approval  → Approval (?, live)
+    compacting         → Compacting (⌄, live)
+    completed          → Complete (✓, non-live)
+    error              → Error (!, non-live)
+    resumable          → Paused (↻, non-live)
+    undefined          → Unknown (?, non-live)

@@ -4535,7 +4535,12 @@ export class Controller {
 				// is explicitly NOT migrated by E7.1 — its `taskHeaderStateLabel`
 				// helper consumes the full multi-phase `turnState.phase` vocabulary
 				// ("Working" / "Approval" / "Complete" / "Error" / "Paused" /
-				// "Waiting"). The TaskHeader is left for an E7.1-2 slice.
+				// "Your turn"). The TaskHeader is left for an E7.1-2 slice.
+				//
+				// ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01: the
+				// `awaiting_followup` projection at `stateLabel` was changed from
+				// "Waiting" to "Your turn" — user-owned action language. The wire
+				// `TurnPhase` and the state-machine contracts are unchanged.
 				//
 				// The legacy `turnState` field is retained for non-thinking
 				// presentation concepts (button set, composer lockout, follow-up

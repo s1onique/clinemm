@@ -65,7 +65,7 @@ export function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
 		case "awaiting_approval":
 			return { label: "Approval", glyph: "?", live: true }
 		case "awaiting_followup":
-			return { label: "Waiting", glyph: "…", live: true }
+			return { label: "Your turn", glyph: "↳", live: true }
 		case "compacting":
 			return { label: "Compacting", glyph: "⌄", live: true }
 		case "completed":

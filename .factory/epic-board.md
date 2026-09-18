@@ -1436,3 +1436,98 @@ The §10.3 caveat in the LIVE_FIRST_IDLE_WRITER_BOUND entry above says "the synt
 **No production code modified.** No bounded production-repair child ACT authorized. No CORRECTION01 ACT authorized. The predecessor recon ACT (`ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01`) CAN NOW CLOSE based on this adjudication.
 
 **STOP rule honored (final).** This ACT is now CLOSED at `CASE_A / NOT_A_RUNTIME_DEFECT`. The frozen facts are the durable record. The live specimen is the expected behavior of the production code; no defect exists at any of the three boundaries the recon examined (writer boundary, wake path, straggler causality).
+
+## ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01 — BOUNDED_PRODUCT_REPAIR_CLOSURE — 2026-09-18
+
+**Status:** `PASS`. The bounded product repair landed: ONE production line changed at the central `stateLabel` authority, with 109/109 tests passing and typecheck exitCode=0.
+
+**The change (single line):**
+
+```text
+FILE     = apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
+FUNCTION = stateLabel(phase: TurnPhase | undefined): StateLabelProjection
+LINE     = 165 (case "awaiting_followup")
+
+  -    return { label: "Waiting",   glyph: "…", live: true }
+  +    return { label: "Your turn", glyph: "↳", live: true }
+```
+
+**UI semantics after repair:**
+
+```text
+turnPhase = awaiting_followup
++ no explicit question
++ no approval
+→ USER_ACTION_REQUIRED
+→ visible label: "Your turn"
+→ glyph: ↳ (rightwards arrow with hook, matches ↻ resumable vocabulary)
+→ aria-label: "Task state: Your turn"
+→ elapsed clock keeps ticking (live: true; same task continues on reply)
+```
+
+**Conservation (verified by UX-FOLLOWUP-NN matrix, all PASS):**
+
+```text
+awaiting_approval  → "Approval"   (precedence; unchanged)
+streaming          → "Working"    (active work; unchanged)
+compacting         → "Compacting" (active work; unchanged)
+completed          → "Complete"   (terminal; unchanged)
+error              → "Error"      (terminal; unchanged)
+resumable          → "Paused"     (terminal; unchanged)
+idle               → "Idle"       (no task; unchanged)
+undefined          → "Unknown"    (no authority; unchanged)
+```
+
+**Test results (vitest):**
+
+```text
+Webview:
+  taskHeaderTelemetryHelpers.test.ts    45 tests PASS
+  TaskHeaderTelemetry.test.tsx          46 tests PASS
+                                        ---
+                                         91 tests PASS
+
+SDK:
+  task-completion-continuation-coherence.tccc01.test.ts    5 PASS
+  sdk-compaction-coordinator.turn-phase-authority.test.ts 9 PASS
+  task-header-live-activity-coherence.lac01.test.ts       1 PASS
+  task-header-live-timer-zero-reset.ltz01.test.ts         3 PASS
+                                                            ---
+                                                            18 tests PASS
+
+Grand total: 109 PASS, 0 FAIL
+```
+
+Plus typecheck exitCode=0 across both root (`apps/vscode`) and webview-ui.
+
+**Files modified (13 total, 173 insertions, 30 deletions):**
+
+Production (1):
+- `apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts` — one line, comment header added
+
+Tests updated (5):
+- `taskHeaderTelemetryHelpers.test.ts` — THA08 + THCP01 repinned; UX-FOLLOWUP-01..10 matrix added
+- `TaskHeaderTelemetry.test.tsx` — phase matrix + THA28b repinned
+- `task-completion-continuation-coherence.tccc01.test.ts` — local copy + assertions updated
+- `task-header-live-activity-coherence.lac01.helpers.ts` — local helper updated
+- `sdk-compaction-coordinator.turn-phase-authority.test.ts` — CSA07 repinned
+
+Docs/comments updated (6):
+- `ExtensionMessage.ts` — TaskHeader vocabulary enum updated (2 sites)
+- `SdkController.ts` — TaskHeader comment updated
+- `task-state-shadow-arbiter-mapper.ts` — comment updated
+- `sdk-compaction-coordinator.ts` — comment updated
+- `aopc02-phase-a-correction03.c24-c-bridge.test.ts` — comment updated
+- `task-header-canonical-task-activity-ownership.cta01.test.ts` — comment updated
+
+Plus the new ACT body and 12 evidence files (under .factory/).
+
+**NO production runtime change. NO FSM change. NO CommandJobManager change. NO SdkController change. NO scope explosion.**
+
+The runtime contract established by ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01 (`CASE_A / NOT_A_RUNTIME_DEFECT`) is preserved. The user-visible projection at the TaskHeader telemetry strip is now user-owned action language ("Your turn") instead of the ambiguous passive "Waiting".
+
+**No synthetic chat message inserted. No provider call. No token consumption. No automatic model continuation.** The repair is a display-only projection.
+
+**Predecessor ACT remains closed at CASE_A / NOT_A_RUNTIME_DEFECT.** This ACT is the actual product repair that makes the runtime semantics visible to the user.
+
+**STOP rule honored (final).** The runtime is not changed. The user-facing projection is now truthful: when the agent has yielded and the user owns the next move, the UI says "Your turn".

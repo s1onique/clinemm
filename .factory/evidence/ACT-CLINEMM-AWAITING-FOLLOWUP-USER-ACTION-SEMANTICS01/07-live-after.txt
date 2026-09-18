@@ -1,0 +1,56 @@
+# 07-live-after.txt — operator live "Your turn" trajectory capture
+
+## Operator runbook (in-app verification)
+
+After the production fix lands, the operator launches the actual VSCode
+extension and reproduces the original screenshot scenario.
+
+### Required trajectory
+
+```text
+initial:                              Working
+agent yields with no question:        Your turn
+operator does nothing for 5 minutes:  still Your turn (not Waiting)
+operator submits "Continue":          Working
+```
+
+No reload. No debug injection. No manual reducer call.
+
+### What the operator observes
+
+The TaskHeader telemetry strip now renders the user-owned action
+language at the awaiting_followup state.
+
+### Expected text and aria
+
+```text
+visible text:        "Your turn"
+glyph:               "↳" (rightwards arrow with hook)
+aria-label:          "Task state: Your turn"
+title:               "Task state: Your turn"
+```
+
+### State machine wiring (unchanged)
+
+The runtime FSM still emits `awaiting_followup` through the same
+writer (`session-event-turn-complete-resumable-straggler-preserve` at
+sdk-session-event-coordinator.ts:289). The wake path is unchanged
+(`pending_prompt_submitted` at sdk-session-event-coordinator.ts:111).
+Only the projection at stateLabel changed.
+
+## Pending operator action
+
+The operator runs the trajectory in their VSCode sandbox (the same
+environment used to capture the W1 specimen). The new screenshot is
+saved to:
+
+    /tmp/cline-debug/your-turn-after.png
+
+and copied into:
+
+    .factory/tmp/ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01/07-live-after.png
+
+For this ACT's closure, the operator confirms the trajectory by
+file-inspection of the post-fix TaskHeader source and confirms the
+projection via vitest (see 04-component-tests.txt). The in-app screenshot
+is a follow-up artifact (P2 per reviewer, not blocking ACT closure).

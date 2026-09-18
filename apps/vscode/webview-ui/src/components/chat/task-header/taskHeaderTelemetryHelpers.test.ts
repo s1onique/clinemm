@@ -102,8 +102,8 @@ describe("ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A / stateLabel", () => {
 	it("THA07: awaiting_approval → Approval (live)", () => {
 		expect(stateLabel("awaiting_approval")).toEqual({ label: "Approval", glyph: "?", live: true })
 	})
-	it("THA08 (CORRECTION01): awaiting_followup → Waiting (LIVE — same task continues)", () => {
-		expect(stateLabel("awaiting_followup")).toEqual({ label: "Waiting", glyph: "…", live: true })
+	it("THA08 (CORRECTION01; UX-FOLLOWUP-01: AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01): awaiting_followup → 'Your turn' (LIVE — same task continues, user-owned next move)", () => {
+		expect(stateLabel("awaiting_followup")).toEqual({ label: "Your turn", glyph: "↳", live: true })
 	})
 	it("THA09: completed → Complete (non-live, terminal)", () => {
 		expect(stateLabel("completed")).toEqual({ label: "Complete", glyph: "✓", live: false })
@@ -152,7 +152,7 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / taskHeaderPr
 		seq = 1,
 	): TaskHeaderPresentationProjection => ({ phase, source, seq })
 
-	it("THCP01 (helper): when projection says awaiting_followup, label is Waiting (not Working from stale streaming)", () => {
+	it("THCP01 (helper; UX-FOLLOWUP-01: AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01): when projection says awaiting_followup, label is 'Your turn' (not Working from stale streaming)", () => {
 		// Truthful divergence: legacy turnState is `streaming`
 		// (Working), but the canonical projection says
 		// `awaiting_followup`. The helper must follow the projection.
@@ -161,7 +161,7 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / taskHeaderPr
 		// We cannot import taskHeaderPresentationStateLabel at module
 		// top because the existing test file imports use a different
 		// path; the import is added below.
-		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Waiting", glyph: "\u2026", live: true })
+		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Your turn", glyph: "\u21B3", live: true })
 	})
 
 	it("THCP02 (helper): when projection says compacting (host source), label is Compacting", () => {
@@ -199,6 +199,110 @@ describe("ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01 / taskHeaderPr
 		const st = { phase: "streaming" as const, seq: 1 }
 		const p = projection("completed", "shadow", 21)
 		expect(taskHeaderPresentationStateLabel(p, st)).toEqual({ label: "Complete", glyph: "\u2713", live: false })
+	})
+})
+
+/**
+ * ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01 / bounded product repair
+ *
+ * The runtime state `awaiting_followup` means: the agent has yielded,
+ * the user owns the next move. The previous UI projected this as
+ * passive "Waiting", which was semantically indistinguishable from
+ * "Cline is doing background work" or "Cline is stuck". This ACT
+ * centralizes the projection at `stateLabel` (one line in
+ * `taskHeaderTelemetryHelpers.ts`) and replaces "Waiting" with
+ * "Your turn" — the user-owned action language that the previous
+ * discriminator ACT durably established is correct runtime semantics.
+ *
+ * Conservation gates (one per UX-FOLLOWUP-N):
+ *   - UX-FOLLOWUP-01 awaiting_followup + no question/approval → "Your turn"
+ *   - UX-FOLLOWUP-02 awaiting_approval → "Approval" (question/approval precedence)
+ *   - UX-FOLLOWUP-03 awaiting_followup and awaiting_approval are distinct (no double-label)
+ *   - UX-FOLLOWUP-04 streaming/compacting → "Working"/"Compacting" (background running work)
+ *   - UX-FOLLOWUP-05 streaming → "Working" (unchanged)
+ *   - UX-FOLLOWUP-06 completed → "Complete" (unchanged)
+ *   - UX-FOLLOWUP-07 awaiting_followup remains live: true (clock keeps ticking)
+ *   - UX-FOLLOWUP-08 awaiting_followup glyph is arrow-shaped (matches ↻ vocabulary)
+ *   - UX-FOLLOWUP-09 source of truth is the canonical phase (no chat-tail fallback)
+ *   - UX-FOLLOWUP-10 REAL_STATE_PROJECTION_COMPOSITION: full projection round-trip
+ */
+describe("ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01 / UX-FOLLOWUP matrix", () => {
+	it("UX-FOLLOWUP-01: awaiting_followup + no question/approval → 'Your turn' (live)", () => {
+		expect(stateLabel("awaiting_followup")).toEqual({ label: "Your turn", glyph: "↳", live: true })
+	})
+
+	it("UX-FOLLOWUP-02: awaiting_approval → 'Approval' (question/approval wins, unchanged)", () => {
+		expect(stateLabel("awaiting_approval")).toEqual({ label: "Approval", glyph: "?", live: true })
+	})
+
+	it("UX-FOLLOWUP-03: awaiting_followup and awaiting_approval are distinct phases (no double-label)", () => {
+		// Same TaskHeader component, but the runtime FSM never emits both
+		// simultaneously. The projection at stateLabel is total over TurnPhase.
+		const followup = stateLabel("awaiting_followup")
+		const approval = stateLabel("awaiting_approval")
+		expect(followup.label).not.toBe(approval.label)
+		expect(followup.glyph).not.toBe(approval.glyph)
+	})
+
+	it("UX-FOLLOWUP-04: active background work (streaming/compacting) is NOT relabeled as 'Your turn'", () => {
+		// Active work stays as the original labels. ONLY awaiting_followup
+		// (yielded) becomes "Your turn".
+		expect(stateLabel("streaming").label).toBe("Working")
+		expect(stateLabel("compacting").label).toBe("Compacting")
+		expect(stateLabel("streaming").label).not.toBe("Your turn")
+		expect(stateLabel("compacting").label).not.toBe("Your turn")
+	})
+
+	it("UX-FOLLOWUP-05: streaming → 'Working' (unchanged from prior ACT)", () => {
+		expect(stateLabel("streaming")).toEqual({ label: "Working", glyph: "●", live: true })
+	})
+
+	it("UX-FOLLOWUP-06: completed → 'Complete' (unchanged)", () => {
+		expect(stateLabel("completed")).toEqual({ label: "Complete", glyph: "✓", live: false })
+	})
+
+	it("UX-FOLLOWUP-07: awaiting_followup remains live: true (elapsed clock keeps ticking)", () => {
+		// Same task continues when the user replies — CORRECTION01 contract.
+		expect(stateLabel("awaiting_followup").live).toBe(true)
+	})
+
+	it("UX-FOLLOWUP-08: awaiting_followup glyph is arrow-shaped (matches ↻ resumable vocabulary)", () => {
+		// ↳ (U+21B3) is the new glyph. It is single-character and not a
+		// question mark or hourglass, so it does not collide with
+		// Approval (?) or any future passive-waiting label.
+		const { glyph } = stateLabel("awaiting_followup")
+		expect(glyph.length).toBe(1)
+		expect(glyph).toBe("↳")
+	})
+
+	it("UX-FOLLOWUP-09: source of truth is canonical phase only (no chat-tail fallback)", () => {
+		// stateLabel takes a phase and returns a label. It does NOT
+		// inspect chat messages, tool results, elapsed time, or the
+		// string "Waiting". This is the projection invariant preserved
+		// from THA01/M2 killer.
+		const followup = stateLabel("awaiting_followup")
+		const fallback = stateLabel("idle")
+		expect(followup.label).toBe("Your turn")
+		expect(fallback.label).toBe("Idle")
+		expect(followup.label).not.toBe(fallback.label)
+	})
+
+	it("UX-FOLLOWUP-10: REAL_STATE_PROJECTION_COMPOSITION — full projection round-trip", () => {
+		// Composition: production FSM emits awaiting_followup, projection
+		// carries it through, stateLabel renders "Your turn". Then the
+		// wake path emits streaming, stateLabel renders "Working". This
+		// is the canonical transition established by the predecessor ACT.
+		const st: TurnState = { phase: "idle", seq: 1 }
+		const pFollowup: TaskHeaderPresentationProjection = { phase: "awaiting_followup", source: "host", seq: 5 }
+		const pStreaming: TaskHeaderPresentationProjection = { phase: "streaming", source: "shadow", seq: 6 }
+
+		const labelYielded = taskHeaderPresentationStateLabel(pFollowup, st)
+		const labelWorking = taskHeaderPresentationStateLabel(pStreaming, st)
+
+		expect(labelYielded.label).toBe("Your turn")
+		expect(labelYielded.live).toBe(true)
+		expect(labelWorking.label).toBe("Working")
+		expect(labelWorking.live).toBe(true)
 	})
 })
 

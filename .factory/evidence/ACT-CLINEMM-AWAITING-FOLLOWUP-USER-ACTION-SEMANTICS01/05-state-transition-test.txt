@@ -1,0 +1,76 @@
+# 05-state-transition-test.txt — composition tests
+
+These exercise the production state-transition path THROUGH the projection seam.
+
+## SDK-side composition tests (apps/vscode)
+
+```text
+$ bun x vitest run --config vitest.config.ts \
+    src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts \
+    src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts
+
+ ✓ src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts (5 tests) 3ms
+ ✓ src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts     (9 tests) 6ms
+
+ Test Files  2 passed (2)
+      Tests  14 passed (14)
+   Duration  2.67s
+```
+
+## SDK-side lac01+ltz01 (helpers import)
+
+```text
+$ bun x vitest run --config vitest.config.ts \
+    src/sdk/__tests__/task-header-live-activity-coherence.lac01.test.ts \
+    src/sdk/__tests__/task-header-live-timer-zero-reset.ltz01.test.ts
+
+ ✓ src/sdk/__tests__/task-header-live-activity-coherence.lac01.test.ts (1 test) 4ms
+ ✓ src/sdk/__tests__/task-header-live-timer-zero-reset.ltz01.test.ts   (3 tests) 4ms
+
+ Test Files  2 passed (2)
+      Tests  4 passed (4)
+   Duration  2.50s
+```
+
+## Existing c2-replay-red transition tests (composition unchanged)
+
+```text
+File: apps/vscode/webview-ui/src/components/chat/chat-view/__tests__/c2-replay-red.test.ts
+
+RED-2: idle/seq2 → awaiting_followup/seq15 advances the replica   PASS
+LIVE: exact E1-E9 sequence through the production reducer reaches
+      awaiting_followup/seq15                                    PASS
+```
+
+These tests assert the FSM reachability of awaiting_followup. They do
+NOT assert the rendered label. They are unchanged and continue to PASS.
+
+## What is pinned (REAL_STATE_PROJECTION_COMPOSITION)
+
+UX-FOLLOWUP-10 (added by this ACT) asserts the full projection
+round-trip:
+
+```ts
+const st: TurnState = { phase: "idle", seq: 1 }
+const pFollowup: TaskHeaderPresentationProjection = { phase: "awaiting_followup", source: "host", seq: 5 }
+const pStreaming: TaskHeaderPresentationProjection = { phase: "streaming", source: "shadow", seq: 6 }
+
+const labelYielded = taskHeaderPresentationStateLabel(pFollowup, st)
+const labelWorking = taskHeaderPresentationStateLabel(pStreaming, st)
+
+expect(labelYielded.label).toBe("Your turn")
+expect(labelYielded.live).toBe(true)
+expect(labelWorking.label).toBe("Working")
+expect(labelWorking.live).toBe(true)
+```
+
+This is the canonical transition:
+    streaming → agent yields → awaiting_followup → UI: "Your turn"
+    awaiting_followup → user submits prompt → streaming → UI: "Working"
+
+Both directions are pinned by the projection composition test plus the
+c2-replay-red FSM reachability tests.
+
+(Sandbox worker-shutdown EPERM noise on vitest teardown is not a test
+failure — every test file reports its final test count before the
+teardown attempt.)

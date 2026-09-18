@@ -152,10 +152,17 @@ export function stateLabel(phase: TurnPhase | undefined): StateLabelProjection {
 		case "awaiting_approval":
 			return { label: "Approval", glyph: "?", live: true }
 		case "awaiting_followup":
-			// CORRECTION01: same task continues — elapsed clock keeps
-			// ticking so the user sees "how long since the task was
-			// started", not "how long since the agent last produced".
-			return { label: "Waiting", glyph: "…", live: true }
+			// ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01:
+			// The agent has yielded; the user owns the next move. The
+			// label must be user-owned action language, not passive
+			// waiting. The runtime never emits awaiting_followup while
+			// a question or approval is pending (awaiting_approval is a
+			// distinct TurnPhase; stateLabel maps it to "Approval"), and
+			// never while the agent is doing genuine active work
+			// (streaming → "Working", compacting → "Compacting").
+			// Elapsed clock keeps ticking (live: true) — the same task
+			// continues when the user replies (CORRECTION01).
+			return { label: "Your turn", glyph: "↳", live: true }
 		case "compacting":
 			// ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01: an internal
 			// SYSTEM TRANSITION owns the next progress step. This is

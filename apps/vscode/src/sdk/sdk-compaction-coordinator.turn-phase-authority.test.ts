@@ -4,7 +4,13 @@
 // contradiction:
 //
 //     main chat surface : "Compacting context"      (CompactionRow)
-//     TaskHeader        : "Waiting"                 (stateLabel)
+//     TaskHeader        : "Your turn"               (stateLabel)
+//
+// ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01:
+//   The TaskHeader label for `awaiting_followup` was changed from
+//   "Waiting" to "Your turn" — the user-owned action language. CSA07
+//   here is the single test that pins the no-compaction branch of
+//   that same label, so it updates with the central projection.
 //
 // Both ends of this test are production code:
 //
@@ -122,8 +128,8 @@ describe("ACT-CLINEMM-COMPACTION-STATE-AUTHORITY01 / compaction owns the canonic
 		expect(tracker.get().phase).toBe("completed")
 	})
 
-	it("CSA07 (conservation): a genuine human wait with no compaction still reads 'Waiting'", () => {
-		expect(stateLabel("awaiting_followup").label).toBe("Waiting")
+	it("CSA07 (conservation; ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01): a genuine human wait with no compaction reads 'Your turn' (user-owned action language)", () => {
+		expect(stateLabel("awaiting_followup").label).toBe("Your turn")
 	})
 
 	it("CSA08 (conservation): model/tool work and approvals are unchanged", () => {

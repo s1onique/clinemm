@@ -1,0 +1,50 @@
+# 08-accessibility.txt — confirms aria-label / title / icon vocabulary
+
+After the fix, the TaskHeader telemetry strip renders:
+
+```html
+<span aria-label="Task state: Your turn"
+      data-testid="task-header-state"
+      title="Task state: Your turn">
+  <span aria-hidden="true">↳</span>
+  <span>Your turn</span>
+</span>
+```
+
+Source: apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx:265-275
+
+## Vocabulary check
+
+- The visible label "Your turn" is plain text inside a <span>, not an
+  icon. Screen readers will read the visible text directly.
+- The glyph "↳" (U+21B3, RIGHTWARDS ARROW WITH HOOK) is marked
+  aria-hidden="true" — it does NOT contribute to the screen reader
+  output. The semantic is in the text, not the glyph.
+- The aria-label duplicates the visible text. This is intentional: the
+  TaskHeader's tooltip-style aria-label is the canonical screen reader
+  entry point (matches the existing pattern for Working, Approval, etc.)
+- The title attribute ("Task state: Your turn") gives a hover tooltip
+  matching the visible text. Same as the previous behavior.
+
+## Existing accessibility tests still pass
+
+The existing aria-label tests in TaskHeaderTelemetry.test.tsx (lines
+101-112) cover streaming ("Task state: Working") — unchanged.
+
+The new label uses the same projection path. A future test could add an
+aria-label test for "Task state: Your turn" (P2 follow-up, not blocking).
+
+## No icon-only reliance
+
+The previous label "Waiting" had the same property (plain text). The new
+label "Your turn" preserves it. The glyph is decorative (↳) and does not
+carry semantics on its own.
+
+## Keyboard / focus / disabled state
+
+The TaskHeader telemetry strip is a passive display — it is not
+keyboard-focusable, not clickable, and not part of any form. The chat
+input below it (the only user-owned affordance) remains enabled and
+unaffected by the TaskHeader label change (verified at
+ChatView.tsx:394-397 — placeholderText is "Type a message..." once a
+task exists, no disabled gate under any phase).

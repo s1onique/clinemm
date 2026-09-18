@@ -1,0 +1,63 @@
+# 09-conservation.txt — confirms all non-target labels are unchanged
+
+The fix is bounded to awaiting_followup. Every other phase projection
+remains byte-equivalent.
+
+## stateLabel matrix (after fix)
+
+```text
+stateLabel("idle")              → { label: "Idle",       glyph: "○", live: false }
+stateLabel("streaming")         → { label: "Working",    glyph: "●", live: true  }
+stateLabel("awaiting_approval") → { label: "Approval",   glyph: "?", live: true  }
+stateLabel("awaiting_followup") → { label: "Your turn",  glyph: "↳", live: true  }  ← CHANGED
+stateLabel("compacting")        → { label: "Compacting", glyph: "⌄", live: true  }
+stateLabel("completed")         → { label: "Complete",   glyph: "✓", live: false }
+stateLabel("error")             → { label: "Error",      glyph: "!", live: false }
+stateLabel("resumable")         → { label: "Paused",     glyph: "↻", live: false }
+stateLabel(undefined)           → { label: "Unknown",    glyph: "?", live: false }
+```
+
+## Test matrix evidence
+
+The existing THA05..THA12 (and corresponding THCP series) tests assert
+each of these projections. After the fix:
+
+- THA05 (idle → Idle)             PASS
+- THA06 (streaming → Working)     PASS
+- THA07 (awaiting_approval → Approval)  PASS
+- THA08 (awaiting_followup → "Your turn")  PASS  ← REPINNED
+- THA09 (completed → Complete)    PASS
+- THA10 (error → Error)           PASS
+- THA11 (resumable → Paused)      PASS
+- THA12 (undefined → Unknown)     PASS
+
+Plus the new UX-FOLLOWUP matrix (10 tests, all PASS) covers:
+
+- UX-FOLLOWUP-01 awaiting_followup → "Your turn"
+- UX-FOLLOWUP-02 awaiting_approval → "Approval" (precedence)
+- UX-FOLLOWUP-03 distinct phases (no double-label)
+- UX-FOLLOWUP-04 streaming/compacting NOT relabeled (background-work)
+- UX-FOLLOWUP-05 streaming → "Working"
+- UX-FOLLOWUP-06 completed → "Complete"
+- UX-FOLLOWUP-07 awaiting_followup remains live: true
+- UX-FOLLOWUP-08 glyph is ↳ (single char, matches ↻ vocabulary)
+- UX-FOLLOWUP-09 source of truth = phase only (no chat-tail fallback)
+- UX-FOLLOWUP-10 REAL_STATE_PROJECTION_COMPOSITION (full round-trip)
+
+## Total tests passing after the fix
+
+Webview:
+  taskHeaderTelemetryHelpers.test.ts    45 tests PASS
+  TaskHeaderTelemetry.test.tsx          46 tests PASS
+                                       ---
+                                        91 tests PASS
+
+SDK (vitest):
+  task-completion-continuation-coherence.tccc01.test.ts    5 PASS
+  sdk-compaction-coordinator.turn-phase-authority.test.ts 9 PASS
+  task-header-live-activity-coherence.lac01.test.ts       1 PASS
+  task-header-live-timer-zero-reset.ltz01.test.ts         3 PASS
+                                                            ---
+                                                            18 tests PASS
+
+Grand total: 109 tests PASS, 0 FAIL.

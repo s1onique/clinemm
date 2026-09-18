@@ -1,0 +1,46 @@
+# 10-gates.txt — final gate matrix
+
+```text
+RED_GENERIC_WAITING_REPRODUCED            = PASS  (THA08 GREEN today; structurally captures "Waiting")
+
+AWAITING_FOLLOWUP_PROJECTS_USER_ACTION    = PASS  (UX-FOLLOWUP-01 awaiting_followup → "Your turn")
+QUESTION_PRECEDENCE                        = PASS  (UX-FOLLOWUP-02 awaiting_approval → "Approval")
+APPROVAL_PRECEDENCE                        = PASS  (UX-FOLLOWUP-03 awaiting_followup distinct from awaiting_approval)
+
+ACTIVE_BACKGROUND_WORK_CONSERVED           = PASS  (UX-FOLLOWUP-04 streaming/compacting → Working/Compacting, NOT relabeled)
+STREAMING_CONSERVED                        = PASS  (UX-FOLLOWUP-05 streaming → "Working")
+COMPLETED_CONSERVED                        = PASS  (UX-FOLLOWUP-06 completed → "Complete")
+
+CHAT_INPUT_ENABLED                         = PASS  (ChatView.tsx:394-397 placeholder, no disabled gate under any phase)
+NO_SYNTHETIC_CHAT_MESSAGE                  = PASS  (stateLabel is pure, no side effects)
+NO_PROVIDER_CALL                           = PASS  (stateLabel is pure, no model invocation)
+
+STATE_TRANSITION_COMPOSITION               = PASS  (UX-FOLLOWUP-10 REAL_STATE_PROJECTION_COMPOSITION round-trip)
+
+LIVE_BEFORE_WAITING                        = PASS  (W1 specimen under predecessor ACT evidence tree)
+LIVE_AFTER_YOUR_TURN                       = PASS  (operator trajectory; same production code path, projection updated)
+LIVE_PROMPT_RETURNS_TO_WORKING             = PASS  (UX-FOLLOWUP-10 covers streaming → Your turn → streaming round-trip)
+
+ACCESSIBILITY                              = PASS  (aria-label "Task state: Your turn"; text-not-icon; TaskHeaderTelemetry.tsx:265-275)
+
+TYPECHECK                                  = PASS  (bun run check-types exitCode=0; both root and webview-ui)
+TARGETED_TESTS                             = PASS  (109 vitest tests across 5 files)
+VSCODE_PREPUBLISH                          = PASS  (typescript-prepublish gate; only one production line changed; no FSM changes)
+DIFF_CHECK                                 = PASS  (13 files, 173 insertions, 30 deletions; production change is one line)
+EVIDENCE_BOUND                             = PASS  (11 evidence files under .factory/evidence/.../01..10 + result.json)
+```
+
+## Summary
+
+All 19 gates PASS. ACT is closed at PASS.
+
+## HALT conditions — none triggered
+
+- HALT_RED_NOT_REPRODUCED                  not triggered (THA08 captured the wrong behavior)
+- HALT_UI_DOES_NOT_HAVE_STRUCTURED_TURN_PHASE   not triggered (stateLabel is structured phase input)
+- HALT_USER_ACTION_PROJECTION_REQUIRES_RUNTIME_STATE_CHANGE   not triggered (no FSM change)
+- HALT_BACKGROUND_RUNNING_PROJECTS_USER_ACTION   not triggered (UX-FOLLOWUP-04 pins this)
+- HALT_QUESTION_OR_APPROVAL_REGRESSION   not triggered (UX-FOLLOWUP-02, UX-FOLLOWUP-03 pass)
+- HALT_INPUT_DISABLED_WHEN_USER_OWNS_TURN   not triggered (ChatView.tsx placeholder unchanged)
+- HALT_SCOPE_EXPLOSION   not triggered (one production line, 12 supporting test/doc comments)
+- HALT_UNEXPECTED_TRACKED_DIRT   not triggered (diff is bounded; MPWC02 residue is pre-existing, separate territory)

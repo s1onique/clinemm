@@ -39,9 +39,9 @@
  *   2. The same LIVE evidence the repair cited — toolCalls
  *      186→190, command partial, tool partial — describes
  *      ACTIVE asynchronous work continuing. Mapping that to
- *      `awaiting_followup` ("Waiting") replaces one defect
+ *      `awaiting_followup` ("Your turn") replaces one defect
  *      (Idle while Cline is working) with another
- *      (Waiting while Cline is working).
+ *      (Waiting/Your-turn while Cline is working).
  *
  *   3. The CTA-suite asserted `awaiting_followup` as the
  *      desired target phase without an independent authority

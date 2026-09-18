@@ -170,9 +170,14 @@ export function selectTaskShadowArbiterSnapshot(input: {
 // is explicitly NOT migrated by E7.1 — its `taskHeaderStateLabel`
 // helper consumes the full multi-phase `turnState.phase` vocabulary
 // ("Working" / "Approval" / "Complete" / "Error" / "Paused" /
-// "Waiting"). Migrating it requires a richer TurnPhase-shaped
+// "Your turn"). Migrating it requires a richer TurnPhase-shaped
 // projection that the current `modelStreaming`-only shape does not
 // carry; the E7.1-2 slice is reserved for that.
+//
+// ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01: the
+// `awaiting_followup` projection at `stateLabel` was changed from
+// "Waiting" to "Your turn" — user-owned action language. The wire
+// `TurnPhase` and the state-machine contracts are unchanged.
 //
 // Selection rule (frozen):
 //

@@ -1,0 +1,32 @@
+# 06-live-before.txt — pointer to the W1 specimen captured by the predecessor ACT
+
+The "before" specimen was captured by the predecessor ACT
+ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01. The
+canonical evidence files for that capture live under:
+
+    .factory/evidence/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01/
+
+Specifically the W1 specimen (which became the question for this ACT)
+was the TaskHeader telemetry strip showing:
+
+    Task state: Waiting
+    aria-label="Task state: Waiting"
+    title="Task state: Waiting"
+
+for the semantic state:
+
+    turnPhase = awaiting_followup
+    questionPending = false
+    approvalPending = false
+
+The text "Waiting" was ambiguous — the user could not tell whether Cline
+was still working, stuck, waiting for a process, or waiting for them.
+The current ACT replaces this projection with "Your turn".
+
+See the predecessor ACT body at:
+    .factory/acts/ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01.md
+for the full operator runbook and evidence trail of the W1 capture.
+
+Note: this ACT does not duplicate the W1 screenshot (it lives under the
+predecessor's evidence tree and remains valid as the "before" baseline).
+This ACT adds the "after" baseline at 07-live-after.txt.

@@ -1,0 +1,90 @@
+{
+  "act": "ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01",
+  "status": "PASS",
+  "closed_at": "2026-09-18",
+  "predecessor": {
+    "act": "ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01",
+    "status": "CASE_A / NOT_A_RUNTIME_DEFECT",
+    "commit": "cbdb2b182"
+  },
+  "runtime_change": "NONE",
+  "ui_semantics": {
+    "before": {
+      "phase": "awaiting_followup",
+      "question": false,
+      "approval": false,
+      "label": "Waiting",
+      "glyph": "…",
+      "live": true
+    },
+    "after": {
+      "phase": "awaiting_followup",
+      "question": false,
+      "approval": false,
+      "label": "Your turn",
+      "glyph": "↳",
+      "live": true,
+      "semantic_class": "USER_ACTION_REQUIRED"
+    }
+  },
+  "production_change": {
+    "file": "apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts",
+    "line": 165,
+    "function": "stateLabel",
+    "diff": "single case branch (awaiting_followup)",
+    "scope": "one production line + comment header"
+  },
+  "test_files_modified": [
+    "apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts",
+    "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx",
+    "apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts",
+    "apps/vscode/src/sdk/__tests__/task-header-live-activity-coherence.lac01.helpers.ts",
+    "apps/vscode/src/sdk/sdk-compaction-coordinator.turn-phase-authority.test.ts"
+  ],
+  "doc_files_modified": [
+    "apps/vscode/src/shared/ExtensionMessage.ts",
+    "apps/vscode/src/sdk/SdkController.ts",
+    "apps/vscode/src/sdk/task-state-shadow-arbiter-mapper.ts",
+    "apps/vscode/src/sdk/sdk-compaction-coordinator.ts",
+    "apps/vscode/src/sdk/__tests__/application-ownership-projection-coherence.aopc02-phase-a-correction03.c24-c-bridge.test.ts",
+    "apps/vscode/src/sdk/__tests__/task-header-canonical-task-activity-ownership.cta01.test.ts"
+  ],
+  "test_results": {
+    "webview": {
+      "taskHeaderTelemetryHelpers.test.ts": {"passed": 45, "failed": 0},
+      "TaskHeaderTelemetry.test.tsx":       {"passed": 46, "failed": 0},
+      "total": {"passed": 91, "failed": 0}
+    },
+    "sdk": {
+      "task-completion-continuation-coherence.tccc01.test.ts": {"passed": 5,  "failed": 0},
+      "sdk-compaction-coordinator.turn-phase-authority.test.ts": {"passed": 9,  "failed": 0},
+      "task-header-live-activity-coherence.lac01.test.ts":       {"passed": 1,  "failed": 0},
+      "task-header-live-timer-zero-reset.ltz01.test.ts":         {"passed": 3,  "failed": 0},
+      "total": {"passed": 18, "failed": 0}
+    },
+    "grand_total": {"passed": 109, "failed": 0}
+  },
+  "gates": {
+    "RED_GENERIC_WAITING_REPRODUCED": "PASS",
+    "AWAITING_FOLLOWUP_PROJECTS_USER_ACTION": "PASS",
+    "QUESTION_PRECEDENCE": "PASS",
+    "APPROVAL_PRECEDENCE": "PASS",
+    "ACTIVE_BACKGROUND_WORK_CONSERVED": "PASS",
+    "STREAMING_CONSERVED": "PASS",
+    "COMPLETED_CONSERVED": "PASS",
+    "CHAT_INPUT_ENABLED": "PASS",
+    "NO_SYNTHETIC_CHAT_MESSAGE": "PASS",
+    "NO_PROVIDER_CALL": "PASS",
+    "STATE_TRANSITION_COMPOSITION": "PASS",
+    "LIVE_BEFORE_WAITING": "PASS",
+    "LIVE_AFTER_YOUR_TURN": "PASS",
+    "LIVE_PROMPT_RETURNS_TO_WORKING": "PASS",
+    "ACCESSIBILITY": "PASS",
+    "TYPECHECK": "PASS",
+    "TARGETED_TESTS": "PASS",
+    "VSCODE_PREPUBLISH": "PASS",
+    "DIFF_CHECK": "PASS",
+    "EVIDENCE_BOUND": "PASS"
+  },
+  "halt_conditions_triggered": []
+}

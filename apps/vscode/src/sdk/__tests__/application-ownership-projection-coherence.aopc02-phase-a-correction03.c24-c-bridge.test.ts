@@ -477,7 +477,9 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PH
 		// selectTaskHeaderPresentation now applies to it, mirroring
 		// the compaction precedent — `source === "host"`, not
 		// `"legacy"`. The user-visible phase ("awaiting_followup"
-		// → "Waiting") is unchanged.
+		// → "Your turn", ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01)
+		// is otherwise unchanged from this test's perspective —
+		// we are pinning the projection authority, not the label.
 		const proj = selectTaskHeaderPresentation({
 			canonicalShadowPhase: undefined,
 			currentLegacyPhase: "awaiting_followup",

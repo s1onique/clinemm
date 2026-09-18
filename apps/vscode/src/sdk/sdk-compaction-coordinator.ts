@@ -105,9 +105,15 @@ export interface SdkCompactionCoordinatorOptions {
 	 * owns the next progress step, so the canonical phase must say so.
 	 * Without this the tracker keeps whatever phase the finished turn
 	 * left behind (typically `awaiting_followup`), and the TaskHeader
-	 * truthfully projects that stale authority as "Waiting" while the
+	 * truthfully projects that stale authority as "Your turn" while the
 	 * chat surface shows "Compacting context" — the observed
 	 * contradiction.
+	 *
+	 * ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01: the
+	 * TaskHeader label for `awaiting_followup` is now "Your turn"
+	 * (user-owned action language), not "Waiting". The compaction
+	 * contradiction this method fixes is unchanged — but the
+	 * visible TaskHeader text is now "Your turn" instead of "Waiting".
 	 *
 	 * Optional so a caller that has no tracker (tests of unrelated
 	 * behaviour) still constructs; production always supplies both.
