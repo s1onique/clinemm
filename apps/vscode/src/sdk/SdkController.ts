@@ -78,6 +78,7 @@ import { AuthService, LogoutReason } from "./auth-service"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
+import type { CommandJobLifecycleEvent } from "./command-job-manager"
 import {
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	composeEffectiveDiagnosticKnobs,
@@ -1583,6 +1584,7 @@ export class Controller {
 					// incidents so the user-visible ⚠ N does not
 					// silently reset under tool rebuild.
 					onRuntimeError: this.handleTaskRuntimeError,
+					onCommandJobLifecycle: this.handleCommandJobLifecycle,
 				}),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: (sessionHost, taskId) => this.sessionHistory.loadInitialMessages(sessionHost, taskId),
@@ -1735,6 +1737,7 @@ export class Controller {
 					// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
 					// mirror the production wiring.
 					onRuntimeError: this.handleTaskRuntimeError,
+					onCommandJobLifecycle: this.handleCommandJobLifecycle,
 				}),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			resolveContextMentions: (text) => this.resolveContextMentions(text),
@@ -1771,6 +1774,7 @@ export class Controller {
 					// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
 					// mirror the production wiring.
 					onRuntimeError: this.handleTaskRuntimeError,
+					onCommandJobLifecycle: this.handleCommandJobLifecycle,
 				}),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
@@ -2119,6 +2123,7 @@ export class Controller {
 			// creates a temp host with its own CommandJobManager, so
 			// it must carry the same sink as the production host.
 			onRuntimeError: this.handleTaskRuntimeError,
+			onCommandJobLifecycle: this.handleCommandJobLifecycle,
 		})
 	}
 
@@ -3434,6 +3439,7 @@ export class Controller {
 				// CommandJobManager, so the runtime-error sink must
 				// follow.
 				onRuntimeError: this.handleTaskRuntimeError,
+				onCommandJobLifecycle: this.handleCommandJobLifecycle,
 			})
 			sessionHost = tempHost
 		}
@@ -3692,6 +3698,7 @@ export class Controller {
 				// comparison on a stale session creates a temp host
 				// with its own CommandJobManager.
 				onRuntimeError: this.handleTaskRuntimeError,
+				onCommandJobLifecycle: this.handleCommandJobLifecycle,
 			})
 			sessionHost = tempHost
 		}
@@ -4151,6 +4158,86 @@ export class Controller {
 			Logger.warn(
 				`[SdkController] Failed to post state after runtime error (class=${incident.errorClass}, source=${incident.source}): ${error instanceof Error ? error.message : String(error)}`,
 			)
+		})
+	}
+
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+	 * (correction07 / Factory
+	 * HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
+	 *
+	 * Closure passed to `VscodeSessionHost.create({ onCommandJobLifecycle })`.
+	 * Forwards every lifecycle event to the host-owned
+	 * `TaskTelemetryTracker`. The tracker is updated by the
+	 * `event.activeCommandJobs` value carried on every event
+	 * (single semantic authority — `manager.activeCount`).
+	 *
+	 * The gauge moves on:
+	 *   - `command_job_process_started`            — POST `active.set`  (correction07)
+	 *   - `command_job_terminal_committed`         — POST `active.delete` (correction07, clean path)
+	 *   - `command_job_containment_failed`         — POST `active.delete` (correction06, failure path)
+	 *
+	 * correction05 / Factory P0 follow-up: under the new
+	 * `gone`-gating, `terminal_committed` only fires on a clean
+	 * kernel postcondition. Jobs whose postcondition is
+	 * `alive`/`eperm`/`unknown` (REFUSED / UNPROVEN / fail-closed)
+	 * emit `command_job_residual_detected` instead AND have their
+	 * `terminationFailed` flag latched on the CommandJob. The job
+	 * still moves from `active` → `terminal` (memory hygiene), so
+	 * the gauge decrements regardless — the residual event is the
+	 * explicit verdict the host can surface as a runtime incident
+	 * and `terminationFailed` carries the postcondition verdict
+	 * out-of-band.
+	 *
+	 * correction07 / Factory P1 follow-up:
+	 * `command_job_containment_failed` also fires on the
+	 * `pgid_unset` branch (no numeric PGID resolvable from the
+	 * supervisor). The event's `pgid` field is now optional on
+	 * the type so `pgid_unset` reaches the tracker without
+	 * coercion to a fake 0.
+	 *
+	 * All other events are acknowledged but do NOT move the gauge
+	 * (they're observational). Errors thrown by the tracker are
+	 * caught + logged so a tracker bug cannot poison the manager's
+	 * runtime path. The post-to-webview is throttled by the
+	 * existing `postStateToWebview` flush semantics so a burst of
+	 * events produces a bounded number of state posts.
+	 */
+	private readonly handleCommandJobLifecycle = (event: CommandJobLifecycleEvent): void => {
+		try {
+			// Every event carries the live gauge (`event.activeCommandJobs`)
+			// injected by the CommandJobManager's emitter. We forward it
+			// unconditionally so the tracker always reflects the latest
+			// post-delta state. This is O(1) per event.
+			this.taskTelemetry.recordActiveCommandJobs(event.activeCommandJobs)
+			this.scheduleGaugePost()
+		} catch (e) {
+			Logger.warn(
+				`[SdkController] Failed to forward lifecycle event ${event.event} (jobId=${event.jobId}): ${e instanceof Error ? e.message : String(e)}`,
+			)
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	 *
+	 * Schedule a single post-to-webview for the next tick. Multiple
+	 * lifecycle events within the same tick coalesce into a single
+	 * state post, preventing an event burst from saturating the
+	 * message channel. Mirrors the existing `postStateToWebview`
+	 * throttling semantics on the SdkController.
+	 */
+	private gaugePostScheduled = false
+	private scheduleGaugePost(): void {
+		if (this.gaugePostScheduled) return
+		this.gaugePostScheduled = true
+		setImmediate(() => {
+			this.gaugePostScheduled = false
+			this.postStateToWebview().catch((error) => {
+				Logger.warn(
+					`[SdkController] Failed to post state after gauge update: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			})
 		})
 	}
 

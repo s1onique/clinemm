@@ -49,7 +49,40 @@ import {
 	type SandboxBackendResolver,
 } from "./sandbox-policy"
 
-export type CommandJobState = "running" | "exited" | "deadline_exceeded" | "cancelled" | "spawn_failed"
+export type CommandJobState =
+	| "running"
+	| "exited"
+	| "deadline_exceeded"
+	| "cancelled"
+	| "spawn_failed" /**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+	 * (correction06 / Factory HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED
+	 * follow-up):
+	 *
+	 * Explicit terminal class for jobs whose execution ended
+	 * (`process.exit` resolved, the host asked for termination,
+	 * etc.) but whose bounded PGID-conservation invariant was
+	 * NOT proven — i.e. the synchronous postcondition probe in
+	 * `finalize()` returned `alive` / `eperm` / `unknown` (or
+	 * no PGID was resolvable). The job has therefore terminated
+	 * from the manager's vantage but the group is still on the
+	 * OS (or unproven to be gone).
+	 *
+	 * Distinct from `exited`/`deadline_exceeded`/`cancelled`/
+	 * `spawn_failed` so consumers can read the verdict
+	 * out-of-band. The bounded invariant
+	 * `CLEAN_TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE`
+	 * is preserved: only the four "clean" terminal classes
+	 * (without `containment_failed`) authorize a clean
+	 * `command_job_terminal_committed`.
+	 *
+	 * Memory hygiene: a `containment_failed` job still moves
+	 * from `active` → `terminal` (so the manager does not
+	 * retain indefinitely); the gauge decrements via a
+	 * post-delete `command_job_containment_failed` event so
+	 * the `⎇ N` tracker sees the active-map mutation.
+	 */
+	| "containment_failed"
 
 /**
  * Why the host initiated termination, if it did. Latched onto the job
@@ -77,6 +110,25 @@ export interface CommandJobSnapshot {
 	/** Convenience fields for tool results. */
 	elapsedMs: number
 	deadlineRemainingMs: number
+
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+	 * (correction06): projected for terminal jobs whose bounded
+	 * PGID-conservation invariant was NOT proven. Carries the
+	 * specific reason — mirrors the `CommandJob.terminationFailed`
+	 * latched inside `finalize()`. Undefined for `running` jobs
+	 * and for terminal jobs whose postcondition was `gone`
+	 * (clean terminal).
+	 *
+	 * Values:
+	 *   - 'pgid_unset'        — no PGID resolvable at finalize
+	 *   - 'substrate_alive'   — kernel reported the group still exists
+	 *   - 'substrate_eperm'   — kernel refused the probe (sandbox)
+	 *   - 'substrate_unknown' — any other errno (fail-closed)
+	 *
+	 * When this field is set, `state` is `"containment_failed"`.
+	 */
+	containmentFailed?: "pgid_unset" | "substrate_alive" | "substrate_eperm" | "substrate_unknown"
 
 	// NOTE (CORRECTION03): real authority-bearing capabilities
 	// (e.g. FilesystemCreateOnlyCapability with the canonical
@@ -330,7 +382,353 @@ export interface CommandJobManagerOptions {
 	 * Production callers wire this to the telemetry tracker.
 	 */
 	onRuntimeError?: (incident: RuntimeErrorIncident) => void
+
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	 *
+	 * Optional CommandJob lifecycle telemetry sink. The host can
+	 * wire this to observe the lifecycle stages enumerated
+	 * in §7 of the ACT:
+	 *
+	 *   - `command_job_process_started`
+	 *   - `command_job_primary_group_registered`
+	 *   - `command_job_termination_started`
+	 *   - `command_job_primary_group_probe`
+	 *   - `command_job_primary_group_cleanup`
+	 *   - `command_job_helper_cleanup_attempted` (correction05)
+	 *   - `command_job_terminal_requested`
+	 *   - `command_job_terminal_committed` (correction05: only on `gone`)
+	 *   - `command_job_residual_detected`
+	 *   - `command_job_containment_failed` (correction06: post-delete
+	 *     gauge-conservation event on the failure path)
+	 *
+	 * The sink is opt-in: omitting it is the production default
+	 * (zero overhead, no allocations, no logger writes). Wiring it
+	 * produces structured events that operators can correlate
+	 * against the helper's request_id stream. The sink receives a
+	 * fully-classified event with NO command text — only jobId,
+	 * rootPid, pgid, jobState, terminationReason, probeResult, and
+	 * helperFallbackUsed. Privacy / leak surface is identical to
+	 * the existing `onRuntimeError` sink.
+	 *
+	 * The manager does NOT branch on the lifecycle kind — every
+	 * callback fires with the same shape, and the host decides what
+	 * to render. Default sink is no-op (`() => {}`).
+	 */
+	onCommandJobLifecycle?: (event: CommandJobLifecycleEvent) => void
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+	 * (correction05 / Factory P0 follow-up):
+	 *
+	 * Test-only override for the postcondition probe. The production
+	 * implementation calls `process.kill(-pgid, 0)` synchronously and
+	 * classifies the return value (`gone` | `alive` | `eperm` |
+	 * `unknown`). Tests inject a fake to drive the
+	 * `command_job_primary_group_cleanup.postcondition` value without
+	 * depending on real kernel state — required because the
+	 * bounded-invariant gating (gone-only terminalization) needs
+	 * composition coverage across the entire fail-closed set, not just
+	 * the ESRCH substrate that production tests exercise by accident.
+	 *
+	 * Defaults to the real `process.kill(-pgid, 0)` classifier.
+	 * Production callers MUST NOT supply this — it is reserved for
+	 * the DCCT test suite and any future operator-driven diagnostic
+	 * harness.
+	 */
+	terminalPostconditionProbe?: (pgid: number) => "gone" | "alive" | "eperm" | "unknown"
 }
+
+/**
+ * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+ *
+ * Frozen V1 lifecycle event payload. Mirrors the eight events in
+ * §7 of the ACT spec. The `event` discriminator is a string
+ * union; widening it is an additive change. The fields are
+ * orthogonal: e.g. `pgid` is undefined for events emitted before
+ * the helper registers the group, and `terminationReason` is
+ * undefined for events emitted before the host initiates
+ * termination.
+ */
+/**
+ * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+ * Raw event payload passed to `emitCommandJobLifecycle()`. The
+ * emitter enriches it with the live ownership gauge before
+ * forwarding to the host sink, so call sites never need to
+ * compute the gauge themselves.
+ */
+export type CommandJobLifecycleEventInput =
+	| {
+			readonly event: "command_job_process_started"
+			readonly jobId: string
+			readonly rootPid?: number
+			readonly pgid?: number
+			readonly detached: boolean
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			readonly event: "command_job_primary_group_registered"
+			readonly jobId: string
+			readonly pgid: number
+			readonly helperFallbackUsed: boolean
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			readonly event: "command_job_termination_started"
+			readonly jobId: string
+			readonly pgid: number
+			readonly terminationReason: TerminationReason
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			readonly event: "command_job_primary_group_probe"
+			readonly jobId: string
+			readonly pgid: number
+			readonly probeResult: "gone" | "alive" | "eperm" | "unknown"
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			readonly event: "command_job_primary_group_cleanup"
+			readonly jobId: string
+			readonly pgid: number
+			readonly postcondition: "gone" | "alive" | "eperm" | "unknown"
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			/**
+			 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+			 * (correction05 / Factory P1 follow-up):
+			 *
+			 * Fires from `runTerminationSequence()` when the EPERM
+			 * fallback path consults the helper-owned-PGID helper. This
+			 * is the OBSERVATIONAL signal that the helper was asked to
+			 * terminate the group — it is NOT the authoritative
+			 * postcondition probe (that lives in
+			 * `command_job_primary_group_cleanup`, emitted from
+			 * `finalize()` once the helper returned and we can read the
+			 * kernel state).
+			 *
+			 * Disambiguates two events that previously shared the name
+			 * `command_job_primary_group_cleanup` (helper-attempt vs
+			 * authoritative kernel probe). Consumers now correlate
+			 * these chronologically:
+			 *   1. `command_job_helper_cleanup_attempted`
+			 *      (EPERM fallback fired)
+			 *   2. `command_job_primary_group_cleanup`
+			 *      (authoritative kernel probe — gone|alive|eperm|unknown)
+			 *   3. `command_job_terminal_committed` (only if postcondition===gone)
+			 */
+			readonly event: "command_job_helper_cleanup_attempted"
+			readonly jobId: string
+			readonly pgid: number
+			readonly helperOutcome: "success" | "denied" | "failed"
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			readonly event: "command_job_terminal_requested"
+			readonly jobId: string
+			readonly terminationReason: TerminationReason
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			readonly event: "command_job_terminal_committed"
+			readonly jobId: string
+			readonly terminationReason: TerminationReason
+			readonly exitCode: number | null
+			readonly signal: string | null
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			readonly event: "command_job_residual_detected"
+			readonly jobId: string
+			readonly pgid: number
+			readonly residualJobs: number
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+	  }
+	| {
+			/**
+			 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+			 * (correction06 / Factory
+			 * HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED):
+			 *
+			 * Fires AFTER `this.active.delete(job.id)` in the
+			 * failure path (postcondition ∈ {alive, eperm, unknown}
+			 * or no PGID resolvable). This is the post-delete
+			 * gauge-conservation event: it carries the live
+			 * ownership gauge AFTER the active-map mutation so the
+			 * tracker decrements from N to N-1, closing the
+			 * `⎇ N` stale-gauge bug that correction05 introduced.
+			 *
+			 * Distinct from `command_job_residual_detected`
+			 * (pre-delete observation of the kernel state) and
+			 * from `command_job_terminal_committed` (clean
+			 * terminalization, fires only on `gone`).
+			 *
+			 * Chronological order on the failure path:
+			 *   1. command_job_primary_group_cleanup (probe)
+			 *   2. command_job_residual_detected (pre-delete obs)
+			 *   3. active.delete (mutation)
+			 *   4. command_job_containment_failed (post-delete
+			 *      gauge-conservation event — THIS event)
+			 */
+			readonly event: "command_job_containment_failed"
+			readonly jobId: string
+			/**
+			 * The PGID the postcondition probe attempted to
+			 * verify. `undefined` when the supervisor never
+			 * exposed a numeric PGID (correction07
+			 * `pgid_unset` branch); in that case
+			 * `containmentFailed === "pgid_unset"` is the
+			 * authoritative verdict.
+			 */
+			readonly pgid?: number
+			readonly containmentFailed: "pgid_unset" | "substrate_alive" | "substrate_eperm" | "substrate_unknown"
+			readonly jobState: "containment_failed"
+			readonly tsMs: number
+	  }
+
+export type CommandJobLifecycleEvent =
+	| {
+			readonly event: "command_job_process_started"
+			readonly jobId: string
+			readonly rootPid?: number
+			readonly pgid?: number
+			readonly detached: boolean
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			/**
+			 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+			 * Live ownership gauge = the size of the manager's
+			 * `active` map AT THE TIME of this event (i.e. AFTER
+			 * the delta for this event has been applied). Lets the
+			 * host update its tracker without holding a
+			 * back-reference into the manager.
+			 *
+			 * NB: this measures jobs still in `active`, NOT live
+			 * descendants. The bounded PGID-conservation invariant
+			 * is the postcondition probe emitted in `finalize()`
+			 * via `command_job_primary_group_cleanup.postcondition`;
+			 * the stronger descendant-conservation invariant is
+			 * OUT OF SCOPE here and is addressed by the successor
+			 * ACT ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01.
+			 */
+			readonly activeCommandJobs: number
+	  }
+	| {
+			readonly event: "command_job_primary_group_registered"
+			readonly jobId: string
+			readonly pgid: number
+			readonly helperFallbackUsed: boolean
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
+	| {
+			readonly event: "command_job_termination_started"
+			readonly jobId: string
+			readonly pgid: number
+			readonly terminationReason: TerminationReason
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
+	| {
+			readonly event: "command_job_primary_group_probe"
+			readonly jobId: string
+			readonly pgid: number
+			readonly probeResult: "gone" | "alive" | "eperm" | "unknown"
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
+	| {
+			readonly event: "command_job_primary_group_cleanup"
+			readonly jobId: string
+			readonly pgid: number
+			readonly postcondition: "gone" | "alive" | "eperm" | "unknown"
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
+	| {
+			/**
+			 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+			 * (correction05 / Factory P1 follow-up): see the
+			 * `CommandJobLifecycleEventInput` mirror entry for the
+			 * full rationale. This is the OBSERVATIONAL helper
+			 * attempt signal — distinct from the authoritative
+			 * `command_job_primary_group_cleanup` kernel probe.
+			 */
+			readonly event: "command_job_helper_cleanup_attempted"
+			readonly jobId: string
+			readonly pgid: number
+			readonly helperOutcome: "success" | "denied" | "failed"
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
+	| {
+			readonly event: "command_job_terminal_requested"
+			readonly jobId: string
+			readonly terminationReason: TerminationReason
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
+	| {
+			readonly event: "command_job_terminal_committed"
+			readonly jobId: string
+			readonly terminationReason: TerminationReason
+			readonly exitCode: number | null
+			readonly signal: string | null
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
+	| {
+			readonly event: "command_job_residual_detected"
+			readonly jobId: string
+			readonly pgid: number
+			readonly residualJobs: number
+			readonly jobState: CommandJobState
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
+	| {
+			/**
+			 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+			 * (correction06 / Factory
+			 * HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED):
+			 * see the `CommandJobLifecycleEventInput` mirror entry
+			 * for the full rationale. This is the post-delete
+			 * gauge-conservation event that closes the stale-`⎇ N`
+			 * bug on the failure path (postcondition ∈ {alive,
+			 * eperm, unknown} or no PGID resolvable).
+			 */
+			readonly event: "command_job_containment_failed"
+			readonly jobId: string
+			/**
+			 * The PGID the postcondition probe attempted to
+			 * verify. `undefined` when the supervisor never
+			 * exposed a numeric PGID (correction07
+			 * `pgid_unset` branch); in that case
+			 * `containmentFailed === "pgid_unset"` is the
+			 * authoritative verdict.
+			 */
+			readonly pgid?: number
+			readonly containmentFailed: "pgid_unset" | "substrate_alive" | "substrate_eperm" | "substrate_unknown"
+			readonly jobState: "containment_failed"
+			readonly tsMs: number
+			readonly activeCommandJobs: number
+	  }
 
 /**
  * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
@@ -428,6 +826,13 @@ function snapshot(job: CommandJob): CommandJobSnapshot {
 		outputTruncated: stdoutSnap.dropped || stderrSnap.dropped,
 		elapsedMs: nowMs - job.startedAtMs,
 		deadlineRemainingMs: Math.max(0, job.deadlineAtMs - nowMs),
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// (correction06): project containment verdict for
+		// `containment_failed` terminal jobs. Clean terminal
+		// jobs (postcondition `gone`) leave this undefined so
+		// callers can read the invariant as
+		// `containmentFailed === undefined ⇔ clean terminal`.
+		containmentFailed: job.terminationFailed,
 		// CORRECTION03: do NOT project job.executionCapability
 		// (which may carry real FilesystemCreateOnlyCapability
 		// roots) into the snapshot. The merged capability lives
@@ -652,6 +1057,33 @@ interface CommandJob {
 	 * second EPERM observation to double-count.
 	 */
 	runtimeErrorReported?: boolean
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+	 * (correction05 / Factory P0 follow-up):
+	 *
+	 * Latched by `finalize()` after the synchronous PGID postcondition
+	 * probe. Set iff the postcondition was NOT `gone`. Carries the
+	 * specific reason so the bounded invariant verdict can be read
+	 * out-of-band (independent of `state`):
+	 *
+	 *   - `'pgid_unset'`         — no PGID resolved at finalize time
+	 *                              (should be unreachable on POSIX)
+	 *   - `'substrate_alive'`    — `kill(-pgid, 0)` returned rc=0,
+	 *                              i.e. the OS still has a process in
+	 *                              this group. The bounded invariant
+	 *                              `TERMINAL ⇒ PRIMARY OWNED PGID
+	 *                              GONE` is REFUTED for this job.
+	 *   - `'substrate_eperm'`    — `kill(-pgid, 0)` returned EPERM.
+	 *                              The kernel refused the probe; the
+	 *                              bounded invariant is UNPROVEN.
+	 *                              Helper authority is the only path
+	 *                              that could still claim conservation.
+	 *   - `'substrate_unknown'`  — any other errno. Fail-closed.
+	 *
+	 * When `undefined`, the bounded invariant was proven for this job
+	 * (postcondition === `gone`) — see `command_job_primary_group_cleanup.postcondition`.
+	 */
+	terminationFailed?: "pgid_unset" | "substrate_alive" | "substrate_eperm" | "substrate_unknown"
 } /**
  * CommandJobManager — the single host owner of command execution
  * lifetime for the VS Code extension's `run_commands` background path.
@@ -740,6 +1172,30 @@ export class CommandJobManager {
 	 * tracker bug cannot poison the termination flow.
 	 */
 	private readonly onRuntimeError: ((incident: RuntimeErrorIncident) => void) | undefined
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	 * Lifecycle telemetry sink (opt-in). Production default is
+	 * `undefined` (no callback fired, zero overhead). When wired
+	 * by the host (e.g. dogfood diagnostic profile), receives the
+	 * eight lifecycle events from §7 of the ACT.
+	 */
+	private readonly onCommandJobLifecycle: ((event: CommandJobLifecycleEvent) => void) | undefined
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+	 * (correction05 / Factory P0 follow-up):
+	 *
+	 * Synchronous PGID postcondition classifier. The production
+	 * implementation calls `process.kill(-pgid, 0)` and maps the
+	 * result onto the fail-closed set; tests inject a fake to drive
+	 * `command_job_primary_group_cleanup.postcondition` independently
+	 * of real kernel state (the bounded-invariant gating needs
+	 * composition coverage across all four classifications, not just
+	 * the ESRCH substrate that production tests exercise by accident).
+	 *
+	 * Defaults to the real-kernel classifier; see
+	 * `defaultTerminalPostconditionProbe` below.
+	 */
+	private readonly terminalPostconditionProbe: (pgid: number) => "gone" | "alive" | "eperm" | "unknown"
 	private helperClientToken: string | undefined
 	/**
 	 * ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 (review-correction03):
@@ -763,6 +1219,50 @@ export class CommandJobManager {
 		this.helperOwnedPgidProvider = options.helperOwnedPgidProvider
 		this.spawnFactory = options.spawnFactory ?? spawnSupervisableShellCommand
 		this.onRuntimeError = options.onRuntimeError
+		this.onCommandJobLifecycle = options.onCommandJobLifecycle
+		this.terminalPostconditionProbe = options.terminalPostconditionProbe ?? defaultTerminalPostconditionProbe
+	}
+
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	 *
+	 * Helper that fires a CommandJob lifecycle event into the
+	 * optional sink. When the sink is undefined (production
+	 * default), the call is a no-op (zero overhead, no
+	 * allocations). When wired, the sink receives a fully-
+	 * classified event and any thrown error is caught + logged
+	 * — a sink bug must never poison the manager's runtime path.
+	 */
+	private emitCommandJobLifecycle(event: CommandJobLifecycleEventInput): void {
+		const sink = this.onCommandJobLifecycle
+		if (!sink) return
+		try {
+			// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+			// (correction07 / Factory
+			// HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
+			//
+			// The gauge IS the size of the active map — exactly
+			// and only. NOT the length of `getActiveCommandJobs()`,
+			// which filters out jobs whose `state !== "running"`
+			// or whose PGID is not numeric/positive (that filter
+			// is for the postcondition / ownership probe, NOT for
+			// the gauge). Picking a single semantic authority
+			// means `event.activeCommandJobs === manager.activeCount`
+			// at every emit point — including BEFORE the delta has
+			// been applied (the mutator must emit AFTER the map
+			// write so this invariant holds; see start() and the
+			// post-delete `command_job_containment_failed` emit
+			// on the failure path).
+			const enriched = {
+				...(event as object),
+				activeCommandJobs: this.active.size,
+			} as CommandJobLifecycleEvent
+			sink(enriched)
+		} catch (e) {
+			Logger.warn(
+				`[CommandJobManager] onCommandJobLifecycle sink threw; event dropped (event=${event.event}, jobId=${event.jobId}): ${(e as Error).message}`,
+			)
+		}
 	}
 
 	/**
@@ -1175,6 +1675,25 @@ export class CommandJobManager {
 		// fall back; treeEscapee will be set instead.
 		const helperCapability = await this.tryRegisterOwnedJob(childProcess)
 
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// (correction07 / Factory
+		// HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
+		//
+		// Capture the data for `command_job_process_started` and
+		// `command_job_primary_group_registered` HERE, but DEFER
+		// the actual emits until AFTER `this.active.set(id, job)`
+		// below. The lifecycle emitter enriches every event with
+		// the live ownership gauge; emitting before the active-map
+		// mutation would carry `activeCommandJobs = 0` for a
+		// start that just grew the gauge from 0 → 1, leaving the
+		// header's `⎇ N` hidden for the entire useful lifetime of
+		// a long-running command. The `command_job_containment_failed`
+		// failure-path event already fires AFTER `active.delete`
+		// (correction06); we mirror that here on the start path.
+		const processStartedRootPid = readRootPidFromSupervisor(childProcess)
+		const processStartedPgid = readPgidFromSupervisor(childProcess)
+		const registeredPgid = helperCapability ? readPgidFromSupervisor(childProcess) : undefined
+
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 		// set up the terminal-transition promise BEFORE the active
 		// Map mutation so the resolver is registered before the
@@ -1271,6 +1790,48 @@ export class CommandJobManager {
 		// count, which would be racy.
 		const wasBecomingActive = this.active.size === 0
 		this.active.set(id, job)
+
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// (correction07 / Factory
+		// HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
+		//
+		// Emit `command_job_process_started` AFTER the active-map
+		// insertion so the lifecycle emitter's
+		// `activeCommandJobs = this.active.size` enrichment
+		// carries the post-delta gauge (1 for a 0→1 transition).
+		// Mirror of the `command_job_containment_failed`
+		// post-delete emit on the failure path (correction06):
+		// both events now carry the gauge value that reflects the
+		// mutation that produced them, not the value from before
+		// the mutation.
+		this.emitCommandJobLifecycle({
+			event: "command_job_process_started",
+			jobId: id,
+			rootPid: processStartedRootPid,
+			pgid: processStartedPgid,
+			detached: true,
+			jobState: "running",
+			tsMs: startedAtMs,
+		})
+
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// (correction07): same ordering rule for
+		// `command_job_primary_group_registered`. Emit only when
+		// the helper accepted the registration AND a numeric pgid
+		// is resolvable (the same predicate as the previous
+		// ordering). When the helper is absent or rejects, the
+		// bounded contract still owns the PGID via the direct
+		// path — no event is emitted in that case.
+		if (typeof registeredPgid === "number") {
+			this.emitCommandJobLifecycle({
+				event: "command_job_primary_group_registered",
+				jobId: id,
+				pgid: registeredPgid,
+				helperFallbackUsed: false,
+				jobState: "running",
+				tsMs: Date.now(),
+			})
+		}
 
 		// Track exit; finalize using the latched terminationReason so
 		// host-initiated termination wins over the child's cooperation.
@@ -1450,6 +2011,23 @@ export class CommandJobManager {
 		}
 		// Latch the reason and start the termination flow.
 		job.terminationReason = reason
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+		// emit `command_job_termination_started` BEFORE the
+		// termination sequence runs so a wired sink can correlate
+		// the post-probe event with the originating reason. The
+		// event is emitted exactly once per terminate() call thanks
+		// to the FIRST-WRITER-WINS gate above.
+		const terminatePgid = readPgidFromSupervisor(job.process)
+		if (typeof terminatePgid === "number") {
+			this.emitCommandJobLifecycle({
+				event: "command_job_termination_started",
+				jobId: job.id,
+				pgid: terminatePgid,
+				terminationReason: reason,
+				jobState: job.state,
+				tsMs: Date.now(),
+			})
+		}
 		job.terminationPromise = this.runTerminationSequence(job)
 		return job.terminationPromise
 	}
@@ -1487,6 +2065,30 @@ export class CommandJobManager {
 			gracefulSignal: "SIGTERM",
 			graceMs: TERM_GRACE_MS,
 		})
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+		// emit `command_job_primary_group_probe` so a wired sink can
+		// observe the post-terminate kernel state of the PGID. We
+		// classify the result the same way `probeOwnedGroups()`
+		// does, but the source of truth here is the supervisor's
+		// `treeResult` (it already polled the kernel as part of its
+		// grace-race loop). When the supervisor reports
+		// `treeTerminated: false`, the PGID is still alive (or
+		// EPERM'd); when true, the PGID is gone.
+		const probePgid = readPgidFromSupervisor(job.process)
+		if (typeof probePgid === "number") {
+			let probeResult: "gone" | "alive" | "eperm" | "unknown"
+			if (treeResult.treeTerminated) probeResult = "gone"
+			else if (treeResult.epermDetected) probeResult = "eperm"
+			else probeResult = "alive"
+			this.emitCommandJobLifecycle({
+				event: "command_job_primary_group_probe",
+				jobId: job.id,
+				pgid: probePgid,
+				probeResult,
+				jobState: job.state,
+				tsMs: Date.now(),
+			})
+		}
 		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: the
 		// supervisor's structured EPERM signal is the canonical
 		// runtime-error authority for process-tree termination. We
@@ -1528,20 +2130,71 @@ export class CommandJobManager {
 				// helperOwnedCapability only when a provider was used.
 				throw new Error("helper-owned capability set without a provider")
 			}
+			// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+			// (correction05 / Factory P1 follow-up):
+			// Capture the helper-attempt outcome so we can emit
+			// `command_job_helper_cleanup_attempted` with a structured
+			// verdict — distinct from the authoritative
+			// `command_job_primary_group_cleanup` kernel probe that
+			// `finalize()` emits after the helper returned.
+			//
+			// Outcomes:
+			//   success → terminateOwned resolved; helper told us the
+			//             group is gone (caller's responsibility to
+			//             await the kernel observation).
+			//   denied  → capability-level rejection (e.g. expired
+			//             token, foreign UID). Identifiable by the
+			//             helper's structured error code (DENY_*).
+			//   failed  → IPC / runtime / unknown failure. The direct
+			//             path's treeEscapee remains the diagnostic.
+			let helperOutcome: "success" | "denied" | "failed" = "failed"
 			try {
 				await provider.terminateOwned({
 					clientToken: job.helperOwnedCapability.clientToken,
 					jobToken: job.helperOwnedCapability.jobToken,
 				})
+				helperOutcome = "success"
 				// Helper succeeded — wait briefly for the kernel
 				// to observe the group gone. We do NOT block here:
 				// `job.process.exit` will catch it; the helper's
 				// own timeout-driven kill on its own task guarantees
 				// the leader goes away in bounded time.
-			} catch {
+			} catch (e) {
 				// Helper error (DENY_*, TERMINATION_FAILED, IPC fail,
 				// METHOD_NOT_AVAILABLE_IN_TS_FALLBACK). The direct
-				// path's treeEscapee remains the diagnostic.
+				// path's treeEscapee remains the diagnostic. We do
+				// our best-effort classification: provider-shaped
+				// rejection surfaces as `denied`, anything else as
+				// `failed`. The provider's error contract is opaque
+				// to the manager (HelperOwnedPgidProvider is a host
+				// seam) so we rely on the convention that helpers
+				// with structured codes attach a `code` or
+				// `errorClass` to the thrown value.
+				const err = e as { code?: string; errorClass?: string; message?: string }
+				const codeOrClass = err?.code ?? err?.errorClass
+				if (typeof codeOrClass === "string" && (codeOrClass.startsWith("DENY_") || codeOrClass === "PERMISSION_DENIED")) {
+					helperOutcome = "denied"
+				}
+			}
+			// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+			// (correction05 / Factory P1 follow-up): emit the
+			// OBSERVATIONAL helper-attempt event (renamed from the
+			// previous `command_job_primary_group_cleanup` reuse).
+			// Consumers now correlate these chronologically:
+			//   1. command_job_helper_cleanup_attempted (this one)
+			//   2. command_job_primary_group_cleanup (kernel probe
+			//      from finalize() — fail-closed set)
+			//   3. command_job_terminal_committed (only on gone)
+			const cleanupPgid = readPgidFromSupervisor(job.process)
+			if (typeof cleanupPgid === "number") {
+				this.emitCommandJobLifecycle({
+					event: "command_job_helper_cleanup_attempted",
+					jobId: job.id,
+					pgid: cleanupPgid,
+					helperOutcome,
+					jobState: job.state,
+					tsMs: Date.now(),
+				})
 			}
 		}
 		// After terminateTree resolves, the tree is observed gone OR
@@ -1574,12 +2227,137 @@ export class CommandJobManager {
 	): void {
 		if (job.finalized) return
 		job.finalized = true
-		job.state = state
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// (correction06 / Factory
+		// HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED):
+		//
+		// State assignment is DEFERRED until after the postcondition
+		// probe. The probe may determine the job belongs in the
+		// `containment_failed` terminal class (postcondition ≠
+		// `gone`), in which case the caller's `state` (e.g.
+		// `"cancelled"`, `"deadline_exceeded"`) is OVERWRITTEN with
+		// the containment verdict — the bounded invariant statement
+		// `CLEAN_TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE`
+		// then has the truthful semantic it claims.
+		//
+		// correction05 wrote `job.state = state` here eagerly,
+		// which made the bounded invariant
+		// `TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE`
+		// false by construction: any cancelled job whose PGID
+		// was still on the OS would terminate with `state =
+		// "cancelled"` AND `command_job_terminal_committed`
+		// denied — exactly the case Factory caught. The
+		// over-write below makes the state machine honest.
 		if (detail.exitCode !== undefined && detail.exitCode !== null) {
 			job.exitCode = detail.exitCode
 		}
 		if (typeof detail.signal === "string") {
 			job.signal = detail.signal
+		}
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// (correction05 / Factory P0 follow-up):
+		//
+		// BEFORE emitting terminal_committed and BEFORE discarding
+		// the job's identity (`this.active.delete(job.id)`), capture
+		// the saved PGID and probe `kill(-pgid, 0)` synchronously.
+		// The classification is fail-closed (see
+		// `defaultTerminalPostconditionProbe`):
+		//
+		//   gone    → ESRCH — the OS confirms the group is reaped
+		//   alive   → rc=0 — the group still exists; the bounded
+		//                    invariant `TERMINAL ⇒ PRIMARY OWNED
+		//                    PGID GONE` is REFUTED for this job
+		//   eperm   → EPERM — the kernel refused the probe; the
+		//                    bounded invariant is UNPROVEN
+		//   unknown → any other errno — fail-closed
+		//
+		// The probe fires inside finalize() SYNCHRONOUSLY so the
+		// saved PGID is still resolvable and the read cannot race
+		// with the active-map delete that follows. The result
+		// ALSO drives a LOAD-BEARING GATE on terminalization:
+		//
+		//   postcondition === "gone"
+		//     → emit `command_job_primary_group_cleanup`
+		//     → emit `command_job_terminal_committed`
+		//     → `gone` is the ONLY path that proves the bounded
+		//       invariant
+		//
+		//   postcondition === "alive" | "eperm" | "unknown"
+		//     → emit `command_job_primary_group_cleanup` carrying
+		//       the failure classification
+		//     → emit `command_job_residual_detected` (a runtime
+		//       incident the host can surface)
+		//     → latch `job.terminationFailed` so callers reading the
+		//       terminal snapshot can read the verdict out-of-band
+		//     → DO NOT emit `command_job_terminal_committed` (this
+		//       state is terminal but uncommitted — the group is
+		//       still on the OS)
+		//
+		// The previous code (correction04) emitted
+		// `terminal_committed` regardless of postcondition — that
+		// was a bookkeeping observation, NOT conservation. The
+		// `gone`-gating introduced here turns bookkeeping into
+		// causality: a terminal job is one whose kernel-level
+		// invariant was proven at the moment of finalization.
+		const savedPgid = readPgidFromSupervisor(job.process)
+		let postcondition: "gone" | "alive" | "eperm" | "unknown" | undefined
+		if (typeof savedPgid === "number" && savedPgid > 0) {
+			postcondition = this.terminalPostconditionProbe(savedPgid)
+			this.emitCommandJobLifecycle({
+				event: "command_job_primary_group_cleanup",
+				jobId: job.id,
+				pgid: savedPgid,
+				postcondition,
+				jobState: state,
+				tsMs: Date.now(),
+			})
+		} else {
+			// No PGID resolvable — fail-closed. POSIX paths should
+			// always carry a pgid from the supervisor, but this
+			// branch keeps the invariant statement correct on
+			// malformed supervisors or non-POSIX substrates.
+			postcondition = undefined
+			job.terminationFailed = "pgid_unset"
+		}
+		// Resolve the terminal state: clean (caller's `state`) vs
+		// `containment_failed`. The `gone` postcondition is the
+		// ONLY verdict compatible with the bounded invariant
+		// `CLEAN_TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE` —
+		// any other verdict OVERWRITES the caller's clean terminal
+		// state with `containment_failed` so the state machine
+		// is honest (correction06).
+		const invariantProven = postcondition === "gone"
+		let terminalState: CommandJobState
+		if (invariantProven) {
+			terminalState = state
+		} else {
+			// Map the kernel verdict onto a structured failure
+			// reason so the host sink (and `CommandJobSnapshot`
+			// consumers) can read the verdict out-of-band.
+			if (job.terminationFailed === undefined) {
+				if (postcondition === "alive") job.terminationFailed = "substrate_alive"
+				else if (postcondition === "eperm") job.terminationFailed = "substrate_eperm"
+				else if (postcondition === "unknown") job.terminationFailed = "substrate_unknown"
+			}
+			terminalState = "containment_failed"
+		}
+		job.state = terminalState
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+		// emit `command_job_residual_detected` on the failure path —
+		// a pre-delete observation of the kernel state. The gauge
+		// in this event is the PRE-delete count, NOT the
+		// gauge-conservation event (correction06 adds
+		// `command_job_containment_failed` for that).
+		if (!invariantProven) {
+			const residualCount = this.active.size
+			this.emitCommandJobLifecycle({
+				event: "command_job_residual_detected",
+				jobId: job.id,
+				pgid: typeof savedPgid === "number" ? savedPgid : 0,
+				residualJobs: residualCount,
+				jobState: terminalState,
+				tsMs: Date.now(),
+			})
 		}
 		// INVARIANT (timer hygiene): clear any leftover watchdog / abort
 		// listener so high command volume doesn't accumulate timers.
@@ -1623,7 +2401,89 @@ export class CommandJobManager {
 		// runner uses this flag directly instead of a post-hoc
 		// `getActiveJobIds()` count.
 		const wasBecomingIdle = this.active.size === 1
+		// Move from active → terminal (bounded FIFO). The PGID
+		// postcondition probe was emitted above (before
+		// terminal_committed) so the saved PGID is still on the
+		// supervisor at this point. active.delete below is the
+		// final mutation.
 		this.active.delete(job.id)
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// (correction07 / Factory
+		// HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
+		//
+		// emit `command_job_terminal_committed` AFTER the
+		// active-map delete on the clean path. Previously the
+		// emit happened BEFORE the delete (correction05) — the
+		// lifecycle emitter's `getActiveCommandJobs().length`
+		// enrichment then captured the PRE-delete gauge (N) for a
+		// job that just shrunk the active map from N → N-1, leaving
+		// the header's `⎇ N` off-by-one for the entire end-of-life
+		// window. We now mirror the post-delete emit ordering on
+		// the failure path (correction06):
+		//   1. command_job_primary_group_cleanup  (probe)
+		//   2. command_job_residual_detected      (pre-delete obs, failure path only)
+		//   3. active.delete                      (mutation)
+		//   4. command_job_terminal_committed     (post-delete — clean path) OR
+		//      command_job_containment_failed     (post-delete — failure path, correction06)
+		if (invariantProven) {
+			this.emitCommandJobLifecycle({
+				event: "command_job_terminal_committed",
+				jobId: job.id,
+				terminationReason: job.terminationReason,
+				exitCode: job.exitCode ?? null,
+				signal: job.signal ?? null,
+				jobState: terminalState,
+				tsMs: Date.now(),
+			})
+		}
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// (correction06 / Factory
+		// HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED):
+		//
+		// emit `command_job_containment_failed` AFTER the
+		// active-map delete on the failure path. This is the
+		// post-delete gauge-conservation event — it carries the
+		// live ownership gauge (post-delete, via the emitter's
+		// `this.active.size` enrichment) so the tracker decrements
+		// from N to N-1, closing the stale-`⎇ N` bug correction05
+		// introduced.
+		//
+		// On the clean path this event is NOT emitted — the
+		// `command_job_terminal_committed` event already carries
+		// the post-delete gauge and the tracker decrements off
+		// it.
+		//
+		// The `pgid` and `containmentFailed` fields let consumers
+		// correlate this event with the earlier
+		// `command_job_primary_group_cleanup.postcondition` and
+		// `command_job_residual_detected` events on the same job.
+		if (!invariantProven && job.terminationFailed) {
+			// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+			// (correction07 / Factory
+			// HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
+			//
+			// The previous guard required `typeof savedPgid === "number"`,
+			// which silently skipped the `pgid_unset` branch
+			// (line 2289 — supervisor never exposed a numeric
+			// PGID). On that path, the tracker would receive
+			// `command_job_primary_group_cleanup` carrying
+			// `postcondition: undefined` but NO post-delete
+			// gauge-conservation event, leaving the live
+			// ownership gauge stuck at N instead of decrementing
+			// to N-1. Loosen the guard to fire whenever the
+			// containment verdict is non-clean AND a structured
+			// `terminationFailed` reason was latched. `pgid` is
+			// now optional in the event type so `pgid_unset`
+			// reaches the tracker without coercion.
+			this.emitCommandJobLifecycle({
+				event: "command_job_containment_failed",
+				jobId: job.id,
+				pgid: typeof savedPgid === "number" ? savedPgid : undefined,
+				containmentFailed: job.terminationFailed,
+				jobState: "containment_failed",
+				tsMs: Date.now(),
+			})
+		}
 		// Resolve the terminal-transition promise with the captured
 		// flag. This is the single source of truth for the
 		// >0->0 transition identity; the runner reads the flag
@@ -1717,6 +2577,20 @@ export class CommandJobManager {
 		if (job.state !== "running") {
 			return { ok: true, state: job.state }
 		}
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+		// emit `command_job_terminal_requested` from the public
+		// cancel() seam — this is the host's authoritative signal
+		// that the user/code WANTS termination. Distinct from
+		// `command_job_termination_started`, which fires once the
+		// SIGTERM/ESCALATE flow actually begins (and is gated by
+		// the FIRST-WRITER-WINS latch so it fires at most once).
+		this.emitCommandJobLifecycle({
+			event: "command_job_terminal_requested",
+			jobId: job.id,
+			terminationReason: "cancel",
+			jobState: job.state,
+			tsMs: Date.now(),
+		})
 		// ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01:
 		// EPERM-only fallback. terminate() below tries the direct
 		// path (kill -pgid SIGTERM) first. On EPERM, the
@@ -1811,6 +2685,128 @@ export class CommandJobManager {
 	}
 
 	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	 *
+	 * Snapshot the live ClineMM-owned command containment units.
+	 *
+	 * Each entry corresponds to a CommandJob whose `state === "running"`
+	 * is currently held in the `active` Map. This is the host's
+	 * authoritative live-ownership gauge — orthogonal to the
+	 * "executables named `node`/`python`/etc. running on the system"
+	 * signal (which is diagnostic only and not authoritative for
+	 * destruction decisions).
+	 *
+	 * Returned `pgid` is the same primary PGID the helper LaunchAgent
+	 * registered with `process-group.register-owned`. It is what the
+	 * production `terminateTree(...)` signals via
+	 * `process.kill(-pgid, ...)`. The helper remains the single
+	 * source of cleanup authority; this method only projects state.
+	 *
+	 * `detached` mirrors the spawn shape (`detached: true` -> the
+	 * spawned shell is leader of a new process group; this is the
+	 * shape CommandJobManager uses). Production code does NOT branch
+	 * on this field for cleanup logic; it is exposed only for the
+	 * invariant probe and the bounded UI gauge.
+	 */
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+	 * (correction07 / Factory
+	 * HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
+	 *
+	 * Snapshot of "RUNNING jobs retained in `active` with a
+	 * numeric, positive PGID resolvable from the supervisor."
+	 * NOT the gauge — the gauge is `manager.activeCount` (i.e.
+	 * `this.active.size`) and is the value carried by every
+	 * lifecycle event as `activeCommandJobs`. The two readings
+	 * agree when the manager is idle (both 0) and after a job
+	 * finalizes (the job leaves `active` for `terminal`); they
+	 * diverge mid-emission only when a job is in `active` but
+	 * NOT `running` (e.g. a corner case during finalize), which
+	 * the gauge includes and this filtered view does not.
+	 *
+	 * The filtered view is the canonical input to
+	 * `probeOwnedGroups()` and to the bounded UI rendering of
+	 * "running background commands". It is NOT the gauge.
+	 */
+	getActiveCommandJobs(): ReadonlyArray<{
+		readonly jobId: string
+		readonly pgid: number
+		readonly detached: boolean
+		readonly startedAtMs: number
+	}> {
+		const out: { jobId: string; pgid: number; detached: boolean; startedAtMs: number }[] = []
+		for (const job of this.active.values()) {
+			if (job.state !== "running") continue
+			const pgid = readPgidFromSupervisor(job.process)
+			if (typeof pgid !== "number" || pgid <= 0) continue
+			out.push({
+				jobId: job.id,
+				pgid,
+				detached: true,
+				startedAtMs: job.startedAtMs,
+			})
+		}
+		return out
+	}
+
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	 *
+	 * Postcondition probe for the cleanup invariant.
+	 *
+	 * For every active owned job, probe the kernel with
+	 * `kill(-pgid, 0)` and classify the result. The probe is a
+	 * read-only assertion (no signal is delivered); the helper
+	 * remains the only authority for cleanup decisions.
+	 *
+	 * Return shape is a per-job tuple so a UI or test can render
+	 * "X / Y owned groups confirmed gone" without rescanning the
+	 * active Map. The probe is best-effort: a process whose PGID
+	 * has been reaped AND whose PID has been reused may produce a
+	 * misleading result; production callers MUST combine this probe
+	 * with the live `ps` census for diagnostic purposes
+	 * (see §16 of the ACT spec — destructive decisions may not rely
+	 * on `ps`).
+	 *
+	 * The implementation is pure-JS: it reads the supervisor's PGID
+	 * via the existing `readPgidFromSupervisor` helper, invokes
+	 * `process.kill(-pgid, 0)` synchronously, and classifies the
+	 * return value as `gone` (ESRCH), `alive` (rc=0), or `eperm`
+	 * (EPERM). It is intentionally NOT executed on every keystroke;
+	 * the host should call it from the `dispose()` boundary and from
+	 * any operator-triggered diagnostic dump.
+	 */
+	probeOwnedGroups(): ReadonlyArray<{
+		readonly jobId: string
+		readonly pgid: number
+		readonly state: "gone" | "alive" | "eperm" | "unknown"
+	}> {
+		const out: { jobId: string; pgid: number; state: "gone" | "alive" | "eperm" | "unknown" }[] = []
+		for (const job of this.active.values()) {
+			if (job.state !== "running") continue
+			const pgid = readPgidFromSupervisor(job.process)
+			if (typeof pgid !== "number" || pgid <= 0) continue
+			// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+			// Classification is fail-closed. Only an unambiguous ESRCH is
+			// evidence the PGID is gone. EPERM is a substrate signal
+			// (sandbox); unknown errnos are reported as `unknown` so the
+			// caller (or DCCT test) does NOT silently read them as gone.
+			let state: "gone" | "alive" | "eperm" | "unknown"
+			try {
+				process.kill(-pgid, 0)
+				state = "alive"
+			} catch (e) {
+				const err = e as NodeJS.ErrnoException
+				if (err.code === "ESRCH") state = "gone"
+				else if (err.code === "EPERM") state = "eperm"
+				else state = "unknown"
+			}
+			out.push({ jobId: job.id, pgid, state })
+		}
+		return out
+	}
+
+	/**
 	 * Dispose the manager: cancel every still-running job and drop all
 	 * retained state. Call from the host's session teardown.
 	 */
@@ -1820,6 +2816,29 @@ export class CommandJobManager {
 			const job = this.active.get(id)
 			if (job) {
 				await this.terminate(job, "cancel")
+			}
+		}
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+		// emit `command_job_residual_detected` per still-residual
+		// PGID. The probe runs synchronously after every job was
+		// asked to terminate; on the IDE sandboxed shell the probe
+		// surfaces EPERM (which is the substrate, not a contract
+		// failure). On a non-sandboxed host the probe should report
+		// `gone` for every previously-active job. Residual jobs
+		// receive the event with `residualJobs` = count of leftover
+		// active jobs; the gauge in §13 of the ACT spec renders
+		// `⎇! N` when this fires.
+		const residualProbe = this.probeOwnedGroups()
+		for (const probe of residualProbe) {
+			if (probe.state !== "gone") {
+				this.emitCommandJobLifecycle({
+					event: "command_job_residual_detected",
+					jobId: probe.jobId,
+					pgid: probe.pgid,
+					residualJobs: residualProbe.filter((p) => p.state !== "gone").length,
+					jobState: "running",
+					tsMs: Date.now(),
+				})
 			}
 		}
 		this.active.clear()
@@ -1850,6 +2869,73 @@ export class CommandJobManager {
 			this.helperClientTokenPromise = undefined
 		}
 	}
+}
+
+/**
+ * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+ *
+ * Read the canonical PGID from a `SupervisableShellProcess`. The
+ * supervisor exposes a `pgid` property on POSIX (POSIX-only field;
+ * undefined on Windows). This helper exists so the new
+ * `getActiveCommandJobs()` and `probeOwnedGroups()` methods
+ * can share a single point of truth for PGID extraction; it also
+ * keeps the existing `tryRegisterOwnedJob()` invariant: the PGID
+ * the helper verified at registration is the same PGID the probe
+ * reads here. Returning `undefined` for any shape mismatch keeps
+ * the call sites uniform.
+ */
+function readPgidFromSupervisor(process: SupervisableShellProcess): number | undefined {
+	const p = (process as unknown as { pgid?: number | undefined }).pgid
+	if (typeof p !== "number" || p <= 0) return undefined
+	return p
+}
+
+/**
+ * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+ * (correction05 / Factory P0 follow-up):
+ *
+ * Production PGID postcondition classifier. Calls
+ * `process.kill(-pgid, 0)` synchronously and maps the return value
+ * onto the fail-closed set:
+ *
+ *   rc=0        → "alive"   (the OS still has a process in this group)
+ *   ESRCH       → "gone"    (the only classification that proves the
+ *                            bounded invariant `TERMINAL ⇒ PRIMARY
+ *                            OWNED PGID GONE`)
+ *   EPERM       → "eperm"   (the kernel refused the probe — the
+ *                            bounded invariant is UNPROVEN)
+ *   anything    → "unknown" (fail-closed — no silent coerce)
+ *
+ * The probe MUST run synchronously inside `finalize()` so the
+ * saved PGID is still resolvable. No async work, no IPC, no helper
+ * — this is the kernel's own verdict on whether the group has been
+ * reaped.
+ */
+function defaultTerminalPostconditionProbe(pgid: number): "gone" | "alive" | "eperm" | "unknown" {
+	try {
+		process.kill(-pgid, 0)
+		return "alive"
+	} catch (e) {
+		const err = e as NodeJS.ErrnoException
+		if (err.code === "ESRCH") return "gone"
+		if (err.code === "EPERM") return "eperm"
+		return "unknown"
+	}
+}
+
+/**
+ * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+ *
+ * Read the canonical root PID from a `SupervisableShellProcess`.
+ * Returns `undefined` for any shape mismatch so call sites stay
+ * uniform. Mirrors the readPgidFromSupervisor helper above so
+ * every extraction of process-identity metadata goes through a
+ * single shape check.
+ */
+function readRootPidFromSupervisor(process: SupervisableShellProcess): number | undefined {
+	const p = (process as unknown as { pid?: number | undefined }).pid
+	if (typeof p !== "number" || p <= 0) return undefined
+	return p
 }
 
 /**

@@ -814,6 +814,49 @@ export interface TaskHeaderTelemetryStrip {
 	 * task id (REC-06 + REC-BE-13 pin this contract).
 	 */
 	runtimeErrorCount?: number
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+	 * (correction07 / Factory
+	 * HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
+	 *
+	 * Live ownership gauge = `manager.activeCount` =
+	 * `this.active.size` (number of CommandJobs the manager
+	 * currently owns, regardless of `state`). This is the value
+	 * the lifecycle emitter enriches onto every event.
+	 *
+	 * NOT to be confused with
+	 * `manager.getActiveCommandJobs().length`, which is the
+	 * filtered view of RUNNING jobs with a numeric, positive
+	 * PGID resolvable from the supervisor (used as the input to
+	 * the postcondition probe and to the bounded UI rendering of
+	 * "running background commands"). The two readings agree at
+	 * idle and after a job finalizes; they diverge mid-emission
+	 * only when an `active` entry is in a non-`running` state
+	 * (a corner case during finalize).
+	 *
+	 * ORTHOGONAL to `runtimeErrorCount` (which is a historical
+	 * monotonic incident counter) and to `toolCalls.mechanism.command`
+	 * (which is the cumulative number of `>_` shell tool calls).
+	 *
+	 * Hidden at zero (the webview treats absence as 0). When the
+	 * host sees `activeCommandJobs > 0`, a `⎇ N` glyph is
+	 * rendered in the task-header telemetry strip.
+	 *
+	 * Conservation invariant (per the ACT spec, §18):
+	 *   `terminal task/job` → `activeCommandJobs === 0`
+	 *
+	 * Single semantic authority (correction07):
+	 *   `event.activeCommandJobs === manager.activeCount`
+	 * at every emit point, achieved by (a) emitting
+	 * `command_job_process_started` and
+	 * `command_job_primary_group_registered` AFTER
+	 * `this.active.set`, (b) emitting `command_job_terminal_committed`
+	 * AFTER `this.active.delete` on the clean path (mirrors the
+	 * post-delete `command_job_containment_failed` on the failure
+	 * path from correction06), and (c) using `this.active.size`
+	 * as the gauge at the lifecycle emitter.
+	 */
+	activeCommandJobs?: number
 }
 
 /**
