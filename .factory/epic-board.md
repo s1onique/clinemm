@@ -1,25 +1,41 @@
-## ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 — HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED + BOUNDED FIX CYCLE — 2026-09-18
+## ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 — HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED + BOUNDED FIX CYCLE — 2026-09-18
 
-**Status:** Third-round HALT (HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED) from Factory reviewer applied; bounded fix cycle applied (correction06: explicit `containment_failed` terminal class + post-delete gauge-conservation event). Bounded invariant re-stated honestly as `CLEAN_TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE`. **84 tests green across 6 gates; tsc --noEmit clean. C1: GO directly to the containment-primitive discriminator.**
+**Status:** Fourth-round HALT (HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED) from Factory reviewer applied; bounded fix cycle applied (correction07: post-mutation emit ordering on start + clean terminal + loosened `pgid_unset` guard + single semantic authority on the gauge). State machine and event semantics both honest. Bounded invariant `CLEAN_TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE` re-asserted. **86 tests green across 6 gates; tsc --noEmit clean. C1: GO directly to the containment-primitive discriminator.**
 
-**Honest verdict matrix (correction06 / post-third-reviewer):**
+**Honest verdict matrix (correction07 / post-fourth-reviewer):**
 ```
-PRIMARY_PGID_POSTCONDITION_OBSERVED   = PROVEN  (probe runs synchronously inside finalize())
-PRIMARY_PGID_CONSERVATION              = PROVEN  (re-stated as CLEAN_TERMINAL ⇒ PRIMARY OWNED PGID GONE;
-                                                  state machine holds by construction)
-PRIMARY_PGID_POSTCONDITION_FAIL_CLOSED = PROVEN  (no silent coerce; alive/eperm/unknown distinct)
-HELPER_EVENT_DISAMBIGUATION            = PROVEN  (helper_cleanup_attempted vs primary_group_cleanup)
-CONTAINMENT_FAILED_TERMINAL_CLASS      = PROVEN  (CommandJobState member; deferred state assignment)
-GAUGE_CONSERVATION_ON_FAILURE_PATH     = PROVEN  (command_job_containment_failed fires AFTER active.delete)
-ACTIVE_JOB_GAUGE                       = GREEN   (⎇ N works, 84 tests pass)
-ZERO-DESCENDANT_GAUGE                  = NOT IMPLEMENTED (renamed honest label)
-DESCENDANT_CONSERVATION                = REFUTED by escape fixtures (E-F)
-CASE_B                                 = REPRODUCED (Node detached:true, Python start_new_session=True)
+PRIMARY_PGID_POSTCONDITION_OBSERVED    = PROVEN  (probe runs synchronously inside finalize())
+PRIMARY_PGID_CONSERVATION               = PROVEN  (CLEAN_TERMINAL ⇒ PRIMARY OWNED PGID GONE; state machine holds by construction)
+PRIMARY_PGID_POSTCONDITION_FAIL_CLOSED  = PROVEN  (no silent coerce; alive/eperm/unknown distinct)
+HELPER_EVENT_DISAMBIGUATION             = PROVEN  (helper_cleanup_attempted vs primary_group_cleanup)
+CONTAINMENT_FAILED_TERMINAL_CLASS       = PROVEN  (CommandJobState member; deferred state assignment)
+GAUGE_CONSERVATION_ON_FAILURE_PATH      = PROVEN  (command_job_containment_failed fires AFTER active.delete with post-delete gauge)
+START_PATH_GAUGE_INCREMENT              = PROVEN  (correction07: process_started + primary_group_registered carry POST-delta gauge)
+CLEAN_PATH_POST_DELETE_GAUGE            = PROVEN  (correction07: terminal_committed moved from pre-delete to post-delete emit)
+PGID_UNSET_COVERAGE                     = PROVEN  (correction07: containment_failed guard loosened; pgid optional on event)
+GAUGE_SINGLE_SEMANTIC_AUTHORITY         = PROVEN  (correction07: enrichment = this.active.size — matches manager.activeCount)
+ACTIVE_JOB_GAUGE                        = GREEN   (⎇ N works, 86 tests pass)
+ZERO-DESCENDANT_GAUGE                   = NOT IMPLEMENTED (renamed honest label)
+DESCENDANT_CONSERVATION                 = REFUTED by escape fixtures (E-F)
+CASE_B                                  = REPRODUCED (Node detached:true, Python start_new_session=True)
 ```
 
 The reviewer correctly identified that correction05 fixed the event claim but left the **CommandJob state invariant** broken:
 - **P0 (state-machine)**: correction05 eagerly wrote `job.state = state` (caller's clean terminal class) BEFORE the probe. Any non-gone postcondition then made the bounded invariant `TERMINAL ⇒ PRIMARY OWNED PGID GONE` false by construction — a job with `state = "cancelled"` AND a stuck PGID contradicted the claim. The new bounded invariant is honestly re-stated as `CLEAN_TERMINAL ⇒ PRIMARY OWNED PGID GONE` and held by **deferred state assignment** in `finalize()`: non-gone postconditions OVERWRITE the caller's clean class with the new explicit `containment_failed` terminal state.
 - **P1 (gauge-conservation)**: on the failure path `terminal_committed` is denied, so the tracker had no event carrying the post-delete gauge. The `⎇ N` could stay stuck at N even after the manager threw the job out of `active`. Closed by a NEW lifecycle event `command_job_containment_failed` that fires AFTER `active.delete` so the tracker decrements N → N-1.
+
+The reviewer of correction06 (fourth-round HALT) identified a NEW P0 in the visible telemetry path. Even though the state machine now holds the bounded invariant by construction, the lifecycle-event gauge could still be off-by-one at the boundaries:
+
+- **NEW P0 (start-path gauge)**: `command_job_process_started` and `command_job_primary_group_registered` were emitted BEFORE `this.active.set(id, job)`. The lifecycle emitter's `getActiveCommandJobs().length` enrichment then captured the PRE-insertion gauge (0) for a start that grew the active map from 0 → 1, leaving the header's `⎇ N` hidden for the entire useful lifetime of a long-running command. The existing tests asserted the events existed (DCCT-06) but never pinned the gauge value carried by them.
+- **P1 (single semantic authority)**: `getActiveCommandJobs()` filters `job.state === "running"` and `pgid > 0`, so its length is NOT literally `this.active.size`. Comment and wire fields called it "the size of the active map" but it wasn't. Pick one.
+- **P1 (`pgid_unset` coverage)**: the post-delete `command_job_containment_failed` event required `typeof savedPgid === "number"`, silently skipping the `pgid_unset` branch (line 2289 — supervisor never exposed a numeric PGID). On that branch the tracker would receive `command_job_primary_group_cleanup` with `postcondition: undefined` but NO post-delete gauge-conservation event, leaving the live ownership gauge stuck at N. The reviewer called this out as a coverage asymmetry.
+
+**Bounded fix cycle applied (correction07 — addresses NEW P0 + 2 P1s):**
+1. **Post-mutation emit ordering on start** — `command_job_process_started` and `command_job_primary_group_registered` now fire AFTER `this.active.set(id, job)`. The lifecycle emitter's gauge reads the post-delta value (1 for a 0→1 transition). Mirror of the post-delete emit on the failure path (correction06).
+2. **Post-mutation emit ordering on clean terminal** — `command_job_terminal_committed` now fires AFTER `this.active.delete(job.id)`. Both terminal-path events are now post-delete by construction. The previous early emit left the clean path's gauge off-by-one for the end-of-life window.
+3. **Single semantic authority** — `emitCommandJobLifecycle` enrichment changed from `this.getActiveCommandJobs().length` to `this.active.size`. The invariant `event.activeCommandJobs === manager.activeCount` now holds at every emit point. `getActiveCommandJobs()` is documented honestly as the filtered RUNNING-with-valid-pgid view (used as input to `probeOwnedGroups()` and bounded UI rendering), NOT as the gauge.
+4. **`pgid_unset` reach** — `command_job_containment_failed` emit guard loosened from `typeof savedPgid === "number"` to `job.terminationFailed` truthy. The event's `pgid` field is now optional on both the input and output type so `pgid_unset` reaches the consumer without coercion to a fake `0`.
+5. **Composition matrix strengthened (DCCT-16 + DCCT-17)** — DCCT-16 pins the start-path increment (process_started carries `activeCommandJobs = 1` for a 0→1 transition; `manager.activeCount === 1` agrees). DCCT-17 exercises BOTH terminal paths in a single composition (start A → 1; start B → 2; finalize A clean → 1; finalize B alive → 0), with exactly one `terminal_committed` (clean) and one `containment_failed` (failure) — and both events carry the post-delta gauge.
 
 **Bounded fix cycle applied (correction06 — addresses NEW P0):**
 1. **Explicit `containment_failed` terminal class** — added as a new `CommandJobState` member. Distinct from `exited`/`deadline_exceeded`/`cancelled`/`spawn_failed` so consumers can read the verdict out-of-band.
@@ -36,30 +52,31 @@ The reviewer correctly identified that correction05 fixed the event claim but le
 
 1. `CommandJobManager.getActiveCommandJobs(): CommandJobHandle[]` — snapshot of the active-owned map.
 2. `CommandJobManager.probeOwnedGroups(): ReadonlyArray<{ jobId, pgid, state: 'gone' | 'alive' | 'eperm' | 'unknown' }>` — fail-closed postcondition probe.
-3. `CommandJobManager.onCommandJobLifecycle: (event: CommandJobLifecycleEvent) => void` — lifecycle telemetry sink. **10** event kinds (was 8; +`helper_cleanup_attempted` correction05, +`containment_failed` correction06). Every event carries `activeCommandJobs: number`. `command_job_primary_group_cleanup` carries the authoritative `postcondition` (fail-closed). `command_job_terminal_committed` is the load-bearing witness for `CLEAN_TERMINAL ⇒ GONE` (fires only on `gone`). `command_job_containment_failed` is the post-delete gauge-conservation event on the failure path.
+3. `CommandJobManager.onCommandJobLifecycle: (event: CommandJobLifecycleEvent) => void` — lifecycle telemetry sink. **10** event kinds (was 8; +`helper_cleanup_attempted` correction05, +`containment_failed` correction06). Every event carries `activeCommandJobs: number` derived from `manager.activeCount = this.active.size` (correction07 — single semantic authority, NOT `getActiveCommandJobs().length`). `command_job_primary_group_cleanup` carries the authoritative `postcondition` (fail-closed). `command_job_terminal_committed` is the load-bearing witness for `CLEAN_TERMINAL ⇒ GONE` (fires only on `gone`, AFTER `active.delete` post-correction07). `command_job_containment_failed` is the post-delete gauge-conservation event on the failure path (also reaches the tracker on `pgid_unset`, correction07). Both start-path events (`process_started`, `primary_group_registered`) fire AFTER `active.set` so the gauge reads post-delta.
 
 **Live ownership gauge** rendered in the task-header telemetry strip as `⎇ N` (Unicode U+238F). Hidden at zero; normalized at the webview seam (`?? 0`); independent of `runtimeErrorCount` (the `⚠` glyph) and cumulative `>_` (the command mechanism glyph). Process-name agnostic — there is no executable-name string matching anywhere in the cleanup or render path.
 
 **⚠ N broadened to "runtime incidents"** — existing `RuntimeErrorIncident` payload type unchanged so no consumer of `taskTelemetry.runtimeErrorCount` regresses.
 
-**Gates (6/6 PASS, 84/84 tests):**
+**Gates (6/6 PASS, 86/86 tests):**
 - `bunx tsc --noEmit` clean
-- `apps/vscode` vitest on `command-job-manager-descendant-conservation.dcct01.test.ts` — **15/15 GREEN** (DCCT-01..10 + correction05 composition matrix DCCT-11..14 strengthened by correction06 to assert containment_failed state + post-delete gauge-conservation event + containmentFailed projection)
+- `apps/vscode` vitest on `command-job-manager-descendant-conservation.dcct01.test.ts` — **17/17 GREEN** (DCCT-01..15 retained; +DCCT-16 start-path gauge increment + DCCT-17 multi-job composition with clean + containment_failed terminal paths)
 - `apps/vscode` vitest on `task-header-runtime-error-counter-rec01.test.ts` — 13/13 GREEN
-- Combined host vitest — 28/28 GREEN
+- Combined host vitest — 30/30 GREEN
 - `apps/vscode/webview-ui` vitest on `TaskHeaderTelemetry.test.tsx` — 46/46 GREEN (existing tests preserved)
 - `apps/vscode/webview-ui` vitest on `TaskHeaderTelemetry.gauge.test.tsx` — 10/10 GREEN (G-01..G-10)
 
 **Honest seam labels:** substrate EPERM on worker termination is the documented noise from prior ACTs and is unrelated to test outcomes. Tests run via `bun vitest run` (Node runtime) — not the VS Code host. The substrate-discriminator reproduces CASE_B (`node-escape`, `python-escape`) with PPID=1 + new PGID evidence on the real helper substrate — same finding as ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02. The bounded `CLEAN_TERMINAL ⇒ PRIMARY OWNED PGID GONE` invariant holds (DCCT-11..15); the stronger descendant-conservation invariant is REFUTED.
 
 **Successor ACT (re-scoped per reviewer P1, ready to begin):**
-`ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01` — re-scoped as `CONTAINMENT_PRIMITIVE_DISCRIMINATOR`. Its first purpose is to discriminate which macOS authority primitive survives the reproduced E/F escapes: (A) cleanup-time PPID/proc_pidinfo reconstruction, (B) event-time fork lineage tracking from the helper, (C) native stable descendant authority (es_new_descendants_client if acceptable). Apple distinguishes `ppid` from `original_ppid` (escaped processes may not give you the chain back), and current Endpoint Security descendant API is beta-only. **C1: GO directly to the discriminator after correction06 closes.**
+`ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01` — re-scoped as `CONTAINMENT_PRIMITIVE_DISCRIMINATOR`. Its first purpose is to discriminate which macOS authority primitive survives the reproduced E/F escapes: (A) cleanup-time PPID/proc_pidinfo reconstruction, (B) event-time fork lineage tracking from the helper, (C) native stable descendant authority (es_new_descendants_client if acceptable). Apple distinguishes `ppid` from `original_ppid` (escaped processes may not give you the chain back), and current Endpoint Security descendant API is beta-only. **C1: GO directly to the discriminator after correction07 closes.**
 
 **Halt sequence:**
 1. `HALT_DESCENDANT_CONSERVATION_NOT_PROVEN` (correction04 bounded fix cycle applied)
 2. `HALT_PRIMARY_PGID_CONSERVATION_NOT_ENFORCED` (correction05 bounded fix cycle applied)
 3. `HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED` (correction06 bounded fix cycle applied)
-4. **No further HALT expected for the bounded invariant.** State machine and event semantics are both honest.
+4. `HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED` (correction07 bounded fix cycle applied)
+5. **No further HALT expected for the bounded invariant OR the visible telemetry.** State machine, event semantics, AND the lifecycle-event gauge now share a single semantic authority: `event.activeCommandJobs === manager.activeCount` at every emit point.
 
 **Evidence:** `.factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/{00-entry,01-live-process-census,02-ownership-recon,03-current-pgid-contract}.{txt,md}`, `04-final-gates.json`, plus per-fixture JSON dumps. ACT spec at `.factory/acts/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01.md`. Successor ACT at `.factory/acts/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01.md` (re-scoped).
 

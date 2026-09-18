@@ -56,7 +56,7 @@ leakage to **all ClineMM-owned descendant processes**
   - `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`
       * renders `⎇ N` glyph.
   - `apps/vscode/src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts`
-      * new file, 11 tests (DCCT-01..11), all green.
+      * new file, 17 tests (DCCT-01..17), all green. correction07 add: DCCT-16 (start-path gauge increment) + DCCT-17 (multi-job composition with clean + containment_failed terminal paths).
   - `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx`
       * new file, 10 tests (G-01..G-10), all green.
 
@@ -132,6 +132,23 @@ though the manager had thrown the job out of `active`.
                Disambiguates "helper attempt" from "authoritative
                kernel probe" so consumers no longer rely on
                chronology.
+  DCCT-16      correction07 — start-path gauge increment.
+               `command_job_process_started` carries the
+               POST-delta gauge (`activeCommandJobs === 1` for a
+               0→1 transition). Was: PRE-delta (0). Mirror of
+               the post-delete emit on the terminal path
+               (correction06's `command_job_containment_failed`,
+               plus correction07's `command_job_terminal_committed`).
+  DCCT-17      correction07 — composition witness. Two
+               concurrent jobs, both terminal paths exercised:
+               start A → gauge 1; start B → gauge 2; finalize A
+               cleanly → gauge 1 (`command_job_terminal_committed`
+               carries post-delete 1); finalize B on
+               postcondition `alive` → gauge 0
+               (`command_job_containment_failed` carries
+               post-delete 0). Single semantic authority:
+               `event.activeCommandJobs === manager.activeCount`
+               at every observation point.
 
   G-01..G-10   webview seam tests for the `⎇ N` glyph.
 
@@ -162,14 +179,14 @@ ACT file for the discriminator decision procedure.
 ## Gates
 
   - `bunx tsc --noEmit` clean.
-  - `bun vitest run src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts` 15/15 GREEN (correction05: DCCT-11 strengthened + DCCT-12..15 composition matrix).
+  - `bun vitest run src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts` 17/17 GREEN (correction05: DCCT-11 strengthened + DCCT-12..15 composition matrix; correction07: DCCT-16 start-path gauge increment + DCCT-17 multi-job composition with clean + containment_failed terminal paths).
   - `bun vitest run src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts` 13/13 GREEN.
   - `bun vitest run src/components/chat/task-header/TaskHeaderTelemetry.test.tsx` 46/46 GREEN.
   - `bun vitest run src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx` 10/10 GREEN.
 
-Total: 84/84 tests, 6/6 gates PASS.
+Total: 86/86 tests, 6/6 gates PASS.
 
-## Verdict (correction06 / post-third-reviewer)
+## Verdict (correction07 / post-fourth-reviewer)
 
   PRIMARY_PGID_POSTCONDITION_OBSERVED    = PROVEN (probe runs synchronously inside finalize())
   PRIMARY_PGID_CONSERVATION               = PROVEN — re-stated as
@@ -185,7 +202,11 @@ Total: 84/84 tests, 6/6 gates PASS.
   HELPER_EVENT_DISAMBIGUATION             = PROVEN (helper_cleanup_attempted vs primary_group_cleanup)
   CONTAINMENT_FAILED_TERMINAL_CLASS       = PROVEN (CommandJobState member; populated via deferred state assignment)
   GAUGE_CONSERVATION_ON_FAILURE_PATH      = PROVEN (command_job_containment_failed fires AFTER active.delete with post-delete gauge — closes the stale-⎇N bug)
-  ACTIVE_JOB_GAUGE                        = GREEN (`⎇ N` works, 84 tests pass)
+  START_PATH_GAUGE_INCREMENT              = PROVEN (correction07: command_job_process_started carries POST-delta gauge; command_job_primary_group_registered moved to post-insert too)
+  CLEAN_PATH_POST_DELETE_GAUGE            = PROVEN (correction07: command_job_terminal_committed moved from pre-delete to post-delete; carrier value matches active.size after decrement)
+  PGID_UNSET_COVERAGE                     = PROVEN (correction07: containment_failed emit guard loosened; pgid field now optional on the event; the pgid_unset branch reaches the tracker)
+  GAUGE_SINGLE_SEMANTIC_AUTHORITY         = PROVEN (correction07: emitCommandJobLifecycle enrichment is this.active.size — single semantic authority; matches manager.activeCount at every emit point)
+  ACTIVE_JOB_GAUGE                        = GREEN (`⎇ N` works, 86 tests pass)
   ZERO-DESCENDANT_GAUGE                   = NOT IMPLEMENTED (renamed honest label)
   DESCENDANT_CONSERVATION                 = REFUTED by escape fixtures
   CASE_B                                  = REPRODUCED
@@ -195,11 +216,51 @@ Total: 84/84 tests, 6/6 gates PASS.
   1. `HALT_DESCENDANT_CONSERVATION_NOT_PROVEN` (correction04 bounded fix cycle applied)
   2. `HALT_PRIMARY_PGID_CONSERVATION_NOT_ENFORCED` (correction05 bounded fix cycle applied — terminal_committed gated on gone)
   3. `HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED` (correction06 bounded fix cycle applied — explicit containment_failed terminal class + post-delete gauge-conservation event)
-  4. **No further HALT expected for the bounded invariant.** The state machine and the event semantics are both honest: a `CLEAN_TERMINAL` job is exactly one whose bounded invariant was proven. The escape case remains REFUTED for the bounded invariant and OUT-OF-SCOPE for the helper-supervised boundary until the successor ACT's discriminator completes.
+  4. `HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED` (correction07 bounded fix cycle applied — process_started/primary_group_registered/terminal_committed moved to post-mutation emit order; pgid_optional on containment_failed; gauge pinned to this.active.size)
+  5. **No further HALT expected for the bounded invariant OR the visible telemetry.** The state machine, the event semantics, AND the lifecycle-event gauge now share a single semantic authority: `event.activeCommandJobs === manager.activeCount` at every emit point. The escape case remains REFUTED for the bounded invariant and OUT-OF-SCOPE for the helper-supervised boundary until the successor ACT's discriminator completes.
+
+## correction07 — bounded fix (Factory
+## HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED)
+
+correction06 closed the state-machine defect and added a
+post-delete gauge-conservation event on the failure path.
+correction07 closes the **start-path counterpart** plus two
+P1 follow-ups. The bounded fix is purely mechanical — no
+lifecycle-event redesign.
+
+  1. `command_job_process_started` emit moved from BEFORE
+     `this.active.set(id, job)` to AFTER. The lifecycle
+     emitter's gauge now reads the post-delta value (1 for a
+     0→1 transition) instead of the pre-delta value (0).
+  2. `command_job_primary_group_registered` emit moved to
+     AFTER `this.active.set` (same rationale).
+  3. `command_job_terminal_committed` emit moved from BEFORE
+     `this.active.delete(job.id)` to AFTER. The clean-path
+     terminal event now also carries the post-decrement
+     gauge, mirroring `command_job_containment_failed` on
+     the failure path. Both terminal-path events are now
+     post-delete by construction.
+  4. The lifecycle emitter's enrichment changed from
+     `this.getActiveCommandJobs().length` to
+     `this.active.size`. Single semantic authority:
+     `event.activeCommandJobs === manager.activeCount` at
+     every emit point. The filtered `getActiveCommandJobs()`
+     view remains for the postcondition probe and the bounded
+     UI rendering; it is documented as such, NOT as the gauge.
+  5. `command_job_containment_failed` emit guard loosened
+     from `typeof savedPgid === "number"` to
+     `job.terminationFailed` truthy. The `pgid_unset`
+     branch (line 2289) now reaches the tracker instead of
+     silently skipping the gauge decrement. The event's
+     `pgid` field is now optional on both the input and
+     output type so `pgid_unset` reaches the consumer
+     without coercion to a fake `0`.
+  6. Composition matrix strengthened with DCCT-16 and DCCT-17
+     (see "Invariants pinned" above).
 
 ## C1 GO directive (per Factory reviewer)
 
-  After correction06 closes, **GO directly to the
+  After correction07 closes, **GO directly to the
   containment-primitive discriminator**
   (ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01,
   re-scoped as `CONTAINMENT_PRIMITIVE_DISCRIMINATOR`). No
