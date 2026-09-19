@@ -60,3 +60,21 @@ regexes = [
 paths = [
   '''\.factory/evidence/ACT-CLINEMM-SAFE-YOLO-SEATBELT-.*\.json$''',
 ]
+
+# ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 helper-disc
+# capture JSONs contain synthetic `client_token` and `job_token` fields
+# that are test-fixture sentinel values generated locally by the harness
+# (MD5-like 32-hex strings). They are NOT credentials — they are bound
+# to the recorded fixturePath and were never transmitted to any external
+# service. Allowlisted so the pre-commit gate does not block legitimate
+# evidence files for this bounded ACT.
+[[allowlists]]
+description = "ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 helper-disc capture fixture tokens"
+targetRules = ["generic-api-key"]
+regexes = [
+  '''"client_token"\s*:\s*"[a-f0-9]{32}"''',
+  '''"job_token"\s*:\s*"[a-f0-9]{32}"''',
+]
+paths = [
+  '''\.factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/.*\.json$''',
+]
