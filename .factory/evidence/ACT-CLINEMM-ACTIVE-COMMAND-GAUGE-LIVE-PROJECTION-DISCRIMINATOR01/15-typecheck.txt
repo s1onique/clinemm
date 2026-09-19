@@ -2,21 +2,33 @@
 
 ```
 $ cd apps/vscode && bunx tsc --noEmit
-(clean)
+(clean — 0 diagnostics)
+```
+
+```
+$ cd apps/vscode/webview-ui && bunx tsc -b --pretty false
+(clean — exit 0, 0 diagnostics)
 ```
 
 ```
 TYPECHECK_HOST    = PASS  (bunx tsc --noEmit — no diagnostics)
-TYPECHECK_WEBVIEW = PASS  (no source change in webview-ui this ACT;
-                          baseline typecheck gates unchanged)
+TYPECHECK_WEBVIEW = PASS  (bunx tsc -b --pretty false — exit 0, no diagnostics)
 ```
 
-The bounded repair only touched two source files in `apps/vscode/src/sdk/`:
-- `sdk-session-lifecycle.ts` (extended SdkSessionLifecycleOptions with
-  two new optional fields, added 2 type imports)
-- `SdkController.ts` (added 2 new options to the `new SdkSessionLifecycle({...})`
-  call)
+Honest correction (reviewer feedback):
+- The prior evidence recorded TYPECHECK_WEBVIEW = PASS with the rationale
+  "no source change in webview-ui this ACT; baseline typecheck gates
+  unchanged". That is not a valid executed measurement — it asserts
+  inheritance without re-verifying. The corrected entry above
+  re-executes `bunx tsc -b` against the webview-ui project and
+  confirms 0 diagnostics with exit 0.
+- The bounded repair only touched two source files in `apps/vscode/src/sdk/`:
+  - `sdk-session-lifecycle.ts` (extended SdkSessionLifecycleOptions with
+    two new optional fields, added 2 type imports)
+  - `SdkController.ts` (added 2 new options to the `new SdkSessionLifecycle({...})`
+    call)
 
-Both type cleanly under `bunx tsc --noEmit`. No `any` casts introduced
-(only the existing test seam `(manager as any).emitCommandJobLifecycle(...)`
+Both type cleanly under `bunx tsc --noEmit` (host) and `bunx tsc -b`
+(webview-ui). No `any` casts introduced in production source (only
+the existing test seam `(manager as any).emitCommandJobLifecycle(...)`
 in the new RED test, mirrored from the prior seatbelt-network test).

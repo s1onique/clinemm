@@ -1,6 +1,6 @@
 {
   "act": "ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01",
-  "verdict": "PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (source-level GREEN, live operator followup pending)",
+  "verdict": "PASS_SOURCE_LEVEL_GAUGE_CHAIN (LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION)",
   "halt_code": "NONE — bounded repair landed, no halt triggered",
   "halt_taxonomy_22": {
     "HALT_DOGFOOD_BUILD_NOT_SUBJECT": "NOT_TRIGGERED (installed bundle has gauge code)",
@@ -8,10 +8,15 @@
     "HALT_EXISTING_SYNTHETIC_GREEN_REGRESSED": "NOT_TRIGGERED",
     "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED",
     "HALT_REPAIR_REQUIRES_TELEMETRY_REDESIGN": "NOT_TRIGGERED (3-file diff is tightly scoped)",
-    "HALT_LIVE_GREEN_STILL_ABSENT": "OPERATOR_FOLLOWUP",
-    "HALT_GAUGE_CARDINALITY_WRONG": "OPERATOR_FOLLOWUP",
-    "HALT_TERMINAL_GAUGE_LEAK": "OPERATOR_FOLLOWUP",
+    "HALT_LIVE_GREEN_STILL_ABSENT": "PENDING_OPERATOR_QUALIFICATION",
+    "HALT_GAUGE_CARDINALITY_WRONG": "PENDING_OPERATOR_QUALIFICATION",
+    "HALT_TERMINAL_GAUGE_LEAK": "PENDING_OPERATOR_QUALIFICATION",
     "HALT_UNEXPECTED_PROCESS_CONTAINMENT_REGRESSION": "NOT_TRIGGERED"
+  },
+  "verdict_clarification": {
+    "verdict_issued": "PASS_SOURCE_LEVEL_GAUGE_CHAIN",
+    "live_verdict_deferred": "PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION",
+    "rationale": "The source/synthetic-real evidence chain is fully GREEN (212/212 tests, typecheck, diff-check, RED reproduction). The live ⎇ 1 → hidden round-trip is load-bearing for the live PASS verdict but is operator-only (no human UI from agent shell; debug harness forbidden by ACT section 4). The prior verdict string 'PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION' was promoted prematurely — it incorrectly equated source/synthetic GREEN with live product GREEN. This corrected verdict honors the evidence boundary."
   },
   "live_red": {
     "real": true,
@@ -55,18 +60,22 @@
       "Passed onCommandJobLifecycle + onRuntimeError at new SdkSessionLifecycle({...}) construction"
     ],
     "edit_3_file": "apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts (NEW, 3 tests)",
-    "diff_stat": "3 files changed, 405 insertions(+)"
+    "diff_stat_source": "3 files changed, 67 insertions(+), 0 deletions(-) source",
+    "diff_stat_test": "+286 insertions (new test file)"
   },
   "tests": {
     "host_targeted_tests": {"passed": 103, "total": 103},
     "webview_targeted_tests": {"passed": 109, "total": 109},
     "host_existing_synthetic_green_regression": "NOT_TRIGGERED"
   },
-  "typecheck": {"host": "PASS (bunx tsc --noEmit clean)", "webview": "PASS"},
-  "diff_check": {"passed": true, "files_changed": 3, "insertions": 405, "deletions": 0},
+  "typecheck": {
+    "host": "PASS (bunx tsc --noEmit — clean, 0 diagnostics)",
+    "webview": "PASS (bunx tsc -b --pretty false — exit 0, 0 diagnostics; reviewer re-executed, no longer inherited baseline)"
+  },
+  "diff_check": {"passed": true, "files_changed": 3, "source_insertions": 67, "source_deletions": 0, "test_insertions": 286, "git_diff_check_clean": true, "reviewer_eof_warnings_fixed": true},
   "temp_diagnostics": {"added": false, "removed": "NOT_APPLICABLE"},
   "live_trace": "NOT_REQUIRED_ROOT_CAUSE_STRUCTURALLY_PROVEN",
-  "live_red_reproduction": "OPERATOR_BOUND (no agent UI access; debug harness forbidden by ACT §4)",
+  "live_red_reproduction": "OPERATOR_BOUND (no agent UI access; debug harness forbidden by ACT section 4)",
   "next_bounded_action": "OPERATOR_REBUILD_AND_LIVE_TEST",
   "operator_followup_steps": [
     "cd apps/vscode",
@@ -78,11 +87,11 @@
     "Cancel normally via the ClineMM UI",
     "Observe task header: ⎇ hidden at terminal",
     "Capture 20-live-green-active.{png,txt} + 21-live-green-terminal.{png,txt}",
-    "Open a continuation ACT to record the live GREEN and resume the halted PGID production dogfood"
+    "Open a continuation ACT to record the live GREEN. If the live ⎇ glyph is still absent after the bounded repair, trigger HALT_LIVE_GREEN_STILL_ABSENT and stop."
   ],
   "expected_closure": {
-    "source_level": "PASS_SOURCE_LEVEL_GAUGE_CHAIN (212/212 tests)",
-    "operator_continuation": "PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (after operator rebuild + install + live round-trip)"
+    "source_level": "PASS_SOURCE_LEVEL_GAUGE_CHAIN (212/212 tests; this verdict is now the issued verdict)",
+    "operator_continuation": "PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (after operator rebuild + install + live round-trip; reserved for live ⎇ visible → hidden round-trip succeeding in Codium-ClineMM)"
   },
   "evidence_packet": [
     "01-entry.txt",
@@ -95,15 +104,26 @@
     "12-red.txt (RED_REPRODUCED_AT_PRODUCTION_SOURCING_SITE)",
     "13-diagnostics-removal.txt (NOT_APPLICABLE)",
     "14-tests.txt (212/212 PASS)",
-    "15-typecheck.txt (PASS)",
-    "16-diff-check.txt (3 files, +405 LOC)",
-    "20-live-green-active.{png,txt} (OPERATOR_FOLLOWUP)",
-    "21-live-green-terminal.{png,txt} (OPERATOR_FOLLOWUP)",
+    "15-typecheck.txt (host PASS; webview PASS via re-executed bunx tsc -b)",
+    "16-diff-check.txt (3 files, +67 source +286 test LOC; git diff --check clean)",
+    "20-live-green-active.{png,txt} (PENDING_OPERATOR_QUALIFICATION)",
+    "21-live-green-terminal.{png,txt} (PENDING_OPERATOR_QUALIFICATION)",
     "30-gates.txt",
     "result.json"
   ],
   "board_update_appended": true,
-  "board_update_text": "ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01 → PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (CASE_B bounded repair at SdkSessionLifecycle.getOrCreateSharedHost(): SdkSessionLifecycleOptions now declares onCommandJobLifecycle + onRuntimeError; getOrCreateSharedHost forwards both; SdkController passes the corresponding closures at construction; RED test (3 tests) wires the seam; 103 host + 109 webview tests pass; bunx tsc --noEmit clean; diff scoped to 3 files; operator must rebuild + install + run live ⎇ round-trip in a continuation ACT)",
-  "halted_dogfood_row_text": "HALT_ACTIVE_GAUGE_LIVE_DIVERGENCE = CLOSED (CASE_B bounded repair landed; telemetry chain now reaches the live primary-session host); NEXT = OPERATOR_REBUILD_AND_LIVE_TEST",
-  "resume_pgid_dogfood": "Do NOT auto-resume PGID production dogfood in this ACT. On operator-driven live GREEN, authorize ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01 to continue from its halted production-seam state under human-driven interaction."
+  "board_update_text": "ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01 → PASS_SOURCE_LEVEL_GAUGE_CHAIN (CASE_B bounded repair at SdkSessionLifecycle.getOrCreateSharedHost: SdkSessionLifecycleOptions now declares onCommandJobLifecycle + onRuntimeError; getOrCreateSharedHost forwards both; SdkController passes the corresponding closures at construction; RED test (3 tests) wires the seam; 103 host + 109 webview tests pass; bunx tsc --noEmit clean; diff scoped to 3 files; git diff --check clean). LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION (live ⎇ 1 → hidden round-trip required to upgrade to PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION).",
+  "halted_dogfood_row_text": "HALT_ACTIVE_GAUGE_LIVE_DIVERGENCE = CLOSED at source-level (CASE_B bounded repair landed; telemetry chain now reaches the live primary-session host); live GREEN still PENDING_OPERATOR_QUALIFICATION; NEXT = OPERATOR_REBUILD_AND_LIVE_TEST",
+  "resume_pgid_dogfood": "Do NOT auto-resume PGID production dogfood in this ACT. On operator-driven live GREEN, authorize ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01 to continue from its halted production-seam state under human-driven interaction.",
+  "reviewer_correction_applied": {
+    "reviewer": "Factory reviewer + ClineMM runtime engineer",
+    "scope": "9fe1a9389a58..14cc65659",
+    "changes": [
+      "1. Verdict downgraded from PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION to PASS_SOURCE_LEVEL_GAUGE_CHAIN with LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION (the prior verdict string incorrectly equated source/synthetic-real GREEN with live product GREEN).",
+      "2. EOF blank-line warnings fixed in .factory/acts/ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01.md:646 and .factory/evidence/.../04-wiring-recon.txt:79; git diff HEAD~2 HEAD --check is now clean.",
+      "3. Webview typecheck re-executed honestly (bunx tsc -b --pretty false, exit 0, 0 diagnostics) — no longer the misleading 'inherited baseline' claim.",
+      "4. Operator followup_steps now explicitly states the HALT trigger: 'If the live ⎇ glyph is still absent after the bounded repair, trigger HALT_LIVE_GREEN_STILL_ABSENT and stop.'"
+    ],
+    "live_round_trip_status": "OPERATOR-BOUND (reviewer explicit: 'rebuild/install the new VSIX and perform exactly the live round trip already specified'). This ACT cannot drive a live Codium-ClineMM UI from the agent shell (debug harness forbidden by ACT section 4, no human UI available). The reviewer authorized the code repair to proceed to operator qualification. Verdict PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION is reserved for the operator-driven live round-trip succeeding in a continuation ACT."
+  }
 }

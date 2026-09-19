@@ -4,7 +4,17 @@
 
 **Authorization:** `C1: GO.`
 
-**Verdict:** `PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION` (CASE_B bounded repair)
+**Verdict:** `PASS_SOURCE_LEVEL_GAUGE_CHAIN` (CASE_B bounded repair, source-level GREEN;
+            `LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION`)
+
+> **Reviewer correction:** The prior headline verdict string
+> `PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION` incorrectly equated
+> source/synthetic-real GREEN with live product GREEN. The corrected
+> verdict honors the evidence boundary: live product GREEN requires
+> the operator-driven live ⎇ 1 → hidden round-trip on a freshly
+> installed VSIX, which is the load-bearing closure that this ACT
+> cannot perform from the agent shell (debug harness forbidden by §4,
+> no human UI available).
 
 ---
 
@@ -423,8 +433,9 @@ $ cd apps/vscode && bunx tsc --noEmit
 ```
 
 ```
-TYPECHECK_HOST    = PASS
-TYPECHECK_WEBVIEW = (no source change; baseline unchanged)
+TYPECHECK_HOST    = PASS  (bunx tsc --noEmit — clean, 0 diagnostics)
+TYPECHECK_WEBVIEW = PASS  (bunx tsc -b --pretty false — exit 0, 0 diagnostics;
+                          reviewer correction: re-executed, no longer "inherited baseline")
 ```
 
 ---
@@ -490,11 +501,13 @@ RESUME = ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01
 12-red.txt                          = RED_REPRODUCED_AT_PRODUCTION_SOURCING_SITE
 13-diagnostics-removal.txt          = NOT_APPLICABLE
 14-tests.txt                        = 212/212 PASS
-15-typecheck.txt                    = PASS
+15-typecheck.txt                    = host PASS (bunx tsc --noEmit);
+                                      webview PASS (bunx tsc -b; reviewer re-executed)
 16-diff-check.txt                   = tight scope, no source churn outside
-                                      the first broken boundary
-20-live-green-active.{png,txt}      = OPERATOR_FOLLOWUP (post-rebuild)
-21-live-green-terminal.{png,txt}    = OPERATOR_FOLLOWUP (post-rebuild)
+                                      the first broken boundary;
+                                      git diff --check clean (reviewer EOF fixed)
+20-live-green-active.{png,txt}      = PENDING_OPERATOR_QUALIFICATION (post-rebuild)
+21-live-green-terminal.{png,txt}    = PENDING_OPERATOR_QUALIFICATION (post-rebuild)
 30-gates.txt
 result.json
 ```
@@ -529,15 +542,16 @@ TASK_PHASE_SEMANTICS_UNCHANGED      = PASS  (no turn-state change)
 
 TARGETED_HOST_TESTS                 = PASS  (103/103)
 TARGETED_WEBVIEW_TESTS              = PASS  (109/109)
-TYPECHECK_HOST                      = PASS  (bunx tsc --noEmit clean)
-TYPECHECK_WEBVIEW                   = PASS  (no source change; baseline)
-DIFF_CHECK                          = PASS  (tight scope)
+TYPECHECK_HOST                      = PASS  (bunx tsc --noEmit clean — 0 diagnostics)
+TYPECHECK_WEBVIEW                   = PASS  (bunx tsc -b --pretty false — exit 0,
+                                              0 diagnostics; reviewer re-executed)
+DIFF_CHECK                          = PASS  (tight scope, EOF warnings fixed)
 
 TEMP_DIAGNOSTICS_REMOVED            = NOT_APPLICABLE
 
-LIVE_GREEN_JOB_RUNNING              = OPERATOR_FOLLOWUP
-LIVE_GREEN_VISIBLE_GAUGE_1          = OPERATOR_FOLLOWUP
-LIVE_GREEN_TERMINAL_HIDDEN_AT_ZERO  = OPERATOR_FOLLOWUP
+LIVE_GREEN_JOB_RUNNING              = PENDING_OPERATOR_QUALIFICATION
+LIVE_GREEN_VISIBLE_GAUGE_1          = PENDING_OPERATOR_QUALIFICATION
+LIVE_GREEN_TERMINAL_HIDDEN_AT_ZERO  = PENDING_OPERATOR_QUALIFICATION
 
 EVIDENCE_BOUND_TO_FINAL_HEAD        = PASS
 BOARD_DURABLE                       = PENDING
@@ -553,14 +567,16 @@ HALT_UNEXPECTED_TRACKED_DIRT        = NOT_TRIGGERED
 HALT_EXISTING_SYNTHETIC_GREEN_REGRESSED = NOT_TRIGGERED
 HALT_RED_NOT_REPRODUCED             = NOT_TRIGGERED
 HALT_REPAIR_REQUIRES_TELEMETRY_REDESIGN = NOT_TRIGGERED  (3-file diff is tightly scoped)
-HALT_LIVE_GREEN_STILL_ABSENT        = OPERATOR_FOLLOWUP
-HALT_GAUGE_CARDINALITY_WRONG        = OPERATOR_FOLLOWUP
-HALT_TERMINAL_GAUGE_LEAK            = OPERATOR_FOLLOWUP
+HALT_LIVE_GREEN_STILL_ABSENT        = PENDING_OPERATOR_QUALIFICATION
+HALT_GAUGE_CARDINALITY_WRONG        = PENDING_OPERATOR_QUALIFICATION
+HALT_TERMINAL_GAUGE_LEAK            = PENDING_OPERATOR_QUALIFICATION
 HALT_UNEXPECTED_PROCESS_CONTAINMENT_REGRESSION = NOT_TRIGGERED
 ```
 
 No P0 halt. The bounded repair is GREEN at the source level; the
 load-bearing closure is the operator's §11 + §17 live round-trip.
+If the live ⎇ glyph is still absent after the bounded repair,
+trigger `HALT_LIVE_GREEN_STILL_ABSENT` and stop.
 
 ---
 
@@ -582,13 +598,15 @@ If the change grows beyond these three tightly scoped files,
 ## 24. Expected closure
 
 ```
-PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION = (target on operator rebuild + install
-                                            + live ⎇ 1 → hidden round-trip)
-PASS_SOURCE_LEVEL_GAUGE_CHAIN             = PASS  (212/212 tests)
+PASS_SOURCE_LEVEL_GAUGE_CHAIN             = PASS  (212/212 tests; THIS verdict issued)
+PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION = PENDING_OPERATOR_QUALIFICATION
+                                            (target on operator rebuild + install
+                                            + live ⎇ 1 → hidden round-trip;
+                                            NOT issued by this ACT)
 
 REAL_COMMANDJOB_ACTIVE        = LIVE PASS  (operator observation)
-ACTIVE_GAUGE_0_TO_1           = LIVE PASS  (operator followup)
-ACTIVE_GAUGE_1_TO_0           = LIVE PASS  (operator followup)
+ACTIVE_GAUGE_0_TO_1           = PENDING_OPERATOR_QUALIFICATION  (operator followup)
+ACTIVE_GAUGE_1_TO_0           = PENDING_OPERATOR_QUALIFICATION  (operator followup)
 
 MANAGER_LIFECYCLE             = CONSERVED  (no CommandJobManager change)
 PGID_CONTAINMENT              = UNCHANGED  (no PGID-state change)
@@ -605,25 +623,28 @@ Append to `.factory/epic-board.md`:
 
 ```
 ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01
-→ PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION
+→ PASS_SOURCE_LEVEL_GAUGE_CHAIN (LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION)
   (CASE_B bounded repair at SdkSessionLifecycle.getOrCreateSharedHost():
    SdkSessionLifecycleOptions now declares onCommandJobLifecycle +
    onRuntimeError; getOrCreateSharedHost forwards both; SdkController
    passes the corresponding closures at construction; RED test
    (3 tests) wires the seam; 103 host + 109 webview tests pass;
-   bunx tsc --noEmit clean; diff scoped to 3 files; operator must
-   rebuild + install + run live ⎇ round-trip in a continuation ACT)
+   bunx tsc --noEmit (host) + bunx tsc -b (webview) both clean;
+   diff scoped to 3 files, git diff --check clean; operator must
+   rebuild + install + run live ⎇ round-trip in a continuation ACT
+   to upgrade to PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION)
 ```
 
 The halted production-dogfood row:
 
 ```
-HALT_ACTIVE_GAUGE_LIVE_DIVERGENCE = CLOSED  (CASE_B bounded repair landed;
-                                            telemetry chain now reaches the
-                                            live primary-session host)
+HALT_ACTIVE_GAUGE_LIVE_DIVERGENCE = CLOSED at source-level  (CASE_B bounded repair landed;
+                                                            telemetry chain now reaches the
+                                                            live primary-session host);
+                                    live GREEN still PENDING_OPERATOR_QUALIFICATION
 NEXT = OPERATOR_REBUILD_AND_LIVE_TEST  (bun run package, install fresh vsix,
-                                        run §11 live; the source-level wiring
-                                        is already GREEN)
+                                        run §11 live; if the live ⎇ glyph is
+                                        still absent, trigger HALT_LIVE_GREEN_STILL_ABSENT)
 ```
 
 Do NOT mark PGID production dogfood itself PASS — that requires the

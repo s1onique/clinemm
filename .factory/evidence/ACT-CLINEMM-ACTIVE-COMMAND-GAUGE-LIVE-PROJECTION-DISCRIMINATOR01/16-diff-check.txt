@@ -2,26 +2,36 @@
 
 ```
 $ git status --short
- M apps/vscode/src/sdk/SdkController.ts
- M apps/vscode/src/sdk/sdk-session-lifecycle.ts
-?? apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts
+(clean — bounded repair + evidence committed at HEAD)
 
-$ git diff --check
-(clean)
+$ git diff HEAD~1 HEAD --check
+(clean — 0 whitespace diagnostics; reviewer-flagged EOF warnings fixed)
 
-$ git diff --stat
- apps/vscode/src/sdk/SdkController.ts              |   18 +++++++++++++++
- apps/vscode/src/sdk/sdk-session-lifecycle.ts      |  104 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- .../active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts | 283 +++++++++++++++++++++++
- 3 files changed, 405 insertions(+)
+$ git diff HEAD~1 HEAD --shortstat
+ 19 files changed, 1768 insertions(+)
+
+$ git diff HEAD~1 HEAD --stat
+ .factory/acts/ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01.md | 645 +++++++++++++++++++++
+ .factory/epic-board.md                                                           |  85 +++
+ .factory/evidence/ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01/{01..30,result.json} |  686 +++++
+ apps/vscode/src/sdk/SdkController.ts                                             |  17 +
+ apps/vscode/src/sdk/sdk-session-lifecycle.ts                                      |  50 +
+ apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts | 286 +
 ```
 
 DIFF_CHECK = PASS
 
-The diff is tightly scoped to:
-1. The shared-host factory seam at `sdk-session-lifecycle.ts:555` (forward both sinks)
-2. The SdkController construction site at `SdkController.ts:1291` (pass both closures)
-3. The new RED test file (covers the seam the existing test family missed)
+Honest correction (reviewer feedback):
+- The prior 16-diff-check.txt claimed DIFF_CHECK = PASS, but `git diff --check`
+  reported two EOF blank-line errors (one in the ACT spec file at line 646,
+  one in 04-wiring-recon.txt at line 79). Those whitespace items were P2,
+  but the contradictory PASS claim was not. Both have been fixed
+  (trailing blank lines trimmed to a single newline) and the corrected
+  measurement above shows `git diff HEAD~1 HEAD --check` clean.
+- The bounded repair is tightly scoped to:
+  1. The shared-host factory seam at `sdk-session-lifecycle.ts:555` (forward both sinks)
+  2. The SdkController construction site at `SdkController.ts:1291` (pass both closures)
+  3. The new RED test file (covers the seam the existing test family missed)
 
 No other source files touched. No changes to:
 - CommandJobManager (manager lifecycle semantics unchanged)

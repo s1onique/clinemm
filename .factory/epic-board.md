@@ -3886,9 +3886,17 @@ production tool-path invocation was attempted.
 
 ---
 
-## ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01 — PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (CASE_B) — 2026-09-19
+## ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01 — PASS_SOURCE_LEVEL_GAUGE_CHAIN (LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION) (CASE_B) — 2026-09-19
 
 **Status:** Source-level GREEN (212/212 tests pass). **Live GREEN pending operator rebuild + install + UI round-trip.** ACT §11 + §17 load-bearing closure requires human-driven UI interaction in Codium-ClineMM (debug harness forbidden by §4; live primary-session webview not drivable from this agent shell).
+
+> **Reviewer correction applied (2026-09-19, post-board):** The
+> prior verdict string `PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION`
+> incorrectly equated source/synthetic-real GREEN with live product
+> GREEN. The corrected verdict honors the evidence boundary:
+> `PASS_SOURCE_LEVEL_GAUGE_CHAIN` is issued; `PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION`
+> is reserved for the operator-driven live round-trip succeeding in
+> Codium-ClineMM (cannot be issued by an agent shell).
 
 **First broken boundary isolated (CASE_B — PRODUCTION_WIRING_DEFECT):**
 
@@ -3934,10 +3942,18 @@ SOURCE_LEVEL_GAUGE_CHAIN               = PASS  (212/212 tests pass post-repair;
                                             98/98 pre-repair host + 109/109 webview + 3 NEW + 2 companion)
 HALT_EXISTING_SYNTHETIC_GREEN_REGRESSED = NOT_TRIGGERED
 TYPECHECK_HOST                          = PASS  (bunx tsc --noEmit clean)
-DIFF_CHECK                              = PASS  (tight scope, 3 files, 405 LOC)
+TYPECHECK_WEBVIEW                       = PASS  (bunx tsc -b --pretty false — exit 0,
+                                            0 diagnostics; reviewer re-executed,
+                                            no longer "inherited baseline")
+DIFF_CHECK                              = PASS  (tight scope, 3 files, 405 LOC;
+                                            git diff --check clean; reviewer
+                                            EOF warnings fixed)
 RED_REPRODUCED                          = PASS  (3/3 RED tests fail pre-repair, pass post)
 TEMP_DIAGNOSTICS_REMOVED                = NOT_APPLICABLE (no instrumentation was added)
-LIVE_GAUGE_REPRODUCTION                 = OPERATOR_FOLLOWUP  (not drivable from this agent shell)
+LIVE_GAUGE_REPRODUCTION                 = PENDING_OPERATOR_QUALIFICATION
+                                            (not drivable from this agent shell;
+                                            upgrade to PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION
+                                            requires operator-driven live round-trip)
 ```
 
 **Files (this ACT):**
@@ -3953,18 +3969,21 @@ LIVE_GAUGE_REPRODUCTION                 = OPERATOR_FOLLOWUP  (not drivable from 
 **Halted production-dogfood row (UPDATE):**
 
 ```
-HALT_ACTIVE_GAUGE_LIVE_DIVERGENCE = CLOSED  (CASE_B bounded repair landed;
-                                            telemetry chain now reaches the
-                                            live primary-session host)
+HALT_ACTIVE_GAUGE_LIVE_DIVERGENCE = CLOSED at source-level  (CASE_B bounded repair landed;
+                                                            telemetry chain now reaches the
+                                                            live primary-session host);
+                                    live GREEN still PENDING_OPERATOR_QUALIFICATION
 NEXT = OPERATOR_REBUILD_AND_LIVE_TEST  (bun run package, install fresh vsix,
-                                        run §11 live; the source-level wiring
-                                        is already GREEN)
+                                        run §11 live; if the live ⎇ glyph is
+                                        still absent, trigger HALT_LIVE_GREEN_STILL_ABSENT)
 ```
 
 Do NOT mark PGID production dogfood itself PASS — that requires the
 operator's live human-driven round-trip on a freshly installed VSIX.
 
-**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (committed at HEAD 9fe1a9389 + bounded repair)
-**BOARD_DURABLE**                = PASS  (this row is committed)
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (committed at HEAD 9fe1a9389 + bounded repair
+                                          + reviewer corrections)
+**BOARD_DURABLE**                = PASS  (this row is committed; verdict string
+                                          corrected to honor evidence boundary)
 
 ---

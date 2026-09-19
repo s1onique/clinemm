@@ -1,4 +1,4 @@
-30-gates.txt — Gate matrix snapshot (POST-REPAIR)
+30-gates.txt — Gate matrix snapshot (POST-REPAIR, reviewer-corrected)
 
 ENTRY_CLEAN                         = PASS
 PRODUCTION_BUILD_BOUND              = PASS  (installed bundle has gauge code;
@@ -17,7 +17,8 @@ FIRST_BROKEN_BOUNDARY               = IDENTIFIED  (CASE_B: SHARED_HOST_FACTORY
 ROOT_CAUSE_ISOLATED                 = PASS
 
 RED_REPRODUCED                      = PASS  (3/3 RED tests fail pre-repair, pass post)
-BOUNDED_REPAIR_ONLY                 = PASS  (3-file diff, tightly scoped, ~405 LOC)
+BOUNDED_REPAIR_ONLY                 = PASS  (3-file diff, tightly scoped,
+                                              67 source LOC + 286 test LOC)
 
 MANAGER_GAUGE_SEMANTICS_UNCHANGED   = PASS  (no CommandJobManager change)
 RUNTIME_INCIDENT_SEMANTICS_UNCHANGED= PASS  (no recordRuntimeError behavior change;
@@ -26,25 +27,44 @@ TASK_PHASE_SEMANTICS_UNCHANGED      = PASS  (no turn-state change)
 
 TARGETED_HOST_TESTS                 = PASS  (103/103)
 TARGETED_WEBVIEW_TESTS              = PASS  (109/109)
-TYPECHECK_HOST                      = PASS  (bunx tsc --noEmit clean)
-TYPECHECK_WEBVIEW                   = PASS  (no source change; baseline)
-DIFF_CHECK                          = PASS  (tight scope)
+TYPECHECK_HOST                      = PASS  (bunx tsc --noEmit clean — 0 diagnostics)
+TYPECHECK_WEBVIEW                   = PASS  (bunx tsc -b --pretty false — exit 0,
+                                              0 diagnostics; re-executed in
+                                              reviewer correction)
+DIFF_CHECK                          = PASS  (tight scope, EOF warnings fixed)
 
 TEMP_DIAGNOSTICS_REMOVED            = NOT_APPLICABLE  (no instrumentation added)
 
-LIVE_GREEN_JOB_RUNNING              = OPERATOR_FOLLOWUP  (post-rebuild)
-LIVE_GREEN_VISIBLE_GAUGE_1          = OPERATOR_FOLLOWUP  (post-rebuild + install)
-LIVE_GREEN_TERMINAL_HIDDEN_AT_ZERO  = OPERATOR_FOLLOWUP  (post-cancel in fresh build)
+LIVE_GREEN_JOB_RUNNING              = PENDING_OPERATOR_QUALIFICATION  (post-rebuild)
+LIVE_GREEN_VISIBLE_GAUGE_1          = PENDING_OPERATOR_QUALIFICATION  (post-rebuild + install)
+LIVE_GREEN_TERMINAL_HIDDEN_AT_ZERO  = PENDING_OPERATOR_QUALIFICATION  (post-cancel in fresh build)
 
-EVIDENCE_BOUND_TO_FINAL_HEAD        = PASS  (committed at 9fe1a9389 + bounded repair)
+EVIDENCE_BOUND_TO_FINAL_HEAD        = PASS  (committed at HEAD + bounded repair
+                                              + reviewer corrections)
 BOARD_DURABLE                       = PASS  (board update appended below)
 
-Verdict:
-SOURCE_LEVEL_GAUGE_CHAIN            = GREEN  (212/212 tests pass post-repair)
+Verdict (reviewer-corrected):
+SOURCE_LEVEL_GAUGE_CHAIN            = GREEN  (212/212 tests pass post-repair;
+                                                 PASS_SOURCE_LEVEL_GAUGE_CHAIN issued)
 SHARED_HOST_WIRE                    = REPAIRED  (CASE_B bounded repair landed)
-LIVE_GAUGE_REPRODUCTION             = OPERATOR_FOLLOWUP  (live UI not drivable from agent shell)
+LIVE_GAUGE_REPRODUCTION             = PENDING_OPERATOR_QUALIFICATION
+                                      (live UI not drivable from agent shell;
+                                       verdict PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION
+                                       is reserved for the live round-trip succeeding
+                                       in Codium-ClineMM)
 
 Next action:
 OPERATOR_FOLLOWUP = `bun run package` + install + live ⎇ round-trip in Codium-ClineMM
                     (see §11 of the ACT spec; load-bearing closure for
-                    PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION)
+                    PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION — which is
+                    NOT yet issued by this ACT and is reserved for the
+                    continuation ACT after the operator round-trip succeeds)
+
+Honest correction summary (reviewer feedback applied):
+1. Verdict downgraded from PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION to
+   PASS_SOURCE_LEVEL_GAUGE_CHAIN with LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION.
+2. Webview typecheck re-executed (bunx tsc -b, exit 0) — no longer "inherited baseline".
+3. EOF blank-line warnings in two evidence files fixed; git diff --check now clean.
+4. operator_followup_steps now explicitly states:
+   "If the live ⎇ glyph is still absent after the bounded repair,
+   trigger HALT_LIVE_GREEN_STILL_ABSENT and stop."
