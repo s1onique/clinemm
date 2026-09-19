@@ -1939,3 +1939,58 @@ them; it does not invalidate any of them.
 **STOP rule honored:** this ACT does NOT enter the
 policy/remediation decision tree. The preattach discriminator
 must run first.
+
+---
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — PREEXEC BOUNDED FIX / HALT_PREATTACH_DISCRIMINATOR_STILL_HAS_A_RACE — 2026-09-19
+
+**Status:** C1 GREEN — bounded correction applied before execution. The successor ACT specified by `ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01` (the corrected closure) had a new P0 in its experiment design: the original §Method placed the preattach barrier in a **cooperative 5 ms fixture sleep**, which is still a race — merely a race with a cooperative fixture. 100/100 green runs under that scheme would have established only "kqueue works when the spawned program voluntarily waits long enough for the watcher to attach", NOT containment for arbitrary ClineMM commands.
+
+**Fix landed (single bounded change):**
+
+  - **Replaced cooperative 5 ms delay with documented Darwin primitive `POSIX_SPAWN_START_SUSPENDED`** (Apple extension to `posix_spawnattr_setflags(3)`; flag defined in `<sys/spawn.h>` as `0x0080`): the root is born with its task suspended at the kernel boundary and **cannot execute a single user-space instruction until the driver delivers `SIGCONT`**. This is the kernel-enforced pre-exec barrier the ACT claimed to want.
+  - **Removed every fixture-side "attach window" sleep.** Adversarial roots MUST be permitted to fork/exec/setsid on their first possible user-space instruction. The fork-storm emulator performs zero `sleep`/`nanosleep`/`usleep` between iterations.
+  - **Renamed verdict labels** to reflect the actual barrier: `KQUEUE_PRIMITIVE_VIABLE_UNDER_SUSPENDED_HELPER_SPAWN` (the new PASS label) and `HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_RACE` / `HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_PARTIAL` (the new halt labels). The old `KQUEUE_PRIMITIVE_VIABLE_UNDER_HELPER_SUPERVISED_SPAWN` / `HALT_HELPER_PREATTACH_KQUEUE_*` names are fully replaced.
+  - **Traveled small correction to §Driver identity.** The original wording claimed the predecessor ACT "verified that `kill(2)` from a same-UID probe succeeds." The predecessor ACT actually records **EPERM** for same-UID probes (`ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/10-mechanism-a-recon.txt`: "My user cannot kill processes spawned by the fixture (verified: 'Operation not permitted' for the spawned rootPid, identical to the production EPERM substrate)") and assigns signal authority to the gui/501 LaunchAgent helper. The ACT now states explicitly:
+    ```
+    SIGNAL_AUTHORITY = inherited from predecessor LIVE helper evidence
+    THIS_ACT         = lineage-observation discriminator only
+    ```
+    No `kill(2)` capability is asserted or required by this ACT.
+  - **Probe-binary hygiene preserved:** `.c` sources tracked, build artifacts ignored (no new tracked dirt).
+
+**Predecessor closure is unchanged:** `B_spawn_then_attach = RACE_REFUTED` is still the correct narrow verdict for the spawn-then-attach sequence; `NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE` remains retracted; the successor remains the preattach discriminator. The bounded fix only changes how the preattach discriminator will run, not what the predecessor proved.
+
+**Honest verdict matrix after bounded fix:**
+
+```
+B_spawn_then_attach                           = RACE_REFUTED       (unchanged)
+NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT        = RETRACTED          (unchanged)
+NO_SAFE_POST_SPAWN_CONTAINMENT_AVAILABLE      = PROVEN             (unchanged)
+SUCCESSOR_ACT_PURPOSE                         = CORRECT            (unchanged)
+SUCCESSOR_ACT_METHOD                          = CORRECTED          (was cooperative 5 ms race;
+                                                                       now POSIX_SPAWN_START_SUSPENDED
+                                                                       kernel barrier with zero
+                                                                       fixture delay permitted)
+PROBE_BINARY_HYGIENE                          = PASS               (.c tracked, .o ignored)
+```
+
+**Halt sequence (this ACT):**
+
+1. `HALT_PREATTACH_DISCRIMINATOR_STILL_HAS_A_RACE` (Factory reviewer, 2026-09-19; bounded fix applied in this same closure).
+
+**Files modified (this bounded fix):**
+
+- `.factory/acts/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01.md`
+  — §Method rewritten to use `POSIX_SPAWN_START_SUSPENDED`; pseudo-C
+  updated; §Driver identity corrected (EPERM + LaunchAgent signal authority,
+  no same-UID `kill(2)` claim); §Evidence `10-driver-design.md` /
+  `27-fixture-fork-storm.json` pointers reframed; §RED/GREEN matrix fork-storm
+  row updated; verdict labels renamed (`KQUEUE_PRIMITIVE_VIABLE_UNDER_SUSPENDED_HELPER_SPAWN`);
+  halt labels renamed (`HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_RACE` /
+  `HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_PARTIAL`); Correction history appended.
+- `.factory/epic-board.md` — this section appended.
+
+**STOP rule honored:** no production-side change; no helper-protocol change;
+no `CommandJobManager` change; the corrected ACT is still native-probe-only.
+**After bounded fix: C1: GO.**
