@@ -3550,9 +3550,10 @@ round; `git status --short` clean after commit).
 
 ## ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01 — PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT — 2026-09-19
 
-**Status:** PASS. **Subject head:** `4ed31f587dedae46321bf9d691255637fa0874e3`
-(no new commit; the ACT qualifies the current main against the
-frozen contract wording).
+**Status:** PASS. **Subject head:** `8f72bbb28ca246dd3ae865d31061f36a471a38ad`
+(the ACT's full subject — production diff, new tests, docs, ACT
+body, 16 evidence files, and the original closure row — is
+committed in one durable commit).
 
 ```
 PRIMARY_PGID_GUARANTEE          = EXPLICIT
@@ -3694,7 +3695,7 @@ Three bounded corrections:
   not truthfully read `PASS` while the binding was uncommitted.
   Staged the entire ACT subject, committed it as one durable
   commit, and bound `result.json` + this board row to the
-  discovered final HEAD (see below).
+  discovered final HEAD: **`8f72bbb28ca246dd3ae865d31061f36a471a38ad`**.
 
 After these corrections:
 

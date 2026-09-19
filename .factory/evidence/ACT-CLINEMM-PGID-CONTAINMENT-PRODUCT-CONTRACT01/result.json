@@ -3,7 +3,7 @@
   "epistemic_purpose": "PRODUCT_CONTRACT_QUALIFICATION",
   "authorization": "C1: GO.",
   "status": "PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT",
-  "subject_head": "4ed31f587dedae46321bf9d691255637fa0874e3",
+  "subject_head": "8f72bbb28ca246dd3ae865d31061f36a471a38ad",
   "predecessor": "ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01",
   "predecessor_status": "PASS_SELECT_B_CURRENT_C_FUTURE_TRACK",
   "gates": {
@@ -32,8 +32,8 @@
     "TYPECHECK_HOST": "PASS",
     "TYPECHECK_WEBVIEW": "PASS",
     "DIFF_CHECK": "PASS",
-    "EVIDENCE_BOUND_TO_FINAL_HEAD": "PENDING_FINAL_COMMIT",
-    "BOARD_DURABLE": "PENDING_FINAL_COMMIT"
+    "EVIDENCE_BOUND_TO_FINAL_HEAD": "PASS",
+    "BOARD_DURABLE": "PASS"
   },
   "halt_conditions_triggered": [],
   "halt_conditions_evaluated": [
