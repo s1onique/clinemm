@@ -1,7 +1,18 @@
 31-strategy-c-signing.txt
 ==========================
 
-# Helper signing and entitlement status (current state)
+# Helper signing and entitlement status (current state) — CORRECTION02
+
+CORRECTION02 narrows two remaining stale claims in this file that
+referenced a "macOS 15+" floor for Strategy C. The corrected claim
+is: Strategy C requires the current beta API generation — per Apple
+documentation `es_new_descendants_client(_:_:)` is **Beta**; per
+external implementation work it is a **macOS 27-era** API absent
+even from the macOS 26.x SDK/runtime. The current Sonoma substrate
+is UNAVAILABLE. Do NOT infer "macOS 15 floor" merely because SDK
+14 lacks the symbol. The selection B_WITH_C_FUTURE_TRACK is
+preserved; CORRECTION02 is a P0 completeness fix, not a strategy
+change.
 
 ## Current helper binary
 
@@ -59,10 +70,12 @@
   the new client because the calling binary does NOT hold the
   com.apple.developer.endpoint-security.client entitlement.
 
-  The current helper does not hold that entitlement, so even if we
-  were on macOS 15+ (with es_new_descendants_client available in the
-  SDK), the helper could not construct an EndpointSecurity client
-  without first being:
+  The current helper does not hold that entitlement, so even on a
+  runtime/SDK generation exposing es_new_descendants_client()
+  (per Apple the symbol is currently Beta; per external
+  implementation work it is a macOS 27-era API absent even from the
+  macOS 26.x SDK/runtime), the helper could not construct an
+  EndpointSecurity client without first being:
     (a) signed by a Developer ID associated with an Apple Developer
         account that has been granted the entitlement, AND
     (b) re-signed with an entitlements blob that contains
@@ -93,8 +106,10 @@
      even in a local-dev context.)
 
   TARGET_OS_SUPPORT = NOT_ACCEPTABLE
-    (requires macOS 15+; current Sonoma host cannot run the descendants
-     client API)
+    (CURRENT_SONOMA_SUBSTRATE = UNAVAILABLE; the current Apple API
+     remains Beta / macOS-27-era; the current Sonoma host cannot run
+     the descendants-client API because the symbol is not exported
+     from SDK 14 and the helper lacks the entitlement)
 
   BETA_API_ACCEPTANCE = N/A
     (the descendants client is documented as "Beta" by Apple, but this

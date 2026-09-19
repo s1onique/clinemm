@@ -1,7 +1,17 @@
 21-strategy-b-product-contract.md
 ==================================
 
-# Product contract for the PGID-only containment boundary
+# Product contract for the PGID-only containment boundary (CORRECTION02)
+
+CORRECTION02 narrows a remaining stale claim
+(`21-strategy-b-product-contract.md` §6 line stating Strategy C
+"requires macOS 15+"). The corrected claim is: Strategy C requires
+the current beta API generation (per Apple documentation
+`es_new_descendants_client(_:_:)` is Beta; per external
+implementation work it is macOS 27-era, absent even from macOS 26.x
+SDK/runtime). Strategy C is unavailable on the current Sonoma
+substrate. The selection B_WITH_C_FUTURE_TRACK is preserved;
+CORRECTION02 is a P0 completeness fix, not a strategy change.
 
 This is the contract ClineMM adopts when Strategy B is selected.
 No production code is changed in this ACT; this document is the
@@ -90,11 +100,18 @@ its descendants from any session it does not own.
 ## §6. Why this contract is preferable to Strategy A or C on this
 substrate
 
-  - Strategy A is not enforceable (see 10-/11-/12-strategy-a-*.txt).
-  - Strategy C requires the Endpoint Security entitlement (not
-    available on this adhoc-signed helper) AND requires macOS 15+
-    for the descendants-client API (not available on this Sonoma
-    host). It is a future research track, not a current contract.
+  - Strategy A is not enforceable in this execution context
+    (UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT) and is NOT_PROVEN
+    on Sonoma generally (see 10-/11-/12-strategy-a-*.txt).
+  - Strategy C requires (a) the Endpoint Security entitlement
+    (not available on this adhoc-signed helper), (b) Developer ID
+    signing, (c) the current beta API generation — per Apple
+    documentation `es_new_descendants_client(_:_:)` is **Beta**
+    and per external implementation work it is a **macOS 27-era**
+    API absent even from the macOS 26.x SDK/runtime. Do NOT infer
+    "macOS 15 floor" merely because SDK 14 lacks the symbol. The
+    current Sonoma substrate is UNAVAILABLE for Strategy C.
+    Strategy C is a future research track, not a current contract.
   - Strategy B is what already works and what already matches
     upstream behavior; making it explicit only adds clarity.
 

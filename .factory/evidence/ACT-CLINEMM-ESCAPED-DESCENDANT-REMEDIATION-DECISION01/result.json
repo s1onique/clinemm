@@ -1,7 +1,8 @@
 {
   "act": "ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01",
   "purpose": "REMEDIATION_DECISION",
-  "correction_round": "CORRECTION01",
+  "correction_round": "CORRECTION02",
+  "correction_history": ["CORRECTION01", "CORRECTION02"],
   "correction_halt": "HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE",
   "predecessor": {
     "kqueue_suspended_preattach": "REFUTED",
@@ -65,6 +66,11 @@
       "name": "HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE",
       "round": "CORRECTION01",
       "fix": "Strategy A claim narrowed from REFUTED to UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT; Strategy C macOS floor corrected from 15+ to current beta API generation (macOS 27-era); ACT body, evidence, result.json, decision matrix, and epic-board row all committed."
+    },
+    {
+      "name": "HALT_DECISION_CLAIMS_NOT_FULLY_NARROWED",
+      "round": "CORRECTION02",
+      "fix": "Two committed evidence files (21-strategy-b-product-contract.md, 31-strategy-c-signing.txt) still asserted 'requires macOS 15+'. Replaced with the corrected narrow claim (current beta API generation; unavailable on the current Sonoma substrate). Added CORRECTION02 headers to the affected files labeling prior wording as retracted. Also fixed two non-blocking EOF whitespace findings (40-decision-matrix.md, result.json). All three sub-closure signals now PASS repository-wide; selection B_WITH_C_FUTURE_TRACK is preserved."
     }
   ],
   "non_goals": [
@@ -81,4 +87,3 @@
     "touch the active-job-gauge telemetry"
   ]
 }
-

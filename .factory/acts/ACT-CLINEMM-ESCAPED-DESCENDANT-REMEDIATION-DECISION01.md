@@ -2,19 +2,22 @@
 
 **Primary epistemic purpose:** `REMEDIATION_DECISION`
 
-**Status:** PASS (BOUNDED CORRECTION01 applied per
-`HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`). The original
-closure overclaimed Strategy A as "REFUTED on Sonoma" when only
-"unavailable in this execution context" was proven, and mis-stated
-the Strategy C macOS floor as "15+" when the API is in fact a
-current-beta / macOS-27-era symbol absent from the 14.0 and 26.x
-SDKs. The selection itself (`B_WITH_C_FUTURE_TRACK`) does not depend
-on the overclaim — B is independently available now, A is not
-qualified in this execution context, and C is unavailable on the
-current OS/signing substrate — so the bounded narrowing preserves
-the selection. ACT body, evidence packet, result.json, decision
-matrix, and epic-board row are all committed in this round so the
-closure is durable.
+**Status:** PASS (BOUNDED CORRECTION02 applied per
+`HALT_DECISION_CLAIMS_NOT_FULLY_NARROWED`). CORRECTION01 narrowed
+the Strategy A claim (REFUTED → UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT)
+and corrected the Strategy C macOS floor (macOS 15+ → macOS 27 / current
+beta SDK generation), but left two committed evidence files
+(`21-strategy-b-product-contract.md` §6, `31-strategy-c-signing.txt`)
+still asserting the stale "requires macOS 15+" claim. CORRECTION02
+fixes those two active claims and labels prior wording as retracted
+via file-level CORRECTION02 headers. Two non-blocking EOF-whitespace
+findings (P2) in `40-decision-matrix.md` and `result.json` were
+cleaned opportunistically. All three reviewer-required sub-signals
+(`DECISION_CLAIMS_NARROWED`, `ACT_ARTIFACT_BOUND`, `BOARD_DURABLE`)
+now PASS repository-wide. The selection `B_WITH_C_FUTURE_TRACK`
+remains intact: B is independently available now, A is not qualified
+in this execution context, and C is unavailable on the current
+OS/signing substrate.
 
 **C1: GO.**
 
@@ -318,7 +321,7 @@ modified. No helper re-signed. No entitlement requested.
 
 ### 9.1 Bounded correction log
 
-CORRECTION01 (this round, per
+CORRECTION01 (per
 `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`):
   - Strategy A: REFUTED → UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT.
     Added the un-sandboxed qualification needed for global viability
@@ -333,3 +336,24 @@ CORRECTION01 (this round, per
   - Closure durability: ACT body + evidence + result.json + matrix +
     epic-board row all committed in this round; `git status --short`
     empty after commit.
+
+CORRECTION02 (per
+`HALT_DECISION_CLAIMS_NOT_FULLY_NARROWED`):
+  - Two committed evidence files still asserted the stale "macOS 15+"
+    claim after CORRECTION01:
+      - `21-strategy-b-product-contract.md` §6 ("Strategy C … AND
+        requires macOS 15+ for the descendants-client API")
+      - `31-strategy-c-signing.txt` (two places: "even if we were on
+        macOS 15+ (with es_new_descendants_client available in the
+        SDK)" and "requires macOS 15+; current Sonoma host cannot
+        run the descendants client API")
+  - Replaced both with the CORRECTION01-narrowed claim (Strategy C
+    requires the current beta API generation; CURRENT_SONOMA_SUBSTRATE
+    = UNAVAILABLE). Added file-level CORRECTION02 headers labeling
+    prior wording as retracted.
+  - Cleaned two non-blocking EOF-whitespace findings (P2) in
+    `40-decision-matrix.md` and `result.json`. `git diff --check`
+    is now silent.
+  - All three reviewer-required sub-signals now PASS repository-wide:
+    DECISION_CLAIMS_NARROWED = PASS, ACT_ARTIFACT_BOUND = PASS,
+    BOARD_DURABLE = PASS. Selection B_WITH_C_FUTURE_TRACK preserved.

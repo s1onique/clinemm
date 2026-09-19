@@ -3405,17 +3405,26 @@ review unless a new P0 appears. Agent stops here.
 
 ---
 
-## ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01 — PASS (BOUNDED CORRECTION01) — 2026-09-19
+## ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01 — PASS (BOUNDED CORRECTION02) — 2026-09-19
 
-**Status:** PASS (bounded CORRECTION01 applied per
-`HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE` from Factory
-reviewer + macOS process-control engineer). The selection itself
-(`B_WITH_C_FUTURE_TRACK`) is preserved — B is independently available
-now, A is not qualified in this execution context, and C is unavailable
-on the current OS/signing substrate — so the bounded narrowing does not
-disturb the decision. ACT body, evidence packet, result.json, decision
-matrix, selected-contract, and this epic-board row are all committed
-together in the CORRECTION01 round.
+**Status:** PASS (bounded CORRECTION02 applied per
+`HALT_DECISION_CLAIMS_NOT_FULLY_NARROWED` from Factory reviewer +
+macOS process-control engineer). CORRECTION01 narrowed the Strategy A
+claim (REFUTED → UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT) and
+corrected the Strategy C macOS floor (macOS 15+ → macOS 27 / current
+beta SDK generation), but left two committed evidence files
+(`21-strategy-b-product-contract.md` §6, `31-strategy-c-signing.txt`)
+still asserting the stale "requires macOS 15+" claim. CORRECTION02
+fixes those two active claims and labels prior wording as retracted
+via file-level CORRECTION02 headers. Two non-blocking EOF-whitespace
+findings (P2) in `40-decision-matrix.md` and `result.json` were cleaned
+opportunistically; `git diff --check` is now silent.
+
+The selection (`B_WITH_C_FUTURE_TRACK`) is preserved — B is
+independently available now, A is not qualified in this execution
+context, and C is unavailable on the current OS/signing substrate.
+All three reviewer-required sub-signals now PASS repository-wide:
+`DECISION_CLAIMS_NARROWED`, `ACT_ARTIFACT_BOUND`, `BOARD_DURABLE`.
 
 ### Honest verdicts (CORRECTION01-narrowed)
 
@@ -3475,6 +3484,24 @@ CORRECTION01 (this round, per `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`
     `git status --short` empty after commit. The previous round had
     31 untracked files; they are now committed and HEAD-bound.
 
+CORRECTION02 (per `HALT_DECISION_CLAIMS_NOT_FULLY_NARROWED`):
+
+  - Two committed evidence files still asserted the stale "macOS 15+"
+    claim after CORRECTION01:
+    - `21-strategy-b-product-contract.md` §6: "Strategy C … AND
+      requires macOS 15+ for the descendants-client API".
+    - `31-strategy-c-signing.txt`: two places — "even if we were on
+      macOS 15+ (with es_new_descendants_client available in the SDK)"
+      and "TARGET_OS_SUPPORT ... requires macOS 15+; current Sonoma
+      host cannot run the descendants client API".
+  - Both replaced with the CORRECTION01-narrowed claim (Strategy C
+    requires the current beta API generation; CURRENT_SONOMA_SUBSTRATE
+    = UNAVAILABLE). File-level CORRECTION02 headers added labeling
+    prior wording as retracted.
+  - Two non-blocking EOF-whitespace findings (P2) in
+    `40-decision-matrix.md` and `result.json` cleaned
+    opportunistically. `git diff --check` is now silent.
+
 ### Substrate evidence (live on macOS 14.7.4 / Sonoma / arm64)
 
 | Item | Result |
@@ -3500,7 +3527,8 @@ CORRECTION01 (this round, per `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`
 
 - `HALT_STRATEGY_A_REQUIRES_COMMAND_HEURISTICS`: did NOT trigger
 - `HALT_STRATEGY_A_BREAKS_ORDINARY_EXEC`: did NOT trigger
-- `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`: TRIGGERED round 1; CLOSED by CORRECTION01 (this round)
+- `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`: TRIGGERED round 1; CLOSED by CORRECTION01 (round 1)
+- `HALT_DECISION_CLAIMS_NOT_FULLY_NARROWED`: TRIGGERED round 2; CLOSED by CORRECTION02 (this round)
 - `CAPTURE_INSUFFICIENT (Strategy C entitlement/deployment viability)`: TRIGGERED; does NOT block selection per §20
 - `CAPTURE_INSUFFICIENT (Strategy B product demand)`: did NOT trigger
 

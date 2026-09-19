@@ -86,4 +86,3 @@ Notes per row (only non-obvious ones):
   (d) live E/F/G qualification on an un-sandboxed host. These
   compound; the runtime floor alone may force a ClineMM
   feature-deprecation path.
-

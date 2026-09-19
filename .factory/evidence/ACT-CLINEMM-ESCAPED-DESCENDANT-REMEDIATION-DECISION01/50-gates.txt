@@ -3,16 +3,27 @@
 
 Gate evaluation per §19 of the ACT spec.
 
-ENVELOPE (CORRECTION01):
+ENVELOPE (CORRECTION02):
   DECISION_CLAIMS_NARROWED                     = PASS
     (Strategy A: UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT;
-     Strategy C: macOS 27 / current beta SDK floor, NOT "macOS 15+")
+     Strategy C: macOS 27 / current beta SDK floor, NOT "macOS 15+".
+     All stale "macOS 15+" active claims in 21- and 31- replaced
+     with CORRECTION02 headers and retracted wording in CORRECTION02.)
   ACT_ARTIFACT_BOUND                            = PASS
     (ACT + evidence + result.json + matrix + selected-contract all
-     committed in this round; HEAD-bound after commit)
+     committed; HEAD-bound after commit)
   BOARD_DURABLE                                 = PASS
     (epic-board row appended with bounded-correction framing and
-     committed in this round)
+     committed)
+
+ENVELOPE (CORRECTION01 — superseded by CORRECTION02 envelope above):
+  DECISION_CLAIMS_NARROWED                     = was PASS, then PARTIAL
+    (round 1 narrowed the central ACT/result.json/matrix/selected-
+     contract/platform/entitlement, but left 21-strategy-b-product-
+     contract.md §6 and 31-strategy-c-signing.txt asserting the
+     stale "macOS 15+" claim. CORRECTION02 fixed those.)
+  ACT_ARTIFACT_BOUND                            = PASS
+  BOARD_DURABLE                                 = PASS
 
 ENTRY_CLEAN                                      = PASS
   (git status --short -> empty; HEAD=c434af752)
@@ -105,7 +116,9 @@ NO_PRODUCTION_CHANGE                             = PASS
 DIFF_CHECK                                       = PASS
   (this ACT wrote evidence files + epic-board row + ACT body; no
    source touched; no signature line would re-add it. ACT body +
-   evidence + epic-board row are committed in the same round.)
+   evidence + epic-board row are committed in the same round.
+   `git diff --check` reports no findings after CORRECTION02 EOF
+   whitespace cleanup of 40-decision-matrix.md and result.json.)
 
 EVIDENCE_BOUND                                   = PASS
   (all files in 00-/01-/02-/10-/11-/12-/20-/21-/30-/31-/32-/40-/41-/50-,
@@ -121,12 +134,22 @@ Halt conditions encountered:
         context, before any ordinary-exec test was attempted.
   HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE (reviewer halt
         from Factory reviewer + macOS process-control engineer):
-        TRIGGERED in round 1; CLOSED by CORRECTION01 (this round).
+        TRIGGERED in round 1; CLOSED by CORRECTION01 (round 1).
         Strategy A claim narrowed to
         UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT; Strategy C macOS
         floor corrected from "macOS 15+" to "macOS 27 / current beta
         SDK generation"; ACT body + evidence + matrix + selected-
         contract + result.json + epic-board row all committed.
+  HALT_DECISION_CLAIMS_NOT_FULLY_NARROWED (reviewer halt from
+        Factory reviewer + macOS process-control engineer):
+        TRIGGERED in round 2; CLOSED by CORRECTION02 (this round).
+        Two committed evidence files (21-strategy-b-product-contract.md
+        §6, 31-strategy-c-signing.txt) still asserted "requires macOS
+        15+"; both replaced with the corrected narrow claim and
+        CORRECTION02 headers labeling prior wording as retracted.
+        Two non-blocking EOF-whitespace findings (40-decision-matrix.md,
+        result.json) cleaned opportunistically. Selection
+        B_WITH_C_FUTURE_TRACK preserved.
 
 CAPTURE_INSUFFICIENT triggers:
   CAPTURE_INSUFFICIENT (Strategy C entitlement/deployment viability):
