@@ -296,3 +296,111 @@ CARRIER_OVERFLOW             = CLOSED (round-3 halt + exit code 7)
 READY_FOR_OPERATOR_RUN       = YES
 NEXT                         = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
 ```
+
+## Round-4 update (HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE)
+
+Reviewer flagged that the round-3 `WRITE_FAILED` line uses the same
+pipe that just failed. If the pipe is broken (reader gone, EPIPE,
+SIGPIPE), the diagnostic itself can be lost, leaving the driver with
+neither the CREATE nor the failure signal. The fix is to make the
+fixture's exit status the authoritative cross-process-boundary
+oracle-failure signal, which the kernel mediates independently of any
+pipe state.
+
+### What changed
+
+1. **Authoritative `_exit(86)` failsafe.** When `gt_announce()`
+   detects an unrecoverable write failure (EPIPE, EIO, ENXIO, EBADF,
+   or persistent EAGAIN underflow), it now calls `_exit(86)` via
+   `gt_announce_failure()`. Exit status 86 is a kernel-mediated fact
+   that `waitpid()` in the driver can observe regardless of pipe
+   state. The in-pipe `WRITE_FAILED` line is now treated as
+   best-effort, not load-bearing.
+
+2. **SIGPIPE suppression.** Both fixture binaries
+   (`31-helper-preattach-root.c`, `32-helper-preattach-emulator.c`)
+   now call `signal(SIGPIPE, SIG_IGN)` at process start. Without this,
+   the kernel's default SIGPIPE action would terminate the fixture
+   on the first EPIPE write, before the round-4 `_exit(86)` failsafe
+   could run.
+
+3. **Driver-side waitpid + status check.** After `drain_ground_truth()`
+   returns, the driver (`30-helper-preattach-driver.c`) calls
+   `waitpid(root, ...)` to reap the spawned root. If the root exits
+   with status 86 (`GT_EVIDENCE_FAIL_STATUS`), the driver latches
+   `gt_oracle_evidence_fail = 1` and emits a `root_exit` JSON event.
+   Signal-induced termination (e.g., signal-triggered-fork SIGTERM
+   mode) is treated as the contract — NOT latched.
+
+4. **New exit code 8 reserved.** `gt_oracle_evidence_fail` returns
+   exit code 8, distinct from the round-3 codes 6 (in-pipe WRITE_FAILED)
+   and 7 (reader fault). The PASS-only-on-exit-0 invariant is preserved.
+
+5. **New witness binary `41-oracle-broken-channel-witness`.** 240-line
+   C test (4 cases) verifies the failsafe works on:
+   - T1: mirrored broken-pipe logic → `_exit(86)` ✓
+   - T2: confirms EPIPE on broken channel makes in-pipe WRITE_FAILED
+     unreliable (this is the reviewer's exact concern) ✓
+   - T3: healthy pipe → `_exit(0)` (no false positive) ✓
+   - T4: **real `31-helper-preattach-root` binary** with closed GT
+     read end → exits 86 via waitpid observation ✓
+
+### Why this is fail-safe
+
+The invariant now holds:
+
+```
+CREATE could not be durably emitted  =>  this run can NEVER return PASS.
+```
+
+Mechanism:
+- Pipe failure (any cause: EPIPE, EIO, ENXIO, EBADF, persistent EAGAIN):
+  fixture `_exit(86)` immediately.
+- Process exit status is a kernel-mediated fact, NOT pipe-mediated.
+- The driver `waitpid()`s the root and inspects the status. If it's
+  86, `gt_oracle_evidence_fail` latches and exit code 8 is returned.
+- The in-pipe `WRITE_FAILED` line is now redundant for correctness;
+  it's still emitted for log inspection and for round-3 backward
+  compatibility, but its loss is no longer fatal.
+
+### Verification
+
+```
+$ ./41-oracle-broken-channel-witness
+=== ORACLE_BROKEN_CHANNEL_WITNESS (round-4) ===
+[T1 broken-pipe (read end closed)] child exit_status=86 signaled=0
+  T1 expected=86 got=86 PASS
+[T2 broken-pipe diagnostic] first_write=-1 errno=32, second_write=-1 errno=32
+[T3 healthy-pipe control] parent read=48 errno=0
+[T3 healthy-pipe control] child exit_status=0 signaled=0
+  T3 expected=0 got=0 PASS
+  T4 [real fixture, broken GT] expected=86 got=86 PASS
+=== failures=0 VERDICT=PASS ===
+```
+
+Note T4: the witness `execl()`s the **actual** `31-helper-preattach-root`
+binary (path resolved via `_NSGetExecutablePath` for cwd independence),
+sets `CLINEMM_GROUND_TRUTH_FD` to a pipe whose read end is already
+closed, and observes exit status 86 via `waitpid()`. This is the
+end-to-end proof that the round-4 failsafe is wired into the production
+fixture binary, not just a mirror.
+
+### Updated status block
+
+```
+KQUEUE_PRIMITIVE_VIABILITY        = NOT_YET_ADJUDICATED
+GROUND_TRUTH_CHANNEL              = IMPLEMENTED + LOSSLESS + EOF-AWARE + FAIL-SAFE
+GROUND_TRUTH_INDEPENDENT          = YES
+ORACLE_BUILDS_CLEAN               = YES (0 warnings; 5 binaries incl. 2 witnesses)
+P0_FALSE_GREEN_RISK               = CLOSED (fail-closed identity, exact (pid,start_us))
+P1_PS_TR_NOISE                    = CLOSED
+P1_SIGNAL_HANDLER_UNSAFE          = CLOSED
+P0_ENV_AS_ARGV                    = CLOSED
+PIPE_LOSS_FALSE_GREEN_RISK        = CLOSED (round-3 lossless carry)
+WRITE_FAIL_SILENT                 = CLOSED (round-3 in-pipe + round-4 _exit(86))
+WRITE_FAIL_CHANNEL_NOT_FAILSAFE   = CLOSED (round-4 kernel-mediated status)
+CARRIER_OVERFLOW                  = CLOSED (round-3 halt + exit code 7)
+ORACLE_EVIDENCE_FAIL              = CLOSED (round-4 exit code 8)
+READY_FOR_OPERATOR_RUN            = YES
+NEXT                              = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
+```

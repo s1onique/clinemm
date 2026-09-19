@@ -168,6 +168,18 @@ static int gt_pid_only = 0;
 static int gt_write_failures = 0;
 // Round-3: oracle reader fault latches (carry overflow, malformed).
 static int gt_reader_fault = 0;
+// Round-4 (HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE):
+// latched when the spawned root fixture exits with status 86
+// (GT_EXIT_EVIDENCE_FAIL). This is the authoritative cross-process
+// signal that the oracle write side failed irrecoverably -- the
+// in-pipe WRITE_FAILED line might have been lost to the same broken
+// channel, but the kernel-mediated exit status cannot be lost.
+static int gt_oracle_evidence_fail = 0;
+// The exit status the fixture tree contracted on for a normal run.
+// The signal-triggered-fork fixture in SIGTERM mode exits via signal
+// (negative status) and that's not a failure; only 86 is.
+#define GT_EXPECTED_OK_STATUS 0
+#define GT_EVIDENCE_FAIL_STATUS 86
 
 // Ground-truth pipe read end (set in main before posix_spawn).
 static int gt_read_fd = -1;
@@ -676,6 +688,69 @@ int main(int argc, char **argv) {
   int drain_ms = (duration_sec + 2) * 1000;
   drain_ground_truth(drain_ms);
 
+  // Round-4 (HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE):
+  // Reap the spawned root with WNOHANG. If it already exited with
+  // status 86 (GT_EXIT_EVIDENCE_FAIL), the oracle write side failed
+  // irrecoverably -- the in-pipe WRITE_FAILED signal might have been
+  // lost to the same broken channel, but the kernel-mediated exit
+  // status cannot be. Latch the evidence-fail flag.
+  //
+  // Use WNOHANG and a brief retry: for non-signal fixtures, the root
+  // is sleeping for the duration; we just SIGTERM it after a short
+  // grace and reap. For signal-triggered-fork SIGTERM mode, the root
+  // already exited on its own via SIGTERM (negative status, NOT 86,
+  // so no false-positive latch).
+  {
+    int root_status = 0;
+    pid_t r;
+    int reaped = 0;
+    // Give the root up to 2 seconds to exit on its own.
+    for (int i = 0; i < 20; i++) {
+      r = waitpid(root, &root_status, WNOHANG);
+      if (r == root) { reaped = 1; break; }
+      if (r < 0) break;
+      usleep(100 * 1000);  // 100ms
+    }
+    if (!reaped) {
+      // Root still alive after grace period -- send SIGTERM and wait.
+      // This is normal for fixtures that sleep until killed.
+      kill(root, SIGTERM);
+      // Wait up to 2 more seconds.
+      for (int i = 0; i < 20; i++) {
+        r = waitpid(root, &root_status, WNOHANG);
+        if (r == root) { reaped = 1; break; }
+        if (r < 0) break;
+        usleep(100 * 1000);
+      }
+      if (!reaped) {
+        // Root is wedged. SIGKILL as last resort.
+        kill(root, SIGKILL);
+        r = waitpid(root, &root_status, 0);
+        reaped = (r == root);
+      }
+    }
+    if (reaped) {
+      if (WIFEXITED(root_status)) {
+        int code = WEXITSTATUS(root_status);
+        emit("{\"event\":\"root_exit\",\"pid\":%d,\"exit_code\":%d,\"signal\":false}\n",
+             root, code);
+        if (code == GT_EVIDENCE_FAIL_STATUS) {
+          gt_oracle_evidence_fail = 1;
+        }
+      } else if (WIFSIGNALED(root_status)) {
+        int sig = WTERMSIG(root_status);
+        emit("{\"event\":\"root_exit\",\"pid\":%d,\"signal\":true,\"signal_num\":%d}\n",
+             root, sig);
+        // signal-triggered-fork SIGTERM mode is the contract for this;
+        // we do NOT latch on signal-induced exit unless the fixture
+        // explicitly _exit(86)'d. Signal-only termination is NOT
+        // evidence of oracle failure.
+      }
+    } else {
+      emit("{\"event\":\"root_exit\",\"pid\":%d,\"reaped\":false}\n", root);
+    }
+  }
+
   // Compute the authoritative MISSED set.
   gt_record_t missed_gt[MAX_GT];
   int missed_count = compute_missed(missed_gt, MAX_GT);
@@ -720,6 +795,7 @@ int main(int argc, char **argv) {
   printf(",\"ground_truth_created_pid_only_count\":%d", gt_pid_only);
   printf(",\"ground_truth_write_failures\":%d", gt_write_failures);
   printf(",\"ground_truth_reader_fault\":%d", gt_reader_fault);
+  printf(",\"ground_truth_oracle_evidence_fail\":%d", gt_oracle_evidence_fail);
   printf(",\"ground_truth_seen_count\":%d", ngt_created);
   printf(",\"ground_truth_missed_count\":%d", missed_count);
   printf("}}\n");
@@ -729,11 +805,14 @@ int main(int argc, char **argv) {
   close(kq);
   if (gt_read_fd >= 0) close(gt_read_fd);
   if (gt_write_fd >= 0) close(gt_write_fd);
-  // Round-3 exit-code semantics:
-  //   0 = PASS  (no missed GT, no write failures)
+  // Round-4 exit-code semantics:
+  //   0 = PASS  (no missed GT, no write failures, no evidence fail)
   //   5 = MISS  (GT records that kqueue did not track)
   //   6 = ORACLE_WRITE_FAIL  (gt_write_failures > 0 -- EVIDENCE failure)
   //   7 = ORACLE_READER_FAULT  (carry overflow etc.)
+  //   8 = ORACLE_EVIDENCE_FAIL  (root exited 86 -- kernel-mediated oracle
+  //                              write-side failure signal)
+  if (gt_oracle_evidence_fail) return 8;
   if (gt_reader_fault) return 7;
   if (gt_write_failures > 0) return 6;
   return missed_count > 0 ? 5 : 0;

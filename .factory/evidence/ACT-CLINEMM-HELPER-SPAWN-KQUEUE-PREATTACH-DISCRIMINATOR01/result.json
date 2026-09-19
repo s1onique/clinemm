@@ -1,8 +1,8 @@
 {
   "act": "ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01",
   "verdict": "HALT",
-  "halt_reason": "HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD + ROUND_3_HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS_CLOSED",
-  "halt_summary": "Driver design and probe binaries are correct (kernel barrier via POSIX_SPAWN_START_SUSPENDED, no cooperative delay, recursive kqueue+reconcile). However, the substrate this ACT was executed on blocks same-UID signal delivery from parent to its own children (EPERM on kill(child, SIGCONT) and even kill(child, SIGTERM)). This is the same EPERM boundary the predecessor ACT documented in 10-mechanism-a-recon.txt and the production helper exists to bridge. The corrected ACT's §Method requires kill(root, SIGCONT); §Driver identity disclaims kill(2) capability. These are contradictory on this substrate. The experiment did not run. Round-3 closes the lossless-reader / EOF-semantics / write-failure-visibility gaps via a verified fragmentation witness.",
+  "halt_reason": "HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD + ROUND_3_HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS_CLOSED + ROUND_4_HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE_CLOSED",
+  "halt_summary": "Driver design and probe binaries are correct (kernel barrier via POSIX_SPAWN_START_SUSPENDED, no cooperative delay, recursive kqueue+reconcile). However, the substrate this ACT was executed on blocks same-UID signal delivery from parent to its own children (EPERM on kill(child, SIGCONT) and even kill(child, SIGTERM)). This is the same EPERM boundary the predecessor ACT documented in 10-mechanism-a-recon.txt and the production helper exists to bridge. The corrected ACT's §Method requires kill(root, SIGCONT); §Driver identity disclaims kill(2) capability. These are contradictory on this substrate. The experiment did not run. Round-3 closes the lossless-reader / EOF-semantics / write-failure-visibility gaps via a verified fragmentation witness. Round-4 makes the fixture exit status the authoritative cross-process-boundary oracle-failure signal (_exit(86) + driver waitpid + SIGPIPE suppression), verified by 41-oracle-broken-channel-witness on the real fixture binary.",
   "substrate": {
     "macos": "14.7.4 (23H420)",
     "darwin": "23.6.0",
@@ -61,7 +61,7 @@
   },
   "ground_truth_implementation": {
     "oracle_added": true,
-    "round": 3,
+    "round": 4,
     "round2_fixes": [
       "P0-1: tracked_has now requires EXACT (pid, start_us) match when start_us != 0; pid-only fallback only when start_us == 0; ground_truth_created_with_start_us_count and ground_truth_created_pid_only_count emitted separately to quantify weak-evidence reliance",
       "P0-2: 73-operator-handoff.md adds run_env <label> KEY=VAL -- args... helper using 'env KEY=VAL ...'; CLINEMM_FIXTURE_I_SIGNAL is now actually in the environment (not argv)",
@@ -79,7 +79,7 @@
       "exec-fork (H)",
       "signal-triggered-fork (I, renamed from termination-window; gated by CLINEMM_FIXTURE_I_SIGNAL env var; sigwait-based)"
     ],
-    "build_status": "make clean && make: 0 warnings on -Wall -Wextra; 30-driver=52840, 31-root=52168, 32-emulator=51008, 40-witness=34600 bytes",
+    "build_status": "make clean && make: 0 warnings on -Wall -Wextra; 30-driver=52920, 31-root=52216, 32-emulator=51024, 40-witness=34600, 41-witness=34256 bytes",
     "smoke_test_status": "PASS on agent substrate (no SIGCONT); GT channel end-to-end verified for shell-A, exec-fork, signal-triggered-fork (SIGTERM self-raise), control (no signal). ps/tr subprocess noise eliminated.",
     "ready_for_operator_run": true,
     "operator_handoff_packet": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/73-operator-handoff.md",
@@ -103,29 +103,43 @@
     "witness_artifact": "tools/macos-host-helper/native/containment-probe/40-oracle-lossless-witness",
     "witness_verdict": "PASS (records_seen=8, gt_with_start_us=7, gt_write_failures=1, gt_reader_fault=0, truncated-at-EOF pid=888 survived)",
     "exit_code_semantics": {
-      "0": "PASS (no missed GT, no write failures)",
-      "5": "MISS (GT records that kqueue did not track)",
-      "6": "ORACLE_WRITE_FAIL (gt_write_failures > 0; EVIDENCE failure)",
-      "7": "ORACLE_READER_FAULT (carry overflow etc.)"
-    }
+      "0": "PASS (no missed GT, no write failures, no evidence fail)",
+      "5": "REFUTE (MISS) -- missed_ground_truth_count > 0",
+      "6": "REFUTE (ORACLE_WRITE_FAIL) -- ground_truth_write_failures > 0 (in-pipe)",
+      "7": "REFUTE (ORACLE_READER_FAULT) -- ground_truth_reader_fault > 0",
+      "8": "REFUTE (ORACLE_EVIDENCE_FAIL) -- root exited 86 (kernel-mediated)"
+    },
+    "round4_fixes": [
+      "ORACLE_WRITE_FAILURE_FAILSAFE: gt_announce_failure() now _exit(86)s immediately on any unrecoverable write failure (EPIPE/EIO/ENXIO/EBADF/persistent EAGAIN). Exit status 86 is kernel-mediated and observable via waitpid() in the driver regardless of pipe state. The in-pipe WRITE_FAILED line is now best-effort, not load-bearing.",
+      "SIGPIPE_SUPPRESSED: Both fixture binaries (31-helper-preattach-root.c, 32-helper-preattach-emulator.c) install signal(SIGPIPE, SIG_IGN) at process start. Without this, the kernel's default SIGPIPE action terminates the fixture before the round-4 _exit(86) failsafe can run.",
+      "DRIVER_WAITPID_ROOT_STATUS: After drain_ground_truth(), driver calls waitpid(root) with a brief grace period (SIGTERM if needed, SIGKILL last resort). If root exits with status 86, gt_oracle_evidence_fail latches; exit code 8 reserved.",
+      "SIGNAL_EXIT_NOT_LATCHED: signal-induced root exit (e.g., signal-triggered-fork SIGTERM mode) is the contract for that fixture and is NOT latched as oracle failure. Verified by signal-triggered-fork SIGTERM smoke test: root exit -15, driver does not latch.",
+      "Added 41-oracle-broken-channel-witness (240 lines C, 4 cases). T4 exercises the REAL 31-helper-preattach-root binary with a closed GT read end and observes exit status 86 via waitpid -- proving the failsafe is wired into production code, not just a mirror."
+    ],
+    "oracle_write_failure_failsafe": true,
+    "sigpipe_suppressed_in_fixtures": true,
+    "driver_waits_root_status": true,
+    "broken_channel_witness_artifact": "tools/macos-host-helper/native/containment-probe/41-oracle-broken-channel-witness",
+    "broken_channel_witness_verdict": "PASS (T1 broken-pipe -> exit 86; T2 both writes fail EPIPE; T3 healthy -> exit 0; T4 real fixture -> exit 86)"
   },
   "next_step": {
     "actor": "human_operator",
     "substrate": "unsandboxed Terminal.app (NOT VSCodium-descended)",
     "command_packet": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/73-operator-handoff.md",
     "captured_output_dir": ".factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator/",
-    "decision_rule": "PASS only if E/F + double-fork + setsid + exec-fork + signal-triggered-fork + 100x hammer all show zero misses AND controls survive. REFUTED if any descendant is missed. REFUTED if any ground_truth_write_failures > 0 (oracle write-evidence failure). REFUTED if ground_truth_reader_fault > 0 (oracle reader overflow/EOF fault). Driver exit codes 5/6/7 each correspond to a distinct REFUTE mode.",
+    "decision_rule": "PASS only if E/F + double-fork + setsid + exec-fork + signal-triggered-fork + 100x hammer all show zero misses AND controls survive. REFUTED if any descendant is missed. REFUTED if any ground_truth_write_failures > 0 (oracle write-evidence failure). REFUTED if ground_truth_reader_fault > 0 (oracle reader overflow/EOF fault). Driver exit codes 5/6/7 each correspond to a distinct REFUTE mode. REFUTED if ground_truth_oracle_evidence_fail > 0 (round-4 -- root exited 86, kernel-mediated oracle write-side failure). Driver exit codes 5/6/7/8 each correspond to a distinct REFUTE mode.",
     "decision_rule_fail_closed": "PASS criteria require ground_truth_created_with_start_us_count > 0 across fixtures; if the operator run reports ALL ground_truth_created_pid_only_count (zero strong-evidence records), the strong-evidence path was not exercised and the result is INDETERMINATE.",
     "pass_action": "authorize ACT-CLINEMM-HELPER-SUPERVISED-SPAWN-IMPLEMENTATION01",
     "refuted_action": "HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_RACE; authorize ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01",
     "exit_code_meanings": {
-      "0": "PASS (no missed GT, no write failures)",
-      "5": "MISS (GT records that kqueue did not track)",
-      "6": "ORACLE_WRITE_FAIL (gt_write_failures > 0; EVIDENCE failure)",
-      "7": "ORACLE_READER_FAULT (carry overflow etc.)"
+      "0": "PASS (no missed GT, no write failures, no evidence fail)",
+      "5": "REFUTE (MISS) -- missed_ground_truth_count > 0",
+      "6": "REFUTE (ORACLE_WRITE_FAIL) -- ground_truth_write_failures > 0 (in-pipe)",
+      "7": "REFUTE (ORACLE_READER_FAULT) -- ground_truth_reader_fault > 0",
+      "8": "REFUTE (ORACLE_EVIDENCE_FAIL) -- root exited 86 (kernel-mediated)"
     }
   },
-  "reviewer_ask": "The previous reviewer ask (A/B/C options: signal.cont capability, bundled helper wire, or ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR02 on a different substrate) is still the right next move. The continuation in this run confirms that substrate option C (a different substrate) is the only one physically reachable -- and it is reachable only to an actual human operator with a clean macOS shell or a Developer ID-signed helper build. Neither option can be exercised from this agent. | ROUND_3: HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS addressed; reader is lossless, EOF semantics correct, write failures visible via WRITE_FAILED line + gt_write_failures counter; verified by 40-oracle-lossless-witness.",
+  "reviewer_ask": "The previous reviewer ask (A/B/C options: signal.cont capability, bundled helper wire, or ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR02 on a different substrate) is still the right next move. The continuation in this run confirms that substrate option C (a different substrate) is the only one physically reachable -- and it is reachable only to an actual human operator with a clean macOS shell or a Developer ID-signed helper build. Neither option can be exercised from this agent. | ROUND_3: HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS addressed; reader is lossless, EOF semantics correct, write failures visible via WRITE_FAILED line + gt_write_failures counter; verified by 40-oracle-lossless-witness. | ROUND_4: HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE addressed; _exit(86) on broken channel + driver waitpid + SIGPIPE suppression + 41-oracle-broken-channel-witness verifies on real fixture binary.",
   "stop_rule_honored": true,
   "production_side_changes": [],
   "evidence_files": [

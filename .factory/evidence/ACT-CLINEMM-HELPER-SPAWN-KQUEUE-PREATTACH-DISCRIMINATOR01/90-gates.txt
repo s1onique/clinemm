@@ -167,9 +167,9 @@ Round-2 oracle gates (this round; reviewer-flagged issues closed):
                                                    pid-only, the result is INDETERMINATE,
                                                    not PASS
 
-Final gate verdict (this round; round-3):
+Final gate verdict (this round; round-4):
   HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
-  GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED
+  GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED + FAIL-SAFE
   IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
   ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
   SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
@@ -177,6 +177,7 @@ Final gate verdict (this round; round-3):
   ORACLE_READER_DROPS_PARTIAL_RECORDS                     = CLOSED (round-3, lossless carry)
   ORACLE_EOF_NEVER_DELIVERED                              = CLOSED (round-3, gt_write_fd close-after-spawn)
   ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
+  ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE               = CLOSED (round-4, _exit(86) + driver waitpid)
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
@@ -255,3 +256,97 @@ See 60-substrate-halt.md (preserved), 70-operator-substrate-entry.txt (RUN_2
 reproduction), 71-ground-truth-design.md (this round's oracle implementation),
 73-operator-handoff.md (exact commands for the human operator) for full
 substrate analysis and the next-step action.
+
+Round-4 oracle write-side fail-safe gates (HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE):
+
+  [PASS] ORACLE_WRITE_FAILURE_VISIBLE_FAILSAFE  -- fixture gt_announce() now
+                                                     _exit(86)s immediately on
+                                                     any unrecoverable write
+                                                     failure (EPIPE/EIO/ENXIO/
+                                                     EBADF/persistent EAGAIN).
+                                                     Exit status 86 is the
+                                                     kernel-mediated cross-
+                                                     process-boundary signal
+                                                     that waitpid() in the
+                                                     driver observes. The
+                                                     in-pipe WRITE_FAILED line
+                                                     is now best-effort, not
+                                                     load-bearing.
+  [PASS] SIGPIPE_SUPPRESSED                      -- both fixture binaries
+                                                     (31-, 32-) install
+                                                     signal(SIGPIPE, SIG_IGN)
+                                                     at process start so the
+                                                     kernel's default SIGPIPE
+                                                     action doesn't kill the
+                                                     fixture before the
+                                                     _exit(86) failsafe runs.
+  [PASS] DRIVER_WAITPID_ROOT_STATUS              -- driver now waitpid()s the
+                                                     spawned root after drain
+                                                     with a brief grace period
+                                                     (SIGTERM if needed,
+                                                     SIGKILL as last resort).
+                                                     If root exits with status
+                                                     86, gt_oracle_evidence_fail
+                                                     is latched and exit code
+                                                     8 is returned.
+  [PASS] SIGNAL_EXIT_NOT_LATCHED                 -- signal-induced root exit
+                                                     (e.g., signal-triggered-
+                                                     fork SIGTERM mode) is the
+                                                     contract for that fixture;
+                                                     the driver does NOT latch
+                                                     on signal-only termination.
+                                                     Verified by signal-
+                                                     triggered-fork SIGTERM
+                                                     smoke test: root exit
+                                                     code -15, driver does
+                                                     not latch.
+  [PASS] BROKEN_CHANNEL_WITNESS                  -- 41-oracle-broken-channel-
+                                                     witness (240-line C test,
+                                                     4 cases). T1: mirrored
+                                                     broken-pipe logic ->
+                                                     _exit(86). T2: confirms
+                                                     EPIPE on broken channel
+                                                     makes in-pipe WRITE_FAILED
+                                                     unreliable. T3: healthy
+                                                     pipe -> _exit(0), no false
+                                                     positive. T4: REAL
+                                                     31-helper-preattach-root
+                                                     with closed GT read end ->
+                                                     exits 86 via waitpid.
+                                                     All 4 PASS.
+
+Round-4 verification artifacts:
+
+  Witness binary:
+    tools/macos-host-helper/native/containment-probe/41-oracle-broken-channel-witness
+  Witness source:
+    tools/macos-host-helper/native/containment-probe/41-oracle-broken-channel-witness.c
+  Witness verdict (run from workspace root, cwd-independent):
+    T1 expected=86 got=86 PASS
+    T2 [diagnostic] both writes fail with errno=32 (EPIPE)
+    T3 expected=0 got=0 PASS
+    T4 [real fixture, broken GT] expected=86 got=86 PASS
+    failures=0 VERDICT=PASS
+
+  Re-run of round-3 evidence (no regressions):
+    40-oracle-lossless-witness:    VERDICT=PASS (8 records, 0 reader_fault)
+    P0-1 unit tests:               6/6 PASS
+    Smoke fixtures (4):            shell-A=5, exec-fork=4,
+      signal-triggered-fork/control=1, signal-triggered-fork/SIGTERM=2;
+      exit codes 0/-15 as designed.
+
+  Binary sizes (clean rebuild, -Wall -Wextra, 0 warnings):
+    30-helper-preattach-driver              52920 bytes
+    31-helper-preattach-root                52216 bytes
+    32-helper-preattach-emulator            51024 bytes
+    40-oracle-lossless-witness              34600 bytes
+    41-oracle-broken-channel-witness        34256 bytes
+
+Updated exit code table (round-4):
+
+  0 = PASS (no missed GT, no write failures, no evidence fail)
+  5 = REFUTE (MISS) -- missed_ground_truth_count > 0
+  6 = REFUTE (ORACLE_WRITE_FAIL) -- ground_truth_write_failures > 0 (in-pipe)
+  7 = REFUTE (ORACLE_READER_FAULT) -- ground_truth_reader_fault > 0
+  8 = REFUTE (ORACLE_EVIDENCE_FAIL) -- root exited 86 (kernel-mediated)
+  1-4 = INFRASTRUCTURE ERROR (see halt event)

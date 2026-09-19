@@ -2619,3 +2619,145 @@ READY_FOR_OPERATOR_RUN              = YES (round-3 packet is now fully executabl
 - Re-run of P0-1 unit tests (6/6) and 4 smoke fixtures all PASS.
 - Agent stops at READY_FOR_OPERATOR_RUN. Operator Terminal run
   (RUN_3) is required to actually adjudicate the kqueue primitive.
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — ROUND-4 ORACLE WRITE-SIDE FAIL-SAFE — 2026-09-19
+
+**Reviewer halt:** `HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE`.
+
+Round-3 closed the reader-side defect, but the WRITE_FAILED line uses
+the same pipe that just failed. If the pipe is broken (reader gone,
+EPIPE, SIGPIPE), the diagnostic itself can be lost, leaving the
+driver with neither the CREATE nor the failure signal. Round-4 makes
+the fixture's process exit status the authoritative cross-process-
+boundary oracle-failure signal.
+
+### Round-4 fixes
+
+1. **Authoritative `_exit(86)` failsafe.** When `gt_announce()`
+   detects an unrecoverable write failure (EPIPE, EIO, ENXIO, EBADF,
+   persistent EAGAIN underflow), it now calls `_exit(86)` via
+   `gt_announce_failure()`. Exit status 86 is a kernel-mediated fact
+   that `waitpid()` in the driver observes regardless of pipe state.
+   The in-pipe `WRITE_FAILED` line is now best-effort, not
+   load-bearing.
+
+2. **`signal(SIGPIPE, SIG_IGN)`** at process start in both
+   `31-helper-preattach-root.c` and `32-helper-preattach-emulator.c`.
+   Without this, the kernel's default SIGPIPE action would terminate
+   the fixture on the first EPIPE write, before the round-4
+   `_exit(86)` failsafe could run.
+
+3. **Driver-side `waitpid(root)` + status check.** After
+   `drain_ground_truth()` returns, the driver calls
+   `waitpid(root, ...)` with a brief grace period (SIGTERM if
+   needed, SIGKILL last resort). If the root exits with status 86
+   (`GT_EVIDENCE_FAIL_STATUS`), `gt_oracle_evidence_fail = 1` latches
+   and exit code 8 is returned.
+
+4. **Signal-induced exit is NOT latched.** The
+   `signal-triggered-fork` SIGTERM-mode contract is "parent exits
+   via SIGTERM". The driver distinguishes `WIFEXITED && WEXITSTATUS
+   == 86` (oracle failure) from `WIFSIGNALED` (signal-triggered
+   contract). Verified: signal-triggered-fork SIGTERM smoke test
+   shows exit -15 and no false-positive latch.
+
+### Verification: 41-oracle-broken-channel-witness
+
+A 240-line C test with 4 cases:
+
+```
+$ ./41-oracle-broken-channel-witness  (cwd-independent)
+=== ORACLE_BROKEN_CHANNEL_WITNESS (round-4) ===
+[T1 broken-pipe (read end closed)] child exit_status=86 signaled=0
+  T1 expected=86 got=86 PASS
+[T2 broken-pipe diagnostic] first_write=-1 errno=32, second_write=-1 errno=32
+[T3 healthy-pipe control] parent read=48 errno=0
+[T3 healthy-pipe control] child exit_status=0 signaled=0
+  T3 expected=0 got=0 PASS
+  T4 [real fixture, broken GT] expected=86 got=86 PASS
+=== failures=0 VERDICT=PASS ===
+```
+
+Key cases:
+- **T1**: mirrored broken-pipe logic → `_exit(86)` ✓
+- **T2**: confirms both writes fail with errno=32 (EPIPE) on broken
+  channel — proving the in-pipe WRITE_FAILED is unreliable
+- **T3**: healthy pipe → `_exit(0)` (no false positive) ✓
+- **T4**: **`execl()`s the actual `31-helper-preattach-root` binary**
+  with closed GT read end → observes exit status 86 via `waitpid()`.
+  This proves the round-4 failsafe is wired into the production
+  fixture, not just a test mirror.
+
+### Round-4 invariant
+
+```
+CREATE could not be durably emitted  =>  this run can NEVER return PASS.
+```
+
+Mechanism:
+- Pipe failure (any cause: EPIPE, EIO, ENXIO, EBADF, persistent
+  EAGAIN): fixture `_exit(86)` immediately.
+- Process exit status is a kernel-mediated fact, NOT pipe-mediated.
+- The driver `waitpid()`s the root and inspects the status. If it's
+  86, `gt_oracle_evidence_fail` latches and exit code 8 is returned.
+
+### Driver exit code semantics (round-4)
+
+| Exit | Meaning |
+|------|---------|
+| 0    | PASS |
+| 5    | REFUTE (MISS) -- `missed_ground_truth_count > 0` |
+| 6    | REFUTE (ORACLE_WRITE_FAIL) -- in-pipe WRITE_FAILED received |
+| 7    | REFUTE (ORACLE_READER_FAULT) -- carry overflow etc. |
+| 8    | REFUTE (ORACLE_EVIDENCE_FAIL) -- root exited 86 |
+| 1-4  | INFRASTRUCTURE ERROR |
+
+### Files modified (round-4)
+
+- `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+  -- new `gt_oracle_evidence_fail` counter + `waitpid(root)` block
+  + `ground_truth_oracle_evidence_fail` end-event field + exit code 8.
+- `tools/macos-host-helper/native/containment-probe/31-helper-preattach-root.c`
+  -- `signal(SIGPIPE, SIG_IGN)` in main(); `gt_announce_failure()`
+  now `_exit(86)`.
+- `tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator.c`
+  -- same `signal(SIGPIPE, SIG_IGN)` + `_exit(86)`.
+- `tools/macos-host-helper/native/containment-probe/41-oracle-broken-channel-witness.c`
+  -- NEW: 240-line witness with 4 cases including T4 real-fixture test.
+- `tools/macos-host-helper/native/containment-probe/Makefile`
+  -- added `41-oracle-broken-channel-witness`.
+- `.gitignore` -- ignore `41-oracle-broken-channel-witness` binary.
+- `.factory/evidence/.../71-ground-truth-design.md` -- Round-4 update.
+- `.factory/evidence/.../73-operator-handoff.md` -- Round-4 update + exit code table.
+- `.factory/evidence/.../90-gates.txt` -- Round-4 gates + verdict block.
+- `.factory/evidence/.../result.json` -- round: 4, round4_fixes array,
+  exit_code_semantics, fail-closed decision_rule.
+- `.factory/epic-board.md` -- this section appended.
+
+### Verdict (round-4)
+
+```
+ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE = CLOSED (_exit(86) + waitpid + SIGPIPE ignore)
+ORACLE_EVIDENCE_FAIL = CLOSED (kernel-mediated exit status 8)
+
+GROUND_TRUTH_ORACLE = IMPLEMENTED + LOSSLESS + EOF-AWARE + FAIL-SAFE
+AGENT_SUBSTRATE_HALT = PRESERVED (no probe execution attempted)
+KQUEUE_PRIMITIVE_VIABILITY = NOT_YET_ADJUDICATED (still requires RUN_3)
+READY_FOR_OPERATOR_RUN = YES (round-4 packet is now fully fail-safe)
+```
+
+**STOP rule honored (round-4):**
+
+- No probe execution attempted from agent shell.
+- All 5 binaries built clean (`make clean && make`: 0 warnings,
+  30-driver=52920, 31-root=52216, 32-emulator=51024,
+  40-witness=34600, 41-witness=34256).
+- Witness 41 PASS (all 4 cases) verified from workspace root
+  (cwd-independent).
+- Re-run of P0-1 unit tests (6/6), round-3 lossless witness (8/8),
+  and 4 smoke fixtures (no regressions) all PASS.
+- Agent stops at READY_FOR_OPERATOR_RUN. Operator Terminal run
+  (RUN_3) is required to actually adjudicate the kqueue primitive.
+
+**C1: GO → human Terminal matrix** is now warranted per the
+reviewer's verdict block.

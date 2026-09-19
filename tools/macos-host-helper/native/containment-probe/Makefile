@@ -30,7 +30,8 @@ PROBES = \
   30-helper-preattach-driver \
   31-helper-preattach-root \
   32-helper-preattach-emulator \
-  40-oracle-lossless-witness
+  40-oracle-lossless-witness \
+  41-oracle-broken-channel-witness
 
 .PHONY: all clean
 all: $(PROBES)

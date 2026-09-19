@@ -300,3 +300,67 @@ want to confirm the oracle mechanics:
 
 Exit codes 5/6/7 are all REFUTE modes (operator decision_rule says
 PASS only on exit 0 with all gates green).
+
+## Round-4 update: oracle write-side fail-safe
+
+The round-3 in-pipe `WRITE_FAILED` signal uses the same pipe that
+just failed. Per Apple pipe(2), if the read end is closed, that
+diagnostic itself fails — leaving the driver with neither the CREATE
+nor the failure signal. Round-4 makes the fixture's process exit
+status the authoritative cross-process-boundary oracle-failure
+signal.
+
+### What the operator will see
+
+- Fixture `_exit(86)` immediately on any unrecoverable GT write
+  failure (EPIPE, EIO, ENXIO, EBADF, persistent EAGAIN underflow).
+- `signal(SIGPIPE, SIG_IGN)` at fixture start so SIGPIPE doesn't kill
+  the fixture before `_exit(86)` runs.
+- Driver `waitpid(root)`s after the drain and inspects the exit
+  status. Status 86 latches `gt_oracle_evidence_fail` (driver exit
+  code 8). Signal-induced exit (e.g., signal-triggered-fork SIGTERM
+  mode) is NOT latched — that's the contract for that fixture.
+
+### Updated driver exit code table
+
+| Exit | Meaning |
+|------|---------|
+| 0    | PASS — every GT record was tracked, no write failures |
+| 5    | REFUTE (MISS) — `missed_ground_truth_count > 0` |
+| 6    | REFUTE (ORACLE_WRITE_FAIL) — `ground_truth_write_failures > 0` (in-pipe WRITE_FAILED line received) |
+| 7    | REFUTE (ORACLE_READER_FAULT) — `ground_truth_reader_fault > 0` |
+| 8    | REFUTE (ORACLE_EVIDENCE_FAIL) — root exited 86 (kernel-mediated oracle write-side failure) |
+| 1-4  | INFRASTRUCTURE ERROR — see halt event |
+
+Exit codes 5/6/7/8 are all REFUTE modes. PASS only on exit 0.
+
+### Witness to verify before the matrix
+
+```bash
+./41-oracle-broken-channel-witness
+# Expect:
+#   T1 broken-pipe (read end closed):  child exit_status=86 signaled=0  PASS
+#   T2 broken-pipe diagnostic:        both writes fail with errno=32 (EPIPE)
+#   T3 healthy-pipe control:          child exit_status=0  PASS
+#   T4 [real fixture, broken GT]:     expected=86 got=86  PASS
+#   failures=0 VERDICT=PASS
+```
+
+The T4 case `execl()`s the actual `31-helper-preattach-root` binary
+with a closed GT read end and observes exit status 86 via `waitpid()`
+— this proves the round-4 failsafe is wired into the production
+fixture, not just a test mirror.
+
+### PASS criterion (fail-closed)
+
+`result.json.next_step.decision_rule` now requires:
+
+```
+ground_truth_oracle_evidence_fail == 0
+ground_truth_write_failures == 0
+ground_truth_reader_fault == 0
+missed_ground_truth_count == 0
+driver_exit_code == 0
+```
+
+Any single failure ⇒ REFUTE.

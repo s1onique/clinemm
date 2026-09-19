@@ -113,16 +113,32 @@ static uint64_t gt_start_us_for(pid_t p) {
 // Reads ppid/pgid/start_us from kinfo_proc at call time.
 //
 // Round-3 (HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS):
-//   A failed GT write is now an EVIDENCE failure, not a "process didn't
+//   A failed GT write is an EVIDENCE failure, not a "process didn't
 //   exist". We retry once with a tiny backoff, then surface a
 //   WRITE_FAILED line on the SAME pipe (best effort) plus a stderr
 //   line. The driver counts WRITE_FAILED lines into
 //   ground_truth_write_failures and never allows a PASS verdict when
 //   that count is non-zero.
+//
+// Round-4 (HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE):
+//   The WRITE_FAILED line uses the same pipe that just failed -- if
+//   the pipe is broken (reader gone, EPIPE, SIGPIPE) the diagnostic
+//   itself can be lost, leaving the driver with neither the CREATE
+//   nor the failure signal. The invariant now is:
+//     CREATE could not be durably emitted  =>  this run can NEVER return PASS.
+//   On an unrecoverable write failure, the fixture process _exit(86)s
+//   immediately. The driver waitpid()s the root after the drain; if
+//   it exits with status 86 (or any unexpected nonzero status outside
+//   the signal-triggered-fork SIGTERM contract), the driver latches
+//   ground_truth_oracle_evidence_fail and exit code 8 is reserved.
+#define GT_EXIT_EVIDENCE_FAIL 86
+
 static int g_gt_write_failures = 0;
+static volatile sig_atomic_t g_oracle_evidence_fail = 0;
 
 static void gt_announce_failure(pid_t pid, int attempted, int err) {
-  // Best-effort in-pipe signal: the driver counts WRITE_FAILED lines.
+  // Best-effort in-pipe signal. If THIS write fails too (broken pipe,
+  // SIGPIPE), the failure is still authoritative via _exit(86) below.
   char wb[160];
   int wn = snprintf(wb, sizeof wb,
                     "WRITE_FAILED pid=%d attempted=%d errno=%d\n",
@@ -135,6 +151,13 @@ static void gt_announce_failure(pid_t pid, int attempted, int err) {
   // harness that captures stderr. The driver does not read stderr.
   fprintf(stderr, "[gt_write_failed] pid=%d attempted=%d errno=%d\n",
           (int)pid, attempted, err);
+  // Authoritative cross-process-boundary signal: terminate this fixture
+  // process with the dedicated nonzero status so waitpid() in the
+  // driver sees it. This is the round-4 failsafe: the failure CANNOT
+  // be lost across the process boundary because process exit status
+  // is a kernel-mediated fact, not a pipe-mediated fact.
+  g_oracle_evidence_fail = 1;
+  _exit(GT_EXIT_EVIDENCE_FAIL);
 }
 
 static void gt_announce(pid_t pid) {
@@ -170,8 +193,10 @@ static void gt_announce(pid_t pid) {
   size_t off = 0;
   // Retry short writes up to 3 times with a 1ms backoff; PIPE_BUF is
   // 512 bytes on macOS and these records are < 160 bytes, so EAGAIN
-  // is the only realistic failure mode (kernel buffer temporarily
-  // full under fork-storm burst).
+  // is the only realistic non-fatal failure mode (kernel buffer
+  // temporarily full under fork-storm burst). Any other errno
+  // (EPIPE, EIO, ENXIO, EBADF, EINVAL) means the channel is broken
+  // and the failure is authoritative via _exit(86).
   for (int attempt = 0; attempt < 3; attempt++) {
     ssize_t w = write(g_gt_fd, buf + off, total - off);
     if (w < 0) {
@@ -180,7 +205,10 @@ static void gt_announce(pid_t pid) {
         usleep(1000);
         continue;
       }
+      // Broken channel (EPIPE/EIO/ENXIO/EBADF). Fatal immediately --
+      // any subsequent WRITE_FAILED write on the same fd is unreliable.
       gt_announce_failure(pid, (int)total, errno);
+      // gt_announce_failure does _exit(86), so we never reach here.
       g_gt_write_failures++;
       return;
     }
@@ -191,6 +219,9 @@ static void gt_announce(pid_t pid) {
     usleep(1000);
   }
   if (off < total) {
+    // Persistent underflow after 3 retries: kernel buffer not draining.
+    // This is rare but not strictly a broken channel; treat as fatal
+    // anyway because we cannot guarantee the record arrived.
     gt_announce_failure(pid, (int)(total - off), EAGAIN);
     g_gt_write_failures++;
   }
@@ -571,6 +602,14 @@ int main(int argc, char **argv) {
       argv[0]);
     return 2;
   }
+
+  // Round-4 (HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE):
+  // Suppress SIGPIPE so that a broken GT pipe returns EPIPE from write()
+  // instead of terminating the process via default SIGPIPE action.
+  // Without this, the round-4 _exit(86) failsafe would never run -- the
+  // kernel would kill the fixture on the first EPIPE write, before our
+  // gt_announce_failure() can latch the authoritative exit status.
+  signal(SIGPIPE, SIG_IGN);
 
   // Initialize ground-truth oracle. This reads CLINEMM_GROUND_TRUTH_FD
   // from the environment and announces our own pid before any fork().

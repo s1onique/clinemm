@@ -61,6 +61,14 @@ static uint64_t gt_start_us_for(pid_t p) {
 // Round-3 (HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS): write-failure
 // must be visible. The fork-storm is the most likely trigger (kernel
 // pipe buffer pressure). Same retry+report semantics as 31-.
+//
+// Round-4 (HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE):
+// Same authoritative _exit(86) failsafe. The fork-storm binary has the
+// highest write-failure exposure (kernel pipe buffer pressure under
+// immediate-double-fork burst), so this is the most important place
+// to install the failsafe.
+#define GT_EXIT_EVIDENCE_FAIL 86
+
 static int g_gt_write_failures = 0;
 
 static void gt_announce_failure(pid_t pid, int attempted, int err) {
@@ -71,6 +79,10 @@ static void gt_announce_failure(pid_t pid, int attempted, int err) {
   if (wn > 0) { ssize_t ww = write(g_gt_fd, wb, (size_t)wn); (void)ww; }
   fprintf(stderr, "[gt_write_failed] pid=%d attempted=%d errno=%d\n",
           (int)pid, attempted, err);
+  // Round-4: kernel-mediated authoritative exit status. The driver
+  // waitpid()s this process; status 86 is the only oracle-evidence
+  // failure signal that cannot be lost to a broken channel.
+  _exit(GT_EXIT_EVIDENCE_FAIL);
 }
 
 static void gt_announce(pid_t pid) {
@@ -108,6 +120,8 @@ static void gt_announce(pid_t pid) {
     if (w < 0) {
       if (errno == EINTR) continue;
       if (errno == EAGAIN) { usleep(1000); continue; }
+      // Any other errno (EPIPE, EIO, ENXIO, EBADF): broken channel.
+      // Fatal immediately -- WRITE_FAILED on the same fd is unreliable.
       gt_announce_failure(pid, (int)total, errno);
       g_gt_write_failures++;
       return;
@@ -134,6 +148,12 @@ static void gt_init(void) {
 int main(int argc, char **argv) {
   int iterations    = argc >= 2 ? atoi(argv[1]) : 16;
   int lifetime_sec  = argc >= 3 ? atoi(argv[2]) : 30;
+
+  // Round-4: suppress SIGPIPE so a broken GT pipe returns EPIPE from
+  // write() and our _exit(86) failsafe can run. Without this, the
+  // kernel's default SIGPIPE action would kill the fork-storm
+  // process before any authoritative exit status can be latched.
+  signal(SIGPIPE, SIG_IGN);
 
   gt_init();
 
