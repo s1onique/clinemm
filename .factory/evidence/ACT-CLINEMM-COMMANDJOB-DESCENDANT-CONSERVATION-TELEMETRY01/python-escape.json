@@ -1,0 +1,88 @@
+{
+  "label": "python-escape",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/06-fixture-python-escape.py",
+  "duration": 5,
+  "childPid": 22790,
+  "expectedPgid": 22790,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "2cf1626475902652dcffcc8199050c75",
+    "peer_uid": 501,
+    "peer_pid": 22789,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "627b416b58ba542fb763bf83485cbb0a",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22790,
+      "ppid": 22789,
+      "pgid": 22790,
+      "sess": 0,
+      "comm": "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 22791,
+      "ppid": 22790,
+      "pgid": 22790,
+      "sess": 0,
+      "comm": "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [
+    {
+      "pid": 22792,
+      "ppid": 1,
+      "pgid": 22792,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "beforeMemberCount": 2,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 1,
+  "elapsedMs": 970,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": false
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}

@@ -1,0 +1,138 @@
+{
+  "act": "ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01",
+  "executed_at": "2026-09-18T22:50:38.658158+00:00",
+  "bounded_fix_cycle": "correction06",
+  "halt_sequence": [
+    "HALT_DESCENDANT_CONSERVATION_NOT_PROVEN (correction04)",
+    "HALT_PRIMARY_PGID_CONSERVATION_NOT_ENFORCED (correction05)",
+    "HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED (correction06)"
+  ],
+  "host_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "toolchain": {
+    "package_manager": "bun",
+    "typecheck": "tsc --noEmit",
+    "test_runner_host": "vitest",
+    "test_runner_webview": "vitest"
+  },
+  "gates": [
+    {
+      "name": "host-typecheck",
+      "command": "cd apps/vscode && bunx tsc --noEmit",
+      "exit_code": 0,
+      "result": "PASS",
+      "notes": "no diagnostics"
+    },
+    {
+      "name": "host-dcct01",
+      "command": "cd apps/vscode && bun vitest run src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 17,
+      "tests_passed": 17,
+      "tests_failed": 0,
+      "tests_in_bounded_fix_cycle_correction06": [
+        "DCCT-11 (gone path) \u2014 assert CLEAN_TERMINAL state (NOT containment_failed); containmentFailed: undefined; command_job_containment_failed NOT emitted",
+        "DCCT-12 (alive path) \u2014 assert state := 'containment_failed'; containmentFailed := 'substrate_alive'; command_job_containment_failed fires AFTER active.delete with activeCommandJobs := 0 (gauge closes N\u21920)",
+        "DCCT-13 (eperm path) \u2014 assert state := 'containment_failed'; containmentFailed := 'substrate_eperm'; gauge-conservation event fires",
+        "DCCT-14 (unknown path) \u2014 assert state := 'containment_failed'; containmentFailed := 'substrate_unknown'; gauge-conservation event fires",
+        "DCCT-15 \u2014 type-level witness for command_job_helper_cleanup_attempted (correction05 retained)"
+      ],
+      "notes": "17/17 GREEN. correction07 add: DCCT-16 (start-path gauge increment \u2014 process_started carries activeCommandJobs = 1) + DCCT-17 (multi-job composition \u2014 start A\u21921, start B\u21922, finalize A clean\u21921, finalize B alive\u21920)."
+    },
+    {
+      "name": "host-rec01",
+      "command": "cd apps/vscode && bun vitest run src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 13,
+      "tests_passed": 13,
+      "tests_failed": 0
+    },
+    {
+      "name": "host-combined-dcct01-rec01",
+      "command": "cd apps/vscode && bun vitest run src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 30,
+      "tests_passed": 30,
+      "tests_failed": 0
+    },
+    {
+      "name": "webview-telemetry",
+      "command": "cd apps/vscode/webview-ui && bun vitest run src/components/chat/task-header/TaskHeaderTelemetry.test.tsx",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 46,
+      "tests_passed": 46,
+      "tests_failed": 0
+    },
+    {
+      "name": "webview-gauge",
+      "command": "cd apps/vscode/webview-ui && bun vitest run src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 10,
+      "tests_passed": 10,
+      "tests_failed": 0
+    }
+  ],
+  "substrate_artifact": {
+    "epemr_on_worker_termination": "expected (documented)",
+    "tests_unaffected": true,
+    "note": "EPERM on vitest worker termination is the documented substrate noise from ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02. Does not affect test outcomes (all 84 tests GREEN)."
+  },
+  "bounded_fix_cycle_changes": {
+    "correction04_retained": [
+      "Renamed activeOwnedCommandJobs -> activeCommandJobs everywhere.",
+      "Renamed getActiveOwnedCommandJobs() -> getActiveCommandJobs().",
+      "Renamed recordActiveOwnedCommandJobs() -> recordActiveCommandJobs().",
+      "Renamed wire field TaskHeaderTelemetryStrip.activeOwnedCommandJobs -> activeCommandJobs.",
+      "Narrowed conservation invariant: TERMINAL CommandJob => PRIMARY OWNED PGID GONE (was: ZERO LIVE ClineMM-OWNED DESCENDANTS).",
+      "Made probeOwnedGroups fail-closed: state is now { gone, alive, eperm, unknown }.",
+      "Replaced helperFallbackUsed: boolean with postcondition: 'gone'|'alive'|'eperm'|'unknown'.",
+      "Moved the PGID postcondition probe from after terminal_committed into the synchronous span of finalize() BEFORE terminal_committed AND BEFORE active.delete(job.id)."
+    ],
+    "correction05_retained": [
+      "NEW P0 FIX: terminal_committed GATED on postcondition === 'gone'. Only 'gone' authorizes clean closure.",
+      "NEW P1 FIX: helper EPERM path renamed to command_job_helper_cleanup_attempted with helperOutcome: success|denied|failed.",
+      "Added CommandJob.terminationFailed out-of-band verdict field.",
+      "Added test seam CommandJobManagerOptions.terminalPostconditionProbe.",
+      "Added defaultTerminalPostconditionProbe() helper.",
+      "Composition matrix DCCT-11..14 (correction06 extended)."
+    ],
+    "correction06_applied": [
+      "Added CommandJobState 'containment_failed' terminal class \u2014 explicit state for jobs whose execution ended but whose bounded PGID-conservation invariant was NOT proven. Distinct from exited/deadline_exceeded/cancelled/spawn_failed so consumers can read the verdict.",
+      "DEFERRED state assignment in finalize(): the caller's clean terminal state (e.g. 'cancelled') is OVERWRITTEN with 'containment_failed' on any non-gone postcondition. The bounded invariant CLEAN_TERMINAL CommandJob => PRIMARY OWNED PGID GONE then holds by construction: containment_failed jobs do NOT claim CLEAN_TERMINAL.",
+      "Added CommandJobSnapshot.containmentFailed projection \u2014 terminal jobs whose postcondition was non-gone expose the verdict out-of-band (mirror of CommandJob.terminationFailed).",
+      "Added command_job_containment_failed lifecycle event \u2014 fires AFTER active.delete on the failure path so the tracker decrements the gauge from N to N-1. Closes the stale-gauge bug correction05 introduced (the gauge stayed at N because terminal_committed was denied).",
+      "DCCT-11..14 strengthened to assert (a) snapshot.state is containment_failed on non-gone paths, (b) containmentFailed is set to substrate_alive/eperm/unknown, (c) command_job_containment_failed event fires AFTER active.delete with activeCommandJobs := 0."
+    ]
+  },
+  "honest_verdict_matrix_correction06": {
+    "PRIMARY_PGID_POSTCONDITION_OBSERVED": "PROVEN",
+    "PRIMARY_PGID_CONSERVATION": "PROVEN \u2014 re-stated as CLEAN_TERMINAL CommandJob => PRIMARY OWNED PGID GONE (was: TERMINAL CommandJob => ...). The narrower statement is what the implementation actually delivers; containment_failed jobs do not claim CLEAN_TERMINAL.",
+    "PRIMARY_PGID_POSTCONDITION_FAIL_CLOSED": "PROVEN",
+    "HELPER_EVENT_DISAMBIGUATION": "PROVEN",
+    "CONTAINMENT_FAILED_TERMINAL_CLASS": "PROVEN \u2014 explicit CommandJobState member; populated via deferred state assignment in finalize(); projected into CommandJobSnapshot.containmentFailed",
+    "GAUGE_CONSERVATION_ON_FAILURE_PATH": "PROVEN \u2014 command_job_containment_failed fires AFTER active.delete so the tracker decrements N -> N-1 (the stale-gauge bug from correction05 is closed)",
+    "ACTIVE_JOB_GAUGE": "GREEN",
+    "ZERO_DESCENDANT_GAUGE": "NOT_IMPLEMENTED (renamed honest label)",
+    "DESCENDANT_CONSERVATION": "REFUTED by escape fixtures",
+    "CASE_B": "REPRODUCED"
+  },
+  "successor_act": {
+    "id": "ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01",
+    "rescoped_purpose": "CONTAINMENT_PRIMITIVE_DISCRIMINATOR",
+    "not_yet_frozen": true,
+    "ready_to_begin": true,
+    "rationale": "Per Factory reviewer: prior PPID-walk mechanism is not established on macOS after reparenting (Apple distinguishes ppid from original_ppid). ACT must first discriminate candidate authority primitives (A: cleanup-time PPID/proc_pidinfo reconstruction, B: event-time fork lineage tracking from helper via EVFILT_PROC NOTE_FORK, C: native stable descendant authority via es_new_descendants_client) before freezing a mechanism."
+  },
+  "summary": {
+    "gates_total": 6,
+    "gates_passed": 6,
+    "gates_failed": 0,
+    "tests_total": 84,
+    "tests_passed": 84,
+    "tests_failed": 0
+  }
+}

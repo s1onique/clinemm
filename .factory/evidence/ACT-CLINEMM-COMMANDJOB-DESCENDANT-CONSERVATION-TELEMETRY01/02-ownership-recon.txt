@@ -1,0 +1,545 @@
+=== RECON RUN START: 2026-09-18T14:20:44Z ===
+
+--- fixture=/tmp/clinemm-descendant-conservation-telemetry01/01-fixture-shell.sh label=shell-A ---
+{
+  "label": "shell-A",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/01-fixture-shell.sh",
+  "duration": 5,
+  "childPid": 22297,
+  "expectedPgid": 22297,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "81a4055ddbc2cbbd7b44db0c11f7ccd4",
+    "peer_uid": 501,
+    "peer_pid": 22296,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "ce9b100adadd868eb7001359476073b0",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22297,
+      "ppid": 22296,
+      "pgid": 22297,
+      "sess": 0,
+      "comm": "bash"
+    },
+    {
+      "pid": 22298,
+      "ppid": 22297,
+      "pgid": 22297,
+      "sess": 0,
+      "comm": "bash"
+    },
+    {
+      "pid": 22299,
+      "ppid": 22298,
+      "pgid": 22297,
+      "sess": 0,
+      "comm": "sleep"
+    },
+    {
+      "pid": 22303,
+      "ppid": 22298,
+      "pgid": 22297,
+      "sess": 0,
+      "comm": "bash"
+    },
+    {
+      "pid": 22304,
+      "ppid": 22303,
+      "pgid": 22297,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [],
+  "beforeMemberCount": 5,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 0,
+  "elapsedMs": 986,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": true
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}
+rc=1
+
+--- fixture=/tmp/clinemm-descendant-conservation-telemetry01/02-fixture-node.mjs label=node-B ---
+{
+  "label": "node-B",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/02-fixture-node.mjs",
+  "duration": 5,
+  "childPid": 22338,
+  "expectedPgid": 22338,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "fe0066d3dc2903290158a50779e7dcd3",
+    "peer_uid": 501,
+    "peer_pid": 22337,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "fba248f048367b08f01e1dadea4f8d3b",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22338,
+      "ppid": 22337,
+      "pgid": 22338,
+      "sess": 0,
+      "comm": "node"
+    },
+    {
+      "pid": 22342,
+      "ppid": 22338,
+      "pgid": 22338,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [],
+  "beforeMemberCount": 2,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 0,
+  "elapsedMs": 986,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": true
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}
+rc=1
+
+--- fixture=/tmp/clinemm-descendant-conservation-telemetry01/03-fixture-python.py label=python-C ---
+{
+  "label": "python-C",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/03-fixture-python.py",
+  "duration": 5,
+  "childPid": 22376,
+  "expectedPgid": 22376,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "1e84311954f020163086150ffb30d650",
+    "peer_uid": 501,
+    "peer_pid": 22371,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "ac15dbc6fb436a8e372d61fa99f46280",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22376,
+      "ppid": 22371,
+      "pgid": 22376,
+      "sess": 0,
+      "comm": "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 22377,
+      "ppid": 22376,
+      "pgid": 22376,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [],
+  "beforeMemberCount": 2,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 0,
+  "elapsedMs": 981,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": true
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}
+rc=1
+
+--- fixture=/tmp/clinemm-descendant-conservation-telemetry01/04-fixture-mixed.sh label=mixed-D ---
+{
+  "label": "mixed-D",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/04-fixture-mixed.sh",
+  "duration": 5,
+  "childPid": 22419,
+  "expectedPgid": 22419,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "baec4329249a7ab5595cca94ff25ae24",
+    "peer_uid": 501,
+    "peer_pid": 22418,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "f1d564508c4d03c6b7f753c4ccdf5415",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22419,
+      "ppid": 22418,
+      "pgid": 22419,
+      "sess": 0,
+      "comm": "bash"
+    },
+    {
+      "pid": 22420,
+      "ppid": 22419,
+      "pgid": 22419,
+      "sess": 0,
+      "comm": "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 22424,
+      "ppid": 22420,
+      "pgid": 22419,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [],
+  "beforeMemberCount": 3,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 0,
+  "elapsedMs": 986,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": true
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}
+rc=1
+
+--- fixture=/tmp/clinemm-descendant-conservation-telemetry01/05-fixture-node-escape.mjs label=node-escape ---
+{
+  "label": "node-escape",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/05-fixture-node-escape.mjs",
+  "duration": 5,
+  "childPid": 22459,
+  "expectedPgid": 22459,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "a9d0835f265ed3ea649506f79bd06ec2",
+    "peer_uid": 501,
+    "peer_pid": 22458,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "51b7c22375e57cf4ee3fc08b954ed733",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22459,
+      "ppid": 22458,
+      "pgid": 22459,
+      "sess": 0,
+      "comm": "node"
+    },
+    {
+      "pid": 22460,
+      "ppid": 22459,
+      "pgid": 22459,
+      "sess": 0,
+      "comm": "/opt/homebrew/Cellar/node/26.0.0/bin/node"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [
+    {
+      "pid": 22464,
+      "ppid": 1,
+      "pgid": 22464,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "beforeMemberCount": 2,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 1,
+  "elapsedMs": 985,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": false
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}
+rc=1
+
+--- fixture=/tmp/clinemm-descendant-conservation-telemetry01/06-fixture-python-escape.py label=python-escape ---
+{
+  "label": "python-escape",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/06-fixture-python-escape.py",
+  "duration": 5,
+  "childPid": 22494,
+  "expectedPgid": 22494,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "d03dd99a15def997dedfdfb59c3d38d7",
+    "peer_uid": 501,
+    "peer_pid": 22493,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "b6381392c7d37c4080d93a081f97dc5f",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22494,
+      "ppid": 22493,
+      "pgid": 22494,
+      "sess": 0,
+      "comm": "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 22495,
+      "ppid": 22494,
+      "pgid": 22494,
+      "sess": 0,
+      "comm": "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [
+    {
+      "pid": 22496,
+      "ppid": 1,
+      "pgid": 22496,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "beforeMemberCount": 2,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 1,
+  "elapsedMs": 980,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": false
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}
+rc=1
+
+=== RECON RUN END: 2026-09-18T14:20:50Z ===

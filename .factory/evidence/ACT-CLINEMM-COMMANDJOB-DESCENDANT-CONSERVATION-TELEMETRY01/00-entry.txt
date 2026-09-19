@@ -1,0 +1,55 @@
+ENTRY_HEAD = 58d214b61ce39ed2f9aae7ed314d7bf166e74e12
+ENTRY_DATE  = 2026-09-18
+ENTRY_BRANCH = (clean working tree, no diffs)
+
+ACT = ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+
+Predecessor ACTs (relevant):
+  - ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
+        Frozen architecture: CommandJobManager.cancel -> terminateTree
+        (direct kill -pgid SIGTERM) -> on EPERM, helper.terminateOwned
+        (helper-owned PGID, SIGTERM -> grace -> SIGKILL escalation).
+  - ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01(-CORRECTION01)
+        Real helper bootstrap + live termination GREEN end-to-end.
+  - ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02
+        Real production function + production kill-call sites
+        reproduce the substrate EPERM; helper recovers.
+  - ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01(-CORRECTION01..02)
+        V1 ⚠ N runtime-error counter (EPERM-only class),
+        per-task lifetime contract.
+
+Working tree:
+  - apps/vscode clean
+  - no proto changes
+  - no production runtime change at entry
+
+Goal of THIS ACT:
+  Make the cleanup invariant executable-name-agnostic. The
+  termination contract must hold for `node`, `python`, `zsh`,
+  `bash`, `ruby`, `go`, and arbitrary test runners alike, with
+  zero arbitrary-PID kills, zero process-name matching.
+
+  Primary deliverable in this closure:
+    1. Recon that proves which of CASE_A (still in PGID),
+       CASE_B (escaped PGID/session), CASE_C (not ours) applies.
+    2. Discriminator fixtures (shell, node, python, mixed,
+       detached-escape, session-escape) to expose the
+       architectural boundary.
+    3. Bounded production fix: explicit "primary group gone"
+       postcondition probe, default-off structured lifecycle
+       telemetry, command-job-level activeOwnedGroups gauge.
+    4. Bounded UI: live ownership gauge `⎇ N` (active owned
+       command jobs / containment units) alongside existing
+       `>_ N` (cumulative command executions) and `⚠ N`
+       (runtime incidents, broadened from EPERM-only).
+    5. Discriminator gating: helper fall-back counted as ONE
+       incident, residual jobs distinguished from historical
+       incidents, no executable-name branch in cleanup code.
+
+  Out of scope for this closure (intentional halt surfaces
+  documented in §27):
+    - Adding true containment for descendants that deliberately
+      leave the owned PGID via setsid()/start_new_session (CASE_B).
+      That requires a successor ACT with a LaunchAgent-based
+      containment primitive (no production code change without
+      reproducing escape on this substrate first).

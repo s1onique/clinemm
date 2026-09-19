@@ -1,0 +1,101 @@
+{
+  "label": "shell-A",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/01-fixture-shell.sh",
+  "duration": 5,
+  "childPid": 22588,
+  "expectedPgid": 22588,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "aec8e1d4d21a4de49b6dd8a171df884c",
+    "peer_uid": 501,
+    "peer_pid": 22587,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "1ac962d815369c44d9093780bc94a337",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22588,
+      "ppid": 22587,
+      "pgid": 22588,
+      "sess": 0,
+      "comm": "bash"
+    },
+    {
+      "pid": 22589,
+      "ppid": 22588,
+      "pgid": 22588,
+      "sess": 0,
+      "comm": "bash"
+    },
+    {
+      "pid": 22590,
+      "ppid": 22589,
+      "pgid": 22588,
+      "sess": 0,
+      "comm": "sleep"
+    },
+    {
+      "pid": 22594,
+      "ppid": 22589,
+      "pgid": 22588,
+      "sess": 0,
+      "comm": "bash"
+    },
+    {
+      "pid": 22595,
+      "ppid": 22594,
+      "pgid": 22588,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [],
+  "beforeMemberCount": 5,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 0,
+  "elapsedMs": 966,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": true
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}

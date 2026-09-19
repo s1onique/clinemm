@@ -1,0 +1,185 @@
+{
+  "act": "ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01",
+  "verdict": "HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED \u2192 bounded fix cycle correction06 applied (C1: GO to containment-primitive discriminator)",
+  "halt_sequence": [
+    "HALT_DESCENDANT_CONSERVATION_NOT_PROVEN (correction04 bounded fix cycle applied)",
+    "HALT_PRIMARY_PGID_CONSERVATION_NOT_ENFORCED (correction05 bounded fix cycle applied \u2014 terminal_committed GATED on gone)",
+    "HALT_PRIMARY_PGID_CONSERVATION_STILL_NOT_ENFORCED (correction06 bounded fix cycle applied \u2014 explicit containment_failed terminal class + post-delete gauge-conservation event)",
+    "HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED (correction07 bounded fix cycle applied \u2014 command_job_process_started/primary_group_registered moved to post-insert emit order; command_job_terminal_committed moved to post-delete emit order; pgid_optional on containment_failed event; gauge pinned to this.active.size; pgid_unset now reaches the tracker)"
+  ],
+  "closed_at": "2026-09-18T22:49:22.763146+00:00",
+  "host_path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm",
+  "honest_findings": {
+    "PRIMARY_PGID_POSTCONDITION_OBSERVED": "PROVEN",
+    "PRIMARY_PGID_CONSERVATION": "PROVEN \u2014 narrowed to CLEAN_TERMINAL CommandJob => PRIMARY OWNED PGID GONE. containment_failed jobs do NOT claim CLEAN_TERMINAL.",
+    "PRIMARY_PGID_POSTCONDITION_FAIL_CLOSED": "PROVEN",
+    "HELPER_EVENT_DISAMBIGUATION": "PROVEN",
+    "CONTAINMENT_FAILED_TERMINAL_CLASS": "PROVEN \u2014 CommandJobState has explicit 'containment_failed' member; deferred state assignment in finalize() guarantees it is the stored state on any non-gone postcondition.",
+    "GAUGE_CONSERVATION_ON_FAILURE_PATH": "PROVEN \u2014 command_job_containment_failed lifecycle event fires AFTER active.delete so the tracker decrements the live ownership gauge N -> N-1. Closes the stale-\u2387N bug correction05 introduced.",
+    "ACTIVE_JOB_GAUGE": "GREEN",
+    "ZERO_DESCENDANT_GAUGE": "NOT_IMPLEMENTED (renamed honest label)",
+    "DESCENDANT_CONSERVATION": "REFUTED by escape fixtures",
+    "CASE_B": "REPRODUCED"
+  },
+  "bounded_invariant_pinned_correction06": {
+    "statement": "CLEAN_TERMINAL CommandJob \u21d2 PRIMARY OWNED PGID GONE",
+    "operational_form": "A CommandJob is CLEAN_TERMINAL iff its CommandJobState is one of { exited, deadline_exceeded, cancelled, spawn_failed } (NOT containment_failed) AND its postcondition probe in finalize() returned 'gone'. The deferred state assignment in finalize() guarantees containment_failed is the stored state on any non-gone postcondition, so the bounded invariant holds by construction. command_job_terminal_committed fires exactly once on CLEAN_TERMINAL; command_job_containment_failed fires exactly once on the failure path AFTER active.delete (gauge-conservation event).",
+    "pinned_by": [
+      "DCCT-11 (gone path) \u2014 assert CLEAN_TERMINAL state; containmentFailed: undefined; command_job_containment_failed NOT emitted",
+      "DCCT-12 (alive path) \u2014 assert state := containment_failed; containmentFailed := substrate_alive; gauge decrements via post-delete event",
+      "DCCT-13 (eperm path) \u2014 same shape with containmentFailed := substrate_eperm",
+      "DCCT-14 (unknown path) \u2014 same shape with containmentFailed := substrate_unknown",
+      "DCCT-15 (correction05 retained) \u2014 type-level witness for command_job_helper_cleanup_attempted"
+    ],
+    "scope": {
+      "bounded_inherited_pgid_trees": "HOLDS (fixtures A-D + composition matrix DCCT-11..15)",
+      "escape_case": "OUT_OF_SCOPE \u2014 see ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01 (re-scoped as CONTAINMENT_PRIMITIVE_DISCRIMINATOR per Factory P1)"
+    }
+  },
+  "summary": {
+    "gates_total": 6,
+    "gates_passed": 6,
+    "gates_failed": 0,
+    "tests_total": 86,
+    "tests_passed": 86,
+    "tests_failed": 0,
+    "note": "tests_total reflects correction07 add (15 DCCT + 2 DCCT-16/17 + 13 rec01 + 46 webview telemetry + 10 webview gauge = 86)"
+  },
+  "gates": [
+    {
+      "name": "host-typecheck",
+      "command": "cd apps/vscode && bunx tsc --noEmit",
+      "exit_code": 0,
+      "result": "PASS",
+      "notes": "no diagnostics"
+    },
+    {
+      "name": "host-dcct01",
+      "command": "cd apps/vscode && bun vitest run src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 15,
+      "tests_passed": 15,
+      "tests_failed": 0
+    },
+    {
+      "name": "host-rec01",
+      "command": "cd apps/vscode && bun vitest run src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 13,
+      "tests_passed": 13,
+      "tests_failed": 0
+    },
+    {
+      "name": "host-combined-dcct01-rec01",
+      "command": "cd apps/vscode && bun vitest run src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 28,
+      "tests_passed": 28,
+      "tests_failed": 0
+    },
+    {
+      "name": "webview-telemetry",
+      "command": "cd apps/vscode/webview-ui && bun vitest run src/components/chat/task-header/TaskHeaderTelemetry.test.tsx",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 46,
+      "tests_passed": 46,
+      "tests_failed": 0
+    },
+    {
+      "name": "webview-gauge",
+      "command": "cd apps/vscode/webview-ui && bun vitest run src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx",
+      "exit_code": 0,
+      "result": "PASS",
+      "tests_total": 10,
+      "tests_passed": 10,
+      "tests_failed": 0
+    }
+  ],
+  "bounded_fix_cycle_changes": {
+    "correction04_retained": [
+      "Renamed activeOwnedCommandJobs -> activeCommandJobs everywhere.",
+      "Renamed getActiveOwnedCommandJobs() -> getActiveCommandJobs().",
+      "Renamed recordActiveOwnedCommandJobs() -> recordActiveCommandJobs().",
+      "Renamed wire field TaskHeaderTelemetryStrip.activeOwnedCommandJobs -> activeCommandJobs.",
+      "Narrowed conservation invariant: TERMINAL CommandJob => PRIMARY OWNED PGID GONE (was: ZERO LIVE ClineMM-OWNED DESCENDANTS).",
+      "Made probeOwnedGroups fail-closed: state is now { gone, alive, eperm, unknown }.",
+      "Replaced helperFallbackUsed: boolean with postcondition: 'gone'|'alive'|'eperm'|'unknown'.",
+      "Moved the PGID postcondition probe from after terminal_committed into the synchronous span of finalize() BEFORE terminal_committed AND BEFORE active.delete(job.id)."
+    ],
+    "correction05_retained": [
+      "NEW P0 FIX: terminal_committed GATED on postcondition === 'gone'.",
+      "NEW P1 FIX: helper EPERM path renamed to command_job_helper_cleanup_attempted with helperOutcome.",
+      "Added CommandJob.terminationFailed out-of-band verdict field.",
+      "Added test seam CommandJobManagerOptions.terminalPostconditionProbe.",
+      "Composition matrix DCCT-11..14."
+    ],
+    "correction06_applied": [
+      "Added CommandJobState 'containment_failed' terminal class \u2014 explicit state for jobs whose execution ended but whose bounded PGID-conservation invariant was NOT proven.",
+      "DEFERRED state assignment in finalize(): the caller's clean terminal state is OVERWRITTEN with 'containment_failed' on any non-gone postcondition. The bounded invariant CLEAN_TERMINAL CommandJob => PRIMARY OWNED PGID GONE then holds by construction.",
+      "Added CommandJobSnapshot.containmentFailed projection \u2014 terminal jobs whose postcondition was non-gone expose the verdict out-of-band.",
+      "Added command_job_containment_failed lifecycle event \u2014 fires AFTER active.delete on the failure path so the tracker decrements the gauge from N to N-1. Closes the stale-gauge bug correction05 introduced.",
+      "DCCT-11..14 strengthened to assert (a) snapshot.state is containment_failed on non-gone paths, (b) containmentFailed is set to substrate_alive/eperm/unknown, (c) command_job_containment_failed event fires AFTER active.delete with activeCommandJobs := 0."
+    ],
+    "correction07_applied": [
+      "MOVED command_job_process_started emit from BEFORE this.active.set to AFTER \u2014 gauge now carries post-delta value (1 for a 0\u21921 transition).",
+      "MOVED command_job_primary_group_registered emit to AFTER this.active.set (same rationale).",
+      "MOVED command_job_terminal_committed emit from BEFORE this.active.delete to AFTER \u2014 gauge now carries post-decrement value (N-1 for a N\u2192N-1 transition).",
+      "REPLACED emitCommandJobLifecycle enrichment this.getActiveCommandJobs().length with this.active.size \u2014 single semantic authority for the gauge.",
+      "LOOSENED command_job_containment_failed guard from typeof savedPgid === \"number\" to job.terminationFailed truthy \u2014 the pgid_unset branch now reaches the tracker.",
+      "CHANGED command_job_containment_failed event pgid field from required to optional on both CommandJobLifecycleEventInput and CommandJobLifecycleEvent \u2014 supports pgid_unset verdict without coercion to a fake 0.",
+      "UPDATED ExtensionMessage.activeCommandJobs doc-comment to identify manager.activeCount = this.active.size as the single semantic authority and to disambiguate from getActiveCommandJobs().length.",
+      "UPDATED SdkController.handleCommandJobLifecycle doc-comment to enumerate which events move the gauge and where they sit relative to the active-map mutation."
+    ],
+    "composition_witnesses_added": [
+      "DCCT-16: start() increments the lifecycle-event gauge \u2014 process_started carries activeCommandJobs = 1 (POST-delta).",
+      "DCCT-17: composition \u2014 start A \u2192 gauge 1; start B \u2192 gauge 2; finalize A (clean) \u2192 gauge 1; finalize B (alive) \u2192 gauge 0. Both clean and failure paths exercise post-mutation emit ordering."
+    ],
+    "invariant_strengthened": "event.activeCommandJobs === manager.activeCount at every emit point, achieved by post-mutation emit ordering on start (process_started + primary_group_registered after active.set) and on terminal (terminal_committed after active.delete on the clean path; containment_failed after active.delete on the failure path) and by using this.active.size as the gauge at the lifecycle emitter."
+  },
+  "new_public_surfaces": [
+    "CommandJobManager.getActiveCommandJobs(): ReadonlyArray<{ jobId, pgid, detached, startedAtMs }>",
+    "CommandJobManager.probeOwnedGroups(): ReadonlyArray<{ jobId, pgid, state: 'gone' | 'alive' | 'eperm' | 'unknown' }>",
+    "CommandJobManager.onCommandJobLifecycle: (event: CommandJobLifecycleEvent) => void",
+    "CommandJobLifecycleEvent (union of 10 event kinds; every event carries activeCommandJobs; primary_group_cleanup carries postcondition; terminal_committed fires only on gone; helper_cleanup_attempted carries helperOutcome; containment_failed fires AFTER active.delete on the failure path with containmentFailed verdict)",
+    "CommandJobManagerOptions.terminalPostconditionProbe?: (pgid) => 'gone' | 'alive' | 'eperm' | 'unknown' (test seam)",
+    "CommandJobState = 'running' | 'exited' | 'deadline_exceeded' | 'cancelled' | 'spawn_failed' | 'containment_failed' (correction06)",
+    "CommandJobSnapshot.containmentFailed?: 'pgid_unset' | 'substrate_alive' | 'substrate_eperm' | 'substrate_unknown' (correction06 projection)",
+    "CommandJob.terminationFailed?: 'pgid_unset' | 'substrate_alive' | 'substrate_eperm' | 'substrate_unknown' (out-of-band verdict)",
+    "TaskTelemetryTracker.recordActiveCommandJobs(n)",
+    "TaskTelemetryTracker.currentActiveCommandJobs: number",
+    "TaskHeaderTelemetryStrip.activeCommandJobs?: number",
+    "TaskHeaderTelemetryStrip \u2387 N glyph"
+  ],
+  "successor_act": {
+    "id": "ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01",
+    "rescoped_purpose": "CONTAINMENT_PRIMITIVE_DISCRIMINATOR",
+    "not_yet_frozen": true,
+    "ready_to_begin": true,
+    "rationale": "Per Factory reviewer: prior PPID-walk mechanism is not established on macOS after reparenting (Apple distinguishes ppid from original_ppid). ACT must first discriminate candidate authority primitives (A: cleanup-time PPID/proc_pidinfo reconstruction, B: event-time fork lineage tracking from helper via EVFILT_PROC NOTE_FORK, C: native stable descendant authority via es_new_descendants_client) before freezing a mechanism. C1: GO directly to the discriminator after correction06 closes."
+  },
+  "substrate_artifact": {
+    "epemr_on_worker_termination": "expected (documented)",
+    "tests_unaffected": true,
+    "note": "EPERM on vitest worker termination is the documented substrate noise from ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02. Does not affect test outcomes (all 84 tests GREEN)."
+  },
+  "files_changed": [
+    "apps/vscode/src/sdk/command-job-manager.ts (correction06: CommandJobState 'containment_failed' added; finalize() state assignment DEFERRED until post-probe; containment_failed overwrites caller's clean terminal class on non-gone postcondition; CommandJobSnapshot.containmentFailed projected; command_job_containment_failed lifecycle event added to both unions; post-delete emit added in finalize)",
+    "apps/vscode/src/sdk/SdkController.ts (correction05 comment update retained)",
+    "apps/vscode/src/sdk/task-telemetry-tracker.ts (correction04 rename retained)",
+    "apps/vscode/src/sdk/vscode-session-host.ts (correction04 unchanged)",
+    "apps/vscode/src/shared/ExtensionMessage.ts (correction04 rename retained)",
+    "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx (correction04 rename retained)",
+    "apps/vscode/src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts (correction06: DCCT-11..14 strengthened \u2014 snapshot.state, containmentFailed projection, post-delete command_job_containment_failed event with activeCommandJobs := 0)",
+    "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx (correction04 new, unchanged in correction06)",
+    ".factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/03-current-pgid-contract.md (Appendix A rewritten \u2014 correction06 will need a follow-up note for the containment_failed terminal class and post-delete gauge-conservation event; out of scope for this evidence packet)",
+    ".factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/result.json (this file \u2014 correction06 rewrite)",
+    ".factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/04-final-gates.json (correction06 rewrite: 6 gates, 84 tests GREEN, 3-halt sequence)",
+    ".factory/acts/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01.md (correction04 + correction05 + correction06 sections; halt sequence; re-scoped successor ACT)",
+    ".factory/acts/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01.md (correction05 re-scoped as CONTAINMENT_PRIMITIVE_DISCRIMINATOR \u2014 unchanged by correction06)",
+    ".factory/epic-board.md (head entry rewritten for correction06 halt + bounded fix cycle: containment_failed terminal class; gauge conservation closed; bounded invariant re-stated as CLEAN_TERMINAL \u21d2 PRIMARY OWNED PGID GONE)"
+  ]
+}

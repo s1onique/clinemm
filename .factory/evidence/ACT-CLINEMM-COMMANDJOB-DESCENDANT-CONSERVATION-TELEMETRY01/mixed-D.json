@@ -1,0 +1,87 @@
+{
+  "label": "mixed-D",
+  "fixturePath": "/tmp/clinemm-descendant-conservation-telemetry01/04-fixture-mixed.sh",
+  "duration": 5,
+  "childPid": 22715,
+  "expectedPgid": 22715,
+  "socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+  "open": {
+    "version": 1,
+    "request_id": "disc-1",
+    "client_token": "0db9ccc42e4cb7585ac5f93869abbfe1",
+    "peer_uid": 501,
+    "peer_pid": 22714,
+    "ok": true
+  },
+  "register": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "5e5758a876473edc1fd0fd8b6d42d716",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "term": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "close": {
+    "version": 1,
+    "request_id": "disc-4",
+    "ok": true,
+    "result": "CLOSED"
+  },
+  "error": null,
+  "registerError": null,
+  "directTerm": {
+    "probeBeforeTerm": {
+      "rc": 1,
+      "errno": -1,
+      "name": ""
+    },
+    "rc": 1
+  },
+  "finalProbe": {
+    "rc": 1,
+    "errno": -1,
+    "name": ""
+  },
+  "beforeMembers": [
+    {
+      "pid": 22715,
+      "ppid": 22714,
+      "pgid": 22715,
+      "sess": 0,
+      "comm": "bash"
+    },
+    {
+      "pid": 22716,
+      "ppid": 22715,
+      "pgid": 22715,
+      "sess": 0,
+      "comm": "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "pid": 22720,
+      "ppid": 22716,
+      "pgid": 22715,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "afterMembers": [],
+  "afterDescendants": [],
+  "beforeMemberCount": 3,
+  "afterMemberCount": 0,
+  "afterDescendantCount": 0,
+  "elapsedMs": 974,
+  "invariant": {
+    "primaryGroupGone": false,
+    "membersGone": true,
+    "noSurvivingPidInGroup": true,
+    "noSurvivingDescendantsAnyPpid": true
+  },
+  "classification": "DIRECT_CANCEL_RED=SYNTHETIC_REAL|HELPER_TERMINATION_PRIMITIVE"
+}

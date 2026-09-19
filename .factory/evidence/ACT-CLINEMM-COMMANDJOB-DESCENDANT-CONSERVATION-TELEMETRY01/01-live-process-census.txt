@@ -1,0 +1,893 @@
+    1     0     1      0 Thu Sep 17 17:46:02 2026     23:28:29 (launchd)
+  339     1   339      0 Thu Sep 17 17:46:36 2026     23:27:55 (logd)
+  340     1   340      0 Thu Sep 17 17:46:36 2026     23:27:55 (smd)
+  341     1   341      0 Thu Sep 17 17:46:36 2026     23:27:55 (UserEventAgent)
+  343     1   343      0 Thu Sep 17 17:46:36 2026     23:27:55 (uninstalld)
+  344     1   344      0 Thu Sep 17 17:46:36 2026     23:27:55 (fseventsd)
+  345     1   345      0 Thu Sep 17 17:46:36 2026     23:27:55 (mediaremoted)
+  348     1   348      0 Thu Sep 17 17:46:36 2026     23:27:55 (systemstats)
+  350     1   350      0 Thu Sep 17 17:46:36 2026     23:27:55 (accessoryupdater)
+  351     1   351      0 Thu Sep 17 17:46:36 2026     23:27:55 (configd)
+  352     1   352      0 Thu Sep 17 17:46:36 2026     23:27:55 (endpointsecurity)
+  353     1   353      0 Thu Sep 17 17:46:36 2026     23:27:55 (powerd)
+  354     1   354      0 Thu Sep 17 17:46:36 2026     23:27:55 (IOMFB_bics_daemo)
+  355     1   355      0 Thu Sep 17 17:46:36 2026     23:27:55 (biomed)
+  357     1   357      0 Thu Sep 17 17:46:36 2026     23:27:55 (amfid)
+  359     1   359      0 Thu Sep 17 17:46:36 2026     23:27:55 (remoted)
+  361     1   361      0 Thu Sep 17 17:46:36 2026     23:27:55 (keybagd)
+  362     1   362      0 Thu Sep 17 17:46:36 2026     23:27:55 (softwareupdated)
+  364     1   364      0 Thu Sep 17 17:46:36 2026     23:27:55 (watchdogd)
+  368     1   368      0 Thu Sep 17 17:46:36 2026     23:27:55 (mds)
+  369     1   369      0 Thu Sep 17 17:46:36 2026     23:27:55 (iconservicesd)
+  370     1   370      0 Thu Sep 17 17:46:36 2026     23:27:55 (kernelmanagerd)
+  371     1   371      0 Thu Sep 17 17:46:36 2026     23:27:55 (diskarbitrationd)
+  374     1   374      0 Thu Sep 17 17:46:36 2026     23:27:55 (coreduetd)
+  375     1   375      0 Thu Sep 17 17:46:36 2026     23:27:55 (syslogd)
+  378     1   378      0 Thu Sep 17 17:46:36 2026     23:27:55 (thermalmonitord)
+  379     1   379      0 Thu Sep 17 17:46:36 2026     23:27:55 (opendirectoryd)
+  380     1   380      0 Thu Sep 17 17:46:36 2026     23:27:55 (apsd)
+  381     1   381      0 Thu Sep 17 17:46:36 2026     23:27:55 (launchservicesd)
+  382     1   382      0 Thu Sep 17 17:46:36 2026     23:27:55 (timed)
+  383     1   383      0 Thu Sep 17 17:46:36 2026     23:27:55 (usbmuxd)
+  384     1   384      0 Thu Sep 17 17:46:36 2026     23:27:55 (securityd)
+  386     1   386      0 Thu Sep 17 17:46:36 2026     23:27:55 (locationd)
+  388     1   388      0 Thu Sep 17 17:46:36 2026     23:27:55 (autofsd)
+  389     1   389      0 Thu Sep 17 17:46:36 2026     23:27:55 (dasd)
+  391     1   391      0 Thu Sep 17 17:46:36 2026     23:27:55 (distnoted)
+  392     1   392      0 Thu Sep 17 17:46:36 2026     23:27:55 (AppleCredentialM)
+  394     1   394      0 Thu Sep 17 17:46:36 2026     23:27:55 (dirhelper)
+  395     1   395      0 Thu Sep 17 17:46:36 2026     23:27:55 (logind)
+  396     1   396      0 Thu Sep 17 17:46:36 2026     23:27:55 (revisiond)
+  397     1   397      0 Thu Sep 17 17:46:36 2026     23:27:55 (KernelEventAgent)
+  398     1   398      0 Thu Sep 17 17:46:36 2026     23:27:55 (usermanagerd)
+  400     1   400      0 Thu Sep 17 17:46:36 2026     23:27:55 (bluetoothd)
+  401     1   401      0 Thu Sep 17 17:46:36 2026     23:27:55 (notifyd)
+  402     1   402      0 Thu Sep 17 17:46:36 2026     23:27:55 (sandboxd)
+  403     1   403      0 Thu Sep 17 17:46:36 2026     23:27:55 (corebrightnessd)
+  404     1   404      0 Thu Sep 17 17:46:36 2026     23:27:55 (AirPlayXPCHelper)
+  405     1   405      0 Thu Sep 17 17:46:36 2026     23:27:55 (com.apple.cmio.r)
+  406     1   406      0 Thu Sep 17 17:46:36 2026     23:27:55 (logd_helper)
+  407     1   407      0 Thu Sep 17 17:46:37 2026     23:27:54 (WindowServer)
+  408     1   408      0 Thu Sep 17 17:46:37 2026     23:27:54 (cfprefsd)
+  409     1   409      0 Thu Sep 17 17:46:37 2026     23:27:54 (tccd)
+  410     1   410      0 Thu Sep 17 17:46:37 2026     23:27:54 (lsd)
+  411     1   411      0 Thu Sep 17 17:46:37 2026     23:27:54 (coreservicesd)
+  422     1   422      0 Thu Sep 17 17:46:37 2026     23:27:54 (analyticsd)
+  448     1   448      0 Thu Sep 17 17:46:37 2026     23:27:54 (contextstored)
+  451     1   451      0 Thu Sep 17 17:46:37 2026     23:27:54 (backupd-helper)
+  452     1   452      0 Thu Sep 17 17:46:37 2026     23:27:54 (PowerUIAgent)
+  461     1   461      0 Thu Sep 17 17:46:37 2026     23:27:54 (airportd)
+  462     1   462      0 Thu Sep 17 17:46:37 2026     23:27:54 (liquiddetectiond)
+  463     1   463      0 Thu Sep 17 17:46:37 2026     23:27:54 (apfsd)
+  465     1   465      0 Thu Sep 17 17:46:37 2026     23:27:54 (nehelper)
+  466     1   466      0 Thu Sep 17 17:46:37 2026     23:27:54 (nsurlsessiond)
+  467     1   467      0 Thu Sep 17 17:46:37 2026     23:27:54 (accessoryd)
+  469     1   469      0 Thu Sep 17 17:46:37 2026     23:27:54 (biometrickitd)
+  470     1   470      0 Thu Sep 17 17:46:37 2026     23:27:54 (runningboardd)
+  471     1   471      0 Thu Sep 17 17:46:37 2026     23:27:54 (coreaudiod)
+  472     1   472      0 Thu Sep 17 17:46:37 2026     23:27:54 (mDNSResponder)
+  476     1   476      0 Thu Sep 17 17:46:37 2026     23:27:54 (backgroundtaskma)
+  477     1   477      0 Thu Sep 17 17:46:37 2026     23:27:54 /System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow
+  495     1   495      0 Thu Sep 17 17:46:37 2026     23:27:54 (csnameddatad)
+  500     1   500      0 Thu Sep 17 17:46:37 2026     23:27:54 (trustd)
+  503     1   503      0 Thu Sep 17 17:46:37 2026     23:27:54 (containermanager)
+  506     1   506      0 Thu Sep 17 17:46:37 2026     23:27:54 (systemstatusd)
+  507     1   507      0 Thu Sep 17 17:46:37 2026     23:27:54 (aslmanager)
+  510     1   510      0 Thu Sep 17 17:46:37 2026     23:27:54 (distnoted)
+  512     1   512      0 Thu Sep 17 17:46:37 2026     23:27:54 (hidd)
+  515     1   515      0 Thu Sep 17 17:46:37 2026     23:27:54 (trustdFileHelper)
+  517     1   517      0 Thu Sep 17 17:46:37 2026     23:27:54 (distnoted)
+  521     1   521      0 Thu Sep 17 17:46:37 2026     23:27:54 (distnoted)
+  526     1   526      0 Thu Sep 17 17:46:37 2026     23:27:54 (secinitd)
+  534     1   534      0 Thu Sep 17 17:46:37 2026     23:27:54 (authd)
+  540     1   540      0 Thu Sep 17 17:46:37 2026     23:27:54 (mDNSResponderHel)
+  542     1   542      0 Thu Sep 17 17:46:37 2026     23:27:54 (nesessionmanager)
+  543     1   543      0 Thu Sep 17 17:46:37 2026     23:27:54 (PlugInLibrarySer)
+  544     1   544      0 Thu Sep 17 17:46:37 2026     23:27:54 (sysextd)
+  545     1   545      0 Thu Sep 17 17:46:38 2026     23:27:53 (symptomsd)
+  546     1   546      0 Thu Sep 17 17:46:38 2026     23:27:53 (com.apple.CodeSi)
+  548     1   548      0 Thu Sep 17 17:46:38 2026     23:27:53 (mobileassetd)
+  556     1   556      0 Thu Sep 17 17:46:38 2026     23:27:53 (osanalyticshelpe)
+  561     1   561      0 Thu Sep 17 17:46:38 2026     23:27:53 (securityd_system)
+  562     1   562      0 Thu Sep 17 17:46:38 2026     23:27:53 (colorsyncd)
+  564     1   564      0 Thu Sep 17 17:46:38 2026     23:27:53 (wifip2pd)
+  568     1   568      0 Thu Sep 17 17:46:38 2026     23:27:53 (distnoted)
+  569     1   569      0 Thu Sep 17 17:46:38 2026     23:27:53 (com.apple.audio.)
+  571     1   571      0 Thu Sep 17 17:46:38 2026     23:27:53 (syspolicyd)
+  572     1   572      0 Thu Sep 17 17:46:38 2026     23:27:53 (storagekitd)
+  573     1   573      0 Thu Sep 17 17:46:38 2026     23:27:53 (AudioComponentRe)
+  574     1   574      0 Thu Sep 17 17:46:38 2026     23:27:53 (XProtectPluginSe)
+  579     1   579      0 Thu Sep 17 17:46:38 2026     23:27:53 (pritunl-service)
+  580     1   580      0 Thu Sep 17 17:46:38 2026     23:27:53 (TracSrvWrapper)
+  583     1   583      0 Thu Sep 17 17:46:38 2026     23:27:53 (vpnagentd)
+  584     1   584      0 Thu Sep 17 17:46:38 2026     23:27:53 (nix)
+  585     1   585      0 Thu Sep 17 17:46:38 2026     23:27:53 (bash)
+  588     1   588      0 Thu Sep 17 17:46:38 2026     23:27:53 (AmneziaVPN-servi)
+  590     1   590      0 Thu Sep 17 17:46:38 2026     23:27:53 (WiFiCloudAssetsX)
+  592     1   592      0 Thu Sep 17 17:46:38 2026     23:27:53 (WirelessRadioMan)
+  595     1   595      0 Thu Sep 17 17:46:38 2026     23:27:53 (appleeventsd)
+  596     1   596      0 Thu Sep 17 17:46:38 2026     23:27:53 (com.cisco.anycon)
+  597     1   597      0 Thu Sep 17 17:46:38 2026     23:27:53 (findmybeaconingd)
+  601     1   601      0 Thu Sep 17 17:46:38 2026     23:27:53 (backupd)
+  603     1   603      0 Thu Sep 17 17:46:38 2026     23:27:53 (com.apple.geod)
+  604     1   604      0 Thu Sep 17 17:46:38 2026     23:27:53 (distnoted)
+  606     1   606      0 Thu Sep 17 17:46:38 2026     23:27:53 (audioclocksyncd)
+  607     1   607      0 Thu Sep 17 17:46:38 2026     23:27:53 (secinitd)
+  608     1   608      0 Thu Sep 17 17:46:38 2026     23:27:53 (softwareupdated)
+  609     1   609      0 Thu Sep 17 17:46:38 2026     23:27:53 (appleh13camerad)
+  610     1   610      0 Thu Sep 17 17:46:38 2026     23:27:53 (cameracaptured)
+  611     1   611      0 Thu Sep 17 17:46:38 2026     23:27:53 (UVCAssistant)
+  612     1   612      0 Thu Sep 17 17:46:38 2026     23:27:53 (ViewBridgeAuxili)
+  614     1   614      0 Thu Sep 17 17:46:38 2026     23:27:53 (cfprefsd)
+  616     1   616      0 Thu Sep 17 17:46:38 2026     23:27:53 (trustd)
+  617     1   617      0 Thu Sep 17 17:46:38 2026     23:27:53 (countryd)
+  618     1   618      0 Thu Sep 17 17:46:38 2026     23:27:53 (audioanalyticsd)
+  620     1   620      0 Thu Sep 17 17:46:38 2026     23:27:53 (suhelperd)
+  621     1   621      0 Thu Sep 17 17:46:38 2026     23:27:53 (distnoted)
+  623     1   623      0 Thu Sep 17 17:46:38 2026     23:27:53 (SubmitDiagInfo)
+  626     1   626      0 Thu Sep 17 17:46:39 2026     23:27:52 (com.apple.Accoun)
+  629     1   629      0 Thu Sep 17 17:46:39 2026     23:27:52 (containermanager)
+  630     1   630      0 Thu Sep 17 17:46:39 2026     23:27:52 (eligibilityd)
+  631     1   631      0 Thu Sep 17 17:46:39 2026     23:27:52 (wifianalyticsd)
+  634     1   634      0 Thu Sep 17 17:46:39 2026     23:27:52 (com.apple.audio.)
+  635     1   635      0 Thu Sep 17 17:46:39 2026     23:27:52 (containermanager)
+  636     1   636      0 Thu Sep 17 17:46:39 2026     23:27:52 (GSSCred)
+  637     1   637      0 Thu Sep 17 17:46:39 2026     23:27:52 (com.apple.hiserv)
+  638     1   638      0 Thu Sep 17 17:46:39 2026     23:27:52 (PerfPowerTelemet)
+  642     1   642      0 Thu Sep 17 17:46:39 2026     23:27:52 (oahd)
+  643     1   643      0 Thu Sep 17 17:46:39 2026     23:27:52 (symptomsd-diag)
+  649     1   649      0 Thu Sep 17 17:46:39 2026     23:27:52 (searchpartyd)
+  651     1   651      0 Thu Sep 17 17:46:39 2026     23:27:52 (com.apple.Driver)
+  655     1   655      0 Thu Sep 17 17:46:39 2026     23:27:52 (mds_stores)
+  658     1   658      0 Thu Sep 17 17:46:39 2026     23:27:52 (com.apple.AppleU)
+  666     1   666      0 Thu Sep 17 17:46:39 2026     23:27:52 (coreauthd)
+  668     1   668      0 Thu Sep 17 17:46:39 2026     23:27:52 /usr/sbin/distnoted
+  669     1   669      0 Thu Sep 17 17:46:39 2026     23:27:52 (securityd_servic)
+  670     1   670      0 Thu Sep 17 17:46:39 2026     23:27:52 /usr/sbin/cfprefsd
+  673     1   673      0 Thu Sep 17 17:46:39 2026     23:27:52 (distnoted)
+  680     1   680      0 Thu Sep 17 17:46:39 2026     23:27:52 (rtcreportingd)
+  683     1   683      0 Thu Sep 17 17:46:39 2026     23:27:52 (corekdld)
+  686     1   686      0 Thu Sep 17 17:46:39 2026     23:27:52 (com.apple.geod)
+  687     1   687      0 Thu Sep 17 17:46:39 2026     23:27:52 (secinitd)
+  688     1   688      0 Thu Sep 17 17:46:39 2026     23:27:52 (XprotectService)
+  689     1   689      0 Thu Sep 17 17:46:40 2026     23:27:51 (cfprefsd)
+  690     1   690      0 Thu Sep 17 17:46:40 2026     23:27:51 (com.apple.geod)
+  691     1   691      0 Thu Sep 17 17:46:40 2026     23:27:51 (trustd)
+  692     1   692      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/UserEventAgent
+  693     1   693      0 Thu Sep 17 17:46:40 2026     23:27:51 (gamecontrollerd)
+  694     1   694      0 Thu Sep 17 17:46:40 2026     23:27:51 (seld)
+  696     1   696      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/knowledge-agent
+  697     1   697      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/CoreServices/CoreServicesUIAgent.app/Contents/MacOS/CoreServicesUIAgent
+  698     1   698      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/sbin/universalaccessd
+  699     1   699      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/CoreServices/audioaccessoryd
+  700     1   700      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/pboard
+  701     1   701      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/CoreServices/WindowManager.app/Contents/MacOS/WindowManager
+  702     1   702      0 Thu Sep 17 17:46:40 2026     23:27:51 (ReportCrash)
+  703     1   703      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Support/BackgroundTaskManagementAgent.app/Contents/MacOS/BackgroundTaskManagementAgent
+  704     1   704      0 Thu Sep 17 17:46:40 2026     23:27:51 (containermanager)
+  705     1   705      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/lsd
+  706     1   706      0 Thu Sep 17 17:46:40 2026     23:27:51 (findmydeviced)
+  707     1   707      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/TCC.framework/Support/tccd
+  708     1   708      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/CloudServices.framework/Helpers/com.apple.sbd
+  709     1   709      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/UserNotificationsCore.framework/Support/usernotificationsd
+  710     1   710      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/TelephonyUtilities.framework/callservicesd
+  711     1   711      0 Thu Sep 17 17:46:40 2026     23:27:51 (mobileactivation)
+  712     1   712      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/Accounts.framework/Versions/A/Support/accountsd
+  713     1   713      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/IDS.framework/identityservicesd.app/Contents/MacOS/identityservicesd
+  714     1   714      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/CoreTelephony.framework/Support/CommCenter
+  716     1   716      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/nsurlsessiond
+  718     1   718      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/sbin/usernoted
+  719     1   719      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/routined
+  720     1   720      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/rapportd
+  722     1   722      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/secinitd
+  723     1   723      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/CarbonCore.framework/Versions/A/XPCServices/csnameddatad.xpc/Contents/MacOS/csnameddatad
+  724     1   724      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/CloudKitDaemon.framework/Support/cloudd
+  725     1   725      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/trustd
+  727     1   727      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/neagent
+  728     1   728      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/CacheDelete.framework/deleted
+  729     1   729      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/CoreServices/CoreLocationAgent.app/Contents/MacOS/CoreLocationAgent
+  730     1   730      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/secd
+  731     1   731      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/findmydevice-user-agent
+  732     1   732      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/bluetoothuserd
+  733     1   733      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/DoNotDisturbServer.framework/Support/donotdisturbd
+  734     1   734      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/HomeKitDaemon.framework/Support/homed
+  735     1   735      0 Thu Sep 17 17:46:40 2026     23:27:51 (distnoted)
+  736     1   736      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/CoreDuetContext.framework/Resources/ContextStoreAgent
+  737     1   737      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/ApplicationServices.framework/Frameworks/ATS.framework/Support/fontd
+  738     1   738      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/containermanagerd
+  739     1   739      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/HIServices.framework/Versions/A/XPCServices/com.apple.hiservices-xpcservice.xpc/Contents/MacOS/com.apple.hiservices-xpcservice
+  740     1   740      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/CoreServices/talagent
+  741     1   741      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/CoreCDP.framework/Versions/A/Resources/cdpd
+  742     1   742      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/CoreServices/NotificationCenter.app/Contents/MacOS/NotificationCenter
+  743     1   743      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/Security.framework/Versions/A/XPCServices/TrustedPeersHelper.xpc/Contents/MacOS/TrustedPeersHelper
+  744     1   744      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/CoreServices/sharedfilelistd
+  745     1   745      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/ATS.framework/Versions/A/Support/fontworker
+  746     1   746      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/CoreServices/iconservicesagent
+  747     1   747      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/SyncedDefaults.framework/Support/syncdefaultsd
+  749     1   749      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/transparencyd
+  750     1   750      0 Thu Sep 17 17:46:40 2026     23:27:51 (PlugInLibrarySer)
+  751     1   751      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/CryptoTokenKit.framework/ctkd
+  752     1   752      0 Thu Sep 17 17:46:40 2026     23:27:51 /Applications/Chromium.app/Contents/MacOS/Chromium
+  753     1   753      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/Frameworks/LocalAuthentication.framework/Support/coreauthd
+  755     1   755      0 Thu Sep 17 17:46:40 2026     23:27:51 (ctkd)
+  756     1   756      0 Thu Sep 17 17:46:40 2026     23:27:51 /usr/libexec/pkd
+  757     1   757      0 Thu Sep 17 17:46:40 2026     23:27:51 (awdd)
+  758     1   758      0 Thu Sep 17 17:46:40 2026     23:27:51 /System/Library/PrivateFrameworks/CoreFollowUp.framework/Versions/A/Support/followupd
+  759     1   759      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/CoreServices/WiFiAgent.app/Contents/MacOS/WiFiAgent
+  760     1   760      0 Thu Sep 17 17:46:41 2026     23:27:50 /usr/libexec/dmd
+  761     1   761      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/ChronoCore.framework/Support/chronod
+  762     1   762      0 Thu Sep 17 17:46:41 2026     23:27:50 /usr/libexec/sharingd
+  763     1   763      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/Frameworks/ManagedSettings.framework/Versions/A/ManagedSettingsAgent
+  764     1   764      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/AuthKit.framework/Versions/A/Support/akd
+  765     1   765      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/FamilyCircle.framework/Versions/A/Resources/familycircled
+  766     1   766      0 Thu Sep 17 17:46:41 2026     23:27:50 (coresymbolicatio)
+  767     1   767      0 Thu Sep 17 17:46:41 2026     23:27:50 /usr/libexec/fmfd
+  768     1   768      0 Thu Sep 17 17:46:41 2026     23:27:50 /usr/libexec/ContinuityCaptureAgent
+  769     1   769      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/IMCore.framework/imagent.app/Contents/MacOS/imagent
+  770     1   770      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/TelephonyUtilities.framework/XPCServices/com.apple.FaceTime.FTConversationService.xpc/Contents/MacOS/com.apple.FaceTime.FTConversationService
+  771     1   771      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/Frameworks/Contacts.framework/Support/contactsd
+  772     1   772      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/UserActivity.framework/Agents/useractivityd
+  773     1   773      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/MediaRemote.framework/Support/mediaremoteagent
+  774     1   774      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/ScreenTimeCore.framework/Versions/A/ScreenTimeAgent
+  775     1   775      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/AssistantServices.framework/Versions/A/Support/assistantd
+  776     1   776      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/IMDPersistence.framework/XPCServices/IMDPersistenceAgent.xpc/Contents/MacOS/IMDPersistenceAgent
+  781     1   781      0 Thu Sep 17 17:46:41 2026     23:27:50 /usr/libexec/avconferenced
+  782     1   782      0 Thu Sep 17 17:46:41 2026     23:27:50 (distnoted)
+  783     1   783      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/SocialLayer.framework/sociallayerd.app/Contents/MacOS/sociallayerd
+  784     1   784      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/CoreSuggestions.framework/Versions/A/Support/suggestd
+  787     1   787      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/ContinuousDialogManagerService.framework/assistant_cdmd
+  789     1   789      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/SiriTTSService.framework/sirittsd
+  790     1   790      0 Thu Sep 17 17:46:41 2026     23:27:50 (nearbyd)
+  792     1   792      0 Thu Sep 17 17:46:41 2026     23:27:50 /System/Library/PrivateFrameworks/GeoServices.framework/Versions/A/XPCServices/com.apple.geod.xpc/Contents/MacOS/com.apple.geod
+  795     1   795      0 Thu Sep 17 17:46:42 2026     23:27:49 /System/Library/PrivateFrameworks/BiomeStreams.framework/Support/BiomeAgent
+  797     1   585      0 Thu Sep 17 17:46:42 2026     23:27:49 (wireguard-go)
+  808     1   808      0 Thu Sep 17 17:46:42 2026     23:27:49 (spindump)
+  809     1   809      0 Thu Sep 17 17:46:42 2026     23:27:49 (com.apple.Stream)
+  812     1   812      0 Thu Sep 17 17:46:42 2026     23:27:49 /usr/libexec/spindump_agent
+  824     1   824      0 Thu Sep 17 17:46:42 2026     23:27:49 (nfcd)
+  828     1   828      0 Thu Sep 17 17:46:42 2026     23:27:49 (adid)
+  832     1   832      0 Thu Sep 17 17:46:42 2026     23:27:49 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/corespotlightd
+  843   585   585      0 Thu Sep 17 17:46:42 2026     23:27:49 (bash)
+  844   843   585      0 Thu Sep 17 17:46:42 2026     23:27:49 (route)
+  845     1   845      0 Thu Sep 17 17:46:42 2026     23:27:49 /System/Library/PrivateFrameworks/IntlPreferences.framework/Support/localizationswitcherd
+  847     1   847      0 Thu Sep 17 17:46:42 2026     23:27:49 /System/Library/PrivateFrameworks/CalendarDaemon.framework/Support/calaccessd
+  848     1   848      0 Thu Sep 17 17:46:42 2026     23:27:49 (UARPUpdaterServi)
+  849     1   849      0 Thu Sep 17 17:46:42 2026     23:27:49 (UARPUpdaterServi)
+  851     1   851      0 Thu Sep 17 17:46:42 2026     23:27:49 (UARPUpdaterServi)
+  852     1   852      0 Thu Sep 17 17:46:42 2026     23:27:49 (UARPUpdaterServi)
+  854     1   854      0 Thu Sep 17 17:46:42 2026     23:27:49 (distnoted)
+  855     1   855      0 Thu Sep 17 17:46:42 2026     23:27:49 /System/Library/PrivateFrameworks/ContextKit.framework/Versions/A/XPCServices/ContextService.xpc/Contents/MacOS/ContextService
+  858     1   858      0 Thu Sep 17 17:46:42 2026     23:27:49 (ThunderboltAcces)
+  862     1   862      0 Thu Sep 17 17:46:42 2026     23:27:49 /usr/libexec/triald
+  864     1   864      0 Thu Sep 17 17:46:42 2026     23:27:49 (com.apple.geod)
+  865     1   865      0 Thu Sep 17 17:46:42 2026     23:27:49 (secinitd)
+  867     1   867      0 Thu Sep 17 17:46:43 2026     23:27:48 /System/Library/PrivateFrameworks/ViewBridge.framework/Versions/A/XPCServices/ViewBridgeAuxiliary.xpc/Contents/MacOS/ViewBridgeAuxiliary
+  868     1   868      0 Thu Sep 17 17:46:43 2026     23:27:48 /Applications/Mattermost.app/Contents/MacOS/Mattermost
+  869     1   869      0 Thu Sep 17 17:46:43 2026     23:27:48 /usr/libexec/SidecarRelay
+  870     1   870      0 Thu Sep 17 17:46:43 2026     23:27:48 /System/Library/CoreServices/UniversalControl.app/Contents/MacOS/UniversalControl
+  871     1   871      0 Thu Sep 17 17:46:43 2026     23:27:48 /Applications/Ghostty.app/Contents/MacOS/ghostty
+  875     1   875      0 Thu Sep 17 17:46:43 2026     23:27:48 /Applications/KeePassXC.app/Contents/MacOS/KeePassXC
+  876     1   876      0 Thu Sep 17 17:46:43 2026     23:27:48 /Applications/Telegram.app/Contents/MacOS/Telegram
+  878     1   878      0 Thu Sep 17 17:46:43 2026     23:27:48 /Applications/Helium.app/Contents/MacOS/Helium
+  879     1   879      0 Thu Sep 17 17:46:43 2026     23:27:48 /System/Library/PrivateFrameworks/StatusKit.framework/StatusKitAgent
+  880     1   880      0 Thu Sep 17 17:46:43 2026     23:27:48 /Applications/Nextcloud Talk.app/Contents/MacOS/Nextcloud Talk
+  885     1   885      0 Thu Sep 17 17:46:43 2026     23:27:48 /Applications/Microsoft Remote Desktop.app/Contents/MacOS/Microsoft Remote Desktop
+  886     1   886      0 Thu Sep 17 17:46:43 2026     23:27:48 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  891     1   891      0 Thu Sep 17 17:46:43 2026     23:27:48 /System/Library/PrivateFrameworks/AppSSO.framework/Support/AppSSOAgent.app/Contents/MacOS/AppSSOAgent
+  900     1   900      0 Thu Sep 17 17:46:43 2026     23:27:48 (distnoted)
+  903     1   903      0 Thu Sep 17 17:46:43 2026     23:27:48 (AppSSODaemon)
+  904     1   904      0 Thu Sep 17 17:46:43 2026     23:27:48 (gamepolicyd)
+  906     1   906      0 Thu Sep 17 17:46:43 2026     23:27:48 (captiveagent)
+  907     1   907      0 Thu Sep 17 17:46:43 2026     23:27:48 (distnoted)
+  909     1   909      0 Thu Sep 17 17:46:43 2026     23:27:48 (cfprefsd)
+  910     1   910      0 Thu Sep 17 17:46:43 2026     23:27:48 /System/Library/Frameworks/StoreKit.framework/Support/storekitagent
+  911     1   911      0 Thu Sep 17 17:46:43 2026     23:27:48 /System/Library/PrivateFrameworks/MapsSync.framework/mapssyncd
+  959     1   959      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter
+  960     1   960      0 Thu Sep 17 17:46:44 2026     23:27:47 /usr/libexec/gamecontrolleragentd
+  966     1   966      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/AMPLibrary.framework/Versions/A/Support/AMPLibraryAgent
+  969     1   969      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/ProtectedCloudStorage.framework/Helpers/ProtectedCloudKeySyncing
+  970     1   970      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/CoreServices/Keychain Circle Notification.app/Contents/MacOS/Keychain Circle Notification
+  972     1   972      0 Thu Sep 17 17:46:44 2026     23:27:47 /usr/libexec/seserviced
+  977     1   977      0 Thu Sep 17 17:46:44 2026     23:27:47 (filecoordination)
+  978     1   978      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/VoiceShortcuts.framework/Versions/A/Support/siriactionsd
+  981     1   981      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/CloudDocsDaemon.framework/Versions/A/Support/bird
+  984     1   984      0 Thu Sep 17 17:46:44 2026     23:27:47 (fairplayd)
+  993     1   993      0 Thu Sep 17 17:46:44 2026     23:27:47 /usr/libexec/replayd
+  998     1   998      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/HearingCore.framework/heard
+  999     1   999      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/AppleMediaServices.framework/Resources/amsaccountsd
+ 1000     1  1000      0 Thu Sep 17 17:46:44 2026     23:27:47 /usr/libexec/intelligentroutingd
+ 1001     1  1001      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/AppleMediaServicesUI.framework/amsengagementd
+ 1002     1  1002      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/MobileTimer.framework/Executables/mobiletimerd
+ 1003     1  1003      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/Frameworks/AudioToolbox.framework/AudioComponentRegistrar
+ 1004     1  1004      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/CarbonComponentScannerXPC.xpc/Contents/MacOS/CarbonComponentScannerXPC
+ 1005     1  1005      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/Frameworks/ExtensionFoundation.framework/Versions/A/XPCServices/extensionkitservice.xpc/Contents/MacOS/extensionkitservice
+ 1010     1  1010      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Applications/Calendar.app/Contents/PlugIns/CalendarWidgetExtension.appex/Contents/MacOS/CalendarWidgetExtension
+ 1011     1  1011      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/CoreServices/UIKitSystem.app/Contents/MacOS/UIKitSystem
+ 1012     1  1012      0 Thu Sep 17 17:46:44 2026     23:27:47 /usr/libexec/networkserviceproxy
+ 1013     1  1013      0 Thu Sep 17 17:46:44 2026     23:27:47 (systemsoundserve)
+ 1014     1  1014      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Applications/Clock.app/Contents/PlugIns/WorldClockWidget.appex/Contents/MacOS/WorldClockWidget
+ 1015     1  1015      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Applications/Weather.app/Contents/PlugIns/WeatherWidget.appex/Contents/MacOS/WeatherWidget
+ 1016     1  1016      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/CoreServices/Screen Time.app/Contents/PlugIns/ScreenTimeWidgetExtension.appex/Contents/MacOS/ScreenTimeWidgetExtension
+ 1017     1  1017      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Applications/Stocks.app/Contents/PlugIns/StocksWidget.appex/Contents/MacOS/StocksWidget
+ 1022     1  1022      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/CoreServices/ReportCrash
+ 1023     1  1023      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/login.framework/Versions/A/XPCServices/LoginUserService.xpc/Contents/MacOS/LoginUserService
+ 1028     1  1028      0 Thu Sep 17 17:46:44 2026     23:27:47 /usr/libexec/WiFiVelocityAgent
+ 1029     1  1029      0 Thu Sep 17 17:46:44 2026     23:27:47 /System/Library/PrivateFrameworks/FileProvider.framework/Support/fileproviderd
+ 1031     1  1031      0 Thu Sep 17 17:46:44 2026     23:27:47 (wifivelocityd)
+ 1035     1  1035      0 Thu Sep 17 17:46:45 2026     23:27:46 /System/Library/PrivateFrameworks/iCloudNotification.framework/iCloudNotificationAgent
+ 1037     1  1037      0 Thu Sep 17 17:46:45 2026     23:27:46 /usr/libexec/siriknowledged
+ 1038     1  1038      0 Thu Sep 17 17:46:45 2026     23:27:46 /usr/libexec/findmylocateagent
+ 1065     1  1065      0 Thu Sep 17 17:46:45 2026     23:27:46 /usr/libexec/swcd
+ 1067     1  1067      0 Thu Sep 17 17:46:45 2026     23:27:46 (trustd)
+ 1072     1  1072      0 Thu Sep 17 17:46:46 2026     23:27:45 (mdbulkimport)
+ 1073     1  1073      0 Thu Sep 17 17:46:46 2026     23:27:45 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdbulkimport
+ 1078     1  1078      0 Thu Sep 17 17:46:46 2026     23:27:45 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+ 1079     1  1079      0 Thu Sep 17 17:46:46 2026     23:27:45 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+ 1094     1  1094      0 Thu Sep 17 17:46:46 2026     23:27:45 (trustd)
+ 1117     1  1117      0 Thu Sep 17 17:46:46 2026     23:27:45 (akd)
+ 1123     1  1123      0 Thu Sep 17 17:46:46 2026     23:27:45 /System/Library/PrivateFrameworks/AssetCacheServices.framework/Versions/A/XPCServices/AssetCacheLocatorService.xpc/Contents/MacOS/AssetCacheLocatorService
+ 1128     1  1128      0 Thu Sep 17 17:46:46 2026     23:27:45 (AssetCache)
+ 1134     1  1134      0 Thu Sep 17 17:46:46 2026     23:27:45 (AssetCacheTether)
+ 1141     1  1141      0 Thu Sep 17 17:46:46 2026     23:27:45 (distnoted)
+ 1155     1  1155      0 Thu Sep 17 17:46:47 2026     23:27:44 /System/Library/Frameworks/ClassKit.framework/Versions/A/progressd
+ 1198     1  1198      0 Thu Sep 17 17:46:47 2026     23:27:44 (deleted_helper)
+ 1227     1  1227      0 Thu Sep 17 17:46:47 2026     23:27:44 (aneuserd)
+ 1228     1  1228      0 Thu Sep 17 17:46:47 2026     23:27:44 (aned)
+ 1229     1  1229      0 Thu Sep 17 17:46:47 2026     23:27:44 (online-auth-agen)
+ 1236     1  1236      0 Thu Sep 17 17:46:48 2026     23:27:43 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker
+ 1237     1  1237      0 Thu Sep 17 17:46:48 2026     23:27:43 /System/Library/PrivateFrameworks/DistributedEvaluation.framework/Versions/A/XPCServices/com.apple.siri-distributed-evaluation.xpc/Contents/MacOS/com.apple.siri-distributed-evaluation
+ 1238     1  1238      0 Thu Sep 17 17:46:48 2026     23:27:43 (mdworker)
+ 1240     1  1240      0 Thu Sep 17 17:46:48 2026     23:27:43 /usr/libexec/mlruntimed
+ 1243     1  1243      0 Thu Sep 17 17:46:49 2026     23:27:42 /Applications/zoom.us.app/Contents/MacOS/zoom.us
+ 1244     1  1244      0 Thu Sep 17 17:46:49 2026     23:27:42 (com.apple.Mobile)
+ 1245     1  1245      0 Thu Sep 17 17:46:49 2026     23:27:42 (xpcroleaccountd)
+ 1246     1  1246      0 Thu Sep 17 17:46:49 2026     23:27:42 (containermanager)
+ 1247     1  1247      0 Thu Sep 17 17:46:49 2026     23:27:42 /System/Library/PrivateFrameworks/CascadeSets.framework/Versions/A/XPCServices/SetStoreUpdateService.xpc/Contents/MacOS/SetStoreUpdateService
+ 1255     1  1255      0 Thu Sep 17 17:46:50 2026     23:27:41 /Applications/Pritunl.app/Contents/MacOS/Pritunl
+ 1257     1  1257      0 Thu Sep 17 17:46:50 2026     23:27:41 /Applications/Notion.app/Contents/MacOS/Notion
+ 1278     1  1278      0 Thu Sep 17 17:46:50 2026     23:27:41 /Applications/Figma.app/Contents/MacOS/Figma
+ 1279     1  1279      0 Thu Sep 17 17:46:50 2026     23:27:41 (sysmond)
+ 1280     1  1280      0 Thu Sep 17 17:46:50 2026     23:27:41 (IOUserBluetoothS)
+ 1281     1  1281      0 Thu Sep 17 17:46:50 2026     23:27:41 (IOUserBluetoothS)
+ 1284   348   348      0 Thu Sep 17 17:46:50 2026     23:27:41 (systemstats)
+ 1291     1  1291      0 Thu Sep 17 17:46:51 2026     23:27:40 (containermanager)
+ 1299     1  1299      0 Thu Sep 17 17:46:52 2026     23:27:39 (XProtectBridgeSe)
+ 1301     1  1301      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/CoreServices/Dock.app/Contents/MacOS/Dock
+ 1302     1  1302      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/CoreServices/SystemUIServer.app/Contents/MacOS/SystemUIServer
+ 1303     1  1303      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder
+ 1306     1  1306      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/CoreServices/WallpaperAgent.app/Contents/MacOS/WallpaperAgent
+ 1307     1  1307      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/Frameworks/QuickLookUI.framework/Versions/A/XPCServices/QuickLookUIService.xpc/Contents/MacOS/QuickLookUIService
+ 1308     1  1308      0 Thu Sep 17 17:46:52 2026     23:27:39 (automountd)
+ 1309     1  1309      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/PrivateFrameworks/AMPDevices.framework/Versions/A/Support/AMPDeviceDiscoveryAgent
+ 1311     1  1311      0 Thu Sep 17 17:46:52 2026     23:27:39 (idleassetsd)
+ 1312     1  1312      0 Thu Sep 17 17:46:52 2026     23:27:39 (wallpaperexportd)
+ 1313     1  1313      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/Frameworks/ExtensionFoundation.framework/Versions/A/XPCServices/extensionkitservice.xpc/Contents/MacOS/extensionkitservice
+ 1315     1  1315      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/ExtensionKit/Extensions/WallpaperVideoExtension.appex/Contents/MacOS/WallpaperVideoExtension
+ 1316     1  1316      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService
+ 1318     1  1318      0 Thu Sep 17 17:46:52 2026     23:27:39 /System/Library/CoreServices/ScopedBookmarkAgent
+ 1320     1  1320      0 Thu Sep 17 17:46:53 2026     23:27:38 /System/Library/CoreServices/pbs
+ 1321     1  1321      0 Thu Sep 17 17:46:53 2026     23:27:38 /System/Library/PrivateFrameworks/TextInputUIMacHelper.framework/Versions/A/XPCServices/CursorUIViewService.xpc/Contents/MacOS/CursorUIViewService
+ 1322     1  1322      0 Thu Sep 17 17:46:53 2026     23:27:38 /System/Library/CoreServices/Spotlight.app/Contents/MacOS/Spotlight
+ 1323     1  1323      0 Thu Sep 17 17:46:53 2026     23:27:38 /System/Library/CoreServices/Dock.app/Contents/XPCServices/com.apple.dock.extra.xpc/Contents/MacOS/com.apple.dock.extra
+ 1324     1  1324      0 Thu Sep 17 17:46:53 2026     23:27:38 /System/Library/CoreServices/Dock.app/Contents/XPCServices/com.apple.dock.external.extra.arm64.xpc/Contents/MacOS/com.apple.dock.external.extra.arm64
+ 1327     1  1327      0 Thu Sep 17 17:46:53 2026     23:27:38 /System/Library/Frameworks/Metal.framework/Versions/A/XPCServices/MTLCompilerService.xpc/Contents/MacOS/MTLCompilerService
+ 1328     1  1328      0 Thu Sep 17 17:46:53 2026     23:27:38 /System/Library/Frameworks/Metal.framework/Versions/A/XPCServices/MTLCompilerService.xpc/Contents/MacOS/MTLCompilerService
+ 1329     1  1329      0 Thu Sep 17 17:46:54 2026     23:27:37 /usr/libexec/MTLAssetUpgraderD
+ 1330     1  1330      0 Thu Sep 17 17:46:54 2026     23:27:37 /usr/libexec/linkd
+ 1331     1  1331      0 Thu Sep 17 17:46:54 2026     23:27:37 /usr/libexec/loginitemregisterd
+ 1332     1  1332      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/PrivateFrameworks/CoreParsec.framework/parsecd
+ 1334   752   752      0 Thu Sep 17 17:46:54 2026     23:27:37 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper
+ 1336   752   752      0 Thu Sep 17 17:46:54 2026     23:27:37 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper
+ 1338     1  1338      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/PrivateFrameworks/CallHistory.framework/Support/CallHistoryPluginHelper
+ 1339     1  1339      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/PrivateFrameworks/iTunesCloud.framework/Support/itunescloudd
+ 1343     1  1343      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/Frameworks/InputMethodKit.framework/Resources/imklaunchagent
+ 1351   752   752      0 Thu Sep 17 17:46:54 2026     23:27:37 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper
+ 1360     1  1360      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/Input Methods/PressAndHold.app/Contents/PlugIns/PAH_Extension.appex/Contents/MacOS/PAH_Extension
+ 1361     1  1361      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/PrivateFrameworks/CharacterPicker.framework/Versions/A/XPCServices/com.apple.CharacterPicker.FileService.xpc/Contents/MacOS/com.apple.CharacterPicker.FileService
+ 1362     1  1362      0 Thu Sep 17 17:46:54 2026     23:27:37 /Applications/Fig.app/Contents/Helpers/FigInputMethod.app/Contents/MacOS/fig_input_method
+ 1374     1  1374      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/PrivateFrameworks/CommerceKit.framework/Versions/A/Resources/commerce
+ 1379     1  1379      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/Frameworks/ColorSync.framework/Support/colorsync.useragent
+ 1381   752   752      0 Thu Sep 17 17:46:54 2026     23:27:37 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 1384     1  1384      0 Thu Sep 17 17:46:54 2026     23:27:37 /System/Library/Frameworks/ColorSync.framework/Versions/A/XPCServices/com.apple.ColorSyncXPCAgent.xpc/Contents/MacOS/com.apple.ColorSyncXPCAgent
+ 1386   752   752      0 Thu Sep 17 17:46:54 2026     23:27:37 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 1392     1  1392      0 Thu Sep 17 17:46:55 2026     23:27:36 (AssetCacheManage)
+ 1406   752   752      0 Thu Sep 17 17:46:55 2026     23:27:36 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 1415     1  1415      0 Thu Sep 17 17:46:55 2026     23:27:36 /System/Library/Frameworks/QuickLookThumbnailing.framework/Support/com.apple.quicklook.ThumbnailsAgent
+ 1436   752   752      0 Thu Sep 17 17:46:55 2026     23:27:36 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 1437     1  1437      0 Thu Sep 17 17:46:55 2026     23:27:36 /System/Library/Frameworks/QuickLook.framework/Versions/A/XPCServices/QuickLookSatellite.xpc/Contents/MacOS/QuickLookSatellite
+ 1442   752   752      0 Thu Sep 17 17:46:55 2026     23:27:36 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 1446     1  1446      0 Thu Sep 17 17:46:55 2026     23:27:36 /System/Cryptexes/App/usr/libexec/SafariLaunchAgent
+ 1447     1  1447      0 Thu Sep 17 17:46:55 2026     23:27:36 /System/Library/Frameworks/QuickLookThumbnailing.framework/Versions/A/PlugIns/ThumbnailExtension_macOS.appex/Contents/MacOS/ThumbnailExtension_macOS
+ 1469     1  1469      0 Thu Sep 17 17:46:56 2026     23:27:35 /System/Library/PrivateFrameworks/PhotoLibraryServices.framework/Versions/A/Support/photolibraryd
+ 1473     1  1473      0 Thu Sep 17 17:46:56 2026     23:27:35 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 1476     1  1476      0 Thu Sep 17 17:46:56 2026     23:27:35 /System/Library/PrivateFrameworks/PodcastServices.framework/XPCServices/PodcastContentService.xpc/Contents/MacOS/PodcastContentService
+ 1480     1  1480      0 Thu Sep 17 17:46:56 2026     23:27:35 /System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService
+ 1481     1  1481      0 Thu Sep 17 17:46:56 2026     23:27:35 /System/Library/PrivateFrameworks/BookKit.framework/Versions/A/XPCServices/com.apple.BKAgentService.xpc/Contents/MacOS/com.apple.BKAgentService
+ 1483     1  1483      0 Thu Sep 17 17:46:56 2026     23:27:35 /System/Library/PrivateFrameworks/AMPLibrary.framework/Versions/A/Support/AMPArtworkAgent
+ 1500     1  1499      0 Thu Sep 17 17:46:57 2026     23:27:34 /Applications/Mattermost.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler
+ 1511   868   868      0 Thu Sep 17 17:46:57 2026     23:27:34 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper.app/Contents/MacOS/Mattermost Helper
+ 1513   868   868      0 Thu Sep 17 17:46:57 2026     23:27:34 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper.app/Contents/MacOS/Mattermost Helper
+ 1533   868   868      0 Thu Sep 17 17:46:58 2026     23:27:33 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper (Renderer).app/Contents/MacOS/Mattermost Helper (Renderer)
+ 1535   868   868      0 Thu Sep 17 17:46:58 2026     23:27:33 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper (Renderer).app/Contents/MacOS/Mattermost Helper (Renderer)
+ 1536   868   868      0 Thu Sep 17 17:46:58 2026     23:27:33 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper (Renderer).app/Contents/MacOS/Mattermost Helper (Renderer)
+ 1537   868   868      0 Thu Sep 17 17:46:58 2026     23:27:33 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper (Renderer).app/Contents/MacOS/Mattermost Helper (Renderer)
+ 1538   868   868      0 Thu Sep 17 17:46:58 2026     23:27:33 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper (Renderer).app/Contents/MacOS/Mattermost Helper (Renderer)
+ 1540   868   868      0 Thu Sep 17 17:46:58 2026     23:27:33 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper (Renderer).app/Contents/MacOS/Mattermost Helper (Renderer)
+ 1541   868   868      0 Thu Sep 17 17:46:58 2026     23:27:33 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper (Renderer).app/Contents/MacOS/Mattermost Helper (Renderer)
+ 1544     1  1544      0 Thu Sep 17 17:46:58 2026     23:27:33 /System/Library/Frameworks/QuickLook.framework/Versions/A/XPCServices/ExternalQuickLookSatellite-x86_64.xpc/Contents/MacOS/ExternalQuickLookSatellite-x86_64
+ 1556     1  1556      0 Thu Sep 17 17:46:58 2026     23:27:33 /System/Library/PrivateFrameworks/AXAssetLoader.framework/Support/axassetsd
+ 1589  1255  1255      0 Thu Sep 17 17:46:59 2026     23:27:32 /Applications/Pritunl.app/Contents/Frameworks/Pritunl Helper (GPU).app/Contents/MacOS/Pritunl Helper (GPU)
+ 1592   880   880      0 Thu Sep 17 17:46:59 2026     23:27:32 /Applications/Nextcloud Talk.app/Contents/Frameworks/Nextcloud Talk Helper (GPU).app/Contents/MacOS/Nextcloud Talk Helper (GPU)
+ 1595  1255  1255      0 Thu Sep 17 17:46:59 2026     23:27:32 /Applications/Pritunl.app/Contents/Frameworks/Pritunl Helper.app/Contents/MacOS/Pritunl Helper
+ 1598   880   880      0 Thu Sep 17 17:46:59 2026     23:27:32 /Applications/Nextcloud Talk.app/Contents/Frameworks/Nextcloud Talk Helper.app/Contents/MacOS/Nextcloud Talk Helper
+ 1635  1255  1255      0 Thu Sep 17 17:46:59 2026     23:27:32 /Applications/Pritunl.app/Contents/Frameworks/Pritunl Helper (Renderer).app/Contents/MacOS/Pritunl Helper (Renderer)
+ 1710     1  1710      0 Thu Sep 17 17:47:00 2026     23:27:31 /System/Library/Frameworks/PCSC.framework/Versions/A/XPCServices/com.apple.ctkpcscd.xpc/Contents/MacOS/com.apple.ctkpcscd
+ 1745   880   880      0 Thu Sep 17 17:47:00 2026     23:27:31 /Applications/Nextcloud Talk.app/Contents/Frameworks/Nextcloud Talk Helper (Renderer).app/Contents/MacOS/Nextcloud Talk Helper (Renderer)
+ 1816     1  1816      0 Thu Sep 17 17:47:01 2026     23:27:30 /System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService
+ 1859  1257  1257      0 Thu Sep 17 17:47:03 2026     23:27:28 /Applications/Notion.app/Contents/Frameworks/Notion Helper.app/Contents/MacOS/Notion Helper
+ 1862  1257  1257      0 Thu Sep 17 17:47:03 2026     23:27:28 /Applications/Notion.app/Contents/Frameworks/Notion Helper.app/Contents/MacOS/Notion Helper
+ 1872     1  1872      0 Thu Sep 17 17:47:03 2026     23:27:28 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.ComponentTagHelper.xpc/Contents/MacOS/com.apple.audio.ComponentTagHelper
+ 1875     1  1875      0 Thu Sep 17 17:47:04 2026     23:27:27 /System/Library/PrivateFrameworks/ToneLibrary.framework/Versions/A/XPCServices/com.apple.tonelibraryd.xpc/Contents/MacOS/com.apple.tonelibraryd
+ 1876     1  1876      0 Thu Sep 17 17:47:04 2026     23:27:27 (com.apple.audio.)
+ 1879     1  1878      0 Thu Sep 17 17:47:04 2026     23:27:27 /Applications/Figma.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler
+ 1882  1278  1278      0 Thu Sep 17 17:47:04 2026     23:27:27 /Applications/Figma.app/Contents/Frameworks/Figma Helper.app/Contents/MacOS/Figma Helper
+ 1883  1278  1278      0 Thu Sep 17 17:47:04 2026     23:27:27 /Applications/Figma.app/Contents/Frameworks/Figma Helper.app/Contents/MacOS/Figma Helper
+ 1884  1257  1257      0 Thu Sep 17 17:47:04 2026     23:27:27 /Applications/Notion.app/Contents/Frameworks/Notion Helper.app/Contents/MacOS/Notion Helper
+ 1885     1  1885      0 Thu Sep 17 17:47:04 2026     23:27:27 (CVMServer)
+ 1888  1278  1278      0 Thu Sep 17 17:47:04 2026     23:27:27 /Applications/Figma.app/Contents/Frameworks/Figma Helper (Renderer).app/Contents/MacOS/Figma Helper (Renderer)
+ 1890  1278  1278      0 Thu Sep 17 17:47:04 2026     23:27:27 /Applications/Figma.app/Contents/Frameworks/Figma Helper (Renderer).app/Contents/MacOS/Figma Helper (Renderer)
+ 1891  1278  1278      0 Thu Sep 17 17:47:04 2026     23:27:27 /Applications/Figma.app/Contents/Frameworks/Figma Helper (Renderer).app/Contents/MacOS/Figma Helper (Renderer)
+ 1893     1  1893      0 Thu Sep 17 17:47:05 2026     23:27:26 /Volumes/UserData/Users/chistyakov/Library/Application Support/Figma/FigmaAgent.app/Contents/MacOS/figma_agent
+ 1910  1257  1257      0 Thu Sep 17 17:47:06 2026     23:27:25 /Applications/Notion.app/Contents/Frameworks/Notion Helper (Renderer).app/Contents/MacOS/Notion Helper (Renderer)
+ 1912     1  1912      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/MacinTalk.framework/Versions/A/PlugIns/MacinTalkAUSP.appex/Contents/MacOS/MacinTalkAUSP
+ 1914     1  1914      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/TextToSpeech.framework/PlugIns/SiriAUSP.appex/Contents/MacOS/SiriAUSP
+ 1945     1  1945      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 1950     1  1950      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 1951  1257  1257      0 Thu Sep 17 17:47:06 2026     23:27:25 /Applications/Notion.app/Contents/Frameworks/Notion Helper (Renderer).app/Contents/MacOS/Notion Helper (Renderer)
+ 1957     1  1957      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/TextToSpeechMauiSupport.framework/Versions/A/PlugIns/MauiAUSP.appex/Contents/MacOS/MauiAUSP
+ 1958     1  1958      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/SiriTTSService.framework/Versions/A/XPCServices/com.apple.SiriTTSService.TrialProxy.xpc/Contents/MacOS/com.apple.SiriTTSService.TrialProxy
+ 1959  1278  1278      0 Thu Sep 17 17:47:06 2026     23:27:25 /Applications/Figma.app/Contents/Frameworks/Figma Helper.app/Contents/MacOS/Figma Helper
+ 1960     1  1960      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/MacinTalk.framework/Versions/A/PlugIns/WardaSynthesizer_x86_64.appex/Contents/MacOS/WardaSynthesizer_x86_64
+ 1961     1  1961      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/TextToSpeechVoiceBankingSupport.framework/Support/voicebankingd
+ 1962   878   878      0 Thu Sep 17 17:47:06 2026     23:27:25 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (GPU).app/Contents/MacOS/Helium Helper (GPU)
+ 1963   878   878      0 Thu Sep 17 17:47:06 2026     23:27:25 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper.app/Contents/MacOS/Helium Helper
+ 1964     1  1964      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/MacinTalk.framework/Versions/A/PlugIns/WardaSynthesizer_arm64.appex/Contents/MacOS/WardaSynthesizer_arm64
+ 1965     1  1965      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/TextToSpeechKonaSupport.framework/Versions/A/PlugIns/KonaSynthesizer.appex/Contents/MacOS/KonaSynthesizer
+ 1966   878   878      0 Thu Sep 17 17:47:06 2026     23:27:25 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper.app/Contents/MacOS/Helium Helper
+ 1968     1  1968      0 Thu Sep 17 17:47:06 2026     23:27:25 /System/Library/PrivateFrameworks/AppStoreDaemon.framework/Support/appstoreagent
+ 1971     1  1971      0 Thu Sep 17 17:47:07 2026     23:27:24 (installcoordinat)
+ 1972     1  1972      0 Thu Sep 17 17:47:07 2026     23:27:24 (com.apple.AppSto)
+ 1974     1  1974      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 1975     1  1975      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Fig.app/Contents/MacOS/fig_desktop
+ 1976     1  1976      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/PrivateFrameworks/CoreSpeech.framework/corespeechd
+ 1977     1  1977      0 Thu Sep 17 17:47:07 2026     23:27:24 /Library/Application Support/Fortinet/FortiClient/bin/CredentialStore
+ 1978     1  1978      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Fig.app/Contents/MacOS/fig-darwin-universal
+ 1979   878   878      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+ 1983     1  1983      0 Thu Sep 17 17:47:07 2026     23:27:24 (PanGPS)
+ 1987     1  1987      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/CoreServices/Siri.app/Contents/MacOS/Siri
+ 1988     1  1988      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/Image Capture/Support/icdd
+ 1989     1  1989      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/GlobalProtect.app/Contents/MacOS/GlobalProtect
+ 1992     1  1992      0 Thu Sep 17 17:47:07 2026     23:27:24 Contents/Frameworks/Squirrel.framework/Versions/A/Squirrel
+ 1994     1  1994      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/PrivateFrameworks/AskPermission.framework/Versions/A/Resources/askpermissiond
+ 1997     1  1997      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Endpoint Security VPN.app/Contents/MacOS/Endpoint_Security_VPN
+ 1998     1  1998      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/CoreServices/AirPlayUIAgent.app/Contents/MacOS/AirPlayUIAgent
+ 2000     1  2000      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/CoreServices/diagnostics_agent
+ 2001     1  2001      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/CoreServices/TextInputMenuAgent.app/Contents/MacOS/TextInputMenuAgent
+ 2005     1  2005      0 Thu Sep 17 17:47:07 2026     23:27:24 (ctkahp)
+ 2006     1  2006      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Podman Desktop.app/Contents/MacOS/Podman Desktop
+ 2007     1  2007      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Толк.app/Contents/MacOS/Толк
+ 2008  1278  1278      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Figma.app/Contents/Frameworks/Figma Helper (Renderer).app/Contents/MacOS/Figma Helper (Renderer)
+ 2009     1  2009      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Syncthing.app/Contents/MacOS/Syncthing
+ 2010     1  2010      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/Ice.app/Contents/MacOS/Ice
+ 2011     1  2011      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/Frameworks/CryptoTokenKit.framework/ctkahp.bundle/Contents/MacOS/ctkahp
+ 2013     1  2013      0 Thu Sep 17 17:47:07 2026     23:27:24 /System/Library/CoreServices/TextInputSwitcher.app/Contents/MacOS/TextInputSwitcher
+ 2018     1  2018      0 Thu Sep 17 17:47:07 2026     23:27:24 /Applications/WireGuard.app/Contents/MacOS/WireGuard
+ 2019     1  2019      0 Thu Sep 17 17:47:07 2026     23:27:24 /Volumes/UserData/Users/chistyakov/Applications/Battery Health 3.app/Contents/MacOS/Battery Health 3
+ 2024  1992  1992      0 Thu Sep 17 17:47:08 2026     23:27:23 /Applications/Ollama 3.app/Contents/MacOS/Ollama
+ 2026     1  2026      0 Thu Sep 17 17:47:08 2026     23:27:23 /Applications/Balance Lock.app/Contents/MacOS/Balance Lock
+ 2039  1243  2039      0 Thu Sep 17 17:47:08 2026     23:27:23 /Applications/zoom.us.app/Contents/Frameworks/caphost.app/Contents/MacOS/caphost
+ 2040  2009  2040      0 Thu Sep 17 17:47:08 2026     23:27:23 /Applications/Syncthing.app/Contents/Resources/syncthing/syncthing
+ 2051     1  2051      0 Thu Sep 17 17:47:08 2026     23:27:23 /System/Library/Frameworks/LocalAuthentication.framework/Support/coreautha.bundle/Contents/MacOS/coreautha
+ 2057  1278  1278      0 Thu Sep 17 17:47:09 2026     23:27:22 /Applications/Figma.app/Contents/Frameworks/Figma Helper (Renderer).app/Contents/MacOS/Figma Helper (Renderer)
+ 2061  2040  2040      0 Thu Sep 17 17:47:09 2026     23:27:22 /Applications/Syncthing.app/Contents/Resources/syncthing/syncthing
+ 2062     1  2062      0 Thu Sep 17 17:47:09 2026     23:27:22 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 2064     1  2063      0 Thu Sep 17 17:47:09 2026     23:27:22 /Applications/Толк.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler
+ 2065  2007  2007      0 Thu Sep 17 17:47:09 2026     23:27:22 /Applications/Толк.app/Contents/Frameworks/Толк Helper.app/Contents/MacOS/Толк Helper
+ 2068  2007  2007      0 Thu Sep 17 17:47:09 2026     23:27:22 /Applications/Толк.app/Contents/Frameworks/Толк Helper.app/Contents/MacOS/Толк Helper
+ 2075     1  2075      0 Thu Sep 17 17:47:09 2026     23:27:22 /System/Library/PrivateFrameworks/UIFoundation.framework/Versions/A/XPCServices/nsattributedstringagent.xpc/Contents/MacOS/nsattributedstringagent
+ 2076     1  2076      0 Thu Sep 17 17:47:09 2026     23:27:22 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 2086     1  2086      0 Thu Sep 17 17:47:09 2026     23:27:22 /System/Library/Frameworks/MediaAccessibility.framework/Versions/A/XPCServices/com.apple.accessibility.mediaaccessibilityd.xpc/Contents/MacOS/com.apple.accessibility.mediaaccessibilityd
+ 2089  2007  2007      0 Thu Sep 17 17:47:09 2026     23:27:22 /Applications/Толк.app/Contents/Frameworks/Толк Helper (Renderer).app/Contents/MacOS/Толк Helper (Renderer)
+ 2090  2007  2007      0 Thu Sep 17 17:47:09 2026     23:27:22 /Applications/Толк.app/Contents/Frameworks/Толк Helper (Renderer).app/Contents/MacOS/Толк Helper (Renderer)
+ 2178  1278  1278      0 Thu Sep 17 17:47:10 2026     23:27:21 /Applications/Figma.app/Contents/Frameworks/Figma Helper (Renderer).app/Contents/MacOS/Figma Helper (Renderer)
+ 2179     1  2179      0 Thu Sep 17 17:47:10 2026     23:27:21 /usr/libexec/promotedcontentd
+ 2180  2006  2006      0 Thu Sep 17 17:47:10 2026     23:27:21 /Applications/Podman Desktop.app/Contents/Frameworks/Podman Desktop Helper.app/Contents/MacOS/Podman Desktop Helper
+ 2181  2006  2006      0 Thu Sep 17 17:47:10 2026     23:27:21 /Applications/Podman Desktop.app/Contents/Frameworks/Podman Desktop Helper.app/Contents/MacOS/Podman Desktop Helper
+ 2182  2024  1992      0 Thu Sep 17 17:47:11 2026     23:27:20 scutil
+ 2184  2006  2006      0 Thu Sep 17 17:47:11 2026     23:27:20 /Applications/Podman Desktop.app/Contents/Frameworks/Podman Desktop Helper (Renderer).app/Contents/MacOS/Podman Desktop Helper (Renderer)
+ 2189  1243  2189      0 Thu Sep 17 17:47:11 2026     23:27:20 /usr/bin/log
+ 2191     1  2191      0 Thu Sep 17 17:47:11 2026     23:27:20 (diagnosticd)
+ 2192  2024  1992      0 Thu Sep 17 17:47:12 2026     23:27:19 /Applications/Ollama 3.app/Contents/Resources/ollama
+ 2195     1  2195      0 Thu Sep 17 17:47:12 2026     23:27:19 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 2300     1  2300      0 Thu Sep 17 17:47:12 2026     23:27:19 /System/Library/PrivateFrameworks/UniversalAccess.framework/Versions/A/Resources/universalAccessAuthWarn.app/Contents/MacOS/universalAccessAuthWarn
+ 2372  1243  2372      0 Thu Sep 17 17:47:13 2026     23:27:18 /usr/bin/log
+ 2373     1  2373      0 Thu Sep 17 17:47:13 2026     23:27:18 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking
+ 2374     1  2374      0 Thu Sep 17 17:47:13 2026     23:27:18 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent
+ 2382     1  2382      0 Thu Sep 17 17:47:13 2026     23:27:18 /System/Library/PrivateFrameworks/WebPrivacy.framework/webprivacyd
+ 2384     1  2384      0 Thu Sep 17 17:47:13 2026     23:27:18 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent
+ 2385     1  2385      0 Thu Sep 17 17:47:14 2026     23:27:17 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking
+ 2386     1  2386      0 Thu Sep 17 17:47:14 2026     23:27:17 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent
+ 2401     1  2401      0 Thu Sep 17 17:47:14 2026     23:27:17 /System/Library/PrivateFrameworks/SafariSafeBrowsing.framework/com.apple.Safari.SafeBrowsing.Service
+ 2416     1  2416      0 Thu Sep 17 17:47:14 2026     23:27:17 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU
+ 2422     1  2422      0 Thu Sep 17 17:47:14 2026     23:27:17 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU
+ 2423     1  2423      0 Thu Sep 17 17:47:14 2026     23:27:17 /Volumes/UserData/Users/chistyakov/Applications/Battery Health 3.app/Contents/XPCServices/org.sparkle-project.InstallerStatus.xpc/Contents/MacOS/org.sparkle-project.InstallerStatus
+ 2428     1  2428      0 Thu Sep 17 17:47:14 2026     23:27:17 /System/Library/PrivateFrameworks/SiriTTSService.framework/Versions/A/XPCServices/com.apple.SiriTTSService.TrialProxy.xpc/Contents/MacOS/com.apple.SiriTTSService.TrialProxy
+ 2431     1  2431      0 Thu Sep 17 17:47:15 2026     23:27:16 /Volumes/UserData/Users/chistyakov/Applications/Battery Health 3.app/Contents/XPCServices/org.sparkle-project.Downloader.xpc/Contents/MacOS/org.sparkle-project.Downloader
+ 2580     1  2580      0 Thu Sep 17 17:47:17 2026     23:27:14 (installd)
+ 2581     1  2581      0 Thu Sep 17 17:47:17 2026     23:27:14 /System/Library/PrivateFrameworks/SoftwareUpdate.framework/Resources/SoftwareUpdateNotificationManager.app/Contents/MacOS/SoftwareUpdateNotificationManager
+ 2582     1  2582      0 Thu Sep 17 17:47:17 2026     23:27:14 /System/Library/Services/AppleSpell.service/Contents/MacOS/AppleSpell
+ 2584  2007  2007      0 Thu Sep 17 17:47:17 2026     23:27:14 /Applications/Толк.app/Contents/Frameworks/Толк Helper.app/Contents/MacOS/Толк Helper
+ 2585  2007  2007      0 Thu Sep 17 17:47:17 2026     23:27:14 /Applications/Толк.app/Contents/Frameworks/Толк Helper.app/Contents/MacOS/Толк Helper
+ 2587     1  2587      0 Thu Sep 17 17:47:17 2026     23:27:14 /usr/libexec/keyboardservicesd
+ 2588     1  2006      0 Thu Sep 17 17:47:17 2026     23:27:14 /opt/podman/bin/gvproxy
+ 2589  2007  2007      0 Thu Sep 17 17:47:17 2026     23:27:14 /Applications/Толк.app/Contents/Frameworks/Толк Helper (Renderer).app/Contents/MacOS/Толк Helper (Renderer)
+ 2591     1  2591      0 Thu Sep 17 17:47:18 2026     23:27:13 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 2592     1  2592      0 Thu Sep 17 17:47:18 2026     23:27:13 (audiomxd)
+ 2595     1  2595      0 Thu Sep 17 17:47:18 2026     23:27:13 (system_installd)
+ 2596     1  2596      0 Thu Sep 17 17:47:18 2026     23:27:13 (cloudd)
+ 2597     1  2597      0 Thu Sep 17 17:47:18 2026     23:27:13 /System/Library/PrivateFrameworks/GeoServices.framework/geodMachServiceBridge
+ 2598     1  2598      0 Thu Sep 17 17:47:18 2026     23:27:13 /System/Library/PrivateFrameworks/CommerceKit.framework/Versions/A/Resources/storedownloadd
+ 2599     1  2006      0 Thu Sep 17 17:47:18 2026     23:27:13 /opt/podman/bin/krunkit
+ 2631     1  2631      0 Thu Sep 17 17:47:20 2026     23:27:11 /Library/Apple/System/Library/CoreServices/XProtect.app/Contents/XPCServices/XProtectPluginService.xpc/Contents/MacOS/XProtectPluginService
+ 2641     1  2641      0 Thu Sep 17 17:47:21 2026     23:27:10 /Applications/Notion.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt
+ 2644     1  2644      0 Thu Sep 17 17:47:22 2026     23:27:09 /System/Library/PrivateFrameworks/IASUtilities.framework/Versions/A/Resources/installerauthagent
+ 2645     1  2645      0 Thu Sep 17 17:47:22 2026     23:27:09 (NRDUpdated)
+ 2653     1  2653      0 Thu Sep 17 17:47:23 2026     23:27:08 (com.apple.NRD.Up)
+ 2654     1  2654      0 Thu Sep 17 17:47:23 2026     23:27:08 /usr/libexec/naturallanguaged
+ 2655     1  2655      0 Thu Sep 17 17:47:23 2026     23:27:08 (triald_system)
+ 2659     1  2659      0 Thu Sep 17 17:47:25 2026     23:27:06 /System/Library/PrivateFrameworks/IntelligencePlatformCompute.framework/Versions/A/XPCServices/IntelligencePlatformComputeService.xpc/Contents/MacOS/IntelligencePlatformComputeService
+ 2660     1  2660      0 Thu Sep 17 17:47:25 2026     23:27:06 (AssetCacheLocato)
+ 2661     1  2661      0 Thu Sep 17 17:47:25 2026     23:27:06 /System/Library/PrivateFrameworks/NewDeviceOutreach.framework/ndoagent
+ 2662     1  2662      0 Thu Sep 17 17:47:25 2026     23:27:06 /System/Library/Frameworks/FinanceKit.framework/financed
+ 2663     1  2663      0 Thu Sep 17 17:47:25 2026     23:27:06 /usr/libexec/diagnosticextensionsd
+ 2664     1  2664      0 Thu Sep 17 17:47:25 2026     23:27:06 /usr/libexec/adprivacyd
+ 2665     1  2665      0 Thu Sep 17 17:47:25 2026     23:27:06 /System/Library/PrivateFrameworks/EmailDaemon.framework/Versions/A/maild
+ 2666     1  2666      0 Thu Sep 17 17:47:25 2026     23:27:06 /System/Library/PrivateFrameworks/WeatherDaemon.framework/weatherd
+ 2667     1  2667      0 Thu Sep 17 17:47:25 2026     23:27:06 /System/Library/PrivateFrameworks/UsageTracking.framework/Versions/A/UsageTrackingAgent
+ 2668     1  2668      0 Thu Sep 17 17:47:25 2026     23:27:06 /System/Library/PrivateFrameworks/LockdownMode.framework/Versions/A/XPCServices/lockdownmoded
+ 2675     1  2675      0 Thu Sep 17 17:47:25 2026     23:27:06 /System/Library/PrivateFrameworks/CommunicationsFilter.framework/CMFSyncAgent
+ 2686     1  2686      0 Thu Sep 17 17:47:26 2026     23:27:05 (STExtractionServ)
+ 2690     1  2690      0 Thu Sep 17 17:47:27 2026     23:27:04 (nsattributedstri)
+ 2692     1  2692      0 Thu Sep 17 17:47:27 2026     23:27:04 (com.apple.hiserv)
+ 2693     1  2693      0 Thu Sep 17 17:47:27 2026     23:27:04 (cfprefsd)
+ 2695     1  2695      0 Thu Sep 17 17:47:27 2026     23:27:04 (com.apple.access)
+ 2701     1  2701      0 Thu Sep 17 17:47:27 2026     23:27:04 /System/Library/PrivateFrameworks/UIFoundation.framework/Versions/A/XPCServices/nsattributedstringagent.xpc/Contents/MacOS/nsattributedstringagent
+ 2724     1  2724      0 Thu Sep 17 17:47:30 2026     23:27:01 (DistributionHelp)
+ 2733     1  2733      0 Thu Sep 17 17:47:33 2026     23:26:58 (CrashReporterSup)
+ 2746     1  2746      0 Thu Sep 17 17:47:34 2026     23:26:57 /System/Library/PrivateFrameworks/AssistantServices.framework/Versions/A/Support/assistant_service
+ 2748     1  2748      0 Thu Sep 17 17:47:35 2026     23:26:56 /System/Library/Frameworks/ExtensionFoundation.framework/Versions/A/XPCServices/extensionkitservice.xpc/Contents/MacOS/extensionkitservice
+ 2749     1  2749      0 Thu Sep 17 17:47:35 2026     23:26:56 /System/Applications/Calendar.app/Contents/Extensions/CalendarFocusConfigurationExtension.appex/Contents/MacOS/CalendarFocusConfigurationExtension
+ 2750     1  2750      0 Thu Sep 17 17:47:35 2026     23:26:56 /System/Applications/Mail.app/Contents/Extensions/MailShortcutsExtension.appex/Contents/MacOS/MailShortcutsExtension
+ 2751     1  2751      0 Thu Sep 17 17:47:35 2026     23:26:56 /System/Volumes/Preboot/Cryptexes/App/System/Applications/Safari.app/Contents/Extensions/SafariLinkExtension.appex/Contents/MacOS/SafariLinkExtension
+ 2752     1  2752      0 Thu Sep 17 17:47:35 2026     23:26:56 /System/Applications/Messages.app/Contents/Extensions/MessagesActionExtension.appex/Contents/MacOS/MessagesActionExtension
+ 2776     1  2776      0 Thu Sep 17 17:47:39 2026     23:26:52 /Applications/Figma.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt
+ 2811     1  2811      0 Thu Sep 17 17:47:44 2026     23:26:47 /System/Library/PrivateFrameworks/CommerceKit.framework/Versions/A/Resources/storeaccountd
+ 2818     1  2818      0 Fri Sep 18 00:15:18 2026     16:59:13 /Applications/VSCodium.app/Contents/MacOS/VSCodium
+ 2830  2818  2818      0 Fri Sep 18 00:15:18 2026     16:59:13 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+ 2831  2818  2818      0 Fri Sep 18 00:15:18 2026     16:59:13 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+ 2832  2818  2818      0 Fri Sep 18 00:15:18 2026     16:59:13 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+ 2833     1  2833      0 Thu Sep 17 17:47:48 2026     23:26:43 (ANECompilerServi)
+ 2834     1  2834      0 Thu Sep 17 17:47:48 2026     23:26:43 /System/Library/PrivateFrameworks/MobileAccessoryUpdater.framework/Support/fudHelperAgent
+ 2836  2818  2818      0 Fri Sep 18 00:15:18 2026     16:59:13 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+ 2837  2818  2818      0 Fri Sep 18 00:15:18 2026     16:59:13 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+ 2838  2818  2818      0 Fri Sep 18 00:15:18 2026     16:59:13 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Plugin).app/Contents/MacOS/VSCodium Helper (Plugin)
+ 2896     1  2896      0 Thu Sep 17 17:48:00 2026     23:26:31 /usr/libexec/searchpartyuseragent
+ 2916     1  2916      0 Thu Sep 17 17:48:04 2026     23:26:27 /System/Library/PrivateFrameworks/DataAccess.framework/Support/dataaccessd
+ 2917     1  2917      0 Thu Sep 17 17:48:04 2026     23:26:27 (dprivacyd)
+ 2918     1  2918      0 Thu Sep 17 17:48:04 2026     23:26:27 /System/Cryptexes/App/System/Library/CoreServices/SafariSupport.bundle/Contents/MacOS/SafariBookmarksSyncAgent
+ 2922  2818  2818      0 Fri Sep 18 00:15:22 2026     16:59:09 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+ 2934     1  2934      0 Thu Sep 17 17:48:06 2026     23:26:25 (fairplaydeviceid)
+ 2935     1  2935      0 Thu Sep 17 17:48:06 2026     23:26:25 /usr/libexec/appleaccountd
+ 2954     1  2954      0 Thu Sep 17 17:48:10 2026     23:26:21 /System/Library/CoreServices/Siri.app/Contents/XPCServices/SiriNCService.xpc/Contents/MacOS/SiriNCService
+ 2993   878   878      0 Thu Sep 17 17:48:19 2026     23:26:12 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+ 3005     1  3005      0 Fri Sep 18 00:15:33 2026     16:58:58 /System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTDecoderXPCService.xpc/Contents/MacOS/VTDecoderXPCService
+ 3006     1  3006      0 Fri Sep 18 00:15:33 2026     16:58:58 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 3014     1  3014      0 Thu Sep 17 17:48:22 2026     23:26:09 /System/Library/PrivateFrameworks/Synapse.framework/Support/contentlinkingd
+ 3082     1  3082      0 Thu Sep 17 17:48:30 2026     23:26:01 tmux
+ 3084   752   752      0 Fri Sep 18 14:36:54 2026     02:37:37 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 3440     1  3440      0 Thu Sep 17 17:49:09 2026     23:25:22 (remotemanagement)
+ 3446     1  3446      0 Thu Sep 17 17:49:09 2026     23:25:22 (SecuritySubscrib)
+ 3447     1  3447      0 Thu Sep 17 17:49:09 2026     23:25:22 (distnoted)
+ 3448     1  3448      0 Thu Sep 17 17:49:09 2026     23:25:22 (InteractiveLegac)
+ 3449     1  3449      0 Thu Sep 17 17:49:09 2026     23:25:22 (ScreenSharingSub)
+ 3457     1  3457      0 Thu Sep 17 17:49:09 2026     23:25:22 (LegacyProfilesSu)
+ 3458     1  3458      0 Thu Sep 17 17:49:09 2026     23:25:22 (PasscodeSettings)
+ 3460     1  3460      0 Thu Sep 17 17:49:10 2026     23:25:21 (AccountSubscribe)
+ 3461     1  3461      0 Thu Sep 17 17:49:10 2026     23:25:21 (SoftwareUpdateSu)
+ 3462     1  3462      0 Thu Sep 17 17:49:10 2026     23:25:21 (ManagementTestSu)
+ 3463     1  3463      0 Thu Sep 17 17:49:10 2026     23:25:21 (ManagedConfigura)
+ 3464     1  3464      0 Thu Sep 17 17:49:10 2026     23:25:21 (ASConfigurationS)
+ 3668     1  3668      0 Thu Sep 17 17:49:40 2026     23:24:51 /System/Library/PrivateFrameworks/SiriTTSService.framework/Versions/A/XPCServices/com.apple.SiriTTSService.TrialProxy.xpc/Contents/MacOS/com.apple.SiriTTSService.TrialProxy
+ 3721     1  3721      0 Thu Sep 17 17:49:54 2026     23:24:37 /usr/bin/ssh-agent
+ 3934   878   878      0 Thu Sep 17 17:50:45 2026     23:23:46 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+ 4008   878   878      0 Thu Sep 17 17:50:56 2026     23:23:35 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper.app/Contents/MacOS/Helium Helper
+ 4009     1  4009      0 Thu Sep 17 17:50:56 2026     23:23:35 /System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService
+ 4010     1  4010      0 Thu Sep 17 17:50:56 2026     23:23:35 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 4119     1  4119      0 Thu Sep 17 17:51:19 2026     23:23:12 /usr/libexec/mlhostd
+ 4120     1  4120      0 Thu Sep 17 17:51:19 2026     23:23:12 /usr/libexec/backgroundassets.user
+ 4121     1  4121      0 Thu Sep 17 17:51:19 2026     23:23:12 /System/Library/PrivateFrameworks/PhotoAnalysis.framework/Versions/A/Support/photoanalysisd
+ 4140     1  4140      0 Thu Sep 17 17:51:25 2026     23:23:06 cloudphotod
+ 4195     1  4195      0 Thu Sep 17 17:51:37 2026     23:22:54 (csnameddatad)
+ 4246   868   868      0 Thu Sep 17 17:51:49 2026     23:22:42 /Applications/Mattermost.app/Contents/Frameworks/Mattermost Helper.app/Contents/MacOS/Mattermost Helper
+ 4247     1  4247      0 Thu Sep 17 17:51:49 2026     23:22:42 /System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService
+ 4248     1  4248      0 Thu Sep 17 17:51:50 2026     23:22:41 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 4259     1  4259      0 Thu Sep 17 17:51:52 2026     23:22:39 /usr/libexec/betaenrollmentd
+ 4260     1  4260      0 Thu Sep 17 17:51:52 2026     23:22:39 (ASPCarryLog)
+ 4262     1  4262      0 Thu Sep 17 17:51:52 2026     23:22:39 (fbahelperd)
+ 4385   752   752      0 Thu Sep 17 17:52:21 2026     23:22:10 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 4397     1  4397      0 Thu Sep 17 17:52:23 2026     23:22:08 /System/Library/Frameworks/VideoToolbox.framework/Versions/A/XPCServices/VTEncoderXPCService.xpc/Contents/MacOS/VTEncoderXPCService
+ 4405     1  4405      0 Thu Sep 17 17:52:24 2026     23:22:07 /System/Cryptexes/App/usr/libexec/PasswordBreachAgent
+ 4464   752   752      0 Thu Sep 17 17:52:36 2026     23:21:55 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 4498   752   752      0 Thu Sep 17 17:52:44 2026     23:21:47 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 4527   752   752      0 Thu Sep 17 17:52:49 2026     23:21:42 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper
+ 4528   752   752      0 Thu Sep 17 17:52:49 2026     23:21:42 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper.app/Contents/MacOS/Chromium Helper
+ 4568     1  4568      0 Thu Sep 17 17:52:55 2026     23:21:36 /System/Library/PrivateFrameworks/SiriTTSService.framework/Versions/A/XPCServices/com.apple.SiriTTSService.TrialProxy.xpc/Contents/MacOS/com.apple.SiriTTSService.TrialProxy
+ 5218     1  5218      0 Thu Sep 17 17:55:06 2026     23:19:25 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+ 5219     1  5219      0 Thu Sep 17 17:55:06 2026     23:19:25 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+ 5220     1  5220      0 Thu Sep 17 17:55:06 2026     23:19:25 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+ 5222     1  5222      0 Thu Sep 17 17:55:06 2026     23:19:25 /System/Library/PrivateFrameworks/KerberosHelper/Helpers/DiskUnmountWatcher
+ 5623   880   880      0 Fri Sep 18 14:44:53 2026     02:29:38 /Applications/Nextcloud Talk.app/Contents/Frameworks/Nextcloud Talk Helper.app/Contents/MacOS/Nextcloud Talk Helper
+ 5624     1  5624      0 Fri Sep 18 14:44:53 2026     02:29:38 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+ 5880     1  5880      0 Thu Sep 17 17:56:40 2026     23:17:51 (powerdatad)
+ 6827     1  6827      0 Thu Sep 17 17:59:26 2026     23:15:05 (taskgated)
+ 7486     1  7486      0 Thu Sep 17 18:01:39 2026     23:12:52 (PerfPowerTelemet)
+ 7564   752   752      0 Fri Sep 18 14:49:01 2026     02:25:30 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 7566   752   752      0 Fri Sep 18 14:49:01 2026     02:25:30 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 7589     1  7589      0 Thu Sep 17 18:01:58 2026     23:12:33 /System/Library/Frameworks/ExtensionFoundation.framework/Versions/A/XPCServices/extensionkitservice.xpc/Contents/MacOS/extensionkitservice
+ 7591     1  7591      0 Thu Sep 17 18:01:58 2026     23:12:33 (ospredictiond)
+ 7592     1  7592      0 Thu Sep 17 18:01:58 2026     23:12:33 /usr/libexec/metrickitd
+ 7598     1  7598      0 Thu Sep 17 18:01:58 2026     23:12:33 (DPSubmissionServ)
+ 7845     1  7845      0 Thu Sep 17 18:02:47 2026     23:11:44 /System/Library/PrivateFrameworks/IntelligencePlatformCore.framework/Versions/A/intelligenceplatformd
+ 7908     1  7908      0 Thu Sep 17 18:03:00 2026     23:11:31 /System/Library/PrivateFrameworks/PowerLog.framework/Versions/A/XPCServices/PerfPowerTelemetryClientRegistrationService.xpc/Contents/MacOS/PerfPowerTelemetryClientRegistrationService
+ 8041     1  8006      0 Fri Sep 18 14:50:02 2026     02:24:29 /opt/homebrew/Cellar/node/26.0.0/bin/node
+ 8042     1  8006      0 Fri Sep 18 14:50:02 2026     02:24:29 /opt/homebrew/Cellar/node/26.0.0/bin/node
+ 8043     1  8006      0 Fri Sep 18 14:50:02 2026     02:24:29 /opt/homebrew/Cellar/node/26.0.0/bin/node
+ 8053     1  8006      0 Fri Sep 18 14:50:02 2026     02:24:29 /opt/homebrew/Cellar/node/26.0.0/bin/node
+ 8085     1  8085      0 Fri Sep 18 00:29:52 2026     16:44:39 /System/Cryptexes/App/usr/libexec/com.apple.Safari.History
+ 8088     1  8088      0 Fri Sep 18 00:29:52 2026     16:44:39 /System/Library/PrivateFrameworks/PassKitCore.framework/passd
+ 8089     1  8089      0 Fri Sep 18 00:29:52 2026     16:44:39 /System/Library/Frameworks/Translation.framework/translationd
+ 8112     1  8112      0 Fri Sep 18 00:29:53 2026     16:44:38 /usr/sbin/BTLEServerAgent
+ 8116     1  8116      0 Fri Sep 18 00:29:53 2026     16:44:38 /System/Cryptexes/App/usr/libexec/webpushd
+ 8119     1  8119      0 Fri Sep 18 00:29:53 2026     16:44:38 /System/Cryptexes/App/usr/libexec/SafariNotificationAgent
+ 8153     1  8153      0 Fri Sep 18 00:29:55 2026     16:44:36 /System/Library/PrivateFrameworks/SafariFoundation.framework/Versions/A/XPCServices/CredentialProviderExtensionHelper.xpc/Contents/MacOS/CredentialProviderExtensionHelper
+ 8157     1  8157      0 Fri Sep 18 00:29:58 2026     16:44:33 /System/Library/PrivateFrameworks/CoreSuggestions.framework/Versions/A/Support/reversetemplated
+ 8376     1  8376      0 Thu Sep 17 18:04:41 2026     23:09:50 /System/iOSSupport/System/Library/PrivateFrameworks/HomeEnergyDaemon.framework/Support/homeenergyd
+ 8377     1  8377      0 Fri Sep 18 14:50:46 2026     02:23:45 /opt/homebrew/Cellar/node/26.0.0/bin/node
+ 8378  8377  8377      0 Fri Sep 18 14:50:46 2026     02:23:45 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+ 8379     1  8379      0 Fri Sep 18 14:50:46 2026     02:23:45 /opt/homebrew/Cellar/node/26.0.0/bin/node
+ 9090     1  9090      0 Fri Sep 18 14:53:03 2026     02:21:28 (com.adobe.ARMDC.)
+ 9091     1  9091      0 Fri Sep 18 14:53:03 2026     02:21:28 (com.adobe.ARMDC.)
+ 9174     1  9174      0 Fri Sep 18 14:53:15 2026     02:21:16 (package_script_s)
+ 9343   752   752      0 Fri Sep 18 16:53:26 2026        21:05 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 9344   752   752      0 Fri Sep 18 16:53:27 2026        21:04 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 9490     1  9490      0 Fri Sep 18 11:40:52 2026     05:33:39 /System/Library/CoreServices/UserNotificationCenter.app/Contents/MacOS/UserNotificationCenter
+ 9582     1  9582      0 Thu Sep 17 18:07:49 2026     23:06:42 /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+ 9647   752   752      0 Fri Sep 18 00:35:54 2026     16:38:37 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 9683   752   752      0 Fri Sep 18 00:36:01 2026     16:38:30 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 9695   752   752      0 Fri Sep 18 00:36:04 2026     16:38:27 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 9812   752   752      0 Fri Sep 18 00:36:31 2026     16:38:00 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+ 9895   752   752      0 Fri Sep 18 00:36:53 2026     16:37:38 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+10070     1 10070      0 Fri Sep 18 00:37:37 2026     16:36:54 /System/Library/Frameworks/Metal.framework/Versions/A/XPCServices/MTLCompilerService.xpc/Contents/MacOS/MTLCompilerService
+10574   752   752      0 Fri Sep 18 11:43:59 2026     05:30:32 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+10593   752   752      0 Fri Sep 18 11:44:02 2026     05:30:29 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+11014     1 11014      0 Fri Sep 18 11:44:55 2026     05:29:36 /Applications/VSCodium.app/Contents/MacOS/VSCodium
+11029 11014 11014      0 Fri Sep 18 11:44:55 2026     05:29:36 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+11030 11014 11014      0 Fri Sep 18 11:44:55 2026     05:29:36 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+11031 11014 11014      0 Fri Sep 18 11:44:55 2026     05:29:36 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+11032 11014 11014      0 Fri Sep 18 11:44:56 2026     05:29:35 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+11033 11014 11014      0 Fri Sep 18 11:44:56 2026     05:29:35 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+11034 11014 11014      0 Fri Sep 18 11:44:56 2026     05:29:35 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Plugin).app/Contents/MacOS/VSCodium Helper (Plugin)
+11144     1 11144      0 Thu Sep 17 18:12:06 2026     23:02:25 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+11149   752   752      0 Fri Sep 18 16:58:51 2026        15:40 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+11262     1 11262      0 Thu Sep 17 18:12:32 2026     23:01:59 /System/Library/Frameworks/Metal.framework/Versions/A/XPCServices/MTLCompilerService.xpc/Contents/MacOS/MTLCompilerService
+11543 11014 11014      0 Fri Sep 18 11:44:59 2026     05:29:32 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+12373   878   878      0 Fri Sep 18 14:54:34 2026     02:19:57 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+12376   878   878      0 Fri Sep 18 14:54:34 2026     02:19:57 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+12428     1 12428      0 Fri Sep 18 05:46:50 2026     11:27:41 /System/Library/CoreServices/EscrowSecurityAlert.app/Contents/MacOS/EscrowSecurityAlert
+12475     1 12475      0 Fri Sep 18 05:47:02 2026     11:27:29 /System/Library/PrivateFrameworks/DeviceCheckInternal.framework/devicecheckd
+12476     1 12476      0 Fri Sep 18 05:47:02 2026     11:27:29 /System/Library/PrivateFrameworks/RemoteManagement.framework/RemoteManagementAgent
+12477     1 12477      0 Fri Sep 18 05:47:02 2026     11:27:29 /System/Library/PrivateFrameworks/BusinessChatService.framework/businessservicesd
+12478     1 12478      0 Fri Sep 18 05:47:02 2026     11:27:29 /System/Library/PrivateFrameworks/IMDPersistence.framework/IMAutomaticHistoryDeletionAgent.app/Contents/MacOS/IMAutomaticHistoryDeletionAgent
+12487     1 12487      0 Fri Sep 18 05:47:03 2026     11:27:28 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/SecuritySubscriber.xpc/Contents/MacOS/SecuritySubscriber
+12488     1 12488      0 Fri Sep 18 05:47:03 2026     11:27:28 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/InteractiveLegacyProfilesSubscriber.xpc/Contents/MacOS/InteractiveLegacyProfilesSubscriber
+12489     1 12489      0 Fri Sep 18 05:47:03 2026     11:27:28 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/ScreenSharingSubscriber.xpc/Contents/MacOS/ScreenSharingSubscriber
+12495     1 12495      0 Fri Sep 18 05:47:04 2026     11:27:27 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/LegacyProfilesSubscriber.xpc/Contents/MacOS/LegacyProfilesSubscriber
+12496     1 12496      0 Fri Sep 18 05:47:04 2026     11:27:27 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/PasscodeSettingsSubscriber.xpc/Contents/MacOS/PasscodeSettingsSubscriber
+12497     1 12497      0 Fri Sep 18 05:47:04 2026     11:27:27 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/AccountSubscriber.xpc/Contents/MacOS/AccountSubscriber
+12503     1 12503      0 Fri Sep 18 05:47:04 2026     11:27:27 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/SoftwareUpdateSubscriber.xpc/Contents/MacOS/SoftwareUpdateSubscriber
+12512     1 12512      0 Fri Sep 18 05:47:04 2026     11:27:27 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/ManagementTestSubscriber.xpc/Contents/MacOS/ManagementTestSubscriber
+12517     1 12517      0 Fri Sep 18 05:47:04 2026     11:27:27 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/ManagedConfigurationFilesSubscriber.xpc/Contents/MacOS/ManagedConfigurationFilesSubscriber
+12522     1 12522      0 Fri Sep 18 05:47:05 2026     11:27:26 /System/Library/PrivateFrameworks/RemoteManagement.framework/XPCServices/ASConfigurationSubscriber.xpc/Contents/MacOS/ASConfigurationSubscriber
+12535     1 12535      0 Fri Sep 18 05:47:08 2026     11:27:23 /usr/libexec/proactived
+12536     1 12536      0 Fri Sep 18 05:47:08 2026     11:27:23 (sysdiagnosed)
+12596     1 12596      0 Fri Sep 18 05:47:21 2026     11:27:10 /System/Library/PrivateFrameworks/AssistantServices.framework/Versions/A/XPCServices/media-indexer.xpc/Contents/MacOS/media-indexer
+12679     1 12679      0 Fri Sep 18 05:47:41 2026     11:26:50 (ANECompilerServi)
+13373     1 13373      0 Thu Sep 17 18:18:47 2026     22:55:44 (XProtect)
+13446     1 13446      0 Thu Sep 17 18:19:04 2026     22:55:27 /Library/Apple/System/Library/CoreServices/XProtect.app/Contents/MacOS/XProtect
+14082     1 14082      0 Fri Sep 18 17:04:41 2026        09:50 /Applications/VSCodium.app/Contents/MacOS/VSCodium
+14094 14082 14082      0 Fri Sep 18 17:04:42 2026        09:49 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+14095 14082 14082      0 Fri Sep 18 17:04:42 2026        09:49 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+14096 14082 14082      0 Fri Sep 18 17:04:42 2026        09:49 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+14097 14082 14082      0 Fri Sep 18 17:04:42 2026        09:49 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+14098 14082 14082      0 Fri Sep 18 17:04:42 2026        09:49 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+14099 14082 14082      0 Fri Sep 18 17:04:42 2026        09:49 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Plugin).app/Contents/MacOS/VSCodium Helper (Plugin)
+14198 14082 14082      0 Fri Sep 18 17:04:45 2026        09:46 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+14251 14099 14082      0 Fri Sep 18 17:04:49 2026        09:42 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Plugin).app/Contents/MacOS/VSCodium Helper (Plugin)
+15247     1 15247      0 Thu Sep 17 18:23:54 2026     22:50:37 /System/Cryptexes/App/usr/libexec/AuthenticationServicesAgent
+15248     1 15248      0 Thu Sep 17 18:23:55 2026     22:50:36 /usr/libexec/keychainsharingmessagingd
+15346     1 15346      0 Thu Sep 17 18:24:13 2026     22:50:18 (PerfPowerService)
+16372     1 16372      0 Fri Sep 18 15:03:39 2026     02:10:52 /System/Library/PrivateFrameworks/Lookup.framework/Versions/A/XPCServices/LookupViewService.xpc/Contents/MacOS/LookupViewService
+16435     1 16435      0 Fri Sep 18 15:03:50 2026     02:10:41 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/DictionaryServices.framework/Versions/A/XPCServices/com.apple.DictionaryServiceHelper.xpc/Contents/MacOS/com.apple.DictionaryServiceHelper
+17083     1 17083      0 Fri Sep 18 17:09:14 2026        05:17 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+17084     1 17084      0 Fri Sep 18 17:09:14 2026        05:17 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+17512     1 17512      0 Fri Sep 18 17:10:30 2026        04:01 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+17812     1 17812      0 Fri Sep 18 17:11:31 2026        03:00 /Applications/VSCodium.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt
+18031     1 18031      0 Fri Sep 18 17:12:14 2026        02:17 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18032     1 18032      0 Fri Sep 18 17:12:14 2026        02:17 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18319     1 18319      0 Fri Sep 18 11:51:46 2026     05:22:45 /System/Library/CoreServices/PowerChime.app/Contents/MacOS/PowerChime
+18529     1 18529      0 Fri Sep 18 17:13:39 2026        00:52 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18530     1 18530      0 Fri Sep 18 17:13:39 2026        00:52 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18544     1 18428      0 Fri Sep 18 11:52:17 2026     05:22:14 /Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin/java
+18659     1 18659      0 Fri Sep 18 17:14:02 2026        00:29 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18660     1 18660      0 Fri Sep 18 17:14:02 2026        00:29 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18756     1 18756      0 Fri Sep 18 17:14:19 2026        00:12 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18757     1 18757      0 Fri Sep 18 17:14:19 2026        00:12 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18758     1 18758      0 Fri Sep 18 17:14:19 2026        00:12 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18759     1 18759      0 Fri Sep 18 17:14:19 2026        00:12 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18760     1 18760      0 Fri Sep 18 17:14:19 2026        00:12 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+18815 14099 18815      0 Fri Sep 18 17:14:31 2026        00:00 /bin/zsh
+18816 18815 18815      0 Fri Sep 18 17:14:31 2026        00:00 ps
+20475     1 20345      0 Fri Sep 18 11:54:44 2026     05:19:47 /Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin/java
+21045     1 20813      0 Fri Sep 18 11:55:19 2026     05:19:12 /Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin/java
+21460     1 21332      0 Fri Sep 18 11:55:38 2026     05:18:53 /Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin/java
+22313     1 22313      0 Fri Sep 18 06:29:03 2026     10:45:28 (microstackshot)
+23799   752   752      0 Fri Sep 18 11:58:50 2026     05:15:41 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+23801   752   752      0 Fri Sep 18 11:58:50 2026     05:15:41 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+27520     1 27520      0 Thu Sep 17 19:09:20 2026     22:05:11 /usr/libexec/tipsd
+34488     1 34488      0 Fri Sep 18 01:16:18 2026     15:58:13 /System/Library/Frameworks/ApplicationServices.framework/Frameworks/PrintCore.framework/Versions/A/printtool
+34502     1 34502      0 Fri Sep 18 01:16:21 2026     15:58:10 /System/Library/Frameworks/PCSC.framework/Versions/A/XPCServices/com.apple.ctkpcscd.xpc/Contents/MacOS/com.apple.ctkpcscd
+34696     1 34696      0 Fri Sep 18 01:16:46 2026     15:57:45 /Applications/VSCodium.app/Contents/MacOS/VSCodium
+34708 34696 34696      0 Fri Sep 18 01:16:47 2026     15:57:44 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+34709 34696 34696      0 Fri Sep 18 01:16:47 2026     15:57:44 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+34710 34696 34696      0 Fri Sep 18 01:16:47 2026     15:57:44 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+34711 34696 34696      0 Fri Sep 18 01:16:47 2026     15:57:44 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+34712 34696 34696      0 Fri Sep 18 01:16:47 2026     15:57:44 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+34713 34696 34696      0 Fri Sep 18 01:16:47 2026     15:57:44 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Plugin).app/Contents/MacOS/VSCodium Helper (Plugin)
+34793 34696 34696      0 Fri Sep 18 01:16:51 2026     15:57:40 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+34980     1 34980      0 Fri Sep 18 12:18:58 2026     04:55:33 /usr/libexec/USBAgent
+36365   752   752      0 Fri Sep 18 12:21:15 2026     04:53:16 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+37200     1 37200      0 Fri Sep 18 01:18:39 2026     15:55:52 /usr/libexec/remindd
+44565     1 44565      0 Thu Sep 17 20:22:47 2026     20:51:44 /System/Library/PrivateFrameworks/ContactsDonation.framework/Versions/A/Support/contactsdonationagent
+46232     1 46232      0 Thu Sep 17 20:29:59 2026     20:44:32 /usr/libexec/proactiveeventtrackerd
+49651     1 49651      0 Fri Sep 18 01:42:33 2026     15:31:58 /usr/libexec/ciphermld
+49653     1 49653      0 Fri Sep 18 01:42:34 2026     15:31:57 /System/Library/PrivateFrameworks/IntelligencePlatformCore.framework/Versions/A/knowledgeconstructiond
+49674     1 49674      0 Fri Sep 18 01:42:35 2026     15:31:56 (ANEStorageMainta)
+49675     1 49675      0 Fri Sep 18 01:42:35 2026     15:31:56 (ANEStorageMainta)
+49676     1 49676      0 Fri Sep 18 01:42:35 2026     15:31:56 (distnoted)
+49681     1 49681      0 Fri Sep 18 01:42:36 2026     15:31:55 /System/Library/PrivateFrameworks/CloudPhotoServices.framework/Versions/A/XPCServices/com.apple.CloudPhotosConfiguration.xpc/Contents/MacOS/com.apple.CloudPhotosConfiguration
+49694     1 49694      0 Fri Sep 18 01:42:37 2026     15:31:54 (iconservicesagen)
+49698     1 49698      0 Fri Sep 18 01:42:37 2026     15:31:54 (MTLCompilerServi)
+49699     1 49699      0 Fri Sep 18 01:42:37 2026     15:31:54 (MTLCompilerServi)
+50033     1 50033      0 Thu Sep 17 20:46:32 2026     20:27:59 (logd_reporter)
+54678     1 54678      0 Fri Sep 18 15:21:24 2026     01:53:07 /opt/homebrew/Cellar/node/26.0.0/bin/node
+54679     1 54679      0 Fri Sep 18 15:21:24 2026     01:53:07 /opt/homebrew/Cellar/node/26.0.0/bin/node
+54680     1 54680      0 Fri Sep 18 15:21:24 2026     01:53:07 /opt/homebrew/Cellar/node/26.0.0/bin/node
+54682     1 54682      0 Fri Sep 18 15:21:24 2026     01:53:07 /opt/homebrew/Cellar/node/26.0.0/bin/node
+54702 54678 54678      0 Fri Sep 18 15:21:25 2026     01:53:06 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+54703 54679 54679      0 Fri Sep 18 15:21:25 2026     01:53:06 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+54704 54680 54680      0 Fri Sep 18 15:21:25 2026     01:53:06 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+54706 54682 54682      0 Fri Sep 18 15:21:25 2026     01:53:06 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+54717     1 54717      0 Fri Sep 18 15:21:25 2026     01:53:06 /opt/homebrew/Cellar/node/26.0.0/bin/node
+54722     1 54722      0 Fri Sep 18 15:21:25 2026     01:53:06 /opt/homebrew/Cellar/node/26.0.0/bin/node
+54730     1 54730      0 Fri Sep 18 15:21:25 2026     01:53:06 /opt/homebrew/Cellar/node/26.0.0/bin/node
+54955     1 54955      0 Fri Sep 18 15:21:31 2026     01:53:00 /opt/homebrew/Cellar/node/26.0.0/bin/node
+55009     1 55009      0 Fri Sep 18 15:21:36 2026     01:52:55 /opt/homebrew/Cellar/node/26.0.0/bin/node
+55599     1 55558      0 Fri Sep 18 15:22:23 2026     01:52:08 /opt/homebrew/Cellar/node/26.0.0/bin/node
+55600     1 55558      0 Fri Sep 18 15:22:23 2026     01:52:08 /opt/homebrew/Cellar/node/26.0.0/bin/node
+55601     1 55558      0 Fri Sep 18 15:22:23 2026     01:52:08 /opt/homebrew/Cellar/node/26.0.0/bin/node
+55602     1 55558      0 Fri Sep 18 15:22:23 2026     01:52:08 /opt/homebrew/Cellar/node/26.0.0/bin/node
+56589   878   878      0 Fri Sep 18 15:24:03 2026     01:50:28 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+56611   878   878      0 Fri Sep 18 15:24:05 2026     01:50:26 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+57731     1 57731      0 Thu Sep 17 21:19:39 2026     19:54:52 (tzd)
+57876     1 57876      0 Thu Sep 17 21:20:12 2026     19:54:19 (periodic-wrapper)
+57877     1 57877      0 Thu Sep 17 21:20:12 2026     19:54:19 (mmaintenanced)
+58735     1 58735      0 Thu Sep 17 21:23:53 2026     19:50:38 (griddatad)
+62051   752   752      0 Fri Sep 18 15:31:51 2026     01:42:40 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+62056   752   752      0 Fri Sep 18 15:31:52 2026     01:42:39 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+62057   752   752      0 Fri Sep 18 15:31:52 2026     01:42:39 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+62058   752   752      0 Fri Sep 18 15:31:54 2026     01:42:37 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+63277     1 63277      0 Thu Sep 17 21:43:42 2026     19:30:49 (VTDecoderXPCServ)
+64927   752   752      0 Thu Sep 17 21:49:50 2026     19:24:41 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+66601   752   752      0 Thu Sep 17 21:57:01 2026     19:17:30 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+66737   752   752      0 Thu Sep 17 21:57:35 2026     19:16:56 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+66738   752   752      0 Thu Sep 17 21:57:36 2026     19:16:55 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+67264   752   752      0 Fri Sep 18 02:50:34 2026     14:23:57 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+70315   752   752      0 Fri Sep 18 02:58:25 2026     14:16:06 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+71472  1243  1243      0 Fri Sep 18 10:00:56 2026     07:13:35 /Volumes/UserData/Users/chistyakov/Library/Application Support/zoom.us/CefPlugin/WebView/128.6.0.722_arm64/ZoomCefHelper (GPU).app/Contents/MacOS/ZoomCefHelper (GPU)
+71473  1243  1243      0 Fri Sep 18 10:00:56 2026     07:13:35 /Volumes/UserData/Users/chistyakov/Library/Application Support/zoom.us/CefPlugin/WebView/128.6.0.722_arm64/ZoomCefHelper.app/Contents/MacOS/ZoomCefHelper
+71483  1243  1243      0 Fri Sep 18 10:00:56 2026     07:13:35 /Volumes/UserData/Users/chistyakov/Library/Application Support/zoom.us/CefPlugin/WebView/128.6.0.722_arm64/ZoomCefHelper.app/Contents/MacOS/ZoomCefHelper
+71492  1243  1243      0 Fri Sep 18 10:00:57 2026     07:13:34 /Volumes/UserData/Users/chistyakov/Library/Application Support/zoom.us/CefPlugin/WebView/128.6.0.722_arm64/ZoomCefHelper (Renderer).app/Contents/MacOS/ZoomCefHelper (Renderer)
+71493  1243  1243      0 Fri Sep 18 10:00:57 2026     07:13:34 /Volumes/UserData/Users/chistyakov/Library/Application Support/zoom.us/CefPlugin/WebView/128.6.0.722_arm64/ZoomCefHelper (Renderer).app/Contents/MacOS/ZoomCefHelper (Renderer)
+71496     1 71496      0 Fri Sep 18 10:01:00 2026     07:13:31 (netbiosd)
+71598   878   878      0 Fri Sep 18 10:01:18 2026     07:13:13 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Plugin).app/Contents/MacOS/Helium Helper (Plugin)
+71613   878   878      0 Fri Sep 18 10:01:22 2026     07:13:09 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+71857     1 71857      0 Fri Sep 18 10:02:25 2026     07:12:06 /System/Library/CoreServices/OSDUIHelper.app/Contents/MacOS/OSDUIHelper
+73769     1 73769      0 Fri Sep 18 10:10:41 2026     07:03:50 /System/Library/PrivateFrameworks/Noticeboard.framework/Versions/A/Resources/nbagent.app/Contents/MacOS/nbagent
+73776     1 73776      0 Fri Sep 18 10:10:42 2026     07:03:49 (nbstated)
+74707     1 74707      0 Fri Sep 18 12:47:07 2026     04:27:24 /opt/homebrew/Cellar/node/26.0.0/bin/node
+74708     1 74708      0 Fri Sep 18 12:47:07 2026     04:27:24 /opt/homebrew/Cellar/node/26.0.0/bin/node
+74709     1 74709      0 Fri Sep 18 12:47:07 2026     04:27:24 /opt/homebrew/Cellar/node/26.0.0/bin/node
+74710     1 74710      0 Fri Sep 18 12:47:07 2026     04:27:24 /opt/homebrew/Cellar/node/26.0.0/bin/node
+74718 74707 74707      0 Fri Sep 18 12:47:07 2026     04:27:24 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+74722 74709 74709      0 Fri Sep 18 12:47:07 2026     04:27:24 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+74723 74708 74708      0 Fri Sep 18 12:47:07 2026     04:27:24 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+74724 74710 74710      0 Fri Sep 18 12:47:07 2026     04:27:24 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/node_modules/@esbuild/darwin-arm64/bin/esbuild
+74733     1 74733      0 Fri Sep 18 12:47:07 2026     04:27:24 /opt/homebrew/Cellar/node/26.0.0/bin/node
+74735     1 74735      0 Fri Sep 18 12:47:07 2026     04:27:24 /opt/homebrew/Cellar/node/26.0.0/bin/node
+74760     1 74760      0 Fri Sep 18 12:47:07 2026     04:27:24 /opt/homebrew/Cellar/node/26.0.0/bin/node
+74948     1 74948      0 Fri Sep 18 12:47:12 2026     04:27:19 /opt/homebrew/Cellar/node/26.0.0/bin/node
+74979     1 74979      0 Fri Sep 18 12:47:18 2026     04:27:13 /opt/homebrew/Cellar/node/26.0.0/bin/node
+75563   752   752      0 Fri Sep 18 03:10:46 2026     14:03:45 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+76045   752   752      0 Fri Sep 18 03:12:56 2026     14:01:35 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+77342   752   752      0 Fri Sep 18 03:18:35 2026     13:55:56 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+80778   579   579      0 Fri Sep 18 10:36:46 2026     06:37:45 (pritunl-openvpn)
+87657   752   752      0 Fri Sep 18 16:23:21 2026        51:10 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+88005     1 88005      0 Fri Sep 18 10:55:31 2026     06:19:00 /Applications/WireGuard.app/Contents/PlugIns/WireGuardNetworkExtension.appex/Contents/MacOS/WireGuardNetworkExtension
+88067     1 88067      0 Fri Sep 18 10:55:38 2026     06:18:53 /System/Library/CoreServices/Dock.app/Contents/XPCServices/DockHelper.xpc/Contents/MacOS/DockHelper
+88656     1 88656      0 Fri Sep 18 10:58:01 2026     06:16:30 (com.apple.ifdrea)
+88657     1 88657      0 Fri Sep 18 10:58:02 2026     06:16:29 (usbd)
+89744   752   752      0 Fri Sep 18 11:01:33 2026     06:12:58 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+92038     1 92038      0 Fri Sep 18 11:07:49 2026     06:06:42 /Applications/VSCodium.app/Contents/MacOS/VSCodium
+92067 92038 92038      0 Fri Sep 18 11:07:49 2026     06:06:42 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+92068 92038 92038      0 Fri Sep 18 11:07:49 2026     06:06:42 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+92070 92038 92038      0 Fri Sep 18 11:07:49 2026     06:06:42 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+92071 92038 92038      0 Fri Sep 18 11:07:50 2026     06:06:41 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+92072 92038 92038      0 Fri Sep 18 11:07:50 2026     06:06:41 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper
+92073 92038 92038      0 Fri Sep 18 11:07:50 2026     06:06:41 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Plugin).app/Contents/MacOS/VSCodium Helper (Plugin)
+92085 92038 92038      0 Fri Sep 18 11:07:51 2026     06:06:40 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper (Renderer).app/Contents/MacOS/VSCodium Helper (Renderer)
+92272   752   752      0 Fri Sep 18 11:08:03 2026     06:06:28 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+92584   752   752      0 Fri Sep 18 16:27:58 2026        46:33 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+92800     1 92800      0 Thu Sep 17 23:49:57 2026     17:24:34 /System/Library/Frameworks/AppKit.framework/Versions/C/XPCServices/com.apple.appkit.xpc.openAndSavePanelService.xpc/Contents/MacOS/com.apple.appkit.xpc.openAndSavePanelService
+92801     1 92801      0 Thu Sep 17 23:49:58 2026     17:24:33 /System/Library/Frameworks/QuickLookUI.framework/Versions/A/XPCServices/QuickLookUIService.xpc/Contents/MacOS/QuickLookUIService
+92802     1 92802      0 Thu Sep 17 23:49:58 2026     17:24:33 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+92808     1 92808      0 Thu Sep 17 23:49:58 2026     17:24:33 /System/Applications/Books.app/Contents/PlugIns/BooksThumbnail.appex/Contents/MacOS/BooksThumbnail
+92816     1 92816      0 Thu Sep 17 23:50:00 2026     17:24:31 /System/Library/Frameworks/CoreGraphics.framework/Versions/A/XPCServices/CGPDFService.xpc/Contents/MacOS/CGPDFService
+92955     1 92955      0 Thu Sep 17 23:50:37 2026     17:23:54 /System/Library/Frameworks/AppKit.framework/Versions/C/XPCServices/com.apple.appkit.xpc.openAndSavePanelService.xpc/Contents/MacOS/com.apple.appkit.xpc.openAndSavePanelService
+92964     1 92964      0 Thu Sep 17 23:50:37 2026     17:23:54 /System/Library/Frameworks/QuickLookUI.framework/Versions/A/XPCServices/QuickLookUIService.xpc/Contents/MacOS/QuickLookUIService
+93304   752   752      0 Thu Sep 17 23:52:03 2026     17:22:28 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+93312   752   752      0 Thu Sep 17 23:52:07 2026     17:22:24 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+93437   752   752      0 Fri Sep 18 16:28:25 2026        46:06 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+93453     1 93453      0 Fri Sep 18 04:28:11 2026     12:46:20 /System/Library/Frameworks/AudioToolbox.framework/XPCServices/com.apple.audio.SandboxHelper.xpc/Contents/MacOS/com.apple.audio.SandboxHelper
+93670   878   878      0 Fri Sep 18 14:03:00 2026     03:11:31 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+94348     1 94348      0 Thu Sep 17 23:55:12 2026     17:19:19 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+94349     1 94349      0 Thu Sep 17 23:55:12 2026     17:19:19 /System/Library/Frameworks/NetFS.framework/Versions/A/XPCServices/PlugInLibraryService.xpc/Contents/MacOS/PlugInLibraryService
+94766   752   752      0 Thu Sep 17 23:56:49 2026     17:17:42 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+95576   752   752      0 Fri Sep 18 11:14:53 2026     05:59:38 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+95841     1 95841      0 Fri Sep 18 00:00:00 2026     17:14:31 /System/Library/PrivateFrameworks/Categories.framework/Versions/A/XPCServices/CategoriesService.xpc/Contents/MacOS/CategoriesService
+96630   878   878      0 Fri Sep 18 14:15:11 2026     02:59:20 /Applications/Helium.app/Contents/Frameworks/Helium Framework.framework/Versions/140.0.7339.207/Helpers/Helium Helper (Renderer).app/Contents/MacOS/Helium Helper (Renderer)
+98418   752   752      0 Fri Sep 18 14:22:26 2026     02:52:05 /Applications/Chromium.app/Contents/Frameworks/Chromium Framework.framework/Versions/150.0.7871.46/Helpers/Chromium Helper (Renderer).app/Contents/MacOS/Chromium Helper (Renderer)
+99842     1 99842      0 Fri Sep 18 00:08:19 2026     17:06:12 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mdwrite
+ 1558   871  1558      0 Thu Sep 17 17:46:58 2026     23:27:33 (login)
+ 1560  1558  1558      0 Thu Sep 17 17:46:58 2026     23:27:33 zsh (figterm)
+ 1573  1560  1573      0 Thu Sep 17 17:46:58 2026     23:27:33 /bin/zsh
+ 3080  1573  3080      0 Thu Sep 17 17:48:29 2026     23:26:02 tmux
+ 3083  3082  3083      0 Thu Sep 17 17:48:30 2026     23:26:01 /bin/zsh
+ 9777  3082  9777      0 Thu Sep 17 18:08:26 2026     23:06:05 /bin/zsh
+ 2442  3082  2442      0 Fri Sep 18 00:14:45 2026     16:59:46 /bin/zsh
+80418  3082 80418      0 Fri Sep 18 10:35:51 2026     06:38:40 /bin/zsh
+91252  3082 91252      0 Fri Sep 18 11:06:56 2026     06:07:35 /bin/zsh
+ 7408  3082  7408      0 Fri Sep 18 00:27:34 2026     16:46:57 /bin/zsh
+ 8233  3082  8233      0 Fri Sep 18 00:30:16 2026     16:44:15 /bin/zsh
+ 8622  3082  8622      0 Fri Sep 18 00:31:45 2026     16:42:46 /bin/zsh
+10718  3082 10718      0 Fri Sep 18 11:44:29 2026     05:30:02 /bin/zsh
+10707  3082 10707      0 Fri Sep 18 16:57:38 2026        16:53 /bin/zsh
