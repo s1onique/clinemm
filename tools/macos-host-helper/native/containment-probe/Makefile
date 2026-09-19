@@ -34,7 +34,8 @@ PROBES = \
   41-oracle-broken-channel-witness \
   42-oracle-descendant-failure-witness \
   43-oracle-composition-witness \
-  44-oracle-miss-classifier-witness
+  44-oracle-miss-classifier-witness \
+  45-oracle-disposition-witness
 
 .PHONY: all clean
 all: $(PROBES)

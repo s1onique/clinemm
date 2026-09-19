@@ -3274,3 +3274,131 @@ review unless a new P0 appears. The agent stops here.
 - Round-5: HALT_ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED              RETRACTED (false-GREEN hazard)
 - Round-6: HALT_ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE      CLOSED (42 + 43 witnesses)
 - Round-7: HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED                  CLOSED (44-witness, production classifier)
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — ROUND-8 ORACLE_DISPOSITION SHARED (45-witness) — 2026-09-19
+
+**Reviewer halt:** `HALT_DISPOSITION_WITNESS_CONTRADICTS_CLAIM` (new P0).
+
+The reviewer observed that round-7's 44-witness printed
+"driver_disposition_for_run_above: exit=0 (PASS)" while the
+surrounding prose and the gate list claimed the same scenario proves
+"exit=5 (REFUTE / MISS)". The contradiction was durable: the printed
+evidence contradicted the load-bearing claim.
+
+The bug: the witness's disposition line was implemented as
+`(failures == 0) ? 0 : 5`. `failures` was the **test-failure count**,
+not `missed_count`. Since T5 correctly observed one miss, the test
+itself passed, `failures == 0`, and the witness reported exit 0.
+
+### Bounded correction
+
+Same pattern as round-7: extract the production disposition function
+into the shared header so the witness compiles against the SAME
+function the production driver uses. No algorithm fork.
+
+`miss-classifier.h` now exports:
+- `miss_classify()` (round-7, unchanged)
+- `oracle_disposition(missed_count, write_failures, reader_fault, evidence_fail)` (NEW)
+- `ORACLE_EXIT_{PASS, MISS, WRITE_FAIL, READER_FAULT, EVIDENCE_FAIL}` constants
+
+Production driver (30-) main() tail now calls `oracle_disposition()`
+in place of the inline if/return chain. Behavior byte-identical
+(smoke tests still PASS).
+
+### 44-witness fix (round-8 patch)
+
+Removed the broken `(failures == 0) ? 0 : 5` line that produced the
+contradiction. In its place: five new `oracle_disposition()` checks
+that feed real oracle counter sets into the production function and
+assert the documented exit code.
+
+### 45-oracle-disposition-witness (NEW, 114 lines, 6 cases)
+
+Composition test the reviewer asked for: exercises BOTH
+`miss_classify()` AND `oracle_disposition()` on the exact T5 scenario,
+then pins every branch.
+
+```
+composition: classifier -> disposition (T5 scenario)
+  miss_classify(...)        -> missed_count=1 PASS
+  missed[0]=(pid=102,start_us=1200) PASS
+  oracle_disposition(...)   -> exit=5 PASS (expected=5 / EXIT_MISS)
+
+precedence / branch pin (5 cases):
+  [PASS] all zeros      -> 0 (PASS)            expected=0 got=0
+  [PASS] missed=1       -> 5 (REFUTE / MISS)   expected=5 got=5
+  [PASS] write_fail=1   -> 6 (WRITE_FAIL)      expected=6 got=6
+  [PASS] reader_fault=1 -> 7 (READER_FAULT)    expected=7 got=7
+  [PASS] evidence_fail=1-> 8 (EVIDENCE_FAIL)   expected=8 got=8
+```
+
+The T5 scenario in 45-witness produces exactly the claimed sequence:
+- `miss_classify(GT={100,101,102}, pid_start={(100,1000),(101,1100)}, TRACKED={100,101})` → missed_count=1, missed[0]=(pid=102,start_us=1200)
+- `oracle_disposition(mc=1, wf=0, rf=0, ef=0)` → exit=5
+
+No more contradiction. The executable output now agrees with the
+gate list.
+
+### Verification (all PASS on agent substrate)
+
+```
+make clean && make: 0 warnings on -Wall -Wextra; 14 binaries built.
+40-witness (round-3 lossless reader):           PASS
+41-witness (round-4 broken channel):            PASS
+42-witness (round-6 descendant isolation):      PASS
+43-witness (round-6 composition):               PASS
+44-witness (round-7+8 classifier+disposition):  PASS (5+5 cases)
+45-witness (round-8 NEW composition+pin):       PASS (6/6)
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+git diff --check: clean.
+```
+
+### Files modified (round-8)
+
+- `tools/macos-host-helper/native/containment-probe/miss-classifier.h`
+  — added `oracle_disposition()` static inline and ORACLE_EXIT_*
+  constants (round-7's `miss_classify()` preserved unchanged).
+- `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+  — main() tail now calls `oracle_disposition()`.
+- `tools/macos-host-helper/native/containment-probe/44-oracle-miss-classifier-witness.c`
+  — replaced the broken `(failures == 0) ? 0 : 5` line with five new
+  `oracle_disposition()` checks feeding real oracle counters.
+- `tools/macos-host-helper/native/containment-probe/45-oracle-disposition-witness.c`
+  (NEW, 114 lines) — composition test + 5-branch precedence pin.
+- `tools/macos-host-helper/native/containment-probe/Makefile` — added 45.
+- `.gitignore` — ignore 45 binary.
+- Documentation: result.json (round8_fixes[4], disposition_witness_verdict,
+  halt_reason/summary/reviewer_ask updated); 71-ground-truth-design.md
+  (Round-8); 73-operator-handoff.md (Round-8); 90-gates.txt (Round-8
+  gates + verdict); epic-board.md (this section).
+
+### Verdict (round-8)
+
+```
+DISPOSITION_WITNESS_CONTRADICTS_CLAIM = CLOSED (round-8)
+ORACLE_DISPOSITION_ALGORITHM           = SHARED (miss-classifier.h)
+MISSED_TO_EXIT5_DISPOSITION            = PASS (45-witness composition)
+ORACLE_DISPOSITION_PRECEDENCE          = PASS (45-witness 5-branch pin)
+EVIDENCE_CONTRADICTION                 = CLOSED (45-witness T5 prints exit=5)
+
+AGENT_SUBSTRATE_HALT                   = PRESERVED (no probe execution attempted)
+KQUEUE_PRIMITIVE_VIABILITY             = NOT_YET_ADJUDICATED
+READY_FOR_OPERATOR_RUN                 = YES
+```
+
+**C1: GO → human Terminal matrix (RUN_3)** — per the reviewer's
+verdict block: after 45-witness PASS, no further pre-execution
+review unless a new P0 appears. Agent stops here.
+
+### 8-round evidence chain
+
+- Round-2: HALT_ORACLE_CAN_FALSE_GREEN                                 CLOSED
+- Round-3: HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS                     CLOSED (40-witness)
+- Round-4: HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE              CLOSED (41-witness)
+- Round-5: HALT_ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED               RETRACTED (false-GREEN hazard)
+- Round-6: HALT_ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE       CLOSED (42 + 43 witnesses)
+- Round-7: HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED                   CLOSED (44-witness, production classifier)
+- Round-8: HALT_DISPOSITION_WITNESS_CONTRADICTS_CLAIM                  CLOSED (45-witness, production disposition)

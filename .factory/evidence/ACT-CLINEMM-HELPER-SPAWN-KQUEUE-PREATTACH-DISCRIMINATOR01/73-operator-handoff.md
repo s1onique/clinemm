@@ -619,3 +619,92 @@ Any single failure => REFUTE. The strong-evidence path
 (`ground_truth_created_with_start_us_count > 0`) must be exercised;
 if the operator run reports ALL pid-only records, the result is
 INDETERMINATE.
+
+## Round-8 update: shared oracle_disposition() + 45-witness composition
+
+Reviewer flagged a new P0 in round-7: 44-witness's T5 printed
+"driver_disposition_for_run_above: exit=0 (PASS)" while the
+surrounding prose and gate list claimed "exit=5 (REFUTE / MISS)".
+The witness conflated the test-failure count with the missed_count:
+`(failures == 0) ? 0 : 5` printed exit 0 whenever T5 passed, even
+when T5 correctly observed one miss. The contradiction was durable
+(printed in the executable output) and contradicts the load-bearing
+claim.
+
+### What changed
+
+**Shared oracle_disposition().** The production disposition function
+that maps oracle counters to a driver exit code is now in
+`miss-classifier.h` as a `static inline`. Both the production
+driver (30-) and the witnesses (44-, 45-) compile against the SAME
+function. No algorithm fork.
+
+The disposition preserves the production driver's documented
+precedence exactly:
+
+```
+evidence_fail   -> 8  (root exited 86, kernel-mediated)
+reader_fault    -> 7  (carry overflow etc.)
+write_failures  -> 6  (gt_write_failures > 0)
+missed_count>0  -> 5  (REFUTE / MISS)
+none            -> 0  (PASS)
+```
+
+### Witnesses to verify before the matrix (round-8 — supersedes earlier lists)
+
+```bash
+./40-oracle-lossless-witness           # round-3, lossless reader
+./41-oracle-broken-channel-witness     # round-4, broken channel failsafe
+./42-oracle-descendant-failure-witness # round-6, descendant isolation
+./43-oracle-composition-witness        # round-6, multilevel GT delivery
+./44-oracle-miss-classifier-witness    # round-7+8, classifier + 5 disposition checks
+./45-oracle-disposition-witness        # round-8 NEW, composition + 5-branch pin
+```
+
+45-witness is the composition test the reviewer asked for. It feeds
+the production `miss_classify()` and `oracle_disposition()` in
+sequence on the exact T5 scenario and asserts:
+
+```
+miss_classify(...)       -> missed_count=1, missed[0]=(pid=102,start_us=1200)
+oracle_disposition(...)  -> exit=5
+```
+
+It also pins every branch:
+
+```
+[PASS] all zeros      -> 0 (PASS)            expected=0 got=0
+[PASS] missed=1       -> 5 (REFUTE / MISS)   expected=5 got=5
+[PASS] write_fail=1   -> 6 (WRITE_FAIL)      expected=6 got=6
+[PASS] reader_fault=1 -> 7 (READER_FAULT)    expected=7 got=7
+[PASS] evidence_fail=1-> 8 (EVIDENCE_FAIL)   expected=8 got=8
+```
+
+### Updated gate list (round-8)
+
+```
+SINGLE_PIPE_TOPOLOGY             = PASS  (round-6)
+LOSSLESS_READER                  = PASS  (round-3)
+ATOMIC_RECORD_WRITES             = PASS  (round-6; PIPE_BUF floor asserted)
+MULTILEVEL_GT_DELIVERY           = PASS  (round-6 43-witness)
+GT_MINUS_TRACKED_DISCRIMINATOR   = PASS  (round-7 44-witness)
+MISSED_TO_EXIT5_DISPOSITION      = PASS  (round-8 45-witness composition)
+ORACLE_DISPOSITION_PRECEDENCE    = PASS  (round-8 45-witness branch pin)
+EVIDENCE_CONTRADICTION           = CLOSED (round-8)
+READY_FOR_OPERATOR_RUN           = YES
+```
+
+### PASS criterion (round-8 — unchanged from round-4)
+
+```
+ground_truth_oracle_evidence_fail == 0
+ground_truth_write_failures == 0
+ground_truth_reader_fault == 0
+missed_ground_truth_count == 0
+driver_exit_code == 0
+```
+
+Any single failure => REFUTE. The strong-evidence path
+(`ground_truth_created_with_start_us_count > 0`) must be exercised;
+if the operator run reports ALL pid-only records, the result is
+INDETERMINATE.

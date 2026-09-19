@@ -63,6 +63,7 @@ tools/macos-host-helper/native/containment-probe/41-oracle-broken-channel-witnes
 tools/macos-host-helper/native/containment-probe/42-oracle-descendant-failure-witness
 tools/macos-host-helper/native/containment-probe/43-oracle-composition-witness
 tools/macos-host-helper/native/containment-probe/44-oracle-miss-classifier-witness
+tools/macos-host-helper/native/containment-probe/45-oracle-disposition-witness
 
 # E2E Tests
 test-results

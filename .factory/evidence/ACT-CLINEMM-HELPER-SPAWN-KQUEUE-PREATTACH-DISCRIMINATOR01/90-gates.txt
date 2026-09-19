@@ -167,13 +167,14 @@ Round-2 oracle gates (this round; reviewer-flagged issues closed):
                                                    pid-only, the result is INDETERMINATE,
                                                    not PASS
 
-Final gate verdict (this round; round-7):
+Final gate verdict (this round; round-8):
   HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
   GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED + FAIL-SAFE
   GROUND_TRUTH_TOPOLOGY                                   = SINGLE_PIPE (round-6; round-5 retracted)
   GROUND_TRUTH_EXPECTED_SET                               = GT (round-6; direct from same pipe)
   MULTITHREADED_FORK_HAZARD                               = REMOVED (round-6; no pthread in root)
   MISS_CLASSIFIER_ALGORITHM                               = SHARED (round-7; miss-classifier.h)
+  ORACLE_DISPOSITION_ALGORITHM                            = SHARED (round-8; oracle_disposition in miss-classifier.h)
   IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
   ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
   SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
@@ -186,6 +187,9 @@ Final gate verdict (this round; round-7):
   ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE        = CLOSED (round-6, single-pipe topology)
   ORACLE_REPORT_DROP_CANNOT_FALSE_GREEN                   = CLOSED (round-6, no report pipe)
   ORACLE_MISS_CLASSIFIER_NOT_EXERCISED                    = CLOSED (round-7, 44-witness)
+  DISPOSITION_WITNESS_CONTRADICTS_CLAIM                   = CLOSED (round-8, shared oracle_disposition + 45-witness)
+  MISSED_TO_EXIT5_DISPOSITION                             = CLOSED (round-8, 45-witness composition)
+  ORACLE_DISPOSITION_PRECEDENCE                           = CLOSED (round-8, 45-witness 5-branch pin)
   GT_SINGLE_TOPOLOGY_ALL_FIXTURES                         = CLOSED (round-6, 31- + 32- both write direct to GT)
   GT_MINUS_TRACKED_DISCRIMINATOR                          = CLOSED (round-7, 44-witness T5)
   READY_FOR_OPERATOR_RUN                                  = YES
@@ -684,3 +688,103 @@ Final gate verdict (this round; round-7; same as above):
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
+
+Round-8 oracle gates (this round; HALT_DISPOSITION_WITNESS_CONTRADICTS_CLAIM):
+
+  [PASS] SHARED_ORACLE_DISPOSITION           -- oracle_disposition() static
+                                                  inline added to
+                                                  miss-classifier.h.
+                                                  Precedence preserved:
+                                                  evidence>reader>write>miss.
+
+  [PASS] DRIVER_USES_SHARED_DISPOSITION      -- 30-helper-preattach-driver.c
+                                                  main() tail now calls
+                                                  oracle_disposition().
+                                                  Smoke tests still PASS
+                                                  (driver behavior
+                                                  unchanged).
+
+  [PASS] ROUND-7_44_CONTRADICTION_FIXED      -- 44-witness no longer
+                                                  prints a false exit=0
+                                                  when T5 correctly
+                                                  observes one miss.
+                                                  New disposition checks
+                                                  feed real oracle
+                                                  counters into the
+                                                  production function.
+
+  [PASS] T5_DISPOSITION_IS_5                 -- 45-witness T5:
+                                                  miss_classify(GT={100,
+                                                  101, 102}, pid_start=
+                                                  {(100,1000),(101,1100)},
+                                                  TRACKED={100,101})
+                                                  -> missed_count=1,
+                                                  missed[0]=(pid=102,
+                                                  start_us=1200)
+                                                  oracle_disposition(mc=1,
+                                                  wf=0, rf=0, ef=0)
+                                                  -> exit=5
+                                                  This is the exact
+                                                  claim the reviewer
+                                                  required.
+
+  [PASS] BRANCH_PIN_ALL_FIVE_EXITS           -- 45-witness pins all five
+                                                  driver exit codes:
+                                                  [PASS] all zeros      -> 0
+                                                  [PASS] missed=1       -> 5
+                                                  [PASS] write_fail=1   -> 6
+                                                  [PASS] reader_fault=1 -> 7
+                                                  [PASS] evidence_fail=1-> 8
+
+Round-8 verification artifacts:
+
+  Witness: 45-oracle-disposition-witness (NEW, 114 lines C, 6 cases)
+  Run: ./45-oracle-disposition-witness
+  Output (on agent substrate, 2026-09-19):
+    === ORACLE_DISPOSITION_WITNESS (round-8) ===
+
+      composition: classifier -> disposition (T5 scenario)
+        miss_classify(...)       -> missed_count=1 PASS
+        missed[0]=(pid=102,start_us=1200) PASS
+        oracle_disposition(...)  -> exit=5 PASS (expected=5 / EXIT_MISS)
+
+      precedence / branch pin (5 cases, production oracle_disposition):
+      [PASS] all zeros    -> 0 (PASS) expected=0 got=0
+      [PASS] missed=1     -> 5 (REFUTE / MISS) expected=5 got=5
+      [PASS] write_fail=1 -> 6 (WRITE_FAIL, beats MISS) expected=6 got=6
+      [PASS] reader_fault=1 -> 7 (READER_FAULT, beats MISS+WF) expected=7 got=7
+      [PASS] evidence_fail=1 -> 8 (EVIDENCE_FAIL, beats all) expected=8 got=8
+
+    === failures=0 VERDICT=PASS ===
+
+  Witness: 44-oracle-miss-classifier-witness (round-7 + round-8 fix)
+  Run: ./44-oracle-miss-classifier-witness
+  Output:
+    === ORACLE_MISS_CLASSIFIER_WITNESS (round-7) ===
+      T1 [weak pid-only match] expected_missed=0 got=0 PASS
+      T2 [weak pid-only miss] expected_missed=1 got=1 PASS
+      T3 [strong exact match] expected_missed=0 got=0 PASS
+      T4 [strong start_us known but no exact match] expected_missed=1 got=1 PASS
+      T5 [root->child->grandchild, kqueue misses grandchild] expected_missed=1 got=1 PASS
+
+      driver_disposition_for_oracle_counters:
+        [PASS] missed_count=1 -> exit 5 (REFUTE / MISS) expected=5 got=5
+        [PASS] all zeros         -> exit 0 (PASS) expected=0 got=0
+        [PASS] evidence_fail=1   -> exit 8 (EVIDENCE_FAIL, beats MISS) expected=8 got=8
+        [PASS] reader_fault=1    -> exit 7 (READER_FAULT, beats MISS+WF) expected=7 got=7
+        [PASS] write_failures=1  -> exit 6 (WRITE_FAIL, beats MISS) expected=6 got=6
+
+    === classifier_failures=0 disposition_failures=0 VERDICT=PASS ===
+
+  Smoke tests (round-8; all 4 fixtures via Python harness):
+    shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+    exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+    signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+    signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+
+  Build status:
+    make clean && make
+    -> 0 warnings on -Wall -Wextra
+    -> 14 binaries (added 45-oracle-disposition-witness)
+    -> 40-witness + 41-witness + 42-witness + 43-witness + 44-witness
+       + 45-witness all PASS

@@ -746,3 +746,119 @@ GT_MINUS_TRACKED_DISCRIMINATOR   = PASS  (round-7 44-witness, exercises producti
 ROUND-7_HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED = CLOSED
 READY_FOR_OPERATOR_RUN           = YES
 ```
+
+## Round-8 (HALT_DISPOSITION_WITNESS_CONTRADICTS_CLAIM) — closed by sharing the disposition function
+
+### Reviewer contradiction
+
+Round-7's 44-witness printed:
+
+```
+T5 ... expected_missed=1 got=1 PASS
+driver_disposition_for_run_above: exit=0 (PASS)
+```
+
+The test was passing, but the line directly above claimed `exit=0`
+(PASS) while the surrounding prose and the gate list claimed the
+same scenario proves `exit=5` (REFUTE / MISS). The witness's
+disposition line was implemented as:
+
+```c
+int driver_exit = (failures == 0) ? 0 : 5;
+```
+
+`failures` was the **test-failure count**, not `missed_count`. Since
+T5 correctly observed one miss, the test itself passed,
+`failures == 0`, and the witness reported exit 0. The contradiction
+was durable: the printed evidence contradicted the load-bearing
+claim.
+
+### Bounded correction: share the production disposition
+
+Same pattern as round-7: extract the production disposition function
+into the shared header so the witness compiles against the SAME
+function the production driver uses.
+
+`miss-classifier.h` now exports both:
+
+- `miss_classify()` — already there from round-7.
+- `oracle_disposition(missed_count, write_failures, reader_fault, evidence_fail)` — NEW.
+- `ORACLE_EXIT_{PASS, MISS, WRITE_FAIL, READER_FAULT, EVIDENCE_FAIL}` — explicit constants.
+
+The production driver's main() tail now calls `oracle_disposition()`.
+The witness compiles against the same function. No algorithm fork.
+
+The disposition preserves the precedence the production driver
+documents:
+
+```
+evidence_fail   -> 8  (root exited 86, kernel-mediated)
+reader_fault    -> 7  (carry overflow etc.)
+write_failures  -> 6  (gt_write_failures > 0)
+missed_count>0  -> 5  (REFUTE / MISS)
+none of the above -> 0 (PASS)
+```
+
+### 44-witness fix
+
+44-witness's broken disposition line was removed. In its place:
+five new `oracle_disposition()` checks that feed a fresh
+oracle-shaped counter set into the production function and assert
+the documented exit code. The T5 scenario's `missed_count` is fed
+into the same call.
+
+### 45-oracle-disposition-witness (NEW, 114 lines, 6 cases)
+
+The dedicated composition test the reviewer asked for. Exercises
+BOTH `miss_classify()` AND `oracle_disposition()` on the exact T5
+scenario, then pins every branch:
+
+```
+composition: classifier -> disposition (T5 scenario)
+  miss_classify(...)        -> missed_count=1 PASS
+  missed[0]=(pid=102,start_us=1200) PASS
+  oracle_disposition(...)   -> exit=5 PASS (expected=5 / EXIT_MISS)
+
+precedence / branch pin (5 cases):
+  [PASS] all zeros      -> 0 (PASS)            expected=0 got=0
+  [PASS] missed=1       -> 5 (REFUTE / MISS)   expected=5 got=5
+  [PASS] write_fail=1   -> 6 (WRITE_FAIL)      expected=6 got=6
+  [PASS] reader_fault=1 -> 7 (READER_FAULT)    expected=7 got=7
+  [PASS] evidence_fail=1-> 8 (EVIDENCE_FAIL)   expected=8 got=8
+```
+
+The T5 scenario in 45-witness produces:
+- `miss_classify(GT={100,101,102}, pid_start={(100,1000),(101,1100)}, TRACKED={100,101}) -> missed_count=1, missed[0]=(pid=102, start_us=1200)`
+- `oracle_disposition(missed_count=1, wf=0, rf=0, ef=0) -> 5`
+
+That is the exact sequence the production driver runs in main()
+after `compute_missed()` returns, and the witness now exercises it.
+
+### Driver changes (round-8, minimal)
+
+`30-helper-preattach-driver.c`:
+- Replaced the 4-line `if/return` chain in main() tail with a single
+  call to `oracle_disposition()`. Behavior is byte-identical
+  (smoke tests still PASS).
+- `#include "miss-classifier.h"` was already present from round-7;
+  no additional includes needed.
+
+`44-oracle-miss-classifier-witness.c`:
+- Removed the `(failures == 0) ? 0 : 5` line that produced the
+  contradiction.
+- Added 5 `oracle_disposition()` checks at the end that exercise
+  every branch with synthetic counter sets.
+
+### Updated gate list (round-8)
+
+```
+SINGLE_PIPE_TOPOLOGY             = PASS  (round-6)
+LOSSLESS_READER                  = PASS  (round-3)
+ATOMIC_RECORD_WRITES             = PASS  (round-6; PIPE_BUF floor asserted)
+MULTILEVEL_GT_DELIVERY           = PASS  (round-6 43-witness)
+GT_MINUS_TRACKED_DISCRIMINATOR   = PASS  (round-7 44-witness)
+MISSED_TO_EXIT5_DISPOSITION      = PASS  (round-8 45-witness composition)
+ORACLE_DISPOSITION_PRECEDENCE    = PASS  (round-8 45-witness branch pin)
+EVIDENCE_CONTRADICTION           = CLOSED (round-8)
+READY_FOR_OPERATOR_RUN           = YES
+```

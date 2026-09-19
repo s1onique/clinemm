@@ -809,8 +809,13 @@ int main(int argc, char **argv) {
   //   7 = ORACLE_READER_FAULT  (carry overflow etc.)
   //   8 = ORACLE_EVIDENCE_FAIL  (root exited 86 -- kernel-mediated oracle
   //                              write-side failure signal)
-  if (gt_oracle_evidence_fail) return 8;
-  if (gt_reader_fault) return 7;
-  if (gt_write_failures > 0) return 6;
-  return missed_count > 0 ? 5 : 0;
+  //
+  // Round-8: the disposition lives in miss-classifier.h so the
+  // 45-oracle-disposition-witness can compile against the SAME
+  // function. Do not fork the precedence here.
+  return oracle_disposition(
+      missed_count,
+      gt_write_failures,
+      gt_reader_fault,
+      gt_oracle_evidence_fail);
 }

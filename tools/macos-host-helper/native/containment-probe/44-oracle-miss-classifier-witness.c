@@ -182,13 +182,54 @@ int main(void) {
   }
 
   // Driver disposition semantics: missed_count > 0 -> exit 5 (REFUTE / MISS).
-  // This is the production disposition; assert it explicitly here.
-  int driver_exit = (failures == 0) ? 0 : 5;
-  printf("\n  driver_disposition_for_run_above: exit=%d (%s)\n",
-         driver_exit, driver_exit == 0 ? "PASS" : "REFUTE");
+  // Round-8 fix: this used to print `(failures == 0) ? 0 : 5`, which
+  // conflated the test failure count with the missed_count and printed
+  // exit=0 even when T5 correctly observed one miss. The reviewer
+  // flagged this as HALT_DISPOSITION_WITNESS_CONTRADICTS_CLAIM.
+  //
+  // The fix is the same as round-7's: call the production disposition
+  // function from miss-classifier.h. We feed it the ORACLE COUNTERS
+  // we actually care about: missed_count from the T5 classifier run,
+  // write_failures=0, reader_fault=0, evidence_fail=0. Production
+  // driver does exactly this in main() tail.
+  //
+  // Each case below feeds a fresh, oracle-shaped counter set into
+  // oracle_disposition() and asserts the documented exit code.
+  printf("\n  driver_disposition_for_oracle_counters:\n");
+  int disp_failures = 0;
+  struct { const char *name;
+           int mc, wf, rf, ef;
+           int expected; } disp_cases[] = {
+    // T5: GT minus tracked = 1, no other faults => exit 5
+    { "missed_count=1 -> exit 5 (REFUTE / MISS)",
+      1, 0, 0, 0, ORACLE_EXIT_MISS },
+    // 0 of everything -> exit 0 (PASS)
+    { "all zeros         -> exit 0 (PASS)",
+      0, 0, 0, 0, ORACLE_EXIT_PASS },
+    // Precedence check: evidence_fail beats miss
+    { "evidence_fail=1   -> exit 8 (EVIDENCE_FAIL, beats MISS)",
+      1, 0, 0, 1, ORACLE_EXIT_EVIDENCE_FAIL },
+    // reader_fault beats write_failures beats miss
+    { "reader_fault=1    -> exit 7 (READER_FAULT, beats MISS+WF)",
+      1, 1, 1, 0, ORACLE_EXIT_READER_FAULT },
+    { "write_failures=1  -> exit 6 (WRITE_FAIL, beats MISS)",
+      1, 1, 0, 0, ORACLE_EXIT_WRITE_FAIL },
+  };
+  for (size_t i = 0; i < sizeof(disp_cases)/sizeof(disp_cases[0]); i++) {
+    int got = oracle_disposition(disp_cases[i].mc, disp_cases[i].wf,
+                                  disp_cases[i].rf, disp_cases[i].ef);
+    int ok = (got == disp_cases[i].expected);
+    printf("    [%s] %s expected=%d got=%d %s\n",
+           ok ? "PASS" : "FAIL",
+           disp_cases[i].name,
+           disp_cases[i].expected, got,
+           ok ? "" : "  *** MISMATCH ***");
+    if (!ok) disp_failures++;
+  }
 
-  printf("=== failures=%d VERDICT=%s ===\n",
-         failures, failures == 0 ? "PASS" : "FAIL");
+  printf("\n=== classifier_failures=%d disposition_failures=%d VERDICT=%s ===\n",
+         failures, disp_failures,
+         (failures == 0 && disp_failures == 0) ? "PASS" : "FAIL");
 
-  return failures == 0 ? 0 : 1;
+  return (failures == 0 && disp_failures == 0) ? 0 : 1;
 }
