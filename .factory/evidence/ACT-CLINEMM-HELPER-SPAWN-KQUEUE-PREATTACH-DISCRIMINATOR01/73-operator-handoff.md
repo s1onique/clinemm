@@ -550,3 +550,72 @@ Any single failure ⇒ REFUTE. The strong-evidence path
 (`ground_truth_created_with_start_us_count > 0`) must be exercised;
 if the operator run reports ALL pid-only records, the result is
 INDETERMINATE.
+
+## Round-7 update: bounded executable witness for the MISS = GT - KQUEUE discriminator
+
+Reviewer observed that 43-witness verifies the ORACLE OUTPUT
+(MULTILEVEL_GT_RECORD_DELIVERY) but does not exercise the load-bearing
+discriminator MISSED = GT - KQUEUE_TRACKED. The actual classifier
+lived inline inside 30-helper-preattach-driver.c, so the witness
+couldn't compile against it without forking the algorithm.
+
+### What changed
+
+**Shared header.** The pure miss classifier (gt_record_t,
+pid_start_t, miss_classify() static inline) was extracted into
+`tools/macos-host-helper/native/containment-probe/miss-classifier.h`.
+Both the production driver (30-) and the new witness (44-) compile
+against this header. The driver's local `tracked_has()` and the loop
+body of `compute_missed()` were deleted; `compute_missed()` is now a
+6-line wrapper that calls `miss_classify()`.
+
+### Witnesses to verify before the matrix (round-7 — supersedes the round-6 list)
+
+```bash
+./40-oracle-lossless-witness           # round-3, lossless reader
+./41-oracle-broken-channel-witness     # round-4, broken channel failsafe
+./42-oracle-descendant-failure-witness # round-6, descendant isolation
+./43-oracle-composition-witness        # round-6, multilevel GT delivery
+./44-oracle-miss-classifier-witness    # round-7 NEW, MISS discriminator
+```
+
+44-witness exercises the actual production classifier (no algorithm
+fork) with 5 cases including the root→child→grandchild scenario
+the reviewer asked for: GT has all three, KQUEUE deliberately omits
+the grandchild, expected missed_count=1 with pid=102 and
+start_us=1200. Driver disposition = exit 5 (REFUTE / MISS).
+
+### Smoke test status (round-7, agent substrate)
+
+```
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+```
+
+### Updated gate list (round-7)
+
+```
+SINGLE_PIPE_TOPOLOGY             = PASS  (round-6)
+LOSSLESS_READER                  = PASS  (round-3)
+ATOMIC_RECORD_WRITES             = PASS  (round-6; PIPE_BUF floor asserted at startup)
+MULTILEVEL_GT_DELIVERY           = PASS  (round-6 43-witness)
+GT_MINUS_TRACKED_DISCRIMINATOR   = PASS  (round-7 44-witness)
+READY_FOR_OPERATOR_RUN           = YES
+```
+
+### PASS criterion (round-7 — same as round-4)
+
+```
+ground_truth_oracle_evidence_fail == 0
+ground_truth_write_failures == 0
+ground_truth_reader_fault == 0
+missed_ground_truth_count == 0
+driver_exit_code == 0
+```
+
+Any single failure => REFUTE. The strong-evidence path
+(`ground_truth_created_with_start_us_count > 0`) must be exercised;
+if the operator run reports ALL pid-only records, the result is
+INDETERMINATE.

@@ -684,3 +684,65 @@ DESCENDANT_FAILURE_FALSE_GREEN    = CLOSED (round-6 single-pipe topology)
 READY_FOR_OPERATOR_RUN            = YES
 NEXT                              = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
 ```
+
+## Round-7 (HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED) — closed by sharing the production classifier with a new witness
+
+### Reviewer gap
+
+The reviewer observed that 43-witness (round-6) verifies MULTILEVEL_GT_RECORD_DELIVERY but does not exercise the load-bearing discriminator `MISSED = GT - KQUEUE_TRACKED`. The actual miss-classifier algorithm lived inline inside `30-helper-preattach-driver.c` (the `tracked_has` + `compute_missed` pair), so the witness couldn't compile against it without forking the algorithm — which would defeat the test.
+
+### Bounded correction: extract the pure classifier into a header
+
+The classifier is allocation-free and side-effect-free (reads only from caller-owned arrays). It is now in `tools/macos-host-helper/native/containment-probe/miss-classifier.h` as a `static inline` function `miss_classify()`. Both the production driver (30-) and the new witness (44-) compile against this header. **No algorithm fork.**
+
+The shared classifier preserves the two-layer evidence model:
+
+- **Strong path**: when `r->start_us != 0`, require an EXACT `(pid, start_us)` match in `pid_start[]`. If start_us is known but no exact match exists, the record is a MISS (fail closed). This is the load-bearing branch: pid reuse is a real hazard, so a pid-only fallback would be unsafe.
+- **Weak path**: when `r->start_us == 0` (the writer could not enrich from `kinfo_proc`), fall back to a pid-only lookup in `tracked[]`. This is explicitly weaker and is counted separately.
+
+### New witness: 44-oracle-miss-classifier-witness.c (194 lines, 5 cases)
+
+| Case | Setup | Expected | Result |
+|------|-------|----------|--------|
+| T1 | weak path pid-only match (GT={200,0}, TRACKED={200}) | missed=0 | PASS |
+| T2 | weak path pid-only miss (GT={201,0}, TRACKED={200}) | missed=1, pid=201 | PASS |
+| T3 | strong path exact match (GT={300,5000}, pid_start={(300,5000)}) | missed=0 | PASS |
+| T4 | strong path start_us known but NO exact match (GT={301,5000}, pid_start={(300,5000)}, TRACKED={301}) | missed=1, pid=301, start_us=5000 (fail closed) | PASS |
+| T5 | root→child→grandchild, kqueue deliberately omits grandchild (GT={100,101,102}, pid_start={(100,1000),(101,1100)}, TRACKED={100,101}) | missed=1, pid=102, start_us=1200 | PASS |
+
+T5 is exactly the scenario the reviewer asked for: a synthetic root→child→grandchild tree where the kqueue is told to miss the grandchild, and the witness asserts that `missed_count == 1`, `missed[0].pid == 102`, `missed[0].start_us == 1200`, and the driver disposition is exit 5 (REFUTE / MISS).
+
+### Documentary correction (PIPE_BUF)
+
+Round-6 documentation pinned `PIPE_BUF=65536` for macOS. That's true on current macOS but it isn't a portable invariant. The portable load-bearing fact is just `record_size <= PIPE_BUF`, and POSIX guarantees atomicity at that boundary. The 44-witness now asserts this at startup:
+
+```c
+enum {
+  C_RECORD_MAX_BYTES  = 64,    // generous over the 46-byte worst case
+  KNOWN_MIN_PIPE_BUF  = 4096   // any POSIX-conforming system
+};
+if (C_RECORD_MAX_BYTES > KNOWN_MIN_PIPE_BUF) { ... exit(2); }
+```
+
+The C-side CREATE template `"CREATE pid=%d ppid=%d pgid=%d start_us=%llu\n"` is at most ~46 bytes even with full-width pid (99999) and full u64 start_us. The bash/node/python wrappers emit ~38 bytes pid-only. Both are far below any platform's PIPE_BUF.
+
+### Driver changes (round-7, minimal)
+
+`30-helper-preattach-driver.c`:
+- Removed the local `typedef struct { ... } gt_record_t` and `pid_start_t` (now in the shared header).
+- Removed the local `tracked_has()` and the loop body of `compute_missed()`. `compute_missed()` is now a 6-line wrapper that calls `miss_classify()` with the production arrays.
+- `#include "miss-classifier.h"` adds the shared inline.
+
+No behavior change. The driver's JSON output and exit-code table are byte-identical to round-6. Verified by smoke tests: all 4 fixtures (shell-A=4, exec-fork=3, signal-triggered-fork/control=1, signal-triggered-fork/SIGTERM=2) PASS.
+
+### Updated gate list (round-7)
+
+```
+SINGLE_PIPE_TOPOLOGY             = PASS  (round-6)
+LOSSLESS_READER                  = PASS  (round-3)
+ATOMIC_RECORD_WRITES             = PASS  (round-6; PIPE_BUF floor asserted at startup)
+MULTILEVEL_GT_DELIVERY           = PASS  (round-6 43-witness)
+GT_MINUS_TRACKED_DISCRIMINATOR   = PASS  (round-7 44-witness, exercises production classifier)
+ROUND-7_HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED = CLOSED
+READY_FOR_OPERATOR_RUN           = YES
+```

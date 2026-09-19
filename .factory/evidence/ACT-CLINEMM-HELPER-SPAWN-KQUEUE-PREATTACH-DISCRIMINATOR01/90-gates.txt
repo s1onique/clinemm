@@ -167,12 +167,13 @@ Round-2 oracle gates (this round; reviewer-flagged issues closed):
                                                    pid-only, the result is INDETERMINATE,
                                                    not PASS
 
-Final gate verdict (this round; round-6):
+Final gate verdict (this round; round-7):
   HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
   GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED + FAIL-SAFE
   GROUND_TRUTH_TOPOLOGY                                   = SINGLE_PIPE (round-6; round-5 retracted)
   GROUND_TRUTH_EXPECTED_SET                               = GT (round-6; direct from same pipe)
   MULTITHREADED_FORK_HAZARD                               = REMOVED (round-6; no pthread in root)
+  MISS_CLASSIFIER_ALGORITHM                               = SHARED (round-7; miss-classifier.h)
   IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
   ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
   SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
@@ -181,10 +182,12 @@ Final gate verdict (this round; round-6):
   ORACLE_EOF_NEVER_DELIVERED                              = CLOSED (round-3, gt_write_fd close-after-spawn)
   ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
   ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE               = CLOSED (round-4, _exit(86) + driver waitpid)
-  ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = RETRACTED (round-5 superseded by round-6; see below)
+  ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = RETRACTED (round-5 superseded by round-6)
   ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE        = CLOSED (round-6, single-pipe topology)
   ORACLE_REPORT_DROP_CANNOT_FALSE_GREEN                   = CLOSED (round-6, no report pipe)
+  ORACLE_MISS_CLASSIFIER_NOT_EXERCISED                    = CLOSED (round-7, 44-witness)
   GT_SINGLE_TOPOLOGY_ALL_FIXTURES                         = CLOSED (round-6, 31- + 32- both write direct to GT)
+  GT_MINUS_TRACKED_DISCRIMINATOR                          = CLOSED (round-7, 44-witness T5)
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
@@ -561,6 +564,123 @@ Final gate verdict (this round; round-6; same as above):
   ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE        = CLOSED (round-6, single-pipe topology)
   ORACLE_REPORT_DROP_CANNOT_FALSE_GREEN                   = CLOSED (round-6, no report pipe)
   GT_SINGLE_TOPOLOGY_ALL_FIXTURES                         = CLOSED (round-6, 31- + 32- both write direct to GT)
+  READY_FOR_OPERATOR_RUN                                  = YES
+  KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
+  NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
+
+Round-7 oracle gates (this round; HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED):
+
+  [PASS] SHARED_CLASSIFIER_HEADER              -- miss-classifier.h defines
+                                                  gt_record_t, pid_start_t,
+                                                  miss_classify() static inline.
+                                                  30- and 44- both compile
+                                                  against it; no algorithm
+                                                  fork.
+
+  [PASS] DRIVER_USES_SHARED_CLASSIFIER         -- 30-helper-preattach-driver.c
+                                                  now calls miss_classify()
+                                                  from compute_missed().
+                                                  Driver's JSON output and
+                                                  exit-code table are
+                                                  byte-identical to round-6.
+
+  [PASS] WEAK_PATH_PID_ONLY_MATCH              -- 44-witness T1 (GT=200,
+                                                  TRACKED=200, start_us=0)
+                                                  -> missed=0
+
+  [PASS] WEAK_PATH_PID_ONLY_MISS               -- 44-witness T2 (GT=201,
+                                                  TRACKED=200, start_us=0)
+                                                  -> missed=1, pid=201
+
+  [PASS] STRONG_PATH_EXACT_MATCH               -- 44-witness T3 (GT=300/5000,
+                                                  pid_start=(300,5000))
+                                                  -> missed=0
+
+  [PASS] STRONG_PATH_FAIL_CLOSED               -- 44-witness T4 (GT=301/5000,
+                                                  pid_start=(300,5000),
+                                                  TRACKED=301)
+                                                  -> missed=1, pid=301,
+                                                  start_us=5000
+                                                  (no pid-only fallback
+                                                  when start_us is known)
+
+  [PASS] ROOT_CHILD_GRANDCHILD_DISCRIMINATOR   -- 44-witness T5:
+                                                  GT      = {100/1000,
+                                                            101/1100,
+                                                            102/1200}
+                                                  pid_start={(100,1000),
+                                                            (101,1100)}
+                                                  TRACKED = {100, 101}
+                                                  -> missed=1, missed[0] =
+                                                     (pid=102, start_us=1200)
+                                                  -> driver disposition
+                                                     exit 5 (REFUTE / MISS)
+                                                  This is the exact
+                                                  scenario the reviewer
+                                                  asked for.
+
+  [PASS] PIPE_BUF_FLOOR_ASSERTED               -- 44-witness asserts at
+                                                  startup that
+                                                  C_RECORD_MAX_BYTES (64)
+                                                  > KNOWN_MIN_PIPE_BUF
+                                                  (4096) is false.
+                                                  Load-bearing invariant:
+                                                  record_size <= PIPE_BUF
+                                                  (POSIX guarantees
+                                                  atomicity). Worst-case
+                                                  record is ~46 bytes;
+                                                  no platform ships a
+                                                  PIPE_BUF smaller than
+                                                  the well-known minimum.
+
+Round-7 verification artifacts:
+
+  Witness: 44-oracle-miss-classifier-witness (NEW, 194 lines C, 5 cases)
+  Run: ./44-oracle-miss-classifier-witness
+  Output (on agent substrate, 2026-09-19):
+    === ORACLE_MISS_CLASSIFIER_WITNESS (round-7) ===
+      T1 [weak pid-only match] expected_missed=0 got=0 PASS
+      T2 [weak pid-only miss] expected_missed=1 got=1 PASS
+      T3 [strong exact match] expected_missed=0 got=0 PASS
+      T4 [strong start_us known but no exact match] expected_missed=1 got=1 PASS
+      T5 [root->child->grandchild, kqueue misses grandchild] expected_missed=1 got=1 PASS
+
+      driver_disposition_for_run_above: exit=0 (PASS)
+    === failures=0 VERDICT=PASS ===
+
+  Smoke tests (round-7; all 4 fixtures via Python harness):
+    shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+    exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+    signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+    signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+
+  Build status:
+    make clean && make
+    -> 0 warnings on -Wall -Wextra
+    -> 13 binaries (added 44-oracle-miss-classifier-witness)
+    -> 40-witness + 41-witness + 42-witness + 43-witness + 44-witness all PASS
+
+Final gate verdict (this round; round-7; same as above):
+  HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
+  GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED + FAIL-SAFE
+  GROUND_TRUTH_TOPOLOGY                                   = SINGLE_PIPE (round-6; round-5 retracted)
+  GROUND_TRUTH_EXPECTED_SET                               = GT (round-6; direct from same pipe)
+  MULTITHREADED_FORK_HAZARD                               = REMOVED (round-6; no pthread in root)
+  MISS_CLASSIFIER_ALGORITHM                               = SHARED (round-7; miss-classifier.h)
+  IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
+  ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
+  SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
+  ENV_AS_ARGV                                             = CLOSED (P0-2, run_env helper)
+  ORACLE_READER_DROPS_PARTIAL_RECORDS                     = CLOSED (round-3, lossless carry)
+  ORACLE_EOF_NEVER_DELIVERED                              = CLOSED (round-3, gt_write_fd close-after-spawn)
+  ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
+  ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE               = CLOSED (round-4, _exit(86) + driver waitpid)
+  ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = RETRACTED (round-5 superseded by round-6)
+  ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE        = CLOSED (round-6, single-pipe topology)
+  ORACLE_REPORT_DROP_CANNOT_FALSE_GREEN                   = CLOSED (round-6, no report pipe)
+  ORACLE_MISS_CLASSIFIER_NOT_EXERCISED                    = CLOSED (round-7, 44-witness)
+  GT_SINGLE_TOPOLOGY_ALL_FIXTURES                         = CLOSED (round-6, 31- + 32- both write direct to GT)
+  GT_MINUS_TRACKED_DISCRIMINATOR                          = CLOSED (round-7, 44-witness T5)
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL

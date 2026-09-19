@@ -130,23 +130,17 @@ static int watch_esrch_total = 0;
 static int watch_failed_other_total = 0;
 
 // ---------- Ground-truth oracle (independent channel) ----------
-typedef struct {
-  pid_t pid;
-  pid_t ppid;
-  pid_t pgid;
-  uint64_t start_us;  // 0 if the writer could not read kinfo_proc
-} gt_record_t;
+// The classifier algorithm (tracked_has + compute_missed) lives in
+// miss-classifier.h so 44-oracle-miss-classifier-witness can compile
+// against the SAME production code path. Do not fork the algorithm
+// here; both files use miss_classify().
+#include "miss-classifier.h"
 
-#define MAX_GT 4096
+#define MAX_GT MISS_MAX_GT
 static gt_record_t gt_created[MAX_GT];
 static int ngt_created = 0;
 
-// pid -> start_us mapping (populated when we discover start_us for a tracked pid).
-typedef struct {
-  pid_t pid;
-  uint64_t start_us;
-} pid_start_t;
-#define MAX_PID_START 4096
+#define MAX_PID_START MISS_MAX_PID_START
 static pid_start_t pid_start[MAX_PID_START];
 static int npid_start = 0;
 
@@ -541,37 +535,16 @@ static void drain_ground_truth(int timeout_ms) {
 // child=1789807011033633 -- difference ~700ms matches the gap
 // between the parent arriving in kqueue and the child being forked).
 // So requiring exact (pid,start_us) match is the right rule.
-static int tracked_has(gt_record_t *r) {
-  // Strong path: require exact (pid, start_us) match.
-  if (r->start_us != 0) {
-    for (int i = 0; i < npid_start; i++) {
-      if (pid_start[i].pid != 0 &&
-          pid_start[i].pid == r->pid &&
-          pid_start[i].start_us == r->start_us) {
-        return 1;
-      }
-    }
-    // start_us is known but no exact match -- this is a miss, not a
-    // pid-only fallback. Fail closed.
-    return 0;
-  }
-  // Weak path: pid-only when start_us is unknown. This is explicitly
-  // weaker evidence and is counted separately.
-  if (r->pid > 0 && already_tracked(r->pid)) return 1;
-  return 0;
-}
-
 // Compute MISS = GROUND_TRUTH_CREATED - KQUEUE_TRACKED.
-// Returns count; fills `missed_out` (capped at max_missed).
+// Thin wrapper over the production classifier in miss-classifier.h.
+// The witness (44-) compiles against the SAME algorithm; do not
+// fork this logic.
 static int compute_missed(gt_record_t *missed_out, int max_missed) {
-  int n = 0;
-  for (int i = 0; i < ngt_created; i++) {
-    if (!tracked_has(&gt_created[i])) {
-      if (n < max_missed) missed_out[n] = gt_created[i];
-      n++;
-    }
-  }
-  return n;
+  return miss_classify(
+      gt_created, ngt_created,
+      pid_start,  npid_start,
+      tracked,    ntracked,
+      missed_out, max_missed);
 }
 
 int main(int argc, char **argv) {

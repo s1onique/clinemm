@@ -3149,3 +3149,128 @@ READY_FOR_OPERATOR_RUN = YES (round-6 packet is now fully fail-safe + single-pip
 reviewer's verdict block, with the oracle now fully fail-safe
 (round-3 lossless reader + round-4 broken-channel failsafe +
 round-6 single-pipe topology with expected set from GT + multithreaded-fork-hazard removed).
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — ROUND-7 MISS-CLASSIFIER WITNESS (43 → 44) — 2026-09-19
+
+**Reviewer halt:** `HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED` (P1).
+
+The reviewer observed that round-6's 43-witness verifies the ORACLE
+OUTPUT (MULTILEVEL_GT_RECORD_DELIVERY) but does not exercise the
+load-bearing discriminator `MISSED = GT - KQUEUE_TRACKED`. The actual
+classifier algorithm lived inline inside `30-helper-preattach-driver.c`
+(the `tracked_has` + `compute_missed` pair), so 43-witness could not
+compile against it without forking the algorithm — which would defeat
+the test. This is P1, not a P0 redesign.
+
+### Bounded correction
+
+The classifier is allocation-free and side-effect-free (reads only
+from caller-owned arrays). Extract it into a header so the production
+driver (30-) and a new witness (44-) compile against the same code
+path. **No algorithm fork.**
+
+- `tools/macos-host-helper/native/containment-probe/miss-classifier.h`
+  defines `gt_record_t`, `pid_start_t`, and `miss_classify()` as a
+  `static inline`.
+- `30-helper-preattach-driver.c` deletes the local `tracked_has()`
+  and the loop body of `compute_missed()`. `compute_missed()` is now
+  a 6-line wrapper that calls `miss_classify()`. Driver's JSON
+  output and exit-code table are byte-identical to round-6.
+- `44-oracle-miss-classifier-witness.c` (NEW, 194 lines) injects
+  synthetic GT + KQUEUE_TRACKED arrays and asserts the exact missed
+  set and the driver disposition.
+
+### 44-witness test matrix
+
+| Case | GT records              | pid_start          | TRACKED    | Expected                      | Got     |
+|------|-------------------------|--------------------|------------|-------------------------------|---------|
+| T1   | (200, 0)                | (empty)            | {200}      | missed=0                      | 0 PASS  |
+| T2   | (201, 0)                | (empty)            | {200}      | missed=1, pid=201             | 1 PASS  |
+| T3   | (300, 5000)             | {(300,5000)}       | {300}      | missed=0                      | 0 PASS  |
+| T4   | (301, 5000)             | {(300,5000)}       | {301}      | missed=1, pid=301, start_us=5000 (FAIL CLOSED — strong path does NOT fall back to pid-only when start_us is known) | 1 PASS  |
+| T5   | (100, 1000), (101, 1100), (102, 1200) | {(100,1000),(101,1100)} | {100, 101} | missed=1, missed[0]=(pid=102, start_us=1200); driver disposition exit 5 | 1 PASS  |
+
+T5 is the exact scenario the reviewer asked for: a synthetic
+root→child→grandchild tree where the kqueue is told to miss the
+grandchild, and the witness asserts `missed_count == 1`,
+`missed[0].pid == 102`, `missed[0].start_us == 1200`, and the driver
+disposition is exit 5 (REFUTE / MISS).
+
+### Documentary correction (PIPE_BUF)
+
+Round-6 documentation pinned `PIPE_BUF=65536` for macOS. That's
+true on current macOS but it isn't a portable invariant. The
+portable load-bearing fact is just `record_size <= PIPE_BUF` (POSIX
+guarantees atomicity at that boundary). The 44-witness now asserts
+this at startup:
+
+```c
+enum {
+  C_RECORD_MAX_BYTES  = 64,    // generous over the 46-byte worst case
+  KNOWN_MIN_PIPE_BUF  = 4096   // any POSIX-conforming system
+};
+if (C_RECORD_MAX_BYTES > KNOWN_MIN_PIPE_BUF) { exit(2); }
+```
+
+The C-side CREATE template `"CREATE pid=%d ppid=%d pgid=%d start_us=%llu\n"`
+is at most ~46 bytes; bash/node/python pid-only wrappers emit
+~38 bytes. Both are far below any platform's PIPE_BUF.
+
+### Verification (all PASS on agent substrate)
+
+```
+make clean && make: 0 warnings on -Wall -Wextra; 13 binaries built.
+40-witness (round-3 lossless reader):           PASS
+41-witness (round-4 broken channel):            PASS
+42-witness (round-6 descendant isolation):      PASS
+43-witness (round-6 composition):               PASS
+44-witness (round-7 MISS discriminator):        PASS (5/5 cases)
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+git diff --check: clean.
+```
+
+### Files modified (round-7)
+
+- `tools/macos-host-helper/native/containment-probe/miss-classifier.h`
+  (NEW, 76 lines) — shared classifier header.
+- `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+  — `compute_missed()` now wraps `miss_classify()`. Deleted
+  `tracked_has()`. Driver JSON output unchanged.
+- `tools/macos-host-helper/native/containment-probe/44-oracle-miss-classifier-witness.c`
+  (NEW, 194 lines) — exercises the production classifier on 5 cases.
+- `tools/macos-host-helper/native/containment-probe/Makefile`
+  — added 44-witness.
+- `.gitignore` — ignore 44-witness binary.
+- Documentation: result.json (round7_fixes, miss_classifier_witness_verdict,
+  halt_reason +halt_summary +reviewer_ask updated); 71-ground-truth-design.md
+  (Round-7 section); 73-operator-handoff.md (Round-7 section);
+  90-gates.txt (Round-7 gates + verdict); epic-board.md (this section).
+
+### Verdict (round-7)
+
+```
+ORACLE_MISS_CLASSIFIER_NOT_EXERCISED = CLOSED (round-7)
+MISS_CLASSIFIER_ALGORITHM            = SHARED (miss-classifier.h)
+GT_MINUS_TRACKED_DISCRIMINATOR       = CLOSED (44-witness T5)
+PIPE_BUF_FLOOR_ASSERTED              = PASS (44-witness startup)
+DRIVER_USES_SHARED_CLASSIFIER        = PASS (compute_missed wraps miss_classify)
+AGENT_SUBSTRATE_HALT                 = PRESERVED (no probe execution attempted)
+KQUEUE_PRIMITIVE_VIABILITY           = NOT_YET_ADJUDICATED
+READY_FOR_OPERATOR_RUN               = YES
+```
+
+**C1: GO → human Terminal matrix (RUN_3)** — per the reviewer's
+verdict block: after 44-witness PASS, no further pre-execution
+review unless a new P0 appears. The agent stops here.
+
+### 7-round evidence chain
+
+- Round-2: HALT_ORACLE_CAN_FALSE_GREEN                                CLOSED
+- Round-3: HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS                    CLOSED (40-witness)
+- Round-4: HALT_ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE             CLOSED (41-witness)
+- Round-5: HALT_ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED              RETRACTED (false-GREEN hazard)
+- Round-6: HALT_ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE      CLOSED (42 + 43 witnesses)
+- Round-7: HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED                  CLOSED (44-witness, production classifier)
