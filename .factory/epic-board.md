@@ -1615,3 +1615,107 @@ The runtime contract established by ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DIS
 **Predecessor ACT remains closed at CASE_A / NOT_A_RUNTIME_DEFECT.** This ACT is the actual product repair that makes the runtime semantics visible to the user.
 
 **STOP rule honored (final).** The runtime is not changed. The user-facing projection is now truthful: when the agent has yielded and the user owns the next move, the UI says "Your turn".
+
+## ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01 — DISCRIMINATOR_VERDICT_NONE — 2026-09-19
+
+**Status:** C1 GREEN — discriminator verdict: **NONE**. `NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE`.
+
+The re-scoped successor to the predecessor's CASE_B-reproducing ACT has executed the discriminator procedure on this macOS 14.7.4 arm64 substrate. Per spec §25 (no-mechanism-qualifies outcome), production consequence is:
+
+    PGID_ONLY = production invariant (preserved)
+    ESCAPED_DESCENDANTS = known unsupported boundary
+
+**Three candidates evaluated against the predecessor's reproduced E/F fixtures:**
+
+  **A — cleanup-time PPID-chain ancestry reconstruction: REFUTED on correctness.**
+    After helper-mediated PGID cleanup, the detached Node `child_process.spawn({detached:true})`
+    and Python `subprocess.Popen(start_new_session=True)` grandchildren have `ppid=1, pgid=itself`.
+    Current-ppid BFS from rootPid cannot reach them because macOS rewrites ppid on reparenting
+    and does not expose original_ppid via kinfo_proc / proc_pidinfo.
+    Helper-driven driver (`11-mechanism-a-helper-driven.mjs`) reproduces this on the
+    live helper substrate: helper register PGID succeeds, helper terminate succeeds,
+    escape `sleep` process survives with `ppid=1, pgid=itself`. A_REFUTED on E and F.
+
+  **B — kqueue EVFILT_PROC NOTE_FORK event-time lineage: RACE_REFUTED.**
+    Cross-process kqueue attachment WORKS on macOS 14.7.4 (Apple's
+    "If a process can normally see another process, it can attach an event to it."
+    confirmed empirically). NOTE_FORK fires on subsequent forks. However:
+      (1) kevent.data is NOT the child PID (Apple documents NOTE_FORK without
+          promising child-PID delivery; in every observed fork event kevent.data
+          was 0). The probe must reconcile via sysctl KERN_PROC enumeration.
+      (2) The dominant defect is the FORK-BEFORE-ATTACH race: production sequence
+          is spawn-then-attach. The fixture's FIRST fork (e.g. shell -> node)
+          happens during the spawn window, before the helper can install its watch.
+          The intermediate child is invisible to the helper, and the helper has no
+          way to discover it.
+      (3) 5/5 immediate-fork iterations MISSED both grandchildren.
+    Per spec §6.B3: "If any iteration escapes tracking: MECHANISM_B = RACE_REFUTED.
+    No retries may promote that to safe containment." B_REFUTED on the production
+    sequence. When the race is artificially avoided (delay_s=2 emulator), B works
+    correctly — proving the primitive itself is sound, but the production sequence
+    cannot satisfy its preconditions.
+
+  **C — Endpoint Security descendants client: UNAVAILABLE.**
+    Three independent blockers on this substrate:
+      (1) macOS 14.0 CommandLineTools SDK does NOT ship EndpointSecurity.framework headers.
+      (2) Runtime framework absent from /System/Library/Frameworks,
+          /System/Library/PrivateFrameworks, and Cryptex root (dlopen fails).
+      (3) Helper binary is adhoc-signed (linker-signed, no Developer Team), so
+          `com.apple.developer.endpoint-security.client` entitlement cannot be granted.
+    C_RUNTIME_ELIGIBILITY = UNAVAILABLE is a legitimate discriminator result
+    (per spec §24 and §28). No entitlements fabricated, no ad-hoc claims.
+
+**Production consequence (per spec §25):**
+
+The ACT closes with NO mechanism selected. PGID_ONLY remains the production
+invariant. ESCAPED_DESCENDANTS becomes a documented, known-unsupported boundary.
+
+A separate ACT must decide between (a) prohibit detached process creation in
+ClineMM-owned commands at the policy layer, (b) accept the gap and document
+ESCAPED_DESCENDANTS, or (c) pursue Endpoint Security descendants under a
+separately-authorized architecture track (Developer ID signing + ES entitlement
++ macOS where the runtime framework is present).
+
+This ACT does NOT make that decision. It establishes the architectural boundary
+honestly and freezes the evidence so the decision ACT has durable substrate.
+
+**Negative controls pass:**
+- 2 unrelated same-UID sleeps spawned alongside the fixture survived the probe
+  run uneventfully (`25-mechanism-b-control.*`).
+- Probe tracked only the kqueue lineage, not by process-name matching.
+- No same-UID sweep, no arbitrary PID kill, no process-name match in any
+  candidate path.
+- Helper's existing client_token + job_token + peer-identity + pid+start_us
+  binding (unchanged) ensures multi-client isolation and PID-reuse resistance
+  regardless of primitive selection.
+
+**Production code delta: NONE.**
+- No production-side helper.c, protocol.ts, command-job-manager.ts, or other
+  runtime code modified.
+- Probe binaries added under `tools/macos-host-helper/native/containment-probe/`
+  are intentionally outside the production helper protocol.
+- `.gitleaks.toml` allowlist updated for the new ACT's client_token/job_token
+  synthetic test markers (32-hex strings from the C helper's gen_token()).
+
+**Halt condition triggered:** `HALT_NO_SAFE_CONTAINMENT_PRIMITIVE`.
+
+**Halt conditions NOT triggered:**
+- `HALT_UNEXPECTED_TRACKED_DIRT` — working tree was clean at entry; only
+  evidence + probe sources + gitleaks allowlist + ACT spec modified.
+- `HALT_UNRELATED_PROCESS_TARGETED` — negative controls pass.
+- `HALT_CLIENT_ISOLATION_BROKEN` — no production wire changed.
+- `HALT_STALE_PID_CAN_BE_KILLED` — pid+start_us binding unaffected.
+- `HALT_TERMINATION_WINDOW_ESCAPE` — out of scope for discriminator;
+  helper signal authority unchanged.
+- `HALT_MECHANISM_B_RACE` — this halts B as a candidate but does not halt the ACT.
+
+**Successor ACT:** `ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01` —
+to be authorized by Factory reviewer to choose between (a)/(b)/(c) above.
+This ACT does NOT pre-fill the answer.
+
+**Evidence:** `.factory/evidence/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/` —
+26 files: entry + predecessor-freeze + per-mechanism capability/recon/E/F/control/double-fork/race-stress JSONs +
+comparison matrix + per-axis evidence (client-isolation, pid-reuse, termination-window,
+final-conservation, negative-control) + gates + result.json.
+Probe binaries at `tools/macos-host-helper/native/containment-probe/` with `Makefile`
+to reproduce from sources.
