@@ -1,0 +1,99 @@
+CANDIDATE C — ENDPOINT SECURITY DESCENDANTS CLIENT
+==================================================
+
+Reference: Apple Developer Documentation
+  es_new_descendants_client(_:_:)
+    "Creates a new Endpoint Security client whose visibility is
+     limited to the descendants of `instigator_process`."
+    "The resulting client sees the calling process plus the entire
+     recursive descendant subtree..."
+  Requirements (per Apple docs):
+    - requires Endpoint Security client entitlement
+    - does not require root
+    - does NOT require TCC approval
+    - currently BETA (macOS 14.0+)
+
+AVAILABILITY PROBE
+------------------
+Step 1: SDK header check
+    $ SDK=$(xcrun --show-sdk-path)
+    $ ls $SDK/System/Library/Frameworks/EndpointSecurity.framework
+    ls: cannot access ... No such file or directory
+    $ find $SDK -name 'EndpointSecurity*' | head
+    (empty)
+
+    The macOS 14.0 SDK from CommandLineTools on this machine
+    does NOT contain EndpointSecurity.framework headers. The
+    candidates may be private in this SDK distribution.
+
+Step 2: Runtime dlopen
+    $ cc /tmp/check-es-runtime.c -o /tmp/check-es-runtime
+    $ /tmp/check-es-runtime
+    dlopen failed: dlopen(.../EndpointSecurity.framework/EndpointSecurity, 0x0002):
+      tried: '/System/Library/Frameworks/EndpointSecurity.framework/EndpointSecurity'
+             (no such file)
+      '/System/Volumes/Preboot/Cryptexes/OS/System/Library/Frameworks/EndpointSecurity.framework/EndpointSecurity'
+             (no such file)
+      '/System/Library/Frameworks/EndpointSecurity.framework/EndpointSecurity'
+             (no such file, not in dyld cache)
+
+    The framework is not present on the system, not in the
+    dyld cache, and not in any Cryptex location.
+
+Step 3: Helper binary signing state
+    $ codesign -d -vv ~/.clinemm/bin/clinemm-host-helper
+    Format=Mach-O thin (arm64)
+    CodeDirectory v=20400 size=543 flags=0x20002(adhoc,linker-signed) hashes=14+0
+    Signature=adhoc
+    TeamIdentifier=not set
+
+    The helper is adhoc-signed (linker-signed). It cannot carry
+    `com.apple.developer.endpoint-security.client` because that
+    entitlement requires:
+      - a real Apple Developer Team identifier
+      - a provisioning profile that grants the entitlement
+      - Developer ID signing (not adhoc)
+
+SDK_HAS_es_new_descendants_client        = NO (header not in SDK)
+RUNTIME_OS_HAS_SYMBOL                    = NO (framework not on disk,
+                                              not in dyld cache)
+HELPER_CODESIGN_ENTITLEMENT_PRESENT      = NO (adhoc-signed, no team)
+CAN_CREATE_DESCENDANTS_CLIENT            = NO
+
+C_RUNTIME_ELIGIBILITY = UNAVAILABLE
+
+Three independent blockers:
+1. macOS 14.0 SDK does not include EndpointSecurity.h or
+   the framework headers in the CommandLineTools distribution.
+2. Runtime framework is absent from /System/Library/Frameworks,
+   /System/Library/PrivateFrameworks, and the Cryptex root.
+3. Even if both above were resolved, the helper binary is
+   adhoc-signed without a Developer Team, so the
+   `com.apple.developer.endpoint-security.client` entitlement
+   cannot be granted.
+
+This is a legitimate discriminator result:
+    HALT_ENDPOINT_SECURITY_ENTITLEMENT_UNAVAILABLE
+        (only for C; does NOT halt the whole ACT)
+
+Per the spec:
+    Select C only if
+        entitlement is actually obtainable/useable
+        AND API works on target macOS
+        AND beta dependency is accepted explicitly
+        AND E/F + controls pass
+
+None of these preconditions hold on this substrate.
+
+If we wanted to use ES descendants in the future, we would need:
+    - An Apple Developer account
+    - Provisioning profile granting endpoint-security.client
+    - Re-signed helper binary
+    - And: the runtime framework would need to be present on the
+      target macOS (it is not on this machine)
+
+Conclusion: C is UNAVAILABLE on this substrate and cannot be
+            exercised by this ACT.
+
+No entitlements are fabricated, no ad-hoc claims are made,
+no fake signatures are produced.

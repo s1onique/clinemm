@@ -1,0 +1,228 @@
+[
+  {
+    "fixture": "shell-A",
+    "rootPid": 42429,
+    "candidate": "A_cleanup_ancestry_helper_driven",
+    "helper_register_response": {
+      "version": 1,
+      "request_id": "disc-2",
+      "job_token": "8bda8ce2f68600b67446862f03507041",
+      "active_job_count": 1,
+      "active_client_count": 1,
+      "ok": true
+    },
+    "helper_terminate_response": {
+      "version": 1,
+      "request_id": "disc-3",
+      "ok": true,
+      "result": "TERMINATED_TERM"
+    },
+    "helper_terminate_error": null,
+    "inherited_descendants": [
+      42430,
+      42431,
+      42435,
+      42436
+    ],
+    "escape_survivors": [],
+    "expected_escaped_pids": [],
+    "candidate_a_attributed": [],
+    "candidate_a_missed": [],
+    "candidates_a_targeted": [],
+    "actually_terminated": [],
+    "already_dead": [],
+    "still_alive_after": [],
+    "classification": "A_NO_ESCAPES_OBSERVED"
+  },
+  {
+    "fixture": "node-B",
+    "rootPid": 42472,
+    "candidate": "A_cleanup_ancestry_helper_driven",
+    "helper_register_response": {
+      "version": 1,
+      "request_id": "disc-6",
+      "job_token": "63792858b3983aca960300b24d15441a",
+      "active_job_count": 1,
+      "active_client_count": 1,
+      "ok": true
+    },
+    "helper_terminate_response": {
+      "version": 1,
+      "request_id": "disc-7",
+      "ok": true,
+      "result": "TERMINATED_TERM"
+    },
+    "helper_terminate_error": null,
+    "inherited_descendants": [
+      42475
+    ],
+    "escape_survivors": [],
+    "expected_escaped_pids": [],
+    "candidate_a_attributed": [],
+    "candidate_a_missed": [],
+    "candidates_a_targeted": [],
+    "actually_terminated": [],
+    "already_dead": [],
+    "still_alive_after": [],
+    "classification": "A_NO_ESCAPES_OBSERVED"
+  },
+  {
+    "fixture": "python-C",
+    "rootPid": 42511,
+    "candidate": "A_cleanup_ancestry_helper_driven",
+    "helper_register_response": {
+      "version": 1,
+      "request_id": "disc-10",
+      "job_token": "64876e638685a71bd47dd1e942661c97",
+      "active_job_count": 1,
+      "active_client_count": 1,
+      "ok": true
+    },
+    "helper_terminate_response": {
+      "version": 1,
+      "request_id": "disc-11",
+      "ok": true,
+      "result": "TERMINATED_TERM"
+    },
+    "helper_terminate_error": null,
+    "inherited_descendants": [
+      42512
+    ],
+    "escape_survivors": [],
+    "expected_escaped_pids": [],
+    "candidate_a_attributed": [],
+    "candidate_a_missed": [],
+    "candidates_a_targeted": [],
+    "actually_terminated": [],
+    "already_dead": [],
+    "still_alive_after": [],
+    "classification": "A_NO_ESCAPES_OBSERVED"
+  },
+  {
+    "fixture": "mixed-D",
+    "rootPid": 42543,
+    "candidate": "A_cleanup_ancestry_helper_driven",
+    "helper_register_response": {
+      "version": 1,
+      "request_id": "disc-14",
+      "job_token": "b2dbd4f43ff076825cffc4d3a738b6a9",
+      "active_job_count": 1,
+      "active_client_count": 1,
+      "ok": true
+    },
+    "helper_terminate_response": {
+      "version": 1,
+      "request_id": "disc-15",
+      "ok": true,
+      "result": "TERMINATED_TERM"
+    },
+    "helper_terminate_error": null,
+    "inherited_descendants": [
+      42544,
+      42548
+    ],
+    "escape_survivors": [],
+    "expected_escaped_pids": [],
+    "candidate_a_attributed": [],
+    "candidate_a_missed": [],
+    "candidates_a_targeted": [],
+    "actually_terminated": [],
+    "already_dead": [],
+    "still_alive_after": [],
+    "classification": "A_NO_ESCAPES_OBSERVED"
+  },
+  {
+    "fixture": "node-escape",
+    "rootPid": 42574,
+    "candidate": "A_cleanup_ancestry_helper_driven",
+    "helper_register_response": {
+      "version": 1,
+      "request_id": "disc-18",
+      "job_token": "58440eb200c1bb4109243d134ab09128",
+      "active_job_count": 1,
+      "active_client_count": 1,
+      "ok": true
+    },
+    "helper_terminate_response": {
+      "version": 1,
+      "request_id": "disc-19",
+      "ok": true,
+      "result": "TERMINATED_TERM"
+    },
+    "helper_terminate_error": null,
+    "inherited_descendants": [
+      42575,
+      42578
+    ],
+    "escape_survivors": [
+      {
+        "pid": 42578,
+        "ppid": 1,
+        "pgid": 42578,
+        "sess": 0,
+        "comm": "sleep"
+      }
+    ],
+    "expected_escaped_pids": [
+      42578
+    ],
+    "candidate_a_attributed": [],
+    "candidate_a_missed": [
+      42578
+    ],
+    "candidates_a_targeted": [],
+    "actually_terminated": [],
+    "already_dead": [],
+    "still_alive_after": [
+      42578
+    ],
+    "classification": "A_REFUTED"
+  },
+  {
+    "fixture": "python-escape",
+    "rootPid": 43205,
+    "candidate": "A_cleanup_ancestry_helper_driven",
+    "helper_register_response": {
+      "version": 1,
+      "request_id": "disc-22",
+      "job_token": "c1210ebc21db63376ff6c035297389be",
+      "active_job_count": 1,
+      "active_client_count": 1,
+      "ok": true
+    },
+    "helper_terminate_response": {
+      "version": 1,
+      "request_id": "disc-23",
+      "ok": true,
+      "result": "TERMINATED_TERM"
+    },
+    "helper_terminate_error": null,
+    "inherited_descendants": [
+      43206,
+      43207
+    ],
+    "escape_survivors": [
+      {
+        "pid": 43207,
+        "ppid": 1,
+        "pgid": 43207,
+        "sess": 0,
+        "comm": "sleep"
+      }
+    ],
+    "expected_escaped_pids": [
+      43207
+    ],
+    "candidate_a_attributed": [],
+    "candidate_a_missed": [
+      43207
+    ],
+    "candidates_a_targeted": [],
+    "actually_terminated": [],
+    "already_dead": [],
+    "still_alive_after": [
+      43207
+    ],
+    "classification": "A_REFUTED"
+  }
+]

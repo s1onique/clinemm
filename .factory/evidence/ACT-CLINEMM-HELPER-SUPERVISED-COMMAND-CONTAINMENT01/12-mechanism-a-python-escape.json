@@ -1,0 +1,47 @@
+{
+  "fixture": "python-escape",
+  "rootPid": 43205,
+  "candidate": "A_cleanup_ancestry_helper_driven",
+  "helper_register_response": {
+    "version": 1,
+    "request_id": "disc-22",
+    "job_token": "c1210ebc21db63376ff6c035297389be",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "helper_terminate_response": {
+    "version": 1,
+    "request_id": "disc-23",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "helper_terminate_error": null,
+  "inherited_descendants": [
+    43206,
+    43207
+  ],
+  "escape_survivors": [
+    {
+      "pid": 43207,
+      "ppid": 1,
+      "pgid": 43207,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "expected_escaped_pids": [
+    43207
+  ],
+  "candidate_a_attributed": [],
+  "candidate_a_missed": [
+    43207
+  ],
+  "candidates_a_targeted": [],
+  "actually_terminated": [],
+  "already_dead": [],
+  "still_alive_after": [
+    43207
+  ],
+  "classification": "A_REFUTED"
+}

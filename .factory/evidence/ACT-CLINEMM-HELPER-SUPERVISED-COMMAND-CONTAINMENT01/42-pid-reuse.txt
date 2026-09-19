@@ -1,0 +1,31 @@
+PID REUSE RESISTANCE
+====================
+
+This ACT does not modify the production helper protocol. PID reuse
+resistance is therefore governed by the existing helper's binding
+mechanism, which is unaffected by this discriminator's selection.
+
+Existing helper PID reuse resistance (helper.c validate_pgid_ownership):
+
+  1. validate_pgid_ownership() reads the process's start_us via
+     read_proc_identity_ext() / libproc PROC_PIDTBSDINFO.
+  2. Compares against job->leader_start_us captured at register.
+  3. If they differ, registration is DENY_OWNERSHIP (with a
+     transition to a fresh slot if it was a stale identity).
+  4. terminate-owned re-checks start_us on every call; mismatch
+     returns STALE_OWNERSHIP (per helper.c handle_terminate_owned
+     review-correction02).
+
+For candidate B specifically, the production wire would need to
+carry the start_us (or audit_token-equivalent) for each tracked
+PID. The probe binaries do NOT wire this into the helper protocol;
+this is a deferred implementation concern for the eventual
+production wiring ACT (which this discriminator has explicitly
+deferred — see §25 successor in the ACT spec).
+
+PID_REUSE_RESISTANCE for the production invariant = PASS
+    (unchanged from predecessor)
+
+PID_REUSE_RESISTANCE for B as a primitive = DEFERRED
+    (not exercised in the discriminator; implementation would
+    require a production wire ACT)

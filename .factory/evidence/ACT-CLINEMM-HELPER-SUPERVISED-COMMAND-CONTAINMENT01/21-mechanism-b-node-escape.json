@@ -1,0 +1,19 @@
+{
+  "fixture": "node-escape",
+  "candidate": "B_kqueue_lineage",
+  "evidence": "20-mechanism-b-capability.json + 20-mechanism-b-capability.txt",
+  "summary": "B's race condition is the binding defect. The emulator with delay_s=2 (analogous to node-escape's pre-detached-fork window) shows B CAN capture the grandchild when the probe attaches before the fork. With delay_s=0 (analogous to the spawn-then-attach production sequence), the probe loses the race deterministically. 5/5 immediate-fork iterations missed both grandchildren.",
+  "racing_test": {
+    "emulator_delay_s": 0,
+    "probe_attach_lag_s": 0.05,
+    "tracked": ["<root_pid_only>"],
+    "missed_descendants": ["<both grandchildren invisible to probe>"]
+  },
+  "race_avoided_test": {
+    "emulator_delay_s": 2,
+    "tracked": ["<root>", "<grandchild1>", "<grandchild2>"],
+    "note": "B works correctly when externally sequenced to attach before fork; this is not the production sequence."
+  },
+  "kevent_data_observation": "kevent.data == 0 in every observed fork event; child PID not delivered by kqueue EVFILT_PROC NOTE_FORK on macOS 14.7.4 arm64.",
+  "verdict": "B_NODE_ESCAPE_ZERO = RACE_REFUTED"
+}

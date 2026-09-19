@@ -1,147 +1,238 @@
-# ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01 — CONTAINMENT_PRIMITIVE_DISCRIMINATOR (NOT YET FROZEN)
+# ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01
 
-## Goal
+## Purpose
 
-**Discriminate** which real macOS authority primitive can
-actually survive the reproduced Node `detached:true` and Python
-`start_new_session=True` escape, then pick one (and only one)
-for the helper-supervised spawn boundary. This ACT does NOT
-yet freeze a mechanism — it freezes a decision procedure for
-mechanism selection.
+`CONTAINMENT_PRIMITIVE_DISCRIMINATOR`. Discriminate three candidate
+macOS containment primitives against the predecessor ACT's reproduced
+E/F escape (Node `detached:true`, Python `start_new_session=True`).
 
-## Status: RE-SCOPED per Factory reviewer P1 (2026-09-18)
+## Inputs (predecessor)
 
-The earlier draft of this ACT assumed a cleanup-time
-PPID/`proc_pidinfo` walk would recover escaped descendants.
-Per the Factory reviewer's P1 finding, this assumption is NOT
-established:
+`.factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/`
 
-  - Apple distinguishes `ppid` from `original_ppid`. Once a
-    process is reparented to PID 1, the current `ppid` no longer
-    gives you the chain back to the helper-owned root.
-    [Apple Developer: original_ppid](https://developer.apple.com/documentation/endpointsecurity/es_process_t/original_ppid?language=objc)
-  - Current Apple Endpoint Security
-    `es_new_descendants_client` API observes a process and its
-    recursively created descendant subtree, including
-    subsequent forks/execs — which is exactly the semantic
-    problem here — but it requires the Endpoint Security
-    entitlement and Apple currently marks the API beta.
-    [Apple Developer: es_new_descendants_client](https://developer.apple.com/documentation/endpointsecurity/es_new_descendants_client%28_%3A_%3A%29?changes=_2_1_1&language=objc)
-  - macOS `EVFILT_PROC` with `NOTE_FORK` exposes event-time
-    fork lineage tracking. This is an event-time approach
-    worth discriminating rather than reconstructing ancestry
-    after the fact.
-    [Apple: EV_SET(2)](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/EV_SET.2.html)
+  - shell-A.json, node-B.json, python-C.json, mixed-D.json
+    (bounded inherited PGID trees — helper-mediated cleanup succeeds)
+  - node-escape.json, python-escape.json
+    (setsid()/detached:true escape — helper-mediated cleanup misses)
+  - result.json invariant classification:
+      DESCENDANT_CONSERVATION: REFUTED
+      CASE_B: REPRODUCED
 
-So the previous "default is the stronger primitive;
-`helperSupervised=false` is the backward-compat default"
-framing in this ACT was internally contradictory — a primitive
-that has not been chosen cannot be the default. Re-scoped.
+The successor ACT MUST find which macOS primitive can contain
+descendants that escape the inherited PGID/session, without
+killing unrelated same-UID processes.
 
-## Background (carried over from ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01)
+## Discriminator
 
-  - Bounded PGID cleanup works for cooperative descendants
-    (fixtures A-D, all descendants gone).
-  - Escape fixtures E-F (`node-escape`, `python-escape`) survive
-    PGID cleanup: the descendant process is reparented to PID 1
-    with its own PGID.
-  - Reproduction is on the real helper substrate (PPID=1, new
-    PGID evidence). See
-    `.factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/{node-escape,python-escape}.json`
-    and Appendix A of `03-current-pgid-contract.md`.
+Three candidates evaluated against the same six fixtures:
 
-## Non-goals
+  A: cleanup-time PPID-chain ancestry reconstruction
+  B: kqueue EVFILT_PROC NOTE_FORK event-time lineage
+  C: Endpoint Security descendants client
 
-  - This ACT does NOT modify the existing PGID-only cleanup path.
-    That path remains the bounded-correct behavior under
-    `TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE` (the
-    invariant pinned by ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
-    correction05).
-  - This ACT does NOT pick a default. Until the discriminator
-    produces a verdict, no new primitive is selected by
-    configuration. The codebase remains on the bounded PGID
-    path; the escape is documented as REFUTED for the bounded
-    invariant and OUT-OF-SCOPE for the helper-supervised
-    boundary until the discriminator completes.
+## Evidence
 
-## Decision procedure (this ACT's actual content)
+`.factory/evidence/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/`
 
-Test three candidate authority mechanisms against the already-
-reproduced E/F escapes. Each is exercised against the same
-helper substrate used in ACT-CLINEMM-REAL-LAUNCHAGENT-SIGNAL-DISCRIMINATOR02
-so the verdict is comparable to the existing bounded-invariant
-evidence. The verdict is the first mechanism that produces a
-deterministic, fail-closed classification for BOTH bounded
-fixtures (A-D, all `descendants_zero = TRUE`) AND escape
-fixtures (E-F, `descendants_zero = TRUE`).
+  00-entry.txt                       entry freeze
+  01-predecessor-freeze.txt          predecessor contract
+  10-mechanism-a-cleanup-ancestry.json   full A result matrix
+  10-mechanism-a-recon.txt               A narrative
+  11-mechanism-a-node-escape.json        E run, A_REFUTED
+  12-mechanism-a-python-escape.json      F run, A_REFUTED
+  20-mechanism-b-capability.json         B cross-process attach test
+  20-mechanism-b-capability.txt          B 5 capability probes
+  25-mechanism-b-control.json            B negative control run
+  25-mechanism-b-control.txt             B narrative
+  30-mechanism-c-availability.txt        C 3-blocker diagnosis
+  31-mechanism-c-entitlement.txt         C codesign + entitlement
+  40-comparison-matrix.md
+  41-mechanism-b-control.json (negative controls)
+  50-gates.txt
+  result.json
 
-  - **A. Cleanup-time PPID/`proc_pidinfo` reconstruction.**
-    Walk `proc_pidinfo` for the helper-owned root, walk each
-    descendant by `ppid`. **EXPECTED FAILURE** on the
-    reproduction substrate: Apple distinguishes `ppid` from
-    `original_ppid`, so the chain breaks at reparenting. This
-    is the disproof of the previously-frozen mechanism.
-  - **B. Event-time fork lineage tracking from the helper.**
-    Subscribe the helper to `EVFILT_PROC NOTE_FORK` on the
-    owned root, accumulate a fork-lineage set across the
-    job's lifetime, walk the set at exit time and `kill(-pgid,
-    0)`/`kill(pid, 0)` for each member.
-  - **C. Native stable descendant authority.** Use
-    `es_new_descendants_client` (Endpoint Security) to observe
-    the process and its recursively-created descendants
-    including subsequent forks/execs. Requires the Endpoint
-    Security entitlement; Apple marks the API beta. **Cannot
-    be the default** if the entitlement is not granted or the
-    beta API is unacceptable.
+## Probe binaries (production-code-delta NONE)
 
-## Verdict selection (frozen at ACT close)
+`tools/macos-host-helper/native/containment-probe/`
 
-After all three mechanisms have been exercised, this ACT
-freezes ONE of:
+  20-mechb-kqueue-probe.c        NOTE_FORK capability probe
+  22-mechb-emulator.c            setsid+fork+sleep emulator
+  22-mechb-cross-process-test.c  cross-process kqueue test
+  22-mechb-self-fork-test.c      same-process fork test
+  23-mechb-full-test.c           recursive watcher with sysctl reconcile
+  10-mechanism-a-cleanup-ancestry.mjs   non-helper driver (initial)
+  11-mechanism-a-helper-driven.mjs      helper-driven (real test)
+  22-mechb-capability.mjs               B capability test driver
 
-  - `MECHANISM_A`: kept (B and C deferred — but A's
-    disproof means the freeze is "A is not enough; we accept
-    that the escape case remains REFUTED for the helper-
-    supervised boundary"). This ACT becomes a
-    CONTAINMENT-DENIAL verdict: no real primitive survives.
-  - `MECHANISM_B`: accepted (default selection is event-time
-    fork lineage tracking). The previous "default is stronger
-    primitive" framing is replaced with a configuration flag
-    `helperSupervised: "event-fork-trace" | "pgid-only"`.
-  - `MECHANISM_C`: accepted (default selection is Endpoint
-    Security descendant tracking). The configuration flag
-    `helperSupervised: "es-descendants" | "pgid-only"`.
-    Requires entitlement work and beta-API risk acceptance
-    documented in the verdict.
+None of these are wired into the production helper protocol.
 
-A verdict other than `MECHANISM_A` rejects the prior
-"helperSupervised default = stronger primitive" framing and
-asserts the configuration flag explicitly. The default selection
-question is DECIDED here, not assumed.
+## Mechanism verdicts
 
-## Success criteria
+### A — cleanup-time ancestry reconstruction: REFUTED
 
-  - All escape fixtures (E-F) report `descendants_zero = TRUE`
-    under the chosen mechanism.
-  - All bounded fixtures (A-D) still report `descendants_zero =
-    TRUE` under both modes (no regression).
-  - The verdict is committed at ACT close; the chosen
-    mechanism is documented with the entitlement / API-maturity
-    caveats that informed the choice.
+After the helper kills the inherited PGID, the detached/setsid'd
+grandchild has `ppid=1, pgid=itself`. Current-ppid BFS from rootPid
+cannot reach it (macOS does not expose original_ppid to user-space
+processes; ppid is rewritten on reparenting).
 
-## Gates
+Apple Developer Documentation confirms the model:
+  ppid: "The parent process identifier. ..."
+There is no API to retrieve the original parent post-reparent.
 
-  - `bunx tsc --noEmit` clean.
-  - DCCT matrix extended with the chosen mechanism's
-    composition coverage.
-  - Webview gauge tests preserved (no regression on the
-    `⎇ N` rendering).
+Helper-driven test results (`11-mechanism-a-helper-driven.mjs`):
 
-## Authorization
+  shell-A       A_NO_ESCAPES_OBSERVED  (helper cleanup succeeded)
+  node-B        A_NO_ESCAPES_OBSERVED
+  python-C      A_NO_ESCAPES_OBSERVED
+  mixed-D       A_NO_ESCAPES_OBSERVED
+  node-escape   A_REFUTED              (sleep: ppid=1, pgid=itself)
+  python-escape A_REFUTED              (sleep: ppid=1, pgid=itself)
 
-This ACT is authorized by ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
-correction05 (bounded fix cycle, 2026-09-18). The bounded fix
-cycle established `PRIMARY_PGID_CONSERVATION = PROVEN` (with
-`terminal_committed` gated on `gone`) and reproduced CASE_B; no
-further recon is needed to justify the discriminator work.
-Mechanism selection is the only remaining epistemic gap.
+A_CURRENT_PPID_RECONSTRUCTION = REFUTED.
+
+### B — kqueue event-time lineage: RACE_REFUTED
+
+Cross-process kqueue EVFILT_PROC attachment WORKS (Apple's
+"If a process can normally see another process, it can attach
+an event to it."). On macOS 14.7.4 arm64, the probe attached
+to a detached+setsid+exec emulator process and successfully
+received subsequent NOTE_FORK events.
+
+However:
+
+  1. **kevent.data is NOT the child PID.** Apple documents
+     NOTE_FORK as "The process created a child process via
+     fork(2)" — without promising child PID delivery. In every
+     observed fork event, kevent.data == 0. The probe must
+     reconcile by enumerating children via sysctl KERN_PROC
+     after each NOTE_FORK.
+
+  2. **FORK-BEFORE-ATTACH race.** The probe attaches AFTER the
+     fixture has been spawned (the production model is
+     spawn-then-attach). The fixture's FIRST fork (e.g.
+     shell -> node) happens during the spawn window, before
+     the helper can install its first watch. The intermediate
+     child is invisible to the helper, and the helper has no
+     way to discover it.
+
+  3. **5/5 immediate-fork iterations missed** the grandchildren.
+     The race is not a one-off — it is the deterministic
+     outcome of the production sequence.
+
+Per spec §6.B3:
+    If any iteration escapes tracking:
+        MECHANISM_B = RACE_REFUTED
+        No retries may promote that to safe containment.
+
+B_NOTE_FORK_CAPABILITY = PARTIAL
+B_NODE_ESCAPE_ZERO     = RACE_REFUTED
+B_PYTHON_ESCAPE_ZERO   = RACE_REFUTED
+B_RACE_STRESS_ZERO     = FAIL
+B_DOUBLE_FORK_ZERO     = PASS (when race avoided, by external sequencing)
+
+B_NOTE_FORK_CHILD_PID_AVAILABLE = NO
+
+The primitive is structurally correct on the negative-control
+axis (process-name-independent, no same-UID sweep, unrelated
+PIDs survive — see 25-mechanism-b-control.*). The defect is
+specifically the FORK-BEFORE-ATTACH race.
+
+To make B race-free would require:
+    1. Helper-mediated spawn (out of scope)
+    2. AND pre-spawn snapshot + watch installation before any
+       new process is created
+    3. AND continuous reconcile against sysctl KERN_PROC for
+       owned-UID processes
+
+These are substantial architecture changes beyond this ACT.
+
+### C — Endpoint Security descendants: UNAVAILABLE
+
+Three independent blockers on this substrate:
+
+  1. macOS 14.0 CommandLineTools SDK does NOT ship
+     EndpointSecurity.framework headers.
+  2. Runtime framework absent from /System/Library/Frameworks,
+     /System/Library/PrivateFrameworks, and Cryptex root.
+  3. Helper binary is adhoc-signed without a Developer Team,
+     so `com.apple.developer.endpoint-security.client`
+     entitlement cannot be granted.
+
+C_RUNTIME_ELIGIBILITY = UNAVAILABLE is a legitimate discriminator
+result (per spec §24 and §28).
+
+SDK_HAS_es_new_descendants_client       = NO
+RUNTIME_OS_HAS_SYMBOL                   = NO
+HELPER_CODESIGN_ENTITLEMENT_PRESENT     = NO
+CAN_CREATE_DESCENDANTS_CLIENT           = NO
+
+If ES descendants were ever adopted in the future, the
+prerequisites are: Developer ID signing, ES-client entitlement,
+and a target macOS where the runtime framework is present.
+
+## Selection
+
+NONE.
+
+A is REFUTED on correctness (cannot reach reparented grandchild).
+B is RACE_REFUTED on production feasibility.
+C is UNAVAILABLE on this substrate.
+
+Per spec §9 last paragraph:
+    If B fails and C is unavailable:
+        Close:
+            CAPTURED_ARCHITECTURAL_LIMIT
+            NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE
+        Do not compensate with process-name or same-UID sweeping.
+
+## Production consequence
+
+Per spec §25:
+
+  PGID_ONLY                 = production invariant (preserved)
+  ESCAPED_DESCENDANTS       = known unsupported boundary
+                              (documented, not silently fixed)
+
+A separate ACT must decide:
+  (a) prohibit detached process creation in ClineMM-owned
+      commands at the policy layer, OR
+  (b) accept the gap and document ESCAPED_DESCENDANTS as a
+      known unsupported boundary, OR
+  (c) pursue Endpoint Security descendants under a separately-
+      authorized architecture track (Developer ID signing + ES
+      entitlement).
+
+This ACT does NOT make that decision.
+
+## Halt conditions triggered
+
+  - HALT_NO_SAFE_CONTAINMENT_PRIMITIVE  (the discriminated result)
+
+## Halt conditions NOT triggered (verifying non-halt)
+
+  - HALT_UNEXPECTED_TRACKED_DIRT         (working tree clean)
+  - HALT_UNRELATED_PROCESS_TARGETED      (negative control passed)
+  - HALT_CLIENT_ISOLATION_BROKEN         (no protocol change)
+  - HALT_STALE_PID_CAN_BE_KILLED         (helper pid+start_us
+                                           binding unaffected)
+  - HALT_TERMINATION_WINDOW_ESCAPE       (out of scope for
+                                           discriminator; helper
+                                           signal authority
+                                           unchanged)
+  - HALT_MECHANISM_B_RACE                (does not halt the ACT;
+                                           it halts B as a candidate)
+
+## Substrate
+
+  macOS 14.7.4 (23H420), Darwin 23.6.0, arm64.
+  Helper build_id (live): c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+  Helper pid (live): 9582
+  Helper socket (live): /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+  EndpointSecurity framework present: NO
+  Helper codesign state: adhoc, no team
+
+## Successor ACT
+
+ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01 — to be
+authorized by Factory reviewer to choose between (a)/(b)/(c)
+above. This ACT does NOT pre-fill the answer.

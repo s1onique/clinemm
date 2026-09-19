@@ -1,0 +1,37 @@
+{
+  "fixture": "node-escape",
+  "candidate": "A_cleanup_ancestry_helper_driven",
+  "rootPid": 42336,
+  "helper_register_response": {
+    "version": 1,
+    "request_id": "disc-2",
+    "job_token": "b4389617357908a5c3c23385b5c7a847",
+    "active_job_count": 1,
+    "active_client_count": 1,
+    "ok": true
+  },
+  "helper_terminate_response": {
+    "version": 1,
+    "request_id": "disc-3",
+    "ok": true,
+    "result": "TERMINATED_TERM"
+  },
+  "inherited_descendants": [42337, 42340],
+  "escape_survivors": [
+    {
+      "pid": 42340,
+      "ppid": 1,
+      "pgid": 42340,
+      "sess": 0,
+      "comm": "sleep"
+    }
+  ],
+  "expected_escaped_pids": [42340],
+  "candidate_a_attributed": [],
+  "candidate_a_missed": [42340],
+  "candidates_a_targeted": [],
+  "actually_terminated": [],
+  "already_dead": [],
+  "still_alive_after": [42340],
+  "classification": "A_REFUTED"
+}

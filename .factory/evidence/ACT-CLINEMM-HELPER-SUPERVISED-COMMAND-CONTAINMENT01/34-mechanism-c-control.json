@@ -1,0 +1,6 @@
+{
+  "candidate": "C_endpoint_security_descendants",
+  "test": "control_negative",
+  "status": "UNAVAILABLE",
+  "reason": "C is unavailable on this substrate (see 30-mechanism-c-availability.txt and 31-mechanism-c-entitlement.txt). Control-negative exercises were not attempted."
+}

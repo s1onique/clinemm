@@ -1,0 +1,42 @@
+PREDECESSOR_CODE_COMMIT       = 128c61f5ba46ff6291862b1052dd4562968c927c
+PREDECESSOR_EVIDENCE_COMMIT   = present at .factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/
+
+PREDECESSOR_CASE_B_BOUND      = PASS (reproduced in predecessor ACT)
+
+Frozen predecessor truths (do NOT modify):
+
+    CLEAN_TERMINAL
+        ⇒ PRIMARY OWNED PGID GONE
+
+    activeCommandJobs
+        = CommandJobManager active-map cardinality
+
+    ⎇ N
+        = active CommandJobs
+        ≠ descendant count
+
+    DESCENDANT_CONSERVATION
+        = REFUTED for deliberate session/PGID escape
+
+Frozen predecessor mechanism (helper-mediated PGID fallback):
+    CommandJobManager.cancel → terminateTree
+        direct kill(-pgid, SIGTERM) for sandbox-permitted PGs
+        on EPERM: helper.terminateOwned (helper-owned PGID, SIGTERM→grace→SIGKILL)
+    result.json invariant classification:
+        "TERMINAL ⇒ ZERO LIVE OWNED DESCENDANTS" : REFUTED by E/F
+        "CLEAN_TERMINAL ⇒ PRIMARY OWNED PGID GONE" : PROVEN
+
+Frozen predecessor helper binary:
+    path:        ~/.clinemm/bin/clinemm-host-helper
+    build_id:    c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+    pid:         9582
+    socket:      /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+    capabilities at entry:
+        - launch_activate_socket (LaunchAgent or ESRCH fallback)
+        - structural anti-shell JSON envelope
+        - per-method allowed-key whitelist
+        - fixed methods: health, client.open, process-group.register-owned,
+          process-group.terminate-owned, process-group.release-owned,
+          helper.restart, testbed.run-installed-vsix-smoke
+        - PID+start_time identity binding via validate_pgid_ownership
+        - signal authority to kill(-pgid, ...) within registered job

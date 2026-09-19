@@ -1,0 +1,7 @@
+{
+  "fixture": "python-escape",
+  "candidate": "B_kqueue_lineage",
+  "evidence": "20-mechanism-b-capability.json + 20-mechanism-b-capability.txt",
+  "summary": "Identical finding to node-escape. Python start_new_session=True performs setsid + fork in the same atomic operation; the detached sleep grandchild is born with pgid=itself. B's race condition applies identically.",
+  "verdict": "B_PYTHON_ESCAPE_ZERO = RACE_REFUTED"
+}

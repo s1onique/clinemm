@@ -1,0 +1,152 @@
+CANDIDATE B — KQUEUE EVENT-TIME LINEAGE
+========================================
+
+Mechanism:
+    helper owns job root
+    -> register EVFILT_PROC / NOTE_FORK on owned processes
+    -> on child creation, add child identity to job lineage
+    -> recursively watch descendants
+    -> terminate tracked identities regardless of later PGID/session
+
+Reference: kevent(2) Apple Developer Documentation
+    EVFILT_PROC: "Takes the process ID to monitor as the identifier...
+                 If a process can normally see another process, it
+                 can attach an event to it."
+    NOTE_FORK:   "The process created a child process via fork(2) or
+                 similar call."
+    Apple does NOT promise that kevent.data contains the child PID.
+
+Test binaries:
+    tools/macos-host-helper/native/containment-probe/22-mechb-emulator.c
+    tools/macos-host-helper/native/containment-probe/22-mechb-cross-process-test.c
+    tools/macos-host-helper/native/containment-probe/22-mechb-self-fork-test.c
+    tools/macos-host-helper/native/containment-probe/23-mechb-full-test.c
+
+CAPABILITY PROBE 1: cross-process kqueue attachment
+--------------------------------------------------
+Test: ./22-mechb-emulator 0 30; ./22-mechb-cross-process-test <pid>
+Result:
+    attach_succeeded: TRUE
+    fork_events_count: 0    (race lost)
+    NOTE_FORK_CHILD_PID_AVAILABLE: FALSE
+    CROSS_PROCESS_ATTACHMENT_WORKS: TRUE
+
+CAPABILITY PROBE 2: same-process attachment with deliberate delay
+-----------------------------------------------------------------
+Test: ./22-mechb-emulator 2 30; ./22-mechb-cross-process-test <pid>
+Result:
+    attached -> 2 fork events, both with kevent_data = 0
+Conclusion: NOTE_FORK fires when watch was in place BEFORE fork;
+            kevent.data carries NO child PID.
+
+CAPABILITY PROBE 3: same-process self-fork
+-------------------------------------------
+Test: ./22-mechb-self-fork-test
+Result: forksSeen=1; kevent_data=0; CHILD PID not delivered
+
+CAPABILITY PROBE 4: recursive watcher with sysctl reconcile
+-----------------------------------------------------------
+Test: ./22-mechb-emulator 2 30; ./23-mechb-full-test <pid> 7
+Result:
+    watch(58683) -> fork -> watch(58698) -> fork -> watch(58709)
+    tracked=[58683, 58698, 58709]; killed=[]
+Conclusion: Recursive watching WORKS when probe attaches BEFORE the
+            forks; reconcile_after_fork() via sysctl KERN_PROC
+            discovers new children.
+
+CAPABILITY PROBE 5: RACE discriminator (LOAD-BEARING)
+----------------------------------------------------
+Test: ./22-mechb-emulator 0 30 (NO delay); sleep 0.05;
+      ./23-mechb-full-test <pid> 5
+Result:
+    watch(58517); tracked=[58517] (root only, both grandchildren LOST)
+    The emulator's immediate fork finished before the probe attached.
+    The grandchildren are forever invisible to this primitive.
+
+This is the dangerous race the spec warned about:
+    parent forks child
+    child forks grandchild
+    BEFORE helper installs child watch
+
+Even with a 50ms lead, the race is lost. The first fork at
+emulator startup finishes before the kqueue attach completes.
+
+Production implication:
+    In the production CommandJobManager model, the helper is asked
+    to register ownership AFTER the fixture has already been
+    spawned. The fixture's first fork (e.g. shell -> node) has
+    typically already happened. The helper would then watch the
+    shell, miss its first child fork, and have no way to discover
+    the missing intermediate.
+
+    To make B race-free would require:
+    1. Helper-mediated spawn (not currently in scope)
+    2. AND: pre-spawn-time snapshot of all currently-running
+       same-UID processes, with watch installation before any
+       new process is created
+    3. AND: continuous reconcile against sysctl KERN_PROC to
+       catch any process whose UID matches and whose ppid chain
+       reaches an owned PID
+
+    None of these are part of the current helper protocol.
+    Adding them is a substantial architecture change.
+
+DOUBLE-FORK daemon pattern:
+    The emulator with delay_s=2 captures the second-fork
+    grandchild via reconcile_after_fork on the child watch.
+    This part of B works when the race is avoided by external
+    sequencing.
+
+EXEC transitions:
+    NOTE_EXEC is registered alongside NOTE_FORK. exec() refreshes
+    the start_us for the same PID (PID preserved across exec).
+    Compatible with PID+start_time identity binding.
+
+Reparenting:
+    The detached grandchild (setsid+own-PGID) is still a CHILD of
+    the emulator (ppid chain intact) until the emulator exits. B
+    captures it via NOTE_FORK on the emulator. Once the emulator
+    exits, the grandchild is reparented to launchd -- but B has
+    already recorded its PID in tracked[] and can kill it
+    directly via helper authority.
+
+KILL authority:
+    The probe (running outside the sandbox) cannot kill the
+    tracked PIDs: eperm on all three. This matches the production
+    EPERM substrate. In production, the helper would have the
+    authority to kill; the candidate-B primitive is "track
+    everything, then kill via helper authority". The tracking is
+    the question; killing is helper-authority's job.
+
+VERDICT
+-------
+B_NOTE_FORK_CAPABILITY                 = PARTIAL
+    - cross-process attach WORKS
+    - NOTE_FORK fires on subsequent forks
+    - child PID NOT delivered (must reconcile via sysctl)
+
+B_NODE_ESCAPE_ZERO                     = RACE_REFUTED
+B_PYTHON_ESCAPE_ZERO                   = RACE_REFUTED (same)
+B_RACE_STRESS_ZERO                     = FAIL
+B_DOUBLE_FORK_ZERO                     = PASS (when race avoided)
+
+B_NOTE_FORK_CHILD_PID_AVAILABLE        = NO (kevent.data = 0)
+
+REGISTRATION_LATENCY_US                = ~50ms minimum lead needed;
+    production sequence is "spawn-then-attach", which loses this
+    race deterministically.
+
+MECHANISM_B = RACE_REFUTED
+
+The spec is unambiguous:
+    If any iteration escapes tracking:
+        MECHANISM_B = RACE_REFUTED
+        No retries may promote that to safe containment.
+
+Multiple iterations have escaped. MECHANISM_B is REFUTED.
+
+The primitive can ATTACH, can OBSERVE NOTE_FORK, and can
+RECURSIVELY WATCH with sysctl reconciliation. But it cannot
+RELIABLY ATTACH BEFORE the first fork of a freshly-spawned
+fixture. For our use case (terminate arbitrary ClineMM descendants)
+that is a fatal flaw, not a fixable one.

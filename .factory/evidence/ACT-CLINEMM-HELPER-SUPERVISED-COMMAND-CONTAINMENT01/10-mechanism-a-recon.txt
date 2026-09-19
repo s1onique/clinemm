@@ -1,0 +1,83 @@
+CANDIDATE A — CLEANUP-TIME ANCESTRY RECONSTRUCTION
+==================================================
+
+Mechanism:
+    root PID
+    → enumerate process table at cleanup time
+    → recursively select descendants by CURRENT ppid
+    → terminate matched identities
+
+Test driver:  tools/macos-host-helper/native/containment-probe/11-mechanism-a-helper-driven.mjs
+
+Why helper-driven:
+    The test sandbox isolates signal authority. My user cannot kill
+    processes spawned by the fixture (verified: "Operation not permitted"
+    for the spawned rootPid, identical to the production EPERM substrate).
+    The clinemm-host-helper is a per-user LaunchAgent with EPERM authority
+    to deliver signals across the sandbox boundary. The driver uses
+    client.open + process-group.register-owned + process-group.terminate-owned
+    to perform the inherited-PGID kill, exactly as production CommandJobManager
+    does today.
+
+Result matrix (helper-driven, real macOS substrate, real fixtures):
+
+  shell-A      A_NO_ESCAPES_OBSERVED   inherited PGID, helper cleanup succeeded
+  node-B       A_NO_ESCAPES_OBSERVED   inherited PGID, helper cleanup succeeded
+  python-C     A_NO_ESCAPES_OBSERVED   inherited PGID, helper cleanup succeeded
+  mixed-D      A_NO_ESCAPES_OBSERVED   inherited PGID, helper cleanup succeeded
+  node-escape  A_REFUTED               sleep 42340 survived: ppid=1, pgid=42340
+  python-escape A_REFUTED              sleep <pid> survived: ppid=1, pgid=<pid>
+
+DETAILED node-escape run (rootPid 42336):
+  inherited_descendants:        [42337, 42340]  (inner-node, detached sleep)
+  escape_survivors:             [{pid:42340, ppid:1, pgid:42340, sess:0, comm:"sleep"}]
+  candidate_a_attributed:       []     (BFS from 42336 by CURRENT ppid cannot reach ppid=1)
+  candidate_a_missed:           [42340]
+  still_alive_after:            [42340]
+  helper_register_response:     ok=true, job_token=b4389617357908a5c3c23385b5c7a847
+  helper_terminate_response:    ok=true, result=TERMINATED_TERM
+
+DETAILED python-escape run:
+  inherited_descendants:        [<inner-py>, <detached-sleep>]
+  escape_survivors:             [{pid:<sleep-pid>, ppid:1, pgid:<sleep-pid>, comm:"sleep"}]
+  candidate_a_attributed:       []
+  candidate_a_missed:           [<sleep-pid>]
+  still_alive_after:            [<sleep-pid>]
+  helper_register_response:     ok=true
+  helper_terminate_response:    ok=true, result=TERMINATED_TERM
+
+Verdict:
+    MECHANISM_A = REFUTED
+
+    Cleanup-time current-ppid BFS cannot reach a descendant that has
+    called setsid() (Python) or detached:true (Node). The detached
+    descendant becomes the leader of its own session/PGID; its
+    current ppid becomes 1 (or some other reparenting target) once
+    its parent dies. macOS deliberately distinguishes current ppid
+    from original_ppid; the current ppid is rewritten on reparenting.
+    Apple Developer docs:
+      ppid: "The parent process identifier. ..."
+      "After fork(), the child PPID is the parent's PID."
+    There is no "original_ppid" in the user-visible kinfo_proc / proc_info;
+    restoration from a process snapshot is therefore not possible on
+    macOS without kqueue-style event-time tracking.
+
+    Helper-mediated PGID cleanup of the inherited PGID is necessary
+    but not sufficient: it kills the inherited members, but the
+    detached child is in a different PGID and survives.
+
+A_CURRENT_PPID_RECONSTRUCTION = REFUTED
+
+No false-ownership was introduced. The unrelated-control check is
+deferred to a later phase; this candidate was rejected on correctness
+grounds (misses the escape), not on over-reach grounds.
+
+The non-helper-driven variant
+(tools/macos-host-helper/native/containment-probe/10-mechanism-a-cleanup-ancestry.mjs)
+was attempted first and surfaced the substrate signal-authority
+boundary: my driver cannot kill the spawned fixture's rootPid
+(verified directly with `kill -KILL rootPid`: "Operation not permitted").
+This is the SAME EPERM substrate the production CommandJobManager
+sees, and is the reason the helper exists. The helper-driven variant
+exercises the production cleanup authority and reaches the same
+conclusion: A is REFUTED for the E/F escapes.

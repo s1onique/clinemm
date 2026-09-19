@@ -1,0 +1,95 @@
+{
+  "act": "ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01",
+  "purpose": "CONTAINMENT_PRIMITIVE_DISCRIMINATOR",
+  "predecessor_case_b": "REPRODUCED",
+  "predecessor_evidence_path": ".factory/evidence/ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01/",
+  "predecessor_fixtures_reused": [
+    "01-fixture-shell.sh",
+    "02-fixture-node.mjs",
+    "03-fixture-python.py",
+    "04-fixture-mixed.sh",
+    "05-fixture-node-escape.mjs",
+    "06-fixture-python-escape.py"
+  ],
+  "mechanisms": {
+    "A_cleanup_ancestry": {
+      "status": "REFUTED",
+      "summary": "Current-ppid BFS cannot reach a setsid()/detached:true grandchild because macOS rewrites ppid to 1 on reparenting. Apple kqueue(2) documents EVFILT_PROC separately from current ppid; there is no 'original_ppid' in the user-visible kinfo_proc.",
+      "evidence_files": [
+        "10-mechanism-a-cleanup-ancestry.json",
+        "10-mechanism-a-recon.txt",
+        "11-mechanism-a-node-escape.json",
+        "12-mechanism-a-python-escape.json"
+      ],
+      "fixtures_attempted": ["shell-A", "node-B", "python-C", "mixed-D", "node-escape", "python-escape"],
+      "fixtures_classification": {
+        "shell-A": "A_NO_ESCAPES_OBSERVED",
+        "node-B": "A_NO_ESCAPES_OBSERVED",
+        "python-C": "A_NO_ESCAPES_OBSERVED",
+        "mixed-D": "A_NO_ESCAPES_OBSERVED",
+        "node-escape": "A_REFUTED",
+        "python-escape": "A_REFUTED"
+      }
+    },
+    "B_kqueue_lineage": {
+      "status": "REFUTED",
+      "summary": "kqueue EVFILT_PROC NOTE_FORK attaches successfully (cross-process, same-process), fires on subsequent forks, but kevent.data carries NO child PID (must reconcile via sysctl KERN_PROC). The dominant defect is the FORK-BEFORE-ATTACH race: the fixture's first fork (e.g. shell->node) happens before the helper can attach kqueue, so the intermediate child is never observed. The production sequence (spawn-then-attach) loses this race deterministically across 5/5 immediate-fork iterations.",
+      "evidence_files": [
+        "20-mechanism-b-capability.json",
+        "20-mechanism-b-capability.txt",
+        "25-mechanism-b-control.json",
+        "25-mechanism-b-control.txt"
+      ],
+      "NOTE_FORK_PARENT_PID": "kevent.ident",
+      "NOTE_FORK_CHILD_PID_AVAILABLE": false,
+      "CHILD_START_TIME_AVAILABLE": false,
+      "REGISTRATION_LATENCY_US": 50000,
+      "CROSS_PROCESS_ATTACHMENT_WORKS": true,
+      "RACE_ITERATIONS": 5,
+      "RACE_ITERATIONS_LOST": 5,
+      "RACE_FINDING": "immediate-fork fixture always beats the probe attach"
+    },
+    "C_endpoint_security_descendants": {
+      "status": "UNAVAILABLE",
+      "summary": "Three independent blockers: (1) EndpointSecurity.framework headers absent from the macOS 14.0 CommandLineTools SDK; (2) runtime framework absent from /System/Library/Frameworks, /System/Library/PrivateFrameworks, and the Cryptex root; (3) helper binary is adhoc-signed without a Developer Team, so com.apple.developer.endpoint-security.client cannot be granted. C_RUNTIME_ELIGIBILITY = UNAVAILABLE is a legitimate discriminator result, not a configuration defect.",
+      "evidence_files": [
+        "30-mechanism-c-availability.txt",
+        "31-mechanism-c-entitlement.txt"
+      ],
+      "SDK_HAS_es_new_descendants_client": false,
+      "RUNTIME_OS_HAS_SYMBOL": false,
+      "HELPER_CODESIGN_ENTITLEMENT_PRESENT": false,
+      "CAN_CREATE_DESCENDANTS_CLIENT": false
+    }
+  },
+  "selection": {
+    "mechanism": "NONE",
+    "reason": "Per spec §9: A is refuted on correctness (cannot reach reparented grandchild); B is refuted on production feasibility (FORK-BEFORE-ATTACH race loses 5/5 iterations); C is unavailable on this substrate (framework absent + entitlement impossible). Per spec §9 last paragraph: if B fails and C is unavailable, close with CAPTURED_ARCHITECTURAL_LIMIT and NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE."
+  },
+  "production_code_delta": "NONE",
+  "production_code_delta_detail": "No production-side helper.c, protocol.ts, command-job-manager.ts, or other runtime code was modified. Only diagnostic probe binaries were added under tools/macos-host-helper/native/containment-probe/; these are intentionally outside the production helper protocol and do not modify the wire format or any consumer-facing surface.",
+  "successor": "ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01",
+  "successor_mandate": "Decide whether to (a) prohibit detached process creation in ClineMM-owned commands at the policy layer, (b) accept the gap and document ESCAPED_DESCENDANTS as a known unsupported boundary, or (c) pursue Endpoint Security descendants under a separately-authorized architecture track (Developer ID signing + ES entitlement). This ACT does NOT make that decision.",
+  "halt_conditions_triggered": [
+    "HALT_NO_SAFE_CONTAINMENT_PRIMITIVE"
+  ],
+  "halt_conditions_NOT_triggered": [
+    "HALT_UNEXPECTED_TRACKED_DIRT",
+    "HALT_UNRELATED_PROCESS_TARGETED",
+    "HALT_CLIENT_ISOLATION_BROKEN",
+    "HALT_STALE_PID_CAN_BE_KILLED",
+    "HALT_TERMINATION_WINDOW_ESCAPE",
+    "HALT_MECHANISM_B_RACE_ONLY_THIS_DOES_NOT_HALT_ACT",
+    "HALT_ENDPOINT_SECURITY_ENTITLEMENT_UNAVAILABLE_only_for_C_does_NOT_halt_whole_ACT"
+  ],
+  "substrate": {
+    "macos_version": "14.7.4 (23H420)",
+    "darwin_kernel": "23.6.0",
+    "arch": "arm64",
+    "helper_build_id": "c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9",
+    "helper_pid": 9582,
+    "helper_socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock",
+    "endpoint_security_framework_present": false,
+    "codesign_state": "adhoc, no team"
+  }
+}

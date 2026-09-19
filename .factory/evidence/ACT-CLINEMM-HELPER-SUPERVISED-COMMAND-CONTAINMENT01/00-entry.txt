@@ -1,0 +1,54 @@
+ENTRY_HEAD                    = 128c61f5ba46ff6291862b1052dd4562968c927c
+ENTRY_BRANCH                  = main
+ENTRY_DATE                    = 2026-09-19
+HELPER_BUILD_ID               = c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9 (live LaunchAgent-managed helper)
+HELPER_PID                    = 9582
+HELPER_SOCKET                 = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+MACOS_VERSION                 = 14.7.4 (23H420), Darwin Kernel 23.6.0
+ARCH                          = arm64 (Apple Silicon)
+GIT_STATUS_CLEAN              = PASS (no untracked, no unstaged)
+
+ACT = ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01
+PURPOSE = CONTAINMENT_PRIMITIVE_DISCRIMINATOR
+
+Predecessor (durable CASE_B evidence):
+  ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+  - shell-A.json          : 5 members, 0 escaped    (PASS for inherited PGID)
+  - node-B.json           : inherited PGID          (PASS for inherited PGID)
+  - python-C.json         : inherited PGID          (PASS for inherited PGID)
+  - mixed-D.json          : shell->python->node     (PASS for inherited PGID)
+  - node-escape.json      : 2 members gone, 1 escape survives (ppid=1, pgid=itself)
+  - python-escape.json    : 2 members gone, 1 escape survives (ppid=1, pgid=itself)
+
+  Helpers existing primitive = helper-owned PGID + kill(-pgid, SIGTERM/SIGKILL).
+  Confirmed REFUTED for descendants that perform setsid() or detached:true.
+
+  result.json invariant classification (predecessor):
+    "CLEAN_TERMINAL ⇒ PRIMARY OWNED PGID GONE"            : PROVEN
+    "TERMINAL ⇒ ZERO LIVE OWNED DESCENDANTS"             : REFUTED by E/F
+    "DESCENDANT_CONSERVATION"                            : REFUTED
+    "CASE_B"                                             : REPRODUCED
+
+Discriminator this ACT must answer:
+  Which macOS authority can safely preserve ClineMM ownership
+  across deliberate setsid() / new-process-group escape, without
+  killing unrelated same-UID processes?
+
+  Three candidates (A, B, C); one must win or NO_SAFE_PRIMITIVE_AVAILABLE.
+
+Working tree at entry:
+  apps/vscode clean (no untracked, no unstaged)
+  Helper binary on disk at ~/.clinemm/bin/clinemm-host-helper (md5: live build)
+  Helper socket responsive (health() returns ok=true; build_id matches the
+  LaunchAgent-managed instance launched earlier in the predecessor ACT).
+
+Initial probe hygiene:
+  No detached/orphaned helper processes from prior ACTs.
+  No production-side helper protocol change.
+
+Discriminator harness paths:
+  fixtures reuse:
+    /tmp/clinemm-descendant-conservation-telemetry01/{01..06}-fixture-*
+  new harness:
+    /tmp/clinemm-helper-supervised-command-containment01/
+    tools/macos-host-helper/native/containment-probe/  (native probes only)

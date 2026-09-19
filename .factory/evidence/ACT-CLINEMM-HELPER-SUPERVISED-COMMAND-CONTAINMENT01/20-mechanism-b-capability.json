@@ -1,0 +1,20 @@
+{
+  "emulator_pid": 53356,
+  "emulator_seen_in_ps": true,
+  "ps_line_for_emulator": "53356 53319 53356      0 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/tools/macos-host-helper/native/containment-probe/22-mechb-emulator",
+  "probe_exit_code": 0,
+  "probe_stderr": "",
+  "attach_succeeded": true,
+  "attach_failed": false,
+  "fork_events_count": 0,
+  "fork_events": [],
+  "end_event": {
+    "event": "end",
+    "forks": 0,
+    "execs": 0,
+    "exits": 0
+  },
+  "NOTE_FORK_CHILD_PID_AVAILABLE": false,
+  "CROSS_PROCESS_ATTACHMENT_WORKS": true,
+  "REGISTRATION_LATENCY_US": null
+}

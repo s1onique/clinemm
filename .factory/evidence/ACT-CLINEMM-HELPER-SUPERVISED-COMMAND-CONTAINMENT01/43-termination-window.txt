@@ -1,0 +1,26 @@
+TERMINATION WINDOW ESCAPE
+==========================
+
+This ACT is a discriminator of OBSERVATION primitives. Termination
+is performed by the helper's existing kill(-pgid, SIGTERM) ->
+SIGKILL escalation, NOT by candidate A/B/C themselves.
+
+The termination-window-escape test (a process forks during the
+SIGTERM grace period, in the hope that the new descendant is not
+terminated) is an interesting adversarial case for any containment
+primitive, but it is OUT OF SCOPE for this ACT:
+
+  - The discriminator only proves whether a primitive CAN OBSERVE
+    the descendant set. It does not change the termination
+    authority, which remains helper-owned PGID signal.
+  - With candidate A or B selected, the question would become
+    "does the chosen observation primitive continue to observe
+    during the SIGTERM grace window?" That is an integration
+    question, not a discriminator question.
+
+If/when a production wiring ACT is authorized (which this ACT
+defers — selection is NONE), termination-window tests become
+appropriate.
+
+TERMINATION_WINDOW_ESCAPE = NOT_EXERCISED
+    (deferred to a production-wiring ACT, if any)

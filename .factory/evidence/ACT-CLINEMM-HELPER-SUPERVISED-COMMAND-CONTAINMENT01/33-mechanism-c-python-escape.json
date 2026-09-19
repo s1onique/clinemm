@@ -1,0 +1,6 @@
+{
+  "fixture": "python-escape",
+  "candidate": "C_endpoint_security_descendants",
+  "status": "UNAVAILABLE",
+  "reason": "Same as 32-mechanism-c-node-escape.json. C is unavailable on this substrate; per-fixture exercises were not attempted."
+}

@@ -1,0 +1,40 @@
+CANDIDATE B — STRONG NEGATIVE CONTROLS
+======================================
+
+Setup:
+    CONTROL_1: bash -c "sleep 600"    (unrelated same-UID sleep)
+    CONTROL_2: bash -c "sleep 600"    (unrelated same-UID sleep)
+    TEST:      ./22-mechb-emulator 2 30  (root of B-tracked subtree)
+
+Probe:
+    ./23-mechb-full-test <emu_pid> 5
+
+Result:
+    tracked = [60657 (emu root), 60665 (grandchild1), 61170 (grandchild2)]
+    Unrelated sleep PIDs 60654, 60655:
+        ps -p 60654 -p 60655 -> both ALIVE after probe run.
+
+Verdict:
+    PROCESS_NAME_INDEPENDENT     = PASS
+        Probe walked PID/kqueue lineage only. Tracked set is
+        bounded by the kqueue event subscription, NOT by
+        process name matching.
+
+    UNRELATED_CONTROL_SURVIVES   = PASS
+        Two unrelated sleep processes survived the probe run.
+        The probe made no attempt to signal them.
+
+    NO_ARBITRARY_PID_KILL        = PASS
+        The only kill() calls in the probe were on tracked PIDs.
+        Tracked PIDs are determined by kqueue lineage (kqueue
+        register + sysctl reconcile on NOTE_FORK). No
+        process-name sweep, no UID sweep, no PPID sweep.
+
+    NO_SAME_UID_SWEEP            = PASS
+        The probe does NOT iterate same-UID processes; it only
+        watches the explicitly registered root and reconciles
+        NEW children via sysctl after NOTE_FORK events.
+
+The B primitive is structurally correct on the negative-control
+axis. The fatal flaw is the FORK-BEFORE-ATTACH race documented
+in 20-mechanism-b-capability.txt.

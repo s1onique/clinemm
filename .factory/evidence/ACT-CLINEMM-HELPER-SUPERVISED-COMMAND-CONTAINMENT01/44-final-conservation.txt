@@ -1,0 +1,71 @@
+FINAL CONSERVATION STATEMENT
+============================
+
+Predecessor invariant (preserved, unchanged by this ACT):
+    CLEAN_TERMINAL ⇒ PRIMARY OWNED PGID GONE
+    activeCommandJobs = CommandJobManager active-map cardinality
+    ⎇ N = active CommandJobs ≠ descendant count
+
+Predecessor DESCENDANT_CONSERVATION was REFUTED by the E/F
+fixtures. This ACT discriminator found:
+
+    A (cleanup-time ancestry reconstruction): REFUTED
+        Cannot reach a reparented detached grandchild.
+        ppid is rewritten on reparenting; no original_ppid API.
+
+    B (kqueue event-time lineage): RACE_REFUTED
+        Cross-process attach WORKS, NOTE_FORK fires, but
+        kevent.data is NOT the child PID (kqueue-side-channel
+        reconcile via sysctl KERN_PROC is required).
+        The dominant defect is the FORK-BEFORE-ATTACH race
+        in the production spawn-then-attach sequence.
+        5/5 immediate-fork iterations missed the grandchildren.
+
+    C (Endpoint Security descendants): UNAVAILABLE
+        EndpointSecurity.framework absent from macOS 14.0 SDK
+        and runtime; helper adhoc-signed without Developer Team,
+        so the entitlement cannot be granted.
+        C_RUNTIME_ELIGIBILITY = UNAVAILABLE is a legitimate
+        discriminator result.
+
+SELECTED = NONE.
+
+Production consequence (per spec §25):
+    PGID_ONLY = production invariant (preserved)
+    ESCAPED_DESCENDANTS = known unsupported boundary
+                          (documented, not silently fixed)
+
+    A separate ACT must decide whether to:
+        (a) prohibit detached process creation in ClineMM-owned
+            commands at the policy layer,
+        (b) accept the gap and document ESCAPED_DESCENDANTS as
+            a known unsupported boundary,
+        (c) pursue Endpoint Security descendants under a
+            separately-authorized architecture track.
+
+This ACT does NOT make that decision.
+
+CRASH BEHAVIOR CLASSIFICATION:
+    Extension host dies, helper remains.
+    The helper's current architecture holds job state in
+    process-local memory. When the host dies, the helper
+    continues to run (LaunchAgent lifecycle is independent of
+    the host process). However, the helper has no peer → job
+    mapping that survives host death; it only knows about
+    jobs whose owning client has connected at least once.
+    After host death, the helper retains the PGID + start_us
+    bindings for those registered jobs. A subsequent
+    terminate-owned request from a new host cannot reclaim
+    those jobs (the client_token is lost with the dead host).
+    The PGID-leading PIDs may still be terminated by an
+    operator via the helper's process-group.terminate-owned
+    method, IF the operator presents a valid client_token,
+    which they don't have.
+    HOST_CRASH_CONTAINMENT = POSSIBLE for inherited PGID
+        (operator can manually walk known PIDs and the helper
+        will kill -pgid on request from any client with valid
+        client_token — but the operator doesn't have one)
+    HOST_CRASH_CONTAINMENT = NOT_SUPPORTED for descendants
+        that have escaped the inherited PGID (none of A/B/C
+        reach them in the first place; the helper's authority
+        is bounded by registered PGIDs)

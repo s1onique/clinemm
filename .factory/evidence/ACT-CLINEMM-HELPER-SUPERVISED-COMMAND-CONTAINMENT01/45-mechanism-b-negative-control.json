@@ -1,0 +1,24 @@
+{
+  "candidate": "B_kqueue_lineage",
+  "test": "process_name_independence + unrelated_negative_control",
+  "setup": [
+    "bash: sleep 600  (CONTROL_1)",
+    "bash: sleep 600  (CONTROL_2)",
+    "/.../22-mechb-emulator 2 30 (root of test subtree)"
+  ],
+  "tracked_after_probe": [60657, 60665, 61170],
+  "tracked_comm_breakdown": [
+    {"pid": 60657, "comm": "22-mechb-emulator"},
+    {"pid": 60665, "comm": "22-mechb-emulator (grandchild 1)"},
+    {"pid": 61170, "comm": "22-mechb-emulator (grandchild 2)"}
+  ],
+  "unrelated_sleep_pids": [60654, 60655],
+  "unrelated_sleep_in_tracked_set": false,
+  "control_survival_check": "BOTH ALIVE (ps -p confirmed)",
+  "verdict": {
+    "PROCESS_NAME_INDEPENDENT": "PASS",
+    "NO_ARBITRARY_PID_KILL": "PASS (kill attempts only on tracked set, EPERM from sandbox anyway)",
+    "NO_SAME_UID_SWEEP": "PASS (probe walks kqueue lineage, not uid filter)",
+    "UNRELATED_CONTROL_SURVIVES": "PASS"
+  }
+}

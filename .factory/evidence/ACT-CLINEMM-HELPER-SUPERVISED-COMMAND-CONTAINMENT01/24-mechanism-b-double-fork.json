@@ -1,0 +1,11 @@
+{
+  "candidate": "B_kqueue_lineage",
+  "test": "double_fork_daemon_pattern",
+  "fixture": "./22-mechb-emulator 2 30   (delay 2s, then 2 nested forks)",
+  "lead_time_s": 0.5,
+  "tracked": ["<root_pid>", "<grandchild1>", "<grandchild2>"],
+  "tracked_count": 3,
+  "result": "PASS (when race avoided)",
+  "verdict": "B_DOUBLE_FORK_ZERO = PASS (when race avoided by external sequencing)",
+  "note": "Double-fork daemon pattern itself works under B. The defect is the spawn-then-attach race, not the recursive watching primitive."
+}

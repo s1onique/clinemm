@@ -1,0 +1,38 @@
+CLIENT ISOLATION
+================
+
+This ACT does not modify the production helper protocol. Client
+isolation is therefore governed by the existing helper's
+authentication mechanism, which is unaffected by this
+discriminator's selection.
+
+Existing helper client isolation (helper.c client_record_t +
+process-group.register-owned + handle_terminate_owned):
+
+  1. client.open issues a client_token bound to the calling
+     connection's kernel peer identity (peer_identity_t: uid,
+     pid). The token is opaque (32 hex chars).
+  2. process-group.register-owned requires:
+     - client_token from a known client
+     - proposed PGID
+     - peer identity on THIS connection MUST match the recorded
+       identity (uid + pid)
+     - leader_ppid must match peer pid (ownership proof)
+  3. process-group.terminate-owned / release-owned resolve the
+     (client_token, job_token) pair, re-verify peer identity on
+     this connection, and refuse if mismatched.
+
+This means a different ClineMM client cannot terminate another
+client's jobs even with the same UID, because the per-connection
+peer PID check discriminates them. The mechanism is
+process-name-agnostic and identity-bound; the only way a foreign
+client could terminate is by stealing the client_token AND
+spoofing the peer PID, which requires root.
+
+For candidates A/B/C, none of them rely on per-PID trust beyond
+what the helper's existing protocol already enforces. Client
+isolation is therefore unchanged regardless of which (if any)
+primitive is selected.
+
+MULTI_CLIENT_ISOLATION = PASS (architectural, by inherited helper protocol)
+    Not re-exercised in this ACT — no production wire was changed.

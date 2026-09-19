@@ -1,0 +1,56 @@
+CANDIDATE C ENTITLEMENT VERIFICATION
+====================================
+
+Helper binary at: ~/.clinemm/bin/clinemm-host-helper
+
+codesign -d -vv:
+    Format=Mach-O thin (arm64)
+    CodeDirectory v=20400 size=543 flags=0x20002(adhoc,linker-signed)
+    Signature=adhoc
+    Info.plist=not bound
+    TeamIdentifier=not set
+    Sealed Resources=none
+    Internal requirements=none
+
+codesign -d --entitlements :-:
+    (no entitlements output -- adhoc-signed, no entitlements blob)
+
+REQUIRED ENTITLEMENT (per Apple Developer Documentation for
+es_new_descendants_client):
+    com.apple.developer.endpoint-security.client
+
+REQUIREMENTS TO CARRY THIS ENTITLEMENT:
+    1. Apple Developer Program enrollment
+    2. Provisioning profile with the entitlement
+    3. Developer ID signing (NOT adhoc / NOT linker-signed)
+
+ACTUAL STATE:
+    - Signature: adhoc (linker-signed, NO team identifier)
+    - TeamIdentifier: not set
+    - Entitlements: NONE
+
+VERDICT: HELPER_CODESIGN_ENTITLEMENT_PRESENT = NO
+         CAN_CREATE_DESCENDANTS_CLIENT       = NO
+         C_RUNTIME_ELIGIBILITY                = UNAVAILABLE
+
+The current production helper cannot carry the required
+entitlement without:
+    - re-signing with a Developer ID
+    - provisioning profile that grants the entitlement
+    - ongoing Apple Developer Program enrollment
+
+This is a legitimate discriminator result, not a configuration
+defect. The ClineMM project currently ships an adhoc-signed
+LaunchAgent helper; converting to Developer ID signing with
+ES entitlements is a separate, much larger architectural
+decision that is out of scope for this ACT.
+
+Per spec:
+    C_RUNTIME_ELIGIBILITY = UNAVAILABLE
+        is a legitimate discriminator result.
+
+    HALT_ENDPOINT_SECURITY_ENTITLEMENT_UNAVAILABLE
+        only for C; does NOT halt the whole ACT.
+
+ACT continues to A/B selection. C is excluded on availability
+grounds without further evaluation.

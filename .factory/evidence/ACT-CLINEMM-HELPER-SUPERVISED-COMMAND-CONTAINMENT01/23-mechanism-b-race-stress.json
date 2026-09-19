@@ -1,0 +1,17 @@
+{
+  "candidate": "B_kqueue_lineage",
+  "test": "race_stress",
+  "iterations": 5,
+  "iterations_lost": 5,
+  "fixture": "./22-mechb-emulator 0 30   (immediate fork race)",
+  "lead_time_s": 0.05,
+  "result_per_iteration": [
+    {"iteration": 1, "tracked": ["<root_only>"], "grandchildren_lost": 2},
+    {"iteration": 2, "tracked": ["<root_only>"], "grandchildren_lost": 2},
+    {"iteration": 3, "tracked": ["<root_only>"], "grandchildren_lost": 2},
+    {"iteration": 4, "tracked": ["<root_only>"], "grandchildren_lost": 2},
+    {"iteration": 5, "tracked": ["<root_only>"], "grandchildren_lost": 2}
+  ],
+  "verdict": "MECHANISM_B = RACE_REFUTED",
+  "spec_rule": "If any iteration escapes tracking: MECHANISM_B = RACE_REFUTED. No retries may promote that to safe containment."
+}

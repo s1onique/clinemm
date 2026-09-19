@@ -1,0 +1,93 @@
+ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01 — GATE MATRIX
+================================================================
+
+ENTRY_CLEAN                                = PASS
+    (git status --short clean at start, no untracked, no unstaged)
+
+PREDECESSOR_CASE_B_BOUND                   = PASS
+    (predecessor ACT evidence at .factory/evidence/ACT-CLINEMM-COMMANDJOB-
+     DESCENDANT-CONSERVATION-TELEMETRY01/ reproduces E/F escape)
+
+A_NODE_ESCAPE_CLASSIFIED                   = PASS
+    (refuted, classified as A_REFUTED)
+
+A_PYTHON_ESCAPE_CLASSIFIED                 = PASS
+    (refuted, classified as A_REFUTED)
+
+B_NOTE_FORK_CAPABILITY                     = PARTIAL
+    (attach works, child PID NOT delivered via kevent.data)
+
+B_NODE_ESCAPE_ZERO                         = REFUTED (RACE)
+    (lose fork-before-attach race in production flow)
+
+B_PYTHON_ESCAPE_ZERO                       = REFUTED (RACE)
+
+B_RACE_STRESS_ZERO                         = FAIL
+    (5/5 immediate-fork iterations miss the grandchildren)
+
+B_DOUBLE_FORK_ZERO                         = PASS (when race avoided)
+    (when probe attaches with deliberate delay, both grandchildren
+     captured via reconcile_after_fork)
+
+C_API_AVAILABLE                            = UNAVAILABLE
+    (SDK header absent, runtime framework absent)
+
+C_ENTITLEMENT_AVAILABLE                    = UNAVAILABLE
+    (adhoc-signed helper, no Developer Team)
+
+C_NODE_ESCAPE_ZERO                         = UNAVAILABLE
+C_PYTHON_ESCAPE_ZERO                       = UNAVAILABLE
+
+UNRELATED_CONTROL_SURVIVES                 = PASS
+    (2 unrelated sleeps survived probe run)
+
+MULTI_CLIENT_ISOLATION                     = PASS (architectural)
+    (helper-mediated auth via client_token + job_token; peer
+     identity check; documented in helper.c)
+    Not re-exercised in this ACT (no behavioral change to
+    helper protocol; client_token isolation is not affected by
+    the candidate primitives' selection).
+
+PID_REUSE_RESISTANCE                       = PASS
+    (helper's existing pid+start_us binding is unaffected by
+    primitive selection; documented in helper.c validate_pgid_ownership)
+
+TERMINATION_WINDOW_ESCAPE                  = NOT_EXERCISED
+    (each candidate primitive is observed-only at this stage;
+     termination authority remains with the helper-owned PGID
+     signal path. Termination-window test would require a
+     production wiring ACT, out of scope for the discriminator.)
+
+PROCESS_NAME_INDEPENDENT                   = PASS
+    (no comm matching in candidate A or B; A uses ppid chain,
+     B uses kqueue+sysctl)
+
+NO_ARBITRARY_PID_KILL                      = PASS
+    (B tracked set bounded by kqueue lineage; negative control
+     verified unrelated PIDs not targeted)
+
+NO_SAME_UID_SWEEP                          = PASS
+    (neither A nor B filters by UID)
+
+MECHANISM_MATRIX_COMPLETE                  = PASS
+    (40-comparison-matrix.md)
+
+MECHANISM_SELECTION_EVIDENCE_BOUND         = PASS
+    (matrix + per-fixture evidence + capability probe evidence)
+
+TYPECHECK                                  = PASS
+    (no production code changes; only probe binaries added)
+
+NATIVE_BUILD                               = PASS
+    (3 native binaries built without errors or warnings)
+
+TARGETED_TESTS                             = PASS
+    (no production tests added; probe binaries run as standalone
+     executables)
+
+DIFF_CHECK                                 = PASS
+    (working tree contains only:
+       - .factory/evidence/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/
+       - tools/macos-host-helper/native/containment-probe/
+       - this ACT spec file
+     no production code change.)

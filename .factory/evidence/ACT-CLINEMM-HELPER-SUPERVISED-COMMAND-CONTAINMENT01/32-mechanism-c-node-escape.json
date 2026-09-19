@@ -1,0 +1,6 @@
+{
+  "fixture": "node-escape",
+  "candidate": "C_endpoint_security_descendants",
+  "status": "UNAVAILABLE",
+  "reason": "Three independent blockers (see 30-mechanism-c-availability.txt): EndpointSecurity.framework absent from macOS 14.0 SDK and runtime; helper binary adhoc-signed without Developer Team so com.apple.developer.endpoint-security.client entitlement cannot be granted. C_RUNTIME_ELIGIBILITY = UNAVAILABLE is a legitimate discriminator result per spec §24 and §28."
+}
