@@ -1,0 +1,101 @@
+31-strategy-c-signing.txt
+==========================
+
+# Helper signing and entitlement status (current state)
+
+## Current helper binary
+
+  Path:  /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+
+## codesign -d -v (live)
+
+  Executable=/Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+  Identifier=helper
+  Format=Mach-O thin (arm64)
+  CodeDirectory v=20400 size=543 flags=0x20002(adhoc,linker-signed) hashes=14+0 location=embedded
+  Signature=adhoc
+  Info.plist=not bound
+  TeamIdentifier=not set
+  Sealed Resources=none
+  Internal requirements=none
+
+## codesign -d --entitlements - (live)
+
+  (no entitlements section — the helper is adhoc-signed with no
+   entitlement blob.)
+
+## codesign -d --entitlements :- (verbose)
+
+  warning: Specifying ':' in the path is deprecated and will not work in a future release
+  (no entitlements output — there are none.)
+
+## Substrate confirmation via direct API call
+
+  $ cat > /tmp/es-probe.c << 'EOF'
+  #include <EndpointSecurity/EndpointSecurity.h>
+  #include <stdio.h>
+  int main(void) {
+    es_client_t *c = NULL;
+    es_handler_block_t h = ^void (es_client_t *cl, const es_message_t *m) { (void)cl; (void)m; };
+    es_new_client_result_t r = es_new_client(&c, h);
+    printf("es_new_client rc=%d\n", (int)r);
+    if (c) es_delete_client(c);
+    return 0;
+  }
+  EOF
+  $ clang -O2 /tmp/es-probe.c \
+      -L/Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk/usr/lib \
+      -lEndpointSecurity -o /tmp/es-probe
+  $ DYLD_FRAMEWORK_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk/System/Library/Frameworks \
+      /tmp/es-probe
+  es_new_client rc=5
+  RC=0
+
+  Result: es_new_client returns 5 = ES_NEW_CLIENT_RESULT_ERR_NOT_ENTITLED.
+
+## Interpretation
+
+  ES_NEW_CLIENT_RESULT_ERR_NOT_ENTITLED = 5 means the kernel rejected
+  the new client because the calling binary does NOT hold the
+  com.apple.developer.endpoint-security.client entitlement.
+
+  The current helper does not hold that entitlement, so even if we
+  were on macOS 15+ (with es_new_descendants_client available in the
+  SDK), the helper could not construct an EndpointSecurity client
+  without first being:
+    (a) signed by a Developer ID associated with an Apple Developer
+        account that has been granted the entitlement, AND
+    (b) re-signed with an entitlements blob that contains
+        com.apple.developer.endpoint-security.client = true.
+
+  The current build is `linker-signed` (ld -adhoc) with no entitlements
+  blob and no Developer ID. Re-signing requires a Developer ID
+  certificate chain AND a manually-issued Apple entitlement grant,
+  which must be requested from Apple per the
+  `com.apple.developer.endpoint-security.client` documentation page.
+
+## Operational classification
+
+  ENTITLEMENT_OBTAINABLE_FOR_CLINEMM = UNKNOWN
+    (requires Apple developer-program enrollment and an Apple-side
+     entitlement grant; the team has not previously requested this
+     entitlement, so its availability for ClineMM is unverified)
+
+  DISTRIBUTION_MODEL_COMPATIBLE = UNKNOWN
+    (if entitlement is granted, the helper would need to be re-signed
+     and re-distributed; existing dogfood/local-dev helper builds do
+     not have a code-signing identity. Production distribution would
+     need a Developer ID + notarization.)
+
+  LOCAL_DEV_BUILD_COMPATIBLE = UNKNOWN
+    (linker-signed adhoc builds cannot use the entitlement; a Developer
+     ID-signed build would be needed for the entitlement to be honored
+     even in a local-dev context.)
+
+  TARGET_OS_SUPPORT = NOT_ACCEPTABLE
+    (requires macOS 15+; current Sonoma host cannot run the descendants
+     client API)
+
+  BETA_API_ACCEPTANCE = N/A
+    (the descendants client is documented as "Beta" by Apple, but this
+     is moot because the SDK and host cannot exercise it)

@@ -3402,3 +3402,120 @@ review unless a new P0 appears. Agent stops here.
 - Round-6: HALT_ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE       CLOSED (42 + 43 witnesses)
 - Round-7: HALT_ORACLE_MISS_CLASSIFIER_NOT_EXERCISED                   CLOSED (44-witness, production classifier)
 - Round-8: HALT_DISPOSITION_WITNESS_CONTRADICTS_CLAIM                  CLOSED (45-witness, production disposition)
+
+---
+
+## ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01 — PASS (BOUNDED CORRECTION01) — 2026-09-19
+
+**Status:** PASS (bounded CORRECTION01 applied per
+`HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE` from Factory
+reviewer + macOS process-control engineer). The selection itself
+(`B_WITH_C_FUTURE_TRACK`) is preserved — B is independently available
+now, A is not qualified in this execution context, and C is unavailable
+on the current OS/signing substrate — so the bounded narrowing does not
+disturb the decision. ACT body, evidence packet, result.json, decision
+matrix, selected-contract, and this epic-board row are all committed
+together in the CORRECTION01 round.
+
+### Honest verdicts (CORRECTION01-narrowed)
+
+```
+SELECTION                              = B_WITH_C_FUTURE_TRACK
+
+A_SEATBELT_ENFORCEMENT                 = UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT
+A_CURRENTLY_QUALIFIED                  = NO
+A_GENERAL_VIABILITY_ON_SONOMA          = NOT_PROVEN  (claim NOT made)
+A_BLANKET_DENY_PROCESS_FORK            = NOT a viable policy shape (would break 4 paths)
+A_FINER_GRAINED_SBPL_POLICY_VIABILITY  = not addressed by this ACT
+
+B                                      = AVAILABLE — current production contract
+
+C_CURRENT_APPLE_BETA_API_FLOOR         = macOS 27 / current beta SDK generation
+C_CURRENT_SONOMA_SUBSTRATE             = UNAVAILABLE
+C_ENTITLEMENT_AVAILABILITY             = UNKNOWN  (not previously requested)
+C_DISTRIBUTION_FEASIBILITY             = UNKNOWN  (may differ from dev grant per Apple capability guidance)
+```
+
+### Bounded correction log
+
+CORRECTION01 (this round, per `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`):
+
+  - **Strategy A claim narrowed.** Original wording was `REFUTED on
+    Sonoma` from a single EPERM observation. Honest claim is
+    `UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT`: this ACT was
+    running in a sandboxed ClineMM agent process, Apple documents
+    that child processes inherit a parent's static sandbox, so the
+    EPERM observed from a sandboxed parent is not evidence Seatbelt
+    is globally unavailable on the host. General Sonoma viability
+    is `NOT_PROVEN` and that global claim is explicitly NOT made.
+    Precedent: ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01 encountered
+    the same EPERM-from-sandboxed-parent hazard and deferred live
+    kernel qualification to an un-sandboxed host. Any future
+    qualification of Strategy A globally requires an un-sandboxed
+    developer-Mac.
+  - **Strategy A blanket deny vs. finer-grained policy.** Original
+    wording conflated "no kernel policy can be written that does not
+    break all four paths" with "blanket (deny process-fork) breaks
+    all four paths". Only the latter is proven. The actual
+    containment primitive would be a finer-grained SBPL policy that
+    allows ordinary fork/exec and only blocks session establishment;
+    that finer-grained shape is not addressed by this ACT.
+  - **Strategy C macOS floor corrected.** Original wording said
+    `macOS 15+ (Sequoia)` because SDK 14 lacks the symbol. Per Apple
+    documentation the symbol is **Beta** and is identified by
+    contemporary external implementation work as a **macOS 27-era**
+    API absent even from the macOS 26.x SDK/runtime. Do NOT infer
+    "macOS 15" merely because SDK 14 lacks the symbol. The honest
+    claim is `CURRENT_APPLE_BETA_API_FLOOR = macOS 27 / current
+    beta SDK generation` and `CURRENT_SONOMA_SUBSTRATE =
+    UNAVAILABLE`.
+  - **Closure durability.** ACT body, evidence packet, result.json,
+    decision matrix, selected-contract, and this epic-board row are
+    all committed together in this round so the closure is durable.
+    `git status --short` empty after commit. The previous round had
+    31 untracked files; they are now committed and HEAD-bound.
+
+### Substrate evidence (live on macOS 14.7.4 / Sonoma / arm64)
+
+| Item | Result |
+|---|---|
+| `sandbox-exec -p '(version 1) (allow default)' /usr/bin/true` | `sandbox_apply: Operation not permitted` (rc=71) — from this execution context only |
+| `sandbox-exec -f profile-process-fork-deny.sbpl ...` (5 modes) | `sandbox_apply: Operation not permitted` (rc=71) — from this execution context only |
+| Production `probeSeatbeltAvailability()` | returns `false` from this execution context |
+| `es_new_descendants_client` symbol | NOT exported from macOS 14.0 SDK; per Apple Beta; per external implementation macOS 27-era |
+| Helper signing | `linker-signed adhoc`, no Developer ID, no entitlements blob |
+| Live `es_new_client()` | `ES_NEW_CLIENT_RESULT_ERR_NOT_ENTITLED` (rc=5) |
+| 4 production `detached:true` / PGID-leader paths | inventoried (connector-supervisor:426, hub/daemon/index.ts:381, BrowserSession.ts:123, bash.ts:806) |
+| 3 production paths that don't require escape | inventoried |
+
+### Files (this ACT, all committed in CORRECTION01 round)
+
+- `.factory/acts/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01.md`
+- `.factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/{00,01,02,10,11,12,20,21,30,31,32,40,41,50}-*.{txt,md}`
+- `.factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/{80,81,82,83,84}-*`
+- `.factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/result.json`
+- Raw captures (gitignored): `.factory/tmp/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/probe/40-seatbelt-setsid-probe.{c,binary}` + 3 SBPL profiles
+
+### Halt log
+
+- `HALT_STRATEGY_A_REQUIRES_COMMAND_HEURISTICS`: did NOT trigger
+- `HALT_STRATEGY_A_BREAKS_ORDINARY_EXEC`: did NOT trigger
+- `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`: TRIGGERED round 1; CLOSED by CORRECTION01 (this round)
+- `CAPTURE_INSUFFICIENT (Strategy C entitlement/deployment viability)`: TRIGGERED; does NOT block selection per §20
+- `CAPTURE_INSUFFICIENT (Strategy B product demand)`: did NOT trigger
+
+### Final closure
+
+```
+CLOSURE_TAXONOMY         = PASS_SELECT_B_CURRENT_C_FUTURE_TRACK
+DECISION_CLAIMS_NARROWED = PASS  (Strategy A: UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT;
+                                  Strategy C: CURRENT_APPLE_BETA_API_FLOOR = macOS 27)
+ACT_ARTIFACT_BOUND       = PASS  (ACT + evidence + result.json + matrix + selected-contract + this row, committed)
+BOARD_DURABLE            = PASS  (this row present and committed)
+
+SUCCESSOR_ACT            = ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+SUCCESSOR_PURPOSE        = PRODUCT_CONTRACT_QUALIFICATION
+```
+
+C1: GO. No production code changes (no source touched in either
+round; `git status --short` clean after commit).

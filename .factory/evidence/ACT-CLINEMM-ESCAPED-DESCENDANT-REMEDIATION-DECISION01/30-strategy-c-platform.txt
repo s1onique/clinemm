@@ -1,0 +1,79 @@
+30-strategy-c-platform.txt
+==========================
+
+# Strategy C — platform capability packet (read-only) — CORRECTION01
+
+## Compiler and SDK
+
+  xcode-select -p              = /Library/Developer/CommandLineTools
+  xcrun --show-sdk-path        = /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+  xcrun --show-sdk-version     = 14.0
+  macOSX.sdk -> MacOSX14.0.sdk (symlink)
+
+## macOS version
+
+  sw_vers
+    ProductName:     macOS
+    ProductVersion:  14.7.4
+    BuildVersion:    23H420
+    Darwin:          23.6.0 (arm64)
+  USER: chistyakov (uid 501)
+
+## EndpointSecurity framework availability
+
+  Header directory (SDK 14.0):
+    /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk/usr/include/EndpointSecurity/
+    ESClient.h
+    ESMessage.h
+    ESTypes.h
+    EndpointSecurity.h
+
+  Symbols exported (from .tbd; objdump / nm -gU):
+    _es_delete_client
+    _es_new_client
+    _es_new_client_with_config
+    _es_subscribe
+
+  Symbols NOT exported (the descendants client API):
+    _es_new_descendants_client  <-- MISSING
+
+CORRECTION01 narrowing (per `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`):
+  The original wording said "The descendants-client API is part of
+  the macOS 15 (Sequoia) SDK and is not back-ported". The honest
+  claim is:
+
+  - Per Apple documentation, `es_new_descendants_client(_:_:)` is
+    currently marked **Beta**. We do NOT have direct local evidence
+    of which macOS SDK generation first shipped the symbol; we
+    observed only that SDK 14.0 does not export it.
+
+  - Contemporary external implementation work identifies the symbol
+    as a **macOS 27-era** API, absent even from the macOS 26.x
+    SDK/runtime.
+
+  - Therefore: do NOT infer "macOS 15 floor" merely because SDK 14
+    lacks the symbol. The correct narrow claim is
+    `CURRENT_APPLE_BETA_API_FLOOR = macOS 27 / current beta SDK
+    generation` and `CURRENT_SONOMA_SUBSTRATE = UNAVAILABLE`.
+
+  Runtime use on this Sonoma host would require either:
+    (i)  acquiring an Apple beta SDK generation that ships the
+         symbol AND a runtime host on which that SDK generation
+         ships (this is a moving target),
+    (ii) shipping a separate fat binary with a beta-only segment,
+         which still requires the runtime host to be that beta
+         generation for dyld to select that segment.
+
+  Either way, Strategy C is currently NOT deployable on this Sonoma
+  host. The "which OS generation is the actual floor" question is
+  out of scope for this ACT; the relevant fact is that the API is
+  Beta and unavailable on Sonoma's macOS 14.7.4.
+
+## Kernel module presence
+
+  security.mac.sandbox.sentinel = .sb-d030d5d7
+  -> Endpoint Security kernel module is loaded.
+  security.mac.endpointsecurity.log_level = 1
+  security.mac.endpointsecurity.panic_on_soft_fail = 0
+  -> ES subsystem is operational at the kernel level; only the
+     client API differs between SDK generations.

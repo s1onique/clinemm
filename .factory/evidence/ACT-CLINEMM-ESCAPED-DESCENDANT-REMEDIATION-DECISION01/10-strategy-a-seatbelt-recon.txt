@@ -1,0 +1,91 @@
+10-strategy-a-seatbelt-recon.txt
+=================================
+
+Question: can macOS Seatbelt (sandbox-exec + SBPL) deny setsid() and
+process-session-detachment while keeping ordinary fork/exec alive
+on this substrate?
+
+Substrate facts (this host):
+  macOS 14.7.4 (23H420), Darwin 23.6.0, arm64
+  SIP enabled, AMFI launch constraints enforced
+  security.mac.sandbox.sentinel = .sb-d030d5d7 (kernel module loaded)
+
+Production-shaped Seatbelt profile lives at:
+  sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts
+
+Minimum production profile lines (verbatim from seatbelt-profile.ts):
+  (version 1)
+  (deny default)
+  (allow process-exec)
+  (allow process-fork)
+  (allow signal (target self))
+  (allow sysctl-read)
+  (allow mach-lookup)
+  ...
+
+Production availability probe lives at:
+  sdk/packages/core/src/runtime/sandbox/macos/seatbelt-availability.ts
+
+It runs:
+  /usr/bin/sandbox-exec -p "(version 1) (allow default)" /usr/bin/true
+
+Result on this substrate (re-verified at the start of this ACT):
+
+  $ /usr/bin/sandbox-exec -p '(version 1) (allow default)' /usr/bin/true
+  sandbox-exec: sandbox_apply: Operation not permitted
+  rc=71
+
+  $ /usr/bin/sandbox-exec -f /tmp/min.sb /bin/echo hello
+  sandbox-exec: sandbox_apply: Operation not permitted
+  rc=71
+
+  $ node -e 'import("node:child_process").then(({spawnSync}) =>
+      console.log(spawnSync("/usr/bin/sandbox-exec",
+        ["-p","(version 1) (allow default)","/usr/bin/true"],
+        {stdio:"ignore",timeout:5000,env:{PATH:"/usr/bin:/bin"}}).status))'
+  status=71
+
+The rc=71 with EPERM (sandbox_apply failed) is the exact same result
+the production availability probe would record -- it returns `false`.
+
+Therefore:
+
+A_SEATBELT_ENFORCEMENT = UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT
+
+HONEST SCOPE (CORRECTION01, per `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`):
+the EPERM is observed from THIS execution context, which is itself a
+sandboxed ClineMM agent process. Apple documents that a child process
+inherits the parent's static sandbox, so an EPERM observed from a
+sandboxed parent is not evidence that Seatbelt is *globally*
+unavailable on the host. The general Sonoma viability of Strategy A
+is `NOT_PROVEN` from this ACT alone; un-sandboxed developer-Mac
+qualification is required to make any global claim. Precedent:
+ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01 encountered the same
+EPERM-from-sandboxed-parent hazard and deferred live kernel
+qualification to an un-sandboxed host.
+
+In this execution context: kernel-level Seatbelt (sandbox_apply) is
+rejected by the substrate for ANY profile (including the trivial
+`(allow default)`), even though the binary `/usr/bin/sandbox-exec`
+exists and the kernel module is loaded
+(`security.mac.sandbox.sentinel = .sb-d030d5d7`). The production
+Seatbelt backend therefore short-circuits to NoSandboxBackend in
+practice -- there is no SBPL rule we can emit that THIS context
+will apply.
+
+Source seams (cited, not modified):
+  - sdk/packages/core/src/runtime/sandbox/macos/seatbelt-profile.ts:684
+    `generateSeatbeltProfile()` -- the generator
+  - sdk/packages/core/src/runtime/sandbox/macos/seatbelt-availability.ts:76
+    `probeSeatbeltAvailability()` -- the runtime gate
+  - sdk/packages/core/src/runtime/sandbox/macos/seatbelt-backend.ts
+    `SeatbeltSandboxBackendExperimental.prepare()` -- the consumer
+
+Halt consequence for THIS ACT:
+  Strategy A cannot pass its kernel-enforcement seam discriminator
+  in this execution context. Per §9 of the ACT spec, the next step
+  would have been RED/GREEN matrix runs under a `(deny process-fork)`
+  profile. Those cannot be executed because sandbox_apply itself
+  fails before any rule is consulted, FROM THIS CONTEXT. The branch
+  is closed here for THIS ACT, but the global viability question
+  remains open and is explicitly NOT claimed refuted.

@@ -1,0 +1,51 @@
+RUN3_SUBSTRATE
+  = REAL | LIVE | UNSANDBOXED_OPERATOR_TERMINAL
+
+KQUEUE_SUSPENDED_PREATTACH
+  = REFUTED
+
+LOAD_BEARING_COUNTEREXAMPLE
+  = double-fork-setsid-G
+  (captured in 82-run3-double-fork-setsid-G.jsonl)
+
+UNIQUE_MISSED_IDENTITIES
+  = 1
+
+MISSED
+  = pid=43372, start_us=1789826834840193
+  (grandchild of fixture G; appears in ground truth but is absent
+   from the kqueue-tracked set {43370, 43371})
+
+100X_RACE_HAMMER
+  = NOT_RUN
+
+WHY_NOT_RUN
+  = primitive already falsified; additional repetitions cannot restore
+    a universal containment claim.
+    Fixture G is constructed so that the second fork occurs immediately
+    after setsid in the child; the parent's kqueue EVFILT_PROC NOTE_FORK
+    event on the child races against the grandchild's exec/no-exec, and
+    even suspended preattach cannot close that race because the grandchild
+    is created AFTER the parent's kqueue registration sees the child.
+
+NEXT
+  = ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01
+  (this ACT — choice of production contract)
+
+Conservation note (this same RUN_3):
+  - E (Node detached:true) and F (Python start_new_session=True) were
+    both zero-miss in this run (RC=0). They are NOT load-bearing for
+    the falsification because fixture G uses a C-level double-fork+setsid
+    which both Node detached:true and Python start_new_session could
+    implement on the host.
+  - However, RUN_3 does not assert that E/F ALWAYS survive kqueue;
+    it only asserts they survived in this run. The relevant universal
+    containment claim was already falsified by G; further hammering E
+    or F would not repair the claim.
+
+Distinction the downstream decision depends on:
+  The failure is "kqueue cannot guarantee recursively closing the
+  watch-registration race for an immediate next-generation fork".
+  It is NOT "every detached process escapes". A PGID-anchored contract
+  that simply does not promise to track cross-session descendants is
+  compatible with the observed evidence.

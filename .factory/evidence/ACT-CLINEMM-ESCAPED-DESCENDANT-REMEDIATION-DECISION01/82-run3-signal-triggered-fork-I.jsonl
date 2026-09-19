@@ -1,0 +1,15 @@
+RUN_START=2026-09-19T14:07:25Z
+{"event":"spawn","pid":43423,"suspended":true,"gt_fd":5}
+{"event":"watch","pid":43423}
+{"event":"sigcont","pid":43423}
+[fixture-signal-triggered-fork-I] parent pid=43423 pgid=43422 ppid=43422
+[fixture-i] received signal=15, forking detached child now
+{"event":"fork","parent_pid":43423,"kevent_data":0}
+{"event":"watch","pid":43424}
+{"event":"exit","pid":43423}
+{"event":"ground_truth","kind":"CREATE","pid":43423,"ppid":43422,"pgid":43422,"start_us":1789826845283788}
+{"event":"ground_truth","kind":"CREATE","pid":43424,"ppid":43423,"pgid":43424,"start_us":1789826845285547}
+{"event":"root_exit","pid":43423,"signal":true,"signal_num":15}
+{"event":"end","tracked":[43423,43424],"ground_truth_created":[{"pid":43423,"ppid":43422,"pgid":43422,"start_us":1789826845283788},{"pid":43424,"ppid":43423,"pgid":43424,"start_us":1789826845285547}],"watch_esrch":[],"watch_failed_other":[],"missed_ground_truth":[],"missed_ground_truth_count":0,"duration_ms":11730,"counters":{"fork_events":1,"watch_attempts":2,"watch_success":2,"watch_esrch":0,"watch_failed_other":0,"ground_truth_created_count":2,"ground_truth_created_with_start_us_count":2,"ground_truth_created_pid_only_count":0,"ground_truth_write_failures":0,"ground_truth_reader_fault":0,"ground_truth_oracle_evidence_fail":0,"ground_truth_seen_count":2,"ground_truth_missed_count":0}}
+RC=0
+RUN_END=2026-09-19T14:07:37Z

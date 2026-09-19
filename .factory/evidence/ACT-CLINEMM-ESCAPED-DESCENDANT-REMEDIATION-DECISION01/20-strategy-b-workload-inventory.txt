@@ -1,0 +1,119 @@
+20-strategy-b-workload-inventory.txt
+====================================
+
+Inventory of production code paths in ClineMM that intentionally
+detach or session-escape. If Strategy B is selected, this is the
+list of workflows that must be DOCUMENTED as operating outside the
+PGID containment boundary.
+
+Source: rg of the current tree (excluding build output and node_modules).
+
+--------------------------------------------------------------------
+REQUIRES_ESCAPE (in production code paths; would break if session
+detach were denied):
+
+[1] sdk/packages/core/src/services/connectors/connector-supervisor.ts:426
+    const child = spawn(..., { detached: true, ... })
+    Comment: "Detached so it survives this hub, but not unref'd from
+              our listener".
+    Owner:   Slack/Telegram/WhatsApp/GChat connector processes
+    Consequence of denying: a hub restart would kill the connectors;
+             the entire connector subsystem (background messaging)
+             becomes unreliable.
+
+[2] sdk/packages/core/src/hub/daemon/index.ts:381
+    export function spawnDetachedHubServer(...)
+    spawn(command.launcher, command.args, { detached: true, ... })
+    Comment: "Detached so it survives this hub".
+    Owner:   hub daemonization (the hub process itself)
+    Consequence of denying: the hub cannot start as a detached
+             background daemon; it would die with the parent terminal.
+
+[3] apps/vscode/src/services/browser/BrowserSession.ts:123
+    const chromeProcess = spawn(installation, args, { detached: true, ... })
+    Comment: "This is key - makes the process independent of parent".
+    Owner:   Puppeteer browser automation (Chrome relaunch)
+    Consequence of denying: the Chrome process would die when the
+             VS Code extension host exits, breaking browser automation.
+
+[4] sdk/packages/core/src/extensions/tools/executors/bash.ts:806
+    spawn(..., { detached: !isWindows })
+    Comment: "Process-tree ownership mirrors the bash executor's
+              (`spawn(..., { detached: !isWindows })`); `killTree()`
+              terminates the OWNED PROCESS TREE — not just the leader
+              shell — via the helper-owned PGID."
+    Owner:   the supervised bash executor itself (the production
+             command runner)
+    Consequence of denying: the entire supervised-command
+             infrastructure (CommandJobManager, helper PGID
+             termination) breaks. This is the load-bearing primitive
+             that makes the "primary owned process group" guarantee
+             possible. Note: this uses detached:true on POSIX to
+             make the shell its own process group leader (pgid==pid);
+             it does NOT call setsid(), but it does rely on
+             process-fork being allowed.
+
+--------------------------------------------------------------------
+DOES_NOT_REQUIRE_ESCAPE (production code that simply uses spawn
+without detached:true and stays inside the inherited PGID):
+
+[5] sdk/packages/core/src/extensions/tools/executors/bash.ts:191
+    spawn(shell, ["-lc", command], { cwd, stdio: ..., env: ... })
+    Owner:   ordinary shell commands (production tool execution).
+    Containment: relies on the supervised bash executor's PGID.
+
+[6] apps/cli/src/connectors/common.ts:251
+    spawn(command.launcher, command.childArgs, { cwd, stdio: ... })
+    Owner:   legacy connector launcher (non-detached path).
+
+[7] sdk/packages/core/src/hooks/subprocess.ts:386
+    spawn(shell, args, { cwd, env, onSpawn, ... })
+    Owner:   hook file invocation.
+
+--------------------------------------------------------------------
+UNKNOWN (referenced but not validated in this ACT):
+
+[8] apps/vscode/src/core/hooks/HookProcess.ts:75
+    spawn(command, args, { shell: true, ... })
+    Used by VS Code extension-side hook runner. Not session-detached,
+    but exact containment path was not exercised end-to-end here.
+
+--------------------------------------------------------------------
+COUNT:
+  REQUIRES_ESCAPE          = 4 (three connector/daemon/browser paths +
+                                one supervised-bash executor's own PGID
+                                leadership trick)
+  DOES_NOT_REQUIRE_ESCAPE  = 3
+  UNKNOWN                  = 1
+
+INTERPRETATION:
+  Refusing detached:true / setsid / start_new_session at the
+  command-execution boundary would break three core ClineMM subsystems:
+  - connector subsystem (messaging background work),
+  - hub daemonization,
+  - browser automation,
+  AND would break the supervised-command executor's PGID-leader
+  pattern, which is the load-bearing mechanism for the "primary owned
+  process group" guarantee itself.
+
+  Therefore Strategy B is the only contract that keeps all four
+  systems working.
+
+--------------------------------------------------------------------
+LEGITIMATE WORKLOADS THAT STRATEGY B DOCUMENTS AS UNSUPPORTED:
+  - User-supplied commands that call setsid(2) directly.
+  - User-supplied Node scripts that spawn with detached:true.
+  - User-supplied Python scripts that use start_new_session=True.
+  - User-supplied shells that invoke `nohup ... &` or background
+    daemons with double-fork.
+  - Any of the above run inside a parent CommandJob that the user
+    later cancels: the descendant running under the new session
+    is NOT terminated by the cancel signal; it is left to run until
+    natural completion.
+
+--------------------------------------------------------------------
+TEST/RECON FIXTURES (excluded from product demand):
+  - tools/macos-host-helper/native/containment-probe/*.c
+  - tools/macos-host-helper/native/containment-probe/*.mjs
+  These are containment ACT fixtures only; they do not represent
+  product workload.

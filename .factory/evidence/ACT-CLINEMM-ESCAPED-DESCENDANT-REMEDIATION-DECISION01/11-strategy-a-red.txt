@@ -1,0 +1,56 @@
+11-strategy-a-red.txt
+=====================
+
+Strategy A RED — prove the escape patterns DO escape under current
+production-shaped execution on this substrate.
+
+The probe binary (40-seatbelt-setsid-probe) lives at:
+  .factory/tmp/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/probe/
+  40-seatbelt-setsid-probe  (34408 bytes, cc -O2 -Wall -Wextra)
+
+Modes exercised (no sandbox, baseline substrate):
+  fork       -> fork(2); child prints its pid, exits.
+  exec       -> fork + execve("/bin/echo","/bin/echo","ok").
+  setsid     -> setsid(2); prints new SID.
+  pipeline   -> fork; in child fork + execve /bin/sh -c 'echo hello'.
+  doublefork -> fork; child does setsid() then fork again; grandchild
+                prints its pid.
+
+Result (transcript):
+  == fork       ==  PARENT_PID=46162 CHILD_PID=46176  RC=0
+  == exec       ==  ok                              RC=0
+  == setsid     ==  SID=46179 PGID=46179            RC=0
+  == pipeline   ==  hello                           RC=0
+  == doublefork ==  GRANDCHILD_PID=46184            RC=0
+
+  (stderr: [fork] child exited code=0 / [exec] child exited code=0 /
+   [pipeline-child] child exited code=0 /
+   [doublefork-b] child exited code=0 /
+   [doublefork-a] child exited code=0)
+
+ESCAPE_SUCCEEDS = TRUE  (under no-sandbox baseline)
+
+This is unsurprising; the production Seatbelt backend currently
+returns `false` from isSeatbeltAvailable() on this substrate
+(see 10-strategy-a-seatbelt-recon.txt), so no sandbox is applied in
+practice. The RED step is therefore a formality confirming what the
+predecessor RUN_3 already established for fixture G.
+
+What this ACT does NOT do:
+  It does not run the same probe matrix under the proposed
+  `(deny process-fork)` profile because sandbox_apply is rejected
+  at the kernel boundary before any rule is consulted (see
+  10-strategy-a-seatbelt-recon.txt for the substrate-level evidence).
+  The GREEN matrix therefore cannot be exercised either.
+
+CORRECTION01 narrowing:
+  Note that the proposed profile above is a BLANKET deny of
+  process-fork, which is not the target primitive. The actual
+  containment goal is to allow ordinary fork/exec while blocking
+  session escape (setsid / new session); a more carefully scoped
+  SBPL policy would not deny process-fork outright. The 4-path
+  inventory (20-strategy-b-workload-inventory.txt) demonstrates
+  that a blanket `(deny process-fork)` cannot be the policy shape
+  because it would trivially break the supervised-bash PGID setup;
+  it does NOT demonstrate that no finer-grained SBPL policy could
+  be written.

@@ -1,0 +1,11 @@
+2026-09-19T14:05:14Z
+HEAD=c434af752bba236bb6c54abcd6f4d0e3144b4ac6
+SELF=42226
+PPID=42211
+ProductName:		macOS
+ProductVersion:		14.7.4
+BuildVersion:		23H420
+Darwin MacBook-Pro-3.local 23.6.0 Darwin Kernel Version 23.6.0: Thu Dec 19 20:47:16 PST 2024; root:xnu-10063.141.1.703.2~1/RELEASE_ARM64_T6031 arm64 arm Darwin
+  PID  PPID USER       COMMAND
+42211  3083 chistyakov bash (figterm)
+42226 42211 chistyakov /opt/homebrew/Cellar/bash/5.3.9/bin/bash

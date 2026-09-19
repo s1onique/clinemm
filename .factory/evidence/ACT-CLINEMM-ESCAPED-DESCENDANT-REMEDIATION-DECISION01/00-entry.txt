@@ -1,0 +1,35 @@
+ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01 — entry freeze.
+
+ACT identity:
+  Source ACT: .factory/acts/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01.md
+  Reviewer:   Factory reviewer, macOS process-control engineer, ClineMM runtime architect
+  Reviewer GO: C1: GO
+
+ENTRY_HEAD    = c434af752bba236bb6c54abcd6f4d0e3144b4ac6
+ENTRY_BRANCH  = (no branch, detached HEAD on this commit)
+ENTRY_STATUS  = clean (git status --short -> empty)
+
+Predecessor (RUN_3) substrate:
+  Evidence:   .factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/
+  Operator:   .factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator/
+  Substrate:  macOS 14.7.4 (23H420), Darwin 23.6.0, arm64, uid 501 (chistyakov)
+
+Live helper (this entry):
+  pid:        9582
+  build_id:   c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+  socket:     /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+  helper bin: /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+
+Predecessor RUN_3 capture path:
+  RUN3_CAPTURE_PATH = .factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator/
+
+PERMANENT_HELPER_PID      = 9582
+PERMANENT_HELPER_BUILD_ID = c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+
+Hygiene pre-checks (live):
+  CONTROL_SURVIVES=FAIL    (predecessor control PID is dead — expected, run complete)
+  HELPER_SOCK_AFTER=ALIVE  (helper socket present)
+  pgrep -> 9582 /.../clinemm-host-helper  (helper process present)
+  UNEXPECTED_TRACKED_DIRT = 0  (no rogue probe processes attached to the helper)
+
+This ACT is READ-ONLY. No production code is modified.

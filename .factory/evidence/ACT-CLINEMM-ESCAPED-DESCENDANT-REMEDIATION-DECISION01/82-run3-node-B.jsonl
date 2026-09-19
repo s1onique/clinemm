@@ -1,0 +1,21 @@
+RUN_START=2026-09-19T14:06:07Z
+{"event":"spawn","pid":43001,"suspended":true,"gt_fd":5}
+{"event":"watch","pid":43001}
+{"event":"sigcont","pid":43001}
+[fixture-node-B] parent pid=43001 pgid=43000 ppid=43000
+{"event":"fork","parent_pid":43001,"kevent_data":0}
+{"event":"watch","pid":43002}
+{"event":"exec","pid":43002}
+{"event":"exec","pid":43002}
+{"event":"fork","parent_pid":43002,"kevent_data":0}
+{"event":"fork","parent_pid":43002,"kevent_data":0}
+{"event":"watch","pid":43008}
+{"event":"fork","parent_pid":43002,"kevent_data":0}
+{"event":"exit","pid":43008}
+{"event":"ground_truth","kind":"CREATE","pid":43001,"ppid":43000,"pgid":43000,"start_us":1789826767348909}
+{"event":"ground_truth","kind":"CREATE","pid":43002,"ppid":43001,"pgid":43000,"start_us":1789826767351330}
+{"event":"ground_truth","kind":"CREATE","pid":43008,"ppid":0,"pgid":0,"start_us":0}
+{"event":"root_exit","pid":43001,"signal":true,"signal_num":15}
+{"event":"end","tracked":[43001,43002,43008],"ground_truth_created":[{"pid":43001,"ppid":43000,"pgid":43000,"start_us":1789826767348909},{"pid":43002,"ppid":43001,"pgid":43000,"start_us":1789826767351330},{"pid":43008,"ppid":0,"pgid":0,"start_us":0}],"watch_esrch":[],"watch_failed_other":[],"missed_ground_truth":[],"missed_ground_truth_count":0,"duration_ms":13912,"counters":{"fork_events":4,"watch_attempts":3,"watch_success":3,"watch_esrch":0,"watch_failed_other":0,"ground_truth_created_count":3,"ground_truth_created_with_start_us_count":2,"ground_truth_created_pid_only_count":1,"ground_truth_write_failures":0,"ground_truth_reader_fault":0,"ground_truth_oracle_evidence_fail":0,"ground_truth_seen_count":3,"ground_truth_missed_count":0}}
+RC=0
+RUN_END=2026-09-19T14:06:21Z

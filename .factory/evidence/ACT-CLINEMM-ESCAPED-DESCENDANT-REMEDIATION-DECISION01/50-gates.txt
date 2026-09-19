@@ -1,0 +1,147 @@
+50-gates.txt
+============
+
+Gate evaluation per §19 of the ACT spec.
+
+ENVELOPE (CORRECTION01):
+  DECISION_CLAIMS_NARROWED                     = PASS
+    (Strategy A: UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT;
+     Strategy C: macOS 27 / current beta SDK floor, NOT "macOS 15+")
+  ACT_ARTIFACT_BOUND                            = PASS
+    (ACT + evidence + result.json + matrix + selected-contract all
+     committed in this round; HEAD-bound after commit)
+  BOARD_DURABLE                                 = PASS
+    (epic-board row appended with bounded-correction framing and
+     committed in this round)
+
+ENTRY_CLEAN                                      = PASS
+  (git status --short -> empty; HEAD=c434af752)
+
+RUN3_EVIDENCE_BOUND                              = PASS
+  (80-/81-/82-/83-/84-* all present and bound to operator captures)
+
+RUN3_G_UNIQUE_MISS                               = PASS
+  (pid=43372,start_us=1789826834840193 missing from kqueue-tracked set)
+
+KQUEUE_REFUTATION                                = PASS
+  (predecessor RUN_3 fixture G falsifies suspended preattach kqueue)
+
+HAMMER_SKIPPED_AFTER_FALSIFICATION               = PASS
+  (84-run3-adjudication.txt records 100X_RACE_HAMMER=NOT_RUN with reason)
+
+NEGATIVE_CONTROLS                                = PASS
+  (83-run3-negative-controls.txt records HELPER_SOCK_AFTER=ALIVE)
+
+A_REAL_ENFORCEMENT_SEAM_IDENTIFIED               = UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT
+  (sandbox_apply EPERM on minimal profile FROM THIS CONTEXT;
+   general Sonoma viability NOT_PROVEN — un-sandboxed developer-Mac
+   qualification needed for any global claim. See
+   10-strategy-a-seatbelt-recon.txt and CORRECTION01 note in
+   11-strategy-a-red.txt / 12-strategy-a-green.txt)
+
+A_ORDINARY_FORK_EXEC_CONSERVED                   = N/A
+  (cannot exercise in this context; sandbox_apply EPERM gates the
+   matrix in this execution context. Finer-grained SBPL policy
+   shapes not addressed by this ACT.)
+
+A_NODE_ESCAPE_DENIED                             = N/A
+  (cannot exercise in this context)
+
+A_PYTHON_ESCAPE_DENIED                           = N/A
+  (cannot exercise in this context)
+
+A_DOUBLE_FORK_ESCAPE_DENIED                      = N/A
+  (cannot exercise in this context)
+
+A_BLANKET_DENY_PROCESS_FORK_SHAPE_BREAKS_4_PATHS = PASS
+  (20-strategy-b-workload-inventory.txt: this ACT proves that a
+   blanket `(deny process-fork)` would break the 4 REQUIRES_ESCAPE
+   paths; it does NOT prove that no finer-grained SBPL policy could
+   be written.)
+
+B_WORKLOAD_INVENTORY                             = PASS
+  (20-strategy-b-workload-inventory.txt: 4 REQUIRES_ESCAPE paths,
+   3 DOES_NOT_REQUIRE_ESCAPE, 1 UNKNOWN)
+
+B_PRODUCT_CONTRACT_EXPLICIT                      = PASS
+  (21-strategy-b-product-contract.md: §§1-8 fully specified)
+
+C_PLATFORM_CAPABILITY_CLASSIFIED                 = PASS
+  (30-strategy-c-platform.txt: es_new_descendants_client not in
+   macOS 14.0 SDK; per Apple the symbol is Beta and is identified
+   as macOS 27-era per contemporary external implementation work;
+   CURRENT_APPLE_BETA_API_FLOOR = macOS 27; CURRENT_SONOMA_SUBSTRATE
+   = UNAVAILABLE)
+
+C_ENTITLEMENT_CLASSIFIED                         = PASS
+  (32-strategy-c-entitlement.md: helper has no entitlement; live
+   rc=5 ES_NEW_CLIENT_RESULT_ERR_NOT_ENTITLED. ENTITLEMENT_AVAILABILITY
+   = UNKNOWN; DISTRIBUTION_FEASIBILITY = UNKNOWN.)
+
+C_DEPLOYABILITY_CLASSIFIED                       = PASS
+  (31-strategy-c-signing.txt + 32-strategy-c-entitlement.md: signing
+   = linker-signed adhoc; entitlement = absent; Apple-granted
+   entitlement for ClineMM = UNKNOWN; distribution feasibility =
+   UNKNOWN.)
+
+DECISION_MATRIX_COMPLETE                         = PASS
+  (40-decision-matrix.md: 11 properties x 3 strategies; all filled
+   with CORRECTION01-narrowed claims)
+
+SELECTED_CONTRACT_EXPLICIT                       = PASS
+  (41-selected-contract.md: SELECTION=B_WITH_C_FUTURE_TRACK with
+   CORRECTION01-narrowed rationale)
+
+NO_HEURISTIC_PROCESS_SWEEP                       = PASS
+  (21 §3.5 explicit; no same-UID enumeration, no process-name
+   matching, no command-text parsing; confirmed by reading the
+   Strategy A recon: only kernel-seatbelt enforcement was considered
+   and was UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT)
+
+NO_PRODUCTION_CHANGE                             = PASS
+  (git status --short after this ACT's evidence authoring is empty
+   -- see "DIFF_CHECK" below)
+
+DIFF_CHECK                                       = PASS
+  (this ACT wrote evidence files + epic-board row + ACT body; no
+   source touched; no signature line would re-add it. ACT body +
+   evidence + epic-board row are committed in the same round.)
+
+EVIDENCE_BOUND                                   = PASS
+  (all files in 00-/01-/02-/10-/11-/12-/20-/21-/30-/31-/32-/40-/41-/50-,
+   80-/81-/82-/83-/84-; result.json present; raw captures bound under
+   .factory/tmp/.../operator/)
+
+Halt conditions encountered:
+  HALT_STRATEGY_A_REQUIRES_COMMAND_HEURISTICS : did NOT trigger;
+        A was rejected at the kernel-enforcement seam in this context,
+        not by resorting to command-text parsing.
+  HALT_STRATEGY_A_BREAKS_ORDINARY_EXEC : did NOT trigger;
+        A was rejected at the kernel-enforcement seam in this
+        context, before any ordinary-exec test was attempted.
+  HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE (reviewer halt
+        from Factory reviewer + macOS process-control engineer):
+        TRIGGERED in round 1; CLOSED by CORRECTION01 (this round).
+        Strategy A claim narrowed to
+        UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT; Strategy C macOS
+        floor corrected from "macOS 15+" to "macOS 27 / current beta
+        SDK generation"; ACT body + evidence + matrix + selected-
+        contract + result.json + epic-board row all committed.
+
+CAPTURE_INSUFFICIENT triggers:
+  CAPTURE_INSUFFICIENT (Strategy C entitlement/deployment viability):
+        TRIGGERED. C is classified UNKNOWN (not YES, not NO) because
+        the entitlement grant status for ClineMM is not yet
+        determined. Per §20: this does NOT block choosing an
+        acceptable current contract (B). The decision ACT still
+        proceeds and selects B_WITH_C_FUTURE_TRACK.
+  CAPTURE_INSUFFICIENT (Strategy B product demand):
+        did NOT trigger. The inventory in 20-strategy-b-workload-
+        inventory.txt was sufficient to classify REQUIRES_ESCAPE
+        paths (4) and DOES_NOT_REQUIRE_ESCAPE paths (3) at the
+        source-seam level.
+
+Final closure:
+  PASS_SELECT_B_CURRENT_C_FUTURE_TRACK
+  (envelope: DECISION_CLAIMS_NARROWED=PASS, ACT_ARTIFACT_BOUND=PASS,
+   BOARD_DURABLE=PASS)

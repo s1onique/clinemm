@@ -1,0 +1,23 @@
+RUN_3 negative-controls (live re-verification at start of this ACT).
+
+CONTROL_SURVIVES=FAIL
+  (predecessor control PID in
+   .factory/tmp/.../operator/control.pid is dead — expected; the
+   preceding operator run completed and its bash driver exited. This
+   is NOT a new failure.)
+
+HELPER_SOCK_AFTER=ALIVE
+  /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock exists
+  with mode srw-------, owned by chistyakov:wheel, mtime Sep 17 17:46.
+
+HELPER_PROCESS_ALIVE=PASS
+  pgrep -fl 'clinemm-host-helper|macos-host-helper/native/helper'
+  -> 9582 /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+
+UNEXPECTED_TRACKED_DIRT=0
+  No rogue probe processes (no 30-/31-/32-/40-/41-/42-/43-/44-/45-
+  prefixed binaries) are attached to the helper, and the helper has no
+  dangling PGIDs.
+
+Decision ACT continues. The helper is healthy and the substrate is
+the same as the predecessor RUN_3 (no change since 2026-09-19 14:07Z).

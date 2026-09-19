@@ -1,0 +1,84 @@
+{
+  "act": "ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01",
+  "purpose": "REMEDIATION_DECISION",
+  "correction_round": "CORRECTION01",
+  "correction_halt": "HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE",
+  "predecessor": {
+    "kqueue_suspended_preattach": "REFUTED",
+    "fixture": "double-fork-setsid-G",
+    "unique_missed_descendants": 1,
+    "race_hammer": "NOT_RUN_ALREADY_FALSIFIED",
+    "ground_truth_capture_path": ".factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator/",
+    "ground_truth_recorded_miss": {
+      "pid": 43372,
+      "start_us": 1789826834840193
+    },
+    "evidence_path": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/"
+  },
+  "strategies": {
+    "A_escape_prohibition": {
+      "enforceability": "UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT",
+      "currently_qualified": "NO",
+      "general_viability_on_sonoma": "NOT_PROVEN",
+      "claim_about_blanket_deny_process_fork": "WOULD trivially break the supervised bash PGID setup; the 4-path inventory proves that a blanket deny is NOT a viable policy shape but does NOT prove that no finer-grained kernel policy can be written",
+      "substrate_observation": "Seatbelt sandbox_apply returns EPERM (rc=71) from this execution context even for the trivial (version 1) (allow default) profile. Apple documents that child processes inherit a parent's static sandbox; an EPERM observed from a sandboxed parent is not evidence Seatbelt is globally unavailable on the host.",
+      "qualification_needed_for_global_claim": "Live qualification on an un-sandboxed developer-Mac (precedent: ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01 encountered the same EPERM-from-sandboxed-parent hazard).",
+      "evidence": "10-strategy-a-seatbelt-recon.txt, 11-strategy-a-red.txt, 12-strategy-a-green.txt"
+    },
+    "B_pgid_only_contract": {
+      "technical_status": "AVAILABLE",
+      "product_compatibility": "ACCEPTABLE",
+      "evidence": "20-strategy-b-workload-inventory.txt, 21-strategy-b-product-contract.md",
+      "requires_escape_paths": 4,
+      "does_not_require_escape_paths": 3
+    },
+    "C_endpoint_security": {
+      "technical_semantics": "PROMISING",
+      "current_apple_beta_api_floor": "macOS 27 / current beta SDK generation",
+      "current_sonoma_substrate": "UNAVAILABLE",
+      "entitlement_availability": "UNKNOWN",
+      "distribution_feasibility": "UNKNOWN",
+      "substrate_block": "es_new_descendants_client() is absent from macOS 14.0 SDK (this host runs 14.7.4); per Apple the symbol is Beta and is also absent from the macOS 26.x SDK/runtime. The helper is linker-signed adhoc with no entitlements blob and es_new_client() returns ES_NEW_CLIENT_RESULT_ERR_NOT_ENTITLED (rc=5) live on this host.",
+      "evidence": "30-strategy-c-platform.txt, 31-strategy-c-signing.txt, 32-strategy-c-entitlement.md"
+    }
+  },
+  "selection": "B_WITH_C_FUTURE_TRACK",
+  "rationale": "A is not qualified in this execution context (sandbox_apply EPERM, narrow claim; global Sonoma viability not proven and not relevant to today's selection). B is technically already-proven (PRIMARY_PGID_CLEANUP = PROVEN) and product-acceptable (matches existing production behavior across connector supervisor, hub daemon, browser automation, and supervised-bash executor). C is a future track: it is semantically attractive (descendants-client scopes ES to the caller's entire descendant subtree, recursively) but is Beta API (macOS 27-era), requires an Apple-granted entitlement, requires a Developer ID signing identity, and requires live E/F/G qualification on an un-sandboxed host. None of these gates are satisfied today.",
+  "production_code_delta": "NONE",
+  "successor_act": "ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01",
+  "successor_purpose": "PRODUCT_CONTRACT_QUALIFICATION",
+  "closure_taxonomy": "PASS_SELECT_B_CURRENT_C_FUTURE_TRACK",
+  "sub_closure_signals": {
+    "DECISION_CLAIMS_NARROWED": "PASS",
+    "ACT_ARTIFACT_BOUND": "PASS",
+    "BOARD_DURABLE": "PASS"
+  },
+  "evidence_packet_root": ".factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/",
+  "raw_capture_root": ".factory/tmp/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/",
+  "halt_conditions_triggered": [],
+  "halt_conditions_acknowledged": [
+    {
+      "name": "CAPTURE_INSUFFICIENT (Strategy C entitlement/deployment viability)",
+      "decision": "TRIGGERED but does NOT block selection. C is classified UNKNOWN; B is selected independently."
+    },
+    {
+      "name": "HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE",
+      "round": "CORRECTION01",
+      "fix": "Strategy A claim narrowed from REFUTED to UNAVAILABLE_FROM_CURRENT_EXECUTION_CONTEXT; Strategy C macOS floor corrected from 15+ to current beta API generation (macOS 27-era); ACT body, evidence, result.json, decision matrix, and epic-board row all committed."
+    }
+  ],
+  "non_goals": [
+    "rerun the 100x kqueue hammer",
+    "repair kqueue recursively",
+    "add polling",
+    "resurrect PPID reconstruction",
+    "kill same-UID processes",
+    "match process names",
+    "parse commands to detect node detached:true",
+    "add Endpoint Security entitlement blindly",
+    "change helper protocol",
+    "modify CommandJobManager",
+    "touch the active-job-gauge telemetry"
+  ]
+}
+

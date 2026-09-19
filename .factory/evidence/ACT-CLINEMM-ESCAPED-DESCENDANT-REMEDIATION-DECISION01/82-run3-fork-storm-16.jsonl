@@ -1,0 +1,97 @@
+RUN_START=2026-09-19T14:07:54Z
+{"event":"spawn","pid":43576,"suspended":true,"gt_fd":5}
+{"event":"watch","pid":43576}
+{"event":"sigcont","pid":43576}
+[fork-storm] parent pid=43576 pgid=43575 ppid=43575 iterations=16
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] immediate-double-fork child pid=43577
+{"event":"watch","pid":43577}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=1 child pid=43578
+[fork-storm] grandchild pid=43579
+{"event":"watch","pid":43578}
+{"event":"fork","parent_pid":43577,"kevent_data":0}
+[fork-storm] immediate-double-fork child 43577 saw grandchild=43579
+{"event":"watch","pid":43579}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=2 child pid=43580
+{"event":"watch","pid":43580}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=3 child pid=43581
+{"event":"watch","pid":43581}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=4 child pid=43582
+{"event":"watch","pid":43582}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=5 child pid=43583
+{"event":"watch","pid":43583}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=6 child pid=43584
+{"event":"watch","pid":43584}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=7 child pid=43585
+{"event":"watch","pid":43585}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=8 child pid=43586
+{"event":"watch","pid":43586}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=9 child pid=43587
+{"event":"watch","pid":43587}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=10 child pid=43588
+{"event":"watch","pid":43588}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=11 child pid=43589
+{"event":"watch","pid":43589}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=12 child pid=43590
+{"event":"watch","pid":43590}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=13 child pid=43591
+{"event":"watch","pid":43591}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=14 child pid=43592
+{"event":"watch","pid":43592}
+{"event":"fork","parent_pid":43576,"kevent_data":0}
+[fork-storm] iteration=15 child pid=43593
+{"event":"watch","pid":43593}
+[fork-storm] parent waiting for descendants
+{"event":"ground_truth","kind":"CREATE","pid":43576,"ppid":43575,"pgid":43575,"start_us":1789826874015227}
+{"event":"ground_truth","kind":"CREATE","pid":43577,"ppid":43576,"pgid":43575,"start_us":1789826874017478}
+{"event":"ground_truth","kind":"CREATE","pid":43577,"ppid":43576,"pgid":43575,"start_us":1789826874017478}
+{"event":"ground_truth","kind":"CREATE","pid":43578,"ppid":43576,"pgid":43575,"start_us":1789826874018109}
+{"event":"ground_truth","kind":"CREATE","pid":43579,"ppid":43577,"pgid":43575,"start_us":1789826874018199}
+{"event":"ground_truth","kind":"CREATE","pid":43578,"ppid":43576,"pgid":43575,"start_us":1789826874018109}
+{"event":"ground_truth","kind":"CREATE","pid":43579,"ppid":43577,"pgid":43575,"start_us":1789826874018199}
+{"event":"ground_truth","kind":"CREATE","pid":43580,"ppid":43576,"pgid":43575,"start_us":1789826874018789}
+{"event":"ground_truth","kind":"CREATE","pid":43580,"ppid":43576,"pgid":43575,"start_us":1789826874018789}
+{"event":"ground_truth","kind":"CREATE","pid":43581,"ppid":43576,"pgid":43575,"start_us":1789826874019359}
+{"event":"ground_truth","kind":"CREATE","pid":43581,"ppid":43576,"pgid":43575,"start_us":1789826874019359}
+{"event":"ground_truth","kind":"CREATE","pid":43582,"ppid":43576,"pgid":43575,"start_us":1789826874019912}
+{"event":"ground_truth","kind":"CREATE","pid":43582,"ppid":43576,"pgid":43575,"start_us":1789826874019912}
+{"event":"ground_truth","kind":"CREATE","pid":43583,"ppid":43576,"pgid":43575,"start_us":1789826874020483}
+{"event":"ground_truth","kind":"CREATE","pid":43583,"ppid":43576,"pgid":43575,"start_us":1789826874020483}
+{"event":"ground_truth","kind":"CREATE","pid":43584,"ppid":43576,"pgid":43575,"start_us":1789826874021023}
+{"event":"ground_truth","kind":"CREATE","pid":43584,"ppid":43576,"pgid":43575,"start_us":1789826874021023}
+{"event":"ground_truth","kind":"CREATE","pid":43585,"ppid":43576,"pgid":43575,"start_us":1789826874021542}
+{"event":"ground_truth","kind":"CREATE","pid":43585,"ppid":43576,"pgid":43575,"start_us":1789826874021542}
+{"event":"ground_truth","kind":"CREATE","pid":43586,"ppid":43576,"pgid":43575,"start_us":1789826874022076}
+{"event":"ground_truth","kind":"CREATE","pid":43586,"ppid":43576,"pgid":43575,"start_us":1789826874022076}
+{"event":"ground_truth","kind":"CREATE","pid":43587,"ppid":43576,"pgid":43575,"start_us":1789826874022495}
+{"event":"ground_truth","kind":"CREATE","pid":43587,"ppid":43576,"pgid":43575,"start_us":1789826874022495}
+{"event":"ground_truth","kind":"CREATE","pid":43588,"ppid":43576,"pgid":43575,"start_us":1789826874022904}
+{"event":"ground_truth","kind":"CREATE","pid":43588,"ppid":43576,"pgid":43575,"start_us":1789826874022904}
+{"event":"ground_truth","kind":"CREATE","pid":43589,"ppid":43576,"pgid":43575,"start_us":1789826874023345}
+{"event":"ground_truth","kind":"CREATE","pid":43589,"ppid":43576,"pgid":43575,"start_us":1789826874023345}
+{"event":"ground_truth","kind":"CREATE","pid":43590,"ppid":43576,"pgid":43575,"start_us":1789826874023790}
+{"event":"ground_truth","kind":"CREATE","pid":43590,"ppid":43576,"pgid":43575,"start_us":1789826874023790}
+{"event":"ground_truth","kind":"CREATE","pid":43591,"ppid":43576,"pgid":43575,"start_us":1789826874024225}
+{"event":"ground_truth","kind":"CREATE","pid":43591,"ppid":43576,"pgid":43575,"start_us":1789826874024225}
+{"event":"ground_truth","kind":"CREATE","pid":43592,"ppid":43576,"pgid":43575,"start_us":1789826874024617}
+{"event":"ground_truth","kind":"CREATE","pid":43592,"ppid":43576,"pgid":43575,"start_us":1789826874024617}
+{"event":"ground_truth","kind":"CREATE","pid":43593,"ppid":43576,"pgid":43575,"start_us":1789826874024983}
+{"event":"ground_truth","kind":"CREATE","pid":43593,"ppid":43576,"pgid":43575,"start_us":1789826874024983}
+{"event":"root_exit","pid":43576,"exit_code":0,"signal":false}
+{"event":"end","tracked":[43576,43577,43578,43579,43580,43581,43582,43583,43584,43585,43586,43587,43588,43589,43590,43591,43592,43593],"ground_truth_created":[{"pid":43576,"ppid":43575,"pgid":43575,"start_us":1789826874015227},{"pid":43577,"ppid":43576,"pgid":43575,"start_us":1789826874017478},{"pid":43577,"ppid":43576,"pgid":43575,"start_us":1789826874017478},{"pid":43578,"ppid":43576,"pgid":43575,"start_us":1789826874018109},{"pid":43579,"ppid":43577,"pgid":43575,"start_us":1789826874018199},{"pid":43578,"ppid":43576,"pgid":43575,"start_us":1789826874018109},{"pid":43579,"ppid":43577,"pgid":43575,"start_us":1789826874018199},{"pid":43580,"ppid":43576,"pgid":43575,"start_us":1789826874018789},{"pid":43580,"ppid":43576,"pgid":43575,"start_us":1789826874018789},{"pid":43581,"ppid":43576,"pgid":43575,"start_us":1789826874019359},{"pid":43581,"ppid":43576,"pgid":43575,"start_us":1789826874019359},{"pid":43582,"ppid":43576,"pgid":43575,"start_us":1789826874019912},{"pid":43582,"ppid":43576,"pgid":43575,"start_us":1789826874019912},{"pid":43583,"ppid":43576,"pgid":43575,"start_us":1789826874020483},{"pid":43583,"ppid":43576,"pgid":43575,"start_us":1789826874020483},{"pid":43584,"ppid":43576,"pgid":43575,"start_us":1789826874021023},{"pid":43584,"ppid":43576,"pgid":43575,"start_us":1789826874021023},{"pid":43585,"ppid":43576,"pgid":43575,"start_us":1789826874021542},{"pid":43585,"ppid":43576,"pgid":43575,"start_us":1789826874021542},{"pid":43586,"ppid":43576,"pgid":43575,"start_us":1789826874022076},{"pid":43586,"ppid":43576,"pgid":43575,"start_us":1789826874022076},{"pid":43587,"ppid":43576,"pgid":43575,"start_us":1789826874022495},{"pid":43587,"ppid":43576,"pgid":43575,"start_us":1789826874022495},{"pid":43588,"ppid":43576,"pgid":43575,"start_us":1789826874022904},{"pid":43588,"ppid":43576,"pgid":43575,"start_us":1789826874022904},{"pid":43589,"ppid":43576,"pgid":43575,"start_us":1789826874023345},{"pid":43589,"ppid":43576,"pgid":43575,"start_us":1789826874023345},{"pid":43590,"ppid":43576,"pgid":43575,"start_us":1789826874023790},{"pid":43590,"ppid":43576,"pgid":43575,"start_us":1789826874023790},{"pid":43591,"ppid":43576,"pgid":43575,"start_us":1789826874024225},{"pid":43591,"ppid":43576,"pgid":43575,"start_us":1789826874024225},{"pid":43592,"ppid":43576,"pgid":43575,"start_us":1789826874024617},{"pid":43592,"ppid":43576,"pgid":43575,"start_us":1789826874024617},{"pid":43593,"ppid":43576,"pgid":43575,"start_us":1789826874024983},{"pid":43593,"ppid":43576,"pgid":43575,"start_us":1789826874024983}],"watch_esrch":[],"watch_failed_other":[],"missed_ground_truth":[],"missed_ground_truth_count":0,"duration_ms":5018,"counters":{"fork_events":17,"watch_attempts":18,"watch_success":18,"watch_esrch":0,"watch_failed_other":0,"ground_truth_created_count":35,"ground_truth_created_with_start_us_count":35,"ground_truth_created_pid_only_count":0,"ground_truth_write_failures":0,"ground_truth_reader_fault":0,"ground_truth_oracle_evidence_fail":0,"ground_truth_seen_count":35,"ground_truth_missed_count":0}}
+RC=0
+RUN_END=2026-09-19T14:07:59Z

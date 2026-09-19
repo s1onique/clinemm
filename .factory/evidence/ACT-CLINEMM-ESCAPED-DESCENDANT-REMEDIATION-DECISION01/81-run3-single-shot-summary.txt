@@ -1,0 +1,50 @@
+RUN_3 single-shot summary (reproduced verbatim from
+.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/
+70-operator-substrate-entry.txt and 71-ground-truth-design.md, plus the
+operator-side JSONL captures copied into 82-*.jsonl).
+
+Fixture G = double-fork-setsid-G (the load-bearing counterexample).
+
+Ground truth (created):
+  pid=43370 ppid=43369 pgid=43369 start_us=1789826834835944  (root, tracked)
+  pid=43371 ppid=43370 pgid=43371 start_us=1789826834839706  (child, tracked)
+  pid=43372 ppid=43371 pgid=43371 start_us=1789826834840193  (grandchild, MISS)
+  pid=43372 ppid=43371 pgid=43371 start_us=1789826834840193  (duplicate GT record for same identity)
+
+kqueue-tracked identities: {43370, 43371}
+
+Driver counters (from 82-run3-double-fork-setsid-G.jsonl end block):
+  fork_events               = 1
+  watch_attempts            = 2
+  watch_success             = 2
+  watch_esrch               = 0
+  watch_failed_other        = 0
+  ground_truth_created_count        = 4 (3 unique + 1 duplicate)
+  ground_truth_seen_count           = 4
+  ground_truth_missed_count         = 2 (raw; one duplicate of same identity)
+  missed_ground_truth_count         = 2
+
+UNIQUE_MISSED_IDENTITIES = 1 (pid=43372,start_us=1789826834840193)
+DRIVER_RC = 5  (miss-classifier decision: not all GT seen)
+
+Conservation evidence (same RUN_3):
+  82-run3-shell-A.jsonl         RC=0 (bash + subshell + grandchild sleep, in-PGID)
+  82-run3-node-B.jsonl          RC=0 (Node sleep child)
+  82-run3-python-C.jsonl        RC=0 (Python sleep child)
+  82-run3-mixed-D.jsonl         RC=0 (heterogeneous bash->python->sleep in-PGID)
+  82-run3-node-escape-E.jsonl   RC=0 (Node detached:true + grandchild)
+  82-run3-python-escape-F.jsonl RC=0 (Python start_new_session=True + grandchild)
+  82-run3-exec-fork-H.jsonl     RC=0 (exec-then-fork pattern)
+  82-run3-signal-triggered-fork-I.jsonl RC=0 (signal-triggered fork)
+  82-run3-double-fork-1.jsonl   RC=0 (one-level double-fork emulator)
+  82-run3-fork-storm-16.jsonl   RC=0 (16 concurrent forks)
+  82-run3-double-fork-setsid-G.jsonl  RC=5 (FAIL — grandchild not captured)
+
+Conclusion (verbatim from predecessor adjudication):
+  "The primitive is already falsified by a stronger single counterexample."
+
+The 100x race hammer was intentionally NOT run: the witness above
+suffices to refute any universal containment claim, because fixture G
+demonstrates the same kernel-mediated race on every iteration by
+construction (immediate second fork after setsid, before the parent
+can deliver the registration).

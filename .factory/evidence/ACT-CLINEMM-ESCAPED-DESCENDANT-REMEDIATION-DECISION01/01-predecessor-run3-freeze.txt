@@ -1,0 +1,68 @@
+01-predecessor-run3-freeze.txt
+=============================
+
+Closed facts inherited from predecessor ACTs and bound by the
+operator captures copied into 80-/81-/82-/83-/84-*.{txt,jsonl}.
+
+PRIMARY_PGID_CLEANUP
+  = PROVEN for inherited-PGID trees
+  source: ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01 +
+          ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+  evidence: production CommandJobManager terminates the leader PGID
+            with SIGTERM -> grace -> SIGKILL; ordinary subprocess
+            children (no setsid, no detached:true) are reaped.
+
+ACTIVE_JOB_GAUGE
+  = GREEN
+  source: ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01
+  meaning: ⎇ counter represents "active CommandJobs", not
+           "live owned processes"; this distinction is durable.
+
+DESCENDANT_ESCAPE
+  = REAL / REPRODUCED
+  source: 71-ground-truth-design.md (predecessor), 82-run3-*.jsonl
+  evidence: fixture G (double-fork+setsid) places a grandchild
+            process (pid=43372, start_us=1789826834840193) into the
+            ground-truth CREATE set while the kqueue-tracked set
+            contains only {43370, 43371}.
+
+A_cleanup_time_ppid_reconstruction
+  = REFUTED
+  source: ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01
+  reason:  after session escape, current ppid == 1 (launchd); walking
+           ppid from the leader fails immediately.
+
+B_spawn_then_attach_kqueue
+  = RACE_REFUTED
+  source: ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01
+          (pre-suspended-recon predecessor)
+  reason:  NOTE_FORK delivery race loses to immediate grandchild fork.
+
+B_suspended_preattach_kqueue
+  = REFUTED by RUN_3 fixture G
+  source: 82-run3-double-fork-setsid-G.jsonl
+  reason:  even with POSIX_SPAWN_START_SUSPENDED and the watch
+           registered before SIGCONT, the second fork after setsid
+           in the child is not observable as a NOTE_FORK on the
+           parent's kqueue in time to register the grandchild.
+
+C_endpoint_security_descendants
+  = unavailable on CURRENT Sonoma/SDK/signing substrate
+  source: this ACT's recon (see 30-strategy-c-platform.txt,
+          31-strategy-c-signing.txt, 32-strategy-c-entitlement.md)
+  reason:  es_new_descendants_client() is NOT in the public SDK
+           headers shipped with macOS 14.0 (the Sonoma SDK);
+           es_new_client() returns ES_NEW_CLIENT_RESULT_ERR_NOT_ENTITLED
+           for an adhoc-signed helper; the helper does not hold the
+           com.apple.developer.endpoint-security.client entitlement.
+
+GENERAL_DESCENDANT_CONTAINMENT
+  = NOT IMPLEMENTED
+  source: this conclusion
+  reason:  no proven primitive is available on this substrate for
+           universal descendant containment; the only remaining
+           contracts are (a) prohibit session-detach (which requires
+           a kernel seam that does not exist here) or (b) accept
+           PGID-only containment and document the boundary.
+
+This ACT does NOT re-litigate any of the above.

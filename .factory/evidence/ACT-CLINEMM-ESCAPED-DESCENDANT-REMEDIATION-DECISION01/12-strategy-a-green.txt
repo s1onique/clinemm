@@ -1,0 +1,76 @@
+12-strategy-a-green.txt
+=======================
+
+Strategy A GREEN discriminator — would have measured:
+
+  | Operation                       |    Expected |
+  | ------------------------------- | ----------: |
+  | ordinary fork                   |       ALLOW |
+  | ordinary exec                   |       ALLOW |
+  | shell pipeline                  |       ALLOW |
+  | Node ordinary child             |       ALLOW |
+  | Python ordinary child           |       ALLOW |
+  | setsid()                        |        DENY |
+  | Node detached:true              | DENY escape |
+  | Python start_new_session=True   | DENY escape |
+  | immediate double-fork+setsid    | DENY escape |
+
+Candidate profile (NOTE: this is a BLANKET `(deny process-fork)` for
+illustrative RED/GREEN measurement; the actual containment primitive
+would be a finer-grained SBPL policy that allows ordinary fork/exec
+and only blocks session-establishment. See CORRECTION01 note below):
+  (version 1)
+  (deny default)
+  (allow process-exec)
+  (deny process-fork)
+  (allow signal (target self))
+  (allow sysctl-read)
+  (allow mach-lookup)
+  (allow file-read* (subpath "/"))
+  (allow file-read* (subpath "/usr/lib"))
+  (allow file-read* (subpath "/usr/bin"))
+  (allow file-read* (subpath "/bin"))
+  (allow file-read* (subpath "/dev"))
+  (allow file-read-metadata (subpath "/"))
+
+Result of attempting to run sandbox-exec with this profile on this
+substrate:
+
+  $ /usr/bin/sandbox-exec -f profile-process-fork-deny.sbpl \
+      ./40-seatbelt-setsid-probe fork
+  sandbox-exec: sandbox_apply: Operation not permitted
+  RC=71
+
+  (same rc=71, sandbox_apply EPERM, for ALL five modes:
+   fork, exec, setsid, doublefork, pipeline)
+
+STRATEGY_A_ENFORCEABILITY_IN_THIS_CONTEXT = NOT_PROVEN (cannot be exercised)
+STRATEGY_A_GENERAL_VIABILITY_ON_SONOMA   = NOT_PROVEN
+
+CORRECTION01 narrowing (per `HALT_DECISION_EVIDENCE_OVERCLAIM_AND_NOT_DURABLE`):
+  The original wording said "Strategy A is REJECTED FOR THIS SUBSTRATE
+  rather than 'not proven'". The honest claim is narrower:
+
+  - In THIS execution context (a sandboxed ClineMM agent process),
+    sandbox_apply returns EPERM for every profile we can write,
+    including the trivial `(allow default)`. This blocks the
+    discriminating experiment in this context.
+
+  - It does NOT prove that Strategy A is globally infeasible on
+    Sonoma. Apple documents that child processes inherit a parent's
+    static sandbox, so the EPERM observed from a sandboxed parent
+    is not evidence that Seatbelt is unavailable on the host. Global
+    viability requires un-sandboxed developer-Mac qualification
+    (precedent: ACT-CLINEMM-SEATBELT-GO-DEFAULT-CACHE01).
+
+  - The blanket `(deny process-fork)` profile shown above is also
+    not the target primitive; the actual containment goal would be
+    a finer-grained SBPL policy that allows ordinary fork/exec and
+    only blocks session establishment. The 4-path inventory proves
+    that this blanket shape is NOT viable; it does NOT prove that
+    no finer-grained shape is viable.
+
+Therefore, in this ACT:
+
+  STRATEGY_A_CURRENTLY_QUALIFIED          = NO
+  STRATEGY_A_GLOBALLY_INFEASIBLE_ON_SONOMA = NOT_PROVEN (claim not made)

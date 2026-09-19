@@ -1,0 +1,32 @@
+02-predecessor-adjudication.txt
+=============================
+
+Why the 100x kqueue race hammer was not run
+(verbatim from 84-run3-adjudication.txt):
+
+  100X_RACE_HAMMER = NOT_RUN
+  WHY_NOT_RUN      = primitive already falsified; additional
+                     repetitions cannot restore a universal
+                     containment claim.
+
+The single fixture-G witness is stronger than a 100-iteration hammer
+for one specific reason: fixture G's race window is construction-fixed.
+The grandchild fork happens immediately after setsid() returns; this
+sequence is the kernel's own ordering, not a probabilistic outcome.
+A hammer would only add the same (pid,start_us) pair 100 more times
+without strengthening or weakening the falsification.
+
+The oracle-correction rounds (round-1 through round-8) of the
+predecessor ACT produced their only effect: making the negative result
+trustworthy. None of those rounds changed the production classifier
+itself; they repaired the oracle so the (missed_ground_truth_count,
+unique_missed_identities) pair is verifiable. Do not reopen them.
+
+What this ACT authorizes next:
+  - Strategy A recon (substrate-level Seatbelt enforcement probe).
+  - Strategy B inventory (production code that uses detached:true
+    intentionally).
+  - Strategy C read-only feasibility packet (platform, signing,
+    entitlement).
+
+It does NOT authorize any production code change in this ACT.
