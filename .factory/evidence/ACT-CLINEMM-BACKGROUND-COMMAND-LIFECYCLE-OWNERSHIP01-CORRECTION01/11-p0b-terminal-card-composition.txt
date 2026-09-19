@@ -66,8 +66,17 @@ BGCL-09 TEST (new in this correction cycle):
     - (Implicit regression guard: when a future ACT adds a
     row-mutation seam, this test must be updated.)
 
-TERMINAL_CARD_TRANSITION = PROVE_OR_HALT (per reviewer)
+TERMINAL_CARD_TRANSITION = DEFERRED_TO_SUCCESSOR_ACT (per reviewer)
   Currently no row-mutation seam exists. The product contract
   is narrowed to "row stays Backgrounded until explicit
-  mutation". A separate ACT must authorize any future
-  row-mutation seam.
+  mutation". A separate ACT (ACT-CLINEMM-BACKGROUND-COMMAND-
+  TERMINAL-ROW-MUTATION01) is the only path to authorize any
+  future row-mutation seam. Until that ACT lands, the row pill
+  does NOT transition to Cancelled/Completed/Failed — even
+  after the underlying CommandJob reaches a terminal state.
+
+  This means: the LIVE qualification card → Cancelled expectation
+  from CORRECTION01's result.json was a contract violation of the
+  narrow product contract pinned by this same file. CORRECTION02
+  corrects that operator expectation: ⎇ 1 → 0 is the correct
+  post-Cancel observation; the card stays "Backgrounded".

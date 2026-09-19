@@ -13,7 +13,7 @@
   "reviewer_halt": "HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE",
   "reviewer_p0s": {
     "P0-A_turn_ownership_override": "RESOLVED — taskHeaderStateLabelWithBackground REMOVED; TaskHeaderTelemetry + TaskHeader reverted to ef82572de state; BGCL-10..13 removed; TURN_OWNERSHIP reclassified UNRESOLVED/SPLIT.",
-    "P0-B_terminal_card_lifecycle": "RESOLVED — investigated and confirmed no row-mutation seam exists today (message-translator.ts is the only writer of commandCompleted/commandExecutionDisposition). Narrow product contract pinned via BGCL-09 (row stays Backgrounded until explicit mutation; ⎇ gauge is the authoritative terminal signal). TERMINAL_CARD_TRANSITION = PROVE_OR_HALT."
+    "P0-B_terminal_card_lifecycle": "RESOLVED_BY_SCOPE_NARROWING — investigated and confirmed no row-mutation seam exists today (message-translator.ts is the only writer of commandCompleted/commandExecutionDisposition). Narrow product contract pinned via BGCL-09 (row stays Backgrounded until explicit mutation; ⎇ gauge is the authoritative terminal signal). TERMINAL_CARD_TRANSITION = DEFERRED_TO_SUCCESSOR_ACT per CORRECTION02. LIVE qualification observes the ⎇ gauge, NOT the row pill."
   },
   "reviewer_p1_runtime_descriptor": {
     "status": "CLEARED (no production change required)",
@@ -63,26 +63,29 @@
   },
   "live_qualification": {
     "status": "DEFERRED to operator (no debug harness, no human UI in authoring shell)",
+    "live_cancel_expectation": "⎇ 1 → hidden/0; card remains Backgrounded; job disappears from active set; cancel RPC returns through the jobId-targeted path. The row pill does NOT transition to Cancelled/Completed/Failed in this ACT — that is reserved for ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-ROW-MUTATION01.",
     "operator_next_steps": [
       "Rebuild + install fresh VSIX",
       "Run `sh -c 'echo STARTED; sleep 600; echo FINISHED'` as a backgrounded command",
       "Verify live: card shows 'Backgrounded' + Cancel visible + ⎇ 1 + header NOT 'Your turn' (header revert means awaiting_followup will show 'Your turn' again — this is intentional per the reviewer's P0-A)",
-      "Click Cancel. Verify: card → Cancelled + ⎇ 0 (via the user-driven terminal path)"
+      "Click Cancel. Verify: ⎇ 1 → 0 (glyph hidden); job disappears from active set; cancel RPC returns through jobId-targeted path. The card row itself remains 'Backgrounded' (no row-mutation seam today — see BGCL-09 narrow contract).",
+      "(Optional) Run short background command, verify natural completion: ⎇ hidden; job disappears from active set; card row still 'Backgrounded'."
     ]
   },
   "halt_triggers_checked": {
-    "HALT_TURN_OWNERSHIP_INSUFFICIENT_EVIDENCE": "RESOLVED — TURN_OWNERSHIP reclassified UNRESOLVED/SPLIT per P0-A",
-    "HALT_TERMINAL_CARD_TRANSITION_UNPROVEN": "OPEN — TERMINAL_CARD_TRANSITION = PROVE_OR_HALT per P0-B; no row-mutation seam today",
+    "HALT_TURN_OWNERSHIP_INSUFFICIENT_EVIDENCE": "RESOLVED_BY_SCOPE_NARROWING — TURN_OWNERSHIP reclassified UNRESOLVED/SPLIT per P0-A (no claim made; awaiting a causal discriminator for CASE_T3)",
+    "HALT_TERMINAL_CARD_TRANSITION_UNPROVEN": "RESOLVED_BY_SCOPE_NARROWING — terminal card mutation is REMOVED FROM this ACT's contract; row remains Backgrounded until a successor ACT (TERMINAL-ROW-MUTATION01) introduces a row-mutation seam. TERMINAL_CARD_TRANSITION = DEFERRED_TO_SUCCESSOR_ACT.",
     "HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID": "CLEARED — all generated files use StringRequest consistently",
     "HALT_EOF_BLANK_LINE_RESIDUE": "CLEARED — git diff --cached --check clean"
   },
   "board_update": {
     "BACKGROUND_CARD_RUNNING_STATE": "GREEN",
     "BACKGROUND_CANCEL_JOBID": "GREEN",
-    "TERMINAL_CARD_TRANSITION": "PROVE_OR_HALT",
+    "TERMINAL_CARD_TRANSITION": "DEFERRED_TO_SUCCESSOR_ACT (TERMINAL-ROW-MUTATION01)",
     "TURN_OWNERSHIP": "UNRESOLVED / SPLIT",
     "AUTOMATIC_MONITORING": "CONSERVED",
-    "PGID_PRODUCTION_DOGFOOD": "RESUME (operator rebuild + install + live qualification; cancel seam unblocked)"
+    "LIVE_CANCEL_EXPECTATION": "⎇ 1 → 0, row remains Backgrounded (per narrow contract)",
+    "PGID_PRODUCTION_DOGFOOD": "READY_FOR_OPERATOR_REBUILD + ACT-...-TERMINAL-ROW-MUTATION01 authorized as a future ACT that, IF PURSUED, will introduce the row-mutation seam"
   },
   "next_after_pass": [
     "Operator rebuild + install + drive the live ⎇ 1 → Backgrounded → live Cancel round-trip in a continuation ACT.",

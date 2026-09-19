@@ -17,8 +17,8 @@ RUNNING_JOB_PROJECTS_BACKGROUNDED                     = PASS  (BGCL-01)
 ACTIVE_JOB_CANCEL_VISIBLE                             = PASS  (BGCL-05)
 CANCEL_JOB_ID_CORRELATED                              = PASS  (BGCL-06)
 
-COMPLETED_ONLY_AFTER_JOB_TERMINAL                     = PROVE_OR_HALT  (per CORRECTION01 P0-B; no row-mutation seam today)
-CANCELLED_PROJECTS_CANCELLED                          = PROVE_OR_HALT  (per CORRECTION01 P0-B; same reason)
+COMPLETED_ONLY_AFTER_JOB_TERMINAL                     = DEFERRED_TO_SUCCESSOR_ACT  (per CORRECTION02; no row-mutation seam today; successor ACT TERMINAL-ROW-MUTATION01 is the only path)
+CANCELLED_PROJECTS_CANCELLED                          = DEFERRED_TO_SUCCESSOR_ACT  (per CORRECTION02; same reason)
 TERMINAL_CARD_COMPOSITION_BGCL09                      = PASS  (BGCL-09; narrow contract pinned)
 
 AUTOMATIC_MONITORING_CONSERVED                        = PASS
@@ -45,17 +45,22 @@ BOARD_DURABLE                                         = PASS  (this CORRECTION01
 FINAL VERDICT (per the bounded CORRECTION01):
   BACKGROUND_CARD_RUNNING_STATE = GREEN
   BACKGROUND_CANCEL_JOBID       = GREEN
-  TERMINAL_CARD_TRANSITION      = PROVE_OR_HALT
+  TERMINAL_CARD_TRANSITION      = DEFERRED_TO_SUCCESSOR_ACT (TERMINAL-ROW-MUTATION01)
   TURN_OWNERSHIP                = UNRESOLVED / SPLIT
   AUTOMATIC_MONITORING          = CONSERVED
+  LIVE_CANCEL_EXPECTATION       = ⎇ 1 → 0, row remains Backgrounded (per BGCL-09 narrow contract)
 
 NOTES:
 - The bounded CORRECTION01 cycle per Factory reviewer HALT verdict
   closes 2792a33ba's over-claims (P0-A ownership override + P0-B
   terminal-row lifecycle) while preserving the useful card/Cancel
   production repair.
-- TERMINAL_CARD_TRANSITION stays PROVE_OR_HALT until a future ACT
-  introduces (or declines to introduce) a row-mutation seam.
+- TERMINAL_CARD_TRANSITION is DEFERRED_TO_SUCCESSOR_ACT per
+  CORRECTION02 scope narrowing. The narrow product contract
+  (row stays Backgrounded; ⎇ gauge is the authoritative
+  terminal signal) stands as the current product contract. A
+  successor ACT (TERMINAL-ROW-MUTATION01) is the only path
+  to introduce a row-mutation seam.
 - TURN_OWNERSHIP is reclassified UNRESOLVED/SPLIT until a causal
   discriminator for CASE_T3 (model yields intentionally vs projection
   bug) is established. The prior ACT did not have one; this

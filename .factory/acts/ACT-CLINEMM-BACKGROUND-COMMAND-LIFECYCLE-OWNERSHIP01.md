@@ -38,9 +38,10 @@
 >
 >     BACKGROUND_CARD_RUNNING_STATE = GREEN
 >     BACKGROUND_CANCEL_JOBID       = GREEN
->     TERMINAL_CARD_TRANSITION      = PROVE_OR_HALT
+>     TERMINAL_CARD_TRANSITION      = DEFERRED_TO_SUCCESSOR_ACT (CORRECTION02)
 >     TURN_OWNERSHIP                = UNRESOLVED / SPLIT
 >     AUTOMATIC_MONITORING          = CONSERVED
+>     LIVE_CANCEL_EXPECTATION       = ⎇ 1 → 0, row remains Backgrounded
 >
 > LIVE_QUALIFICATION (per §20/§26/§31):
 >   The source-level bounded repair is the artifact this

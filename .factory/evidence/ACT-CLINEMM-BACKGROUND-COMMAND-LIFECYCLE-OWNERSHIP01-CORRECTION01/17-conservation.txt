@@ -33,18 +33,24 @@ TURN_OWNERSHIP_OVERRIDE = REVERTED (per P0-A)
     (was claimed PASS without supporting evidence; the prior
     recon ACT explicitly marked CASE_T3 as AMBIGUOUS).
 
-TERMINAL_CARD_TRANSITION = NARROW-CONTRACT (per P0-B)
+TERMINAL_CARD_TRANSITION = DEFERRED_TO_SUCCESSOR_ACT (per CORRECTION02 P0-B scope narrowing)
   - The wire enum is only
     "executed" | "rejected_before_execution" | "backgrounded".
     There is no row-mutation seam today.
-  - The narrow product contract is: the row stays "Backgrounded"
-    until something explicitly mutates it. The authoritative
-    terminal signal is the ⎇ gauge + activeCommandJobs counter
-    (NOT the row pill). Both are driven by
-    onBackgroundStateChange and verified by the prior ACT's
-    tests.
-  - BGCL-09 pins this narrow contract as a regression guard for
-    any future ACT that introduces a row-mutation seam.
+  - The narrow product contract is the contract for THIS ACT:
+    the row stays "Backgrounded" until something explicitly
+    mutates it. The authoritative terminal signal is the ⎇ gauge
+    + activeCommandJobs counter (NOT the row pill). Both are
+    driven by onBackgroundStateChange and verified by the prior
+    ACT's tests.
+  - BGCL-09 pins this contract as a regression guard for any
+    future ACT that introduces a row-mutation seam.
+  - The LIVE operator qualification for THIS ACT observes the
+    ⎇ gauge change, NOT the row pill. The card stays
+    "Backgrounded" both after user-Cancel and after natural
+    command completion. ACT-...-TERMINAL-ROW-MUTATION01 is the
+    ONLY successor authorized to introduce the row-mutation
+    seam that would make the card transition.
 
 AUTOMATIC_MONITORING = CONSERVED (no change from 2792a33ba)
 ACTIVE_GAUGE_SEMANTICS_UNCHANGED = YES (no change from 2792a33ba)

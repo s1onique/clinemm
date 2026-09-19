@@ -24,9 +24,10 @@ TERMINAL_CARD_COMPOSITION_BGCL09                   = PASS  (BGCL-09)
 
 BACKGROUNDED_CARD = GREEN
 BACKGROUND_CANCEL_JOBID = GREEN
-TERMINAL_CARD_TRANSITION = PROVE_OR_HALT  (no row-mutation seam exists today; narrow contract pinned via BGCL-09)
+TERMINAL_CARD_TRANSITION = DEFERRED_TO_SUCCESSOR_ACT  (no row-mutation seam exists today; narrow contract pinned via BGCL-09; a successor ACT — TERMINAL-ROW-MUTATION01 — is the only path to add such a seam)
 TURN_OWNERSHIP = UNRESOLVED / SPLIT  (reclassified; awaiting a causal discriminator)
 AUTOMATIC_MONITORING = CONSERVED  (no change from 2792a33ba)
+LIVE_CANCEL_EXPECTATION = ⎇ 1 → 0, row remains Backgrounded  (per BGCL-09 narrow contract)
 
 REGRESSION GUARDS:
   - CommandOutputRow existing tests: 5/5 PASS
@@ -47,8 +48,11 @@ NOTES:
     verdict closes 2792a33ba's over-claims (the override and
     the terminal-card assertion) while preserving the useful
     card/Cancel production repair.
-  - TERMINAL_CARD_TRANSITION stays PROVE_OR_HALT until a future
-    ACT introduces (or declines to introduce) a row-mutation seam.
+  - TERMINAL_CARD_TRANSITION is DEFERRED_TO_SUCCESSOR_ACT (the
+    successor ACT — TERMINAL-ROW-MUTATION01 — is the only path
+    to introduce a row-mutation seam). The narrow contract
+    (row stays Backgrounded; ⎇ gauge is the authoritative
+    terminal signal) stands as the current product contract.
   - TURN_OWNERSHIP is reclassified UNRESOLVED/SPLIT until a
     causal discriminator for CASE_T3 (model yields intentionally
     vs projection bug) is established. The prior ACT did not

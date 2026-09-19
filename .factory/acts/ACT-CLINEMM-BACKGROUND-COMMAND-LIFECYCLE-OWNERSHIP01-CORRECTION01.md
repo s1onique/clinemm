@@ -1,11 +1,18 @@
 # ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
 
-> Status: **PASS_BOUNDED_CORRECTION01 / LiveQualification = PENDING_OPERATOR**
+> Status: **CLOSED via CORRECTION02 / PASS_BOUNDED_CORRECTION01
+>  with contract correction applied (P0-B scope narrowing
+>  RESOLVED_BY_SCOPE_NARROWING; row-pill expectation removed
+>  from LIVE operator qualification) /
+>  LiveQualification = PENDING_OPERATOR**
 >
 > Epistemic purpose: bounded correction cycle per Factory reviewer
-> HALT verdict (`HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE`).
+> HALT verdicts (`HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE`
+> then `HALT_CORRECTION01_INTERNAL_CONTRADICTION`).
 >
-> Authorization: `C1: GO.` (one bounded correction cycle only).
+> Authorization: `C1: GO.` on both bounded correction cycles.
+> CORRECTION02 is the FINAL evidence/contract correction per
+> the reviewer's CORRECTION02 directive.
 >
 > ```text
 > HEAD at CORRECTION01 opening = 2792a33ba ACT-CLINEMM-BACKGROUND-
@@ -194,10 +201,17 @@ Pins the narrow contract. Asserts:
 - `runningCommandRow(jobId).commandCompleted === false`
 - The webview renders `Backgrounded` for this row.
 
-### TERMINAL_CARD_TRANSITION = PROVE_OR_HALT
+### TERMINAL_CARD_TRANSITION = DEFERRED_TO_SUCCESSOR_ACT
 
-A future ACT that introduces a row-mutation seam must update BGCL-09
-and the narrow contract. Until then, the contract stands.
+A future ACT (ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-ROW-MUTATION01)
+that introduces a row-mutation seam must update BGCL-09 and the narrow
+contract. Until then, the contract stands AND the LIVE operator
+qualification observes the ⎇ gauge + activeCommandJobs counter,
+NOT the row pill. The LIVE cancellation expectation is:
+`⎇ 1 → hidden / 0, card remains Backgrounded, job disappears from
+active set, cancel RPC returns through the jobId-targeted path.`
+Anything stronger (card → Cancelled/Completed/Failed) belongs to
+the successor ACT.
 
 ---
 
@@ -254,13 +268,16 @@ After this CORRECTION01 stage, `git diff --cached --check` is
 ## 7. Halt taxonomy (per ACT §28 — P0 only)
 
 ```text
-HALT_TURN_OWNERSHIP_INSUFFICIENT_EVIDENCE       = RESOLVED
+HALT_TURN_OWNERSHIP_INSUFFICIENT_EVIDENCE       = RESOLVED_BY_SCOPE_NARROWING
   (TURN_OWNERSHIP reclassified UNRESOLVED/SPLIT; AUTO_CONTINUATION_NOT_YOUR_TURN
-   REMOVED FROM GATES)
+   REMOVED FROM GATES; no claim made; awaiting a causal discriminator
+   for CASE_T3)
 
-HALT_TERMINAL_CARD_TRANSITION_UNPROVEN         = OPEN
-  (TERMINAL_CARD_TRANSITION = PROVE_OR_HALT; no row-mutation seam today;
-   narrow contract pinned via BGCL-09)
+HALT_TERMINAL_CARD_TRANSITION_UNPROVEN         = RESOLVED_BY_SCOPE_NARROWING
+  (TERMINAL_CARD_TRANSITION = DEFERRED_TO_SUCCESSOR_ACT; terminal card
+   mutation REMOVED FROM this ACT's contract per CORRECTION02;
+   narrow contract pinned via BGCL-09; LIVE qualification observes
+   the ⎇ gauge, NOT the row pill)
 
 HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID          = CLEARED
   (all generated files use StringRequest consistently)
@@ -306,9 +323,10 @@ TERMINAL_CARD_COMPOSITION_BGCL09          = PASS  (BGCL-09)
 
 BACKGROUNDED_CARD        = GREEN
 BACKGROUND_CANCEL_JOBID  = GREEN
-TERMINAL_CARD_TRANSITION = PROVE_OR_HALT
+TERMINAL_CARD_TRANSITION = DEFERRED_TO_SUCCESSOR_ACT
 TURN_OWNERSHIP           = UNRESOLVED / SPLIT
 AUTOMATIC_MONITORING     = CONSERVED
+LIVE_CANCEL_EXPECTATION  = ⎇ 1 → 0, row remains Backgrounded
 
 TYPECHECK                                  = PASS  (host + webview)
 DIFF_CHECK                                 = PASS  (git diff --cached --check clean)
@@ -331,8 +349,13 @@ clears the P1 false-positive (generated files use StringRequest
 consistently), and fixes the P2 cosmetic issue.
 
 `TURN_OWNERSHIP` is reclassified `UNRESOLVED / SPLIT` per the
-reviewer's directive. `TERMINAL_CARD_TRANSITION` stays
-`PROVE_OR_HALT` until a future ACT introduces a row-mutation seam.
+reviewer's directive. `TERMINAL_CARD_TRANSITION` is
+`DEFERRED_TO_SUCCESSOR_ACT` per CORRECTION02's scope narrowing —
+the row-pill transition (card → Cancelled/Completed/Failed) is
+explicitly removed from THIS ACT's contract; the LIVE qualification
+observes the ⎇ gauge + activeCommandJobs counter, not the row pill.
+A successor ACT (`ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-ROW-MUTATION01`)
+is the only path to introduce a row-mutation seam.
 
 The card/Cancel production repair from CORRECTION00 is RETAINED.
 
@@ -343,31 +366,38 @@ The card/Cancel production repair from CORRECTION00 is RETAINED.
 ```text
 BACKGROUND_CARD_RUNNING_STATE = GREEN
 BACKGROUND_CANCEL_JOBID       = GREEN
-TERMINAL_CARD_TRANSITION      = PROVE_OR_HALT
+TERMINAL_CARD_TRANSITION      = DEFERRED_TO_SUCCESSOR_ACT  (TERMINAL-ROW-MUTATION01)
 TURN_OWNERSHIP                = UNRESOLVED / SPLIT
 AUTOMATIC_MONITORING          = CONSERVED
+LIVE_CANCEL_EXPECTATION       = ⎇ 1 → 0, row remains Backgrounded
 
-PGID PRODUCTION DOGFOOD       = RESUME (operator rebuild + install +
-                                          live qualification; cancel
-                                          seam unblocked)
+PGID PRODUCTION DOGFOOD       = READY_FOR_OPERATOR_REBUILD + ACT-...-TERMINAL-ROW-MUTATION01
+                                authorized as a future ACT that, IF PURSUED,
+                                will introduce the row-mutation seam.
 ```
 
 ---
 
 ## 11. STOP rule
 
-This CORRECTION01 cycle is **CLOSED** on the working tree delta against
-`2792a33ba`. Per the reviewer's STOP rule:
+This CORRECTION02 cycle is **CLOSED** on the working tree delta against
+`1cf318c0b` (the CORRECTION01 commit). Per the reviewer's CORRECTION02
+directive, this is an evidence/contract correction only — no production
+code or tests are changed.
 
 - The card/Cancel production repair is directionally correct.
-- The ownership override was the only over-claim. It is REVERTED.
-- The terminal-row lifecycle is OPEN as a future ACT.
+- The ownership override was REVERTED (CORRECTION01).
+- The terminal-row lifecycle was REMOVED FROM this ACT's contract
+  (CORRECTION02 scope narrowing) and is now `DEFERRED_TO_SUCCESSOR_ACT`.
+- The LIVE operator qualification observes the ⎇ gauge + activeCommandJobs
+  counter, NOT the row pill.
 - Per ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01, this
-  CORRECTION01 row must be committed durably to the board.
+  CORRECTION02 row must be committed durably to the board.
 
 No further corrections are opened in this cycle. If a future ACT
 introduces a row-mutation seam, it must update BGCL-09 and the narrow
-contract.
+contract; until then, the LIVE expectation is `⎇ 1 → 0, row remains
+Backgrounded`.
 
 ---
 
@@ -380,9 +410,16 @@ ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01
   AUTHORIZED BY: this CORRECTION01 (reclassification of TURN_OWNERSHIP).
 
 ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-ROW-MUTATION01
-  WHEN: a row-mutation seam is to be added (terminal card transition).
-  NOT BEFORE: the product contract is documented as PROVE_OR_HALT.
-  AUTHORIZED BY: this CORRECTION01 (PROVE_OR_HALT classification).
+  WHEN: a row-mutation seam is to be added (terminal card transition:
+        card → Cancelled/Completed/Failed).
+  NOT BEFORE: this CORRECTION02 has been committed and the operator
+               has qualified the LIVE ⎇ 1 → 0 round-trip on the
+               narrow contract.
+  AUTHORIZED BY: this CORRECTION01 + CORRECTION02 (DEFERRED_TO_
+                 SUCCESSOR_ACT classification). The successor ACT
+                 MUST update BGCL-09 (the narrow-contract regression
+                 guard) and re-record LIVE qualification under the
+                 new contract.
 ```
 
 ---
@@ -420,10 +457,16 @@ This CORRECTION01 is **CLOSED** at PASS_BOUNDED_CORRECTION01 on the
 working tree delta against `2792a33ba`.
 
 ```text
-verdict                 = PASS_BOUNDED_CORRECTION01
+verdict                 = PASS_BOUNDED_CORRECTION01 + PASS_CONTRACT_CORRECTION02
 production_source_delta = bounded revert of override (3 files) +
                            test edit (1 file) + board row
+                           (CORRECTION01); evidence + ACT bodies +
+                           board (CORRECTION02); no production code
+                           or test changes in CORRECTION02
 live_qualification      = PENDING_OPERATOR (no human UI in authoring shell)
-halt_triggers           = P0-A RESOLVED, P0-B OPEN (PROVE_OR_HALT),
-                          P1 CLEARED, P2 FIXED
+halt_triggers           = P0-A RESOLVED_BY_SCOPE_NARROWING,
+                          P0-B RESOLVED_BY_SCOPE_NARROWING (DEFERRED_TO_SUCCESSOR_ACT),
+                          P1 CLEARED,
+                          P2 FIXED,
+                          HALT_CORRECTION01_INTERNAL_CONTRADICTION RESOLVED
 ```

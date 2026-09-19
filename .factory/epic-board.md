@@ -4074,9 +4074,13 @@ DOGFOOD01). The operator's next step is:
    command.
 3. Verify live: card shows "Backgrounded" + Cancel visible + ⎇ 1 +
    header NOT "Your turn".
-4. Click Cancel. Verify: card → Cancelled + ⎇ 0.
-5. (Optional) Run short background command, verify natural completion →
-   Completed + ⎇ 0.
+4. Click Cancel. Verify: ⎇ glyph hides / counter goes to 0;
+   job disappears from active set; cancel RPC returns through the
+   jobId-targeted path. Card row itself remains "Backgrounded"
+   (narrow contract — no row-mutation seam today).
+5. (Optional) Run short background command, verify natural
+   completion: ⎇ hides; job disappears from active set; card row
+   still "Backgrounded" (narrow contract).
 
 If live qualification fails, trigger HALT_LIVE_BACKGROUNDED_NOT_RENDERED /
 HALT_LIVE_CANCEL_STILL_UNAVAILABLE / HALT_LIVE_FALSE_YOUR_TURN_PERSISTS.
@@ -4151,7 +4155,8 @@ steps:
   stays Backgrounded until something explicitly mutates it. The
   authoritative terminal signal is the ⎇ gauge + activeCommandJobs
   counter (driven by onBackgroundStateChange). TERMINAL_CARD_TRANSITION
-  is PROVE_OR_HALT; a future ACT must authorize any row-mutation seam.
+  is DEFERRED_TO_SUCCESSOR_ACT per CORRECTION02 — a future ACT
+  must authorize any row-mutation seam.
 
   Step 4 (P1 cleared): The reviewer's P1 concern that generated
   files might not consume StringRequest was verified clean: 6 files
@@ -4165,9 +4170,10 @@ steps:
 
   BACKGROUND_CARD_RUNNING_STATE = GREEN  (CORRECTION00 retained)
   BACKGROUND_CANCEL_JOBID       = GREEN  (CORRECTION00 retained)
-  TERMINAL_CARD_TRANSITION      = PROVE_OR_HALT  (CORRECTION01 narrowed)
+  TERMINAL_CARD_TRANSITION      = DEFERRED_TO_SUCCESSOR_ACT  (CORRECTION02 narrowed)
   TURN_OWNERSHIP                = UNRESOLVED / SPLIT  (CORRECTION01 reclassified)
   AUTOMATIC_MONITORING          = CONSERVED  (CORRECTION00 preserved)
+  LIVE_CANCEL_EXPECTATION       = ⎇ 1 → 0, row remains Backgrounded  (CORRECTION02)
 
 **Verification (source-level):**
   - bgcl01 after CORRECTION01: 8/8 pass (BGCL-01..03, 05..09)
@@ -4181,7 +4187,7 @@ steps:
   - biome check on modified files: 0 errors.
   - git diff --cached --check: clean.
 
-**Next ACTs authorized by this CORRECTION01:**
+**Next ACTs authorized by this CORRECTION01 + CORRECTION02:**
 
   ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01
     WHEN: a causal discriminator for CASE_T3 (model yields
@@ -4191,8 +4197,10 @@ steps:
 
   ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-ROW-MUTATION01
     WHEN: a row-mutation seam is to be added (terminal card
-    transition). NOT BEFORE: the product contract is documented
-    as PROVE_OR_HALT.
+    transition: card → Cancelled/Completed/Failed).
+    NOT BEFORE: CORRECTION02 has been committed; operator has
+    qualified the LIVE ⎇ 1 → 0 round-trip on the narrow
+    contract; the successor ACT MUST update BGCL-09.
 
 **LIVE qualification remains DEFERRED** to the operator (no
 debug harness, no human UI in authoring shell). The card/Cancel
@@ -4212,3 +4220,118 @@ production repair is the artifact that ships.
 **EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (HEAD at CORRECTION01 closure)
 **BOARD_DURABLE**                = PASS  (this row committed; both ACT
                                               files durably tracked)
+
+Updated: 2026-09-19 ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION02
+(PASS_CONTRACT_CORRECTION02; the 1cf318c0b CORRECTION01 closure
+left an OPEN P0 halt (`HALT_TERMINAL_CARD_TRANSITION_UNPROVEN =
+OPEN`) while claiming PASS closure — a Factory-semantic
+inconsistency that was HALTed by the reviewer
+`HALT_CORRECTION01_INTERNAL_CONTRADICTION`. CORRECTION02 closes
+that inconsistency via scope narrowing.) — Per the reviewer's
+verbatim CORRECTION02 directive, this bounded correction cycle is
+**evidence/contract only**; all production code and tests remain
+unchanged:
+
+  Step 1: Replaced every operator expectation of
+    card → Cancelled/Completed/Failed after a backgrounded
+    terminal event with the actual current contract:
+      - row remains Backgrounded
+      - ⎇ is the authoritative terminal signal
+    Applied in:
+      - `.factory/evidence/.../CORRECTION01/result.json`
+        (live_qualification.operator_next_steps rewritten)
+      - `.factory/epic-board.md` (operator expectation lines
+        4077-4083 rewritten)
+
+  Step 2: Changed `HALT_TERMINAL_CARD_TRANSITION_UNPROVEN =
+    OPEN` to `RESOLVED_BY_SCOPE_NARROWING` (terminal card
+    mutation REMOVED FROM this ACT's contract). Applied in:
+      - `.factory/evidence/.../CORRECTION01/result.json`
+      - `.factory/evidence/.../CORRECTION01/30-gates.txt`
+      - `.factory/evidence/.../CORRECTION01-CORRECTION01/result.json`
+      - `.factory/evidence/.../CORRECTION01-CORRECTION01/30-gates.txt`
+      - `.factory/acts/.../CORRECTION01.md` (halt taxonomy)
+
+  Step 3: Changed `TERMINAL_CARD_TRANSITION = PROVE_OR_HALT` to
+    `DEFERRED_TO_SUCCESSOR_ACT` (the successor ACT
+    `TERMINAL-ROW-MUTATION01` is the only path to authorize a
+    row-mutation seam). Applied in all the same files as Step 2.
+
+  Step 4: Added `LIVE_CANCEL_EXPECTATION = ⎇ 1 → 0, row remains
+    Backgrounded` to every board state block. Applied in all
+    the same files as Step 2.
+
+  Step 5: All production code and tests UNCHANGED per the
+    reviewer's directive. Only evidence + ACT bodies + board
+    are edited. The card/Cancel production repair from
+    CORRECTION0X (CORRECTION00+01) is RETAINED.
+
+**Final state of the bounded repair (post-CORRECTION02):**
+
+  BACKGROUND_CARD_RUNNING_STATE = GREEN  (CORRECTION00 retained)
+  BACKGROUND_CANCEL_JOBID       = GREEN  (CORRECTION00 retained)
+  TERMINAL_CARD_TRANSITION      = DEFERRED_TO_SUCCESSOR_ACT (CORRECTION02 narrowed)
+  TURN_OWNERSHIP                = UNRESOLVED / SPLIT  (CORRECTION01 reclassified)
+  AUTOMATIC_MONITORING          = CONSERVED  (CORRECTION00 preserved)
+  LIVE_CANCEL_EXPECTATION       = ⎇ 1 → 0, row remains Backgrounded  (CORRECTION02)
+
+**Halt status (post-CORRECTION02):**
+
+  HALT_TURN_OWNERSHIP_INSUFFICIENT_EVIDENCE    = RESOLVED_BY_SCOPE_NARROWING
+  HALT_TERMINAL_CARD_TRANSITION_UNPROVEN       = RESOLVED_BY_SCOPE_NARROWING
+  HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID        = CLEARED
+  HALT_EOF_BLANK_LINE_RESIDUE                  = CLEARED
+  HALT_CORRECTION01_INTERNAL_CONTRADICTION     = RESOLVED
+
+**Verification (source-level, unchanged from CORRECTION01):**
+  - bgcl01: 8/8 pass (BGCL-01..03, 05..09)
+  - All regression guards: pass with no regression
+  - Typecheck host + webview: 0 errors
+  - biome check on modified files: 0 errors
+  - git diff --cached --check: clean
+
+**No production code or test changes in CORRECTION02.**
+
+**Operator qualification step (post-CORRECTION02):**
+
+  Per the reviewer's C1: GO verdict:
+
+  1. Rebuild + install fresh VSIX.
+  2. Run `sh -c 'echo STARTED; sleep 600; echo FINISHED'` as a
+     backgrounded command.
+  3. Verify live: card shows "Backgrounded" + Cancel visible +
+     ⎇ 1 + header NOT "Your turn" (or "Your turn" again after
+     awaiting_followup — the header revert is intentional per
+     CORRECTION01 P0-A).
+  4. Click Cancel. Verify: ⎇ glyph hides / counter goes to 0;
+     job disappears from active set; cancel RPC returns through
+     the jobId-targeted path. Card row itself remains
+     "Backgrounded" (narrow contract — no row-mutation seam
+     today).
+  5. (Optional) Run short background command, verify natural
+     completion: ⎇ hides; job disappears from active set; card
+     row still "Backgrounded".
+
+  Trigger HALT_LIVE_GREEN_STILL_ABSENT if ⎇ glyph is absent or
+  Cancel is unavailable. Do NOT trigger HALT_LIVE_CARD_NOT_
+  CANCELLED — that expectation was removed from this ACT's
+  contract per CORRECTION02.
+
+**Files updated this commit (CORRECTION02):**
+- `.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01.md`
+  (final-state table updated)
+- `.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01.md`
+  (status + halt taxonomy + final state + STOP rule + Next-ACTs
+  authorization updated)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01/`
+  (14-tests.txt UNCHANGED; 17-conservation.txt unchanged-update;
+  30-gates.txt updated; result.json updated)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01/`
+  (11-p0b-terminal-card-composition.txt updated; 17-conservation.txt
+  updated; 30-gates.txt updated; result.json updated)
+- `.factory/epic-board.md` (operator expectation lines + this row)
+
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (HEAD at CORRECTION02 closure)
+**BOARD_DURABLE**                = PASS  (this row committed; ACT bodies
+                                              + evidence + result.json
+                                              all durably tracked)
