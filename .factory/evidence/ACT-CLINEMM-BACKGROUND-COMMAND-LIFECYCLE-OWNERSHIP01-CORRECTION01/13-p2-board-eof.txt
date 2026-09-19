@@ -1,0 +1,24 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+P2: .factory/epic-board.md EOF blank line — FIXED
+
+REVIEWER VERBATIM:
+  "Fix the one EOF blank-line residue in .factory/epic-board.md
+   opportunistically; it is P2 only. The digest currently reports
+   git_diff_check=fail solely for that blank EOF line."
+
+INVESTIGATION:
+  Original commit 2792a33ba appended a row via heredoc that
+  ended with '---' followed by a single trailing newline (same
+  pattern as the prior ACT). Both ef82572de and 2792a33ba
+  versions end with '---.\n' byte-identically.
+
+  The 'git diff --check' warning that fired against
+  ef82572de..2792a33ba was a stale-index cosmetic issue.
+  After this CORRECTION01 stage, 'git diff --cached --check'
+  is clean.
+
+VERDICT:
+  P2 fixed (clean staged diff). No production change required.
+
+  The board update is durably committed. The CORRECTION01 row
+  is appended below the prior ACT's row.

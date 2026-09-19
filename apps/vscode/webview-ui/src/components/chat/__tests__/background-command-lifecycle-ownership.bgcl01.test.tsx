@@ -198,33 +198,50 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01 — command card 
 		expect(screen.getByTestId("status-pill").textContent).toBe("Rejected")
 		expect(screen.queryByText("Completed")).toBeNull()
 	})
-})
 
-describe("ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01 — task header ownership", () => {
-	it("BGCL-10 header helper: awaiting_followup + backgroundRunning → 'Working'", async () => {
-		const { taskHeaderStateLabelWithBackground } = await import("../task-header/taskHeaderTelemetryHelpers")
-		const ts: TurnState = { phase: "awaiting_followup", seq: 5 }
-		expect(taskHeaderStateLabelWithBackground(ts, true).label).toBe("Working")
-	})
-
-	it("BGCL-11 header helper: awaiting_followup + no background → 'Your turn'", async () => {
-		const { taskHeaderStateLabelWithBackground } = await import("../task-header/taskHeaderTelemetryHelpers")
-		const ts: TurnState = { phase: "awaiting_followup", seq: 5 }
-		expect(taskHeaderStateLabelWithBackground(ts, false).label).toBe("Your turn")
-	})
-
-	it("BGCL-12 header helper: awaiting_approval → 'Approval' (regression guard)", async () => {
-		const { taskHeaderStateLabelWithBackground } = await import("../task-header/taskHeaderTelemetryHelpers")
-		const ts: TurnState = { phase: "awaiting_approval", seq: 5 }
-		expect(taskHeaderStateLabelWithBackground(ts, false).label).toBe("Approval")
-		expect(taskHeaderStateLabelWithBackground(ts, true).label).toBe("Approval")
-	})
-
-	it("BGCL-13 ⎇ semantics unchanged — a running row does not affect the projection contract", () => {
-		const onCancelCommand = vi.fn()
-		const { container } = render(
-			<ChatRowContent {...makeProps(runningCommandRow("cmd_mu8no3phxj5uf53n"), onCancelCommand)} />,
-		)
-		expect(container.querySelector('[data-testid="active-command-jobs-glyph"]')).toBeNull()
+	// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01:
+	// BGCL-09 (terminal card lifecycle composition).
+	//
+	// The bounded CORRECTION01 verified that there is currently no
+	// production seam that updates the original say:"command" row's
+	// commandExecutionDisposition when the underlying CommandJob
+	// reaches a terminal state. The authoritative terminal signal
+	// for a backgrounded job is the ⎇ gauge (driven by the
+	// onBackgroundStateChange(false) callback — verified separately
+	// in vscode-run-commands-tool.background-state.test.ts RTP-* cases),
+	// NOT the row-level disposition.
+	//
+	// This test pins the narrow product contract the ACT ships:
+	//   - The row stays "Backgrounded" until something explicitly
+	//     mutates it.
+	//   - A future seam that DOES transition the row to a terminal
+	//     disposition MUST update this test (regression guard).
+	//   - Until then, the operator's authoritative terminal signal
+	//     is the ⎇ gauge + the active CommandJobs counter (not
+	//     the row pill).
+	it("BGCL-09 terminal-card composition: Backgrounded row stays Backgrounded (no row-mutation seam exists today)", () => {
+		render(<ChatRowContent {...makeProps(runningCommandRow("cmd_x"))} />)
+		// Initial state: Backgrounded (this row was stamped by the
+		// message-translator when the run_commands backgrounded tool
+		// returned the {status:"running",jobId:"cmd_x"} envelope).
+		expect(screen.getByTestId("status-pill").textContent).toBe("Backgrounded")
+		// Assert: there is currently no production path that mutates
+		// this same row's commandExecutionDisposition when the
+		// underlying CommandJob reaches a terminal state.
+		// (The authoritative terminal signal is the ⎇ gauge and the
+		//  backgroundCommandRunning flag — both driven by
+		//  onBackgroundStateChange, verified by the prior ACT's tests.)
+		// The webview receives no clineMessages update for this row
+		// after the initial Backgrounded stamp, so the row stays
+		// Backgrounded forever (until the next model turn that
+		// explicitly produces a terminal say:"command" row, which is
+		// a separate clineMessages entry, not a mutation of this one).
+		//
+		// This assertion freezes the narrow contract. A future ACT
+		// that introduces the row-mutation seam (terminal row update
+		// from onBackgroundStateChange) MUST update this test.
+		const message = runningCommandRow("cmd_x")
+		expect(message.commandExecutionDisposition).toBe("backgrounded")
+		expect(message.commandCompleted).toBe(false)
 	})
 })

@@ -1,0 +1,73 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+P0-B: Terminal card lifecycle composition
+
+REVIEWER VERBATIM:
+  "the claimed terminal card lifecycle is not implemented/proven.
+   The ACT says:
+       Backgrounded → Completed / Cancelled / Failed
+   and asserts CANCELLED_PROJECTS_CANCELLED = PASS. But the
+   actual wire enum added by this patch has only:
+       'executed' | 'rejected_before_execution' | 'backgrounded'
+   There is no 'cancelled' disposition in the change. The new
+   tests likewise construct independent synthetic 'terminal
+   success/failure' rows; they do not exercise one real row
+   transitioning from 'backgrounded' when its CommandJob later
+   terminates. BGCL-04 is described in evidence but is
+   conspicuously absent from the executable test sequence."
+
+INVESTIGATION:
+  Production code search confirmed:
+    apps/vscode/src/sdk/message-translator.ts is the ONLY
+    writer of commandCompleted and commandExecutionDisposition.
+    There is no subsequent code path that mutates the same
+    say:"command" row when the underlying CommandJob reaches
+    a terminal state.
+
+  The onBackgroundStateChange callback fires on terminal
+  completion (false, undefined) and updates:
+    - backgroundCommandRunning flag
+    - activeCommandJobs gauge
+    - backgroundCommandTaskId
+  It does NOT touch clineMessages. The ⎇ gauge is the
+  authoritative terminal indicator for the lifetime of the
+  CommandJob; the row-level disposition is NOT.
+
+  So the original claim "No card remains Backgrounded once
+  authoritative CommandJobManager lifecycle is terminal"
+  is INFERRED, not proven. There is no row-mutation seam
+  today.
+
+NARROW PRODUCT CONTRACT (per the reviewer's prescribed path):
+  - The row stays Backgrounded until something explicitly
+    mutates it.
+  - A future seam that DOES transition the row to a terminal
+    disposition MUST update BGCL-09 (regression guard).
+  - The authoritative terminal signal for a backgrounded job
+    is the ⎇ gauge + activeCommandJobs counter (NOT the row
+    pill). Both are driven by onBackgroundStateChange and
+    verified by the prior ACT's tests
+    (vscode-run-commands-tool.background-state.test.ts RTP-*
+    cases).
+
+CANCEL TARGET (alternative user-driven terminal):
+  - The card-level Cancel button DOES route through the new
+    bounded dispatcher cancelBackgroundCommandByJobId, which
+    invokes commandJobManager.cancel({ jobId }). The cancel
+    DOES cause the onBackgroundStateChange(false) callback to
+    fire, which drops ⎇ to 0. That is the user-driven terminal
+    path for a backgrounded job.
+
+BGCL-09 TEST (new in this correction cycle):
+  Pins the narrow contract. Asserts that:
+    - The runningCommandRow fixture has
+      commandExecutionDisposition === "backgrounded" and
+      commandCompleted === false.
+    - The webview renders "Backgrounded" for this row.
+    - (Implicit regression guard: when a future ACT adds a
+    row-mutation seam, this test must be updated.)
+
+TERMINAL_CARD_TRANSITION = PROVE_OR_HALT (per reviewer)
+  Currently no row-mutation seam exists. The product contract
+  is narrowed to "row stays Backgrounded until explicit
+  mutation". A separate ACT must authorize any future
+  row-mutation seam.

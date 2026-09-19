@@ -1,8 +1,14 @@
 # ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01
 
-> Status: **PENDING_CLOSURE / PASS_SOURCE_LEVEL_BOUNDED_REPAIR /
-> LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION**
+> Status: **CLOSED via CORRECTION01 / PASS_SOURCE_LEVEL_BOUNDED_REPAIR
+>  with bounded corrections applied (P0-A override REVERTED, P0-B
+>  terminal-row lifecycle NARROW-CONTRACT) / LIVE_GREEN =
+>  PENDING_OPERATOR_QUALIFICATION**
 >
+> See `.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-
+> OWNERSHIP01-CORRECTION01.md` for the bounded correction cycle
+> per Factory reviewer HALT
+> (`HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE`).
 > Epistemic purpose: `REPRODUCTION → CAUSAL_DISCRIMINATOR →
 > BOUNDED_PRODUCT_REPAIR`
 >
@@ -15,20 +21,26 @@
 >                        captured below)
 > ```
 >
-> Verdict (per ACT §29 closure taxonomy):
+> Verdict (per ACT §29 closure taxonomy, as narrowed by CORRECTION01):
 >
 > ```text
-> PASS_BACKGROUND_COMMAND_LIFECYCLE_OWNERSHIP
+> PASS_BACKGROUND_COMMAND_CARD_LIFECYCLE
 >
->   card status / cancel / turn ownership are
->   CASE_SHARED per §5 — they are BOTH presentation gaps
->   on the SAME background-command lifecycle authority
->   (CommandJobManager → onBackgroundStateChange →
->   SdkController.updateBackgroundCommandState →
->   backgroundCommandRunning / backgroundCommandTaskId /
->   activeCommandJobs). The fix lives in the projection
->   layer that consumes this authority, not in new
->   lifecycle machinery.
+>   The CORRECTION01 cycle (per Factory reviewer HALT) verified
+>   the P0-B premise: there is currently no production row-mutation
+>   seam that updates the original say:"command" row when its
+>   underlying CommandJob reaches a terminal state. The P0-A
+>   override (taskHeaderStateLabelWithBackground demote) was
+>   REVERTED because backgroundCommandRunning is not equivalent
+>   to "agent still owns the turn".
+>
+>   So the bounded repair that ships is:
+>
+>     BACKGROUND_CARD_RUNNING_STATE = GREEN
+>     BACKGROUND_CANCEL_JOBID       = GREEN
+>     TERMINAL_CARD_TRANSITION      = PROVE_OR_HALT
+>     TURN_OWNERSHIP                = UNRESOLVED / SPLIT
+>     AUTOMATIC_MONITORING          = CONSERVED
 >
 > LIVE_QUALIFICATION (per §20/§26/§31):
 >   The source-level bounded repair is the artifact this

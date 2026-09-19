@@ -1,0 +1,106 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01",
+  "status": "PASS_BOUNDED_CORRECTION01",
+  "closure": "PASS_BACKGROUND_COMMAND_CARD_LIFECYCLE (P0-A + P0-B resolved; TURN_OWNERSHIP split out)",
+  "verdict": "PASS_BOUNDED_CORRECTION01 (LiveQualification = PENDING_OPERATOR)",
+  "epistemic_purpose": "REVIEWER_CORRECTION (HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE)",
+  "head_at_pass": "2792a33ba + bounded revert (in working tree; HEAD itself unchanged until commit)",
+  "entry": {
+    "head_at_opening": "2792a33ba ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01: PASS_SOURCE_LEVEL_BOUNDED_REPAIR",
+    "target_revert_point": "ef82572de046508dff1f7c9f7881c43a511f5d83",
+    "unexpected_tracked_dirt": 0
+  },
+  "reviewer_halt": "HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE",
+  "reviewer_p0s": {
+    "P0-A_turn_ownership_override": "RESOLVED — taskHeaderStateLabelWithBackground REMOVED; TaskHeaderTelemetry + TaskHeader reverted to ef82572de state; BGCL-10..13 removed; TURN_OWNERSHIP reclassified UNRESOLVED/SPLIT.",
+    "P0-B_terminal_card_lifecycle": "RESOLVED — investigated and confirmed no row-mutation seam exists today (message-translator.ts is the only writer of commandCompleted/commandExecutionDisposition). Narrow product contract pinned via BGCL-09 (row stays Backgrounded until explicit mutation; ⎇ gauge is the authoritative terminal signal). TERMINAL_CARD_TRANSITION = PROVE_OR_HALT."
+  },
+  "reviewer_p1_runtime_descriptor": {
+    "status": "CLEARED (no production change required)",
+    "verification": "All generated client/stub files (grpc-js, nice-grpc, hosts/vscode/protobus-service-types, hosts/vscode/protobus-services, hosts/standalone/protobus-server-setup) use StringRequest. Webview client + host handler consistent."
+  },
+  "reviewer_p2_board_eof": {
+    "status": "FIXED",
+    "verification": "git diff --cached --check is clean."
+  },
+  "production_delta": {
+    "files_reverted": [
+      "apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts",
+      "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx",
+      "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx"
+    ],
+    "files_modified": [
+      "apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx (BGCL-10..13 removed; BGCL-09 added)"
+    ],
+    "files_unchanged_from_2792a33ba": [
+      "apps/vscode/src/sdk/message-translator.ts (Backgrounded envelope detector)",
+      "apps/vscode/src/sdk/SdkController.ts (cancelBackgroundCommand(jobId?))",
+      "apps/vscode/src/sdk/vscode-session-host.ts (cancelBackgroundCommand(jobId?))",
+      "apps/vscode/src/core/controller/task/cancelBackgroundCommand.ts (forwards jobId)",
+      "apps/vscode/src/shared/ExtensionMessage.ts (commandExecutionDisposition: 'backgrounded')",
+      "apps/vscode/proto/cline/task.proto (cancelBackgroundCommand(StringRequest))",
+      "apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts (cancelBackgroundCommandByJobId dispatcher)",
+      "apps/vscode/webview-ui/src/components/chat/chat-view/components/messages/MessageRenderer.tsx (wires to new dispatcher)",
+      "apps/vscode/webview-ui/src/components/chat/chat-view/components/layout/MessagesArea.tsx (wires to new dispatcher)",
+      "apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx (Backgrounded pill, showCancelButton for backgrounded, jobId dispatch)",
+      "apps/vscode/webview-ui/src/components/chat/ChatRow.tsx (isCommandBackgrounded derivation)"
+    ]
+  },
+  "tests": {
+    "bgcl01_after_correction": "8/8 pass (was 11; removed BGCL-10..13 helper-dependent; added BGCL-09 composition)",
+    "commandOutputRow_existing": "5/5 pass",
+    "rcp01_regression_guard": "8/8 pass",
+    "taskHeaderTelemetryHelpers_existing": "45/45 pass (helper file reverted)",
+    "TaskHeaderTelemetry_existing": "46/46 pass (unchanged)",
+    "message_translator_existing": "167/167 pass (unchanged)",
+    "vscode_session_host_existing": "9/9 pass (unchanged)"
+  },
+  "typecheck": {
+    "host": "PASS (0 errors)",
+    "webview": "PASS (0 errors)",
+    "biome": "PASS (0 errors on modified files)",
+    "git_diff_check": "PASS (clean)"
+  },
+  "live_qualification": {
+    "status": "DEFERRED to operator (no debug harness, no human UI in authoring shell)",
+    "operator_next_steps": [
+      "Rebuild + install fresh VSIX",
+      "Run `sh -c 'echo STARTED; sleep 600; echo FINISHED'` as a backgrounded command",
+      "Verify live: card shows 'Backgrounded' + Cancel visible + ⎇ 1 + header NOT 'Your turn' (header revert means awaiting_followup will show 'Your turn' again — this is intentional per the reviewer's P0-A)",
+      "Click Cancel. Verify: card → Cancelled + ⎇ 0 (via the user-driven terminal path)"
+    ]
+  },
+  "halt_triggers_checked": {
+    "HALT_TURN_OWNERSHIP_INSUFFICIENT_EVIDENCE": "RESOLVED — TURN_OWNERSHIP reclassified UNRESOLVED/SPLIT per P0-A",
+    "HALT_TERMINAL_CARD_TRANSITION_UNPROVEN": "OPEN — TERMINAL_CARD_TRANSITION = PROVE_OR_HALT per P0-B; no row-mutation seam today",
+    "HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID": "CLEARED — all generated files use StringRequest consistently",
+    "HALT_EOF_BLANK_LINE_RESIDUE": "CLEARED — git diff --cached --check clean"
+  },
+  "board_update": {
+    "BACKGROUND_CARD_RUNNING_STATE": "GREEN",
+    "BACKGROUND_CANCEL_JOBID": "GREEN",
+    "TERMINAL_CARD_TRANSITION": "PROVE_OR_HALT",
+    "TURN_OWNERSHIP": "UNRESOLVED / SPLIT",
+    "AUTOMATIC_MONITORING": "CONSERVED",
+    "PGID_PRODUCTION_DOGFOOD": "RESUME (operator rebuild + install + live qualification; cancel seam unblocked)"
+  },
+  "next_after_pass": [
+    "Operator rebuild + install + drive the live ⎇ 1 → Backgrounded → live Cancel round-trip in a continuation ACT.",
+    "If the live ⎇ glyph is still absent or Cancel still unavailable, trigger HALT_LIVE_GREEN_STILL_ABSENT.",
+    "When (and ONLY when) a causal discriminator for CASE_T3 (model yields intentionally vs projection bug) is established, open ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01.",
+    "If a row-mutation seam is to be added (terminal card transition), open ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-ROW-MUTATION01. Until then, the narrow product contract stands."
+  ],
+  "evidence_files": [
+    "02-entry.txt",
+    "10-p0a-revert-and-projection.txt",
+    "11-p0b-terminal-card-composition.txt",
+    "12-p1-runtime-descriptor.txt",
+    "13-p2-board-eof.txt",
+    "14-tests.txt",
+    "15-typecheck.txt",
+    "16-diff-check.txt",
+    "17-conservation.txt",
+    "30-gates.txt",
+    "result.json"
+  ]
+}

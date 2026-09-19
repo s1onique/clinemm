@@ -1,63 +1,51 @@
-TEST RESULTS (targeted suite)
+TEST RESULTS (as updated by ACT-...-CORRECTION01)
 
-apps/vscode/webview-ui/src/components/chat/__tests__/
-  background-command-lifecycle-ownership.bgcl01.test.tsx
-  → 11 tests, ALL PASS (32ms)
+apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
+  8 tests, ALL PASS (after CORRECTION01)
+  BGCL-01: running job projects 'Backgrounded' (NOT 'Completed')  PASS
+  BGCL-02: terminal success stays 'Completed'                      PASS
+  BGCL-03: terminal failure stays 'Completed'                      PASS
+  BGCL-05: backgrounded job shows Cancel                           PASS
+  BGCL-06: Cancel dispatch carries exact jobId                     PASS
+  BGCL-07: terminal job hides Cancel                               PASS
+  BGCL-08: rejected-before-execution stays 'Rejected' (no regression to RCP01) PASS
+  BGCL-09: terminal-card composition (NEW in CORRECTION01)         PASS
+    Backgrounded row stays Backgrounded (no row-mutation seam
+    exists today); ⎇ gauge is the authoritative terminal signal.
 
-  Card lifecycle (BGCL-01, 02, 03, 05, 06, 07, 08):
-    BGCL-01 running job projects 'Backgrounded' (NOT 'Completed')  ✓
-    BGCL-02 terminal success stays 'Completed'                    ✓
-    BGCL-03 terminal failure stays 'Completed'                    ✓
-    BGCL-05 backgrounded job shows Cancel                         ✓
-    BGCL-06 Cancel dispatch carries exact jobId                   ✓
-    BGCL-07 terminal job hides Cancel                             ✓
-    BGCL-08 rejected-before-execution stays 'Rejected'           ✓
-
-  Task header ownership (BGCL-10, 11, 12, 13):
-    BGCL-10 awaiting_followup + backgroundRunning → 'Working'    ✓
-    BGCL-11 awaiting_followup + no background → 'Your turn'       ✓
-    BGCL-12 awaiting_approval → 'Approval' (regression guard)    ✓
-    BGCL-13 ⎇ semantics unchanged (no second command FSM)        ✓
+REMOVED IN CORRECTION01:
+  BGCL-10: header helper awaiting_followup + backgroundRunning -> Working
+            REMOVED (helper function reverted per P0-A)
+  BGCL-11: header helper awaiting_followup + no background -> Your turn
+            REMOVED (helper function reverted)
+  BGCL-12: header helper awaiting_approval -> Approval (regression guard)
+            REMOVED (covered by TaskHeaderTelemetry.test.tsx)
+  BGCL-13: ⎇ semantics unchanged
+            REMOVED (was a non-load-bearing regression guard that
+            depended on the helper; covered by TaskHeaderTelemetry.test.tsx)
 
 REGRESSION GUARDS (existing tests, MUST still pass):
 
   apps/vscode/webview-ui/src/components/chat/CommandOutputRow.test.tsx
-    → 5 tests, ALL PASS (43ms)
+    5 tests, ALL PASS — no regression to card rendering
 
-  apps/vscode/webview-ui/src/components/chat/__tests__/
-    chat-row.rejected-command.rejected-truth.rcp.test.tsx
-    → 8 tests, ALL PASS (27ms)
+  apps/vscode/webview-ui/src/components/chat/__tests__/chat-row.rejected-command.rejected-truth.rcp.test.tsx
+    8 tests, ALL PASS — no regression to RCP01
+
+  apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts
+    45 tests, ALL PASS — helper file state is exactly pre-ACT
+
+  apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx
+    46 tests, ALL PASS — telemetry component unchanged
 
   apps/vscode/src/sdk/message-translator.test.ts
-    → 167 tests, ALL PASS (29ms)
+    167 tests, ALL PASS — translator logic unchanged
 
   apps/vscode/src/sdk/vscode-session-host.test.ts
-    → 9 tests, ALL PASS (12ms)
-
-  apps/vscode/webview-ui/src/components/chat/task-header/
-    taskHeaderTelemetryHelpers.test.ts
-    → 45 tests, ALL PASS (9ms)
-
-  apps/vscode/webview-ui/src/components/chat/task-header/
-    TaskHeaderTelemetry.test.tsx
-    → 46 tests, ALL PASS (150ms)
-
-  apps/vscode/webview-ui/src/components/chat/chat-view/shared/
-    buttonConfig.test.ts
-    → 37 tests, ALL PASS (14ms)
-
-ENVIRONMENTAL PRE-EXISTING FAILURES (NOT REGRESSIONS):
-
-  apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts
-    → 6 tests FAIL on ef82572de BEFORE any change in this ACT
-      (verified via git stash + re-run). These tests spawn POSIX
-      sleep/sh subprocesses from vitest's pool; the authoring
-      shell's sandbox EPERM-kills child processes. The failures
-      are environmental, not a regression introduced by this ACT.
+    9 tests, ALL PASS — cancelBackgroundCommand(jobId?) signature
 
 INVARIANT:
-  - BGCL01..BGCL14 (this ACT): all pass
-  - Existing RCTP01..RCTP08 (RCP01 regression guard): all pass
-  - Existing CommandOutputRow tests: all pass
-  - Existing message-translator tests: all pass
-  - No new tests introduced outside the bounded suite
+  - BGCL01..09 (this ACT after CORRECTION01): 8/8 pass
+  - All regression guards: pass with no regression
+  - Removed tests were the helper-dependent set only
+  - No new production bugs introduced

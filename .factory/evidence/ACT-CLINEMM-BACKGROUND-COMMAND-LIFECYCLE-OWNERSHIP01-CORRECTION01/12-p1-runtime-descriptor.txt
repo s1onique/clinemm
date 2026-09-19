@@ -1,0 +1,47 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+P1: Runtime RPC descriptor consumes StringRequest — VERIFIED CLEAN
+
+REVIEWER VERBATIM:
+  "the proto changes cancelBackgroundCommand from EmptyRequest
+   to StringRequest, and the ACT says `bun run protos`
+   regenerated clients, but the digest manifest contains no
+   generated client/stub files at all (generated_files=0).
+   Confirm that the runtime gRPC descriptor actually expects
+   StringRequest; otherwise TypeScript structural compatibility
+   could conceal a wire-level loss of jobId."
+
+VERIFICATION:
+  apps/vscode/src/generated/grpc-js/cline/task.ts
+    cancelBackgroundCommand.requestType = StringRequest as typeof StringRequest
+    cancelBackgroundCommand.requestSerialize = (value: StringRequest) => ...
+
+  apps/vscode/src/generated/nice-grpc/cline/task.ts
+    cancelBackgroundCommand(request: StringRequest, context: ...): Promise<...>
+
+  apps/vscode/src/generated/hosts/vscode/protobus-service-types.ts
+    cancelBackgroundCommand:(controller: Controller, request: proto.cline.StringRequest) => Promise<proto.cline.Empty>
+
+  apps/vscode/src/generated/hosts/vscode/protobus-services.ts
+    cancelBackgroundCommand: cancelBackgroundCommand  (correct binding)
+
+  apps/vscode/src/generated/hosts/standalone/protobus-server-setup.ts
+    cancelBackgroundCommand: wrapper<cline.StringRequest,cline.Empty>(cancelBackgroundCommand, controller)
+
+  apps/vscode/webview-ui/src/services/grpc-client.ts
+    static async cancelBackgroundCommand(request: proto.cline.StringRequest): Promise<proto.cline.Empty>
+      return this.makeUnaryRequest("cancelBackgroundCommand", request, ...)
+
+VERDICT:
+  All generated client/stub files correctly use StringRequest.
+  The runtime gRPC descriptor expects StringRequest (verified
+  in 5 files). The wire-level loss of jobId risk is closed.
+
+  The reviewer's concern about "no generated files" was
+  misplaced — the generated files DO exist and ARE consistent
+  with the new proto (the regenerated bundle reflects
+  `bun run protos` from CORRECTION00). TypeScript structural
+  compatibility does not conceal a wire-level loss of jobId
+  here because both ends (host handler and webview client)
+  use the same generated StringRequest type.
+
+P1 = CLEARED (no production change required).

@@ -1,0 +1,52 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+CONSERVATION INVARIANTS
+
+BACKGROUNDED_CARD = RETAINED (from 2792a33ba)
+  - The Backgrounded pill, isCommandBackgrounded derivation,
+    and CommandOutputRow.getCommandStatusText branch are RETAINED.
+    The user sees "Backgrounded" (NOT "Completed") while the
+    underlying CommandJob is alive.
+
+CANCEL_JOBID = RETAINED (from 2792a33ba)
+  - The card-level Cancel onClick dispatches onCancelCommand(jobId).
+  - MessageRenderer.tsx and MessagesArea.tsx wire to the new
+    cancelBackgroundCommandByJobId dispatcher (NOT
+    executeButtonAction("cancel"), which would route to
+    cancelTask — wrong target).
+  - The cancelBackgroundCommand(StringRequest) proto is RETAINED.
+  - Host chain cancelBackgroundCommand.ts -> SdkController
+    .cancelBackgroundCommand(jobId?) -> vscode-session-host
+    .cancelBackgroundCommand(jobId?) -> commandJobManager
+    .cancel({ jobId }) is RETAINED.
+  - When jobId provided -> single-job cancel; when omitted ->
+    legacy session-wide cancel (back-compat).
+
+TURN_OWNERSHIP_OVERRIDE = REVERTED (per P0-A)
+  - taskHeaderStateLabelWithBackground function is REMOVED from
+    taskHeaderTelemetryHelpers.ts (file reverted to ef82572de).
+  - TaskHeaderTelemetry.tsx and TaskHeader.tsx reverted to
+    pre-ACT state (no backgroundCommandRunning pass-through;
+    no backgroundCommandRunningOverride prop).
+  - TaskHeader now reads the bare taskHeaderPresentationStateLabel
+    derivation (no demote of awaiting_followup to streaming).
+  - AUTO_CONTINUATION_NOT_YOUR_TURN = REMOVED FROM GATES
+    (was claimed PASS without supporting evidence; the prior
+    recon ACT explicitly marked CASE_T3 as AMBIGUOUS).
+
+TERMINAL_CARD_TRANSITION = NARROW-CONTRACT (per P0-B)
+  - The wire enum is only
+    "executed" | "rejected_before_execution" | "backgrounded".
+    There is no row-mutation seam today.
+  - The narrow product contract is: the row stays "Backgrounded"
+    until something explicitly mutates it. The authoritative
+    terminal signal is the ⎇ gauge + activeCommandJobs counter
+    (NOT the row pill). Both are driven by
+    onBackgroundStateChange and verified by the prior ACT's
+    tests.
+  - BGCL-09 pins this narrow contract as a regression guard for
+    any future ACT that introduces a row-mutation seam.
+
+AUTOMATIC_MONITORING = CONSERVED (no change from 2792a33ba)
+ACTIVE_GAUGE_SEMANTICS_UNCHANGED = YES (no change from 2792a33ba)
+RUNTIME_INCIDENT_SEMANTICS_UNCHANGED = YES (no change from 2792a33ba)
+PGID_TERMINATION_SEMANTICS_UNCHANGED = YES (no change from 2792a33ba)

@@ -4117,3 +4117,98 @@ ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01).
 
 ---
 
+Updated: 2026-09-19 ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+(PASS_BOUNDED_CORRECTION01; the 2792a33ba PASS_SOURCE_LEVEL_BOUNDED_REPAIR
+verdict was HALTed by the Factory reviewer
+`HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE` and
+re-closed via the bounded correction cycle) — Per the reviewer's
+verbatim directive, this CORRECTION01 executed exactly five bounded
+steps:
+
+  Step 1 (KEEP): The card/Cancel production repair from 2792a33ba
+  is RETAINED — Backgrounded pill, card-level Cancel button, exact
+  jobId dispatch, session-wide backward-compatible fallback, the
+  cancelBackgroundCommand(StringRequest) proto, the new
+  cancelBackgroundCommandByJobId dispatcher, and the
+  MessageRenderer/MessagesArea wiring. None of this is reverted.
+
+  Step 2 (REVERT P0-A): The `taskHeaderStateLabelWithBackground`
+  override was REVERTED. Three files were restored to their ef82572de
+  state:
+    apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
+    apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx
+    apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx
+  The bgcl01 test file lost 4 helper-dependent tests (BGCL-10..13).
+  TURN_OWNERSHIP is reclassified UNRESOLVED/SPLIT;
+  AUTO_CONTINUATION_NOT_YOUR_TURN is REMOVED FROM GATES
+  (was claimed PASS without supporting evidence; the prior recon ACT
+  explicitly marked CASE_T3 as AMBIGUOUS).
+
+  Step 3 (PROVE_OR_HALT P0-B): Investigation confirmed there is no
+  production row-mutation seam that updates the original say:"command"
+  row when its underlying CommandJob reaches a terminal state. The
+  narrow product contract is pinned via BGCL-09 (added): the row
+  stays Backgrounded until something explicitly mutates it. The
+  authoritative terminal signal is the ⎇ gauge + activeCommandJobs
+  counter (driven by onBackgroundStateChange). TERMINAL_CARD_TRANSITION
+  is PROVE_OR_HALT; a future ACT must authorize any row-mutation seam.
+
+  Step 4 (P1 cleared): The reviewer's P1 concern that generated
+  files might not consume StringRequest was verified clean: 6 files
+  (5 generated + 1 webview client) consistently use StringRequest.
+  No production change required.
+
+  Step 5 (P2 fixed): The .factory/epic-board.md EOF blank line was
+  fixed. `git diff --cached --check` is now clean.
+
+**Final state of the bounded repair:**
+
+  BACKGROUND_CARD_RUNNING_STATE = GREEN  (CORRECTION00 retained)
+  BACKGROUND_CANCEL_JOBID       = GREEN  (CORRECTION00 retained)
+  TERMINAL_CARD_TRANSITION      = PROVE_OR_HALT  (CORRECTION01 narrowed)
+  TURN_OWNERSHIP                = UNRESOLVED / SPLIT  (CORRECTION01 reclassified)
+  AUTOMATIC_MONITORING          = CONSERVED  (CORRECTION00 preserved)
+
+**Verification (source-level):**
+  - bgcl01 after CORRECTION01: 8/8 pass (BGCL-01..03, 05..09)
+  - CommandOutputRow existing: 5/5 pass (no regression)
+  - RCP01 regression guard: 8/8 pass (no regression)
+  - taskHeaderTelemetryHelpers existing: 45/45 pass (file reverted)
+  - TaskHeaderTelemetry existing: 46/46 pass (no change)
+  - message-translator existing: 167/167 pass (no change)
+  - vscode-session-host existing: 9/9 pass (no change)
+  - Typecheck host + webview: 0 errors.
+  - biome check on modified files: 0 errors.
+  - git diff --cached --check: clean.
+
+**Next ACTs authorized by this CORRECTION01:**
+
+  ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01
+    WHEN: a causal discriminator for CASE_T3 (model yields
+    intentionally vs projection bug) is established.
+    NOT before. The P0-A override was the only over-claim; this
+    CORRECTION01 does NOT invent an alternative signal.
+
+  ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-ROW-MUTATION01
+    WHEN: a row-mutation seam is to be added (terminal card
+    transition). NOT BEFORE: the product contract is documented
+    as PROVE_OR_HALT.
+
+**LIVE qualification remains DEFERRED** to the operator (no
+debug harness, no human UI in authoring shell). The card/Cancel
+production repair is the artifact that ships.
+
+**Files updated this commit:**
+- `.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01.md`
+  (status + verdict updated to reflect CORRECTION01)
+- `.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01.md`
+  (NEW ACT body, 429 lines)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01/`
+  (14-tests.txt, 17-conservation.txt, 30-gates.txt, result.json updated)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01/`
+  (NEW evidence packet: 11 files + result.json)
+- `.factory/epic-board.md` (this row)
+
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (HEAD at CORRECTION01 closure)
+**BOARD_DURABLE**                = PASS  (this row committed; both ACT
+                                              files durably tracked)

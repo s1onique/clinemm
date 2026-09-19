@@ -1,0 +1,42 @@
+ACT_ID                  = ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+ENTRY_COMMIT            = 2792a33ba89c110c14428ca023616634c62e30b0 (HEAD at CORRECTION01 opening)
+ENTRY_TREE              = ef82572de046508dff1f7c9f7881c43a511f5d83 (target revert point)
+ENTRY_BRANCH            = (detached / sandbox worktree)
+ENTRY_REMOTE_HEAD       = 2792a33ba ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01: PASS_SOURCE_LEVEL_BOUNDED_REPAIR
+ENTRY_STATUS            = clean tracked worktree
+ENTRY_STASHES           = (none)
+ENTRY_RECOVERY          = (none)
+
+UNEXPECTED_TRACKED_DIRT = 0
+
+REVIEWER                 = Factory reviewer (Factory causal reviewer on
+                            HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE)
+REVIEWER_HALT            = HALT_BACKGROUND_COMMAND_LIFECYCLE_CLOSURE_EXCEEDS_EVIDENCE
+
+PROVENANCE_OF_HALT:
+  - 2792a33ba PASS_SOURCE_LEVEL_BOUNDED_REPAIR claimed:
+      AUTO_CONTINUATION_NOT_YOUR_TURN = PASS
+    but the evidence did not establish that
+    backgroundCommandRunning is equivalent to
+    "agent still owns the turn".
+  - The ACT's own recon said continuation is model-driven,
+    there is no host scheduler/wake mechanism, and explicitly
+    marked CASE_T3 ("model chooses to stop polling and yields
+    intentionally") as AMBIGUOUS.
+  - The repair then unconditionally mapped
+    backgroundCommandRunning && awaiting_followup → Working,
+    conflating job liveness with turn ownership.
+
+  - 2792a33ba also claimed CANCELLED_PROJECTS_CANCELLED = PASS
+    but the wire enum is only
+    "executed" | "rejected_before_execution" | "backgrounded"
+    (no "cancelled"). There is no demonstrated lifecycle callback
+    that mutates the original say:"command" row when the
+    underlying CommandJob reaches a terminal state.
+
+  - The P1 about generated files consuming StringRequest was
+    verified clean: generated/grpc-js, generated/nice-grpc, and
+    generated/hosts/* all use StringRequest. False positive.
+
+  - The P2 about .factory/epic-board.md EOF blank line was a
+    cosmetic issue, fixed in this correction cycle.

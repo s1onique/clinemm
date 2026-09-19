@@ -1,0 +1,42 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+DIFF-CHECK RESULTS
+
+PRODUCTION DELTA (this CORRECTION01 only):
+  2792a33ba -> ef82572de-pre-ACT (revert the override):
+    apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
+    apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx
+    apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx
+
+PRODUCTION DELTA (CORRECTION01 net, against ef82572de):
+  No net production source change beyond 2792a33ba for the
+  three task-header files. The original ACT's bounded
+  production repair (Backgrounded card, Cancel dispatcher,
+  cancelBackgroundCommand(StringRequest) proto) is RETAINED
+  per the reviewer's Step 1 ("Keep Backgrounded, card-level
+  Cancel, exact jobId dispatch, and the session-wide
+  backward-compatible fallback").
+
+TEST DELTA (this CORRECTION01):
+  apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
+    - Removed BGCL-10..13 (helper-dependent)
+    + Added BGCL-09 (terminal-card composition)
+    Net: 11 tests -> 8 tests (all pass)
+
+BOARD DELTA (this CORRECTION01):
+  .factory/epic-board.md
+    + CORRECTION01 row appended (bounded correction cycle)
+
+DIFF_CHECK = git diff --cached --check -> 0 errors (clean)
+
+NOT_TOUCHED in this CORRECTION01:
+  - command-job-manager.ts (CommandJobManager termination algorithm)
+  - vscode-session-host.ts CommandJobManager wiring
+  - PGID containment / cleanup / native helper / LaunchAgent / kqueue
+  - Endpoint Security
+  - pgid-containment-product-contract01
+  - The two prior writers of awaiting_followup
+    (controller-epoch-transition-reseed,
+     followup-on-follow-up-abandoned)
+  - proto/cline/task.proto (cancelBackgroundCommand(StringRequest)
+    proto change is RETAINED from 2792a33ba)
+  - The card/Cancel bounded production repair from 2792a33ba

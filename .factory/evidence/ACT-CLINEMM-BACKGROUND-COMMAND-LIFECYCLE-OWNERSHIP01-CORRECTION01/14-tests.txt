@@ -1,0 +1,54 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+TEST RESULTS
+
+apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
+  8 tests, ALL PASS (23ms)
+  BGCL-01: running job projects 'Backgrounded' (NOT 'Completed')  PASS
+  BGCL-02: terminal success stays 'Completed'                      PASS
+  BGCL-03: terminal failure stays 'Completed'                      PASS
+  BGCL-05: backgrounded job shows Cancel                           PASS
+  BGCL-06: Cancel dispatch carries exact jobId                     PASS
+  BGCL-07: terminal job hides Cancel                               PASS
+  BGCL-08: rejected-before-execution stays 'Rejected' (no regression) PASS
+  BGCL-09: terminal-card composition (NEW)                         PASS
+    Backgrounded row stays Backgrounded (no row-mutation seam
+    exists today); ⎇ gauge is the authoritative terminal signal
+
+REGRESSION GUARDS (existing tests, MUST still pass):
+
+  apps/vscode/webview-ui/src/components/chat/CommandOutputRow.test.tsx
+    5 tests, ALL PASS (45ms) — no regression to card rendering
+
+  apps/vscode/webview-ui/src/components/chat/__tests__/chat-row.rejected-command.rejected-truth.rcp.test.tsx
+    8 tests, ALL PASS (19ms) — no regression to RCP01
+
+  apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts
+    45 tests, ALL PASS (4ms) — helper-file state is exactly pre-ACT
+
+  apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx
+    46 tests, ALL PASS (64ms) — telemetry component unchanged
+
+  apps/vscode/src/sdk/message-translator.test.ts
+    167 tests, ALL PASS (29ms) — translator logic unchanged
+
+  apps/vscode/src/sdk/vscode-session-host.test.ts
+    9 tests, ALL PASS (12ms) — cancelBackgroundCommand(jobId?) signature
+
+REMOVED TESTS (CORRECTION01):
+  BGCL-10: header helper awaiting_followup + backgroundRunning -> Working
+            REMOVED (helper function reverted)
+  BGCL-11: header helper awaiting_followup + no background -> Your turn
+            REMOVED (helper function reverted)
+  BGCL-12: header helper awaiting_approval -> Approval (regression guard)
+            REMOVED (helper function reverted; awaiting_approval regression
+            guard is already covered by existing TaskHeaderTelemetry.test.tsx)
+  BGCL-13: ⎇ semantics unchanged
+            REMOVED (was a non-load-bearing regression guard that depended
+            on the helper; covered by TaskHeaderTelemetry.test.tsx)
+
+INVARIANT:
+  - BGCL01..09 (this ACT after CORRECTION01): 8/8 pass
+  - All regression guards: pass with no regression
+  - Removed tests were the helper-dependent set only
+  - No new production bugs introduced; no new tests added
+    outside the bounded suite

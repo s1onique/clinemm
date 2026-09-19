@@ -1,0 +1,36 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+TYPECHECK RESULTS
+
+host side, apps/vscode:
+  PLATFORM=vscode FORCE_COLOR=0 NO_COLOR=1
+  /opt/homebrew/bin/node ./node_modules/typescript/bin/tsc --noEmit
+  Result: 0 errors (EXIT=0)
+
+webview side, apps/vscode/webview-ui:
+  PLATFORM=vscode FORCE_COLOR=0 NO_COLOR=1
+  /opt/homebrew/bin/node ./node_modules/typescript/bin/tsc --noEmit
+  Result: 0 errors (EXIT=0)
+
+biome check on the files modified in this CORRECTION01:
+  - apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
+  - apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx (no delta from 2792a33ba)
+  - apps/vscode/webview-ui/src/components/chat/ChatRow.tsx (no delta from 2792a33ba)
+  - apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts (reverted to ef82572de)
+  - apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx (reverted to ef82572de)
+  - apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx (reverted to ef82572de)
+  - apps/vscode/src/sdk/message-translator.ts (no delta from 2792a33ba)
+  - apps/vscode/src/sdk/SdkController.ts (no delta from 2792a33ba)
+  - apps/vscode/src/sdk/vscode-session-host.ts (no delta from 2792a33ba)
+  - apps/vscode/src/core/controller/task/cancelBackgroundCommand.ts (no delta from 2792a33ba)
+  - apps/vscode/src/shared/ExtensionMessage.ts (no delta from 2792a33ba)
+  - apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts (no delta from 2792a33ba)
+  - apps/vscode/webview-ui/src/components/chat/chat-view/components/messages/MessageRenderer.tsx (no delta from 2792a33ba)
+  - apps/vscode/webview-ui/src/components/chat/chat-view/components/layout/MessagesArea.tsx (no delta from 2792a33ba)
+  - apps/vscode/proto/cline/task.proto (no delta from 2792a33ba)
+
+  PLATFORM=vscode FORCE_COLOR=0 NO_COLOR=1
+  /opt/homebrew/bin/bunx biome check --no-errors-on-unmatched --max-diagnostics=20 ...
+  Result: 0 errors (only pre-existing warnings)
+
+git diff --cached --check:
+  Result: clean (no warnings)

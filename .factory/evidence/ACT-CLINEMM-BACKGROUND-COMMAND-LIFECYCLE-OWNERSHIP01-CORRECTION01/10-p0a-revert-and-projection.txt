@@ -1,0 +1,36 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+P0-A: Revert the taskHeaderStateLabelWithBackground override
+
+REVIEWER VERBATIM:
+  "backgroundCommandRunning is not equivalent to 'agent still
+   owns the turn.' The ACT's own recon says continuation is
+   model-driven, there is no host scheduler/wake mechanism, and
+   explicitly marks CASE_T3 — 'model chooses to stop polling and
+   yields intentionally' — as AMBIGUOUS. Yet the repair then
+   unconditionally maps:
+       backgroundCommandRunning && awaiting_followup → Working
+   That turns job liveness into turn ownership, which has not
+   been proven."
+
+EXECUTION:
+  Files reverted to ef82572de state:
+    apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
+    apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx
+    apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx
+
+  Files updated:
+    apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
+      Removed the BGCL-10..13 describe block (4 tests) that depended
+      on the now-reverted helper. Replaced with BGCL-09 (terminal
+      card lifecycle composition) that pins the narrow contract.
+
+RECLASSIFIED:
+  TURN_OWNERSHIP = UNRESOLVED / SPLIT
+  A separate continuation-ownership ACT will be authorized ONLY
+  when a causal discriminator for "model yields intentionally vs
+  projection bug" is established (not just "backgroundCommandRunning
+  is true").
+
+  AUTO_CONTINUATION_NOT_YOUR_TURN = REMOVED FROM GATES
+  (it was claimed PASS without supporting evidence; the prior
+  recon ACT explicitly marked CASE_T3 as AMBIGUOUS).

@@ -1,0 +1,57 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01
+GATE MATRIX
+
+ENTRY_CLEAN                                       = PASS  (git status --short: only ACT body, evidence, and bounded source deltas; UNEXPECTED_TRACKED_DIRT = 0)
+PRODUCTION_BUILD_BOUND                             = PASS  (git diff --cached --stat: bounded revert of override + test edit + board row; no scope expansion)
+
+REVIEWER_P0A_REVERT_OVERRIDE                        = PASS  (taskHeaderStateLabelWithBackground REMOVED; TaskHeaderTelemetry + TaskHeader reverted to ef82572de state)
+REVIEWER_P0A_TEST_ORPHANS_REMOVED                  = PASS  (BGCL-10..13 removed; 4 -> 0 dependent tests)
+REVIEWER_P0A_TURN_OWNERSHIP_RECLASSIFIED           = PASS  (UNRESOLVED / SPLIT; AUTO_CONTINUATION_NOT_YOUR_TURN REMOVED FROM GATES)
+REVIEWER_P0B_TERMINAL_TRANSITION_INVESTIGATED       = PASS  (no row-mutation seam found in production; verified via grep + reader)
+REVIEWER_P0B_NARROW_CONTRACT_PINNED                 = PASS  (BGCL-09 added; row stays Backgrounded until explicit mutation)
+REVIEWER_P0B_NO_FAKE_TERMINAL_ROW                   = PASS  (do not claim Completed/Cancelled/Failed; narrow contract is "row stays Backgrounded")
+REVIEWER_P1_RUNTIME_DESCRIPTOR_VERIFIED             = PASS  (5 generated files use StringRequest; webview client + host handler consistent)
+REVIEWER_P2_EOF_BLANK_LINE_FIXED                    = PASS  (git diff --cached --check clean)
+
+CARD_LIFECYCLE_BACKGROUNDED_PROJECTION             = PASS  (BGCL-01)
+TERMINAL_SUCCESS_PROJECTION                       = PASS  (BGCL-02)
+TERMINAL_FAILURE_PROJECTION                       = PASS  (BGCL-03)
+ACTIVE_JOB_CANCEL_VISIBLE                          = PASS  (BGCL-05)
+CANCEL_JOB_ID_CORRELATED                           = PASS  (BGCL-06)
+TERMINAL_JOB_HIDES_CANCEL                          = PASS  (BGCL-07)
+REJECTED_REGRESSION_GUARD                           = PASS  (BGCL-08)
+TERMINAL_CARD_COMPOSITION_BGCL09                   = PASS  (BGCL-09)
+
+BACKGROUNDED_CARD = GREEN
+BACKGROUND_CANCEL_JOBID = GREEN
+TERMINAL_CARD_TRANSITION = PROVE_OR_HALT  (no row-mutation seam exists today; narrow contract pinned via BGCL-09)
+TURN_OWNERSHIP = UNRESOLVED / SPLIT  (reclassified; awaiting a causal discriminator)
+AUTOMATIC_MONITORING = CONSERVED  (no change from 2792a33ba)
+
+REGRESSION GUARDS:
+  - CommandOutputRow existing tests: 5/5 PASS
+  - RCP01 regression guard: 8/8 PASS
+  - taskHeaderTelemetryHelpers existing: 45/45 PASS (unchanged after revert)
+  - TaskHeaderTelemetry existing: 46/46 PASS (unchanged after revert)
+  - message-translator existing: 167/167 PASS (unchanged)
+  - vscode-session-host existing: 9/9 PASS (unchanged)
+
+TYPECHECK                                  = PASS  (host + webview both clean)
+DIFF_CHECK                                 = PASS  (git diff --cached --check clean)
+
+EVIDENCE_BOUND_TO_FINAL_HEAD               = PASS  (this CORRECTION01 evidence packet binds to HEAD 2792a33ba + revert + test edit)
+BOARD_DURABLE                              = PASS  (board row appended below the prior ACT's row)
+
+NOTES:
+  - The bounded CORRECTION01 cycle per Factory reviewer HALT
+    verdict closes 2792a33ba's over-claims (the override and
+    the terminal-card assertion) while preserving the useful
+    card/Cancel production repair.
+  - TERMINAL_CARD_TRANSITION stays PROVE_OR_HALT until a future
+    ACT introduces (or declines to introduce) a row-mutation seam.
+  - TURN_OWNERSHIP is reclassified UNRESOLVED/SPLIT until a
+    causal discriminator for CASE_T3 (model yields intentionally
+    vs projection bug) is established. The prior ACT did not
+    have one; this CORRECTION01 does not invent one.
+  - LIVE qualification remains DEFERRED to operator (no debug
+    harness, no human UI in authoring shell).

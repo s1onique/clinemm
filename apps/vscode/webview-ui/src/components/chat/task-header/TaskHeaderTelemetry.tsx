@@ -92,25 +92,13 @@ import {
 	formatElapsed,
 	isUsableMechanismProjection,
 	resolveElapsedDisplayMs,
-	taskHeaderStateLabelWithBackground,
+	taskHeaderPresentationStateLabel,
 } from "./taskHeaderTelemetryHelpers"
 
 interface TaskHeaderTelemetryProps {
 	telemetry: TaskHeaderTelemetryStrip | undefined
 	taskHeaderPresentation: TaskHeaderPresentationProjection | undefined
 	turnState: TurnState | undefined
-	/**
-	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
-	 * When a background CommandJob is alive, suppress the
-	 * user-facing "Your turn" label by demoting
-	 * `awaiting_followup` → "Working" via the bounded projection
-	 * helper `taskHeaderStateLabelWithBackground`. Optional for
-	 * backward compatibility — when absent the header falls back
-	 * to the bare `taskHeaderPresentationStateLabel` derivation
-	 * (no behavior change for consumers that do not pass this
-	 * flag).
-	 */
-	backgroundCommandRunning?: boolean
 	/**
 	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01
 	 * + ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
@@ -198,16 +186,8 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 	taskHeaderPresentation,
 	turnState,
 	diagnosticKnobs,
-	backgroundCommandRunning,
 }) => {
-	// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
-	// bounded projection-layer override. When a background
-	// CommandJob is alive, demote `awaiting_followup` → "Working"
-	// so the header does not falsely tell the user "Your turn".
-	// The override is a pure projection (no state, no React, no
-	// DOM, no chat-derived inference). All other phases pass
-	// through `taskHeaderPresentationStateLabel` unchanged.
-	const state = taskHeaderStateLabelWithBackground(turnState, backgroundCommandRunning)
+	const state = taskHeaderPresentationStateLabel(taskHeaderPresentation, turnState)
 	// Local presentation timer — DOES NOT mutate telemetry authority.
 	// We re-read telemetry.startedAt/endedAt each tick so the value
 	// remains a pure projection of canonical timestamps.
