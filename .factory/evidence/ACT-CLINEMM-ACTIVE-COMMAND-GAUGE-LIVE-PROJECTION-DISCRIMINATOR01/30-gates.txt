@@ -1,0 +1,50 @@
+30-gates.txt — Gate matrix snapshot (POST-REPAIR)
+
+ENTRY_CLEAN                         = PASS
+PRODUCTION_BUILD_BOUND              = PASS  (installed bundle has gauge code;
+                                              the bug is upstream in source wiring)
+
+LIVE_RED_BOUND                      = PASS  (operator observation)
+REAL_COMMANDJOB_ACTIVE              = PASS  (operator observation)
+VISIBLE_GAUGE_ABSENT_RED            = PASS  (operator observation; ⎇ absent on live)
+
+PRODUCTION_WIRING_RECON             = PASS  (6 temp-host sites wired + 1 shared-host
+                                              site now wired = all 7 sites wire
+                                              onCommandJobLifecycle + onRuntimeError)
+FIRST_BROKEN_BOUNDARY               = IDENTIFIED  (CASE_B: SHARED_HOST_FACTORY
+                                                     missing onCommandJobLifecycle
+                                                     + onRuntimeError — REPAIRED)
+ROOT_CAUSE_ISOLATED                 = PASS
+
+RED_REPRODUCED                      = PASS  (3/3 RED tests fail pre-repair, pass post)
+BOUNDED_REPAIR_ONLY                 = PASS  (3-file diff, tightly scoped, ~405 LOC)
+
+MANAGER_GAUGE_SEMANTICS_UNCHANGED   = PASS  (no CommandJobManager change)
+RUNTIME_INCIDENT_SEMANTICS_UNCHANGED= PASS  (no recordRuntimeError behavior change;
+                                              only the wiring path is corrected)
+TASK_PHASE_SEMANTICS_UNCHANGED      = PASS  (no turn-state change)
+
+TARGETED_HOST_TESTS                 = PASS  (103/103)
+TARGETED_WEBVIEW_TESTS              = PASS  (109/109)
+TYPECHECK_HOST                      = PASS  (bunx tsc --noEmit clean)
+TYPECHECK_WEBVIEW                   = PASS  (no source change; baseline)
+DIFF_CHECK                          = PASS  (tight scope)
+
+TEMP_DIAGNOSTICS_REMOVED            = NOT_APPLICABLE  (no instrumentation added)
+
+LIVE_GREEN_JOB_RUNNING              = OPERATOR_FOLLOWUP  (post-rebuild)
+LIVE_GREEN_VISIBLE_GAUGE_1          = OPERATOR_FOLLOWUP  (post-rebuild + install)
+LIVE_GREEN_TERMINAL_HIDDEN_AT_ZERO  = OPERATOR_FOLLOWUP  (post-cancel in fresh build)
+
+EVIDENCE_BOUND_TO_FINAL_HEAD        = PASS  (committed at 9fe1a9389 + bounded repair)
+BOARD_DURABLE                       = PASS  (board update appended below)
+
+Verdict:
+SOURCE_LEVEL_GAUGE_CHAIN            = GREEN  (212/212 tests pass post-repair)
+SHARED_HOST_WIRE                    = REPAIRED  (CASE_B bounded repair landed)
+LIVE_GAUGE_REPRODUCTION             = OPERATOR_FOLLOWUP  (live UI not drivable from agent shell)
+
+Next action:
+OPERATOR_FOLLOWUP = `bun run package` + install + live ⎇ round-trip in Codium-ClineMM
+                    (see §11 of the ACT spec; load-bearing closure for
+                    PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION)

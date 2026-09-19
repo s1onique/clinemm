@@ -1,0 +1,74 @@
+ACT §7: run only the existing focused tests first.
+
+Expected existing proof (PRE-REPAIR source-level, where applicable):
+
+- manager lifecycle event carries post-delta activeCommandJobs       → DCCT-16 PASS
+- tracker accepts activeCommandJobs                                  → tracker unit tests PASS
+- React renders ⎇ when activeCommandJobs > 0                         → G-03 PASS
+
+Pre-repair host-side vitest (98 tests):
+
+$ cd apps/vscode && bunx vitest run --config vitest.config.ts \
+    src/sdk/SdkController.task-telemetry-wiring.test.ts \
+    src/sdk/task-telemetry-tracker.test.ts \
+    src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts \
+    src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts
+ ✓ src/sdk/SdkController.task-telemetry-wiring.test.ts                  (6 tests)
+ ✓ src/sdk/task-telemetry-tracker.test.ts                               (64 tests)
+ ✓ src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts    (11 tests)
+ ✓ src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts (17 tests)
+ Test Files  4 passed (4)
+      Tests  98 passed (98)
+
+Pre-repair webview-side vitest + jsdom (109 tests):
+
+$ cd apps/vscode/webview-ui && bunx vitest run \
+    src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx \
+    src/components/chat/task-header/TaskHeaderTelemetry.test.tsx \
+    src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx \
+    src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx          (13 tests)
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.test.tsx               (46 tests)
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx (5 tests)
+ ✓ src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts         (45 tests)
+ (total 109 tests)
+
+```
+HOST_GAUGE_TESTS_PASS    = 98/98
+WEBVIEW_GAUGE_TESTS_PASS = 109/109
+TOTAL_PASS               = 207/207
+HALT_EXISTING_SYNTHETIC_GREEN_REGRESSED = NOT_TRIGGERED
+```
+
+The synthetic-green coverage pins the AG-LIVE-01..08 + AG-UI-01..08
+invariants — but only at the manager↔tracker and render layers. The
+shared-host factory seam was UNCOVERED by any existing test; this is
+how the bug shipped. The new RED file
+(`active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts`)
+closes this gap and pins the CASE_B forward-by-reference contract.
+
+Coverage of §14 invariants:
+
+| Invariant                                                  | Test pinning it                                                       |
+|------------------------------------------------------------|-----------------------------------------------------------------------|
+| AG-LIVE-01  start → activeCommandJobs=1                    | DCCT-16 (`pcpc-containment-product-contract` companion)               |
+| AG-LIVE-02  two jobs → 2                                   | DCCT-17 (start A → 1; start B → 2)                                    |
+| AG-LIVE-03  clean terminal with B still active → 1         | DCCT-17 (finalize A clean → 1)                                        |
+| AG-LIVE-04  last clean terminal → 0                        | DCCT-16 (gauge drops to 0 after terminal)                             |
+| AG-LIVE-05  containment_failed terminal → 0                | DCCT-17 (finalize B alive → 0)                                        |
+| AG-LIVE-06  tracker update schedules state projection      | SdkController.ts:4230 scheduleGaugePost (wired unconditionally)        |
+| AG-LIVE-07  unrelated runtimeErrorCount unchanged          | tracker.ts spread-conditional at line 553 vs 559                      |
+| AG-LIVE-08  >_ cumulative mechanism count unchanged        | G-05 (TaskHeaderTelemetry.gauge.test.tsx:70)                          |
+| AG-UI-01    undefined → hidden                             | G-01 (line 44)                                                        |
+| AG-UI-02    0 → hidden                                     | G-02 (line 49)                                                        |
+| AG-UI-03    1 → "⎇ 1"                                      | G-03 (line 54) + G-09 (line 111)                                      |
+| AG-UI-04    2 → "⎇ 2"                                      | G-07 (line 96; count text exactly matches wire value)                 |
+| AG-UI-05    1 → 0 removes glyph                            | G-08 (line 102; rerender with 0 ⇒ null)                               |
+| AG-UI-06    runtimeErrorCount independent                   | G-04 (line 59)                                                        |
+| AG-UI-07    task phase "Working" unchanged                 | (covered by TaskHeaderTelemetry.test.tsx 46 tests — no gauge branch)  |
+| AG-UI-08    Your turn / Approval / Complete unchanged      | (covered by TaskHeaderTelemetry.test.tsx — independent label branch)  |
+| AG-LIVE-WIRE shared host forwards onCommandJobLifecycle    | RED-B + RED-B-EVENT-FLOW + RED-B-CARDINALITY (this ACT, NEW)          |
+
+All §14 invariants are pinned, including the new AG-LIVE-WIRE.
+Source-level chain is GREEN. The bounded repair lands at the shared-host
+factory seam.

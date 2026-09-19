@@ -1,0 +1,46 @@
+14-tests.txt — POST-REPAIR test runs (this ACT)
+
+Host-side vitest (6 files, 103 tests):
+
+$ cd apps/vscode && bunx vitest run --config vitest.config.ts \
+    src/sdk/SdkController.task-telemetry-wiring.test.ts \
+    src/sdk/task-telemetry-tracker.test.ts \
+    src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts \
+    src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts \
+    src/sdk/__tests__/seatbelt-network-live-downstream-recon01.s0-red-shared-host-source-omitted.test.ts \
+    src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts
+ ✓ src/sdk/SdkController.task-telemetry-wiring.test.ts                                                       ( 6 tests)
+ ✓ src/sdk/task-telemetry-tracker.test.ts                                                                    (64 tests)
+ ✓ src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts                                         (11 tests)
+ ✓ src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts                               (17 tests)
+ ✓ src/sdk/__tests__/seatbelt-network-live-downstream-recon01.s0-red-shared-host-source-omitted.test.ts       ( 2 tests)
+ ✓ src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts ( 3 tests — NEW)
+ Test Files  6 passed (6)
+      Tests  103 passed (103)
+
+Webview-side vitest + jsdom (4 files, 109 tests):
+
+$ cd apps/vscode/webview-ui && bunx vitest run \
+    src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx \
+    src/components/chat/task-header/TaskHeaderTelemetry.test.tsx \
+    src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx \
+    src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx          (13 tests)
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.test.tsx               (46 tests)
+ ✓ src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx ( 5 tests)
+ ✓ src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts         (45 tests)
+
+```
+TARGETED_HOST_TESTS    = 103/103 PASS
+TARGETED_WEBVIEW_TESTS = 109/109 PASS
+TOTAL                   = 212/212 PASS
+```
+
+Pre-existing failures in `SdkController.test.ts` (3 tests) are
+**unrelated** to this ACT — they fail with
+`Cannot read properties of undefined (reading 'workspaceState')` at
+`isPostTerminalAuthorityDiagnosticWorkspaceEnabled` and were failing
+on the unmodified HEAD before the bounded repair was applied (verified
+by `git stash` → run → `git stash pop`).
+
+The 3 pre-existing failures are NOT regressions introduced by this ACT.

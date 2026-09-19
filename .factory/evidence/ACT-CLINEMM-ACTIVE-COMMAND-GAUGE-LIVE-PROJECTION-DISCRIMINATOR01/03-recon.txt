@@ -1,0 +1,93 @@
+Recon command (per ACT §5):
+
+$ rg -n \
+  'activeCommandJobs|getActiveCommandJobs|recordActiveCommandJobs|command_job_process_started|command_job_primary_group_registered|command_job_terminal_committed|command_job_containment_failed|handleCommandJobLifecycle|TaskHeaderTelemetryStrip|TaskHeaderTelemetry|postStateToWebview' \
+  apps/vscode/src apps/vscode/webview-ui/src
+
+Findings (top hits per concern):
+
+Source authorities (current HEAD 9fe1a9389):
+
+- apps/vscode/src/sdk/command-job-manager.ts:1236 emitCommandJobLifecycle(...);
+  enrichment at line 1258 (`activeCommandJobs: this.active.size`).
+  Emit ordering fixed in correction07 (factory): process_started +
+  primary_group_registered fire AFTER `this.active.set(id, job)`
+  so the gauge carries the POST-delta value (1 for 0→1 transitions).
+
+- apps/vscode/src/sdk/vscode-session-host.ts:154 onCommandJobLifecycle?: (event: CommandJobLifecycleEvent) => void;
+  Forwarded from the CommandJobManager options at line 263.
+
+- apps/vscode/src/sdk/SdkController.ts:1587/1740/1777/2126/3442/3701
+  All 6 production VscodeSessionHost.create() sites wire
+  `onCommandJobLifecycle: this.handleCommandJobLifecycle`.
+
+- apps/vscode/src/sdk/SdkController.ts:4206 handleCommandJobLifecycle(event)
+  Closure instance method; forwards to
+  `this.taskTelemetry.recordActiveCommandJobs(event.activeCommandJobs)`
+  and schedules a `postStateToWebview` via `scheduleGaugePost` (line 4230).
+
+- apps/vscode/src/sdk/task-telemetry-tracker.ts:503 recordActiveCommandJobs(count)
+  Defensive drop pattern: if `currentTaskId === undefined`, the call
+  is logged and dropped (consistent with recordToolStarted, observeRecovery,
+  recordRuntimeError). When a task IS active, the gauge is updated
+  directly with the post-delta value from the event payload.
+
+- apps/vscode/src/sdk/task-telemetry-tracker.ts:559
+  `...(this.activeCommandJobs > 0 ? { activeCommandJobs: this.activeCommandJobs } : {}),`
+  Wire emission: present only when > 0; absent ⇒ renders as 0 in webview.
+
+- apps/vscode/src/sdk/SdkController.ts:4573
+  `taskTelemetry: this.taskTelemetry.get(),`
+  in getStateToPostToWebview() — the canonical state projection.
+
+- apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx:774-785
+  Webview functional updater spreads `...stateData` (which carries
+  `taskTelemetry` from the wire) and overlays the gated projections
+  for `taskHeaderPresentation` / `thinkingPresentation`. The gauge
+  is preserved verbatim on every state post.
+
+- apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx:398-418
+  Gauge JSX block:
+    const count = telemetry.activeCommandJobs ?? 0
+    if (count <= 0) return null
+    // renders <span data-testid="task-header-active-owned-command-jobs">⎇ {count}</span>
+
+CRITICAL FINDING — the 7th host creation site is unwired:
+
+- apps/vscode/src/sdk/sdk-session-lifecycle.ts:547-589
+  `getOrCreateSharedHost()` — the LIVE primary-session host used by
+  every active task in the production primary-session path.
+  `VscodeSessionHost.create({...})` does NOT pass
+  `onCommandJobLifecycle` or `onRuntimeError`. The shared
+  CommandJobManager therefore has both sinks undefined.
+
+This is the FIRST broken boundary at P1 → P2 for the production
+primary-session path. CASE_B — PRODUCTION_WIRING_DEFECT.
+
+Frozen authorities:
+
+ACTIVE_MAP_AUTHORITY        = apps/vscode/src/sdk/command-job-manager.ts (CommandJobManager.active: Map<string, CommandJob>)
+LIFECYCLE_EMIT_AUTHORITY    = apps/vscode/src/sdk/command-job-manager.ts:1236 (emitCommandJobLifecycle); line 1258 activeCommandJobs: this.active.size enrichment
+HOST_CONSUMER_AUTHORITY     = apps/vscode/src/sdk/SdkController.ts:4206 (handleCommandJobLifecycle)
+TRACKER_AUTHORITY           = apps/vscode/src/sdk/task-telemetry-tracker.ts:503 (recordActiveCommandJobs)
+STATE_PROJECTION_AUTHORITY  = apps/vscode/src/sdk/SdkController.ts:4573 (taskTelemetry: this.taskTelemetry.get())
+WEBVIEW_STATE_AUTHORITY     = apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx:774 (newState spread)
+RENDER_AUTHORITY            = apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx:398-418 (gauge JSX)
+SHARED_HOST_FACTORY (P1→P2 BROKEN) = apps/vscode/src/sdk/sdk-session-lifecycle.ts:547-589 (getOrCreateSharedHost)
+
+Tests (host):
+
+- apps/vscode/src/sdk/task-telemetry-tracker.test.ts                      (64 tests)
+- apps/vscode/src/sdk/SdkController.task-telemetry-wiring.test.ts         ( 6 tests)
+- apps/vscode/src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts (17 tests, includes DCCT-16, DCCT-17 — start-path gauge ordering + composition witness)
+- apps/vscode/src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts           (11 tests, includes PCPC-BE-08 — activeCommandJobs follows manager.activeCount)
+- apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts (3 tests, NEW — this ACT)
+
+Tests (webview):
+
+- apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx   (13 tests, G-01..G-10 + PCPC-UI-03..05)
+- apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.test.tsx        (46 tests)
+- apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx ( 5 tests, LIVE_HEADER_BEFORE/0_TO_1/1_TO_2/EXIT7_UNCHANGED/SANITY)
+- apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.test.ts  (45 tests)
+
+Inventory matches the §5 recon command's intent.

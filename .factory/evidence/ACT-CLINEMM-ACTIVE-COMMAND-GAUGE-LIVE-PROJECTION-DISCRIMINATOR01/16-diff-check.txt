@@ -1,0 +1,30 @@
+16-diff-check.txt
+
+```
+$ git status --short
+ M apps/vscode/src/sdk/SdkController.ts
+ M apps/vscode/src/sdk/sdk-session-lifecycle.ts
+?? apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts
+
+$ git diff --check
+(clean)
+
+$ git diff --stat
+ apps/vscode/src/sdk/SdkController.ts              |   18 +++++++++++++++
+ apps/vscode/src/sdk/sdk-session-lifecycle.ts      |  104 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ .../active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts | 283 +++++++++++++++++++++++
+ 3 files changed, 405 insertions(+)
+```
+
+DIFF_CHECK = PASS
+
+The diff is tightly scoped to:
+1. The shared-host factory seam at `sdk-session-lifecycle.ts:555` (forward both sinks)
+2. The SdkController construction site at `SdkController.ts:1291` (pass both closures)
+3. The new RED test file (covers the seam the existing test family missed)
+
+No other source files touched. No changes to:
+- CommandJobManager (manager lifecycle semantics unchanged)
+- TaskTelemetryTracker (recordActiveCommandJobs unchanged)
+- TaskHeaderTelemetry (webview render unchanged)
+- Any PGID-containment, helper, terminal-execution, or sandbox code

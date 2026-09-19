@@ -1,0 +1,109 @@
+{
+  "act": "ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01",
+  "verdict": "PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (source-level GREEN, live operator followup pending)",
+  "halt_code": "NONE — bounded repair landed, no halt triggered",
+  "halt_taxonomy_22": {
+    "HALT_DOGFOOD_BUILD_NOT_SUBJECT": "NOT_TRIGGERED (installed bundle has gauge code)",
+    "HALT_UNEXPECTED_TRACKED_DIRT": "NOT_TRIGGERED",
+    "HALT_EXISTING_SYNTHETIC_GREEN_REGRESSED": "NOT_TRIGGERED",
+    "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED",
+    "HALT_REPAIR_REQUIRES_TELEMETRY_REDESIGN": "NOT_TRIGGERED (3-file diff is tightly scoped)",
+    "HALT_LIVE_GREEN_STILL_ABSENT": "OPERATOR_FOLLOWUP",
+    "HALT_GAUGE_CARDINALITY_WRONG": "OPERATOR_FOLLOWUP",
+    "HALT_TERMINAL_GAUGE_LEAK": "OPERATOR_FOLLOWUP",
+    "HALT_UNEXPECTED_PROCESS_CONTAINMENT_REGRESSION": "NOT_TRIGGERED"
+  },
+  "live_red": {
+    "real": true,
+    "live": true,
+    "tool_status": "running",
+    "jobId": "cmd_mu8lx2hm520893hg",
+    "header_state": "Working",
+    "visible_active_job_gauge": "ABSENT"
+  },
+  "production_identity": {
+    "running_extension_head": "9fe1a9389",
+    "installed_extension_build": "clinemm-4.1.16-84a238464",
+    "installed_extension_build_date": "2026-09-01",
+    "installed_extension_path": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-84a238464",
+    "installed_bundle_has_gauge_code": "YES",
+    "installed_bundle_proof": {
+      "extension_js_recordActiveCommandJobs_or_activeCommandJobs_count": 2,
+      "webview_index_js_activeCommandJobs_count": 1,
+      "webview_index_js_testid_count": 1,
+      "webview_index_js_glyph_count": 1
+    }
+  },
+  "first_broken_boundary": "SHARED_HOST_FACTORY (SdkSessionLifecycle.getOrCreateSharedHost at sdk-session-lifecycle.ts:555)",
+  "case_class": "CASE_B — PRODUCTION_WIRING_DEFECT (P1 right, P2 missing at the shared-host factory)",
+  "root_cause_isolated": "YES",
+  "wiring_recon": {
+    "all_production_call_sites_wired_pre_repair": "NO",
+    "wired_temp_hosts_pre_repair_count": 6,
+    "broken_shared_host_pre_repair": "apps/vscode/src/sdk/sdk-session-lifecycle.ts:555 getOrCreateSharedHost (no onCommandJobLifecycle, no onRuntimeError)",
+    "all_production_call_sites_wired_post_repair": "YES"
+  },
+  "bounded_repair": {
+    "edit_1_file": "apps/vscode/src/sdk/sdk-session-lifecycle.ts",
+    "edit_1_changes": [
+      "Added CommandJobLifecycleEvent + RuntimeErrorIncident type imports",
+      "Extended SdkSessionLifecycleOptions with both sinks",
+      "Forwarded both fields in getOrCreateSharedHost()'s VscodeSessionHost.create({...}) options bag"
+    ],
+    "edit_2_file": "apps/vscode/src/sdk/SdkController.ts",
+    "edit_2_changes": [
+      "Passed onCommandJobLifecycle + onRuntimeError at new SdkSessionLifecycle({...}) construction"
+    ],
+    "edit_3_file": "apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts (NEW, 3 tests)",
+    "diff_stat": "3 files changed, 405 insertions(+)"
+  },
+  "tests": {
+    "host_targeted_tests": {"passed": 103, "total": 103},
+    "webview_targeted_tests": {"passed": 109, "total": 109},
+    "host_existing_synthetic_green_regression": "NOT_TRIGGERED"
+  },
+  "typecheck": {"host": "PASS (bunx tsc --noEmit clean)", "webview": "PASS"},
+  "diff_check": {"passed": true, "files_changed": 3, "insertions": 405, "deletions": 0},
+  "temp_diagnostics": {"added": false, "removed": "NOT_APPLICABLE"},
+  "live_trace": "NOT_REQUIRED_ROOT_CAUSE_STRUCTURALLY_PROVEN",
+  "live_red_reproduction": "OPERATOR_BOUND (no agent UI access; debug harness forbidden by ACT §4)",
+  "next_bounded_action": "OPERATOR_REBUILD_AND_LIVE_TEST",
+  "operator_followup_steps": [
+    "cd apps/vscode",
+    "mkdir -p ../../dist",
+    "bun run package",
+    "Install freshly built dist/clinemm-<version>.vsix into Codium-ClineMM and reload the extension host",
+    "Run: sh -c 'echo STARTED; sleep 600; echo FINISHED'",
+    "Observe task header: ⎇ 1 visible while running",
+    "Cancel normally via the ClineMM UI",
+    "Observe task header: ⎇ hidden at terminal",
+    "Capture 20-live-green-active.{png,txt} + 21-live-green-terminal.{png,txt}",
+    "Open a continuation ACT to record the live GREEN and resume the halted PGID production dogfood"
+  ],
+  "expected_closure": {
+    "source_level": "PASS_SOURCE_LEVEL_GAUGE_CHAIN (212/212 tests)",
+    "operator_continuation": "PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (after operator rebuild + install + live round-trip)"
+  },
+  "evidence_packet": [
+    "01-entry.txt",
+    "02-production-identity.txt",
+    "03-recon.txt",
+    "04-wiring-recon.txt",
+    "05-existing-tests.txt",
+    "10-live-trace.txt (NOT_REQUIRED_ROOT_CAUSE_STRUCTURALLY_PROVEN)",
+    "11-live-red-reproduction.txt (operator-bound)",
+    "12-red.txt (RED_REPRODUCED_AT_PRODUCTION_SOURCING_SITE)",
+    "13-diagnostics-removal.txt (NOT_APPLICABLE)",
+    "14-tests.txt (212/212 PASS)",
+    "15-typecheck.txt (PASS)",
+    "16-diff-check.txt (3 files, +405 LOC)",
+    "20-live-green-active.{png,txt} (OPERATOR_FOLLOWUP)",
+    "21-live-green-terminal.{png,txt} (OPERATOR_FOLLOWUP)",
+    "30-gates.txt",
+    "result.json"
+  ],
+  "board_update_appended": true,
+  "board_update_text": "ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01 → PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (CASE_B bounded repair at SdkSessionLifecycle.getOrCreateSharedHost(): SdkSessionLifecycleOptions now declares onCommandJobLifecycle + onRuntimeError; getOrCreateSharedHost forwards both; SdkController passes the corresponding closures at construction; RED test (3 tests) wires the seam; 103 host + 109 webview tests pass; bunx tsc --noEmit clean; diff scoped to 3 files; operator must rebuild + install + run live ⎇ round-trip in a continuation ACT)",
+  "halted_dogfood_row_text": "HALT_ACTIVE_GAUGE_LIVE_DIVERGENCE = CLOSED (CASE_B bounded repair landed; telemetry chain now reaches the live primary-session host); NEXT = OPERATOR_REBUILD_AND_LIVE_TEST",
+  "resume_pgid_dogfood": "Do NOT auto-resume PGID production dogfood in this ACT. On operator-driven live GREEN, authorize ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01 to continue from its halted production-seam state under human-driven interaction."
+}

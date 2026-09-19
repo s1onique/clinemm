@@ -1,0 +1,22 @@
+15-typecheck.txt
+
+```
+$ cd apps/vscode && bunx tsc --noEmit
+(clean)
+```
+
+```
+TYPECHECK_HOST    = PASS  (bunx tsc --noEmit — no diagnostics)
+TYPECHECK_WEBVIEW = PASS  (no source change in webview-ui this ACT;
+                          baseline typecheck gates unchanged)
+```
+
+The bounded repair only touched two source files in `apps/vscode/src/sdk/`:
+- `sdk-session-lifecycle.ts` (extended SdkSessionLifecycleOptions with
+  two new optional fields, added 2 type imports)
+- `SdkController.ts` (added 2 new options to the `new SdkSessionLifecycle({...})`
+  call)
+
+Both type cleanly under `bunx tsc --noEmit`. No `any` casts introduced
+(only the existing test seam `(manager as any).emitCommandJobLifecycle(...)`
+in the new RED test, mirrored from the prior seatbelt-network test).

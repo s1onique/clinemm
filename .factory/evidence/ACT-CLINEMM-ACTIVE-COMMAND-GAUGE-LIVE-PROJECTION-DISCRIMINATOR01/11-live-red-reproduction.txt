@@ -1,0 +1,21 @@
+11-live-red-reproduction.txt = operator-bound
+
+The agent cannot drive a live ClineMM webview UI from this shell:
+
+- No human UI access in the agent shell (the user runs in Codium-ClineMM).
+- ACT §4 forbids the debug harness as a separate substrate.
+
+The live RED is bound from the operator's production observation:
+
+REAL/LIVE tool result:
+  status = "running"
+  jobId  = "cmd_mu8lx2hm520893hg"
+
+REAL/LIVE task header:
+  state = Working
+  ⎇     = ABSENT
+
+This is the load-bearing evidence captured before this ACT began. The
+operator's continuation ACT must reproduce it in a freshly-rebuilt +
+installed VSIX (which the operator must build per §11 below) and then
+verify the same production interaction now renders ⎇ 1 → hidden.

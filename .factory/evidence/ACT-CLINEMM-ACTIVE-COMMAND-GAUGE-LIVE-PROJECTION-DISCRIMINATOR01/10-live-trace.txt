@@ -1,0 +1,24 @@
+10-live-trace.txt = NOT_REQUIRED_ROOT_CAUSE_STRUCTURALLY_PROVEN
+
+The root cause is proven structurally from the production source at the
+shared-host factory seam (`apps/vscode/src/sdk/sdk-session-lifecycle.ts:547-589`):
+
+1. The 6 production VscodeSessionHost.create() call sites in SdkController.ts
+   all wire `onCommandJobLifecycle: this.handleCommandJobLifecycle`.
+2. The 7th — `SdkSessionLifecycle.getOrCreateSharedHost()` — did NOT pass
+   `onCommandJobLifecycle` (or `onRuntimeError`).
+3. The shared CommandJobManager therefore had
+   `onCommandJobLifecycle === undefined`, and
+   `emitCommandJobLifecycle(...)` (the sink guard at
+   `command-job-manager.ts:1238`) was a no-op.
+4. The new RED test
+   (`active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts`)
+   captures the forwarded options via `vi.mock("../vscode-session-host")`
+   and asserts both sinks are forwarded by reference. PRE-REPAIR: 3/3 fail.
+   POST-REPAIR: 3/3 pass.
+
+Per ACT §20: "If no instrumentation was necessary because recon found the
+defect structurally, record `10-live-trace.txt =
+NOT_REQUIRED_ROOT_CAUSE_STRUCTURALLY_PROVEN`."
+
+No live trace was added. No instrumentation was inserted.

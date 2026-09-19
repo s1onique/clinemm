@@ -1,0 +1,16 @@
+13-diagnostics-removal.txt = NOT_APPLICABLE
+
+No instrumentation was added. The root cause was proven structurally
+from the production source at the shared-host factory seam (see
+02-production-identity.txt and 12-red.txt). Per ACT §20: "Unless the
+trace is genuinely reusable production diagnostics and separately
+justified—which this ACT does not authorize."
+
+Verifying no production trace residue was left:
+
+$ rg -n 'ACTIVE_COMMAND_GAUGE_TRACE|P1_MANAGER_EMIT|P2_CONTROLLER_RECEIVE|P3_TRACKER|P4_STATE_PROJECTION|P5_POST_STATE|P6_WEBVIEW' \
+  apps/vscode
+(no matches)
+
+TEMP_TRACE_REMOVED = PASS
+TEMP_TRACE_NEVER_INSERTED = PASS

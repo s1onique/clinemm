@@ -1,0 +1,11 @@
+CAPTURE_CLASS = REAL | LIVE
+JOB_ID        = cmd_mu8lx2hm520893hg
+TOOL_STATUS   = running
+HEADER_TASK_STATE   = Working
+VISIBLE_ACTIVE_JOB_GAUGE = ABSENT
+
+Required statement:
+A real background CommandJob existed while the production task header
+did not display the active-CommandJob gauge.
+
+No inference beyond that.

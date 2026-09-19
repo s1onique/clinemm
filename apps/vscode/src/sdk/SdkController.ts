@@ -1307,6 +1307,23 @@ export class Controller {
 			// host so the run_commands tool can flip the projection when it
 			// returns RUNNING / reaches a terminal state.
 			onBackgroundStateChange: (running, jobId) => this.updateBackgroundCommandState(running, jobId),
+			// ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01:
+			// forward the CommandJob lifecycle sink to the shared host. The
+			// shared host is the live primary-session host; without this
+			// wire every production CommandJob lifecycle event silently
+			// drops (manager.emitCommandJobLifecycle no-ops when the sink
+			// is undefined), leaving the live ⎇ N gauge hidden for the
+			// entire useful lifetime of a long-running command. The 6
+			// temp-host callsites at SdkController.ts:1575/1731/1768/2116/
+			// 3430/3690 already wire this — closing the gap for the shared
+			// host keeps the live primary-session path consistent.
+			onCommandJobLifecycle: this.handleCommandJobLifecycle,
+			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: mirror the
+			// runtime-error sink through to the shared host so the live
+			// primary-session CommandJobManager surfaces structured EPERM /
+			// command_containment_failed incidents to the host-owned
+			// TaskTelemetryTracker (matching the 6 temp-host callsites).
+			onRuntimeError: this.handleTaskRuntimeError,
 			onSessionEvent: (event) => {
 				this.sessionEvents.handleSessionEvent(event).catch((err) => {
 					Logger.error("[SdkController] Failed to handle session event:", err)

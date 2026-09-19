@@ -10,8 +10,10 @@ import { formatModeSwitchNotice, type ModeSwitchNotice } from "@cline/shared"
 import { StateManager } from "@/core/storage/StateManager"
 import type { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTerminalManager"
 import { McpHub } from "@/services/mcp/McpHub"
+import type { RuntimeErrorIncident } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import type { ActiveSession } from "./cline-session-factory"
+import type { CommandJobLifecycleEvent } from "./command-job-manager"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { buildToolPolicies } from "./sdk-tool-policies"
 import type { SdkSessionHost } from "./session-host"
@@ -113,6 +115,40 @@ export interface SdkSessionLifecycleOptions {
 	 * because there is no live host to expose.
 	 */
 	isOperationCurrent?: (token: number) => boolean
+	/**
+	 * ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01:
+	 *
+	 * CommandJob lifecycle telemetry sink forwarded into the shared
+	 * host built by `getOrCreateSharedHost`. Required at this seam
+	 * because the live primary-session path runs through this shared
+	 * host — the 6 temp-host callsites in `SdkController.ts` pass
+	 * this sink explicitly, but the shared-host factory previously
+	 * omitted it, silently dropping every CommandJob lifecycle event
+	 * from the production primary-session host. With this field
+	 * wired, the live primary-session CommandJobManager receives the
+	 * post-delta `activeCommandJobs` enrichment on every event and
+	 * forwards it to the `TaskTelemetryTracker`.
+	 *
+	 * When omitted (Hub/Remote, tests), the manager silently drops
+	 * events — preserving the pre-ACT zero-overhead default.
+	 */
+	onCommandJobLifecycle?: (event: CommandJobLifecycleEvent) => void
+	/**
+	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01 +
+	 * ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01:
+	 *
+	 * Structured ClineMM runtime error incident sink forwarded into
+	 * the shared host built by `getOrCreateSharedHost`. The shared
+	 * CommandJobManager surfaces structured EPERM and
+	 * `command_containment_failed` incidents to this sink; with this
+	 * field wired, the live primary-session incidents flow into the
+	 * canonical task-scoped `TaskTelemetryTracker.recordRuntimeError`
+	 * counter.
+	 *
+	 * When omitted (Hub/Remote, tests), the manager silently drops
+	 * incidents — preserving the pre-ACT behavior.
+	 */
+	onRuntimeError?: (incident: RuntimeErrorIncident) => void
 }
 
 export class SdkSessionLifecycle {
@@ -577,6 +613,20 @@ export class SdkSessionLifecycle {
 				// network path — yielding network="deny" regardless of
 				// the persisted clinemmSafeYoloAllowNetwork=true.
 				safeYoloCapabilitySource: this.options.safeYoloCapabilitySource,
+				// ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01:
+				// forward the CommandJob lifecycle sink. The shared host is
+				// the live primary-session host; without this wire the
+				// production CommandJobManager silently drops every event
+				// (the manager's `emitCommandJobLifecycle` no-ops when the
+				// sink is undefined), leaving the live `⎇ N` gauge hidden
+				// for the entire useful lifetime of a long-running command.
+				onCommandJobLifecycle: this.options.onCommandJobLifecycle,
+				// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:
+				// mirror the runtime-error sink through to the shared host
+				// so the live primary-session CommandJobManager surfaces
+				// structured EPERM / `command_containment_failed` incidents
+				// to the host-owned `TaskTelemetryTracker`.
+				onRuntimeError: this.options.onRuntimeError,
 			})
 				.then((sdkHost) => {
 					this.ensureSharedHostSubscription(sdkHost)

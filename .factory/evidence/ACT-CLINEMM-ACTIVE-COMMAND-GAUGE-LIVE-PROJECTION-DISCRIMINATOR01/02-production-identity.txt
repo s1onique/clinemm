@@ -1,0 +1,66 @@
+RUNNING_EXTENSION_HEAD     = 9fe1a9389 (current repo HEAD)
+INSTALLED_EXTENSION_PATH   = /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-84a238464
+INSTALLED_EXTENSION_VERSION = clinemm 4.1.16-84a238464
+INSTALLED_EXTENSION_BUILD  = bound to commit 84a238464 (committed 2026-09-01)
+INSTALLED_BUNDLE_HAS_GAUGE = YES
+VSCODIUM_PID               = (operator-side; not observable from this shell)
+EXTENSION_HOST_PID         = (operator-side; not observable from this shell)
+
+The installed bundle DOES contain the gauge implementation:
+
+$ grep -c 'recordActiveCommandJobs\|activeCommandJobs' \
+    /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-84a238464/dist/extension.js
+2
+
+$ grep -c 'activeCommandJobs' \
+    /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-84a238464/webview-ui/build/assets/index.js
+1
+
+$ grep -c 'task-header-active-owned-command-jobs' \
+    /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-84a238464/webview-ui/build/assets/index.js
+1
+
+$ grep -c '⎇' \
+    /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-84a238464/webview-ui/build/assets/index.js
+1
+
+So the bug is NOT a stale build. The bug is a missing wiring at the
+sharedHost factory in the source.
+
+Source-root cause (proven structurally):
+
+The 6 production VscodeSessionHost.create() call sites in
+SdkController.ts all wire `onCommandJobLifecycle: this.handleCommandJobLifecycle`:
+  apps/vscode/src/sdk/SdkController.ts:1587   (createTempSessionHost @ 1575)
+  apps/vscode/src/sdk/SdkController.ts:1740   (createTempSessionHost @ 1731)
+  apps/vscode/src/sdk/SdkController.ts:1777   (createTempSessionHost @ 1768)
+  apps/vscode/src/sdk/SdkController.ts:2126   (createRemoteConfigAwareSessionHost @ 2116)
+  apps/vscode/src/sdk/SdkController.ts:3442   (tempHost @ 3430 — message-edit rebuild)
+  apps/vscode/src/sdk/SdkController.ts:3701   (tempHost @ 3690 — checkpoint compare)
+
+The 7th host creation — `SdkSessionLifecycle.getOrCreateSharedHost()` at
+`apps/vscode/src/sdk/sdk-session-lifecycle.ts:555` (the LIVE primary-session
+host used by every active task in the production primary-session path) — did
+NOT pass `onCommandJobLifecycle` (or `onRuntimeError`) to `VscodeSessionHost.create()`.
+
+Result: the shared CommandJobManager had `onCommandJobLifecycle === undefined`,
+and `emitCommandJobLifecycle(...)` (the sink guard at
+`command-job-manager.ts:1238`) was a no-op. Every CommandJob lifecycle event
+from the live primary-session host silently disappeared.
+
+ACT §3 HALT_DOGFOOD_BUILD_NOT_SUBJECT is NOT triggered because the
+installed bundle contains the gauge code. The bug is upstream in the
+source at the shared-host factory.
+
+Bounded repair landed in this ACT (§12):
+
+- apps/vscode/src/sdk/sdk-session-lifecycle.ts: extended
+  SdkSessionLifecycleOptions with onCommandJobLifecycle + onRuntimeError;
+  getOrCreateSharedHost() now forwards both.
+- apps/vscode/src/sdk/SdkController.ts: passes
+  `onCommandJobLifecycle: this.handleCommandJobLifecycle` +
+  `onRuntimeError: this.handleTaskRuntimeError` to the new
+  SdkSessionLifecycle({...}) constructor call.
+- apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts:
+  new 3-test RED file that captures the forwarded options and asserts
+  the event flow.

@@ -1,0 +1,45 @@
+12-red.txt = RED_REPRODUCED_AT_PRODUCTION_SOURCING_SITE
+
+New RED test:
+  apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts
+
+PRE-REPAIR failure (verbatim from vitest run on unmodified source):
+
+  ❯ src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts (3 tests | 3 failed) 41ms
+  ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+   FAIL  ... > RED-B: shared host factory forwards onCommandJobLifecycle to VscodeSessionHost.create
+   FAIL  ... > RED-B-EVENT-FLOW: shared host manager's lifecycle event reaches the controller sink with activeCommandJobs=1
+   FAIL  ... > RED-B-CARDINALITY: shared host factory forwards both sinks by reference (NOT re-wrapped)
+   Test Files  1 failed (1)
+        Tests  3 failed (3)
+
+  Sample assertion:
+  AssertionError: shared host factory MUST forward onCommandJobLifecycle:
+    expected 'undefined' to be 'function' // Object.is equality
+  Expected: "function"
+  Received: "undefined"
+
+POST-REPAIR (this ACT) — same test file:
+
+  ✓ src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts (3 tests) 36ms
+   Test Files  1 passed (1)
+        Tests  3 passed (3)
+
+The RED test exercises the production composition:
+
+1. real SdkSessionLifecycle constructed with onCommandJobLifecycle +
+   onRuntimeError sinks
+2. startNewSession triggers getOrCreateSharedHost
+3. vscode-session-host is `vi.mock`'d to capture the options forwarded
+4. Asserts:
+   - typeof onCommandJobLifecycle === 'function'  (RED-B)
+   - typeof onRuntimeError === 'function'         (RED-B)
+   - forwarded sinks are reference-equal to the supplied ones
+     (RED-B-CARDINALITY — no re-wrap)
+   - With the active map pre-populated to mirror the production
+     `manager.start()` emit-after-set ordering, the resulting
+     CommandJobManager.emitCommandJobLifecycle(process_started)
+     reaches the captured controller sink with
+     event.activeCommandJobs === 1
+     (RED-B-EVENT-FLOW — verifies the post-delta gauge enrichment
+     flows through the wired sink to the controller)

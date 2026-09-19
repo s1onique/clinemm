@@ -1,0 +1,78 @@
+ACT §6 first structural discriminator: does the real tool path wire the callback?
+
+TEMP-HOST PRODUCTION CALL SITES (6) — all wired:
+
+| File:Line                                              | Site                                 | onCommandJobLifecycle |
+|-------------------------------------------------------|--------------------------------------|-----------------------|
+| apps/vscode/src/sdk/SdkController.ts:1575 (+ 1587)    | createTempSessionHost                | this.handleCommandJobLifecycle |
+| apps/vscode/src/sdk/SdkController.ts:1731 (+ 1740)    | createTempSessionHost                | this.handleCommandJobLifecycle |
+| apps/vscode/src/sdk/SdkController.ts:1768 (+ 1777)    | createTempSessionHost                | this.handleCommandJobLifecycle |
+| apps/vscode/src/sdk/SdkController.ts:2116 (+ 2126)    | createRemoteConfigAwareSessionHost   | this.handleCommandJobLifecycle |
+| apps/vscode/src/sdk/SdkController.ts:3430 (+ 3442)    | tempHost (message-edit rebuild)      | this.handleCommandJobLifecycle |
+| apps/vscode/src/sdk/SdkController.ts:3690 (+ 3701)    | tempHost (checkpoint compare)        | this.handleCommandJobLifecycle |
+
+These 6 are TEMP host paths used by message-edit rebuilds, checkpoint
+compare, remote-config refresh, and followup resume. They are NOT the
+host used by the live primary session.
+
+SHARED-HOST PRODUCTION CALL SITE (1) — the LIVE primary-session host — UNWIRED (PRE-REPAIR):
+
+| File:Line                                              | Site                                 | onCommandJobLifecycle |
+|-------------------------------------------------------|--------------------------------------|-----------------------|
+| apps/vscode/src/sdk/sdk-session-lifecycle.ts:555       | getOrCreateSharedHost                | (PRE-REPAIR) UNDEFINED |
+
+The 7th host creation — the one used by every active task in the
+production primary-session path — did NOT pass `onCommandJobLifecycle`
+(or `onRuntimeError`) to `VscodeSessionHost.create()`. This is the first
+broken boundary at P1 → P2.
+
+```
+ALL_PRODUCTION_CALL_SITES_WIRED            = NO
+SHARED_HOST_LIFECYCLE_SINK                 = MISSING  ← CASE_B first broken boundary
+SHARED_HOST_RUNTIME_ERROR_SINK             = MISSING  ← bonus gap, same root cause
+TEMP_HOST_LIFECYCLE_SINK                   = WIRED (6 sites)
+TEMP_HOST_RUNTIME_ERROR_SINK               = WIRED (6 sites)
+```
+
+Classification:
+
+P1 → P2 = BROKEN STRUCTURALLY at the SHARED host factory.
+
+The shared CommandJobManager had `onCommandJobLifecycle === undefined`,
+and `emitCommandJobLifecycle(...)` (the sink guard at
+`command-job-manager.ts:1238`) was a no-op (`if (!sink) return`). Every
+CommandJob lifecycle event from the live primary-session host silently
+disappeared. The tracker never received the gauge mutation; the wire
+field stayed absent (or zero); the webview never rendered the `⎇ N`
+glyph.
+
+Sites that intentionally do NOT wire the lifecycle sink (no CommandJob emission possible):
+
+| File:Line                                              | Site                                 | Reason |
+|-------------------------------------------------------|--------------------------------------|--------|
+| apps/vscode/src/sdk/sdk-task-history.ts:273           | historyHost                          | history load never emits command jobs |
+| apps/vscode/src/sdk/sdk-session-lifecycle.ts:555      | sharedHostPromise                    | (PRE-REPAIR) shared-host reuse, host missing the sink ← REPAIRED |
+
+Post-repair (this ACT):
+
+The shared-host factory at `sdk-session-lifecycle.ts:555` now forwards
+both sinks:
+
+```
+onCommandJobLifecycle: this.options.onCommandJobLifecycle,
+onRuntimeError: this.options.onRuntimeError,
+```
+
+And the SdkController construction site at line 1291+ now passes both
+closures:
+
+```
+onCommandJobLifecycle: this.handleCommandJobLifecycle,
+onRuntimeError: this.handleTaskRuntimeError,
+```
+
+All 7 production VscodeSessionHost.create() call sites are now wired.
+
+```
+ALL_PRODUCTION_CALL_SITES_WIRED (POST-REPAIR) = YES
+```

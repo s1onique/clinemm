@@ -3883,3 +3883,88 @@ production tool-path invocation was attempted.
 
 **EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (committed HEAD 84a238464)
 **BOARD_DURABLE**                = PASS  (this row is committed)
+
+---
+
+## ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01 — PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (CASE_B) — 2026-09-19
+
+**Status:** Source-level GREEN (212/212 tests pass). **Live GREEN pending operator rebuild + install + UI round-trip.** ACT §11 + §17 load-bearing closure requires human-driven UI interaction in Codium-ClineMM (debug harness forbidden by §4; live primary-session webview not drivable from this agent shell).
+
+**First broken boundary isolated (CASE_B — PRODUCTION_WIRING_DEFECT):**
+
+The 6 production `VscodeSessionHost.create()` call sites in `SdkController.ts` (the 5 `createTempSessionHost` closures at line 1575/1731/1768/3430/3690 and `createRemoteConfigAwareSessionHost` at line 2116) all wired `onCommandJobLifecycle: this.handleCommandJobLifecycle` correctly. The **7th** host creation — `SdkSessionLifecycle.getOrCreateSharedHost()` at `sdk-session-lifecycle.ts:555` (the LIVE primary-session host used by every active task in the production primary-session path) — did NOT pass `onCommandJobLifecycle` (or `onRuntimeError`) to `VscodeSessionHost.create()`. The shared `CommandJobManager` therefore had `onCommandJobLifecycle === undefined`, and `emitCommandJobLifecycle(...)` was a no-op (`command-job-manager.ts:1238`: `if (!sink) return`). Every CommandJob lifecycle event from the live primary-session host silently disappeared. The `TaskTelemetryTracker` never received the gauge mutation; the wire field stayed absent (or zero); the webview never rendered the `⎇ N` glyph.
+
+**Why this slipped through:**
+
+The pre-existing 207-test synthetic-green coverage (98 host + 109 webview) pins the `⎇ N` invariant at the manager↔tracker and render layers (DCCT-16, DCCT-17, PCPC-BE-08, G-01..G-10) — but does NOT cover the shared-host factory seam. The 7th host-creation site is the only one used by the production primary-session path; without a wiring test for it, the omission shipped silently. The 6 temp-host sites are wired correctly but those paths only run during message-edit rebuilds, checkpoint compare, remote-config refresh, and followup resume — never during normal primary-session tool execution.
+
+**Bounded repair (3 files, 405 insertions, 0 deletions):**
+
+1. `apps/vscode/src/sdk/sdk-session-lifecycle.ts`:
+   - Added `CommandJobLifecycleEvent` + `RuntimeErrorIncident` type imports.
+   - Extended `SdkSessionLifecycleOptions` with two new optional fields:
+     `onCommandJobLifecycle?: (event: CommandJobLifecycleEvent) => void`
+     and `onRuntimeError?: (incident: RuntimeErrorIncident) => void`.
+   - Forwarded both fields in `getOrCreateSharedHost()`'s `VscodeSessionHost.create({...})` options bag (line 615-630).
+
+2. `apps/vscode/src/sdk/SdkController.ts`:
+   - Passed `onCommandJobLifecycle: this.handleCommandJobLifecycle` and
+     `onRuntimeError: this.handleTaskRuntimeError` at the construction site of
+     `new SdkSessionLifecycle({...})` (line 1310-1326), mirroring the 6 temp-host callsites.
+
+3. `apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts` (NEW, 283 lines):
+   - Three focused vitest tests exercising the production composition
+     (real `SdkSessionLifecycle.startNewSession` + mock
+     `VscodeSessionHost.create` capture via `vi.mock`) asserting the
+     forwarded-by-reference wiring of both sinks and the post-delta
+     `activeCommandJobs=1` event flow.
+
+No new event bus, no new protocol, no new store, no new gauge, no `CommandJobManager` redesign. The repair is precisely the load-bearing wiring at the 7th host-creation site.
+
+**Honest verdict matrix:**
+
+```
+FIRST_BROKEN_BOUNDARY                  = SHARED_HOST_FACTORY (the 7th VscodeSessionHost.create site
+                                            in SdkSessionLifecycle.getOrCreateSharedHost)
+ROOT_CAUSE_ISOLATED                    = YES (source-level structural proof)
+CASE_CLASS                             = CASE_B (PRODUCTION_WIRING_DEFECT) — P1 right,
+                                            P2 missing at the shared-host factory
+PRODUCTION_BUILD_IS_SUBJECT            = PASS  (clinemm-4.1.16-84a238464 bundle has gauge code)
+SOURCE_LEVEL_GAUGE_CHAIN               = PASS  (212/212 tests pass post-repair;
+                                            98/98 pre-repair host + 109/109 webview + 3 NEW + 2 companion)
+HALT_EXISTING_SYNTHETIC_GREEN_REGRESSED = NOT_TRIGGERED
+TYPECHECK_HOST                          = PASS  (bunx tsc --noEmit clean)
+DIFF_CHECK                              = PASS  (tight scope, 3 files, 405 LOC)
+RED_REPRODUCED                          = PASS  (3/3 RED tests fail pre-repair, pass post)
+TEMP_DIAGNOSTICS_REMOVED                = NOT_APPLICABLE (no instrumentation was added)
+LIVE_GAUGE_REPRODUCTION                 = OPERATOR_FOLLOWUP  (not drivable from this agent shell)
+```
+
+**Files (this ACT):**
+- `.factory/acts/ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01.md`
+- `.factory/evidence/ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01/` (14 files: entry, production-identity, recon, wiring-recon, existing-tests, live-trace, live-red-reproduction, red, diagnostics-removal, tests, typecheck, diff-check, gates, result.json)
+- `.factory/epic-board.md` (this row)
+
+**Source files changed (bounded repair):**
+- `apps/vscode/src/sdk/SdkController.ts` (18 lines added — pass both sinks at SdkSessionLifecycle construction)
+- `apps/vscode/src/sdk/sdk-session-lifecycle.ts` (104 lines added — extend options + forward in shared-host factory)
+- `apps/vscode/src/sdk/__tests__/active-command-gauge-live-projection-discriminator01.case-b-red-shared-host-lifecycle-sink-omitted.test.ts` (NEW, 283 lines — RED test family)
+
+**Halted production-dogfood row (UPDATE):**
+
+```
+HALT_ACTIVE_GAUGE_LIVE_DIVERGENCE = CLOSED  (CASE_B bounded repair landed;
+                                            telemetry chain now reaches the
+                                            live primary-session host)
+NEXT = OPERATOR_REBUILD_AND_LIVE_TEST  (bun run package, install fresh vsix,
+                                        run §11 live; the source-level wiring
+                                        is already GREEN)
+```
+
+Do NOT mark PGID production dogfood itself PASS — that requires the
+operator's live human-driven round-trip on a freshly installed VSIX.
+
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (committed at HEAD 9fe1a9389 + bounded repair)
+**BOARD_DURABLE**                = PASS  (this row is committed)
+
+---
