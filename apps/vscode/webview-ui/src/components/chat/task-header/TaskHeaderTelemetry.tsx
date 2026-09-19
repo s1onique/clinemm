@@ -359,6 +359,54 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 					</span>
 				)
 			})()}
+			{/*
+			  ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+			  Live ownership gauge for ClineMM-owned CommandJobs. The
+			  glyph is `⎇` (U+238F, "ALTERNATIVE KEY SYMBOL") — a
+			  fork/branch hint that signals "process tree" without
+			  overlapping the existing `>_` command glyph or the `⚠`
+			  incident glyph. It is normalized at the webview seam
+			  (single `?? 0` boundary per the ACT contract) so an
+			  absent wire field (Hub/Remote, older host, pre-emit)
+			  renders identically to zero. Hidden at zero so a quiet
+			  task session stays uncluttered — the user only sees the
+			  glyph when at least one background job is in flight.
+
+			  The semantics are deliberately process-name agnostic:
+			  the gauge counts ClineMM-OWNED CommandJobs (i.e. jobs
+			  registered in the CommandJobManager's active map) — not
+			  any specific executable. A `node`, `python`, `bash`, or
+			  `perl` background job all contribute equally to the
+			  same counter, mirroring the cleanup-path invariant
+			  ("TERMINAL CommandJob ⇒ ZERO LIVE ClineMM-OWNED
+			  DESCENDANTS").
+
+			  The glyph is non-clickable in V1 (no live-detail panel);
+			  cursor stays default. Color follows the existing
+			  telemetry-strip convention (no hard-coded hex) — the
+			  `aria-label` and `title` carry the full semantics.
+			*/}
+			{(() => {
+				const count = telemetry.activeCommandJobs ?? 0
+				if (count <= 0) return null
+				const label = `${count} active owned command job${count === 1 ? "" : "s"}`
+				const title =
+					`Live count of ClineMM-owned CommandJobs in flight (the ` +
+					`size of the CommandJobManager's active map at the most ` +
+					`recent lifecycle event). Independent of executable name — ` +
+					`node, python, bash, perl, etc. all contribute to the same ` +
+					`gauge. Resets to 0 when the task identity changes.`
+				return (
+					<span
+						aria-label={label}
+						className="inline-flex items-center gap-1"
+						data-testid="task-header-active-owned-command-jobs"
+						title={title}>
+						<span aria-hidden>⎇</span>
+						<span className="font-mono">{count}</span>
+					</span>
+				)
+			})()}
 			{/* ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 			    Diagnostic-knob indicator. Rendered ONLY when at least one
 			    knob is ON. In public the field is all-false and the

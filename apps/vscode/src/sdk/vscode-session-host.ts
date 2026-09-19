@@ -48,7 +48,7 @@ import type { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTermin
 import { getDistinctId } from "@/services/logging/distinctId"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
-import { CommandJobManager } from "./command-job-manager"
+import { type CommandJobLifecycleEvent, CommandJobManager } from "./command-job-manager"
 import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
@@ -140,6 +140,18 @@ export interface VscodeSessionHostOptions {
 	 * passing a closure that delegates directly to the tracker.
 	 */
 	onRuntimeError?: (incident: RuntimeErrorIncident) => void
+	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	 *
+	 * Optional CommandJob lifecycle telemetry sink. Pass-through
+	 * only — the session host forwards every event to the host
+	 * sink as-is. The SdkController typically wires this to a
+	 * closure that updates the `TaskTelemetryTracker` and re-posts
+	 * state to the webview. When omitted (Hub/Remote), the manager
+	 * silently drops events — preserving the pre-ACT zero-overhead
+	 * default.
+	 */
+	onCommandJobLifecycle?: (event: CommandJobLifecycleEvent) => void
 	/**
 	 * ACT-CLINEMM-SEATBELT-YOLO-COMPLETION-AUTHORITY-IMPLEMENTATION01:
 	 * Custom `submit_and_exit` executor. When supplied, the host provides
@@ -240,6 +252,15 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// sink (Hub/Remote, tests), the manager silently drops
 			// incidents — preserving the pre-ACT behavior.
 			onRuntimeError: options.onRuntimeError,
+			// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+			// wire the lifecycle telemetry sink. The sink observes
+			// the eight lifecycle events (§7) and forwards a live
+			// ownership gauge to the host-owned TaskTelemetryTracker
+			// (and ultimately the webview `⎇ N` glyph). The sink is
+			// `undefined` when the host doesn't supply a tracker (e.g.
+			// Hub/Remote), preserving the pre-ACT zero-overhead
+			// default.
+			onCommandJobLifecycle: options.onCommandJobLifecycle,
 		})
 		const toolExecutors: Partial<ToolExecutors> = {}
 		if (options.askQuestion) {

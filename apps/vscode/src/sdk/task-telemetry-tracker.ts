@@ -185,6 +185,14 @@ export class TaskTelemetryTracker {
 	// zero, so a Hub/Remote host that hasn't projected the field yet
 	// still renders a clean header.
 	private runtimeErrorCount = 0
+	// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	// Live ownership gauge — number of ClineMM-owned command
+	// containment units currently alive. Set by the host via
+	// `recordActiveCommandJobs(n)` whenever the
+	// CommandJobManager's active map changes. Saturates at MAX_SAFE
+	// like the runtime-error counter; the wire emits only when > 0
+	// (see `get()`).
+	private activeCommandJobs = 0
 
 	/**
 	 * Start (or re-start) a task's telemetry window.
@@ -222,6 +230,10 @@ export class TaskTelemetryTracker {
 		// startTask() to a previously-incident-bearing task id will
 		// start at 0 (no per-id cache). REC-06 + REC-BE-13 pin this.
 		this.runtimeErrorCount = 0
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+		// zero the live ownership gauge on a new task identity —
+		// same-task continuation preserves it.
+		this.activeCommandJobs = 0
 		return this.get()
 	}
 
@@ -473,6 +485,41 @@ export class TaskTelemetryTracker {
 	}
 
 	/**
+	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+	 *
+	 * Update the live ownership gauge. Called by the host whenever
+	 * the CommandJobManager's active map changes (i.e. on every
+	 * `start()` and every `finalize()`). Saturates at
+	 * `Number.MAX_SAFE_INTEGER` so a runaway burst cannot wrap.
+	 *
+	 * When no task is active the call is logged and dropped,
+	 * mirroring the existing defensive pattern for runtime-error
+	 * recording (the tracker never fabricates counts against an
+	 * unowned task identity).
+	 *
+	 * @param count the new gauge value (must be >= 0; non-finite
+	 * values are clamped to 0).
+	 */
+	recordActiveCommandJobs(count: number): TaskHeaderTelemetryStrip | undefined {
+		if (this.currentTaskId === undefined) {
+			Logger.debug(`[TaskTelemetryTracker] recordActiveCommandJobs called before startTask; ignored (count=${count})`)
+			return this.get()
+		}
+		const safe = typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : 0
+		this.activeCommandJobs = Math.min(safe, Number.MAX_SAFE_INTEGER)
+		return this.get()
+	}
+
+	/**
+	 * Read-only test seam that exposes the current live ownership
+	 * gauge WITHOUT requiring a task identity. Returns 0 when no
+	 * task is active. Mirrors `currentRuntimeErrorCount`.
+	 */
+	get currentActiveOwnedCommandJobs(): number {
+		return this.activeCommandJobs
+	}
+
+	/**
 	 * Pure snapshot of the current telemetry state. Returns
 	 * `undefined` when no task has ever been started.
 	 *
@@ -504,6 +551,12 @@ export class TaskTelemetryTracker {
 			// still render cleanly (they simply omit it; the webview
 			// normalizes absence to zero at the TaskHeader seam).
 			...(this.runtimeErrorCount > 0 ? { runtimeErrorCount: this.runtimeErrorCount } : {}),
+			// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
+			// live ownership gauge. Emitted only when > 0; webview
+			// renders `⎇ N` in the telemetry strip when this field is
+			// present. Conservation invariant: terminal task/job
+			// implies activeCommandJobs === 0.
+			...(this.activeCommandJobs > 0 ? { activeCommandJobs: this.activeCommandJobs } : {}),
 		}
 	}
 
