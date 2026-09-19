@@ -1,0 +1,75 @@
+# 03 — RED-A: containment failure is not visible enough
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## RED reproduction
+
+The composition tested here uses the existing test injection seam for
+the primary-PGID postcondition (`terminalPostconditionProbe` at
+command-job-manager.ts:430) — no synthetic reproduction of the
+substrate. The composition runs the REAL `CommandJobManager` public
+function path end-to-end through to a fake-shell supervisor that
+reports `epermDetected: false` (clean kill) so the lower-level EPERM
+runtime-error path is NOT exercised.
+
+Composition:
+
+```
+start sleep 60  (supervisor returns treeTerminated:true, epermDetected:false)
+   -> activeCommandJobs grows to 1
+
+cancel jobId
+   -> terminate() -> killTree -> epermDetected false
+      -> NO reportRuntimeError at line 2101  (epermDetected === false)
+      -> helper fallback NOT consulted (epermDetected === false)
+      -> finalize() runs:
+         -> terminalPostconditionProbe(-savedPgid, 0) === "alive"
+         -> emit command_job_primary_group_cleanup(postcondition:"alive")
+         -> emit command_job_residual_detected        (pre-delete)
+         -> active.delete
+         -> emit command_job_containment_failed       (post-delete)
+              containmentFailed: "substrate_alive"
+              activeCommandJobs: 0
+   -> SdkController.handleCommandJobLifecycle(event)
+        recordActiveCommandJobs(0)                  <- gauge moves to 0
+        // NO recordRuntimeError() call             <- ! DOES NOT increment
+   -> ! N stays 0
+```
+
+## RED test (PCPC-BE-02 — wired in the new test file)
+
+See `apps/vscode/src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts`.
+
+The test wires:
+
+  - `spawnFactory` -> `fakeShellProcess({ epermDetected: false })`
+  - `terminalPostconditionProbe` -> `() => "alive"`
+  - `onRuntimeError` -> `incidents.push` + `tracker.recordRuntimeError(i)`
+  - `onCommandJobLifecycle` -> `tracker.recordActiveCommandJobs(event.activeCommandJobs)`
+
+then asserts:
+
+```
+tracker.currentRuntimeErrorCount === 1     // RED: currently fails (== 0)
+tracker.currentActiveOwnedCommandJobs === 0
+events.filter(command_job_containment_failed).length === 1
+job.state === "containment_failed"
+```
+
+RED status: at the entry head, `currentRuntimeErrorCount === 0` and
+the test fails. This is the load-bearing defect.
+
+The existing EPERM path is NOT double-counted (the test uses
+`epermDetected: false` so the lower-level report at line 2101 is
+NOT called). PCPC-BE-03 covers the double-count guard.
+
+## Reproduction command (manual)
+
+```
+cd apps/vscode
+bun test src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts
+```
+
+The PCPC-BE-02 case fails at the entry head with the message
+"expected currentRuntimeErrorCount to be 1, got 0".

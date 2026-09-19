@@ -1,0 +1,62 @@
+# 13 — Diff check (whitespace + final-tree state)
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## Production diff (canonical files)
+
+```
+ apps/vscode/src/sdk/command-job-manager.ts                        | +18 -1
+ apps/vscode/src/shared/ExtensionMessage.ts                        | +24 -0
+ apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx  | +13 -6
+ apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx | +49 -0
+ apps/vscode/src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts | new file
+ apps/vscode/src/sdk/__tests__/pcpc-no-overclaim-sweep.pcpc01.test.ts  | new file
+ docs/tools-reference/all-cline-tools.mdx                          | +40 -0
+ .factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/21-strategy-b-product-contract.md | CORRECTION03 doc-only
+ .factory/acts/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01.md  | new file
+ .factory/evidence/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01/*  | 14 evidence files
+```
+
+No other production files are touched.
+
+## Diff-check (`git diff --check`)
+
+The bash command `git diff --check` exits 0 if there are no
+trailing-whitespace or EOF-whitespace issues. Verified after the
+final commit: PASS.
+
+## Greps — forbidden primitives
+
+```
+$ grep -rn '\bpkill\b\|\bkillall\b\|same[-_ ]uid\|ps\s*|\s*grep\|detached:true' \
+       apps/vscode/src apps/vscode/webview-ui/src docs \
+       --include='*.ts' --include='*.tsx' --include='*.md' --include='*.mdx'
+
+  (no production matches; allow-list covers the test fixtures
+   in pcpc-no-overclaim-sweep.pcpc01.test.ts and the historical
+   retraction text in the predecessor ACT's evidence file)
+```
+
+PASS.
+
+## Manager not redesigned
+
+`apps/vscode/src/sdk/command-job-manager.ts` is the file the
+predecessor forbids from being redesigned. Recon confirmed that
+the only edits to this file are:
+
+  1. Line 2496+ (inside the existing `command_job_containment_failed`
+     emit branch): a single `reportRuntimeError` invocation gated
+     by the existing `!job.runtimeErrorReported` latch.
+
+  2. Doc-block comments updated to reflect the new wiring.
+
+The `CommandJob` state machine, lifecycle event union, command
+injection seam, terminalPostconditionProbe seam, dispose() flow,
+and helper fallback flow are all UNCHANGED. No manager redesign
+occurred.
+
+```
+HALT_CONTRACT_IMPLEMENTATION_REQUIRES_MANAGER_REDESIGN = NOT TRIGGERED
+```

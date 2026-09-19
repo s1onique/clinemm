@@ -1,0 +1,85 @@
+# 06 — Incident cardinality (GREEN-A)
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## Implementation
+
+In `apps/vscode/src/sdk/command-job-manager.ts` the `command_job_containment_failed`
+emit branch (line 2460+) was extended with:
+
+```ts
+if (!job.runtimeErrorReported) {
+    job.runtimeErrorReported = true
+    this.reportRuntimeError({
+        errorClass: "command_containment_failed",
+        source: "command-job-manager",
+        correlationId: job.id,
+    })
+}
+this.emitCommandJobLifecycle({
+    event: "command_job_containment_failed",
+    jobId: job.id,
+    pgid: typeof savedPgid === "number" ? savedPgid : undefined,
+    containmentFailed: job.terminationFailed,
+    jobState: "containment_failed",
+    tsMs: Date.now(),
+})
+```
+
+The existing `runtimeErrorReported` latch at line 2101 (the lower-level
+EPERM path) and the new latch at line 2501 share the same flag. The
+flow is:
+
+  (1) terminate() -> treeResult.epermDetected && !runtimeErrorReported
+      -> runtimeErrorReported := true
+      -> reportRuntimeError({errorClass:"EPERM"})
+  (2) finalize() -> terminalPostconditionProbe -> postcondition
+      -> if postcondition != "gone" && !runtimeErrorReported
+         -> runtimeErrorReported := true
+         -> reportRuntimeError({errorClass:"command_containment_failed"})
+
+ONE causal failure => AT MOST ONE runtime incident. The existing
+EPERM authority wins for the EPERM-on-kill case; the new
+containment_failed authority wins for the alive / unknown / pgid_unset
+cases and for the EPERM-only-on-postcondition case.
+
+In `apps/vscode/src/shared/ExtensionMessage.ts` the `RuntimeErrorClass`
+union was extended additively with:
+
+```ts
+| "command_containment_failed"
+```
+
+The source taxonomy (`command-job-manager` | `run-commands-spawn`) is
+unchanged; the new class is emitted from `command-job-manager` only.
+
+## Composition matrix (PCPC-BE tests)
+
+| Test | Postcondition | `epermDetected` | runtimeErrorReported at finalize | ! delta | incident.class   |
+|------|---------------|----------------|----------------------------------|---------|------------------|
+| BE-01| gone          | false          | false                            | +0      | (none)           |
+| BE-02| alive         | false          | false                            | +1      | containment_f.   |
+| BE-03| eperm         | true           | TRUE (latched at terminate)      | 0           | EPERM            |
+| BE-04| unknown       | false          | false                            | +1      | containment_f.   |
+| BE-05| pgid_unset    | false          | false                            | +1      | containment_f.   |
+| BE-06| two alive     | false          | false                            | +2      | containment_f.×2 |
+| BE-07| alive         | false          | false                            | +1      | containment_f.   |
+| BE-08| gone          | false          | false                            | +0      | (none)           |
+| BE-09| alive         | false          | false                            | +1      | containment_f.   |
+| BE-10| alive         | false          | false                            | +1      | containment_f.   |
+
+All 10 PCPC-BE cases PASS, plus the existing 17 DCCT cases continue to
+PASS, plus the 13 REC cases continue to PASS. Total = 41 tests, 185
+expect() calls.
+
+## Reproduction command
+
+```
+cd apps/vscode
+bun test src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts \
+       src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts \
+       src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
+```
+
+Expected: 41 pass, 0 fail.

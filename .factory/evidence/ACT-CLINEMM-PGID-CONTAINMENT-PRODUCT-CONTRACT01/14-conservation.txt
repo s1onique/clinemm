@@ -1,0 +1,107 @@
+# 14 — Conservation (PGID-only)
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## Inherited LIVE conservation (NOT re-litigated)
+
+From
+`ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01`:
+
+```
+PRIMARY_PGID_TERMINATION = LIVE PASS
+HELPER_SELF_RESTART       = LIVE PASS
+CLIENT_ISOLATION          = LIVE PASS
+```
+
+This ACT inherits the LIVE evidence via §19 of the spec
+("PRIMARY_PGID_GUARANTEE = inherited LIVE evidence from closed
+helper qualification"). The bounded invariant
+
+```
+CLEAN_TERMINAL CommandJob => PRIMARY OWNED PGID GONE
+```
+
+is pinned at the predecessor ACT (`COMMANDJOB-DESCENDANT-CONSERVATION-
+TELEMETRY01` correction07) and remains GREEN.
+
+## Synthetic conservation (this ACT)
+
+`pcpc-containment-product-contract.pcpc01.test.ts` exercises the
+fail-closed set via the existing `terminalPostconditionProbe`
+injection seam against the REAL `CommandJobManager` public
+function path. No synthetic reproduction of the substrate.
+
+Composition matrix (full table at `06-incident-cardinality.txt`):
+
+| Postcondition | Job result         | ! delta |
+|---------------|--------------------|--------:|
+| `gone`        | normal terminal    |       0 |
+| `alive`       | containment failed |      +1 |
+| `eperm` (no prior EPERM)  | containment failed |  +1 |
+| `eperm` (prior EPERM)     | containment failed |   0 |
+| `unknown`     | containment failed |      +1 |
+| `pgid_unset`  | containment failed |      +1 |
+
+The conservation invariant is REFUTED for the
+"all descendants killed" claim and confirmed for the
+"primary owned PGID cleaned" claim. This is exactly the
+bounded contract freeze the predecessor ACT authorizes.
+
+## Explicit anti-overclaims
+
+The contract wording does NOT promise:
+
+  - "all descendants killed"
+  - "everything spawned by Cline is killed"
+  - "zero leaked processes"
+  - "ClineMM guarantees cleanup of session-detached processes"
+  - "every completed or cancelled CommandJob ends with the
+    primary PGID cleanly gone" (this is exactly the stronger
+    universal claim that would overclaim — when the postcondition
+    fails, containment_failed is surfaced and the PGID is not
+    cleanly cleaned; the contract only says that IF ClineMM
+    considers a job cleanly terminal THEN the PGID is gone)
+
+The wording DOES say:
+
+  - ClineMM owns and attempts to clean up each CommandJob's
+    primary owned process group when the command completes or
+    is cancelled.
+  - A CommandJob is considered cleanly terminal only after
+    ClineMM establishes that the primary PGID is gone.
+  - If that postcondition cannot be established, the job
+    terminates as containment_failed and ClineMM surfaces a
+    runtime incident.
+  - ClineMM does NOT guarantee cleanup of processes that have
+    left the CommandJob's primary process group by any mechanism.
+
+The proven invariant (sufficient-condition, not universal) is:
+
+  CLEAN_TERMINAL CommandJob  =>  PRIMARY OWNED PGID GONE
+
+The "by any mechanism" framing deliberately covers `setsid()`,
+`setpgid()` / `setpgrp()`, Node `detached:true`, Python
+`start_new_session=True`, double-fork daemonization,
+`nohup`/`disown` patterns, and any other PGID-move mechanism.
+CORRECTION03 of the predecessor contract file retacts the
+narrower "only setsid()" framing.
+
+## HALT conditions (NOT triggered)
+
+```
+HALT_UNEXPECTED_TRACKED_DIRT                        = NOT TRIGGERED (entry tree clean)
+HALT_PRODUCTION_SEAM_MOVED                          = NOT TRIGGERED (all seams confirmed at recon)
+HALT_CONTRACT_IMPLEMENTATION_REQUIRES_MANAGER_REDESIGN = NOT TRIGGERED (manager design unchanged)
+HALT_DOUBLE_COUNTED_RUNTIME_INCIDENT                = NOT TRIGGERED (PCPC-BE-03 guards it)
+HALT_GONE_MISCLASSIFIED_AS_ESCAPE                   = NOT TRIGGERED (PCPC-BE-01 + PCPC-AO-01 pin it)
+HALT_ESCAPE_CLAIM_WITHOUT_OBSERVATION               = NOT TRIGGERED (PCPC-AO-02/03/04 sweep pins it)
+HALT_TELEMETRY_SEMANTICS_REGRESSED                  = NOT TRIGGERED (PCPC-UI-05 + PCPC-BE-08 pin it)
+```
+
+## DOCENDANT_CONSERVATION = REFUTED
+
+This claim is permanently REFUTED for the current architecture.
+The successor ACT (`ACT-CLINEMM-ENDPOINT-SECURITY-DESCENDANT-CONTAINMENT01`,
+parked on the future research track) is the only path that could
+re-open it.

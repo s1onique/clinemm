@@ -1,0 +1,27 @@
+# 11 — Typecheck
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## Host (apps/vscode)
+
+```
+cd apps/vscode
+bunx tsc --noEmit
+```
+
+Expected output: zero errors, exit 0.
+
+Confirmed at the entry head + after all GREEN edits: PASS.
+
+## Webview (apps/vscode/webview-ui)
+
+```
+cd apps/vscode/webview-ui
+./node_modules/.bin/tsc --noEmit
+```
+
+Expected output: zero errors, exit 0.
+
+Confirmed at the entry head + after the tooltip / aria-label edit
+(GREEN-B): PASS.

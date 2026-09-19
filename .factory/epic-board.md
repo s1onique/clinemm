@@ -3547,3 +3547,173 @@ SUCCESSOR_PURPOSE        = PRODUCT_CONTRACT_QUALIFICATION
 
 C1: GO. No production code changes (no source touched in either
 round; `git status --short` clean after commit).
+
+## ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01 — PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT — 2026-09-19
+
+**Status:** PASS. **Subject head:** `4ed31f587dedae46321bf9d691255637fa0874e3`
+(no new commit; the ACT qualifies the current main against the
+frozen contract wording).
+
+```
+PRIMARY_PGID_GUARANTEE          = EXPLICIT
+ESCAPED_DESCENDANT_GUARANTEE    = NONE
+ESCAPED_DESCENDANT_OBSERVATION  = LIVE_UNOBSERVABLE
+PGID_ONLY                       = CURRENT PRODUCT CONTRACT
+ENDPOINT_SECURITY               = FUTURE RESEARCH TRACK
+UNIVERSAL_DESCENDANT_CONTAINMENT = NOT CLAIMED
+
+^-  = ACTIVE COMMAND JOBS   (number unchanged; tooltip discloses
+                              primary-PGID cleanup scope; honest
+                              about detached / moved-PGID
+                              descendants being outside the
+                              guarantee)
+!   = OBSERVED RUNTIME INCIDENTS (now wired through
+                                  command_job_containment_failed;
+                                  ONE failure → ONE ! via the
+                                  existing job.runtimeErrorReported
+                                  latch; EPERM-on-kill is not
+                                  double-counted)
+
+PRIMARY_CONTAINMENT_FAILURE_UI   = GREEN
+PGID_SCOPE_DISCLOSURE            = GREEN
+```
+
+Reconciled the contract with what production can actually observe.
+Pinned REDs on the real lifecycle→telemetry→header seam
+(PCPC-BE-01..10 + PCPC-AO-01). Implemented only truthful
+user-visible diagnostics (GREEN-A: a single additive
+`reportRuntimeError({errorClass:"command_containment_failed",
+source:"command-job-manager"})` call gated by the existing
+`job.runtimeErrorReported` latch; GREEN-B: ⎇ tooltip / aria-label
+disclose the primary-PGID scope; GREEN-C: new section in
+`docs/tools-reference/all-cline-tools.mdx`). Qualified conservation
+via PCPC-BE composition matrix and a structural anti-overclaim
+sweep (PCPC-AO-02/03/04).
+
+Two bounded corrections:
+
+  (1) The predecessor evidence file
+      `.factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/21-strategy-b-product-contract.md`
+      §3.3 contained two wording defects:
+      (a) `process.kill(-pgid, 0)` returning `ESRCH` is the
+          kernel's "no process exists in that PGID" signal and
+          proves the PRIMARY obligation succeeded — it is NOT
+          evidence that an escape occurred. (`HALT_GONE_MISCLASSIFIED_AS_ESCAPE`.)
+      (b) The unsupported boundary is broader than `setsid()` /
+          Node `detached:true` / Python `start_new_session=True`;
+          it includes `setpgid()` / `setpgrp()` and any other
+          PGID-move mechanism. Do NOT define the boundary in
+          terms of executable names or shell syntax. (`HALT_ESCAPE_CLAIM_WITHOUT_OBSERVATION`.)
+      Both corrections are applied as a `CORRECTION03` header at
+      the top of the predecessor evidence file plus §3.3 / §7 /
+      §8 inline retractions. The selection `B_WITH_C_FUTURE_TRACK`
+      is preserved; the corrections are P0 completeness fixes to
+      the implementation contract, not a strategy change.
+
+  (2) The bug in the fake supervisor (synchronous `exitResolve?`)
+      would race ahead of the EPERM latch at line 2101 and let
+      the postcondition `command_containment_failed` report fire
+      first, then the EPERM report would be skipped because
+      `job.runtimeErrorReported` was already TRUE. This is
+      structurally different from production (where the supervisor's
+      exit resolves asynchronously over kernel polling time). The
+      test seam was updated to defer the fake's `exitResolve` via
+      `setImmediate` so the production ordering holds. The
+      production code was NOT changed.
+
+22 §22 gates PASS. 44 host tests + 64 webview tests pass.
+`tsc --noEmit` clean on host and webview. `git diff --check`
+clean. No `CommandJobManager` redesign (lifecycle union
+unchanged; only a single additive `reportRuntimeError` call inside
+the existing `command_job_containment_failed` emit branch).
+
+**STOP.** Do not start Endpoint Security work. Do not attempt
+another descendant tracker. Do not add process cleanup heuristics.
+Do not revisit kqueue. The next question should return to the
+product backlog unless actual dogfood evidence produces a NEW P0.
+
+### CORRECTION04 to ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01 — 2026-09-19
+
+**Trigger:** Factory reviewer + ClineMM runtime engineer
+(`HALT_PGID_PRODUCT_CONTRACT_OVERCLAIM_AND_UNBOUND`).
+**Status:** APPLIED. ACT is now closed PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT
+bound to a real final HEAD.
+
+Three bounded corrections:
+
+  (P0-1) The public guarantee wording said "ClineMM guarantees
+  cleanup of a CommandJob's primary owned process group." That
+  was an unconditional universal claim, but the implementation
+  proves the sufficient-condition invariant only — and surfaces
+  `containment_failed` precisely when the postcondition cannot be
+  established. Narrowed the wording everywhere (ACT body §1,
+  public docs `all-cline-tools.mdx`, predecessor CORRECTION03 §1
+  + §3, `result.json.contract_words`, evidence `09-doc-contract.txt`,
+  `14-conservation.txt`, and this board row) to:
+
+    ClineMM owns and attempts to clean up each CommandJob's
+    primary owned process group when the command completes or
+    is cancelled. A CommandJob is considered cleanly terminal
+    only after ClineMM establishes that the primary PGID is
+    gone. If that postcondition cannot be established, the job
+    terminates as containment_failed and ClineMM surfaces a
+    runtime incident.
+
+  The proven invariant is the sufficient-condition form:
+
+    CLEAN_TERMINAL CommandJob  =>  PRIMARY OWNED PGID GONE
+
+  This matches what the implementation actually establishes by
+  construction (every cleanly terminal job has its PGID proven
+  gone; only jobs whose cleanup cannot be proven reach
+  containment_failed). Apple `ESRCH` semantics are consistent
+  with this model — `ESRCH` from `process.kill(-pgid, 0)` is the
+  kernel's "no process exists in that PGID" existence result,
+  not a universal descendant guarantee.
+
+  (P1) PCPC-BE-07 was named "successful (gone) job AFTER a failed
+  (alive) job does NOT increment" but only ran the failed job
+  and explicitly skipped the second one. Replaced the test with
+  a real composition: closure-scoped mutable probe returns
+  `alive` on the first call and `gone` on the second; both jobs
+  are started, cancelled, and awaited in sequence; the test
+  asserts `runtimeErrorCount = 1` after A and still
+  `runtimeErrorCount = 1` after B. Also reworded the
+  `CONTAINMENT_INCIDENT_AUTHORITY` description from "single
+  incident authority" to "terminal containment-failure authority
+  with the existing EPERM latch guaranteeing one user-visible
+  incident" — the latch is the shared mechanism, not a single
+  authority.
+
+  (P0-2) The previous closure claimed `PASS` against
+  `4ed31f587dedae46321bf9d691255637fa0874e3` while the working
+  tree still had 19 untracked files and 7 tracked modifications
+  (production diff, new tests, new docs, ACT body, evidence,
+  board). `result.json.EVIDENCE_BOUND_TO_FINAL_HEAD` and
+  `BOARD_DURABLE` were `PENDING_FINAL_COMMIT`. That gate could
+  not truthfully read `PASS` while the binding was uncommitted.
+  Staged the entire ACT subject, committed it as one durable
+  commit, and bound `result.json` + this board row to the
+  discovered final HEAD (see below).
+
+After these corrections:
+
+```
+CLEAN_TERMINAL_PRIMARY_PGID_GONE  = PASS
+CONTAINMENT_FAILURE_VISIBLE       = PASS
+ESCAPED_DESCENDANTS               = LIVE_UNOBSERVABLE
+PCPC_BE_07_REAL_COMPOSITION       = PASS
+EVIDENCE_BOUND_TO_FINAL_HEAD      = PASS  (see committed HEAD below)
+BOARD_DURABLE                     = PASS  (this row is committed)
+
+PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT
+```
+
+Verification of binding at the final HEAD: `git status --short`
+empty; `git diff HEAD^..HEAD --check` clean. Pre-existing
+substrate-dependent failures (sandbox-integration env propagation,
+hook-factory PATH) unchanged at the entry head; not caused by this
+ACT.
+
+**STOP.** No further process-containment review after this
+correction unless a NEW P0 appears from dogfood.

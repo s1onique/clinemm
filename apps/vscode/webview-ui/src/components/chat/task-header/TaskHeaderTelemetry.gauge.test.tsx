@@ -118,4 +118,49 @@ describe("ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 / TaskHeade
 		const node = screen.getByTestId(TESTID)
 		expect(node.getAttribute("aria-label")).toContain("4")
 	})
+
+	// ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01:
+	// The ⎇ title MUST disclose the primary-PGID cleanup scope so the
+	// user can hover and read the honest scope. The aria-label stays
+	// concise for screen readers.
+
+	it("PCPC-UI-03: ⎇ title discloses primary-process-group cleanup scope", () => {
+		render(<TaskHeaderTelemetry telemetry={telemetry({ activeCommandJobs: 3 })} turnState={ts("streaming")} />)
+		const node = screen.getByTestId(TESTID)
+		const title = node.getAttribute("title") ?? ""
+		expect(title).toMatch(/primary process group|primary PGID|primary.*group/i)
+		expect(title).toMatch(/processes that leave|outlive the job|may outlive/i)
+	})
+
+	it("PCPC-UI-04: ⎇ aria-label still carries the count (screen-reader contract preserved)", () => {
+		render(<TaskHeaderTelemetry telemetry={telemetry({ activeCommandJobs: 3 })} turnState={ts("streaming")} />)
+		const node = screen.getByTestId(TESTID)
+		const label = node.getAttribute("aria-label") ?? ""
+		// Must still carry the count for screen readers.
+		expect(label).toContain("3")
+		// Must still describe the count semantically.
+		expect(label).toMatch(/active command job/i)
+	})
+
+	it("PCPC-UI-05: ⎇ tooltip does not claim process count or executable-name sweep", () => {
+		// The accessible contract MUST NOT include the escape-claim
+		// patterns the predecessor ACT retracts. PCPC-AO-02 at the
+		// production-source level is mirrored here at the rendered
+		// tooltip level.
+		render(<TaskHeaderTelemetry telemetry={telemetry({ activeCommandJobs: 3 })} turnState={ts("streaming")} />)
+		const node = screen.getByTestId(TESTID)
+		const label = node.getAttribute("aria-label") ?? ""
+		const title = node.getAttribute("title") ?? ""
+		const noOverclaimPatterns = [
+			/escape detected/i,
+			/leaked descendant/i,
+			/all descendants killed/i,
+			/zero descendants/i,
+			/all spawned processes terminated/i,
+		]
+		for (const pat of noOverclaimPatterns) {
+			expect(pat.test(label)).toBe(false)
+			expect(pat.test(title)).toBe(false)
+		}
+	})
 })

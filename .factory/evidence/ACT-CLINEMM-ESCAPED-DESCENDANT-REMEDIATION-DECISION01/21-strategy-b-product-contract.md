@@ -1,7 +1,29 @@
 21-strategy-b-product-contract.md
 ==================================
 
-# Product contract for the PGID-only containment boundary (CORRECTION02)
+# Product contract for the PGID-only containment boundary (CORRECTION02 + CORRECTION03)
+
+CORRECTION03 (per `ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01`,
+see `.factory/evidence/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01/02-contract-correction.txt`)
+narrows the original §3.3 wording in TWO ways:
+
+  1. `process.kill(-pgid, 0)` returning `ESRCH` is NOT evidence that
+     a descendant escaped; it is the kernel's "no process exists in
+     that PGID" signal and proves the PRIMARY obligation succeeded.
+     The `alive` / `eperm` / `unknown` / `pgid_unset` postconditions
+     from `terminalPostconditionProbe` are the only eligible
+     containment-failure diagnostics.
+  2. The unsupported boundary is broadened from `setsid()` and its
+     equivalents to "any process that leaves the CommandJob's primary
+     owned PGID", including `setpgid()` / `setpgrp()` and other
+     PGID-move mechanisms. Do NOT define the boundary in terms of
+     executable names or shell syntax.
+
+The original §3.3 wording is RETRACTED. The corrected doctrine is
+captured in §1 / §2 / §3 of
+`ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01`. The selection
+`B_WITH_C_FUTURE_TRACK` is preserved; CORRECTION03 is a P0
+completeness fix to the implementation contract, not a strategy change.
 
 CORRECTION02 narrows a remaining stale claim
 (`21-strategy-b-product-contract.md` §6 line stating Strategy C
@@ -20,18 +42,35 @@ will implement.
 
 ## §1. Contained
 
-The following ARE within the ClineMM containment guarantee:
+What ClineMM **owns and attempts** to clean up when a CommandJob
+completes or is cancelled: the CommandJob's primary owned PGID.
+
+What ClineMM **proves** — exactly the sufficient-condition invariant
+the implementation establishes:
+
+  CLEAN_TERMINAL CommandJob  ⇒  PRIMARY OWNED PGID GONE
+
+Concretely, the contained set includes:
 
   (a) The leader process of a CommandJob (rootPid).
   (b) All processes sharing the leader's primary PGID at the time
       of cancellation or completion.
-  (c) All descendants of (a) that have not performed a session-escape
-      operation (setsid, detached:true with setsid, start_new_session,
-      double-fork-and-exit, nohup-and-disown).
+  (c) All descendants of (a) that have not left the primary PGID
+      via setsid, setpgid/setpgrp, Node detached:true (with setsid),
+      Python start_new_session=True, double-fork-and-exit, or
+      nohup-and-disown.
 
 These are terminated together when the user cancels or the CommandJob
 completes, via the host-helper's owned-PGID signal authority
 (ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01).
+
+The contract is honest about what it does **not** universalize:
+when the primary-PGID postcondition cannot be established (`alive`,
+`eperm`, `unknown`, `pgid_unset`), the job terminates as
+`containment_failed` and a runtime incident is surfaced. The
+sufficient-condition invariant is preserved by construction — every
+cleanly terminal job has its primary PGID proven gone; only jobs
+whose cleanup cannot be proven reach `containment_failed`.
 
 ## §2. Not contained
 
@@ -57,11 +96,25 @@ ClineMM agrees to:
      or been cancelled.
   2. Keep the ⎇ indicator as the active CommandJob count (already
      correct after ACT-CLINEMM-BACKGROUND-HANDOFF-TURNSTATE-DISCRIMINATOR01).
-  3. Surface a containment-boundary diagnostic when an escape is
-     OBSERVED or strongly INDICATED (e.g. a watchdog process notices
-     the leader exited but a known-child pid is still alive, OR
-     `process.kill(-pgid, 0)` returns ESRCH during cleanup).
+  3. CORRECTION03 (per ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01):
+     Surface a runtime containment diagnostic only when the OWNED
+     primary-PGID postcondition itself fails or is indeterminate
+     (the `alive` / `eperm` / `unknown` / `pgid_unset` classifications
+     emitted by `command_job_primary_group_cleanup` /
+     `command_job_containment_failed`). The original §3.3 wording
+     ("Surface a containment-boundary diagnostic when an escape is
+     OBSERVED or strongly INDICATED ... OR `process.kill(-pgid, 0)`
+     returns ESRCH during cleanup") is RETRACTED — `ESRCH` is the
+     kernel's "no process exists in that PGID" signal and proves the
+     PRIMARY obligation succeeded; it says nothing about descendants
+     that previously moved into another PGID. See
+     `.factory/evidence/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01/02-contract-correction.txt`.
   4. Document detached/sessionized background work as unsupported.
+     CORRECTION03: broadened from `setsid()` / `Node detached:true` /
+     `Python start_new_session=True` to "any process that leaves the
+     CommandJob's primary owned PGID", including `setpgid()` /
+     `setpgrp()` and other PGID-move mechanisms. Do NOT define the
+     boundary in terms of executable names or shell syntax.
   5. Never sweep same-UID processes attempting to compensate.
 
 ## §4. Failure modes the contract acknowledges
@@ -117,20 +170,35 @@ substrate
 
 ## §7. What the next ACT must do (NOT in this ACT)
 
-  - Surface the containment-boundary diagnostic (§3.3) when a
-    CommandJob finishes or is cancelled but the host-helper
-    reports known-child-escaped (e.g. via the existing watchdog
-    primitive in ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01).
+  - CORRECTION03: the diagnostic surface is now the OWNED primary-PGID
+    postcondition failure (see §3.3 corrected wording), NOT a
+    watchdog observation of escaped descendants. Wire the
+    `command_job_containment_failed` lifecycle event into the
+    existing `runtimeErrorCount` telemetry path so ⚠ N reflects the
+    observed containment failure. Use a single incident per
+    CommandJob terminal verdict (the `command_job_containment_failed`
+    event is the user-visible authority; earlier diagnostic events
+    are observed but MUST NOT increment the user counter).
   - Update product documentation to reflect the boundary (§3.4).
-  - Update the chat/task UI to show the diagnostic.
+  - Update the chat/task UI to show the diagnostic (the ⎇ tooltip
+    MUST disclose the primary-PGID cleanup scope).
   - DO NOT add same-UID sweeping machinery (§3.5).
   - DO NOT add command-text heuristics (§§7, 22 of the ACT spec).
+  - DO NOT add any anti-overclaim language that promises
+    "zero descendants", "all spawned processes terminated", or any
+    similar claim about escaped descendants — those are LIVE
+    UNOBSERVABLE from the current production seam.
 
 ## §8. What ClineMM does NOT promise
 
 ClineMM does not promise:
   - Universal descendant containment.
   - Cleanup of session-detached processes on cancellation.
+    CORRECTION03: broadened to "cleanup of any process that has
+    left the CommandJob's primary owned PGID, regardless of the
+    mechanism that moved it (setsid, setpgid/setpgrp, Node
+    detached:true, Python start_new_session=True, double-fork
+    daemonization, nohup/disown patterns, etc.)".
   - That ⎇ counts the actual number of owned processes on the system
     (⎇ counts active CommandJobs; some of those may have leaked
     descendants that are no longer tracked).

@@ -381,6 +381,15 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 			  ("TERMINAL CommandJob ⇒ ZERO LIVE ClineMM-OWNED
 			  DESCENDANTS").
 
+			  ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01:
+			  The `title` tooltip MUST disclose that cleanup is
+			  primary-PGID scoped — a process that calls setsid() or
+			  moves to another PGID via setpgid()/setpgrp() is
+			  OUTSIDE the guarantee and may outlive the job. The
+			  aria-label stays concise for screen readers; the title
+			  carries the full disclosure. The visible glyph (⎇)
+			  is unchanged.
+
 			  The glyph is non-clickable in V1 (no live-detail panel);
 			  cursor stays default. Color follows the existing
 			  telemetry-strip convention (no hard-coded hex) — the
@@ -389,13 +398,13 @@ const TaskHeaderTelemetry: React.FC<TaskHeaderTelemetryProps> = ({
 			{(() => {
 				const count = telemetry.activeCommandJobs ?? 0
 				if (count <= 0) return null
-				const label = `${count} active owned command job${count === 1 ? "" : "s"}`
+				const label = `${count} active command job${count === 1 ? "" : "s"}`
 				const title =
-					`Live count of ClineMM-owned CommandJobs in flight (the ` +
-					`size of the CommandJobManager's active map at the most ` +
-					`recent lifecycle event). Independent of executable name — ` +
-					`node, python, bash, perl, etc. all contribute to the same ` +
-					`gauge. Resets to 0 when the task identity changes.`
+					`${count} active command job${count === 1 ? "" : "s"}. ` +
+					`Cleanup is scoped to each job's primary process group; ` +
+					`processes that leave that group may outlive the job. ` +
+					`ClineMM does not kill processes by UID, executable name, ` +
+					`command text, or age.`
 				return (
 					<span
 						aria-label={label}

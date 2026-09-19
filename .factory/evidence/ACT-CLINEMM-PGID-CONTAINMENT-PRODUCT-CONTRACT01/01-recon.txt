@@ -1,0 +1,229 @@
+# 01 — Production seam recon
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3 (entry)
+Recon date: 2026-09-19
+
+This file freezes the production seams the ACT relies on. Every named
+identifier and every named method has been confirmed against the source
+tree at the entry head.
+
+## Production seams
+
+```
+LIFECYCLE_AUTHORITY         = apps/vscode/src/sdk/command-job-manager.ts
+                              CommandJobManager.emitCommandJobLifecycle
+                              (the 11-event CommandJobLifecycleEvent union)
+
+RUNTIME_INCIDENT_AUTHORITY  = apps/vscode/src/sdk/SdkController.ts
+                              SdkController.handleTaskRuntimeError
+                              -> TaskTelemetryTracker.recordRuntimeError
+                              (apps/vscode/src/sdk/task-telemetry-tracker.ts)
+
+## Existing event + telemetry surface (confirmed from source)
+
+### CommandJob lifecycle union
+
+The union is declared at command-job-manager.ts:540-718 and consists of
+eleven event kinds:
+
+```
+command_job_process_started
+command_job_primary_group_registered
+command_job_termination_started
+command_job_primary_group_probe
+command_job_primary_group_cleanup         (postcondition: gone|alive|eperm|unknown)
+command_job_helper_cleanup_attempted      (helperOutcome: success|denied|failed)
+command_job_terminal_requested
+command_job_terminal_committed            (clean path only — postcondition === "gone")
+command_job_residual_detected             (failure path pre-delete observation)
+command_job_containment_failed            (failure path post-delete gauge event;
+                                           containmentFailed:
+                                             pgid_unset | substrate_alive |
+                                             substrate_eperm | substrate_unknown)
+```
+
+All eleven events carry `activeCommandJobs: number` (the gauge, enriched
+to `manager.activeCount`).
+
+### Runtime-error incident surface (ExtensionMessage.ts:915-951)
+
+```
+interface RuntimeErrorIncident {
+  readonly errorClass: RuntimeErrorClass
+  readonly source: RuntimeErrorSource
+  readonly correlationId?: string
+}
+
+type RuntimeErrorClass =
+  | "EPERM" | "EACCES" | "ENOENT" | "ETIMEDOUT" | "ESRCH"
+  | "SPAWN_ERROR" | "IPC_ERROR" | "HELPER_IPC_ERROR"
+  | "TIMEOUT" | "UNKNOWN_RUNTIME_ERROR"
+
+type RuntimeErrorSource = "command-job-manager" | "run-commands-spawn"
+```
+
+ONE and ONLY ONE errorClass / source pair is currently emitted from
+`command-job-manager.ts`: `EPERM` / `command-job-manager` from
+### Header projection (TaskHeaderTelemetry.tsx:341-409)
+
+```
+! N  glyph   rendered when telemetry.runtimeErrorCount > 0
+              aria-label: "<N> runtime error(s) in this task"
+              title: "Cumulative structured ClineMM runtime error
+                     incidents in the current task session (V1: EPERM
+                     during process-tree termination). Resets to 0
+                     when the task identity changes ..."
+
+^- N  glyph   rendered when telemetry.activeCommandJobs > 0
+              aria-label: "<N> active owned command job(s)"
+              title: "Live count of ClineMM-owned CommandJobs in
+                     flight (the size of the CommandJobManager's
+                     active map at the most recent lifecycle event).
+                     Independent of executable name — node, python,
+                     bash, perl, etc. all contribute to the same
+                     gauge. Resets to 0 when the task identity changes."
+```
+
+The ^- title currently says "Live count of CommandJobs in flight" but
+does NOT disclose that cleanup is primary-PGID scoped. This is the
+defect RED-C targets.
+
+## RED-A: containment failure is not visible enough
+
+Composition today (driven by the `terminalPostconditionProbe` test seam
+at command-job-manager.ts:430):
+
+```
+terminalPostconditionProbe = () => "alive"
+  -> finalize() emits command_job_primary_group_cleanup(postcondition:"alive")
+  -> finalize() emits command_job_residual_detected           (pre-delete, gauge)
+  -> finalize() emits command_job_containment_failed          (post-delete, gauge)
+  -> SdkController.handleCommandJobLifecycle(event)
+        this.taskTelemetry.recordActiveCommandJobs(event.activeCommandJobs)
+        // NO recordRuntimeError() call -> ! DOES NOT INCREMENT
+  -> ! N stays unchanged
+```
+
+The same is true for `postcondition === "eperm"` IF the underlying
+`treeResult.epermDetected === false` (i.e. EPERM only on the postcondition
+probe, not on the kill). For the more typical EPERM-on-kill case the
+lower-level incident was already counted at line 2101, but for the
+`alive` / `unknown` / `pgid_unset` cases no incident has been counted
+at all.
+
+## RED-B: `gone` must never imply escape
+
+Composition (no fix required — this is a CONSERVATION pin):
+
+```
+terminalPostconditionProbe = () => "gone"
+  -> finalize() emits command_job_primary_group_cleanup(postcondition:"gone")
+  // NO command_job_residual_detected
+  // NO command_job_containment_failed
+  -> SdkController.handleCommandJobLifecycle(event)
+        recordActiveCommandJobs(0)
+  -> ! N unchanged
+```
+
+This is exactly what the conservation tests (DCCT-11 in
+command-job-manager-descendant-conservation.dcct01.test.ts:313) already
+verify at the manager level. The new product-contract test
+(PCPC-BE-01) must extend that to assert that the ! counter is also
+unchanged through the full composition.
+
+## RED-C: ^- tooltip does not disclose PGID-scope
+
+Current title (TaskHeaderTelemetry.tsx:393-398):
+> "Live count of ClineMM-owned CommandJobs in flight (the size of the
+> CommandJobManager's active map at the most recent lifecycle event).
+> Independent of executable name — node, python, bash, perl, etc. all
+> contribute to the same gauge. Resets to 0 when the task identity
+> changes."
+
+Required title (per §13 of the ACT spec):
+> "N active command job(s). Cleanup is scoped to each job's primary
+> process group; processes that leave that group may outlive the job."
+
+The aria-label must still carry the count, but the title must state the
+ownership scope honestly.
+
+## RED-D: docs page is silent on PGID scope
+
+`docs/tools-reference/all-cline-tools.mdx` lists `bash` as
+"Execute shell commands" with no statement of cleanup scope or process
+ownership. The ACT requires a new section documenting the cleanup
+boundary. The smallest canonical location is this file.
+
+## Confirmation: real lifecycle seam exists
+
+The named lifecycle events and the named telemetry sink are present in
+production. No halt on production-seam-moved is required.
+
+```
+REAL_LIFECYCLE_SEAM_FOUND = PASS
+```
+
+## EPERM cardinality analysis (preliminary)
+
+Two paths can produce a `command_job_containment_failed` event with
+`containmentFailed: "substrate_eperm"`:
+
+| Underlying `treeResult.epermDetected` | runtimeErrorReported before finalize | Required ! delta |
+|--------------------------------------|-------------------------------------|------------------|
+| `true`                              | `true` (latched at line 2101)       | +0 (CASE 1)     |
+| `false`                             | `false`                             | +1 (new incident) |
+
+The `job.runtimeErrorReported` latch already gates the line 2101
+report. Re-using the same latch at the
+`command_job_containment_failed` emit gate guarantees the
+ONE-FAILURE -> ONE-! invariant.
+
+For `alive` / `unknown` / `pgid_unset`, `runtimeErrorReported` is always
+`false` at the point of `command_job_containment_failed` because no
+earlier code path calls `reportRuntimeError`. These three cases are
+unconditional +1.
+
+See §6 / §12 evidence files for the wired test confirmation.
+Therefore the user-visible state is:
+
+```
+ACTIVE_JOB_GAUGE          = GREEN   (^- N moves to N-1 correctly)
+RUNTIME_INCIDENT_COUNTER  = WRONG   (! does NOT increment for the
+                                       alive / unknown / pgid_unset paths)
+```
+
+This is the load-bearing defect this ACT must close. The fix is a
+single `reportRuntimeError` call inside the
+`command_job_containment_failed` emit branch, gated by the existing
+`!job.runtimeErrorReported` latch so EPERM-on-kill is not double-counted
+(CASE 1 per §12 of the ACT spec).
+`terminate()` at line 2101, gated by `job.runtimeErrorReported`
+(REC-BE-10 / REC-BE-11 verify cardinality). This is the lower-level
+substrate-EPERM signal from `treeResult.epermDetected`.
+
+The `recordRuntimeError` observer path is:
+
+```
+CommandJobManager.terminate()
+  -> treeResult.epermDetected && !job.runtimeErrorReported
+  -> CommandJobManager.reportRuntimeError(
+       {errorClass:"EPERM", source:"command-job-manager", correlationId:job.id})
+  -> options.onRuntimeError(incident)               // wired in production
+  -> SdkController.handleTaskRuntimeError(incident)
+  -> TaskTelemetryTracker.recordRuntimeError(incident)
+  -> runtimeErrorCount += 1                          (latched on currentTaskId)
+  -> webview ! N += 1
+```
+HEADER_PROJECTION_AUTHORITY = apps/vscode/webview-ui/src/components/chat/task-header/
+                              TaskHeaderTelemetry.tsx
+                              (renders both ^- and ! from
+                               TaskHeaderTelemetryStrip)
+
+DOC_AUTHORITY               = docs/tools-reference/all-cline-tools.mdx
+                              (canonical Cline tool reference;
+                               will receive a new "Process ownership
+                               and cancellation" section)
+```
+and cancellation" section)
+```

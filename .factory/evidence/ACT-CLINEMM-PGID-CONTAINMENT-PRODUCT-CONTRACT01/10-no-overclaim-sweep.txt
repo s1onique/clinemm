@@ -1,0 +1,77 @@
+# 10 — No-overclaim sweep (structural anti-overclaim gate)
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## Implementation
+
+`apps/vscode/src/sdk/__tests__/pcpc-no-overclaim-sweep.pcpc01.test.ts`
+walks `apps/vscode/src` and `docs/`, reading every `.ts` / `.tsx`
+/ `.md` / `.mdx` file (excluding `node_modules/`, `dist/`, `out/`,
+`.git/`) and asserts that the OVERCLAIM_PATTERNS / PROHIBITED_PRIMITIVES
+sets produce ZERO matches outside the explicit allow-list.
+
+## Allow-list
+
+The allow-list contains the paths that REFERENCE these patterns
+RETROACTIVELY (REDs, predecessor ACT body and evidence, this ACT's
+own body and tests):
+
+```
+.factory/evidence/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01/
+.factory/acts/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01.md
+.factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/
+.factory/acts/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01.md
+apps/vscode/src/sdk/__tests__/pcpc-   (this ACT's tests)
+apps/vscode/src/sdk/__tests__/pcpc-no-overclaim-sweep.pcpc01.test.ts
+```
+
+These files are NOT production claims; they DOCUMENT or TEST the
+absence of such claims. Outside the allow-list, the patterns must
+produce zero hits.
+
+## PATTERNS swept
+
+Overclaim patterns (case-insensitive):
+```
+zero descendants
+all descendants killed
+all spawned processes terminated
+escape detected
+leaked descendant detected
+process leak detected
+no descendants leaked
+```
+
+Prohibited primitives (anti-overclaim machinery, ACT spec §17):
+```
+pkill
+killall
+kill(-1, ...)
+pgrep by executable
+```
+
+Same-UID / command-text detection (ACT spec §17):
+```
+same[-_ ]uid / same uid sweep
+ps | grep
+command-text detection for detached:true / setsid
+```
+
+## Test result
+
+```
+bun test src/sdk/__tests__/pcpc-no-overclaim-sweep.pcpc01.test.ts
+```
+
+Expected output:
+```
+ ✓ PCPC-AO-02: production code + user docs do NOT contain overclaim patterns
+ ✓ PCPC-AO-03: production code does NOT introduce pkill/killall/kill(-1,/pgrep-by-name
+ ✓ PCPC-AO-04: production code does NOT introduce same-UID sweeps or ps|grep / command-text detection
+ 3 pass, 0 fail
+```
+
+PASS at the entry head. A future PR that introduces any of these
+patterns in a non-allow-listed path will fail this test, providing
+the structural anti-overclaim gate the ACT spec requires.

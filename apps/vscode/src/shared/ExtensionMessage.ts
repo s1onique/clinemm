@@ -923,6 +923,27 @@ export interface RuntimeErrorIncident {
  * Frozen V1 normalized error taxonomy. Mirrored on host (tracker
  * input) and webview (tooltips) so the wire / display / log strings
  * stay byte-identical across the codebase.
+ *
+ * ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01:
+ * Adds one additive class — `command_containment_failed` — emitted
+ * exactly once per CommandJob terminal verdict when the OWNED
+ * primary-PGID postcondition (from `terminalPostconditionProbe`)
+ * fails or is indeterminate (`alive` | `eperm` | `unknown` |
+ * `pgid_unset`). This is the user-visible authority for an OBSERVED
+ * primary-PGID cleanup failure.
+ *
+ * The new class is latched through the existing
+ * `job.runtimeErrorReported` flag so an EPERM observed at the lower
+ * `treeResult.epermDetected` seam (which already counts as a runtime
+ * incident via the canonical EPERM path at command-job-manager.ts
+ * line 2101) does NOT also count via the
+ * `command_containment_failed` postcondition path. The invariant
+ * `ONE FAILURE → ONE ⚠ INCREMENT` is preserved.
+ *
+ * The new class does NOT describe escaped descendants. The
+ * terminal-PGID postcondition is scoped to the OWNED primary PGID
+ * only; processes that previously moved into another PGID are
+ * `LIVE_UNOBSERVABLE` from the current production seam.
  */
 export type RuntimeErrorClass =
 	// POSIX errno names — captured only when the runtime actually
@@ -941,6 +962,12 @@ export type RuntimeErrorClass =
 	| "HELPER_IPC_ERROR"
 	| "TIMEOUT"
 	| "UNKNOWN_RUNTIME_ERROR"
+	// ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01:
+	// Additive containment-failure class. Emitted exactly once per
+	// CommandJob terminal verdict when the OWNED primary-PGID
+	// postcondition fails. See header note above for cardinality
+	// and observability scope.
+	| "command_containment_failed"
 
 /**
  * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01:

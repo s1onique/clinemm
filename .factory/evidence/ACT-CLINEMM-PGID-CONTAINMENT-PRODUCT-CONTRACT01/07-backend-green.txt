@@ -1,0 +1,58 @@
+# 07 — Backend GREEN-A
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## Implementation summary
+
+Two files changed:
+
+  1. `apps/vscode/src/shared/ExtensionMessage.ts`
+     - Added `command_containment_failed` to the `RuntimeErrorClass`
+       union (additive, no removals).
+     - Doc block records the cardinality / latch semantics and the
+       observability boundary (OWNED PGID postcondition only;
+       escaped descendants are LIVE_UNOBSERVABLE).
+
+  2. `apps/vscode/src/sdk/command-job-manager.ts`
+     - Extended the `command_job_containment_failed` emit branch
+       (line 2460+) with a single `reportRuntimeError({errorClass:
+       "command_containment_failed", source: "command-job-manager",
+       correlationId: job.id})` call gated by the existing
+       `!job.runtimeErrorReported` latch. The same flag is set by
+       the lower-level EPERM path at line 2101, so the EPERM
+       kill + postcondition=eperm case counts as ONE incident
+       (the EPERM class wins; the latch prevents the second
+       call).
+     - No change to the lifecycle event itself
+       (`command_job_containment_failed` payload is unchanged).
+     - No change to `commandJobManager` lifecycle state machine.
+     - No change to `CommandJobManager.dispose()`, `cancel()`, or
+       `start()`.
+
+## Tests
+
+`apps/vscode/src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts`
+- 11 tests, all PASS.
+- Existing 17 DCCT tests in
+  `command-job-manager-descendant-conservation.dcct01.test.ts` —
+  PASS (no regression).
+- Existing 13 REC tests in
+  `task-header-runtime-error-counter-rec01.test.ts` —
+  PASS (no regression).
+- Total: 41 tests, 185 expect() calls, 0 failures.
+
+## Reproduction
+
+```
+cd apps/vscode
+bun test src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts \
+       src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts \
+       src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
+```
+
+Expected output:
+```
+ 41 pass
+  0 fail
+```

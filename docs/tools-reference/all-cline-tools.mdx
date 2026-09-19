@@ -66,6 +66,62 @@ See:
 - [Writing Plugins (examples)](/sdk/guides/writing-plugins)
 - [SDK Tools: Creating Custom Tools](/sdk/tools#creating-custom-tools)
 
+## Process Ownership and Cancellation (PGID-only guarantee)
+
+The `bash` tool runs commands through a supervised process group.
+ClineMM **owns and attempts to clean up** each CommandJob's primary
+process group when the command completes or is cancelled.
+
+A CommandJob is considered **cleanly terminal** only after ClineMM
+establishes that the primary PGID is gone — verified by probing the
+process group after the supervised process has exited. If that
+postcondition cannot be established (for example: the probe returns
+`EPERM` because the kernel refuses to signal the group, or the
+probe finds the group still alive, or the group cannot be
+addressed), the job terminates as `containment_failed` and ClineMM
+surfaces a runtime incident.
+
+What this guarantees:
+
+> A cleanly terminal CommandJob implies its primary owned PGID is
+> gone.
+
+What this does **not** guarantee:
+
+> ClineMM does not guarantee cleanup of processes that have left
+> the CommandJob's primary process group by any mechanism.
+
+Mechanisms that leave the primary group include, but are not
+limited to:
+
+- `setsid()` and any other API that creates a new session /
+  process group.
+- `setpgid()` / `setpgrp()` moving a process to another process
+  group.
+- Node child processes spawned with `detached: true` that
+  establish independent process ownership.
+- Python `subprocess.Popen(..., start_new_session=True)` and
+  equivalent `start_new_session=True` flags.
+- Double-fork daemonization.
+- `nohup`, `disown`, and other shell patterns that ultimately move
+  the process out of the owned group.
+
+In any of these cases the descendant is no longer reachable by
+signalling the CommandJob's leader PGID, so ClineMM does not kill
+it on cancellation. ClineMM does **not** compensate by killing
+processes based on UID, executable name, command text, or age;
+doing so would be incorrect on a shared system. A `process.kill(-pgid, 0)`
+probe returning `ESRCH` is the kernel's "no process exists in that
+PGID" signal and is consistent with this model: it is an existence
+result for the addressed PGID, not a universal descendant
+guarantee.
+
+A `⚠ N` glyph in the task header indicates the number of
+**observed** primary-PGID cleanup failures ClineMM has recorded in
+the current task session. A `⎇ N` glyph indicates the number of
+currently active ClineMM-owned CommandJobs. Hover either glyph for
+the full semantics.
+
 ## Legacy Tool Names vs Current Runtime Tools
 
 Some older docs/examples reference XML-style names like `read_file`, `replace_in_file`, or `execute_command`. Current SDK/ClineCore runtime uses the built-in tool names listed above (`read_files`, `apply_patch`, `bash`, etc.).

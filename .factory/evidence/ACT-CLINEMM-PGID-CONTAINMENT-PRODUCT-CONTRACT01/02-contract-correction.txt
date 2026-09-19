@@ -1,0 +1,116 @@
+# 02 — Predecessor contract correction
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+The predecessor ACT
+(`ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01`) at evidence
+file
+`.factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/21-strategy-b-product-contract.md`
+§3.3 contains two wording defects that this ACT must repair before any
+implementation begins. The corrections are bounded; the selection
+`B_WITH_C_FUTURE_TRACK` (Strategy B = PGID-only containment, Strategy C
+parked on the Endpoint Security research track) is NOT re-opened.
+
+## Correction 1 — `ESRCH` does NOT prove an escape
+
+### Defective wording (predecessor §3.3, bullet 3 — to be retired)
+
+> Surface a containment-boundary diagnostic when an escape is
+> OBSERVED or strongly INDICATED (e.g. a watchdog process notices
+> the leader exited but a known-child pid is still alive, OR
+> `process.kill(-pgid, 0)` returns ESRCH during cleanup).
+
+### Why this is backwards
+
+`process.kill(-pgid, 0)` is a permission/existence probe against the
+named process group. On macOS the kernel returns:
+
+  - `ESRCH` — no process exists in that PGID (the primary group is gone)
+  - `EPERM` — a process exists but the caller cannot signal it
+  - 0      — at least one process exists and the caller can signal it
+
+`ESRCH` therefore means the OPPOSITE of "strongly indicated escape":
+it proves the primary group is gone. A successful `ESRCH` (gone)
+postcondition says nothing about whether a process that previously
+moved into another PGID still exists in that other PGID; the kernel
+probe is scoped to the named PGID only.
+
+(Apple killpg(2): "If pid is 0 … sig is not sent, but error checking
+is still performed. … ESRCH: The process or process group does not
+exist." Reference:
+https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/killpg.2.html )
+
+### Corrected wording (this ACT §2)
+
+> Surface a runtime containment diagnostic only when the owned
+> primary-PGID postcondition itself fails or is indeterminate
+> (the `alive` / `eperm` / `unknown` / `pgid_unset` classifications
+> emitted by `command_job_primary_group_cleanup` /
+> `command_job_containment_failed`). A successful `ESRCH` / `gone`
+> primary-PGID postcondition is NOT evidence that escaped descendants
+> do or do not exist.
+
+## Correction 2 — broadening the boundary from `setsid()` to "left the primary PGID"
+
+### Defective wording (predecessor §3.3 implicit framing, §2, §4)
+
+The predecessor evidence uses `setsid()` (and its equivalents:
+Node `detached:true`, Python `start_new_session=True`, double-fork
+daemonization, `nohup & disown`) as the canonical description of the
+escape boundary. This is incomplete: `setsid()` is ONE mechanism by
+which a process can leave the owned primary PGID. `setpgid()` /
+`setpgrp()` can move a process to a different PGID without creating
+a new session.
+
+(Apple setsid(2) creates a new session AND a new process group;
+Apple setpgid(2) / setpgrp(2) can move a process to a different
+existing PGID. References:
+https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/setsid.2.html ,
+https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/setpgid.2.html )
+
+### Corrected wording (this ACT §1, §14)
+
+The contract is:
+
+```
+ClineMM guarantees cleanup of a CommandJob's PRIMARY OWNED PROCESS
+GROUP.
+
+ClineMM does NOT guarantee cleanup of processes that have left that
+process group by any mechanism.
+```
+
+The unsupported boundary includes, non-exhaustively:
+
+```
+setsid()
+setpgid()/setpgrp() moving a process elsewhere
+Node detached:true when it establishes independent process ownership
+Python start_new_session=True
+double-fork daemonization
+nohup/disown patterns that ultimately leave the owned PGID
+other equivalent mechanisms
+```
+
+Do NOT define the boundary in terms of executable names or shell
+syntax.
+
+## Boundedness
+
+This ACT does not reopen the predecessor selection. Both corrections
+are textual; neither changes the resolved strategies, the substrate
+qualification, or the row in `.factory/epic-board.md`. The corrections
+are load-bearing for the implementation in §9-§14 of the ACT spec
+because the diagnostic emission contract (the `command_job_containment_failed`
+-> `runtimeErrorCount` wiring) is keyed on the OWNED-PGID postcondition,
+not on a watchdog observation of escaped descendants.
+
+## Patch applied
+
+The predecessor evidence file
+`.factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/21-strategy-b-product-contract.md`
+§3.3 is left in place (predecessor closure is immutable per its §9.1
+final paragraph) but a `CORRECTION03` header is added at the top of the
+file labeling the §3.3 wording as retracted. The corrected doctrine is
+captured here and implemented in §1-§3 of this ACT.

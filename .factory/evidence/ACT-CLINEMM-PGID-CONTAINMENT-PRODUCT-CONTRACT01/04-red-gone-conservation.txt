@@ -1,0 +1,68 @@
+# 04 — RED-B: `gone` must never imply escape
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## RED reproduction (already a PASS today)
+
+This is a conservation test, not a defect witness. It MUST be wired
+BEFORE the implementation to ensure the GREEN fix does not
+regress the `gone` path.
+
+Composition:
+
+```
+start sleep 60
+   -> activeCommandJobs grows to 1
+
+cancel jobId
+   -> terminate() -> killTree (clean)
+   -> finalize() runs:
+      -> terminalPostconditionProbe(-savedPgid, 0) === "gone"
+      -> emit command_job_primary_group_cleanup(postcondition:"gone")
+      // NO command_job_residual_detected
+      // NO command_job_containment_failed
+      -> active.delete
+      -> emit command_job_terminal_committed
+         jobState: <caller's clean class>
+   -> SdkController.handleCommandJobLifecycle(event)
+        recordActiveCommandJobs(0)
+   -> ! N stays 0
+```
+
+## RED test (PCPC-BE-01 — wired in the new test file)
+
+See `apps/vscode/src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts`.
+
+Asserts:
+
+```
+tracker.currentRuntimeErrorCount === 0
+tracker.currentActiveOwnedCommandJobs === 0
+events.filter(command_job_containment_failed).length === 0
+events.filter(command_job_residual_detected).length === 0
+events.filter(command_job_terminal_committed).length === 1
+job.state !== "containment_failed"
+```
+
+PCPC-BE-01 is GREEN at the entry head (this is a pre-existing DCCT-11
+behavior). It must remain GREEN after the GREEN-A implementation.
+The new tests assert it explicitly.
+
+## Anti-overclaim invariant (a textual check, not a runtime test)
+
+The new test file also asserts that no source string in the wired
+composition matches the escape-claim patterns:
+
+```
+  /escape detected/i
+  /leaked descendant/i
+  /all descendants killed/i
+  /zero descendants/i
+  /all spawned processes terminated/i
+```
+
+A search for these strings over the wired runtime error / lifecycle
+events / job snapshot text must return zero hits. The
+anti-overclaim gate (`10-no-overclaim-sweep.txt`) repeats this check
+across the wider source tree.

@@ -1,0 +1,72 @@
+# 05 — RED-C: ^- tooltip does not disclose PGID-scope
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## RED reproduction
+
+The webview `^- N` glyph renders a tooltip and an aria-label. The
+current title (TaskHeaderTelemetry.tsx:393-398) says:
+
+> Live count of ClineMM-owned CommandJobs in flight (the size of
+> the CommandJobManager's active map at the most recent lifecycle
+> event). Independent of executable name — node, python, bash, perl,
+> etc. all contribute to the same gauge. Resets to 0 when the task
+> identity changes.
+
+This title tells the user what `^-` counts but NOT what cleanup
+scope is guaranteed. A user who reads this title cannot tell that:
+
+  - cleanup is primary-PGID scoped (a process that calls setsid()
+    or moves to another PGID via setpgid() is OUTSIDE the
+    guarantee);
+  - ClineMM does NOT kill processes by executable name, UID,
+    command text, or age.
+
+This is the defect RED-C targets.
+
+## Required scope-disclosed contract
+
+Per §9 / §13 of the ACT spec:
+
+```
+aria-label: "Active command jobs: N"
+
+title:
+  "N active command job(s). Cleanup is scoped to each job's primary
+   process group; processes that leave that group may outlive the job."
+```
+
+The aria-label stays concise for screen readers; the title carries
+the full disclosure. The visible glyph (^-) is unchanged.
+
+## RED test (PCPC-UI-03 — wired in the webview test extension)
+
+See `apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx`.
+
+Asserts (at the entry head, before GREEN-B):
+
+```
+node.getAttribute("aria-label").includes("active command jobs: 3")
+                                 (or "active command job: 1" for N=1)
+node.getAttribute("title").match(/primary.*process group|primary PGID/i)
+```
+
+PCPC-UI-03 FAILS at the entry head. The current title mentions
+"executable name" and "task identity" but never mentions the
+process-group boundary.
+
+The fix (GREEN-B) preserves the count text, the testid, and the
+hidden-at-zero behavior (PCPC-UI-01 / PCPC-UI-02 / PCPC-UI-05 /
+PCPC-UI-06 / PCPC-UI-07 / PCPC-UI-08 remain GREEN).
+
+## Reproduction command (manual)
+
+```
+cd apps/vscode/webview-ui
+bun test src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx
+```
+
+The PCPC-UI-03 case fails at the entry head with a message
+indicating the title does not contain the required PGID-scope
+disclosure.

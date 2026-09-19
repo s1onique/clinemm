@@ -1,0 +1,92 @@
+# 12 — Tests (PASS)
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## Host (apps/vscode) — focused product-contract suite
+
+```
+cd apps/vscode
+bun test \
+  src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts \
+  src/sdk/__tests__/pcpc-no-overclaim-sweep.pcpc01.test.ts \
+  src/sdk/__tests__/command-job-manager-descendant-conservation.dcct01.test.ts \
+  src/sdk/__tests__/task-header-runtime-error-counter-rec01.test.ts
+```
+
+Result:
+```
+ 44 pass
+  0 fail
+ 188 expect() calls
+Ran 44 tests across 4 files.
+```
+
+Breakdown:
+
+  - 11 PCPC-BE tests (containment-incident composition, PCPC-BE-01
+    through PCPC-BE-10 plus PCPC-AO-01 no-overclaim textual guard)
+    — all PASS.
+  - 3 PCPC-AO tests (PCPC-AO-02 / AO-03 / AO-04, structural
+    anti-overclaim gate) — all PASS.
+  - 17 DCCT tests (predecessor conservation substrate) — all PASS,
+    no regression.
+  - 13 REC tests (predecessor runtime-error counter substrate) —
+    all PASS, no regression.
+
+## Webview (apps/vscode/webview-ui) — focused ⎇ tooltip suite
+
+```
+cd apps/vscode/webview-ui
+./node_modules/.bin/vitest run \
+  src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx
+```
+
+Result:
+```
+ ✓ TaskHeaderTelemetry.gauge.test.tsx (13 tests)
+   - 10 G-* tests (predecessor) — PASS, no regression.
+   - 3 PCPC-UI tests (PCPC-UI-03 / UI-04 / UI-05) — PASS.
+```
+
+The other task-header test files (`TaskHeaderTelemetry.test.tsx`,
+`TaskHeaderTelemetry.live-green-dom.test.tsx`,
+`taskHeaderTelemetryHelpers.test.ts`) also continue to PASS.
+
+## Pre-existing failures (NOT caused by this ACT)
+
+  - `src/sdk/command-job-manager.sandbox-integration.test.ts`:
+    2 substrate-dependent seatbelt env-propagation failures exist
+    at the entry head (verified by `git stash` of this ACT's
+    edits and re-running). Not in the product-contract surface.
+    Out of scope.
+  - `src/core/hooks/__tests__/*`: 6 hook-factory test files fail
+    because the test fixture invokes `node` and `node` is not on
+    the developer's PATH (`env: node: No such file or directory`).
+    Verified at the entry head with `git stash`. Out of scope.
+
+## Coverage of the ACT spec matrix (§15 / §16)
+
+Backend (§15):
+  - PCPC-BE-01 gone -> 0 incidents       PASS
+  - PCPC-BE-02 alive -> +1                PASS
+  - PCPC-BE-03 eperm + prior EPERM -> 0   PASS
+  - PCPC-BE-04 unknown -> +1              PASS
+  - PCPC-BE-05 pgid_unset -> +1           PASS
+  - PCPC-BE-06 two failed -> +2           PASS
+  - PCPC-BE-07 fail-then-success -> +1    PASS
+  - PCPC-BE-08 activeCount gauge correct  PASS
+  - PCPC-BE-09 post-delete gauge          PASS
+  - PCPC-BE-10 throwing sink survives     PASS
+
+Webview (§16):
+  - PCPC-UI-01 (absent) -> hidden         PASS (G-01)
+  - PCPC-UI-02 (0) -> hidden             PASS (G-02)
+  - PCPC-UI-03 (>= 1) -> "⎇ N"           PASS (G-03)
+  - PCPC-UI-03 (tooltip) -> PGID disclosure PASS (PCPC-UI-03)
+  - PCPC-UI-04 (aria-label count)        PASS (PCPC-UI-04)
+  - PCPC-UI-05 (! independent)           PASS (G-04)
+  - PCPC-UI-06 (>- independent of >_)    PASS (G-05)
+  - PCPC-UI-07 (no overclaim patterns)   PASS (PCPC-UI-05)
+  - PCPC-UI-08 (existing state labels unchanged) PASS (TaskHeaderTelemetry.test.tsx:46 tests)
+  - PCPC-UI-09 (elapsed timer unchanged) PASS (TaskHeaderTelemetry.live-green-dom.test.tsx:5 tests)

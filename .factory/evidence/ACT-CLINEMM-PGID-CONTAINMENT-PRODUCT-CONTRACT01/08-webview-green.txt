@@ -1,0 +1,65 @@
+# 08 — Webview GREEN-B
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+## Implementation summary
+
+`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx`
+was extended at the `⎇` glyph IIFE (line 388+):
+
+  - `aria-label` tightened from
+    `"${count} active owned command job(s)"` to
+    `"${count} active command job(s)"` (drops "owned" — the
+    ownership scope is conveyed via the `title` tooltip, not the
+    screen-reader label).
+
+  - `title` tooltip rewritten to disclose the cleanup boundary:
+
+    > "${count} active command job(s). Cleanup is scoped to each
+    > job's primary process group; processes that leave that group
+    > may outlive the job. ClineMM does not kill processes by UID,
+    > executable name, command text, or age."
+
+  - Visible glyph (`⎇`) unchanged.
+  - Hidden-at-zero behavior unchanged (PCPC-UI-01 / PCPC-UI-02).
+  - Tooltip / aria-label are still derived from
+    `telemetry.activeCommandJobs` only — no other wire field is
+    consulted (PCPC-UI-06 / PCPC-UI-07 / PCPC-UI-08 unchanged).
+
+## Tests
+
+`apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx`
+extended with three new tests:
+
+  - PCPC-UI-03: ⎇ title discloses primary-process-group cleanup
+    scope (matches `/primary process group|primary PGID|primary.*group/i`
+    AND `/processes that leave|outlive the job|may outlive/i`).
+  - PCPC-UI-04: ⎇ aria-label still carries the count for
+    screen readers.
+  - PCPC-UI-05: ⎇ tooltip / aria-label do NOT match the
+    escape-claim regex set (composition-level anti-overclaim guard).
+
+Existing 10 G-* tests continue to PASS (no regression).
+
+## Reproduction
+
+```
+cd apps/vscode/webview-ui
+./node_modules/.bin/vitest run \
+  src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx \
+  src/components/chat/task-header/TaskHeaderTelemetry.test.tsx \
+  src/components/chat/task-header/TaskHeaderTelemetry.live-green-dom.test.tsx
+```
+
+Expected output:
+```
+ ✓ TaskHeaderTelemetry.gauge.test.tsx       (13 tests)
+ ✓ TaskHeaderTelemetry.test.tsx              (46 tests)
+ ✓ TaskHeaderTelemetry.live-green-dom.test.tsx (5 tests)
+```
+
+(The "kill EPERM" Unhandled Rejection printed at end of each
+Vitest run is a worker-cleanup issue from the host's process tree,
+not a test failure. It was present at the entry head and is
+unrelated to this ACT.)

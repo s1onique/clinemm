@@ -1,0 +1,49 @@
+# 00 — Entry freeze
+
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+Subject head: 4ed31f587dedae46321bf9d691255637fa0874e3
+
+```
+ENTRY_HEAD       = 4ed31f587dedae46321bf9d691255637fa0874e3
+ENTRY_BRANCH     = main
+ENTRY_STATUS     = PASS_ENTRY_CLEAN
+PREDECESSOR_HEAD = 4ed31f587dedae46321bf9d691255637fa0874e3 (this commit)
+                  (predecessor ACT body is
+                   .factory/acts/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01.md
+                   — closed at PASS_SELECT_B_CURRENT_C_FUTURE_TRACK
+                   and bound at the same commit hash via the
+                   2026-09-17 epic-board policy-flip; see also
+                   ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+                   at correction07 which installed the lifecycle
+                   seam the successor relies on)
+HELPER_STATUS    = PASS_HELPER_QUALIFIED (inherited from
+                  ACT-CLINEMM-LAUNCHAGENT-OWNED-PGID-LIVE-QUALIFICATION01)
+UNEXPECTED_TRACKED_DIRT = 0
+```
+
+`git status --short` at entry: empty. `git rev-parse HEAD` at entry:
+`4ed31f587dedae46321bf9d691255637fa0874e3`. No build artifacts,
+untracked fixtures, or uncommitted evidence outside the
+`.factory/acts/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01.md` and
+`.factory/evidence/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01/`
+directories that this ACT creates.
+
+The Factory-board durability rule
+(`ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01`) is
+satisfied: ACT body and evidence are bound via the existing
+`.gitignore` whitelist and committed alongside the
+`.factory/epic-board.md` closure row. `git status --short` is empty
+between commits.
+
+## Predecessor linkage
+
+The selection closed at
+`PASS_SELECT_B_CURRENT_C_FUTURE_TRACK` (predecessor ACT §1 / §9.1)
+authorizes exactly one successor: this ACT. The contract wording
+repaired by §5 of this ACT (the `ESRCH` example in §3.3 of the
+predecessor evidence file
+`.factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/21-strategy-b-product-contract.md`)
+was a downstream misreading of the macOS process model and is fixed
+in `02-contract-correction.txt`. The bounded helper qualification
+(`PRIMARY_PGID_GUARANTEE = LIVE PASS`) is inherited, not re-litigated
+here, per §19 of the ACT spec.

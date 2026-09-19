@@ -2475,6 +2475,32 @@ export class CommandJobManager {
 			// `terminationFailed` reason was latched. `pgid` is
 			// now optional in the event type so `pgid_unset`
 			// reaches the tracker without coercion.
+			//
+			// ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01:
+			// This is the user-visible authority for an OBSERVED
+			// primary-PGID cleanup failure. When the existing
+			// `job.runtimeErrorReported` latch is still FALSE
+			// (no lower-level EPERM runtime error was reported
+			// at the `treeResult.epermDetected` seam), surface
+			// a single `command_containment_failed` runtime
+			// incident so the ⚠ N counter increments by exactly
+			// one for the alive / unknown / pgid_unset cases
+			// (and for an eperm-only-postcondition case where
+			// the kill itself did NOT return EPERM).
+			//
+			// When `job.runtimeErrorReported` is already TRUE
+			// (the EPERM-on-kill case at line 2101 already
+			// surfaced the same causal failure), the latch
+			// guarantees we do NOT add a second incident —
+			// the `ONE FAILURE -> ONE ⚠` invariant holds.
+			if (!job.runtimeErrorReported) {
+				job.runtimeErrorReported = true
+				this.reportRuntimeError({
+					errorClass: "command_containment_failed",
+					source: "command-job-manager",
+					correlationId: job.id,
+				})
+			}
 			this.emitCommandJobLifecycle({
 				event: "command_job_containment_failed",
 				jobId: job.id,

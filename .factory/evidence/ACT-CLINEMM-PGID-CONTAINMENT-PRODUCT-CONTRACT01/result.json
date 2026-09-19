@@ -1,0 +1,100 @@
+{
+  "act_id": "ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01",
+  "epistemic_purpose": "PRODUCT_CONTRACT_QUALIFICATION",
+  "authorization": "C1: GO.",
+  "status": "PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT",
+  "subject_head": "4ed31f587dedae46321bf9d691255637fa0874e3",
+  "predecessor": "ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01",
+  "predecessor_status": "PASS_SELECT_B_CURRENT_C_FUTURE_TRACK",
+  "gates": {
+    "ENTRY_CLEAN": "PASS",
+    "CONTRACT_ESRCH_CORRECTED": "PASS",
+    "CONTRACT_PGID_NOT_SESSION_ONLY": "PASS",
+    "ESCAPED_DESCENDANT_OBSERVABILITY": "LIVE_UNOBSERVABLE",
+    "REAL_LIFECYCLE_SEAM_FOUND": "PASS",
+    "CONTAINMENT_INCIDENT_AUTHORITY_SINGLE": "PASS",
+    "GONE_NO_WARNING": "PASS",
+    "ALIVE_ONE_WARNING": "PASS",
+    "EPERM_ONE_WARNING_TOTAL": "PASS",
+    "UNKNOWN_ONE_WARNING": "PASS",
+    "PGID_UNSET_ONE_WARNING": "PASS",
+    "ACTIVE_JOB_GAUGE_SEMANTICS_UNCHANGED": "PASS",
+    "ACTIVE_JOB_GAUGE_SCOPE_VISIBLE": "PASS",
+    "RUNTIME_INCIDENT_COUNTER_INDEPENDENT": "PASS",
+    "NO_ZERO_DESCENDANT_CLAIM": "PASS",
+    "NO_SAME_UID_SWEEP": "PASS",
+    "NO_PROCESS_NAME_SWEEP": "PASS",
+    "NO_COMMAND_TEXT_HEURISTIC": "PASS",
+    "NO_KQUEUE_RESURRECTION": "PASS",
+    "NO_MANAGER_REDESIGN": "PASS",
+    "TARGETED_HOST_TESTS": "PASS",
+    "TARGETED_WEBVIEW_TESTS": "PASS",
+    "TYPECHECK_HOST": "PASS",
+    "TYPECHECK_WEBVIEW": "PASS",
+    "DIFF_CHECK": "PASS",
+    "EVIDENCE_BOUND_TO_FINAL_HEAD": "PENDING_FINAL_COMMIT",
+    "BOARD_DURABLE": "PENDING_FINAL_COMMIT"
+  },
+  "halt_conditions_triggered": [],
+  "halt_conditions_evaluated": [
+    "HALT_UNEXPECTED_TRACKED_DIRT",
+    "HALT_PRODUCTION_SEAM_MOVED",
+    "HALT_CONTRACT_IMPLEMENTATION_REQUIRES_MANAGER_REDESIGN",
+    "HALT_DOUBLE_COUNTED_RUNTIME_INCIDENT",
+    "HALT_GONE_MISCLASSIFIED_AS_ESCAPE",
+    "HALT_ESCAPE_CLAIM_WITHOUT_OBSERVATION",
+    "HALT_TELEMETRY_SEMANTICS_REGRESSED"
+  ],
+  "production_diff": {
+    "files": [
+      "apps/vscode/src/sdk/command-job-manager.ts",
+      "apps/vscode/src/shared/ExtensionMessage.ts",
+      "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx",
+      "apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.gauge.test.tsx",
+      "apps/vscode/src/sdk/__tests__/pcpc-containment-product-contract.pcpc01.test.ts",
+      "apps/vscode/src/sdk/__tests__/pcpc-no-overclaim-sweep.pcpc01.test.ts",
+      "docs/tools-reference/all-cline-tools.mdx",
+      ".factory/evidence/ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01/21-strategy-b-product-contract.md",
+      ".factory/acts/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01.md",
+      ".factory/evidence/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01/"
+    ],
+    "command_job_manager_redesigned": false,
+    "lifecycle_event_union_changed": false,
+    "wire_schema_additive": true
+  },
+  "tests": {
+    "host_focused": {
+      "files": 4,
+      "pass": 44,
+      "fail": 0,
+      "expect_calls": 188
+    },
+    "webview_focused": {
+      "files": 3,
+      "pass": 64,
+      "fail": 0
+    },
+    "no_regression": "PASS — all predecessor DCCT (17) and REC (13) tests still pass; webview G-* (10) and broader TaskHeaderTelemetry (46) still pass"
+  },
+  "contract_words": {
+    "promise": "ClineMM owns and attempts to clean up each CommandJob's primary owned process group when the command completes or is cancelled. A CommandJob is considered cleanly terminal only after ClineMM establishes that the primary PGID is gone. If that postcondition cannot be established, the job terminates as containment_failed and ClineMM surfaces a runtime incident.",
+    "proven_invariant": "CLEAN_TERMINAL CommandJob => PRIMARY OWNED PGID GONE",
+    "non_promise": "ClineMM does NOT guarantee cleanup of processes that have left the CommandJob's primary process group by any mechanism. ClineMM does NOT claim that every completed or cancelled CommandJob ends cleanly — when the postcondition fails, containment_failed is surfaced.",
+    "esrch_corrected": true,
+    "boundary_broadened_to_setpgid_and_others": true
+  },
+  "expected_closure_grammar": {
+    "PRIMARY_PGID_GUARANTEE": "EXPLICIT",
+    "ESCAPED_DESCENDANT_GUARANTEE": "NONE",
+    "ESCAPED_DESCENDANT_OBSERVATION": "LIVE_UNOBSERVABLE",
+    "ACTIVE_JOB_GAUGE": "ACTIVE COMMAND JOBS",
+    "RUNTIME_INCIDENT_GAUGE": "OBSERVED RUNTIME INCIDENTS",
+    "PRIMARY_CONTAINMENT_FAILURE_UI": "GREEN",
+    "PGID_SCOPE_DISCLOSURE": "GREEN"
+  },
+  "documentation": {
+    "file": "docs/tools-reference/all-cline-tools.mdx",
+    "section": "Process Ownership and Cancellation (PGID-only guarantee)",
+    "matches_spec_section_14": true
+  }
+}
