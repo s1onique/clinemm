@@ -43,6 +43,22 @@ apps/vscode/src/shared/proto/
 apps/vscode/webview-ui/src/services/grpc-client.ts
 *.tsbuildinfo
 
+# Diagnostic / probe binaries produced by `make` under
+# tools/macos-host-helper/native/containment-probe/. These are reproducible
+# build artifacts of the discriminator ACTs
+# (ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01 +
+# ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01); the .c source
+# files are tracked, the binaries are not. P2/exempt (rebuild with `make`).
+tools/macos-host-helper/native/containment-probe/20-mechb-kqueue-probe
+tools/macos-host-helper/native/containment-probe/22-mechb-cross-process-test
+tools/macos-host-helper/native/containment-probe/22-mechb-emulator
+tools/macos-host-helper/native/containment-probe/22-mechb-self-fork-test
+tools/macos-host-helper/native/containment-probe/23-mechb-full-test
+# Future native probes (same family — reproducible from tracked sources):
+tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver
+tools/macos-host-helper/native/containment-probe/31-helper-preattach-root
+tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator
+
 # E2E Tests
 test-results
 

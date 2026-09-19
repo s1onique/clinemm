@@ -1719,3 +1719,223 @@ comparison matrix + per-axis evidence (client-isolation, pid-reuse, termination-
 final-conservation, negative-control) + gates + result.json.
 Probe binaries at `tools/macos-host-helper/native/containment-probe/` with `Makefile`
 to reproduce from sources.
+
+## ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01 — CORRECTED_CLOSURE / HALT_CONTAINMENT_CONCLUSION_EXCEEDS_DISCRIMINATOR — 2026-09-19
+
+**Status:** Corrected closure applied. Factory reviewer
+(`HALT_CONTAINMENT_CONCLUSION_EXCEEDS_DISCRIMINATOR`, 2026-09-19)
+identified that the prior closure's selection label
+(`NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE`) **exceeded the
+discriminator evidence**. The A/B/C per-mechanism classifications
+remain valid; the **conclusion** was over-broad and is retracted.
+
+**What was proven (preserved from prior closure):**
+
+```
+A_cleanup_time_ancestry = REFUTED
+B_spawn_then_attach     = RACE_REFUTED
+C_on_Sonoma_substrate  = UNAVAILABLE
+
+PGID_ONLY               = current production invariant
+ESCAPED_DESCENDANTS     = current unsupported boundary
+PRODUCTION_CODE_DELTA   = NONE
+```
+
+**A evidence is clean:** both Node and Python escape children
+survive as `ppid=1`, own-PGID processes and disappear from
+current-PPID ancestry (predecessor evidence
+`11-mechanism-a-node-escape.json` /
+`12-mechanism-a-python-escape.json`).
+
+**B evidence is partial:** the load-bearing result is the
+specific RACE within the spawn-then-attach sequence:
+
+```
+B / kqueue:
+  attach after spawn        → race, descendants missed
+  attach before fork        → recursive tracking works
+```
+
+The 5/5 immediate-fork iterations (predecessor evidence
+`23-mechanism-b-race-stress.json`) prove **post-spawn B is
+refuted** under the current architecture. Apple's contract
+supports the limited interpretation: `EVFILT_PROC/NOTE_FORK`
+tells a watcher that an already-watched process forked; it does
+not give recursive containment automatically
+(https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/kevent.2.html).
+The predecessor's own `24-mechanism-b-double-fork.json` shows
+the primitive PASSES when the watcher precedes the forks —
+this is the falsifiable next-discriminator the prior closure
+skipped.
+
+**C evidence is substrate-bound:** `es_new_descendants_client`
+is unavailable on this Sonoma 14.7.4 / installed-SDK substrate
+(framework absent + adhoc-signed helper cannot carry
+`com.apple.developer.endpoint-security.client`). Apple still
+documents Endpoint Security as a macOS framework/API family
+(https://developer.apple.com/documentation/EndpointSecurity);
+C is unavailable on this **substrate** specifically, not as a
+general macOS fact.
+
+**What was NOT proven (retracted):**
+
+```
+NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE
+```
+
+The honest narrow statement is:
+
+```
+NO_SAFE_POST_SPAWN_CONTAINMENT
+AVAILABLE_IN_CURRENT_ARCHITECTURE
+```
+
+…which is load-bearing: the same experiment already provided
+the next causal discriminator — helper-mediated preattach —
+and skipping it would shortcut the most obvious engineering
+experiment.
+
+**Corrected closure matrix:**
+
+```
+ACT discriminator evidence       = PASS
+A                                = REFUTED
+B spawn-then-attach              = REFUTED
+C current substrate              = UNAVAILABLE
+
+SELECTED PRODUCTION MECHANISM    = NONE YET
+NO SAFE GENERAL PRIMITIVE        = NOT PROVEN
+NO SAFE POST-SPAWN PRIMITIVE     = PROVEN (in current architecture)
+NO SAFE POST-SPAWN IN ANY ARCH   = NOT PROVEN (preattach arm un-falsified)
+
+NEXT =
+ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01
+```
+
+**Production consequence (preserved from prior closure):**
+
+- `PGID_ONLY` remains the production invariant.
+- `ESCAPED_DESCENDANTS` remains a documented, known-unsupported
+  boundary in the **current spawn-then-attach sequence**.
+- `PRODUCTION_CODE_DELTA = NONE`. No production-side
+  `helper.c`, `protocol.ts`, `command-job-manager.ts`, or other
+  runtime code was modified.
+- Negative controls (`45-mechanism-b-negative-control.json`)
+  pass: `PROCESS_NAME_INDEPENDENT`, `UNRELATED_CONTROL_SURVIVES`,
+  `NO_SAME_UID_SWEEP`, `NO_ARBITRARY_PID_KILL` — the B primitive
+  is structurally correct on the negative-control axis. The
+  fatal flaw in the prior closure was the over-broad conclusion,
+  not the primitive itself.
+- Helper's existing `client_token` + `job_token` +
+  `peer-identity` + `pid+start_us` binding (unchanged) ensures
+  multi-client isolation and PID-reuse resistance regardless of
+  primitive selection.
+
+**Halt condition triggered (corrected):**
+`HALT_CONTAINMENT_CONCLUSION_EXCEEDS_DISCRIMINATOR` (Factory
+reviewer 2026-09-19) + the narrowed successor halt
+`HALT_NO_SAFE_CONTAINMENT_PRIMITIVE_IN_CURRENT_SPAWN_ARCHITECTURE`
+(replacing the over-broad
+`HALT_NO_SAFE_CONTAINMENT_PRIMITIVE`).
+
+**Halt conditions NOT triggered (preserved from prior closure):**
+- `HALT_UNEXPECTED_TRACKED_DIRT` — working tree was clean at
+  entry; this corrected closure adds the preattach ACT spec,
+  the narrowed predecessor ACT spec/result/comparison-matrix
+  edits, and one `.gitignore` P2/exempt entry for the compiled
+  probe binaries (which the reviewer flagged as a hygiene item).
+- `HALT_UNRELATED_PROCESS_TARGETED` — negative controls pass.
+- `HALT_CLIENT_ISOLATION_BROKEN` — no production wire changed.
+- `HALT_STALE_PID_CAN_BE_KILLED` — pid+start_us binding unaffected.
+- `HALT_TERMINATION_WINDOW_ESCAPE` — out of scope for
+  discriminator; helper signal authority unchanged.
+- `HALT_MECHANISM_B_RACE` — halts B as a candidate in the
+  spawn-then-attach sequence; does not halt B as a primitive
+  (preattach arm remains un-falsified and is the successor's
+  job).
+- `HALT_ENDPOINT_SECURITY_ENTITLEMENT_UNAVAILABLE` — only for
+  C; does not halt the whole ACT.
+
+**Hygiene fix (reviewer P2):** the working tree contained five
+untracked compiled probe binaries under
+`tools/macos-host-helper/native/containment-probe/`
+(`20-mechb-kqueue-probe`, `22-mechb-cross-process-test`,
+`22-mechb-emulator`, `22-mechb-self-fork-test`,
+`23-mechb-full-test`). These are reproducible build artifacts
+(the `.c` source files are tracked; `make` rebuilds them).
+Classified P2/exempt and added to `.gitignore`. The same
+`.gitignore` block pre-emptively adds the three binaries the
+new successor ACT will introduce
+(`30-helper-preattach-driver`,
+`31-helper-preattach-root`,
+`32-helper-preattach-emulator`) so the next ACT's compiled
+output is also `.gitignore`-clean.
+
+**Successor ACT (NOT a policy/remediation decision):**
+
+`ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01` —
+falsify (or confirm) the next causal discriminator implied by
+this ACT's evidence but never run. Single epistemic question:
+
+> If the trusted LaunchAgent helper installs lineage observation
+> BEFORE it spawns the command root, does kqueue+reconciliation
+> retain complete ownership through Node `detached:true`, Python
+> `start_new_session=True`, immediate double-fork, exec, and
+> reparenting?
+
+Required RED/GREEN matrix: 6 fixtures (shell-A, node-B,
+python-C, mixed-D, node-escape E, python-escape F) +
+immediate double-fork + fork storm (≥ 16 forks in < 5 ms) +
+unrelated same-UID controls. Race hammer: ≥ 100 iterations,
+`missed_descendants = 0`. If even one descendant escapes:
+`HALT_HELPER_PREATTACH_KQUEUE_RACE`. Native probe only — no
+`CommandJobManager` change.
+
+If PASS:
+`KQUEUE_PRIMITIVE = VIABLE_UNDER_HELPER_SUPERVISED_SPAWN`,
+`CURRENT_SPAWN_ARCHITECTURE = ROOT_CAUSE_OF_RACE`, NEXT =
+`ACT-CLINEMM-HELPER-SUPERVISED-SPAWN-IMPLEMENTATION01`.
+
+If REFUTED or MIXED: NEXT =
+`ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01` (now
+narrowed: only authorized after the preattach experiment fails).
+
+This ACT does NOT make the policy/remediation decision. The
+shortest path back to real engineering is: **move the watch to
+the other side of the spawn race and try to falsify it.**
+
+**Files modified (this corrected closure):**
+
+- `.factory/acts/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01.md`
+  — Selection section rewritten; Halt conditions section
+  amended; Successor ACT re-routed to preattach discriminator;
+  Correction history appended.
+- `.factory/evidence/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/result.json`
+  — `selection.mechanism` changed from `NONE` to
+  `NONE_IN_CURRENT_SPAWN_ARCHITECTURE`; added `retracted_claim`,
+  `narrowed_halt`, `narrowed_conclusion`,
+  `primitive_viability_under_preattach`; `successor` re-routed
+  to preattach discriminator; halt list updated.
+- `.factory/evidence/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/40-comparison-matrix.md`
+  — Verdict section rewritten to retract the over-broad label
+  and state the narrow one; Production-consequence section
+  updated to re-route successor.
+- `.factory/acts/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01.md`
+  — NEW, 289 lines. The successor ACT spec with the epistemic
+  question, method, RED/GREEN matrix, race hammer, negative
+  controls, evidence layout, verdict taxonomy, halt taxonomy,
+  and successor routing.
+- `.gitignore` — P2/exempt entry for the five compiled probe
+  binaries from this ACT + the three binaries the successor
+  ACT will introduce.
+- `.factory/epic-board.md` — this section appended below the
+  prior closure entry.
+
+**Evidence unchanged:** all 26 evidence files under
+`.factory/evidence/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/`
+are durable substrate. The corrected closure re-interprets
+them; it does not invalidate any of them.
+
+**STOP rule honored:** this ACT does NOT enter the
+policy/remediation decision tree. The preattach discriminator
+must run first.

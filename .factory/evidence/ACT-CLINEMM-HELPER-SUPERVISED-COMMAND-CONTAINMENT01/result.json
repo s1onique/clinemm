@@ -63,15 +63,20 @@
     }
   },
   "selection": {
-    "mechanism": "NONE",
-    "reason": "Per spec §9: A is refuted on correctness (cannot reach reparented grandchild); B is refuted on production feasibility (FORK-BEFORE-ATTACH race loses 5/5 iterations); C is unavailable on this substrate (framework absent + entitlement impossible). Per spec §9 last paragraph: if B fails and C is unavailable, close with CAPTURED_ARCHITECTURAL_LIMIT and NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE."
+    "mechanism": "NONE_IN_CURRENT_SPAWN_ARCHITECTURE",
+    "reason": "Per spec §9: A is refuted on correctness (cannot reach reparented grandchild); B is RACE_REFUTED on production feasibility (FORK-BEFORE-ATTACH race loses 5/5 iterations) under the spawn-then-attach sequence only — B's primitive attach-then-spawn direction is PASS (see 24-mechanism-b-double-fork.json, B_DOUBLE_FORK_ZERO = PASS when race avoided by external sequencing); C is unavailable on this Sonoma 14.7.4 / installed-SDK substrate (framework absent on this machine + adhoc-signed helper cannot carry com.apple.developer.endpoint-security.client).",
+    "retracted_claim": "NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE (this label exceeded the discriminator evidence; retracted by Factory reviewer HALT_CONTAINMENT_CONCLUSION_EXCEEDS_DISCRIMINATOR on 2026-09-19).",
+    "narrowed_halt": "HALT_NO_SAFE_CONTAINMENT_PRIMITIVE_IN_CURRENT_SPAWN_ARCHITECTURE",
+    "narrowed_conclusion": "NO_SAFE_POST_SPAWN_CONTAINMENT_AVAILABLE_IN_CURRENT_ARCHITECTURE",
+    "primitive_viability_under_preattach": "NOT_YET_FALSIFIED (this ACT did not run the preattach-then-spawn discriminator; that is the successor ACT's job)"
   },
   "production_code_delta": "NONE",
   "production_code_delta_detail": "No production-side helper.c, protocol.ts, command-job-manager.ts, or other runtime code was modified. Only diagnostic probe binaries were added under tools/macos-host-helper/native/containment-probe/; these are intentionally outside the production helper protocol and do not modify the wire format or any consumer-facing surface.",
-  "successor": "ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01",
-  "successor_mandate": "Decide whether to (a) prohibit detached process creation in ClineMM-owned commands at the policy layer, (b) accept the gap and document ESCAPED_DESCENDANTS as a known unsupported boundary, or (c) pursue Endpoint Security descendants under a separately-authorized architecture track (Developer ID signing + ES entitlement). This ACT does NOT make that decision.",
+  "successor": "ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01",
+  "successor_mandate": "Falsify (or confirm) the next causal discriminator implied by this ACT's evidence but never run: does kqueue+reconciliation retain complete ownership through every escape class (Node detached:true, Python start_new_session=True, immediate double-fork, fork storm, reparenting) when the watch is installed BEFORE the user command's first fork? Native probe only — no CommandJobManager change. RED/GREEN matrix + ≥100 iteration race hammer + negative control required. If PASS: ACT-CLINEMM-HELPER-SUPERVISED-SPAWN-IMPLEMENTATION01. If REFUTED or MIXED: ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01.",
   "halt_conditions_triggered": [
-    "HALT_NO_SAFE_CONTAINMENT_PRIMITIVE"
+    "HALT_CONTAINMENT_CONCLUSION_EXCEEDS_DISCRIMINATOR (Factory reviewer 2026-09-19; corrected in this same closure; produces the narrowed verdict above)",
+    "HALT_NO_SAFE_CONTAINMENT_PRIMITIVE_IN_CURRENT_SPAWN_ARCHITECTURE"
   ],
   "halt_conditions_NOT_triggered": [
     "HALT_UNEXPECTED_TRACKED_DIRT",
@@ -80,7 +85,8 @@
     "HALT_STALE_PID_CAN_BE_KILLED",
     "HALT_TERMINATION_WINDOW_ESCAPE",
     "HALT_MECHANISM_B_RACE_ONLY_THIS_DOES_NOT_HALT_ACT",
-    "HALT_ENDPOINT_SECURITY_ENTITLEMENT_UNAVAILABLE_only_for_C_does_NOT_halt_whole_ACT"
+    "HALT_ENDPOINT_SECURITY_ENTITLEMENT_UNAVAILABLE_only_for_C_does_NOT_halt_whole_ACT",
+    "HALT_GENERAL_NO_SAFE_CONTAINMENT_PRIMITIVE_RETRACTED_in_favor_of_narrowed_halt_above"
   ],
   "substrate": {
     "macos_version": "14.7.4 (23H420)",

@@ -172,41 +172,67 @@ and a target macOS where the runtime framework is present.
 
 ## Selection
 
-NONE.
+This ACT selects **NONE for the current spawn-then-attach production
+architecture** and authorizes the next causal discriminator ACT.
 
 A is REFUTED on correctness (cannot reach reparented grandchild).
-B is RACE_REFUTED on production feasibility.
-C is UNAVAILABLE on this substrate.
+B is **RACE_REFUTED only in the spawn-then-attach production
+sequence**. B's primitive attach-then-spawn direction is PASS
+(see `B_DOUBLE_FORK_ZERO = PASS (when race avoided, by external
+sequencing)`, `24-mechanism-b-double-fork.json`). The defect is
+the spawn-race in the production sequence, NOT the primitive.
+C is UNAVAILABLE on this Sonoma 14.7.4 / installed-SDK substrate
+(framework absent on this machine + adhoc-signed helper cannot
+carry `com.apple.developer.endpoint-security.client`).
 
-Per spec §9 last paragraph:
-    If B fails and C is unavailable:
-        Close:
-            CAPTURED_ARCHITECTURAL_LIMIT
-            NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE
-        Do not compensate with process-name or same-UID sweeping.
+**What was proven:**
+
+    A_cleanup_time_ancestry = REFUTED
+    B_spawn_then_attach     = RACE_REFUTED
+    C_on_this_substrate    = UNAVAILABLE
+
+**What was NOT proven (and was retracted by Factory reviewer
+`HALT_CONTAINMENT_CONCLUSION_EXCEEDS_DISCRIMINATOR`, 2026-09-19):**
+
+    NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE
+
+That statement exceeded the discriminator evidence. The honest
+narrow statement is:
+
+    NO_SAFE_POST_SPAWN_CONTAINMENT
+    AVAILABLE_IN_CURRENT_ARCHITECTURE
+
+The primitive's attach-then-spawn direction was never falsified by
+this ACT. The same evidence that proves B is RACE_REFUTED for
+spawn-then-attach already proves B's primitive mechanism is sound
+when the race is avoided by external sequencing. Apple still
+documents Endpoint Security as a macOS framework/API family
+(https://developer.apple.com/documentation/EndpointSecurity); C
+is unavailable on this **substrate** specifically, not as a
+general macOS fact.
 
 ## Production consequence
 
-Per spec §25:
+Per spec §25 (preserved):
 
   PGID_ONLY                 = production invariant (preserved)
-  ESCAPED_DESCENDANTS       = known unsupported boundary
+  ESCAPED_DESCENDANTS       = known unsupported boundary in the
+                              current spawn-then-attach sequence
                               (documented, not silently fixed)
 
-A separate ACT must decide:
-  (a) prohibit detached process creation in ClineMM-owned
-      commands at the policy layer, OR
-  (b) accept the gap and document ESCAPED_DESCENDANTS as a
-      known unsupported boundary, OR
-  (c) pursue Endpoint Security descendants under a separately-
-      authorized architecture track (Developer ID signing + ES
-      entitlement).
-
-This ACT does NOT make that decision.
+A separate successor ACT must falsify (or confirm) the next
+causal discriminator before any policy/remediation decision is
+authorized. This ACT does NOT make that decision.
 
 ## Halt conditions triggered
 
-  - HALT_NO_SAFE_CONTAINMENT_PRIMITIVE  (the discriminated result)
+  - HALT_CONTAINMENT_CONCLUSION_EXCEEDS_DISCRIMINATOR  (applied by
+    Factory reviewer 2026-09-19; corrected in this same closure;
+    produces the narrowed verdict above and authorizes the
+    successor ACT below).
+  - `HALT_NO_SAFE_CONTAINMENT_PRIMITIVE_IN_CURRENT_SPAWN_ARCHITECTURE`
+    (the discriminated result, narrowed from the original
+    over-broad `HALT_NO_SAFE_CONTAINMENT_PRIMITIVE`).
 
 ## Halt conditions NOT triggered (verifying non-halt)
 
@@ -220,7 +246,9 @@ This ACT does NOT make that decision.
                                            signal authority
                                            unchanged)
   - HALT_MECHANISM_B_RACE                (does not halt the ACT;
-                                           it halts B as a candidate)
+                                           it halts B as a candidate
+                                           in the spawn-then-attach
+                                           sequence)
 
 ## Substrate
 
@@ -228,11 +256,31 @@ This ACT does NOT make that decision.
   Helper build_id (live): c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
   Helper pid (live): 9582
   Helper socket (live): /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
-  EndpointSecurity framework present: NO
-  Helper codesign state: adhoc, no team
+  EndpointSecurity framework on this substrate: NO (absent from
+    /System/Library/Frameworks, /System/Library/PrivateFrameworks,
+    and Cryptex root; dlopen fails).
+  Helper codesign state: adhoc, no team.
 
-## Successor ACT
+## Successor ACT (NOT a policy/remediation decision)
 
-ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01 — to be
-authorized by Factory reviewer to choose between (a)/(b)/(c)
-above. This ACT does NOT pre-fill the answer.
+ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — falsify
+(or confirm) the next causal discriminator implied by this ACT's
+evidence but never run: does kqueue+reconciliation retain complete
+ownership through every escape class when the watch is installed
+BEFORE the user command's first fork?
+
+ONLY if that ACT reports REFUTED should
+ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01 be authorized
+to choose between the policy-layer options (a)/(b)/(c). This ACT
+does NOT pre-fill the answer.
+
+## Correction history
+
+  - 2026-09-19: corrected closure (this version). Retracts
+    `NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE` as the
+    selection label; narrows the halt label to
+    `HALT_NO_SAFE_CONTAINMENT_PRIMITIVE_IN_CURRENT_SPAWN_ARCHITECTURE`;
+    authorizes
+    `ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01`
+    as the next ACT instead of routing directly to
+    `ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01`.

@@ -38,9 +38,25 @@ ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01
 
 ## Verdict
 
-A: REFUTED on correctness (cannot reach reparented grandchild)
-B: RACE_REFUTED on production feasibility (loses fork-before-attach race)
-C: UNAVAILABLE on substrate (framework absent, entitlement impossible)
+A: REFUTED on correctness (cannot reach reparented grandchild).
+B: **RACE_REFUTED on production feasibility for the
+   spawn-then-attach sequence** (loses fork-before-attach race;
+   5/5 immediate-fork iterations miss both grandchildren).
+   B's primitive attach-then-spawn direction is **PASS** when the
+   race is artificially avoided by external sequencing
+   (`24-mechanism-b-double-fork.json`,
+   `B_DOUBLE_FORK_ZERO = PASS (when race avoided, by external
+   sequencing)`). The defect is the spawn-race in the
+   production sequence, NOT the primitive.
+C: UNAVAILABLE on this Sonoma 14.7.4 / installed-SDK substrate
+   (framework absent from `/System/Library/Frameworks`,
+   `/System/Library/PrivateFrameworks`, Cryptex root; helper
+   adhoc-signed → cannot carry
+   `com.apple.developer.endpoint-security.client`). Endpoint
+   Security remains a documented macOS framework/API family
+   (https://developer.apple.com/documentation/EndpointSecurity);
+   C is unavailable on this substrate specifically, not as a
+   general macOS fact.
 
 Per spec §9:
     Select A only if A survives E/F AND ownership remains
@@ -52,21 +68,37 @@ Per spec §9:
         AND API works on target macOS AND beta dependency is
         accepted explicitly AND E/F + controls pass.
 
-None qualify. Per spec §9:
-    If B fails and C is unavailable:
-        Close:
-            CAPTURED_ARCHITECTURAL_LIMIT
-            NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE
-        Do not compensate with process-name or same-UID sweeping.
+None qualify **for the current spawn-then-attach production
+architecture**. The load-bearing distinction is:
+
+    RETRACTED (Factory reviewer 2026-09-19
+    HALT_CONTAINMENT_CONCLUSION_EXCEEDS_DISCRIMINATOR):
+        NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE
+        (this label exceeded the discriminator evidence;
+        the primitive's attach-then-spawn direction was never
+        falsified by this ACT).
+
+    NARROWED (this corrected closure):
+        NO_SAFE_POST_SPAWN_CONTAINMENT
+        AVAILABLE_IN_CURRENT_ARCHITECTURE
+        (what this ACT actually proved).
+
+Do not compensate with process-name or same-UID sweeping.
 
 ## Production consequence (per spec §25)
 
 We keep:
     PGID_ONLY = production invariant
     ESCAPED_DESCENDANTS = known unsupported boundary
+                          in the current spawn-then-attach sequence
 
-A separate ACT must decide whether to prohibit or mediate
-detached process creation in Cline-owned commands. This ACT
-does NOT make that decision; it only establishes that no
-safe containment primitive is deployable on this substrate
-for the setsid()/detached:true escape class.
+The successor ACT (`ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01`)
+falsifies (or confirms) the next causal discriminator implied by
+this ACT's evidence but never run: does kqueue+reconciliation
+retain complete ownership through every escape class when the
+watch is installed BEFORE the user command's first fork?
+
+This ACT does NOT make the policy/remediation decision. Only if
+the successor reports REFUTED should
+`ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01` be
+authorized.
