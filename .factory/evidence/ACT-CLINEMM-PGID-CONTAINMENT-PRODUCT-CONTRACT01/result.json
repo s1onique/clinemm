@@ -12,7 +12,7 @@
     "CONTRACT_PGID_NOT_SESSION_ONLY": "PASS",
     "ESCAPED_DESCENDANT_OBSERVABILITY": "LIVE_UNOBSERVABLE",
     "REAL_LIFECYCLE_SEAM_FOUND": "PASS",
-    "CONTAINMENT_INCIDENT_AUTHORITY_SINGLE": "PASS",
+    "INCIDENT_CARDINALITY_SINGLE": "PASS",
     "GONE_NO_WARNING": "PASS",
     "ALIVE_ONE_WARNING": "PASS",
     "EPERM_ONE_WARNING_TOTAL": "PASS",
@@ -67,7 +67,7 @@
       "files": 4,
       "pass": 44,
       "fail": 0,
-      "expect_calls": 188
+      "expect_calls": 190
     },
     "webview_focused": {
       "files": 3,
@@ -81,7 +81,14 @@
     "proven_invariant": "CLEAN_TERMINAL CommandJob => PRIMARY OWNED PGID GONE",
     "non_promise": "ClineMM does NOT guarantee cleanup of processes that have left the CommandJob's primary process group by any mechanism. ClineMM does NOT claim that every completed or cancelled CommandJob ends cleanly — when the postcondition fails, containment_failed is surfaced.",
     "esrch_corrected": true,
-    "boundary_broadened_to_setpgid_and_others": true
+    "boundary_broadened_to_setpgid_and_others": true,
+    "incident_authority_model": {
+      "terminal_containment_failure_authority": "command_job_containment_failed lifecycle event (postcondition != gone)",
+      "low_level_eperm_authority": "existing EPERM runtime incident at treeResult.epermDetected seam (line 2101)",
+      "cardinality_authority": "job.runtimeErrorReported shared latch prevents double-counting",
+      "invariant": "ONE CAUSAL FAILURE => AT MOST ONE USER-VISIBLE INCIDENT",
+      "NOT_a_single_authority": true
+    }
   },
   "expected_closure_grammar": {
     "PRIMARY_PGID_GUARANTEE": "EXPLICIT",

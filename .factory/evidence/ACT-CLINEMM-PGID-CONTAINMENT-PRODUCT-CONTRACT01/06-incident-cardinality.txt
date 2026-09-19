@@ -70,8 +70,15 @@ unchanged; the new class is emitted from `command-job-manager` only.
 | BE-10| alive         | false          | false                            | +1      | containment_f.   |
 
 All 10 PCPC-BE cases PASS, plus the existing 17 DCCT cases continue to
-PASS, plus the 13 REC cases continue to PASS. Total = 41 tests, 185
-expect() calls.
+PASS, plus the 13 REC cases continue to PASS. Total (full focused
+suite including the PCPC-AO sweep) = 44 tests, 190 expect() calls.
+The 41 / 185 figure above was recorded before CORRECTION04
+expanded PCPC-BE-07 to actually run both jobs (was 1 expect() call,
+now 3 expect() calls: count-after-A, count-after-B, probeLog.length)
+plus the PCPC-AO sweep (3 tests / 3 expect() calls) was added to
+the suite for the durable ACT HEAD. Net delta vs. the originally
+recorded 188 baseline: +2 expect() calls from PCPC-BE-07
+expansion.
 
 ## Reproduction command
 

@@ -214,18 +214,74 @@ stale wording as retracted.
   - GREEN-C (§14): add the "Process ownership and cancellation"
     section to `docs/tools-reference/all-cline-tools.mdx`.
 
-## 8. Incident authority
+## 8. Incident authority (two authorities + shared cardinality latch)
 
-Frozen to a single incident authority per CommandJob:
+There is NOT a single incident authority for CommandJobs. Two
+parallel authorities exist, and a shared cardinality latch
+guarantees that at most one user-visible incident is surfaced per
+causal failure:
 
 ```
-CONTAINMENT_INCIDENT_AUTHORITY = command_job_containment_failed
+TERMINAL_CONTAINMENT_FAILURE_AUTHORITY = command_job_containment_failed
+LOW_LEVEL_EPERM_AUTHORITY              = existing EPERM runtime incident
+                                          (line 2101 of command-job-manager.ts)
+
+CARDINALITY_AUTHORITY = job.runtimeErrorReported
+                       (shared latch, prevents double-counting)
+
+ONE CAUSAL FAILURE  =>  AT MOST ONE USER-VISIBLE INCIDENT
 ```
+
+`TERMINAL_CONTAINMENT_FAILURE_AUTHORITY` is the
+`command_job_containment_failed` lifecycle event emitted when the
+postcondition probe cannot establish that the primary PGID is gone
+(alive / unknown / pgid_unset, or an eperm-only-postcondition case
+where the kill itself did NOT return EPERM). It is the canonical
+authority for terminal-cleanup failures.
+
+`LOW_LEVEL_EPERM_AUTHORITY` is the existing EPERM runtime incident
+emitted at the `treeResult.epermDetected` seam (line 2101) when
+`process.kill(-pgid, SIGKILL)` itself returns EPERM. It is
+authoritative for the kill-time EPERM case and is surfaced BEFORE
+the postcondition probe runs.
+
+`CARDINALITY_AUTHORITY` is the `job.runtimeErrorReported` boolean
+field. Once any authority surfaces an incident, the latch is set
+TRUE and the other authority's path is skipped via
+`if (!job.runtimeErrorReported)` at the containment_failed emit
+site. This guarantees:
+
+  EPERM on kill                → existing EPERM incident (latch TRUE)
+                                  → containment_failed sees latch TRUE
+                                  → containment_failed SKIPS its own
+                                    reportRuntimeError call
+                                  → ONE ! total (CAUSAL: kill EPERM)
+
+  EPERM on postcondition only  → existing EPERM path NOT exercised
+  (kill succeeded)               → containment_failed sees latch FALSE
+                                  → containment_failed reports
+                                  → ONE ! total (CAUSAL: postcondition)
+
+  alive / unknown / pgid_unset → existing EPERM path NOT exercised
+                                  → containment_failed sees latch FALSE
+                                  → containment_failed reports
+                                  → ONE ! total (CAUSAL: postcondition)
+
+  gone                        → existing EPERM path NOT exercised
+                                  → containment_failed sees latch FALSE
+                                  → BUT postcondition is `gone`, so the
+                                    containment_failed branch is NOT
+                                    reached at all (the job is
+                                    CLEAN_TERMINAL)
+                                  → ZERO ! total
 
 Earlier diagnostic events (e.g. `command_job_residual_detected`,
-`command_job_primary_group_cleanup` with `postcondition: alive|eperm|unknown`)
-may be logged but MUST NOT increment the user counter. The terminal
-verdict is the only user-visible authority.
+`command_job_primary_group_cleanup` with
+`postcondition: alive|eperm|unknown`) may be logged but MUST NOT
+increment the user counter — they are not in either authority path.
+
+The substrate that enforces cardinality is the
+`job.runtimeErrorReported` latch, NOT a single authority.
 
 ## 9. EPERM cardinality
 
@@ -350,7 +406,7 @@ CONTRACT_PGID_NOT_SESSION_ONLY           = PASS  (02-contract-correction.txt)
 ESCAPED_DESCENDANT_OBSERVABILITY         = LIVE_UNOBSERVABLE  (02-contract-correction.txt)
 
 REAL_LIFECYCLE_SEAM_FOUND                = PASS  (01-recon.txt)
-CONTAINMENT_INCIDENT_AUTHORITY_SINGLE    = PASS  (06-incident-cardinality.txt)
+INCIDENT_CARDINALITY_SINGLE              = PASS  (06-incident-cardinality.txt; one causal failure -> at most one ! via the shared job.runtimeErrorReported latch; two-authority + latch model per §8)
 
 GONE_NO_WARNING                          = PASS  (04-red-gone-conservation.txt + PCPC-BE-01)
 ALIVE_ONE_WARNING                        = PASS  (PCPC-BE-02)

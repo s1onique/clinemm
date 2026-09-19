@@ -18,9 +18,25 @@ Result:
 ```
  44 pass
   0 fail
- 188 expect() calls
+ 190 expect() calls
 Ran 44 tests across 4 files.
 ```
+
+Per-file breakdown (re-measured at the durable ACT HEAD):
+
+```
+pcpc-containment-product-contract.pcpc01.test.ts   11 tests / 37 expect() calls
+pcpc-no-overclaim-sweep.pcpc01.test.ts              3 tests /  3 expect() calls
+command-job-manager-descendant-conservation.dcct01  17 tests /116 expect() calls
+task-header-runtime-error-counter-rec01.test.ts    13 tests / 34 expect() calls
+─────────────────────────────────────────────────────────
+TOTAL                                              44 tests /190 expect() calls
+```
+
+PCPC-BE-07 (CORRECTION04 expansion) gained the second
+`runtimeErrorCount = 1` assertion on job B; that is what accounts
+for the difference between the originally-recorded 188 and the
+correct 190.
 
 Breakdown:
 

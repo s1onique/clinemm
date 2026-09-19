@@ -3718,3 +3718,73 @@ ACT.
 
 **STOP.** No further process-containment review after this
 correction unless a NEW P0 appears from dogfood.
+
+### CORRECTION05 to ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01 — 2026-09-19
+
+**Trigger:** Factory reviewer + ClineMM runtime engineer
+(`HALT_CORRECTION04_EVIDENCE_NOT_INTERNALLY_CONSISTENT`).
+**Status:** APPLIED. ACT is now closed PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT
+with consistent incident-authority model + test-count evidence.
+
+Two bounded corrections:
+
+  (P0-A) The reviewer-required incident-authority correction did
+  not actually land everywhere in CORRECTION04. The ACT body §8
+  still said "Frozen to a single incident authority per
+  CommandJob: CONTAINMENT_INCIDENT_AUTHORITY =
+  command_job_containment_failed" while also acknowledging that
+  the existing EPERM path remains independently authoritative.
+  The §22 gate was likewise still named
+  `CONTAINMENT_INCIDENT_AUTHORITY_SINGLE`. Replaced with the
+  honest two-authority + shared-cardinality-latch model in ACT
+  body §8, renamed the gate to `INCIDENT_CARDINALITY_SINGLE`,
+  and updated `result.json` + the `contract_words.incident_authority_model`
+  block to reflect:
+
+    TERMINAL_CONTAINMENT_FAILURE_AUTHORITY = command_job_containment_failed
+    LOW_LEVEL_EPERM_AUTHORITY              = existing EPERM runtime incident
+    CARDINALITY_AUTHORITY                  = job.runtimeErrorReported shared latch
+    ONE CAUSAL FAILURE => AT MOST ONE USER-VISIBLE INCIDENT
+
+  This is the truthful model: the existing EPERM authority wins
+  for the EPERM-on-kill case (latch TRUE, containment_failed
+  SKIPS its own reportRuntimeError call), the new
+  containment_failed authority wins for the
+  alive/unknown/pgid_unset cases and the
+  EPERM-only-on-postcondition case, and the cardinality is
+  enforced by the shared `job.runtimeErrorReported` latch — NOT
+  by a single authority.
+
+  (P0-B) The closure report claimed the corrected suite has 190
+  expect() calls, but the committed evidence still recorded 188
+  in both `12-tests.txt` and `result.json`. Re-measured at the
+  durable ACT HEAD and confirmed: 44 tests, 190 expect() calls
+  (pcpc-containment-product-contract: 11/37; pcpc-no-overclaim-sweep:
+  3/3; dcct: 17/116; rec: 13/34). The PCPC-BE-07 expansion
+  (CORRECTION04) added 2 expect() calls (1 → 3) to
+  pcpc-containment-product-contract, accounting for the +2 net
+  delta. Updated `06-incident-cardinality.txt`,
+  `12-tests.txt`, `result.json.tests.host_focused.expect_calls`,
+  and the ACT body §22 gate note to the same exact numbers.
+
+After these corrections:
+
+```
+CLEAN_TERMINAL_PRIMARY_PGID_GONE  = PASS
+CONTAINMENT_FAILURE_VISIBLE       = PASS
+INCIDENT_CARDINALITY_SINGLE       = PASS
+PCPC_BE_07_REAL_COMPOSITION       = PASS
+TEST_EVIDENCE_SELF_CONSISTENT     = PASS
+EVIDENCE_BOUND_TO_FINAL_HEAD      = PASS  (committed HEAD 8f72bbb28)
+BOARD_DURABLE                     = PASS  (this row is committed)
+
+PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT
+```
+
+Verification at the durable ACT HEAD: 44 host tests pass / 190
+expect() calls (re-measured); webview ⎇ gauge 13/13 pass; host +
+webview `tsc --noEmit` exit 0; `git diff HEAD --check` clean;
+`git status --short` empty; `git diff HEAD^..HEAD --check` clean.
+
+**STOP.** No further process-containment review after this
+correction unless a NEW P0 appears from dogfood.
