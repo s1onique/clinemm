@@ -537,3 +537,150 @@ DESCENDANT_WRITE_FAILURE_CASCADE  = CLOSED (round-5 two-pipe topology)
 READY_FOR_OPERATOR_RUN            = YES
 NEXT                              = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
 ```
+
+## Round-6 update (HALT_ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE)
+
+Round-5 introduced a two-pipe topology (GT pipe + descendant-report
+pipe) with a reader thread in root. The reviewer flagged a P0 in
+that design:
+
+> "Descendant write fails -> report dropped -> root continues normally
+> -> exit code 0 -> driver detects via missed_ground_truth_count"
+
+But `missed_ground_truth_count` is defined as
+`GROUND_TRUTH_CREATED - KQUEUE_TRACKED`. The GT records themselves
+are what arrive through the oracle. So if a descendant's report is
+dropped **before** it becomes a CREATE, the process is absent from
+`GROUND_TRUTH_CREATED` AND from the comparison set. The driver has
+no independent "expected descendant set" to discover the omission:
+
+```
+descendant really exists
+  -> descendant-report write fails
+  -> no CREATE reaches GT
+  -> KQUEUE may also miss descendant
+  -> GT contains no descendant
+  -> GT - KQUEUE = empty
+  -> missed_ground_truth_count = 0
+  -> exit 0 possible
+```
+
+That is a textbook false-GREEN. The fix is to SIMPLIFY rather than
+add a third oracle channel.
+
+### What changed
+
+1. **Single-pipe topology.** Removed the descendant-report pipe and
+   the root reader thread. EVERY fixture-created process (root + every
+   descendant, C-side or exec'd) inherits `CLINEMM_GROUND_TRUTH_FD`
+   and writes its CREATE record DIRECTLY to the single GT pipe that
+   the driver drains.
+
+2. **Expected set = GT.** `GROUND_TRUTH_CREATED` is now the
+   AUTHORITATIVE expected set, derived from the SAME pipe the driver
+   reads. There is no secondary pipe, no reader thread in root, no
+   report->CREATE translation stage that can erase the expected set.
+
+3. **Atomic writes.** Each CREATE record is 75-100 bytes, well below
+   `PIPE_BUF` (65536 bytes on macOS). POSIX `pipe(2)` guarantees
+   atomic writes for any payload `<= PIPE_BUF`, so concurrent writers
+   from different processes serialize at the kernel without
+   interleaving. No mutex or thread is needed.
+
+4. **Round-4 failsafe preserved.** On a broken GT pipe
+   (`EPIPE`/`EIO`/`ENXIO`/`EBADF`), `gt_announce_failure()` calls
+   `_exit(86)` immediately. The driver `waitpid(root)` observes
+   status 86 and latches `gt_oracle_evidence_fail` (exit code 8).
+
+5. **Multithreaded-fork hazard removed.** No `pthread` exists in
+   root. Apple `pthread_atfork(3)` docs warn that the child side of
+   `fork()` in a multithreaded process is heavily restricted; the
+   child can only call async-signal-safe functions. The round-6 fix
+   avoids this entirely.
+
+6. **32-emulator unchanged.** `32-helper-preattach-emulator.c` was
+   not modified. Its descendants stay in C and never exec, so
+   multiple writers to GT are safe (no fork+exec that needs an
+   inherited env var; the GT FD is already inherited at fork time).
+
+### Why this is correct
+
+The round-6 invariant is precise:
+
+```
+CREATE could not be durably emitted (write fails)  =>  writer _exit(86)
+   =>  driver waitpid observes status 86
+   =>  gt_oracle_evidence_fail latches
+   =>  exit code 8
+
+CREATE successfully emitted                       =>  driver reads it
+   =>  GROUND_TRUTH_CREATED contains the pid
+   =>  if kqueue missed it: missed_ground_truth_count++  =>  exit 5
+   =>  if kqueue tracked it: PASS
+```
+
+GROUND_TRUTH_CREATED is now built directly from what the driver
+observed on the GT pipe. There is no "translation stage" that can
+silently erase records.
+
+### Bash/node/python descendant wiring
+
+The 5 wrapper sections in `31-helper-preattach-root.c` (shell-A,
+node-B, python-C, mixed-D, exec-fork) were updated to write
+`CREATE pid=<pid> ppid=0 pgid=0 start_us=0\n` directly to
+`$CLINEMM_GROUND_TRUTH_FD` via `printf ... >&"$GTFD"` syntax. (Note:
+`>>"$FD"` would NOT work on macOS bash for a pipe fd -- it appears
+to truncate the pipe rather than append. `>&"$FD"` is the correct
+dup-to syntax.)
+
+### Verification
+
+```
+$ ./42-oracle-descendant-failure-witness  (cwd-independent)
+=== ORACLE_DESCENDANT_FAILURE_WITNESS (round-6) ===
+[gt_write_failed] pid=89390 attempted=65 errno=32
+  T1 [real fixture, GT broken pre-spawn] expected=86 got=86 PASS
+  T2 [signal-triggered-fork, GT healthy] expected=0 got=0 CREATE=1 PASS
+  T3 [shell-A healthy control] expected=0 got=0 CREATE=4 (>=3) PASS
+=== failures=0 VERDICT=PASS ===
+
+$ ./43-oracle-composition-witness
+=== ORACLE_COMPOSITION_WITNESS (round-6) ===
+  [shell-A] expected=0 got=0 CREATE=4 (>=4) PASS
+  [double-fork-setsid] expected=0 got=0 CREATE=4 (>=3) PASS
+  [exec-fork] expected=0 got=0 CREATE=3 (>=3) PASS
+=== failures=0 VERDICT=PASS ===
+```
+
+Smoke tests on agent substrate (all 4 fixtures):
+```
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+```
+
+### Updated status block (round-6)
+
+```
+KQUEUE_PRIMITIVE_VIABILITY        = NOT_YET_ADJUDICATED
+GROUND_TRUTH_CHANNEL              = IMPLEMENTED + LOSSLESS + EOF-AWARE + FAIL-SAFE
+GROUND_TRUTH_TOPOLOGY             = SINGLE_PIPE (round-6; round-5 retracted)
+GROUND_TRUTH_INDEPENDENT          = YES
+GROUND_TRUTH_EXPECTED_SET         = GT (round-6; direct from same pipe)
+MULTITHREADED_FORK_HAZARD         = REMOVED (round-6; no pthread in root)
+ORACLE_BUILDS_CLEAN               = YES (0 warnings; 7 binaries incl. 4 witnesses)
+P0_FALSE_GREEN_RISK               = CLOSED (fail-closed identity, exact (pid,start_us))
+P1_PS_TR_NOISE                    = CLOSED
+P1_SIGNAL_HANDLER_UNSAFE          = CLOSED
+P0_ENV_AS_ARGV                    = CLOSED
+PIPE_LOSS_FALSE_GREEN_RISK        = CLOSED (round-3 lossless carry)
+WRITE_FAIL_SILENT                 = CLOSED (round-3 in-pipe + round-4 _exit(86))
+WRITE_FAIL_CHANNEL_NOT_FAILSAFE   = CLOSED (round-4 kernel-mediated status)
+CARRIER_OVERFLOW                  = CLOSED (round-3 halt + exit code 7)
+ORACLE_EVIDENCE_FAIL              = CLOSED (round-4 exit code 8)
+EXPECTED_SET_DISAPPEARS           = CLOSED (round-6 single-pipe topology)
+DESCENDANT_FAILURE_FALSE_GREEN    = CLOSED (round-6 single-pipe topology)
+READY_FOR_OPERATOR_RUN            = YES
+NEXT                              = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
+```

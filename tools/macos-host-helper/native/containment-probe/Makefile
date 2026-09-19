@@ -32,7 +32,8 @@ PROBES = \
   32-helper-preattach-emulator \
   40-oracle-lossless-witness \
   41-oracle-broken-channel-witness \
-  42-oracle-descendant-failure-witness
+  42-oracle-descendant-failure-witness \
+  43-oracle-composition-witness
 
 .PHONY: all clean
 all: $(PROBES)

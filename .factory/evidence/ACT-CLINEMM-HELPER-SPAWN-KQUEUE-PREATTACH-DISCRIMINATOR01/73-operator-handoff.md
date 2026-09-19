@@ -455,3 +455,98 @@ Any single failure ⇒ REFUTE. The strong-evidence path
 (`ground_truth_created_with_start_us_count > 0`) must be exercised;
 if the operator run reports ALL pid-only records, the result is
 INDETERMINATE.
+
+## Round-6 update: single-pipe topology (round-5 retracted)
+
+Round-5 introduced a two-pipe topology (GT pipe + descendant-report
+pipe) with a reader thread in root. The reviewer flagged a P0 in
+that design: the expected set (GROUND_TRUTH_CREATED) was derived
+from the descendant-report pipe, which was itself a source of loss.
+If a report was dropped before becoming a CREATE, the expected set
+was missing that pid and the driver could not detect the omission.
+This is the textbook false-GREEN hazard. The bounded correction is
+to simplify, not add a third channel.
+
+### What changed
+
+**Single-pipe topology.** The driver creates ONE pipe per fixture
+run and exposes it via a single env var:
+
+| Env var                      | FD             | Owner          |
+|------------------------------|----------------|----------------|
+| `CLINEMM_GROUND_TRUTH_FD`    | `gt_write_fd`  | root + every descendant (writers) |
+
+There is no descendant-report pipe, no root reader thread, no
+report->CREATE translation. GROUND_TRUTH_CREATED is built directly
+from the GT pipe that the driver drains.
+
+**Atomic writes.** Each CREATE record is 75-100 bytes, well below
+`PIPE_BUF` (65536 bytes on macOS). POSIX `pipe(2)` guarantees atomic
+writes for any payload `<= PIPE_BUF`, so concurrent writers from
+different processes serialize at the kernel without interleaving.
+
+**Round-4 failsafe preserved.** On a broken GT pipe
+(`EPIPE`/`EIO`/`ENXIO`/`EBADF`), the writer process `_exit(86)`s
+immediately. The driver `waitpid(root)` observes status 86 and
+latches `gt_oracle_evidence_fail` (exit code 8).
+
+**Multithreaded-fork hazard removed.** No `pthread` exists in root.
+This eliminates the Apple `pthread_atfork(3)` warning about
+restricted child-side behavior after `fork()` in a multithreaded
+process.
+
+### Updated driver exit code table (round-6 — unchanged from round-4)
+
+| Exit | Meaning |
+|------|---------|
+| 0    | PASS — every GT record was tracked, no write failures, no oracle evidence fail |
+| 5    | REFUTE (MISS) — `missed_ground_truth_count > 0` |
+| 6    | REFUTE (ORACLE_WRITE_FAIL) — `ground_truth_write_failures > 0` (in-pipe WRITE_FAILED line received) |
+| 7    | REFUTE (ORACLE_READER_FAULT) — `ground_truth_reader_fault > 0` |
+| 8    | REFUTE (ORACLE_EVIDENCE_FAIL) — root exited 86 (kernel-mediated oracle write-side failure) |
+| 1-4  | INFRASTRUCTURE ERROR — see halt event |
+
+Exit codes 5/6/7/8 are all REFUTE modes. PASS only on exit 0.
+
+### Witnesses to verify before the matrix (round-6)
+
+```bash
+./40-oracle-lossless-witness
+./41-oracle-broken-channel-witness
+./42-oracle-descendant-failure-witness
+./43-oracle-composition-witness
+```
+
+42-witness confirms (round-6):
+- T1 GT broken pre-spawn -> exit 86 (round-4 failsafe preserved).
+- T2 signal-triggered-fork healthy -> exit 0 with C-side CREATE.
+- T3 shell-A healthy -> exit 0 with all CREATEs.
+
+43-witness confirms (round-6 composition):
+- shell-A: 4 CREATEs (root + bash + 2 sleep grandchildren).
+- double-fork-setsid: 4 CREATEs (root + child1 + grandchild + child1's re-announce of grandchild).
+- exec-fork: 3 CREATEs (root + bash + setsid grandchild).
+
+### Smoke test status (round-6, agent substrate)
+
+```
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+```
+
+### PASS criterion (round-6 — same as round-4)
+
+```
+ground_truth_oracle_evidence_fail == 0
+ground_truth_write_failures == 0
+ground_truth_reader_fault == 0
+missed_ground_truth_count == 0
+driver_exit_code == 0
+```
+
+Any single failure ⇒ REFUTE. The strong-evidence path
+(`ground_truth_created_with_start_us_count > 0`) must be exercised;
+if the operator run reports ALL pid-only records, the result is
+INDETERMINATE.

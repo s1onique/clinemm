@@ -167,11 +167,12 @@ Round-2 oracle gates (this round; reviewer-flagged issues closed):
                                                    pid-only, the result is INDETERMINATE,
                                                    not PASS
 
-Final gate verdict (this round; round-5):
+Final gate verdict (this round; round-6):
   HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
   GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED + FAIL-SAFE
-  GROUND_TRUTH_TOPOLOGY                                   = TWO-PIPE (round-5, GT + descendant-report)
-  GT_SOLE_WRITER                                          = ROOT_ONLY (round-5, mutex-protected reader thread)
+  GROUND_TRUTH_TOPOLOGY                                   = SINGLE_PIPE (round-6; round-5 retracted)
+  GROUND_TRUTH_EXPECTED_SET                               = GT (round-6; direct from same pipe)
+  MULTITHREADED_FORK_HAZARD                               = REMOVED (round-6; no pthread in root)
   IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
   ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
   SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
@@ -180,7 +181,10 @@ Final gate verdict (this round; round-5):
   ORACLE_EOF_NEVER_DELIVERED                              = CLOSED (round-3, gt_write_fd close-after-spawn)
   ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
   ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE               = CLOSED (round-4, _exit(86) + driver waitpid)
-  ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = CLOSED (round-5, two-pipe topology)
+  ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = RETRACTED (round-5 superseded by round-6; see below)
+  ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE        = CLOSED (round-6, single-pipe topology)
+  ORACLE_REPORT_DROP_CANNOT_FALSE_GREEN                   = CLOSED (round-6, no report pipe)
+  GT_SINGLE_TOPOLOGY_ALL_FIXTURES                         = CLOSED (round-6, 31- + 32- both write direct to GT)
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
@@ -453,6 +457,110 @@ Final gate verdict (this round; round-5; same as above):
   ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
   ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE               = CLOSED (round-4, _exit(86) + driver waitpid)
   ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = CLOSED (round-5, two-pipe topology)
+  READY_FOR_OPERATOR_RUN                                  = YES
+  KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
+  NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
+
+Round-6 oracle gates (this round; HALT_ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE):
+
+  [PASS] SINGLE_PIPE_TOPOLOGY                  -- driver creates ONE pipe;
+                                                  env var CLINEMM_GROUND_TRUTH_FD
+                                                  only; no descendant-report
+                                                  pipe, no reader thread.
+
+  [PASS] EXPECTED_SET_FROM_GT                  -- GROUND_TRUTH_CREATED is
+                                                  built directly from what
+                                                  the driver read on GT. No
+                                                  report->CREATE translation
+                                                  stage that can erase the
+                                                  expected set.
+
+  [PASS] ATOMIC_WRITES                         -- CREATE records are 75-100
+                                                  bytes (< PIPE_BUF = 65536).
+                                                  POSIX pipe(2) guarantees
+                                                  atomic writes for any
+                                                  payload <= PIPE_BUF.
+
+  [PASS] ROUND-4_FAILSAFE_PRESERVED            -- gt_announce_failure()
+                                                  _exit(86)s on broken GT
+                                                  pipe. waitpid(root) in
+                                                  driver observes 86. Exit
+                                                  code 8 semantics preserved.
+
+  [PASS] MULTITHREADED_FORK_HAZARD_REMOVED     -- no pthread in root. The
+                                                  Apple pthread_atfork(3)
+                                                  warning about restricted
+                                                  child-side behavior after
+                                                  fork() in a multithreaded
+                                                  process no longer applies.
+
+  [PASS] GT_SINGLE_TOPOLOGY_ALL_FIXTURES       -- 31-helper-preattach-root
+                                                  AND 32-helper-preattach-emulator
+                                                  both write CREATE records
+                                                  directly to the GT pipe.
+
+Round-6 verification artifacts:
+
+  Witness: 42-oracle-descendant-failure-witness (round-6 update, 223 lines C, 3 cases)
+  Run: ./42-oracle-descendant-failure-witness
+  Output (on agent substrate, 2026-09-19):
+    === ORACLE_DESCENDANT_FAILURE_WITNESS (round-6) ===
+    [gt_write_failed] pid=89390 attempted=65 errno=32
+      T1 [real fixture, GT broken pre-spawn] expected=86 got=86 PASS
+    [fixture-signal-triggered-fork-I] parent pid=89391 pgid=89265 ppid=89389
+      T2 [signal-triggered-fork, GT healthy] expected=0 got=0 CREATE=1 PASS
+    [fixture-shell-A] parent pid=89398 pgid=89265 ppid=89389
+      T3 [shell-A healthy two-pipe control] expected=0 got=0 CREATE=4 (>=3) PASS
+    === failures=0 VERDICT=PASS ===
+
+  Witness: 43-oracle-composition-witness (NEW, 166 lines C, 3 cases)
+  Run: ./43-oracle-composition-witness
+  Output (on agent substrate, 2026-09-19):
+    === ORACLE_COMPOSITION_WITNESS (round-6) ===
+    [fixture-shell-A] parent pid=89417 pgid=89265 ppid=89265
+      [shell-A] expected=0 got=0 CREATE=4 (>=4) PASS
+    [fixture-double-fork-setsid-G] parent pid=89444 pgid=89265 ppid=89265
+      [double-fork-setsid] expected=0 got=0 CREATE=4 (>=3) PASS
+    [fixture-exec-fork-H] parent pid=89448 pgid=89265 ppid=89265
+      [exec-fork] expected=0 got=0 CREATE=3 (>=3) PASS
+    === failures=0 VERDICT=PASS ===
+
+  Smoke tests (round-6; all 4 fixtures via Python harness):
+    shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+    exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+    signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+    signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+
+  Build status:
+    make clean && make
+    -> 0 warnings on -Wall -Wextra
+    -> 12 binaries (added 43-oracle-composition-witness)
+    -> 40-witness + 41-witness + 42-witness + 43-witness all PASS
+
+  T1 of 42-witness confirms the round-4 failsafe is preserved (GT
+  broken -> _exit(86)). T2 and T3 confirm healthy two-pipe (now
+  single-pipe) control produces CREATEs and exits 0. 43-witness
+  confirms multi-level descendant trees compose under the
+  single-pipe topology.
+
+Final gate verdict (this round; round-6; same as above):
+  HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
+  GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED + FAIL-SAFE
+  GROUND_TRUTH_TOPOLOGY                                   = SINGLE_PIPE (round-6; round-5 retracted)
+  GROUND_TRUTH_EXPECTED_SET                               = GT (round-6; direct from same pipe)
+  MULTITHREADED_FORK_HAZARD                               = REMOVED (round-6; no pthread in root)
+  IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
+  ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
+  SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
+  ENV_AS_ARGV                                             = CLOSED (P0-2, run_env helper)
+  ORACLE_READER_DROPS_PARTIAL_RECORDS                     = CLOSED (round-3, lossless carry)
+  ORACLE_EOF_NEVER_DELIVERED                              = CLOSED (round-3, gt_write_fd close-after-spawn)
+  ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
+  ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE               = CLOSED (round-4, _exit(86) + driver waitpid)
+  ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = RETRACTED (round-5 superseded by round-6)
+  ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE        = CLOSED (round-6, single-pipe topology)
+  ORACLE_REPORT_DROP_CANNOT_FALSE_GREEN                   = CLOSED (round-6, no report pipe)
+  GT_SINGLE_TOPOLOGY_ALL_FIXTURES                         = CLOSED (round-6, 31- + 32- both write direct to GT)
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL

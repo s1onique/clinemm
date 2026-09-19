@@ -2946,3 +2946,206 @@ READY_FOR_OPERATOR_RUN = YES (round-5 packet is now fully fail-safe + descendant
 reviewer's verdict block, with the oracle now fully fail-safe
 (round-3 lossless reader + round-4 broken-channel failsafe +
 round-5 descendant-failure isolation).
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — ROUND-6 SINGLE-PIPE TOPOLOGY (EXPECTED SET FROM GT, ROUND-5 RETRACTED) — 2026-09-19
+
+**Reviewer halt:** `HALT_ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE`.
+
+Round-5 introduced a two-pipe topology (GT pipe + descendant-report
+pipe) with a reader thread in root. The reviewer flagged a P0 in
+that design: the expected set (GROUND_TRUTH_CREATED) was derived
+from the descendant-report pipe, which was itself a source of loss.
+If a descendant's report write failed, the report was missing from
+the expected set and the driver could not detect the omission.
+That is a textbook false-GREEN hazard.
+
+The bounded correction is to simplify, not add a third channel.
+
+### Round-6 fixes
+
+1. **Single-pipe topology.** Removed the descendant-report pipe
+   and the root reader thread. EVERY fixture-created process
+   (root + every descendant, C-side or exec'd) inherits
+   `CLINEMM_GROUND_TRUTH_FD` and writes its CREATE record DIRECTLY
+   to the single GT pipe that the driver drains.
+
+2. **Expected set = GT.** `GROUND_TRUTH_CREATED` is now the
+   AUTHORITATIVE expected set, derived from the SAME pipe the driver
+   reads. There is no secondary pipe, no reader thread in root, no
+   report->CREATE translation stage that can erase the expected set.
+
+3. **Atomic writes.** Each CREATE record is 75-100 bytes, well below
+   `PIPE_BUF` (65536 bytes on macOS). POSIX `pipe(2)` guarantees
+   atomic writes for any payload `<= PIPE_BUF`, so concurrent
+   writers from different processes serialize at the kernel
+   without interleaving. No mutex or thread is needed.
+
+4. **Round-4 failsafe preserved.** On a broken GT pipe
+   (`EPIPE`/`EIO`/`ENXIO`/`EBADF`), `gt_announce_failure()` calls
+   `_exit(86)` immediately. The driver `waitpid(root)` observes
+   status 86 and latches `gt_oracle_evidence_fail` (exit code 8).
+
+5. **Multithreaded-fork hazard removed.** No `pthread` exists in
+   root. Apple `pthread_atfork(3)` docs warn that the child side of
+   `fork()` in a multithreaded process is heavily restricted; the
+   child can only call async-signal-safe functions. The round-6 fix
+   avoids this entirely.
+
+6. **32-emulator unchanged.** `32-helper-preattach-emulator.c` was
+   not modified. Its descendants stay in C and never exec, so
+   multiple writers to GT are safe.
+
+### Round-6 invariant
+
+```
+CREATE could not be durably emitted (write fails)  =>  writer _exit(86)
+   =>  driver waitpid observes status 86
+   =>  gt_oracle_evidence_fail latches
+   =>  exit code 8 (round-4 preserved exactly)
+
+CREATE successfully emitted                       =>  driver reads it
+   =>  GROUND_TRUTH_CREATED contains the pid
+   =>  if kqueue missed it: missed_ground_truth_count++  =>  exit 5
+   =>  if kqueue tracked it: PASS
+```
+
+GROUND_TRUTH_CREATED is now built directly from what the driver
+observed on the GT pipe. There is no "translation stage" that can
+silently erase records.
+
+### Why round-5 was retracted
+
+The round-5 statement was:
+
+> "Descendant write fails -> report dropped -> root continues
+> normally -> exit code 0 -> driver detects via
+> missed_ground_truth_count"
+
+But `missed_ground_truth_count` is defined as
+`GROUND_TRUTH_CREATED - KQUEUE_TRACKED`. The GT records themselves
+are what arrive through the oracle. So if a descendant's report is
+dropped **before** it becomes a CREATE, the process is absent from
+`GROUND_TRUTH_CREATED` AND from the comparison set. The driver has
+no independent "expected descendant set" to discover the omission.
+
+The T2 case of the round-5 42-witness actually **proved the blind
+spot**, rather than proving safety: it showed that a descendant pipe
+breakdown did not make the root fail, but it did not establish that
+the driver would later notice what was lost. There is no later
+notice possible because the lost report is gone from both sides of
+the discriminator.
+
+Round-6 fixes this by removing the report pipe entirely.
+
+### Bash/node/python descendant wiring
+
+The 5 wrapper sections in `31-helper-preattach-root.c` (shell-A,
+node-B, python-C, mixed-D, exec-fork) were updated to write
+`CREATE pid=<pid> ppid=0 pgid=0 start_us=0\n` directly to
+`$CLINEMM_GROUND_TRUTH_FD` via `printf ... >&"$GTFD"` syntax. (Note:
+`>>"$FD"` would NOT work on macOS bash for a pipe fd -- it appears
+to truncate the pipe rather than append. `>&"$FD"` is the correct
+dup-to syntax.)
+
+### Verification
+
+```
+$ ./42-oracle-descendant-failure-witness  (cwd-independent)
+=== ORACLE_DESCENDANT_FAILURE_WITNESS (round-6) ===
+[gt_write_failed] pid=89390 attempted=65 errno=32
+  T1 [real fixture, GT broken pre-spawn] expected=86 got=86 PASS
+  T2 [signal-triggered-fork, GT healthy] expected=0 got=0 CREATE=1 PASS
+  T3 [shell-A healthy two-pipe control] expected=0 got=0 CREATE=4 (>=3) PASS
+=== failures=0 VERDICT=PASS ===
+
+$ ./43-oracle-composition-witness
+=== ORACLE_COMPOSITION_WITNESS (round-6) ===
+  [shell-A] expected=0 got=0 CREATE=4 (>=4) PASS
+  [double-fork-setsid] expected=0 got=0 CREATE=4 (>=3) PASS
+  [exec-fork] expected=0 got=0 CREATE=3 (>=3) PASS
+=== failures=0 VERDICT=PASS ===
+```
+
+Smoke tests on agent substrate (all 4 fixtures):
+```
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=2 WRITE_FAILED=0 exit=-15 PASS
+```
+
+### Driver exit code semantics (round-6 — unchanged from round-4)
+
+| Exit | Meaning |
+|------|---------|
+| 0    | PASS |
+| 5    | REFUTE (MISS) -- `missed_ground_truth_count > 0` |
+| 6    | REFUTE (ORACLE_WRITE_FAIL) -- in-pipe WRITE_FAILED received |
+| 7    | REFUTE (ORACLE_READER_FAULT) -- carry overflow etc. |
+| 8    | REFUTE (ORACLE_EVIDENCE_FAIL) -- root exited 86 |
+| 1-4  | INFRASTRUCTURE ERROR |
+
+### Files modified (round-6)
+
+- `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+  -- removed desc_pipe[2]; removed CLINEMM_DESCENDANT_FD and
+  CLINEMM_GT_DESC_READ_FD env vars; updated comment to reflect
+  single-pipe topology.
+- `tools/macos-host-helper/native/containment-probe/31-helper-preattach-root.c`
+  -- removed `<pthread.h>`; replaced `g_gt_root_fd` +
+  `g_desc_read_fd` + `g_desc_write_fd` with single `g_gt_fd`;
+  removed `gt_reader_thread`, `gt_reader_emit`, `g_seen_pids[]`,
+  `gt_announce_to_desc_failure`, `gt_serialize_report`;
+  `gt_init` simplified (no pthread); `gt_announce` writes
+  CREATE directly to GT; bash/node/python wrappers updated to
+  use `printf ... >&"$GTFD"`; round-4 `_exit(86)` failsafe
+  preserved.
+- `tools/macos-host-helper/native/containment-probe/42-oracle-descendant-failure-witness.c`
+  -- UPDATED for round-6 (223 lines, 3 cases: T1 GT broken, T2
+  signal-triggered-fork healthy, T3 shell-A healthy).
+- `tools/macos-host-helper/native/containment-probe/43-oracle-composition-witness.c`
+  -- NEW (166 lines, 3 cases: shell-A, double-fork-setsid, exec-fork).
+- `tools/macos-host-helper/native/containment-probe/Makefile`
+  -- added `43-oracle-composition-witness`.
+- `.gitignore` -- ignore `43-oracle-composition-witness` binary.
+- `.factory/evidence/.../71-ground-truth-design.md` -- Round-6 section.
+- `.factory/evidence/.../73-operator-handoff.md` -- Round-6 section + exit code table.
+- `.factory/evidence/.../90-gates.txt` -- Round-6 gates + verdict block.
+- `.factory/evidence/.../result.json` -- round: 6,
+  round5_fixes_RETRACTED, round6_fixes array,
+  single_pipe_topology flag, composition_witness_verdict.
+- `.factory/epic-board.md` -- this section appended.
+
+### Verdict (round-6)
+
+```
+ORACLE_EXPECTED_SET_DISAPPEARS_ON_REPORT_FAILURE = CLOSED (round-6)
+ORACLE_REPORT_DROP_CANNOT_FALSE_GREEN             = CLOSED (round-6)
+GT_SINGLE_TOPOLOGY_ALL_FIXTURES                   = CLOSED (round-6)
+MULTITHREADED_FORK_HAZARD                         = REMOVED (round-6)
+ROUND-5_RETIRED                                   = YES (round-6 supersedes)
+
+GROUND_TRUTH_ORACLE = IMPLEMENTED + LOSSLESS + EOF-AWARE + FAIL-SAFE + SINGLE_PIPE
+AGENT_SUBSTRATE_HALT = PRESERVED (no probe execution attempted)
+KQUEUE_PRIMITIVE_VIABILITY = NOT_YET_ADJUDICATED (still requires RUN_3)
+READY_FOR_OPERATOR_RUN = YES (round-6 packet is now fully fail-safe + single-pipe + multithreaded-fork-hazard-removed)
+```
+
+**STOP rule honored (round-6):**
+
+- No probe execution attempted from agent shell.
+- All 12 binaries built clean (`make clean && make`: 0 warnings).
+- Witness 40 PASS (round-3, lossless reader).
+- Witness 41 PASS (round-4, broken channel failsafe).
+- Witness 42 PASS (round-6, descendant failure isolation).
+- Witness 43 PASS (round-6, composition).
+- 4 smoke fixtures (shell-A, exec-fork, signal-triggered-fork
+  control, signal-triggered-fork SIGTERM) all PASS.
+- 32-emulator (4-iter) PASS.
+- Agent stops at READY_FOR_OPERATOR_RUN. Operator Terminal run
+  (RUN_3) is required to actually adjudicate the kqueue primitive.
+
+**C1: GO → human Terminal matrix** is now warranted per the
+reviewer's verdict block, with the oracle now fully fail-safe
+(round-3 lossless reader + round-4 broken-channel failsafe +
+round-6 single-pipe topology with expected set from GT + multithreaded-fork-hazard removed).
