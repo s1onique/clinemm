@@ -60,6 +60,7 @@ tools/macos-host-helper/native/containment-probe/31-helper-preattach-root
 tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator
 tools/macos-host-helper/native/containment-probe/40-oracle-lossless-witness
 tools/macos-host-helper/native/containment-probe/41-oracle-broken-channel-witness
+tools/macos-host-helper/native/containment-probe/42-oracle-descendant-failure-witness
 
 # E2E Tests
 test-results

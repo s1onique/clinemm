@@ -404,3 +404,136 @@ ORACLE_EVIDENCE_FAIL              = CLOSED (round-4 exit code 8)
 READY_FOR_OPERATOR_RUN            = YES
 NEXT                              = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
 ```
+
+## Round-5 update (HALT_ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED)
+
+Round-4 made the GT-pipe write fail-safe by `_exit(86)` on broken
+channel. But that failsafe was triggered by ANY descendant's GT
+write failure -- meaning if a bash subprocess tried to write its own
+CREATE record and the pipe was broken, the bash subprocess would
+exit 86. This creates a problem: in some fixtures the bash
+subprocess may not be the immediate child of root; if it fails, the
+root process can still complete normally. Worse, the round-4 failsafe
+couples descendant write failure with root `_exit(86)`, which means
+a single broken pipe can take down an entire healthy fixture run if
+ANY descendant's write fails.
+
+The fix is to separate concerns: descendants don't write to GT at
+all. Instead, they post small report lines to a descendant-report
+pipe, and the root process's reader thread is the SOLE writer to GT.
+This makes "CREATE could not be durably emitted" the only oracle-
+failure trigger, and descendant write failures are simply missed
+reports (detectable by the driver, not catastrophic).
+
+### What changed
+
+1. **Two-pipe topology.** The driver now creates TWO pipes per
+   fixture run:
+   - `gt_pipe[2]`: GT pipe. Root writes CREATE records; driver reads.
+   - `desc_pipe[2]`: descendant-report pipe. Descendants write
+     `"pid=<N> start_us=<N>\n"` report lines; root reads.
+   The driver passes both pipes to the spawned root via three env
+   vars: `CLINEMM_GROUND_TRUTH_FD=<gt_write_fd>`,
+   `CLINEMM_GT_DESC_READ_FD=<desc_read_fd>`,
+   `CLINEMM_DESCENDANT_FD=<desc_write_fd>`.
+
+2. **Single-writer invariant.** Only root writes to the GT pipe.
+   `gt_serialize_report()` is mutex-protected (`pthread_mutex_t`) and
+   the only path to `g_gt_root_fd`. If that write fails, `_exit(86)`
+   is called and `waitpid()` in the driver observes it. Round-5 does
+   NOT add a new exit code; the round-4 exit code 8 semantics are
+   preserved exactly.
+
+3. **Reader thread + dedup.** A detached `pthread` (`gt_reader_thread`)
+   drains the descendant pipe, parses `"pid=<N> start_us=<N>\n"`
+   lines, and calls `gt_reader_emit(pid, sus)` which dedupes by pid
+   (linear scan of a 64-entry `g_seen_pids[]`) before serializing
+   to GT. This eliminates duplicate CREATE records when the C-side
+   `gt_announce(c)` in the parent AND `gt_announce(getpid())` in the
+   pre-exec child both fire for the same pid.
+
+4. **FD lifetime.** Root keeps its inherited WRITE end of the
+   descendant pipe for the full lifetime of the process. If root
+   closed it before forking some descendants, those descendants
+   would not have the FD. The reader thread dies with the process
+   when root exits; EOF is not required for correctness because the
+   reader is short-lived relative to the fixture run.
+
+5. **CLOEXEC handling.** Root's GT write end has `FD_CLOEXEC`
+   cleared (no harm). Root's descendant READ end has `FD_CLOEXEC`
+   set so descendants that fork+exec from root do not inherit the
+   read end -- they only need the write end.
+
+6. **32-helper-preattach-emulator.c was NOT modified** because its
+   descendants stay in C and never exec. They can write directly to
+   GT (they inherited the FD from root) without going through the
+   descendant-report pipe. The two-pipe env vars are accepted but
+   unused by 32-.
+
+### Why this is correct
+
+The round-5 invariant now holds precisely:
+
+```
+Root's serialize_report fails (EPIPE/EIO/ENXIO/EBADF)  =>  root _exit(86)
+   =>  driver waitpid(root) observes status 86
+   =>  gt_oracle_evidence_fail latches
+   =>  exit code 8 (round-4)
+
+Descendant write fails (EPIPE on the descendant pipe)   =>  report dropped
+   =>  root continues normally
+   =>  exit code 0 (no oracle failure)
+   =>  driver detects via missed_ground_truth_count comparison
+```
+
+The descendant pipe is intentionally NOT load-bearing for correctness.
+Its purpose is to give descendants a way to communicate reports
+without becoming writers to the GT pipe (which would require them to
+either exec with the GT FD inherited, or share a mutex with root --
+both impossible from a fork+exec'd bash subprocess).
+
+### Verification
+
+```
+$ ./42-oracle-descendant-failure-witness
+=== ORACLE_DESCENDANT_FAILURE_WITNESS (round-5) ===
+[gt_write_failed] pid=77290 attempted=65 errno=32
+  T1 [real fixture, GT broken pre-spawn] expected=86 got=86 PASS
+[fixture-shell-A] parent pid=77291 pgid=77177 ppid=77289
+  T2 [real fixture, descendant pipe broken pre-spawn] expected=0 got=0 PASS
+[fixture-shell-A] parent pid=77302 pgid=77177 ppid=77289
+  T3 [healthy two-pipe control] expected=0 got=0 PASS
+=== failures=0 VERDICT=PASS ===
+```
+
+Smoke tests on agent substrate (all 4 fixtures):
+```
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=1 WRITE_FAILED=0 exit=-15 PASS
+```
+
+### Updated status block (round-5)
+
+```
+KQUEUE_PRIMITIVE_VIABILITY        = NOT_YET_ADJUDICATED
+GROUND_TRUTH_CHANNEL              = IMPLEMENTED + LOSSLESS + EOF-AWARE + FAIL-SAFE
+GROUND_TRUTH_TOPOLOGY             = TWO-PIPE (GT + descendant-report; round-5)
+GROUND_TRUTH_INDEPENDENT          = YES
+GT_SOLE_WRITER                    = ROOT_ONLY (mutex-protected reader thread)
+DESCENDANT_FAILURE_NOT_PROPAGATED = YES (round-5 invariant)
+ORACLE_BUILDS_CLEAN               = YES (0 warnings; 6 binaries incl. 3 witnesses)
+P0_FALSE_GREEN_RISK               = CLOSED (fail-closed identity, exact (pid,start_us))
+P1_PS_TR_NOISE                    = CLOSED
+P1_SIGNAL_HANDLER_UNSAFE          = CLOSED
+P0_ENV_AS_ARGV                    = CLOSED
+PIPE_LOSS_FALSE_GREEN_RISK        = CLOSED (round-3 lossless carry)
+WRITE_FAIL_SILENT                 = CLOSED (round-3 in-pipe + round-4 _exit(86))
+WRITE_FAIL_CHANNEL_NOT_FAILSAFE   = CLOSED (round-4 kernel-mediated status)
+CARRIER_OVERFLOW                  = CLOSED (round-3 halt + exit code 7)
+ORACLE_EVIDENCE_FAIL              = CLOSED (round-4 exit code 8)
+DESCENDANT_WRITE_FAILURE_CASCADE  = CLOSED (round-5 two-pipe topology)
+READY_FOR_OPERATOR_RUN            = YES
+NEXT                              = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
+```

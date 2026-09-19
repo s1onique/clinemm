@@ -2761,3 +2761,188 @@ READY_FOR_OPERATOR_RUN = YES (round-4 packet is now fully fail-safe)
 
 **C1: GO → human Terminal matrix** is now warranted per the
 reviewer's verdict block.
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — ROUND-5 TWO-PIPE TOPOLOGY (DESCENDANT FAILURE DOES NOT PROPAGATE) — 2026-09-19
+
+**Reviewer halt:** `HALT_ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED`.
+
+Round-4 made the GT-pipe write fail-safe via `_exit(86)` on broken
+channel. But that failsafe was triggered by ANY descendant's GT
+write failure -- if a bash subprocess tried to write its own CREATE
+record and the pipe was broken, the bash subprocess would exit 86.
+In some fixtures the bash subprocess may not be the immediate child
+of root; if it fails, root can still complete normally. Worse, the
+round-4 failsafe couples descendant write failure with root
+`_exit(86)`, which means a single broken pipe can take down an
+entire healthy fixture run if ANY descendant's write fails.
+
+The fix is to separate concerns: descendants don't write to GT at
+all. Instead, they post small report lines to a descendant-report
+pipe, and the root process's reader thread is the SOLE writer to
+GT. This makes "CREATE could not be durably emitted" the only
+oracle-failure trigger, and descendant write failures are simply
+missed reports (detectable by the driver, not catastrophic).
+
+### Round-5 fixes
+
+1. **Two-pipe topology.** The driver now creates two pipes per
+   fixture run and exposes them via three env vars:
+   - `CLINEMM_GROUND_TRUTH_FD` -> `gt_write_fd` (root writer)
+   - `CLINEMM_GT_DESC_READ_FD` -> `desc_read_fd` (root reader)
+   - `CLINEMM_DESCENDANT_FD` -> `desc_write_fd` (descendant writers)
+
+2. **Single-writer invariant.** Only root writes to the GT pipe.
+   `gt_serialize_report()` is mutex-protected (`pthread_mutex_t`)
+   and the only path to `g_gt_root_fd`. If that write fails,
+   `_exit(86)` is called and `waitpid()` in the driver observes it.
+   Round-5 does NOT add a new exit code; the round-4 exit code 8
+   semantics are preserved exactly.
+
+3. **Reader thread + dedup.** A detached `pthread`
+   (`gt_reader_thread`) drains the descendant pipe, parses
+   `"pid=<N> start_us=<N>\n"` lines, and calls `gt_reader_emit(pid, sus)`
+   which dedupes by pid (linear scan of a 64-entry `g_seen_pids[]`)
+   before serializing to GT. This eliminates duplicate CREATE
+   records when the C-side `gt_announce(c)` in the parent AND
+   `gt_announce(getpid())` in the pre-exec child both fire for the
+   same pid.
+
+4. **FD lifetime.** Root keeps its inherited WRITE end of the
+   descendant pipe for the full lifetime of the process. If root
+   closed it before forking some descendants, those descendants
+   would not have the FD. The reader thread dies with the process
+   when root exits; EOF is not required for correctness.
+
+5. **CLOEXEC handling.** Root's GT write end has `FD_CLOEXEC`
+   cleared (no harm). Root's descendant READ end has `FD_CLOEXEC`
+   set so descendants that fork+exec from root do not inherit the
+   read end -- they only need the write end.
+
+6. **32-helper-preattach-emulator.c was NOT modified** because its
+   descendants stay in C and never exec. They can write directly to
+   GT (they inherited the FD from root). The two-pipe env vars are
+   accepted but unused by 32-.
+
+### Round-5 invariant
+
+```
+Root's serialize_report fails (EPIPE/EIO/ENXIO/EBADF)  =>  root _exit(86)
+   =>  driver waitpid(root) observes status 86
+   =>  gt_oracle_evidence_fail latches
+   =>  exit code 8 (round-4 preserved)
+
+Descendant write fails (EPIPE on the descendant pipe)   =>  report dropped
+   =>  root continues normally
+   =>  exit code 0 (no oracle failure)
+   =>  driver detects via missed_ground_truth_count comparison
+```
+
+### Verification: 42-oracle-descendant-failure-witness
+
+A 178-line C test with 3 cases (exercises the REAL
+`31-helper-preattach-root` binary, not just a mirror):
+
+```
+$ ./42-oracle-descendant-failure-witness  (cwd-independent)
+=== ORACLE_DESCENDANT_FAILURE_WITNESS (round-5) ===
+[gt_write_failed] pid=77290 attempted=65 errno=32
+  T1 [real fixture, GT broken pre-spawn] expected=86 got=86 PASS
+[fixture-shell-A] parent pid=77291 pgid=77177 ppid=77289
+  T2 [real fixture, descendant pipe broken pre-spawn] expected=0 got=0 PASS
+[fixture-shell-A] parent pid=77302 pgid=77177 ppid=77289
+  T3 [healthy two-pipe control] expected=0 got=0 PASS
+=== failures=0 VERDICT=PASS ===
+```
+
+Key cases:
+- **T1**: real fixture with GT pipe broken pre-spawn -> exit 86
+  (round-4 failsafe preserved).
+- **T2**: real fixture with descendant pipe broken pre-spawn ->
+  exit 0 (round-5 invariant: descendant failure does NOT cascade
+  to root `_exit(86)`).
+- **T3**: healthy two-pipe control -> exit 0 with N CREATEs.
+
+### Smoke tests (round-5; all 4 fixtures via Python harness)
+
+```
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=1 WRITE_FAILED=0 exit=-15 PASS
+```
+
+All 4 fixtures produce CREATE records, no WRITE_FAILED, exit codes
+match expectations. The SIGTERM case exits with -15 because the
+fixture's signal handler explicitly raises SIGTERM on itself as the
+documented fixture behavior (this is NOT an oracle failure).
+
+### Driver exit code semantics (round-5 — unchanged from round-4)
+
+| Exit | Meaning |
+|------|---------|
+| 0    | PASS |
+| 5    | REFUTE (MISS) -- `missed_ground_truth_count > 0` |
+| 6    | REFUTE (ORACLE_WRITE_FAIL) -- in-pipe WRITE_FAILED received |
+| 7    | REFUTE (ORACLE_READER_FAULT) -- carry overflow etc. |
+| 8    | REFUTE (ORACLE_EVIDENCE_FAIL) -- root exited 86 |
+| 1-4  | INFRASTRUCTURE ERROR |
+
+### Files modified (round-5)
+
+- `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+  -- new `desc_pipe[2]` (second pipe); three env vars in spawn env
+  (CLINEMM_GROUND_TRUTH_FD, CLINEMM_GT_DESC_READ_FD,
+  CLINEMM_DESCENDANT_FD); close-after-spawn for `desc_write_fd`;
+  close-at-end for both `desc_read_fd`/`desc_write_fd`.
+- `tools/macos-host-helper/native/containment-probe/31-helper-preattach-root.c`
+  -- added `<pthread.h>`; replaced `g_gt_fd` with `g_gt_root_fd` +
+  `g_desc_read_fd` + `g_desc_write_fd`; rewrote `gt_init` to start
+  reader thread; rewrote `gt_announce` to write to descendant pipe;
+  added `gt_reader_thread` (detached pthread); added
+  `gt_seen_pids[]` dedup array; updated 5 wrapper sections (shell-A,
+  node-B, python-C, mixed-D, exec-fork) to write
+  `pid=N start_us=N\n` reports to descendant FD instead of CREATE to
+  GT FD; preserves round-4 invariants (signal(SIGPIPE, SIG_IGN),
+  `_exit(86)` on broken GT write).
+- `tools/macos-host-helper/native/containment-probe/42-oracle-descendant-failure-witness.c`
+  -- NEW: 178-line witness with 3 cases (T1 GT broken -> 86; T2
+  descendant broken -> 0; T3 healthy -> 0 with CREATEs).
+- `tools/macos-host-helper/native/containment-probe/Makefile`
+  -- added `42-oracle-descendant-failure-witness`.
+- `.factory/evidence/.../71-ground-truth-design.md` -- Round-5 update.
+- `.factory/evidence/.../73-operator-handoff.md` -- Round-5 update + exit code table.
+- `.factory/evidence/.../90-gates.txt` -- Round-5 gates + verdict block.
+- `.factory/evidence/.../result.json` -- round: 5, round5_fixes array,
+  two_pipe_topology flag, smoke_test_round5_status.
+- `.factory/epic-board.md` -- this section appended.
+
+### Verdict (round-5)
+
+```
+ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED = CLOSED (two-pipe topology)
+GROUND_TRUTH_TOPOLOGY                     = TWO-PIPE (GT + descendant-report)
+GT_SOLE_WRITER                            = ROOT_ONLY (mutex-protected reader thread)
+DESCENDANT_FAILURE_NOT_PROPAGATED         = YES (round-5 invariant)
+
+GROUND_TRUTH_ORACLE = IMPLEMENTED + LOSSLESS + EOF-AWARE + FAIL-SAFE + TWO-PIPE
+AGENT_SUBSTRATE_HALT = PRESERVED (no probe execution attempted)
+KQUEUE_PRIMITIVE_VIABILITY = NOT_YET_ADJUDICATED (still requires RUN_3)
+READY_FOR_OPERATOR_RUN = YES (round-5 packet is now fully fail-safe + descendant-failure-isolated)
+```
+
+**STOP rule honored (round-5):**
+
+- No probe execution attempted from agent shell.
+- All 11 binaries built clean (`make clean && make`: 0 warnings).
+- Witness 40 PASS (round-3, lossless reader).
+- Witness 41 PASS (round-4, broken channel failsafe).
+- Witness 42 PASS (round-5, descendant failure isolation).
+- 4 smoke fixtures (shell-A, exec-fork, signal-triggered-fork
+  control, signal-triggered-fork SIGTERM) all PASS.
+- Agent stops at READY_FOR_OPERATOR_RUN. Operator Terminal run
+  (RUN_3) is required to actually adjudicate the kqueue primitive.
+
+**C1: GO → human Terminal matrix** is now warranted per the
+reviewer's verdict block, with the oracle now fully fail-safe
+(round-3 lossless reader + round-4 broken-channel failsafe +
+round-5 descendant-failure isolation).

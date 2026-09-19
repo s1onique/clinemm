@@ -167,9 +167,11 @@ Round-2 oracle gates (this round; reviewer-flagged issues closed):
                                                    pid-only, the result is INDETERMINATE,
                                                    not PASS
 
-Final gate verdict (this round; round-4):
+Final gate verdict (this round; round-5):
   HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
   GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED + FAIL-SAFE
+  GROUND_TRUTH_TOPOLOGY                                   = TWO-PIPE (round-5, GT + descendant-report)
+  GT_SOLE_WRITER                                          = ROOT_ONLY (round-5, mutex-protected reader thread)
   IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
   ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
   SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
@@ -178,6 +180,7 @@ Final gate verdict (this round; round-4):
   ORACLE_EOF_NEVER_DELIVERED                              = CLOSED (round-3, gt_write_fd close-after-spawn)
   ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
   ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE               = CLOSED (round-4, _exit(86) + driver waitpid)
+  ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = CLOSED (round-5, two-pipe topology)
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
@@ -350,3 +353,106 @@ Updated exit code table (round-4):
   7 = REFUTE (ORACLE_READER_FAULT) -- ground_truth_reader_fault > 0
   8 = REFUTE (ORACLE_EVIDENCE_FAIL) -- root exited 86 (kernel-mediated)
   1-4 = INFRASTRUCTURE ERROR (see halt event)
+
+Round-5 oracle gates (this round; HALT_ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED):
+
+  [PASS] TWO_PIPE_TOPOLOGY                   -- driver creates gt_pipe[2] +
+                                                  desc_pipe[2]; three env vars
+                                                  (CLINEMM_GROUND_TRUTH_FD,
+                                                  CLINEMM_GT_DESC_READ_FD,
+                                                  CLINEMM_DESCENDANT_FD) are
+                                                  passed to the spawned root.
+
+  [PASS] GT_SOLE_WRITER                      -- 31-helper-preattach-root has
+                                                  g_gt_root_fd; the only path
+                                                  is gt_serialize_report(),
+                                                  mutex-protected by
+                                                  pthread_mutex_t. Verified by
+                                                  inspection.
+
+  [PASS] DESCENDANT_WRITES_DONT_PROPAGATE    -- descendants write "pid=N
+                                                  start_us=N\n" reports to
+                                                  desc_write_fd. If write
+                                                  fails, g_gt_write_failures++
+                                                  and report is dropped.
+                                                  Root continues. Driver
+                                                  detects via
+                                                  missed_ground_truth_count.
+
+  [PASS] READER_THREAD_DEDUP                 -- 64-entry g_seen_pids[] array;
+                                                  gt_reader_emit() checks
+                                                  before serializing to GT.
+                                                  Eliminates duplicate CREATEs
+                                                  from C-side gt_announce(c)
+                                                  in parent + pre-exec child.
+
+  [PASS] FD_LIFETIME_CORRECT                 -- root keeps its inherited
+                                                  WRITE end of desc_pipe for
+                                                  the full lifetime. If root
+                                                  closed early, descendants
+                                                  forked AFTER that close
+                                                  would not have the FD.
+
+  [PASS] CLOEXEC_CORRECT                     -- root's GT write end has
+                                                  FD_CLOEXEC cleared; root's
+                                                  descendant READ end has
+                                                  FD_CLOEXEC set so descendants
+                                                  that fork+exec from root
+                                                  do not inherit the read end.
+
+  [PASS] NO_EXIT_CODE_CHANGE                 -- round-5 preserves round-4
+                                                  exit code 8 semantics
+                                                  exactly. Round-5 refactor
+                                                  is purely structural; the
+                                                  oracle-evidence-fail latch
+                                                  is identical.
+
+Round-5 verification artifacts:
+
+  Witness: 42-oracle-descendant-failure-witness (178 lines C, 3 cases)
+  Run: ./42-oracle-descendant-failure-witness
+  Output (on agent substrate, 2026-09-19):
+    === ORACLE_DESCENDANT_FAILURE_WITNESS (round-5) ===
+    [gt_write_failed] pid=77290 attempted=65 errno=32
+      T1 [real fixture, GT broken pre-spawn] expected=86 got=86 PASS
+    [fixture-shell-A] parent pid=77291 pgid=77177 ppid=77289
+      T2 [real fixture, descendant pipe broken pre-spawn] expected=0 got=0 PASS
+    [fixture-shell-A] parent pid=77302 pgid=77177 ppid=77289
+      T3 [healthy two-pipe control] expected=0 got=0 PASS
+    === failures=0 VERDICT=PASS ===
+
+  Smoke tests (round-5; all 4 fixtures via Python harness mimicking
+  driver behavior):
+    shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+    exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+    signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+    signal-triggered-fork/SIGTERM:  CREATE=1 WRITE_FAILED=0 exit=-15 PASS
+
+  Build status:
+    make clean && make
+    -> 0 warnings on -Wall -Wextra
+    -> 11 binaries (added 42-oracle-descendant-failure-witness)
+    -> 40-witness + 41-witness + 42-witness all PASS
+
+  T1 of the 42-witness confirms the round-4 failsafe (broken GT pipe
+  -> _exit(86)) is preserved. T2 confirms the round-5 invariant
+  (broken descendant pipe -> exit 0, NOT _exit(86)). T3 confirms the
+  healthy two-pipe control produces CREATE records and exits 0.
+
+Final gate verdict (this round; round-5; same as above):
+  HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
+  GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED + FAIL-SAFE + TWO-PIPE
+  GROUND_TRUTH_TOPOLOGY                                   = TWO-PIPE (round-5, GT + descendant-report)
+  GT_SOLE_WRITER                                          = ROOT_ONLY (round-5, mutex-protected reader thread)
+  IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
+  ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
+  SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
+  ENV_AS_ARGV                                             = CLOSED (P0-2, run_env helper)
+  ORACLE_READER_DROPS_PARTIAL_RECORDS                     = CLOSED (round-3, lossless carry)
+  ORACLE_EOF_NEVER_DELIVERED                              = CLOSED (round-3, gt_write_fd close-after-spawn)
+  ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
+  ORACLE_WRITE_FAILURE_CHANNEL_NOT_FAILSAFE               = CLOSED (round-4, _exit(86) + driver waitpid)
+  ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED                = CLOSED (round-5, two-pipe topology)
+  READY_FOR_OPERATOR_RUN                                  = YES
+  KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
+  NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL

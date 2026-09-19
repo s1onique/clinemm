@@ -364,3 +364,94 @@ driver_exit_code == 0
 ```
 
 Any single failure ⇒ REFUTE.
+
+## Round-5 update: two-pipe topology (no exit code change)
+
+Round-4 made the GT-pipe write fail-safe via `_exit(86)` on broken
+channel. Round-5 refactors the oracle so that ONLY root writes to
+GT, eliminating the risk that a single descendant's failed write
+takes down an entire healthy fixture run.
+
+### What changed in the oracle
+
+**Two-pipe topology.** The driver now creates two pipes per fixture
+run and exposes them to the spawned root via three env vars:
+
+| Env var                      | FD             | Owner          |
+|------------------------------|----------------|----------------|
+| `CLINEMM_GROUND_TRUTH_FD`    | `gt_write_fd`  | root (writer)  |
+| `CLINEMM_GT_DESC_READ_FD`    | `desc_read_fd` | root (reader)  |
+| `CLINEMM_DESCENDANT_FD`      | `desc_write_fd`| descendants (writers) |
+
+**Single-writer invariant.** Only the root process writes to the GT
+pipe, via `gt_serialize_report()` (mutex-protected). If that write
+fails, `_exit(86)` is called and the driver's `waitpid(root)` observes
+it. The round-4 exit code 8 semantics are preserved exactly — no
+new exit codes are added.
+
+**Descendant report path.** Descendants write
+`"pid=<N> start_us=<N>\n"` report lines to the descendant-report
+pipe. Root's reader thread (detached `pthread`) drains it, dedupes
+by pid (64-entry linear scan), and serializes each unique pid as a
+CREATE record to GT. If a descendant write fails (EPIPE on the
+descendant pipe), the report is silently dropped; root continues;
+the driver detects via `missed_ground_truth_count`.
+
+### Updated driver exit code table (round-5 — unchanged from round-4)
+
+| Exit | Meaning |
+|------|---------|
+| 0    | PASS — every GT record was tracked, no write failures, no oracle evidence fail |
+| 5    | REFUTE (MISS) — `missed_ground_truth_count > 0` |
+| 6    | REFUTE (ORACLE_WRITE_FAIL) — `ground_truth_write_failures > 0` (in-pipe WRITE_FAILED line received) |
+| 7    | REFUTE (ORACLE_READER_FAULT) — `ground_truth_reader_fault > 0` |
+| 8    | REFUTE (ORACLE_EVIDENCE_FAIL) — root exited 86 (kernel-mediated oracle write-side failure) |
+| 1-4  | INFRASTRUCTURE ERROR — see halt event |
+
+Exit codes 5/6/7/8 are all REFUTE modes. PASS only on exit 0.
+
+### Witness to verify before the matrix (round-5 addition)
+
+```bash
+./42-oracle-descendant-failure-witness
+# Expect:
+#   T1 [real fixture, GT broken pre-spawn]:        expected=86 got=86  PASS
+#   T2 [real fixture, descendant pipe broken pre-spawn]: expected=0 got=0  PASS
+#   T3 [healthy two-pipe control]:                  expected=0 got=0  PASS
+#   failures=0 VERDICT=PASS
+```
+
+T1 confirms that a broken GT pipe still triggers `_exit(86)` (the
+round-4 failsafe is preserved). T2 confirms that a broken descendant
+pipe does NOT cascade into root `_exit(86)` — root continues and
+exits cleanly (the round-5 invariant). T3 is the healthy control.
+
+### Smoke test status (round-5, agent substrate)
+
+```
+shell-A/control:                CREATE=4 WRITE_FAILED=0 exit=0   PASS
+exec-fork/control:              CREATE=3 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/control:  CREATE=1 WRITE_FAILED=0 exit=0   PASS
+signal-triggered-fork/SIGTERM:  CREATE=1 WRITE_FAILED=0 exit=-15 PASS
+```
+
+All 4 fixtures produce CREATE records, no WRITE_FAILED, exit codes
+match expectations. The SIGTERM case exits with -15 because the
+fixture's signal handler explicitly raises SIGTERM on itself as the
+contract for that fixture (this is NOT an oracle failure — it's the
+documented fixture behavior).
+
+### PASS criterion (round-5 — same as round-4)
+
+```
+ground_truth_oracle_evidence_fail == 0
+ground_truth_write_failures == 0
+ground_truth_reader_fault == 0
+missed_ground_truth_count == 0
+driver_exit_code == 0
+```
+
+Any single failure ⇒ REFUTE. The strong-evidence path
+(`ground_truth_created_with_start_us_count > 0`) must be exercised;
+if the operator run reports ALL pid-only records, the result is
+INDETERMINATE.

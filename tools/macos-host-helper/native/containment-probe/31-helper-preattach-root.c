@@ -75,11 +75,30 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 extern char **environ;
 
 static int g_duration = 30;
-static int g_gt_fd = -1;
+
+// Round-5 (HALT_ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED):
+// Only the ROOT writes to the GT pipe. Descendants post small
+// "pid=N start_us=N" report lines to a descendant pipe, and root's
+// reader thread serializes each report as a CREATE on the GT pipe.
+//
+// g_gt_root_fd:   root's GT write end (set once in gt_init; never
+//   closed by descendants because descendants don't have it -- only
+//   the root does, and root is the only writer).
+// g_desc_read_fd: root's READ end of the descendant-report pipe.
+//   Descendants inherit the WRITE end.
+// g_desc_write_fd:root's WRITE end of the descendant-report pipe,
+//   inherited from driver at spawn time. C-side gt_announce() in
+//   root writes reports here. Descendants that fork from root also
+//   inherit this (and use it). Root does NOT close this -- if it did,
+//   descendants forked after that close wouldn't have it.
+static int g_gt_root_fd    = -1;
+static int g_desc_read_fd  = -1;
+static int g_desc_write_fd = -1;
 
 static void emit(const char *fmt, ...) {
   va_list ap; va_start(ap, fmt);
@@ -136,33 +155,27 @@ static uint64_t gt_start_us_for(pid_t p) {
 static int g_gt_write_failures = 0;
 static volatile sig_atomic_t g_oracle_evidence_fail = 0;
 
-static void gt_announce_failure(pid_t pid, int attempted, int err) {
-  // Best-effort in-pipe signal. If THIS write fails too (broken pipe,
-  // SIGPIPE), the failure is still authoritative via _exit(86) below.
+// Round-5: gt_serialize_report is the SINGLE writer to the GT pipe.
+// Called from root's reader thread (for each descendant report) and
+// synchronously from gt_init (for root's own CREATE). On persistent
+// write failure, _exit(86) immediately (round-4 failsafe).
+static void gt_serialize_failure(pid_t pid, int attempted, int err) {
   char wb[160];
   int wn = snprintf(wb, sizeof wb,
                     "WRITE_FAILED pid=%d attempted=%d errno=%d\n",
                     (int)pid, attempted, err);
-  if (wn > 0) {
-    ssize_t ww = write(g_gt_fd, wb, (size_t)wn);
+  if (wn > 0 && g_gt_root_fd >= 0) {
+    ssize_t ww = write(g_gt_root_fd, wb, (size_t)wn);
     (void)ww;
   }
-  // Last-resort stderr line: visible to the operator and to any test
-  // harness that captures stderr. The driver does not read stderr.
   fprintf(stderr, "[gt_write_failed] pid=%d attempted=%d errno=%d\n",
           (int)pid, attempted, err);
-  // Authoritative cross-process-boundary signal: terminate this fixture
-  // process with the dedicated nonzero status so waitpid() in the
-  // driver sees it. This is the round-4 failsafe: the failure CANNOT
-  // be lost across the process boundary because process exit status
-  // is a kernel-mediated fact, not a pipe-mediated fact.
   g_oracle_evidence_fail = 1;
   _exit(GT_EXIT_EVIDENCE_FAIL);
 }
 
-static void gt_announce(pid_t pid) {
-  if (g_gt_fd < 0 || pid <= 0) return;
-  uint64_t start_us = gt_start_us_for(pid);
+static void gt_serialize_report(pid_t pid, uint64_t start_us) {
+  if (g_gt_root_fd < 0 || pid <= 0) return;
   pid_t ppid = -1;
   pid_t pgid = -1;
   int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
@@ -191,62 +204,236 @@ static void gt_announce(pid_t pid) {
   if (n <= 0) return;
   size_t total = (size_t)n;
   size_t off = 0;
-  // Retry short writes up to 3 times with a 1ms backoff; PIPE_BUF is
-  // 512 bytes on macOS and these records are < 160 bytes, so EAGAIN
-  // is the only realistic non-fatal failure mode (kernel buffer
-  // temporarily full under fork-storm burst). Any other errno
-  // (EPIPE, EIO, ENXIO, EBADF, EINVAL) means the channel is broken
-  // and the failure is authoritative via _exit(86).
   for (int attempt = 0; attempt < 3; attempt++) {
-    ssize_t w = write(g_gt_fd, buf + off, total - off);
+    ssize_t w = write(g_gt_root_fd, buf + off, total - off);
     if (w < 0) {
       if (errno == EINTR) continue;
-      if (errno == EAGAIN) {
-        usleep(1000);
-        continue;
-      }
-      // Broken channel (EPIPE/EIO/ENXIO/EBADF). Fatal immediately --
-      // any subsequent WRITE_FAILED write on the same fd is unreliable.
-      gt_announce_failure(pid, (int)total, errno);
-      // gt_announce_failure does _exit(86), so we never reach here.
+      if (errno == EAGAIN) { usleep(1000); continue; }
+      gt_serialize_failure(pid, (int)total, errno);
       g_gt_write_failures++;
       return;
     }
     off += (size_t)w;
     if (off >= total) return;
-    // Short write without EAGAIN: shouldn't happen on a pipe for a
-    // single record < PIPE_BUF, but treat as a soft retry.
     usleep(1000);
   }
   if (off < total) {
-    // Persistent underflow after 3 retries: kernel buffer not draining.
-    // This is rare but not strictly a broken channel; treat as fatal
-    // anyway because we cannot guarantee the record arrived.
-    gt_announce_failure(pid, (int)(total - off), EAGAIN);
+    gt_serialize_failure(pid, (int)(total - off), EAGAIN);
     g_gt_write_failures++;
   }
 }
 
+// Round-5: gt_announce posts a "pid=N start_us=N\n" report to the
+// DESCENDANT pipe (not the GT pipe). Root's reader thread will pick
+// it up and call gt_serialize_report. On persistent failure,
+// _exit(86) immediately (round-4 invariant: any oracle failure -> 86).
+static void gt_announce_to_desc_failure(pid_t pid, int attempted, int err) {
+  fprintf(stderr,
+          "[gt_desc_write_failed] pid=%d attempted=%d errno=%d\n",
+          (int)pid, attempted, err);
+  g_oracle_evidence_fail = 1;
+  _exit(GT_EXIT_EVIDENCE_FAIL);
+}
+
+static void gt_announce(pid_t pid) {
+  if (g_desc_write_fd < 0 || pid <= 0) return;
+  uint64_t start_us = gt_start_us_for(pid);
+  char buf[128];
+  int n = snprintf(buf, sizeof buf,
+                   "pid=%d start_us=%llu\n",
+                   (int)pid, (unsigned long long)start_us);
+  if (n <= 0) return;
+  size_t total = (size_t)n;
+  size_t off = 0;
+  for (int attempt = 0; attempt < 3; attempt++) {
+    ssize_t w = write(g_desc_write_fd, buf + off, total - off);
+    if (w < 0) {
+      if (errno == EINTR) continue;
+      if (errno == EAGAIN) { usleep(1000); continue; }
+      gt_announce_to_desc_failure(pid, (int)total, errno);
+      g_gt_write_failures++;
+      return;
+    }
+    off += (size_t)w;
+    if (off >= total) return;
+    usleep(1000);
+  }
+  if (off < total) {
+    gt_announce_to_desc_failure(pid, (int)(total - off), EAGAIN);
+    g_gt_write_failures++;
+  }
+}
+
+static pthread_mutex_t g_gt_root_lock = PTHREAD_MUTEX_INITIALIZER;
+
+// Round-5: reader thread drains g_desc_read_fd, parses
+// "pid=N start_us=N\n" report lines, and calls gt_serialize_report
+// for each (the SINGLE writer to g_gt_root_fd).
+//
+// DEDUPLICATION: in some fixtures (e.g. shell-A), the C-side
+// `gt_announce(c)` in the parent AND the C-side `gt_announce(getpid())`
+// in the pre-exec child BOTH write a report for the same pid. The
+// reader thread dedupes by pid so each pid produces exactly one CREATE
+// on the GT pipe. We keep a tiny linear array of seen pids (small set
+// in practice; fixtures produce at most a handful of descendants).
+//
+// On read error other than EINTR, the reader exits; on EOF (zero
+// bytes), it drains the carry and exits. Root keeps running; missing
+// records are observable at the driver.
+
+#define GT_SEEN_MAX 64
+static pid_t g_seen_pids[GT_SEEN_MAX];
+static int   g_seen_count = 0;
+
+static int gt_seen_already(pid_t pid) {
+  for (int i = 0; i < g_seen_count; i++) {
+    if (g_seen_pids[i] == pid) return 1;
+  }
+  return 0;
+}
+
+static void gt_seen_record(pid_t pid) {
+  if (g_seen_count >= GT_SEEN_MAX) return;
+  g_seen_pids[g_seen_count++] = pid;
+}
+
+static void gt_reader_emit(int pid, unsigned long long sus) {
+  if (pid <= 0) return;
+  if (gt_seen_already((pid_t)pid)) return;
+  gt_seen_record((pid_t)pid);
+  pthread_mutex_lock(&g_gt_root_lock);
+  gt_serialize_report((pid_t)pid, (uint64_t)sus);
+  pthread_mutex_unlock(&g_gt_root_lock);
+}
+
+static void *gt_reader_thread(void *arg) {
+  (void)arg;
+  char buf[4096];
+  size_t carry = 0;
+  while (1) {
+    ssize_t n = read(g_desc_read_fd, buf + carry, sizeof(buf) - carry - 1);
+    if (n < 0) {
+      if (errno == EINTR) continue;
+      break;
+    }
+    if (n == 0) {
+      // EOF: parse remaining carry.
+      if (carry > 0 && buf[carry - 1] != '\n') {
+        buf[carry] = '\n';
+        carry++;
+      }
+      size_t scan = 0;
+      while (scan < carry) {
+        size_t eol = scan;
+        while (eol < carry && buf[eol] != '\n') eol++;
+        if (eol >= carry) break;
+        buf[eol] = '\0';
+        int pid = 0;
+        unsigned long long sus = 0;
+        if (sscanf(buf + scan, "pid=%d start_us=%llu", &pid, &sus) >= 1 && pid > 0) {
+          gt_reader_emit(pid, sus);
+        }
+        scan = eol + 1;
+      }
+      break;
+    }
+    carry += (size_t)n;
+    size_t scan = 0;
+    while (scan < carry) {
+      size_t eol = scan;
+      while (eol < carry && buf[eol] != '\n') eol++;
+      if (eol >= carry) break;
+      buf[eol] = '\0';
+      int pid = 0;
+      unsigned long long sus = 0;
+      if (sscanf(buf + scan, "pid=%d start_us=%llu", &pid, &sus) >= 1 && pid > 0) {
+        gt_reader_emit(pid, sus);
+      }
+      scan = eol + 1;
+    }
+    if (scan >= carry) {
+      carry = 0;
+    } else if (scan > 0) {
+      size_t rem = carry - scan;
+      memmove(buf, buf + scan, rem);
+      carry = rem;
+    }
+  }
+  return NULL;
+}
+
 static void gt_init(void) {
-  const char *e = getenv("CLINEMM_GROUND_TRUTH_FD");
-  if (e == NULL) {
-    g_gt_fd = -1;
+  // Two-env-var scheme (round-5):
+  //   CLINEMM_GT_DESC_READ_FD  = root's READ end of descendant pipe.
+  //   CLINEMM_DESCENDANT_FD    = descendant's WRITE end of pipe.
+  // Root closes its inherited WRITE end so EOF is meaningful when all
+  // descendants close theirs.
+  const char *e_gt       = getenv("CLINEMM_GROUND_TRUTH_FD");
+  const char *e_desc_r   = getenv("CLINEMM_GT_DESC_READ_FD");
+  const char *e_desc_w   = getenv("CLINEMM_DESCENDANT_FD");
+  if (e_gt == NULL) {
+    g_gt_root_fd    = -1;
+    g_desc_read_fd  = -1;
+    g_desc_write_fd = -1;
     return;
   }
-  int fd = atoi(e);
-  if (fd <= 0) {
-    g_gt_fd = -1;
+  int gfd = atoi(e_gt);
+  if (gfd <= 0) {
+    g_gt_root_fd    = -1;
+    g_desc_read_fd  = -1;
+    g_desc_write_fd = -1;
     return;
   }
-  g_gt_fd = fd;
-  // Set CLOEXEC off so exec'd programs can also write -- but CLOEXEC
-  // is per-fd. We do NOT want CLOEXEC because some fixtures exec into
-  // programs that should NOT inherit (the C binary announces them
-  // itself before exec).
-  int flags = fcntl(g_gt_fd, F_GETFD, 0);
-  if (flags >= 0) fcntl(g_gt_fd, F_SETFD, flags & ~FD_CLOEXEC);
-  // Announce ourselves first.
-  gt_announce(getpid());
+  g_gt_root_fd = gfd;
+  if (e_desc_r != NULL) {
+    int rfd = atoi(e_desc_r);
+    g_desc_read_fd = (rfd > 0) ? rfd : -1;
+  } else {
+    g_desc_read_fd = -1;
+  }
+  if (e_desc_w != NULL) {
+    int wfd = atoi(e_desc_w);
+    g_desc_write_fd = (wfd > 0) ? wfd : -1;
+  } else {
+    g_desc_write_fd = -1;
+  }
+  // Note: we deliberately do NOT close root's inherited WRITE end
+  // of the descendant pipe (see comment below after CLOEXEC setup).
+  if (g_gt_root_fd >= 0) {
+    // Root's GT write end: clear CLOEXEC defensively (no harm).
+    int flags = fcntl(g_gt_root_fd, F_GETFD, 0);
+    if (flags >= 0) fcntl(g_gt_root_fd, F_SETFD, flags & ~FD_CLOEXEC);
+  }
+  if (g_desc_read_fd >= 0) {
+    // Root's descendant READ end: set CLOEXEC so descendants that
+    // fork+exec from root do NOT inherit the read end (they only
+    // need the write end).
+    int flags = fcntl(g_desc_read_fd, F_GETFD, 0);
+    if (flags >= 0) fcntl(g_desc_read_fd, F_SETFD, flags | FD_CLOEXEC);
+  }
+  // DO NOT close root's inherited WRITE end of the descendant pipe.
+  // Descendants that fork from root inherit it; if root closed it,
+  // descendants forked AFTER that close wouldn't have it. Root keeps
+  // its write end for the lifetime of the process; descendants
+  // inherit and use it (CLOEXEC is OFF by default for pipe FDs).
+  // When root exits (clean or via SIGTERM), the kernel closes root's
+  // copy and the reader thread dies with the process. EOF on the
+  // reader side is not required for correctness because the reader
+  // thread is short-lived relative to the fixture run.
+
+  // Start the reader thread.
+  if (g_desc_read_fd >= 0) {
+    pthread_t reader;
+    if (pthread_create(&reader, NULL, gt_reader_thread, NULL) != 0) {
+      fprintf(stderr, "[gt_init] pthread_create failed\n");
+      _exit(GT_EXIT_EVIDENCE_FAIL);
+    }
+    pthread_detach(reader);
+  }
+  // Announce root itself synchronously (before any fork/exec).
+  if (g_gt_root_fd >= 0) {
+    gt_serialize_report(getpid(), gt_start_us_for(getpid()));
+  }
 }
 
 static pid_t spawn_inherit(const char *path, char *const argv[]) {
@@ -287,10 +474,10 @@ static void fixture_shell_a(int dur) {
     // pgid=0 in the CREATE record: the driver's discrimination is
     // by (pid, start_us), not by pgid.
     execl("/bin/sh", "sh", "-c",
-      "GTFD=${CLINEMM_GROUND_TRUTH_FD:-/dev/null}; "
-      "announce() { printf 'CREATE pid=%s ppid=%s pgid=0 start_us=0\\n' \"$1\" \"$2\" >&\"$GTFD\"; }; "
-      "(sleep \"$0\" & announce \"$!\" \"$$\"; "
-      "(sleep \"$0\" & announce \"$!\" \"$$\"; wait)) & wait",
+      "GTFD=${CLINEMM_DESCENDANT_FD:-/dev/null}; "
+      "announce() { printf 'pid=%s start_us=0\\n' \"$1\" >&\"$GTFD\"; }; "
+      "(sleep \"$0\" & announce \"$!\"; "
+      "(sleep \"$0\" & announce \"$!\"; wait)) & wait",
       d, NULL);
     _exit(127);
   }
@@ -308,7 +495,7 @@ static void fixture_node_b(int dur) {
   char d[32]; snprintf(d, sizeof d, "%d", dur);
   pid_t c = spawn_inherit("/bin/sh", (char *const[]){
     "sh", "-c",
-    "exec /opt/homebrew/bin/node -e \"const fd=parseInt(process.env.CLINEMM_GROUND_TRUTH_FD||'-1',10); const c=require('child_process').spawn('sleep', process.argv[1], { stdio: 'ignore' }); if(fd>0) require('fs').writeSync(fd, 'CREATE pid='+c.pid+' ppid='+process.pid+' pgid='+c.pid+' start_us=0\\n'); setInterval(()=>{}, 1<<30);\"",
+    "exec /opt/homebrew/bin/node -e \"const fd=parseInt(process.env.CLINEMM_DESCENDANT_FD||'-1',10); const c=require('child_process').spawn('sleep', process.argv[1], { stdio: 'ignore' }); if(fd>0) require('fs').writeSync(fd, 'pid='+c.pid+' start_us=0\\n'); setInterval(()=>{}, 1<<30);\"",
     d, NULL });
   if (c > 0) waitpid(c, NULL, 0);
 }
@@ -330,12 +517,12 @@ static pid_t spawn_python_gt(const char *dur_str, bool detached) {
   char hdr[512];
   snprintf(hdr, sizeof hdr,
     "import os, sys, subprocess\n"
-    "fd = int(os.environ.get('CLINEMM_GROUND_TRUTH_FD', '-1'))\n"
+    "fd = int(os.environ.get('CLINEMM_DESCENDANT_FD', '-1'))\n"
     "kwargs = {}\n"
     "if %s:\n"
     "    kwargs['start_new_session'] = True\n"
     "p = subprocess.Popen(['sleep', sys.argv[1]], **kwargs)\n"
-    "line = f'CREATE pid={p.pid} ppid={os.getpid()} pgid={p.pid} start_us=0\\n'\n"
+    "line = f'pid={p.pid} start_us=0\\n'\n"
     "if fd > 0:\n"
     "    os.write(fd, line.encode())\n",
     sns);
@@ -403,7 +590,7 @@ static void fixture_node_escape(int dur) {
   // CRITICAL: no sleep BEFORE the detached spawn.
   pid_t c = spawn_inherit("/bin/sh", (char *const[]){
     "sh", "-c",
-    "exec /opt/homebrew/bin/node -e \"const fd=parseInt(process.env.CLINEMM_GROUND_TRUTH_FD||'-1',10); const c = require('child_process').spawn('sleep', process.argv[1], { detached: true, stdio: 'ignore' }); if(fd>0) require('fs').writeSync(fd, 'CREATE pid='+c.pid+' ppid='+process.pid+' pgid='+c.pid+' start_us=0\\n'); c.unref(); setInterval(() => {}, 1 << 30);\"",
+    "exec /opt/homebrew/bin/node -e \"const fd=parseInt(process.env.CLINEMM_DESCENDANT_FD||'-1',10); const c = require('child_process').spawn('sleep', process.argv[1], { detached: true, stdio: 'ignore' }); if(fd>0) require('fs').writeSync(fd, 'pid='+c.pid+' start_us=0\\n'); c.unref(); setInterval(() => {}, 1 << 30);\"",
     d, NULL });
   if (c > 0) waitpid(c, NULL, 0);
 }
@@ -453,10 +640,10 @@ static void fixture_exec_fork(int dur) {
     // Child announces itself, then execs into bash.
     gt_announce(getpid());
     execl("/bin/sh", "sh", "-c",
-      "GTFD=${CLINEMM_GROUND_TRUTH_FD:-/dev/null}; "
+      "GTFD=${CLINEMM_DESCENDANT_FD:-/dev/null}; "
       "setsid sleep \"$0\" >/dev/null 2>&1 & "
       "pid=$!; "
-      "printf 'CREATE pid=%s ppid=%s pgid=0 start_us=0\\n' \"$pid\" \"$$\" >&\"$GTFD\"; "
+      "printf 'pid=%s start_us=0\\n' \"$pid\" >&\"$GTFD\"; "
       "wait $pid",
       d, NULL);
     _exit(127);

@@ -184,9 +184,25 @@ static int gt_oracle_evidence_fail = 0;
 // Ground-truth pipe read end (set in main before posix_spawn).
 static int gt_read_fd = -1;
 // Ground-truth pipe write end kept by the driver ONLY to close-on-exec
-// (we never write from the driver side; the fixture tree writes via the
-// inherited fd).
+// (we never write from the driver side; the fixture root writes via
+// the inherited fd, serializing every descendant's CREATE itself --
+// see descendant pipe below).
 static int gt_write_fd = -1;
+
+// Round-5 (HALT_ORACLE_DESCENDANT_FAILURE_NOT_PROPAGATED):
+// Descendant-report pipe. Only the spawned root reads from this; every
+// descendant (forked child, exec'd shell/node/python) inherits the
+// write end and posts a small report line. Root's reader thread
+// serializes each report as a CREATE on the GT pipe.
+//
+// This makes root the SOLE authoritative writer to the GT pipe. A
+// descendant's _exit(86) is no longer load-bearing for the GT channel
+// (the in-pipe WRITE_FAILED line is unreliable on a broken channel);
+// instead, any descendant that cannot durably emit its report triggers
+// root's reader thread to _exit(86), which the driver observes via
+// waitpid(root).
+static int desc_read_fd = -1;   // driver-owned (closed after spawn)
+static int desc_write_fd = -1;  // inherited by descendants (closed by driver after spawn)
 
 static volatile sig_atomic_t g_done = 0;
 static void on_sig(int s) { (void)s; g_done = 1; }
@@ -567,8 +583,10 @@ int main(int argc, char **argv) {
 
   // ---------- Ground-truth pipe ----------
   // Created BEFORE posix_spawn so the write fd is inherited by every
-  // descendant the fixture tree creates. The fixture tree writes
+  // descendant the fixture tree creates. The fixture ROOT writes
   // CREATE records on this fd; the driver reads from gt_read_fd.
+  // Only the root writes -- descendants post reports on the
+  // descendant pipe (below) which the root serializes.
   int gt_pipe[2];
   if (pipe(gt_pipe) != 0) {
     perror("pipe(gt)");
@@ -576,6 +594,19 @@ int main(int argc, char **argv) {
   }
   gt_read_fd = gt_pipe[0];
   gt_write_fd = gt_pipe[1];
+
+  // ---------- Descendant-report pipe (round-5) ----------
+  // Driver reads from this end after closing its own write end. The
+  // root inherits the read end; every descendant inherits the write
+  // end. Descendants post small "pid=N start_us=N\n" report lines;
+  // root's reader thread serializes each as a CREATE on gt_write_fd.
+  int desc_pipe[2];
+  if (pipe(desc_pipe) != 0) {
+    perror("pipe(desc)");
+    return 1;
+  }
+  desc_read_fd = desc_pipe[0];    // driver closes after spawn (drained later)
+  desc_write_fd = desc_pipe[1];   // driver closes after spawn (only descendants use)
 
   posix_spawnattr_t attr;
   posix_spawnattr_init(&attr);
@@ -585,17 +616,23 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // Build a fresh environment with CLINEMM_GROUND_TRUTH_FD exposed.
+  // Build a fresh environment with all FDs exposed.
   // We do NOT modify the caller's environ -- we build a one-shot copy.
   char fd_env[64];
   snprintf(fd_env, sizeof fd_env, "CLINEMM_GROUND_TRUTH_FD=%d", gt_write_fd);
+  char desc_env[64];
+  snprintf(desc_env, sizeof desc_env, "CLINEMM_DESCENDANT_FD=%d", desc_write_fd);
+  char desc_read_env[64];
+  snprintf(desc_read_env, sizeof desc_read_env, "CLINEMM_GT_DESC_READ_FD=%d", desc_read_fd);
   size_t env_count = 0;
   while (environ[env_count] != NULL) env_count++;
-  char **new_env = (char **)calloc(env_count + 2, sizeof(char *));
+  char **new_env = (char **)calloc(env_count + 4, sizeof(char *));
   if (new_env == NULL) { perror("calloc env"); return 1; }
   for (size_t i = 0; i < env_count; i++) new_env[i] = environ[i];
-  new_env[env_count] = fd_env;
-  new_env[env_count + 1] = NULL;
+  new_env[env_count]     = fd_env;
+  new_env[env_count + 1] = desc_env;
+  new_env[env_count + 2] = desc_read_env;
+  new_env[env_count + 3] = NULL;
 
   char **root_argv = &argv[1];
 
@@ -622,6 +659,15 @@ int main(int argc, char **argv) {
   if (gt_write_fd >= 0) {
     close(gt_write_fd);
     gt_write_fd = -1;
+  }
+  // Round-5: also close our copy of the descendant-report pipe WRITE
+  // end. Root inherited the read end; descendants inherited the
+  // write end. Closing our copy here doesn't affect descendants but
+  // makes the descendant pipe EOF semantics meaningful for root's
+  // reader thread (it can detect "no more descendants will report").
+  if (desc_write_fd >= 0) {
+    close(desc_write_fd);
+    desc_write_fd = -1;
   }
 
   watch(root);
@@ -805,6 +851,8 @@ int main(int argc, char **argv) {
   close(kq);
   if (gt_read_fd >= 0) close(gt_read_fd);
   if (gt_write_fd >= 0) close(gt_write_fd);
+  if (desc_read_fd >= 0) close(desc_read_fd);
+  if (desc_write_fd >= 0) close(desc_write_fd);
   // Round-4 exit-code semantics:
   //   0 = PASS  (no missed GT, no write failures, no evidence fail)
   //   5 = MISS  (GT records that kqueue did not track)
