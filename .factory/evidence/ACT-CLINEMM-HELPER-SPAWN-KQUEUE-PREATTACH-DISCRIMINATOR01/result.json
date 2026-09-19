@@ -67,6 +67,7 @@
     "50-gates.txt",
     "60-substrate-halt.md",
     "70-operator-substrate-entry.txt",
+    "90-gates.txt",
     "result.json"
   ]
 }
