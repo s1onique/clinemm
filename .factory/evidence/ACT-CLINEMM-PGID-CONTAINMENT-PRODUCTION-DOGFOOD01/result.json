@@ -1,0 +1,74 @@
+{
+  "act_id": "ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01",
+  "verdict": "HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL",
+  "halt_taxonomy": {
+    "matched_listed_halt": null,
+    "new_halt_added": "HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL",
+    "structural_analog": "HALT_DOGFOOD_BUILD_NOT_SUBJECT (§2 — production seam not reachable for this ACT)",
+    "trigger": "ACT §5 requires driving CommandJobManager.start(...) through the actual Codium-ClineMM chat/tool path; the only programmatic seam from the agent shell (apps/vscode/src/dev/debug-harness/server.ts on port 19229) is forbidden by user directive in this run; the only other path is human-driven ClineMM webview interaction which is unavailable in a shell-driven workflow."
+  },
+  "entry_freeze": {
+    "entry_head": "84a23846477fec081bde6482c518f976245b0f00",
+    "git_status_clean": true,
+    "unexpected_tracked_dirt": 0,
+    "expected_tracked_dirt_classified": "11 node processes from prior ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 escape-case fixtures (intentionally NOT cleaned by the bounded invariant — out-of-scope). 4 node processes from factory/long-horizon-harness (unrelated pre-existing fixtures).",
+    "helper_pid": 47013,
+    "helper_build_id": "c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9",
+    "helper_socket_healthy": true,
+    "helper_active_client_count": 0,
+    "helper_active_job_count": 0,
+    "launchd_domain": "gui/501",
+    "helper_count": 1
+  },
+  "production_identity": {
+    "installed_extension_version": "4.1.16-84a238464",
+    "installed_extension_publisher": "s1onique",
+    "installed_extension_path": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-84a238464",
+    "repo_head": "84a23846477fec081bde6482c518f976245b0f00",
+    "build_binding": "INSTALLED_COMMIT_SUFFIX == REPO_HEAD_PREFIX (84a238464)",
+    "running_codium_clinemm": "REAL | LIVE",
+    "vscodium_pid": 47776,
+    "extension_host_pid": 47791,
+    "extension_activation_event": "onLanguage @ 2026-09-19T19:16:14Z",
+    "production_pgid_contract_symbols_present": {
+      "process_kill_minus_pgid": 4,
+      "command_job_containment_failed_or_terminalPostconditionProbe_or_register_owned_or_terminate_owned": 2
+    },
+    "production_codium_identity_bound": "PASS",
+    "halt_dogfood_build_not_subject": "NOT_TRIGGERED"
+  },
+  "baseline_telemetry": {
+    "entry_active_command_jobs": 0,
+    "entry_runtime_incidents": 0,
+    "method": "structured (helper active_job_count=0 + active_client_count=0). Webview-header gauge text requires debug harness which is forbidden."
+  },
+  "halted_before_phase": "§5 (CASE_A start — production tool-path invocation)",
+  "halted_at_step": "§4 (fixture never built because no driving seam is reachable)",
+  "completed_steps": [
+    "§0 Hard scope (scope understood)",
+    "§1 Entry freeze (00-entry.txt)",
+    "§1 Helper identity (01-helper-identity.txt)",
+    "§2 Production Codium-ClineMM identity bound (02-codium-production-identity.txt)",
+    "§3 Baseline telemetry (03-header-baseline.txt)"
+  ],
+  "gates_passed": [
+    "ENTRY_CLEAN",
+    "PRODUCTION_CODIUM_IDENTITY_BOUND",
+    "INSTALLED_HELPER_IDENTITY_BOUND",
+    "HELPER_RESOURCE_BASELINE_CONSERVED",
+    "HELPER_REGISTRATION_CONSERVED",
+    "EVIDENCE_BOUND_TO_FINAL_HEAD",
+    "BOARD_DURABLE"
+  ],
+  "gates_pending_or_na": [
+    "All CASE_A_* (halted before §5)",
+    "All CASE_B_* (halted before §10)",
+    "PROCESS_NAME_AGNOSTIC",
+    "NO_GENERAL_PROCESS_SWEEP",
+    "FINAL_FIXTURE_STRAGGLERS",
+    "DIFF_CHECK (no code change)"
+  ],
+  "pass_or_green": null,
+  "production_qualification": "NOT_QUALIFIED — halt before production tool-path exercise.",
+  "successor": "NO_REPAIR_ACT — this is a structural halt, not a code defect. The fix requires either human-driven ClineMM webview interaction (outside this shell) or authorization to launch the debug harness. No code change implied."
+}

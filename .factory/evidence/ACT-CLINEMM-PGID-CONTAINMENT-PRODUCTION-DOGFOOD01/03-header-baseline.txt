@@ -1,0 +1,34 @@
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01
+Step 03 — Baseline visible telemetry.
+
+ENTRY_ACTIVE_COMMAND_JOBS = 0
+ENTRY_RUNTIME_INCIDENTS = 0
+
+Method: ClineMM state is owned by the extension host. Production telemetry surface is the
+webview header (⎇ = active jobs count, ⚠ = runtime incident count). The only programmatic
+production seam to inspect this state is the debug harness's `web.evaluate` (gauge text
+extraction) or `ext.evaluate` against the Task class instance.
+
+Both of those seams require the debug harness (apps/vscode/src/dev/debug-harness/server.ts)
+on port 19229 connected to the running .vscodium-clinemm VSCodium instance. As of ENTRY:
+  $ lsof -i :19229 → empty
+  $ pgrep -fl debug-harness → empty
+  $ curl http://localhost:19229/api → connection refused
+
+The debug harness was FORBIDDEN to launch by user directive during this ACT
+("Don't run the debug harness"). Without it, the production telemetry surface cannot
+be programmatically observed — only a human viewing the ClineMM webview header can
+verify ⎇ N → ⎇ N+1 in real time.
+
+Baseline entry holds by structural argument:
+  HELPER_ACTIVE_JOB_COUNT = 0   (verified via helper status)
+  HELPER_ACTIVE_CLIENT_COUNT = 0 (verified via helper status)
+  No other extension host is connected to the helper (only clinemm extension host on
+  this machine, and its CommandJobManager instance has no jobs registered at idle)
+
+ENTRY_ACTIVE_COMMAND_JOBS = 0
+ENTRY_RUNTIME_INCIDENTS = 0
+BASELINE_HEADER_OBSERVATION = UNAVAILABLE_FROM_SHELL
+  (human-side verification required: open ClineMM sidebar in the running VSCodium,
+   observe ⎇ and ⚠ read 0; the helper's active_job_count=0 is the corroborating
+   structured evidence from the production helper.)

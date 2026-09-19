@@ -3788,3 +3788,98 @@ webview `tsc --noEmit` exit 0; `git diff HEAD --check` clean;
 
 **STOP.** No further process-containment review after this
 correction unless a NEW P0 appears from dogfood.
+
+---
+
+## ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01 — HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL — 2026-09-19
+
+**Status:** New halt taxonomy entry — structurally analogous to
+`HALT_DOGFOOD_BUILD_NOT_SUBJECT`. NOT a code defect. NOT a regression of
+the prior `PASS_PGID_CONTAINMENT_PRODUCT_CONTRACT` or
+`PASS_CORRECTION05` closures.
+
+The production dogfood question this ACT was asked to answer:
+
+> Does the freshly installed production helper, when driven by the real
+> production Codium-ClineMM command path, cleanly terminate ordinary
+> non-daemonizing process trees and project the correct live telemetry?
+
+Requires §5: "From the actual Codium-ClineMM chat/tool path, instruct the
+running product to start..." — a real CommandJob, not a Vitest fixture,
+not a manually-launched shell.
+
+The only programmatic production seam that drives the ClineMM tool path
+from an agent shell is the debug harness
+(`apps/vscode/src/dev/debug-harness/server.ts`, port 19229,
+`ui.send_message` posts `cline.TaskService.newTask` gRPC into the running
+webview's exposed `window.__clineVsCodeApi`). In this run, the user
+directive explicitly forbids launching the debug harness. The other
+production seam is human-driven ClineMM webview interaction, which is
+outside this shell-driven workflow.
+
+Therefore §5 is structurally unreachable from this shell without one of:
+
+1. Human-driven ClineMM webview interaction (manual UI work).
+2. Authorization to launch the debug harness.
+3. A new non-debug-harness programmatic seam into the running extension
+   host (a Cline-side "trigger command" tool, CLI bridge, or scripting
+   API that bypasses the chat UI but is not a debug-only hook).
+
+**What was verified at entry (all PASS):**
+
+```
+ENTRY_HEAD                      = 84a23846477fec081bde6482c518f976245b0f00
+UNEXPECTED_TRACKED_DIRT         = 0   (11 escape-case nodes + 4 long-horizon
+                                          nodes classified as EXPECTED tracked
+                                          dirt from prior bounded-invariant ACTs)
+INSTALLED_HELPER                = REAL | LIVE
+  PID = 47013
+  build_id = c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+  socket = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock (HEALTHY)
+  domain = gui/501
+  active_client_count = 0, active_job_count = 0
+INSTALLED_CODIUM_CLINEMM        = REAL | LIVE
+  VSCodium PID = 47776, extension host PID = 47791
+  Installed extension = s1onique.clinemm-4.1.16-84a238464
+  Repo HEAD prefix = 84a238464 (== installed extension suffix)
+  Production PGID-contract symbols present in dist/extension.js:
+    process.kill(-pgid...) refs = 4
+    command_job_containment_failed/terminalPostconditionProbe/register-owned/
+      terminate-owned refs = 2
+  activation: onLanguage @ 2026-09-19T19:16:14Z
+
+ENTRY_ACTIVE_COMMAND_JOBS       = 0  (helper active_job_count=0)
+ENTRY_RUNTIME_INCIDENTS         = 0  (helper active_client_count=0)
+```
+
+**Honest classification:**
+
+```
+PRODUCTION_BUILD_IS_SUBJECT         = PASS  (clinemm-4.1.16-84a238464 == HEAD)
+PRODUCTION_HELPER_BOUND             = PASS  (real, healthy, freshly bound)
+PRODUCTION_TELEMETRY_BASELINE       = PASS  (structured via helper counts)
+PRODUCTION_SEAM_DRIVABLE_FROM_SHELL = FAIL
+HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL = TRIGGERED
+```
+
+**No repair ACT authorized.** This is a structural halt, not a code
+defect. The bounded invariant
+`CLEAN_TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE`
+is unchanged at closure (it is the contract under `ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01`'s
+PASS). No `⎇ N` / `⚠ N` deltas were produced by this run because no
+production tool-path invocation was attempted.
+
+**Files (this ACT, committed in this row):**
+- `.factory/acts/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01.md`
+- `.factory/evidence/ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01/`
+  - `00-entry.txt` (entry freeze)
+  - `01-helper-identity.txt` (helper: PID 47013, build_id present, socket healthy, gui/501)
+  - `02-codium-production-identity.txt` (clinemm-4.1.16-84a238464 == HEAD 84a238464)
+  - `03-header-baseline.txt` (helper active_job_count=0, active_client_count=0)
+  - `HALT_PRODUCTION_SEAM_NOT_DRIVABLE.txt` (halt rationale + classification)
+  - `40-gates.txt` (gate matrix: §1-§4 PASS, §5+ NA)
+  - `result.json` (verdict + halt_taxonomy entry)
+- `.factory/epic-board.md` (this row)
+
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (committed HEAD 84a238464)
+**BOARD_DURABLE**                = PASS  (this row is committed)

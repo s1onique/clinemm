@@ -1,0 +1,52 @@
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01
+Step 40 — Gate matrix (halted before §5, so most production gates are PENDING/NA).
+
+ENTRY_CLEAN                              = PASS  (00-entry.txt)
+PRODUCTION_CODIUM_IDENTITY_BOUND         = PASS  (02-codium-production-identity.txt)
+INSTALLED_HELPER_IDENTITY_BOUND          = PASS  (01-helper-identity.txt)
+
+CASE_A_REAL_PRODUCTION_SEAM              = PENDING (halted before §5)
+CASE_A_ALL_FIXTURE_MEMBERS_SAME_PGID     = NA      (fixture never built)
+CASE_A_ACTIVE_GAUGE_INCREMENT            = NA
+CASE_A_PRIMARY_PGID_GONE                 = NA
+CASE_A_KNOWN_MEMBERS_GONE                = NA
+CASE_A_ACTIVE_GAUGE_BASELINE             = NA
+CASE_A_NO_FALSE_INCIDENT                 = NA
+
+CASE_B_REAL_PRODUCTION_SEAM              = PENDING (halted before §10)
+CASE_B_ALL_FIXTURE_MEMBERS_SAME_PGID     = NA
+CASE_B_ACTIVE_GAUGE_INCREMENT            = NA
+CASE_B_TERM_TO_KILL_LIVE                 = NA
+CASE_B_PRIMARY_PGID_GONE                 = NA
+CASE_B_KNOWN_MEMBERS_GONE                = NA
+CASE_B_ACTIVE_GAUGE_BASELINE             = NA
+CASE_B_NO_FALSE_CONTAINMENT_INCIDENT     = NA
+
+PROCESS_NAME_AGNOSTIC                    = NA
+NO_GENERAL_PROCESS_SWEEP                 = NA
+
+FINAL_FIXTURE_STRAGGLERS                 = NA
+HELPER_RESOURCE_BASELINE_CONSERVED       = PASS  (entry helper state preserved)
+HELPER_REGISTRATION_CONSERVED            = PASS  (entry helper registration preserved)
+
+DIFF_CHECK                               = NA      (no code change)
+EVIDENCE_BOUND_TO_FINAL_HEAD             = PASS    (HEAD frozen = 84a238464)
+BOARD_DURABLE                            = PASS    (this halt entry staged)
+
+NEW HALT:
+  HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL = TRIGGERED
+
+Verdict:
+  §22 halt taxonomy does not contain an exact entry for "production tool path
+  cannot be driven from the agent shell because the only programmatic seam
+  (debug harness) is forbidden by user directive." Closest structurally:
+  HALT_DOGFOOD_BUILD_NOT_SUBJECT — but that one specifically targets a stale
+  build, which is NOT this case (build is bound to repo HEAD 84a238464).
+
+  Therefore a new halt taxonomy entry is honestly recorded as TRIGGERED, with
+  classification analogous to HALT_DOGFOOD_BUILD_NOT_SUBJECT: the production
+  seam itself is not reachable, not the code under test.
+
+  This ACT does NOT qualify the production dogfood path. The successor task is
+  not a repair ACT — it requires either human-driven ClineMM UI interaction or
+  authorization to launch the debug harness. No code change is implied.

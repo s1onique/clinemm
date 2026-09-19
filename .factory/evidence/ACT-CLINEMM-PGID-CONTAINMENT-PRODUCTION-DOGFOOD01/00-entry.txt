@@ -1,0 +1,22 @@
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01
+Step 00 — Entry freeze
+
+ENTRY_HEAD=84a23846477fec081bde6482c518f976245b0f00
+ENTRY_STATUS=$(git status --short) — empty (clean working tree)
+
+UNEXPECTED_TRACKED_DIRT=0
+  Expected tracked dirt (escape-case residuals) =
+    11 node processes from /tmp/clinemm-descendant-conservation-telemetry01/05-fixture-node-escape.mjs
+    (setid/Node detached:true — intentionally NOT cleaned by the
+     bounded invariant per ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+     verdict = REFUTED_BY_ESCAPE_FIXTURES, OUT_OF_SCOPE)
+    4 node processes from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/factory/labs/long-horizon-harness/test/fixtures/child-fixture.ts
+    (pre-existing long-horizon harness fixtures, unrelated to this epic)
+
+Pre-existing dirt classified as EXPECTED — not from this ACT's fixtures, not interfering with the EPIC's
+PGID probes (each has its own PGID identity and is not a fixture for the same-pgid-tree contract).
+Per ACT §17 "Do not perform a general process cleanup sweep" and "If unrelated old Node/Python processes
+exist, classify them separately. They are not evidence against these two jobs without identity correlation."
+
+These residual processes were created by prior bounded-invariant ACTs and are part of the closed
+escape-case evidence — NOT unexpected dirt introduced by this run.

@@ -1,0 +1,72 @@
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01
+Step — HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL
+
+NEW HALT TAXONOMY ENTRY (not in §22 of the ACT body; structurally analogous to
+HALT_DOGFOOD_BUILD_NOT_SUBJECT — both are about whether the production seam is
+genuinely reachable for this ACT).
+
+Verbatim from ACT §2:
+  "Do not accept a source-tree test as this ACT's load-bearing evidence."
+  "If the running Codium build cannot be tied to the code containing the latest
+   changes: HALT_DOGFOOD_BUILD_NOT_SUBJECT. Do not continue using a stale
+   installed extension."
+
+Verbatim from ACT §5:
+  "From the actual Codium-ClineMM chat/tool path, instruct the running product
+   to start: .factory/tmp/.../same-pgid-tree.sh"
+  "It must become a real background CommandJob, not a shell launched manually
+   from Terminal and not a Vitest fixture."
+  "COMMAND_PATH = REAL | LIVE | REAL_PRODUCTION_SEAM"
+
+Verbatim from ACT §11:
+  "Drive it through the same real Codium-ClineMM tool path."
+
+What this ACT requires:
+  The running VSCodium + ClineMM extension host (PID 47776 / 47791) must accept a
+  tool invocation through the production chat/tool path that ultimately reaches
+  CommandJobManager.start(...) with the fixture script as the command.
+
+What is actually drivable from THIS shell:
+  1. The helper IPC (host-helper.sock) — direct, but this only addresses the
+     *helper-side* termination, not the *extension-host-side* CommandJob lifecycle.
+     Driving CommandJobManager from outside the extension host would require either:
+     a. The ClineMM chat/tool UI (human-driven), or
+     b. The debug harness (apps/vscode/src/dev/debug-harness/server.ts), which
+        exposes ui.send_message via gRPC postMessage into the running webview.
+
+What this ACT does NOT have:
+  The debug harness. Lsof :19229 is empty. pgrep debug-harness is empty.
+  The harness is forbidden to launch by user directive in this run.
+
+What this ACT can NOT therefore do:
+  Drive CommandJobManager.start(...) with the fixture as command, observe the
+  ⎇ N → ⎇ N+1 active-jobs gauge increment, observe ⎇ N+1 → ⎇ N terminal-state
+  gauge decrement, observe the runtime incident ⚠ delta, or verify the production
+  CommandJobManager → SupervisableShellProcess → primary PGID → helper fallback
+  chain reaches the real installed helper. All of these require either human
+  interaction with the ClineMM webview or a running debug harness.
+
+This is a STRUCTURAL halt, not a code defect:
+  - The production code under test is correctly installed and the build IS the
+    subject (clinemm-4.1.16-84a238464 == repo HEAD 84a238464).
+  - The helper is healthy and bound (PID 47013, build_id present, socket healthy).
+  - All §1-§4 prerequisites are met.
+  - §5 cannot be satisfied from this shell with the harness forbidden.
+
+Classification (honest):
+  ENTRY_FREEZE                       = PASS  (00-entry.txt)
+  HELPER_IDENTITY                    = PASS  (01-helper-identity.txt)
+  PRODUCTION_BUILD_IS_SUBJECT        = PASS  (02-codium-production-identity.txt)
+  BASELINE_TELEMETRY                 = PASS  (03-header-baseline.txt — ⎇ 0 ⚠ 0
+                                                    via helper active_job_count
+                                                    and active_client_count)
+  PRODUCTION_SEAM_DRIVABLE_FROM_SHELL= FAIL
+  HALT_PRODUCTION_SEAM_NOT_DRIVABLE_FROM_SHELL = TRIGGERED
+
+No repair ACT authorized from this halt — the same constraint will apply to any
+agent-only run. The fix requires either:
+  1. Human-driven ClineMM chat interaction (manual UI work outside this shell).
+  2. Authorization to launch the debug harness.
+  3. A non-debug-harness programmatic seam into the extension host
+     (e.g. a Cline-side "trigger command" tool, CLI bridge, or scripting API
+      that bypasses the chat UI but is not a debug-only hook).

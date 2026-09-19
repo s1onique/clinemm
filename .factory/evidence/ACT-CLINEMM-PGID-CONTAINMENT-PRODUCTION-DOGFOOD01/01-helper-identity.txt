@@ -1,0 +1,24 @@
+[1;34m[clinemm-host-helper][0m status: socket=/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock label=io.clinemm.host-helper
+srw------- 1 chistyakov wheel 0 Sep 17 17:46 /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+{"version":1,"request_id":"status-probe-1","ok":true,"service":"clinemm-host-helper","pid":47013,"uid":501,"build_id":"c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9","active_client_count":0,"active_job_count":0}
+	path = /Volumes/UserData/Users/chistyakov/Library/LaunchAgents/io.clinemm.host-helper.plist
+	state = running
+	stdout path = /Volumes/UserData/Users/chistyakov/Library/Logs/clinemm-host-helper.log
+	stderr path = /Volumes/UserData/Users/chistyakov/Library/Logs/clinemm-host-helper.log
+	domain = gui/501 [100020]
+	pid = 47013
+			path = /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+47013 /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+-rwx------ 1 chistyakov staff 53960 Sep 19 19:14 /Volumes/UserData/Users/chistyakov/.clinemm/bin/clinemm-host-helper
+---
+HELPER_PID=47013
+HELPER_BUILD_ID=c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+HELPER_SOCKET=/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+HELPER_ACTIVE_CLIENT_COUNT=0
+HELPER_ACTIVE_JOB_COUNT=0
+HELPER_COUNT=1
+HELPER_SOCKET=HEALTHY
+HELPER_BUILD_ID=PRESENT
+LAUNCHD_DOMAIN=gui/501
+HELPER_HEALTHY=PASS
+HELPER_REGISTRATION_CONSERVED=PASS

@@ -1,0 +1,34 @@
+ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-DOGFOOD01
+Step 02 — Production Codium-ClineMM identity bound.
+
+RUNNING_CODIUM_CLINEMM = REAL | LIVE
+INSTALLED_EXTENSION_VERSION = 4.1.16-84a238464
+INSTALLED_EXTENSION_NAME = s1onique.clinemm
+INSTALLED_EXTENSION_PUBLISHER = s1onique
+INSTALLED_EXTENSION_PATH = /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-84a238464
+REPO_HEAD = 84a23846477fec081bde6482c518f976245b0f00
+INSTALLED_COMMIT_SUFFIX = 84a238464 (matches repo HEAD prefix)
+
+PRODUCTION_BUILD_BINDING:
+  Repo HEAD prefix 84a238464 === Installed extension version suffix 84a238464
+  Installed dist/extension.js (26176760 bytes, 5638 lines) is bound to the same commit
+  Built bundle contains production PGID contract code (verified by symbol presence):
+    - 4 references to process.kill(-pgid...) — the production primitive signal-call sites
+    - 2 references to command_job_containment_failed / terminalPostconditionProbe / register-owned / terminate-owned
+      — the lifecycle / helper-termination seams from ACT-CLINEMM-PGID-CONTAINMENT-PRODUCT-CONTRACT01
+    and ACT-CLINEMM-HOST-HELPER-OWNED-PGID-TERMINATION01
+
+VSCODIUM_INSTANCE = REAL
+  /Applications/VSCodium.app/Contents/MacOS/VSCodium
+  --user-data-dir /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data
+  --extensions-dir /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions
+  PID = 47776
+  Extension host PID = 47791 (VSCodium Helper (Plugin), NodeService, NOT sandboxed)
+  Activation log line:
+    2026-09-19 19:16:14.272 [info] ExtensionService#_doActivateExtension s1onique.clinemm, startup: false, activationEvent: 'onLanguage'
+  ClineMM extension activated successfully.
+
+RUNNING_CODIUM_CLINEMM = REAL | LIVE — production identity is BOUND to the production code under test.
+
+PRODUCTION_CODIUM_IDENTITY_BOUND = PASS
+HALT_DOGFOOD_BUILD_NOT_SUBJECT = NOT_TRIGGERED
