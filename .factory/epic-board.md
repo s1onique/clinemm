@@ -2489,3 +2489,133 @@ PRODUCTION-SIDE CHANGES        = ZERO (apps/, sdk/, helper.c, protocol.ts)
   - All changes are source-only (drivers + evidence + docs).
   - The operator Terminal run is required to actually adjudicate the
     kqueue primitive (RUN_3).
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — ROUND-3 ORACLE MECHANICS — 2026-09-19
+
+**Reviewer halt:** `HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS`.
+
+The four round-2 corrections landed correctly, but the oracle reader
+itself could silently lose a CREATE record when a `read()` returned a
+fragment containing no newline. Three coupled issues closed in this
+round (source-only, no agent-side execution attempted).
+
+### Round-3 fixes
+
+1. **Lossless carry buffer.** `drain_ground_truth()` previously did
+   `carry_off = carry_len = 0` when `scan == 0` (no newline in the
+   buffer). With prior carry content, that discarded bytes that were
+   part of an in-progress record. Now: only reset when
+   `scan >= carry_len`; partial reads accumulate in `[0, carry_len)`
+   and the next `read()` appends to them. Per Apple `read(2)`, partial
+   reads are legal on pipes; only regular files guarantee a full
+   requested read.
+
+2. **Meaningful EOF.** The driver kept `gt_write_fd` open until after
+   `drain_ground_truth()` returned. Per Apple `pipe(2)`, EOF appears
+   only when every write descriptor is closed. So `drain()` never saw
+   true EOF -- only timeout. Fixed: `gt_write_fd` is closed
+   immediately after `posix_spawn()` succeeds. The spawned root
+   inherited a duplicate via `CLINEMM_GROUND_TRUTH_FD`, so this close
+   does not prevent the fixture tree from announcing. EOF now
+   triggers the new EOF-branch logic that parses the trailing carry
+   as a final record.
+
+3. **Final-drain removed.** The "best-effort final drain" called
+   `read()` without parsing and threw bytes away. Removed. Every
+   byte read is fed through the same parser.
+
+4. **Overflow halt.** `carry_len >= sizeof(buf)` latches
+   `gt_reader_fault` (exit 7) and emits a halt event. No silent
+   drop.
+
+5. **Visible write failures.** Fixture `gt_announce()` previously
+   discarded the `write()` return value. Now: retry on `EAGAIN`/`EINTR`
+   (3 attempts, 1ms backoff). On persistent failure, emit a
+   `WRITE_FAILED pid=N attempted=N errno=N\n` line on the same pipe
+   AND a stderr line. Driver parses `WRITE_FAILED`, increments
+   `gt_write_failures`, emits `ground_truth_write_failures` in end
+   event. Exit code 6 reserved.
+
+### Verification: 40-oracle-lossless-witness
+
+A 245-line standalone C test (`tools/macos-host-helper/native/containment-probe/40-oracle-lossless-witness.c`):
+
+```
+Fragmenter writes 7 records with split-half-and-sleep-each-side
+fragmentation, plus 1 WRITE_FAILED line, plus 1 truncated-at-EOF
+record (no trailing newline).
+
+records_seen=8
+gt_with_start_us=7
+gt_write_failures=1
+gt_reader_fault=0
+truncated-at-EOF record (pid=888) survived: YES
+VERDICT=PASS
+```
+
+The split-half-and-sleep-each-side fragmentation is the worst case
+for a non-lossless parser: every record is split across two writes
+with a 2ms gap. The old parser would have captured 0-3 of 7 records;
+the new parser captures all 7.
+
+### Driver exit code semantics (round-3)
+
+| Exit | Meaning |
+|------|---------|
+| 0    | PASS -- every GT record was tracked by kqueue, no write failures |
+| 5    | REFUTE (MISS) -- `missed_ground_truth_count > 0` |
+| 6    | REFUTE (ORACLE_WRITE_FAIL) -- `ground_truth_write_failures > 0` |
+| 7    | REFUTE (ORACLE_READER_FAULT) -- `ground_truth_reader_fault > 0` |
+| 1-4  | INFRASTRUCTURE ERROR -- see halt event |
+
+### Files modified (round-3)
+
+- `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+  -- lossless `drain_ground_truth()`, EOF branch handling, overflow
+  halt latch, `WRITE_FAILED` parser, `gt_write_fd` close after spawn,
+  new counters and exit codes.
+- `tools/macos-host-helper/native/containment-probe/31-helper-preattach-root.c`
+  -- `gt_announce()` retry/report logic; added `<errno.h>` (was missing).
+- `tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator.c`
+  -- same retry/report logic; added `<errno.h>`.
+- `tools/macos-host-helper/native/containment-probe/40-oracle-lossless-witness.c`
+  -- NEW: 245-line standalone fragmentation witness.
+- `tools/macos-host-helper/native/containment-probe/Makefile`
+  -- added `40-oracle-lossless-witness` to PROBES list.
+- `.factory/evidence/.../71-ground-truth-design.md` -- Round-3 update
+  section appended.
+- `.factory/evidence/.../73-operator-handoff.md` -- Round-3 update
+  section appended (oracle mechanics + witness + exit code table).
+- `.factory/evidence/.../90-gates.txt` -- Round-3 oracle reader gates
+  appended; verdict block updated.
+- `.factory/evidence/.../result.json` -- `round: 3`, 6-item
+  `round3_fixes` array, witness artifact + verdict, exit code
+  semantics, updated decision_rule.
+- `.factory/epic-board.md` -- this section appended.
+
+### Verdict (round-3)
+
+```
+ORACLE_READER_DROPS_PARTIAL_RECORDS = CLOSED (lossless carry + overflow halt)
+ORACLE_EOF_NEVER_DELIVERED          = CLOSED (gt_write_fd close-after-spawn)
+ORACLE_WRITE_FAIL_SILENT            = CLOSED (WRITE_FAILED line + counter)
+CARRIER_OVERFLOW                    = CLOSED (halt event + exit code 7)
+
+GROUND_TRUTH_ORACLE                 = IMPLEMENTED + LOSSLESS + EOF-AWARE
+AGENT_SUBSTRATE_HALT                = PRESERVED (no probe execution attempted)
+KQUEUE_PRIMITIVE_VIABILITY          = NOT_YET_ADJUDICATED (still requires RUN_3)
+READY_FOR_OPERATOR_RUN              = YES (round-3 packet is now fully executable)
+```
+
+**STOP rule honored (round-3):**
+
+- No probe execution attempted from agent shell.
+- All 4 binaries built clean (`make clean && make`: 0 warnings,
+  `30-helper-preattach-driver=52840`, `31-helper-preattach-root=52168`,
+  `32-helper-preattach-emulator=51008`, `40-oracle-lossless-witness=34600`).
+- Witness PASS verified (`./40-oracle-lossless-witness`: 8 records,
+  7 with start_us, 1 WRITE_FAILED, 0 reader_fault, truncated-at-EOF
+  survived).
+- Re-run of P0-1 unit tests (6/6) and 4 smoke fixtures all PASS.
+- Agent stops at READY_FOR_OPERATOR_RUN. Operator Terminal run
+  (RUN_3) is required to actually adjudicate the kqueue primitive.

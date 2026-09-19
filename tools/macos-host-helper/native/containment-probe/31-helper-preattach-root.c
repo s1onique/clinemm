@@ -111,6 +111,32 @@ static uint64_t gt_start_us_for(pid_t p) {
 
 // Announce a CREATE record for the given pid to the ground-truth pipe.
 // Reads ppid/pgid/start_us from kinfo_proc at call time.
+//
+// Round-3 (HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS):
+//   A failed GT write is now an EVIDENCE failure, not a "process didn't
+//   exist". We retry once with a tiny backoff, then surface a
+//   WRITE_FAILED line on the SAME pipe (best effort) plus a stderr
+//   line. The driver counts WRITE_FAILED lines into
+//   ground_truth_write_failures and never allows a PASS verdict when
+//   that count is non-zero.
+static int g_gt_write_failures = 0;
+
+static void gt_announce_failure(pid_t pid, int attempted, int err) {
+  // Best-effort in-pipe signal: the driver counts WRITE_FAILED lines.
+  char wb[160];
+  int wn = snprintf(wb, sizeof wb,
+                    "WRITE_FAILED pid=%d attempted=%d errno=%d\n",
+                    (int)pid, attempted, err);
+  if (wn > 0) {
+    ssize_t ww = write(g_gt_fd, wb, (size_t)wn);
+    (void)ww;
+  }
+  // Last-resort stderr line: visible to the operator and to any test
+  // harness that captures stderr. The driver does not read stderr.
+  fprintf(stderr, "[gt_write_failed] pid=%d attempted=%d errno=%d\n",
+          (int)pid, attempted, err);
+}
+
 static void gt_announce(pid_t pid) {
   if (g_gt_fd < 0 || pid <= 0) return;
   uint64_t start_us = gt_start_us_for(pid);
@@ -139,9 +165,34 @@ static void gt_announce(pid_t pid) {
                    "CREATE pid=%d ppid=%d pgid=%d start_us=%llu\n",
                    (int)pid, (int)ppid, (int)pgid,
                    (unsigned long long)start_us);
-  if (n > 0) {
-    ssize_t w = write(g_gt_fd, buf, (size_t)n);
-    (void)w;
+  if (n <= 0) return;
+  size_t total = (size_t)n;
+  size_t off = 0;
+  // Retry short writes up to 3 times with a 1ms backoff; PIPE_BUF is
+  // 512 bytes on macOS and these records are < 160 bytes, so EAGAIN
+  // is the only realistic failure mode (kernel buffer temporarily
+  // full under fork-storm burst).
+  for (int attempt = 0; attempt < 3; attempt++) {
+    ssize_t w = write(g_gt_fd, buf + off, total - off);
+    if (w < 0) {
+      if (errno == EINTR) continue;
+      if (errno == EAGAIN) {
+        usleep(1000);
+        continue;
+      }
+      gt_announce_failure(pid, (int)total, errno);
+      g_gt_write_failures++;
+      return;
+    }
+    off += (size_t)w;
+    if (off >= total) return;
+    // Short write without EAGAIN: shouldn't happen on a pipe for a
+    // single record < PIPE_BUF, but treat as a soft retry.
+    usleep(1000);
+  }
+  if (off < total) {
+    gt_announce_failure(pid, (int)(total - off), EAGAIN);
+    g_gt_write_failures++;
   }
 }
 

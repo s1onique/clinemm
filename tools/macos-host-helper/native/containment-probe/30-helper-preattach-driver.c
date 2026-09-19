@@ -163,6 +163,11 @@ static int fork_events = 0;
 //   to pid-only identity in tracked_has; they are explicitly weaker.
 static int gt_with_start_us = 0;
 static int gt_pid_only = 0;
+// Round-3 (HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS): count WRITE_FAILED
+// announcements from the fixture side. Non-zero => HALT, never PASS.
+static int gt_write_failures = 0;
+// Round-3: oracle reader fault latches (carry overflow, malformed).
+static int gt_reader_fault = 0;
 
 // Ground-truth pipe read end (set in main before posix_spawn).
 static int gt_read_fd = -1;
@@ -332,8 +337,17 @@ static void dump_gt_records(void) {
 static void drain_ground_truth(int timeout_ms) {
   if (gt_read_fd < 0) return;
 
+  // Round-3 (HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS):
+  //   The reader is a LOSSLESS byte-oriented parser. Per Apple
+  //   read(2), partial reads are legal on pipes; we must retain
+  //   incomplete records across reads. EOF is detected only when the
+  //   driver has closed its own gt_write_fd copy AND every fixture
+  //   writer has exited (caller closes gt_write_fd immediately after
+  //   posix_spawn succeeds -- see main()).
+  //
+  //   Overflow is a hard halt, not a silent drop.
+
   char buf[4096];
-  size_t carry_off = 0;
   size_t carry_len = 0;
 
   // Make the read end non-blocking so we can poll.
@@ -341,6 +355,7 @@ static void drain_ground_truth(int timeout_ms) {
   fcntl(gt_read_fd, F_SETFL, flags | O_NONBLOCK);
 
   time_t t0 = time(NULL);
+  int eof_seen = 0;
   while (1) {
     struct pollfd pfd = { .fd = gt_read_fd, .events = POLLIN };
     int pr = poll(&pfd, 1, 100);
@@ -353,19 +368,54 @@ static void drain_ground_truth(int timeout_ms) {
       if ((int)((time(NULL) - t0) * 1000) >= timeout_ms) break;
       continue;
     }
-    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-      // peer closed; drain remaining then exit
+
+    // Read into the buffer space AFTER the carry. Always allow at least
+    // 1 byte of room for the trailing '\n' of an in-progress record.
+    if (carry_len >= sizeof(buf)) {
+      emit("{\"event\":\"halt\",\"reason\":\"oracle_record_overflow\",\"carry_len\":%zu}\n",
+           carry_len);
+      gt_reader_fault = 1;
+      break;
     }
-    ssize_t n = read(gt_read_fd, buf + carry_off, sizeof(buf) - carry_off);
+    ssize_t n = read(gt_read_fd, buf + carry_len, sizeof(buf) - carry_len);
     if (n < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
       if (errno == EINTR) continue;
       break;
     }
-    if (n == 0) break;
-    carry_len = carry_off + (size_t)n;
+    if (n == 0) {
+      // EOF on the read end. Per Apple pipe(2) this only happens when
+      // every write descriptor (including the driver's own gt_write_fd)
+      // has been closed. Parse the trailing carry as a final record,
+      // then exit.
+      eof_seen = 1;
+      if (carry_len > 0) {
+        // Treat whatever is left as a final line for parsing.
+        // The driver's contract requires every CREATE record to end in
+        // '\n'; a non-empty carry at EOF indicates either truncation
+        // (HALT) or a degenerate line we still attempt to parse.
+        if (carry_len >= sizeof(buf)) {
+          emit("{\"event\":\"halt\",\"reason\":\"oracle_record_overflow_at_eof\",\"carry_len\":%zu}\n",
+               carry_len);
+          gt_reader_fault = 1;
+          break;
+        }
+        // Append a sentinel newline so the parser can attempt a parse.
+        // If the carry was already terminated by '\n' this is a no-op
+        // (the parser will treat it as a second empty line which is
+        // ignored by the strncmp guard).
+        if (buf[carry_len - 1] != '\n' && carry_len + 1 < sizeof(buf)) {
+          buf[carry_len] = '\n';
+          carry_len++;
+        }
+      } else {
+        break;
+      }
+    } else {
+      carry_len += (size_t)n;
+    }
 
-    // Parse complete lines.
+    // Parse complete lines out of [0, carry_len).
     size_t scan = 0;
     while (scan < carry_len) {
       size_t eol = scan;
@@ -374,8 +424,20 @@ static void drain_ground_truth(int timeout_ms) {
       buf[eol] = '\0';
       const char *line = buf + scan;
 
+      // Parse "WRITE_FAILED pid=N attempted=N errno=N" first -- a
+      // fixture tree that failed to write its CREATE record is an
+      // EVIDENCE failure (round-3). Non-zero count -> HALT.
+      if (strncmp(line, "WRITE_FAILED ", 13) == 0) {
+        int pid = 0, attempted = 0, err = 0;
+        if (sscanf(line + 13, "pid=%d attempted=%d errno=%d",
+                   &pid, &attempted, &err) >= 2) {
+          gt_write_failures++;
+          emit("{\"event\":\"ground_truth\",\"kind\":\"WRITE_FAILED\",\"pid\":%d,\"attempted\":%d,\"errno\":%d}\n",
+               pid, attempted, err);
+        }
+      }
       // Parse "CREATE pid=N ppid=N pgid=N start_us=N"
-      if (strncmp(line, "CREATE ", 7) == 0 && ngt_created < MAX_GT) {
+      else if (strncmp(line, "CREATE ", 7) == 0 && ngt_created < MAX_GT) {
         pid_t pid = 0, ppid = 0, pgid = 0;
         uint64_t start_us = 0;
         const char *p = line + 7;
@@ -396,22 +458,30 @@ static void drain_ground_truth(int timeout_ms) {
       }
       scan = eol + 1;
     }
-    // Compact carry.
-    if (scan > 0) {
+
+    // LOSSLESS carry compaction:
+    //   If scan consumed everything, carry is empty.
+    //   If scan consumed some, move the residual to the front of buf.
+    //   If scan consumed nothing (no newline found), KEEP all carry
+    //   bytes -- they are an in-progress record that the next read
+    //   will append to. This is the round-3 fix for the false-green
+    //   hazard flagged by HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS.
+    if (scan >= carry_len) {
+      carry_len = 0;
+    } else if (scan > 0) {
       size_t rem = carry_len - scan;
       memmove(buf, buf + scan, rem);
-      carry_off = rem;
       carry_len = rem;
-    } else {
-      carry_off = 0;
-      carry_len = 0;
     }
-    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) break;
-  }
-  // best-effort final drain
-  while (1) {
-    ssize_t n = read(gt_read_fd, buf, sizeof(buf));
-    if (n <= 0) break;
+    // else scan == 0: keep carry_len as-is.
+
+    if (eof_seen) break;
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      // peer closed; loop one more time so the read() above returns 0
+      // and we treat the remaining carry as the final parse attempt.
+      // No break here -- we want the next iteration to see EOF.
+      continue;
+    }
   }
   fcntl(gt_read_fd, F_SETFL, flags);
 }
@@ -527,6 +597,21 @@ int main(int argc, char **argv) {
   emit("{\"event\":\"spawn\",\"pid\":%d,\"suspended\":true,\"gt_fd\":%d}\n",
        root, gt_write_fd);
 
+  // Round-3 (HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS):
+  //   Close the driver's own copy of the GT pipe write end IMMEDIATELY.
+  //   Per Apple pipe(2), EOF on the read end is only delivered after
+  //   every write descriptor (including this one) has been closed.
+  //   The spawned root already inherited a duplicate via
+  //   CLINEMM_GROUND_TRUTH_FD=<gt_write_fd>, so this close does NOT
+  //   prevent the fixture tree from announcing. It DOES make the
+  //   drain_ground_truth() EOF path meaningful: when the last fixture
+  //   writer exits, the reader actually sees EOF instead of waiting
+  //   for timeout.
+  if (gt_write_fd >= 0) {
+    close(gt_write_fd);
+    gt_write_fd = -1;
+  }
+
   watch(root);
 
   if (!already_tracked(root)) {
@@ -633,6 +718,8 @@ int main(int argc, char **argv) {
   printf(",\"ground_truth_created_count\":%d", ngt_created);
   printf(",\"ground_truth_created_with_start_us_count\":%d", gt_with_start_us);
   printf(",\"ground_truth_created_pid_only_count\":%d", gt_pid_only);
+  printf(",\"ground_truth_write_failures\":%d", gt_write_failures);
+  printf(",\"ground_truth_reader_fault\":%d", gt_reader_fault);
   printf(",\"ground_truth_seen_count\":%d", ngt_created);
   printf(",\"ground_truth_missed_count\":%d", missed_count);
   printf("}}\n");
@@ -642,5 +729,12 @@ int main(int argc, char **argv) {
   close(kq);
   if (gt_read_fd >= 0) close(gt_read_fd);
   if (gt_write_fd >= 0) close(gt_write_fd);
+  // Round-3 exit-code semantics:
+  //   0 = PASS  (no missed GT, no write failures)
+  //   5 = MISS  (GT records that kqueue did not track)
+  //   6 = ORACLE_WRITE_FAIL  (gt_write_failures > 0 -- EVIDENCE failure)
+  //   7 = ORACLE_READER_FAULT  (carry overflow etc.)
+  if (gt_reader_fault) return 7;
+  if (gt_write_failures > 0) return 6;
   return missed_count > 0 ? 5 : 0;
 }

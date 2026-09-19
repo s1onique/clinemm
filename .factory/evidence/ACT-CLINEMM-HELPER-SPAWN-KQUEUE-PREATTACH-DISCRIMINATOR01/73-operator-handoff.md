@@ -262,3 +262,41 @@ ps -p $$ -o pid,ppid,user,command
 ```
 
 Then proceed with the matrix commands above.
+
+## Round-3 update: oracle mechanics
+
+The oracle reader (`drain_ground_truth()`) is now LOSSLESS:
+
+- Partial reads are retained across `read()` calls (per Apple `read(2)`).
+- The driver's own write end of the GT pipe is closed immediately after
+  `posix_spawn()`, so EOF is meaningful when the last fixture writer exits.
+- The "best-effort final drain" that previously threw bytes away is removed.
+- Carry overflow is a hard halt (exit 7), not a silent drop.
+- Fixture `gt_announce()` retries on `EAGAIN`/`EINTR` and surfaces a
+  `WRITE_FAILED` line on persistent failure (driver exit 6 if any).
+
+The witness at `40-oracle-lossless-witness` validates this with 7
+fragmented records (split across two writes with a 2ms gap) plus one
+truncated-at-EOF record and one WRITE_FAILED announcement -- all
+captured correctly. Run it from Terminal.app before the matrix if you
+want to confirm the oracle mechanics:
+
+```bash
+./40-oracle-lossless-witness
+# Expect:
+#   records_seen=8, gt_with_start_us=7, gt_write_failures=1,
+#   gt_reader_fault=0, truncated-at-EOF pid=888 survived, VERDICT=PASS
+```
+
+### Driver exit code meanings (round-3)
+
+| Exit | Meaning |
+|------|---------|
+| 0    | PASS — every GT record was tracked by kqueue, no write failures |
+| 5    | REFUTE (MISS) — `missed_ground_truth_count > 0` |
+| 6    | REFUTE (ORACLE_WRITE_FAIL) — `ground_truth_write_failures > 0` |
+| 7    | REFUTE (ORACLE_READER_FAULT) — `ground_truth_reader_fault > 0` |
+| 1-4  | INFRASTRUCTURE ERROR — see halt event |
+
+Exit codes 5/6/7 are all REFUTE modes (operator decision_rule says
+PASS only on exit 0 with all gates green).

@@ -29,7 +29,8 @@ PROBES = \
   23-mechb-full-test \
   30-helper-preattach-driver \
   31-helper-preattach-root \
-  32-helper-preattach-emulator
+  32-helper-preattach-emulator \
+  40-oracle-lossless-witness
 
 .PHONY: all clean
 all: $(PROBES)

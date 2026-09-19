@@ -58,6 +58,7 @@ tools/macos-host-helper/native/containment-probe/23-mechb-full-test
 tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver
 tools/macos-host-helper/native/containment-probe/31-helper-preattach-root
 tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator
+tools/macos-host-helper/native/containment-probe/40-oracle-lossless-witness
 
 # E2E Tests
 test-results

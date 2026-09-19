@@ -34,6 +34,7 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 static int g_gt_fd = -1;
 
@@ -55,6 +56,21 @@ static uint64_t gt_start_us_for(pid_t p) {
   }
   free(kp);
   return out;
+}
+
+// Round-3 (HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS): write-failure
+// must be visible. The fork-storm is the most likely trigger (kernel
+// pipe buffer pressure). Same retry+report semantics as 31-.
+static int g_gt_write_failures = 0;
+
+static void gt_announce_failure(pid_t pid, int attempted, int err) {
+  char wb[160];
+  int wn = snprintf(wb, sizeof wb,
+                    "WRITE_FAILED pid=%d attempted=%d errno=%d\n",
+                    (int)pid, attempted, err);
+  if (wn > 0) { ssize_t ww = write(g_gt_fd, wb, (size_t)wn); (void)ww; }
+  fprintf(stderr, "[gt_write_failed] pid=%d attempted=%d errno=%d\n",
+          (int)pid, attempted, err);
 }
 
 static void gt_announce(pid_t pid) {
@@ -84,7 +100,26 @@ static void gt_announce(pid_t pid) {
                    "CREATE pid=%d ppid=%d pgid=%d start_us=%llu\n",
                    (int)pid, (int)ppid, (int)pgid,
                    (unsigned long long)start_us);
-  if (n > 0) { ssize_t w = write(g_gt_fd, buf, (size_t)n); (void)w; }
+  if (n <= 0) return;
+  size_t total = (size_t)n;
+  size_t off = 0;
+  for (int attempt = 0; attempt < 3; attempt++) {
+    ssize_t w = write(g_gt_fd, buf + off, total - off);
+    if (w < 0) {
+      if (errno == EINTR) continue;
+      if (errno == EAGAIN) { usleep(1000); continue; }
+      gt_announce_failure(pid, (int)total, errno);
+      g_gt_write_failures++;
+      return;
+    }
+    off += (size_t)w;
+    if (off >= total) return;
+    usleep(1000);
+  }
+  if (off < total) {
+    gt_announce_failure(pid, (int)(total - off), EAGAIN);
+    g_gt_write_failures++;
+  }
 }
 
 static void gt_init(void) {

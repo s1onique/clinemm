@@ -211,3 +211,88 @@ NEXT                         = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
 See `73-operator-handoff.md` for the exact commands the human operator runs
 from Terminal.app, plus the file paths ClineMM will subsequently read for
 adjudication.
+
+## Round-3 update (HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS)
+
+Reviewer flagged that the previous oracle reader could silently drop
+records when a `read()` returned a fragment containing no newline. Per
+Apple `read(2)`, partial reads are legal on pipes; only regular files
+guarantee a full requested read. The fix is lossless carry retention +
+meaningful EOF semantics + visible write failures.
+
+### What changed
+
+1. **Lossless carry**: `drain_ground_truth()` now only resets `carry_len`
+   when `scan >= carry_len` (consumed everything) or moves the residual
+   to the front of `buf` when `scan > 0` (partial). If `scan == 0`
+   (no newline yet), the carry is **kept** for the next `read()` to
+   append to. Previously, `scan == 0` reset `carry_off = carry_len = 0`
+   which silently dropped bytes from the prior read.
+
+2. **EOF semantics**: the driver now closes its own `gt_write_fd`
+   immediately after `posix_spawn()` succeeds (the spawned root
+   inherited a duplicate, so the close is safe). Per Apple `pipe(2)`,
+   EOF on the read end appears only after every write descriptor is
+   closed; previously the driver kept `gt_write_fd` open until after
+   the drain, so EOF was effectively unreachable.
+
+3. **Final-drain removed**: the prior "best-effort final drain" called
+   `read()` and threw bytes away. Every byte now goes through the
+   same parser.
+
+4. **Overflow halt**: `carry_len >= sizeof(buf)` latches
+   `gt_reader_fault` (exit code 7) and emits a halt event. This is
+   a hard halt, not a silent drop.
+
+5. **EOF-branch carry handling**: when EOF arrives with a non-empty
+   carry, the parser appends a sentinel newline (if missing) and
+   attempts to parse the residual as a final record. A truncated
+   record (no newline at EOF) is now visible.
+
+6. **Visible write failures**: fixture `gt_announce()` now retries on
+   `EAGAIN`/`EINTR` (3 attempts, 1ms backoff). On persistent failure
+   it emits a `WRITE_FAILED pid=N attempted=N errno=N\n` line on the
+   same pipe AND a stderr line. The driver parses `WRITE_FAILED`,
+   increments `gt_write_failures`, and emits
+   `ground_truth_write_failures` in the end event (exit code 6
+   reserved for any non-zero count).
+
+### Verification
+
+**40-oracle-lossless-witness** (`tools/macos-host-helper/native/containment-probe/40-oracle-lossless-witness.c`,
+245 lines, builds to a 34600-byte standalone test):
+
+```
+Fragmenter writes 7 records with split-half-and-sleep-each-side fragmentation,
+plus 1 WRITE_FAILED line, plus 1 truncated-at-EOF record (no trailing newline).
+
+records_seen=8
+gt_with_start_us=7
+gt_write_failures=1
+gt_reader_fault=0
+truncated-at-EOF record (pid=888) survived: YES
+VERDICT=PASS
+```
+
+The fragmentation is the worst case for a non-lossless parser: every
+record is split across two writes with a 2ms gap, forcing the parser
+to retain carry across reads. The old parser would have captured
+0-3 of the 7 fragmented records; the new parser captures all 7.
+
+### Updated status block
+
+```
+KQUEUE_PRIMITIVE_VIABILITY   = NOT_YET_ADJUDICATED
+GROUND_TRUTH_CHANNEL         = IMPLEMENTED + LOSSLESS + EOF-AWARE
+GROUND_TRUTH_INDEPENDENT     = YES (oracle is fixture-owned; kqueue census is tracker-owned)
+ORACLE_BUILDS_CLEAN          = YES (0 warnings; 4 binaries incl. witness)
+P0_FALSE_GREEN_RISK          = CLOSED (fail-closed identity, exact (pid,start_us))
+P1_PS_TR_NOISE               = CLOSED (no descendant spawns in fixtures)
+P1_SIGNAL_HANDLER_UNSAFE     = CLOSED (sigwait() in normal control flow)
+P0_ENV_AS_ARGV               = CLOSED (run_env helper, env KEY=VAL command)
+PIPE_LOSS_FALSE_GREEN_RISK   = CLOSED (round-3 lossless carry + EOF semantics)
+WRITE_FAIL_SILENT            = CLOSED (round-3 WRITE_FAILED line + counter)
+CARRIER_OVERFLOW             = CLOSED (round-3 halt + exit code 7)
+READY_FOR_OPERATOR_RUN       = YES
+NEXT                         = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
+```

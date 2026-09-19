@@ -167,16 +167,84 @@ Round-2 oracle gates (this round; reviewer-flagged issues closed):
                                                    pid-only, the result is INDETERMINATE,
                                                    not PASS
 
-Final gate verdict (this round):
+Final gate verdict (this round; round-3):
   HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
-  GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN
+  GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED
   IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
   ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
   SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
   ENV_AS_ARGV                                             = CLOSED (P0-2, run_env helper)
+  ORACLE_READER_DROPS_PARTIAL_RECORDS                     = CLOSED (round-3, lossless carry)
+  ORACLE_EOF_NEVER_DELIVERED                              = CLOSED (round-3, gt_write_fd close-after-spawn)
+  ORACLE_WRITE_FAIL_SILENT                                = CLOSED (round-3, WRITE_FAILED line + counter)
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
+
+Round-3 oracle reader gates (this round; HALT_GROUND_TRUTH_PIPE_CAN_DROP_RECORDS):
+
+  [PASS] ORACLE_READER_LOSSLESS            -- drain_ground_truth() preserves
+                                                incomplete records across reads.
+                                                Previously: scan==0 with no '\n'
+                                                in the fragment dropped the carry
+                                                (false-GREEN hazard). Now: only
+                                                reset when scan>=carry_len; partial
+                                                reads accumulate in [0,carry_len).
+                                                Verified by 40-oracle-lossless-witness
+                                                fragmentation test: 7 records written
+                                                with split-half-and-sleep-each-side
+                                                fragmentation, all 7 captured.
+  [PASS] ORACLE_EOF_SEMANTICS               -- driver closes its own gt_write_fd
+                                                IMMEDIATELY after posix_spawn()
+                                                succeeds (line 594-597). Per Apple
+                                                pipe(2), EOF appears only when ALL
+                                                write descriptors are closed. Now
+                                                when the last fixture writer exits,
+                                                the reader actually sees EOF and
+                                                parses the trailing carry (verified
+                                                by the witness truncated-at-EOF
+                                                record pid=888 surviving).
+  [PASS] ORACLE_NO_FINAL_DRAIN_DROP         -- the "best-effort final drain"
+                                                that called read() without parsing
+                                                is REMOVED. Every byte read is
+                                                fed through the same parser.
+  [PASS] ORACLE_OVERFLOW_HALT               -- carry_len >= sizeof(buf) latches
+                                                gt_reader_fault and emits a halt
+                                                event. Exit code 7 reserved for
+                                                this case so the operator sees a
+                                                distinct failure.
+  [PASS] ORACLE_WRITE_FAIL_VISIBLE          -- fixture gt_announce() retries on
+                                                EAGAIN/EINTR (3 attempts, 1ms
+                                                backoff), then emits a
+                                                WRITE_FAILED line on the same pipe
+                                                AND a stderr line. Driver counts
+                                                WRITE_FAILED into gt_write_failures,
+                                                emits ground_truth_write_failures in
+                                                end event. Exit code 6 reserved.
+                                                Verified by witness: 1 WRITE_FAILED
+                                                announcement parsed correctly.
+
+Round-3 verification artifacts:
+
+  Witness binary:
+    tools/macos-host-helper/native/containment-probe/40-oracle-lossless-witness
+  Witness source:
+    tools/macos-host-helper/native/containment-probe/40-oracle-lossless-witness.c
+  Witness verdict (run on agent substrate):
+    records_seen=8, gt_with_start_us=7, gt_write_failures=1,
+    gt_reader_fault=0, truncated-at-EOF pid=888 survived,
+    VERDICT=PASS
+
+  Re-run of P0-1 unit tests on /tmp/test_tracked: 6/6 PASS
+  Re-run of fixture smoke tests: shell-A=5 records, exec-fork=4,
+    signal-triggered-fork/control=1, signal-triggered-fork/SIGTERM=2;
+    no WRITE_FAILED, no reader_fault.
+
+  Binary sizes (clean rebuild, -Wall -Wextra, 0 warnings):
+    30-helper-preattach-driver     52840 bytes
+    31-helper-preattach-root       52168 bytes
+    32-helper-preattach-emulator   51008 bytes
+    40-oracle-lossless-witness     34600 bytes
 
 Substrate runnability (3 runs so far):
   RUN_1 (VSCodium-descended sandbox, prior halt):    SUBSTRATE_BLOCKED, EPERM
