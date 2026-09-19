@@ -153,6 +153,17 @@ static int npid_start = 0;
 // fork_events is incremented on every NOTE_FORK we observe.
 static int fork_events = 0;
 
+// ground_truth_created_with_start_us_count
+//   number of CREATE records that arrived with a non-zero start_us.
+//   These are the strong-evidence cases; tracked_has requires EXACT
+//   (pid, start_us) match for them.
+// ground_truth_created_pid_only_count
+//   number of CREATE records that arrived with start_us == 0 (we read
+//   kinfo_proc before the proc entry was published). These fall back
+//   to pid-only identity in tracked_has; they are explicitly weaker.
+static int gt_with_start_us = 0;
+static int gt_pid_only = 0;
+
 // Ground-truth pipe read end (set in main before posix_spawn).
 static int gt_read_fd = -1;
 // Ground-truth pipe write end kept by the driver ONLY to close-on-exec
@@ -377,6 +388,8 @@ static void drain_ground_truth(int timeout_ms) {
           gt_created[ngt_created].pgid = pgid;
           gt_created[ngt_created].start_us = start_us;
           ngt_created++;
+          if (start_us != 0) gt_with_start_us++;
+          else               gt_pid_only++;
           emit("{\"event\":\"ground_truth\",\"kind\":\"CREATE\",\"pid\":%d,\"ppid\":%d,\"pgid\":%d,\"start_us\":%llu}\n",
                pid, ppid, pgid, (unsigned long long)start_us);
         }
@@ -403,21 +416,43 @@ static void drain_ground_truth(int timeout_ms) {
   fcntl(gt_read_fd, F_SETFL, flags);
 }
 
-// Returns 1 if (start_us, pid) is in KQUEUE_TRACKED, else 0.
-// Identity preference: start_us when available, else pid.
-// Within one probe run, start_us is a unique per-process identifier
-// (verified empirically: fork() creates a child with a different
-// start_us than its parent).
+// Returns 1 if (pid, start_us) is in KQUEUE_TRACKED, else 0.
+//
+// Identity rule (P0-1, fail-closed):
+//   If the GT record carries a non-zero start_us, we require EXACT
+//   match on BOTH pid AND start_us against a (pid,start_us) entry in
+//   pid_start[]. We do NOT fall back to pid-only. This prevents the
+//   false-GREEN class where pid-reuse (or an unrelated process with
+//   the same pid) could mask a missing identity.
+//
+//   If the GT record carries start_us == 0 (we read kinfo_proc
+//   before the proc entry was published), we fall back to pid-only.
+//   This is explicitly weaker evidence and is reported as such via
+//   the counters { ground_truth_created_count with start_us and
+//   ground_truth_created_pid_only_count } so the operator can
+//   quantify how many cases relied on the weaker rule.
+//
+// Within one probe run, start_us is empirically unique per fork()
+// (verified on the substrate: parent=1789807010311285 vs
+// child=1789807011033633 -- difference ~700ms matches the gap
+// between the parent arriving in kqueue and the child being forked).
+// So requiring exact (pid,start_us) match is the right rule.
 static int tracked_has(gt_record_t *r) {
-  // First try start_us.
+  // Strong path: require exact (pid, start_us) match.
   if (r->start_us != 0) {
     for (int i = 0; i < npid_start; i++) {
-      if (pid_start[i].pid != 0 && pid_start[i].start_us == r->start_us) {
+      if (pid_start[i].pid != 0 &&
+          pid_start[i].pid == r->pid &&
+          pid_start[i].start_us == r->start_us) {
         return 1;
       }
     }
+    // start_us is known but no exact match -- this is a miss, not a
+    // pid-only fallback. Fail closed.
+    return 0;
   }
-  // Fallback: pid-only.
+  // Weak path: pid-only when start_us is unknown. This is explicitly
+  // weaker evidence and is counted separately.
   if (r->pid > 0 && already_tracked(r->pid)) return 1;
   return 0;
 }
@@ -596,6 +631,8 @@ int main(int argc, char **argv) {
   printf(",\"watch_esrch\":%d", watch_esrch_total);
   printf(",\"watch_failed_other\":%d", watch_failed_other_total);
   printf(",\"ground_truth_created_count\":%d", ngt_created);
+  printf(",\"ground_truth_created_with_start_us_count\":%d", gt_with_start_us);
+  printf(",\"ground_truth_created_pid_only_count\":%d", gt_pid_only);
   printf(",\"ground_truth_seen_count\":%d", ngt_created);
   printf(",\"ground_truth_missed_count\":%d", missed_count);
   printf("}}\n");

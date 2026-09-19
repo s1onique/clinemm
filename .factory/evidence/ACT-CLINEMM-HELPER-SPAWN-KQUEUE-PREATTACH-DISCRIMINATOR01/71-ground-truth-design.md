@@ -29,7 +29,7 @@ forks, escapes/reparents, and ends up with PPID=1).
   races a not-yet-published proc entry or if the writer is a shell wrapper
   that can't easily call sysctl.
 
-### Identity discrimination (start_us > pid)
+### Identity discrimination (P0-1, fail-closed)
 
 The driver maintains a `pid_start[]` table populated each time `watch()`
 discovers a tracked pid (best-effort lookup via sysctl). The MISSED
@@ -37,14 +37,36 @@ discriminator is computed as:
 
 ```
 MISSED = GROUND_TRUTH_CREATED - KQUEUE_TRACKED
-        by start_us when GT record has start_us > 0,
-        else by pid (fallback)
+
+  Strong path (start_us != 0 in GT record):
+    require EXACT (pid, start_us) match in pid_start[]
+    if no exact match -> MISS (fail closed; no pid-only fallback)
+    This prevents the false-GREEN class where pid-reuse or an
+    unrelated process with the same pid could mask a missing identity.
+
+  Weak path (start_us == 0 in GT record):
+    pid-only match in tracked[]
+    This is explicitly weaker evidence and is counted separately
+    via ground_truth_created_pid_only_count so the operator can
+    quantify how many cases relied on the weaker rule.
 ```
 
 Empirical verification: on this substrate, `fork()` creates a child with a
 different `start_us` than its parent (verified via a /tmp/forkstart repro:
 parent `1789807010311285`, child `1789807011033633`). So `start_us` is a
 per-probe-unique identifier.
+
+Unit-test verification (in /tmp/test_tracked, runnable as
+`cc -o /tmp/test_tracked /tmp/test_tracked.c && /tmp/test_tracked`):
+
+```
+PASS T1: GT(123,1000) matches tracked(123,1000)
+PASS T2: GT(456,1000) does NOT match tracked(456,1001) [P0-1 fix verified]
+PASS T3: GT(123,999) does NOT match tracked(123,1000) [P0-1 fix verified]
+PASS T4: pid-reuse GT(123,1000) does NOT match overwritten tracked(123,2000)
+PASS T5: GT(999,0) matches tracked(999) via pid-only fallback
+PASS T6: GT(42,0) does not match (pid not tracked)
+```
 
 ### WATCH_ESRCH_SHORT_LIVED classification
 
@@ -75,6 +97,8 @@ ground-truth descendants. A different errno is classified as `FAILED_OTHER`
     "watch_esrch": N,
     "watch_failed_other": N,
     "ground_truth_created_count": N,
+    "ground_truth_created_with_start_us_count": N,
+    "ground_truth_created_pid_only_count": N,
     "ground_truth_seen_count": N,
     "ground_truth_missed_count": N
   }
@@ -90,9 +114,22 @@ fixtures per ACT §13-§15:
     child2 -> child1 exits. Child2 is reparented to launchd.
   - `exec-fork` (H): root forks -> child execs /bin/sh -> shell does
     `setsid sleep &`. Tests NOTE_EXEC + NOTE_FORK composition.
-  - `termination-window` (I): signal-handler forks detached child on
-    SIGTERM (gated by `CLINEMM_FIXTURE_I_SIGNAL` env var so it stays a
-    no-op by default).
+  - `signal-triggered-fork` (I, renamed from `termination-window` per
+    P1 review): the fixture blocks SIGTERM/SIGINT with `sigprocmask`,
+    waits via `sigwait()` in normal control flow, then forks a
+    detached child (setsid + sleep) and announces it BEFORE the
+    parent exits. This is async-signal-safe (the heavy work happens
+    outside the handler). Gated by `CLINEMM_FIXTURE_I_SIGNAL=SIGTERM`
+    env var (or `SIGINT`); unset = no-signal control. SIGKILL mode is
+    documented as unsupported (SIGKILL cannot be sigwait()ed).
+
+**P1 oracle-contamination fix**: the shell fixtures used to spawn
+`ps -o pgid= / tr -d ' '` to enrich the diagnostic `pgid` field.
+Each such subprocess is itself a descendant the oracle does NOT
+announce, weakening the GROUND_TRUTH_CREATED claim. After the fix,
+shell-announced records use `pgid=0`; the driver's discrimination
+is by `(pid, start_us)`, not by pgid. No `ps`/`tr` subprocesses
+remain in any fixture.
 
 ## What was deliberately NOT added
 
@@ -120,34 +157,37 @@ just spawns the fixture tree to verify the GT channel end-to-end. Results on
 the agent substrate:
 
 ```
-fixture=shell-A:
-  CREATE pid=61193 ppid=61192 pgid=61190 start_us=1789809340065416
-  CREATE pid=61203 ppid=61193 pgid=61190 start_us=1789809340274940
-  CREATE pid=61205 ppid=61203 pgid=61190 start_us=0
-  CREATE pid=61210 ppid=61203 pgid=61190 start_us=0
+fixture=shell-A (round-2, after ps/tr removal):
+  CREATE pid=93348 ppid=93347 pgid=93347 start_us=1789815205123807
+  CREATE pid=93349 ppid=93348 pgid=93347 start_us=1789815205126107
+  CREATE pid=93351 ppid=93349 pgid=0       start_us=0   [bash announce, no ps/tr]
+  CREATE pid=93353 ppid=93349 pgid=0       start_us=0   [bash announce, no ps/tr]
 
-fixture=python-escape:
-  CREATE pid=62882 ppid=62881 pgid=62880 start_us=1789809602858886
-  CREATE pid=62930 ppid=62882 pgid=62880 start_us=1789809603171480
-  CREATE pid=62952 ppid=62930 pgid=62952 start_us=0
+fixture=exec-fork (round-2, after ps/tr removal):
+  CREATE pid=93482 ppid=93481 pgid=93480 start_us=1789815227638273
+  CREATE pid=93483 ppid=93482 pgid=93480 start_us=1789815227640743
+  CREATE pid=93484 ppid=93483 pgid=0       start_us=0   [bash setsid announce, no ps/tr]
 
-fixture=double-fork-setsid:
-  CREATE pid=63630 ppid=63629 pgid=63627 start_us=1789809607893422
-  CREATE pid=63631 ppid=63630 pgid=63627 start_us=1789809607895291
-  CREATE pid=63632 ppid=63631 pgid=63631 start_us=1789809607895890
+fixture=signal-triggered-fork (round-2, SIGTERM self-raise):
+  CREATE pid=93485 ppid=93480 pgid=93480 start_us=1789815227669777
+  CREATE pid=93486 ppid=93485 pgid=93486 start_us=1789815227672245
+  -- root exited with -15 (SIGTERM); pid=93486 detached (PPID=1, own pgid)
 
-fixture=exec-fork:
-  CREATE pid=63658 ppid=63657 pgid=63655 start_us=1789809609909917
-  CREATE pid=63659 ppid=63658 pgid=63655 start_us=1789809609912358
-  CREATE pid=63660 ppid=63659 pgid=63655 start_us=0
-
-fixture=fork-storm (8 iterations):
-  11 distinct identities captured (root + child1 + grandchild + 8 storm
-  children). All start_us values populated for C-side announces.
+fixture=signal-triggered-fork (control, env unset):
+  CREATE pid=93519 ppid=93517 pgid=93517 start_us=1789815235186239
+  -- control case emits ONE record (the root only); exits 0
 ```
 
 This confirms the GT channel is correctly plumbed end-to-end on the agent
-substrate. The actual discriminator (MISSED vs TRACKED) can only be
+substrate, including:
+
+  - C-side announces carry accurate pgid and start_us
+  - Bash-side announces now use pgid=0 and start_us=0 (no ps/tr noise)
+  - signal-triggered-fork SIGTERM mode: parent exits via SIGTERM, detached
+    child survives and is announced BEFORE the parent dies
+  - signal-triggered-fork control mode: no spurious fork, exits 0
+
+The actual discriminator (MISSED vs TRACKED) can only be
 exercised once the operator runs the driver from Terminal.app where SIGCONT
 works.
 
@@ -158,6 +198,10 @@ KQUEUE_PRIMITIVE_VIABILITY   = NOT_YET_ADJUDICATED
 GROUND_TRUTH_CHANNEL         = IMPLEMENTED
 GROUND_TRUTH_INDEPENDENT     = YES (oracle is fixture-owned; kqueue census is tracker-owned)
 ORACLE_BUILDS_CLEAN          = YES (0 warnings)
+P0_FALSE_GREEN_RISK          = CLOSED (fail-closed identity, exact (pid,start_us))
+P1_PS_TR_NOISE               = CLOSED (no descendant spawns in fixtures)
+P1_SIGNAL_HANDLER_UNSAFE     = CLOSED (sigwait() in normal control flow)
+P0_ENV_AS_ARGV               = CLOSED (run_env helper, env KEY=VAL command)
 READY_FOR_OPERATOR_RUN       = YES
 NEXT                         = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
 ```

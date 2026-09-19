@@ -98,9 +98,14 @@ Oracle gates (added in this round):
                                                    ground_truth_missed_count}
   [PASS] NEW_FIXTURES                          -- §13 double-fork-setsid (G)
                                                    §14 exec-fork (H)
-                                                   §15 termination-window (I, gated)
+                                                   §15 signal-triggered-fork (I, gated;
+                                                      renamed from termination-window per
+                                                      P1 review; sigwait-based)
                                                    all build clean
   [PASS] ORACLE_BUILDS_CLEAN                   -- make clean && make: 0 warnings
+                                                   30-helper-preattach-driver   52760 bytes
+                                                   31-helper-preattach-root     52088 bytes
+                                                   32-helper-preattach-emulator 50880 bytes
   [PASS] ORACLE_INDEPENDENT_OF_TRACKER         -- GT records are written by the fixture
                                                    tree via the inherited fd; the driver
                                                    reads them from the read end and stores
@@ -111,9 +116,64 @@ Oracle gates (added in this round):
   [PASS] OPERATOR_HANDOFF_PACKET               -- 73-operator-handoff.md contains exact
                                                    commands for the human Terminal.app run
 
+Round-2 oracle gates (this round; reviewer-flagged issues closed):
+
+  [PASS] IDENTITY_FAIL_CLOSED                  -- P0-1 tracked_has requires EXACT
+                                                   (pid, start_us) match when start_us != 0;
+                                                   NO pid-only fallback when start_us
+                                                   is known. Verified by 6/6 unit tests
+                                                   in /tmp/test_tracked:
+                                                     T1: GT(123,1000) matches tracked(123,1000)
+                                                     T2: GT(456,1000) does NOT match
+                                                         tracked(456,1001) [false-green closed]
+                                                     T3: GT(123,999) does NOT match
+                                                         tracked(123,1000) [false-green closed]
+                                                     T4: pid-reuse GT(123,1000) does NOT match
+                                                         overwritten tracked(123,2000)
+                                                     T5: GT(999,0) matches via weak path
+                                                     T6: GT(42,0) does not match (unknown pid)
+  [PASS] WEAK_PATH_QUANTIFIED                  -- counter ground_truth_created_with_start_us_count
+                                                   and ground_truth_created_pid_only_count
+                                                   emitted separately so operator can
+                                                   quantify how many records relied on
+                                                   the weak (pid-only) path
+  [PASS] ENV_AS_ARGV_CLOSED                    -- P0-2 73-operator-handoff.md adds
+                                                   run_env <label> KEY=VAL -- args...
+                                                   helper using 'env KEY=VAL command ...';
+                                                   CLINEMM_FIXTURE_I_SIGNAL is now
+                                                   actually in the environment (verified
+                                                   by re-reading the handoff packet)
+  [PASS] ORACLE_NO_DESCENDANT_NOISE            -- P1 shell-A and exec-fork no longer spawn
+                                                   'ps -o pgid=' or 'tr -d' for diagnostic
+                                                   pgid enrichment. Shell-announced records
+                                                   use pgid=0 (driver discriminates by
+                                                   pid+start_us, not pgid). Smoke test:
+                                                   shell-A emits 4 CREATE records; no
+                                                   residual ps/tr processes.
+  [PASS] SIGNAL_HANDLER_ASYNC_SAFE             -- P1 fixture I renamed signal-triggered-fork;
+                                                   blocks SIGTERM/SIGINT via sigprocmask,
+                                                   waits via sigwait() in NORMAL control
+                                                   flow, then forks detached child and
+                                                   announces via gt_announce() BEFORE
+                                                   exiting. NO fork/sysctl/write happens
+                                                   inside a signal handler. SIGKILL mode
+                                                   documented as unsupported (cannot be
+                                                   sigwait()ed). Smoke test: parent exits
+                                                   with -15, detached child survives
+                                                   with PPID=1.
+  [PASS] PASS_CRITERIA_FAIL_CLOSED             -- result.json next_step now requires
+                                                   ground_truth_created_with_start_us_count
+                                                   > 0 across fixtures; if all records are
+                                                   pid-only, the result is INDETERMINATE,
+                                                   not PASS
+
 Final gate verdict (this round):
   HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
   GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN
+  IDENTITY_FALSE_GREEN_RISK                               = CLOSED (P0-1, fail-closed)
+  ORACLE_CONTAMINATION_BY_PS_TR                           = CLOSED (P1)
+  SIGNAL_HANDLER_UNSAFE                                   = CLOSED (P1, sigwait-based)
+  ENV_AS_ARGV                                             = CLOSED (P0-2, run_env helper)
   READY_FOR_OPERATOR_RUN                                  = YES
   KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
   NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL

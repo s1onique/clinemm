@@ -1,5 +1,51 @@
 # 73-operator-handoff.md
 
+## Round-2 fixes (since last operator packet)
+
+Three reviewer-flagged issues were closed in this round. They are
+called out here so the operator can audit the source if anything
+looks surprising.
+
+1. **P0-1 (oracle false-GREEN risk)**: the driver's `tracked_has`
+   comparison used to fall through to pid-only when `start_us != 0`
+   did not match. That allowed pid-reuse or unrelated pid matches to
+   mask a missing identity. Fixed to require EXACT `(pid, start_us)`
+   match when `start_us` is known, fail closed otherwise. Pid-only
+   fallback is now explicit and is counted separately via
+   `ground_truth_created_pid_only_count` so the operator can quantify
+   how many cases relied on the weaker rule.
+
+2. **P0-2 (env-as-argv bug)**: the previous `run` helper for the
+   termination fixture wrote `CLINEMM_FIXTURE_I_SIGNAL=SIGTERM` as an
+   argv element to the driver, which forwarded it as argv to the
+   fixture root. `getenv()` saw nothing and the fixture took the
+   no-signal branch. Fixed by adding `run_env <label> KEY=VAL -- args...`
+   that uses `env KEY=VAL driver args...` so the variable is in the
+   environment. **The matrix command below uses the fixed form.**
+
+3. **P1 (oracle contamination by `ps`/`tr`)**: the shell fixtures
+   used to spawn `ps -o pgid=` and `tr -d ' '` purely to enrich the
+   diagnostic `pgid` field. Each such subprocess is itself a
+   descendant that the oracle does NOT announce, weakening the claim
+   that `GROUND_TRUTH_CREATED` contains every fixture-created
+   process. Fixed: shell-announced records now use `pgid=0` (the
+   driver's discrimination is by `(pid, start_us)`, not by pgid).
+   No `ps`/`tr` subprocesses remain in any fixture.
+
+4. **P1 (termination-fixture unsafe signal handler)**: the previous
+   termination fixture did `fork+setsid+sleep+gt_announce` inside a
+   signal handler, which is undefined behaviour for any function
+   that allocates, calls `sysctl`, or writes to a pipe. It also
+   self-raised SIGTERM, so it proved only "fork after self-triggering
+   SIGTERM while kqueue observation exists", not "fork during external
+   teardown". Fixed:
+     - Renamed to `signal-triggered-fork` (honest semantics).
+     - The fixture blocks SIGTERM/SIGINT with `sigprocmask`, then
+       waits via `sigwait()` in normal control flow, then forks the
+       detached child and announces it BEFORE exiting.
+     - SIGKILL mode is documented as unsupported (SIGKILL cannot be
+       caught or sigwait()ed).
+
 ## Why this packet exists
 
 The ClineMM agent shell is sandboxed by VSCodium Helper (Plugin) and
@@ -29,7 +75,14 @@ does, open a fresh Terminal.app window from the Dock.
 
 For each fixture, run the driver with the fixture root, redirect both
 stdout (JSONL) and stderr (driver progress messages) to a single file,
-append the exit code at the end. This is one command per fixture:
+append the exit code at the end. This is one command per fixture.
+
+P0-2 fix: the operator-handoff `run` function now takes an explicit
+"env" form for cases where the fixture is gated by an environment
+variable. The original `CLINEMM_FIXTURE_I_SIGNAL=SIGTERM` was being
+passed as an argv element to the driver (which forwards it to the
+fixture root as argv[...]), NOT as an environment assignment. The
+fixed `run_env` helper below correctly puts it into the environment.
 
 ```bash
 cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
@@ -37,14 +90,38 @@ cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
 CAP=".factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator"
 mkdir -p "$CAP"
 
+# Standard run: no special env.
 run() {
   local label="$1"; shift
   local out="$CAP/$label.jsonl"
   : > "$out"
   tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver \
     "$@" >>"$out" 2>&1
-  echo "RC=$? run_start=$(date -u +%FT%TZ)" >>"$out"
-  echo "[$label] done; rc=$?; size=$(wc -c <"$out")"
+  local rc=$?
+  echo "RC=$rc run_start=$(date -u +%FT%TZ)" >>"$out"
+  echo "[$label] done; rc=$rc; size=$(wc -c <"$out")"
+}
+
+# Env-aware run: takes env assignments as KEY=VAL pairs first, then
+# the rest as the command. This is the ONLY safe way to pass
+# CLINEMM_FIXTURE_I_SIGNAL to the fixture root.
+# Usage: run_env <label> KEY=VAL [KEY=VAL ...] -- <driver-args...>
+run_env() {
+  local label="$1"; shift
+  local out="$CAP/$label.jsonl"
+  : > "$out"
+  # Collect env assignments (KEY=VAL with no spaces) until we hit "--"
+  local -a envs
+  while [[ "$1" != "--" ]]; do
+    envs+=("$1"); shift
+  done
+  shift  # consume the "--"
+  env "${envs[@]}" \
+    tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver \
+    "$@" >>"$out" 2>&1
+  local rc=$?
+  echo "RC=$rc run_start=$(date -u +%FT%TZ) env=${envs[*]}" >>"$out"
+  echo "[$label] done; rc=$rc; size=$(wc -c <"$out"); env=${envs[*]}"
 }
 
 # Warmup (conservation controls) — should all show missed_ground_truth_count=0
@@ -60,7 +137,17 @@ run 72-python-escape-F tools/macos-host-helper/native/containment-probe/31-helpe
 # NEW fixtures per ACT §13/§14/§15
 run 74-double-fork-setsid-G tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=double-fork-setsid --duration=5
 run 75-exec-fork-H          tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=exec-fork          --duration=5
-run 76-termination-window-I tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=termination-window --duration=5 CLINEMM_FIXTURE_I_SIGNAL=SIGTERM
+
+# P1 termination fixture: renamed to `signal-triggered-fork` (honest
+# semantics). CLINEMM_FIXTURE_I_SIGNAL is propagated via env (NOT
+# argv). The fixture blocks SIGTERM/SIGINT with sigprocmask, waits via
+# sigwait() in normal control flow, then forks a detached child and
+# announces it BEFORE exiting. This proves the kqueue primitive
+# captures the child even though it is created during teardown.
+# Note: the driver's SIGCONT requirement still applies.
+run_env 76-signal-triggered-fork-I CLINEMM_FIXTURE_I_SIGNAL=SIGTERM -- \
+  tools/macos-host-helper/native/containment-probe/31-helper-preattach-root \
+  --fixture=signal-triggered-fork --duration=5
 
 # Fork-storm (immediate-double-fork + 16x storm)
 run 77-fork-storm     tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator 16 5
@@ -141,7 +228,7 @@ per ACT §25 is based on:
   - fork-storm (single run)                        zero misses
   - double-fork-setsid-G                           zero misses
   - exec-fork-H                                    zero misses
-  - termination-window-I                           zero misses
+  - signal-triggered-fork-I                        zero misses
   - 100/100 race hammer                            zero misses
   - permanent helper survives                      PASS
   - unrelated control survives                     PASS

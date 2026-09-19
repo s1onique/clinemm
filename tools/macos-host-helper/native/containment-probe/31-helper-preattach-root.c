@@ -25,10 +25,11 @@
 //   exec-fork-H       shell exec'd from this binary; the exec'd shell
 //                     immediately forks a grandchild with setsid
 //                     (NOTE_EXEC + NOTE_FORK composition; must be GREEN)
-//   termination-window-I
-//                     receives SIGTERM, signal handler forks detached
-//                     child, then exits (tracker must observe the child
-//                     during teardown)
+//   signal-triggered-fork-I
+//                     receives SIGTERM (or SIGINT) via sigwait() in
+//                     normal control flow, then forks a detached child
+//                     and announces it to GT before the parent exits.
+//                     (tracker must observe the child during teardown)
 //
 // CRITICAL: NO cooperative delay permitted in this binary. Each
 // fixture must perform its escape (setsid / detached:true /
@@ -42,12 +43,21 @@
 //   fixture-created process, as early as possible after that process
 //   identity is valid:
 //
-//     CREATE pid=<pid> ppid=<pid> pgid=<pid> start_us=<value>\n
+//     CREATE pid=<pid> ppid=<pid> pgid=<pid|0> start_us=<value>\n
 //
 //   start_us is the kernel start time of the process, read via
 //   sysctl(KERN_PROC). start_us may be 0 if the read races a
 //   not-yet-published proc entry; the driver falls back to pid-only
-//   identity in that case.
+//   identity in that case (counted separately via
+//   ground_truth_created_pid_only_count).
+//
+//   pgid is reported accurately for C-side gt_announce() calls
+//   (which read kinfo_proc). For shell/python-announced records,
+//   pgid=0 -- the announcement deliberately does NOT spawn `ps`/`tr`
+//   to enrich the pgid field, because each such subprocess would
+//   itself be a descendant the oracle does NOT announce
+//   (P1 oracle-contamination fix). The driver's discrimination is
+//   by (pid, start_us), not by pgid.
 //
 // Usage:
 //   31-helper-preattach-root --fixture=<name> [duration-seconds]
@@ -188,11 +198,17 @@ static void fixture_shell_a(int dur) {
     gt_announce(getpid());
     // The bash sub-script writes GT records for grandchildren via
     // `>&$CLINEMM_GROUND_TRUTH_FD`. exec preserves the environment.
+    //
+    // P1: do NOT spawn `ps -o pgid=` or `tr` to fetch pgid -- each
+    // invocation is a new descendant that the oracle does NOT
+    // announce, contaminating the GROUND_TRUTH_CREATED set. Use
+    // pgid=0 in the CREATE record: the driver's discrimination is
+    // by (pid, start_us), not by pgid.
     execl("/bin/sh", "sh", "-c",
       "GTFD=${CLINEMM_GROUND_TRUTH_FD:-/dev/null}; "
-      "announce() { printf 'CREATE pid=%s ppid=%s pgid=%s start_us=0\\n' \"$1\" \"$2\" \"$3\" >&\"$GTFD\"; }; "
-      "(sleep \"$0\" & announce \"$!\" \"$$\" \"$(ps -o pgid= -p $! | tr -d ' ')\"; "
-      "(sleep \"$0\" & announce \"$!\" \"$$\" \"$(ps -o pgid= -p $! | tr -d ' ')\"; wait)) & wait",
+      "announce() { printf 'CREATE pid=%s ppid=%s pgid=0 start_us=0\\n' \"$1\" \"$2\" >&\"$GTFD\"; }; "
+      "(sleep \"$0\" & announce \"$!\" \"$$\"; "
+      "(sleep \"$0\" & announce \"$!\" \"$$\"; wait)) & wait",
       d, NULL);
     _exit(127);
   }
@@ -358,8 +374,7 @@ static void fixture_exec_fork(int dur) {
       "GTFD=${CLINEMM_GROUND_TRUTH_FD:-/dev/null}; "
       "setsid sleep \"$0\" >/dev/null 2>&1 & "
       "pid=$!; "
-      "pgid=$(ps -o pgid= -p $pid | tr -d ' '); "
-      "printf 'CREATE pid=%s ppid=%s pgid=%s start_us=0\\n' \"$pid\" \"$$\" \"$pgid\" >&\"$GTFD\"; "
+      "printf 'CREATE pid=%s ppid=%s pgid=0 start_us=0\\n' \"$pid\" \"$$\" >&\"$GTFD\"; "
       "wait $pid",
       d, NULL);
     _exit(127);
@@ -368,54 +383,120 @@ static void fixture_exec_fork(int dur) {
   waitpid(c, NULL, 0);
 }
 
-// FIXTURE I: dynamic fork during termination.
-//   parent receives SIGTERM (delivered by the driver via the loop).
-//   Signal handler forks detached child, then parent exits.
-// The tracker must still observe the child during teardown.
+// FIXTURE I: SIGNAL_TRIGGERED_FORK (renamed honestly per P1 review).
 //
-// NOTE: the test harness here does NOT actually deliver SIGTERM
-// automatically -- this fixture is gated by an environment variable
-// so it stays a no-op unless explicitly enabled:
+// What this fixture actually proves:
+//   After the parent receives SIGTERM, it forks a detached child and
+//   announces it to the GT channel BEFORE the parent exits. The
+//   tracker must observe this detached child even though it is created
+//   during the parent's teardown.
 //
-//   CLINEMM_FIXTURE_I_SIGNAL=SIGTERM   -> raise(SIGTERM) before wait
-//   CLINEMM_FIXTURE_I_SIGNAL=SIGKILL   -> raise(SIGKILL)
-//   unset                                -> sleep dur seconds, no signal
+// What this fixture does NOT prove:
+//   That the driver's kqueue primitive captures the child when an
+//   EXTERNAL actor (the production helper) initiates a teardown. The
+//   driver does not send SIGTERM here; the signal is either
+//   self-raised (SIGTERM/SIGINT case) or delivered by the operator's
+//   shell `kill` command (which is the realistic mode for this ACT,
+//   see 73-operator-handoff.md).
 //
-static pid_t g_i_detached_pid = 0;
-static void fixture_i_on_signal(int s) {
-  (void)s;
+// P1 design (per reviewer):
+//   No complex work in a signal handler. The parent blocks SIGTERM and
+//   SIGINT with sigprocmask, then waits for the signal via sigwait()
+//   in normal control flow. Once the signal is observed, the parent
+//   forks a detached child (setsid + sleep) and announces it BEFORE
+//   exiting. The kernel-suspended preattach guarantees the kqueue
+//   primitive is already in place before this fork happens.
+//
+// Modes (set via CLINEMM_FIXTURE_I_SIGNAL):
+//   SIGTERM  -> block SIGTERM/SIGINT, sigwait() for SIGTERM, fork+announce+exit
+//   SIGINT   -> block SIGTERM/SIGINT, sigwait() for SIGINT,  fork+announce+exit
+//   SIGKILL  -> SIGKILL cannot be caught or waited on; we cannot model
+//               "fork during SIGKILL teardown" with a synchronous
+//               control flow. Documented as unsupported.
+//   unset    -> sleep dur seconds (control case, no signal).
+//
+static int fixture_i_wait_for_signal(const char *mode) {
+  // Block the signal first so it can be observed via sigwait.
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGTERM);
+  sigaddset(&set, SIGINT);
+  int pr = sigprocmask(SIG_BLOCK, &set, NULL);
+  if (pr != 0) {
+    fprintf(stderr, "[fixture-i] sigprocmask failed: %s\n", strerror(errno));
+    return -1;
+  }
+
+  // Self-raise OR wait for external kill. Both are equivalent for
+  // this fixture's purpose: they produce a pending signal that
+  // sigwait consumes. Self-raise makes the run reproducible without
+  // external orchestration.
+  if (strcmp(mode, "SIGTERM") == 0) {
+    raise(SIGTERM);
+  } else if (strcmp(mode, "SIGINT") == 0) {
+    raise(SIGINT);
+  } else {
+    // External mode: do NOT self-raise; sigwait will block until
+    // the operator's Terminal delivers the signal via `kill`.
+    emit("[fixture-i] external mode: waiting for SIGTERM or SIGINT "
+         "(operator must `kill -TERM <pid>`)\n");
+  }
+
+  int sig = 0;
+  int sr = sigwait(&set, &sig);
+  if (sr != 0) {
+    fprintf(stderr, "[fixture-i] sigwait failed: %s\n", strerror(sr));
+    return -1;
+  }
+  emit("[fixture-i] received signal=%d, forking detached child now\n", sig);
+
+  // Now in NORMAL control flow -- safe to call sysctl, malloc, write.
   pid_t c = fork();
   if (c == 0) {
+    // Child: detach and survive parent.
     setsid();
     sleep(60);
     _exit(0);
   }
-  g_i_detached_pid = c;
-  gt_announce(c);
-  // Re-raise default action after a single fork so the parent
-  // terminates as the harness expects.
-  signal(SIGTERM, SIG_DFL);
-  signal(SIGINT, SIG_DFL);
-  raise(s);
-}
-static void fixture_termination_window(int dur) {
-  emit("[fixture-termination-window-I] parent pid=%d pgid=%d ppid=%d\n",
-       getpid(), getpgid(0), getppid());
-  const char *sig = getenv("CLINEMM_FIXTURE_I_SIGNAL");
-  if (sig != NULL && strcmp(sig, "SIGTERM") == 0) {
-    signal(SIGTERM, fixture_i_on_signal);
-    signal(SIGINT, fixture_i_on_signal);
-    raise(SIGTERM);
-  } else if (sig != NULL && strcmp(sig, "SIGKILL") == 0) {
-    // SIGKILL can't be caught; we just fork+exit before sig would
-    // arrive. This still exercises observation during teardown.
-    pid_t c = fork();
-    if (c == 0) { setsid(); sleep(60); _exit(0); }
-    gt_announce(c);
-    raise(SIGKILL);
+  if (c < 0) {
+    fprintf(stderr, "[fixture-i] fork failed: %s\n", strerror(errno));
+    return -1;
   }
-  // No signal scheduled: just sleep so the test can observe the parent
-  // without a race.
+  // Announce the detached child to the GT channel BEFORE the parent
+  // exits. This is the load-bearing claim: the child is created during
+  // teardown, announced while the parent still exists, and then the
+  // parent exits. The tracker must observe the child.
+  gt_announce(c);
+
+  // Re-raise so the parent terminates as the harness expects.
+  // Use signal() to restore default action then raise via kill(getpid())
+  // so the signal can no longer be blocked.
+  sigprocmask(SIG_UNBLOCK, &set, NULL);
+  kill(getpid(), sig);
+  // If we get here, signal was masked -- exit cleanly.
+  return 0;
+}
+
+static void fixture_signal_triggered_fork(int dur) {
+  emit("[fixture-signal-triggered-fork-I] parent pid=%d pgid=%d ppid=%d\n",
+       getpid(), getpgid(0), getppid());
+
+  const char *sig = getenv("CLINEMM_FIXTURE_I_SIGNAL");
+  if (sig != NULL && (strcmp(sig, "SIGTERM") == 0 || strcmp(sig, "SIGINT") == 0)) {
+    fixture_i_wait_for_signal(sig);
+    return;
+  }
+  if (sig != NULL && strcmp(sig, "SIGKILL") == 0) {
+    fprintf(stderr,
+      "[fixture-signal-triggered-fork-I] SIGKILL mode is unsupported: "
+      "SIGKILL cannot be caught or sigwait()ed; the kqueue primitive "
+      "must rely on a different teardown mechanism for SIGKILL. "
+      "Sleeping %d seconds as a no-op.\n", dur);
+    sleep((unsigned)dur);
+    return;
+  }
+  // No signal scheduled: just sleep so the test can observe the
+  // parent without a race.
   sleep((unsigned)dur);
 }
 
@@ -435,7 +516,7 @@ int main(int argc, char **argv) {
   if (fixture == NULL) {
     fprintf(stderr, "usage: %s --fixture=<name> [duration]\n"
       "  names: shell-A node-B python-C mixed-D node-escape python-escape\n"
-      "         double-fork-setsid exec-fork termination-window\n",
+      "         double-fork-setsid exec-fork signal-triggered-fork\n",
       argv[0]);
     return 2;
   }
@@ -452,7 +533,7 @@ int main(int argc, char **argv) {
   else if (strcmp(fixture, "python-escape")        == 0) fixture_python_escape(g_duration);
   else if (strcmp(fixture, "double-fork-setsid")   == 0) fixture_double_fork_setsid(g_duration);
   else if (strcmp(fixture, "exec-fork")            == 0) fixture_exec_fork(g_duration);
-  else if (strcmp(fixture, "termination-window")   == 0) fixture_termination_window(g_duration);
+  else if (strcmp(fixture, "signal-triggered-fork") == 0) fixture_signal_triggered_fork(g_duration);
   else {
     fprintf(stderr, "unknown fixture: %s\n", fixture);
     return 2;

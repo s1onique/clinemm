@@ -61,28 +61,41 @@
   },
   "ground_truth_implementation": {
     "oracle_added": true,
-    "channel_contract": "CLINEMM_GROUND_TRUTH_FD=<write-fd>; each fixture-created process writes 'CREATE pid=<pid> ppid=<pid> pgid=<pid> start_us=<value>\\n'",
+    "round": 2,
+    "round2_fixes": [
+      "P0-1: tracked_has now requires EXACT (pid, start_us) match when start_us != 0; pid-only fallback only when start_us == 0; ground_truth_created_with_start_us_count and ground_truth_created_pid_only_count emitted separately to quantify weak-evidence reliance",
+      "P0-2: 73-operator-handoff.md adds run_env <label> KEY=VAL -- args... helper using 'env KEY=VAL ...'; CLINEMM_FIXTURE_I_SIGNAL is now actually in the environment (not argv)",
+      "P1 oracle-contamination: shell-A and exec-fork no longer spawn ps -o pgid= / tr -d ' '; shell-announced records use pgid=0",
+      "P1 termination: signal-triggered-fork (renamed from termination-window) uses sigprocmask + sigwait() in normal control flow; no fork/setsid/sysctl/write inside a signal handler; SIGKILL documented as unsupported"
+    ],
+    "channel_contract": "CLINEMM_GROUND_TRUTH_FD=<write-fd>; each fixture-created process writes 'CREATE pid=<pid> ppid=<pid> pgid=<pid|0> start_us=<value>\\n'",
     "oracle_authority": "fixture_owned",
     "tracker_authority": "kqueue_reconciliation",
-    "discriminator": "GROUND_TRUTH_CREATED - KQUEUE_TRACKED, by start_us (preferred) or pid (fallback)",
+    "discriminator": "GROUND_TRUTH_CREATED - KQUEUE_TRACKED; EXACT (pid, start_us) when start_us != 0 (fail closed); pid-only when start_us == 0 (weak path, counted separately)",
     "empirical_start_us_evidence": "fork() creates a child with different start_us than parent (verified: parent=1789807010311285, child=1789807011033633)",
+    "unit_test_evidence": "/tmp/test_tracked ran 6/6 PASS including pid-reuse-doesn't-match, same-pid-different-start_us-doesn't-match",
     "fixtures_added": [
       "double-fork-setsid (G)",
       "exec-fork (H)",
-      "termination-window (I, gated by CLINEMM_FIXTURE_I_SIGNAL env var)"
+      "signal-triggered-fork (I, renamed from termination-window; gated by CLINEMM_FIXTURE_I_SIGNAL env var; sigwait-based)"
     ],
-    "build_status": "make clean && make: 0 warnings on -Wall -Wextra",
-    "smoke_test_status": "PASS on agent substrate (no SIGCONT); GT channel end-to-end verified for shell-A, node-B, python-C, mixed-D, node-escape, python-escape, double-fork-setsid, exec-fork, fork-storm",
+    "build_status": "make clean && make: 0 warnings on -Wall -Wextra; three binaries 52760/52088/50880 bytes",
+    "smoke_test_status": "PASS on agent substrate (no SIGCONT); GT channel end-to-end verified for shell-A, exec-fork, signal-triggered-fork (SIGTERM self-raise), control (no signal). ps/tr subprocess noise eliminated.",
     "ready_for_operator_run": true,
     "operator_handoff_packet": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/73-operator-handoff.md",
-    "design_doc": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/71-ground-truth-design.md"
+    "design_doc": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/71-ground-truth-design.md",
+    "false_green_risk_closed": true,
+    "env_as_argv_closed": true,
+    "ps_tr_noise_closed": true,
+    "signal_handler_unsafe_closed": true
   },
   "next_step": {
     "actor": "human_operator",
     "substrate": "unsandboxed Terminal.app (NOT VSCodium-descended)",
     "command_packet": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/73-operator-handoff.md",
     "captured_output_dir": ".factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator/",
-    "decision_rule": "PASS only if E/F + double-fork + setsid + exec-fork + termination-window + 100x hammer all show zero misses AND controls survive. REFUTED if any descendant is missed.",
+    "decision_rule": "PASS only if E/F + double-fork + setsid + exec-fork + signal-triggered-fork + 100x hammer all show zero misses AND controls survive. REFUTED if any descendant is missed.",
+    "decision_rule_fail_closed": "PASS criteria require ground_truth_created_with_start_us_count > 0 across fixtures; if the operator run reports ALL ground_truth_created_pid_only_count (zero strong-evidence records), the strong-evidence path was not exercised and the result is INDETERMINATE.",
     "pass_action": "authorize ACT-CLINEMM-HELPER-SUPERVISED-SPAWN-IMPLEMENTATION01",
     "refuted_action": "HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_RACE; authorize ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01"
   },

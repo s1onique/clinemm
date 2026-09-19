@@ -2375,3 +2375,117 @@ If ANY descendant is missed:
 Until then, the ACT remains halted at
 `HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD` for the
 agent-shell run; the kqueue primitive is not falsified.
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — ROUND-2 BOUNDED CORRECTION — 2026-09-19
+
+**Reviewer halt:** `HALT_ORACLE_CAN_FALSE_GREEN`.
+
+Three new P0s and one bounded P1 were flagged. All closed in this
+round (source-only, no agent-side execution attempted).
+
+### P0-1 — false-green risk in `tracked_has`
+
+The driver's identity comparison used to fall through to pid-only
+when `start_us != 0` did not match. Two failure modes:
+
+  - `GT=(pid=456, start_us=1000)` matched `tracked=(pid=456, start_us=1001)`
+    -> false-GREEN.
+  - `GT=(pid=123, start_us=999)` matched `tracked=(pid=123, start_us=1000)`
+    -> false-GREEN (same pid, different kernel start time).
+
+Both closed by making `tracked_has` require EXACT match on BOTH
+`pid` AND `start_us` when `start_us != 0`, fail closed otherwise.
+Pid-only fallback is now explicit, used ONLY when `start_us == 0`,
+and counted separately via `ground_truth_created_with_start_us_count`
+vs `ground_truth_created_pid_only_count`.
+
+Verified by 6/6 unit tests in /tmp/test_tracked (T2/T3 are the exact
+false-green regressions).
+
+### P0-2 — env-as-argv bug in handoff
+
+The previous `run 76-termination-window-I ... CLINEMM_FIXTURE_I_SIGNAL=SIGTERM`
+command was passing the env-var assignment as an argv element to the
+driver, which forwarded it as argv to the fixture root. `getenv()`
+saw nothing and the fixture took the no-signal branch.
+
+Closed by adding `run_env <label> KEY=VAL -- args...` to
+73-operator-handoff.md, using the standard Unix `env KEY=VAL command ...`
+form. The matrix command below uses the fixed form.
+
+### P1 (termination) — unsafe signal handler
+
+The previous fixture I did `fork+setsid+sleep+gt_announce` inside a
+signal handler. `gt_announce()` calls `sysctl`, `malloc`, `snprintf`,
+`write` — none async-signal-safe per Apple
+`SecureCodingGuide/ValidatingInput.html`. The fixture also
+self-raised SIGTERM, so it proved only "fork after self-triggering
+SIGTERM" not "fork during external teardown".
+
+Closed:
+  - Renamed fixture to `signal-triggered-fork` (honest semantics).
+  - Now blocks SIGTERM/SIGINT with `sigprocmask`, waits via
+    `sigwait()` in normal control flow, then forks detached child
+    and announces it BEFORE the parent exits.
+  - SIGKILL mode documented as unsupported (cannot be sigwait()ed).
+  - Smoke test verified: parent exits -15, detached child survives
+    with PPID=1.
+
+### P1 (oracle contamination) — ps/tr subprocesses
+
+Shell fixtures used to spawn `ps -o pgid= | tr -d ' '` purely to
+enrich the diagnostic pgid field. Each such subprocess is a
+descendant the oracle does NOT announce, weakening the claim that
+`GROUND_TRUTH_CREATED` contains every fixture-created process.
+
+Closed: shell-announced records now use `pgid=0`. The driver's
+discrimination is by `(pid, start_us)`, not by pgid. No `ps`/`tr`
+subprocesses remain in any fixture.
+
+### Files modified (round-2)
+
+  - `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+    — P0-1 `tracked_has` rewritten; `gt_with_start_us` and `gt_pid_only`
+    counters added; new counter fields emitted in `end` event.
+  - `tools/macos-host-helper/native/containment-probe/31-helper-preattach-root.c`
+    — shell-A and exec-fork `ps`/`tr` removed (pgid=0); fixture I renamed
+    to `signal-triggered-fork` and rewritten with `sigprocmask + sigwait`
+    synchronous flow.
+  - `.factory/evidence/.../71-ground-truth-design.md` — UPDATED with round-2
+    fixes, schema additions, unit-test evidence, smoke-test refresh.
+  - `.factory/evidence/.../73-operator-handoff.md` — UPDATED with round-2
+    preamble (`## Round-2 fixes`), `run_env` helper, fixture-I rename.
+  - `.factory/evidence/.../90-gates.txt` — UPDATED with `IDENTITY_FAIL_CLOSED`,
+    `WEAK_PATH_QUANTIFIED`, `ENV_AS_ARGV_CLOSED`, `ORACLE_NO_DESCENDANT_NOISE`,
+    `SIGNAL_HANDLER_ASYNC_SAFE`, `PASS_CRITERIA_FAIL_CLOSED` gates; verdict
+    block updated.
+  - `.factory/evidence/.../result.json` — UPDATED with `round2_fixes` array,
+    weak-path counter fields, fail-closed PASS criteria.
+  - `.factory/epic-board.md` — this section appended.
+
+### Verdict (round-2)
+
+```
+IDENTITY_FALSE_GREEN_RISK      = CLOSED (P0-1, fail-closed, 6/6 unit tests)
+ORACLE_CONTAMINATION_BY_PS_TR  = CLOSED (P1, shell-A + exec-fork use pgid=0)
+SIGNAL_HANDLER_UNSAFE          = CLOSED (P1, sigwait-based fixture I)
+ENV_AS_ARGV                    = CLOSED (P0-2, run_env helper)
+
+GROUND_TRUTH_ORACLE            = IMPLEMENTED + BUILD CLEAN + SMOKE TESTED
+AGENT_SUBSTRATE_HALT           = PRESERVED (RUN_2 reproduced, no change)
+KQUEUE_PRIMITIVE_VIABILITY     = NOT_YET_ADJUDICATED (still requires RUN_3)
+READY_FOR_OPERATOR_RUN         = YES (round-2 packet is now fully executable)
+
+NEW ACT                        = NO (same ACT, additional round)
+PRODUCTION-SIDE CHANGES        = ZERO (apps/, sdk/, helper.c, protocol.ts)
+```
+
+**STOP rule honored (round-2):**
+
+  - No probe execution attempted from agent shell.
+  - All three binaries built clean (`make clean && make`: 0 warnings,
+    `30-helper-preattach-driver=52760`, `31-helper-preattach-root=52088`,
+    `32-helper-preattach-emulator=50880`).
+  - All changes are source-only (drivers + evidence + docs).
+  - The operator Terminal run is required to actually adjudicate the
+    kqueue primitive (RUN_3).
