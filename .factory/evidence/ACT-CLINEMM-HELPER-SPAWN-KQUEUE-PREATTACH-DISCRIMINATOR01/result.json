@@ -59,6 +59,33 @@
     "sdk_delta": "ZERO (per ACT §27)",
     "native_helper_delta": "ZERO (per ACT §27)"
   },
+  "ground_truth_implementation": {
+    "oracle_added": true,
+    "channel_contract": "CLINEMM_GROUND_TRUTH_FD=<write-fd>; each fixture-created process writes 'CREATE pid=<pid> ppid=<pid> pgid=<pid> start_us=<value>\\n'",
+    "oracle_authority": "fixture_owned",
+    "tracker_authority": "kqueue_reconciliation",
+    "discriminator": "GROUND_TRUTH_CREATED - KQUEUE_TRACKED, by start_us (preferred) or pid (fallback)",
+    "empirical_start_us_evidence": "fork() creates a child with different start_us than parent (verified: parent=1789807010311285, child=1789807011033633)",
+    "fixtures_added": [
+      "double-fork-setsid (G)",
+      "exec-fork (H)",
+      "termination-window (I, gated by CLINEMM_FIXTURE_I_SIGNAL env var)"
+    ],
+    "build_status": "make clean && make: 0 warnings on -Wall -Wextra",
+    "smoke_test_status": "PASS on agent substrate (no SIGCONT); GT channel end-to-end verified for shell-A, node-B, python-C, mixed-D, node-escape, python-escape, double-fork-setsid, exec-fork, fork-storm",
+    "ready_for_operator_run": true,
+    "operator_handoff_packet": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/73-operator-handoff.md",
+    "design_doc": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/71-ground-truth-design.md"
+  },
+  "next_step": {
+    "actor": "human_operator",
+    "substrate": "unsandboxed Terminal.app (NOT VSCodium-descended)",
+    "command_packet": ".factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/73-operator-handoff.md",
+    "captured_output_dir": ".factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator/",
+    "decision_rule": "PASS only if E/F + double-fork + setsid + exec-fork + termination-window + 100x hammer all show zero misses AND controls survive. REFUTED if any descendant is missed.",
+    "pass_action": "authorize ACT-CLINEMM-HELPER-SUPERVISED-SPAWN-IMPLEMENTATION01",
+    "refuted_action": "HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_RACE; authorize ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01"
+  },
   "reviewer_ask": "The previous reviewer ask (A/B/C options: signal.cont capability, bundled helper wire, or ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR02 on a different substrate) is still the right next move. The continuation in this run confirms that substrate option C (a different substrate) is the only one physically reachable -- and it is reachable only to an actual human operator with a clean macOS shell or a Developer ID-signed helper build. Neither option can be exercised from this agent.",
   "stop_rule_honored": true,
   "production_side_changes": [],
@@ -67,8 +94,9 @@
     "50-gates.txt",
     "60-substrate-halt.md",
     "70-operator-substrate-entry.txt",
+    "71-ground-truth-design.md",
+    "73-operator-handoff.md",
     "90-gates.txt",
     "result.json"
   ]
 }
-

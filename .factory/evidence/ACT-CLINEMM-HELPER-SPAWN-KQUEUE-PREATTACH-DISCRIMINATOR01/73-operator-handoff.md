@@ -1,0 +1,177 @@
+# 73-operator-handoff.md
+
+## Why this packet exists
+
+The ClineMM agent shell is sandboxed by VSCodium Helper (Plugin) and
+cannot deliver `SIGCONT` to its own spawned children (EPERM on
+`kill(root, SIGCONT)`, including `kill -0`). The kqueue primitive cannot
+be exercised from the agent.
+
+This packet contains the **exact commands** the human operator runs from
+an unsandboxed Terminal.app. The output is written into the repository's
+`.factory/tmp/` so ClineMM can read it back from its sandbox and continue
+the adjudication in the same ACT.
+
+## One-time setup
+
+Open Terminal.app (NOT a ClineMM-controlled terminal). Confirm you are NOT
+in a VSCodium-descended process tree:
+
+```bash
+echo "self=$$ parent=$PPID"
+ps -o pid,ppid,command -p $PPID
+```
+
+The parent command should NOT include `VSCodium` or `claude-dev`. If it
+does, open a fresh Terminal.app window from the Dock.
+
+## Run the matrix
+
+For each fixture, run the driver with the fixture root, redirect both
+stdout (JSONL) and stderr (driver progress messages) to a single file,
+append the exit code at the end. This is one command per fixture:
+
+```bash
+cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+CAP=".factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator"
+mkdir -p "$CAP"
+
+run() {
+  local label="$1"; shift
+  local out="$CAP/$label.jsonl"
+  : > "$out"
+  tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver \
+    "$@" >>"$out" 2>&1
+  echo "RC=$? run_start=$(date -u +%FT%TZ)" >>"$out"
+  echo "[$label] done; rc=$?; size=$(wc -c <"$out")"
+}
+
+# Warmup (conservation controls) — should all show missed_ground_truth_count=0
+run 71-shell-A        tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=shell-A --duration=5
+run 71-node-B         tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=node-B  --duration=5
+run 71-python-C       tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=python-C --duration=5
+run 71-mixed-D        tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=mixed-D  --duration=5
+
+# Escape discriminators
+run 72-node-escape-E  tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=node-escape   --duration=5
+run 72-python-escape-F tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=python-escape --duration=5
+
+# NEW fixtures per ACT §13/§14/§15
+run 74-double-fork-setsid-G tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=double-fork-setsid --duration=5
+run 75-exec-fork-H          tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=exec-fork          --duration=5
+run 76-termination-window-I tools/macos-host-helper/native/containment-probe/31-helper-preattach-root --fixture=termination-window --duration=5 CLINEMM_FIXTURE_I_SIGNAL=SIGTERM
+
+# Fork-storm (immediate-double-fork + 16x storm)
+run 77-fork-storm     tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator 16 5
+
+# Single iteration immediate-double-fork (sanity check)
+run 77-double-fork-1  tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator  1 5
+
+echo "all single-shot runs complete"
+ls -la "$CAP"
+```
+
+## Race hammer (100 runs)
+
+This loops the fork-storm emulator 100 times. Each run produces a small
+JSONL file. ClineMM will then aggregate them.
+
+```bash
+cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+CAP=".factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator"
+mkdir -p "$CAP/race"
+
+run_race() {
+  local i="$1"
+  local out="$CAP/race/run-$i.jsonl"
+  : > "$out"
+  tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver \
+    tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator \
+    16 2 >>"$out" 2>&1
+  echo "RC=$?" >>"$out"
+}
+
+for i in $(seq 1 100); do
+  run_race "$i"
+done
+
+echo "race hammer complete"
+ls "$CAP/race" | wc -l   # expect 100
+```
+
+## Negative controls (independent of the matrix)
+
+Before AND after the matrix, verify the production helper survives:
+
+```bash
+# Before:
+test -S /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock \
+  && echo "HELPER_SOCK=ALIVE" || echo "HELPER_SOCK=DEAD"
+lsof -U /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+
+# Spawn an unrelated control (NOT included in any GT channel)
+sleep 600 &
+CONTROL_PID=$!
+echo "CONTROL_PID=$CONTROL_PID"
+
+# After matrix:
+kill -0 "$CONTROL_PID" && echo "CONTROL_SURVIVES=PASS" || echo "CONTROL_SURVIVES=FAIL"
+kill "$CONTROL_PID"
+test -S /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock \
+  && echo "HELPER_SOCK=ALIVE_AFTER" || echo "HELPER_SOCK=DEAD_AFTER"
+```
+
+## What ClineMM will do next
+
+After the operator runs the commands above, ClineMM ingests the JSONL
+files from `.factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-
+DISCRIMINATOR01/operator/`. For each fixture it computes:
+
+```
+ground_truth_missed_count = |GROUND_TRUTH_CREATED - KQUEUE_TRACKED|
+```
+
+by start_us (when present) or pid (fallback). The PASS/REFUTED decision
+per ACT §25 is based on:
+
+  - E/F (node-escape, python-escape)              zero misses
+  - immediate double-fork                          zero misses
+  - fork-storm (single run)                        zero misses
+  - double-fork-setsid-G                           zero misses
+  - exec-fork-H                                    zero misses
+  - termination-window-I                           zero misses
+  - 100/100 race hammer                            zero misses
+  - permanent helper survives                      PASS
+  - unrelated control survives                     PASS
+
+If all of the above are GREEN:
+  KQUEUE_PRIMITIVE_VIABLE_UNDER_SUSPENDED_HELPER_SPAWN = PASS
+  → authorize ACT-CLINEMM-HELPER-SUPERVISED-SPAWN-IMPLEMENTATION01
+
+If ANY descendant is missed:
+  HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_RACE
+  → authorize ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01
+
+## What ClineMM will NOT do
+
+- Will NOT modify `apps/`, `sdk/`, `helper.c`, `protocol.ts`, `client.ts`,
+  `CommandJobManager`, telemetry, or UI (per ACT §19, §20, §27).
+- Will NOT add `signal.cont` to the production helper (per ACT §19).
+- Will NOT attempt to run any probe from its sandbox (EPERM is reproduced
+  every time; this is the substrate-blocker the operator Terminal
+  bypasses).
+
+## Sanity check before running
+
+If you want to confirm Terminal.app is unsandboxed before starting:
+
+```bash
+# Should be tiny (the macOS Terminal.app sandbox profile is permissive).
+ps -p $$ -o pid,ppid,user,command
+# Parent should be /System/Applications/Utilities/Terminal.app or similar
+# loginwindow. NOT VSCodium, NOT Claude, NOT codium-clinemm.
+```
+
+Then proceed with the matrix commands above.

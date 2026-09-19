@@ -2231,3 +2231,147 @@ which this agent does not have.
 Until that handoff occurs, the ACT remains halted at
 `HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD` (now confirmed
 by reproduction in RUN_2 as well).
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — ORACLE IMPLEMENTED / READY_FOR_OPERATOR_RUN — 2026-09-19
+
+**Reviewer instruction:** "Accept the agent-substrate halt; distinguish
+chat evidence from repo-bound evidence; keep the same ACT; implement the
+oracle in-repo, then hand one exact command to the human operator."
+
+**This round's deliverables (source-only, no agent-side execution):**
+
+  - **Ground-truth oracle implemented.** Three native probe binaries
+    (`30-helper-preattach-driver.c`, `31-helper-preattach-root.c`,
+    `32-helper-preattach-emulator.c`) extended with an inherited-FD
+    ground-truth channel (`CLINEMM_GROUND_TRUTH_FD=<fd>`). Each
+    fixture-created process writes `CREATE pid=<pid> ppid=<pid>
+    pgid=<pid> start_us=<value>\n` immediately after identity becomes
+    valid. The driver collects these records via a pipe drained after
+    the kevent loop. The MISSED discriminator is
+    `GROUND_TRUTH_CREATED - KQUEUE_TRACKED`, by `start_us` when
+    available, else by pid.
+  - **Identity uses kernel start time.** `start_us = p_starttime.tv_sec
+    * 1e6 + tv_usec` read via `sysctl(KERN_PROC)`. Empirically verified:
+    on this substrate, `fork()` creates a child with a different
+    `start_us` than its parent (parent=1789807010311285,
+    child=1789807011033633), so `start_us` is a per-probe-unique
+    identifier.
+  - **WATCH_ESRCH_SHORT_LIVED classification.** A watch that fails with
+    `ESRCH` is classified as `ESRCH_SHORT_LIVED` (the watched identity
+    was already gone before the watch armed). This is NOT a primitive
+    failure unless that identity had ground-truth descendants.
+  - **New end-event schema.** `tracked`, `ground_truth_created[]`,
+    `watch_esrch[]`, `missed_ground_truth[]`,
+    `missed_ground_truth_count`, `counters {fork_events, watch_attempts,
+    watch_success, watch_esrch, watch_failed_other,
+    ground_truth_created_count, ground_truth_seen_count,
+    ground_truth_missed_count}`, `duration_ms`.
+  - **New fixtures (G/H/I).** `double-fork-setsid` (§13), `exec-fork`
+    (§14), `termination-window` (§15, gated by `CLINEMM_FIXTURE_I_SIGNAL`
+    env var).
+  - **Build clean.** `make clean && make` produces 0 warnings on
+    `-Wall -Wextra`.
+  - **GT-channel smoke test PASS on agent substrate.** A small
+    /tmp/gtsmoke harness (no SIGCONT) verified that every fixture emits
+    CREATE records as expected for shell-A, node-B, python-C, mixed-D,
+    node-escape, python-escape, double-fork-setsid, exec-fork,
+    fork-storm. Sample captures in `71-ground-truth-design.md`.
+
+**Two important classifications from the reviewer (corrected vs my
+prior round):**
+
+  ```
+  OPERATOR_TERMINAL_SIGCONT = OBSERVED_BY_OPERATOR / NOT_REPO_BOUND
+  AGENT_SUBSTRATE_SIGCONT   = LIVE EPERM / DURABLY_BOUND
+  ```
+
+  The PIDs 16386 / 16383 I previously challenged do NOT exist in any
+  committed evidence file. The reviewer's first Terminal run was
+  interactive in this conversation, not durable. My prior halt packet
+  preserved this nuance; this round does not need to revise it.
+
+**Operator handoff packet:**
+
+`.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/73-operator-handoff.md`
+contains the exact commands the human operator runs from Terminal.app:
+
+  - 9 single-shot runs (warmups A-D + escapes E/F + new fixtures G/H/I)
+  - 1 fork-storm run
+  - 1 immediate-double-fork-1 sanity
+  - 100-iteration race hammer
+  - Negative controls (helper survival + unrelated sleep control)
+
+Output captured to
+`.factory/tmp/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/operator/`
+which ClineMM reads back from its sandbox.
+
+**Verdict (this round):**
+
+```
+GROUND_TRUTH_ORACLE             = IMPLEMENTED + BUILD CLEAN
+GROUND_TRUTH_INDEPENDENT        = YES (fixture-owned, not tracker-owned)
+WATCH_ESRCH_CLASSIFICATION      = IMPLEMENTED
+NEW_END_EVENT_SCHEMA            = IMPLEMENTED
+NEW_FIXTURES_G_H_I              = IMPLEMENTED
+READY_FOR_OPERATOR_RUN          = YES
+
+KQUEUE_PRIMITIVE_VIABILITY      = NOT_YET_ADJUDICATED
+  (still pending RUN_3 from unsandboxed Terminal.app)
+
+AGENT_SUBSTRATE_HALT            = PRESERVED (RUN_2 reproduced)
+HUMAN TERMINAL RUN              = REQUIRED (RUN_3 planned)
+NEW ACT                         = NO (same ACT, additional round)
+HELPER PROTOCOL CHANGE          = NO
+```
+
+**STOP rule honored:**
+
+  - No production-side change to `apps/` or `sdk/`.
+  - No `helper.c` / `protocol.ts` / `client.ts` change.
+  - No `CommandJobManager` change.
+  - No telemetry / UI change.
+  - No probe execution attempted from agent shell (would re-hit the
+    same EPERM substrate halt). Probe binaries built clean; agent stops
+    at `READY_FOR_OPERATOR_RUN`.
+
+**Files modified (this round):**
+
+  - `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+    — pipe-based GT channel; GT record parser; WATCH_ESRCH_SHORT_LIVED
+    classification; new end-event schema with counters; ~377 lines added.
+  - `tools/macos-host-helper/native/containment-probe/31-helper-preattach-root.c`
+    — GT init / announce helpers; updated A-F fixtures to announce
+    immediate children + grandchildren (via bash `>&$GTFD` for shell-A,
+    via `os.write(fd, ...)` for python-C/D/F via tempfile, via node.js
+    `fs.writeSync(fd, ...)` for B/E); three new fixtures G/H/I.
+  - `tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator.c`
+    — GT init / announce on every fork() (root + child1 + grandchild +
+    16 storm children).
+  - `.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/71-ground-truth-design.md`
+    — NEW (oracle design + smoke-test results).
+  - `.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/73-operator-handoff.md`
+    — NEW (exact commands for the human operator).
+  - `.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/90-gates.txt`
+    — UPDATED (oracle gates added; verdict block reflects READY_FOR_OPERATOR_RUN).
+  - `.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/result.json`
+    — UPDATED (preserves prior halt; adds ground_truth_implementation
+    block, next_step block, evidence_files list).
+  - `.factory/epic-board.md` — this section appended.
+
+**Next ACT (post-RUN_3):**
+
+If RUN_3 (operator Terminal) reports zero misses on E/F + double-fork +
+setsid + exec-fork + termination-window + 100x hammer AND controls
+survive:
+
+  → KQUEUE_PRIMITIVE_VIABLE_UNDER_SUSPENDED_HELPER_SPAWN = PASS
+  → authorize ACT-CLINEMM-HELPER-SUPERVISED-SPAWN-IMPLEMENTATION01
+
+If ANY descendant is missed:
+
+  → HALT_HELPER_SUSPENDED_PREATTACH_KQUEUE_RACE
+  → authorize ACT-CLINEMM-ESCAPED-DESCENDANT-REMEDIATION-DECISION01
+
+Until then, the ACT remains halted at
+`HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD` for the
+agent-shell run; the kqueue primitive is not falsified.

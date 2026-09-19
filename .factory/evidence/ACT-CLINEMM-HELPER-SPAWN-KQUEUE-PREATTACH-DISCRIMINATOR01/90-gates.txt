@@ -61,11 +61,12 @@ Continuation gates (could not be exercised because §0/§26 substrate gate faile
   [SKIP] TERMINATION_WINDOW                    -- §15 NOT run
   [SKIP] RACE_HAMMER_RUNS=100                  -- §12 NOT run
   [SKIP] RACE_HAMMER_MISSES=0                  -- §12 NOT run
-  [SKIP] UNRELATED_CONTROL_SURVIVES            -- §16 NOT run
+  [SKIP] UNRELATED_CONTROL_SURVIVES            -- §16 deferred to operator run
+  [SKIP] PERMANENT_HELPER_SURVIVES             -- §16 deferred to operator run
 
 Production-scope gates:
 
-  [PASS] NO_PROCESS_NAME_OWNERSHIP             -- identity from pid+ppid+pgid+start
+  [PASS] NO_PROCESS_NAME_OWNERSHIP             -- identity from pid+ppid+pgid+start_us
   [PASS] NO_ARBITRARY_PID_KILL                 -- driver only kills its own children
   [PASS] NO_PRODUCTION_HELPER_PROTOCOL_CHANGE  -- helper.c/protocol.ts untouched
   [PASS] NO_COMMANDJOBMANAGER_CHANGE           -- CommandJobManager untouched
@@ -73,17 +74,56 @@ Production-scope gates:
   [PASS] DIFF_CHECK                            -- no apps/, sdk/, helper.c, protocol.ts
   [PASS] EVIDENCE_BOUND                        -- all under .factory/evidence/ + .factory/tmp/
 
-Final gate verdict:
-  HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, confirmed by reproduction)
+Oracle gates (added in this round):
 
-  Substrate runnability:
-    RUN_1 (VSCodium-descended sandbox): SUBSTRATE_BLOCKED, EPERM
-    RUN_2 (operator terminal, this run): SUBSTRATE_BLOCKED, EPERM
+  [PASS] GROUND_TRUTH_CHANNEL                  -- §3 implemented; CLINEMM_GROUND_TRUTH_FD
+                                                   pipe-based; verified end-to-end via
+                                                   /tmp/gtsmoke harness on agent substrate
+  [PASS] GROUND_TRUTH_INDEPENDENT_OF_TRACKER   -- §4 oracle is fixture-owned (writes
+                                                   CREATE records from each fixture-created
+                                                   process); tracker is driver-owned (kqueue
+                                                   + reconciliation)
+  [PASS] WATCH_ESRCH_CLASSIFICATION            -- §5 watch_failed event now emits
+                                                   class=ESRCH_SHORT_LIVED vs
+                                                   class=FAILED_OTHER
+  [PASS] NEW_END_EVENT_SCHEMA                  -- §6 driver emits tracked,
+                                                   ground_truth_created, watch_esrch,
+                                                   watch_failed_other, missed_ground_truth,
+                                                   missed_ground_truth_count, duration_ms,
+                                                   counters {fork_events, watch_attempts,
+                                                   watch_success, watch_esrch,
+                                                   watch_failed_other,
+                                                   ground_truth_created_count,
+                                                   ground_truth_seen_count,
+                                                   ground_truth_missed_count}
+  [PASS] NEW_FIXTURES                          -- §13 double-fork-setsid (G)
+                                                   §14 exec-fork (H)
+                                                   §15 termination-window (I, gated)
+                                                   all build clean
+  [PASS] ORACLE_BUILDS_CLEAN                   -- make clean && make: 0 warnings
+  [PASS] ORACLE_INDEPENDENT_OF_TRACKER         -- GT records are written by the fixture
+                                                   tree via the inherited fd; the driver
+                                                   reads them from the read end and stores
+                                                   them in gt_created[] without consulting
+                                                   its own tracked/seen/reconciled sets
+  [PASS] READY_FOR_OPERATOR_RUN                -- §28 stop-rule: built but NOT executed
+                                                   from ClineMM agent shell
+  [PASS] OPERATOR_HANDOFF_PACKET               -- 73-operator-handoff.md contains exact
+                                                   commands for the human Terminal.app run
 
-  The kqueue primitive itself is NOT falsified. The substrate that would let
-  the experiment run is not reachable from this agent's VSCodium-Helper-
-  Plugin-sandboxed shell. The reviewer's premise that a previous unsandboxed
-  Terminal run cleared the blocker is unverified.
+Final gate verdict (this round):
+  HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD  (preserved, RUN_2 reproduced)
+  GROUND_TRUTH_ORACLE                                     = IMPLEMENTED + BUILD CLEAN
+  READY_FOR_OPERATOR_RUN                                  = YES
+  KQUEUE_PRIMITIVE_VIABILITY                              = NOT_YET_ADJUDICATED
+  NEXT                                                    = HUMAN_OPERATOR_RUNS_FROM_TERMINAL
 
-See 60-substrate-halt.md (preserved) and 70-operator-substrate-entry.txt (new)
-for full substrate analysis.
+Substrate runnability (3 runs so far):
+  RUN_1 (VSCodium-descended sandbox, prior halt):    SUBSTRATE_BLOCKED, EPERM
+  RUN_2 (operator continuation from agent):          SUBSTRATE_BLOCKED, EPERM
+  RUN_3 (planned: human operator's Terminal.app):    required for kqueue adjudication
+
+See 60-substrate-halt.md (preserved), 70-operator-substrate-entry.txt (RUN_2
+reproduction), 71-ground-truth-design.md (this round's oracle implementation),
+73-operator-handoff.md (exact commands for the human operator) for full
+substrate analysis and the next-step action.

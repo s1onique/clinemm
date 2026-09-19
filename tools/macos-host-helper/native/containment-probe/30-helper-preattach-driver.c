@@ -10,19 +10,32 @@
 //   fork storm)?
 //
 // Method:
-//   1. Use POSIX_SPAWN_START_SUSPENDED -- the documented Darwin primitive
+//   1. Create an independent ground-truth channel:
+//      pipe(2) -> write end inherited by the spawned subtree via
+//      CLINEMM_GROUND_TRUTH_FD=<write-fd>. Each fixture-created
+//      descendant writes "CREATE pid=<pid> ppid=<pid> pgid=<pid>
+//      start_us=<value>\n" immediately after its identity becomes
+//      valid. This oracle is owned by the fixture tree, NOT the
+//      tracker, so MISS = GROUND_TRUTH_CREATED - KQUEUE_TRACKED is
+//      independent of the kqueue census.
+//   2. Use POSIX_SPAWN_START_SUSPENDED -- the documented Darwin primitive
 //      that creates the child with its task SUSPENDED at the kernel
 //      boundary, so it cannot execute a single user-space instruction
 //      until SIGCONT is delivered (Apple posix_spawnattr_setflags(3)).
-//   2. While the root is suspended, register kqueue EVFILT_PROC |
+//   3. While the root is suspended, register kqueue EVFILT_PROC |
 //      NOTE_FORK | NOTE_EXEC | NOTE_EXIT on the root PID.
-//   3. Verify the registration succeeded.
-//   4. Deliver SIGCONT.
-//   5. Run the kevent loop: on NOTE_FORK, reconcile via sysctl
+//   4. Verify the registration succeeded.
+//   5. Deliver SIGCONT (NOT performed by the ClineMM agent shell --
+//      SIGCONT comes from the human operator's Terminal.app because
+//      the VSCodium-Helper-Plugin-sandboxed agent shell returns EPERM
+//      on cross-process signal delivery).
+//   6. Run the kevent loop: on NOTE_FORK, reconcile via sysctl
 //      KERN_PROC to find the new child PIDs (Apple's kevent(2) does
 //      not put the child PID in ident/data on all substrates), and
 //      register watches on each new child recursively.
-//   6. Dump the tracked set + a per-fixture result as JSON.
+//   7. Drain the ground-truth pipe until EOF (or timeout).
+//   8. Dump the tracked set + ground-truth set + missed set + counters
+//      as JSON. The MISSED count is the authoritative discriminator.
 //
 // CRITICAL: NO cooperative fixture delay. The fixture root may fork,
 // exec, setsid, double-fork, fork-storm immediately after SIGCONT.
@@ -38,18 +51,44 @@
 //   boundary. The actual production kill chain is inherited from the
 //   helper evidence chain and is NOT re-falsified here.
 //
+// Ground-truth oracle (independent of the tracker):
+//   The fixture tree emits CREATE records on a pipe inherited from the
+//   driver. The driver's kqueue-based reconciliation builds a separate
+//   KQUEUE_TRACKED set keyed on (start_us, pid). The MISSED set is
+//   GROUND_TRUTH_CREATED - KQUEUE_TRACKED (by start_us, with pid as a
+//   fallback when start_us == 0).
+//
+//   start_us is the kernel process start time (struct timeval converted
+//   to microseconds), read via sysctl(KERN_PROC) for self and for any
+//   child whose identity needs to be enriched. This gives stable
+//   process identity across the probe duration (PID reuse is not a
+//   hazard for the ground-truth oracle within a single run).
+//
+// WATCH_ESRCH_SHORT_LIVED classification:
+//   A watch that fails with ESRCH is NOT a primitive failure if the
+//   missing identity has zero ground-truth descendants. The
+//   load-bearing condition is "every created descendant identity is
+//   accounted for", not "every intermediate gets watched".
+//
 // Output (JSON line stream):
 //   {"event":"spawn","pid":N,"suspended":true}
 //   {"event":"watch","pid":N}
+//   {"event":"watch_failed","pid":N,"errno":N,"errstr":"...","class":"ESRCH_SHORT_LIVED|FAILED_OTHER"}
 //   {"event":"sigcont","pid":N}
-//   {"event":"fork","parent_pid":N,"child_pid":N}
+//   {"event":"fork","parent_pid":N,"kevent_data":N}
 //   {"event":"exec","pid":N}
 //   {"event":"exit","pid":N}
-//   {"event":"end","tracked":[...],"seen":[...],"missed_descendants":[...],
-//    "missed_descendants_count":N,"duration_ms":N}
+//   {"event":"ground_truth","kind":"CREATE","pid":N,"ppid":N,"pgid":N,"start_us":N}
+//   {"event":"end","tracked":[...],"ground_truth_created":[...],
+//    "watch_esrch":[...],"missed_ground_truth":[...],"missed_ground_truth_count":N,
+//    "counters":{...},"duration_ms":N}
 //
 // Usage:
 //   30-helper-preattach-driver <root-binary> [fixture-args...]
+//
+// Environment:
+//   PREATTACH_DURATION_SEC          override loop duration (default 5)
+//   CLINEMM_GT_TRACE=1              (cosmetic only; CREATE events always emit)
 
 #include <sys/types.h>
 #include <sys/event.h>
@@ -66,16 +105,60 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <fcntl.h>
+#include <poll.h>
 #include <mach/mach_time.h>
 
 extern char **environ;
 
+// ---------- Tracked / seen pid tables ----------
 #define MAX_PIDS 4096
 static pid_t tracked[MAX_PIDS];
 static int ntracked = 0;
 static pid_t seen_pids[8192];
 static int nseen = 0;
 static bool seen_set[100000] = { false };
+
+// ---------- Watch-result classification (ESRCH_SHORT_LIVED vs OTHER) ----------
+static pid_t watch_esrch_list[MAX_PIDS];
+static int nwatch_esrch = 0;
+static pid_t watch_failed_other_list[MAX_PIDS];
+static int nwatch_failed_other = 0;
+static int watch_attempts = 0;
+static int watch_success = 0;
+static int watch_esrch_total = 0;
+static int watch_failed_other_total = 0;
+
+// ---------- Ground-truth oracle (independent channel) ----------
+typedef struct {
+  pid_t pid;
+  pid_t ppid;
+  pid_t pgid;
+  uint64_t start_us;  // 0 if the writer could not read kinfo_proc
+} gt_record_t;
+
+#define MAX_GT 4096
+static gt_record_t gt_created[MAX_GT];
+static int ngt_created = 0;
+
+// pid -> start_us mapping (populated when we discover start_us for a tracked pid).
+typedef struct {
+  pid_t pid;
+  uint64_t start_us;
+} pid_start_t;
+#define MAX_PID_START 4096
+static pid_start_t pid_start[MAX_PID_START];
+static int npid_start = 0;
+
+// fork_events is incremented on every NOTE_FORK we observe.
+static int fork_events = 0;
+
+// Ground-truth pipe read end (set in main before posix_spawn).
+static int gt_read_fd = -1;
+// Ground-truth pipe write end kept by the driver ONLY to close-on-exec
+// (we never write from the driver side; the fixture tree writes via the
+// inherited fd).
+static int gt_write_fd = -1;
 
 static volatile sig_atomic_t g_done = 0;
 static void on_sig(int s) { (void)s; g_done = 1; }
@@ -84,6 +167,28 @@ static void emit(const char *fmt, ...) {
   va_list ap; va_start(ap, fmt);
   vprintf(fmt, ap); va_end(ap);
   fflush(stdout);
+}
+
+// ---------- start_us helper ----------
+// Lookup start_us for a pid by scanning kinfo_proc. Returns 0 if not found.
+static uint64_t lookup_start_us(pid_t p) {
+  int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
+  size_t len = 0;
+  if (sysctl(mib, 3, NULL, &len, NULL, 0) < 0) return 0;
+  struct kinfo_proc *procs = (struct kinfo_proc *)malloc(len);
+  if (procs == NULL) return 0;
+  if (sysctl(mib, 3, procs, &len, NULL, 0) < 0) { free(procs); return 0; }
+  int n = (int)(len / sizeof(struct kinfo_proc));
+  uint64_t out = 0;
+  for (int i = 0; i < n; i++) {
+    if (procs[i].kp_proc.p_pid == p) {
+      out = (uint64_t)procs[i].kp_proc.p_starttime.tv_sec * 1000000ULL
+          + (uint64_t)procs[i].kp_proc.p_starttime.tv_usec;
+      break;
+    }
+  }
+  free(procs);
+  return out;
 }
 
 static int already_tracked(pid_t p) {
@@ -101,9 +206,27 @@ static void add_seen(pid_t p) {
   if (nseen < (int)(sizeof(seen_pids)/sizeof(seen_pids[0]))) seen_pids[nseen++] = p;
 }
 
+// Bind start_us for a tracked pid (best-effort).
+static void bind_pid_start(pid_t p, uint64_t start_us) {
+  if (p <= 0) return;
+  for (int i = 0; i < npid_start; i++) {
+    if (pid_start[i].pid == p) { pid_start[i].start_us = start_us; return; }
+  }
+  if (npid_start < MAX_PID_START) {
+    pid_start[npid_start].pid = p;
+    pid_start[npid_start].start_us = start_us;
+    npid_start++;
+  }
+}
+
 static int kq = -1;
 static void watch(pid_t p) {
   if (already_tracked(p)) return;
+  watch_attempts++;
+  // Best-effort: bind start_us from kinfo_proc when possible.
+  uint64_t su = lookup_start_us(p);
+  if (su != 0) bind_pid_start(p, su);
+
   struct kevent ev = { 0 };
   ev.ident = (uintptr_t)p;
   ev.filter = EVFILT_PROC;
@@ -113,10 +236,24 @@ static void watch(pid_t p) {
   if (r == 0) {
     add_tracked(p);
     add_seen(p);
+    watch_success++;
     emit("{\"event\":\"watch\",\"pid\":%d}\n", p);
   } else {
-    emit("{\"event\":\"watch_failed\",\"pid\":%d,\"errno\":%d,\"errstr\":\"%s\"}\n",
-         p, errno, strerror(errno));
+    int e = errno;
+    // Classify ESRCH as a short-lived race: the watched identity was
+    // already gone before the watch armed. This is NOT a primitive
+    // failure unless that identity had ground-truth descendants.
+    if (e == ESRCH) {
+      watch_esrch_total++;
+      if (nwatch_esrch < MAX_PIDS) watch_esrch_list[nwatch_esrch++] = p;
+      emit("{\"event\":\"watch_failed\",\"pid\":%d,\"errno\":%d,\"errstr\":\"%s\",\"class\":\"ESRCH_SHORT_LIVED\"}\n",
+           p, e, strerror(e));
+    } else {
+      watch_failed_other_total++;
+      if (nwatch_failed_other < MAX_PIDS) watch_failed_other_list[nwatch_failed_other++] = p;
+      emit("{\"event\":\"watch_failed\",\"pid\":%d,\"errno\":%d,\"errstr\":\"%s\",\"class\":\"FAILED_OTHER\"}\n",
+           p, e, strerror(e));
+    }
   }
 }
 
@@ -167,6 +304,137 @@ static void dump_pids(const char *label, const pid_t *arr, int n) {
   printf("]");
 }
 
+static void dump_gt_records(void) {
+  printf("\"ground_truth_created\":[");
+  for (int i = 0; i < ngt_created; i++) {
+    printf("%s{\"pid\":%d,\"ppid\":%d,\"pgid\":%d,\"start_us\":%llu}",
+           i ? "," : "",
+           gt_created[i].pid, gt_created[i].ppid, gt_created[i].pgid,
+           (unsigned long long)gt_created[i].start_us);
+  }
+  printf("]");
+}
+
+// Drain the ground-truth pipe. Read records until EOF or a timeout.
+// Each record: "CREATE pid=<pid> ppid=<pid> pgid=<pid> start_us=<value>\n"
+// start_us may be 0 if the writer could not read kinfo_proc.
+static void drain_ground_truth(int timeout_ms) {
+  if (gt_read_fd < 0) return;
+
+  char buf[4096];
+  size_t carry_off = 0;
+  size_t carry_len = 0;
+
+  // Make the read end non-blocking so we can poll.
+  int flags = fcntl(gt_read_fd, F_GETFL, 0);
+  fcntl(gt_read_fd, F_SETFL, flags | O_NONBLOCK);
+
+  time_t t0 = time(NULL);
+  while (1) {
+    struct pollfd pfd = { .fd = gt_read_fd, .events = POLLIN };
+    int pr = poll(&pfd, 1, 100);
+    if (pr < 0) {
+      if (errno == EINTR) continue;
+      break;
+    }
+    if (pr == 0) {
+      // timeout tick
+      if ((int)((time(NULL) - t0) * 1000) >= timeout_ms) break;
+      continue;
+    }
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      // peer closed; drain remaining then exit
+    }
+    ssize_t n = read(gt_read_fd, buf + carry_off, sizeof(buf) - carry_off);
+    if (n < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
+      if (errno == EINTR) continue;
+      break;
+    }
+    if (n == 0) break;
+    carry_len = carry_off + (size_t)n;
+
+    // Parse complete lines.
+    size_t scan = 0;
+    while (scan < carry_len) {
+      size_t eol = scan;
+      while (eol < carry_len && buf[eol] != '\n') eol++;
+      if (eol >= carry_len) break;  // no full line yet
+      buf[eol] = '\0';
+      const char *line = buf + scan;
+
+      // Parse "CREATE pid=N ppid=N pgid=N start_us=N"
+      if (strncmp(line, "CREATE ", 7) == 0 && ngt_created < MAX_GT) {
+        pid_t pid = 0, ppid = 0, pgid = 0;
+        uint64_t start_us = 0;
+        const char *p = line + 7;
+        while (*p == ' ') p++;
+        if (sscanf(p, "pid=%d ppid=%d pgid=%d start_us=%llu",
+                   &pid, &ppid, &pgid,
+                   (unsigned long long *)&start_us) >= 3) {
+          gt_created[ngt_created].pid = pid;
+          gt_created[ngt_created].ppid = ppid;
+          gt_created[ngt_created].pgid = pgid;
+          gt_created[ngt_created].start_us = start_us;
+          ngt_created++;
+          emit("{\"event\":\"ground_truth\",\"kind\":\"CREATE\",\"pid\":%d,\"ppid\":%d,\"pgid\":%d,\"start_us\":%llu}\n",
+               pid, ppid, pgid, (unsigned long long)start_us);
+        }
+      }
+      scan = eol + 1;
+    }
+    // Compact carry.
+    if (scan > 0) {
+      size_t rem = carry_len - scan;
+      memmove(buf, buf + scan, rem);
+      carry_off = rem;
+      carry_len = rem;
+    } else {
+      carry_off = 0;
+      carry_len = 0;
+    }
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) break;
+  }
+  // best-effort final drain
+  while (1) {
+    ssize_t n = read(gt_read_fd, buf, sizeof(buf));
+    if (n <= 0) break;
+  }
+  fcntl(gt_read_fd, F_SETFL, flags);
+}
+
+// Returns 1 if (start_us, pid) is in KQUEUE_TRACKED, else 0.
+// Identity preference: start_us when available, else pid.
+// Within one probe run, start_us is a unique per-process identifier
+// (verified empirically: fork() creates a child with a different
+// start_us than its parent).
+static int tracked_has(gt_record_t *r) {
+  // First try start_us.
+  if (r->start_us != 0) {
+    for (int i = 0; i < npid_start; i++) {
+      if (pid_start[i].pid != 0 && pid_start[i].start_us == r->start_us) {
+        return 1;
+      }
+    }
+  }
+  // Fallback: pid-only.
+  if (r->pid > 0 && already_tracked(r->pid)) return 1;
+  return 0;
+}
+
+// Compute MISS = GROUND_TRUTH_CREATED - KQUEUE_TRACKED.
+// Returns count; fills `missed_out` (capped at max_missed).
+static int compute_missed(gt_record_t *missed_out, int max_missed) {
+  int n = 0;
+  for (int i = 0; i < ngt_created; i++) {
+    if (!tracked_has(&gt_created[i])) {
+      if (n < max_missed) missed_out[n] = gt_created[i];
+      n++;
+    }
+  }
+  return n;
+}
+
 int main(int argc, char **argv) {
   if (argc < 2) {
     fprintf(stderr, "usage: %s <root-binary> [fixture-args...]\n", argv[0]);
@@ -180,6 +448,18 @@ int main(int argc, char **argv) {
   kq = kqueue();
   if (kq < 0) { perror("kqueue"); return 1; }
 
+  // ---------- Ground-truth pipe ----------
+  // Created BEFORE posix_spawn so the write fd is inherited by every
+  // descendant the fixture tree creates. The fixture tree writes
+  // CREATE records on this fd; the driver reads from gt_read_fd.
+  int gt_pipe[2];
+  if (pipe(gt_pipe) != 0) {
+    perror("pipe(gt)");
+    return 1;
+  }
+  gt_read_fd = gt_pipe[0];
+  gt_write_fd = gt_pipe[1];
+
   posix_spawnattr_t attr;
   posix_spawnattr_init(&attr);
   short flags = POSIX_SPAWN_START_SUSPENDED;
@@ -188,16 +468,29 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // Build a fresh environment with CLINEMM_GROUND_TRUTH_FD exposed.
+  // We do NOT modify the caller's environ -- we build a one-shot copy.
+  char fd_env[64];
+  snprintf(fd_env, sizeof fd_env, "CLINEMM_GROUND_TRUTH_FD=%d", gt_write_fd);
+  size_t env_count = 0;
+  while (environ[env_count] != NULL) env_count++;
+  char **new_env = (char **)calloc(env_count + 2, sizeof(char *));
+  if (new_env == NULL) { perror("calloc env"); return 1; }
+  for (size_t i = 0; i < env_count; i++) new_env[i] = environ[i];
+  new_env[env_count] = fd_env;
+  new_env[env_count + 1] = NULL;
+
   char **root_argv = &argv[1];
 
   pid_t root = -1;
-  int sr = posix_spawn(&root, root_argv[0], NULL, &attr, root_argv, environ);
+  int sr = posix_spawn(&root, root_argv[0], NULL, &attr, root_argv, new_env);
   posix_spawnattr_destroy(&attr);
   if (sr != 0) {
     fprintf(stderr, "posix_spawn failed: %s\n", strerror(sr));
     return 1;
   }
-  emit("{\"event\":\"spawn\",\"pid\":%d,\"suspended\":true}\n", root);
+  emit("{\"event\":\"spawn\",\"pid\":%d,\"suspended\":true,\"gt_fd\":%d}\n",
+       root, gt_write_fd);
 
   watch(root);
 
@@ -238,6 +531,7 @@ int main(int argc, char **argv) {
       int64_t  kdata  = events[i].data;
 
       if (fflags & NOTE_FORK) {
+        fork_events++;
         emit("{\"event\":\"fork\",\"parent_pid\":%d,\"kevent_data\":%lld}\n",
              ident, (long long)kdata);
         add_seen(ident);
@@ -257,19 +551,14 @@ int main(int argc, char **argv) {
 
   full_reconcile();
 
-  pid_t buf[1024];
-  int missed_descendants = 0;
-  pid_t missed[1024];
-  for (int i = 0; i < ntracked; i++) {
-    int n = list_children(tracked[i], buf, 1024);
-    for (int j = 0; j < n; j++) {
-      if (!already_tracked(buf[j]) && buf[j] != 0) {
-        if (missed_descendants < 1024) {
-          missed[missed_descendants++] = buf[j];
-        }
-      }
-    }
-  }
+  // Drain ground-truth pipe. Give the fixture tree up to (duration+2)
+  // seconds to publish all CREATE records before EOF.
+  int drain_ms = (duration_sec + 2) * 1000;
+  drain_ground_truth(drain_ms);
+
+  // Compute the authoritative MISSED set.
+  gt_record_t missed_gt[MAX_GT];
+  int missed_count = compute_missed(missed_gt, MAX_GT);
 
   uint64_t t1 = mach_absolute_time();
   uint64_t elapsed = t1 - t0;
@@ -277,18 +566,44 @@ int main(int argc, char **argv) {
   mach_timebase_info(&tb);
   uint64_t elapsed_ms = (elapsed * tb.numer / tb.denom) / 1000000ULL;
 
+  // ---------- End event (new schema) ----------
   printf("{\"event\":\"end\",");
   dump_pids("tracked", tracked, ntracked);
   printf(",");
-  dump_pids("seen", seen_pids, nseen);
+  dump_gt_records();
   printf(",");
-  dump_pids("missed_descendants", missed, missed_descendants);
-  printf(",\"missed_descendants_count\":%d", missed_descendants);
+  dump_pids("watch_esrch", watch_esrch_list, nwatch_esrch);
+  printf(",");
+  printf("\"watch_failed_other\":[");
+  for (int i = 0; i < nwatch_failed_other; i++)
+    printf("%s%d", i ? "," : "", watch_failed_other_list[i]);
+  printf("]");
+  printf(",");
+  printf("\"missed_ground_truth\":[");
+  for (int i = 0; i < missed_count; i++) {
+    printf("%s{\"pid\":%d,\"ppid\":%d,\"pgid\":%d,\"start_us\":%llu}",
+           i ? "," : "",
+           missed_gt[i].pid, missed_gt[i].ppid, missed_gt[i].pgid,
+           (unsigned long long)missed_gt[i].start_us);
+  }
+  printf("]");
+  printf(",\"missed_ground_truth_count\":%d", missed_count);
   printf(",\"duration_ms\":%llu", (unsigned long long)elapsed_ms);
-  printf("}\n");
+  printf(",\"counters\":{");
+  printf("\"fork_events\":%d", fork_events);
+  printf(",\"watch_attempts\":%d", watch_attempts);
+  printf(",\"watch_success\":%d", watch_success);
+  printf(",\"watch_esrch\":%d", watch_esrch_total);
+  printf(",\"watch_failed_other\":%d", watch_failed_other_total);
+  printf(",\"ground_truth_created_count\":%d", ngt_created);
+  printf(",\"ground_truth_seen_count\":%d", ngt_created);
+  printf(",\"ground_truth_missed_count\":%d", missed_count);
+  printf("}}\n");
   fflush(stdout);
 
   usleep(200 * 1000);
   close(kq);
-  return missed_descendants > 0 ? 5 : 0;
+  if (gt_read_fd >= 0) close(gt_read_fd);
+  if (gt_write_fd >= 0) close(gt_write_fd);
+  return missed_count > 0 ? 5 : 0;
 }
