@@ -1,0 +1,56 @@
+ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — gates.
+
+Pre-execution gates (these passed before halting on substrate):
+
+  [PASS] SDK has POSIX_SPAWN_START_SUSPENDED (0x0080)
+         $ grep POSIX_SPAWN_START_SUSPENDED /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/spawn.h
+         #define POSIX_SPAWN_START_SUSPENDED 0x0080
+
+  [PASS] Probe binaries compile clean
+         $ make
+         (output: 30-helper-preattach-driver, 31-helper-preattach-root,
+          32-helper-preattach-emulator all built; no warnings)
+
+  [PASS] Probe binaries link to posix_spawn + kqueue
+         $ nm 30-helper-preattach-driver | grep -E 'posix_spawn|kqueue'
+                  U _kqueue
+                  U _posix_spawn
+                  U _posix_spawnattr_destroy
+                  U _posix_spawnattr_init
+                  U _posix_spawnattr_setflags
+
+  [PASS] Driver accepts suspended-spawn design and registers watch BEFORE SIGCONT
+         (verified by reading 30-helper-preattach-driver.c and confirming
+          posix_spawnattr_setflags precedes kevent registration)
+
+  [PASS] No cooperative fixture delay permitted
+         (verified by reading 31-helper-preattach-root.c and confirming
+          --fixture=node-escape and --fixture=python-escape perform
+          setsid/detached:true/start_new_session on the FIRST
+          user-space instruction after resume)
+
+  [PASS] Fork-storm emulator has ZERO inter-iteration sleep
+         (verified by reading 32-helper-preattach-emulator.c and confirming
+          the fork loop performs no sleep/nanosleep/usleep)
+
+  [PASS] Probe-binary hygiene: .c tracked, .o ignored
+         (verified by git status --short; .gitignore has the three names)
+
+  [PASS] Predecessor ACT untouched
+         (verified by git hash-object and git log)
+
+Runtime gates (these failed at the SIGCONT step):
+
+  [FAIL] Driver can deliver SIGCONT to suspended root
+         The driver returns:
+            {"event":"halt","reason":"sigcont_failed","errno":1,
+             "errstr":"Operation not permitted"}
+         The same EPERM reproduces on a minimal native test:
+            [parent] kill(SIGTERM) -> -1 errno=1 (Operation not permitted)
+         This is the SAME EPERM boundary the predecessor ACT documented
+         in 10-mechanism-a-recon.txt and the production helper exists
+         to bridge.
+
+Final gate verdict:
+  HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD
+  See 60-substrate-halt.md for analysis and reviewer ask.

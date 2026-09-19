@@ -1,0 +1,45 @@
+{
+  "act": "ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01",
+  "verdict": "HALT",
+  "halt_reason": "HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD",
+  "halt_summary": "Driver design and probe binaries are correct (kernel barrier via POSIX_SPAWN_START_SUSPENDED, no cooperative delay, recursive kqueue+reconcile). However, the substrate this ACT was executed on blocks same-UID signal delivery from parent to its own children (EPERM on kill(child, SIGCONT) and even kill(child, SIGTERM)). This is the same EPERM boundary the predecessor ACT documented in 10-mechanism-a-recon.txt and the production helper exists to bridge. The corrected ACT's §Method requires kill(root, SIGCONT); §Driver identity disclaims kill(2) capability. These are contradictory on this substrate. The experiment did not run.",
+  "substrate": {
+    "macos": "14.7.4 (23H420)",
+    "darwin": "23.6.0",
+    "arch": "arm64",
+    "user": "chistyakov (uid 501)",
+    "helper_build_id": "c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9",
+    "helper_pid": 9582,
+    "helper_socket": "/Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock"
+  },
+  "deliverables": {
+    "probe_binaries_built": [
+      "tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver",
+      "tools/macos-host-helper/native/containment-probe/31-helper-preattach-root",
+      "tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator"
+    ],
+    "probe_source_tracked": true,
+    "probe_artifacts_ignored": true,
+    "makefile_updated": true,
+    "gitignore_compatible": true
+  },
+  "pre_execution_gates": "all PASS",
+  "runtime_gate_failed": "kill(root, SIGCONT) returns EPERM on this substrate (same EPERM boundary the predecessor ACT documented)",
+  "matrix_run": "NOT_RUN",
+  "race_hammer_run": "NOT_RUN",
+  "negative_controls_run": "NOT_RUN",
+  "predecessor_act": {
+    "id": "ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01",
+    "verdict_unchanged": "B_spawn_then_attach=RACE_REFUTED, NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT_AVAILABLE=RETRACTED",
+    "narrowing_unchanged": "the successor ACT purpose and method correction remain correct; only the runnability on this substrate is at issue"
+  },
+  "reviewer_ask": "Choose between three options: (A) add a signal.cont capability to the helper; (B) bundle the SIGCONT delivery with the existing helper wire as a single bounded additive change; (C) re-route to ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR02 on a substrate where same-UID signal delivery works (clean macOS or Developer ID-signed helper). Probes are ready; only the SIGCONT step needs to come from the helper.",
+  "stop_rule_honored": true,
+  "production_side_changes": [],
+  "evidence_files": [
+    "00-entry.txt",
+    "50-gates.txt",
+    "60-substrate-halt.md",
+    "result.json"
+  ]
+}

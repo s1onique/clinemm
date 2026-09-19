@@ -1994,3 +1994,123 @@ PROBE_BINARY_HYGIENE                          = PASS               (.c tracked, 
 **STOP rule honored:** no production-side change; no helper-protocol change;
 no `CommandJobManager` change; the corrected ACT is still native-probe-only.
 **After bounded fix: C1: GO.**
+
+---
+
+## ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — SUBSTRATE HALT / HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD — 2026-09-19
+
+**Status:** C1 HALT (substrate). Three probe binaries built cleanly,
+ACT spec is correct (kernel barrier via `POSIX_SPAWN_START_SUSPENDED`,
+no cooperative delay, recursive kqueue+reconcile, six-fixture matrix,
+immediate-double-fork and fork-storm all encoded faithfully), but the
+substrate this ACT was executed on blocks same-UID signal delivery from
+parent to its own children.
+
+**Built (no production-side change):**
+
+  - `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+    (51848 bytes; posix_spawn + POSIX_SPAWN_START_SUSPENDED + kqueue +
+    reconcile via sysctl KERN_PROC + recursive watch on every new child)
+  - `tools/macos-host-helper/native/containment-probe/31-helper-preattach-root.c`
+    (51048 bytes; six sub-fixtures: shell-A, node-B, python-C, mixed-D,
+    node-escape, python-escape; zero pre-fork sleep permitted)
+  - `tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator.c`
+    (33936 bytes; immediate-double-fork + >= 16 forks, zero
+    inter-iteration sleep)
+  - `tools/macos-host-helper/native/containment-probe/Makefile` updated
+    to include the three new probes.
+
+**Substrate-level EPERM finding:**
+
+The driver emits:
+
+```
+{"event":"spawn","pid":N,"suspended":true}
+{"event":"watch","pid":N}
+{"event":"halt","reason":"sigcont_failed","errno":1,"errstr":"Operation not permitted"}
+```
+
+The minimal reproduction (plain `fork()` + `kill(child, SIGTERM)`)
+returns the SAME EPERM. This is the SAME EPERM boundary the
+predecessor ACT documented in
+`ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/10-mechanism-a-recon.txt`
+("My user cannot kill processes spawned by the fixture...
+'Operation not permitted' for the spawned rootPid, identical to the
+production EPERM substrate") and the production helper exists to bridge
+via LaunchAgent signal authority.
+
+**Where the corrected ACT contract has a hole:**
+
+The corrected ACT's §Method requires `kill(root, SIGCONT)` (the reviewer
+verified this is the correct Darwin primitive). The corrected §Driver
+identity disclaims any `kill(2)` capability for this ACT. On a substrate
+where same-UID signal delivery works (normal macOS; Apple's XNU tests
+cited by the reviewer), these are mutually consistent because the driver
+itself is the parent and CAN signal its own children. On a substrate
+where same-UID signal delivery is blocked (VSCodium-descended tool
+sandboxes, which is the substrate this ACT was executed in), the
+driver cannot complete the SIGCONT step without going through the
+helper.
+
+**Reviewer ask (bounded):**
+
+Three options the reviewer can choose between to make this ACT runnable:
+
+  - **(A)** Add an additive `signal.cont` capability to the helper
+    protocol, gated by the existing kernel-authenticated peer binding of
+    `process-group.register-owned`. Limited to `SIGCONT` (or a small
+    allow-list that excludes `SIGKILL`/`SIGTERM` so the existing
+    `terminate-owned` flow remains the kill authority). The driver then
+    registers the suspended root via the helper, and uses `signal.cont`
+    to resume it.
+  - **(B)** Bundle the SIGCONT delivery with the existing helper wire as
+    a single bounded additive change for THIS ACT only (effectively a
+    constrained version of A).
+  - **(C)** Re-route to `ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR02`
+    on a substrate where same-UID signal delivery works (clean macOS
+    shell, or Developer-ID-signed helper build).
+
+**Honest verdict matrix (post-substrate-halt):**
+
+```
+B_spawn_then_attach                           = RACE_REFUTED       (predecessor, unchanged)
+NO_SAFE_GENERAL_DESCENDANT_CONTAINMENT        = RETRACTED          (predecessor, unchanged)
+SUCCESSOR_ACT_PURPOSE                         = CORRECT            (predecessor, unchanged)
+SUCCESSOR_ACT_METHOD                          = CORRECTED          (bounded correction landed)
+SUCCESSOR_ACT_RUNNABLE_ON_THIS_SUBSTRATE      = NO                 (this halt)
+PROBE_BINARIES_BUILT                          = YES                (3 binaries, clean compile)
+PROBE_BINARY_HYGIENE                          = PASS               (.c tracked, .o ignored)
+KERNEL_PREEXEC_BARRIER_AVAILABLE              = YES                (POSIX_SPAWN_START_SUSPENDED works)
+SAME_UID_SIGNAL_AUTHORITY                     = NO                 (substrate blocks parent -> child signals)
+PROBE_DESIGN_VS_SUBSTRATE                     = CONTRADICTORY      (§Method needs kill, §Driver identity disclaims it)
+```
+
+**Halt sequence (this ACT):**
+
+1. `HALT_PREATTACH_DISCRIMINATOR_STILL_HAS_A_RACE` (Factory reviewer,
+   2026-09-19; bounded correction applied in `226ae341b`).
+2. `HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD`
+   (this closure; substrate-level).
+
+**Files modified (this substrate halt):**
+
+- `tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver.c`
+  — NEW, 294 lines. The preattach driver with kernel-suspended barrier.
+- `tools/macos-host-helper/native/containment-probe/31-helper-preattach-root.c`
+  — NEW, 184 lines. Six-fixture user-command-equivalent root.
+- `tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator.c`
+  — NEW, 73 lines. Immediate-double-fork + fork-storm emulator.
+- `tools/macos-host-helper/native/containment-probe/Makefile` —
+  PROBES list updated to include the three new binaries.
+- `.factory/acts/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01.md`
+  — added `HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD` to
+  §Halt conditions; appended substrate-halt entry to §Correction history.
+- `.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/{00-entry.txt,
+  50-gates.txt, 60-substrate-halt.md, result.json}` — durable evidence.
+- `.factory/epic-board.md` — this section appended.
+
+**STOP rule honored:** no production-side change to `apps/` or `sdk/`;
+no helper-protocol change; no `CommandJobManager` change. Probe-binary
+hygiene preserved: `.c` sources tracked, build artifacts ignored (already
+carved out at ACT-creation time). **Until A, B, or C is chosen:
+C1: HALT (substrate).**

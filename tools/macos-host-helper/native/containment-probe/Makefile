@@ -26,7 +26,10 @@ PROBES = \
   22-mechb-cross-process-test \
   22-mechb-emulator \
   22-mechb-self-fork-test \
-  23-mechb-full-test
+  23-mechb-full-test \
+  30-helper-preattach-driver \
+  31-helper-preattach-root \
+  32-helper-preattach-emulator
 
 .PHONY: all clean
 all: $(PROBES)

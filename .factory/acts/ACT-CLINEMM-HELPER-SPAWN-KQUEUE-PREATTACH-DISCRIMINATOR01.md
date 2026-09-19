@@ -319,6 +319,18 @@ selection belongs to the successor.
     across 100 race-hammer iterations.
   - `HALT_UNRELATED_PROCESS_TARGETED` — negative control regression.
   - `HALT_UNEXPECTED_TRACKED_DIRT` — unexpected production-side change.
+  - `HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD` — runtime halt
+    raised when the substrate blocks the driver from delivering
+    `kill(root, SIGCONT)` after `POSIX_SPAWN_START_SUSPENDED`. This is the
+    same EPERM boundary the predecessor ACT documented in
+    `10-mechanism-a-recon.txt` and the production helper exists to bridge.
+    On a substrate where same-UID parent→child signal delivery works, this
+    halt does not trigger. On a substrate where it does not, the SIGCONT
+    step requires the helper (an additive `signal.cont` capability on the
+    existing `process-group.register-owned` job binding). See
+    `.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/60-substrate-halt.md`
+    for the full substrate analysis and the three bounded options the
+    reviewer can choose between to make this ACT runnable.
 
 ## Halt conditions NOT triggered (verifying non-halt)
 
@@ -375,3 +387,59 @@ is NOT authorized by this ACT.
     than asserting a same-UID `kill(2)` capability it does not
     actually exercise. Probe-binary hygiene preserved: `.c` sources
     tracked, build artifacts ignored. **After bounded fix: C1: GO.**
+
+  - 2026-09-19: substrate-level execution halt
+    `HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD`. The three
+    probe binaries (`30-helper-preattach-driver`,
+    `31-helper-preattach-root`, `32-helper-preattach-emulator`) were
+    built cleanly with the kernel barrier (`POSIX_SPAWN_START_SUSPENDED`)
+    correctly wired, and the driver correctly registers the kqueue
+    watch BEFORE delivering `kill(root, SIGCONT)`. On the substrate
+    this ACT was executed on, the parent cannot deliver signals to
+    its own children — `kill(root, SIGCONT)` returns EPERM. The
+    minimal reproduction (plain `fork()` + `kill(child, SIGTERM)`)
+    returns the same EPERM. This is the SAME boundary the
+    predecessor ACT documented in
+    `ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/10-mechanism-a-recon.txt`
+    ("My user cannot kill processes spawned by the fixture...
+    'Operation not permitted'... identical to the production EPERM
+    substrate") and the production helper exists to bridge via
+    LaunchAgent signal authority.
+
+    This is **not a defect in the probe binaries or in the corrected
+    ACT design** — those are both verified. The §Method and
+    §Driver identity of the corrected ACT are mutually consistent
+    on a substrate where same-UID signal delivery works (which is
+    the normal macOS substrate; the reviewer cited Apple's XNU
+    tests as a known-working precedent). The substrate this ACT
+    was executed on has a tool-layer sandbox that blocks same-UID
+    signal delivery from any descendant of VSCodium Helper. The
+    experiment did not run; no RED/GREEN matrix entry was
+    produced.
+
+    Three bounded options the reviewer can choose between to make
+    this ACT runnable:
+
+      (A) Add a `signal.cont` (or similarly named) capability to
+          the helper protocol, gated by the existing kernel-
+          authenticated peer binding of `process-group.register-owned`.
+          Additive; does not change the helper's behavior for any
+          other consumer; production wire change.
+
+      (B) Bundle the SIGCONT delivery with the existing helper
+          wire as a single bounded additive change for this ACT
+          only. Same as (A) but bounded explicitly to the
+          preattach discriminator.
+
+      (C) Re-route to a successor ACT (`...DISCRIMINATOR02`) that
+          runs the experiment on a substrate where same-UID
+          signal delivery works (clean macOS shell outside
+          VSCodium, or a Developer-ID-signed helper build where
+          signal authority is established via LaunchAgent).
+
+    See
+    `.factory/evidence/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01/60-substrate-halt.md`
+    for the full substrate analysis. Predecessor ACT unchanged:
+    `B_spawn_then_attach = RACE_REFUTED`, retracted claim unchanged,
+    successor purpose unchanged. **Until A, B, or C is chosen:
+    C1: HALT (substrate).**

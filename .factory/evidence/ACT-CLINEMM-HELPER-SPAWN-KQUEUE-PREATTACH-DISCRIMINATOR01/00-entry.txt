@@ -1,0 +1,35 @@
+ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01 — substrate entry freeze.
+
+ACT identity:
+  Source ACT: .factory/acts/ACT-CLINEMM-HELPER-SPAWN-KQUEUE-PREATTACH-DISCRIMINATOR01.md
+  Reviewer:   Factory reviewer, macOS process-control engineer
+  Reviewer GO: C1: GO (after bounded correction landed in commit 226ae341b)
+
+Substrate (live):
+  macOS: 14.7.4 (23H420)
+  Darwin: 23.6.0
+  Arch:  arm64
+  User:  chistyakov (uid 501)
+  Live helper build_id: c5f3ea0322ae92a6ea5378577e39fef95696057b8ad6fba63a1fce57f80b74b9
+  Live helper pid: 9582
+  Live helper socket: /Volumes/UserData/Users/chistyakov/.clinemm/host-helper.sock
+
+Toolchain:
+  cc (Apple clang) at /usr/bin/cc
+  MacOSX SDK at /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+  POSIX_SPAWN_START_SUSPENDED verified in SDK: <sys/spawn.h> flag 0x0080
+
+Probe binaries built:
+  tools/macos-host-helper/native/containment-probe/30-helper-preattach-driver  (51848 bytes)
+  tools/macos-host-helper/native/containment-probe/31-helper-preattach-root     (51048 bytes)
+  tools/macos-host-helper/native/containment-probe/32-helper-preattach-emulator (33936 bytes)
+  All three built clean (cc -O2 -Wall -Wextra, no warnings).
+
+Hygiene:
+  .c sources tracked in git
+  Build artifacts ignored via .gitignore (already carved out at ACT-creation time)
+
+Execution state:
+  HALT_SUBSTRATE_CANNOT_DELIVER_SIGCONT_TO_SPAWNED_CHILD
+  See 50-gates.txt and 60-substrate-halt.md for the substrate-level EPERM
+  finding and the recommended path forward.
