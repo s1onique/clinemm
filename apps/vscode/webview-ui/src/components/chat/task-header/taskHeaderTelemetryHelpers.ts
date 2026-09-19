@@ -40,6 +40,26 @@
  *     `ToolMechanismSummary` itself is the same canonical shape on
  *     both sides — defined once in `apps/vscode/src/shared/ExtensionMessage.ts`.
  *
+ * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+ *   - Added `taskHeaderStateLabelWithBackground(turnState,
+ *     backgroundCommandRunning)` — a bounded projection-layer
+ *     override that demotes the user-facing label from
+ *     `awaiting_followup` ("Your turn") to `streaming` ("Working")
+ *     while a background CommandJob is alive.
+ *
+ *     The override is intentionally a pure projection: it consumes
+ *     the canonical `backgroundCommandRunning` field (already on
+ *     the wire from ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-
+ *     PROJECTION-DISCRIMINATOR01) and the canonical `turnState.phase`
+ *     (from TurnStateTracker). It does NOT touch the writer of
+ *     `awaiting_followup` (the prior recon ACT
+ *     ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01
+ *     classified those writers as contract-correct). It does NOT
+ *     introduce a second command-state machine. The override is
+ *     transparent to genuine user-owned asks (when
+ *     `backgroundCommandRunning === false`, the label is exactly
+ *     the same as the bare `stateLabel` derivation).
+ *
  * Pure helpers for the Task Header telemetry strip:
  *   - `formatElapsed`: deterministic elapsed-time formatter
  *     (mm:ss / h:mm:ss / d hh:mm) with the canonical epoch as
@@ -52,6 +72,9 @@
  *     for new consumers. Reads `taskHeaderPresentation` (when
  *     present) and falls back to `turnState.phase` derivation if the
  *     projection is absent.
+ *   - `taskHeaderStateLabelWithBackground`: ACT overlay that
+ *     suppresses "Your turn" while a background CommandJob is
+ *     alive. Used by the TaskHeader consumer wrapper.
  *   - `isUsableMechanismProjection`: wire-boundary validator. Pure.
  *
  * No React. No DOM. No chat-derived inference.
@@ -225,6 +248,59 @@ export function taskHeaderPresentationStateLabel(
 		return stateLabel(taskHeaderPresentation.phase)
 	}
 	return stateLabel(turnState?.phase)
+}
+
+/**
+ * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+ *
+ * Bounded projection-layer override that suppresses the
+ * user-facing "Your turn" label while a background CommandJob is
+ * alive. The override is intentionally a pure function with no
+ * state, no React, no DOM, no message-tail inference.
+ *
+ * Semantics:
+ *   - backgroundCommandRunning === false  ⇒ delegate to the
+ *     canonical stateLabel derivation unchanged (no regression for
+ *     genuine user-owned asks).
+ *   - backgroundCommandRunning === true AND phase === "awaiting_followup"
+ *     ⇒ demote the label to "Working" (the streaming projection).
+ *     This is the LIVE RED binding: the conversation is not paused
+ *     for user input — a background CommandJob is autonomously
+ *     running and the agent may continue polling via
+ *     `command_status`. The user owns NOTHING meaningful at this
+ *     moment; the header must not pretend they do.
+ *   - backgroundCommandRunning === true AND phase === "awaiting_approval"
+ *     ⇒ keep "Approval" (the genuine ask IS user-owned; the
+ *     background job is parallel context, not a substitute for the
+ *     approval).
+ *   - backgroundCommandRunning === true AND phase ∈ {streaming,
+ *     completed, error, resumable, compacting, idle}
+ *     ⇒ delegate to stateLabel (the background-running flag does
+ *     not change a streaming / completed / error / compacting /
+ *     idle header; only "Your turn" is a meaningful ownership
+ *     conflict).
+ *
+ * The override is the bounded projection seam authorized by the
+ * ACT — it does NOT touch the writer of `awaiting_followup`
+ * (TurnStateTracker), it does NOT introduce a second command-state
+ * machine, and it does NOT depend on any chat-derived inference.
+ * The two inputs are the canonical `turnState` (host-owned) and
+ * the canonical `backgroundCommandRunning` flag (host-owned,
+ * already on the wire per ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-
+ * PROJECTION-DISCRIMINATOR01).
+ */
+export function taskHeaderStateLabelWithBackground(
+	turnState: TurnState | undefined,
+	backgroundCommandRunning: boolean | undefined,
+): StateLabelProjection {
+	const phase = turnState?.phase
+	if (backgroundCommandRunning === true && phase === "awaiting_followup") {
+		// The user's "turn" is not the next meaningful action — the
+		// background job is autonomously running and the agent may
+		// continue polling. Demote to the streaming label.
+		return stateLabel("streaming")
+	}
+	return stateLabel(phase)
 }
 
 /**

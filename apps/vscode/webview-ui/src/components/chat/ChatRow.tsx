@@ -77,7 +77,17 @@ interface ChatRowProps {
 	inputValue?: string
 	sendMessageFromChatRow?: (text: string, images: string[], files: string[]) => void
 	onSetQuote: (text: string) => void
-	onCancelCommand?: () => void
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+	 * Cancel a backgrounded command. Receives the jobId extracted
+	 * from the row's running envelope so the dispatcher can target
+	 * a single job (multi-job sessions preserve independent
+	 * cancellation targets — see BGCARD-05). The legacy
+	 * `onCancelCommand()` no-argument signature is still supported
+	 * for callers that want the session-wide cancel; the new
+	 * jobId-aware signature is preferred.
+	 */
+	onCancelCommand?: (jobId?: string) => void
 	mode?: Mode
 	reasoningContent?: string
 	responseStarted?: boolean
@@ -216,6 +226,14 @@ export const ChatRowContent = memo(
 		const isCommandMessage = type === "command"
 		// Check if command has output to determine if it's actually executing
 		const commandHasOutput = message.text?.includes(COMMAND_OUTPUT_STRING) ?? false
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+		// A command is "backgrounded" when the lifecycle disposition
+		// stamped by the message-translator says so. This is the
+		// single authoritative signal that the underlying CommandJob
+		// is still alive — the row is NOT terminal, the Cancel
+		// affordance MUST remain available, and the status pill MUST
+		// read "Backgrounded" (NOT "Completed").
+		const isCommandBackgrounded = isCommandMessage && message.commandExecutionDisposition === "backgrounded"
 		// A command is executing if it has output but hasn't completed yet
 		const isCommandExecuting = isCommandMessage && !message.commandCompleted && commandHasOutput
 		// A command is pending if it hasn't started (no output) and hasn't completed
@@ -760,6 +778,7 @@ export const ChatRowContent = memo(
 				<CommandOutputRow
 					icon={icon}
 					isBackgroundExec={vscodeTerminalExecutionMode === "backgroundExec"}
+					isCommandBackgrounded={isCommandBackgrounded}
 					isCommandCompleted={isCommandCompleted && !isCommandRejected}
 					isCommandExecuting={isCommandExecuting}
 					isCommandPending={isCommandPending}

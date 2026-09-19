@@ -620,10 +620,36 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 		startNewTask()
 	}, [startNewTask])
 
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+	 * Cancel a single background command by its jobId, WITHOUT
+	 * also cancelling the entire task. Wired from the card-level
+	 * `onCancelCommand(jobId)` callback on a backgrounded command
+	 * row. Routes through the existing `cancelBackgroundCommand`
+	 * gRPC handler with the optional jobId argument
+	 * (added by this ACT's proto extension); falls back to the
+	 * session-wide cancel if no jobId is supplied.
+	 *
+	 * This is the bounded dispatcher — it does NOT touch the
+	 * task-cancel path, the existing `executeButtonAction("cancel")`
+	 * streaming-cancel button, or the global abort button.
+	 */
+	const cancelBackgroundCommandByJobId = useCallback(async (jobId?: string) => {
+		try {
+			const request = jobId ? StringRequest.create({ value: jobId }) : EmptyRequest.create({})
+			await TaskServiceClient.cancelBackgroundCommand(request).catch((err) => {
+				console.error("Failed to cancel background command:", err)
+			})
+		} catch (err) {
+			console.error("Failed to dispatch cancelBackgroundCommand:", err)
+		}
+	}, [])
+
 	return {
 		handleSendMessage,
 		executeButtonAction,
 		handleTaskCloseButtonClick,
 		startNewTask,
+		cancelBackgroundCommandByJobId,
 	}
 }

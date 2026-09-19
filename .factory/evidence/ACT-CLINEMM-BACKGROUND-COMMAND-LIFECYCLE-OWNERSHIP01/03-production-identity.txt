@@ -1,0 +1,25 @@
+RUNNING_EXTENSION_HEAD   = ef82572de046508dff1f7c9f7881c43a511f5d83 (current repo HEAD)
+INSTALLED_EXTENSION_VERSION = clinemm 4.1.16
+INSTALLED_EXTENSION_BUILD  = (no committed install marker present in
+                              apps/vscode/dist/extension.js at HEAD; the
+                              most recently committed production bundle per
+                              ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-
+                              DISCRIMINATOR01 was clinemm-4.1.16-84a238464,
+                              which corresponds to PGID-CONTAINMENT-PRODUCT-
+                              CONTRACT01 CORRECTION05)
+INSTALLED_EXTENSION_HEAD   = 84a238464 (per prior committed ACT)
+EXTENSION_HOST_PID         = (operator-side; not observable from this shell)
+PACKAGE_VERSION            = 4.1.16  (apps/vscode/package.json)
+
+DELTA_FROM_PRIOR_ACT       = HEAD = 62f2feabc + ef82572de
+                              (REVIEWER_CORRECTION: verdict downgrade +
+                              EOF fix + webview typecheck re-execute;
+                              no production-source change between
+                              62f2feabc and ef82572de that would alter
+                              background-command lifecycle or turn
+                              ownership projection — confirmed via
+                              git diff 62f2feabc..ef82572de, see 05-recon.txt)
+
+SOURCE_PROVENANCE         = all recon below is on ef82572de source
+                              (= same source as the prior ACT's
+                              PASS_SOURCE_LEVEL_GAUGE_CHAIN).

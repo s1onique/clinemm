@@ -1,0 +1,24 @@
+ACT_ID                  = ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01
+ENTRY_COMMIT            = ef82572de046508dff1f7c9f7881c43a511f5d83 (HEAD)
+ENTRY_TREE              = ef82572de046508dff1f7c9f7881c43a511f5d83
+ENTRY_BRANCH            = (detached / sandbox worktree)
+ENTRY_REMOTE_HEAD       = ef82572de046508dff1f7c9f7881c43a511f5d83 (origin/main)
+ENTRY_STATUS            = clean (no tracked dirt)
+ENTRY_STASHES           = (none)
+ENTRY_RECOVERY          = (none)
+
+UNEXPECTED_TRACKED_DIRT = 0
+
+PREVIOUS_HEAD           = 62f2feabc ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01: PASS_ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION (CASE_B)
+                          ef82572de is the REVIEWER_CORRECTION (verdict
+                          downgrade + EOF fix + webview typecheck re-execute)
+                          on top of 62f2feabc.
+
+INHERITED_STATE         = ACTIVE_COMMAND_GAUGE_LIVE_PROJECTION = PASS at source-level
+                          (LIVE_GREEN still PENDING_OPERATOR_QUALIFICATION
+                          per the prior ACT's verdict; this ACT consumes
+                          the gauge as authoritative corroborating telemetry
+                          and does not redesign it)
+
+PRODUCTION_IDENTITY     = see 03-production-identity.txt
+LIVE_RED_BIND           = see 00-live-red-card.txt + 01-live-red-your-turn.txt

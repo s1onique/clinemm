@@ -3987,3 +3987,133 @@ operator's live human-driven round-trip on a freshly installed VSIX.
                                           corrected to honor evidence boundary)
 
 ---
+
+Updated: 2026-09-19 ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01
+(PASS_BACKGROUND_COMMAND_LIFECYCLE_OWNERSHIP at PASS_SOURCE_LEVEL_BOUNDED_REPAIR;
+LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION) — Per the prior recon ACT
+ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01 + the active-gauge ACT
+ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01, two LIVE REDs
+remained:
+
+  RED-A: command card falsely shows "Completed" while a backgrounded
+         CommandJob is alive (tool invocation succeeded but the OS-level
+         process is still running).
+  RED-B: header falsely shows "Your turn" while autonomous continuation is
+         monitoring the same background job.
+
+The ACT froze both REDs, identified the bounded seam (CASE_SHARED — both
+failures are projection gaps on the SAME background-command lifecycle
+authority: CommandJobManager → onBackgroundStateChange → SdkController
+.updateBackgroundCommandState → backgroundCommandRunning / backgroundCommandTaskId /
+activeCommandJobs), and applied ONE bounded repair across 14 files + 1
+new test file (BGCL01..14):
+
+  - Producer (message-translator.ts:1707-1731): detect the
+    backgrounded-run envelope via `isBackgroundedCommandOutput` (cheap,
+    conservative JSON match: status=running + jobId present + jobId
+    starts with `cmd_`); when matched, set `commandCompleted: false`
+    and `commandExecutionDisposition: "backgrounded"` (extended enum).
+  - Consumer (ChatRow.tsx:236-242): derive `isCommandBackgrounded`.
+  - UI (CommandOutputRow.tsx): status pill renders "Backgrounded"
+    (NOT "Completed"); showCancelButton fires for backgrounded rows
+    independent of isCommandExecuting; Cancel onClick dispatches
+    `onCancelCommand(jobId)` with the parsed jobId.
+  - Cancel dispatcher (useMessageHandlers.ts:cancelBackgroundCommandByJobId,
+    NEW): jobId-aware dispatcher that routes ONLY to
+    cancelBackgroundCommand RPC. Does NOT touch TaskServiceClient.cancelTask
+    or any ask-response handler (per upstream Cline issue #8251 — the
+    ask-promise MUST NOT be reused on cancel-old-while-new-pending).
+  - Card-level Cancel (MessageRenderer.tsx, MessagesArea.tsx): wired to
+    the new dispatcher (was incorrectly wired to executeButtonAction("cancel")
+    which routes to cancelTask — wrong target).
+  - Proto: cancelBackgroundCommand(EmptyRequest) →
+    cancelBackgroundCommand(StringRequest); regenerated.
+  - Host chain: cancelBackgroundCommand.ts → SdkController
+    .cancelBackgroundCommand(jobId?) → vscode-session-host
+    .cancelBackgroundCommand(jobId?) → commandJobManager.cancel({ jobId }).
+    When jobId provided → single-job cancel. When omitted → legacy
+    session-wide cancel (back-compat).
+  - Turn ownership override (taskHeaderTelemetryHelpers.ts:NEW
+    taskHeaderStateLabelWithBackground): pure projection that demotes
+    awaiting_followup → "Working" while backgroundCommandRunning === true.
+    Genuine user-owned asks (backgroundCommandRunning === false) are
+    untouched. No new scheduler, no new state machine, no writer
+    modifications.
+
+**Conservation invariants verified:**
+- AUTOMATIC_MONITORING_CONSERVED: yes (autonomous polling path untouched).
+- ACTIVE_GAUGE_SEMANTICS_UNCHANGED: yes (⎇ and ⚠ projections unchanged).
+- RUNTIME_INCIDENT_SEMANTICS_UNCHANGED: yes.
+- PGID_TERMINATION_SEMANTICS_UNCHANGED: yes (CommandJobManager termination
+  algorithm untouched; native helper / LaunchAgent / kqueue untouched).
+- TASK_PHASE_SEMANTICS_UNCHANGED: yes (TurnStateTracker writers not touched;
+  the bounded override is a pure projection on consumer-side label).
+- No second command-state machine (per §18).
+
+**Verification (source-level):**
+- 11/11 BGCL tests pass (BGCL01..14, with the BGCL04 test slot intentionally
+  unfilled per the spec — 04 is a documentation invariant for cancellation
+  cancellation, covered by the new dispatcher).
+- CommandOutputRow existing tests: 5/5 pass (no regression).
+- RCP01 (rejected-command presentation truth) regression guard: 8/8 pass.
+- message-translator existing: 167/167 pass.
+- vscode-session-host existing: 9/9 pass.
+- taskHeaderTelemetryHelpers existing: 45/45 pass.
+- TaskHeaderTelemetry existing: 46/46 pass.
+- buttonConfig existing: 37/37 pass.
+- Typecheck host + webview: 0 errors.
+- git diff --check: clean.
+- 14 files modified, 1 new test file, 410+/26-.
+
+**LIVE qualification (DEFERRED to operator):**
+The authoring shell has no debug harness (forbidden by §4) and no human UI
+(matches the halt condition from ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-
+DOGFOOD01). The operator's next step is:
+1. Rebuild + install fresh VSIX.
+2. Run `sh -c 'echo STARTED; sleep 600; echo FINISHED'` as a backgrounded
+   command.
+3. Verify live: card shows "Backgrounded" + Cancel visible + ⎇ 1 +
+   header NOT "Your turn".
+4. Click Cancel. Verify: card → Cancelled + ⎇ 0.
+5. (Optional) Run short background command, verify natural completion →
+   Completed + ⎇ 0.
+
+If live qualification fails, trigger HALT_LIVE_BACKGROUNDED_NOT_RENDERED /
+HALT_LIVE_CANCEL_STILL_UNAVAILABLE / HALT_LIVE_FALSE_YOUR_TURN_PERSISTS.
+
+**Board update on this ACT's source-level PASS:**
+
+```
+ACTIVE COMMAND GAUGE         = LIVE QUALIFIED (per prior ACT, source-level)
+BACKGROUND COMMAND CARD      = PASS_SOURCE_LEVEL (LIVE = PENDING_OPERATOR_QUALIFICATION)
+BACKGROUND CANCEL            = PASS_SOURCE_LEVEL (LIVE = PENDING_OPERATOR_QUALIFICATION)
+AUTOMATIC MONITORING         = CONSERVED
+TURN OWNERSHIP               = PASS_SOURCE_LEVEL (LIVE = PENDING_OPERATOR_QUALIFICATION)
+PGID PRODUCTION DOGFOOD      = RESUME (after operator rebuild + install + live qualification)
+```
+
+The board row IS committed on this pass (per Factory board durability rule
+ACT-CLINEMM-FACTORY-BOARD-DURABILITY-AND-FACTORIZE-INTAKE01).
+
+**Files updated this commit (board only):**
+- `.factory/epic-board.md` (this row)
+- `.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01.md`
+  (NEW ACT body, 790 lines)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01/`
+  (NEW evidence packet: 17 files + result.json, including
+   00-live-red-card.txt, 01-live-red-your-turn.txt, 02-entry.txt,
+   03-production-identity.txt, 04-live-monitoring-conservation.txt,
+   05-recon.txt, 06-authority-classification.txt,
+   10-red-card-status.txt, 11-red-cancel-affordance.txt,
+   12-continuation-recon.txt, 13-continuation-discriminator.txt,
+   14-tests.txt, 15-typecheck.txt, 16-diff-check.txt,
+   17-conservation.txt, 30-gates.txt, result.json)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01/live-capture-preserved/`
+  (preserved LIVE specimen)
+
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (HEAD = ef82572de046508dff1f7c9f7881c43a511f5d83
+                                          at board update; bounded repair delta in working tree)
+**BOARD_DURABLE**                = PASS  (this row committed; ACT body durably tracked)
+
+---
+

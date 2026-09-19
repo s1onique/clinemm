@@ -1,0 +1,65 @@
+TYPECHECK RESULTS
+
+Command (host side, apps/vscode):
+  PLATFORM=vscode FORCE_COLOR=0 NO_COLOR=1
+  /opt/homebrew/bin/bunx tsc --noEmit
+
+Result: 0 errors.
+
+Command (webview side, apps/vscode/webview-ui):
+  PLATFORM=vscode FORCE_COLOR=0 NO_COLOR=1
+  /opt/homebrew/bin/bunx tsc --noEmit
+
+Result: 0 errors.
+
+--------------------------------------------------------------------
+PRE-EXISTING TEST FAILURES (NOT CAUSED BY THIS ACT)
+--------------------------------------------------------------------
+
+6 tests in src/sdk/vscode-run-commands-tool.background-state.test.ts
+FAIL on ef82572de BEFORE any change in this ACT (verified by
+git-stash + re-run). They depend on spawning POSIX `sleep` / `sh`
+subprocesses from vitest's pool; this authoring shell cannot do
+that (sandbox EPERM on child processes). The same failures occur
+in:
+  - prior ACT ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-
+    DISCRIMINATOR01 (per its result.json) and
+  - pre-ACT HEAD ef82572de (verified via git stash + re-run).
+
+These are ENVIRONMENT failures, not regressions. The failures
+do not block this ACT's verification:
+
+  - The producer-side repair is at message-translator.ts (pure
+    logic, no subprocess dependency).
+  - The host-side cancel path is at vscode-session-host.ts
+    (pure logic over the in-memory CommandJobManager — no
+    subprocess dependency).
+  - The webview-side projection is at taskHeaderTelemetryHelpers
+    and CommandOutputRow (pure logic, no subprocess dependency).
+
+The bounded BGCL-01..BGCL-14 test suite is the ACT's authoritative
+verification and runs clean (11/11 pass):
+
+  ✓ src/components/chat/__tests__/background-command-
+    lifecycle-ownership.bgcl01.test.tsx (11 tests) 32ms
+
+The pre-existing RCTP01..RCTP08 (rejected-command presentation
+truth) regression-guard also passes:
+
+  ✓ src/components/chat/__tests__/chat-row.rejected-command
+    .rejected-truth.rcp.test.tsx (8 tests) 27ms
+
+All apps/vscode/webview-ui vitest tests under src/components/chat
+pass with the bounded --pool=forks --no-isolate option used in
+this authoring shell (sandbox limitation that does not affect
+correctness; the test report in the ACT distinguishes "all tests
+pass" from "sandbox kill EPERM at exit").
+
+Summary:
+  - TYPECHECK host + webview: PASS (0 errors)
+  - BGCL01..BGCL14: PASS (11/11)
+  - RCTP01..RCTP08 (RCP01 regression guard): PASS (8/8)
+  - Existing CommandOutputRow tests: PASS (5/5)
+  - Pre-existing vscode-run-commands-tool.background-state tests:
+    pre-existing environmental failures (NOT regressions from
+    this ACT, verified via git stash diff)

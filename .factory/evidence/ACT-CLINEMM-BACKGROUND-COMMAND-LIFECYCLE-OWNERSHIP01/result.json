@@ -1,0 +1,119 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01",
+  "status": "PASS_SOURCE_LEVEL_BOUNDED_REPAIR",
+  "closure": "PASS_BACKGROUND_COMMAND_LIFECYCLE_OWNERSHIP",
+  "verdict": "PASS_SOURCE_LEVEL_BOUNDED_REPAIR (LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION)",
+  "epistemic_purpose": "REPRODUCTION → CAUSAL_DISCRIMINATOR → BOUNDED_PRODUCT_REPAIR",
+  "spec_decision_gate": {
+    "case": "CASE_SHARED",
+    "rationale": "card status / cancel and turn ownership are BOTH presentation gaps on the same background-command lifecycle authority (CommandJobManager → onBackgroundStateChange → SdkController.updateBackgroundCommandState → backgroundCommandRunning / backgroundCommandTaskId / activeCommandJobs)",
+    "act_count": "ONE ACT, ONE BOUNDED REPAIR"
+  },
+  "head_at_pass": "ef82572de046508dff1f7c9f7881c43a511f5d83",
+  "entry": {
+    "head": "ef82572de046508dff1f7c9f7881c43a511f5d83",
+    "unexpected_tracked_dirt": 0
+  },
+  "production_identity": {
+    "running_extension_head": "ef82572de046508dff1f7c9f7881c43a511f5d83",
+    "installed_extension_version": "clinemm 4.1.16",
+    "installed_extension_build": "(no committed install marker present; most recent committed install per prior ACT was clinemm-4.1.16-84a238464)"
+  },
+  "live_red_bind": {
+    "command_card": {
+      "job_status": "running",
+      "jobId": "cmd_mu8no3phxj5uf53n",
+      "gauge": 1,
+      "card_headline": "Completed",
+      "cancel_visible": false
+    },
+    "turn_ownership": {
+      "job_status": "running",
+      "autonomous_monitoring_messages": ["The command is still running...", "Continuing to monitor...", "Let me continue monitoring it..."],
+      "user_question": false,
+      "approval_request": false,
+      "header": "Your turn"
+    }
+  },
+  "conservation": {
+    "automatic_monitoring_conserved": true,
+    "active_gauge_semantics_unchanged": true,
+    "runtime_incident_semantics_unchanged": true,
+    "pgid_termination_semantics_unchanged": true,
+    "task_phase_semantics_unchanged": true
+  },
+  "scope": {
+    "files_modified": 14,
+    "files_added": 1,
+    "insertions": 410,
+    "deletions": 26,
+    "diff_check": "clean",
+    "production_code_scope_bounded": true
+  },
+  "tests": {
+    "BGCL_01_to_14": "11/11 pass",
+    "CommandOutputRow_existing": "5/5 pass",
+    "RCP01_regression_guard": "8/8 pass",
+    "message_translator_existing": "167/167 pass",
+    "vscode_session_host_existing": "9/9 pass",
+    "taskHeaderTelemetryHelpers_existing": "45/45 pass",
+    "TaskHeaderTelemetry_existing": "46/46 pass",
+    "buttonConfig_existing": "37/37 pass"
+  },
+  "typecheck": {
+    "host": "PASS (0 errors)",
+    "webview": "PASS (0 errors)"
+  },
+  "environmental_pre_existing_failures": {
+    "vscode-run-commands-tool.background-state.test.ts": "6 tests fail on ef82572de BEFORE any change (POSIX subprocess spawn blocked by authoring shell sandbox EPERM). NOT regressions from this ACT.",
+    "verified_by": "git stash + re-run on ef82572de"
+  },
+  "live_qualification": {
+    "live_backgrounded_card": "DEFERRED to operator (no debug harness, no human UI in authoring shell)",
+    "live_cancel_control": "DEFERRED to operator",
+    "live_cancel_terminal_projection": "DEFERRED to operator",
+    "live_active_gauge_1_to_0": "PASS_SOURCE_LEVEL (per prior ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01); LIVE_GREEN = PENDING_OPERATOR_QUALIFICATION"
+  },
+  "halt_triggers_checked": {
+    "HALT_UNEXPECTED_TRACKED_DIRT": false,
+    "HALT_CARD_STATUS_REQUIRES_PARALLEL_STATE_MACHINE": false,
+    "HALT_CANCEL_NOT_JOB_ID_CORRELATED": false,
+    "HALT_CANCEL_INTERFERES_WITH_CURRENT_ASK": false,
+    "HALT_CONTINUATION_OWNERSHIP_REQUIRES_SEPARATE_REPAIR": false,
+    "HALT_AUTOMATIC_MONITORING_REGRESSED": false,
+    "HALT_SCOPE_ESCALATION": false,
+    "HALT_LIVE_BACKGROUNDED_NOT_RENDERED": "deferred to operator (LIVE qualification)",
+    "HALT_LIVE_CANCEL_STILL_UNAVAILABLE": "deferred to operator (LIVE qualification)",
+    "HALT_LIVE_FALSE_YOUR_TURN_PERSISTS": "deferred to operator (LIVE qualification)"
+  },
+  "board_update": {
+    "BACKGROUND_COMMAND_CARD": "PASS_SOURCE_LEVEL (LIVE = PENDING_OPERATOR_QUALIFICATION)",
+    "BACKGROUND_CANCEL": "PASS_SOURCE_LEVEL (LIVE = PENDING_OPERATOR_QUALIFICATION)",
+    "AUTOMATIC_MONITORING": "CONSERVED",
+    "TURN_OWNERSHIP": "PASS_SOURCE_LEVEL (LIVE = PENDING_OPERATOR_QUALIFICATION)",
+    "PGID_PRODUCTION_DOGFOOD": "RESUME (after operator rebuild + install + live qualification)"
+  },
+  "next_after_pass": [
+    "Operator rebuild + install + drive the live ⎇ 1 → Backgrounded → live Cancel round-trip in a continuation ACT (per §31 STOP rule — once card + Cancel + Your-turn are wired, STOP).",
+    "If the live ⎇ glyph is still absent or Cancel still unavailable, trigger HALT_LIVE_GREEN_STILL_ABSENT.",
+    "PGID production dogfood is unblocked once this ACT's live qualification passes."
+  ],
+  "evidence_files": [
+    "00-live-red-card.txt",
+    "01-live-red-your-turn.txt",
+    "02-entry.txt",
+    "03-production-identity.txt",
+    "04-live-monitoring-conservation.txt",
+    "05-recon.txt",
+    "06-authority-classification.txt",
+    "10-red-card-status.txt",
+    "11-red-cancel-affordance.txt",
+    "12-continuation-recon.txt",
+    "13-continuation-discriminator.txt",
+    "14-tests.txt",
+    "15-typecheck.txt",
+    "16-diff-check.txt",
+    "17-conservation.txt",
+    "30-gates.txt"
+  ]
+}

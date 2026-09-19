@@ -1,0 +1,28 @@
+CAPTURE_CLASS = REAL | LIVE  (operator-bound specimen from the
+                            ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-
+                            LIVENESS-RECON01 predecessor recon, taskId
+                            1788213818870_vmswf; same publication context
+                            as the prior ACT's LIVE_RED_A / LIVE_RED_B
+                            evidence)
+
+LIVE_RED_A_COMMAND_CARD
+  job:
+    status = running
+    jobId  = cmd_mu8no3phxj5uf53n
+    ⎇      = 1          (activeCommandJobs gauge projects "1")
+  command card:
+    headline = Completed      ← FALSE for the underlying job
+    Cancel   = absent         ← operator lost control
+  observed behavior:
+    - tool invocation returned a tool result with status=running + jobId
+    - tool invocation itself is therefore NOT terminal
+    - the command card claims Completed, contradicting the job's
+      non-terminal state
+    - Cancel affordance is missing, contradicting that the user still
+      owns the operation (the user must be able to cancel an
+      actively-running OS-level process)
+
+freeze:
+  CAPTURE_BOUND = YES   (real same-publication specimen)
+  LIVE_BIND     = YES   (current recon ACT's own specimen)
+  RED_BIND      = YES

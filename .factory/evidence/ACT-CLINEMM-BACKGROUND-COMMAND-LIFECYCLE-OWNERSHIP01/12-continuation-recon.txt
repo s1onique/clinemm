@@ -1,0 +1,74 @@
+TRACE (per ACT §10):
+  tool returns status=running
+  → continuation/poll intention recorded?           YES (the model emits
+                                                       the next provider
+                                                       turn with command_status)
+  → model/provider turn ends                        YES (turn ends after
+                                                       the tool result;
+                                                       background job
+                                                       remains active in
+                                                       CommandJobManager)
+  → CommandJob remains active                       YES (verified by ⎇ 1
+                                                       in the LIVE specimen)
+  → scheduled poll / completion wake exists?        AMBIGUOUS — the
+                                                       cancellation of the
+                                                       agent run is what
+                                                       the prior recon
+                                                       isolated; the poll
+                                                       itself is
+                                                       model-driven (the
+                                                       agent calls
+                                                       command_status on
+                                                       its own — there is
+                                                       NO host-side wake
+                                                       or scheduler that
+                                                       drives the model to
+                                                       call command_status)
+  → another provider request occurs?                 YES, observed repeatedly
+                                                       ("Continuing to
+                                                       monitor...",
+                                                       "Let me continue
+                                                       monitoring it...")
+
+The continuation is therefore MODEL-DRIVEN, not HOST-DRIVEN. The
+host keeps the CommandJob alive; the model decides when to call
+command_status. There is no scheduler to break, no wake architecture
+to add — the fix lives entirely in the projection of the foreground
+turn's lifecycle onto the TaskHeader.
+
+DISCRIMINATOR (per ACT §10 cases):
+
+  CASE_T1: polling scheduler remains armed but phase projection
+           incorrectly maps temporary idle → awaiting_followup →
+           projection bug.
+           ⇒ THIS IS THE LIVE STATE per the prior recon ACT
+             (turnState.phase === "awaiting_followup" while the
+             background job remains alive). The recon ACT isolated
+             two viable writers of awaiting_followup, both of which
+             are structurally forbidden from inspecting
+             CommandJobManager. The fix is the projection-consumer
+             override (stateLabel consumes backgroundCommandRunning
+             in the consumer wrapper). CASE_T1 MATCHES.
+
+  CASE_T2: continuation scheduler exhausts/stops after N polls →
+           actual liveness/ownership bug.
+           ⇒ NO — the LIVE specimen shows the model polling
+             repeatedly (multiple "Continuing to monitor..."
+             messages). No exhaustion observed.
+
+  CASE_T3: model chooses to stop polling and yields intentionally →
+           conversation contract bug if UI still gives no meaningful
+           action.
+           ⇒ AMBIGUOUS — could match the moment the model decides
+             to yield between polls. But the LIVE specimen shows
+             the model is still polling actively. Not the present
+             failure mode.
+
+  CASE_T4: CommandJob completion event is supposed to wake the
+           agent, but wake registration is missing → runtime
+           continuation bug.
+           ⇒ NO — the LIVE specimen shows the agent IS continuing
+             to monitor (the autonomous polling works). The bug is
+             the UI projection, not the wake.
+
+CONCLUSION: CASE_T1.

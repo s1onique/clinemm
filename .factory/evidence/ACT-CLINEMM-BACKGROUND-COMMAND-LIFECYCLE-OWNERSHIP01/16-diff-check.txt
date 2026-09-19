@@ -1,0 +1,48 @@
+SCOPE_OF_CHANGE = exactly the bounded set authorized by the ACT §19
+
+MODIFIED FILES (14):
+  apps/vscode/proto/cline/task.proto
+  apps/vscode/src/core/controller/task/cancelBackgroundCommand.ts
+  apps/vscode/src/sdk/SdkController.ts
+  apps/vscode/src/sdk/message-translator.ts
+  apps/vscode/src/sdk/vscode-session-host.ts
+  apps/vscode/src/shared/ExtensionMessage.ts
+  apps/vscode/webview-ui/src/components/chat/ChatRow.tsx
+  apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx
+  apps/vscode/webview-ui/src/components/chat/chat-view/components/layout/MessagesArea.tsx
+  apps/vscode/webview-ui/src/components/chat/chat-view/components/messages/MessageRenderer.tsx
+  apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts
+  apps/vscode/webview-ui/src/components/chat/task-header/TaskHeader.tsx
+  apps/vscode/webview-ui/src/components/chat/task-header/TaskHeaderTelemetry.tsx
+  apps/vscode/webview-ui/src/components/chat/task-header/taskHeaderTelemetryHelpers.ts
+
+NEW FILES (1):
+  apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
+
+TOTAL DELTA:
+  410 insertions / 26 deletions across 14 modified files
+  247 lines added in 1 new test file
+
+DIFF_CHECK = git diff --check → 0 errors (clean)
+
+NOT_TOUCHED (per ACT §19 scope exclusions):
+  - command-job-manager.ts (CommandJobManager termination algorithm)
+  - vscode-session-host.ts CommandJobManager wiring (constructor only)
+  - PGID containment / cleanup / native helper / LaunchAgent / kqueue
+  - Endpoint Security
+  - pgid-containment-product-contract01
+  - The two prior writers (controller-epoch-transition-reseed,
+    followup-on-follow-up-abandoned) per the prior recon
+  - No new scheduler / job-completion wake architecture
+  - No new state machine
+
+PROTO_REGEN:
+  apps/vscode/proto/cline/task.proto updated:
+    rpc cancelBackgroundCommand(EmptyRequest)
+    →
+    rpc cancelBackgroundCommand(StringRequest)
+  Regenerated via `bun run protos`:
+    - src/shared/proto/...
+    - src/generated/...
+    - webview-ui/src/services/grpc-client.ts
+  All 24 .proto files compile clean.

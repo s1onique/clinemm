@@ -1,0 +1,52 @@
+CLASSIFICATION = CASE_SHARED
+
+  card status / cancel and turn ownership are BOTH presentation
+  gaps on the same background-command lifecycle authority
+  (CommandJobManager → onBackgroundStateChange → SdkController
+  .updateBackgroundCommandState → backgroundCommandRunning /
+  backgroundCommandTaskId / activeCommandJobs).
+
+  The fix lives in the projection layer that consumes this
+  authority, not in new lifecycle machinery.
+
+PER ACT §5 DECISION GATE:  CASE_SHARED ⇒ ONE ACT, ONE BOUNDED REPAIR.
+
+Evidence chain (verbatim from §5 recon):
+
+  Both REDs are derived from the SAME wire field group:
+
+    backgroundCommandRunning  (bool)
+    backgroundCommandTaskId   (string | undefined)
+    activeCommandJobs         (number)
+
+  These three fields are set by a SINGLE producer — SdkController
+  .updateBackgroundCommandState (SdkController.ts:4134) — which is
+  fed by onBackgroundStateChange (vscode-run-commands-tool.ts:618).
+  There is exactly one transition trigger (CommandJobManager
+  terminalPromise), so the card lifecycle and the turn ownership
+  are necessarily derived from the same authority.
+
+  Per the prior ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-
+  RECON01 §10 closure (verbatim): "the visible contradiction
+  (TaskHeader says 'Idle' while a background job is alive) is
+  therefore a UI presentation gap, NOT a writer defect".
+
+  Therefore:
+    - "Your turn" while a background job is alive is a projection
+      bug at the consumer of turnState.phase (the TaskHeader label
+      mapping), not a writer defect in TurnStateTracker.
+    - "Completed" while a background job is alive is a producer
+      bug at the message-translator (it hardcodes commandCompleted:
+      true without inspecting the running envelope) AND a
+      projection bug at CommandOutputRow.getCommandStatusText (it
+      trusts commandCompleted unconditionally).
+    - "Cancel absent" is a projection bug at CommandOutputRow
+      .showCancelButton (it gates on isCommandExecuting which is
+      FALSE for backgrounded commands) AND a dispatch bug at
+      useMessageHandlers.executeButtonAction("cancel") (it routes
+      to cancelTask, not jobId-targeted command-job-manager.cancel).
+
+  All three are in-scope of the same bounded projection-layer
+  repair.
+
+DECISION: ONE ACT, ONE BOUNDED REPAIR — proceed in this ACT.

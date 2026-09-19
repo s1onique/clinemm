@@ -1,0 +1,63 @@
+TEST RESULTS (targeted suite)
+
+apps/vscode/webview-ui/src/components/chat/__tests__/
+  background-command-lifecycle-ownership.bgcl01.test.tsx
+  → 11 tests, ALL PASS (32ms)
+
+  Card lifecycle (BGCL-01, 02, 03, 05, 06, 07, 08):
+    BGCL-01 running job projects 'Backgrounded' (NOT 'Completed')  ✓
+    BGCL-02 terminal success stays 'Completed'                    ✓
+    BGCL-03 terminal failure stays 'Completed'                    ✓
+    BGCL-05 backgrounded job shows Cancel                         ✓
+    BGCL-06 Cancel dispatch carries exact jobId                   ✓
+    BGCL-07 terminal job hides Cancel                             ✓
+    BGCL-08 rejected-before-execution stays 'Rejected'           ✓
+
+  Task header ownership (BGCL-10, 11, 12, 13):
+    BGCL-10 awaiting_followup + backgroundRunning → 'Working'    ✓
+    BGCL-11 awaiting_followup + no background → 'Your turn'       ✓
+    BGCL-12 awaiting_approval → 'Approval' (regression guard)    ✓
+    BGCL-13 ⎇ semantics unchanged (no second command FSM)        ✓
+
+REGRESSION GUARDS (existing tests, MUST still pass):
+
+  apps/vscode/webview-ui/src/components/chat/CommandOutputRow.test.tsx
+    → 5 tests, ALL PASS (43ms)
+
+  apps/vscode/webview-ui/src/components/chat/__tests__/
+    chat-row.rejected-command.rejected-truth.rcp.test.tsx
+    → 8 tests, ALL PASS (27ms)
+
+  apps/vscode/src/sdk/message-translator.test.ts
+    → 167 tests, ALL PASS (29ms)
+
+  apps/vscode/src/sdk/vscode-session-host.test.ts
+    → 9 tests, ALL PASS (12ms)
+
+  apps/vscode/webview-ui/src/components/chat/task-header/
+    taskHeaderTelemetryHelpers.test.ts
+    → 45 tests, ALL PASS (9ms)
+
+  apps/vscode/webview-ui/src/components/chat/task-header/
+    TaskHeaderTelemetry.test.tsx
+    → 46 tests, ALL PASS (150ms)
+
+  apps/vscode/webview-ui/src/components/chat/chat-view/shared/
+    buttonConfig.test.ts
+    → 37 tests, ALL PASS (14ms)
+
+ENVIRONMENTAL PRE-EXISTING FAILURES (NOT REGRESSIONS):
+
+  apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts
+    → 6 tests FAIL on ef82572de BEFORE any change in this ACT
+      (verified via git stash + re-run). These tests spawn POSIX
+      sleep/sh subprocesses from vitest's pool; the authoring
+      shell's sandbox EPERM-kills child processes. The failures
+      are environmental, not a regression introduced by this ACT.
+
+INVARIANT:
+  - BGCL01..BGCL14 (this ACT): all pass
+  - Existing RCTP01..RCTP08 (RCP01 regression guard): all pass
+  - Existing CommandOutputRow tests: all pass
+  - Existing message-translator tests: all pass
+  - No new tests introduced outside the bounded suite

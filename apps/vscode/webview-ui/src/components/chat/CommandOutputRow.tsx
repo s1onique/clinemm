@@ -121,6 +121,7 @@ export const CommandOutputRow = memo(
 		isCommandPending = false,
 		isCommandCompleted = false,
 		isCommandRejected = false,
+		isCommandBackgrounded = false,
 		isBackgroundExec = false, // vscodeTerminalExecutionMode === "backgroundExec"
 		onCancelCommand,
 		icon,
@@ -134,8 +135,17 @@ export const CommandOutputRow = memo(
 		isCommandPending?: boolean
 		isCommandCompleted?: boolean
 		isCommandRejected?: boolean
+		/**
+		 * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+		 * True iff the underlying CommandJob is still alive (the
+		 * row's `commandExecutionDisposition === "backgrounded"`).
+		 * When true, the row's status pill renders "Backgrounded"
+		 * (NOT "Completed") and the Cancel affordance MUST remain
+		 * visible (independent of `isCommandExecuting`).
+		 */
+		isCommandBackgrounded?: boolean
 		isBackgroundExec?: boolean
-		onCancelCommand?: () => void
+		onCancelCommand?: (jobId?: string) => void
 		icon?: JSX.Element | null
 		title?: JSX.Element | null
 		isOutputFullyExpanded: boolean
@@ -175,8 +185,16 @@ export const CommandOutputRow = memo(
 
 		const requestsApproval = rawCommand.endsWith(COMMAND_REQ_APP_STRING)
 		const command = requestsApproval ? rawCommand.slice(0, -COMMAND_REQ_APP_STRING.length) : rawCommand
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+		// showCancelButton now fires for backgrounded jobs as well
+		// (independent of isCommandExecuting). The user must retain
+		// Cancel control over a non-terminal CommandJob regardless
+		// of whether the foreground streaming row is still being
+		// updated.
 		const showCancelButton =
-			(isCommandExecuting || isCommandPending) && typeof onCancelCommand === "function" && isBackgroundExec
+			(isCommandExecuting || isCommandPending || isCommandBackgrounded) &&
+			typeof onCancelCommand === "function" &&
+			isBackgroundExec
 
 		const commandHeader = (
 			<div className="flex items-center gap-2.5 mb-3">
@@ -200,6 +218,13 @@ export const CommandOutputRow = memo(
 									className={cn("bg-description rounded-full w-2 h-2 shrink-0", {
 										"bg-success animate-pulse": isCommandExecuting,
 										"bg-editor-warning-foreground": isCommandPending,
+										// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+										// backgrounded jobs reuse the success family but with
+										// a steadier (non-pulsing) dot so the operator
+										// visually distinguishes them from foreground
+										// streaming rows. (Mutually exclusive with isCommandExecuting
+										// — a backgrounded row has no foreground streaming yet.)
+										"bg-success opacity-75": isCommandBackgrounded,
 										// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01:
 										// rejected-before-execution rows use a
 										// distinct dim/red dot so the status
@@ -219,6 +244,7 @@ export const CommandOutputRow = memo(
 										isCommandPending,
 										isCommandCompleted,
 										isCommandRejected,
+										isCommandBackgrounded,
 									)}
 								</span>
 							</div>
@@ -228,7 +254,12 @@ export const CommandOutputRow = memo(
 										onClick={(e) => {
 											e.stopPropagation()
 											if (isBackgroundExec) {
-												onCancelCommand?.()
+												// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+												// pass the exact jobId (parsed from the running envelope)
+												// so the dispatcher targets a single job rather than
+												// the session-wide cancel path.
+												const jobId = isCommandBackgrounded ? extractJobIdFromOutput(output) : undefined
+												onCancelCommand?.(jobId)
 											} else {
 												// For regular terminal mode, show a message
 												alert(
@@ -272,22 +303,63 @@ export const CommandOutputRow = memo(
 
 CommandOutputRow.displayName = "CommandOutputRow"
 
+/**
+ * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+ * Extract the `jobId` from a backgrounded-run output envelope.
+ * Returns `undefined` if the output is not a backgrounded envelope
+ * or if the jobId cannot be parsed. Cheap and conservative — never
+ * throws.
+ */
+function extractJobIdFromOutput(output: string): string | undefined {
+	if (!output) return undefined
+	const m = output.match(/"jobId"\s*:\s*"([^"]+)"/)
+	return m?.[1]
+}
+
 const CommandStatusMap = {
 	executing: "Running",
 	pending: "Pending",
 	completed: "Completed",
 	skipped: "Skipped",
+	// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01: a row
+	// whose underlying CommandJob is still alive (the
+	// `commandExecutionDisposition === "backgrounded"` projection
+	// from the message-translator) must NOT show "Completed" (the
+	// row is non-terminal). The operator-visible pill must read
+	// "Backgrounded" so the user retains Cancel control over the
+	// still-running process.
+	backgrounded: "Backgrounded",
 	// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01: §20 status-pill
 	// truth — a row that never executed must NOT show "Completed"
 	// (which reads as successful execution).
 	rejected: "Rejected",
 }
 
-function getCommandStatusText(isExecuting: boolean, isPending: boolean, isCompleted: boolean, isRejected: boolean): string {
+/**
+ * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+ * Get the operator-visible status pill text. Lifecycle dominates
+ * completion: a backgrounded row MUST read "Backgrounded" (NOT
+ * "Completed") regardless of `isExecuting` / `isPending` state.
+ */
+function getCommandStatusText(
+	isExecuting: boolean,
+	isPending: boolean,
+	isCompleted: boolean,
+	isRejected: boolean,
+	isBackgrounded: boolean,
+): string {
 	// Lifecycle dominates completion: a row stamped as rejected before
 	// execution is finalized at the request boundary, not execution.
 	if (isRejected) {
 		return CommandStatusMap.rejected
+	}
+	// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+	// Backgrounded takes precedence over executing/pending/
+	// completed so the operator-visible pill truthfully reflects
+	// the underlying CommandJob liveness (still alive, NOT
+	// terminal).
+	if (isBackgrounded) {
+		return CommandStatusMap.backgrounded
 	}
 	if (isExecuting) {
 		return CommandStatusMap.executing

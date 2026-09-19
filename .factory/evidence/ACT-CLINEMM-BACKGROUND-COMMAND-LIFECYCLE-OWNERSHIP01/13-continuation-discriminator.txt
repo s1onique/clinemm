@@ -1,0 +1,26 @@
+DISCRIMINATOR_RESULT = CASE_T1
+
+  The "Your turn" projection is incorrect while a background job
+  remains alive. The fix is a projection-consumer override that
+  reads the canonical `backgroundCommandRunning` field and demotes
+  `awaiting_followup` → `Working` while the background job is
+  active.
+
+  Per ACT §11, the same-ACT rule for `Your turn` is satisfied:
+  the repair uses an existing bounded seam (backgroundCommandRunning
+  + the canonical TurnState.phase projection), NOT a new scheduler
+  or wake architecture. The two viable writers of awaiting_followup
+  remain untouched (they are contract-correct per the prior recon
+  ACT).
+
+  Per ACT §31 STOP rule, this is the bounded expansion: no new FSM,
+  no new state machine, no design rewrite. The header projection
+  becomes context-aware (it already IS — it consults turnState.
+  phase, modelStreaming, foregroundCommandRunning — adding
+  backgroundCommandRunning is the same bounded pattern).
+
+  The bounded projection rule from §18 (no synthetic lifecycle
+  bookkeeping) is preserved: the override reads the existing
+  authoritative `backgroundCommandRunning` projection that the
+  prior ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01
+  promoted to LIVE PASS_SOURCE_LEVEL_GAUGE_CHAIN.

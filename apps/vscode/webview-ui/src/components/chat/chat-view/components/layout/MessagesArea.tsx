@@ -229,7 +229,12 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 							isLast={true}
 							lastModifiedMessage={modifiedMessages.at(-1)}
 							message={WAITING_ROW}
-							onCancelCommand={() => messageHandlers.executeButtonAction("cancel")}
+							// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+							// card-level Cancel dispatches the jobId-aware
+							// background-command cancel RPC (NOT the
+							// task-cancel path that executeButtonAction("cancel")
+							// routes to).
+							onCancelCommand={(jobId) => messageHandlers.cancelBackgroundCommandByJobId(jobId)}
 							onHeightChange={handleRowHeightChange}
 							onLastRowContentChange={handleLastRowContentChange}
 							onSetQuote={setActiveQuote}

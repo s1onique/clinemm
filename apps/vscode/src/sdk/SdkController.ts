@@ -3203,8 +3203,15 @@ export class Controller {
 	 * to terminate the running `run_commands` BEFORE the rest of the
 	 * task is cancelled, so the user always sees the runtime actually
 	 * settle the in-flight command rather than racing it.
+	 *
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+	 * When `jobId` is provided, the cancel is scoped to a single
+	 * backgrounded CommandJob (multi-job sessions preserve
+	 * independent cancellation targets — see BGCARD-05). When
+	 * omitted, falls back to the legacy session-wide cancel for
+	 * back-compat with callers that have not yet been updated.
 	 */
-	async cancelBackgroundCommand(): Promise<void> {
+	async cancelBackgroundCommand(jobId?: string): Promise<void> {
 		const activeSession = this.sessions.getActiveSession()
 		if (!activeSession) {
 			Logger.debug("[SdkController] cancelBackgroundCommand: no active session")
@@ -3215,7 +3222,7 @@ export class Controller {
 		// `SdkSessionHost` doesn't expose this method because it's
 		// host-specific to VS Code.
 		const host = activeSession.sdkHost as VscodeSessionHost & {
-			cancelBackgroundCommand?: () => Promise<number>
+			cancelBackgroundCommand?: (jobId?: string) => Promise<number>
 		}
 		if (typeof host.cancelBackgroundCommand !== "function") {
 			Logger.debug(
@@ -3223,12 +3230,18 @@ export class Controller {
 			)
 			return
 		}
-		await host.cancelBackgroundCommand()
+		await host.cancelBackgroundCommand(jobId)
 		// The `onBackgroundStateChange` callback fires when the cancelled
 		// job's exit transition settles, resetting the projection to
 		// `false`. We mirror it here so the next `getStateToPostToWebview`
 		// doesn't return stale state if the postStateToWebview runs
 		// before the callback fires.
+		// For single-job cancels we keep `backgroundCommandTaskId`
+		// pointed at the cancelled job so the next projection
+		// carries an honest "no active jobs" only after the
+		// terminalPromise has settled (otherwise the webview could
+		// flip ⎇ to 0 prematurely while the cancellation is still
+		// in flight).
 		this.backgroundCommandRunning = false
 		this.backgroundCommandTaskId = undefined
 	}

@@ -1,0 +1,212 @@
+RECON_PROVENANCE  = apps/vscode @ ef82572de046508dff1f7c9f7881c43a511f5d83
+SEARCH_PATTERN    = Completed|Backgrounded|Proceed While Running|Cancel|
+                    cancel_command|jobId|status.*running|awaiting_followup|
+                    Your turn|userActionRequired|activeCommandJobs|CommandJob
+
+================================================================================
+PRODUCTION SEAM MAP — BOUNDED REDS
+================================================================================
+
+1) command-card lifecycle projection
+   AUTHORITY:
+     - webview ChatRow.tsx:223
+         const isCommandCompleted =
+             isCommandMessage && message.commandCompleted === true
+     - webview CommandOutputRow.tsx:286-301
+         getCommandStatusText(isExecuting, isPending, isCompleted, isRejected)
+         returns "Completed" iff isCommandCompleted
+   PRODUCER (writes commandCompleted=true):
+     - host message-translator.ts:1707-1715
+         toolName === "run_commands" || "execute_command"
+         → content_end always stamps commandCompleted: true
+         (does NOT inspect start.state === "running" envelope)
+   GAP:
+     - The producer does not encode the running-vs-terminal distinction
+       into the message; the webview cannot distinguish
+       {tool invocation completed} from {CommandJob completed}.
+
+2) Cancel affordance
+   AUTHORITY:
+     - webview CommandOutputRow.tsx:178-179
+         const showCancelButton =
+             (isCommandExecuting || isCommandPending) &&
+             typeof onCancelCommand === "function" &&
+             isBackgroundExec
+   PRODUCER (onCancelCommand wiring):
+     - MessageRenderer.tsx:108, MessagesArea.tsx:232 both wire
+         onCancelCommand={() => messageHandlers.executeButtonAction("cancel")}
+     - useMessageHandlers.ts:561-580
+         case "cancel":
+             if (backgroundCommandRunning) {
+                 await TaskServiceClient.cancelBackgroundCommand(...)
+             }
+             await TaskServiceClient.cancelTask(EmptyRequest.create({}))
+   GAP-A:
+     - isCommandExecuting is FALSE for a backgrounded command (because
+       message.commandCompleted === true is hardcoded). So showCancelButton
+       is FALSE. Cancel is hidden.
+   GAP-B:
+     - When showCancelButton is true, the cancel routes to
+       executeButtonAction("cancel") → cancelTask. The background-command
+       cancel is *pre-pended* to a TASK cancel. The user clicks the card
+       Cancel expecting to cancel the running command; instead the entire
+       task is aborted. The proto handler cancelBackgroundCommand.ts:4-9
+       does not even expose a jobId parameter — it cancels all active jobs
+       on the session.
+   CANCELLATION TARGET AUTHORITY (already correct):
+     - command-job-manager.cancel({ jobId })  (per command-status-tool.ts:191)
+     - vscode-session-host.cancelBackgroundCommand(): Promise<number>
+       cancels ALL active jobs on the manager
+     - SdkController.cancelBackgroundCommand(): Promise<void> calls the above
+   GAP-C:
+     - The existing target is a session-wide cancel (no jobId filter).
+       Multi-job sessions cannot cancel a single job from the UI; the
+       spec calls for BGCARD-04 (Cancel dispatch carries exact jobId)
+       and BGCARD-05 (two jobs preserve independent cancellation targets).
+
+3) task-header ownership projection ("Your turn")
+   AUTHORITY:
+     - webview taskHeaderTelemetryHelpers.ts:154-165
+         case "awaiting_followup":
+             return { label: "Your turn", glyph: "↳", live: true }
+   PRODUCER:
+     - TurnStateTracker (sdk/packages/agents) → turnState.phase
+     - The two viable writers per ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-
+       LIVENESS-RECON01 (CLOSED at HEAD 71a56613a, PENDING_CLOSURE on
+       live bind): controller-epoch-transition-reseed and
+       followup-on-follow-up-abandoned
+     - Both are STRUCTURALLY FORBIDDEN from inspecting CommandJobManager
+       (verified in DISCRIMINATOR01 §7: SdkController.updateBackgroundCommandState
+       has no setWithWriter call)
+   PER PRIOR RECON (LIVENESS-RECON01 §10 closure):
+     "the visible contradiction (TaskHeader says 'Idle' while a
+      background job is alive) is therefore a UI presentation gap,
+      NOT a writer defect, conditional on the LIVE bind confirming
+      either writer"
+   GAP:
+     - The "Your turn" surface (awaiting_followup) is a turn-state-only
+       projection; the prior recon's classification (UI presentation gap,
+       not writer defect) means the fix lives in the projection layer
+       that consumes turnState.phase, not in the writer. The exact seam
+       to extend is the `stateLabel` / `taskHeaderPresentationStateLabel`
+       mapping (or the consumer wrapper that feeds it). This is in-scope
+       of the same bounded authority — both `Completed` and `Your turn`
+       are UI presentation gaps on the same lifecycle authority.
+
+================================================================================
+AUTHORITY CLASSIFICATION (per ACT §5 decision gate)
+================================================================================
+
+CARD_STATUS_AUTHORITY =
+    production message-translator.ts:1707-1715 (host) → ClineMessage
+    .commandCompleted (wire) → ChatRow.tsx:223 (webview) →
+    CommandOutputRow.tsx:286 getCommandStatusText → status pill
+
+CARD_CANCEL_AUTHORITY =
+    production onBackgroundStateChange (CommandJobManager →
+    vscode-run-commands-tool.ts:618-628) → SdkController
+    .updateBackgroundCommandState → backgroundCommandRunning +
+    backgroundCommandTaskId (wire) → useMessageHandlers.ts:569-573
+    (cancel-target dispatch)
+    production command-job-manager.cancel({ jobId }) (terminal
+    cancellation target — same surface as cancel_command tool)
+
+TURN_OWNERSHIP_AUTHORITY =
+    production TurnStateTracker (sdk) → turnState.phase (wire) →
+    taskHeaderTelemetryHelpers.stateLabel(phase) → TaskHeader label
+    (= "Your turn" for awaiting_followup)
+
+BACKGROUND_CONTINUATION_AUTHORITY =
+    production onBackgroundStateChange → SdkController
+    .updateBackgroundCommandState → backgroundCommandRunning
+    + activeCommandJobs (TaskTelemetryTracker) — these are the
+    canonical runtime answers to "is a background job still alive"
+
+JOB_TERMINAL_AUTHORITY =
+    production CommandJobManager terminalPromise + cancel
+    → onBackgroundStateChange(false) → SdkController
+    .updateBackgroundCommandState(false, undefined)
+    The CommandJobManager is the SINGLE authority for "the job
+    finished" — no other surface may decrement the gauge or
+    project a terminal state.
+
+CLASSIFICATION = CASE_SHARED
+
+  card status / cancel and turn ownership are BOTH presentation
+  gaps on the same background-command lifecycle authority
+  (CommandJobManager → onBackgroundStateChange → SdkController
+  .updateBackgroundCommandState → backgroundCommandRunning /
+  backgroundCommandTaskId / activeCommandJobs). The fix lives
+  in the projection layer that consumes this authority, not in
+  new lifecycle machinery.
+
+  Per ACT §5: CASE_SHARED ⇒ ONE ACT, ONE BOUNDED REPAIR.
+
+================================================================================
+KEY CODE POINTS (will be touched / must NOT be touched)
+================================================================================
+
+IN-SCOPE (projection seams only):
+  apps/vscode/src/sdk/message-translator.ts:1707-1715
+      add `commandExecutionDisposition: "backgrounded"` (or new
+      enum value) when the tool output text matches the
+      `status: "running"` JSON envelope; do NOT set commandCompleted
+      in that case.
+  apps/vscode/src/shared/ExtensionMessage.ts:1030
+      extend ClineMessage.commandExecutionDisposition enum to
+      include "backgrounded"
+  apps/vscode/webview-ui/src/components/chat/ChatRow.tsx:220-223
+      derive isCommandCompleted / isCommandExecuting /
+      isCommandBackgrounded from the new disposition value
+  apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx:286-301
+      add `backgrounded` branch to getCommandStatusText + show
+      Cancel button when disposition === "backgrounded"
+  apps/vscode/webview-ui/src/components/chat/ChatRow.tsx:80-145
+      thread an `onCancelCommand(jobId)` callback from the parent
+      (or use a jobId-aware message handler)
+  apps/vscode/webview-ui/src/components/chat/chat-view/components/
+    messages/MessageRenderer.tsx:108
+  apps/vscode/webview-ui/src/components/chat/chat-view/components/
+    layout/MessagesArea.tsx:232
+      switch the onCancelCommand dispatch to call the new
+      jobId-aware background-command cancel RPC (NOT
+      executeButtonAction("cancel") which routes to cancelTask)
+  apps/vscode/proto/cline/task.proto:17-19
+      extend cancelBackgroundCommand(EmptyRequest) to accept a
+      jobId field (BoundedMessage StringRequest-shaped OR a new
+      CancelBackgroundCommandRequest with optional jobId), and
+      regenerate.
+  apps/vscode/src/core/controller/task/cancelBackgroundCommand.ts
+      forward jobId to SdkController.cancelBackgroundCommand(jobId)
+  apps/vscode/src/sdk/SdkController.ts:3207-3234
+      extend signature to accept jobId?: string, call
+      vscode-session-host.cancelBackgroundCommand(jobId) (single
+      job instead of all)
+  apps/vscode/src/sdk/vscode-session-host.ts:474-485
+      extend to accept optional jobId; if provided cancel only
+      that job; else cancel all (back-compat for callers without
+      jobId)
+  apps/vscode/webview-ui/src/components/chat/task-header/
+    taskHeaderTelemetryHelpers.ts:146-183
+      extend stateLabel OR add a stateLabelOverride hook that
+      consumes backgroundCommandRunning and overrides
+      "Your turn" → "Working" while a background job is alive
+      and the turnState is awaiting_followup.
+  apps/vscode/webview-ui/src/components/chat/chat-view/components/
+    messages/TaskHeaderTelemetryStrip.tsx (or equivalent consumer)
+      pass the backgroundCommandRunning flag to the header label
+      projection (this is the consumer wrapper that owns the
+      override — per the prior recon, the fix lives in the
+      consumer that feeds stateLabel, not in the writer).
+
+OUT-OF-SCOPE (must not be touched):
+  - command-job-manager.ts (CommandJobManager termination algorithm)
+  - vscode-session-host.ts CommandJobManager wiring (constructor only)
+  - PGID containment / cleanup / native helper / LaunchAgent / kqueue /
+    Endpoint Security / pgid-containment-product-contract01
+  - The two prior writers (controller-epoch-transition-reseed,
+    followup-on-follow-up-abandoned) — they are contract-correct
+    per prior recon; the fix lives in the projection consumer.
+  - new scheduler / job-completion wake architecture (not needed —
+    onBackgroundStateChange already provides the lifecycle signal
+    used by the gauge chain; this ACT reuses it.)

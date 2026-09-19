@@ -1,0 +1,34 @@
+AUTOMATIC_MONITORING = LIVE OBSERVED  (per the ACT-CLINEMM-BACKGROUND-
+                                       COMMAND-TURNSTATE-LIVENESS-RECON01
+                                       LIVE specimen + the example
+                                       dialogue quoted in this ACT:
+                                       "The command is still running...",
+                                       "Continuing to monitor...",
+                                       "Let me continue monitoring it...")
+
+PROPERTY:
+  background job stays active
+  → model can continue monitoring/polling automatically
+  → user does not need to poke the task
+
+REQUIRED_AFTER_REPAIR:
+  - continuation remains schedulable (background job can be polled
+    by an autonomous provider turn)
+  - provider can resume without user input
+  - task does not enter USER_ACTION_REQUIRED merely because one poll
+    ended
+  - textual updates from autonomous monitoring may appear
+
+FORBIDDEN_REPAIR:
+  - disabling the autonomous monitoring poll loop
+  - forcing the system to wait for user input between polls
+  - introducing a USER_ACTION_REQUIRED state purely to suppress the
+    spurious "Your turn" (the property to fix is the projection,
+    not the polling behavior)
+
+PROVENANCE_OF_GOOD_BEHAVIOR:
+  per upstream Cline's "Proceed While Running" semantics the
+  background command is a separate registered OS-level process;
+  the foreground turn may end and the model may continue polling
+  (or the model may be resumed by a job-completion event). Both
+  paths must remain live.

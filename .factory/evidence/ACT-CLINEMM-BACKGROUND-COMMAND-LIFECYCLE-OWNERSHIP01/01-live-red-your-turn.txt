@@ -1,0 +1,27 @@
+CAPTURE_CLASS = REAL | LIVE
+
+LIVE_RED_B_TURN_OWNERSHIP
+  job:
+    status = running
+  autonomous monitoring messages observed repeatedly:
+    - "The command is still running..."
+    - "Continuing to monitor..."
+    - "Let me continue monitoring it..."
+  user question            = none
+  approval request         = none
+  task header              = "Your turn"      ← FALSE; model was
+                                                    autonomously monitoring
+  observed behavior:
+    - the conversation did not pause for user input
+    - the model is actively issuing provider turns to poll the
+      background job
+    - the task header still says "Your turn", contradicting the
+      observed autonomous continuation
+    - this is a projection bug, not an actual pause-for-user:
+      see §4 monitoring conservation; do NOT disable the
+      autonomous continuation while repairing this
+
+freeze:
+  CAPTURE_BOUND = YES
+  LIVE_BIND     = YES
+  RED_BIND      = YES

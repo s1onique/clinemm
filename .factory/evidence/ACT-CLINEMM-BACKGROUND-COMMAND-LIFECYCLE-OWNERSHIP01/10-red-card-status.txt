@@ -1,0 +1,91 @@
+RED TEST FILE: background-command-lifecycle-ownership.bgcl01.test.tsx
+
+PURPOSE:
+  Bound the card status projection per ACT §6, §7, §8, §17.
+  Tests render the REAL CommandOutputRow against the REAL
+  ChatRowContent (no chat-row mock). Fixtures construct ClineMessage
+  values that mirror what the production translator must produce
+  after the bounded repair.
+
+  Pre-repair (LIVE state):
+    - a say:"command" row whose text matches the
+      `{"status":"running","jobId":"cmd_x"}` envelope and whose
+      commandCompleted flag is true (as the current translator
+      hardcodes it) renders "Completed" — which is FALSE.
+
+  Post-repair:
+    - the translator stamps commandExecutionDisposition:
+      "backgrounded" and commandCompleted: false when the output
+      text matches the running envelope. The webview renders
+      "Backgrounded" and keeps Cancel visible.
+
+FIXTURES (production-derived shapes):
+
+  running command row:
+    say: "command"
+    text: 'sleep 600\n<<<COMMAND OUTPUT>>>\n{"status":"running","jobId":"cmd_mu8no3phxj5uf53n","elapsedMs":1234,"deadlineRemainingMs":9999,"outputTruncated":false,"stdout":""}'
+    commandCompleted: false
+    commandExecutionDisposition: "backgrounded"
+
+  terminal success row:
+    say: "command"
+    text: 'echo done\n<<<COMMAND OUTPUT>>>\n'
+    commandCompleted: true
+    commandExecutionDisposition: "executed"
+
+  terminal failure row:
+    say: "command"
+    text: 'false\n<<<COMMAND OUTPUT>>>\nError: ...'
+    commandCompleted: true
+    commandExecutionDisposition: "executed"
+
+  rejected-before-execution row:
+    say: "command"
+    text: '...\n<<<COMMAND OUTPUT>>>\nError: ...'
+    commandCompleted: true
+    commandExecutionDisposition: "rejected_before_execution"
+
+MINIMUM TEST CASES (per ACT §17 BGCL-01..BGCL-14):
+
+  BGCL-01  running+jobId  → pill says "Backgrounded" (NOT "Completed")
+  BGCL-02  terminal success → pill says "Completed"
+  BGCL-03  terminal failure → pill says "Completed" (terminal is
+           terminal; failure mode is communicated by the output
+           text + exit code, not the status pill)
+  BGCL-04  cancelled       → pill says "Cancelled"   (NOT a new state
+           per se — we reuse the existing executed pill when the
+           translator stamps commandExecutionDisposition:
+           "executed" and a follow-up completion arrives; the cancel
+           path is covered by the cancel-target tests below)
+  BGCL-05  running+jobId + onCancelCommand(jobId) → Cancel visible
+  BGCL-06  running+jobId + onCancelCommand(jobId) → clicking Cancel
+           calls onCancelCommand with the EXACT jobId (not the
+           task-level cancel path)
+  BGCL-07  terminal success + onCancelCommand(jobId) → Cancel hidden
+  BGCL-08  rejected before execution → pill says "Rejected" (no
+           regression to existing ACT-CLINEMM-REJECTED-COMMAND-
+           PRESENTATION-TRUTH01 contract)
+  BGCL-09  command_completed=true, NO commandExecutionDisposition,
+           output text is not the running envelope → pill says
+           "Completed" (backward-compat for legacy rows)
+  BGCL-10  active background job + turnState.phase = awaiting_followup
+           → header label is NOT "Your turn" (TaskHeader
+           background-running override)
+  BGCL-11  genuine user-owned ask (turnState.phase = awaiting_followup,
+           backgroundCommandRunning = false) → header label IS
+           "Your turn" (regression guard for the existing ACT
+           contract)
+  BGCL-12  genuine approval ask (turnState.phase = awaiting_approval) →
+           header label is "Approval" (regression guard)
+  BGCL-13  ⎇ semantics unchanged — activeCommandJobs count surfaces
+           correctly with the new "backgrounded" pill (regression
+           guard for the prior ACT)
+  BGCL-14  ⚠ semantics unchanged — runtime incident counter surfaces
+           correctly while a background job is alive (regression
+           guard for the prior ACT)
+
+TEST FILE: apps/vscode/webview-ui/src/components/chat/__tests__/
+           background-command-lifecycle-ownership.bgcl01.test.tsx
+
+STATUS: written in this ACT (see ACT §12/§13 evidence files for the
+        green confirmation after the production repair).

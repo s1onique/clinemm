@@ -1,0 +1,68 @@
+CONSERVATION INVARIANTS (per ACT §15/§16/§17)
+
+AUTOMATIC_MONITORING_CONSERVED = YES
+
+  The autonomous continuation / polling path is untouched. The
+  bounded repair is a projection-layer override that consumes
+  `backgroundCommandRunning` (already on the wire from
+  ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01)
+  and `turnState.phase` (canonical). It does NOT introduce any
+  new scheduler / wake architecture.
+
+  The model can still call `command_status` on its own; the
+  background job remains alive; the user does NOT need to poke
+  the task.
+
+CARD_LIFECYCLE_AUTHORITY = single producer (message-translator)
+  is the only source for `commandCompleted` /
+  `commandExecutionDisposition` on a `say:"command"` row. The
+  webview projection derives the status pill from those fields.
+
+CANCEL_AUTHORITY = command-job-manager.cancel({ jobId })
+  is the only cancellation target. The card-level Cancel routes
+  the jobId to the gRPC `cancelBackgroundCommand(StringRequest)`
+  handler, which forwards to `SdkController.cancelBackgroundCommand(jobId?)`
+  → `vscode-session-host.cancelBackgroundCommand(jobId?)` →
+  `commandJobManager.cancel({ jobId })`. Session-wide cancel is
+  preserved for back-compat (empty `value` triggers
+  `getActiveJobIds()`).
+
+TERMINAL_LIFECYCLE_CONSERVATION = YES
+  - Backgrounded → job exits 0 → Completed → Cancel disappears →
+    ⎇ decrements (via onBackgroundStateChange(false) callback)
+  - Backgrounded → operator Cancel → Cancelled → Cancel disappears
+    → ⎇ decrements
+  - Backgrounded → exit nonzero → Failed → Cancel disappears →
+    ⎇ decrements
+  No card remains Backgrounded once authoritative CommandJobManager
+  lifecycle is terminal. ⎇ never manually decremented — the
+  CommandJobManager remains the single authority.
+
+ACTIVE_GAUGE_SEMANTICS_UNCHANGED = YES
+  - ⎇ glyph renders from `taskTelemetry.activeCommandJobs`
+    (unchanged code path)
+  - ⚠ glyph renders from `taskTelemetry.runtimeErrors`
+    (unchanged code path)
+  - This ACT only reads these fields for the bounded override
+    `taskHeaderStateLabelWithBackground`.
+
+RUNTIME_INCIDENT_SEMANTICS_UNCHANGED = YES
+  - `handleTaskRuntimeError` (SdkController.ts:4172) untouched
+  - Runtime error counter projection unchanged
+
+PGID_TERMINATION_SEMANTICS_UNCHANGED = YES
+  - PGID-CONTAINMENT-PRODUCT-CONTRACT01 not touched
+  - CommandJobManager termination algorithm not touched
+  - Native helper / LaunchAgent / kqueue not touched
+
+TASK_PHASE_SEMANTICS_UNCHANGED = YES
+  - TurnStateTracker writers not touched (per prior recon ACT
+    ACT-CLINEMM-BACKGROUND-COMMAND-TURNSTATE-LIVENESS-RECON01,
+    which classified those writers as contract-correct).
+  - The bounded override reads turnState.phase + the canonical
+    backgroundCommandRunning flag. It does NOT mutate either.
+  - Only consumer-side label projection is altered: the bounded
+    wrapper `taskHeaderStateLabelWithBackground` demotes
+    `awaiting_followup` → "Working" while a background job is
+    alive. Genuine user-owned asks (backgroundCommandRunning=false)
+    are untouched.

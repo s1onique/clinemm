@@ -105,7 +105,11 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({
 				lastModifiedMessage={modifiedMessages.at(-1)}
 				message={messageOrGroup}
 				mode={mode}
-				onCancelCommand={() => messageHandlers.executeButtonAction("cancel")}
+				// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+				// card-level Cancel dispatches the jobId-aware
+				// background-command cancel RPC (NOT the task-cancel
+				// path that executeButtonAction("cancel") routes to).
+				onCancelCommand={(jobId) => messageHandlers.cancelBackgroundCommandByJobId(jobId)}
 				onHeightChange={onHeightChange}
 				onLastRowContentChange={onLastRowContentChange}
 				onSetQuote={onSetQuote}

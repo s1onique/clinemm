@@ -1,0 +1,54 @@
+RED TEST CASES — cancel affordance per ACT §7/§8/§17
+
+PRE-REPAIR (LIVE state, frozen at HEAD ef82572de):
+  jobId     = cmd_mu8no3phxj5uf53n
+  job.status = running
+  ⎇ = 1
+  card = Completed       ← FALSE
+  Cancel = absent         ← operator lost control
+
+POST-REPAIR (bounded projection-layer override):
+  card headline = Backgrounded
+  Cancel visible + enabled
+  Cancel dispatch carries exact jobId
+  Multi-job sessions preserve independent cancellation targets
+
+TESTS (per ACT §7 BGCARD-03..05 + §8 BGCARD-06..08):
+  BGCARD-03 backgrounded job shows Cancel           → BGCL-05
+  BGCARD-04 Cancel dispatch carries exact jobId     → BGCL-06
+  BGCARD-05 two jobs preserve independent
+            cancellation targets                     → CommandJobManager.cancel
+                                                       ({ jobId }) is single-job;
+                                                       proto handler forwards
+                                                       jobId through SdkController
+                                                       .cancelBackgroundCommand
+                                                       (jobId?) → vscode-session-
+                                                       host.cancelBackgroundCommand
+                                                       (jobId?) → single-job.
+  BGCARD-06 active job + Working → Cancel visible   → CommandOutputRow.tsx
+                                                       showCancelButton logic +
+                                                       ACT §8 invariant:
+                                                       REGARDLESS OF Working/
+                                                       Thinking/awaiting_followup/
+                                                       Your turn/Approval for
+                                                       another ask, Cancel remains
+                                                       available when
+                                                       CommandJob.active == true.
+  BGCARD-07 active job + awaiting_followup → Cancel → covered by same.
+  BGCARD-08 active job + unrelated approval ask →
+            Cancel remains job-scoped               → the new dispatcher
+                                                       cancelBackgroundCommandByJobId
+                                                       (useMessageHandlers.ts
+                                                       :637-648) routes ONLY to
+                                                       the cancelBackgroundCommand
+                                                       RPC; never touches
+                                                       TaskServiceClient.cancelTask
+                                                       or any ask-response handler.
+                                                       Per upstream issue #8251
+                                                       (cancel-old-while-new-pending),
+                                                       the ask-promise MUST NOT be
+                                                       reused — this is preserved.
+
+HALT_TRIGGERS (per ACT §28):
+  HALT_CANCEL_INTERFERES_WITH_CURRENT_ASK → not triggered
+  HALT_CANCEL_NOT_JOB_ID_CORRELATED → not triggered (BGCL-06)

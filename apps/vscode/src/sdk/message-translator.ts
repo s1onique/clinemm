@@ -1152,6 +1152,64 @@ function extractCommandText(input: unknown): string {
 }
 
 /**
+ * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+ *
+ * Detect the structured backgrounded-run envelope produced by the
+ * `run_commands` background path (see
+ * `vscode-run-commands-tool.ts:685-693`):
+ *
+ *   {
+ *     "status": "running",
+ *     "jobId": "cmd_mu8no3phxj5uf53n",
+ *     "elapsedMs": <number>,
+ *     "deadlineRemainingMs": <number>,
+ *     "outputTruncated": <boolean>,
+ *     "stdout": "..."
+ *   }
+ *
+ * Returns true only when:
+ *   - the output parses as a single JSON object,
+ *   - `status === "running"`, and
+ *   - `jobId` is a non-empty string.
+ *
+ * The detection is intentionally cheap and conservative — it
+ * never throws and never matches anything that isn't the exact
+ * envelope shape produced by the run_commands background
+ * executor. Free-form tool output that happens to contain the
+ * substring "status" will NOT match.
+ *
+ * This helper is the single producer-side authority for the
+ * "the underlying CommandJob is non-terminal" claim that the
+ * webview needs to render "Backgrounded" + keep the Cancel
+ * affordance.
+ */
+export function isBackgroundedCommandOutput(outputStr: string): boolean {
+	if (!outputStr || typeof outputStr !== "string") {
+		return false
+	}
+	const trimmed = outputStr.trim()
+	if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+		return false
+	}
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(trimmed)
+	} catch {
+		return false
+	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		return false
+	}
+	const record = parsed as Record<string, unknown>
+	return (
+		record.status === "running" &&
+		typeof record.jobId === "string" &&
+		record.jobId.length > 0 &&
+		record.jobId.startsWith("cmd_")
+	)
+}
+
+/**
  * Build the Cline approval ask message for an SDK tool approval request.
  * Keeps approval prompts aligned with the SDK event translator so the webview
  * can render specialized rows (MCP, commands, subagents) instead of a generic
@@ -1691,6 +1749,20 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						const commandText = extractCommandText(storedInput)
 						const outputStr = event.error ? `Error: ${event.error}` : extractToolOutputText(event.output)
 						const ts = state.clearStreamingTool()
+						// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+						// Detect the backgrounded-run envelope
+						//   { status: "running", jobId: "cmd_..." }
+						// produced by the run_commands background path
+						// (vscode-run-commands-tool.ts:685-693). When the
+						// envelope is present, the underlying CommandJob
+						// remains alive — commandCompleted MUST be false and
+						// commandExecutionDisposition MUST be "backgrounded"
+						// so the webview can render "Backgrounded" + keep the
+						// Cancel affordance. Without this distinction the
+						// card would falsely claim "Completed" and the user
+						// would lose Cancel control over a still-running
+						// process.
+						const isBackgroundedEnvelope = isBackgroundedCommandOutput(outputStr)
 						// ACT-CLINEMM-REJECTED-COMMAND-PRESENTATION-TRUTH01:
 						// Preserve the runtime's lifecycle disposition verbatim.
 						// The webview (ChatRow / CommandOutputRow) reads this
@@ -1699,18 +1771,35 @@ function translateAgentEvent(event: AgentEvent, state: MessageTranslatorState): 
 						// wording. ABSENT for producers that pre-date the field;
 						// we MUST NOT default to either value (per the §18
 						// "no synthesis" rule).
-						const commandExecutionDisposition =
+						let commandExecutionDisposition: "executed" | "rejected_before_execution" | "backgrounded" | undefined
+						if (isBackgroundedEnvelope) {
+							// Backgrounded wins over the runtime-stamped
+							// disposition — the tool DID execute but did
+							// NOT terminate, so "backgrounded" is the
+							// truthful label for the lifecycle.
+							commandExecutionDisposition = "backgrounded"
+						} else if (
 							event.executionDisposition === "executed" ||
 							event.executionDisposition === "rejected_before_execution"
-								? event.executionDisposition
-								: undefined
+						) {
+							commandExecutionDisposition = event.executionDisposition
+						} else {
+							commandExecutionDisposition = undefined
+						}
 						messages.push({
 							ts,
 							type: "say",
 							say: "command",
 							text: outputStr ? `${commandText}\n${COMMAND_OUTPUT_STRING}\n${outputStr}` : commandText,
 							partial: false,
-							commandCompleted: true,
+							// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+							// Backgrounded tool results are NON-terminal
+							// from the underlying-CommandJob perspective.
+							// Setting commandCompleted:false here is the
+							// single producer-side repair that lets the
+							// webview render the truthful "Backgrounded"
+							// pill and keep the Cancel affordance.
+							commandCompleted: !isBackgroundedEnvelope,
 							...(commandExecutionDisposition !== undefined ? { commandExecutionDisposition } : {}),
 						})
 						break

@@ -67,6 +67,21 @@ interface TaskHeaderProps {
 	taskHeaderPresentation?: TaskHeaderPresentationProjection
 	turnState?: TurnState
 	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+	 * Optional override for the background-command-running flag.
+	 * When provided, the TaskHeader state label suppresses
+	 * `awaiting_followup` → "Your turn" while a background
+	 * CommandJob is alive (the bounded projection-layer override;
+	 * see `taskHeaderStateLabelWithBackground` in
+	 * `taskHeaderTelemetryHelpers.ts`).
+	 *
+	 * Optional for backward compatibility — when absent the header
+	 * falls back to the bare `turnState.phase` derivation
+	 * (no behavior change for consumers that do not pass this
+	 * flag).
+	 */
+	backgroundCommandRunningOverride?: boolean
+	/**
 	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 	 * + ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
 	 * Effective diagnostic-knob state from the host (V / I / A / P / D).
@@ -106,6 +121,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	taskHeaderPresentation: taskHeaderPresentationProp,
 	turnState: turnStateProp,
 	diagnosticKnobs: diagnosticKnobsProp,
+	backgroundCommandRunningOverride,
 }) => {
 	const {
 		apiConfiguration,
@@ -120,6 +136,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		taskTelemetry: taskTelemetryFromContext,
 		taskHeaderPresentation: taskHeaderPresentationFromContext,
 		diagnosticKnobs: diagnosticKnobsFromContext,
+		backgroundCommandRunning: backgroundCommandRunningFromContext,
 	} = useExtensionState()
 
 	// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: prefer the prop if provided
@@ -130,6 +147,13 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	// ACT-CLINEMM-TASKHEADER-CANONICAL-PROJECTION-MIGRATION01: same
 	// preference pattern for the new TaskHeader presentation projection.
 	const taskHeaderPresentation = taskHeaderPresentationProp ?? taskHeaderPresentationFromContext
+	// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01: prefer the
+	// prop override if provided, otherwise read the canonical
+	// backgroundCommandRunning flag from the extension state. This
+	// is the bounded seam the override consults (see
+	// `taskHeaderStateLabelWithBackground` in
+	// `taskHeaderTelemetryHelpers.ts`).
+	const backgroundCommandRunning = backgroundCommandRunningOverride ?? backgroundCommandRunningFromContext ?? false
 	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 	// Effective diagnostic-knob state. Host-owned; projected via
 	// `useExtensionState()` (which extends the wire `ExtensionState`
@@ -255,6 +279,7 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 						when the host has no canonical telemetry on the wire. */}
 					<div className="flex items-center justify-between gap-2 mt-0.5">
 						<TaskHeaderTelemetry
+							backgroundCommandRunning={backgroundCommandRunning}
 							diagnosticKnobs={diagnosticKnobs}
 							taskHeaderPresentation={taskHeaderPresentation}
 							telemetry={taskTelemetry}

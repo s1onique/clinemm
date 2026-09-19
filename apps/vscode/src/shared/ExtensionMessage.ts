@@ -1027,7 +1027,7 @@ export interface ClineMessage {
 	 * ABSENT means the translator has no signal — consumers MUST treat
 	 * absence as opaque and not synthesize either value.
 	 */
-	commandExecutionDisposition?: "executed" | "rejected_before_execution"
+	commandExecutionDisposition?: "executed" | "rejected_before_execution" | "backgrounded"
 	/**
 	 * ACT-CLINEMM-TERMINAL-REPORT-COMPLETION-FRAMING01-CORRECTION01:
 	 * immutable per-message marker stamped by the runtime AT THE MOMENT a

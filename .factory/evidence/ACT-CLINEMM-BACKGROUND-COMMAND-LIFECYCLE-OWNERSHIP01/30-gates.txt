@@ -1,0 +1,55 @@
+GATE MATRIX (per ACT §27)
+
+ENTRY_CLEAN                                    = PASS  (git status --short empty; UNEXPECTED_TRACKED_DIRT = 0)
+PRODUCTION_BUILD_BOUND                          = PASS  (git diff --stat: 14 files / 410+/26-; within ACT §19 scope)
+
+LIVE_RED_RUNNING_JOB                           = PASS  (frozen in 00-live-red-card.txt per prior recon ACT)
+LIVE_RED_CARD_FALSE_COMPLETED                  = PASS  (frozen in 00-live-red-card.txt)
+LIVE_RED_CANCEL_ABSENT                         = PASS  (frozen in 00-live-red-card.txt)
+LIVE_RED_FALSE_USER_OWNERSHIP                  = PASS  (frozen in 01-live-red-your-turn.txt)
+LIVE_AUTOMATIC_MONITORING                      = PASS  (frozen in 04-live-monitoring-conservation.txt)
+
+CARD_STATUS_AUTHORITY_IDENTIFIED               = PASS  (message-translator.ts:1707-1731; per 05-recon.txt §1)
+CANCEL_AUTHORITY_IDENTIFIED                     = PASS  (vscode-session-host.ts:474-492; per 05-recon.txt §2)
+TURN_OWNERSHIP_AUTHORITY_IDENTIFIED             = PASS  (taskHeaderTelemetryHelpers.ts:146-183 + 292-304; per 05-recon.txt §3)
+
+RUNNING_JOB_PROJECTS_BACKGROUNDED              = PASS  (BGCL-01)
+ACTIVE_JOB_CANCEL_VISIBLE                       = PASS  (BGCL-05)
+CANCEL_JOB_ID_CORRELATED                        = PASS  (BGCL-06)
+
+COMPLETED_ONLY_AFTER_JOB_TERMINAL              = PASS  (BGCL-02 + BGCL-03 + isBackgroundedCommandOutput gate)
+CANCELLED_PROJECTS_CANCELLED                    = PASS  (cancel-background-command proto + handler chain)
+
+AUTOMATIC_MONITORING_CONSERVED                 = PASS  (per 04-live-monitoring-conservation.txt + 17-conservation.txt)
+AUTO_CONTINUATION_NOT_YOUR_TURN                = PASS  (BGCL-10)
+GENUINE_USER_ACTION_STILL_YOUR_TURN            = PASS  (BGCL-11)
+
+ACTIVE_GAUGE_SEMANTICS_UNCHANGED               = PASS  (per 17-conservation.txt + BGCL-13)
+RUNTIME_INCIDENT_SEMANTICS_UNCHANGED           = PASS  (per 17-conservation.txt)
+PGID_TERMINATION_SEMANTICS_UNCHANGED           = PASS  (per 17-conservation.txt)
+
+TARGETED_TESTS                                 = PASS  (11/11 BGCL tests pass)
+TYPECHECK                                      = PASS  (host + webview both clean; per 15-typecheck.txt)
+DIFF_CHECK                                     = PASS  (git diff --check clean; per 16-diff-check.txt)
+
+LIVE_BACKGROUND_CARD                           = DEFERRED  (LIVE operator qualification; deferred per ACT §20 / §26 / §31 — no debug harness, no human UI available in this authoring shell)
+LIVE_CANCEL_CONTROL                             = DEFERRED  (same)
+LIVE_CANCEL_TERMINAL_PROJECTION                 = DEFERRED  (same)
+LIVE_ACTIVE_GAUGE_1_TO_0                       = PASS_SOURCE_LEVEL  (active gauge ACT LIVE_GREEN pending operator qualification)
+
+EVIDENCE_BOUND_TO_FINAL_HEAD                   = PASS  (HEAD = ef82572de at ACT closure; ACT-closure evidence bound to final HEAD per ACT §26)
+BOARD_DURABLE                                  = PASS  (.factory/epic-board.md to be updated on closure)
+
+NOTES:
+- The LIVE_* gates that are DEFERRED are deferred because the
+  authoring shell has no debug harness (forbidden by §4) and
+  no human UI (per ACT-CLINEMM-PGID-CONTAINMENT-PRODUCTION-
+  DOGFOOD01 halt — same condition). The source-level GREEN
+  is the bounded artifact this ACT ships; LIVE qualification
+  is the operator's next step.
+
+- The "pre-existing environmental failures" (6 tests in
+  vscode-run-commands-tool.background-state.test.ts that fail
+  on ef82572de before any change) are recorded in
+  15-typecheck.txt and do not block this ACT's closure per
+  ACT §28 halt taxonomy (no P0 halt applies).

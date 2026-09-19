@@ -15,7 +15,13 @@ service TaskService {
   // Cancels a queued prompt by ID
   rpc cancelQueuedPrompt(StringRequest) returns (Empty);
   // Cancels the currently running background command
-  rpc cancelBackgroundCommand(EmptyRequest) returns (Empty);
+  // ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+  // The optional `jobId` value scopes the cancel to a single
+  // backgrounded CommandJob (multi-job sessions preserve
+  // independent cancellation targets — see BGCARD-05). When the
+  // value is empty, the handler falls back to the legacy
+  // session-wide cancel.
+  rpc cancelBackgroundCommand(StringRequest) returns (Empty);
   // Detaches the running foreground terminal command ("Proceed While Running"):
   // the agent receives the partial output and a log file path for the rest.
   rpc proceedWhileRunningCommand(EmptyRequest) returns (Empty);

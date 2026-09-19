@@ -471,15 +471,22 @@ export class VscodeSessionHost implements SdkSessionHost {
 		return this.inner.captureHostOwnershipFacts(sessionId) ?? undefined
 	}
 
-	async cancelBackgroundCommand(): Promise<number> {
-		const activeIds = this.commandJobManager.getActiveJobIds()
-		if (activeIds.length === 0) {
+	async cancelBackgroundCommand(jobId?: string): Promise<number> {
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+		// When jobId is provided, target a single backgrounded job
+		// (multi-job sessions preserve independent cancellation
+		// targets — see BGCARD-05). When omitted, cancel all
+		// active jobs (legacy session-wide cancel path for
+		// back-compat with callers that have not yet been
+		// updated to pass a jobId).
+		const targetIds = jobId ? [jobId] : this.commandJobManager.getActiveJobIds()
+		if (targetIds.length === 0) {
 			return 0
 		}
-		const results = await Promise.all(activeIds.map((jobId) => this.commandJobManager.cancel({ jobId })))
+		const results = await Promise.all(targetIds.map((id) => this.commandJobManager.cancel({ jobId: id })))
 		const cancelled = results.filter((r): r is { ok: true; state: "cancelled" } => r.ok && r.state === "cancelled").length
 		Logger.log(
-			`[VscodeSessionHost] cancelBackgroundCommand: cancelled ${cancelled}/${activeIds.length} active background command(s)`,
+			`[VscodeSessionHost] cancelBackgroundCommand: cancelled ${cancelled}/${targetIds.length} active background command(s)`,
 		)
 		return cancelled
 	}
