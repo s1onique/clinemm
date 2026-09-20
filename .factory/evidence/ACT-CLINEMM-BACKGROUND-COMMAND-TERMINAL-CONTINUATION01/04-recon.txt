@@ -1,0 +1,53 @@
+# Recon — BTCONT01
+
+## Recon results vs ACT spec
+
+### A. Q5 deferral (verified LIVE)
+File:     apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+Function: handleSessionEvent(event) -> result.turnComplete branch
+Branch:   line 457 `if (ownerStillRunning)`
+Live:     BOCOR jsonl row 1 (1789935252484) - guardResult=true
+
+Input event:        done-without-completion
+Active session:     1789935070156_oneah
+Existing state:     phase=streaming
+Owner identity:     preserved (queriedOwnerSessionId=activeSession.sessionId)
+
+### B. CommandJob terminal publication (verified LIVE)
+File:     apps/vscode/src/sdk/command-job-manager.ts:finalize()
+Events:   command_job_termination_started,
+          command_job_primary_group_cleanup (postcondition=gone),
+          command_job_terminal_committed (post-delete emit)
+Live:     BJLA jsonl rows 14-21
+Identity: jobId, ownerSessionId, pgid, terminalState ALL preserved end-to-end
+
+### C. SDK/session-event coordinator (verified ABSENT)
+grep -rn 'reevaluateDeferredTurn\|reevaluate\|onCommandJobLifecycle.*coordinator\|SdkSessionEventCoordinator.*jobTerminal':
+  -> NO MATCHES in production source
+
+Production consumers of terminal events:
+  - vscode-run-commands-tool.ts:621-636 (run_commands wrapper -> onBackgroundStateChange)
+  - SdkController.ts:4272 (handleCommandJobLifecycle -> gauge only)
+  - SdkController.ts:4183 (updateBackgroundCommandState -> projection only)
+
+The SdkSessionEventCoordinator is NOT a lifecycle consumer. TC1 confirmed.
+
+### D. Deferred continuation state (verified ABSENT)
+grep -rn 'deferredContinuation\|deferredTurn\|pendingTurnCompletion\|straggler.*deferred\|turnOwed':
+  -> NO MATCHES
+
+ACT introduces DeferredContinuation interface (sessionId + taskId + epoch).
+
+### E. Current streaming ownership (verified INDISTINGUISHABLE)
+grep -n 'streaming' apps/vscode/src/sdk/turn-state-tracker.ts:
+  TurnStateTracker.currentPhase is a single TurnPhase enum value; no
+  'actively streaming vs deferred-streaming' discriminator.
+
+Discrimination is achieved via the deferred marker + re-evaluation guard
+(hasRunningBackgroundJobForOwner at the moment of terminality).
+
+## Findings
+- TC1 (missing terminal continuation consumer) is the dominant case
+- TC2 (terminal event identity loss) REFUTED — identity is preserved
+- TC3 (deferred continuation not represented) is also relevant; the
+  repair uses TC1 + TC3 hybrid (terminal consumer + bounded marker)

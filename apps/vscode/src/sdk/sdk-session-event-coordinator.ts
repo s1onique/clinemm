@@ -104,11 +104,121 @@ export interface SdkSessionEventCoordinatorOptions {
 	getActiveSessionHost?: () => { readonly sdkHost?: object | undefined } | undefined
 }
 
+/**
+ * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+ *
+ * Bounded marker recorded at Q5 deferral time. Holds the
+ * identity triple (sessionId + taskId + epoch) so a late
+ * terminal event cannot mutate a newer turn (BTCONT-CTL-03 epoch
+ * supersession). The marker is cleared on commit or on any newer
+ * turn that supersedes the deferral. The marker is NOT a
+ * general-purpose continuation queue - it holds at most ONE
+ * pending continuation per coordinator instance.
+ */
+interface DeferredContinuation {
+	readonly sessionId: string
+	readonly taskId: string | undefined
+	readonly epoch: number
+	readonly deferredAt: number
+}
+
 export class SdkSessionEventCoordinator {
 	private readonly translateSessionEvent: (event: CoreSessionEvent, state: MessageTranslatorState) => TranslationResult
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+	 * bounded continuation marker (at most one entry per coordinator
+	 * instance). Cleared on commit or on epoch supersession.
+	 */
+	private deferredContinuation: DeferredContinuation | undefined
 
 	constructor(private readonly options: SdkSessionEventCoordinatorOptions) {
 		this.translateSessionEvent = options.translateSessionEvent ?? translateSessionEvent
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+	 * external entry point invoked by `SdkController` when the
+	 * active session's background-command projection flips from
+	 * running=true to running=false (the >0->0 cardinal transition).
+	 *
+	 * Re-evaluates the deferred continuation under the four
+	 * conservation rules (BTCONT-CTL-02/03/04/05):
+	 *   1. the deferred marker MUST exist for the active session;
+	 *      otherwise this is a no-op (other-session terminality
+	 *      never affects this session)
+	 *   2. the deferred marker's epoch MUST still match the active
+	 *      minter epoch; otherwise the deferral has been superseded
+	 *      by a newer turn and the late terminal event is discarded
+	 *   3. the live `hasRunningBackgroundJobForOwner(activeSession.sessionId)`
+	 *      lookup MUST return false; otherwise another matching job
+	 *      is still alive and the continuation stays deferred
+	 *   4. on success, the canonical writer
+	 *      `session-event-turn-complete-resumable-straggler-preserve`
+	 *      commits `awaiting_followup` exactly once and the
+	 *      marker is cleared
+	 */
+	reevaluateDeferredContinuation(): void {
+		const marker = this.deferredContinuation
+		if (!marker) return
+		const activeSession = this.options.sessions.getActiveSession()
+		if (!activeSession) {
+			this.deferredContinuation = undefined
+			return
+		}
+		if (marker.sessionId !== activeSession.sessionId) {
+			// different-session terminality: never affects this session
+			return
+		}
+		const taskId = this.options.getTask?.()?.taskId
+		if (marker.taskId !== undefined && taskId !== undefined && marker.taskId !== taskId) {
+			// task identity changed (e.g. task was cleared and a new
+			// task started before the late terminal arrived)
+			this.deferredContinuation = undefined
+			return
+		}
+		const currentEpoch = this.options.messageTranslatorState.getMinter().epoch
+		if (marker.epoch !== currentEpoch) {
+			// newer epoch supersedes the old deferral
+			this.deferredContinuation = undefined
+			return
+		}
+		// The third conservation: another matching job may STILL be
+		// running (BTCONT-CTL-04 multi-job case). The terminal event
+		// for job J1 just settled; if J2 is still alive, the lookup
+		// returns true and we stay deferred. The deferred marker is
+		// PRESERVED across this re-evaluation so J2's terminal event
+		// can re-drive the same continuation.
+		const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
+		if (ownerStillRunning) return
+
+		// All four conservation checks pass: commit the canonical
+		// awaiting_followup transition exactly once.
+		Logger.warn(
+			`[SdkController] background job terminal idle re-evaluating deferred Q5 completion for session ${activeSession.sessionId} (epoch=${marker.epoch})`,
+		)
+		this.deferredContinuation = undefined
+		this.options.setTurnPhase?.("awaiting_followup", undefined, "session-event-turn-complete-resumable-straggler-preserve")
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+	 * test-only backdoor exposing the deferred-continuation marker
+	 * so the BTCONT-CTL-03 / BTCONT-CTL-04 / BTCONT-CTL-05 suites can
+	 * verify the marker's identity triple (sessionId, taskId, epoch)
+	 * without depending on indirect observable side-effects. Returns
+	 * a copy of the marker; mutating the return value does NOT
+	 * affect the coordinator's internal state. Returns `undefined`
+	 * when no deferral is pending.
+	 */
+	getDeferredContinuationForTesting():
+		| { readonly sessionId: string; readonly taskId: string | undefined; readonly epoch: number }
+		| undefined {
+		if (!this.deferredContinuation) return undefined
+		return {
+			sessionId: this.deferredContinuation.sessionId,
+			taskId: this.deferredContinuation.taskId,
+			epoch: this.deferredContinuation.epoch,
+		}
 	}
 
 	async handleSessionEvent(event: CoreSessionEvent): Promise<void> {
@@ -365,6 +475,24 @@ export class SdkSessionEventCoordinator {
 							Logger.warn(
 								`[SdkController] done with no committed terminal response but active session ${activeSession.sessionId} owns a RUNNING background command; suppressing awaiting_followup transition (Q5 composition seam)`,
 							)
+							// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+							// record the bounded deferred-continuation marker
+							// so the terminal-idle consumer can re-evaluate
+							// the suppression exactly once. The marker
+							// carries {sessionId, taskId, epoch} so a late
+							// terminal event for an older deferral cannot
+							// mutate a newer turn (BTCONT-CTL-03 epoch
+							// supersession). Any existing marker is OVERWRITTEN
+							// - there is at most ONE pending continuation per
+							// coordinator instance, matching the
+							// session-event-turn-complete-resumable-straggler-preserve
+							// writer's exactly-one-commit-per-turn contract.
+							this.deferredContinuation = {
+								sessionId: activeSession.sessionId,
+								taskId: this.options.getTask?.()?.taskId,
+								epoch: this.options.messageTranslatorState.getMinter().epoch,
+								deferredAt: Date.now(),
+							}
 						} else {
 							Logger.warn(
 								"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",

@@ -1,0 +1,42 @@
+# Final Gates — BTCONT01
+
+## Implementation head
+a658057c1a76e9173bb5cdcf9f5609cce636657c
+
+## Focused tests
+$ bunx vitest run src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
+✓ 7/7 tests pass
+  - BTCONT-RED-01 (UNWIRED): pre-repair defect witness
+  - BTCONT-RED-01-GREEN:  post-repair auto-commit
+  - BTCONT-CTL-01:        manual wake-up commits
+  - BTCONT-CTL-02:        job still running (no commit)
+  - BTCONT-CTL-03:        newer epoch supersedes (discard)
+  - BTCONT-CTL-04:        multi-job last-relevant (J2 commits)
+  - BTCONT-CTL-05:        different session unaffected
+
+## Baseline (BCAFG01)
+$ bunx vitest run src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+✓ 5/5 tests pass (no regression)
+
+## Bun unit suite
+$ bun run scripts/run-bun-unit-tests.ts
+82/82 files pass / 1141 tests pass / 0 fail / 33.8s
+
+## check-types
+$ bun run check-types
+exit code 0 (clean)
+
+## git diff --check
+$ git diff --check HEAD~1 HEAD -- apps/
+exit code 0 (clean)
+
+## Repository status
+$ git status --short
+(empty)
+
+## LIVE qualification
+- Operator-side LIVE GREEN pending (600s specimen).
+- Production seam exercised end-to-end by synthetic-real tests.
+- Same Q5 deferral path; same CommandJobManager terminal lifecycle path;
+  same writer identity (session-event-turn-complete-resumable-straggler-preserve).
+- Subject to operator confirmation against the ACT §38 specimen.

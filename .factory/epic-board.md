@@ -1,3 +1,46 @@
+## ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 — PASS_BACKGROUND_TERMINAL_CONTINUATION_REPAIRED — 2026-09-20
+
+**Status:** PASS. Bounded repair on the canonical Q5 composition seam (sdk-session-event-coordinator.ts) plus a 14-line patch in SdkController.updateBackgroundCommandState. Live failure reproduced via the real production seam (real CommandJobManager + real SdkSessionEventCoordinator + real TurnStateTracker) in vitest. All 7 BTCONT tests pass; full bun unit suite 1141/1141 green; tsc --noEmit clean.
+
+**Honest verdict matrix:**
+```
+PRIMARY_P0                         = LIVE_PROVEN (stranded streaming)
+LIVE_TASK                          = 1789935070156_oneah
+LIVE_JOB                           = cmd_mua94lrk2w8jyomn
+Q5_AT_DONE                         = DEFERRED / guard=true
+JOB_TERMINAL                       = deadline_exceeded / process gone
+BACKGROUND_RUNNING_AFTER_TERMINAL  = false
+TURN_PHASE_AFTER_TERMINAL          = streaming / STRANDED
+AUTOMATIC_CONTINUATION             = ABSENT (pre-ACT)
+MANUAL_WAKEUP                      = controller-cancel-task: streaming -> resumable
+RESUME                             = controller-ask-response:  resumable -> streaming
+POST_RESUME_Q5                     = guard=false
+POST_RESUME_CANONICAL_RESULT       = awaiting_followup
+Q5                                 = EXONERATED (deferral is correct)
+TSWPD                              = EXONERATED (writer identity healthy)
+TASKHEADER                         = PROJECTION_ONLY
+STALE_CARD_AFTER_TERMINAL          = LIVE_PROVEN / SAME_SHARED_CONSUMER
+                                       (incidental fix via the same
+                                        updateBackgroundCommandState call)
+PWAOR_ABORT_OWNERSHIP              = LIVE_POSITIVE_SIGNAL (untouched)
+CLASSIFICATION                     = TC1 (missing terminal consumer)
+                                       + TC3 (no deferred marker)
+REPAIR                             = TC1 + TC3 hybrid (bounded)
+CAUSALITY                          = ESTABLISHED
+```
+
+**Why TC1 + TC3 hybrid (not TC1 alone):** the Q5 deferral leaves the coordinator with no durable "continuation owed" fact. The re-evaluation must verify the deferred decision still applies to the same turn (epoch/taskId match) and that another matching job isn't still alive (hasRunningBackgroundJobForOwner at terminality time). Without the bounded marker, BTCONT-CTL-03 (newer epoch supersedes) cannot be enforced. The marker holds at most one entry per coordinator instance — matches the `session-event-turn-complete-resumable-straggler-preserve` writer's "exactly one commit per turn" contract.
+
+**Why the existing Q5 deferral stays:** the LIVE specimen proves the canonical completion logic is healthy (post-resume Q5 commits awaiting_followup in 0ms; BOCOR row 2 guardResult=false; activeJobs=[]). The only missing piece is the automatic re-evaluation consumer.
+
+**Authority separation preserved:** CommandJobManager stays a lifecycle publisher. The canonical SdkSessionEventCoordinator decides the phase. The SdkController's `onBackgroundStateChange(false, undefined)` callback is the bridge — it fires only on the >0->0 cardinal transition (vscode-run-commands-tool.ts:697-698: `if (becameIdle) notifyBackgroundStateChange(false, undefined)`). The bridge forwards to coordinator.reevaluateDeferredContinuation() which consults the live hasRunningBackgroundJobForOwner at terminality time and commits the canonical writer exactly once.
+
+**LIVE qualification:** Operator-side LIVE qualification pending (600-second specimen requires operator-side sitting through the deadline). The production seam is exercised end-to-end by the synthetic-real test family (BTCONT-RED-01-GREEN + BTCONT-CTL-04). Subject to LIVE GREEN confirmation against the known specimen `sh -c 'echo STARTED; sleep 600; echo FINISHED'` per ACT §38.
+
+**Diagnostic policy:** No new env var, no new Command Palette command. TSWPD / BOCOR / BJLA reuse unchanged. Only test-only backdoor added: `coordinator.getDeferredContinuationForTesting()` mirrors the existing BOCOR/BJLA inspection precedent.
+
+**Next:** Operator LIVE GREEN verification on the 600s specimen. No successor ACT required for the live button-affordance (fixed incidentally by the same updateBackgroundCommandState call).
+
 ## ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 — HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED + BOUNDED FIX CYCLE — 2026-09-18
 
 **Status:** Fourth-round HALT (HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED) from Factory reviewer applied; bounded fix cycle applied (correction07: post-mutation emit ordering on start + clean terminal + loosened `pgid_unset` guard + single semantic authority on the gauge). State machine and event semantics both honest. Bounded invariant `CLEAN_TERMINAL CommandJob ⇒ PRIMARY OWNED PGID GONE` re-asserted. **86 tests green across 6 gates; tsc --noEmit clean. C1: GO directly to the containment-primitive discriminator.**

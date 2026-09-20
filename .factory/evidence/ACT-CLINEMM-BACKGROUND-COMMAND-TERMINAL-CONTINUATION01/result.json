@@ -1,0 +1,67 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01",
+  "epistemic_purpose": "reproduce and repair missing continuation after a Q5-deferred turn loses its final matching background job",
+  "entry_head": "6d64e674b48a50616ec09c0c5bb394a72dd49f99",
+  "live_predecessor": {
+    "task_id": "1789935070156_oneah",
+    "job_id": "cmd_mua94lrk2w8jyomn",
+    "phase_at_deferral": "streaming",
+    "guard_at_deferral": true,
+    "terminal_state": "deadline_exceeded",
+    "process_postcondition": "gone",
+    "background_running_after_terminal": false,
+    "turn_writer_after_terminal": "NONE",
+    "manual_wakeup_writer": "controller-cancel-task",
+    "resume_writer": "controller-ask-response",
+    "later_q5_guard": false,
+    "later_completion_writer": "session-event-turn-complete-resumable-straggler-preserve",
+    "evidence_class": "LIVE"
+  },
+  "reproduction": {
+    "real_q5_seam": true,
+    "real_job_terminal_seam": true,
+    "red_reproduced": true,
+    "phase_after_terminal_without_external_action": "streaming (UNWIRED) -> awaiting_followup (GREEN)"
+  },
+  "classification": "CASE_TC1_MISSING_TERMINAL_CONTINUATION_CONSUMER + CASE_TC3_DEFERRED_CONTINUATION_NOT_REPRESENTED",
+  "deferred_continuation": {
+    "existing_representation_found": false,
+    "identity": "{sessionId, taskId, epoch}",
+    "generation_bound": "epoch"
+  },
+  "causality": {
+    "established": true,
+    "ablation": "PASS (UNWIRED -> stranded, GREEN -> commits awaiting_followup)"
+  },
+  "repair": {
+    "authorized": true,
+    "performed": true,
+    "files": [
+      "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+      "apps/vscode/src/sdk/SdkController.ts",
+      "apps/vscode/src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts"
+    ]
+  },
+  "conservation": {
+    "job_still_running": "PASS (BTCONT-CTL-02)",
+    "newer_epoch": "PASS (BTCONT-CTL-03)",
+    "multi_job": "PASS (BTCONT-CTL-04)",
+    "different_session": "PASS (BTCONT-CTL-05)",
+    "natural_terminal": "PASS (BTCONT-CTL-04 uses cancel path; reason-independent)",
+    "cancel_terminal": "PASS (BTCONT-RED-01-GREEN, BTCONT-CTL-04)",
+    "deadline_terminal": "PASS (LIVE specimen bjla rows 13-21; reason-independent)"
+  },
+  "stale_card": {
+    "live_proven": true,
+    "same_root_cause": "YES (CARD-A) for green button affordance; incidentally fixed",
+    "repair_in_this_act": true
+  },
+  "live_qualification": {
+    "executed": false,
+    "automatic_continuation_after_terminal": "NOT_EXECUTED (operator-side live qualification pending)",
+    "manual_wakeup_required": null,
+    "note": "Operator-side LIVE GREEN pending against ACT section 38 600s specimen. Production seam exercised end-to-end by synthetic-real tests."
+  },
+  "verdict": "PASS_BACKGROUND_TERMINAL_CONTINUATION_REPAIRED",
+  "implementation_head": "2a7d03fbd"
+}

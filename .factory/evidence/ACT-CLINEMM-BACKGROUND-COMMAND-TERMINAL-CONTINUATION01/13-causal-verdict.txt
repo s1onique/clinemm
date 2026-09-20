@@ -1,0 +1,27 @@
+# Causal Verdict — BTCONT01
+
+Causal chain established: TC1 (missing terminal continuation consumer)
++ TC3 (no durable deferred-continuation marker) hybrid.
+
+The Q5 composition seam at sdk-session-event-coordinator.ts:457
+correctly defers `awaiting_followup` when a matching background job is
+alive. The CommandJobManager correctly publishes the terminal lifecycle
+(becameIdle=true at finalize()). The ownerSessionId identity is preserved
+end-to-end. There was simply NO consumer in the canonical session/turn
+coordinator for the >0->0 cardinal transition.
+
+The bounded repair:
+
+  1. Records a DeferredContinuation marker at Q5 deferral time
+     carrying {sessionId, taskId, epoch}.
+  2. Wires `coordinator.reevaluateDeferredContinuation()` from
+     `SdkController.updateBackgroundCommandState` on the >0->0
+     cardinal transition (running=true -> running=false, jobId=undefined).
+  3. The re-evaluation checks identity (sessionId match), task
+     identity (taskId match), epoch freshness (no supersession),
+     and active-job liveness (no other matching job running) before
+     committing the canonical `session-event-turn-complete-resumable-
+     straggler-preserve` writer exactly once.
+
+Causality is established.
+Causal verdict: PASS_BACKGROUND_TERMINAL_CONTINUATION_REPAIRED.

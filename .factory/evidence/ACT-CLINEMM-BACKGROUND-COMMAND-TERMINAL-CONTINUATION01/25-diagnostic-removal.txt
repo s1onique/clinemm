@@ -1,0 +1,23 @@
+# Diagnostic Removal — BTCONT01
+
+This ACT did NOT introduce any new diagnostic framework. All forensic
+capture is delegated to the existing TSWPD ring (writer identity
+preserved at the re-evaluation commit) and the existing BOCOR ring
+(used to log the original Q5 deferral).
+
+No env var was added. No new command palette command was added. No
+new diagnostic capture module was added.
+
+The only new code is:
+  - DeferredContinuation interface in sdk-session-event-coordinator.ts
+  - private `deferredContinuation` field
+  - `reevaluateDeferredContinuation()` method
+  - `getDeferredContinuationForTesting()` test backdoor
+  - 14-line patch in SdkController.updateBackgroundCommandState to
+    forward the >0->0 cardinal transition to the coordinator
+
+No temporary scaffolding needs removal. The test backdoor
+(`getDeferredContinuationForTesting`) is a permanent addition
+matching the existing test-only inspection patterns elsewhere in
+the SDK adapter layer (mirrors the BOCOR / BJLA / BCLAS inspection
+methods).

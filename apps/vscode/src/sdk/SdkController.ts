@@ -4184,8 +4184,22 @@ export class Controller {
 		if (this.backgroundCommandRunning === running && this.backgroundCommandTaskId === taskId) {
 			return
 		}
+		const previousRunning = this.backgroundCommandRunning
 		this.backgroundCommandRunning = running
 		this.backgroundCommandTaskId = taskId
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+		// The >0->0 cardinal transition (becameIdle === true at the
+		// manager level; vscode-run-commands-tool.ts:697-698 fires
+		// `onBackgroundStateChange(false, undefined)` ONLY when this
+		// cardinal transition occurs) is the re-evaluation trigger for
+		// any deferred Q5 completion. Forward the signal to the
+		// canonical session-event coordinator so the
+		// `session-event-turn-complete-resumable-straggler-preserve`
+		// writer can commit awaiting_followup exactly once, under
+		// the four conservation rules (BTCONT-CTL-02/03/04/05).
+		if (previousRunning && !running && taskId === undefined) {
+			this.sessionEvents.reevaluateDeferredContinuation()
+		}
 		// best-effort post — the StatePostDebouncer coalesces bursts.
 		this.postStateToWebview().catch((error) => {
 			Logger.warn(

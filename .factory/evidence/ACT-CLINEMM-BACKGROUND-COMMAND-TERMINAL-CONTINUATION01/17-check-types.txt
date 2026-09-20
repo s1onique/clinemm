@@ -1,0 +1,18 @@
+[0m[2m[35m$[0m [2m[1mbun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit[0m
+[0m[2m[35m$[0m [2m[1mnode scripts/build-proto.mjs[0m
+(node:55803) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1m[34mCompiling Protocol Buffers...[39m[22m
+[36mProcessing 24 proto files from[39m /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/proto
+Generated ProtoBus files at:
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/webview-ui/src/services/grpc-client.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/protobus-service-types.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/protobus-services.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/standalone/protobus-server-setup.ts
+Generated Host Bridge client files at:
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/host-bridge-client-types.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/standalone/host-bridge-clients.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/hostbridge-grpc-service-config.ts
+[0m[2m[35m$[0m [2m[1mbiome format --config-path ./biome.jsonc src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched[0m
+Formatted 329 files in 36ms. Fixed 1 file.
+src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts(242,37): error TS7006: Parameter 'id' implicitly has an 'any' type.

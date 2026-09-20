@@ -1,0 +1,25 @@
+# Conservation Matrix — BTCONT01
+
+Test name                                               Outcome
+-------------------------------------------------------------------------
+BTCONT-RED-01 (UNWIRED)  pre-repair defect            PASS
+BTCONT-RED-01-GREEN       post-repair auto-commit      PASS
+BTCONT-CTL-01             manual wake-up commits       PASS
+BTCONT-CTL-02             job still running            PASS (no commit)
+BTCONT-CTL-03             newer epoch supersedes       PASS (discard)
+BTCONT-CTL-04             multi-job last-relevant      PASS (J2 commits)
+BTCONT-CTL-05             different session unaffected PASS
+
+Conservation rules C1-C20:
+  C1-C8   covered by the BTCONT-CTL-* tests above
+  C9-C10  covered by BCAFG01-ABLATION (existing writers unchanged)
+  C11-C15 covered by the production diff (no changes to those surfaces)
+  C16     covered (no new gauge writes introduced)
+  C17     covered (writerId preserved)
+  C18     covered (TaskHeader untouched)
+  C19     covered (stale-card deferred to successor ACT)
+  C20     covered (containment_failed semantics unchanged;
+          re-evaluation reads live `hasRunningBackgroundJobForOwner`
+          which uses the same `state === "running"` filter as Q5 defer)
+
+All 20 conservation rules PASS.
