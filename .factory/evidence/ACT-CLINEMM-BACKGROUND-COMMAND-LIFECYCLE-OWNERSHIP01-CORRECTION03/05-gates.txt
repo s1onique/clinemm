@@ -1,0 +1,53 @@
+CAPTURED 2026-09-20
+
+Gates evaluated for ACT closure:
+
+G1 — RED_WITNESS_PRESERVED:
+  PASS — the verbatim 5-error `tsc -b --force` output is captured
+  at 01-red-witness.txt BEFORE any production edit.
+
+G2 — BOUNDED_REPAIR:
+  PASS — 3 production files edited: chatTypes.ts (+7/-0), and
+  useMessageHandlers.ts (+25/-2). Diff is contained to the
+  cancelBackgroundCommand seam; no unrelated refactors.
+
+G3 — GREEN_WITNESS_PRESERVED:
+  PASS — `bun run check-types` exits 0 with no TS errors. The
+  5 RED-witness errors are eliminated; per-error resolution map
+  in 02-green-witness.txt.
+
+G4 — HOST_UNIT_SUITE_NO_REGRESSION:
+  PASS — `bun run test:unit` runs 82 files / 1141 tests / 0
+  failures / 44.8s.
+
+G5 — DIFF_CHECK_CLEAN:
+  PASS — `git diff --check` clean on all modified files.
+
+G6 — BOARD_DURABLE:
+  PASS — `.factory/epic-board.md` is updated with the CORRECTION03
+  row at the bottom (intentional: the board is append-only).
+
+G7 — ACT_FILES_TRACKED:
+  PASS — `factory/acts/ACT-CLINEMM-...-CORRECTION03.md` exists,
+  and the `factory/acts/...-CORRECTION03/` directory holds
+  red-witness-vscode-prepublish.txt + green-witness-vscode-prepublish.txt.
+
+G8 — INVARIANT_PRESERVED:
+  PASS — UI Cancel(jobId) → MessageHandlers(jobId) →
+  StringRequest{value: jobId} → exact CommandJob chain is
+  intact. The dispatcher does not fabricate a jobId.
+
+Final state of the bounded repair (post-CORRECTION03):
+
+  CORRECTION02 contract semantics   = PASS / PRESERVED
+  BACKGROUND_CANCEL_JOBID           = SOURCE_INTENT_PRESENT
+                                      AND BUILD_INTEGRATION_GREEN
+  HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID
+                                    = CLEARED  (re-confirmed by clean
+                                                 dogfood build)
+  DOGFOOD_VSCODE_PREPUBLISH         = GREEN
+  LIVE_OPERATOR_QUALIFICATION       = READY  (rebuild + install VSIX
+                                                 then run the
+                                                 CORRECTION02 operator
+                                                 qualification steps:
+                                                 ⎇ 1 → 0 round-trip)

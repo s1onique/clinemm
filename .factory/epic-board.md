@@ -4335,3 +4335,131 @@ unchanged:
 **BOARD_DURABLE**                = PASS  (this row committed; ACT bodies
                                               + evidence + result.json
                                               all durably tracked)
+
+Updated: 2026-09-20 ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03
+(PASS_PRODUCTION_INTEGRATION_REPAIR; bounded CORRECTION03 — production
+integration repair, despite the normal one-review-cycle rule, because
+this is a genuinely new P0 discovered by executable production
+evidence: a fresh `bun run vscode:prepublish` dogfood build fails with
+5 TypeScript errors.) — The CORRECTION02 closure explicitly claimed
+`HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID = CLEARED` and
+`TYPECHECK = PASS (host + webview)`. Both were true in the narrower
+sense (host tsc + a partial webview tsc) but the fresh dogfood path
+exercises `protos → biome → tsc --noEmit → tsc compat → webview-ui
+tsc -b → vite build → esbuild`. The webview `tsc -b --force` is the
+failing piece CORRECTION02's evidence did not run.
+
+**RED witness (preserved at .factory/acts/ACT-CLINEMM-BACKGROUND-
+COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/red-witness-vscode-prepublish.txt):**
+
+```
+src/components/chat/chat-view/components/layout/MessagesArea.tsx(237,52):
+  error TS2339: Property 'cancelBackgroundCommandByJobId' does not
+  exist on type 'MessageHandlers'.
+src/components/chat/chat-view/components/messages/MessageRenderer.tsx(112,49):
+  error TS2339: Property 'cancelBackgroundCommandByJobId' does not
+  exist on type 'MessageHandlers'.
+src/components/chat/chat-view/hooks/useMessageHandlers.ts(570,56):
+  error TS2345: Argument of type 'EmptyRequest' is not assignable to
+  parameter of type 'StringRequest'. Property 'value' is missing in
+  type 'EmptyRequest' but required in type 'StringRequest'.
+src/components/chat/chat-view/hooks/useMessageHandlers.ts(640,52):
+  error TS2345: Argument of type 'EmptyRequest' is not assignable to
+  parameter of type 'StringRequest'. Property 'value' is missing in
+  type 'EmptyRequest' but required in type 'StringRequest'.
+src/components/chat/chat-view/hooks/useMessageHandlers.ts(653,3):
+  error TS2353: Object literal may only specify known properties, and
+  'cancelBackgroundCommandByJobId' does not exist in type
+  'MessageHandlers'.
+```
+
+**Production state analysis (5 errors, 2 root causes):**
+
+  1. Proto authority says `cancelBackgroundCommand(StringRequest)`.
+     The regenerated webview client at `grpc-client.ts:1077` correctly
+     declares `cancelBackgroundCommand(request: proto.cline.StringRequest)`.
+     But TWO handwritten call sites still pass `EmptyRequest`:
+       - line 570: streaming-cancel path
+         (`executeButtonAction("cancel")` — no jobId in scope)
+       - line 640: card-level dispatcher fallback
+         (when invoked without a jobId)
+  2. `MessageHandlers` contract is stale:
+       - `chatTypes.ts` interface does not declare
+         `cancelBackgroundCommandByJobId`, so the two card-level
+         consumers (MessagesArea.tsx, MessageRenderer.tsx) cannot
+         resolve the callback. The object literal returned from
+         `useMessageHandlers` is rejected as having an unknown
+         property.
+
+**Bounded CORRECTION03 repair (3 files; production invariant preserved):**
+
+  - `apps/vscode/webview-ui/src/components/chat/chat-view/types/chatTypes.ts`:
+    Added `cancelBackgroundCommandByJobId: (jobId?: string) => Promise<void>`
+    to the `MessageHandlers` interface, matching the implementation
+    shape produced by the CORRECTION0X bounded repair.
+  - `apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts`:
+    - Site 570 (streaming-cancel path in `executeButtonAction("cancel")`):
+      was `cancelBackgroundCommand(EmptyRequest.create({}))`. Replaced
+      with `cancelBackgroundCommand(StringRequest.create({ value: "" }))`.
+      The backend's `cancelBackgroundCommand` already treats empty
+      `value` as "no jobId supplied" → legacy session-wide cancel
+      fallback (CORRECTION00 contract). This preserves the
+      jobId-targeted cancellation seam without fabricating an
+      identity this caller cannot know.
+    - Site 640 (card-level dispatcher `cancelBackgroundCommandByJobId`):
+      was `jobId ? StringRequest.create({ value: jobId }) : EmptyRequest.create({})`.
+      Reshaped: if `!jobId`, log a warning and skip (card-level Cancel
+      is bound to a specific backgrounded CommandJob and always
+      supplies a real id); otherwise always emit
+      `StringRequest.create({ value: jobId })`. The dispatcher MUST
+      NOT fabricate a jobId. Production invariant preserved:
+      `UI Cancel(jobId) → MessageHandlers(jobId) → StringRequest{value:
+      jobId} → cancelBackgroundCommand → exact CommandJob`.
+
+**Crucially, the proto RPC `cancelBackgroundCommand(StringRequest)`
+is NOT changed back to `EmptyRequest`.** The jobId-targeted
+cancellation seam introduced by CORRECTION0X remains canonical —
+upstream Cline's newer background-execution model is also
+explicitly job-record/job-ID based, so carrying identity through
+this seam is conceptually aligned rather than an accidental API
+choice.
+
+**GREEN witness (preserved at .factory/acts/ACT-CLINEMM-BACKGROUND-
+COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/green-witness-vscode-prepublish.txt):**
+
+  - `cd apps/vscode && bun run check-types` → EXIT=0
+    (runs `protos → biome format → tsc --noEmit → tsc compat →
+    cd webview-ui && tsc -b --noEmit`)
+  - `cd apps/vscode && bun run test:unit` → 82 files / 1141 tests / 0 failures / 44.8s
+    (host unit suite; none regressed)
+  - The 5 RED-witness TS errors are no longer emitted; they were
+    replaced by the 3 production edits above.
+
+**Final state of the bounded repair (post-CORRECTION03):**
+
+  CORRECTION02 contract semantics   = PASS / PRESERVED
+  BACKGROUND_CANCEL_JOBID           = SOURCE_INTENT_PRESENT
+                                      AND BUILD_INTEGRATION_GREEN
+  HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID
+                                    = CLEARED  (re-confirmed by clean
+                                                 dogfood build)
+  DOGFOOD_VSCODE_PREPUBLISH         = GREEN
+  LIVE_OPERATOR_QUALIFICATION       = READY  (rebuild + install VSIX
+                                                 then run the
+                                                 CORRECTION02 operator
+                                                 qualification steps:
+                                                 ⎇ 1 → 0 round-trip)
+
+**Files updated this commit (CORRECTION03):**
+- `apps/vscode/webview-ui/src/components/chat/chat-view/types/chatTypes.ts`
+  (interface contract updated)
+- `apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts`
+  (sites 570 and 640 reshaped)
+- `.factory/epic-board.md` (this row)
+- `.factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/`
+  (NEW ACT body + red/green witnesses)
+
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (HEAD at CORRECTION03 closure)
+**BOARD_DURABLE**                = PASS  (this row committed; ACT bodies
+                                              + evidence + result.json
+                                              all durably tracked)

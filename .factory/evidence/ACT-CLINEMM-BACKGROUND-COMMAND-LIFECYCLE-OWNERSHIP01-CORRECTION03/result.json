@@ -1,0 +1,58 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03",
+  "epistemic_purpose": "Repair production integration of the jobId-targeted cancellation seam so a fresh bun run vscode:prepublish dogfood build succeeds end-to-end.",
+  "halt_trigger": "HALT_DOGFOOD_BUILD_RED",
+  "cycle_index": 3,
+  "bounded_repair_files": [
+    "apps/vscode/webview-ui/src/components/chat/chat-view/types/chatTypes.ts",
+    "apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts"
+  ],
+  "diff_summary": {
+    "production_files": 2,
+    "test_files": 0,
+    "lines_added": 32,
+    "lines_removed": 6
+  },
+  "red_witness": "01-red-witness.txt",
+  "green_witness": "02-green-witness.txt",
+  "diff_stat": "03-diff-stat.txt",
+  "conservation": "04-conservation.txt",
+  "gates": "05-gates.txt",
+  "verification": {
+    "red": {
+      "command": "cd apps/vscode/webview-ui && bun x tsc -b --force --pretty false",
+      "errors": 5,
+      "exit_code": 2
+    },
+    "green": {
+      "command": "cd apps/vscode && bun run check-types",
+      "errors": 0,
+      "exit_code": 0
+    },
+    "host_unit_suite": {
+      "command": "cd apps/vscode && bun run test:unit",
+      "files": 82,
+      "tests": 1141,
+      "failures": 0,
+      "duration_seconds": 44.8
+    }
+  },
+  "verdict": {
+    "correction02_contract_semantics": "PASS / PRESERVED",
+    "background_cancel_jobid": "SOURCE_INTENT_PRESENT AND BUILD_INTEGRATION_GREEN",
+    "halt_runtime_descriptor_loss_of_jobid": "CLEARED",
+    "dogfood_vscode_prepublish": "GREEN",
+    "live_operator_qualification": "READY (rebuild + install VSIX then run the CORRECTION02 operator qualification steps: ⎇ 1 → 0 round-trip)"
+  },
+  "halt_taxonomy": {
+    "halt_dogfood_build_red": "RESOLVED_BY_PRODUCTION_INTEGRATION_REPAIR"
+  },
+  "constraint_preserved": {
+    "proto_rpc_unchanged": true,
+    "cancelBackgroundCommand_signature": "cancelBackgroundCommand(StringRequest) returns (Empty)",
+    "no_empty_request_reintroduction": true
+  },
+  "next_authorized": [
+    "Resume CORRECTION02 operator qualification steps (live ⎇ 1 → 0 round-trip)"
+  ]
+}

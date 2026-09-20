@@ -1,0 +1,39 @@
+CAPTURED 2026-09-20
+
+Conservation invariants verified (each one preserved from the
+CORRECTION0X bounded repair and re-confirmed after CORRECTION03):
+
+- UI Cancel(jobId) → MessageHandlers(jobId) → StringRequest{value: jobId}
+  → cancelBackgroundCommand → exact CommandJob
+  (the invariant survives CORRECTION03; the only way the chain is
+  bypassed is by the streaming-cancel button which has no jobId in
+  scope and intentionally sends an empty StringRequest — that path
+  remains distinct from the card-level Cancel chain.)
+
+- Card-level Cancel is bound to a specific backgrounded CommandJob
+  via the parsed jobId from the row's
+  `isBackgroundedCommandOutput` JSON envelope; the dispatcher no
+  longer fabricates an identity.
+
+- Streaming-cancel button (the global "Stop" button that flows
+  through `executeButtonAction("cancel")`) is a separate code path
+  that still calls TaskServiceClient.cancelBackgroundCommand with
+  an empty StringRequest → backend session-wide cancel fallback.
+  This matches the CORRECTION00 contract.
+
+- TASK_PHASE_SEMANTICS_UNCHANGED: TurnStateTracker writers not touched.
+
+- AUTOMATIC_MONITORING_CONSERVED: autonomous polling path untouched.
+
+- ACTIVE_GAUGE_SEMANTICS_UNCHANGED: ⎇ and ⚠ projections unchanged.
+
+- RUNTIME_INCIDENT_SEMANTICS_UNCHANGED.
+
+- PGID_TERMINATION_SEMANTICS_UNCHANGED: CommandJobManager termination
+  algorithm untouched; native helper / LaunchAgent / kqueue untouched.
+
+- No second command-state machine (per §18).
+
+- Proto RPC `cancelBackgroundCommand(StringRequest)` is preserved
+  (not reverted to EmptyRequest) — the jobId-targeted cancellation
+  seam is canonical.

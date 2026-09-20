@@ -567,7 +567,16 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 					setEnableButtons(false)
 					try {
 						if (backgroundCommandRunning) {
-							await TaskServiceClient.cancelBackgroundCommand(EmptyRequest.create({})).catch((err) =>
+							// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+							// The streaming-cancel button has no jobId in scope — it is
+							// not bound to any specific backgrounded CommandJob. The
+							// `cancelBackgroundCommand` RPC is `StringRequest`-typed and
+							// the backend treats an empty `value` as "no jobId supplied"
+							// (session-wide cancel fallback). Empty `StringRequest` is
+							// therefore the correct shape here: it preserves the
+							// jobId-targeted cancellation seam without fabricating an
+							// identity this caller cannot know.
+							await TaskServiceClient.cancelBackgroundCommand(StringRequest.create({ value: "" })).catch((err) =>
 								console.error("Failed to cancel background command:", err),
 							)
 						}
@@ -626,17 +635,28 @@ export function useMessageHandlers(messages: ClineMessage[], chatState: ChatStat
 	 * also cancelling the entire task. Wired from the card-level
 	 * `onCancelCommand(jobId)` callback on a backgrounded command
 	 * row. Routes through the existing `cancelBackgroundCommand`
-	 * gRPC handler with the optional jobId argument
-	 * (added by this ACT's proto extension); falls back to the
-	 * session-wide cancel if no jobId is supplied.
+	 * gRPC handler with the jobId argument (added by this ACT's
+	 * proto extension; the RPC is `StringRequest`-typed).
+	 *
+	 * Invariant: this dispatcher MUST NOT fabricate a jobId.
+	 * The card-level cancel button is bound to a specific
+	 * backgrounded CommandJob and always supplies a real id.
+	 * If a caller invokes this without a jobId, the request is
+	 * meaningless — we log and skip rather than emit an empty
+	 * StringRequest that the backend would (legitimately)
+	 * interpret as a session-wide cancel.
 	 *
 	 * This is the bounded dispatcher — it does NOT touch the
 	 * task-cancel path, the existing `executeButtonAction("cancel")`
 	 * streaming-cancel button, or the global abort button.
 	 */
 	const cancelBackgroundCommandByJobId = useCallback(async (jobId?: string) => {
+		if (!jobId) {
+			console.warn("cancelBackgroundCommandByJobId called without jobId; skipping (no identity to cancel)")
+			return
+		}
 		try {
-			const request = jobId ? StringRequest.create({ value: jobId }) : EmptyRequest.create({})
+			const request = StringRequest.create({ value: jobId })
 			await TaskServiceClient.cancelBackgroundCommand(request).catch((err) => {
 				console.error("Failed to cancel background command:", err)
 			})

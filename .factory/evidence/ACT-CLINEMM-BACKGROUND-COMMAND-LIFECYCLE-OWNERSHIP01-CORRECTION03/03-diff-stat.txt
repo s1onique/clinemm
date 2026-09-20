@@ -1,0 +1,25 @@
+CAPTURED 2026-09-20
+
+Command:
+  cd apps/vscode && git diff --stat
+
+Production code changes (bounded to 3 files; +33/-6 lines):
+
+  apps/vscode/webview-ui/src/components/chat/chat-view/types/chatTypes.ts   |  7 +++++
+  apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts | 32 ++++++++++++++++++----
+
+Test/evidence changes (none — the CORRECTION0X tests already
+cover the public contract via BGCL-06
+`expect(onCancelCommand).toHaveBeenCalledWith(jobId)`; no test
+contract drift required):
+
+  (no test files modified)
+
+Factory/board changes:
+
+  .factory/epic-board.md                                                        | +130 (new CORRECTION03 row)
+  factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03.md | NEW
+  factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/  | NEW (RED + GREEN witnesses)
+  .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/ | NEW (this directory)
+
+git diff --check: clean on all modified files.

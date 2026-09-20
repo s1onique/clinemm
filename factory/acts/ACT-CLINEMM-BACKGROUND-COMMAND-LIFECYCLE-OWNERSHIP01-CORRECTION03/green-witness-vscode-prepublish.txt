@@ -1,0 +1,43 @@
+Command:
+  cd apps/vscode && bun run check-types
+
+Sequence executed (from check-types script):
+  protos (node scripts/build-proto.mjs)
+  → biome format --write on src/shared/proto, src/core/controller, src/hosts/, webview-ui/src/services, src/generated
+  → bunx tsc --noEmit (host)
+  → bunx tsc --project tsconfig.vscode-compat.json --noEmit
+  → cd webview-ui && bunx tsc --noEmit
+
+Result: EXIT=0 (no errors)
+
+Bounded unit suite (apps/vscode host):
+  bun run test:unit
+  → 82 test files / 1141 tests / 0 failures / 44.8s
+
+The previously-failing RED witness errors are no longer emitted:
+
+  src/components/chat/chat-view/components/layout/MessagesArea.tsx(237,52):
+    error TS2339: Property 'cancelBackgroundCommandByJobId' does not exist on type 'MessageHandlers'.
+    RESOLVED — MessageHandlers interface now declares `cancelBackgroundCommandByJobId`.
+
+  src/components/chat/chat-view/components/messages/MessageRenderer.tsx(112,49):
+    error TS2339: Property 'cancelBackgroundCommandByJobId' does not exist on type 'MessageHandlers'.
+    RESOLVED — same interface fix.
+
+  src/components/chat/chat-view/hooks/useMessageHandlers.ts(570,56):
+    error TS2345: Argument of type 'EmptyRequest' is not assignable to parameter of type 'StringRequest'.
+    RESOLVED — site 570 now sends `StringRequest.create({ value: "" })`
+    (session-wide-cancel fallback shape; backend treats empty value as
+    "no jobId supplied").
+
+  src/components/chat/chat-view/hooks/useMessageHandlers.ts(640,52):
+    error TS2345: Argument of type 'EmptyRequest' is not assignable to parameter of type 'StringRequest'.
+    RESOLVED — site 640 (card-level dispatcher) reshaped: skips with
+    a console.warn when called without a jobId, and otherwise always
+    emits `StringRequest.create({ value: jobId })`. The dispatcher
+    must NOT fabricate a jobId (production invariant preserved).
+
+  src/components/chat/chat-view/hooks/useMessageHandlers.ts(653,3):
+    error TS2353: Object literal may only specify known properties, and 'cancelBackgroundCommandByJobId' does not exist in type 'MessageHandlers'.
+    RESOLVED — the returned object now satisfies the
+    `cancelBackgroundCommandByJobId` contract added to `MessageHandlers`.

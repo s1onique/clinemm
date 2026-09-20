@@ -1,0 +1,34 @@
+CAPTURED 2026-09-20
+
+Command:
+  cd apps/vscode/webview-ui
+  bun x tsc -b --force --pretty false
+
+Verbatim output (5 errors):
+
+src/components/chat/chat-view/components/layout/MessagesArea.tsx(237,52): error TS2339: Property 'cancelBackgroundCommandByJobId' does not exist on type 'MessageHandlers'.
+src/components/chat/chat-view/components/messages/MessageRenderer.tsx(112,49): error TS2339: Property 'cancelBackgroundCommandByJobId' does not exist on type 'MessageHandlers'.
+src/components/chat/chat-view/hooks/useMessageHandlers.ts(570,56): error TS2345: Argument of type 'EmptyRequest' is not assignable to parameter of type 'StringRequest'.
+  Property 'value' is missing in type 'EmptyRequest' but required in type 'StringRequest'.
+src/components/chat/chat-view/hooks/useMessageHandlers.ts(640,52): error TS2345: Argument of type 'EmptyRequest' is not assignable to parameter of type 'StringRequest'.
+  Property 'value' is missing in type 'EmptyRequest' but required in type 'StringRequest'.
+src/components/chat/chat-view/hooks/useMessageHandlers.ts(653,3): error TS2353: Object literal may only specify known properties, and 'cancelBackgroundCommandByJobId' does not exist in type 'MessageHandlers'.
+
+EXIT=2
+
+Reproduction environment:
+  - Regenerated protos via `bun run protos` (from clean source).
+  - Generated client `apps/vscode/webview-ui/src/services/grpc-client.ts`
+    declares `cancelBackgroundCommand(request: proto.cline.StringRequest)`.
+  - Proto `apps/vscode/proto/cline/task.proto` declares
+    `rpc cancelBackgroundCommand(StringRequest) returns (Empty);`.
+
+Why this RED was missed:
+  The host tsconfig.json excludes `webview-ui`. The webview-ui
+  project uses project references (`tsconfig.app.json` /
+  `tsconfig.node.json`). The base `tsc --noEmit` runs only the
+  host side, so the webview side was never exercised by the
+  host typecheck. The fresh `bun run vscode:prepublish` runs
+  the webview side via `cd webview-ui && bunx tsc --noEmit`,
+  which uses `tsc -b --force` against the project references
+  — and that's where the 5 errors surfaced.

@@ -77,6 +77,13 @@ export interface MessageHandlers {
 	handleSendMessage: (text: string, images: string[], files: string[]) => Promise<void>
 	handleTaskCloseButtonClick: () => void
 	startNewTask: () => Promise<void>
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
+	 * Cancel a single backgrounded CommandJob by its jobId. The
+	 * streaming-cancel path (`executeButtonAction("cancel")`) is
+	 * distinct and remains the task-cancel path.
+	 */
+	cancelBackgroundCommandByJobId: (jobId?: string) => Promise<void>
 }
 
 /**
