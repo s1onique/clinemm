@@ -1,0 +1,38 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 24 — diagnostic removal
+
+This ACT did NOT add any new diagnostics. It only:
+
+  - Added ONE new public method on CommandJobManager:
+    `releaseForegroundAbortOwnership(jobId)`
+  - Added ONE new call site at the foreground->background handoff
+    boundary in vscode-run-commands-tool.ts:
+    `manager.releaseForegroundAbortOwnership(start.jobId)`
+
+No BJLA records, BOCOR records, TSWPD records, package.json
+commands, or diagnostic dumps were added by this ACT.
+
+The existing diagnostics from the predecessor ACT
+(`ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01`) — the
+`job_cancellation_requested` BJLA capture seam at the request boundary
+— are PRESERVED. They are the mechanical discriminator that the LIVE
+qualification will use to verify the GREEN invariant (the ABSENCE of
+any `requestOrigin=caller_abort_signal` for the detached job after the
+caller aborts).
+
+REMOVAL TRIGGER: the bounded repair is bounded. Once the LIVE
+qualification is qualified as PASS, the only follow-up diagnostics to
+remove are the predecessor ACT's instrumentation IF the Factory
+reviewer determines that the bounded repair's correctness is now
+established enough to retire the BJLA capture. The current ACT does
+not authorize that removal — it is a separate decision left for the
+Factory reviewer.
+
+DO NOT REMOVE:
+  - the BJLA capture seam at command-job-manager.ts:1993-2004 (deadline
+    path) — it remains the authoritative capture for the CP4 origin.
+  - the BJLA capture seam at command-job-manager.ts:1988-2004 (caller
+    abort path) — it remains the authoritative capture for the CP3
+    origin (in case any future caller fails to release).
+  - the diagnostic profile / dogfood-only knobs in
+    `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` — they remain
+    the discriminator for the Factory reviewer's LIVE qualification.

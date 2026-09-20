@@ -1,0 +1,56 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 25 — final gates (post-commit)
+
+Repository HEAD: a58c32a13ba4559bf758b156b7784781acf5890d
+
+Working tree: CLEAN (only the .factory/evidence directory is untracked).
+
+Gates executed against the post-commit tree:
+
+  check-types      : PASS (tsc --noEmit --project tsconfig.json EXIT=0,
+                          no diagnostics)
+  lint             : PASS (biome lint EXIT=0; "Checked 3 files. No
+                          fixes applied.")
+  format           : PASS (biome format EXIT=0; "Checked 3 files. No
+                          fixes applied.")
+  git diff --check  : PASS (no whitespace warnings; EXIT=0; tree clean
+                          after commit)
+  git status       : CLEAN (post-commit)
+
+Production seam RED → GREEN on the post-commit tree (verified by
+re-running /tmp/quick-check.mjs and /tmp/conservation2.mjs):
+
+  WITHOUT release (defect preserved at the seam; production wire
+  calls release at the handoff so this is NOT exercised in production):
+    state after 1s: cancelled, in active: false
+
+  WITH release (production wire; the bounded repair's effect):
+    state after 1s: running, in active: true
+
+Conservation matrix (CP-A..CP-N): all PASS.
+
+UNEXECUTABLE GATES (pre-existing environmental failure):
+  - test:vitest under apps/vscode: zod 4 ESM import failure under
+    bun-spawned vite. Reproduced on parent commit bab253afb
+    (documented in predecessor ACT's result.json). Not caused by this
+    ACT's bounded repair.
+
+LIVE QUALIFICATION:
+  - DEFERRED. Actuator environment does not provide a VS Code
+    instance. See 18-dogfood-vsix-identity.txt and 23-live-qualification.md.
+
+VERDICT:
+
+  At this commit (a58c32a13), the bounded repair is:
+    - mechanically correct (RED → GREEN on the production seam)
+    - conservation-compliant (CP-A..CP-N all PASS)
+    - type-clean (check-types PASS)
+    - lint-clean (biome lint PASS)
+    - format-clean (biome format PASS)
+    - whitespace-clean (git diff --check PASS)
+    - committed (working tree CLEAN post-commit)
+
+  Until LIVE is qualified, the verdict is:
+    PASS_RED_REPRODUCED_ABLATION_PENDING (per ACT §46)
+
+  If a future ACT qualifies LIVE as PASS:
+    VERDICT = PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED

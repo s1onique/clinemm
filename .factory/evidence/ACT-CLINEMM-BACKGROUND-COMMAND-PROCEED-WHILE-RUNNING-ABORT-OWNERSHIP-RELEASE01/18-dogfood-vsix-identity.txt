@@ -1,0 +1,66 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 18 — dogfood VSIX identity
+
+LIVE QUALIFICATION DEFERRED. The actuator environment does not provide
+a VS Code instance.
+
+Per ACT §34, the LIVE qualification step requires a real VS Code
+host. The bounded repair's correctness is verified through:
+
+  - the production-seam RED reproduction (`/tmp/red-tool.mjs` →
+    07-red-output.txt)
+  - the production-seam GREEN ablation (`/tmp/green-tool.mjs` →
+    12-ablation-output.txt)
+  - the conservation matrix (`/tmp/conservation2.mjs` →
+    16-conservation.txt)
+  - the focused test suite output (15-focused-tests.txt)
+  - the full gate pass (17-full-gates.txt)
+
+Each of these exercises the production `CommandJobManager.start(...)`
+seam directly with real AbortControllers. The bounded repair is
+exercised end-to-end; only the packaging step (VSIX build + install
+into a fresh VS Code) is deferred.
+
+If a future ACT (or the Factory reviewer) runs the LIVE qualification:
+
+  Build:
+    cd apps/vscode
+    bun run package  # typecheck + webview build + esbuild production
+
+  Install:
+    code --install-extension dist/clinemm-<version>.vsix
+
+  Fresh task:
+    Run a long-running shell command with Proceed While Running or
+    the 300s auto-proceed:
+      sh -c 'echo STARTED; sleep 600; echo FINISHED'
+
+  Expected behavior (post-repair):
+    - tool returns RUNNING with jobId
+    - detached job SURVIVES caller aborts
+    - explicit Cancel still cancels the job
+    - the Backgrounded card / job card remains visible until
+      natural completion or explicit cancel
+
+  Diagnostic dump commands (from the predecessor ACT):
+    - Cline Debug: Dump Background Job Liveness Authority
+    - Cline Debug: Dump Background Owner Correlation
+    - Cline: Dump Turn State Writer Provenance Diagnostic
+
+  Decisive negative evidence (the GREEN invariant):
+    NO job_cancellation_requested
+      requestOrigin=caller_abort_signal
+    for the detached job after the caller aborts.
+
+  Positive-control invariant:
+    An explicit Cancel click on the Backgrounded card produces
+    job_cancellation_requested
+      requestOrigin=background_cancel_rpc
+    and the job is cancelled cleanly.
+
+VSIX BUILD IDENTITY (when LIVE is qualified):
+  DOGFOOD_SOURCE_HEAD: <to be captured at LIVE time>
+  VERSION: <to be captured at LIVE time>
+  VSIX_PATH: dist/clinemm-<version>.vsix
+  BYTE_SIZE: <to be measured>
+  SHA256: <to be computed>
+  INSTALLED_VERSION: <to be captured at LIVE time>

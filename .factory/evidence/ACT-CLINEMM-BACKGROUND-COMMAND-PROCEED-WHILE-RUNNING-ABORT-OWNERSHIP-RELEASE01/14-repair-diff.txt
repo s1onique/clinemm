@@ -1,0 +1,150 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 14 — repair diff
+
+Two production files changed. Test file added.
+
+## File 1: apps/vscode/src/sdk/command-job-manager.ts
+
+Added ONE new public method, `releaseForegroundAbortOwnership(jobId)`.
+No other lines changed.
+
+```diff
+@@ -2862,6 +2862,67 @@
+                await this.terminate(job, "cancel")
+                return { ok: true, state: job.state }
+        }
++
++       /**
++        * ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01:
++        *
++        * Release the caller-supplied AbortSignal ownership from a single
++        * managed job. After this call returns, a later abort on the original
++        * caller's signal does NOT cancel the detached job.
++        *
++        * (full docblock — see source)
++        */
+
+Why each line is necessary:
+
+  - `const job = this.active.get(jobId)`: per-job lookup; O(1); scoped to
+    the target job; does not iterate any other job or session.
+  - `if (!job) { return }`: safe no-op when the job does not exist or has
+    been finalized (cleanup at finalize() already removed the listener).
+    Matches the surrounding `lookup()` semantics.
+  - `if (job.abortListener && job.abortSignal)`: structural guard; the
+    fields are only present when a caller signal was attached. This
+    prevents spurious `removeEventListener` calls on a non-existent
+    listener, and ensures the release is a true no-op when no signal
+    was attached (no listener was ever added).
+  - `job.abortSignal.removeEventListener("abort", job.abortListener)`:
+    THE bounded repair. Removes the listener attached at
+    command-job-manager.ts:2010.
+  - `job.abortSignal = undefined` and `job.abortListener = undefined`:
+    matches the cleanup performed at command-job-manager.ts:2522-2526
+    inside finalize(). This guarantees the internal state is consistent
+    with the listener-removal pattern.
+
+Why no broader changes are needed:
+
+  - The deadline timer is NOT cleared; the watchdog continues to fire on
+    its own schedule.
+  - No other public method's signature changes.
+  - No proto / webview / gRPC handler changes.
+  - No new diagnostics; the existing BJLA capture continues to operate
+    identically.
+
+## File 2: apps/vscode/src/sdk/vscode-run-commands-tool.ts
+
+Added ONE new call site. No other lines changed.
+
+```diff
+@@ -698,6 +698,17 @@
+                                        notifyBackgroundStateChange(false, undefined)
+                                }
+                        })
++                       // ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01:
++                       // (full docblock — see source)
++                       manager.releaseForegroundAbortOwnership(start.jobId)
+                        const runningPayload = {
+                                status: "running" as const,
+                                jobId: start.jobId,
+```
+
+Why this is the right call site:
+
+  - The foreground->background handoff is irrevocable at this point:
+    `start.state === "running"` has been asserted; the RUNNING envelope
+    is being constructed. Whatever the tool returns next is the
+    detached managed job's lifetime contract.
+
+  - The release call is AFTER the `start.terminalPromise.then(...)`
+    listener is attached (so the async-completion callback still works)
+    and BEFORE the RUNNING envelope is returned (so callers cannot
+    observe a state where the job exists but the abort listener is
+    already detached in a way that violates the upstream contract).
+
+  - The release call is INSIDE the `if (start.state === "running")`
+    branch (5 tabs indent matches). This means the release only fires
+    on the actual Proceed While Running handoff path — terminal results
+    (exited / cancelled / deadline_exceeded / spawn_failed) skip the
+    release entirely, matching the upstream contract (the executor
+    only releases abort ownership when the process is continued).
+
+Why no broader changes are needed:
+
+  - The release is a single method call; the control flow of the
+    background path is unchanged.
+  - The release does not affect the terminal path (exited / cancelled /
+    deadline_exceeded / spawn_failed branches) at all.
+  - The release does not affect the foreground path (executeForeground,
+    vscodeTerminalExecutionMode === "vscodeTerminal").
+
+## File 3: apps/vscode/src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts
+
+NEW vitest test file. Currently NON-EXECUTABLE under the apps/vscode
+vitest harness (pre-existing environmental failure documented in the
+predecessor ACT's `gates.command_job_manager_tests`). The RED/GREEN
+discriminator was executed via `/tmp/red-tool.mjs` and
+`/tmp/green-tool.mjs` invoking the production `manager.start(...)` seam
+directly (bypassing the vitest harness). The test file documents the
+intended RED/GREEN contract for future vitest-harness repair.
+
+This test file is committed alongside the bounded repair so the
+contract is preserved in the repository. It does NOT exercise any new
+production behavior beyond what `/tmp/red-tool.mjs` and
+`/tmp/green-tool.mjs` already proved.
+
+## Summary
+
+Total production diff:
+  - 1 new public method on CommandJobManager (the docblock is the
+    larger half and is necessary to bind the contract to the upstream
+    architecture reference and to the predecessor ACT's LIVE specimen).
+  - 1 new call site in vscode-run-commands-tool.ts (1 LOC of code +
+    10 LOC of docblock; the docblock binds the call to the handoff
+    boundary invariant).
+  - 0 changes to the listener install path (command-job-manager.ts:1984-2011).
+  - 0 changes to terminate / cancel / dispose.
+  - 0 changes to finalize (cleanup at line 2522-2526 is still the only
+    listener-removal site; release is a deliberate, separate removal).
+  - 0 changes to the deadline timer.
+  - 0 changes to proto / webview / gRPC / SDK core / CLI.
+
+This is the minimal bounded repair that the predecessor ACT's
+"production repair conditional on successor RED->GREEN" gate authorized.
+
++       releaseForegroundAbortOwnership(jobId: string): void {
++               const job = this.active.get(jobId)
++               if (!job) {
++                       return
++               }
++               if (job.abortListener && job.abortSignal) {
++                       job.abortSignal.removeEventListener("abort", job.abortListener)
++                       job.abortSignal = undefined
++                       job.abortListener = undefined
++               }
++       }
+
+        private lookup(jobId: string): CommandJob | undefined {
+                return this.active.get(jobId) ?? this.terminal.get(jobId)
+        }
+```

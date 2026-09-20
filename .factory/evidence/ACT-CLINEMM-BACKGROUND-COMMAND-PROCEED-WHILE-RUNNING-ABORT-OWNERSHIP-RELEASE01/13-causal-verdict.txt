@@ -1,0 +1,81 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 13 — causal verdict
+
+ROOT_CAUSE_NECESSITY = ESTABLISHED.
+
+CHAIN:
+
+  1. Predecessor ACT (CASE_CP3_CALLER_ABORT_SIGNAL):
+     - LIVE specimen cmd_mu9wmnyuhvgva8cn
+     - requestOrigin = "caller_abort_signal"
+     - operator did not click Cancel, did not send a message
+     - the detached managed CommandJob was cancelled by the caller's
+       AbortSignal listener
+     - the LIVE chain is CAUSAL (not merely chronological)
+
+  2. This ACT (RED reproduction):
+     - The exact same production seam (manager.start({...}, { signal }))
+       is exercised with a real AbortController.signal
+     - The handoff boundary is reached (start.state === "running")
+     - The internal listener is structurally attached (job.abortListener
+       is a function, job.abortSignal is the caller's signal)
+     - A later callerAbort.abort() fires the listener
+     - The detached managed job becomes cancelled; active map is empty
+     - DEFECT_REPRODUCED = true
+
+  3. This ACT (ablation / GREEN):
+     - Same fixture, same supervisor, same caller signal, same handoff
+     - Single variable added: manager.releaseForegroundAbortOwnership(jobId)
+       between handoff and abort
+     - After release: job.abortListener is undefined, job.abortSignal
+       is undefined
+     - A later callerAbort.abort() does NOT cancel the job
+     - The detached managed job remains running; active map still
+       contains it
+     - DEFECT_REPAIRED = true
+
+  4. Single-variable discriminator:
+     - RED state: caller AbortSignal listener is RETAINED across the
+       handoff boundary
+     - GREEN state: caller AbortSignal listener is RELEASED at the
+       handoff boundary
+     - The only difference between RED and GREEN is whether
+       releaseForegroundAbortOwnership is called
+     - Everything else (same manager, same supervisor, same command,
+       same wait budget, same execution deadline, same caller signal,
+       same handoff code path) is held constant
+
+  5. Necessity: the listener retention IS the necessary cause of the
+     defect. The bounded repair (a single `removeEventListener` call)
+     turns RED into GREEN.
+
+IMPLICATION:
+
+  - The LIVE defect is reproducible on the production seam.
+  - The LIVE defect's root cause is the listener retention at the
+    foreground->background handoff.
+  - The bounded repair is minimal (one new public method + one new
+    call site in vscode-run-commands-tool.ts).
+  - All other cancellation seams are unaffected by the repair.
+
+PRODUCTION REPAIR: AUTHORIZED. Apply the bounded repair exactly as
+designed in 11-ablation-design.md:
+
+  apps/vscode/src/sdk/command-job-manager.ts:
+    new public method releaseForegroundAbortOwnership(jobId)
+    (lines 2866-2927 in the post-repair tree at HEAD)
+
+  apps/vscode/src/sdk/vscode-run-commands-tool.ts:
+    one new call to manager.releaseForegroundAbortOwnership(start.jobId)
+    inserted immediately after the background-start RUNNING envelope
+    is built (5 tabs indent, between the `start.terminalPromise.then(...)`
+    block and the `const runningPayload = { ... }` declaration)
+
+DO NOT:
+  - change Q5 / TSWPD / TaskHeader logic
+  - redesign the manager's other cancellation seams
+  - touch the deadline timer (CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT
+    is DEFERRED per ACT §14)
+  - change the proto surface, the webview, or the public gRPC handlers
+  - rewrite the listener install path (line 1984-2011) — the bounded
+    repair is the minimal deletion at the handoff, not a redesign of
+    the install path

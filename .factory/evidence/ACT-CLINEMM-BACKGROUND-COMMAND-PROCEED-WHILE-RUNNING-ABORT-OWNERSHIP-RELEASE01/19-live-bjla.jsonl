@@ -1,0 +1,22 @@
+# Live BJLA (Background Job Liveness Authority) records — STUB
+#
+# This ACT does not exercise the LIVE qualification step (no VS Code
+# instance in this actuator environment). The LIVE step is deferred to
+# a future ACT.
+#
+# When LIVE is qualified, this file will be the post-run dump of the
+# "Cline Debug: Dump Background Job Liveness Authority" command, showing
+# the bound set of:
+#
+#   job_cancellation_requested (with requestOrigin and firstWriterWins)
+#   job_status_lookup
+#   job_active_inserted
+#   job_active_removed
+#
+# The decisive negative evidence (the GREEN invariant) is the ABSENCE
+# of any job_cancellation_requested with requestOrigin=caller_abort_signal
+# for the detached job after the caller aborts.
+#
+# The decisive positive-control evidence is the PRESENCE of exactly one
+# job_cancellation_requested with requestOrigin=background_cancel_rpc when
+# the operator clicks the explicit Cancel button on the Backgrounded card.

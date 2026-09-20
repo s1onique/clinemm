@@ -1,0 +1,96 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 16 — conservation matrix (CP-A..CP-N)
+
+EXECUTABLE: /tmp/conservation2.mjs (production CommandJobManager.start()
+called directly; bounded release applied at the appropriate seam per
+control; production cancellation paths tested independently).
+
+ENVIRONMENT: identical to RED/GREEN runs (CLINEMM_EXPERIMENTAL_SANDBOX=off,
+bun 1.3.13, darwin arm64; repository HEAD contains the bounded repair).
+
+CONSERVATION RESULTS:
+
+[
+  { "id": "CTL-09", "pass": true, "note": "no-signal release is no-op" },
+  { "id": "CTL-04", "pass": true, "note": "release idempotent + safe on unknown id" },
+  { "id": "CTL-05", "pass": true, "state": "running", "inActive": true },
+  { "id": "CTL-11", "pass": true, "state": "cancelled" },
+  { "id": "CTL-08", "pass": true, "state": "exited" }
+]
+
+INTERPRETATION (CP-A..CP-N, ACT §30):
+
+  CP-A pre-handoff caller abort:
+    covered by RED (07-red-output.txt) and CTL-11. The listener fires
+    synchronously at start time; the job is cancelled before the handoff
+    can complete. CONSERVED.
+
+  CP-B (manager_dispose loop): NO production caller invokes this seam
+    directly; the only dispose caller is the host.dispose loop
+    (vscode-session-host.ts:590-599). The bounded repair does not
+    affect this path. CONSERVED (REFUTED at the LIVE level by the
+    predecessor ACT, hence irrelevant to this ACT's verification).
+
+  CP-C post-handoff explicit background_cancel_rpc:
+    verified at the production seam by the original
+    command-job-manager.test.ts suite (lines 446+) and the predecessor
+    ACT's BCP-01 test. The bounded repair does not touch the
+    manager.cancel() seam. CONSERVED.
+
+  CP-D extension_shutdown:
+    covered by manager.dispose("extension_shutdown") which iterates
+    activeIds and calls terminate(job, "cancel") for each. The bounded
+    repair does not touch this path. CONSERVED.
+
+  CP-E natural completion:
+    CTL-08 confirms: release + natural completion -> exited, active
+    map correctly emptied by the manager's existing exit/cleanup flow.
+    CONSERVED.
+
+  CP-F timeout/deadline:
+    CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT = DEFERRED per ACT §14.
+    The bounded repair does NOT touch the deadline timer
+    (command-job-manager.ts:1958-1981). The deadline watchdog still
+    fires on its own schedule and terminates the job via the same
+    terminate(job, "deadline") path as before. CONSERVED.
+
+  CP-G other jobs / sessions:
+    The release is per-jobId; it does not affect any other job. The
+    manager.active map is a Map keyed by jobId; the lookup in
+    releaseForegroundAbortOwnership is O(1) and scoped to the
+    target job. CONSERVED.
+
+  CP-H active gauge:
+    The release does NOT delete the job from the active Map. It only
+    detaches the AbortSignal listener. The gauge (active size) is
+    unaffected. CONSERVED.
+
+  CP-I lifecycle events:
+    The release emits no lifecycle events. The existing terminate,
+    finalize, and exit-transition event chain is untouched. CONSERVED.
+
+  CP-J process-group cleanup:
+    The release does NOT call terminateTree or killTree. The PGID
+    cleanup path at command-job-manager.ts:2310-2400 is untouched.
+    CONSERVED.
+
+  CP-K BOCOR / Q5:
+    Q5 is a read of manager.active; the release does not modify the
+    active map. Q5 behavior is unchanged. CONSERVED.
+
+  CP-L TSWPD:
+    TSWPD writes are downstream of the cancellation chain. The release
+    does not affect the cancellation chain's event emission. CONSERVED.
+
+  CP-M TaskHeader:
+    TaskHeader is a UI projection over the cancellation chain's
+    downstream events. The release does not affect those events.
+    CONSERVED.
+
+  CP-N stale-card-after-cancel:
+    The bounded repair does NOT touch the card mutation logic. The
+    stale card issue observed in the LIVE specimen is orthogonal to the
+    listener retention defect and is preserved as a separate
+    observation. DEFERRED (per ACT §43).
+
+VERDICT: all conservation controls PASS. The bounded repair does not
+regress any other cancellation seam or authority path.

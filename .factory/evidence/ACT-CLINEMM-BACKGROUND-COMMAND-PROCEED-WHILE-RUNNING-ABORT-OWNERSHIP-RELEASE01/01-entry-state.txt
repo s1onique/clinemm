@@ -1,0 +1,29 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01
+
+Entry state:
+ENTRY_HEAD=a064ea96b76562b2b2f6d4cda562b119af993073
+ENTRY_HEAD_SHORT=a064ea96b
+ENTRY_STATUS=CLEAN (no tracked dirt, no untracked changes)
+PARENT_COMMIT_MSG=ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01: correct overreach — ablation deferred, production repair conditional on successor RED+ablation
+
+Predecessor ACT ancestry (in order):
+  640cc388131ad8071e7a2feccb456c580d1d09a5  LIVE CP3 classification (VSIX 4.1.16-bjla-cancellation-provenance01)
+  a064ea96b76562b2b2f6d4cda562b119af993073  Epistemic correction — ablation NOT_EXECUTED, production repair conditional on successor RED+ablation
+
+ENTRY_HEAD and ENTRY_STATUS verified via:
+  $ git rev-parse HEAD        -> a064ea96b76562b2b2f6d4cda562b119af993073
+  $ git status --short        -> (empty — clean working tree)
+  $ git log -1 --oneline      -> a064ea96b ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01: ...
+
+Inherited frozen state (from predecessor ACT):
+  LIVE_JOB = cmd_mu9wmnyuhvgva8cn
+  MANAGER  = M2
+  SESSION  = 1789914077854_aq4sy
+  CLASSIFICATION = CASE_CP3_CALLER_ABORT_SIGNAL
+  Q5 = EXONERATED
+  TSWPD = EXONERATED_GIVEN_EMPTY_ACTIVE_SET
+  TaskHeader = EXONERATED
+  ROOT_CAUSE_HYPOTHESIS = retained caller AbortSignal ownership across foreground→background handoff
+  ABLATION = NOT_EXECUTED (this ACT must execute it)
+  PRODUCTION_REPAIR = NOT_YET_AUTHORIZED (this ACT authorizes it on RED→GREEN)
+  background_cancel_rpc / extension_shutdown / command_deadline / manager split / owner mismatch = REFUTED for LIVE specimen

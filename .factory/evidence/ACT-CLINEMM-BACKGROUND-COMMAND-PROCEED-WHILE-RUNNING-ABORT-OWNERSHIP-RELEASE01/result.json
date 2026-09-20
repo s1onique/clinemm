@@ -1,0 +1,115 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01",
+  "epistemic_purpose": "reproduction and ablation first; bounded repair only on RED->GREEN",
+  "entry_head": "a064ea96b76562b2b2f6d4cda562b119af993073",
+  "act_commit_head": "a58c32a13ba4559bf758b156b7784781acf5890d",
+  "predecessor": {
+    "classification": "CASE_CP3_CALLER_ABORT_SIGNAL",
+    "requester_causality": "ESTABLISHED",
+    "root_cause_ablation": "NOT_EXECUTED"
+  },
+  "reproduction": {
+    "real_production_handoff": true,
+    "red_reproduced": true,
+    "post_handoff_abort_cancelled_job": true,
+    "evidence_file": "07-red-output.txt",
+    "executable": "/tmp/red-tool.mjs",
+    "output_summary": {
+      "start_state": "running",
+      "jobId": "cmd_mua5it42ub78lj6g",
+      "STRUCTURAL_LISTENER_ATTACHED_AT_HANDOFF": true,
+      "STRUCTURAL_ABORT_SIGNAL_IS_CALLER": true,
+      "POST_ABORT_STATE": "cancelled",
+      "POST_ABORT_IN_ACTIVE_MAP": false,
+      "DEFECT_REPRODUCED": true
+    }
+  },
+  "ablation": {
+    "executed": true,
+    "single_variable": "caller AbortSignal ownership after handoff (releaseForegroundAbortOwnership invocation)",
+    "red_state": {
+      "listener_attached": true,
+      "abort_signal_is_caller": true,
+      "post_abort_state": "cancelled",
+      "post_abort_in_active_map": false
+    },
+    "green_state": {
+      "listener_attached": false,
+      "abortListener_undefined": true,
+      "abortSignal_undefined": true,
+      "post_abort_state": "running",
+      "post_abort_in_active_map": true,
+      "idempotent_release_throws": false
+    },
+    "necessity_established": true,
+    "evidence_file": "12-ablation-output.txt",
+    "executable": "/tmp/green-tool.mjs"
+  },
+  "repair": {
+    "authorized": true,
+    "performed": true,
+    "files": [
+      {
+        "path": "apps/vscode/src/sdk/command-job-manager.ts",
+        "change": "Added public method releaseForegroundAbortOwnership(jobId)",
+        "lines_added": 63
+      },
+      {
+        "path": "apps/vscode/src/sdk/vscode-run-commands-tool.ts",
+        "change": "Added one call site at the foreground->background handoff boundary (line ~709)",
+        "lines_added": 11
+      },
+      {
+        "path": "apps/vscode/src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts",
+        "change": "Test file documenting the RED/GREEN contract (vitest harness is non-functional; the production-seam RED/GREEN is exercised via /tmp/red-tool.mjs and /tmp/green-tool.mjs)",
+        "lines_added": 150
+      }
+    ],
+    "conservation": {
+      "CP_A_prehandoff_abort": "CONSERVED",
+      "CP_C_background_cancel_rpc": "CONSERVED",
+      "CP_D_extension_shutdown": "CONSERVED",
+      "CP_E_natural_completion": "CONSERVED (CTL-08 PASS: state=exited after release)",
+      "CP_F_timeout_deadline": "DEFERRED_BY_CONTRACT (CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT per ACT \u00a714)",
+      "CP_G_other_jobs_sessions": "UNCHANGED (per-job release)",
+      "CP_H_active_gauge": "UNCHANGED (release does not delete from active map)",
+      "CP_I_lifecycle_events": "UNCHANGED (release emits no events)",
+      "CP_J_process_group_cleanup": "UNCHANGED (no killTree call)",
+      "CP_K_BOCOR_Q5": "UNCHANGED",
+      "CP_L_TSWPD": "UNCHANGED",
+      "CP_M_TaskHeader": "UNCHANGED",
+      "CP_N_stale_card_after_cancel": "DEFERRED (orthogonal card mutation issue, observed in LIVE specimen)"
+    }
+  },
+  "gates": {
+    "check_types": "PASS (tsc EXIT=0; no diagnostics)",
+    "lint": "PASS (biome lint EXIT=0)",
+    "format": "PASS (biome format EXIT=0)",
+    "git_diff_check": "PASS (no whitespace warnings; EXIT=0)",
+    "git_status_post_commit": "CLEAN (working tree clean; only evidence directory untracked)",
+    "production_seam_red_reproduced": true,
+    "production_seam_green_repaired": true,
+    "conservation_matrix": "PASS (5/5 CTL-04, CTL-05, CTL-08, CTL-09, CTL-11)"
+  },
+  "live_qualification": {
+    "executed": false,
+    "deferred_reason": "actuator environment does not provide a VS Code instance",
+    "caller_abort_after_handoff": "NOT_EXECUTED",
+    "explicit_cancel_positive_control": "NOT_EXECUTED",
+    "evidence_files_placeholder": [
+      "18-dogfood-vsix-identity.txt",
+      "19-live-bjla.jsonl",
+      "20-live-bocor.jsonl",
+      "21-live-tswpd.jsonl",
+      "22-live-screenshot-index.md",
+      "23-live-qualification.md"
+    ]
+  },
+  "diagnostics": {
+    "removed": false,
+    "new_diagnostics_added": false,
+    "rationale": "This ACT only adds a bounded production repair; no new diagnostics were added. Existing diagnostics from the predecessor ACT are preserved."
+  },
+  "verdict": "PASS_RED_REPRODUCED_ABLATION_PENDING",
+  "next_state": "PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED conditional on LIVE qualification by a future ACT or the Factory reviewer"
+}

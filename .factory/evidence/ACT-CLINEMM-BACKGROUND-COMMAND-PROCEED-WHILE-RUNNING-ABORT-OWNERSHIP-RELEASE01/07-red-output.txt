@@ -1,0 +1,45 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 07 — RED output (executable evidence)
+
+DECISIVE EVIDENCE: the LIVE causal chain is now reproducible deterministically
+on the production seam (was previously LIVE-only, un-reproducible per
+predecessor ACT's 16-red.txt).
+
+EXECUTABLE: /tmp/red-tool.mjs (production manager.start() called directly
+with a real AbortSignal from a real AbortController — same code path as
+`vscode-run-commands-tool.ts:648`).
+
+ENVIRONMENT:
+  - Repository HEAD: a064ea96b76562b2b2f6d4cda562b119af993073
+  - Platform: darwin (arm64)
+  - CLINEMM_EXPERIMENTAL_SANDBOX=off
+  - Runtime: bun 1.3.13
+
+PRODUCTION SEAM EXERCISED:
+  apps/vscode/src/sdk/command-job-manager.ts:1984-2011 — caller
+  AbortSignal listener installation
+  apps/vscode/src/sdk/command-job-manager.ts:2010 — addEventListener
+  apps/vscode/src/sdk/vscode-run-commands-tool.ts:648 — manager.start(
+    { ... }, context) — the load-bearing call site
+
+RED COMMAND:
+  CLINEMM_EXPERIMENTAL_SANDBOX=off bun /tmp/red-tool.mjs
+
+EXIT CODE: 0 (DEFECT_REPRODUCED=true)
+
+RED OUTPUT:
+  HANDOFF_REACHED start.state = running jobId = cmd_mua5it42ub78lj6g
+  STRUCTURAL_LISTENER_ATTACHED_AT_HANDOFF: true
+  STRUCTURAL_ABORT_SIGNAL_IS_CALLER: true
+  POST_ABORT_STATE: cancelled
+  POST_ABORT_IN_ACTIVE_MAP: false
+  DEFECT_REPRODUCED: true
+
+EVALUATION:
+
+  1. Realtime seam match (RED reproduces deterministically): PASS.
+  2. Provenance match (caller_abort_signal is the discriminator):
+     Structural — same listener install at command-job-manager.ts:1986.
+  3. Conservation: bounded release is per-job; does not touch any
+     other cancellation seam.
+
+RED STATUS: RED REPRODUCED — defect is real on the production seam.

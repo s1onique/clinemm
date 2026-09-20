@@ -1,0 +1,125 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 04 — recon (raw)
+
+Reconciles the handoff authority map (03) with concrete file:line references
+discovered by `grep`-style searches and direct reading. No runtime probing —
+this is structural.
+
+1. apps/vscode/src/sdk/command-job-manager.ts:1983-2012
+   // Caller-supplied AbortSignal listener installation
+   if (context?.signal) {
+       job.abortSignal = context.signal
+       job.abortListener = () => {
+           if (job.finalized || job.state !== "running") return
+           captureBackgroundJobLivenessAuthorityRecord({
+               event: "job_cancellation_requested",
+               ...
+               requestOrigin: "caller_abort_signal",
+               ...
+           })
+           void this.terminate(job, "cancel")
+       }
+       if (context.signal.aborted) job.abortListener()
+       else context.signal.addEventListener("abort", job.abortListener, { once: true })
+   }
+   — THE load-bearing seam. The listener is added with { once: true } but has
+   no release path other than (a) firing (which cancels the job) or (b)
+   finalize() removing it at line 2522-2526.
+
+2. apps/vscode/src/sdk/command-job-manager.ts:2516-2526
+   // Natural terminal cleanup (inside finalize())
+   if (job.deadlineTimer) {
+       clearTimeout(job.deadlineTimer)
+       job.deadlineTimer = undefined
+   }
+   if (job.abortListener && job.abortSignal) {
+       job.abortSignal.removeEventListener("abort", job.abortListener)
+       job.abortSignal = undefined
+       job.abortListener = undefined
+   }
+   — The ONLY production removal of the abort listener. Triggers only at
+   terminal state, not at the handoff boundary.
+
+3. apps/vscode/src/sdk/vscode-run-commands-tool.ts:647-709
+   // Background path handoff
+   start = await manager.start({ ... }, context)
+   // ...
+   if (start.state === "running") {
+       start.terminalPromise.then(({ becameIdle }) => { ... })
+       const runningPayload = {
+           status: "running" as const,
+           jobId: start.jobId,
+           elapsedMs: start.elapsedMs,
+           deadlineRemainingMs: start.deadlineRemainingMs,
+           outputTruncated: start.outputTruncated,
+           stdout: start.stdout,
+       }
+       return JSON.stringify(runningPayload)  // <-- HANDOFF BOUNDARY
+   }
+   — The handoff IS this return. The job stays alive in the manager after
+   this point. No code at the handoff releases caller ownership.
+
+4. apps/vscode/src/sdk/command-job-manager.ts:1017-1020
+   interface CommandJob {
+       ...
+       deadlineTimer?: NodeJS.Timeout
+       abortListener?: () => void
+       abortSignal?: AbortSignal
+       ...
+   }
+   — Identity storage for the listener (private fields on the job).
+
+5. apps/vscode/src/sdk/command-job-manager.ts:1956-1981
+   // Deadline watchdog
+   job.deadlineTimer = setTimeout(() => {
+       if (job.finalized || job.state !== "running") return
+       captureBackgroundJobLivenessAuthorityRecord({ ... requestOrigin: "command_deadline" ... })
+       void this.terminate(job, "deadline")
+   }, effectiveDeadlineMs)
+   job.deadlineTimer.unref()
+   — Independent timer; not the focus of this ACT but tracked for conservation.
+
+6. apps/vscode/src/sdk/command-job-manager.ts:3031-3116
+   async dispose() — iterates activeIds, terminates each with reason="cancel"
+   → only invoked by host.dispose → lifecycle.dispose → controller.dispose
+   at extension deactivation.
+
+7. apps/vscode/src/sdk/vscode-session-host.ts:494-512
+   async cancelBackgroundCommand(jobId?) — public cancel seam
+   → commandJobManager.cancel({ jobId })
+
+8. apps/vscode/src/sdk/vscode-run-commands-tool.ts:107
+   onBackgroundStateChange? — fires on background state flip; orthogonal
+   to this ACT's defect but tracks the running/idle transitions.
+
+9. apps/vscode/src/sdk/command-job-manager.ts:2713-2755
+   async cancel({ jobId, origin? }) — public cancel; routes to terminate
+   with reason="cancel". firstWriterWins latch via job.terminationPromise.
+
+## What does NOT exist
+
+- No "release" / "detach" / "proceed" / "backgrounded" / "releaseForegroundOwnership" method on CommandJob or CommandJobManager.
+- No internal flag on CommandJob distinguishing foreground ownership from detached/background ownership.
+- No code anywhere in `apps/vscode/src/sdk/command-job-manager.ts` or
+  `apps/vscode/src/sdk/vscode-run-commands-tool.ts` that calls
+  `abortSignal.removeEventListener(...)` outside of `finalize()`.
+- No `releaseTimeout` / `clearDeadlineTimer` / "release ownership" method on CommandJob or CommandJobManager.
+
+## What the bounded defect IS
+
+```text
+Property: at the moment the foreground tool returns RUNNING (line 709),
+          the caller AbortSignal listener remains attached to context.signal.
+
+Effect:   any later caller-supplied abort fires the listener, which calls
+          manager.terminate(job, "cancel") with origin="caller_abort_signal".
+
+Live:     ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 captured
+          exactly this on the dogfood VSIX — requestOrigin="caller_abort_signal"
+          on the detached job, with operator having done nothing.
+```
+
+## Implication
+
+The defect is STRUCTURALLY PRESENT. Whether it is the NECESSARY cause
+requires the RED→GREEN ablation on the production seam. That is what
+this ACT executes.

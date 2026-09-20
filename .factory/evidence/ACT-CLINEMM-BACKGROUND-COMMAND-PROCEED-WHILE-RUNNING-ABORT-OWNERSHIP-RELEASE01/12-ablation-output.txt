@@ -1,0 +1,59 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 12 — ablation output (RED → GREEN)
+
+EXECUTABLE: /tmp/green-tool.mjs (production manager.start() called
+directly with a real AbortSignal; bounded repair release call between
+handoff and abort).
+
+VARIABLE CHANGED vs. RED (single discriminator):
+  callerAbort.abort() vs. callerAbort.abort() — IDENTICAL on both runs;
+  the ONLY difference is the addition of:
+    manager.releaseForegroundAbortOwnership(jobId)
+  immediately after handoff and before the abort.
+
+ABLATION OUTPUT:
+  HANDOFF_REACHED start.state = running jobId = cmd_mua5nnc05x6m0sew
+  BEFORE_RELEASE listener attached: true
+  BEFORE_RELEASE abortSignal is caller: true
+  AFTER_RELEASE listener attached: false
+  AFTER_RELEASE abortSignal is caller: false
+  AFTER_RELEASE abortListener is undefined: true
+  AFTER_RELEASE abortSignal is undefined: true
+  IDEMPOTENT_RELEASE_THROWS: false
+  POST_ABORT_STATE: running
+  POST_ABORT_IN_ACTIVE_MAP: true
+  DEFECT_REPAIRED: true
+
+INTERPRETATION:
+
+  Before the release call:
+    - listener attached: true (same as RED — the listener is in place
+      at handoff)
+    - abortSignal is caller: true
+
+  The bounded repair:
+    - manager.releaseForegroundAbortOwnership(jobId)
+    - detaches the listener from the caller's signal
+    - clears job.abortListener and job.abortSignal
+
+  After the release call:
+    - listener attached: false
+    - abortListener is undefined: true
+    - abortSignal is undefined: true
+
+  Idempotence check: IDEMPOTENT_RELEASE_THROWS = false
+
+  Caller abort AFTER release:
+    - POST_ABORT_STATE: running
+    - POST_ABORT_IN_ACTIVE_MAP: true
+    - DEFECT_REPAIRED: true
+
+CONCLUSION:
+
+  RED → GREEN is established.
+
+  The single discriminator — caller AbortSignal ownership after handoff —
+  accounts for the entire symptom.
+
+  ROOT_CAUSE_NECESSITY = ESTABLISHED.
+
+  Production repair is AUTHORIZED.
