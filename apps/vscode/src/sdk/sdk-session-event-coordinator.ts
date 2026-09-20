@@ -6,6 +6,10 @@ import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@/shared/cline/recommended-mo
 import type { ClineApiReqInfo, TurnPhase } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
+import {
+	captureBackgroundOwnerCorrelationRecord,
+	type BackgroundOwnerCorrelationActiveJob,
+} from "./background-owner-correlation"
 import type { MessageTranslatorState, TranslationResult } from "./message-translator"
 import { translateSessionEvent } from "./message-translator"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
@@ -68,6 +72,27 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * pass this option are unaffected.
 	 */
 	hasRunningBackgroundJobForOwner?: (ownerSessionId: string | undefined) => boolean
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+	 *
+	 * INTERNAL read-only diagnostic accessor that returns the
+	 * underlying identity tuple (jobId / state / ownerSessionId)
+	 * for every job currently held in the active CommandJobManager
+	 * map. Wired by `SdkController` to a thin adapter that
+	 * delegates to
+	 * `CommandJobManager.getActiveJobOwnershipSnapshot()` (the
+	 * closed-runtime P1 accessor added by this ACT). The
+	 * coordinator calls this from the Q5 decision boundary
+	 * BEFORE evaluating `hasRunningBackgroundJobForOwner` so the
+	 * captured BOCOR record mechanically proves OC1 / OC2 / OC3
+	 * without relying on a guessed owner identity.
+	 *
+	 * Optional (same default semantic as
+	 * `hasRunningBackgroundJobForOwner`): when absent, the BOCOR
+	 * capture records `activeJobs: []` so tests that omit the
+	 * option remain deterministic.
+	 */
+	getActiveJobOwnershipSnapshot?: () => readonly BackgroundOwnerCorrelationActiveJob[]
 }
 
 export class SdkSessionEventCoordinator {
@@ -275,6 +300,57 @@ export class SdkSessionEventCoordinator {
 							this.options.hasRunningBackgroundJobForOwner?.(
 								activeSession.sessionId,
 							)
+						// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+						// capture ONE decision-boundary observation right
+						// BEFORE the if/else resolves. The capture is gated
+						// ONLY by the BOCOR module seam (default OFF in public,
+						// ON in dogfood via the central profile resolver).
+						// Zero semantic delta when the seam is OFF —
+						// `captureBackgroundOwnerCorrelationRecord` returns
+						// immediately and the if/else evaluates exactly as
+						// before.
+						//
+						// The record captures the LIVE tuple:
+						//   queriedOwnerSessionId = activeSession.sessionId
+						//   activeJobs           = closed-runtime snapshot of
+						//                            every job in the active map
+						//   guardAvailable        = whether the production
+						//                            SdkController wired the option
+						//   guardResult          = the exact boolean the guard
+						//                            returned
+						//   candidateWriterId    = always
+						//     session-event-turn-complete-resumable-straggler-preserve
+						//
+						// Mechanical classification (see ACT sec 27):
+						//   OC1 producer owner stamp defect
+						//     activeJobs[N].ownerSessionId is null/undefined
+						//     AND guardResult === false
+						//   OC2 active session identity drift
+						//     activeJobs[N].ownerSessionId !== activeSession.sessionId
+						//     AND guardResult === false
+						//   OC3 guard unavailable
+						//     guardAvailable === false (option not wired)
+						//   Contradiction
+						//     owner matches AND guard === true AND result === false
+						captureBackgroundOwnerCorrelationRecord({
+							event: "background_owner_correlation_decision",
+							capturedAt: Date.now(),
+							taskId: this.options.getTask?.()?.taskId ?? null,
+							sessionEventSessionId:
+								typeof event.payload?.sessionId === "string"
+									? event.payload.sessionId
+									: null,
+							activeSessionId: activeSession.sessionId,
+							currentPhase: "streaming",
+							candidatePhase: "awaiting_followup",
+							guardAvailable:
+								typeof this.options.hasRunningBackgroundJobForOwner === "function",
+							queriedOwnerSessionId: activeSession.sessionId,
+							guardResult:
+								typeof ownerStillRunning === "boolean" ? ownerStillRunning : null,
+							activeJobs: this.options.getActiveJobOwnershipSnapshot?.() ?? [],
+							candidateWriterId: "session-event-turn-complete-resumable-straggler-preserve",
+						})
 						if (ownerStillRunning) {
 							Logger.warn(
 								`[SdkController] done with no committed terminal response but active session ${activeSession.sessionId} owns a RUNNING background command; suppressing awaiting_followup transition (Q5 composition seam)`,

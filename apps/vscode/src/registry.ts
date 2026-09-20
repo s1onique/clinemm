@@ -69,6 +69,19 @@ const ClineCommands = {
 	// recurrence, OR CAPTURE_INSUFFICIENT.
 	DumpTaskHeaderSelectorInputDiagnostic: prefix + ".debug.dumpTaskHeaderSelectorInputDiagnostic",
 	ClearTaskHeaderSelectorInputDiagnostic: prefix + ".debug.clearTaskHeaderSelectorInputDiagnostic",
+	// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+	// Debug dump command for the bounded Background Owner Correlation
+	// (BOCOR) diagnostic at the Q5 done-without-completion boundary.
+	// Dogfood-only (controlled by the central dogfood profile
+	// resolver - no separate env-var toggle, no workspace toggle).
+	// The dump serializes the bounded ring to
+	// <globalStorageUri>/background-owner-correlation.jsonl. No
+	// toggle command (the diagnostic enablement is owned by
+	// `applyBackgroundOwnerCorrelationDiagnosticProfile` in
+	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER: first
+	// successful LIVE binding of the LIVE cause (OC1/OC2/OC3) AND
+	// qualification of the bounded repair, OR CAPTURE_INSUFFICIENT.
+	DumpBackgroundOwnerCorrelation: prefix + ".debug.dumpBackgroundOwnerCorrelation",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

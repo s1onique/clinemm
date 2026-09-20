@@ -531,6 +531,27 @@ export class VscodeSessionHost implements SdkSessionHost {
 		return this.commandJobManager.hasRunningBackgroundJobForOwner(sessionId)
 	}
 
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+	 *
+	 * INTERNAL read-only diagnostic accessor. Host-only extension
+	 * following the `hasRunningBackgroundJobForOwner` /
+	 * `cancelBackgroundCommand` precedent. Delegates to
+	 * `CommandJobManager.getActiveJobOwnershipSnapshot()` so the
+	 * BOCOR diagnostic at the Q5 composition seam can mechanically
+	 * classify the LIVE owner correlation. NEVER read from the
+	 * public CommandJobSnapshot type — the P1 no-leak invariant is
+	 * preserved here the same way it is preserved for the boolean
+	 * lookup.
+	 */
+	getActiveJobOwnershipSnapshot(): ReadonlyArray<{
+		readonly jobId: string
+		readonly state: import("./command-job-manager").CommandJobState
+		readonly ownerSessionId: string | undefined
+	}> {
+		return this.commandJobManager.getActiveJobOwnershipSnapshot()
+	}
+
 	async dispose(reason?: string): Promise<void> {
 		try {
 			await this.commandJobManager.dispose()

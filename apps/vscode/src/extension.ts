@@ -5,6 +5,7 @@ import assert from "node:assert"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
 import {
+	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
@@ -23,6 +24,7 @@ import {
 	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
 	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
 } from "@/sdk/task-header-selector-input-capture-runtime"
+import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
 import {
 	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
 	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
@@ -145,6 +147,24 @@ export async function activate(context: vscode.ExtensionContext) {
 	// armed BEFORE the first observer / producer call. See
 	// `dogfood-diagnostic-profile-w-carrier-activation.test.ts`.
 	applyWCarrierTraceDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+	// arm the BOCOR (Background Owner Correlation) capture seam at
+	// the SAME EARLIEST initialization seam, BEFORE SdkController
+	// construction. The helper composes the effective capture
+	// state (explicit env override
+	// `CLINEMM_DIAG_BACKGROUND_OWNER_CORRELATION_V1` > dogfood
+	// profile default ON > public default OFF) and flips the
+	// module seam idempotently. Dogfood default ON means the
+	// LIVE qualification window does not require the operator to
+	// remember to set the env var; explicit `=0` flips the
+	// auto-on default off (override-down semantic). The capture
+	// is at the Q5 done-without-completion decision boundary in
+	// sdk-session-event-coordinator.ts, so running this BEFORE
+	// SdkController construction guarantees the seam is armed
+	// BEFORE the first composition-seam evaluation. See
+	// `background-owner-correlation-dogfood-profile.test.ts`.
+	applyBackgroundOwnerCorrelationDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool
@@ -735,6 +755,37 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[THSICAP] clear failed", err)
 				void vscode.window.showErrorMessage(
 					`TaskHeader selector-input clear failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+		// Debug dump command for the bounded Background Owner
+		// Correlation (BOCOR) diagnostic at the Q5
+		// done-without-completion decision boundary.
+		// Dogfood-only (controlled by the central dogfood profile
+		// resolver - no separate env-var toggle, no workspace
+		// toggle). The dump command is ALWAYS reachable so an
+		// operator can inspect whatever was captured even after
+		// the diagnostic is disabled. The dump is unconditional
+		// (does not clear the ring; matches the TSWPD / W carrier
+		// / THSICAP dump != clear contract).
+		//
+		// REMOVAL_TRIGGER: first successful LIVE binding of the
+		// LIVE cause (OC1 / OC2 / OC3) AND qualification of the
+		// bounded repair, OR CAPTURE_INSUFFICIENT. Once the
+		// trigger fires this command + the registry entry + the
+		// package.json declaration + the dogfood-profile helper
+		// + the ring module MUST be removed TOGETHER.
+		vscode.commands.registerCommand(commands.DumpBackgroundOwnerCorrelation, async () => {
+			try {
+				const { file, recordCount } = await dumpExtensionSideBackgroundOwnerCorrelationDiagnostic(context)
+				void vscode.window.showInformationMessage(
+					`Background owner correlation diagnostic: ${recordCount} record${recordCount === 1 ? "" : "s"} → ${file}.`,
+				)
+			} catch (err) {
+				Logger.error("[BOCOR] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Background owner correlation dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

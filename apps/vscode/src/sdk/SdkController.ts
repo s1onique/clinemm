@@ -1892,6 +1892,31 @@ export class Controller {
 				}
 				return host.hasRunningBackgroundJobForOwner(ownerSessionId)
 			},
+			// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+			// thread the INTERNAL read-only ownership-snapshot accessor
+			// into the coordinator so the Q5 BOCOR diagnostic can
+			// mechanically classify the LIVE owner correlation as
+			// OC1 / OC2 / OC3 / contradiction. Returns `[]` when the
+			// active session host does not implement the method
+			// (Hub/Remote omit it by design - same absence semantic as
+			// `cancelBackgroundCommand`).
+			getActiveJobOwnershipSnapshot: () => {
+				const activeSession = this.sessions.getActiveSession()
+				if (!activeSession) return []
+				const host = activeSession.sdkHost as
+					| (VscodeSessionHost & {
+							getActiveJobOwnershipSnapshot?: () => ReadonlyArray<{
+								readonly jobId: string
+								readonly state: import("./command-job-manager").CommandJobState
+								readonly ownerSessionId: string | undefined
+							}>
+					  })
+					| undefined
+				if (!host || typeof host.getActiveJobOwnershipSnapshot !== "function") {
+					return []
+				}
+				return host.getActiveJobOwnershipSnapshot()
+			},
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder

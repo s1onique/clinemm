@@ -242,6 +242,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpBackgroundOwnerCorrelation",
+				"title": "Cline Debug: Dump Background Owner Correlation",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

@@ -2776,6 +2776,64 @@ export class CommandJobManager {
 	}
 
 	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+	 *
+	 * INTERNAL read-only diagnostic snapshot of every entry in the
+	 * `active` Map, including the closed-runtime
+	 * `ownerSessionId` slot. Mirrors the
+	 * `hasRunningBackgroundJobForOwner` boolean authority shape
+	 * but returns the underlying identity tuple so the BOCOR
+	 * diagnostic at the Q5 composition seam can mechanically
+	 * classify the LIVE owner correlation as OC1 (producer stamp
+	 * defect), OC2 (active-session identity drift), OC3 (guard
+	 * unavailable), or contradiction.
+	 *
+	 * Contract (frozen; mirrors the closed-runtime P1
+	 * encapsulation invariant at line 925 — see the
+	 * BACKGROUND-JOB-OWNER-IDENTITY-CONTRACT01 docblock):
+	 *
+	 *   - INTERNAL — exposed only to the SdkController composition
+	 *     seam that threads `hasRunningBackgroundJobForOwner` into
+	 *     the coordinator. NOT on the public CommandJobSnapshot
+	 *     type, NOT projected into the model-facing tool-result
+	 *     text, NOT in any wire payload.
+	 *   - READ_ONLY — never mutates the active Map. Caller may
+	 *     iterate the result freely.
+	 *   - NO_WIRE_API — no proto, no RPC, no webview state field.
+	 *     The result is consumed exclusively by the host-side
+	 *     BOCOR diagnostic ring.
+	 *   - NO_PGID — the snapshot at invocation is not a containment
+	 *     probe. Use `getActiveCommandJobs()` for the PGID-bearing
+	 *     containment view. The BOCOR diagnostic is about IDENTITY
+	 *     (jobId / ownerSessionId / state) not PROCESS GROUP.
+	 *   - INCLUDES terminal-state jobs (state !== "running") — the
+	 *     BOCOR diagnostic captures whatever is currently in the
+	 *     active map at the decision boundary so a future
+	 *     correlation can distinguish "no job" from "different
+	 *     job".
+	 *
+	 * Performance: O(n) over the active map. Bounded by
+	 * `activeCount`, which is bounded by the number of background
+	 * commands the host has started but not yet completed
+	 * (typically a small integer).
+	 */
+	getActiveJobOwnershipSnapshot(): ReadonlyArray<{
+		readonly jobId: string
+		readonly state: CommandJobState
+		readonly ownerSessionId: string | undefined
+	}> {
+		const out: { jobId: string; state: CommandJobState; ownerSessionId: string | undefined }[] = []
+		for (const job of this.active.values()) {
+			out.push({
+				jobId: job.id,
+				state: job.state,
+				ownerSessionId: job.ownerSessionId,
+			})
+		}
+		return out
+	}
+
+	/**
 	 * ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
 	 *
 	 * Postcondition probe for the cleanup invariant.

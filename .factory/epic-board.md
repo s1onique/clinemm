@@ -4737,3 +4737,120 @@ NEXT_ACT_REQUIRED_FOR_REPAIR =
 
 EVIDENCE_BOUND_TO_FINAL_HEAD = PASS  (HEAD at this ACT)
 BOARD_DURABLE                  = PASS  (this row durably appended)
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01
+
+LIVE_EVIDENCE_ACQUISITION_WITH_BOUNDED_REPAIR_AUTHORIZATION
+
+EPISTEMIC_PURPOSE:
+  Add a bounded dogfood-only diagnostic at the Q5 decision
+  boundary so the next LIVE occurrence mechanically classifies
+  as OC1 (producer stamp defect), OC2 (active-session identity
+  drift), OC3 (guard unavailable), or contradiction against the
+  synthetic model. The diagnostic is BOUNDED with a removal
+  trigger (per ACT §37).
+
+DIAGNOSTIC_ENABLEMENT =
+  DOGFOOD_PROFILE (no separate env-var toggle; no workspace
+  toggle; no webview surface; no gRPC / proto / wire field;
+  no React state)
+
+ADDITIONAL_ENV_VAR =
+  NONE (a single override-down/up env var
+        CLINEMM_DIAG_BACKGROUND_OWNER_CORRELATION_V1 is honored
+        by the central dogfood profile resolver for parity with
+        the W carrier / THSICAP precedent; it is NOT a separate
+        per-diagnostic enable knob)
+
+DUMP_COMMAND =
+  Cline Debug: Dump Background Owner Correlation
+
+DUMP_ARTIFACT =
+  <context.globalStorageUri.fsPath>/background-owner-correlation.jsonl
+
+LIVE_JOB_OWNER =
+  UNPROVEN (LIVE qualification requires operator-driven dogfood
+            reproduction per ACT §25-26; this Cloud Agent
+            environment does not have a real VS Code host + the
+            operator's UI)
+
+LIVE_ACTIVE_SESSION =
+  UNPROVEN (same reason)
+
+LIVE_GUARD_AVAILABLE =
+  UNPROVEN (same reason)
+
+LIVE_GUARD_RESULT =
+  UNPROVEN (same reason)
+
+LIVE_WRITER =
+  session-event-turn-complete-resumable-straggler-preserve
+  (frozen from BCAFG01 §8)
+
+REPAIR =
+  NONE (per ACT §30, repair is authorized only after
+        LIVE_CAUSE_CAPTURED == true; the LIVE qualification
+        is the operator's responsibility after this ACT's
+        diagnostic build is installed into a real dogfood
+        ClineMM instance)
+
+TURN_HEADER_PROJECTION =
+  CONSERVED (per the diagnostic's zero-semantic-delta contract;
+              capture-disabled path is a complete no-op; verified
+              by the semantic-ablation test in
+              background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts)
+
+SUBMIT_AND_EXIT_PATH =
+  UNCHANGED (the capture diagnostic is at the Q5
+              done-without-completion branch ONLY; the
+              submit_and_exit completion path is in the if
+              branch above and is not touched by this ACT)
+
+TERMINAL_ROW_MUTATION =
+  DEFERRED (UNCHANGED — out of scope per ACT §42 STOP rule)
+
+PATH_P0 =
+  SEPARATE_LANE / UNCHANGED (this ACT does not modify PATH
+                              behavior)
+
+CLASSIFICATION =
+  CAPTURE_INSUFFICIENT (legitimate terminal verdict per ACT §40;
+                        LIVE sub-cause discrimination is the next
+                        ACT's responsibility)
+
+SYNTHETIC_CLASSIFIABLE_SHAPES_PROVEN =
+  OC1_PRODUCER_OWNER_STAMP_DEFECT: PASS (verified by
+                                       background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts)
+  OC2_ACTIVE_SESSION_IDENTITY_DRIFT: PASS (same)
+  MATCHING_OWNER_GREEN_BASELINE: PASS (same)
+
+CONSERVATION =
+  C1..C13 + C14..C19 verified (see
+  .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-
+  CORRELATION-CAPTURE01/15-conservation.txt)
+
+PRODUCTION_SOURCE_CHANGED =
+  YES (8 modified files + 2 new files; all bounded to the
+       diagnostic machinery; zero semantic delta when the
+       capture seam is OFF)
+
+TEST_FILES_ADDED =
+  apps/vscode/src/sdk/__tests__/background-owner-correlation.bocor.test.ts
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-runtime-roundtrip.bocorrt.test.ts
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-dogfood-profile.bocordp.test.ts
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts
+  (44 tests pass; combined focused suite 9 files / 69 tests
+   pass; see 16-green.txt)
+
+DIAGNOSTIC_REMOVAL =
+  NOT_TRIGGERED (per ACT §37 the trigger is the first of:
+                 root cause isolated + repair qualified,
+                 CAPTURE_INSUFFICIENT, better evidence
+                 supersedes it. None has fired yet. The
+                 diagnostic is RETAINED TEMPORARILY for the
+                 next ACT in the lineage to consume the LIVE
+                 BOCOR + TSWPD + screenshot the operator will
+                 produce.)
+
+EVIDENCE_BOUND_TO_FINAL_HEAD = PASS  (HEAD at this ACT)
+BOARD_DURABLE                  = PASS  (this row durably appended)
