@@ -32,27 +32,42 @@ G5: command-job-manager.test.ts (predecessor CommandJobManager tests)
     sandbox cannot spawn real /bin/sh -c "sleep 600" processes.
     NOT a defect introduced by this ACT.
 
-G6: git status (working tree clean except intended changes)
+G6: git status (working tree clean after committing)
   $ git status --short
-   M apps/vscode/src/sdk/background-job-liveness-authority.ts
-   M apps/vscode/src/sdk/command-job-manager.ts
-   M apps/vscode/src/sdk/vscode-session-host.ts
-  ?? .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01/
-  ?? apps/vscode/src/sdk/__tests__/background-cancellation-provenance01.bcp.test.ts
-  → PASS (no unexpected tracked dirt)
+  → (empty)
+  → PASS (committed as 640cc388131ad8071e7a2feccb456c580d1d09a5)
 
 G7: git diff --check (no whitespace / syntax warnings)
   $ git diff --check
   → exit 0
   → PASS
 
-SUMMARY: 5 of 6 gates pass outright; G5 is a pre-existing environmental
+G8: vscode:prepublish (full packaging pipeline — reviewer-required)
+  $ cd apps/vscode && bun run vscode:prepublish
+  → exit 0
+  → ran: sync-parser-helper → check-types → protos →
+    biome format → tsc compat → protos → vite build →
+    biome lint → proto-lint
+  → PASS
+
+G9: vsce package (dogfood VSIX produced and bound — see 09-vsix-identity.txt)
+  $ bunx @vscode/vsce package --no-dependencies \
+      --no-git-tag-version \
+      --out $ROOT/dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix
+  → exit 0
+  → DONE  (51 files, 13.94 MB)
+  → HEAD: 640cc388131ad8071e7a2feccb456c580d1d09a5
+  → SHA-256: 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5
+  → PASS
+
+SUMMARY: 8 of 9 gates pass outright; G5 is a pre-existing environmental
 failure unrelated to this ACT (verified by reproducing on the parent
 commit without my changes).
 
-VERDICT: INSTRUMENTATION QUALIFIED — the new BJLA request-boundary
-capture is fully tested at the unit level. The next step is to build a
-dogfood VSIX, install it, run a fresh `sleep 600` task per ACT sec 15,
-and dump BJLA after Working→Your turn. The job_cancellation_requested.
-requestOrigin in the dump will mechanically classify the requester
-into CP1-CP6.
+VERDICT: DOGFOOD VSIX QUALIFIED. The tree is committed (HEAD
+640cc3881) and the VSIX is built, bound, and ready for LIVE install.
+The next operator step is: install the VSIX, run a fresh `sleep 600`
+task per ACT sec 15, dump BJLA after Working→Your turn. The
+job_cancellation_requested.requestOrigin in the dump will mechanically
+classify the requester (CP1 if background_cancel_rpc, CP2/CP6 if
+extension_shutdown, CP3 if caller_abort_signal).

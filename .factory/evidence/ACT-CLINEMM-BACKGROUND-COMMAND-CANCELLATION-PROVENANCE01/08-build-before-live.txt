@@ -8,13 +8,28 @@ Pre-LIVE gates (ACT sec 27):
   (output: bun run protos && bunx tsc --noEmit && bun run check-types:compat
    && cd webview-ui && bunx tsc --noEmit — all clean)
 
-✓ git status: working tree clean except the intended changes
+✓ git status: working tree clean after committing
   $ git status --short
-   M apps/vscode/src/sdk/background-job-liveness-authority.ts
-   M apps/vscode/src/sdk/command-job-manager.ts
-   M apps/vscode/src/sdk/vscode-session-host.ts
-  ?? .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01/
-  ?? apps/vscode/src/sdk/__tests__/background-cancellation-provenance01.bcp.test.ts
+  → (empty)
+  → HEAD = 640cc388131ad8071e7a2feccb456c580d1d09a5
+
+✓ vscode:prepublish: PASS (reviewer-required gate)
+  $ cd apps/vscode && bun run vscode:prepublish
+  → exit 0
+  → ran: sync-parser-helper → check-types → protos →
+    biome format → tsc compat → protos → vite build →
+    biome lint → proto-lint
+  → dist/extension.js produced (~24.97 MB bundle)
+
+✓ dogfood VSIX packaged and bound
+  $ bunx @vscode/vsce package --no-dependencies --no-git-tag-version \
+      --out $ROOT/dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix
+  → exit 0
+  → 51 files, 13.94 MB
+  → HEAD = 640cc388131ad8071e7a2feccb456c580d1d09a5
+  → SHA-256 = 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5
+  → version = 4.1.16
+  → See 09-vsix-identity.txt for full binding.
 
 ✓ focused BCP tests: PASS (5/5)
   $ bunx vitest run --config vitest.config.ts \

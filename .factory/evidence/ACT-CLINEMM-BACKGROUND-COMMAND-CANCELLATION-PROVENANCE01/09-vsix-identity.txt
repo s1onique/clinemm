@@ -1,0 +1,25 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 09 — VSIX identity
+
+  Source HEAD    : 640cc388131ad8071e7a2feccb456c580d1d09a5
+  Package version: 4.1.16 (from apps/vscode/package.json, unchanged)
+  VSIX filename  : clinemm-4.1.16-bjla-cancellation-provenance01.vsix
+  VSIX path      : /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix
+  VSIX bytes     : 14613072 (13.94 MB)
+  VSIX sha256    : 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5
+  Source package : apps/vscode/package.json "name": "clinemm", "version": "4.1.16"
+
+Built from:
+  - $ bun run vscode:prepublish    (PASS: protos + check-types + webview build + lint + esbuild production)
+  - $ bunx @vscode/vsce package --no-dependencies --no-git-tag-version --out <PATH>
+  - vsce DONE  (51 files, 13.94 MB)
+
+Installed identity binding:
+  When the dogfood VSIX is installed, the operator MUST verify
+  via VS Code → Extensions → ClineMM that the installed version is
+  4.1.16 and the publisher matches the dogfood channel. Record that
+  INSTALLED_VERSION value here on the operator capture pass.
+
+COMMIT-FROZEN identity: any future rebuild that does not come from
+HEAD 640cc388131ad8071e7a2feccb456c580d1d09a5 invalidates this
+binding. Re-run `bun run vscode:prepublish` and `vsce package` from
+the updated HEAD and rebind.

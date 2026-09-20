@@ -2,6 +2,7 @@
   "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01",
   "epistemic_purpose": "causal discriminator with bounded repair authorization",
   "entry_head": "bab253afba4c06ce0f847f08c5718c131561565f",
+  "act_commit_head": "640cc388131ad8071e7a2feccb456c580d1d09a5",
   "live_subject": {
     "job_id": "cmd_mu9v06vyx0bsxj44",
     "pre_cancel_state": "running",
@@ -37,7 +38,8 @@
       "CommandJobManager abortSignal listener → caller_abort_signal"
     ],
     "no_proto_or_webview_wire_changes": true,
-    "no_public_api_changes": true
+    "no_public_api_changes": true,
+    "ui_cancel_rpc_rename": "Renamed to background_cancel_rpc per reviewer correction so the label proves only the public gRPC seam, NOT that the operator pressed the UI button."
   },
   "tests": {
     "bcp_01_05": "PASS (5/5)",
@@ -49,12 +51,14 @@
     "check_types": "PASS",
     "lint": "PASS",
     "git_diff_check": "PASS (no warnings)",
-    "git_status": "EXPECTED (3 files modified, 2 new files)",
+    "git_status": "CLEAN (committed as 640cc388131ad8071e7a2feccb456c580d1d09a5)",
     "bcp_01_05": "PASS",
     "bclas_01_06": "PASS",
     "bocor": "PASS",
-    "command_job_manager_tests": "PRE_EXISTING environmental failures (reproduced on parent commit)"
+    "command_job_manager_tests": "PRE_EXISTING environmental failures (reproduced on parent commit)",
+    "vscode_prepublish": "PASS (full pipeline: protos + check-types + webview build + lint + esbuild production)",
+    "vsce_package": "PASS — produced /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix (51 files, 13.94 MB, SHA-256 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5)"
   },
-  "verdict": "INSTRUMENTATION_QUALIFIED_FOR_LIVE_CAPTURE",
-  "next_step": "Install dogfood VSIX with the new BJLA capture; run a fresh `sleep 600` task per ACT §15; dump BJLA after Working→Your turn transition. The job_cancellation_requested.requestOrigin in the dump will mechanically classify the requester into CP1-CP6."
+  "verdict": "DOGFOOD_VSIX_QUALIFIED_FOR_LIVE_CAPTURE",
+  "next_step": "Install dogfood VSIX (HEAD 640cc3881, version 4.1.16) into the operator's VS Code instance; run a fresh `sleep 600` task per ACT §15; dump BJLA after Working→Your turn transition. The job_cancellation_requested.requestOrigin in the dump will mechanically classify the requester into CP1 (background_cancel_rpc), CP2/CP6 (extension_shutdown), or CP3 (caller_abort_signal)."
 }
