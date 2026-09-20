@@ -1,4 +1,4 @@
-CAPTURED 2026-09-20
+CAPTURED 2026-09-20 (re-verified per reviewer directive)
 
 Gates evaluated for ACT closure:
 
@@ -7,14 +7,23 @@ G1 — RED_WITNESS_PRESERVED:
   at 01-red-witness.txt BEFORE any production edit.
 
 G2 — BOUNDED_REPAIR:
-  PASS — 3 production files edited: chatTypes.ts (+7/-0), and
-  useMessageHandlers.ts (+25/-2). Diff is contained to the
-  cancelBackgroundCommand seam; no unrelated refactors.
+  PASS — 3 production files edited (chatTypes.ts + useMessageHandlers.ts
+  site 570 + useMessageHandlers.ts site 640). Total +33/-6 lines.
+  Diff is contained to the cancelBackgroundCommand seam; no
+  unrelated refactors.
 
 G3 — GREEN_WITNESS_PRESERVED:
-  PASS — `bun run check-types` exits 0 with no TS errors. The
-  5 RED-witness errors are eliminated; per-error resolution map
-  in 02-green-witness.txt.
+  PASS (TWO independent green witnesses):
+    G3a — `bun run check-types` exits 0 (host tsc + compat tsc +
+          webview tsc -b all PASS).
+    G3b — `bun run vscode:prepublish` exits 0 (the actual gate
+          that originally failed). All 5 stages PASS:
+          sync-parser-helper, check-types, build:webview (vite,
+          7208 modules, 9.03s), lint (biome + proto-lint), and
+          esbuild --production (extension.js = 26,177,371 bytes
+          regenerated 2026-09-20 03:18).
+  The 5 RED-witness errors are eliminated; per-error resolution
+  map in 02-green-witness.txt.
 
 G4 — HOST_UNIT_SUITE_NO_REGRESSION:
   PASS — `bun run test:unit` runs 82 files / 1141 tests / 0
@@ -29,25 +38,51 @@ G6 — BOARD_DURABLE:
 
 G7 — ACT_FILES_TRACKED:
   PASS — `factory/acts/ACT-CLINEMM-...-CORRECTION03.md` exists,
-  and the `factory/acts/...-CORRECTION03/` directory holds
-  red-witness-vscode-prepublish.txt + green-witness-vscode-prepublish.txt.
+  and the `factory/acts/...-CORRECTION03/` directory holds the
+  red/green witness files (red-witness-vscode-prepublish.txt,
+  green-witness-vscode-prepublish.txt, AND
+  vscode-prepublish-green-witness.txt for the reviewer-required
+  re-verification).
 
 G8 — INVARIANT_PRESERVED:
   PASS — UI Cancel(jobId) → MessageHandlers(jobId) →
   StringRequest{value: jobId} → exact CommandJob chain is
   intact. The dispatcher does not fabricate a jobId.
 
+G9 — WORKING_TREE_CLEAN_BEFORE_AND_AFTER_GREEN_GATE (new per reviewer):
+  PASS — 2056 untracked `.js`/`.js.map` transpilation residue
+  files (P1) from the RED reproduction step were removed. Each
+  removed file had a corresponding `.ts` source; no source was
+  deleted. `git status` confirmed working tree clean BEFORE
+  AND AFTER the `vscode:prepublish` green gate. The proper
+  prepublish script uses `--noEmit` for tsc, so the green gate
+  does NOT emit residue.
+
+G10 — REPO_HYGIENE (new per reviewer):
+  PASS — `.js`/`.js.map` files are no longer in `apps/vscode/src/`
+  (the residue was created by my prior `bun x tsc -b --force`
+  reproduction; future discriminators should prefer `tsc -b
+  --noEmit` against the project's tsconfig.json that already
+  has noEmit set, OR `bun run check-types` which uses --noEmit
+  for both host and webview). This is the lesson learned; no
+  future red will use `tsc -b --force` without --noEmit.
+
 Final state of the bounded repair (post-CORRECTION03):
 
   CORRECTION02 contract semantics   = PASS / PRESERVED
   BACKGROUND_CANCEL_JOBID           = SOURCE_INTENT_PRESENT
                                       AND BUILD_INTEGRATION_GREEN
+                                      AND VSCODE_PREPUBLISH_GREEN
   HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID
                                     = CLEARED  (re-confirmed by clean
                                                  dogfood build)
-  DOGFOOD_VSCODE_PREPUBLISH         = GREEN
+  HALT_DOGFOOD_BUILD_RED            = RESOLVED_BY_PRODUCTION_INTEGRATION_REPAIR
+                                       AND REPROVEN_BY_VSCODE_PREPUBLISH_GATE
+  HALT_DOGFOOD_PREPUBLISH_NOT_REPROVEN
+                                    = CLEARED  (per reviewer directive)
+  DOGFOOD_VSCODE_PREPUBLISH         = GREEN  (reproven)
   LIVE_OPERATOR_QUALIFICATION       = READY  (rebuild + install VSIX
                                                  then run the
                                                  CORRECTION02 operator
                                                  qualification steps:
-                                                 ⎇ 1 → 0 round-trip)
+                                                 round-trip)

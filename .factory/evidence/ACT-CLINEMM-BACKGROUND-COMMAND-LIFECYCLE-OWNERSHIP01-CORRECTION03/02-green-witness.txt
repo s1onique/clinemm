@@ -1,8 +1,17 @@
-CAPTURED 2026-09-20
+CAPTURED 2026-09-20 (re-verified per reviewer directive)
 
-Command:
-  cd apps/vscode && bun run check-types
+The original CORRECTION03 closure evidence was `bun run check-types`.
+Per the reviewer's `HALT_DOGFOOD_PREPUBLISH_NOT_REPROVEN` verdict,
+the actual gate that originally failed was `bun run vscode:prepublish`
+(which is broader than check-types — it also runs the webview
+production build, lint, and production esbuild).
 
+This file now documents BOTH green witnesses:
+
+=============================================================
+GREEN WITNESS 1 — `bun run check-types` (original)
+=============================================================
+Command: cd apps/vscode && bun run check-types
 Sequence executed (from check-types script):
   - protos (node scripts/build-proto.mjs)
   - biome format --write on src/shared/proto, src/core/controller,
@@ -11,14 +20,59 @@ Sequence executed (from check-types script):
   - bunx tsc --project tsconfig.vscode-compat.json --noEmit
   - cd webview-ui && bunx tsc --noEmit (= `tsc -b` on
     tsconfig.app.json + tsconfig.node.json)
-
 Result: EXIT=0 (no errors)
 
-The 5 RED-witness errors are no longer emitted.
+=============================================================
+GREEN WITNESS 2 — `bun run vscode:prepublish` (the actual RED gate)
+=============================================================
+Command: cd apps/vscode && bun run vscode:prepublish
+Pre-conditions:
+  - 2056 untracked `.js`/`.js.map` transpilation residue files in
+    `apps/vscode/src/` (from the RED reproduction step) removed.
+    Each residue had a corresponding `.ts` source; cleanup did NOT
+    delete any source.
+  - Working tree clean (git status: nothing to commit).
+Sequence executed (the `package` script invoked by vscode:prepublish):
+  - bun run sync-parser-helper: "copied 5 platform binaries"
+  - bun run check-types: EXIT=0 (4 sub-stages, all PASS)
+  - bun run build:webview: vite v7.3.6; 7208 modules transformed;
+    built in 9.03s; assets/index.js = 9,548.59 kB
+  - bun run lint: biome lint 1897 files clean; proto-lint OK
+  - bun esbuild.mjs --production:
+    apps/vscode/dist/extension.js (26,177,371 bytes) regenerated
+    at 2026-09-20 03:18
+Result: EXIT=0
 
-Additional verification — host unit suite:
-  cd apps/vscode && bun run test:unit
-  → 82 files / 1141 tests / 0 failures / 44.8s
+Post-conditions:
+  - apps/vscode/dist/extension.js current (rebuilt by this run)
+  - apps/vscode/webview-ui/build/* current
+  - git status: working tree clean (no new residue emitted)
+
+=============================================================
+ADDITIONAL VERIFICATION — host unit suite (no regression)
+=============================================================
+Command: cd apps/vscode && bun run test:unit
+Result: 82 files / 1141 tests / 0 failures / 44.8s
+
+=============================================================
+PER-ERROR RESOLUTION MAP (original 5 RED errors absent from GREEN)
+=============================================================
+  1. TS2339 cancelBackgroundCommandByJobId does not exist
+     (MessagesArea.tsx:237, MessageRenderer.tsx:112,
+      useMessageHandlers.ts:653)
+     RESOLVED — MessageHandlers interface now declares the method.
+
+  2. TS2345 EmptyRequest → StringRequest
+     (useMessageHandlers.ts:570, 640)
+     RESOLVED — both sites now emit StringRequest shapes.
+
+=============================================================
+HALT TAXONOMY UPDATE
+=============================================================
+  HALT_DOGFOOD_BUILD_RED               = RESOLVED_BY_PRODUCTION_INTEGRATION_REPAIR
+                                         AND REPROVEN_BY_VSCODE_PREPUBLISH_GATE
+  HALT_DOGFOOD_PREPUBLISH_NOT_REPROVEN = CLEARED  (per reviewer directive)
+  HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID = CLEARED  (re-confirmed)
 
 Per-error resolution map:
 

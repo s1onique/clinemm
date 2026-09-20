@@ -18,16 +18,29 @@
   "diff_stat": "03-diff-stat.txt",
   "conservation": "04-conservation.txt",
   "gates": "05-gates.txt",
+  "vscode_prepublish_witness": "../../../factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/vscode-prepublish-green-witness.txt",
   "verification": {
     "red": {
       "command": "cd apps/vscode/webview-ui && bun x tsc -b --force --pretty false",
       "errors": 5,
       "exit_code": 2
     },
-    "green": {
+    "green_1_check_types": {
       "command": "cd apps/vscode && bun run check-types",
       "errors": 0,
       "exit_code": 0
+    },
+    "green_2_vscode_prepublish_actual_red_gate": {
+      "command": "cd apps/vscode && bun run vscode:prepublish",
+      "errors": 0,
+      "exit_code": 0,
+      "stages": [
+        {"stage": "sync-parser-helper", "result": "PASS (copied 5 platform binaries)"},
+        {"stage": "check-types", "result": "EXIT=0 (host tsc + compat tsc + webview tsc -b all PASS)"},
+        {"stage": "build:webview", "result": "PASS (vite v7.3.6, 7208 modules transformed, built in 9.03s, index.js = 9,548.59 kB)"},
+        {"stage": "lint", "result": "PASS (biome lint 1897 files clean; proto-lint OK)"},
+        {"stage": "esbuild --production", "result": "PASS (apps/vscode/dist/extension.js = 26,177,371 bytes regenerated 2026-09-20 03:18)"}
+      ]
     },
     "host_unit_suite": {
       "command": "cd apps/vscode && bun run test:unit",
@@ -37,22 +50,40 @@
       "duration_seconds": 44.8
     }
   },
+  "residue_cleanup": {
+    "files_removed": 2056,
+    "files_pattern": ".js and .js.map (transpilation emission from the RED reproduction step)",
+    "verification": "Every removed file had a corresponding .ts source. The companion .ts files were not touched.",
+    "post_cleanup_status": "git status: working tree clean",
+    "post_prepublish_status": "git status: working tree clean (no new residue emitted by vscode:prepublish)"
+  },
   "verdict": {
     "correction02_contract_semantics": "PASS / PRESERVED",
-    "background_cancel_jobid": "SOURCE_INTENT_PRESENT AND BUILD_INTEGRATION_GREEN",
+    "background_cancel_jobid": "SOURCE_INTENT_PRESENT AND BUILD_INTEGRATION_GREEN AND VSCODE_PREPUBLISH_GREEN",
     "halt_runtime_descriptor_loss_of_jobid": "CLEARED",
-    "dogfood_vscode_prepublish": "GREEN",
-    "live_operator_qualification": "READY (rebuild + install VSIX then run the CORRECTION02 operator qualification steps: ⎇ 1 → 0 round-trip)"
+    "halt_dogfood_build_red": "RESOLVED_BY_PRODUCTION_INTEGRATION_REPAIR AND REPROVEN_BY_VSCODE_PREPUBLISH_GATE",
+    "halt_dogfood_prepublish_not_reproven": "CLEARED",
+    "dogfood_vscode_prepublish": "GREEN (reproven by green_2_vscode_prepublish_actual_red_gate)",
+    "live_operator_qualification": "READY (rebuild VSIX from dist/ output of this run; install; run the CORRECTION02 round-trip qualification)"
   },
   "halt_taxonomy": {
-    "halt_dogfood_build_red": "RESOLVED_BY_PRODUCTION_INTEGRATION_REPAIR"
+    "halt_dogfood_build_red": "RESOLVED_BY_PRODUCTION_INTEGRATION_REPAIR AND REPROVEN_BY_VSCODE_PREPUBLISH_GATE",
+    "halt_dogfood_prepublish_not_reproven": "CLEARED",
+    "halt_runtime_descriptor_loss_of_jobid": "CLEARED"
   },
   "constraint_preserved": {
     "proto_rpc_unchanged": true,
     "cancelBackgroundCommand_signature": "cancelBackgroundCommand(StringRequest) returns (Empty)",
-    "no_empty_request_reintroduction": true
+    "no_empty_request_reintroduction": true,
+    "reviewer_constraint_no_revert_to_empty_request": true
+  },
+  "reviewer_followup": {
+    "verdict": "HALT_DOGFOOD_PREPUBLISH_NOT_REPROVEN",
+    "resolution": "Cleared by re-running the actual failing gate `bun run vscode:prepublish` from a cleaned tree and capturing the EXIT=0 result.",
+    "residue_classification": "P1 (RED witness command emitted repository residue)",
+    "residue_resolution": "Removed only the emitted untracked .js/.js.map files; no source deleted; working tree clean before and after the green gate."
   },
   "next_authorized": [
-    "Resume CORRECTION02 operator qualification steps (live ⎇ 1 → 0 round-trip)"
+    "Resume CORRECTION02 operator qualification steps (live backgrounded-command cancel round-trip)"
   ]
 }

@@ -4463,3 +4463,107 @@ COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/green-witness-vscode-prepublish.txt):
 **BOARD_DURABLE**                = PASS  (this row committed; ACT bodies
                                               + evidence + result.json
                                               all durably tracked)
+
+Updated: 2026-09-20 ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03
+amendment — REPROVEN_VSCODE_PREPUBLISH_GATE_AND_RESIDUE_CLEANUP — Per
+Factory reviewer's `HALT_DOGFOOD_PREPUBLISH_NOT_REPROVEN` verdict on
+commit `bac1c4423`: the original CORRECTION03 closure evidence was
+`bun run check-types`, which the reviewer correctly noted is NOT
+equivalent to the actual gate that originally failed
+(`bun run vscode:prepublish`). The two scripts differ:
+
+  - `check-types`: `protos → biome format → tsc --noEmit →
+    tsc compat → cd webview-ui && tsc --noEmit`
+  - `vscode:prepublish` (= `bun run package`):
+    `sync-parser-helper → check-types → build:webview → lint →
+    esbuild --production`
+
+The latter additionally exercises the vite production build
+(7208 modules), the proto-lint watcher, and the production
+esbuild bundling of `dist/extension.js`.
+
+**Residue cleanup (P1 from reviewer):**
+
+  Before this amendment the working tree had 2056 untracked
+  `.js` / `.js.map` files in `apps/vscode/src/`. These were
+  transpilation residue from the RED reproduction step
+  (`bun x tsc -b --force` invoked WITHOUT `--noEmit` against
+  the source tree).
+
+  Cleanup verification:
+    - Each removed file had a corresponding `.ts` source. The
+      `.ts` files were preserved; only the transpilation
+      emissions were deleted.
+    - Two embedded-UTF-8 paths
+      (`apps/vscode/src/sdk/__tests__/probe-workers/§4-three-point/worker.{js,js.map}`)
+      were removed by literal-path `rm -f`. The companion
+      `worker.ts` remains.
+    - `git status` after cleanup: working tree clean.
+
+  Future-discriminator note: prefer `bun run check-types`
+  (which uses `--noEmit` for both host and webview tsc) over
+  `bun x tsc -b --force` for RED reproduction. The proper
+  `vscode:prepublish` script does NOT pollute the source tree.
+
+**Reproven green gate:**
+
+  After the cleanup, `cd apps/vscode && bun run vscode:prepublish`
+  was run from the cleaned tree and EXIT=0. All 5 stages of
+  the `package` script PASSED:
+
+    1. sync-parser-helper: "copied 5 platform binaries"
+    2. check-types: EXIT=0 (host + compat + webview tsc -b PASS)
+    3. build:webview: vite v7.3.6, 7208 modules, built in 9.03s,
+       assets/index.js = 9,548.59 kB
+    4. lint: biome lint 1897 files clean; proto-lint OK
+    5. esbuild --production: apps/vscode/dist/extension.js
+       (26,177,371 bytes) regenerated 2026-09-20 03:18
+
+  Post-run `git status` re-confirmed working tree clean
+  (the proper prepublish script does not emit residue).
+
+**Updated halt taxonomy (post-amendment):**
+
+  CORRECTION02 contract semantics    = PASS / PRESERVED
+  BACKGROUND_CANCEL_JOBID            = SOURCE_INTENT_PRESENT
+                                       AND BUILD_INTEGRATION_GREEN
+                                       AND VSCODE_PREPUBLISH_GREEN
+  HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID
+                                     = CLEARED
+  HALT_DOGFOOD_BUILD_RED             = RESOLVED_BY_PRODUCTION_INTEGRATION_REPAIR
+                                       AND REPROVEN_BY_VSCODE_PREPUBLISH_GATE
+  HALT_DOGFOOD_PREPUBLISH_NOT_REPROVEN
+                                     = CLEARED  (per reviewer directive)
+  P1_RED_WITNESS_EMITTED_REPO_RESIDUE
+                                     = CLEARED  (2056 .js/.js.map files
+                                                  deleted; source preserved)
+  DOGFOOD_VSCODE_PREPUBLISH          = GREEN  (reproven)
+  LIVE_OPERATOR_QUALIFICATION        = READY  (rebuild VSIX from the
+                                                dist/ output of this run;
+                                                install; run the
+                                                CORRECTION02 round-trip)
+
+**Files updated this amendment:**
+- `.factory/epic-board.md` (this amendment row)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/02-green-witness.txt`
+  (now documents BOTH green witnesses: check-types AND vscode:prepublish)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/05-gates.txt`
+  (added G9 working-tree-clean-before-and-after-green-gate,
+  G10 repo-hygiene / future-discriminator note)
+- `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/result.json`
+  (now records green_1_check_types + green_2_vscode_prepublish_actual_red_gate
+  + residue_cleanup + reviewer_followup sections)
+- `factory/acts/ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION03/vscode-prepublish-green-witness.txt`
+  (NEW: full vscode:prepublish EXIT=0 evidence)
+
+**No production code changed in this amendment.** This is
+strictly an evidence completion: the same production repair
+from `bac1c4423` is preserved; the GREEN gate is now
+reproven by the actual `vscode:prepublish` script (not just
+`check-types`).
+
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (HEAD at this amendment)
+**BOARD_DURABLE**                = PASS  (this amendment row
+                                              durably appended;
+                                              no production code
+                                              re-touched)

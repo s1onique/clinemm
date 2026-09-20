@@ -1,0 +1,92 @@
+CAPTURED 2026-09-20 (CORRECTION03 reviewer-authorized re-verification)
+
+Command:
+  cd apps/vscode
+  bun run vscode:prepublish
+
+Result: EXIT=0 (after a clean working tree; see residue-cleanup below)
+
+The `vscode:prepublish` script runs:
+  bun run sync-parser-helper
+  && bun run check-types
+  && bun run build:webview
+  && bun run lint
+  && bun esbuild.mjs --production
+
+Each stage of the chain PASSED:
+  1. sync-parser-helper:
+     "copied 5 platform binaries"
+  2. check-types:
+     "bun run protos && bunx tsc --noEmit && bun run check-types:compat &&
+      cd webview-ui && bunx tsc --noEmit"
+     — both protos regeneration cycles succeeded (24 proto files)
+     — both biome format passes succeeded (Formatted 329 files)
+     — host tsc + compat tsc + webview tsc -b all EXIT=0
+  3. build:webview:
+     "Building webview for vscode"
+     "vite v7.3.6 building client environment for production..."
+     "✓ 7208 modules transformed."
+     "✓ built in 9.03s"
+     (index.js = 9,548.59 kB; index.css = 135.54 kB; codicon.ttf + 7 woff2)
+  4. lint:
+     biome lint: "Checked 1897 files in 934ms. No fixes applied."
+     proto-lint: "[watch] build started [watch] build finished"
+  5. esbuild --production:
+     apps/vscode/dist/extension.js (26,177,371 bytes) regenerated
+     at 2026-09-20 03:18 — proves the esbuild production bundle
+     succeeded end-to-end.
+
+RESIDUE-CLEANUP (pre-gate):
+  Before running `bun run vscode:prepublish`, 2056 untracked
+  `.js` / `.js.map` files were present in `apps/vscode/src/`.
+  These were `tsc -b --force` transpilation residue from the RED
+  reproduction step (the reviewer noted:
+  `bun x tsc -b --force` without `--noEmit` is the source).
+
+  Cleanup verified:
+    - Each residue file has a corresponding `.ts` source (the
+      residue is purely transpilation emission, no real source
+      was deleted).
+    - `git status` after cleanup: working tree clean.
+    - The two embedded-UTF-8 paths
+      (`apps/vscode/src/sdk/__tests__/probe-workers/§4-three-point/worker.{js,js.map}`)
+      were deleted by literal-path `rm -f`. The companion
+      `worker.ts` remains.
+
+  After `vscode:prepublish` ran, `git status` was re-checked:
+  still working tree clean (0 untracked files). The proper
+  `vscode:prepublish` script uses `--noEmit` for tsc, so it
+  does NOT pollute the source tree.
+
+PER-ERROR RESOLUTION MAP (the original 5 RED errors are absent
+from the GREEN log; no new errors were emitted):
+
+  - TS2339 cancelBackgroundCommandByJobId does not exist
+    (MessagesArea.tsx:237, MessageRenderer.tsx:112,
+     useMessageHandlers.ts:653)
+    RESOLVED — MessageHandlers interface in
+    apps/vscode/webview-ui/src/components/chat/chat-view/types/chatTypes.ts
+    declares `cancelBackgroundCommandByJobId`.
+
+  - TS2345 EmptyRequest → StringRequest
+    (useMessageHandlers.ts:570, 640)
+    RESOLVED — both sites now emit StringRequest shapes
+    (570: empty value for streaming-cancel fallback; 640: real
+    jobId for card-level dispatcher).
+
+VERDICT:
+  DOGFOOD_VSCODE_PREPUBLISH = GREEN  (this witness; the original
+                                       RED gate is now PASS)
+
+  HALT_DOGFOOD_BUILD_RED                  = RESOLVED_BY_PRODUCTION_INTEGRATION_REPAIR
+                                            AND REPROVEN_BY_VSCODE_PREPUBLISH_GATE
+  HALT_DOGFOOD_PREPUBLISH_NOT_REPROVEN    = CLEARED  (per reviewer
+                                                       directive)
+  HALT_RUNTIME_DESCRIPTOR_LOSS_OF_JOBID    = CLEARED  (re-confirmed)
+  LIVE_OPERATOR_QUALIFICATION              = READY    (rebuild VSIX
+                                                       from the dist/
+                                                       output of this
+                                                       run; install;
+                                                       run the CORRECTION02
+                                                       ⎇ 1 → 0
+                                                       round-trip)
