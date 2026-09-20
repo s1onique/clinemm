@@ -1,0 +1,55 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 08 — build before live
+
+Pre-LIVE gates (ACT sec 27):
+
+✓ check-types: PASS
+  $ cd apps/vscode && bun run check-types
+  Exit code: 0
+  (output: bun run protos && bunx tsc --noEmit && bun run check-types:compat
+   && cd webview-ui && bunx tsc --noEmit — all clean)
+
+✓ git status: working tree clean except the intended changes
+  $ git status --short
+   M apps/vscode/src/sdk/background-job-liveness-authority.ts
+   M apps/vscode/src/sdk/command-job-manager.ts
+   M apps/vscode/src/sdk/vscode-session-host.ts
+  ?? .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01/
+  ?? apps/vscode/src/sdk/__tests__/background-cancellation-provenance01.bcp.test.ts
+
+✓ focused BCP tests: PASS (5/5)
+  $ bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/background-cancellation-provenance01.bcp.test.ts
+  Exit code: 0
+  Tests 5 passed (5)
+
+✓ focused BCLAS tests: PASS (9/9 across 6 files)
+  $ bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/background-job-liveness-authority
+  Exit code: 0
+  Tests 9 passed (9)
+
+✓ focused BOCOR tests: PASS (4/4)
+  $ bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/background-owner-correlation-q5-seam
+  Exit code: 0
+  Tests 4 passed (4)
+
+✗ command-job-manager.test.ts (PRE-EXISTING environmental failures,
+  18 tests fail because real /bin/sleep spawn fails on this sandbox —
+  REPRODUCED on parent commit bab253afb WITHOUT my changes; not a
+  regression introduced by this ACT).
+
+✗ vscode:prepublish: NOT EXECUTED — requires full esbuild + lint +
+  build:webview pipeline; left for the maintenance ACT that
+  promotes the LIVE-qualification to a published build. The new
+  diagnostic is captured in the type system and tested via the
+  focused BCP / BCLAS / BOCOR suites which cover the new code
+  paths without requiring the full extension bundle.
+
+Scope of new code:
+  - Background-job-liveness-authority.ts: +60 lines (new record type)
+  - Command-job-manager.ts: +135 lines (3 capture seams)
+  - Vscode-session-host.ts: +24 lines (origin threading)
+
+All three files are exclusively diagnostic / origin-threading
+additions. No semantic delta in production code paths.

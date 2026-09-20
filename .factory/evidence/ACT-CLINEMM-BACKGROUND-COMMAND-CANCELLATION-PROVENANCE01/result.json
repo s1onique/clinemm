@@ -1,0 +1,60 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01",
+  "epistemic_purpose": "causal discriminator with bounded repair authorization",
+  "entry_head": "bab253afba4c06ce0f847f08c5718c131561565f",
+  "live_subject": {
+    "job_id": "cmd_mu9v06vyx0bsxj44",
+    "pre_cancel_state": "running",
+    "terminal_state": "cancelled",
+    "cleanup_postcondition": "gone",
+    "active_remove_reason": "cancel",
+    "operator_clicked_cancel": false,
+    "evidence_class": "LIVE"
+  },
+  "cancellation": {
+    "request_origin": "UNRESOLVED",
+    "manager_instance": "M2",
+    "host_instance": null,
+    "session_id": null,
+    "task_id": null
+  },
+  "classification": "CAPTURE_INSUFFICIENT",
+  "causality": {
+    "established": false,
+    "ablation": "NOT_EXECUTED"
+  },
+  "diagnostic_changes": {
+    "new_record_type": "job_cancellation_requested",
+    "internal_origin_threading": [
+      "commandJobManager.cancel({origin?})",
+      "commandJobManager.dispose(origin?)",
+      "commandJobManager.terminate(_origin?)"
+    ],
+    "production_caller_origins": [
+      "VscodeSessionHost.cancelBackgroundCommand → background_cancel_rpc",
+      "VscodeSessionHost.dispose → extension_shutdown",
+      "CommandJobManager deadline timer → command_deadline",
+      "CommandJobManager abortSignal listener → caller_abort_signal"
+    ],
+    "no_proto_or_webview_wire_changes": true,
+    "no_public_api_changes": true
+  },
+  "tests": {
+    "bcp_01_05": "PASS (5/5)",
+    "bclas_01_06": "PASS (9/9)",
+    "bocor": "PASS (4/4)",
+    "command_job_manager_tests": "PRE_EXISTING environmental failures (reproduced on parent commit bab253afb)"
+  },
+  "gates": {
+    "check_types": "PASS",
+    "lint": "PASS",
+    "git_diff_check": "PASS (no warnings)",
+    "git_status": "EXPECTED (3 files modified, 2 new files)",
+    "bcp_01_05": "PASS",
+    "bclas_01_06": "PASS",
+    "bocor": "PASS",
+    "command_job_manager_tests": "PRE_EXISTING environmental failures (reproduced on parent commit)"
+  },
+  "verdict": "INSTRUMENTATION_QUALIFIED_FOR_LIVE_CAPTURE",
+  "next_step": "Install dogfood VSIX with the new BJLA capture; run a fresh `sleep 600` task per ACT §15; dump BJLA after Working→Your turn transition. The job_cancellation_requested.requestOrigin in the dump will mechanically classify the requester into CP1-CP6."
+}

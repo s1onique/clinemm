@@ -1,0 +1,38 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 15 — causal classification
+
+CLASSIFICATION: CAPTURE_INSUFFICIENT (per ACT §32 — LIVE evidence not yet
+captured; instrumentation qualified, awaits LIVE dogfood install).
+
+Recon-based pre-classification (per ACT §5):
+
+  Three production callers of manager.terminate(reason="cancel") exist:
+    (a) VscodeSessionHost.cancelBackgroundCommand  → origin="background_cancel_rpc"     → CP1
+    (b) VscodeSessionHost.dispose loop            → origin="extension_shutdown" → CP6
+    (c) Caller-supplied AbortSignal               → origin="caller_abort_signal"→ CP3
+
+  CP2 (manager_dispose) is the legacy dispose-loop caller with NO
+  production callers in the current code base. The host.dispose chain
+  is the ONLY production caller of commandJobManager.dispose().
+
+  CP4 (command_deadline) is distinct — it sets reason="deadline" not
+  reason="cancel", so the LIVE evidence's "cancel" reason already
+  refutes CP4 at the record level (job_active_removed.reason="cancel"
+  not "deadline").
+
+  CP5 (tool_cleanup) has NO production caller in the recon that
+  cancels a registered background CommandJob on tool cleanup.
+
+Most-likely classification (probability ordering, BEFORE LIVE):
+  1. CP1 — unexpected background_cancel_rpc (most likely; the LIVE
+     operator did not click Cancel, but a programmatic caller of the
+     public cancelBackgroundCommand gRPC seam could fire it — e.g. an
+     automatic "old command vs. new command pending" cleanup path
+     along the lines of cline/cline#8251)
+  2. CP6 — extension_shutdown (least likely; the task/session remained
+     visible to the operator, so the controller was not disposed)
+  3. CP3 — caller_abort_signal (least likely; the run_commands tool
+     does NOT currently pass context.signal for background jobs)
+
+The next LIVE run will deterministically resolve this classification by
+inspecting the job_cancellation_requested.requestOrigin field in the
+BJLA dump.

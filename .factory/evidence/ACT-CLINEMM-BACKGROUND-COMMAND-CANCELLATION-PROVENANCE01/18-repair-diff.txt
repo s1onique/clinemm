@@ -1,0 +1,17 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 18 — repair diff
+
+REPAIR: NONE PERFORMED IN THIS ACT.
+
+Per ACT §18, repair requires:
+
+  LIVE_REQUEST_ORIGIN_CAPTURED = true
+  CAUSAL_CALLER_IDENTIFIED     = true
+  ABLATION                     = PASS
+  REPAIR_SEAM                  = bounded
+
+Only `LIVE_REQUEST_ORIGIN_CAPTURED` is false at this ACT's
+closure — the diagnostic is qualified and tested, but the LIVE
+dump has not yet been captured. The next ACT step (dogfood VSIX
+install + LIVE run + dump) will resolve this.
+
+REPAIR: DEFERRED TO NEXT ACT (LIVE CAPTURE REQUIRED).

@@ -129,6 +129,7 @@ export type BackgroundJobLivenessAuthorityRecord =
 	| BackgroundJobLivenessAuthorityJobCancelLookupRecord
 	| BackgroundJobLivenessAuthorityBackgroundStateChangePublishedRecord
 	| BackgroundJobLivenessAuthorityJobLifecycleEventPublishedRecord
+	| BackgroundJobLivenessAuthorityJobCancellationRequestedRecord
 
 export interface BackgroundJobLivenessAuthorityManagerConstructedRecord {
 	readonly event: "manager_constructed"
@@ -267,6 +268,65 @@ export interface BackgroundJobLivenessAuthorityJobLifecycleEventPublishedRecord 
 	readonly managerInstance: string | null
 	readonly eventName: CommandJobLifecycleEvent["event"]
 	readonly jobId: string
+}
+
+/**
+ * ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+ *
+ * Captured at the REQUEST BOUNDARY of every cancellation — BEFORE
+ * `CommandJobManager.terminate()` mutates any state. The `requestOrigin`
+ * is THREADED by the production caller as an internal-only second
+ * argument (see `CancelCommandJobOptions.origin`,
+ * `CommandJobManager.dispose(origin?)`). It is NEVER inferred from
+ * `new Error().stack`.
+ *
+ * The `firstWriterWins` field is true iff this request initiated the
+ * termination (i.e. it was the FIRST caller). A subsequent cancel
+ * arriving after the deadline fired would observe `firstWriterWins=false`
+ * because the FIRST-WRITER-WINS latch on `job.terminationPromise` would
+ * already be set. That invariant is preserved so a single LIVE cycle
+ * produces exactly ONE authoritative request-origin record, matching
+ * the cardinality invariant in ACT sec 13.
+ *
+ * Allowed `requestOrigin` values (frozen by recon — see
+ * 03-cancellation-authority-map.md):
+ *
+ *   "background_cancel_rpc"  — public cancelBackgroundCommand gRPC path
+ *   "manager_dispose"        — CommandJobManager.dispose() iterate-active loop
+ *   "extension_shutdown"     — host.dispose via lifecycle.dispose via controller.dispose
+ *   "command_deadline"       — deadline timer fired inside manager.start
+ *   "caller_abort_signal"    — caller's AbortSignal aborted inside manager.start
+ *   "other:<bounded id>"     — bounded escape hatch (e.g. "other:test")
+ *
+ * INTERNAL ONLY — never enters proto / webview / public API.
+ */
+export interface BackgroundJobLivenessAuthorityJobCancellationRequestedRecord {
+	readonly event: "job_cancellation_requested"
+	readonly capturedAt: number
+	readonly managerInstance: string | null
+	readonly hostInstance: string | null
+	readonly jobId: string
+	/**
+	 * Explicit caller identity, threaded by the production caller as
+	 * an internal-only option. Never inferred from a stack trace.
+	 */
+	readonly requestOrigin: string
+	/**
+	 * Session/task correlation when the caller passed it through.
+	 * Null when the caller has no session/task binding (e.g.
+	 * deadline timer).
+	 */
+	readonly sessionId: string | null
+	readonly taskId: string | null
+	readonly currentState: CommandJobState
+	/**
+	 * True iff THIS request initiated the termination. A subsequent
+	 * cancel arriving after the deadline/previous-cancel fired would
+	 * observe `firstWriterWins=false` (gated by `job.terminationPromise`).
+	 * The cardinality invariant is that exactly ONE primary
+	 * `job_cancellation_requested` per LIVE cycle has `firstWriterWins=true`.
+	 */
+	readonly firstWriterWins: boolean
 }
 
 // -----------------------------------------------------------------------------

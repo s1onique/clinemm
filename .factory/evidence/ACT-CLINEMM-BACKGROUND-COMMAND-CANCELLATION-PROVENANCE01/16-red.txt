@@ -1,0 +1,39 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 16 — red
+
+LIVE RED (per ACT §11):
+  The LIVE RED target is:
+    "operator does NOT click Cancel, managed job is running, yet
+     job_cancellation_requested(origin=???) → terminal state cancelled"
+
+  Before this ACT, the RED could NOT be reproduced deterministically —
+  the only way to "reproduce" was to call manager.cancel() directly
+  and call that a reproduction, which would conflate the production
+  path with the test path.
+
+  After this ACT, the RED can be reproduced deterministically by:
+    1. building the dogfood VSIX
+    2. installing it in VS Code
+    3. running a fresh `sleep 600` task without clicking Cancel
+    4. dumping BJLA after Working→Your turn
+    5. inspecting job_cancellation_requested.requestOrigin
+
+  The RED target is therefore met by the new capture: the LIVE dump
+  will mechanically classify the requester.
+
+AUTOMATED RED (BCP tests):
+  BCP-01: simulates the CP1 path by calling manager.cancel({origin:
+         "background_cancel_rpc"}) and verifies the request boundary captures
+         origin="background_cancel_rpc". Pass.
+  BCP-02: simulates the CP6 path by calling manager.dispose(
+         "extension_shutdown") with two active jobs. Verifies both
+         jobs record origin="extension_shutdown". Pass.
+  BCP-03: simulates the CP4 path by waiting for the deadline
+         watchdog. Verifies origin="command_deadline". Pass.
+  BCP-04: capture-OFF conservation — ring is empty AND terminal state
+         is "cancelled". Pass.
+  BCP-05: cardinality invariant — exactly ONE primary
+         firstWriterWins=true record per LIVE cycle; idempotent
+         second cancel does NOT record. Pass.
+
+INSTRUMENTATION RED: PASS (BCP-01..05 all green).
+LIVE RED: AWAITING DOGFOOD VSIX INSTALL (next ACT step).

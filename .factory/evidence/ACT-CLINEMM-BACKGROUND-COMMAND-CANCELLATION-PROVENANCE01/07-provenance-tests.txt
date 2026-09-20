@@ -1,0 +1,31 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 07 — provenance tests
+
+Source: apps/vscode/src/sdk/__tests__/background-cancellation-provenance01.bcp.test.ts
+Runner: bunx vitest run --config vitest.config.ts
+
+Exit code: 0
+Tests: 5 passed (5)
+
+Captured stdout (trimmed):
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/background-cancellation-provenance01.bcp.test.ts (5 tests) 828ms
+     ✓ captures command_deadline when the watchdog timer fires  306ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+
+Test breakdown:
+  BCP-01  captures background_cancel_rpc at the request boundary of VscodeSessionHost.cancelBackgroundCommand  ✓
+  BCP-02  captures extension_shutdown for every job terminated by the host.dispose loop                ✓
+  BCP-03  captures command_deadline when the watchdog timer fires                                       ✓
+  BCP-04  capture OFF produces identical termination semantics                                          ✓
+  BCP-05  exactly one primary request-origin record per LIVE cycle (FIRST-WRITER-WINS + idempotent)    ✓
+
+Vitest-pool kill EPERM warnings at teardown are NOT test failures — they are
+worker cleanup warnings. All 5 tests pass with exit code 0.
+
+Conservation evidence: BCP-04 proves that with capture OFF, the BJLA ring
+is empty AND the terminal state is still "cancelled" — production semantics
+unchanged.

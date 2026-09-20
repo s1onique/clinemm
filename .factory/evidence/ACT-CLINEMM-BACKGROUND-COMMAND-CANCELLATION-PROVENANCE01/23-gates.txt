@@ -1,0 +1,58 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 23 — gates
+
+G1: check-types
+  $ cd apps/vscode && bun run check-types
+  → exit 0
+  → PASS
+
+G2: BCP tests (new — covers the cancellation request boundary)
+  $ bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/background-cancellation-provenance01.bcp.test.ts
+  → 5 passed (5)
+  → PASS
+
+G3: BCLAS tests (predecessor BJLA diagnostic — must still pass)
+  $ bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/background-job-liveness-authority
+  → 9 passed (9 across 6 files)
+  → PASS
+
+G4: BOCOR tests (Q5 owner correlation — must still pass)
+  $ bunx vitest run --config vitest.config.ts \
+      src/sdk/__tests__/background-owner-correlation-q5-seam
+  → 4 passed (4)
+  → PASS
+
+G5: command-job-manager.test.ts (predecessor CommandJobManager tests)
+  $ bunx vitest run --config vitest.config.ts \
+      src/sdk/command-job-manager.test.ts
+  → 18 failed | 2 passed (20) — pre-existing environmental failures
+  → NOT A REGRESSION (reproduced on parent commit bab253afb).
+    The 18 failures all fail with "spawn_failed" because the test
+    sandbox cannot spawn real /bin/sh -c "sleep 600" processes.
+    NOT a defect introduced by this ACT.
+
+G6: git status (working tree clean except intended changes)
+  $ git status --short
+   M apps/vscode/src/sdk/background-job-liveness-authority.ts
+   M apps/vscode/src/sdk/command-job-manager.ts
+   M apps/vscode/src/sdk/vscode-session-host.ts
+  ?? .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01/
+  ?? apps/vscode/src/sdk/__tests__/background-cancellation-provenance01.bcp.test.ts
+  → PASS (no unexpected tracked dirt)
+
+G7: git diff --check (no whitespace / syntax warnings)
+  $ git diff --check
+  → exit 0
+  → PASS
+
+SUMMARY: 5 of 6 gates pass outright; G5 is a pre-existing environmental
+failure unrelated to this ACT (verified by reproducing on the parent
+commit without my changes).
+
+VERDICT: INSTRUMENTATION QUALIFIED — the new BJLA request-boundary
+capture is fully tested at the unit level. The next step is to build a
+dogfood VSIX, install it, run a fresh `sleep 600` task per ACT sec 15,
+and dump BJLA after Working→Your turn. The job_cancellation_requested.
+requestOrigin in the dump will mechanically classify the requester
+into CP1-CP6.

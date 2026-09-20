@@ -503,7 +503,17 @@ export class VscodeSessionHost implements SdkSessionHost {
 		if (targetIds.length === 0) {
 			return 0
 		}
-		const results = await Promise.all(targetIds.map((id) => this.commandJobManager.cancel({ jobId: id })))
+		// ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+		// Thread the explicit caller identity "background_cancel_rpc"
+		// for the BJLA request-boundary capture. This labels the PUBLIC
+		// cancelBackgroundCommand gRPC path — it does NOT claim the
+		// operator pressed the UI button. A programmatic caller (e.g.
+		// an automatic "old command vs. new command pending" cleanup)
+		// hitting the same gRPC seam will also be labelled here; that
+		// distinction is exactly the upward discriminator we want.
+		const results = await Promise.all(
+			targetIds.map((id) => this.commandJobManager.cancel({ jobId: id, origin: "background_cancel_rpc" })),
+		)
 		const cancelled = results.filter((r): r is { ok: true; state: "cancelled" } => r.ok && r.state === "cancelled").length
 		Logger.log(
 			`[VscodeSessionHost] cancelBackgroundCommand: cancelled ${cancelled}/${targetIds.length} active background command(s)`,
@@ -589,7 +599,19 @@ export class VscodeSessionHost implements SdkSessionHost {
 
 	async dispose(reason?: string): Promise<void> {
 		try {
-			await this.commandJobManager.dispose()
+			// ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+			// Thread the "extension_shutdown" caller identity for the
+			// BJLA request-boundary capture on every active job this
+			// dispose loop terminates. The host-level dispose is the
+			// ONLY production caller of commandJobManager.dispose() —
+			// any LIVE cycle whose BJLA dump shows
+			// job_cancellation_requested.requestOrigin = "extension_shutdown"
+			// alongside a manager_dispose_begin event is unambiguously
+			// a controller-shutdown cause (CP6). The legacy dispose
+			// loop caller (which has no production callers in the
+			// current code base) would surface as
+			// requestOrigin = "manager_dispose".
+			await this.commandJobManager.dispose("extension_shutdown")
 		} catch (error) {
 			Logger.warn(
 				`[VscodeSessionHost] commandJobManager.dispose failed: ${error instanceof Error ? error.message : String(error)}`,

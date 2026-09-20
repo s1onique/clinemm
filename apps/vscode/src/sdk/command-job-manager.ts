@@ -232,6 +232,28 @@ export interface StatusCommandJobOptions {
 /** Caller-supplied input to {@link CommandJobManager.cancel}. */
 export interface CancelCommandJobOptions {
 	jobId: string
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+	 *
+	 * INTERNAL ONLY — explicit caller identity threaded by production
+	 * callers as the provenance discriminator. Never inferred from
+	 * stack traces. When omitted, defaults to `"other:unspecified"`.
+	 *
+	 * Allowed values are bounded by the recon (see
+	 * 03-cancellation-authority-map.md):
+	 *
+	 *   "background_cancel_rpc"  — public cancelBackgroundCommand gRPC path
+	 *   "manager_dispose"        — CommandJobManager.dispose() iterate-active loop
+	 *   "extension_shutdown"     — host.dispose via lifecycle.dispose
+	 *   "command_deadline"       — deadline timer fired inside manager.start
+	 *   "caller_abort_signal"    — caller's AbortSignal aborted inside manager.start
+	 *   "other:<bounded id>"     — bounded escape hatch
+	 *
+	 * This field is consumed only by the BJLA diagnostic capture
+	 * seam. It does NOT enter proto, webview, or the public SdkSessionHost
+	 * interface.
+	 */
+	origin?: string
 }
 
 /** Constructor options for {@link CommandJobManager}. */
@@ -1935,6 +1957,25 @@ export class CommandJobManager {
 		// Tracked on the job so finalize() can clear it.
 		job.deadlineTimer = setTimeout(() => {
 			if (job.finalized || job.state !== "running") return
+			// ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+			// Capture `job_cancellation_requested` at the request
+			// boundary for the deadline timer, BEFORE this.terminate().
+			// `firstWriterWins` is true iff the FIRST-WRITER-WINS latch
+			// (job.terminationPromise) is unset — i.e. this is the
+			// first termination request. No semantic delta when
+			// capture is OFF.
+			captureBackgroundJobLivenessAuthorityRecord({
+				event: "job_cancellation_requested",
+				capturedAt: Date.now(),
+				managerInstance: getDiagnosticManagerId(this),
+				hostInstance: null,
+				jobId: job.id,
+				requestOrigin: "command_deadline",
+				sessionId: job.ownerSessionId ?? null,
+				taskId: null,
+				currentState: job.state,
+				firstWriterWins: job.terminationPromise === undefined,
+			})
 			void this.terminate(job, "deadline")
 		}, effectiveDeadlineMs)
 		job.deadlineTimer.unref()
@@ -1944,6 +1985,23 @@ export class CommandJobManager {
 			job.abortSignal = context.signal
 			job.abortListener = () => {
 				if (job.finalized || job.state !== "running") return
+				// ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+				// Capture `job_cancellation_requested` at the request
+				// boundary for the AbortSignal listener, BEFORE
+				// this.terminate(). The `requestOrigin` is the explicit
+				// caller identity "caller_abort_signal".
+				captureBackgroundJobLivenessAuthorityRecord({
+					event: "job_cancellation_requested",
+					capturedAt: Date.now(),
+					managerInstance: getDiagnosticManagerId(this),
+					hostInstance: null,
+					jobId: job.id,
+					requestOrigin: "caller_abort_signal",
+					sessionId: job.ownerSessionId ?? null,
+					taskId: null,
+					currentState: job.state,
+					firstWriterWins: job.terminationPromise === undefined,
+				})
 				void this.terminate(job, "cancel")
 			}
 			if (context.signal.aborted) {
@@ -2080,7 +2138,24 @@ export class CommandJobManager {
 		}
 	}
 
-	private async terminate(job: CommandJob, reason: "deadline" | "cancel"): Promise<void> {
+	private async terminate(
+		job: CommandJob,
+		reason: "deadline" | "cancel",
+		/**
+		 * ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+		 *
+		 * INTERNAL ONLY — explicit caller identity threaded by the
+		 * production caller for the BJLA request-boundary capture.
+		 * When omitted, defaults to `"other:unspecified"`. The
+		 * capture itself is performed by the production caller BEFORE
+		 * invoking terminate(); this parameter is preserved so future
+		 * internal callers can thread provenance without changing the
+		 * public `cancel()` seam.
+		 *
+		 * No semantic delta when capture is OFF.
+		 */
+		_origin: string = "other:unspecified",
+	): Promise<void> {
 		if (job.finalized || job.state !== "running") return
 		// FIRST-WRITER-WINS: if termination is already in flight, return
 		// the existing promise. The deadline-vs-cancel race produces a
@@ -2737,6 +2812,27 @@ export class CommandJobManager {
 		if (job.state !== "running") {
 			return { ok: true, state: job.state }
 		}
+		// ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+		// BJLA diagnostic — capture `job_cancellation_requested` at
+		// the REQUEST BOUNDARY (BEFORE this.terminate() mutates
+		// anything). The `requestOrigin` is THREADED explicitly by
+		// the production caller via `options.origin` (internal-only).
+		// `firstWriterWins` is true iff this request will initiate
+		// the termination (i.e. `job.terminationPromise` is unset).
+		// The cardinality invariant is exactly ONE primary record per
+		// LIVE cycle. No semantic delta when capture is OFF.
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "job_cancellation_requested",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(this),
+			hostInstance: null,
+			jobId: job.id,
+			requestOrigin: options.origin ?? "other:unspecified",
+			sessionId: job.ownerSessionId ?? null,
+			taskId: null,
+			currentState: job.state,
+			firstWriterWins: job.terminationPromise === undefined,
+		})
 		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01:
 		// emit `command_job_terminal_requested` from the public
 		// cancel() seam — this is the host's authoritative signal
@@ -3027,8 +3123,18 @@ export class CommandJobManager {
 	/**
 	 * Dispose the manager: cancel every still-running job and drop all
 	 * retained state. Call from the host's session teardown.
+	 *
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+	 * `origin` is an INTERNAL ONLY caller identity threaded by the
+	 * production caller to populate the
+	 * `job_cancellation_requested.requestOrigin` field for each
+	 * termination triggered by the dispose loop. Defaults to
+	 * `"manager_dispose"` (the legacy dispose-loop caller). The
+	 * `SdkController.dispose → SdkSessionLifecycle.dispose →
+	 * sharedHost.dispose → commandJobManager.dispose` chain threads
+	 * `"extension_shutdown"`.
 	 */
-	async dispose(): Promise<void> {
+	async dispose(origin: string = "manager_dispose"): Promise<void> {
 		const activeIds = Array.from(this.active.keys())
 		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
 		// BJLA diagnostic — capture `manager_dispose_begin` BEFORE any
@@ -3042,11 +3148,34 @@ export class CommandJobManager {
 			managerInstance: getDiagnosticManagerId(this),
 			hostInstance: null,
 			activeJobIdsBeforeDispose: activeIds,
-			reason: null,
+			reason: origin,
 		})
 		for (const id of activeIds) {
 			const job = this.active.get(id)
 			if (job) {
+				// ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+				// Capture `job_cancellation_requested` at the request
+				// boundary for the dispose loop, BEFORE
+				// this.terminate(). The `requestOrigin` is the
+				// explicit caller identity threaded by the production
+				// caller (typically "extension_shutdown"). The
+				// `firstWriterWins` flag is true for the FIRST
+				// dispose-loop iteration that initiates termination
+				// for a given job; later iterations (if any) record
+				// false because the FIRST-WRITER-WINS latch on
+				// `job.terminationPromise` is already set.
+				captureBackgroundJobLivenessAuthorityRecord({
+					event: "job_cancellation_requested",
+					capturedAt: Date.now(),
+					managerInstance: getDiagnosticManagerId(this),
+					hostInstance: null,
+					jobId: job.id,
+					requestOrigin: origin,
+					sessionId: job.ownerSessionId ?? null,
+					taskId: null,
+					currentState: job.state,
+					firstWriterWins: job.terminationPromise === undefined,
+				})
 				await this.terminate(job, "cancel")
 			}
 		}

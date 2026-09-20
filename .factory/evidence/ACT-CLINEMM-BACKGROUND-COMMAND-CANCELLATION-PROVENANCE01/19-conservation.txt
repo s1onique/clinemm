@@ -1,0 +1,78 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 19 — conservation
+
+Per ACT sec 25, every C1-C15 invariant must hold. The mechanical evidence:
+
+C1  explicit operator Cancel still cancels exact jobId
+    → BCP-01 proves cancel({jobId, origin:"background_cancel_rpc"}) returns
+       {ok: true, state: "cancelled"} for the same jobId. Pass.
+
+C2  cancelling job A does not cancel job B
+    → The cancel path is per-jobId; cancel(A) terminates only A.
+       The dispose path iterates activeIds explicitly. Pass.
+
+C3  natural completion unchanged
+    → cancel() returns early at `job.state !== "running"` so a
+       naturally-completed job (state "exited") is untouched. The
+       capture seam is BEFORE terminate() so naturally-completed
+       jobs do NOT record a job_cancellation_requested event. Pass.
+
+C4  Proceed While Running still detaches correctly
+    → The detach flow uses its own coordinator
+       (vscode-run-commands-tool.ts); the cancel seam is a
+       separate, independent path. Not touched. Pass.
+
+C5  no cancellation request → job remains running
+    → Without any cancel/dispose/deadline/abort call, the job stays
+       in the active map with state "running". Verified by all BCP
+       tests' setup (start a job, check state). Pass.
+
+C6  legitimate timeout still cancels where intended
+    → BCP-03 proves the deadline watchdog fires the
+       `command_deadline` origin and terminates the job. Pass.
+
+C7  legitimate extension shutdown still cleans up
+    → BCP-02 proves the dispose loop terminates every active job
+       with the `extension_shutdown` origin. Pass.
+
+C8  session abort behavior outside detached-background case unchanged
+    → cancelTask() in sdk-task-control-coordinator.ts does NOT
+       touch commandJobManager; the only modification is the
+       origin-threading in cancelBackgroundCommand (CP1 path) and
+       dispose (CP6 path). Pass.
+
+C9  Q5 unchanged
+    → Q5 composition seam (sdk-session-event-coordinator.ts +
+       BOCOR diagnostic) is untouched. Pass.
+
+C10 TaskHeader unchanged
+    → TaskHeader runtime error counter + active-command gauge
+       wire unchanged. The onBackgroundStateChange callback still
+       fires through the unchanged path. Pass.
+
+C11 owner correlation unchanged
+    → BOCOR (Background Owner Correlation) diagnostic untouched.
+       The owner identity preserved on the job record. Pass.
+
+C12 manager authority unchanged
+    → CommandJobManager is still the SINGLE host owner of
+       background command lifetime. Only the cancel/dispose seam
+       gained an internal-only origin parameter. Pass.
+
+C13 helper/PGID cleanup unchanged
+    → The PGID helper-owned termination path (review-correction03)
+       is untouched. EPERM-only fallback preserved. Pass.
+
+C14 diagnostics ON/OFF zero semantic delta
+    → BCP-04 proves that with captureEnabled=false, the ring is
+       empty AND the terminal state is still "cancelled" — same
+       production semantics. Pass.
+
+C15 request provenance never enters proto/webview/public API
+    → `CancelCommandJobOptions.origin` is internal-only.
+       `CommandJobManager.dispose(origin?)` is internal-only.
+       `CommandJobManager.terminate(_origin?)` is internal-only.
+       The proto `StringRequest` for cancelBackgroundCommand is
+       unchanged. The webview state shape is unchanged. The
+       `SdkSessionHost` interface is unchanged. Pass.
+
+ALL CONSERVATION INVARIANTS HOLD.

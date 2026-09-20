@@ -4963,3 +4963,72 @@ that the next ACT needs to classify and repair the LIVE defect.
 qualification of the bounded repair (PASS_CASE_*) OR
 CAPTURE_INSUFFICIENT. Then remove BOCOR + BJLA together unless
 separately promoted as permanent dogfood observability.
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01
+
+```text
+BACKGROUND_COMMAND_CANCELLATION_PROVENANCE =
+  UNRESOLVED (awaiting LIVE dogfood capture)
+
+LIVE_JOB =
+  cmd_mu9v06vyx0bsxj44
+
+PRE_CANCEL_STATE =
+  RUNNING
+
+CANCEL_REQUEST_ORIGIN =
+  UNRESOLVED — instrumentation qualified; the
+  job_cancellation_requested.requestOrigin field will resolve to
+  one of (background_cancel_rpc | extension_shutdown | command_deadline |
+  caller_abort_signal | other:<bounded id>) on the next LIVE dump
+
+MANAGER =
+  M2
+
+PROCESS_CLEANUP =
+  gone
+
+TERMINAL_STATE =
+  cancelled
+
+ACTIVE_REMOVE_REASON =
+  cancel
+
+Q5 =
+  EXONERATED (unchanged)
+
+TURN_STATE =
+  DOWNSTREAM / CONSERVED (unchanged)
+
+STALE_CARD_AFTER_CANCEL =
+  OBSERVED (from predecessor ACT) / DEFERRED
+
+REPAIR =
+  none (deferred to LIVE-capture + repair ACT)
+
+NEW BJLA EVENT:
+  job_cancellation_requested (added to
+  apps/vscode/src/sdk/background-job-liveness-authority.ts)
+  — request-boundary capture with threaded caller identity.
+
+ORIGIN THREADING (INTERNAL ONLY):
+  - VscodeSessionHost.cancelBackgroundCommand → "background_cancel_rpc"
+  - VscodeSessionHost.dispose → "extension_shutdown"
+  - CommandJobManager deadline timer → "command_deadline"
+  - CommandJobManager abortSignal listener → "caller_abort_signal"
+
+PRODUCTION API CHANGES: ZERO (proto / webview / SdkSessionHost).
+
+TESTS PASSING:
+  BCP-01..05  (5 passed)
+  BCLAS-01..06 (9 passed)
+  BOCOR Q5 seam (4 passed)
+
+HALT: CAPTURE_INSUFFICIENT — instrumentation qualified, LIVE dogfood
+install + capture pending (operator-driven per the LIVE procedure in
+ACT §15).
+
+NEXT ACT: dogfood VSIX install + LIVE run + dump. The
+job_cancellation_requested.requestOrigin in the dump will mechanically
+classify the requester into CP1-CP6.
+```

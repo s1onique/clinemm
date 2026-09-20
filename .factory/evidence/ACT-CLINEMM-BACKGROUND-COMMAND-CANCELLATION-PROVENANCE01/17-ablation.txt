@@ -1,0 +1,19 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 17 — ablation
+
+ABLATION: NOT_EXECUTED — no LIVE classification yet, so no repair seam
+identified.
+
+Per ACT §17, the ablation depends on the LIVE classification:
+
+  CP1 → ablate the public background_cancel_rpc caller; verify job remains running
+  CP2 → ablate the host.dispose caller; verify job remains running
+  CP3 → ablate the AbortSignal propagation; verify job remains running
+  CP4 → disable deadline; verify job runs past original T
+  CP5 → preserve detached registered job on tool cleanup
+  CP6 → ablate the controller-shutdown path; verify job remains running
+
+The BCP tests exercise the diagnostic capture; the ablation tests
+require a known-broken production seam to repair. Until the LIVE
+dump identifies the requester, there is no seam to ablate.
+
+ABLATION: PENDING LIVE CAPTURE.

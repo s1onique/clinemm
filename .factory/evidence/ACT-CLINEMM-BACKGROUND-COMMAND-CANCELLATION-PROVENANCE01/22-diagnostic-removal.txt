@@ -1,0 +1,27 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 22 — diagnostic removal
+
+REMOVAL_TRIGGER (per ACT §26):
+  After the LIVE requester is proven and the bounded repair is
+  qualified, the diagnostic MUST be removed:
+
+  - The `job_cancellation_requested` record type
+  - The capture call in CommandJobManager.cancel
+  - The capture call in CommandJobManager.dispose loop
+  - The capture call in CommandJobManager.start deadline timer
+  - The capture call in CommandJobManager.start AbortSignal listener
+  - The `origin` parameter on CancelCommandJobOptions
+  - The `origin` parameter on CommandJobManager.dispose
+  - The `_origin` parameter on CommandJobManager.terminate
+
+  AND (if no separate promotion is justified):
+  - BOCOR (background owner correlation)
+  - BJLA (background job liveness authority)
+  - All dump commands
+  - All Command Palette registrations for dump commands
+  - All package.json command declarations
+  - The dogfood profile resolver entry
+
+The diagnostics MUST be removed TOGETHER — no quiet survival through
+inertia. Until LIVE classification succeeds, the diagnostics remain.
+
+DIAGNOSTIC REMOVAL: DEFERRED TO POST-LIVE REPAIR ACT.

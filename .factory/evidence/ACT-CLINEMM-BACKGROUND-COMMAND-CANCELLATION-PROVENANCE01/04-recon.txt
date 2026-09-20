@@ -1,0 +1,153 @@
+# 04 — Recon (raw)
+
+Reconciles the cancellation authority map (03) with concrete file:line
+references. Each numbered item is one observation in the production seam
+discovered by `grep`-style searches during recon (no runtime probing).
+
+```text
+1. apps/vscode/src/sdk/command-job-manager.ts:2083
+   private async terminate(job: CommandJob, reason: "deadline" | "cancel"): Promise<void>
+   — the SINGLE MUTATING SINK. First-writer-wins via job.terminationPromise.
+
+2. apps/vscode/src/sdk/command-job-manager.ts:2713
+   async cancel(options: CancelCommandJobOptions): Promise<...>
+   — the PUBLIC HOST-FACING CANCEL. Routes to this.terminate(job, "cancel").
+
+3. apps/vscode/src/sdk/command-job-manager.ts:1936-1939
+   job.deadlineTimer = setTimeout(() => {
+     if (job.finalized || job.state !== "running") return
+     void this.terminate(job, "deadline")
+   }, effectiveDeadlineMs)
+   — Command deadline path (CP4). Distinct reason="deadline".
+
+4. apps/vscode/src/sdk/command-job-manager.ts:1943-1953
+   if (context?.signal) {
+     job.abortSignal = context.signal
+     job.abortListener = () => { ...; void this.terminate(job, "cancel") }
+     if (context.signal.aborted) job.abortListener()
+     else context.signal.addEventListener("abort", job.abortListener, { once: true })
+   }
+   — Caller-supplied AbortSignal path. Distinct reason="cancel". Caller
+     passes context.signal to manager.start({ ... context: ctx }); the
+     only production caller in apps/vscode/src/sdk/vscode-run-commands-tool.ts
+     does NOT currently pass context.signal for background jobs.
+
+5. apps/vscode/src/sdk/command-job-manager.ts:3031-3116
+   async dispose(): Promise<void> {
+     ...
+     for (const id of activeIds) {
+       const job = this.active.get(id)
+       if (job) await this.terminate(job, "cancel")
+     }
+     ...
+   }
+   — Manager dispose path (CP2 / CP6).
+
+6. apps/vscode/src/sdk/vscode-session-host.ts:494-512
+   async cancelBackgroundCommand(jobId?: string): Promise<number> {
+     const targetIds = jobId ? [jobId] : this.commandJobManager.getActiveJobIds()
+     ...
+     const results = await Promise.all(targetIds.map((id) => this.commandJobManager.cancel({ jobId: id })))
+     ...
+   }
+   — The SINGLE entry to the public cancel() seam from the host. Path A.
+
+7. apps/vscode/src/sdk/vscode-session-host.ts:590-599
+   async dispose(reason?: string): Promise<void> {
+     try { await this.commandJobManager.dispose() } catch (error) { ... }
+     return this.inner.dispose(reason)
+   }
+   — The ONLY host-level caller of commandJobManager.dispose().
+
+8. apps/vscode/src/sdk/vscode-session-host.ts:438-440
+   async stop(sessionId: string): Promise<...> {
+     return this.inner.stop(sessionId)
+   }
+   — VscodeSessionHost.stop() does NOT cancel CommandJobs.
+
+9. apps/vscode/src/sdk/SdkController.ts:3250-3283
+   async cancelBackgroundCommand(jobId?: string): Promise<void> {
+     const activeSession = this.sessions.getActiveSession()
+     ...
+     await host.cancelBackgroundCommand(jobId)
+     ...
+   }
+   — Bridges webview gRPC call (path A) to VscodeSessionHost.cancel.
+
+10. apps/vscode/src/core/controller/task/cancelBackgroundCommand.ts:13-19
+    export async function cancelBackgroundCommand(controller: Controller, request: StringRequest): Promise<Empty> {
+      ...
+      await controllerWithCancel.cancelBackgroundCommand(jobId)
+      return Empty.create()
+    }
+    — gRPC handler. Path A terminal entry.
+
+11. apps/vscode/src/sdk/sdk-session-lifecycle.ts:493-502
+    async dispose(reason = "SdkSessionLifecycle.dispose"): Promise<void> {
+      await this.endActiveSession(reason, { awaitStop: true })
+      ...
+      await sharedHost?.dispose(reason)
+    }
+    — Only caller of VscodeSessionHost.dispose() in production. Triggered
+      from SdkController.dispose() at extension deactivation.
+
+12. apps/vscode/src/sdk/SdkController.ts:2292-2310
+    async dispose() — controller shutdown path. Contains the only
+      production call to lifecycle.dispose().
+
+13. apps/vscode/src/sdk/sdk-task-control-coordinator.ts:76-117
+    async cancelTask() — task-cancel path. Calls sdkHost.abort(sessionId),
+      NOT commandJobManager.cancel. Background jobs are NOT cancelled by
+      this path.
+
+14. apps/vscode/src/sdk/sdk-task-control-coordinator.ts:119-177
+    async clearTask() / clearTaskForOperation() — calls
+      endActiveSession, NOT host.dispose. Background jobs survive.
+
+15. apps/vscode/src/sdk/sdk-session-lifecycle.ts:548-568
+    trackSessionStop — calls sdkHost.stop(sessionId). NOT host.dispose.
+
+16. apps/vscode/src/sdk/sdk-session-lifecycle.ts:309
+    if (this.activeSession) {
+      await this.endActiveSession("startNewSession")
+      ...
+    }
+    — startNewSession transition. Background jobs survive.
+
+17. apps/vscode/src/sdk/vscode-run-commands-tool.ts
+    run_commands tool. Foreground coordinator. Does NOT call
+    commandJobManager.cancel on tool cleanup for a registered background
+    CommandJob (no caller of this.cancel found in the production path).
+```
+
+## Negative confirmations
+
+```text
+- No production caller of commandJobManager.cancel({ jobId }) exists
+  outside of vscode-session-host.ts:506.
+- No production caller of commandJobManager.dispose() exists outside of
+  vscode-session-host.ts:592.
+- No production caller of commandJobManager.terminate() exists outside of
+  the manager itself (deadline, abortSignal listener, dispose).
+- No production caller of VscodeSessionHost.dispose() exists outside of
+  sdk-session-lifecycle.ts:501.
+```
+
+## Conclusion
+
+The cancellation requester for the LIVE job MUST be one of:
+
+```text
+(a) UiCancelRpc      — webview background-cancel button path A
+(b) CallerAbortSignal — caller's AbortSignal aborted (path D)
+(c) ExtensionShutdown — SdkController.dispose (path F) → host.dispose → manager.dispose
+```
+
+The LIVE evidence has `job_active_removed.reason = "cancel"`, so (b), (a),
+and (c) are the only candidates. CP1 (UiCancelRpc) is the most likely
+because (b) has no production caller for the background path and (c) is
+the controller-shutdown path which would also kill the manager (replacing
+M2 with nothing, not adding a manager_dispose_begin to a still-present
+manager). The next ACT will instrument the request boundary of each of
+these three seams with an explicit caller identity so the LIVE dump can
+classify deterministically.
