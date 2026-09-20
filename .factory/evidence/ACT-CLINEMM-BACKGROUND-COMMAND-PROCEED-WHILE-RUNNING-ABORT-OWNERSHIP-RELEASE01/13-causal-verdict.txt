@@ -1,81 +1,86 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 13 — causal verdict
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 13 — causal verdict (CORRECTION01 — real handoff verified)
 
-ROOT_CAUSE_NECESSITY = ESTABLISHED.
+ROOT_CAUSE_NECESSITY = ESTABLISHED on the REAL production handoff.
 
-CHAIN:
+This is a CORRECTION CYCLE relative to my first submission:
+  - first submission claimed ROOT_CAUSE_NECESSITY = ESTABLISHED via
+    /tmp/red-tool.mjs and /tmp/green-tool.mjs which exercise
+    manager.start() DIRECTLY (lower-level seam, not the tool factory).
+  - Factory causal reviewer P0'd this: H2 (handoff never actually
+    completed) was not ruled out at the tool-factory level.
+  - this CORRECTION01 executes the same RED→GREEN pair on the REAL
+    production handoff via createVscodeRunCommandsTool(backgroundExec).
+
+CORRECTION01 RED OUTPUT (pre-repair parent a064ea96b, REAL HANDOFF):
+
+  tool.execute() → manager.start() returns RUNNING
+  callerAbort.abort() AFTER handoff
+  → BJLA captures job_cancellation_requested with origin=caller_abort_signal
+    (Expected 0 cancellation records on the post-repair path, Received 1
+     on the pre-repair path: this is the defect reproducing on the real
+     production handoff)
+
+CORRECTION01 GREEN OUTPUT (post-repair HEAD a58c32a13, REAL HANDOFF):
+
+  Same scenario, but the production wire calls
+  manager.releaseForegroundAbortOwnership(start.jobId) at the handoff
+  boundary (vscode-run-commands-tool.ts:711). The listener is detached
+  before the caller's abort fires. Expected 0, Received 0.
+
+CHAIN (now confirmed on the actual production tool factory):
 
   1. Predecessor ACT (CASE_CP3_CALLER_ABORT_SIGNAL):
      - LIVE specimen cmd_mu9wmnyuhvgva8cn
      - requestOrigin = "caller_abort_signal"
-     - operator did not click Cancel, did not send a message
+     - operator did not click Cancel, did not send a message, did not switch
+       modes
      - the detached managed CommandJob was cancelled by the caller's
-       AbortSignal listener
-     - the LIVE chain is CAUSAL (not merely chronological)
+       AbortSignal listener (LIVE; previously un-reproducible deterministically)
 
-  2. This ACT (RED reproduction):
-     - The exact same production seam (manager.start({...}, { signal }))
-       is exercised with a real AbortController.signal
-     - The handoff boundary is reached (start.state === "running")
-     - The internal listener is structurally attached (job.abortListener
-       is a function, job.abortSignal is the caller's signal)
-     - A later callerAbort.abort() fires the listener
-     - The detached managed job becomes cancelled; active map is empty
-     - DEFECT_REPRODUCED = true
+  2. This ACT CORRECTION01 (real handoff RED):
+     - createVscodeRunCommandsTool({ backgroundExec, commandJobManager })
+       on the PRE-REPAIR parent (a064ea96b)
+     - tool.execute() returns RUNNING envelope (status="running", jobId)
+     - caller abort AFTER handoff
+     - BJLA captures cancellation_requested with origin=caller_abort_signal
+     - DEFECT REPRODUCED at the real handoff (the exact defect from the
+       LIVE specimen is now mechanically reproducible)
 
-  3. This ACT (ablation / GREEN):
-     - Same fixture, same supervisor, same caller signal, same handoff
-     - Single variable added: manager.releaseForegroundAbortOwnership(jobId)
-       between handoff and abort
-     - After release: job.abortListener is undefined, job.abortSignal
-       is undefined
-     - A later callerAbort.abort() does NOT cancel the job
-     - The detached managed job remains running; active map still
-       contains it
-     - DEFECT_REPAIRED = true
+  3. This ACT (ablation / GREEN at the real handoff):
+     - Same scenario on the post-repair HEAD (a58c32a13)
+     - The production wire calls manager.releaseForegroundAbortOwnership at
+       the handoff boundary (vscode-run-commands-tool.ts:711)
+     - caller abort AFTER handoff: NO cancellation_requested record
+       fires (Expected 0, Received 0)
+     - The detached managed job is NOT cancelled
+     - DEFECT REPAIRED at the real handoff
 
   4. Single-variable discriminator:
-     - RED state: caller AbortSignal listener is RETAINED across the
-       handoff boundary
-     - GREEN state: caller AbortSignal listener is RELEASED at the
-       handoff boundary
-     - The only difference between RED and GREEN is whether
-       releaseForegroundAbortOwnership is called
-     - Everything else (same manager, same supervisor, same command,
-       same wait budget, same execution deadline, same caller signal,
-       same handoff code path) is held constant
+     - RED state: the production wire does NOT call release after handoff
+     - GREEN state: the production wire calls release after handoff
+     - everything else (same manager, same supervisor, same caller signal,
+       same handoff code path, same command, same wait budget) is held
+       constant
 
   5. Necessity: the listener retention IS the necessary cause of the
-     defect. The bounded repair (a single `removeEventListener` call)
-     turns RED into GREEN.
+     defect. The bounded repair (one new public method on
+     CommandJobManager + one new call site at the handoff boundary) turns
+     RED into GREEN.
 
 IMPLICATION:
 
   - The LIVE defect is reproducible on the production seam.
   - The LIVE defect's root cause is the listener retention at the
-    foreground->background handoff.
-  - The bounded repair is minimal (one new public method + one new
-    call site in vscode-run-commands-tool.ts).
+    foreground→background handoff.
+  - The bounded repair is minimal (one per-job listener-release method
+    and one call at the background `running` branch).
   - All other cancellation seams are unaffected by the repair.
 
-PRODUCTION REPAIR: AUTHORIZED. Apply the bounded repair exactly as
-designed in 11-ablation-design.md:
-
-  apps/vscode/src/sdk/command-job-manager.ts:
-    new public method releaseForegroundAbortOwnership(jobId)
-    (lines 2866-2927 in the post-repair tree at HEAD)
-
-  apps/vscode/src/sdk/vscode-run-commands-tool.ts:
-    one new call to manager.releaseForegroundAbortOwnership(start.jobId)
-    inserted immediately after the background-start RUNNING envelope
-    is built (5 tabs indent, between the `start.terminalPromise.then(...)`
-    block and the `const runningPayload = { ... }` declaration)
+PRODUCTION REPAIR: APPLIED (commits a58c32a13, f61069e9a, 5643f1baa).
 
 DO NOT:
-  - change Q5 / TSWPD / TaskHeader logic
-  - redesign the manager's other cancellation seams
+  - change Q5 / TSWPD / TaskHeader.
+  - redesign the listener install path.
   - touch the deadline timer (CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT
-    is DEFERRED per ACT §14)
-  - change the proto surface, the webview, or the public gRPC handlers
-  - rewrite the listener install path (line 1984-2011) — the bounded
-    repair is the minimal deletion at the handoff, not a redesign of
-    the install path
+    = DEFERRED per ACT §14).
+  - change the proto / webview / gRPC / SDK / CLI surface.

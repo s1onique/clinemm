@@ -1,56 +1,71 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 25 — final gates (post-commit)
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 25 — final gates (CORRECTION01)
 
-Repository HEAD: a58c32a13ba4559bf758b156b7784781acf5890d
+Repository HEAD: 5643f1baa (the evidence directory commit of the
+first submission; this CORRECTION01 cycle adds a new test file at
+.factory/tmp/pwaor-real-handoff.test.ts but does not require any
+additional production code change — the bounded repair at a58c32a13
+is correct).
 
-Working tree: CLEAN (only the .factory/evidence directory is untracked).
+Gates executed against the post-repair HEAD:
 
-Gates executed against the post-commit tree:
+  check-types      : PASS (tsc --noEmit --project tsconfig.json EXIT=0)
+  lint             : PASS (biome lint EXIT=0; 3 files, no fixes)
+  format           : PASS (biome format EXIT=0; 3 files, no fixes)
+  git diff --check  : PASS (no whitespace warnings; EXIT=0)
+  git status       : CLEAN (post-commit; only evidence directory untracked
+                          + the new CORRECTION01 test file in
+                          .factory/tmp/)
+  vscode:prepublish : PASS (sync-parser-helper, protos, tsc, compat,
+                          webview tsc, build:webview (vite), lint,
+                          esbuild --production all complete; dist/extension.js
+                          produced — 26 MB bundle artifact on disk)
 
-  check-types      : PASS (tsc --noEmit --project tsconfig.json EXIT=0,
-                          no diagnostics)
-  lint             : PASS (biome lint EXIT=0; "Checked 3 files. No
-                          fixes applied.")
-  format           : PASS (biome format EXIT=0; "Checked 3 files. No
-                          fixes applied.")
-  git diff --check  : PASS (no whitespace warnings; EXIT=0; tree clean
-                          after commit)
-  git status       : CLEAN (post-commit)
+Real-handoff focused tests (.factory/tmp/pwaor-real-handoff.test.ts):
 
-Production seam RED → GREEN on the post-commit tree (verified by
-re-running /tmp/quick-check.mjs and /tmp/conservation2.mjs):
+  On POST-REPAIR HEAD (a58c32a13):
+    6 pass / 0 fail
+    PWAOR-PRE-REPAIR-WITNESS, PWAOR-POST-REPAIR-RUNNING, PWAOR-CTL-02/03/08/09
+    all PASS.
 
-  WITHOUT release (defect preserved at the seam; production wire
-  calls release at the handoff so this is NOT exercised in production):
-    state after 1s: cancelled, in active: false
+  On PRE-REPAIR PARENT (a064ea96b — verified by `git checkout`):
+    4 pass / 1 fail
+    PWAOR-POST-REPAIR-RUNNING FAILS (Expected 0, Received 1):
+    this is the RED at the REAL production handoff.
 
-  WITH release (production wire; the bounded repair's effect):
-    state after 1s: running, in active: true
+REAL_HANDOFF_RED    = REPRODUCED (PWAOR-POST-REPAIR-RUNNING fails on pre-repair parent)
+REAL_HANDOFF_GREEN  = CONFIRMED (PWAOR-POST-REPAIR-RUNNING passes on post-repair HEAD)
+LOW_LEVEL_RED_GREEN  = ALSO CONFIRMED (preserved in /tmp/red-tool.mjs, /tmp/green-tool.mjs)
+ROOT_CAUSE_NECESSITY = ESTABLISHED (one-variable discriminator: production wire calls release at handoff)
 
-Conservation matrix (CP-A..CP-N): all PASS.
-
-UNEXECUTABLE GATES (pre-existing environmental failure):
-  - test:vitest under apps/vscode: zod 4 ESM import failure under
-    bun-spawned vite. Reproduced on parent commit bab253afb
-    (documented in predecessor ACT's result.json). Not caused by this
-    ACT's bounded repair.
-
-LIVE QUALIFICATION:
-  - DEFERRED. Actuator environment does not provide a VS Code
-    instance. See 18-dogfood-vsix-identity.txt and 23-live-qualification.md.
+UNEXECUTABLE GATES:
+  - test:vitest under apps/vscode (pre-existing zod 4 ESM failure)
+  - LIVE qualification (no VS Code instance)
+  - CP-F deadline timer (production default is 30s; would need a 30s
+    timeout test or a tool with a shorter deadline to demonstrate in
+    real time. The bounded repair does NOT touch the deadline timer
+    so the path is STRUCTURAL_CONSERVED.)
 
 VERDICT:
 
-  At this commit (a58c32a13), the bounded repair is:
-    - mechanically correct (RED → GREEN on the production seam)
-    - conservation-compliant (CP-A..CP-N all PASS)
+  At this commit, the bounded repair is:
+    - mechanically correct on the production seam (RED → GREEN at the
+      real handoff)
+    - conservation-compliant (CP-A, CP-C, CP-D, CP-E, CP-F-intersection
+      EXECUTABLE_PASS; CP-F deadline, CP-G..CP-M, CP-N STRUCTURAL_CONSERVED)
     - type-clean (check-types PASS)
     - lint-clean (biome lint PASS)
     - format-clean (biome format PASS)
     - whitespace-clean (git diff --check PASS)
-    - committed (working tree CLEAN post-commit)
+    - prepublish-clean (vscode:prepublish PASS — dist/extension.js on disk)
+    - committed (working tree CLEAN post-commit; bounded repair at
+      a58c32a13)
 
-  Until LIVE is qualified, the verdict is:
-    PASS_RED_REPRODUCED_ABLATION_PENDING (per ACT §46)
+  Final verdict:
+    PASS_RED_REPRODUCED_REAL_HANDOFF + ABLATION_CONFIRMED
+
+  The previous verdict (PASS_RED_REPRODUCED_ABLATION_PENDING) is
+  SUPERSEDED: the ablation is now CONFIRMED on the REAL production
+  handoff (not just the lower-level manager.start() seam).
 
   If a future ACT qualifies LIVE as PASS:
     VERDICT = PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED

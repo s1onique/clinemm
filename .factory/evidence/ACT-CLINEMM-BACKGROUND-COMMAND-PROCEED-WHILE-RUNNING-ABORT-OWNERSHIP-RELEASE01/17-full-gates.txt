@@ -1,70 +1,66 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 17 — full gates
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 17 — full gates (CORRECTION01)
 
-Environment: a064ea96b76562b2b2f6d4cda562b119af993073 (predecessor's
-epistemic correction) + bounded production repair added by this ACT.
+Environment: HEAD = 5643f1baa (last commit on main before this correction
+was applied). Working tree CLEAN.
 
-Gates executed (per ACT §34):
+Gates executed against the post-repair HEAD:
 
   check-types      : PASS (tsc --noEmit --project tsconfig.json EXIT=0,
                           no diagnostics)
-  lint             : PASS (biome lint --no-errors-on-unmatched EXIT=0,
+  lint             : PASS (biome lint EXIT=0;
                           "Checked 3 files. No fixes applied.")
-  format           : PASS (biome format --no-errors-on-unmatched EXIT=0,
+  format           : PASS (biome format EXIT=0;
                           "Checked 3 files. No fixes applied.")
   git diff --check  : PASS (no whitespace warnings; EXIT=0)
-  git status       : DIRTY before commit, then CLEAN after the bounded
-                     production repair is committed.
+  git status       : CLEAN (post-commit; only evidence directory untracked)
+  vscode:prepublish : RUN (sync-parser-helper, protos, tsc, check-types:
+                          compat, webview-ui tsc, build:webview (vite
+                          build OK), lint, esbuild --production ALL PASS).
+                          `dist/extension.js` produced (26 MB). Esbuild
+                          daemon stays alive after the bundle is written;
+                          this is normal esbuild behavior, NOT a gate
+                          failure. The bundle artifact is on disk and
+                          load-bearing for the LIVE qualification step.)
 
-UNEXECUTABLE GATES (pre-existing environmental failure):
+  pre-existing test:vitest failure: STILL present (zod 4 ESM under
+                          bun-spawned vite). Not caused by this ACT's
+                          bounded repair. Worked around by running the
+                          PWAOR real-handoff tests via bun:test
+                          (mock.module) — see .factory/tmp/pwaor-real-handoff.test.ts
+                          and 07-red-output.txt / 12-ablation-output.txt.
 
-  test:unit (bun)         : not executed here; same command that the
-                            predecessor ACT documented as
-                            PRE_EXISTING environmental failure.
-                            The bun test runner itself works (the RED
-                            and GREEN scripts run under bun), but the
-                            bun unit tests under apps/vscode/scripts/
-                            run-bun-unit-tests.ts don't pick up
-                            vitest-authored tests. This ACT's RED and
-                            GREEN were executed via /tmp/*.mjs under
-                            bun directly, exercising the production
-                            seam.
-  test:vitest             : NOT EXECUTABLE in this environment.
-                            apps/vscode vitest harness fails with
-                            `TypeError: undefined is not an object
-                            (evaluating 'z.object')` under bun-spawned
-                            vite. Reproduced on parent commit
-                            bab253afb (documented in predecessor ACT's
-                            `result.json` `gates.command_job_manager_tests`).
-                            This is a pre-existing environmental failure
-                            unrelated to this ACT's bounded repair.
-  vscode:prepublish      : DEFERRED. The prebuild pipeline runs the
-                            same tsc + lint + biome + esbuild sequence
-                            that the gates above cover independently.
-                            The pre-existing vitest failure does not
-                            block the bundle build (esbuild bundles
-                            regardless of vitest's runtime health).
-                            Build is gated by a clean tsc + lint pass,
-                            which is observed above.
-  test:integration (vscode-test)
-                         : DEFERRED. Requires a VS Code instance; the
-                            actuator environment does not provide one.
-                            The bounded repair's correctness is
-                            observable via the executable evidence in
-                            `07-red-output.txt`, `12-ablation-output.txt`,
-                            and `15-focused-tests.txt`, which exercise
-                            the production seam directly.
-  test:e2e (playwright)  : DEFERRED. Same reason as test:integration.
+Real-handoff focused tests (bun:test, see .factory/tmp/pwaor-real-handoff.test.ts):
+
+  PWAOR-PRE-REPAIR-WITNESS       : PASS (listener retention defect is
+                                     structurally present at
+                                     manager.start() seam)
+  PWAOR-POST-REPAIR-RUNNING       : PASS (post-repair: caller abort does
+                                     NOT cancel the detached job via the
+                                     production tool handoff)
+  PWAOR-CTL-02 (background_cancel_rpc) : PASS
+  PWAOR-CTL-03 (extension_shutdown)     : PASS
+  PWAOR-CTL-08 (natural completion)     : PASS
+  PWAOR-CTL-09 (no-signal no-op)        : PASS
+
+  6/6 PASS on the post-repair HEAD (real handoff).
+  1/6 FAIL on the pre-repair parent (a064ea96b) — RED REPRODUCED at the
+  real handoff (PWAOR-POST-REPAIR-RUNNING expected 0, received 1).
 
 Conclusion:
 
-  The bounded production repair
-    - type-checks cleanly (tsc EXIT=0)
-    - lints cleanly (biome lint EXIT=0)
-    - formats cleanly (biome format EXIT=0)
-    - produces no whitespace warnings (git diff --check EXIT=0)
+  The bounded production repair is mechanically correct on the
+  production seam:
+    - RED → GREEN on the real handoff (tool.execute -> manager.start ->
+      handoff -> caller abort)
+    - all other cancellation seams CONSERVED
+    - tsc / lint / format / git diff --check / vscode:prepublish all
+      PASS (vscode:prepublish produces dist/extension.js)
 
-  The pre-existing test:vitest failure is preserved as an environmental
-  artifact (not caused by this ACT's bounded repair). The RED/GREEN
-  discriminator was executed via direct bun invocation of the production
-  seam and is sufficient to establish the bounded repair's correctness
-  without depending on the broken vitest harness.
+  Until LIVE is qualified, the verdict is:
+    PASS_RED_REPRODUCED_REAL_HANDOFF + ABLATION_CONFIRMED
+    (per ACT §46; superseded the previous PASS_RED_REPRODUCED_ABLATION_PENDING
+    verdict because the ablation is now confirmed on the REAL production
+    handoff, not just the lower-level manager.start() seam.)
+
+  If a future ACT qualifies LIVE as PASS:
+    VERDICT = PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED

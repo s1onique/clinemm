@@ -1,90 +1,82 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 15 — focused tests
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 15 — focused tests (CORRECTION01)
 
-Focused test runs executed via bun scripts that drive the production
-CommandJobManager.start(...) seam directly. The vitest harness is
-non-functional in this environment (pre-existing zod 4 ESM failure
-documented in predecessor ACT's result.json `gates.command_job_manager_tests`).
+The CORRECTION01 focused tests exercise the REAL `createVscodeRunCommandsTool`
+backgroundExec handoff (not just `manager.start()`). The test file lives
+at `.factory/tmp/pwaor-real-handoff.test.ts` and is run via `bun test` (NOT
+vitest — vitest has a pre-existing zod 4 ESM failure documented in the
+predecessor ACT's `result.json` `gates.command_job_manager_tests`).
 
-## 1. RED reproduction (`/tmp/red-tool.mjs`)
+CORRECTION01 EXECUTABLES (real handoff):
 
-Exercised: production seam — caller AbortSignal listener install + abort
-+ handoff boundary + post-abort state.
+  1. RED (pre-repair parent a064ea96b):
+     bun test ./.factory/tmp/pwaor-real-handoff.test.ts
 
-Output (07-red-output.txt, abbreviated):
-  HANDOFF_REACHED start.state = running jobId = cmd_mua5it42ub78lj6g
-  STRUCTURAL_LISTENER_ATTACHED_AT_HANDOFF: true
-  STRUCTURAL_ABORT_SIGNAL_IS_CALLER: true
-  POST_ABORT_STATE: cancelled
-  POST_ABORT_IN_ACTIVE_MAP: false
-  DEFECT_REPRODUCED: true
+     Output (excerpt):
+       ✓ PWAOR-PRE-REPAIR-WITNESS  (listener retention defect at
+         manager.start() seam; structurally present)
+       ✗ PWAOR-POST-REPAIR-RUNNING  (RED REPRODUCED: Expected 0
+         cancellation records, Received 1 — caller abort cancels the
+         detached job via the listener attached at the real handoff)
+       ✓ PWAOR-CTL-02 / -03 / -08 (conservation)
 
-## 2. GREEN ablation (`/tmp/green-tool.mjs`)
+  2. GREEN (post-repair HEAD a58c32a13):
+     bun test ./.factory/tmp/pwaor-real-handoff.test.ts
 
-Exercised: same seam, with release call between handoff and abort.
+     Output (excerpt):
+       ✓ PWAOR-PRE-REPAIR-WITNESS  (defect still structurally present
+         at manager.start() — same underlying code path)
+       ✓ PWAOR-POST-REPAIR-RUNNING  (GREEN: Expected 0 cancellation
+         records, Received 0 — the production wire called release at
+         the handoff boundary and the listener was detached)
+       ✓ PWAOR-CTL-02 / -03 / -08 / -09 (conservation)
 
-Output (12-ablation-output.txt, abbreviated):
-  HANDOFF_REACHED start.state = running jobId = cmd_mua5nnc05x6m0sew
-  BEFORE_RELEASE listener attached: true
-  BEFORE_RELEASE abortSignal is caller: true
-  AFTER_RELEASE listener attached: false
-  AFTER_RELEASE abortListener is undefined: true
-  AFTER_RELEASE abortSignal is undefined: true
-  IDEMPOTENT_RELEASE_THROWS: false
-  POST_ABORT_STATE: running
-  POST_ABORT_IN_ACTIVE_MAP: true
-  DEFECT_REPAIRED: true
+  3. Full pre-existing unit tests (mocha) and vitest suites: NOT executed.
+     The pre-existing vitest failure is preserved as an environmental
+     artifact (zod 4 ESM under bun-spawned vite). The mocha-vscode-test
+     integration suite is not exercised here (no VS Code instance in
+     this actuator environment).
 
-## 3. Conservation matrix (`/tmp/conservation2.mjs`)
+LOWER-LEVEL RED (preserved for completeness; superseded by CORRECTION01
+real-handoff RED but documented for the bounded-hypothesis chain):
 
-Exercised: PWAOR-CTL-04 / -05 / -08 / -09 / -11 against the post-repair code.
+  /tmp/red-tool.mjs + /tmp/green-tool.mjs exercised manager.start()
+  directly. They proved:
+    - BEFORE release: listener attached, abortSignal is caller.signal
+    - AFTER  release: listener detached, abortListener undefined,
+                      abortSignal undefined
+    - Caller abort AFTER release -> job remains running
 
-Output (16-conservation.txt):
-  [
-    { "id": "CTL-09", "pass": true, "note": "no-signal release is no-op" },
-    { "id": "CTL-04", "pass": true, "note": "release idempotent + safe on unknown id" },
-    { "id": "CTL-05", "pass": true, "state": "running", "inActive": true },
-    { "id": "CTL-11", "pass": true, "state": "cancelled" },
-    { "id": "CTL-08", "pass": true, "state": "exited" }
-  ]
+  These files are NOT the load-bearing evidence for the bounded repair.
+  The load-bearing evidence is .factory/tmp/pwaor-real-handoff.test.ts
+  (which exercises the REAL tool factory at the REAL handoff).
 
-## 4. Post-repair state assertion (`/tmp/quick-check.mjs`)
+PRODUCTION SOURCE FILES VERIFIED:
 
-WITHOUT release (defect retained at the seam, not at the production call site):
-  state after 1s: cancelled, in active: false  → defect preserved at the
-  un-released seam (matches the pre-repair behavior; the production wire
-  calls release at the handoff so this is NOT exercised in production).
+  apps/vscode/src/sdk/command-job-manager.ts:
+    + new public method `releaseForegroundAbortOwnership(jobId)` (line
+      2913)
+      - O(1) lookup in `this.active`
+      - safe no-op when jobId is unknown or job is terminal
+      - removes the AbortSignal listener via `removeEventListener`
+      - clears `job.abortSignal` and `job.abortListener`
+      - DOES NOT touch `job.deadlineTimer`
 
-WITH release (production wire):
-  state after 1s: running, in active: true   → bounded repair works.
+  apps/vscode/src/sdk/vscode-run-commands-tool.ts:
+    + one new call site at the foreground→background handoff boundary
+      (line 711, inside `if (start.state === "running")` branch)
+      - calls `manager.releaseForegroundAbortOwnership(start.jobId)` AFTER
+        `start.terminalPromise.then(...)` is attached and BEFORE the
+        RUNNING envelope is constructed and returned.
+      - idempotent, safe no-op when no caller signal was attached
+      - bounded to the background path (the foreground `executeForeground`
+        path is unaffected)
 
-## Production source files verified
-
-apps/vscode/src/sdk/command-job-manager.ts:
-  + new public method `releaseForegroundAbortOwnership(jobId)` (line ~2866)
-    - O(1) lookup in `this.active`
-    - safe no-op when jobId is unknown or job is terminal
-    - removes the AbortSignal listener via `removeEventListener`
-    - clears `job.abortSignal` and `job.abortListener`
-    - DOES NOT touch `job.deadlineTimer`
-    - DOES NOT call `terminateTree` / `killTree`
-
-apps/vscode/src/sdk/vscode-run-commands-tool.ts:
-  + one new call site at the foreground->background handoff boundary
-    (line ~709, inside `if (start.state === "running")` branch)
-    - calls `manager.releaseForegroundAbortOwnership(start.jobId)` AFTER
-      `start.terminalPromise.then(...)` is attached and BEFORE the
-      RUNNING envelope is constructed and returned.
-    - idempotent, safe no-op when no caller signal was attached
-    - bounded to the background path (the foreground `executeForeground`
-      path is unaffected)
-
-## Boundaries observed (one-variable discriminator)
+BOUNDARIES OBSERVED (one-variable discriminator):
 
   Production RED vs. GREEN differ only in whether
   `manager.releaseForegroundAbortOwnership(jobId)` is invoked between
   handoff and abort. Everything else (same manager, same supervisor,
   same caller signal, same handoff code path, same command, same wait
-  budget) is held constant.
-
-  The bounded ablation therefore establishes the listener retention as
-  the necessary cause of the defect.
+  budget) is held constant. The bounded ablation therefore establishes
+  the listener retention as the necessary cause of the defect at the
+  REAL production handoff.

@@ -1,45 +1,79 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 07 — RED output (executable evidence)
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 07 — RED output (REAL HANDOFF, PRE-REPAIR PARENT)
 
-DECISIVE EVIDENCE: the LIVE causal chain is now reproducible deterministically
-on the production seam (was previously LIVE-only, un-reproducible per
-predecessor ACT's 16-red.txt).
+DECISIVE EVIDENCE: the LIVE causal chain is reproduced deterministically
+on the ACTUAL production `createVscodeRunCommandsTool` backgroundExec
+handoff — NOT on `manager.start()` alone.
 
-EXECUTABLE: /tmp/red-tool.mjs (production manager.start() called directly
-with a real AbortSignal from a real AbortController — same code path as
-`vscode-run-commands-tool.ts:648`).
+EXECUTABLE: .factory/tmp/pwaor-real-handoff.test.ts
+(bun:test; vitest is broken per the predecessor ACT result.json
+`gates.command_job_manager_tests`. bun:test's mock.module() substitutes the
+production modules.)
 
 ENVIRONMENT:
-  - Repository HEAD: a064ea96b76562b2b2f6d4cda562b119af993073
-  - Platform: darwin (arm64)
+  - HEAD TESTED: a064ea96b (predecessor's epistemic correction — pre-repair)
+  - Platform: darwin (arm64), bun 1.3.13
   - CLINEMM_EXPERIMENTAL_SANDBOX=off
-  - Runtime: bun 1.3.13
 
 PRODUCTION SEAM EXERCISED:
-  apps/vscode/src/sdk/command-job-manager.ts:1984-2011 — caller
-  AbortSignal listener installation
-  apps/vscode/src/sdk/command-job-manager.ts:2010 — addEventListener
-  apps/vscode/src/sdk/vscode-run-commands-tool.ts:648 — manager.start(
-    { ... }, context) — the load-bearing call site
+  apps/vscode/src/sdk/vscode-run-commands-tool.ts:648 — manager.start(...) call
+  apps/vscode/src/sdk/vscode-run-commands-tool.ts:674 — RUNNING envelope
+  apps/vscode/src/sdk/command-job-manager.ts:1984-2011 — listener install
+  apps/vscode/src/sdk/background-job-liveness-authority.ts — BJLA capture
 
 RED COMMAND:
-  CLINEMM_EXPERIMENTAL_SANDBOX=off bun /tmp/red-tool.mjs
+  CLINEMM_EXPERIMENTAL_SANDBOX=off bun test \
+    ./.factory/tmp/pwaor-real-handoff.test.ts
 
-EXIT CODE: 0 (DEFECT_REPRODUCED=true)
+RED OUTPUT (PRE-REPAIR PARENT, a064ea96b):
 
-RED OUTPUT:
-  HANDOFF_REACHED start.state = running jobId = cmd_mua5it42ub78lj6g
-  STRUCTURAL_LISTENER_ATTACHED_AT_HANDOFF: true
-  STRUCTURAL_ABORT_SIGNAL_IS_CALLER: true
-  POST_ABORT_STATE: cancelled
-  POST_ABORT_IN_ACTIVE_MAP: false
-  DEFECT_REPRODUCED: true
+  ✗ PWAOR-POST-REPAIR-RUNNING: Expected 0 cancellation records, Received 1
+  ✓ PWAOR-PRE-REPAIR-WITNESS: listener retention defect at manager.start() seam
+  ✓ PWAOR-CTL-02: explicit cancelBackgroundCommand still works (CP-C)
+  ✓ PWAOR-CTL-03: extension_shutdown still cancels (CP-D)
+  ✓ PWAOR-CTL-08: natural completion still works (CP-E)
 
-EVALUATION:
+INTERPRETATION:
 
-  1. Realtime seam match (RED reproduces deterministically): PASS.
-  2. Provenance match (caller_abort_signal is the discriminator):
-     Structural — same listener install at command-job-manager.ts:1986.
-  3. Conservation: bounded release is per-job; does not touch any
-     other cancellation seam.
+  PWAOR-CTL-02 / CTL-03 / CTL-08 PASS: explicit cancel, extension_shutdown,
+  and natural completion work at the real handoff (conservation matrix).
 
-RED STATUS: RED REPRODUCED — defect is real on the production seam.
+  PWAOR-PRE-REPAIR-WITNESS PASSES: the listener retention defect IS
+  structurally present at command-job-manager.ts:1986-2010.
+
+  PWAOR-POST-REPAIR-RUNNING FAILS: the caller's AbortSignal listener
+  attached at handoff FIRES on later abort, producing a
+  job_cancellation_requested record with origin=caller_abort_signal.
+  This is the defect reproducing on the REAL production tool handoff.
+
+  On the pre-repair parent (a064ea96b):
+    - tool.execute() → manager.start() returns RUNNING
+    - caller abort AFTER handoff → BJLA captures cancellation_requested
+      with requestOrigin=caller_abort_signal (the LIVE defect)
+
+  This is the EXACT defect the predecessor ACT captured LIVE but could
+  not reproduce deterministically. The bounded hypothesis is now
+  mechanically verified on the real handoff.
+
+COMPARISON (post-repair HEAD vs pre-repair parent):
+
+  Post-repair HEAD (a58c32a13):
+    ✓ PWAOR-POST-REPAIR-RUNNING: Expected 0 cancellation records,
+        received 0. Caller abort does NOT cancel the detached job.
+        The production wire calls releaseForegroundAbortOwnership at the
+        handoff boundary (vscode-run-commands-tool.ts:711), which detaches
+        the listener BEFORE the caller's abort can fire it.
+
+  Pre-repair parent (a064ea96b):
+    ✗ PWAOR-POST-REPAIR-RUNNING: Expected 0 cancellation records,
+        received 1. Caller abort cancels the detached job via the
+        listener that was retained at the handoff.
+
+  RED → GREEN on the REAL production handoff:
+    Single discriminator: whether the production wire calls
+    manager.releaseForegroundAbortOwnership(jobId) at the handoff.
+
+RED STATUS: RED REPRODUCED on REAL HANDOFF.
+
+The bounded defect is mechanically reproducible on the production
+seam. ROOT_CAUSE_NECESSITY = ESTABLISHED (see 13-causal-verdict.txt
+for the full causal chain).

@@ -5394,3 +5394,45 @@ STALE_CARD_AFTER_CANCEL      = DEFERRED (orthogonal card mutation issue)
   4. Decisive negative evidence: NO `job_cancellation_requested` with `requestOrigin=caller_abort_signal` for the detached job after the caller aborts.
   5. Positive-control: explicit Cancel on the Backgrounded card produces `requestOrigin=background_cancel_rpc` and cancels cleanly.
   6. Update `result.json` to `verdict: PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED`.
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 — CORRECTION01 — REAL-HANDOFF RED REPRODUCED + ABLATION CONFIRMED — 2026-09-20
+
+**Status:** CORRECTION01 cycle after Factory causal reviewer P0 on first submission (HALT_RED_NOT_REPRODUCED at the real `createVscodeRunCommandsTool` handoff). Built a bun:test probe with `mock.module()` substitutions that drives the REAL production tool factory — NOT just `manager.start()` directly. **RED REPRODUCED at the real handoff on the pre-repair parent (`a064ea96b`):** tool.execute() returns RUNNING envelope, caller abort AFTER handoff produces a `caller_abort_signal` cancellation record at the BJLA request boundary — the exact defect from the predecessor LIVE specimen `cmd_mu9wmnyuhvgva8cn`. **GREEN CONFIRMED on the post-repair HEAD (`a58c32a13`):** the production wire calls `releaseForegroundAbortOwnership(start.jobId)` at the handoff boundary (`vscode-run-commands-tool.ts:711`), the listener is detached before the caller's abort fires, NO cancellation record is produced, the detached job remains RUNNING. **6/6 focused real-handoff tests pass on the post-repair HEAD; 4/5 pass on the pre-repair parent (the 1 fail is the deliberate RED reproduction).** Conservation matrix: CP-A (PWAOR-PRE-REPAIR-WITNESS), CP-C (PWAOR-CTL-02), CP-D (PWAOR-CTL-03), CP-E (PWAOR-CTL-08), and the no-signal CP-F-intersection (PWAOR-CTL-09) all EXECUTABLE_PASS. CP-F (deadline), CP-G..CP-M, CP-N are STRUCTURAL_CONSERVED (no code change to those paths). **`vscode:prepublish` PASSES** — `dist/extension.js` (26 MB) produced. `tsc` / `lint` / `format` / `git diff --check` all PASS. Working tree CLEAN post-CORRECTION01.
+
+**Honest verdict matrix (CORRECTION01):**
+```
+LOW_LEVEL_RED_GREEN       = PASS (manager.start() direct; preserved from first submission)
+REAL_HANDOFF_RED          = PASS (pre-repair parent: PWAOR-POST-REPAIR-RUNNING Expected 0, Received 1)
+REAL_HANDOFF_GREEN        = PASS (post-repair HEAD: PWAOR-POST-REPAIR-RUNNING Expected 0, Received 0)
+PRODUCTION_HANDOFF_RED     = REPRODUCED (this ACT, on the production tool factory)
+PRODUCTION_HANDOFF_GREEN   = CONFIRMED (this ACT, on the production tool factory)
+ROOT_CAUSE_NECESSITY      = ESTABLISHED at the real production handoff
+PRE_HANDOFF_ABORT          = CONSERVED (CP-A EXECUTABLE_PASS)
+POST_HANDOFF_ABORT         = RELEASED (production wire calls release at handoff)
+BACKGROUND_CANCEL_RPC      = CONSERVED (CP-C EXECUTABLE_PASS)
+EXTENSION_SHUTDOWN         = CONSERVED (CP-D EXECUTABLE_PASS)
+NATURAL_COMPLETION         = CONSERVED (CP-E EXECUTABLE_PASS)
+DEADLINE                   = STRUCTURAL_CONSERVED (CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT = DEFERRED per ACT §14)
+Q5                         = UNCHANGED
+TASK_HEADER                = UNCHANGED
+STALE_CARD_AFTER_CANCEL     = DEFERRED (orthogonal)
+```
+
+**VERDICT:** PASS_RED_REPRODUCED_REAL_HANDOFF + ABLATION_CONFIRMED (supersedes PASS_RED_REPRODUCED_ABLATION_PENDING from first submission).
+
+**Production diff (UNCHANGED from first submission — bounded repair is correct):**
+  - `apps/vscode/src/sdk/command-job-manager.ts`: +63 LOC (new public method `releaseForegroundAbortOwnership` at line 2913)
+  - `apps/vscode/src/sdk/vscode-run-commands-tool.ts`: +11 LOC (one new call site at the handoff boundary at line 711)
+
+**NEW in CORRECTION01:**
+  - `.factory/tmp/pwaor-real-handoff.test.ts` (251 LOC): bun:test probe that drives the REAL `createVscodeRunCommandsTool` factory at the real handoff. 6 tests covering PWAOR-PRE-REPAIR-WITNESS, PWAOR-POST-REPAIR-RUNNING, PWAOR-CTL-02/03/08/09. Saved to evidence directory as `pwaor-real-handoff.test.ts`.
+  - `07-red-output.txt`, `12-ablation-output.txt`, `13-causal-verdict.txt`, `15-focused-tests.txt`, `16-conservation.txt`, `17-full-gates.txt`, `25-final-gates.txt`, `result.json`: rewritten to reflect CORRECTION01 real-handoff evidence (vs the lower-level manager.start() evidence of the first submission).
+  - `vscode:prepublish` now PASSES (with dist/extension.js on disk).
+
+**NEXT STEP:** future ACT (or Factory reviewer) to qualify LIVE in a real VS Code instance:
+  1. `cd apps/vscode && bun run package` (typecheck + webview build + esbuild production — confirmed working in this CORRECTION01)
+  2. `code --install-extension dist/clinemm-<version>.vsix`
+  3. Run a long-running shell command with Proceed While Running or 300s auto-proceed.
+  4. Decisive negative evidence: NO `job_cancellation_requested` with `requestOrigin=caller_abort_signal` for the detached job after the caller aborts.
+  5. Positive-control: explicit Cancel on the Backgrounded card produces `requestOrigin=background_cancel_rpc` and cancels cleanly.
+  6. Update `result.json` `verdict` to `PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED`.

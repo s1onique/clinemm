@@ -1,49 +1,50 @@
 {
   "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01",
-  "epistemic_purpose": "reproduction and ablation first; bounded repair only on RED->GREEN",
+  "epistemic_purpose": "reproduction and ablation on the REAL production handoff; bounded repair only on RED->GREEN",
+  "correction_cycle": "CORRECTION01 — re-opened after Factory causal reviewer P0 (first submission only proved manager.start() lower-level seam, not the production tool factory handoff)",
   "entry_head": "a064ea96b76562b2b2f6d4cda562b119af993073",
-  "act_commit_head": "a58c32a13ba4559bf758b156b7784781acf5890d",
+  "act_commit_head": "5643f1baaa94086fbe0e20e772aa67e5c113e758 (evidence directory of first submission; production repair at a58c32a13 — unchanged in CORRECTION01)",
   "predecessor": {
     "classification": "CASE_CP3_CALLER_ABORT_SIGNAL",
     "requester_causality": "ESTABLISHED",
-    "root_cause_ablation": "NOT_EXECUTED"
+    "root_cause_ablation": "EXECUTED at the REAL production handoff (CORRECTION01)"
   },
   "reproduction": {
     "real_production_handoff": true,
     "red_reproduced": true,
     "post_handoff_abort_cancelled_job": true,
+    "executable": "./.factory/tmp/pwaor-real-handoff.test.ts (bun:test)",
     "evidence_file": "07-red-output.txt",
-    "executable": "/tmp/red-tool.mjs",
     "output_summary": {
-      "start_state": "running",
-      "jobId": "cmd_mua5it42ub78lj6g",
-      "STRUCTURAL_LISTENER_ATTACHED_AT_HANDOFF": true,
-      "STRUCTURAL_ABORT_SIGNAL_IS_CALLER": true,
-      "POST_ABORT_STATE": "cancelled",
-      "POST_ABORT_IN_ACTIVE_MAP": false,
-      "DEFECT_REPRODUCED": true
+      "test_name": "PWAOR-POST-REPAIR-RUNNING (real handoff)",
+      "tool_factory": "createVscodeRunCommandsTool({ vscodeTerminalExecutionMode: 'backgroundExec' })",
+      "command": "/bin/sh -c 'sleep 4'",
+      "waitBudgetMs": 30,
+      "executionDeadlineMs": 30000,
+      "pre_repair_parent_head": "a064ea96b",
+      "result_pre_repair": "Expected 0, Received 1 — caller_abort_signal cancellation_record fired on the real handoff",
+      "DEFECT_REPRODUCED_AT_REAL_HANDOFF": true
     }
   },
   "ablation": {
     "executed": true,
-    "single_variable": "caller AbortSignal ownership after handoff (releaseForegroundAbortOwnership invocation)",
+    "real_handoff": true,
+    "single_variable": "the production wire calls manager.releaseForegroundAbortOwnership(start.jobId) at the handoff boundary (vscode-run-commands-tool.ts:711) — yes on the post-repair HEAD, no on the pre-repair parent",
     "red_state": {
-      "listener_attached": true,
-      "abort_signal_is_caller": true,
-      "post_abort_state": "cancelled",
-      "post_abort_in_active_map": false
+      "tool_factory": "createVscodeRunCommandsTool({ backgroundExec })",
+      "release_called_at_handoff": false,
+      "post_handoff_abort_cancelled_job": true,
+      "BJLA_cancellation_requested": { "requestOrigin": "caller_abort_signal", "firstWriterWins": true }
     },
     "green_state": {
-      "listener_attached": false,
-      "abortListener_undefined": true,
-      "abortSignal_undefined": true,
-      "post_abort_state": "running",
-      "post_abort_in_active_map": true,
-      "idempotent_release_throws": false
+      "tool_factory": "createVscodeRunCommandsTool({ backgroundExec })",
+      "release_called_at_handoff": true,
+      "post_handoff_abort_cancelled_job": false,
+      "BJLA_cancellation_requested_records": 0,
+      "job_remains_running_after_handoff_and_abort": true
     },
     "necessity_established": true,
-    "evidence_file": "12-ablation-output.txt",
-    "executable": "/tmp/green-tool.mjs"
+    "evidence_file": "12-ablation-output.txt"
   },
   "repair": {
     "authorized": true,
@@ -51,51 +52,49 @@
     "files": [
       {
         "path": "apps/vscode/src/sdk/command-job-manager.ts",
-        "change": "Added public method releaseForegroundAbortOwnership(jobId)",
-        "lines_added": 63
+        "change": "Added public method releaseForegroundAbortOwnership(jobId) at line 2913",
+        "lines_added_code": 17,
+        "lines_added_docblock": 42
       },
       {
         "path": "apps/vscode/src/sdk/vscode-run-commands-tool.ts",
-        "change": "Added one call site at the foreground->background handoff boundary (line ~709)",
-        "lines_added": 11
-      },
-      {
-        "path": "apps/vscode/src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts",
-        "change": "Test file documenting the RED/GREEN contract (vitest harness is non-functional; the production-seam RED/GREEN is exercised via /tmp/red-tool.mjs and /tmp/green-tool.mjs)",
-        "lines_added": 150
+        "change": "Added one call site at the foreground->background handoff boundary at line 711 (inside if (start.state === 'running') branch)",
+        "lines_added_code": 1,
+        "lines_added_docblock": 10
       }
     ],
     "conservation": {
-      "CP_A_prehandoff_abort": "CONSERVED",
-      "CP_C_background_cancel_rpc": "CONSERVED",
-      "CP_D_extension_shutdown": "CONSERVED",
-      "CP_E_natural_completion": "CONSERVED (CTL-08 PASS: state=exited after release)",
-      "CP_F_timeout_deadline": "DEFERRED_BY_CONTRACT (CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT per ACT \u00a714)",
-      "CP_G_other_jobs_sessions": "UNCHANGED (per-job release)",
-      "CP_H_active_gauge": "UNCHANGED (release does not delete from active map)",
-      "CP_I_lifecycle_events": "UNCHANGED (release emits no events)",
-      "CP_J_process_group_cleanup": "UNCHANGED (no killTree call)",
-      "CP_K_BOCOR_Q5": "UNCHANGED",
-      "CP_L_TSWPD": "UNCHANGED",
-      "CP_M_TaskHeader": "UNCHANGED",
-      "CP_N_stale_card_after_cancel": "DEFERRED (orthogonal card mutation issue, observed in LIVE specimen)"
+      "CP-A_prehandoff_abort": "EXECUTABLE_PASS (PWAOR-PRE-REPAIR-WITNESS at manager.start() seam)",
+      "CP-C_background_cancel_rpc": "EXECUTABLE_PASS (PWAOR-CTL-02)",
+      "CP-D_extension_shutdown": "EXECUTABLE_PASS (PWAOR-CTL-03)",
+      "CP-E_natural_completion": "EXECUTABLE_PASS (PWAOR-CTL-08)",
+      "CP-F_timeout_deadline": "STRUCTURAL_CONSERVED only (CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT = DEFERRED per ACT §14; deadline timer untouched by the bounded repair)",
+      "CP-G_other_jobs_sessions": "STRUCTURAL_CONSERVED (per-job release)",
+      "CP-H_active_gauge": "STRUCTURAL_CONSERVED (release does not delete from active map)",
+      "CP-I_lifecycle_events": "STRUCTURAL_CONSERVED (release emits no events)",
+      "CP-J_process_group_cleanup": "STRUCTURAL_CONSERVED (no killTree call)",
+      "CP-K_BOCOR_Q5": "STRUCTURAL_CONSERVED",
+      "CP-L_TSWPD": "STRUCTURAL_CONSERVED",
+      "CP-M_TaskHeader": "STRUCTURAL_CONSERVED",
+      "CP-N_stale_card_after_cancel": "DEFERRED (orthogonal card mutation issue, observed in LIVE specimen)"
     }
   },
   "gates": {
-    "check_types": "PASS (tsc EXIT=0; no diagnostics)",
+    "check_types": "PASS (tsc EXIT=0)",
     "lint": "PASS (biome lint EXIT=0)",
     "format": "PASS (biome format EXIT=0)",
-    "git_diff_check": "PASS (no whitespace warnings; EXIT=0)",
-    "git_status_post_commit": "CLEAN (working tree clean; only evidence directory untracked)",
-    "production_seam_red_reproduced": true,
-    "production_seam_green_repaired": true,
-    "conservation_matrix": "PASS (5/5 CTL-04, CTL-05, CTL-08, CTL-09, CTL-11)"
+    "git_diff_check": "PASS (no whitespace warnings)",
+    "git_status": "CLEAN post-commit",
+    "vscode_prepublish": "RUN (sync-parser-helper, protos, tsc, compat, webview tsc, build:webview (vite), lint, esbuild --production all PASS; dist/extension.js produced — 26 MB)",
+    "test_vitest": "NOT_EXECUTABLE (pre-existing zod 4 ESM failure under bun-spawned vite, unrelated to this ACT; worked around by bun:test)",
+    "real_handoff_test_post_repair": "PASS (6/6 in .factory/tmp/pwaor-real-handoff.test.ts)",
+    "real_handoff_test_pre_repair": "RED (PWAOR-POST-REPAIR-RUNNING fails on pre-repair parent; CTL-02/03/08 still pass — conservation matrix intact)"
   },
   "live_qualification": {
     "executed": false,
     "deferred_reason": "actuator environment does not provide a VS Code instance",
-    "caller_abort_after_handoff": "NOT_EXECUTED",
-    "explicit_cancel_positive_control": "NOT_EXECUTED",
+    "caller_abort_after_handoff": "EXECUTABLE_PASS (real-handoff test, post-repair HEAD — no caller_abort_signal cancellation_record fires)",
+    "explicit_cancel_positive_control": "EXECUTABLE_PASS (real-handoff test, post-repair HEAD — PWAOR-CTL-02 confirms origin=background_cancel_rpc)",
     "evidence_files_placeholder": [
       "18-dogfood-vsix-identity.txt",
       "19-live-bjla.jsonl",
@@ -110,6 +109,7 @@
     "new_diagnostics_added": false,
     "rationale": "This ACT only adds a bounded production repair; no new diagnostics were added. Existing diagnostics from the predecessor ACT are preserved."
   },
-  "verdict": "PASS_RED_REPRODUCED_ABLATION_PENDING",
+  "verdict": "PASS_RED_REPRODUCED_REAL_HANDOFF + ABLATION_CONFIRMED",
+  "previous_verdict": "PASS_RED_REPRODUCED_ABLATION_PENDING (superseded — that verdict was based on manager.start() only, not the production tool factory handoff)",
   "next_state": "PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED conditional on LIVE qualification by a future ACT or the Factory reviewer"
 }

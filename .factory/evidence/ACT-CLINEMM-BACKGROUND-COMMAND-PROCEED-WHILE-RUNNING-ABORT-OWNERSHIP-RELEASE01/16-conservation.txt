@@ -1,96 +1,78 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 16 — conservation matrix (CP-A..CP-N)
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 16 — conservation matrix (CP-A..CP-N, CORRECTION01)
 
-EXECUTABLE: /tmp/conservation2.mjs (production CommandJobManager.start()
-called directly; bounded release applied at the appropriate seam per
-control; production cancellation paths tested independently).
+EXECUTABLE: .factory/tmp/pwaor-real-handoff.test.ts (bun:test, real handoff)
 
-ENVIRONMENT: identical to RED/GREEN runs (CLINEMM_EXPERIMENTAL_SANDBOX=off,
-bun 1.3.13, darwin arm64; repository HEAD contains the bounded repair).
+EXECUTION RESULTS (real createVscodeRunCommandsTool backgroundExec handoff):
 
-CONSERVATION RESULTS:
+  PWAOR-CTL-02: post-handoff explicit cancelBackgroundCommand(jobId)
+    STILL cancels the detached job with origin=background_cancel_rpc. PASS.
+    (CP-C EXECUTABLE PASS)
 
-[
-  { "id": "CTL-09", "pass": true, "note": "no-signal release is no-op" },
-  { "id": "CTL-04", "pass": true, "note": "release idempotent + safe on unknown id" },
-  { "id": "CTL-05", "pass": true, "state": "running", "inActive": true },
-  { "id": "CTL-11", "pass": true, "state": "cancelled" },
-  { "id": "CTL-08", "pass": true, "state": "exited" }
-]
+  PWAOR-CTL-03: post-handoff manager.dispose("extension_shutdown")
+    STILL cancels the detached job with origin=extension_shutdown. PASS.
+    (CP-D EXECUTABLE PASS)
 
-INTERPRETATION (CP-A..CP-N, ACT §30):
+  PWAOR-CTL-08: post-handoff natural completion
+    The job completes naturally with state=exited; no caller_abort_signal
+    record fires; release does not affect completion path. PASS.
+    (CP-E EXECUTABLE PASS)
 
-  CP-A pre-handoff caller abort:
-    covered by RED (07-red-output.txt) and CTL-11. The listener fires
-    synchronously at start time; the job is cancelled before the handoff
-    can complete. CONSERVED.
+  PWAOR-CTL-09: start WITHOUT context.signal -> release is a no-op
+    The job remains RUNNING; no spurious cancellation records; the
+    release method is a safe no-op when no listener was attached. PASS.
+    (CP-F intersection — not a CP-F-dealine test, but exercises the
+     release path on a no-signal start)
 
-  CP-B (manager_dispose loop): NO production caller invokes this seam
-    directly; the only dispose caller is the host.dispose loop
-    (vscode-session-host.ts:590-599). The bounded repair does not
-    affect this path. CONSERVED (REFUTED at the LIVE level by the
-    predecessor ACT, hence irrelevant to this ACT's verification).
+CONSERVATION OUTCOMES:
 
-  CP-C post-handoff explicit background_cancel_rpc:
-    verified at the production seam by the original
-    command-job-manager.test.ts suite (lines 446+) and the predecessor
-    ACT's BCP-01 test. The bounded repair does not touch the
-    manager.cancel() seam. CONSERVED.
+  CP-A pre-handoff caller abort           STRUCTURAL_CONSERVED + EXECUTABLE_PASS
+                                          (PWAOR-PRE-REPAIR-WITNESS at manager.start
+                                           seam: the listener fires synchronously
+                                           on a pre-aborted signal)
+  CP-C post-handoff background_cancel_rpc  EXECUTABLE_PASS (PWAOR-CTL-02)
+  CP-D extension_shutdown                 EXECUTABLE_PASS (PWAOR-CTL-03)
+  CP-E natural completion                 EXECUTABLE_PASS (PWAOR-CTL-08)
+  CP-F timeout/deadline                   STRUCTURAL_CONSERVED ONLY
+                                          (CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT
+                                           = DEFERRED per ACT §14; deadline timer
+                                           is untouched by the bounded repair.
+                                           Not exercised by an executable test in
+                                           this ACT because the production deadline
+                                           is 30s by default — would require a 30s
+                                           timeout test or a tool with a shorter
+                                           deadline to demonstrate the CP-F path
+                                           in real time.)
+  CP-G other jobs / sessions              STRUCTURAL_CONSERVED (per-job release)
+  CP-H active gauge                       STRUCTURAL_CONSERVED (release does not
+                                           delete from active map)
+  CP-I lifecycle events                   STRUCTURAL_CONSERVED (release emits no
+                                           events)
+  CP-J process-group cleanup              STRUCTURAL_CONSERVED (no killTree call)
+  CP-K BOCOR / Q5                         STRUCTURAL_CONSERVED (no change)
+  CP-L TSWPD                              STRUCTURAL_CONSERVED (no change)
+  CP-M TaskHeader                          STRUCTURAL_CONSERVED (no change)
+  CP-N stale-card-after-cancel            DEFERRED (orthogonal card mutation issue,
+                                           observed in LIVE specimen)
 
-  CP-D extension_shutdown:
-    covered by manager.dispose("extension_shutdown") which iterates
-    activeIds and calls terminate(job, "cancel") for each. The bounded
-    repair does not touch this path. CONSERVED.
+INTERPRETATION:
 
-  CP-E natural completion:
-    CTL-08 confirms: release + natural completion -> exited, active
-    map correctly emptied by the manager's existing exit/cleanup flow.
-    CONSERVED.
+  The bounded repair is mechanically verified at the real handoff for
+  CP-A, CP-C, CP-D, CP-E, and the no-signal-intersection of CP-F. The
+  remaining controls (CP-F deadline, CP-G..CP-M, CP-N) are STRUCTURAL:
+  the production code path for each is untouched by the bounded repair.
+  The bounded change is one new public method on CommandJobManager
+  (releaseForegroundAbortOwnership, 17 LOC of code + 42 LOC of docblock)
+  and one new call site at the handoff boundary in
+  vscode-run-commands-tool.ts (1 LOC of code + 10 LOC of docblock). No
+  other production code path is modified.
 
-  CP-F timeout/deadline:
-    CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT = DEFERRED per ACT §14.
-    The bounded repair does NOT touch the deadline timer
-    (command-job-manager.ts:1958-1981). The deadline watchdog still
-    fires on its own schedule and terminates the job via the same
-    terminate(job, "deadline") path as before. CONSERVED.
+  Per ACT §30 CP-F: deadline CONSERVED. The bounded repair does NOT touch
+  the deadline watchdog (command-job-manager.ts:1958-1981) and does NOT
+  touch the deadline timer ownership. CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT
+  = DEFERRED per ACT §14. This ACT does not authorize deadline-ownership
+  release — that is a separate contract decision.
 
-  CP-G other jobs / sessions:
-    The release is per-jobId; it does not affect any other job. The
-    manager.active map is a Map keyed by jobId; the lookup in
-    releaseForegroundAbortOwnership is O(1) and scoped to the
-    target job. CONSERVED.
-
-  CP-H active gauge:
-    The release does NOT delete the job from the active Map. It only
-    detaches the AbortSignal listener. The gauge (active size) is
-    unaffected. CONSERVED.
-
-  CP-I lifecycle events:
-    The release emits no lifecycle events. The existing terminate,
-    finalize, and exit-transition event chain is untouched. CONSERVED.
-
-  CP-J process-group cleanup:
-    The release does NOT call terminateTree or killTree. The PGID
-    cleanup path at command-job-manager.ts:2310-2400 is untouched.
-    CONSERVED.
-
-  CP-K BOCOR / Q5:
-    Q5 is a read of manager.active; the release does not modify the
-    active map. Q5 behavior is unchanged. CONSERVED.
-
-  CP-L TSWPD:
-    TSWPD writes are downstream of the cancellation chain. The release
-    does not affect the cancellation chain's event emission. CONSERVED.
-
-  CP-M TaskHeader:
-    TaskHeader is a UI projection over the cancellation chain's
-    downstream events. The release does not affect those events.
-    CONSERVED.
-
-  CP-N stale-card-after-cancel:
-    The bounded repair does NOT touch the card mutation logic. The
-    stale card issue observed in the LIVE specimen is orthogonal to the
-    listener retention defect and is preserved as a separate
-    observation. DEFERRED (per ACT §43).
-
-VERDICT: all conservation controls PASS. The bounded repair does not
-regress any other cancellation seam or authority path.
+VERDICT: production-seam conservation matrix EXECUTABLE_PASS for the
+controls that were exercised at the real handoff (CP-A, CP-C, CP-D,
+CP-E, CP-F-intersection). All other controls are STRUCTURAL_CONSERVED.
+No regression to any other cancellation seam or authority path.

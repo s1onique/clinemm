@@ -1,59 +1,60 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 12 — ablation output (RED → GREEN)
+ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 / 12 — ablation output (REAL HANDOFF, POST-REPAIR HEAD)
 
-EXECUTABLE: /tmp/green-tool.mjs (production manager.start() called
-directly with a real AbortSignal; bounded repair release call between
-handoff and abort).
+EXECUTABLE: .factory/tmp/pwaor-real-handoff.test.ts
+(bun:test, post-repair HEAD = a58c32a13)
 
-VARIABLE CHANGED vs. RED (single discriminator):
-  callerAbort.abort() vs. callerAbort.abort() — IDENTICAL on both runs;
-  the ONLY difference is the addition of:
-    manager.releaseForegroundAbortOwnership(jobId)
-  immediately after handoff and before the abort.
+ABLATION OUTPUT (POST-REPAIR HEAD, a58c32a13):
 
-ABLATION OUTPUT:
-  HANDOFF_REACHED start.state = running jobId = cmd_mua5nnc05x6m0sew
-  BEFORE_RELEASE listener attached: true
-  BEFORE_RELEASE abortSignal is caller: true
-  AFTER_RELEASE listener attached: false
-  AFTER_RELEASE abortSignal is caller: false
-  AFTER_RELEASE abortListener is undefined: true
-  AFTER_RELEASE abortSignal is undefined: true
-  IDEMPOTENT_RELEASE_THROWS: false
-  POST_ABORT_STATE: running
-  POST_ABORT_IN_ACTIVE_MAP: true
-  DEFECT_REPAIRED: true
+  ✓ PWAOR-PRE-REPAIR-WITNESS: at the manager.start() seam the listener
+      retention defect is structurally present (pre-repair shape)  [4073.10ms]
+  ✓ PWAOR-POST-REPAIR-RUNNING (real handoff): tool returns RUNNING then
+      caller abort does NOT cancel (post-repair invariant)  [4062.78ms]
+  ✓ PWAOR-CTL-02: post-handoff explicit cancelBackgroundCommand(jobId)
+      still cancels (origin=background_cancel_rpc)  [4059.34ms]
+  ✓ PWAOR-CTL-03: post-handoff manager.dispose('extension_shutdown')
+      cancels detached job (origin=extension_shutdown)  [4037.51ms]
+  ✓ PWAOR-CTL-08: post-handoff natural completion CONSERVED  [350.48ms]
+  ✓ PWAOR-CTL-09: start WITHOUT context.signal -> release is a no-op
+      (job remains running)  [4038.90ms]
+
+  6 pass / 0 fail. 22 expect() calls. Ran 6 tests in 21.27s.
 
 INTERPRETATION:
 
-  Before the release call:
-    - listener attached: true (same as RED — the listener is in place
-      at handoff)
-    - abortSignal is caller: true
+  PWAOR-PRE-REPAIR-WITNESS PASSES on the post-repair HEAD: the defect is
+  structurally present at the manager.start() seam (this is the
+  bounded defect; on the post-repair HEAD it does not surface via the
+  production wire because the production wire calls release at the
+  handoff).
 
-  The bounded repair:
-    - manager.releaseForegroundAbortOwnership(jobId)
-    - detaches the listener from the caller's signal
-    - clears job.abortListener and job.abortSignal
+  PWAOR-POST-REPAIR-RUNNING PASSES on the post-repair HEAD: tool returns
+  RUNNING, caller abort does NOT produce a caller_abort_signal cancellation
+  record (Expected 0, Received 0). The bounded repair works on the real
+  handoff.
 
-  After the release call:
-    - listener attached: false
-    - abortListener is undefined: true
-    - abortSignal is undefined: true
+  PWAOR-CTL-02 PASSES: explicit jobId cancel via manager.cancel({origin:
+  "background_cancel_rpc"}) still works (CP-C CONSERVED).
 
-  Idempotence check: IDEMPOTENT_RELEASE_THROWS = false
+  PWAOR-CTL-03 PASSES: manager.dispose("extension_shutdown") still cancels
+  detached jobs (CP-D CONSERVED).
 
-  Caller abort AFTER release:
-    - POST_ABORT_STATE: running
-    - POST_ABORT_IN_ACTIVE_MAP: true
-    - DEFECT_REPAIRED: true
+  PWAOR-CTL-08 PASSES: natural completion path is unaffected by the
+  bounded release (CP-E CONSERVED).
+
+  PWAOR-CTL-09 PASSES: starting without context.signal leaves the job
+  unaffected (the release is a no-op when no listener was attached).
 
 CONCLUSION:
 
-  RED → GREEN is established.
+  RED → GREEN on the REAL production handoff.
 
-  The single discriminator — caller AbortSignal ownership after handoff —
-  accounts for the entire symptom.
+  Single discriminator: whether the production wire calls
+  manager.releaseForegroundAbortOwnership(jobId) at the handoff.
 
-  ROOT_CAUSE_NECESSITY = ESTABLISHED.
+  All other cancellation seams are CONSERVED. The bounded repair is
+  correct.
 
-  Production repair is AUTHORIZED.
+ROOT_CAUSE_NECESSITY = ESTABLISHED.
+
+Production repair authorized + applied (commits a58c32a13 + f61069e9a
++ 5643f1baa + this correction cycle).
