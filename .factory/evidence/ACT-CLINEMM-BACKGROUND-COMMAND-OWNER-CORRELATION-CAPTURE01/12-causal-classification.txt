@@ -1,0 +1,137 @@
+CAUSAL CLASSIFICATION (per ACT sec 27)
+======================================
+
+LIVE CLASSIFICATION: UNRESOLVED
+
+The LIVE causal tuple (jobId, job owner sessionId, active
+session id, guard result) was NOT captured in this evidence
+because the LIVE qualification requires the operator-driven
+reproduction per ACT sec 25-26 (see file 11 for the reason).
+
+LIVE cause is therefore UNPROVEN at this evidence.
+
+PRE-EXISTING CLASSIFICATION (BCAFG01 §8 — frozen by ACT
+sec 2 and NOT re-litigated here):
+
+  G2 owner identity mismatch (proven within bounds)
+  H2a vs H2b sub-cause (UNPROVEN — this ACT provides the
+                              diagnostic that will close
+                              the gap on the next LIVE
+                              occurrence)
+
+SYNTHETIC CLASSIFIABLE SHAPES (per ACT sec 27)
+===============================================
+
+This ACT's diagnostic MUST mechanically classify a LIVE
+occurrence as one of:
+
+  OC1 producer owner stamp defect
+    activeJobs[N].state == "running"
+    activeJobs[N].ownerSessionId is null/undefined
+    queriedOwnerSessionId == activeSessionId
+    guardAvailable == true
+    guardResult == false
+
+    -> REPAIR: per ACT sec 31, the producer must pass
+       AgentToolContext.sessionId at managed-job start time:
+       tool.execute(..., context)
+         -> manager.start(..., { sessionId: context.sessionId })
+
+  OC2 active session identity drift
+    activeJobs[N].state == "running"
+    activeJobs[N].ownerSessionId == A
+    activeSessionId == B
+    A != B
+    guardAvailable == true
+    guardResult == false
+
+    -> REPAIR: per ACT sec 32, the session-lifecycle
+       replacement seam must preserve sessionId across
+       replaceActiveSession / rebuilds. Upstream Cline treats
+       session identity as a first-class runtime boundary
+       (per sdk/ARCHITECTURE.md).
+
+  OC3 live guard unavailable
+    activeJobs[N] present (running)
+    guardAvailable == false (the host does not expose
+                            hasRunningBackgroundJobForOwner)
+
+    -> REPAIR: per ACT sec 33, the VscodeSessionHost-backed
+       sessions must expose hasRunningBackgroundJobForOwner.
+
+  CONTRADICTION (HALT_SYNTHETIC_MODEL_CONTRADICTED_BY_LIVE)
+    activeJobs[N].state == "running"
+    activeJobs[N].ownerSessionId == queriedOwnerSessionId
+    guardAvailable == true
+    guardResult == false
+
+    -> HALT: do not repair; the synthetic model is
+       contradicted by the LIVE composition and the prior
+       BCAFG01 evidence (G1 lookup is sound) is incorrect.
+
+SYNTHETIC PROOF (NOT EXECUTED LIVE — produced by
+background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts):
+
+  OC1 record shape (test "capture ON: OC1-classifiable
+  record shape when the job's ownerSessionId is undefined
+  (no context passed)"):
+    activeJobs[0].ownerSessionId == undefined
+    activeSessionId == "session-A"
+    guardAvailable == true
+    guardResult == false
+    -> PASS: OC1 is mechanically classifiable from the
+       captured record.
+
+  OC2 record shape (test "capture ON: OC2-classifiable
+  record shape when ownerSessionId is a DIFFERENT
+  session"):
+    activeJobs[0].ownerSessionId == "session-B"
+    activeSessionId == "session-A"
+    queriedOwnerSessionId == "session-A"
+    guardAvailable == true
+    guardResult == false
+    -> PASS: OC2 is mechanically classifiable from the
+       captured record.
+
+  MATCHING_OWNER (test "capture OFF vs capture ON:
+  identical guard result + writer decision + turn phase"):
+    activeJobs[0].ownerSessionId == "session-A"
+    activeSessionId == "session-A"
+    guardAvailable == true
+    guardResult == true
+    -> The matching-owner case produces a record whose
+       guardResult is TRUE; this case is the GREEN baseline
+       (writer does NOT commit; transition suppressed).
+
+  OC3 record shape (structurally implicit):
+    Tests that omit the hasRunningBackgroundJobForOwner
+    option record guardAvailable=false, activeJobs=[],
+    guardResult=null. The OC3 classification is therefore
+    also mechanically derivable, but no explicit test
+    asserts the synthetic OC3 path because production
+    ALWAYS wires the option (so OC3 is reachable only via
+    Hub/Remote hosts that omit the method; not the LIVE
+    scenario).
+
+NEXT-ACT PROVISION
+==================
+
+This ACT halts at CAPTURE_INSUFFICIENT for the LIVE
+classification (per ACT sec 28 and sec 30). The next ACT
+in this lineage (ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-
+CORRELATION-REPAIR01 or successor) will:
+
+  1. Operate on the LIVE BOCOR + TSWPD dumps + screenshot
+     produced by the operator after installing this ACT's
+     diagnostic build.
+  2. Mechanically classify the LIVE occurrence as OC1, OC2,
+     OC3, or contradiction per ACT sec 27.
+  3. Apply the bounded repair per ACT sec 31, 32, or 33
+     (whichever the LIVE classification dictates).
+  4. Qualify the repair per ACT sec 29 (necessity) and
+     ACT sec 36 (LIVE qualification after repair).
+  5. Remove the diagnostic per ACT sec 37.
+
+Until the operator drives the LIVE reproduction, this ACT's
+verdict remains CAPTURE_INSUFFICIENT (a legitimate terminal
+verdict per ACT sec 40).

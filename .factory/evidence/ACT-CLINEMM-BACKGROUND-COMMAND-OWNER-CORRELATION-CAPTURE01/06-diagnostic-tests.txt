@@ -1,0 +1,132 @@
+DIAGNOSTIC TESTS (per ACT sec 20, 21, 22)
+=========================================
+
+Four test files added; all 44 tests pass at HEAD before LIVE.
+
+  apps/vscode/src/sdk/__tests__/background-owner-correlation.bocor.test.ts
+    Unit tests for the bounded ring module.
+    9 tests pass.
+
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-runtime-roundtrip.bocorrt.test.ts
+    Production-dump roundtrip tests (BOCOR-DUMP-01,
+    BOCOR-DUMP-EMPTY, BOCOR-DOGFOOD-OFF, dump!=clear).
+    4 tests pass.
+
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-dogfood-profile.bocordp.test.ts
+    parseBackgroundOwnerCorrelationCaptureEnv +
+    resolveEffectiveBackgroundOwnerCorrelationCapture +
+    applyBackgroundOwnerCorrelationDiagnosticProfile matrix.
+    27 tests pass.
+
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts
+    Semantic ablation + OC1/OC2/OC3-classifiable shape
+    evidence via the real SdkSessionEventCoordinator + the
+    real CommandJobManager.hasRunningBackgroundJobForOwner.
+    4 tests pass.
+
+Total: 9 + 4 + 27 + 4 = 44 new tests pass.
+
+REQUIRED TESTS FROM ACT sec 20
+==============================
+
+  BOCOR-DUMP-01: capture record -> invoke dump adapter ->
+    file exists -> JSONL parses -> exact correlation fields
+    survive. PASS.
+
+  BOCOR-DUMP-EMPTY: empty ring -> dump -> file exists ->
+    zero bytes. PASS.
+
+  BOCOR-DOGFOOD-OFF: dogfood disabled -> capture call ->
+    ring remains empty. PASS.
+
+DOGFOOD-PROFILE MATRIX (per ACT sec 21)
+=======================================
+
+  Dogfood profile | Capture
+  ----------------+-------
+  enabled         | ON
+  disabled        | OFF
+
+Verified in `bocordp.test.ts` via the
+`resolveEffectiveBackgroundOwnerCorrelationCapture` matrix:
+
+  dogfood + unset              -> ON
+  public  + unset              -> OFF
+  dogfood + "0"                -> OFF (override-down)
+  public  + "1"                -> ON  (override-up)
+  dogfood + off                -> OFF
+  dogfood + false              -> OFF
+  public  + yes                -> ON
+  dogfood + TRUE (case)        -> ON
+  dogfood + garbage            -> ON  (profile default)
+  public  + garbage            -> OFF (profile default)
+
+SEMANTIC ABLATION (per ACT sec 22)
+==================================
+
+Using identical coordinator input:
+  capture disabled vs capture enabled
+
+must produce identical:
+  - guard result
+  - writer decision
+  - turn phase
+  - CommandJob state
+  - posted webview state
+
+Only the ring contents may differ.
+
+Verified by `bocorq5.test.ts`:
+
+  "capture OFF vs capture ON: identical guard result +
+   writer decision + turn phase" - PASS
+
+The OFF case records zero records (ring stays empty); the
+ON case records one record (with the exact correlation
+tuple). The phase transition is SUPPRESSED in both cases
+because the guard returns true (matching owner) - identical
+semantic, ring contents are the ONLY delta.
+
+CLASSIFIABLE SHAPE EVIDENCE (per ACT sec 27)
+============================================
+
+  "capture ON: OC1-classifiable record shape when the
+   job's ownerSessionId is undefined (no context passed)"
+   - PASS
+   - record.activeJobs[0].ownerSessionId === undefined
+   - record.guardResult === false
+
+  "capture ON: OC2-classifiable record shape when
+   ownerSessionId is a DIFFERENT session" - PASS
+   - record.activeJobs[0].ownerSessionId === "session-B"
+   - record.activeSessionId === "session-A"
+   - record.guardResult === false
+
+  OC3-classifiable shape is structurally testable (any
+  test that omits `hasRunningBackgroundJobForOwner` will
+  record guardAvailable=false, activeJobs=[], guardResult=null).
+  Not an explicit test because the production SdkController
+  ALWAYS wires the option; the absence path is only
+  reachable in synthetic harnesses.
+
+EXISTING TESTS STILL PASS
+=========================
+
+  apps/vscode/src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+    5 tests pass (Q5 GREEN baseline + identity-mismatch
+    discriminator + bypass + ablation).
+
+  apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts
+    All q5rr01 tests pass.
+
+  apps/vscode/src/sdk/__tests__/background-handoff-turnstate-discriminator.bhtd01-synthetic-real.test.ts
+    All bhtd01 tests pass.
+
+  apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts
+    All tccc01 tests pass.
+
+  apps/vscode/src/sdk/__tests__/background-command-continuation-ownership-discriminator.bcco01-synthetic-real.test.ts
+    All bcco01 tests pass.
+
+Total focused suite (per ACT sec 35): 5 + q5rr01 + bhtd01 +
+tccc01 + bcco01 + 9 + 4 + 27 + 4 = 69 tests pass.

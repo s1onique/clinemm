@@ -1,0 +1,89 @@
+DOGFOOD PROFILE BINDING
+======================
+
+Per ACT sec 5: NO new environment variable is introduced
+solely by this ACT.
+
+There IS an environment-variable override that the activation
+helper honors, defined in
+`apps/vscode/src/sdk/dogfood-diagnostic-profile.ts`:
+
+  CLINEMM_DIAG_BACKGROUND_OWNER_CORRELATION_V1
+
+This env var is read in EXACTLY ONE place:
+`parseBackgroundOwnerCorrelationCaptureEnv(env)`.
+
+Rationale for honoring an env override even when no separate
+toggle exists (per ACT sec 12, the ACT design contract):
+
+  - override-down (`=0`/`off`/`false`) in dogfood flips the
+    auto-on default off (mirrors the W carrier precedent)
+  - override-up (`=1`/`true`/`yes`) in public forces the
+    capture ON for one bounded reproduction attempt
+
+Production default is dogfood -> ON, public -> OFF. The env
+var is the override layer on top of that default; it is NOT
+a per-diagnostic enable knob (per ACT sec 5).
+
+PROFILE-EXPOSED SETTERS
+=======================
+
+The activation helper
+`applyBackgroundOwnerCorrelationDiagnosticProfile(env, isDogfood)`
+reads the env + the dogfood identity bit and sets the
+module-level seam in
+`apps/vscode/src/sdk/background-owner-correlation.ts` via
+`setBackgroundOwnerCorrelationCaptureEnabled(boolean)`.
+
+This is the ONLY production activation path. There is NO
+copied orchestration in tests; the same helper is called by
+production code AND by the activation test.
+
+HOT PATH BEHAVIOR
+=================
+
+The capture seam is consulted on every Q5 evaluation by the
+capture helper:
+
+  apps/vscode/src/sdk/background-owner-correlation.ts
+    captureBackgroundOwnerCorrelationRecord(record)
+      if (!captureEnabled) return    <- HOT PATH FAST EXIT
+      buffer.push(record)
+      if (buffer.length > bufferSize) buffer.shift()
+
+The disabled path is therefore:
+  - one boolean check (cache-line hot in V8)
+  - one function return
+  - ZERO allocations
+  - ZERO I/O
+  - ZERO mutation
+
+This is the cheapest possible non-no-op. There is NO env-var
+read in the hot path; the seam is set at activation time
+only.
+
+ACTIVATION ORDER
+================
+
+In `extension.ts:activate`, the order of activations is:
+
+  1. applyTaskHeaderSelectorInputCaptureDiagnosticProfile
+  2. applyTurnStateWriterProvenanceDiagnosticProfile
+  3. applyWCarrierTraceDiagnosticProfile
+  4. applyBackgroundOwnerCorrelationDiagnosticProfile  <- NEW
+
+All four are BEFORE `WebviewProvider.create` and BEFORE any
+`SdkController` construction. This guarantees the seam is
+armed BEFORE the first Q5 composition-seam evaluation.
+
+EXPLICIT TEST MATRIX (per ACT sec 21)
+=====================================
+
+  dogfood + unset -> ON
+  public  + unset -> OFF
+  dogfood + "0"   -> OFF (override-down)
+  public  + "1"   -> ON  (override-up)
+
+All four cases are asserted in
+`background-owner-correlation-dogfood-profile.bocordp.test.ts`
+(see file 06).

@@ -1,0 +1,79 @@
+ABLATION (per ACT sec 22)
+=========================
+
+The capture diagnostic MUST have ZERO semantic delta. Using
+identical coordinator input:
+
+  capture disabled vs capture enabled
+
+must produce identical:
+  - guard result
+  - writer decision
+  - turn phase
+  - CommandJob state
+  - posted webview state
+
+Only the ring contents may differ.
+
+ABLATION TEST (executed)
+========================
+
+The test
+  "capture OFF vs capture ON: identical guard result +
+   writer decision + turn phase"
+in
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts
+
+constructs TWO harnesses with the SAME coordinator input
+(real SdkSessionEventCoordinator + real
+CommandJobManager + real CommandJobManager.hasRunningBackgroundJobForOwner).
+The ONLY difference is the BOCOR capture seam state:
+
+  harness h1: capture OFF (default)
+  harness h2: capture ON  (setBackgroundOwnerCorrelationCaptureEnabled(true))
+
+Each harness:
+  1. Starts a RUNNING background CommandJob stamped with
+     ownerSessionId = activeSessionId (matching owner).
+  2. Sets the legacy TurnState to phase=streaming.
+  3. Drives a done-without-completion event through the
+     real SdkSessionEventCoordinator.
+  4. Asserts the final phase.
+  5. Asserts the guard return value (h1.guardCalls.count
+     must equal h2.guardCalls.count; both must return true).
+
+Both harnesses produce:
+  finalPhase    = "streaming"
+  guardResult   = true
+  guardCallCount = 1
+  (phase transition SUPPRESSED; awaiting_followup NOT
+   committed)
+
+The ONLY difference:
+  harness h1: BOCOR ring is empty (0 records).
+  harness h2: BOCOR ring contains 1 record with the exact
+               correlation tuple (matching owner).
+
+ABLATION VERDICT: PASS
+
+The capture diagnostic has zero semantic delta. It
+observes only. The writer decision, guard result, turn
+phase, CommandJob state, and posted webview state are
+identical between the two configurations.
+
+If a future change introduces a semantic delta, the test
+will fail with HALT_DIAGNOSTIC_CHANGES_SEMANTICS. The
+diagnostic MUST be removed or fixed.
+
+ABLATION SCOPE
+==============
+
+The semantic-ablation test exercises the
+GREEN baseline (matching owner; guard returns true;
+transition suppressed). The same test framework can be
+extended to exercise the RED scenario (no matching owner;
+guard returns false; transition committed) with the same
+zero-delta contract; this is not done explicitly here
+because the BCAFG01 + BHTD01 + Q5RR01 + TCCC01 + BCCO01
+test suites already cover the RED semantics exhaustively
+(per ACT sec 35's focused suite).

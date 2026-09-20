@@ -1,0 +1,121 @@
+DUMP COMMAND CONTRACT
+=====================
+
+Command ID (per ACT sec 9):
+  cline.debug.dumpBackgroundOwnerCorrelation
+
+Title (searchable in VS Code Command Palette):
+  "Cline Debug: Dump Background Owner Correlation"
+
+No toggle command. No enable command. No clear command.
+
+OPERATOR WORKFLOW (per ACT sec 9)
+==================================
+
+  dogfood profile (default ON in dogfood)
+    -> reproduce Working -> Your turn with a managed background job
+    -> Cmd+Shift+P
+    -> Cline Debug: Dump Background Owner Correlation
+    -> receive notification path
+
+DUMP FILE LOCATION (per ACT sec 10)
+===================================
+
+  <context.globalStorageUri.fsPath>/background-owner-correlation.jsonl
+
+The authority is context.globalStorageUri, NOT a hard-coded
+path. The actual on-disk location depends on the user's VS
+Code installation (e.g.
+~/.vscode/extensions/<publisher>.<name>/globalStorage on a
+default Linux install; ~/.config/Code/User/globalStorage/...
+on a macOS install). This matches the TSWPD / THSICAP / W
+carrier precedent.
+
+DUMP FILE FORMAT (per ACT sec 19)
+==================================
+
+JSONL — one JSON object per line, one line per record.
+Records are bounded by the in-memory ring size (default 64;
+override via test-only `setBackgroundOwnerCorrelationCaptureBufferSize`).
+
+A trailing newline is appended when records exist.
+
+Empty ring produces an explicit empty file (zero bytes) so
+the operator does not mistake "missing file" for "extension
+not running".
+
+dump != clear: the dump preserves the ring across invocations.
+An accidental first dump does not destroy evidence.
+
+DUMP RETURN VALUE
+=================
+
+The dump function returns:
+  { file: string, recordCount: number }
+
+The notification message includes both fields:
+
+  Background owner correlation diagnostic:
+    <N> record(s) -> <absolute file path>.
+
+On failure:
+  Background owner correlation dump failed: <error message>
+
+PRODUCTION COMMAND HANDLER (mirrors TSWPD / THSICAP / W carrier)
+================================================================
+
+vscode.commands.registerCommand(
+  commands.DumpBackgroundOwnerCorrelation,
+  async () => {
+    try {
+      const { file, recordCount } =
+        await dumpExtensionSideBackgroundOwnerCorrelationDiagnostic(context)
+      void vscode.window.showInformationMessage(
+        `Background owner correlation diagnostic: ${recordCount} record${recordCount === 1 ? "" : "s"} -> ${file}.`,
+      )
+    } catch (err) {
+      Logger.error("[BOCOR] dump failed", err)
+      void vscode.window.showErrorMessage(
+        `Background owner correlation dump failed: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  },
+)
+
+DIAGNOSTIC ENABLES vs DUMP
+==========================
+
+The diagnostic enablement is gated by the central dogfood
+profile resolver (`applyBackgroundOwnerCorrelationDiagnosticProfile`)
+and the module-level seam
+(`isBackgroundOwnerCorrelationCaptureEnabled()`). The dump
+command is ALWAYS reachable regardless of the seam state
+(the operator can inspect any captured records even after the
+diagnostic was disabled).
+
+The dump command itself does NOT flip the seam; it only reads
+the ring.
+
+ENVIRONMENT CONTRACTS
+=====================
+
+- No NEW environment variable is added by this ACT (per ACT
+  sec 5). The single env var that the activation helper honors
+  is documented at file 04.
+
+- No workspace toggle is added (per ACT sec 9). The bounded
+  diagnostic is dogfood-controlled only.
+
+- No webview surface is added (per ACT sec 6).
+
+- No gRPC / proto / wire field is added (per ACT sec 6).
+
+REGISTRY + PACKAGE.JSON
+=======================
+
+- apps/vscode/src/registry.ts: ClineCommands.DumpBackgroundOwnerCorrelation
+  added at line 73-84 with the bounded-removal-trigger comment
+  block.
+
+- apps/vscode/package.json: command declaration added at line
+  245-248 (matches existing TSWPD / THSICAP command shape).

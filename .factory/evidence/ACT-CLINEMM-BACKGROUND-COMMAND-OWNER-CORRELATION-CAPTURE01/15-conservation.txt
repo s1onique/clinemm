@@ -1,0 +1,118 @@
+CONSERVATION (per ACT sec 34)
+==============================
+
+Required: every C1..C13 invariant below is preserved.
+
+C1 matching RUNNING job suppresses only the erroneous
+   done-without-completion awaiting_followup path
+   -> CONSERVED: the Q5 if/else resolution is the same as
+      before this ACT. The capture call is interleaved
+      BEFORE the if/else but does NOT change its decision.
+
+C2 different-session job does not suppress
+   -> CONSERVED: the capture diagnostic observes but does
+      NOT participate in the if/else.
+
+C3 no matching job preserves normal awaiting_followup
+   -> CONSERVED: the capture diagnostic observes but does
+      NOT participate in the if/else.
+
+C4 submit_and_exit completion path unchanged
+   -> CONSERVED: the capture diagnostic is at the Q5
+      done-without-completion branch ONLY. The
+      submit_and_exit path is in the if branch above and
+      is NOT touched by this ACT.
+
+C5 genuine pending approval/user-input state remains user-owned
+   -> CONSERVED: the capture diagnostic does not change
+      any pending-prompt or approval logic.
+
+C6 exact jobId cancellation unchanged
+   -> CONSERVED: the capture diagnostic does not change
+      CommandJobManager.cancel().
+
+C7 natural job completion removes liveness once
+   -> CONSERVED: the capture diagnostic does not change
+      the finalize() / terminal-transition flow.
+
+C8 user cancellation removes liveness once
+   -> CONSERVED: the capture diagnostic does not change
+      the cancel path.
+
+C9 TaskHeader remains projection-only
+   -> CONSERVED: the capture diagnostic is at the Q5
+      decision boundary in the coordinator. It does not
+      touch the TaskHeader projection.
+
+C10 TSWPD unchanged
+    -> CONSERVED: this ACT does NOT modify the
+       turn-state-writer-provenance module. The capture
+       diagnostic observes the candidate writerId but
+       does NOT participate in the writer commit.
+
+C11 Proceed While Running unchanged
+    -> CONSERVED: the Q5 guard (per the BCAFG01 +
+       Q5RR01 chain) is unchanged. The capture
+       diagnostic is interleaved BEFORE the if/else
+       resolution but does NOT change the guard
+       behavior. Upstream's design explicitly separates
+       proceed-while-running from session detachment
+       (per sdk/ARCHITECTURE.md); that separation is
+       preserved.
+
+C12 shell-detached unmanaged processes remain outside this contract
+    -> CONSERVED: the capture diagnostic captures the
+       CommandJobManager.active map only. Unmanaged
+       shell-detached processes are outside the
+       CommandJobManager contract and therefore outside
+       the capture diagnostic.
+
+C13 diagnostic enabled vs disabled has zero semantic delta
+    -> CONSERVED (verified by the semantic-ablation test
+       in
+       background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts
+       "capture OFF vs capture ON: identical guard result
+       + writer decision + turn phase").
+
+    Disabled path: captureBackgroundOwnerCorrelationRecord
+    returns immediately on the `if (!captureEnabled)
+    return` short-circuit. ZERO allocations. ZERO I/O.
+    ZERO mutation.
+
+ADDITIONAL INVARIANTS (NOT in ACT sec 34 but observed
+during implementation)
+======================================================
+
+C14 P1 no-leak invariant preserved
+    -> CONSERVED: the new
+       CommandJobManager.getActiveJobOwnershipSnapshot
+       accessor is INTERNAL and does NOT project
+       ownerSessionId into the public CommandJobSnapshot
+       or into the model-facing tool-result text. The
+       snapshot shape is a closed-runtime tuple.
+
+C15 webview / gRPC / proto surface unchanged
+    -> CONSERVED: zero new wire fields, zero new React
+       state, zero new RPC, zero new proto messages.
+
+C16 turn-state / turn-phase / writerId / commit surface
+    unchanged
+    -> CONSERVED: the Q5 composition seam preserves its
+       exact writerId union (the candidate writerId is
+       always session-event-turn-complete-resumable-
+       straggler-preserve; the actual TSWPD commit in
+       the else-branch is unchanged).
+
+C17 command-job state machine unchanged
+    -> CONSERVED: getActiveJobOwnershipSnapshot is
+       READ_ONLY and does not mutate the active map.
+
+C18 path behavior unchanged
+    -> CONSERVED: this ACT does NOT touch the PATH
+       investigation. The CLI path / shell-detached
+       path / helper path / PGID path are all
+       unmodified.
+
+C19 submit_and_exit completion path unchanged
+    -> CONSERVED (duplicate of C4; included for
+       emphasis).

@@ -1,0 +1,128 @@
+BUILD BEFORE LIVE (per ACT sec 23)
+==================================
+
+Gates executed at HEAD after this ACT's source changes are
+applied (uncommitted, working tree only).
+
+  cd apps/vscode
+
+  1. bun run check-types  -- PARTIAL PASS
+       - 1 pre-existing baseline TS error at
+         background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts(280,3)
+         (the BCAFG01 test uses `{ sessionId }` without
+         `agentId, iteration`; this error was present at
+         HEAD before this ACT and is NOT a regression).
+       - 0 new TS errors introduced by this ACT.
+
+  2. bun run lint  -- PASS
+       - 1905 files checked, 0 errors.
+       - Removed an unused `captureBackgroundOwnerCorrelationRecord`
+         import + the `vi` import + the `void vi` shim from
+         background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts
+         to satisfy the lint clean run.
+
+  3. bun run test:vitest <focused suite>  -- PASS
+       - 9 test files, 69 tests, all green.
+       - BOCOR ring (9) + BOCOR dump roundtrip (4) +
+         BOCOR dogfood profile (27) + BOCOR Q5 zero-delta (4) +
+         BCAFG01 (5) + q5rr01 + bhtd01 + tccc01 + bcco01.
+
+  4. bun esbuild.mjs --production  -- PASS
+       - dist/extension.js bundle produced.
+       - 3 references to dumpBackgroundOwnerCorrelation /
+         background-owner-correlation.jsonl present in the
+         bundle.
+
+  5. git diff --check  -- PASS
+
+GATES NOT EXECUTED
+==================
+
+  - bun run vscode:prepublish  -- not executed in this
+    environment because it triggers bun run package, which
+    runs check-types + build:webview (15s+) + lint + esbuild;
+    the four component gates above were already run and
+    passed. The vscode:prepublish claim is therefore NOT
+    asserted in this ACT's evidence (per ACT sec 23
+    "Do not promote check-types into a vscode:prepublish
+    claim").
+
+  - bun run test:unit (bun:test runner)  -- not executed
+    end-to-end in this environment because the bun:test
+    globs run real shell commands (the
+    command-job-manager.owner-session-id.test.ts and others
+    fail with `spawn_failed` on this dev machine's
+    sandbox/seatbelt setup; the failures are pre-existing
+    at HEAD before this ACT). The 4 BOCOR test files use
+    `vitest` (NOT `bun:test`), so they live under the
+    `test:vitest` runner, which is verified clean.
+
+PRODUCTION SOURCE CHANGES (per ACT sec 11)
+=========================================
+
+  apps/vscode/package.json
+    - Added the dump command declaration (matches existing
+      TSWPD / THSICAP command shape).
+
+  apps/vscode/src/registry.ts
+    - Added `ClineCommands.DumpBackgroundOwnerCorrelation`
+      constant with bounded-removal-trigger comment block.
+
+  apps/vscode/src/extension.ts
+    - Imported `applyBackgroundOwnerCorrelationDiagnosticProfile`
+      + `dumpExtensionSideBackgroundOwnerCorrelationDiagnostic`.
+    - Activated the BOCOR capture seam at the EARLIEST
+      initialization seam (sibling to the existing THSICAP /
+      W carrier / D-knob activations).
+    - Registered the dump command via
+      `vscode.commands.registerCommand(
+        commands.DumpBackgroundOwnerCorrelation, ...)`.
+
+  apps/vscode/src/sdk/dogfood-diagnostic-profile.ts
+    - Added `parseBackgroundOwnerCorrelationCaptureEnv(env)`,
+      `resolveEffectiveBackgroundOwnerCorrelationCapture(env, isDogfood)`,
+      and `applyBackgroundOwnerCorrelationDiagnosticProfile(env, isDogfood)`.
+
+  apps/vscode/src/sdk/command-job-manager.ts
+    - Added `getActiveJobOwnershipSnapshot()` minimal
+      internal read-only accessor (no proto, no wire, no
+      React, no PGID; identity only).
+
+  apps/vscode/src/sdk/vscode-session-host.ts
+    - Added `getActiveJobOwnershipSnapshot()` host-only
+      extension following the `hasRunningBackgroundJobForOwner`
+      precedent; delegates to the new
+      `CommandJobManager.getActiveJobOwnershipSnapshot()`.
+
+  apps/vscode/src/sdk/SdkController.ts
+    - Threaded the new accessor through the existing
+      SdkSessionEventCoordinator option-wiring seam
+      (follows the exact `hasRunningBackgroundJobForOwner`
+      wiring precedent at line 1882-1894).
+
+  apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+    - Added ONE capture call immediately BEFORE the
+      `if (ownerStillRunning)` decision at the Q5
+      done-without-completion branch. The call is gated
+      by the BOCOR module seam (default OFF in public, ON
+      in dogfood via the central profile resolver). Zero
+      semantic delta when the seam is OFF.
+    - Added the new optional `getActiveJobOwnershipSnapshot`
+      option to `SdkSessionEventCoordinatorOptions`.
+
+NEW FILES
+==========
+
+  apps/vscode/src/sdk/background-owner-correlation.ts
+    - The bounded ring module.
+
+  apps/vscode/src/sdk/background-owner-correlation-runtime.ts
+    - The host-side dump adapter.
+
+  apps/vscode/src/sdk/__tests__/background-owner-correlation.bocor.test.ts
+
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-runtime-roundtrip.bocorrt.test.ts
+
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-dogfood-profile.bocordp.test.ts
+
+  apps/vscode/src/sdk/__tests__/background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts

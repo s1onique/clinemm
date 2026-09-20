@@ -1,0 +1,90 @@
+DOGFOOD VSIX IDENTITY (per ACT sec 24)
+======================================
+
+NOTE: this ACT does NOT install a fresh dogfood VSIX in this
+session. The LIVE qualification (per ACT sec 25-26) requires
+a real dogfood ClineMM instance running in a VS Code host with
+the operator able to reproduce the failure. Neither the
+VS Code host nor the operator-driven UI is available in this
+Cloud Agent environment (per the workspace AGENTS.md
+constraints and the prior ACTs in this lineage).
+
+VSIX BUILD STATE AT THIS EVIDENCE FILE
+=====================================
+
+  SOURCE_HEAD    = e77679a25 (the same HEAD this ACT forked
+                                from; the source changes are
+                                in the working tree only,
+                                NOT yet committed).
+  VERSION        = 4.1.16 (apps/vscode/package.json
+                                line 4; the package.json was
+                                not modified by this ACT so
+                                the version is unchanged).
+  PRODUCTION_BUNDLE = apps/vscode/dist/extension.js
+                        (built via `bun esbuild.mjs --production`;
+                         contains 3 references to
+                         dumpBackgroundOwnerCorrelation /
+                         background-owner-correlation.jsonl).
+  BYTE_SIZE      = 26_180_282 bytes (apps/vscode/dist/extension.js).
+  SHA256         = not asserted in this ACT (see note below).
+
+VSIX INSTALLATION SKIPPED
+=========================
+
+Per ACT sec 24, the operator is expected to:
+
+  bun run package
+  -> produces apps/vscode/dist/clinemm-<version>.vsix
+  -> install into the dogfood profile via
+     `code --install-extension <path>`
+  -> verify installed version when practical
+
+That step is the operator's job, not the agent's; it requires
+the real VS Code host and the operator's UI. This ACT
+satisfies the BUILD BEFORE LIVE requirement (sec 23) without
+the INSTALL + LIVE VERIFY step (sec 24-26) which require a
+LIVE instance.
+
+WHY NO LIVE RUN
+===============
+
+This Cloud Agent environment does not have:
+  - a real VS Code host (DISPLAY=:1 is configured but the
+    debug harness is forbidden for live qualification per
+    prior halted ACTs)
+  - the operator's UI
+  - a CLI to exercise ClineMM autonomously without the UI
+    shell
+
+The LIVE qualification window opens the moment this ACT's
+diagnostic build is installed into a real dogfood ClineMM
+instance. The operator's required procedure is documented in
+ACT sec 26 and summarized at the bottom of this file.
+
+OPERATOR PROCEDURE (per ACT sec 26)
+===================================
+
+After the operator installs this ACT's diagnostic build into
+their dogfood ClineMM instance:
+
+  1. Install the fresh dogfood VSIX:
+     code --install-extension <path-to-clinemm-vsix>
+  2. Verify installed version when practical:
+     code --list-extensions --product=clinemm
+  3. Reproduce: send the agent a task that runs a managed
+     background command such as:
+       sh -c 'echo STARTED; sleep 600; echo FINISHED'
+  4. Wait for the failure (Working -> Your turn with a
+     Backgrounded / Cancel / jobId still visible).
+  5. Cmd+Shift+P -> Cline Debug: Dump Background Owner
+     Correlation.
+  6. Record the notification path.
+  7. Cmd+Shift+P -> Cline: Dump Turn State Writer Provenance
+     Diagnostic.
+  8. Record that notification path too.
+  9. Preserve both .jsonl files.
+  10. Preserve the screenshot showing jobId / Backgrounded /
+      Cancel / Your turn.
+
+The BOCOR .jsonl at step 9 is the LIVE evidence; the
+classification per ACT sec 27 is then mechanical.

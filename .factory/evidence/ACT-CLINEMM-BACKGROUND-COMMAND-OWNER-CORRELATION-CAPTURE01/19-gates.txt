@@ -1,0 +1,119 @@
+GATES (per ACT sec 23, 35)
+==========================
+
+GATES EXECUTED AT HEAD WITH THIS ACT'S SOURCE CHANGES APPLIED
+=============================================================
+
+  cd apps/vscode
+
+  1. bun run check-types
+     -> 1 pre-existing baseline error at
+        background-command-awaiting-followup-guard01.bcafg01-
+        synthetic-real.test.ts(280,3).
+     -> 0 new TS errors introduced by this ACT.
+     -> PASS for this ACT's purposes.
+
+  2. bun run lint
+     -> Checked 1905 files in 1070ms.
+     -> 0 errors.
+     -> PASS.
+
+  3. bun run test:vitest <focused suite>
+     -> 9 test files, 69 tests.
+     -> 0 failures.
+     -> PASS.
+
+  4. bun esbuild.mjs --production
+     -> Build finished; dist/extension.js produced.
+     -> 3 references to dumpBackgroundOwnerCorrelation /
+        background-owner-correlation.jsonl present.
+     -> PASS.
+
+  5. git diff --check
+     -> PASS (no whitespace-only damage).
+
+  6. git status --short
+     -> 8 modified files, 7 untracked files (3 from the
+        prior BCCO01 ACT, 4 from this ACT).
+     -> PASS.
+
+GATES NOT EXECUTED (and why)
+============================
+
+  bun run vscode:prepublish (= bun run package):
+    -> Not executed in this Cloud Agent session because it runs
+       the full production build pipeline (check-types +
+       build:webview (~15s) + lint + esbuild) and the
+       four component gates above are already verified.
+    -> Per ACT sec 23: "Do not promote check-types into
+       a vscode:prepublish claim." This ACT asserts the
+       component gates, NOT the umbrella gate.
+
+  bun run test:unit (bun:test runner):
+    -> Not executed end-to-end. The bun:test runner globs
+       run real shell commands (sleep, etc.); on this
+       dev machine the sandbox/seatbelt setup prevents
+       shell spawn (the failures are PRE-EXISTING at
+       HEAD before this ACT, verified via git stash).
+    -> The 4 BOCOR test files use vitest (NOT bun:test)
+       so they are skipped by the bun:unit runner
+       (per the import filter at line 34 of
+       scripts/run-bun-unit-tests.ts) and run via
+       `bun run test:vitest` instead, which is verified
+       clean.
+
+  bun run test:integration (vscode-test):
+    -> Not executed. Requires the VS Code host test CLI.
+
+  bun run test:e2e (Playwright):
+    -> Not executed. Requires the VS Code host.
+
+LIVE QUALIFICATION GATES (per ACT sec 25, 26, 36)
+================================================
+
+  -> NOT executed. Requires the operator-driven dogfood
+     ClineMM reproduction which is not available in this
+     Cloud Agent environment.
+
+PRE-EXISTING BASELINE DIFFERENCES (NOT REGRESSIONS)
+====================================================
+
+The following tests fail at HEAD BEFORE this ACT's source
+changes (verified via git stash):
+
+  - apps/vscode/src/sdk/__tests__/sdk-session-event-coordinator.test.ts
+    > "OWN01 RED: bare done + no terminal commit + no
+       attempt_completion + no user-yield authority MUST NOT
+       yield to awaiting_followup"
+    Known RED test that pins a future fix; expected to
+    fail on current code per its explicit "RED" name.
+
+  - apps/vscode/src/sdk/command-job-manager.owner-session-id.test.ts
+    > 7 of 9 tests fail with `spawn_failed`
+    The tests spawn real shell commands; the Cloud Agent
+    sandbox prevents the spawn. PRE-EXISTING environment
+    artifact.
+
+Both are environment- or design-status artifacts, NOT
+regressions caused by this ACT.
+
+DIAGNOSTIC GATES INTERNAL TO THIS ACT
+=====================================
+
+  BOCOR ring semantics (file 06):
+    - 9 tests pass: bounded FIFO eviction, idempotent
+      enable/disable, capture OFF is no-op, schema fidelity.
+
+  BOCOR dump roundtrip (file 06):
+    - 4 tests pass: BOCOR-DUMP-01, BOCOR-DUMP-EMPTY,
+      BOCOR-DOGFOOD-OFF, dump != clear.
+
+  BOCOR dogfood profile matrix (file 06):
+    - 27 tests pass: parseEnv + resolveEffective +
+      applyActivation matrix; idempotent activation;
+      override-down; override-up; post-activation env
+      mutation does NOT change seam without re-activation.
+
+  BOCOR Q5 semantic ablation (file 06):
+    - 4 tests pass: capture OFF vs ON with identical
+      semantics; OC1 / OC2 classifiable record shapes.

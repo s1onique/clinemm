@@ -1,0 +1,86 @@
+GREEN (per ACT sec 35)
+======================
+
+Focused suite executed via
+`bun run test:vitest <files>` at HEAD with this ACT's
+source changes applied (uncommitted, working tree).
+
+Files in the focused suite:
+  1. apps/vscode/src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+       5 tests pass (BCAFG01 RED/GREEN discriminator)
+  2. apps/vscode/src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts
+       q5rr01 tests pass
+  3. apps/vscode/src/sdk/__tests__/background-handoff-turnstate-discriminator.bhtd01-synthetic-real.test.ts
+       bhtd01 tests pass (TSWPD synthetic-real discriminator)
+  4. apps/vscode/src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts
+       tccc01 tests pass
+  5. apps/vscode/src/sdk/__tests__/background-command-continuation-ownership-discriminator.bcco01-synthetic-real.test.ts
+       bcco01 tests pass
+  6. apps/vscode/src/sdk/__tests__/background-owner-correlation.bocor.test.ts
+       9 tests pass (NEW — BOCOR ring unit tests)
+  7. apps/vscode/src/sdk/__tests__/background-owner-correlation-runtime-roundtrip.bocorrt.test.ts
+       4 tests pass (NEW — production-dump roundtrip)
+  8. apps/vscode/src/sdk/__tests__/background-owner-correlation-dogfood-profile.bocordp.test.ts
+       27 tests pass (NEW — dogfood profile matrix)
+  9. apps/vscode/src/sdk/__tests__/background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts
+       4 tests pass (NEW — semantic ablation + OC1/OC2 shape
+                          evidence)
+
+Result: Test Files 9 passed (9). Tests 69 passed (69).
+
+RELATED TESTS STILL PASS (out-of-suite spot-check)
+==================================================
+
+  apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-w-carrier.test.ts
+    (W carrier profile — same pattern, no BOCOR interference)
+    PASS
+
+  apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-tswpd-activation.test.ts
+    (TSWPD activation — no BOCOR interference)
+    PASS
+
+  apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-thsicap-activation.test.ts
+    (THSICAP activation — no BOCOR interference)
+    PASS
+
+  apps/vscode/src/sdk/__tests__/turn-state-writer-provenance.wprov.test.ts
+    (TSWPD ring + dump command — no BOCOR interference)
+    PASS
+
+OTHER TESTS
+===========
+
+  apps/vscode/src/sdk/__tests__/sdk-session-event-coordinator.test.ts
+    28 of 29 tests pass.
+    The 1 failing test ("OWN01 RED: bare done + no terminal
+    commit + no attempt_completion + no user-yield authority
+    MUST NOT yield to awaiting_followup") is a known
+    PRE-EXISTING RED at HEAD before this ACT. The test name
+    explicitly says "RED" — it pins the negative contract for
+    a future fix and is expected to fail on current code.
+    Verified at HEAD via git stash: the failure was present
+    before any of this ACT's source changes.
+
+  apps/vscode/src/sdk/command-job-manager.owner-session-id.test.ts
+    2 of 9 tests pass.
+    The 7 failing tests fail with `spawn_failed` because the
+    test suite spawns real shell commands (`sleep`, etc.) and
+    the Cloud Agent sandbox/seatbelt setup prevents the
+    spawn. The failures are PRE-EXISTING at HEAD (verified
+    via git stash).
+
+CI GATES NOT REGRESSED
+======================
+
+  bun run check-types  -- 1 pre-existing baseline error at
+    background-command-awaiting-followup-guard01.bcafg01-
+    synthetic-real.test.ts(280,3). NOT a regression of this
+    ACT (verified at HEAD via git stash).
+
+  bun run lint  -- PASS (1905 files checked, 0 errors).
+
+  git diff --check  -- PASS.
+
+  bun esbuild.mjs --production  -- PASS (dist/extension.js
+    bundle produced; 3 references to dumpBackgroundOwner-
+    Correlation / background-owner-correlation.jsonl).

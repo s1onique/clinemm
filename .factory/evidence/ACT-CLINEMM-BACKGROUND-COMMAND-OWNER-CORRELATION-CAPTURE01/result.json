@@ -1,0 +1,91 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01",
+  "epistemic_purpose": "live evidence acquisition with bounded repair authorization",
+  "entry_head": "b3b10a93fa8aa568ab7b4e945483e21fc9318161",
+  "diagnostic": {
+    "enablement": "dogfood_profile",
+    "additional_env_var": false,
+    "env_var_override_layer": "CLINEMM_DIAG_BACKGROUND_OWNER_CORRELATION_V1 (honored by the central profile resolver for override-down in dogfood / override-up in public; NOT a separate operator-facing knob)",
+    "dump_command": "cline.debug.dumpBackgroundOwnerCorrelation",
+    "dump_title": "Cline Debug: Dump Background Owner Correlation",
+    "artifact": "background-owner-correlation.jsonl",
+    "default_off_outside_dogfood": true,
+    "semantic_delta_when_disabled": false,
+    "ring_module": "apps/vscode/src/sdk/background-owner-correlation.ts",
+    "runtime_adapter": "apps/vscode/src/sdk/background-owner-correlation-runtime.ts",
+    "profile_helper": "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts (applyBackgroundOwnerCorrelationDiagnosticProfile)",
+    "production_activation_seam": "apps/vscode/src/extension.ts:activate (sibling to THSICAP / W carrier / D-knob activations; BEFORE SdkController construction)",
+    "owner_correlation_accessor": "apps/vscode/src/sdk/command-job-manager.ts#getActiveJobOwnershipSnapshot (INTERNAL read-only)",
+    "wired_through": "apps/vscode/src/sdk/vscode-session-host.ts#getActiveJobOwnershipSnapshot (host-only) -> apps/vscode/src/sdk/SdkController.ts option-wiring seam",
+    "capture_seam_location": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts (immediately BEFORE the if (ownerStillRunning) at the Q5 done-without-completion branch)",
+    "new_test_files": [
+      "apps/vscode/src/sdk/__tests__/background-owner-correlation.bocor.test.ts",
+      "apps/vscode/src/sdk/__tests__/background-owner-correlation-runtime-roundtrip.bocorrt.test.ts",
+      "apps/vscode/src/sdk/__tests__/background-owner-correlation-dogfood-profile.bocordp.test.ts",
+      "apps/vscode/src/sdk/__tests__/background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts"
+    ]
+  },
+  "live_capture": {
+    "captured": false,
+    "task_id": null,
+    "job_id": null,
+    "job_state": null,
+    "job_owner_session_id": null,
+    "session_event_session_id": null,
+    "active_session_id": null,
+    "queried_owner_session_id": null,
+    "guard_available": null,
+    "guard_result": null,
+    "writer_id": null,
+    "reason": "LIVE qualification requires operator-driven dogfood reproduction per ACT sec 25-26; this Cloud Agent environment does not have a real VS Code host + operator UI. The diagnostic build is ready; the operator drives the LIVE run after installing the fresh dogfood VSIX."
+  },
+  "classification": "UNRESOLVED",
+  "causality": {
+    "established": false,
+    "ablation": "NOT_EXECUTED (live)",
+    "synthetic_classifiable_shapes": {
+      "OC1_PRODUCER_OWNER_STAMP_DEFECT": "PASS (verified by background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts)",
+      "OC2_ACTIVE_SESSION_IDENTITY_DRIFT": "PASS (verified by the same test file)",
+      "OC3_LIVE_GUARD_UNAVAILABLE": "structurally derivable (any test that omits hasRunningBackgroundJobForOwner records guardAvailable=false; not asserted explicitly because production ALWAYS wires the option)",
+      "MATCHING_OWNER_GREEN_BASELINE": "PASS (verified by the same test file)"
+    }
+  },
+  "repair": {
+    "performed": false,
+    "files": [],
+    "rationale": "Per ACT sec 30, repair is authorized in this ACT only if LIVE_CAUSE_CAPTURED == true AND NECESSITY_ESTABLISHED == true AND REPAIR_SEAM_BOUNDED == true. LIVE_CAUSE_CAPTURED is false because the LIVE qualification is not executable in this Cloud Agent environment. This ACT adds the diagnostic machinery only; the bounded repair is the next ACT's responsibility."
+  },
+  "qualification": {
+    "synthetic_real": "PASS \u2014 44 new tests + 25 existing focused tests = 69/69 PASS",
+    "live": "NOT_EXECUTED \u2014 operator-driven dogfood reproduction required (no VS Code host + no operator UI in this Cloud Agent environment)"
+  },
+  "diagnostic_removal": "NOT_TRIGGERED",
+  "verdict": "CAPTURE_INSUFFICIENT",
+  "halt_conditions_triggered": [
+    "CAPTURE_INSUFFICIENT (per ACT sec 28 and sec 30; this is a legitimate terminal verdict per ACT sec 40; LIVE_CAUSE_CAPTURED is false because the LIVE qualification requires the operator-driven dogfood reproduction)"
+  ],
+  "stop_rule_observed": true,
+  "next_act_required_for_repair": "ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-REPAIR01 (or successor) \u2014 operator installs this ACT's diagnostic build into a real dogfood ClineMM instance, drives the LIVE reproduction, captures the BOCOR + TSWPD + screenshot, classifies the LIVE occurrence as OC1 / OC2 / OC3 / contradiction per ACT sec 27, applies the bounded repair per ACT sec 31 / 32 / 33, qualifies per ACT sec 36, then removes the diagnostic per ACT sec 37.",
+  "conservation": "C1..C13 + C14..C19 verified (see 15-conservation.txt). The diagnostic has zero semantic delta when the capture seam is OFF; the semantic-ablation test in background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts proves identical guard result + writer decision + turn phase + CommandJob state + posted webview state across capture ON vs OFF.",
+  "test_files_added": [
+    "apps/vscode/src/sdk/__tests__/background-owner-correlation.bocor.test.ts",
+    "apps/vscode/src/sdk/__tests__/background-owner-correlation-runtime-roundtrip.bocorrt.test.ts",
+    "apps/vscode/src/sdk/__tests__/background-owner-correlation-dogfood-profile.bocordp.test.ts",
+    "apps/vscode/src/sdk/__tests__/background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts"
+  ],
+  "production_source_changed": true,
+  "production_files_changed": [
+    "apps/vscode/package.json",
+    "apps/vscode/src/registry.ts",
+    "apps/vscode/src/extension.ts",
+    "apps/vscode/src/sdk/command-job-manager.ts",
+    "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts",
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+    "apps/vscode/src/sdk/vscode-session-host.ts",
+    "apps/vscode/src/sdk/SdkController.ts"
+  ],
+  "production_files_added": [
+    "apps/vscode/src/sdk/background-owner-correlation.ts",
+    "apps/vscode/src/sdk/background-owner-correlation-runtime.ts"
+  ]
+}

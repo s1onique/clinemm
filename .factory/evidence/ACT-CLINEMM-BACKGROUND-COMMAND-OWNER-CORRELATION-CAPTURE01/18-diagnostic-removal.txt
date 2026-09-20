@@ -1,0 +1,101 @@
+DIAGNOSTIC REMOVAL (per ACT sec 37)
+====================================
+
+DIAGNOSTIC REMOVAL TRIGGERED: NOT_TRIGGERED
+
+This ACT halts at CAPTURE_INSUFFICIENT (per ACT sec 28 and
+sec 30). The removal trigger is the FIRST of:
+
+  1. root cause isolated and repair qualified
+     -> NOT TRIGGERED: the LIVE root cause (OC1 / OC2 /
+        OC3 / contradiction) was NOT isolated (the LIVE
+        qualification requires the operator-driven dogfood
+        reproduction per ACT sec 25-26, which this Cloud
+        Agent environment does not have).
+
+  2. CAPTURE_INSUFFICIENT
+     -> NOT TRIGGERED YET: this ACT's verdict is
+        CAPTURE_INSUFFICIENT but the diagnostic build
+        is now ready. The next ACT in the lineage
+        (operator-driven LIVE run + bounded repair ACT)
+        is what triggers the removal. Per ACT sec 37's
+        preferred final state, the removal happens after
+        either (1) the LIVE cause is isolated and the
+        repair is qualified, OR (2) the LIVE cause is
+        UNPROVEN despite multiple reproduction attempts
+        (genuine CAPTURE_INSUFFICIENT).
+
+  3. better evidence supersedes it
+     -> NOT TRIGGERED.
+
+The diagnostic is therefore RETAINED TEMPORARILY for the
+next ACT in the lineage to consume.
+
+REMOVAL PLAN (when triggered)
+==============================
+
+When the removal trigger fires, the diagnostic must be
+removed TOGETHER (per ACT sec 37):
+
+  1. Capture hot-path removed:
+     - Delete the capture call in
+       apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+       (the capture call BEFORE the if (ownerStillRunning)
+        at the Q5 done-without-completion branch).
+     - Delete the getActiveJobOwnershipSnapshot option from
+       SdkSessionEventCoordinatorOptions.
+     - Delete the getActiveJobOwnershipSnapshot() host-only
+       method in VscodeSessionHost.
+     - Delete the getActiveJobOwnershipSnapshot() INTERNAL
+       accessor in CommandJobManager.
+
+  2. Ring removed:
+     - Delete apps/vscode/src/sdk/background-owner-correlation.ts.
+     - Delete the import from dogfood-diagnostic-profile.ts.
+     - Delete the parseBackgroundOwnerCorrelationCaptureEnv,
+       resolveEffectiveBackgroundOwnerCorrelationCapture,
+       applyBackgroundOwnerCorrelationDiagnosticProfile
+       helpers from dogfood-diagnostic-profile.ts.
+
+  3. Dump command removed:
+     - Delete apps/vscode/src/sdk/background-owner-correlation-runtime.ts.
+     - Delete the dump command registration from
+       apps/vscode/src/extension.ts.
+
+  4. Package/registry command removed:
+     - Delete the command constant from apps/vscode/src/registry.ts.
+     - Delete the command declaration from apps/vscode/package.json.
+
+  5. Activation call removed:
+     - Delete the applyBackgroundOwnerCorrelationDiagnosticProfile
+       call from apps/vscode/src/extension.ts:activate.
+
+  6. Test files removed:
+     - Delete
+       apps/vscode/src/sdk/__tests__/background-owner-correlation.bocor.test.ts.
+     - Delete
+       apps/vscode/src/sdk/__tests__/background-owner-correlation-runtime-roundtrip.bocorrt.test.ts.
+     - Delete
+       apps/vscode/src/sdk/__tests__/background-owner-correlation-dogfood-profile.bocordp.test.ts.
+     - Delete
+       apps/vscode/src/sdk/__tests__/background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts.
+
+RETENTION POLICY
+================
+
+Per ACT sec 37, if the diagnostic proves generally
+valuable and we want to retain it permanently, that
+requires a SEPARATE observability decision. Silent
+survival through this ACT is FORBIDDEN. The diagnostic
+must either:
+
+  (a) be removed via the removal plan above, OR
+  (b) survive via a separate observability ACT that
+      explicitly decides to make it permanent
+      (with a separate test suite, a separate removal
+      trigger, and a separate bounded contract).
+
+This ACT does NOT make either decision; it RETURNS the
+diagnostic for the operator's LIVE-driven decision.
+
+NOT TRIGGERED (this ACT's verdict for this file).

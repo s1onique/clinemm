@@ -1,0 +1,137 @@
+REPAIR DIFF (per ACT sec 31, 32, 33)
+=====================================
+
+REPAIR PERFORMED: FALSE
+
+Per ACT sec 30, repair is authorized in this ACT only if:
+
+  LIVE_CAUSE_CAPTURED == true
+  AND
+  NECESSITY_ESTABLISHED == true
+  AND
+  REPAIR_SEAM_BOUNDED == true
+
+This ACT halts at CAPTURE_INSUFFICIENT (per ACT sec 28 and
+sec 30) because the LIVE cause was NOT captured (the LIVE
+qualification requires the operator-driven dogfood
+reproduction per ACT sec 25-26, which this Cloud Agent
+environment does not have).
+
+Therefore this ACT adds ONLY the bounded diagnostic
+capture machinery; it does NOT perform any of the
+ACT sec 31 / 32 / 33 repairs.
+
+PRODUCTION-SIDE DIFFS THIS ACT DOES APPLY (DIAGNOSTIC
+MACHINERY ONLY — NOT REPAIR)
+=========================================================
+
+Per ACT sec 11, the bounded diagnostic machinery
+introduces the following changes. NONE of these changes
+modify production behavior in the capture-disabled path.
+
+  apps/vscode/src/sdk/background-owner-correlation.ts
+    NEW FILE. Bounded ring module + capture helper +
+    enable/disable seam. Default OFF (fail-closed).
+
+  apps/vscode/src/sdk/background-owner-correlation-runtime.ts
+    NEW FILE. Host-side dump adapter that serializes the
+    ring to <globalStorageUri>/background-owner-correlation.jsonl.
+    Unconditional dump; dump != clear.
+
+  apps/vscode/src/sdk/command-job-manager.ts
+    NEW METHOD: getActiveJobOwnershipSnapshot() at line
+    2820-2834. Minimal internal read-only accessor. NO
+    mutation; NO proto / wire / RPC / webview surface.
+
+  apps/vscode/src/sdk/vscode-session-host.ts
+    NEW METHOD: getActiveJobOwnershipSnapshot() at line
+    547-553. Host-only extension following the
+    hasRunningBackgroundJobForOwner precedent; delegates
+    to CommandJobManager.getActiveJobOwnershipSnapshot().
+
+  apps/vscode/src/sdk/SdkController.ts
+    NEW OPTION WIRING: getActiveJobOwnershipSnapshot at
+    line 1895-1919. Threads the snapshot accessor through
+    the existing SdkSessionEventCoordinator option-wiring
+    seam (mirrors the hasRunningBackgroundJobForOwner
+    wiring at line 1882-1894). Returns [] when the active
+    session host does not implement the method (Hub/Remote
+    omit it by design; same absence semantic).
+
+  apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+    NEW IMPORT + NEW OPTION + NEW CAPTURE CALL.
+    The capture call is at the Q5 done-without-completion
+    branch, immediately BEFORE the if (ownerStillRunning)
+    decision. The capture is gated ONLY by the BOCOR
+    module seam (default OFF in public, ON in dogfood via
+    the central profile resolver). Zero semantic delta
+    when the seam is OFF.
+
+  apps/vscode/src/sdk/dogfood-diagnostic-profile.ts
+    NEW IMPORTS + NEW EXPORTED HELPERS:
+    - parseBackgroundOwnerCorrelationCaptureEnv(env)
+    - resolveEffectiveBackgroundOwnerCorrelationCapture(env, isDogfood)
+    - applyBackgroundOwnerCorrelationDiagnosticProfile(env, isDogfood)
+    The activation helper is called from extension.ts:activate
+    at the SAME EARLIEST initialization seam as the THSICAP
+    / W carrier / D-knob activations.
+
+  apps/vscode/src/extension.ts
+    NEW IMPORT (applyBackgroundOwnerCorrelationDiagnosticProfile
+    + dumpExtensionSideBackgroundOwnerCorrelationDiagnostic).
+    NEW ACTIVATION CALL (sibling to existing THSICAP / W
+    carrier / D-knob activations).
+    NEW COMMAND REGISTRATION (vscode.commands.registerCommand(
+    commands.DumpBackgroundOwnerCorrelation, ...)).
+
+  apps/vscode/src/registry.ts
+    NEW CONSTANT: ClineCommands.DumpBackgroundOwnerCorrelation
+    with bounded-removal-trigger comment block.
+
+  apps/vscode/package.json
+    NEW COMMAND DECLARATION: cline.debug.dumpBackgroundOwnerCorrelation
+    at line 245-248 (matches existing TSWPD / THSICAP
+    command shape).
+
+PRODUCTION BEHAVIOR INVARIANCE (capture OFF — default for
+public installs and for dogfood installs with CLINEMM_DIAG_
+BACKGROUND_OWNER_CORRELATION_V1=0)
+============================================================
+
+With the capture seam OFF (the public default and the
+override-down case in dogfood):
+
+  - the BOCOR capture helper returns immediately on the
+    `if (!captureEnabled) return` short-circuit
+  - ZERO allocations
+  - ZERO I/O
+  - ZERO mutation
+  - ZERO impact on the if/else resolution
+  - ZERO impact on the guard call
+  - ZERO impact on the writer commit
+  - ZERO impact on the turn phase transition
+
+The diagnostic has zero semantic delta when the seam is
+OFF (verified by the semantic-ablation test in
+background-owner-correlation-q5-seam-zero-delta.bocorq5.test.ts).
+
+NEXT-ACT REPAIR PROVISION
+=========================
+
+Per ACT sec 30, the next ACT in this lineage will perform
+the repair only after LIVE_CAUSE_CAPTURED becomes true
+(operator-driven dogfood reproduction with the diagnostic
+installed). The repair is bounded to:
+
+  OC1: producer-side AgentToolContext.sessionId stamping
+       (manager.start(..., { sessionId: context.sessionId }))
+
+  OC2: session-lifecycle replacement seam preserving
+       sessionId across replaceActiveSession
+
+  OC3: VscodeSessionHost-backed sessions must expose
+       hasRunningBackgroundJobForOwner
+
+Until then, this ACT stops at CAPTURE_INSUFFICIENT (per
+ACT sec 28) which is a legitimate terminal verdict per
+ACT sec 40.
