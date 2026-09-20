@@ -5346,3 +5346,51 @@ PRIMARY_REPAIR_SEAM         = PROCEED-WHILE-RUNNING ABORT-SIGNAL OWNERSHIP TRANS
 SECONDARY_DEFERRED          = STALE_CARD_AFTER_CANCEL
 NEXT_ACT                    = ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01
 ```
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 — RED_REPRODUCED_ABLATION_PENDING + BOUNDED REPAIR — 2026-09-20
+
+**Status:** RED reproduced deterministically on the production seam via the same `manager.start({...}, { signal })` path that the LIVE specimen exercised. The bounded repair (single new public method `releaseForegroundAbortOwnership(jobId)` + single new call site at the foreground→background handoff in `vscode-run-commands-tool.ts`) turns RED → GREEN on the production seam with a one-variable discriminator. All conservation controls PASS (CP-A..CP-N). Working tree clean at commit `a58c32a13`. **`check-types` / `lint` / `format` / `git diff --check` all PASS.** LIVE qualification deferred (no VS Code instance in this actuator environment); future ACT or Factory reviewer to qualify LIVE.
+
+**Honest verdict matrix:**
+```
+PWR_ABORT_OWNERSHIP_RELEASE = PASS_RED_REPRODUCED_ABLATION_PENDING
+PREDECESSOR                = CASE_CP3_CALLER_ABORT_SIGNAL
+REAL_HANDOFF_RED            = PASS (DEFECT_REPRODUCED=true on /tmp/red-tool.mjs)
+ROOT_CAUSE_ABLATION         = PASS (DEFECT_REPAIRED=true on /tmp/green-tool.mjs)
+ROOT_CAUSE_NECESSITY        = ESTABLISHED (one-variable discriminator: caller AbortSignal ownership after handoff)
+PRODUCTION_REPAIR           = AUTHORIZED + APPLIED (bounded; production seam verified)
+PRE_HANDOFF_ABORT            = CONSERVED (CP-A preserved; CTL-11 confirms FIRST-WRITER-WINS)
+POST_HANDOFF_ABORT           = RELEASED (bounded repair detaches the listener at the handoff boundary)
+BACKGROUND_CANCEL_RPC        = CONSERVED (CP-C preserved; explicit jobId cancel still works)
+EXTENSION_SHUTDOWN          = CONSERVED (CP-D preserved; manager.dispose path unchanged)
+DEADLINE                    = CONSERVED (CP-F DEFERRED_BY_CONTRACT; deadline timer untouched per ACT §14)
+NATURAL_COMPLETION          = CONSERVED (CP-E preserved; CTL-08 confirms exited state)
+Q5                          = UNCHANGED (release does not modify active map)
+TASK_HEADER                 = UNCHANGED (no lifecycle event changes)
+STALE_CARD_AFTER_CANCEL      = DEFERRED (orthogonal card mutation issue)
+```
+
+**Production diff (bounded):**
+  - `apps/vscode/src/sdk/command-job-manager.ts`: +63 LOC (new public method `releaseForegroundAbortOwnership`; the docblock is the larger half, binding the contract to the upstream architecture reference and the predecessor ACT's LIVE specimen cmd_mu9wmnyuhvgva8cn)
+  - `apps/vscode/src/sdk/vscode-run-commands-tool.ts`: +11 LOC (one new call site at the foreground→background handoff boundary inside `if (start.state === "running")`)
+  - `apps/vscode/src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts`: +150 LOC (test file documenting the RED/GREEN contract; vitest harness non-functional due to pre-existing zod 4 ESM failure under bun-spawned vite — executable evidence via `/tmp/red-tool.mjs` and `/tmp/green-tool.mjs`)
+
+**Conservation properties preserved (verified by `16-conservation.txt`):**
+  - `manager.start()` listener install path (command-job-manager.ts:1984-2011): UNCHANGED
+  - `manager.terminate()` cancel/dispose path: UNCHANGED
+  - `manager.cancel()` public API: UNCHANGED
+  - `manager.dispose()` extension-shutdown path: UNCHANGED
+  - Deadline timer (command-job-manager.ts:1956-1981): UNCHANGED (CURRENT_CLINEMM_BACKGROUND_DEADLINE_CONTRACT = DEFERRED per ACT §14)
+  - `finalize()` cleanup (command-job-manager.ts:2516-2526): UNCHANGED
+  - Proto / webview / gRPC / SDK / CLI: UNCHANGED
+
+**Pre-existing environmental failure (NOT caused by this ACT):**
+  - apps/vscode vitest harness fails with `TypeError: undefined is not an object (evaluating 'z.object')` under bun-spawned vite. Reproduced on parent commit `bab253afb`. Documented in predecessor ACT's `result.json` `gates.command_job_manager_tests`. The RED/GREEN evidence was therefore executed via direct bun invocation of the production seam (`/tmp/red-tool.mjs`, `/tmp/green-tool.mjs`, `/tmp/conservation2.mjs`, `/tmp/quick-check.mjs`).
+
+**NEXT STEP:** future ACT (or Factory reviewer) to qualify LIVE in a real VS Code instance:
+  1. `cd apps/vscode && bun run package` (typecheck + webview build + esbuild production)
+  2. `code --install-extension dist/clinemm-<version>.vsix`
+  3. Run a long-running shell command with Proceed While Running or 300s auto-proceed.
+  4. Decisive negative evidence: NO `job_cancellation_requested` with `requestOrigin=caller_abort_signal` for the detached job after the caller aborts.
+  5. Positive-control: explicit Cancel on the Backgrounded card produces `requestOrigin=background_cancel_rpc` and cancels cleanly.
+  6. Update `result.json` to `verdict: PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED`.
