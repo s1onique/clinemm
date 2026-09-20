@@ -1,25 +1,52 @@
-# Conservation Matrix — BTCONT01
-
-Test name                                               Outcome
--------------------------------------------------------------------------
-BTCONT-RED-01 (UNWIRED)  pre-repair defect            PASS
-BTCONT-RED-01-GREEN       post-repair auto-commit      PASS
-BTCONT-CTL-01             manual wake-up commits       PASS
-BTCONT-CTL-02             job still running            PASS (no commit)
-BTCONT-CTL-03             newer epoch supersedes       PASS (discard)
-BTCONT-CTL-04             multi-job last-relevant      PASS (J2 commits)
-BTCONT-CTL-05             different session unaffected PASS
-
-Conservation rules C1-C20:
-  C1-C8   covered by the BTCONT-CTL-* tests above
-  C9-C10  covered by BCAFG01-ABLATION (existing writers unchanged)
-  C11-C15 covered by the production diff (no changes to those surfaces)
-  C16     covered (no new gauge writes introduced)
-  C17     covered (writerId preserved)
-  C18     covered (TaskHeader untouched)
-  C19     covered (stale-card deferred to successor ACT)
-  C20     covered (containment_failed semantics unchanged;
-          re-evaluation reads live `hasRunningBackgroundJobForOwner`
-          which uses the same `state === "running"` filter as Q5 defer)
-
-All 20 conservation rules PASS.
+# 16 — Conservation Matrix (correction cycle 1)
+#
+# After Factory reviewer correction cycle 1, the matrix is honestly
+# separated into three classes:
+#
+# 1. EXECUTABLE CONSERVED (run end-to-end in vitest):
+#    - C1  job_still_running              PASS  (BTCONT-CTL-02)
+#    - C2  newer_epoch                    PASS  (BTCONT-CTL-03)
+#    - C3  multi_job                      PASS  (BTCONT-CTL-04)
+#    - C4  different_session              PASS  (BTCONT-CTL-05)
+#    - C5  same_coordinator_session_swap  PASS  (BTCONT-CTL-06)
+#    - C6  tighter_task_identity          PASS  (BTCONT-CTL-07)
+#    - C7  production_bridge_end_to_end   PASS  (BTCONT-BRIDGE-01)
+#    - C8  manual_wakeup                  PASS  (BTCONT-CTL-01)
+#    - C9  cancel_terminal                PASS  (BTCONT-RED-01-GREEN,
+#                                              BTCONT-CTL-04)
+#
+# 2. STRUCTURAL_CONSERVED / NOT_EXECUTED:
+#    - C10 natural_completion
+#      The BTCONT family only exercises the cancel path
+#      (manager.cancel → terminalPromise → becameIdle). The
+#      natural-completion path uses the SAME
+#      vscode-run-commands-tool.ts:697-698 becameIdle gate
+#      (`if (becameIdle) notifyBackgroundStateChange(false, undefined)`)
+#      and the SAME production bridge. No executable test
+#      distinguishes natural completion from cancel.
+#
+# 3. STRUCTURAL_CONSERVED / LIVE_PRE_REPAIR:
+#    - C11 deadline_terminal
+#      The LIVE specimen (task 1789935070156_oneah, job
+#      cmd_mua94lrk2w8jyomn, bjla rows 13-21) IS the deadline
+#      terminality evidence. The repair is reason-independent
+#      (becameIdle gate is shared by cancel and deadline). No
+#      post-repair test exercises the deadline path explicitly.
+#
+# 4. STRUCTURALLY_EXPECTED / LIVE_PENDING:
+#    - C12 stale_card_repair (button affordance)
+#      The same >0->0 transition drives BOTH:
+#        a. the canonical reevaluation (BTCONT-BRIDGE-01)
+#        b. the projection flip via postStateToWebview in
+#           updateBackgroundCommandState
+#      The projection flip structurally clears the green
+#      "Backgrounded/Cancel" button's stale state. Operator-side
+#      dogfood confirmation pending.
+#
+# Authority separation preserved:
+#   - CommandJobManager stays a lifecycle publisher
+#     (no turn-state writes; only active-map + lifecycle events)
+#   - SdkSessionEventCoordinator owns the phase decision
+#     (DeferredContinuation marker + reevaluateDeferredContinuation)
+#   - SdkController is the bridge on the >0->0 cardinal transition
+#     (Controller.maybeReevaluateDeferredContinuation)

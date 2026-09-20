@@ -21,17 +21,22 @@
     "real_q5_seam": true,
     "real_job_terminal_seam": true,
     "red_reproduced": true,
-    "phase_after_terminal_without_external_action": "streaming (UNWIRED) -> awaiting_followup (GREEN)"
+    "phase_after_terminal_without_external_action": "streaming (UNWIRED) -> awaiting_followup (GREEN)",
+    "production_bridge_exercised": true,
+    "production_bridge_method": "Controller.maybeReevaluateDeferredContinuation (static, SdkController.ts:4233)"
   },
   "classification": "CASE_TC1_MISSING_TERMINAL_CONTINUATION_CONSUMER + CASE_TC3_DEFERRED_CONTINUATION_NOT_REPRESENTED",
   "deferred_continuation": {
     "existing_representation_found": false,
     "identity": "{sessionId, taskId, epoch}",
-    "generation_bound": "epoch"
+    "generation_bound": "epoch",
+    "task_identity_equality": "marker.taskId !== taskId (rejects defined->undefined transition per Factory reviewer correction cycle 1)",
+    "session_mismatch_clears_marker": true,
+    "stale_session_replacement_clear": "BTCONT-CTL-06 (same-coordinator active session swap clears the marker)"
   },
   "causality": {
     "established": true,
-    "ablation": "PASS (UNWIRED -> stranded, GREEN -> commits awaiting_followup)"
+    "ablation": "PASS (UNWIRED -> stranded, GREEN -> commits awaiting_followup, BRIDGE-01 -> commits awaiting_followup)"
   },
   "repair": {
     "authorized": true,
@@ -40,28 +45,39 @@
       "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
       "apps/vscode/src/sdk/SdkController.ts",
       "apps/vscode/src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts"
-    ]
+    ],
+    "production_bridge_extraction": "Controller.maybeReevaluateDeferredContinuation (static method on the production Controller class; invoked by updateBackgroundCommandState at SdkController.ts:4200)"
   },
   "conservation": {
     "job_still_running": "PASS (BTCONT-CTL-02)",
     "newer_epoch": "PASS (BTCONT-CTL-03)",
     "multi_job": "PASS (BTCONT-CTL-04)",
     "different_session": "PASS (BTCONT-CTL-05)",
-    "natural_terminal": "PASS (BTCONT-CTL-04 uses cancel path; reason-independent)",
+    "same_coordinator_session_replacement": "PASS (BTCONT-CTL-06)",
+    "tighter_task_identity": "PASS (BTCONT-CTL-07)",
+    "production_bridge_end_to_end": "PASS (BTCONT-BRIDGE-01)",
+    "natural_completion": "STRUCTURAL_CONSERVED / NOT_EXECUTED (BTCONT-CTL-04 uses cancel path; natural completion path uses the same becameIdle gate at vscode-run-commands-tool.ts:697-698 but is not exercised in this ACT's tests)",
     "cancel_terminal": "PASS (BTCONT-RED-01-GREEN, BTCONT-CTL-04)",
-    "deadline_terminal": "PASS (LIVE specimen bjla rows 13-21; reason-independent)"
+    "deadline_terminal": "STRUCTURAL_CONSERVED / LIVE_PRE_REPAIR (LIVE specimen bjla rows 13-21; reason-independent gate at vscode-run-commands-tool.ts:697-698 is the same for cancel and deadline; not exercised in this ACT's post-repair tests)"
   },
   "stale_card": {
-    "live_proven": true,
-    "same_root_cause": "YES (CARD-A) for green button affordance; incidentally fixed",
-    "repair_in_this_act": true
+    "live_failure": "PROVEN",
+    "repair": "STRUCTURALLY_EXPECTED / LIVE_PENDING (the same >0->0 transition drives the projection flip via postStateToWebview in updateBackgroundCommandState; structurally the green button affordance flips to 'running=false' on the same bridge that commits awaiting_followup; operator-side dogfood confirmation pending)"
   },
   "live_qualification": {
     "executed": false,
     "automatic_continuation_after_terminal": "NOT_EXECUTED (operator-side live qualification pending)",
     "manual_wakeup_required": null,
-    "note": "Operator-side LIVE GREEN pending against ACT section 38 600s specimen. Production seam exercised end-to-end by synthetic-real tests."
+    "note": "Operator-side LIVE GREEN pending against ACT section 38 600s specimen. Production seam exercised end-to-end by BTCONT-BRIDGE-01 which drives the REAL production bridge (Controller.maybeReevaluateDeferredContinuation) with the SAME arguments updateBackgroundCommandState would compute."
+  },
+  "gates": {
+    "btcont_focused": "10/10 pass (BTCONT-RED-01 UNWIRED, BTCONT-RED-01-GREEN, BTCONT-CTL-01, BTCONT-CTL-02, BTCONT-CTL-03, BTCONT-CTL-04, BTCONT-CTL-05, BTCONT-BRIDGE-01, BTCONT-CTL-06, BTCONT-CTL-07)",
+    "bcafg01_baseline": "5/5 pass (no regression)",
+    "bun_unit_suite": "82/82 files / 1141 tests / 0 fail",
+    "check_types": "exit code 0 (clean)",
+    "pre_existing_red": "OWN01 RED in sdk-session-event-coordinator.test.ts fails at ENTRY_HEAD (verified pre-ACT; out of scope for this ACT)"
   },
   "verdict": "PASS_BACKGROUND_TERMINAL_CONTINUATION_REPAIRED",
-  "implementation_head": "2a7d03fbd"
+  "implementation_head": "bca83002bdf50e361b5d68b5ddb860cd1cb111d8",
+  "_note": "implementation_head is the canonical commit reference. The bundle HEAD is the current git HEAD at the time of writing this file; it may differ from implementation_head because amending the result.json field updates the HEAD but the production code in implementation_head is unchanged. To find the production code: git checkout implementation_head; production files (SdkController.ts, sdk-session-event-coordinator.ts, test file) are byte-identical at the current HEAD."
 }

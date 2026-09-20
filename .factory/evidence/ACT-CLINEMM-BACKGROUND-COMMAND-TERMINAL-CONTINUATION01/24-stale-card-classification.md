@@ -1,37 +1,40 @@
-# Stale Card Classification — BTCONT01
+# 24 — Stale Card Classification (correction cycle 1)
 
-## Live-proven
-- Backgrounded / Cancel button visible after terminality: LIVE_PROVEN
-  (bjla rows 17, 18, 21; foreground-style "running" projection frozen)
+## Honest classification
 
-## Same-root-cause discriminator
+The reviewer correctly flagged that the stale-card conclusion was over-promoted
+to "closed" in the previous ACT closure. The honest state after correction
+cycle 1:
 
-The TaskHeader card renders `backgroundCommandRunning` + the
-command-row's frozen `{"status":"running"}` JSON. Both are projections
-of:
-  1. `SdkController.backgroundCommandRunning` (flipped by
-     `updateBackgroundCommandState` which now ALSO drives the
-     continuation re-evaluation)
-  2. `command_row.tool_result` (immutable historical row written at the
-     earlier poll that returned RUNNING)
+```
+STALE_CARD_LIVE_FAILURE = PROVEN          (LIVE specimen bjla rows 13-21)
+STALE_CARD_REPAIR       = STRUCTURALLY_EXPECTED / LIVE_PENDING
+```
 
-The repair in this ACT updates #1 at the SAME >0->0 cardinal transition
-that flips `backgroundCommandRunning` to `false`. The webview already
-redraws the footer when the projection flips (verified by
-`updateBackgroundCommandState` calling `postStateToWebview`). So the
-GREEN button-flip is "fixed incidentally" by this ACT.
+## Why "STRUCTURALLY_EXPECTED" and not "PASS"
 
-The frozen `{"status":"running"}` row in the chat transcript is a
-historical record (per ACT §30: "Do not mutate historical output").
-The card that renders the green "Backgrounded / Cancel" affordance
-IS projected from `backgroundCommandRunning` and IS fixed.
+The green "Backgrounded/Cancel" button's stale state IS structurally fixed
+by the same repair:
 
-## Classification
-- Card projection: SAME_SHARED_CONSUMER (incidental fix)
-- Frozen command-row JSON: STAYS (historical)
+1. The >0->0 cardinal transition fires `onBackgroundStateChange(false, undefined)`.
+2. `SdkController.updateBackgroundCommandState(false, undefined)` runs.
+3. The body calls `this.postStateToWebview()` which posts the new
+   `backgroundCommandRunning=false` projection to the webview.
+4. The webview's TaskHeader / button affordance flips from
+   "Backgrounded/Cancel" back to the appropriate state.
 
-## Successor
-No successor ACT required for the live button-affordance; the fix is
-incidental. If a future ACT needs to also retitle the frozen row text
-(e.g. "Cancelled" badge), it should route through the canonical
-`command_row` write path (out of scope for this ACT).
+The same single code path in `updateBackgroundCommandState` is the
+load-bearing wire for BOTH:
+  - the canonical reevaluation (BTCONT-BRIDGE-01)
+  - the projection flip (the existing card-stale fix from
+    ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01)
+
+## Why "LIVE_PENDING" and not "REPAIRED"
+
+Operator-side dogfood has not run the 600s specimen post-repair. Until a
+real human sits through the deadline on a real dogfood build and confirms
+the button no longer goes stale, the LIVE qualification is pending.
+
+The structural argument is sound, but the LIVE evidence is not yet
+captured. This ACT does not close the stale-card question; it only
+confirms the structural fix is in place.

@@ -166,13 +166,21 @@ export class SdkSessionEventCoordinator {
 			return
 		}
 		if (marker.sessionId !== activeSession.sessionId) {
-			// different-session terminality: never affects this session
+			// different-session terminality (BTCONT-CTL-05: two
+			// coordinators), OR same-coordinator session replacement
+			// (BTCONT-CTL-06: active session swapped to a different
+			// session before the late terminal arrived). In both
+			// cases the marker is stale; clear it and return.
+			this.deferredContinuation = undefined
 			return
 		}
 		const taskId = this.options.getTask?.()?.taskId
-		if (marker.taskId !== undefined && taskId !== undefined && marker.taskId !== taskId) {
+		if (marker.taskId !== taskId) {
 			// task identity changed (e.g. task was cleared and a new
-			// task started before the late terminal arrived)
+			// task started before the late terminal arrived, or the
+			// task ended and taskId became undefined). The deferred
+			// marker is bound to the taskId at deferral time; any
+			// taskId mismatch means the deferral has been superseded.
 			this.deferredContinuation = undefined
 			return
 		}

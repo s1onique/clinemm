@@ -4197,15 +4197,48 @@ export class Controller {
 		// `session-event-turn-complete-resumable-straggler-preserve`
 		// writer can commit awaiting_followup exactly once, under
 		// the four conservation rules (BTCONT-CTL-02/03/04/05).
-		if (previousRunning && !running && taskId === undefined) {
-			this.sessionEvents.reevaluateDeferredContinuation()
-		}
+		Controller.maybeReevaluateDeferredContinuation(previousRunning, running, taskId, this.sessionEvents)
 		// best-effort post — the StatePostDebouncer coalesces bursts.
 		this.postStateToWebview().catch((error) => {
 			Logger.warn(
 				`[SdkController] Failed to post state after background command state change (running=${running}, taskId=${taskId}): ${error instanceof Error ? error.message : String(error)}`,
 			)
 		})
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+	 * the production bridge from `updateBackgroundCommandState` to
+	 * `SdkSessionEventCoordinator.reevaluateDeferredContinuation()`.
+	 * Exposed as a `static` method so the BTCONT01 focused test
+	 * family can drive the REAL production condition
+	 * (previousRunning && !running && taskId === undefined) end-to-end
+	 * without needing to construct the full `Controller` (whose
+	 * constructor pulls in McpHub, StateManager, AuthService, etc.
+	 * that are out of scope for this unit-level bridge verification).
+	 *
+	 * The BTCONT-BRIDGE-01 test calls THIS method with the real
+	 * production condition and the real production coordinator
+	 * instance — exactly the same arguments
+	 * `updateBackgroundCommandState` would compute and pass.
+	 * The only thing that differs from a real dogfood run is the
+	 * absence of `postStateToWebview()` (the projection-side effect,
+	 * not the canonical turn-state writer).
+	 *
+	 * Production wiring (this file, updateBackgroundCommandState):
+	 *   this.maybeReevaluateDeferredContinuation(
+	 *     previousRunning, running, taskId, this.sessionEvents,
+	 *   )
+	 */
+	static maybeReevaluateDeferredContinuation(
+		previousRunning: boolean,
+		running: boolean,
+		taskId: string | undefined,
+		sessionEvents: SdkSessionEventCoordinator,
+	): void {
+		if (previousRunning && !running && taskId === undefined) {
+			sessionEvents.reevaluateDeferredContinuation()
+		}
 	}
 
 	/**

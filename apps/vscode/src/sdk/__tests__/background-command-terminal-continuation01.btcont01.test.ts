@@ -95,6 +95,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { CommandJobManager, type StartCommandJobResult } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
+import { Controller } from "../SdkController"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
@@ -115,6 +116,81 @@ vi.mock("@/core/storage/StateManager", () => ({
 			setGlobalState: vi.fn(),
 		}),
 	},
+}))
+
+// vi.mock -- heavyweight Controller deps. Same proven set used by
+// AOC02 / AOPC02 (no new mock additions). Required because
+// `Controller.maybeReevaluateDeferredContinuation` (the production
+// bridge under test) lives on the `Controller` class exported from
+// SdkController.ts; importing SdkController pulls in McpHub,
+// AuthService, OcaAuthService, etc.
+
+vi.mock("@/services/logging/distinctId", () => ({
+	initializeDistinctId: vi.fn(async () => undefined),
+	getDistinctId: vi.fn(() => undefined),
+	getDeviceId: vi.fn(() => undefined),
+	setDistinctId: vi.fn(),
+	_GENERATED_MACHINE_ID_KEY: "cline.generatedMachineId",
+}))
+
+vi.mock("@/services/mcp/McpHub", () => ({
+	McpHub: class {
+		getServers = vi.fn(() => [])
+		getServersAsMap = vi.fn(() => new Map())
+		getAllServers = vi.fn(() => [])
+		dispose = vi.fn()
+		connectToServer = vi.fn(async () => {})
+		setToolListChangeCallback = vi.fn()
+	},
+}))
+
+vi.mock("@/services/account/ClineAccountService", () => ({
+	ClineAccountService: {
+		getInstance: vi.fn(() => ({
+			getUser: vi.fn(async () => undefined),
+			fetchOrganizationBillingData: vi.fn(async () => undefined),
+		})),
+	},
+}))
+
+vi.mock("@/services/auth/AuthService", () => ({
+	AuthService: {
+		getInstance: vi.fn(() => ({
+			getState: vi.fn(() => "logged-out"),
+			subscribe: vi.fn(() => () => {}),
+		})),
+	},
+	LogoutReason: { USER_INITIATED: "user_initiated" },
+}))
+
+vi.mock("@/services/auth/oca/OcaAuthService", () => ({
+	OcaAuthService: {
+		initialize: vi.fn(() => ({
+			handleAuthCallback: vi.fn(async () => {}),
+			handleDeauth: vi.fn(async () => {}),
+		})),
+	},
+}))
+
+vi.mock("@/services/banner/BannerService", () => ({
+	BannerService: {
+		get: vi.fn(() => ({
+			getActiveBanners: vi.fn(() => []),
+			getWelcomeBanners: vi.fn(() => []),
+		})),
+		initialize: vi.fn(() => ({
+			getActiveBanners: vi.fn(() => []),
+			getWelcomeBanners: vi.fn(() => []),
+		})),
+		reset: vi.fn(),
+	},
+}))
+
+vi.mock("@core/storage/disk", () => ({
+	getMcpSettingsFilePath: vi.fn(() => "/tmp/mock-mcp-settings.json"),
+	ensureMcpServersDirectoryExists: vi.fn(() => "/tmp/mock-mcp-servers"),
+	ensureSettingsDirectoryExists: vi.fn(() => "/tmp/mock-settings"),
+	resolveDefaultMcpSettingsPath: vi.fn(() => "/tmp/mock-mcp-settings.json"),
 }))
 
 // Disable the experimental sandbox so the test does not require a
@@ -177,13 +253,50 @@ interface ProductionHarness {
 	minter: MessageIdMinter
 	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
-	 * Mirrors the production SdkController.updateBackgroundCommandState
-	 * wiring: on the >0->0 cardinal transition (running=true→false,
-	 * jobId=undefined), calls coordinator.reevaluateDeferredContinuation().
+	 * Invokes the REAL production bridge
+	 * `Controller.maybeReevaluateDeferredContinuation` from
+	 * SdkController.ts (the static method that
+	 * `updateBackgroundCommandState` calls). The arguments match
+	 * what `updateBackgroundCommandState` computes: previousRunning,
+	 * running, taskId. This is the same call sequence the production
+	 * host performs when it sees
+	 * `onBackgroundStateChange(false, undefined)` after
+	 * `becameIdle === true`.
+	 *
 	 * Tests invoke this AFTER terminating a managed background job to
 	 * simulate the live signal that fires on the production seam.
 	 */
-	notifyTerminalIdle: () => void
+	/**
+	 * Production-mirror of the >0->0 cardinal transition that
+	 * `vscode-run-commands-tool.ts:697-698` guards on
+	 * (`becameIdle === true`). The test must pass the value from
+	 * the manager's `terminalPromise.becameIdle` so the production
+	 * bridge condition is exercised with the same gate. When
+	 * `becameIdle === false`, the bridge does NOT fire — matching
+	 * the production guard at
+	 * `vscode-run-commands-tool.ts:697-698`.
+	 */
+	notifyTerminalIdleIfIdle: (becameIdle: boolean) => void
+	/**
+	 * Mutable projection state that `notifyTerminalIdle` reads to
+	 * determine `previousRunning`. Mirrors `Controller.backgroundCommandRunning`
+	 * exactly (the test cannot construct a real `Controller` because
+	 * its constructor pulls in McpHub/AuthService/etc).
+	 */
+	getBackgroundCommandRunning: () => boolean
+	/**
+	 * Mirror the Controller's projection state flip. Tests call this
+	 * after starting a background job (production would do
+	 * `updateBackgroundCommandState(true, jobId)`) so the harness's
+	 * `notifyTerminalIdle` observes the correct `previousRunning` on
+	 * the >0->0 cardinal transition.
+	 */
+	setBackgroundCommandRunning: (running: boolean) => void
+	/**
+	 * Swap the active session and task the coordinator sees.
+	 * Used by BTCONT-CTL-06 to verify the same-coordinator guard.
+	 */
+	setActiveSessionAndTask: (sessionId: string, taskId: string) => void
 }
 
 interface MakeHarnessOptions {
@@ -213,21 +326,23 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		spawnFactory: fakeSupervisorFactory(),
 	})
 
+	let currentActiveSession = activeSessionId
+	let currentActiveTask = activeTaskId
 	const coordinator = new SdkSessionEventCoordinator({
 		messageTranslatorState: translatorState,
 		sessions: {
 			getActiveSession: () => ({
-				sessionId: activeSessionId,
+				sessionId: currentActiveSession,
 				sdkHost: {},
 				unsubscribe: vi.fn(),
-				startResult: { sessionId: activeSessionId },
+				startResult: { sessionId: currentActiveSession },
 				isRunning: false,
 			}),
 			setRunning: vi.fn(),
 		},
 		messages: { appendAndEmit: vi.fn() },
 		taskHistory: { updateTaskUsage: vi.fn() },
-		getTask: () => ({ taskId: activeTaskId }) as never,
+		getTask: () => ({ taskId: currentActiveTask }) as never,
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
 		setTurnPhase: ((phase, anchorTs, writerId) => {
 			tracker.setWithWriter(phase, anchorTs, {
@@ -243,17 +358,38 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
-	// mirror the production SdkController.updateBackgroundCommandState
-	// behavior on the >0->0 cardinal transition. Production forwards
-	// the signal to coordinator.reevaluateDeferredContinuation() from
-	// the onBackgroundStateChange(false, undefined) callback (see
-	// SdkController.ts:4196-4203). The harness reproduces the same
-	// single method invocation so the test exercises the real
-	// production seam end-to-end.
-	const notifyTerminalIdle = (): void => {
-		if (opts.wireTerminalConsumer !== false) {
-			coordinator.reevaluateDeferredContinuation()
+	// Drive the REAL production bridge from `SdkController`:
+	//   `Controller.maybeReevaluateDeferredContinuation(
+	//     previousRunning, running, taskId, this.sessionEvents,
+	//   )`
+	// which is the static method that `updateBackgroundCommandState`
+	// invokes. This is the same call site as production, with the
+	// same condition (`previousRunning && !running && taskId === undefined`).
+	// The harness mirrors the Controller's projection state
+	// (`backgroundCommandRunning`) so the previousRunning argument
+	// reflects what the Controller would have recorded.
+	const backgroundCommandRunning = { value: false }
+	const notifyTerminalIdleIfIdle = (becameIdle: boolean): void => {
+		if (opts.wireTerminalConsumer === false) {
+			return
 		}
+		// Production gate: vscode-run-commands-tool.ts:697-698 fires
+		// `onBackgroundStateChange(false, undefined)` ONLY when
+		// `becameIdle === true` (the >0->0 cardinal transition).
+		// Mirror that here so the production condition is exercised
+		// with the same gate.
+		if (!becameIdle) {
+			return
+		}
+		const previousRunning = backgroundCommandRunning.value
+		const running = false
+		const taskId = undefined as string | undefined
+		// Production sets running=false, taskId=undefined on the >0->0
+		// cardinal transition. Flip the projection AFTER computing
+		// previousRunning so the test exercises the same race-free
+		// ordering as production.
+		backgroundCommandRunning.value = running
+		Controller.maybeReevaluateDeferredContinuation(previousRunning, running, taskId, coordinator)
 	}
 
 	return {
@@ -264,11 +400,30 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		activeSessionId,
 		activeTaskId,
 		minter,
-		notifyTerminalIdle,
+		notifyTerminalIdleIfIdle,
+		getBackgroundCommandRunning: () => backgroundCommandRunning.value,
+		setBackgroundCommandRunning: (running: boolean) => {
+			backgroundCommandRunning.value = running
+		},
+		/**
+		 * Swap the active session and task the coordinator sees.
+		 * Used by BTCONT-CTL-06 to verify that a late terminal
+		 * event arriving AFTER the active session has changed (in
+		 * the SAME coordinator instance) does not affect the new
+		 * session.
+		 */
+		setActiveSessionAndTask: (sessionId: string, taskId: string) => {
+			currentActiveSession = sessionId
+			currentActiveTask = taskId
+		},
 	}
 }
 
-async function startBackgroundJob(manager: CommandJobManager, sessionId: string): Promise<StartCommandJobResult> {
+async function startBackgroundJob(
+	manager: CommandJobManager,
+	sessionId: string,
+	harness?: ProductionHarness,
+): Promise<StartCommandJobResult> {
 	const start = await manager.start(
 		{
 			command: "sleep 120",
@@ -283,6 +438,16 @@ async function startBackgroundJob(manager: CommandJobManager, sessionId: string)
 	)
 	if (start.state !== "running") {
 		throw new Error(`expected state=running, got state=${start.state}`)
+	}
+	// Mirror production's `updateBackgroundCommandState(true, jobId)`
+	// flip on the projection state so the harness's `notifyTerminalIdle`
+	// observes the correct `previousRunning` on the >0->0 cardinal
+	// transition. Without this the production bridge condition
+	// (`previousRunning && !running && taskId === undefined`) would
+	// never fire, and BTCONT-CTL-02 / BTCONT-RED-01-GREEN would never
+	// commit a continuation.
+	if (harness) {
+		harness.setBackgroundCommandRunning(true)
 	}
 	return start
 }
@@ -332,7 +497,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		expect(h.tracker.currentPhase).toBe("streaming")
 
 		// 1. start managed background job owned by active session
-		const start = await startBackgroundJob(h.manager, h.activeSessionId)
+		const start = await startBackgroundJob(h.manager, h.activeSessionId, h)
 		expect(h.manager.hasRunningBackgroundJobForOwner(h.activeSessionId)).toBe(true)
 
 		// 2. deliver the done-without-completion session event - Q5
@@ -378,7 +543,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		})
 		expect(h.tracker.currentPhase).toBe("streaming")
 
-		const start = await startBackgroundJob(h.manager, h.activeSessionId)
+		const start = await startBackgroundJob(h.manager, h.activeSessionId, h)
 		expect(h.manager.hasRunningBackgroundJobForOwner(h.activeSessionId)).toBe(true)
 
 		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
@@ -390,8 +555,8 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		expect(h.manager.hasRunningBackgroundJobForOwner(h.activeSessionId)).toBe(false)
 
 		// Simulate the production SdkController wiring:
-		// onBackgroundStateChange(false, undefined) -> notifyTerminalIdle
-		h.notifyTerminalIdle()
+		// onBackgroundStateChange(false, undefined) -> notifyTerminalIdleIfIdle
+		h.notifyTerminalIdleIfIdle(becameIdle)
 
 		// The phase MUST exit stranded streaming.
 		expect(h.tracker.currentPhase).toBe("awaiting_followup")
@@ -408,7 +573,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 			writerId: "task-start-init-task",
 		})
 
-		const start = await startBackgroundJob(h.manager, h.activeSessionId)
+		const start = await startBackgroundJob(h.manager, h.activeSessionId, h)
 		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
 		expect(h.tracker.currentPhase).toBe("streaming")
 
@@ -435,7 +600,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 			writerId: "task-start-init-task",
 		})
 
-		const start = await startBackgroundJob(h.manager, h.activeSessionId)
+		const start = await startBackgroundJob(h.manager, h.activeSessionId, h)
 		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
 		expect(h.tracker.currentPhase).toBe("streaming")
 		expect(h.manager.hasRunningBackgroundJobForOwner(h.activeSessionId)).toBe(true)
@@ -448,8 +613,8 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		expect(h.tracker.currentPhase).toBe("streaming")
 
 		// Cleanup: terminate the still-running job
-		await terminateJobAndAwait(h.manager, start)
-		h.notifyTerminalIdle()
+		const { becameIdle: cleanupBecameIdle } = await terminateJobAndAwait(h.manager, start)
+		h.notifyTerminalIdleIfIdle(cleanupBecameIdle)
 		await h.manager.dispose()
 	}, 15_000)
 
@@ -464,8 +629,8 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 
 		// Start TWO matching managed background jobs J1 + J2 owned by the
 		// active session.
-		const start1 = await startBackgroundJob(h.manager, h.activeSessionId)
-		const start2 = await startBackgroundJob(h.manager, h.activeSessionId)
+		const start1 = await startBackgroundJob(h.manager, h.activeSessionId, h)
+		const start2 = await startBackgroundJob(h.manager, h.activeSessionId, h)
 		expect(h.manager.hasRunningBackgroundJobForOwner(h.activeSessionId)).toBe(true)
 
 		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
@@ -475,8 +640,12 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		// for J1 fires but J2 is still alive, so the
 		// hasRunningBackgroundJobForOwner lookup returns true and
 		// the continuation MUST NOT commit.
-		await terminateJobAndAwait(h.manager, start1)
-		h.notifyTerminalIdle()
+		const { becameIdle: becameIdleJ1 } = await terminateJobAndAwait(h.manager, start1)
+		expect(becameIdleJ1).toBe(false)
+		// Production gate: the >0->0 cardinal transition fires ONLY
+		// when becameIdle === true. J1's terminal is NOT the
+		// >0->0 transition; the harness's notify mirrors that gate.
+		h.notifyTerminalIdleIfIdle(becameIdleJ1)
 		await new Promise((resolve) => setImmediate(resolve))
 		expect(h.tracker.currentPhase).toBe("streaming")
 		// The deferred marker is preserved (not cleared) so J2's
@@ -487,8 +656,9 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		// hasRunningBackgroundJobForOwner lookup returns false
 		// and the continuation commits awaiting_followup exactly
 		// once.
-		await terminateJobAndAwait(h.manager, start2)
-		h.notifyTerminalIdle()
+		const { becameIdle: becameIdleJ2 } = await terminateJobAndAwait(h.manager, start2)
+		expect(becameIdleJ2).toBe(true)
+		h.notifyTerminalIdleIfIdle(becameIdleJ2)
 		await new Promise((resolve) => setImmediate(resolve))
 		expect(h.tracker.currentPhase).toBe("awaiting_followup")
 		expect(h.coordinator.getDeferredContinuationForTesting()).toBeUndefined()
@@ -502,7 +672,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 			writerId: "task-start-init-task",
 		})
 
-		const start = await startBackgroundJob(h.manager, h.activeSessionId)
+		const start = await startBackgroundJob(h.manager, h.activeSessionId, h)
 		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
 		expect(h.tracker.currentPhase).toBe("streaming")
 		const markerAtDefer = h.coordinator.getDeferredContinuationForTesting()
@@ -523,7 +693,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		const { becameIdle } = await terminateJobAndAwait(h.manager, start)
 		expect(becameIdle).toBe(true)
 		// Simulate the production SdkController wiring
-		h.notifyTerminalIdle()
+		h.notifyTerminalIdleIfIdle(becameIdle)
 		await new Promise((resolve) => setImmediate(resolve))
 
 		// The newer turn's phase must not be mutated by a late
@@ -560,17 +730,17 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		})
 
 		// session A starts its own background job
-		const startA = await startBackgroundJob(hA.manager, "session-A")
+		const startA = await startBackgroundJob(hA.manager, "session-A", hA)
 		await emitDoneWithoutCompletion(hA.coordinator, "session-A")
 		expect(hA.tracker.currentPhase).toBe("streaming")
 
 		// session B starts AND terminates an unrelated background
 		// job. This must NOT cause session A's stranded streaming
 		// to commit awaiting_followup.
-		const startB = await startBackgroundJob(hB.manager, "session-B")
+		const startB = await startBackgroundJob(hB.manager, "session-B", hB)
 		const { becameIdle } = await terminateJobAndAwait(hB.manager, startB)
 		expect(becameIdle).toBe(true)
-		hB.notifyTerminalIdle()
+		hB.notifyTerminalIdleIfIdle(becameIdle)
 		await new Promise((resolve) => setImmediate(resolve))
 
 		// session A is still stranded (its own job hasn't terminated)
@@ -578,9 +748,146 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01", ()
 		expect(hA.manager.hasRunningBackgroundJobForOwner("session-A")).toBe(true)
 
 		// Cleanup
-		await terminateJobAndAwait(hA.manager, startA)
-		hA.notifyTerminalIdle()
+		const { becameIdle: cleanupBecameIdleA } = await terminateJobAndAwait(hA.manager, startA)
+		hA.notifyTerminalIdleIfIdle(cleanupBecameIdleA)
 		await hA.manager.dispose()
 		await hB.manager.dispose()
 	}, 20_000)
+
+	//
+	// BRIDGE - exercise the REAL production Controller bridge
+	//
+	it("BTCONT-BRIDGE-01: real production bridge (Controller.maybeReevaluateDeferredContinuation) commits awaiting_followup", async () => {
+		// Per Factory reviewer (correction cycle 1): this test MUST
+		// drive the REAL production bridge that
+		// `updateBackgroundCommandState` invokes — i.e. the static
+		// method `Controller.maybeReevaluateDeferredContinuation`
+		// on the production Controller class — with the EXACT
+		// arguments production computes from a >0->0 cardinal
+		// transition. It must NOT call
+		// `coordinator.reevaluateDeferredContinuation()` directly.
+		//
+		// Production wiring (SdkController.ts:4200):
+		//   Controller.maybeReevaluateDeferredContinuation(
+		//     previousRunning, running, taskId, this.sessionEvents,
+		//   )
+		// with previousRunning=true, running=false, taskId=undefined.
+		const h = makeHarness({ wireTerminalConsumer: true })
+		h.tracker.setWithWriter("streaming", undefined, {
+			writerId: "task-start-init-task",
+		})
+
+		const start = await startBackgroundJob(h.manager, h.activeSessionId, h)
+		expect(h.manager.hasRunningBackgroundJobForOwner(h.activeSessionId)).toBe(true)
+
+		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.coordinator.getDeferredContinuationForTesting()).toBeDefined()
+
+		const { becameIdle } = await terminateJobAndAwait(h.manager, start)
+		expect(becameIdle).toBe(true)
+
+		// Drive the REAL production bridge (not the coordinator
+		// directly). The arguments are exactly what
+		// `updateBackgroundCommandState` would compute:
+		// previousRunning from `this.backgroundCommandRunning`,
+		// running=false (the >0->0 flip), taskId=undefined (the
+		// no-jobId terminal signal).
+		h.notifyTerminalIdleIfIdle(becameIdle)
+
+		expect(h.tracker.currentPhase).toBe("awaiting_followup")
+		expect(h.coordinator.getDeferredContinuationForTesting()).toBeUndefined()
+
+		await h.manager.dispose()
+	}, 15_000)
+
+	//
+	// CONTROL - same-coordinator session replacement must discard late terminal
+	//
+	it("BTCONT-CTL-06: same-coordinator active session changes after deferral; late terminal event must not affect the new session", async () => {
+		// BTCONT-CTL-05 proves isolation between TWO independent
+		// coordinator instances. This test proves the more
+		// dangerous case: a SINGLE coordinator whose active session
+		// changes after deferral must discard a late terminal event
+		// that arrives for the original session.
+		const h = makeHarness({ wireTerminalConsumer: true, activeSessionId: "session-A", activeTaskId: "task-A" })
+		h.tracker.setWithWriter("streaming", undefined, {
+			writerId: "task-start-init-task",
+		})
+
+		// Original session-A starts a background job.
+		const startA = await startBackgroundJob(h.manager, "session-A", h)
+		await emitDoneWithoutCompletion(h.coordinator, "session-A")
+		expect(h.tracker.currentPhase).toBe("streaming")
+		const markerAtDefer = h.coordinator.getDeferredContinuationForTesting()
+		expect(markerAtDefer).toBeDefined()
+		expect(markerAtDefer?.sessionId).toBe("session-A")
+
+		// SAME coordinator's active session swaps to session-B.
+		// In production this happens when the user starts a new
+		// task or `clearTask` is invoked.
+		h.setActiveSessionAndTask("session-B", "task-B-new")
+		h.tracker.setWithWriter("streaming", undefined, {
+			writerId: "controller-ask-response",
+		})
+		expect(h.tracker.currentPhase).toBe("streaming")
+
+		// Original session-A's job terminates. The terminal event
+		// fires; the bridge runs; the coordinator must discard the
+		// late terminal event (the marker is bound to session-A,
+		// not session-B).
+		const { becameIdle } = await terminateJobAndAwait(h.manager, startA)
+		expect(becameIdle).toBe(true)
+		h.notifyTerminalIdleIfIdle(becameIdle)
+		await new Promise((resolve) => setImmediate(resolve))
+
+		// Session-B's phase must remain streaming (the late
+		// terminal event for session-A must not mutate it).
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.coordinator.getDeferredContinuationForTesting()).toBeUndefined()
+
+		await h.manager.dispose()
+	}, 15_000)
+
+	//
+	// CONTROL - tighter task identity equality
+	//
+	it("BTCONT-CTL-07: tighter task identity - marker.taskId=old, current=undefined must be discarded", async () => {
+		// Per Factory reviewer: the original guard
+		// `marker.taskId !== undefined && taskId !== undefined && marker.taskId !== taskId`
+		// let through the asymmetric case where marker.taskId was
+		// defined but current taskId became undefined (e.g. after
+		// `clearTask`). The bounded check is now
+		// `marker.taskId !== taskId` which rejects any taskId
+		// mismatch — including the defined->undefined transition.
+		const h = makeHarness({ wireTerminalConsumer: true })
+		h.tracker.setWithWriter("streaming", undefined, {
+			writerId: "task-start-init-task",
+		})
+
+		const start = await startBackgroundJob(h.manager, h.activeSessionId, h)
+		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
+		expect(h.tracker.currentPhase).toBe("streaming")
+		const markerAtDefer = h.coordinator.getDeferredContinuationForTesting()
+		expect(markerAtDefer).toBeDefined()
+		expect(markerAtDefer?.taskId).toBe(h.activeTaskId)
+
+		// Task ends — `getTask` returns `undefined` for taskId
+		// (mirrors `clearTask` clearing the active task reference).
+		// The marker still carries the OLD taskId; current is
+		// `undefined`. The tighter guard must reject.
+		h.setActiveSessionAndTask(h.activeSessionId, undefined as unknown as string)
+
+		const { becameIdle } = await terminateJobAndAwait(h.manager, start)
+		expect(becameIdle).toBe(true)
+		h.notifyTerminalIdleIfIdle(becameIdle)
+		await new Promise((resolve) => setImmediate(resolve))
+
+		// The phase stays streaming — the late terminal is
+		// discarded because the task identity changed.
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.coordinator.getDeferredContinuationForTesting()).toBeUndefined()
+
+		await h.manager.dispose()
+	}, 15_000)
 })

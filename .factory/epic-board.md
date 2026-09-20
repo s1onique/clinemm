@@ -1,45 +1,78 @@
 ## ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 — PASS_BACKGROUND_TERMINAL_CONTINUATION_REPAIRED — 2026-09-20
 
-**Status:** PASS. Bounded repair on the canonical Q5 composition seam (sdk-session-event-coordinator.ts) plus a 14-line patch in SdkController.updateBackgroundCommandState. Live failure reproduced via the real production seam (real CommandJobManager + real SdkSessionEventCoordinator + real TurnStateTracker) in vitest. All 7 BTCONT tests pass; full bun unit suite 1141/1141 green; tsc --noEmit clean.
+**Status:** PASS — correction cycle 1 closed all Factory reviewer P0/P1 items. 10/10 BTCONT tests pass (added BTCONT-BRIDGE-01, BTCONT-CTL-06, BTCONT-CTL-07); BCAFG01 baseline 5/5 unchanged; full bun unit suite 1141/1141 green; tsc --noEmit clean.
 
-**Honest verdict matrix:**
+**Honest verdict matrix (post correction cycle 1):**
 ```
-PRIMARY_P0                         = LIVE_PROVEN (stranded streaming)
-LIVE_TASK                          = 1789935070156_oneah
-LIVE_JOB                           = cmd_mua94lrk2w8jyomn
-Q5_AT_DONE                         = DEFERRED / guard=true
-JOB_TERMINAL                       = deadline_exceeded / process gone
-BACKGROUND_RUNNING_AFTER_TERMINAL  = false
-TURN_PHASE_AFTER_TERMINAL          = streaming / STRANDED
-AUTOMATIC_CONTINUATION             = ABSENT (pre-ACT)
-MANUAL_WAKEUP                      = controller-cancel-task: streaming -> resumable
-RESUME                             = controller-ask-response:  resumable -> streaming
-POST_RESUME_Q5                     = guard=false
-POST_RESUME_CANONICAL_RESULT       = awaiting_followup
-Q5                                 = EXONERATED (deferral is correct)
-TSWPD                              = EXONERATED (writer identity healthy)
-TASKHEADER                         = PROJECTION_ONLY
-STALE_CARD_AFTER_TERMINAL          = LIVE_PROVEN / SAME_SHARED_CONSUMER
-                                       (incidental fix via the same
-                                        updateBackgroundCommandState call)
-PWAOR_ABORT_OWNERSHIP              = LIVE_POSITIVE_SIGNAL (untouched)
-CLASSIFICATION                     = TC1 (missing terminal consumer)
-                                       + TC3 (no deferred marker)
-REPAIR                             = TC1 + TC3 hybrid (bounded)
-CAUSALITY                          = ESTABLISHED
+PRIMARY_P0                              = LIVE_PROVEN (stranded streaming)
+LIVE_TASK                               = 1789935070156_oneah
+LIVE_JOB                                = cmd_mua94lrk2w8jyomn
+Q5_AT_DONE                              = DEFERRED / guard=true
+JOB_TERMINAL                            = deadline_exceeded / process gone
+BACKGROUND_RUNNING_AFTER_TERMINAL       = false
+TURN_PHASE_AFTER_TERMINAL               = streaming / STRANDED
+AUTOMATIC_CONTINUATION                  = ABSENT (pre-ACT) / PRESENT (post-ACT)
+MANUAL_WAKEUP                           = controller-cancel-task: streaming -> resumable
+RESUME                                  = controller-ask-response:  resumable -> streaming
+POST_RESUME_Q5                          = guard=false
+POST_RESUME_CANONICAL_RESULT            = awaiting_followup
+Q5                                      = EXONERATED (deferral is correct)
+TSWPD                                   = EXONERATED (writer identity healthy)
+TASKHEADER                              = PROJECTION_ONLY
+STALE_CARD_LIVE_FAILURE                 = PROVEN
+STALE_CARD_REPAIR                       = STRUCTURALLY_EXPECTED / LIVE_PENDING
+                                            (was over-promoted in the
+                                             previous closure; corrected)
+PWAOR_ABORT_OWNERSHIP                   = LIVE_POSITIVE_SIGNAL (untouched)
+CLASSIFICATION                          = TC1 (missing terminal consumer)
+                                            + TC3 (no deferred marker)
+REPAIR                                  = TC1 + TC3 hybrid (bounded)
+PRODUCTION_BRIDGE                       = Controller.maybeReevaluateDeferredContinuation
+                                            (static, real SdkController.ts:4233;
+                                             exercised end-to-end by
+                                             BTCONT-BRIDGE-01)
+CAUSALITY                               = ESTABLISHED
 ```
 
-**Why TC1 + TC3 hybrid (not TC1 alone):** the Q5 deferral leaves the coordinator with no durable "continuation owed" fact. The re-evaluation must verify the deferred decision still applies to the same turn (epoch/taskId match) and that another matching job isn't still alive (hasRunningBackgroundJobForOwner at terminality time). Without the bounded marker, BTCONT-CTL-03 (newer epoch supersedes) cannot be enforced. The marker holds at most one entry per coordinator instance — matches the `session-event-turn-complete-resumable-straggler-preserve` writer's "exactly one commit per turn" contract.
+**Correction cycle 1 — what changed:**
+1. **P0**: Production bridge extracted into `Controller.maybeReevaluateDeferredContinuation` (static method on the production Controller class). The bridge is now called by `updateBackgroundCommandState` at SdkController.ts:4200 — the same call site production uses. BTCONT-BRIDGE-01 exercises this REAL bridge end-to-end.
+2. **P1**: Task identity equality tightened from `marker.taskId !== undefined && taskId !== undefined && marker.taskId !== taskId` to `marker.taskId !== taskId` (rejects defined->undefined transition). BTCONT-CTL-07 proves the tighter check.
+3. **P1**: Session mismatch now CLEARS the marker (was return without clear). Supports BTCONT-CTL-06 same-coordinator session swap.
+4. **P2**: Stale-card re-labelled `STRUCTURALLY_EXPECTED / LIVE_PENDING` (was over-promoted to "closed").
+5. **P2**: `natural_completion` and `deadline_terminal` conservation lines re-labelled honestly:
+   - `natural_completion`: STRUCTURAL_CONSERVED / NOT_EXECUTED (cancel path only is exercised; reason-independent gate is the same)
+   - `deadline_terminal`: STRUCTURAL_CONSERVED / LIVE_PRE_REPAIR (LIVE specimen IS the deadline evidence; reason-independent)
 
-**Why the existing Q5 deferral stays:** the LIVE specimen proves the canonical completion logic is healthy (post-resume Q5 commits awaiting_followup in 0ms; BOCOR row 2 guardResult=false; activeJobs=[]). The only missing piece is the automatic re-evaluation consumer.
+**Authority separation preserved:** CommandJobManager stays a lifecycle publisher. The canonical SdkSessionEventCoordinator decides the phase. SdkController is the bridge on the >0->0 cardinal transition.
 
-**Authority separation preserved:** CommandJobManager stays a lifecycle publisher. The canonical SdkSessionEventCoordinator decides the phase. The SdkController's `onBackgroundStateChange(false, undefined)` callback is the bridge — it fires only on the >0->0 cardinal transition (vscode-run-commands-tool.ts:697-698: `if (becameIdle) notifyBackgroundStateChange(false, undefined)`). The bridge forwards to coordinator.reevaluateDeferredContinuation() which consults the live hasRunningBackgroundJobForOwner at terminality time and commits the canonical writer exactly once.
+**Conservation matrix (post correction cycle 1):**
+```
+EXECUTABLE CONSERVED (vitest end-to-end):
+  job_still_running                PASS (BTCONT-CTL-02)
+  newer_epoch                      PASS (BTCONT-CTL-03)
+  multi_job                        PASS (BTCONT-CTL-04)
+  different_session                PASS (BTCONT-CTL-05)
+  same_coordinator_session_swap    PASS (BTCONT-CTL-06)
+  tighter_task_identity            PASS (BTCONT-CTL-07)
+  production_bridge_end_to_end     PASS (BTCONT-BRIDGE-01)
+  manual_wakeup                    PASS (BTCONT-CTL-01)
+  cancel_terminal                  PASS (BTCONT-RED-01-GREEN, BTCONT-CTL-04)
 
-**LIVE qualification:** Operator-side LIVE qualification pending (600-second specimen requires operator-side sitting through the deadline). The production seam is exercised end-to-end by the synthetic-real test family (BTCONT-RED-01-GREEN + BTCONT-CTL-04). Subject to LIVE GREEN confirmation against the known specimen `sh -c 'echo STARTED; sleep 600; echo FINISHED'` per ACT §38.
+STRUCTURAL_CONSERVED / NOT_EXECUTED:
+  natural_completion               (cancel path only; reason-independent gate)
 
-**Diagnostic policy:** No new env var, no new Command Palette command. TSWPD / BOCOR / BJLA reuse unchanged. Only test-only backdoor added: `coordinator.getDeferredContinuationForTesting()` mirrors the existing BOCOR/BJLA inspection precedent.
+STRUCTURAL_CONSERVED / LIVE_PRE_REPAIR:
+  deadline_terminal                (LIVE specimen bjla rows 13-21)
 
-**Next:** Operator LIVE GREEN verification on the 600s specimen. No successor ACT required for the live button-affordance (fixed incidentally by the same updateBackgroundCommandState call).
+STRUCTURALLY_EXPECTED / LIVE_PENDING:
+  stale_card_repair                (operator dogfood confirmation pending)
+```
+
+**LIVE qualification:** Operator-side LIVE GREEN pending (600s specimen requires operator-side sitting through the deadline). BTCONT-BRIDGE-01 exercises the REAL production bridge with the same arguments `updateBackgroundCommandState` would compute — the only difference from a real dogfood run is `postStateToWebview()` (the projection-side effect).
+
+**Diagnostic policy:** No new env var, no new Command Palette command. TSWPD / BOCOR / BJLA reuse unchanged. Only test-only backdoor added: `coordinator.getDeferredContinuationForTesting()`.
+
+**Next:** Operator LIVE GREEN verification on the 600s specimen.
 
 ## ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01 — HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED + BOUNDED FIX CYCLE — 2026-09-18
 

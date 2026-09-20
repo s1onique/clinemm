@@ -1,35 +1,38 @@
-(node:55394) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-(Use `node --trace-warnings ...` to show where the warning was created)
-(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
-  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
-Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
-
- RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
-
-(node:55395) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-(Use `node --trace-warnings ...` to show where the warning was created)
- ✓ src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts > ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01 > BTCONT-RED-01 (UNWIRED): deferral + terminality without terminal consumer leaves phase=streaming (DEFECT) 15ms
- ✓ src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts > ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01 > BTCONT-RED-01-GREEN: same setup, terminal consumer wired -> phase commits awaiting_followup 12ms
- ✓ src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts > ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01 > BTCONT-CTL-01: drive a fresh done event after terminality - Q5 commits awaiting_followup 12ms
- ✓ src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts > ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01 > BTCONT-CTL-02: deferral persists while matching job is still running 12ms
- ✓ src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts > ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01 > BTCONT-CTL-04: multi-job matching - J1 terminal while J2 still running; J2 terminal commits continuation 23ms
- ✓ src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts > ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01 > BTCONT-CTL-03: a newer turn legitimately started - late terminal event must not mutate it 12ms
- ✓ src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts > ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 / BTCONT01 > BTCONT-CTL-05: unrelated session B job terminal does NOT affect session A 23ms
-[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts. Error: kill EPERM
-[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
-    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
-    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
-    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
-    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
-[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
-  errno: [33m-1[39m,
-  code: [32m'EPERM'[39m,
-  syscall: [32m'kill'[39m
-}
-
- Test Files  1 passed (1)
-      Tests  7 passed (7)
-   Start at  23:43:57
-   Duration  2.24s (transform 1.21s, setup 1.84s, import 181ms, tests 109ms, environment 0ms)
-
-[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts.
+# 15 — Focused Tests (correction cycle 1)
+#
+# Source: apps/vscode/src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
+#
+# Test status: 10/10 pass
+#
+# Tests:
+#   - BTCONT-RED-01 (UNWIRED): pre-repair defect witness (no terminal consumer → stranded streaming)
+#   - BTCONT-RED-01-GREEN:  production bridge wired → commits awaiting_followup
+#   - BTCONT-CTL-01:        manual wake-up (fresh done event after terminality) commits
+#   - BTCONT-CTL-02:        job still running → no commit (deferral persists)
+#   - BTCONT-CTL-03:        newer epoch supersedes (late terminal discarded)
+#   - BTCONT-CTL-04:        multi-job last-relevant (J1 no-op, J2 commits)
+#   - BTCONT-CTL-05:        unrelated session B terminal does NOT affect session A
+#   - BTCONT-BRIDGE-01:     drives the REAL production bridge
+#                          (Controller.maybeReevaluateDeferredContinuation, static
+#                          method on the production Controller class) — P0 fix
+#   - BTCONT-CTL-06:        same-coordinator session swap → late terminal discarded
+#                          and marker cleared — P1 fix
+#   - BTCONT-CTL-07:        tighter task identity equality (defined->undefined
+#                          transition is now rejected) — P1 fix
+#
+# Production seams under test:
+#   - Real CommandJobManager (lifecycle producer + active-map owner)
+#   - Real SdkSessionEventCoordinator (canonical Q5 owner)
+#   - Real TurnStateTracker (canonical turn-phase store)
+#   - Real message translator
+#   - Real MessageIdMinter (epoch source)
+#   - Real production bridge: Controller.maybeReevaluateDeferredContinuation
+#     (static method on production Controller class; same call site as
+#     updateBackgroundCommandState)
+#
+# Reproduction matrix:
+#   - real_q5_seam                    = YES
+#   - real_job_terminal_seam          = YES
+#   - real_production_bridge          = YES (BTCONT-BRIDGE-01)
+#   - same_coordinator_session_replacement = YES (BTCONT-CTL-06)
+#   - tighter_task_identity           = YES (BTCONT-CTL-07)

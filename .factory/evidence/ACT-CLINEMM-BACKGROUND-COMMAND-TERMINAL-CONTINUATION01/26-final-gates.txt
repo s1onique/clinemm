@@ -1,11 +1,18 @@
-# Final Gates — BTCONT01
+# Final Gates — BTCONT01 / correction cycle 1
 
-## Implementation head
-a658057c1a76e9173bb5cdcf9f5609cce636657c
+## Implementation heads
+implementation_head = bca83002bdf50e361b5d68b5ddb860cd1cb111d8
+                      (production code: SdkController.ts:4233,
+                      sdk-session-event-coordinator.ts:160-203,
+                      test file)
+bundle_head         = f6a3da3b96da77a8405ce16481790df3fa84ee49
+                      (bundle includes the result.json marker
+                      pointing at implementation_head)
+HEAD                = f6a3da3b96da77a8405ce16481790df3fa84ee49
 
-## Focused tests
+## Focused tests (vitest)
 $ bunx vitest run src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
-✓ 7/7 tests pass
+✓ 10/10 tests pass
   - BTCONT-RED-01 (UNWIRED): pre-repair defect witness
   - BTCONT-RED-01-GREEN:  post-repair auto-commit
   - BTCONT-CTL-01:        manual wake-up commits
@@ -13,30 +20,35 @@ $ bunx vitest run src/sdk/__tests__/background-command-terminal-continuation01.b
   - BTCONT-CTL-03:        newer epoch supersedes (discard)
   - BTCONT-CTL-04:        multi-job last-relevant (J2 commits)
   - BTCONT-CTL-05:        different session unaffected
+  - BTCONT-BRIDGE-01:     real production bridge end-to-end
+  - BTCONT-CTL-06:        same-coordinator session replacement
+  - BTCONT-CTL-07:        tighter task identity equality
 
 ## Baseline (BCAFG01)
 $ bunx vitest run src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
 ✓ 5/5 tests pass (no regression)
 
+## Both files together
+$ bunx vitest run src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts \
+                    src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+✓ Test Files 2 passed (2)
+✓ Tests       15 passed (15)
+
 ## Bun unit suite
 $ bun run scripts/run-bun-unit-tests.ts
-82/82 files pass / 1141 tests pass / 0 fail / 33.8s
+82/82 files pass / 1141 tests pass / 0 fail / 47.3s
 
 ## check-types
 $ bun run check-types
 exit code 0 (clean)
 
-## git diff --check
-$ git diff --check HEAD~1 HEAD -- apps/
-exit code 0 (clean)
-
-## Repository status
+## git status
 $ git status --short
 (empty)
 
 ## LIVE qualification
 - Operator-side LIVE GREEN pending (600s specimen).
-- Production seam exercised end-to-end by synthetic-real tests.
-- Same Q5 deferral path; same CommandJobManager terminal lifecycle path;
-  same writer identity (session-event-turn-complete-resumable-straggler-preserve).
+- Production bridge exercised end-to-end by BTCONT-BRIDGE-01 with
+  the SAME arguments updateBackgroundCommandState would compute
+  (previousRunning, running=false, taskId=undefined, sessionEvents).
 - Subject to operator confirmation against the ACT §38 specimen.
