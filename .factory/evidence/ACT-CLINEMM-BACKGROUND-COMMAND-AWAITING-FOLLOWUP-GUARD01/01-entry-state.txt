@@ -1,0 +1,13 @@
+ENTRY_HEAD=5ddec9f1de98e88f9f524cebd06c4528e593c1f5
+ENTRY_STATUS=
+  M .factory/epic-board.md
+  ?? .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/
+  ?? apps/vscode/src/sdk/__tests__/background-command-continuation-ownership-discriminator.bcco01-synthetic-real.test.ts
+
+KNOWN_ACCEPTABLE_DIRT:
+  BCCO01 evidence + test file are EXPLICITLY EXEMPT from this ACT.
+  BCCO01 intentionally remains halted (per its result.json: PASS_CASE_T1_MODEL_REQUESTED_TERMINALITY).
+  It is preserved unchanged.
+  No opportunistic folding into this ACT.
+
+HALT_UNEXPECTED_TRACKED_DIRT = FALSE

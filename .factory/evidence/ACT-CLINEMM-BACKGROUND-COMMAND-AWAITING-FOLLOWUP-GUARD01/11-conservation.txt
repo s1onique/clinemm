@@ -1,0 +1,77 @@
+CONSERVATION TESTS — BCAFG01
+
+Per ACT §15, the bounded repair (if any) must preserve the
+following invariants. The BCAFG01 discriminator does NOT alter
+production source. All conservation tests are validated by the
+existing Q5 composition tests (q5rr01) and the existing
+background-continuation tests (BCCO01), not by BCAFG01 (which
+is a synthetic_real discriminator, not a refactor).
+
+C1: old background job + genuine new user ask may still show
+    user-owned/approval state.
+    — Preserved (BCCO01 + q5rr01 cover this). BCAFG01 does not
+      touch the user-input / approval flow.
+
+C2: background job owned by another session must NOT suppress
+    awaiting_followup here.
+    — Preserved. BCAFG01-IDENTITY-MISMATCH proves that when
+      ownerSessionId != activeSession.sessionId, the writer
+      commits (the lookup returns false and the else-branch
+      fires). The existing q5rr01 Q5-C control asserts the same.
+
+C3: terminal/completed submit_and_exit path remains unchanged.
+    — Preserved. BCAFG01 only drives done-without-completion.
+      BCCO01 explicitly proves that submit_and_exit does NOT
+      consult the Q5 composition seam.
+
+C4: exact jobId cancellation remains unchanged.
+    — Preserved. BCAFG01 does not touch cancelBackgroundCommand.
+
+C5: natural background completion removes liveness once.
+    — Preserved. BCAFG01 does not touch the finalize() seam.
+
+C6: user cancellation removes liveness once.
+    — Preserved. BCAFG01 does not touch the cancel() path.
+
+C7: no active jobs:
+    done-without-completion retains normal awaiting_followup
+    behavior.
+    — Preserved. q5rr01 Q5-B control proves this.
+
+C8: TERMINAL_ROW_MUTATION remains untouched.
+    — Preserved. BCAFG01 does not touch terminal row emission.
+
+C9: TaskHeader remains a pure projection of canonical turn state.
+    — Preserved. BCAFG01 does not touch TaskHeader; the LIVE
+      header transition Working → Your turn is the projection
+      of canonical.phase awaiting_followup, which is correct
+      given the committed state. WEBVIEW_HEADER_PROJECTION_DEFECT
+      is REFUTED per the seam map.
+
+C10: TSWPD writer provenance remains intact.
+    — Preserved. BCAFG01 uses the real TSWPD diagnostic
+      (enableTurnStateWriterProvenanceDiagnostic +
+      findTurnStateWriterProvenanceByWriter) to verify the writer
+      commits, without altering the writerId or TSWPD ring.
+
+ADVERSARIAL MATRIX (per ACT §16):
+
+| Active job | Owner matches active session | Completion tool | Expected result         | BCAFG01 coverage |
+|------------|------------------------------|-----------------|-------------------------|------------------|
+| no         | n/a                          | no              | awaiting_followup       | q5rr01 Q5-B      |
+| yes        | yes                          | no              | suppress erroneous      | BCAFG01-RED      |
+|            |                              |                 | awaiting_followup       |                  |
+| yes        | no                           | no              | awaiting_followup       | BCAFG01-IDENTITY-|
+|            |                              |                 |                         | MISMATCH (matches|
+|            |                              |                 |                         | q5rr01 Q5-C)     |
+| yes        | yes                          | yes             | authoritative          | BCCO01-CTL       |
+|            |                              |                 | completion unchanged   |                  |
+| terminal   | yes                          | no              | normal                  | q5rr01 Q5-D      |
+| job        |                              |                 | awaiting_followup       |                  |
+| two jobs,  | one match                    | no              | suppress while matching | (not explicitly   |
+| one match  |                              |                 | job RUNNING             | covered by        |
+|            |                              |                 |                         | existing tests;   |
+|            |                              |                 |                         | relies on the    |
+|            |                              |                 |                         | "any matching"   |
+|            |                              |                 |                         | semantics of     |
+|            |                              |                 |                         | hasRunningBGJFO  |

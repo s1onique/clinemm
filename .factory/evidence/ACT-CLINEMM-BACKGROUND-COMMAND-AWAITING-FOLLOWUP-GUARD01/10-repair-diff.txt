@@ -1,0 +1,41 @@
+REPAIR DIFF — BCAFG01
+
+NO REPAIR PERFORMED.
+
+Per ACT §12, repair is authorized only if:
+  RED_REPRODUCED = true          (yes — BCAFG01-IDENTITY-MISMATCH)
+  CAUSALITY_ESTABLISHED = true   (yes — within H2 bounds)
+  repair is bounded to the proven seam (NO — the exact LIVE
+  sub-cause within H2 is unproven; static analysis + synthetic_real
+  reproduction cannot distinguish H2a from H2b without runtime
+  telemetry, which ACT §9 explicitly prohibits building a second
+  system for).
+
+Per ACT §23, the terminal evidence verdict for this scenario is:
+
+  CAPTURE_INSUFFICIENT
+
+The discriminator IS established (G2 proven within bounds).
+The precise LIVE repair is NOT authorized (HALT_REPAIR_EXCEEDS_PROVEN_CAUSE).
+
+If a bounded repair is desired, the next step would be either:
+  (a) Add a DEFAULT_OFF temporary companion diagnostic at the
+      SdkSessionEventCoordinator's `done-without-completion`
+      branch (sdk-session-event-coordinator.ts:274-291) that
+      logs the load-bearing tuple (jobId, job.state, job.ownerSessionId,
+      activeSession.sessionId, guard result, writerId) at the
+      decision boundary. Capture one LIVE occurrence, then
+      diagnose.
+  (b) Move the runtime diagnostic into a small instrumentation
+      shim that records the four-point capture only when the
+      coordinator takes the else-branch. Same goal.
+
+Neither is in scope for THIS ACT.
+
+Source diff:
+  $ git diff --stat
+  (no production source changes)
+
+New files:
+  apps/vscode/src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+  .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-AWAITING-FOLLOWUP-GUARD01/*.txt|*.md|*.jsonl

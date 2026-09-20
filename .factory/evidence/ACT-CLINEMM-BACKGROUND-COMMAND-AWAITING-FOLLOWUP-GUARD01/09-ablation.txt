@@ -1,0 +1,59 @@
+ABLATION — BCAFG01
+
+Per ACT §11, ablation is required after candidate defect
+identification. The discriminator test (BCAFG01) embeds the
+ablation.
+
+ABLATION FOR H2 (owner identity mismatch):
+
+  Variable held constant:
+    - activeSession.sessionId ("session-bcafg01")
+    - job.state ("running")
+    - presence of a RUNNING managed CommandJob in the active map
+    - completion event (done-without-completion, same sessionId)
+
+  Variable varied:
+    - ownerSessionId stamp on the job (via context.sessionId at
+      CommandJobManager.start() time)
+
+  Result matrix:
+
+    case    ownerSessionId stamp        lookup_result    writer_commits?
+    ------  --------------------------  ---------------  ----------------
+    A       activeSession.sessionId     true             NO (GREEN)
+    B       undefined (no context)      false            YES (RED)
+    C       a different sessionId       false            YES (RED — isolation control)
+
+  Necessity: when stamped correctly (A), the writer is suppressed.
+  Sufficiency: when stamped incorrectly (B/C), the writer commits.
+  Both criteria met for H2.
+
+ABLATION FOR H4 (guard result ignored) — embedded in
+BCAFG01-ABLATION:
+
+  Variable held constant:
+    - same harness, same RUNNING job, same completion event
+    - ownerSessionId correctly stamped (case A precondition)
+
+  Variable varied:
+    - mockLiveness value flipped from true → false
+
+  Result:
+    mockLiveness=true   → writer suppressed
+    mockLiveness=false  → writer commits
+
+  H4 (guard result ignored) is REFUTED.
+
+ABLATION FOR H3 (guard bypass) — embedded in BCAFG01-BYPASS:
+
+  Variable held constant:
+    - same harness, same RUNNING job, same completion event
+
+  Variable varied:
+    - whether hasRunningBackgroundJobForOwner is supplied at all
+
+  Result:
+    option omitted → writer commits
+    option wired (real lookup or mock) → writer gated
+
+  H3 (guard bypass) is REFUTED for the wired-host case.

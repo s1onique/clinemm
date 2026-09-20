@@ -1,0 +1,46 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-AWAITING-FOLLOWUP-GUARD01",
+  "epistemic_purpose": "causal discriminator with bounded repair authorization",
+  "entry_head": "5ddec9f1de98e88f9f524cebd06c4528e593c1f5",
+  "live_subject": {
+    "same_job_across_transition": true,
+    "job_id": "cmd_mu9mh0uahxjkxbo3",
+    "phase_before": "streaming",
+    "phase_after": "awaiting_followup",
+    "writer_id": "session-event-turn-complete-resumable-straggler-preserve",
+    "evidence_class": "LIVE"
+  },
+  "discriminator": {
+    "classification": "CASE_G2_OWNER_IDENTITY_MISMATCH",
+    "job_state_at_decision": "RUNNING",
+    "job_owner": "UNPROVEN_AT_STATIC_RECON",
+    "queried_owner": "activeSession.sessionId (exact value UNPROVEN)",
+    "guard_result": "FALSE_OR_UNDEFINED (writer committed; else-branch only fires when guard returns false or is undefined)",
+    "causality_established": true,
+    "causality_bounds": "G2 proven within synthetic_real + static analysis bounds; H2a vs H2b sub-cause unproven without runtime telemetry",
+    "hypotheses_refuted": [
+      "CASE_G1_FALSE_NEGATIVE_LIVENESS",
+      "CASE_G3_GUARD_BYPASS",
+      "CASE_G4_GUARD_RESULT_IGNORED",
+      "CASE_G5_DISTINCT_INTENTIONAL_BRANCH"
+    ]
+  },
+  "repair": {
+    "performed": false,
+    "files": [],
+    "rationale": "Per ACT §12, repair is bounded to the proven seam. The G2 discriminator is established but the precise LIVE sub-cause (H2a: producer-side no-context; H2b: session-rebuild sessionId drift) cannot be determined without runtime instrumentation, which ACT §9 prohibits building a second system for. CAPTURE_INSUFFICIENT verdict per §23."
+  },
+  "qualification": {
+    "synthetic_real": "PASS — 5 tests in BCAFG01 + 20 tests in related q5rr01/bhtd01/tccc01/bcco01 = 25/25 PASS",
+    "live": "NOT_EXECUTED — no production source change in this ACT; rebuild+install+LIVE re-run deferred to the bounded-repair ACT"
+  },
+  "test_files_added": [
+    "apps/vscode/src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts"
+  ],
+  "production_source_changed": false,
+  "halt_conditions_triggered": [
+    "CAPTURE_INSUFFICIENT (per §23; this is an acceptable terminal evidence verdict)"
+  ],
+  "stop_rule_observed": true,
+  "next_act_required_for_repair": "ACT-CLINEMM-BACKGROUND-COMMAND-AWAITING-FOLLOWUP-GUARD01-REPAIR01 (or successor) — adds DEFAULT_OFF runtime diagnostic at the decision boundary, captures one LIVE occurrence, diagnoses H2a vs H2b, then applies the bounded fix."
+}

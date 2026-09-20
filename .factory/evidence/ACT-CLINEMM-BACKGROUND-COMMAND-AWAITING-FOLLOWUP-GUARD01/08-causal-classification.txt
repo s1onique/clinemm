@@ -1,0 +1,93 @@
+CAUSAL CLASSIFICATION — BCAFG01
+
+PRIMARY CLASSIFICATION: CASE_G2_OWNER_IDENTITY_MISMATCH (proven within bounds)
+
+Evidence for G2 (proven via discriminator test BCAFG01-IDENTITY-MISMATCH):
+  - The writer that committed (session-event-turn-complete-resumable-straggler-preserve)
+    is bound exclusively to the else-branch at
+    sdk-session-event-coordinator.ts:286-290.
+  - The else-branch executes only when `ownerStillRunning === false`
+    (where ownerStillRunning =
+     this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId)).
+  - The lookup at command-job-manager.ts:2701-2711 returns true iff
+    a RUNNING job's ownerSessionId === queried ownerSessionId.
+  - Therefore: the writer committed → lookup returned false →
+    either (a) no RUNNING job matches OR (b) no RUNNING job has
+    the matching ownerSessionId.
+  - The LIVE observation shows the job IS RUNNING and IS visible
+    in the webview card associated with this task. So (a) is
+    impossible — there IS a matching RUNNING job per UI evidence.
+  - This leaves (b): the job's ownerSessionId does not match the
+    activeSession.sessionId at done-time.
+
+DISCRIMINATOR ELIMINATIONS:
+
+  H1 FALSE_NEGATIVE_LIVENESS (CASE_G1):
+    REFUTED by BCAFG01-DIRECT — the real
+    CommandJobManager.hasRunningBackgroundJobForOwner returns true
+    iff a RUNNING job's ownerSessionId matches the queried owner.
+    The lookup logic itself is sound.
+
+  H2 OWNER_IDENTITY_MISMATCH (CASE_G2):
+    PROVEN by BCAFG01-IDENTITY-MISMATCH — the lookup returns false
+    when the job's ownerSessionId is undefined (no context passed
+    at start time) OR when the ownerSessionId is stamped with a
+    different sessionId than the active session at done-time.
+
+  H3 GUARD_BYPASS (CASE_G3):
+    REFUTED by BCAFG01-BYPASS — the writer commits unconditionally
+    ONLY when the option is omitted. The SdkController.ts:1882-1894
+    wiring ALWAYS supplies the option, so the bypass path requires
+    either (a) the activeSession is undefined (fallback `false`)
+    or (b) the host omits the method (Hub/Remote; not the LIVE case).
+
+  H4 GUARD_RESULT_IGNORED (CASE_G4):
+    REFUTED by BCAFG01-ABLATION — with guard=true, the writer does
+    NOT commit; with guard=false, the writer commits. The control
+    flow is fully gated by the guard result.
+
+  H5 DISTINCT_INTENTIONAL_BRANCH (CASE_G5):
+    REFUTED — the writerId is exclusively bound to the else-branch
+    of `if (ownerStillRunning)`. The writer does not fire from any
+    other path.
+
+LIVE SUB-CAUSE WITHIN H2:
+
+  Two scenarios are consistent with the LIVE evidence. The
+  discriminator cannot pinpoint which without runtime telemetry:
+
+  H2a: At job creation time, the producer caller did not pass an
+        AgentToolContext whose sessionId matched the active
+        session. The ownerSessionId was stamped as undefined OR
+        as a different sessionId.
+        (Producer-side defect.)
+
+  H2b: Between job creation and done-time, the active session's
+        sessionId changed (e.g., via replaceActiveSession with a
+        new startResult.sessionId). The job retains the old
+        ownerSessionId; the active session has a new sessionId;
+        the lookup fails to correlate.
+        (Session-rebuild defect.)
+
+  In production, the only call site
+  (vscode-run-commands-tool.ts:632-646) passes context correctly.
+  So H2a is UNLIKELY given current source — unless a future call
+  site is added. H2b is possible if replaceActiveSession returns
+  a startResult with a different sessionId than the previous one
+  (which contradicts the documented contract at
+  sdk-session-lifecycle.ts:160-162 that mode/MCP rebuilds
+  "reuse the sessionId of the session they replace").
+
+  Static analysis alone cannot distinguish H2a vs H2b without
+  runtime instrumentation. The bounded repair therefore cannot
+  proceed without violating the ACT's halt conditions
+  (HALT_REPAIR_EXCEEDS_PROVEN_CAUSE).
+
+VERDICT: CASE_G2_OWNER_IDENTITY_MISMATCH (proven within bounds).
+
+  Within the bounds of synthetic_real reproduction + static analysis:
+  - G2 is the only consistent classification.
+  - G1, G3, G4, G5 are REFUTED.
+  - The exact LIVE sub-cause (H2a vs H2b) is NOT pinpointed
+    without runtime telemetry — classified as CAPTURE_INSUFFICIENT
+    for repair authorization.

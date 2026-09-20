@@ -1,0 +1,31 @@
+GREEN VERIFICATION — BCAFG01
+
+Test execution result:
+  cd apps/vscode
+  bun vitest run \
+    src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+
+  ✓ BCAFG01-RED: ownerSessionId stamped + real lookup wired → awaiting_followup SUPPRESSED (GREEN baseline)
+  ✓ BCAFG01-IDENTITY-MISMATCH: no context → ownerSessionId=undefined → guard returns false → writer commits (H2 PROVEN)
+  ✓ BCAFG01-DIRECT: real CommandJobManager.hasRunningBackgroundJobForOwner returns true iff RUNNING+matching owner (H1 control)
+  ✓ BCAFG01-BYPASS: option omitted → guard not consulted → writer commits unconditionally (H3 control)
+  ✓ BCAFG01-ABLATION: guard=true → writer suppressed; guard=false → writer commits (H4 REFUTED)
+
+  5 tests passed in 60ms.
+
+Cross-validation with related tests (no regression):
+  cd apps/vscode
+  bun vitest run \
+    src/sdk/__tests__/runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01-synthetic-real.test.ts \
+    src/sdk/__tests__/background-handoff-turnstate-discriminator.bhtd01-synthetic-real.test.ts \
+    src/sdk/__tests__/task-completion-continuation-coherence.tccc01.test.ts \
+    src/sdk/__tests__/background-command-continuation-ownership-discriminator.bcco01-synthetic-real.test.ts \
+    src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+
+  5 test files passed
+  25 tests passed (0 failed)
+  Duration: 2.20s
+
+NO PRODUCTION SOURCE WAS CHANGED by this ACT.
+ONLY a new test file was added:
+  apps/vscode/src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts

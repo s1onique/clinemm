@@ -1,0 +1,35 @@
+Q5 CONTRACT — VERIFIED AGAINST CURRENT SOURCE (HEAD 5ddec9f1)
+
+Composition seam:
+  apps/vscode/src/sdk/sdk-session-event-coordinator.ts:200-291
+  Branch: `else` of `if (result.sessionEnded || result.turnComplete)` after
+  the attempt-completion seen / error-seen short-circuits.
+
+Guard source path:
+  SdkSessionEventCoordinator.options.hasRunningBackgroundJobForOwner?.(
+    activeSession.sessionId,
+  )
+  → wired in SdkController.ts:1882-1894 to:
+      activeSession.sdkHost.hasRunningBackgroundJobForOwner(ownerSessionId)
+  → VscodeSessionHost.hasRunningBackgroundJobForOwner (line 529) delegates
+    to CommandJobManager.hasRunningBackgroundJobForOwner(sessionId).
+
+Job-side source path:
+  CommandJobManager.start(options, context) stamps:
+    job.ownerSessionId = context?.sessionId
+  at construction time (command-job-manager.ts:1776).
+  context is the AgentToolContext passed by
+  vscode-run-commands-tool.ts:584 (backgroundExec branch) at line 645.
+
+Lookup semantics (command-job-manager.ts:2701-2711):
+  for job of active.values():
+      if job.state === "running" && job.ownerSessionId === ownerSessionId:
+          return true
+  return false
+
+Contract invariant (LIVE T0, T1):
+  activeSession.sessionId must equal CommandJob.ownerSessionId
+  for the guard to return true.
+
+HALT_Q5_CONTRACT_NOT_PRESENT = FALSE
+Q5 contract IS present in current source.

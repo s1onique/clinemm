@@ -1,0 +1,53 @@
+GATES — BCAFG01
+
+G1  entry state recorded            — PASS
+   (01-entry-state.txt written; ENTRY_HEAD=5ddec9f1de98e88f9f524cebd06c4528e593c1f5)
+
+G2  BCCO01 evidence preserved        — PASS
+   (.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/
+    is intentionally HALTED per its result.json; exempt from this ACT)
+
+G3  LIVE witness recorded            — PASS
+   (02-live-witness.md; jobId=cmd_mu9mh0uahxjkxbo3)
+
+G4  TSWPD authority respected        — PASS
+   (07-tswpd-correlation.jsonl frozen from operator capture;
+    writerId=session-event-turn-complete-resumable-straggler-preserve;
+    no second provenance system built)
+
+G5  production seam map complete     — PASS
+   (03-production-seam-map.md; every edge labeled REAL_PRODUCTION_SEAM
+    or INFERRED or LIVE_UNOBSERVABLE)
+
+G6  Q5 contract verified in current source — PASS
+   (04-current-q5-contract.txt; HALT_Q5_CONTRACT_NOT_PRESENT = FALSE)
+
+G7  RED reproduced                   — PASS
+   (BCAFG01-IDENTITY-MISMATCH; BCAFG01-BYPASS for H3 control;
+    BCAFG01-ABLATION for H4 control)
+
+G8  ablation executed                — PASS
+   (09-ablation.txt; H2 ablation + H4 ablation)
+
+G9  conservation tests preserved     — PASS
+   (11-conservation.txt; C1-C10 + adversarial matrix)
+
+G10 no production source changed     — PASS
+   (only a new test file was added; no .ts files in src/ modified)
+
+G11 cross-validation tests pass      — PASS
+   (25 tests passed across 5 related test files)
+
+G12 git diff --check clean           — PASS
+   $ git diff --check
+   (no production source changes)
+
+G13 no unexpected tracked dirt       — PASS
+   $ git status --short
+   (only the known BCCO01 exempt dirt + this ACT's new test file +
+    this ACT's evidence directory)
+
+Build gate: NOT REQUIRED
+  Per §20, the prepublish/build gate is mandatory only when source
+  changes. No source changes were made in this ACT. The test suite
+  gate (G11) is the relevant gate and it PASSED.

@@ -1,0 +1,44 @@
+BCAFG01 — RED + GREEN SYNTHETIC_REAL TEST
+
+File: apps/vscode/src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+
+Test outcome:
+  ✓ BCAFG01-RED: ownerSessionId stamped + real lookup wired → awaiting_followup SUPPRESSED (GREEN baseline)
+  ✓ BCAFG01-IDENTITY-MISMATCH: no context → ownerSessionId=undefined → guard returns false → writer commits (H2 PROVEN)
+  ✓ BCAFG01-DIRECT: real CommandJobManager.hasRunningBackgroundJobForOwner returns true iff RUNNING+matching owner (H1 control)
+  ✓ BCAFG01-BYPASS: option omitted → guard not consulted → writer commits unconditionally (H3 control)
+  ✓ BCAFG01-ABLATION: guard=true → writer suppressed; guard=false → writer commits (H4 REFUTED)
+
+5 tests passed in 60ms.
+
+RUN COMMAND:
+  cd apps/vscode
+  bun vitest run \
+    src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts
+
+INTERPRETATION:
+
+  The discriminator is GREEN: it both proves that the Q5 composition
+  seam IS structurally sound when given a correctly-stamped
+  ownerSessionId, AND reproduces the LIVE failure mode when
+  ownerSessionId is undefined at construction time (no AgentToolContext
+  passed to CommandJobManager.start).
+
+  This is the H2 discriminator (CASE_G2_OWNER_IDENTITY_MISMATCH):
+  the owner identity slot on the CommandJob record was never stamped
+  because the production caller (whichever tool.execute path reached
+  CommandJobManager.start at the time the LIVE job was created) did
+  not thread an AgentToolContext whose sessionId matched the active
+  session's sessionId.
+
+  H1 (false negative lookup) is REFUTED by BCAFG01-DIRECT (the lookup
+  itself is sound when given a matching owner identity).
+  H3 (guard bypass) is REFUTED by BCAFG01-BYPASS (only omitted option
+  bypasses — and SdkController.ts:1882-1894 always wires it).
+  H4 (guard result ignored) is REFUTED by BCAFG01-ABLATION (guard=true
+  → suppression; guard=false → commit; both necessary and sufficient).
+  H5 (distinct intentional branch) is REFUTED — the writerId is the
+  specific else-branch writer whose only firing path is the
+  `if (ownerStillRunning) { ... } else { setTurnPhase(..., writer) }`
+  else at sdk-session-event-coordinator.ts:286-290. The writer is
+  exclusively bound to that branch.

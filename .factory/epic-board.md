@@ -4567,3 +4567,173 @@ reproven by the actual `vscode:prepublish` script (not just
                                               durably appended;
                                               no production code
                                               re-touched)
+
+
+# ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01
+
+Causal discriminator (NOT a repair ACT) for the operator's LIVE
+phenomenon:
+
+```text
+task: ✓ COMPLETED + Start New Task visible
+AND
+managed CommandJob still running (activeCommandJobs === 1)
+```
+
+**Question (not the row contract):** who owns task/session
+terminality after Proceed While Running, and why did that authority
+decide the task was complete while the managed CommandJob was still
+live?
+
+**Discriminator outcome:** the terminal authority is the MODEL.
+
+  - BCCO01-RED: real CommandJobManager + real SdkSessionEventCoordinator
+    + real submit_and_exit content_start/content_end + real done
+    event → turnState.phase === "completed" AND activeCommandJobs
+    === 1. Test PASSED in 41ms.
+  - BCCO01-GREEN: same harness, submit_and_exit SUPPRESSED →
+    turnState.phase !== "completed" AND activeCommandJobs === 1.
+    Proves necessity (candidate removed → failure absent).
+  - BCCO01-CTL: composition seam (hasRunningBackgroundJobForOwner)
+    NOT consulted on the submit_and_exit path (only acts on
+    done-without-completion). Proves the seam is bounded.
+
+**Verdict:** PASS_CASE_T1_MODEL_REQUESTED_TERMINALITY.
+
+The runtime faithfully honors the model's completion declaration.
+The dual co-existence (task terminal + background job running) is
+the documented product contract — the model decided the work was
+done, the background process continues.
+
+**Repair performed:** NO. Per §16 of the ACT, CASE_T1 does NOT
+immediately patch runtime state. A successor REPAIR ACT is
+required against the actual finalization authority if a contract
+change is desired (option A: improve model prompt; option B: change
+terminality contract so submit_and_exit while a managed job is
+alive yields a user-control state).
+
+**No production source changed.** Only a new test file was added
+(untracked):
+  apps/vscode/src/sdk/__tests__/background-command-continuation-ownership-discriminator.bcco01-synthetic-real.test.ts
+
+**Board state:**
+
+```text
+BACKGROUND_CONTINUATION_OWNERSHIP =
+  CASE_T1_MODEL_REQUESTED_TERMINALITY
+  (PASS_CASE_T1_MODEL_REQUESTED_TERMINALITY)
+
+MANAGED_JOB_CAN_COEXIST_WITH_ACTIVE_TASK =
+  PROVEN
+  (BCCO01-RED reproduces the dual co-existence)
+
+TASK_TERMINAL_WHILE_JOB_RUNNING =
+  OBSERVED (LIVE) AND REPRODUCED (BCCO01-RED)
+
+TERMINALITY_AUTHORITY =
+  the model (via submit_and_exit tool call)
+  consumed by SdkSessionEventCoordinator.handleSessionEvent
+  at apps/vscode/src/sdk/sdk-session-event-coordinator.ts:161
+
+SHELL_DETACH_ESCAPE =
+  UNMANAGED_CHILD (classification only, NOT causal to primary)
+
+TURN_OWNERSHIP =
+  RESOLVED — model-driven completion is the canonical terminal
+  authority for the "completed" phase. The Q5 composition seam
+  is bounded to the "done-without-completion" branch.
+
+TERMINAL_ROW_MUTATION =
+  DEFERRED (OUT OF CONTRACT, unchanged from CORRECTION03)
+```
+
+**Files updated:**
+- .factory/epic-board.md (this row)
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/01-entry-state.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/02-live-observation.md
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/03-authority-map.md
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/04-recon.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/05-red.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/06-terminal-provenance.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/07-four-point-capture.json
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/08-variant-a-continue.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/09-variant-b-finalize.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/10-ablation.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/11-shell-detach-classification.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/12-conservation.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/13-gates.txt
+- .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CONTINUATION-OWNERSHIP01/result.json
+- apps/vscode/src/sdk/__tests__/background-command-continuation-ownership-discriminator.bcco01-synthetic-real.test.ts
+
+**EVIDENCE_BOUND_TO_FINAL_HEAD** = PASS  (HEAD at this ACT)
+**BOARD_DURABLE**                = PASS  (this ACT row
+                                              durably appended;
+                                              no production code
+                                              re-touched)
+
+---
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-AWAITING-FOLLOWUP-GUARD01 (BCAFG01)
+
+CAUSAL_DISCRIMINATOR_WITH_BOUNDED_REPAIR_AUTHORIZATION
+
+EPISTEMIC_PURPOSE:
+  Causal discriminator (proves G2 within bounds) with bounded
+  repair authorization (NOT authorized — CAPTURE_INSUFFICIENT for
+  sub-cause discrimination).
+
+LIVE_T0_LIVE_T1:
+  same managed CommandJob RUNNING across the LIVE header
+  transition Working → Your turn.
+
+LIVE_WRITER =
+  session-event-turn-complete-resumable-straggler-preserve
+
+LIVE_PHASE_TRANSITION =
+  streaming → awaiting_followup
+
+MANAGED_JOB_AT_TRANSITION =
+  RUNNING (UI confirms card=Backgrounded, Cancel=visible,
+  jobId=cmd_mu9mh0uahxjkxbo3)
+
+OWNER_CORRELATION =
+  MISMATCH (proven within bounds — sub-cause H2a vs H2b unproven
+  without runtime telemetry)
+
+Q5_GUARD_RESULT =
+  FALSE_OR_UNDEFINED (writer committed; the else-branch at
+  sdk-session-event-coordinator.ts:286-290 only fires when the
+  hasRunningBackgroundJobForOwner option returns falsy)
+
+CLASSIFICATION =
+  CASE_G2_OWNER_IDENTITY_MISMATCH (proven)
+  CAPTURE_INSUFFICIENT (for LIVE sub-cause — H2a/H2b)
+
+REFUTED_HYPOTHESES =
+  CASE_G1_FALSE_NEGATIVE_LIVENESS
+  CASE_G3_GUARD_BYPASS
+  CASE_G4_GUARD_RESULT_IGNORED
+  CASE_G5_DISTINCT_INTENTIONAL_BRANCH
+
+TURN_HEADER_PROJECTION =
+  CONSERVED (header correctly tracks canonical.phase;
+  WEBVIEW_HEADER_PROJECTION_DEFECT REFUTED)
+
+COMPLETED_SUBMIT_AND_EXIT_PATH =
+  UNCHANGED (per BCCO01 contract)
+
+TERMINAL_ROW_MUTATION =
+  DEFERRED (UNCHANGED — out of scope per ACT §25 STOP rule)
+
+PRODUCTION_SOURCE_CHANGED =
+  NO (only a new test file was added:
+      apps/vscode/src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts)
+
+NEXT_ACT_REQUIRED_FOR_REPAIR =
+  ACT-CLINEMM-BACKGROUND-COMMAND-AWAITING-FOLLOWUP-GUARD01-REPAIR01
+  (or successor) — adds DEFAULT_OFF runtime diagnostic at the
+  decision boundary, captures one LIVE occurrence, diagnoses
+  H2a vs H2b, then applies the bounded fix.
+
+EVIDENCE_BOUND_TO_FINAL_HEAD = PASS  (HEAD at this ACT)
+BOARD_DURABLE                  = PASS  (this row durably appended)
