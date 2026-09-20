@@ -5032,3 +5032,61 @@ NEXT ACT: dogfood VSIX install + LIVE run + dump. The
 job_cancellation_requested.requestOrigin in the dump will mechanically
 classify the requester into CP1-CP6.
 ```
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 — CORRECTION01
+
+```text
+STATUS: HALT_RESOLVED → DOGFOOD_VSIX_QUALIFIED
+
+REVIEWER CORRECTIONS APPLIED:
+  1. `ui_cancel_rpc` → `background_cancel_rpc` (everywhere:
+     production code, BCP tests, evidence, board).
+     The label now proves the PUBLIC cancelBackgroundCommand gRPC
+     seam, NOT that the operator pressed the UI button. A
+     programmatic caller of the same seam (e.g. an automatic "old
+     command vs. new command pending" cleanup along the lines of
+     cline/cline#8251) is also captured as background_cancel_rpc
+     — that upward discrimination is exactly what the LIVE dump
+     enables.
+  2. cp3 wording fixed: "session_abort" → "caller_abort_signal"
+     (matches the recon: the caller's AbortSignal aborted inside
+     manager.start, not a session-level abort).
+  3. Working tree committed (no more `dirty` digest).
+  4. `bun run vscode:prepublish` executed and PASSED from the
+     committed source — not deferred.
+  5. Dogfood VSIX packaged and bound.
+
+COMMITTED HEADS:
+  640cc3881  rename + diagnostic capture (the ACT's code commit;
+             this is the HEAD the VSIX was built from)
+  935ef93d6  bind VSIX identity metadata (the ACT's evidence commit)
+
+VSIX:
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix
+  SHA-256:  5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5
+  Bytes:    14613072 (13.94 MB)
+  Version:  4.1.16
+
+GATES (all pass except the documented pre-existing substrate failures):
+  G1 check-types        PASS
+  G2 BCP tests          PASS (5/5)
+  G3 BCLAS tests        PASS (9/9)
+  G4 BOCOR tests        PASS (4/4)
+  G5 command-job-manager PRE_EXISTING environmental failures (NOT a regression)
+  G6 git status         CLEAN
+  G7 git diff --check   PASS
+  G8 vscode:prepublish  PASS
+  G9 vsce package       PASS
+
+VERDICT: DOGFOOD_VSIX_QUALIFIED_FOR_LIVE_CAPTURE.
+
+NEXT: operator installs the VSIX, runs the LIVE `sleep 600` task per
+ACT §15, dumps BJLA after Working→Your turn. The
+job_cancellation_requested.requestOrigin in the dump will mechanically
+classify the LIVE requester:
+
+  requestOrigin = "background_cancel_rpc"   → CP1 (programmatic
+                                             cancel-RPC caller)
+  requestOrigin = "extension_shutdown"     → CP6 (controller dispose)
+  requestOrigin = "caller_abort_signal"     → CP3 (caller's AbortSignal)
+```
