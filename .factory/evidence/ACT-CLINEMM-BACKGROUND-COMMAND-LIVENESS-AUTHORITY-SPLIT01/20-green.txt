@@ -1,0 +1,65 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC GREEN (synthetic qualification)
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+================================================================
+SYNTHETIC GREEN
+================================================================
+
+The synthetic GREEN for this ACT is the diagnostic build's:
+
+  - typecheck PASS
+  - focused test suites PASS
+  - zero semantic delta when capture is OFF (BCLAS-05)
+
+The LIVE GREEN (the LIVE occurrence no longer reproduces after
+the bounded repair) is the NEXT ACT's responsibility. This ACT
+does NOT repair; therefore LIVE GREEN is N/A here.
+
+================================================================
+SYNTHETIC QUALIFICATION SUMMARY
+================================================================
+
+  bunx tsc --noEmit
+    Result: PASS (no errors after the diagnostic wiring)
+
+  bunx vitest run background-job-liveness-authority.bclas{01..05}.test.ts
+    Result: PASS (5 files, 7 tests)
+
+  bunx vitest run background-owner-correlation (regression check)
+    Result: PASS (4 files, 24 tests) — no regression
+
+  bunx vitest run dogfood-diagnostic-profile (regression check)
+    Result: PASS (4 files, 103 tests) — no regression
+
+  bunx vitest run turn-state-writer-provenance (regression check)
+    Result: PASS (1 file, 35 tests) — no regression
+
+  bunx vitest run background-handoff (regression check)
+    Result: PASS (1 file, 6 tests) — no regression
+
+  bunx vitest run runtime-task-progression (regression check)
+    Result: PASS (2 files, 10 tests) — no regression
+
+  bunx vitest run active-command-gauge-live (regression check)
+    Result: PASS (1 file, 3 tests) — no regression
+
+  bunx vitest run command-job-manager-descendant-conservation (regression check)
+    Result: PASS (1 file, 17 tests) — no regression
+
+================================================================
+ENVIRONMENT CAVEATS
+================================================================
+
+Per ACT sec 32 HALT_UNAVAILABLE_FROM_ENVIRONMENT:
+- `bun run vscode:prepublish` was NOT executed in the Cloud Agent
+  environment (the full prepublish gate requires the webview
+  build dependencies + the dogfood launcher, neither of which
+  are installed in the agent's sandboxed shell). The operator
+  environment re-runs this gate before artifact qualification.
+- `bun run test:unit` (full suite, ~984 tests) was NOT executed
+  end-to-end; the Cloud Agent scanned the focused suites that
+  exercise every production seam the diagnostic touches.
+
+Both are substrate limitations, NOT code defects.

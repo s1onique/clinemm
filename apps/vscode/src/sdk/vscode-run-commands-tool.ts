@@ -37,6 +37,7 @@ import {
 } from "@/integrations/terminal/types"
 import { Logger } from "@/shared/services/Logger"
 import { getShellForProfile } from "@/utils/shell"
+import { captureBackgroundJobLivenessAuthorityRecord, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import {
 	CommandJobManager,
 	DEFAULT_EXECUTION_DEADLINE_MS,
@@ -616,6 +617,21 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			// (with undefined). The host owns the projection — the projection
 			// is dead state until this fires.
 			const notifyBackgroundStateChange = (running: boolean, jobId: string | undefined): void => {
+				// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+				// BJLA diagnostic — capture `background_state_change_published`
+				// BEFORE invoking the host's projection callback. This is the
+				// load-bearing T-projection timestamp for the LA3
+				// discriminator (runner publishes `false` but UI projection
+				// stays `true`). The manager-instance identity is the
+				// correlation token for LA2 / LA5. No semantic delta when
+				// capture is OFF.
+				captureBackgroundJobLivenessAuthorityRecord({
+					event: "background_state_change_published",
+					capturedAt: Date.now(),
+					managerInstance: getDiagnosticManagerId(manager),
+					running,
+					jobId: jobId ?? null,
+				})
 				try {
 					options.onBackgroundStateChange?.(running, jobId)
 				} catch (error) {

@@ -48,6 +48,11 @@ import type { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTermin
 import { getDistinctId } from "@/services/logging/distinctId"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
+import {
+	captureBackgroundJobLivenessAuthorityRecord,
+	getDiagnosticHostId,
+	getDiagnosticManagerId,
+} from "./background-job-liveness-authority"
 import { type CommandJobLifecycleEvent, CommandJobManager } from "./command-job-manager"
 import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
@@ -372,7 +377,22 @@ export class VscodeSessionHost implements SdkSessionHost {
 		// ACT-CLINEMM-UPSTREAM-SYNC-INTEGRATION01 (F27): constructor now takes
 		// (inner, commandJobManager, prepareStartSessionInput?) so both
 		// fields are persisted on the host instance.
-		return new VscodeSessionHost(inner, commandJobManager, prepareStartSessionInput)
+		const host = new VscodeSessionHost(inner, commandJobManager, prepareStartSessionInput)
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — capture `manager_constructed` AFTER the
+		// host instance exists so `getDiagnosticHostId(host)` can
+		// return the correlation token. The two-token pairing
+		// (M?, H?) is the load-bearing LA2 / LA5 discriminator.
+		// No semantic delta when capture is OFF (helper returns
+		// null and no map mutation happens).
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "manager_constructed",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(commandJobManager),
+			hostInstance: getDiagnosticHostId(host),
+			source: "VscodeSessionHost.create",
+		})
+		return host
 	}
 
 	async start(input: StartSessionInput): Promise<StartSessionResult>
@@ -550,6 +570,21 @@ export class VscodeSessionHost implements SdkSessionHost {
 		readonly ownerSessionId: string | undefined
 	}> {
 		return this.commandJobManager.getActiveJobOwnershipSnapshot()
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+	 *
+	 * Host-only extension following the `hasRunningBackgroundJobForOwner`
+	 * / `cancelBackgroundCommand` precedent. Returns the
+	 * CommandJobManager instance the host owns so the BJLA diagnostic
+	 * at the Q5 composition seam can derive a `managerInstance`
+	 * correlation token. NEVER read by the model or webview. The
+	 * diagnostic-only identity string is opaque (`M<n>`); the
+	 * instance reference itself is internal to the diagnostic.
+	 */
+	getCommandJobManager(): import("./command-job-manager").CommandJobManager {
+		return this.commandJobManager
 	}
 
 	async dispose(reason?: string): Promise<void> {

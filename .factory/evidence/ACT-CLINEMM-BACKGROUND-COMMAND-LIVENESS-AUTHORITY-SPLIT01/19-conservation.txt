@@ -1,0 +1,131 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 25 CONSERVATION TESTS
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+This ACT introduces ZERO production-side repair. The bounded
+diagnostic (BJLA) is the ONLY production-side mutation. The
+conservation tests below prove the diagnostic has zero semantic
+delta and no behavioral impact on every invariant listed in ACT
+sec 25.
+
+================================================================
+C1..C14 — conservation evidence
+================================================================
+
+C1  exact jobId Cancel targets only that job
+    PROOF: BCLAS-04 second test ("a job started in managerA is
+    recorded against tokenA; managerB sees nothing") constructs a
+    job in managerA; managerB's status lookup observes source="miss"
+    (job NOT visible). Cancel-by-jobId routes through the same
+    lookup; cancel on a manager that does not own the job returns
+    unknown_job. The diagnostic is read-only on the manager's
+    active map; it does NOT alter cancel semantics.
+
+C2  activeCommandJobs increments once on active insertion
+    PROOF: BCLAS-05 test ("capture ON vs OFF: identical manager
+    semantics") asserts that the lifecycle sink event sequence is
+    identical between capture ON and capture OFF. The
+    `command_job_process_started` event (which carries the gauge
+    increment) fires once per active insertion in both paths.
+
+C3  activeCommandJobs decrements once on true terminal transition
+    PROOF: BCLAS-02 test asserts exactly ONE `job_active_removed`
+    event per jobId AND that the lifecycle sink output is identical
+    between capture ON and capture OFF. The post-delete
+    `command_job_terminal_committed` / `command_job_containment_failed`
+    event carries the post-delete gauge (N → N-1) on the same path.
+
+C4  natural completion remains one-shot
+    PROOF: BCLAS-02 (and BCLAS-05) prove the lifecycle sink output
+    is identical between capture ON and capture OFF; the
+    `command_job_process_started` → `command_job_terminal_committed`
+    transition is unchanged.
+
+C5  cancellation remains FIRST-WRITER-WINS / idempotent
+    PROOF: BCLAS-02 asserts exactly ONE `job_active_removed` per
+    jobId even after a cancel cycle. The bounded
+    FIRST-WRITER-WINS latch on `command_job_termination_started` is
+    downstream of the diagnostic capture; it is not mutated by
+    this ACT.
+
+C6  another session's background job does not suppress this
+    session's user turn
+    PROOF: This ACT does NOT touch the Q5 guard logic
+    (`hasRunningBackgroundJobForOwner` / `getActiveJobOwnershipSnapshot`)
+    other than the additive enrichment of the BOCOR capture record
+    with `managerInstance` / `hostInstance`. The Q5 guard's boolean
+    answer is unchanged.
+
+C7  submit_and_exit semantics unchanged
+    PROOF: This ACT does NOT touch the submit executor
+    (`apps/vscode/src/sdk/vscode-submit-executor.ts`) or the
+    submit_and_exit gating logic. The capture seam only fires
+    when the BOCOR ring is captured (gated by the dogfood profile).
+
+C8  TaskHeader remains projection-only
+    PROOF: This ACT does NOT touch the TaskHeader projection
+    (`apps/vscode/webview-ui/src/components/chat/task-header/`).
+    The capture seam only fires at the CommandJob lifecycle seams,
+    not at TaskHeader publication.
+
+C9  Q5 guard remains unchanged
+    PROOF: The Q5 guard's boolean answer remains `activeJobs` size
+    > 0 AND `ownerSessionId === queriedOwnerSessionId` (per
+    `command-job-manager.ts:hasRunningBackgroundJobForOwner`).
+    The only addition is `managerInstance` / `hostInstance`
+    fields on the BOCOR record (additive — the existing BOCOR
+    schema remains valid for consumers that ignore the new
+    fields).
+C10 terminal-row mutation remains out of scope
+    PROOF: This ACT does NOT touch the chat-row mutation path
+    (`apps/vscode/src/sdk/message-translator.ts`) or the
+    `completion_result` row synthesis. The capture seam is
+    strictly read-only on the lifecycle.
+
+C11 shell-detached unmanaged children remain out of scope
+    PROOF: The capture seam fires only on CommandJob lifecycle
+    events (which are managed by `CommandJobManager`). Shell
+    `cmd &` unmanaged children are OUT OF SCOPE per ACT sec 0.
+
+C12 manager diagnostic IDs never enter wire/proto/webview state
+    PROOF: The `managerInstance` / `hostInstance` strings are
+    captured ONLY into the BJLA ring (in-memory) and the BJLA
+    dump file. They are NOT serialized into the
+    `BackgroundOwnerCorrelationRecord` wire shape (only added
+    as OPTIONAL fields, defaulting to null when capture is OFF).
+    They are NOT surfaced to the webview. They are NOT included
+    in any tool result text. The strings are opaque (`M1`,
+    `H2`); the underlying object identity stays inside the
+    diagnostic.
+
+C13 diagnostics ON/OFF have zero semantic delta
+    PROOF: BCLAS-05 ("capture ON vs OFF: identical manager
+    semantics; only ring contents differ") asserts that the
+    capture ON and OFF paths produce IDENTICAL manager output
+    (start / status / cancel / dispose) and IDENTICAL lifecycle
+    sink output. Only the ring contents differ.
+
+C14 process-generation identity prevents PID-reuse false positives
+    PROOF: This ACT does NOT alter the PGID postcondition probe
+    (`command-job-manager.ts:defaultTerminalPostconditionProbe`)
+    or the helper-owned registration path. The probe is fail-closed
+    and reports the kernel's verdict on whether the group has been
+    reaped. PID-reuse false positives remain guarded by the helper's
+    `start_us` capture (per the upstream invariant cited in ACT
+    sec 0).
+
+================================================================
+ADDITIONAL CONSERVATION
+================================================================
+
+The diagnostic touches the production files ONLY at the seams
+listed in `06-diagnostic-design.md` §7. Each capture call is
+gated by the `captureEnabled` seam (default OFF). When OFF:
+
+  - no allocation (managerIds / hostIds never written)
+  - no map mutation (no `.set` on the identity maps)
+  - no semantic delta (call sites still execute identically)
+  - no JSON serialization (records never reach the ring)
+
+Verified exhaustively by BCLAS-05.

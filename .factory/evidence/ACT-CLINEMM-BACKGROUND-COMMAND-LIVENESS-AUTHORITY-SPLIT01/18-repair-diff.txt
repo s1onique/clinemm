@@ -1,0 +1,127 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 18..24 REPAIR CONTRACT
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+================================================================
+REPAIR PERFORMED
+================================================================
+
+REPAIR_PERFORMED = false
+
+Per ACT sec 0: "Do not repair turn state, TaskHeader, or the Q5
+guard in this ACT." This ACT introduces the diagnostic machinery
+only. The bounded repair is the next ACT's responsibility.
+
+Per ACT sec 20: production repair is allowed only if:
+
+  RED_REPRODUCED == true
+  AND LIVE causal capture is exact
+  AND classification == LA1..LA6/LA6
+  AND necessity/ablation is established
+  AND repair seam is bounded
+
+This ACT halts at CAPTURE_INSUFFICIENT (LIVE causal capture is
+not executable in the Cloud Agent environment).
+
+================================================================
+PRODUCTION DIFF (this ACT)
+================================================================
+
+This ACT introduces the diagnostic machinery ONLY. The diff is
+strictly additive: no production semantics change, no Q5 guard
+change, no TaskHeader change, no submit_and_exit change, no
+terminal-row change.
+
+Files changed (10 modified, 2 added):
+
+  ADDED apps/vscode/src/sdk/background-job-liveness-authority.ts
+        (ring module; captureEnabled seam; diagnostic identity
+         helpers)
+
+  ADDED apps/vscode/src/sdk/background-job-liveness-authority-runtime.ts
+        (host-side dump adapter; mirrors BOCOR pattern)
+
+  MOD apps/vscode/package.json
+        (cline.debug.dumpBackgroundJobLivenessAuthority command)
+
+  MOD apps/vscode/src/registry.ts
+        (ClineCommands.DumpBackgroundJobLivenessAuthority)
+
+  MOD apps/vscode/src/extension.ts
+        (activation seam + dump command registration)
+
+  MOD apps/vscode/src/sdk/background-owner-correlation.ts
+        (ADDITIVE: managerInstance / hostInstance optional fields
+         on the BOCOR record)
+
+  MOD apps/vscode/src/sdk/command-job-manager.ts
+        (ADDITIVE: BJLA capture calls at active.set, active.delete,
+         status, cancel, dispose, lifecycle publish — all gated by
+         the captureEnabled seam)
+
+  MOD apps/vscode/src/sdk/dogfood-diagnostic-profile.ts
+        (applyBackgroundJobLivenessAuthorityDiagnosticProfile
+         helper, mirrors BOCOR)
+
+  MOD apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+        (ADDITIVE: resolveActiveManagerInstance /
+         resolveActiveHostInstance helpers; enrich BOCOR record
+         with the new optional fields; add getActiveSessionHost
+         option)
+
+  MOD apps/vscode/src/sdk/vscode-run-commands-tool.ts
+        (ADDITIVE: capture background_state_change_published in
+         the runner's notifyBackgroundStateChange callback)
+
+  MOD apps/vscode/src/sdk/vscode-session-host.ts
+        (NEW getCommandJobManager host-only accessor; ADDITIVE
+         manager_constructed capture)
+
+  MOD apps/vscode/src/sdk/SdkController.ts
+        (NEW getActiveSessionHost option in the coordinator
+         wiring)
+
+================================================================
+REPAIR CONTRACT (next ACT, after LIVE classification)
+================================================================
+
+Per ACT sec 21 (LA1): "Repair only the terminality discriminator.
+Invariant: CommandJob remains active until the supervised command
+identity is actually terminal. Do not equate: wrapper shell exit,
+foreground tool release, pipe close, detach with managed job
+terminality unless production semantics prove equivalence."
+
+Per ACT sec 22 (LA2/LA5): "One managed CommandJob has one
+authoritative lifecycle owner for its full lifetime. Preferred
+fixes: preserve manager across logical-session rebuild OR
+explicitly transfer live jobs to successor authority. Forbidden:
+search every manager globally and hope to find jobId unless
+separately reviewed as the intended architecture."
+
+Per ACT sec 23 (LA3): "Repair only publication. Invariant:
+authoritative job terminal transition → backgroundCommandRunning
+false → backgroundCommandTaskId cleared → activeCommandJobs
+telemetry decremented once → Cancel disappears. Do not modify
+manager lifecycle."
+
+Per ACT sec 24 (LA4): "Choose one bounded contract: A. status
+comes from CommandJobManager authority OR B. external process
+authority is canonical and CommandJobManager is reconciled
+against it. Do not silently maintain two conflicting notions of
+`running`. If architecture choice is required rather than a
+bounded bug fix: HALT_PRODUCT_CONTRACT_REQUIRED."
+
+================================================================
+REPAIR FILES (planned, not performed)
+================================================================
+
+  LA1: apps/vscode/src/sdk/command-job-manager.ts (finalize seam)
+  LA2: apps/vscode/src/sdk/SdkController.ts (manager wiring seam)
+  LA5: apps/vscode/src/sdk/SdkController.ts + vscode-session-host.ts
+       (session replacement seam)
+  LA3: apps/vscode/src/sdk/vscode-run-commands-tool.ts (projection
+       publish)
+  LA4: HALT_PRODUCT_CONTRACT_REQUIRED (architecture choice)
+
+No files are repaired in this ACT.

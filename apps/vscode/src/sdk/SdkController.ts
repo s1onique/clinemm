@@ -1917,6 +1917,17 @@ export class Controller {
 				}
 				return host.getActiveJobOwnershipSnapshot()
 			},
+			// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+			// thread the active session's `sdkHost` instance into the
+			// coordinator so the BJLA diagnostic can derive the
+			// managerInstance / hostInstance correlation tokens at
+			// the Q5 boundary. Returns `undefined` when no active
+			// session host is wired (test paths).
+			getActiveSessionHost: () => {
+				const activeSession = this.sessions.getActiveSession()
+				if (!activeSession) return undefined
+				return { sdkHost: activeSession.sdkHost }
+			},
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder

@@ -1,0 +1,133 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 31 NEW TEST FAMILY
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit)  (operator packaging)
+DATE      = 2026-09-20
+
+================================================================
+TEST FILES
+================================================================
+
+The new BCLAS (Background Command Liveness Authority Split) test
+family was created under:
+
+  apps/vscode/src/sdk/__tests__/
+    background-job-liveness-authority.bclas01.test.ts
+    background-job-liveness-authority.bclas02.test.ts
+    background-job-liveness-authority.bclas03.test.ts
+    background-job-liveness-authority.bclas04.test.ts
+    background-job-liveness-authority.bclas05.test.ts
+    background-job-liveness-authority.bclas06.test.ts  (LA1 discriminator)
+
+================================================================
+COVERAGE
+================================================================
+
+BCLAS-01 — same manager start → snapshot sees job
+  Test: "same manager start → snapshot sees job (active-map
+         insert + status lookup correlate on managerInstance)"
+  Asserts:
+    - inserted.managerInstance === lookedUp.managerInstance === managerInstance
+    - lookedUp.source === "active"
+    - lookedUp.returnedState === "running"
+  Plus a "capture OFF = no-op" assertion (covers ACT sec 6
+  disabled-path invariant for the capture helper itself).
+
+BCLAS-02 — legitimate finalize → snapshot loses job exactly once
+  Test: "legitimate finalize emits exactly one job_active_removed
+         with terminalState=cancelled"
+  Asserts:
+    - Exactly ONE `job_active_removed` for the target jobId
+    - removals[0].previousState === "running"
+    - removals[0].terminalState === "cancelled"
+    - removals[0].reason === "cancel"
+    - At least one post-cancel status lookup has source="terminal"
+
+BCLAS-03 — status lookup identifies source authority
+  Test: "status lookup captures source bucket: active → terminal →
+         miss (deterministic per state)"
+  Asserts:
+    - Sources observed across the lifecycle include
+      "miss" / "active" / "terminal" (the three buckets)
+    - Every status lookup for the same manager carries the same
+      `managerInstance` token (LA4 discriminator: same manager →
+      same token regardless of bucket)
+
+BCLAS-04 — manager diagnostic identity distinguishes two managers
+  Test 1: "two distinct managers carry distinct diagnostic identity
+          tokens"
+    Asserts:
+      - Two manager instances receive unique tokens
+      - Lookup is idempotent (same reference → same token)
+
+  Test 2: "a job started in managerA is recorded against tokenA;
+          managerB sees nothing"
+    Asserts:
+      - inserts.every((r) => r.managerInstance === tokenA)
+      - lookups.some((l) => l.managerInstance === tokenB
+                            && l.source === "miss")
+
+BCLAS-05 — diagnostic enabled vs disabled = identical semantics
+  Test: "capture ON vs OFF: identical manager semantics; only ring
+         contents differ"
+  Asserts:
+    - startOn.state === startOff.state
+    - statusOn.ok === statusOff.ok
+    - cancelOn.ok === cancelOff.ok
+    - eventsOn (lifecycle sink output) === eventsOff
+    - ringOnLength > 0 (capture ON)
+    - ringOffLength === 0 (capture OFF)
+
+BCLAS-06 — process terminality discriminator (LA1)
+  Test 1: "captures `process_terminality_record` for
+           command_job_primary_group_cleanup with the production
+           postcondition"
+    Asserts:
+      - At least one `process_terminality_record` for the jobId
+      - The `command_job_primary_group_cleanup` record carries the
+        production `postcondition` verbatim
+        (one of "gone" / "alive" / "eperm" / "unknown")
+      - `eventName` and `jobState` are also captured verbatim
+
+  Test 2: "non-terminality lifecycle events do NOT produce a
+           process_terminality_record (LA1 NEGATIVE when no
+           terminality evidence)"
+    Asserts:
+      - No `process_terminality_record` for the jobId after a
+        status lookup (the job remains RUNNING)
+      - The `job_status_lookup` record IS captured (LA4 discriminator)
+      - The status lookup uses `waitMs: 0` so the deadline watchdog
+        does NOT fire mid-test
+
+================================================================
+RUN OUTPUT (LOCAL)
+================================================================
+
+  ✓ src/sdk/__tests__/background-job-liveness-authority.bclas01.test.ts (2 tests) 30ms
+  ✓ src/sdk/__tests__/background-job-liveness-authority.bclas02.test.ts (1 test)  30ms
+  ✓ src/sdk/__tests__/background-job-liveness-authority.bclas03.test.ts (1 test)  56ms
+  ✓ src/sdk/__tests__/background-job-liveness-authority.bclas04.test.ts (2 tests) 29ms
+  ✓ src/sdk/__tests__/background-job-liveness-authority.bclas05.test.ts (1 test)  56ms
+  ✓ src/sdk/__tests__/background-job-liveness-authority.bclas06.test.ts (2 tests) 108ms
+  Test Files  6 passed (6)
+       Tests  9 passed (9)
+
+================================================================
+NO HYPOTHESIS-SPECIFIC RED TESTS ADDED
+================================================================
+
+Per ACT sec 31: "Add hypothesis-specific RED/GREEN only after
+classification. Do not pre-build tests for all five hypothetical
+repairs." The next ACT (after LIVE capture) will add the
+classification-specific test if needed.
+
+================================================================
+NO BCLAS test mutates the production seams
+================================================================
+
+All BCLAS tests use the same `fakeSupervisor` pattern as the BOCOR
+q5-seam-zero-delta test. The supervisor exposes `killTree`,
+`terminateTree`, `stdoutSnapshot`, `stderrSnapshot`, `pid`, `pgid`
+— enough to drive `manager.start` / `manager.status` /
+`manager.cancel` / `manager.dispose` without a real shell. No real
+process tree is created, no PGID probe fires, no
+`command_job_primary_group_cleanup` event is emitted.

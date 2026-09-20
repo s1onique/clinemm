@@ -122,6 +122,10 @@ import {
 	isTurnStateWriterProvenanceDiagnosticEnabled,
 } from "@shared/turn-state-writer-provenance"
 import {
+	isBackgroundJobLivenessAuthorityCaptureEnabled as _isBackgroundJobLivenessAuthorityCaptureEnabled,
+	setBackgroundJobLivenessAuthorityCaptureEnabled,
+} from "./background-job-liveness-authority"
+import {
 	isBackgroundOwnerCorrelationCaptureEnabled as _isBackgroundOwnerCorrelationCaptureEnabled,
 	setBackgroundOwnerCorrelationCaptureEnabled,
 } from "./background-owner-correlation"
@@ -756,9 +760,10 @@ function _isWCarrierTraceEnabledForActivation(): boolean {
  *
  * No new env knob. No parser. No override matrix.
  */
-export function applyBackgroundOwnerCorrelationDiagnosticProfile(
-	isDogfood: boolean,
-): { readonly enabled: boolean; readonly flipped: boolean } {
+export function applyBackgroundOwnerCorrelationDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
 	const was = _isBackgroundOwnerCorrelationCaptureEnabledForActivation()
 	const should = isDogfood
 	if (should && !was) {
@@ -774,4 +779,66 @@ export function applyBackgroundOwnerCorrelationDiagnosticProfile(
 
 function _isBackgroundOwnerCorrelationCaptureEnabledForActivation(): boolean {
 	return _isBackgroundOwnerCorrelationCaptureEnabled()
+}
+
+// ===========================================================================
+// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01 —
+// central dogfood profile resolver for the BJLA capture seam.
+//
+// CONTRACT — frozen in this ACT (mirrors BOCOR; no env override layer):
+//   - There is NO new env var. NO override matrix. NO parser.
+//     Per the Factory reviewer precedent, the diagnostic is enabled
+//     STRICTLY by the central dogfood profile:
+//       isDogfood === true  -> capture ON
+//       isDogfood === false -> capture OFF (public default)
+//   - The module seam is
+//     ./background-job-liveness-authority.ts#captureEnabled. The
+//     resolver arms it via
+//     setBackgroundJobLivenessAuthorityCaptureEnabled(enabled).
+//   - The activation helper is called from
+//     extension.ts:activate (sibling to the existing BOCOR
+//     activation); there is exactly ONE production activation
+//     path.
+//
+// HONEST STOP RULE (mirrors BOCOR):
+//   Once the LIVE cause is isolated (LA1..LA6) AND the bounded
+//   repair is qualified (PASS_CASE_*) OR the diagnostic is
+//   classified CAPTURE_INSUFFICIENT, this resolver + activation
+//   helper + the BJLA ring module + the host-side dump runtime +
+//   the Command Palette registration + the registry entry +
+//   the package.json command declaration MUST be removed TOGETHER.
+// ===========================================================================
+
+/**
+ * THE single production activation helper for the BJLA seam.
+ * Called from extension.ts:activate (sibling to the BOCOR
+ * activation); there is exactly ONE production activation path, no
+ * copied orchestration in tests.
+ *
+ * Mirrors BOCOR's CORRECTION01: enable/disable is strictly:
+ *
+ *   isDogfood === true  -> ON
+ *   isDogfood === false -> OFF
+ *
+ * No new env knob. No parser. No override matrix.
+ */
+export function applyBackgroundJobLivenessAuthorityDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
+	const was = _isBackgroundJobLivenessAuthorityCaptureEnabledForActivation()
+	const should = isDogfood
+	if (should && !was) {
+		setBackgroundJobLivenessAuthorityCaptureEnabled(true)
+		return { enabled: true, flipped: true }
+	}
+	if (!should && was) {
+		setBackgroundJobLivenessAuthorityCaptureEnabled(false)
+		return { enabled: false, flipped: true }
+	}
+	return { enabled: should, flipped: false }
+}
+
+function _isBackgroundJobLivenessAuthorityCaptureEnabledForActivation(): boolean {
+	return _isBackgroundJobLivenessAuthorityCaptureEnabled()
 }

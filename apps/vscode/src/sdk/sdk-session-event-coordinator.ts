@@ -6,10 +6,8 @@ import { CLINE_RECOMMENDED_MODELS_FALLBACK } from "@/shared/cline/recommended-mo
 import type { ClineApiReqInfo, TurnPhase } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
-import {
-	captureBackgroundOwnerCorrelationRecord,
-	type BackgroundOwnerCorrelationActiveJob,
-} from "./background-owner-correlation"
+import { getDiagnosticHostId, getDiagnosticManagerId } from "./background-job-liveness-authority"
+import { type BackgroundOwnerCorrelationActiveJob, captureBackgroundOwnerCorrelationRecord } from "./background-owner-correlation"
 import type { MessageTranslatorState, TranslationResult } from "./message-translator"
 import { translateSessionEvent } from "./message-translator"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
@@ -93,6 +91,17 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * option remain deterministic.
 	 */
 	getActiveJobOwnershipSnapshot?: () => readonly BackgroundOwnerCorrelationActiveJob[]
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+	 *
+	 * Returns the active session's `SdkSessionHost` instance so the
+	 * coordinator can derive diagnostic `managerInstance` /
+	 * `hostInstance` correlation tokens for the Q5 BOCOR
+	 * enrichment. Optional: when absent, the Q5 BOCOR record
+	 * carries `managerInstance=null` and `hostInstance=null` so
+	 * downstream consumers (and tests) remain deterministic.
+	 */
+	getActiveSessionHost?: () => { readonly sdkHost?: object | undefined } | undefined
 }
 
 export class SdkSessionEventCoordinator {
@@ -296,10 +305,7 @@ export class SdkSessionEventCoordinator {
 						// When `hasRunningBackgroundJobForOwner` is not wired
 						// (e.g. tests that omit the option), behavior is
 						// unchanged: unconditional `awaiting_followup`.
-						const ownerStillRunning =
-							this.options.hasRunningBackgroundJobForOwner?.(
-								activeSession.sessionId,
-							)
+						const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId)
 						// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 						// capture ONE decision-boundary observation right
 						// BEFORE the if/else resolves. The capture is gated
@@ -336,20 +342,24 @@ export class SdkSessionEventCoordinator {
 							event: "background_owner_correlation_decision",
 							capturedAt: Date.now(),
 							taskId: this.options.getTask?.()?.taskId ?? null,
-							sessionEventSessionId:
-								typeof event.payload?.sessionId === "string"
-									? event.payload.sessionId
-									: null,
+							sessionEventSessionId: typeof event.payload?.sessionId === "string" ? event.payload.sessionId : null,
 							activeSessionId: activeSession.sessionId,
 							currentPhase: "streaming",
 							candidatePhase: "awaiting_followup",
-							guardAvailable:
-								typeof this.options.hasRunningBackgroundJobForOwner === "function",
+							guardAvailable: typeof this.options.hasRunningBackgroundJobForOwner === "function",
 							queriedOwnerSessionId: activeSession.sessionId,
-							guardResult:
-								typeof ownerStillRunning === "boolean" ? ownerStillRunning : null,
+							guardResult: typeof ownerStillRunning === "boolean" ? ownerStillRunning : null,
 							activeJobs: this.options.getActiveJobOwnershipSnapshot?.() ?? [],
 							candidateWriterId: "session-event-turn-complete-resumable-straggler-preserve",
+							// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+							// BJLA diagnostic enrichment — add managerInstance /
+							// hostInstance correlation tokens to the Q5 BOCOR
+							// record. Both default to null when the BJLA
+							// capture seam is OFF; the existing BOCOR schema
+							// remains valid for all downstream consumers that
+							// ignore the new fields.
+							managerInstance: this.resolveActiveManagerInstance(),
+							hostInstance: this.resolveActiveHostInstance(),
 						})
 						if (ownerStillRunning) {
 							Logger.warn(
@@ -398,6 +408,43 @@ export class SdkSessionEventCoordinator {
 				Logger.error("[SdkController] Failed to post state after event:", err)
 			})
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+	 *
+	 * BJLA diagnostic helpers. Resolve the manager-instance /
+	 * host-instance correlation tokens for the Q5 boundary so the
+	 * BOCOR record can carry them. The helpers consult the
+	 * `getActiveSessionHost` option; when absent (test paths that
+	 * omit the option), they return `null` and the BOCOR record
+	 * carries `managerInstance=null` / `hostInstance=null` —
+	 * preserving the pre-ACT schema.
+	 *
+	 * The `getCommandJobManager()` accessor is host-only; the
+	 * coordinator reaches it via a duck-typed cast on the active
+	 * session host (the same pattern the
+	 * `hasRunningBackgroundJobForOwner` and
+	 * `getActiveJobOwnershipSnapshot` options use).
+	 */
+	private resolveActiveHostInstance(): string | null {
+		const hostOption = this.options.getActiveSessionHost?.()
+		const sdkHost = hostOption?.sdkHost
+		return getDiagnosticHostId(sdkHost)
+	}
+
+	private resolveActiveManagerInstance(): string | null {
+		const hostOption = this.options.getActiveSessionHost?.()
+		const sdkHost = hostOption?.sdkHost
+		if (!sdkHost) return null
+		const managerAccessor = (
+			sdkHost as {
+				getCommandJobManager?: () => object
+			}
+		).getCommandJobManager
+		if (typeof managerAccessor !== "function") return null
+		const manager = managerAccessor.call(sdkHost)
+		return getDiagnosticManagerId(manager)
 	}
 
 	private getAgentFailureTelemetry(event: CoreSessionEvent): AgentFailureTelemetry {

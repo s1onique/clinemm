@@ -1,0 +1,133 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 19 NECESSITY / ABLATION
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+================================================================
+ABLATION STATUS
+================================================================
+
+Ablation is per LA1..LA6 hypothesis (ACT sec 19). The ablation
+tests are NOT pre-built per ACT sec 31: "Add hypothesis-specific
+RED/GREEN only after classification. Do not pre-build tests for
+all five hypothetical repairs."
+
+The next ACT (after LIVE capture) will apply the ablation test
+that matches the proven classification.
+
+================================================================
+LA1 ABLATION (premature finalization)
+================================================================
+
+Hold process constant. Prevent only premature `finalize` /
+`active.delete`. Required:
+
+```text
+before:
+  process live
+  active missing
+  Q5 false
+
+after:
+  process live
+  active contains job
+  Q5 true
+```
+
+The bounded repair is the terminality discriminator — invariant:
+"CommandJob remains active until the supervised command identity
+is actually terminal." The next ACT will add the test once the
+LIVE classification proves LA1.
+
+================================================================
+LA2 / LA5 ABLATION (manager instance split / replacement)
+================================================================
+
+Hold job/process constant. Ensure all relevant paths use the same
+manager instance.
+
+```text
+split managers:
+  status running / guard empty
+
+single authoritative manager:
+  status running / guard sees job
+```
+
+The bounded repair: preserve manager across logical-session
+rebuild, OR explicitly transfer live jobs to successor authority.
+Forbidden: search every manager globally and hope to find jobId.
+
+================================================================
+LA3 ABLATION (stale projection)
+================================================================
+
+Hold manager terminal state constant. Force projection update
+through the canonical existing lifecycle event.
+
+```text
+before:
+  manager terminal
+  projection stale running
+
+after canonical publication:
+  projection terminal/not-running
+```
+
+The bounded repair is publication-only: `backgroundCommandRunning`
+flips to false, `backgroundCommandTaskId` clears,
+`activeCommandJobs` telemetry decrements once, Cancel disappears.
+
+================================================================
+LA4 ABLATION (status authority split)
+================================================================
+
+Route status through the authoritative manager OR prove
+reconciliation between sources.
+
+```text
+before:
+  status source A != guard source B
+  contradiction
+
+after:
+  one authoritative/reconciled source
+  no contradiction
+```
+
+The bounded repair chooses ONE contract: status from
+CommandJobManager authority OR external process authority +
+manager reconciliation. If architecture choice is required,
+HALT_PRODUCT_CONTRACT_REQUIRED.
+
+================================================================
+LA5 ABLATION (replacement strands old manager)
+================================================================
+
+Hold logical session constant. Prevent manager replacement OR
+transfer active job authority explicitly.
+
+```text
+replacement without transfer:
+  old manager owns job
+  new manager empty
+
+preserved/transferred authority:
+  active manager sees job
+```
+
+================================================================
+ABLATION EXECUTION STATUS
+================================================================
+
+ABLATION = NOT_EXECUTED
+
+Reason: the LIVE classification is not yet established. The
+ablation tests are constructed by the next ACT after the operator
+drives the LIVE reproduction and the BJLA dump mechanically
+classifies the occurrence.
+
+This ACT does NOT halt on "HALT_CAUSALITY_NOT_ESTABLISHED"
+because the LIVE capture is the operator's responsibility (per
+ACT sec 28); the diagnostic build is ready and the next ACT will
+execute the ablation once the LIVE packet is in hand.

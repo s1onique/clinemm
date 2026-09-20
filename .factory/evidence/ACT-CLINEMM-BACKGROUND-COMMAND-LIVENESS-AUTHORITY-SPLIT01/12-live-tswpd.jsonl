@@ -1,0 +1,2 @@
+{"note":"LIVE TSWPD capture (operator-frozen, prior to this ACT) — see /Volumes/UserData/Users/chistyakov/Downloads/turn-state-writer-provenance.jsonl for the canonical record. This file is the evidence-directory mirror."}
+{"capturedAt":1789904021699,"writerId":"session-event-turn-complete-resumable-straggler-preserve","taskId":"1789903873206_g5qvj","epoch":4,"previous":{"phase":"streaming","seq":20},"committed":{"phase":"awaiting_followup","seq":203}}

@@ -41,6 +41,7 @@ import {
 import { type AgentToolContext, getDefaultShell, getShellInvocation, type InternalExecutionCapability } from "@cline/shared"
 import type { RuntimeErrorIncident } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
+import { captureBackgroundJobLivenessAuthorityRecord, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import {
 	buildExperimentalReconCapability,
 	defaultSandboxBackendResolver,
@@ -1234,6 +1235,62 @@ export class CommandJobManager {
 	 * — a sink bug must never poison the manager's runtime path.
 	 */
 	private emitCommandJobLifecycle(event: CommandJobLifecycleEventInput): void {
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — LA1 discriminator. When the lifecycle
+		// event is one of the process-terminality-adjacent events,
+		// capture a `process_terminality_record` carrying the actual
+		// production `postcondition` field (only present on
+		// `command_job_primary_group_cleanup`) so the dump can prove
+		// whether the job reached a kernel-verified terminal state
+		// (`gone`) or was prematurely finalized (LA1). The discriminator
+		// is recorded BEFORE the existing `job_lifecycle_event_published`
+		// capture so the LA1 evidence chain is complete. No semantic
+		// delta when capture is OFF.
+		if (
+			event.event === "command_job_termination_started" ||
+			event.event === "command_job_primary_group_cleanup" ||
+			event.event === "command_job_terminal_committed" ||
+			event.event === "command_job_residual_detected" ||
+			event.event === "command_job_containment_failed"
+		) {
+			let postcondition: "gone" | "alive" | "eperm" | "unknown" | null = null
+			let pgid: number | null = null
+			if (event.event === "command_job_primary_group_cleanup") {
+				postcondition = event.postcondition
+				pgid = event.pgid
+			} else if (event.event === "command_job_termination_started") {
+				pgid = event.pgid
+			} else if (event.event === "command_job_residual_detected") {
+				pgid = event.pgid
+			} else if (event.event === "command_job_containment_failed") {
+				pgid = typeof event.pgid === "number" ? event.pgid : null
+			}
+			captureBackgroundJobLivenessAuthorityRecord({
+				event: "process_terminality_record",
+				capturedAt: Date.now(),
+				managerInstance: getDiagnosticManagerId(this),
+				hostInstance: null,
+				jobId: event.jobId,
+				eventName: event.event,
+				postcondition,
+				jobState: event.jobState,
+				pgid,
+			})
+		}
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — capture `job_lifecycle_event_published`
+		// BEFORE the sink call so we record the intent, not the
+		// downstream projection outcome. The diagnostic identity
+		// correlation token lets the dump prove which manager
+		// instance published each event (LA2 / LA5 discriminator).
+		// No semantic delta when capture is OFF.
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "job_lifecycle_event_published",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(this),
+			eventName: event.event,
+			jobId: event.jobId,
+		})
 		const sink = this.onCommandJobLifecycle
 		if (!sink) return
 		try {
@@ -1790,6 +1847,28 @@ export class CommandJobManager {
 		// count, which would be racy.
 		const wasBecomingActive = this.active.size === 0
 		this.active.set(id, job)
+
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — capture `job_active_inserted` immediately
+		// after the active-map mutation. No semantic delta when the
+		// capture seam is OFF (the helper returns immediately). When
+		// ON, this is the load-bearing T2 timestamp for the LA2/LA5
+		// discriminator (same-manager-start → same-manager-status →
+		// same-manager-guard). Production PID/PGID are surfaced via
+		// the supervisor's exposed helpers; both are nullable in the
+		// record.
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "job_active_inserted",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(this),
+			hostInstance: null,
+			taskId: null,
+			jobId: id,
+			ownerSessionId: job.ownerSessionId ?? null,
+			state: "running",
+			pid: processStartedRootPid ?? null,
+			pgid: processStartedPgid ?? null,
+		})
 
 		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
 		// (correction07 / Factory
@@ -2407,6 +2486,28 @@ export class CommandJobManager {
 		// supervisor at this point. active.delete below is the
 		// final mutation.
 		this.active.delete(job.id)
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — capture `job_active_removed` immediately
+		// after the active-map deletion. Carries the production
+		// `previousState` (the job's state BEFORE finalize mutated
+		// it; here it is still `running` because the deletion runs
+		// synchronously inside finalize and the state assignment is
+		// deferred to after the postcondition probe — see the
+		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
+		// correction06 block above), the resolved terminalState, and
+		// the latched `job.terminationReason`. No semantic delta when
+		// capture is OFF.
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "job_active_removed",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(this),
+			jobId: job.id,
+			previousState: "running",
+			terminalState,
+			reason: job.terminationReason ?? null,
+			pid: readRootPidFromSupervisor(job.process) ?? null,
+			pgid: readPgidFromSupervisor(job.process) ?? null,
+		})
 		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01
 		// (correction07 / Factory
 		// HALT_ACTIVE_COMMAND_GAUGE_START_DELTA_NOT_OBSERVED):
@@ -2549,6 +2650,22 @@ export class CommandJobManager {
 		options: StatusCommandJobOptions,
 	): Promise<{ ok: true; snapshot: CommandJobSnapshot } | { ok: false; code: "unknown_job" }> {
 		const job = this.lookup(options.jobId)
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — capture `job_status_lookup` immediately
+		// after the lookup. Identifies WHICH map the lookup found the
+		// job in (`active` vs `terminal` vs `miss`). This is the
+		// load-bearing T3 timestamp for the LA1 / LA4 discriminator
+		// (status returned `running` while the Q5 guard saw the active
+		// set empty). No semantic delta when capture is OFF.
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "job_status_lookup",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(this),
+			hostInstance: null,
+			jobId: options.jobId,
+			source: job ? (this.active.has(options.jobId) ? "active" : "terminal") : "miss",
+			returnedState: job?.state ?? null,
+		})
 		if (!job) {
 			return { ok: false, code: "unknown_job" }
 		}
@@ -2597,6 +2714,23 @@ export class CommandJobManager {
 		options: CancelCommandJobOptions,
 	): Promise<{ ok: true; state: CommandJobState } | { ok: false; code: "unknown_job" }> {
 		const job = this.lookup(options.jobId)
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — capture `job_cancel_lookup` immediately
+		// after the lookup. The Cancel button's authority is exactly
+		// this lookup: if `found=false`, the button cannot cancel
+		// (returns `unknown_job`). This is the T-cancel discriminator
+		// for the LA2 / LA5 path (Cancel resolves against a manager
+		// that does not own the job). No semantic delta when capture
+		// is OFF.
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "job_cancel_lookup",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(this),
+			hostInstance: null,
+			jobId: options.jobId,
+			found: job !== undefined,
+			state: job?.state ?? null,
+		})
 		if (!job) {
 			return { ok: false, code: "unknown_job" }
 		}
@@ -2896,6 +3030,20 @@ export class CommandJobManager {
 	 */
 	async dispose(): Promise<void> {
 		const activeIds = Array.from(this.active.keys())
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — capture `manager_dispose_begin` BEFORE any
+		// termination so the active-set fingerprint at disposal time
+		// is preserved. This is the T-dispose discriminator for the
+		// LA5 hypothesis (replacement strands active job). No semantic
+		// delta when capture is OFF.
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "manager_dispose_begin",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(this),
+			hostInstance: null,
+			activeJobIdsBeforeDispose: activeIds,
+			reason: null,
+		})
 		for (const id of activeIds) {
 			const job = this.active.get(id)
 			if (job) {
@@ -2929,6 +3077,20 @@ export class CommandJobManager {
 		this.terminal.clear()
 		this.terminalOrder.length = 0
 		this.exitTransitions.clear()
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// BJLA diagnostic — capture `manager_dispose_end` AFTER both
+		// maps were cleared. Lets the post-capture correlation prove
+		// whether the dispose() path emptied the active set (always
+		// true here, by construction) or whether the dispose was
+		// itself the seam that lost the job (LA5). No semantic delta
+		// when capture is OFF.
+		captureBackgroundJobLivenessAuthorityRecord({
+			event: "manager_dispose_end",
+			capturedAt: Date.now(),
+			managerInstance: getDiagnosticManagerId(this),
+			hostInstance: null,
+			activeJobIdsAfterDispose: Array.from(this.active.keys()),
+		})
 		// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03: drop
 		// any terminal-transition promises. The terminal maps have
 		// been cleared by `terminate()` above (which finalizes each

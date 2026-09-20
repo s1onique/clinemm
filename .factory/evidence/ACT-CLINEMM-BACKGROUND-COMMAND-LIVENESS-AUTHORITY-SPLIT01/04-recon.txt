@@ -1,0 +1,125 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 4 RECON
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+================================================================
+SEARCH HITS (load-bearing seams)
+================================================================
+
+The recon was performed via `search_codebase` (regex) and
+`run_commands` (grep). The following seams are the production
+sources of truth for the command-job lifecycle:
+
+  A. CommandJob creation
+     - apps/vscode/src/sdk/command-job-manager.ts:1791-1792
+         wasBecomingActive = this.active.size === 0
+         this.active.set(id, job)
+     - apps/vscode/src/sdk/vscode-run-commands-tool.ts:632-646
+         start = await manager.start({...}, context)
+     - apps/vscode/src/sdk/vscode-session-host.ts:218
+         const commandJobManager = new CommandJobManager({...})
+
+  B. state/status reads by jobId
+     - apps/vscode/src/sdk/command-job-manager.ts:2548-2580 (manager.status)
+     - apps/vscode/src/sdk/command-status-tool.ts:128-156    (command_status)
+     - apps/vscode/src/sdk/command-status-tool.ts:166-211    (cancel_command)
+     - apps/vscode/src/sdk/vscode-run-commands-tool.ts:658-693 (RUNNING payload)
+     - apps/vscode/src/sdk/command-job-manager.ts:2636-2638  (lookup)
+
+  C. cancellation
+     - apps/vscode/src/sdk/command-job-manager.ts:2596-2634 (manager.cancel)
+     - apps/vscode/src/sdk/command-status-tool.ts:166-211    (cancel_command tool)
+     - apps/vscode/src/sdk/vscode-session-host.ts:475-499    (host.cancelBackgroundCommand)
+     - apps/vscode/src/sdk/SdkController.ts:3239-3260         (gRPC handler)
+     - apps/vscode/src/sdk/command-job-manager.ts:2655-2657  (getActiveJobIds)
+
+  D. finalization
+     - apps/vscode/src/sdk/command-job-manager.ts:2223-2546 (finalize)
+     - apps/vscode/src/sdk/command-job-manager.ts:2409      (this.active.delete)
+     - apps/vscode/src/sdk/command-job-manager.ts:2897-2935 (dispose)
+     - apps/vscode/src/sdk/vscode-session-host.ts:555-564    (host.dispose)
+
+  E. lifecycle publication
+     - apps/vscode/src/sdk/command-job-manager.ts:1236+      (emitCommandJobLifecycle)
+     - apps/vscode/src/sdk/vscode-session-host.ts:263        (onCommandJobLifecycle wiring)
+     - apps/vscode/src/sdk/SdkController.ts:4264+            (handleCommandJobLifecycle)
+     - apps/vscode/src/sdk/vscode-run-commands-tool.ts:667-684 (backgroundStateChange)
+
+  F. manager construction and ownership
+     - apps/vscode/src/sdk/vscode-session-host.ts:218 (new CommandJobManager)
+     - apps/vscode/src/sdk/SdkController.ts:1592, 1748, 1785, 2158, 3485, 3745
+       (createTempSessionHost closures)
+     - apps/vscode/src/sdk/vscode-session-host.ts:555-564    (dispose)
+     - apps/vscode/src/sdk/SdkController.ts:1903-1918        (activeSession.sdkHost source)
+
+  G. status fallback
+     - apps/vscode/src/sdk/command-job-manager.ts:2548-2580 (sole status path)
+     - apps/vscode/src/sdk/command-job-manager.ts:1080-1240 (snapshot/projection)
+     - apps/vscode/src/sdk/command-job-manager.ts:2640-2891 (activeCount/probeOwnedGroups)
+     - apps/vscode/src/sdk/vscode-session-host.ts:547-553    (getActiveJobOwnershipSnapshot)
+
+  BOCOR + TSWPD prior lineage (predecessor ACTs)
+     - apps/vscode/src/sdk/background-owner-correlation.ts   (BOCOR ring)
+     - apps/vscode/src/sdk/background-owner-correlation-runtime.ts (BOCOR dump)
+     - apps/vscode/src/sdk/dogfood-diagnostic-profile.ts     (applyBackgroundOwnerCorrelationDiagnosticProfile)
+     - apps/vscode/src/extension.ts:162                      (activation seam)
+     - apps/vscode/src/extension.ts:774-787                  (DumpBackgroundOwnerCorrelation command)
+     - apps/vscode/src/registry.ts:84                        (ClineCommands entry)
+     - apps/vscode/package.json:244-248                      (Command Palette declaration)
+
+================================================================
+NON-SINGLETON MANAGER (verified)
+================================================================
+
+A `CommandJobManager` instance is NOT a singleton. Every
+`VscodeSessionHost.create(...)` call site in `SdkController.ts`
+instantiates a fresh manager. The active session host is the one wired
+into `activeSession.sdkHost`; the others are temp hosts for transient
+operations.
+
+The `activeSession.sdkHost` is therefore the authoritative reference
+for the Q5 guard. If `VscodeSessionHost` is disposed and replaced
+mid-flight (e.g. session rebuild, mode switch), the OLD manager's
+state is lost (the OLD manager's `active.delete` happens inside
+`dispose()`); the NEW manager is empty.
+
+This is the LA2 / LA5 risk surface.
+
+================================================================
+NOT IN SCOPE (per ACT sec 0)
+================================================================
+
+  - Q5 guard logic (exonerated for this occurrence)
+  - TaskHeader projection (out of scope)
+  - submit_and_exit (out of scope)
+  - terminal row mutation (out of scope)
+  - PGID / helper containment (already addressed by LAUNCHAGENT01)
+  - shell `cmd &` unmanaged children (out of scope)
+  - TaskHeaderSelectorInputCapture / WCarrierTrace (independent diagnostics)
+
+================================================================
+DETERMINISTIC RED TARGET (per ACT sec 6)
+================================================================
+
+Production assertion shape for the RED:
+
+  status(jobId).state === "running"
+  AND
+  guardManager.getActiveJobOwnershipSnapshot() does not contain jobId
+
+Production API equivalents:
+
+  - manager.status({jobId, waitMs: 0}) → ok=true, snapshot.state="running"
+  - activeManager.getActiveJobOwnershipSnapshot() returns []  (or
+    omits the target jobId)
+
+The current code can reproduce the contradiction in unit tests by
+constructing TWO `CommandJobManager` instances: one that owns the
+job (start + status path) and one that does NOT (Q5 guard path).
+The diagnostic identities (`managerInstance`, `hostInstance`) are the
+load-bearing test seam.
+
+================================================================
+END OF RECON
+================================================================

@@ -1,0 +1,99 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 32 GATES (pre-LIVE)
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+================================================================
+PRE-LIVE GATES
+================================================================
+
+Per ACT sec 32: Before the LIVE build, run:
+
+  cd apps/vscode
+  bun run check-types
+  bun run test:unit
+  bun run vscode:prepublish
+  git diff --check
+  git status --short
+
+Then run the focused existing command-job suites plus the new
+BCLAS tests.
+
+================================================================
+LOCAL RESULTS (Cloud Agent environment, no dogfood VSIX yet)
+================================================================
+
+1. bun run check-types (apps/vscode)
+   Result: PASS
+   - bunx tsc --noEmit produced no errors after the diagnostic
+     wiring (BCLAS test type-narrowing and the `?? null` coercions
+     for `processStartedRootPid` / `processStartedPgid` /
+     `readRootPidFromSupervisor` / `readPgidFromSupervisor`).
+
+2. bun run test:unit (focused suites):
+   - background-job-liveness-authority.bclas{01..05}.test.ts
+     Result: 5 files / 7 tests PASSED
+   - background-owner-correlation.{bocor,bocorrt,bocordp,bocorq5}.test.ts
+     Result: 4 files / 24 tests PASSED (no regression)
+   - dogfood-diagnostic-profile*.test.ts
+     Result: 4 files / 103 tests PASSED (no regression)
+   - turn-state-writer-provenance.wprov.test.ts
+     Result: 1 file / 35 tests PASSED (no regression)
+   - background-handoff-turnstate-discriminator.bhtd01.test.ts
+     Result: 1 file / 6 tests PASSED (no regression)
+   - active-command-gauge-live-projection-discriminator01*.test.ts
+     Result: 1 file / 3 tests PASSED (no regression)
+   - command-job-manager-descendant-conservation.dcct01.test.ts
+     Result: 1 file / 17 tests PASSED (no regression)
+   - runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01.test.ts
+     Result: 2 files / 10 tests PASSED (no regression)
+
+3. bun run vscode:prepublish:
+   Result: NOT_EXECUTED (Cloud Agent environment does not have the
+   webview build dependencies installed for the full prepublish
+   gate). Recorded per ACT sec 32 HALT_UNAVAILABLE_FROM_ENVIRONMENT
+   contract: the operator environment will execute this gate
+   before artifact qualification.
+
+4. git diff --check:
+   Result: PASS (no trailing whitespace / no incomplete lines).
+
+5. git status --short:
+   M apps/vscode/package.json
+   M apps/vscode/src/extension.ts
+   M apps/vscode/src/registry.ts
+   M apps/vscode/src/sdk/SdkController.ts
+   M apps/vscode/src/sdk/background-owner-correlation.ts
+   M apps/vscode/src/sdk/command-job-manager.ts
+   M apps/vscode/src/sdk/dogfood-diagnostic-profile.ts
+   M apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+   M apps/vscode/src/sdk/vscode-run-commands-tool.ts
+   M apps/vscode/src/sdk/vscode-session-host.ts
+   ?? .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01/
+   ?? apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas{01..05}.test.ts
+   ?? apps/vscode/src/sdk/background-job-liveness-authority.ts
+   ?? apps/vscode/src/sdk/background-job-liveness-authority-runtime.ts
+
+   No unexpected tracked dirt; all modifications are production
+   source files listed in `06-diagnostic-design.md` §7.
+
+================================================================
+ENVIRONMENT CAVEATS
+================================================================
+
+- The Cloud Agent environment cannot run the FULL `bun run
+  test:unit` (it scans ~984 tests including ones that spawn real
+  shells with `sleep 600`; those tests take too long and the
+  environment's sandboxing interferes with their lifecycle cleanup
+  via `kill EPERM`). The focused suites listed above are the
+  load-bearing subset that exercises every production seam the
+  diagnostic touches.
+
+- The Cloud Agent environment cannot package a real VSIX (no
+  operator-side dogfood launcher). The operator builds + installs
+  the VSIX per ACT sec 28 LIVE operator procedure.
+
+- Per ACT sec 32 HALT_UNAVAILABLE_FROM_ENVIRONMENT: this is a
+  legitimate substrate limitation, not a code defect. The
+  affected gate (`vscode:prepublish`) is to be re-run by the
+  operator in their environment before artifact qualification.

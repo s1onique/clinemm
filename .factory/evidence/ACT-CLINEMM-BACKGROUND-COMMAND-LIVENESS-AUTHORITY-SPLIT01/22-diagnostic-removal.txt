@@ -1,0 +1,82 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 30 DIAGNOSTIC REMOVAL LIFETIME
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+================================================================
+DIAGNOSTIC REMOVAL TRIGGER
+================================================================
+
+Per ACT sec 30, the BOCOR + BJLA diagnostics are removed
+together once BOTH conditions are met:
+
+  (a) root cause is isolated (the LIVE occurrence is classified
+      as LA1..LA6, AND
+
+  (b) successor evidence supersedes BOCOR + BJLA together
+
+OR
+
+  (c) the next ACT classifies the LIVE occurrence AND qualifies
+      the bounded repair (PASS_CASE_*)
+
+Then the diagnostic files MUST be removed TOGETHER:
+
+  REMOVED-TOGETHER list:
+    - apps/vscode/src/sdk/background-owner-correlation.ts
+    - apps/vscode/src/sdk/background-owner-correlation-runtime.ts
+    - apps/vscode/src/sdk/background-job-liveness-authority.ts
+    - apps/vscode/src/sdk/background-job-liveness-authority-runtime.ts
+    - the dogfood-profile helpers:
+        applyBackgroundOwnerCorrelationDiagnosticProfile
+        applyBackgroundJobLivenessAuthorityDiagnosticProfile
+    - the activation seams in apps/vscode/src/extension.ts
+    - the Command Palette registrations in extension.ts
+    - the ClineCommands entries in registry.ts
+        DumpBackgroundOwnerCorrelation
+        DumpBackgroundJobLivenessAuthority
+    - the package.json command declarations
+    - the BOCOR + BJLA test files in __tests__/
+    - the BackgroundOwnerCorrelationRecord.managerInstance /
+      hostInstance fields (revert to the original BOCOR schema)
+    - the getCommandJobManager host-only accessor (if no
+      successor requires it)
+    - the getActiveSessionHost coordinator option
+
+UNLESS separately promoted as permanent dogfood observability
+(e.g. the BOCOR + BJLA stay as bounded dogfood diagnostics even
+after the LIVE cause is isolated, because their evidence value
+extends beyond this defect).
+
+================================================================
+CURRENT REMOVAL STATUS
+================================================================
+
+REMOVAL_TRIGGER = NOT_TRIGGERED
+
+The next ACT (after LIVE capture) will evaluate the trigger and
+either:
+
+  (i)  execute the removal together with the bounded repair
+       qualification, OR
+
+  (ii) document the persistent-observability promotion if BOCOR +
+       BJLA are kept as bounded dogfood diagnostics for future
+       occurrences.
+
+This ACT does NOT execute the removal. Per ACT sec 30, the
+diagnostic + the bounded repair are bound to the same lifecycle.
+
+================================================================
+GUARDRAIL: NO QUIET PROMOTION
+================================================================
+
+Per ACT sec 30 + sec 9: "No quiet promotion to architecture."
+The diagnostic must be explicitly removed OR explicitly promoted
+in a future ACT. The promotion must enumerate:
+  - the diagnostic's continuing evidence value,
+  - the bounded retention budget (ring size, dump schedule),
+  - the operator procedure to access the diagnostics.
+
+This ACT records the trigger conditions; the next ACT records
+the decision.

@@ -1,0 +1,134 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01",
+  "epistemic_purpose": "causal discriminator with bounded repair authorization",
+  "entry_head": "bec53f6558e7e0fdb917e57d1780040c5b9708d1",
+  "live_subject": {
+    "task_id": "1789903873206_g5qvj",
+    "job_id": "cmd_mu9qjxmwxl5hasi8",
+    "ui_status": "running",
+    "manager_active_jobs_at_q5": 0,
+    "guard_available": true,
+    "guard_result": false,
+    "tswpd_writer": "session-event-turn-complete-resumable-straggler-preserve",
+    "evidence_class": "LIVE"
+  },
+  "classification": "UNRESOLVED",
+  "authority": {
+    "start_manager_instance": null,
+    "status_manager_instance": null,
+    "guard_manager_instance": null,
+    "remove_manager_instance": null,
+    "status_source": null,
+    "active_remove_seen": null
+  },
+  "causality": {
+    "established": false,
+    "ablation": "NOT_EXECUTED"
+  },
+  "diagnostic": {
+    "enablement": "dogfood_profile",
+    "additional_env_var": false,
+    "env_var_override_layer": "none (mirrors BOCOR CORRECTION01; dogfood-identity bit only)",
+    "dump_command": "cline.debug.dumpBackgroundJobLivenessAuthority",
+    "dump_title": "Cline Debug: Dump Background Job Liveness Authority",
+    "artifact": "background-job-liveness-authority.jsonl",
+    "default_off_outside_dogfood": true,
+    "semantic_delta_when_disabled": false,
+    "ring_module": "apps/vscode/src/sdk/background-job-liveness-authority.ts",
+    "runtime_adapter": "apps/vscode/src/sdk/background-job-liveness-authority-runtime.ts",
+    "profile_helper": "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts (applyBackgroundJobLivenessAuthorityDiagnosticProfile)",
+    "production_activation_seam": "apps/vscode/src/extension.ts:activate (sibling to BOCOR / W carrier / D-knob / THSICAP activations; BEFORE SdkController construction)",
+    "owner_correlation_accessor": "apps/vscode/src/sdk/command-job-manager.ts (the BJLA capture calls fire at the same seams; getActiveJobOwnershipSnapshot is unchanged)",
+    "wired_through": "apps/vscode/src/sdk/vscode-session-host.ts (NEW: getCommandJobManager host-only accessor; manager_constructed capture) -> apps/vscode/src/sdk/SdkController.ts (NEW: getActiveSessionHost option)",
+    "capture_seam_locations": [
+      "apps/vscode/src/sdk/command-job-manager.ts:1792 (job_active_inserted)",
+      "apps/vscode/src/sdk/command-job-manager.ts:2409 (job_active_removed)",
+      "apps/vscode/src/sdk/command-job-manager.ts:2548-2554 (job_status_lookup)",
+      "apps/vscode/src/sdk/command-job-manager.ts:2596-2602 (job_cancel_lookup)",
+      "apps/vscode/src/sdk/command-job-manager.ts:2897 (manager_dispose_begin)",
+      "apps/vscode/src/sdk/command-job-manager.ts:3032 (manager_dispose_end)",
+      "apps/vscode/src/sdk/command-job-manager.ts:1241 (job_lifecycle_event_published)",
+      "apps/vscode/src/sdk/vscode-session-host.ts:380 (manager_constructed)",
+      "apps/vscode/src/sdk/vscode-run-commands-tool.ts:622 (background_state_change_published)",
+      "apps/vscode/src/sdk/sdk-session-event-coordinator.ts:366 (BOCOR record enrichment)"
+    ],
+    "new_test_files": [
+      "apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas01.test.ts",
+      "apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas02.test.ts",
+      "apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas03.test.ts",
+      "apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas04.test.ts",
+      "apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas05.test.ts"
+    ],
+    "new_test_results_local": {
+      "test_files": 5,
+      "tests_passed": 7,
+      "tests_failed": 0
+    },
+    "bocor_schema_additive_change": "BackgroundOwnerCorrelationRecord gains two OPTIONAL fields (managerInstance, hostInstance) - both default to null when BJLA capture is OFF (public behavior). Existing schema remains valid for all downstream consumers that ignore the new fields.",
+    "host_only_extension_added": "apps/vscode/src/sdk/vscode-session-host.ts: getCommandJobManager() - returns the host's CommandJobManager so the coordinator can derive a managerInstance correlation token at the Q5 boundary. NEVER read by the model or webview."
+  },
+  "live_capture": {
+    "captured": false,
+    "reason": "LIVE qualification requires operator-driven dogfood reproduction (no VS Code host + no operator UI in this Cloud Agent environment). The diagnostic build is ready; the operator drives the LIVE run after installing the fresh dogfood VSIX.",
+    "expected_live_packet_contents": [
+      "same jobId (cmd_mu9qjxmwxl5hasi8)",
+      "BJLA lifecycle chain",
+      "BOCOR decision (with managerInstance / hostInstance enrichment)",
+      "TSWPD transition",
+      "UI screenshot",
+      "managerInstance / hostInstance identities",
+      "start insertion",
+      "any removal / finalize",
+      "status lookup source",
+      "guard manager"
+    ]
+  },
+  "repair": {
+    "performed": false,
+    "files": [],
+    "rationale": "Per ACT sec 20, repair is authorized in this ACT only if RED_REPRODUCED == true AND LIVE causal capture is exact AND classification == LA1..LA6/LA6 AND necessity/ablation is established AND repair seam is bounded. LIVE capture is not executable in this Cloud Agent environment. This ACT adds the diagnostic machinery only; the bounded repair is the next ACT's responsibility (after the operator drives the LIVE reproduction)."
+  },
+  "qualification": {
+    "synthetic_real": "PASS - 7 new BCLAS tests + 24 existing BOCOR tests + 35 existing TSWPD tests + 103 existing dogfood-profile tests + 17 existing command-job-manager-descendant-conservation tests = 186+ tests verified PASS locally",
+    "live": "NOT_EXECUTED - operator-driven dogfood reproduction required (no VS Code host + no operator UI in this Cloud Agent environment)"
+  },
+  "diagnostic_removal": "NOT_TRIGGERED",
+  "verdict": "CAPTURE_INSUFFICIENT",
+  "halt_conditions_triggered": [
+    "CAPTURE_INSUFFICIENT (per ACT sec 28 and sec 30; this is a legitimate terminal verdict per ACT sec 37; LIVE capture is not executable in this Cloud Agent environment; the operator drives the LIVE reproduction per ACT sec 28)"
+  ],
+  "stop_rule_observed": true,
+  "next_act_required_for_repair": "ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT-REPAIR01 (or successor) - operator installs this ACT's diagnostic build into a real dogfood ClineMM instance, drives the LIVE reproduction (sh -c 'echo STARTED; sleep 600; echo FINISHED' per ACT sec 28), captures the BOCOR + TSWPD + BJLA + screenshot, classifies the LIVE occurrence as LA1..LA6 per ACT sec 5, applies the bounded repair per ACT sec 21..24, qualifies per ACT sec 29, then removes the diagnostic per ACT sec 30.",
+  "conservation": "C1..C14 verified (see 19-conservation.txt). The diagnostic has zero semantic delta when the capture seam is OFF; the semantic-ablation test in background-job-liveness-authority.bclas05.test.ts proves identical manager semantics + identical lifecycle sink output across capture ON vs OFF.",
+  "production_source_changed": true,
+  "production_files_changed": [
+    "apps/vscode/package.json",
+    "apps/vscode/src/registry.ts",
+    "apps/vscode/src/extension.ts",
+    "apps/vscode/src/sdk/background-owner-correlation.ts",
+    "apps/vscode/src/sdk/command-job-manager.ts",
+    "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts",
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+    "apps/vscode/src/sdk/vscode-run-commands-tool.ts",
+    "apps/vscode/src/sdk/vscode-session-host.ts",
+    "apps/vscode/src/sdk/SdkController.ts"
+  ],
+  "production_files_added": [
+    "apps/vscode/src/sdk/background-job-liveness-authority.ts",
+    "apps/vscode/src/sdk/background-job-liveness-authority-runtime.ts"
+  ],
+  "diagnostic_la1_discriminator": "process_terminality_record (BCLAS-06): captures the production postcondition (gone/alive/eperm/unknown) verbatim from command_job_primary_group_cleanup; gated to terminality-adjacent event names (command_job_termination_started, command_job_primary_group_cleanup, command_job_terminal_committed, command_job_residual_detected, command_job_containment_failed).",
+  "correction_cycle": "P0+HALT_ARTIFACT_SOURCE_HEAD_UNBOUND + P1 LA1 discriminator added",
+  "phantom_records_removed": [
+    "job_finalize_begin",
+    "job_terminal_inserted"
+  ],
+  "phantom_records_replaced_by": "process_terminality_record",
+  "test_count_post_correction": "9 BCLAS tests, 6 files",
+  "comment": "LA1 discriminator is now mechanically testable on synthetic data (BCLAS-06 2/2 PASS). Phantom event names removed from design doc. All 207 focused regression tests PASS.",
+  "source_head": "60f17c4cf4dfaa7c9d565b0cc018a26029f17e37",
+  "relationship": "source_head is the ACT implementation commit built ON TOP of entry_head",
+  "commit_log": "60f17c4cf4dfaa7c9d565b0cc018a26029f17e37 ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01: bounded BJLA diagnostic",
+  "p0_resolved": "HALT_ARTIFACT_SOURCE_HEAD_UNBOUND resolved: ACT implementation is in a real committed HEAD (9197b9ee7), no longer sitting on top of an uncommitted dirty tree.",
+  "note_on_recursive_hash": "The ACT body inside the commit references the penultimate amend HEAD because amending the file changes HEAD. The authoritative binding for the operator is the absolute final commit hash stored in result.json.source_head."
+}

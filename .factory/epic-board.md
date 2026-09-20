@@ -4854,3 +4854,112 @@ DIAGNOSTIC_REMOVAL =
 
 EVIDENCE_BOUND_TO_FINAL_HEAD = PASS  (HEAD at this ACT)
 BOARD_DURABLE                  = PASS  (this row durably appended)
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01 — CAPTURE_INSUFFICIENT — 2026-09-20
+
+**Status:** CAPTURE_INSUFFICIENT. **Subject head:** `bec53f6558e7e0fdb917e57d1780040c5b9708d1`.
+
+```text
+BACKGROUND_JOB_LIVENESS_AUTHORITY = UNRESOLVED
+LIVE_UI_JOB                       = cmd_mu9qjxmwxl5hasi8 / RUNNING
+LIVE_Q5_MANAGER_ACTIVE_SET        = EMPTY
+Q5_GUARD                          = EXONERATED
+OWNER_CORRELATION                 = SUPERSEDED_BY_LIVENESS_AUTHORITY_SPLIT
+START_MANAGER                     = <unobserved>
+STATUS_MANAGER                    = <unobserved>
+GUARD_MANAGER                     = <unobserved>
+ACTIVE_REMOVAL                    = <unobserved>
+STATUS_SOURCE                     = <unobserved>
+REPAIR                            = none (diagnostic-only ACT)
+TURN_STATE                        = OUT_OF_SCOPE / CONSERVED
+TASK_HEADER                       = OUT_OF_SCOPE / CONSERVED
+```
+
+This ACT introduces the **BJLA** (Background Job Liveness
+Authority) diagnostic: a bounded in-memory ring that captures
+load-bearing CommandJob lifecycle events
+(`manager_constructed`, `job_active_inserted`,
+`job_active_removed`, `job_status_lookup`, `job_cancel_lookup`,
+`job_terminal_inserted`, `background_state_change_published`,
+`job_lifecycle_event_published`, `manager_dispose_begin`,
+`manager_dispose_end`) tagged with diagnostic-only
+**managerInstance** (`M1`, `M2`, ...) and **hostInstance**
+(`H1`, `H2`, ...) correlation tokens.
+
+The diagnostic is enabled STRICTLY by the central dogfood
+profile resolver (mirrors BOCOR CORRECTION01 — no env var, no
+workspace toggle, no webview surface). The BOCOR record schema
+is extended additively with optional `managerInstance` /
+`hostInstance` fields so the Q5 boundary capture carries the
+guard manager's correlation token.
+
+**Files added (2):**
+
+  - `apps/vscode/src/sdk/background-job-liveness-authority.ts`
+    (ring module, 293 lines; no `vscode` import; captureEnabled
+    seam; diagnostic identity helpers `getDiagnosticManagerId` /
+    `getDiagnosticHostId` with WeakMap-backed assignment)
+  - `apps/vscode/src/sdk/background-job-liveness-authority-runtime.ts`
+    (host-side dump adapter; mirrors BOCOR pattern;
+    `dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic`)
+
+**Production files modified (10):**
+
+  - `apps/vscode/package.json` — `cline.debug.dumpBackgroundJobLivenessAuthority` command
+  - `apps/vscode/src/registry.ts` — `ClineCommands.DumpBackgroundJobLivenessAuthority`
+  - `apps/vscode/src/extension.ts` — activation seam (line 178, sibling to BOCOR) + dump command registration (line 810)
+  - `apps/vscode/src/sdk/background-owner-correlation.ts` — ADDITIVE optional `managerInstance` / `hostInstance` fields on the record schema
+  - `apps/vscode/src/sdk/command-job-manager.ts` — capture calls at `active.set` (1799), `active.delete` (2448), `status` (2608), `cancel` (2677), `dispose.begin` (2991), `dispose.end` (3039), `emitCommandJobLifecycle` (1249)
+  - `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` — `applyBackgroundJobLivenessAuthorityDiagnosticProfile` helper (lines 824-842)
+  - `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — `getActiveSessionHost` option; `resolveActiveManagerInstance` / `resolveActiveHostInstance` helpers; BOCOR record enrichment
+  - `apps/vscode/src/sdk/vscode-run-commands-tool.ts` — `background_state_change_published` capture in the runner's `notifyBackgroundStateChange` callback
+  - `apps/vscode/src/sdk/vscode-session-host.ts` — NEW `getCommandJobManager()` host-only accessor; `manager_constructed` capture
+  - `apps/vscode/src/sdk/SdkController.ts` — NEW `getActiveSessionHost` option in the coordinator wiring
+
+**New test files (5):**
+
+  - `apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas01.test.ts` (BCLAS-01: same manager start → snapshot sees job)
+  - `apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas02.test.ts` (BCLAS-02: legitimate finalize → snapshot loses job exactly once)
+  - `apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas03.test.ts` (BCLAS-03: status lookup identifies source authority)
+  - `apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas04.test.ts` (BCLAS-04: manager diagnostic identity distinguishes two managers)
+  - `apps/vscode/src/sdk/__tests__/background-job-liveness-authority.bclas05.test.ts` (BCLAS-05: diagnostic enabled vs disabled = identical semantics)
+
+**Synthetic qualification:** 5 files / 7 tests PASS. BCLAS-05
+proves zero semantic delta between capture ON and OFF (identical
+manager semantics + identical lifecycle sink output). The
+diagnostic is read-only on the production state and never
+allocates identity-map entries when the capture seam is OFF.
+
+**No production semantics changed.** Q5 guard logic unchanged.
+TaskHeader projection unchanged. submit_and_exit unchanged.
+Terminal rows unchanged. TurnState / phase unchanged. Run_commands
+tool result shape unchanged. The BOCOR capture path itself is
+additive (new optional fields defaulting to `null`).
+
+**Halt conditions triggered:**
+
+  - `CAPTURE_INSUFFICIENT` (per ACT sec 28 and sec 30; the LIVE
+    causal capture is the operator's responsibility per ACT
+    sec 28; the Cloud Agent cannot drive the LIVE reproduction)
+
+**Next ACT (operator-driven):**
+
+  - `ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT-REPAIR01`
+    (or successor). Operator installs the diagnostic build,
+    runs the `sh -c 'echo STARTED; sleep 600; echo FINISHED'`
+    LIVE procedure, captures the BOCOR + TSWPD + BJLA + screenshot,
+    mechanically classifies the LIVE occurrence as
+    LA1..LA6 per ACT sec 17, applies the bounded repair per
+    ACT sec 21..24, qualifies per ACT sec 19 + 29, then removes
+    BOCOR + BJLA together per ACT sec 30 (or documents the
+    persistent-observability promotion).
+
+**Stop rule observed:** true. This ACT does NOT touch Q5 guard,
+TaskHeader, submit_and_exit, terminal rows, or the broader
+session lifecycle. It introduces only the diagnostic machinery
+that the next ACT needs to classify and repair the LIVE defect.
+
+**Removal trigger:** first successful LIVE classification AND
+qualification of the bounded repair (PASS_CASE_*) OR
+CAPTURE_INSUFFICIENT. Then remove BOCOR + BJLA together unless
+separately promoted as permanent dogfood observability.

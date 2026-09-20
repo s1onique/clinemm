@@ -4,7 +4,10 @@
 import assert from "node:assert"
 import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal-authority-diagnostic"
 import * as vscode from "vscode"
+import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
+import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
 import {
+	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
@@ -24,7 +27,6 @@ import {
 	clearExtensionSideTaskHeaderSelectorInputDiagnostic,
 	dumpExtensionSideTaskHeaderSelectorInputDiagnostic,
 } from "@/sdk/task-header-selector-input-capture-runtime"
-import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
 import {
 	dumpExtensionSideTurnStateWriterProvenanceDiagnostic,
 	toggleTurnStateWriterProvenanceDiagnosticWorkspaceEnabled,
@@ -160,6 +162,20 @@ export async function activate(context: vscode.ExtensionContext) {
 	// BEFORE the first composition-seam evaluation. See
 	// `background-owner-correlation-dogfood-profile.test.ts`.
 	applyBackgroundOwnerCorrelationDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+	// arm the BJLA (Background Job Liveness Authority) capture
+	// seam at the SAME EARLIEST initialization seam, BEFORE
+	// SdkController construction. The helper arms the module seam
+	// idempotently based STRICTLY on the dogfood identity bit
+	// (mirrors BOCOR — no env var, no override matrix). The
+	// capture is at the load-bearing CommandJob lifecycle seams
+	// (manager construction, job active-insert / active-remove,
+	// status lookup, cancel lookup, dispose, lifecycle publish,
+	// background-state publish). Running this BEFORE SdkController
+	// construction guarantees the seam is armed BEFORE the first
+	// `new CommandJobManager({...})` inside `VscodeSessionHost.create`.
+	applyBackgroundJobLivenessAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool
@@ -781,6 +797,26 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[BOCOR] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Background owner correlation dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+		// Dump command for the BJLA diagnostic. Mirrors the BOCOR
+		// dump pattern: unconditional (operator can always inspect
+		// captured records), dump != clear (no ring mutation).
+		// REMOVAL_TRIGGER: first successful LIVE classification AND
+		// qualification of the bounded repair, OR
+		// CAPTURE_INSUFFICIENT.
+		vscode.commands.registerCommand(commands.DumpBackgroundJobLivenessAuthority, async () => {
+			try {
+				const { file, recordCount } = await dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic(context)
+				void vscode.window.showInformationMessage(
+					`Background job liveness authority diagnostic: ${recordCount} record${recordCount === 1 ? "" : "s"} → ${file}.`,
+				)
+			} catch (err) {
+				Logger.error("[BJLA] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Background job liveness authority dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

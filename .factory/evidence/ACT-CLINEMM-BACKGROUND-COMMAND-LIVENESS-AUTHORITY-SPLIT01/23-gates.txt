@@ -1,0 +1,54 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 32 GATES
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+================================================================
+GATE SUMMARY
+================================================================
+
+  G1  bun run check-types             PASS  (local)
+  G2  bun run test:unit (focused)     PASS  (local, 9 BCLAS +
+                                              24 BOCOR +
+                                              103 dogfood +
+                                              35 TSWPD +
+                                              6 background-handoff +
+                                              10 runtime-task-progression +
+                                              3 active-command-gauge +
+                                              17 command-job-manager-descendant-conservation
+                                              = 207 PASS, 0 FAIL)
+  G3  bun run vscode:prepublish        NOT_EXECUTED  (substrate)
+  G4  git diff --check                PASS
+  G5  git status --short              CLEAN (only expected M/A files)
+
+  G6  focused existing command-job suites  PASS (above)
+  G7  new BCLAS tests                  PASS (9 tests, 6 files)
+
+================================================================
+ENVIRONMENT CAVEAT (per ACT sec 32 HALT_UNAVAILABLE_FROM_ENVIRONMENT)
+================================================================
+
+  G3 (bun run vscode:prepublish) was NOT executed in the Cloud
+  Agent environment. The full prepublish gate requires:
+    - the webview build dependencies installed for the agent's
+      sandboxed shell (NOT available in the Cloud Agent sandbox)
+    - the dogfood launcher (NOT available in the Cloud Agent)
+
+  The operator environment re-runs this gate before artifact
+  qualification. This is a SUBSTRATE LIMITATION, not a code
+  defect.
+
+================================================================
+VERDICT
+================================================================
+
+VERDICT = CAPTURE_INSUFFICIENT
+
+Per ACT sec 30: production repair is allowed only if
+RED_REPRODUCED == true AND LIVE causal capture is exact AND
+classification == LA1..LA6/LA6 AND necessity/ablation is
+established AND repair seam is bounded. None of these are met
+in the Cloud Agent environment (LIVE capture requires operator).
+
+The diagnostic build is QUALIFIED for the next ACT's LIVE
+procedure. The bounded repair is the next ACT's responsibility.

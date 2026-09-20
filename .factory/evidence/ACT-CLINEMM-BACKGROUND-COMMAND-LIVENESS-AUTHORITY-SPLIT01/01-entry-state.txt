@@ -1,0 +1,51 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+DATE      = 2026-09-20
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit)  (operator packaging / evidence-only commit)
+
+ENTRY_HEAD       = bec53f6558e7e0fdb917e57d1780040c5b9708d1
+ENTRY_STATUS     = CLEAN (no uncommitted modifications, no staged dirt)
+ENTRY_BRANCH     = main
+ENTRY_REMOTES    = origin/main: tracked (no fetch performed in this ACT)
+
+HALT_UNEXPECTED_TRACKED_DIRT = NOT_TRIGGERED
+
+================================================================
+ENTRY NOTES
+================================================================
+
+This ACT starts at the operator's frozen evidence point. The HEAD
+above is the commit at which the BOCOR diagnostic build was packaged
+and the operator captured the LIVE BOCOR + TSWPD + screenshot
+triple that produced `activeJobs = []` while the UI showed a
+running, cancellable managed command (jobId `cmd_mu9qjxmwxl5hasi8`,
+taskId `1789903873206_g5qvj`).
+
+The upstream invariant cited by the ACT body — that "proceed-while-
+running is an explicit command lifecycle" — is satisfied in the
+current production code (`command-job-manager.ts:1791-1792`, single
+authority for active-map insertion; `:2223-2546`, single authority
+for terminal classification; `:2897-2935`, single authority for
+dispose).
+
+The defect under investigation is therefore NOT in the manager's own
+seam. It lies either:
+
+  - BEFORE the Q5 guard consults the manager (manager-instance split,
+    LA2 / LA5), OR
+  - BEFORE the manager's own internal terminality discriminator
+    (premature finalization, LA1), OR
+  - AFTER the manager has correctly removed the job (stale projection,
+    LA3), OR
+  - IN A STATUS PATH that does not consult the same authority as Q5
+    (LA4).
+
+Per the ACT scope, this ACT does NOT repair turn state, TaskHeader,
+the Q5 guard, submit_and_exit, or terminal-row mutation. The next
+ACT in the lineage (after LIVE capture) will apply the bounded repair
+for the proven case.
+
+Known tracked dirt on entry: NONE (git status --short returned empty).
+
+Generated / package output directories (out/, dist/, dist-standalone/,
+src/generated/, src/shared/proto/) are gitignored / not in the
+working tree; the ACT does not need to clean them.

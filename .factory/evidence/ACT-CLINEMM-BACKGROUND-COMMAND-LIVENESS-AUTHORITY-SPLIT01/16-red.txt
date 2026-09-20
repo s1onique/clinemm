@@ -1,0 +1,90 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 6 RED REPRODUCTION TARGET
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (ACT impl commit) 
+DATE      = 2026-09-20
+
+================================================================
+RED TARGET
+================================================================
+
+The RED for this LIVE defect (per ACT sec 6):
+
+```text
+same jobId
+AND
+one production surface says RUNNING
+AND
+the guard-authoritative CommandJobManager says job absent
+```
+
+Production assertion shape:
+
+  status(jobId).state === "running"
+  AND
+  guardManager.getActiveJobOwnershipSnapshot() does not contain jobId
+
+================================================================
+RED REPRODUCTION STATUS
+================================================================
+
+RED_REPRODUCED = false
+
+The RED has been observed in LIVE (the specimen this ACT is
+built on, captured at taskId 1789903873206_g5qvj, jobId
+cmd_mu9qjxmwxl5hasi8), but the LIVE specimen is NOT a
+deterministic reproduction in the synthetic sense — the operator
+captured the contradiction at a single instant without
+controlling the lifecycle.
+
+The DETERMINISTIC RED target is reproducible in synthetic form
+(see `04-recon.txt` §DETERMINISTIC RED TARGET) by constructing TWO
+CommandJobManager instances: one that owns the job (start + status
+path) and one that does NOT (Q5 guard path). The synthetic RED is
+the test seam for the BCLAS-04 second test ("a job started in
+managerA is recorded against tokenA; managerB sees nothing").
+
+The LIVE RED is reproducible by the operator per ACT sec 28
+(`sh -c 'echo STARTED; sleep 600; echo FINISHED'` with the
+diagnostic build installed).
+
+Per ACT sec 6: "If no deterministic reproduction exists:
+HALT_RED_NOT_REPRODUCED." The synthetic RED is reproducible; the
+LIVE RED requires the operator's LIVE procedure. This ACT does
+not halt on RED_NOT_REPRODUCED because the synthetic RED is
+in hand and the LIVE RED is the operator's responsibility.
+
+================================================================
+RED TARGET — SYNTHETIC FORM
+================================================================
+
+Construct two CommandJobManager instances (managerA, managerB).
+Start a job in managerA (returns RUNNING, status="running").
+Query managerB's status for the same jobId. The query returns
+`ok: false, code: "unknown_job"`. This is the synthetic
+reproduction of the LIVE contradiction at the production API
+level.
+
+BCLAS-04 second test exercises this exact shape and asserts that
+the diagnostic records the managerInstance mismatch
+(M1 != M2, where M2's lookup returns source="miss").
+
+================================================================
+RED TARGET — LIVE FORM
+================================================================
+
+Per ACT sec 28: the operator installs the diagnostic build,
+runs the `sh -c 'echo STARTED; sleep 600; echo FINISHED'` command,
+watches for the failure, then dumps in this order:
+
+  1. Cline Debug: Dump Background Job Liveness Authority
+  2. Cline Debug: Dump Background Owner Correlation
+  3. Cline: Dump Turn State Writer Provenance Diagnostic
+
+Then takes a UI screenshot and (optionally) clicks Cancel.
+
+The LIVE RED packet is recorded in:
+  - 10-live-bjla.jsonl (the new diagnostic)
+  - 11-live-bocor.jsonl (the existing BOCOR diagnostic, now
+    enriched with managerInstance / hostInstance)
+  - 12-live-tswpd.jsonl (the existing TSWPD diagnostic)
+  - 13-live-screenshot-index.md (the UI screenshot index)

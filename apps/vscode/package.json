@@ -247,6 +247,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpBackgroundJobLivenessAuthority",
+				"title": "Cline Debug: Dump Background Job Liveness Authority",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

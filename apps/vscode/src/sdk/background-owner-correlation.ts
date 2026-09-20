@@ -40,8 +40,8 @@
  *   No quiet promotion to architecture.
  */
 
-import type { CommandJobState } from "./command-job-manager"
 import type { TurnStateWriterId } from "@shared/turn-state-writer-provenance"
+import type { CommandJobState } from "./command-job-manager"
 
 const DEFAULT_BUFFER_SIZE = 64
 
@@ -62,6 +62,11 @@ export interface BackgroundOwnerCorrelationActiveJob {
  * done-without-completion event for which the Q5 composition
  * seam evaluates the guard. The schema is frozen: adding a field
  * is a breaking change for the post-capture correlation tests.
+ *
+ * ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01 adds
+ * `managerInstance` and `hostInstance` as OPTIONAL diagnostic-only
+ * fields (additive — existing schema remains valid). They are
+ * populated only when the BJLA capture seam is ON.
  */
 export interface BackgroundOwnerCorrelationRecord {
 	readonly event: "background_owner_correlation_decision"
@@ -95,6 +100,20 @@ export interface BackgroundOwnerCorrelationRecord {
 	 * self-describing without joining to a separate TSWPD dump.
 	 */
 	readonly candidateWriterId: TurnStateWriterId
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+	 * BJLA diagnostic-only correlation token for the manager
+	 * instance the guard consulted at the Q5 boundary. `null` when
+	 * the BJLA capture seam is OFF (default public behavior).
+	 */
+	readonly managerInstance?: string | null
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+	 * BJLA diagnostic-only correlation token for the host instance
+	 * the guard consulted at the Q5 boundary. `null` when the BJLA
+	 * capture seam is OFF (default public behavior).
+	 */
+	readonly hostInstance?: string | null
 }
 
 const buffer: BackgroundOwnerCorrelationRecord[] = []
@@ -120,9 +139,7 @@ export function setBackgroundOwnerCorrelationCaptureEnabled(enabled: boolean): v
  * Append one record to the ring. Bounded FIFO eviction. No-op
  * when the capture seam is OFF (default).
  */
-export function captureBackgroundOwnerCorrelationRecord(
-	record: BackgroundOwnerCorrelationRecord,
-): void {
+export function captureBackgroundOwnerCorrelationRecord(record: BackgroundOwnerCorrelationRecord): void {
 	if (!captureEnabled) return
 	buffer.push(record)
 	if (buffer.length > bufferSize) {

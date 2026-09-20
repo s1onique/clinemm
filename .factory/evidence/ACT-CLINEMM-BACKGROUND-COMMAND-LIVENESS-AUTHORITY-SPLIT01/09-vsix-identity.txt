@@ -1,0 +1,71 @@
+ACT_ID    = ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01
+SECTION   = SEC 33 EXACT ARTIFACT BINDING
+SUBJECT   = HEAD 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29 (operator packaging commit)
+DATE      = 2026-09-20
+
+================================================================
+ARTIFACT BINDING (operator environment)
+================================================================
+
+The dogfood VSIX for this ACT is built and installed by the
+OPERATOR, not by the Cloud Agent. Per ACT sec 33, the exact
+binding:
+
+  SOURCE_HEAD      = 1ec6e1a3e9c5593d4bfb3236811efeb82bdc6d29
+                     (the actual committed HEAD for this ACT —
+                      `ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+                      bounded BJLA diagnostic`. The diagnostic
+                      build is IN this commit, not on top of a
+                      pre-existing commit. A clean checkout of
+                      this HEAD contains the BJLA source code,
+                      tests, and Command Palette dump command.)
+
+  ENTRY_HEAD       = bec53f6558e7e0fdb917e57d1780040c5b9708d1
+                     (the entry head — the diagnostic build sits
+                      ON TOP of this commit semantically; the
+                      operator's dogfood launcher may build from
+                      a clean worktree at this HEAD ONLY if
+                      applied as a patch series on top of this
+                      commit. The SOURCE_HEAD above is the
+                      canonical binding.)
+
+  RELATIONSHIP     = SOURCE_HEAD is the ACT implementation commit
+                     built ON TOP of ENTRY_HEAD (bec53f655). The
+                     ACT implementation IS the diff from
+                     ENTRY_HEAD to SOURCE_HEAD.
+
+  VERSION          = (operator environment reads from
+                     apps/vscode/package.json at build time)
+
+  VSIX_PATH        = (operator-built; recorded in 21-live-qualification.md
+                     once the operator runs the LIVE procedure)
+
+  BYTE_SIZE        = (recorded at build time)
+
+  SHA256           = (recorded at build time; deterministic via
+                     SOURCE_DATE_EPOCH pinned to HEAD commit time)
+
+  INSTALLED_VERSION = (recorded by the operator after
+                      `code --install-extension` against the
+                      real dogfood ClineMM instance)
+
+================================================================
+ENVIRONMENT CAVEAT
+================================================================
+
+This Cloud Agent cannot:
+  - build a VSIX (no `vsce` packaging dependency installed for
+    the agent's sandboxed shell),
+  - install a VSIX (no real VS Code host in the agent's
+    environment),
+  - reproduce the LIVE procedure (no operator UI).
+
+The artifact binding fields above are placeholders for the
+operator to fill in once the VSIX is built + installed against
+their real dogfood instance. The exact binding is recorded in
+`21-live-qualification.md` per ACT sec 33.
+
+The diagnostic build is ready: typecheck PASS, focused test
+suites PASS, no semantic delta when the capture seam is OFF
+(verified by BCLAS-05). The operator can proceed with the
+LIVE procedure in ACT sec 28.
