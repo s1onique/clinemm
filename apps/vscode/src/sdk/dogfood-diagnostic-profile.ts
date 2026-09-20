@@ -717,26 +717,13 @@ function _isWCarrierTraceEnabledForActivation(): boolean {
 // ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01 -
 // central dogfood profile resolver for the Q5 BOCOR capture seam.
 //
-// BACKGROUND
-// ----------
-// The Working -> Your turn failure (BCAFG01 followup) was proven
-// within synthetic_real + static-analysis bounds to be
-// CASE_G2_OWNER_IDENTITY_MISMATCH but the LIVE sub-cause (H2a
-// producer stamp defect vs H2b session identity drift) was
-// classified CAPTURE_INSUFFICIENT for repair authorization
-// (see .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-
-// AWAITING-FOLLOWUP-GUARD01/result.json). This ACT closes that
-// gap by adding a dogfood-only diagnostic at the Q5 decision
-// boundary in sdk-session-event-coordinator.ts that captures the
-// actual LIVE ownership tuple (jobId / ownerSessionId / active
-// sessionId / guard result) so the next recurrence can be
-// mechanically classified as OC1 / OC2 / OC3 / contradiction.
-//
-// CONTRACT - frozen in this ACT
-// -----------------------------
-//   - There is NO new env var. The diagnostic participates in the
-//     existing central dogfood profile (mirrors W carrier /
-//     THSICAP).
+// CONTRACT - frozen in this ACT (CORRECTION01 - bounded)
+// ------------------------------------------------------
+//   - There is NO new env var. NO override matrix. NO parser.
+//     Per the Factory reviewer correction, the diagnostic is
+//     enabled STRICTLY by the central dogfood profile:
+//       isDogfood === true  -> capture ON
+//       isDogfood === false -> capture OFF (public default)
 //   - The module seam is
 //     ./background-owner-correlation.ts#captureEnabled. The
 //     resolver arms it via
@@ -745,16 +732,6 @@ function _isWCarrierTraceEnabledForActivation(): boolean {
 //     extension.ts:activate (sibling to the existing THSICAP /
 //     W carrier / D-knob activations); there is exactly ONE
 //     production activation path.
-//
-// Precedence (top wins; deterministic; fail-closed):
-//
-//   1. Explicit env override:
-//        =1/true/yes -> ON  (honored in both profiles)
-//        =0/off/false -> OFF (honored in both profiles)
-//        garbage / unset -> falls through to (2)
-//   2. Profile default:
-//        isDogfood === true  -> ON  (auto-on in dogfood)
-//        isDogfood === false -> OFF (public default OFF)
 //
 // HONEST STOP RULE (mirrors THSICAP / W carrier):
 //   Once the LIVE cause is isolated (OC1 / OC2 / OC3) AND the
@@ -765,60 +742,34 @@ function _isWCarrierTraceEnabledForActivation(): boolean {
 //   package.json command declaration MUST be removed TOGETHER.
 // ===========================================================================
 
-export function parseBackgroundOwnerCorrelationCaptureEnv(
-	env: NodeJS.ProcessEnv,
-): { enabled: boolean } | undefined {
-	const raw = env["CLINEMM_DIAG_BACKGROUND_OWNER_CORRELATION_V1"]
-	if (typeof raw !== "string" || raw.length === 0) {
-		return undefined
-	}
-	const normalized = raw.trim().toLowerCase()
-	if (TRUTHY_DISABLE.has(normalized)) {
-		return { enabled: false }
-	}
-	if (TRUTHY_ENABLE.has(normalized)) {
-		return { enabled: true }
-	}
-	return undefined
-}
-
-/**
- * Resolves the EFFECTIVE BOCOR capture state from the env var and
- * the dogfood identity bit. Pure / synchronous / no I/O. The env
- * var is read in EXACTLY ONE place - this function.
- */
-export function resolveEffectiveBackgroundOwnerCorrelationCapture(
-	env: NodeJS.ProcessEnv,
-	isDogfood: boolean,
-): { readonly enabled: boolean; readonly source: "env" | "profile" } {
-	const parsed = parseBackgroundOwnerCorrelationCaptureEnv(env)
-	if (parsed !== undefined) {
-		return { enabled: parsed.enabled, source: "env" }
-	}
-	return { enabled: isDogfood, source: "profile" }
-}
-
 /**
  * THE single production activation helper for the BOCOR seam.
  * Called from extension.ts:activate (sibling to the existing
  * THSICAP / W carrier / D-knob activations); there is exactly ONE
  * production activation path, no copied orchestration in tests.
+ *
+ * CORRECTION01 - bounded: the env-var override layer was removed
+ * per the Factory reviewer. Enable/disable is now strictly:
+ *
+ *   isDogfood === true  -> ON
+ *   isDogfood === false -> OFF
+ *
+ * No new env knob. No parser. No override matrix.
  */
 export function applyBackgroundOwnerCorrelationDiagnosticProfile(
-	env: NodeJS.ProcessEnv,
 	isDogfood: boolean,
-): { readonly enabled: boolean; readonly source: "env" | "profile"; readonly flipped: boolean } {
-	const resolved = resolveEffectiveBackgroundOwnerCorrelationCapture(env, isDogfood)
+): { readonly enabled: boolean; readonly flipped: boolean } {
 	const was = _isBackgroundOwnerCorrelationCaptureEnabledForActivation()
-	if (resolved.enabled && !was) {
+	const should = isDogfood
+	if (should && !was) {
 		setBackgroundOwnerCorrelationCaptureEnabled(true)
-		return { enabled: true, source: resolved.source, flipped: true }
+		return { enabled: true, flipped: true }
 	}
-	if (!resolved.enabled && was) {
+	if (!should && was) {
 		setBackgroundOwnerCorrelationCaptureEnabled(false)
-		return { enabled: false, source: resolved.source, flipped: true }
+		return { enabled: false, flipped: true }
 	}
-	return { enabled: resolved.enabled, source: resolved.source, flipped: false }
+	return { enabled: should, flipped: false }
 }
 
 function _isBackgroundOwnerCorrelationCaptureEnabledForActivation(): boolean {

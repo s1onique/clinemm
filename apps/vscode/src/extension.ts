@@ -151,20 +151,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 	// arm the BOCOR (Background Owner Correlation) capture seam at
 	// the SAME EARLIEST initialization seam, BEFORE SdkController
-	// construction. The helper composes the effective capture
-	// state (explicit env override
-	// `CLINEMM_DIAG_BACKGROUND_OWNER_CORRELATION_V1` > dogfood
-	// profile default ON > public default OFF) and flips the
-	// module seam idempotently. Dogfood default ON means the
-	// LIVE qualification window does not require the operator to
-	// remember to set the env var; explicit `=0` flips the
-	// auto-on default off (override-down semantic). The capture
-	// is at the Q5 done-without-completion decision boundary in
+	// construction. The helper arms the module seam idempotently
+	// based STRICTLY on the dogfood identity bit (CORRECTION01 -
+	// no env var, no override matrix). The capture is at the Q5
+	// done-without-completion decision boundary in
 	// sdk-session-event-coordinator.ts, so running this BEFORE
 	// SdkController construction guarantees the seam is armed
 	// BEFORE the first composition-seam evaluation. See
 	// `background-owner-correlation-dogfood-profile.test.ts`.
-	applyBackgroundOwnerCorrelationDiagnosticProfile(process.env, isDogfoodRuntime(process.env))
+	applyBackgroundOwnerCorrelationDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool

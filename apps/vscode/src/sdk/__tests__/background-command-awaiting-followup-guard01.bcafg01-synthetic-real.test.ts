@@ -277,7 +277,7 @@ async function startBackgroundJob(
 			executionDeadlineMs: 60_000,
 			maxOutputChars: 4096,
 		},
-		passContext ? { sessionId } : undefined,
+		passContext ? { sessionId, agentId: "test-agent", iteration: 1 } : undefined,
 	)
 	if (start.state !== "running") {
 		throw new Error(`expected state=running, got state=${start.state}`)
