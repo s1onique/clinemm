@@ -82,3 +82,96 @@ UI "Your turn"
 
 `X` is the discriminator that this ACT makes observable. The next LIVE
 run will resolve `X` to exactly one of the bounded origin values.
+
+## LIVE specimen (added after the dogfood VSIX captured a real cycle)
+
+The LIVE run on the dogfood VSIX (HEAD 640cc3881, SHA-256 5195db3a...)
+produced the following observed timeline for `cmd_mu9wmnyuhvgva8cn`:
+
+```text
+t = 0       job_inserted (manager=M2, sessionId=1789914077854_aq4sy)
+            → state=running, ownerSessionId=1789914077854_aq4sy
+
+t + ~poll#1 status_lookup (manager=M2) → state=running
+t + ~poll#2 status_lookup (manager=M2) → state=running
+t + ~poll#N status_lookup (manager=M2) → state=running
+            (all polls hit the same M2 active map; no instance drift;
+             all polls carry the same ownerSessionId)
+
+t ≈ 147.3 s REQUEST BOUNDARY (this ACT's contribution)
+            job_cancellation_requested
+              requestOrigin    = caller_abort_signal
+              jobId            = cmd_mu9wmnyuhvgva8cn
+              manager          = M2
+              sessionId        = 1789914077854_aq4sy
+              currentState     = running
+              firstWriterWins  = true
+              capturedAt       = T (ms resolution)
+
+t = T       MUTATION BOUNDARY (predecessor ACT's contribution)
+            command_job_termination_started
+              manager = M2
+              jobId   = cmd_mu9wmnyuhvgva8cn
+              [FIRST-WRITER-WINS latch fires here]
+
+t = T       command_job_primary_group_cleanup
+              postcondition = gone
+
+t = T       process_terminality_record
+              state  = cancelled
+              pgid cleared
+
+t = T       job_active_removed
+              previousState  = running
+              terminalState  = cancelled
+              reason         = cancel
+              pid/pgid preserved from supervisor
+
+t = T       background_state_change
+              running = false
+
+t = T + 5 ms  DOWNSTREAM (BOCOR / Q5)
+              activeSessionId       = 1789914077854_aq4sy
+              queriedOwnerSessionId = 1789914077854_aq4sy
+              manager               = M2
+              activeJobs            = []
+              guardResult           = false
+
+t = T + 5 ms  DOWNSTREAM (TSWPD)
+              prior_state           = streaming
+              new_state             = awaiting_followup
+              writerId              = session-event-turn-complete-
+                                      resumable-straggler-preserve
+
+t = T + ~5 ms DOWNSTREAM (UI)
+              TaskHeader flips to "Your turn"
+              Backgrounded card / Cancel button become stale
+              (secondary projection issue; deferred)
+```
+
+The exact ordering of `t ≈ 147.3 s` → `t = T` is the LIVE causal
+evidence:
+
+```text
+running managed job (M2, cmd_mu9wmnyuhvgva8cn)
+  ↓
+CALLER ABORT SIGNAL  (context.signal aborted on the foreground
+                       tool/turn that started this job)
+  ↓
+CommandJobManager cancels job  (job_cancellation_requested →
+                                  command_job_termination_started →
+                                  pgid_cleanup → process_terminality_record
+                                  → job_active_removed)
+  ↓
+active map becomes empty
+  ↓
+Q5 correctly returns false
+  ↓
+awaiting_followup
+  ↓
+Your turn
+```
+
+`X` resolved to `caller_abort_signal`, classifying this LIVE occurrence
+as `CASE_CP3_CALLER_ABORT_SIGNAL`. The full exoneration matrix and
+the architectural root cause are in `25-live-result.md`.

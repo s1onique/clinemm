@@ -60,14 +60,53 @@ G9: vsce package (dogfood VSIX produced and bound — see 09-vsix-identity.txt)
   → SHA-256: 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5
   → PASS
 
-SUMMARY: 8 of 9 gates pass outright; G5 is a pre-existing environmental
-failure unrelated to this ACT (verified by reproducing on the parent
-commit without my changes).
+G10: LIVE classification (added after the dogfood VSIX captured a real cycle)
+  → job_cancellation_requested.requestOrigin = "caller_abort_signal"
+  → firstWriterWins = true
+  → currentState    = running (verified at the request boundary, BEFORE
+                                 this.terminate() mutated anything)
+  → manager         = M2 (single manager across insert, polls, terminate,
+                           active delete, BOCOR guard)
+  → sessionId       = 1789914077854_aq4sy
+  → jobId           = cmd_mu9wmnyuhvgva8cn
+  → PASS (CASE_CP3_CALLER_ABORT_SIGNAL — see 15-causal-classification.txt
+          and 25-live-result.md)
 
-VERDICT: DOGFOOD VSIX QUALIFIED. The tree is committed (HEAD
-640cc3881) and the VSIX is built, bound, and ready for LIVE install.
-The next operator step is: install the VSIX, run a fresh `sleep 600`
-task per ACT sec 15, dump BJLA after Working→Your turn. The
-job_cancellation_requested.requestOrigin in the dump will mechanically
-classify the requester (CP1 if background_cancel_rpc, CP2/CP6 if
-extension_shutdown, CP3 if caller_abort_signal).
+G11: post-live conservation
+  → CP1 (background_cancel_rpc)  REFUTED
+  → CP2 (manager_dispose)        NOT_REACHED
+  → CP3 (caller_abort_signal)    CONFIRMED (the only requester)
+  → CP4 (command_deadline)       REFUTED (reason="cancel", not "deadline")
+  → CP5 (tool_cleanup)           REFUTED (no production caller)
+  → CP6 (extension_shutdown)     REFUTED (no manager_dispose_begin)
+  → Q5 (BOCOR)                   EXONERATED (guard returned false on
+                                              empty active set)
+  → TSWPD writer                 EXONERATED_GIVEN_EMPTY_ACTIVE_SET
+  → TaskHeader                   EXONERATED
+  → CommandJobManager            BEHAVING_CORRECTLY_GIVEN_ABORT
+  → manager-instance split       REFUTED
+  → owner mismatch               REFUTED
+  → C1-C15 conservation invariants (19-conservation.txt) STILL HOLD
+  → PASS (the LIVE cycle did not break any conservation invariant;
+         the bounded repair authorization is preserved)
+
+G12: dogfood VSIX identity (the binary that produced the LIVE dump)
+  → /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix
+  → SHA-256: 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5
+  → HEAD:    640cc388131ad8071e7a2feccb456c580d1d09a5
+  → PASS
+
+SUMMARY: 11 of 12 gates pass outright; G5 is a pre-existing environmental
+failure unrelated to this ACT (verified by reproducing on the parent
+commit without my changes); G10/G11/G12 are the LIVE_RESULT gates added
+after the dogfood VSIX captured a real cycle.
+
+VERDICT: LIVE_BOUND / CASE_CP3_CALLER_ABORT_SIGNAL / BOUNDED_REPAIR_AUTHORIZED.
+
+  - The cancellation requester is mechanically classified as
+    `caller_abort_signal` (CP3).
+  - The bounded repair is the next ACT's responsibility:
+    `ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01`.
+  - No Q5, TaskHeader, CommandJobManager architecture, owner/session
+    identity, status authority, PGID helper semantics, `submit_and_exit`,
+    or terminal row mutation has been touched.

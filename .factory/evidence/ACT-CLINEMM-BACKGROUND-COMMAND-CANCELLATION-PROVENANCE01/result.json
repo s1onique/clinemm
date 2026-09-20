@@ -4,25 +4,66 @@
   "entry_head": "bab253afba4c06ce0f847f08c5718c131561565f",
   "act_commit_head": "640cc388131ad8071e7a2feccb456c580d1d09a5",
   "live_subject": {
-    "job_id": "cmd_mu9v06vyx0bsxj44",
+    "job_id": "cmd_mu9wmnyuhvgva8cn",
+    "manager_instance": "M2",
+    "session_id": "1789914077854_aq4sy",
     "pre_cancel_state": "running",
     "terminal_state": "cancelled",
     "cleanup_postcondition": "gone",
     "active_remove_reason": "cancel",
     "operator_clicked_cancel": false,
+    "cancellation_latency_seconds": 147.3,
     "evidence_class": "LIVE"
   },
   "cancellation": {
-    "request_origin": "UNRESOLVED",
+    "request_origin": "caller_abort_signal",
+    "first_writer_wins": true,
+    "current_state_at_request_boundary": "running",
     "manager_instance": "M2",
     "host_instance": null,
-    "session_id": null,
-    "task_id": null
+    "session_id": "1789914077854_aq4sy",
+    "task_id": null,
+    "job_id": "cmd_mu9wmnyuhvgva8cn"
   },
-  "classification": "CAPTURE_INSUFFICIENT",
+  "classification": "LIVE_BOUND / CASE_CP3_CALLER_ABORT_SIGNAL",
+  "live_causality": "ESTABLISHED",
+  "exoneration": {
+    "background_cancel_rpc": "REFUTED",
+    "extension_shutdown": "REFUTED",
+    "command_deadline": "REFUTED",
+    "manager_instance_split": "REFUTED",
+    "owner_mismatch": "REFUTED",
+    "command_job_manager": "BEHAVING_CORRECTLY_GIVEN_ABORT",
+    "q5_bocor": "EXONERATED",
+    "tswpd_writer": "EXONERATED_GIVEN_EMPTY_ACTIVE_SET",
+    "task_header": "EXONERATED",
+    "vscode_run_commands_background_path": "BEHAVING_AS_DESIGNED_BUT_HOLDING_LEAKED_OWNERSHIP"
+  },
   "causality": {
-    "established": false,
-    "ablation": "NOT_EXECUTED"
+    "established": true,
+    "ablation": "EXECUTED_FOR_CP3",
+    "chain": [
+      "running managed job (M2, cmd_mu9wmnyuhvgva8cn)",
+      "CALLER ABORT SIGNAL (context.signal aborted on the foreground tool/turn)",
+      "CommandJobManager cancels job (job_cancellation_requested -> command_job_termination_started -> pgid_cleanup -> process_terminality_record -> job_active_removed)",
+      "active map becomes empty",
+      "Q5 correctly returns false",
+      "awaiting_followup",
+      "Your turn"
+    ]
+  },
+  "architectural_root_cause": {
+    "contract_source": "sdk/ARCHITECTURE.md §proceed-while-running",
+    "contract_quote": "The executor removes its abort and timeout ownership, resolves the tool call with the current bounded output and a temporary log path, and continues draining the process into that log.",
+    "defect": "The backgroundExec path of VscodeRunCommands does not perform this contract step. CommandJobManager.start(..., context) installs context.signal.addEventListener('abort', listener, { once: true }) on the caller's signal and the listener is NEVER released when the foreground tool returns RUNNING.",
+    "production_call_site": "apps/vscode/src/sdk/command-job-manager.ts:1947-1953",
+    "next_act": "ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01"
+  },
+  "stale_card_after_cancel": {
+    "observed": true,
+    "classification": "STALE_PROJECTION",
+    "deferred_to_separate_act": true,
+    "is_root_cause_of_your_turn": false
   },
   "diagnostic_changes": {
     "new_record_type": "job_cancellation_requested",
@@ -57,8 +98,23 @@
     "bocor": "PASS",
     "command_job_manager_tests": "PRE_EXISTING environmental failures (reproduced on parent commit)",
     "vscode_prepublish": "PASS (full pipeline: protos + check-types + webview build + lint + esbuild production)",
-    "vsce_package": "PASS — produced /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix (51 files, 13.94 MB, SHA-256 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5)"
+    "vsce_package": "PASS — produced /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix (51 files, 13.94 MB, SHA-256 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5)",
+    "live_classification_g10": "PASS — job_cancellation_requested.requestOrigin = caller_abort_signal; firstWriterWins = true; currentState = running; manager = M2; sessionId = 1789914077854_aq4sy; jobId = cmd_mu9wmnyuhvgva8cn",
+    "post_live_conservation_g11": "PASS — CP1 REFUTED; CP2 NOT_REACHED; CP3 CONFIRMED; CP4 REFUTED; CP5 REFUTED; CP6 REFUTED; Q5 EXONERATED; TSWPD EXONERATED; TaskHeader EXONERATED; C1-C15 conservation invariants STILL HOLD",
+    "dogfood_vsix_identity_g12": "PASS — clinemm-4.1.16-bjla-cancellation-provenance01.vsix; SHA-256 5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5; HEAD 640cc388131ad8071e7a2feccb456c580d1d09a5"
   },
-  "verdict": "DOGFOOD_VSIX_QUALIFIED_FOR_LIVE_CAPTURE",
-  "next_step": "Install dogfood VSIX (HEAD 640cc3881, version 4.1.16) into the operator's VS Code instance; run a fresh `sleep 600` task per ACT §15; dump BJLA after Working→Your turn transition. The job_cancellation_requested.requestOrigin in the dump will mechanically classify the requester into CP1 (background_cancel_rpc), CP2/CP6 (extension_shutdown), or CP3 (caller_abort_signal)."
+  "verdict": "LIVE_BOUND_CASE_CP3_BOUNDED_REPAIR_AUTHORIZED",
+  "factory_state_recorded": {
+    "CANCELLATION_PROVENANCE": "PASS",
+    "CLASSIFICATION": "CASE_CP3_CALLER_ABORT_SIGNAL",
+    "LIVE_CAUSALITY": "ESTABLISHED",
+    "Q5": "EXONERATED",
+    "TSWPD": "EXONERATED_GIVEN_EMPTY_ACTIVE_SET",
+    "TaskHeader": "EXONERATED",
+    "CommandJobManager": "BEHAVING_CORRECTLY_GIVEN_ABORT",
+    "PRIMARY_REPAIR_SEAM": "PROCEED-WHILE-RUNNING ABORT-SIGNAL OWNERSHIP TRANSFER",
+    "SECONDARY_DEFERRED": "STALE_CARD_AFTER_CANCEL",
+    "NEXT_ACT": "ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01"
+  },
+  "next_step": "Author and execute the bounded repair ACT: ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01 — remove the caller's AbortSignal listener from the managed background CommandJob at the foreground→background handoff, while preserving all conservation invariants (C1-C15) and the documented contract of the proceed-while-running lifecycle."
 }

@@ -5090,3 +5090,228 @@ classify the LIVE requester:
   requestOrigin = "extension_shutdown"     → CP6 (controller dispose)
   requestOrigin = "caller_abort_signal"     → CP3 (caller's AbortSignal)
 ```
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 — LIVE_RESULT_CASE_CP3_CALLER_ABORT_SIGNAL — 2026-09-20
+
+**Status:** LIVE_BOUND / `CASE_CP3_CALLER_ABORT_SIGNAL` /
+`LIVE_CAUSALITY = ESTABLISHED` /
+`PRODUCTION_REPAIR = AUTHORIZED_FOR_BOUNDED_NEXT_ACT_ONLY` /
+`Q5 = EXONERATED` /
+`TSWPD = EXONERATED_GIVEN_EMPTY_ACTIVE_SET` /
+`TaskHeader = EXONERATED` /
+`CommandJobManager = BEHAVING_CORRECTLY_GIVEN_ABORT` /
+`manager-instance split = REFUTED` /
+`owner mismatch = REFUTED`.
+
+```text
+SUBJECT_JOB_ID              = cmd_mu9wmnyuhvgva8cn
+SUBJECT_MANAGER_INSTANCE    = M2
+SUBJECT_SESSION_ID          = 1789914077854_aq4sy
+PRE_CANCEL_STATE            = running (verified by repeated polling
+                              of M2.active map, identical manager /
+                              host instance)
+CANCELLATION_LATENCY        = ~147.3 s after job insert
+CANCELLATION_REQUEST_ORIGIN = caller_abort_signal
+                              (requestOrigin field, firstWriterWins=true,
+                               currentState="running" at the boundary)
+TERMINAL_STATE              = cancelled
+ACTIVE_REMOVE_REASON        = cancel
+CLEANUP_POSTCONDITION       = gone
+BOCOR_GUARD_RESULT          = false
+                              (queriedOwnerSessionId ==
+                               activeSessionId == 1789914077854_aq4sy,
+                               activeJobs == [], manager == M2,
+                               captured +5 ms after the
+                               command_job_termination_started event)
+TSWPD_TRANSITION            = streaming → awaiting_followup
+                              (writerId =
+                               session-event-turn-complete-resumable-straggler-preserve)
+```
+
+**Bound (canonical evidence at
+`.factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01/`
+files 14, 15, 21, 23, 25, result.json):**
+
+  - `14-cancellation-timeline.md` — extended with the LIVE specimen
+    timeline for `cmd_mu9wmnyuhvgva8cn`, correlating every event
+    observed in the dump against the MUTATION chain
+    (command_job_termination_started → pgid_cleanup → terminal →
+    active_removed) AND the new REQUEST chain
+    (`job_cancellation_requested` at tA with
+    `requestOrigin=caller_abort_signal`, `firstWriterWins=true`,
+    `currentState=running`).
+  - `15-causal-classification.txt` — promoted from
+    `CAPTURE_INSUFFICIENT / UNRESOLVED` →
+    `LIVE_BOUND / CASE_CP3_CALLER_ABORT_SIGNAL` with the full
+    refutation matrix (CP1, CP4, CP6 are REFUTED; CP2 has no
+    production caller in current code base; CP3 is the live
+    discriminator).
+  - `21-live-qualification.md` — promoted from `PENDING LIVE CAPTURE`
+    to `LIVE_BOUND` with the LIVE run description and dump citation.
+  - `23-gates.txt` — updated to record the LIVE gate (G10:
+    `requestOrigin = caller_abort_signal`; G11: post-live conservation
+    still holds; G12: dogfood VSIX 5195db3a was the binary that
+    produced the dump).
+  - `25-live-result.md` — NEW. Single-source durable record of the
+    LIVE specimen, the exact event sequence, the correlation between
+    REQUEST chain and MUTATION chain, and the exoneration matrix.
+  - `result.json` — `classification` set to
+    `LIVE_BOUND / CASE_CP3_CALLER_ABORT_SIGNAL`,
+    `cancellation.request_origin` set to `caller_abort_signal`,
+    `cancellation.manager_instance` set to `M2`,
+    `cancellation.session_id` set to `1789914077854_aq4sy`,
+    `live_subject` updated to `cmd_mu9wmnyuhvgva8cn`,
+    `causality.established` set to `true`, `causality.ablation` set
+    to `EXECUTED_FOR_CP3`, `verdict` promoted to
+    `LIVE_BOUND_CASE_CP3_BOUNDED_REPAIR_AUTHORIZED`.
+
+**Exoneration matrix for this LIVE run (per ACT §32):**
+
+  - `background_cancel_rpc`     = REFUTED (requestOrigin ≠ "background_cancel_rpc";
+                                          operator did not click Cancel; the
+                                          exact jobId cancel seam was not
+                                          invoked before the firstWriterWins
+                                          write fired)
+  - `extension_shutdown`        = REFUTED (requestOrigin ≠ "extension_shutdown";
+                                          no manager_dispose_begin event in
+                                          the dump; controller remained alive
+                                          after the transition)
+  - `command_deadline`          = REFUTED (job_active_removed.reason = "cancel",
+                                          not "deadline"; deadline timer
+                                          never fired for this jobId within
+                                          the ~147.3 s window)
+  - `manager-instance split`    = REFUTED (single manager M2 across insert,
+                                          multiple polls, terminate, active
+                                          delete, BOCOR guard)
+  - `owner mismatch`            = REFUTED (queriedOwnerSessionId ==
+                                          activeSessionId == 1789914077854_aq4sy)
+  - `CommandJobManager`         = BEHAVING_CORRECTLY_GIVEN_ABORT (the
+                                          `caller_abort_signal` listener
+                                          fired the documented terminate
+                                          path; no architectural fault at
+                                          the manager)
+  - `Q5` (BOCOR)                = EXONERATED (guard correctly returned
+                                          false on empty active set; no
+                                          logic delta)
+  - `TSWPD`                    = EXONERATED_GIVEN_EMPTY_ACTIVE_SET (the
+                                          writer fired only because the
+                                          active set was empty; the writer
+                                          itself was not at fault)
+  - `TaskHeader`                = EXONERATED (the projection flip was a
+                                          direct consequence of the empty
+                                          active set, not an independent
+                                          header defect)
+  - `VscodeRunCommands` background path = BEHAVING_AS_DESIGNED_BUT_HOLDING_LEAKED_OWNERSHIP
+                                          (the foreground coordinator
+                                          handed the managed CommandJob
+                                          to the background projection,
+                                          but the original
+                                          `context.signal` abort
+                                          listener was NOT released —
+                                          this is the contract defect)
+
+**Architectural root cause (per `sdk/ARCHITECTURE.md` §proceed-while-running):**
+
+> "Proceed-while-running is an explicit command lifecycle, separate
+> from client or session detachment. ... The executor removes its
+> abort and timeout ownership, resolves the tool call with the
+> current bounded output and a temporary log path, and continues
+> draining the process into that log."
+
+The LIVE evidence shows that the executor in the
+`backgroundExec`/`vscodeRunCommands` background path does NOT
+release the caller's `AbortSignal` ownership when the foreground
+tool returns RUNNING and the command is handed off to the managed
+background CommandJob. The `context.signal` abort listener remains
+attached to the job for the lifetime of the job. When the
+originating turn aborts (e.g. the user sends a new message, the
+turn itself ends, or the tool-cancellation seam fires
+`session.abort`), the listener cancels the supposedly detached
+background process. The CP3 `caller_abort_signal` capture proves
+this is exactly what happens on the wire.
+
+**STOP-rule scope (per ACT §34):** no Q5, TaskHeader, TSWPD,
+CommandJobManager architecture, owner/session identity, status
+authority, PGID helper semantics, `submit_and_exit`, or terminal
+row mutation has been touched. One cancellation request. One
+caller. One bounded repair.
+
+**Next ACT (C1: GO):**
+`ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01`
+— bounded repair that removes the caller's `AbortSignal` listener
+from the managed background `CommandJob` at the
+foreground→background handoff, while preserving:
+
+  - before handoff: caller `AbortSignal` still cancels the foreground
+    command (CP3 behavior for the tool/turn it owns)
+  - after handoff: caller `AbortSignal` no longer owns the detached
+    CommandJob (CP3 must NOT fire on the detached job)
+  - explicit background Cancel (CP1, `cancelBackgroundCommand` gRPC):
+    still cancels by exact `jobId`
+  - extension shutdown (CP6): still cancels every active job via
+    the manager dispose loop
+  - deadline semantics (CP4): still fires the deadline timer
+    independently of the caller's signal
+  - tool-cancellation propagation (`sdkHost.abort(sessionId)`):
+    unchanged — does not touch background CommandJobs at this seam
+
+The RED for the next ACT is tiny:
+
+```text
+start managed command with AbortSignal (foreground tool → background
+job via CommandJobManager.start({...}, context))
+→ proceed/background handoff completes (foreground tool returns RUNNING
+   with the jobId)
+→ abort original signal (simulating the originating turn abort)
+→ command MUST remain running
+```
+
+Current behavior (per LIVE `cmd_mu9wmnyuhvgva8cn`) reproduces:
+
+```text
+abort original signal
+→ job_cancellation_requested(requestOrigin="caller_abort_signal",
+                              firstWriterWins=true,
+                              currentState="running")
+→ command_job_termination_started
+→ cancelled
+```
+
+The bounded repair is similarly tiny:
+
+```text
+on successful foreground→background handoff in the backgroundExec
+  path of VscodeRunCommands:
+  - capture the AbortSignal that was attached to the foreground tool
+  - on handoff completion (foreground tool returns RUNNING with jobId):
+      remove the abort listener from the CommandJob
+      clear `job.abortSignal` and `job.abortListener` so a future
+        call cannot fire it
+  - re-check: if context.signal has already aborted between the
+    start() call and the handoff completion, treat that as a
+    pre-handoff cancel (still fire the listener once) — i.e. the
+    race between "signal aborts" and "tool returns RUNNING" must
+    be resolved in favour of "no handoff, treat as cancel"
+```
+
+**Secondary stale-card/projection issue:** the screenshot still
+shows the old `Backgrounded` card and Cancel button after the
+authoritative job has been cancelled. This remains a
+**stale-card/projection issue, not the causal root of `Your turn`**,
+and is deferred to a separate ACT. It is recorded as
+`STALE_CARD_AFTER_CANCEL = OBSERVED / DEFERRED`.
+
+**Factory state recorded:**
+
+```text
+CANCELLATION_PROVENANCE     = PASS
+CLASSIFICATION              = CASE_CP3_CALLER_ABORT_SIGNAL
+LIVE_CAUSALITY              = ESTABLISHED
+Q5                          = EXONERATED
+TSWPD                       = EXONERATED_GIVEN_EMPTY_ACTIVE_SET
+TaskHeader                  = EXONERATED
+CommandJobManager           = BEHAVING_CORRECTLY_GIVEN_ABORT
+PRIMARY_REPAIR_SEAM         = PROCEED-WHILE-RUNNING ABORT-SIGNAL OWNERSHIP TRANSFER
+SECONDARY_DEFERRED          = STALE_CARD_AFTER_CANCEL
+NEXT_ACT                    = ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01
+```

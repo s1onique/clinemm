@@ -1,7 +1,20 @@
 ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01 / 15 — causal classification
 
-CLASSIFICATION: CAPTURE_INSUFFICIENT (per ACT §32 — LIVE evidence not yet
-captured; instrumentation qualified, awaits LIVE dogfood install).
+CLASSIFICATION: LIVE_BOUND / CASE_CP3_CALLER_ABORT_SIGNAL.
+
+  The dogfood VSIX (4.1.16-bjla-cancellation-provenance01, SHA-256
+  5195db3af3e3f09e95ec2dcfacfafe45694e13244d5a8957276366ce937c71e5,
+  HEAD 640cc388131ad8071e7a2feccb456c580d1d09a5) was installed and
+  a fresh `sleep 600` task was run per ACT §15. The operator did
+  NOT click Cancel, did NOT send another message, did NOT switch
+  modes, did NOT restart/reload VS Code. The job
+  `cmd_mu9wmnyuhvgva8cn` was inserted into manager M2 as `running`,
+  repeatedly polled from the same manager M2 / active map, then
+  ~147.3 s later the first cancellation request appeared with
+  `requestOrigin = "caller_abort_signal"`, `firstWriterWins = true`,
+  `currentState = "running"`, `manager = M2`,
+  `sessionId = 1789914077854_aq4sy`. The full correlation is in
+  `25-live-result.md`.
 
 Recon-based pre-classification (per ACT §5):
 
@@ -22,17 +35,36 @@ Recon-based pre-classification (per ACT §5):
   CP5 (tool_cleanup) has NO production caller in the recon that
   cancels a registered background CommandJob on tool cleanup.
 
-Most-likely classification (probability ordering, BEFORE LIVE):
-  1. CP1 — unexpected background_cancel_rpc (most likely; the LIVE
-     operator did not click Cancel, but a programmatic caller of the
-     public cancelBackgroundCommand gRPC seam could fire it — e.g. an
-     automatic "old command vs. new command pending" cleanup path
-     along the lines of cline/cline#8251)
-  2. CP6 — extension_shutdown (least likely; the task/session remained
-     visible to the operator, so the controller was not disposed)
-  3. CP3 — caller_abort_signal (least likely; the run_commands tool
-     does NOT currently pass context.signal for background jobs)
+LIVE RESULT (replaces the "next LIVE run will resolve" paragraph):
 
-The next LIVE run will deterministically resolve this classification by
-inspecting the job_cancellation_requested.requestOrigin field in the
-BJLA dump.
+  CP1 (background_cancel_rpc)     = REFUTED — requestOrigin ≠
+                                              "background_cancel_rpc"
+  CP2 (manager_dispose)           = NOT_REACHED — no production caller
+                                              in the current code base;
+                                              no manager_dispose_begin
+                                              in the dump
+  CP3 (caller_abort_signal)       = CONFIRMED — requestOrigin =
+                                              "caller_abort_signal";
+                                              firstWriterWins=true;
+                                              currentState="running";
+                                              the only requester for
+                                              this LIVE cycle
+  CP4 (command_deadline)          = REFUTED — job_active_removed.reason
+                                              = "cancel", not "deadline"
+  CP5 (tool_cleanup)              = REFUTED — no production caller in
+                                              the recon that cancels a
+                                              registered background
+                                              CommandJob on tool cleanup
+  CP6 (extension_shutdown)        = REFUTED — requestOrigin ≠
+                                              "extension_shutdown";
+                                              controller remained alive
+                                              after the transition
+
+Final classification:
+
+  CLASSIFICATION = CASE_CP3_CALLER_ABORT_SIGNAL
+  LIVE_CAUSALITY = ESTABLISHED (causal not just chronological — see
+                                `25-live-result.md` §"Why this is
+                                causal, not just chronological")
+  NEXT_ACT       = ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-
+                   ABORT-OWNERSHIP-RELEASE01
