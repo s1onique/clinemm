@@ -2,12 +2,14 @@
 
 > Status: **LIVE_BOUND / CASE_CP3_CALLER_ABORT_SIGNAL /
 > LIVE_CAUSALITY = ESTABLISHED /
-> PRODUCTION_REPAIR = AUTHORIZED_FOR_BOUNDED_NEXT_ACT_ONLY /
+> ROOT_CAUSE_ABLATION = NOT_EXECUTED /
+> ARCHITECTURAL_ROOT_CAUSE_STATUS = HYPOTHESIS_STRONGLY_SUPPORTED_BY_LIVE_PLUS_STRUCTURE /
+> PRODUCTION_REPAIR = AUTHORIZED_ONLY_AFTER_SUCCESSOR_RED_AND_ABLATION /
 > Q5 = EXONERATED /
 > TSWPD = EXONERATED_GIVEN_EMPTY_ACTIVE_SET /
 > TaskHeader = EXONERATED /
 > CommandJobManager = BEHAVING_CORRECTLY_GIVEN_ABORT /
-> NEXT = `ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01` (bounded repair ACT only; do not touch Q5, TaskHeader, CommandJobManager architecture, owner/session identity, status authority, PGID helper semantics, `submit_and_exit`, or terminal row mutation in this ACT).**
+> NEXT = `ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01` (first epistemic purpose: reproduction + ablation on the real production handoff; production repair only on RED→GREEN; do not touch Q5, TaskHeader, CommandJobManager architecture, owner/session identity, status authority, PGID helper semantics, `submit_and_exit`, or terminal row mutation in this ACT).**
 
 Epistemic purpose: **causal discriminator with bounded repair
 authorization** (per ACT §0).
@@ -206,10 +208,12 @@ VscodeRunCommands BG path       = BEHAVING_AS_DESIGNED_BUT_HOLDING_LEAKED_OWNERS
                                             but the original
                                             context.signal abort listener
                                             was NOT released — this is
-                                            the contract defect)
+                                            the bounded root-cause
+                                            hypothesis; NOT yet a
+                                            necessary cause by ablation)
 ```
 
-## §5 — Architectural root cause
+## §5 — Architectural root-cause hypothesis (LIVE + STRUCTURE; not yet ablated)
 
 Per `sdk/ARCHITECTURE.md` §proceed-while-running:
 
@@ -229,7 +233,12 @@ The job is supposed to be detached at that point — but the abort
 listener is still attached, and any later abort on the original
 signal cancels the supposedly detached job.
 
-This is the contract defect the LIVE specimen proves.
+This is the **bounded root-cause hypothesis** selected by the LIVE
+requester evidence plus the current production structure. It is NOT
+yet a necessary cause by ablation; the successor ACT must reproduce
+the symptom on the real production handoff and ablate only the
+listener retention (RED→GREEN with all other cancellation mechanisms
+conserved) before any production repair is permitted.
 
 ## §32 — Conservation invariants (post-LIVE)
 
@@ -240,15 +249,20 @@ holding; this ACT does not modify any production code.
 ## §34 — Stop rule
 
 STOP after (a) the cancellation requester is proven and (b) the
-bounded repair is authorized. Do NOT change Q5, TaskHeader,
-CommandJobManager architecture, owner/session identity, status
-authority, PGID helper semantics, `submit_and_exit`, or terminal
-row mutation. One cancellation request. One caller. One repair.
+bounded root-cause hypothesis is authorized. Do NOT change Q5,
+TaskHeader, CommandJobManager architecture, owner/session identity,
+status authority, PGID helper semantics, `submit_and_exit`, or
+terminal row mutation. One cancellation request. One caller.
+One bounded root-cause hypothesis.
 
 The cancellation requester is proven (`caller_abort_signal`). The
-bounded repair is authorized for the next ACT.
+bounded root-cause hypothesis is authorized for the next ACT's
+first epistemic purpose: reproduction and ablation of the
+listener-retention defect on the real production handoff.
+**Production repair is AUTHORIZED only on RED→GREEN ablation,
+NOT by this ACT.**
 
-## §35 — Next ACT (C1: GO)
+## §35 — Next ACT (C1: GO; reproduction/ablation first, repair only on RED→GREEN)
 
 `ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01`
 — bounded repair that removes the caller's `AbortSignal` listener
@@ -348,5 +362,9 @@ and is deferred to a separate ACT. It is recorded as
 25-live-result.md                                 (NEW — single-source
                                                    LIVE specimen)
 result.json                                       (LIVE_BOUND /
-                                                   CASE_CP3_BOUNDED_REPAIR_AUTHORIZED)
+                                                   CASE_CP3_ROOT_CAUSE_HYPOTHESIS_AUTHORIZED
+                                                   — production repair
+                                                   authorized only on
+                                                   successor RED→GREEN
+                                                   ablation)
 ```

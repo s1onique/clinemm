@@ -5095,7 +5095,9 @@ classify the LIVE requester:
 
 **Status:** LIVE_BOUND / `CASE_CP3_CALLER_ABORT_SIGNAL` /
 `LIVE_CAUSALITY = ESTABLISHED` /
-`PRODUCTION_REPAIR = AUTHORIZED_FOR_BOUNDED_NEXT_ACT_ONLY` /
+`ROOT_CAUSE_ABLATION = NOT_EXECUTED` /
+`ARCHITECTURAL_ROOT_CAUSE_STATUS = HYPOTHESIS_STRONGLY_SUPPORTED_BY_LIVE_PLUS_STRUCTURE` /
+`PRODUCTION_REPAIR = AUTHORIZED_ONLY_AFTER_SUCCESSOR_RED_AND_ABLATION` /
 `Q5 = EXONERATED` /
 `TSWPD = EXONERATED_GIVEN_EMPTY_ACTIVE_SET` /
 `TaskHeader = EXONERATED` /
@@ -5161,9 +5163,16 @@ files 14, 15, 21, 23, 25, result.json):**
     `cancellation.manager_instance` set to `M2`,
     `cancellation.session_id` set to `1789914077854_aq4sy`,
     `live_subject` updated to `cmd_mu9wmnyuhvgva8cn`,
-    `causality.established` set to `true`, `causality.ablation` set
-    to `EXECUTED_FOR_CP3`, `verdict` promoted to
-    `LIVE_BOUND_CASE_CP3_BOUNDED_REPAIR_AUTHORIZED`.
+    `causality.established` set to `true`, `causality.ablation`
+    correctly recorded as `NOT_EXECUTED` (the listener-retention
+    ablation is the FIRST epistemic purpose of the successor ACT,
+    not part of this ACT), `architectural_root_cause.status`
+    recorded as `HYPOTHESIS_STRONGLY_SUPPORTED_BY_LIVE_PLUS_STRUCTURE`,
+    `architectural_root_cause.production_repair` recorded as
+    `AUTHORIZED_ONLY_AFTER_SUCCESSOR_RED_AND_ABLATION`, `verdict`
+    promoted to
+    `LIVE_BOUND_CASE_CP3_ROOT_CAUSE_HYPOTHESIS_AUTHORIZED`
+    (production repair deferred).
 
 **Exoneration matrix for this LIVE run (per ACT §32):**
 
@@ -5208,9 +5217,12 @@ files 14, 15, 21, 23, 25, result.json):**
                                           but the original
                                           `context.signal` abort
                                           listener was NOT released —
-                                          this is the contract defect)
+                                          this is the bounded
+                                          root-cause hypothesis; NOT
+                                          yet a necessary cause by
+                                          ablation)
 
-**Architectural root cause (per `sdk/ARCHITECTURE.md` §proceed-while-running):**
+**Architectural root-cause hypothesis (LIVE + STRUCTURE; not yet ablated) — per `sdk/ARCHITECTURE.md` §proceed-while-running:**
 
 > "Proceed-while-running is an explicit command lifecycle, separate
 > from client or session detachment. ... The executor removes its
@@ -5230,13 +5242,32 @@ turn itself ends, or the tool-cancellation seam fires
 background process. The CP3 `caller_abort_signal` capture proves
 this is exactly what happens on the wire.
 
+**What this evidence PROVES vs. what it SELECTS (per reviewer correction):**
+
+  - PROVES:  the cancellation requester is `caller_abort_signal`;
+             the requester -> cancellation -> empty active set ->
+             `awaiting_followup` chain is causal.
+  - SELECTS: the retained caller `AbortSignal` listener at the
+             foreground->background handoff as the bounded
+             root-cause hypothesis. The hypothesis is also strongly
+             supported by the upstream Proceed While Running
+             contract above.
+  - DOES NOT YET PROVE: that releasing only the listener retention
+             turns RED -> GREEN while all other cancellation
+             mechanisms remain conserved. That ablation is the
+             FIRST epistemic purpose of the successor ACT.
+  - PRODUCTION REPAIR: AUTHORIZED ONLY on successor RED -> GREEN
+             ablation, NOT by this ACT. If the successor cannot
+             reproduce the symptom on the real production handoff,
+             `HALT_RED_NOT_REPRODUCED` halts the repair branch.
+
 **STOP-rule scope (per ACT §34):** no Q5, TaskHeader, TSWPD,
 CommandJobManager architecture, owner/session identity, status
 authority, PGID helper semantics, `submit_and_exit`, or terminal
 row mutation has been touched. One cancellation request. One
-caller. One bounded repair.
+caller. One bounded root-cause hypothesis.
 
-**Next ACT (C1: GO):**
+**Next ACT (C1: GO; reproduction/ablation first, repair only on RED→GREEN):**
 `ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01`
 — bounded repair that removes the caller's `AbortSignal` listener
 from the managed background `CommandJob` at the

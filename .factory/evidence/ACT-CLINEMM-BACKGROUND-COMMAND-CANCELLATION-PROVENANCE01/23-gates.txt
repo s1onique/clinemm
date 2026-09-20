@@ -101,12 +101,21 @@ failure unrelated to this ACT (verified by reproducing on the parent
 commit without my changes); G10/G11/G12 are the LIVE_RESULT gates added
 after the dogfood VSIX captured a real cycle.
 
-VERDICT: LIVE_BOUND / CASE_CP3_CALLER_ABORT_SIGNAL / BOUNDED_REPAIR_AUTHORIZED.
+VERDICT: LIVE_BOUND / CASE_CP3_CALLER_ABORT_SIGNAL /
+        ROOT_CAUSE_HYPOTHESIS_AUTHORIZED / PRODUCTION_REPAIR_DEFERRED.
 
   - The cancellation requester is mechanically classified as
     `caller_abort_signal` (CP3).
-  - The bounded repair is the next ACT's responsibility:
-    `ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01`.
+  - The bounded root-cause hypothesis (retained caller AbortSignal
+    listener at foreground->background handoff) is supported by the
+    LIVE requester evidence plus current production structure, but
+    it is NOT yet a necessary cause by ablation.
+  - The successor ACT
+    `ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01`
+    must reproduce and ablate the listener-retention defect on the
+    real production handoff before any production repair is
+    permitted. RED->GREEN ablation authorizes the repair;
+    `HALT_RED_NOT_REPRODUCED` halts it.
   - No Q5, TaskHeader, CommandJobManager architecture, owner/session
     identity, status authority, PGID helper semantics, `submit_and_exit`,
-    or terminal row mutation has been touched.
+    or terminal row mutation has been touched in THIS ACT.

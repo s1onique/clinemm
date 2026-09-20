@@ -143,7 +143,7 @@ owner mismatch                  = REFUTED
    responded to the empty active set; they are NOT independent
    defects.
 
-## Architectural root cause (per `sdk/ARCHITECTURE.md`)
+## Architectural root-cause hypothesis (LIVE + STRUCTURE; not yet ablated)
 
 `sdk/ARCHITECTURE.md` §proceed-while-running states:
 
@@ -161,7 +161,12 @@ RUNNING. The job is supposed to be detached at that point — but the
 abort listener is still attached, and any later abort on the original
 signal cancels the supposedly detached job.
 
-This is the contract defect the LIVE specimen proves.
+This is the **bounded root-cause hypothesis** selected by the LIVE
+requester evidence plus the current production structure. It is NOT
+yet a necessary cause by ablation; the successor ACT must reproduce
+the symptom on the real production handoff and ablate only the
+listener retention (RED→GREEN with all other cancellation mechanisms
+conserved) before any production repair is permitted.
 
 ## STOP-rule scope
 
