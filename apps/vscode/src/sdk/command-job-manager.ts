@@ -2863,6 +2863,69 @@ export class CommandJobManager {
 		return { ok: true, state: job.state }
 	}
 
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01:
+	 *
+	 * Release the caller-supplied AbortSignal ownership from a single
+	 * managed job. After this call returns, a later abort on the original
+	 * caller's signal does NOT cancel the detached job — the listener
+	 * installed at `start()` (command-job-manager.ts:1986-2010) has been
+	 * detached.
+	 *
+	 * This is the bounded repair for the LIVE defect proven by
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-CANCELLATION-PROVENANCE01:
+	 *   - LIVE cancelled job cmd_mu9wmnyuhvgva8cn
+	 *   - requestOrigin = "caller_abort_signal"
+	 *   - the operator did nothing (no Cancel click, no message, no mode
+	 *     switch)
+	 *   - the foreground→background handoff had transferred execution
+	 *     ownership away from the foreground tool, but the caller
+	 *     AbortSignal listener remained attached.
+	 *
+	 * Production call site: the foreground→background handoff boundary
+	 * inside `vscode-run-commands-tool.ts` (the RUNNING envelope return
+	 * at line 709) calls this method immediately after
+	 * `manager.start({...}, context)` returns and the RUNNING case is
+	 * detected. The call is idempotent and a no-op when no caller signal
+	 * was attached.
+	 *
+	 * CONSERVATION:
+	 *   - does NOT touch `job.deadlineTimer` (deadline ownership is a
+	 *     separate axis; see ACT §14)
+	 *   - does NOT touch the explicit `cancel()` seam or the `dispose()`
+	 *     loop; those paths remain operational
+	 *   - does NOT fire any cancellation record (BJLA `requestOrigin`
+	 *     stays at its previous value; nothing was cancelled here)
+	 *   - is safe to call BEFORE or AFTER the job finalizes — once the
+	 *     job is terminal, `job.abortListener` is already undefined
+	 *     (cleanup at command-job-manager.ts:2522-2526) and the call
+	 *     becomes a no-op
+	 *
+	 * RACE: an abort that fires JUST BEFORE this call still cancels
+	 * the job (the listener is single-shot, but the abort's effect is
+	 * synchronous against `terminate()`'s FIRST-WRITER-WINS latch). See
+	 * PWAOR-CTL-11.
+	 *
+	 * @param jobId the job whose caller AbortSignal ownership should be
+	 *   released. Unknown ids are silently ignored (matches the
+	 *   surrounding `lookup()` semantics).
+	 */
+	releaseForegroundAbortOwnership(jobId: string): void {
+		const job = this.active.get(jobId)
+		if (!job) {
+			// No active job — either never existed, already finalized
+			// (cleanup at finalize() already removed the listener and
+			// nulled the references), or has been moved to the terminal
+			// map. All three are safe no-ops.
+			return
+		}
+		if (job.abortListener && job.abortSignal) {
+			job.abortSignal.removeEventListener("abort", job.abortListener)
+			job.abortSignal = undefined
+			job.abortListener = undefined
+		}
+	}
+
 	private lookup(jobId: string): CommandJob | undefined {
 		return this.active.get(jobId) ?? this.terminal.get(jobId)
 	}

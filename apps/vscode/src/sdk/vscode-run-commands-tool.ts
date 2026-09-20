@@ -698,6 +698,17 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 							notifyBackgroundStateChange(false, undefined)
 						}
 					})
+					// ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01:
+					// The foreground->background handoff is irrevocably true
+					// at this point. Per the upstream
+					// `sdk/ARCHITECTURE.md §proceed-while-running` contract,
+					// the executor must release its abort ownership: a later
+					// caller-supplied abort on the same `context.signal` MUST
+					// NOT cancel the detached managed job. Release the
+					// listener installed by `CommandJobManager.start()` at
+					// command-job-manager.ts:1986-2010. The release is a
+					// no-op when no caller signal was attached.
+					manager.releaseForegroundAbortOwnership(start.jobId)
 					const runningPayload = {
 						status: "running" as const,
 						jobId: start.jobId,
