@@ -10,27 +10,53 @@
  *   BTCONT01 consumer commits awaiting_followup
  *   observed: agent never re-enters; user sees "Your turn"
  *
- * The recon (04-recon.txt) classifies this as CASE_AC3 with F4
- * doctrine violation: production doctrine says "model must poll,
- * not yield" (sdk/.../definitions.ts:675). The runtime correctly
- * honors the model's `done` event. The defect is a model-side
- * failure to follow the doctrine.
+ * EVIDENCE LEVEL (per Factory reviewer correction cycle 1):
  *
- * This test is NOT a RED for a runtime defect. It is the bound that
- * proves the doctrine is in force:
+ *   REAL seams exercised by this test:
+ *     - CommandJobManager (real instance, real supervisor)
+ *     - SdkSessionEventCoordinator (real instance, real
+ *       translateSessionEvent)
+ *     - TurnStateTracker + MessageTranslatorState (real)
+ *     - Controller.maybeReevaluateDeferredContinuation (real static
+ *       bridge to the production condition)
+ *
+ *   TEST-LOCAL sentinel (NOT a real AgentRuntime call):
+ *     - `agentSpy` is a fresh vi.fn() array that is NEVER injected
+ *       into any production re-entry seam. It is constructed in
+ *       `makeHarness()`, stored on the harness, and then asserted
+ *       to be empty. The production coordinator/manager have no
+ *       reference to it.
+ *
+ *   Therefore: this test proves only that
+ *     (a) the BTCONT01 terminal->turn-state bridge fires exactly
+ *         once under the four conservation rules (turn-state
+ *         evidence),
+ *     (b) an unconnected sentinel wasn't called (absence-of-call-
+ *         site evidence).
+ *   It does NOT prove the production agent runtime was not invoked
+ *   on background-terminal events; that absence is established
+ *   separately by structural recon (see AGCONT01 04-recon.txt and
+ *   30-structural-no-invocation-recon.md, the latter being the
+ *   load-bearing structural argument).
+ *
+ * Test family (7 controls):
  *   AGCONT-CTL-01: deferral + natural terminal commits
- *                  awaiting_followup WITHOUT invoking the agent runtime
- *   AGCONT-CTL-03: "start and return" task does NOT trigger agent
- *                  re-entry on later terminal (C2 conservation)
+ *                  awaiting_followup (turn-state evidence)
+ *   AGCONT-CTL-02: explicit user follow-up commits a fresh prompt
+ *                  via the canonical runTurn path
+ *   AGCONT-CTL-03: "start and return" task does NOT trigger any
+ *                  agent re-entry on later terminal (C2)
  *   AGCONT-CTL-04: no background dependency -> no re-entry
  *   AGCONT-CTL-05: newer turn supersedes old deferred marker
  *   AGCONT-CTL-06: terminal bridge fires exactly once
  *   AGCONT-CTL-07: terminal of a different session's job does NOT
- *                  wake this session (C4 conservation)
+ *                  wake this session (C4)
  *
- * Per the ACT's section 50 stop rule, if all six controls are GREEN
- * the ACT halts with CASE_AC3 and documents the doctrine boundary.
- * No production repair is authorized.
+ * Per the ACT's section 50 stop rule, if the structural recon
+ * confirms NO production terminal->AgentRuntime consumer exists,
+ * the ACT halts with CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE and
+ * documents the doctrine boundary. No production repair is
+ * authorized.
  */
 
 import { type CoreSessionEvent, type SupervisableShellProcess } from "@cline/core"
@@ -169,10 +195,16 @@ function fakeSupervisorFactory() {
 }
 
 /**
- * Spy for any "agent re-entry" call. Per the doctrine there should be
- * NO automatic re-entry call on a background job terminal event.
- * The control tests assert that the recorded calls match the
- * expected list (which is always empty for automatic re-entry).
+ * TEST-LOCAL sentinel for any "agent re-entry" call. NOTE: this is
+ * NOT a real AgentRuntime call site. The harness creates this spy,
+ * stores it on the production harness object, and then asserts it
+ * is empty. The production coordinator/manager have no reference to
+ * it. The assertion proves only "an unconnected sentinel wasn't
+ * called", not "the real production agent runtime wasn't called".
+ *
+ * The structural argument that no production call exists is
+ * established by recon, not by this spy. See the file header and
+ * AGCONT01/30-structural-no-invocation-recon.md.
  */
 interface AgentRuntimeSpy {
 	run: ReturnType<typeof vi.fn>

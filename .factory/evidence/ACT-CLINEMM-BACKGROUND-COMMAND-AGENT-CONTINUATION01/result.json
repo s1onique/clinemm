@@ -10,34 +10,39 @@
     "terminal_state": "exited",
     "terminal_reason": "natural",
     "turn_continuation": "LIVE_PASS",
-    "agent_reentry": "ABSENT",
+    "agent_reentry": "ABSENT_BY_STRUCTURE",
     "requested_final_output": "MISSING"
   },
   "product_contract": {
-    "classification": "HYBRID_A_AND_C",
+    "classification": "AMBIGUOUS_RUN_TIME_DOES_NOT_DEFINE_WAIT_UNTIL_FINISHED",
     "agent_obligation_after_handoff": null,
-    "doctrine_evidence": "sdk/packages/core/src/extensions/tools/definitions.ts:669-676: 'For long-running commands, run them in background and redirect output to a tmp file that you can read from later.'",
-    "doctrine_summary": "Contract A (model-driven polling) for the model; Contract C (user-return after detach) for the runtime. No Contract B (automatic re-entry) for the run_commands path."
+    "doctrine_evidence": "sdk/packages/core/src/extensions/tools/definitions.ts:675: 'For long-running commands, run them in background and redirect output to a tmp file that you can read from later.'",
+    "doctrine_summary": "F4 places background-output management on the MODEL (tmp-file convention). It does not categorically forbid the runtime from adding notify-on-terminal; it does not categorically require it either. The runtime's structural choice (no notify-on-terminal) is not a doctrinal mandate; it is the canonical ClineMM contract."
   },
   "reproduction": {
-    "real_agent_runtime": true,
+    "real_agent_runtime": false,
     "real_q5": true,
     "real_terminal_event": true,
+    "real_CommandJobManager": true,
+    "real_SdkSessionEventCoordinator": true,
+    "real_TurnStateTracker": true,
+    "real_Controller_maybeReevaluateDeferredContinuation": true,
+    "test_local_agent_sentinel_unconnected": true,
     "red_reproduced": true,
-    "red_classification": "AC3_DOCTRINE_BOUND",
-    "red_note": "The AGCONT-CTL-01..07 control tests prove the runtime's behavior is consistent with the doctrine. There is no automatic agent re-entry on background-command terminal events. The defect is a model-side failure to follow the F4 doctrine (the model yielded control prematurely)."
+    "red_classification": "STRUCTURAL_NO_INVOCATION + CORROBORATING_TEST",
+    "red_note": "The AGCONT01 7-test family proves (a) the BTCONT01 terminal->turn-state bridge fires exactly once under the four conservation rules, and (b) an unconnected sentinel wasn't called. The LOAD-BEARING argument for 'no automatic agent re-entry exists' is structural (see 30-structural-no-invocation-recon.md and 04-recon.txt F1), not the unconnected spy."
   },
   "classification": "CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE",
   "causality": {
     "established": true,
     "ablation": "NOT_APPLICABLE",
-    "ablation_note": "AC1 and AC2 ablations are not applicable because the AC3 classification does not require a runtime re-entry obligation. The F4 doctrine places the polling obligation on the model, not the runtime."
+    "ablation_note": "AC1 and AC2 ablations are not applicable because the AC3 classification does not require a runtime re-entry obligation. The F4 doctrine places the polling/output-management obligation on the model, not the runtime. The runtime correctly honors the model's done event as end-of-turn."
   },
   "repair": {
     "authorized": false,
     "performed": false,
     "files": [],
-    "rationale": "Per ACT section 50 stop rule: 'If the runtime proves the agent turn was genuinely complete: CASE_AC3. STOP. Do not invent automatic agent resurrection.' The AGCONT01 focused test proves the runtime's behavior is consistent with the F4 doctrine. Adding any 'terminal wakes model' mechanism would violate conservation C2 (fire-and-forget must not resurrect completed agent) and the ACT's stop rule."
+    "rationale": "Per ACT section 50 stop rule. The structural recon (30-structural-no-invocation-recon.md) confirms NO production terminal->AgentRuntime consumer exists in ClineMM's run_commands path. The runtime's behavior is correct as a structural choice. Adding any 'terminal wakes model' mechanism would be a product-surface change, not a runtime defect repair."
   },
   "conservation": {
     "C1_wait_until_finished": "PASS_DOCTRINE_BOUND",
@@ -49,21 +54,21 @@
     "C7_natural_exit_pending_agent": "PASS_AC3_DOCTRINE",
     "C8_cancel_wake_if_obligated": "PASS_AC3_DOCTRINE",
     "C9_deadline_wake_if_obligated": "PASS_AC3_DOCTRINE",
-    "C10_q5_while_job_running_unchanged": "PASS_UNTouched",
+    "C10_q5_while_job_running_unchanged": "PASS_UNTOUCHED",
     "C11_terminal_turn_state_continuation": "PASS_BTCONT01_GREEN",
-    "C12_pwaor_abort_signal_release": "PASS_UNTouched",
-    "C13_explicit_jobid_cancel_unchanged": "PASS_UNTouched",
-    "C14_commandjobmanager_no_agent_authority": "PASS_UNTouched",
-    "C15_task_header_projection_only": "PASS_UNTouched",
+    "C12_pwaor_abort_signal_release": "PASS_UNTOUCHED",
+    "C13_explicit_jobid_cancel_unchanged": "PASS_UNTOUCHED",
+    "C14_commandjobmanager_no_agent_authority": "PASS_UNTOUCHED",
+    "C15_task_header_projection_only": "PASS_UNTOUCHED",
     "C16_stale_card_separately_tracked": "PASS_DEFERRED_TO_SUCCESSOR",
-    "C17_submit_and_exit_unchanged": "PASS_UNTouched",
-    "C18_no_global_terminal_to_model_restart": "PASS_ALL_AGCONT_TESTS_GREEN"
+    "C17_submit_and_exit_unchanged": "PASS_UNTOUCHED",
+    "C18_no_global_terminal_to_model_restart": "PASS_STRUCTURAL_RECON_GREEN"
   },
   "live_qualification": {
     "executed": false,
     "natural_completion_agent_reentry": "NOT_EXECUTED",
     "negative_control": "NOT_EXECUTED",
-    "rationale": "AC3 classification: the runtime does not promise automatic agent re-entry. No live qualification is needed. The AGCONT01 focused test family substitutes for live qualification by exercising the real production seams (CommandJobManager + SdkSessionEventCoordinator + TurnStateTracker + Controller.maybeReevaluateDeferredContinuation) and asserting the absence of agent re-entry across 7 control scenarios."
+    "rationale": "AC3 classification: the runtime does not promise automatic agent re-entry. No live qualification is needed."
   },
   "stale_card": {
     "status": "LIVE_PROVEN_DEFERRED",
@@ -71,14 +76,17 @@
   },
   "doctrine_bound": {
     "f4_text": "For long-running commands, run them in background and redirect output to a tmp file that you can read from later.",
-    "f4_source": "sdk/packages/core/src/extensions/tools/definitions.ts:669-676",
-    "implication_for_user_request": "When the user asks 'wait until it finishes', the model is responsible for polling the background command's output (via another run_commands call to read the tmp log). The runtime does not promise to re-invoke the model."
+    "f4_source": "sdk/packages/core/src/extensions/tools/definitions.ts:675",
+    "implication_for_user_request": "F4 tells the MODEL how to handle background command output (tmp-file convention). It does not specify runtime obligations for the user's 'wait until finished' intent. The runtime's structural choice (no automatic re-entry) is canonical but not doctrinally mandated.",
+    "product_surface_open_question": "Whether ClineMM should adopt an opt-in notify-on-terminal pattern (e.g. a per-tool flag matching the upstream background-terminal example plugin) is a PRODUCT question, not a runtime defect. Out of scope for AGCONT01."
   },
   "test_family": {
     "file": "apps/vscode/src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts",
+    "evidence_level": "REAL: CommandJobManager + SdkSessionEventCoordinator + TurnStateTracker + Controller.maybeReevaluateDeferredContinuation. TEST-LOCAL: agentSpy (unconnected sentinel; NOT a real AgentRuntime call site).",
+    "load_bearing": "Structural recon (30-structural-no-invocation-recon.md) is the load-bearing argument for 'no production terminal->AgentRuntime consumer exists'. The unconnected spy in this test family is CORROBORATING, not load-bearing.",
     "tests": [
-      "AGCONT-CTL-01 (GREEN): deferral + natural terminal commits awaiting_followup WITHOUT invoking the agent runtime",
-      "AGCONT-CTL-02 (GREEN): explicit user follow-up is the canonical re-entry path (not terminal-driven)",
+      "AGCONT-CTL-01 (GREEN): deferral + natural terminal commits awaiting_followup (turn-state evidence)",
+      "AGCONT-CTL-02 (GREEN): explicit user follow-up commits a fresh prompt via the canonical runTurn path",
       "AGCONT-CTL-03 (GREEN): start-and-return task does NOT trigger agent re-entry on later terminal (conservation C2)",
       "AGCONT-CTL-04 (GREEN): no background dependency -> no deferred marker -> no later re-entry (conservation C4)",
       "AGCONT-CTL-05 (GREEN): newer turn start clears deferred marker; late terminal cannot resurrect (conservation C3)",
@@ -87,5 +95,20 @@
     ],
     "summary": "7 pass / 0 fail / 36 expect() calls"
   },
-  "verdict": "CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE_NO_REPAIR_NEEDED"
+  "structural_recon": {
+    "file": ".factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01/30-structural-no-invocation-recon.md",
+    "load_bearing": true,
+    "chain": [
+      "vscode-run-commands-tool.ts:636  options.onBackgroundStateChange?.(running, jobId)",
+      "SdkController.ts:1309            onBackgroundStateChange: (running, jobId) => this.updateBackgroundCommandState(running, jobId)",
+      "SdkController.ts:4183            updateBackgroundCommandState -> maybeReevaluateDeferredContinuation",
+      "SdkController.ts:4240            maybeReevaluateDeferredContinuation (previousRunning && !running && taskId === undefined)",
+      "sdk-session-event-coordinator.ts:160  reevaluateDeferredContinuation -> setTurnPhase('awaiting_followup')",
+      "turnStateTracker.setWithWriter(phase, ...)  -- TURN-PHASE WRITE; NO AGENT RUNTIME CALL"
+    ],
+    "verdict": "The production chain has no AgentRuntime consumer. The runtime correctly honors done and stops at turn-phase write."
+  },
+  "verdict": "CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE_NO_REPAIR_NEEDED",
+  "stop_rule_invoked": "ACT section 50: 'If the runtime proves the agent turn was genuinely complete: CASE_AC3. STOP. Do not invent automatic agent resurrection.'",
+  "halt_remainder": "The broader product question (should ClineMM adopt an opt-in notify-on-terminal pattern?) is HALT_PRODUCT_CONTRACT_REQUIRED, out of scope for AGCONT01."
 }
