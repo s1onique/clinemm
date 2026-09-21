@@ -811,17 +811,27 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				}
 
 				if (start.state === "running") {
-					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
-					// the projection flips to true here iff this start
-					// was the 0->1 transition. The flag is captured at
-					// the manager's `active.set()` seam — race-safe under
-					// concurrent starts. If `becameActive` is false, this
-					// start was a 1->2 (or higher) transition; another
-					// job is already in flight and the projection is
-					// already true, so this is a no-op.
-					if (start.becameActive) {
-						notifyBackgroundStateChange(true, start.jobId)
-					}
+					// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+					// (correction01 / Factory
+					// HALT_MULTI_JOB_START_SIGNAL_DROPPED): the start
+					// notification MUST fire per RUNNING job, regardless
+					// of aggregate 0->1 cardinality. The earlier
+					// `becameActive` gate silently dropped the start
+					// signal for any concurrent 1->2+ start (e.g. J2
+					// started while J1 was already running). That left
+					// the projection map missing J2's "running" entry
+					// and broke the per-job derivation of
+					// `backgroundCommandRunning` and `backgroundCommandTaskId`.
+					//
+					// The terminal side was already corrected to fire
+					// per-job (see the terminalPromise listener below).
+					// This brings the start side to the same symmetry:
+					//
+					//   every job for which run_commands returns
+					//   status:"running" emits exactly one
+					//   (true, thatJobId) BEFORE any terminal tuple for
+					//   that job.
+					notifyBackgroundStateChange(true, start.jobId)
 					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 					// attach an async listener so the projection flips
 					// back to false when the process completes

@@ -1445,7 +1445,17 @@ export class Controller {
 			// background `run_commands` path. Forwarded to the active session's
 			// host so the run_commands tool can flip the projection when it
 			// returns RUNNING / reaches a terminal state.
-			onBackgroundStateChange: (running, jobId) => this.updateBackgroundCommandState(running, jobId),
+			//
+			// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+			// (correction01 / Factory
+			// HALT_MULTI_JOB_START_SIGNAL_DROPPED): the runner now fires
+			// the start signal PER RUNNING job (no longer gated on
+			// aggregate 0->1 cardinality) AND threads the per-job
+			// terminal reason on the terminal callback. Both signatures
+			// are forwarded as-is so the controller can keep its
+			// per-job projection map and reason-pill rendering in sync.
+			onBackgroundStateChange: (running, jobId, terminalState) =>
+				this.updateBackgroundCommandState(running, jobId, terminalState),
 			// ACT-CLINEMM-ACTIVE-COMMAND-GAUGE-LIVE-PROJECTION-DISCRIMINATOR01:
 			// forward the CommandJob lifecycle sink to the shared host. The
 			// shared host is the live primary-session host; without this

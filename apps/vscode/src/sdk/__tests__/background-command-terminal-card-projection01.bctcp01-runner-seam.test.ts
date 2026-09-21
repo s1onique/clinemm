@@ -1,30 +1,56 @@
 /**
  * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
- * (correction01 / Factory HALT_MULTI_JOB_RUNNER_SEAM_NOT_EXECUTED):
+ * (correction01 / Factory HALT_MULTI_JOB_START_SIGNAL_DROPPED +
+ * HALT_MULTI_JOB_RUNNER_SEAM_NOT_EXECUTED):
  *
- * RUNNER-COMPOSITION RED witness for the multi-job terminal projection
- * defect. The earlier controller-only proxy test (BCTCP-CTL-MULTI-01..05)
- * drives `updateBackgroundCommandState` directly with the exact args the
- * runner would emit. The Factory causal reviewer correctly identified
- * that this is one layer too early -- the production composition the
- * bug lived at is:
+ * RUNNER-COMPOSITION RED witness for the multi-job terminal AND start
+ * projection defects. The earlier controller-only proxy test
+ * (BCTCP-CTL-MULTI-01..05) drives `updateBackgroundCommandState`
+ * directly with the exact args the runner would emit. The Factory
+ * causal reviewer correctly identified two layers too early:
  *
- *   real createVscodeRunCommandsTool
- *     -> real createVscodeShellExecutor
- *       -> real CommandJobManager.start
- *         -> terminalPromise resolves with { becameIdle, jobId, terminalState }
- *           -> runner's `.then(({jobId, terminalState}) => notify(false, jobId, terminalState))`
- *             -> options.onBackgroundStateChange callback
+ *   1. Round 1: the runner-composition seam itself was not exercised.
+ *      The bug lived at:
  *
- * This file exercises the FULL production composition at exactly that
- * seam -- starting both jobs through `tool.execute(...)`, terminalizing
- * J1 via `manager.cancel({ jobId: J1 })` while J2 stays alive, and
- * asserting the spy receives `(false, J1, 'cancelled')` BEFORE J2
- * terminalizes.
+ *        real createVscodeRunCommandsTool
+ *          -> real createVscodeShellExecutor
+ *            -> real CommandJobManager.start
+ *              -> terminalPromise resolves with { becameIdle, jobId, terminalState }
+ *                -> runner's `.then(({jobId, terminalState}) => notify(false, jobId, terminalState))`
+ *                  -> options.onBackgroundStateChange callback
  *
- * The earlier BCTCP-CTL-MULTI proxy tests remain correct for the
- * controller seam; this file is the runner-seam witness that closes
- * the multi-job false-green proof.
+ *      Closed by BCTCP-RUNNER-MULTI-01..04 (round 1 of this file).
+ *
+ *   2. Round 2 (this commit): the start side of the runner was still
+ *      gated on aggregate 0->1 cardinality
+ *      (`if (start.becameActive) notify(true, start.jobId)`), so a
+ *      concurrent J2 start (1->2 transition) silently dropped the
+ *      J2 start signal. The controller's per-job map never saw
+ *      J2 === "running", breaking the per-job derivation of
+ *      `backgroundCommandRunning` and `backgroundCommandTaskId`:
+ *
+ *        REAL manager:          J2 running
+ *        projection map:        no J2
+ *        backgroundCommandRunning = false
+ *        backgroundCommandTaskId = undefined
+ *
+ *      Closed by BCTCP-RUNNER-MULTI-00 (start-per-job invariant),
+ *      BCTCP-RUNNER-MULTI-01..04 (re-stated to include the start
+ *      side), and BCTCP-RUNNER-COMPOSITION-01 (the genuine
+ *      runner->controller projection composition the reviewer
+ *      demanded -- real runner callbacks drive the real
+ *      `SdkController.prototype.updateBackgroundCommandState`
+ *      method, end-to-end).
+ *
+ * Production change at vscode-run-commands-tool.ts:813-834: the
+ * `if (start.becameActive)` gate is removed; the runner now fires
+ * `(true, start.jobId)` PER RUNNING job. The terminal side was
+ * already per-job from correction01.
+ *
+ * The runner-composition tests below witness this change against
+ * the REAL production seam (real `createVscodeRunCommandsTool` +
+ * real `CommandJobManager.start` + `fakeSupervisor` to avoid the
+ * POSIX shell+spawn env failure that predates this ACT).
  */
 
 import type { SupervisableShellProcess } from "@cline/core"
@@ -201,21 +227,55 @@ describe(
 			delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
 		})
 
-		// The actual Factory P0 gate. The runner fires per-job
-		// (not gated on becameIdle).
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		// (correction01 / Factory
+		// HALT_MULTI_JOB_START_SIGNAL_DROPPED): start-per-job
+		// invariant. Before correction01 the runner gated the
+		// `(true, jobId)` signal on aggregate 0->1 cardinality
+		// (`if (start.becameActive)`). A concurrent J2 start after
+		// J1 was already running dropped J2's start signal
+		// entirely. After correction01 the runner fires
+		// `(true, start.jobId)` UNCONDITIONALLY for every RUNNING
+		// start.
 		it(
-			"BCTCP-RUNNER-MULTI-01 real runner fires (false, J1, 'cancelled') when J1 terminalizes while J2 stays running",
+			"BCTCP-RUNNER-MULTI-00 the runner fires (true, jobId) for EVERY RUNNING start, not only on aggregate 0->1",
 			async () => {
 				const harness = makeHarness()
 				try {
 					const jobId1 = await startJobViaTool(harness)
 					const jobId2 = await startJobViaTool(harness)
 
-					// Sanity: runner fired (true, J1) once and only once.
 					const trueCalls = harness.spy.mock.calls.filter((c) => c[0] === true)
-					expect(trueCalls.length).toBe(1)
-					expect(trueCalls[0]?.[1]).toBe(jobId1)
-					expect(harness.spy).not.toHaveBeenCalledWith(true, jobId2)
+					// EXACTLY one (true, J1) and EXACTLY one (true, J2)
+					// -- no duplicates, no drops, no (true, undefined).
+					expect(trueCalls).toEqual([
+						[true, jobId1, undefined],
+						[true, jobId2, undefined],
+					])
+					expect(harness.spy).not.toHaveBeenCalledWith(true, undefined)
+				} finally {
+					await harness.manager.dispose()
+				}
+			},
+		)
+
+		// The actual Factory P0 gate. The runner fires per-job on
+		// BOTH sides (start and terminal). Per-job start AND per-job
+		// terminal -- not gated on becameActive / becameIdle.
+		it(
+			"BCTCP-RUNNER-MULTI-01 real runner fires per-job (true, J) on every start AND (false, J1, 'cancelled') when J1 terminalizes while J2 stays running",
+			async () => {
+				const harness = makeHarness()
+				try {
+					const jobId1 = await startJobViaTool(harness)
+					const jobId2 = await startJobViaTool(harness)
+
+					// Sanity (NEW): runner fired (true, J1) and (true,
+					// J2) -- one of each. The card-projection map
+					// now has BOTH entries.
+					const trueCalls = harness.spy.mock.calls.filter((c) => c[0] === true)
+					expect(trueCalls).toContainEqual([true, jobId1, undefined])
+					expect(trueCalls).toContainEqual([true, jobId2, undefined])
 
 					// Canonical "J2 still alive" boundary.
 					const callsBeforeJ1Terminal = harness.spy.mock.calls.length

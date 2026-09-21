@@ -53,7 +53,7 @@ import {
 	getDiagnosticHostId,
 	getDiagnosticManagerId,
 } from "./background-job-liveness-authority"
-import { type CommandJobLifecycleEvent, CommandJobManager } from "./command-job-manager"
+import { type CommandJobLifecycleEvent, CommandJobManager, type CommandJobState } from "./command-job-manager"
 import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
@@ -129,8 +129,21 @@ export interface VscodeSessionHostOptions {
 	 * `updateBackgroundCommandState` so the webview's TaskHeader and
 	 * Cancel button can arbitrate the in-flight background command. The
 	 * host owns the projection; the session host is a pass-through.
+	 *
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+	 * (correction01 / Factory
+	 * HALT_MULTI_JOB_START_SIGNAL_DROPPED): the runner now fires
+	 * the start signal PER RUNNING job (no longer gated on aggregate
+	 * 0->1 cardinality) AND threads the per-job terminal reason on
+	 * the terminal callback. Both signatures are forwarded as-is so
+	 * the controller can keep its per-job projection map and
+	 * reason-pill rendering in sync.
 	 */
-	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	onBackgroundStateChange?: (
+		running: boolean,
+		jobId: string | undefined,
+		terminalState?: Exclude<CommandJobState, "running">,
+	) => void
 	/**
 	 * ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: optional
 	 * callback invoked when the host-owned `CommandJobManager`

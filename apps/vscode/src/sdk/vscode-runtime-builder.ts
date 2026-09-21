@@ -5,6 +5,7 @@ import type { McpHub } from "@/services/mcp/McpHub"
 import { resolveMcpServerTimeoutMs } from "@/services/mcp/timeout"
 import { Logger } from "@/shared/services/Logger"
 import { CommandJobManager, DEFAULT_EXECUTION_DEADLINE_MS, DEFAULT_WAIT_BUDGET_MS } from "./command-job-manager"
+import type { CommandJobState } from "./command-job-manager"
 import { createCancelCommandTool, createCommandStatusTool } from "./command-status-tool"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { createVscodeRunCommandsTool, VSCODE_FOREGROUND_RUN_COMMANDS_TIMEOUT_MS } from "./vscode-run-commands-tool"
@@ -72,8 +73,21 @@ export interface VscodeExtraToolsOptions {
 	 * background execution path. The host (SdkController) wires this to
 	 * `updateBackgroundCommandState` so the webview's TaskHeader and
 	 * Cancel button can arbitrate the in-flight background command.
+	 *
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+	 * (correction01 / Factory
+	 * HALT_MULTI_JOB_START_SIGNAL_DROPPED): the runner now fires
+	 * the start signal PER RUNNING job (no longer gated on aggregate
+	 * 0->1 cardinality) AND threads the per-job terminal reason on
+	 * the terminal callback. Both signatures are forwarded as-is so
+	 * the controller can keep its per-job projection map and
+	 * reason-pill rendering in sync.
 	 */
-	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	onBackgroundStateChange?: (
+		running: boolean,
+		jobId: string | undefined,
+		terminalState?: Exclude<CommandJobState, "running">,
+	) => void
 	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
 	 * opt-in notify-on-terminal coordinator (pass-through to the

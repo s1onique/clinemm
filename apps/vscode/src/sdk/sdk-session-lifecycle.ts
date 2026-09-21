@@ -13,7 +13,7 @@ import { McpHub } from "@/services/mcp/McpHub"
 import type { RuntimeErrorIncident } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import type { ActiveSession } from "./cline-session-factory"
-import type { CommandJobLifecycleEvent } from "./command-job-manager"
+import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { buildToolPolicies } from "./sdk-tool-policies"
 import type { SdkSessionHost } from "./session-host"
@@ -97,8 +97,21 @@ export interface SdkSessionLifecycleOptions {
 	 * run_commands tool can flip the projection when it returns RUNNING
 	 * / reaches a terminal state. The host owns the projection; the
 	 * session lifecycle is the pass-through.
+	 *
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+	 * (correction01 / Factory
+	 * HALT_MULTI_JOB_START_SIGNAL_DROPPED): the runner now fires
+	 * the start signal PER RUNNING job (no longer gated on aggregate
+	 * 0->1 cardinality) AND threads the per-job terminal reason on
+	 * the terminal callback. Both signatures are forwarded as-is so
+	 * the controller can keep its per-job projection map and
+	 * reason-pill rendering in sync.
 	 */
-	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	onBackgroundStateChange?: (
+		running: boolean,
+		jobId: string | undefined,
+		terminalState?: Exclude<CommandJobState, "running">,
+	) => void
 	/**
 	 * ACT-CLINEMM-TASK-CONTROL-LIVENESS01-FIX01: the originating
 	 * task-operation generation authority. The lifecycle does NOT
