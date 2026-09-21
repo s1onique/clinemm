@@ -92,8 +92,11 @@ For Candidate B (v1):
   - Wake on: exited, deadline_exceeded, cancelled, spawn_failed.
   - Do NOT wake on: containment_failed (UNSAFE_TO_DECLARE_TERMINAL).
 
-The wake prompt content is a structured payload
-(not a natural-language prose blob). It carries:
+The wake prompt content is a bounded GENERATED PROMPT STRING
+(per §15.7.2). It is NOT a typed payload; the
+PendingPromptsController.enqueue seam accepts only prompt strings
+({ prompt: string, delivery: "queue"|"steer", ... }). The wake
+prompt carries:
   - jobId
   - terminalState (one of: exited, deadline_exceeded, cancelled,
     spawn_failed)
@@ -102,6 +105,13 @@ The wake prompt content is a structured payload
   - stdoutTail (bounded, last ~80 lines)
   - stderrTail (bounded, last ~80 lines)
   - elapsedMs
+
+The "schema" of the wake prompt lives in CODE
+(`formatTerminalWakePrompt` in the bounded implementation ACT),
+NOT in the queue payload. The schema is testable and diff-stable
+across versions. The previous "structured payload (not prose)"
+wording is retracted; the correct wording is "bounded generated
+prompt string, schema lives in code".
 
 The exact prompt format is the responsibility of the bounded
 implementation ACT, not this contract-selection ACT.

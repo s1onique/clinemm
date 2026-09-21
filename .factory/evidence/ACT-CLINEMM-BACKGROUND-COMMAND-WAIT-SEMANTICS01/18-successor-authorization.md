@@ -41,30 +41,40 @@ SUCCESSOR_PURPOSE =
 
 3. Identity capture (session/coordinator seam — per §15.7.1):
    - At run_commands call time, capture
-     (sessionId, taskId, epoch, notifyOnCompletion) at the
+     (sessionId, taskId, notifyOnCompletion, createdAtMs) at the
      SdkSessionEventCoordinator seam (or equivalent where
      options.getTask().taskId is reachable).
-   - Store in a per-session identity map keyed by jobId:
-     Map<jobId, { sessionId, taskId, epoch, notifyOnCompletion }>
+   - Store in a per-session NotificationMarker map keyed by jobId:
+     Map<jobId, NotificationMarker>
+     NotificationMarker = {
+       jobId, sessionId, taskId, notifyOnCompletion, createdAtMs
+     }
+   - Epoch is NOT part of NotificationMarker (post-CORRECTION02).
+     The wake consumer's lifetime invariant is per §10.8
+     (sessionId + taskId match; epoch NOT used).
    - The map lives at the session/coordinator seam, NOT on CommandJob.
+   - The map is BOTH the identity map AND the source of the
+     active-notify set (post-CORRECTION02). The wake consumer
+     queries this map for everything; it does NOT read from
+     CommandJobManager for notification semantics.
 
 4. Wake consumer:
    - New module that subscribes to
      CommandJobManager.onCommandJobLifecycle events.
    - On event "command_job_terminal_committed" (per-job, fires
-     exactly once per terminal job — see §15.7.3):
-     - look up identity at the session/coordinator seam
-     - check conservation rules (sessionId, taskId, epoch,
-       hasRunningBackgroundJobForOwner)
-     - if notifyOnCompletion:true AND conservation pass AND no
-       other notify=true job for owner:
-         enqueue bounded generated prompt string via
-         PendingPromptsController.enqueue with delivery:"queue"
-     - if notifyOnCompletion:true AND another notify=true job
-       still running for owner:
-         HOLD the wake in the session/coordinator held set
-         (FIFO by createdAtMs)
-     - else: discard (notify=false is the default)
+     exactly once per terminal job — see §15.7.3). NOT the
+     >0→0 cardinal transition.
+   - On event:
+     - look up NotificationMarker in the coordinator-owned map
+     - apply §10.8 NOTIFICATION_LIFETIME_INVARIANT (sessionId +
+       taskId match; epoch NOT used)
+     - if marker absent or notifyOnCompletion:false: discard
+     - if other same-owner notify=true markers remain active:
+       HOLD the wake in the coordinator-held set (FIFO by
+       createdAtMs)
+     - else (last same-owner notify=true marker): drain held set
+       (FIFO) + enqueue the current job's wake via
+       PendingPromptsController.enqueue with delivery:"queue"
 
 5. Wake prompt format (per §15.7.2):
    - Single function `formatTerminalWakePrompt(payload)` in the
@@ -74,9 +84,13 @@ SUCCESSOR_PURPOSE =
    - NOT a typed payload — PendingPromptsController accepts
      { prompt: string } only.
 
-6. Multi-job held set (per §15.7.3):
-   - Lives at the session/coordinator seam.
-   - FIFO drain triggered when the last notify=true job terminates.
+6. Multi-job held set (per §15.7.3, post-CORRECTION02):
+   - Lives at the session/coordinator seam (NOT on CommandJob).
+   - The COORDINATOR owns BOTH the identity map AND the
+     active-notify set; the wake consumer does NOT query
+     CommandJobManager for notification semantics.
+   - FIFO drain triggered when the last same-owner notify=true
+     marker terminates.
    - Wakes are dropped only when the session ends
      (PERSISTENCE = EPHEMERAL_ONLY).
 
@@ -171,14 +185,20 @@ Boundary discipline:
 ```text
 R1: identity check too loose → late wake fires for superseded task
     Mitigation: capture identity at run_commands call time
-    (sessionId + taskId + epoch) and check on each terminal event;
-    the wake consumer is STRICTLY STRICTER than the turn-state
-    consumer.
+    (sessionId + taskId) at the SdkSessionEventCoordinator seam
+    and check on each terminal event (per §10.8
+    NOTIFICATION_LIFETIME_INVARIANT). Epoch is NOT used for the
+    wake consumer's lifetime decision (epoch is the BTCONT
+    turn-state consumer's mechanism, not the wake consumer's).
+    Different sessionId or different taskId → DISCARD.
+    Same sessionId + same taskId → KEEP.
 
 R2: identity check too strict → wake never fires
-    Mitigation: identity is captured at run_commands call time and
-    read from the per-session map; if taskId is undefined, fall back
-    to sessionId-only identity (acceptable for non-task contexts).
+    Mitigation: identity is captured at run_commands call time
+    and read from the per-session NotificationMarker map; if
+    taskId is undefined, fall back to sessionId-only identity
+    (acceptable for non-task contexts). The active-session
+    getter is reused from the existing coordinator seam.
 
 R3: wake prompt content too long → token waste
     Mitigation: cap stdoutTail and stderrTail at ~80 lines each;
@@ -194,14 +214,15 @@ R5: wake fires multiple times for one job
     Mitigation: the wake consumer subscribes to the per-job
     "command_job_terminal_committed" lifecycle event, which fires
     EXACTLY ONCE per terminal job (per §15.7.3). The CommandJob
-    terminal-once invariant + the held-set FIFO drain guarantee
-    at-most-once enqueue.
+    terminal-once invariant + the held-set FIFO drain + the
+    marker.delete on terminal guarantee at-most-once enqueue.
 
 R6: wake fires for the wrong session
-    Mitigation: sessionId is captured at run_commands call time
-    at the coordinator seam and bound to the wake prompt;
-    PendingPromptsController.enqueue is invoked with the captured
-    sessionId; routing is by sessionId.
+    Mitigation: sessionId is captured in NotificationMarker at
+    run_commands call time at the coordinator seam. The wake
+    consumer applies §10.8 NOTIFICATION_LIFETIME_INVARIANT which
+    discards on sessionId mismatch BEFORE enqueue. Routing is by
+    the marker-captured sessionId, not by global state.
 
 R7: containment_failed wake → false "done"
     Mitigation: per §11.3 / §14.6, containment_failed does NOT
@@ -211,13 +232,18 @@ R7: containment_failed wake → false "done"
 
 R8: extension restart loses wake
     Mitigation: ACCEPTED in v1. PERSISTENCE = EPHEMERAL_ONLY.
-    User-facing doctrine states this explicitly. Future cycle may
-    add PERSISTED.
+    NotificationMarker map is session-scoped and dies with the
+    session. User-facing doctrine states this explicitly. Future
+    cycle may add PERSISTED.
 
 R9: multi-job wakes accumulate
-    Mitigation: per-job terminal events drive a session/coordinator
-    held set (per §15.7.3). The held set is drained FIFO when the
-    last notify=true job terminates. Bounded by maxTerminalJobs.
+    Mitigation: per-job terminal events drive the
+    COORDINATOR-OWNED held set (per §15.7.3). The coordinator
+    owns BOTH the identity map AND the active-notify set; the
+    wake consumer does NOT query CommandJobManager for
+    notification semantics. The held set is drained FIFO when
+    the last same-owner notify=true marker terminates. Bounded
+    by maxTerminalJobs.
 ```
 
 ## 18.6 Why exactly one successor ACT

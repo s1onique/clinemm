@@ -193,7 +193,7 @@ Answers:
   terminal owner: the turn-state consumer
 ```
 
-## 16.9 S9 — newer user turn before terminal
+## 16.9 S9 — newer user turn before terminal (post-CORRECTION02)
 
 ```text
 Setup:
@@ -202,23 +202,39 @@ Setup:
   T2: user sends unrelated prompt → new turn starts
   ... command exits 0 ...
 
-Flow:
-  - T2 starts (existing runTurn path)
+Flow (post-CORRECTION02, per §15.7.3 + §10.8 lifetime invariant):
+  - Background handoff accepted:
+    notificationMarkers.set(jobId, {jobId, sessionId, taskId,
+                                    notifyOnCompletion: true,
+                                    createdAtMs: now})
+  - T2 starts (existing runTurn path). T2 may bump the epoch.
   - command exits 0 during T2
-  - >0 -> 0 cardinal transition fires
-  - notifyOnCompletion:true → wake consumer fires
+  - "command_job_terminal_committed" event fires (PER-JOB, exactly once)
+  - wake consumer reads marker from notificationMarkers map
+    (NOT from CommandJob)
+  - §10.8 NOTIFICATION_LIFETIME_INVARIANT:
+      marker.sessionId === activeSession.sessionId   → KEEP
+      marker.taskId    === activeSession.taskId      → KEEP
+      (T2 may have bumped the epoch; epoch is NOT used for
+       notify-on-terminal lifetime decision — see §10.8)
   - delivery:"queue" → wake joins the existing PendingPromptsController
-    queue (which is empty here since T2 is mid-flight, not queued)
-  - actually T2 is RUNNING, not queued; the wake's delivery:"queue"
-    means the wake is enqueued and drains AFTER T2 finishes
+    queue
   - T2 finishes (non-error)
   - drain runs; wake prompt is delivered as a new turn
 
 Answers:
-  agent wake:     yes (but waits behind T2)
+  agent wake:     yes (kept across newer turn; waits behind T2)
   user notify:    yes (after T2 completes)
   Your turn:      yes (after T2's completion and before wake turn)
   terminal owner: the wake consumer
+  lifetime:       KEPT (per §10.8); NOT discarded by epoch bump
+
+NOTE (post-CORRECTION02): The previous S9 used `>0 -> 0` cardinal
+transition AND epoch-based discard. Both were stale. The corrected
+S9 uses the per-job `command_job_terminal_committed` event (per
+§15.7.3) and the §10.8 lifetime invariant (per-session + per-task
+identity, NO epoch). T2 bumping the epoch does NOT discard the
+wake.
 ```
 
 ## 16.10 S10 — two background jobs (per-job terminal events)

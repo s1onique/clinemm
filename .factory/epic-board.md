@@ -5609,18 +5609,27 @@ HALT_PRODUCT_CONTRACT_REQUIRED.
 
 ## ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
 
-Updated: 2026-09-21 06:42:00Z (CONTRACT_FROZEN post correction cycle 01: Factory causal reviewer verdict PASS_WAIT_SEMANTICS_CONTRACT_FROZEN. Epistemic purpose = PRODUCT-CONTRACT SELECTION. Production change = NONE. Test change = NONE. Five P0/P1 defects opened by initial review closed in correction cycle 01; full record in §20-contract-correction-01.md.)
+Updated: 2026-09-21 11:55:00Z (CONTRACT_FROZEN post correction cycle 02: Factory causal reviewer verdict PASS_WAIT_SEMANTICS_CONTRACT_FROZEN. Epistemic purpose = PRODUCT-CONTRACT SELECTION. Production change = NONE. Test change = NONE. Cycle 01 (HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN) closed in the contract-freeze commit (§20-contract-correction-01.md; 5 defects). Cycle 02 (HALT_WAIT_SEMANTICS_STALE_CONTRACT_AUTHORITY) closed by rewriting the packet to ONE unambiguous v1 contract (§21-contract-correction-02.md; 4 defects: P0 STALE_B_D1_AUTHORITY, P0 S9_SUPERSESSION_CONTRADICTION, P1 STALE_TRIGGER_IDENTITY_TEXT, P1 MULTIJOB_NOTIFY_AUTHORITY).)
 
 **Selection**: Candidate B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL). Passes all ten rubric items D1-D10. WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to a future cycle requiring the suspended-tool state machine (Candidate C). Default `notifyOnCompletion = false` preserves current behavior exactly. Wake is one bounded generated prompt string delivered exactly once.
 
-**Frozen invariants** (corrected cycle 01):
+**Frozen invariants** (corrected cycle 01 + cycle 02):
 ```text
 SELECTED_CONTRACT = B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL)
+  Selected basis (post-CORRECTION02, honest v1 scope):
+    B is the bounded v1 NOTIFY contract, not "B fully implements
+    literal WAIT". D1a strict WAIT = NO/OUT_OF_V1; D1b v1
+    WAIT(v1)→NOTIFY mapping = YES.
 WAIT(v1) = NOTIFY (honest collapse; documented in §8.1, §14.1, §14.2)
 STRICT_WAIT (future, NOT v1) = notifyOnCompletion:"wait" (requires Candidate C)
 DEFAULT = notifyOnCompletion=false (preserves current behavior)
 PERSISTENCE = EPHEMERAL_ONLY for v1
 NEWER_TURN = delivery="queue" (waits behind current turn)
+  Per §10.8 NOTIFICATION_LIFETIME_INVARIANT: same sessionId + same
+  taskId → KEEP (queued); different sessionId OR different taskId →
+  DISCARD; EPOCH IS NOT USED for the notify-on-terminal lifetime
+  decision (epoch is the BTCONT turn-state consumer's mechanism,
+  not the wake consumer's).
 WAKE_REPRESENTATION = bounded generated prompt string
                    (NOT typed payload; PendingPromptsController.enqueue
                     accepts { prompt: string } only. Schema in §15.7.2.)
@@ -5629,8 +5638,12 @@ WAKE_TRIGGER = per-job "command_job_terminal_committed" event
 NOTIFICATION_IDENTITY_OWNER = session/coordinator-owned
                    (at SdkSessionEventCoordinator seam; NOT on CommandJob,
                     which does not capture taskId)
+                   The COORDINATOR owns BOTH the identity map AND
+                   the active-notify set (post-CORRECTION02 §15.7.3).
+                   The wake consumer MUST NOT query CommandJobManager
+                   for notification semantics.
 MULTI_JOB = held set at coordinator seam; FIFO drain when last
-            notify=true job terminates
+            same-owner notify=true marker terminates (per §15.7.3)
 TERMINAL_REASONS = {exited, deadline_exceeded, cancelled, spawn_failed} -> wake
 CONTAINMENT_FAILED = NO wake (UNSAFE_TO_DECLARE_TERMINAL; wake consumer
                      subscribes ONLY to command_job_terminal_committed)
@@ -5640,12 +5653,29 @@ PRODUCTION_CHANGE = NONE (this ACT is contract-selection only)
 STALE_CARD = LIVE_PROVEN_SEPARATE (deferred to ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01)
 ```
 
-**Correction cycle 01 record** (closes Factory reviewer's findings):
+**Correction cycle 01 record** (HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN, closed):
 - P0 CONTRACT_FREEZE_NOT_DURABLE: CLOSED via single docs/evidence-only commit
 - P0 WAIT_NOTIFY_SEMANTIC_CONTRADICTION: CLOSED — WAIT(v1) honestly maps to NOTIFY
 - P1 MULTI_JOB_TRIGGER_CONTRACT: CLOSED — per-job terminal event, not >0→0
 - P1 NOTIFICATION_IDENTITY_OWNER: CLOSED — coordinator seam, not CommandJob
 - P1 WAKE_PAYLOAD_SURFACE: CLOSED — bounded generated prompt string
+
+**Correction cycle 02 record** (HALT_WAIT_SEMANTICS_STALE_CONTRACT_AUTHORITY, closed):
+- P0 STALE_B_D1_AUTHORITY: CLOSED — §7.2 + §14.0 + §14.1 rewritten; D1a
+  strict WAIT = NO/OUT_OF_V1; D1b v1 WAIT(v1)→NOTIFY = YES
+- P0 S9_SUPERSESSION_CONTRADICTION: CLOSED — §10.8
+  NOTIFICATION_LIFETIME_INVARIANT introduced; epoch explicitly excluded
+  from notify-on-terminal lifetime decision; S9 rewritten; §10.3 + §10.5
+  annotated as BTCONT turn-state-only
+- P1 STALE_TRIGGER_IDENTITY_TEXT: CLOSED — §11.7, §12.1, §13.4,
+  §14.4, §17.7 rewritten to defer to §15.7
+- P1 MULTIJOB_NOTIFY_AUTHORITY: CLOSED — §15.7.3 rewritten; coordinator
+  owns both identity map AND active-notify set; wake consumer MUST NOT
+  query CommandJobManager for notification semantics
+
+Next step (per Factory reviewer disposition):
+  C1: GO directly to ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 —
+  no additional pre-execution review cycle unless a new P0 appears.
 
 **Successor ACT** (authorized, NOT implemented by this ACT):
 - ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01
@@ -5661,8 +5691,8 @@ STALE_CARD = LIVE_PROVEN_SEPARATE (deferred to ACT-CLINEMM-BACKGROUND-COMMAND-TE
 
 **Production code touched: NONE.**
 **Test code touched: NONE.**
-**Evidence directory: .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01/ (20 artifacts + result.json)**
-**Verdict**: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN.
+**Evidence directory: .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01/ (21 artifacts + result.json: 01-21 + result.json)**
+**Verdict**: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN (post correction cycles 01 + 02).
 
 **Follow-ups (NOT in this ACT)**:
 - Bounded implementation: ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 (next)

@@ -89,22 +89,31 @@ a formatted text prompt; we can emit a typed prompt instead).
 - Requires exactly-once semantics (enforceable via the identity
   rules + single-wake consumption).
 
-**Rubric check**:
+**Rubric check (post-CORRECTION02, honest v1 scope)**:
 
 | # | Requirement                                   | Verdict | Note |
 |---|-----------------------------------------------|---------|------|
-| D1 | Literal "wait until finished" predictable    | YES     | notify=true triggers wake on terminal; user-visible "wait" becomes runtime-honored. |
+| D1a| strict WAIT predictable                       | NO / OUT_OF_V1 | strict WAIT ("no Your turn before final answer") is deferred to a future cycle requiring Candidate C architecture. |
+| D1b| v1 WAIT(v1)→NOTIFY mapping predictable        | YES     | The v1 contract collapses WAIT to NOTIFY (see §8.1, §14.1); the wake is one bounded stimulus delivered via PendingPromptsController.enqueue. |
 | D2 | Fire-and-forget never resurrects agent       | YES     | notify=false (the default if not opted-in) is exactly fire-and-forget. |
 | D3 | Runtime does not parse NL to infer intent    | YES     | Intent is structured (the schema field). |
 | D4 | Long waits do not require tight polling      | YES     | Notification replaces polling. |
 | D5 | Failure/cancel/deadline behavior defined     | YES     | The terminal event covers all three; one bounded stimulus. |
-| D6 | Newer-turn/concurrent-work behavior defined  | YES     | delivery:"queue" or "steer" chooses the rule. |
-| D7 | Session identity + exactly-once possible     | YES     | Existing identity rules enforce this. |
-| D8 | Product wording matches runtime               | YES     | Schema field + description = explicit promise. |
-| D9 | Implementable on existing seams               | YES     | Reuses PendingPromptsController + identity rules. |
+| D6 | Newer-turn/concurrent-work behavior defined  | YES     | delivery:"queue" (see §10.3, §10.8). |
+| D7 | Session identity + exactly-once possible     | YES     | Existing identity rules enforce this; wake consumer reuses (sessionId, taskId) per §10.8 lifetime invariant. |
+| D8 | Product wording matches runtime               | YES     | Schema field + description = explicit promise (the v1 NOTIFY collapse is stated honestly). |
+| D9 | Implementable on existing seams               | YES     | Reuses PendingPromptsController + per-job CommandJobManager.onCommandJobLifecycle event + identity-correlating machinery at coordinator seam. |
 | D10| No dependence on stale card                   | YES     | Card projection unchanged. |
 
-**Candidate B passes all ten rubric items.**
+**Summary (post-CORRECTION02)**: B is the bounded v1 NOTIFY
+contract. Strict WAIT (STRICT_WAIT) is deferred to a future cycle
+requiring the suspended-tool state machine (Candidate C). B passes
+the rubric when D1 is read as "D1a strict WAIT = NO/OUT_OF_V1;
+D1b v1 WAIT(v1)→NOTIFY mapping = YES" — not "B honors literal
+WAIT". The previous scoring ("D1 Literal 'wait until finished'
+predictable = YES") is retracted. The selection basis is: **B is
+the bounded v1 NOTIFY contract**, not "B fully implements literal
+WAIT".
 
 The remaining decision work is product-shaped: where does the
 opt-in live, what is the default, what does the wake prompt
@@ -214,16 +223,22 @@ also the largest product surface.
 and C; without C's architecture, it collapses to B with three
 mode labels.
 
-## 7.5 What the rubric says
+## 7.5 What the rubric says (post-CORRECTION02, honest v1 scope)
 
 ```text
 A: fails D1, D4, D8 — current implementation, observable mismatch.
-B: passes all ten — smallest scope change, reuses existing seams.
+B: passes all ten rubric items WHEN D1 is read as
+   "D1a strict WAIT = OUT_OF_V1; D1b v1 WAIT(v1)→NOTIFY mapping = YES".
+   B is the bounded v1 NOTIFY contract; strict WAIT (STRICT_WAIT)
+   is deferred to a future cycle. Smallest scope change that reuses
+   existing seams.
 C: fails D9 — requires new suspended-tool state machine.
+   (C is the architecture that WOULD enable STRICT_WAIT.)
 D: fails D9 (inherited) — superset of B + C.
 
-The contract decision therefore favors B for v1, with the option
-to evolve to D in a later cycle IF C's architecture is funded.
+The contract decision therefore favors B for v1 (NOTIFY contract),
+with the option to evolve to D in a later cycle IF C's architecture
+is funded (which would enable STRICT_WAIT as a future cycle).
 ```
 
 ## 7.6 What this ACT does NOT do

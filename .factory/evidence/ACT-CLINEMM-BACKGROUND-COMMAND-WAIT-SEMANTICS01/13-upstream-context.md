@@ -108,7 +108,11 @@ Notable differences from ClineMM:
 
 ClineMM v1 can:
   - Adopt the boolean opt-in (renamed e.g. `notifyOnCompletion`).
-  - Emit a typed wake (NOT a natural-language prose blob).
+  - Emit a bounded GENERATED PROMPT STRING (per §15.7.2). The
+    schema lives in code (`formatTerminalWakePrompt`), NOT in the
+    queue payload. The original packet's "typed wake payload, not
+    prose" claim is retracted; the correct wording is "bounded
+    generated prompt string, schema lives in code".
   - Reuse the existing PendingPromptsController.enqueue seam.
 ```
 
@@ -126,5 +130,5 @@ This ACT does not implement anything. The upstream pattern is
 informative for the implementation ACT (which is the bounded
 successor ACT authorized by §18-successor-authorization.md). It
 is NOT a mandate; ClineMM may choose to implement the pattern
-differently (e.g., a typed wake payload instead of a prose
-prompt).
+differently (e.g., a generated prompt string instead of a typed
+payload — which is what the v1 contract actually does).

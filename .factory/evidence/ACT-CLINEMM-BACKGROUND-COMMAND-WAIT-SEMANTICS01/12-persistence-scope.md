@@ -7,12 +7,19 @@ For Candidate B, what state must survive a restart?
 ```text
 - The CommandJob's identity (jobId, ownerSessionId).
 - The CommandJob's terminal state (one of the five classes from §11).
-- The CommandJob's notify=true flag.
 - The CommandJob's terminal payload (exitCode, signal, stdout, stderr).
 
-The deferred marker (sessionId, taskId, epoch) is session-scoped.
-A sessionId that no longer exists is a discarded wake (see §10.6).
-A taskId that no longer exists is a discarded wake (see §10.5).
+The notify=true flag is NOT stored on CommandJob. It lives in
+the COORDINATOR'S notificationMarkers map (per §15.7.1 + §15.7.3),
+which is EPHEMERAL and dies with the session. Therefore the
+notify-on-terminal wake is LOST on restart by design (matches the
+session-scoped lifetime invariant in §10.8).
+
+The deferred marker (sessionId, taskId) is session-scoped.
+A sessionId that no longer exists is a discarded wake (see §10.8).
+A taskId that no longer exists is a discarded wake (see §10.8).
+(Epoch is NOT used for the notify-on-terminal lifetime decision —
+see §10.8.)
 ```
 
 ## 12.2 What may NOT survive a restart (v1 scope)

@@ -4,36 +4,49 @@ This is the load-bearing artifact of this ACT. It is the
 contract selection.
 
 ```text
-SELECTED_CONTRACT = B
+SELECTED_CONTRACT = B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL)
 
-SELECTION_REASON:
-  - Candidate B passes all ten rubric items D1-D10.
-  - Candidate A fails D1, D4, D8 (observable user-visible mismatch).
-  - Candidate C fails D9 (no existing suspended-tool state machine).
+SELECTION_REASON (post-CORRECTION02, honest v1 scope):
+  - Candidate B passes all ten rubric items D1-D10 WHEN D1 is
+    read as "D1a strict WAIT = OUT_OF_V1; D1b v1 WAIT(v1)→NOTIFY
+    mapping = YES". The selection basis is: B is the bounded v1
+    NOTIFY contract, not "B fully implements literal WAIT".
+  - Candidate A fails D1, D4, D8 (observable user-visible
+    mismatch with the runtime promise).
+  - Candidate C fails D9 (no existing suspended-tool state
+    machine — C is the architecture that WOULD enable
+    STRICT_WAIT in a future cycle).
   - Candidate D fails D9 (inherits C).
   - B reuses existing seams (PendingPromptsController.enqueue,
-    identity-correlating machinery, CommandJobManager.onTerminalEvent).
-  - B is the smallest-scope change that distinguishes all three
-    user intents (wait / notify / detach) via a structured schema
-    field.
+    per-job CommandJobManager.onCommandJobLifecycle event,
+    identity-correlating machinery at the coordinator seam).
 
-RATIONALE:
+RATIONALE (post-CORRECTION02, honest v1 scope):
   - The fork's run_commands schema currently exposes NO user-intent
     flag (R3 in §3.7). Adding one boolean (`notifyOnCompletion`)
-    is the smallest schema change that lets ClineMM honor the
-    user's "wait until finished" intent without inventing
-    a new suspended-tool state machine.
+    is the smallest schema change that lets ClineMM offer a
+    bounded async terminal-notification contract in v1, WITHOUT
+    inventing a new suspended-tool state machine.
+  - WAIT(v1) HONESTLY collapses to NOTIFY semantics: the wake is
+    a new turn delivered via PendingPromptsController.enqueue
+    (delivery:"queue"), and the user may see "Your turn" briefly
+    before the wake turn. This is NOT strict WAIT. Strict WAIT
+    (STRICT_WAIT — "no Your turn before final answer") is
+    deferred to a future cycle requiring the suspended-tool
+    state machine (Candidate C architecture). The v1 user-facing
+    doctrine states this honestly.
   - Default value (notifyOnCompletion=false) preserves the
     current canonical behavior (Candidate A) for backwards
     compatibility. Existing tasks that rely on the polling model
     continue to work.
   - User/model can opt into wake-on-terminal by passing
-    `notifyOnCompletion: true`. The wake is one bounded stimulus
-    delivered via PendingPromptsController.enqueue, exactly-once,
-    bounded by sessionId/taskId/epoch identity tests.
-  - The wake is structured (typed payload, not prose) so the
-    model can react deterministically without parsing natural
-    language.
+    `notifyOnCompletion: true`. The wake is one bounded
+    GENERATED PROMPT STRING (per §15.7.2) delivered via
+    PendingPromptsController.enqueue, exactly-once, bounded by
+    (sessionId, taskId) identity tests per §10.8
+    NOTIFICATION_LIFETIME_INVARIANT. (NB: the wake is NOT a
+    typed payload — PendingPromptsController accepts only
+    prompt: string. The "typed payload" claim is retracted.)
 ```
 
 ## 14.1 Selected semantic table
@@ -124,36 +137,77 @@ The model is NOT told to "wait" via this flag. It is told to
 REQUEST notification via this flag. The wait semantic is a
 model-side interpretation of "I will wait for the wake."
 
-## 14.4 RUNTIME_CONTRACT
+## 14.4 RUNTIME_CONTRACT (post-CORRECTION02)
 
 ```text
-On the >0 -> 0 cardinal transition of a notifyOnCompletion=true job:
+TRIGGER (per-job, exactly-once):
+  The wake consumer subscribes to the per-job lifecycle event:
+    CommandJobManager.onCommandJobLifecycle(
+      event: { event: "command_job_terminal_committed",
+               jobId, terminationReason, exitCode, signal, tsMs, ... })
+  Source: apps/vscode/src/sdk/command-job-manager.ts:621-...
+  Fires EXACTLY ONCE per terminal job.
 
-  if previousRunning && !running && taskId === undefined:
-    if (notifyOnCompletion) {
-        capture terminal payload (jobId, state, exitCode, signal,
-        stdoutTail, stderrTail, elapsedMs)
-        bind to (sessionId, taskId, epoch) of the originating
-        CommandJob
-        if conservation rules pass (sessionId matches, taskId
-        matches, epoch matches, no other notify=true job still
-        running for this owner):
-            enqueue wake prompt on the owning session via
-            PendingPromptsController.enqueue with
-            delivery:"queue"
-            (steer is NOT the default for v1; steer interrupts
-            the user's current turn)
-        else:
-            hold the wake (multi-job case) or discard (supersession
-            case) per the conservation rules
-    }
+  NOT the >0 -> 0 cardinal transition (which fires once when the
+  LAST job disappears, not on each job's terminal — the previous
+  freeze incorrectly conflated the two).
+
+IDENTITY OWNER (coordinator seam, NOT CommandJob):
+  On accepted background handoff with notifyOnCompletion:true:
+    notificationMarkers.set(jobId, NotificationMarker{
+      jobId, sessionId, taskId, notifyOnCompletion: true,
+      createdAtMs: now
+    })
+  The marker is captured at the SdkSessionEventCoordinator seam
+  where options.getTask?.()?.taskId is reachable. CommandJob does
+  NOT carry taskId.
+
+WAKE CONSUMER (handler on the per-job terminal event):
+
+  for each "command_job_terminal_committed" event:
+    j = the terminal job (jobId from event)
+    marker = notificationMarkers.get(j.id)
+    if marker === undefined OR marker.notifyOnCompletion === false:
+      discard (DETACH intent or unknown job)
+      return
+    notificationMarkers.delete(j.id)
+
+    Apply §10.8 NOTIFICATION_LIFETIME_INVARIANT:
+      if marker.sessionId !== activeSession.sessionId: discard (different session)
+      if marker.taskId    !== activeSession.getTask()?.taskId: discard (different task)
+      if activeSession is undefined: discard (host shutdown / empty repo)
+      NOTE: epoch is NOT used for the notify-on-terminal lifetime decision.
+
+    // Compute other same-owner notify markers still active.
+    otherNotifyCount = count(notificationMarkers.values()
+      where m.sessionId === marker.sessionId
+        AND m.taskId    === marker.taskId
+        AND m.notifyOnCompletion === true)
+    if otherNotifyCount > 0:
+      HOLD wake for j in session/coordinator held set
+        (FIFO list, keyed by jobId, marker.createdAtMs)
+      return
+
+    // j is the LAST same-owner notify=true job terminating.
+    DRAIN held wakes for (marker.sessionId, marker.taskId) in FIFO
+      for each held wake w:
+        enqueue w via PendingPromptsController.enqueue(
+          { prompt: formatTerminalWakePrompt(w.payload),
+            delivery: "queue" })
+    enqueue j's wake via PendingPromptsController.enqueue(
+      { prompt: formatTerminalWakePrompt(j.payload),
+        delivery: "queue" })
+
+WAKE_PROMPT_FORMAT:
+  See §15.7.2 — bounded generated prompt string (hard cap 8 KB,
+  soft target 4 KB). NOT a typed payload.
+
+COORDINATION:
+  The wake consumer is registered alongside the existing
+  turn-state consumer on CommandJobManager.onCommandJobLifecycle.
+  Both consumers run independently. The wake consumer's existence
+  does not affect the turn-state consumer.
 ```
-
-The wake consumer is registered alongside the existing
-turn-state consumer on the CommandJobManager's
-`onCommandJobLifecycle` callback. Both consumers run
-independently; the wake consumer's existence does not affect
-the turn-state consumer.
 
 ## 14.5 TERMINAL_SUCCESS
 
@@ -217,11 +271,16 @@ Conservation rules apply.
 ## 14.9 NEWER_TURN
 
 ```text
-Per §10.3:
+Per §10.3 (Candidate B behavior) and §10.8 NOTIFICATION_LIFETIME_INVARIANT:
   - delivery = "queue" by default
   - the wake waits behind the user's current turn
   - drain delivers the wake after the current turn finishes with
     a non-error finishReason
+
+LIFETIME: a wake is KEPT (not discarded) under a newer turn, iff
+the wake's (sessionId, taskId) still match the active session and
+active task. Per §10.8, EPOCH IS NOT USED as a "newer turn means
+stale" discriminator for notify-on-terminal.
 
 Alternative delivery: "steer" interrupts the current turn. v1
 recommends "queue" (less surprising to the user). This is a
@@ -232,18 +291,20 @@ via a separate knob (out of v1 scope).
 ## 14.10 MULTI_JOB
 
 ```text
-Per §10.4:
-  - The wake consumer reuses the
-    `hasRunningBackgroundJobForOwner(activeSession.sessionId)`
-    check.
-  - If another notify=true job is still running for the owning
-    session, the wake is HELD.
-  - When the last notify=true job terminates, the held wakes are
-    delivered together (in job-start order, FIFO).
+Per §15.7.3 (post-CORRECTION02 coordinator-owned active-notify set):
+  - The coordinator owns BOTH the identity map AND the active-notify
+    set (Map<jobId, NotificationMarker>).
+  - If another same-owner notify=true job is still active, the wake
+    for the terminating job is HELD in the session/coordinator
+    held set (FIFO by createdAtMs).
+  - When the LAST same-owner notify=true job terminates, all held
+    wakes for that owner are drained in FIFO order via
+    PendingPromptsController.enqueue (delivery:"queue"), followed
+    by the current job's wake.
 
-v1 simplification: deliver one wake per terminal event for the
-owning session. The held-wake case is correctly handled by the
-existing `hasRunningBackgroundJobForOwner` invariant.
+v1 simplification: the held set is bounded by max parallel jobs
+(existing maxTerminalJobs limit). Wakes are dropped only when the
+session ends (PERSISTENCE = EPHEMERAL_ONLY).
 ```
 
 ## 14.11 PERSISTENCE
@@ -264,11 +325,18 @@ This preserves today's behavior (Candidate A) for any existing
 task that does not opt in. Fire-and-forget is the default, not
 the exception.
 
-Conservation invariant: the wake consumer MUST NOT fire for
-any job whose notifyOnCompletion flag is false. The wake
-consumer is a strict superset of the existing turn-state
-consumer; the turn-state consumer runs unconditionally (the
-awaiting_followup transition is the existing behavior).
+Conservation invariant (post-CORRECTION02):
+  - The wake consumer MUST NOT fire for any job whose
+    notificationMarker.notifyOnCompletion is false (i.e. the job
+    is in DETACH intent, or it was never registered in the
+    coordinator's notificationMarkers map).
+  - The notify=true flag is captured in the COORDINATOR-OWNED
+    notificationMarkers map (per §15.7.1 + §15.7.3), NOT on
+    CommandJob. CommandJob's footprint is preserved.
+  - The wake consumer is a strict superset of the existing
+    turn-state consumer; the turn-state consumer runs
+    unconditionally (the awaiting_followup transition is the
+    existing behavior).
 ```
 
 ## 14.13 IMPLEMENTATION_AUTHORIZED

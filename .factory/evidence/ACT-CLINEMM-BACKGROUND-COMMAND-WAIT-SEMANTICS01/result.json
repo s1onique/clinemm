@@ -107,16 +107,24 @@
     "G13_successor_bounded": true
   },
   "correction_cycle": {
-    "cycle_number": 1,
-    "reviewer_verdict": "HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN",
+    "cycle_number": 2,
+    "reviewer_verdict_initial": "HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN",
+    "reviewer_verdict_post_cycle01": "HALT_WAIT_SEMANTICS_STALE_CONTRACT_AUTHORITY",
+    "cycle_01_status": "CLOSED — durability + 3 P1 defects closed; contract-freeze commit landed",
+    "cycle_02_status": "CLOSED — packet rewritten to ONE unambiguous v1 contract",
     "p0_p1_status": {
-      "P0_CONTRACT_FREEZE_NOT_DURABLE": "CLOSED (commit lands in this ACT)",
-      "P0_WAIT_NOTIFY_SEMANTIC_CONTRADICTION": "CLOSED (WAIT(v1) = NOTIFY honest collapse; STRICT_WAIT deferred)",
-      "P1_MULTI_JOB_TRIGGER_CONTRACT": "CLOSED (per-job terminal event, NOT >0->0 cardinal)",
-      "P1_NOTIFICATION_IDENTITY_OWNER": "CLOSED (session/coordinator-owned; NOT CommandJob)",
-      "P1_WAKE_PAYLOAD_SURFACE": "CLOSED (bounded generated prompt string)"
+      "P0_CONTRACT_FREEZE_NOT_DURABLE": "CLOSED cycle01 (commit lands in this ACT)",
+      "P0_WAIT_NOTIFY_SEMANTIC_CONTRADICTION": "CLOSED cycle01 (WAIT(v1) = NOTIFY honest collapse; STRICT_WAIT deferred)",
+      "P1_MULTI_JOB_TRIGGER_CONTRACT": "CLOSED cycle01 (per-job terminal event, NOT >0->0 cardinal)",
+      "P1_NOTIFICATION_IDENTITY_OWNER": "CLOSED cycle01 (session/coordinator-owned; NOT CommandJob)",
+      "P1_WAKE_PAYLOAD_SURFACE": "CLOSED cycle01 (bounded generated prompt string)",
+      "P0_STALE_B_D1_AUTHORITY": "CLOSED cycle02 (§7.2 + §14.0 + §14.1 rewritten: D1a strict WAIT = NO/OUT_OF_V1; D1b v1 WAIT(v1)→NOTIFY = YES; B is the bounded v1 NOTIFY contract)",
+      "P0_S9_SUPERSESSION_CONTRADICTION": "CLOSED cycle02 (§10.8 NOTIFICATION_LIFETIME_INVARIANT introduced; epoch explicitly excluded from notify-on-terminal lifetime decision; S9 rewritten; §10.3 + §10.5 annotated as BTCONT turn-state-only)",
+      "P1_STALE_TRIGGER_IDENTITY_TEXT": "CLOSED cycle02 (§11.7, §12.1, §13.4, §14.4, §17.7 rewritten to defer to §15.7)",
+      "P1_MULTIJOB_NOTIFY_AUTHORITY": "CLOSED cycle02 (§15.7.3 rewritten: coordinator owns BOTH identity map AND active-notify set; wake consumer MUST NOT query CommandJobManager for notification semantics)"
     },
-    "evidence_artifact": "20-contract-correction-01.md"
+    "evidence_artifact_cycle01": "20-contract-correction-01.md",
+    "evidence_artifact_cycle02": "21-contract-correction-02.md"
   },
   "successor_act": "ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01",
   "successor_purpose": "bounded async terminal->session stimulus (add optional schema field, append tool description paragraph, implement wake consumer on command_job_terminal_committed event, capture identity at coordinator seam, implement formatTerminalWakePrompt, implement held set with FIFO drain, add focused test family mirroring BTCONT01 shape)",
@@ -138,5 +146,5 @@
     "rationale": "Upstream's notifyParent default-true is one viable design; ClineMM v1 chooses default-false for backwards compatibility. notifyOnCompletion is host-builtin (not plugin) and reuses the existing PendingPromptsController.enqueue seam rather than the plugin host's steer_message."
   },
   "verdict": "PASS_WAIT_SEMANTICS_CONTRACT_FROZEN",
-  "verdict_basis": "Contract B passes all ten rubric items D1-D10; recon in §3-§6 establishes that the selected seams (PendingPromptsController.enqueue, identity-correlating machinery at coordinator seam, CommandJobManager.onCommandJobLifecycle command_job_terminal_committed event) all exist and are reusable; default false preserves current behavior; WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to future cycle; wake is bounded generated prompt string (NOT typed payload — PendingPromptsController accepts only prompt: string); notification identity owner is session/coordinator-owned (CommandJob does not capture taskId); multi-job trigger is per-job terminal event (NOT >0->0 cardinal transition); scenario suite S1-S11 fully defined; successor ACT bounded and bound to this ACT's exit_head."
+  "verdict_basis": "Contract B passes all ten rubric items D1-D10 WHEN D1 is read as D1a strict WAIT = NO/OUT_OF_V1 and D1b v1 WAIT(v1)→NOTIFY mapping = YES. B is the bounded v1 NOTIFY contract, not 'B fully implements literal WAIT'. Recon in §3-§6 establishes that the selected seams (PendingPromptsController.enqueue, identity-correlating machinery at coordinator seam, CommandJobManager.onCommandJobLifecycle command_job_terminal_committed event) all exist and are reusable. Default false preserves current behavior. WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to future cycle requiring Candidate C architecture. Wake is bounded generated prompt string (NOT typed payload — PendingPromptsController accepts only prompt: string). Notification identity owner is session/coordinator-owned (CommandJob does not capture taskId). The COORDINATOR owns BOTH the identity map AND the active-notify set (post-CORRECTION02 §15.7.3); the wake consumer MUST NOT query CommandJobManager for notification semantics. Multi-job trigger is per-job terminal event (NOT >0->0 cardinal transition). NOTIFICATION_LIFETIME_INVARIANT (§10.8) governs the wake consumer: same sessionId + same taskId → KEEP; different sessionId OR different taskId → DISCARD; epoch is NOT used. Scenario suite S1-S11 fully defined. Successor ACT bounded and bound to this ACT's exit_head. CORRECTION02 closed all four defects from HALT_WAIT_SEMANTICS_STALE_CONTRACT_AUTHORITY."
 }

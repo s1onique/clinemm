@@ -1,7 +1,7 @@
 Final review — ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
 =================================================================
 
-VERDICT: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN (post correction cycle 01)
+VERDICT: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN (post correction cycle 02)
 
 CONTRACT: B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL)
 
@@ -74,7 +74,34 @@ ENTRY HEAD: 3a201b49c0c2de5a1a7f224e9633d07046400df9
 EXIT HEAD:  769281892e43401bcf81f7e22765f24b60eb5932
             (single docs/evidence-only commit; see git log -1)
 
-CORRECTION CYCLE: 01
+CORRECTION CYCLE: 02
+  Cycle 01 (HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN) was closed in
+  the contract-freeze commit (§20-contract-correction-01.md). The
+  Factory causal reviewer then returned
+  HALT_WAIT_SEMANTICS_STALE_CONTRACT_AUTHORITY, which this ACT
+  closed as cycle 02:
+
+  P0 STALE_B_D1_AUTHORITY             CLOSED (§7.2 + §14.0 + §14.1
+                                       rewritten; D1a strict WAIT =
+                                       NO/OUT_OF_V1; D1b v1
+                                       WAIT(v1)→NOTIFY mapping = YES)
+  P0 S9_SUPERSESSION_CONTRADICTION    CLOSED (§10.8
+                                       NOTIFICATION_LIFETIME_INVARIANT
+                                       introduced; epoch explicitly
+                                       excluded from notify-on-terminal
+                                       lifetime decision; S9 rewritten)
+  P1 STALE_TRIGGER_IDENTITY_TEXT      CLOSED (§11.7, §12.1, §13.4,
+                                       §14.4, §17.7 rewritten to defer
+                                       to §15.7)
+  P1 MULTIJOB_NOTIFY_AUTHORITY        CLOSED (§15.7.3 rewritten:
+                                       coordinator owns both identity
+                                       map AND active-notify set; wake
+                                       consumer MUST NOT query
+                                       CommandJobManager for notification
+                                       semantics)
+  See §21-contract-correction-02.md for full record.
+
+CYCLE 01 STATUS (already closed before cycle 02 began):
   Reviewer verdict: HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN
   P0 #1 CONTRACT_FREEZE_NOT_DURABLE         CLOSED (commit landed)
   P0 #2 WAIT_NOTIFY_SEMANTIC_CONTRADICTION   CLOSED (WAIT = NOTIFY in v1 honestly)
@@ -103,10 +130,11 @@ EVIDENCE ARTIFACTS PRODUCED:
   15-contract-wording.md          (corrected cycle 01; §15.7 added)
   16-scenario-suite.md            (corrected cycle 01)
   17-compatibility.md
-  18-successor-authorization.md   (corrected cycle 01)
-  19-final-review.txt             (this file; corrected cycle 01)
-  20-contract-correction-01.md    (new; correction record)
-  result.json                     (corrected cycle 01)
+  18-successor-authorization.md   (corrected cycle 01 + cycle 02)
+  19-final-review.txt             (this file; corrected cycle 01 + cycle 02)
+  20-contract-correction-01.md    (cycle 01 record)
+  21-contract-correction-02.md    (cycle 02 record; NEW)
+  result.json                     (corrected cycle 01 + cycle 02)
 
 RECON GATES:
   - Current tool surface recon: done (§3)
@@ -127,7 +155,7 @@ SCENARIO SUITE:
 CHECKS PERFORMED:
   - git rev-parse HEAD: 769281892e43401bcf81f7e22765f24b60eb5932 (post-commit)
   - git status --short: clean
-  - git log -1 --oneline: 337bdb1c1 docs(factory): freeze Contract B...
+  - git log -1 --oneline: 769281892 docs(factory): freeze Contract B...
   - diff --check: clean (no production changes)
   - result.json parses: yes
   - successor ACT binds to exit_head 769281892e43401bcf81f7e22765f24b60eb5932

@@ -111,10 +111,25 @@ The run_commands tool result envelope is unchanged:
 - ONE new lifecycle subscriber is registered on the
   CommandJobManager.onCommandJobLifecycle callback.
 - The wake subscriber:
-  - reads the notifyOnCompletion flag from the CommandJob record
-  - on the >0 -> 0 cardinal transition, fires the wake via
-    PendingPromptsController.enqueue
-  - is dormant when notifyOnCompletion is false
+  - subscribes to the per-job `command_job_terminal_committed`
+    lifecycle event (NOT the `>0 -> 0` cardinal transition).
+  - reads the notifyOnCompletion flag from the COORDINATOR-OWNED
+    active-notify set (`notificationMarkers` map at the
+    SdkSessionEventCoordinator seam, per §15.7.1 + §15.7.3),
+    NOT from the CommandJob record. CommandJob's footprint is
+    preserved.
+  - on per-job terminal, applies the §10.8
+    NOTIFICATION_LIFETIME_INVARIANT (per-session + per-task
+    identity; epoch NOT used).
+  - if same-owner otherNotifyCount > 0, HOLD the wake in the
+    session/coordinator held set (FIFO by createdAtMs).
+  - if same-owner otherNotifyCount === 0, DRAIN held wakes
+    (FIFO) + enqueue the current job's wake via
+    PendingPromptsController.enqueue with delivery:"queue".
+  - the wake prompt is a bounded GENERATED PROMPT STRING
+    (formatTerminalWakePrompt, per §15.7.2), NOT a typed payload.
+  - is dormant when the marker is absent or notifyOnCompletion
+    is false (DETACH intent).
 ```
 
 ## 17.8 Why this is a strict-superset change

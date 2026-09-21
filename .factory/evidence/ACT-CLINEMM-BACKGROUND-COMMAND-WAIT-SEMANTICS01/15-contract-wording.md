@@ -81,45 +81,60 @@ to verify the outcome."
 ```text
 ONE new consumer on CommandJobManager.onCommandJobLifecycle:
   - subscribe to "command_job_terminal_committed" events (per-job,
-    fires exactly once per terminal job)
+    fires exactly once per terminal job) — NOT the >0 → 0
+    cardinal transition.
   - on each event:
-    - look up identity at the session/coordinator seam
-      (NOT on CommandJob — see §15.7 below)
-    - check conservation rules (sessionId, taskId, epoch,
-      hasRunningBackgroundJobForOwner)
-    - if notifyOnCompletion:true AND conservation pass AND no
-      other notify=true job for owner:
-      enqueue a bounded generated prompt string via
-      PendingPromptsController.enqueue with delivery:"queue"
-    - if notifyOnCompletion:true AND another notify=true job still
-      running for owner: HOLD the wake in the session/coordinator
-      held set (FIFO by job-start order)
-    - else: discard (notify=false is the default)
+    - look up the NotificationMarker in the coordinator-owned
+      notificationMarkers map (NOT on CommandJob — see §15.7)
+    - apply §10.8 NOTIFICATION_LIFETIME_INVARIANT
+      (sessionId + taskId match; epoch NOT used)
+    - if notifyOnCompletion:true AND lifetime check passes AND no
+      other same-owner notify=true marker active:
+      drain the held set (FIFO) + enqueue a bounded generated
+      prompt string via PendingPromptsController.enqueue with
+      delivery:"queue"
+    - if notifyOnCompletion:true AND lifetime check passes AND
+      another same-owner notify=true marker active:
+      HOLD the wake in the session/coordinator held set
+      (FIFO by createdAtMs)
+    - else (lifetime fails OR notify=false OR marker absent):
+      discard
 
-NOTIFICATION_IDENTITY_OWNER (frozen, see §15.7):
+NOTIFICATION_IDENTITY_OWNER (frozen, see §15.7.1 + §15.7.3):
   - session/coordinator-owned, NOT CommandJob-owned
   - Captured at run_commands call time at the
     SdkSessionEventCoordinator seam (or equivalent where
     options.getTask().taskId is reachable)
   - Per-session identity map keyed by jobId:
-      Map<jobId, { sessionId, taskId, epoch, notifyOnCompletion }>
+      Map<jobId, NotificationMarker>
+      NotificationMarker = {
+        jobId, sessionId, taskId, notifyOnCompletion, createdAtMs
+      }
+    Epoch is NOT part of NotificationMarker (post-CORRECTION02).
+  - This map is BOTH the identity map AND the source of the
+    active-notify set (post-CORRECTION02). The wake consumer
+    queries this map for everything; it does NOT read from
+    CommandJobManager for notification semantics.
   - Cleared on terminal-committed (after wake enqueue) and on
     session end
 
-WAKE_REPRESENTATION (frozen, see §15.7):
+WAKE_REPRESENTATION (frozen, see §15.7.2):
   - Bounded generated prompt string (not typed payload)
   - PendingPromptsController.enqueue accepts only { prompt: string }
   - The "typed" schema lives in code (formatTerminalWakePrompt),
     NOT in the queue payload
+  - The original packet's "typed wake payload" claim is retracted.
 
 NO change to:
   - run_commands schema (only addition: optional boolean)
   - CommandJobManager internal CommandJob record structure
-    (CommandJob does NOT capture taskId/epoch; the coordinator
-    seam owns those identities)
+    (CommandJob does NOT capture taskId/notifyOnCompletion/epoch;
+    the coordinator seam owns all notification identity)
   - command_status / cancel_command / Proceed While Running
-  - reevaluateDeferredContinuation (the turn-state consumer)
-  - the Q5 deferral marker
+  - reevaluateDeferredContinuation (the BTCONT turn-state
+    consumer — its lifetime invariant uses epoch; the wake
+    consumer has its OWN lifetime invariant per §10.8)
+  - the BTCONT Q5 deferral marker
   - any card / TaskHeader / webview / protobuf surface
 ```
 
@@ -147,13 +162,28 @@ NOTIFICATION_IDENTITY_OWNER = session/coordinator-owned
   Owner seam: SdkSessionEventCoordinator construction (or equivalent
   coordinator seam where options.getTask().taskId is reachable).
   Captured at run_commands call time:
-    - sessionId:   AgentToolContext.sessionId (already present)
-    - taskId:      options.getTask().taskId at call time
-                   (may be undefined if not in a task context)
-    - epoch:       coordinator-managed epoch counter
-                   (bumped on task reset, follow-up start, etc.)
+    - sessionId:           AgentToolContext.sessionId (already present)
+    - taskId:              options.getTask().taskId at call time
+                           (may be undefined if not in a task context)
+    - notifyOnCompletion:  the boolean passed in by the model
+    - createdAtMs:         Date.now() at handoff time (for FIFO)
+  NOTE (post-CORRECTION02): epoch is NOT part of NotificationMarker.
+  The wake consumer's lifetime invariant (per §10.8) does NOT use
+  epoch. Epoch is the BTCONT turn-state consumer's mechanism; the
+  wake consumer has its own (sessionId, taskId) check.
   Stored in a per-session identity map keyed by jobId:
-    Map<jobId, { sessionId, taskId, epoch, notifyOnCompletion }>
+    Map<jobId, NotificationMarker>
+    NotificationMarker = {
+      jobId: string,
+      sessionId: string,
+      taskId: string | undefined,
+      notifyOnCompletion: boolean,
+      createdAtMs: number
+    }
+  This map is BOTH the identity map AND the source of the
+  active-notify set (post-CORRECTION02). The wake consumer queries
+  THIS map for everything; it does NOT read from CommandJob
+  directly. CommandJob's footprint is preserved.
   Cleared on terminal-committed (after wake enqueue) and on session
   end.
 
@@ -219,9 +249,27 @@ WHY THIS FORM:
     is retracted.
 ```
 
-### 15.7.3 Multi-job trigger (frozen)
+### 15.7.3 Multi-job trigger (frozen, post-CORRECTION02)
 
 ```text
+NOTIFICATION_MARKERS (authoritative owner: SdkSessionEventCoordinator):
+  Map<jobId, NotificationMarker>
+  NotificationMarker = {
+    jobId: string,
+    sessionId: string,
+    taskId: string | undefined,
+    notifyOnCompletion: boolean,
+    createdAtMs: number
+  }
+
+  The coordinator owns BOTH:
+    - the identity map (`markers`) and
+    - the active-notify set (the subset where
+      m.notifyOnCompletion === true, partitioned by
+      (m.sessionId, m.taskId) into per-owner FIFO lists).
+  CommandJob does NOT carry notifyOnCompletion. The wake consumer
+  MUST NOT query CommandJobManager for notification semantics.
+
 TRIGGER = per-job terminal lifecycle event
   Event: CommandJobManager.onCommandJobLifecycle(
     event: { event: "command_job_terminal_committed",
@@ -229,30 +277,57 @@ TRIGGER = per-job terminal lifecycle event
   )
   Source: apps/vscode/src/sdk/command-job-manager.ts:621-...
   Per-job, fires EXACTLY ONCE per terminal job.
+  NOT the >0 -> 0 cardinal transition.
 
-NOT the >0 -> 0 cardinal transition (which fires once when the LAST
-job disappears, not on each job's terminal — the previous freeze
-incorrectly conflated the two).
+NOTIFICATION LIFETIME (per §10.8):
+  Apply §10.8 NOTIFICATION_LIFETIME_INVARIANT before any hold/drain
+  decision. Discard on session/task mismatch or empty-repo. Epoch
+  is NOT used.
 
-For each "command_job_terminal_committed" event:
-  let j = the terminal job
-  if j.notifyOnCompletion !== true:
-    discard (DETACH intent; no wake)
-    return
-  let otherNotifyCount = count of jobs in CommandJobManager.active
-    where job.id != j.id AND job.notifyOnCompletion === true
-  if otherNotifyCount > 0:
-    HOLD wake for j in session/coordinator held set
-    return
-  // j.notifyOnCompletion === true AND no other notify=true jobs
-  // still running for the owning session
-  DRAIN all held wakes for the owning session in FIFO order
-  enqueue each held wake via PendingPromptsController.enqueue
-  enqueue j's wake via PendingPromptsController.enqueue
+WAKE CONSUMER (handler on per-job terminal event):
 
-Held wake key: (jobId, ownerSessionId, notifyOnCompletion, createdAtMs)
-Held set lives at the session/coordinator seam (per §15.7.1).
-At most one FIFO list per owner session.
-v1 cap: bounded by max parallel jobs (existing maxTerminalJobs limit).
-Wakes are dropped only when the session ends (PERSISTENCE = EPHEMERAL_ONLY).
+  for each "command_job_terminal_committed" event:
+    j = the terminal job (jobId from event)
+    marker = markers.get(j.id)
+    if marker === undefined OR marker.notifyOnCompletion === false:
+      discard (DETACH intent or unknown job)
+      return
+    markers.delete(j.id)
+
+    // §10.8 lifetime check
+    if marker.sessionId !== activeSession?.sessionId: return (discard)
+    if marker.taskId    !== activeSession?.getTask?.()?.taskId: return (discard)
+    if activeSession === undefined: return (discard; empty repo)
+
+    // Compute other same-owner notify markers still active.
+    otherNotifyCount = count(markers.values()
+      where m.sessionId === marker.sessionId
+        AND m.taskId    === marker.taskId
+        AND m.notifyOnCompletion === true)
+
+    if otherNotifyCount > 0:
+      HOLD wake for j in coordinator held set
+        (FIFO list keyed by (marker.sessionId, marker.taskId),
+         ordered by marker.createdAtMs)
+      return
+
+    // j is the LAST same-owner notify=true job terminating.
+    let held = heldSet.get((marker.sessionId, marker.taskId))
+    heldSet.delete((marker.sessionId, marker.taskId))
+    if held:
+      for each w in held (FIFO order):
+        enqueue w via PendingPromptsController.enqueue(
+          { prompt: formatTerminalWakePrompt(w.payload),
+            delivery: "queue" })
+    enqueue j's wake via PendingPromptsController.enqueue(
+      { prompt: formatTerminalWakePrompt(j.payload),
+        delivery: "queue" })
+
+HELD SET:
+  Held set lives at the session/coordinator seam (per §15.7.1).
+  Per-owner FIFO list keyed by (sessionId, taskId), bounded by
+  createdAtMs.
+  v1 cap: bounded by max parallel jobs (existing maxTerminalJobs limit).
+  Wakes are dropped only when the session ends (PERSISTENCE =
+  EPHEMERAL_ONLY).
 ```
