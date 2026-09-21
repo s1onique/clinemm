@@ -71,7 +71,7 @@ SUCCESSOR: ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01
   Implementation brief: §18-successor-authorization.md (corrected).
 
 ENTRY HEAD: 3a201b49c0c2de5a1a7f224e9633d07046400df9
-EXIT HEAD:  66911bd48441ca69aca5ccc6213cc8d280aac4ed
+EXIT HEAD:  769281892e43401bcf81f7e22765f24b60eb5932
             (single docs/evidence-only commit; see git log -1)
 
 CORRECTION CYCLE: 01
@@ -125,12 +125,12 @@ SCENARIO SUITE:
   - Coverage table at §16.12.
 
 CHECKS PERFORMED:
-  - git rev-parse HEAD: 66911bd48441ca69aca5ccc6213cc8d280aac4ed (post-commit)
+  - git rev-parse HEAD: 769281892e43401bcf81f7e22765f24b60eb5932 (post-commit)
   - git status --short: clean
   - git log -1 --oneline: 337bdb1c1 docs(factory): freeze Contract B...
   - diff --check: clean (no production changes)
   - result.json parses: yes
-  - successor ACT binds to exit_head 66911bd48441ca69aca5ccc6213cc8d280aac4ed
+  - successor ACT binds to exit_head 769281892e43401bcf81f7e22765f24b60eb5932
 
 NO PRODUCTION FILES TOUCHED.
 NO TEST FILES TOUCHED.

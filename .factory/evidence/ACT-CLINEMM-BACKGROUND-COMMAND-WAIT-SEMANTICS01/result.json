@@ -2,7 +2,7 @@
   "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01",
   "epistemic_purpose": "product-contract selection for background command wait, notify, and detach semantics",
   "entry_head": "3a201b49c0c2de5a1a7f224e9633d07046400df9",
-  "exit_head": "66911bd48441ca69aca5ccc6213cc8d280aac4ed",
+  "exit_head": "769281892e43401bcf81f7e22765f24b60eb5932",
   "exit_head_commit_subject": "docs(factory): freeze Contract B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL) for run_commands wait/notify/detach semantics",
   "worktree_state_at_exit": "clean",
   "predecessor": {
@@ -120,7 +120,7 @@
   },
   "successor_act": "ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01",
   "successor_purpose": "bounded async terminal->session stimulus (add optional schema field, append tool description paragraph, implement wake consumer on command_job_terminal_committed event, capture identity at coordinator seam, implement formatTerminalWakePrompt, implement held set with FIFO drain, add focused test family mirroring BTCONT01 shape)",
-  "successor_binding_head": "66911bd48441ca69aca5ccc6213cc8d280aac4ed",
+  "successor_binding_head": "769281892e43401bcf81f7e22765f24b60eb5932",
   "scope_discipline": {
     "production_files_touched": 0,
     "test_files_touched": 0,
@@ -129,7 +129,7 @@
     "branch": "main",
     "commit_landed_in_this_act": true,
     "commit_subject": "docs(factory): freeze Contract B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL) for run_commands wait/notify/detach semantics",
-    "commit_hash": "66911bd48441ca69aca5ccc6213cc8d280aac4ed"
+    "commit_hash": "769281892e43401bcf81f7e22765f24b60eb5932"
   },
   "upstream_divergence_record": {
     "upstream_background_terminal": "notifyParent defaults true",

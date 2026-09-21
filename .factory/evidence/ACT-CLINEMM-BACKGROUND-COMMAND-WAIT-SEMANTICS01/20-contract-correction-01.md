@@ -325,12 +325,12 @@ SUCCESSOR = ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01
 ```text
 VERDICT = PASS_WAIT_SEMANTICS_CONTRACT_FROZEN
 
-EXIT_HEAD = 66911bd48441ca69aca5ccc6213cc8d280aac4ed
+EXIT_HEAD = 769281892e43401bcf81f7e22765f24b60eb5932
 ENTRY_HEAD = 3a201b49c0c2de5a1a7f224e9633d07046400df9
 
 P0 CONTRACT_FREEZE_NOT_DURABLE         = CLOSED (single docs/evidence-only
                                               commit landed;
-                                              HEAD = 66911bd48441ca69aca5ccc6213cc8d280aac4ed;
+                                              HEAD = 769281892e43401bcf81f7e22765f24b60eb5932;
                                               git status --short: clean)
 P0 WAIT_NOTIFY_SEMANTIC_CONTRADICTION   = CLOSED (WAIT = NOTIFY in v1 honestly;
                                               STRICT_WAIT deferred)
@@ -340,5 +340,5 @@ P1 WAKE_PAYLOAD_SURFACE                 = CLOSED (bounded generated prompt)
 
 PRODUCTION_IMPLEMENTATION = AUTHORIZED
   via successor ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01
-  bound to exit_head = 66911bd48441ca69aca5ccc6213cc8d280aac4ed.
+  bound to exit_head = 769281892e43401bcf81f7e22765f24b60eb5932.
 ```
