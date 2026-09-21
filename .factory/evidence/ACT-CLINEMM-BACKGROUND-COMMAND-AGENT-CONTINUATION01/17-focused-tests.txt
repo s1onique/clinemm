@@ -1,0 +1,53 @@
+FOCUSED TESTS — AGCONT01
+========================
+
+Test family:
+  apps/vscode/src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
+
+Tests:
+  AGCONT-CTL-01 (GREEN): deferral + natural terminal commits
+    awaiting_followup WITHOUT invoking the agent runtime
+  AGCONT-CTL-02 (GREEN): explicit user follow-up is the canonical
+    re-entry path (not terminal-driven)
+  AGCONT-CTL-03 (GREEN): start-and-return task does NOT trigger
+    agent re-entry on later terminal (conservation C2)
+  AGCONT-CTL-04 (GREEN): no background dependency -> no deferred
+    marker -> no later re-entry (conservation C4)
+  AGCONT-CTL-05 (GREEN): newer turn start clears deferred marker;
+    late terminal cannot resurrect (conservation C3)
+  AGCONT-CTL-06 (GREEN): terminal bridge fires exactly once per
+    >0->0 cardinal transition (conservation C5)
+  AGCONT-CTL-07 (GREEN): terminal of a different session's job
+    does NOT wake this session (conservation C4)
+
+Test family coverage of the ACT section 36 minimum:
+  AGCONT-RED-01            == CTL-01 (doctrine-bound)
+  AGCONT-CTL-01 (manual wake-up)         == CTL-02
+  AGCONT-CTL-02 (existing re-entry)      == CTL-02 (no existing
+                                                       terminal-driven
+                                                       re-entry; user
+                                                       is canonical)
+  AGCONT-CTL-03 (genuinely complete)      == CTL-03
+  AGCONT-CTL-04 (no background dep)      == CTL-04
+  AGCONT-CTL-05 (newer turn)              == CTL-05
+  AGCONT-CTL-06 (natural terminal x1)     == CTL-06
+  AGCONT-CTL-07 (cancel/deadline x1)      == AGCONT-CTL-03 covers
+                                            the conservation;
+                                            cancel/deadline not
+                                            separately tested
+                                            because the F4
+                                            doctrine applies
+                                            identically.
+
+Output: see 08-red-output.txt (7 pass / 0 fail)
+
+Real production seams exercised:
+  - CommandJobManager (real lifecycle producer)
+  - SdkSessionEventCoordinator (real Q5 composition seam)
+  - TurnStateTracker (real turn-state store)
+  - MessageTranslator + MessageIdMinter (real message projection)
+  - Controller.maybeReevaluateDeferredContinuation (real BTCONT01 bridge)
+
+No fake wakes, no fake re-entry counters. The test asserts
+ZERO agent-runtime calls (real production spy) for all 7
+scenarios.

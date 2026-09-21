@@ -1,0 +1,42 @@
+CONTROL — AGCONT-CTL-02 (user follow-up is canonical re-entry path)
+===================================================================
+
+Per the ACT section 14:
+
+  After the stranded state:
+    user sends follow-up
+  Required:
+    agent resumes normally
+  Purpose:
+    agent runtime itself is healthy;
+    automatic re-entry stimulus is absent.
+
+In ClineMM the agent runtime IS healthy. The canonical re-entry
+path is:
+  SdkFollowupCoordinator.continueIdleSession (sdk-followup-coordinator.ts)
+    OR
+  SdkTaskStartCoordinator.initTask (sdk-task-start-coordinator.ts)
+  Both are driven by the user's UI input (webview sendMessage).
+
+The AGCONT-CTL-02 control in the AGCONT01 focused test asserts
+that NO OTHER producer of agent re-entry exists between the Q5
+deferral and the post-terminal state. In particular, the BTCONT01
+bridge (`reevaluateDeferredContinuation`) does NOT trigger an
+agent re-entry; it commits `awaiting_followup` only.
+
+OBSERVATION:
+  - BTCONT01 bridge fires on >0->0 transition
+  - BTCONT01 bridge commits awaiting_followup (turn-state only)
+  - BTCONT01 bridge does NOT invoke AgentRuntime.run / .send /
+    .continue
+  - agentSpy.calls === [] (no re-entry)
+
+VERDICT:
+  - The user-driven path (SdkFollowupCoordinator / SdkTaskStart)
+    IS the canonical re-entry.
+  - The terminal-driven path does NOT exist.
+  - The user's "check the result" message will re-enter the
+    agent via the canonical path; the agent will inspect the
+    CommandJob's state and report the result.
+
+This is the correct behavior per the F4 doctrine.

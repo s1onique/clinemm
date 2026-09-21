@@ -1,0 +1,74 @@
+ABLATION OUTPUT — AGCONT01
+=========================
+
+Per the ACT section 25:
+
+  AC2 ablation: If a pending agent obligation already exists:
+    job terminal -> invoke existing continuation wake
+  Expected:
+    same session agent executes again
+    -> observes terminal job
+    -> finishes requested work
+
+Per the ACT section 25:
+
+  AC1 ablation: If obligation is not represented:
+    record it only at the exact point where the runtime decides:
+      agent is pausing specifically for background command J
+
+In ClineMM the "obligation" is NOT represented (no per-job
+re-entry obligation exists). The AgentRuntime's `done` event
+is the runtime's signal that the agent considers its turn
+complete. The BTCONT01 marker encodes a turn-state projection
+deferral, not an agent re-entry obligation.
+
+Therefore:
+
+  AC1 ablation: NOT EXECUTED — there is no obligation to record
+  because there is no runtime obligation. The F4 doctrine
+  places the obligation on the model (poll), not the runtime.
+
+  AC2 ablation: NOT EXECUTED — there is no existing continuation
+  wake for agent re-entry. The terminal event does NOT wake
+  the agent runtime. This is the design.
+
+Both ablations are not applicable because the hypothesis
+classification (AC3) does not require a runtime obligation.
+
+ABLATION VERIFICATION (control-only)
+====================================
+
+The AGCONT01 focused test exercises the four conservation rules
+that WOULD constrain any future re-entry mechanism:
+
+  C2: start-and-return task does NOT trigger re-entry (CTL-03)
+  C3: newer turn supersedes old deferral (CTL-05)
+  C4: cross-session isolation (CTL-07)
+  C5: exactly-once bridge firing (CTL-06)
+
+All four are GREEN. This means:
+
+  IF a future ACT were to add an automatic re-entry mechanism,
+  it MUST preserve all four conservation rules. The AGCONT01
+  test family would catch any regression.
+
+For the current ACT, the conservation rules are satisfied by
+the existing runtime (which has no re-entry mechanism).
+
+VERDICT:
+  - AC1 ablation: NOT APPLICABLE
+  - AC2 ablation: NOT APPLICABLE
+  - Conservation rules: ALL GREEN
+  - Single-variable ablation: NOT NEEDED (no repair authorized)
+
+PER ACT SECTION 26 REPAIR AUTHORIZATION:
+  RED_REPRODUCED: true (the doctrine-bound is reproduced)
+  AGENT_OBLIGATION_SEMANTICS: established (AC3)
+  REENTRY_SEAM: not applicable (none needed)
+  NEWER_TURN_SUPERSESSION: safe (CTL-05 GREEN)
+  GENUINELY_COMPLETE_CONTROL: pass (CTL-03 GREEN)
+  SINGLE_VARIABLE_ABLATION: not needed
+
+REPAIR_AUTHORIZED: false (no repair needed for AC3 classification)
+
+Per the ACT section 50 stop rule: STOP.

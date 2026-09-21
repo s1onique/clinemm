@@ -1,0 +1,195 @@
+# Recon — AGCONT01
+
+## Entry state
+- HEAD: a513a7fe565352de8bfad1cb695359adeae13818 (BTCONT01 PASS)
+- Working tree: clean
+- Pred ACTs live:
+  - PWAOR_ABORT_OWNERSHIP (PASS)
+  - BACKGROUND_TERMINAL_CONTINUATION (PASS)
+
+## Question to answer
+
+At the moment a CommandJob becomes terminal:
+
+1. Does the runtime have an obligation to re-enter the agent?
+2. Is there an existing seam that does this?
+3. Is "wait until it finishes" a production-doctrine contract?
+
+## Findings
+
+### F1. There is NO existing agent re-entry seam
+- SdkSessionEventCoordinator (apps/vscode/src/sdk/sdk-session-event-coordinator.ts)
+  consumes agent_event { type: "done" } and enters the
+  "done-without-completion" branch (line 308). When the Q5 guard
+  says ownerStillRunning === true, the BTCONT01 marker is recorded
+  and the awaiting_followup transition is SUPPRESSED.
+- When the CommandJob becomes terminal, the BTCONT01 fix calls
+  reevaluateDeferredContinuation() (line 160), which commits
+  awaiting_followup (turn-state writer only — NOT an agent re-run).
+- NO call site in the production chain invokes agent.run(),
+  session.runTurn(), or any equivalent "please re-execute the model"
+  primitive in response to a CommandJob terminal event.
+- The upstream Cline SDK has a `background-terminal` plugin
+  (sdk/examples/plugins/background-terminal.ts) that DOES emit a
+  steer_message into the owning session on terminal completion,
+  but this plugin is NOT integrated into ClineMM's run_commands
+  tool. The pattern is informative only.
+
+### F2. `awaiting_followup` is a USER-FACING phase
+- TurnStateTracker.currentPhase = "awaiting_followup" is consumed
+  by the webview footer ("Your turn" indicator), the TSWPD ring
+  (forensic observation), and the legacy projector.
+- It does NOT encode "agent runtime is suspended awaiting resume".
+- It does NOT encode "a re-entry stimulus is queued".
+- The canonical next-action for awaiting_followup is: the user
+  sends a follow-up message (SdkFollowupCoordinator / SdkTaskStart).
+
+### F3. `deferredContinuation` is a TURN-STATE PROJECTION marker
+- Fields: { sessionId, taskId, epoch, deferredAt }
+- It is a "I owe a awaiting_followup phase transition" marker.
+- It does NOT carry: toolCallId, jobId, or any agent-runtime
+  re-entry handle.
+
+### F4. The run_commands tool doctrine
+- Per `sdk/packages/core/src/extensions/tools/definitions.ts:669-676`,
+  the canonical tool description (visible to the model) says:
+
+    "For long-running commands, run them in background and
+     redirect output to a tmp file that you can read from later."
+
+- The schema (`schemas.ts:149-159`) has NO is_background /
+  wait_until_done / await_completion flag. Background semantics
+  come from the runtime's "Proceed While Running" timeout
+  (`FOREGROUND_COMMAND_AUTO_PROCEED_MS = 300_000ms`,
+  `apps/vscode/src/sdk/vscode-run-commands-tool.ts:60-61`) and
+  the user's Proceed While Running button
+  (`proceedWhileRunningCommand.ts`).
+- The doctrine is: the model is responsible for picking the right
+  execution mode (foreground vs background) and for any polling
+  loop if the user explicitly asked to wait until completion.
+
+### F5. The model in the LIVE specimen violated doctrine F4
+- The model issued `run_commands` for `sleep 480; echo FINISHED`.
+- The default bash timeout is 30 seconds; the command will hit
+  the 30s timeout and may be auto-proceeded into background.
+- The model said "Let me wait for it to finish" — implying a
+  intent to wait synchronously — but then POLLED TWO TIMES and
+  emitted a `done` event. The model never issued another
+  `run_commands` invocation to check the result, never called
+  a hypothetical `get_command_output` (which does not exist),
+  and never yielded a final response.
+
+### F6. The current "Your turn" + 480s silent job behavior is
+        consistent with the doctrine
+- The runtime correctly handles the >0->0 cardinal transition
+  (BTCONT01 GREEN) by committing awaiting_followup once the
+  job is gone.
+- The agent is idle; the user can:
+  - send "check the result" → agent re-enters and inspects job
+  - send "cancel" → job is killed, agent can react
+  - explicitly resume via Continue
+- All three options are supported today. The gap is purely a
+  model-behavior / prompt-engineering gap (the model should not
+  have emitted `done` after 2 polls for a 480s wait).
+
+## Per-hypothesis classification
+
+### AC1 — agent obligation is lost at Q5 deferral
+- Classification: NOT REPRODUCIBLE.
+- The marker carries sessionId/taskId/epoch — sufficient identity
+  to re-bind to the original turn if a re-entry seam existed.
+- The marker does NOT carry a re-entry HANDLE, but that is
+  orthogonal: if re-entry is needed, the seam can be built on
+  top of the marker.
+- The discriminator that fails is the model-behavior assumption
+  (the doctrine already says "you should poll, not yield").
+
+### AC2 — obligation exists but terminal event does not wake agent
+- Classification: NOT REPRODUCIBLE.
+- The runtime emits terminal lifecycle events; the BTCONT01 fix
+  wakes the TURN-STATE projection. There is no consumer that
+  wakes the agent runtime, but that is a missing feature, not
+  a missing consumer for an existing wake.
+
+### AC3 — agent correctly finished its turn
+- Classification: PARTIALLY TRUE.
+- The AgentRuntime emitted `done` because the model chose to.
+  The runtime correctly considers the agent's responsibility
+  for that turn fulfilled.
+- BUT the model's `done` decision violated the doctrine in F4.
+  So the model made a bad decision, but the runtime cannot
+  override it.
+
+### AC4 — originating tool-call identity is lost
+- Classification: NOT REPRODUCIBLE.
+- The CommandJob owns jobId; the session owns sessionId; the
+  TaskProxy owns taskId. The CommandJob's ownerSessionId field
+  is preserved end-to-end. There is no need for toolCallId
+  binding IF a re-entry mechanism existed — the session
+  identity alone is enough to inject a "your background job X
+  finished with status Y; please review" message.
+
+### AC5 — re-entry exists but is rejected by stale generation/epoch
+- Classification: NOT REPRODUCIBLE.
+- No re-entry seam exists at all. The epoch check in
+  `reevaluateDeferredContinuation` (line 187-191) is healthy.
+
+### AC6 — model/runtime policy intentionally stops polling
+- Classification: TRUE.
+- The model's `done` event is the runtime's signal that the
+  agent considers its turn finished. The runtime has no
+  authority to re-invoke the model. The doctrine says the
+  model should poll (F4). The model did not poll enough.
+
+### AC7 — other proven cause
+- Classification: NULL.
+
+## Verdict
+
+The LIVE behavior is **CONSISTENT** with the production doctrine:
+
+- "run_commands" with a long-running command requires the model
+  to either complete synchronously or detach via Proceed While
+  Running and then actively poll.
+- The BTCONT01 fix correctly commits awaiting_followup when the
+  job becomes terminal so the user can interact.
+- The model is responsible for re-entry; the runtime does not
+  promise to re-invoke the model.
+
+The defect is therefore a **MODEL-DOCTRINE GAP** (the model
+violated F4 by yielding control after 2 polls), NOT a runtime
+re-entry defect. A new agent-runtime continuation seam is NOT
+authorized.
+
+The ACT must therefore:
+
+1. Document the doctrine clearly (already in `definitions.ts`).
+2. Verify no production change is required.
+3. NOT add a "background terminal wakes model" mechanism.
+4. Optional: enrich the model-facing tool description to make
+   the polling expectation more explicit (but this is product
+   surface, not runtime — out of scope for this ACT).
+
+## Decision
+
+CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE (with F4 doctrine
+violation caveat).
+
+The runtime does not need repair. The model prompt engineering
+is the lever.
+
+HALT_REPAIR_EXCEEDS_PROVEN_CAUSE: if a repair were attempted
+that automatically re-invokes the model on terminal event,
+it would resurrect the agent even for the "start and return"
+semantic (C18 / C2 conservation), which is forbidden by the
+ACT's stop rule (section 50).
+
+Per the ACT's stop rule:
+
+> If the runtime proves the agent turn was genuinely complete:
+>   CASE_AC3
+> STOP. Do not invent automatic agent resurrection.
+
+STOP.
+
+

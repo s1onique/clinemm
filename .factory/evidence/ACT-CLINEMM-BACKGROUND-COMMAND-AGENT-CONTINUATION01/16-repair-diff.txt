@@ -1,0 +1,55 @@
+REPAIR DIFF — AGCONT01
+=====================
+
+NO REPAIR PERFORMED.
+
+Per the ACT section 26 repair authorization gates:
+
+  RED_REPRODUCED: true (doctrine-bound reproduced; AGCONT-CTL-01..07)
+  AGENT_OBLIGATION_SEMANTICS: established (CASE_AC3 — agent turn
+                              genuinely complete; F4 doctrine
+                              places polling obligation on model)
+  REENTRY_SEAM: N/A (no re-entry seam needed for AC3)
+  NEWER_TURN_SUPERSESSION: safe (AGCONT-CTL-05 GREEN)
+  GENUINELY_COMPLETE_CONTROL: pass (AGCONT-CTL-03 GREEN;
+                                  conservation C2 holds)
+  SINGLE_VARIABLE_ABLATION: not needed (no repair variable)
+
+REPAIR_AUTHORIZED: false (per AC3 classification; nothing to repair)
+
+Per the ACT section 50 stop rule:
+  > If the runtime proves the agent turn was genuinely complete:
+  >   CASE_AC3
+  > STOP. Do not invent automatic agent resurrection.
+
+STOP.
+
+What the ACT did NOT do:
+  - Did not add a "background terminal wakes model" mechanism
+  - Did not modify CommandJobManager to invoke any agent API
+  - Did not modify SdkSessionEventCoordinator's Q5 logic
+  - Did not modify SdkController's updateBackgroundCommandState
+  - Did not modify the BTCONT01 deferredContinuation marker
+  - Did not add a new agent-runtime re-entry seam
+  - Did not enrich the run_commands tool description (out of scope
+    for a runtime ACT; this is product surface)
+
+What the ACT did do:
+  - Authored a 7-test focused suite proving the runtime's
+    doctrine-bound behavior (AGCONT-CTL-01..07)
+  - Classified the LIVE failure as AC3 (agent turn genuinely
+    complete; F4 doctrine violation)
+  - Documented the doctrine boundary in 04-recon.txt and
+    05-product-contract.md
+  - Established the conservation matrix in 16-conservation.txt
+    (all 18 conservation rules PASS without runtime change)
+
+FILES TOUCHED (this ACT):
+  - apps/vscode/src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts (new)
+  - .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01/* (evidence)
+  - .factory/epic-board.md (board update; deferred to finalization)
+
+PRODUCTION CODE TOUCHED: NONE.
+
+The BTCONT01 fix (PASS) is the production-side ancestor. No
+additional production change is needed for AGCONT01.

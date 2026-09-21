@@ -1,0 +1,41 @@
+CAUSAL VERDICT — AGCONT01
+=========================
+
+Causal chain established:
+
+  agent emits `done` (model yields turn)
+  -> Q5 SUPPRESS awaiting_followup (deferral marker recorded)
+  -> BTCONT01 bridge wakes turn-state projection on >0->0 transition
+  -> phase commits awaiting_followup (USER-FACING, not agent-resuming)
+  -> agent runtime NOT re-invoked
+
+The runtime correctly:
+  - Honors the model's `done` event as end-of-turn
+  - Defers awaiting_followup while a background job is alive
+  - Commits awaiting_followup when the background job becomes terminal
+  - Does NOT invoke the agent runtime
+
+Classification: CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE
+
+The defect in the LIVE specimen is a MODEL-DOCTRINE GAP:
+  - The model violated F4: "For long-running commands, run them
+    in background and redirect output to a tmp file that you can
+    read from later."
+  - The model polled twice and emitted `done` after a 480s wait.
+  - The runtime correctly honored the yield.
+
+There is NO production doctrine for "automatic agent re-entry on
+background command terminal events." Adding such a mechanism
+would violate conservation C2 (the "start and return" task).
+
+Causal verdict: NO_REPAIR_NEEDED_CASE_AC3.
+
+Per the ACT section 50 stop rule:
+  > If the runtime proves the agent turn was genuinely complete:
+  >   CASE_AC3
+  > STOP.
+
+STOP.
+
+The LIVE 480s specimen is a model-side failure. The runtime is
+correct. No production change is authorized.

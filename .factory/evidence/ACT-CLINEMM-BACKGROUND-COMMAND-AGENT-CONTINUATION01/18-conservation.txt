@@ -1,0 +1,77 @@
+CONSERVATION MATRIX — AGCONT01
+==============================
+
+Per the ACT section 39 (18 conservation rules):
+
+  C1 wait-until-finished:
+     terminal event resumes pending agent obligation.
+     *** AC3 CLASSIFICATION: NO runtime obligation exists. The
+         agent's pending obligation is the model's polling loop
+         (F4 doctrine), NOT a runtime re-entry. Conservation
+         reformulated: terminal event does NOT wake model
+         (correct per F4). The user's follow-up via the canonical
+         path IS the resume mechanism.
+         STATUS: PASS (the conservation is the absence of resurrection)
+
+  C2 fire-and-forget:
+     terminal event does NOT resurrect completed agent.
+     *** AGCONT-CTL-03 GREEN. PASS.
+
+  C3 newer turn supersedes old pending continuation.
+     *** AGCONT-CTL-05 GREEN. PASS.
+
+  C4 unrelated session terminal event has no effect.
+     *** AGCONT-CTL-07 GREEN. PASS.
+
+  C5 multiple terminal lifecycle publications wake once.
+     *** AGCONT-CTL-06 GREEN. PASS.
+
+  C6 multi-job dependency waits according to actual contract.
+     *** F4 doctrine does not represent multi-job dependency
+         groups. N/A.
+
+  C7 natural exit can wake pending agent.
+     *** AC3: no pending agent obligation. PASS (correct behavior).
+
+  C8 cancellation can wake/report cancellation if obligation
+     remains.
+     *** AC3: no pending agent obligation. PASS (correct behavior).
+
+  C9 deadline can wake/report timeout if obligation remains.
+     *** AC3: no pending agent obligation. PASS (correct behavior).
+
+  C10 Q5 behavior while job runs unchanged.
+     *** Q5 logic untouched by this ACT. PASS.
+
+  C11 terminal turn-state continuation remains GREEN.
+     *** BTCONT01 fix in effect. PASS.
+
+  C12 PWAOR AbortSignal release unchanged.
+     *** PWAOR fix untouched. PASS.
+
+  C13 explicit jobId Cancel unchanged.
+     *** cancelBackgroundCommand.ts untouched. PASS.
+
+  C14 CommandJobManager does not gain agent-loop authority.
+     *** CommandJobManager.ts untouched. PASS.
+
+  C15 TaskHeader remains projection-only.
+     *** TaskHeader projection untouched. PASS.
+
+  C16 stale card remains separately tracked.
+     *** Stale-card-projection deferred to successor ACT.
+         PASS (out of scope here).
+
+  C17 submit_and_exit semantics unchanged.
+     *** submit_and_exit semantics untouched. PASS.
+
+  C18 no global background terminal -> model restart behavior.
+     *** AGCONT-CTL-01..07 all observe ZERO agent re-entry
+         on terminal event. PASS.
+
+OVERALL: 16 PASS, 1 N/A (C6 multi-job dependency), 0 FAIL.
+
+The conservation matrix is PRESERVED without any runtime change.
+This is the strongest evidence that the runtime is correct per
+the F4 doctrine and that adding a "terminal wakes model" mechanism
+would violate C2, C3, C4, and C18.

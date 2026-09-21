@@ -1,0 +1,15 @@
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+[0m[32m✓[0m [0mACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01[2m >[0m[1m AGCONT-CTL-01: deferral + natural terminal commits awaiting_followup WITHOUT invoking the agent runtime[0m [0m[2m[[1m12.62ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01[2m >[0m[1m AGCONT-CTL-02: explicit user follow-up is the canonical re-entry path (not terminal-driven)[0m [0m[2m[[1m10.85ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01[2m >[0m[1m AGCONT-CTL-03: start-and-return task does NOT trigger agent re-entry on later terminal[0m [0m[2m[[1m13.49ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01[2m >[0m[1m AGCONT-CTL-04: no background dependency -> no deferred marker -> no later re-entry[0m [0m[2m[[1m12.56ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01[2m >[0m[1m AGCONT-CTL-05: newer turn start clears deferred marker; late terminal cannot resurrect[0m [0m[2m[[1m11.77ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01[2m >[0m[1m AGCONT-CTL-06: terminal bridge fires exactly once per >0->0 cardinal transition[0m [0m[2m[[1m10.84ms[0m[2m][0m
+[0m[32m✓[0m [0mACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01[2m >[0m[1m AGCONT-CTL-07: terminal of a different session's job does NOT wake this session[0m [0m[2m[[1m12.11ms[0m[2m][0m
+
+[0m[32m 7 pass[0m
+[0m[2m 0 fail[0m
+ 36 expect() calls
+Ran 7 tests across 1 file. [0m[2m[[1m1215.00ms[0m[2m][0m

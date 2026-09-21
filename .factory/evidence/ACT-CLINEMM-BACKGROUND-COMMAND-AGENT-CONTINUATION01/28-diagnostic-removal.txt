@@ -1,0 +1,31 @@
+DIAGNOSTIC REMOVAL — AGCONT01
+=============================
+
+Per the ACT section 35:
+
+  Reuse: BJLA, BOCOR, TSWPD
+  Do not add a fourth ring unless absolutely necessary.
+  If agent re-entry itself is currently unobservable, minimally
+  extend TSWPD or existing runtime telemetry with:
+    background_agent_continuation
+
+This ACT did NOT add any new diagnostic ring. The recon (04-recon.txt)
+established that NO agent re-entry happens; the existing rings
+(BJLA, BOCOR, TSWPD) are sufficient to observe all relevant events:
+
+- BJLA: background-job liveness authority (lifecycle events)
+- BOCOR: background-owner correlation (Q5 deferral observations)
+- TSWPD: turn-state writer provenance (awaiting_followup commits)
+
+The AGCONT01 test asserts via a TEST-LOCAL spy (agentSpy) that
+NO agent re-entry happens. This is a test-only observation, not
+a production diagnostic. No new ring is needed because the
+absence of agent re-entry is by design (AC3 classification),
+not a defect.
+
+If a future ACT were to add an automatic agent re-entry mechanism,
+it would need to extend TSWPD with `background_agent_continuation`
+events per the ACT section 35 specification. That ACT is not
+this one.
+
+DIAGNOSTIC REMOVAL: NONE (no diagnostic was added).

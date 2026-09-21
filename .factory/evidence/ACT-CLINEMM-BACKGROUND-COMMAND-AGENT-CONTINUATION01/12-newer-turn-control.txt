@@ -1,0 +1,36 @@
+CONTROL — AGCONT-CTL-05 (newer turn supersession)
+=================================================
+
+The ACT section 19 specifies:
+  agent work deferred waiting for J
+  -> user/newer turn legitimately starts
+  -> J later terminates
+  Required:
+    old completion must NOT inject itself into newer turn
+
+OBSERVATION (AGCONT-CTL-05 in AGCONT01 test):
+  - First turn: deferredContinuation marker recorded for
+    session A with epoch N
+  - User starts a newer turn (active session swapped to
+    session B)
+  - The OLD background job terminates naturally
+  - BTCONT01 bridge fires; the reevaluateDeferredContinuation
+    check sees:
+      marker.sessionId !== activeSession.sessionId
+      (the older marker's sessionId is session A, but the
+      active session is session B)
+  - Marker is cleared (stale); the bridge is a no-op
+  - agentSpy.calls === []
+  - The OLD terminal event does NOT wake the NEWER turn
+
+This is the GREEN outcome of the newer-turn supersession case.
+
+The BTCONT01 fix's `reevaluateDeferredContinuation` already
+implements this conservation rule (lines 168-176 of
+sdk-session-event-coordinator.ts: if marker.sessionId !==
+activeSession.sessionId, clear the marker and return).
+
+VERDICT:
+  - Older terminal events are safely dropped.
+  - The newer turn is not contaminated by an old deferral.
+  - This is a CORRECT existing behavior, not a defect.

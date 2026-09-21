@@ -1,0 +1,57 @@
+FULL GATES - AGCONT01
+=====================
+
+$ cd apps/vscode && bun test src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
+
+bun test v1.3.13 (bf2e2cec)
+
+src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts:
+
+  AGCONT-CTL-01: deferral + natural terminal commits awaiting_followup
+  WITHOUT invoking the agent runtime           [13.23ms] PASS
+  AGCONT-CTL-02: explicit user follow-up is the canonical re-entry
+  path (not terminal-driven)                    [12.47ms] PASS
+  AGCONT-CTL-03: start-and-return task does NOT trigger agent
+  re-entry on later terminal                    [10.58ms] PASS
+  AGCONT-CTL-04: no background dependency -> no deferred marker ->
+  no later re-entry                            [12.69ms] PASS
+  AGCONT-CTL-05: newer turn start clears deferred marker; late
+  terminal cannot resurrect                     [11.79ms] PASS
+  AGCONT-CTL-06: terminal bridge fires exactly once per >0->0
+  cardinal transition                          [10.08ms] PASS
+  AGCONT-CTL-07: terminal of a different session's job does NOT
+  wake this session                            [12.00ms] PASS
+
+ 7 pass
+ 0 fail
+ 36 expect() calls
+Ran 7 tests across 1 file.
+
+$ cd apps/vscode && bun run check-types
+
+$ bun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit
+[format] biome format --write (329 files, 1 fixed)
+[tsc] tsc --noEmit (no errors)
+[compat] tsc --project tsconfig.vscode-compat.json --noEmit (no errors)
+[webview-ui tsc] tsc --noEmit (no errors)
+exit code 0
+
+$ bun run test:unit (full node-side unit suite)
+Files: 82   Pass: 1141   Fail: 0   Time: 34.4s
+All unit test files passed.
+
+VERDICT
+=======
+
+All 7 focused tests PASS. The full node-side unit suite PASSES
+(1141 tests across 82 files). TypeScript typecheck PASSES.
+
+The ACT's load-bearing proof is that the runtime correctly honors
+the model's `done` event and does NOT invoke the agent runtime
+on background-command terminal events -- the doctrine-bound behavior
+the recon (04-recon.txt) identified as the correct F4-aligned
+behavior.
+
+No production code change is needed (NO_REPAIR_NEEDED_CASE_AC3).
+
+The ACT halts per the section 50 stop rule.

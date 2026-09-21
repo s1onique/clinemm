@@ -1,0 +1,42 @@
+CONTROL — AGCONT-CTL-03 (start-and-return task)
+===============================================
+
+The ACT section 16 specifies:
+  Construct a task where the model explicitly says or calls a
+  real completion mechanism BEFORE the background job exits.
+  Required:
+    job later terminal
+    -> do NOT restart agent automatically
+
+This is the strongest conservation test against accidental agent
+resurrection.
+
+OBSERVATION (AGCONT-CTL-03 in AGCONT01 test):
+  - Model calls attempt_completion tool (canonical completion)
+  - Phase commits "completed" (NOT "awaiting_followup" — the
+    canonical turn-state writer respects the completion tool)
+  - deferredContinuation marker is undefined (Q5 was NOT
+    deferred because the model voluntarily yielded via a clean
+    completion)
+  - Background job terminates naturally later
+  - BTCONT01 bridge fires on >0->0 transition; since the marker
+    is undefined, the bridge is a no-op
+  - agentSpy.calls === []
+  - Phase remains "completed"
+  - The agent is NOT re-invoked
+
+This is the GREEN outcome of the "start and return" semantic.
+
+CRITICAL CONSERVATION IMPLICATION:
+  If a runtime re-entry mechanism were added to handle the
+  "wait until it finishes" case, it MUST distinguish that case
+  from the "start and return" case. The current runtime has no
+  such distinction. Adding a "terminal wakes model" mechanism
+  would resurrect the agent for "start and return" tasks, which
+  violates the F4 doctrine and the AGCONT-CTL-03 invariant.
+
+VERDICT:
+  - The "start and return" task is correctly handled: agent
+    does NOT resurrect on later terminal.
+  - This is the conservation bound that prevents any
+    "always re-invoke on terminal" repair.

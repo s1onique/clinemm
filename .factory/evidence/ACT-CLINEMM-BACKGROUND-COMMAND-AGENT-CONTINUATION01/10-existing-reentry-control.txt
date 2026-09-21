@@ -1,0 +1,51 @@
+CONTROL — AGCONT-CTL-02 (existing re-entry/steer seam)
+======================================================
+
+The ACT section 15 specifies:
+  If production has a `steer_message`, equivalent queue, or
+  session continuation API:
+    Inject a legitimate re-entry through that EXISTING real API.
+  Required:
+    agent runs again and can inspect terminal command state
+
+In ClineMM, the existing re-entry APIs are:
+
+1. SdkFollowupCoordinator.continueIdleSession
+   Location: apps/vscode/src/sdk/sdk-followup-coordinator.ts
+   Invocation: askResponse RPC (user-driven)
+   Effect: re-enters the agent runtime to process the user's
+           follow-up message; the agent can read CommandJob
+           state via vscode-run-commands-tool.ts:621-636
+           (run_commands wrapper provides status + output
+           access via the canonical tool surface).
+
+2. SdkTaskStartCoordinator.initTask
+   Location: apps/vscode/src/sdk/sdk-task-start-coordinator.ts
+   Invocation: newTask RPC or queued prompt drain
+   Effect: starts a new turn with a fresh prompt.
+
+3. PendingPromptsController (CLI/Hub only)
+   Location: sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
+   Invocation: queue drain
+   Effect: re-enters via session.send
+
+NONE of these are bound to background-job terminal events.
+
+The upstream Cline SDK's `background-terminal` plugin (NOT
+integrated into ClineMM's run_commands tool) does inject a
+`steer_message` into the owning session on terminal completion,
+but that pattern requires a fresh prompt to be injected into the
+conversation. ClineMM does not implement that pattern; the
+production code does not call session.send / agent.run on
+CommandJob terminal events.
+
+The AGCONT01 focused test (AGCONT-CTL-01 through 07) observes
+that NO existing re-entry mechanism is invoked on terminal event.
+The agentSpy.calls list is EMPTY for all 7 scenarios.
+
+VERDICT:
+  - The existing re-entry API (SdkFollowupCoordinator) is
+    user-driven, not terminal-driven.
+  - The terminal event does NOT trigger any re-entry API.
+  - This is consistent with the F4 doctrine: the model is
+    responsible for its own polling loop.
