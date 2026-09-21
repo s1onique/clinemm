@@ -1,7 +1,7 @@
 Final review — ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
 =================================================================
 
-VERDICT: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN (post correction cycle 02)
+VERDICT: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN (post correction cycle 03)
 
 CONTRACT: B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL)
 
@@ -74,6 +74,50 @@ ENTRY HEAD: 3a201b49c0c2de5a1a7f224e9633d07046400df9
 EXIT HEAD:  769281892e43401bcf81f7e22765f24b60eb5932
             (single docs/evidence-only commit; see git log -1)
 
+CORRECTION CYCLE: 03
+  Cycles 01 and 02 were closed in prior commits
+  (§20-contract-correction-01.md and §21-contract-correction-02.md).
+  The Factory causal reviewer then returned
+  HALT_WAIT_SEMANTICS_CORRECTION02_STALE_EPOCH_AUTHORITY: the
+  architecture in cycle 02 was right, but four load-bearing text
+  locations still described superseded authority. This ACT closed
+  them as cycle 03:
+
+  P0 STALE_EPOCH_SUMMARY_AUTHORITY   CLOSED (§10.7 contract-decision
+                                       summary rewritten: Supersession
+                                       = sessionId + taskId (NOT
+                                       epoch); explicit reference to
+                                       §10.8 NOTIFICATION_LIFETIME_INVARIANT)
+  P1 S10_STALE_EPOCH_FIELD           CLOSED (S10 identity tuple
+                                       rewritten: (sessionId, taskId,
+                                       notifyOnCompletion, createdAtMs)
+                                       per §15.7.1)
+  P1 S7_WRONG_INTENT_OWNER           CLOSED (S7 wake-consumer logic
+                                       rewritten: marker =
+                                       notificationMarkers.get(jobId);
+                                       marker absent OR
+                                       marker.notifyOnCompletion !==
+                                       true -> discard; explicit that
+                                       CommandJob does NOT carry notify
+                                       field)
+  P1 OLD_TYPED_OR_COMMANDJOB_WORDING  CLOSED (07-contract-candidates.md
+                                       Candidate B prose + Risks
+                                       block rewritten: 'typed prompt
+                                       instead' removed and replaced
+                                       with bounded-string reference to
+                                       §15.7.2; 'CommandJob internal
+                                       flag' alternative removed and
+                                       replaced with
+                                       notification-marker-only design
+                                       per §15.7.1 + §15.7.3)
+  See §22-contract-correction-03.md for full record.
+
+  Bounded edit verification:
+    git diff --check -> clean
+    git grep -nE 'sessionId + taskId + epoch|j\.notifyOnCompletion|
+                  typed prompt instead|new CommandJob internal flag'
+        -> no load-bearing matches anywhere in the ACT directory
+
 CORRECTION CYCLE: 02
   Cycle 01 (HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN) was closed in
   the contract-freeze commit (§20-contract-correction-01.md). The
@@ -131,10 +175,11 @@ EVIDENCE ARTIFACTS PRODUCED:
   16-scenario-suite.md            (corrected cycle 01)
   17-compatibility.md
   18-successor-authorization.md   (corrected cycle 01 + cycle 02)
-  19-final-review.txt             (this file; corrected cycle 01 + cycle 02)
+  19-final-review.txt             (this file; corrected cycle 01 + 02 + 03)
   20-contract-correction-01.md    (cycle 01 record)
-  21-contract-correction-02.md    (cycle 02 record; NEW)
-  result.json                     (corrected cycle 01 + cycle 02)
+  21-contract-correction-02.md    (cycle 02 record)
+  22-contract-correction-03.md    (cycle 03 record; NEW)
+  result.json                     (corrected cycle 01 + 02 + 03)
 
 RECON GATES:
   - Current tool surface recon: done (§3)

@@ -162,7 +162,9 @@ For Candidate B, the concurrency rules are:
 - Multi-job: held until all of the owning session's notify=true
   jobs are terminal.
 - Newer-turn precedence: wake joins the queue (delivery:"queue").
-- Supersession: bound to sessionId + taskId + epoch.
+- Supersession: bound to sessionId + taskId (NOT epoch; epoch
+  is BTCONT turn-state machinery and is not reused for wake
+  semantics per §10.8).
 - Empty-repo: discarded.
 
 All five rules are implementable via existing seams

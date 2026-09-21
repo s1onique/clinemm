@@ -5609,11 +5609,11 @@ HALT_PRODUCT_CONTRACT_REQUIRED.
 
 ## ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
 
-Updated: 2026-09-21 11:55:00Z (CONTRACT_FROZEN post correction cycle 02: Factory causal reviewer verdict PASS_WAIT_SEMANTICS_CONTRACT_FROZEN. Epistemic purpose = PRODUCT-CONTRACT SELECTION. Production change = NONE. Test change = NONE. Cycle 01 (HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN) closed in the contract-freeze commit (§20-contract-correction-01.md; 5 defects). Cycle 02 (HALT_WAIT_SEMANTICS_STALE_CONTRACT_AUTHORITY) closed by rewriting the packet to ONE unambiguous v1 contract (§21-contract-correction-02.md; 4 defects: P0 STALE_B_D1_AUTHORITY, P0 S9_SUPERSESSION_CONTRADICTION, P1 STALE_TRIGGER_IDENTITY_TEXT, P1 MULTIJOB_NOTIFY_AUTHORITY).)
+Updated: 2026-09-21 12:30:00Z (CONTRACT_FROZEN post correction cycle 03: Factory causal reviewer verdict PASS_WAIT_SEMANTICS_CONTRACT_FROZEN. Epistemic purpose = PRODUCT-CONTRACT SELECTION. Production change = NONE. Test change = NONE. Cycle 01 (HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN) closed in the contract-freeze commit (§20-contract-correction-01.md; 5 defects). Cycle 02 (HALT_WAIT_SEMANTICS_STALE_CONTRACT_AUTHORITY) closed by rewriting the packet to ONE unambiguous v1 contract (§21-contract-correction-02.md; 4 defects). Cycle 03 (HALT_WAIT_SEMANTICS_CORRECTION02_STALE_EPOCH_AUTHORITY) closed by removing four stale-authority residue text locations (§22-contract-correction-03.md; 1 P0 + 3 P1: P0 STALE_EPOCH_SUMMARY_AUTHORITY, P1 S10_STALE_EPOCH_FIELD, P1 S7_WRONG_INTENT_OWNER, P1 OLD_TYPED_OR_COMMANDJOB_WORDING).)
 
 **Selection**: Candidate B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL). Passes all ten rubric items D1-D10. WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to a future cycle requiring the suspended-tool state machine (Candidate C). Default `notifyOnCompletion = false` preserves current behavior exactly. Wake is one bounded generated prompt string delivered exactly once.
 
-**Frozen invariants** (corrected cycle 01 + cycle 02):
+**Frozen invariants** (corrected cycle 01 + cycle 02 + cycle 03):
 ```text
 SELECTED_CONTRACT = B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL)
   Selected basis (post-CORRECTION02, honest v1 scope):
@@ -5673,7 +5673,22 @@ STALE_CARD = LIVE_PROVEN_SEPARATE (deferred to ACT-CLINEMM-BACKGROUND-COMMAND-TE
   owns both identity map AND active-notify set; wake consumer MUST NOT
   query CommandJobManager for notification semantics
 
-Next step (per Factory reviewer disposition):
+**Correction cycle 03 record** (HALT_WAIT_SEMANTICS_CORRECTION02_STALE_EPOCH_AUTHORITY, closed):
+- P0 STALE_EPOCH_SUMMARY_AUTHORITY: CLOSED — §10.7 contract-decision
+  summary rewritten; Supersession = sessionId + taskId (NOT epoch);
+  explicit reference to §10.8 NOTIFICATION_LIFETIME_INVARIANT
+- P1 S10_STALE_EPOCH_FIELD: CLOSED — S10 identity tuple rewritten to
+  (sessionId, taskId, notifyOnCompletion, createdAtMs) per §15.7.1
+- P1 S7_WRONG_INTENT_OWNER: CLOSED — S7 wake-consumer logic rewritten
+  to consult notificationMarkers map; explicit that CommandJob does NOT
+  carry notify field
+- P1 OLD_TYPED_OR_COMMANDJOB_WORDING: CLOSED — 07-contract-candidates.md
+  Candidate B prose + Risks block rewritten; "typed prompt instead"
+  replaced with bounded-string reference to §15.7.2; "CommandJob internal
+  flag" alternative replaced with notification-marker-only design per
+  §15.7.1 + §15.7.3
+
+Next step (per Factory reviewer disposition, cycle 03):
   C1: GO directly to ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 —
   no additional pre-execution review cycle unless a new P0 appears.
 
@@ -5691,8 +5706,8 @@ Next step (per Factory reviewer disposition):
 
 **Production code touched: NONE.**
 **Test code touched: NONE.**
-**Evidence directory: .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01/ (21 artifacts + result.json: 01-21 + result.json)**
-**Verdict**: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN (post correction cycles 01 + 02).
+**Evidence directory: .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01/ (22 artifacts + result.json: 01-22 + result.json)**
+**Verdict**: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN (post correction cycles 01 + 02 + 03).
 
 **Follow-ups (NOT in this ACT)**:
 - Bounded implementation: ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 (next)

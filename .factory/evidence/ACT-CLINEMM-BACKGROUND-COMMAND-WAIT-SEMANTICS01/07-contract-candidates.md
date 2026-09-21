@@ -65,8 +65,10 @@ Fire-and-forget:
 ```
 
 This resembles upstream `notifyParent` but is not bound to copy
-its prompt-based mechanism (the upstream emits steer_message with
-a formatted text prompt; we can emit a typed prompt instead).
+its prompt-based mechanism. Per §15.7.2 the v1 wake surface is a
+bounded generated prompt **string** delivered through
+`PendingPromptsController.enqueue`, which accepts `{ prompt: string }`
+only. There is no typed-payload alternative in v1.
 
 **Advantages**:
 - Explicit semantics (the user/model must opt in).
@@ -79,8 +81,11 @@ a formatted text prompt; we can emit a typed prompt instead).
   conservation rules.
 
 **Risks**:
-- Requires durable intent representation (a new schema field OR a
-  new CommandJob internal flag).
+- Requires durable intent representation (a new schema field on the
+  notification marker at the coordinator seam — NOT on CommandJob,
+  which would force a record-shape change in
+  command-job-manager.ts; the v1 contract keeps CommandJob free of
+  notification semantics per §15.7.1 + §15.7.3).
 - Requires generation/session safety (already provided by existing
   identity rules; need to reuse).
 - May consume additional model call asynchronously (cost).

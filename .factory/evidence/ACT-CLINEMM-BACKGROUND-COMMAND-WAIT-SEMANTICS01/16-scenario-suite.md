@@ -168,8 +168,10 @@ Flow:
   - model yields
   - command exits 0
   - "command_job_terminal_committed" event fires (per-job, exactly once)
-  - notifyOnCompletion:false → wake consumer discards the event
-    (per §15.7.3: j.notifyOnCompletion !== true → discard)
+  - wake consumer: marker = notificationMarkers.get(jobId)
+    marker absent OR marker.notifyOnCompletion !== true
+    → discard the event (per §15.7.3; CommandJob does NOT carry
+      the notify field, so the marker is the only source of truth)
   - awaiting_followup committed by existing turn-state consumer
   - user can poll command_status or follow up manually
 
@@ -248,7 +250,7 @@ Setup:
 Flow (corrected — uses per-job terminal events per §15.7.3):
   - J1, J2 both RUNNING in CommandJobManager.active
   - J1, J2 identity captured at coordinator seam
-    (sessionId, taskId, epoch, notifyOnCompletion) per §15.7.1
+    (sessionId, taskId, notifyOnCompletion, createdAtMs) per §15.7.1
   - model yields
   - J1 exits 0
   - "command_job_terminal_committed" event fires for J1 (per-job)
