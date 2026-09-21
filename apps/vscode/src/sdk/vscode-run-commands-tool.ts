@@ -40,6 +40,7 @@ import { getShellForProfile } from "@/utils/shell"
 import { captureBackgroundJobLivenessAuthorityRecord, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import {
 	CommandJobManager,
+	type CommandJobState,
 	DEFAULT_EXECUTION_DEADLINE_MS,
 	DEFAULT_WAIT_BUDGET_MS,
 	MAX_RESPONSE_OUTPUT_CHARS,
@@ -105,7 +106,22 @@ export interface VscodeRunCommandsToolOptions {
 	 * the projection is wired here so the webview's TaskHeader and
 	 * Cancel button can arbitrate the in-flight background command.
 	 */
-	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	onBackgroundStateChange?: (
+		running: boolean,
+		jobId: string | undefined,
+		/**
+		 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		 * (correction01): per-job terminal reason. Present ONLY
+		 * when `running === false && jobId !== undefined`. The
+		 * host-owned `CommandJobManager` is the authority for the
+		 * value (one of `exited`/`cancelled`/`deadline_exceeded`/
+		 * `spawn_failed`/`containment_failed`). The runner forwards
+		 * it verbatim so the projection can render the exact
+		 * terminal pill reason (Cancelled / Deadline exceeded /
+		 * etc.) rather than collapsing everything to "Completed".
+		 */
+		terminalState?: Exclude<CommandJobState, "running">,
+	) => void
 	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
 	 * coordinator-owned opt-in notify-on-terminal marker set.
@@ -637,10 +653,34 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			const executionDeadlineMs = options.backgroundExecutionDeadlineMs ?? DEFAULT_EXECUTION_DEADLINE_MS
 			// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback. Fires
 			// once when the tool returns RUNNING (with the active jobId) and
-			// once when the command reaches a terminal state on the same call
+			// again when the command reaches a terminal state on the same call
 			// (with undefined). The host owns the projection — the projection
 			// is dead state until this fires.
-			const notifyBackgroundStateChange = (running: boolean, jobId: string | undefined): void => {
+			//
+			// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+			// (correction01 / Factory
+			// HALT_TERMINAL_CARD_MULTI_JOB_PROJECTION_FALSE_GREEN):
+			// the terminal notification MUST carry the terminating
+			// jobId (and the exact terminal reason) so the host
+			// projection can flip a SINGLE job in a multi-job
+			// session. The previous implementation fired
+			// `(false, undefined)` ONLY on the >0->0 cardinal
+			// transition, which silently left every other running
+			// sibling in "running" state forever. The new contract:
+			//   (true,  jobId)                → states[jobId] = "running"
+			//   (false, jobId, terminalState) → states[jobId] = terminalState
+			//                                    (e.g. "exited",
+			//                                    "cancelled",
+			//                                    "deadline_exceeded")
+			// The aggregate >0->0 signal is derived by the host from
+			// the count of "running" entries in the map; BTCONT is
+			// gated on the derived scalar in the same way it was
+			// gated on the >0->0 flip before.
+			const notifyBackgroundStateChange = (
+				running: boolean,
+				jobId: string | undefined,
+				terminalState?: Exclude<CommandJobState, "running">,
+			): void => {
 				// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
 				// BJLA diagnostic — capture `background_state_change_published`
 				// BEFORE invoking the host's projection callback. This is the
@@ -657,10 +697,10 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					jobId: jobId ?? null,
 				})
 				try {
-					options.onBackgroundStateChange?.(running, jobId)
+					options.onBackgroundStateChange?.(running, jobId, terminalState)
 				} catch (error) {
 					Logger.warn(
-						`[VscodeRunCommands] onBackgroundStateChange callback threw (running=${running}, jobId=${jobId}): ${
+						`[VscodeRunCommands] onBackgroundStateChange callback threw (running=${running}, jobId=${jobId}, terminalState=${terminalState ?? "n/a"}): ${
 							error instanceof Error ? error.message : String(error)
 						}`,
 					)
@@ -792,10 +832,20 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					// this completion was a 2->1 (or higher) transition;
 					// another job is still active and the projection must
 					// stay true (no-op).
-					start.terminalPromise.then(({ becameIdle }) => {
-						if (becameIdle) {
-							notifyBackgroundStateChange(false, undefined)
-						}
+					// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+					// (correction01 / Factory
+					// HALT_TERMINAL_CARD_MULTI_JOB_PROJECTION_FALSE_GREEN):
+					// the listener MUST fire per-job, regardless of
+					// `becameIdle`. The aggregate >0->0 signal is now
+					// derived from the host's running-count of the
+					// projection map (the host's scalar field stays in
+					// sync via `updateBackgroundCommandState`'s recompute).
+					// The terminal reason (`terminalState`) is forwarded
+					// verbatim so the projection renders the exact pill
+					// (Cancelled / Deadline exceeded / etc.) instead of
+					// collapsing every terminal into "Completed".
+					start.terminalPromise.then(({ jobId, terminalState }) => {
+						notifyBackgroundStateChange(false, jobId, terminalState)
 					})
 					// ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01:
 					// The foreground->background handoff is irrevocably true
@@ -828,11 +878,34 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// that completed during the wait-budget race, the
 				// `.then()` fires the same way (the manager's
 				// `exitTransition` resolves before `makeStartResult`).
-				start.terminalPromise.then(({ becameIdle }) => {
-					if (becameIdle) {
-						notifyBackgroundStateChange(false, undefined)
-					}
-				})
+				//
+				// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+				// (correction01): fire the per-job terminal signal
+				// UNCONDITIONALLY (not gated on `becameIdle`) so the
+				// host projection can flip a SINGLE job in a multi-job
+				// session. The aggregate >0->0 signal is derived from
+				// the host's running-count of the projection map, not
+				// from the runner's callback cardinality. This site
+				// stays a no-op when the manager never reached the
+				// RUNNING branch (the fast-path case where the tool
+				// returned terminal synchronously) — the synchronous
+				// terminal state is already handled by the early-return
+				// paths below; no projection update is required.
+				//
+				// (Guarded by `start.becameActive` — the flag that
+				// indicates the job actually entered the manager's
+				// active Map. The RUNNING handler at line 822 only
+				// fires `(true, jobId)` when `becameActive === true`;
+				// the matching per-job terminal signal must be
+				// gated by the same condition so the projection
+				// map does not accumulate phantom entries for
+				// synchronous-fast-path terminals that never had a
+				// corresponding start signal.)
+				if (start.becameActive) {
+					start.terminalPromise.then(({ jobId, terminalState }) => {
+						notifyBackgroundStateChange(false, jobId, terminalState)
+					})
+				}
 				// Terminal path. Preserve existing CommandExitError so the
 				// SDK wrapper records the existing telemetry; for success,
 				// return stdout as before.
@@ -871,11 +944,19 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// attached a listener for the async case; we add another
 				// here for the catch path (errors can also fire after
 				// manager.start() returns).
-				if (start?.terminalPromise) {
-					start.terminalPromise.then(({ becameIdle }) => {
-						if (becameIdle) {
-							notifyBackgroundStateChange(false, undefined)
-						}
+				//
+				// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+				// (correction01): fire per-job (not gated on
+				// `becameIdle`) so multi-job projection stays
+				// accurate. The terminal reason (`terminalState`)
+				// is forwarded so cancelled/deadline_exceeded
+				// render correctly in the chat row. Same
+				// `becameActive` guard as the fast-path branch
+				// above — only fire if the job had a
+				// corresponding start signal.
+				if (start?.terminalPromise && start.becameActive) {
+					start.terminalPromise.then(({ jobId, terminalState }) => {
+						notifyBackgroundStateChange(false, jobId, terminalState)
 					})
 				}
 				telemetryService.captureTerminalExecution(false, "vscode", "child_process", {

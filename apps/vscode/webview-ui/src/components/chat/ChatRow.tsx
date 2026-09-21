@@ -273,9 +273,24 @@ export const ChatRowContent = memo(
 		const backgroundedJobId = isCommandMessage
 			? extractJobIdFromCommandOutput(message.text ?? "")
 			: undefined
-		const liveProjectionTerminal =
-			backgroundedJobId !== undefined &&
-			backgroundCommandJobStates?.[backgroundedJobId] === "terminal"
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		// (correction01): the projection value is one of
+		// `"running"` / `"exited"` / `"cancelled"` /
+		// `"deadline_exceeded"` / `"spawn_failed"` /
+		// `"containment_failed"` / `"terminal"` / undefined.
+		// Only the literal string `"running"` means the job is
+		// still in flight; EVERY OTHER value (including the
+		// legacy `"terminal"`) means the job has settled.
+		const liveProjectionValue =
+			backgroundedJobId !== undefined ? backgroundCommandJobStates?.[backgroundedJobId] : undefined
+		const liveProjectionTerminal = liveProjectionValue !== undefined && liveProjectionValue !== "running"
+		// Pass through the exact terminal reason for the renderer
+		// to surface on the pill (Cancelled / Deadline exceeded /
+		// Spawn failed / Containment failed / Completed / etc.).
+		// Only forward when the row is actually terminal — the
+		// renderer treats the prop as authoritative, so a
+		// stray "running" value must NOT leak through.
+		const liveProjectionTerminalValue = liveProjectionTerminal ? liveProjectionValue : undefined
 		const isCommandBackgrounded = historicalIsCommandBackgrounded && !liveProjectionTerminal
 		// A command is executing if it has output but hasn't completed yet
 		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
@@ -835,6 +850,14 @@ export const ChatRowContent = memo(
 			// not just `commandCompleted:true`. Surface the disposition
 			// to CommandOutputRow so the status pill matches.
 			const isCommandRejected = message.commandExecutionDisposition === "rejected_before_execution"
+			// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+			// (correction01): surface the exact terminal reason to
+			// the renderer when the live projection says the row is
+			// terminal. We pass the projection value (not a derived
+			// "Completed" boolean) so the row pill renders "Cancelled"
+			// / "Deadline exceeded" / etc. instead of collapsing every
+			// terminal into "Completed".
+			const liveProjectionTerminalReason = liveProjectionTerminalValue
 			return (
 				<CommandOutputRow
 					icon={icon}
@@ -844,6 +867,7 @@ export const ChatRowContent = memo(
 					isCommandExecuting={isCommandExecuting}
 					isCommandPending={isCommandPending}
 					isCommandRejected={isCommandRejected}
+					liveProjectionTerminalReason={liveProjectionTerminalReason}
 					isOutputFullyExpanded={isOutputFullyExpanded}
 					message={message}
 					onCancelCommand={onCancelCommand}

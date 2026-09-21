@@ -122,6 +122,7 @@ export const CommandOutputRow = memo(
 		isCommandCompleted = false,
 		isCommandRejected = false,
 		isCommandBackgrounded = false,
+		liveProjectionTerminalReason,
 		isBackgroundExec = false, // vscodeTerminalExecutionMode === "backgroundExec"
 		onCancelCommand,
 		icon,
@@ -144,6 +145,22 @@ export const CommandOutputRow = memo(
 		 * visible (independent of `isCommandExecuting`).
 		 */
 		isCommandBackgrounded?: boolean
+		/**
+		 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		 * (correction01): when the live projection says the row is
+		 * terminal, the pill renders the EXACT terminal reason
+		 * (Cancelled / Deadline exceeded / etc.) instead of
+		 * collapsing to "Completed". Undefined means no live
+		 * terminal signal — the renderer falls back to the
+		 * legacy behavior (Completed / Skipped / etc.).
+		 */
+		liveProjectionTerminalReason?:
+			| "exited"
+			| "cancelled"
+			| "deadline_exceeded"
+			| "spawn_failed"
+			| "containment_failed"
+			| "terminal"
 		isBackgroundExec?: boolean
 		onCancelCommand?: (jobId?: string) => void
 		icon?: JSX.Element | null
@@ -245,6 +262,7 @@ export const CommandOutputRow = memo(
 										isCommandCompleted,
 										isCommandRejected,
 										isCommandBackgrounded,
+										liveProjectionTerminalReason,
 									)}
 								</span>
 							</div>
@@ -333,6 +351,21 @@ const CommandStatusMap = {
 	// truth — a row that never executed must NOT show "Completed"
 	// (which reads as successful execution).
 	rejected: "Rejected",
+	// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+	// (correction01): the per-job terminal reason projection
+	// surfaces these exact pill variants when the projection says
+	// the row is terminal. Without these the renderer collapsed
+	// every terminal into "Completed" — losing the truth about
+	// WHY the row finished (cancelled by the operator,
+	// deadline-exceeded, etc.). The legacy `"terminal"` literal
+	// stays as the fallback projection value (the BCTCP-01/02
+	// tests' canonical name) and is rendered as
+	// CommandStatusMap.completed.
+	cancelled: "Cancelled",
+	deadline_exceeded: "Deadline exceeded",
+	spawn_failed: "Spawn failed",
+	containment_failed: "Run failed",
+	exited: "Completed",
 }
 
 /**
@@ -340,6 +373,14 @@ const CommandStatusMap = {
  * Get the operator-visible status pill text. Lifecycle dominates
  * completion: a backgrounded row MUST read "Backgrounded" (NOT
  * "Completed") regardless of `isExecuting` / `isPending` state.
+ *
+ * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+ * (correction01): when the live projection carries an exact
+ * terminal reason, surface it on the pill. The renderer's
+ * invariant: a row whose underlying CommandJob has finalized as
+ * `cancelled` MUST read "Cancelled" (not "Completed") so the
+ * operator can distinguish a job the user stopped from one
+ * that succeeded.
  */
 function getCommandStatusText(
 	isExecuting: boolean,
@@ -347,11 +388,33 @@ function getCommandStatusText(
 	isCompleted: boolean,
 	isRejected: boolean,
 	isBackgrounded: boolean,
+	liveProjectionTerminalReason?:
+		| "exited"
+		| "cancelled"
+		| "deadline_exceeded"
+		| "spawn_failed"
+		| "containment_failed"
+		| "terminal",
 ): string {
 	// Lifecycle dominates completion: a row stamped as rejected before
 	// execution is finalized at the request boundary, not execution.
 	if (isRejected) {
 		return CommandStatusMap.rejected
+	}
+	// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+	// (correction01): a live terminal projection MUST dominate
+	// every other surface. The row is no longer backgrounded,
+	// executing, pending, OR pending-cancel — it has reached its
+	// final state and the operator needs to see WHY.
+	if (liveProjectionTerminalReason) {
+		// biome-ignore lint/suspicious/noExplicitAny: the map key
+		// type is a closed enumeration that exactly matches the
+		// `liveProjectionTerminalReason` union; a missing key is
+		// a contract bug, not a runtime concern.
+		const entry = (CommandStatusMap as any)[liveProjectionTerminalReason]
+		if (typeof entry === "string") {
+			return entry
+		}
 	}
 	// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01:
 	// Backgrounded takes precedence over executing/pending/

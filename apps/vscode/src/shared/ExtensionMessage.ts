@@ -414,9 +414,16 @@ export interface ExtensionState {
 	 * Per-job lifecycle projection keyed by CommandJob jobId.
 	 *
 	 * Updated by `SdkController.updateBackgroundCommandState`:
-	 *   `(true, jobId)`    → `this[jobId] = "running"`
-	 *   `(false, undefined)` (the >0->0 cardinal flip)
-	 *                       → every currently-"running" entry becomes "terminal"
+	 *   `(true,  jobId)`                  → `this[jobId] = "running"`
+	 *   `(false, jobId, terminalState)`   → `this[jobId] = terminalState`
+	 *     (one of `"exited"` / `"cancelled"` /
+	 *      `"deadline_exceeded"` /
+	 *      `"spawn_failed"` / `"containment_failed"`)
+	 *   `(false, undefined, terminalState)` (the >0->0 legacy
+	 *      cardinal pathway)              → every currently-"running"
+	 *                                        entry becomes `terminalState`
+	 *                                        (or `"terminal"` as the
+	 *                                        fallback projection value).
 	 *
 	 * Consulted by `ChatRow` so the row's live "Backgrounded" + Cancel
 	 * affordance flips to terminal / hidden when the authoritative
@@ -426,14 +433,29 @@ export interface ExtensionState {
 	 * ORTHOGONAL to `backgroundCommandRunning` (the scalar TaskHeader
 	 * gauge) and `backgroundCommandTaskId` (the LAST active jobId).
 	 * The map supports multi-job independence: BCTCP-06 proves two
-	 * sibling rows can render different lifecycle phases.
+	 * sibling rows can render different lifecycle phases; the
+	 * correction01 production-shaped test
+	 * `background-command-terminal-card-projection01.bctcp01.test.tsx`
+	 * BCTCP-08 (and the controller companion BCTCP-CTL-10) prove the
+	 * correct semantics when J1 terminalizes while J2 continues
+	 * running.
 	 *
 	 * Production invariant:
 	 *   `Object.values(this).includes("running")` is equivalent to
 	 *   `backgroundCommandRunning === true` (the same seam maintains
-	 *   both).
+	 *   both — the controller recomputes the scalar from the map on
+	 *   every callback).
+	 *
+	 * Bounded terminal reason set: this ACT ships the
+	 * `CommandJobState` minus `"running"` enumeration verbatim so the
+	 * pill renders the exact reason (Cancelled / Deadline exceeded
+	 * / Spawn failed / Containment failed / Exited) instead of
+	 * collapsing everything to "Completed".
 	 */
-	backgroundCommandJobStates?: Record<string, "running" | "terminal">
+	backgroundCommandJobStates?: Record<
+		string,
+		"running" | "exited" | "cancelled" | "deadline_exceeded" | "spawn_failed" | "containment_failed" | "terminal"
+	>
 	/**
 	 * True while a foreground (VS Code terminal) command is awaited by a
 	 * run_commands tool call. Drives the "Proceed While Running" button.

@@ -33,7 +33,10 @@ import { ChatRowContent } from "../ChatRow"
 
 // One module-level mutable so individual `it()` cases can drive the
 // live per-job projection without re-importing the module.
-let liveJobStates: Record<string, "running" | "terminal"> = {}
+let liveJobStates: Record<
+	string,
+	"running" | "exited" | "cancelled" | "deadline_exceeded" | "spawn_failed" | "containment_failed" | "terminal"
+> = {}
 
 vi.mock("@/context/ExtensionStateContext", () => ({
 	useExtensionState: () => ({
@@ -235,5 +238,44 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 — RED/GREE
 		fireEvent.click(screen.getByRole("button", { name: /cancel/i }))
 		expect(onCancelCommand).toHaveBeenCalledTimes(1)
 		expect(onCancelCommand).toHaveBeenCalledWith(jobId)
+	})
+
+	// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 (correction01
+	// / Factory HALT_TERMINAL_CARD_MULTI_JOB_PROJECTION_FALSE_GREEN): the
+	// pill renders the EXACT terminal reason. The P1 reviewer's
+	// "cancelled/deadline_exceeded rendered as Completed" defect is
+	// fixed by passing the projection value through to the renderer.
+	it("BCTCP-10 cancelled projection surfaces 'Cancelled' pill (not 'Completed')", () => {
+		const jobId = "cmd_cancelled"
+		const message = runningCommandRow(jobId)
+		liveJobStates = { [jobId]: "cancelled" }
+		render(<ChatRowContent {...makeProps(message, vi.fn())} />)
+		expect(screen.getByText("Cancelled")).toBeInTheDocument()
+		expect(screen.queryByText("Backgrounded")).toBeNull()
+		expect(screen.queryByText("Completed")).toBeNull()
+		expect(screen.queryByRole("button", { name: /cancel/i })).toBeNull()
+	})
+
+	it("BCTCP-11 deadline_exceeded projection surfaces 'Deadline exceeded' pill", () => {
+		const jobId = "cmd_deadline"
+		const message = runningCommandRow(jobId)
+		liveJobStates = { [jobId]: "deadline_exceeded" }
+		render(<ChatRowContent {...makeProps(message, vi.fn())} />)
+		expect(screen.getByText("Deadline exceeded")).toBeInTheDocument()
+		expect(screen.queryByText("Backgrounded")).toBeNull()
+		expect(screen.queryByText("Completed")).toBeNull()
+	})
+
+	it("BCTCP-12 exited projection surfaces 'Completed' pill", () => {
+		const jobId = "cmd_exited"
+		const message = runningCommandRow(jobId)
+		liveJobStates = { [jobId]: "exited" }
+		render(<ChatRowContent {...makeProps(message, vi.fn())} />)
+		// `exited` maps to CommandStatusMap.completed
+		// ("Completed"). A row that exited with code 0 reads
+		// "Completed"; the model-facing terminal enumeration
+		// and the user-facing pill text diverge by design.
+		expect(screen.getByText("Completed")).toBeInTheDocument()
+		expect(screen.queryByText("Backgrounded")).toBeNull()
 	})
 })

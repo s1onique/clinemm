@@ -79,7 +79,7 @@ import { BackgroundNotifyCoordinator } from "./background-notify-coordinator"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
-import type { CommandJobLifecycleEvent } from "./command-job-manager"
+import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
 import {
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	composeEffectiveDiagnosticKnobs,
@@ -931,7 +931,10 @@ export class Controller {
 	 * .includes("running") === backgroundCommandRunning` (both are
 	 * maintained by the same `updateBackgroundCommandState` seam).
 	 */
-	private backgroundCommandJobStates: Record<string, "running" | "terminal"> = {}
+	private backgroundCommandJobStates: Record<
+		string,
+		"running" | "exited" | "cancelled" | "deadline_exceeded" | "spawn_failed" | "containment_failed" | "terminal"
+	> = {}
 	private pendingClineAuthRetryPrompt?: string
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
 
@@ -3455,33 +3458,62 @@ export class Controller {
 			return
 		}
 		await host.cancelBackgroundCommand(jobId)
-		// The `onBackgroundStateChange` callback fires when the cancelled
-		// job's exit transition settles, resetting the projection to
-		// `false`. We mirror it here so the next `getStateToPostToWebview`
-		// doesn't return stale state if the postStateToWebview runs
-		// before the callback fires.
-		// For single-job cancels we keep `backgroundCommandTaskId`
-		// pointed at the cancelled job so the next projection
-		// carries an honest "no active jobs" only after the
-		// terminalPromise has settled (otherwise the webview could
-		// flip ⎇ to 0 prematurely while the cancellation is still
-		// in flight).
-		this.backgroundCommandRunning = false
-		this.backgroundCommandTaskId = undefined
-		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
-		// When a single jobId is cancelled, mark THAT job's projection
-		// terminal. Other running siblings stay "running" until the
-		// next cardinal flip arrives. (The legacy session-wide cancel
-		// — jobId undefined — marks every currently-"running" entry.)
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		// (correction01): the cancel RPC no longer pre-emptively
+		// flips the scalar `backgroundCommandRunning = false`. The
+		// scalar is now DERIVED from the per-job projection map;
+		// when the cancel-target job settles, the runner fires
+		// `onBackgroundStateChange(false, jobId, "cancelled")` and
+		// the controller recomputes the scalar correctly
+		// (preserving any other running siblings in a multi-job
+		// session). The previous code silently flipped the scalar
+		// to false even when a sibling job was still running.
+		//
+		// We still mirror the per-job projection update here so
+		// the next `getStateToPostToWebview` doesn't return stale
+		// state if the post runs before the runner's
+		// `terminalPromise` settles. The cancel-target job is
+		// stamped with `"cancelled"`; siblings stay
+		// `"running"`. The legacy session-wide cancel (jobId
+		// undefined) marks every currently-running entry, matching
+		// the pre-correction01 contract for callers that have not
+		// been updated.
 		if (jobId && this.backgroundCommandJobStates[jobId] === "running") {
-			this.backgroundCommandJobStates[jobId] = "terminal"
+			this.backgroundCommandJobStates[jobId] = "cancelled"
 		} else if (!jobId) {
 			for (const k of Object.keys(this.backgroundCommandJobStates)) {
 				if (this.backgroundCommandJobStates[k] === "running") {
-					this.backgroundCommandJobStates[k] = "terminal"
+					this.backgroundCommandJobStates[k] = "cancelled"
 				}
 			}
 		}
+		// Recompute the scalar from the (updated) projection map.
+		// If a sibling is still running, the scalar stays true.
+		const previousRunning = this.backgroundCommandRunning
+		const anyRunning = Object.values(this.backgroundCommandJobStates).some((s) => s === "running")
+		this.backgroundCommandRunning = anyRunning
+		this.backgroundCommandTaskId = anyRunning ? this.backgroundCommandTaskId : undefined
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		// (correction01): best-effort post so the optimistic
+		// cancel-projection stamp is visible in the webview
+		// before the runner's `terminalPromise` settles. The
+		// eventual `updateBackgroundCommandState` call from the
+		// runner will reconcile to the same state (idempotent).
+		// Mirrors the same pattern used elsewhere in the
+		// lifecycle callback wiring.
+		if (previousRunning !== anyRunning) {
+			Controller.maybeReevaluateDeferredContinuation(
+				previousRunning,
+				anyRunning,
+				anyRunning ? this.backgroundCommandTaskId : undefined,
+				this.sessionEvents,
+			)
+		}
+		this.postStateToWebview().catch((error) => {
+			Logger.warn(
+				`[SdkController] Failed to post state after cancel (jobId=${jobId ?? "session-wide"}, anyRunning=${anyRunning}): ${error instanceof Error ? error.message : String(error)}`,
+			)
+		})
 	}
 
 	/**
@@ -4400,50 +4432,133 @@ export class Controller {
 	 * (and the Cancel button's gating) reflects the in-flight command.
 	 * Idempotent: a no-op transition does NOT trigger a post.
 	 */
-	updateBackgroundCommandState(running: boolean, taskId?: string): void {
-		if (this.backgroundCommandRunning === running && this.backgroundCommandTaskId === taskId) {
-			return
-		}
+	updateBackgroundCommandState(
+		running: boolean,
+		taskId?: string,
+		/**
+		 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		 * (correction01): per-job terminal reason. Forwarded by
+		 * `vscode-run-commands-tool.ts` from the host's
+		 * `CommandJobManager.finalize()` (one of
+		 * `exited`/`cancelled`/`deadline_exceeded`/
+		 * `spawn_failed`/`containment_failed`). The chat row
+		 * renders the EXACT pill reason instead of collapsing
+		 * every terminal into "Completed".
+		 *
+		 * Backward-compat: when omitted (e.g. legacy callers, the
+		 * single-job cancel RPC fast-path, or the
+		 * `cancelBackgroundCommand()` invocation), the controller
+		 * falls back to `"terminal"` for the cancelled/legacy
+		 * pathway and preserves the existing BTCONT-conservation
+		 * semantics (BCTCP-CTL-02, BTCONT-CTL-04).
+		 */
+		terminalState?: Exclude<CommandJobState, "running">,
+	): void {
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		// (correction01): the scalar `backgroundCommandRunning` is
+		// now DERIVED from the per-job projection map. The new
+		// invariant (BCTCP-CTL-07):
+		//   backgroundCommandRunning === Object.values(map).includes("running")
+		// The runner fires per-job; the controller recomputes the
+		// scalar on every callback. This keeps the TaskHeader
+		// gauge (`activeCommandJobs`) coherent with the row
+		// projection without coupling the runner's callback
+		// cardinality to the BTCONT `>0->0` predicate.
 		const previousRunning = this.backgroundCommandRunning
-		this.backgroundCommandRunning = running
-		this.backgroundCommandTaskId = taskId
-		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
-		// Maintain the per-job lifecycle projection. The contract:
-		//   (true,  jobId)         → this.jobStates[jobId] = "running"
-		//   (false, undefined)     → every currently-"running" entry
-		//                            becomes "terminal" (the >0->0
-		//                            cardinal flip is the only signal
-		//                            the manager fires for terminal —
-		//                            see vscode-run-commands-tool.ts:697-698)
-		//   (false, jobId)         → no-op for the projection (the
-		//                            cancel RPC awaits its own settle
-		//                            before the cardinal flip arrives).
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		// (correction01): per-job lifecycle projection maintenance.
+		// The contract:
+		//   (true,  jobId)                 → map[jobId] = "running"
+		//   (false, jobId, terminalState)  → map[jobId] = terminalState
+		//                                     (e.g. "exited",
+		//                                     "cancelled",
+		//                                     "deadline_exceeded")
+		//   (false, undefined, terminalState) → legacy BTCONT pathway:
+		//                                     every currently-"running"
+		//                                     entry becomes "terminal"
+		//                                     (the >0->0 cardinal
+		//                                     transition observation).
+		//                                     Kept for callers that
+		//                                     still send the legacy
+		//                                     (false, undefined) shape.
 		if (running && taskId) {
 			this.backgroundCommandJobStates[taskId] = "running"
+		} else if (!running && taskId !== undefined) {
+			// Per-job terminal — the runner's load-bearing signal
+			// for multi-job sessions. The value of
+			// `terminalState` is the exact reason; if absent
+			// (legacy caller), fall back to "terminal" (the
+			// pre-correction01 projection value).
+			this.backgroundCommandJobStates[taskId] = terminalState ?? "terminal"
 		} else if (!running && taskId === undefined) {
 			for (const k of Object.keys(this.backgroundCommandJobStates)) {
 				if (this.backgroundCommandJobStates[k] === "running") {
-					this.backgroundCommandJobStates[k] = "terminal"
+					this.backgroundCommandJobStates[k] = terminalState ?? "terminal"
 				}
 			}
 		}
+		// Recompute the scalar AND the active taskId from the
+		// projection. The scalar stays in lockstep with the
+		// per-job map; the active taskId is the LAST key whose
+		// value is "running" (insertion order is preserved by
+		// `Object.keys`, so the most-recently-started still-
+		// running job wins). When all jobs are terminal, the
+		// active taskId is undefined.
+		const runningEntries = Object.entries(this.backgroundCommandJobStates).filter(
+			([, v]) => v === "running",
+		)
+		const anyRunning = runningEntries.length > 0
+		const newActiveTaskId = anyRunning ? runningEntries[runningEntries.length - 1][0] : undefined
+		if (
+			this.backgroundCommandRunning === anyRunning &&
+			this.backgroundCommandTaskId === newActiveTaskId &&
+			!this.didProjectionChange(terminalState)
+		) {
+			return
+		}
+		this.backgroundCommandRunning = anyRunning
+		this.backgroundCommandTaskId = newActiveTaskId
 		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
-		// The >0->0 cardinal transition (becameIdle === true at the
-		// manager level; vscode-run-commands-tool.ts:697-698 fires
-		// `onBackgroundStateChange(false, undefined)` ONLY when this
-		// cardinal transition occurs) is the re-evaluation trigger for
-		// any deferred Q5 completion. Forward the signal to the
-		// canonical session-event coordinator so the
-		// `session-event-turn-complete-resumable-straggler-preserve`
-		// writer can commit awaiting_followup exactly once, under
-		// the four conservation rules (BTCONT-CTL-02/03/04/05).
-		Controller.maybeReevaluateDeferredContinuation(previousRunning, running, taskId, this.sessionEvents)
+		// The `>0->0` cardinal transition (the derived scalar
+		// flipping from `true` to `false`) is the re-evaluation
+		// trigger for any deferred Q5 completion. The argument
+		// `taskId === undefined` matches the legacy contract that
+		// BTCONT-01 was built against — `maybeReevaluateDeferredContinuation`
+		// gates on `previousRunning && !running && taskId ===
+		// undefined`, which fires EXACTLY once per session when the
+		// last running job transitions to terminal. The runner
+		// now fires the callback per-job (carrying jobId), but
+		// when the LAST job goes terminal the controller derives
+		// the >0->0 flip and forwards the predicate-shaped
+		// signal to BTCONT.
+		Controller.maybeReevaluateDeferredContinuation(
+			previousRunning,
+			anyRunning,
+			anyRunning ? taskId : undefined,
+			this.sessionEvents,
+		)
 		// best-effort post — the StatePostDebouncer coalesces bursts.
 		this.postStateToWebview().catch((error) => {
 			Logger.warn(
-				`[SdkController] Failed to post state after background command state change (running=${running}, taskId=${taskId}): ${error instanceof Error ? error.message : String(error)}`,
+				`[SdkController] Failed to post state after background command state change (running=${anyRunning}, taskId=${taskId}, terminalState=${terminalState ?? "n/a"}): ${error instanceof Error ? error.message : String(error)}`,
 			)
 		})
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+	 * (correction01): detect a terminal-reason change in the
+	 * projection (e.g. a still-"running" sibling later transitions
+	 * to "cancelled" instead of "exited"). Used to invalidate the
+	 * no-op short-circuit when only the projection reason changes
+	 * (the scalar stays the same but the row pill text changes).
+	 */
+	private didProjectionChange(_terminalState?: Exclude<CommandJobState, "running">): boolean {
+		// Conservative: any explicit terminalState invalidates
+		// the no-op. The scalar-flavor equality above is the
+		// primary short-circuit; this is the secondary gate for
+		// reason-pill updates within an existing >0 or 0 epoch.
+		return _terminalState !== undefined
 	}
 
 	/**

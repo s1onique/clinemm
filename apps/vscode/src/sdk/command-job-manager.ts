@@ -172,9 +172,24 @@ export interface StartCommandJobOptions {
  * last active job). Captured at the manager's `finalize()` mutation
  * seam — race-safe under concurrent terminal-completions because
  * the check + delete happen in a single synchronous burst.
+ *
+ * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+ * (correction01 / Factory HALT_TERMINAL_CARD_MULTI_JOB_PROJECTION_FALSE_GREEN):
+ * the resolved value ALSO carries the per-job terminal identity
+ * (`jobId`) and the exact terminal reason
+ * (`terminalState` — one of `exited`/`cancelled`/
+ * `deadline_exceeded`/`spawn_failed`/`containment_failed`). Without
+ * these, the runner cannot fire a per-job terminal signal — it
+ * could only carry the aggregate >0->0 cardinal flip. The per-job
+ * identity is the LOAD-BEARING FIX for the multi-job projection
+ * bug; the terminal reason is the bounded correctness repair for
+ * the P1 "cancelled/deadline_exceeded rendered as Completed" defect
+ * (the chat row now renders the exact terminal pill reason).
  */
 export interface TerminalTransition {
 	becameIdle: boolean
+	jobId: string
+	terminalState: Exclude<CommandJobState, "running">
 }
 
 export interface StartCommandJobResult {
@@ -1789,7 +1804,20 @@ export class CommandJobManager {
 			resolveTerminalTransition = resolve
 		}).then(
 			(value) => value,
-			() => ({ becameIdle: false }) as TerminalTransition,
+			() =>
+				({
+					becameIdle: false,
+					jobId: id,
+					// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+					// (correction01): the rejection guard is a fail-safe
+					// for an unreachable code path (the resolver never
+					// rejects); a best-effort terminalState is required to
+					// satisfy the structural type. The `terminalState`
+					// field is only meaningful when the resolved transition
+					// is consumed by the runner; rejecting here would mean
+					// the manager never reached `finalize()` for this job.
+					terminalState: "exited",
+				}) as TerminalTransition,
 		)
 		this.terminalTransitions.set(id, terminalTransitionPromise)
 
@@ -2132,7 +2160,16 @@ export class CommandJobManager {
 			// cardinality transition to observe. Resolve immediately
 			// with `becameIdle: true` so any downstream `.then()` is a
 			// no-op rather than holding a pending promise.
-			terminalPromise: Promise.resolve({ becameIdle: true }),
+			// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+			// (correction01): also carry the jobId and the
+			// (synthetic) terminalState so the runner's per-job
+			// terminal projection sees a structurally complete
+			// `TerminalTransition`.
+			terminalPromise: Promise.resolve({
+				becameIdle: true,
+				jobId: input.id,
+				terminalState: "spawn_failed",
+			}),
 			becameActive: false,
 			signal: input.signal,
 		}
@@ -2690,8 +2727,21 @@ export class CommandJobManager {
 		// flag. This is the single source of truth for the
 		// >0->0 transition identity; the runner reads the flag
 		// from the resolved value.
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
+		// (correction01): also resolve with the per-job identity
+		// (`jobId`) and the exact terminal reason (`terminalState`,
+		// narrowed by the finalize() local — `state` is
+		// `Exclude<CommandJobState, "running">` and the
+		// `containment_failed` overwrite preserves that narrowing).
+		// Without these, the runner could not fire a per-job
+		// terminal signal (only the aggregate >0->0 cardinal flip
+		// is otherwise observable).
 		if (job.terminalTransitionResolve) {
-			job.terminalTransitionResolve({ becameIdle: wasBecomingIdle })
+			job.terminalTransitionResolve({
+				becameIdle: wasBecomingIdle,
+				jobId: job.id,
+				terminalState,
+			})
 			job.terminalTransitionResolve = undefined
 		}
 		this.terminal.set(job.id, job)

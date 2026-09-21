@@ -37,7 +37,10 @@ export async function getStateToPostToWebview(controller: {
 	 * Per-job lifecycle projection keyed by CommandJob jobId.
 	 * Forwarded to the wire as `backgroundCommandJobStates`.
 	 */
-	backgroundCommandJobStates?: Record<string, "running" | "terminal">
+	backgroundCommandJobStates?: Record<
+		string,
+		"running" | "exited" | "cancelled" | "deadline_exceeded" | "spawn_failed" | "containment_failed" | "terminal"
+	>
 	foregroundCommandRunning?: boolean
 	workspaceManager?: any
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
