@@ -5844,3 +5844,92 @@ cancelBackgroundCommandByJobId = unchanged          (UNCHANGED)
 **Diagnostic policy:** No new env var, no new command palette command, no new diagnostic framework. Reuses the existing `updateBackgroundCommandState` seam. The new wire field is optional and hidden at zero (the chat-row treats absence as "no projection", preserving historical behavior).
 
 **Next:** Operator LIVE GREEN verification on a fresh task + the natural/cancel/notify=false variants.
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 correction01 — PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED_MULTI_JOB — 2026-09-21
+
+**Status:** PASS — bounded repair at the upstream runner seam (correction01 closed the Factory reviewer's `HALT_TERMINAL_CARD_MULTI_JOB_PROJECTION_FALSE_GREEN` P0).
+
+**Correction01 deltas (vs. correction00 commit `e588d0541`):**
+
+| P0 | The runner fired `(false, undefined)` ONLY on the >0→0 cardinal flip, gated by `if (becameIdle)` | Dropped the gate; runner now fires `(false, jobId, terminalState)` UNCONDITIONALLY on `terminalPromise` resolution | BCTCP-CTL-MULTI-01 GREEN (J1 terminal while J2 stays running flips ONLY J1) |
+| P1 | `cancelled`/`deadline_exceeded` rendered as `Completed` (every terminal collapsed to one pill text) | Per-job `terminalState` projected through the renderer; ChatRow + CommandOutputRow render `Cancelled` / `Deadline exceeded` / etc. | BCTCP-10/11/12 GREEN |
+| P1 | `cancelBackgroundCommand(jobId)` pre-emptively set `backgroundCommandRunning = false` even when a sibling was still running | Cancel RPC now stamps only the target job's projection; scalar recomputed from the map | BCTCP-CTL-MULTI-03 GREEN (legacy pathway preserved) |
+
+**Pre-correction01 production behavior (proven false-green):**
+```text
+start J1 → onBackgroundStateChange(true, J1)
+start J2 → becameActive=false → NO callback (correct, J2's 1->2 transition is silent)
+J1 exits → terminalPromise resolves with becameIdle=false → `if (becameIdle)` GATE DROPS THE SIGNAL
+  → projection[J1] stays "running" forever (stale Backgrounded pill + Cancel)
+J2 exits → terminalPromise resolves with becameIdle=true → onBackgroundStateChange(false, undefined)
+  → projection[J1] AND projection[J2] finally flip to "terminal" (but J2 was the only thing keeping J1 alive in the projection; both are now terminal, so the projection reflects reality — but only because J2 also exited)
+```
+
+**Post-correction01 production behavior (THIS ACT):**
+```text
+start J1 → onBackgroundStateChange(true, J1)
+start J2 → becameActive=false → NO callback (correct, J2's 1->2 transition is silent)
+J1 exits → terminalPromise resolves with {becameIdle: false, jobId: J1, terminalState: "exited"}
+  → runner fires onBackgroundStateChange(false, J1, "exited") UNCONDITIONALLY
+  → controller projection[J1] = "exited"; projection[J2] = "running" (UNCHANGED)
+  → backgroundCommandRunning = true (J2 still alive); backgroundCommandTaskId = J2 (last running)
+  → ChatRow sees projection[J1]="exited" -> pill = "Completed"; ChatRow sees projection[J2]="running" -> pill = "Backgrounded" + Cancel BOTH rendered correctly
+J2 exits → terminalPromise resolves with {becameIdle: true, jobId: J2, terminalState: "exited"}
+  → runner fires onBackgroundStateChange(false, J2, "exited")
+  → controller projection[J2] = "exited"; anyRunning=false; scalar=false
+  → backgroundCommandTaskId = undefined (last running)
+  → BTCONT predicate fires (previousRunning=true && running=false && taskId=undefined)
+```
+
+**Honest verdict matrix:**
+```
+PRIMARY_P0                              = LIVE_PROVEN (BGCL-09 explicit acknowledgement)
+LIVE_TASK                               = predecessor 1789935070156_oneah / cmd_mua94lrk2w8jyomn
+STALE_BACKGROUNDED_AFFORDANCE           = PROVEN
+STALE_CANCEL_AFFORDANCE                  = PROVEN
+BACKEND_TERMINAL_STATE                   = PROVEN
+HISTORICAL_TOOL_RESULT                   = IMMUTABLE (CPJ-CTL-01 GREEN)
+RUNNING_CARD                            = GREEN (BCTCP-01, BGCL-01, BGCL-05)
+TERMINAL_CARD                           = GREEN (BCTCP-02/03/04, BGCL-07)
+CANCEL_RUNNING                          = GREEN (BCTCP-09, BGCL-06)
+CANCEL_TERMINAL                         = GREEN (BGCL-07, BCTCP-02/03/04)
+MULTI_JOB_PRODUCTION_PROJECTION         = GREEN (BCTCP-CTL-MULTI-01..05)
+MULTI_JOB_PRESENTATION                  = GREEN (BCTCP-06 + BCTCP-10..12)
+NOTIFY_ON_TERMINAL                      = CONSERVED (BCNT01 unchanged, no notify code touched)
+BTCONT                                  = CONSERVED (BTCONT01 10/10, predicate wired correctly)
+PWAOR                                   = CONSERVED (no PWAOR code touched)
+PILL_REASON_TRUTH                       = GREEN (BCTCP-10 cancelled -> 'Cancelled'),
+                                            (BCTCP-11 deadline -> 'Deadline exceeded'),
+                                            (BCTCP-12 exited -> 'Completed')
+```
+
+**Authority separation preserved (NO changes):**
+```
+CommandJobManager    = lifecycle authority           (TerminalTransition widened with jobId+terminalState)
+historical clineMessages = immutable record          (UNCHANGED)
+backgroundCommandJobStates = derived consumer       (WIDENED to the bounded CommandJobState enum)
+CommandOutputRow     = pure renderer                 (liveProjectionTerminalReason prop added, optional)
+ChatRow              = historical flag + live override (now passes through the exact terminal reason)
+cancelBackgroundCommandByJobId = unchanged          (UN-CHANGED — cancel stamps 'cancelled' on the
+                                                       projection; the scalar is recomputed from the map)
+```
+
+**Bounded repair (correction01 = 9 files / 746 inserts / 84 dels):**
+1. `apps/vscode/src/shared/ExtensionMessage.ts` — wire field type widened.
+2. `apps/vscode/src/sdk/command-job-manager.ts` — `TerminalTransition` carries `jobId` + `terminalState`.
+3. `apps/vscode/src/sdk/vscode-run-commands-tool.ts` — runner fires per-job unconditionally.
+4. `apps/vscode/src/sdk/SdkController.ts` — projection maintenance + scalar derivation + BTCONT bridge.
+5. `apps/vscode/src/core/controller/state/getStateToPostToWebview.ts` — wire field type widened.
+6. `apps/vscode/webview-ui/src/components/chat/ChatRow.tsx` — pass through the exact projection value.
+7. `apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx` — new `liveProjectionTerminalReason` prop; `CommandStatusMap` widened with reason-specific pills.
+8. `apps/vscode/webview-ui/src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx` — 3 new pill tests (BCTCP-10/11/12).
+9. `apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts` (new) — 5 multi-job production-shape tests (incl. BCTCP-CTL-MULTI-01 the bug gate).
+
+**Pre-existing failures preserved (NOT introduced by this ACT):**
+```
+vscode-run-commands-tool.background-state.test.ts: 6 RTP-* tests
+  (POSIX shell+spawn env issue, SAME as in correction00 + predecessor ACT)
+```
+
+**Next:** Operator LIVE GREEN verification on a fresh task + the natural/cancel/notify=false variants.
+

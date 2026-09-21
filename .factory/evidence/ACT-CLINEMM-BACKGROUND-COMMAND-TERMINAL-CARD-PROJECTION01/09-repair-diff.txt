@@ -1,65 +1,99 @@
-09 — Repair Diff Summary
-========================
+09 — Repair Diff Summary (correction01)
+=======================================
 
-Files changed (4 production + 1 test + 1 wire):
+Upstream (the BUG gate — where the production-composition defect lives):
+  apps/vscode/src/sdk/vscode-run-commands-tool.ts
+    - onBackgroundStateChange callback signature widened:
+        (running: boolean, jobId: string | undefined,
+         terminalState?: Exclude<CommandJobState, "running">) => void
+    - terminalPromise.then(...) listener FIRES UNCONDITIONALLY now:
+        start.terminalPromise.then(({ jobId, terminalState }) => {
+            notifyBackgroundStateChange(false, jobId, terminalState)
+        })
+      (No longer gated by `if (becameIdle)`. becameIdle gated the
+       signal to the >0->0 cardinal flip; multi-job cases dropped
+       the signal entirely.)
+    - Guarded by `if (start.becameActive)` so synchronous-fast-path
+      terminals that never had a start signal don't add phantom
+      entries to the projection map.
+    - Three sites updated (RUNNING branch, terminal branch, catch).
 
-  apps/vscode/src/shared/ExtensionMessage.ts
-    + backgroundCommandJobStates?: Record<string, "running" | "terminal">
-      (with bounded-invariant doc)
+Manager (the resolved value contract):
+  apps/vscode/src/sdk/command-job-manager.ts
+    - TerminalTransition widened with jobId + terminalState:
+        export interface TerminalTransition {
+            becameIdle: boolean
+            jobId: string
+            terminalState: Exclude<CommandJobState, "running">
+        }
+    - finalize() resolves with `{ becameIdle, jobId: job.id, terminalState }`.
+    - buildSandboxUnavailableResult() resolves with
+      `{ becameIdle: true, jobId, terminalState: "spawn_failed" }`.
+    - The deferred-creation promise rejection guard returns the
+      same shape with terminalState: "exited".
 
+Controller (the projection maintenance):
   apps/vscode/src/sdk/SdkController.ts
-    + private backgroundCommandJobStates: Record<...> = {}
-    + (running=true,  taskId)        → map[taskId] = "running"
-    + (running=false, taskId=undef)  → every "running" entry → "terminal"
-    + cancelBackgroundCommand(jobId):
-        single-job cancel   → map[jobId] = "terminal"
-        legacy session-wide → every "running" entry → "terminal"
-    + getStateToPostToWebview: forward backgroundCommandJobStates
+    - updateBackgroundCommandState signature widened:
+        (running: boolean, taskId?: string,
+         terminalState?: Exclude<CommandJobState, "running">) => void
+    - backgroundCommandRunning is DERIVED from the map:
+        anyRunning = Object.values(map).some(s => s === "running")
+        backgroundCommandRunning = anyRunning
+    - backgroundCommandTaskId is the LAST running entry:
+        newActiveTaskId = anyRunning
+            ? runningEntries[runningEntries.length - 1][0]
+            : undefined
+    - BTCONT bridge still fires once per session on the >0->0
+      transition. The static method `maybeReevaluateDeferredContinuation`
+      is invoked unconditionally; the predicate
+      `previousRunning && !running && taskId === undefined` fires
+      only on the LAST job terminalizing (the controller derives
+      taskId=undefined when anyRunning=false).
+    - cancelBackgroundCommand no longer pre-emptively flips
+      backgroundCommandRunning = false. The scalar is recomputed
+      from the (updated) projection map; siblings in a multi-job
+      session stay "running" until their own terminal signal.
+      Legacy session-wide cancel (jobId undefined) marks every
+      currently-"running" entry as "cancelled" (the bounded
+      P1 fix for the renderer's terminal reason pill).
+
+Wire (the consumer surface):
+  apps/vscode/src/shared/ExtensionMessage.ts
+    - backgroundCommandJobStates type widened:
+        Record<string, "running" | "exited" | "cancelled" |
+                     "deadline_exceeded" | "spawn_failed" |
+                     "containment_failed" | "terminal">
 
   apps/vscode/src/core/controller/state/getStateToPostToWebview.ts
-    + controller.backgroundCommandJobStates ?? {} in wire payload
+    - Same widening as ExtensionMessage.ts.
 
-  apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx
-    + backgroundCommandJobStates: {} in initial state
-
+Renderer (the consumer):
   apps/vscode/webview-ui/src/components/chat/ChatRow.tsx
-    + extractJobIdFromCommandOutput(text) helper
-    + historicalIsCommandBackgrounded (renamed from isCommandBackgrounded)
-    + backgroundedJobId extracted from message.text
-    + liveProjectionTerminal = jobId in projection && === "terminal"
-    + isCommandBackgrounded = historical && !liveTerminal
-    + isCommandExecuting    = original && !liveTerminal
-    + isCommandPending      = original && !liveTerminal
-    + isCommandCompleted    = historical OR liveTerminal
-      (overrides historical commandCompleted:false to true so the
-       row's pill flips to "Completed" and the Cancel button hides)
+    - Computes liveProjectionTerminalValue (the exact projection
+      string when terminal) and passes it to CommandOutputRow.
+    - The "everything not 'running' is terminal" predicate is
+      applied (legacy "terminal" string still counts).
 
-  apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
-    ~ BGCL-09 updated: now asserts the absent-projection control
-      (Backgrounded row stays Backgrounded + Cancel when no live
-      projection says terminal). The positive terminal case is
-      asserted by the BCTCP01 family.
+  apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx
+    - New optional prop `liveProjectionTerminalReason` added.
+    - getCommandStatusText() consults it BEFORE the rejected /
+      backgrounded / executing / pending / completed waterfall.
+    - CommandStatusMap widened with: cancelled, deadline_exceeded,
+      spawn_failed, containment_failed, exited.
 
-  apps/vscode/webview-ui/src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx (NEW)
-    BCTCP-RED-01 (RED witness for the bug)
-    BCTCP-01..10 (RED→GREEN family — all pass after repair)
+Tests (new):
+  apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts
+    - 5 controller tests:
+      - BCTCP-CTL-MULTI-01: J1 terminal while J2 stays running
+      - BCTCP-CTL-MULTI-02: J2 terminal after J1 -> >0->0 cardinal
+      - BCTCP-CTL-MULTI-03: legacy (false, undefined, ...) pathway
+      - BCTCP-CTL-MULTI-04: per-job terminalState preservation
+      - BCTCP-CTL-MULTI-05: invariant any('running')===scalar
 
-## Authority separation (preserved)
-
-  CommandJobManager     = lifecycle authority        (UNCHANGED)
-  Historical clineMessages entry = immutable record (UNCHANGED)
-  backgroundCommandJobStates     = derived consumer  (NEW)
-  CommandOutputRow    = pure renderer                (UNCHANGED)
-  ChatRow             = historical flag + live override (NEW BRANCH)
-  cancelBackgroundCommandByJobId = unchanged         (UNCHANGED)
-
-No change to:
-  - CommandJobManager state machine
-  - Process supervisor / PGID / deadline handling (PWAOR)
-  - BTCONT (deferred continuation reevaluation)
-  - notify-on-terminal coordinator
-  - PendingPrompts / Queue
-  - proto schema (no proto change)
-  - wire shape (only ONE new optional field added)
-  - cancellation callback path (cancelBackgroundCommandByJobId
-    is unchanged)
+Tests (extended):
+  apps/vscode/webview-ui/src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx
+    - 3 new pill tests (BCTCP-10/11/12):
+      - cancelled -> 'Cancelled'
+      - deadline_exceeded -> 'Deadline exceeded'
+      - exited -> 'Completed'

@@ -1,50 +1,66 @@
-10 — Focused Test Suite Results
-=================================
+10 — Focused Test Suite Output (correction01)
+==============================================
 
-All test families that exercise the new projection seam pass.
+  $ cd apps/vscode && node ./node_modules/vitest/dist/cli.js run --no-coverage \
+        src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts
+  Test Files  1 passed (1)
+       Tests  7 passed (7)
 
-Webview (apps/vscode/webview-ui):
-  src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx
-    BCTCP-RED-01  RED → GREEN  (RED captured the bug pre-repair)
-    BCTCP-01      running projection → Backgrounded + Cancel     PASS
-    BCTCP-02      natural exit projection → terminal / no Cancel PASS
-    BCTCP-03      cancelled projection → terminal / no Cancel     PASS
-    BCTCP-04      deadline projection → terminal / no Cancel      PASS
-    BCTCP-05      absent projection → row stays Backgrounded       PASS
-    BCTCP-06      multi-job: row A terminal + row B running       PASS
-    BCTCP-07      historical tool result stays immutable           PASS
-    BCTCP-08      duplicate terminal projection → idempotent       PASS
-    BCTCP-09      Cancel dispatch carries exact jobId (running)    PASS
+  $ node ./node_modules/vitest/dist/cli.js run --no-coverage \
+        src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts
+   ✓ BCTCP-CTL-MULTI-01 J1 terminal while J2 stays running -> independent per-job projection
+   ✓ BCTCP-CTL-MULTI-02 J2 terminal after J1 -> >0->0 cardinal flip -> BTCONT predicate fires
+   ✓ BCTCP-CTL-MULTI-03 (false, undefined, terminalState) legacy pathway still flips every running entry
+   ✓ BCTCP-CTL-MULTI-04 per-job terminalState is preserved on the projection map
+   ✓ BCTCP-CTL-MULTI-05 invariant: backgroundCommandRunning === any(map value === 'running')
+  Test Files  1 passed (1)
+       Tests  5 passed (5)
 
-  src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
-    BGCL-01..08  (predecessor ACT baseline)                         PASS (8/8)
-    BGCL-09      (re-labeled: absent-projection control)            PASS
+  $ node ./node_modules/vitest/dist/cli.js run --no-coverage \
+        src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
+  Test Files  1 passed (1)
+       Tests  10 passed (10)
+  (BTCONT01 unchanged — no regression)
 
-  src/components/chat/__tests__/chat-row.rejected-command.rejected-truth.rcp.test.tsx
-    RCP01..RCP10 (predecessor ACT baseline)                        PASS (8/8)
+  $ cd apps/vscode/webview-ui && node ./node_modules/vitest/dist/cli.js run --no-coverage \
+        src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx
+   ✓ BCTCP-RED-01 RED witness (historical backgrounded + live terminal projection -> no Backgrounded)
+   ✓ BCTCP-01 running projection -> Backgrounded + Cancel (conservation)
+   ✓ BCTCP-02 natural exit projection -> terminal (no Backgrounded, no Cancel)
+   ✓ BCTCP-03 cancelled projection -> terminal (no Backgrounded, no Cancel)
+   ✓ BCTCP-04 deadline_exceeded projection -> terminal (no Backgrounded, no Cancel)
+   ✓ BCTCP-05 absent projection (different job terminalized) -> row stays Backgrounded
+   ✓ BCTCP-06 multi-job: row A terminal + row B running -> independent presentation
+   ✓ BCTCP-07 historical tool result stays immutable across live terminal projection
+   ✓ BCTCP-08 duplicate terminal projection -> idempotent terminal
+   ✓ BCTCP-09 Cancel dispatch carries exact jobId while running
+   ✓ BCTCP-10 cancelled projection surfaces 'Cancelled' pill (not 'Completed')
+   ✓ BCTCP-11 deadline_exceeded projection surfaces 'Deadline exceeded' pill
+   ✓ BCTCP-12 exited projection surfaces 'Completed' pill
+  Test Files  1 passed (1)
+       Tests  13 passed (13)
 
-  src/components/chat/CommandOutputRow.test.tsx
-    5/5                                                                PASS
+  $ node ./node_modules/vitest/dist/cli.js run --no-coverage \
+        src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
+  Test Files  1 passed (1)
+       Tests  8 passed (8)
+  (BGCL01 unchanged; BGCL-09 re-labeled to absent-projection control)
 
-Controller (apps/vscode):
-  src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts
-    BCTCP-CTL-01  (true, jobId) sets map[jobId]='running'           PASS
-    BCTCP-CTL-02  (false, undef) marks 'running'→'terminal'         PASS
-    BCTCP-CTL-03  multi-job independent per-job projection          PASS
-    BCTCP-CTL-06  getStateToPostToWebview spreads fresh copy        PASS
-    BCTCP-CTL-07  invariant: backgroundCommandRunning === any       PASS
-    BCTCP-CTL-08  BTCONT predicate wired correctly                  PASS
-    BCTCP-CTL-09  (true, jobId) after cardinal flip = new running  PASS
+  $ node ./node_modules/vitest/dist/cli.js run --no-coverage \
+        src/components/chat/__tests__/chat-row.rejected-command.rejected-truth.rcp.test.tsx
+  Test Files  1 passed (1)
+       Tests  8 passed (8)
+  (RCP01..10 unchanged; rejected-command presentation untouched)
 
-  src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
-    BTCONT-01..10 (predecessor ACT baseline)                        PASS (10/10)
+  $ node ./node_modules/vitest/dist/cli.js run --no-coverage \
+        src/components/chat/CommandOutputRow.test.tsx
+  Test Files  1 passed (1)
+       Tests  5 passed (5)
+  (CommandOutputRow unchanged signature-compatible;
+   liveProjectionTerminalReason is an optional new prop)
 
-Total focused: 17 webview-side + 7 controller-side + 10 BTCONT = 34 / 34 PASS.
-
-Pre-existing failures (NOT caused by this ACT):
-  src/sdk/vscode-run-commands-tool.background-state.test.ts
-    6/6 FAIL in baseline AND post-ACT (requires POSIX shell+spawn;
-    current environment cannot pipe to /bin/sh reliably).
-  src/sdk/SdkController.test.ts
-    3/20 FAIL in baseline AND post-ACT (SDK remote-config tests
-    using an unstubbed method path; pre-existing).
+  $ cd apps/vscode && bun scripts/run-bun-unit-tests.ts
+  Running 82 unit test files, isolated (concurrency 4)…
+  [1/82] ok   12 pass / 0 fail     ...
+  [82/82] ok   6 pass / 0 fail     ...
+  1141 tests passed, 0 failed

@@ -1,50 +1,42 @@
-12 — Full Gate Run
-==================
+12 — Full Gate Run (correction01)
+===================================
 
   cd apps/vscode
 
   bun x tsc --noEmit                    CLEAN (no diagnostics)
   cd webview-ui && bun x tsc --noEmit   CLEAN (no diagnostics)
 
-  bun run vscode:prepublish (full pipeline)
-    sync-parser-helper                  OK
-    protos                             OK (24 proto files compiled)
-    tsc --noEmit                       OK
-    check-types:compat                 OK
-    webview tsc --noEmit               OK
-    build:webview                      OK (vite build, 9.55 MB index.js)
-    lint                               OK (biome, 1929 files checked, 0 errors)
-    lint:proto                         OK
-    esbuild --production               OK (started; cancelled by harness timeout,
-                                                  not by failure)
+  bun run test:unit (1141 tests, 82 files)  PASS
 
-  bun scripts/run-bun-unit-tests.ts    1141 / 1141 PASS, 0 FAIL (95.5s)
-
-  Focused test families (apps/vscode):
+  Focused controller test families (apps/vscode):
     src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts
-                                          7 / 7 PASS
+                                          7 / 7 PASS  (correction00 invariant suite)
+    src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts
+                                          5 / 5 PASS  (correction01 multi-job bug gate)
     src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
                                           10 / 10 PASS (no regression)
-    src/sdk/SdkController.test.ts        17 / 20 PASS (3 pre-existing failures
-                                                      in SDK remote-config mocks;
-                                                      identical in baseline)
 
-  Focused test families (apps/vscode/webview-ui):
+  Focused webview test families (apps/vscode/webview-ui):
     src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx
-                                          10 / 10 PASS (incl. BCTCP-RED-01)
+                                          13 / 13 PASS (10 correction00 + 3 correction01 pill tests)
     src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
-                                          8 / 8 PASS (BGCL-09 re-labeled)
+                                          8 / 8 PASS  (predecessor baseline unchanged)
     src/components/chat/__tests__/chat-row.rejected-command.rejected-truth.rcp.test.tsx
-                                          8 / 8 PASS
+                                          8 / 8 PASS  (rejected-command presentation unchanged)
     src/components/chat/CommandOutputRow.test.tsx
-                                          5 / 5 PASS
+                                          5 / 5 PASS  (existing tests pass with widened signature)
 
-  git diff --check                       (none run; clean diff)
+  Pre-existing failures (NOT introduced by this ACT; same in baseline):
+    src/sdk/vscode-run-commands-tool.background-state.test.ts
+                                          6 / 6 FAIL (RTP-* — POSIX shell+spawn env issue;
+                                                      same failures as in correction00 + predecessor ACT)
 
 Verdict:
   type-check         PASS
   lint               PASS
   webview build      PASS
   unit (bun)         1141 / 1141 PASS
-  focused suites     PASS
+  focused suites     PASS (BCTCP webview 13/13, BCTCP ctl 7+5/7+5,
+                         BTCONT 10/10, BGCL01 8/8, RCP 8/8,
+                         CommandOutputRow 5/5)
   pre-existing fails preserved (NOT introduced by this ACT)

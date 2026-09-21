@@ -2,60 +2,65 @@
   "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01",
   "epistemic_purpose": "repair stale live Backgrounded + Cancel projection after authoritative CommandJob terminality",
   "entry_head": "993ac6dabe5ebd271b7140a8c05aaf6678e437e5",
-  "implementation_head": "e588d0541374a0db1c847af404105a3ef493a2f6",
-  "live_predecessor": {
-    "terminal_backend_state": "PROVEN",
-    "stale_backgrounded_affordance": "PROVEN",
-    "stale_cancel_affordance": "PROVEN"
-  },
+  "implementation_head_correction00": "e588d0541374a0db1c847af404105a3ef493a2f6",
+  "implementation_head_correction01": "3cec954cb17ad8e27c0edcaf60d80e55ec5faa25",
+  "verdict_history": [
+    {
+      "revision": "e588d0541 (correction00 / predecessor)",
+      "verdict": "HALT_TERMINAL_CARD_MULTI_JOB_PROJECTION_FALSE_GREEN",
+      "factory_reviewer": "Factory causal reviewer",
+      "summary": "Multi-job production projection bug: the runner fired onBackgroundStateChange(false, undefined) ONLY on the >0->0 cardinal flip. When J1 terminalized while J2 stayed running, no callback fired; J1's projection stayed 'running' forever (stale Backgrounded pill). The predecessor's BCTCP-06 multi-job test manually injected the desired end state but did NOT exercise the production composition."
+    },
+    {
+      "revision": "3cec954cb (correction01 / THIS COMMIT)",
+      "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED_MULTI_JOB",
+      "summary": "Bounded repair moves the per-job terminal signal UPSTREAM to the runner (carrying jobId + terminalState, NOT gated on becameIdle). Controller projection maintains the per-job map, derives the scalar from it, and computes the active taskId as the LAST running entry. BTCONT predicate fires exactly once on the >0->0 transition (the LAST running job terminalizes with taskId=undefined)."
+    }
+  ],
   "authority": {
     "job_lifecycle": "CommandJobManager",
     "historical_tool_result": "IMMUTABLE_HISTORY",
-    "card": "PROJECTION_ONLY (now with per-job overlay)"
+    "card": "PROJECTION_ONLY (per-job map overlay, scalar derived)"
   },
-  "reproduction": {
-    "red_reproduced": true,
-    "real_row_projection": true,
-    "same_job_terminal_update": true,
-    "red_tests_captured": [
-      "BCTCP-RED-01",
-      "BCTCP-02",
-      "BCTCP-03",
-      "BCTCP-04",
-      "BCTCP-06",
-      "BCTCP-08"
+  "reproduction_red_001": {
+    "reviewer_demand": "start J1, start J2, terminalize J1 while J2 remains running; assert projection[J1]=exited AND projection[J2]=running AND backgroundCommandRunning=true",
+    "pre_correction01_behavior": "J1's terminalPromise resolves with becameIdle=false (J2 still alive); runner drops the signal via `if (becameIdle)`; projection[J1] stays 'running' forever",
+    "post_correction01_behavior": "Runner fires (false, J1, 'exited') UNCONDITIONALLY; controller updates projection[J1] = 'exited' while projection[J2] stays 'running'; scalar stays true"
+  },
+  "controller_red_test": {
+    "file": "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts",
+    "cases": [
+      "BCTCP-CTL-MULTI-01 J1 terminal while J2 stays running -> independent per-job projection",
+      "BCTCP-CTL-MULTI-02 J2 terminal after J1 -> >0->0 cardinal flip -> BTCONT predicate fires",
+      "BCTCP-CTL-MULTI-03 (false, undefined, terminalState) legacy pathway still flips every running entry",
+      "BCTCP-CTL-MULTI-04 per-job terminalState is preserved on the projection map",
+      "BCTCP-CTL-MULTI-05 invariant: backgroundCommandRunning === any(map value === 'running')"
     ],
-    "conservation_passing_pre_repair": [
-      "BCTCP-01",
-      "BCTCP-05",
-      "BCTCP-07",
-      "BCTCP-09"
-    ]
+    "result": "5/5 GREEN"
   },
-  "classification": "CPJ1 + CPJ2 combined (historical flag pure-read + scalar live projection with no per-job identity)",
-  "repair": {
-    "authorized": true,
-    "performed": true,
-    "files": [
-      "apps/vscode/src/shared/ExtensionMessage.ts",
-      "apps/vscode/src/sdk/SdkController.ts",
-      "apps/vscode/src/core/controller/state/getStateToPostToWebview.ts",
-      "apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx",
-      "apps/vscode/webview-ui/src/components/chat/ChatRow.tsx",
-      "apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx",
-      "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts (new)",
-      "apps/vscode/webview-ui/src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx (new)"
-    ]
+  "production_runner_callback": {
+    "pre_correction01_signature": "(running: boolean, jobId: string | undefined) => void",
+    "post_correction01_signature": "(running: boolean, jobId: string | undefined, terminalState?: Exclude<CommandJobState, 'running'>) => void",
+    "fire_on_terminal": "UNCONDITIONAL (not gated on becameIdle)",
+    "becameActive_guard": "skips synchronous-fast-path terminals that never had a start signal"
+  },
+  "pill_reasons": {
+    "exited": "Completed",
+    "cancelled": "Cancelled",
+    "deadline_exceeded": "Deadline exceeded",
+    "spawn_failed": "Spawn failed",
+    "containment_failed": "Run failed",
+    "terminal": "Completed (legacy fallback)"
   },
   "conservation": {
     "running_card": "PASS",
     "other_job": "PASS",
-    "multi_job": "PASS",
-    "historical_immutability": "PASS",
-    "cancel_path": "PASS",
-    "notify_true": "CONSERVED (BCNT01 unchanged)",
+    "multi_job": "PASS (independent per-job projection, not owner-cardinality)",
+    "historical_immutability": "PASS (CPJ-CTL-01)",
+    "cancel_path": "PASS (cancelBackgroundCommand no longer pre-emptively flips scalar)",
+    "notify_true": "CONSERVED (BCNT01 unchanged, no notify code touched)",
     "notify_false": "CONSERVED (no notify code touched)",
-    "btcont": "PASS (BTCONT01 10/10, predicate wired correctly)",
+    "btcont": "CONSERVED (BTCONT01 10/10, predicate wired correctly)",
     "pwaor": "CONSERVED (no PWAOR code touched)"
   },
   "gates": {
@@ -64,21 +69,34 @@
     "lint": "CLEAN",
     "webview_build": "PASS",
     "bun_unit_tests": "1141/1141 PASS",
-    "bctcp_webview_tests": "10/10 PASS",
-    "bctcp_controller_tests": "7/7 PASS",
+    "bctcp_webview_tests": "13/13 PASS (incl. RED witness BCTCP-RED-01 + 3 new pill tests)",
+    "bctcp_controller_tests_correction00": "7/7 PASS",
+    "bctcp_controller_tests_correction01_multi_job": "5/5 PASS",
     "btcont_tests": "10/10 PASS",
     "bgcl01_tests": "8/8 PASS",
     "rcp_tests": "8/8 PASS",
     "command_output_row_tests": "5/5 PASS"
   },
   "live": {
-    "natural": "PENDING (operator dogfood; design verified by production-shape vitest + bun unit)",
+    "natural": "PENDING (operator dogfood; design verified by production-shape vitest + bun unit coverage; the predecessor ACT LIVE specimens document the bug)",
     "cancel": "PENDING (operator dogfood)",
     "notify_false": "PENDING (operator dogfood; notify code untouched)"
   },
   "pre_existing_failures_unchanged": [
-    "apps/vscode/src/sdk/SdkController.test.ts: 3 SDK remote-config tests fail in baseline AND post-ACT (unrelated to projection work)",
-    "apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts: 6 RTP-* tests fail in baseline AND post-ACT (POSIX shell+spawn environment issue)"
+    "apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts: 6 RTP-* tests fail in baseline AND post-ACT (POSIX shell+spawn environment issue, predates this ACT)"
   ],
-  "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED"
+  "files_modified": [
+    "apps/vscode/src/shared/ExtensionMessage.ts",
+    "apps/vscode/src/sdk/command-job-manager.ts",
+    "apps/vscode/src/sdk/vscode-run-commands-tool.ts",
+    "apps/vscode/src/sdk/SdkController.ts",
+    "apps/vscode/src/core/controller/state/getStateToPostToWebview.ts",
+    "apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx",
+    "apps/vscode/webview-ui/src/components/chat/ChatRow.tsx",
+    "apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx",
+    "apps/vscode/webview-ui/src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx",
+    "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts (new in correction00)",
+    "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts (new in correction01)"
+  ],
+  "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED_MULTI_JOB"
 }

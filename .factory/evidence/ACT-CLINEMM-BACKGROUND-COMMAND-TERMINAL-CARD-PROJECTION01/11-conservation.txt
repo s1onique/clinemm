@@ -1,45 +1,58 @@
-11 — Full Conservation Matrix
-==============================
+11 — Full Conservation Matrix (correction01)
+============================================
 
   C1  running card still shows Backgrounded                       PASS (BCTCP-01)
   C2  running card still exposes Cancel                           PASS (BCTCP-01, BCTCP-09)
   C3  exited card no longer exposes Cancel                       PASS (BCTCP-02)
-  C4  cancelled card no longer exposes Cancel                     PASS (BCTCP-03)
-  C5  deadline card no longer exposes Cancel                      PASS (BCTCP-04)
+  C4  cancelled card no longer exposes Cancel                     PASS (BCTCP-03, BCTCP-10 pill='Cancelled')
+  C5  deadline card no longer exposes Cancel                      PASS (BCTCP-04, BCTCP-11 pill='Deadline exceeded')
   C6  unrelated job terminal does not alter card                 PASS (BCTCP-05)
-  C7  multiple jobs project independently                         PASS (BCTCP-06)
+  C7  multiple jobs project independently                         PASS (BCTCP-06 + BCTCP-CTL-MULTI-01..05 — J1 terminal while J2 running flips ONLY J1)
   C8  historical tool result remains immutable                    PASS (BCTCP-07)
   C9  exact jobId cancellation path preserved                     PASS (BCTCP-09)
-  C10 terminal cache/status lookup preserved                      PASS (BGCL01 unchanged)
-  C11 notify=true continuation preserved                          CONSERVED (BTCONT01 10/10 + check-types clean)
+  C10 terminal cache/status lookup preserved                      PASS (BGCL01 8/8 unchanged)
+  C11 notify=true continuation preserved                          CONSERVED (BCNT01 unchanged)
   C12 notify=false conservation preserved                         CONSERVED (no notify code touched)
-  C13 BTCONT preserved                                            CONSERVED (BTCONT01 10/10; per-job projection does not
-                                                                   alter the BTCONT-01 test fixtures or predicate)
-  C14 PWAOR preserved                                            CONSERVED (no PWAOR code touched;
-                                                                   BCTCP01-controller proves the per-job projection
-                                                                   hooks into updateBackgroundCommandState which is the
-                                                                   PWAOR boundary but does NOT alter abort ownership)
-  C15 active-job telemetry gauge preserved                        CONSERVED (backgroundCommandJobStates invariant:
-                                                                   any("running") === backgroundCommandRunning, proven
-                                                                   by BCTCP-CTL-07; the scalar gauge is unchanged)
+  C13 BTCONT preserved                                            CONSERVED (BTCONT01 10/10, predicate wired correctly)
+  C14 PWAOR preserved                                            CONSERVED (no PWAOR code touched)
+  C15 active-job telemetry gauge preserved                        CONSERVED (scalar derived from map; invariant any('running')===backgroundCommandRunning, BCTCP-CTL-07 + BCTCP-CTL-MULTI-05)
   C16 TaskHeader semantics untouched                              CONSERVED (no TaskHeader code touched)
-  C17 no process-manager redesign                                 CONSERVED (CommandJobManager untouched;
-                                                                   the SdkController observer is the only writer of the
-                                                                   new map)
+  C17 no process-manager redesign                                 CONSERVED (CommandJobManager only extended, lifecycle authority unchanged)
   C18 no NLP/product-contract change                              CONSERVED (no prompt text or contract change)
+  C19 per-job terminal reason pill truth                          PASS (BCTCP-10 cancelled -> 'Cancelled'; BCTCP-11 deadline -> 'Deadline exceeded')
+  C20 cancel preserves running siblings                           PASS (cancelBackgroundCommand(jobId) no longer pre-emptively flips scalar)
 
 Additional conservation:
 
   BGCL01 8/8 passes (predecessor ACT baseline unchanged).
   RCP01..10 8/8 pass (rejected-command presentation untouched).
-  CommandOutputRow 5/5 pass (signature + pill math unchanged;
-                              the bug is fixed upstream of the row).
-  CommandOutputRow.test.tsx 5/5 pass.
+  CommandOutputRow 5/5 pass (signature widened with optional
+                              liveProjectionTerminalReason prop;
+                              existing callers continue to work).
+  BTCONT01 10/10 pass (predicate unchanged;
+                       Controller.maybeReevaluateDeferredContinuation
+                       still gates on previousRunning && !running &&
+                       taskId === undefined; this ACT just derives
+                       the right taskId from the projection map).
 
 Conservation verdict:
   - No new wire field semantics that affect existing tests.
   - No change to cancellation RPC, PWAOR, BTCONT, or notify-on-terminal.
-  - The ChatRow signature is unchanged (existing useExtensionState
-    destructuring remains valid).
-  - The CommandOutputRow signature is unchanged.
-  - The message-translator contract is unchanged.
+  - The runner's onBackgroundStateChange callback signature WIDENED
+    (added optional 3rd arg terminalState) — backward-compatible
+    for existing callers that omit it (they continue to receive
+    the legacy "terminal" fallback projection value).
+  - The CommandOutputRow signature WIDENED (added optional prop
+    liveProjectionTerminalReason) — backward-compatible for
+    existing callers that omit it (the renderer falls back to
+    the legacy pill logic).
+  - The wire field type widened from
+    Record<string, "running" | "terminal"> to
+    Record<string, "running" | "exited" | "cancelled" |
+                     "deadline_exceeded" | "spawn_failed" |
+                     "containment_failed" | "terminal">.
+    The legacy "terminal" literal is preserved verbatim.
+  - The historical clineMessages entry remains immutable (CPJ-CTL-01).
+  - The CommandJobManager's lifecycle authority is unchanged; the
+    TerminalTransition resolved value just carries more context
+    (jobId + terminalState) for downstream consumers.
