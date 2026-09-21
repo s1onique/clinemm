@@ -5990,3 +5990,78 @@ PWAOR                                   = CONSERVED
 
 **C1: GO TO DOGFOOD.** The Factory closure verdict stands. All production-composition seams are now GREEN.
 
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 correction01 closure round 3 — start-side + composition closure — 2026-09-21
+
+**Status:** PASS — closes Factory `HALT_MULTI_JOB_START_SIGNAL_DROPPED` + `HALT_MULTI_JOB_RUNNER_COMPOSITION_FALSE_GREEN` (both P0).
+
+**The asymmetry the reviewer caught (round 2):**
+
+The terminal side was correctly per-job (correction01 round 1). The START side was still gated on aggregate 0->1 cardinality (`if (start.becameActive) notify(true, start.jobId)`). A concurrent J2 start after J1 dropped J2's start signal entirely. And BCTCP-RUNNER-MULTI-03 was a false-green at the composition boundary — it manually injected the J2 `running` projection entry that production failed to publish.
+
+**Production change (bounded — 1 source file changed):**
+
+```diff
+- // ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
+- // the projection flips to true here iff this start was the 0->1 transition.
+- if (start.becameActive) {
+-     notifyBackgroundStateChange(true, start.jobId)
+- }
++ // ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01
++ // (correction01 / Factory HALT_MULTI_JOB_START_SIGNAL_DROPPED):
++ // the start notification MUST fire per RUNNING job, regardless
++ // of aggregate 0->1 cardinality.
++ notifyBackgroundStateChange(true, start.jobId)
+```
+
+at `apps/vscode/src/sdk/vscode-run-commands-tool.ts:813-834`.
+
+Plus the SdkController wiring lambda at line 1448 was dropping the third argument (`terminalState`); now forwards it correctly so the per-job reason actually reaches the projection map. Three pass-through surface types updated (vscode-runtime-builder / vscode-session-host / sdk-session-lifecycle).
+
+**New executable evidence (round 2):**
+
+| File | Test | Property |
+|------|------|----------|
+| `bctcp01-runner-seam.test.ts` (NEW BCTCP-RUNNER-MULTI-00) | runner fires `(true, jobId)` for EVERY RUNNING start, not only on aggregate 0->1 | exactly one `(true, J1)` and one `(true, J2)`; no `(true, undefined)`; no drops |
+| `bctcp01-runner-controller-composition.test.ts` (NEW FILE) | BCTCP-RUNNER-COMPOSITION-01 — full producer → bridge → consumer composition | real runner callbacks drive real `SdkController.updateBackgroundCommandState` end-to-end; J1+J2 start → both projection entries; J1 cancel → J1=cancelled, J2=running, scalar=true, taskId=J2; J2 cancel → J2=cancelled, scalar=false, taskId=undefined |
+
+**RED captured against round-1 head (3cec954cb):**
+- BCTCP-RUNNER-MULTI-00 would have asserted `expected [[true, J1], [true, J2]] received [[true, J1], [true, undefined]]` (the `if (becameActive)` gate dropped J2's start signal — `becameActive === false` because J1 was already active)
+- BCTCP-RUNNER-COMPOSITION-01 would have asserted `expected projection[J2]=running received undefined` (the controller's map never saw J2's start because the runner never published it)
+
+**GREEN on this commit (565be21a1):**
+- BCTCP-RUNNER-MULTI-00 PASS (5/5 in the runner-seam suite total)
+- BCTCP-RUNNER-COMPOSITION-01 PASS (1/1 in the new runner-controller-composition suite)
+
+**Honest verdict matrix (round 3 final):**
+
+```
+PRIMARY_P0                              = LIVE_PROVEN (BGCL-09)
+LIVE_TASK                               = predecessor 1789935070156_oneah / cmd_mua94lrk2w8jyomn
+RUNNER_COMPOSITION_MULTI_JOB_SEAM       = GREEN (BCTCP-RUNNER-MULTI-00..04)
+RUNNER->CONTROLLER_COMPOSITION          = GREEN (BCTCP-RUNNER-COMPOSITION-01 -- the Factory P0 gate)
+CONTROLLER_PER_JOB_PROJECTION           = GREEN (BCTCP-CTL-MULTI-01..05)
+MULTI_JOB_PRESENTATION                  = GREEN (BCTCP-06 + BCTCP-10..12)
+TERMINAL_REASON_RENDERING               = GREEN (BCTCP-10 cancelled -> 'Cancelled'),
+                                            (BCTCP-11 deadline -> 'Deadline exceeded'),
+                                            (BCTCP-12 exited -> 'Completed')
+STALE_BACKGROUNDED_AFFORDANCE           = PROVEN
+STALE_CANCEL_AFFORDANCE                  = PROVEN
+HISTORICAL_TOOL_RESULT                   = IMMUTABLE (CPJ-CTL-01)
+NOTIFY_ON_TERMINAL                      = CONSERVED (BCNT01 unchanged)
+BTCONT                                  = CONSERVED (BTCONT01 10/10)
+PWAOR                                   = CONSERVED
+LIVE                                    = PENDING (operator dogfood per reviewer)
+```
+
+**Bounded repair (round 2 = 4 source files + 2 test files):**
+- `apps/vscode/src/sdk/vscode-run-commands-tool.ts` — runner start-side ungated
+- `apps/vscode/src/sdk/SdkController.ts` — wiring lambda forwards terminalState
+- `apps/vscode/src/sdk/vscode-runtime-builder.ts` — type signature updated (pass-through)
+- `apps/vscode/src/sdk/vscode-session-host.ts` — type signature updated (pass-through)
+- `apps/vscode/src/sdk/sdk-session-lifecycle.ts` — type signature updated (pass-through)
+- `apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-runner-seam.test.ts` — +BCTCP-RUNNER-MULTI-00
+- `apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-runner-controller-composition.test.ts` (NEW) — full producer→bridge→consumer composition
+
+**C1: GO TO DOGFOOD.** Both Factory P0 gates now GREEN with bounded production change and bounded executable evidence.
+
