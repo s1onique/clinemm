@@ -202,44 +202,30 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01 — command card 
 	// ACT-CLINEMM-BACKGROUND-COMMAND-LIFECYCLE-OWNERSHIP01-CORRECTION01:
 	// BGCL-09 (terminal card lifecycle composition).
 	//
-	// The bounded CORRECTION01 verified that there is currently no
-	// production seam that updates the original say:"command" row's
-	// commandExecutionDisposition when the underlying CommandJob
-	// reaches a terminal state. The authoritative terminal signal
-	// for a backgrounded job is the ⎇ gauge (driven by the
-	// onBackgroundStateChange(false) callback — verified separately
-	// in vscode-run-commands-tool.background-state.test.ts RTP-* cases),
-	// NOT the row-level disposition.
+	// Historical: the bounded CORRECTION01 verified that there was
+	// NO production seam that updated the original say:"command"
+	// row's commandExecutionDisposition when the underlying CommandJob
+	// reached a terminal state.
 	//
-	// This test pins the narrow product contract the ACT ships:
-	//   - The row stays "Backgrounded" until something explicitly
-	//     mutates it.
-	//   - A future seam that DOES transition the row to a terminal
-	//     disposition MUST update this test (regression guard).
-	//   - Until then, the operator's authoritative terminal signal
-	//     is the ⎇ gauge + the active CommandJobs counter (not
-	//     the row pill).
-	it("BGCL-09 terminal-card composition: Backgrounded row stays Backgrounded (no row-mutation seam exists today)", () => {
-		render(<ChatRowContent {...makeProps(runningCommandRow("cmd_x"))} />)
+	// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+	// Introduced the per-job liveness projection
+	// (`backgroundCommandJobStates[jobId]`) consulted by ChatRow to
+	// override the historical flag when the authoritative CommandJob
+	// has finalized. This test now asserts the COMPLEMENT: with NO
+	// projection (the never-published case, or a different-job
+	// terminal), the row stays Backgrounded + Cancel.
+	//
+	// The flipped side — historical backgrounded + matching
+	// backgroundCommandJobStates[cmd_x] = "terminal" → row flips
+	// terminal — is asserted in the BCTCP01 family.
+	it("BGCL-09 absent-projection control: Backgrounded row stays Backgrounded when no per-job projection says terminal", () => {
+		render(<ChatRowContent {...makeProps(runningCommandRow("cmd_x"), vi.fn())} />)
 		// Initial state: Backgrounded (this row was stamped by the
 		// message-translator when the run_commands backgrounded tool
 		// returned the {status:"running",jobId:"cmd_x"} envelope).
 		expect(screen.getByTestId("status-pill").textContent).toBe("Backgrounded")
-		// Assert: there is currently no production path that mutates
-		// this same row's commandExecutionDisposition when the
-		// underlying CommandJob reaches a terminal state.
-		// (The authoritative terminal signal is the ⎇ gauge and the
-		//  backgroundCommandRunning flag — both driven by
-		//  onBackgroundStateChange, verified by the prior ACT's tests.)
-		// The webview receives no clineMessages update for this row
-		// after the initial Backgrounded stamp, so the row stays
-		// Backgrounded forever (until the next model turn that
-		// explicitly produces a terminal say:"command" row, which is
-		// a separate clineMessages entry, not a mutation of this one).
-		//
-		// This assertion freezes the narrow contract. A future ACT
-		// that introduces the row-mutation seam (terminal row update
-		// from onBackgroundStateChange) MUST update this test.
+		expect(screen.getByTestId("cancel-button")).toBeInTheDocument()
+		// The historical tool result remains immutable (CPJ-CTL-01).
 		const message = runningCommandRow("cmd_x")
 		expect(message.commandExecutionDisposition).toBe("backgrounded")
 		expect(message.commandCompleted).toBe(false)

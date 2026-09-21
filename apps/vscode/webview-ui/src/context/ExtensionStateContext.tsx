@@ -427,6 +427,12 @@ export const ExtensionStateContextProvider: React.FC<{
 		remoteConfigSettings: {},
 		backgroundCommandRunning: false,
 		backgroundCommandTaskId: undefined,
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+		// Per-job lifecycle projection. Default empty object so the
+		// chat-row's `liveJobStates[jobId] === "terminal"` check is
+		// well-defined for the never-published case (treated as
+		// "absent projection", preserving historical behavior).
+		backgroundCommandJobStates: {},
 		foregroundCommandRunning: false,
 		lastDismissedCliBannerVersion: 0,
 		backgroundEditEnabled: false,

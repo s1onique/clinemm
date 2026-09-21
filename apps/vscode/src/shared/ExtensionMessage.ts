@@ -410,6 +410,31 @@ export interface ExtensionState {
 	backgroundCommandRunning?: boolean
 	backgroundCommandTaskId?: string
 	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+	 * Per-job lifecycle projection keyed by CommandJob jobId.
+	 *
+	 * Updated by `SdkController.updateBackgroundCommandState`:
+	 *   `(true, jobId)`    → `this[jobId] = "running"`
+	 *   `(false, undefined)` (the >0->0 cardinal flip)
+	 *                       → every currently-"running" entry becomes "terminal"
+	 *
+	 * Consulted by `ChatRow` so the row's live "Backgrounded" + Cancel
+	 * affordance flips to terminal / hidden when the authoritative
+	 * CommandJob has finalized. The historical `clineMessages` entry
+	 * is NOT mutated; the projection is an overlay only.
+	 *
+	 * ORTHOGONAL to `backgroundCommandRunning` (the scalar TaskHeader
+	 * gauge) and `backgroundCommandTaskId` (the LAST active jobId).
+	 * The map supports multi-job independence: BCTCP-06 proves two
+	 * sibling rows can render different lifecycle phases.
+	 *
+	 * Production invariant:
+	 *   `Object.values(this).includes("running")` is equivalent to
+	 *   `backgroundCommandRunning === true` (the same seam maintains
+	 *   both).
+	 */
+	backgroundCommandJobStates?: Record<string, "running" | "terminal">
+	/**
 	 * True while a foreground (VS Code terminal) command is awaited by a
 	 * run_commands tool call. Drives the "Proceed While Running" button.
 	 */

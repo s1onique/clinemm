@@ -32,6 +32,12 @@ export async function getStateToPostToWebview(controller: {
 	mcpHub?: any
 	backgroundCommandRunning?: boolean
 	backgroundCommandTaskId?: string
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+	 * Per-job lifecycle projection keyed by CommandJob jobId.
+	 * Forwarded to the wire as `backgroundCommandJobStates`.
+	 */
+	backgroundCommandJobStates?: Record<string, "running" | "terminal">
 	foregroundCommandRunning?: boolean
 	workspaceManager?: any
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
@@ -306,6 +312,11 @@ export async function getStateToPostToWebview(controller: {
 		favoritedModelIds,
 		backgroundCommandRunning: controller.backgroundCommandRunning ?? false,
 		backgroundCommandTaskId: controller.backgroundCommandTaskId,
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+		// Per-job lifecycle projection. Empty object when the host has
+		// never published any job (the webview treats both absent and
+		// empty as "no projection", and consults the historical flag).
+		backgroundCommandJobStates: controller.backgroundCommandJobStates ?? {},
 		foregroundCommandRunning: controller.foregroundCommandRunning ?? false,
 		workspaceRoots: controller.workspaceManager?.getRoots?.() ?? [],
 		primaryRootIndex: controller.workspaceManager?.getPrimaryIndex?.() ?? 0,

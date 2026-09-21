@@ -919,6 +919,19 @@ export class Controller {
 	// Private state kept for stub compatibility
 	private backgroundCommandRunning = false
 	private backgroundCommandTaskId?: string
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+	 * Per-job lifecycle projection. The chat-row consults this map
+	 * to flip its "Backgrounded" + Cancel affordance to terminal /
+	 * hidden when the authoritative CommandJob has finalized. Lives
+	 * alongside the scalar `backgroundCommandRunning` /
+	 * `backgroundCommandTaskId` (which drive the TaskHeader gauge).
+	 *
+	 * Invariant: `Object.values(this.backgroundCommandJobStates)
+	 * .includes("running") === backgroundCommandRunning` (both are
+	 * maintained by the same `updateBackgroundCommandState` seam).
+	 */
+	private backgroundCommandJobStates: Record<string, "running" | "terminal"> = {}
 	private pendingClineAuthRetryPrompt?: string
 	checkpointRestoreInput?: ExtensionState["checkpointRestoreInput"]
 
@@ -3455,6 +3468,20 @@ export class Controller {
 		// in flight).
 		this.backgroundCommandRunning = false
 		this.backgroundCommandTaskId = undefined
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+		// When a single jobId is cancelled, mark THAT job's projection
+		// terminal. Other running siblings stay "running" until the
+		// next cardinal flip arrives. (The legacy session-wide cancel
+		// — jobId undefined — marks every currently-"running" entry.)
+		if (jobId && this.backgroundCommandJobStates[jobId] === "running") {
+			this.backgroundCommandJobStates[jobId] = "terminal"
+		} else if (!jobId) {
+			for (const k of Object.keys(this.backgroundCommandJobStates)) {
+				if (this.backgroundCommandJobStates[k] === "running") {
+					this.backgroundCommandJobStates[k] = "terminal"
+				}
+			}
+		}
 	}
 
 	/**
@@ -4380,6 +4407,26 @@ export class Controller {
 		const previousRunning = this.backgroundCommandRunning
 		this.backgroundCommandRunning = running
 		this.backgroundCommandTaskId = taskId
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+		// Maintain the per-job lifecycle projection. The contract:
+		//   (true,  jobId)         → this.jobStates[jobId] = "running"
+		//   (false, undefined)     → every currently-"running" entry
+		//                            becomes "terminal" (the >0->0
+		//                            cardinal flip is the only signal
+		//                            the manager fires for terminal —
+		//                            see vscode-run-commands-tool.ts:697-698)
+		//   (false, jobId)         → no-op for the projection (the
+		//                            cancel RPC awaits its own settle
+		//                            before the cardinal flip arrives).
+		if (running && taskId) {
+			this.backgroundCommandJobStates[taskId] = "running"
+		} else if (!running && taskId === undefined) {
+			for (const k of Object.keys(this.backgroundCommandJobStates)) {
+				if (this.backgroundCommandJobStates[k] === "running") {
+					this.backgroundCommandJobStates[k] = "terminal"
+				}
+			}
+		}
 		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
 		// The >0->0 cardinal transition (becameIdle === true at the
 		// manager level; vscode-run-commands-tool.ts:697-698 fires
@@ -4664,6 +4711,10 @@ export class Controller {
 				mcpHub: this.mcpHub,
 				backgroundCommandRunning: this.backgroundCommandRunning,
 				backgroundCommandTaskId: this.backgroundCommandTaskId,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+				// Per-job lifecycle projection. Spread a shallow copy
+				// so the wire payload is immutable per-snapshot.
+				backgroundCommandJobStates: { ...this.backgroundCommandJobStates },
 				foregroundCommandRunning: this.foregroundCommands.isRunning,
 				isRemoteConfigAvailable: this.isRemoteConfigAvailable,
 				currentRemoteConfigRevision: this.currentRemoteConfigRevision,

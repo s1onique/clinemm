@@ -66,6 +66,26 @@ import UserMessage from "./UserMessage"
 
 const HEADER_CLASSNAMES = "flex items-center gap-2.5 mb-3"
 
+/**
+ * ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+ * Cheap, conservative helper to extract a CommandJob jobId from a
+ * say:"command" row's text. Mirrors the helper inside
+ * `CommandOutputRow.tsx` (`extractJobIdFromOutput`) but operates on
+ * the FULL message text (rather than the post-COMMAND_OUTPUT_STRING
+ * output slice) — the chat-row needs the jobId BEFORE the row is
+ * rendered, and the envelope may sit anywhere after the
+ * COMMAND_OUTPUT_STRING marker.
+ *
+ * Returns `undefined` if the message text does not contain a
+ * backgrounded-run envelope (the conservative default — non-background
+ * rows are not projected).
+ */
+function extractJobIdFromCommandOutput(text: string): string | undefined {
+	if (!text) return undefined
+	const m = text.match(/"jobId"\s*:\s*"([^"]+)"/)
+	return m?.[1]
+}
+
 interface ChatRowProps {
 	message: ClineMessage
 	isExpanded: boolean
@@ -167,6 +187,11 @@ export const ChatRowContent = memo(
 			enableCheckpointsSetting,
 			turnState,
 			thinkingPresentation,
+			// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+			// Per-job lifecycle projection. The chat-row consults this map
+			// to override the historical `commandExecutionDisposition` flag
+			// when the authoritative CommandJob has finalized.
+			backgroundCommandJobStates,
 		} = useExtensionState()
 		const [quoteButtonState, setQuoteButtonState] = useState<QuoteButtonState>({
 			visible: false,
@@ -233,12 +258,48 @@ export const ChatRowContent = memo(
 		// is still alive — the row is NOT terminal, the Cancel
 		// affordance MUST remain available, and the status pill MUST
 		// read "Backgrounded" (NOT "Completed").
-		const isCommandBackgrounded = isCommandMessage && message.commandExecutionDisposition === "backgrounded"
+		const historicalIsCommandBackgrounded =
+			isCommandMessage && message.commandExecutionDisposition === "backgrounded"
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+		// Live override. The historical `commandExecutionDisposition`
+		// was stamped ONCE by the message-translator at content_end
+		// and is never re-stamped (see BGCL-09). After the underlying
+		// CommandJob reaches terminality, the per-job projection
+		// `backgroundCommandJobStates[jobId]` says so — we override
+		// the historical flag so the row flips to terminal / hides
+		// the Cancel affordance. The historical `clineMessages` entry
+		// is NOT mutated (CPJ-CTL-01); only this render-projection
+		// is.
+		const backgroundedJobId = isCommandMessage
+			? extractJobIdFromCommandOutput(message.text ?? "")
+			: undefined
+		const liveProjectionTerminal =
+			backgroundedJobId !== undefined &&
+			backgroundCommandJobStates?.[backgroundedJobId] === "terminal"
+		const isCommandBackgrounded = historicalIsCommandBackgrounded && !liveProjectionTerminal
 		// A command is executing if it has output but hasn't completed yet
-		const isCommandExecuting = isCommandMessage && !message.commandCompleted && commandHasOutput
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+		// When the live projection says terminal, the row is no longer
+		// executing — the underlying job has settled. We override
+		// `isCommandExecuting` to false so the Cancel button hides
+		// (CommandOutputRow.showCancelButton is OR'd over all three
+		// flags: isCommandExecuting || isCommandPending || isCommandBackgrounded).
+		const isCommandExecuting =
+			isCommandMessage && !message.commandCompleted && commandHasOutput && !liveProjectionTerminal
 		// A command is pending if it hasn't started (no output) and hasn't completed
-		const isCommandPending = isCommandMessage && isLast && !message.commandCompleted && !commandHasOutput
-		const isCommandCompleted = isCommandMessage && message.commandCompleted === true
+		const isCommandPending =
+			isCommandMessage && isLast && !message.commandCompleted && !commandHasOutput && !liveProjectionTerminal
+		// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01:
+		// When the live projection says terminal, the row's pill must
+		// read "Completed" (the natural terminal lifecycle surface) —
+		// not "Skipped" (the getCommandStatusText default when no
+		// flag matches) and not "Backgrounded" (the stale historical
+		// marker). We override `isCommandCompleted` to true so the
+		// pill text + the Cancel-hiding predicate BOTH pick up the
+		// terminal state. Historical `message.commandCompleted: false`
+		// is preserved verbatim (CPJ-CTL-01).
+		const isCommandCompleted =
+			isCommandMessage && (message.commandCompleted === true || liveProjectionTerminal)
 
 		const isMcpServerResponding = isLast && lastModifiedMessage?.say === "mcp_server_request_started"
 
