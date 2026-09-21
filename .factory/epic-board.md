@@ -5933,3 +5933,60 @@ vscode-run-commands-tool.background-state.test.ts: 6 RTP-* tests
 
 **Next:** Operator LIVE GREEN verification on a fresh task + the natural/cancel/notify=false variants.
 
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 correction01 closure round 2 — runner-composition closure — 2026-09-21
+
+**Status:** PASS — runner-composition RED witness gates Factory `HALT_MULTI_JOB_RUNNER_SEAM_NOT_EXECUTED` (P0).
+
+**Round 2 deltas (correction01 runner-composition evidence):**
+
+| Source-file tests added | Production-seam assertion |
+|--------|--------|
+| `apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-runner-seam.test.ts` (NEW, 4 tests) | Real `createVscodeRunCommandsTool` + real `createVscodeShellExecutor` + real `CommandJobManager.start` + `fakeSupervisor` (to avoid POSIX shell+spawn env failure, documented as pre-existing) |
+
+**Runner-composition RED witness against predecessor `e588d0541`:**
+
+```text
+BCTCP-RUNNER-MULTI-01: expected [[false, jobId1, 'cancelled']] received []
+  Cause: predecessor's runner dropped J1's signal via `if (becameIdle)`;
+         becameIdle was false because J2 was still alive.
+BCTCP-RUNNER-MULTI-02: expected per-job tuples for J1+J2 received only [false, undefined, undefined]
+  Cause: predecessor fired only on the LAST (J2) terminalization (the >0->0 cardinal flip).
+BCTCP-RUNNER-MULTI-03: projection[J1] expected 'cancelled', received <unchanged>
+BCTCP-RUNNER-MULTI-04: spy received (false, undefined) BEFORE both jobs terminalized
+  Cause: the cardinal leak from J2's terminal fired into J1's slot (the bug).
+```
+
+**Runner-composition GREEN on this commit (correction01 head `ed43b4cd2`):**
+
+```text
+BCTCP-RUNNER-MULTI-01  PASS  (J1 cancel fires (false, J1, 'cancelled') UNCONDITIONALLY)
+BCTCP-RUNNER-MULTI-02  PASS  (per-job tuple for BOTH J1 and J2, no (false, undefined) leak)
+BCTCP-RUNNER-MULTI-03  PASS  (runner->projection end-to-end: J1=cancelled, J2=running)
+BCTCP-RUNNER-MULTI-04  PASS  (runner NEVER fires (false, undefined) while a sibling is running)
+```
+
+**Honest verdict matrix (round 2 update):**
+
+```
+PRIMARY_P0                              = LIVE_PROVEN (BGCL-09)
+LIVE_TASK                               = predecessor 1789935070156_oneah / cmd_mua94lrk2w8jyomn
+RUNNER_COMPOSITION_MULTI_JOB_SEAM       = GREEN (BCTCP-RUNNER-MULTI-01..04 — the Factory P0 gate)
+CONTROLLER_PER_JOB_PROJECTION           = GREEN (BCTCP-CTL-MULTI-01..05)
+MULTI_JOB_PRESENTATION                  = GREEN (BCTCP-06 + BCTCP-10..12)
+TERMINAL_REASON_RENDERING               = GREEN (BCTCP-10 cancelled -> 'Cancelled'),
+                                            (BCTCP-11 deadline -> 'Deadline exceeded'),
+                                            (BCTCP-12 exited -> 'Completed')
+STALE_BACKGROUNDED_AFFORDANCE           = PROVEN
+STALE_CANCEL_AFFORDANCE                  = PROVEN
+HISTORICAL_TOOL_RESULT                   = IMMUTABLE (CPJ-CTL-01)
+NOTIFY_ON_TERMINAL                      = CONSERVED (BCNT01 unchanged, no notify code touched)
+BTCONT                                  = CONSERVED (BTCONT01 10/10)
+PWAOR                                   = CONSERVED
+```
+
+**Bounded repair (round 2 = 1 new test file, 418 lines):**
+- `apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-runner-seam.test.ts` (NEW) — 4 runner-composition RED->GREEN tests against the EXACT production seam (real `createVscodeRunCommandsTool` → real `createVscodeShellExecutor` → real `CommandJobManager.start` → real `terminalPromise` → real `onBackgroundStateChange` callback). RED captured against predecessor `e588d0541`; GREEN on correction01 head `ed43b4cd2`.
+
+**C1: GO TO DOGFOOD.** The Factory closure verdict stands. All production-composition seams are now GREEN.
+

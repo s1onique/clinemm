@@ -3,7 +3,7 @@
   "epistemic_purpose": "repair stale live Backgrounded + Cancel projection after authoritative CommandJob terminality",
   "entry_head": "993ac6dabe5ebd271b7140a8c05aaf6678e437e5",
   "implementation_head_correction00": "e588d0541374a0db1c847af404105a3ef493a2f6",
-  "implementation_head_correction01": "3cec954cb17ad8e27c0edcaf60d80e55ec5faa25",
+  "implementation_head_correction01": "ed43b4cd207c0bb6271ef7f81c5d27e0c4f3ce95",
   "verdict_history": [
     {
       "revision": "e588d0541 (correction00 / predecessor)",
@@ -12,9 +12,15 @@
       "summary": "Multi-job production projection bug: the runner fired onBackgroundStateChange(false, undefined) ONLY on the >0->0 cardinal flip. When J1 terminalized while J2 stayed running, no callback fired; J1's projection stayed 'running' forever (stale Backgrounded pill). The predecessor's BCTCP-06 multi-job test manually injected the desired end state but did NOT exercise the production composition."
     },
     {
-      "revision": "3cec954cb (correction01 / THIS COMMIT)",
-      "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED_MULTI_JOB",
-      "summary": "Bounded repair moves the per-job terminal signal UPSTREAM to the runner (carrying jobId + terminalState, NOT gated on becameIdle). Controller projection maintains the per-job map, derives the scalar from it, and computes the active taskId as the LAST running entry. BTCONT predicate fires exactly once on the >0->0 transition (the LAST running job terminalizes with taskId=undefined)."
+      "revision": "3cec954cb (correction01 / repair)",
+      "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED_CONTROLLER_LAYER",
+      "summary": "Bounded repair moves the per-job terminal signal UPSTREAM to the runner (carrying jobId + terminalState, NOT gated on becameIdle). Controller projection maintains the per-job map, derives the scalar from it, and computes the active taskId as the LAST running entry. BTCONT predicate fires exactly once on the >0->0 transition. Controller-only proxy test BCTCP-CTL-MULTI-01..05 proves the controller seam but only ASSUMES the runner emits the right tuple."
+    },
+    {
+      "revision": "ed43b4cd2 (correction01 / runner-composition RED witness)",
+      "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED_RUNNER_COMPOSITION",
+      "factory_reviewer": "Factory causal reviewer (round 2: HALT_MULTI_JOB_RUNNER_SEAM_NOT_EXECUTED)",
+      "summary": "Adds BCTCP-RUNNER-MULTI-01..04 at the EXACT production seam: real createVscodeRunCommandsTool + real createVscodeShellExecutor + real CommandJobManager.start. The RED was captured against predecessor e588d0541 (BCTCP-RUNNER-MULTI-01 returned 'Received: []' because the predecessor's `if (becameIdle)` gate dropped J1's signal entirely; BCTCP-RUNNER-MULTI-02 returned only the cardinal [false, undefined, undefined] tuple). The four tests now PASS GREEN against correction01, proving the runner-composition closure of the multi-job false-green."
     }
   ],
   "authority": {
@@ -24,10 +30,28 @@
   },
   "reproduction_red_001": {
     "reviewer_demand": "start J1, start J2, terminalize J1 while J2 remains running; assert projection[J1]=exited AND projection[J2]=running AND backgroundCommandRunning=true",
-    "pre_correction01_behavior": "J1's terminalPromise resolves with becameIdle=false (J2 still alive); runner drops the signal via `if (becameIdle)`; projection[J1] stays 'running' forever",
-    "post_correction01_behavior": "Runner fires (false, J1, 'exited') UNCONDITIONALLY; controller updates projection[J1] = 'exited' while projection[J2] stays 'running'; scalar stays true"
+    "pre_correction01_runner_seam_behavior": "J1's terminalPromise resolves with becameIdle=false (J2 still alive); runner drops the signal via `if (becameIdle)`; runner never calls updateBackgroundCommandState(false, J1, 'cancelled'); projection[J1] stays 'running' forever",
+    "post_correction01_runner_seam_behavior": "Runner fires (false, J1, 'cancelled') UNCONDITIONALLY via `start.terminalPromise.then(({jobId, terminalState}) => notify(false, jobId, terminalState))`; BCTCP-RUNNER-MULTI-01 GREEN (spy's per-job tuple contains J1's exact jobId+terminalState)"
   },
-  "controller_red_test": {
+  "runner_composition_red_witness": {
+    "file": "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-runner-seam.test.ts",
+    "seam": "real createVscodeRunCommandsTool + real CommandJobManager + fakeSupervisor (production-shape composition isolated from POSIX shell+spawn env)",
+    "cases": [
+      "BCTCP-RUNNER-MULTI-01 J1 terminal while J2 stays running -> runner fires (false, J1, 'cancelled') UNCONDITIONALLY",
+      "BCTCP-RUNNER-MULTI-02 J1 then J2 cancel -> per-job tuple for BOTH, no (false, undefined) leak",
+      "BCTCP-RUNNER-MULTI-03 composed runner -> projection: J1 flipped to 'cancelled', J2 still 'running'",
+      "BCTCP-RUNNER-MULTI-04 invariant: the runner NEVER fires (false, undefined) while a sibling is running"
+    ],
+    "predecessor_red_witness": {
+      "head": "e588d0541",
+      "BCTCP-RUNNER-MULTI-01_failure_mode": "expected [[false, jobId1, 'cancelled']] received [] (the runner dropped J1's signal entirely; becameIdle was false because J2 was alive)",
+      "BCTCP-RUNNER-MULTI-02_failure_mode": "expected per-job tuples for both J1+J2 received only [false, undefined, undefined] (the cardinal signal fired only on J2's terminal completion, which lost J1's projection mapping)",
+      "BCTCP-RUNNER-MULTI-03_failure_mode": "projection[J1] expected 'cancelled' received unchanged",
+      "BCTCP-RUNNER-MULTI-04_failure_mode": "spy received (false, undefined) BEFORE both jobs terminalized"
+    },
+    "result": "4/4 GREEN on correction01 head ed43b4cd2"
+  },
+  "controller_proxy_test": {
     "file": "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts",
     "cases": [
       "BCTCP-CTL-MULTI-01 J1 terminal while J2 stays running -> independent per-job projection",
@@ -55,12 +79,13 @@
   "conservation": {
     "running_card": "PASS",
     "other_job": "PASS",
-    "multi_job": "PASS (independent per-job projection, not owner-cardinality)",
+    "multi_job_projection": "PASS (independent per-job map at controller layer)",
+    "multi_job_runner_seam": "PASS (BCTCP-RUNNER-MULTI-01..04)",
     "historical_immutability": "PASS (CPJ-CTL-01)",
     "cancel_path": "PASS (cancelBackgroundCommand no longer pre-emptively flips scalar)",
-    "notify_true": "CONSERVED (BCNT01 unchanged, no notify code touched)",
+    "notify_true": "CONSERVED (BCNT01 unchanged)",
     "notify_false": "CONSERVED (no notify code touched)",
-    "btcont": "CONSERVED (BTCONT01 10/10, predicate wired correctly)",
+    "btcont": "CONSERVED (BTCONT01 10/10)",
     "pwaor": "CONSERVED (no PWAOR code touched)"
   },
   "gates": {
@@ -69,7 +94,8 @@
     "lint": "CLEAN",
     "webview_build": "PASS",
     "bun_unit_tests": "1141/1141 PASS",
-    "bctcp_webview_tests": "13/13 PASS (incl. RED witness BCTCP-RED-01 + 3 new pill tests)",
+    "bctcp_runner_seam_tests_NEW_correction01_round2": "4/4 PASS",
+    "bctcp_webview_tests": "13/13 PASS",
     "bctcp_controller_tests_correction00": "7/7 PASS",
     "bctcp_controller_tests_correction01_multi_job": "5/5 PASS",
     "btcont_tests": "10/10 PASS",
@@ -78,12 +104,12 @@
     "command_output_row_tests": "5/5 PASS"
   },
   "live": {
-    "natural": "PENDING (operator dogfood; design verified by production-shape vitest + bun unit coverage; the predecessor ACT LIVE specimens document the bug)",
+    "natural": "PENDING (operator dogfood)",
     "cancel": "PENDING (operator dogfood)",
     "notify_false": "PENDING (operator dogfood; notify code untouched)"
   },
   "pre_existing_failures_unchanged": [
-    "apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts: 6 RTP-* tests fail in baseline AND post-ACT (POSIX shell+spawn environment issue, predates this ACT)"
+    "apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts: 6 RTP-* tests fail in baseline AND post-ACT (POSIX shell+spawn env issue, predates this ACT)"
   ],
   "files_modified": [
     "apps/vscode/src/shared/ExtensionMessage.ts",
@@ -96,7 +122,8 @@
     "apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx",
     "apps/vscode/webview-ui/src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx",
     "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts (new in correction00)",
-    "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts (new in correction01)"
+    "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts (new in correction01)",
+    "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-runner-seam.test.ts (new in correction01 / Factory HALT_MULTI_JOB_RUNNER_SEAM_NOT_EXECUTED closeout)"
   ],
-  "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED_MULTI_JOB"
+  "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED_RUNNER_COMPOSITION"
 }
