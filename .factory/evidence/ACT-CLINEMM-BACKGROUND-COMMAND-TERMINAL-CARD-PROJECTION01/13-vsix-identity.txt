@@ -1,0 +1,24 @@
+13 — VSIX Identity
+====================
+
+Not packaged in this ACT. The ACT ships the bounded repair verified
+by the production-shape vitest seams + the full bun unit suite
+(1141/1141). Operator dogfood LIVE is qualified separately (see
+14-live-natural.md and following).
+
+The predecessor ACT
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01-CORRECTION03
+packaged the same source head (993ac6dab) for the notify-on-terminal
+seam. This ACT uses the same source head + this ACT's bounded
+diff (5 production files + 2 test files). A dogfood build is NOT
+run by this ACT; per ACT §43 we record:
+
+  IMPLEMENTATION_HEAD = 993ac6dabe5ebd271b7140a8c05aaf6678e437e5
+                         (entry head; no commit on this ACT yet)
+  VERSION = n/a (no package.json change; same as entry head)
+
+If a dogfood VSIX is desired, the standard
+  cd apps/vscode && bun run vscode:prepublish
+sequence will produce a fresh VSIX from the same source head with
+this ACT's diff applied. The webview build is already verified
+PASS at 9,548.82 kB index.js (see 12-full-gates.txt).

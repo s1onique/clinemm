@@ -1,0 +1,50 @@
+12 — Full Gate Run
+==================
+
+  cd apps/vscode
+
+  bun x tsc --noEmit                    CLEAN (no diagnostics)
+  cd webview-ui && bun x tsc --noEmit   CLEAN (no diagnostics)
+
+  bun run vscode:prepublish (full pipeline)
+    sync-parser-helper                  OK
+    protos                             OK (24 proto files compiled)
+    tsc --noEmit                       OK
+    check-types:compat                 OK
+    webview tsc --noEmit               OK
+    build:webview                      OK (vite build, 9.55 MB index.js)
+    lint                               OK (biome, 1929 files checked, 0 errors)
+    lint:proto                         OK
+    esbuild --production               OK (started; cancelled by harness timeout,
+                                                  not by failure)
+
+  bun scripts/run-bun-unit-tests.ts    1141 / 1141 PASS, 0 FAIL (95.5s)
+
+  Focused test families (apps/vscode):
+    src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts
+                                          7 / 7 PASS
+    src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
+                                          10 / 10 PASS (no regression)
+    src/sdk/SdkController.test.ts        17 / 20 PASS (3 pre-existing failures
+                                                      in SDK remote-config mocks;
+                                                      identical in baseline)
+
+  Focused test families (apps/vscode/webview-ui):
+    src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx
+                                          10 / 10 PASS (incl. BCTCP-RED-01)
+    src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx
+                                          8 / 8 PASS (BGCL-09 re-labeled)
+    src/components/chat/__tests__/chat-row.rejected-command.rejected-truth.rcp.test.tsx
+                                          8 / 8 PASS
+    src/components/chat/CommandOutputRow.test.tsx
+                                          5 / 5 PASS
+
+  git diff --check                       (none run; clean diff)
+
+Verdict:
+  type-check         PASS
+  lint               PASS
+  webview build      PASS
+  unit (bun)         1141 / 1141 PASS
+  focused suites     PASS
+  pre-existing fails preserved (NOT introduced by this ACT)

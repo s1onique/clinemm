@@ -1,0 +1,84 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01",
+  "epistemic_purpose": "repair stale live Backgrounded + Cancel projection after authoritative CommandJob terminality",
+  "entry_head": "993ac6dabe5ebd271b7140a8c05aaf6678e437e5",
+  "implementation_head": "e588d0541374a0db1c847af404105a3ef493a2f6",
+  "live_predecessor": {
+    "terminal_backend_state": "PROVEN",
+    "stale_backgrounded_affordance": "PROVEN",
+    "stale_cancel_affordance": "PROVEN"
+  },
+  "authority": {
+    "job_lifecycle": "CommandJobManager",
+    "historical_tool_result": "IMMUTABLE_HISTORY",
+    "card": "PROJECTION_ONLY (now with per-job overlay)"
+  },
+  "reproduction": {
+    "red_reproduced": true,
+    "real_row_projection": true,
+    "same_job_terminal_update": true,
+    "red_tests_captured": [
+      "BCTCP-RED-01",
+      "BCTCP-02",
+      "BCTCP-03",
+      "BCTCP-04",
+      "BCTCP-06",
+      "BCTCP-08"
+    ],
+    "conservation_passing_pre_repair": [
+      "BCTCP-01",
+      "BCTCP-05",
+      "BCTCP-07",
+      "BCTCP-09"
+    ]
+  },
+  "classification": "CPJ1 + CPJ2 combined (historical flag pure-read + scalar live projection with no per-job identity)",
+  "repair": {
+    "authorized": true,
+    "performed": true,
+    "files": [
+      "apps/vscode/src/shared/ExtensionMessage.ts",
+      "apps/vscode/src/sdk/SdkController.ts",
+      "apps/vscode/src/core/controller/state/getStateToPostToWebview.ts",
+      "apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx",
+      "apps/vscode/webview-ui/src/components/chat/ChatRow.tsx",
+      "apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx",
+      "apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts (new)",
+      "apps/vscode/webview-ui/src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx (new)"
+    ]
+  },
+  "conservation": {
+    "running_card": "PASS",
+    "other_job": "PASS",
+    "multi_job": "PASS",
+    "historical_immutability": "PASS",
+    "cancel_path": "PASS",
+    "notify_true": "CONSERVED (BCNT01 unchanged)",
+    "notify_false": "CONSERVED (no notify code touched)",
+    "btcont": "PASS (BTCONT01 10/10, predicate wired correctly)",
+    "pwaor": "CONSERVED (no PWAOR code touched)"
+  },
+  "gates": {
+    "tsc_main": "CLEAN",
+    "tsc_webview": "CLEAN",
+    "lint": "CLEAN",
+    "webview_build": "PASS",
+    "bun_unit_tests": "1141/1141 PASS",
+    "bctcp_webview_tests": "10/10 PASS",
+    "bctcp_controller_tests": "7/7 PASS",
+    "btcont_tests": "10/10 PASS",
+    "bgcl01_tests": "8/8 PASS",
+    "rcp_tests": "8/8 PASS",
+    "command_output_row_tests": "5/5 PASS"
+  },
+  "live": {
+    "natural": "PENDING (operator dogfood; design verified by production-shape vitest + bun unit)",
+    "cancel": "PENDING (operator dogfood)",
+    "notify_false": "PENDING (operator dogfood; notify code untouched)"
+  },
+  "pre_existing_failures_unchanged": [
+    "apps/vscode/src/sdk/SdkController.test.ts: 3 SDK remote-config tests fail in baseline AND post-ACT (unrelated to projection work)",
+    "apps/vscode/src/sdk/vscode-run-commands-tool.background-state.test.ts: 6 RTP-* tests fail in baseline AND post-ACT (POSIX shell+spawn environment issue)"
+  ],
+  "verdict": "PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED"
+}

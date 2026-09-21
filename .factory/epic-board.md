@@ -5796,3 +5796,51 @@ Next step (per Factory reviewer disposition, cycle 03):
 - Stale card projection: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 (still deferred, separate)
 - Future cycle: persistence upgrade (EPHEMERAL_ONLY → PERSISTED) if product demand warrants
 - Future cycle: Candidate C architecture (suspended-tool state machine) → enables STRICT_WAIT
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 — PASS_BACKGROUND_TERMINAL_CARD_PROJECTION_REPAIRED — 2026-09-21
+
+**Status:** PASS — bounded repair at the per-job projection layer. RED→GREEN at the webview seam (BCTCP-RED-01 + 10 BCTCP-01..10 cases). BGCL01 baseline 8/8 unchanged (BGCL-09 re-labeled to absent-projection control). Full bun unit suite 1141/1141 green. tsc + lint + webview build clean. Pre-existing failures in `SdkController.test.ts` and `vscode-run-commands-tool.background-state.test.ts` reproduce in baseline (unrelated).
+
+**Honest verdict matrix:**
+```
+PRIMARY_P0                              = LIVE_PROVEN (BGCL-09 explicit acknowledgement)
+LIVE_TASK                               = predecessor 1789935070156_oneah / cmd_mua94lrk2w8jyomn
+STALE_BACKGROUNDED_AFFORDANCE           = PROVEN
+STALE_CANCEL_AFFORDANCE                  = PROVEN
+BACKEND_TERMINAL_STATE                   = PROVEN
+HISTORICAL_TOOL_RESULT                   = IMMUTABLE (CPJ-CTL-01 GREEN)
+RUNNING_CARD                            = GREEN (BCTCP-01, BGCL-01, BGCL-05)
+TERMINAL_CARD                           = GREEN (BCTCP-02/03/04, BGCL-07)
+CANCEL_RUNNING                          = GREEN (BCTCP-09, BGCL-06)
+CANCEL_TERMINAL                         = GREEN (BGCL-07, BCTCP-02/03/04)
+MULTI_JOB                               = GREEN (BCTCP-06 — row A terminal + row B running independently)
+NOTIFY_ON_TERMINAL                      = CONSERVED (BCNT01 unchanged, no notify code touched)
+BTCONT                                  = CONSERVED (BTCONT01 10/10, BCTCP-CTL-08 wired correctly)
+PWAOR                                   = CONSERVED (no PWAOR code touched)
+```
+
+**Authority separation preserved:**
+```
+CommandJobManager    = lifecycle authority           (UNCHANGED)
+historical clineMessages entry = immutable record    (UNCHANGED)
+backgroundCommandJobStates   = derived consumer     (NEW)
+CommandOutputRow     = pure renderer                 (UNCHANGED)
+ChatRow              = historical flag + live override (NEW BRANCH)
+cancelBackgroundCommandByJobId = unchanged          (UNCHANGED)
+```
+
+**Bounded repair (8 files / 657 inserts / 37 dels):**
+1. `apps/vscode/src/shared/ExtensionMessage.ts` — new wire field `backgroundCommandJobStates?: Record<string, "running" | "terminal">`.
+2. `apps/vscode/src/sdk/SdkController.ts` — maintain the projection in `updateBackgroundCommandState` + `cancelBackgroundCommand`.
+3. `apps/vscode/src/core/controller/state/getStateToPostToWebview.ts` — forward the projection to wire.
+4. `apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx` — default `{}`.
+5. `apps/vscode/webview-ui/src/components/chat/ChatRow.tsx` — extract jobId from historical text, override isCommandBackgrounded/Executing/Pending/Completed when live says terminal.
+6. `apps/vscode/webview-ui/src/components/chat/__tests__/background-command-lifecycle-ownership.bgcl01.test.tsx` — re-label BGCL-09 to absent-projection control.
+7. `apps/vscode/src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts` (new) — 7 controller-side projection semantics.
+8. `apps/vscode/webview-ui/src/components/chat/__tests__/background-command-terminal-card-projection.bctcp01.test.tsx` (new) — 10 webview-side render cases (incl. RED witness).
+
+**Live qualification:** Operator dogfood scenarios (§44/§45/§47/§46) are PENDING on operator-side VS Code install; the design is fully qualified by production-shape vitest + bun unit coverage (the same seam already proven LIVE in predecessors). No NEW live specimens required to qualify the bounded repair.
+
+**Diagnostic policy:** No new env var, no new command palette command, no new diagnostic framework. Reuses the existing `updateBackgroundCommandState` seam. The new wire field is optional and hidden at zero (the chat-row treats absence as "no projection", preserving historical behavior).
+
+**Next:** Operator LIVE GREEN verification on a fresh task + the natural/cancel/notify=false variants.

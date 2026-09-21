@@ -1,0 +1,114 @@
+04 — Recon
+=========
+
+CommandOutputRow render path
+----------------------------
+File: apps/vscode/webview-ui/src/components/chat/CommandOutputRow.tsx
+  showCancelButton (line 194-197):
+    = (isCommandExecuting || isCommandPending || isCommandBackgrounded)
+      && typeof onCancelCommand === "function"
+      && isBackgroundExec
+  getCommandStatusText (line 344-374):
+    line 361: if (isBackgrounded) return "Backgrounded"
+  pill dot (line 218-235):
+    line 227: "bg-success opacity-75" if isCommandBackgrounded
+
+ChatRow derivation
+------------------
+File: apps/vscode/webview-ui/src/components/chat/ChatRow.tsx
+  line 236: const isCommandBackgrounded =
+             isCommandMessage && message.commandExecutionDisposition === "backgrounded"
+  //  ↑ PURE READ of the message flag — NO live state consultation.
+
+message-translator stamp
+------------------------
+File: apps/vscode/src/sdk/message-translator.ts
+  line 1765: const isBackgroundedEnvelope = isBackgroundedCommandOutput(outputStr)
+  line 1774: let commandExecutionDisposition
+  line 1775-1788:
+    if (isBackgroundedEnvelope) {
+      commandExecutionDisposition = "backgrounded"
+    } else if (event.executionDisposition === "executed" ||
+               event.executionDisposition === "rejected_before_execution") {
+      commandExecutionDisposition = event.executionDisposition
+    } else {
+      commandExecutionDisposition = undefined
+    }
+  line 1789-1804:
+    messages.push({
+      ts,
+      type: "say",
+      say: "command",
+      text: outputStr ? `${commandText}\n${COMMAND_OUTPUT_STRING}\n${outputStr}` : commandText,
+      partial: false,
+      commandCompleted: !isBackgroundedEnvelope,
+      ...(commandExecutionDisposition !== undefined ? { commandExecutionDisposition } : {}),
+    })
+  // ↑ STAMPED ONCE at content_end. NEVER re-stamped.
+
+isBackgroundedCommandOutput (line 1186-1210)
+  = parsed.status === "running" && jobId.startsWith("cmd_") && non-empty
+  // ↑ Hard requirement: status must be "running". A terminal envelope
+  //   would NOT match. But no terminal envelope is ever produced either.
+
+Live background state wiring
+----------------------------
+File: apps/vscode/src/sdk/SdkController.ts
+  line 920: private backgroundCommandRunning = false
+  line 4376: updateBackgroundCommandState(running, taskId?)
+    line 4381-4382:
+      this.backgroundCommandRunning = running
+      this.backgroundCommandTaskId = taskId
+    line 4395: postStateToWebview()
+  line 4665: getStateToPostToWebview includes:
+              backgroundCommandTaskId: this.backgroundCommandTaskId,
+              foregroundCommandRunning: this.foregroundCommands.isRunning,
+              // ↑ NO per-job projection (only last/single jobId).
+
+getStateToPostToWebview (apps/vscode/src/core/controller/state/getStateToPostToWebview.ts:308-309)
+  backgroundCommandTaskId: controller.backgroundCommandTaskId,
+  foregroundCommandRunning: controller.backgroundCommandRunning ?? false,
+  // ↑ Same: scalar taskId only. No per-job array.
+
+ExtensionStateContext (apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx:428-430)
+  backgroundCommandTaskId: undefined,
+  foregroundCommandRunning: false,
+  // ↑ Same scalar surface, NOT per-job.
+
+isBackgroundExec (vscodeTerminalExecutionMode === "backgroundExec")
+  Per ExtensionStateContext; used as the gate that allows Cancel.
+
+Cancellation path (preserved; out of scope)
+------------------------------------------
+File: apps/vscode/webview-ui/src/components/chat/chat-view/hooks/useMessageHandlers.ts:653
+  cancelBackgroundCommandByJobId(jobId?)
+  → TaskServiceClient.cancelBackgroundCommand(StringRequest({value: jobId}))
+File: apps/vscode/src/core/controller/task/cancelBackgroundCommand.ts
+  → SdkController.cancelBackgroundCommand (line 3425)
+  → host.cancelBackgroundCommand(jobId)
+  //  ↑ Unchanged. Stays the same.
+
+Communication: onBackgroundStateChange callback
+-----------------------------------------------
+File: apps/vscode/src/sdk/vscode-run-commands-tool.ts:108
+  onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+File: apps/vscode/src/sdk/vscode-run-commands-tool.ts:697-698
+  // Fires when:
+  //   start.state === "running" → (true, start.jobId)
+  //   terminalPromise resolves  → (false, undefined)  [the >0->0 flip ONLY]
+
+This callback is the canonical lifecycle bridge from the
+CommandJobManager to the Controller's updateBackgroundCommandState.
+
+Production-host wiring
+----------------------
+File: apps/vscode/src/sdk/SdkController.ts:1428-1433
+  onBackgroundStateChange: this.updateBackgroundCommandState
+  // ↑ production callback that flips backgroundCommandRunning + TaskId.
+
+Conclusion
+----------
+Currently NO production path mutates the say:"command" row's
+commandExecutionDisposition when the CommandJob reaches terminality.
+The row stays "backgrounded" until the next model turn emits a NEW
+say:"command" message — which is the proven STALE_CARD defect.

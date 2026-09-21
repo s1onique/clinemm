@@ -1,0 +1,45 @@
+11 — Full Conservation Matrix
+==============================
+
+  C1  running card still shows Backgrounded                       PASS (BCTCP-01)
+  C2  running card still exposes Cancel                           PASS (BCTCP-01, BCTCP-09)
+  C3  exited card no longer exposes Cancel                       PASS (BCTCP-02)
+  C4  cancelled card no longer exposes Cancel                     PASS (BCTCP-03)
+  C5  deadline card no longer exposes Cancel                      PASS (BCTCP-04)
+  C6  unrelated job terminal does not alter card                 PASS (BCTCP-05)
+  C7  multiple jobs project independently                         PASS (BCTCP-06)
+  C8  historical tool result remains immutable                    PASS (BCTCP-07)
+  C9  exact jobId cancellation path preserved                     PASS (BCTCP-09)
+  C10 terminal cache/status lookup preserved                      PASS (BGCL01 unchanged)
+  C11 notify=true continuation preserved                          CONSERVED (BTCONT01 10/10 + check-types clean)
+  C12 notify=false conservation preserved                         CONSERVED (no notify code touched)
+  C13 BTCONT preserved                                            CONSERVED (BTCONT01 10/10; per-job projection does not
+                                                                   alter the BTCONT-01 test fixtures or predicate)
+  C14 PWAOR preserved                                            CONSERVED (no PWAOR code touched;
+                                                                   BCTCP01-controller proves the per-job projection
+                                                                   hooks into updateBackgroundCommandState which is the
+                                                                   PWAOR boundary but does NOT alter abort ownership)
+  C15 active-job telemetry gauge preserved                        CONSERVED (backgroundCommandJobStates invariant:
+                                                                   any("running") === backgroundCommandRunning, proven
+                                                                   by BCTCP-CTL-07; the scalar gauge is unchanged)
+  C16 TaskHeader semantics untouched                              CONSERVED (no TaskHeader code touched)
+  C17 no process-manager redesign                                 CONSERVED (CommandJobManager untouched;
+                                                                   the SdkController observer is the only writer of the
+                                                                   new map)
+  C18 no NLP/product-contract change                              CONSERVED (no prompt text or contract change)
+
+Additional conservation:
+
+  BGCL01 8/8 passes (predecessor ACT baseline unchanged).
+  RCP01..10 8/8 pass (rejected-command presentation untouched).
+  CommandOutputRow 5/5 pass (signature + pill math unchanged;
+                              the bug is fixed upstream of the row).
+  CommandOutputRow.test.tsx 5/5 pass.
+
+Conservation verdict:
+  - No new wire field semantics that affect existing tests.
+  - No change to cancellation RPC, PWAOR, BTCONT, or notify-on-terminal.
+  - The ChatRow signature is unchanged (existing useExtensionState
+    destructuring remains valid).
+  - The CommandOutputRow signature is unchanged.
+  - The message-translator contract is unchanged.
