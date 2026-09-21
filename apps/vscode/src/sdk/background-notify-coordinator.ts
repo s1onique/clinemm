@@ -129,14 +129,46 @@ export function formatTerminalWakePrompt(input: {
 	const tailPart = ["</bounded-output>", "", "Inspect the canonical command result/status and continue the user's task."].join(
 		"\n",
 	)
-	const combined = `${head}\n${tail}\n${tailPart}`
-	return truncateToByteCap(combined, NOTIFY_WAKE_PROMPT_MAX_BYTES)
+	// Reserve bytes for the fixed head + the closing delimiter +
+	// footer so the truncated output NEVER drops the safety
+	// delimiters (data vs instruction, command vs model
+	// continuation). Reserve = measured once per call; the head
+	// + tailPart are constant size for a given input shape.
+	const fixedOverhead = `${head}\n\n${tailPart}`
+	const fixedBytes = Buffer.byteLength(fixedOverhead, "utf8")
+	if (fixedBytes > NOTIFY_WAKE_PROMPT_MAX_BYTES) {
+		// Catastrophic: even with no output the prompt is over
+		// budget. Return the fixed prefix alone, truncated to
+		// fit.
+		return truncateToByteCap(fixedOverhead, NOTIFY_WAKE_PROMPT_MAX_BYTES)
+	}
+	const tailByteBudget = NOTIFY_WAKE_PROMPT_MAX_BYTES - fixedBytes
+	const safeTail = truncateToByteCap(tail, tailByteBudget)
+	return `${head}\n${safeTail}\n${tailPart}`
 }
 
 /**
  * Truncate `s` so that `Buffer.byteLength(s, "utf8") <= maxBytes`.
- * Truncates at a code-point boundary so we never produce an
- * invalid UTF-8 sequence.
+ *
+ * Truncates at a code-point boundary so we never produce a partial
+ * UTF-16 surrogate pair (which `Buffer.from(..., "utf8")` would
+ * encode as U+FFFD replacement characters and re-encode into
+ * invalid UTF-8). Implementation: iterate over Unicode code
+ * points (via `String.prototype[@@iterator]`) and accumulate
+ * each as a full code point; stop when the next code point would
+ * exceed `maxBytes`. Each code point contributes 1, 2, 3, or 4
+ * bytes to the UTF-8 encoding (ASCII surrogate halves are
+ * impossible inside a single code-point iteration because
+ * `for-of` decodes surrogate pairs).
+ *
+ * The previous implementation used `s.slice(0, mid)` over UTF-16
+ * indices, which CAN slice between a high+low surrogate half.
+ * `Buffer.from(slice, "utf8")` of a lone surrogate encodes the
+ * half as `\xEF\xBF\xBD` (U+FFFD) — invalid for our purposes:
+ * the assertion `truncated.length === buf.toString("utf8").length`
+ * happened to pass because U+FFFD is 1 code point, but the
+ * original code point was lost. This implementation is the
+ * correct code-point-safe variant.
  */
 export function truncateToByteCap(s: string, maxBytes: number): string {
 	if (maxBytes <= 0) {
@@ -145,18 +177,18 @@ export function truncateToByteCap(s: string, maxBytes: number): string {
 	if (Buffer.byteLength(s, "utf8") <= maxBytes) {
 		return s
 	}
-	let lo = 0
-	let hi = s.length
-	while (lo < hi) {
-		const mid = Math.floor((lo + hi + 1) / 2)
-		const candidate = s.slice(0, mid)
-		if (Buffer.byteLength(candidate, "utf8") <= maxBytes) {
-			lo = mid
-		} else {
-			hi = mid - 1
+	let acc = ""
+	let accBytes = 0
+	// `for-of` walks by code point, not by UTF-16 code unit.
+	for (const ch of s) {
+		const chBytes = Buffer.byteLength(ch, "utf8")
+		if (accBytes + chBytes > maxBytes) {
+			break
 		}
+		acc += ch
+		accBytes += chBytes
 	}
-	return s.slice(0, lo)
+	return acc
 }
 
 /**

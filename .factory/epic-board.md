@@ -5609,25 +5609,40 @@ HALT_PRODUCT_CONTRACT_REQUIRED.
 
 ## ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
 
-Updated: 2026-09-21 13:30:00Z (PRODUCTION_QUALIFIED post correction cycle 03 + this ACT: Factory causal reviewer verdict PASS_BACKGROUND_NOTIFY_ON_TERMINAL_PRODUCTION_QUALIFIED. Epistemic purpose = IMPLEMENT + EXECUTABLE QUALIFICATION of frozen opt-in notify-on-terminal contract. Production change = 367 insertions across 7 files (schema + tool + coordinator + 4 lifecycle wirings) + 2 new files (background-notify-coordinator.ts 439 lines + BCNT01 test 16 tests all passing). Contract-freeze commit (immutable) = 769281892...; this ACT implements it.)
+Updated: 2026-09-21 19:05:00Z (CORRECTION01 PRODUCTION_QUALIFIED post reviewer's HALT_NOTIFY_ON_TERMINAL_QUALIFICATION_OVERPROMOTED: 4 P0 + 2 P1 defects closed in one bounded cycle. Factory causal reviewer verdict PASS_BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION01_PRODUCTION_QUALIFIED. Epistemic purpose = bounded correction to the overpromoted initial ACT. Production change = re-bind marker registration to start.state === "running" (correction01 P1-1 fix; prevents duplicate wake on fast-path terminality) + reserve fixed-overhead bytes in truncateToByteCap so closing delimiter survives truncation (correction01 P1-2 fix) + 7 new tests (BCNT-NATURAL-01 real subprocess natural exit, BCNT-DEADLINE-01/02 deadline_exceeded wake eligibility, BCNT-FAST-01 fast-completion zero wake, BCNT-WIRE-01 real production wire bridge test, BCNT-U02b surrogate-pair test, plus renamed RED-01 to SYNTHETIC_REAL_UNWIRED honest label). Pre-repair RED witness captured at ddcf1ad4 in 19-pre-repair-red.md + 19-pre-repair-red-output.txt.)
 
-BACKGROUND_NOTIFY_ON_TERMINAL = PRODUCTION_QUALIFIED
-CONTRACT = WS-B_EXPLICIT_NOTIFY_ON_TERMINAL
-DEFAULT = false
-INTENT_OWNER = session/coordinator NotificationMarker
-LIFETIME = sessionId + taskId / NO epoch
-TRIGGER = per-job command_job_terminal_committed (terminalPromise.then listener)
-WAKE = PendingPromptsController.enqueue via activeSession.sdkHost.send({ delivery: "queue" }) / bounded string (<= 8 KiB UTF-8)
-PERSISTENCE = EPHEMERAL_ONLY (dispose() drops all markers + held results)
+BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION01 = PRODUCTION_QUALIFIED
+CONTRACT = WS-B_EXPLICIT_NOTIFY_ON_TERMINAL (UNCHANGED)
+DEFAULT = false (UNCHANGED)
+INTENT_OWNER = session/coordinator NotificationMarker (UNCHANGED)
+LIFETIME = sessionId + taskId / NO epoch (UNCHANGED)
+TRIGGER = per-job command_job_terminal_committed (UNCHANGED)
+WAKE = PendingPromptsController.enqueue via activeSession.sdkHost.send({ delivery: "queue" }) (UNCHANGED)
+PERSISTENCE = EPHEMERAL_ONLY (UNCHANGED)
+MARKER_REGISTRATION_BOUND_TO = start.state === "running" (NEW — correction01 P1-1 fix)
+TRUNCATION_FIXED_OVERHEAD_RESERVED = true (NEW — correction01 P1-2 fix)
 
-NOTIFY_TRUE = GREEN (BCNT-01 + 13 supporting)
-NOTIFY_FALSE = conservation verified (BCNT-02 omitted + BCNT-03 explicit false)
-MULTI_JOB = FIFO drain verified (BCNT-06)
+BCNT01 = 21/21 GREEN (correction01: +5 tests for real terminal reasons + fast-path control + truncation safety)
+BCNT_WIRE01 = 1/1 GREEN (real LocalRuntimeHost bridge test)
+BCNT01 + WIRE = 22/22 GREEN
 BTCONT = CONSERVED (10/10 BTCONT01)
 PWAOR = CONSERVED (1/1 PWAOR01)
+AGCONT = CONSERVED (7/7 AGCONT01)
+VRCT = CONSERVED (46/46)
+TYPECHECK = 0 new errors in apps/vscode
+
+CORRECTION01 DEFECTS CLOSED:
+P0-1 real_pending_prompt_wire = PROVEN (BCNT-WIRE-01 bridge)
+P0-2 natural_exit_witness = PROVEN (BCNT-NATURAL-01 real subprocess)
+P0-3 deadline_witness = PROVEN (BCNT-DEADLINE-01/02)
+P0-4 pre_repair_red = PROVEN (19-pre-repair-red.md probe at ddcf1ad4)
+P0-5 source_head_binding = PROVEN (production_head = 59b56525d..., matches digest exact one-commit range)
+P1-1 fast_completion_duplicate_wake = FIXED (registration bound to state==="running")
+P1-2 prompt_truncation_safety = FIXED (code-point iteration + reserve fixed overhead)
+
 STALE_CARD = OUT_OF_SCOPE / LIVE_PROVEN (successor ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01)
 
-16 BCNT tests: ALL PASSING. Full gates: typecheck clean (0 new errors), conservation tests green, RED reproduction confirmed. LIVE qualification deferred to operator dogfood cycle (the cloud agent context does not have vsce:prepublish + sideload infrastructure; production-shaped executable coverage qualifies per §46 + §47).
+LIVE POSITIVE + LIVE NEGATIVE = DEFERRED to operator dogfood VSIX cycle (cloud agent context lacks vsce:prepublish + sideload infrastructure; production-shaped executable coverage qualifies per §46 + §47 of the ACT).
 
 **Selection**: Candidate B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL). Passes all ten rubric items D1-D10. WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to a future cycle requiring the suspended-tool state machine (Candidate C). Default `notifyOnCompletion = false` preserves current behavior exactly. Wake is one bounded generated prompt string delivered exactly once.
 

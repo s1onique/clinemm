@@ -105,6 +105,11 @@
 		// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01:
 		// Stop/Resume integrity discriminator. Bridge-only.
 		"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01:
+		// Real production wire bridge test — runs under
+		// tsconfig.c2-4-c-bridge.json + vitest.config.c2-4-c-bridge.ts
+		// to bypass the @cline/core stub alias.
+		"src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 /
 		// FRSP01-C03: bounded P0 cleanup of the test-domain configuration
 		// leak that blocked `vscode:prepublish` from producing an exact-

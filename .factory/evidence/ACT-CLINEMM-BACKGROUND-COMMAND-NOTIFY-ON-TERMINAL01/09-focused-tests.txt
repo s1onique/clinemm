@@ -1,37 +1,65 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FOCUSED TESTS
-====================================================================
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FOCUSED TESTS (correction01)
+==================================================================================
 
-Focused test file: apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+Focused test files:
+  apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts (21 tests)
+  apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts (1 test, BRIDGE)
 
-16 tests, all PASSING.
+Total: 22 tests, all PASSING.
 
-  BCNT-U01..U03   coordinator unit tests (ownerKey, truncateToByteCap,
-                  formatTerminalWakePrompt)
+BCNT-U01..U03   coordinator unit tests (ownerKey, truncateToByteCap,
+                formatTerminalWakePrompt)
 
-  BCNT-RED-01     pre-ACT reproduction: notify=true + terminal event
-                  produces zero wakes (defect witness)
+BCNT-U02b       truncateToByteCap never splits a UTF-16 surrogate pair
+                (correction01 P1-2 code-point safety witness)
 
-  BCNT-01         notify=true natural terminal -> exactly one queued wake
-  BCNT-02         omitted/default false -> zero wake, zero marker
-  BCNT-03         explicit false -> zero wake, zero marker
-  BCNT-04         newer turn same task -> notification survives queue
-                  delivery (NOTIFY-CTL-02 invariant)
-  BCNT-05         different task -> discarded (owner_mismatch)
-                  (NOTIFY-CTL-03 invariant)
-  BCNT-06         two notify jobs -> hold then FIFO drain
-                  (NOTIFY-CTL-04 invariant)
-  BCNT-07         notify + non-notify mix -> notification-active set
-                  independent of total CommandJobManager.active
-                  (NOTIFY-CTL-05 invariant)
-  BCNT-08         duplicate terminal event -> exactly one wake
-                  (NOTIFY-CTL-06 invariant)
-  BCNT-09         explicit cancel -> wake (terminality is the trigger)
-                  (NOTIFY-CTL-08 invariant)
-  BCNT-11         containment_failed -> no wake (NOTIFY-CTL-10 invariant)
-  BCNT-12         ephemeral marker loss -> no restored wake
-                  (NOTIFY-CTL-11 invariant)
-  BCNT-13         prompt hard-bound <= 8 KiB under multibyte stress
-                  (PROMPT-BOUND invariant)
+BCNT-RED-01     (SYNTHETIC_REAL_UNWIRED): pre-ACT reproduction —
+                notify=true + terminal event produces zero wakes
+                when coordinator is intentionally disconnected.
+                Honest label: synthetic_unwired probe (the production
+                pre-repair witness lives in 19-pre-repair-red.md;
+                see 19-pre-repair-red-output.txt for the captured
+                vitest output at ddcf1ad4).
+
+BCNT-01         notify=true natural terminal -> exactly one queued wake
+BCNT-02         omitted/default false -> zero wake, zero marker
+BCNT-03         explicit false -> zero wake, zero marker
+BCNT-04         newer turn same task -> notification survives queue
+                delivery (NOTIFY-CTL-02 invariant)
+BCNT-05         different task -> discarded (owner_mismatch)
+                (NOTIFY-CTL-03 invariant)
+BCNT-06         two notify jobs -> hold then FIFO drain
+                (NOTIFY-CTL-04 invariant)
+BCNT-07         mixed notify/non-notify mix -> notification-active set
+                independent of total CommandJobManager.active
+                (NOTIFY-CTL-05 invariant)
+BCNT-08         duplicate terminal event -> exactly one wake
+                (NOTIFY-CTL-06 invariant)
+BCNT-09         explicit cancel -> wake (terminality is the trigger)
+                (NOTIFY-CTL-08 invariant)
+BCNT-11         containment_failed -> no wake (NOTIFY-CTL-10 invariant)
+BCNT-12         ephemeral marker loss -> no restored wake
+                (NOTIFY-CTL-11 invariant)
+BCNT-13         prompt hard-bound <= 8 KiB under multibyte stress
+
+correction01 additions:
+BCNT-NATURAL-01 natural subprocess exit -> exactly one wake
+                (real subprocess, waitBudgetMs=50, sleep 0.3)
+BCNT-DEADLINE-01 coordinator consumes deadline_exceeded -> wake
+                (correction01 P0-3 reviewer ask)
+BCNT-DEADLINE-02 coordinator deadline_exceeded wake-eligibility
+                (same code path as the tool consumer)
+BCNT-FAST-01    fast-completion (state=exited within wait budget)
+                produces ZERO wake (correction01 P1-1 fix:
+                marker registration now bound to state==="running"
+                to avoid duplicate wake on synchronous terminality)
+
+BCNT-WIRE-01    (BRIDGE TEST, real LocalRuntimeHost):
+                BackgroundNotifyCoordinator.enqueueTerminalWake
+                  -> sdkHost.send({ delivery: "queue" })
+                  -> LocalRuntimeHost.runTurn
+                  -> PendingPromptsController.enqueue
+                  -> host.pendingPrompts.list returns the wake
 
 Production seams under test (real, not mocked):
   - CommandJobManager (apps/vscode/src/sdk/command-job-manager.ts)
@@ -40,13 +68,19 @@ Production seams under test (real, not mocked):
   - RunCommandsInputSchema (sdk/packages/core/src/extensions/tools/schemas.ts)
   - BackgroundNotifyCoordinator
     (apps/vscode/src/sdk/background-notify-coordinator.ts)
+  - LocalRuntimeHost.runTurn (sdk/packages/core/src/.../local-runtime-host.ts:1044)
+  - PendingPromptsController.enqueue
+    (sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts)
 
-Test seam (in-memory, NOT a production dependency):
+Test seams (in-memory, NOT a production dependency):
   - TestPendingPromptsSink: captures wake prompts in memory for
     assertion.
   - notifyEnqueued sink: captures consumeTerminal decisions for
     diagnostic verification.
 
-Run command:
+Run commands:
   cd apps/vscode
-  bunx vitest run src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+  bun run test:vitest \
+    src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+  bun run test:vitest:c2-4-c-bridge \
+    src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts

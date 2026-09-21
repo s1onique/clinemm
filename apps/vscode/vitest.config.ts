@@ -143,6 +143,12 @@ export default defineConfig({
 			// synthetic stub agent). Bridge-only — same alias
 			// requirement as SCHR01/SHRC01.
 			"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01:
+			// Real production wire bridge test — runs under
+			// vitest.config.c2-4-c-bridge.ts to bypass the
+			// @cline/core stub alias and exercise the real
+			// LocalRuntimeHost.
+			"src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-FOLLOWUP-RESUME-SUBSCRIPTION-PARITY01-CORRECTION03 /
 			// FRSP01-C03: bounded P0 cleanup of the test-domain configuration
 			// leak. The four files below are bridge-only (require the

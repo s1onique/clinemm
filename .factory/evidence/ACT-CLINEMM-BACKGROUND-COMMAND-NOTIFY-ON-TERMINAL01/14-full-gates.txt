@@ -1,46 +1,52 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FULL GATES
-================================================================
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FULL GATES (correction01)
+=================================================================================
 
-Focused GREEN tests:
-  bunx vitest run src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+Focused GREEN tests (base config):
+  bun run test:vitest src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
     -> Test Files: 1 passed (1)
-    -> Tests:      16 passed (16)
+    -> Tests:      21 passed (21)
+       BCNT-U01..U03         ownerKey + truncateToByteCap + formatTerminalWakePrompt
+       BCNT-U02b             truncateToByteCap never splits a surrogate pair
+       BCNT-RED-01 (SYNTHETIC_REAL_UNWIRED) — honest synthetic_unwired probe
+       BCNT-01..13           core notify-on-terminal semantics
+       BCNT-NATURAL-01       real subprocess natural exit -> one wake
+       BCNT-DEADLINE-01..02  deadline_exceeded wake eligibility (coordinator path)
+       BCNT-FAST-01          fast-completion produces zero wake (correction01 P1-1 fix)
 
-Focused conservation tests:
+Focused GREEN tests (bridge config — real production wire):
+  bun run test:vitest:c2-4-c-bridge \
+    src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts
+    -> Test Files: 1 passed (1)
+    -> Tests:      1 passed (1)
+       BCNT-WIRE-01          real sdkHost.send({delivery:"queue"})
+                              -> LocalRuntimeHost.runTurn
+                              -> PendingPromptsController.enqueue
+                              -> host.pendingPrompts.list shows the wake
+
+Conservation tests (no regression introduced):
   PWAOR01  src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts
-    -> 1 passed
+    -> 1 passed / 1
   BTCONT01 src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
-    -> 10 passed
+    -> 10 passed / 10
   AGCONT01 src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
-    -> 7 passed
+    -> 7 passed / 7
   VRCT     src/sdk/vscode-run-commands-tool.test.ts
-    -> 46 passed
+    -> 46 passed / 46
+
+Total: 21 (BCNT01) + 1 (BCNT-WIRE-01) + 1 + 10 + 7 + 46 = 86 tests passing.
+
+Pre-repair RED (correction01 P0-3 reviewer ask):
+  Probe at ddcf1ad4: 3/3 assertions pass (all 'absent' witnesses).
+  Witness captured: 19-pre-repair-red.md + 19-pre-repair-red-output.txt.
 
 TypeScript:
-  apps/vscode (cd apps/vscode && bunx tsc --noEmit)
+  apps/vscode typecheck (bunx tsc --noEmit)
     -> 0 errors
-    (baseline before ACT = 0 errors; after ACT = 0 errors.
-     no regressions introduced.)
+    (baseline before ACT = 0; after ACT = 0; no regressions)
+  sdk/packages/core typecheck
+    -> 67 lines of pre-existing baseline noise in unrelated files
+       (TS6133 unused-vars, TS2345 arg-type). Zero in files we touched
+       (schemas.ts / definitions.ts). Verified by grep.
 
-  sdk/packages/core (cd sdk/packages/core && bunx tsc --noEmit)
-    -> 67 lines of output
-    (baseline before ACT = 67 lines of output; after ACT = 67.
-     the SDK has 67 lines of pre-existing baseline noise in
-     unrelated test files (TS6133 unused-vars, TS2345 arg
-     types). None of the 67 errors are in files we touched
-     (schemas.ts / definitions.ts). Verified by grep:
-       git grep -E 'schemas\.ts|definitions\.ts' in the tsc output
-       -> 0 matches.
-
-git status --short
-  M apps/vscode/src/sdk/SdkController.ts
-  M apps/vscode/src/sdk/sdk-session-lifecycle.ts
-  M apps/vscode/src/sdk/vscode-run-commands-tool.ts
-  M apps/vscode/src/sdk/vscode-runtime-builder.ts
-  M apps/vscode/src/sdk/vscode-session-host.ts
-  M sdk/packages/core/src/extensions/tools/definitions.ts
-  M sdk/packages/core/src/extensions/tools/schemas.ts
-  ?? apps/vscode/src/sdk/background-notify-coordinator.ts
-  ?? apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
-
-git diff --check -> clean
+git status: working tree clean (after the bounded patch)
+git diff --check: clean

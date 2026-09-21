@@ -1,76 +1,75 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — CONSERVATION
-=================================================================
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — CONSERVATION (correction01)
+===================================================================================
 
 Mandatory conservation controls:
 
-  C1 default false preserves old behavior          PASS  (BCNT-02)
-  C2 explicit false preserves fire-and-forget     PASS  (BCNT-03)
-  C3 same-task newer turn retains notification    PASS  (BCNT-04)
-  C4 different task/session discards              PASS  (BCNT-05)
-  C5 epoch ignored for notification lifetime        PASS  (BCNT-U01 — ownerKey
-                                                            explicitly
-                                                            contains NO
-                                                            epoch field;
-                                                            BCNT-04 same
-                                                            sessionId +
-                                                            taskId wake
-                                                            survives epoch
-                                                            bump by
-                                                            construction)
-  C6 multi-job notification set independent of
-     manager active set                            PASS  (BCNT-07)
-  C7 per-job trigger, not >0->0                   PASS  (start.terminalPromise
-                                                            is per-job; the
-                                                            coordinator's
-                                                            activeNotifyCount
-                                                            is independent
-                                                            of manager.active)
-  C8 exactly once                                 PASS  (BCNT-08: second
-                                                            consumeTerminal
-                                                            returns no_marker)
-  C9 natural terminal wakes                       PASS  (BCNT-01)
-  C10 cancel wakes                                 PASS  (BCNT-09)
-  C11 deadline wakes                              PASS  (BCNT-01 covers
-                                                            fast-path terminal
-                                                            via waitBudgetMs=5
-                                                            which is the
-                                                            same code path as
-                                                            deadline when
-                                                            maxExecutionDeadlineMs
-                                                            < waitBudgetMs;
-                                                            BCNT-09 covers the
-                                                            cancel wake)
-  C12 containment_failed does not wake            PASS  (BCNT-11)
-  C13 marker state ephemeral                      PASS  (BCNT-12:
-                                                            dispose() drops
-                                                            all markers + held
-                                                            results)
+  C1 default false preserves old behavior       PASS  (BCNT-02)
+  C2 explicit false preserves fire-and-forget   PASS  (BCNT-03)
+  C3 same-task/newer-turn retains notification  PASS  (BCNT-04)
+  C4 different task/session discards            PASS  (BCNT-05)
+  C5 epoch ignored for notification lifetime     PASS  (BCNT-U01 — ownerKey
+                                                          explicitly
+                                                          contains NO
+                                                          epoch field)
+  C6 multi-job notification set independent
+     of manager active set                       PASS  (BCNT-07)
+  C7 per-job trigger, not >0->0                 PASS  (terminalPromise
+                                                          is per-job; the
+                                                          coordinator's
+                                                          activeNotifyCount
+                                                          is independent
+                                                          of manager.active)
+  C8 exactly once                               PASS  (BCNT-08: second
+                                                          consumeTerminal
+                                                          returns no_marker)
+  C9 natural terminal wakes                     PASS  (BCNT-NATURAL-01
+                                                          real subprocess)
+  C10 cancel wakes                              PASS  (BCNT-09)
+  C11 deadline wakes                            PASS  (BCNT-DEADLINE-01/02)
+  C12 containment_failed does not wake          PASS  (BCNT-11)
+  C13 marker state ephemeral                    PASS  (BCNT-12: dispose()
+                                                          drops all
+                                                          markers + held
+                                                          results)
   C14 CommandJob shape remains notification-free  PASS  (zero changes to
-                                                            command-job-manager.ts)
+                                                          command-job-manager.ts)
   C15 CommandJobManager never invokes
-     model/session runtime                        PASS  (the wake transport
-                                                            goes through
-                                                            coordinator.enqueueTerminalWake,
-                                                            which the SdkController
-                                                            wired to
-                                                            activeSession.sdkHost.send;
-                                                            CommandJobManager
-                                                            itself has no
-                                                            model-invocation
-                                                            capability — it is
-                                                            purely a process
-                                                            lifecycle authority)
-  C16 BTCONT remains green                        PASS  (BTCONT01 10/10)
-  C17 PWAOR remains green                         PASS  (PWAOR01 1/1)
-  C18 cancellation provenance remains green       PASS  (no changes to
-                                                            cancellation-provenance
-                                                            code paths; PWAOR01
-                                                            green confirms
-                                                            foreground abort
-                                                            release still works)
-  C19 submit_and_exit unchanged                    PASS  (no changes to
-                                                            vscode-submit-executor.ts
-                                                            or its call sites)
-  C20 TaskHeader/card projection untouched         PASS  (no changes to
-                                                            chat-view rendering
-                                                            or webview card logic)
+     model/session runtime                       PASS  (the wake transport
+                                                          goes through
+                                                          coordinator.enqueue
+                                                          TerminalWake,
+                                                          which the
+                                                          SdkController wired
+                                                          to
+                                                          active.sdkHost.send;
+                                                          CommandJobManager
+                                                          itself has no
+                                                          model-invocation
+                                                          capability)
+  C16 BTCONT remains green                       PASS  (BTCONT01 10/10)
+  C17 PWAOR remains green                        PASS  (PWAOR01 1/1)
+  C18 cancellation provenance remains green      PASS  (no changes to
+                                                          cancellation-
+                                                          provenance code
+                                                          paths; PWAOR01
+                                                          green confirms
+                                                          foreground abort
+                                                          release still
+                                                          works)
+  C19 submit_and_exit unchanged                  PASS  (no changes to
+                                                          vscode-submit-
+                                                          executor.ts or its
+                                                          call sites)
+  C20 TaskHeader/card projection untouched       PASS  (no changes to
+                                                          chat-view rendering
+                                                          or webview card
+                                                          logic)
+  C21 fast-completion produces zero wake         PASS  (BCNT-FAST-01)
+  C22 real production wire delivers the wake     PASS  (BCNT-WIRE-01
+                                                          bridge test)
+  C23 code-point-safe truncation                 PASS  (BCNT-U02b
+                                                          surrogate test)
+  C24 closing delimiter always present           PASS  (BCNT-U03 updated
+                                                          to assert
+                                                          </bounded-output>
+                                                          survives)

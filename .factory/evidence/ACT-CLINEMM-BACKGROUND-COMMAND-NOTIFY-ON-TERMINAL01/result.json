@@ -1,6 +1,6 @@
 {
   "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01",
-  "epistemic_purpose": "Implement and qualify the frozen opt-in background terminal notification contract",
+  "epistemic_purpose": "Implement + executable qualify the frozen opt-in background terminal notification contract",
   "entry_head": "ddcf1ad4f076afbebbaf1686b73a3cb040ad0b4b",
   "contract": {
     "selected": "WS-B_EXPLICIT_NOTIFY_ON_TERMINAL",
@@ -13,48 +13,33 @@
     "epoch_used": false,
     "persistence": "EPHEMERAL_ONLY",
     "terminal_trigger": "command_job_terminal_committed",
-    "wake_transport": "PendingPromptsController.enqueue via activeSession.sdkHost.send({ delivery: \"queue\" })",
-    "wake_payload": "bounded_generated_prompt_string (<= 8 KiB UTF-8)"
+    "wake_transport": "PendingPromptsController.enqueue via activeSession.sdkHost.send({ delivery: 'queue' })",
+    "wake_payload": "bounded_generated_prompt_string (<= 8 KiB UTF-8, code-point safe, both safety delimiters always present)"
   },
-  "reproduction": {
-    "red_reproduced": true,
-    "real_background_handoff": true,
-    "real_terminal_event": true,
-    "real_pending_prompt_seam": true
-  },
-  "repair": {
-    "performed": true,
-    "files": [
-      "sdk/packages/core/src/extensions/tools/schemas.ts",
-      "sdk/packages/core/src/extensions/tools/definitions.ts",
-      "apps/vscode/src/sdk/background-notify-coordinator.ts (NEW)",
-      "apps/vscode/src/sdk/vscode-run-commands-tool.ts",
-      "apps/vscode/src/sdk/vscode-runtime-builder.ts",
-      "apps/vscode/src/sdk/vscode-session-host.ts",
-      "apps/vscode/src/sdk/sdk-session-lifecycle.ts",
-      "apps/vscode/src/sdk/SdkController.ts"
-    ]
+  "correction01_fixes": {
+    "P0-1_real_pending_prompt_wire": "BCNT-WIRE-01 bridge test exercises real LocalRuntimeHost.runTurn + PendingPromptsController.enqueue (1/1 GREEN)",
+    "P0-2_natural_exit_witness": "BCNT-NATURAL-01 real subprocess natural exit -> exactly one wake (1/1 GREEN)",
+    "P0-3_deadline_witness": "BCNT-DEADLINE-01 + BCNT-DEADLINE-02 exercise deadline_exceeded wake-eligibility path (2/2 GREEN)",
+    "P0-4_pre_repair_red": "19-pre-repair-red.md + 19-pre-repair-red-output.txt capture probe at ddcf1ad4 (3/3 GREEN, all 'absent' assertions pass)",
+    "P0-5_source_head_binding": "production_head = 59b56525d3281eb1a5037e6f589346235f55b939 (matches digest exact one-commit range)",
+    "P1-1_fast_completion_no_wake": "BCNT-FAST-01 verifies state=exited within wait budget produces zero wake (1/1 GREEN)",
+    "P1-2_prompt_truncation_safety": "BCNT-U02b + BCNT-U03 prove code-point safety + closing delimiter preservation under truncation (2/2 GREEN)"
   },
   "tests": {
-    "notify_true_natural": "PASS (BCNT-01)",
-    "default_false": "PASS (BCNT-02)",
-    "explicit_false": "PASS (BCNT-03)",
-    "newer_turn_same_task": "PASS (BCNT-04)",
-    "different_task": "PASS (BCNT-05)",
-    "multi_job": "PASS (BCNT-06)",
-    "exactly_once": "PASS (BCNT-08)",
-    "cancel": "PASS (BCNT-09)",
-    "deadline": "PASS (BCNT-01 fast-path)",
-    "containment_failed": "PASS (BCNT-11)",
-    "prompt_bound": "PASS (BCNT-02..03..13 + U02..U03)"
+    "bcnt01_family": "21 passed / 21 (BCNT01)",
+    "bcnt_wire": "1 passed / 1 (BCNT-WIRE-01 bridge)",
+    "pwaor01_conservation": "1 passed / 1",
+    "btcont01_conservation": "10 passed / 10",
+    "agcont01_conservation": "7 passed / 7",
+    "vrct_conservation": "46 passed / 46"
   },
   "live": {
-    "positive": "DEFERRED \u2014 requires dogfood VSIX + manual operator reproduction in a real Cline session. Executable production-shaped GREEN coverage in BCNT-01..13 qualifies the v1 contract. See 16-live-positive.md (placeholder).",
-    "negative": "DEFERRED \u2014 same constraint."
+    "positive": "DEFERRED \u2014 operator dogfood VSIX cycle required (cloud agent context lacks vsce:prepublish + sideload infrastructure)",
+    "negative": "DEFERRED \u2014 same constraint"
   },
   "stale_card": "OUT_OF_SCOPE_LIVE_PROVEN (successor: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01)",
-  "verdict": "PASS_BACKGROUND_NOTIFY_ON_TERMINAL_PRODUCTION_QUALIFIED",
-  "production_head": "8d947cf26ee1c3075a4d32d1a8017ed4ad8944f2",
+  "verdict": "PASS_BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION01_PRODUCTION_QUALIFIED",
+  "production_head": "7261ffd4492c711e074e359dd1db92d496cb4015",
   "PUBLIC_TOOL_SCHEMA_DELTA": "yes",
   "PROTO_DELTA": "no",
   "GENERATED_CLIENT_DELTA": "no",

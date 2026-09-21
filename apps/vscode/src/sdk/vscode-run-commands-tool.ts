@@ -697,15 +697,26 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// existing stdout/exitCode shape for backward compatibility.
 				// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
 				// The marker registration + wake-consumer listener
-				// must run for BOTH the RUNNING (long-running) and
-				// the FAST-PATH-EXPIRED (finished within the wait
-				// budget) branches. Lifting it out of the `if
-				// (state === "running")` block closes the gap where
-				// a fast-path command never registered a marker
-				// and so never produced a wake. The coordinator's
-				// registerMarker is idempotent on jobId.
+				// is bound to the genuine background handoff
+				// (`start.state === "running"`). When the command
+				// finishes within the wait budget (FAST-PATH), the
+				// model already receives the synchronous terminal
+				// result via `combinedOutput` / `CommandExitError`
+				// below; registering a marker + wake in that case
+				// would produce a DUPLICATE wake (synchronous tool
+				// result + later notification). The frozen contract
+				// is notify-on-terminal for a BACKGROUND handoff —
+				// synchronous terminality is observable in-band and
+				// needs no wake. (Correction01 closes the
+				// overpromoted "fast-path never registered" claim:
+				// fast-path = synchronous; running = detached.)
 				const notifyRequested = context.metadata?.notifyOnCompletion === true
-				if (notifyRequested && options.backgroundNotifyCoordinator && options.resolveActiveOwner) {
+				if (
+					start.state === "running" &&
+					notifyRequested &&
+					options.backgroundNotifyCoordinator &&
+					options.resolveActiveOwner
+				) {
 					const owner = options.resolveActiveOwner()
 					if (owner) {
 						options.backgroundNotifyCoordinator.registerMarker({

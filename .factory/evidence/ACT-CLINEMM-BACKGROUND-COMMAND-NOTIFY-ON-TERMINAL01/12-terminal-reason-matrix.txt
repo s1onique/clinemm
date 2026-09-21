@@ -1,42 +1,61 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — TERMINAL REASON MATRIX
-===========================================================================
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — TERMINAL REASON MATRIX (correction01)
+==========================================================================================
 
-Frozen classifications (per N10 + §10 ACT):
+Frozen classifications (per N10 + §10 ACT) — corrected from initial commit:
 
-  Terminal reason  | Notify? | Evidence
-  -----------------|---------|----------------------------------------
-  exited (0)       | YES     | BCNT-01 (terminal state = cancelled
-                   |         |   via cancel(); same code path)
-  exited (non-0)   | YES     | BCNT-01 + coordinator's
-                   |         |   consumeTerminal({terminalState: "exited",
-                   |         |   exitCode: any}) path
-  cancelled        | YES     | BCNT-09 (explicit cancel -> wake)
-  deadline_exceeded| YES     | BCNT-01 (waitBudgetMs=5 + cancel
-                   |         |   before deadline expires; the
-                   |         |   consumeTerminal path covers
-                   |         |   deadline_exceeded terminalState
-                   |         |   identically)
-  containment_failed| NO     | BCNT-11 (isContainmentFailed=true
-                   |         |   -> containment_no_wake decision;
-                   |         |   sink.size() === 0)
-  spawn_failed     | YES     | Same code path (terminalState =
-                   |         |   "spawn_failed" is not
-                   |         |   containment_failed; consumeTerminal
-                   |         |   wakes by default). The fork's
-                   |         |   existing tool executor throws a
-                   |         |   distinct spawn_failed error which
-                   |         |   we did not alter.
+  Terminal reason       | Notify? | Evidence
+  ----------------------|---------|---------------------------------------------
+  exited (0)            | YES     | BCNT-NATURAL-01 (real subprocess natural exit)
+                        |         | BCNT-01 (fakeSupervisor exit; was the only
+                        |         |   initial witness — corrected01 now adds the
+                        |         |   real subprocess version per reviewer P0-4)
+  exited (non-0)        | YES     | BCNT-01 + coordinator's consumeTerminal path
+                        |         | (state="exited", exitCode=any)
+  cancelled             | YES     | BCNT-09 (explicit cancel -> wake)
+  deadline_exceeded     | YES     | BCNT-DEADLINE-01 + BCNT-DEADLINE-02
+                        |         | (coordinator-level deadline_exceeded state,
+                        |         |   same code path as cancelled in the run_commands
+                        |         |   tool terminal mapping vscode-run-commands-tool.ts:
+                        |         |   832-842)
+  containment_failed    | NO      | BCNT-11 (isContainmentFailed=true
+                        |         |   -> containment_no_wake decision; sink.size()===0)
+  spawn_failed          | YES     | Same code path (terminalState = "spawn_failed"
+                        |         | is NOT containment_failed). The fork's existing
+                        |         | tool executor throws a distinct spawn_failed
+                        |         | error which we did not alter.
 
-Detection of containment_failed:
-  Per the manager's CORRECTION03 invariant, containment_failed is
+Detection of containment_failed (correction01 N9 invariant):
   authoritative via snapshot.state === "containment_failed"
   (the bounded discriminator exposed via manager.status().snapshot).
   The wake consumer treats the state as the authority and forwards
   it as the `isContainmentFailed` flag to the coordinator.
 
+Fast-path / synchronous terminality (correction01 P1-1 fix):
+  When the manager's makeStartResult returns state="exited" at the
+  tool's outer await (the wait budget didn't expire; the subprocess
+  finished in milliseconds), the model already receives the
+  synchronous terminal result via combinedOutput / CommandExitError.
+  Registering a marker + wake in that path would produce a
+  DUPLICATE follow-up turn (synchronous tool result + later
+  notification). correction01 binds marker registration to
+  `start.state === "running"` (genuine background handoff) so
+  fast-path / synchronous terminality produces ZERO wake.
+  Witness: BCNT-FAST-01.
+
 FIFO drain (multi-job):
   J1 + J2 both notify=true.
   J1 terminal  ->  remainingNotify = 1 -> HOLD J1
   J2 terminal  ->  remainingNotify = 0 -> DRAIN J1 FIFO first,
-                                       then J2 (exactly 2 wakes
-                                       total). Evidence: BCNT-06.
+                                       then J2 (exactly 2 wakes total).
+  Witness: BCNT-06.
+
+Production wire (correction01 P0-2):
+  BackgroundNotifyCoordinator.enqueueTerminalWake
+    -> SdkController closure (src/sdk/SdkController.ts:996-1020)
+    -> active.sdkHost.send({ sessionId, prompt, delivery: "queue" })
+    -> VscodeSessionHost.send
+    -> inner.send (ClineCore LocalRuntimeHost)
+    -> LocalRuntimeHost.runTurn (sdk/packages/core/src/.../local-runtime-host.ts:1044)
+       - if delivery === "queue" || "steer":
+           pendingPromptsController.enqueue(input.sessionId, {...})
+  Witness: BCNT-WIRE-01 (bridge test, real LocalRuntimeHost).

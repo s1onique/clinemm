@@ -86,6 +86,15 @@ export default defineConfig({
 			// Discriminator for upstream `cline/cline#12975` —
 			// Stop/Resume must not replay already-completed work.
 			"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01:
+			// Real production wire proof — drives the full
+			// chain `coordinator.enqueueTerminalWake
+			// -> sdkHost.send({ delivery: "queue" })
+			// -> LocalRuntimeHost.runTurn
+			// -> PendingPromptsController.enqueue`
+			// and verifies the wake appears in
+			// `host.pendingPrompts.list({sessionId})`.
+			"src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-RUNTIME-SHADOW-REACTIVATION01
 			// / RSR01: production-seam RED at the canonical runtime-event ↔
 			// shadow reactivation boundary. Real LocalRuntimeHost +
