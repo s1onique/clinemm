@@ -5513,11 +5513,46 @@ STALE_CARD_AFTER_CANCEL     = DEFERRED (orthogonal)
   5. Positive-control: explicit Cancel on the Backgrounded card produces `requestOrigin=background_cancel_rpc` and cancels cleanly.
   6. Update `result.json` `verdict` to `PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED`.
 
-## ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 — CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE_NO_REPAIR_NEEDED — 2026-09-21
+## ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 — CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE_NO_REPAIR_NEEDED — 2026-09-21 (correction cycle 1: 2026-09-21)
 
-**Status:** STOP per ACT section 50 stop rule. The runtime correctly honors the model's `done` event as end-of-turn. The defect in the LIVE 480s specimen is a model-side failure to follow the F4 doctrine ("For long-running commands, run them in background and redirect output to a tmp file that you can read from later."), not a runtime defect. No production code change is authorized.
+**Status:** STOP per ACT section 50 stop rule, with structural-recon load-bearing argument.
 
-**Honest verdict matrix:**
+**Correction cycle 1 (Factory reviewer):** The original closure
+over-claimed `real_agent_runtime=true` and overstated the F4 doctrine
+as a categorical prohibition on automatic re-entry. The corrected
+closure:
+
+1. Reclassifies the AGCONT01 7-test family honestly:
+   - REAL seams: CommandJobManager, SdkSessionEventCoordinator,
+     TurnStateTracker, Controller.maybeReevaluateDeferredContinuation.
+   - TEST-LOCAL: agentSpy (unconnected sentinel; NOT a real
+     AgentRuntime call site).
+   - The agentSpy assertions prove only "an unconnected sentinel
+     wasn't called", not "the real production agent runtime wasn't
+     called".
+2. Adds the load-bearing structural recon:
+   30-structural-no-invocation-recon.md (in the evidence dir).
+   The production chain from
+   `vscode-run-commands-tool.ts:636 onBackgroundStateChange`
+   through
+   `SdkController.updateBackgroundCommandState`
+   through
+   `Controller.maybeReevaluateDeferredContinuation`
+   through
+   `SdkSessionEventCoordinator.reevaluateDeferredContinuation`
+   through
+   `setTurnPhase("awaiting_followup", ...)`
+   contains NO call to `host.runTurn`, `session.runTurn`,
+   `agent.send`, `enqueuePendingPrompt`, `emitEvent("steer_message")`,
+   or `emitEvent("pending_prompt")`.
+3. Recharacterizes the F4 doctrine honestly:
+   - F4 is a MODEL-SIDE convention (tmp-file for output capture).
+   - F4 does NOT categorically forbid runtime notify-on-terminal.
+   - F4 does NOT categorically require runtime notify-on-terminal.
+   - The runtime's structural choice (no notify-on-terminal) is the
+     canonical ClineMM contract, not a doctrinal mandate.
+
+**Honest verdict matrix (post correction cycle 1):**
 ```
 LIVE_JOB                                = cmd_muac7cvi11hmne3x
 USER_CONTRACT                           = wait until finished
@@ -5526,48 +5561,18 @@ MODEL_POLLING                           = stopped after 2 polls, emitted done
 Q5                                      = correctly deferred awaiting_followup
 BACKGROUND_TERMINAL                     = natural / exited / process gone
 TURN_CONTINUATION                       = LIVE GREEN (BTCONT01 fix in effect)
-AGENT_REENTRY                           = ABSENT (by design per F4 doctrine)
+AGENT_REENTRY                           = ABSENT (structural; not doctrinal mandate)
 FINAL_REQUESTED_OUTPUT                  = MISSING (model did not poll)
+STRUCTURAL_RECON                        = GREEN (no terminal->AgentRuntime consumer)
+TEST_FAMILY                             = 7/7 GREEN (BTCONT bridge + sentinel)
+REAL_AGENT_RUNTIME                      = NO (load-bearing arg is structural)
 PRIMARY_P0                              = BACKGROUND_TERMINAL_AGENT_CONTINUATION_MISSING
                                           RECLASSIFIED AS MODEL_DOCTRINE_VIOLATION
+PRODUCT_CONTRACT                        = AMBIGUOUS (F4 doesn't define runtime obligation)
 STALE_CARD                              = LIVE_PROVEN / SUCCESSOR (deferred)
-F4_DOCTRINE_SOURCE                      = sdk/.../definitions.ts:669-676
-```
-
-**Reproduction (real production seams):**
-```
-test file: apps/vscode/src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
-tests:
-  AGCONT-CTL-01: deferral + natural terminal commits awaiting_followup WITHOUT invoking the agent runtime
-  AGCONT-CTL-02: explicit user follow-up is the canonical re-entry path (not terminal-driven)
-  AGCONT-CTL-03: start-and-return task does NOT trigger agent re-entry on later terminal
-  AGCONT-CTL-04: no background dependency -> no deferred marker -> no later re-entry
-  AGCONT-CTL-05: newer turn start clears deferred marker; late terminal cannot resurrect
-  AGCONT-CTL-06: terminal bridge fires exactly once per >0->0 cardinal transition
-  AGCONT-CTL-07: terminal of a different session's job does NOT wake this session
-all 7 GREEN (real CommandJobManager + SdkSessionEventCoordinator + TurnStateTracker + Controller.maybeReevaluateDeferredContinuation)
-```
-
-**Conservation matrix (ACT section 39, 18 rules):**
-```
-C1 wait-until-finished                    PASS_DOCTRINE_BOUND
-C2 fire-and-forget no resurrection        PASS (AGCONT-CTL-03)
-C3 newer turn supersession                PASS (AGCONT-CTL-05)
-C4 unrelated session no effect            PASS (AGCONT-CTL-07)
-C5 exactly-once bridge                    PASS (AGCONT-CTL-06)
-C6 multi-job dependency                   N/A (no doctrine)
-C7 natural exit pending agent             PASS_AC3
-C8 cancel wake if obligated               PASS_AC3
-C9 deadline wake if obligated             PASS_AC3
-C10 Q5 while running                      PASS (untouched)
-C11 terminal turn-state continuation     PASS (BTCONT01 GREEN)
-C12 PWAOR abort signal                    PASS (untouched)
-C13 explicit jobId cancel                 PASS (untouched)
-C14 CommandJobManager no agent authority  PASS (untouched)
-C15 TaskHeader projection only            PASS (untouched)
-C16 stale card separately tracked        DEFERRED to successor
-C17 submit_and_exit                       PASS (untouched)
-C18 no global terminal->model restart     PASS (all AGCONT tests GREEN)
+F4_DOCTRINE_SOURCE                      = sdk/.../definitions.ts:675
+UPSTREAM_BG_TERMINAL_PLUGIN             = NOT INTEGRATED (separate start_background_command plugin)
+HALT_PRODUCT_CONTRACT_REQUIRED          = YES (broader question is product-surface)
 ```
 
 **Decision (ACT section 50):**
@@ -5579,20 +5584,21 @@ C18 no global terminal->model restart     PASS (all AGCONT tests GREEN)
 STOP.
 
 The 480s LIVE specimen is a model-side defect (model violated F4
-doctrine by yielding control prematurely). The runtime is correct.
-No production change authorized.
+doctrine by yielding control prematurely). The runtime is correct
+as a structural choice (no automatic re-entry seam exists in
+ClineMM's run_commands path). No production change authorized.
 
-The user's "wait until it finishes" instruction was an instruction
-TO THE MODEL, not a contract with the runtime. The user can drive
-re-entry via the canonical follow-up path (SdkFollowupCoordinator /
-SdkTaskStartCoordinator), which IS the established ClineMM contract
-for resuming work after a deferred turn.
+The broader question — should ClineMM adopt an opt-in
+notify-on-terminal pattern (matching the upstream
+background-terminal example plugin)? — is
+HALT_PRODUCT_CONTRACT_REQUIRED, out of scope for AGCONT01.
 ```
 
 **Production code touched: NONE.**
 **Test code added: apps/vscode/src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts**
-**Full gates: 7/7 AGCONT tests GREEN; 1141/1141 unit tests GREEN; tsc clean.**
+**Evidence directory: .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01/**
+**Full gates: 7/7 AGCONT tests GREEN; tsc clean.**
 
 **Follow-ups (NOT in this ACT):**
 - Stale card projection: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 (deferred)
-- Model-docrine reinforcement (F4): product-surface concern, out of scope for runtime ACT
+- Opt-in notify-on-terminal: HALT_PRODUCT_CONTRACT_REQUIRED (separate ACT, needs product input)
