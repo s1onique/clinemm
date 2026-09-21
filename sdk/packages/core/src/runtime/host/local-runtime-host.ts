@@ -1269,6 +1269,32 @@ export class LocalRuntimeHost implements RuntimeHost {
 	}
 
 	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+	 * Synchronous authoritative accessor for the count of pending prompts
+	 * queued in `PendingPromptsController` for `sessionId`. Reads directly
+	 * from the in-memory session queue (the canonical source) — NOT from
+	 * any cached projection. This is the BOUNDARY the Q5 composition seam
+	 * relies on: a wake enqueued into the queue at time T is observable
+	 * to the writer at time T (same JavaScript turn).
+	 *
+	 * Returns 0 when:
+	 *   * `sessionId` is empty (failsafe — never throw),
+	 *   * the session is not active on this host.
+	 *
+	 * The implementation reads `active.pendingPrompts.length` directly;
+	 * that field is mutated synchronously inside `PendingPromptService.enqueue`
+	 * / `update` / `delete` / `clear` (see `pending-prompt-service.ts:130-205`),
+	 * so the count returned here reflects the queue state at the moment of
+	 * the read.
+	 */
+	getPendingPromptsCount(sessionId: string): number {
+		if (!sessionId) return 0
+		const active = this.sessions.get(sessionId)
+		if (!active) return 0
+		return active.pendingPrompts.length
+	}
+
+	/**
 	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
 	 * Provisional class method on `LocalRuntimeHost` that reads six raw
 	 * host-ownership facts.

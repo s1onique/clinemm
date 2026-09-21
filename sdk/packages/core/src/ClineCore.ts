@@ -714,6 +714,33 @@ export class ClineCore {
 		return this.host.getActiveRuntimeSnapshot(sessionId)
 	}
 	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+	 * Synchronous authoritative accessor for the count of pending prompts
+	 * queued for `sessionId`. The proxy chain is:
+	 *   ClineCore.getPendingPromptsCount(sessionId)
+	 *     → host.getPendingPromptsCount?.(sessionId)   // LocalRuntimeHost
+	 *     → session.pendingPrompts.length
+	 *
+	 * Returns 0 when:
+	 *   * `sessionId` is empty (failsafe — never throw),
+	 *   * the underlying host does not implement
+	 *     `getPendingPromptsCount?` (Hub/Remote omit by design;
+	 *     the method-absent case is fail-safe for the false-
+	 *     positive that this ACT repairs — see LHOWA01 §6
+	 *     CORRECTION02).
+	 *
+	 * PUBLIC API DELTA: yes. Adds ClineCore.getPendingPromptsCount.
+	 * Surface stability: PROVISIONAL — internal-use-only during the
+	 * LHOWA01 qualification; not for third-party consumers yet.
+	 */
+	getPendingPromptsCount(sessionId: string | undefined): number {
+		if (!sessionId) return 0
+		if (!this.host.getPendingPromptsCount) {
+			return 0
+		}
+		return this.host.getPendingPromptsCount(sessionId)
+	}
+	/**
 	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
 	 * Provisional proxy that reads six raw host-ownership facts via the
 	 * `LocalRuntimeHost.captureHostOwnershipFacts` class method.

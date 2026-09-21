@@ -92,6 +92,49 @@ export interface SdkSessionEventCoordinatorOptions {
 	 */
 	getActiveJobOwnershipSnapshot?: () => readonly BackgroundOwnerCorrelationActiveJob[]
 	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+	 *
+	 * Synchronous accessor for the count of queued prompts in
+	 * `PendingPromptsController` for the given sessionId. Wired by
+	 * `SdkController` to a thin adapter that delegates to
+	 * `activeSession.sdkHost.pendingPromptsCount?.()`, which reaches
+	 * `ClineCore.getPendingPromptsCount` → `LocalRuntimeHost.getPendingPromptsCount`
+	 * → `session.pendingPrompts.length`. AUTHORITATIVE: the count is
+	 * read synchronously at the call site, NOT from any cached
+	 * projection. A wake enqueued at time T is observable at time T
+	 * (same JavaScript turn), regardless of whether
+	 * `getStateToPostToWebview` has run.
+	 *
+	 * The previous CORRECTION01 cache-based implementation
+	 * (`lastKnownPendingPromptCountBySession` populated by
+	 * `getStateToPostToWebview`) was racy; this option now points
+	 * at the synchronous authoritative accessor instead.
+	 *
+	 * The Q5 guard chain consults this in Branch 4 to defer
+	 * `awaiting_followup` when an autonomous wake has already
+	 * been enqueued into PendingPromptsController but the
+	 * BackgroundNotifyCoordinator marker has been consumed
+	 * (Shape D in `03-turn-authority-map.md`).
+	 *
+	 * Optional: when absent, the count defaults to 0 (Shape F).
+	 */
+	getPendingPromptCount?: (sessionId: string | undefined) => number
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
+	 *
+	 * Synchronous accessor for the count of ACTIVE
+	 * BackgroundNotifyCoordinator markers owned by
+	 * (sessionId, taskId). Wired by `SdkController` to a thin
+	 * adapter that delegates to
+	 * `BackgroundNotifyCoordinator.activeNotifyCountForOwner`.
+	 * The Q5 guard chain consults this in Branch 4 to defer
+	 * `awaiting_followup` when a held-result marker is still
+	 * present (Shape E).
+	 *
+	 * Optional: when absent, the count defaults to 0 (Shape F).
+	 */
+	getActiveNotifyCount?: (sessionId: string | undefined, taskId: string | undefined) => number
+	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
 	 *
 	 * Returns the active session's `SdkSessionHost` instance so the
@@ -423,7 +466,25 @@ export class SdkSessionEventCoordinator {
 						// When `hasRunningBackgroundJobForOwner` is not wired
 						// (e.g. tests that omit the option), behavior is
 						// unchanged: unconditional `awaiting_followup`.
-						const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId)
+					const ownerStillRunning =
+						this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
+					// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
+					// Read the two NEW canonical projections of
+					// autonomous-work state at the Q5 decision boundary.
+					// Together with `ownerStillRunning`, they form the
+					// complete `outstandingAutonomousWork` predicate that
+					// determines whether `awaiting_followup` is the truthful
+					// phase (Shape F — genuine operator handoff) or a
+					// false-positive that should defer (Shapes A / B / D / E).
+					const pendingPromptCount =
+						this.options.getPendingPromptCount?.(activeSession.sessionId) ?? 0
+					const activeNotifyCount =
+						this.options.getActiveNotifyCount?.(
+							activeSession.sessionId,
+							this.options.getTask?.()?.taskId,
+						) ?? 0
+					const outstandingAutonomousWork =
+						ownerStillRunning || pendingPromptCount > 0 || activeNotifyCount > 0
 						// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 						// capture ONE decision-boundary observation right
 						// BEFORE the if/else resolves. The capture is gated
@@ -476,42 +537,50 @@ export class SdkSessionEventCoordinator {
 							// capture seam is OFF; the existing BOCOR schema
 							// remains valid for all downstream consumers that
 							// ignore the new fields.
-							managerInstance: this.resolveActiveManagerInstance(),
-							hostInstance: this.resolveActiveHostInstance(),
-						})
-						if (ownerStillRunning) {
-							Logger.warn(
-								`[SdkController] done with no committed terminal response but active session ${activeSession.sessionId} owns a RUNNING background command; suppressing awaiting_followup transition (Q5 composition seam)`,
-							)
-							// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
-							// record the bounded deferred-continuation marker
-							// so the terminal-idle consumer can re-evaluate
-							// the suppression exactly once. The marker
-							// carries {sessionId, taskId, epoch} so a late
-							// terminal event for an older deferral cannot
-							// mutate a newer turn (BTCONT-CTL-03 epoch
-							// supersession). Any existing marker is OVERWRITTEN
-							// - there is at most ONE pending continuation per
-							// coordinator instance, matching the
-							// session-event-turn-complete-resumable-straggler-preserve
-							// writer's exactly-one-commit-per-turn contract.
-							this.deferredContinuation = {
-								sessionId: activeSession.sessionId,
-								taskId: this.options.getTask?.()?.taskId,
-								epoch: this.options.messageTranslatorState.getMinter().epoch,
-								deferredAt: Date.now(),
-							}
-						} else {
-							Logger.warn(
-								"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
-							)
-							this.options.setTurnPhase?.(
-								"awaiting_followup",
-								undefined,
-								"session-event-turn-complete-resumable-straggler-preserve",
-							)
+						managerInstance: this.resolveActiveManagerInstance(),
+						hostInstance: this.resolveActiveHostInstance(),
+						// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
+						// Enrich the BOCOR record with the two NEW canonical
+						// autonomous-work projections. Existing consumers that
+						// do not read these fields are unaffected (the schema
+						// is additive).
+						pendingPromptCount,
+						activeNotifyCount,
+						outstandingAutonomousWork,
+					})
+					if (outstandingAutonomousWork) {
+						Logger.warn(
+							`[SdkController] done with no committed terminal response but active session ${activeSession.sessionId} has outstanding autonomous work (running=${ownerStillRunning}, pendingPrompts=${pendingPromptCount}, activeNotify=${activeNotifyCount}); suppressing awaiting_followup transition (LHOWA01 boundary)`,
+						)
+						// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+						// record the bounded deferred-continuation marker
+						// so the terminal-idle consumer can re-evaluate
+						// the suppression exactly once. The marker
+						// carries {sessionId, taskId, epoch} so a late
+						// terminal event for an older deferral cannot
+						// mutate a newer turn (BTCONT-CTL-03 epoch
+						// supersession). Any existing marker is OVERWRITTEN
+						// - there is at most ONE pending continuation per
+						// coordinator instance, matching the
+						// session-event-turn-complete-resumable-straggler-preserve
+						// writer's exactly-one-commit-per-turn contract.
+						this.deferredContinuation = {
+							sessionId: activeSession.sessionId,
+							taskId: this.options.getTask?.()?.taskId,
+							epoch: this.options.messageTranslatorState.getMinter().epoch,
+							deferredAt: Date.now(),
 						}
+					} else {
+						Logger.warn(
+							"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
+						)
+						this.options.setTurnPhase?.(
+							"awaiting_followup",
+							undefined,
+							"session-event-turn-complete-resumable-straggler-preserve",
+						)
 					}
+				}
 				}
 
 				this.options.sessions.setRunning(false)

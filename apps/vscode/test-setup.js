@@ -138,6 +138,13 @@ Module.prototype.require = function (id) {
 					}
 				}
 
+				// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+				// synchronous authoritative accessor stub. Default 0 keeps
+				// existing tests fail-safe (no outstanding autonomous work).
+				pendingPromptsCount(_sessionId) {
+					return 0
+				}
+
 				static async create() {
 					return new this()
 				}

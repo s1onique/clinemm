@@ -785,4 +785,20 @@ export class VscodeSessionHost implements SdkSessionHost {
 	runtimeSnapshot(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined {
 		return this.inner.getActiveRuntimeSnapshot(sessionId)
 	}
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+	 * Synchronous authoritative accessor for the count of pending prompts
+	 * queued for `sessionId`. Proxies to
+	 * `ClineCore.getPendingPromptsCount(sessionId)` which in turn reaches
+	 * `LocalRuntimeHost.getPendingPromptsCount(sessionId)` and reads
+	 * `session.pendingPrompts.length` directly.
+	 *
+	 * This is the AUTHORITATIVE boundary for the Q5 composition seam —
+	 * a wake enqueued into the queue at time T is observable here at
+	 * time T (same JavaScript turn), so the Q5 writer can correctly
+	 * detect Shape D and defer the `awaiting_followup` commit.
+	 */
+	pendingPromptsCount(sessionId: string | undefined): number {
+		return this.inner.getPendingPromptsCount(sessionId)
+	}
 }

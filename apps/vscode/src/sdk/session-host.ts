@@ -103,6 +103,24 @@ export interface SdkSessionHost {
 	 */
 	runtimeSnapshot?(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+	 * Synchronous authoritative accessor for the count of pending prompts
+	 * queued for `sessionId`. AUTHORITATIVE boundary for the Q5 composition
+	 * seam in the `SdkSessionEventCoordinator` — the count is read directly
+	 * from the canonical `PendingPromptsController` queue (via the runtime
+	 * host's `getPendingPromptsCount`), NOT from any cached projection.
+	 *
+	 * Returns 0 when:
+	 *   * `sessionId` is empty (failsafe),
+	 *   * the host does not implement the underlying accessor (Hub/Remote
+	 *     omit by design; method-absent case is fail-safe for the
+	 *     false-positive that this ACT repairs).
+	 *
+	 * Optional. Hosts that cannot surface the pending-prompt queue MUST
+	 * omit this method.
+	 */
+	pendingPromptsCount?(sessionId: string | undefined): number
 }
 
 export type SdkInitialMessages = NonNullable<StartSessionInput["initialMessages"]>

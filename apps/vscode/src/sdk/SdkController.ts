@@ -968,6 +968,19 @@ export class Controller {
 	// the chat view). Warmed in the constructor and refreshed on every call.
 	private lastKnownWorkspaceRoot?: string
 
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+	 * The Q5 guard chain reads `pendingPromptsCount` AUTHORITATIVELY
+	 * from the runtime host (via `activeSession.sdkHost.pendingPromptsCount?.()`
+	 * → `ClineCore.getPendingPromptsCount` → `LocalRuntimeHost.getPendingPromptsCount`
+	 * → `session.pendingPrompts.length`). NO cache is needed and NO
+	 * cache is maintained here — a wake enqueued into the queue at
+	 * time T is observable to the Q5 writer at time T (same JavaScript
+	 * turn), regardless of whether `getStateToPostToWebview` has run.
+	 * The previous CORRECTION01 cache-based implementation
+	 * (`lastKnownPendingPromptCountBySession` populated by
+	 * `getStateToPostToWebview`) was racy and was removed.
+	 */
 	get remoteConfig(): RemoteConfig | undefined {
 		return this.remoteConfigCoreIntegration?.prepared.bundle?.remoteConfig
 	}
@@ -2113,6 +2126,37 @@ export class Controller {
 				if (!activeSession) return undefined
 				return { sdkHost: activeSession.sdkHost }
 			},
+			// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+			// Thread the two NEW canonical autonomous-work projections
+			// into the coordinator's Q5 guard chain.
+			//
+			// `getPendingPromptCount` reads the AUTHORITATIVE count
+			// directly from `LocalRuntimeHost.getPendingPromptsCount`
+			// (via `activeSession.sdkHost.pendingPromptsCount?.()`),
+			// which reads `session.pendingPrompts.length` synchronously
+			// at the call site. NO CACHE — a wake enqueued at time T
+			// is observable at time T (same JavaScript turn). The
+			// previous CORRECTION01 cache-based implementation
+			// (`lastKnownPendingPromptCountBySession` populated by
+			// `getStateToPostToWebview`) was racy: a `done` event that
+			// reached Q5 immediately after a wake enqueue could see
+			// `pendingPromptCount = 0` because the webview-state-push
+			// had not yet converged. The synchronous authoritative
+			// accessor eliminates that race by construction.
+			getPendingPromptCount: (ownerSessionId) => {
+				const activeSession = this.sessions.getActiveSession()
+				return activeSession?.sdkHost.pendingPromptsCount?.(ownerSessionId) ?? 0
+			},
+			// `getActiveNotifyCount` delegates to the existing
+			// BackgroundNotifyCoordinator (constructed in this
+			// constructor above). Returns 0 when the coordinator is
+			// not yet wired (early lifecycle) or when the active
+			// session does not match.
+			getActiveNotifyCount: (ownerSessionId, taskId) =>
+				this.backgroundNotifyCoordinator?.activeNotifyCountForOwner(
+					ownerSessionId ?? "",
+					taskId,
+				) ?? 0,
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder
@@ -4935,6 +4979,14 @@ export class Controller {
 			if (activeSession) {
 				try {
 					queuedPrompts = await activeSession.sdkHost.pendingPrompts("list", { sessionId: activeSession.sessionId })
+					// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
+					// No cache write needed — the Q5 guard chain now reads
+					// the authoritative count directly from
+					// `activeSession.sdkHost.pendingPromptsCount?.()` which
+					// reaches `LocalRuntimeHost.getPendingPromptsCount` and
+					// reads `session.pendingPrompts.length` synchronously.
+					// The previous cache-based implementation was racy; see
+					// the adapter comment for the full causal analysis.
 				} catch (error) {
 					Logger.error("[SdkController] Failed to list pending prompts for webview state:", error)
 				}

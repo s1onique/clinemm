@@ -1,0 +1,98 @@
+ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 — ENTRY STATE
+=====================================================================
+
+> ACT purpose: RECON + BOUNDED REPAIR authorization.
+> Frozen invariants from predecessor ACTs (DO NOT REOPEN):
+>
+>   PWAOR                         = CONSERVED (PWAOR01 LIVE_POSITIVE_SIGNAL)
+>   CommandJob lifecycle          = CONSERVED (CLI package, vscode-run-commands-tool)
+>   per-job start projection      = CONSERVED (BCTCP01 closure)
+>   per-job terminal projection   = CONSERVED (BCTCP01 closure)
+>   notify-on-terminal            = CONSERVED (BCNT01 closure)
+>   BTCONT                        = CONSERVED (BTCONT01 closure, Q5 deferral)
+>   terminal-card projection      = LIVE_GREEN
+>
+> Stop rules (do not touch without new evidence contradicting them):
+>
+>   - terminal-card projection
+>   - per-job projection map
+>   - PWAOR abort ownership
+>   - CommandJob process lifecycle
+>   - PGID handling
+>   - deadline mechanics
+>   - notify prompt formatting
+>   - duplicate completion messages (deferred to a successor ACT)
+
+ENTRY HEAD                  = ae7f98260 (post-ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 correction01 round 3 closure)
+WORKTREE STATE              = clean (git status --short returns nothing)
+BRANCH                      = main (HEAD = ae7f98260)
+STASHES                     = 0
+PROTECTED-STASH BRANCHES    = 0
+BUN LOCKFILE                = present at repo root
+NODE RUNTIME                = >=22 (per .nvmrc)
+SDK BUILD ARTIFACTS         = up-to-date (no dist rebuild required for evidence gathering)
+
+PRE-ACT UNIT SUITE STATE (frozen at ACT entry):
+  total unit tests           = 1141 (per BTCONT01 closure)
+  failing tests              = 0
+  tsc --noEmit (apps/vscode) = clean (per BTCONT01 closure)
+  tsc --noEmit (sdk)         = clean
+
+LIVE QUALIFICATION SUBSTRATE:
+  /tmp/vscode-userdata       = preserved across ACTs
+  DISPLAY=:1                 = preserved (xvfb-running GUI display)
+  debug-harness port 19229   = reusable for any LIVE spec driving
+  /tmp/cline-debug           = reused for screenshots if needed
+
+PREDECESSOR VERDICTS (frozen):
+  ACT-CLINEMM-BACKGROUND-COMMAND-AWAITING-FOLLOWUP-GUARD01 (BCAFG01):
+      GREEN. The Q5 composition seam at SdkSessionEventCoordinator:426
+      suppresses awaiting_followup when
+      hasRunningBackgroundJobForOwner(activeSessionId) === true.
+      Production has the guard; live tests prove the guard works.
+
+  ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 (BTCONT01):
+      PASS. Q5 deferral at SdkSessionEventCoordinator:498-503
+      records a DeferredContinuation marker (sessionId + taskId + epoch).
+      The marker is re-evaluated when the active job count drops
+      (Controller.maybeReevaluateDeferredContinuation at SdkController.ts:4233).
+      Bridge test BTCONT-BRIDGE-01 exercises the real production bridge.
+
+  ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 (AGCONT01):
+      HALT_PRODUCT_CONTRACT_REQUIRED. The structural recon proves
+      NO production terminal -> AgentRuntime consumer exists. The
+      BCNT01 opt-in notify-on-terminal was the v1 product-semantics
+      answer (model-side opt-in via `notifyOnCompletion: true`).
+      Successor ACT: ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01.
+
+  ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 (BCNT01):
+      PASS. BackgroundNotifyCoordinator (apps/vscode/src/sdk/background-notify-coordinator.ts)
+      consumes terminal events and enqueues wakes via
+      active.sdkHost.send({ sessionId, prompt, delivery: "queue" })
+      which lands in PendingPromptsController.enqueue. Owner-key =
+      sessionId + taskId; lifetime = same session/task; FIFO; ephemeral.
+      Tested end-to-end (BCNT-BRIDGE-01).
+
+  ACT-CLINEMM-AWAITING-FOLLOWUP-USER-ACTION-SEMANTICS01 (CLOSED):
+      The webview label "Waiting" was renamed to "Your turn" as
+      display-only. The wire TurnPhase vocabulary and the legacy
+      write sites are unchanged. This ACT MUST NOT regress the
+      "Your turn" display when operator input is genuinely required.
+
+ENTRY INVARIANTS:
+  E1. Single-job natural completion: projection shows correct terminal
+      state and does NOT resurrect an unrelated turn. LIVE_GREEN.
+  E2. Multi-job A->B terminal: per-job terminal projection flips;
+      no spurious completion. LIVE_GREEN.
+  E3. Terminal row truth: terminalState text mirrors the per-job
+      terminal classification. LIVE_GREEN.
+  E4. PWAOR abort ownership: foreground->background handoff releases
+      abort listener cleanly. LIVE_POSITIVE_SIGNAL.
+
+ENTRY-SPECIFIC ASSERTIONS (for this ACT):
+  E5. BTCONT01 BTCONT-BRIDGE-01: GREEN at entry. Re-execute after any
+      repair to confirm zero regression.
+  E6. BCAFG01 GREEN at entry. Re-execute after any repair.
+  E7. BCNT01 BCNT-BRIDGE-01: GREEN at entry. Re-execute after any
+      repair (this is the load-bearing transport the bounded repair
+      would re-use).

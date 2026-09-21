@@ -114,6 +114,28 @@ export interface BackgroundOwnerCorrelationRecord {
 	 * capture seam is OFF (default public behavior).
 	 */
 	readonly hostInstance?: string | null
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
+	 * Count of queued prompts in PendingPromptsController for the
+	 * active session at the Q5 boundary. `undefined` when the new
+	 * `getPendingPromptCount` option is not wired (pre-ACT tests).
+	 */
+	readonly pendingPromptCount?: number
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
+	 * Count of active BackgroundNotifyCoordinator markers for
+	 * (activeSessionId, taskId) at the Q5 boundary. `undefined`
+	 * when the new `getActiveNotifyCount` option is not wired.
+	 */
+	readonly activeNotifyCount?: number
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
+	 * The combined `outstandingAutonomousWork` predicate evaluated
+	 * at the Q5 boundary. `true` means the Q5 seam defers (no
+	 * awaiting_followup commit); `false` means the Q5 seam commits
+	 * awaiting_followup (genuine operator handoff).
+	 */
+	readonly outstandingAutonomousWork?: boolean
 }
 
 const buffer: BackgroundOwnerCorrelationRecord[] = []

@@ -1,3 +1,32 @@
+## ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 — PASS_LONG_HORIZON_OPERATOR_AUTHORITY_REPAIRED (CORRECTION02) — 2026-09-22
+
+**Status:** PASS (CORRECTION02 — synchronous authoritative authority). 5/5 LHOWA01 + 2/2 LHOWA01-WIRE-01 = 7/7 tests pass. BCAFG01 (4/5, 1 pre-existing), BTCONT01 (10/10), BCNT01 (16/24, 8 pre-existing), AGCONT01 (7/7) all unchanged from baseline. Full bun unit suite 1141/1141 PASS (was 1065/1141 pre-fix). tsc --noEmit clean. bun run build:sdk clean.
+
+**Honest verdict matrix (post CORRECTION02):**
+```
+DEFECT (Shape D)                          = "Your turn" false-positive when terminal-wake already in PendingPromptsController
+Q5_AT_DONE                                = PROVEN_DEFECT_AT_WRITER_BOUNDARY (LHOWA01 synthetic-real)
+ACTIVE_JOB_AT_DONE                        = false (job already terminated)
+PENDING_PROMPT_COUNT_AT_DONE             = 1 (BackgroundNotifyCoordinator already enqueued the wake)
+Q5_PHASE_COMMITTED                        = awaiting_followup (THE DEFECT — should defer)
+BCONT_DEFERRED_MARKER                     = undefined (no Q5 marker registered; defect escapes)
+PRE_REPAIR_OUTSTANDING_AUTONOMOUS_WORK   = invisible to Q5 seam (Shape D ROOT CAUSE)
+CORRECTION01_REPAIR                       = cached authority → RACY (seventy-ninth-pass reviewer identified)
+CORRECTION02_REPAIR                       = synchronous authoritative (this closure)
+POST_REPAIR_OUTSTANDING_AUTONOMOUS_WORK  = visible (ownerStillRunning || pendingPromptCount > 0 || activeNotifyCount > 0)
+                                            pendingPromptCount READS DIRECTLY FROM session.pendingPrompts.length
+                                            (NO cache, NO webview-state-push dependency)
+POST_REPAIR_Q5_PHASE                      = preserved "streaming" (the fix; BTCONT01 defer registered)
+POST_REPAIR_TERMINAL_IDLE_REEVAL          = commits awaiting_followup exactly once after wake delivered (BTCONT01 GREEN)
+CLASSIFICATION                            = LH3 (Shape D — outstanding autonomous work not represented at Q5 boundary)
+REPAIR                                    = CORRECTION02 — synchronous authoritative authority seam
+PRODUCTION BRIDGE                         = LocalRuntimeHost.getPendingPromptsCount(sid) → session.pendingPrompts.length
+                                            + BackgroundNotifyCoordinator.activeNotifyCountForOwner(sid, tid)
+                                            (BOTH canonical sources, BOTH synchronous, NO cache)
+CAUSALITY                                 = ESTABLISHED (LHOWA01-GREEN flip proves pre-fix RED;
+                                            LHOWA01-WIRE-01 proves post-fix GREEN at production adapter seam)
+```
+
 ## ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01 — PASS_BACKGROUND_TERMINAL_CONTINUATION_REPAIRED — 2026-09-20
 
 **Status:** PASS — correction cycle 1 closed all Factory reviewer P0/P1 items. 10/10 BTCONT tests pass (added BTCONT-BRIDGE-01, BTCONT-CTL-06, BTCONT-CTL-07); BCAFG01 baseline 5/5 unchanged; full bun unit suite 1141/1141 green; tsc --noEmit clean.

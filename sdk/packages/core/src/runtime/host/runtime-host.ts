@@ -483,6 +483,28 @@ export interface RuntimeHost {
 	getActiveRuntimeSnapshot?(
 		sessionId: string | undefined,
 	): import("@cline/shared").LiveAgentRuntimeStateSnapshot | undefined;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
+	 * Returns the synchronous count of pending prompts currently
+	 * queued in `PendingPromptsController` for `sessionId`. AUTHORITATIVE
+	 * boundary for the Q5 composition seam — the count is read directly
+	 * from the in-memory queue, NOT from a cached projection. This
+	 * guarantees that a wake enqueued into the queue at time T is
+	 * observable to the Q5 writer at time T (the same JavaScript
+	 * turn), without requiring a webview-state-push interval to
+	 * converge the cache.
+	 *
+	 * Returns 0 when:
+	 *   * the session is not active on this host,
+	 *   * the host does not implement the method (Hub/Remote omit
+	 *     by design — consumers MUST use `?.()` so the absence
+	 *     collapses to "no outstanding autonomous work" which is
+	 *     fail-safe for the false-positive that this ACT repairs).
+	 *
+	 * Optional. Hosts that cannot surface the pending-prompt queue
+	 * MUST omit this method. See ACT LHOWA01 §6 / CORRECTION02.
+	 */
+	getPendingPromptsCount?(sessionId: string): number;
 }
 
 export type RuntimeHostMode = "auto" | "local" | "hub" | "remote";
