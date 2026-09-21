@@ -1,0 +1,142 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01",
+  "epistemic_purpose": "product-contract selection for background command wait, notify, and detach semantics",
+  "entry_head": "3a201b49c0c2de5a1a7f224e9633d07046400df9",
+  "exit_head": "66911bd48441ca69aca5ccc6213cc8d280aac4ed",
+  "exit_head_commit_subject": "docs(factory): freeze Contract B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL) for run_commands wait/notify/detach semantics",
+  "worktree_state_at_exit": "clean",
+  "predecessor": {
+    "act": "ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01",
+    "verdict": "HALT_PRODUCT_CONTRACT_REQUIRED",
+    "current_turn_ended": "PROVEN",
+    "terminal_to_agent_reentry": "ABSENT_STRUCTURAL",
+    "btcont_turn_state_continuation": "PASS",
+    "wait_until_finished_product_contract": "UNRESOLVED"
+  },
+  "current_runtime": {
+    "terminal_behavior": "awaiting_followup_then_stop",
+    "automatic_agent_reentry": false,
+    "f4_text": "For long-running commands, run them in background and redirect output to a tmp file that you can read from later.",
+    "f4_source": "sdk/packages/core/src/extensions/tools/definitions.ts:675",
+    "user_intent_representable": false,
+    "user_intent_classification": "R3_NO",
+    "runtime_nlp_inference": "FORBIDDEN"
+  },
+  "candidates": {
+    "A_model_polling_only": {
+      "evaluated": true,
+      "rubric_verdict": "FAILS_D1_D4_D8",
+      "fails": ["D1", "D4", "D8"],
+      "passes": ["D2", "D3", "D5 (partial)", "D6", "D7", "D9", "D10"],
+      "notes": "Current implementation. LIVE specimen proved the user's 'wait until finished' intent is not honored (model emitted done without polling). User-visible mismatch with the runtime promise."
+    },
+    "B_opt_in_notify_on_terminal": {
+      "evaluated": true,
+      "rubric_verdict": "PASSES_ALL_TEN",
+      "fails": [],
+      "passes": ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10"],
+      "notes": "WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to future cycle requiring Candidate C architecture. Adds one optional schema field (notifyOnCompletion). Default false preserves current behavior. Wake is one bounded generated prompt string delivered via PendingPromptsController exactly-once."
+    },
+    "C_explicit_await_terminal": {
+      "evaluated": true,
+      "rubric_verdict": "FAILS_D9",
+      "fails": ["D9"],
+      "passes": ["D1", "D2", "D3", "D4", "D5", "D6 (partial)", "D7", "D8", "D10"],
+      "notes": "Requires a new suspended-tool state machine. The runtime has no seam for suspended tool/turn ownership. Architecturally invasive. Not in v1 scope. Would enable STRICT_WAIT in a future cycle."
+    },
+    "D_explicit_multi_mode": {
+      "evaluated": true,
+      "rubric_verdict": "FAILS_D9_INHERITED",
+      "fails": ["D9 (inherited from C)"],
+      "passes": ["D1", "D2", "D3", "D4", "D5", "D6 (partial)", "D7", "D8", "D10"],
+      "notes": "Union of B and C. Without C's architecture, collapses to B with three mode labels."
+    }
+  },
+  "selected_contract": "B",
+  "selected_contract_full_name": "WS-B_EXPLICIT_NOTIFY_ON_TERMINAL",
+  "default": "notifyOnCompletion=false",
+  "persistence": "EPHEMERAL_ONLY",
+  "contract": {
+    "wait_v1": "honestly collapses to NOTIFY semantics. Mapped to notifyOnCompletion:true. Strict WAIT (no Your turn interlude before final answer) is UNSUPPORTED in v1; deferred to STRICT_WAIT (future cycle requiring Candidate C architecture). User-facing doctrine states this explicitly.",
+    "notify": "notifyOnCompletion:true -> one wake at terminal via PendingPromptsController.enqueue. Wake prompt is a bounded generated prompt string (NOT typed payload); delivery='queue' by default; exactly-once.",
+    "detach": "notifyOnCompletion:false (default); no wake; current behavior preserved exactly.",
+    "strict_wait_future": "notifyOnCompletion:'wait'. Requires suspended-tool state machine (Candidate C). Tracked but NOT in v1 contract.",
+    "wake_representation": "bounded generated prompt string via formatTerminalWakePrompt(payload). Hard cap 8 KB; soft target 4 KB. Schema frozen in §15.7.2.",
+    "wake_trigger": "CommandJobManager.onCommandJobLifecycle event 'command_job_terminal_committed' (per-job, fires exactly once per terminal job). NOT the >0->0 cardinal transition.",
+    "notification_identity_owner": "session/coordinator-owned. Captured at run_commands call time at SdkSessionEventCoordinator seam (where options.getTask().taskId is reachable). Stored in per-session Map<jobId, {sessionId, taskId, epoch, notifyOnCompletion}>. NOT on CommandJob.",
+    "multi_job_held_set": "at session/coordinator seam; FIFO drain when the last notify=true job terminates.",
+    "terminal_success": "wake prompt content: 'Background command {jobId} exited successfully: code=0. stdoutTail: <tail>. stderrTail: <tail>. elapsedMs: {ms}.'",
+    "terminal_failure": "wake prompt content: 'Background command {jobId} exited with code {exitCode}. stdoutTail: <tail>. stderrTail: <tail>. elapsedMs: {ms}.'",
+    "cancel": "wake prompt content: 'Background command {jobId} was cancelled. stdoutTail: <tail>. stderrTail: <tail>. elapsedMs: {ms}.'",
+    "deadline": "wake prompt content: 'Background command {jobId} exceeded the host execution deadline and was terminated: code=null, signal=SIGKILL. stdoutTail: <tail>. stderrTail: <tail>. elapsedMs: {ms}.'",
+    "spawn_failed": "wake prompt content: 'Background command {jobId} failed to start: {error}. stdoutTail: <empty>. stderrTail: <empty>. elapsedMs: {ms}.'",
+    "newer_turn": "delivery='queue'; wake waits behind current turn; drain delivers after current turn's non-error finish.",
+    "persistence": "EPHEMERAL_ONLY for v1; wake lost on host restart; user-facing doctrine states this explicitly."
+  },
+  "terminal_reason_matrix": {
+    "exited_0": "TERMINAL_AND_REPORTABLE -> wake",
+    "exited_nonzero": "TERMINAL_AND_REPORTABLE -> wake",
+    "deadline_exceeded": "TERMINAL_AND_REPORTABLE -> wake",
+    "cancelled": "TERMINAL_AND_REPORTABLE -> wake",
+    "spawn_failed": "TERMINAL_AND_REPORTABLE -> wake",
+    "containment_failed": "UNSAFE_TO_DECLARE_TERMINAL -> NO wake (diagnostic only); wake consumer subscribes ONLY to command_job_terminal_committed, not containment_failed"
+  },
+  "production_change": {
+    "authorized": false,
+    "performed": false
+  },
+  "stale_card": {
+    "status": "LIVE_PROVEN_SEPARATE",
+    "deferred_to": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01"
+  },
+  "scenario_suite_complete": true,
+  "scenario_rows": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10", "S11"],
+  "contract_freeze_gate": {
+    "G1_wait_defined": true,
+    "G2_notify_defined": true,
+    "G3_detach_defined": true,
+    "G4_default_defined": true,
+    "G5_natural_success_defined": true,
+    "G6_failure_defined": true,
+    "G7_cancel_defined": true,
+    "G8_deadline_defined": true,
+    "G9_newer_turn_defined": true,
+    "G10_fire_and_forget_conserved": true,
+    "G11_runtime_nlp_inference_forbidden": true,
+    "G12_production_untouched": true,
+    "G13_successor_bounded": true
+  },
+  "correction_cycle": {
+    "cycle_number": 1,
+    "reviewer_verdict": "HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN",
+    "p0_p1_status": {
+      "P0_CONTRACT_FREEZE_NOT_DURABLE": "CLOSED (commit lands in this ACT)",
+      "P0_WAIT_NOTIFY_SEMANTIC_CONTRADICTION": "CLOSED (WAIT(v1) = NOTIFY honest collapse; STRICT_WAIT deferred)",
+      "P1_MULTI_JOB_TRIGGER_CONTRACT": "CLOSED (per-job terminal event, NOT >0->0 cardinal)",
+      "P1_NOTIFICATION_IDENTITY_OWNER": "CLOSED (session/coordinator-owned; NOT CommandJob)",
+      "P1_WAKE_PAYLOAD_SURFACE": "CLOSED (bounded generated prompt string)"
+    },
+    "evidence_artifact": "20-contract-correction-01.md"
+  },
+  "successor_act": "ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01",
+  "successor_purpose": "bounded async terminal->session stimulus (add optional schema field, append tool description paragraph, implement wake consumer on command_job_terminal_committed event, capture identity at coordinator seam, implement formatTerminalWakePrompt, implement held set with FIFO drain, add focused test family mirroring BTCONT01 shape)",
+  "successor_binding_head": "66911bd48441ca69aca5ccc6213cc8d280aac4ed",
+  "scope_discipline": {
+    "production_files_touched": 0,
+    "test_files_touched": 0,
+    "documentation_files_touched": 22,
+    "tracked_dirt_introduced": false,
+    "branch": "main",
+    "commit_landed_in_this_act": true,
+    "commit_subject": "docs(factory): freeze Contract B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL) for run_commands wait/notify/detach semantics",
+    "commit_hash": "66911bd48441ca69aca5ccc6213cc8d280aac4ed"
+  },
+  "upstream_divergence_record": {
+    "upstream_background_terminal": "notifyParent defaults true",
+    "clinemm_run_commands": "notifyOnCompletion defaults false (v1)",
+    "divergence": "intentional",
+    "rationale": "Upstream's notifyParent default-true is one viable design; ClineMM v1 chooses default-false for backwards compatibility. notifyOnCompletion is host-builtin (not plugin) and reuses the existing PendingPromptsController.enqueue seam rather than the plugin host's steer_message."
+  },
+  "verdict": "PASS_WAIT_SEMANTICS_CONTRACT_FROZEN",
+  "verdict_basis": "Contract B passes all ten rubric items D1-D10; recon in §3-§6 establishes that the selected seams (PendingPromptsController.enqueue, identity-correlating machinery at coordinator seam, CommandJobManager.onCommandJobLifecycle command_job_terminal_committed event) all exist and are reusable; default false preserves current behavior; WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to future cycle; wake is bounded generated prompt string (NOT typed payload — PendingPromptsController accepts only prompt: string); notification identity owner is session/coordinator-owned (CommandJob does not capture taskId); multi-job trigger is per-job terminal event (NOT >0->0 cardinal transition); scenario suite S1-S11 fully defined; successor ACT bounded and bound to this ACT's exit_head."
+}

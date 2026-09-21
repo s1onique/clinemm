@@ -1,0 +1,142 @@
+Final review — ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
+=================================================================
+
+VERDICT: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN (post correction cycle 01)
+
+CONTRACT: B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL)
+
+WAIT (v1): HONEST COLLAPSE TO NOTIFY semantics
+  (Strict WAIT / "no Your turn before final answer" is
+   deferred to STRICT_WAIT in a future cycle requiring
+   Candidate C / suspended-tool state machine.)
+
+NOTIFY (v1):
+  notifyOnCompletion:true -> one wake at terminal
+
+DETACH (v1, default):
+  notifyOnCompletion:false -> no wake; current behavior preserved
+
+STRICT_WAIT (future, NOT v1):
+  notifyOnCompletion:"wait". Requires suspended-tool state machine.
+
+DEFAULT: notifyOnCompletion = false (preserves current behavior)
+
+PERSISTENCE: EPHEMERAL_ONLY for v1
+
+FIRE-AND-FORGET: conserved (default behavior; no wake)
+
+NEWER_TURN: delivery="queue" (waits behind current turn)
+
+MULTI_JOB:
+  Per-job terminal events drive a held set at the
+  session/coordinator seam (NOT >0->0 cardinal transitions).
+  FIFO drain when the last notify=true job terminates.
+
+WAKE REPRESENTATION: bounded generated prompt string
+  (NOT typed payload; PendingPromptsController.enqueue accepts
+   { prompt: string } only. Schema frozen in §15.7.2.)
+
+NOTIFICATION IDENTITY OWNER: session/coordinator-owned
+  Captured at run_commands call time at SdkSessionEventCoordinator
+  seam (where options.getTask().taskId is reachable). CommandJob
+  does NOT capture taskId; identity lives at the coordinator seam
+  per §15.7.1.
+
+FAILURE/CANCEL/DEADLINE: wake prompt covers all four
+  (exited, deadline_exceeded, cancelled, spawn_failed)
+containment_failed: NO wake (UNSAFE_TO_DECLARE_TERMINAL;
+  wake consumer subscribes ONLY to "command_job_terminal_committed")
+
+CONTRACT FREEZE GATE (G1-G13 from §44):
+  G1  wait semantics defined            YES (§14.1, §14.2 honest collapse)
+  G2  notify semantics defined          YES (§14.1, §14.2)
+  G3  detach semantics defined          YES (default = current behavior)
+  G4  default defined                   YES (notifyOnCompletion = false)
+  G5  natural success defined           YES (§14.5)
+  G6  failure defined                   YES (§14.6)
+  G7  cancel defined                    YES (§14.7)
+  G8  deadline defined                  YES (§14.8)
+  G9  newer-turn behavior defined       YES (§14.9)
+  G10 fire-and-forget conservation      YES (§14.12)
+  G11 runtime NLP inference forbidden   YES (no NL parsing anywhere)
+  G12 production implementation untouched   YES (this ACT touches 0 files)
+  G13 successor ACT bounded             YES (ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01)
+
+PRODUCTION CHANGE: NONE (this ACT is product-contract work only)
+PRODUCTION REPAIR: NOT_AUTHORIZED_IN_THIS_ACT
+
+SUCCESSOR: ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01
+  Bound to this ACT's exit_head (post-commit).
+  Purpose: bounded async terminal->session stimulus.
+  Implementation brief: §18-successor-authorization.md (corrected).
+
+ENTRY HEAD: 3a201b49c0c2de5a1a7f224e9633d07046400df9
+EXIT HEAD:  66911bd48441ca69aca5ccc6213cc8d280aac4ed
+            (single docs/evidence-only commit; see git log -1)
+
+CORRECTION CYCLE: 01
+  Reviewer verdict: HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN
+  P0 #1 CONTRACT_FREEZE_NOT_DURABLE         CLOSED (commit landed)
+  P0 #2 WAIT_NOTIFY_SEMANTIC_CONTRADICTION   CLOSED (WAIT = NOTIFY in v1 honestly)
+  P1 #1 MULTI_JOB_TRIGGER_CONTRACT           CLOSED (per-job terminal events)
+  P1 #2 NOTIFICATION_IDENTITY_OWNER          CLOSED (session/coordinator-owned)
+  P1 #3 WAKE_PAYLOAD_SURFACE                 CLOSED (bounded generated prompt)
+  See §20-contract-correction-01.md for full record.
+
+SCOPE BREACH: NONE
+
+EVIDENCE ARTIFACTS PRODUCED:
+  01-entry-state.txt
+  02-predecessor-freeze.md
+  03-current-tool-contract.md
+  04-model-contract-recon.md
+  05-done-semantics.md
+  06-reentry-seam-inventory.md
+  07-contract-candidates.md
+  08-user-intent-matrix.md        (corrected cycle 01)
+  09-cost-and-risk.md
+  10-concurrency-and-supersession.md
+  11-terminal-reason-matrix.md
+  12-persistence-scope.md
+  13-upstream-context.md
+  14-contract-decision.md         (corrected cycle 01)
+  15-contract-wording.md          (corrected cycle 01; §15.7 added)
+  16-scenario-suite.md            (corrected cycle 01)
+  17-compatibility.md
+  18-successor-authorization.md   (corrected cycle 01)
+  19-final-review.txt             (this file; corrected cycle 01)
+  20-contract-correction-01.md    (new; correction record)
+  result.json                     (corrected cycle 01)
+
+RECON GATES:
+  - Current tool surface recon: done (§3)
+  - Model/system prompt recon: done (§4)
+  - done semantics: done (§5)
+  - Async stimulus mechanism recon: done (§6)
+  - All recon files contain source-of-truth citations with line
+    numbers or function names.
+
+SCENARIO SUITE:
+  - S1-S11 all defined with agent-wake / user-notify /
+    your-turn-timing / terminal-owner answers (§16)
+  - S1-S4 retitled to "NOTIFY (via WAIT)" in cycle 01
+  - S10 corrected to use per-job terminal events
+  - No UNRESOLVED rows.
+  - Coverage table at §16.12.
+
+CHECKS PERFORMED:
+  - git rev-parse HEAD: 66911bd48441ca69aca5ccc6213cc8d280aac4ed (post-commit)
+  - git status --short: clean
+  - git log -1 --oneline: 337bdb1c1 docs(factory): freeze Contract B...
+  - diff --check: clean (no production changes)
+  - result.json parses: yes
+  - successor ACT binds to exit_head 66911bd48441ca69aca5ccc6213cc8d280aac4ed
+
+NO PRODUCTION FILES TOUCHED.
+NO TEST FILES TOUCHED.
+
+HALT SCOPE_BREACH: NOT INVOKED.
+
+NEXT STEP (successor ACT, NOT this ACT):
+  ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01
+  See §18-successor-authorization.md for full scope (corrected cycle 01).

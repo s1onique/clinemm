@@ -5604,3 +5604,68 @@ HALT_PRODUCT_CONTRACT_REQUIRED.
 **Follow-ups (NOT in this ACT):**
 - Stale card projection: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 (deferred)
 - Wait-until-finished semantics decision: ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01 (successor ACT; must choose between (a) model-polling only, (b) explicit per-command notify-on-terminal, or (c) some other bounded async-continuation semantic)
+
+---
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
+
+Updated: 2026-09-21 06:42:00Z (CONTRACT_FROZEN post correction cycle 01: Factory causal reviewer verdict PASS_WAIT_SEMANTICS_CONTRACT_FROZEN. Epistemic purpose = PRODUCT-CONTRACT SELECTION. Production change = NONE. Test change = NONE. Five P0/P1 defects opened by initial review closed in correction cycle 01; full record in §20-contract-correction-01.md.)
+
+**Selection**: Candidate B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL). Passes all ten rubric items D1-D10. WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to a future cycle requiring the suspended-tool state machine (Candidate C). Default `notifyOnCompletion = false` preserves current behavior exactly. Wake is one bounded generated prompt string delivered exactly once.
+
+**Frozen invariants** (corrected cycle 01):
+```text
+SELECTED_CONTRACT = B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL)
+WAIT(v1) = NOTIFY (honest collapse; documented in §8.1, §14.1, §14.2)
+STRICT_WAIT (future, NOT v1) = notifyOnCompletion:"wait" (requires Candidate C)
+DEFAULT = notifyOnCompletion=false (preserves current behavior)
+PERSISTENCE = EPHEMERAL_ONLY for v1
+NEWER_TURN = delivery="queue" (waits behind current turn)
+WAKE_REPRESENTATION = bounded generated prompt string
+                   (NOT typed payload; PendingPromptsController.enqueue
+                    accepts { prompt: string } only. Schema in §15.7.2.)
+WAKE_TRIGGER = per-job "command_job_terminal_committed" event
+                   (NOT >0->0 cardinal transition)
+NOTIFICATION_IDENTITY_OWNER = session/coordinator-owned
+                   (at SdkSessionEventCoordinator seam; NOT on CommandJob,
+                    which does not capture taskId)
+MULTI_JOB = held set at coordinator seam; FIFO drain when last
+            notify=true job terminates
+TERMINAL_REASONS = {exited, deadline_exceeded, cancelled, spawn_failed} -> wake
+CONTAINMENT_FAILED = NO wake (UNSAFE_TO_DECLARE_TERMINAL; wake consumer
+                     subscribes ONLY to command_job_terminal_committed)
+FIRE_AND_FORGET = conserved (default behavior; wake consumer dormant)
+RUNTIME_NLP_INFERENCE = FORBIDDEN
+PRODUCTION_CHANGE = NONE (this ACT is contract-selection only)
+STALE_CARD = LIVE_PROVEN_SEPARATE (deferred to ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01)
+```
+
+**Correction cycle 01 record** (closes Factory reviewer's findings):
+- P0 CONTRACT_FREEZE_NOT_DURABLE: CLOSED via single docs/evidence-only commit
+- P0 WAIT_NOTIFY_SEMANTIC_CONTRADICTION: CLOSED — WAIT(v1) honestly maps to NOTIFY
+- P1 MULTI_JOB_TRIGGER_CONTRACT: CLOSED — per-job terminal event, not >0→0
+- P1 NOTIFICATION_IDENTITY_OWNER: CLOSED — coordinator seam, not CommandJob
+- P1 WAKE_PAYLOAD_SURFACE: CLOSED — bounded generated prompt string
+
+**Successor ACT** (authorized, NOT implemented by this ACT):
+- ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01
+- Bound to this ACT's exit_head (post-commit HEAD of the contract-freeze commit)
+- Purpose: bounded async terminal→session stimulus (one schema field, one wake consumer on per-job terminal events, identity capture at coordinator seam, formatTerminalWakePrompt, held set + FIFO drain, 1 new test family mirroring BTCONT01 shape)
+- Scope: ~6 production files touched (NO change to command-job-manager.ts CommandJob record), 1 new test family, 1 documentation update
+
+**Why not A**: Candidate A (model-polling-only) fails D1, D4, D8 — the LIVE 480s specimen (cmd_muac7cvi11hmne3x) proved the user's "wait until finished" intent is not honored because the model emitted done without polling. User-visible mismatch with the runtime promise.
+
+**Why not C**: Candidate C (explicit await-terminal) fails D9 — requires a new suspended-tool state machine that does not exist and is not on the ClineMM roadmap as a near-term item. No seam for suspended tool/turn ownership. Would enable STRICT_WAIT in a future cycle.
+
+**Why not D**: Candidate D (explicit multi-mode) inherits C's D9 failure. Without C's architecture, collapses to B with three mode labels.
+
+**Production code touched: NONE.**
+**Test code touched: NONE.**
+**Evidence directory: .factory/evidence/ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01/ (20 artifacts + result.json)**
+**Verdict**: PASS_WAIT_SEMANTICS_CONTRACT_FROZEN.
+
+**Follow-ups (NOT in this ACT)**:
+- Bounded implementation: ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 (next)
+- Stale card projection: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 (still deferred, separate)
+- Future cycle: persistence upgrade (EPHEMERAL_ONLY → PERSISTED) if product demand warrants
+- Future cycle: Candidate C architecture (suspended-tool state machine) → enables STRICT_WAIT
