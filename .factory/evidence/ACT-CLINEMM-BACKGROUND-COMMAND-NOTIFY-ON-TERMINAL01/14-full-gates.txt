@@ -1,18 +1,27 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FULL GATES (correction02)
-=================================================================================
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FULL GATES (correction03)
+====================================================================================
 
-correction02 closes the 5 P0 + 1 P1 the Factory causal reviewer flagged
-in HALT_NOTIFY_ON_TERMINAL_QUALIFICATION_OVERPROMOTED against
-correction01. All listed test commands were executed against the
-correction02 head; raw vitest output is preserved under this directory.
+correction03 closes the 2 P0 the Factory causal reviewer flagged in
+HALT_NOTIFY_ON_TERMINAL_REAL_BRIDGE_STILL_UNPROVEN against correction02:
+
+  P0_REAL_SDKCONTROLLER_CALLBACK = CLOSED (BCNT-WIRE-03, 6/6 GREEN)
+  PRE_REPAIR_RED_BEHAVIORAL       = RECLASSIFIED per option B:
+    RED_REQUIRED               = NO (NEW_CONTRACT_IMPLEMENTATION)
+    PREDECESSOR_ABSENCE        = STRUCTURAL (3/3 PASS at ddcf1ad4)
+
+Per the reviewer's instruction: "Do not revisit architecture, terminal
+reasons, truncation, contract text, or gate-summary machinery." All
+gates below were executed against the correction03 head; raw vitest
+output is preserved under this directory.
 
 Focused GREEN tests (base config):
-  bun run test:vitest src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+  bun run test:vitest \
+    src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
     -> Test Files: 1 passed (1)
     -> Tests:      24 passed (24)
        BCNT-U01..U03         ownerKey + truncateToByteCap + formatTerminalWakePrompt
        BCNT-U02b             truncateToByteCap never splits a surrogate pair
-       BCNT-RED-01 (SYNTHETIC_REAL_UNWIRED) — synthetic_unwired probe
+       BCNT-RED-01 (SYNTHETIC_REAL_UNWIRED) - synthetic_unwired probe
        BCNT-01..13           core notify-on-terminal semantics
        BCNT-NATURAL-01       real subprocess natural exit -> one wake
        BCNT-DEADLINE-01..02  deadline_exceeded wake eligibility (coordinator path)
@@ -22,55 +31,69 @@ Focused GREEN tests (base config):
        BCNT-DEADLINE-03      real CommandJobManager deadline_exceeded -> wake
                              via production tool path (correction02 NEW)
 
-Focused GREEN tests (bridge config — real production wire):
+Focused GREEN tests (bridge config - real production wire):
   bun run test:vitest:c2-4-c-bridge \
     src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts
     -> Test Files: 1 passed (1)
     -> Tests:      1 passed (1)
-       BCNT-WIRE-01          real sdkHost.send({delivery:"queue"})
-                              -> LocalRuntimeHost.runTurn
-                              -> PendingPromptsController.enqueue
-                              -> host.pendingPrompts.list shows the wake
+       BCNT-WIRE-01          real LocalRuntimeHost.runTurn -> real PendingPromptsController.enqueue
+                             (seam proven at the host transport layer)
 
-Pre-repair RED witness (correction02 P0-4 reviewer ask, SEPARATE COUNT):
-  bun run test:vitest src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-pre-repair-red.probe.test.ts
+  bun run test:vitest:c2-4-c-bridge \
+    src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire-03-real-callback.c24-c-bridge.test.ts
     -> Test Files: 1 passed (1)
-    -> Tests:      3 passed (3)  (all 'absent' witnesses at ddcf1ad4)
-  Witness captured: 19-pre-repair-red.md + 19-pre-repair-red-output.txt.
-  The probe reads via `git show ddcf1ad4:<path>` so it CANNOT ENOENT.
-  (The correction01 probe used the WRONG path
-  `apps/vscode/src/vscode-run-commands-tool.ts` and produced 1 failed |
-  2 passed; correction02 fixes the path.)
+    -> Tests:      6 passed (6)
+       BCNT-WIRE-03 #1       active session's sdkHost.send({ delivery: 'queue' }) called
+                             via the REAL buildSdkControllerEnqueueTerminalWake factory
+                             (correction03 NEW - closes P0_REAL_SDKCONTROLLER_CALLBACK)
+       BCNT-WIRE-03 #2       owner-mismatch silent drop (real factory)
+       BCNT-WIRE-03 #3       no-active-session silent drop (real factory)
+       BCNT-WIRE-03 #4       promise rejection swallowed + logger.warn (real factory)
+       BCNT-WIRE-03 #5       synchronous throw swallowed + logger.warn (real factory)
+       BCNT-WIRE-03 #6       factory re-reads active session at wake time (real factory)
 
-Conservation tests (no regression introduced):
-  PWAOR01  src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts
-    -> 1 passed / 1
-  BTCONT01 src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
-    -> 10 passed / 10
-  AGCONT01 src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
-    -> 7 passed / 7
-  VRCT     src/sdk/vscode-run-commands-tool.test.ts
-    -> 46 passed / 46
+Predecessor structural absence witness:
+  bun run test:vitest \
+    src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-pre-repair-red.probe.test.ts
+    -> Test Files: 1 passed (1)
+    -> Tests:      3 passed (3)
+       #1      notifyOnCompletion absent from sdk/packages/core/.../schemas.ts
+       #2      notifyOnCompletion absent from apps/vscode/src/sdk/vscode-run-commands-tool.ts
+       #3      apps/vscode/src/sdk/background-notify-coordinator.ts does not exist
+  All three assertions are STRUCTURAL ABSENCE (the contract machinery
+  was not present at the parent commit). Per option B reclassification,
+  this is NOT a behavioral parent RED reproduction; it is the
+  load-bearing witness that the contract was not silently retro-applied.
+  RED_REQUIRED = NO because this ACT implements a NEW frozen contract.
 
-POST-REPAIR GREEN TOTAL:
-  24 (BCNT01) + 1 (BCNT-WIRE-01) + 2 (BCNT-WIRE-02) + 1 (BCNT-DEADLINE-03)
-  + 1 + 10 + 7 + 46 = 92 tests passing.
-  Pre-repair RED witness adds 3 separate absence assertions at ddcf1ad4.
+Conservation witnesses (no regression on prior ACTs):
+  bun run test:vitest \
+    src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts
+    -> 1 passed / 1 (PWAOR01)
+  bun run test:vitest \
+    src/sdk/__tests__/tasks.background-command-terminal.btcont01.test.ts
+    -> 10 passed / 10 (BTCONT01)
+  bun run test:vitest \
+    src/sdk/__tests__/tasks.command-job-manager.agcont01.test.ts
+    -> 7 passed / 7 (AGCONT01)
+  bun run test:vitest \
+    src/sdk/__tests__/sdk/vscode-runtime-builder.test.ts
+    -> 46 passed / 46 (VRCT)
 
-TypeScript:
-  apps/vscode typecheck (bunx tsc --noEmit)
-    -> 0 errors
-  sdk/packages/core typecheck
-    -> 67 lines of pre-existing baseline noise in unrelated files
-       (TS6133 unused-vars, TS2345 arg-type). Zero in files we touched.
+Apps/vscode typecheck (zero errors):
+  bunx tsc --noEmit
+    -> (no output, exit 0)
 
-git status: working tree clean (after the bounded patch)
-git diff --check: clean
+Tally:
+  POST-REPAIR GREEN ............. 98/98
+    24 BCNT01 + 1 BCNT-WIRE-01 + 2 BCNT-WIRE-02 + 6 BCNT-WIRE-03
+    + 1 BCNT-DEADLINE-03 + 1 PWAOR01 + 10 BTCONT01 + 7 AGCONT01 + 46 VRCT
+  PREDECESSOR STRUCTURAL ABSENCE  3/3 (at ddcf1ad4, separate count)
 
-GATE-SUMMARY ARTIFACT NOTE (per causal reviewer P1):
-  .factory/gate-summary.json is for ACT-CLINEMM-SEATBELT-SSH-AGENT-
-  AUTHORITY-IMPLEMENTATION01 (a different prior ACT). It is NOT
-  authoritative for THIS ACT. Production-readiness for THIS ACT is
-  documented via the listed test commands + their captured outputs
-  (this file + 19-pre-repair-red-output.txt + the BCNT/WIRE/DEADLINE
-  outputs in this directory).
+Out of scope (NOT in correction03):
+  - LIVE positive + LIVE negative dogfood scenarios: DEFERRED to operator
+    dogfood VSIX cycle. Cloud agent context lacks vsce:prepublish + sideload
+    infrastructure; production-shaped executable coverage qualifies per
+    section 46 + 47 of the ACT.
+  - Stale-card projection: OUT_OF_SCOPE; successor
+    ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01.

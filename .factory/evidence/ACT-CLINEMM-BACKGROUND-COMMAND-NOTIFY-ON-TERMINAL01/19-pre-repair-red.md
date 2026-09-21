@@ -1,5 +1,16 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / CORRECTION02
-PRE-REPAIR RED (parent commit ddcf1ad4...)
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / CORRECTION03
+PREDECESSOR STRUCTURAL ABSENCE (parent commit ddcf1ad4...)
+
+NOTE (correction03): Per the Factory causal reviewer's preference
+option B, this is reclassified as PREDECESSOR_ABSENCE (STRUCTURAL),
+NOT a behavioral parent RED reproduction. The probe verifies that
+the contract-machinery was not present at the contract-freeze
+commit, which is the correct witness for a NEW-CONTRACT
+implementation ACT (RED_REQUIRED = NO). It is not equivalent to
+"old runtime gave 0 wakes for the new stimulus" (the old runtime
+never had the stimulus path; it never had the machinery). The
+absence probe's purpose is to demonstrate that the contract was
+not silently retro-applied to the parent.
 ====================================================================
 
 PROBE DESIGN (correction02 P0-4 reviewer ask):
@@ -17,6 +28,24 @@ correction 03 residue cleanup. It does NOT contain:
 
 So the pre-repair RED is not a wake-count assertion — it is an
 ABSENCE-WITNESS: the machinery for the opt-in wake does not exist.
+
+
+
+CORRECTION03: NO PROBE CHANGES
+-------------------------------
+
+The probe itself is unchanged. correction02 already rewrote it to
+read via `git show <parent>:<path>` (no filesystem ENOENT) and got
+3/3 PASS. correction03 only re-labels the witness under the
+reviewer's option B framing:
+
+  OLD label:  PRE_REPAIR_RED_BEHAVIORAL = NOT_EXECUTED
+  NEW label:  PREDECESSOR_ABSENCE = STRUCTURAL
+               RED_REQUIRED = NO (NEW_CONTRACT_IMPLEMENTATION)
+
+The probe remains a load-bearing structural witness: the
+notify-capable machinery was not silently present at the parent.
+It does not claim behavioral parent-RED reproduction.
 
 CORRECTION02 FIX TO THE CORRECTION01 PROBE
 ------------------------------------------

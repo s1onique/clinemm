@@ -78,7 +78,7 @@ import { AuthService, LogoutReason } from "./auth-service"
 import { BackgroundNotifyCoordinator } from "./background-notify-coordinator"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
-import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
+import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import type { CommandJobLifecycleEvent } from "./command-job-manager"
 import {
 	applyTurnStateWriterProvenanceDiagnosticProfile,
@@ -663,6 +663,86 @@ export function buildSdkControllerEvaluateCommandToolApproval(options: {
 	}
 }
 
+/**
+ * Build the SdkController-owned `enqueueTerminalWake` callback used by
+ * `BackgroundNotifyCoordinator` (the host-owned notify-on-terminal
+ * coordinator constructed in the `Controller` constructor at
+ * `SdkController.ts:~986`).
+ *
+ * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 CORRECTION03:
+ *
+ * Extracted into a named exported function so tests can drive the
+ * ACTUAL callback composition (not a mirrored one) by passing a
+ * fake `getActiveSession` and a recording `logger`. The production
+ * `Controller` constructor calls this with:
+ *
+ *   getActiveSession: () => this.sessions?.getActiveSession()
+ *   logger: Logger
+ *
+ * The returned callback body is identical to what the production
+ * constructor used inline (before extraction). The contract is:
+ *
+ *   1. Look up the active session via `getActiveSession()`.
+ *   2. If there is no active session, OR if the active session's
+ *      sessionId does not match the wake sessionId, return early
+ *      (silent drop). This is the v1 contract for cross-task /
+ *      cross-session notification.
+ *   3. Otherwise call `active.sdkHost.send({ sessionId, prompt,
+ *      delivery: "queue" })`. A rejected promise is swallowed
+ *      with a `logger.warn`; a synchronous throw is also swallowed
+ *      with a `logger.warn`.
+ *
+ * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 contract:
+ *   `transport = PendingPromptsController.enqueue via activeSession
+ *   .sdkHost.send({ delivery: "queue" })`. This function is the
+ *   single host-owned realization of that contract.
+ *
+ * Bridge test `background-command-notify-on-terminal01.bcnt01-wire-03-real-callback
+ * .c24-c-bridge.test.ts` calls this function directly with a fake
+ * session table + a recording logger to assert that the EXACT
+ * production callback routes a wake into the active session's
+ * `sdkHost.send({ delivery: "queue" })`.
+ */
+export function buildSdkControllerEnqueueTerminalWake(options: {
+	/**
+	 * Resolve the active session. Production uses
+	 * `() => this.sessions?.getActiveSession()`. Async not
+	 * needed: the lookup is in-memory.
+	 */
+	getActiveSession: () => ActiveSession | undefined
+	/**
+	 * Logger sink. Production uses the module-level `Logger`.
+	 * Tests inject a recording sink to assert swallow semantics.
+	 */
+	logger: { warn: (message: string) => void }
+}): (input: { sessionId: string; prompt: string }) => void {
+	return ({ sessionId, prompt }) => {
+		const active = options.getActiveSession()
+		if (!active || active.sessionId !== sessionId) {
+			// Owner has been replaced between marker
+			// registration and terminal completion —
+			// silent drop is the documented v1 contract
+			// for cross-task/cross-session notification.
+			return
+		}
+		try {
+			void active.sdkHost.send({ sessionId, prompt, delivery: "queue" }).catch((error: unknown) => {
+				options.logger.warn(
+					`[SdkController] enqueueTerminalWake send() rejected for sessionId=${sessionId}: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				)
+			})
+		} catch (error) {
+			options.logger.warn(
+				`[SdkController] enqueueTerminalWake send() threw for sessionId=${sessionId}: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			)
+		}
+	}
+}
+
 export class Controller {
 	// SDK session state and the coordinators that drive it.
 	private messageTranslatorState: MessageTranslatorState
@@ -993,31 +1073,10 @@ export class Controller {
 					taskId: this.task?.taskId,
 				}
 			},
-			enqueueTerminalWake: ({ sessionId, prompt }) => {
-				const active = this.sessions?.getActiveSession()
-				if (!active || active.sessionId !== sessionId) {
-					// Owner has been replaced between marker
-					// registration and terminal completion —
-					// silent drop is the documented v1 contract
-					// for cross-task/cross-session notification.
-					return
-				}
-				try {
-					void active.sdkHost.send({ sessionId, prompt, delivery: "queue" }).catch((error: unknown) => {
-						Logger.warn(
-							`[SdkController] enqueueTerminalWake send() rejected for sessionId=${sessionId}: ${
-								error instanceof Error ? error.message : String(error)
-							}`,
-						)
-					})
-				} catch (error) {
-					Logger.warn(
-						`[SdkController] enqueueTerminalWake send() threw for sessionId=${sessionId}: ${
-							error instanceof Error ? error.message : String(error)
-						}`,
-					)
-				}
-			},
+			enqueueTerminalWake: buildSdkControllerEnqueueTerminalWake({
+				getActiveSession: () => this.sessions?.getActiveSession(),
+				logger: Logger,
+			}),
 		})
 		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: debug-only hook
 		// for the live-ext-host qualification harness. Mirrors the

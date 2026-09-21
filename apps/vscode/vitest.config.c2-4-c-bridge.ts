@@ -95,6 +95,13 @@ export default defineConfig({
 			// and verifies the wake appears in
 			// `host.pendingPrompts.list({sessionId})`.
 			"src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / CORRECTION03:
+			// real production SdkController callback factory witness.
+			// Drives the actual
+			// exported by  (the same factory the
+			// Controller constructor calls). Closes the reviewer HALT
+			// P0_REAL_SDKCONTROLLER_CALLBACK.
+			"src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire-03-real-callback.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-RUNTIME-SHADOW-REACTIVATION01
 			// / RSR01: production-seam RED at the canonical runtime-event ↔
 			// shadow reactivation boundary. Real LocalRuntimeHost +

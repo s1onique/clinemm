@@ -34,14 +34,15 @@
     "btcont01_conservation": "10 passed / 10",
     "agcont01_conservation": "7 passed / 7",
     "vrct_conservation": "46 passed / 46",
-    "pre_repair_red_absence_witness": "3 passed / 3 at ddcf1ad4 (separate count, NOT in GREEN total)"
+    "bcnt_wire_03_real_sdkcontroller_callback": "6 passed / 6 (real buildSdkControllerEnqueueTerminalWake factory from @/sdk/SdkController; production callback composition) [NEW correction03]",
+    "predecessor_structural_absence": "3 passed / 3 at ddcf1ad4 (structural absence of: notifyOnCompletion symbol + coordinator module + wake wiring). NOT a behavioral RED reproduction; RED_REQUIRED = NO (NEW_CONTRACT_IMPLEMENTATION). See 19-pre-repair-red.md for option B reclassification per reviewer."
   },
   "live": {
     "positive": "DEFERRED \u2014 operator dogfood VSIX cycle required (cloud agent context lacks vsce:prepublish + sideload infrastructure)",
     "negative": "DEFERRED \u2014 same constraint"
   },
   "stale_card": "OUT_OF_SCOPE_LIVE_PROVEN (successor: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01)",
-  "verdict": "PASS_BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION02_PRODUCTION_QUALIFIED",
+  "verdict": "PASS_BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION03_PRODUCTION_QUALIFIED",
   "production_head": "9ce8f93b5f311c465c6bac3c47238e094bb520cd",
   "PUBLIC_TOOL_SCHEMA_DELTA": "yes",
   "PROTO_DELTA": "no",
@@ -54,5 +55,13 @@
     "P0-5_source_head_single_value": "Removed contradictory P0-5_source_head_binding field that referenced 59b56525... while the top-level production_head pointed at 72025d77... All readers now see a single production_head value (top-level field).",
     "P1-arithmetic_honest": "Pre-repair RED is now reported as a separate absence-witness (3/3 at ddcf1ad4), NOT folded into the post-repair GREEN total. Post-repair GREEN = 92/92 (24 BCNT01 + 1 BCNT-WIRE-01 + 2 BCNT-WIRE-02 + 1 BCNT-DEADLINE-03 + 1 PWAOR01 + 10 BTCONT01 + 7 AGCONT01 + 46 VRCT). The pre-repair probe adds 3/3 absence-witness, separately.",
     "P2-gate_summary_artifact_status": ".factory/gate-summary.json was generated for ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01 (a different prior ACT). It is NOT authoritative for THIS ACT. The factory causal reviewer correctly noted the schema mismatch. Production-readiness for THIS ACT is documented via the listed test commands + their captured outputs (14-full-gates.txt + the BCNT/WIRE/DEADLINE outputs above)."
+  },
+  "correction03_fixes": {
+    "P0_real_sdkcontroller_callback": "BCNT-WIRE-03 NEW: extracts the production callback into a module-scope named exported function buildSdkControllerEnqueueTerminalWake({getActiveSession, logger}) in apps/vscode/src/sdk/SdkController.ts. The Controller constructor (line ~1076) now calls this factory instead of inlining the closure. The bridge test imports the REAL factory and asserts: (1) active session's sdkHost.send called with { delivery: 'queue' } shape; (2) owner-mismatch silent drop; (3) no-active-session silent drop; (4) promise rejection swallowed + logger.warn; (5) synchronous throw swallowed + logger.warn; (6) factory re-reads active session at wake time (not snapshot). 6/6 GREEN. This closes the reviewer P0_REAL_SDKCONTROLLER_CALLBACK: the test now exercises the callback the controller ACTUALLY registers, not a mirrored one.",
+    "predecessor_absence_reclassified_per_reviewer_option_B": "Per the reviewer's preference option B: this ACT implements a newly frozen contract (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL), so RED_REQUIRED = NO. The 3/3 pre-repair absence probe at ddcf1ad4 is now correctly labeled PREDECESSOR_ABSENCE = STRUCTURAL (notifyOnCompletion symbol absent + coordinator module absent + wake wiring absent). It is NOT a behavioral reproduction of an old-runtime RED. The probe exists as a load-bearing witness that the contract was not silently retro-applied.",
+    "arithmetic_corrected_post_correction03": "POST-REPAIR GREEN = 98/98 (24 BCNT01 + 1 BCNT-WIRE-01 + 2 BCNT-WIRE-02 + 6 BCNT-WIRE-03 + 1 BCNT-DEADLINE-03 + 1 PWAOR01 + 10 BTCONT01 + 7 AGCONT01 + 46 VRCT). PREDECESSOR_STRUCTURAL_ABSENCE = 3/3 (separate count, at ddcf1ad4). No false summation.",
+    "architecture_unchanged": "WS-B_EXPLICIT_NOTIFY_ON_TERMINAL contract unchanged. notifyOnCompletion = false default unchanged. sessionId + taskId / NO epoch lifetime unchanged. Marker registration bound to state === running unchanged. truncateToByteCap code-point iteration + reserve fixed overhead unchanged. PendingPromptsController.enqueue via sdkHost.send({delivery: 'queue'}) unchanged. EPHEMERAL_ONLY persistence unchanged. The callback extraction is a host-side refactor (named exported function instead of inline closure) with byte-identical behavior.",
+    "non_regression": "BCNT-WIRE-01 (real LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue) still 1/1 GREEN. BCNT01 unit tests (24 tests) still 24/24 GREEN. Pre-repair absence probe (3/3 at ddcf1ad4) still GREEN. apps/vscode typecheck (bunx tsc --noEmit) 0 errors. The constructor's callback now goes through the named factory; byte-identical behavior.",
+    "outstanding_NOT_in_correction03_scope": "LIVE positive + LIVE negative dogfood scenarios DEFERRED to operator dogfood VSIX cycle (cloud agent context lacks vsce:prepublish + sideload infrastructure; production-shaped executable coverage qualifies per section 46 + 47 of the ACT). Stale-card scope remains out-of-scope (successor ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01). Per reviewer's instruction: do NOT revisit architecture, terminal reasons, truncation, contract text, or gate-summary machinery."
   }
 }

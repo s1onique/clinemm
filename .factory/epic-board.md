@@ -5609,9 +5609,10 @@ HALT_PRODUCT_CONTRACT_REQUIRED.
 
 ## ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
 
-Updated: 2026-09-21 19:35:00Z (CORRECTION02 PRODUCTION_QUALIFIED post Factory causal reviewer's HALT against correction01: 5 P0 + 1 P1 defects closed in one bounded cycle. Reviewer caught that correction01 overclaimed: pre-repair RED probe used the WRONG PATH (`apps/vscode/src/vscode-run-commands-tool.ts` not the real `apps/vscode/src/sdk/vscode-run-commands-tool.ts`); the markdown narrative said "ALL PASS" contradicting the raw "1 failed | 2 passed" output. Reviewer also caught: BCNT-WIRE-01 only proved `LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue`, NOT the SdkController closure; the deadline_exceeded tests SIMULATED `terminalState` rather than letting the deadline fire for real; the `result.json` had two `production_head` values that contradicted each other; the `89/89` total arithmetic was wrong; `.factory/gate-summary.json` was for a different prior ACT. correction02 fixes each defect with bounded additive changes. Factory causal reviewer verdict PASS_BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION02_PRODUCTION_QUALIFIED.)
+Updated: 2026-09-21 20:05:00Z (CORRECTION03 PRODUCTION_QUALIFIED post Factory causal reviewer's HALT_NOTIFY_ON_TERMINAL_REAL_BRIDGE_STILL_UNPROVEN against correction02: 2 P0 defects closed in one bounded cycle. Reviewer caught that correction02 BCNT-WIRE-02 MIRRORED the SdkController closure body inside the test (a real factory is not a mirror of a real factory), and that the pre-repair RED probe established STRUCTURAL ABSENCE not a behavioral parent RED reproduction. correction03 follows option B reclassification (RED_REQUIRED=NO, NEW_CONTRACT_IMPLEMENTATION) and extracts the production callback into a named exported factory `buildSdkControllerEnqueueTerminalWake({getActiveSession, logger})` in `apps/vscode/src/sdk/SdkController.ts`. The Controller constructor (~line 1076) now calls this factory with the production seams (`getActiveSession: () => this.sessions?.getActiveSession(), logger: Logger`); the body is byte-identical to the previous inline closure. BCNT-WIRE-03 (NEW, 6/6 GREEN) imports the REAL factory via `@/sdk/SdkController` and asserts the production callback composition: active session routes through `sdkHost.send({delivery: 'queue'})`; owner-mismatch silent-drops; no-active-session silent-drops; promise rejection is swallowed with `logger.warn`; sync throw is swallowed with `logger.warn`; the factory re-reads the active session at wake time (closure seam, not snapshot). This pattern already exists in the same file as `buildSdkControllerEvaluateCommandToolApproval` (SdkController.ts:367). The pre-repair absence probe (3/3 at ddcf1ad4) is re-labeled PREDECESSOR_ABSENCE = STRUCTURAL; it remains a load-bearing witness that the contract was not silently retro-applied at the parent. Per the reviewer's instruction: no architecture change; no revisit of terminal reasons, truncation, contract text, or gate-summary. Factory causal reviewer verdict PASS_BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION03_PRODUCTION_QUALIFIED.)
 
-BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION02 = PRODUCTION_QUALIFIED
+BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION02 = SUPERSEDED by CORRECTION03
+BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION03 = PRODUCTION_QUALIFIED
 CONTRACT = WS-B_EXPLICIT_NOTIFY_ON_TERMINAL (UNCHANGED)
 DEFAULT = false (UNCHANGED)
 INTENT_OWNER = session/coordinator NotificationMarker (UNCHANGED)
@@ -5641,6 +5642,44 @@ P0-3 real_deadline_terminalization = PROVEN (BCNT-DEADLINE-03 goes through the p
 P0-4 source_head_single_value = PROVEN (contradictory `P0-5_source_head_binding` field removed from result.json; only top-level `production_head` survives)
 P0-5 test_count_arithmetic = PROVEN (post-repair GREEN = 92/92; pre-repair RED 3/3 separate; total = 95 in distinct named sets; not falsely summed to "89/89")
 P1-gate_summary_artifact_status = DOCUMENTED (.factory/gate-summary.json belongs to ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01, not THIS ACT; production-readiness is documented via the listed test commands + their captured outputs)
+
+CORRECTION03 STATUS BLOCK
+-------------------------
+
+BCNT_WIRE03 = 6/6 GREEN (real buildSdkControllerEnqueueTerminalWake factory; production callback composition) [NEW correction03]
+BCNT01 = 24/24 GREEN (UNCHANGED from correction02)
+BCNT_WIRE01 = 1/1 GREEN (LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue bridge)
+BCNT_WIRE02 = 2/2 GREEN (SdkController closure shape witness; correction02)
+BCNT_DEADLINE03 = 1/1 GREEN (real CommandJobManager deadline_exceeded -> wake; correction02)
+BCNT_FAMILY + WIRES + DEADLINE = 34/34 GREEN
+BTCONT = CONSERVED (10/10 BTCONT01)
+PWAOR = CONSERVED (1/1 PWAOR01)
+AGCONT = CONSERVED (7/7 AGCONT01)
+VRCT = CONSERVED (46/46)
+TYPECHECK = 0 errors in apps/vscode
+PREDECESSOR_STRUCTURAL_ABSENCE = 3/3 GREEN at ddcf1ad4 (reclassified under option B; RED_REQUIRED=NO)
+TOTAL POST-REPAIR GREEN = 98/98 (BCNT family + conservation)
+TOTAL PREDECESSOR STRUCTURAL ABSENCE = 3/3 (separate count)
+
+CORRECTION03 DEFECTS CLOSED (HALT_NOTIFY_ON_TERMINAL_REAL_BRIDGE_STILL_UNPROVEN against correction02):
+P0-real_sdkcontroller_callback = PROVEN (BCNT-WIRE-03 drives the REAL buildSdkControllerEnqueueTerminalWake factory extracted from the constructor inline closure; 6/6 GREEN. The test exercises the callback the controller ACTUALLY registers.)
+P0-predecessor_red_reclassification = DOCUMENTED (option B: RED_REQUIRED=NO because this ACT implements a NEW frozen contract; the 3/3 absence probe is now PREDECESSOR_ABSENCE = STRUCTURAL, not a behavioral RED reproduction)
+
+ARCHITECTURE = UNCHANGED across correction01 -> correction02 -> correction03
+  - WS-B_EXPLICIT_NOTIFY_ON_TERMINAL contract unchanged
+  - notifyOnCompletion = false default unchanged
+  - sessionId + taskId / NO epoch lifetime unchanged
+  - marker registration bound to state === "running" (correction01 P1-1 fix retained)
+  - truncateToByteCap code-point iteration + reserve fixed overhead (correction01 P1-2 fix retained)
+  - PendingPromptsController.enqueue via sdkHost.send({delivery: "queue"}) unchanged
+  - EPHEMERAL_ONLY persistence unchanged
+  The callback extraction is a host-side refactor (named exported function instead of inline closure) with byte-identical behavior.
+
+CORRECTION02 PRODUCTION_QUALIFIED = SUPERSEDED by CORRECTION03
+  correction02 was correct for what it proved but the reviewer HALTed it
+  on two P0s: BCNT-WIRE-02 mirrored rather than executed the production
+  closure, and the pre-repair RED probe established structural absence
+  rather than behavioral parent RED. correction03 closes both.
 
 CORRECTION01 PRODUCTION_QUALIFIED (ORIGINAL) = SUPERSEDED
   The correction01 verdict was correct for what it proved but
