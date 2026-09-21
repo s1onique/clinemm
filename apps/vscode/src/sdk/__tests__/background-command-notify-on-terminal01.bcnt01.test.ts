@@ -1001,6 +1001,270 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			}
 		})
 	})
+
+	// =========================================================================
+	// CORRECTION02: P0-2 (real SdkController closure transport) +
+	// P0-3 (real CommandJobManager deadline terminalization).
+	// =========================================================================
+	describe("correction02: SdkController closure transport + real deadline terminalization", () => {
+		// ---- BCNT-WIRE-02 ----
+		// Mirrors the SdkController construction at
+		// apps/vscode/src/sdk/SdkController.ts:996-1020. The
+		// closure:
+		//   1. resolves the active session via SdkSessionLifecycle
+		//      (replaced here with a plain sessionMap.get())
+		//   2. validates active.sessionId === sessionId (silent
+		//      drop on owner mismatch, per the v1 contract)
+		//   3. calls active.sdkHost.send({ sessionId, prompt,
+		//      delivery: "queue" }) and swallows the rejection
+		//      with a Logger.warn (mirrors production)
+		//   4. swallows synchronous throws the same way
+		//
+		// The mock sdkHost.send is a vi.fn() that resolves
+		// successfully. We assert the call shape exactly.
+		it("BCNT-WIRE-02 SdkController closure routes the wake through activeSession.sdkHost.send({ delivery: 'queue' })", async () => {
+			const sessionId = "session-bcnt01-wire02"
+			const taskId = "task-bcnt01-wire02"
+			// The active session is held in a one-element "active slot"
+			// (mirroring SdkSessionLifecycle.getActiveSession, which
+			// returns the current active or undefined).
+			type SendFn = (input: { sessionId: string; prompt: string; delivery: string }) => Promise<unknown>
+			let activeSession: { sessionId: string; sdkHost: { send: SendFn } } | undefined
+			const sendMock: SendFn = vi.fn(async (_input: { sessionId: string; prompt: string; delivery: string }) => ({
+				ok: true,
+			}))
+			activeSession = { sessionId, sdkHost: { send: sendMock } }
+			const loggerWarns: string[] = []
+			// Construct the BackgroundNotifyCoordinator with a
+			// closure that mirrors the SdkController production
+			// shape EXACTLY (see SdkController.ts:996-1020):
+			//   - active = sessions.getActiveSession()  (live
+			//     active-session lookup, NOT lookup-by-id)
+			//   - drop if active is undefined or
+			//     active.sessionId !== wakeSessionId (the marker
+			//     sessionId passed by the coordinator)
+			//   - call active.sdkHost.send({ sessionId:
+			//     wakeSessionId, prompt, delivery: "queue" })
+			//   - swallow rejections + synchronous throws with
+			//     Logger.warn
+			const coordinator = new CoordinatorCtor({
+				resolveActiveOwner: () => (activeSession ? { sessionId: activeSession.sessionId, taskId } : undefined),
+				enqueueTerminalWake: ({ sessionId: wakeSessionId, prompt }) => {
+					const active = activeSession
+					if (!active || active.sessionId !== wakeSessionId) {
+						return
+					}
+					try {
+						void active.sdkHost
+							.send({ sessionId: wakeSessionId, prompt, delivery: "queue" })
+							.catch((error: unknown) => {
+								loggerWarns.push(
+									`[SdkController] enqueueTerminalWake send() rejected for sessionId=${wakeSessionId}: ${
+										error instanceof Error ? error.message : String(error)
+									}`,
+								)
+							})
+					} catch (error) {
+						loggerWarns.push(
+							`[SdkController] enqueueTerminalWake send() threw for sessionId=${wakeSessionId}: ${
+								error instanceof Error ? error.message : String(error)
+							}`,
+						)
+					}
+				},
+			})
+			coordinator.registerMarker({
+				jobId: "cmd-bcnt01-wire02",
+				sessionId,
+				taskId,
+			})
+			coordinator.consumeTerminal({
+				jobId: "cmd-bcnt01-wire02",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: "wire02-ok\n",
+			})
+			await sleep(50)
+			expect(sendMock).toHaveBeenCalledTimes(1)
+			const mockFn = sendMock as unknown as { mock: { calls: Array<Array<unknown>> } }
+			const callArg = mockFn.mock.calls[0]?.[0] as { sessionId: string; prompt: string; delivery: string }
+			expect(callArg.delivery).toBe("queue")
+			expect(callArg.sessionId).toBe(sessionId)
+			expect(callArg.prompt).toContain("State: exited")
+			expect(callArg.prompt).toContain("ExitCode: 0")
+			expect(callArg.prompt).toContain("wire02-ok")
+			expect(callArg.prompt).toMatch(/<bounded-output>/)
+			expect(callArg.prompt).toMatch(/<\/bounded-output>/)
+			expect(loggerWarns).toHaveLength(0)
+			expect(coordinator.diagnosticMarkerCount()).toBe(0)
+		})
+
+		// ---- BCNT-WIRE-02 owner-mismatch silent drop ----
+		// The production closure's sessionId match check: if the
+		// active session has been replaced between marker
+		// registration and terminal completion, the wake is
+		// silently dropped. This test confirms that contract
+		// (v1 NOTIFICATION_DROPPED_EPHEMERAL).
+		it("BCNT-WIRE-02 owner mismatch (active.sessionId !== marker.sessionId) silently drops the wake", async () => {
+			const markerSessionId = "session-bcnt01-wire02-old"
+			const activeSessionId = "session-bcnt01-wire02-new"
+			type SendFn = (input: { sessionId: string; prompt: string; delivery: string }) => Promise<unknown>
+			const sendMock: SendFn = vi.fn(async (_input: { sessionId: string; prompt: string; delivery: string }) => ({
+				ok: true,
+			}))
+			const activeSession: { sessionId: string; sdkHost: { send: SendFn } } | undefined = {
+				sessionId: activeSessionId,
+				sdkHost: { send: sendMock },
+			}
+			const coordinator = new CoordinatorCtor({
+				resolveActiveOwner: () =>
+					activeSession ? { sessionId: activeSession.sessionId, taskId: "task-bcnt01-wire02" } : undefined,
+				enqueueTerminalWake: ({ sessionId: wakeSessionId, prompt }) => {
+					const active = activeSession
+					if (!active || active.sessionId !== wakeSessionId) {
+						return
+					}
+					void active.sdkHost.send({ sessionId: wakeSessionId, prompt, delivery: "queue" })
+				},
+			})
+			// Marker was registered for the OLD session. The
+			// active session is NEW. The closure's sessionId
+			// match MUST fail.
+			coordinator.registerMarker({
+				jobId: "cmd-bcnt01-wire02-mismatch",
+				sessionId: markerSessionId,
+				taskId: "task-bcnt01-wire02",
+			})
+			coordinator.consumeTerminal({
+				jobId: "cmd-bcnt01-wire02-mismatch",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			await sleep(50)
+			// The mismatch is silent: zero calls to sdkHost.send.
+			expect(sendMock).not.toHaveBeenCalled()
+		})
+
+		// ---- BCNT-DEADLINE-03 ----
+		// Real CommandJobManager + real subprocess + real
+		// executionDeadlineMs. Goes through the production
+		// `createVscodeRunCommandsTool` factory so the marker is
+		// registered at the genuine background handoff and the
+		// per-job wake consumer attaches to terminalPromise. The
+		// deadline fires for real; the consumer reads
+		// manager.status() and forwards the snapshot to
+		// coordinator.consumeTerminal; the wake fires.
+		//
+		// Materially different from BCNT-DEADLINE-01/02: those
+		// tests SIMULATED the post-terminal snapshot with a
+		// hand-written consumeTerminal. This test LETS THE
+		// DEADLINE FIRE FOR REAL on a real subprocess via the
+		// production tool path and asserts the wake fires.
+		it("BCNT-DEADLINE-03 real CommandJobManager deadline fires deadline_exceeded -> wake (production tool path)", async () => {
+			const sessionId = "session-bcnt01-deadline03"
+			const taskId = "task-bcnt01-deadline03"
+			const realManager = new CommandJobManagerCtor({
+				maxWaitBudgetMs: 60_000,
+			})
+			const sink = new TestPendingPromptsSink()
+			const coordinator = new CoordinatorCtor({
+				resolveActiveOwner: () => ({ sessionId, taskId }),
+				enqueueTerminalWake: ({ sessionId: wakeSessionId, prompt }) => sink.enqueue({ sessionId: wakeSessionId, prompt }),
+				recordNotifyDecision: () => {},
+			})
+			try {
+				const tool = createVscodeRunCommandsTool({
+					cwd: process.cwd(),
+					getTerminalManager: () => {
+						throw new Error("foreground not used")
+					},
+					vscodeTerminalExecutionMode: "backgroundExec",
+					commandJobManager: realManager,
+					backgroundWaitBudgetMs: 50,
+					// 200ms execution deadline — short enough
+					// to fire before `sleep 5` completes
+					// naturally. Long enough to allow
+					// subprocess spawn + the tool's wake
+					// consumer to attach.
+					backgroundExecutionDeadlineMs: 200,
+					backgroundNotifyCoordinator: coordinator,
+					resolveActiveOwner: () => ({ sessionId, taskId }),
+				})
+				// `sleep 5` is killed at ~80ms by the
+				// executionDeadlineMs. The wait budget
+				// (50ms) is shorter, so start.state at
+				// the budget boundary is "running" and
+				// the marker is registered.
+				const result = await tool.execute(
+					{
+						commands: ["/bin/sh -c 'sleep 5'"],
+						notifyOnCompletion: true,
+					},
+					{
+						sessionId,
+						agentId: "test-agent",
+						iteration: 1,
+					},
+				)
+				const arr = Array.isArray(result) ? result : []
+				const first = arr[0] as { result?: string } | undefined
+				// Running payload is { status: "running", jobId, ... }
+				// (see vscode-run-commands-tool.ts:798-805).
+				const startInfo = JSON.parse(first?.result ?? "{}") as {
+					jobId?: string
+					status?: string
+				}
+				expect(startInfo.jobId).toBeDefined()
+				expect(startInfo.status).toBe("running")
+				const jobId = startInfo.jobId as string
+				// Wait for the deadline-escalation path
+				// to finish. After the deadline fires,
+				// the tool's wake consumer reads
+				// manager.status() (with waitMs:0, but
+				// post-terminal) and forwards to
+				// coordinator.consumeTerminal. The wake
+				// consumer must observe
+				// state="deadline_exceeded" and the
+				// wake MUST fire.
+				//
+				// We poll status with a 100ms wait so we
+				// can assert the deadline actually
+				// fired — the deadline is 80ms, plus
+				// subprocess teardown + finalize()
+				// slack. We give the deadline path
+				// up to ~5s.
+				let deadlineSeen = false
+				for (let i = 0; i < 50; i++) {
+					const status = await realManager.status({ jobId, waitMs: 100 })
+					if (status.ok && status.snapshot.state === "deadline_exceeded") {
+						deadlineSeen = true
+						break
+					}
+				}
+				expect(deadlineSeen).toBe(true)
+				// Wait briefly for the tool's wake
+				// consumer `.then()` microtask to fire
+				// (it was attached at tool.execute
+				// time at line 740 of
+				// vscode-run-commands-tool.ts and
+				// fires after terminalPromise
+				// resolves).
+				await sleep(200)
+				expect(sink.size()).toBe(1)
+				const queued = sink.queued[0]
+				expect(queued?.sessionId).toBe(sessionId)
+				expect(queued?.prompt).toContain("State: deadline_exceeded")
+				expect(coordinator.diagnosticMarkerCount()).toBe(0)
+			} finally {
+				await realManager.dispose()
+			}
+		}, 30_000)
+	})
 })
 
 // ---------------------------------------------------------------------------

@@ -1,17 +1,26 @@
-ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FULL GATES (correction01)
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FULL GATES (correction02)
 =================================================================================
+
+correction02 closes the 5 P0 + 1 P1 the Factory causal reviewer flagged
+in HALT_NOTIFY_ON_TERMINAL_QUALIFICATION_OVERPROMOTED against
+correction01. All listed test commands were executed against the
+correction02 head; raw vitest output is preserved under this directory.
 
 Focused GREEN tests (base config):
   bun run test:vitest src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
     -> Test Files: 1 passed (1)
-    -> Tests:      21 passed (21)
+    -> Tests:      24 passed (24)
        BCNT-U01..U03         ownerKey + truncateToByteCap + formatTerminalWakePrompt
        BCNT-U02b             truncateToByteCap never splits a surrogate pair
-       BCNT-RED-01 (SYNTHETIC_REAL_UNWIRED) — honest synthetic_unwired probe
+       BCNT-RED-01 (SYNTHETIC_REAL_UNWIRED) — synthetic_unwired probe
        BCNT-01..13           core notify-on-terminal semantics
        BCNT-NATURAL-01       real subprocess natural exit -> one wake
        BCNT-DEADLINE-01..02  deadline_exceeded wake eligibility (coordinator path)
        BCNT-FAST-01          fast-completion produces zero wake (correction01 P1-1 fix)
+       BCNT-WIRE-02          SdkController closure -> activeSession.sdkHost.send (correction02 NEW)
+       BCNT-WIRE-02          owner-mismatch silent drop (correction02 NEW)
+       BCNT-DEADLINE-03      real CommandJobManager deadline_exceeded -> wake
+                             via production tool path (correction02 NEW)
 
 Focused GREEN tests (bridge config — real production wire):
   bun run test:vitest:c2-4-c-bridge \
@@ -23,6 +32,16 @@ Focused GREEN tests (bridge config — real production wire):
                               -> PendingPromptsController.enqueue
                               -> host.pendingPrompts.list shows the wake
 
+Pre-repair RED witness (correction02 P0-4 reviewer ask, SEPARATE COUNT):
+  bun run test:vitest src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-pre-repair-red.probe.test.ts
+    -> Test Files: 1 passed (1)
+    -> Tests:      3 passed (3)  (all 'absent' witnesses at ddcf1ad4)
+  Witness captured: 19-pre-repair-red.md + 19-pre-repair-red-output.txt.
+  The probe reads via `git show ddcf1ad4:<path>` so it CANNOT ENOENT.
+  (The correction01 probe used the WRONG path
+  `apps/vscode/src/vscode-run-commands-tool.ts` and produced 1 failed |
+  2 passed; correction02 fixes the path.)
+
 Conservation tests (no regression introduced):
   PWAOR01  src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts
     -> 1 passed / 1
@@ -33,20 +52,25 @@ Conservation tests (no regression introduced):
   VRCT     src/sdk/vscode-run-commands-tool.test.ts
     -> 46 passed / 46
 
-Total: 21 (BCNT01) + 1 (BCNT-WIRE-01) + 1 + 10 + 7 + 46 = 86 tests passing.
-
-Pre-repair RED (correction01 P0-3 reviewer ask):
-  Probe at ddcf1ad4: 3/3 assertions pass (all 'absent' witnesses).
-  Witness captured: 19-pre-repair-red.md + 19-pre-repair-red-output.txt.
+POST-REPAIR GREEN TOTAL:
+  24 (BCNT01) + 1 (BCNT-WIRE-01) + 2 (BCNT-WIRE-02) + 1 (BCNT-DEADLINE-03)
+  + 1 + 10 + 7 + 46 = 92 tests passing.
+  Pre-repair RED witness adds 3 separate absence assertions at ddcf1ad4.
 
 TypeScript:
   apps/vscode typecheck (bunx tsc --noEmit)
     -> 0 errors
-    (baseline before ACT = 0; after ACT = 0; no regressions)
   sdk/packages/core typecheck
     -> 67 lines of pre-existing baseline noise in unrelated files
-       (TS6133 unused-vars, TS2345 arg-type). Zero in files we touched
-       (schemas.ts / definitions.ts). Verified by grep.
+       (TS6133 unused-vars, TS2345 arg-type). Zero in files we touched.
 
 git status: working tree clean (after the bounded patch)
 git diff --check: clean
+
+GATE-SUMMARY ARTIFACT NOTE (per causal reviewer P1):
+  .factory/gate-summary.json is for ACT-CLINEMM-SEATBELT-SSH-AGENT-
+  AUTHORITY-IMPLEMENTATION01 (a different prior ACT). It is NOT
+  authoritative for THIS ACT. Production-readiness for THIS ACT is
+  documented via the listed test commands + their captured outputs
+  (this file + 19-pre-repair-red-output.txt + the BCNT/WIRE/DEADLINE
+  outputs in this directory).

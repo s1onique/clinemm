@@ -1,5 +1,5 @@
-[0m[2m[35m$[0m [2m[1mvitest run --config vitest.config.ts "src/sdk/__tests__/background-command-notify-on-terminal01-pre-repair-red.probe.test.ts"[0m
-(node:17251) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[0m[2m[35m$[0m [2m[1mvitest run --config vitest.config.ts "src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-pre-repair-red.probe.test.ts"[0m
+(node:48925) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
   - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
@@ -7,43 +7,28 @@ Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
  RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
 
-(node:17252) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:48926) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
- ❯ src/sdk/__tests__/background-command-notify-on-terminal01-pre-repair-red.probe.test.ts (3 tests | 1 failed) 3ms
-     ✓ notifyOnCompletion is absent from schemas.ts at parent commit 1ms
-     × notifyOnCompletion is absent from vscode-run-commands-tool.ts at parent commit 2ms
-     ✓ BackgroundNotifyCoordinator module is absent at parent commit 0ms
-[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01-pre-repair-red.probe.test.ts. Error: kill EPERM
+ ✓ src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-pre-repair-red.probe.test.ts (3 tests) 29ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  19:33:03
+   Duration  1.87s (transform 1.05s, setup 1.74s, import 3ms, tests 29ms, environment 0ms)
+
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-pre-repair-red.probe.test.ts. Error: kill EPERM
 [90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
     at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
     at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
     at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
     at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
-[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async Promise.all (index 0)
+    at Pool.cancel (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3509:3)
+    at Pool.close (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3516:3)
+    at async Promise.all (index 0) {
   errno: [33m-1[39m,
   code: [32m'EPERM'[39m,
   syscall: [32m'kill'[39m
 }
-
-⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
-
- FAIL  src/sdk/__tests__/background-command-notify-on-terminal01-pre-repair-red.probe.test.ts > PRE-REPAIR RED witness (parent ddcf1ad4...) > notifyOnCompletion is absent from vscode-run-commands-tool.ts at parent commit
-Error: ENOENT: no such file or directory, open '/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/vscode-run-commands-tool.ts'
- ❯ src/sdk/__tests__/background-command-notify-on-terminal01-pre-repair-red.probe.test.ts:33:19
-     31|
-     32|  it("notifyOnCompletion is absent from vscode-run-commands-tool.ts at …
-     33|   const tool = fs.readFileSync(TOOL_PATH, "utf-8")
-       |                   ^
-     34|   expect(tool).not.toContain("notifyOnCompletion")
-     35|  })
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
-
-
- Test Files  1 failed (1)
-      Tests  1 failed | 2 passed (3)
-   Start at  19:01:11
-   Duration  2.16s (transform 1.09s, setup 2.04s, import 3ms, tests 3ms, environment 0ms)
-
-[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01-pre-repair-red.probe.test.ts.
-[0m[31merror[0m[2m:[0m script [1m"test:vitest"[0m exited with code 1[0m
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-pre-repair-red.probe.test.ts.

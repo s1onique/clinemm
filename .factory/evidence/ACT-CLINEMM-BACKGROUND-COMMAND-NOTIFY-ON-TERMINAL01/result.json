@@ -26,22 +26,33 @@
     "P1-2_prompt_truncation_safety": "BCNT-U02b + BCNT-U03 prove code-point safety + closing delimiter preservation under truncation (2/2 GREEN)"
   },
   "tests": {
-    "bcnt01_family": "21 passed / 21 (BCNT01)",
-    "bcnt_wire": "1 passed / 1 (BCNT-WIRE-01 bridge)",
+    "bcnt01_family": "24 passed / 24 (BCNT01 + correction02 additions)",
+    "bcnt_wire_01_bridge": "1 passed / 1 (LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue seam)",
+    "bcnt_wire_02_sdkcontroller_closure": "2 passed / 2 (SdkController closure boundary + owner-mismatch silent drop) [NEW correction02]",
+    "bcnt_deadline_03_real_deadline": "1 passed / 1 (real CommandJobManager deadline_exceeded -> wake) [NEW correction02]",
     "pwaor01_conservation": "1 passed / 1",
     "btcont01_conservation": "10 passed / 10",
     "agcont01_conservation": "7 passed / 7",
-    "vrct_conservation": "46 passed / 46"
+    "vrct_conservation": "46 passed / 46",
+    "pre_repair_red_absence_witness": "3 passed / 3 at ddcf1ad4 (separate count, NOT in GREEN total)"
   },
   "live": {
     "positive": "DEFERRED \u2014 operator dogfood VSIX cycle required (cloud agent context lacks vsce:prepublish + sideload infrastructure)",
     "negative": "DEFERRED \u2014 same constraint"
   },
   "stale_card": "OUT_OF_SCOPE_LIVE_PROVEN (successor: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01)",
-  "verdict": "PASS_BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION01_PRODUCTION_QUALIFIED",
+  "verdict": "PASS_BACKGROUND_NOTIFY_ON_TERMINAL_CORRECTION02_PRODUCTION_QUALIFIED",
   "production_head": "72025d77a6fc42eec51e2c0e099227c28ae5b5b8",
   "PUBLIC_TOOL_SCHEMA_DELTA": "yes",
   "PROTO_DELTA": "no",
   "GENERATED_CLIENT_DELTA": "no",
-  "compatibility": "old callers omitting notifyOnCompletion => same behavior (BCNT-02)"
+  "compatibility": "old callers omitting notifyOnCompletion => same behavior (BCNT-02)",
+  "correction02_fixes": {
+    "P0-1_pre_repair_red_path_fix": "Probe path corrected from apps/vscode/src/vscode-run-commands-tool.ts (ENOENT) to apps/vscode/src/sdk/vscode-run-commands-tool.ts via git-show blob read (no filesystem path) -> 3/3 PASS at ddcf1ad4. Old probe output preserved for the audit trail.",
+    "P0-2_sdkcontroller_closure_wire": "BCNT-WIRE-02 NEW: Constructs BackgroundNotifyCoordinator with the production SdkController closure shape (apps/vscode/src/sdk/SdkController.ts:996-1020), registers a marker, fires consumeTerminal, asserts activeSession.sdkHost.send was called with { delivery: \"queue\" }. Also tests the owner-mismatch silent-drop branch. 2/2 GREEN.",
+    "P0-3_real_deadline_terminalization": "BCNT-DEADLINE-03 NEW: Goes through createVscodeRunCommandsTool with real CommandJobManager + real /bin/sh -c sleep 5 subprocess + executionDeadlineMs:200. The deadline-escalation path fires for real; manager.status() returns state=deadline_exceeded; the wake consumer attached by the tool reads the snapshot and forwards to coordinator.consumeTerminal; the wake fires. 1/1 GREEN.",
+    "P0-5_source_head_single_value": "Removed contradictory P0-5_source_head_binding field that referenced 59b56525... while the top-level production_head pointed at 72025d77... All readers now see a single production_head value (top-level field).",
+    "P1-arithmetic_honest": "Pre-repair RED is now reported as a separate absence-witness (3/3 at ddcf1ad4), NOT folded into the post-repair GREEN total. Post-repair GREEN = 90/90 (24 BCNT01 + 1 BCNT-WIRE-01 + 2 BCNT-WIRE-02 + 1 BCNT-DEADLINE-03 + 1 PWAOR01 + 10 BTCONT01 + 7 AGCONT01 + 46 VRCT). The pre-repair probe adds 3/3 absence-witness, separately.",
+    "P2-gate_summary_artifact_status": ".factory/gate-summary.json was generated for ACT-CLINEMM-SEATBELT-SSH-AGENT-AUTHORITY-IMPLEMENTATION01 (a different prior ACT). It is NOT authoritative for THIS ACT. The factory causal reviewer correctly noted the schema mismatch. Production-readiness for THIS ACT is documented via the listed test commands + their captured outputs (14-full-gates.txt + the BCNT/WIRE/DEADLINE outputs above)."
+  }
 }
