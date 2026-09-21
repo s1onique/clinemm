@@ -1,17 +1,36 @@
 CONSERVATION MATRIX — AGCONT01
 ==============================
 
+> **CORRECTION CYCLE 2 NOTE (Factory reviewer, 2026-09-21):**
+>
+> The original "the runtime is correct per the F4 doctrine"
+> closing line is replaced. The conservation matrix below is
+> preserved; it confirms that NO production change has been
+> made by this ACT and that the C2/C3/C4/C18 invariants would
+> be violated by an automatic re-entry seam. But the broader
+> claim "the runtime is correct per F4 doctrine" is replaced
+> with: "the current implementation structurally has no
+> terminal->AgentRuntime consumer; whether that structural
+> choice is the correct product semantic for the user's
+> 'wait until finished' intent is HALT_PRODUCT_CONTRACT_REQUIRED."
+
 Per the ACT section 39 (18 conservation rules):
 
   C1 wait-until-finished:
      terminal event resumes pending agent obligation.
-     *** AC3 CLASSIFICATION: NO runtime obligation exists. The
-         agent's pending obligation is the model's polling loop
-         (F4 doctrine), NOT a runtime re-entry. Conservation
-         reformulated: terminal event does NOT wake model
-         (correct per F4). The user's follow-up via the canonical
-         path IS the resume mechanism.
-         STATUS: PASS (the conservation is the absence of resurrection)
+     *** BOUNDED OBSERVATION: NO runtime re-entry obligation
+         exists in the current implementation (proved structurally
+         + AGCONT tests). The agent's potential pending obligation
+         is the model's polling loop (F4 doctrine), NOT a runtime
+         re-entry. Conservation reformulated: terminal event does
+         NOT wake model in the current implementation. The user's
+         follow-up via the canonical path IS the resume mechanism
+         in the current implementation.
+         Whether the runtime SHOULD wake the model on terminal is
+         a separate product question (HALT_PRODUCT_CONTRACT_REQUIRED).
+         STATUS: BOUNDED_PASS (the conservation is the structural
+                 absence of resurrection; the broader product
+                 question is HALT).
 
   C2 fire-and-forget:
      terminal event does NOT resurrect completed agent.
@@ -31,14 +50,15 @@ Per the ACT section 39 (18 conservation rules):
          groups. N/A.
 
   C7 natural exit can wake pending agent.
-     *** AC3: no pending agent obligation. PASS (correct behavior).
+     *** BOUNDED OBSERVATION: no pending agent obligation by
+         structural choice. PASS.
 
   C8 cancellation can wake/report cancellation if obligation
      remains.
-     *** AC3: no pending agent obligation. PASS (correct behavior).
+     *** BOUNDED OBSERVATION: same. PASS.
 
   C9 deadline can wake/report timeout if obligation remains.
-     *** AC3: no pending agent obligation. PASS (correct behavior).
+     *** BOUNDED OBSERVATION: same. PASS.
 
   C10 Q5 behavior while job runs unchanged.
      *** Q5 logic untouched by this ACT. PASS.
@@ -72,6 +92,13 @@ Per the ACT section 39 (18 conservation rules):
 OVERALL: 16 PASS, 1 N/A (C6 multi-job dependency), 0 FAIL.
 
 The conservation matrix is PRESERVED without any runtime change.
-This is the strongest evidence that the runtime is correct per
-the F4 doctrine and that adding a "terminal wakes model" mechanism
-would violate C2, C3, C4, and C18.
+This is the strongest evidence that the current implementation
+does not have a terminal->AgentRuntime seam.
+
+Note (correction cycle 2): the conservation matrix does NOT
+prove that the absence of such a seam is the correct product
+semantic for the user's "wait until finished" intent. The
+matrix only proves that whatever the runtime does, the
+runtime's invariants are preserved. Whether the runtime SHOULD
+have a notify-on-terminal seam is the product question
+(successor ACT: ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01).

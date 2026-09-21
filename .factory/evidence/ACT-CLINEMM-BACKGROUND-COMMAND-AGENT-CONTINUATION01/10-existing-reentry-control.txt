@@ -1,4 +1,12 @@
 CONTROL — AGCONT-CTL-02 (existing re-entry/steer seam)
+
+> **CORRECTION CYCLE 2 NOTE (Factory reviewer, 2026-09-21):**
+> The "consistent with the F4 doctrine" line below is replaced.
+> The bounded observation under this ACT is that no terminal-driven
+> re-entry exists in production. Whether this absence is the correct
+> product semantic for the user's "wait until finished" intent is
+> HALT_PRODUCT_CONTRACT_REQUIRED (successor ACT:
+> ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01).
 ======================================================
 
 The ACT section 15 specifies:
@@ -43,9 +51,13 @@ The AGCONT01 focused test (AGCONT-CTL-01 through 07) observes
 that NO existing re-entry mechanism is invoked on terminal event.
 The agentSpy.calls list is EMPTY for all 7 scenarios.
 
-VERDICT:
+VERDICT (CORRECTION CYCLE 2):
   - The existing re-entry API (SdkFollowupCoordinator) is
     user-driven, not terminal-driven.
   - The terminal event does NOT trigger any re-entry API.
-  - This is consistent with the F4 doctrine: the model is
-    responsible for its own polling loop.
+  - This is consistent with the F4 doctrine ONLY in the sense
+    that F4 tells the model to poll. F4 does NOT categorically
+    forbid the runtime from adding a notify-on-terminal seam
+    (the upstream `background-terminal` example plugin uses one).
+    Whether ClineMM should adopt such a seam is
+    HALT_PRODUCT_CONTRACT_REQUIRED.

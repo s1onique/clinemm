@@ -5513,49 +5513,45 @@ STALE_CARD_AFTER_CANCEL     = DEFERRED (orthogonal)
   5. Positive-control: explicit Cancel on the Backgrounded card produces `requestOrigin=background_cancel_rpc` and cancels cleanly.
   6. Update `result.json` `verdict` to `PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED`.
 
-## ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 — CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE_NO_REPAIR_NEEDED — 2026-09-21 (correction cycle 1: 2026-09-21)
+## ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 — HALT_PRODUCT_CONTRACT_REQUIRED — 2026-09-21 (correction cycle 2: 2026-09-21)
 
-**Status:** STOP per ACT section 50 stop rule, with structural-recon load-bearing argument.
+**Status:** STOP per ACT section 50 stop rule on both bounded and broader scopes.
+- Bounded: current agent turn genuinely ended (model emitted done). NO repair under this ACT's scope.
+- Broader: the user's "wait until finished" intent cannot be discharged by the current runtime contract. HALT_PRODUCT_CONTRACT_REQUIRED.
 
-**Correction cycle 1 (Factory reviewer):** The original closure
-over-claimed `real_agent_runtime=true` and overstated the F4 doctrine
-as a categorical prohibition on automatic re-entry. The corrected
-closure:
+**Correction cycle 2 (Factory reviewer):** The previous closure
+over-claimed that the structural absence of a re-entry seam
+proved the runtime's behavior was the correct product semantic.
+It does not. The structural recon proves the chain:
+`onBackgroundStateChange → updateBackgroundCommandState →
+maybeReevaluateDeferredContinuation → reevaluateDeferredContinuation
+→ setTurnPhase("awaiting_followup")` ends at a turn-phase write
+with NO AgentRuntime call. That is a STRUCTURAL OBSERVATION
+about what the current implementation does, not a verdict about
+what the product should do.
 
-1. Reclassifies the AGCONT01 7-test family honestly:
-   - REAL seams: CommandJobManager, SdkSessionEventCoordinator,
-     TurnStateTracker, Controller.maybeReevaluateDeferredContinuation.
-   - TEST-LOCAL: agentSpy (unconnected sentinel; NOT a real
-     AgentRuntime call site).
-   - The agentSpy assertions prove only "an unconnected sentinel
-     wasn't called", not "the real production agent runtime wasn't
-     called".
-2. Adds the load-bearing structural recon:
-   30-structural-no-invocation-recon.md (in the evidence dir).
-   The production chain from
-   `vscode-run-commands-tool.ts:636 onBackgroundStateChange`
-   through
-   `SdkController.updateBackgroundCommandState`
-   through
-   `Controller.maybeReevaluateDeferredContinuation`
-   through
-   `SdkSessionEventCoordinator.reevaluateDeferredContinuation`
-   through
-   `setTurnPhase("awaiting_followup", ...)`
-   contains NO call to `host.runTurn`, `session.runTurn`,
-   `agent.send`, `enqueuePendingPrompt`, `emitEvent("steer_message")`,
-   or `emitEvent("pending_prompt")`.
-3. Recharacterizes the F4 doctrine honestly:
-   - F4 is a MODEL-SIDE convention (tmp-file for output capture).
-   - F4 does NOT categorically forbid runtime notify-on-terminal.
-   - F4 does NOT categorically require runtime notify-on-terminal.
-   - The runtime's structural choice (no notify-on-terminal) is the
-     canonical ClineMM contract, not a doctrinal mandate.
+Two distinct propositions now:
 
-**Honest verdict matrix (post correction cycle 1):**
+```
+A. Did the current agent turn end?            YES (bounded)
+B. Did ending that turn legitimately discharge
+   the user's "wait until finished" obligation? UNKNOWN
+```
+
+The bounded observation (this ACT):
+
+```
+CURRENT_TURN_ENDED                     = PROVEN (model emitted done)
+TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (structural)
+BTCONT_TURN_STATE_CONTINUATION         = PASS (BTCONT01 GREEN)
+WAIT_UNTIL_FINISHED_PRODUCT_CONTRACT   = UNRESOLVED (HALT)
+```
+
+**Honest verdict matrix (post correction cycle 2):**
 ```
 LIVE_JOB                                = cmd_muac7cvi11hmne3x
 USER_CONTRACT                           = wait until finished
+USER_WAIT_OBLIGATION_DISCHARGED         = UNPROVEN
 MODEL_DECLARED_INTENT                   = continue waiting (prose only)
 MODEL_POLLING                           = stopped after 2 polls, emitted done
 Q5                                      = correctly deferred awaiting_followup
@@ -5564,34 +5560,40 @@ TURN_CONTINUATION                       = LIVE GREEN (BTCONT01 fix in effect)
 AGENT_REENTRY                           = ABSENT (structural; not doctrinal mandate)
 FINAL_REQUESTED_OUTPUT                  = MISSING (model did not poll)
 STRUCTURAL_RECON                        = GREEN (no terminal->AgentRuntime consumer)
-TEST_FAMILY                             = 7/7 GREEN (BTCONT bridge + sentinel)
+TEST_FAMILY                             = 7/7 GREEN (BTCONT bridge + corroborating sentinel)
 REAL_AGENT_RUNTIME                      = NO (load-bearing arg is structural)
 PRIMARY_P0                              = BACKGROUND_TERMINAL_AGENT_CONTINUATION_MISSING
-                                          RECLASSIFIED AS MODEL_DOCTRINE_VIOLATION
+                                          RECLASSIFIED AS PRODUCT_CONTRACT_AMBIGUOUS
+                                          (not model-doctrine gap; runtime cannot discharge)
 PRODUCT_CONTRACT                        = AMBIGUOUS (F4 doesn't define runtime obligation)
 STALE_CARD                              = LIVE_PROVEN / SUCCESSOR (deferred)
 F4_DOCTRINE_SOURCE                      = sdk/.../definitions.ts:675
 UPSTREAM_BG_TERMINAL_PLUGIN             = NOT INTEGRATED (separate start_background_command plugin)
-HALT_PRODUCT_CONTRACT_REQUIRED          = YES (broader question is product-surface)
+HALT_PRODUCT_CONTRACT_REQUIRED          = YES (successor ACT scoped)
+SUCCESSOR_ACT                           = ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
+F4_DOCTRINE_REINTERPRETATION            = MODEL-SIDE convention (tmp-file);
+                                          does NOT categorically forbid runtime
+                                          notify-on-terminal (the upstream
+                                          background-terminal example plugin uses one)
 ```
 
-**Decision (ACT section 50):**
+**Decision (ACT section 50, both scopes):**
 ```
-> If the runtime proves the agent turn was genuinely complete:
->   CASE_AC3
-> STOP. Do not invent automatic agent resurrection.
+> Bounded:
+>   If the runtime proves the current agent turn genuinely ended:
+>     CASE_AC3 (bounded)
+>   STOP. Do not invent automatic agent resurrection under THIS ACT's scope.
 
-STOP.
+> Broader:
+>   If product semantics cannot distinguish:
+>     wait for result
+>   from:
+>     fire-and-forget
+>   STOP
 
-The 480s LIVE specimen is a model-side defect (model violated F4
-doctrine by yielding control prematurely). The runtime is correct
-as a structural choice (no automatic re-entry seam exists in
-ClineMM's run_commands path). No production change authorized.
-
-The broader question — should ClineMM adopt an opt-in
-notify-on-terminal pattern (matching the upstream
-background-terminal example plugin)? — is
-HALT_PRODUCT_CONTRACT_REQUIRED, out of scope for AGCONT01.
+The product semantics in ClineMM's run_commands path genuinely
+cannot distinguish these at the runtime level. STOP with
+HALT_PRODUCT_CONTRACT_REQUIRED.
 ```
 
 **Production code touched: NONE.**
@@ -5601,4 +5603,4 @@ HALT_PRODUCT_CONTRACT_REQUIRED, out of scope for AGCONT01.
 
 **Follow-ups (NOT in this ACT):**
 - Stale card projection: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 (deferred)
-- Opt-in notify-on-terminal: HALT_PRODUCT_CONTRACT_REQUIRED (separate ACT, needs product input)
+- Wait-until-finished semantics decision: ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01 (successor ACT; must choose between (a) model-polling only, (b) explicit per-command notify-on-terminal, or (c) some other bounded async-continuation semantic)

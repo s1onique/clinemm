@@ -1,21 +1,37 @@
 REPAIR DIFF — AGCONT01
 =====================
 
+> **CORRECTION CYCLE 2 NOTE (Factory reviewer, 2026-09-21):**
+>
+> The original "AGENT_OBLIGATION_SEMANTICS: established" line below
+> is replaced. The bounded observation establishes:
+>
+>   CURRENT_TURN_ENDED                     = PROVEN
+>   TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (structural)
+>   BTCONT_TURN_STATE_CONTINUATION         = PASS
+>
+> It does NOT establish that the absence of a re-entry seam is the
+> correct product semantic for the user's "wait until finished"
+> intent. That is HALT_PRODUCT_CONTRACT_REQUIRED.
+
 NO REPAIR PERFORMED.
 
 Per the ACT section 26 repair authorization gates:
 
-  RED_REPRODUCED: true (doctrine-bound reproduced; AGCONT-CTL-01..07)
-  AGENT_OBLIGATION_SEMANTICS: established (CASE_AC3 — agent turn
-                              genuinely complete; F4 doctrine
-                              places polling obligation on model)
-  REENTRY_SEAM: N/A (no re-entry seam needed for AC3)
+  RED_REPRODUCED: true (structural absence proved; AGCONT-CTL-01..07
+                   corroborating)
+  CURRENT_TURN_GENUINELY_ENDED: PROVEN (bounded)
+  TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS: ABSENT (structural +
+                                          AGCONT-CTL-01..07)
+  USER_WAIT_OBLIGATION_DISCHARGED: UNPROVEN (HALT)
+  REENTRY_SEAM: N/A under this ACT's scope (no seam exists;
+                  adding one is HALT_PRODUCT_CONTRACT_REQUIRED)
   NEWER_TURN_SUPERSESSION: safe (AGCONT-CTL-05 GREEN)
   GENUINELY_COMPLETE_CONTROL: pass (AGCONT-CTL-03 GREEN;
                                   conservation C2 holds)
   SINGLE_VARIABLE_ABLATION: not needed (no repair variable)
 
-REPAIR_AUTHORIZED: false (per AC3 classification; nothing to repair)
+REPAIR_AUTHORIZED: false (NO_REPAIR under this ACT's scope)
 
 Per the ACT section 50 stop rule:
   > If the runtime proves the agent turn was genuinely complete:

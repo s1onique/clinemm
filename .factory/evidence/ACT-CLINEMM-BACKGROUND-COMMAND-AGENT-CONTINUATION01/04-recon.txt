@@ -1,5 +1,28 @@
 # Recon — AGCONT01
 
+> **SUPERSEDED BY CORRECTION CYCLE 2 (Factory reviewer, 2026-09-21):**
+>
+> The original "the LIVE behavior is **CONSISTENT** with the production
+> doctrine" verdict (and its case_ac3 doctrine-violation caveat) is
+> superseded. The bounded observation is:
+>
+> - ClineMM's run_commands path structurally has NO terminal->AgentRuntime
+>   consumer (proved by structural recon in 30-structural-no-invocation-
+>   recon.md).
+> - Whether this structural choice is **correct product semantics** is
+>   NOT established by this ACT. F4 puts background-output management
+>   on the MODEL; it does not categorically forbid the runtime from
+>   adding a notify-on-terminal pattern (the upstream background-
+>   terminal example plugin uses one).
+> - The current ACT halts with HALT_PRODUCT_CONTRACT_REQUIRED on the
+>   broader question (successor ACT: ACT-CLINEMM-BACKGROUND-COMMAND-
+>   WAIT-SEMANTICS01).
+>
+> The text below is preserved for the chain-of-custody but should be
+> read with the bounded observation in mind, not as a verdict that
+> the runtime's current behavior matches the user's intended
+> semantics.
+
 ## Entry state
 - HEAD: a513a7fe565352de8bfad1cb695359adeae13818 (BTCONT01 PASS)
 - Working tree: clean
@@ -67,6 +90,13 @@ At the moment a CommandJob becomes terminal:
 - The doctrine is: the model is responsible for picking the right
   execution mode (foreground vs background) and for any polling
   loop if the user explicitly asked to wait until completion.
+- **Correction cycle 2 note**: F4 is a MODEL-SIDE convention. It does
+  NOT categorically forbid the runtime from adding a notify-on-terminal
+  pattern (the upstream `background-terminal` example plugin uses one).
+  F4 does NOT categorically require it either. F4 simply tells the model
+  the recommended pattern for output capture. Whether ClineMM should
+  add a runtime-level notify-on-terminal pattern is a product-surface
+  decision, HALT_PRODUCT_CONTRACT_REQUIRED on this ACT.
 
 ### F5. The model in the LIVE specimen violated doctrine F4
 - The model issued `run_commands` for `sleep 480; echo FINISHED`.
@@ -80,17 +110,25 @@ At the moment a CommandJob becomes terminal:
   and never yielded a final response.
 
 ### F6. The current "Your turn" + 480s silent job behavior is
-        consistent with the doctrine
-- The runtime correctly handles the >0->0 cardinal transition
-  (BTCONT01 GREEN) by committing awaiting_followup once the
-  job is gone.
+        consistent with the doctrine (CORRECTION CYCLE 2)
+> **The F6 heading's "consistent with the doctrine" wording is
+> replaced.** The runtime's current behavior is structurally the
+> canonical ClineMM contract. Whether that contract is the correct
+> product semantic for the user's "wait until finished" intent is
+> HALT_PRODUCT_CONTRACT_REQUIRED.
+
+- The runtime handles the >0->0 cardinal transition (BTCONT01
+  GREEN) by committing awaiting_followup once the job is gone.
 - The agent is idle; the user can:
   - send "check the result" → agent re-enters and inspects job
   - send "cancel" → job is killed, agent can react
   - explicitly resume via Continue
-- All three options are supported today. The gap is purely a
-  model-behavior / prompt-engineering gap (the model should not
-  have emitted `done` after 2 polls for a 480s wait).
+- All three options are supported today. The model-behavior /
+  prompt-engineering gap (the model should not have emitted
+  `done` after 2 polls for a 480s wait) is a candidate explanation
+  for the LIVE specimen, but the broader product question (should
+  the runtime ALSO have a notify-on-terminal seam?) is a separate
+  decision: HALT_PRODUCT_CONTRACT_REQUIRED.
 
 ## Per-hypothesis classification
 
@@ -146,7 +184,11 @@ At the moment a CommandJob becomes terminal:
 
 ## Verdict
 
-The LIVE behavior is **CONSISTENT** with the production doctrine:
+The LIVE behavior is **STRUCTURALLY CONSISTENT** with the production
+doctrine in the bounded sense that no runtime re-entry seam exists.
+It is NOT established that this structural choice is correct product
+semantics — see the SUPERSEDED banner at the top of this file and
+the successor ACT in result.json.
 
 - "run_commands" with a long-running command requires the model
   to either complete synchronously or detach via Proceed While
@@ -159,7 +201,9 @@ The LIVE behavior is **CONSISTENT** with the production doctrine:
 The defect is therefore a **MODEL-DOCTRINE GAP** (the model
 violated F4 by yielding control after 2 polls), NOT a runtime
 re-entry defect. A new agent-runtime continuation seam is NOT
-authorized.
+authorized under this ACT's scope. The broader product question
+(should ClineMM adopt an opt-in notify-on-terminal pattern?) is
+HALT_PRODUCT_CONTRACT_REQUIRED.
 
 The ACT must therefore:
 
@@ -172,24 +216,42 @@ The ACT must therefore:
 
 ## Decision
 
-CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE (with F4 doctrine
-violation caveat).
+> **SUPERSEDED by correction cycle 2.** The original
+> "CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE (with F4 doctrine
+> violation caveat)" decision is preserved below for
+> chain-of-custody. The bounded observation is that the current
+> agent turn genuinely ended (model emitted done). The current
+> implementation structurally has no terminal->AgentRuntime
+> consumer. Whether the runtime's STRUCTURAL choice to not wake
+> the agent on terminal matches the user's intended semantics
+> is HALT_PRODUCT_CONTRACT_REQUIRED.
 
-The runtime does not need repair. The model prompt engineering
-is the lever.
+CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE_BOUNDED_OBSERVATION (with F4
+doctrine-violation caveat).
+
+The runtime does not need a repair UNDER THIS ACT'S SCOPE. The
+model prompt engineering is one lever; the broader product
+question (should ClineMM add a notify-on-terminal pattern?) is
+out of scope and HALT_PRODUCT_CONTRACT_REQUIRED.
 
 HALT_REPAIR_EXCEEDS_PROVEN_CAUSE: if a repair were attempted
 that automatically re-invokes the model on terminal event,
 it would resurrect the agent even for the "start and return"
 semantic (C18 / C2 conservation), which is forbidden by the
-ACT's stop rule (section 50).
+ACT's stop rule (section 50) — for THIS ACT'S bounded scope.
+The bounded stop rule does NOT foreclose a successor product-
+contract ACT from choosing a different semantic.
 
-Per the ACT's stop rule:
+Per the ACT's stop rule (bounded):
 
 > If the runtime proves the agent turn was genuinely complete:
->   CASE_AC3
-> STOP. Do not invent automatic agent resurrection.
+>   CASE_AC3 (bounded)
+> STOP. Do not invent automatic agent resurrection under THIS
+> ACT's scope.
 
 STOP.
+
+> **For the broader product question (successor ACT):**
+> HALT_PRODUCT_CONTRACT_REQUIRED. See result.json.
 
 

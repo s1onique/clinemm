@@ -1,13 +1,37 @@
 STRUCTURAL NO-INVOCATION RECON - AGCONT01
 ==========================================
 
+> **CORRECTION CYCLE 2 NOTE (Factory reviewer, 2026-09-21):**
+>
+> The original "Conclusion (load-bearing)" section at the bottom
+> of this file claimed the structural recon establishes the
+> CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE classification. That is
+> replaced. The structural recon establishes ONLY:
+>
+>   1. ClineMM's run_commands terminal path leads to
+>      setTurnPhase("awaiting_followup", ...) and stops.
+>   2. There is no consumer of "background-terminal" events that
+>      calls the agent runtime, emits pending_prompt / steer_message,
+>      or invokes host.runTurn / session.runTurn / agent.send.
+>   3. The upstream example plugin with notifyParent IS NOT used by
+>      ClineMM's run_commands.
+>
+> It does NOT establish that this structural absence is the correct
+> product semantic for the user's "wait until finished" intent.
+> The bounded observation under this ACT is that the current
+> implementation has no automatic re-entry seam. Whether that is
+> the correct product semantic is HALT_PRODUCT_CONTRACT_REQUIRED
+> (successor ACT: ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01).
+
 Per the Factory reviewer correction cycle 1:
 
   "I would NOT require another synthetic test merely to prove
    absence of a call site. Structural recon can prove no
    terminal->AgentRuntime consumer exists."
 
-This document is the load-bearing structural argument.
+This document is the load-bearing argument for the structural
+absence claim. The product-semantics claim is NOT load-bearing
+on this evidence alone.
 
 ## Chain: from background-terminal event to AgentRuntime
 
@@ -122,9 +146,9 @@ shape (no notifyParent parameter, no jobId).
 Therefore the upstream example's automatic-continuation pattern is
 NOT applied to ClineMM's run_commands.
 
-## Conclusion (load-bearing)
+## Conclusion (load-bearing) — CORRECTION CYCLE 2
 
-The structural recon establishes:
+The structural recon establishes the STRUCTURAL OBSERVATION:
 
   1. ClineMM's run_commands terminal path leads to
      setTurnPhase("awaiting_followup", ...) and stops.
@@ -134,21 +158,19 @@ The structural recon establishes:
   3. The upstream example plugin with notifyParent IS NOT used by
      ClineMM's run_commands.
 
-This is sufficient to prove the production absence of automatic
-agent re-entry on background-terminal events. The unconnected
-agentSpy in the AGCONT01 focused test suite is corroborating
-evidence, not load-bearing.
+The structural argument is sufficient to prove the production
+absence of automatic agent re-entry on background-terminal events.
+The unconnected agentSpy in the AGCONT01 focused test suite is
+corroborating evidence, not load-bearing.
 
-The structural argument is the load-bearing argument for the
-CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE classification - and it
-holds.
+The structural argument does NOT establish the product-semantics
+claim. See correction cycle 2 banner at top.
 
-## Remaining open question (product semantics)
+## Remaining open question (product semantics) — CORRECTION CYCLE 2
 
-The reviewer notes: the F4 quote does NOT establish a categorical
-prohibition on automatic re-entry. It tells the model "use tmp
-file" but does not forbid the runtime from adding a notify-on-
-terminal pattern.
+The F4 quote does NOT establish a categorical prohibition on
+automatic re-entry. It tells the model "use tmp file" but does
+not forbid the runtime from adding a notify-on-terminal pattern.
 
 The structural recon confirms ClineMM's runtime HAS NO such pattern
 (by absence), but does not prove such a pattern is forbidden by
@@ -164,15 +186,18 @@ doctrine. The right interpretation is:
     example plugin? That is a product-surface decision, not a
     runtime defect.
 
-The AGCONT01 ACT halts with CASE_AC3 (runtime correctly honors
-done; no re-entry seam exists; LIVE specimen is a model-side
-doctrine violation, not a runtime defect).
+The AGCONT01 ACT halts with the bounded observation:
+
+  - CURRENT_TURN_ENDED                     = PROVEN (model emitted done)
+  - TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (proved structurally)
+  - BTCONT_TURN_STATE_CONTINUATION         = PASS (BTCONT01 GREEN)
+  - WAIT_UNTIL_FINISHED_PRODUCT_CONTRACT   = UNRESOLVED
+
+The ACT halts with HALT_PRODUCT_CONTRACT_REQUIRED on the
+broader question (successor ACT:
+ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01).
 
 A successor ACT for the product-surface question would need:
   - product-management input on the desired semantics
   - UX design for how the user opts in
   - cost/benefit analysis vs the F4 tmp-file convention
-
-This is HALT_PRODUCT_CONTRACT_REQUIRED for the broader question,
-but the AGCONT01 question (is the runtime correct?) is answered
-CASE_AC3 with strong structural evidence.

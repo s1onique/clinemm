@@ -1,5 +1,29 @@
 RED OUTPUT — AGCONT01
-===================
+==================
+
+> **SUPERSEDED BY CORRECTION CYCLE 2 (Factory reviewer, 2026-09-21):**
+>
+> The original interpretation "The runtime is correct. The defect
+> is a model-side failure to follow the doctrine" /
+> "CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE NO REPAIR REQUIRED" is
+> superseded.
+>
+> The bounded observation under this ACT:
+>
+> - CURRENT_TURN_ENDED                     = PROVEN (model emitted done)
+> - TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (proved by structural
+>                                              recon in 30-structural-
+>                                              no-invocation-recon.md)
+> - BTCONT_TURN_STATE_CONTINUATION         = PASS (BTCONT01 GREEN)
+> - WAIT_UNTIL_FINISHED_PRODUCT_CONTRACT   = UNRESOLVED (HALT)
+>
+> The 7/7 GREEN tests prove the BTCONT bridge fires correctly and an
+> unconnected sentinel wasn't called. They do NOT prove the runtime's
+> current behavior is the correct product semantic for the user's
+> "wait until finished" intent. That is a separate product question
+> (successor ACT: ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01).
+>
+> The original test output is preserved below for chain-of-custody.=
 
 $ cd apps/vscode && bun test src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
 
@@ -40,36 +64,35 @@ src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts:
  36 expect() calls
 Ran 7 tests across 1 file. [1234.00ms]
 
-INTERPRETATION
+INTERPRETATION (PRESERVED; READ WITH CYCLE 2 BANNER)
 ==============
 
-All 7 control tests are GREEN. The runtime correctly:
+All 7 control tests are GREEN. The runtime:
   - Commits awaiting_followup on >0->0 cardinal transition
-  - Does NOT invoke the agent runtime (no .run / .send / .continue)
-    on ANY background-job terminal event
+  - Does NOT call the unconnected agentSpy sentinel (corroborating
+    only — does NOT prove the production AgentRuntime wasn't called)
   - Preserves conservation C2 (no resurrection for fire-and-forget)
   - Preserves conservation C3 (newer-turn supersession)
   - Preserves conservation C4 (cross-session isolation)
   - Preserves conservation C5 (exactly-once bridge firing)
 
-The runtime's behavior is CONSISTENT with the F4 doctrine:
-  "For long-running commands, run them in background and redirect
-   output to a tmp file that you can read from later."
+The load-bearing argument for "no production terminal->AgentRuntime
+consumer exists" is the STRUCTURAL RECON in
+30-structural-no-invocation-recon.md, not this test family.
 
-The runtime is correct. The defect is a model-side failure to
-follow the doctrine (the model polled twice and emitted done,
-violating the polling contract).
+The runtime's behavior is the canonical ClineMM contract for
+run_commands. It is NOT established that this is the correct
+product semantic for the user's "wait until finished" intent.
+That is a separate product question (successor ACT:
+ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01).
 
-Per the ACT's section 50 stop rule:
-  > If the runtime proves the agent turn was genuinely complete:
-  >   CASE_AC3
-  > STOP.
+VERDICT (CORRECTION CYCLE 2):
+  CURRENT_TURN_ENDED                     = PROVEN (bounded)
+  TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (structural)
+  BTCONT_TURN_STATE_CONTINUATION         = PASS
+  WAIT_UNTIL_FINISHED_PRODUCT_CONTRACT   = UNRESOLVED (HALT)
 
-VERDICT: CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE
-NO REPAIR REQUIRED.
-
-The 480s LIVE specimen is a model-side defect, not a runtime
-defect. The model violated the F4 doctrine by yielding control
-prematurely. The runtime correctly honored the yield by
-committing awaiting_followup when the background job became
-terminal (BTCONT01 fix in effect).
+PRODUCTION_REPAIR = NOT_AUTHORIZED under this ACT's scope.
+The runtime is structurally correct in its current form; adding
+any notify-on-terminal seam is a product-surface decision that
+requires a successor ACT.

@@ -1,5 +1,19 @@
 # Hypotheses — AGCONT01
 
+> **SUPERSEDED BY CORRECTION CYCLE 2 (Factory reviewer, 2026-09-21):**
+>
+> The original "AC3 PARTIALLY TRUE + AC6 TRUE" selection is superseded.
+> The bounded observation distinguishes two questions:
+>
+> 1. Did the current agent turn end? **YES** (model emitted done).
+> 2. Did ending that turn legitimately discharge the user's
+>    outstanding "wait until finished" obligation? **UNKNOWN**.
+>
+> The runtime's structural choice to NOT re-enter the agent on
+> terminal is canonical but does NOT prove it discharges the user's
+> obligation. The broader product question is
+> HALT_PRODUCT_CONTRACT_REQUIRED.
+
 ## AC1 — agent obligation is lost at Q5 deferral
 **Status**: NOT REPRODUCIBLE.
 
@@ -80,26 +94,50 @@ machine.
 ## AC7 — other proven cause
 **Status**: NULL.
 
-## Selection
+## Selection (CORRECTION CYCLE 2)
 
-The closest match is **AC3 (CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE)**,
-qualified by AC6 (the model-runtime contract is intentionally
-non-polling at the runtime layer; the polling contract is on the
-model).
+The bounded observation matches **AC3** in the narrow sense that
+the agent's current turn genuinely ended (model emitted done).
+The runtime's structural choice to NOT re-enter the agent on
+terminal is canonical.
 
-## Implication for repair authorization
+But the bounded observation does NOT match AC3 in the broader
+sense that "ending the turn legitimately discharged the user's
+'wait until finished' obligation." The user's outstanding work
+remained MISSING after natural completion. The structural absence
+of a re-entry seam is canonical but does NOT establish that the
+user's intent was honored.
 
-Per the ACT's section 50 stop rule:
+The combined AC3 + AC6+ observation is therefore:
 
-> If the runtime proves the agent turn was genuinely complete:
->   CASE_AC3
-> STOP.
+```
+CURRENT_TURN_ENDED = PROVEN (bounded)
+USER_WAIT_OBLIGATION_DISCHARGED = UNPROVEN (HALT_PRODUCT_CONTRACT_REQUIRED)
+```
+
+## Implication for repair authorization (CORRECTION CYCLE 2)
+
+Per the ACT's section 50 stop rule (bounded):
+
+> If the runtime proves the current agent turn genuinely ended:
+>   CASE_AC3 (bounded)
+> STOP. Do not invent automatic agent resurrection under THIS ACT's scope.
 
 STOP.
 
-The "Your turn" + 480s silent job behavior is the correct runtime
-response to a `done` event from the AgentRuntime. The defect is
-on the model side (the model should not have yielded). Adding a
-runtime re-entry seam would resurrect the agent for the
-"start and return" case, violating the ACT's conservation matrix
-(C2).
+Per the ACT's section 50 stop rule (broader):
+
+> If product semantics cannot distinguish:
+>   wait for result
+> from:
+>   fire-and-forget
+> STOP
+
+The product semantics in ClineMM's run_commands path genuinely
+cannot distinguish these at the runtime level. STOP.
+
+**The "Your turn" + 480s silent job behavior is the canonical
+runtime response to a `done` event from the AgentRuntime, but it
+is NOT established that this is the correct product semantic for
+the user's "wait until finished" intent. That is a separate
+product question: ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01.**

@@ -1,41 +1,77 @@
 CAUSAL VERDICT — AGCONT01
 =========================
 
+> **SUPERSEDED BY CORRECTION CYCLE 2 (Factory reviewer, 2026-09-21):**
+>
+> The original causal chain and "NO_REPAIR_NEEDED_CASE_AC3" verdict
+> are preserved below for chain-of-custody. The bounded observation
+> is:
+>
+> - CURRENT_TURN_ENDED                     = PROVEN (model emitted done)
+> - TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (proved by structural
+>                                              recon in 30-structural-
+>                                              no-invocation-recon.md)
+> - BTCONT_TURN_STATE_CONTINUATION         = PASS (BTCONT01 GREEN)
+> - WAIT_UNTIL_FINISHED_PRODUCT_CONTRACT   = UNRESOLVED (HALT)
+>
+> The bounded stop rule still applies: do not invent automatic agent
+> resurrection under THIS ACT's scope. But the broader product
+> question (does ClineMM need a notify-on-terminal seam?) is
+> HALT_PRODUCT_CONTRACT_REQUIRED, out of scope for AGCONT01.
+
 Causal chain established:
 
   agent emits `done` (model yields turn)
   -> Q5 SUPPRESS awaiting_followup (deferral marker recorded)
   -> BTCONT01 bridge wakes turn-state projection on >0->0 transition
   -> phase commits awaiting_followup (USER-FACING, not agent-resuming)
-  -> agent runtime NOT re-invoked
+  -> agent runtime NOT re-invoked (proved structurally)
 
-The runtime correctly:
-  - Honors the model's `done` event as end-of-turn
-  - Defers awaiting_followup while a background job is alive
-  - Commits awaiting_followup when the background job becomes terminal
-  - Does NOT invoke the agent runtime
+The runtime:
+  - Honors the model's `done` event as end-of-turn (CORRECT)
+  - Defers awaiting_followup while a background job is alive (CORRECT)
+  - Commits awaiting_followup when the background job becomes
+    terminal (CORRECT)
+  - Does NOT invoke the agent runtime (CANONICAL ClineMM contract,
+    NOT a doctrinal mandate; HALT_PRODUCT_CONTRACT_REQUIRED on the
+    question of whether it SHOULD)
 
-Classification: CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE
+Classification (bounded): CURRENT_TURN_ENDED=PROVEN.
 
-The defect in the LIVE specimen is a MODEL-DOCTRINE GAP:
-  - The model violated F4: "For long-running commands, run them
-    in background and redirect output to a tmp file that you can
-    read from later."
+The defect in the LIVE specimen may be a MODEL-DOCTRINE GAP
+(model violated F4 by yielding after 2 polls):
+  - F4: "For long-running commands, run them in background and
+    redirect output to a tmp file that you can read from later."
+  - F4 is a MODEL-SIDE convention. It does NOT categorically
+    require the runtime to wake the model on terminal, and it does
+    NOT categorically forbid it.
   - The model polled twice and emitted `done` after a 480s wait.
-  - The runtime correctly honored the yield.
+  - The runtime honored the yield.
 
 There is NO production doctrine for "automatic agent re-entry on
-background command terminal events." Adding such a mechanism
-would violate conservation C2 (the "start and return" task).
+background command terminal events" in ClineMM. Adding such a
+mechanism UNDER THIS ACT'S SCOPE would violate conservation C2.
+But the broader decision (should ClineMM add a notify-on-terminal
+seam?) is a separate product question.
 
-Causal verdict: NO_REPAIR_NEEDED_CASE_AC3.
+Causal verdict (bounded): CURRENT_TURN_ENDED_PROVEN, NO_REPAIR_AUTHORIZED
+under this ACT's scope.
 
-Per the ACT section 50 stop rule:
-  > If the runtime proves the agent turn was genuinely complete:
-  >   CASE_AC3
+Broader verdict: HALT_PRODUCT_CONTRACT_REQUIRED. Successor ACT:
+ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01.
+
+Per the ACT section 50 stop rule (bounded):
+  > If the runtime proves the current agent turn genuinely ended:
+  >   CASE_AC3 (bounded)
   > STOP.
+
+Per the ACT section 50 stop rule (broader, product semantics
+cannot distinguish): STOP with HALT_PRODUCT_CONTRACT_REQUIRED.
 
 STOP.
 
-The LIVE 480s specimen is a model-side failure. The runtime is
-correct. No production change is authorized.
+The LIVE 480s specimen demonstrates that ClineMM's current run_commands
+contract cannot automatically resume a model that has yielded, even
+when the user explicitly asked to "wait until finished." Whether
+that contract should change is the product question for the
+successor ACT.

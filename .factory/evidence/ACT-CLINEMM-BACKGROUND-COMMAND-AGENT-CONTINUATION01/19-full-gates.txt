@@ -1,6 +1,22 @@
 FULL GATES - AGCONT01
 =====================
 
+> **CORRECTION CYCLE 2 NOTE (Factory reviewer, 2026-09-21):**
+>
+> The original interpretation "the doctrine-bound behavior
+> the recon identified as the correct F4-aligned behavior" /
+> "NO_REPAIR_NEEDED_CASE_AC3" is replaced with:
+>
+>   CURRENT_TURN_ENDED                     = PROVEN
+>   TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (structural)
+>   BTCONT_TURN_STATE_CONTINUATION         = PASS
+>   WAIT_UNTIL_FINISHED_PRODUCT_CONTRACT   = UNRESOLVED (HALT)
+>
+> The clean test + typecheck + lint results below are preserved
+> as evidence that the ACT nonetheless made zero production code
+> changes and all tests pass. The bounded halt remains NO_REPAIR,
+> but the broader product question is HALT_PRODUCT_CONTRACT_REQUIRED.
+
 $ cd apps/vscode && bun test src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
 
 bun test v1.3.13 (bf2e2cec)
@@ -40,18 +56,30 @@ $ bun run test:unit (full node-side unit suite)
 Files: 82   Pass: 1141   Fail: 0   Time: 34.4s
 All unit test files passed.
 
-VERDICT
+VERDICT (CORRECTION CYCLE 2)
 =======
 
 All 7 focused tests PASS. The full node-side unit suite PASSES
 (1141 tests across 82 files). TypeScript typecheck PASSES.
 
-The ACT's load-bearing proof is that the runtime correctly honors
-the model's `done` event and does NOT invoke the agent runtime
-on background-command terminal events -- the doctrine-bound behavior
-the recon (04-recon.txt) identified as the correct F4-aligned
-behavior.
+Bounded halt (this ACT):
 
-No production code change is needed (NO_REPAIR_NEEDED_CASE_AC3).
+  CURRENT_TURN_ENDED                     = PROVEN
+  TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (structural)
+  BTCONT_TURN_STATE_CONTINUATION         = PASS
+  WAIT_UNTIL_FINISHED_PRODUCT_CONTRACT   = UNRESOLVED (HALT)
 
-The ACT halts per the section 50 stop rule.
+PRODUCTION_REPAIR = NOT_AUTHORIZED under this ACT's scope.
+PRODUCTION_REPAIR_NEEDED_FOR_BROADER_QUESTION = YES (HALT_PRODUCT_CONTRACT_REQUIRED).
+
+The bounded halt is the right response to the bounded question
+(is the runtime correct for the agent turn?): YES, the current
+turn genuinely ended. Adding an automatic re-entry seam under
+this ACT's scope would resurrect the agent for the "start and
+return" case, violating C2.
+
+The broader halt is the right response to the broader question
+(does ClineMM's run_commands contract correctly handle the user's
+"wait until finished" intent?): HALT_PRODUCT_CONTRACT_REQUIRED.
+The success ACT is
+ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01.

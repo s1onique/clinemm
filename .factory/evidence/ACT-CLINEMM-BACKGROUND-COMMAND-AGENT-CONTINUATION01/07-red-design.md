@@ -1,5 +1,15 @@
 # RED design — AGCONT01
 
+> **SUPERSEDED BY CORRECTION CYCLE 2 (Factory reviewer, 2026-09-21):**
+>
+> The original test-design prose claiming "agentSpy.calls === []
+> proves no AgentRuntime invocation" is replaced with honest
+> classification: the agentSpy is a TEST-LOCAL unconnected sentinel;
+> it proves only "an unconnected spy wasn't called." The load-bearing
+> argument for "no production terminal->AgentRuntime consumer exists"
+> is the STRUCTURAL RECON in
+> `30-structural-no-invocation-recon.md`, not this test family.
+
 ## The ACT section 11 RED requirement
 
 > The RED must exercise the real production agent/session path.

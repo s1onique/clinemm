@@ -1,6 +1,15 @@
 FOCUSED TESTS — AGCONT01
 ========================
 
+> **CORRECTION CYCLE 2 NOTE (Factory reviewer, 2026-09-21):**
+>
+> The test descriptions below originally claimed "WITHOUT invoking
+> the agent runtime" — that wording is replaced. The unconnected
+> agentSpy in this test family is TEST-LOCAL and can only prove
+> "an unconnected sentinel wasn't called." The structural claim
+> is established by the structural recon in
+> 30-structural-no-invocation-recon.md, not by this test family.
+
 Test family:
   apps/vscode/src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
 

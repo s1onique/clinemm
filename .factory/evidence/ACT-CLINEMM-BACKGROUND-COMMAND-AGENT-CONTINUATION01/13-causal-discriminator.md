@@ -1,5 +1,12 @@
 # Causal Discriminator — AGCONT01
 
+> **SUPERSEDED BY CORRECTION CYCLE 2 (Factory reviewer, 2026-09-21):**
+>
+> The original Discriminator 3 ("F4 says the model should poll")
+> is preserved below, but the broader claim "CASE_AC3" at the end
+> is replaced with the bounded observation: CURRENT_TURN_ENDED=PROVEN,
+> USER_WAIT_OBLIGATION_DISCHARGED=UNPROVEN, HALT_PRODUCT_CONTRACT_REQUIRED.
+
 ## The discriminator question
 
 At the moment a CommandJob becomes terminal, is there a runtime
@@ -94,14 +101,26 @@ ACT's stop rule:
 > Do not:
 > * wake the model for every terminal background job;
 
-## Verdict
+## Verdict (CORRECTION CYCLE 2)
 
-The runtime correctly honors the model's `done` event. The defect
-is on the model side: the model violated the F4 doctrine by
-yielding control prematurely. Adding a runtime re-entry seam
-would resurrect the agent for the "start and return" case, which
-violates the conservation matrix.
+Bounded observation (this ACT):
 
-CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE.
+- CURRENT_TURN_ENDED                     = PROVEN (Discriminators 1+2)
+- TERMINAL_TO_AGENT_REENTRY_SEAM_EXISTS  = ABSENT (Discriminator 1+4)
+- BTCONT_TURN_STATE_CONTINUATION         = PASS (BTCONT01 GREEN)
 
-Per the ACT's stop rule, STOP.
+Broader product question (out of scope; HALT):
+
+- USER_WAIT_OBLIGATION_DISCHARGED = UNPROVEN
+- WAIT_UNTIL_FINISHED_PRODUCT_CONTRACT = UNRESOLVED
+
+Adding a notify-on-terminal seam under THIS ACT's scope would
+resurrect the agent for the "start and return" case, which
+violates conservation C2. But the SEAM itself is not forbidden
+by F4 doctrine; F4 simply tells the model to poll. Whether
+ClineMM should adopt such a seam is a product-surface decision
+for a successor ACT.
+
+Per the ACT's stop rule (bounded), STOP. Per the ACT's stop
+rule (broader, product semantics cannot distinguish), STOP with
+HALT_PRODUCT_CONTRACT_REQUIRED.
