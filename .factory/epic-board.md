@@ -5512,3 +5512,87 @@ STALE_CARD_AFTER_CANCEL     = DEFERRED (orthogonal)
   4. Decisive negative evidence: NO `job_cancellation_requested` with `requestOrigin=caller_abort_signal` for the detached job after the caller aborts.
   5. Positive-control: explicit Cancel on the Backgrounded card produces `requestOrigin=background_cancel_rpc` and cancels cleanly.
   6. Update `result.json` `verdict` to `PASS_ROOT_CAUSE_ABLATED_AND_REPAIRED`.
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 — CASE_AC3_AGENT_TURN_GENUINELY_COMPLETE_NO_REPAIR_NEEDED — 2026-09-21
+
+**Status:** STOP per ACT section 50 stop rule. The runtime correctly honors the model's `done` event as end-of-turn. The defect in the LIVE 480s specimen is a model-side failure to follow the F4 doctrine ("For long-running commands, run them in background and redirect output to a tmp file that you can read from later."), not a runtime defect. No production code change is authorized.
+
+**Honest verdict matrix:**
+```
+LIVE_JOB                                = cmd_muac7cvi11hmne3x
+USER_CONTRACT                           = wait until finished
+MODEL_DECLARED_INTENT                   = continue waiting (prose only)
+MODEL_POLLING                           = stopped after 2 polls, emitted done
+Q5                                      = correctly deferred awaiting_followup
+BACKGROUND_TERMINAL                     = natural / exited / process gone
+TURN_CONTINUATION                       = LIVE GREEN (BTCONT01 fix in effect)
+AGENT_REENTRY                           = ABSENT (by design per F4 doctrine)
+FINAL_REQUESTED_OUTPUT                  = MISSING (model did not poll)
+PRIMARY_P0                              = BACKGROUND_TERMINAL_AGENT_CONTINUATION_MISSING
+                                          RECLASSIFIED AS MODEL_DOCTRINE_VIOLATION
+STALE_CARD                              = LIVE_PROVEN / SUCCESSOR (deferred)
+F4_DOCTRINE_SOURCE                      = sdk/.../definitions.ts:669-676
+```
+
+**Reproduction (real production seams):**
+```
+test file: apps/vscode/src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
+tests:
+  AGCONT-CTL-01: deferral + natural terminal commits awaiting_followup WITHOUT invoking the agent runtime
+  AGCONT-CTL-02: explicit user follow-up is the canonical re-entry path (not terminal-driven)
+  AGCONT-CTL-03: start-and-return task does NOT trigger agent re-entry on later terminal
+  AGCONT-CTL-04: no background dependency -> no deferred marker -> no later re-entry
+  AGCONT-CTL-05: newer turn start clears deferred marker; late terminal cannot resurrect
+  AGCONT-CTL-06: terminal bridge fires exactly once per >0->0 cardinal transition
+  AGCONT-CTL-07: terminal of a different session's job does NOT wake this session
+all 7 GREEN (real CommandJobManager + SdkSessionEventCoordinator + TurnStateTracker + Controller.maybeReevaluateDeferredContinuation)
+```
+
+**Conservation matrix (ACT section 39, 18 rules):**
+```
+C1 wait-until-finished                    PASS_DOCTRINE_BOUND
+C2 fire-and-forget no resurrection        PASS (AGCONT-CTL-03)
+C3 newer turn supersession                PASS (AGCONT-CTL-05)
+C4 unrelated session no effect            PASS (AGCONT-CTL-07)
+C5 exactly-once bridge                    PASS (AGCONT-CTL-06)
+C6 multi-job dependency                   N/A (no doctrine)
+C7 natural exit pending agent             PASS_AC3
+C8 cancel wake if obligated               PASS_AC3
+C9 deadline wake if obligated             PASS_AC3
+C10 Q5 while running                      PASS (untouched)
+C11 terminal turn-state continuation     PASS (BTCONT01 GREEN)
+C12 PWAOR abort signal                    PASS (untouched)
+C13 explicit jobId cancel                 PASS (untouched)
+C14 CommandJobManager no agent authority  PASS (untouched)
+C15 TaskHeader projection only            PASS (untouched)
+C16 stale card separately tracked        DEFERRED to successor
+C17 submit_and_exit                       PASS (untouched)
+C18 no global terminal->model restart     PASS (all AGCONT tests GREEN)
+```
+
+**Decision (ACT section 50):**
+```
+> If the runtime proves the agent turn was genuinely complete:
+>   CASE_AC3
+> STOP. Do not invent automatic agent resurrection.
+
+STOP.
+
+The 480s LIVE specimen is a model-side defect (model violated F4
+doctrine by yielding control prematurely). The runtime is correct.
+No production change authorized.
+
+The user's "wait until it finishes" instruction was an instruction
+TO THE MODEL, not a contract with the runtime. The user can drive
+re-entry via the canonical follow-up path (SdkFollowupCoordinator /
+SdkTaskStartCoordinator), which IS the established ClineMM contract
+for resuming work after a deferred turn.
+```
+
+**Production code touched: NONE.**
+**Test code added: apps/vscode/src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts**
+**Full gates: 7/7 AGCONT tests GREEN; 1141/1141 unit tests GREEN; tsc clean.**
+
+**Follow-ups (NOT in this ACT):**
+- Stale card projection: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01 (deferred)
+- Model-docrine reinforcement (F4): product-surface concern, out of scope for runtime ACT
