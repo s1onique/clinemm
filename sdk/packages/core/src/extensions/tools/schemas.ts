@@ -146,11 +146,29 @@ export const StructuredCommandEntrySchema = z.union([
 	StructuredCommandInputSchema,
 ]);
 
+// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+// notifyOnCompletion is an opt-in flag the model sets when it
+// wants the runtime to queue a bounded continuation prompt after
+// the background run_commands job reaches a terminal state.
+// Default false; strict mode (additionalProperties:false)
+// requires the field to be declared here so unknown values are
+// rejected. The wake transport, lifetime, and marker authority
+// are documented in
+// ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01 (frozen
+// contract) and the bounded runtime wiring lives in
+// apps/vscode/src/sdk/vscode-run-commands-tool.ts +
+// apps/vscode/src/sdk/background-notify-coordinator.ts.
 export const RunCommandsInputSchema = z
 	.object({
 		commands: z
 			.array(CommandInputSchema)
 			.describe("Array of complete shell command strings to execute."),
+		notifyOnCompletion: z
+			.boolean()
+			.optional()
+			.describe(
+				"Set true to ask the runtime to queue exactly one bounded continuation prompt after this background command reaches a terminal state. Default false. Asynchronous notification only; the current turn may end before completion.",
+			),
 	})
 	// ACT-CLINEMM-INVALID-TOOL-INPUT-PREAPPROVAL01: reject unknown
 	// fields (e.g. `timeout`) so the schema is strict at runtime —
@@ -160,19 +178,36 @@ export const RunCommandsInputSchema = z
 
 const StructuredCommandsInputSchema = z.object({
 	commands: z.array(StructuredCommandEntrySchema),
+	notifyOnCompletion: z.boolean().optional(),
 });
 
 /**
  * Union schema for run_commands tool input. More flexible.
+ *
+ * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+ * notifyOnCompletion is mirrored onto every {commands:...} arm
+ * and onto the bare {command}/{cmd} arms so the model-facing
+ * JSON schema advertises the flag on every accepted shape.
+ * Bare string / bare array arms cannot carry flags and keep
+ * the previous behaviour (notifyOnCompletion defaults to false).
  */
 export const RunCommandsInputUnionSchema = z.union([
 	RunCommandsInputSchema,
 	StructuredCommandsInputSchema,
-	z.object({ commands: StructuredCommandEntrySchema }),
+	z.object({
+		commands: StructuredCommandEntrySchema,
+		notifyOnCompletion: z.boolean().optional(),
+	}),
 	z.array(StructuredCommandInputSchema),
 	StructuredCommandInputSchema,
-	z.object({ command: CommandInputSchema }),
-	z.object({ cmd: CommandInputSchema }),
+	z.object({
+		command: CommandInputSchema,
+		notifyOnCompletion: z.boolean().optional(),
+	}),
+	z.object({
+		cmd: CommandInputSchema,
+		notifyOnCompletion: z.boolean().optional(),
+	}),
 	z.array(z.string()),
 	z.string(),
 ]);

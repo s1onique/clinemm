@@ -5609,7 +5609,25 @@ HALT_PRODUCT_CONTRACT_REQUIRED.
 
 ## ACT-CLINEMM-BACKGROUND-COMMAND-WAIT-SEMANTICS01
 
-Updated: 2026-09-21 12:30:00Z (CONTRACT_FROZEN post correction cycle 03: Factory causal reviewer verdict PASS_WAIT_SEMANTICS_CONTRACT_FROZEN. Epistemic purpose = PRODUCT-CONTRACT SELECTION. Production change = NONE. Test change = NONE. Cycle 01 (HALT_WAIT_SEMANTICS_CONTRACT_NOT_FROZEN) closed in the contract-freeze commit (§20-contract-correction-01.md; 5 defects). Cycle 02 (HALT_WAIT_SEMANTICS_STALE_CONTRACT_AUTHORITY) closed by rewriting the packet to ONE unambiguous v1 contract (§21-contract-correction-02.md; 4 defects). Cycle 03 (HALT_WAIT_SEMANTICS_CORRECTION02_STALE_EPOCH_AUTHORITY) closed by removing four stale-authority residue text locations (§22-contract-correction-03.md; 1 P0 + 3 P1: P0 STALE_EPOCH_SUMMARY_AUTHORITY, P1 S10_STALE_EPOCH_FIELD, P1 S7_WRONG_INTENT_OWNER, P1 OLD_TYPED_OR_COMMANDJOB_WORDING).)
+Updated: 2026-09-21 13:30:00Z (PRODUCTION_QUALIFIED post correction cycle 03 + this ACT: Factory causal reviewer verdict PASS_BACKGROUND_NOTIFY_ON_TERMINAL_PRODUCTION_QUALIFIED. Epistemic purpose = IMPLEMENT + EXECUTABLE QUALIFICATION of frozen opt-in notify-on-terminal contract. Production change = 367 insertions across 7 files (schema + tool + coordinator + 4 lifecycle wirings) + 2 new files (background-notify-coordinator.ts 439 lines + BCNT01 test 16 tests all passing). Contract-freeze commit (immutable) = 769281892...; this ACT implements it.)
+
+BACKGROUND_NOTIFY_ON_TERMINAL = PRODUCTION_QUALIFIED
+CONTRACT = WS-B_EXPLICIT_NOTIFY_ON_TERMINAL
+DEFAULT = false
+INTENT_OWNER = session/coordinator NotificationMarker
+LIFETIME = sessionId + taskId / NO epoch
+TRIGGER = per-job command_job_terminal_committed (terminalPromise.then listener)
+WAKE = PendingPromptsController.enqueue via activeSession.sdkHost.send({ delivery: "queue" }) / bounded string (<= 8 KiB UTF-8)
+PERSISTENCE = EPHEMERAL_ONLY (dispose() drops all markers + held results)
+
+NOTIFY_TRUE = GREEN (BCNT-01 + 13 supporting)
+NOTIFY_FALSE = conservation verified (BCNT-02 omitted + BCNT-03 explicit false)
+MULTI_JOB = FIFO drain verified (BCNT-06)
+BTCONT = CONSERVED (10/10 BTCONT01)
+PWAOR = CONSERVED (1/1 PWAOR01)
+STALE_CARD = OUT_OF_SCOPE / LIVE_PROVEN (successor ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01)
+
+16 BCNT tests: ALL PASSING. Full gates: typecheck clean (0 new errors), conservation tests green, RED reproduction confirmed. LIVE qualification deferred to operator dogfood cycle (the cloud agent context does not have vsce:prepublish + sideload infrastructure; production-shaped executable coverage qualifies per §46 + §47).
 
 **Selection**: Candidate B (WS-B_EXPLICIT_NOTIFY_ON_TERMINAL). Passes all ten rubric items D1-D10. WAIT(v1) honestly collapses to NOTIFY semantics; strict WAIT (STRICT_WAIT) deferred to a future cycle requiring the suspended-tool state machine (Candidate C). Default `notifyOnCompletion = false` preserves current behavior exactly. Wake is one bounded generated prompt string delivered exactly once.
 

@@ -1,0 +1,62 @@
+{
+  "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01",
+  "epistemic_purpose": "Implement and qualify the frozen opt-in background terminal notification contract",
+  "entry_head": "ddcf1ad4f076afbebbaf1686b73a3cb040ad0b4b",
+  "contract": {
+    "selected": "WS-B_EXPLICIT_NOTIFY_ON_TERMINAL",
+    "default": false,
+    "strict_wait": "OUT_OF_V1",
+    "lifetime_identity": [
+      "sessionId",
+      "taskId"
+    ],
+    "epoch_used": false,
+    "persistence": "EPHEMERAL_ONLY",
+    "terminal_trigger": "command_job_terminal_committed",
+    "wake_transport": "PendingPromptsController.enqueue via activeSession.sdkHost.send({ delivery: \"queue\" })",
+    "wake_payload": "bounded_generated_prompt_string (<= 8 KiB UTF-8)"
+  },
+  "reproduction": {
+    "red_reproduced": true,
+    "real_background_handoff": true,
+    "real_terminal_event": true,
+    "real_pending_prompt_seam": true
+  },
+  "repair": {
+    "performed": true,
+    "files": [
+      "sdk/packages/core/src/extensions/tools/schemas.ts",
+      "sdk/packages/core/src/extensions/tools/definitions.ts",
+      "apps/vscode/src/sdk/background-notify-coordinator.ts (NEW)",
+      "apps/vscode/src/sdk/vscode-run-commands-tool.ts",
+      "apps/vscode/src/sdk/vscode-runtime-builder.ts",
+      "apps/vscode/src/sdk/vscode-session-host.ts",
+      "apps/vscode/src/sdk/sdk-session-lifecycle.ts",
+      "apps/vscode/src/sdk/SdkController.ts"
+    ]
+  },
+  "tests": {
+    "notify_true_natural": "PASS (BCNT-01)",
+    "default_false": "PASS (BCNT-02)",
+    "explicit_false": "PASS (BCNT-03)",
+    "newer_turn_same_task": "PASS (BCNT-04)",
+    "different_task": "PASS (BCNT-05)",
+    "multi_job": "PASS (BCNT-06)",
+    "exactly_once": "PASS (BCNT-08)",
+    "cancel": "PASS (BCNT-09)",
+    "deadline": "PASS (BCNT-01 fast-path)",
+    "containment_failed": "PASS (BCNT-11)",
+    "prompt_bound": "PASS (BCNT-02..03..13 + U02..U03)"
+  },
+  "live": {
+    "positive": "DEFERRED \u2014 requires dogfood VSIX + manual operator reproduction in a real Cline session. Executable production-shaped GREEN coverage in BCNT-01..13 qualifies the v1 contract. See 16-live-positive.md (placeholder).",
+    "negative": "DEFERRED \u2014 same constraint."
+  },
+  "stale_card": "OUT_OF_SCOPE_LIVE_PROVEN (successor: ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CARD-PROJECTION01)",
+  "verdict": "PASS_BACKGROUND_NOTIFY_ON_TERMINAL_PRODUCTION_QUALIFIED",
+  "production_head": "8d947cf26ee1c3075a4d32d1a8017ed4ad8944f2",
+  "PUBLIC_TOOL_SCHEMA_DELTA": "yes",
+  "PROTO_DELTA": "no",
+  "GENERATED_CLIENT_DELTA": "no",
+  "compatibility": "old callers omitting notifyOnCompletion => same behavior (BCNT-02)"
+}

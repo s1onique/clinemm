@@ -1,0 +1,52 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FOCUSED TESTS
+====================================================================
+
+Focused test file: apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+
+16 tests, all PASSING.
+
+  BCNT-U01..U03   coordinator unit tests (ownerKey, truncateToByteCap,
+                  formatTerminalWakePrompt)
+
+  BCNT-RED-01     pre-ACT reproduction: notify=true + terminal event
+                  produces zero wakes (defect witness)
+
+  BCNT-01         notify=true natural terminal -> exactly one queued wake
+  BCNT-02         omitted/default false -> zero wake, zero marker
+  BCNT-03         explicit false -> zero wake, zero marker
+  BCNT-04         newer turn same task -> notification survives queue
+                  delivery (NOTIFY-CTL-02 invariant)
+  BCNT-05         different task -> discarded (owner_mismatch)
+                  (NOTIFY-CTL-03 invariant)
+  BCNT-06         two notify jobs -> hold then FIFO drain
+                  (NOTIFY-CTL-04 invariant)
+  BCNT-07         notify + non-notify mix -> notification-active set
+                  independent of total CommandJobManager.active
+                  (NOTIFY-CTL-05 invariant)
+  BCNT-08         duplicate terminal event -> exactly one wake
+                  (NOTIFY-CTL-06 invariant)
+  BCNT-09         explicit cancel -> wake (terminality is the trigger)
+                  (NOTIFY-CTL-08 invariant)
+  BCNT-11         containment_failed -> no wake (NOTIFY-CTL-10 invariant)
+  BCNT-12         ephemeral marker loss -> no restored wake
+                  (NOTIFY-CTL-11 invariant)
+  BCNT-13         prompt hard-bound <= 8 KiB under multibyte stress
+                  (PROMPT-BOUND invariant)
+
+Production seams under test (real, not mocked):
+  - CommandJobManager (apps/vscode/src/sdk/command-job-manager.ts)
+  - createVscodeRunCommandsTool (the fork's tool factory)
+  - createShellTool (sdk/packages/core/src/extensions/tools/definitions.ts)
+  - RunCommandsInputSchema (sdk/packages/core/src/extensions/tools/schemas.ts)
+  - BackgroundNotifyCoordinator
+    (apps/vscode/src/sdk/background-notify-coordinator.ts)
+
+Test seam (in-memory, NOT a production dependency):
+  - TestPendingPromptsSink: captures wake prompts in memory for
+    assertion.
+  - notifyEnqueued sink: captures consumeTerminal decisions for
+    diagnostic verification.
+
+Run command:
+  cd apps/vscode
+  bunx vitest run src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts

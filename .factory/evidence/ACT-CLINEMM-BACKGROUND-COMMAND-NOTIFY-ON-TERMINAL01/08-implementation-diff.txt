@@ -1,0 +1,110 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — IMPLEMENTATION DIFF
+==========================================================================
+
+Production files modified (7):
+
+  apps/vscode/src/sdk/SdkController.ts               +136 lines
+  apps/vscode/src/sdk/sdk-session-lifecycle.ts       +25 lines
+  apps/vscode/src/sdk/vscode-run-commands-tool.ts    +93 lines
+  apps/vscode/src/sdk/vscode-runtime-builder.ts      +21 lines
+  apps/vscode/src/sdk/vscode-session-host.ts         +28 lines
+  sdk/packages/core/src/extensions/tools/definitions.ts       +27 lines
+  sdk/packages/core/src/extensions/tools/schemas.ts  +41 lines
+  -------------------------------------------------------------------
+  TOTAL: 367 insertions, 4 deletions across 7 files.
+
+New files (2):
+
+  apps/vscode/src/sdk/background-notify-coordinator.ts (439 lines)
+    - BackgroundNotifyCoordinator class
+    - NotificationMarker type
+    - TerminalNotification type
+    - ConsumeTerminalDecision union
+    - NotifyDecisionRecord type
+    - BackgroundNotifyCoordinatorOptions type
+    - formatTerminalWakePrompt pure function
+    - truncateToByteCap pure function (UTF-8 code-point boundary safe)
+    - ownerKey pure function (sessionId + taskId, NO epoch)
+
+  apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+    (16 tests, all passing — see 10-green-output.txt)
+
+## Production diff summary
+
+### sdk/packages/core/src/extensions/tools/schemas.ts
+  - RunCommandsInputSchema: added optional
+    `notifyOnCompletion?: boolean` (strict mode preserved).
+  - RunCommandsInputUnionSchema: mirrored optional
+    notifyOnCompletion onto every {commands:...} / {command}/{cmd}
+    arm so the model-facing JSON schema advertises the flag on
+    every accepted shape. Bare string / bare array arms cannot
+    carry flags and keep the previous behaviour.
+
+### sdk/packages/core/src/extensions/tools/definitions.ts
+  - createShellTool.execute(): reads `input.notifyOnCompletion`
+    and, when true, threads it through the typed
+    AgentToolContext.metadata slot (host-attached; trusted
+    because the host owns the executor). Default false means no
+    metadata entry, so fire-and-forget callers see zero state
+    delta.
+
+### apps/vscode/src/sdk/background-notify-coordinator.ts (NEW)
+  - Process-ephemeral coordinator.
+  - notificationMarkers: Map<jobId, NotificationMarker>.
+  - heldTerminalResults: Map<ownerKey, TerminalNotification[]>.
+  - registerMarker({jobId, sessionId, taskId}) — idempotent on
+    jobId. No epoch field.
+  - consumeTerminal({jobId, terminalState, exitCode, reason,
+    isContainmentFailed, outputTail}) — single consumer; no
+    second path; marker removed exactly once.
+  - HOLD-vs-DRAIN FIFO by createdAtMs.
+  - containment_failed -> containment_no_wake (N9).
+  - owner_absent or owner_mismatch -> discarded (N4).
+  - EPHEMERAL_ONLY enforced via dispose() (no DB write, no
+    disk persistence).
+  - formatTerminalWakePrompt produces a UTF-8-bounded string
+    with hard cap NOTIFY_WAKE_PROMPT_MAX_BYTES (8 KiB).
+  - truncateToByteCap is code-point-boundary safe
+    (Buffer.byteLength, not character count).
+
+### apps/vscode/src/sdk/vscode-run-commands-tool.ts
+  - VscodeRunCommandsToolOptions: added
+    backgroundNotifyCoordinator + resolveActiveOwner (both
+    optional; default to fire-and-forget when omitted).
+  - Lifted the marker registration + wake-consumer attachment
+    block OUT of the `if (start.state === "running")` branch so
+    it runs for BOTH the RUNNING and FAST-PATH-EXPIRED paths.
+    This closes the gap where a fast-path command never
+    registered a marker.
+  - Wake consumer: attaches to start.terminalPromise.then;
+    fetches terminal classification via manager.status after
+    terminalPromise resolves; forwards to
+    coordinator.consumeTerminal.
+
+### apps/vscode/src/sdk/vscode-runtime-builder.ts
+  - VscodeExtraToolsOptions: added backgroundNotifyCoordinator +
+    resolveActiveOwner. Pass-through to createVscodeRunCommandsTool.
+
+### apps/vscode/src/sdk/vscode-session-host.ts
+  - VscodeSessionHostOptions: added backgroundNotifyCoordinator +
+    resolveActiveOwner. Pass-through to createVscodeExtraTools.
+
+### apps/vscode/src/sdk/sdk-session-lifecycle.ts
+  - SdkSessionLifecycleOptions: added backgroundNotifyCoordinator
+    + resolveActiveOwner. Pass-through to VscodeSessionHost.create
+    (shared-host factory).
+
+### apps/vscode/src/sdk/SdkController.ts
+  - Added private field `backgroundNotifyCoordinator` (host-owned,
+    single instance per Controller lifetime).
+  - Constructed in constructor with closures:
+    - resolveActiveOwner: reads activeSession from
+      SdkSessionLifecycle + this.task?.taskId.
+    - enqueueTerminalWake: routes through
+      `activeSession.sdkHost.send({ sessionId, prompt, delivery: "queue" })`
+      which is the canonical PendingPromptsController.enqueue
+      path. Cross-session drops are silent.
+  - Threaded through all 7 VscodeSessionHostOptions / SdkSessionLifecycleOptions
+    callsites (1 lifecycle + 6 temp-host factories).
+  - dispose() calls coordinator.dispose() FIRST so no further
+    consumeTerminal can race shutdown.

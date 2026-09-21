@@ -74,6 +74,21 @@ export interface VscodeExtraToolsOptions {
 	 * Cancel button can arbitrate the in-flight background command.
 	 */
 	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * opt-in notify-on-terminal coordinator (pass-through to the
+	 * run_commands tool). When omitted, the tool falls back to
+	 * the pre-ACT fire-and-forget path with zero state delta.
+	 */
+	backgroundNotifyCoordinator?: import("./background-notify-coordinator").BackgroundNotifyCoordinator
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * resolve the active owner (sessionId, taskId) at marker
+	 * registration time. Returns undefined when no active
+	 * owner is available (the coordinator treats this as
+	 * owner_absent and discards).
+	 */
+	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
 }
 
 export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExtraToolsOptions): Promise<AgentTool[]> {
@@ -123,6 +138,12 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 				// run_commands tool so the background state callback fires
 				// when the tool returns RUNNING / reaches a terminal state.
 				onBackgroundStateChange: options.onBackgroundStateChange,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+				// pass-through of the bounded opt-in coordinator + the
+				// active-owner resolver. When the host does not supply
+				// them, the tool defaults to fire-and-forget.
+				backgroundNotifyCoordinator: options.backgroundNotifyCoordinator,
+				resolveActiveOwner: options.resolveActiveOwner,
 			}),
 		)
 		// Expose the follow-up API only for the background path —

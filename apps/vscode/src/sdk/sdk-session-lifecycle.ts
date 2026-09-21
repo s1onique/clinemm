@@ -149,6 +149,24 @@ export interface SdkSessionLifecycleOptions {
 	 * incidents — preserving the pre-ACT behavior.
 	 */
 	onRuntimeError?: (incident: RuntimeErrorIncident) => void
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * opt-in notify-on-terminal coordinator. Forwarded into the
+	 * shared host built by `getOrCreateSharedHost` so the
+	 * run_commands tool can register markers on
+	 * `start.state === "running" && notifyOnCompletion === true`.
+	 * When omitted, the tool falls back to the pre-ACT
+	 * fire-and-forget path with zero state delta.
+	 */
+	backgroundNotifyCoordinator?: import("./background-notify-coordinator").BackgroundNotifyCoordinator
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * resolve the active owner (sessionId, taskId) at marker
+	 * registration time. Returns undefined when no active owner
+	 * is available (the coordinator treats this as owner_absent
+	 * and discards).
+	 */
+	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
 }
 
 export class SdkSessionLifecycle {
@@ -627,6 +645,13 @@ export class SdkSessionLifecycle {
 				// structured EPERM / `command_containment_failed` incidents
 				// to the host-owned `TaskTelemetryTracker`.
 				onRuntimeError: this.options.onRuntimeError,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+				// forward the host-owned opt-in coordinator + active-owner
+				// resolver through to the shared host so the
+				// run_commands tool can register markers on
+				// `start.state === "running" onRuntimeError: this.options.onRuntimeError,onRuntimeError: this.options.onRuntimeError, notifyOnCompletion === true`.
+				backgroundNotifyCoordinator: this.options.backgroundNotifyCoordinator,
+				resolveActiveOwner: this.options.resolveActiveOwner,
 			})
 				.then((sdkHost) => {
 					this.ensureSharedHostSubscription(sdkHost)

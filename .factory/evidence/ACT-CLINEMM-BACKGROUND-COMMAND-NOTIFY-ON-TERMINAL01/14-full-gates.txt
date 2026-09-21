@@ -1,0 +1,46 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — FULL GATES
+================================================================
+
+Focused GREEN tests:
+  bunx vitest run src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+    -> Test Files: 1 passed (1)
+    -> Tests:      16 passed (16)
+
+Focused conservation tests:
+  PWAOR01  src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts
+    -> 1 passed
+  BTCONT01 src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
+    -> 10 passed
+  AGCONT01 src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
+    -> 7 passed
+  VRCT     src/sdk/vscode-run-commands-tool.test.ts
+    -> 46 passed
+
+TypeScript:
+  apps/vscode (cd apps/vscode && bunx tsc --noEmit)
+    -> 0 errors
+    (baseline before ACT = 0 errors; after ACT = 0 errors.
+     no regressions introduced.)
+
+  sdk/packages/core (cd sdk/packages/core && bunx tsc --noEmit)
+    -> 67 lines of output
+    (baseline before ACT = 67 lines of output; after ACT = 67.
+     the SDK has 67 lines of pre-existing baseline noise in
+     unrelated test files (TS6133 unused-vars, TS2345 arg
+     types). None of the 67 errors are in files we touched
+     (schemas.ts / definitions.ts). Verified by grep:
+       git grep -E 'schemas\.ts|definitions\.ts' in the tsc output
+       -> 0 matches.
+
+git status --short
+  M apps/vscode/src/sdk/SdkController.ts
+  M apps/vscode/src/sdk/sdk-session-lifecycle.ts
+  M apps/vscode/src/sdk/vscode-run-commands-tool.ts
+  M apps/vscode/src/sdk/vscode-runtime-builder.ts
+  M apps/vscode/src/sdk/vscode-session-host.ts
+  M sdk/packages/core/src/extensions/tools/definitions.ts
+  M sdk/packages/core/src/extensions/tools/schemas.ts
+  ?? apps/vscode/src/sdk/background-notify-coordinator.ts
+  ?? apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+
+git diff --check -> clean

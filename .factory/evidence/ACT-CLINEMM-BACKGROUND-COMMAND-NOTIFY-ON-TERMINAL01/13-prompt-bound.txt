@@ -1,0 +1,40 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — PROMPT BOUND
+================================================================
+
+Hard bound: NOTIFY_WAKE_PROMPT_MAX_BYTES = 8192 (UTF-8 bytes)
+Soft target: NOTIFY_WAKE_PROMPT_SOFT_TARGET_BYTES = 4096
+
+Enforcement:
+  formatTerminalWakePrompt() -> string
+    1. Compose fixed header (~280 bytes): jobId, terminalState,
+       reason, exitCode, output delimiters, footer instruction.
+    2. TruncateToByteCap(combined, 8192) — code-point-boundary
+       safe, never produces invalid UTF-8.
+
+Tests:
+  BCNT-U02: 4-byte emoji stress test. 5000 x \u{1F600} (each 4 bytes).
+    Truncated to <= 8192 bytes. round-trip via Buffer -> String
+    preserves length (no partial codepoint cut).
+
+  BCNT-U03: formatTerminalWakePrompt with small output -> includes
+    <bounded-output> and </bounded-output> delimiters.
+    formatTerminalWakePrompt with 100k chars -> hard cap enforced,
+    <bounded-output> present in the truncated result.
+
+  BCNT-13: end-to-end via the tool — prompt captured at the
+    sink has Buffer.byteLength <= 8192 (asserted via
+    NOTIFY_WAKE_PROMPT_MAX_BYTES).
+
+Multibyte safety:
+  truncateToByteCap uses binary search on the string length and
+  Buffer.byteLength to find the largest prefix whose UTF-8 byte
+  length is <= maxBytes. The truncation always lands on a
+  code-point boundary, so the resulting string is always valid
+  UTF-8. Verified by BCNT-U02 (5000 emoji -> truncated ->
+  Buffer -> String round-trip preserves length).
+
+Data vs instruction:
+  All output content is wrapped in <bounded-output>...</bounded-output>
+  delimiters. The header / footer / instruction lines are
+  constant text. The model is told explicitly that the wrapped
+  content is data, not instructions.

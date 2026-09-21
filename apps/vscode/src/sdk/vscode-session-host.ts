@@ -173,6 +173,27 @@ export interface VscodeSessionHostOptions {
 	 * signals are present.
 	 */
 	submitExecutor?: ToolExecutors["submit"]
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * opt-in notify-on-terminal coordinator. Pass-through only;
+	 * the session host does NOT own notification state. When
+	 * supplied, the run_commands tool wires the coordinator into
+	 * its background handoff so opt-in wake prompts reach the
+	 * PendingPrompts queue. When omitted, the coordinator is
+	 * undefined and the tool behaves identically to the pre-ACT
+	 * path (notify=false default produces zero state delta).
+	 */
+	backgroundNotifyCoordinator?: import("./background-notify-coordinator").BackgroundNotifyCoordinator
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * resolve the active (sessionId, taskId) at marker
+	 * registration time. The session host calls this from the
+	 * host-supplied resolver; it never invents one. When the
+	 * resolver returns undefined, the coordinator treats the
+	 * terminal event as owner_absent and discards (N9
+	 * containment_failed + N4 lifetime guard).
+	 */
+	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
 }
 
 /**
@@ -327,6 +348,13 @@ export class VscodeSessionHost implements SdkSessionHost {
 				// run_commands tool so the background state callback fires
 				// when the tool returns RUNNING / reaches a terminal state.
 				onBackgroundStateChange: options.onBackgroundStateChange,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+				// pass-through of the opt-in notify-on-terminal coordinator
+				// + active-owner resolver. When the host does not supply
+				// them, the tool falls back to the pre-ACT fire-and-forget
+				// path (notify=false default is preserved).
+				backgroundNotifyCoordinator: options.backgroundNotifyCoordinator,
+				resolveActiveOwner: options.resolveActiveOwner,
 			})
 			return {
 				...inputWithRemoteConfig,

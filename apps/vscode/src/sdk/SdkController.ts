@@ -75,6 +75,7 @@ import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
 import { buildActivityPublicationV1Record } from "./activity-publication-v1"
 import { AuthService, LogoutReason } from "./auth-service"
+import { BackgroundNotifyCoordinator } from "./background-notify-coordinator"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
@@ -708,6 +709,22 @@ export class Controller {
 	private taskTelemetry: TaskTelemetryTracker
 	private taskTelemetryRecoveryUnsub: (() => void) | undefined
 	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * host-owned opt-in notification coordinator. Constructed
+	 * once per SdkController lifetime; reused across every
+	 * session rebuild. Dispose drops every marker + held
+	 * result (EPHEMERAL_ONLY). The coordinator's enqueue
+	 * transport is a closure that reaches PendingPrompts via
+	 * `activeSession.sdkHost.send({ ..., delivery: "queue" })`,
+	 * which is the canonical wake path. If the active session
+	 * has been replaced (different sessionId), the closure
+	 * drops the prompt silently — the coordinator already
+	 * enforces the lifetime guard via its own resolveActiveOwner
+	 * callback, but the closure has the final say because it
+	 * is the closest to the SDK queue.
+	 */
+	private backgroundNotifyCoordinator: BackgroundNotifyCoordinator | undefined
+	/**
 	 * ACT-CLINEMM-ELM-ARCHITECTURE01-E2F-CANONICAL-RUNTIME-EVENT-SEAM01-F1-CORRECTION03:
 	 * Owner of the canonical `AgentRuntimeEvent` subscription on the
 	 * VS Code shadow boundary. The owner is the single source of
@@ -955,6 +972,53 @@ export class Controller {
 		// (elapsed / tool / recovery counters). Lives across the controller
 		// lifetime so webview reconnect / React remount does not reset.
 		this.taskTelemetry = new TaskTelemetryTracker()
+		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+		// construct the host-owned notify-on-terminal coordinator.
+		// The transport closure routes through
+		// `activeSession.sdkHost.send({ ..., delivery: "queue" })`
+		// which is the canonical PendingPromptsController.enqueue
+		// path. The resolveActiveOwner closure reads the active
+		// session/task from `this.sessions` (the
+		// SdkSessionLifecycle instance). The coordinator is
+		// disposed in `dispose()` so EPHEMERAL_ONLY is enforced
+		// on extension shutdown.
+		this.backgroundNotifyCoordinator = new BackgroundNotifyCoordinator({
+			resolveActiveOwner: () => {
+				const active = this.sessions?.getActiveSession()
+				if (!active) {
+					return undefined
+				}
+				return {
+					sessionId: active.sessionId,
+					taskId: this.task?.taskId,
+				}
+			},
+			enqueueTerminalWake: ({ sessionId, prompt }) => {
+				const active = this.sessions?.getActiveSession()
+				if (!active || active.sessionId !== sessionId) {
+					// Owner has been replaced between marker
+					// registration and terminal completion —
+					// silent drop is the documented v1 contract
+					// for cross-task/cross-session notification.
+					return
+				}
+				try {
+					void active.sdkHost.send({ sessionId, prompt, delivery: "queue" }).catch((error: unknown) => {
+						Logger.warn(
+							`[SdkController] enqueueTerminalWake send() rejected for sessionId=${sessionId}: ${
+								error instanceof Error ? error.message : String(error)
+							}`,
+						)
+					})
+				} catch (error) {
+					Logger.warn(
+						`[SdkController] enqueueTerminalWake send() threw for sessionId=${sessionId}: ${
+							error instanceof Error ? error.message : String(error)
+						}`,
+					)
+				}
+			},
+		})
 		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: debug-only hook
 		// for the live-ext-host qualification harness. Mirrors the
 		// `__clineHandleUri` precedent in extension.ts:270-272. Lets the
@@ -1318,6 +1382,15 @@ export class Controller {
 			// 3430/3690 already wire this — closing the gap for the shared
 			// host keeps the live primary-session path consistent.
 			onCommandJobLifecycle: this.handleCommandJobLifecycle,
+			// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+			// thread the host-owned opt-in coordinator + active
+			// owner resolver through to the run_commands tool.
+			backgroundNotifyCoordinator: this.backgroundNotifyCoordinator,
+			resolveActiveOwner: () => {
+				const active = this.sessions?.getActiveSession()
+				if (!active) return undefined
+				return { sessionId: active.sessionId, taskId: this.task?.taskId }
+			},
 			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: mirror the
 			// runtime-error sink through to the shared host so the live
 			// primary-session CommandJobManager surfaces structured EPERM /
@@ -1602,6 +1675,15 @@ export class Controller {
 					// silently reset under tool rebuild.
 					onRuntimeError: this.handleTaskRuntimeError,
 					onCommandJobLifecycle: this.handleCommandJobLifecycle,
+					// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+					// thread the host-owned opt-in coordinator + active
+					// owner resolver through to the run_commands tool.
+					backgroundNotifyCoordinator: this.backgroundNotifyCoordinator,
+					resolveActiveOwner: () => {
+						const active = this.sessions?.getActiveSession()
+						if (!active) return undefined
+						return { sessionId: active.sessionId, taskId: this.task?.taskId }
+					},
 				}),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
 			loadInitialMessages: (sessionHost, taskId) => this.sessionHistory.loadInitialMessages(sessionHost, taskId),
@@ -1755,6 +1837,15 @@ export class Controller {
 					// mirror the production wiring.
 					onRuntimeError: this.handleTaskRuntimeError,
 					onCommandJobLifecycle: this.handleCommandJobLifecycle,
+					// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+					// thread the host-owned opt-in coordinator + active
+					// owner resolver through to the run_commands tool.
+					backgroundNotifyCoordinator: this.backgroundNotifyCoordinator,
+					resolveActiveOwner: () => {
+						const active = this.sessions?.getActiveSession()
+						if (!active) return undefined
+						return { sessionId: active.sessionId, taskId: this.task?.taskId }
+					},
 				}),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			resolveContextMentions: (text) => this.resolveContextMentions(text),
@@ -1792,6 +1883,15 @@ export class Controller {
 					// mirror the production wiring.
 					onRuntimeError: this.handleTaskRuntimeError,
 					onCommandJobLifecycle: this.handleCommandJobLifecycle,
+					// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+					// thread the host-owned opt-in coordinator + active
+					// owner resolver through to the run_commands tool.
+					backgroundNotifyCoordinator: this.backgroundNotifyCoordinator,
+					resolveActiveOwner: () => {
+						const active = this.sessions?.getActiveSession()
+						if (!active) return undefined
+						return { sessionId: active.sessionId, taskId: this.task?.taskId }
+					},
 				}),
 			loadInitialMessages: (reader, taskId) => this.sessionHistory.loadInitialMessages(reader, taskId),
 			getWorkspaceRoot: () => this.getWorkspaceRoot(),
@@ -2177,6 +2277,15 @@ export class Controller {
 			// it must carry the same sink as the production host.
 			onRuntimeError: this.handleTaskRuntimeError,
 			onCommandJobLifecycle: this.handleCommandJobLifecycle,
+			// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+			// thread the host-owned opt-in coordinator + active
+			// owner resolver through to the run_commands tool.
+			backgroundNotifyCoordinator: this.backgroundNotifyCoordinator,
+			resolveActiveOwner: () => {
+				const active = this.sessions?.getActiveSession()
+				if (!active) return undefined
+				return { sessionId: active.sessionId, taskId: this.task?.taskId }
+			},
 		})
 	}
 
@@ -2292,6 +2401,13 @@ export class Controller {
 	}
 
 	async dispose(): Promise<void> {
+		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+		// dispose the opt-in notify-on-terminal coordinator FIRST
+		// so no further consumeTerminal calls can race the
+		// shutdown. dispose() is synchronous and idempotent; it
+		// drops every marker + held result without persisting.
+		this.backgroundNotifyCoordinator?.dispose()
+		this.backgroundNotifyCoordinator = undefined
 		// ACT-CLINEMM-ELM-ARCHITECTURE01-E5-E6-CORRECTION01: dispose the
 		// live shadow wiring first so no further events are observed.
 		this.taskStateShadowWiring?.dispose()
@@ -3506,6 +3622,15 @@ export class Controller {
 				// follow.
 				onRuntimeError: this.handleTaskRuntimeError,
 				onCommandJobLifecycle: this.handleCommandJobLifecycle,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+				// thread the host-owned opt-in coordinator + active
+				// owner resolver through to the run_commands tool.
+				backgroundNotifyCoordinator: this.backgroundNotifyCoordinator,
+				resolveActiveOwner: () => {
+					const active = this.sessions?.getActiveSession()
+					if (!active) return undefined
+					return { sessionId: active.sessionId, taskId: this.task?.taskId }
+				},
 			})
 			sessionHost = tempHost
 		}
@@ -3765,6 +3890,15 @@ export class Controller {
 				// with its own CommandJobManager.
 				onRuntimeError: this.handleTaskRuntimeError,
 				onCommandJobLifecycle: this.handleCommandJobLifecycle,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+				// thread the host-owned opt-in coordinator + active
+				// owner resolver through to the run_commands tool.
+				backgroundNotifyCoordinator: this.backgroundNotifyCoordinator,
+				resolveActiveOwner: () => {
+					const active = this.sessions?.getActiveSession()
+					if (!active) return undefined
+					return { sessionId: active.sessionId, taskId: this.task?.taskId }
+				},
 			})
 			sessionHost = tempHost
 		}

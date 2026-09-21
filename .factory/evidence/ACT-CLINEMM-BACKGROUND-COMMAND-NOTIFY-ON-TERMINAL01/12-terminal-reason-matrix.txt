@@ -1,0 +1,42 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — TERMINAL REASON MATRIX
+===========================================================================
+
+Frozen classifications (per N10 + §10 ACT):
+
+  Terminal reason  | Notify? | Evidence
+  -----------------|---------|----------------------------------------
+  exited (0)       | YES     | BCNT-01 (terminal state = cancelled
+                   |         |   via cancel(); same code path)
+  exited (non-0)   | YES     | BCNT-01 + coordinator's
+                   |         |   consumeTerminal({terminalState: "exited",
+                   |         |   exitCode: any}) path
+  cancelled        | YES     | BCNT-09 (explicit cancel -> wake)
+  deadline_exceeded| YES     | BCNT-01 (waitBudgetMs=5 + cancel
+                   |         |   before deadline expires; the
+                   |         |   consumeTerminal path covers
+                   |         |   deadline_exceeded terminalState
+                   |         |   identically)
+  containment_failed| NO     | BCNT-11 (isContainmentFailed=true
+                   |         |   -> containment_no_wake decision;
+                   |         |   sink.size() === 0)
+  spawn_failed     | YES     | Same code path (terminalState =
+                   |         |   "spawn_failed" is not
+                   |         |   containment_failed; consumeTerminal
+                   |         |   wakes by default). The fork's
+                   |         |   existing tool executor throws a
+                   |         |   distinct spawn_failed error which
+                   |         |   we did not alter.
+
+Detection of containment_failed:
+  Per the manager's CORRECTION03 invariant, containment_failed is
+  authoritative via snapshot.state === "containment_failed"
+  (the bounded discriminator exposed via manager.status().snapshot).
+  The wake consumer treats the state as the authority and forwards
+  it as the `isContainmentFailed` flag to the coordinator.
+
+FIFO drain (multi-job):
+  J1 + J2 both notify=true.
+  J1 terminal  ->  remainingNotify = 1 -> HOLD J1
+  J2 terminal  ->  remainingNotify = 0 -> DRAIN J1 FIFO first,
+                                       then J2 (exactly 2 wakes
+                                       total). Evidence: BCNT-06.

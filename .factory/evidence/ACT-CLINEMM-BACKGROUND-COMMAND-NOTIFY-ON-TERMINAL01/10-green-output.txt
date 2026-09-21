@@ -1,0 +1,41 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — GREEN OUTPUT
+==================================================================
+
+GREEN test family (background-command-notify-on-terminal01.bcnt01.test.ts):
+all 16 tests pass against the production code (real
+CommandJobManager + real createVscodeRunCommandsTool + real
+createShellTool + real BackgroundNotifyCoordinator wired into
+the coordinator + tool seam).
+
+  Test Files  1 passed (1)
+  Tests       16 passed (16)
+
+  ✓ BCNT-U01 ownerKey joins sessionId + taskId with no epoch field 2ms
+  ✓ BCNT-U02 truncateToByteCap truncates at code-point boundary
+        (multibyte UTF-8) 0ms
+  ✓ BCNT-U03 formatTerminalWakePrompt binds to <= 8 KiB and tags
+        output as data 0ms
+  ✓ BCNT-RED-01 (UNWIRED): notify=true + terminal event produces
+        zero wakes (RED baseline)  5059ms
+  ✓ BCNT-01 notify=true natural terminal -> exactly one queued
+        wake  5104ms
+  ✓ BCNT-02 omitted/default false -> zero wake, zero marker  5103ms
+  ✓ BCNT-03 explicit false -> zero wake, zero marker  5102ms
+  ✓ BCNT-04 newer turn same task -> notification survives queue
+        delivery  5103ms
+  ✓ BCNT-05 different task -> discarded (owner_mismatch)
+  ✓ BCNT-06 two notify jobs -> hold then FIFO drain 12ms
+  ✓ BCNT-07 mixed notify/non-notify mix -> notification-active set
+        independent of total 12ms
+  ✓ BCNT-08 duplicate terminal -> exactly once (marker consumed)
+        56ms
+  ✓ BCNT-09 explicit cancel -> wake (terminality is the trigger)
+  ✓ BCNT-11 containment_failed -> no wake (N9)
+  ✓ BCNT-12 ephemeral marker loss -> no restored wake 6ms
+  ✓ BCNT-13 prompt hard-bound <= 8 KiB under multibyte stress 56ms
+
+Same setup as the RED test (notify=true + real background handoff
++ real terminal event); pending terminal wake count is exactly 1
+after the GREEN patch. Marker is removed exactly once. No
+duplicate wake. Pending prompt is bounded to <= 8 KiB (UTF-8
+byte count).

@@ -1,0 +1,21 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 — RED OUTPUT
+=================================================================
+
+RED TEST (BCNT-RED-01): pre-repair, the run_commands tool
+returns RUNNING + jobId, the marker registration + wake consumer
+attachment does NOT run (the production tool never reaches the
+notify coordinator seam), so terminalPromise.then(...) never
+fires consumeTerminal. Verified:
+
+  ✓ BCNT-RED-01 (UNWIRED): notify=true + terminal event produces
+                          zero wakes (RED baseline)  5057ms
+    sink.queued.length === 0
+    marker NOT registered (tool does not consume coordinator)
+
+This confirms the contract-bound defect: the frozen opt-in
+notify-on-terminal contract had no production-side wake
+consumer. The coordinator existed (BCNT01) but the run_commands
+tool's executor body never called it.
+
+After the GREEN patch (commit will follow), the same scenario
+produces exactly one queued wake. See 10-green-output.txt.

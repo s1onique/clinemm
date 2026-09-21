@@ -106,6 +106,30 @@ export interface VscodeRunCommandsToolOptions {
 	 * Cancel button can arbitrate the in-flight background command.
 	 */
 	onBackgroundStateChange?: (running: boolean, jobId: string | undefined) => void
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * coordinator-owned opt-in notify-on-terminal marker set.
+	 * When supplied, the background path registers a marker on
+	 * `start.state === "running" && notifyOnCompletion === true`
+	 * and consumes the per-job terminal event after the tool
+	 * returns. The coordinator owns the lifetime, hold/drain
+	 * FIFO, and prompt-bounded wake. This option is OPTIONAL —
+	 * production code MUST continue to work when it is omitted
+	 * (notify=false is the default and produces zero state
+	 * delta).
+	 */
+	backgroundNotifyCoordinator?: import("./background-notify-coordinator").BackgroundNotifyCoordinator
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+	 * resolve the active owner (sessionId, taskId) at marker
+	 * registration time. Returned values must match the
+	 * coordinator's owner-key invariants (sessionId + taskId;
+	 * NO epoch). The tool calls this synchronously in the
+	 * RUNNING branch BEFORE attaching the terminal listener so
+	 * the marker is bound to the same owner the rest of the
+	 * host sees.
+	 */
+	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -671,6 +695,70 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 				// RUNNING returns a structured snapshot so the model can
 				// observe status + jobId. Terminal results retain the
 				// existing stdout/exitCode shape for backward compatibility.
+				// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+				// The marker registration + wake-consumer listener
+				// must run for BOTH the RUNNING (long-running) and
+				// the FAST-PATH-EXPIRED (finished within the wait
+				// budget) branches. Lifting it out of the `if
+				// (state === "running")` block closes the gap where
+				// a fast-path command never registered a marker
+				// and so never produced a wake. The coordinator's
+				// registerMarker is idempotent on jobId.
+				const notifyRequested = context.metadata?.notifyOnCompletion === true
+				if (notifyRequested && options.backgroundNotifyCoordinator && options.resolveActiveOwner) {
+					const owner = options.resolveActiveOwner()
+					if (owner) {
+						options.backgroundNotifyCoordinator.registerMarker({
+							jobId: start.jobId,
+							sessionId: owner.sessionId,
+							taskId: owner.taskId,
+						})
+						// Attach the per-job wake consumer to the
+						// terminalPromise. The listener fetches
+						// terminal classification via manager.status
+						// AFTER terminalPromise resolves (so the
+						// status() lookup sees a stable terminal
+						// record) and forwards the fact to the
+						// coordinator's consumeTerminal method.
+						const jobId = start.jobId
+						start.terminalPromise.then(async () => {
+							const status = await manager.status({ jobId, waitMs: 0 })
+							if (!status.ok) {
+								// Job evaporated between terminalPromise
+								// resolving and our status() call. Mark
+								// as a no-wake so the consumer cannot
+								// resurrect the agent. The coordinator
+								// treats this as "no_marker" anyway
+								// (the marker was already consumed or
+								// never existed) but logging is useful
+								// for diagnostics.
+								return
+							}
+							const snapshot = status.snapshot
+							const terminalState = snapshot.state
+							const exitCode = snapshot.exitCode
+							// containment_failed is the "no wake"
+							// trigger per N9. The manager exposes
+							// the verdict as snapshot.state ===
+							// "containment_failed" (CORRECTION03)
+							// OR via snapshot.containmentFailed
+							// (the postcondition discriminator).
+							// We treat the state itself as the
+							// authority and forward it as the
+							// `isContainmentFailed` flag.
+							const isContainmentFailed = terminalState === "containment_failed"
+							options.backgroundNotifyCoordinator!.consumeTerminal({
+								jobId,
+								terminalState,
+								exitCode,
+								reason: snapshot.signal,
+								isContainmentFailed,
+								outputTail: snapshot.stdout?.slice(-1024),
+							})
+						})
+					}
+				}
+
 				if (start.state === "running") {
 					// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01-CORRECTION03:
 					// the projection flips to true here iff this start

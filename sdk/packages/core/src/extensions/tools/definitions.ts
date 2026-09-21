@@ -731,10 +731,35 @@ export function createShellTool(
 				normalizeRunCommandsInput(input),
 			);
 
+			// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01:
+			// The notifyOnCompletion flag is opt-in (default false)
+			// and lives on the top-level input. The ShellExecutor
+			// signature does not accept per-invocation flags, so we
+			// thread the intent through the typed AgentToolContext
+			// metadata slot (host-attached; trusted because the
+			// host owns the executor). Only propagate when the
+			// caller explicitly opted in — absent / false is the
+			// same as "no metadata entry" so fire-and-forget
+			// callers do not see any delta. The fork's
+			// createVscodeShellExecutor reads this field and
+			// registers a notification marker at the
+			// background-handoff seam.
+			const rawInput = input as { notifyOnCompletion?: unknown } | null;
+			const notifyOnCompletion = rawInput?.notifyOnCompletion === true;
+			const nextContext = notifyOnCompletion
+				? {
+						...context,
+						metadata: {
+							...(context.metadata ?? {}),
+							notifyOnCompletion: true,
+						},
+					}
+				: context;
+
 			return executeShellCommands(commands, {
 				executor,
 				cwd,
-				context,
+				context: nextContext,
 				timeoutMs,
 				timeoutSource,
 				telemetry: config.telemetry,
