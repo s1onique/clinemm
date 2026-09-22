@@ -110,6 +110,13 @@ function createLocalRuntimeHost(
 		toolPolicies: options.toolPolicies,
 		distinctId,
 		fetch: options.fetch,
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+		// Forward the host's optional capture hooks so the production
+		// `LocalRuntimeHost` can emit C4..C8 records. The default
+		// (undefined) makes every capture site a complete no-op.
+		...(options.pendingPromptCapture
+			? { pendingPromptCapture: options.pendingPromptCapture }
+			: {}),
 	});
 }
 

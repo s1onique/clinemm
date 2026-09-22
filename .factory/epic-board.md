@@ -6710,3 +6710,285 @@ No manual `resolveObligation`, no manual discard, no `splice()` test queue. The 
 
 **Verdict:** PASS_PRODUCTION_SEAM_WITNESS_PROVEN_CORRECTION02.5 — P0 CLOSED, C1: GO TO DOGFOOD.
 
+
+## ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 — PASS_DIAGNOSTIC_INSTRUMENTATION_LANDED — 2026-09-23
+
+**Status:** PASS (instrumentation landed). The first 1 -> 2 cardinality seam remains UNKNOWN — this ACT deliberately does NOT patch completion / arbitration / presentation semantics. Its sole purpose is to add the bounded dogfood-only diagnostic surface that lets the next dogfood run mechanically identify the first duplicated seam.
+
+**Why this ACT is narrower than the previous three:** TQCB01/CORRECTION02 closed the completion-barrier + dual-delivery-arbitration seams. Fresh LIVE evidence (one notify=true job → one terminal fact → one legitimate completion → later autonomous continuation → second submit_and_exit → second COMPLETED) disproves those closures for the autonomous-continuation case. Rather than patch presentation AGAIN (CC7_DUAL_DELIVERY_ARBITRATION was already explored and ruled out), this ACT asks the narrower question the Factory reviewer demanded: **"where exactly does 1 become 2?"**
+
+**Causal surface (10 production seams instrumented):**
+
+```text
+C1  terminal_committed          CommandJobManager.finalize post-delete emit
+C2  notify_consume_enter        BackgroundNotifyCoordinator.consumeTerminal entry
+C3  wake_created                formatTerminalWakePrompt + enqueueTerminalWake (held-batch + current-terminal)
+C4  pending_prompt_enqueued     PendingPromptsController.enqueue (SDK PendingPromptService hook)
+C5  pending_prompt_dequeued     PendingPromptsController.drain (SDK PendingPromptService hook)
+C6  continuation_scheduled      same drain hook, fires in lockstep with C5
+C7  run_turn_started            LocalRuntimeHost.runTurn entry (host-side hook)
+C8  agent_turn_done             LocalRuntimeHost.runTurn after executeTurn resolves (host-side hook)
+C9  submit_and_exit_seen        sdk-session-event-coordinator wasTerminalResponseCommittedThisTurn branch
+C10 task_completion_committed   setTurnPhase("completed", ...) call site
+```
+
+Each capture is gated by `isContinuationCardinalityAuthorityCaptureEnabled()` (dogfood-only, default OFF). When OFF every capture site is a complete no-op — zero production overhead.
+
+**Diagnostic surface (mirrors BJLA / BOCOR pattern exactly):**
+
+```text
+module:    apps/vscode/src/sdk/continuation-cardinality-authority.ts
+runtime:   apps/vscode/src/sdk/continuation-cardinality-authority-runtime.ts
+ring:      512 records FIFO (default)
+profile:   applyContinuationCardinalityAuthorityDiagnosticProfile in dogfood-diagnostic-profile.ts
+command:   cline.debug.dumpContinuationCardinalityAuthority → "<globalStorageUri>/continuation-cardinality-authority.jsonl" + ".counters.json"
+dump:      unconditional (operator can always inspect captured records), dump != clear (no ring mutation)
+toggle:    NO env-var, NO workspace toggle, NO webview surface
+```
+
+**RED tests (10/10 PASS in vitest):**
+
+```text
+CCARD-CTL-01..06    capture-flag semantics (default off, off=no-op, on=record+counter,
+                     ring bounded FIFO, counters per stage with origin set, clear resets ring+counters+seq)
+CCARD-RED-01        exactly one record per stage C1..C10 per single logical terminal fact
+CCARD-RED-01-DUP    simulated 1 -> 2 cardinality expansion at C5 is observable (CC4 discriminator)
+CCARD-COMPOSE-01    SDK package is reachable from the host test runner (structural contract enforced by tsc)
+CCARD-ABLATION-01   with capture OFF the production callback wiring is a no-op (50 wake-enqueue-drain cycles, 0 records)
+```
+
+**Conservation (all UNCHANGED):**
+
+| Test family                          | Result |
+|--------------------------------------|--------|
+| BCNEX01 (presentation)               | 7/7 PASS |
+| BCNT01 (notify-on-terminal)          | 24/24 PASS |
+| BTCONT01 (terminal continuation)     | 10/10 PASS |
+| AGCONT01 (agent continuation)        | 7/7 PASS |
+| TQCB01 (completion barrier)          | 15/15 PASS |
+| PPAT01 (pending-prompt authority)    | 9/9 PASS |
+| QPSR01-c24-c-bridge                  | 6/6 PASS |
+| BCNT01-WIRE-c24-c-bridge             | 1/1 PASS |
+| SDK PendingPromptService unit test   | 7/7 PASS |
+| bun-unit-tests (entire `bun:test` suite) | 1141/1141 PASS (82 files) |
+| `bunx tsc --noEmit`                  | clean |
+
+**Stop rules honored (all YES):**
+
+```text
+completion-barrier patched?                     NO (TQCB01 work preserved unchanged)
+dual-delivery-arbitration patched?              NO (CORRECTION02.5 work preserved unchanged)
+presentation suppressed?                        NO (BCNEX01 work preserved unchanged)
+wake-prompt format modified?                    NO (formatTerminalWakePrompt preserved unchanged)
+CommandJobManager redesigned?                   NO (lifecycle unchanged)
+queue logic globally changed?                   NO (queue + drain semantics unchanged)
+PROTO_DELTA?                                    NO
+PUBLIC_TOOL_SCHEMA_DELTA?                        NO
+```
+
+**Removal trigger (per ACT sec 31/32):** first 1 -> 2 cardinality seam mechanically identified AND ablation returns cardinality to 1 (PASS_CONTINUATION_*), OR CAPTURE_INSUFFICIENT, OR HALT_RED_NOT_REPRODUCED, OR successor evidence supersedes it. Once trigger fires, the ring module + runtime + activation helper + Command Palette registration + registry entry + `package.json` declaration MUST be removed TOGETHER.
+
+**Production diff:**
+
+```text
+apps/vscode/src/sdk/continuation-cardinality-authority.ts         +249 lines (ring module)
+apps/vscode/src/sdk/continuation-cardinality-authority-runtime.ts +99 lines (host dump adapter)
+apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts +272 lines (RED + CTL + COMPOSE + ABLATION)
+apps/vscode/src/registry.ts                                       +14 lines (DumpContinuationCardinalityAuthority)
+apps/vscode/src/extension.ts                                      +30 lines (import + activation + dump command)
+apps/vscode/src/sdk/dogfood-diagnostic-profile.ts                 +66 lines (applyContinuationCardinalityAuthorityDiagnosticProfile)
+apps/vscode/src/sdk/command-job-manager.ts                        +9 lines  (C1 capture)
+apps/vscode/src/sdk/background-notify-coordinator.ts               +21 lines (C2 + C3 captures)
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts              +27 lines (C9 + C10 captures)
+apps/vscode/src/sdk/vscode-session-host.ts                        +50 lines (pendingPromptCapture pass-through to ClineCore.create)
+apps/vscode/package.json                                          +5 lines  (Command Palette declaration)
+sdk/packages/core/src/cline-core/types.ts                         +33 lines (ClineCoreOptions.pendingPromptCapture)
+sdk/packages/core/src/runtime/host/host.ts                        +6 lines  (createLocalRuntimeHost pass-through)
+sdk/packages/core/src/runtime/host/local-runtime-host.ts          +58 lines (LocalRuntimeHostOptions.pendingPromptCapture + C7/C8 captures)
+sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts +72 lines (PendingPromptsControllerDeps.onEnqueue + onBeforeDrain + C4/C5/C6 captures)
+```
+
+**LIVE qualification (PENDING_OPERATOR_RUN):**
+
+```text
+1. Install dogfood VSIX with this ACT's bundle.
+2. Start one managed notify=true 30s job:
+     sh -c 'echo STARTED; sleep 30; echo FINISHED'
+3. After the second COMPLETED appears, run:
+     Cline Debug: Dump Continuation Cardinality Authority
+4. Open <globalStorageUri>/continuation-cardinality-authority.jsonl
+   and inspect the first 1 -> 2 cardinality seam.
+```
+
+The unit-test RED (`CCARD-RED-01`) proves the diagnostic-only invariant (the capture module produces one record per stage per single logical terminal fact); the LIVE RED proves the production wiring fires at every C1..C10 seam. Until the LIVE RED is captured, the first duplicated seam remains UNKNOWN.
+
+**Next ACT (successor gate):** Once the LIVE dump produces a JSONL with a 1 -> 2 cardinality expansion, a successor ACT will mechanically identify the first duplicated seam (CC0..CC8 classification per ACT sec 11) and apply the corresponding bounded repair branch (A..D per ACT sec 14..17). No such repair is included in this ACT — by design, per the Factory disposition: "DO NOT ASK: 'how should completion work?' ASK: 'where exactly does 1 become 2?'"
+
+**Verdict:** PASS_CONTINUATION_CARDINALITY_AUTHORITY_INSTRUMENTATION — P0: diagnostic landed, dogfood LIVE RED queued.
+
+## ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 — REOPEN & RESUBMIT (P0+P1 FIX) — 2026-09-23
+
+**Status:** REOPEN → FIXED → READY_FOR_LIVE_RED_QUALIFICATION (post FACTORY HALT_CCARD_DIAGNOSTIC_CANNOT_DISCRIMINATE_CONTINUATION_ORIGIN).
+
+**Why reopened:** Factory causal reviewer + runtime observability engineer both halted the dogfood gate because the first version of the diagnostic collapsed three structurally different continuation paths into one (`origin: "pending_prompt_drain"`) and because C5 + C6 were emitted from the same callback in lockstep, so the duplicate-dispatch fingerprint (C5=1 with C6=2) was, by construction, unobservable.
+
+### P0 defects fixed
+
+**A. C5/C6 are now distinct observation seams.** The drain hook in `PendingPromptsController.drain` was split into two:
+
+```text
+onBeforeDrain  (C5)  — fires AFTER the destructive shift, BEFORE dispatch
+onBeforeDispatch (C6) — fires IMMEDIATELY BEFORE the actual `deps.send(...)` call
+```
+
+A code path that re-enters `send` for one shifted entry now crosses C6 twice while C5 still fires exactly once. The dump counter therefore exposes the duplicate-dispatch fingerprint the reviewer demanded.
+
+**B. C7/C8 origin is now derived from real delivery.** The hard-coded `origin: "pending_prompt_drain"` on `onRunTurnStarted` and `onAgentTurnDone` (in `vscode-session-host.ts`) was replaced with a per-call `deriveOrigin(delivery)` mapper:
+
+```text
+delivery === "queue"     → pending_prompt_drain
+delivery === "steer"     → deferred_continuation
+delivery === undefined   → explicit_user
+```
+
+The explicit-user turn and the queued wake turn and the steered message turn are now distinguishable in the JSONL.
+
+### P1 defect fixed
+
+**C. jobId threads through the entire C4→C5→C6→C7→C8 chain.** `SendSessionInput` (runtime-host.ts), `PendingPromptEnqueueInput`, `PendingPromptEntry` (pending-prompt-service.ts), and all five hook payloads (onEnqueue, onBeforeDrain, onBeforeDispatch, onRunTurnStarted, onAgentTurnDone) now carry an optional `jobId`. Backward-compatible: undefined `jobId` is identical to the previous behavior; existing callers see no change.
+
+### Discriminator tests added (these were missing in the initial landing)
+
+```text
+CCARD-DISCRIMINATOR-01 (NEW) — C5=1 with C6=2 is observable.
+                               Counters.stages.continuation_scheduled.count === 2
+                               while .pending_prompt_dequeued.count === 1.
+
+CCARD-ORIGIN-01        (NEW) — C7 origin set contains all three derivations
+                               (pending_prompt_drain, deferred_continuation,
+                                explicit_user) when each is exercised.
+```
+
+Both tests fail without the P0 fix and pass with it. Together they replace the reviewer-facing assertion "the diagnostic MUST be able to discriminate continuation origin AND observe duplicate-dispatch cardinality."
+
+### Conservation (re-verified)
+
+| Test family                          | Result |
+|--------------------------------------|--------|
+| BCNEX01 (presentation)               | 7/7 PASS |
+| BCNT01 (notify-on-terminal)          | 24/24 PASS |
+| BTCONT01 (terminal continuation)     | 10/10 PASS |
+| AGCONT01 (agent continuation)        | 7/7 PASS |
+| TQCB01 (completion barrier)          | 15/15 PASS |
+| PPAT01 (pending-prompt authority)    | 9/9 PASS |
+| CCARD01 (this ACT, post-fix)         | 12/12 PASS  (was 10/10) |
+| QPSR01-c24-c-bridge                  | 6/6 PASS |
+| BCNT01-WIRE-c24-c-bridge             | 1/1 PASS |
+| SDK pending-prompt-service.test      | 7/7 PASS |
+| `bunx tsc --noEmit` (apps/vscode)    | clean |
+| `bunx tsc -p tsconfig.build.json --noEmit` (sdk/core) | clean |
+
+### Trust binding (UNCHANGED)
+
+`DEFAULT_OFF`, dogfood-only, bounded FIFO ring (512 records), `dump != clear`, no env-var, no workspace toggle, no protocol/webview delta, no semantic mutation. All new fields (`jobId`) + the new `onBeforeDispatch` hook are OPTIONAL; existing callers see no behavior change.
+
+### Pre-existing test drift (not introduced by this ACT)
+
+`local-runtime-host.test.ts > persists active manual compaction state against the persisted transcript` was already failing on the entry head `d1ecf48dc` (verified via `git stash` + rerun on main). The failure is unrelated to CCARD instrumentation and unrelated to the P0+P1 fix — it concerns `systemPrompt` + `currentWorkingContextEstimate` field-shape drift in the persistence layer. Out of scope.
+
+### LIVE qualification status
+
+```text
+PENDING_OPERATOR_RUN
+```
+
+After this VSIX:
+
+1. Install the dogfood bundle with this ACT.
+2. Dispatch one managed notify=true 30s job:
+       sh -c 'echo STARTED; sleep 30; echo FINISHED'
+3. After the second autonomous COMPLETED arrives, run:
+       Cline Debug: Dump Continuation Cardinality Authority
+4. Inspect `<globalStorageUri>/continuation-cardinality-authority.jsonl`.
+5. The per-stage count table + origin set on each stage should now MEANINGFULLY distinguish:
+       explicit_user         from  pending_prompt_drain   from  deferred_continuation
+   and a real duplicate should now surface as one stage's count being strictly greater
+   than the prior stage's count (e.g. C6=2 with C5=1, or C9=2 with C10=1).
+
+### Verdict
+
+**PASS_CONTINUATION_CARDINALITY_AUTHORITY_INSTRUMENTATION_V2** — P0+P1 defects closed, 12/12 discriminator tests green, conservation preserved, ready for LIVE RED dogfood qualification.
+
+## ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 — REOPEN & RESUBMIT (V3 PRODUCTION-WIRING FIX) — 2026-09-23
+
+**Status:** HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN → FIXED → READY_FOR_LIVE_RED.
+
+**Why reopened (second time):** Factory causal reviewer + runtime observability engineer halted V2 with three load-bearing production-wiring defects:
+
+### V3 defects fixed
+
+**A. `onBeforeDispatch` was declared but NOT forwarded into the real `PendingPromptsController`.** The dep spread in `LocalRuntimeHost`'s constructor omitted the new hook. Without this forwarding, the C6 hook never fired in LIVE production. The diagnostic could never observe a duplicate-dispatch fingerprint regardless of how the production path behaved. CCARD-DISCRIMINATOR-01 could not detect this because it drove the capture module directly.
+
+**B. C7 (`run_turn_started`) was REQUEST-TIME, not EXECUTION-TIME.** The hook fired at `runTurn(...)` entry — BEFORE the queue/steer short-circuit. A `runTurn(delivery:"queue")` request that simply queued the prompt would still record a C7 entry. A later drain would then fire C7 again at actual execute time, manufacturing a `1 → 2` signal all on its own. After V3 the hook fires immediately before `executeTurn(...)` — the queue/steer short-circuit returns first.
+
+**C. `next.jobId` stopped at C6.** `next.jobId` was captured on C5/C6 payloads but NOT copied into the SendSessionInput passed to `runTurn`. The C6 → C7 → C8 jobId correlation was therefore lost. V3 threads `next.jobId` AND `next.delivery` through `deps.send({...})` so the drained prompt's C7 record carries the correct origin (`pending_prompt_drain` or `deferred_continuation`) instead of falling through to `explicit_user`.
+
+### V3 regression tests added (production-shape)
+
+```text
+CCARD-WIRE-01 (NEW)  — real PendingPromptsController + stubbed send
+                        asserts onBeforeDrain fires once, onBeforeDispatch
+                        fires once, send receives the jobId + delivery.
+                        FAILS if the dep-forwarding is removed.
+
+CCARD-WIRE-01c (NEW) — controller without onBeforeDispatch option is a
+                        complete no-op for C6 (backward-compat).
+
+CCARD-WIRE-02 (NEW)  — enqueue (queue-path) does NOT fire C5/C6/send
+                        (request != execution cardinality invariant).
+```
+
+### Conservation (re-verified)
+
+| Test family                          | Result |
+|--------------------------------------|--------|
+| CCARD01 (capture module)             | 12/12 PASS |
+| SDK pending-prompt-service.test      | 10/10 PASS  (was 7/7; +3 CCARD-WIRE-01/01c/02) |
+| BCNEX01 (presentation)               | 7/7 PASS |
+| BCNT01 (notify-on-terminal)          | 24/24 PASS |
+| BTCONT01 (terminal continuation)     | 10/10 PASS |
+| AGCONT01 (agent continuation)        | 7/7 PASS |
+| TQCB01 (completion barrier)          | 15/15 PASS |
+| PPAT01 (pending-prompt authority)    | 10/10 PASS |
+| QPSR01-c24-c-bridge                  | 6/6 PASS |
+| BCNT01-WIRE-c24-c-bridge             | 1/1 PASS |
+| `bunx tsc --noEmit` (apps/vscode)    | clean |
+| `bunx tsc -p tsconfig.build.json --noEmit` (sdk/core) | clean |
+
+### Trust binding (UNCHANGED)
+
+`DEFAULT_OFF`, dogfood-only, bounded FIFO ring (512 records), `dump != clear`, no env-var, no workspace toggle, no protocol/webview delta, no semantic mutation. V3 made ZERO changes to public SDK surface — only closed existing production-wiring holes and moved one observation seam (C7) to its truthful boundary.
+
+### LIVE qualification status
+
+```text
+READY_FOR_OPERATOR_RUN
+```
+
+After this VSIX:
+
+1. Install the dogfood bundle.
+2. Dispatch one managed notify=true 30s job:
+       sh -c 'echo STARTED; sleep 30; echo FINISHED'
+3. After the second autonomous COMPLETED arrives, run:
+       Cline Debug: Dump Continuation Cardinality Authority
+4. Inspect `<globalStorageUri>/continuation-cardinality-authority.jsonl`.
+5. The diagnostic should now MEANINGFULLY distinguish explicit_user
+   from pending_prompt_drain from deferred_continuation at C7/C8
+   (because the drain's runTurn invocation now carries `delivery`),
+   and the production-wired C5/C6 hooks should fire on every drained
+   prompt (because onBeforeDispatch is now forwarded).
+
+### Verdict
+
+**PASS_CONTINUATION_CARDINALITY_AUTHORITY_INSTRUMENTATION_V3** — V2 production-wiring defects closed, 22/22 production-shape + discriminator tests green, conservation preserved, ready for LIVE RED dogfood qualification.

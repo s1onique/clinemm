@@ -55,6 +55,7 @@ import {
 	getDiagnosticManagerId,
 } from "./background-job-liveness-authority"
 import { type CommandJobLifecycleEvent, CommandJobManager, type CommandJobState } from "./command-job-manager"
+import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import { resolveActiveWorkspaceRootsForSandbox } from "./sandbox-policy"
@@ -410,6 +411,77 @@ export class VscodeSessionHost implements SdkSessionHost {
 				// an inline duplicate that risks losing the source binding.
 				applyToStartSessionInput: prepareStartSessionInput,
 			}),
+			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+			// Wire the host-side CCARD capture hooks into the SDK
+			// `PendingPromptsController` + `LocalRuntimeHost.runTurn`
+			// via the `pendingPromptCapture` pass-through. The capture
+			// gate (dogfood-only) lives inside the capture module —
+			// when OFF every callback is a no-op, so the production
+			// default is zero-overhead.
+			pendingPromptCapture: (() => {
+				const deriveOrigin = (
+					delivery: "queue" | "steer" | undefined,
+				): "pending_prompt_drain" | "deferred_continuation" | "explicit_user" => {
+					if (delivery === "queue") return "pending_prompt_drain"
+					if (delivery === "steer") return "deferred_continuation"
+					return "explicit_user"
+				}
+				return {
+					onEnqueue: (input) => {
+						captureContinuationCardinalityAuthorityRecord({
+							stage: "pending_prompt_enqueued",
+							origin: deriveOrigin(input.delivery),
+							sessionId: input.sessionId,
+							promptId: input.promptId,
+							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+						})
+					},
+					onBeforeDrain: (input) => {
+						// C5 — pending_prompt_dequeued fires AFTER
+						// the destructive shift but BEFORE the send
+						// dispatch.
+						captureContinuationCardinalityAuthorityRecord({
+							stage: "pending_prompt_dequeued",
+							origin: deriveOrigin(input.delivery),
+							sessionId: input.sessionId,
+							promptId: input.promptId,
+							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+						})
+					},
+					onBeforeDispatch: (input) => {
+						// C6 — continuation_scheduled fires
+						// IMMEDIATELY BEFORE the actual `deps.send(...)`
+						// call. INDEPENDENT of C5 (so C5=1 with C6=2
+						// is observable as a duplicate-dispatch
+						// fingerprint).
+						captureContinuationCardinalityAuthorityRecord({
+							stage: "continuation_scheduled",
+							origin: deriveOrigin(input.delivery),
+							sessionId: input.sessionId,
+							promptId: input.promptId,
+							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+						})
+					},
+					onRunTurnStarted: (input) => {
+						// C7 — origin derived from actual delivery.
+						captureContinuationCardinalityAuthorityRecord({
+							stage: "run_turn_started",
+							origin: deriveOrigin(input.delivery),
+							sessionId: input.sessionId,
+							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+						})
+					},
+					onAgentTurnDone: (input) => {
+						// C8 — same derivation as C7.
+						captureContinuationCardinalityAuthorityRecord({
+							stage: "agent_turn_done",
+							origin: deriveOrigin(input.delivery),
+							sessionId: input.sessionId,
+							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+						})
+					},
+				}
+			})(),
 		})
 
 		Logger.log("[VscodeSessionHost] Initialized with ClineCore + VSCode extra tools")

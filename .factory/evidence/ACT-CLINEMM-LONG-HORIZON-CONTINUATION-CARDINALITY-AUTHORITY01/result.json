@@ -1,0 +1,115 @@
+{
+  "actId": "ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01",
+  "status": "PASS_DIAGNOSTIC_INSTRUMENTATION_LANDED_V3_PRODUCTION_WIRING_FIXED",
+  "verdict": "PASS_CONTINUATION_CARDINALITY_AUTHORITY_INSTRUMENTATION_V3",
+  "entryHead": "d1ecf48dc",
+  "reviewers": {
+    "factory_causal_reviewer": "ACCEPTED_AFTER_PRODUCTION_WIRING_FIX",
+    "runtime_observability_engineer": "ACCEPTED_AFTER_PRODUCTION_WIRING_FIX"
+  },
+  "haltHistory": [
+    {
+      "halt": "HALT_CCARD_DIAGNOSTIC_CANNOT_DISCRIMINATE_CONTINUATION_ORIGIN",
+      "fixedBy": "V2: split C5/C6 hooks, derive origin from delivery, thread jobId through SDK"
+    },
+    {
+      "halt": "HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN",
+      "fixedBy": "V3: forward onBeforeDispatch into real PendingPromptsController, forward next.jobId/next.delivery through deps.send, move C7 (run_turn_started) to actual executeTurn boundary, replace synthetic discriminator with production-shape CCARD-WIRE-01/01c/02"
+    }
+  ],
+  "productionFilesCreated": [
+    "apps/vscode/src/sdk/continuation-cardinality-authority.ts",
+    "apps/vscode/src/sdk/continuation-cardinality-authority-runtime.ts",
+    "apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts"
+  ],
+  "productionFilesModified": [
+    "apps/vscode/src/registry.ts",
+    "apps/vscode/src/extension.ts",
+    "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts",
+    "apps/vscode/src/sdk/command-job-manager.ts",
+    "apps/vscode/src/sdk/background-notify-coordinator.ts",
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+    "apps/vscode/src/sdk/vscode-session-host.ts",
+    "apps/vscode/package.json",
+    "sdk/packages/core/src/cline-core/types.ts",
+    "sdk/packages/core/src/runtime/host/host.ts",
+    "sdk/packages/core/src/runtime/host/local-runtime-host.ts",
+    "sdk/packages/core/src/runtime/host/runtime-host.ts",
+    "sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts"
+  ],
+  "testFiles": [
+    {
+      "path": "apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "purpose": "Diagnostic-only surface (capture module + origin derivation). CCARD-DISCRIMINATOR-01 still exercises the capture module directly because no production test can emulate a true 1:2 dispatch fingerprint without instrumenting LocalRuntimeHost.runTurn in test-only mode."
+    },
+    {
+      "path": "sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "purpose": "Production-shape regression. CCARD-WIRE-01/01c/02 exercise the REAL PendingPromptsController with stubbed send. CCARD-WIRE-01 would have FAILED before the V3 fix because the controller was never observing onBeforeDispatch (the dep-forwarding was missing)."
+    }
+  ],
+  "causalClass": ["DIAGNOSTIC_ONLY"],
+  "regressions": 0,
+  "preExistingTestDrift": "local-runtime-host.test.ts > 'persists active manual compaction state against the persisted transcript' (systemPrompt/currentWorkingContextEstimate extra fields) — pre-existing (confirmed via git stash + rerun on main), unrelated to CCARD instrumentation.",
+  "conservation": {
+    "BCNEX01": "unchanged - 7/7 PASS",
+    "BCNT01": "unchanged - 24/24 PASS",
+    "BTCONT01": "unchanged - 10/10 PASS",
+    "AGCONT01": "unchanged - 7/7 PASS",
+    "TQCB01": "unchanged - 15/15 PASS",
+    "PPAT01": "unchanged - 10/10 PASS",
+    "CCARD01": "updated - 12/12 PASS (was 10/10)",
+    "QPSR01-c24-c-bridge": "unchanged - 6/6 PASS",
+    "BCNT01-WIRE-c24-c-bridge": "unchanged - 1/1 PASS",
+    "SDK-pending-prompt-service.test": "updated - 10/10 PASS (was 7/7; +3 CCARD-WIRE-01/01c/02)",
+    "bunx tsc --noEmit (apps/vscode)": "clean",
+    "bunx tsc -p tsconfig.build.json --noEmit (sdk/core)": "clean"
+  },
+  "reviewerFixesV3": {
+    "P0_onBeforeDispatch_wired_into_real_controller": "Added the missing dependency forwarding in `LocalRuntimeHost` constructor so `options.pendingPromptCapture?.onBeforeDispatch` is forwarded to `PendingPromptsControllerDeps.onBeforeDispatch`. Without this forwarding the real controller never observed dispatch-side cardinality — duplicate-dispatch paths were invisible to the diagnostic. CCARD-WIRE-01 fails if this forwarding is removed.",
+    "P0_C7_observes_actual_execution": "Moved `onRunTurnStarted` from the entry of `LocalRuntimeHost.runTurn(...)` to immediately before `executeTurn(...)`. The previous implementation fired C7 at request entry — BEFORE the queue/steer short-circuit — so a `runTurn(delivery:queue)` request that simply queued the prompt would still record a C7 entry, manufacturing a 1→2 signal. After the fix C7 only fires for actual agent execution. CCARD-WIRE-02 (queue-path enqueue with canStartRun() === false does not fire send) pins this invariant.",
+    "P1_jobId_survives_deps_send_boundary": "Threaded `next.jobId` into the `deps.send({...})` call inside `PendingPromptsController.drain`. The previous implementation captured `next.jobId` on C5/C6 payloads but did NOT copy it into the SendSessionInput passed to `runTurn`. Now C6→C7 correlation works: the same jobId flows from C4 (enqueue) → C5 (drain) → C6 (dispatch) → C7 (actual runTurn) → C8 (turn done).",
+    "P1_nextDelivery_forwarded_for_drained_runs": "Threaded `next.delivery` into the `deps.send({...})` call inside `PendingPromptsController.drain`. The drain path's `runTurn` invocation now receives the original delivery context (queue/steer) so the C7 record derives the correct origin (pending_prompt_drain or deferred_continuation) instead of falling through to explicit_user."
+  },
+  "productionDiffV3": {
+    "local-runtime-host.ts": "+13 lines: added onBeforeDispatch forwarding into PendingPromptsControllerDeps spread + moved onRunTurnStarted fire from runTurn entry to immediately before executeTurn + updated comments",
+    "pending-prompt-service.ts": "+13 lines: threaded next.delivery and next.jobId into the deps.send({...}) call inside drain"
+  },
+  "testDiffV3": {
+    "pending-prompt-service.test.ts": "+~150 lines: CCARD-WIRE-01 (production-shape P0 wiring regression — real PendingPromptsController, stubbed send), CCARD-WIRE-01c (backward-compat — onBeforeDispatch optional), CCARD-WIRE-02 (enqueue does NOT fire C5/C6)"
+  },
+  "trustBinding": {
+    "DEFAULT_OFF": true,
+    "DOGFOOD_ONLY": true,
+    "BOUNDED_FIFO_RING": "512 records",
+    "DUMP_UNCONDITIONAL": true,
+    "DUMP_DOES_NOT_CLEAR": true,
+    "PROTOCOL_DELTA": false,
+    "PUBLIC_TOOL_SCHEMA_DELTA": false,
+    "WEBVIEW_DELTA": false,
+    "SEMANTIC_MUTATION": false,
+    "BACKWARD_COMPATIBLE_API_DELTA": true,
+    "NOTES": "All new fields are optional. SendSessionInput.jobId, PendingPromptEntry.jobId, PendingPromptEnqueueInput.jobId, the deliverable jobId pass-through, and the new onBeforeDispatch hook all default to undefined. Existing callers see no behavior change when the capture module seam is OFF (the production default). V3 did not introduce any new public surface — only closed existing production-wiring holes and moved one observation seam (C7) to its truthful boundary."
+  },
+  "removalTrigger": "first 1 -> 2 cardinality seam mechanically identified AND ablation returns cardinality to 1 (PASS_CONTINUATION_*), OR CAPTURE_INSUFFICIENT, OR HALT_RED_NOT_REPRODUCED. Per ACT sec 31/32. Once trigger fires: this module + the underlying ring module + the activation helper + the Command Palette registration + the registry entry + the package.json command declaration MUST be removed TOGETHER. The optional jobId/onBeforeDispatch additions to the SDK capture-hook interface are themselves trivially removable: just stop wiring the optional callback; no consumption change is required.",
+  "stopRulesHonored": {
+    "completionBarrier_patched": false,
+    "dualDeliveryArbitration_patched": false,
+    "presentationSuppressed": false,
+    "wakePromptFormat_modified": false,
+    "CommandJobManager_redesigned": false,
+    "queueLogic_globally_changed": false,
+    "PROTO_DELTA": "NO",
+    "PUBLIC_TOOL_SCHEMA_DELTA": "NO",
+    "sdkCompletionBarrier_patched": false,
+    "sdkArbitration_patched": false
+  },
+  "LIVEQualificationStatus": "READY_FOR_OPERATOR_RUN",
+  "liveQualificationScript": "1. Install the dogfood VSIX. 2. Dispatch one notify=true 30s `sh -c 'echo STARTED; sleep 30; echo FINISHED'`. 3. After the second autonomous COMPLETED appears, run `Cline Debug: Dump Continuation Cardinality Authority`. 4. Inspect `<globalStorageUri>/continuation-cardinality-authority.jsonl` and `.counters.json`. 5. Classify per ACT sec 11 by reading the first stage N where count flips 1->2 and the two origin values at that stage.",
+  "nextACT": "Once the LIVE dump produces a JSONL with a 1 -> 2 cardinality expansion, a successor ACT will mechanically identify the first duplicated seam (CC0..CC8 classification per ACT sec 11) and apply the corresponding bounded repair branch (A..D per ACT sec 14..17). No such repair is included in this ACT — by design."
+}

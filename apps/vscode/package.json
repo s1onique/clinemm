@@ -252,6 +252,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpContinuationCardinalityAuthority",
+				"title": "Cline Debug: Dump Continuation Cardinality Authority",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

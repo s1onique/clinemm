@@ -42,6 +42,7 @@ import { type AgentToolContext, getDefaultShell, getShellInvocation, type Intern
 import type { RuntimeErrorIncident } from "@shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import { captureBackgroundJobLivenessAuthorityRecord, getDiagnosticManagerId } from "./background-job-liveness-authority"
+import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import {
 	buildExperimentalReconCapability,
 	defaultSandboxBackendResolver,
@@ -2647,6 +2648,16 @@ export class CommandJobManager {
 				signal: job.signal ?? null,
 				jobState: terminalState,
 				tsMs: Date.now(),
+			})
+			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+			// C1 — terminal_committed capture. The CommandJobManager
+			// is the canonical terminal-fact authority; one terminal
+			// transition per jobId is the invariant. When the capture
+			// seam is OFF (default) this is a complete no-op.
+			captureContinuationCardinalityAuthorityRecord({
+				stage: "terminal_committed",
+				origin: "background_terminal",
+				jobId: job.id,
 			})
 		}
 		// ACT-CLINEMM-COMMANDJOB-DESCENDANT-CONSERVATION-TELEMETRY01

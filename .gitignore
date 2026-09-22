@@ -145,3 +145,4 @@ apps/examples/desktop-app/.cursor/settings.json
 .bun-install/
 
 scripts/__pycache__/
+apps/vscode/~/

@@ -126,6 +126,10 @@ import {
 	setBackgroundJobLivenessAuthorityCaptureEnabled,
 } from "./background-job-liveness-authority"
 import {
+	isContinuationCardinalityAuthorityCaptureEnabled as _isContinuationCardinalityAuthorityCaptureEnabled,
+	setContinuationCardinalityAuthorityCaptureEnabled,
+} from "./continuation-cardinality-authority"
+import {
 	isBackgroundOwnerCorrelationCaptureEnabled as _isBackgroundOwnerCorrelationCaptureEnabled,
 	setBackgroundOwnerCorrelationCaptureEnabled,
 } from "./background-owner-correlation"
@@ -841,4 +845,70 @@ export function applyBackgroundJobLivenessAuthorityDiagnosticProfile(isDogfood: 
 
 function _isBackgroundJobLivenessAuthorityCaptureEnabledForActivation(): boolean {
 	return _isBackgroundJobLivenessAuthorityCaptureEnabled()
+}
+
+// ===========================================================================
+// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 —
+// central dogfood profile resolver for the CCARD (Continuation
+// Cardinality Authority) capture seam.
+//
+// CONTRACT — frozen in this ACT (mirrors BJLA / BOCOR; no env
+// override layer):
+//   - There is NO new env var. NO override matrix. NO parser.
+//     Per the Factory reviewer precedent, the diagnostic is enabled
+//     STRICTLY by the central dogfood profile:
+//       isDogfood === true  -> capture ON
+//       isDogfood === false -> capture OFF (public default)
+//   - The module seam is
+//     ./continuation-cardinality-authority.ts#captureEnabled. The
+//     resolver arms it via
+//     setContinuationCardinalityAuthorityCaptureEnabled(enabled).
+//   - The activation helper is called from
+//     extension.ts:activate (sibling to the existing BJLA / BOCOR
+//     activations); there is exactly ONE production activation
+//     path.
+//
+// HONEST STOP RULE (mirrors BJLA / BOCOR):
+//   Once the first 1 -> 2 cardinality seam is mechanically
+//   identified AND ablation returns cardinality to 1
+//   (PASS_CONTINUATION_*) OR the diagnostic is classified
+//   CAPTURE_INSUFFICIENT OR HALT_RED_NOT_REPRODUCED, this resolver
+//   + activation helper + the CCARD ring module + the host-side
+//   dump runtime + the Command Palette registration + the registry
+//   entry + the package.json command declaration MUST be removed
+//   TOGETHER.
+// ===========================================================================
+
+/**
+ * THE single production activation helper for the CCARD seam.
+ * Called from extension.ts:activate (sibling to the BJLA / BOCOR
+ * activations); there is exactly ONE production activation path,
+ * no copied orchestration in tests.
+ *
+ * Mirrors BJLA / BOCOR: enable/disable is strictly:
+ *
+ *   isDogfood === true  -> ON
+ *   isDogfood === false -> OFF
+ *
+ * No new env knob. No parser. No override matrix.
+ */
+export function applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
+	const was = _isContinuationCardinalityAuthorityCaptureEnabledForActivation()
+	const should = isDogfood
+	if (should && !was) {
+		setContinuationCardinalityAuthorityCaptureEnabled(true)
+		return { enabled: true, flipped: true }
+	}
+	if (!should && was) {
+		setContinuationCardinalityAuthorityCaptureEnabled(false)
+		return { enabled: false, flipped: true }
+	}
+	return { enabled: should, flipped: false }
+}
+
+function _isContinuationCardinalityAuthorityCaptureEnabledForActivation(): boolean {
+	return _isContinuationCardinalityAuthorityCaptureEnabled()
 }

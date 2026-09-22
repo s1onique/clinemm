@@ -95,6 +95,22 @@ const ClineCommands = {
 	// successful LIVE classification AND qualification of the
 	// bounded repair, OR CAPTURE_INSUFFICIENT.
 	DumpBackgroundJobLivenessAuthority: prefix + ".debug.dumpBackgroundJobLivenessAuthority",
+	// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+	// Debug dump command for the bounded Continuation Cardinality
+	// Authority (CCARD) diagnostic at the autonomous-turn boundary
+	// (C1..C10 production seams). Dogfood-only (controlled by the
+	// central dogfood profile resolver - no separate env-var toggle,
+	// no workspace toggle). The dump serializes the bounded ring to
+	// <globalStorageUri>/continuation-cardinality-authority.jsonl
+	// AND the per-stage counters to
+	// <globalStorageUri>/continuation-cardinality-authority.counters.json.
+	// No toggle command (the diagnostic enablement is owned by
+	// `applyContinuationCardinalityAuthorityDiagnosticProfile` in
+	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER: first 1 -> 2
+	// cardinality seam mechanically identified AND ablation returns
+	// cardinality to 1, OR CAPTURE_INSUFFICIENT, OR
+	// HALT_RED_NOT_REPRODUCED, OR successor evidence supersedes it.
+	DumpContinuationCardinalityAuthority: prefix + ".debug.dumpContinuationCardinalityAuthority",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",

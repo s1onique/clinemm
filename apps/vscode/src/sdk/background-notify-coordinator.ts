@@ -42,6 +42,7 @@
  */
 
 import type { CommandJobState } from "./command-job-manager"
+import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 
 /** Maximum bytes (UTF-8) for a generated wake prompt. */
 export const NOTIFY_WAKE_PROMPT_MAX_BYTES = 8192
@@ -120,9 +121,7 @@ export type ConsumeTerminalDecision =
  * canonical Path A (consumeTerminal); `canonical_status_observed` is
  * the canonical Path B (command_status observation).
  */
-export type ResolveObligationReason =
-	| "terminal_wake_delivered"
-	| "canonical_status_observed"
+export type ResolveObligationReason = "terminal_wake_delivered" | "canonical_status_observed"
 
 /**
  * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
@@ -394,6 +393,17 @@ export class BackgroundNotifyCoordinator {
 		isContainmentFailed: boolean
 		outputTail?: string | undefined
 	}): ConsumeTerminalDecision {
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+		// C2 — notify_consume_enter capture. Captured BEFORE any
+		// short-circuit return so the entry cardinality for a
+		// single terminal fact can be observed even when the
+		// decision is `no_marker`. When the capture seam is OFF
+		// (default) this is a complete no-op.
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "notify_consume_enter",
+			origin: "background_terminal",
+			jobId: input.jobId,
+		})
 		if (this.disposed) {
 			return { kind: "no_marker" }
 		}
@@ -466,6 +476,17 @@ export class BackgroundNotifyCoordinator {
 					outputTail: h.outputTail,
 				}),
 			})
+			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+			// C3 — wake_created capture (held-batch path). One record
+			// per wake actually delivered. When the capture seam is
+			// OFF (default) this is a complete no-op.
+			captureContinuationCardinalityAuthorityRecord({
+				stage: "wake_created",
+				origin: "background_terminal",
+				jobId: h.jobId,
+				sessionId: activeOwner.sessionId,
+				taskId: activeOwner.taskId,
+			})
 			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
 			// CORRECTION02: dual-delivery arbitration. Track each
 			// wake so a later Path B (resolveObligation) can
@@ -482,6 +503,17 @@ export class BackgroundNotifyCoordinator {
 				exitCode: input.exitCode,
 				outputTail: input.outputTail,
 			}),
+		})
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+		// C3 — wake_created capture (current-terminal path). One
+		// record per wake actually delivered. When the capture seam
+		// is OFF (default) this is a complete no-op.
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "wake_created",
+			origin: "background_terminal",
+			jobId: input.jobId,
+			sessionId: activeOwner.sessionId,
+			taskId: activeOwner.taskId,
 		})
 		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
 		// CORRECTION02: dual-delivery arbitration. Track the current

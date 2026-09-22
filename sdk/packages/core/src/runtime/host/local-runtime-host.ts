@@ -254,6 +254,83 @@ export interface LocalRuntimeHostOptions {
 	 * the AI gateway providers when issuing HTTP requests.
 	 */
 	fetch?: typeof fetch;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0+P1 fix):
+	 *
+	 * Optional capture hooks threaded through to the
+	 * `PendingPromptsController` so C4 (pending_prompt_enqueued) +
+	 * C5 (pending_prompt_dequeued) + C6 (continuation_scheduled) can
+	 * be observed from a host-side capture module without making the
+	 * SDK depend on apps/vscode. The default production wiring in
+	 * `apps/vscode/src/sdk/vscode-runtime-builder.ts` supplies these
+	 * from the dogfood-only Continuation Cardinality Authority
+	 * capture module; tests / external embedders may omit them and
+	 * the controller is a complete no-op.
+	 *
+	 * The P0 fix split the C5/C6 observation into distinct hooks
+	 * (`onBeforeDrain` for dequeue, `onBeforeDispatch` for send)
+	 * so C5=1 with C6=2 is observable as a duplicate-dispatch
+	 * fingerprint.
+	 *
+	 * The P0 fix also stopped hard-coding C7/C8 origin; the
+	 * host derives the origin from `input.delivery`.
+	 *
+	 * The P1 fix threads `jobId` through `onBeforeDrain`,
+	 * `onBeforeDispatch`, `onRunTurnStarted`, and `onAgentTurnDone`
+	 * so the JSONL can correlate one logical job through
+	 * C4 → C5 → C6 → C7 → C8.
+	 */
+	pendingPromptCapture?: {
+		onEnqueue?: (input: {
+			sessionId: string;
+			delivery: "queue" | "steer";
+			promptId: string;
+			jobId?: string;
+		}) => void;
+		onBeforeDrain?: (input: {
+			sessionId: string;
+			promptId: string;
+			delivery: "queue" | "steer";
+			jobId?: string;
+		}) => void;
+		onBeforeDispatch?: (input: {
+			sessionId: string;
+			promptId: string;
+			delivery: "queue" | "steer";
+			jobId?: string;
+		}) => void;
+		/**
+		 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0 fix):
+		 *
+		 * Fired at the start of every `runTurn` call, BEFORE the
+		 * queue/steer short-circuit, so the capture covers BOTH the
+		 * "drain dispatched a queued prompt" path (callback fires
+		 * here too) AND the "user-supplied immediate prompt" path.
+		 * Use this for C7 (run_turn_started). The host derives the
+		 * origin from `input.delivery` (the `pending_prompt_drain`
+		 * hard-coding bug is fixed — see the reviewer note in
+		 * `vscode-session-host.ts`).
+		 */
+		onRunTurnStarted?: (input: {
+			sessionId: string;
+			delivery: "queue" | "steer" | undefined;
+			jobId?: string;
+		}) => void;
+		/**
+		 * Fired when an agent turn's run completes (C8 — agent_turn_done).
+		 * Fires on every finishReason, including "completed" /
+		 * "aborted" / "error". The host-side completion commit
+		 * observer uses this to distinguish "agent turn done" from
+		 * "user-visible completion commit". The host derives the
+		 * origin from `input.delivery` (no hard-coding).
+		 */
+		onAgentTurnDone?: (input: {
+			sessionId: string;
+			finishReason: string;
+			delivery: "queue" | "steer" | undefined;
+			jobId?: string;
+		}) => void;
+	};
 }
 
 export class LocalRuntimeHost implements RuntimeHost {
@@ -271,6 +348,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 	private readonly distinctId: string;
 	private readonly defaultLogger?: BasicLogger;
 	private readonly defaultFetch?: typeof fetch;
+	private readonly pendingPromptCaptureHooks: LocalRuntimeHostOptions["pendingPromptCapture"];
 	private readonly events = new RuntimeHostEventBus();
 	private readonly sessions = new Map<string, ActiveSession>();
 	// Serializes manifest read-modify-writes per session; see mutateSessionManifest.
@@ -313,12 +391,39 @@ export class LocalRuntimeHost implements RuntimeHost {
 		this.defaultLogger = options.logger;
 		this.defaultTelemetry?.setDistinctId(distinctId);
 		this.defaultFetch = options.fetch;
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+		// Cache the optional capture hooks so the C7 capture site in
+		// `runTurn` (which takes only the SendSessionInput parameter)
+		// can reach them via `this.pendingPromptCaptureHooks`. When
+		// undefined the production path is a complete no-op.
+		this.pendingPromptCaptureHooks = options.pendingPromptCapture;
 		recoverDetachedCommandLogsOnce(this.defaultLogger, this.defaultTelemetry);
 
 		this.pendingPromptsController = new PendingPromptsController({
 			getSession: (sid) => this.sessions.get(sid),
 			emit: (event) => this.emit(event),
 			send: (input) => this.runTurn(input),
+			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+			// Forward the optional pendingPromptCapture hooks to the
+			// controller so C4 (pending_prompt_enqueued) + C5/C6
+			// (drain boundary) are observable. When undefined the
+			// controller is a complete no-op.
+			...(options.pendingPromptCapture?.onEnqueue
+				? { onEnqueue: options.pendingPromptCapture.onEnqueue }
+				: {}),
+			...(options.pendingPromptCapture?.onBeforeDrain
+				? { onBeforeDrain: options.pendingPromptCapture.onBeforeDrain }
+				: {}),
+			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
+			// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
+			// Forward `onBeforeDispatch` so the C6 hook actually fires
+			// in LIVE production. Without this forwarding the
+			// PendingPromptsController never observes dispatch-side
+			// cardinality — a duplicate-dispatch path that re-enters
+			// `deps.send` is INVISIBLE to the diagnostic.
+			...(options.pendingPromptCapture?.onBeforeDispatch
+				? { onBeforeDispatch: options.pendingPromptCapture.onBeforeDispatch }
+				: {}),
 		});
 		this.pendingPrompts = {
 			list: async (input) =>
@@ -1066,10 +1171,26 @@ export class LocalRuntimeHost implements RuntimeHost {
 
 	async runTurn(input: SendSessionInput): Promise<AgentResult | undefined> {
 		const session = this.getSessionOrThrow(input.sessionId);
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
+		// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
+		// The previous implementation fired `onRunTurnStarted` here,
+		// at the entry of `runTurn`. That conflated REQUEST cardinality
+		// with EXECUTION cardinality — a `runTurn(delivery:"queue")`
+		// arriving while the agent cannot start would enter runTurn,
+		// become queued/short-circuited, and later be drained. Counting
+		// the first entry as an actual turn start would manufacture a
+		// `1→2` signal all on its own.
+		//
+		// C7 now observes ACTUAL AGENT EXECUTION (not request entry).
+		// The hook is fired at the boundary immediately before
+		// `executeTurn(...)` (below). The early-return / queue path
+		// (delivery === "queue" || delivery === "steer") is captured at
+		// C4 (onEnqueue) instead. Origin derivation is unchanged.
 		const canStartRun = session.agent.canStartRun();
-		const delivery =
+		const resolvedDelivery =
 			input.delivery ??
 			(session.interactive && !canStartRun ? ("queue" as const) : undefined);
+		const delivery = resolvedDelivery;
 		session.config.telemetry?.capture({
 			event: "session.input_sent",
 			properties: {
@@ -1087,8 +1208,28 @@ export class LocalRuntimeHost implements RuntimeHost {
 				delivery,
 				userImages: input.userImages,
 				userFiles: input.userFiles,
+				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 			});
 			return undefined;
+		}
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
+		// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
+		// C7 — agent_turn_started capture (host-side seam). Fires
+		// IMMEDIATELY BEFORE the actual `executeTurn(...)` call, AFTER
+		// the queue/steer short-circuit has already returned. The hook
+		// therefore observes ACTUAL EXECUTION, not request entry.
+		// `delivery` here is the original resolved delivery (carried
+		// across the queue/steer branch via the `delivery` variable);
+		// for the immediate path it is undefined. The host derives
+		// origin from `delivery` rather than hard-coding
+		// `pending_prompt_drain`. The optional `jobId` correlation
+		// token is threaded through unchanged.
+		if (this.pendingPromptCaptureHooks?.onRunTurnStarted) {
+			this.pendingPromptCaptureHooks.onRunTurnStarted({
+				sessionId: input.sessionId,
+				delivery,
+				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+			});
 		}
 		try {
 			const result = await this.executeTurn(session, {
@@ -1097,6 +1238,21 @@ export class LocalRuntimeHost implements RuntimeHost {
 				userImages: input.userImages,
 				userFiles: input.userFiles,
 			});
+			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0+P1 fix):
+			// C8 — agent_turn_done capture (host-side seam). Fires
+			// once per actual autonomous turn that ran (NOT for the
+			// queue/steer short-circuit above; that path is captured
+			// at C4 instead). The hook now carries the resolved
+			// `delivery` plus optional `jobId` so the host can
+			// derive origin contextually rather than hard-coding.
+			if (this.pendingPromptCaptureHooks?.onAgentTurnDone) {
+				this.pendingPromptCaptureHooks.onAgentTurnDone({
+					sessionId: input.sessionId,
+					finishReason: result.finishReason,
+					delivery: resolvedDelivery,
+					...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+				});
+			}
 			if (!session.interactive) {
 				await this.finalizeSingleRun(session, result.finishReason);
 			} else {

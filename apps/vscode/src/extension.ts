@@ -6,9 +6,11 @@ import { getPostTerminalAuthorityDiagnosticRecords } from "@shared/post-terminal
 import * as vscode from "vscode"
 import { dumpExtensionSideBackgroundJobLivenessAuthorityDiagnostic } from "@/sdk/background-job-liveness-authority-runtime"
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "@/sdk/background-owner-correlation-runtime"
+import { dumpExtensionSideContinuationCardinalityAuthorityDiagnostic } from "@/sdk/continuation-cardinality-authority-runtime"
 import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
+	applyContinuationCardinalityAuthorityDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
@@ -176,6 +178,19 @@ export async function activate(context: vscode.ExtensionContext) {
 	// construction guarantees the seam is armed BEFORE the first
 	// `new CommandJobManager({...})` inside `VscodeSessionHost.create`.
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+	// arm the CCARD (Continuation Cardinality Authority) capture
+	// seam at the SAME EARLIEST initialization seam, BEFORE
+	// SdkController construction. The helper arms the module seam
+	// idempotently based STRICTLY on the dogfood identity bit
+	// (mirrors BJLA / BOCOR — no env var, no override matrix). The
+	// capture is at the C1..C10 production seams capable of
+	// starting another model turn. Running this BEFORE
+	// SdkController construction guarantees the seam is armed
+	// BEFORE the first CommandJobManager.finalize /
+	// BackgroundNotifyCoordinator.consumeTerminal / etc.
+	applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool
@@ -817,6 +832,27 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[BJLA] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Background job liveness authority dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+		// Dump command for the CCARD diagnostic. Mirrors the BJLA /
+		// BOCOR dump pattern: unconditional (operator can always
+		// inspect captured records), dump != clear (no ring
+		// mutation). REMOVAL_TRIGGER: first 1 -> 2 cardinality seam
+		// mechanically identified AND ablation returns cardinality
+		// to 1, OR CAPTURE_INSUFFICIENT, OR HALT_RED_NOT_REPRODUCED.
+		vscode.commands.registerCommand(commands.DumpContinuationCardinalityAuthority, async () => {
+			try {
+				const { ringFile, countersFile, recordCount, totalCaptured } =
+					await dumpExtensionSideContinuationCardinalityAuthorityDiagnostic(context)
+				void vscode.window.showInformationMessage(
+					`Continuation cardinality authority diagnostic: ${recordCount} record${recordCount === 1 ? "" : "s"} (${totalCaptured} captured across stages) → ${ringFile} (+ ${countersFile}).`,
+				)
+			} catch (err) {
+				Logger.error("[CCARD] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Continuation cardinality authority dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

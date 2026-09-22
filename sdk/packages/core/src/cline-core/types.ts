@@ -281,6 +281,73 @@ export interface ClineCoreOptions {
 		| Promise<StartSessionBootstrap | undefined>
 		| StartSessionBootstrap
 		| undefined;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0+P1 fix):
+	 *
+	 * Optional capture hooks threaded through to the
+	 * `PendingPromptsController` + `LocalRuntimeHost.runTurn` so
+	 * the host can observe the C4 (pending_prompt_enqueued) + C5
+	 * (pending_prompt_dequeued) + C6 (continuation_scheduled) +
+	 * C7 (run_turn_started) + C8 (agent_turn_done) cardinality
+	 * without making the SDK depend on apps/vscode.
+	 *
+	 * The P0 fix split the drain observation into two distinct
+	 * hooks (`onBeforeDrain` for C5 and `onBeforeDispatch` for
+	 * C6) so a duplicate-dispatch path (C5=1, C6=2) is
+	 * observable. The P0 fix ALSO stopped hard-coding the C7/C8
+	 * origin; the host now derives it from `input.delivery`
+	 * (`queue` → pending_prompt_drain, `steer` →
+	 * deferred_continuation, undefined → explicit_user).
+	 *
+	 * The P1 fix threads `jobId` through the drain and dispatch
+	 * payload so the JSONL can correlate one logical job through
+	 * C4 → C5 → C6. The host's terminal-wake path supplies it
+	 * (via the existing `enqueue(..., jobId)` extension); the
+	 * explicit user path leaves it undefined.
+	 *
+	 * The default production wiring in
+	 * `apps/vscode/src/sdk/vscode-runtime-builder.ts` (and the
+	 * SDK hub daemon equivalent) supplies these from the
+	 * dogfood-only Continuation Cardinality Authority capture
+	 * module; tests / external embedders may omit them and the
+	 * controller is a complete no-op.
+	 */
+	pendingPromptCapture?: {
+		onEnqueue?: (input: {
+			sessionId: string;
+			delivery: "queue" | "steer";
+			promptId: string;
+			jobId?: string;
+		}) => void;
+		/** C5 — fired AFTER the destructive shift, BEFORE scheduleDrain emits `pending_prompt_submitted`. */
+		onBeforeDrain?: (input: {
+			sessionId: string;
+			promptId: string;
+			delivery: "queue" | "steer";
+			jobId?: string;
+		}) => void;
+		/** C6 — fired IMMEDIATELY BEFORE the actual `deps.send(...)` call. Independent of C5. */
+		onBeforeDispatch?: (input: {
+			sessionId: string;
+			promptId: string;
+			delivery: "queue" | "steer";
+			jobId?: string;
+		}) => void;
+		/** C7 — fired at the entry of `LocalRuntimeHost.runTurn(...)`. */
+		onRunTurnStarted?: (input: {
+			sessionId: string;
+			delivery: "queue" | "steer" | undefined;
+			jobId?: string;
+		}) => void;
+		/** C8 — fired after the agent turn resolves. */
+		onAgentTurnDone?: (input: {
+			sessionId: string;
+			finishReason: string;
+			/** Last observed delivery for correlation (may be `undefined` for explicit user paths). */
+			delivery: "queue" | "steer" | undefined;
+			jobId?: string;
+		}) => void;
+	};
 }
 
 export interface StartSessionBootstrap {

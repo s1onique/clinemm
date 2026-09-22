@@ -8,6 +8,7 @@ import { Logger } from "@/shared/services/Logger"
 import { isClineManagedProvider } from "@/shared/utils/cline"
 import { getDiagnosticHostId, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import { type BackgroundOwnerCorrelationActiveJob, captureBackgroundOwnerCorrelationRecord } from "./background-owner-correlation"
+import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import type { MessageTranslatorState, TranslationResult } from "./message-translator"
 import { translateSessionEvent } from "./message-translator"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
@@ -350,21 +351,13 @@ export class SdkSessionEventCoordinator {
 		// Same predicate as the admission guard. Fail-closed on
 		// pending-prompt authority. NO `ownerStillRunning` —
 		// notify=false jobs are not completion-relevant.
-		const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
-			activeSession.sessionId,
-		) ?? {
+		const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(activeSession.sessionId) ?? {
 			available: false,
 		}
 		const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
-		const pendingPromptsKnown = pendingPromptCountRead.available === true
-			? pendingPromptCountRead.count
-			: 0
-		const activeNotifyCount = this.options.getActiveNotifyCount?.(
-			activeSession.sessionId,
-			taskId,
-		) ?? 0
-		const outstandingAutonomousWork =
-			pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+		const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+		const activeNotifyCount = this.options.getActiveNotifyCount?.(activeSession.sessionId, taskId) ?? 0
+		const outstandingAutonomousWork = pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
 		if (outstandingAutonomousWork) return
 
 		// All four conservation checks pass: commit the held
@@ -496,6 +489,18 @@ export class SdkSessionEventCoordinator {
 					// translator sets terminalResponseCommittedThisTurn at the completion
 					// tool's content_end; if it didn't, refuse the promotion.
 					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
+						// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+						// C9 — submit_and_exit_seen capture. Fires when the
+						// completion tool's terminal response was committed
+						// AND the turn-end path is promoting phase. The
+						// host-side capture gate makes this a complete
+						// no-op when OFF.
+						captureContinuationCardinalityAuthorityRecord({
+							stage: "submit_and_exit_seen",
+							origin: "pending_prompt_drain",
+							sessionId: activeSession.sessionId,
+							taskId: this.options.getTask?.()?.taskId,
+						})
 						// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
 						// Completion-barrier guard. The completion commit is HELD iff
 						// an outstanding autonomous obligation exists for the active
@@ -525,13 +530,9 @@ export class SdkSessionEventCoordinator {
 							available: false,
 						}
 						const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
-						const pendingPromptsKnown = pendingPromptCountRead.available === true
-							? pendingPromptCountRead.count
-							: 0
-						const activeNotifyCount = this.options.getActiveNotifyCount?.(
-							activeSession.sessionId,
-							this.options.getTask?.()?.taskId,
-						) ?? 0
+						const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+						const activeNotifyCount =
+							this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ?? 0
 						const outstandingAutonomousWork =
 							pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
 
@@ -550,6 +551,18 @@ export class SdkSessionEventCoordinator {
 								deferredAt: Date.now(),
 							}
 						} else {
+							// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+							// C10 — task_completion_committed capture. Fires
+							// at the actual completion commit seam (the
+							// canonical phase transition). One record per
+							// user-visible COMPLETED. The host-side capture
+							// gate makes this a complete no-op when OFF.
+							captureContinuationCardinalityAuthorityRecord({
+								stage: "task_completion_committed",
+								origin: "pending_prompt_drain",
+								sessionId: activeSession.sessionId,
+								taskId: this.options.getTask?.()?.taskId,
+							})
 							this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 						}
 					} else {

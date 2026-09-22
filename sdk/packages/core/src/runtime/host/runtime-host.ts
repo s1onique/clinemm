@@ -258,6 +258,20 @@ export interface SendSessionInput {
 	userFiles?: string[];
 	delivery?: "queue" | "steer";
 	timeoutMs?: number;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P1 fix):
+	 *
+	 * Optional correlation token for the originating background
+	 * command / job. Used by the dogfood-only CCARD capture so the
+	 * JSONL can correlate one logical job through C4 → C5 → C6 →
+	 * C7 → C8. The terminal-wake path supplies it; the explicit
+	 * user path leaves it undefined.
+	 *
+	 * Backward-compatible: no SDK semantic mutation. The field is
+	 * only consumed by the optional capture hooks (and threaded
+	 * into `PendingPromptEntry.jobId` when delivery is queue/steer).
+	 */
+	jobId?: string;
 }
 
 export interface SessionAccumulatedUsage {

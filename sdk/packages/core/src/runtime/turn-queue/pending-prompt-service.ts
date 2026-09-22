@@ -20,6 +20,15 @@ export interface PendingPromptEntry {
 	delivery: PendingPromptDelivery;
 	userImages?: string[];
 	userFiles?: string[];
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P1 fix):
+	 * Optional job correlation token. The host (terminal wake path)
+	 * supplies it when the enqueue was driven by a background command
+	 * completion; the explicit user path leaves it undefined. Used
+	 * only by the optional CCARD capture hooks (drain + dispatch) so
+	 * the JSONL can correlate one logical job through C4 → C5 → C6.
+	 */
+	jobId?: string;
 }
 
 export interface PendingPromptQueueState {
@@ -36,6 +45,69 @@ export interface PendingPromptsControllerDeps {
 		userImages?: string[];
 		userFiles?: string[];
 	}): Promise<unknown>;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+	 *
+	 * Optional callback fired AFTER a successful queue enqueue.
+	 * The callback receives the entry id that was actually pushed
+	 * (or the previously-existing entry that survived the
+	 * dedupe-by-prompt match). When undefined the controller is a
+	 * no-op (default — keeps the SDK package independent of the
+	 * apps/vscode capture module).
+	 *
+	 * `jobId` is supplied when the host caller knew it (terminal
+	 * wake path); undefined otherwise (explicit user follow-up).
+	 */
+	onEnqueue?: (input: {
+		sessionId: string;
+		delivery: PendingPromptDelivery;
+		promptId: string;
+		jobId?: string;
+	}) => void;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0+P1 fix):
+	 *
+	 * Optional callback fired AFTER the destructive shift but BEFORE
+	 * the controller schedules the actual send. The callback receives
+	 * the dequeued entry (so C5 `pending_prompt_dequeued` is
+	 * observed once and only once per shift, even if the subsequent
+	 * dispatch retries). Carries `jobId` so the JSONL can correlate
+	 * one logical job through C4 → C5 → C6.
+	 *
+	 * This hook is the C5 OBSERVATION SEAM; C6 is the distinct
+	 * `onBeforeDispatch` hook (see below) so the diagnostic can
+	 * distinguish a successful shift (C5=1) from a subsequently
+	 * scheduled dispatch (C6=1) versus a duplicate dispatch
+	 * (C6=2 with a single C5).
+	 *
+	 * When undefined the controller is a no-op.
+	 */
+	onBeforeDrain?: (input: {
+		sessionId: string;
+		promptId: string;
+		delivery: PendingPromptDelivery;
+		jobId?: string;
+	}) => void;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0 fix):
+	 *
+	 * Optional callback fired IMMEDIATELY BEFORE the actual
+	 * `deps.send(...)` invocation in the drain loop. This is the
+	 * distinct C6 `continuation_scheduled` seam — independent of
+	 * the C5 dequeue so a duplicate dispatch (two sends for one
+	 * drain) is observable as C6=2 with C5=1.
+	 *
+	 * Without this hook a re-entry into the dispatch path could be
+	 * invisible because the queue has already been drained.
+	 *
+	 * When undefined the controller is a no-op.
+	 */
+	onBeforeDispatch?: (input: {
+		sessionId: string;
+		promptId: string;
+		delivery: PendingPromptDelivery;
+		jobId?: string;
+	}) => void;
 }
 
 export interface PendingPromptEnqueueInput {
@@ -44,6 +116,15 @@ export interface PendingPromptEnqueueInput {
 	delivery: PendingPromptDelivery;
 	userImages?: string[];
 	userFiles?: string[];
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P1 fix):
+	 * Optional job correlation token. Threaded through to the
+	 * `PendingPromptEntry.jobId` field so the optional
+	 * `onBeforeDrain` + dispatch hooks can observe which background
+	 * job a queued wake belongs to. When undefined (explicit user
+	 * path) the entry simply carries no correlation.
+	 */
+	jobId?: string;
 }
 
 export interface PendingPromptConsumeResult {
@@ -138,7 +219,7 @@ export class PendingPromptService {
 		state: PendingPromptQueueState,
 		input: PendingPromptEnqueueInput,
 	): SessionPendingPrompt[] {
-		const { prompt, mode, delivery, userImages, userFiles } = input;
+		const { prompt, mode, delivery, userImages, userFiles, jobId } = input;
 		const existingIndex = state.pendingPrompts.findIndex(
 			(queued) => queued.prompt === prompt,
 		);
@@ -150,6 +231,12 @@ export class PendingPromptService {
 				mode: mode ?? existing.mode,
 				userImages: userImages ?? existing.userImages,
 				userFiles: userFiles ?? existing.userFiles,
+				// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P1):
+				// A re-enqueue of the same prompt retains its first jobId
+				// unless a fresher jobId is explicitly supplied; this
+				// matches the foreground dedupe semantics (the entry is
+				// the same logical continuation).
+				jobId: jobId ?? existing.jobId,
 			};
 			if (delivery === "steer" || existing.delivery === "steer") {
 				state.pendingPrompts.unshift({ ...next, delivery: "steer" });
@@ -164,6 +251,10 @@ export class PendingPromptService {
 				delivery,
 				userImages,
 				userFiles,
+				// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P1):
+				// jobId is preserved verbatim (may be undefined for
+				// explicit user turns).
+				jobId,
 			};
 			if (delivery === "steer") {
 				state.pendingPrompts.unshift(newEntry);
@@ -243,6 +334,14 @@ export class PendingPromptsController {
 			delivery: "queue" | "steer";
 			userImages?: string[];
 			userFiles?: string[];
+			/**
+			 * ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+			 * Optional callback-supplied jobId correlation. Forwarded
+			 * to the onEnqueue hook (C4 capture) when supplied so the
+			 * host can correlate pending_prompt_enqueued records with
+			 * the originating jobId (terminal wake path).
+			 */
+			jobId?: string;
 		},
 	): void {
 		const session = this.deps.getSession(sessionId);
@@ -253,8 +352,26 @@ export class PendingPromptsController {
 		// silently dropped, and queued prompts stay editable/deletable before
 		// they auto-run. scheduleDrain/drain still refuse to run while the
 		// abort is settling.
-		this.service.enqueue(session, entry);
+		const snapshots = this.service.enqueue(session, entry);
 		this.emitPrompts(session);
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+		// C4 hook — fire the optional onEnqueue capture callback AFTER
+		// the queue mutation, BEFORE scheduleDrain. The snapshot tail
+		// identifies the entry actually pushed (or the
+		// previously-existing entry that survived the dedupe-by-prompt
+		// match). When no callback is supplied the host has no capture
+		// seam installed (the production default).
+		if (this.deps.onEnqueue) {
+			const tail = snapshots[snapshots.length - 1];
+			if (tail) {
+				this.deps.onEnqueue({
+					sessionId,
+					delivery: entry.delivery,
+					promptId: tail.id,
+					...(entry.jobId !== undefined ? { jobId: entry.jobId } : {}),
+				});
+			}
+		}
 		this.scheduleDrain(sessionId, session);
 	}
 
@@ -314,17 +431,72 @@ export class PendingPromptsController {
 		}
 		const { entry: next } = this.service.shiftNext(session);
 		if (!next) return;
+		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0+P1 fix):
+		// C5 hook — fire the optional onBeforeDrain capture callback
+		// AFTER the destructive shift (the entry has actually been
+		// claimed off the queue) but BEFORE the controller schedules
+		// the actual send. The callback carries `next.jobId` so
+		// terminal-wake-bound entries can be correlated through
+		// C4 → C5 → C6.
+		//
+		// NOTE: this fires ONCE per shift. If `send` fails the entry
+		// is requeued (via requeueFront); no second C5 fires for the
+		// retry — that is the load-bearing distinction from C6.
+		if (this.deps.onBeforeDrain) {
+			this.deps.onBeforeDrain({
+				sessionId,
+				promptId: next.id,
+				delivery: next.delivery,
+				...(next.jobId !== undefined ? { jobId: next.jobId } : {}),
+			});
+		}
 		this.emitPrompts(session);
 		this.emitSubmitted(session, next);
 		session.drainingPendingPrompts = true;
 		let continueDrain = true;
 		try {
+			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 (P0 fix):
+			// C6 hook — fire the optional onBeforeDispatch capture
+			// callback IMMEDIATELY BEFORE the actual `deps.send(...)`
+			// call. This is the distinct "continuation scheduled"
+			// seam: each retry of an inner async send (e.g. a duplicate
+			// dispatch path) crosses C6 again, while C5 still fires
+			// exactly once per shift. The diagnostic can therefore
+			// observe "C6=2 with C5=1" as a duplicate-dispatch
+			// fingerprint.
+			if (this.deps.onBeforeDispatch) {
+				this.deps.onBeforeDispatch({
+					sessionId,
+					promptId: next.id,
+					delivery: next.delivery,
+					...(next.jobId !== undefined ? { jobId: next.jobId } : {}),
+				});
+			}
 			const result = await this.deps.send({
 				sessionId,
 				prompt: next.prompt,
 				...(next.mode ? { mode: next.mode } : {}),
 				userImages: next.userImages,
 				userFiles: next.userFiles,
+				// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
+				// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
+				// Forward `next.delivery` so the receiving `runTurn` can
+				// observe the original delivery context (queue/steer)
+				// at the execution boundary (C7). Without this, the
+				// drained prompt's C7 record would lose its
+				// origin-discriminating information — the host's
+				// deriveOrigin() would fall through to `explicit_user`
+				// for what is actually a `pending_prompt_drain` turn.
+				...(next.delivery !== undefined ? { delivery: next.delivery } : {}),
+				// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
+				// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
+				// Forward `next.jobId` into the SendSessionInput so the
+				// jobId correlation token survives the real
+				// `deps.send` boundary. Without this forwarding the
+				// C6→C7 jobId correlation is lost — C7 (run_turn_started)
+				// would observe `delivery` but never the originating
+				// jobId, defeating the C4→C5→C6→C7→C8 traceability.
+				...(next.jobId !== undefined ? { jobId: next.jobId } : {}),
 			});
 			// A turn that resolves with an error finish ran (the prompt is in
 			// the conversation and the error is surfaced), so the entry is not

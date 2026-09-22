@@ -1,0 +1,43 @@
+CCARD01 vitest suite (post-P0+P1 fix) — 12/12 PASS
+
+$ bunx vitest run src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts
+ ✓ src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts (12 tests) 5ms
+   ✓ CCARD-CTL-01: captureEnabled default is false
+   ✓ CCARD-CTL-02: capture() with seam OFF is a no-op
+   ✓ CCARD-CTL-03: capture() with seam ON appends + counts (with FIFO + counter)
+   ✓ CCARD-CTL-04: bounded FIFO ring eviction
+   ✓ CCARD-CTL-05: per-stage counter + Origin set (with multiple stages)
+   ✓ CCARD-CTL-06: clear() resets ring + counters + seq
+   ✓ CCARD-RED-01: one logical terminal fact -> exactly one record per stage C1..C10
+   ✓ CCARD-RED-01-DUP: simulated 1 -> 2 cardinality expansion at C5 is observable (per-PromptEntry dequeue)
+   ✓ CCARD-DISCRIMINATOR-01: C5=1 with C6=2 is observable as a duplicate-dispatch fingerprint   ← NEW (P0 fix)
+   ✓ CCARD-ORIGIN-01: C7 origin is derived from `delivery` (queue/steer/undefined)              ← NEW (P0 fix)
+   ✓ CCARD-COMPOSE-01: SDK package is reachable from the host test runner
+   ✓ CCARD-ABLATION-01: with capture OFF the production callback wiring is a no-op
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+
+Two new tests are exactly the discriminator the FACTORY HALT_CCARD_DIAGNOSTIC_* reviewer
+demanded before dogfood:
+
+  • CCARD-DISCRIMINATOR-01 — proves the production diagnostic can actually observe
+    "C5=1 with C6=2" (a duplicate-dispatch fingerprint). Before the P0 fix C5 and C6
+    were emitted from the same `onBeforeDrain` callback so this discriminator was,
+    by construction, unobservable. After the P0 fix C5 fires from
+    `onBeforeDrain` (after the destructive shift) and C6 fires from a distinct
+    `onBeforeDispatch` callback (immediately before the actual `deps.send(...)`
+    call in `PendingPromptsController.drain`).
+
+  • CCARD-ORIGIN-01 — proves C7/C8 origin is derived from the actual `input.delivery`
+    (`queue`→pending_prompt_drain, `steer`→deferred_continuation, undefined→explicit_user)
+    rather than hard-coded `pending_prompt_drain` for every record.
+
+This test output corresponds to the LIVE RED SPECIFICATION the operator runs against
+dogfood. Once the 30-second background job is dispatched and the second autonomous
+COMPLETED arrives, invoking `Cline Debug: Dump Continuation Cardinality Authority` will
+write `<globalStorageUri>/continuation-cardinality-authority.jsonl`. The CCARD-DISCRIMINATOR
+assertion that the diagnostic surface implements here is the same discriminator the
+LIVE operator uses to decide which CC0..CC8 classification applies to the resulting JSONL.
+
+LIVE operator verdict will update `06-classification.md` and `07-ablation-output.txt`
+in this evidence directory once a real `1 → 2` cardinality expansion is captured.
