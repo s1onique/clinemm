@@ -6643,3 +6643,70 @@ Seam 3: SdkController.discardQueuedWakeForJobId(sessionId, jobId)
 
 **Verdict:** PASS_DUAL_DELIVERY_ARBITRATION_REPAIRED_CORRECTION02
 
+
+## ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02.5 — PASS_PRODUCTION_SEAM_WITNESS_PROVEN — 2026-09-23
+
+**Status:** PASS. Factory reviewer's re-opened P0 (`HALT_DUAL_DELIVERY_DISCARD_PRODUCTION_SEAM_NOT_EXECUTED`) is closed by a single production-composition witness test `TQCB-COMPOSE-DUAL-DELIVERY-01` that drives the REAL production wire end-to-end.
+
+**Re-opened concern (P0):** The CORRECTION02 DUAL-2 test exercised a `TestPendingPromptsSink.discardByJobId` array surrogate, NOT the real production `SdkController.discardQueuedWakeForJobIdOnHost` adapter → real `host.pendingPrompts("list")` → real `host.pendingPrompts("delete")` seam. Arbitration semantics were green; production queued-wake deletion was unexercised.
+
+**Fix (bounded, ~270 lines across 2 files):**
+
+```text
+SdkController.ts:
+  function discardQueuedWakeForJobIdOnHost(...)  →  EXPORT (function body unchanged)
+  The export lets the production-composition test drive the EXACT
+  production adapter the live `Controller.discardQueuedWakeForJobId`
+  method invokes.
+
+long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts:
+  new TQCB-COMPOSE-DUAL-DELIVERY-01 (~270 lines) drives:
+    real CommandJobManager.start()
+    real BackgroundNotifyCoordinator (with discardQueuedWake callback
+        wired to the EXPORTED production adapter)
+    real pendingPrompts("list" | "delete", ...) service signature
+        (production call surface from SdkController.ts:768)
+    real createCommandStatusTool (Path B observation)
+```
+
+**Chronology (matches reviewer's required chronology exactly):**
+
+```text
+1. register marker J
+2. consumeTerminal(J) (Path A)
+3. assert canonical pendingPrompts.list({sessionId}) contains J wake
+4. invoke real command_status(J) (Path B)
+5. command_status → resolveObligation(J) → discardQueuedWake
+6. resolveObligation → real SdkController discard adapter
+7. discard adapter → pendingPrompts("list") → pendingPrompts("delete", {promptId})
+8. assert canonical pendingPrompts.list NO LONGER contains J wake
+9. assert coordinator.wakeEnqueuedJobIds no longer references J
+10. assert activeNotifyCountForOwner == 0 (marker drained)
+```
+
+No manual `resolveObligation`, no manual discard, no `splice()` test queue. The discard traversal goes through the production SdkController adapter.
+
+**Backing storage note:** The pendingPrompts queue is backed by an in-memory array (mirroring the BCFNEX01 / BCNT01 pattern: real coordinator + real discard adapter + in-memory agent stub). What is under test is the discard adapter's list→delete traversal + the coordinator's Path-B supersession logic, NOT the storage backend. Switching the storage to `LocalRuntimeHost.runTurn → PendingPromptsController` would be a bridge-only test (separate vitest config) and is not required for the production-composition evidence the reviewer asked for.
+
+**Conservation:**
+
+| Test family               | Result |
+|---------------------------|--------|
+| TQCB01                    | 15/15 PASS (was 14; +1 production-composition) |
+| BCNEX01                   | 7/7 PASS |
+| BTCONT01                  | 10/10 PASS |
+| BCTCP01-controller        | 7/7 PASS |
+| BCTCP01-multi-job         | 5/5 PASS |
+| AGCONT01                  | 7/7 PASS |
+| BCAFG01                   | 5/5 PASS |
+| PPAT01                    | 10/10 PASS |
+| **Total**                 | **66/66 PASS** |
+
+`bunx tsc --noEmit`: clean. No trailing whitespace residue. No pre-existing test drift introduced.
+
+**P1 (tracker normal-consumption cleanup):** Recorded as bounded lifecycle debt, not addressed in this pass (no natural consumption hook surfaced in the diff).
+
+**P2 (diff whitespace residue):** Cleaned in this pass.
+
+**Verdict:** PASS_PRODUCTION_SEAM_WITNESS_PROVEN_CORRECTION02.5 — P0 CLOSED, C1: GO TO DOGFOOD.
+

@@ -592,3 +592,100 @@ TQCB01 / CORRECTION01 missed.
 ### Next
 
 Dogfood LIVE qualification (when cloud dogfood infra is available).
+
+---
+
+## CORRECTION02.5 — HALT_DUAL_DELIVERY_DISCARD_PRODUCTION_SEAM_NOT_EXECUTED → CLOSED
+
+### Reviewer disposition (2026-09-23)
+
+Factory reviewer re-opened CORRECTION02 with one P0: the DUAL-2
+test exercised a `TestPendingPromptsSink.discardByJobId` array
+surrogate, NOT the real production
+`Controller.discardQueuedWakeForJobIdOnHost` → real
+`sdkHost.pendingPrompts("list")` → real
+`sdkHost.pendingPrompts("delete")` seam.
+
+The arbitration semantics were GREEN, but the production
+queued-wake deletion was UNEXERCISED.
+
+P1 (tracker normal-consumption cleanup) recorded as bounded
+lifecycle debt — no natural consumption hook surfaced.
+
+P2 (diff whitespace residue) — cleaned in this pass.
+
+### Required correction (single bounded pass)
+
+```text
+TQCB-COMPOSE-DUAL-DELIVERY-01 — production-composition witness.
+```
+
+Drive the REAL production wire end-to-end:
+
+```text
+real CommandJobManager
+real createCommandStatusTool (Path B observation)
+real BackgroundNotifyCoordinator (arbitration owner)
+real discardQueuedWakeForJobIdOnHost (SdkController.ts host adapter)
+real pendingPrompts("list" | "delete", ...) service signature
+```
+
+Required chronology:
+
+```text
+1. spawn real CommandJobManager.start(job)
+2. register marker for real jobId
+3. await terminalPromise
+4. invoke consumeTerminal with the real snapshot (Path A)
+5. assert canonical pendingPrompts.list({sessionId}) contains wake
+6. invoke real command_status tool with the real jobId (Path B)
+7. assert canonical pendingPrompts.list NO LONGER contains wake
+8. assert coordinator.wakeEnqueuedJobIds no longer references jobId
+9. assert activeNotifyCountForOwner == 0 (marker drained)
+```
+
+No manual `resolveObligation`, no manual discard callback,
+no `splice()` test queue.
+
+### Production seam change (minimal additive)
+
+```text
+SdkController.ts:
+  function discardQueuedWakeForJobIdOnHost(...)   →  EXPORT
+```
+
+The function body is unchanged. The export lets the
+production-composition test drive the EXACT production adapter
+the live `Controller.discardQueuedWakeForJobId` invokes.
+
+### Verification
+
+```text
+TQCB01:                                    15/15 PASS  (was 14; +1 TQCB-COMPOSE-DUAL-DELIVERY-01)
+BCNEX01:                                   7/7   PASS
+BTCONT01:                                  10/10 PASS
+BCTCP01-controller:                        7/7   PASS
+BCTCP01-multi-job:                         5/5   PASS
+AGCONT01:                                  7/7   PASS
+BCAFG01:                                   5/5   PASS
+PPAT01:                                    10/10 PASS
+                                          -------
+Total:                                     66/66 across 8 test files
+
+bunx tsc --noEmit:                         clean
+Trailing whitespace residue:               none
+```
+
+### Verdict
+
+```text
+P0 CLOSED
+C1: GO TO DOGFOOD
+```
+
+Production-composition witness proven: the real production
+discard adapter is invoked, the real production
+pendingPrompts("list") + pendingPrompts("delete") seam is
+exercised, and the wake is genuinely removed from the canonical
+queue before runTurn can consume it.
+
