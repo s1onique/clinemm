@@ -421,16 +421,25 @@ describe("BCNEX-CTL-12: queue-side cardinality (one notify=true job → exactly 
 		const harness = makeHarness()
 		const { notifyCoordinator, queue, activeSessionId, activeTaskId } = harness
 
-		// Opt-in via notifyOnCompletion: true (one marker, one job).
+		// Opt-in via marker registration itself (one marker, one
+		// job). The coordinator's `registerMarker` input contract
+		// is { jobId, sessionId, taskId } — `notifyOnCompletion`
+		// and `createdAtMs` are NOT part of the public input
+		// surface (the marker is implicitly opt-in, and the
+		// timestamp is filled in by the coordinator from its `now`
+		// hook). Passing them is a TS2353 excess-property error.
 		notifyCoordinator.registerMarker({
 			jobId: "J-ctl12",
 			sessionId: activeSessionId,
 			taskId: activeTaskId,
-			notifyOnCompletion: true,
-			createdAtMs: Date.now(),
 		})
 
-		// One terminal event.
+		// One terminal event. The coordinator's `consumeTerminal`
+		// input contract is { jobId, terminalState, exitCode,
+		// reason, isContainmentFailed, outputTail? } — `createdAtMs`
+		// is NOT part of the public input surface either (held
+		// ordering uses the coordinator's internal `now`). Passing
+		// it is a TS2353 excess-property error.
 		const decision = notifyCoordinator.consumeTerminal({
 			jobId: "J-ctl12",
 			terminalState: "exited",
@@ -438,7 +447,6 @@ describe("BCNEX-CTL-12: queue-side cardinality (one notify=true job → exactly 
 			reason: "natural",
 			isContainmentFailed: false,
 			outputTail: "started\n",
-			createdAtMs: Date.now(),
 		})
 
 		// Decision MUST be a single drained wake (not held, not
