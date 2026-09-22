@@ -18,7 +18,7 @@
 
 import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
+import { BackgroundNotifyCoordinator, type ResolveObligationDecision } from "../background-notify-coordinator"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
 import {
@@ -62,15 +62,38 @@ afterEach(() => {
 interface QueuedPrompt {
 	readonly sessionId: string
 	readonly prompt: string
+	readonly id: string
 }
 
 class TestPendingPromptsSink {
 	public readonly queued: QueuedPrompt[] = []
+	private nextId = 0
 	enqueue(input: { sessionId: string; prompt: string }): void {
-		this.queued.push({ sessionId: input.sessionId, prompt: input.prompt })
+		const id = `pending_test_${++this.nextId}`
+		this.queued.push({ sessionId: input.sessionId, prompt: input.prompt, id })
 	}
 	countForSession(sessionId: string): number {
 		return this.queued.filter((q) => q.sessionId === sessionId).length
+	}
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
+	 * CORRECTION02: dual-delivery arbitration test seam. Remove
+	 * the queued wake for `jobId` (by parsing the prompt's
+	 * `Job: <jobId>` line). Mirrors the production
+	 * `discardQueuedWakeForJobIdOnHost` logic for tests.
+	 */
+	discardByJobId(sessionId: string, jobId: string): boolean {
+		const idx = this.queued.findIndex(
+			(q) =>
+				q.sessionId === sessionId &&
+				q.prompt.startsWith("A background command you asked to be notified about has reached a terminal state.") &&
+				q.prompt.includes(`\nJob: ${jobId}\n`),
+		)
+		if (idx < 0) {
+			return false
+		}
+		this.queued.splice(idx, 1)
+		return true
 	}
 }
 
@@ -84,7 +107,8 @@ interface ProductionHarness {
 	activeTaskId: string
 	completionCommitCount: () => number
 	registerMarker: (jobId: string) => void
-	resolveObligation: (jobId: string) => void
+	resolveObligation: (jobId: string) => ResolveObligationDecision
+	discardCalls: () => Array<{ sessionId: string; jobId: string }>
 }
 
 interface MakeHarnessOptions {
@@ -119,9 +143,21 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 
 	const wakeSink = new TestPendingPromptsSink()
 	let now = 0
+	// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
+	// CORRECTION02: dual-delivery arbitration test seam. Track
+	// every discard call so RED tests can assert the host was
+	// actually invoked when Path B supersedes Path A.
+	const discardCalls: Array<{ sessionId: string; jobId: string }> = []
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
 		enqueueTerminalWake: ({ sessionId, prompt }) => wakeSink.enqueue({ sessionId, prompt }),
+		discardQueuedWake: ({ sessionId, jobId }) => {
+			discardCalls.push({ sessionId, jobId })
+			const removed = wakeSink.discardByJobId(sessionId, jobId)
+			return removed
+				? { kind: "discarded", jobId, promptId: undefined }
+				: { kind: "not_found", jobId }
+		},
 		now: () => ++now,
 	})
 
@@ -182,6 +218,7 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		activeSessionId,
 		activeTaskId,
 		completionCommitCount: () => completionCommitCount,
+		discardCalls: () => discardCalls.slice(),
 		registerMarker: (jobId: string) => {
 			notifyCoordinator.registerMarker({
 				jobId,
@@ -190,7 +227,7 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 			})
 		},
 		resolveObligation: (jobId: string) => {
-			notifyCoordinator.resolveObligation({
+			return notifyCoordinator.resolveObligation({
 				jobId,
 				sessionId: activeSessionId,
 				taskId: activeTaskId,
@@ -493,6 +530,240 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeUndefined()
 
 			h.notifyCoordinator.dispose()
+		}, 15_000)
+
+		// =====================================================================
+		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
+		// CORRECTION02: dual-delivery arbitration (Path A vs Path B).
+		//
+		// The LIVE bug: when Path A (terminalPromise.then → consumeTerminal
+		// → wake enqueued) and Path B (command_status → resolveObligation)
+		// race to deliver the same terminal result, the marker layer is
+		// first-writer-wins (correct) but the wake layer is NOT
+		// arbitrated. The completion barrier commits COMPLETED on the
+		// marker-drain signal, but a redundant wake is left in the queue
+		// and starts a SECOND autonomous turn → second submit_and_exit →
+		// second COMPLETED.
+		//
+		// Acceptance matrix (from Factory reviewer):
+		//
+		//   | command_status first, wake not yet enqueued → wake never
+		//     becomes actionable
+		//   | wake enqueued first, command_status second → queued wake
+		//     becomes redundant and cannot start a turn
+		//   | wake consumed first → continuation proceeds once; later
+		//     status read harmless
+		//   | notify=false → unaffected
+		//   | two jobs A/B → arbitration is per jobId, never global
+		// =====================================================================
+
+		// TQCB-CTL-DUAL-1: command_status first, wake not yet enqueued.
+		// Path B drains the marker; subsequent Path A consumeTerminal
+		// returns no_marker (no wake enqueued). The completion barrier
+		// commits COMPLETED on the first path; no duplicate wake exists.
+		it("TQCB-CTL-DUAL-1: command_status first → Path A becomes no-op, no second wake", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			h.registerMarker("J-A")
+			h.resolveObligation("J-A")
+			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
+
+			const decision = h.notifyCoordinator.consumeTerminal({
+				jobId: "J-A",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			expect(decision.kind).toBe("no_marker")
+			expect(h.wakeSink.countForSession(h.activeSessionId)).toBe(0)
+			expect(h.discardCalls()).toEqual([])
+
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(h.completionCommitCount()).toBe(1)
+
+			h.notifyCoordinator.dispose()
+		}, 15_000)
+
+		// TQCB-CTL-DUAL-2: wake enqueued first, command_status second.
+		// Path A fires consumeTerminal and enqueues a wake. Path B then
+		// fires resolveObligation: the coordinator detects the queued
+		// wake for the same jobId and calls the discard seam to remove
+		// it BEFORE runTurn can consume it. Completion commits ONCE.
+		it("TQCB-CTL-DUAL-2: wake enqueued first → command_status discards queued wake", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			h.registerMarker("J-B")
+
+			h.notifyCoordinator.consumeTerminal({
+				jobId: "J-B",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			expect(h.wakeSink.countForSession(h.activeSessionId)).toBe(1)
+			expect(h.notifyCoordinator.diagnosticWakeEnqueuedJobIds()).toContain("J-B")
+
+			const decision = h.resolveObligation("J-B")
+			expect(decision.kind).toBe("resolved")
+
+			const calls = h.discardCalls()
+			expect(calls).toEqual([{ sessionId: h.activeSessionId, jobId: "J-B" }])
+			expect(h.wakeSink.countForSession(h.activeSessionId)).toBe(0)
+			expect(h.notifyCoordinator.diagnosticWakeEnqueuedJobIds()).not.toContain("J-B")
+
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(h.completionCommitCount()).toBe(1)
+
+			h.notifyCoordinator.dispose()
+		}, 15_000)
+
+		// TQCB-CTL-DUAL-3: command_status first, then a late wake that
+		// races AFTER completion committed. The late wake must NOT
+		// start a turn (the marker is gone, the tracker is empty, and
+		// consumeTerminal returns no_marker).
+		it("TQCB-CTL-DUAL-3: command_status first → late terminalPromise.then becomes no-op", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			h.registerMarker("J-C")
+
+			h.resolveObligation("J-C")
+
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(h.completionCommitCount()).toBe(1)
+
+			const decision = h.notifyCoordinator.consumeTerminal({
+				jobId: "J-C",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			expect(decision.kind).toBe("no_marker")
+			expect(h.wakeSink.countForSession(h.activeSessionId)).toBe(0)
+
+			expect(h.completionCommitCount()).toBe(1)
+
+			h.notifyCoordinator.dispose()
+		}, 15_000)
+
+		// TQCB-CTL-DUAL-4: two jobs A and B; arbitration is per-jobId,
+		// never global. Path B for A must NOT discard B's wake, and
+		// vice versa.
+		it("TQCB-CTL-DUAL-4: two jobs → arbitration is per jobId, never global", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			h.registerMarker("J-A")
+			h.registerMarker("J-B")
+
+			h.notifyCoordinator.consumeTerminal({
+				jobId: "J-A",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			h.notifyCoordinator.consumeTerminal({
+				jobId: "J-B",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			expect(h.wakeSink.countForSession(h.activeSessionId)).toBe(2)
+
+			h.resolveObligation("J-A")
+
+			const calls = h.discardCalls()
+			expect(calls).toEqual([{ sessionId: h.activeSessionId, jobId: "J-A" }])
+
+			expect(h.wakeSink.countForSession(h.activeSessionId)).toBe(1)
+			const remaining = h.wakeSink.queued[0]
+			expect(remaining).toBeDefined()
+			expect(remaining?.prompt).toContain("Job: J-B")
+
+			h.resolveObligation("J-B")
+			expect(h.wakeSink.countForSession(h.activeSessionId)).toBe(0)
+
+			expect(h.notifyCoordinator.diagnosticWakeEnqueuedJobIds()).toEqual([])
+
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(h.completionCommitCount()).toBe(1)
+
+			h.notifyCoordinator.dispose()
+		}, 15_000)
+
+		// TQCB-CTL-DUAL-5: notify=false jobs are unaffected by the
+		// arbitration. A notify=false job never registers a marker, so
+		// the dual-delivery tracker never observes it and no discard
+		// is invoked.
+		it("TQCB-CTL-DUAL-5: notify=false is unaffected — no marker, no wake, no discard", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			// Simulate notify=false: just call consumeTerminal
+			// without ever registering a marker. consumeTerminal
+			// will return no_marker and MUST NOT enqueue any wake.
+			const decision = h.notifyCoordinator.consumeTerminal({
+				jobId: "J-D-notifyfalse",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			expect(decision.kind).toBe("no_marker")
+			expect(h.wakeSink.countForSession(h.activeSessionId)).toBe(0)
+			expect(h.discardCalls()).toEqual([])
+			expect(h.notifyCoordinator.diagnosticWakeEnqueuedJobIds()).toEqual([])
+
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(h.completionCommitCount()).toBe(1)
+
+			h.notifyCoordinator.dispose()
+		}, 15_000)
+
+		// TQCB-CTL-DUAL-6: dispose clears the wake tracker
+		// (EPHEMERAL_ONLY invariant).
+		it("TQCB-CTL-DUAL-6: dispose clears wakeEnqueuedJobIds tracker", async () => {
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			h.registerMarker("J-F")
+			h.notifyCoordinator.consumeTerminal({
+				jobId: "J-F",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			expect(h.notifyCoordinator.diagnosticWakeEnqueuedJobIds()).toContain("J-F")
+
+			h.notifyCoordinator.dispose()
+			expect(h.notifyCoordinator.diagnosticWakeEnqueuedJobIds()).toEqual([])
+			expect(h.notifyCoordinator.diagnosticDisposed()).toBe(true)
 		}, 15_000)
 	})
 })

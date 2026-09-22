@@ -6581,3 +6581,65 @@ Under the Factory rule that **separate executable evidence may compose into a pr
 - `bun run test:unit` (apps/vscode): **1141/1141 PASS** — unchanged from CORRECTION01.
 
 `PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL` (UNCHANGED).
+
+## ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02 — PASS_DUAL_DELIVERY_ARBITRATION_REPAIRED — 2026-09-23
+
+**Status:** PASS. The dual-delivery arbitration gap in TQCB01 / CORRECTION01 (where the marker layer was first-writer-wins but the wake layer was NOT arbitrated) is mechanically classified as **TQ7_TERMINAL_RESULT_DUAL_DELIVERY_RACE** and repaired by a single bounded change set that adds symmetric first-writer-wins arbitration at the wake lifecycle layer.
+
+**Causal seam:** Factory reviewer's fresh LIVE evidence (single-job run, SECOND_STEP run, two-job run) showed that the TQCB01 completion-barrier predicate (`pendingPromptsKnown > 0 || activeNotifyCount > 0`) does NOT reason about the orthogonal wake lifecycle. There is a window where Path A (`terminalPromise.then → consumeTerminal → wake enqueued`) fires before Path B (`command_status → resolveObligation`); when Path B runs, the marker is gone (Path A drained it) so `resolveObligation` returns `no_marker` and the wake is left queued. The completion barrier sees no marker and no wake at the moment of `submit_and_exit` and commits COMPLETED. The wake then drains and starts a second autonomous turn → second `submit_and_exit` → second COMPLETED.
+
+**Fix (bounded, ~165 lines across 2 files + 1 test file):**
+
+```text
+Seam 1: BackgroundNotifyCoordinator.wakeEnqueuedJobIds (Set<string>)
+        + diagnosticWakeEnqueuedJobIds() getter
+        + consumeTerminal() tracks each wake it enqueues (current
+          + held drains)
+        + dispose() clears the tracker (EPHEMERAL_ONLY invariant)
+
+Seam 2: BackgroundNotifyCoordinatorOptions.discardQueuedWake callback
+        + DiscardQueuedWakeDecision type
+        + resolveObligation() now checks wakeEnqueuedJobIds BEFORE
+          returning; if a wake is still queued, calls the callback
+          to remove it from PendingPrompts BEFORE runTurn consumes it.
+        + Return decision refined: { kind: "resolved" } when marker
+          existed OR wake was superseded; { kind: "no_marker" }
+          otherwise (idempotency).
+
+Seam 3: SdkController.discardQueuedWakeForJobId(sessionId, jobId)
+        + discardQueuedWakeForJobIdOnHost() helper
+        + Listed the active session's pendingPrompts, parsed the
+          deterministic wake fingerprint (BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX
+          + \nJob: <jobId>\n), and called pendingPrompts("delete", ...)
+        + Non-throwing; host errors swallowed with Logger.warn.
+        + Wired into BackgroundNotifyCoordinator constructor.
+```
+
+**Acceptance matrix (Factory reviewer's required outcomes):**
+
+| Order                                         | Required outcome                                       | Test           | Result |
+|-----------------------------------------------|--------------------------------------------------------|----------------|--------|
+| `command_status` first, wake not yet enqueued | wake never becomes actionable                          | TQCB-CTL-DUAL-1 | PASS  |
+| wake enqueued first, `command_status` second | queued wake becomes redundant and discarded          | TQCB-CTL-DUAL-2 | PASS  |
+| wake consumed first                          | continuation proceeds once; later status read harmless | TQCB-CTL-DUAL-3 | PASS  |
+| `notify=false`                                | unaffected                                             | TQCB-CTL-DUAL-5 | PASS  |
+| two jobs A/B                                | arbitration is per `jobId`, never global               | TQCB-CTL-DUAL-4 | PASS  |
+| dispose clears tracker (EPHEMERAL_ONLY)      | diagnostic tracker is empty after dispose              | TQCB-CTL-DUAL-6 | PASS  |
+
+**Conservation (all UNCHANGED):**
+- TQCB01: 14/14 PASS (8 original + 6 new CORRECTION02 tests)
+- BCNEX01: 7/7 PASS
+- BTCONT01: 10/10 PASS
+- BCTCP01-controller: 7/7 PASS
+- BCTCP01-multi-job: 5/5 PASS
+- AGCONT01: 7/7 PASS
+- BCAFG01: 5/5 PASS
+- PPAT01: 10/10 PASS
+- LHOWA01-WIRE: 5/5 PASS
+
+**Pre-existing failures (verified NOT caused by this ACT via git stash round-trip on entry HEAD `705b74454`):**
+- `LHOWA01-GREEN` in `long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts`
+- `OWN01 RED` in `sdk-session-event-coordinator.test.ts`
+
+**Verdict:** PASS_DUAL_DELIVERY_ARBITRATION_REPAIRED_CORRECTION02
+

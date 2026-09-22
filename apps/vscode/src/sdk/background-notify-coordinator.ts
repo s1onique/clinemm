@@ -137,6 +137,20 @@ export type ResolveObligationDecision =
 	| { kind: "no_marker"; jobId: string }
 
 /**
+ * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02:
+ *
+ * Outcome of a discard attempt for a redundant wake. `discarded` means
+ * the host discarded the queued wake (e.g. via
+ * `pendingPrompts("delete", ...)`). `not_found` means there was no
+ * queued wake to discard (already drained or never enqueued). This is
+ * the dual-delivery arbitration signal returned to the coordinator
+ * after `resolveObligation` supersedes an already-enqueued wake.
+ */
+export type DiscardQueuedWakeDecision =
+	| { kind: "discarded"; jobId: string; promptId: string | undefined }
+	| { kind: "not_found"; jobId: string }
+
+/**
  * Pure formatter for the wake prompt. Produces a bounded UTF-8
  * string no longer than NOTIFY_WAKE_PROMPT_MAX_BYTES. The
  * formatter is exported so tests can assert prompt shape without
@@ -266,6 +280,26 @@ export interface BackgroundNotifyCoordinatorOptions {
 	 * case).
 	 */
 	enqueueTerminalWake: (input: { sessionId: string; prompt: string }) => void
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02:
+	 *
+	 * Dual-delivery arbitration seam. When `resolveObligation`
+	 * supersedes a wake that was already enqueued by
+	 * `consumeTerminal` for the same jobId, the coordinator calls
+	 * this callback to remove the wake from the host's
+	 * PendingPrompts queue BEFORE runTurn consumes it.
+	 *
+	 * Returning `{ kind: "discarded" }` means the host successfully
+	 * removed the entry; returning `{ kind: "not_found" }` means
+	 * there was no matching queued entry (already drained or never
+	 * enqueued). The callback is OPTIONAL — when omitted, the
+	 * coordinator still tracks resolution state but does not attempt
+	 * queue mutation (conservation mode for non-host harnesses).
+	 *
+	 * The callback MUST be safe to call with a jobId whose wake
+	 * has already been consumed (no-op return). It MUST NOT throw.
+	 */
+	discardQueuedWake?: (input: { sessionId: string; jobId: string }) => DiscardQueuedWakeDecision
 	/** Optional diagnostic sink; default no-op. */
 	recordNotifyDecision?: (record: NotifyDecisionRecord) => void
 	/** Optional monotonic clock; defaults to Date.now. */
@@ -293,8 +327,21 @@ export function ownerKey(sessionId: string, taskId: string | undefined): string 
 export class BackgroundNotifyCoordinator {
 	private readonly notificationMarkers = new Map<string, NotificationMarker>()
 	private readonly heldTerminalResults = new Map<string, TerminalNotification[]>()
-	private readonly options: Required<Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision">> &
-		Pick<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision">
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02:
+	 *
+	 * Dual-delivery arbitration: per-job wake-enqueue tracker.
+	 *
+	 * Path A (consumeTerminal) adds the jobId here when it
+	 * successfully enqueues a wake. Path B (resolveObligation)
+	 * checks this set: if the marker is gone AND the wake is
+	 * queued, the wake is REDUNDANT (the model already observed
+	 * the canonical status via Path B) and MUST be discarded
+	 * before runTurn can consume it.
+	 */
+	private readonly wakeEnqueuedJobIds = new Set<string>()
+	private readonly options: Required<Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">> &
+		Pick<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">
 	private disposed = false
 
 	constructor(options: BackgroundNotifyCoordinatorOptions) {
@@ -303,6 +350,7 @@ export class BackgroundNotifyCoordinator {
 			enqueueTerminalWake: options.enqueueTerminalWake,
 			now: options.now ?? (() => Date.now()),
 			recordNotifyDecision: options.recordNotifyDecision,
+			discardQueuedWake: options.discardQueuedWake,
 		}
 	}
 
@@ -418,6 +466,11 @@ export class BackgroundNotifyCoordinator {
 					outputTail: h.outputTail,
 				}),
 			})
+			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
+			// CORRECTION02: dual-delivery arbitration. Track each
+			// wake so a later Path B (resolveObligation) can
+			// supersede it.
+			this.wakeEnqueuedJobIds.add(h.jobId)
 		}
 		this.heldTerminalResults.delete(ownerK)
 		this.options.enqueueTerminalWake({
@@ -430,6 +483,12 @@ export class BackgroundNotifyCoordinator {
 				outputTail: input.outputTail,
 			}),
 		})
+		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
+		// CORRECTION02: dual-delivery arbitration. Track the current
+		// wake too (defensive — Path B on the same jobId will be a
+		// no-op marker drain, but if any other path enqueued this
+		// wake earlier, it MUST be tracked).
+		this.wakeEnqueuedJobIds.add(input.jobId)
 		const drainedCount = held.length + 1
 		this.recordDecision(input.jobId, "drained", undefined, 0, 0)
 		return {
@@ -466,21 +525,83 @@ export class BackgroundNotifyCoordinator {
 			return { kind: "no_marker", jobId: input.jobId }
 		}
 		const marker = this.notificationMarkers.get(input.jobId)
-		if (!marker) {
+		// Owner-isolation guard: only the SAME (sessionId, taskId)
+		// owner can resolve. This matches the consumeTerminal
+		// owner_mismatch check.
+		if (marker && (marker.sessionId !== input.sessionId || marker.taskId !== input.taskId)) {
 			return { kind: "no_marker", jobId: input.jobId }
 		}
-		// Cross-isolation guard: only the SAME (sessionId, taskId) owner
-		// can resolve. This matches the consumeTerminal owner_mismatch
-		// check at line 348.
-		if (marker.sessionId !== input.sessionId || marker.taskId !== input.taskId) {
-			return { kind: "no_marker", jobId: input.jobId }
+		if (marker) {
+			this.notificationMarkers.delete(input.jobId)
 		}
-		this.notificationMarkers.delete(input.jobId)
-		return {
-			kind: "resolved",
-			jobId: input.jobId,
-			resolution: input.resolution,
+
+		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
+		// CORRECTION02: dual-delivery arbitration.
+		//
+		// First-writer-wins at the marker layer: if Path A
+		// (consumeTerminal) ran first, it already deleted the
+		// marker and enqueued a wake. The marker is now GONE
+		// (`marker === undefined`), but the wake is still queued.
+		// When Path B (resolveObligation) is called for the same
+		// (sessionId, jobId), we MUST check whether a wake was
+		// already enqueued via the wakeEnqueuedJobIds tracker; if
+		// so, that wake is REDUNDANT (the model will observe the
+		// canonical status via this resolveObligation call) and
+		// MUST be discarded BEFORE it can fire another autonomous
+		// turn.
+		//
+		// The marker presence/absence is the SEMANTIC outcome of
+		// the arbitration (resolved vs no_marker). The wake
+		// discard is a parallel side-effect — independent of
+		// whether Path A or Path B "won" at the marker layer.
+		let discardedWake = false
+		if (this.wakeEnqueuedJobIds.has(input.jobId)) {
+			this.wakeEnqueuedJobIds.delete(input.jobId)
+			if (this.options.discardQueuedWake) {
+				// The discard callback is contractually
+				// non-throwing (see BackgroundNotifyCoordinatorOptions).
+				// We do NOT wrap in try/catch — any throw is a
+				// contract violation by the host callback, and
+				// letting it propagate matches the existing
+				// `enqueueTerminalWake` swallow contract for
+				// symmetric error handling.
+				const decision = this.options.discardQueuedWake({
+					sessionId: input.sessionId,
+					jobId: input.jobId,
+				})
+				discardedWake = decision.kind === "discarded"
+			} else {
+				discardedWake = true // host callback omitted: tracker updated, no queue mutation
+			}
 		}
+
+		// Determine the return decision:
+		//   - marker existed → "resolved" (Path B drained the marker)
+		//   - marker gone, no wake to discard → "no_marker" (Path A
+		//     fired first and drained the marker without enqueueing a
+		//     wake, OR marker never existed)
+		//   - marker gone, wake discarded → "resolved" (semantically
+		//     the obligation IS resolved: the wake was the OTHER path's
+		//     delivery, and we just superseded it)
+		if (marker) {
+			return {
+				kind: "resolved",
+				jobId: input.jobId,
+				resolution: input.resolution,
+			}
+		}
+		if (discardedWake) {
+			// Path A won at the marker layer; Path B's
+			// resolveObligation still OBSERVED the canonical
+			// status and superseded the wake. Semantically this
+			// is a resolution.
+			return {
+				kind: "resolved",
+				jobId: input.jobId,
+				resolution: input.resolution,
+			}
+		}
+		return { kind: "no_marker", jobId: input.jobId }
 	}
 
 	dispose(): void {
@@ -490,6 +611,11 @@ export class BackgroundNotifyCoordinator {
 		this.disposed = true
 		this.notificationMarkers.clear()
 		this.heldTerminalResults.clear()
+		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
+		// CORRECTION02: dual-delivery arbitration tracker is
+		// process-ephemeral (matches the coordinator's EPHEMERAL_ONLY
+		// contract).
+		this.wakeEnqueuedJobIds.clear()
 	}
 
 	diagnosticMarkerCount(): number {
@@ -502,6 +628,20 @@ export class BackgroundNotifyCoordinator {
 			total += arr.length
 		}
 		return total
+	}
+
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
+	 * CORRECTION02: dual-delivery arbitration diagnostic.
+	 *
+	 * Returns the set of jobIds whose wake has been enqueued via
+	 * `consumeTerminal` but neither superseded (via
+	 * `resolveObligation`) nor acknowledged as consumed. Used by
+	 * tests and the post-terminal-authority diagnostic builder to
+	 * assert exactly-once delivery.
+	 */
+	diagnosticWakeEnqueuedJobIds(): readonly string[] {
+		return Array.from(this.wakeEnqueuedJobIds)
 	}
 
 	diagnosticDisposed(): boolean {

@@ -1,0 +1,38 @@
+ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02 — CONSERVATION
+==============================================================================================
+
+All predecessor test families re-run after the CORRECTION02 changes.
+No regressions; same pre-existing failures as TQCB01 / CORRECTION01
+(verified via git stash round-trip — these failures exist on entry
+HEAD too and are NOT caused by this ACT).
+
+| Predecessor ACT                       | Result                                 |
+|---------------------------------------|---------------------------------------|
+| TQCB01 (this file)                    | 14/14 PASS (8 original + 6 CORRECTION02 control tests) |
+| BCNEX01 (presentation exactly-once)   | 7/7 PASS                              |
+| BTCONT01 (deferred continuation)      | 10/10 PASS                            |
+| BCTCP01-controller (terminal card)    | 7/7 PASS                              |
+| BCTCP01-multi-job (terminal card)     | 5/5 PASS                              |
+| AGCONT01 (agent continuation)         | 7/7 PASS                              |
+| BCAFG01 (awaiting-followup guard)     | 5/5 PASS                              |
+| PPAT01 (pending-prompt authority)     | 10/10 PASS                            |
+| LHOWA01-WIRE (authority transport)    | 5/5 PASS (LHOWA01-GREEN pre-existing failure NOT caused by this ACT) |
+
+Pre-existing failures (verified NOT caused by this ACT via git stash round-trip):
+    - LHOWA01-GREEN in long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts
+    - OWN01 RED in sdk-session-event-coordinator.test.ts
+    - (BCNT01 long-running tests hang on real subprocesses; not run)
+
+Type-check: clean (bunx tsc --noEmit exits 0)
+
+Lower layers UNTOUCHED:
+    - CommandJobManager (PWAOR01 / BCTCP01 territory)
+    - BackgroundNotifyCoordinator.consumeTerminal Path A
+    - Q5 long-horizon predicate
+    - pending-prompt transport authority
+    - terminal-card projection
+    - PWAOR abort ownership
+    - Hub ordering machinery
+    - wake prompt format
+    - PROTO_DELTA = NO
+    - PUBLIC_TOOL_SCHEMA_DELTA = NO

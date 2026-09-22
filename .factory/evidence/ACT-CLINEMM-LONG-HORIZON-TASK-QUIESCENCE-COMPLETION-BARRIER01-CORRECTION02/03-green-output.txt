@@ -1,0 +1,12 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts (14 tests) 324ms
+       ✓ TQCB-COMPOSE-PATH-B-01: real command_status → marker resolution (production wiring)  317ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+     Errors  1 error
+   Start at  00:50:38
+   Duration  2.48s (transform 1.33s, setup 1.87s, import 167ms, tests 324ms, environment 0ms)
+

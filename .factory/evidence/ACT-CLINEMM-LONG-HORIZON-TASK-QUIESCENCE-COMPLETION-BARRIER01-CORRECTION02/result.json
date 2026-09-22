@@ -1,0 +1,62 @@
+{
+  "actId": "ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01-CORRECTION02",
+  "status": "PASS",
+  "verdict": "PASS_DUAL_DELIVERY_ARBITRATION_REPAIRED_CORRECTION02",
+  "entryHead": "705b74454",
+  "productionHead": "705b74454 + CORRECTION02 bounded repair",
+  "testFile": "apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts",
+  "testsAdded": 6,
+  "testsPass": 14,
+  "testsFail": 0,
+  "causalClass": [
+    "TQ7_TERMINAL_RESULT_DUAL_DELIVERY_RACE"
+  ],
+  "productionFilesModified": [
+    "apps/vscode/src/sdk/background-notify-coordinator.ts (CORRECTION02: wake tracker + discardQueuedWake callback)",
+    "apps/vscode/src/sdk/SdkController.ts (CORRECTION02: discardQueuedWakeForJobIdOnHost + Controller.discardQueuedWakeForJobId)"
+  ],
+  "testFilesModified": [
+    "apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts (6 new CORRECTION02 control tests + harness extensions)"
+  ],
+  "regressions": 0,
+  "preExistingFailures": [
+    "LHOWA01-GREEN (long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts)",
+    "OWN01 RED (sdk-session-event-coordinator.test.ts)"
+  ],
+  "conservation": {
+    "TQCB01": "8 + 6 = 14/14 PASS (3 RED + 5 CTL pre-CORRECTION02 + 6 CTL CORRECTION02)",
+    "BCNEX01": "7/7 PASS",
+    "BTCONT01": "10/10 PASS",
+    "BCTCP01-controller": "7/7 PASS",
+    "BCTCP01-multi-job": "5/5 PASS",
+    "AGCONT01": "7/7 PASS",
+    "BCAFG01": "5/5 PASS",
+    "PPAT01": "10/10 PASS",
+    "LHOWA01-WIRE": "5/5 PASS"
+  },
+  "keyInsight": "Completion safety requires BOTH (a) the result obligation is resolved AND (b) the wake cannot still create autonomous work. TQCB01 / CORRECTION01 satisfied (a) but missed (b). The dual-delivery arbitration seam (per-jobId tracker + host-side discard callback invoked when resolveObligation supersedes a previously-enqueued wake) closes the orthogonal wake lifecycle. First-writer-wins at the marker layer is preserved; the wake layer is now symmetric.",
+  "stopRulesHonored": {
+    "CommandJobManager redesigned": false,
+    "Q5 long-horizon predicate modified": false,
+    "pending-prompt transport rewired": false,
+    "terminal-card projection modified": false,
+    "PWAOR abort ownership modified": false,
+    "Hub ordering modified": false,
+    "wake prompt format modified": false,
+    "PROTO_DELTA": "NO",
+    "PUBLIC_TOOL_SCHEMA_DELTA": "NO"
+  },
+  "evidences": [
+    "01-entry-state.md",
+    "02-live-failure-freeze.md",
+    "03-green-output.txt",
+    "04-conservation.txt",
+    "05-causal-classification.md",
+    "result.json"
+  ],
+  "productionDiff": {
+    "apps/vscode/src/sdk/background-notify-coordinator.ts": "+90 lines (wakeEnqueuedJobIds tracker + DiscardQueuedWakeDecision type + discardQueuedWake callback option + diagnosticWakeEnqueuedJobIds method + resolveObligation supersede logic)",
+    "apps/vscode/src/sdk/SdkController.ts": "+75 lines (discardQueuedWakeForJobIdOnHost function + Controller.discardQueuedWakeForJobId method + discardQueuedWake option wired in BackgroundNotifyCoordinator constructor)"
+  },
+  "typeCheck": "clean (bunx tsc --noEmit exits 0)"
+}

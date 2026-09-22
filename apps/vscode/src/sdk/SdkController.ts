@@ -75,7 +75,7 @@ import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
 import { buildActivityPublicationV1Record } from "./activity-publication-v1"
 import { AuthService, LogoutReason } from "./auth-service"
-import { BackgroundNotifyCoordinator } from "./background-notify-coordinator"
+import { BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX, BackgroundNotifyCoordinator } from "./background-notify-coordinator"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
@@ -743,6 +743,79 @@ export function buildSdkControllerEnqueueTerminalWake(options: {
 	}
 }
 
+/**
+ * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02:
+ *
+ * Dual-delivery arbitration. Remove a queued wake from the active
+ * session's PendingPrompts queue when the model has already observed
+ * the terminal result via the OTHER delivery path
+ * (`command_status` / Path B).
+ *
+ * Returns `{ kind: "discarded", jobId, promptId }` when an entry was
+ * actually removed, `{ kind: "not_found", jobId }` otherwise (no
+ * matching wake was queued — already drained, never enqueued, or the
+ * sessionId doesn't match the active session).
+ *
+ * Implementation: list the session's pendingPrompts, find any entry
+ * whose prompt starts with `BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX`
+ * and contains `Job: <jobId>` on a subsequent line (the deterministic
+ * `formatTerminalWakePrompt` fingerprint), and call
+ * `sdkHost.pendingPrompts("delete", ...)` for it. The callback is
+ * contractually non-throwing — host errors are swallowed with a
+ * Logger.warn so a malformed queue state cannot corrupt the marker
+ * resolution.
+ */
+function discardQueuedWakeForJobIdOnHost(
+	host: { pendingPrompts: (action: "list" | "delete", input: { sessionId: string; promptId?: string }) => unknown } | undefined,
+	sessionId: string,
+	jobId: string,
+	logger: { warn: (message: string) => void },
+): { kind: "discarded"; jobId: string; promptId: string | undefined } | { kind: "not_found"; jobId: string } {
+	if (!host) {
+		return { kind: "not_found", jobId }
+	}
+	let entries: Array<{ id?: string; prompt?: string }> = []
+	try {
+		const list = host.pendingPrompts("list", { sessionId })
+		entries = Array.isArray(list) ? (list as Array<{ id?: string; prompt?: string }>) : []
+	} catch (error) {
+		logger.warn(
+			`[SdkController] discardQueuedWakeForJobId: list() threw for sessionId=${sessionId}: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+		)
+		return { kind: "not_found", jobId }
+	}
+	const jobIdLine = `Job: ${jobId}`
+	const match = entries.find((entry) => {
+		const prompt = entry?.prompt
+		if (typeof prompt !== "string" || prompt.length === 0) {
+			return false
+		}
+		// Deterministic fingerprint: the wake prompt always
+		// starts with `BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX`
+		// and contains `Job: <jobId>` on a separate line.
+		if (!prompt.startsWith(BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX)) {
+			return false
+		}
+		return prompt.includes(`\n${jobIdLine}`)
+	})
+	if (!match || typeof match.id !== "string") {
+		return { kind: "not_found", jobId }
+	}
+	try {
+		host.pendingPrompts("delete", { sessionId, promptId: match.id })
+	} catch (error) {
+		logger.warn(
+			`[SdkController] discardQueuedWakeForJobId: delete() threw for sessionId=${sessionId} promptId=${match.id}: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+		)
+		return { kind: "not_found", jobId }
+	}
+	return { kind: "discarded", jobId, promptId: match.id }
+}
+
 export class Controller {
 	// SDK session state and the coordinators that drive it.
 	private messageTranslatorState: MessageTranslatorState
@@ -1114,6 +1187,23 @@ export class Controller {
 				getActiveSession: () => this.sessions?.getActiveSession(),
 				logger: Logger,
 			}),
+			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01
+			// / CORRECTION02: dual-delivery arbitration. When
+			// `resolveObligation` supersedes an already-enqueued
+			// wake for the same (sessionId, jobId) triple, the
+			// coordinator calls this callback to remove the wake
+			// from the active session's PendingPrompts queue
+			// BEFORE runTurn consumes it.
+			//
+			// The host (this SdkController) holds the canonical
+			// queue reference via the active session's sdkHost.
+			// We list the session's pendingPrompts, find any
+			// entry whose prompt is a wake for the target jobId
+			// (parsed from the deterministic prompt prefix), and
+			// call `pendingPrompts("delete", ...)` to remove it.
+			discardQueuedWake: ({ sessionId, jobId }) => {
+				return this.discardQueuedWakeForJobId(sessionId, jobId)
+			},
 		})
 		// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: debug-only hook
 		// for the live-ext-host qualification harness. Mirrors the
@@ -3631,6 +3721,44 @@ export class Controller {
 			Logger.warn(`[SdkController] cancelQueuedPrompt: Prompt not found: ${trimmedPromptId}`)
 		}
 		await this.postStateToWebview()
+	}
+
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02:
+	 *
+	 * Dual-delivery arbitration: discard a queued terminal-wake
+	 * prompt for a specific jobId. Used by
+	 * `BackgroundNotifyCoordinator.resolveObligation` when Path B
+	 * (command_status observation) supersedes Path A's already-
+	 * enqueued wake for the same (sessionId, jobId) triple.
+	 *
+	 * The wake prompt carries `Job: <jobId>` on a deterministic
+	 * line (see `formatTerminalWakePrompt`). We list the session's
+	 * pendingPrompts, locate the entry whose prompt starts with
+	 * `BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX` and contains the
+	 * target jobId, and delete it.
+	 *
+	 * Idempotent: returns `{ kind: "not_found" }` when no matching
+	 * wake is queued (already drained, never enqueued, or another
+	 * path already discarded it). Non-throwing — host errors are
+	 * swallowed with a Logger.warn.
+	 */
+	discardQueuedWakeForJobId(
+		sessionId: string,
+		jobId: string,
+	): { kind: "discarded"; jobId: string; promptId: string | undefined } | { kind: "not_found"; jobId: string } {
+		const active = this.sessions?.getActiveSession()
+		if (!active || active.sessionId !== sessionId) {
+			// Owner isolation: the wake was enqueued for a
+			// different session; do not touch its queue.
+			return { kind: "not_found", jobId }
+		}
+		return discardQueuedWakeForJobIdOnHost(
+			active.sdkHost as unknown as Parameters<typeof discardQueuedWakeForJobIdOnHost>[0],
+			sessionId,
+			jobId,
+			Logger,
+		)
 	}
 
 	/**

@@ -461,3 +461,134 @@ VERDICT                                             = PASS_TASK_QUIESCENCE_COMPL
 ### Next
 
 Dogfood LIVE qualification (when cloud dogfood infra is available).
+
+## CORRECTION02 — HALT_TQCB_DUAL_DELIVERY_ARBITRATION_MISSING (2026-09-23)
+
+### Reviewer disposition
+
+The TQCB01 / CORRECTION01 closure landed GREEN on the completion-barrier
+predicate, but Factory reviewer's fresh LIVE evidence (single-job run,
+SECOND_STEP run, two-job run) showed that the barrier does NOT
+reason about the ORTHOGONAL wake lifecycle. There is a window where
+Path A (`terminalPromise.then → consumeTerminal → wake enqueued`) and
+Path B (`command_status → resolveObligation`) race to deliver the same
+terminal result:
+
+- **Marker layer**: first-writer-wins (correctly closed by TQCB01).
+- **Wake layer**: NOT arbitrated. The completion barrier sees no
+  marker and no queued wake at the instant of `submit_and_exit`, so it
+  commits COMPLETED. The wake then arrives (deferred from Path A's
+  `terminalPromise.then` callback) and starts a second autonomous turn
+  that re-commits COMPLETED.
+
+The user's spec:
+
+```
+Completion becomes safe when:
+  result is resolved
+  AND
+  wake cannot still create autonomous work
+```
+
+TQCB01 satisfied the first clause; CORRECTION02 closes the second.
+
+### The bounded repair
+
+A symmetric first-writer-wins arbitration at the wake layer:
+
+1. **BackgroundNotifyCoordinator** gains a `wakeEnqueuedJobIds: Set<string>`
+   tracker. `consumeTerminal` adds the jobId when it enqueues a wake
+   (for the current input AND for any held wake it drains in the same
+   call). `resolveObligation` checks the tracker BEFORE returning.
+
+2. **`resolveObligation` supersede logic** — when a wake for the same
+   jobId is still queued, the coordinator calls a NEW
+   `discardQueuedWake` callback option to remove the wake from
+   `PendingPromptsController` BEFORE `runTurn` can consume it.
+
+3. **`SdkController`** provides the `discardQueuedWake` callback via a
+   new `Controller.discardQueuedWakeForJobId(sessionId, jobId)` method.
+   It lists the active session's `pendingPrompts`, finds the entry
+   whose prompt matches the deterministic wake fingerprint
+   (`BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX` + `Job: <jobId>`), and
+   calls `pendingPrompts("delete", ...)`. Non-throwing; host errors
+   are swallowed with `Logger.warn`.
+
+4. **`resolveObligation` decision refinement** — the return decision
+   is now:
+   - `{ kind: "resolved" }` if the marker existed OR a wake was
+     superseded (semantically resolved)
+   - `{ kind: "no_marker" }` if neither happened (idempotency for
+     already-resolved calls)
+
+5. **`dispose()` clears the wake tracker** alongside the marker and
+   held-result maps (EPHEMERAL_ONLY invariant preserved).
+
+### Acceptance matrix
+
+| Order                                         | Required outcome                                       | Test           |
+|-----------------------------------------------|--------------------------------------------------------|----------------|
+| command_status first, wake not yet enqueued  | wake never becomes actionable                          | DUAL-1 PASS    |
+| wake enqueued first, command_status second    | queued wake becomes redundant and discarded          | DUAL-2 PASS    |
+| wake consumed first                          | continuation proceeds once; later status read harmless | DUAL-3 PASS    |
+| notify=false                                | unaffected                                             | DUAL-5 PASS    |
+| two jobs A/B                                | arbitration is per jobId, never global                 | DUAL-4 PASS    |
+| idempotent duplicate resolveObligation       | second call is no-op, no extra discard                 | (existing)     |
+| dispose clears tracker (EPHEMERAL_ONLY)       | diagnostic tracker is empty after dispose             | DUAL-6 PASS    |
+
+### CORRECTION02 production diff
+
+```
+apps/vscode/src/sdk/background-notify-coordinator.ts:
+    +15 lines (wakeEnqueuedJobIds tracker field)
+    +30 lines (discardQueuedWake callback option + DiscardQueuedWakeDecision type)
+    +35 lines (resolveObligation supersede logic + diagnosticWakeEnqueuedJobIds)
+    +10 lines (dispose tracker clear)
+
+apps/vscode/src/sdk/SdkController.ts:
+    +60 lines (discardQueuedWakeForJobIdOnHost function)
+    +25 lines (Controller.discardQueuedWakeForJobId method + option wiring)
+    +5 lines (BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX import)
+
+apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts:
+    +12 lines (TestPendingPromptsSink.discardByJobId + discardCalls harness)
+    +250 lines (6 new CORRECTION02 control tests)
+```
+
+### CORRECTION02 verdict
+
+```
+TQ1 completion barrier                              = GREEN (TQCB01)
+TQ3 Path-B command_status wired                     = GREEN (TQCB01 / CORRECTION01)
+TQ7 dual-delivery arbitration (NEW)                = GREEN (CORRECTION02)
+
+Conservation                                        = GREEN (54/54 across 8 test files,
+                                                       excluding pre-existing LHOWA01-GREEN + OWN01 RED)
+Type check                                          = clean (bunx tsc --noEmit exits 0)
+Lower layers                                        = UNTOUCHED
+
+VERDICT                                             = PASS_DUAL_DELIVERY_ARBITRATION_REPAIRED_CORRECTION02
+```
+
+### New primary class
+
+```
+TQ7_TERMINAL_RESULT_DUAL_DELIVERY_RACE
+
+For each (sessionId, jobId) terminal result:
+  EXACTLY ONE of
+    command_status incorporation  (Path B)
+    terminal-wake incorporation   (Path A)
+  may remain actionable.
+
+Once one wins:
+  the other MUST be neutralized before it can cause another turn.
+```
+
+This is a NEW class — not TQ1 (barrier presence), not TQ3 (Path B
+method wiring), but the orthogonal wake-lifecycle arbitration that
+TQCB01 / CORRECTION01 missed.
+
+### Next
+
+Dogfood LIVE qualification (when cloud dogfood infra is available).
