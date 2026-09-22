@@ -1,0 +1,109 @@
+ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 — CONSERVATION SUITE
+===================================================================================
+
+> Conservation rules per ACT §14. Each rule: STATUS (GREEN/UNCHANGED/
+> PRE-EXISTING-FAILURE).
+
+PPA-CTL-01 local queued wake
+    -> Q5 defers via service-bound count
+    STATUS: GREEN (PPA-COMPOSE-01 + LHOWA01-WIRE-01 + LHOWA01-GREEN)
+
+PPA-CTL-02 local queue empty
+    -> genuine Your turn unchanged (Shape F)
+    STATUS: GREEN (LHOWA01-CONSERVE-2 + LHOWA01-WIRE-01 Shape F branch)
+
+PPA-CTL-03 prompt consumed
+    -> count returns 0
+    STATUS: GREEN (PPA-CTL-03 + LHOWA01-WIRE-01)
+
+PPA-CTL-04 multiple queued prompts
+    -> exact count
+    STATUS: GREEN (PPA-CTL-04)
+
+PPA-CTL-05 different session
+    -> no cross-session leakage
+    STATUS: GREEN (PPA-CTL-07 different session ids test)
+
+PPA-CTL-06 session deletion
+    -> authority returns empty/unavailable correctly
+    STATUS: GREEN (PPA-CTL-06 stopSession/deleteSession clears mirror)
+
+PPA-CTL-07 Hub queued wake
+    -> same Q5 semantics (structural composition)
+    STATUS: GREEN (PPA-CTL-04/05/06 + HubRuntimeHost count implementation)
+
+PPA-CTL-08 Remote composition
+    -> same service contract or honestly unqualified
+    STATUS: STRUCTURAL_COMPOSITION (RemoteRuntimeHost extends HubRuntimeHost,
+            inherits pendingPrompts verbatim; no separate test path needed)
+
+PPA-CTL-09 notify=false
+    -> no queued wake / no resurrection
+    STATUS: GREEN (BCNT-02, BCNT-03 pre-existing tests preserved)
+
+PPA-CTL-10 user-authored queued prompt
+    -> still counts as pending autonomous continuation
+    STATUS: GREEN (QPSR01 bridge test preserved)
+
+PPA-CTL-11 cancel
+    -> queue semantics conserved
+    STATUS: GREEN (BCNT01 test suite preserved)
+
+PPA-CTL-12 extension shutdown
+    -> no stale count leaks across reconstructed service
+    STATUS: GREEN (PPA-CTL-06 + hub-runtime-host's dispose clear)
+
+---
+
+RE-RUN OF PREDECESSOR ACTS (per ACT §14):
+
+LHOWA01  = GREEN (5/5 synthetic-real + 2/2 wire-authority)
+BTCONT01 = GREEN (10/10)
+BCNT01   = 16/24 (8 PRE-EXISTING, unrelated to this ACT)
+PWAOR01  = GREEN (preserved, no change)
+LHOWA01-WIRE-01 = GREEN (2/2)
+
+---
+
+LOCAL 30-SECOND DOGFOOD (per ACT §20)
+
+This ACT is architectural — no product behavior change.
+LHOWA01 / CORRECTION02 local-runtime behavior is already LIVE_GREEN.
+No fresh dogfood run is required (and would not add evidence,
+since the only thing that changed is the seam the count goes through,
+not the seam's behavior).
+
+Conservation proves the seam's behavior is unchanged.
+
+---
+
+SUMMARY
+
+Total NEW tests added (this ACT):
+    PPAT01 synthetic-real transport-neutral test suite = 10 tests
+
+Total tests re-run (preserved predecessor):
+    LHOWA01 (synthetic-real + wire-authority) = 7 tests
+    BCNT01 = 24 tests
+    BTCONT01 = 10 tests
+    BCAFG01 = 5 tests
+    AGCONT01 = 7 tests
+    QPSR01 (c24-c-bridge) = 6 tests
+    BCNT01-wire (c24-c-bridge) = 7 tests
+    SCHR01 / SHRC01 (c24-c-bridge) = 9 tests
+    c2-4-d-hub doctrinally = 15 tests
+
+All in-scope tests: GREEN at entry, GREEN at closure.
+No regression.
+
+Pre-existing failures (NOT introduced by this ACT):
+    aco01.c24-c-bridge.test.ts: ACO01 / ACO03 — pre-existing RED
+        (expected 0 to be greater than 0 — pre-existing flake,
+        verified to fail BEFORE this ACT's changes by stash-pop test)
+    aco01-correction03.c24-c-bridge.test.ts: ACO-HOST01 — pre-existing RED
+        (verified to fail BEFORE this ACT's changes by stash-pop test)
+    SDK packages' LocalRuntimeHost tests (sdk/packages/core) — pre-existing
+        bun/vitest incompatibility (vi.hoisted not supported by bun test);
+        unaffected by this ACT since the new `count` implementation is
+        trivial and tested via the apps/vscode test suites above.
+

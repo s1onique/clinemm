@@ -177,13 +177,27 @@ function makeHarness(): Harness {
 		taskHistory: { updateTaskUsage: vi.fn() },
 		getTask: () => undefined,
 		postStateToWebview: vi.fn().mockResolvedValue(undefined),
-		setTurnPhase: (phase: Parameters<NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>>[0], anchorTs?: number, writerId?: string) => {
+		setTurnPhase: (
+			phase: Parameters<NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>>[0],
+			anchorTs?: number,
+			writerId?: string,
+		) => {
 			turnStateTracker.setWithWriter(phase, anchorTs, {
 				writerId: (writerId ?? "unknown-legacy-writer") as never,
 			})
 		},
 		getTurnPhase: () => turnStateTracker.currentPhase,
 		translateSessionEvent,
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+		// Wire the CORRECTION01 availability-aware `getPendingPromptCount`
+		// option. This harness simulates a LocalRuntimeHost where the
+		// queue is unconditionally `available: true` with no pending
+		// prompts — i.e. Shape F. Without this wire, the Q5 seam
+		// defaults to `{ available: false }` (authority unavailable),
+		// which is the production fail-closed default but does NOT
+		// match this harness's intent (no queued autonomous work,
+		// commit `awaiting_followup`).
+		getPendingPromptCount: () => ({ available: true, count: 0 }),
 	} as unknown as SdkSessionEventCoordinatorOptions
 
 	return {
@@ -273,10 +287,7 @@ describe("ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / post-terminal-02 specim
 
 		const writerMatches = findTurnStateWriterProvenanceByWriter(
 			"session-event-turn-complete-resumable-straggler-preserve",
-		).filter(
-			(r) =>
-				r.previous.phase === "streaming" && r.committed.phase === "awaiting_followup",
-		)
+		).filter((r) => r.previous.phase === "streaming" && r.committed.phase === "awaiting_followup")
 		expect(
 			writerMatches.length,
 			"the production done-without-completion branch MUST stamp a TSWPD record with writerId=session-event-turn-complete-resumable-straggler-preserve and transition streaming -> awaiting_followup (matching the LIVE specimen's TSWPD log for task 1788297479245_hv9w5 / epoch 4)",
@@ -376,9 +387,7 @@ describe("ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / post-terminal-02 specim
 
 		await harness.coordinator.handleSessionEvent(doneEvent)
 
-		const writerUnderTest = findTurnStateWriterProvenanceByWriter(
-			"session-event-turn-complete-resumable-straggler-preserve",
-		)
+		const writerUnderTest = findTurnStateWriterProvenanceByWriter("session-event-turn-complete-resumable-straggler-preserve")
 		// In the attemptCompletionSeen=true case, the writer under test
 		// MUST NOT fire — the production code falls through to
 		// session-event-turn-complete-awaiting-followup-liveness

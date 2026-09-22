@@ -987,7 +987,17 @@ describe("T2-EXT01: production-lifecycle PTAD capture order", () => {
 			getTurnPhase: vi.fn(() => "streaming" as const),
 			captureProviderApiError: vi.fn(),
 			beginProviderFailureTelemetryTurn: vi.fn(),
-			// REAL translateSessionEvent — production chooses ordering.
+			// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+			// Wire the CORRECTION01 availability-aware getPendingPromptCount
+			// option. This harness simulates a LocalRuntimeHost where the
+			// queue is unconditionally available: true with no pending
+			// prompts -- i.e. Shape F. Without this wire, the Q5 seam
+			// defaults to { available: false } (authority unavailable),
+			// which is the production fail-closed default but does NOT
+			// match this harness's intent (no queued autonomous work,
+			// commit awaiting_followup).
+			getPendingPromptCount: () => ({ available: true, count: 0 }),
+			// REAL translateSessionEvent -- production chooses ordering.
 			translateSessionEvent: vi.fn((event: CoreSessionEvent, state: MessageTranslatorState) =>
 				translateSessionEvent(event, state),
 			),
@@ -1131,6 +1141,12 @@ function makeCoordinator(input: Partial<MakeCoordinatorInput> = {}) {
 		getTurnPhase: vi.fn(() => input.turnPhase ?? "streaming"),
 		captureProviderApiError: vi.fn(),
 		beginProviderFailureTelemetryTurn: vi.fn(),
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+		// Wire the CORRECTION01 availability-aware getPendingPromptCount
+		// option. Same harness intent as the makeProductionCoordinator
+		// above -- LocalRuntimeHost unconditionally available with no
+		// pending prompts (Shape F).
+		getPendingPromptCount: () => ({ available: true, count: 0 }),
 		translateSessionEvent: vi.fn(() => input.translation ?? { messages: [], sessionEnded: false, turnComplete: false }),
 		isClineFreeModel: input.isClineFreeModel,
 	} as unknown as SdkSessionEventCoordinatorOptions & {

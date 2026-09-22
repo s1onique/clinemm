@@ -325,6 +325,29 @@ export class LocalRuntimeHost implements RuntimeHost {
 				this.pendingPromptsController.list(input.sessionId),
 			update: async (input) => this.pendingPromptsController.update(input),
 			delete: async (input) => this.pendingPromptsController.delete(input),
+			// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+			// CORRECTION01:
+			// Synchronous authoritative count read. Reaches
+			// `active.pendingPrompts.length` directly — the queue is mutated
+			// synchronously inside `PendingPromptService.enqueue`/`update`/
+			// `delete`/`clear`, so a wake enqueued at time T is observable at
+			// time T (same JavaScript turn). The Q5 composition seam reads
+			// through this service-style operation, NOT through any
+			// `RuntimeHost` primitive.
+			//
+			// CORRECTION01: return the new availability-aware
+			// `PendingPromptCountRead` shape. LocalRuntimeHost ALWAYS
+			// returns `{ available: true; count }` — its in-memory queue
+			// is unconditionally authoritative and the empty
+			// sessionId/unknown session case returns `{ available: false }`
+			// to prevent a stale read at Q5 from being read as
+			// "queue is empty" (fail-closed on unknown sessionId).
+			count: (sessionId) => {
+				if (!sessionId) return { available: false }
+				const active = this.sessions.get(sessionId)
+				if (!active) return { available: false }
+				return { available: true, count: active.pendingPrompts.length }
+			},
 		};
 		this.eventBridge = new AgentEventBridge({
 			getSession: (sid) => this.sessions.get(sid),
@@ -1269,30 +1292,23 @@ export class LocalRuntimeHost implements RuntimeHost {
 	}
 
 	/**
-	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
-	 * Synchronous authoritative accessor for the count of pending prompts
-	 * queued in `PendingPromptsController` for `sessionId`. Reads directly
-	 * from the in-memory session queue (the canonical source) — NOT from
-	 * any cached projection. This is the BOUNDARY the Q5 composition seam
-	 * relies on: a wake enqueued into the queue at time T is observable
-	 * to the writer at time T (same JavaScript turn).
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
+	 * REMOVED.
 	 *
-	 * Returns 0 when:
-	 *   * `sessionId` is empty (failsafe — never throw),
-	 *   * the session is not active on this host.
+	 * The provisional `LocalRuntimeHost.getPendingPromptsCount(sessionId)`
+	 * method has been removed. The pending-prompt count authority now
+	 * lives at the canonical `ClineCore.pendingPrompts` service
+	 * boundary (specifically `pendingPrompts.count(sessionId)`),
+	 * which is the transport-neutral service-style operation that
+	 * every backend implementing `PendingPromptsServiceApi` MUST
+	 * provide.
 	 *
-	 * The implementation reads `active.pendingPrompts.length` directly;
-	 * that field is mutated synchronously inside `PendingPromptService.enqueue`
-	 * / `update` / `delete` / `clear` (see `pending-prompt-service.ts:130-205`),
-	 * so the count returned here reflects the queue state at the moment of
-	 * the read.
+	 * The implementation has migrated to the `pendingPrompts` service
+	 * literal in the constructor (see the `count` method above). The
+	 * class-level method is gone because the architecture rule is
+	 * explicit: pending-prompt count reads are NOT `RuntimeHost`
+	 * primitive vocabulary.
 	 */
-	getPendingPromptsCount(sessionId: string): number {
-		if (!sessionId) return 0
-		const active = this.sessions.get(sessionId)
-		if (!active) return 0
-		return active.pendingPrompts.length
-	}
 
 	/**
 	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:

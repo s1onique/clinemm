@@ -15,6 +15,7 @@ import {
 	type EditorExecutor,
 	type HookEventPayload,
 	type ITelemetryService,
+	type PendingPromptCountRead,
 	type PendingPromptMutationResult,
 	type PendingPromptsDeleteInput,
 	type PendingPromptsListInput,
@@ -721,6 +722,36 @@ export class VscodeSessionHost implements SdkSessionHost {
 	pendingPrompts(action: "list", input: PendingPromptsListInput): Promise<SessionPendingPrompt[]>
 	pendingPrompts(action: "update", input: PendingPromptsUpdateInput): Promise<PendingPromptMutationResult>
 	pendingPrompts(action: "delete", input: PendingPromptsDeleteInput): Promise<PendingPromptMutationResult>
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+	 * CORRECTION01:
+	 * Synchronous authoritative accessor for the count of pending prompts
+	 * queued for `sessionId`. Reaches the canonical
+	 * `ClineCore.pendingPrompts.count(sessionId)` service operation, which
+	 * is the transport-neutral service-style method that every backend
+	 * implementing `PendingPromptsServiceApi` MUST provide.
+	 *
+	 * Returns a {@link PendingPromptCountRead} discriminated union —
+	 * NOT a bare number — so the Q5 consumer can distinguish "queue is
+	 * known to be empty" from "queue mirror has not yet been
+	 * initialized for this session". The latter case produces
+	 * `{ available: false }`, which Q5 treats as "authority
+	 * unavailable — do NOT authorize operator handoff" rather than
+	 * "queue is empty".
+	 *
+	 * This is the AUTHORITATIVE boundary for the Q5 composition seam —
+	 * a wake enqueued into the queue at time T is observable to the Q5
+	 * writer at time T (same JavaScript turn), regardless of whether
+	 * `getStateToPostToWebview` has run. The transport-neutral service
+	 * operation makes this work uniformly for `LocalRuntimeHost` (in-
+	 * memory `session.pendingPrompts.length`), `HubRuntimeHost`
+	 * (availability-aware count from a per-session mirror seeded by
+	 * `session.pending_prompts` events + reply of
+	 * `requestPendingPromptsList` / `requestPendingPromptUpdate` /
+	 * `requestPendingPromptDelete`), and `RemoteRuntimeHost` (inherits
+	 * HubRuntimeHost's mirror verbatim).
+	 */
+	pendingPrompts(action: "count", input: { sessionId: string }): PendingPromptCountRead
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	pendingPrompts(action: any, input: any): any {
 		switch (action) {
@@ -730,6 +761,8 @@ export class VscodeSessionHost implements SdkSessionHost {
 				return this.inner.pendingPrompts.update(input)
 			case "delete":
 				return this.inner.pendingPrompts.delete(input)
+			case "count":
+				return this.inner.pendingPrompts.count(input.sessionId)
 			default:
 				throw new Error(`Unsupported pending prompt action: ${String(action)}`)
 		}
@@ -786,19 +819,21 @@ export class VscodeSessionHost implements SdkSessionHost {
 		return this.inner.getActiveRuntimeSnapshot(sessionId)
 	}
 	/**
-	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
-	 * Synchronous authoritative accessor for the count of pending prompts
-	 * queued for `sessionId`. Proxies to
-	 * `ClineCore.getPendingPromptsCount(sessionId)` which in turn reaches
-	 * `LocalRuntimeHost.getPendingPromptsCount(sessionId)` and reads
-	 * `session.pendingPrompts.length` directly.
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
+	 * REMOVED.
 	 *
-	 * This is the AUTHORITATIVE boundary for the Q5 composition seam —
-	 * a wake enqueued into the queue at time T is observable here at
-	 * time T (same JavaScript turn), so the Q5 writer can correctly
-	 * detect Shape D and defer the `awaiting_followup` commit.
+	 * The provisional `pendingPromptsCount(sessionId)` method on
+	 * `VscodeSessionHost` has been removed. Pending-prompt count
+	 * authority now lives at the canonical `pendingPrompts` service
+	 * boundary — i.e. `this.pendingPrompts("count", { sessionId })`
+	 * is the transport-neutral service-style accessor that every
+	 * backend implementing `PendingPromptsServiceApi` MUST provide.
+	 *
+	 * Per the upstream architecture rule (ARCHITECTURE.md lines
+	 * 454-460): pending-prompt query/mutation semantics are
+	 * intentionally outside the minimal `RuntimeHost` primitive
+	 * vocabulary. `VscodeSessionHost` mirrors that rule: the count
+	 * accessor is reached through the grouped `pendingPrompts`
+	 * service, NOT through a separate host-level primitive.
 	 */
-	pendingPromptsCount(sessionId: string | undefined): number {
-		return this.inner.getPendingPromptsCount(sessionId)
-	}
 }

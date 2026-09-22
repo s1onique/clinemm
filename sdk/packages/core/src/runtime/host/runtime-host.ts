@@ -298,6 +298,34 @@ export interface PendingPromptsDeleteInput {
 	promptId: string;
 }
 
+/**
+ * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+ *
+ * Availability-aware read result for the `pendingPrompts.count(sessionId)`
+ * service operation. Backends whose mirror can lag the authoritative hub
+ * queue (HubRuntimeHost / RemoteRuntimeHost) MUST return
+ * `{ available: false }` whenever the session has never been initialized
+ * in this host, and `{ available: true; count }` once any of the
+ * authoritative sources has populated the mirror (initial `list(...)`
+ * reply, `update`/`delete` reply, or a `session.pending_prompts`
+ * event payload).
+ *
+ * LocalRuntimeHost, whose queue is in-memory and mutated synchronously
+ * inside PendingPromptsController, ALWAYS returns
+ * `{ available: true; count }` — its authority is synchronous and
+ * unconditional.
+ *
+ * Q5 consumers MUST treat `{ available: false }` as "authority
+ * unavailable for this read; do NOT authorize operator handoff",
+ * NOT as "queue is empty". This closes the
+ * PROVISIONAL_FAIL_OPEN_RISK that an unmirrored Hub session would
+ * otherwise be read as `count = 0` and authorize `awaiting_followup`
+ * despite authoritative work pending remotely.
+ */
+export type PendingPromptCountRead =
+	| { available: true; count: number }
+	| { available: false };
+
 export interface PendingPromptsServiceApi {
 	list(input: PendingPromptsListInput): Promise<SessionPendingPrompt[]>;
 	update(
@@ -306,6 +334,53 @@ export interface PendingPromptsServiceApi {
 	delete(
 		input: PendingPromptsDeleteInput,
 	): Promise<PendingPromptMutationResult>;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+	 * CORRECTION01:
+	 *
+	 * Synchronous authoritative accessor for the count of pending prompts
+	 * queued for `sessionId`. Returns a {@link PendingPromptCountRead}
+	 * discriminated union — NOT a bare number — so callers can
+	 * distinguish "queue is known to be empty" from "queue mirror has
+	 * not yet been initialized for this session". AUTHORITATIVE
+	 * transport-neutral authority — every backend that exposes
+	 * `pendingPrompts` MUST implement this.
+	 *
+	 * Semantics:
+	 *   - LocalRuntimeHost: ALWAYS returns
+	 *     `{ available: true; count: active.pendingPrompts.length }`.
+	 *     The queue is mutated synchronously inside
+	 *     `PendingPromptService.enqueue`/`update`/`delete`/`clear`, so
+	 *     a wake enqueued at time T is observable at time T (same
+	 *     JavaScript turn).
+	 *   - HubRuntimeHost / RemoteRuntimeHost: returns
+	 *     `{ available: false }` when the session has never been
+	 *     initialized on this host (no `list(...)` reply and no
+	 *     `session.pending_prompts` event has reached this host yet).
+	 *     Returns `{ available: true; count: N }` once any of those
+	 *     sources has populated the mirror. The mirror is keyed by
+	 *     sessionId and seeded from:
+	 *       (a) the authoritative reply of `requestPendingPromptsList`,
+	 *       (b) the reply of `requestPendingPromptUpdate` /
+	 *           `requestPendingPromptDelete`,
+	 *       (c) the `session.pending_prompts` event payload.
+	 *     This mirrors the upstream `pendingPrompts.steerFirst`
+	 *     "synchronous core operation" pattern (ARCHITECTURE.md lines
+	 *     989-993). On `stopSession` / `deleteSession` / `dispose`,
+	 *     both the mirror entry AND the "initialized" marker are
+	 *     cleared so the next `count(...)` returns `{ available: false }`.
+	 *
+	 * Failsafe: never throws. When `sessionId` is empty the
+	 * implementation returns `{ available: false }` — the empty
+	 * sessionId is not a valid authority target and must not be read
+	 * as "queue is empty" by callers.
+	 *
+	 * Surface stability: STABLE. Part of the canonical `ClineCore.pendingPrompts`
+	 * service per the upstream architecture rule that pending-prompt query/
+	 * mutation semantics belong OUTSIDE the minimal `RuntimeHost` primitive
+	 * vocabulary.
+	 */
+	count(sessionId: string): PendingPromptCountRead;
 }
 
 export interface PendingPromptsRuntimeService {
@@ -484,27 +559,24 @@ export interface RuntimeHost {
 		sessionId: string | undefined,
 	): import("@cline/shared").LiveAgentRuntimeStateSnapshot | undefined;
 	/**
-	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
-	 * Returns the synchronous count of pending prompts currently
-	 * queued in `PendingPromptsController` for `sessionId`. AUTHORITATIVE
-	 * boundary for the Q5 composition seam — the count is read directly
-	 * from the in-memory queue, NOT from a cached projection. This
-	 * guarantees that a wake enqueued into the queue at time T is
-	 * observable to the Q5 writer at time T (the same JavaScript
-	 * turn), without requiring a webview-state-push interval to
-	 * converge the cache.
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
+	 * REMOVED.
 	 *
-	 * Returns 0 when:
-	 *   * the session is not active on this host,
-	 *   * the host does not implement the method (Hub/Remote omit
-	 *     by design — consumers MUST use `?.()` so the absence
-	 *     collapses to "no outstanding autonomous work" which is
-	 *     fail-safe for the false-positive that this ACT repairs).
+	 * The provisional `getPendingPromptsCount?(sessionId)` primitive
+	 * has been removed. Pending-prompt count authority now lives at
+	 * the canonical `ClineCore.pendingPrompts` service boundary
+	 * (per the upstream architecture rule that pending-prompt
+	 * query/mutation semantics belong OUTSIDE the minimal
+	 * `RuntimeHost` primitive vocabulary, ARCHITECTURE.md lines
+	 * 454-460).
 	 *
-	 * Optional. Hosts that cannot surface the pending-prompt queue
-	 * MUST omit this method. See ACT LHOWA01 §6 / CORRECTION02.
+	 * Consumers (e.g. `SdkController.getPendingPromptCount`,
+	 * `SdkSessionEventCoordinator`'s Q5 guard chain) now reach
+	 * `activeSession.sdkHost.pendingPrompts.count(sessionId)`,
+	 * which is a transport-neutral service-style operation that
+	 * every backend implementing `PendingPromptsServiceApi` MUST
+	 * provide.
 	 */
-	getPendingPromptsCount?(sessionId: string): number;
 }
 
 export type RuntimeHostMode = "auto" | "local" | "hub" | "remote";

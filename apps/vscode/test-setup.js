@@ -135,14 +135,17 @@ Module.prototype.require = function (id) {
 						list: async () => [],
 						update: async () => ({ updated: false }),
 						delete: async () => ({ updated: false }),
+						// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+						// CORRECTION01:
+						// Synchronous authoritative count accessor stub on
+						// the canonical `pendingPrompts` service. Default
+						// `{ available: false }` keeps the Q5 composition
+						// seam fail-CLOSED against outstanding autonomous
+						// work for tests that don't wire a richer adapter
+						// (PROVISIONAL_FAIL_OPEN_RISK fix — an unmirrored
+						// Hub session must NOT be read as "queue is empty").
+						count: (_sessionId) => ({ available: false }),
 					}
-				}
-
-				// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
-				// synchronous authoritative accessor stub. Default 0 keeps
-				// existing tests fail-safe (no outstanding autonomous work).
-				pendingPromptsCount(_sessionId) {
-					return 0
 				}
 
 				static async create() {

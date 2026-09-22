@@ -778,6 +778,41 @@ export class HubRuntimeHost implements RuntimeHost {
 	>();
 	private readonly defaultCapabilities: RuntimeCapabilities;
 	private readonly telemetry?: ITelemetryService;
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
+	 *
+	 * Synchronous local mirror of the pending-prompt queue count per
+	 * session. Populated from two sources:
+	 *   1. The authoritative reply of `requestPendingPromptsList`
+	 *      (called when `pendingPrompts.list(...)` is invoked; also
+	 *      triggers `ensureSessionSubscription` so future mutations
+	 *      stream via the event subscription).
+	 *   2. The `session.pending_prompts` event payload, which carries
+	 *      the authoritative prompt list whenever the hub publishes a
+	 *      queue-state change.
+	 *
+	 * The mirror is read synchronously by `pendingPrompts.count(sessionId)`
+	 * to support the Q5 composition seam's synchronous authoritative
+	 * read pattern. This mirrors the upstream `pendingPrompts.steerFirst`
+	 * "synchronous core operation" pattern (ARCHITECTURE.md lines
+	 * 989-993): transport-translated state, exposed via a service-
+	 * style operation, with synchronous read semantics at the call site.
+	 *
+	 * CORRECTION01: `count(...)` is now availability-aware. The mirror
+	 * alone is not enough — the previous `Map.get(...) ?? 0` semantics
+	 * fail-open: an unmirrored session read as `count = 0` would
+	 * authorize Q5 `awaiting_followup` despite authoritative work
+	 * pending remotely. The mirror is therefore paired with a
+	 * `mirroredSessions` set: only sessions that have been initialized
+	 * via at least one of the authoritative sources above are eligible
+	 * to produce a `{ available: true; count }` read. An unmirrored
+	 * session produces `{ available: false }`, which Q5 interprets as
+	 * "authority unavailable — do NOT authorize operator handoff".
+	 * On `stopSession` / `deleteSession` / `dispose` both the mirror
+	 * entry AND the mirrored-set membership are cleared.
+	 */
+	private readonly pendingPromptCountBySession = new Map<string, number>();
+	private readonly pendingPromptCountInitializedBySession = new Set<string>();
 
 	constructor(
 		options: HubRuntimeHostOptions,
@@ -796,9 +831,37 @@ export class HubRuntimeHost implements RuntimeHost {
 		this.telemetry = options.telemetry;
 		this.runtimeAddress = options.url;
 		this.pendingPrompts = {
-			list: (input) => this.requestPendingPromptsList(input),
+			list: async (input) => this.requestPendingPromptsList(input),
 			update: (input) => this.requestPendingPromptUpdate(input),
 			delete: (input) => this.requestPendingPromptDelete(input),
+			// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+			// CORRECTION01:
+			// Availability-aware synchronous read at the service boundary.
+			// The mirror alone is NOT enough — an unmirrored session
+			// read as `count = 0` would fail-open (PROVISIONAL_FAIL_OPEN_RISK
+			// fixed by CORRECTION01). The mirror is paired with a
+			// `pendingPromptCountInitializedBySession` set: only sessions
+			// that have been initialized via at least one of the
+			// authoritative sources (initial `list(...)` reply, `update`/
+			// `delete` reply, or `session.pending_prompts` event payload)
+			// are eligible to produce `{ available: true; count }`. An
+			// unmirrored session — including one whose count is zero
+			// because no authoritative read has happened yet — produces
+			// `{ available: false }`, which Q5 interprets as
+			// "authority unavailable for this read; do NOT authorize
+			// operator handoff". This closes the
+			// PROVISIONAL_FAIL_OPEN_RISK that LHOWA01's `Map.get(...) ?? 0`
+			// semantics would otherwise recreate for the Hub transport.
+			count: (sessionId) => {
+				if (!sessionId) return { available: false }
+				if (!this.pendingPromptCountInitializedBySession.has(sessionId)) {
+					return { available: false }
+				}
+				return {
+					available: true,
+					count: this.pendingPromptCountBySession.get(sessionId) ?? 0,
+				}
+			},
 		};
 		this.client = this.createClient(options.url);
 	}
@@ -1177,9 +1240,20 @@ export class HubRuntimeHost implements RuntimeHost {
 			{ sessionId: input.sessionId },
 			input.sessionId,
 		);
-		return Array.isArray(reply.payload?.prompts)
+		const prompts = Array.isArray(reply.payload?.prompts)
 			? (reply.payload.prompts as SessionPendingPrompt[])
 			: [];
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+		// CORRECTION01:
+		// Authoritative reply — refresh the local mirror with the hub's
+		// authoritative queue snapshot so `pendingPrompts.count(...)`
+		// returns the right number at the next synchronous read, AND
+		// mark the session as initialized so the availability-aware
+		// `count(...)` returns `{ available: true; count }` instead of
+		// fail-open `{ available: false }` collapsing to "queue empty".
+		this.pendingPromptCountBySession.set(input.sessionId, prompts.length);
+		this.pendingPromptCountInitializedBySession.add(input.sessionId);
+		return prompts;
 	}
 
 	private async requestPendingPromptUpdate(
@@ -1191,11 +1265,22 @@ export class HubRuntimeHost implements RuntimeHost {
 			{ ...input },
 			input.sessionId,
 		);
+		const prompts = Array.isArray(reply.payload?.prompts)
+			? (reply.payload.prompts as SessionPendingPrompt[])
+			: [];
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+		// CORRECTION01:
+		// Update the mirror so the synchronous read returns the post-
+		// update count without requiring an extra `list` round-trip,
+		// AND mark the session as initialized (a `session.update_pending_prompt`
+		// reply carries the authoritative post-update queue snapshot,
+		// so the session is guaranteed to have been initialized by this
+		// call).
+		this.pendingPromptCountBySession.set(input.sessionId, prompts.length);
+		this.pendingPromptCountInitializedBySession.add(input.sessionId);
 		return {
 			sessionId: input.sessionId,
-			prompts: Array.isArray(reply.payload?.prompts)
-				? (reply.payload.prompts as SessionPendingPrompt[])
-				: [],
+			prompts,
 			prompt: reply.payload?.prompt as SessionPendingPrompt | undefined,
 			updated: reply.payload?.updated === true,
 		};
@@ -1210,11 +1295,22 @@ export class HubRuntimeHost implements RuntimeHost {
 			{ ...input },
 			input.sessionId,
 		);
+		const prompts = Array.isArray(reply.payload?.prompts)
+			? (reply.payload.prompts as SessionPendingPrompt[])
+			: [];
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+		// CORRECTION01:
+		// Update the mirror so the synchronous read returns the post-
+		// delete count without requiring an extra `list` round-trip,
+		// AND mark the session as initialized (a `session.remove_pending_prompt`
+		// reply carries the authoritative post-delete queue snapshot,
+		// so the session is guaranteed to have been initialized by this
+		// call).
+		this.pendingPromptCountBySession.set(input.sessionId, prompts.length);
+		this.pendingPromptCountInitializedBySession.add(input.sessionId);
 		return {
 			sessionId: input.sessionId,
-			prompts: Array.isArray(reply.payload?.prompts)
-				? (reply.payload.prompts as SessionPendingPrompt[])
-				: [],
+			prompts,
 			prompt: reply.payload?.prompt as SessionPendingPrompt | undefined,
 			removed: reply.payload?.removed === true,
 		};
@@ -1267,6 +1363,15 @@ export class HubRuntimeHost implements RuntimeHost {
 	async stopSession(sessionId: string): Promise<void> {
 		this.sessionCapabilities.delete(sessionId);
 		this.disposeSessionSubscription(sessionId);
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+		// CORRECTION01:
+		// Clear both the per-session count mirror AND the
+		// "initialized" marker on session teardown so a future
+		// `count(...)` returns `{ available: false }` (fail-closed)
+		// until the next subscription / list / update / delete
+		// re-initializes the session.
+		this.pendingPromptCountBySession.delete(sessionId);
+		this.pendingPromptCountInitializedBySession.delete(sessionId);
 		await this.client.command("session.detach", { sessionId }, sessionId);
 	}
 
@@ -1282,6 +1387,14 @@ export class HubRuntimeHost implements RuntimeHost {
 		this.sessionSubscriptions.clear();
 		this.sessionCapabilities.clear();
 		this.agentDoneEmittedForCurrentRunBySession.clear();
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+		// CORRECTION01:
+		// Drop all per-session count mirrors AND "initialized" markers
+		// on shutdown so a future host cannot accidentally read
+		// stale `{ available: true; count: N }` reads after a fresh
+		// startup.
+		this.pendingPromptCountBySession.clear();
+		this.pendingPromptCountInitializedBySession.clear();
 		for (const controller of this.activeCapabilityAbortControllers.values()) {
 			controller.abort("Hub runtime host disposed.");
 		}
@@ -1353,6 +1466,12 @@ export class HubRuntimeHost implements RuntimeHost {
 	async deleteSession(sessionId: string): Promise<boolean> {
 		this.sessionCapabilities.delete(sessionId);
 		this.disposeSessionSubscription(sessionId);
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+		// CORRECTION01:
+		// Clear both the per-session count mirror AND the
+		// "initialized" marker on session deletion.
+		this.pendingPromptCountBySession.delete(sessionId);
+		this.pendingPromptCountInitializedBySession.delete(sessionId);
 		const reply = await this.client.command("session.delete", {
 			sessionId,
 		});
@@ -1934,13 +2053,32 @@ export class HubRuntimeHost implements RuntimeHost {
 				return;
 			}
 			case "session.pending_prompts": {
+				const prompts = Array.isArray(event.payload?.prompts)
+					? (event.payload.prompts as SessionPendingPrompt[])
+					: [];
+				// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+				// CORRECTION01:
+				// Keep the local count mirror current from the hub-published
+				// authoritative queue snapshot. This is the second of the two
+				// mirror sources (the first is the reply of
+				// `requestPendingPromptsList`). Together they make the
+				// synchronous `pendingPrompts.count(sessionId)` read transport-
+				// transparent to the Q5 composition seam.
+				//
+				// CORRECTION01: also mark the session as initialized — a
+				// hub-published `session.pending_prompts` event is the
+				// authoritative source for "we have observed the queue
+				// state at least once". Until this point
+				// `pendingPrompts.count(...)` returns `{ available: false }`,
+				// and Q5 will not authorize operator handoff on
+				// uninitialized sessions (fail-closed).
+				this.pendingPromptCountBySession.set(sessionId, prompts.length);
+				this.pendingPromptCountInitializedBySession.add(sessionId);
 				this.events.emit({
 					type: "pending_prompts",
 					payload: {
 						sessionId,
-						prompts: Array.isArray(event.payload?.prompts)
-							? (event.payload.prompts as SessionPendingPrompt[])
-							: [],
+						prompts,
 					},
 				});
 				return;

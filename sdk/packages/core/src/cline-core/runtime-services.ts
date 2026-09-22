@@ -73,5 +73,17 @@ export function createClineCorePendingPromptsApi(
 		delete(input) {
 			return getService().delete(input);
 		},
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
+		// Forward the synchronous `count` accessor to the underlying
+		// host's pending-prompt service. This is the AUTHORITATIVE
+		// transport-neutral read used by the Q5 composition seam (e.g.
+		// SdkController.getPendingPromptCount →
+		// SdkSessionEventCoordinator's `getPendingPromptCount` option).
+		// Per the upstream architecture rule (ARCHITECTURE.md lines
+		// 454-460), pending-prompt query/mutation semantics belong at
+		// this service boundary, NOT on the `RuntimeHost` primitive.
+		count(sessionId) {
+			return getService().count(sessionId);
+		},
 	};
 }

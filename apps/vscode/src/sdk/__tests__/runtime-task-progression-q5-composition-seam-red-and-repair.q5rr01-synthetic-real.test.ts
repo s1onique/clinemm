@@ -102,10 +102,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
-import {
-	SdkSessionEventCoordinator,
-	type SdkSessionEventCoordinatorOptions,
-} from "../sdk-session-event-coordinator"
+import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
 vi.mock("@/shared/services/Logger", () => ({
@@ -157,7 +154,11 @@ function makeHarnessWithLiveness(initialLiveness?: (ownerSessionId: string | und
 			taskHistory: { updateTaskUsage: vi.fn() },
 			getTask: () => undefined,
 			postStateToWebview: vi.fn().mockResolvedValue(undefined),
-			setTurnPhase: (phase: Parameters<NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>>[0], anchorTs?: number, writerId?: string) => {
+			setTurnPhase: (
+				phase: Parameters<NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>>[0],
+				anchorTs?: number,
+				writerId?: string,
+			) => {
 				turnStateTracker.setWithWriter(phase, anchorTs, {
 					writerId: (writerId ?? "unknown-legacy-writer") as never,
 				})
@@ -165,6 +166,16 @@ function makeHarnessWithLiveness(initialLiveness?: (ownerSessionId: string | und
 			getTurnPhase: () => turnStateTracker.currentPhase,
 			translateSessionEvent,
 			hasRunningBackgroundJobForOwner: livenessQuery,
+			// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+			// Wire the CORRECTION01 availability-aware `getPendingPromptCount`
+			// option. This harness simulates a LocalRuntimeHost where the
+			// queue is unconditionally `available: true` with no pending
+			// prompts — i.e. Shape F. Without this wire, the Q5 seam
+			// defaults to `{ available: false }` (authority unavailable),
+			// which is the production fail-closed default but does NOT
+			// match this harness's intent (no queued autonomous work,
+			// commit `awaiting_followup`).
+			getPendingPromptCount: () => ({ available: true, count: 0 }),
 		} as unknown as SdkSessionEventCoordinatorOptions
 		return new SdkSessionEventCoordinator(options)
 	}
@@ -212,139 +223,134 @@ async function driveDoneWithoutCompletion(harness: Harness): Promise<{
 	await harness.coordinator.handleSessionEvent(doneEvent)
 
 	const after = harness.turnStateTracker.currentPhase
-	const writerFired = findTurnStateWriterProvenanceByWriter(
-		"session-event-turn-complete-resumable-straggler-preserve",
-	).filter(
+	const writerFired = findTurnStateWriterProvenanceByWriter("session-event-turn-complete-resumable-straggler-preserve").filter(
 		(r) => r.previous.phase === "streaming" && r.committed.phase === "awaiting_followup",
 	).length
 
 	return { afterPhase: after, writerFired }
 }
 
-describe(
-	"ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5 composition seam RED + repair (q5rr01)",
-	() => {
-		beforeEach(() => {
-			clearTurnStateWriterProvenanceDiagnostic()
-			disableTurnStateWriterProvenanceDiagnostic()
+describe("ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5 composition seam RED + repair (q5rr01)", () => {
+	beforeEach(() => {
+		clearTurnStateWriterProvenanceDiagnostic()
+		disableTurnStateWriterProvenanceDiagnostic()
+	})
+
+	afterEach(() => {
+		clearTurnStateWriterProvenanceDiagnostic()
+		disableTurnStateWriterProvenanceDiagnostic()
+	})
+
+	it("Q5-A PRE-REPAIR baseline: current session owns RUNNING J + done-without-completion -> awaiting_followup (ADJUDICATED RED)", async () => {
+		// Baseline simulation: the `hasRunningBackgroundJobForOwner`
+		// option is wired to `() => false` to emulate the pre-repair
+		// production seam (which never consulted the query). The
+		// test asserts that, in that baseline, the active session
+		// owning a RUNNING job is INSUFFICIENT to suppress the
+		// `awaiting_followup` transition - confirming the bug.
+		enableTurnStateWriterProvenanceDiagnostic()
+		const harness = makeHarnessWithLiveness(() => false)
+
+		const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
+
+		// RED proven: phase became awaiting_followup despite the
+		// active session owning a RUNNING job (in the pre-repair
+		// baseline, the writer had no input and so unconditionally
+		// fired).
+		expect(afterPhase).toBe("awaiting_followup")
+		expect(writerFired, "pre-repair baseline MUST still fire the writer under test").toBeGreaterThanOrEqual(1)
+	})
+
+	it("Q5-A POST-REPAIR: current session owns RUNNING J + done-without-completion -> phase NOT awaiting_followup (GREEN after composition seam repair)", async () => {
+		// Post-repair scenario: the `hasRunningBackgroundJobForOwner`
+		// option is wired to `() => true` (the production
+		// `VscodeSessionHost.hasRunningBackgroundJobForOwner`
+		// would return true when the active session owns a RUNNING
+		// `CommandJob`). The test asserts that, with the option
+		// wired correctly, the `awaiting_followup` transition is
+		// suppressed.
+		enableTurnStateWriterProvenanceDiagnostic()
+		const harness = makeHarnessWithLiveness(() => true)
+
+		const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
+
+		// GREEN: phase did NOT become awaiting_followup. The writer
+		// under test did NOT fire.
+		expect(afterPhase, "post-repair MUST NOT transition to awaiting_followup when active session owns RUNNING J").not.toBe(
+			"awaiting_followup",
+		)
+		expect(writerFired, "post-repair MUST NOT fire the writer under test when the active session owns a RUNNING job").toBe(0)
+	})
+
+	it("Q5-B control: current session owns NO RUNNING J -> awaiting_followup preserved (control / unchanged)", async () => {
+		// Control: in the post-repair scenario with the active
+		// session NOT owning a RUNNING job, the `awaiting_followup`
+		// transition is preserved. This is the existing
+		// pre-repair behavior (and the post-repair behavior when
+		// the query returns false).
+		enableTurnStateWriterProvenanceDiagnostic()
+		const harness = makeHarnessWithLiveness(() => false)
+
+		const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
+
+		expect(afterPhase).toBe("awaiting_followup")
+		expect(writerFired).toBeGreaterThanOrEqual(1)
+	})
+
+	it("Q5-B control (option omitted): current session owns NO RUNNING J -> awaiting_followup preserved (option omitted == pre-Q5 behavior)", async () => {
+		// Same control as Q5-B but with the option OMITTED entirely.
+		// This proves: when `SdkController` does not wire
+		// `hasRunningBackgroundJobForOwner` (e.g. legacy hosts that
+		// don't support it, or test environments), the pre-Q5
+		// behavior is preserved (the coordinator falls through to
+		// `awaiting_followup` unconditionally).
+		enableTurnStateWriterProvenanceDiagnostic()
+		const harness = makeHarnessWithLiveness(undefined)
+
+		const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
+
+		expect(afterPhase).toBe("awaiting_followup")
+		expect(writerFired).toBeGreaterThanOrEqual(1)
+	})
+
+	it("Q5-C control: another session owns RUNNING J -> awaiting_followup preserved (isolation control)", async () => {
+		// Control: the repair must NOT confuse ownership. When
+		// `hasRunningBackgroundJobForOwner` is asked about a
+		// sessionId OTHER than the active session's owner, the
+		// query is asked with the ACTIVE session's sessionId (not
+		// the running job's owner). The harness's liveness query
+		// returns false for "session-q5rr01" (the active session),
+		// so no suppression occurs. The phase transitions to
+		// `awaiting_followup` as expected.
+		enableTurnStateWriterProvenanceDiagnostic()
+		const harness = makeHarnessWithLiveness((ownerSessionId) => {
+			// Returns true only if asked about a different
+			// sessionId - simulating "another session owns a
+			// RUNNING J but NOT the active session."
+			return ownerSessionId !== undefined && ownerSessionId !== "session-q5rr01"
 		})
 
-		afterEach(() => {
-			clearTurnStateWriterProvenanceDiagnostic()
-			disableTurnStateWriterProvenanceDiagnostic()
-		})
+		const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
 
-		it("Q5-A PRE-REPAIR baseline: current session owns RUNNING J + done-without-completion -> awaiting_followup (ADJUDICATED RED)", async () => {
-			// Baseline simulation: the `hasRunningBackgroundJobForOwner`
-			// option is wired to `() => false` to emulate the pre-repair
-			// production seam (which never consulted the query). The
-			// test asserts that, in that baseline, the active session
-			// owning a RUNNING job is INSUFFICIENT to suppress the
-			// `awaiting_followup` transition - confirming the bug.
-			enableTurnStateWriterProvenanceDiagnostic()
-			const harness = makeHarnessWithLiveness(() => false)
+		// The active session's done-without-completion preserves
+		// `awaiting_followup` because the active session does not
+		// own the RUNNING job.
+		expect(afterPhase).toBe("awaiting_followup")
+		expect(writerFired).toBeGreaterThanOrEqual(1)
+	})
 
-			const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
+	it("Q5-D control: current session's J is completed (terminal state) -> awaiting_followup preserved (terminal state doesn't count)", async () => {
+		// Control: when the active session's J is in any terminal
+		// state (cancelled, exited, failed), the query returns
+		// false because `hasRunningBackgroundJobForOwner` only
+		// matches active RUNNING jobs. The phase transitions to
+		// `awaiting_followup` as expected.
+		enableTurnStateWriterProvenanceDiagnostic()
+		const harness = makeHarnessWithLiveness(() => false)
 
-			// RED proven: phase became awaiting_followup despite the
-			// active session owning a RUNNING job (in the pre-repair
-			// baseline, the writer had no input and so unconditionally
-			// fired).
-			expect(afterPhase).toBe("awaiting_followup")
-			expect(writerFired, "pre-repair baseline MUST still fire the writer under test").toBeGreaterThanOrEqual(1)
-		})
+		const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
 
-		it("Q5-A POST-REPAIR: current session owns RUNNING J + done-without-completion -> phase NOT awaiting_followup (GREEN after composition seam repair)", async () => {
-			// Post-repair scenario: the `hasRunningBackgroundJobForOwner`
-			// option is wired to `() => true` (the production
-			// `VscodeSessionHost.hasRunningBackgroundJobForOwner`
-			// would return true when the active session owns a RUNNING
-			// `CommandJob`). The test asserts that, with the option
-			// wired correctly, the `awaiting_followup` transition is
-			// suppressed.
-			enableTurnStateWriterProvenanceDiagnostic()
-			const harness = makeHarnessWithLiveness(() => true)
-
-			const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
-
-			// GREEN: phase did NOT become awaiting_followup. The writer
-			// under test did NOT fire.
-			expect(afterPhase, "post-repair MUST NOT transition to awaiting_followup when active session owns RUNNING J").not.toBe(
-				"awaiting_followup",
-			)
-			expect(writerFired, "post-repair MUST NOT fire the writer under test when the active session owns a RUNNING job").toBe(0)
-		})
-
-		it("Q5-B control: current session owns NO RUNNING J -> awaiting_followup preserved (control / unchanged)", async () => {
-			// Control: in the post-repair scenario with the active
-			// session NOT owning a RUNNING job, the `awaiting_followup`
-			// transition is preserved. This is the existing
-			// pre-repair behavior (and the post-repair behavior when
-			// the query returns false).
-			enableTurnStateWriterProvenanceDiagnostic()
-			const harness = makeHarnessWithLiveness(() => false)
-
-			const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
-
-			expect(afterPhase).toBe("awaiting_followup")
-			expect(writerFired).toBeGreaterThanOrEqual(1)
-		})
-
-		it("Q5-B control (option omitted): current session owns NO RUNNING J -> awaiting_followup preserved (option omitted == pre-Q5 behavior)", async () => {
-			// Same control as Q5-B but with the option OMITTED entirely.
-			// This proves: when `SdkController` does not wire
-			// `hasRunningBackgroundJobForOwner` (e.g. legacy hosts that
-			// don't support it, or test environments), the pre-Q5
-			// behavior is preserved (the coordinator falls through to
-			// `awaiting_followup` unconditionally).
-			enableTurnStateWriterProvenanceDiagnostic()
-			const harness = makeHarnessWithLiveness(undefined)
-
-			const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
-
-			expect(afterPhase).toBe("awaiting_followup")
-			expect(writerFired).toBeGreaterThanOrEqual(1)
-		})
-
-		it("Q5-C control: another session owns RUNNING J -> awaiting_followup preserved (isolation control)", async () => {
-			// Control: the repair must NOT confuse ownership. When
-			// `hasRunningBackgroundJobForOwner` is asked about a
-			// sessionId OTHER than the active session's owner, the
-			// query is asked with the ACTIVE session's sessionId (not
-			// the running job's owner). The harness's liveness query
-			// returns false for "session-q5rr01" (the active session),
-			// so no suppression occurs. The phase transitions to
-			// `awaiting_followup` as expected.
-			enableTurnStateWriterProvenanceDiagnostic()
-			const harness = makeHarnessWithLiveness((ownerSessionId) => {
-				// Returns true only if asked about a different
-				// sessionId - simulating "another session owns a
-				// RUNNING J but NOT the active session."
-				return ownerSessionId !== undefined && ownerSessionId !== "session-q5rr01"
-			})
-
-			const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
-
-			// The active session's done-without-completion preserves
-			// `awaiting_followup` because the active session does not
-			// own the RUNNING job.
-			expect(afterPhase).toBe("awaiting_followup")
-			expect(writerFired).toBeGreaterThanOrEqual(1)
-		})
-
-		it("Q5-D control: current session's J is completed (terminal state) -> awaiting_followup preserved (terminal state doesn't count)", async () => {
-			// Control: when the active session's J is in any terminal
-			// state (cancelled, exited, failed), the query returns
-			// false because `hasRunningBackgroundJobForOwner` only
-			// matches active RUNNING jobs. The phase transitions to
-			// `awaiting_followup` as expected.
-			enableTurnStateWriterProvenanceDiagnostic()
-			const harness = makeHarnessWithLiveness(() => false)
-
-			const { afterPhase, writerFired } = await driveDoneWithoutCompletion(harness)
-
-			expect(afterPhase).toBe("awaiting_followup")
-			expect(writerFired).toBeGreaterThanOrEqual(1)
-		})
-	},
-)
+		expect(afterPhase).toBe("awaiting_followup")
+		expect(writerFired).toBeGreaterThanOrEqual(1)
+	})
+})

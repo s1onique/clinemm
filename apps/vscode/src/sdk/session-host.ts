@@ -5,6 +5,7 @@ import type {
 	CompareCheckpointResult,
 	CoreSessionEvent,
 	HookEventPayload,
+	PendingPromptCountRead,
 	PendingPromptMutationResult,
 	PendingPromptsDeleteInput,
 	PendingPromptsListInput,
@@ -58,6 +59,29 @@ export interface SdkSessionHost {
 	pendingPrompts(action: "list", input: PendingPromptsListInput): Promise<SessionPendingPrompt[]>
 	pendingPrompts(action: "update", input: PendingPromptsUpdateInput): Promise<PendingPromptMutationResult>
 	pendingPrompts(action: "delete", input: PendingPromptsDeleteInput): Promise<PendingPromptMutationResult>
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+	 * CORRECTION01:
+	 * Synchronous authoritative accessor for the count of pending prompts
+	 * queued for `sessionId`. Reaches the canonical
+	 * `ClineCore.pendingPrompts.count(sessionId)` service operation, which
+	 * is the transport-neutral service-style method that every backend
+	 * implementing `PendingPromptsServiceApi` MUST provide.
+	 *
+	 * Returns a {@link PendingPromptCountRead} discriminated union —
+	 * NOT a bare number — so the Q5 consumer can distinguish "queue is
+	 * known to be empty" from "queue mirror has not yet been
+	 * initialized for this session". The latter case produces
+	 * `{ available: false }`, which Q5 treats as "authority
+	 * unavailable — do NOT authorize operator handoff" rather than
+	 * "queue is empty".
+	 *
+	 * This is the AUTHORITATIVE boundary for the Q5 composition seam —
+	 * a wake enqueued into the queue at time T is observable to the Q5
+	 * writer at time T (same JavaScript turn), regardless of whether
+	 * `getStateToPostToWebview` has run.
+	 */
+	pendingPrompts(action: "count", input: { sessionId: string }): PendingPromptCountRead
 	subscribe(listener: (event: CoreSessionEvent) => void): () => void
 	/**
 	 * ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: subscribe to canonical recovery
@@ -104,23 +128,23 @@ export interface SdkSessionHost {
 	runtimeSnapshot?(sessionId: string | undefined): AgentRuntimeStateSnapshot | undefined
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
 	/**
-	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
-	 * Synchronous authoritative accessor for the count of pending prompts
-	 * queued for `sessionId`. AUTHORITATIVE boundary for the Q5 composition
-	 * seam in the `SdkSessionEventCoordinator` — the count is read directly
-	 * from the canonical `PendingPromptsController` queue (via the runtime
-	 * host's `getPendingPromptsCount`), NOT from any cached projection.
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
+	 * REMOVED.
 	 *
-	 * Returns 0 when:
-	 *   * `sessionId` is empty (failsafe),
-	 *   * the host does not implement the underlying accessor (Hub/Remote
-	 *     omit by design; method-absent case is fail-safe for the
-	 *     false-positive that this ACT repairs).
+	 * The provisional `pendingPromptsCount?(sessionId)` method on
+	 * `SdkSessionHost` has been removed. Pending-prompt count
+	 * authority now lives at the canonical `pendingPrompts` service
+	 * boundary — i.e. `sdkHost.pendingPrompts.count(sessionId)` is
+	 * the transport-neutral service-style accessor that every
+	 * backend implementing `PendingPromptsServiceApi` MUST provide.
 	 *
-	 * Optional. Hosts that cannot surface the pending-prompt queue MUST
-	 * omit this method.
+	 * Per the upstream architecture rule (ARCHITECTURE.md lines
+	 * 454-460): pending-prompt query/mutation semantics are
+	 * intentionally outside the minimal `RuntimeHost` primitive
+	 * vocabulary. `SdkSessionHost` mirrors that rule: the count
+	 * accessor is reached through the grouped `pendingPrompts`
+	 * service, NOT through a separate host-level primitive.
 	 */
-	pendingPromptsCount?(sessionId: string | undefined): number
 }
 
 export type SdkInitialMessages = NonNullable<StartSessionInput["initialMessages"]>

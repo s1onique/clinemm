@@ -34,20 +34,17 @@ import {
 } from "@shared/turn-state-writer-provenance"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	type BackgroundOwnerCorrelationRecord,
 	clearBackgroundOwnerCorrelationCaptureRecords,
 	getBackgroundOwnerCorrelationCaptureRecords,
 	setBackgroundOwnerCorrelationCaptureBufferSize,
 	setBackgroundOwnerCorrelationCaptureEnabled,
-	type BackgroundOwnerCorrelationRecord,
 } from "../background-owner-correlation"
-import { CommandJobManager } from "../command-job-manager"
 import { dumpExtensionSideBackgroundOwnerCorrelationDiagnostic } from "../background-owner-correlation-runtime"
-import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
+import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
-import {
-	SdkSessionEventCoordinator,
-	type SdkSessionEventCoordinatorOptions,
-} from "../sdk-session-event-coordinator"
+import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
+import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
 // Disable the experimental sandbox (mirrors BCAFG01).
@@ -95,11 +92,7 @@ interface Harness {
 	guardCalls: { count: number; lastResult: boolean | undefined }
 }
 
-function makeHarness(
-	activeSessionId: string,
-	jobOwnerSessionId: string | undefined,
-	passContext: boolean,
-): Harness {
+function makeHarness(activeSessionId: string, jobOwnerSessionId: string | undefined, passContext: boolean): Harness {
 	const minter = new MessageIdMinter()
 	const tracker = new TurnStateTracker(minter)
 	const translatorState = new MessageTranslatorState()
@@ -139,10 +132,19 @@ function makeHarness(
 		translateSessionEvent,
 		hasRunningBackgroundJobForOwner: (ownerSessionId: string | undefined) => {
 			guardCalls.count += 1
-			guardCalls.lastResult =
-				Boolean(jobOwnerSessionId) && jobOwnerSessionId === ownerSessionId
+			guardCalls.lastResult = Boolean(jobOwnerSessionId) && jobOwnerSessionId === ownerSessionId
 			return guardCalls.lastResult
 		},
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+		// Wire the CORRECTION01 availability-aware `getPendingPromptCount`
+		// option. This harness simulates a LocalRuntimeHost where the
+		// queue is unconditionally `available: true` with no pending
+		// prompts — i.e. Shape F. Without this wire, the Q5 seam
+		// defaults to `{ available: false }` (authority unavailable),
+		// which is the production fail-closed default but does NOT
+		// match this harness's intent (no queued autonomous work,
+		// commit `awaiting_followup`).
+		getPendingPromptCount: () => ({ available: true, count: 0 }),
 		getActiveJobOwnershipSnapshot: () => manager.getActiveJobOwnershipSnapshot(),
 	} as unknown as SdkSessionEventCoordinatorOptions
 	void passContext // passed to startBackgroundJob, not used in harness
@@ -273,9 +275,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01 / Q5 semant
 		expect(record.queriedOwnerSessionId).toBe(sessionId)
 		expect(record.guardAvailable).toBe(true)
 		expect(record.guardResult).toBe(true)
-		expect(record.candidateWriterId).toBe(
-			"session-event-turn-complete-resumable-straggler-preserve",
-		)
+		expect(record.candidateWriterId).toBe("session-event-turn-complete-resumable-straggler-preserve")
 		expect(record.activeJobs).toHaveLength(1)
 		expect(record.activeJobs[0].state).toBe("running")
 		expect(record.activeJobs[0].ownerSessionId).toBe(sessionId)
@@ -302,8 +302,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01 / Q5 semant
 				iterations: 1,
 			}),
 		)
-		const records: readonly BackgroundOwnerCorrelationRecord[] =
-			getBackgroundOwnerCorrelationCaptureRecords()
+		const records: readonly BackgroundOwnerCorrelationRecord[] = getBackgroundOwnerCorrelationCaptureRecords()
 		expect(records).toHaveLength(1)
 		const record = records[0]
 		// OC1 signature: ownerSessionId is undefined on the active job.
@@ -336,8 +335,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01 / Q5 semant
 				iterations: 1,
 			}),
 		)
-		const records: readonly BackgroundOwnerCorrelationRecord[] =
-			getBackgroundOwnerCorrelationCaptureRecords()
+		const records: readonly BackgroundOwnerCorrelationRecord[] = getBackgroundOwnerCorrelationCaptureRecords()
 		expect(records).toHaveLength(1)
 		const record = records[0]
 		expect(record.activeJobs[0].ownerSessionId).toBe("session-B")
@@ -369,7 +367,9 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01 / Q5 semant
 		const { file } = await dumpExtensionSideBackgroundOwnerCorrelationDiagnostic({
 			globalStorageUri: { fsPath: dir },
 		})
-		const lines = readFileSync(file, "utf8").split("\n").filter((l) => l.length > 0)
+		const lines = readFileSync(file, "utf8")
+			.split("\n")
+			.filter((l) => l.length > 0)
 		expect(lines).toHaveLength(1)
 		const parsed = JSON.parse(lines[0]) as BackgroundOwnerCorrelationRecord
 		expect(parsed.event).toBe("background_owner_correlation_decision")

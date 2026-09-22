@@ -41,10 +41,7 @@ import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
-import {
-	SdkSessionEventCoordinator,
-	type SdkSessionEventCoordinatorOptions,
-} from "../sdk-session-event-coordinator"
+import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
 vi.mock("@/shared/services/Logger", () => ({
@@ -62,7 +59,9 @@ vi.mock("@/core/storage/StateManager", () => ({
 }))
 
 const originalSandbox = process.env.CLINEMM_EXPERIMENTAL_SANDBOX
-beforeEach(() => { process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off" })
+beforeEach(() => {
+	process.env.CLINEMM_EXPERIMENTAL_SANDBOX = "off"
+})
 afterEach(() => {
 	if (originalSandbox === undefined) {
 		delete process.env.CLINEMM_EXPERIMENTAL_SANDBOX
@@ -109,16 +108,39 @@ class TestPendingPromptQueue {
 		if (!sessionId) return 0
 		return this.items.filter((q) => q.sessionId === sessionId).length
 	}
-	get length(): number { return this.items.length }
+	get length(): number {
+		return this.items.length
+	}
 }
 
 // Production-shape SdkSessionHost stub with synchronous authoritative
-// pendingPromptsCount accessor — mirrors VscodeSessionHost.pendingPromptsCount
-// which reaches ClineCore.getPendingPromptsCount →
-// LocalRuntimeHost.getPendingPromptsCount → session.pendingPrompts.length.
+// pendingPrompts service accessor — mirrors VscodeSessionHost.pendingPrompts
+// (the "count" action) which reaches ClineCore.pendingPrompts.count →
+// LocalRuntimeHost.pendingPrompts.count → session.pendingPrompts.length.
+//
+// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 /
+// CORRECTION01:
+// The previous `pendingPromptsCount?(sessionId)` accessor on
+// SdkSessionHost has been removed. The count accessor is reached
+// through the canonical `pendingPrompts` service boundary (per the
+// upstream architecture rule at ARCHITECTURE.md lines 454-460).
+// The CORRECTION01 `count(...)` returns the new
+// `PendingPromptCountRead` discriminated union: `{ available: true;
+// count }` when authority is known (LocalRuntimeHost is always
+// `available: true`), and `{ available: false }` otherwise.
 function makeSdkHostWithPendingCount(queue: TestPendingPromptQueue) {
 	return {
-		pendingPromptsCount: (sessionId: string | undefined) => queue.countForSession(sessionId),
+		pendingPrompts: (action: string, input: { sessionId: string } | undefined) => {
+			if (action === "count") {
+				// LocalRuntimeHost is unconditionally available: every
+				// read produces `{ available: true; count }`.
+				return {
+					available: true,
+					count: queue.countForSession(input?.sessionId),
+				}
+			}
+			throw new Error(`Unhandled pendingPrompts action in test stub: ${action}`)
+		},
 	}
 }
 
@@ -178,9 +200,12 @@ function makeWireHarness(opts: { activeSessionId?: string; activeTaskId?: string
 		translateSessionEvent,
 		hasRunningBackgroundJobForOwner: () => manager.hasRunningBackgroundJobForOwner(activeSessionId),
 		// PRODUCTION ADAPTER (mirrors SdkController.getPendingPromptCount
-		// wired in production at SdkController.ts:2143-2146).
+		// wired in production at SdkController.ts:2160-2166): the
+		// authoritative count is read through the canonical `pendingPrompts`
+		// service boundary (`pendingPrompts("count", { sessionId })`), NOT
+		// through a `RuntimeHost` primitive.
 		getPendingPromptCount: (ownerSessionId: string | undefined) =>
-			sdkHost.pendingPromptsCount(ownerSessionId),
+			sdkHost.pendingPrompts("count", { sessionId: ownerSessionId ?? "" }),
 		getActiveNotifyCount: (ownerSessionId: string | undefined, taskId: string | undefined) =>
 			notifyCoordinator.activeNotifyCountForOwner(ownerSessionId ?? "", taskId),
 	} as unknown as SdkSessionEventCoordinatorOptions)
@@ -191,10 +216,7 @@ function makeWireHarness(opts: { activeSessionId?: string; activeTaskId?: string
 const agentEvent = (sessionId: string, event: Record<string, unknown>): CoreSessionEvent =>
 	({ type: "agent_event", payload: { sessionId, event: event as never } }) as CoreSessionEvent
 
-async function emitDoneWithoutCompletion(
-	coordinator: SdkSessionEventCoordinator,
-	sessionId: string,
-): Promise<void> {
+async function emitDoneWithoutCompletion(coordinator: SdkSessionEventCoordinator, sessionId: string): Promise<void> {
 	const doneEvent = agentEvent(sessionId, {
 		type: "done",
 		reason: "completed",

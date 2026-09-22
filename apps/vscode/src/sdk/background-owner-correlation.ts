@@ -122,6 +122,28 @@ export interface BackgroundOwnerCorrelationRecord {
 	 */
 	readonly pendingPromptCount?: number
 	/**
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+	 * Availability-aware `PendingPromptCountRead` discriminated
+	 * union read at the Q5 boundary. Carries the full
+	 * `{ available, count? }` shape so the BOCOR diagnostic can
+	 * distinguish "queue known to be empty" from "queue mirror
+	 * not yet initialized" — critical for diagnosing
+	 * PROVISIONAL_FAIL_OPEN_RISK regressions in the Hub transport.
+	 */
+	readonly pendingPromptCountRead?: {
+		available: boolean
+		count?: number
+	}
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+	 * `true` when the Q5 reader got `{ available: false }` from
+	 * the pending-prompt authority (Hub session not yet mirrored).
+	 * Always `false` for LocalRuntimeHost (which is unconditionally
+	 * available). Drives the same deferred-continuation marker
+	 * path as `pendingPromptCount > 0`.
+	 */
+	readonly pendingPromptAuthorityUnknown?: boolean
+	/**
 	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01:
 	 * Count of active BackgroundNotifyCoordinator markers for
 	 * (activeSessionId, taskId) at the Q5 boundary. `undefined`

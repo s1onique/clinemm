@@ -1,0 +1,142 @@
+ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 — COMPOSITION OUTPUT
+====================================================================================
+
+> Test execution summary. All tests in scope for this ACT pass.
+
+================================================================================
+PPAT01 (NEW this ACT) — transport-neutral pending-prompt authority
+================================================================================
+
+  $ bun test src/sdk/__tests__/long-horizon-pending-prompt-authority-transport01.ppat01.test.ts
+
+  ✓ PPA-RED-01 architectural seam: RuntimeHost.getPendingPromptsCount absent
+        RuntimeHost interface does NOT carry getPendingPromptsCount — authority moved to pendingPrompts service
+  ✓ PPA-CTL-01..03 local synchronous authority via service
+        PPA-CTL-01: enqueue at T, count at T+ε returns 1 (synchronous authoritative)
+        PPA-CTL-02: empty queue → service count = 0
+        PPA-CTL-03: prompt consumed → service count returns to 0
+  ✓ PPA-CTL-04..06 hub mirror projections
+        PPA-CTL-04: hub mirror reflects the authoritative list reply
+        PPA-CTL-05: hub mirror reflects the session.pending_prompts event payload
+        PPA-CTL-06: stopSession / deleteSession clears the hub mirror
+  ✓ PPA-COMPOSE-01: load-bearing production composition through service boundary
+        enqueue wake → done-without-completion → Q5 DEFERS via service-bound count
+  ✓ PPA-CTL-07 transport neutrality (discriminator)
+        different session ids do not leak counts across sessions
+        empty sessionId returns 0 (failsafe)
+
+  10 pass / 0 fail (10 tests, 29 expect() calls)
+  Ran 10 tests across 1 file. [687.00ms]
+
+================================================================================
+LHOWA01 / CORRECTION02 — preserved predecessor invariant
+================================================================================
+
+  $ bun test src/sdk/__tests__/long-horizon-outstanding-work-authority01.lhowa01-wire-authority.test.ts
+
+  ✓ LHOWA01-WIRE-01: synchronous authoritative adapter at Q5
+        enqueue wake → done-without-completion (no cache refresh) → Q5 DEFERS
+        no wake + done-without-completion → Q5 COMMITS awaiting_followup (Shape F)
+
+  2 pass / 0 fail
+
+  $ bun test src/sdk/__tests__/long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts
+
+  ✓ ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / LHOWA01
+        Shape D — terminal-wake already enqueued before done-without-completion
+          LHOWA01-GREEN: pendingPromptCount > 0 + done-without-completion → Q5 seam DEFERS
+        Conservation: pre-existing guards unchanged
+          LHOWA01-CONSERVE-1: Shape A (RUNNING job) still defers via BCAFG01 path
+          LHOWA01-CONSERVE-2: Shape F (no outstanding work) still commits awaiting_followup
+        Discriminator — operator-demand signals
+          LHOWA01-DISCRIM-1: wasErrorSeen() === true → error phase (NOT awaiting_followup)
+          LHOWA01-DISCRIM-2: wasAttemptCompletionSeen() && wasTerminalResponseCommittedThisTurn() → completed phase
+
+  5 pass / 0 fail
+
+================================================================================
+BCNT01 — preserved
+================================================================================
+
+  $ bun test src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts
+
+  ✓ BCNT-RED-01 (SYNTHETIC_REAL_UNWIRED): notify=true + terminal event produces zero wakes
+  ✓ BCNT-01 notify=true natural terminal -> exactly one queued wake
+  ✓ BCNT-02 omitted/default false -> zero wake, zero marker
+  ✓ BCNT-03 explicit false -> zero wake, zero marker
+  ✓ BCNT-04 newer turn same task -> notification survives queue delivery
+  ✓ BCNT-NATURAL-01 natural subprocess exit fires exactly one wake
+  ✓ BCNT-FAST-01 fast-completion -> zero wake (correction01 P1-1)
+  ✓ BCNT-DEADLINE-03 real CommandJobManager deadline fires deadline_exceeded -> wake
+  ... (16 more)
+
+  24 pass / 0 fail
+
+================================================================================
+BTCONT01 / BCAFG01 / AGCONT01 — preserved
+================================================================================
+
+  $ bun test src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
+  10 pass / 0 fail
+
+  $ bun test src/sdk/__tests__/background-command-awaiting-followup-guard01.bcafg01-synthetic-real.test.ts \
+              src/sdk/__tests__/background-command-agent-continuation01.agcont01.test.ts
+  12 pass / 0 fail (BCAFG01: 5 tests, AGCONT01: 7 tests)
+
+================================================================================
+QPSR01 / BCNT01-wire (real-bridge c24-c-bridge) — preserved
+================================================================================
+
+  $ bun run test:vitest:c2-4-c-bridge \
+      src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts
+  6 pass / 0 fail
+
+  $ bun run test:vitest:c2-4-c-bridge \
+      src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire.c24-c-bridge.test.ts \
+      src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire-03-real-callback.c24-c-bridge.test.ts
+  7 pass / 0 fail
+
+  $ bun run test:vitest:c2-4-c-bridge \
+      src/sdk/__tests__/skipped-command-host-recovery.schr01.test.ts \
+      src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts
+  9 pass / 0 fail
+
+================================================================================
+Hub composition doctrinally exercised — c2-4-d-hub tests
+================================================================================
+
+  $ bun run test:vitest:c2-4-d-hub
+
+  ✓ src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts (4 tests) 8ms
+  ✓ src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts (11 tests) 9ms
+
+  Test Files  2 passed (2)
+       Tests  15 passed (15)
+
+================================================================================
+TypeScript gates — clean
+================================================================================
+
+  $ cd apps/vscode && bunx tsc --noEmit
+  (no errors, exit 0)
+
+  $ cd sdk/packages/core && bun tsc -p tsconfig.build.json --noEmit
+  (no errors, exit 0)
+
+================================================================================
+Bun unit suite — preserved
+================================================================================
+
+  $ cd apps/vscode && bun run test:unit
+
+  Files: 82   Pass: 1141   Fail: 0   Time: 42.0s
+  All unit test files passed.
+
+================================================================================
+Production build — clean
+================================================================================
+
+  $ cd apps/vscode && bun esbuild.mjs
+
+  [watch] build started
+  [watch] build finished

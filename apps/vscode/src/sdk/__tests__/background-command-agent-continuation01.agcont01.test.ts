@@ -287,6 +287,16 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		getTurnPhase: () => tracker.currentPhase,
 		translateSessionEvent,
 		hasRunningBackgroundJobForOwner: (id: string | undefined) => manager.hasRunningBackgroundJobForOwner(id),
+		// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+		// Wire the CORRECTION01 availability-aware `getPendingPromptCount`
+		// option. This harness simulates a LocalRuntimeHost where the
+		// queue is unconditionally `available: true` with no pending
+		// prompts — i.e. Shape F. Without this wire, the Q5 seam
+		// defaults to `{ available: false }` (authority unavailable),
+		// which is the production fail-closed default but does NOT
+		// match this harness's intent (no queued autonomous work,
+		// commit `awaiting_followup`).
+		getPendingPromptCount: () => ({ available: true, count: 0 }),
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	const backgroundCommandRunning = { value: false }

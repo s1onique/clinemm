@@ -1784,3 +1784,540 @@ describe("HubRuntimeHost", () => {
 		expect(disposeMock).toHaveBeenCalledTimes(1);
 	});
 });
+
+/**
+ * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 / CORRECTION01
+ *
+ * PPA-HUB-RACE-01 — real `HubRuntimeHost` race test.
+ *
+ * Per the seventy-ninth-pass Factory reviewer's verdict on the original
+ * TRANSPORT01 closure:
+ *
+ *   "The local refactor is good. The transport-neutral verdict is not
+ *    yet justified. `HubRuntimeHost.pendingPrompts.count()` returns
+ *    `Map.get(...) ?? 0`, which fails-open: an unmirrored session
+ *    read as `count = 0` would authorize Q5 `awaiting_followup`
+ *    despite authoritative work pending remotely."
+ *
+ * This test exercises the REAL `HubRuntimeHost` (not a synthetic
+ * `TestPendingPromptQueue`) and drives the canonical race that the
+ * reviewer identified. A mocked transport around the REAL
+ * `HubRuntimeHost` is sufficient — we do not need a live hub daemon.
+ * The mock is the canonical `vi.mock("../client", ...)` seam defined
+ * at the top of this file.
+ */
+describe("ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01 / PPA-HUB-RACE-01", () => {
+	it("unmirrored session returns {available:false} (FAIL-CLOSED), not 0", async () => {
+		// Capture the subscribe listener so we can drive the
+		// `session.pending_prompts` event payload through the real
+		// `HubRuntimeHost.handleHubEvent` path. We capture the
+		// listener lazily — only the FIRST `subscribe` call wins
+		// per sessionId (later calls no-op), so capture the
+		// listener when the host calls `ensureSessionSubscription`.
+		const listeners: ((event: HubEventEnvelope) => void)[] = []
+		subscribeMock.mockImplementation((listener) => {
+			listeners.push(listener)
+			return () => {
+				// no-op
+			}
+		})
+		// Default `command` mock — the `pendingPrompts.list(...)` reply
+		// would normally seed the mirror, but in this race we
+		// deliberately read BEFORE any list/update/delete/event has
+		// reached the host.
+		commandMock.mockImplementation(async () => ({ payload: { prompts: [] } }))
+
+		const { HubRuntimeHost } = await import("./hub-runtime-host")
+		const host = new HubRuntimeHost({ url: "ws://127.0.0.1:25463/hub" })
+
+		// T0: NO list / update / delete / event has reached this host.
+		// The mirror AND the "initialized" marker are both empty.
+		const beforeAnyAuthority = host.pendingPrompts.count("session-ppa-hub-race")
+		expect(beforeAnyAuthority).toEqual({ available: false })
+
+		// CORRECTION01 invariant: an unmirrored session MUST NOT be
+		// readable as `{ available: true; count: 0 }`. PRE-FIX
+		// `Map.get() ?? 0` would have collapsed this to a falsy zero —
+		// the exact fail-open smell the reviewer flagged.
+		expect(beforeAnyAuthority).not.toEqual({ available: true, count: 0 })
+		expect(beforeAnyAuthority).not.toBe(0)
+
+		// T1: trigger the canonical mirror-seed path (production
+		// SdkController.getStateToPostToWebview calls this BEFORE any
+		// Q5 decision is taken). This also establishes the
+		// session-subscription that routes hub-published events to
+		// `handleHubEvent`.
+		await host.pendingPrompts.list({ sessionId: "session-ppa-hub-race" })
+
+		// T2: deliver the authoritative `session.pending_prompts`
+		// event payload carrying one pending prompt. MUST both
+		// populate the count AND mark the session as initialized.
+		const onHubEvent = listeners[listeners.length - 1]
+		expect(onHubEvent).toBeDefined()
+		onHubEvent!({
+			version: "v1",
+			event: "session.pending_prompts",
+			sessionId: "session-ppa-hub-race",
+			payload: {
+				prompts: [{ id: "p1", prompt: "wake", delivery: "queue" }],
+			},
+		} as unknown as HubEventEnvelope)
+
+		const afterEvent = host.pendingPrompts.count("session-ppa-hub-race")
+		expect(afterEvent).toEqual({ available: true, count: 1 })
+
+		// T3: deliver an authoritative empty snapshot (queue drained).
+		onHubEvent!({
+			version: "v1",
+			event: "session.pending_prompts",
+			sessionId: "session-ppa-hub-race",
+			payload: {
+				prompts: [],
+			},
+		} as unknown as HubEventEnvelope)
+
+		const afterDrain = host.pendingPrompts.count("session-ppa-hub-race")
+		// `{ available: true; count: 0 }` is the ONLY state that
+		// authorizes operator handoff in production (CORRECTION01).
+		expect(afterDrain).toEqual({ available: true, count: 0 })
+
+		await host.dispose()
+	})
+
+	it("stopSession clears the mirror AND the initialization marker → next count returns {available:false}", async () => {
+		const listeners: ((event: HubEventEnvelope) => void)[] = []
+		subscribeMock.mockImplementation((listener) => {
+			listeners.push(listener)
+			return () => {
+				// no-op
+			}
+		})
+		commandMock.mockImplementation(async () => ({ payload: { prompts: [] } }))
+
+		const { HubRuntimeHost } = await import("./hub-runtime-host")
+		const host = new HubRuntimeHost({ url: "ws://127.0.0.1:25463/hub" })
+
+		// T0: drive the canonical mirror-seed path (list call).
+		await host.pendingPrompts.list({ sessionId: "session-ppa-hub-race-stop" })
+		const onHubEvent = listeners[listeners.length - 1]
+		expect(onHubEvent).toBeDefined()
+
+		// T1: seed the mirror via the authoritative event path.
+		onHubEvent!({
+			version: "v1",
+			event: "session.pending_prompts",
+			sessionId: "session-ppa-hub-race-stop",
+			payload: {
+				prompts: [{ id: "p1", prompt: "wake", delivery: "queue" }],
+			},
+		} as unknown as HubEventEnvelope)
+		expect(host.pendingPrompts.count("session-ppa-hub-race-stop")).toEqual({
+			available: true,
+			count: 1,
+		})
+
+		// T2: stop the session. CORRECTION01 must clear BOTH the
+		// count-mirror entry AND the "initialized" marker so the
+		// next `count` is fail-closed (`{ available: false }`),
+		// not fail-open (`{ available: true; count: 0 }`).
+		await host.stopSession("session-ppa-hub-race-stop")
+
+		const afterStop = host.pendingPrompts.count("session-ppa-hub-race-stop")
+		expect(afterStop).toEqual({ available: false })
+		expect(afterStop).not.toEqual({ available: true, count: 0 })
+
+		await host.dispose()
+	})
+
+	it("requestPendingPromptsList reply initializes the mirror (count → {available:true, count:N})", async () => {
+		subscribeMock.mockReturnValue(() => {})
+		// Configure the `session.pending_prompts` command reply to
+		// return three prompts. This is the second authoritative
+		// mirror source (the first is the `session.pending_prompts`
+		// event payload).
+		commandMock.mockImplementation(async (cmd: string) => {
+			if (cmd === "session.pending_prompts") {
+				return {
+					payload: {
+						prompts: [
+							{ id: "p1", prompt: "wake-1", delivery: "queue" },
+							{ id: "p2", prompt: "wake-2", delivery: "queue" },
+							{ id: "p3", prompt: "wake-3", delivery: "queue" },
+						],
+					},
+				}
+			}
+			return { payload: {} }
+		})
+
+		const { HubRuntimeHost } = await import("./hub-runtime-host")
+		const host = new HubRuntimeHost({ url: "ws://127.0.0.1:25463/hub" })
+
+		// T0: pre-list, the session is unmirrored → { available: false }.
+		expect(
+			host.pendingPrompts.count("session-ppa-hub-race-list"),
+		).toEqual({ available: false })
+
+		// T1: drive the authoritative `pendingPrompts.list(...)` reply.
+		// This is the canonical mirror-seed path that production
+		// `SdkController.getStateToPostToWebview` exercises before any
+		// Q5 decision is taken.
+		const prompts = await host.pendingPrompts.list({
+			sessionId: "session-ppa-hub-race-list",
+		})
+		expect(prompts).toHaveLength(3)
+
+		// T2: post-list, the session is initialized.
+		expect(
+			host.pendingPrompts.count("session-ppa-hub-race-list"),
+		).toEqual({ available: true, count: 3 })
+
+		await host.dispose()
+	})
+
+	it("empty sessionId returns {available:false} (failsafe)", async () => {
+		subscribeMock.mockReturnValue(() => {})
+		commandMock.mockImplementation(async () => ({ payload: {} }))
+
+		const { HubRuntimeHost } = await import("./hub-runtime-host")
+		const host = new HubRuntimeHost({ url: "ws://127.0.0.1:25463/hub" })
+
+		expect(host.pendingPrompts.count("")).toEqual({ available: false })
+		expect(host.pendingPrompts.count(undefined as unknown as string)).toEqual({
+			available: false,
+		})
+
+		await host.dispose()
+	})
+});
+
+
+/**
+ * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION02
+ *
+ * PPA-HUB-RACE-02 — real `HubRuntimeHost` initialized-but-stale
+ * discriminator.
+ *
+ * Per the eighty-pass Factory reviewer's verdict on CORRECTION01
+ * (`HALT_HUB_PENDING_AUTHORITY_STALENESS_UNPROVEN`):
+ *
+ *   "The current mirror closes the uninitialized→fail-open bug. It does
+ *    not close the initialized→stale race. Consider this legal
+ *    chronology after the mirror has already been initialized:
+ *
+ *      T0  Hub client receives list reply: []
+ *          mirror = 0
+ *          initialized = true
+ *      T1  remote authoritative queue gains terminal wake
+ *          authoritative count = 1
+ *      T2  pending_prompts event carrying that mutation is in flight
+ *      T3  done-without-completion reaches Q5
+ *      T4  Q5 calls count() → { available: true, count: 0 }
+ *
+ *    CORRECTION01 does not mechanically exclude this chronology.
+ *    pendingPromptCountInitializedBySession proves only that some
+ *    authoritative snapshot has existed, not that the snapshot is
+ *    fresh relative to the done decision."
+ *
+ * The discriminator the reviewer demanded is:
+ *
+ *   "PASS only if Q5 cannot observe {available:true,count:0} after the
+ *    wake is authoritative but before it learns about the wake."
+ *
+ * The two layouts below correspond to:
+ *   Layout A — wake event arrives at the client listener BEFORE
+ *     done-without-completion. The wire delivers the wake event first
+ *     → mirror reflects 1 BEFORE Q5 reads → defers.
+ *
+ *   Layout B — done-without-completion arrives BEFORE the wake event.
+ *     The wire delivers the done event first → mirror STILL shows 0
+ *     at the moment Q5 reads → Q5 commits awaiting_followup.
+ *     THE MIRROR IS STALE.
+ *
+ * The tests below do NOT modify the production design. They are
+ * pure composition witnesses of what the production wire ordering
+ * permits. Layout A passes; Layout B documents the staleness the
+ * reviewer identified.
+ */
+describe("ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION02 / PPA-HUB-RACE-02", () => {
+	it("Layout A (wake event BEFORE done): mirror is fresh when Q5 reads count", async () => {
+		const listeners: ((event: HubEventEnvelope) => void)[] = []
+		subscribeMock.mockImplementation((listener) => {
+			listeners.push(listener)
+			return () => {
+				// no-op
+			}
+		})
+		commandMock.mockImplementation(async () => ({ payload: { prompts: [] } }))
+
+		const { HubRuntimeHost } = await import("./hub-runtime-host")
+		const host = new HubRuntimeHost({ url: "ws://127.0.0.1:25463/hub" })
+
+		// T0: initialize the mirror via the canonical mirror-seed
+		// path. The reply says prompts=[].
+		await host.pendingPrompts.list({ sessionId: "session-ppa-hub-race-2-A" })
+		const onHubEvent = listeners[listeners.length - 1]
+		expect(onHubEvent).toBeDefined()
+
+		expect(host.pendingPrompts.count("session-ppa-hub-race-2-A")).toEqual({
+			available: true,
+			count: 0,
+		})
+
+		// T1: drive Layout A chronology — wake event arrives at the
+		// client listener BEFORE the done-without-completion event.
+		onHubEvent!({
+			version: "v1",
+			event: "session.pending_prompts",
+			sessionId: "session-ppa-hub-race-2-A",
+			payload: {
+				prompts: [{ id: "wake-1", prompt: "BG terminal wake", delivery: "queue" }],
+			},
+		} as unknown as HubEventEnvelope)
+
+		// T2 (Layout A): at the moment Q5 reads count AFTER the
+		// done-without-completion event would be processed, the
+		// mirror MUST reflect the wake.
+		expect(host.pendingPrompts.count("session-ppa-hub-race-2-A")).toEqual({
+			available: true,
+			count: 1,
+		})
+
+		// T3: deliver done-without-completion AFTER the wake event.
+		// The host emits `agent_event { type: done }` (the
+		// published-into-events-stream form that the Q5 consumer
+		// reads).
+		let emittedDone = false
+		const unsubscribe = host.subscribe((event) => {
+			if (
+				event.type === "agent_event" &&
+				(event.payload as { event?: { type?: string } }).event?.type === "done"
+			) {
+				emittedDone = true
+			}
+		})
+		onHubEvent!({
+			version: "v1",
+			event: "run.completed",
+			sessionId: "session-ppa-hub-race-2-A",
+			payload: {
+				reason: "completed",
+				result: { finishReason: "completed" },
+			},
+		} as unknown as HubEventEnvelope)
+		expect(emittedDone).toBe(true)
+
+		// Layout A final assertion: the mirror MUST still reflect
+		// the wake at the moment the done event is processed. Q5
+		// reads this synchronously. {available:true, count:1} →
+		// defer (correct).
+		expect(host.pendingPrompts.count("session-ppa-hub-race-2-A")).toEqual({
+			available: true,
+			count: 1,
+		})
+
+		unsubscribe()
+		await host.dispose()
+	})
+});
+describe("ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION02 / PPA-HUB-RACE-02 Layout B", () => {
+	it("Layout B (done BEFORE wake event): mirror is STALE when Q5 reads count", async () => {
+		const listeners: ((event: HubEventEnvelope) => void)[] = []
+		subscribeMock.mockImplementation((listener) => {
+			listeners.push(listener)
+			return () => {
+				// no-op
+			}
+		})
+		commandMock.mockImplementation(async () => ({ payload: { prompts: [] } }))
+
+		const { HubRuntimeHost } = await import("./hub-runtime-host")
+		const host = new HubRuntimeHost({ url: "ws://127.0.0.1:25463/hub" })
+
+		// T0: initialize the mirror via the canonical mirror-seed
+		// path. The reply says prompts=[].
+		await host.pendingPrompts.list({ sessionId: "session-ppa-hub-race-2-B" })
+		const onHubEvent = listeners[listeners.length - 1]
+		expect(onHubEvent).toBeDefined()
+
+		expect(host.pendingPrompts.count("session-ppa-hub-race-2-B")).toEqual({
+			available: true,
+			count: 0,
+		})
+
+		// T1: drive Layout B chronology — done-without-completion
+		// arrives at the client listener BEFORE the wake event.
+		let emittedDone = false
+		const unsubscribe = host.subscribe((event) => {
+			if (
+				event.type === "agent_event" &&
+				(event.payload as { event?: { type?: string } }).event?.type === "done"
+			) {
+				emittedDone = true
+			}
+		})
+
+		// T2: deliver `run.completed` (which causes the host to
+		// emit the `agent_event { type: done }` into the host's
+		// own event stream — that's what the Q5 consumer reads).
+		onHubEvent!({
+			version: "v1",
+			event: "run.completed",
+			sessionId: "session-ppa-hub-race-2-B",
+			payload: {
+				reason: "completed",
+				result: { finishReason: "completed" },
+			},
+		} as unknown as HubEventEnvelope)
+		expect(emittedDone).toBe(true)
+
+		// T3 (Layout B): at the EXACT moment Q5 reads count AFTER
+		// done-without-completion was processed, the mirror STILL
+		// shows {available:true, count:0} — the wake has not yet
+		// been observed by the host. THIS IS THE STALENESS THE
+		// REVIEWER IDENTIFIED.
+		const countAtDone = host.pendingPrompts.count("session-ppa-hub-race-2-B")
+		expect(countAtDone).toEqual({ available: true, count: 0 })
+
+		// T4: NOW deliver the wake event. The mirror updates to 1.
+		// But this happens AFTER Q5 has already read count. The
+		// user's "Your turn" has already been committed (in the
+		// production Q5 evaluator).
+		onHubEvent!({
+			version: "v1",
+			event: "session.pending_prompts",
+			sessionId: "session-ppa-hub-race-2-B",
+			payload: {
+				prompts: [{ id: "wake-1", prompt: "BG terminal wake", delivery: "queue" }],
+			},
+		} as unknown as HubEventEnvelope)
+
+		expect(host.pendingPrompts.count("session-ppa-hub-race-2-B")).toEqual({
+			available: true,
+			count: 1,
+		})
+
+		// LAYOUT B DISCRIMINATOR:
+		// The fact that the count at the done-event moment was
+		// {available:true, count:0} (above) PROVES the design
+		// CANNOT distinguish "queue is genuinely empty" from "wake
+		// was just enqueued at the Hub but the wire-delivered
+		// pending_prompts event hasn't arrived yet". This is
+		// exactly the initialized-but-stale race the eighty-pass
+		// reviewer identified.
+		//
+		// Per the reviewer's prescription:
+		//
+		//   A. If production serializes pending_prompts-before-done
+		//      on the same event stream, Layout B cannot happen in
+		//      production and the design survives.
+		//
+		//   B. If production does NOT guarantee that ordering, the
+		//      Layout B chronology above demonstrates that the
+		//      current mirror is insufficient and an additional
+		//      mechanism is required.
+		//
+		// This test demonstrates that the Layout B chronology is
+		// realizable on the Hub transport's wire-ordering. The
+		// bounded correction that follows will resolve B by
+		// adding a freshness discriminator to the service API.
+		unsubscribe()
+		await host.dispose()
+	})
+});
+describe("ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION02 / PPA-HUB-RACE-02 Layout C", () => {
+	it("Layout B with atomic re-query at the decision boundary recovers freshness", async () => {
+		// Per the eighty-pass reviewer:
+		//   "If B, then availability alone cannot fix it. You need
+		//    freshness/causal identity: revision/sequence, an atomic
+		//    remote query at the decision boundary, or another
+		//    authority that is ordered with done."
+		//
+		// This test demonstrates the SIMPLEST recovery: at the Q5
+		// decision boundary, RE-QUERY the authoritative source via
+		// `pendingPrompts.list(...)`. If the atomic re-query's reply
+		// carries a count >0, Q5 defers.
+		//
+		// We model this by:
+		//   1. Initialize the mirror via the first list reply (count=0).
+		//   2. Drive Layout B (done-without-completion FIRST).
+		//   3. At the moment Q5 reads count, the local mirror is
+		//      stale {available:true, count:0}.
+		//   4. Q5 RE-QUERIES the Hub via `pendingPrompts.list(...)`.
+		//   5. The mock command implementation returns the
+		//      authoritative count [wake] in the reply.
+		//   6. The mirror becomes {available:true, count:1} BEFORE
+		//      Q5 commits `awaiting_followup`.
+		//   7. Q5 reads count AGAIN and observes {available:true,
+		//      count:1} → defers.
+		const listeners: ((event: HubEventEnvelope) => void)[] = []
+		subscribeMock.mockImplementation((listener) => {
+			listeners.push(listener)
+			return () => {
+				// no-op
+			}
+		})
+
+		let listCallCount = 0
+		commandMock.mockImplementation(async (cmd: string) => {
+			if (cmd === "session.pending_prompts") {
+				listCallCount++
+				if (listCallCount === 1) {
+					return { payload: { prompts: [] } }
+				}
+				return {
+					payload: {
+						prompts: [
+							{ id: "wake-1", prompt: "BG terminal wake", delivery: "queue" },
+						],
+					},
+				}
+			}
+			return { payload: {} }
+		})
+
+		const { HubRuntimeHost } = await import("./hub-runtime-host")
+		const host = new HubRuntimeHost({ url: "ws://127.0.0.1:25463/hub" })
+
+		// T0: first list reply (mirror-seed): prompts=[].
+		await host.pendingPrompts.list({ sessionId: "session-ppa-hub-race-2-C" })
+		const onHubEvent = listeners[listeners.length - 1]
+		expect(onHubEvent).toBeDefined()
+
+		expect(host.pendingPrompts.count("session-ppa-hub-race-2-C")).toEqual({
+			available: true,
+			count: 0,
+		})
+
+		// T1: drive Layout B — done-without-completion event
+		// arrives at the host FIRST.
+		onHubEvent!({
+			version: "v1",
+			event: "run.completed",
+			sessionId: "session-ppa-hub-race-2-C",
+			payload: {
+				reason: "completed",
+				result: { finishReason: "completed" },
+			},
+		} as unknown as HubEventEnvelope)
+
+		// T2: Q5 first reads count → STALE {available:true, count:0}.
+		const firstRead = host.pendingPrompts.count("session-ppa-hub-race-2-C")
+		expect(firstRead).toEqual({ available: true, count: 0 })
+
+		// T3: Q5 atomically re-queries the Hub via
+		// `pendingPrompts.list(...)`. The reply carries the
+		// authoritative count = 1. The local mirror is updated as
+		// part of this synchronous call (the
+		// `requestPendingPromptsList` path sets both the count AND
+		// the initialization marker).
+		await host.pendingPrompts.list({ sessionId: "session-ppa-hub-race-2-C" })
+
+		// T4: Q5 reads count AGAIN — now FRESH {available:true,
+		// count:1}. Q5 defers.
+		const secondRead = host.pendingPrompts.count("session-ppa-hub-race-2-C")
+		expect(secondRead).toEqual({ available: true, count: 1 })
+
+		await host.dispose()
+	})
+});

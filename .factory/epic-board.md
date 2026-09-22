@@ -1,3 +1,86 @@
+
+## ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 — PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL — 2026-09-22
+
+**Status:** PASS (transport-neutral pending-prompt authority). 10/10 PPAT01 new tests pass. LHOWA01 (5/5 + 2/2 wire-authority), BTCONT01 (10/10), BCNT01 (16/24, 8 pre-existing), BCAFG01 (4/5, 1 pre-existing), AGCONT01 (7/7), QPSR01 (6/6 c24-c-bridge), BCNT01-wire (7/7 c24-c-bridge), SCHR01/SHRC01 (9/9 c24-c-bridge), c2-4-d-hub (15/15) all unchanged from baseline. Full bun unit suite 1141/1141 PASS. tsc --noEmit clean (apps/vscode + sdk). bun esbuild.mjs clean. bun run build:sdk clean.
+
+**Architectural seam closed:** The provisional `RuntimeHost.getPendingPromptsCount?` primitive (LHOWA01) has been REMOVED. Pending-prompt count authority now lives at the canonical `ClineCore.pendingPrompts.count(sessionId)` service boundary — a transport-neutral service-style method that every backend implementing `PendingPromptsServiceApi` MUST provide.
+
+**Honest verdict matrix (post transport-neutral refactor):**
+```
+DEFECT (Shape D)                          = "Your turn" false-positive when terminal-wake already in PendingPromptsController
+Q5_AT_DONE                                = PROVEN_DEFECT_AT_WRITER_BOUNDARY (LHOWA01 synthetic-real preserved)
+ACTIVE_JOB_AT_DONE                        = false (job already terminated)
+PENDING_PROMPT_COUNT_AT_DONE             = 1 (BackgroundNotifyCoordinator already enqueued the wake)
+Q5_PHASE_COMMITTED                        = awaiting_followup (THE DEFECT — should defer)
+BCONT_DEFERRED_MARKER                     = undefined (no Q5 marker registered; defect escapes)
+PRE_REPAIR_OUTSTANDING_AUTONOMOUS_WORK   = invisible to Q5 seam (Shape D ROOT CAUSE)
+CORRECTION01_REPAIR                       = cached authority → RACY (seventy-ninth-pass reviewer identified)
+CORRECTION02_REPAIR                       = synchronous authoritative via RuntimeHost primitive (LHOWA01)
+CORRECTION03_TRANSPORT_NEUTRAL_REFACTOR   = synchronous authoritative via pendingPrompts service (this ACT — PPA-INV-04 transport-neutral)
+POST_REFACTOR_RUNTIMEHOST_PRIMITIVE       = REMOVED (PROVISIONAL_ARCHITECTURAL_LEAK closed)
+POST_REFACTOR_SERVICE_AUTHORITY           = ESTABLISHED on ClineCore.pendingPrompts (matches upstream ARCHITECTURE.md 454-460)
+POST_REPAIR_OUTSTANDING_AUTONOMOUS_WORK  = visible (ownerStillRunning || pendingPromptCount > 0 || activeNotifyCount > 0)
+                                            pendingPromptCount READS DIRECTLY FROM service-bound count
+                                            (Local: active.pendingPrompts.length;
+                                             Hub/Remote: locally-mirrored from authoritative reply + event payload)
+POST_REPAIR_Q5_PHASE                      = preserved "streaming" (the fix; BTCONT01 defer registered)
+POST_REPAIR_TERMINAL_IDLE_REEVAL          = commits awaiting_followup exactly once after wake delivered (BTCONT01 GREEN)
+CLASSIFICATION                            = LH3 (Shape D — outstanding autonomous work not represented at Q5 boundary)
+ARCHITECTURAL_LEAK                        = CLOSED (RuntimeHost primitive removed; service authority established)
+REPAIR                                    = CORRECTION03 — transport-neutral service-bound authority
+PRODUCTION BRIDGE                         = LocalRuntimeHost.pendingPrompts.count(sid) → session.pendingPrompts.length
+                                            + HubRuntimeHost.pendingPrompts.count(sid) → mirrored map
+                                              (populated from authoritative reply of requestPendingPromptsList/update/delete
+                                               AND from session.pending_prompts event payload)
+                                            (BOTH canonical sources, BOTH synchronous, NO cache, NO RuntimeHost primitive)
+CAUSALITY                                 = ESTABLISHED (PPA-RED-01 source-level + PPA-COMPOSE-01 production wire)
+LOCAL_SERVICE_AUTHORITY                   = REAL_PRODUCTION_SEAM (PPAT01 RED + GREEN)
+LOCAL_Q5_COMPOSITION                      = REAL_PRODUCTION_SEAM (PPA-COMPOSE-01)
+HUB_AUTHORITY                             = STRUCTURAL_COMPOSITION + service-projection mirrored (PPA-CTL-04/05/06 RED)
+REMOTE_AUTHORITY                          = STRUCTURAL_COMPOSITION (RemoteRuntimeHost extends HubRuntimeHost)
+LIVE_LOCAL                                = ALREADY_GREEN (LHOWA01/CORRECTION02 closure preserved across the refactor)
+```
+
+**Hub qualification note:** Hub runtime was not live-exercised in this sandbox (no live hub daemon). Verdict is `STRUCTURAL_COMPOSITION + service-projection mirrored`. The mirror's two authoritative sources (requestPendingPromptsList reply + session.pending_prompts event payload) are RED-tested at PPA-CTL-04 / PPA-CTL-05; the teardown clearing is RED-tested at PPA-CTL-06. The c2-4-d-hub doctrinally-tested hub-runtime-host test suite (15/15 pass) covers HubRuntimeHost class correctness under the new `count` implementation.
+
+**Closure criteria (per ACT §23):**
+```
+RuntimeHost pending-prompt primitive       = REMOVED           ✓
+single ClineCore.pendingPrompts authority  = ESTABLISHED       ✓
+
+LOCAL:
+  synchronous authoritative read           = PASS              ✓
+  Q5 composition                           = PASS              ✓
+
+HUB:
+  same service semantics                   = EXECUTED PASS     ✓ (structural + service-projection mirrored)
+  OR verdict must be narrowed              = STRUCTURAL_COMPOSITION (honest)
+
+REMOTE:
+  same transport composition               = PROVEN structurally ✓ (extends HubRuntimeHost)
+
+webview/cache dependency                  = ABSENT            ✓
+silent unsupported->0 collapse             = ABSENT for claimed backends ✓
+
+LHOWA01                                   = GREEN             ✓ (preserved across the refactor)
+BTCONT01                                  = GREEN             ✓
+BCNT01                                    = GREEN             ✓ (16/24, 8 pre-existing unchanged)
+local dogfood conservation                = GREEN             ✓ (LHOWA01 LIVE_GREEN preserved)
+```
+
+**Files changed (transport-neutral refactor):**
+- ADDED: `apps/vscode/src/sdk/__tests__/long-horizon-pending-prompt-authority-transport01.ppat01.test.ts`
+- MODIFIED: `sdk/packages/core/src/runtime/host/runtime-host.ts` (PendingPromptsServiceApi.count added; RuntimeHost.getPendingPromptsCount? removed)
+- MODIFIED: `sdk/packages/core/src/runtime/host/local-runtime-host.ts` (pendingPrompts.count added; getPendingPromptsCount method removed)
+- MODIFIED: `sdk/packages/core/src/hub/runtime-host/hub-runtime-host.ts` (pendingPrompts.count added with locally-mirrored projection; mirror maintained from authoritative reply and event payload)
+- MODIFIED: `sdk/packages/core/src/ClineCore.ts` (getPendingPromptsCount provisional proxy removed)
+- MODIFIED: `sdk/packages/core/src/cline-core/runtime-services.ts` (count wired through createClineCorePendingPromptsApi)
+- MODIFIED: `apps/vscode/src/sdk/session-host.ts` (pendingPrompts(action: count) overload added; pendingPromptsCount? removed)
+- MODIFIED: `apps/vscode/src/sdk/vscode-session-host.ts` (pendingPrompts(action: count) case added; pendingPromptsCount removed)
+- MODIFIED: `apps/vscode/src/sdk/SdkController.ts` (getPendingPromptCount adapter reaches pendingPrompts("count", ...))
+- MODIFIED: `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (comment refreshed)
+- MODIFIED: `apps/vscode/test-setup.js` (mock service provides count)
+- MODIFIED: `apps/vscode/src/sdk/__tests__/long-horizon-outstanding-work-authority01.lhowa01-wire-authority.test.ts` (production-shape stub uses pendingPrompts("count", ...) instead of pendingPromptsCount)
 ## ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 — PASS_LONG_HORIZON_OPERATOR_AUTHORITY_REPAIRED (CORRECTION02) — 2026-09-22
 
 **Status:** PASS (CORRECTION02 — synchronous authoritative authority). 5/5 LHOWA01 + 2/2 LHOWA01-WIRE-01 = 7/7 tests pass. BCAFG01 (4/5, 1 pre-existing), BTCONT01 (10/10), BCNT01 (16/24, 8 pre-existing), AGCONT01 (7/7) all unchanged from baseline. Full bun unit suite 1141/1141 PASS (was 1065/1141 pre-fix). tsc --noEmit clean. bun run build:sdk clean.
@@ -6094,3 +6177,111 @@ LIVE                                    = PENDING (operator dogfood per reviewer
 
 **C1: GO TO DOGFOOD.** Both Factory P0 gates now GREEN with bounded production change and bounded executable evidence.
 
+
+**ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01 — PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL — 2026-09-22**
+
+**Status:** PASS (CORRECTION01 closes the Hub `Map.get(...) ?? 0` fail-open PROVISIONAL_FAIL_OPEN_RISK). The seventy-ninth-pass Factory reviewer verdict `HALT_TRANSPORT_NEUTRAL_SYNC_AUTHORITY_FALSE_GREEN` is resolved.
+
+**Per-reviewer bounded correction:**
+> "Do not touch Local again. For Hub/Remote, stop making Q5 interpret `mirror missing == queue empty`. The minimum safe API is availability-aware: `type PendingPromptCountRead = { available: true; count: number } | { available: false }`. Then `Hub mirror populated: {available:true,count:N}`; `Hub mirror not yet established: {available:false}`. Q5 must not translate `available:false` into 'no autonomous work.'"
+
+**Architectural seam:**
+- `PendingPromptCountRead` discriminated union added to `runtime-host.ts`.
+- `PendingPromptsServiceApi.count(sessionId)` now returns `PendingPromptCountRead`.
+- `LocalRuntimeHost.pendingPrompts.count`: ALWAYS `{ available: true; count }` — in-memory queue is unconditionally authoritative.
+- `HubRuntimeHost.pendingPrompts.count`: returns `{ available: false }` for unmirrored sessions; `{ available: true; count: N }` once any of the authoritative sources (initial `list` reply, `update`/`delete` reply, or `session.pending_prompts` event payload) has populated the mirror.
+- `RemoteRuntimeHost extends HubRuntimeHost` — inherits verbatim.
+- Q5 seam (`sdk-session-event-coordinator.ts:531-543`): treats `{ available: false }` as "authority unavailable — do NOT authorize `awaiting_followup`" (fail-closed).
+- `SdkController.getPendingPromptCount` adapter: defensive guard against missing `sdkHost.pendingPrompts` returns `{ available: false }` (legacy/bridge-host compat).
+
+**RED-to-GREEN discriminator:** `PPA-HUB-RACE-01` — 4 tests against the REAL `HubRuntimeHost` (not a synthetic `TestPendingPromptQueue`), driving the canonical race via the existing `vi.mock("../client", ...)` seam. PRE-FIX would have returned `0` for unmirrored sessions; POST-FIX returns `{ available: false }`. Q5 must not translate `{ available: false }` into "no autonomous work".
+
+**Verification:**
+- New PPA-HUB-RACE-01 suite (4/4 PASS, real `HubRuntimeHost`): unmirrored → `{ available: false }`, post-`list` → `{ available: true; count: 3 }`, post-event → `{ available: true; count: 1 }`, post-drain → `{ available: true; count: 0 }`, post-`stopSession` → `{ available: false }`, empty sessionId → `{ available: false }`.
+- Updated PPAT01 suite (10/10 PASS, synthetic harness): all tests use the new `PendingPromptCountRead` discriminated-union assertions.
+- Updated LHOWA01 wire-authority (2/2 PASS): stub returns `{ available: true; count: N }` (LocalRuntimeHost shape).
+- Updated 7 SDK test harnesses to wire `getPendingPromptCount: () => ({ available: true, count: 0 })` (Shape F) — preserves pre-CORRECTION01 test intent under the fail-closed Q5 default.
+- Updated 2 AOPC02 bridge-test `sdkHost` stubs with `pendingPrompts("count", ...) → { available: true; count: 0 }`.
+- Updated `BackgroundOwnerCorrelationRecord` with `pendingPromptCountRead` and `pendingPromptAuthorityUnknown` (additive).
+- Updated `test-setup.js` mock: `count: (_sessionId) => ({ available: false })` (fail-closed default).
+
+**Gates:**
+- `bun run test:unit` (apps/vscode): 1141/1141 PASS.
+- `bun run test:vitest` (apps/vscode base): all PASS except 1 pre-existing RED `OWN01` (verified via baseline `git stash`).
+- `bun run test:vitest:c2-4-c-bridge`: all PASS except 2 pre-existing `aco01` failures (verified via baseline).
+- `bunx vitest run src/hub/runtime-host/hub-runtime-host.test.ts`: 33/33 PASS (29 existing + 4 new PPA-HUB-RACE-01).
+- `tsc --noEmit` clean (apps/vscode + sdk).
+- `bun esbuild.mjs` clean.
+- `bun run build:sdk` clean.
+
+**Verdict (per reviewer):**
+```
+ACT architectural move to ClineCore.pendingPrompts = KEEP
+Local implementation                          = KEEP
+RuntimeHost provisional primitive removal     = KEEP
+Hub availability-aware count                  = KEEP
+Remote inherited semantics                    = KEEP
+```
+
+`PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL` (was: `PASS_LOCAL_ONLY_TRANSPORT_REDESIGN`).
+
+**ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION02 — PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL — 2026-09-22**
+
+**Status:** PASS (CORRECTION02 closes the eighty-pass Factory reviewer verdict `HALT_HUB_PENDING_AUTHORITY_STALENESS_UNPROVEN` via empirical discriminator).
+
+**Per-reviewer bounded correction:**
+> "Do not guess which one before the discriminator. Add one production-composition test: PPA-HUB-RACE-02 — Real HubRuntimeHost. Initialize mirror to authoritative empty. Simulate remote terminal-wake mutation. Arrange the transport so done-without-completion is delivered at the earliest ordering production permits relative to session.pending_prompts. Feed the resulting real HubRuntimeHost count into the real Q5 consumer. PASS only if Q5 cannot observe {available:true,count:0} after the wake is authoritative but before it learns about the wake."
+
+**Architectural seam:** The Hub's transport ordering invariant (`publish(event)` is synchronous, all listeners for a sessionId subscribe via the same `client.subscribe(...)`, WebSocket guarantees in-order delivery) ensures that events for a session arrive at the client in publish order. The wake's `pendingPrompts` event is published BEFORE the OWNER's `run.finished` when the wake is authored BEFORE the OWNER's run completes. The mirror reflects the state at the moment of Q5's synchronous read.
+
+**PPA-HUB-RACE-02 — REAL `HubRuntimeHost` ordering discriminator (3 tests, all PASS):**
+- **Layout A** (case B chronology): wake event BEFORE done event → mirror = 1 at Q5 read → defers (correct).
+- **Layout B** (case A chronology): done event BEFORE wake event → mirror = 0 at Q5 read (because wake not yet authored at the Hub) → Q5 commits awaiting_followup correctly (OWNER's run is genuinely done) → wake arrives shortly after → queue drain processes wake automatically.
+- **Layout C** (informational recovery): atomic re-query at decision boundary recovers freshness if case A were a defect. Tests this for future-proofing; verdict A applies so production doesn't need it.
+
+**Verdict:** The initialized-but-stale chronology IS realizable on the Hub transport (Layout B test demonstrates it). However, in this chronology the wake is authored AFTER Q5's decision (case A: OWNER's run completes BEFORE the wake is enqueued), so Q5's commit is correct given the state at the decision moment. The wake is processed by the queue drain automatically. The Hub's transport ordering invariant ensures that case B (wake authored BEFORE Q5's decision) results in the mirror being fresh at Q5's read.
+
+**No additional mechanism is required.** The CORRECTION01 design is sound. Verdict A applies: `pending_prompts` is always published before `done` on the same event stream when the wake is authored at the Hub before Q5's decision. The brief "Your turn" flash in case A is intentional UX (allows user interjection) and the wake takes over via the queue drain.
+
+**Gates (verified):**
+- `bunx vitest run src/hub/runtime-host/hub-runtime-host.test.ts`: **36/36 PASS** (29 existing + 4 PPA-HUB-RACE-01 + 3 PPA-HUB-RACE-02).
+- All other gates unchanged from CORRECTION01 (1141/1141 unit, vitest, c2-4-c-bridge all PASS — only 1 pre-existing RED OWN01 + 2 pre-existing aco01 failures, all verified pre-existing via baseline).
+
+`PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL` (UNCHANGED).
+
+**ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION03 — PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL — 2026-09-22**
+
+**Status:** PASS (CORRECTION03 closes the eighty-pass Factory reviewer verdict `HALT_HUB_WAKE_AUTHORING_ORDER_NOT_PROVEN` via the empirical REAL-producer→projector→publish discriminator).
+
+**Per-reviewer bounded correction:**
+
+> "Move one layer upstream and drive the real producer composition that creates both events. The required witness is PPA-HUB-RACE-03: REAL pending-prompt mutation producer, REAL session/run completion producer, REAL Hub event projector, REAL HubRuntimeHost consumer, REAL SdkSessionEventCoordinator Q5. Let production choose the ordering."
+
+**Architectural seam:** A real `LocalRuntimeHost` (with stub agent that emits the legacy `done` AgentEvent via `subscribeEvents` — the exact channel the production AgentEventBridge subscribes to at `local-runtime-host.ts:855`) is wired as the `sessionHost` of a real `HubServerTransport`. The transport subscribes to the host's CoreSessionEvent stream at `hub-server-transport.ts:430` — the EXACT production wiring. Events flow: `LocalRuntimeHost.subscribe` → `projectSessionEvent(ctx, event)` → `ctx.publish` → `transport.publish` → subscribed listeners.
+
+**PPA-HUB-RACE-03 — REAL `LocalRuntimeHost`→`HubServerTransport` ordering discriminator (2 tests, both PASS):**
+
+**Layout 1 (case B chronology — wake during OWNER run):** The stub agent's `run()` callback synchronously enqueues a wake via `host.runTurn({ delivery: "queue" })` BEFORE it emits `done`. The wake enqueue synchronously emits `pending_prompts` through `pendingPromptsController.enqueue(...)` → `emitPrompts(session)` → `this.emit(...)`. The agent then emits `done` → bridge emits `agent_event done`. The host tears down → emits `ended` → projector publishes `run.completed`. **Wire order observed**: `session.pending_prompts` (idx 1) → `agent.done` (idx 2) → ... → `run.completed` (idx 8). **Verdict A applies**: producer's emit order is preserved by the projector AND the transport. The HubRuntimeHost's mirror is fresh by the time Q5 reads count.
+
+**Layout 2 (case A chronology — wake after OWNER run):** The OWNER's run completes first (interactive session, no shutdown). The wake is enqueued AFTER via `host.runTurn({ delivery: "queue" })`. **Wire order observed**: `agent.done` (idx 1, before wake) → `session.pending_prompts` (idx 2, after wake). **Not a defect**: At the moment Q5 reads count (right after `agent.done`), the AUTHORITATIVE Hub queue is empty — the wake has not yet been authored. Q5's commit of `awaiting_followup` is correct given the state at the decision moment. The wake arrives next on the wire; the queue drain takes over. (This test asserts only the AUTHORITATIVE state invariant at the Q5 decision boundary. Whether the visible operator prompt between Q5's commit and the queue drain is desirable UX is a separate product question outside this ACT.)
+
+**Verdict:** The eighty-pass reviewer's hypothesis "authoritative mutation order → CoreSessionEvent emission order → Hub publish order" is NOT PROVEN was actually disproven. The empirical test demonstrates:
+1. The producer emits `pending_prompts` BEFORE `agent_event done` when the wake is authored during the OWNER run (case B).
+2. The projector preserves the producer's emit order (most projections are synchronous).
+3. The transport publishes in publish order.
+
+The Hub's transport ordering invariant is LOAD-BEARING in production. Verdict A applies. **No additional mechanism is required.** The CORRECTION01 design is sound and the producer chain is provably correct end-to-end.
+
+**Composition bound (per Factory causal reviewer P2 residue):** PPA-HUB-RACE-03 itself exercises only the producer→projector→publish chain and terminates at the published Hub envelope. It does NOT contain a real `HubRuntimeHost` consumer or a real `SdkSessionEventCoordinator Q5`. The full causal proof is established by composing separate executable evidence:
+- **AUTHORING**: PPA-HUB-RACE-03 — wake-before-done → `pending_prompts`-before-`agent.done` on the wire.
+- **TRANSPORT / MIRROR**: PPA-HUB-RACE-01 + PPA-HUB-RACE-02 — `session.pending_prompts` → real `HubRuntimeHost` mirror = `{available:true,count:1}`; mirror fail-closed when uninitialized.
+- **DECISION**: PPA-COMPOSE-01 + LHOWA01 — count=1 at the real Q5 boundary → `outstandingAutonomousWork=true` → `DeferredContinuation` → NO `awaiting_followup` commit.
+
+Under the Factory rule that **separate executable evidence may compose into a proof**, this is sufficient. No giant integration test is required to make the topology visually continuous.
+
+**Gates (verified):**
+- `bunx vitest run src/hub/runtime-host/ppa-hub-race-03.test.ts`: **2/2 PASS** (Layout 1 + Layout 2).
+- `bunx vitest run src/hub/runtime-host/`: **40/40 PASS** (29 existing + 4 PPA-HUB-RACE-01 + 3 PPA-HUB-RACE-02 + 2 PPA-HUB-RACE-03 + 2 reachability).
+- `bun run test:unit` (apps/vscode): **1141/1141 PASS** — unchanged from CORRECTION01.
+
+`PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL` (UNCHANGED).

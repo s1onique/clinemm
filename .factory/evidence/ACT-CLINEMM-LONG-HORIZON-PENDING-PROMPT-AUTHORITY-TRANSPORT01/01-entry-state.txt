@@ -1,0 +1,77 @@
+ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 — ENTRY STATE
+===========================================================================
+
+> ACT purpose: TRANSPORT-NEUTRAL PENDING-PROMPT AUTHORITY REFACTOR.
+> Move pending-prompt count read out of `RuntimeHost` and into the
+> existing `ClineCore.pendingPrompts` service boundary. Preserve all
+> LIVE_GREEN invariants from LHOWA01/CORRECTION02.
+
+FROZEN PREDECESSOR FACTS (do not reopen):
+
+  LHOWA01_LOCAL_RUNTIME           = LIVE_GREEN (CORRECTION02 closure)
+  DOGFOOD_DURATION                = ~480s (the LIVE qualification specimen)
+  TERMINAL_WAKE                   = DELIVERED
+  AUTONOMOUS_REENTRY              = OBSERVED
+  SECOND_STEP                     = EXECUTED
+  INTERMEDIATE_YOUR_TURN          = NOT_OBSERVED
+  TERMINAL_CARD_PROJECTION        = LIVE_GREEN
+  NOTIFY_ON_TERMINAL              = LIVE_GREEN
+  LHOWA01 / CORRECTION02 PRODUCTION SEAM = synchronous authoritative authority:
+    LocalRuntimeHost.getPendingPromptsCount(sid) -> session.pendingPrompts.length
+    BackgroundNotifyCoordinator.activeNotifyCountForOwner(sid, tid)
+    BOTH synchronous, BOTH canonical, NO cache.
+
+ENTRY HEAD                 = 1c6649d21 (post LHOWA01/CORRECTION02)
+WORKTREE STATE             = clean
+BRANCH                     = main
+PROVISIONAL SURFACES (this ACT targets):
+  RuntimeHost.getPendingPromptsCount?  (sdk/packages/core/src/runtime/host/runtime-host.ts:507)
+  ClineCore.getPendingPromptsCount    (sdk/packages/core/src/ClineCore.ts:736-742)
+  LocalRuntimeHost.getPendingPromptsCount  (sdk/packages/core/src/runtime/host/local-runtime-host.ts:1290)
+  SdkSessionHost.pendingPromptsCount? (apps/vscode/src/sdk/session-host.ts:123)
+  VscodeSessionHost.pendingPromptsCount (apps/vscode/src/sdk/vscode-session-host.ts:801-803)
+  SdkController.getPendingPromptCount  (apps/vscode/src/sdk/SdkController.ts:2146-2149)
+
+STOP RULES (do not touch without new evidence):
+  - Q5 predicate semantics
+  - BackgroundNotifyCoordinator behavior
+  - BTCONT deferred continuation marker
+  - PWAOR abort ownership
+  - terminal-card projection
+  - notify-on-terminal UX
+  - duplicate completion presentation
+  - PendingPromptsController.enqueue/update/delete/clear/drain behavior
+
+ENTRY INVARIANTS:
+  E1. LHOWA01 / CORRECTION02 production code reaches the canonical
+      session.pendingPrompts.length via RuntimeHost.getPendingPromptsCount?.
+      Required to remain green throughout this ACT.
+  E2. BCAFG01, BTCONT01, BCNT01, AGCONT01 tests GREEN at entry.
+  E3. Full bun unit suite (1141) PASS at entry.
+  E4. tsc --noEmit (apps/vscode) clean at entry.
+  E5. tsc --noEmit (sdk) clean at entry.
+
+PRE-ACT BASELINE STATE:
+  bun unit suite               = 1141 PASS
+  LHOWA01 tests                = 5/5 PASS
+  LHOWA01-WIRE-01 tests        = 2/2 PASS
+  BCAFG01                      = 4/5 (1 pre-existing failure)
+  BTCONT01                     = 10/10 PASS
+  BCNT01                       = 16/24 (8 pre-existing)
+  AGCONT01                     = 7/7 PASS
+  tsc --noEmit (apps/vscode)   = clean
+  tsc --noEmit (sdk)           = clean
+
+UPSTREAM ARCHITECTURE QUOTE (verbatim, https://github.com/cline/cline/blob/main/sdk/ARCHITECTURE.md, lines 454-460):
+
+  > pending prompt list/update/delete are exposed through the grouped
+  > `ClineCore.pendingPrompts` service. Usage summary lookup and active-session
+  > model switching are also service-style capabilities exposed through
+  > `ClineCore` when the concrete transport implements them. These service APIs
+  > are intentionally outside the minimal `RuntimeHost` primitive vocabulary.
+
+ARCHITECTURAL LEAK BEING REPAIRED:
+  RuntimeHost.getPendingPromptsCount?  = PROVISIONAL_ARCHITECTURAL_LEAK
+  (an optional primitive on the transport-safe execution boundary
+   that is NOT a fundamental execution primitive; it duplicates
+   the existing ClineCore.pendingPrompts service authority.)

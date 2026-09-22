@@ -714,32 +714,25 @@ export class ClineCore {
 		return this.host.getActiveRuntimeSnapshot(sessionId)
 	}
 	/**
-	 * ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / CORRECTION02:
-	 * Synchronous authoritative accessor for the count of pending prompts
-	 * queued for `sessionId`. The proxy chain is:
-	 *   ClineCore.getPendingPromptsCount(sessionId)
-	 *     → host.getPendingPromptsCount?.(sessionId)   // LocalRuntimeHost
-	 *     → session.pendingPrompts.length
+	 * ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01:
+	 * REMOVED.
 	 *
-	 * Returns 0 when:
-	 *   * `sessionId` is empty (failsafe — never throw),
-	 *   * the underlying host does not implement
-	 *     `getPendingPromptsCount?` (Hub/Remote omit by design;
-	 *     the method-absent case is fail-safe for the false-
-	 *     positive that this ACT repairs — see LHOWA01 §6
-	 *     CORRECTION02).
+	 * The provisional `ClineCore.getPendingPromptsCount(sessionId)`
+	 * proxy has been removed. Pending-prompt count authority now lives
+	 * at the canonical `ClineCore.pendingPrompts.count(sessionId)`
+	 * service operation (a transport-neutral service-style method on
+	 * the grouped service interface), which every backend that exposes
+	 * `pendingPrompts` MUST implement.
 	 *
-	 * PUBLIC API DELTA: yes. Adds ClineCore.getPendingPromptsCount.
-	 * Surface stability: PROVISIONAL — internal-use-only during the
-	 * LHOWA01 qualification; not for third-party consumers yet.
+	 * Consumers (e.g. `SdkController.getPendingPromptCount`,
+	 * `SdkSessionEventCoordinator`'s Q5 guard chain) reach the
+	 * service directly via the per-session `SdkSessionHost` adapter:
+	 * `activeSession.sdkHost.pendingPrompts.count(sessionId)`. The
+	 * proxy layer was redundant with the service boundary, and
+	 * removing it closes the architectural leak that violated the
+	 * upstream rule that pending-prompt query/mutation semantics
+	 * belong OUTSIDE the minimal `RuntimeHost` primitive vocabulary.
 	 */
-	getPendingPromptsCount(sessionId: string | undefined): number {
-		if (!sessionId) return 0
-		if (!this.host.getPendingPromptsCount) {
-			return 0
-		}
-		return this.host.getPendingPromptsCount(sessionId)
-	}
 	/**
 	 * ACT-CLINEMM-TASK-INTERACTION-OWNERSHIP-PROJECTION01-LIVE-CAPTURE01-CORRECTION02:
 	 * Provisional proxy that reads six raw host-ownership facts via the

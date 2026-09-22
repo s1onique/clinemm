@@ -278,6 +278,21 @@ describe("ACT-CLINEMM-APPLICATION-OWNERSHIP-PROJECTION-COHERENCE01 / AOPC02 / PH
 			sdkHost: {
 				subscribe: () => () => {},
 				dispose: async () => {},
+				// ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01:
+				// Bridge-test `sdkHost` stub. The production
+				// `getPendingPromptCount` adapter reaches
+				// `sdkHost.pendingPrompts("count", { sessionId })` —
+				// the CORRECTION01 transport-neutral service-style
+				// accessor. This stub returns `{ available: true;
+				// count: 0 }` to express "queue is known empty"
+				// (Shape F — same harness intent as the
+				// `lhowa01-wire-authority.test.ts` synthetic queue).
+				pendingPrompts: (_action: string, _input?: { sessionId: string }) => {
+					if (_action === "count") {
+						return { available: true, count: 0 }
+					}
+					throw new Error(`Unhandled pendingPrompts action in aopc02 bridge stub: ${String(_action)}`)
+				},
 			},
 			unsubscribe: () => {},
 			isRunning: true,

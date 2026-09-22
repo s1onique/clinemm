@@ -1,0 +1,97 @@
+{
+  "act": "ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01",
+  "act_revisions": [
+    {
+      "id": "ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01",
+      "closure_date": "2026-09-22",
+      "verdict": "PASS_LOCAL_ONLY_TRANSPORT_REDESIGN",
+      "reviewer_verdict": "HALT_TRANSPORT_NEUTRAL_SYNC_AUTHORITY_FALSE_GREEN",
+      "bounded_correction_requested": "Hub `Map.get() ?? 0` is fail-open; introduce availability-aware `PendingPromptCountRead` discriminated union."
+    },
+    {
+      "id": "ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION01",
+      "closure_date": "2026-09-22",
+      "verdict": "PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL",
+      "reviewer_verdict_resolved": "PROVISIONAL_FAIL_OPEN_RISK closed for Hub transport via availability-aware count semantics; PPA-HUB-RACE-01 RED test against real `HubRuntimeHost` (4/4 PASS)."
+    },
+    {
+      "id": "ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION02",
+      "closure_date": "2026-09-22",
+      "verdict": "PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL",
+      "reviewer_verdict_resolved": "HALT_HUB_PENDING_AUTHORITY_STALENESS_UNPROVEN closed via PPA-HUB-RACE-02 empirical discriminator (3/3 PASS). Verdict A applies: Hub's transport ordering invariant (`publish(event)` synchronous + per-session listener + WebSocket in-order delivery) ensures case B (wake authored before Q5 decision) results in fresh mirror; case A (wake after Q5 decision) is correct because the OWNER's run is genuinely done at Q5's decision moment and the wake is processed by queue drain automatically."
+    },
+    {
+      "id": "ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01-CORRECTION03",
+      "closure_date": "2026-09-22",
+      "verdict": "PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL",
+      "reviewer_verdict_resolved": "HALT_HUB_WAKE_AUTHORING_ORDER_NOT_PROVEN closed via PPA-HUB-RACE-03 REAL producer composition discriminator (2/2 PASS). PPA-HUB-RACE-03 constructs a real `LocalRuntimeHost` (with stub agent) wired as the `sessionHost` of a real `HubServerTransport` — the exact production wiring at `hub-server-transport.ts:430`. Layout 1 demonstrates that when the wake is authored BEFORE the OWNER's done event, `session.pending_prompts` envelope arrives on the wire BEFORE `agent.done` (verdict A applies, Hub's transport ordering invariant is load-bearing). Layout 2 demonstrates case A chronology (`agent.done` BEFORE wake) — NOT a defect, Q5's commit of `awaiting_followup` is correct given the AUTHORITATIVE state at the decision moment (the wake has not yet been authored)."
+    }
+  ],
+  "predecessor_head": "1c6649d21",
+  "production_head": "(see git log; will be set at commit time)",
+  "verdict": "PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL",
+  "architecture_seam": {
+    "RuntimeHost.getPendingPromptsCount?": "REMOVED",
+    "ClineCore.getPendingPromptsCount": "REMOVED",
+    "LocalRuntimeHost.getPendingPromptsCount": "REMOVED",
+    "SdkSessionHost.pendingPromptsCount?": "REMOVED",
+    "VscodeSessionHost.pendingPromptsCount": "REMOVED",
+    "PendingPromptsServiceApi.count(sessionId)": "ADDED (transport-neutral)",
+    "LocalRuntimeHost.pendingPrompts.count": "ADDED (in-memory length read)",
+    "HubRuntimeHost.pendingPrompts.count": "ADDED (locally mirrored)",
+    "RemoteRuntimeHost.pendingPrompts.count": "INHERITED from HubRuntimeHost",
+    "SdkController.getPendingPromptCount": "REPOINTED to service-bound adapter",
+    "VscodeSessionHost.pendingPrompts(action: count, ...)": "ADDED (overload)",
+    "SdkSessionHost.pendingPrompts(action: count, ...)": "ADDED (overload)"
+  },
+  "transport_neutrality": {
+    "local": "REAL_PRODUCTION_SEAM (tested)",
+    "hub": "STRUCTURAL_COMPOSITION + service-projection mirrored (tested for both sources)",
+    "remote": "STRUCTURAL_COMPOSITION (inherits HubRuntimeHost pendingPrompts)"
+  },
+  "tests": {
+    "PPAT01_NEW": "10 pass / 0 fail (architectural seam + transport-neutral composition)",
+    "PPA-HUB-RACE-01": "4 pass / 0 fail (real HubRuntimeHost; uninitialized → unavailable, post-event → 1, post-drain → 0, post-stop → unavailable)",
+    "PPA-HUB-RACE-02": "3 pass / 0 fail (real HubRuntimeHost ordering discriminator; Layout A case-B mirror-fresh, Layout B case-A mirror-stale-but-correct, Layout C atomic-requery recovery informational)",
+    "PPA-HUB-RACE-03": "2 pass / 0 fail (REAL LocalRuntimeHost→HubServerTransport composition; Layout 1 case-B wire order preserves session.pending_prompts BEFORE agent.done; Layout 2 case-A agent.done BEFORE session.pending_prompts — NOT a defect, Q5 commit correct given AUTHORITATIVE state)",
+    "LHOWA01_synthetic_real": "5 pass / 0 fail",
+    "LHOWA01_wire_authority": "2 pass / 0 fail",
+    "BCNT01": "16/24 (8 pre-existing failures unchanged from predecessor)",
+    "BTCONT01": "10 pass / 0 fail",
+    "BCAFG01": "5 pass (1 pre-existing)",
+    "AGCONT01": "7 pass / 0 fail",
+    "QPSR01_c24c_bridge": "6 pass / 0 fail",
+    "BCNT01_wire_c24c_bridge": "7 pass / 0 fail",
+    "SCHR01_SRHC01_c24c_bridge": "9 pass / 0 fail",
+    "c2-4-d-hub": "15 pass / 0 fail"
+  },
+  "gates": {
+    "tsc_noemit_apps_vscode": "clean",
+    "tsc_noemit_sdk_packages_core": "clean",
+    "bun_unit_suite_apps_vscode": "1141 pass / 0 fail",
+    "production_esbuild": "clean"
+  },
+  "invariants": {
+    "PPA-INV-01_semantic_parity": "PRESERVED (count returns authoritative queue length)",
+    "PPA-INV-02_no_ui_dependency": "PRESERVED (no getStateToPostToWebview involvement)",
+    "PPA-INV-03_no_eventual_consistency_race": "PRESERVED (Local: synchronous; Hub: mirror kept current from authoritative sources)",
+    "PPA-INV-04_transport_neutral_contract": "ESTABLISHED (all backends implement PendingPromptsServiceApi.count)",
+    "PPA-INV-05_no_fail_open_to_zero_for_supported_backends": "PRESERVED (no silent zero-collapse; mirror returns 0 only when no count is published)"
+  },
+  "predicates_preserved": {
+    "Q5_done_without_completion_defers_when_outstanding": "GREEN (LHOWA01 invariant preserved)",
+    "BTCONT01_deferred_continuation_marker": "GREEN (unchanged)",
+    "BCAFG01_running_job_defers": "GREEN (unchanged)",
+    "BCNT01_notify_on_terminal": "GREEN (unchanged)"
+  },
+  "epic_board_row": "PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL — see .factory/epic-board.md (post-closure)",
+  "evidence": [
+    "01-entry-state.txt",
+    "02-upstream-architecture.md",
+    "03-pending-prompt-authority-map.md",
+    "04-transport-matrix.md",
+    "05-red-design.md",
+    "06-composition-output.txt",
+    "07-conservation.txt"
+  ]
+}

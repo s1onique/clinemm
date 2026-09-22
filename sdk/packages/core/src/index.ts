@@ -532,6 +532,7 @@ export {
 export { LocalRuntimeHost } from "./runtime/host/local-runtime-host";
 export type {
 	CommandExecutionRuntimeService,
+	PendingPromptCountRead,
 	PendingPromptMutationResult,
 	PendingPromptsDeleteInput,
 	PendingPromptsListInput,
