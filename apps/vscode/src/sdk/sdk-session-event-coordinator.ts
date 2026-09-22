@@ -184,6 +184,26 @@ interface DeferredContinuation {
 	readonly deferredAt: number
 }
 
+/**
+ * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+ *
+ * Bounded marker recorded at the `wasAttemptCompletionSeen() +
+ * wasTerminalResponseCommittedThisTurn()` branch when an outstanding
+ * autonomous obligation exists. Holds the identity triple (sessionId
+ * + taskId + epoch) so a late terminal event cannot mutate a newer
+ * task (TQCB01-CTL-07 / TQCB01-CTL-08 / epoch supersession). Cleared
+ * on commit (exactly once) or on epoch supersession.
+ *
+ * The marker is NOT a general-purpose continuation queue — it holds
+ * at most ONE pending completion per coordinator instance.
+ */
+interface DeferredCompletionBarrier {
+	readonly sessionId: string
+	readonly taskId: string | undefined
+	readonly epoch: number
+	readonly deferredAt: number
+}
+
 export class SdkSessionEventCoordinator {
 	private readonly translateSessionEvent: (event: CoreSessionEvent, state: MessageTranslatorState) => TranslationResult
 	/**
@@ -192,6 +212,15 @@ export class SdkSessionEventCoordinator {
 	 * instance). Cleared on commit or on epoch supersession.
 	 */
 	private deferredContinuation: DeferredContinuation | undefined
+
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+	 * bounded completion-barrier marker (at most one entry per
+	 * coordinator instance). Cleared on commit or on epoch
+	 * supersession. Same identity-triple semantics as
+	 * `deferredContinuation` (BTCONT01).
+	 */
+	private deferredCompletionBarrier: DeferredCompletionBarrier | undefined
 
 	constructor(private readonly options: SdkSessionEventCoordinatorOptions) {
 		this.translateSessionEvent = options.translateSessionEvent ?? translateSessionEvent
@@ -268,6 +297,96 @@ export class SdkSessionEventCoordinator {
 		)
 		this.deferredContinuation = undefined
 		this.options.setTurnPhase?.("awaiting_followup", undefined, "session-event-turn-complete-resumable-straggler-preserve")
+	}
+
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+	 *
+	 * External entry point invoked by `SdkController` when an
+	 * outstanding autonomous obligation resolves (Path A wake
+	 * consumption or Path B command_status observation). Mirrors the
+	 * four conservation rules of `reevaluateDeferredContinuation`
+	 * (BTCONT01):
+	 *   1. the deferred-completion-barrier marker MUST exist for the
+	 *      active session; otherwise this is a no-op
+	 *   2. the marker's epoch MUST still match the active minter
+	 *      epoch; otherwise the deferral has been superseded by a
+	 *      newer turn and the late terminal event is discarded
+	 *   3. the live `hasRunningBackgroundJobForOwner(activeSession.sessionId)`
+	 *      lookup MUST return false; otherwise another matching job
+	 *      is still alive and the held completion stays deferred
+	 *   4. on success, the canonical writer
+	 *      `session-event-turn-complete-completed` commits `completed`
+	 *      exactly once and the marker is cleared
+	 */
+	reevaluateDeferredCompletionBarrier(): void {
+		const marker = this.deferredCompletionBarrier
+		if (!marker) return
+		const activeSession = this.options.sessions.getActiveSession()
+		if (!activeSession) {
+			this.deferredCompletionBarrier = undefined
+			return
+		}
+		if (marker.sessionId !== activeSession.sessionId) {
+			this.deferredCompletionBarrier = undefined
+			return
+		}
+		const taskId = this.options.getTask?.()?.taskId
+		if (marker.taskId !== taskId) {
+			this.deferredCompletionBarrier = undefined
+			return
+		}
+		const currentEpoch = this.options.messageTranslatorState.getMinter().epoch
+		if (marker.epoch !== currentEpoch) {
+			this.deferredCompletionBarrier = undefined
+			return
+		}
+		// Three-resolution-source guard:
+		//   ownerStillRunning   = RUNNING CommandJob (BCAFG01 / PWAOR01)
+		//   pendingPromptsKnown = queued prompts (PPAT01)
+		//   activeNotifyCount   = registered BackgroundNotifyCoordinator
+		//                         markers (BCNEX01)
+		const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
+		if (ownerStillRunning) return
+		const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
+			activeSession.sessionId,
+		) ?? {
+			available: false,
+		}
+		const pendingPromptsKnown =
+			pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+		if (pendingPromptsKnown > 0) return
+		const activeNotifyCount = this.options.getActiveNotifyCount?.(
+			activeSession.sessionId,
+			taskId,
+		) ?? 0
+		if (activeNotifyCount > 0) return
+
+		// All four conservation checks pass: commit the held
+		// completion transition exactly once.
+		Logger.warn(
+			`[SdkController] outstanding obligations resolved; releasing held completion for session ${activeSession.sessionId} (epoch=${marker.epoch})`,
+		)
+		this.deferredCompletionBarrier = undefined
+		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+	}
+
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+	 * test-only backdoor exposing the deferred-completion-barrier
+	 * marker so TQCB01 RED/GREEN tests can verify the marker's
+	 * identity triple (sessionId, taskId, epoch) without depending
+	 * on indirect observable side-effects.
+	 */
+	getDeferredCompletionBarrierForTesting():
+		| { readonly sessionId: string; readonly taskId: string | undefined; readonly epoch: number }
+		| undefined {
+		if (!this.deferredCompletionBarrier) return undefined
+		return {
+			sessionId: this.deferredCompletionBarrier.sessionId,
+			taskId: this.deferredCompletionBarrier.taskId,
+			epoch: this.deferredCompletionBarrier.epoch,
+		}
 	}
 
 	/**
@@ -372,7 +491,50 @@ export class SdkSessionEventCoordinator {
 					// translator sets terminalResponseCommittedThisTurn at the completion
 					// tool's content_end; if it didn't, refuse the promotion.
 					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
-						this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+						// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+						// Completion-barrier guard. The completion commit is HELD iff
+						// an outstanding autonomous obligation exists for the active
+						// (sessionId, taskId). The barrier is conservative: it
+						// consults the same predicate as LHOWA01's awaiting_followup
+						// deferral (RUNNING job + queued prompt + active notify
+						// marker). When HELD, a DeferredCompletionBarrier marker is
+						// registered so the terminal-idle re-evaluation
+						// (reevaluateDeferredCompletionBarrier) can fire the held
+						// commit when all obligations resolve. Per the recon
+						// (04-background-obligation-map.md §5), only
+						// notifyOnCompletion=true obligations are completion-
+						// relevant; a notify=false background job (fire-and-forget
+						// daemon, dev server, etc.) does NOT block completion.
+						const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
+							activeSession.sessionId,
+						) ?? {
+							available: false,
+						}
+						const pendingPromptsKnown =
+							pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+						const activeNotifyCount = this.options.getActiveNotifyCount?.(
+							activeSession.sessionId,
+							this.options.getTask?.()?.taskId,
+						) ?? 0
+						const outstandingAutonomousWork = pendingPromptsKnown > 0 || activeNotifyCount > 0
+
+						if (outstandingAutonomousWork) {
+							// Register the deferred-completion-barrier marker.
+							// Same epoch + task + session identity triple as
+							// deferredContinuation (BTCONT01). Cleared on commit
+							// or on epoch supersession.
+							Logger.warn(
+								`[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has outstanding autonomous work (pendingPrompts=${pendingPromptsKnown}, activeNotify=${activeNotifyCount}); holding completion (TQCB01 barrier)`,
+							)
+							this.deferredCompletionBarrier = {
+								sessionId: activeSession.sessionId,
+								taskId: this.options.getTask?.()?.taskId,
+								epoch: this.options.messageTranslatorState.getMinter().epoch,
+								deferredAt: Date.now(),
+							}
+						} else {
+							this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+						}
 					} else {
 						// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01-CORRECTION01:
 						// symmetric to the CPL01 "done-without-completion" liveness

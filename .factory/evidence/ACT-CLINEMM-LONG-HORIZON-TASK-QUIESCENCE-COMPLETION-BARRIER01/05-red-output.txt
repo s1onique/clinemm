@@ -1,0 +1,58 @@
+ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 — RED OUTPUT
+==========================================================================
+
+Entry HEAD: 0a80bea0316fd4bfcad67556171dc593c286ae5d
+Test runner: vitest v4.1.10
+Command: bunx vitest run --config vitest.config.ts \
+          src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts
+
+Result: 3 failed | 2 passed (5 tests)
+
+RED-01 RED (defect reproduced):
+  AssertionError: expected 'completed' not to be 'completed' // Object.is equality
+   ❯ src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts:213:39
+       211|    await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+       212|
+       213|    expect(h.tracker.currentPhase).not.toBe("completed")
+          |                                       ^
+
+  Causal trace:
+    T1 register obligation J-red01
+    T2 emitCompletionTurn → setAttemptCompletionSeen + setTerminalResponseCommittedThisTurn
+    T3 done agent event → sdk-session-event-coordinator.ts:374-375 fires
+    T4 setTurnPhase("completed", ..., "session-event-turn-complete-completed")
+    T5 phase = "completed" (BUG)
+
+RED-02 RED (no resolution path):
+  TypeError: notifyCoordinator.resolveObligation is not a function
+   ❯ Object.resolveObligation src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts:162:22
+
+  Production gap: BackgroundNotifyCoordinator has no resolveObligation method.
+  Path B (command_status observation) cannot resolve the marker.
+
+RED-03 RED (no resolution path AND no barrier):
+  TypeError: notifyCoordinator.resolveObligation is not a function
+   ❯ Object.resolveObligation src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts:162:22
+
+  Same gap as RED-02 + no completion barrier at the coordinator seam.
+
+PASS (control):
+  TQCB-CTL-01 notify=false does not block: PASS (notify=false → no marker → existing behavior)
+  TQCB-CTL-03 terminal wake (Path A) resolves: PASS (Path A already wired)
+
+CAUSAL CLASSIFICATION:
+  TQ1_NO_COMPLETION_BARRIER (RED-01)
+  TQ3_RESULT_OBSERVATION_NOT_CONNECTED (RED-02, RED-03)
+
+Both classes are addressable by a SINGLE bounded repair:
+  (a) Add BackgroundNotifyCoordinator.resolveObligation({jobId, sessionId, taskId, resolution})
+  (b) Add the outstandingAutonomousWork guard at the
+      wasAttemptCompletionSeen() + wasTerminalResponseCommittedThisTurn() branch
+      of the done handler (sdk-session-event-coordinator.ts:374-375)
+  (c) Add a DeferredCompletionBarrier marker + reevaluateDeferredCompletionBarrier()
+      hook for terminal-idle release (the BTCONT01 deferred-continuation
+      marker pattern, reused for completion semantics)
+
+Both gates the existing BCAFG01/LHOWA01 path already passes, so the
+repair only widens the existing outstandingAutonomousWork predicate
+from the awaiting_followup branch to the completed branch.

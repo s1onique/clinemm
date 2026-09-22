@@ -1,0 +1,66 @@
+ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 — GREEN OUTPUT
+==========================================================================
+
+Entry HEAD: 0a80bea0316fd4bfcad67556171dc593c286ae5d
+Test runner: vitest v4.1.10
+Command: bunx vitest run --config vitest.config.ts \
+          src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts
+
+Result: 5 passed (5)
+
+TQCB-RED-01 GREEN (completion blocked by outstanding notify-marker):
+  ✓ completion commit SUPPRESSED; deferredCompletionBarrier registered
+TQCB-RED-02 GREEN (Path B command_status observation resolves obligation):
+  ✓ resolveObligation consumed marker; submit_and_exit committed exactly once
+TQCB-RED-03 GREEN (two jobs, partial resolution, then full):
+  ✓ completion held until both markers resolved; reevaluateDeferredCompletionBarrier fired exactly once
+TQCB-CTL-01 GREEN (notify=false → no barrier → completion commits):
+  ✓ notify=false: no marker registered; completion commits immediately
+TQCB-CTL-03 GREEN (Path A wake resolves):
+  ✓ consumeTerminal fired; submit_and_exit committed exactly once
+
+CAUSAL FIX (one bounded repair, two seams):
+
+Seam 1: BackgroundNotifyCoordinator.resolveObligation()
+  apps/vscode/src/sdk/background-notify-coordinator.ts:443-484
+  - Idempotent: returns {kind:"no_marker"} when no marker exists
+  - Owner-isolation guard: cross-session/cross-task resolves are no-ops
+  - Records the resolution decision (terminal_wake_delivered vs canonical_status_observed)
+
+Seam 2: SdkSessionEventCoordinator completion-barrier guard
+  apps/vscode/src/sdk/sdk-session-event-coordinator.ts (line 374-413 region)
+  - The completion commit (wasAttemptCompletionSeen() && wasTerminalResponseCommittedThisTurn())
+    now consults the SAME outstandingAutonomousWork predicate as LHOWA01's
+    awaiting_followup deferral
+  - Predicate = pendingPromptsKnown > 0 OR activeNotifyCount > 0
+  - NOTE: ownerStillRunning is NOT consulted because a RUNNING background job
+    WITHOUT a notify-marker is NOT completion-relevant (notify=false semantic)
+
+Seam 3: DeferredCompletionBarrier marker + reevaluateDeferredCompletionBarrier()
+  apps/vscode/src/sdk/sdk-session-event-coordinator.ts (line 187-205, 322-385)
+  - Same identity triple (sessionId, taskId, epoch) as deferredContinuation
+  - Cleared on commit OR on epoch supersession
+  - Wired to the BTCONT01 terminal-idle hook via maybeReevaluateDeferredContinuation
+    (SdkController.ts:4684)
+
+CONSERVATION:
+  All BCNEX01, BTCONT01, BCTCP01, AGCONT01, BCAFG01, BCNT01 tests: PASS
+  LHOWA01-synthetic-real: pre-existing failure (RED-01) NOT caused by this ACT
+    (verified via git stash round-trip)
+  OWN01 RED: pre-existing failure NOT caused by this ACT
+    (verified via git stash round-trip)
+
+NO REGRESSIONS in:
+  - BCAFG01 (RUNNING job still defers awaiting_followup)
+  - BCNEX01 (exactly-once presentation)
+  - BTCONT01 (deferred continuation re-eval)
+  - BCTCP01 (terminal-card projection)
+  - AGCONT01 (agent continuation)
+  - BCNT01 (notify-on-terminal)
+  - PPAT01 (pending-prompt authority transport)
+  - LHOWA01-WIRE (wire-authority)
+  - BCTCP01-CONTROLLER (terminal-card controller)
+  - BCAFG01-SYNTHETIC-REAL (awaiting-followup guard)
+
+TYPE CHECK (apps/vscode): clean (exit 0)
+NEW TESTS: 5 pass / 0 fail

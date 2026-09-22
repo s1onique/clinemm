@@ -1,5 +1,103 @@
 
+## ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 — PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED — 2026-09-22
+
+**Status:** PASS. The premature task completion defect (Shape D / LIVE bug) — where `submit_and_exit` commits COMPLETED while a notify-enabled background job is still RUNNING, leading to a duplicate autonomous continuation when the queued terminal wake arrives AFTER completion — is mechanically classified as **TQ1_NO_COMPLETION_BARRIER + TQ3_RESULT_OBSERVATION_NOT_CONNECTED** and repaired by a single bounded change set.
+
+**Causal seam:** the load-bearing completion commit at `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:374-375` (`setTurnPhase("completed", ..., "session-event-turn-complete-completed")`) did NOT consult outstanding autonomous obligations. The LHOWA01 awaiting_followup deferral (Q5 path) covered the same predicate at a different branch; the completion branch was unprotected. Additionally, `BackgroundNotifyCoordinator` had only one resolution source (Path A: `consumeTerminal`); direct `command_status` observation (Path B) could not resolve the marker.
+
+**Fix (one bounded repair, two seams + one hook extension):**
+
+```
+Seam 1: BackgroundNotifyCoordinator.resolveObligation({jobId, sessionId, taskId, resolution})
+        (apps/vscode/src/sdk/background-notify-coordinator.ts)
+        Path B resolution source. Idempotent. Owner-isolation guard.
+
+Seam 2: completion-barrier guard at the wasAttemptCompletionSeen() +
+        wasTerminalResponseCommittedThisTurn() branch
+        (apps/vscode/src/sdk/sdk-session-event-coordinator.ts)
+        Predicate = pendingPromptsKnown > 0 || activeNotifyCount > 0
+        (NOT ownerStillRunning: notify=false jobs are NOT completion-relevant)
+
+Seam 3: DeferredCompletionBarrier marker + reevaluateDeferredCompletionBarrier()
+        (apps/vscode/src/sdk/sdk-session-event-coordinator.ts)
+        Hooked into the existing BTCONT01 terminal-idle bridge at
+        SdkController.maybeReevaluateDeferredContinuation (line 4684).
+        Same identity-triple semantics as deferredContinuation
+        (sessionId + taskId + epoch).
+```
+
+**Production diff:**
+- `apps/vscode/src/sdk/background-notify-coordinator.ts`: +60 lines (ResolveObligationReason/Decision types + resolveObligation method)
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`: +85 lines (DeferredCompletionBarrier interface + field + reevaluateDeferredCompletionBarrier method + completion-barrier guard)
+- `apps/vscode/src/sdk/SdkController.ts`: +9 lines (terminal-idle hook extension)
+- New test file: `apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts`
+
+**RED tests (reproduced before fix):**
+- TQCB-RED-01: unresolved notify=true obligation blocked completion
+  PRE-FIX: `phase = "completed"` (premature — the bug)
+  POST-FIX: `phase = "streaming"` (held — barrier active)
+- TQCB-RED-02: direct command_status observation resolved obligation (LIVE bug discriminator)
+  PRE-FIX: `TypeError: resolveObligation is not a function`
+  POST-FIX: marker consumed; `phase = "completed"` (exactly once)
+- TQCB-RED-03: two jobs, partial resolution, held completion
+  PRE-FIX: `TypeError: resolveObligation is not a function`
+  POST-FIX: completion held until both markers resolved; re-eval fired exactly once
+
+**Conservation (all UNCHANGED):**
+- BCAFG01 (synthetic-real): 12/12 PASS
+- BCNEX01 (incl. P1): 8/8 PASS
+- BCNT01: 24/24 PASS
+- BCTCP01 (controller + composition): 17/17 PASS
+- BTCONT01: 10/10 PASS (extended, not duplicated)
+- AGCONT01: 7/7 PASS (notify=false "start and return" still commits)
+- LHOWA01-WIRE: 2/2 PASS
+- PPAT01: 9/9 PASS
+
+**Pre-existing failures NOT caused by this ACT** (verified via `git stash` round-trip on entry HEAD `0a80bea03`):
+- `LHOWA01-GREEN` in `long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts` — pre-existing test mock issue; predates CORRECTION01.
+- `OWN01 RED` in `sdk-session-event-coordinator.test.ts` — pre-existing bare-done defect; not in scope.
+
+**Ablation:**
+- TQCB-ABLATION-1: no marker → completion commits immediately: PASS
+- TQCB-ABLATION-2: marker registered → completion held: PASS
+
+Both pass → causal chain proven.
+
+**Type check:** clean (exit 0)
+
+**Success condition met:**
+
+```
+for each jobId:
+  terminal_authority_count == 1    ✓
+  semantic_wake_count      <= 1    ✓
+  continuation_count       <= 1    ✓
+  user-visible terminal completion presentation == 1   ✓ (was 2 pre-fix)
+
+and:
+  two distinct jobIds → two legitimate terminal completions  ✓
+
+and:
+  submit_and_exit + notify=true obligation → hold completion,
+  resolution (Path A wake OR Path B command_status observation) →
+  re-evaluate → commit exactly once
+
+and:
+  resolved obligation's late wake → no_marker → no second turn
+```
+
+**Stop rules honored:** CommandJobManager redesigned: NO. Q5 long-horizon predicate modified: NO. pending-prompt transport rewired: NO. terminal-card projection modified: NO. PWAOR abort ownership modified: NO. Hub ordering modified: NO. wake prompt format modified: NO. PROTO_DELTA = NO. PUBLIC_TOOL_SCHEMA_DELTA = NO.
+
+**Lower layers UNTOUCHED:** CommandJobManager. BackgroundNotifyCoordinator.consumeTerminal (Path A). Q5 long-horizon predicate (Q5 path). pending-prompt transport (PPAT01). terminal-card projection (BCTCP01). PWAOR abort ownership (PWAOR01). BTCONT01 deferred continuation marker (extended, not duplicated). Hub ordering machinery. wake prompt format (bounded-output delimiters).
+
+**Verdict:** PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED
+
+**Production head:** 0a80bea0316fd4bfcad67556171dc593c286ae5d + bounded repair
+
+**Next:** dogfood LIVE qualification (deferred — cloud dogfood infra unavailable; post-fix LLM-natural-exit specimen pending when infra available).
+
 ## ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 / CORRECTION01 — P1 bounded defect — PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED — 2026-09-22
+ — P1 bounded defect — PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED — 2026-09-22
 
 **Status:** PASS (P1 correction applied). Reviewer feedback from the factory causal reviewer identified that the first-pass predicate (`normalized.includes("<bounded-output>") || normalized.includes("</bounded-output>")`) was overbroad — it would silently hide legitimate user prompts containing either delimiter (e.g., a user explaining HTML/XML).
 

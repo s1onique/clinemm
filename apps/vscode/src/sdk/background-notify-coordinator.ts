@@ -112,6 +112,31 @@ export type ConsumeTerminalDecision =
 	| { kind: "drained"; jobId: string; drainedCount: number; enqueuedNow: boolean }
 
 /**
+ * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+ *
+ * Distinct resolution paths are tracked explicitly so the runtime can
+ * reason about completion-barrier semantics WITHOUT relying on
+ * transport-side packet counts. `terminal_wake_delivered` is the
+ * canonical Path A (consumeTerminal); `canonical_status_observed` is
+ * the canonical Path B (command_status observation).
+ */
+export type ResolveObligationReason =
+	| "terminal_wake_delivered"
+	| "canonical_status_observed"
+
+/**
+ * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+ *
+ * Resolution outcome. `resolved` means the marker was consumed and the
+ * obligation is gone. `no_marker` means the marker did not exist
+ * (either never registered or already resolved — this is the
+ * idempotency signal for duplicate resolution calls).
+ */
+export type ResolveObligationDecision =
+	| { kind: "resolved"; jobId: string; resolution: ResolveObligationReason }
+	| { kind: "no_marker"; jobId: string }
+
+/**
  * Pure formatter for the wake prompt. Produces a bounded UTF-8
  * string no longer than NOTIFY_WAKE_PROMPT_MAX_BYTES. The
  * formatter is exported so tests can assert prompt shape without
@@ -412,6 +437,49 @@ export class BackgroundNotifyCoordinator {
 			jobId: input.jobId,
 			drainedCount,
 			enqueuedNow: true,
+		}
+	}
+
+	/**
+	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+	 *
+	 * Resolve an obligation WITHOUT going through the wake-delivery path.
+	 * The marker is consumed iff it exists AND the (sessionId, taskId)
+	 * triple matches the registered marker. This is the canonical
+	 * Path B resolution source (command_status observation).
+	 *
+	 * Idempotency: a second call for the same (jobId, sessionId, taskId)
+	 * returns `{ kind: "no_marker" }` — the marker is already gone.
+	 *
+	 * Cross-task / cross-session isolation: a resolveObligation call for
+	 * a jobId that was registered for a different (sessionId, taskId)
+	 * returns `{ kind: "no_marker" }` — the marker is preserved (the
+	 * caller's identity triple does not match).
+	 */
+	resolveObligation(input: {
+		jobId: string
+		sessionId: string
+		taskId: string | undefined
+		resolution: ResolveObligationReason
+	}): ResolveObligationDecision {
+		if (this.disposed) {
+			return { kind: "no_marker", jobId: input.jobId }
+		}
+		const marker = this.notificationMarkers.get(input.jobId)
+		if (!marker) {
+			return { kind: "no_marker", jobId: input.jobId }
+		}
+		// Cross-isolation guard: only the SAME (sessionId, taskId) owner
+		// can resolve. This matches the consumeTerminal owner_mismatch
+		// check at line 348.
+		if (marker.sessionId !== input.sessionId || marker.taskId !== input.taskId) {
+			return { kind: "no_marker", jobId: input.jobId }
+		}
+		this.notificationMarkers.delete(input.jobId)
+		return {
+			kind: "resolved",
+			jobId: input.jobId,
+			resolution: input.resolution,
 		}
 	}
 

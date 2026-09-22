@@ -1,0 +1,67 @@
+ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 — ENTRY STATE
+==========================================================================
+
+ENTRY HEAD                            = 0a80bea0316fd4bfcad67556171dc593c286ae5d
+
+Predecessor fact freeze (these are CLOSED substrate):
+
+    PWAOR                                  = CLOSED
+    CommandJob lifecycle                   = CONSERVED
+    per-job start/terminal projection      = CLOSED
+    terminal-card projection               = LIVE_GREEN
+    notify-on-terminal                     = LIVE_GREEN
+    pending-prompt authority               = CLOSED_CLEAN
+    long-horizon Your-turn suppression     = LIVE_GREEN
+    synthetic terminal wake presentation   = HIDDEN
+
+Fresh LIVE evidence this ACT must address:
+
+    SINGLE_JOB_POST_COMPLETION_CONTINUATION = LIVE_PROVEN
+    MULTI_JOB_POST_COMPLETION_CONTINUATION  = LIVE_PROVEN
+
+Observed defect pattern (frozen):
+
+    job terminal result already incorporated
+    → first submit_and_exit
+    → COMPLETED
+    → later terminal wake
+    → second autonomous turn
+    → second submit_and_exit
+
+Predecessor ACTs that define the substrate (CLOSED):
+    - ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01       (LHOWA01) PASS
+    - ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 (PPAT01) PASS
+    - ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01   (BCNEX01) PASS (incl. P1)
+    - ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01      (BTCONT01) PASS
+    - ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01   (BCLAS01) PASS
+    - ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01         (AGCONT01) PASS
+    - ACT-CLINEMM-BACKGROUND-COMMAND-AWAITING-FOLLOWUP-GUARD01    (BCAFG01) PASS
+
+Mission scope:
+
+    Recon → real RED → causal discriminator → bounded completion-barrier repair → LIVE qualification.
+
+    Fix:
+
+        TASK MAY BECOME COMPLETED
+        IFF
+        objective completion has been requested
+        AND
+        all completion-relevant autonomous obligations are resolved.
+
+    Wait for SEMANTIC OBLIGATIONS, not WAKE PACKETS.
+
+Lower layers UNTOUCHED (per ACT §0 stop rules):
+    - CommandJobManager (NOT DX1)
+    - BackgroundNotifyCoordinator (NOT touched — its marker set is the
+      notification source of truth; completion-barrier is a new owner
+      that observes it)
+    - Q5 long-horizon predicate (NOT touched)
+    - pending-prompt transport authority (NOT touched — PPAT01)
+    - terminal-card projection (NOT touched — BCTCP01)
+    - PWAOR abort ownership (NOT touched — PWAOR01)
+    - BTCONT deferred continuation marker (NOT touched — BTCONT01)
+    - Hub ordering machinery (NOT touched)
+    - wake prompt format (NOT modified — bounded-output delimiters unchanged)
+    - PROTO_DELTA = NO
+    - PUBLIC_TOOL_SCHEMA_DELTA = NO

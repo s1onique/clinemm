@@ -1,0 +1,81 @@
+ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 — CONSERVATION
+===========================================================================
+
+Conservation matrix:
+
+| Predecessor ACT | Sealed invariant | TQCB01 effect |
+|-----------------|------------------|---------------|
+| PWAOR01         | Abort ownership release | UNTOUCHED |
+| BCAFG01         | RUNNING job → defer awaiting_followup | UNTOUCHED (Q5 path unchanged) |
+| BCNEX01 (P1)    | Exactly-once presentation | UNTOUCHED (terminal-card still 1×) |
+| BTCONT01        | Deferred-continuation re-eval | EXTENDED (same re-eval hook fires both deferredContinuation and deferredCompletionBarrier) |
+| BCTCP01         | Terminal-card projection | UNTOUCHED (projection is per-job, not per-obligation) |
+| AGCONT01        | Agent runtime NOT re-invoked on terminal | UNTOUCHED (completion-barrier re-eval uses same hook as BTCONT01, NOT a new re-entry path) |
+| BCNT01          | Notify-on-terminal exactly-one | UNTOUCHED (consumeTerminal still drains; resolveObligation is a separate idempotent method) |
+| LHOWA01         | Q5 deferred-awaiting_followup | UNTOUCHED (Q5 path now reads the SAME pendingPromptCountRead, but the predicate is unchanged for the Q5 branch) |
+| PPAT01          | Pending-prompt authority transport | UNTOUCHED (barrier uses the same `getPendingPromptCount` adapter) |
+
+Critical regression checks (post-fix):
+
+1. AGCONT01 — "start and return" task (notify=false background job + submit_and_exit):
+   The model starts a background job WITHOUT notifyOnCompletion, then calls
+   submit_and_exit. Per the recon §5, notify=false background work is
+   NOT completion-relevant — completion commits immediately.
+   - Pre-fix: phase = "completed" (existing behavior)
+   - Post-fix: phase = "completed" (no notify-marker → no barrier → commit)
+   ✓ CONSERVED
+
+2. BCAFG01 — RUNNING job suppresses awaiting_followup:
+   The model emits a done-without-completion while a RUNNING job owns
+   the active session. The Q5 branch must DEFERS.
+   - Pre-fix: phase stays "streaming"
+   - Post-fix: phase stays "streaming" (Q5 path unchanged)
+   ✓ CONSERVED
+
+3. BCNEX01 — terminal-card projection is exactly-once per job:
+   The terminal-card for a notify=true job is still rendered exactly once.
+   - Pre-fix: 1 terminal-card per jobId
+   - Post-fix: 1 terminal-card per jobId (consumeTerminal behavior unchanged)
+   ✓ CONSERVED
+
+4. BTCONT01 — terminal-idle hook fires awaiting_followup exactly once:
+   The bridge at SdkController.maybeReevaluateDeferredContinuation fires
+   the deferred-continuation marker re-eval on >0->0 cardinal transition.
+   - Pre-fix: reevaluateDeferredContinuation fires exactly once
+   - Post-fix: reevaluateDeferredContinuation AND
+     reevaluateDeferredCompletionBarrier both fire (the latter is a no-op
+     when no completion-barrier marker is set)
+   ✓ CONSERVED (extended hook, original behavior preserved)
+
+5. BCTCP01 — terminal-card projection per-job, per-jobId:
+   - Pre-fix: one terminal-card per jobId
+   - Post-fix: one terminal-card per jobId (resolution is orthogonal to projection)
+   ✓ CONSERVED
+
+Pre-existing failures NOT caused by this ACT:
+- LHOWA01-GREEN (long-horizon-outstanding-work-authority01.lhowa01-synthetic-real):
+  pre-existing test failure; verified via `git stash` round-trip on
+  entry HEAD 0a80bea03. The mock returns a number for getPendingPromptCount
+  instead of the union; the test predates the CORRECTION01 type change.
+  NOT introduced by TQCB01.
+- OWN01 RED (sdk-session-event-coordinator.test.ts):
+  pre-existing test failure; same git-stash verification.
+  NOT introduced by TQCB01.
+
+Test summary (TQCB01 + all related suites):
+
+  TQCB01 (this ACT):                                     5 passed / 0 failed
+  BCAFG01:                                              12 passed / 0 failed
+  BCNEX01:                                               8 passed / 0 failed
+  BCNT01:                                               24 passed / 0 failed
+  BCTCP01 (controller + composition):                    17 passed / 0 failed
+  BTCONT01:                                             10 passed / 0 failed
+  AGCONT01:                                              7 passed / 0 failed
+  LHOWA01-WIRE:                                          2 passed / 0 failed
+  PPAT01:                                                9 passed / 0 failed
+
+  TOTAL:                                                94 passed / 0 failed
+
+  Pre-existing (NOT caused by this ACT):                  2 failed (LHOWA01-GREEN, OWN01 RED)
+
+All 0 regressions caused by this ACT.

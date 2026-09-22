@@ -1,0 +1,41 @@
+ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 — ABLATION
+=======================================================================
+
+The ablation matrix proves the load-bearing causal chain.
+
+A1 — Disable barrier (pre-fix behavior simulated):
+    outstanding J + submit_and_exit → premature COMPLETED
+    TQCB-ABLATION-1: PASS (with marker registered AND NO barrier enabled,
+    phase = "completed"; this is the pre-fix behavior reproduction)
+
+A2 — Enable barrier (post-fix GREEN):
+    outstanding J + submit_and_exit → held (phase stays "streaming")
+    TQCB-ABLATION-2: PASS
+
+A3 — Disable Path B resolution (resolveObligation NOT wired):
+    Path A still works (consumeTerminal drains).
+    Path B does NOT resolve the marker.
+    Result: command_status observation leaves the marker registered;
+            the completion barrier holds indefinitely.
+    This is the LIVE bug scenario (RED-02) reproduced structurally.
+
+A4 — Enable Path B resolution (resolveObligation wired):
+    command_status observation resolves the marker;
+            the barrier releases on resolution;
+            completion commits.
+    TQCB-RED-02: PASS
+
+Conclusion:
+  TQ1_NO_COMPLETION_BARRIER → addressed (Seam 2 + Seam 3)
+  TQ3_RESULT_OBSERVATION_NOT_CONNECTED → addressed (Seam 1)
+
+Both causal classes proven; the repair is bounded and necessary.
+No causal-class inflation; no speculative infrastructure; no signal
+ambiguity between notifyOnCompletion and completion relevance (the
+v1 contract uses the existing notifyOnCompletion bit to mean both
+"wake me because the task depends on this result" AND "this
+background work participates in task completion").
+
+If the ablation failed (TQCB-ABLATION-1 OR TQCB-ABLATION-2 FAIL):
+    HALT_CAUSE_NOT_ESTABLISHED
+    (both PASS; ablation complete)

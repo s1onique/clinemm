@@ -4673,6 +4673,15 @@ export class Controller {
 		if (previousRunning && !running && taskId === undefined) {
 			sessionEvents.reevaluateDeferredContinuation()
 		}
+		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+		// the terminal-idle event is the canonical hook to release the
+		// held completion when outstanding autonomous obligations
+		// resolve. Re-evaluation consults the same
+		// outstandingAutonomousWork predicate as the original
+		// barrier (RUNNING job + queued prompt + active notify
+		// marker); the barrier fires the held `completed` phase
+		// transition exactly once when all three are zero.
+		sessionEvents.reevaluateDeferredCompletionBarrier()
 	}
 
 	/**

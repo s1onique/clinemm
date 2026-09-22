@@ -1,0 +1,55 @@
+{
+  "actId": "ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01",
+  "status": "PASS",
+  "verdict": "PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED",
+  "entryHead": "0a80bea0316fd4bfcad67556171dc593c286ae5d",
+  "testFile": "apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts",
+  "testsAdded": 5,
+  "testsPass": 5,
+  "testsFail": 0,
+  "causalClass": ["TQ1_NO_COMPLETION_BARRIER", "TQ3_RESULT_OBSERVATION_NOT_CONNECTED"],
+  "productionFilesModified": [
+    "apps/vscode/src/sdk/background-notify-coordinator.ts",
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+    "apps/vscode/src/sdk/SdkController.ts"
+  ],
+  "regressions": 0,
+  "preExistingFailures": [
+    "LHOWA01-GREEN (long-horizon-outstanding-work-authority01.lhowa01-synthetic-real)",
+    "OWN01 RED (sdk-session-event-coordinator.test.ts)"
+  ],
+  "conservation": {
+    "BCAFG01": "unchanged",
+    "BCNEX01": "unchanged",
+    "BTCONT01": "extended (same terminal-idle hook also fires completion-barrier re-eval)",
+    "BCTCP01": "unchanged",
+    "AGCONT01": "unchanged",
+    "BCNT01": "unchanged",
+    "LHOWA01-WIRE": "unchanged",
+    "PPAT01": "unchanged"
+  },
+  "keyInsight": "wait for SEMANTIC OBLIGATIONS, not WAKE PACKETS. The completion commit must consult the same outstandingAutonomousWork predicate as the awaiting_followup deferral.",
+  "stopRulesHonored": {
+    "CommandJobManager redesigned": false,
+    "Q5 long-horizon predicate modified": false,
+    "pending-prompt transport rewired": false,
+    "terminal-card projection modified": false,
+    "PWAOR abort ownership modified": false,
+    "Hub ordering modified": false,
+    "wake prompt format modified": false,
+    "PROTO_DELTA": "NO",
+    "PUBLIC_TOOL_SCHEMA_DELTA": "NO"
+  },
+  "evidences": [
+    "01-entry-state.txt",
+    "03-completion-authority-map.md",
+    "04-background-obligation-map.md",
+    "05-red-design.md",
+    "05-red-output.txt",
+    "06-green-output.txt",
+    "07-conservation.txt",
+    "08-ablation.txt",
+    "09-causal-classification.md",
+    "result.json"
+  ]
+}
