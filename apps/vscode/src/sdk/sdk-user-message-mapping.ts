@@ -43,9 +43,23 @@ export function extractSdkUserText(message: SdkUserMessage): string {
 
 /**
  * Prompts sent to the SDK without a visible user_feedback echo (task
- * resumption, plan -> act auto-continue). They exist in SDK history but not
- * in the visible transcript, so ordinal mapping between the two must skip
- * them or every later user message maps one slot too early.
+ * resumption, plan -> act auto-continue, background-notify terminal
+ * wake). They exist in SDK history but not in the visible transcript,
+ * so ordinal mapping between the two must skip them or every later
+ * user message maps one slot too early.
+ *
+ * ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01: the
+ * BackgroundNotifyCoordinator terminal wake (produced by
+ * `formatTerminalWakePrompt` in
+ * `apps/vscode/src/sdk/background-notify-coordinator.ts`) is a
+ * runtime-generated continuation stimulus. Its presence in the
+ * transcript duplicates the model's own assistant completion
+ * response (DX7_PRESENTATION_DUPLICATED). The wake prompt is
+ * recognized here by its stable fingerprint — the bounded-output
+ * delimiters that the formatter contract
+ * (`formatTerminalWakePrompt`) always emits. The text guard keeps
+ * transcripts clean on paths where the metadata `displayRole` is
+ * unavailable.
  */
 export function isSyntheticUserPrompt(text: string): boolean {
 	// Persisted prompts are wrapped by formatModePrompt as
@@ -61,7 +75,15 @@ export function isSyntheticUserPrompt(text: string): boolean {
 		// Hook-injected context is model-facing only; the runtime stamps these
 		// messages displayRole "system", and this text guard keeps transcripts
 		// clean on paths where that metadata is unavailable.
-		normalized.startsWith("<hook_context")
+		normalized.startsWith("<hook_context") ||
+		// ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01:
+		// background-notify terminal wake. Fingerprint is the
+		// bounded-output delimiters — both `<bounded-output>` and
+		// `</bounded-output>` are guaranteed present by the
+		// formatter contract (the prompt truncates ONLY the
+		// payload between them, never the delimiters).
+		normalized.includes("<bounded-output>") ||
+		normalized.includes("</bounded-output>")
 	)
 }
 

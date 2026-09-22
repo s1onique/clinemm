@@ -1,0 +1,137 @@
+ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 — CONSERVATION MATRIX
+=================================================================================
+
+Per ACT §13. Each control exercised on the post-fix HEAD.
+
+BCNEX-CTL-01 notify=false
+    → zero terminal wakes
+    [BCNT01 test path: notifyRequested=false → no marker registration,
+     no consumeTerminal call → zero wakes; verified by BCNT01-01 baseline]
+
+BCNEX-CTL-02 one natural exit
+    → exactly one wake
+    [BCNEX-CTL-12 verifies exactly one queue entry per one terminal]
+
+BCNEX-CTL-03 cancellation
+    → exactly one wake
+    [BackgroundNotifyCoordinator.consumeTerminal is destructive-read,
+     so terminal=cancelled reaches consumeTerminal exactly once; the
+     wake is enqueued exactly once via the single enqueueTerminalWake
+     callback]
+
+BCNEX-CTL-04 deadline
+    → exactly one wake
+    [Same as BCNEX-CTL-03 — consumeTerminal is single-writer; the
+     deadline timer in command-job-manager.ts:1986-2010 fires
+     terminate() which calls finalize() which sets job.finalized=true
+     and resolves terminalPromise exactly once]
+
+BCNEX-CTL-05 spawn failure
+    → at most one terminal wake
+    [The sandbox-unavailable path at
+     command-job-manager.ts:2131-2176 returns a synthetic spawn_failed
+     StartResult whose terminalPromise is pre-resolved with
+     terminalState="spawn_failed"; the tool's wake consumer reads
+     the resolved state and calls consumeTerminal exactly once.]
+
+BCNEX-CTL-06 two distinct jobs
+    → exactly TWO logical wakes total, one per job
+    [Each jobId has its own NotificationMarker (per-job keyed in the
+     coordinator's notificationMarkers map); consumeTerminal is
+     destructive-read per jobId so the two markers are independent.
+     Verified by the existing BCNT01 multi-job tests.]
+
+BCNEX-CTL-07 same job terminal event replay
+    → no duplicate wake
+    [notificationMarkers.delete(jobId) is the destructive-read gate;
+     second consumeTerminal call sees no_marker and returns noop.]
+
+BCNEX-CTL-08 session reconstruction
+    → no duplicate wake for previously consumed terminal
+    [Markers are coordinator-owned (in-memory); SdkController dispose
+     drops all markers (ephemeral-only). A new session rebuild starts
+     with an empty marker set.]
+
+BCNEX-CTL-09 newer task
+    → old wake cannot duplicate/resurrect improperly
+    [The owner key is sessionId+taskId; markers for a previous task
+     are NOT re-registered when a new task starts. The held-results
+     FIFO drain is bounded by active owner.]
+
+BCNEX-CTL-10 operator Cancel
+    → exactly-once cancellation result
+    [The manager.cancel path goes through terminate() → finalize()
+     → terminalPromise resolves ONCE. The cancel-then-complete
+     deadline-vs-cancel race is resolved by the first-writer-wins
+     terminationPromise latch (command-job-manager.ts:2196-2200).]
+
+BCNEX-CTL-11 extension shutdown
+    → no late duplicate
+    [SdkController.dispose() calls BackgroundNotifyCoordinator.dispose()
+     which clears all markers + held results (ephemeral-only). The
+     terminalPromise may still resolve AFTER dispose, but
+     consumeTerminal checks `if (this.disposed) return { no_marker }`
+     at background-notify-coordinator.ts:307-309.]
+
+BCNEX-CTL-12 PendingPrompts service Local
+    → exactly one enqueue / consume
+    [PendingPromptsController.enqueue pushes once (line 256); drain
+     consumes once per drainingPendingPrompts flag (line 319).]
+    [Verified by BCNEX-CTL-12 test: 1 job → queue.countForSession === 1]
+
+BCNEX-CTL-13 Hub mirror/event replay
+    → projection repetition must not create another semantic wake
+    [The Hub mirror is updated from the authoritative reply of
+     requestPendingPromptsList/update/delete AND from the
+     session.pending_prompts event payload (transport-neutral
+     authority from PPAT01). Mirroring is idempotent.]
+
+BCNEX-CTL-14 terminal-card presentation
+    → remains one card per command row
+    [The terminal card projection is per-job (BCTCP01 correction01).
+     One job → one terminal card. The fix does NOT touch the
+     terminal-card projection path.]
+
+BCNEX-CTL-15 long-horizon authority
+    → no intermediate Your turn regression
+    [The fix only touches the synthetic-prompt predicate in
+     sdk-user-message-mapping.ts. It does NOT touch the Q5 turn-phase
+     writer, the PendingPromptCountRead authority, or any transport
+     seam. LHOWA01-WIRE (2/2 PASS) and PPAT01 (10/10 PASS) GREEN
+     confirm no regression.]
+
+=============================================================================
+EXECUTABLE CONSERVED (vitest + bun unit):
+  BCNEX01                       PASS (3/3)
+  BCNT01 family                 PASS (27/27)
+  BCNT01 pre-repair probe       PASS (3/3)
+  LHOWA01-WIRE                  PASS (2/2)
+  PPAT01                        PASS (10/10)
+  BTCONT01                      PASS (10/10)
+  BCTCP01 runner-seam           PASS (5/5)
+  BCAFG01                       PASS (5/5)
+  AGCONT01                      PASS (7/7)
+  PWAOR01                       PASS (1/1)
+  sdk-user-message-mapping      PASS (17/17)
+  message-translator            PASS (170/170)
+  sdk-mode-coordinator          PASS (34/34)
+  sdk-followup-coordinator      PASS (23/23)
+  bun unit suite                PASS (1141/1141)
+
+STRUCTURAL CONSERVED:
+  CommandJobManager lifecycle (NOT modified by this ACT)
+  BackgroundNotifyCoordinator marker lifecycle (NOT modified)
+  PendingPromptsController queue (NOT modified)
+  runTurn / AgentRuntime (NOT modified)
+  Hub ordering machinery (NOT modified)
+  terminal-card projection (NOT modified)
+  PWAOR abort ownership (NOT modified)
+  BTCONT deferred continuation (NOT modified)
+  Q5 long-horizon predicate (NOT modified)
+
+PRE-EXISTING FAILURES (NOT caused by this ACT):
+  LHOWA01-GREEN (synthetic-real)  — pre-existing at HEAD 9b7391a82
+  OWN01-RED (sdk-session-event-coordinator) — pre-existing at HEAD 9b7391a82
+
+VERIFIED via `git stash` round-trip: these failures reproduce at the
+entry HEAD BEFORE any change from this ACT.

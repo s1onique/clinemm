@@ -1,0 +1,76 @@
+ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 — ENTRY STATE
+=======================================================================
+
+> ACT purpose: CAUSAL DISCRIMINATOR → BOUNDED EXACTLY-ONCE REPAIR.
+> For a single `jobId` (notifyOnCompletion=true), find the first
+> production seam where cardinality 1 becomes 2. Repair that
+> authority once; leave every lower layer alone.
+
+FROZEN PREDECESSOR FACTS (do not reopen):
+
+  LONG_HORIZON_OPERATOR_AUTHORITY   = LIVE_GREEN (LHOWA01 closure)
+  PENDING_PROMPT_AUTHORITY          = CLOSED_CLEAN (transport-neutral, correction03)
+  NOTIFY_ON_TERMINAL                = LIVE_GREEN (BCNT01 closure, correction03)
+  TERMINAL_CARD_PROJECTION          = LIVE_GREEN (BCTCP01 closure)
+  MULTI_JOB_PROJECTION              = LIVE_GREEN (BTCONT01 closure)
+  RUN_COMMAND_AUTHORITY_BINDING     = LIVE_GREEN
+  PWAOR                             = LIVE_GREEN
+
+  PRE-ACT UNIT SUITE STATE          = 1141 PASS
+  PRE-ACT TSC (apps/vscode)         = clean
+  PRE-ACT TSC (sdk)                 = clean
+
+ENTRY HEAD                  = 9b7391a82 (post ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 correction03)
+WORKTREE STATE              = clean
+BRANCH                      = main (HEAD = 9b7391a82)
+
+REPRODUCED DEFECT (entry observation):
+  For one managed background command with `notifyOnCompletion: true`,
+  the user-visible chat surface renders TWO distinguishable messages:
+    (A) a `user_feedback` row containing the generated wake text
+        (starting with "A background command you asked to be notified
+        about has reached a terminal state...")
+    (B) an assistant text row containing the model's response
+        (e.g., "The command completed successfully.")
+
+  The (A) message is a SYNTHETIC PROMPT (runtime-generated,
+  model-facing-only continuation stimulus). The (B) message is the
+  MODEL_VISIBLE_FINAL_RESPONSE. Both are produced by exactly one
+  logical terminal event (the CommandJob reaching terminal state), so
+  the bug is NOT in wake production or wake enqueue — it is in
+  PRESENTATION (the synthetic prompt leaks as a visible user bubble).
+
+ENTRY-SPECIFIC ASSERTIONS:
+  E1. CommandJobManager terminal lifecycle is single-writer
+      (`if (job.finalized) return` in `finalize()`).
+  E2. `terminalPromise` resolves exactly once per job
+      (`job.terminalTransitionResolve` is invoked at most once).
+  E3. The wake consumer attached by `vscode-run-commands-tool.ts:775`
+      is the ONLY notification consumer in the production chain.
+  E4. `BackgroundNotifyCoordinator.consumeTerminal` deletes the
+      marker before enqueueing the wake (first-writer-wins).
+  E5. The wake is enqueued via `enqueueTerminalWake` once per job.
+  E6. `PendingPromptsController.enqueue` adds exactly one entry per
+      call.
+  E7. `drain()` consumes one queue entry per `runTurn` invocation.
+
+ENTRY HYPOTHESIS (to be REPRODUCED + ABLATED in evidence):
+  DX7_PRESENTATION_DUPLICATED:
+    The synthetic wake text is rendered as a user-visible
+    `user_feedback` row (matching upstream precedent: TASK_RESUMPTION
+    and ACT_MODE_CONTINUATION_PROMPT are filtered; the wake prompt
+    is not in the synthetic-prompt allowlist at
+    `sdk-user-message-mapping.ts:50-66`).
+
+STOP RULES (do not touch without new evidence):
+  - CommandJobManager terminal lifecycle
+  - Q5 long-horizon predicate
+  - pending-prompt transport authority (CLINE-CORE pendingPrompts service)
+  - terminal-card projection
+  - PWAOR abort ownership
+  - BTCONT deferred continuation marker
+  - Hub ordering machinery
+  - notify prompt format / bounded output
+  - run_commands tool schema
+  - PROTO_DELTA = NO
+  - PUBLIC_TOOL_SCHEMA_DELTA = NO

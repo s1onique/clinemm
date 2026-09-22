@@ -1,0 +1,104 @@
+{
+  "act": "ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01",
+  "act_revisions": [
+    {
+      "id": "ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01",
+      "closure_date": "2026-09-22",
+      "verdict": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED",
+      "epistemic_purpose": "Causal discriminator → bounded exactly-once repair for the deferred duplicate-completion-presentation defect."
+    }
+  ],
+  "predecessor_head": "9b7391a82",
+  "production_head": "(set at commit time)",
+  "classification": "DX7_PRESENTATION_DUPLICATED",
+  "first_duplicated_seam": "Presentation — translateSessionEvent for pending_prompt_submitted leaks the wake prompt as a user_feedback row (pre-fix)",
+  "causal_seam": "apps/vscode/src/sdk/sdk-user-message-mapping.ts:50-66 — isSyntheticUserPrompt did not match the bounded-output wake prompt format",
+  "architecture": {
+    "lower_layers_single_writer_per_jobId": [
+      "CommandJobManager.finalize (guarded by `if (job.finalized) return`)",
+      "BackgroundNotifyCoordinator.consumeTerminal (guarded by `notificationMarkers.delete(jobId)`)",
+      "PendingPromptsController.enqueue / drain (single FIFO push + drainingPendingPrompts guard)",
+      "LocalRuntimeHost.runTurn (one prompt → one agent.run())"
+    ],
+    "duplicate_layer": "Presentation — translateSessionEvent pending_prompt_submitted branch at apps/vscode/src/sdk/message-translator.ts:2303-2332 renders the wake prompt as a user_feedback row when isSyntheticUserPrompt returns false"
+  },
+  "tests": {
+    "BCNEX01_NEW": "3 pass / 0 fail (RED-01 wake prompt filtered + ablation-01 conservation + CTL-12 one queue entry per terminal)",
+    "BCNT01_family": "27 pass / 0 fail (notify-on-terminal contract unchanged)",
+    "BCNT01_pre_repair_probe": "3 pass / 0 fail (structural absence witness)",
+    "LHOWA01_WIRE": "2 pass / 0 fail (synchronous authoritative pending-prompt authority unchanged)",
+    "PPAT01": "10 pass / 0 fail (transport-neutral pending-prompt authority unchanged)",
+    "BTCONT01": "10 pass / 0 fail (deferred continuation marker unchanged)",
+    "BCTCP01_runner_seam": "5 pass / 0 fail (terminal-card per-job projection unchanged)",
+    "BCAFG01": "5 pass / 0 fail (awaiting-followup guard unchanged)",
+    "AGCONT01": "7 pass / 0 fail (agent continuation unchanged)",
+    "PWAOR01": "1 pass / 0 fail (proceed-while-running abort ownership unchanged)",
+    "sdk_user_message_mapping": "17 pass / 0 fail (synthetic-prompt predicate + bounded-output extension both correct)",
+    "message_translator": "170 pass / 0 fail (translation contract unchanged for non-synthetic prompts)",
+    "sdk_mode_coordinator": "34 pass / 0 fail (ACT_MODE_CONTINUATION_PROMPT filter still works)",
+    "sdk_followup_coordinator": "23 pass / 0 fail (follow-up bubble still works for non-synthetic prompts)",
+    "bun_unit_suite": "1141 pass / 0 fail (full unit suite green)"
+  },
+  "pre_existing_failures": [
+    {
+      "test": "long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts > LHOWA01-GREEN",
+      "status": "PRE-EXISTING_AT_ENTRY_HEAD (9b7391a82)",
+      "verified": "git stash round-trip confirms the test fails BEFORE this ACT's changes; the failure is NOT caused by the synthetic-prompt predicate extension",
+      "not_regressed_by_this_act": true
+    },
+    {
+      "test": "sdk-session-event-coordinator.test.ts > OWN01 RED",
+      "status": "PRE-EXISTING_AT_ENTRY_HEAD (9b7391a82)",
+      "verified": "git stash round-trip confirms the test fails BEFORE this ACT's changes; the failure is NOT caused by the synthetic-prompt predicate extension",
+      "not_regressed_by_this_act": true
+    }
+  ],
+  "gates": {
+    "tsc_noemit_apps_vscode": "clean",
+    "tsc_noemit_sdk_packages_core": "(not re-run; no sdk-side changes)",
+    "lint": "clean (biome 1945 files, no fixes applied)",
+    "git_diff_check": "clean",
+    "vitest_bcnex01": "3 pass / 0 fail",
+    "vitest_conservation": "see tests section above"
+  },
+  "production_diff": {
+    "files_modified": [
+      "apps/vscode/src/sdk/sdk-user-message-mapping.ts"
+    ],
+    "files_added": [
+      "apps/vscode/src/sdk/__tests__/background-notify-exactly-once-presentation01.bcnex01.test.ts"
+    ],
+    "lines_added_to_production": 8,
+    "lines_added_to_tests": 301,
+    "scope": "Minimal — adds the bounded-output delimiters as a fourth synthetic-prompt predicate in isSyntheticUserPrompt. The existing three predicates (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) are unchanged."
+  },
+  "invariants": {
+    "P1_one_visible_completion_per_jobId": "RESTORED (pre-fix: 2; post-fix: 1)",
+    "P2_two_distinct_jobs_visible_completions": "PRESERVED (BCNEX-CTL-06)",
+    "P3_no_synthetic_prompt_leak": "RESTORED (pre-fix: wake leaked; post-fix: filtered like TASK_RESUMPTION)",
+    "P4_lower_layers_single_writer": "CONFIRMED_UNCHANGED (CommandJobManager / coordinator / queue / runTurn all single-writer per jobId)",
+    "P5_wake_format_unchanged": "PRESERVED (formatTerminalWakePrompt is NOT modified; the bounded-output delimiters are an existing stable fingerprint)",
+    "P6_no_proto_delta": "PRESERVED (no proto changes)",
+    "P7_no_public_tool_schema_delta": "PRESERVED (no run_commands schema changes)"
+  },
+  "ablation": {
+    "necessity": "PROVEN — without the synthetic-prompt predicate extension, the wake leaks as a user_feedback row (RED reproduced at pre-fix HEAD)",
+    "sufficiency": "PROVEN — with the predicate extension, the wake is filtered (GREEN at post-fix HEAD)",
+    "conservation": "PROVEN — other synthetic-prompt categories (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) remain filtered; non-synthetic prompts remain visible"
+  },
+  "diagnostics": {
+    "added": [],
+    "rationale": "Existing BCNEX test (this ACT) provides the cardinality proof via vitest assertion. No new diagnostic subsystem required."
+  },
+  "epic_board_row": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED — see .factory/epic-board.md (post-closure)",
+  "evidence": [
+    "01-entry-state.txt",
+    "02-live-specimen.md",
+    "03-cardinality-authority-map.md",
+    "04-live-cardinality-trace.md",
+    "05-red-output.txt",
+    "06-ablation-output.txt",
+    "07-conservation.txt",
+    "08-live-green.md"
+  ]
+}

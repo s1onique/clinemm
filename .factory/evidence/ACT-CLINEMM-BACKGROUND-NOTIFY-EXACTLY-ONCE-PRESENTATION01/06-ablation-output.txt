@@ -1,0 +1,61 @@
+ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 — ABLATION OUTPUT
+=========================================================================
+
+ABLATION-01: synthetic-prompt predicate eliminates the wake row.
+
+  Pre-fix behavior:
+    isSyntheticUserPrompt(wakePrompt) → false
+    pending_prompt_submitted → message translator pushes
+    { say: "user_feedback", text: <wake prompt> } row
+    → DUPLICATE VISIBLE COMPLETION (one user_feedback +
+      one assistant response)
+
+  Post-fix behavior:
+    isSyntheticUserPrompt(wakePrompt) → true
+    pending_prompt_submitted → message translator pushes
+    ZERO rows
+    → ONE VISIBLE COMPLETION (only assistant response)
+
+NECESSITY PROOF (the synthetic predicate is the load-bearing
+filter; without it the wake leaks):
+
+  With isSyntheticUserPrompt returning FALSE (pre-fix state):
+    expect(userFeedbackRows).toEqual([])   → FAILS (1 row leaked)
+
+  With isSyntheticUserPrompt returning TRUE (post-fix state):
+    expect(userFeedbackRows).toEqual([])   → PASSES (0 rows)
+
+  The ablation is the inverse-implication proof: removing the
+  predicate RECREATES the duplicate; adding the predicate
+  ELIMINATES the duplicate.
+
+CONSERVATION PROOF (other synthetic-prompt categories unaffected):
+
+  TASK_RESUMPTION prefix (existing):
+    isSyntheticUserPrompt("[TASK RESUMPTION] ...") → true (unchanged)
+    pending_prompt_submitted → ZERO rows (preserved)
+
+  ACT_MODE_CONTINUATION_PROMPT (existing):
+    isSyntheticUserPrompt("The user approved switching to act mode...") → true (unchanged)
+    pending_prompt_submitted → ZERO rows (preserved)
+
+  <hook_context prefix (existing):
+    isSyntheticUserPrompt("<hook_context ...>") → true (unchanged)
+    pending_prompt_submitted → ZERO rows (preserved)
+
+  Bounded-output wake (new, this ACT):
+    isSyntheticUserPrompt("A background command... <bounded-output>...") → true (NEW)
+    pending_prompt_submitted → ZERO rows (NEW)
+
+  Other arbitrary prompts (sanity control):
+    isSyntheticUserPrompt("Please do X.") → false (unchanged)
+    pending_prompt_submitted → one user_feedback row (preserved)
+
+  → The new predicate is OR-ed into the existing disjunction; it
+    does NOT regress the existing synthetic-prompt categories or
+    the non-synthetic-prompt path.
+
+ABLATION VERDICT: PASS
+  The post-fix predicate is NECESSARY (without it the defect
+  reappears) AND SUFFICIENT (with it the defect is eliminated).
+  No other seam change is required.
