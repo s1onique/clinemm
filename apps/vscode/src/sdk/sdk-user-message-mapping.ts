@@ -1,4 +1,5 @@
 import { normalizeUserInput, stripModeNotices } from "@cline/shared"
+import { BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX } from "./background-notify-coordinator"
 
 /**
  * Canned prompt SdkModeCoordinator sends to drive the plan -> act
@@ -55,11 +56,18 @@ export function extractSdkUserText(message: SdkUserMessage): string {
  * runtime-generated continuation stimulus. Its presence in the
  * transcript duplicates the model's own assistant completion
  * response (DX7_PRESENTATION_DUPLICATED). The wake prompt is
- * recognized here by its stable fingerprint — the bounded-output
- * delimiters that the formatter contract
- * (`formatTerminalWakePrompt`) always emits. The text guard keeps
- * transcripts clean on paths where the metadata `displayRole` is
- * unavailable.
+ * recognized here by a conjunctive fingerprint — the stable prefix
+ * `BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX` AND the bounded-output
+ * delimiter pair — that ONLY the formatter emits. This narrow
+ * fingerprint deliberately does NOT match user prompts that happen
+ * to mention `<bounded-output>` (e.g., a user explaining HTML/XML).
+ * The text guard keeps transcripts clean on paths where the
+ * metadata `displayRole` is unavailable.
+ *
+ * P1 correction: a previous version matched `<bounded-output>` OR
+ * `</bounded-output>` alone, which would silently hide legitimate
+ * user prompts containing either delimiter. The conjunctive form
+ * (prefix AND both delimiters) is the formatter's exact identity.
  */
 export function isSyntheticUserPrompt(text: string): boolean {
 	// Persisted prompts are wrapped by formatModePrompt as
@@ -69,22 +77,34 @@ export function isSyntheticUserPrompt(text: string): boolean {
 	// the synthetic prompt would start counting as a visible user message and
 	// shift every later edit/regenerate ordinal by one.
 	const normalized = stripModeNotices(normalizeUserInput(text))
-	return (
-		normalized.startsWith("[TASK RESUMPTION]") ||
-		normalized === ACT_MODE_CONTINUATION_PROMPT ||
-		// Hook-injected context is model-facing only; the runtime stamps these
-		// messages displayRole "system", and this text guard keeps transcripts
-		// clean on paths where that metadata is unavailable.
-		normalized.startsWith("<hook_context") ||
-		// ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01:
-		// background-notify terminal wake. Fingerprint is the
-		// bounded-output delimiters — both `<bounded-output>` and
-		// `</bounded-output>` are guaranteed present by the
-		// formatter contract (the prompt truncates ONLY the
-		// payload between them, never the delimiters).
-		normalized.includes("<bounded-output>") ||
+	if (normalized.startsWith("[TASK RESUMPTION]")) {
+		return true
+	}
+	if (normalized === ACT_MODE_CONTINUATION_PROMPT) {
+		return true
+	}
+	// Hook-injected context is model-facing only; the runtime stamps these
+	// messages displayRole "system", and this text guard keeps transcripts
+	// clean on paths where that metadata is unavailable.
+	if (normalized.startsWith("<hook_context")) {
+		return true
+	}
+	// ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01:
+	// background-notify terminal wake. Fingerprint is conjunctive:
+	// the formatter-owned prefix AND both bounded-output
+	// delimiters. The prefix is exported from
+	// `background-notify-coordinator.ts` and is the formatter's
+	// stable identity; user prompts cannot start with it. The
+	// bounded-output delimiters are always emitted (truncation
+	// only affects the payload between them).
+	if (
+		normalized.startsWith(BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX) &&
+		normalized.includes("<bounded-output>") &&
 		normalized.includes("</bounded-output>")
-	)
+	) {
+		return true
+	}
+	return false
 }
 
 function hasAttachmentBlocks(message: SdkUserMessage): boolean {

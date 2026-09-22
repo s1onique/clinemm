@@ -938,6 +938,32 @@ One ACT doc, one board entry.
 
 ---
 
+# 23.1 P1 correction (review feedback, post-closure)
+
+**Issue:** the first-pass predicate matched `<bounded-output>` OR
+`</bounded-output>` alone — too broad. A legitimate user prompt
+containing either delimiter (e.g., a user explaining HTML/XML)
+would be silently hidden from the transcript.
+
+**Fix:** narrowed the predicate to a conjunctive fingerprint —
+the formatter-owned prefix AND both bounded-output delimiters.
+The prefix is exported as
+`BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX` from
+`apps/vscode/src/sdk/background-notify-coordinator.ts:52-67`
+(single-source-of-truth); `formatTerminalWakePrompt` now references
+the same constant. The conjunctive form cannot match any user
+prompt that does not start with the formatter-owned prefix.
+
+**Conservation tests added:**
+- `BCNEX-P1-01`: actual `formatTerminalWakePrompt(...)` IS filtered
+- `BCNEX-P1-02`: ordinary user prompt containing BOTH delimiters MUST remain visible
+- `BCNEX-P1-03`: ordinary user prompt containing ONLY ONE delimiter MUST remain visible
+- `BCNEX-CTL-12`: registerMarker + consumeTerminal produces exactly one queued wake (uses the harness)
+
+**Updated verdict:** PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED
+
+---
+
 # 24. Verdicts
 
 Allowed:
@@ -945,6 +971,7 @@ Allowed:
 ```text
 PASS_NOTIFY_EXACTLY_ONCE_REPAIRED
 PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED
+PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED  ← final verdict
 PASS_CASE_DX8_DISTINCT_NOTIFICATIONS
 NOT_REPRODUCED
 CAPTURE_INSUFFICIENT

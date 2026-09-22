@@ -4,26 +4,38 @@
     {
       "id": "ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01",
       "closure_date": "2026-09-22",
-      "verdict": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED",
-      "epistemic_purpose": "Causal discriminator \u2192 bounded exactly-once repair for the deferred duplicate-completion-presentation defect."
+      "verdict": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED",
+      "epistemic_purpose": "Causal discriminator → bounded exactly-once repair for the deferred duplicate-completion-presentation defect. P1 review feedback addressed: predicate narrowed to conjunctive fingerprint."
     }
   ],
   "predecessor_head": "9b7391a82",
-  "production_head": "7554b17d1",
+  "production_head": "(set at P1-correction commit time)",
   "classification": "DX7_PRESENTATION_DUPLICATED",
-  "first_duplicated_seam": "Presentation \u2014 translateSessionEvent for pending_prompt_submitted leaks the wake prompt as a user_feedback row (pre-fix)",
-  "causal_seam": "apps/vscode/src/sdk/sdk-user-message-mapping.ts:50-66 \u2014 isSyntheticUserPrompt did not match the bounded-output wake prompt format",
+  "first_duplicated_seam": "Presentation — translateSessionEvent for pending_prompt_submitted leaks the wake prompt as a user_feedback row (pre-fix)",
+  "causal_seam": "apps/vscode/src/sdk/sdk-user-message-mapping.ts:64-108 — isSyntheticUserPrompt did not match the bounded-output wake prompt format",
   "architecture": {
     "lower_layers_single_writer_per_jobId": [
       "CommandJobManager.finalize (guarded by `if (job.finalized) return`)",
       "BackgroundNotifyCoordinator.consumeTerminal (guarded by `notificationMarkers.delete(jobId)`)",
       "PendingPromptsController.enqueue / drain (single FIFO push + drainingPendingPrompts guard)",
-      "LocalRuntimeHost.runTurn (one prompt \u2192 one agent.run())"
+      "LocalRuntimeHost.runTurn (one prompt → one agent.run())"
     ],
-    "duplicate_layer": "Presentation \u2014 translateSessionEvent pending_prompt_submitted branch at apps/vscode/src/sdk/message-translator.ts:2303-2332 renders the wake prompt as a user_feedback row when isSyntheticUserPrompt returns false"
+    "duplicate_layer": "Presentation — translateSessionEvent pending_prompt_submitted branch at apps/vscode/src/sdk/message-translator.ts:2303-2332 renders the wake prompt as a user_feedback row when isSyntheticUserPrompt returns false"
+  },
+  "p1_correction": {
+    "issue": "First-pass predicate matched `<bounded-output>` OR `</bounded-output>` alone, which would have hidden legitimate user prompts containing either delimiter (e.g., a user explaining HTML/XML).",
+    "reviewer_source": "factory causal reviewer / ClineMM presentation/runtime engineer",
+    "fix": "Narrowed predicate to conjunctive fingerprint: formatter-owned prefix AND both bounded-output delimiters. The prefix is exported as `BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX` from `apps/vscode/src/sdk/background-notify-coordinator.ts` (single-source-of-truth); `formatTerminalWakePrompt` now references the same constant.",
+    "single_source_of_truth": "apps/vscode/src/sdk/background-notify-coordinator.ts:52-67 — the prefix literal lives in exactly one place; the formatter's `head` array references the constant; the synthetic-prompt predicate references the same constant.",
+    "conservation_tests_added": [
+      "BCNEX-P1-01: actual formatTerminalWakePrompt(...) IS filtered (formatter identity preserved)",
+      "BCNEX-P1-02: ordinary user prompt containing BOTH delimiters MUST remain visible",
+      "BCNEX-P1-03: ordinary user prompt containing ONLY ONE delimiter MUST remain visible",
+      "BCNEX-CTL-12: registerMarker + consumeTerminal produces exactly one queued wake (uses the harness)"
+    ]
   },
   "tests": {
-    "BCNEX01_NEW": "3 pass / 0 fail (RED-01 wake prompt filtered + ablation-01 conservation + CTL-12 one queue entry per terminal)",
+    "BCNEX01_NEW": "7 pass / 0 fail (post-P1: 3 RED/ABLATION + 3 P1 conservation + 1 CTL-12)",
     "BCNT01_family": "27 pass / 0 fail (notify-on-terminal contract unchanged)",
     "BCNT01_pre_repair_probe": "3 pass / 0 fail (structural absence witness)",
     "LHOWA01_WIRE": "2 pass / 0 fail (synchronous authoritative pending-prompt authority unchanged)",
@@ -37,7 +49,8 @@
     "message_translator": "170 pass / 0 fail (translation contract unchanged for non-synthetic prompts)",
     "sdk_mode_coordinator": "34 pass / 0 fail (ACT_MODE_CONTINUATION_PROMPT filter still works)",
     "sdk_followup_coordinator": "23 pass / 0 fail (follow-up bubble still works for non-synthetic prompts)",
-    "bun_unit_suite": "1141 pass / 0 fail (full unit suite green)"
+    "full_conservation_suite_single_pass": "591 pass / 0 fail across 29 vitest files",
+    "bun_unit_suite": "744 pass + 4 skipped / 0 fail"
   },
   "pre_existing_failures": [
     {
@@ -54,43 +67,48 @@
     }
   ],
   "gates": {
-    "tsc_noemit_apps_vscode": "clean",
+    "tsc_noemit_apps_vscode": "clean (exit 0)",
     "tsc_noemit_sdk_packages_core": "(not re-run; no sdk-side changes)",
-    "lint": "clean (biome 1945 files, no fixes applied)",
+    "lint": "clean (biome, no fixes applied to changed files post-formatting)",
     "git_diff_check": "clean",
-    "vitest_bcnex01": "3 pass / 0 fail",
-    "vitest_conservation": "see tests section above"
+    "vitest_bcnex01_post_p1": "7 pass / 0 fail",
+    "vitest_full_conservation": "591 pass / 0 fail across 29 files",
+    "bun_unit_suite": "744 pass + 4 skipped / 0 fail"
   },
   "production_diff": {
-    "files_modified": [
-      "apps/vscode/src/sdk/sdk-user-message-mapping.ts"
+    "files_modified_post_p1": [
+      "apps/vscode/src/sdk/sdk-user-message-mapping.ts",
+      "apps/vscode/src/sdk/background-notify-coordinator.ts"
     ],
     "files_added": [
       "apps/vscode/src/sdk/__tests__/background-notify-exactly-once-presentation01.bcnex01.test.ts"
     ],
-    "lines_added_to_production": 8,
-    "lines_added_to_tests": 301,
-    "scope": "Minimal \u2014 adds the bounded-output delimiters as a fourth synthetic-prompt predicate in isSyntheticUserPrompt. The existing three predicates (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) are unchanged."
+    "lines_added_to_production_post_p1": 23,
+    "lines_removed_from_production_post_p1": 11,
+    "scope": "Minimal — extracts the formatter's terminal-wake prefix to an exported constant (BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX) and narrows the synthetic-prompt predicate to a conjunctive fingerprint (prefix AND both bounded-output delimiters). The previous over-broad `includes(...)` form has been replaced."
   },
   "invariants": {
     "P1_one_visible_completion_per_jobId": "RESTORED (pre-fix: 2; post-fix: 1)",
     "P2_two_distinct_jobs_visible_completions": "PRESERVED (BCNEX-CTL-06)",
     "P3_no_synthetic_prompt_leak": "RESTORED (pre-fix: wake leaked; post-fix: filtered like TASK_RESUMPTION)",
+    "P3b_no_legitimate_user_prompt_hidden": "RESTORED (BCNEX-P1-02 + BCNEX-P1-03 confirm user prompts with delimiters remain visible)",
     "P4_lower_layers_single_writer": "CONFIRMED_UNCHANGED (CommandJobManager / coordinator / queue / runTurn all single-writer per jobId)",
-    "P5_wake_format_unchanged": "PRESERVED (formatTerminalWakePrompt is NOT modified; the bounded-output delimiters are an existing stable fingerprint)",
+    "P5_wake_format_unchanged": "PRESERVED (formatTerminalWakePrompt output is byte-identical; the prefix is now sourced from a constant instead of a string literal in the formatter head array)",
     "P6_no_proto_delta": "PRESERVED (no proto changes)",
-    "P7_no_public_tool_schema_delta": "PRESERVED (no run_commands schema changes)"
+    "P7_no_public_tool_schema_delta": "PRESERVED (no run_commands schema changes)",
+    "P8_predicate_specificity": "RESTORED (conjunctive fingerprint requires formatter-owned prefix AND both delimiters; cannot match user input)"
   },
   "ablation": {
-    "necessity": "PROVEN \u2014 without the synthetic-prompt predicate extension, the wake leaks as a user_feedback row (RED reproduced at pre-fix HEAD)",
-    "sufficiency": "PROVEN \u2014 with the predicate extension, the wake is filtered (GREEN at post-fix HEAD)",
-    "conservation": "PROVEN \u2014 other synthetic-prompt categories (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) remain filtered; non-synthetic prompts remain visible"
+    "necessity": "PROVEN — without the synthetic-prompt predicate extension, the wake leaks as a user_feedback row (RED reproduced at pre-fix HEAD)",
+    "sufficiency": "PROVEN — with the predicate extension, the wake is filtered (GREEN at post-fix HEAD)",
+    "p1_specificity": "PROVEN — over-broad predicate (delimiter OR) would FAIL BCNEX-P1-02 / BCNEX-P1-03; conjunctive predicate (prefix AND both delimiters) PASSES all four",
+    "conservation": "PROVEN — other synthetic-prompt categories (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) remain filtered; non-synthetic prompts remain visible; lower layers remain single-writer per jobId"
   },
   "diagnostics": {
     "added": [],
-    "rationale": "Existing BCNEX test (this ACT) provides the cardinality proof via vitest assertion. No new diagnostic subsystem required."
+    "rationale": "Existing BCNEX test (this ACT, post-P1) provides the cardinality proof + predicate specificity proof via 7 vitest assertions. No new diagnostic subsystem required."
   },
-  "epic_board_row": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED \u2014 see .factory/epic-board.md (post-closure)",
+  "epic_board_row": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED — see .factory/epic-board.md (post-closure)",
   "evidence": [
     "01-entry-state.txt",
     "02-live-specimen.md",

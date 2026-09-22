@@ -52,7 +52,11 @@
 
 import type { CoreSessionEvent, SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { BackgroundNotifyCoordinator, formatTerminalWakePrompt } from "../background-notify-coordinator"
+import {
+	BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX,
+	BackgroundNotifyCoordinator,
+	formatTerminalWakePrompt,
+} from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
@@ -292,5 +296,164 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 / BCNEX01", 
 			const result = translateSessionEvent(event, state)
 			expect(result.messages).toEqual([])
 		})
+	})
+})
+
+/**
+ * P1 correction (review feedback): the original predicate matched
+ * `<bounded-output>` OR `</bounded-output>` alone, which would
+ * silently hide legitimate user prompts that happen to mention the
+ * delimiters (e.g., a user explaining HTML/XML). The narrowed
+ * predicate is conjunctive — the formatter-owned prefix AND both
+ * bounded-output delimiters — which only matches prompts
+ * `formatTerminalWakePrompt` actually emits. These three tests
+ * pin that the narrowed predicate is both inclusive of real wakes
+ * AND exclusive of user prompts that happen to contain the
+ * delimiters.
+ *
+ * Conservation contract:
+ *   BCNEX-P1-01: actual formatTerminalWakePrompt(...)  → filtered
+ *   BCNEX-P1-02: ordinary user prompt containing BOTH
+ *                <bounded-output> delimiters           → remains visible
+ *   BCNEX-P1-03: ordinary user prompt containing only ONE
+ *                delimiter                            → remains visible
+ */
+describe("BCNEX-P1 (correction): narrow predicate excludes legitimate user prompts containing bounded-output delimiters", () => {
+	it("BCNEX-P1-01: actual formatTerminalWakePrompt(...) IS filtered (formatter identity preserved)", () => {
+		const wakePrompt = formatTerminalWakePrompt({
+			jobId: "J-p1-01",
+			terminalState: "exited",
+			reason: "natural",
+			exitCode: 0,
+			outputTail: "started\nfinished\n",
+		})
+
+		const state = new MessageTranslatorState()
+		const event: CoreSessionEvent = {
+			type: "pending_prompt_submitted",
+			payload: {
+				sessionId: "session-bcnex01-p1",
+				id: "pp-p1-01",
+				prompt: wakePrompt,
+				delivery: "queue",
+				attachmentCount: 0,
+			},
+		}
+
+		const result = translateSessionEvent(event, state)
+		// The wake MUST be filtered — it carries the formatter-owned
+		// prefix AND both bounded-output delimiters.
+		const userFeedbackRows = result.messages.filter((m) => m.say === "user_feedback")
+		expect(userFeedbackRows).toEqual([])
+	})
+
+	it("BCNEX-P1-02: ordinary user prompt containing BOTH delimiters MUST remain visible", () => {
+		// Simulate a user explaining an HTML-like format with both
+		// delimiters. The previous over-broad predicate would have
+		// hidden this prompt from the transcript. The narrowed
+		// (conjunctive) predicate does NOT match it because the
+		// formatter-owned prefix is absent.
+		const userPrompt =
+			"Please explain this snippet:\n\n" + "<bounded-output>\n" + "foo\n" + "</bounded-output>\n\n" + "What does it mean?"
+
+		const state = new MessageTranslatorState()
+		const event: CoreSessionEvent = {
+			type: "pending_prompt_submitted",
+			payload: {
+				sessionId: "session-bcnex01-p1",
+				id: "pp-p1-02",
+				prompt: userPrompt,
+				delivery: "queue",
+				attachmentCount: 0,
+			},
+		}
+
+		const result = translateSessionEvent(event, state)
+		// MUST remain visible: the prompt does not start with
+		// BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX, so the synthetic
+		// predicate returns false and the translator emits the
+		// user_feedback row.
+		const userFeedbackRows = result.messages.filter((m) => m.say === "user_feedback")
+		expect(userFeedbackRows.length).toBe(1)
+		// And the rendered text must contain the user's prose,
+		// not be silently dropped or rewritten.
+		expect(userFeedbackRows[0]?.text ?? "").toContain("<bounded-output>")
+		expect(userFeedbackRows[0]?.text ?? "").toContain("</bounded-output>")
+	})
+
+	it("BCNEX-P1-03: ordinary user prompt containing ONLY ONE delimiter MUST remain visible", () => {
+		// Single delimiter — clearly user text, not a wake prompt.
+		// The original over-broad predicate matched this on either
+		// delimiter alone. The narrowed predicate requires the
+		// prefix AND both delimiters.
+		const userPrompt = "What does </bounded-output> mean in HTML?"
+
+		const state = new MessageTranslatorState()
+		const event: CoreSessionEvent = {
+			type: "pending_prompt_submitted",
+			payload: {
+				sessionId: "session-bcnex01-p1",
+				id: "pp-p1-03",
+				prompt: userPrompt,
+				delivery: "queue",
+				attachmentCount: 0,
+			},
+		}
+
+		const result = translateSessionEvent(event, state)
+		const userFeedbackRows = result.messages.filter((m) => m.say === "user_feedback")
+		expect(userFeedbackRows.length).toBe(1)
+		expect(userFeedbackRows[0]?.text ?? "").toContain("</bounded-output>")
+	})
+})
+
+/**
+ * BCNEX-CTL-12: PendingPrompts service Local — exactly one
+ * enqueue / consume per terminal event. Pins the
+ * queue-side cardinality invariant end-to-end (NOT just at the
+ * presentation seam). Uses the harness above to drive the
+ * BackgroundNotifyCoordinator through its real
+ * registerMarker + consumeTerminal path and verify the queue
+ * receives exactly one wake per one terminal.
+ */
+describe("BCNEX-CTL-12: queue-side cardinality (one notify=true job → exactly one queue entry)", () => {
+	it("registerMarker + consumeTerminal produces exactly one queued wake", () => {
+		const harness = makeHarness()
+		const { notifyCoordinator, queue, activeSessionId, activeTaskId } = harness
+
+		// Opt-in via notifyOnCompletion: true (one marker, one job).
+		notifyCoordinator.registerMarker({
+			jobId: "J-ctl12",
+			sessionId: activeSessionId,
+			taskId: activeTaskId,
+			notifyOnCompletion: true,
+			createdAtMs: Date.now(),
+		})
+
+		// One terminal event.
+		const decision = notifyCoordinator.consumeTerminal({
+			jobId: "J-ctl12",
+			terminalState: "exited",
+			exitCode: 0,
+			reason: "natural",
+			isContainmentFailed: false,
+			outputTail: "started\n",
+			createdAtMs: Date.now(),
+		})
+
+		// Decision MUST be a single drained wake (not held, not
+		// no_marker, not containment_no_wake).
+		expect(decision.kind).toBe("drained")
+		expect(queue.countForSession(activeSessionId)).toBe(1)
+
+		// The queued prompt text MUST be the formatter's wake
+		// prompt — the synthetic-prompt predicate will filter it
+		// out at the presentation seam (BCNEX-RED-01), so the
+		// queue side still produces one wake per one terminal.
+		const items = (queue as unknown as { items: { id: string; sessionId: string; prompt: string }[] }).items
+		expect(items.length).toBe(1)
+		expect(items[0].prompt.startsWith(BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX)).toBe(true)
+		expect(items[0].prompt).toContain("<bounded-output>")
+		expect(items[0].prompt).toContain("</bounded-output>")
 	})
 })

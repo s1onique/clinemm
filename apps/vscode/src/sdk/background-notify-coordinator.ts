@@ -50,6 +50,23 @@ export const NOTIFY_WAKE_PROMPT_MAX_BYTES = 8192
 export const NOTIFY_WAKE_PROMPT_SOFT_TARGET_BYTES = 4096
 
 /**
+ * Single-source-of-truth prefix for the terminal-wake prompt produced
+ * by `formatTerminalWakePrompt`. Exported so the synthetic-prompt
+ * predicate in `sdk-user-message-mapping.ts` can match the wake with a
+ * conjunctive fingerprint (this prefix AND both bounded-output
+ * delimiters) rather than scattering the literal across modules.
+ *
+ * ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 / P1
+ * correction: the prefix is the formatter's stable, runtime-generated
+ * identity. It is not user input. Adding the literal here means the
+ * predicate does NOT need to match user text containing
+ * `<bounded-output>` (e.g., a user explaining HTML/XML) — only prompts
+ * the formatter actually emitted.
+ */
+export const BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX =
+	"A background command you asked to be notified about has reached a terminal state."
+
+/**
  * Per-job identity captured at the coordinator seam when the model
  * opted in via `notifyOnCompletion: true`.
  *
@@ -116,7 +133,7 @@ export function formatTerminalWakePrompt(input: {
 	const reason = input.reason ?? ""
 	const tail = input.outputTail ?? ""
 	const head = [
-		"A background command you asked to be notified about has reached a terminal state.",
+		BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX,
 		"",
 		`Job: ${input.jobId}`,
 		`State: ${state}`,

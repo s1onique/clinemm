@@ -249,3 +249,17 @@ This is the smallest possible diff and does NOT touch:
 - PendingPromptsController FIFO
 - runTurn / AgentRuntime
 - Hub ordering machinery
+
+## P1 correction (review feedback)
+
+The first-pass predicate matched `<bounded-output>` OR
+`</bounded-output>` alone, which would have hidden legitimate user
+prompts that happen to mention either delimiter (e.g., a user
+explaining HTML/XML). The predicate was narrowed to a conjunctive
+fingerprint — the formatter-owned prefix
+`BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX` (exported from
+`apps/vscode/src/sdk/background-notify-coordinator.ts:52-67`,
+referenced by `formatTerminalWakePrompt` and the predicate alike)
+AND both bounded-output delimiters. The conjunctive form CANNOT
+match any user prompt that does not start with the formatter-owned
+prefix. Conservation tests BCNEX-P1-01..03 pin this.

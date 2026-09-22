@@ -1,7 +1,8 @@
 ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 — CONSERVATION MATRIX
 =================================================================================
 
-Per ACT §13. Each control exercised on the post-fix HEAD.
+Per ACT §13. Each control exercised on the post-fix HEAD (post-P1
+correction; commit ba7c4317b → 7554b17d1 → P1 correction commit).
 
 BCNEX-CTL-01 notify=false
     → zero terminal wakes
@@ -75,9 +76,12 @@ BCNEX-CTL-11 extension shutdown
 
 BCNEX-CTL-12 PendingPrompts service Local
     → exactly one enqueue / consume
+    [BCNEX-CTL-12 TEST PINNED: one notify=true job → registerMarker
+     + consumeTerminal → TestPendingPromptQueue.countForSession === 1
+     AND consumed decision.kind === "drained". Verified by the new
+     BCNEX-CTL-12 test in this ACT.]
     [PendingPromptsController.enqueue pushes once (line 256); drain
      consumes once per drainingPendingPrompts flag (line 319).]
-    [Verified by BCNEX-CTL-12 test: 1 job → queue.countForSession === 1]
 
 BCNEX-CTL-13 Hub mirror/event replay
     → projection repetition must not create another semantic wake
@@ -101,25 +105,54 @@ BCNEX-CTL-15 long-horizon authority
      confirm no regression.]
 
 =============================================================================
-EXECUTABLE CONSERVED (vitest + bun unit):
-  BCNEX01                       PASS (3/3)
-  BCNT01 family                 PASS (27/27)
-  BCNT01 pre-repair probe       PASS (3/3)
-  LHOWA01-WIRE                  PASS (2/2)
-  PPAT01                        PASS (10/10)
-  BTCONT01                      PASS (10/10)
-  BCTCP01 runner-seam           PASS (5/5)
-  BCAFG01                       PASS (5/5)
-  AGCONT01                      PASS (7/7)
-  PWAOR01                       PASS (1/1)
-  sdk-user-message-mapping      PASS (17/17)
-  message-translator            PASS (170/170)
-  sdk-mode-coordinator          PASS (34/34)
-  sdk-followup-coordinator      PASS (23/23)
-  bun unit suite                PASS (1141/1141)
+P1 CORRECTION (review feedback):
+=============================================================================
 
-STRUCTURAL CONSERVED:
-  CommandJobManager lifecycle (NOT modified by this ACT)
+The first-pass predicate matched `<bounded-output>` OR `</bounded-output>`
+alone, which would have hidden legitimate user prompts containing
+either delimiter. The predicate was narrowed to a conjunctive
+fingerprint (prefix AND both delimiters). Conservation:
+
+BCNEX-P1-01 actual formatTerminalWakePrompt(...) output
+    → filtered (synthetic)
+    [passes: prefix is present, both delimiters are present]
+
+BCNEX-P1-02 ordinary user prompt containing BOTH <bounded-output> delimiters
+    → remains visible (NOT synthetic)
+    [passes: prefix is absent, so conjunctive predicate is false]
+
+BCNEX-P1-03 ordinary user prompt containing ONLY ONE delimiter
+    → remains visible (NOT synthetic)
+    [passes: missing one or both delimiters breaks the conjunctive]
+
+BCNEX-P1 predicate specificity (the bounded fix)
+    [PASSES all three P1 tests; legacy over-broad predicate would
+     fail BCNEX-P1-02 and BCNEX-P1-03]
+
+=============================================================================
+EXECUTABLE CONSERVED (post-P1, vitest):
+  BCNEX01 (this ACT, post-P1)        PASS (7/7) — 3 RED/ABLATION + 3 P1 + 1 CTL-12
+  BCNT01 family                      PASS (27/27) incl. pre-repair probe (3/3)
+  LHOWA01-WIRE                       PASS (2/2)
+  PPAT01                             PASS (10/10)
+  BTCONT01                           PASS (10/10)
+  BCTCP01 runner-seam                PASS (5/5)
+  BCAFG01                            PASS (5/5)
+  AGCONT01                           PASS (7/7)
+  PWAOR01                            PASS (1/1)
+  sdk-user-message-mapping           PASS (17/17)
+  message-translator                 PASS (170/170)
+  sdk-mode-coordinator               PASS (34/34)
+  sdk-followup-coordinator           PASS (23/23)
+  bun unit suite                     PASS (744 + 4 skipped across packages)
+
+Full conservation suite single-pass run:
+  Test Files  29 passed (29)
+       Tests  591 passed (591)
+
+=============================================================================
+STRUCTURAL CONSERVED (NOT modified by this ACT):
+  CommandJobManager lifecycle (NOT modified)
   BackgroundNotifyCoordinator marker lifecycle (NOT modified)
   PendingPromptsController queue (NOT modified)
   runTurn / AgentRuntime (NOT modified)
@@ -129,9 +162,18 @@ STRUCTURAL CONSERVED:
   BTCONT deferred continuation (NOT modified)
   Q5 long-horizon predicate (NOT modified)
 
+=============================================================================
 PRE-EXISTING FAILURES (NOT caused by this ACT):
-  LHOWA01-GREEN (synthetic-real)  — pre-existing at HEAD 9b7391a82
-  OWN01-RED (sdk-session-event-coordinator) — pre-existing at HEAD 9b7391a82
+  long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts > LHOWA01-GREEN
+  sdk-session-event-coordinator.test.ts > OWN01 RED
 
 VERIFIED via `git stash` round-trip: these failures reproduce at the
 entry HEAD BEFORE any change from this ACT.
+
+=============================================================================
+GATES:
+  tsc --noEmit (apps/vscode)         clean (exit 0)
+  biome lint (changed files)         clean (no fixes applied)
+  git diff --check                   clean
+  vitest BCNEX01                     7/7 PASS
+  vitest full conservation           591/591 PASS

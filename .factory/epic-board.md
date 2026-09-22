@@ -1,4 +1,44 @@
 
+## ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 / CORRECTION01 — P1 bounded defect — PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED — 2026-09-22
+
+**Status:** PASS (P1 correction applied). Reviewer feedback from the factory causal reviewer identified that the first-pass predicate (`normalized.includes("<bounded-output>") || normalized.includes("</bounded-output>")`) was overbroad — it would silently hide legitimate user prompts containing either delimiter (e.g., a user explaining HTML/XML).
+
+**Causal seam:** the synthetic-prompt predicate in `isSyntheticUserPrompt` matched ANY prompt containing the bounded-output delimiters, not just the formatter-emitted terminal wake.
+
+**Fix:** narrowed the predicate to a conjunctive fingerprint — the formatter-owned prefix AND both bounded-output delimiters. The prefix is now exported as `BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX` from `apps/vscode/src/sdk/background-notify-coordinator.ts:52-67` (single-source-of-truth; the formatter and the predicate reference the same constant). The conjunctive form cannot match any user prompt that does not start with the formatter-owned prefix.
+
+**Conservation tests added (BCNEX-P1-01..03, BCNEX-CTL-12):**
+- `BCNEX-P1-01`: actual `formatTerminalWakePrompt(...)` IS filtered (formatter identity preserved)
+- `BCNEX-P1-02`: ordinary user prompt containing BOTH delimiters MUST remain visible
+- `BCNEX-P1-03`: ordinary user prompt containing ONLY ONE delimiter MUST remain visible
+- `BCNEX-CTL-12`: registerMarker + consumeTerminal produces exactly one queued wake (uses the harness, fixes a previously-unused `makeHarness` helper)
+
+**Net production diff (P1 correction):**
+- `apps/vscode/src/sdk/background-notify-coordinator.ts`: +19 lines (exported prefix constant + formatter uses the constant)
+- `apps/vscode/src/sdk/sdk-user-message-mapping.ts`: +27/-10 lines (import + conjunctive predicate replacing the overbroad `||` chain)
+- Test file: +165 lines (4 new tests)
+
+**Gates (post-P1):**
+```
+tsc --noEmit (apps/vscode)               clean (exit 0)
+biome lint (changed files)               clean
+git diff --check                         clean
+BCNEX01 (this ACT, post-P1)              7/7 PASS (3 RED/ABLATION + 3 P1 + 1 CTL-12)
+BCNEX01 + sdk-user-message-mapping       24/24 PASS
+Full conservation suite (single-pass)    591/591 PASS across 29 vitest files
+bun unit suite                           744 pass + 4 skipped / 0 fail
+```
+
+**P2 evidence-hygiene notes** (recorded but not blocking):
+- `02-live-specimen.md` and `08-live-green.md` now explicitly state the specimen is EXECUTABLE / PRODUCTION-SHAPED, not a LIVE operator dogfood run. The cloud agent context lacks `vsce:prepublish` + sideload infrastructure to install a fresh dogfood VSIX and drive a real chat session. When the dogfood infra is available, record a 30-second natural-exit specimen to close the `POST-FIX_LIVE = PENDING` line.
+- The naming `02-live-specimen.md` / `08-live-green.md` over-promises; the file contents already disclose the truth, so no Factory ceremony is needed for the wording adjustment.
+
+**Pre-existing failures** (NOT caused by this ACT, verified via git stash round-trip):
+- `long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts > LHOWA01-GREEN`
+- `sdk-session-event-coordinator.test.ts > OWN01 RED`
+
+**Verdict:** PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED
+
 ## ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 — PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED — 2026-09-22
 
 **Status:** PASS (presentation exactly-once repair). The deferred "duplicate completion presentation" defect was traced end-to-end through the production chain and classified as **DX7_PRESENTATION_DUPLICATED** — the only seam where cardinality 1→2 was observed.
