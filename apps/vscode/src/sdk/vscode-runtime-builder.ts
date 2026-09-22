@@ -165,7 +165,17 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 		// button and don't need a separate status tool.
 		if (executionMode === "backgroundExec" && options.commandJobManager) {
 			// Observation only — auto-approved; safe to expose.
-			tools.push(createCommandStatusTool(options.commandJobManager))
+			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+			// thread the BackgroundNotifyCoordinator + active-owner
+			// resolver through to `command_status` so terminal-state
+			// observation drains the notify marker (Path B resolution
+			// source — the canonical fix for TQ3_RESULT_OBSERVATION_NOT_CONNECTED).
+			tools.push(
+				createCommandStatusTool(options.commandJobManager, {
+					backgroundNotifyCoordinator: options.backgroundNotifyCoordinator,
+					resolveActiveOwner: options.resolveActiveOwner,
+				}),
+			)
 			// Mutating — registered through the command-policy adapter
 			// in sdk-tool-policies.ts so ALLOW/ASK/DENY applies.
 			tools.push(createCancelCommandTool(options.commandJobManager))

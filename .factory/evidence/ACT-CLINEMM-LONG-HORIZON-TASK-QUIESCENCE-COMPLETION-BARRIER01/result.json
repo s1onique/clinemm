@@ -1,17 +1,22 @@
 {
   "actId": "ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01",
   "status": "PASS",
-  "verdict": "PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED",
-  "entryHead": "0a80bea0316fd4bfcad67556171dc593c286ae5d",
+  "verdict": "PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED_CORRECTION01",
+  "entryHead": "10dc7d04843b62a104916c9d1a4740170fa97489",
   "testFile": "apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts",
-  "testsAdded": 5,
-  "testsPass": 5,
+  "testsAdded": 8,
+  "testsPass": 8,
   "testsFail": 0,
-  "causalClass": ["TQ1_NO_COMPLETION_BARRIER", "TQ3_RESULT_OBSERVATION_NOT_CONNECTED"],
+  "causalClass": [
+    "TQ1_NO_COMPLETION_BARRIER",
+    "TQ3_RESULT_OBSERVATION_NOT_CONNECTED"
+  ],
   "productionFilesModified": [
     "apps/vscode/src/sdk/background-notify-coordinator.ts",
     "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
-    "apps/vscode/src/sdk/SdkController.ts"
+    "apps/vscode/src/sdk/SdkController.ts",
+    "apps/vscode/src/sdk/command-status-tool.ts (CORRECTION01: Path B wiring)",
+    "apps/vscode/src/sdk/vscode-runtime-builder.ts (CORRECTION01: pass-through)"
   ],
   "regressions": 0,
   "preExistingFailures": [
@@ -19,16 +24,17 @@
     "OWN01 RED (sdk-session-event-coordinator.test.ts)"
   ],
   "conservation": {
-    "BCAFG01": "unchanged",
-    "BCNEX01": "unchanged",
-    "BTCONT01": "extended (same terminal-idle hook also fires completion-barrier re-eval)",
-    "BCTCP01": "unchanged",
-    "AGCONT01": "unchanged",
-    "BCNT01": "unchanged",
-    "LHOWA01-WIRE": "unchanged",
-    "PPAT01": "unchanged"
+    "BCAFG01": "unchanged - 5/5 PASS",
+    "BCNEX01": "unchanged - 7/7 PASS",
+    "BCNT01": "unchanged - 24/24 PASS",
+    "BCTCP01": "unchanged - 7/7 PASS",
+    "BTCONT01": "extended (same terminal-idle hook also fires completion-barrier re-eval) - 10/10 PASS",
+    "AGCONT01": "unchanged - 7/7 PASS",
+    "LHOWA01-WIRE": "unchanged - 2/2 PASS",
+    "PPAT01": "unchanged - 10/10 PASS",
+    "TQCB01": "8/8 PASS (3 RED + 2 CTL + 3 CORRECTION01)"
   },
-  "keyInsight": "wait for SEMANTIC OBLIGATIONS, not WAKE PACKETS. The completion commit must consult the same outstandingAutonomousWork predicate as the awaiting_followup deferral.",
+  "keyInsight": "wait for SEMANTIC OBLIGATIONS, not WAKE PACKETS. The completion commit must consult the same outstandingAutonomousWork predicate as the awaiting_followup deferral - and that predicate must be FAIL-CLOSED on authority unavailability (NOT 0) and MUST NOT include aggregate CommandJobManager liveness (notify=false jobs are not completion-relevant).",
   "stopRulesHonored": {
     "CommandJobManager redesigned": false,
     "Q5 long-horizon predicate modified": false,
@@ -50,6 +56,13 @@
     "07-conservation.txt",
     "08-ablation.txt",
     "09-causal-classification.md",
-    "result.json"
-  ]
+    "result.json",
+    "02-live-failure-freeze.md"
+  ],
+  "productionHead": "10dc7d04843b62a104916c9d1a4740170fa97489 + CORRECTION01 bounded repair",
+  "corrections": {
+    "P0": "Real command_status production seam now drains the marker (Path B). The test TQCB-COMPOSE-PATH-B-01 invokes the REAL command_status tool with the REAL BackgroundNotifyCoordinator wired through vscode-runtime-builder; no manual resolveObligation call.",
+    "P1-1": "Pending-prompt authority unavailable now FAIL-CLOSES the completion-barrier (matches Q5/PPAT01 invariant).",
+    "P1-2": "Completion-barrier re-evaluation no longer consults aggregate hasRunningBackgroundJobForOwner - notify=false siblings do NOT block completion."
+  }
 }

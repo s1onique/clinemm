@@ -92,7 +92,30 @@ and:
 
 **Verdict:** PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED
 
-**Production head:** 0a80bea0316fd4bfcad67556171dc593c286ae5d + bounded repair
+**CORRECTION01 (2026-09-22): bounded repair addressing HALT_TQCB_PRODUCTION_COMPOSITION_INCOMPLETE.**
+
+P0 — Path B wired into production. The real `command_status` tool now drains the
+BackgroundNotifyCoordinator marker when it observes a terminal state. Wired through
+`vscode-runtime-builder.ts` (backgroundNotifyCoordinator + resolveActiveOwner pass-through)
+into `command-status-tool.ts` (terminal-state observation triggers
+`resolveObligation({jobId, sessionId, taskId, resolution: "canonical_status_observed"})`).
+Test TQCB-COMPOSE-PATH-B-01 invokes the REAL tool with REAL production wiring — no manual
+`resolveObligation` call in the test body.
+
+P1-1 — Fail-closed authority for pending-prompt transport. Completion-barrier predicate
+now treats `{available: false}` as "do not know, hold completion" — exactly matching the
+Q5/PPAT01 invariant. Test TQCB-CTL-AUTHORITY-UNKNOWN proves completion stays held.
+
+P1-2 — Notify=false siblings no longer block completion. Completion-barrier re-evaluation
+drops aggregate `hasRunningBackgroundJobForOwner` from the predicate (it was a contract
+violation — notify=false jobs are fire-and-forget). Test TQCB-CTL-MIXED-FIRE-AND-FORGET
+proves completion releases when notify=true J resolves while notify=false D is still
+running.
+
+Tests: 8/8 PASS (was 5/5; +3 CORRECTION01). Conservation 80/80 across 9 test files
+(was 77/77; +3 CORRECTION01).
+
+Production head:** 10dc7d04843b62a104916c9d1a4740170fa97489 + CORRECTION01 bounded repair
 
 **Next:** dogfood LIVE qualification (deferred — cloud dogfood infra unavailable; post-fix LLM-natural-exit specimen pending when infra available).
 

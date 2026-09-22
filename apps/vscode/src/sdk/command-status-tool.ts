@@ -20,7 +20,9 @@
  * capability boundaries.
  */
 import { type AgentTool, createTool } from "@cline/shared"
+import type { BackgroundNotifyCoordinator } from "./background-notify-coordinator"
 import { CommandJobManager, MAX_STATUS_WAIT_MS } from "./command-job-manager"
+import { Logger } from "@/shared/services/Logger"
 
 export interface CommandStatusInput {
 	jobId: string
@@ -93,12 +95,39 @@ function readCancelInput(input: unknown): CancelCommandInput {
 }
 
 /**
+ * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+ * Path B seam (canonical_status_observed). When `command_status`
+ * observes a terminal state on a job that was registered with
+ * `notifyOnCompletion=true`, the tool resolves the
+ * BackgroundNotifyCoordinator's obligation marker so the
+ * completion-barrier can release the held `completed` phase. The
+ * marker is consumed iff (a) the snapshot's state is terminal,
+ * (b) the optional `backgroundNotifyCoordinator` and
+ * `resolveActiveOwner` callbacks were wired by the host, and
+ * (c) the marker's owner triple matches the active owner.
+ */
+export interface CreateCommandStatusToolOptions {
+	backgroundNotifyCoordinator?: BackgroundNotifyCoordinator
+	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
+}
+
+/**
  * `command_status` — observation only. Cannot terminate the child.
  * Auto-approved by the SDK (no entry in toolPolicies). The tool
  * description is explicit about that boundary so the model does not
  * attempt to use it as a cancel substitute.
+ *
+ * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+ * When the optional `backgroundNotifyCoordinator` and
+ * `resolveActiveOwner` are wired, the tool ALSO resolves the
+ * coordinator's obligation marker on terminal observation (the
+ * canonical Path B source). Idempotent — the coordinator's
+ * `resolveObligation` is itself idempotent.
  */
-export function createCommandStatusTool(manager: CommandJobManager): AgentTool {
+export function createCommandStatusTool(
+	manager: CommandJobManager,
+	options: CreateCommandStatusToolOptions = {},
+): AgentTool {
 	return createTool({
 		name: "command_status",
 		description:
@@ -138,6 +167,41 @@ export function createCommandStatusTool(manager: CommandJobManager): AgentTool {
 				return [{ ok: false, error: `unknown_job: ${typed.jobId}` }]
 			}
 			const snap = status.snapshot
+			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+			// Path B resolution. When this status call observes a
+			// TERMINAL state on a job that was registered with
+			// notifyOnCompletion=true, drain the obligation marker so
+			// the completion-barrier can release the held `completed`
+			// phase. `containment_failed` is the explicit "no wake"
+			// trigger (matches the Path A consumer at
+			// `vscode-run-commands-tool.ts`).
+			//
+			// Owner identity is resolved from the active session so a
+			// stale poll from a different session cannot drain a marker
+			// it does not own. This matches the Path A consumeTerminal
+			// owner-mismatch check at
+			// `background-notify-coordinator.ts:382-388`.
+			if (
+				options.backgroundNotifyCoordinator &&
+				options.resolveActiveOwner &&
+				snap.state !== "running" &&
+				snap.state !== "containment_failed"
+			) {
+				const activeOwner = options.resolveActiveOwner()
+				if (activeOwner) {
+					const decision = options.backgroundNotifyCoordinator.resolveObligation({
+						jobId: typed.jobId,
+						sessionId: activeOwner.sessionId,
+						taskId: activeOwner.taskId,
+						resolution: "canonical_status_observed",
+					})
+					if (decision.kind === "resolved") {
+						Logger.warn(
+							`[command_status] Path B resolution drained marker for jobId=${typed.jobId} (session=${activeOwner.sessionId}); terminal-state=${snap.state}`,
+						)
+					}
+				}
+			}
 			return [
 				{
 					ok: true,

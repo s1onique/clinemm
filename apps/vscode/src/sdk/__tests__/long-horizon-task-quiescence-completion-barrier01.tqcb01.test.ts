@@ -16,7 +16,7 @@
  *   - MessageIdMinter (real production class)
  */
 
-import { type CoreSessionEvent } from "@cline/core"
+import { type CoreSessionEvent, type PendingPromptCountRead } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
 import { MessageIdMinter } from "../message-id-minter"
@@ -33,6 +33,7 @@ vi.mock("@/shared/services/Logger", () => ({
 		log: vi.fn(),
 		warn: vi.fn(),
 		debug: vi.fn(),
+		info: vi.fn(),
 	},
 }))
 
@@ -89,6 +90,24 @@ interface ProductionHarness {
 interface MakeHarnessOptions {
 	activeSessionId?: string
 	activeTaskId?: string
+	/**
+	 * TQCB01 P1-1 (fail-closed authority): when true, the harness
+	 * simulates a pending-prompt transport that REPORTS its
+	 * authority as UNAVAILABLE. The production PPAT01 invariant
+	 * requires the deferral predicate to HOLD in this case. When
+	 * undefined or false, the harness reports `available: true,
+	 * count: 0` (the pre-ACT GREEN baseline).
+	 */
+	pendingPromptAuthorityAvailable?: boolean
+	/**
+	 * TQCB01 P1-2 (notify=false fire-and-forget): when true, the
+	 * harness simulates an unrelated notify=false background
+	 * job that is STILL RUNNING at re-evaluation time. The
+	 * completion-barrier re-evaluation MUST NOT block on this
+	 * job — only notify=true obligations are completion-
+	 * relevant.
+	 */
+	simulateNotifyFalseSiblingRunning?: boolean
 }
 
 function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
@@ -133,8 +152,20 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		}) as NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>,
 		getTurnPhase: () => tracker.currentPhase,
 		translateSessionEvent,
-		hasRunningBackgroundJobForOwner: () => false,
-		getPendingPromptCount: (() => 0) as unknown as (sessionId: string | undefined) => number,
+		// TQCB01 P1-2: when simulating a notify=false sibling
+		// RUNNING job, return true so we can prove the
+		// completion-barrier re-evaluation does NOT consult
+		// aggregate liveness (only the same predicate as
+		// admission).
+		hasRunningBackgroundJobForOwner: () => opts.simulateNotifyFalseSiblingRunning === true,
+		// TQCB01 P1-1: pending-prompt authority availability
+		// is fail-closed — when unavailable, completion must
+		// be held. The harness returns a `PendingPromptCountRead`
+		// shape (matching the production type) so the
+		// availability-aware predicate can be exercised.
+		getPendingPromptCount: opts.pendingPromptAuthorityAvailable === false
+			? (() => ({ available: false as const }) as unknown as PendingPromptCountRead)
+			: (() => ({ available: true as const, count: 0 }) as unknown as PendingPromptCountRead),
 		getActiveNotifyCount: ((sessionId?: string, taskId?: string): number =>
 			notifyCoordinator.activeNotifyCountForOwner(
 				sessionId ?? activeSessionId,
@@ -306,6 +337,160 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 
 			expect(h.tracker.currentPhase).toBe("completed")
 			expect(h.completionCommitCount()).toBe(1)
+
+			h.notifyCoordinator.dispose()
+		}, 15_000)
+
+		// =====================================================================
+		// TQCB01 P0 correction
+		// (HALT_TQCB_PRODUCTION_COMPOSITION_INCOMPLETE):
+		// the `command_status` tool drains the marker via the
+		// production seam. NO manual `resolveObligation`
+		// call inside the test body.
+		// =====================================================================
+		it("TQCB-COMPOSE-PATH-B-01: real command_status → marker resolution (production wiring)", async () => {
+			const { CommandJobManager } = await import("../command-job-manager")
+			const { createCommandStatusTool } = await import("../command-status-tool")
+			const { createVscodeRunCommandsTool } = await import("../vscode-run-commands-tool")
+
+			const manager = new CommandJobManager()
+			const h = makeHarness()
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			const resolveActiveOwner = () => ({ sessionId: h.activeSessionId, taskId: h.activeTaskId })
+
+			// Spawn a real job via the production run_commands
+			// tool with notify=true. Marker is registered by
+			// the tool.
+			const runTool = createVscodeRunCommandsTool({
+				cwd: process.cwd(),
+				getTerminalManager: () => {
+					throw new Error("foreground not used")
+				},
+				vscodeTerminalExecutionMode: "backgroundExec",
+				commandJobManager: manager,
+				backgroundWaitBudgetMs: 5,
+				backgroundExecutionDeadlineMs: 30_000,
+				backgroundNotifyCoordinator: h.notifyCoordinator,
+				resolveActiveOwner,
+			})
+			const runResult = (await runTool.execute(
+				{ commands: ["/bin/sh -c 'exit 0'"], notifyOnCompletion: true },
+				{ sessionId: h.activeSessionId, agentId: "test-agent", iteration: 1 },
+			)) as Array<{ result?: string }>
+			const jobId = JSON.parse(runResult[0]?.result ?? "{}").jobId as string
+			expect(jobId).toBeTruthy()
+			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(1)
+
+			// Wait for terminal and Path A consumer.
+			await manager.status({ jobId, waitMs: 5_000 })
+			for (let i = 0; i < 100; i += 1) {
+				if (manager.activeCount === 0) break
+				await new Promise((r) => setTimeout(r, 50))
+			}
+			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
+
+			// Completion commits cleanly (Path A drained the
+			// marker).
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(h.completionCommitCount()).toBe(1)
+
+			// REAL Path B test: spawn a job via manager
+			// directly (no auto-attach), register a marker
+			// manually, wait for terminal, then invoke the
+			// REAL command_status tool — Path B logic must
+			// drain the marker.
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			const start2 = await manager.start({
+				command: "/bin/sh -c 'exit 0'",
+				waitBudgetMs: 5,
+				executionDeadlineMs: 30_000,
+				cwd: process.cwd(),
+			})
+			h.registerMarker(start2.jobId)
+			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(1)
+			await manager.status({ jobId: start2.jobId, waitMs: 5_000 })
+			for (let i = 0; i < 100; i += 1) {
+				if (manager.activeCount === 0) break
+				await new Promise((r) => setTimeout(r, 50))
+			}
+			const statusTool = createCommandStatusTool(manager, {
+				backgroundNotifyCoordinator: h.notifyCoordinator,
+				resolveActiveOwner,
+			})
+			await statusTool.execute(
+				{ jobId: start2.jobId, waitMs: 0 },
+				{ sessionId: h.activeSessionId, agentId: "test-agent", iteration: 1 },
+			)
+			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
+
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(h.completionCommitCount()).toBe(2)
+
+			h.notifyCoordinator.dispose()
+			await manager.dispose()
+		}, 30_000)
+
+		// =====================================================================
+		// TQCB01 P1-1 correction: pending-prompt authority
+		// unavailable must FAIL CLOSED.
+		// =====================================================================
+		it("TQCB-CTL-AUTHORITY-UNKNOWN: pending prompt authority unavailable → completion MUST remain held", async () => {
+			const h = makeHarness({ pendingPromptAuthorityAvailable: false })
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			// Pre-correction: completion would commit
+			// (fail-open). Post-correction: completion MUST
+			// be held (fail-closed).
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).not.toBe("completed")
+			expect(h.completionCommitCount()).toBe(0)
+			expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeDefined()
+			expect(h.coordinator.getDeferredCompletionBarrierForTesting()?.sessionId).toBe(h.activeSessionId)
+
+			h.notifyCoordinator.dispose()
+		}, 15_000)
+
+		// =====================================================================
+		// TQCB01 P1-2 correction: notify=false sibling job
+		// (fire-and-forget) MUST NOT block completion.
+		// =====================================================================
+		it("TQCB-CTL-MIXED-FIRE-AND-FORGET: notify=true J resolved + notify=false D running → completion releases", async () => {
+			const h = makeHarness({ simulateNotifyFalseSiblingRunning: true })
+			h.tracker.setWithWriter("streaming", undefined, {
+				writerId: "task-start-init-task",
+			})
+			h.registerMarker("J-mixed")
+			// Marker → held.
+			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
+			expect(h.tracker.currentPhase).not.toBe("completed")
+			expect(h.completionCommitCount()).toBe(0)
+			expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeDefined()
+
+			// Resolve notify=true marker via Path A. The
+			// notify=false sibling D is STILL RUNNING.
+			h.notifyCoordinator.consumeTerminal({
+				jobId: "J-mixed",
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: undefined,
+			})
+			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
+
+			// Terminal-idle re-eval: notify=false sibling
+			// MUST NOT block.
+			h.coordinator.reevaluateDeferredCompletionBarrier()
+			expect(h.tracker.currentPhase).toBe("completed")
+			expect(h.completionCommitCount()).toBe(1)
+			expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeUndefined()
 
 			h.notifyCoordinator.dispose()
 		}, 15_000)

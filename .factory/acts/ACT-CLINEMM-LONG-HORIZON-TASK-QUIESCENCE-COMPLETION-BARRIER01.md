@@ -382,3 +382,82 @@ VERDICT                                    = PASS_TASK_QUIESCENCE_COMPLETION_BAR
 The user asked: **"Why does ClineMM commit task completion while a notify-enabled background job is still running, leading to a duplicate autonomous turn when the terminal wake eventually arrives?"**
 
 The fix reconciles the existing completion authority (submit_and_exit) with the long-horizon obligation registry (BackgroundNotifyCoordinator). The barrier holds the completion commit when an outstanding notify-enabled autonomous obligation exists; it releases on the same terminal-idle hook that BTCONT01 already uses for the awaiting_followup deferred-continuation re-evaluation.
+## CORRECTION01 — HALT_TQCB_PRODUCTION_COMPOSITION_INCOMPLETE (2026-09-22)
+
+### Reviewer disposition
+
+The bounded repair landed GREEN on the completion-barrier predicate, but the LIVE bug
+shape required three additional mechanical fixes:
+
+**P0 — Path B wiring through real `command_status` production seam.**
+
+The original ACT identified `command_status` observation (Path B) as the canonical
+resolution source for the marker — but only added the `resolveObligation` method on
+`BackgroundNotifyCoordinator`. The `command-status-tool.ts` itself was NEVER modified,
+and the test bypassed the production seam entirely by calling
+`harness.notifyCoordinator.resolveObligation(...)` directly. That proved
+"if someone calls resolveObligation, the marker disappears" but did NOT prove the
+real production path drains the marker.
+
+Fix: `command-status-tool.ts` now takes an optional
+`{ backgroundNotifyCoordinator, resolveActiveOwner }` and, when terminal-state
+observation succeeds, calls `resolveObligation` with the active owner's identity
+(sessionId, taskId). `vscode-runtime-builder.ts` passes both through to the tool.
+
+Test `TQCB-COMPOSE-PATH-B-01`: invokes the REAL `command_status` tool with REAL
+production wiring (no manual `resolveObligation` call in the test body).
+
+**P1-1 — Fail-closed authority for pending-prompt transport.**
+
+The completion-barrier originally mapped `available === false` to `count = 0` and
+then computed `outstandingAutonomousWork = pendingPromptsKnown > 0 || activeNotifyCount > 0`.
+That re-opened the same fail-open defect PPAT01 fixed for `awaiting_followup`.
+
+Fix: completion-barrier now treats `available !== true` as "authority unknown, hold
+completion": `outstandingAutonomousWork = pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0`.
+
+Test `TQCB-CTL-AUTHORITY-UNKNOWN`: completion stays held when the transport reports
+its authority unavailable.
+
+**P1-2 — Notify=false siblings no longer block completion.**
+
+The completion-barrier admission correctly omitted `ownerStillRunning` (notify=false
+jobs are fire-and-forget), but the re-evaluation `reevaluateDeferredCompletionBarrier`
+included `hasRunningBackgroundJobForOwner` — a contract violation.
+
+Fix: re-evaluation now uses the SAME predicate as admission
+(`pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0`),
+with no `ownerStillRunning` check.
+
+Test `TQCB-CTL-MIXED-FIRE-AND-FORGET`: completion releases when notify=true J resolves
+even while a notify=false sibling D is still running.
+
+### CORRECTION01 production diff
+
+```
+apps/vscode/src/sdk/command-status-tool.ts          +50 lines (Path B resolution seam)
+apps/vscode/src/sdk/vscode-runtime-builder.ts       +9 lines (pass-through)
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts -5 lines (removed ownerStillRunning + fail-closed)
+apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts +191 lines (3 new tests)
+```
+
+### CORRECTION01 verdict
+
+```text
+TQ1 completion barrier                              = GREEN
+TQ3 Path-B method exists                            = GREEN
+TQ3 production wiring                               = GREEN (P0 fixed)
+pending-prompt unavailable semantics                = GREEN (P1-1 fixed, fail-closed)
+notify=false mixed-job release                      = GREEN (P1-2 fixed)
+
+Conservation                                        = GREEN (80/80 across 9 test files)
+Type check                                          = clean
+Lower layers                                        = UNTOUCHED
+
+VERDICT                                             = PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED_CORRECTION01
+                                                     (C1: GO_TO_DOGFOOD)
+```
+
+### Next
+
+Dogfood LIVE qualification (when cloud dogfood infra is available).

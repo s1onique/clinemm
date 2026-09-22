@@ -312,9 +312,15 @@ export class SdkSessionEventCoordinator {
 	 *   2. the marker's epoch MUST still match the active minter
 	 *      epoch; otherwise the deferral has been superseded by a
 	 *      newer turn and the late terminal event is discarded
-	 *   3. the live `hasRunningBackgroundJobForOwner(activeSession.sessionId)`
-	 *      lookup MUST return false; otherwise another matching job
-	 *      is still alive and the held completion stays deferred
+	 *   3. the completion-barrier predicate (`outstandingAutonomousWork`)
+	 *      MUST report zero; otherwise the held completion stays
+	 *      deferred. The predicate is the SAME one used at admission:
+	 *        pendingPromptAuthorityUnknown  (PPAT01 fail-closed)
+	 *        || pendingPromptsKnown > 0
+	 *        || activeNotifyCount > 0
+	 *      Notably the aggregate `hasRunningBackgroundJobForOwner` is
+	 *      NOT consulted here — notify=false jobs are fire-and-forget
+	 *      and must NEVER block completion (TQCB01 P1 correction).
 	 *   4. on success, the canonical writer
 	 *      `session-event-turn-complete-completed` commits `completed`
 	 *      exactly once and the marker is cleared
@@ -341,26 +347,25 @@ export class SdkSessionEventCoordinator {
 			this.deferredCompletionBarrier = undefined
 			return
 		}
-		// Three-resolution-source guard:
-		//   ownerStillRunning   = RUNNING CommandJob (BCAFG01 / PWAOR01)
-		//   pendingPromptsKnown = queued prompts (PPAT01)
-		//   activeNotifyCount   = registered BackgroundNotifyCoordinator
-		//                         markers (BCNEX01)
-		const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
-		if (ownerStillRunning) return
+		// Same predicate as the admission guard. Fail-closed on
+		// pending-prompt authority. NO `ownerStillRunning` —
+		// notify=false jobs are not completion-relevant.
 		const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
 			activeSession.sessionId,
 		) ?? {
 			available: false,
 		}
-		const pendingPromptsKnown =
-			pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
-		if (pendingPromptsKnown > 0) return
+		const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
+		const pendingPromptsKnown = pendingPromptCountRead.available === true
+			? pendingPromptCountRead.count
+			: 0
 		const activeNotifyCount = this.options.getActiveNotifyCount?.(
 			activeSession.sessionId,
 			taskId,
 		) ?? 0
-		if (activeNotifyCount > 0) return
+		const outstandingAutonomousWork =
+			pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+		if (outstandingAutonomousWork) return
 
 		// All four conservation checks pass: commit the held
 		// completion transition exactly once.
@@ -496,27 +501,39 @@ export class SdkSessionEventCoordinator {
 						// an outstanding autonomous obligation exists for the active
 						// (sessionId, taskId). The barrier is conservative: it
 						// consults the same predicate as LHOWA01's awaiting_followup
-						// deferral (RUNNING job + queued prompt + active notify
-						// marker). When HELD, a DeferredCompletionBarrier marker is
-						// registered so the terminal-idle re-evaluation
+						// deferral (queued prompt + active notify marker). When HELD,
+						// a DeferredCompletionBarrier marker is registered so the
+						// terminal-idle re-evaluation
 						// (reevaluateDeferredCompletionBarrier) can fire the held
 						// commit when all obligations resolve. Per the recon
 						// (04-background-obligation-map.md §5), only
 						// notifyOnCompletion=true obligations are completion-
 						// relevant; a notify=false background job (fire-and-forget
 						// daemon, dev server, etc.) does NOT block completion.
+						//
+						// Fail-closed authority for the pending-prompt transport
+						// (PPAT01 invariant): when the authority is UNAVAILABLE
+						// (`available === false`) we MUST treat it as "do not
+						// know, hold completion" — NEVER as "0, allow completion".
+						// The completion-barrier must match the established Q5
+						// deferral authority exactly; relaxing it here would
+						// re-open the same fail-open defect PPAT closed for
+						// awaiting_followup (TQCB01 P1 correction).
 						const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
 							activeSession.sessionId,
 						) ?? {
 							available: false,
 						}
-						const pendingPromptsKnown =
-							pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+						const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
+						const pendingPromptsKnown = pendingPromptCountRead.available === true
+							? pendingPromptCountRead.count
+							: 0
 						const activeNotifyCount = this.options.getActiveNotifyCount?.(
 							activeSession.sessionId,
 							this.options.getTask?.()?.taskId,
 						) ?? 0
-						const outstandingAutonomousWork = pendingPromptsKnown > 0 || activeNotifyCount > 0
+						const outstandingAutonomousWork =
+							pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
 
 						if (outstandingAutonomousWork) {
 							// Register the deferred-completion-barrier marker.
