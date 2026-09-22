@@ -5,22 +5,22 @@
       "id": "ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01",
       "closure_date": "2026-09-22",
       "verdict": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED",
-      "epistemic_purpose": "Causal discriminator → bounded exactly-once repair for the deferred duplicate-completion-presentation defect."
+      "epistemic_purpose": "Causal discriminator \u2192 bounded exactly-once repair for the deferred duplicate-completion-presentation defect."
     }
   ],
   "predecessor_head": "9b7391a82",
-  "production_head": "(set at commit time)",
+  "production_head": "7554b17d1",
   "classification": "DX7_PRESENTATION_DUPLICATED",
-  "first_duplicated_seam": "Presentation — translateSessionEvent for pending_prompt_submitted leaks the wake prompt as a user_feedback row (pre-fix)",
-  "causal_seam": "apps/vscode/src/sdk/sdk-user-message-mapping.ts:50-66 — isSyntheticUserPrompt did not match the bounded-output wake prompt format",
+  "first_duplicated_seam": "Presentation \u2014 translateSessionEvent for pending_prompt_submitted leaks the wake prompt as a user_feedback row (pre-fix)",
+  "causal_seam": "apps/vscode/src/sdk/sdk-user-message-mapping.ts:50-66 \u2014 isSyntheticUserPrompt did not match the bounded-output wake prompt format",
   "architecture": {
     "lower_layers_single_writer_per_jobId": [
       "CommandJobManager.finalize (guarded by `if (job.finalized) return`)",
       "BackgroundNotifyCoordinator.consumeTerminal (guarded by `notificationMarkers.delete(jobId)`)",
       "PendingPromptsController.enqueue / drain (single FIFO push + drainingPendingPrompts guard)",
-      "LocalRuntimeHost.runTurn (one prompt → one agent.run())"
+      "LocalRuntimeHost.runTurn (one prompt \u2192 one agent.run())"
     ],
-    "duplicate_layer": "Presentation — translateSessionEvent pending_prompt_submitted branch at apps/vscode/src/sdk/message-translator.ts:2303-2332 renders the wake prompt as a user_feedback row when isSyntheticUserPrompt returns false"
+    "duplicate_layer": "Presentation \u2014 translateSessionEvent pending_prompt_submitted branch at apps/vscode/src/sdk/message-translator.ts:2303-2332 renders the wake prompt as a user_feedback row when isSyntheticUserPrompt returns false"
   },
   "tests": {
     "BCNEX01_NEW": "3 pass / 0 fail (RED-01 wake prompt filtered + ablation-01 conservation + CTL-12 one queue entry per terminal)",
@@ -70,7 +70,7 @@
     ],
     "lines_added_to_production": 8,
     "lines_added_to_tests": 301,
-    "scope": "Minimal — adds the bounded-output delimiters as a fourth synthetic-prompt predicate in isSyntheticUserPrompt. The existing three predicates (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) are unchanged."
+    "scope": "Minimal \u2014 adds the bounded-output delimiters as a fourth synthetic-prompt predicate in isSyntheticUserPrompt. The existing three predicates (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) are unchanged."
   },
   "invariants": {
     "P1_one_visible_completion_per_jobId": "RESTORED (pre-fix: 2; post-fix: 1)",
@@ -82,15 +82,15 @@
     "P7_no_public_tool_schema_delta": "PRESERVED (no run_commands schema changes)"
   },
   "ablation": {
-    "necessity": "PROVEN — without the synthetic-prompt predicate extension, the wake leaks as a user_feedback row (RED reproduced at pre-fix HEAD)",
-    "sufficiency": "PROVEN — with the predicate extension, the wake is filtered (GREEN at post-fix HEAD)",
-    "conservation": "PROVEN — other synthetic-prompt categories (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) remain filtered; non-synthetic prompts remain visible"
+    "necessity": "PROVEN \u2014 without the synthetic-prompt predicate extension, the wake leaks as a user_feedback row (RED reproduced at pre-fix HEAD)",
+    "sufficiency": "PROVEN \u2014 with the predicate extension, the wake is filtered (GREEN at post-fix HEAD)",
+    "conservation": "PROVEN \u2014 other synthetic-prompt categories (TASK_RESUMPTION, ACT_MODE_CONTINUATION_PROMPT, hook_context) remain filtered; non-synthetic prompts remain visible"
   },
   "diagnostics": {
     "added": [],
     "rationale": "Existing BCNEX test (this ACT) provides the cardinality proof via vitest assertion. No new diagnostic subsystem required."
   },
-  "epic_board_row": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED — see .factory/epic-board.md (post-closure)",
+  "epic_board_row": "PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED \u2014 see .factory/epic-board.md (post-closure)",
   "evidence": [
     "01-entry-state.txt",
     "02-live-specimen.md",

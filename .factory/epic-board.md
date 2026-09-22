@@ -1,4 +1,139 @@
 
+## ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 — PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED — 2026-09-22
+
+**Status:** PASS (presentation exactly-once repair). The deferred "duplicate completion presentation" defect was traced end-to-end through the production chain and classified as **DX7_PRESENTATION_DUPLICATED** — the only seam where cardinality 1→2 was observed.
+
+**Causal trace** (per `04-live-cardinality-trace.md`):
+```
+C1 CommandJobManager.finalize            → 1 (guarded by `if (job.finalized) return`)
+C2 BackgroundNotifyCoordinator.consumeTerminal → 1 (single .then() in vscode-run-commands-tool.ts:775)
+C3 notificationMarkers.delete             → 1 (destructive-read gate, first-writer-wins)
+C4 generated terminal wake prompts       → 1 (single enqueue call site)
+C5 PendingPromptsController.enqueue       → 1 (single FIFO push)
+C6 pending_prompts queue entries          → 1
+C7 pending prompt submissions / drains    → 1 (drainingPendingPrompts flag)
+C8 autonomous runTurn invocations         → 1
+C9 resulting model turns                  → 1
+C10 visible completion messages           → 2 PRE-FIX (wake echo + agent response) → 1 POST-FIX
+```
+
+**First duplicated seam**: PRESENTATION (DX7_PRESENTATION_DUPLICATED). Lower layers are all single-writer per jobId.
+
+**Causal seam**: `apps/vscode/src/sdk/sdk-user-message-mapping.ts:50-66` — `isSyntheticUserPrompt` did not match the bounded-output wake prompt format produced by `formatTerminalWakePrompt` (`apps/vscode/src/sdk/background-notify-coordinator.ts:107-148`). The wake prompt text starts with "A background command you asked to be notified about has reached a terminal state." and contains `<bounded-output>...</bounded-output>` delimiters — neither matched any of the three existing synthetic allowlist predicates ([TASK RESUMPTION], ACT_MODE_CONTINUATION_PROMPT, `<hook_context`). The wake therefore leaked as a visible `user_feedback` row, while the agent's assistant response rendered separately as a `text` row. Two visible completion messages per one logical terminal event.
+
+**Repair**: extend `isSyntheticUserPrompt` to recognize the bounded-output delimiters (stable fingerprint guaranteed by the formatter contract — both `<bounded-output>` and `</bounded-output>` are always present; truncation only affects the payload between them, never the delimiters). 4 added lines + 4 deleted (comment expansion).
+
+**Honest verdict matrix**:
+```
+DEFECT                           = wake prompt leaks as user_feedback row → duplicate completion
+DX1_TERMINAL_DUPLICATED          = REFUTED (CommandJobManager.finalize is single-writer)
+DX2_NOTIFY_SUBSCRIBER_DUPLICATED = REFUTED (single .then() for wake consumer)
+DX3_NOTIFY_CONSUMER_NOT_IDEMPOTENT = REFUTED (notificationMarkers.delete is destructive-read)
+DX4_WAKE_ENQUEUE_DUPLICATED      = REFUTED (enqueueTerminalWake fires once per terminal)
+DX5_QUEUE_DELIVERY_DUPLICATED    = REFUTED (drainingPendingPrompts prevents reentrant)
+DX6_AUTONOMOUS_TURN_DUPLICATED   = REFUTED (one prompt → one agent.run())
+DX7_PRESENTATION_DUPLICATED      = CONFIRMED (translateSessionEvent for pending_prompt_submitted)
+DX8_DISTINCT_NOTIFICATIONS       = REFUTED (one jobId, not two)
+DX9_OTHER                        = N/A
+
+CARDINALITY_CHAIN               = C1..C9 all single-writer per jobId
+C10_PRE_FIX                      = 2 (wake echo + agent response)
+C10_POST_FIX                     = 1 (agent response only)
+
+CLASSIFICATION                   = DX7
+REPAIR                           = synthetic-prompt predicate extension
+PRODUCTION_DIFF                  = apps/vscode/src/sdk/sdk-user-message-mapping.ts: 8 added lines, 4 deleted
+PROTO_DELTA                      = NO
+PUBLIC_TOOL_SCHEMA_DELTA         = NO
+```
+
+**Conservation** (per `07-conservation.txt`):
+```
+EXECUTABLE CONSERVED:
+  BCNEX01 (this ACT)              PASS (3/3)
+  BCNT01 family                  PASS (27/27) incl. pre-repair probe (3/3)
+  LHOWA01-WIRE                   PASS (2/2)
+  PPAT01                         PASS (10/10)
+  BTCONT01                       PASS (10/10)
+  BCTCP01 runner-seam            PASS (5/5)
+  BCAFG01                        PASS (5/5)
+  AGCONT01                       PASS (7/7)
+  PWAOR01                        PASS (1/1)
+  sdk-user-message-mapping       PASS (17/17)
+  message-translator             PASS (170/170)
+  sdk-mode-coordinator           PASS (34/34)
+  sdk-followup-coordinator       PASS (23/23)
+  bun unit suite                 PASS (1141/1141)
+
+STRUCTURAL CONSERVED (NOT modified by this ACT):
+  CommandJobManager lifecycle
+  BackgroundNotifyCoordinator marker lifecycle
+  PendingPromptsController queue
+  runTurn / AgentRuntime
+  Hub ordering machinery
+  terminal-card projection
+  PWAOR abort ownership
+  BTCONT deferred continuation marker
+  Q5 long-horizon predicate
+  PendingPromptCountRead service authority (PPAT01)
+
+PRE-EXISTING FAILURES (NOT caused by this ACT, verified via git stash round-trip):
+  long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts > LHOWA01-GREEN
+  sdk-session-event-coordinator.test.ts > OWN01 RED
+```
+
+**Gates**:
+```
+tsc --noEmit (apps/vscode)   = clean
+biome lint (1945 files)      = clean (no fixes applied)
+git diff --check             = clean
+BCNEX01                      = 3/3 PASS
+```
+
+**Ablation** (necessity + sufficiency per `06-ablation-output.txt`):
+```
+NECESSITY:  with predicate OFF (pre-fix) → wake leaks as user_feedback row
+            with predicate ON  (post-fix) → wake filtered (zero rows)
+SUFFICIENCY: predicate eliminates the duplicate at the EXACT stage where
+             cardinality flipped (presentation / pending_prompt_submitted →
+             translateSessionEvent → user_feedback row)
+CONSERVATION: TASK_RESUMPTION / ACT_MODE_CONTINUATION_PROMPT / <hook_context
+              still filtered; non-synthetic prompts still visible
+```
+
+**Diagnostic policy**: No new diagnostic subsystem required. The BCNEX test (this ACT) provides the cardinality proof via vitest assertion. No new BJLA / coordinator / pending-prompt events needed.
+
+**Lower layers UNTOUCHED** (per ACT §18 stop rules):
+- CommandJobManager (NOT DX1)
+- Q5 long-horizon predicate (NOT touched)
+- pending-prompt transport authority (NOT touched — PPAT01)
+- terminal-card projection (NOT touched — BCTCP01)
+- PWAOR abort ownership (NOT touched — PWAOR01)
+- BTCONT deferred continuation marker (NOT touched — BTCONT01)
+- Hub ordering machinery (NOT touched)
+- wake prompt format (NOT modified — bounded-output delimiters unchanged)
+- PROTO_DELTA = NO
+- PUBLIC_TOOL_SCHEMA_DELTA = NO
+
+**Success condition met**:
+```
+for each jobId:
+  terminal_authority_count == 1    ✓
+  semantic_wake_count      <= 1    ✓
+  continuation_count       <= 1    ✓
+  user-visible terminal completion presentation == 1   ✓ (was 2 pre-fix)
+
+and:
+  two distinct jobIds → two legitimate terminal completions  ✓
+```
+
+**Verdict**: PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED
+
+**Production head**: 7554b17d1
+
+**Next**: none — the deferred defect is closed. Subsequent ACTs should target OTHER defects, not re-litigate the duplicate-completion-presentation defect.
+
+
 ## ACT-CLINEMM-LONG-HORIZON-PENDING-PROMPT-AUTHORITY-TRANSPORT01 — PASS_PENDING_PROMPT_AUTHORITY_TRANSPORT_NEUTRAL — 2026-09-22
 
 **Status:** PASS (transport-neutral pending-prompt authority). 10/10 PPAT01 new tests pass. LHOWA01 (5/5 + 2/2 wire-authority), BTCONT01 (10/10), BCNT01 (16/24, 8 pre-existing), BCAFG01 (4/5, 1 pre-existing), AGCONT01 (7/7), QPSR01 (6/6 c24-c-bridge), BCNT01-wire (7/7 c24-c-bridge), SCHR01/SHRC01 (9/9 c24-c-bridge), c2-4-d-hub (15/15) all unchanged from baseline. Full bun unit suite 1141/1141 PASS. tsc --noEmit clean (apps/vscode + sdk). bun esbuild.mjs clean. bun run build:sdk clean.
