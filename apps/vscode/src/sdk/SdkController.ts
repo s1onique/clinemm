@@ -764,8 +764,15 @@ export function buildSdkControllerEnqueueTerminalWake(options: {
  * contractually non-throwing — host errors are swallowed with a
  * Logger.warn so a malformed queue state cannot corrupt the marker
  * resolution.
+ *
+ * Exported so production-composition tests can drive the EXACT
+ * discard adapter the live `Controller` uses (the wire under test),
+ * rather than re-implementing the list→delete traversal in test
+ * glue. The function is pure with respect to its inputs (host +
+ * sessionId + jobId + logger) and is the same code path the live
+ * `Controller.discardQueuedWakeForJobId` method invokes.
  */
-function discardQueuedWakeForJobIdOnHost(
+export function discardQueuedWakeForJobIdOnHost(
 	host: { pendingPrompts: (action: "list" | "delete", input: { sessionId: string; promptId?: string }) => unknown } | undefined,
 	sessionId: string,
 	jobId: string,
