@@ -1,0 +1,18 @@
+ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02 — Entry state
+
+ENTRY HEAD:        d92235e67711976eb3582617583e9804034724e3 (exact match with installed ClineMM bundle SHA prefix)
+INSTALLED BUILD:   s1onique.clinemm-4.1.16-d92235e67
+VSIX PATH:         dist/dogfood/clinemm-4.1.16-d92235e67.vsix
+PRODUCTION BUNDLE:  /tmp/d92235e67/extension/dist/extension.js  (26,212,968 bytes)
+PROFILE:           exthost-402d7f.cpuprofile  (38,582 samples, 7,194.81 ms)
+PRIOR ACT (closed):ACT-CLINEMM-EXTENSION-HOST-TURN-STATE-PROVENANCE-HOTPATH01/CORRECTION02  (owi 49% -> 0.037%)
+PRIOR ACT (active):ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01/CORRECTION02          (diagnostic owns observation only; queue-log policy is permanent)
+PROFILE FAILURE:   PASS_PROVENANCE_HOTPATH_REPAIRED_HOST_STILL_UNSTABLE
+
+SOURCE FILE:       apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts
+TARGET FUNCTION:   enterExtensionHostHotloopHandleSessionEvent   (lines 147-154)
+CALL SITE:         apps/vscode/src/sdk/sdk-session-event-coordinator.ts:424 (very first line of handleSessionEvent)
+
+METHODOLOGY (verbatim from question):
+  1. exact production-bundle body correlation
+  2. exact-HEAD rebuild with `sourcemap:true`

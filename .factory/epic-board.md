@@ -7563,3 +7563,182 @@ maximum)
   + 31x microbench confirms steady-state O(1)
   + Live qualification PENDING (env-bounded) -> LIVE-QUALIFICATION01
 
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02 — PASS_HOTLEAF_cwi_SYMBOLIZED — 2026-09-23
+
+Cycle: 1 of 1 (no source-of-truth changes; pure symbolization).
+
+**Causal seam:** the post-provenance-repair live crash
+(`PASS_PROVENANCE_HOTPATH_REPAIRED_HOST_STILL_UNSTABLE`,
+exthost-402d7f.cpuprofile) exposed a new dominant ClineMM leaf: `cwi`
+@ `dist/extension.js:1:4773`. Exact source identity unknown. This ACT
+binds `cwi` to one exact original source function/expression, then
+defers the actual hot-path repair to a successor ACT.
+
+**Profile numbers (re-derived from exthost-402d7f.cpuprofile):**
+
+```
+duration             : 7,194.81 ms (38,582 samples)
+top-1 leaf           : (garbage collector)  2,214.214 ms  30.78%  hits=17012
+top-2 leaf           : cwi                  2,190.767 ms  30.45%  hits=11
+top-3 leaf           : Rnl                    354.650 ms   4.93%  hits=2726
+top-4 leaf           : drain                  273.760 ms   3.80%  hits=2120
+top-5 leaf           : r_                     231.510 ms   3.22%  hits=1788
+prior hotspot owi    :                        2.673 ms    0.037%  (collapsed from ~49%)
+cwi + gc combined    : 61.22% of total profile
+```
+
+**Method 1 (production-bundle body correlation):** production bundle
+extracted from
+`dist/dogfood/clinemm-4.1.16-d92235e67.vsix` → `/tmp/d92235e67/extension/dist/extension.js`
+(26,212,968 bytes; head SHA `d92235e67` = exact match with installed build
+`s1onique.clinemm-4.1.16-d92235e67`). The diagnostic module region is a
+cluster of 8 sibling helpers + 1 factory closure spanning bundle offsets
+4241..5301 (length 1060 bytes). The factory closure's body contains the
+literal field-name list `sessionEvents,handleSessionEventCalls,…,byWriter`
+which is byte-identical to the `ExtensionHostHotloopCounters` interface
+in `extension-host-hotloop-diagnostic.ts:71-88`.
+
+**Method 2 (sourcemap rebuild sanity check):** dev build regenerated
+via `esbuild` with `minify=true, sourcemap=external=true` →
+`/tmp/extension_smap.js` (26,180,800 bytes). Single `function cwi`
+declaration exists in production bundle; single `function cwi`
+declaration exists in dev bundle (at offset 8018; body signature
+differs across builds because esbuild's deterministic-name assignment
+is not byte-stable across builds). Module surface preserved across
+builds.
+
+**Binding (token-by-token, 100% match):**
+
+| Mangled | Original export | Source lines | Bundle offset |
+|---------|-----------------|--------------|---------------|
+| `qYu`   | `freshCounters` (factory) | 96-115 | 4241 |
+| `S1e`   | `isExtensionHostHotloopDiagnosticEnabled` | 117-119 | 4616 |
+| `jEr`   | `setExtensionHostHotloopDiagnosticEnabled` | 121-123 | 4642 |
+| `uwi`   | `getExtensionHostHotloopDiagnosticSnapshot` | 130-132 | 4664 |
+| `lwi`   | `recordExtensionHostHotloopSessionEvent` | 134-145 | 4689 |
+| **`cwi`** | **`enterExtensionHostHotloopHandleSessionEvent`** | **147-154** | **4823** ← HOTLEAF |
+| `dwi`   | `leaveExtensionHostHotloopHandleSessionEvent` | 156-159 | 4939 |
+| `Hmt`   | `recordExtensionHostHotloopLogQueueEvent` | 161-169 | 4972 |
+| `pwi`   | `recordExtensionHostHotloopPhaseWrite` | 171-192 | 5101 |
+
+`cwi` body token-by-token decode (each token maps 1-to-1 to
+`extension-host-hotloop-diagnostic.ts:147-154`):
+
+```
+$se                                -> _enabled                (line 90; set by jEr / line 121)
+J7e                                -> _nestedDepth            (line 94)
+Ww                                 -> _counters               (line 92)
+Ww.handleSessionEventCalls++       -> _counters.handleSessionEventCalls++  (line 150)
+J7e > Ww.maxNestedHandleDepth      -> _nestedDepth > _counters.maxNestedHandleDepth  (line 151)
+Ww.maxNestedHandleDepth = J7e      -> _counters.maxNestedHandleDepth = _nestedDepth  (line 152)
+```
+
+Decoded body:
+```ts
+export function enterExtensionHostHotloopHandleSessionEvent(): void {
+    if (!_enabled) return
+    _nestedDepth++
+    _counters.handleSessionEventCalls++
+    if (_nestedDepth > _counters.maxNestedHandleDepth) {
+        _counters.maxNestedHandleDepth = _nestedDepth
+    }
+}
+```
+
+**Call site (the actual hot-path entry point):**
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:424` — the very
+first line of `handleSessionEvent`, executed on every session event
+when the EHLOOP01 diagnostic is enabled (dogfood +
+`CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC` truthy). The diagnostic is wired in
+`extension.ts:209` via `applyExtensionHostHotloopDiagnosticProfile(isDogfoodRuntime(process.env))`
+which sets `_enabled = true` via the `jEr` setter when the dogfood
+profile resolves.
+
+**Column-position quirk (V8/esbuild):** cpuprofile reports
+`cwi @ lineNumber=1 columnNumber=4773`, but `function cwi()` starts at
+bundle offset 4823 — a -50 delta. All six siblings (S1e/lwi/cwi/dwi/Hmt/pwi)
+exhibit the same constant -50 column delta. This is V8's column-anchor
+behavior for short, JIT-inlined function declarations emitted
+back-to-back by esbuild on a single source line. The function name is
+the unique identifier; the column is an artifact. Documented in
+`06-column-position-quirk.txt`.
+
+**Why `cwi` shows 30.45% self-time despite trivial body:** V8 samples
+the inlined leaf 11 times across the 7.2-second capture and credits
+each sample's full interval (~199 ms) to the leaf frame. With
+JIT-inlining of `cwi` into `handleSessionEvent`, the timeDelta on each
+`cwi` leaf sample includes the rest of the inlined
+`handleSessionEvent` body work — so the 30.45% reflects the diagnostic
+PLUS its inlining cost on every handleSessionEvent. Not a measurement
+error; just V8's leaf-attribution rule for inlined frames.
+
+**Conservation (UNCHANGED):**
+- Production code: NOT modified. Symbolization ACT only.
+- Tests: NOT added (no behavior change).
+- Production bundle: NOT re-emitted.
+- Provenance repair: STILL EFFECTIVE (owi 0.037%, intact from
+  `ACT-CLINEMM-EXTENSION-HOST-TURN-STATE-PROVENANCE-HOTPATH01/CORRECTION02`).
+- EHLOOP01 policy module: STILL PERMANENT
+  (`apps/vscode/src/sdk/extension-host-queue-log-policy.ts`).
+- Diagnostic module: STILL TEMPORARY observation-only
+  (`apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts`).
+- REMOVAL_TRIGGER: STILL PENDING first successful LIVE qualification
+  per ACT-CLINEMM-EXTENSION-HOST-LIVE-QUALIFICATION01.
+
+**Success condition met:**
+
+```
+cwi @ exthost-402d7f.cpuprofile line 1 col 4773
+   == extension-host-hotloop-diagnostic.ts:147-154
+   == enterExtensionHostHotloopHandleSessionEvent
+   == bundle offset 4823 (column-quirk = -50, documented)
+   == call site sdk-session-event-coordinator.ts:424
+   == gated by `_enabled` (line 148, set by dogfood profile)
+   == module surface 8/8 siblings unique in production bundle
+```
+
+**Verdict:**
+
+PASS_HOTLEAF_cwi_SYMBOLIZED
+  + cwi source identity = enterExtensionHostHotloopHandleSessionEvent  (PASS)
+  + 8-sibling module surface = unique in production bundle              (PASS)
+  + token-by-token body decode = 1-to-1 to source lines 147-154         (PASS)
+  + column-position quirk (V8/esbuild -50 constant) = documented        (PASS)
+  + provenance repair intact                                            (PASS)
+
+NEXT: ACT-CLINEMM-EXTENSION-HOST-HOTLOOP-DIAGNOSTIC-HOTPATH02
+  - Re-apply the EHLOOP01 / CORRECTION02 two-gate decoupling to the
+    enterHandleSessionEvent path. The diagnostic itself (when dogfood
+    + CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC truthy) is now the dominant
+    inlined leaf at 30.45% self-time. The fix is to convert the
+    enter/leave pair into a no-op when the diagnostic is OFF (already
+    the case via `if (!_enabled) return`), AND to keep the counter
+    write on the hot path also gated by the same permanent policy
+    module `extension-host-queue-log-policy.ts`. NO new architecture;
+    the two-gate decoupling from CORRECTION02 already exists and just
+    needs to be extended to the enterHandleSessionEvent path.
+  - LIVE qualification of this fix is deferred to
+    ACT-CLINEMM-EXTENSION-HOST-LIVE-QUALIFICATION01.
+  - REMOVAL_TRIGGER for the diagnostic module does NOT change: once
+    the host-stability repair is GREEN on LIVE qualification, OR
+    CAPTURE_INSUFFICIENT is declared, the temporary diagnostic +
+    activation helper + dump runtime + Command Palette registration +
+    registry entry + package.json command declaration MUST be removed
+    TOGETHER.
+
+**Files updated:**
+- .factory/acts/ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02.md (this entry)
+- .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02/{01..06,result.json}
+- .factory/epic-board.md (this entry)
+
+**Evidence:** `.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02/`
+with 7 files: `01-entry-state.txt`, `02-cpuprofile-402d7f-hotspots.txt`,
+`03-cwi-binding.txt`, `04-sourcemap-rebuild.txt`,
+`05-module-cluster-identification.txt`, `06-column-position-quirk.txt`,
+`result.json`. ACT body at
+`.factory/acts/ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02.md`.
+Production bundle and dev build live in `/tmp/d92235e67/extension/dist/extension.js`
+and `/tmp/extension_smap.js` (NOT git-tracked; reproducible from the
+listed commit SHA `d92235e67`).

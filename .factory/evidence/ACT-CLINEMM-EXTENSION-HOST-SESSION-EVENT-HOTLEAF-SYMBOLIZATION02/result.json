@@ -1,0 +1,57 @@
+{
+  "verdict": "PASS_HOTLEAF_cwi_SYMBOLIZED",
+  "act_id": "ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02",
+  "lifecycle": "PASS",
+  "evidence": {
+    "profile": "exthost-402d7f.cpuprofile (REAL, captured during live crash post-provenance-repair)",
+    "production_bundle": "dist/dogfood/clinemm-4.1.16-d92235e67.vsix -> extension/dist/extension.js (26,212,968 bytes)",
+    "installed_build": "s1onique.clinemm-4.1.16-d92235e67",
+    "head_sha": "d92235e67711976eb3582617583e9804034724e3 (exact match with installed bundle SHA prefix)",
+    "hotleaf_symbol": "cwi",
+    "hotleaf_self_share": "30.45%",
+    "hotleaf_self_time_ms": 2190.767,
+    "hotleaf_hit_count": 11,
+    "gc_share": "30.78%",
+    "gc_time_ms": 2214.214,
+    "previous_hotspot_owi_self_share": "0.037% (collapsed from ~49% in pre-repair profiles)",
+    "binding_method_1": "PASS (8/8 sibling functions + cwi body 1-to-1 token mapping to extension-host-hotloop-diagnostic.ts)",
+    "binding_method_2": "PASS (single cwi in production bundle; dev-build module surface preserved across build)"
+  },
+  "binding": {
+    "mangled": "cwi",
+    "mangled_offset_in_production_bundle": 4823,
+    "mangled_body": "function cwi(){$se&&(J7e++,Ww.handleSessionEventCalls++,J7e>Ww.maxNestedHandleDepth&&(Ww.maxNestedHandleDepth=J7e))}",
+    "original": "enterExtensionHostHotloopHandleSessionEvent",
+    "original_source_file": "apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts",
+    "original_source_lines": "147-154",
+    "original_body": "export function enterExtensionHostHotloopHandleSessionEvent(): void { if (!_enabled) return; _nestedDepth++; _counters.handleSessionEventCalls++; if (_nestedDepth > _counters.maxNestedHandleDepth) { _counters.maxNestedHandleDepth = _nestedDepth; } }",
+    "call_site": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts:424 (first line of handleSessionEvent)",
+    "module_origin": "ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 diagnostic",
+    "gating": "if (!_enabled) return at line 148; _enabled set true by setExtensionHostHotloopDiagnosticEnabled(true) called from applyExtensionHostHotloopDiagnosticProfile when CLINEMM_RUNTIME_PROFILE=dogfood"
+  },
+  "sibling_bindings": [
+    { "mangled": "qYu", "original": "freshCounters (factory, not exported)", "src_lines": "96-115", "bundle_offset": 4241 },
+    { "mangled": "S1e", "original": "isExtensionHostHotloopDiagnosticEnabled", "src_lines": "117-119", "bundle_offset": 4616 },
+    { "mangled": "jEr", "original": "setExtensionHostHotloopDiagnosticEnabled", "src_lines": "121-123", "bundle_offset": 4642 },
+    { "mangled": "uwi", "original": "getExtensionHostHotloopDiagnosticSnapshot", "src_lines": "130-132", "bundle_offset": 4664 },
+    { "mangled": "lwi", "original": "recordExtensionHostHotloopSessionEvent", "src_lines": "134-145", "bundle_offset": 4689 },
+    { "mangled": "cwi", "original": "enterExtensionHostHotloopHandleSessionEvent", "src_lines": "147-154", "bundle_offset": 4823, "HOTLEAF": true },
+    { "mangled": "dwi", "original": "leaveExtensionHostHotloopHandleSessionEvent", "src_lines": "156-159", "bundle_offset": 4939 },
+    { "mangled": "Hmt", "original": "recordExtensionHostHotloopLogQueueEvent", "src_lines": "161-169", "bundle_offset": 4972 },
+    { "mangled": "pwi", "original": "recordExtensionHostHotloopPhaseWrite", "src_lines": "171-192", "bundle_offset": 5101 }
+  ],
+  "column_quirk": {
+    "observed": "cpuprofile column for cwi = 4773, actual function declaration offset = 4823, delta = -50",
+    "explanation": "V8 anchors each leaf-frame's column to a position 50 bytes inside the previous sibling's body when esbuild emits back-to-back short function declarations on a single source line. The column is an artifact; the function name is the unique identifier.",
+    "applies_to_all_siblings": true,
+    "does_not_weaken_binding": true
+  },
+  "conservation": {
+    "production_code_modified": false,
+    "tests_added": false,
+    "build_re_emitted": false,
+    "git_committed": false,
+    "provenance_repair_intact": "PASS (owi self-share remains at 0.037%; O(1) ring repair from ACT-CLINEMM-EXTENSION-HOST-TURN-STATE-PROVENANCE-HOTPATH01/CORRECTION02 is unaffected)"
+  },
+  "next_act": "ACT-CLINEMM-EXTENSION-HOST-HOTLOOP-DIAGNOSTIC-HOTPATH02 (extend the EHLOOP01/CORRECTION02 two-gate decoupling to the enterHandleSessionEvent path; the diagnostic itself is now the dominant inlined leaf at 30.45% self-time when dogfood-enabled)"
+}

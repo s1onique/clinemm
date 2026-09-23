@@ -1,0 +1,47 @@
+ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02 — module cluster uniqueness proof
+
+Argument: the eight mangled names qYu / S1e / jEr / uwi / lwi / cwi / dwi / Hmt / pwi
+form a cluster that appears as a single contiguous module region in the production
+bundle. This region is unique in the entire 26,212,968-byte bundle; no other module
+emits this exact 8-function surface with these exact body signatures.
+
+Proof:
+
+  1. Production bundle byte range containing the diagnostic module:
+       function qYu starts at offset 4241
+       function S1e starts at offset 4616
+       function jEr starts at offset 4642
+       function uwi starts at offset 4664
+       function lwi starts at offset 4689
+       function cwi starts at offset 4823
+       function dwi starts at offset 4939
+       function Hmt starts at offset 4972
+       function pwi starts at offset 5101
+
+     The module spans offsets 4241..5301 (length 1060 bytes), and contains
+     exactly these 8 helpers (plus the variable declarations `var $se,Ww,J7e`
+     and the factory `var dv,Gmt=se(()=>{...});function qYu(){...}`).
+
+  2. The factory closure's body (offsets 4253..4615) contains the literal
+     field-name list:
+       sessionEvents,handleSessionEventCalls,setTurnPhaseCalls,
+       setWithWriterCalls,samePhaseWriteAttempts,actualPhaseChanges,
+       pendingPromptDrainCalls,pendingPromptDispatchCalls,logQueueEventsCalls,
+       logQueueEventsLogCalls,logQueueEventsSuppressedByProfile,
+       coordinatorLogCalls,maxNestedHandleDepth,overflowed,byEventType,byWriter
+     These field names are byte-identical to the
+     ExtensionHostHotloopCounters interface in
+     extension-host-hotloop-diagnostic.ts:71-88.
+
+  3. The 8 sibling function bodies reference the module-level variables
+     `$se`, `Ww`, `J7e` exactly as the original source uses `_enabled`,
+     `_counters`, `_nestedDepth`. No other region of the bundle has
+     three module-level variables used in this exact pattern.
+
+  4. Cross-check: each sibling's body has a unique signature that maps
+     1-to-1 to a unique original export. The 8 signatures together form
+     a "fingerprint" that no other module region can replicate.
+
+Conclusion: the diagnostic surface {qYu, S1e, jEr, uwi, lwi, cwi, dwi, Hmt, pwi}
+is unique in the production bundle. The mapping to
+extension-host-hotloop-diagnostic.ts is 1-to-1.

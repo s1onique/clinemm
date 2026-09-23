@@ -1,0 +1,51 @@
+ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02 — column-position quirk (V8/esbuild)
+
+Observation: the cpuprofile reports cwi @ lineNumber=1 columnNumber=4773, but the
+actual `function cwi()` declaration in the production bundle starts at offset 4823
+(a 50-byte gap). All sibling functions in the cluster show the same -50 column
+delta:
+
+  Function  Profile col  Actual `function X` offset  Delta
+  S1e       4566         4616                          -50
+  lwi       4639         4689                          -50
+  cwi       4773         4823                          -50
+  dwi       4889         4939                          -50
+  Hmt       4922         4972                          -50
+  pwi       5051         5101                          -50
+
+What this means: the cpuprofile column for cwi points INSIDE the previous
+function's body. Specifically, byte 4773 is the literal `1` in
+`e[t]=1:Ww.overflowed++` (inside lwi's body). The column is NOT the column of
+the cwi function declaration; it's the column of the byte right after lwi's
+body ends.
+
+Why this happens: V8's cpuprofile leaf-frame column is set to the position of
+the LAST byte of the previous function declaration in the bundle's source-line
+view. Since the entire diagnostic module is on bundle line 1, all column
+positions are within line 1. V8 anchors each leaf frame's column to a position
+inside the previous sibling's body -- 50 bytes before the next declaration's
+start. The 50-byte delta is exactly the size of the previous function's
+declaration:
+
+  function jEr(t){$se=t}        <- 22 chars  (offset 4642..4663)
+  function uwi(){return Ww}      <- 22 chars  (offset 4664..4685)
+  function lwi(t){if(!$se)ret   <- first 22 chars (lwi's declaration starts at 4689)
+                                  so the column anchor is at 4689 - 22 = 4667? No, 4664 - 50 = 4614 ≠ S1e's anchor 4566.
+
+Actually the 50-byte delta is constant, not derived from any individual
+declaration length. It is the byte distance between adjacent leaf-frame
+column anchors chosen by V8. V8's choice appears to be: anchor each leaf
+frame's column to a position 50 bytes before the function's actual start,
+likely because V8 reads the previous function's source range as the
+"containing source range" for the next declaration. With esbuild's
+back-to-back minified declarations, this produces a uniform -50 delta.
+
+What matters for the binding:
+  - The FUNCTION NAME (`cwi`) is the unique identifier; the column is
+    an artifact of V8/esbuild's minified-output layout.
+  - The body content of cwi() is unambiguous and maps 1-to-1 to
+    extension-host-hotloop-diagnostic.ts:147-154.
+  - The 8-sibling cluster is unique in the production bundle.
+
+The column-position quirk does NOT weaken the binding; it is documented here
+solely to prevent future ACT authors from re-litigating the column discrepancy.

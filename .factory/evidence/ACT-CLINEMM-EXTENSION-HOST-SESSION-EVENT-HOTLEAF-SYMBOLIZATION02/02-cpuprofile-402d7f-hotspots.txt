@@ -1,0 +1,44 @@
+=== PROFILE OVERVIEW ===
+File: /Volumes/UserData/Users/chistyakov/Downloads/exthost-402d7f.cpuprofile
+startTime: [33m494677901777[39m endTime: [33m494685096860[39m
+(endTime - startTime) / 1000: 7195.08 ms
+sum(timeDeltas) ms: 7194.81
+samples length: [33m38582[39m
+timeDeltas length: [33m38582[39m
+
+=== TOP 25 LEAVES BY SELF-TIME (Chrome trace samples) ===
+----------------------------------------------------------------------------------------------------------------------------------
+ 1.  2214.21ms (30.78%)  hits=17012  (garbage collector)  @:-1:-1
+ 2.  2190.77ms (30.45%)  hits=11  cwi  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:1:4773
+ 3.   354.65ms ( 4.93%)  hits=2726  Rnl  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:15:21885
+ 4.   273.76ms ( 3.80%)  hits=2120  drain  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:2549:11684
+ 5.   231.51ms ( 3.22%)  hits=1788  r_  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:15:21185
+ 6.   171.66ms ( 2.39%)  hits=1327  e_  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:1:2250
+ 7.   161.51ms ( 2.24%)  hits=1251  Gyi  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4422:25
+ 8.   148.07ms ( 2.06%)  hits=1146  e_  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:1:2250
+ 9.   140.99ms ( 1.96%)  hits=1090  e_  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:1:2250
+10.   126.21ms ( 1.75%)  hits=976  setWithWriter  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4468:37927
+11.   118.45ms ( 1.65%)  hits=919  processTicksAndRejections  @node:internal/process/task_queues:71:34
+12.    89.46ms ( 1.24%)  hits=692  handleSessionEvent  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4467:22436
+13.    67.17ms ( 0.93%)  hits=521  onSessionEvent  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4469:7730
+14.    63.61ms ( 0.88%)  hits=492  onSessionEvent  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4469:7730
+15.    61.17ms ( 0.85%)  hits=473  onSessionEvent  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4469:7730
+16.    59.37ms ( 0.83%)  hits=461  (program)  @:-1:-1
+17.    57.97ms ( 0.81%)  hits=448  handleSessionEvent  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4467:22436
+18.    54.74ms ( 0.76%)  hits=423  handleSessionEvent  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4467:22436
+19.    54.42ms ( 0.76%)  hits=422  runTurn  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:2549:29893
+20.    44.37ms ( 0.62%)  hits=342  enqueue  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:2549:10897
+21.    37.59ms ( 0.52%)  hits=291  enqueue  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:2549:9467
+22.    24.79ms ( 0.34%)  hits=192  knl  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:15:21433
+23.    24.51ms ( 0.34%)  hits=190  (anon)  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:2549:12631
+24.    24.15ms ( 0.34%)  hits=187  Mc  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:229:61130
+25.    22.32ms ( 0.31%)  hits=173  (anon)  @s1onique.clinemm-4.1.16-d92235e67/dist/extension.js:4468:9468
+
+=== GC / RUNTIME LEAVES ===
+  2214.21ms (30.78%)  hits=17012  (garbage collector)  @
+
+=== ANCESTRY CHAIN (leaf -> root) for TOP HOT LEAF ===
+  2214214us (30.78%)  hits=17012  (garbage collector)  @:-1:-1
+       0us (0.00%)  hits=0  (root)  @:-1:-1
+(node:89909) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
