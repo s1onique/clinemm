@@ -1,50 +1,81 @@
-EHLOOP-RED-01 reproduction via focused test:
+EHLOOP-RED-01 reproduction via focused test (CORRECTION01):
 
 $ cd apps/vscode && bun test ./src/sdk/__tests__/extension-host-session-event-hotloop01.ehloop01.test.ts
 
-RED phase (production public / diagnostic OFF):
-  The test drives one `pending_prompts` session event through the
-  real production `SdkSessionEventCoordinator.handleSessionEvent`.
+RED phase (CORRECTION01 — real dogfood, the LIVE failure environment):
+
+  The test resolves the activation helper under REAL DOGFOOD profile
+  (CLINEMM_RUNTIME_PROFILE=dogfood), no opt-in env knob. This is the
+  EXACT runtime that captured the LIVE failure
+  (exthost-66cdb2.cpuprofile, installed build
+  s1onique.clinemm-4.1.16-99006fbcc).
+
   Asserts the gated `logQueueEvents` `Logger.log(...)` did NOT fire
-  (the production-public path).
+  (the permanent production rule holds in the LIVE failure
+  environment).
 
   PASS observed:
-    ✓ EHLOOP-RED-01: logQueueEvents production Logger.log call is
-      suppressed when the diagnostic profile is OFF (public default)
+    ✓ EHLOOP-RED-01: in real dogfood (the LIVE failure environment),
+      the synchronous Logger.log breadcrumb is suppressed
+    queueLogCallCount = 0
+    submittedLogCallCount = 0
+    isExtensionHostHotloopDiagnosticEnabled() = true (counters armed)
+    isExtensionHostHotloopQueueLogEnabled() = false (permanent rule)
+    snapshot.logQueueEventsCalls                    >= 2
+    snapshot.logQueueEventsLogCalls                 = 0
+    snapshot.logQueueEventsSuppressedByProfile      >= 2
+
+EHLOOP-RED-02 (public profile — unchanged from V1):
+
+  Asserts the breadcrumb is also suppressed when the profile is
+  public (no public silent activation invariant is violated).
+
+  PASS observed:
     queueLogCallCount = 0
     isExtensionHostHotloopDiagnosticEnabled() = false
+    isExtensionHostHotloopQueueLogEnabled() = false
 
-ABLATION (diagnostic ON, dogfood breadcrumb preserved):
-  Same event sequence with the diagnostic flipped to ON:
-  Asserts the `Logger.log(...)` call DOES fire and the counter
-  snapshot proves the call happened.
+ABLATION (CORRECTION01 — same installed dogfood profile, only the
+queue-log opt-in env knob changes):
 
-  PASS observed:
-    queueLogCallCountArmed = 1
-    logQueueEventsCalls = 1
-    logQueueEventsLogCalls = 1
+  ROUND A: dogfood default (no opt-in) — counters ON, log suppressed.
+  ROUND B: dogfood + CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1 — breadcrumb fires.
+  ROUND C: drop the opt-in — breadcrumb stops firing.
+
+  PASS observed (round B, breadcrumb on):
+    queueLogCallCountArmed = 2 (one per event in the lifecycle)
+    logQueueEventsCalls = 2
+    logQueueEventsLogCalls = 2
     logQueueEventsSuppressedByProfile = 0
 
-Discriminator: the gating is the ONLY production-code change that
-separates the RED (host-stall) and GREEN (host-responsive) states
-for one ordinary background terminal lifecycle.
+  PASS observed (round A and C, breadcrumb off):
+    queueLogCallCount = 0
+    logQueueEventsLogCalls = 0
+    logQueueEventsSuppressedByProfile >= 2
 
-Counter snapshot for a single `pending_prompts` event after the
-diagnostic is armed (dogfood default):
+Discriminator: the permanent production rule (queue-log opt-in is
+DEFAULT OFF in every profile) is the ONLY production-code change
+that separates the RED (host-stall) and GREEN (host-responsive)
+states for the LIVE failure environment. The runtime profile is
+identical across RED and GREEN; the diagnostic enablement bit is
+also identical across RED and GREEN. Only the queue-log opt-in
+gate changes.
 
-  sessionEvents                          = 1
-  handleSessionEventCalls                = 1
-  logQueueEventsCalls                    = 1
-  logQueueEventsLogCalls                 = 1
-  logQueueEventsSuppressedByProfile      = 0
+Counter snapshot for two `pending_prompts` events under the dogfood
+profile (CORRECTION01 RED phase):
+
+  sessionEvents                          = 2
+  handleSessionEventCalls                = 2
+  logQueueEventsCalls                    = 2
+  logQueueEventsLogCalls                 = 0   (breadcrumb suppressed)
+  logQueueEventsSuppressedByProfile      = 2
   maxNestedHandleDepth                   = 1
-  byEventType.pending_prompts            = 1
+  byEventType.pending_prompts            = 2
 
-This is the EH2/EH4 amplification witness for ONE event:
+This is the EH4 amplification witness for ONE event under the
+post-fix code: zero synchronous log breadcrumb work, zero
+outputChannel.appendLine pressure.
 
-  self time spent below logQueueEvents / total self time = 1 / 5
-  <= 5 (PASS - within the expected order of magnitude)
-
-This is a sharp contrast to the LIVE profile where the same ratio
-was 1,008 / 5,379 = 18.7% of the entire 5.4-second profile just for
-the log call site.
+This is a sharp contrast to the LIVE profile where the same
+ratio was 1,008 / 5,379 = 18.7% of the entire 5.4-second profile
+just for the log call site.

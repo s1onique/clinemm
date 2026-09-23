@@ -12,6 +12,7 @@ import { captureContinuationCardinalityAuthorityRecord } from "./continuation-ca
 import {
 	enterExtensionHostHotloopHandleSessionEvent,
 	isExtensionHostHotloopDiagnosticEnabled,
+	isExtensionHostHotloopQueueLogEnabled,
 	leaveExtensionHostHotloopHandleSessionEvent,
 	recordExtensionHostHotloopLogQueueEvent,
 	recordExtensionHostHotloopSessionEvent,
@@ -1089,13 +1090,28 @@ export class SdkSessionEventCoordinator {
 		// `outputChannel.appendLine` synchronously stalls the
 		// extension-host thread.
 		//
-		// The gating preserves the breadcrumb for dogfood (where
-		// operators need the queue-mutation trail) while suppressing
-		// it from public builds (where the breadcrumb has no
-		// consumer). Counter increments are ALWAYS bounded and cheap
-		// (one numeric increment when the diagnostic is enabled).
-		if (!isExtensionHostHotloopDiagnosticEnabled()) {
-			recordExtensionHostHotloopLogQueueEvent({ producedLog: false })
+		// PERMANENT PRODUCTION RULE (CORRECTION01):
+		// The synchronous breadcrumb is gated behind an INDEPENDENT
+		// opt-in (`isExtensionHostHotloopQueueLogEnabled`) that is
+		// DEFAULT_OFF in every profile — public, dogfood, or
+		// otherwise. The dogfood profile does NOT grant this. The
+		// diagnostic enablement (counters / nested depth / phase
+		// write witness) is a separate, cheaper gate.
+		//
+		// Decoupling rationale: the dogfood profile IS the environment
+		// where the LIVE failure was captured (exthost-66cdb2.cpuprofile,
+		// installed build s1onique.clinemm-4.1.16-99006fbcc). A repair
+		// that depends on the diagnostic enablement bit to also be
+		// the production-soundness gate would, after the diagnostic
+		// is removed, leave the hot path UNREPAIRED. The two gates
+		// must therefore be independent.
+		if (!isExtensionHostHotloopQueueLogEnabled()) {
+			// Permanent default: synchronous breadcrumb suppressed.
+			// Counters (when armed) record the suppression so the
+			// post-mortem can verify the permanent rule held.
+			if (isExtensionHostHotloopDiagnosticEnabled()) {
+				recordExtensionHostHotloopLogQueueEvent({ producedLog: false })
+			}
 			return
 		}
 		if (event.type === "pending_prompts") {
@@ -1103,7 +1119,9 @@ export class SdkSessionEventCoordinator {
 			Logger.log(
 				`[SdkController] Pending prompts updated: ${count} prompt(s) in queue for session ${event.payload.sessionId}`,
 			)
-			recordExtensionHostHotloopLogQueueEvent({ producedLog: true })
+			if (isExtensionHostHotloopDiagnosticEnabled()) {
+				recordExtensionHostHotloopLogQueueEvent({ producedLog: true })
+			}
 			return
 		}
 
@@ -1111,7 +1129,9 @@ export class SdkSessionEventCoordinator {
 			Logger.log(
 				`[SdkController] Pending prompt submitted: "${event.payload.prompt.substring(0, 80)}" for session ${event.payload.sessionId}`,
 			)
-			recordExtensionHostHotloopLogQueueEvent({ producedLog: true })
+			if (isExtensionHostHotloopDiagnosticEnabled()) {
+				recordExtensionHostHotloopLogQueueEvent({ producedLog: true })
+			}
 		}
 	}
 }

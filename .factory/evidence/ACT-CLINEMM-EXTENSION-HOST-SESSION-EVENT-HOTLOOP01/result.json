@@ -1,26 +1,30 @@
 {
-  "verdict": "PASS_EXTENSION_HOST_HOTLOOP_REPAIRED",
+  "verdict": "PASS_EXTENSION_HOST_LOGGING_HOTPATH_REPAIRED",
   "act_id": "ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01",
-  "lifecycle": "VERIFIED",
+  "lifecycle": "CORRECTION01_VERIFIED_PENDING_LIVE",
   "evidence": {
     "extension_host_failure": "LIVE_PROVEN",
     "cpu_profile": "REAL (exthost-66cdb2.cpuprofile)",
     "first_amplified_seam": "logQueueEvents",
-    "root_class": ["EH4_LOGGING_HOTPATH", "EH2_REDUNDANT_STATE_WRITE_STORM"],
-    "ablation": "RED_TO_GREEN_VIA_SINGLE_GATING_CHANGE",
+    "root_class": ["EH4_LOGGING_HOTPATH"],
+    "secondary_observation": "EH2_REDUNDANT_STATE_WRITE_STORM was listed as a secondary root_class in the V1 result; the V1 packet itself observed setWithWriterCalls=302 with ~0.5 writes per handleSessionEvent and explicitly noted 'NOT a write storm'. The classifier is therefore NOT_ESTABLISHED — the only proven root class is EH4_LOGGING_HOTPATH.",
+    "ablation": "RED_TO_GREEN_VIA_DECOUPLED_GATING_CHANGE (CORRECTION01)",
     "ccard_primary_cause": "REFUTED",
-    "host_live_green": "PASS"
+    "host_live_green": "PENDING (operator-driven Run A/B/C per ACT §36)",
+    "correction01_invariant": "The synchronous Logger.log breadcrumb inside logQueueEvents is gated behind an INDEPENDENT opt-in (isExtensionHostHotloopQueueLogEnabled) that is DEFAULT_OFF in every profile. The dogfood profile does NOT grant this. Public installs can never grant this. The diagnostic enablement bit (counters) is a SEPARATE gate, defaulted by dogfood, that does not control the breadcrumb."
   },
   "source_identity": {
-    "head": "99006fbccaacb150b78e54dad7bdadc2a1390238",
-    "extension_version": "s1onique.clinemm-4.1.16-99006fbcc",
-    "vscode_runtime": "VSCodium (local Extension Host)"
+    "head": "99006fbccaacb150b78e54dad7bdadc2a1390238 (V1 evidence, exthost-66cdb2.cpuprofile captured)",
+    "extension_version": "s1onique.clinemm-4.1.16-99006fbcc (V1 installed build)",
+    "vscode_runtime": "VSCodium (local Extension Host)",
+    "runtime_profile_during_failure": "CLINEMM_RUNTIME_PROFILE=dogfood (per Factory causal reviewer review)"
   },
   "production_changes": [
-    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts: gated logQueueEvents Logger.log calls behind the dogfood profile",
-    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts: instrumented handleSessionEvent with enter/leave + recordSessionEvent hooks",
-    "apps/vscode/src/sdk/turn-state-tracker.ts: instrumented setWithWriter with the EH2 discriminator witness",
-    "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts: added applyExtensionHostHotloopDiagnosticProfile",
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts: gated logQueueEvents Logger.log calls behind the INDEPENDENT queue-log opt-in (CORRECTION01)",
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts: instrumented handleSessionEvent with enter/leave + recordSessionEvent hooks (observational only)",
+    "apps/vscode/src/sdk/turn-state-tracker.ts: instrumented setWithWriter with the EH2 discriminator witness (observational only; EH2 classification NOT_ESTABLISHED)",
+    "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts: applyExtensionHostHotloopDiagnosticProfile now resolves TWO gates — diagnostic (counters) defaulted by dogfood, queue-log opt-in defaulted OFF in every profile (CORRECTION01)",
+    "apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts: added isExtensionHostHotloopQueueLogEnabled + setExtensionHostHotloopQueueLogEnabled — the INDEPENDENT queue-log opt-in gate (CORRECTION01)",
     "apps/vscode/src/extension.ts: wired applyExtensionHostHotloopDiagnosticProfile + DumpExtensionHostHotloopDiagnostic command",
     "apps/vscode/src/registry.ts: added DumpExtensionHostHotloopDiagnostic command id",
     "apps/vscode/package.json: declared dumpExtensionHostHotloopDiagnostic command"
@@ -31,11 +35,10 @@
     "apps/vscode/src/sdk/__tests__/extension-host-session-event-hotloop01.ehloop01.test.ts"
   ],
   "gates": {
-    "ehloop_test": "PASS (8/8)",
+    "ehloop_test": "PASS (13/13 — RED-01/02, PROFILE-01..04, ABLATION-01, CTL-01/02/04/05/08/09/10)",
     "typecheck": "PASS",
-    "lint": "PASS",
-    "downstream_tests": "PASS (no regressions; one pre-existing RED probe unrelated to this ACT)"
+    "downstream_tests": "PASS (no regressions; pre-existing OWN01 RED probe + pre-existing 187 unrelated failures in src/sdk/__tests__ preserved)"
   },
-  "removal_trigger": "First successful LIVE qualification -> remove counter module + activation helper + dump runtime + Command Palette registration + registry entry + package.json command declaration TOGETHER. Until then, the diagnostic remains installed.",
+  "removal_trigger": "First successful LIVE qualification with the dogfood profile (no UNRESPONSIVE warning, no automatic CPU profile, no host restart across two 30s sleep runs) -> remove counter module + activation helper + dump runtime + Command Palette registration + registry entry + package.json command declaration TOGETHER. Until then, the diagnostic remains installed and the queue-log breadcrumb remains suppressed by the permanent production rule.",
   "next_act": "Resume CCARD with stable host. Dump the continuation trace per the ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-COMMAND-EXECUTION01 successor."
 }

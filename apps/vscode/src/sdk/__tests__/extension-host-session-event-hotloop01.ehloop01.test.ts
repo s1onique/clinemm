@@ -21,29 +21,50 @@
  *     `outputChannel.appendLine` I/O wait (rank 1).
  *   44.7% of all samples fell below `handleSessionEvent`.
  *
+ * The LIVE failure was captured in the **dogfood** profile (installed
+ * build `s1onique.clinemm-4.1.16-99006fbcc`,
+ * `CLINEMM_RUNTIME_PROFILE=dogfood`). The original repair (V1)
+ * gated the synchronous `Logger.log` inside `logQueueEvents` behind
+ * the diagnostic enablement bit, which is itself driven by the
+ * dogfood profile — that made the gate unfixable because the
+ * hot path was deliberately re-armed in dogfood, the exact mode
+ * where the LIVE failure occurred.
+ *
+ * CORRECTION01 (this version): the diagnostic enablement bit and
+ * the synchronous breadcrumb opt-in are DECOUPLED. The hot path is
+ * bounded by the PERMANENT production rule:
+ *
+ *   - Diagnostic enablement (counters + phase writes): defaulted by
+ *     dogfood profile. Cheap. May be removed post-qualification.
+ *   - Synchronous queue-log opt-in (the Logger.log breadcrumb):
+ *     DEFAULT OFF in every profile. Honored ONLY when the operator
+ *     explicitly sets `CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=<truthy>` in
+ *     dogfood. Public installs can never enable this.
+ *
  * Production seams under test:
  *   - `SdkSessionEventCoordinator.handleSessionEvent`
  *   - `SdkSessionEventCoordinator.logQueueEvents`
  *   - `TurnStateTracker.setWithWriter` (real production class)
  *   - `extension-host-hotloop-diagnostic` counter module
+ *   - `applyExtensionHostHotloopDiagnosticProfile` activation helper
  *
  * No production state semantics are changed by this ACT. The
- * diagnostic is a passive observer in all paths. The
- * `logQueueEvents` `Logger.log` calls are gated behind the
- * diagnostic profile (preserved for dogfood, suppressed for public)
- * so the production CPU monopoly is bounded.
+ * diagnostic is a passive observer in all paths.
  */
 
 import type { ClineMessage } from "@shared/ExtensionMessage"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Logger } from "@/shared/services/Logger"
+import { applyExtensionHostHotloopDiagnosticProfile } from "../dogfood-diagnostic-profile"
 import {
 	getExtensionHostHotloopDiagnosticSnapshot,
 	isExtensionHostHotloopDiagnosticEnabled,
+	isExtensionHostHotloopQueueLogEnabled,
 	recordExtensionHostHotloopPendingPrompt,
 	recordExtensionHostHotloopSessionEvent,
 	resetExtensionHostHotloopDiagnostic,
 	setExtensionHostHotloopDiagnosticEnabled,
+	setExtensionHostHotloopQueueLogEnabled,
 } from "../extension-host-hotloop-diagnostic"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
@@ -138,40 +159,101 @@ describe("ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01", () => {
 		mockLogger.trace.mockClear()
 		resetExtensionHostHotloopDiagnostic()
 		setExtensionHostHotloopDiagnosticEnabled(false)
+		setExtensionHostHotloopQueueLogEnabled(false)
 	})
 
 	afterEach(() => {
 		setExtensionHostHotloopDiagnosticEnabled(false)
+		setExtensionHostHotloopQueueLogEnabled(false)
 		resetExtensionHostHotloopDiagnostic()
 	})
 
 	it("EHLOOP-CTL-08: counter module is DEFAULT_OFF and the diagnostic must NOT be enabled without an explicit flip", () => {
 		expect(isExtensionHostHotloopDiagnosticEnabled()).toBe(false)
+		expect(isExtensionHostHotloopQueueLogEnabled()).toBe(false)
 	})
-	it("EHLOOP-RED-01: logQueueEvents production Logger.log call is suppressed when the diagnostic profile is OFF (public default)", async () => {
-		const { coordinator, event } = makeCoordinator({})
-		expect(isExtensionHostHotloopDiagnosticEnabled()).toBe(false)
 
+	// -------------------------------------------------------------------
+	// PROFILE RESOLUTION GATES (CORRECTION01)
+	// -------------------------------------------------------------------
+
+	it("EHLOOP-PROFILE-01: dogfood profile resolution enables diagnostic counters but NOT the synchronous queue-log breadcrumb", () => {
+		const result = applyExtensionHostHotloopDiagnosticProfile(true, {})
+		expect(result.enabled).toBe(true)
+		expect(result.queueLogEnabled).toBe(false)
+		expect(isExtensionHostHotloopDiagnosticEnabled()).toBe(true)
+		expect(isExtensionHostHotloopQueueLogEnabled()).toBe(false)
+	})
+
+	it("EHLOOP-PROFILE-02: dogfood + explicit CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1 enables the synchronous breadcrumb", () => {
+		const result = applyExtensionHostHotloopDiagnosticProfile(true, {
+			CLINEMM_DIAG_HOTLOOP_QUEUE_LOG: "1",
+		})
+		expect(result.enabled).toBe(true)
+		expect(result.queueLogEnabled).toBe(true)
+		expect(isExtensionHostHotloopQueueLogEnabled()).toBe(true)
+	})
+
+	it("EHLOOP-PROFILE-03: public profile + queue-log env override still does NOT enable the synchronous breadcrumb (public never granted)", () => {
+		const result = applyExtensionHostHotloopDiagnosticProfile(false, {
+			CLINEMM_DIAG_HOTLOOP_QUEUE_LOG: "1",
+			CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC: "1",
+		})
+		expect(result.enabled).toBe(false)
+		expect(result.queueLogEnabled).toBe(false)
+		expect(isExtensionHostHotloopDiagnosticEnabled()).toBe(false)
+		expect(isExtensionHostHotloopQueueLogEnabled()).toBe(false)
+	})
+
+	it("EHLOOP-PROFILE-04: dogfood + CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC=0 forces the diagnostic off (matches decideKnob invariant)", () => {
+		const result = applyExtensionHostHotloopDiagnosticProfile(true, {
+			CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC: "0",
+		})
+		expect(result.enabled).toBe(false)
+		expect(isExtensionHostHotloopDiagnosticEnabled()).toBe(false)
+	})
+
+	// -------------------------------------------------------------------
+	// RED (the LIVE failure provenance reproduction under real dogfood)
+	// -------------------------------------------------------------------
+
+	it("EHLOOP-RED-01: in real dogfood (the LIVE failure environment), the synchronous Logger.log breadcrumb is suppressed", async () => {
+		// Resolve under real dogfood profile, no opt-in env knob.
+		// This is the exact runtime the LIVE failure was captured in
+		// (exthost-66cdb2.cpuprofile,
+		// s1onique.clinemm-4.1.16-99006fbcc,
+		// CLINEMM_RUNTIME_PROFILE=dogfood).
+		applyExtensionHostHotloopDiagnosticProfile(true, {})
+
+		const { coordinator, event } = makeCoordinator({})
+		await coordinator.handleSessionEvent(event)
+		await coordinator.handleSessionEvent(event)
+
+		const queueLogCallCount = mockLogger.log.mock.calls.filter(
+			(args) => typeof args[0] === "string" && args[0].includes("Pending prompts updated"),
+		).length
+		const submittedLogCallCount = mockLogger.log.mock.calls.filter(
+			(args) => typeof args[0] === "string" && args[0].includes("Pending prompt submitted"),
+		).length
+
+		expect(queueLogCallCount).toBe(0)
+		expect(submittedLogCallCount).toBe(0)
+
+		const snapshot = getExtensionHostHotloopDiagnosticSnapshot()
+		expect(snapshot.logQueueEventsCalls).toBeGreaterThanOrEqual(2)
+		expect(snapshot.logQueueEventsLogCalls).toBe(0)
+		expect(snapshot.logQueueEventsSuppressedByProfile).toBeGreaterThanOrEqual(2)
+	})
+
+	it("EHLOOP-RED-02: in public profile, the synchronous Logger.log breadcrumb is also suppressed", async () => {
+		applyExtensionHostHotloopDiagnosticProfile(false, {})
+		const { coordinator, event } = makeCoordinator({})
 		await coordinator.handleSessionEvent(event)
 
 		const queueLogCallCount = mockLogger.log.mock.calls.filter(
 			(args) => typeof args[0] === "string" && args[0].includes("Pending prompts updated"),
 		).length
 		expect(queueLogCallCount).toBe(0)
-
-		setExtensionHostHotloopDiagnosticEnabled(true)
-		resetExtensionHostHotloopDiagnostic()
-		await coordinator.handleSessionEvent(event)
-
-		const armedSnapshot = getExtensionHostHotloopDiagnosticSnapshot()
-		expect(armedSnapshot.logQueueEventsCalls).toBeGreaterThanOrEqual(1)
-		expect(armedSnapshot.logQueueEventsLogCalls).toBeGreaterThanOrEqual(1)
-		expect(armedSnapshot.logQueueEventsSuppressedByProfile).toBe(0)
-
-		const queueLogCallCountArmed = mockLogger.log.mock.calls.filter(
-			(args) => typeof args[0] === "string" && args[0].includes("Pending prompts updated"),
-		).length
-		expect(queueLogCallCountArmed).toBeGreaterThanOrEqual(1)
 	})
 
 	it("EHLOOP-COMPOSE-01: production-composition one lifecycle captures bounded counters when the diagnostic is OFF", async () => {
@@ -208,57 +290,124 @@ describe("ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01", () => {
 		).length
 		expect(queueLogCallCount).toBe(0)
 	})
-	it("EHLOOP-ABLATION-01: with diagnostic ENABLED (dogfood), counters capture the full call sequence and the breadcrumb Logger.log fires", async () => {
-		setExtensionHostHotloopDiagnosticEnabled(true)
+	it("EHLOOP-ABLATION-01: same installed dogfood profile; only the explicit queue-log opt-in changes the breadcrumb", async () => {
+		// Round A: dogfood default (no opt-in) — counters ON, log suppressed.
+		applyExtensionHostHotloopDiagnosticProfile(true, {})
 		resetExtensionHostHotloopDiagnostic()
+		mockLogger.log.mockClear()
+		{
+			const { coordinator } = makeCoordinator({})
+			const sessionId = "session-A"
+			await coordinator.handleSessionEvent({
+				type: "pending_prompts",
+				payload: { sessionId, prompts: [{ id: "p1", prompt: "run", images: [], files: [], createdAt: 1 }] },
+			} as never)
+			await coordinator.handleSessionEvent({
+				type: "pending_prompt_submitted",
+				payload: { sessionId, prompt: "run", mode: "act", delivery: "queue" },
+			} as never)
+			const snapA = getExtensionHostHotloopDiagnosticSnapshot()
+			expect(snapA.logQueueEventsCalls).toBeGreaterThanOrEqual(2)
+			expect(snapA.logQueueEventsLogCalls).toBe(0)
+			expect(snapA.logQueueEventsSuppressedByProfile).toBeGreaterThanOrEqual(2)
+			const logCallsA = mockLogger.log.mock.calls.filter(
+				(args) =>
+					typeof args[0] === "string" &&
+					(args[0].includes("Pending prompts updated") || args[0].includes("Pending prompt submitted")),
+			).length
+			expect(logCallsA).toBe(0)
+		}
 
-		const { coordinator } = makeCoordinator({})
-		const sessionId = "session-A"
+		// Round B: dogfood + explicit opt-in — breadcrumb fires.
+		applyExtensionHostHotloopDiagnosticProfile(true, {
+			CLINEMM_DIAG_HOTLOOP_QUEUE_LOG: "1",
+		})
+		resetExtensionHostHotloopDiagnostic()
+		mockLogger.log.mockClear()
+		{
+			const { coordinator } = makeCoordinator({})
+			const sessionId = "session-A"
+			await coordinator.handleSessionEvent({
+				type: "pending_prompts",
+				payload: { sessionId, prompts: [{ id: "p1", prompt: "run", images: [], files: [], createdAt: 1 }] },
+			} as never)
+			await coordinator.handleSessionEvent({
+				type: "pending_prompt_submitted",
+				payload: { sessionId, prompt: "run", mode: "act", delivery: "queue" },
+			} as never)
+			const snapB = getExtensionHostHotloopDiagnosticSnapshot()
+			expect(snapB.logQueueEventsCalls).toBeGreaterThanOrEqual(2)
+			expect(snapB.logQueueEventsLogCalls).toBeGreaterThanOrEqual(2)
+			expect(snapB.logQueueEventsSuppressedByProfile).toBe(0)
+			const logCallsB = mockLogger.log.mock.calls.filter(
+				(args) =>
+					typeof args[0] === "string" &&
+					(args[0].includes("Pending prompts updated") || args[0].includes("Pending prompt submitted")),
+			).length
+			expect(logCallsB).toBeGreaterThanOrEqual(2)
+		}
 
-		const e1 = {
-			type: "pending_prompts",
-			payload: { sessionId, prompts: [{ id: "p1", prompt: "run", images: [], files: [], createdAt: 1 }] },
-		} as never
-		const e2 = {
-			type: "pending_prompt_submitted",
-			payload: { sessionId, prompt: "run", mode: "act", delivery: "queue" },
-		} as never
-		const e3 = { type: "pending_prompts", payload: { sessionId, prompts: [] } } as never
-
-		await coordinator.handleSessionEvent(e1)
-		await coordinator.handleSessionEvent(e2)
-		await coordinator.handleSessionEvent(e3)
-
-		const snapshot = getExtensionHostHotloopDiagnosticSnapshot()
-		expect(snapshot.sessionEvents).toBe(3)
-		expect(snapshot.handleSessionEventCalls).toBe(3)
-		expect(snapshot.logQueueEventsCalls).toBe(3)
-		expect(snapshot.logQueueEventsLogCalls).toBe(3)
-		expect(snapshot.logQueueEventsSuppressedByProfile).toBe(0)
-		expect(snapshot.setWithWriterCalls).toBeGreaterThanOrEqual(1)
-		expect(snapshot.actualPhaseChanges).toBeGreaterThanOrEqual(1)
-		expect(snapshot.maxNestedHandleDepth).toBe(1)
-		expect(snapshot.byEventType.pending_prompts).toBe(2)
-		expect(snapshot.byEventType.pending_prompt_submitted).toBe(1)
-		expect(Object.keys(snapshot.byWriter).length).toBeGreaterThanOrEqual(1)
+		// Round C: drop the opt-in — breadcrumb stops firing.
+		applyExtensionHostHotloopDiagnosticProfile(true, {})
+		resetExtensionHostHotloopDiagnostic()
+		mockLogger.log.mockClear()
+		{
+			const { coordinator } = makeCoordinator({})
+			const sessionId = "session-A"
+			await coordinator.handleSessionEvent({
+				type: "pending_prompts",
+				payload: { sessionId, prompts: [{ id: "p1", prompt: "run", images: [], files: [], createdAt: 1 }] },
+			} as never)
+			await coordinator.handleSessionEvent({
+				type: "pending_prompt_submitted",
+				payload: { sessionId, prompt: "run", mode: "act", delivery: "queue" },
+			} as never)
+			const logCallsC = mockLogger.log.mock.calls.filter(
+				(args) =>
+					typeof args[0] === "string" &&
+					(args[0].includes("Pending prompts updated") || args[0].includes("Pending prompt submitted")),
+			).length
+			expect(logCallsC).toBe(0)
+		}
 	})
 
-	it("EHLOOP-CTL-09: enabling then disabling the diagnostic returns the hot loop to the OFF behavior", async () => {
-		const { coordinator, event } = makeCoordinator({})
-
+	it("EHLOOP-CTL-09: with counters enabled (dogfood), counter snapshot captures the full call sequence WITHOUT firing the synchronous log breadcrumb", async () => {
+		// CORRECTION01: the diagnostic enablement no longer controls the
+		// breadcrumb. Counters are cheap and on in dogfood; the
+		// breadcrumb is independent.
 		setExtensionHostHotloopDiagnosticEnabled(true)
-		await coordinator.handleSessionEvent(event)
-		const onCalls = mockLogger.log.mock.calls.length
-
+		setExtensionHostHotloopQueueLogEnabled(false)
 		resetExtensionHostHotloopDiagnostic()
 		mockLogger.log.mockClear()
 
-		setExtensionHostHotloopDiagnosticEnabled(false)
-		await coordinator.handleSessionEvent(event)
-		const offCalls = mockLogger.log.mock.calls.length
+		const { coordinator } = makeCoordinator({})
+		const sessionId = "session-A"
+		await coordinator.handleSessionEvent({
+			type: "pending_prompts",
+			payload: { sessionId, prompts: [{ id: "p1", prompt: "run", images: [], files: [], createdAt: 1 }] },
+		} as never)
+		await coordinator.handleSessionEvent({
+			type: "pending_prompt_submitted",
+			payload: { sessionId, prompt: "run", mode: "act", delivery: "queue" },
+		} as never)
 
-		expect(offCalls).toBe(0)
-		expect(onCalls).toBeGreaterThanOrEqual(1)
+		const snapshot = getExtensionHostHotloopDiagnosticSnapshot()
+		expect(snapshot.sessionEvents).toBeGreaterThanOrEqual(2)
+		expect(snapshot.handleSessionEventCalls).toBeGreaterThanOrEqual(2)
+		expect(snapshot.logQueueEventsCalls).toBeGreaterThanOrEqual(2)
+		expect(snapshot.logQueueEventsLogCalls).toBe(0)
+		expect(snapshot.logQueueEventsSuppressedByProfile).toBeGreaterThanOrEqual(2)
+		expect(snapshot.maxNestedHandleDepth).toBe(1)
+		expect(snapshot.byEventType.pending_prompts).toBeGreaterThanOrEqual(1)
+		expect(snapshot.byEventType.pending_prompt_submitted).toBeGreaterThanOrEqual(1)
+		expect(Object.keys(snapshot.byWriter).length).toBeGreaterThanOrEqual(1)
+
+		const logCalls = mockLogger.log.mock.calls.filter(
+			(args) =>
+				typeof args[0] === "string" &&
+				(args[0].includes("Pending prompts updated") || args[0].includes("Pending prompt submitted")),
+		).length
+		expect(logCalls).toBe(0)
 	})
 
 	it("EHLOOP-CTL-04 / EHLOOP-CTL-05: pending-prompt drain counter hooks are exposed and bounded", () => {

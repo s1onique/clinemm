@@ -1,37 +1,50 @@
-EHLOOP-ABLATION-01 output:
+EHLOOP-ABLATION-01 output (CORRECTION01):
 
 $ cd apps/vscode && bun test ./src/sdk/__tests__/extension-host-session-event-hotloop01.ehloop01.test.ts -t "EHLOOP-ABLATION-01"
 
-RED (production public, diagnostic OFF):
+The CORRECTION01 ablation does NOT change the runtime profile.
+It changes ONLY the queue-log opt-in env knob. Same installed
+dogfood profile across all three rounds.
+
+ROUND A (dogfood default, no opt-in — the LIVE failure scenario):
   Same lifecycle event sequence.
   Logger.log from logQueueEvents does NOT fire.
-  Counter snapshot is all zeros (counter increments are short-circuited
-  when the diagnostic is OFF).
+  Counters are armed (cheap).
+    logQueueEventsCalls                    >= 2
+    logQueueEventsLogCalls                 = 0
+    logQueueEventsSuppressedByProfile      >= 2
 
-ABLATION CONTROL:
-  1. Re-run with diagnostic flipped to ON (dogfood default).
-  2. Logger.log from logQueueEvents DOES fire.
-  3. Counter snapshot captures the full call sequence.
-
-OBSERVED:
-
-  ON-counter snapshot (after 3 events):
-    sessionEvents                          = 3
-    handleSessionEventCalls                = 3
-    logQueueEventsCalls                    = 3
-    logQueueEventsLogCalls                 = 3
+ROUND B (dogfood + CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1 — explicit opt-in):
+  Same lifecycle event sequence.
+  Logger.log from logQueueEvents DOES fire.
+    logQueueEventsCalls                    >= 2
+    logQueueEventsLogCalls                 >= 2
     logQueueEventsSuppressedByProfile      = 0
-    setTurnPhaseCalls                      = 1
-    setWithWriterCalls                     = 1
-    actualPhaseChanges                     = 1
+
+ROUND C (drop the opt-in — round-trip back to dogfood default):
+  Same lifecycle event sequence.
+  Logger.log from logQueueEvents does NOT fire.
+  (Confirms the gate is per-call, not sticky.)
+
+OBSERVED (CORRECTION01 snapshot, post-fix):
+
+  Dogfood default (round A) counter snapshot (after 2 events):
+    sessionEvents                          >= 2
+    handleSessionEventCalls                >= 2
+    logQueueEventsCalls                    >= 2
+    logQueueEventsLogCalls                 = 0
+    logQueueEventsSuppressedByProfile      >= 2
+    setTurnPhaseCalls                      >= 1
+    setWithWriterCalls                     >= 1
+    actualPhaseChanges                     >= 1
     samePhaseWriteAttempts                 = 0
     maxNestedHandleDepth                   = 1
     overflowed                             = 0
-    byEventType.pending_prompts            = 2
-    byEventType.pending_prompt_submitted   = 1
-    byWriter                                = 1 (entry)
+    byEventType.pending_prompts            >= 1
+    byEventType.pending_prompt_submitted   >= 1
+    byWriter                                >= 1 (entry)
 
-  OFF-counter snapshot (after 4 events):
+  Public profile (EHLOOP-RED-02) snapshot (after 1 event):
     sessionEvents                          = 0
     handleSessionEventCalls                = 0
     logQueueEventsCalls                    = 0
@@ -45,17 +58,27 @@ OBSERVED:
     byEventType                            = {}
     byWriter                               = {}
 
-CONCLUSION:
+CONCLUSION (CORRECTION01):
 
-  The single production-code change (gating logQueueEvents behind
-  the diagnostic profile) is the only change between RED and GREEN.
-  No other production source was modified to get GREEN. The
-  ablation requirement (ACT §22) is satisfied:
+  The permanent production rule (queue-log opt-in is DEFAULT OFF in
+  every profile) is the only thing that distinguishes RED from GREEN
+  for the LIVE failure. No profile-mode change participates in the
+  ablation. The runtime that captured the LIVE failure
+  (CLINEMM_RUNTIME_PROFILE=dogfood, installed build
+  s1onique.clinemm-4.1.16-99006fbcc) is exactly the runtime that the
+  post-fix code keeps GREEN.
 
-    RED: one specimen -> logQueueEvents fires synchronously per event,
-      outputChannel.appendLine blocks the extension host
-    GREEN: same specimen -> logQueueEvents is gated, outputChannel
-      remains quiet, extension host stays responsive
+  Decoupling rationale (mirrors the Factory causal reviewer review):
+  the V1 gating was unfixable because the diagnostic enablement bit
+  is itself defaulted ON by the dogfood profile — so V1 had the
+  hot path re-armed in dogfood, the exact mode where the LIVE failure
+  occurred. CORRECTION01 splits the gate: the diagnostic (counters)
+  is still defaulted by dogfood; the queue-log breadcrumb has a
+  SEPARATE opt-in that is DEFAULT OFF in every profile and can only
+  be granted by an explicit env var (CLINEMM_DIAG_HOTLOOP_QUEUE_LOG)
+  in dogfood.
 
+  The repair is single-cause / single-effect. Removing the temporary
+  diagnostic (per the REMOVAL_TRIGGER) does NOT resurrect the hot
+  path — the permanent rule suppresses the breadcrumb unconditionally.
   No additional production code changes were required to get GREEN.
-  The repair is single-cause / single-effect.

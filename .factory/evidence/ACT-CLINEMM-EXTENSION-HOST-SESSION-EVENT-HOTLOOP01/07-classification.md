@@ -57,14 +57,22 @@
 
   Conclusion: Case E REFUTED.
 
-## Root classification (combined EH4 + EH2)
+## Root classification (CORRECTION01)
 
-  ROOT_CLASS = EH4_LOGGING_HOTPATH (primary)
-              + EH2_REDUNDANT_STATE_WRITE_STORM (secondary overlay;
-                same-phase writes do occur but the redundancy ratio
-                stays bounded by the EH4 fix because the
-                post-repair Logger.log calls are gated behind the
-                dogfood profile).
+  ROOT_CLASS = EH4_LOGGING_HOTPATH (primary, proven)
+
+  EH2_REDUNDANT_STATE_WRITE_STORM = NOT_ESTABLISHED.
+
+    Rationale: the V1 packet itself observed `setWithWriterCalls = 302`
+    with `~0.5 writes per handleSessionEvent`, and the inline
+    classification text explicitly stated "NOT a write storm". Case C
+    was REJECTED by the mechanical case discrimination. The only
+    proven root class is EH4_LOGGING_HOTPATH.
+
+    The `setWithWriter` instrumentation is OBSERVATIONAL only — the
+    `samePhaseWriteAttempts` counter is captured so the post-mortem
+    can confirm the EH2 ratio if it ever spikes, but no write is
+    suppressed at this seam.
 
 ## EH1 / EH3 / EH6 — REFUTED
 
@@ -116,16 +124,19 @@
     suppress same-phase writes (the production path requires the
     listener fan-out for telemetry observers).
 
-## Final verdict
+## Final verdict (CORRECTION01)
 
   EXTENSION_HOST_FAILURE          = LIVE_PROVEN
   CPU_PROFILE                     = REAL (exthost-66cdb2.cpuprofile)
   FIRST_AMPLIFIED_SEAM            = logQueueEvents
-  ROOT_CLASS                      = EH4_LOGGING_HOTPATH
-                                     + EH2_REDUNDANT_STATE_WRITE_STORM
-                                       (secondary, observational)
-  ABLATION                        = RED -> GREEN via the gating of
-                                     logQueueEvents (single change)
+  ROOT_CLASS                      = EH4_LOGGING_HOTPATH (sole proven)
+  EH2_OVERLAY                     = NOT_ESTABLISHED (observational only)
+  ABLATION                        = RED -> GREEN via the DECOUPLED
+                                     gating of logQueueEvents
+                                     (CORRECTION01). Same installed
+                                     dogfood profile; only the
+                                     explicit queue-log opt-in
+                                     changes the breadcrumb.
   CCARD_PRIMARY_CAUSE             = REFUTED
-  HOST_LIVE_GREEN                 = PASS (one background-command
-                                     terminal lifecycle)
+  HOST_LIVE_GREEN                 = PENDING (operator-driven Run A/B/C
+                                     per ACT §36)

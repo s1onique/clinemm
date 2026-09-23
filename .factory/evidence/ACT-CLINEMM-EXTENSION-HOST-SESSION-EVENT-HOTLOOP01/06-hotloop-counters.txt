@@ -1,38 +1,98 @@
-EHLOOP-ABLATION-01 counter snapshot (diagnostic ENABLED / dogfood):
+EHLOOP counter snapshot (CORRECTION01):
 
-  Test drives the production event sequence for ONE ordinary
-  background terminal lifecycle through the real
+  CORRECTION01 invariant: the diagnostic enablement bit
+  (counters / phase writes) and the queue-log breadcrumb opt-in
+  are INDEPENDENT. The counters snapshot below is the production
+  surface for both gates. The breadcrumb-fired count is per-call
+  truth, not per-profile truth.
+
+EHLOOP-PROFILE-01 counter snapshot (dogfood default, no opt-in —
+the LIVE failure environment):
+
+  Counter snapshot after 2 session events:
+
+    sessionEvents                          >= 2
+    handleSessionEventCalls                >= 2
+    logQueueEventsCalls                    >= 2
+    logQueueEventsLogCalls                 = 0   (breadcrumb suppressed)
+    logQueueEventsSuppressedByProfile      >= 2
+    maxNestedHandleDepth                   = 1
+    byEventType.pending_prompts            >= 1
+
+  Production hot-loop cost for the synchronous log breadcrumb = 0
+  (the permanent production rule holds).
+
+EHLOOP-PROFILE-02 counter snapshot (dogfood + CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1):
+
+  Same event sequence with the explicit opt-in env knob:
+
+    sessionEvents                          >= 2
+    handleSessionEventCalls                >= 2
+    logQueueEventsCalls                    >= 2
+    logQueueEventsLogCalls                 >= 2 (breadcrumb fires)
+    logQueueEventsSuppressedByProfile      = 0
+    maxNestedHandleDepth                   = 1
+
+  The opt-in round-trips per-call, not sticky.
+
+EHLOOP-PROFILE-03 (public profile, queue-log env override ignored):
+
+  Public profile + CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1
+  + CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC=1:
+
+    sessionEvents                          = 0   (counters off)
+    handleSessionEventCalls                = 0
+    logQueueEventsCalls                    = 0
+    logQueueEventsLogCalls                 = 0
+    logQueueEventsSuppressedByProfile      = 0
+    maxNestedHandleDepth                   = 0
+
+  Public invariant preserved: no public silent activation.
+
+EHLOOP-PROFILE-04 (dogfood + CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC=0):
+
+  Dogfood profile with the diagnostic force-disabled:
+
+    sessionEvents                          = 0   (counters off)
+    logQueueEventsCalls                    = 0
+    logQueueEventsLogCalls                 = 0
+    logQueueEventsSuppressedByProfile      = 0
+
+  Matches the decideKnob invariant (truthy disable is honored
+  regardless of profile).
+
+EHLOOP-CTL-09 counter snapshot (counters armed, queue-log off):
+
+  Test drives the production event sequence through the real
   SdkSessionEventCoordinator + real TurnStateTracker.
 
   Events driven:
     e1 = pending_prompts     (count=1)
     e2 = pending_prompt_submitted
-    e3 = pending_prompts     (count=0)
 
   Counter snapshot after the drive:
 
-    sessionEvents                          = 3
-    handleSessionEventCalls                = 3
-    logQueueEventsCalls                    = 3
-    logQueueEventsLogCalls                 = 3
-    logQueueEventsSuppressedByProfile      = 0
-    setTurnPhaseCalls                      = 1
-    setWithWriterCalls                     = 1
+    sessionEvents                          >= 2
+    handleSessionEventCalls                >= 2
+    logQueueEventsCalls                    >= 2
+    logQueueEventsLogCalls                 = 0   (breadcrumb suppressed)
+    logQueueEventsSuppressedByProfile      >= 2
+    setTurnPhaseCalls                      >= 1
+    setWithWriterCalls                     >= 1
     samePhaseWriteAttempts                 = 0
-    actualPhaseChanges                     = 1
+    actualPhaseChanges                     >= 1
     pendingPromptDrainCalls                = (not wired in apps/vscode surface)
     pendingPromptDispatchCalls             = (not wired in apps/vscode surface)
     coordinatorLogCalls                    = 0
     maxNestedHandleDepth                   = 1
     overflowed                             = 0
-    byEventType.pending_prompts            = 2
-    byEventType.pending_prompt_submitted   = 1
-    byWriter (count)                       = 1
+    byEventType.pending_prompts            >= 1
+    byEventType.pending_prompt_submitted   >= 1
+    byWriter (count)                       >= 1
     byWriter (writer)                      = "session-event-pending-prompt-submitted"
 
-  Production amplification ratio for ONE lifecycle = 3
-  handleSessionEventCalls / 3 terminalEvents = 1 (PASS — within the
-  expected order of magnitude of low single digits).
+  Production amplification ratio for the synchronous log
+  breadcrumb = 0 (permanent production rule holds).
 
 EHLOOP-COMPOSE-01 counter snapshot (diagnostic DISABLED / public):
 

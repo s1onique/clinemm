@@ -135,7 +135,9 @@ import {
 } from "./continuation-cardinality-authority"
 import {
 	isExtensionHostHotloopDiagnosticEnabled as _isExtensionHostHotloopDiagnosticEnabled,
+	isExtensionHostHotloopQueueLogEnabled as _isExtensionHostHotloopQueueLogEnabled,
 	setExtensionHostHotloopDiagnosticEnabled,
+	setExtensionHostHotloopQueueLogEnabled,
 } from "./extension-host-hotloop-diagnostic"
 import {
 	isTaskHeaderSelectorInputCaptureEnabled as _isTaskHeaderSelectorInputCaptureEnabled,
@@ -953,28 +955,92 @@ function _isContinuationCardinalityAuthorityCaptureEnabledForActivation(): boole
  * CCARD activations); there is exactly ONE production activation
  * path, no copied orchestration in tests.
  *
- * Mirrors BJLA / BOCOR / CCARD: enable/disable is strictly:
+ * Mirrors BJLA / BOCOR / CCARD for the diagnostic enablement bit:
  *
- *   isDogfood === true  -> ON
- *   isDogfood === false -> OFF
+ *   isDogfood === true  -> diagnostic ON (counters / phase writes)
+ *   isDogfood === false -> diagnostic OFF
  *
- * No new env knob. No parser. No override matrix.
+ * Two distinct gates are resolved (CORRECTION01):
+ *
+ *   1. Diagnostic enablement (counters + nested depth + phase write
+ *      witness). Defaulted by the dogfood profile. The
+ *      `CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC` env knob can force OFF
+ *      (truthy disable: 0/off/false) regardless of profile, but
+ *      cannot force ON in public (matches ACT §18 invariant).
+ *
+ *   2. Synchronous queue-log opt-in (the breadcrumb Logger.log
+ *      inside SdkSessionEventCoordinator.logQueueEvents). DEFAULT
+ *      OFF IN EVERY PROFILE. Honored ONLY in dogfood when the
+ *      explicit env knob `CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=<truthy>`
+ *      is set. Public installs cannot enable this regardless of
+ *      env var (per ACT §18 + the LIVE failure provenance).
+ *
+ * The two gates are decoupled so removing the diagnostic (per
+ * REMOVAL_TRIGGER in extension-host-hotloop-diagnostic.ts) does
+ * NOT silently re-arm the synchronous breadcrumb hot path.
  */
-export function applyExtensionHostHotloopDiagnosticProfile(isDogfood: boolean): {
+export function applyExtensionHostHotloopDiagnosticProfile(
+	isDogfood: boolean,
+	env: NodeJS.ProcessEnv = process.env,
+): {
 	readonly enabled: boolean
 	readonly flipped: boolean
+	readonly queueLogEnabled: boolean
+	readonly queueLogFlipped: boolean
 } {
-	const was = _isExtensionHostHotloopDiagnosticEnabledForActivation()
-	const should = isDogfood
-	if (should && !was) {
+	// Gate 1 — diagnostic enablement.
+	const diagWas = _isExtensionHostHotloopDiagnosticEnabledForActivation()
+	let diagShould = isDogfood
+	const diagEnvRaw = env["CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC"]
+	if (typeof diagEnvRaw === "string" && diagEnvRaw.length > 0) {
+		const normalized = diagEnvRaw.trim().toLowerCase()
+		if (normalized === "0" || normalized === "off" || normalized === "false") {
+			diagShould = false
+		}
+		// Explicit ON is honored ONLY in dogfood (matches the
+		// generic decideKnob invariant — no public silent activation).
+		else if (isDogfood && (normalized === "1" || normalized === "true" || normalized === "yes")) {
+			diagShould = true
+		}
+	}
+	let diagFlipped = false
+	if (diagShould && !diagWas) {
 		setExtensionHostHotloopDiagnosticEnabled(true)
-		return { enabled: true, flipped: true }
-	}
-	if (!should && was) {
+		diagFlipped = true
+	} else if (!diagShould && diagWas) {
 		setExtensionHostHotloopDiagnosticEnabled(false)
-		return { enabled: false, flipped: true }
+		diagFlipped = true
 	}
-	return { enabled: should, flipped: false }
+
+	// Gate 2 — synchronous queue-log opt-in (the production soundness
+	// gate). DEFAULT OFF. Public never granted. Dogfood requires
+	// CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=<truthy>.
+	const qlWas = _isExtensionHostHotloopQueueLogEnabled()
+	let qlShould = false
+	if (isDogfood) {
+		const qlEnvRaw = env["CLINEMM_DIAG_HOTLOOP_QUEUE_LOG"]
+		if (typeof qlEnvRaw === "string" && qlEnvRaw.length > 0) {
+			const normalized = qlEnvRaw.trim().toLowerCase()
+			if (normalized === "1" || normalized === "true" || normalized === "yes") {
+				qlShould = true
+			}
+		}
+	}
+	let qlFlipped = false
+	if (qlShould && !qlWas) {
+		setExtensionHostHotloopQueueLogEnabled(true)
+		qlFlipped = true
+	} else if (!qlShould && qlWas) {
+		setExtensionHostHotloopQueueLogEnabled(false)
+		qlFlipped = true
+	}
+
+	return {
+		enabled: diagShould,
+		flipped: diagFlipped,
+		queueLogEnabled: qlShould,
+		queueLogFlipped: qlFlipped,
+	}
 }
 
 function _isExtensionHostHotloopDiagnosticEnabledForActivation(): boolean {
