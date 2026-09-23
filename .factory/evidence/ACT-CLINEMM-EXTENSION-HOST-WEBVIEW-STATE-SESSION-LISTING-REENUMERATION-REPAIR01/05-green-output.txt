@@ -1,0 +1,30 @@
+WVSL POST-FIX GREEN OUTPUT
+===========================
+
+Configuration:
+  metadataHistoryCacheSafetyTtlMs = 5 * 60 * 1000  (= 5 minutes)
+  metadataHistoryCache invalidation authority: existing 5 invalidation sites
+  metadataHistoryCache reuse predicate: cache present AND age < safety TTL
+
+Test file:
+  apps/vscode/src/sdk/__tests__/webview-state-session-listing-reenumeration-repair01.wvsl01.test.ts
+
+Results:
+  WVSL-RED-01   PASS  (post-fix 1 listSessions for 6 projections across simulated 30 s)
+  WVSL-RED-02   PASS  (in-place patch on updateTaskHistoryItem reflects next projection)
+  WVSL-GREEN-01 PASS  (3 projections no mutation -> 1 listSessions)
+  WVSL-GREEN-02 PASS  (delete mutation -> next projection re-enumerates)
+  WVSL-CTL-01   PASS  (explicit RPC contract preserved)
+  WVSL-ADV-01   PASS  (new session appears in next projection)
+  WVSL-ADV-02   PASS  (deleted session disappears from next projection)
+  WVSL-ADV-03   PASS  (rename in-place patch)
+  WVSL-ADV-04   PASS  (25 burst projections -> 1 listSessions)
+  WVSL-ABLATION-01 PASS (forcing safety TTL to 0 -> 3 listSessions for 3 projections)
+
+10 / 10 PASS
+
+Conservation:
+  existing SdkTaskHistory tests (38): all PASS
+  broader bun unit suite (1141 -> 1151 with new file): all PASS
+  apps/vscode tsc --noEmit: clean (0 diagnostics)
+  biome lint: clean

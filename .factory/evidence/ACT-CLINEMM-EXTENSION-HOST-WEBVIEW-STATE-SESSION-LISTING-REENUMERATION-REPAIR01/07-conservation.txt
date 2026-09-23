@@ -1,0 +1,53 @@
+Conservation Summary — ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01
+======================================================================================================
+
+Production code changes (the ENTIRE diff in this ACT):
+  apps/vscode/src/sdk/sdk-task-history.ts
+    - line 211: rename  metadataHistoryCacheTtlMs -> metadataHistoryCacheSafetyTtlMs
+                value: 10_000 -> 5 * 60 * 1_000
+                comment added explaining it is a safety bound, not a freshness gate
+    - line 408: update cache-hit predicate to reference the renamed constant
+  apps/vscode/src/sdk/__tests__/webview-state-session-listing-reenumeration-repair01.wvsl01.test.ts
+    - new file: 10 tests (RED-01, RED-02, GREEN-01, GREEN-02, CTL-01, ADV-01..04, ABLATION-01)
+
+Production LOC delta: ~10 lines (constant rename + comment) + 1 line in predicate
+
+PROTO_DELTA = NO
+PUBLIC_TOOL_SCHEMA_DELTA = NO
+PUBLIC_API_DELTA = NO
+DB SCHEMA DELTA = NO
+
+Untouched (per ACT §13):
+  CommandJobManager
+  BackgroundNotifyCoordinator
+  PendingPromptsController
+  TQCB
+  BTCONT
+  PWAOR
+  terminal-card projection
+  allocation profiler
+  SLAC counter semantics
+  AsyncLocalStorage caller context
+  UnifiedSessionPersistenceService.listSessions()  -- global semantics preserved
+  SessionManifestStore.readSessionManifestTitle() -- no manifest cache added
+  StatePostDebouncer
+  SdkController.getTaskHistory (gRPC RPC)
+  The 5 existing invalidation call sites
+
+Conservation suites:
+  SLAC01        : unchanged (16/16 from predecessor ACT)
+  ALLOCAUTH01   : unchanged (25/25 from predecessor ACT)
+  BCNT01        : untouched
+  TQCB01        : untouched
+  BTCONT01      : untouched
+  CCARD01       : untouched
+  provenance O(1) tests: untouched
+
+Tests run during this ACT:
+  - new WVSL01 (10/10 PASS)
+  - existing SdkTaskHistory tests (38/38 PASS)
+  - bun run test:unit (83 files / 1151 / 0 FAIL)
+
+Code gates:
+  apps/vscode tsc --noEmit : 0 diagnostics
+  biome lint               : 0 issues

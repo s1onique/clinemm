@@ -1,0 +1,29 @@
+WVSL-ABLATION-01 OUTPUT (necessity proof)
+=========================================
+
+Ablation strategy: force the safety TTL constant to 0 via a test-only
+reflective write (no production global mutates, no env knobs added).
+
+  (history as unknown as Record<string, number>).metadataHistoryCacheSafetyTtlMs = 0
+
+With safety TTL = 0:
+  listHistory #1 -> predicate fails (age >= 0)  -> host.listSessions = 1
+  listHistory #2 -> predicate fails              -> host.listSessions = 2
+  listHistory #3 -> predicate fails              -> host.listSessions = 3
+
+Result:
+  3 projections, 3 host.listSessions calls.
+
+Necessity proof:
+  Repair present (safety TTL = 5 min)  -> 3 projections, 1 host.listSessions call
+  Repair ablated (safety TTL forced 0) -> 3 projections, 3 host.listSessions calls
+
+The repair IS necessary; removing it brings back the pre-fix cardinality.
+
+Test output:
+  WVSL-ABLATION-01 PASS
+
+Wider necessity proof: reverting the entire constant rename
+(metadataHistoryCacheSafetyTtlMs = 10_000, the pre-fix 10 s contract)
+also makes WVSL-RED-01 fail with the same 3 calls pattern. Both forms
+of the repair are required and tested.

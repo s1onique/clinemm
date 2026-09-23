@@ -208,7 +208,19 @@ export class SdkTaskHistory {
 	}
 	private disposed = false
 	private readonly cachedHistoryHostIdleMs = 30_000
-	private readonly metadataHistoryCacheTtlMs = 10_000
+	// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01
+	// The cache's primary freshness authority is the 5 existing mutation
+	// invalidation sites (`dispose`, `updateSession` write-failed,
+	// `updateCachedSessionRecord` on index === -1, `deleteSession`,
+	// `cacheTaskSize`) and the in-place patch path on update.
+	// This constant is a SAFETY bound only — it bounds memory if a
+	// process somehow never mutates; it is NOT the primary freshness
+	// gate. Pre-fix this was 10 s, which forced ~3 re-enumerations
+	// during a 30 s long-horizon workload despite no mutation
+	// (LIVE capture: 6 listSessions × 149 = 894 manifest-title reads).
+	// Post-fix the cache survives until an authoritative mutation
+	// invalidates it.
+	private readonly metadataHistoryCacheSafetyTtlMs = 5 * 60 * 1_000
 
 	constructor(private readonly options: SdkTaskHistoryOptions) {}
 
@@ -393,7 +405,12 @@ export class SdkTaskHistory {
 		const useCache = this.canUseMetadataHistoryCache(options)
 		const now = Date.now()
 		const cached = useCache ? this.metadataHistoryCache : undefined
-		if (cached && cached.hostLimit >= hostLimit && now - cached.createdAt < this.metadataHistoryCacheTtlMs) {
+		// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01:
+		// Cache is fresh if (cache exists) AND (within safety TTL). The TTL is a
+		// safety bound only — primary freshness authority is the mutation
+		// invalidation sites listed in the recon evidence file
+		// (.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01/02-webview-session-list-authority-map.md).
+		if (cached && cached.hostLimit >= hostLimit && now - cached.createdAt < this.metadataHistoryCacheSafetyTtlMs) {
 			const result = cached.records.slice(offset, offset + limit)
 			return result
 		}

@@ -1,0 +1,20 @@
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-RED-01: projections across multiple TTL windows with no mutation → only one listSessions[0m [0m[2m[0.65ms[0m[2m][0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-RED-02: in-place patch on updateTaskHistoryItem reflects next projection[0m [0m[2m[0.54ms[0m[2m][0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-GREEN-01: three projections with no mutation → exactly one listSessions[0m [0m[2m[0.06ms[0m[2m][0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-GREEN-02: real mutation (delete) forces next projection to re-enumerate[0m [0m[2m[0.30ms[0m[2m][0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-CTL-01: cache reuse preserves the explicit-RPC contract across two calls[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-ADV-01: brand-new session created during cache lifetime appears in next projection[0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-ADV-02: session deleted during cache lifetime disappears from next projection[0m [0m[2m[0.24ms[0m[2m][0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-ADV-03: rename during cache lifetime reflects in next projection (in-place patch)[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-ADV-04: 25 burst projections with no mutation → exactly one listSessions[0m [0m[2m[0.10ms[0m[2m][0m
+[0m[32m✓[0m [0mWVSL01 — webview-state session-listing re-enumeration repair[2m >[0m[1m WVSL-ABLATION-01: with safety TTL forced to 0, every projection re-enumerates[0m
+
+[0m[32m 10 pass[0m
+[0m[2m 0 fail[0m
+ 26 expect() calls
+Ran 10 tests across 1 file. [0m[2m[[1m690.00ms[0m[2m][0m

@@ -1,0 +1,91 @@
+{
+  "act": "ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01",
+  "entry_live": {
+    "capture_id": "muei4q39-75147dd0af7aa000",
+    "list_sessions_calls": 6,
+    "manifest_title_reads": 894,
+    "distinct_session_ids": 149,
+    "webview_state_projection_calls": 6,
+    "installed_build": "4.1.16-2a18ccea1",
+    "status": "LIVE_CHECKPOINT"
+  },
+  "classification": "SL4_WEBVIEW_STATE_PROJECTION_REENUMERATION",
+  "repair_class": "WR2",
+  "repair": {
+    "authority": "session_history_projection_invalidation",
+    "global_persistence_cache_changed": false,
+    "manifest_title_cache_added": false,
+    "production_diff": {
+      "files": [
+        "apps/vscode/src/sdk/sdk-task-history.ts"
+      ],
+      "constant_renamed": "metadataHistoryCacheTtlMs -> metadataHistoryCacheSafetyTtlMs",
+      "old_value": "10_000",
+      "new_value": "5 * 60 * 1_000",
+      "semantics": "safety bound (not primary freshness authority); mutation authority remains at the 5 existing invalidation sites",
+      "test_files_added": [
+        "apps/vscode/src/sdk/__tests__/webview-state-session-listing-reenumeration-repair01.wvsl01.test.ts"
+      ]
+    }
+  },
+  "red_reproduced": true,
+  "necessity_proven": true,
+  "focused_tests": {
+    "wvsl01": "10/10 PASS",
+    "sdk_task_history_existing": "38/38 PASS",
+    "bun_unit_test_suite": "83 files / 1151 / 0 FAIL"
+  },
+  "code_gates": {
+    "typecheck_apps_vscode": "PASS — 0 diagnostics",
+    "biome_lint": "PASS — 0 issues",
+    "vitest_infra": "DEFERRED — vitest infra not runnable in this sandbox (pre-existing env issue; predecessor slac01 test ALSO fails under vitest in this env). New test runs under bun:test which works in this sandbox."
+  },
+  "conservation": {
+    "SLAC01": "unchanged",
+    "ALLOCAUTH01": "unchanged",
+    "BCNT01": "unchanged",
+    "TQCB01": "unchanged",
+    "BTCONT01": "unchanged",
+    "CCARD01": "unchanged",
+    "CommandJobManager": "untouched",
+    "BackgroundNotifyCoordinator": "untouched",
+    "PendingPromptsController": "untouched",
+    "terminal_card_projection": "untouched",
+    "allocation_profiler": "untouched",
+    "SLAC_counter_semantics": "untouched",
+    "AsyncLocalStorage_caller_context": "untouched",
+    "StatePostDebouncer": "untouched",
+    "UnifiedSessionPersistenceService.listSessions": "untouched (global semantics preserved)",
+    "SessionManifestStore.readSessionManifestTitle": "untouched (no mtime/size cache added)",
+    "PROTO_DELTA": "NO",
+    "PUBLIC_TOOL_SCHEMA_DELTA": "NO",
+    "PUBLIC_API_DELTA": "NO"
+  },
+  "live": {
+    "executed": false,
+    "capture_id": null,
+    "list_sessions_calls": null,
+    "manifest_title_reads": null,
+    "host_responsive": null,
+    "note": "LIVE_NOT_EXECUTED. Author sandbox does not run a VS Code dogfood host. Post-fix capture must be taken by an operator in the follow-up ACT."
+  },
+  "production_diff_budget": {
+    "actual_production_loc": "~10 lines",
+    "budget": "~100 lines",
+    "well_under": true
+  },
+  "stop_conditions_checked": {
+    "red_does_not_reproduce": "NO — WVSL-RED-01 reproduces pre-fix (10s TTL → 3 listSessions vs expected 1)",
+    "no_invalidation_authority": "NO — 5 invalidation sites already exist and are authoritative",
+    "scope_escape": "NO — diff bounded to one file (SdkTaskHistory)",
+    "stale_session_history": "NO — WVSL-ADV-01/02/03 cover create/delete/rename paths",
+    "live_artifact_identity_mismatch": "LIVE_NOT_EXECUTED — out of scope of this ACT"
+  },
+  "expected_post_fix_shape": {
+    "webview_triggered_listSessions": "collapses from 6 to ~1 (no mutation) or ~2 (one legitimate mutation)",
+    "manifest_title_reads": "collapses from 894 to ~149 (no mutation) or ~298 (one mutation)",
+    "host_responsiveness": "cannot be evaluated without a fresh LIVE capture"
+  },
+  "verdict": "PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED_PENDING_LIVE_CAPTURE",
+  "verdict_explanation": "Composition side (RED/GREEN/conservation/necessity) is PASS. LIVE side is PENDING (LIVE_NOT_EXECUTED in this ACT). The post-fix code change is structurally correct and the test oracle proves necessity; a follow-up operator capture is required to bind the LIVE qualification half per ACT §27-§31."
+}

@@ -8314,3 +8314,83 @@ dogfood workload and classifies the allocation authority (A / B /
 C / D). Upon classification (or CAPTURE_INSUFFICIENT), the entire
 REMOVAL_TRIGGER fires and the infrastructure added by this ACT is
 removed TOGETHER.
+
+## ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01 — PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED_PENDING_LIVE_CAPTURE — 2026-09-23
+
+**Status:** PASS composition. PENDING LIVE capture.
+
+The repair is structurally bounded: 10 LOC of production diff in
+one file (`apps/vscode/src/sdk/sdk-task-history.ts`) plus one new
+focused test file. The cache's freshness contract is converted from
+"fresh if age < 10 s" (sole authority = TTL) to "fresh if cache
+present AND within safety TTL (5 min)" with primary freshness
+authority delegated to the existing 5 mutation invalidation sites
+(dispose, update-write-failed, updateCachedSessionRecord on
+index === -1, deleteSession, cacheTaskSize) and the in-place patch
+path on update.
+
+**Classification:** WR2 (cache exists but TTL is sole authority).
+**Repair target:** `metadataHistoryCacheTtlMs` (10 s, primary
+authority) → `metadataHistoryCacheSafetyTtlMs` (5 min, safety bound).
+**Diff budget:** ~10 production LOC (well under the 100 LOC cap).
+
+**Tests (10 / 10 PASS, RED reproduced pre-fix):**
+- WVSL-RED-01: pre-fix 10s TTL → 3 listSessions for 6 projections;
+  post-fix 5-min TTL → 1 listSessions for 6 projections
+- WVSL-RED-02: in-place patch on updateTaskHistoryItem reflects next projection
+- WVSL-GREEN-01: 3 projections no mutation → 1 listSessions
+- WVSL-GREEN-02: real mutation (delete) → next projection re-enumerates
+- WVSL-CTL-01: explicit RPC contract preserved
+- WVSL-ADV-01..04: create/delete/rename/burst behave correctly
+- WVSL-ABLATION-01: forcing safety TTL to 0 → repeated cardinality returns
+  (necessity proof)
+
+**Conservation (all green):**
+- SLAC01 (16/16) — unchanged
+- ALLOCAUTH01 (25/25) — unchanged
+- BCNT01, TQCB01, BTCONT01, CCARD01 — untouched
+- existing SdkTaskHistory tests (38/38) — pass
+- broader bun unit suite (1151 / 0 fail) — green
+- apps/vscode tsc --noEmit — 0 diagnostics
+- biome lint — 0 issues
+
+**Not touched (per ACT §13):**
+- CommandJobManager
+- BackgroundNotifyCoordinator
+- PendingPromptsController
+- TQCB / BTCONT / PWAOR
+- terminal-card projection
+- allocation profiler / SLAC counters
+- AsyncLocalStorage caller context
+- UnifiedSessionPersistenceService.listSessions (global semantics preserved)
+- SessionManifestStore.readSessionManifestTitle (no mtime/size cache added)
+- StatePostDebouncer
+- getTaskHistory (gRPC RPC)
+- The 5 existing invalidation sites
+
+**STOP CONDITIONS HONORED:**
+- RED does not reproduce → NO (WVSL-RED-01 reproduces pre-fix)
+- no invalidation authority → NO (5 existing sites are authoritative)
+- scope escape → NO (diff bounded to one file)
+- stale history hidden by cache → NO (ADV-01/02/03 cover)
+- repository trust → NO
+
+**LIVE_NOT_EXECUTED.** Author sandbox does not run a VS Code dogfood
+host. The post-fix allocation profile must be measured by an operator
+capture (next ACT).
+
+**Verdict:** `PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED_PENDING_LIVE_CAPTURE`
+
+**Successor:** Operator captures a fresh LIVE allocation profile under
+`CLINEMM_DIAG_ALLOCATION_PROFILE=1` + `CLINEMM_RUNTIME_PROFILE=dogfood`
++ `CLINEMM_PTAD=1` with the post-fix build, and binds the post-fix
+capture_id to `08-artifact-identity.md`. Acceptance:
+- webview-triggered listSessions cardinality collapses from 6 to ~1
+  (or ~2 with one legitimate mutation)
+- listSessions / readSessionManifestTitle / Buffer.toString allocation
+  subtree shrinks materially
+- Host responsiveness outcome determines next ACT:
+
+  | Cardinality collapses, host responsive | PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED (full closure) |
+  | Cardinality collapses, host still dies | PASS_SESSION_LISTING_REPAIR_EFFECTIVE_HOST_FAILURE_REMAINS → ACT-CLINEMM-EXTENSION-HOST-I_-HOTLEAF-SYMBOLIZATION01 |
+  | Cardinality does NOT collapse          | HALT_REPAIR_NOT_REPRESENTED → reopen diagnostic authority |

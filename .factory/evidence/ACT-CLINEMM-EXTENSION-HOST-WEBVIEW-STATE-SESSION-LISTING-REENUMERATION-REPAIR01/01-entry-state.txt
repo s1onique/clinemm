@@ -1,0 +1,65 @@
+Entry state — ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01
+
+Working tree (read at ACT start): clean
+HEAD at ACT start: 2a18ccea1 (origin/main)
+
+Predecessor ACT verdict:
+  ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01
+  -> PASS / LIVE_PROVEN with halt disposition BOUNDED_CORRECTION_CYCLE_DELIVERED
+  -> authorization for repair: YES
+  -> SL4_WEBVIEW_STATE_PROJECTION_REENUMERATION = LIVE_PROVEN
+  -> SL1_REPEATED_LISTING                       = LIVE_PROVEN
+  -> SL3_EAGER_FULL_SESSION_MATERIALIZATION     = LIVE_PROVEN
+  -> SL2_UNCHANGED_MANIFEST_REREAD              = NOT_PROVEN (deliberately not promoted in this ACT)
+
+Frozen LIVE allocation observation (from predecessor capture):
+  capture_id                       = muei4q39-75147dd0af7aa000
+  installed build                  = 4.1.16-2a18ccea1
+  status                           = LIVE_CHECKPOINT
+  listSessionsCalls                = 6
+  queryAllCalls                    = 18
+  readSessionManifestTitleCalls    = 894
+  distinctSessionIdsSeenInCapture  = 149
+  repeatReadsSameSessionId         = 745
+  byCaller.webview_state_projection = 6 / 6 listSessions
+
+  listSessions subtree            ≈ 9.98 MiB (~21.3% of capture)
+  readSessionManifestTitle        ≈ 3.85 MiB
+  Buffer.toString                 ≈ 5.20 MiB
+  anonymous extension.js          ≈ 5.48 MiB
+
+Arithmetic (exact):
+  6 listSessions × 149 sessions = 894 manifest-title reads
+
+Profiling environment (predecessor):
+  CLINEMM_DIAG_ALLOCATION_PROFILE = 1
+  CLINEMM_RUNTIME_PROFILE         = dogfood
+  CLINEMM_PTAD                    = 1
+  Qualifying workload             = background command w/ notify=true
+                                    (30-second sleep)
+
+Permanent-diagnostic disposition (carried forward):
+  EXTENSION_HOST_ALLOCATION_PROFILER
+      lifecycle     = PERMANENT_DIAGNOSTIC
+      default       = OFF
+      enablement    = explicit env + dogfood profile
+      semantics     = observational
+      persistence   = bounded
+      public API    = none
+      protocol delta= none
+      REMOVAL_TRIGGER = SUPERSEDED (no cleanup ACT scheduled)
+
+  EXTENSION_HOST_SESSION_LISTING_CAUSALITY_DIAGNOSTIC
+      lifecycle     = PERMANENT_DIAGNOSTIC
+      default       = OFF
+      enablement    = CLINEMM_DIAG_ALLOCATION_PROFILE=1 + CLINEMM_RUNTIME_PROFILE=dogfood
+      semantics     = observational; counters, caller-class taxonomy
+      public API    = none
+      protocol delta= none
+
+Goal of this ACT:
+  Repair the now-proven defect where webview state projection triggers
+  full session enumeration and title materialization on every flush.
+  Preserve explicit session-list RPC semantics. Reuse existing
+  invalidation authority (which already exists). LIVE-qualify with the
+  permanent allocation profiler.

@@ -1,0 +1,26 @@
+WVSL-RED-01 OUTPUT (PRE-FIX, metadataHistoryCacheSafetyTtlMs = 10_000)
+==================================================================
+
+Chronology:
+  T0  initial listHistory         -> host.listSessions = 1
+  T1  Date.now() = base +  6_000 -> 6s  < 10s,  cache HIT
+  T2  Date.now() = base + 12_000 -> 12s > 10s,  REMATERIALIZE  (host.listSessions = 2)
+  T3  Date.now() = base + 18_000 -> 6s  < 10s,  cache HIT
+  T4  Date.now() = base + 24_000 -> 12s > 10s,  REMATERIALIZE  (host.listSessions = 3)
+  T5  Date.now() = base + 30_000 -> 6s  < 10s,  cache HIT
+
+PRE-FIX listSessions count: 3 (the cache expired on T2 and T4)
+POST-FIX listSessions count: 1 (the cache survives the whole sequence)
+
+Assertion failure (pre-fix):
+  Expected number of calls: 1
+  Received number of calls: 3
+
+Final pre-fix test status:
+  9 pass / 1 fail
+
+Test file:
+  apps/vscode/src/sdk/__tests__/webview-state-session-listing-reenumeration-repair01.wvsl01.test.ts
+
+Reducible to live arithmetic: 6 listSessions in 30 s = ~3 cache windows
+of 10 s each, exactly matches the LIVE capture's repeated cardinality.
