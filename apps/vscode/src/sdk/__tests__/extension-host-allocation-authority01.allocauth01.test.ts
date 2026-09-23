@@ -12,6 +12,9 @@
  *   ALLOCAUTH-CONSERVE-*  conservation invariants
  */
 
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	__driveFinalizerForTests,
@@ -37,6 +40,7 @@ import {
 	setAllocationProfilerWarn,
 	triggerExtensionHostAllocationProfilerOnFirstQualifyingJob,
 } from "../extension-host-allocation-profiler"
+import { resolveInstalledBundleIdentity } from "../extension-host-allocation-profiler-runtime"
 
 const TEST_DATA_DIR = "/tmp/clin-allocauth-fake-root"
 
@@ -560,5 +564,105 @@ describe("ALLOCAUTH-CONSERVE: conservation invariants", () => {
 				resolve()
 			}, 100)
 		})
+	})
+})
+
+/**
+ * ALLOCAUTH-IDENTITY-PATH (per HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN):
+ *
+ * Mechanically proves that `resolveInstalledBundleIdentity(bundleDirname)`
+ * reads `<bundleDirname>/../dist/extension.js` (one ascent from the bundle
+ * directory to the extension root), and produces a sha256 that EXACTLY
+ * matches the contents of the fixture file. This is the load-bearing
+ * identity path for the live capture.
+ *
+ * The earlier (pre-correction) implementation walked two levels (`..`,
+ * `..`) which, in a typical VSIX layout, landed ABOVE the extension
+ * root — silently producing `installed_bundle_sha256 = "unknown"` and
+ * defeating the load-bearing invariant.
+ */
+describe("ALLOCAUTH-IDENTITY-PATH: installed bundle resolution (filesystem fixture)", () => {
+	const fixtures: Array<{ root: string }> = []
+	function buildFakeExtension(): string {
+		// Layout (matches both DEV `extensionDevelopmentPath` and an
+		// installed VSIX):
+		//   <root>/
+		//       package.json
+		//       dist/
+		//           extension.js
+		const root = mkdtempSync(join(tmpdir(), "clin-allocauth-identity-"))
+		fixtures.push({ root })
+		mkdirSync(join(root, "dist"), { recursive: true })
+		writeFileSync(join(root, "package.json"), '{"name":"clin-allocauth-fake","version":"0.0.1"}')
+		writeFileSync(join(root, "dist", "extension.js"), "// fake bundle for ALLOCAUTH-IDENTITY-PATH-01\n")
+		return root
+	}
+
+	afterEach(() => {
+		for (const f of fixtures) {
+			try {
+				rmSync(f.root, { recursive: true, force: true })
+			} catch {
+				/* ignore */
+			}
+		}
+		fixtures.length = 0
+	})
+
+	it("ALLOCAUTH-IDENTITY-PATH-01: ONE ascent from <root>/dist -> extension root -> dist/extension.js -> sha256 matches fixture bytes", () => {
+		const root = buildFakeExtension()
+		const bundleDir = join(root, "dist")
+
+		const result = resolveInstalledBundleIdentity(bundleDir)
+
+		expect(result.extensionPath).toBe(root)
+		expect(result.extensionBundleSha256).not.toBe("unknown")
+		expect(result.extensionBundleSha256).toMatch(/^[0-9a-f]{64}$/)
+
+		// Mechanical cross-check: independently hash the fixture file.
+		const crypto = require("node:crypto") as typeof import("node:crypto")
+		const fs = require("node:fs") as typeof import("node:fs")
+		const expected = crypto
+			.createHash("sha256")
+			.update(fs.readFileSync(join(root, "dist", "extension.js")))
+			.digest("hex")
+		expect(result.extensionBundleSha256).toBe(expected)
+	})
+
+	it("ALLOCAUTH-IDENTITY-PATH-02: VSIX-style root also resolves (long parent path does not break the single ascent)", () => {
+		// Simulate a deep VSIX path: ~/.vscode/extensions/claude-dev-3.0.0/dist
+		// Use a deep fixture so we know single-ascent is depth-independent.
+		const root = buildFakeExtension()
+		const nested = mkdtempSync(join(root, "fake-vsix-"))
+		mkdirSync(join(nested, "dist"), { recursive: true })
+		writeFileSync(join(nested, "package.json"), '{"name":"clin-allocauth-fake-deep"}')
+		writeFileSync(join(nested, "dist", "extension.js"), "// nested fixture\n")
+		fixtures.push({ root: nested })
+
+		const bundleDir = join(nested, "dist")
+		const result = resolveInstalledBundleIdentity(bundleDir)
+
+		expect(result.extensionPath).toBe(nested)
+		expect(result.extensionBundleSha256).not.toBe("unknown")
+
+		const crypto = require("node:crypto") as typeof import("node:crypto")
+		const fs = require("node:fs") as typeof import("node:fs")
+		const expected = crypto
+			.createHash("sha256")
+			.update(fs.readFileSync(join(nested, "dist", "extension.js")))
+			.digest("hex")
+		expect(result.extensionBundleSha256).toBe(expected)
+	})
+
+	it("ALLOCAUTH-IDENTITY-PATH-03: missing dist/extension.js → extensionBundleSha256 = 'unknown' (silent failure preserved as a deliberate fallback)", () => {
+		const root = mkdtempSync(join(tmpdir(), "clin-allocauth-identity-empty-"))
+		fixtures.push({ root })
+		// Deliberately no dist/extension.js.
+		const bundleDir = join(root, "dist")
+
+		const result = resolveInstalledBundleIdentity(bundleDir)
+
+		expect(result.extensionPath).toBe(root)
+		expect(result.extensionBundleSha256).toBe("unknown")
 	})
 })

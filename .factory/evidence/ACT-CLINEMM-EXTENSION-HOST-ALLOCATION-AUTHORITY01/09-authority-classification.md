@@ -73,3 +73,28 @@ The successor acquires the first live V8 allocation profile under the
 operator's dogfood workload, classifies the allocation authority
 (A / B / C / D), and fires the REMOVAL_TRIGGER for the temporary
 infrastructure added by this ACT.
+
+---
+
+## Path-correction update (2026-09-23, post HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN)
+
+The original verdict above remained valid for the
+`HALT_ALLOCATION_FINALIZATION_BROKEN` review but a follow-up review
+uncovered a second P0 in the installed bundle filesystem resolution.
+This was the only remaining load-bearing seam before VSIX build.
+
+**What changed:**
+
+| | Pre-correction | Post-correction |
+|---|---|---|
+| `extensionPath` resolver | `path.resolve(__dirname, "..", "..")` (two ascents — lands ABOVE extension root) | `path.resolve(__dirname, "..")` (single ascent — lands on extension root) |
+| Resolver testability | implicit in `__dirname`; not exercised by tests | `resolveInstalledBundleIdentity(bundleDirname)` exported; mechanically exercised by fixture-based tests |
+| `installed_bundle_sha256` (production DEV layout) | silently "unknown" | real SHA-256 (verified: `05dca218...` against `apps/vscode/dist/extension.js`) |
+| `installed_bundle_sha256` (production VSIX layout) | silently "unknown" | real SHA-256 (verified mechanically against `/Users/me/.vscode/extensions/claude-dev-3.0.0/dist`) |
+
+**Test count delta:** 22 → 25 (+3 ALLOCAUTH-IDENTITY-PATH-01/02/03).
+All 25/25 PASS.
+
+**Verdict:** UNCHANGED — `PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING`.
+The path correction is mechanical and within ACT scope (resolver
+implementation is part of the wired production seams).

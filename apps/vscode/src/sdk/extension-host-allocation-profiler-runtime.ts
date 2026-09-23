@@ -106,7 +106,8 @@ function defaultDataRootResolver(): string {
  * Default identity resolver: hashes the installed `extension.js` to
  * produce a SHA-256 fingerprint that is bound to the capture artifact.
  *
- * IDENTITY POLICY (per HALT_ALLOCATION_FINALIZATION_BROKEN review P1c):
+ * IDENTITY POLICY (per HALT_ALLOCATION_FINALIZATION_BROKEN review P1c
+ * and HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN review):
  *   - `extensionBundleSha256` is the LOAD-BEARING identity. It is the
  *     authoritative fingerprint of the actual installed code that ran
  *     the host. Even when `source_head` is "unknown" (an installed
@@ -118,15 +119,36 @@ function defaultDataRootResolver(): string {
  *     must record the build-time SOURCE_HEAD -> bundle SHA-256 binding
  *     externally (in build logs / the VSIX release manifest) before
  *     deploying.
+ *
+ * INSTALLED-LAYOUT CONTRACT (per HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN):
+ *   The bundle runtime `__dirname` is the directory that holds
+ *   `extension.js`. In every supported layout (DEV
+ *   `extensionDevelopmentPath` and installed VSIX), the bundle lives
+ *   one level below the extension ROOT:
+ *       <extension-root>/dist/extension.js     <- bundle
+ *       <extension-root>/package.json
+ *   So a SINGLE `..` ascent from `__dirname` lands on the extension
+ *   root, which is where `dist/extension.js` must be read from.
+ *
+ *   The previous code's `path.resolve(__dirname, "..", "..")` walked
+ *   TWO levels, which in a typical VSIX layout landed ABOVE the
+ *   extension root and silently produced `installed_bundle_sha256 =
+ *   "unknown"` — defeating the load-bearing invariant. The single
+ *   ascent is correct for both DEV and VSIX layouts (verified
+ *   mechanically — see ALLOCAUTH-IDENTITY-PATH-01).
  */
-function defaultIdentityResolver(): AllocationProfilerIdentityBinding {
+export function resolveInstalledBundleIdentity(bundleDirname: string): {
+	sourceHead: string
+	extensionPath: string
+	extensionBundleSha256: string
+} {
 	let sourceHead = "unknown"
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const cp = require("node:child_process") as typeof import("node:child_process")
 		sourceHead = cp
 			.execSync("git rev-parse HEAD", {
-				cwd: __dirname,
+				cwd: bundleDirname,
 				encoding: "utf8",
 				stdio: ["ignore", "pipe", "ignore"],
 			})
@@ -135,7 +157,8 @@ function defaultIdentityResolver(): AllocationProfilerIdentityBinding {
 		sourceHead = "unknown"
 	}
 
-	const extensionPath = path.resolve(__dirname, "..", "..")
+	// ONE ascent: <extension-root>/dist -> <extension-root>.
+	const extensionPath = path.resolve(bundleDirname, "..")
 	let extensionBundleSha256 = "unknown"
 	try {
 		const bundlePath = path.join(extensionPath, "dist", "extension.js")
@@ -147,6 +170,15 @@ function defaultIdentityResolver(): AllocationProfilerIdentityBinding {
 		extensionBundleSha256 = "unknown"
 	}
 
+	return {
+		sourceHead,
+		extensionPath,
+		extensionBundleSha256,
+	}
+}
+
+function defaultIdentityResolver(): AllocationProfilerIdentityBinding {
+	const { sourceHead, extensionPath, extensionBundleSha256 } = resolveInstalledBundleIdentity(__dirname)
 	return {
 		sourceHead,
 		version: ExtensionRegistryInfo.version,

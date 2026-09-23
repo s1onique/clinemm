@@ -8150,16 +8150,19 @@ PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT
 new causation evidence arriving (allocation profile, live
 qualification, etc.). The bounded successor is the next ACT, not
 another review cycle of this one.
-## ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING (post HALT_ALLOCATION_FINALIZATION_BROKEN) — 2026-09-23
+## ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING (post HALT_ALLOCATION_FINALIZATION_BROKEN + post HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN) — 2026-09-23
 
 **Status:** PASS — temporary V8 allocation sampler infrastructure
 shipped; post-correction verdict is
 `PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING` because
-(1) all four review findings (P0 + 3 P1s) are resolved in code and
-in the test suite (22/22 ALLOCAUTH focused tests PASS), (2) the
-smoke probe proves the Node runtime accepts both collected-GC
-options AND that `stopSampling` returns a non-empty completed
-profile (P0 fix verified at runtime), (3) no live capture exists
+(1) all five review findings across two review cycles are resolved
+in code and in the test suite (25/25 ALLOCAUTH focused tests
+PASS), (2) the smoke probe proves the Node runtime accepts both
+collected-GC options AND that `stopSampling` returns a non-empty
+completed profile (P0 fix verified at runtime), (3) the installed
+bundle filesystem resolver is mechanically proven correct against
+fixtures AND against this repo's actual `apps/vscode/dist/extension.js`
+(extensionBundleSha256 = `05dca218...`), (4) no live capture exists
 yet — the operator must build the dogfood VSIX from this tree and
 run the qualifying workload to acquire one.
 
@@ -8191,6 +8194,34 @@ run the qualifying workload to acquire one.
   runtime git probe (commonly "unknown"). The build-time
   SOURCE_HEAD → bundle SHA-256 binding is recorded externally by
   the operator.
+
+**Path-correction (per HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN, second review cycle):**
+
+- **P0 — installed bundle path resolver:** the pre-correction
+  code computed
+  `path.resolve(__dirname, "..", "..")` which, from a runtime
+  `__dirname = <extension-root>/dist`, resolves to
+  `<parent-of-extension-root>` — one level too high. The hash
+  read failed, the try/catch swallowed the ENOENT, and
+  `installed_bundle_sha256 = "unknown"` was silently emitted,
+  defeating the load-bearing identity invariant established by
+  P1c. Fixed to a single ascent:
+  `path.resolve(__dirname, "..")` → `<extension-root>`, then read
+  `<extension-root>/dist/extension.js`. Verified correct for both
+  DEV (`extensionDevelopmentPath`) and installed VSIX layouts by
+  filesystem fixtures AND against this repo's actual
+  `apps/vscode/dist/extension.js` (extensionBundleSha256 =
+  `05dca218...`).
+- **Resolver refactor:** extracted into a separately-testable
+  exported function `resolveInstalledBundleIdentity(bundleDirname)`
+  so the production filesystem layout is mechanically provable
+  from a fixture, instead of being implicit in `__dirname`
+  wiring. This is what made the bug visible.
+- **P2 — result.json residue:** `focused_allocauth_tests 19/19 →
+  25/25`; `ccard01_conservation "PASS" → "12/12 PASS"`; added
+  `identity_path_fixture_probe` entry.
+- **Test count delta:** 22 → 25 (+3
+  ALLOCAUTH-IDENTITY-PATH-01/02/03).
 
 **What this ACT adds (TEMPORARY — REMOVAL_TRIGGER fires once the
 successor ACT classifies A / B / C / D):**

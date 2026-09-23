@@ -68,3 +68,52 @@ GATES PASSED (per ACT §44):
 12. Working tree
    → before commit: only the seven files added/modified in this ACT
    → no spurious tree dirt
+
+================================================================================
+PATH-CORRECTION RE-RUN (2026-09-23, post HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN)
+================================================================================
+
+1. ALLOCAUTH focused tests (post path-correction)
+   $ PATH=/opt/homebrew/bin:$PATH ./node_modules/.bin/vitest run \
+       --config vitest.config.ts \
+       src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts
+   → 25 passed / 25 (0 failed)
+   → Test Files  1 passed (1)
+   → New tests added during the path correction:
+       ALLOCAUTH-IDENTITY-PATH-01: single-ascent from <root>/dist -> extension root;
+                                   sha256 matches independently-hashed fixture bytes;
+                                   extensionBundleSha256 !== "unknown"
+       ALLOCAUTH-IDENTITY-PATH-02: VSIX-style deep parent path also resolves correctly
+       ALLOCAUTH-IDENTITY-PATH-03: missing dist/extension.js -> "unknown" (silent
+                                   fallback preserved for mis-deployed bundles)
+   → All 22 prior tests still PASS (no regression)
+
+2. Production-path mechanical probe (against this repo's actual bundle)
+   $ bun -e 'import {resolveInstalledBundleIdentity} from \
+       "./apps/vscode/src/sdk/extension-host-allocation-profiler-runtime"; \
+       const r = resolveInstalledBundleIdentity(process.cwd()+"/dist"); \
+       console.log(r.extensionPath); console.log(r.extensionBundleSha256); \
+       console.log(r.sourceHead);'
+   → extensionPath: /Volumes/.../apps/vscode           (extension ROOT, NOT parent)
+   → extensionBundleSha256: 05dca218eb59fffea98a2328cd44ad59bb593e13e6a0108c3de62fecfe592d06
+   → sourceHead: 86a8a5016ed9825df0d1c23a71b52ca203da6d24
+   → load-bearing identity invariant RESTORED
+
+3. Inspector smoke probe (re-run, unchanged)
+   → HeapProfiler.startSampling ok (both collected-GC options accepted)
+   → stopSampling returned profile: samples=28957
+   → smoke probe PASS
+
+4. Typecheck
+   $ ./node_modules/.bin/tsc --noEmit --project tsconfig.json
+   → 0 errors
+
+5. Biome (changed files)
+   $ biome check \
+       src/sdk/extension-host-allocation-profiler.ts \
+       src/sdk/extension-host-allocation-profiler-runtime.ts \
+       src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts
+   → 0 errors / 0 warnings / 18 style infos
+
+6. git status --short
+   → clean after commit

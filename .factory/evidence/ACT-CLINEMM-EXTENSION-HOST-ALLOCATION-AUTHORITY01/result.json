@@ -28,12 +28,13 @@
     "allocation_authority": "UNAVAILABLE"
   },
   "test_results": {
-    "focused_allocauth_tests": "19/19 PASS",
+    "focused_allocauth_tests": "25/25 PASS",
     "bcnt01_conservation": "24/24 PASS",
     "tqcb01_conservation": "15/15 PASS",
     "btcont01_conservation": "10/10 PASS",
-    "ccard01_conservation": "PASS",
-    "inspector_smoke_probe": "PASS (HeapProfiler.startSampling with both collected-GC options accepted; profile has nodes + samples)"
+    "ccard01_conservation": "12/12 PASS",
+    "inspector_smoke_probe": "PASS (HeapProfiler.startSampling with both collected-GC options accepted; stopSampling returns a non-empty completed profile with samples=28957)",
+    "identity_path_fixture_probe": "PASS (filesystem-fixture ALLOCAUTH-IDENTITY-PATH-01..03: single-ascent from <root>/dist to extension root produces sha256 that matches fixture bytes; pre-correction two-level ascent produced 'unknown' silently)"
   },
   "allocation_authority": {
     "classification": "UNAVAILABLE (no live capture acquired)",
@@ -77,5 +78,14 @@
     "p1c_fix": "identity authority: installed_bundle_sha256 (load-bearing); source_head_informational only",
     "evidence_semantics_fix": "infrastructure lifecycle and live capture lifecycle are now separate",
     "test_count_delta": "19 -> 22 (FINAL-01 split, FINAL-03 added, CHECKPOINT-03 reworded)"
+  },
+  "corrected_path_2026-09-23": {
+    "review": "HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN (P0 + P2)",
+    "p0_fix": "installed bundle resolver: changed `path.resolve(__dirname, \"..\", \"..\")` (two ascents, walked ABOVE extension root) to `path.resolve(__dirname, \"..\")` (single ascent, lands on extension root). Pre-correction code silently produced installed_bundle_sha256=\"unknown\"; the load-bearing identity invariant was defeated.",
+    "p0_verification": "1) Mechanical probe against a filesystem fixture (`<root>/dist/extension.js`) shows the OLD path resolves to `parent-of-<root>/dist/extension.js` (does not exist) and the NEW path resolves to `<root>/dist/extension.js` (exists). 2) Focused tests ALLOCAUTH-IDENTITY-PATH-01/02/03 build the fixture, call the production resolver with `bundleDirname=<root>/dist`, and assert (a) extensionPath === root, (b) extensionBundleSha256 matches an independently-hashed sha256 of `<root>/dist/extension.js`, (c) extensionBundleSha256 != \"unknown\". 3) End-to-end probe against this repo's own `apps/vscode/dist/extension.js` (simulating `__dirname=<repo>/apps/vscode/dist`) yields extensionPath=`apps/vscode` and extensionBundleSha256=05dca218... (real SHA-256, not \"unknown\"). 4) Tests: 25/25 PASS.",
+    "p2_fix": "result.json test_results block: focused_allocauth_tests 19/19 -> 25/25; ccard01_conservation \"PASS\" -> \"12/12 PASS\"; added identity_path_fixture_probe entry.",
+    "additional_refactor": "resolver extracted into a separately-testable exported function `resolveInstalledBundleIdentity(bundleDirname: string)` so the production filesystem layout is mechanically provable from a fixture, instead of being implicit in __dirname wiring.",
+    "test_count_delta": "22 -> 25 (+3 ALLOCAUTH-IDENTITY-PATH-01/02/03)",
+    "verdict_unchanged": "PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING"
   }
 }

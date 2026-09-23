@@ -140,3 +140,68 @@ ls -la ~/.cline/data/diagnostics/allocation-authority/
 node scripts/analyze-allocation-profile.mjs \
     ~/.cline/data/diagnostics/allocation-authority/final-*.heapprofile.json 25
 ```
+
+## Path-correction patch (2026-09-23, post HALT_ALLOCATION_INSTALLED_BUNDLE_IDENTITY_PATH_UNPROVEN)
+
+**Bug.** The pre-correction code computed the installed bundle path
+with `path.resolve(__dirname, "..", "..")`. From a runtime `__dirname`
+of `<extension-root>/dist`, that resolves to `<parent-of-extension-root>`
+— one level too high. The hash read fails, the `try/catch` swallows
+the ENOENT, and `extensionBundleSha256 = "unknown"` is silently
+emitted. The load-bearing identity invariant was defeated.
+
+**Fix.** Single ascent: `path.resolve(__dirname, "..")` → `<extension-root>`,
+then read `<extension-root>/dist/extension.js`. Correct for both DEV
+(`extensionDevelopmentPath`) and installed VSIX layouts (verified by
+filesystem fixture).
+
+**Resolver refactor.** Extracted into a separately-testable exported
+function:
+
+```ts
+// apps/vscode/src/sdk/extension-host-allocation-profiler-runtime.ts
+export function resolveInstalledBundleIdentity(
+    bundleDirname: string,
+): { sourceHead: string; extensionPath: string; extensionBundleSha256: string }
+```
+
+`defaultIdentityResolver()` now simply calls
+`resolveInstalledBundleIdentity(__dirname)`.
+
+**Mechanical verification (recorded by tests):**
+
+```
+$ # Fixture: /tmp/clin-allocauth-identity-cDuhHy/dist/extension.js
+$ # Pre-correction path:
+$ node -e 'const p=require("path"); const d="/tmp/clin-.../dist"; \
+    console.log(p.join(p.resolve(d,"..",".."),"dist","extension.js"))'
+/tmp/dist/extension.js          # DOES NOT EXIST -> catch fires -> "unknown"
+
+$ # Post-correction path:
+$ node -e 'const p=require("path"); const d="/tmp/clin-.../dist"; \
+    console.log(p.join(p.resolve(d,".."),"dist","extension.js"))'
+/tmp/clin-allocauth-identity-cDuhHy/dist/extension.js   # EXISTS -> hash works
+
+$ # End-to-end probe against this repo's actual bundle:
+$ bun -e 'import {resolveInstalledBundleIdentity} from \
+    "./apps/vscode/src/sdk/extension-host-allocation-profiler-runtime"; \
+    const r = resolveInstalledBundleIdentity(process.cwd()+"/dist"); \
+    console.log(r.extensionPath); console.log(r.extensionBundleSha256);'
+/Volumes/.../apps/vscode
+05dca218eb59fffea98a2328cd44ad59bb593e13e6a0108c3de62fecfe592d06
+86a8a5016ed9825df0d1c23a71b52ca203da6d24
+```
+
+**Focused tests (added):**
+
+- `ALLOCAUTH-IDENTITY-PATH-01`: single-ascent from `<root>/dist` →
+  `extensionPath === root`, `extensionBundleSha256` matches an
+  independently-computed sha256 of `<root>/dist/extension.js`,
+  and `extensionBundleSha256 !== "unknown"`.
+- `ALLOCAUTH-IDENTITY-PATH-02`: VSIX-style deep parent path does
+  not break the single ascent.
+- `ALLOCAUTH-IDENTITY-PATH-03`: missing `dist/extension.js` →
+  `extensionBundleSha256 === "unknown"` (silent failure preserved
+  as a deliberate fallback for mis-deployed bundles).
+
+**Test count delta:** 22 → 25 (+3). All 25/25 PASS.
