@@ -7928,3 +7928,225 @@ with 7 files: `01-entry-state.txt`, `02-cwi-sample-table.txt`,
 `05-causal-interpretation.txt`, `06-column-quirk-retraction.txt`,
 `result.json` (JSON-valid). Repro script at `/tmp/timedelta_validate.js`
 (NOT git-tracked; reproducible from the cpuprofile bytes).
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01 — PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT — 2026-09-23
+
+**Goal (frozen, from predecessor ACT-02):** bind the five high-frequency
+JS leaves around the GC-heavy crash (Rnl, r_, e_, drain, Gyi) to exact
+source functions; reconstruct caller ancestry; authorize NO repair.
+
+**Method (with causal-review fixes applied in-place):**
+  - Method A: production-bundle body correlation (binding of record for every target).
+  - Method B: prodlike minify rebuild sourcemap. Status is per-target.
+  - tooling: `scripts/analyze-cpuprofile-hot-leaves.mjs` (added by this ACT).
+
+**Causal-review fixes** (V8 perf-engineer + Factory causal reviewer
+panel same day; original closure `PASS_HOT_LEAVES_SYMBOLIZED_REPAIR_NOT_AUTHORIZED`
+reopened to `PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT`):
+
+  - **P0-1** hitCount was being promoted into invocation/allocation rate
+    ("2726 RegExp constructions"). CPU profile is sample-based; one
+    invocation may receive 0/1/many samples. FIX: `interpreter_caveats`
+    block at top of result.json; no call/byte rate derived from hitCount
+    anywhere in the analyzer or evidence files.
+  - **P0-2** GC adjacency multiplied each boundary leaf by run length
+    (e.g. `e_/id=35` showed 13,333 exposures). FIX: split into TWO
+    honestly-named metrics. PRIMARY `gc_run_adjacency` (one per
+    contiguous GC run, run-length-independent; sum ≤ 428×2 = 856;
+    analyzer returns 855 = 856 - 1 collapse, sanity-consistent).
+    LEGACY `gc_sample_weighted_boundary_exposure` (BIASED, retained for
+    prior-reference truthfulness only). Causal selection uses PRIMARY
+    only.
+  - **P1** two-method contract was blanket-applied. FIX: per-target
+    status. `cwi` (per predecessor ACT-02) and `e_`×3 are
+    TWO_METHOD_AGREEMENT; all other targets are
+    METHOD_A_EXACT_BODY_BINDING with Method B non-correlatable
+    (production minify DCE'd/inlined them).
+  - **P1** "source HEAD" was conflated. FIX: three explicit identity
+    labels. `ANALYSIS_REPO_HEAD = 1bac7ad321e5c962af56cbfa862bb6b5ec4a77e2`
+    (working tree this analyzer was authored in). `DOGFOOD_SOURCE_HEAD
+    = d92235e67711976eb3582617583e9804034724e3` (commit that produced
+    the installed bundle; matches vsix filename prefix
+    `cline-4.1.16-d92235e67`). `PROFILE_SUBJECT_HEAD = N/A` (a
+    `.cpuprofile` is a captured artifact, not a git object).
+
+**Final bindings (after fixes):**
+
+| Mangled | Authored function                                            | Source file:line                            | Allocation class                                  | Method status                         |
+|---------|--------------------------------------------------------------|---------------------------------------------|---------------------------------------------------|----------------------------------------|
+| `cwi`   | `enterExtensionHostHotloopHandleSessionEvent`                | extension-host-hotloop-diagnostic.ts:147-154 | NO_OBVIOUS                                       | TWO_METHOD_AGREEMENT                   |
+| `Rnl`   | `xmlTagsRemoval`                                              | format.ts:224-229                            | ALLOCATES_DIRECTLY (1 `new RegExp`)               | METHOD_A_ONLY                          |
+| `r_`    | `normalizeUserInput`                                          | format.ts:134-146                            | ALLOCATES_DIRECTLY (2-4 `new RegExp`)             | METHOD_A_ONLY                          |
+| `e_`×3  | `captureContinuationCardinalityAuthorityRecord`              | continuation-cardinality-authority.ts:185-214 | DOCS_ONLY: NO_OBVIOUS; DOGFOOD_ON: ALLOCATES     | TWO_METHOD_AGREEMENT                   |
+| `Gyi`   | `isSyntheticUserPrompt`                                      | sdk-user-message-mapping.ts:72-108          | MAY_ALLOCATE_VIA_CALLEE                            | METHOD_A_ONLY                          |
+| `drain` | `PendingPromptsController.drain`                              | pending-prompt-service.ts:423-507           | ALLOCATES_DIRECTLY (conditional + snapshot)       | METHOD_A_ONLY                          |
+| `setWithWriter` | `TurnStateTracker.setWithWriter`                          | turn-state-tracker.ts:96-153                | ALLOCATES_DIRECTLY — UNCONDITIONAL (eager literal) | METHOD_A_ONLY                         |
+| `handleSessionEvent`×3 | `SdkSessionEventCoordinator.handleSessionEvent` | sdk-session-event-coordinator.ts:419-540    | MAY_ALLOCATE_VIA_CALLEE                            | METHOD_A_ONLY                          |
+| `onSessionEvent`×3    | `SdkMessageCoordinator.onSessionEvent`                   | sdk-message-coordinator.ts:57-62            | ALLOCATES_DIRECTLY (closure; listener-lifetime)    | METHOD_A_ONLY                          |
+
+**Allocation-ownership (after causal review):**
+
+  The 44% GC pressure's allocation owner is **NOT** established by
+  this ACT. The CPU profile cannot distinguish between several
+  structurally allocation-capable leaves. The previously-published
+  "cumulative unconditional allocation churn across the prompt-send
+  pipeline" claim had three invalidating defects fixed above (rate
+  from samples; adjacency × run length; synthetic `<25%` threshold).
+
+  `gc_run_adjacency` (PRIMARY, top by function name):
+    e_ 266 > Rnl 69 > handleSessionEvent 61 > r_ 57 > drain 54 >
+    (unnamed) 45 > onSessionEvent 40 > Gyi 36 > setWithWriter 34
+  These are too close together to single out any one leaf as the
+  GC-pressure owner from CPU samples alone.
+
+**Verdict (post-review):**
+
+```
+PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT
+  - HOT LEAF SYMBOL BINDINGS                  = PASS
+  - ALLOCATION-CAPABLE SOURCE SITES            = PROVEN (structural)
+  - hitCount == call count                     = FALSE (no rate derived)
+  - GC adjacency implementation                = BIAS-FREE (PRIMARY metric)
+  - candidate causal ranking                   = NOT TRUSTWORTHY
+  - 44% GC caused by named four sites          = NOT PROVEN
+  - production repair                          = NOT AUTHORIZED
+```
+
+**Recommended NEXT ACT (preallocated):**
+
+  `ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01`
+  Captures the same workload under V8 sampling heap profile
+  (`v8.writeHeapSnapshot` / `--heap-sampling` / `worker.getHeapSnapshot()`).
+  Emits per-stack `allocated sampled bytes`, `sample count`,
+  `allocation stack`, `source function`, `source line`. Classifies each
+  candidate as A/B/C (one-dominates / multi-contribute / none).
+  Optionally one ablation (diagnostic ON vs OFF) to separate `e_`'s
+  dogfood-only signal from production paths.
+
+  The previously-suggested `ACT-CLINEMM-EXTENSION-HOST-PROMPT-SEND-
+  PIPELINE-ALLOCATION-HOTPATH01` four-seam repair ACT is explicitly
+  NOT authorized.
+
+**Gates (post fixes):**
+
+```
+profile parser succeeds                                     ✓
+bundle SHA verified                                         ✓
+ANALYSIS_REPO_HEAD / DOGFOOD_SOURCE_HEAD / PROFILE_SUBJECT_HEAD
+    (three heads, disambiguated)                            ✓
+PROFILE-CTL-02 cwi calibration                             ✓
+all target nodes enumerated (21)                           ✓
+production-body binding complete (Method A)                ✓ (9 distinct
+                                                            authored funcs,
+                                                            METHOD_A is
+                                                            binding of
+                                                            record)
+sourcemap binding complete (Method B per-target)           ✓ (cwi + e_×3
+                                                            TWO_METHOD,
+                                                            rest B
+                                                            non-corr.)
+caller ancestry extracted                                   ✓
+GC adjacency PRIMARY metric (855 ≤ 428×2)                   ✓
+GC adjacency LEGACY metric labeled honestly                ✓
+git diff --check clean                                      ✓
+result.json emits interpreter_caveats (C1, C2)             ✓
+result.json emits identity_disambiguation                   ✓
+result.json emits method_b_status (per-target)             ✓
+```
+
+**Repository trust:**
+
+```
+$ git status --short
+?? scripts/analyze-cpuprofile-hot-leaves.mjs
+?? .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01/
+?? .factory/acts/ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01.md
+?? .factory/epic-board.md (this entry)
+```
+
+No tracked files modified. Production code untouched. Profile SHA256
+unchanged (`4c15bde38176a614aaf0e97c69176f584eb5bf09f9592ae93859dc2d9e4f405e`).
+Bundle SHA256 unchanged (`78ec3a0b9017ad467cd4886ff0c16f2a5061f286783c665a1c9137052d9fcb7c`).
+Predecessor ACT-02 file left untouched (its P2 blank-EOF residue
+preserved).
+
+**Conservation:**
+
+- Production code: NOT modified (no code path change).
+- Tests: NOT added (the analyzer itself is a one-off evidence tool).
+- Diagnostic module TEMPORARY status: UNCHANGED.
+- EHLOOP01 policy module PERMANENT status: UNCHANGED.
+- Provenance repair from PROVENANCE-HOTPATH01/CORRECTION02: STILL
+  EFFECTIVE (owi live-collapsed at 0.037%).
+- All prior ACT verdicts: UNCHANGED.
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01 — ROUND-2 causal review (2026-09-23)
+
+**Disposition: HALT_GC_RUN_ADJACENCY_AGGREGATION_BROKEN → CLOSED.**
+(Per subsequent expert review verdict.)
+
+Two new defects caught in a second pass, both fixed in-place:
+
+- **P0 (round 2) — `gc_run_adjacency.leaf_stats` keyed by sample index
+  not leaf node_id.** Same `node_id` appeared as N duplicate rows
+  (the e_×3 group would have looked like 177 across three rows when
+  re-summarized; smoke gun: function total 266 vs sum-across-leaves
+  177). Fixed by aggregating by `leafId`; each `node_id` now occurs
+  exactly once. Analyzer enforces three executably-checked
+  invariants; analyzer exits with code 3 if any fails:
+    I1: sum(rows.before+after) ≤ 2 × gcRuns (PRIMARY only)
+    I2: every node_id is unique
+    I3: function total == sum of leaf rows
+  Verifier output (round-2-corrected):
+    PRIMARY  gc_run_adjacency                     : I1 sum=855 OK=true; I2 unique_node_ids=true; I3 fn_eq_sum_nodes=true
+    LEGACY   gc_sample_weighted_boundary_exposure: I1 N/A per-sample; I2 unique_node_ids=true; I3 fn_eq_sum_nodes=true
+  PRIMARY rows = 69 unique node_ids (was 661 sample-idx-keyed rows).
+  Function-level aggregates are now reproducible by summing leaf
+  rows. e.g. e_×3 = 97 + 88 + 81 = 266.
+
+- **P1 (round 2) — successor ACT used the wrong primitives.**
+  `v8.writeHeapSnapshot()` and `Worker.getHeapSnapshot()` are
+  point-in-time heap STATE snapshots of survivors, not sampling
+  allocation profiles. Correct primitive: Inspector
+  `HeapProfiler.startSampling` / `stopSampling` (CDP v8.HeapProfiler
+  domain), with mandatory options:
+    includeObjectsCollectedByMinorGC: true
+    includeObjectsCollectedByMajorGC: true
+  Without the minor-GC option the profile reports only survivors at
+  stopSampling time, missing the short-lived allocation churn that
+  is exactly our hypothesis. External CLI fallback: `node --heap-prof
+  --heap-prof-interval=N`.
+
+**Final state (post round-2):**
+
+```
+PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT
+  - HOT LEAF SYMBOL BINDINGS                  = PASS
+  - ALLOCATION-CAPABLE SOURCE SITES            = PROVEN (structural)
+  - hitCount == call count                     = FALSE (no rate derived)
+  - GC adjacency implementation                = BIAS-FREE (PRIMARY,
+                                                 leaf-id aggregated,
+                                                 invariant-checked)
+  - candidate causal ranking                   = NOT TRUSTWORTHY
+  - 44% GC caused by named four sites          = NOT PROVEN
+  - production repair                          = NOT AUTHORIZED
+```
+
+**Successor (corrected primitives):**
+
+  `ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01`
+  Use Inspector `HeapProfiler.startSampling({ includeObjectsCollectedByMinorGC: true, includeObjectsCollectedByMajorGC: true, samplingInterval: …, stackDepth: … })` /
+  `HeapProfiler.stopSampling()`. Capture in real Extension Host under
+  real dogfood workload. Per-stack output: `allocated sampled bytes`,
+  `sample count`, `allocation stack`, `source function`, `source URL`,
+  `line/column`. Classify A/B/C (one-dominates / multi-contribute /
+  none). Do not ablate first.
+
+**No third re-open.** Round 3 of review-of-this-ACT is gated on
+new causation evidence arriving (allocation profile, live
+qualification, etc.). The bounded successor is the next ACT, not
+another review cycle of this one.

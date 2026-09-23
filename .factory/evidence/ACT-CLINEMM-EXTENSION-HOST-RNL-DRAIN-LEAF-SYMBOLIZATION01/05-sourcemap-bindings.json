@@ -1,0 +1,130 @@
+{
+  "method_status_summary": {
+    "TWO_METHOD_AGREEMENT": [
+      "cwi",
+      "e_1",
+      "e_2",
+      "e_3"
+    ],
+    "METHOD_A_EXACT_BODY_BINDING (Method B non-correlatable rebuild)": [
+      "Rnl",
+      "r_",
+      "Gyi",
+      "drain",
+      "setWithWriter",
+      "handleSessionEvent",
+      "onSessionEvent"
+    ],
+    "note": "Method A is the binding of record for every target. Method B's status is reported per-target because production minify DCE'd/inlined most candidates. See result.json.method_b_status.per_target_status for the analyzer's authoritative machine-readable version."
+  },
+  "artifact_identity": {
+    "profile_path": "/Volumes/UserData/Users/chistyakov/Downloads/exthost-402d7f.cpuprofile",
+    "profile_size": 331216,
+    "profile_sha256": "4c15bde38176a614aaf0e97c69176f584eb5bf09f9592ae93859dc2d9e4f405e",
+    "bundle_path": "/tmp/d92235e67/extension/dist/extension.js",
+    "bundle_size": 26212968,
+    "bundle_sha256": "78ec3a0b9017ad467cd4886ff0c16f2a5061f286783c665a1c9137052d9fcb7c",
+    "start_time": 494677901777,
+    "end_time": 494685096860,
+    "duration_ms": 7195.083,
+    "sample_count": 38582,
+    "time_deltas_length": 38582,
+    "node_count": 180,
+    "profile_ctl_01_sum_hitcount": 38581,
+    "profile_ctl_01_match": false
+  },
+  "ctl01_sum_hitcount": 38581,
+  "ctl01_samples_length": 38582,
+  "ctl01_match": false,
+  "ctl02_cwi": {
+    "node_id": 101,
+    "function_name": "cwi",
+    "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+    "line": 1,
+    "col": 4773,
+    "hit_count": 17,
+    "raw_sample_share_pct": 0.04406199782281893,
+    "sum_delta_us": 2202,
+    "sum_delta_ms": 2.202,
+    "min_delta_ms": 0.127,
+    "median_delta_ms": 0.129,
+    "p95_delta_ms": 0.134,
+    "max_delta_ms": 0.134,
+    "sample_indices_count": 17,
+    "parent_id": 33
+  },
+  "ctl02_cwi_body_signature_match": true,
+  "ctl02_cwi_calibration_pass": true,
+  "sourcemap_bindings": [
+    {
+      "target_name": "cwi",
+      "method_a_source": "apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts:147-154",
+      "method_a_function": "enterExtensionHostHotloopHandleSessionEvent",
+      "method_b_dev_col": 4773,
+      "method_b_source": "sdk/extension-host-hotloop-diagnostic.ts:147:7",
+      "method_b_agrees": true
+    },
+    {
+      "target_name": "Rnl",
+      "method_a_source": "sdk/packages/shared/src/prompt/format.ts:224-229",
+      "method_a_function": "xmlTagsRemoval",
+      "method_b_status": "DCE-folded (source-map returns unrelated module)",
+      "method_b_agrees": false,
+      "note": "production-bundle body byte-identical to source; Method B limited by esbuild DCE under minify=true"
+    },
+    {
+      "target_name": "r_",
+      "method_a_source": "sdk/packages/shared/src/prompt/format.ts:134-146",
+      "method_a_function": "normalizeUserInput",
+      "method_b_status": "DCE-folded",
+      "method_b_agrees": false
+    },
+    {
+      "target_name": "e_",
+      "method_a_source": "apps/vscode/src/sdk/continuation-cardinality-authority.ts:185-214",
+      "method_a_function": "captureContinuationCardinalityAuthorityRecord",
+      "method_b_dev_col": 2325,
+      "method_b_source": "sdk/continuation-cardinality-authority.ts:185:7",
+      "method_b_agrees": true
+    },
+    {
+      "target_name": "Gyi",
+      "method_a_source": "apps/vscode/src/sdk/sdk-user-message-mapping.ts:72-108",
+      "method_a_function": "isSyntheticUserPrompt",
+      "method_b_dev_col": 11474658,
+      "method_b_source": "sdk/w-carrier-trace-runtime.ts:290:62",
+      "method_b_agrees": false,
+      "note": "Method B returns unrelated module due to esbuild DCE"
+    },
+    {
+      "target_name": "drain",
+      "method_a_source": "sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts:423-507",
+      "method_a_function": "PendingPromptsController.drain",
+      "method_b_dev_col": 11938369,
+      "method_b_source": "sdk/w-carrier-trace-runtime.ts:290:62",
+      "method_b_agrees": false,
+      "note": "Method B returns unrelated module due to esbuild DCE"
+    },
+    {
+      "target_name": "setWithWriter",
+      "method_a_source": "apps/vscode/src/sdk/turn-state-tracker.ts:96-153",
+      "method_a_function": "TurnStateTracker.setWithWriter",
+      "method_b_status": "DCE-induced",
+      "method_b_agrees": false
+    },
+    {
+      "target_name": "handleSessionEvent",
+      "method_a_source": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts:419-540",
+      "method_a_function": "SdkSessionEventCoordinator.handleSessionEvent",
+      "method_b_status": "production bundle confirms first two calls are cwi()/lwi(e.type)",
+      "method_b_agrees": false
+    },
+    {
+      "target_name": "onSessionEvent",
+      "method_a_source": "apps/vscode/src/sdk/sdk-message-coordinator.ts:57-62",
+      "method_a_function": "SdkMessageCoordinator.onSessionEvent",
+      "method_b_status": "production bundle is two-line wrapper returning this.messages.onSessionEvent(e)",
+      "method_b_agrees": false
+    }
+  ]
+}

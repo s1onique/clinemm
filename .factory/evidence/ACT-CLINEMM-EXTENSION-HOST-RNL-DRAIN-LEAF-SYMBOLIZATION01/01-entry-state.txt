@@ -1,0 +1,205 @@
+ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01 — entry state
+==========================================================================
+
+Date:                 2026-09-23 (initial closure: same day — reopened TWICE:
+                      once after V8/perf-engineer causal review on the
+                      causal mapping; once after second-round review on
+                      the gc_run_adjacency aggregation. See "Verdict" below.)
+Reviewer disposition: PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT
+                      (V8 profiling engineer + Factory causal reviewer)
+Predecessor:          ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01
+                      (cwi CPU hotleaf REFUTED, top sustained leaves identified)
+
+Causal-review fixes applied to this ACT in place (no new investigation
+cycle, no replacement ACT):
+  1) hitCount is now NEVER converted into invocation/allocation rate.
+     The CPU profile is sample-based; one invocation may receive zero,
+     one, or many samples. Allocation capability is established
+     structurally via source-code inspection only.
+  2) GC adjacency is now computed as TWO clearly labeled metrics:
+       PRIMARY      = gc_run_adjacency
+                      (one count per contiguous GC run; run-length-
+                       independent; 856 = 428 × 2 sanity-checked)
+       LEGACY       = gc_sample_weighted_boundary_exposure
+                      (per-sample exposure; biased by run length;
+                       retained under honest name only)
+  3) Method B status is now explicit per target — cwi and e_ are
+     TWO_METHOD_AGREEMENT; the rest are METHOD_A_EXACT_BODY_BINDING
+     (Method B non-correlatable because the prodlike minified rebuild
+     DCE'd/inlined them).
+  4) Source HEAD labels are now disambiguated: ANALYSIS_REPO_HEAD
+     (= working tree where this analyzer was authored; may differ),
+     DOGFOOD_SOURCE_HEAD (= commit that produced the installed dogfood
+     bundle, = d92235e67711976eb3582617583e9804034724e3), and
+     PROFILE_SUBJECT_HEAD (a .cpuprofile is a captured artifact, not
+     a git object, so N/A).
+  5) SECOND-ROUND REVIEW FIX (#P0 / aggregation): the PRIMARY and
+     LEGACY metric tables are now keyed by leaf `node_id`, not by
+     sample index. A second-round review caught that the prior
+     `buildTable()` emitted one row per (leafId, GC-run) pair, so
+     the same leaf appeared as N duplicate rows. After this fix,
+     each `node_id` occurs at most once per leaf_stats table, and
+     the analyzer enforces three invariants at build time:
+       (I1) sum(rows.before+after) ≤ 2 × gcRuns  (PRIMARY only)
+       (I2) every node_id is unique              (PRIMARY and LEGACY)
+       (I3) function total == sum of leaf rows   (PRIMARY and LEGACY)
+     The analyzer exits with code 3 and refuses to emit
+     `result.json` if any invariant fails. Repro of all three is
+     trivial (sum the leaf table by `function_name`).
+
+    Rationale for per-round review handling:
+      - Round 1: causal mapping was wrong (hitCount == rate; run-
+        length multiplication).
+      - Round 2: data structure was wrong even though the math was
+        right (sampleIdx-keyed rows; function totals a re-aggregation
+        the analyzer did not emit).
+      - Round 3+: this ACT will not re-open for review unless new
+        causation evidence arrives (allocation profile result,
+        live qualification, etc.). The bounded successor
+        `ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01` is the
+        next ACT, not a third review cycle of this one.
+
+  6) SECOND-ROUND REVIEW FIX (#P1 / successor primitives): the
+     bounded successor ACT's primitive list was changed from
+     `v8.writeHeapSnapshot` / `--heap-sampling` / `worker.getHeapSnapshot`
+     (two of which are heap snapshots, not allocation sampling) to
+     Inspector `HeapProfiler.startSampling` / `stopSampling` with
+     `includeObjectsCollectedByMinorGC=true` and
+     `includeObjectsCollectedByMajorGC=true`. The minor-GC option
+     is load-bearing for this hypothesis (short-lived allocation
+     churn dies young; snapshot of survivors would miss it).
+     `node --heap-prof --heap-prof-interval=N` is a valid external
+     CLI fallback that produces the same shape of profile.
+
+Mission (verbatim, frozen):
+--------------------------
+> Symbolize the genuinely high-frequency JS leaves around the GC-heavy crash,
+> bind each to exact source, reconstruct caller ancestry, and authorize
+> **no repair** until an allocation-capable source seam is proven.
+
+The next question is therefore:
+
+> **What exact source functions do the genuinely high-frequency JS leaves correspond to,
+>    and which of them plausibly explains the 44% GC pressure?**
+
+This is a **symbolization ACT**, not a repair ACT.
+
+Frozen entry state (verbatim from predecessor ACT):
+----------------------------------------------------
+LIVE_EXTENSION_HOST_CRASH                    = PROVEN
+PROVENANCE_HOTPATH_owi                       = REPAIRED / LIVE-COLLAPSED
+CWI_SOURCE_BINDING                           = PROVEN
+CWI_CPU_HOTLEAF                              = REFUTED
+CWI_ADJACENT_TO_FIRST_SAMPLE_STALL           = PROVEN
+GC_RAW_SAMPLE_SHARE                          ≈ 44.1%
+SUSTAINED_JS_HOT_LEAVES                      = Rnl, drain, r_, e_, Gyi
+ALLOCATION_PRODUCER                          = UNKNOWN
+REPAIR_AUTHORIZED                            = NO
+
+Targets to bind (verbatim from mission):
+-----------------------------------------
+Rnl   @ extension.js:15:21885
+r_    @ extension.js:15:21185
+e_    @ all distinct hot e_ nodes
+drain @ extension.js:2549:11684
+Gyi   @ extension.js:4422:25
+
+Plus recorded ancestry anchors:
+setWithWriter
+handleSessionEvent
+onSessionEvent
+
+Forbidden in this ACT (verbatim from mission):
+-------------------------------------------------
+- changing PendingPromptsController.drain
+- suppressing events
+- changing queue cardinality
+- disabling diagnostics
+- reducing setWithWriter frequency
+- modifying Rnl/r_/e_/Gyi after identifying them
+- changing GC settings
+- adding caches
+- changing continuation semantics
+- changing CCARD
+
+Non-authorization statement:
+----------------------------
+The symbolization half of this ACT is useful and stands. The CPU sample
+data shows several frequently observed leaves on the failing path that
+each contain an allocation-capable statement, but does NOT prove
+which (or how much) each contributes to the 44% GC pressure.
+
+Final reviewer verdict (after two rounds of causal review):
+    PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT
+
+That is:
+  - HOT LEAF SYMBOL BINDINGS            = PASS
+  - ALLOCATION-CAPABLE SOURCE SITES     = PROVEN (structurally)
+  - hitCount == call count              = FALSE (do not infer rates)
+  - GC adjacency implementation         = NOW BIAS-FREE
+                                          (per-run count, run-length-
+                                           independent, aggregated by
+                                           node_id with executable
+                                           invariants)
+  - candidate causal ranking            = NOT TRUSTWORTHY (correlation
+                                           only; physical measurement
+                                           required for causal claim)
+  - 44% GC caused by named four sites   = NOT PROVEN
+  - production repair                   = NOT AUTHORIZED
+
+Status of each causal-review defect (closed in place):
+  - hitCount-as-call-rate defect          = CLOSED  (round 1)
+  - GC run-length multiplication defect   = CLOSED  (round 1)
+  - GC leaf-id aggregation defect         = CLOSED  (round 2 by invariants)
+  - heap snapshot as allocation profiler  = WRONG PRIMITIVE (round 2)
+  - Inspector HeapProfiler.startSampling  = CORRECT PRIMITIVE (round 2)
+  - minor-GC collected objects inclusion  = REQUIRED (round 2)
+
+The bounded successor ACT (preallocated, see Verdict below):
+    ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01
+    (capture the same workload via Inspector
+     HeapProfiler.startSampling/HeapProfiler.stopSampling with
+     includeObjectsCollectedByMinorGC=true,
+     includeObjectsCollectedByMajorGC=true; rank candidates by
+     sampled allocation bytes; do NOT ablate first)
+
+Allowed verdicts (verbatim + reviewer-posted):
+PASS_HOT_LEAVES_SYMBOLIZED_REPAIR_NOT_AUTHORIZED    (initial disposition)
+PASS_SYMBOLIZATION_ALLOCATION_CAUSE_UNRESOLVED      (no seam emerged)
+PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP              (seam observed but
+                                                     unmeasured)            ← ACTUAL
+HALT_REPAIR_ACT                                     (causal review halted
+                                                     production repair)
+HALT_SYMBOLIZER_NOT_CALIBRATED
+HALT_SYMBOL_BINDING_CONFLICT
+HALT_REPOSITORY_TRUST
+CAPTURE_INSUFFICIENT
+
+Sources / preconditions:
+-----------------------
+profile           : /Volumes/UserData/Users/chistyakov/Downloads/exthost-402d7f.cpuprofile
+                    331,216 bytes
+                    post-provenance-repair live crash capture
+                    SHA256: 4c15bde38176a614aaf0e97c69176f584eb5bf09f9592ae93859dc2d9e4f405e
+production vsix  : dist/dogfood/clinemm-4.1.16-d92235e67.vsix
+                    14,609,733 bytes
+                    SHA256: a5488857ed2d046a43c46e2a74444e15c6b042f844c9af9603c686fc1af84678
+production bundle: /tmp/d92235e67/extension/dist/extension.js
+                    26,212,968 bytes (one big minified line, ~5,652 internal newlines)
+                    SHA256: 78ec3a0b9017ad467cd4886ff0c16f2a5061f286783c665a1c9137052d9fcb7c
+installed ext path: /Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67
+dev sourcemap     : /tmp/extension_smap.js.map (87,723,857 bytes)
+                    Built with esbuild from HEAD d92235e67 by predecessor ACT-02
+                    build date: Sep 23 11:21:00 (matches HEAD source since source has
+                    not changed between ACT-02 and ACT-01 commit points)
+prodlike smap    : /tmp/extension_smap_prodlike.js.map (87,730,237 bytes)
+                    Built with esbuild minify=true,sourcemap=true,IS_DEV=false
+                    build date: Sep 23 12:01 (this ACT)
+
+Tooling (this ACT):
+-------------------
+- scripts/analyze-cpuprofile-hot-leaves.mjs
+    Esbuild + node executable; reads profile + bundle, emits
+    .factory/tmp/leaf-sym01/result.json with profile identity,
+    hitCount table, caller ancestry, GC adjacency, and calibration
+    control. Reproducible by anyone with the same profile, exact bundle.

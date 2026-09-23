@@ -1,0 +1,5279 @@
+{
+  "interpreter_caveats": {
+    "C1_hitcount_is_observations_not_invocations": {
+      "statement": "V8 cpuprofile `hitCount` is the count of samples where the leaf was on-CPU. It is NOT an invocation count. Per-call allocation rates / RegExp/sec / bytes/sec cannot be derived from this analyzer. Use a heap or allocation sampling profiler (V8 sampling heap profile, or `--heap-sampling`) for invocation/allocation evidence.",
+      "applied_in_this_output": "No call count, RegExp/sec, bytes/sec, or \"allocation owner\" claim is derived from hitCount. Allocation capability is established structurally (source inspection) and recorded per function in the targets[] block."
+    },
+    "C2_gc_adjacency_has_two_metrics": {
+      "statement": "The original adjacency algorithm counts the previous/next non-GC leaf for EVERY GC sample (biased by run length). The PRIMARY metric counts ONCE per contiguous GC run. Both are exposed with honest names.",
+      "applied_in_this_output": "gc_run_adjacency is the only metric for causal selection. gc_sample_weighted_boundary_exposure is tagged LEGACY/BIASED."
+    },
+    "C3_gc_adjacency_leafid_aggregation": {
+      "statement": "PRIMARY gc_run_adjacency is aggregated by leaf node_id; LEGACY gc_sample_weighted_boundary_exposure likewise. Each row in either leaf_stats table has a UNIQUE node_id. The analyzer enforces this invariant at build time: (I1) sum(rows.before+after) <= 2*gcRuns; (I2) node_ids are unique; (I3) function-level aggregate equals the sum of its constituent node aggregates. The analyzer refuses to emit result.json if any invariant fails.",
+      "applied_in_this_output": "Per-row uniqueness and the I3 function-sum identity are emitted inside gc_stats.gc_run_adjacency.invariants and gc_stats.gc_sample_weighted_boundary_exposure.invariants in result.json. Function-level totals in evidence files must be reproduced by summing these leaf rows."
+    }
+  },
+  "identity_disambiguation": {
+    "ANALYSIS_REPO_HEAD": "1bac7ad321e5c962af56cbfa862bb6b5ec4a77e2",
+    "ANALYSIS_REPO_HEAD_role": "Working tree in which this analyzer was authored (may differ from the profile subject)",
+    "DOGFOOD_SOURCE_HEAD": "d92235e67711976eb3582617583e9804034724e3",
+    "DOGFOOD_SOURCE_HEAD_role": "Commit hash that produced the installed dogfood bundle (matches the vsix filename prefix cline-4.1.16-d92235e67)",
+    "PROFILE_SUBJECT_HEAD": null,
+    "PROFILE_SUBJECT_HEAD_role": "A .cpuprofile is a captured artifact, not a git object — N/A"
+  },
+  "artifact_identity": {
+    "profile_path": "/Volumes/UserData/Users/chistyakov/Downloads/exthost-402d7f.cpuprofile",
+    "profile_size": 331216,
+    "profile_sha256": "4c15bde38176a614aaf0e97c69176f584eb5bf09f9592ae93859dc2d9e4f405e",
+    "bundle_path": "/tmp/d92235e67/extension/dist/extension.js",
+    "bundle_size": 26212968,
+    "bundle_sha256": "78ec3a0b9017ad467cd4886ff0c16f2a5061f286783c665a1c9137052d9fcb7c",
+    "start_time": 494677901777,
+    "end_time": 494685096860,
+    "duration_ms": 7195.083,
+    "sample_count": 38582,
+    "time_deltas_length": 38582,
+    "node_count": 180,
+    "profile_ctl_01_sum_hitcount": 38581,
+    "profile_ctl_01_match": false
+  },
+  "profile_ctl_01": {
+    "sum_hitcount": 38581,
+    "samples_length": 38582,
+    "match": false
+  },
+  "profile_ctl_02": {
+    "cwi_top_node": {
+      "node_id": 101,
+      "function_name": "cwi",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 1,
+      "col": 4773,
+      "hit_count": 17,
+      "raw_sample_share_pct": 0.04406199782281893,
+      "sum_delta_us": 2202,
+      "sum_delta_ms": 2.202,
+      "min_delta_ms": 0.127,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.134,
+      "sample_indices_count": 17,
+      "parent_id": 33
+    },
+    "cwi_decls_in_bundle": [
+      {
+        "offset": 4823,
+        "snippet": "function cwi(){$se&&(J7e++,Ww.handleSessionEventCalls++,J7e>Ww.maxNestedHandleDepth&&(Ww.maxNestedHandleDepth=J7e))}function dwi(){$se&&J7e>0&&J7e--}function Hmt(t){$se&&(Ww.logQueueEventsCalls++,t.producedLog?Ww.logQueu"
+      }
+    ],
+    "cwi_body_signature_match": true,
+    "cwi_calibration_pass": true
+  },
+  "top_25_leaves_by_raw_hitcount": [
+    {
+      "node_id": 67,
+      "function_name": "(garbage collector)",
+      "url": "",
+      "line": -1,
+      "col": -1,
+      "hit_count": 17012,
+      "raw_sample_share_pct": 44.09310040951739,
+      "sum_delta_us": 2214214,
+      "sum_delta_ms": 2214.214,
+      "min_delta_ms": 0.079,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.135,
+      "max_delta_ms": 1.257,
+      "sample_indices_count": 17012,
+      "parent_id": 1
+    },
+    {
+      "node_id": 37,
+      "function_name": "Rnl",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 15,
+      "col": 21885,
+      "hit_count": 2726,
+      "raw_sample_share_pct": 7.065470945000259,
+      "sum_delta_us": 354647,
+      "sum_delta_ms": 354.647,
+      "min_delta_ms": 0.112,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 1.898,
+      "sample_indices_count": 2726,
+      "parent_id": 36
+    },
+    {
+      "node_id": 4,
+      "function_name": "drain",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 2549,
+      "col": 11684,
+      "hit_count": 2120,
+      "raw_sample_share_pct": 5.494790316728007,
+      "sum_delta_us": 273756,
+      "sum_delta_ms": 273.756,
+      "min_delta_ms": 0.08,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.197,
+      "sample_indices_count": 2120,
+      "children_ids": [
+        5,
+        18,
+        27,
+        34,
+        48,
+        63,
+        92,
+        124,
+        137,
+        140,
+        173
+      ],
+      "parent_id": 3
+    },
+    {
+      "node_id": 36,
+      "function_name": "r_",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 15,
+      "col": 21185,
+      "hit_count": 1788,
+      "raw_sample_share_pct": 4.634285418070603,
+      "sum_delta_us": 231513,
+      "sum_delta_ms": 231.513,
+      "min_delta_ms": 0.106,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.245,
+      "sample_indices_count": 1788,
+      "children_ids": [
+        37
+      ],
+      "parent_id": 26
+    },
+    {
+      "node_id": 49,
+      "function_name": "e_",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 1,
+      "col": 2250,
+      "hit_count": 1327,
+      "raw_sample_share_pct": 3.4394277124047483,
+      "sum_delta_us": 171659,
+      "sum_delta_ms": 171.659,
+      "min_delta_ms": 0.102,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.206,
+      "sample_indices_count": 1327,
+      "parent_id": 48
+    },
+    {
+      "node_id": 26,
+      "function_name": "Gyi",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4422,
+      "col": 25,
+      "hit_count": 1251,
+      "raw_sample_share_pct": 3.242444663314499,
+      "sum_delta_us": 161511,
+      "sum_delta_ms": 161.511,
+      "min_delta_ms": 0.108,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.146,
+      "sample_indices_count": 1251,
+      "children_ids": [
+        36,
+        74
+      ],
+      "parent_id": 25
+    },
+    {
+      "node_id": 35,
+      "function_name": "e_",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 1,
+      "col": 2250,
+      "hit_count": 1146,
+      "raw_sample_share_pct": 2.9702970297029703,
+      "sum_delta_us": 148069,
+      "sum_delta_ms": 148.069,
+      "min_delta_ms": 0.119,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.153,
+      "sample_indices_count": 1146,
+      "parent_id": 34
+    },
+    {
+      "node_id": 80,
+      "function_name": "e_",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 1,
+      "col": 2250,
+      "hit_count": 1090,
+      "raw_sample_share_pct": 2.825151625110155,
+      "sum_delta_us": 140994,
+      "sum_delta_ms": 140.994,
+      "min_delta_ms": 0.113,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.171,
+      "sample_indices_count": 1090,
+      "parent_id": 79
+    },
+    {
+      "node_id": 51,
+      "function_name": "setWithWriter",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4468,
+      "col": 37927,
+      "hit_count": 976,
+      "raw_sample_share_pct": 2.529677051474781,
+      "sum_delta_us": 126210,
+      "sum_delta_ms": 126.21,
+      "min_delta_ms": 0.108,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.157,
+      "sample_indices_count": 976,
+      "children_ids": [
+        77,
+        98,
+        109
+      ],
+      "parent_id": 50
+    },
+    {
+      "node_id": 2,
+      "function_name": "processTicksAndRejections",
+      "url": "node:internal/process/task_queues",
+      "line": 71,
+      "col": 34,
+      "hit_count": 919,
+      "raw_sample_share_pct": 2.3819397646570937,
+      "sum_delta_us": 118454,
+      "sum_delta_ms": 118.454,
+      "min_delta_ms": 0.091,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.133,
+      "max_delta_ms": 0.174,
+      "sample_indices_count": 919,
+      "children_ids": [
+        3,
+        64,
+        84
+      ],
+      "parent_id": 1
+    },
+    {
+      "node_id": 24,
+      "function_name": "handleSessionEvent",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4467,
+      "col": 22436,
+      "hit_count": 692,
+      "raw_sample_share_pct": 1.7935824996112177,
+      "sum_delta_us": 89457,
+      "sum_delta_ms": 89.457,
+      "min_delta_ms": 0.098,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.163,
+      "sample_indices_count": 692,
+      "children_ids": [
+        25,
+        50,
+        53,
+        96,
+        97,
+        100,
+        113,
+        117,
+        120,
+        127,
+        135,
+        162,
+        177
+      ],
+      "parent_id": 23
+    },
+    {
+      "node_id": 32,
+      "function_name": "onSessionEvent",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4469,
+      "col": 7730,
+      "hit_count": 521,
+      "raw_sample_share_pct": 1.3503706391581567,
+      "sum_delta_us": 67169,
+      "sum_delta_ms": 67.169,
+      "min_delta_ms": 0.072,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.133,
+      "max_delta_ms": 0.161,
+      "sample_indices_count": 521,
+      "children_ids": [
+        33,
+        91,
+        93
+      ],
+      "parent_id": 31
+    },
+    {
+      "node_id": 13,
+      "function_name": "onSessionEvent",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4469,
+      "col": 7730,
+      "hit_count": 492,
+      "raw_sample_share_pct": 1.2752060546368773,
+      "sum_delta_us": 63609,
+      "sum_delta_ms": 63.609,
+      "min_delta_ms": 0.116,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.147,
+      "sample_indices_count": 492,
+      "children_ids": [
+        14,
+        94,
+        107,
+        179,
+        180
+      ],
+      "parent_id": 12
+    },
+    {
+      "node_id": 23,
+      "function_name": "onSessionEvent",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4469,
+      "col": 7730,
+      "hit_count": 473,
+      "raw_sample_share_pct": 1.225960292364315,
+      "sum_delta_us": 61174,
+      "sum_delta_ms": 61.174,
+      "min_delta_ms": 0.118,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.155,
+      "sample_indices_count": 473,
+      "children_ids": [
+        24,
+        89,
+        154,
+        156,
+        167,
+        176
+      ],
+      "parent_id": 22
+    },
+    {
+      "node_id": 72,
+      "function_name": "(program)",
+      "url": "",
+      "line": -1,
+      "col": -1,
+      "hit_count": 461,
+      "raw_sample_share_pct": 1.1948577056658547,
+      "sum_delta_us": 59367,
+      "sum_delta_ms": 59.367,
+      "min_delta_ms": 0.118,
+      "median_delta_ms": 0.128,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.148,
+      "sample_indices_count": 461,
+      "parent_id": 1
+    },
+    {
+      "node_id": 33,
+      "function_name": "handleSessionEvent",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4467,
+      "col": 22436,
+      "hit_count": 448,
+      "raw_sample_share_pct": 1.1611632367425224,
+      "sum_delta_us": 57970,
+      "sum_delta_ms": 57.97,
+      "min_delta_ms": 0.114,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.196,
+      "sample_indices_count": 448,
+      "children_ids": [
+        57,
+        71,
+        73,
+        75,
+        88,
+        101,
+        116,
+        132
+      ],
+      "parent_id": 32
+    },
+    {
+      "node_id": 14,
+      "function_name": "handleSessionEvent",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4467,
+      "col": 22436,
+      "hit_count": 423,
+      "raw_sample_share_pct": 1.09636618112073,
+      "sum_delta_us": 54745,
+      "sum_delta_ms": 54.745,
+      "min_delta_ms": 0.12,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.202,
+      "sample_indices_count": 423,
+      "children_ids": [
+        15,
+        16,
+        38,
+        68,
+        70,
+        108,
+        110,
+        150,
+        175
+      ],
+      "parent_id": 13
+    },
+    {
+      "node_id": 6,
+      "function_name": "runTurn",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 2549,
+      "col": 29893,
+      "hit_count": 422,
+      "raw_sample_share_pct": 1.093774298895858,
+      "sum_delta_us": 54419,
+      "sum_delta_ms": 54.419,
+      "min_delta_ms": 0.118,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.133,
+      "max_delta_ms": 0.139,
+      "sample_indices_count": 422,
+      "children_ids": [
+        7,
+        52,
+        105,
+        142,
+        152,
+        160,
+        166
+      ],
+      "parent_id": 5
+    },
+    {
+      "node_id": 7,
+      "function_name": "enqueue",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 2549,
+      "col": 10897,
+      "hit_count": 342,
+      "raw_sample_share_pct": 0.886423720906122,
+      "sum_delta_us": 44366,
+      "sum_delta_ms": 44.366,
+      "min_delta_ms": 0.115,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.136,
+      "max_delta_ms": 0.176,
+      "sample_indices_count": 342,
+      "children_ids": [
+        8,
+        17,
+        41,
+        79,
+        90,
+        128
+      ],
+      "parent_id": 6
+    },
+    {
+      "node_id": 41,
+      "function_name": "enqueue",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 2549,
+      "col": 9467,
+      "hit_count": 291,
+      "raw_sample_share_pct": 0.7542377274376653,
+      "sum_delta_us": 37595,
+      "sum_delta_ms": 37.595,
+      "min_delta_ms": 0.097,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.167,
+      "sample_indices_count": 291,
+      "children_ids": [
+        42,
+        81
+      ],
+      "parent_id": 7
+    },
+    {
+      "node_id": 82,
+      "function_name": "knl",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 15,
+      "col": 21433,
+      "hit_count": 192,
+      "raw_sample_share_pct": 0.4976413871753667,
+      "sum_delta_us": 24792,
+      "sum_delta_ms": 24.792,
+      "min_delta_ms": 0.126,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.133,
+      "max_delta_ms": 0.137,
+      "sample_indices_count": 192,
+      "parent_id": 74
+    },
+    {
+      "node_id": 3,
+      "function_name": "",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 2549,
+      "col": 12631,
+      "hit_count": 190,
+      "raw_sample_share_pct": 0.4924576227256234,
+      "sum_delta_us": 24508,
+      "sum_delta_ms": 24.508,
+      "min_delta_ms": 0.118,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.133,
+      "max_delta_ms": 0.147,
+      "sample_indices_count": 190,
+      "children_ids": [
+        4,
+        99,
+        114,
+        123,
+        133,
+        138,
+        161
+      ],
+      "parent_id": 2
+    },
+    {
+      "node_id": 42,
+      "function_name": "Mc",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 229,
+      "col": 61130,
+      "hit_count": 187,
+      "raw_sample_share_pct": 0.48468197605100827,
+      "sum_delta_us": 24154,
+      "sum_delta_ms": 24.154,
+      "min_delta_ms": 0.121,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.133,
+      "max_delta_ms": 0.144,
+      "sample_indices_count": 187,
+      "children_ids": [
+        43
+      ],
+      "parent_id": 41
+    },
+    {
+      "node_id": 61,
+      "function_name": "",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4468,
+      "col": 9468,
+      "hit_count": 173,
+      "raw_sample_share_pct": 0.44839562490280443,
+      "sum_delta_us": 22324,
+      "sum_delta_ms": 22.324,
+      "min_delta_ms": 0.112,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.134,
+      "max_delta_ms": 0.147,
+      "sample_indices_count": 173,
+      "parent_id": 40
+    },
+    {
+      "node_id": 55,
+      "function_name": "post",
+      "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+      "line": 4468,
+      "col": 9414,
+      "hit_count": 129,
+      "raw_sample_share_pct": 0.3343528070084495,
+      "sum_delta_us": 16635,
+      "sum_delta_ms": 16.635,
+      "min_delta_ms": 0.098,
+      "median_delta_ms": 0.129,
+      "p95_delta_ms": 0.135,
+      "max_delta_ms": 0.142,
+      "sample_indices_count": 129,
+      "children_ids": [
+        56
+      ],
+      "parent_id": 54
+    }
+  ],
+  "targets": [
+    {
+      "target_name": "Rnl",
+      "stats": {
+        "node_id": 37,
+        "function_name": "Rnl",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 15,
+        "col": 21885,
+        "hit_count": 2726,
+        "raw_sample_share_pct": 7.065470945000259,
+        "sum_delta_us": 354647,
+        "sum_delta_ms": 354.647,
+        "min_delta_ms": 0.112,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 1.898,
+        "sample_indices_count": 2726,
+        "parent_id": 36
+      },
+      "body_excerpt": {
+        "byte_offset": 122978,
+        "excerpt": "turn n?`/team ${n}`:\"/team\"}return e?`/${r.slash} ${e}`:`/${r.slash}`}function Rnl(t,e){if(!t?.trim())return\"\";if(!e)return t;let r=new RegExp(`<${e}\\\\b[^>]*>([\\\\s\\\\S]*?)</${e}>`,\"g\");return t.replace(r,\"$1\")}function Pnl(t){return t.startsWith(\"image/\")?\"image\":t.startsWith(\"audio/\")?\"audio\":t.startsWith(\"video/\")?\"video\":\"file\"}function r4i(t){return Mnl.safeParse(t).success}function Lnl(t){let e=t.endsWith(\"==\")?2:t.endsWith(\"=\")?1:0;return Math.floor(t.length*3/4)-e}function ZIr(t={}){return{maxImageEncodedBytes:t.maxImageEncodedBytes??n4i,maxImageDecodedBytes:t.maxImageDecodedBytes??i4i,maxTotalMediaBytes:t.maxTotalMediaBytes??Nnl}}function a4i(){return{totalEncodedBytes:0,keptImages:0,omittedImages:0,omittedReasons:{}}}function pgt(t,e){t.omittedImages+=1,t.omittedReasons[e]=(t.omittedReasons[e]??0)+1}function Unl(t,e,r,n){let a=ZIr(r);if(t>a.maxImageEncodedByte"
+      },
+      "enclosing_function": {
+        "name": "_A",
+        "offset": 122701
+      },
+      "distinct_parents": [
+        {
+          "id": 36,
+          "function_name": "r_",
+          "line": 15,
+          "col": 21185,
+          "hit_count": 1788
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 37,
+          "function_name": "Rnl",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21885,
+          "hit_count": 2726
+        },
+        {
+          "id": 36,
+          "function_name": "r_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21185,
+          "hit_count": 1788
+        },
+        {
+          "id": 26,
+          "function_name": "Gyi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4422,
+          "col": 25,
+          "hit_count": 1251
+        },
+        {
+          "id": 25,
+          "function_name": "svi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4440,
+          "col": 2645,
+          "hit_count": 45
+        },
+        {
+          "id": 24,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692
+        },
+        {
+          "id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473
+        },
+        {
+          "id": 22,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        },
+        {
+          "id": 20,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 19,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 18,
+          "function_name": "emitSubmitted",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12666,
+          "hit_count": 26
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "r_",
+      "stats": {
+        "node_id": 36,
+        "function_name": "r_",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 15,
+        "col": 21185,
+        "hit_count": 1788,
+        "raw_sample_share_pct": 4.634285418070603,
+        "sum_delta_us": 231513,
+        "sum_delta_ms": 231.513,
+        "min_delta_ms": 0.106,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.245,
+        "sample_indices_count": 1788,
+        "children_ids": [
+          37
+        ],
+        "parent_id": 26
+      },
+      "body_excerpt": {
+        "byte_offset": 122278,
+        "excerpt": "t r=Tnl(e.attrs,\"slash\");if(r)return{slash:r,content:e.content.trim()}}function r_(t){if(!t?.trim())return\"\";let e=t.trim();for(let r of[\"user_input\",\"user_command\"]){let n=Rnl(e,r);e=(n!==e?n:e.replace(new RegExp(`<${r}[^>]*>`,\"g\"),\"\")).trim()}return e}function HLe(t){return t?.trim()?knl(t,\"mode_notice\").trim():\"\"}function knl(t,e){let r=`<${e}>`,n=`</${e}>`,a=t,o=a.indexOf(r);for(;o!==-1;){let i=a.indexOf(n,o+r.length);if(i===-1)break;a=a.slice(0,o)+a.slice(i+n.length),o=a.indexOf(r,o)}return a}function _A(t){let e=HLe(r_(t)),r=t4i(t);if(!r)return e;if(r.slash.toLowerCase()===\"team\"){let n=e.toLowerCase().startsWith(\"spawn a team of agents for the following task:\")?e.slice(46).trim():e;return n?`/team ${n}`:\"/team\"}return e?`/${r.slash} ${e}`:`/${r.slash}`}function Rnl(t,e){if(!t?.trim())return\"\";if(!e)return t;let r=new RegExp(`<${e}\\\\b[^>]*>([\\\\s\\\\S]*?)</${e}>`,\""
+      },
+      "enclosing_function": {
+        "name": "t4i",
+        "offset": 122118
+      },
+      "distinct_parents": [
+        {
+          "id": 26,
+          "function_name": "Gyi",
+          "line": 4422,
+          "col": 25,
+          "hit_count": 1251
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 36,
+          "function_name": "r_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21185,
+          "hit_count": 1788
+        },
+        {
+          "id": 26,
+          "function_name": "Gyi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4422,
+          "col": 25,
+          "hit_count": 1251
+        },
+        {
+          "id": 25,
+          "function_name": "svi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4440,
+          "col": 2645,
+          "hit_count": 45
+        },
+        {
+          "id": 24,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692
+        },
+        {
+          "id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473
+        },
+        {
+          "id": 22,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        },
+        {
+          "id": 20,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 19,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 18,
+          "function_name": "emitSubmitted",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12666,
+          "hit_count": 26
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "drain",
+      "stats": {
+        "node_id": 4,
+        "function_name": "drain",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 2549,
+        "col": 11684,
+        "hit_count": 2120,
+        "raw_sample_share_pct": 5.494790316728007,
+        "sum_delta_us": 273756,
+        "sum_delta_ms": 273.756,
+        "min_delta_ms": 0.08,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.197,
+        "sample_indices_count": 2120,
+        "children_ids": [
+          5,
+          18,
+          27,
+          34,
+          48,
+          63,
+          92,
+          124,
+          137,
+          140,
+          173
+        ],
+        "parent_id": 3
+      },
+      "body_excerpt": {
+        "byte_offset": 11695882,
+        "excerpt": ",promptId:o.id,...r.jobId!==void 0?{jobId:r.jobId}:{}})}this.scheduleDrain(e,n)}consumeSteer(e){let r=this.deps.getSession(e);if(!r)return;let{entry:n}=this.service.consumeSteer(r);if(n)return this.emitPrompts(r),this.emitSubmitted(r,n),n}discardQueue(e){e.pendingPrompts.length!==0&&(this.service.clear(e),this.emitPrompts(e))}emitPrompts(e){this.deps.emit({type:\"pending_prompts\",payload:{sessionId:e.sessionId,prompts:eP(e)}})}scheduleDrain(e,r){r.pendingPrompts.length===0||r.aborting||r.drainingPendingPrompts||!r.agent.canStartRun()||queueMicrotask(()=>{this.drain(e)})}async drain(e){let r=this.deps.getSession(e);if(!r||r.aborting||r.drainingPendingPrompts||!r.agent.canStartRun())return;let{entry:n}=this.service.shiftNext(r);if(!n)return;this.deps.onBeforeDrain&&this.deps.onBeforeDrain({sessionId:e,promptId:n.id,delivery:n.delivery,...n.jobId!==void 0?{jobId:n.jobId}:"
+      },
+      "enclosing_function": null,
+      "distinct_parents": [
+        {
+          "id": 3,
+          "function_name": "",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "Gyi",
+      "stats": {
+        "node_id": 26,
+        "function_name": "Gyi",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4422,
+        "col": 25,
+        "hit_count": 1251,
+        "raw_sample_share_pct": 3.242444663314499,
+        "sum_delta_us": 161511,
+        "sum_delta_ms": 161.511,
+        "min_delta_ms": 0.108,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.146,
+        "sample_indices_count": 1251,
+        "children_ids": [
+          36,
+          74
+        ],
+        "parent_id": 25
+      },
+      "body_excerpt": {
+        "byte_offset": 24556677,
+        "excerpt": "),z=e8u(H);z&&z!==\"en\"&&(v=`${v}\n\n# Preferred Language\n\nSpeak in ${z}.`)}catch(H){ke.warn(\"[SessionFactory] Failed to inject preferredLanguage instructions:\",H)}let y=Ro.get(),R=y.getGlobalSettingsKey(\"useAutoCondense\")??!0,b=G9t(),x=y.getGlobalSettingsKey(\"enableCheckpointsSetting\")??!0,I=t.taskSettings?.useAutoCondense??R,T=t.taskSettings?.userContextCeiling??y.getGlobalSettingsKey(\"userContextCeiling\"),M=Z0(i),N=await un0(),G=await ln0(),W;try{Th(hN()),W=await p7t(M);let H=E?.modelInfoSource===\"fallback\"&&!E.overrides;E&&!H&&!W?.[s]&&(W={...W??{},[s]:fn0(E)})}catch(H){ke.warn(`[SessionFactory] Failed to resolve known models for provider=${M}:`,H)}let q={...p??h??m??g??{},providerId:M,modelId:s,...u?{apiKey:u}:{},...c!==void 0?{baseUrl:c}:{},...d!==void 0?{apiLine:d}:{},...W&&Object.keys(W).length>0?{knownModels:W}:{},...C!==void 0?{maxOutputTokens:C}:{},fetch:ed},L"
+      },
+      "enclosing_function": {
+        "name": "V8u",
+        "offset": 24554619
+      },
+      "distinct_parents": [
+        {
+          "id": 25,
+          "function_name": "svi",
+          "line": 4440,
+          "col": 2645,
+          "hit_count": 45
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 26,
+          "function_name": "Gyi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4422,
+          "col": 25,
+          "hit_count": 1251
+        },
+        {
+          "id": 25,
+          "function_name": "svi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4440,
+          "col": 2645,
+          "hit_count": 45
+        },
+        {
+          "id": 24,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692
+        },
+        {
+          "id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473
+        },
+        {
+          "id": 22,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        },
+        {
+          "id": 20,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 19,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 18,
+          "function_name": "emitSubmitted",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12666,
+          "hit_count": 26
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "setWithWriter",
+      "stats": {
+        "node_id": 51,
+        "function_name": "setWithWriter",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4468,
+        "col": 37927,
+        "hit_count": 976,
+        "raw_sample_share_pct": 2.529677051474781,
+        "sum_delta_us": 126210,
+        "sum_delta_ms": 126.21,
+        "min_delta_ms": 0.108,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.157,
+        "sample_indices_count": 976,
+        "children_ids": [
+          77,
+          98,
+          109
+        ],
+        "parent_id": 50
+      },
+      "body_excerpt": {
+        "byte_offset": 24825907,
+        "excerpt": ",text:\"\"}),a}appendLegacyTaskWarningAndResumeMessage(e){let r=e.filter(a=>a.ask!==\"resume_task\"&&a.ask!==\"resume_completed_task\"),n=Date.now();return r.push({ts:n,type:\"say\",say:\"text\",text:\"\\u26A0\\uFE0F This is a legacy task. It may not work as well because tool names may have changed.\"},{ts:n+1,type:\"ask\",ask:\"resume_task\",text:\"\"}),r}}});function Ro0(t){return Kee(t)===\"cline\"}var axr,KLu=se(()=>{\"use strict\";_f();Ni();vnt();Mr();GC();x1r();P1r();nxr();axr=class{constructor(e){this.options=e}async initTask(e,r,n,a,o){ke.log(`[SdkController] initTask called: \"${e?.substring(0,50)}\"`);let i=this.options.taskOperationFence.begin(),s=()=>this.options.taskOperationFence.isCurrent(i),u,c,d;try{await this.options.clearTaskForOperation(i);let f=await this.options.getWorkspaceRoot(),p=this.getCurrentMode();ke.log(`[SdkController] Building session config: mode=${p}, cwd=${f}"
+      },
+      "enclosing_function": null,
+      "distinct_parents": [
+        {
+          "id": 50,
+          "function_name": "setTurnPhase",
+          "line": 4469,
+          "col": 19880,
+          "hit_count": 44
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 51,
+          "function_name": "setWithWriter",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 37927,
+          "hit_count": 976
+        },
+        {
+          "id": 50,
+          "function_name": "setTurnPhase",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 19880,
+          "hit_count": 44
+        },
+        {
+          "id": 24,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692
+        },
+        {
+          "id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473
+        },
+        {
+          "id": 22,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        },
+        {
+          "id": 20,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 19,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 18,
+          "function_name": "emitSubmitted",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12666,
+          "hit_count": 26
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "handleSessionEvent",
+      "stats": {
+        "node_id": 14,
+        "function_name": "handleSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4467,
+        "col": 22436,
+        "hit_count": 423,
+        "raw_sample_share_pct": 1.09636618112073,
+        "sum_delta_us": 54745,
+        "sum_delta_ms": 54.745,
+        "min_delta_ms": 0.12,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.202,
+        "sample_indices_count": 423,
+        "children_ids": [
+          15,
+          16,
+          38,
+          68,
+          70,
+          108,
+          110,
+          150,
+          175
+        ],
+        "parent_id": 13
+      },
+      "body_excerpt": {
+        "byte_offset": 24779366,
+        "excerpt": "mise.resolve().then(()=>(Eg(),J4s)),n=r.get(),a=await e({task:void 0,stateManager:n,mcpHub:void 0,backgroundCommandRunning:!1,foregroundCommandRunning:!1,backgroundCommandTaskId:void 0});await g0t(a)}}catch(e){ke.error(\"[WebviewGrpcBridge] Failed to push state update:\",e)}}async pushStateUpdateFromController(e){try{let r=await e();await g0t(r)}catch(r){ke.error(\"[WebviewGrpcBridge] Failed to push state update from controller:\",r)}}}});var V1r,MLu=se(()=>{\"use strict\";Mr();ebi();V1r=class{constructor(e){this.options=e}sessionEventListeners=new Set;saveClineMessagesTimer;stamp(e){let r=this.options.getMinter?.();if(!r)return;let n=r.epoch;for(let a of e)a.seq=r.nextSeq(),a.epoch=n}dispose(){this.cancelPendingSave(),this.sessionEventListeners.clear()}cancelPendingSave(){this.saveClineMessagesTimer&&(clearTimeout(this.saveClineMessagesTimer),this.saveClineMessagesTimer=vo"
+      },
+      "enclosing_function": {
+        "name": "PLu",
+        "offset": 24778366
+      },
+      "distinct_parents": [
+        {
+          "id": 13,
+          "function_name": "onSessionEvent",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 492
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 14,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 423
+        },
+        {
+          "id": 13,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 492
+        },
+        {
+          "id": 12,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 11,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 115
+        },
+        {
+          "id": 10,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 9,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 8,
+          "function_name": "emitPrompts",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11436,
+          "hit_count": 18
+        },
+        {
+          "id": 7,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10897,
+          "hit_count": 342
+        },
+        {
+          "id": 6,
+          "function_name": "runTurn",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 29893,
+          "hit_count": 422
+        },
+        {
+          "id": 5,
+          "function_name": "send",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18561,
+          "hit_count": 91
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "handleSessionEvent",
+      "stats": {
+        "node_id": 24,
+        "function_name": "handleSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4467,
+        "col": 22436,
+        "hit_count": 692,
+        "raw_sample_share_pct": 1.7935824996112177,
+        "sum_delta_us": 89457,
+        "sum_delta_ms": 89.457,
+        "min_delta_ms": 0.098,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.163,
+        "sample_indices_count": 692,
+        "children_ids": [
+          25,
+          50,
+          53,
+          96,
+          97,
+          100,
+          113,
+          117,
+          120,
+          127,
+          135,
+          162,
+          177
+        ],
+        "parent_id": 23
+      },
+      "body_excerpt": {
+        "byte_offset": 24779366,
+        "excerpt": "mise.resolve().then(()=>(Eg(),J4s)),n=r.get(),a=await e({task:void 0,stateManager:n,mcpHub:void 0,backgroundCommandRunning:!1,foregroundCommandRunning:!1,backgroundCommandTaskId:void 0});await g0t(a)}}catch(e){ke.error(\"[WebviewGrpcBridge] Failed to push state update:\",e)}}async pushStateUpdateFromController(e){try{let r=await e();await g0t(r)}catch(r){ke.error(\"[WebviewGrpcBridge] Failed to push state update from controller:\",r)}}}});var V1r,MLu=se(()=>{\"use strict\";Mr();ebi();V1r=class{constructor(e){this.options=e}sessionEventListeners=new Set;saveClineMessagesTimer;stamp(e){let r=this.options.getMinter?.();if(!r)return;let n=r.epoch;for(let a of e)a.seq=r.nextSeq(),a.epoch=n}dispose(){this.cancelPendingSave(),this.sessionEventListeners.clear()}cancelPendingSave(){this.saveClineMessagesTimer&&(clearTimeout(this.saveClineMessagesTimer),this.saveClineMessagesTimer=vo"
+      },
+      "enclosing_function": {
+        "name": "PLu",
+        "offset": 24778366
+      },
+      "distinct_parents": [
+        {
+          "id": 23,
+          "function_name": "onSessionEvent",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 24,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692
+        },
+        {
+          "id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473
+        },
+        {
+          "id": 22,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        },
+        {
+          "id": 20,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 19,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 18,
+          "function_name": "emitSubmitted",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12666,
+          "hit_count": 26
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "handleSessionEvent",
+      "stats": {
+        "node_id": 33,
+        "function_name": "handleSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4467,
+        "col": 22436,
+        "hit_count": 448,
+        "raw_sample_share_pct": 1.1611632367425224,
+        "sum_delta_us": 57970,
+        "sum_delta_ms": 57.97,
+        "min_delta_ms": 0.114,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.196,
+        "sample_indices_count": 448,
+        "children_ids": [
+          57,
+          71,
+          73,
+          75,
+          88,
+          101,
+          116,
+          132
+        ],
+        "parent_id": 32
+      },
+      "body_excerpt": {
+        "byte_offset": 24779366,
+        "excerpt": "mise.resolve().then(()=>(Eg(),J4s)),n=r.get(),a=await e({task:void 0,stateManager:n,mcpHub:void 0,backgroundCommandRunning:!1,foregroundCommandRunning:!1,backgroundCommandTaskId:void 0});await g0t(a)}}catch(e){ke.error(\"[WebviewGrpcBridge] Failed to push state update:\",e)}}async pushStateUpdateFromController(e){try{let r=await e();await g0t(r)}catch(r){ke.error(\"[WebviewGrpcBridge] Failed to push state update from controller:\",r)}}}});var V1r,MLu=se(()=>{\"use strict\";Mr();ebi();V1r=class{constructor(e){this.options=e}sessionEventListeners=new Set;saveClineMessagesTimer;stamp(e){let r=this.options.getMinter?.();if(!r)return;let n=r.epoch;for(let a of e)a.seq=r.nextSeq(),a.epoch=n}dispose(){this.cancelPendingSave(),this.sessionEventListeners.clear()}cancelPendingSave(){this.saveClineMessagesTimer&&(clearTimeout(this.saveClineMessagesTimer),this.saveClineMessagesTimer=vo"
+      },
+      "enclosing_function": {
+        "name": "PLu",
+        "offset": 24778366
+      },
+      "distinct_parents": [
+        {
+          "id": 32,
+          "function_name": "onSessionEvent",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 521
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 33,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 448
+        },
+        {
+          "id": 32,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 521
+        },
+        {
+          "id": 31,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 30,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 79
+        },
+        {
+          "id": 29,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 28,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 27,
+          "function_name": "emitPrompts",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11436,
+          "hit_count": 21
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "handleSessionEvent",
+      "stats": {
+        "node_id": 118,
+        "function_name": "handleSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4467,
+        "col": 22436,
+        "hit_count": 3,
+        "raw_sample_share_pct": 0.007775646674615105,
+        "sum_delta_us": 384,
+        "sum_delta_ms": 0.384,
+        "min_delta_ms": 0.127,
+        "median_delta_ms": 0.128,
+        "p95_delta_ms": 0.129,
+        "max_delta_ms": 0.129,
+        "sample_indices_count": 3,
+        "parent_id": 1
+      },
+      "body_excerpt": {
+        "byte_offset": 24779366,
+        "excerpt": "mise.resolve().then(()=>(Eg(),J4s)),n=r.get(),a=await e({task:void 0,stateManager:n,mcpHub:void 0,backgroundCommandRunning:!1,foregroundCommandRunning:!1,backgroundCommandTaskId:void 0});await g0t(a)}}catch(e){ke.error(\"[WebviewGrpcBridge] Failed to push state update:\",e)}}async pushStateUpdateFromController(e){try{let r=await e();await g0t(r)}catch(r){ke.error(\"[WebviewGrpcBridge] Failed to push state update from controller:\",r)}}}});var V1r,MLu=se(()=>{\"use strict\";Mr();ebi();V1r=class{constructor(e){this.options=e}sessionEventListeners=new Set;saveClineMessagesTimer;stamp(e){let r=this.options.getMinter?.();if(!r)return;let n=r.epoch;for(let a of e)a.seq=r.nextSeq(),a.epoch=n}dispose(){this.cancelPendingSave(),this.sessionEventListeners.clear()}cancelPendingSave(){this.saveClineMessagesTimer&&(clearTimeout(this.saveClineMessagesTimer),this.saveClineMessagesTimer=vo"
+      },
+      "enclosing_function": {
+        "name": "PLu",
+        "offset": 24778366
+      },
+      "distinct_parents": [
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 118,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 3
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "handleSessionEvent",
+      "stats": {
+        "node_id": 122,
+        "function_name": "handleSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4467,
+        "col": 22436,
+        "hit_count": 5,
+        "raw_sample_share_pct": 0.012959411124358508,
+        "sum_delta_us": 648,
+        "sum_delta_ms": 0.648,
+        "min_delta_ms": 0.129,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.131,
+        "max_delta_ms": 0.131,
+        "sample_indices_count": 5,
+        "parent_id": 11
+      },
+      "body_excerpt": {
+        "byte_offset": 24779366,
+        "excerpt": "mise.resolve().then(()=>(Eg(),J4s)),n=r.get(),a=await e({task:void 0,stateManager:n,mcpHub:void 0,backgroundCommandRunning:!1,foregroundCommandRunning:!1,backgroundCommandTaskId:void 0});await g0t(a)}}catch(e){ke.error(\"[WebviewGrpcBridge] Failed to push state update:\",e)}}async pushStateUpdateFromController(e){try{let r=await e();await g0t(r)}catch(r){ke.error(\"[WebviewGrpcBridge] Failed to push state update from controller:\",r)}}}});var V1r,MLu=se(()=>{\"use strict\";Mr();ebi();V1r=class{constructor(e){this.options=e}sessionEventListeners=new Set;saveClineMessagesTimer;stamp(e){let r=this.options.getMinter?.();if(!r)return;let n=r.epoch;for(let a of e)a.seq=r.nextSeq(),a.epoch=n}dispose(){this.cancelPendingSave(),this.sessionEventListeners.clear()}cancelPendingSave(){this.saveClineMessagesTimer&&(clearTimeout(this.saveClineMessagesTimer),this.saveClineMessagesTimer=vo"
+      },
+      "enclosing_function": {
+        "name": "PLu",
+        "offset": 24778366
+      },
+      "distinct_parents": [
+        {
+          "id": 11,
+          "function_name": "emit",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 115
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 122,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 5
+        },
+        {
+          "id": 11,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 115
+        },
+        {
+          "id": 10,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 9,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 8,
+          "function_name": "emitPrompts",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11436,
+          "hit_count": 18
+        },
+        {
+          "id": 7,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10897,
+          "hit_count": 342
+        },
+        {
+          "id": 6,
+          "function_name": "runTurn",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 29893,
+          "hit_count": 422
+        },
+        {
+          "id": 5,
+          "function_name": "send",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18561,
+          "hit_count": 91
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "handleSessionEvent",
+      "stats": {
+        "node_id": 149,
+        "function_name": "handleSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4467,
+        "col": 22436,
+        "hit_count": 1,
+        "raw_sample_share_pct": 0.0025918822248717018,
+        "sum_delta_us": 128,
+        "sum_delta_ms": 0.128,
+        "min_delta_ms": 0.128,
+        "median_delta_ms": 0.128,
+        "p95_delta_ms": 0.128,
+        "max_delta_ms": 0.128,
+        "sample_indices_count": 1,
+        "parent_id": 21
+      },
+      "body_excerpt": {
+        "byte_offset": 24779366,
+        "excerpt": "mise.resolve().then(()=>(Eg(),J4s)),n=r.get(),a=await e({task:void 0,stateManager:n,mcpHub:void 0,backgroundCommandRunning:!1,foregroundCommandRunning:!1,backgroundCommandTaskId:void 0});await g0t(a)}}catch(e){ke.error(\"[WebviewGrpcBridge] Failed to push state update:\",e)}}async pushStateUpdateFromController(e){try{let r=await e();await g0t(r)}catch(r){ke.error(\"[WebviewGrpcBridge] Failed to push state update from controller:\",r)}}}});var V1r,MLu=se(()=>{\"use strict\";Mr();ebi();V1r=class{constructor(e){this.options=e}sessionEventListeners=new Set;saveClineMessagesTimer;stamp(e){let r=this.options.getMinter?.();if(!r)return;let n=r.epoch;for(let a of e)a.seq=r.nextSeq(),a.epoch=n}dispose(){this.cancelPendingSave(),this.sessionEventListeners.clear()}cancelPendingSave(){this.saveClineMessagesTimer&&(clearTimeout(this.saveClineMessagesTimer),this.saveClineMessagesTimer=vo"
+      },
+      "enclosing_function": {
+        "name": "PLu",
+        "offset": 24778366
+      },
+      "distinct_parents": [
+        {
+          "id": 21,
+          "function_name": "emit",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 149,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 1
+        },
+        {
+          "id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        },
+        {
+          "id": 20,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 19,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 18,
+          "function_name": "emitSubmitted",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12666,
+          "hit_count": 26
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "handleSessionEvent",
+      "stats": {
+        "node_id": 170,
+        "function_name": "handleSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4467,
+        "col": 22436,
+        "hit_count": 1,
+        "raw_sample_share_pct": 0.0025918822248717018,
+        "sum_delta_us": 123,
+        "sum_delta_ms": 0.123,
+        "min_delta_ms": 0.123,
+        "median_delta_ms": 0.123,
+        "p95_delta_ms": 0.123,
+        "max_delta_ms": 0.123,
+        "sample_indices_count": 1,
+        "parent_id": 30
+      },
+      "body_excerpt": {
+        "byte_offset": 24779366,
+        "excerpt": "mise.resolve().then(()=>(Eg(),J4s)),n=r.get(),a=await e({task:void 0,stateManager:n,mcpHub:void 0,backgroundCommandRunning:!1,foregroundCommandRunning:!1,backgroundCommandTaskId:void 0});await g0t(a)}}catch(e){ke.error(\"[WebviewGrpcBridge] Failed to push state update:\",e)}}async pushStateUpdateFromController(e){try{let r=await e();await g0t(r)}catch(r){ke.error(\"[WebviewGrpcBridge] Failed to push state update from controller:\",r)}}}});var V1r,MLu=se(()=>{\"use strict\";Mr();ebi();V1r=class{constructor(e){this.options=e}sessionEventListeners=new Set;saveClineMessagesTimer;stamp(e){let r=this.options.getMinter?.();if(!r)return;let n=r.epoch;for(let a of e)a.seq=r.nextSeq(),a.epoch=n}dispose(){this.cancelPendingSave(),this.sessionEventListeners.clear()}cancelPendingSave(){this.saveClineMessagesTimer&&(clearTimeout(this.saveClineMessagesTimer),this.saveClineMessagesTimer=vo"
+      },
+      "enclosing_function": {
+        "name": "PLu",
+        "offset": 24778366
+      },
+      "distinct_parents": [
+        {
+          "id": 30,
+          "function_name": "emit",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 79
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 170,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 1
+        },
+        {
+          "id": 30,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 79
+        },
+        {
+          "id": 29,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 28,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 27,
+          "function_name": "emitPrompts",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11436,
+          "hit_count": 21
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "onSessionEvent",
+      "stats": {
+        "node_id": 13,
+        "function_name": "onSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4469,
+        "col": 7730,
+        "hit_count": 492,
+        "raw_sample_share_pct": 1.2752060546368773,
+        "sum_delta_us": 63609,
+        "sum_delta_ms": 63.609,
+        "min_delta_ms": 0.116,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.147,
+        "sample_indices_count": 492,
+        "children_ids": [
+          14,
+          94,
+          107,
+          179,
+          180
+        ],
+        "parent_id": 12
+      },
+      "body_excerpt": {
+        "byte_offset": 24840180,
+        "excerpt": "ace(abi,\"\"))}function sxr(t){return t.replace(/^.*[/\\\\]/,\"\")}function Mo0(t,e,r){let n=e.replace(abi,\"\"),a=n&&n!==e?[e,n]:[e];for(let s of a){let u=t.find(c=>c.name===s);if(u)return u}for(let s of a){let u=s.toLowerCase(),c=t.find(d=>d.name.toLowerCase()===u);if(c)return c}let o=e7e(e),i=r.find(s=>e7e(sxr(s.filePath))===o);if(i){let s=i.id===void 0?void 0:t.find(c=>c.id===i.id);if(s)return s;let u=e7e(i.name);return t.find(c=>e7e(c.name)===u)}}function ZLu(t,e,r={}){if(!t.includes(\"/\")||e.length===0)return t;let n=r.disabledWorkflowNames??new Set,a=r.workflowRecords??[];for(let o of t.matchAll(Bo0)){let i=o[2],s=i.slice(1),u=Mo0(e,s,a);if(!u)continue;if(u.kind===\"workflow\"){let f=a.find(p=>p.id===u.id)?.name??u.name;if(n.has(f))continue}if(u.kind===\"skill\"&&!u.id.startsWith(\"builtin:\"))continue;let c=(o.index??0)+o[1].length,d=c+i.length;return t.slice(0,c)+u.instruct"
+      },
+      "enclosing_function": {
+        "name": "Mo0",
+        "offset": 24840161
+      },
+      "distinct_parents": [
+        {
+          "id": 12,
+          "function_name": "a",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 13,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 492
+        },
+        {
+          "id": 12,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 11,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 115
+        },
+        {
+          "id": 10,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 9,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 8,
+          "function_name": "emitPrompts",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11436,
+          "hit_count": 18
+        },
+        {
+          "id": 7,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10897,
+          "hit_count": 342
+        },
+        {
+          "id": 6,
+          "function_name": "runTurn",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 29893,
+          "hit_count": 422
+        },
+        {
+          "id": 5,
+          "function_name": "send",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18561,
+          "hit_count": 91
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "onSessionEvent",
+      "stats": {
+        "node_id": 23,
+        "function_name": "onSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4469,
+        "col": 7730,
+        "hit_count": 473,
+        "raw_sample_share_pct": 1.225960292364315,
+        "sum_delta_us": 61174,
+        "sum_delta_ms": 61.174,
+        "min_delta_ms": 0.118,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.155,
+        "sample_indices_count": 473,
+        "children_ids": [
+          24,
+          89,
+          154,
+          156,
+          167,
+          176
+        ],
+        "parent_id": 22
+      },
+      "body_excerpt": {
+        "byte_offset": 24840180,
+        "excerpt": "ace(abi,\"\"))}function sxr(t){return t.replace(/^.*[/\\\\]/,\"\")}function Mo0(t,e,r){let n=e.replace(abi,\"\"),a=n&&n!==e?[e,n]:[e];for(let s of a){let u=t.find(c=>c.name===s);if(u)return u}for(let s of a){let u=s.toLowerCase(),c=t.find(d=>d.name.toLowerCase()===u);if(c)return c}let o=e7e(e),i=r.find(s=>e7e(sxr(s.filePath))===o);if(i){let s=i.id===void 0?void 0:t.find(c=>c.id===i.id);if(s)return s;let u=e7e(i.name);return t.find(c=>e7e(c.name)===u)}}function ZLu(t,e,r={}){if(!t.includes(\"/\")||e.length===0)return t;let n=r.disabledWorkflowNames??new Set,a=r.workflowRecords??[];for(let o of t.matchAll(Bo0)){let i=o[2],s=i.slice(1),u=Mo0(e,s,a);if(!u)continue;if(u.kind===\"workflow\"){let f=a.find(p=>p.id===u.id)?.name??u.name;if(n.has(f))continue}if(u.kind===\"skill\"&&!u.id.startsWith(\"builtin:\"))continue;let c=(o.index??0)+o[1].length,d=c+i.length;return t.slice(0,c)+u.instruct"
+      },
+      "enclosing_function": {
+        "name": "Mo0",
+        "offset": 24840161
+      },
+      "distinct_parents": [
+        {
+          "id": 22,
+          "function_name": "a",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473
+        },
+        {
+          "id": 22,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        },
+        {
+          "id": 20,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 19,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 18,
+          "function_name": "emitSubmitted",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12666,
+          "hit_count": 26
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "onSessionEvent",
+      "stats": {
+        "node_id": 32,
+        "function_name": "onSessionEvent",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 4469,
+        "col": 7730,
+        "hit_count": 521,
+        "raw_sample_share_pct": 1.3503706391581567,
+        "sum_delta_us": 67169,
+        "sum_delta_ms": 67.169,
+        "min_delta_ms": 0.072,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.133,
+        "max_delta_ms": 0.161,
+        "sample_indices_count": 521,
+        "children_ids": [
+          33,
+          91,
+          93
+        ],
+        "parent_id": 31
+      },
+      "body_excerpt": {
+        "byte_offset": 24840180,
+        "excerpt": "ace(abi,\"\"))}function sxr(t){return t.replace(/^.*[/\\\\]/,\"\")}function Mo0(t,e,r){let n=e.replace(abi,\"\"),a=n&&n!==e?[e,n]:[e];for(let s of a){let u=t.find(c=>c.name===s);if(u)return u}for(let s of a){let u=s.toLowerCase(),c=t.find(d=>d.name.toLowerCase()===u);if(c)return c}let o=e7e(e),i=r.find(s=>e7e(sxr(s.filePath))===o);if(i){let s=i.id===void 0?void 0:t.find(c=>c.id===i.id);if(s)return s;let u=e7e(i.name);return t.find(c=>e7e(c.name)===u)}}function ZLu(t,e,r={}){if(!t.includes(\"/\")||e.length===0)return t;let n=r.disabledWorkflowNames??new Set,a=r.workflowRecords??[];for(let o of t.matchAll(Bo0)){let i=o[2],s=i.slice(1),u=Mo0(e,s,a);if(!u)continue;if(u.kind===\"workflow\"){let f=a.find(p=>p.id===u.id)?.name??u.name;if(n.has(f))continue}if(u.kind===\"skill\"&&!u.id.startsWith(\"builtin:\"))continue;let c=(o.index??0)+o[1].length,d=c+i.length;return t.slice(0,c)+u.instruct"
+      },
+      "enclosing_function": {
+        "name": "Mo0",
+        "offset": 24840161
+      },
+      "distinct_parents": [
+        {
+          "id": 31,
+          "function_name": "a",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 32,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 521
+        },
+        {
+          "id": 31,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 30,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 79
+        },
+        {
+          "id": 29,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 28,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 27,
+          "function_name": "emitPrompts",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11436,
+          "hit_count": 21
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "cwi",
+      "stats": {
+        "node_id": 15,
+        "function_name": "cwi",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 1,
+        "col": 4773,
+        "hit_count": 11,
+        "raw_sample_share_pct": 0.028510704473588718,
+        "sum_delta_us": 2190767,
+        "sum_delta_ms": 2190.767,
+        "min_delta_ms": 0.128,
+        "median_delta_ms": 0.1285,
+        "p95_delta_ms": 2189.353,
+        "max_delta_ms": 2189.353,
+        "sample_indices_count": 12,
+        "parent_id": 14
+      },
+      "body_excerpt": {
+        "byte_offset": 4772,
+        "excerpt": "ction lwi(t){if(!$se)return;Ww.sessionEvents++;let e=Ww.byEventType;t in e?e[t]+=1:Object.keys(e).length<32?e[t]=1:Ww.overflowed++}function cwi(){$se&&(J7e++,Ww.handleSessionEventCalls++,J7e>Ww.maxNestedHandleDepth&&(Ww.maxNestedHandleDepth=J7e))}function dwi(){$se&&J7e>0&&J7e--}function Hmt(t){$se&&(Ww.logQueueEventsCalls++,t.producedLog?Ww.logQueueEventsLogCalls++:Ww.logQueueEventsSuppressedByProfile++)}function pwi(t){if(!$se)return;Ww.setTurnPhaseCalls++,Ww.setWithWriterCalls++,t.changed?Ww.actualPhaseChanges++:Ww.samePhaseWriteAttempts++;let e=Ww.byWriter,r=t.writer??\"<unknown-legacy-writer>\";r in e?e[r]+=1:Object.keys(e).length<32?e[r]=1:Ww.overflowed++}var $se,Ww,J7e,Y7e=se(()=>{\"use strict\";$se=!1,Ww=qYu(),J7e=0});function fwi(){return zmt}function GYu(t,e){if(!t)return!1;let r=e.CLINEMM_DIAG_HOTLOOP_QUEUE_LOG;if(typeof r!=\"string\"||r.length===0)return!1;let n"
+      },
+      "enclosing_function": {
+        "name": "lwi",
+        "offset": 4689
+      },
+      "distinct_parents": [
+        {
+          "id": 14,
+          "function_name": "handleSessionEvent",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 423
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 15,
+          "function_name": "cwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4773,
+          "hit_count": 11
+        },
+        {
+          "id": 14,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 423
+        },
+        {
+          "id": 13,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 492
+        },
+        {
+          "id": 12,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 11,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 115
+        },
+        {
+          "id": 10,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 9,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 8,
+          "function_name": "emitPrompts",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11436,
+          "hit_count": 18
+        },
+        {
+          "id": 7,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10897,
+          "hit_count": 342
+        },
+        {
+          "id": 6,
+          "function_name": "runTurn",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 29893,
+          "hit_count": 422
+        },
+        {
+          "id": 5,
+          "function_name": "send",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18561,
+          "hit_count": 91
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "cwi",
+      "stats": {
+        "node_id": 100,
+        "function_name": "cwi",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 1,
+        "col": 4773,
+        "hit_count": 13,
+        "raw_sample_share_pct": 0.033694468923332124,
+        "sum_delta_us": 1671,
+        "sum_delta_ms": 1.671,
+        "min_delta_ms": 0.126,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.131,
+        "max_delta_ms": 0.131,
+        "sample_indices_count": 13,
+        "parent_id": 24
+      },
+      "body_excerpt": {
+        "byte_offset": 4772,
+        "excerpt": "ction lwi(t){if(!$se)return;Ww.sessionEvents++;let e=Ww.byEventType;t in e?e[t]+=1:Object.keys(e).length<32?e[t]=1:Ww.overflowed++}function cwi(){$se&&(J7e++,Ww.handleSessionEventCalls++,J7e>Ww.maxNestedHandleDepth&&(Ww.maxNestedHandleDepth=J7e))}function dwi(){$se&&J7e>0&&J7e--}function Hmt(t){$se&&(Ww.logQueueEventsCalls++,t.producedLog?Ww.logQueueEventsLogCalls++:Ww.logQueueEventsSuppressedByProfile++)}function pwi(t){if(!$se)return;Ww.setTurnPhaseCalls++,Ww.setWithWriterCalls++,t.changed?Ww.actualPhaseChanges++:Ww.samePhaseWriteAttempts++;let e=Ww.byWriter,r=t.writer??\"<unknown-legacy-writer>\";r in e?e[r]+=1:Object.keys(e).length<32?e[r]=1:Ww.overflowed++}var $se,Ww,J7e,Y7e=se(()=>{\"use strict\";$se=!1,Ww=qYu(),J7e=0});function fwi(){return zmt}function GYu(t,e){if(!t)return!1;let r=e.CLINEMM_DIAG_HOTLOOP_QUEUE_LOG;if(typeof r!=\"string\"||r.length===0)return!1;let n"
+      },
+      "enclosing_function": {
+        "name": "lwi",
+        "offset": 4689
+      },
+      "distinct_parents": [
+        {
+          "id": 24,
+          "function_name": "handleSessionEvent",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 100,
+          "function_name": "cwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4773,
+          "hit_count": 13
+        },
+        {
+          "id": 24,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692
+        },
+        {
+          "id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473
+        },
+        {
+          "id": 22,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104
+        },
+        {
+          "id": 20,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 19,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 18,
+          "function_name": "emitSubmitted",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12666,
+          "hit_count": 26
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "cwi",
+      "stats": {
+        "node_id": 101,
+        "function_name": "cwi",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 1,
+        "col": 4773,
+        "hit_count": 17,
+        "raw_sample_share_pct": 0.04406199782281893,
+        "sum_delta_us": 2202,
+        "sum_delta_ms": 2.202,
+        "min_delta_ms": 0.127,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.134,
+        "sample_indices_count": 17,
+        "parent_id": 33
+      },
+      "body_excerpt": {
+        "byte_offset": 4772,
+        "excerpt": "ction lwi(t){if(!$se)return;Ww.sessionEvents++;let e=Ww.byEventType;t in e?e[t]+=1:Object.keys(e).length<32?e[t]=1:Ww.overflowed++}function cwi(){$se&&(J7e++,Ww.handleSessionEventCalls++,J7e>Ww.maxNestedHandleDepth&&(Ww.maxNestedHandleDepth=J7e))}function dwi(){$se&&J7e>0&&J7e--}function Hmt(t){$se&&(Ww.logQueueEventsCalls++,t.producedLog?Ww.logQueueEventsLogCalls++:Ww.logQueueEventsSuppressedByProfile++)}function pwi(t){if(!$se)return;Ww.setTurnPhaseCalls++,Ww.setWithWriterCalls++,t.changed?Ww.actualPhaseChanges++:Ww.samePhaseWriteAttempts++;let e=Ww.byWriter,r=t.writer??\"<unknown-legacy-writer>\";r in e?e[r]+=1:Object.keys(e).length<32?e[r]=1:Ww.overflowed++}var $se,Ww,J7e,Y7e=se(()=>{\"use strict\";$se=!1,Ww=qYu(),J7e=0});function fwi(){return zmt}function GYu(t,e){if(!t)return!1;let r=e.CLINEMM_DIAG_HOTLOOP_QUEUE_LOG;if(typeof r!=\"string\"||r.length===0)return!1;let n"
+      },
+      "enclosing_function": {
+        "name": "lwi",
+        "offset": 4689
+      },
+      "distinct_parents": [
+        {
+          "id": 33,
+          "function_name": "handleSessionEvent",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 448
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 101,
+          "function_name": "cwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4773,
+          "hit_count": 17
+        },
+        {
+          "id": 33,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 448
+        },
+        {
+          "id": 32,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 521
+        },
+        {
+          "id": 31,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 6
+        },
+        {
+          "id": 30,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 79
+        },
+        {
+          "id": 29,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 52397,
+          "hit_count": 0
+        },
+        {
+          "id": 28,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18540,
+          "hit_count": 0
+        },
+        {
+          "id": 27,
+          "function_name": "emitPrompts",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11436,
+          "hit_count": 21
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "e_1",
+      "stats": {
+        "node_id": 49,
+        "function_name": "e_",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 1,
+        "col": 2250,
+        "hit_count": 1327,
+        "raw_sample_share_pct": 3.4394277124047483,
+        "sum_delta_us": 171659,
+        "sum_delta_ms": 171.659,
+        "min_delta_ms": 0.102,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.206,
+        "sample_indices_count": 1327,
+        "parent_id": 48
+      },
+      "body_excerpt": {
+        "byte_offset": 2249,
+        "excerpt": ";for(let r of Object.keys(qEr)){let n=qEr[r];t[r]={count:n.count,origins:Array.from(n.origins)},e+=n.count}return{total:e,stages:t}}function e_(t){if(!GEr)return;let e=t.origin??\"unknown\",r={seq:FYu++,at:Date.now(),stage:t.stage,origin:e,...t.sessionId!==void 0?{sessionId:t.sessionId}:{},...t.taskId!==void 0?{taskId:t.taskId}:{},...t.jobId!==void 0?{jobId:t.jobId}:{},...t.promptId!==void 0?{promptId:t.promptId}:{},...t.correlationId!==void 0?{correlationId:t.correlationId}:{}};Qmt.push(r),Qmt.length>OYu&&Qmt.shift();let n=qEr[t.stage];n.count++,n.origins.add(e)}function nwi(){return Qmt}var GEr,qEr,Qmt,OYu,FYu,Kse=se(()=>{\"use strict\";GEr=!1;qEr={terminal_committed:{count:0,origins:new Set},notify_consume_enter:{count:0,origins:new Set},wake_created:{count:0,origins:new Set},pending_prompt_enqueued:{count:0,origins:new Set},pending_prompt_dequeued:{count:0,origins:new"
+      },
+      "enclosing_function": {
+        "name": "rwi",
+        "offset": 2142
+      },
+      "distinct_parents": [
+        {
+          "id": 48,
+          "function_name": "onBeforeDrain",
+          "line": 4459,
+          "col": 4911,
+          "hit_count": 53
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 49,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1327
+        },
+        {
+          "id": 48,
+          "function_name": "onBeforeDrain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 4911,
+          "hit_count": 53
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "e_2",
+      "stats": {
+        "node_id": 35,
+        "function_name": "e_",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 1,
+        "col": 2250,
+        "hit_count": 1146,
+        "raw_sample_share_pct": 2.9702970297029703,
+        "sum_delta_us": 148069,
+        "sum_delta_ms": 148.069,
+        "min_delta_ms": 0.119,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.153,
+        "sample_indices_count": 1146,
+        "parent_id": 34
+      },
+      "body_excerpt": {
+        "byte_offset": 2249,
+        "excerpt": ";for(let r of Object.keys(qEr)){let n=qEr[r];t[r]={count:n.count,origins:Array.from(n.origins)},e+=n.count}return{total:e,stages:t}}function e_(t){if(!GEr)return;let e=t.origin??\"unknown\",r={seq:FYu++,at:Date.now(),stage:t.stage,origin:e,...t.sessionId!==void 0?{sessionId:t.sessionId}:{},...t.taskId!==void 0?{taskId:t.taskId}:{},...t.jobId!==void 0?{jobId:t.jobId}:{},...t.promptId!==void 0?{promptId:t.promptId}:{},...t.correlationId!==void 0?{correlationId:t.correlationId}:{}};Qmt.push(r),Qmt.length>OYu&&Qmt.shift();let n=qEr[t.stage];n.count++,n.origins.add(e)}function nwi(){return Qmt}var GEr,qEr,Qmt,OYu,FYu,Kse=se(()=>{\"use strict\";GEr=!1;qEr={terminal_committed:{count:0,origins:new Set},notify_consume_enter:{count:0,origins:new Set},wake_created:{count:0,origins:new Set},pending_prompt_enqueued:{count:0,origins:new Set},pending_prompt_dequeued:{count:0,origins:new"
+      },
+      "enclosing_function": {
+        "name": "rwi",
+        "offset": 2142
+      },
+      "distinct_parents": [
+        {
+          "id": 34,
+          "function_name": "onBeforeDispatch",
+          "line": 4459,
+          "col": 5073,
+          "hit_count": 51
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 35,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1146
+        },
+        {
+          "id": 34,
+          "function_name": "onBeforeDispatch",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 5073,
+          "hit_count": 51
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    },
+    {
+      "target_name": "e_3",
+      "stats": {
+        "node_id": 80,
+        "function_name": "e_",
+        "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+        "line": 1,
+        "col": 2250,
+        "hit_count": 1090,
+        "raw_sample_share_pct": 2.825151625110155,
+        "sum_delta_us": 140994,
+        "sum_delta_ms": 140.994,
+        "min_delta_ms": 0.113,
+        "median_delta_ms": 0.129,
+        "p95_delta_ms": 0.134,
+        "max_delta_ms": 0.171,
+        "sample_indices_count": 1090,
+        "parent_id": 79
+      },
+      "body_excerpt": {
+        "byte_offset": 2249,
+        "excerpt": ";for(let r of Object.keys(qEr)){let n=qEr[r];t[r]={count:n.count,origins:Array.from(n.origins)},e+=n.count}return{total:e,stages:t}}function e_(t){if(!GEr)return;let e=t.origin??\"unknown\",r={seq:FYu++,at:Date.now(),stage:t.stage,origin:e,...t.sessionId!==void 0?{sessionId:t.sessionId}:{},...t.taskId!==void 0?{taskId:t.taskId}:{},...t.jobId!==void 0?{jobId:t.jobId}:{},...t.promptId!==void 0?{promptId:t.promptId}:{},...t.correlationId!==void 0?{correlationId:t.correlationId}:{}};Qmt.push(r),Qmt.length>OYu&&Qmt.shift();let n=qEr[t.stage];n.count++,n.origins.add(e)}function nwi(){return Qmt}var GEr,qEr,Qmt,OYu,FYu,Kse=se(()=>{\"use strict\";GEr=!1;qEr={terminal_committed:{count:0,origins:new Set},notify_consume_enter:{count:0,origins:new Set},wake_created:{count:0,origins:new Set},pending_prompt_enqueued:{count:0,origins:new Set},pending_prompt_dequeued:{count:0,origins:new"
+      },
+      "enclosing_function": {
+        "name": "rwi",
+        "offset": 2142
+      },
+      "distinct_parents": [
+        {
+          "id": 79,
+          "function_name": "onEnqueue",
+          "line": 4459,
+          "col": 4752,
+          "hit_count": 34
+        }
+      ],
+      "ancestry_chain": [
+        {
+          "id": 80,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1090
+        },
+        {
+          "id": 79,
+          "function_name": "onEnqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 4752,
+          "hit_count": 34
+        },
+        {
+          "id": 7,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10897,
+          "hit_count": 342
+        },
+        {
+          "id": 6,
+          "function_name": "runTurn",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 29893,
+          "hit_count": 422
+        },
+        {
+          "id": 5,
+          "function_name": "send",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18561,
+          "hit_count": 91
+        },
+        {
+          "id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120
+        },
+        {
+          "id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190
+        },
+        {
+          "id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919
+        },
+        {
+          "id": 1,
+          "function_name": "(root)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 0
+        }
+      ]
+    }
+  ],
+  "method_b_status": {
+    "per_target_status": {
+      "cwi": "TWO_METHOD_AGREEMENT",
+      "e_1": "TWO_METHOD_AGREEMENT (prodlike dev sourcemap at continuation-cardinality-authority.ts:185:7)",
+      "e_2": "TWO_METHOD_AGREEMENT (prodlike dev sourcemap at continuation-cardinality-authority.ts:185:7)",
+      "e_3": "TWO_METHOD_AGREEMENT (prodlike dev sourcemap at continuation-cardinality-authority.ts:185:7)",
+      "Rnl": "METHOD_A_EXACT_BODY_BINDING (Method B DCE/inlining makes sourcemap offset non-comparable)",
+      "r_": "METHOD_A_EXACT_BODY_BINDING (Method B DCE/inlining makes sourcemap offset non-comparable)",
+      "Gyi": "METHOD_A_EXACT_BODY_BINDING (Method B DCE/inlining makes sourcemap offset non-comparable)",
+      "drain": "METHOD_A_EXACT_BODY_BINDING (Method B DCE/inlining makes sourcemap offset non-comparable)",
+      "setWithWriter": "METHOD_A_EXACT_BODY_BINDING (Method B DCE/inlining makes sourcemap offset non-comparable)",
+      "handleSessionEvent": "METHOD_A_EXACT_BODY_BINDING (Method B DCE/inlining makes sourcemap offset non-comparable)",
+      "onSessionEvent": "METHOD_A_EXACT_BODY_BINDING (Method B DCE/inlining makes sourcemap offset non-comparable)"
+    },
+    "note": "Method A is the binding of record for every target. Method B qualifies only when the sourcemapped rebuild yields offsets comparable to the shipped bundle; here only cwi and e_ survive the prodlike minified rebuild with agreeable source positions."
+  },
+  "gc_stats": {
+    "gc_runs": 428,
+    "run_lengths": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      15,
+      17,
+      17,
+      18,
+      19,
+      19,
+      20,
+      21,
+      21,
+      21,
+      21,
+      21,
+      21,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      23,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      24,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      25,
+      26,
+      26,
+      26,
+      26,
+      26,
+      26,
+      26,
+      26,
+      27,
+      27,
+      28,
+      29,
+      29,
+      30,
+      30,
+      30,
+      33,
+      33,
+      36,
+      37,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      38,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      39,
+      40,
+      40,
+      41,
+      43,
+      45,
+      46,
+      46,
+      48,
+      50,
+      76,
+      77,
+      77,
+      77,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      79,
+      80,
+      100,
+      102,
+      116,
+      117,
+      117,
+      117,
+      117,
+      117,
+      117,
+      117,
+      117,
+      117,
+      117,
+      118,
+      146,
+      156,
+      160,
+      164,
+      284,
+      681
+    ],
+    "run_length_median": 31.5,
+    "run_length_p95": 79,
+    "run_length_max": 681,
+    "gc_run_adjacency": {
+      "description": "Per-leaf count of contiguous GC runs whose boundary touches that leaf. PRIMARY METRIC: independent of run length. Aggregation is by leafId; one row per node_id.",
+      "leaf_stats": [
+        {
+          "node_id": 49,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1327,
+          "gc_before": 47,
+          "gc_after": 50,
+          "total_gc_run_adjacency": 97
+        },
+        {
+          "node_id": 80,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1090,
+          "gc_before": 45,
+          "gc_after": 43,
+          "total_gc_run_adjacency": 88
+        },
+        {
+          "node_id": 35,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1146,
+          "gc_before": 39,
+          "gc_after": 42,
+          "total_gc_run_adjacency": 81
+        },
+        {
+          "node_id": 37,
+          "function_name": "Rnl",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21885,
+          "hit_count": 2726,
+          "gc_before": 39,
+          "gc_after": 30,
+          "total_gc_run_adjacency": 69
+        },
+        {
+          "node_id": 36,
+          "function_name": "r_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21185,
+          "hit_count": 1788,
+          "gc_before": 33,
+          "gc_after": 24,
+          "total_gc_run_adjacency": 57
+        },
+        {
+          "node_id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120,
+          "gc_before": 27,
+          "gc_after": 24,
+          "total_gc_run_adjacency": 51
+        },
+        {
+          "node_id": 26,
+          "function_name": "Gyi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4422,
+          "col": 25,
+          "hit_count": 1251,
+          "gc_before": 18,
+          "gc_after": 18,
+          "total_gc_run_adjacency": 36
+        },
+        {
+          "node_id": 51,
+          "function_name": "setWithWriter",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 37927,
+          "hit_count": 976,
+          "gc_before": 15,
+          "gc_after": 19,
+          "total_gc_run_adjacency": 34
+        },
+        {
+          "node_id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919,
+          "gc_before": 14,
+          "gc_after": 18,
+          "total_gc_run_adjacency": 32
+        },
+        {
+          "node_id": 24,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692,
+          "gc_before": 13,
+          "gc_after": 16,
+          "total_gc_run_adjacency": 29
+        },
+        {
+          "node_id": 13,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 492,
+          "gc_before": 5,
+          "gc_after": 12,
+          "total_gc_run_adjacency": 17
+        },
+        {
+          "node_id": 33,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 448,
+          "gc_before": 11,
+          "gc_after": 5,
+          "total_gc_run_adjacency": 16
+        },
+        {
+          "node_id": 14,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 423,
+          "gc_before": 8,
+          "gc_after": 8,
+          "total_gc_run_adjacency": 16
+        },
+        {
+          "node_id": 7,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10897,
+          "hit_count": 342,
+          "gc_before": 8,
+          "gc_after": 7,
+          "total_gc_run_adjacency": 15
+        },
+        {
+          "node_id": 32,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 521,
+          "gc_before": 8,
+          "gc_after": 7,
+          "total_gc_run_adjacency": 15
+        },
+        {
+          "node_id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190,
+          "gc_before": 10,
+          "gc_after": 4,
+          "total_gc_run_adjacency": 14
+        },
+        {
+          "node_id": 6,
+          "function_name": "runTurn",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 29893,
+          "hit_count": 422,
+          "gc_before": 7,
+          "gc_after": 5,
+          "total_gc_run_adjacency": 12
+        },
+        {
+          "node_id": 56,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9468,
+          "hit_count": 80,
+          "gc_before": 5,
+          "gc_after": 5,
+          "total_gc_run_adjacency": 10
+        },
+        {
+          "node_id": 41,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 9467,
+          "hit_count": 291,
+          "gc_before": 4,
+          "gc_after": 5,
+          "total_gc_run_adjacency": 9
+        },
+        {
+          "node_id": 60,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9468,
+          "hit_count": 127,
+          "gc_before": 6,
+          "gc_after": 3,
+          "total_gc_run_adjacency": 9
+        },
+        {
+          "node_id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473,
+          "gc_before": 4,
+          "gc_after": 4,
+          "total_gc_run_adjacency": 8
+        },
+        {
+          "node_id": 72,
+          "function_name": "(program)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 461,
+          "gc_before": 4,
+          "gc_after": 4,
+          "total_gc_run_adjacency": 8
+        },
+        {
+          "node_id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104,
+          "gc_before": 5,
+          "gc_after": 2,
+          "total_gc_run_adjacency": 7
+        },
+        {
+          "node_id": 82,
+          "function_name": "knl",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21433,
+          "hit_count": 192,
+          "gc_before": 3,
+          "gc_after": 4,
+          "total_gc_run_adjacency": 7
+        },
+        {
+          "node_id": 5,
+          "function_name": "send",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18561,
+          "hit_count": 91,
+          "gc_before": 4,
+          "gc_after": 3,
+          "total_gc_run_adjacency": 7
+        },
+        {
+          "node_id": 61,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9468,
+          "hit_count": 173,
+          "gc_before": 3,
+          "gc_after": 4,
+          "total_gc_run_adjacency": 7
+        },
+        {
+          "node_id": 46,
+          "function_name": "randomFillSync",
+          "url": "node:internal/crypto/random",
+          "line": 118,
+          "col": 23,
+          "hit_count": 12,
+          "gc_before": 2,
+          "gc_after": 4,
+          "total_gc_run_adjacency": 6
+        },
+        {
+          "node_id": 42,
+          "function_name": "Mc",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 229,
+          "col": 61130,
+          "hit_count": 187,
+          "gc_before": 2,
+          "gc_after": 4,
+          "total_gc_run_adjacency": 6
+        },
+        {
+          "node_id": 48,
+          "function_name": "onBeforeDrain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 4911,
+          "hit_count": 53,
+          "gc_before": 3,
+          "gc_after": 3,
+          "total_gc_run_adjacency": 6
+        },
+        {
+          "node_id": 66,
+          "function_name": "enqueueMicrotask",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 119,
+          "gc_before": 2,
+          "gc_after": 4,
+          "total_gc_run_adjacency": 6
+        },
+        {
+          "node_id": 59,
+          "function_name": "post",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9414,
+          "hit_count": 117,
+          "gc_before": 3,
+          "gc_after": 2,
+          "total_gc_run_adjacency": 5
+        },
+        {
+          "node_id": 55,
+          "function_name": "post",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9414,
+          "hit_count": 129,
+          "gc_before": 3,
+          "gc_after": 2,
+          "total_gc_run_adjacency": 5
+        },
+        {
+          "node_id": 128,
+          "function_name": "scheduleDrain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11540,
+          "hit_count": 12,
+          "gc_before": 2,
+          "gc_after": 3,
+          "total_gc_run_adjacency": 5
+        },
+        {
+          "node_id": 40,
+          "function_name": "post",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9414,
+          "hit_count": 109,
+          "gc_before": 1,
+          "gc_after": 3,
+          "total_gc_run_adjacency": 4
+        },
+        {
+          "node_id": 11,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 115,
+          "gc_before": 1,
+          "gc_after": 3,
+          "total_gc_run_adjacency": 4
+        },
+        {
+          "node_id": 50,
+          "function_name": "setTurnPhase",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 19880,
+          "hit_count": 44,
+          "gc_before": 2,
+          "gc_after": 2,
+          "total_gc_run_adjacency": 4
+        },
+        {
+          "node_id": 65,
+          "function_name": "queueMicrotask",
+          "url": "node:internal/process/task_queues",
+          "line": 158,
+          "col": 23,
+          "hit_count": 82,
+          "gc_before": 1,
+          "gc_after": 2,
+          "total_gc_run_adjacency": 3
+        },
+        {
+          "node_id": 86,
+          "function_name": "eP",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1960,
+          "col": 26479,
+          "hit_count": 16,
+          "gc_before": 1,
+          "gc_after": 2,
+          "total_gc_run_adjacency": 3
+        },
+        {
+          "node_id": 85,
+          "function_name": "get",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 36616,
+          "hit_count": 116,
+          "gc_before": 2,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 3
+        },
+        {
+          "node_id": 30,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 79,
+          "gc_before": 2,
+          "gc_after": 0,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 71,
+          "function_name": "lwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4639,
+          "hit_count": 72,
+          "gc_before": 2,
+          "gc_after": 0,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 107,
+          "function_name": "logQueueEvents",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 30197,
+          "hit_count": 3,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 111,
+          "function_name": "L9t",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1960,
+          "col": 26299,
+          "hit_count": 24,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 123,
+          "function_name": "onBeforeDispatch",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 5073,
+          "hit_count": 4,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 106,
+          "function_name": "isOrdinaryTelemetryAllowed",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 4125,
+          "hit_count": 3,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 77,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 2103,
+          "hit_count": 4,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 64,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 111,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 174,
+          "function_name": "isTypedArray",
+          "url": "node:internal/util/types",
+          "line": 8,
+          "col": 21,
+          "hit_count": 1,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 43,
+          "function_name": "Lsl",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 229,
+          "col": 60885,
+          "hit_count": 11,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 112,
+          "function_name": "run",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 36,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 52,
+          "function_name": "getSessionOrThrow",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 50604,
+          "hit_count": 37,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 141,
+          "function_name": "",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 3,
+          "gc_before": 1,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 68,
+          "function_name": "svi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4440,
+          "col": 2645,
+          "hit_count": 30,
+          "gc_before": 0,
+          "gc_after": 2,
+          "total_gc_run_adjacency": 2
+        },
+        {
+          "node_id": 104,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2550,
+          "col": 2644,
+          "hit_count": 15,
+          "gc_before": 1,
+          "gc_after": 0,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 142,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 4,
+          "gc_before": 1,
+          "gc_after": 0,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 74,
+          "function_name": "HLe",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21369,
+          "hit_count": 43,
+          "gc_before": 1,
+          "gc_after": 0,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 87,
+          "function_name": "s",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 4645,
+          "hit_count": 8,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 63,
+          "function_name": "shiftNext",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10207,
+          "hit_count": 121,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 78,
+          "function_name": "observeTurnPhase",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 34755,
+          "hit_count": 34,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 16,
+          "function_name": "lwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4639,
+          "hit_count": 59,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 116,
+          "function_name": "dwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4889,
+          "hit_count": 13,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 34,
+          "function_name": "onBeforeDispatch",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 5073,
+          "hit_count": 51,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 89,
+          "function_name": "writerIdentity",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 22399,
+          "hit_count": 5,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 81,
+          "function_name": "eP",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1960,
+          "col": 26479,
+          "hit_count": 32,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 101,
+          "function_name": "cwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4773,
+          "hit_count": 17,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 98,
+          "function_name": "pwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 5051,
+          "hit_count": 20,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 143,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 4,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 97,
+          "function_name": "zeroCostForFreeClineModel",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 28590,
+          "hit_count": 28,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        },
+        {
+          "node_id": 178,
+          "function_name": "setTurnPhase",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 19880,
+          "hit_count": 1,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_gc_run_adjacency": 1
+        }
+      ],
+      "invariants": {
+        "label": "gc_run_adjacency",
+        "I1": true,
+        "I2": true,
+        "I3": true,
+        "sum_total": 855,
+        "bound": 856,
+        "I1_applicable": true,
+        "I1_NA_reason": null,
+        "I3_mismatches": []
+      }
+    },
+    "gc_sample_weighted_boundary_exposure": {
+      "description": "LEGACY METRIC. Per-sample exposure — biased by run length. A leaf adjacent to a GC run of length K is counted K times. NOT a per-event count. Do not use for causal selection; retained only under honest name.",
+      "leaf_stats": [
+        {
+          "node_id": 49,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1327,
+          "gc_before": 2407,
+          "gc_after": 2265,
+          "total_sample_weighted_exposure": 4672
+        },
+        {
+          "node_id": 80,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1090,
+          "gc_before": 2072,
+          "gc_after": 2464,
+          "total_sample_weighted_exposure": 4536
+        },
+        {
+          "node_id": 35,
+          "function_name": "e_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 2250,
+          "hit_count": 1146,
+          "gc_before": 2339,
+          "gc_after": 1786,
+          "total_sample_weighted_exposure": 4125
+        },
+        {
+          "node_id": 37,
+          "function_name": "Rnl",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21885,
+          "hit_count": 2726,
+          "gc_before": 1319,
+          "gc_after": 985,
+          "total_sample_weighted_exposure": 2304
+        },
+        {
+          "node_id": 36,
+          "function_name": "r_",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21185,
+          "hit_count": 1788,
+          "gc_before": 1083,
+          "gc_after": 979,
+          "total_sample_weighted_exposure": 2062
+        },
+        {
+          "node_id": 4,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 2120,
+          "gc_before": 704,
+          "gc_after": 814,
+          "total_sample_weighted_exposure": 1518
+        },
+        {
+          "node_id": 2,
+          "function_name": "processTicksAndRejections",
+          "url": "node:internal/process/task_queues",
+          "line": 71,
+          "col": 34,
+          "hit_count": 919,
+          "gc_before": 484,
+          "gc_after": 580,
+          "total_sample_weighted_exposure": 1064
+        },
+        {
+          "node_id": 51,
+          "function_name": "setWithWriter",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 37927,
+          "hit_count": 976,
+          "gc_before": 468,
+          "gc_after": 570,
+          "total_sample_weighted_exposure": 1038
+        },
+        {
+          "node_id": 26,
+          "function_name": "Gyi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4422,
+          "col": 25,
+          "hit_count": 1251,
+          "gc_before": 450,
+          "gc_after": 439,
+          "total_sample_weighted_exposure": 889
+        },
+        {
+          "node_id": 24,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 692,
+          "gc_before": 349,
+          "gc_after": 478,
+          "total_sample_weighted_exposure": 827
+        },
+        {
+          "node_id": 14,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 423,
+          "gc_before": 245,
+          "gc_after": 377,
+          "total_sample_weighted_exposure": 622
+        },
+        {
+          "node_id": 7,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10897,
+          "hit_count": 342,
+          "gc_before": 300,
+          "gc_after": 283,
+          "total_sample_weighted_exposure": 583
+        },
+        {
+          "node_id": 33,
+          "function_name": "handleSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 22436,
+          "hit_count": 448,
+          "gc_before": 312,
+          "gc_after": 206,
+          "total_sample_weighted_exposure": 518
+        },
+        {
+          "node_id": 3,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 12631,
+          "hit_count": 190,
+          "gc_before": 354,
+          "gc_after": 159,
+          "total_sample_weighted_exposure": 513
+        },
+        {
+          "node_id": 56,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9468,
+          "hit_count": 80,
+          "gc_before": 269,
+          "gc_after": 191,
+          "total_sample_weighted_exposure": 460
+        },
+        {
+          "node_id": 61,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9468,
+          "hit_count": 173,
+          "gc_before": 193,
+          "gc_after": 257,
+          "total_sample_weighted_exposure": 450
+        },
+        {
+          "node_id": 13,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 492,
+          "gc_before": 124,
+          "gc_after": 313,
+          "total_sample_weighted_exposure": 437
+        },
+        {
+          "node_id": 128,
+          "function_name": "scheduleDrain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11540,
+          "hit_count": 12,
+          "gc_before": 238,
+          "gc_after": 154,
+          "total_sample_weighted_exposure": 392
+        },
+        {
+          "node_id": 46,
+          "function_name": "randomFillSync",
+          "url": "node:internal/crypto/random",
+          "line": 118,
+          "col": 23,
+          "hit_count": 12,
+          "gc_before": 138,
+          "gc_after": 246,
+          "total_sample_weighted_exposure": 384
+        },
+        {
+          "node_id": 32,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 521,
+          "gc_before": 203,
+          "gc_after": 177,
+          "total_sample_weighted_exposure": 380
+        },
+        {
+          "node_id": 21,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 104,
+          "gc_before": 187,
+          "gc_after": 154,
+          "total_sample_weighted_exposure": 341
+        },
+        {
+          "node_id": 48,
+          "function_name": "onBeforeDrain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 4911,
+          "hit_count": 53,
+          "gc_before": 179,
+          "gc_after": 133,
+          "total_sample_weighted_exposure": 312
+        },
+        {
+          "node_id": 30,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 79,
+          "gc_before": 308,
+          "gc_after": 0,
+          "total_sample_weighted_exposure": 308
+        },
+        {
+          "node_id": 82,
+          "function_name": "knl",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21433,
+          "hit_count": 192,
+          "gc_before": 178,
+          "gc_after": 123,
+          "total_sample_weighted_exposure": 301
+        },
+        {
+          "node_id": 41,
+          "function_name": "enqueue",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 9467,
+          "hit_count": 291,
+          "gc_before": 136,
+          "gc_after": 160,
+          "total_sample_weighted_exposure": 296
+        },
+        {
+          "node_id": 60,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9468,
+          "hit_count": 127,
+          "gc_before": 183,
+          "gc_after": 113,
+          "total_sample_weighted_exposure": 296
+        },
+        {
+          "node_id": 78,
+          "function_name": "observeTurnPhase",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 34755,
+          "hit_count": 34,
+          "gc_before": 0,
+          "gc_after": 284,
+          "total_sample_weighted_exposure": 284
+        },
+        {
+          "node_id": 72,
+          "function_name": "(program)",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 461,
+          "gc_before": 151,
+          "gc_after": 106,
+          "total_sample_weighted_exposure": 257
+        },
+        {
+          "node_id": 6,
+          "function_name": "runTurn",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 29893,
+          "hit_count": 422,
+          "gc_before": 158,
+          "gc_after": 95,
+          "total_sample_weighted_exposure": 253
+        },
+        {
+          "node_id": 42,
+          "function_name": "Mc",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 229,
+          "col": 61130,
+          "hit_count": 187,
+          "gc_before": 64,
+          "gc_after": 185,
+          "total_sample_weighted_exposure": 249
+        },
+        {
+          "node_id": 5,
+          "function_name": "send",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 18561,
+          "hit_count": 91,
+          "gc_before": 117,
+          "gc_after": 114,
+          "total_sample_weighted_exposure": 231
+        },
+        {
+          "node_id": 55,
+          "function_name": "post",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9414,
+          "hit_count": 129,
+          "gc_before": 92,
+          "gc_after": 116,
+          "total_sample_weighted_exposure": 208
+        },
+        {
+          "node_id": 50,
+          "function_name": "setTurnPhase",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 19880,
+          "hit_count": 44,
+          "gc_before": 62,
+          "gc_after": 142,
+          "total_sample_weighted_exposure": 204
+        },
+        {
+          "node_id": 107,
+          "function_name": "logQueueEvents",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 30197,
+          "hit_count": 3,
+          "gc_before": 156,
+          "gc_after": 38,
+          "total_sample_weighted_exposure": 194
+        },
+        {
+          "node_id": 66,
+          "function_name": "enqueueMicrotask",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 119,
+          "gc_before": 84,
+          "gc_after": 109,
+          "total_sample_weighted_exposure": 193
+        },
+        {
+          "node_id": 23,
+          "function_name": "onSessionEvent",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 7730,
+          "hit_count": 473,
+          "gc_before": 51,
+          "gc_after": 111,
+          "total_sample_weighted_exposure": 162
+        },
+        {
+          "node_id": 123,
+          "function_name": "onBeforeDispatch",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 5073,
+          "hit_count": 4,
+          "gc_before": 78,
+          "gc_after": 78,
+          "total_sample_weighted_exposure": 156
+        },
+        {
+          "node_id": 77,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 2103,
+          "hit_count": 4,
+          "gc_before": 78,
+          "gc_after": 78,
+          "total_sample_weighted_exposure": 156
+        },
+        {
+          "node_id": 112,
+          "function_name": "run",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 36,
+          "gc_before": 78,
+          "gc_after": 78,
+          "total_sample_weighted_exposure": 156
+        },
+        {
+          "node_id": 11,
+          "function_name": "emit",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2347,
+          "col": 6444,
+          "hit_count": 115,
+          "gc_before": 38,
+          "gc_after": 85,
+          "total_sample_weighted_exposure": 123
+        },
+        {
+          "node_id": 106,
+          "function_name": "isOrdinaryTelemetryAllowed",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 4125,
+          "hit_count": 3,
+          "gc_before": 39,
+          "gc_after": 78,
+          "total_sample_weighted_exposure": 117
+        },
+        {
+          "node_id": 111,
+          "function_name": "L9t",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1960,
+          "col": 26299,
+          "hit_count": 24,
+          "gc_before": 38,
+          "gc_after": 78,
+          "total_sample_weighted_exposure": 116
+        },
+        {
+          "node_id": 43,
+          "function_name": "Lsl",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 229,
+          "col": 60885,
+          "hit_count": 11,
+          "gc_before": 78,
+          "gc_after": 38,
+          "total_sample_weighted_exposure": 116
+        },
+        {
+          "node_id": 141,
+          "function_name": "",
+          "url": "",
+          "line": -1,
+          "col": -1,
+          "hit_count": 3,
+          "gc_before": 38,
+          "gc_after": 78,
+          "total_sample_weighted_exposure": 116
+        },
+        {
+          "node_id": 86,
+          "function_name": "eP",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1960,
+          "col": 26479,
+          "hit_count": 16,
+          "gc_before": 39,
+          "gc_after": 76,
+          "total_sample_weighted_exposure": 115
+        },
+        {
+          "node_id": 59,
+          "function_name": "post",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9414,
+          "hit_count": 117,
+          "gc_before": 45,
+          "gc_after": 69,
+          "total_sample_weighted_exposure": 114
+        },
+        {
+          "node_id": 40,
+          "function_name": "post",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 9414,
+          "hit_count": 109,
+          "gc_before": 38,
+          "gc_after": 59,
+          "total_sample_weighted_exposure": 97
+        },
+        {
+          "node_id": 65,
+          "function_name": "queueMicrotask",
+          "url": "node:internal/process/task_queues",
+          "line": 158,
+          "col": 23,
+          "hit_count": 82,
+          "gc_before": 23,
+          "gc_after": 65,
+          "total_sample_weighted_exposure": 88
+        },
+        {
+          "node_id": 52,
+          "function_name": "getSessionOrThrow",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 50604,
+          "hit_count": 37,
+          "gc_before": 39,
+          "gc_after": 38,
+          "total_sample_weighted_exposure": 77
+        },
+        {
+          "node_id": 174,
+          "function_name": "isTypedArray",
+          "url": "node:internal/util/types",
+          "line": 8,
+          "col": 21,
+          "hit_count": 1,
+          "gc_before": 38,
+          "gc_after": 38,
+          "total_sample_weighted_exposure": 76
+        },
+        {
+          "node_id": 85,
+          "function_name": "get",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4468,
+          "col": 36616,
+          "hit_count": 116,
+          "gc_before": 45,
+          "gc_after": 22,
+          "total_sample_weighted_exposure": 67
+        },
+        {
+          "node_id": 68,
+          "function_name": "svi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4440,
+          "col": 2645,
+          "hit_count": 30,
+          "gc_before": 0,
+          "gc_after": 55,
+          "total_sample_weighted_exposure": 55
+        },
+        {
+          "node_id": 64,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 111,
+          "gc_before": 23,
+          "gc_after": 23,
+          "total_sample_weighted_exposure": 46
+        },
+        {
+          "node_id": 104,
+          "function_name": "",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2550,
+          "col": 2644,
+          "hit_count": 15,
+          "gc_before": 30,
+          "gc_after": 0,
+          "total_sample_weighted_exposure": 30
+        },
+        {
+          "node_id": 178,
+          "function_name": "setTurnPhase",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 19880,
+          "hit_count": 1,
+          "gc_before": 0,
+          "gc_after": 30,
+          "total_sample_weighted_exposure": 30
+        },
+        {
+          "node_id": 71,
+          "function_name": "lwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4639,
+          "hit_count": 72,
+          "gc_before": 27,
+          "gc_after": 0,
+          "total_sample_weighted_exposure": 27
+        },
+        {
+          "node_id": 16,
+          "function_name": "lwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4639,
+          "hit_count": 59,
+          "gc_before": 0,
+          "gc_after": 25,
+          "total_sample_weighted_exposure": 25
+        },
+        {
+          "node_id": 116,
+          "function_name": "dwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4889,
+          "hit_count": 13,
+          "gc_before": 0,
+          "gc_after": 25,
+          "total_sample_weighted_exposure": 25
+        },
+        {
+          "node_id": 142,
+          "function_name": "a",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4466,
+          "col": 28903,
+          "hit_count": 4,
+          "gc_before": 24,
+          "gc_after": 0,
+          "total_sample_weighted_exposure": 24
+        },
+        {
+          "node_id": 34,
+          "function_name": "onBeforeDispatch",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 5073,
+          "hit_count": 51,
+          "gc_before": 0,
+          "gc_after": 24,
+          "total_sample_weighted_exposure": 24
+        },
+        {
+          "node_id": 89,
+          "function_name": "writerIdentity",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4469,
+          "col": 22399,
+          "hit_count": 5,
+          "gc_before": 0,
+          "gc_after": 24,
+          "total_sample_weighted_exposure": 24
+        },
+        {
+          "node_id": 97,
+          "function_name": "zeroCostForFreeClineModel",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4467,
+          "col": 28590,
+          "hit_count": 28,
+          "gc_before": 0,
+          "gc_after": 24,
+          "total_sample_weighted_exposure": 24
+        },
+        {
+          "node_id": 101,
+          "function_name": "cwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 4773,
+          "hit_count": 17,
+          "gc_before": 0,
+          "gc_after": 23,
+          "total_sample_weighted_exposure": 23
+        },
+        {
+          "node_id": 98,
+          "function_name": "pwi",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1,
+          "col": 5051,
+          "hit_count": 20,
+          "gc_before": 0,
+          "gc_after": 23,
+          "total_sample_weighted_exposure": 23
+        },
+        {
+          "node_id": 143,
+          "function_name": "drain",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 11684,
+          "hit_count": 4,
+          "gc_before": 0,
+          "gc_after": 23,
+          "total_sample_weighted_exposure": 23
+        },
+        {
+          "node_id": 63,
+          "function_name": "shiftNext",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 2549,
+          "col": 10207,
+          "hit_count": 121,
+          "gc_before": 0,
+          "gc_after": 22,
+          "total_sample_weighted_exposure": 22
+        },
+        {
+          "node_id": 74,
+          "function_name": "HLe",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 15,
+          "col": 21369,
+          "hit_count": 43,
+          "gc_before": 19,
+          "gc_after": 0,
+          "total_sample_weighted_exposure": 19
+        },
+        {
+          "node_id": 87,
+          "function_name": "s",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 4459,
+          "col": 4645,
+          "hit_count": 8,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_sample_weighted_exposure": 1
+        },
+        {
+          "node_id": 81,
+          "function_name": "eP",
+          "url": "file:///Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-d92235e67/dist/extension.js",
+          "line": 1960,
+          "col": 26479,
+          "hit_count": 32,
+          "gc_before": 0,
+          "gc_after": 1,
+          "total_sample_weighted_exposure": 1
+        }
+      ],
+      "invariants": {
+        "label": "gc_sample_weighted_boundary_exposure",
+        "I1": null,
+        "I2": true,
+        "I3": true,
+        "sum_total": 33999,
+        "bound": 856,
+        "I1_applicable": false,
+        "I1_NA_reason": "per-sample exposure, no upper bound expected",
+        "I3_mismatches": []
+      }
+    }
+  }
+}
