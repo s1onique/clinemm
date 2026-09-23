@@ -1,0 +1,78 @@
+ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — conservation checks (per ACT §40)
+
+ALLOCAUTH-CONSERVE-01  disabled state => zero state/semantic delta
+                         VERIFIED via ALLOCAUTH-CTL-01 (state="disabled" =>
+                         state="disabled", zero observable change) and via
+                         CONSERVE-01 in the focused test file (skipped
+                         trigger when state=disabled).
+
+ALLOCAUTH-CONSERVE-02  start failure => command still executes
+                         VERIFIED via CONSERVE-10 (warn seam captures
+                         the failure; the synchronous trigger never
+                         throws; the host command tool sees no error).
+
+ALLOCAUTH-CONSERVE-03  checkpoint failure => job/continuation unaffected
+                         VERIFIED via ALLOCAUTH-CHECKPOINT-03 (failed
+                         getSamplingProfile -> state="failed"; capture
+                         loop terminates; the host tool already received
+                         its result and is unaffected).
+
+ALLOCAUTH-CONSERVE-04  notify=false jobs preserve current semantics
+                         VERIFIED by construction: the trigger predicate
+                         guards on `context.metadata?.notifyOnCompletion
+                         === true` (vscode-run-commands-tool.ts:754).
+                         notify=false jobs do NOT call the trigger.
+                         The marker-registration branch is the SAME
+                         pre-ACT branch; only the trigger call was
+                         added before the marker registration.
+
+ALLOCAUTH-CONSERVE-05  BTCONT unchanged
+                         VERIFIED by diff: vscode-run-commands-tool.ts
+                         gained ONE trigger call inside an EXISTING
+                         branch; no other path through the tool was
+                         touched. BTCONT tests
+                         (background-command-terminal-continuation01.
+                          btcont01.test.ts) still PASS (10/10).
+
+ALLOCAUTH-CONSERVE-06  TQCB unchanged
+                         VERIFIED by conservation-test rerun
+                         (long-horizon-task-quiescence-completion-
+                          barrier01.tqcb01.test.ts: 15/15 PASS).
+
+ALLOCAUTH-CONSERVE-07  CCARD unchanged
+                         VERIFIED by conservation-test rerun
+                         (continuation-cardinality-authority01.ccard01
+                          .test.ts PASS).
+
+ALLOCAUTH-CONSERVE-08  terminal-card projection unchanged
+                         VERIFIED by construction: the trigger call is
+                         a pure state-machine mutator + spawner; it
+                         never reads or writes onBackgroundStateChange,
+                         notifyBackgroundStateChange, or projection
+                         state. The pre-ACT notifyBackgroundStateChange
+                         callback fires exactly as before.
+
+ALLOCAUTH-CONSERVE-09  queue-log permanent policy unchanged
+                         VERIFIED by diff: extension-host-queue-log-
+                          policy.ts is NOT touched by this ACT. EHLOOP01
+                         structural tests still pass (the queue-log
+                         authority remains in extension-host-queue-log-
+                          policy.ts and out of the diagnostic module).
+                         Note: EHLOOP-REMOVAL-02 (which uses
+                         require("../extension-host-hotloop-diagnostic")
+                         and asserts isExtensionHostHotloopQueueLogEnabled
+                         is NOT exported) fails for a pre-existing
+                         vitest-infrastructure reason (vitest 4.x module
+                         resolution), NOT because of this ACT. The
+                         diagnostic module's exports were NOT modified
+                         by this ACT.
+
+ALLOCAUTH-CONSERVE-10  provenance O(1) repair unchanged
+                         VERIFIED by diff: turn-state-writer-provenance
+                         and TurnStateTracker.setWithWriter are NOT
+                         touched by this ACT. The only production call
+                         site added is the single conditional trigger
+                         call at the marker-registration seam, which
+                         does NOT enter any per-record / per-event path.
+
+# End of conservation checks.

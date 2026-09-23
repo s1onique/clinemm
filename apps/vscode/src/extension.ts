@@ -11,6 +11,7 @@ import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
+	applyExtensionHostAllocationProfilerProfile,
 	applyExtensionHostHotloopDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
@@ -18,6 +19,8 @@ import {
 } from "@/sdk/dogfood-diagnostic-profile"
 import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
 import { isDogfoodRuntime } from "@/sdk/dogfood-runtime-profile"
+import { getAllocationProfilerState } from "@/sdk/extension-host-allocation-profiler"
+import { installExtensionHostAllocationProfilerRuntime } from "@/sdk/extension-host-allocation-profiler-runtime"
 import { dumpExtensionSideExtensionHostHotloopDiagnostic } from "@/sdk/extension-host-hotloop-diagnostic-runtime"
 import {
 	dumpExtensionSideHostOwnershipDiagnostic,
@@ -207,6 +210,25 @@ export async function activate(context: vscode.ExtensionContext) {
 	// construction guarantees the seam is armed BEFORE the first
 	// handleSessionEvent / setTurnPhase / logQueueEvents call.
 	applyExtensionHostHotloopDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01:
+	// arm the ALLOCAUTH01 (Extension Host Allocation Profiler) seam
+	// at the SAME EARLIEST initialization seam, BEFORE SdkController
+	// construction. The helper transitions the profiler to "armed"
+	// if and only if dogfood is true AND the operator has set
+	// CLINEMM_DIAG_ALLOCATION_PROFILE=<truthy>. Public installs
+	// never arm the profiler regardless of the env knob (fail-closed).
+	// Running this BEFORE SdkController construction guarantees the
+	// profiler is armed BEFORE the first run_commands invocation
+	// reaches the trigger seam at vscode-run-commands-tool.ts:754.
+	applyExtensionHostAllocationProfilerProfile(isDogfoodRuntime(process.env), process.env)
+	// Wire the production seams (inspector session, fs/promises,
+	// data root resolver, identity binding) ONLY when the profiler
+	// actually armed. This keeps the cold-start cost at zero for
+	// public installs and for dogfood installs without the env knob.
+	if (getAllocationProfilerState() === "armed") {
+		installExtensionHostAllocationProfilerRuntime()
+	}
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool

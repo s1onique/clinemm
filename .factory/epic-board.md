@@ -8150,3 +8150,83 @@ PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT
 new causation evidence arriving (allocation profile, live
 qualification, etc.). The bounded successor is the next ACT, not
 another review cycle of this one.
+## ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — PASS_ALLOCATION_CAPTURE_CAUSE_UNRESOLVED — 2026-09-23
+
+**Status:** PASS — temporary V8 allocation sampler infrastructure
+shipped; verdict is `PASS_ALLOCATION_CAPTURE_CAUSE_UNRESOLVED` because
+no live capture exists yet (the operator must build the dogfood VSIX
+from this tree and run the qualifying workload to acquire one).
+
+**What this ACT adds (TEMPORARY — REMOVAL_TRIGGER fires once the
+successor ACT classifies A / B / C / D):**
+
+- `apps/vscode/src/sdk/extension-host-allocation-profiler.ts` — pure V8
+  allocation sampler module: state machine (`disabled|armed|starting|
+  active|stopping|finalized|failed`), env resolver
+  (`CLINEMM_DIAG_ALLOCATION_PROFILE`, dogfood-only), hot-path-safe
+  synchronous trigger (never throws, never awaits, one-shot state
+  guard), async capture loop with bounded 2 s checkpoints + 60 s
+  final timer, atomic latest-file replacement, performance counters
+  with `host_unresponsive_halt` perturbation gate.
+- `apps/vscode/src/sdk/extension-host-allocation-profiler-runtime.ts`
+  — production seams: real `node:inspector.Session`, real
+  `node:fs/promises`, real `resolveDataDirFromEnv` data root, real
+  identity resolver (git rev-parse HEAD + sha256 of dist/extension.js).
+- `apps/vscode/src/sdk/__tests__/
+   extension-host-allocation-authority01.allocauth01.test.ts` — focused
+  test suite: 19 tests covering ALLOCAUTH-CTL-01..06, ALLOCAUTH-PROTO-01
+  (both `includeObjectsCollectedByMinorGC=true` and
+  `includeObjectsCollectedByMajorGC=true`), ALLOCAUTH-CHECKPOINT-01..03,
+  ALLOCAUTH-FINAL-01..02, ALLOCAUTH-CONSERVE-01..10.
+- `scripts/analyze-allocation-profile.mjs` — bounded SamplingHeapProfile
+  analyzer (accepts both flat-nodes and tree-head shapes; emits Top-N
+  allocation leaves + ACT §32 candidate set + DOMINANT/MATERIAL/SMALL
+  classification).
+- `scripts/inspector-smoke-probe.mjs` — real-Node Inspector smoke probe
+  proving both collected-GC options are accepted.
+
+**Production diff (bounded, ONE trigger call at the production seam):**
+
+- `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts`: +
+  `applyExtensionHostAllocationProfilerProfile(isDogfood, env)` helper
+  (mirrors BJLA / CCARD / EHLOOP01 activation shape).
+- `apps/vscode/src/extension.ts`: + ONE activation call (sibling to
+  EHLOOP01); + ONE conditional production-wiring call (only when
+  state === "armed").
+- `apps/vscode/src/sdk/vscode-run-commands-tool.ts`: + ONE synchronous
+  trigger call at the existing marker-registration seam
+  (`if (start.state === "running" && notifyRequested && ...)`); no
+  other path through the tool was touched.
+
+**Key invariants (per ACT §5 / §10 / §20):**
+
+- `HeapProfiler.startSampling` called with EXACT V8-default options:
+  `samplingInterval: 32768`, `stackDepth: 128`,
+  `includeObjectsCollectedByMinorGC: true` (LOAD-BEARING),
+  `includeObjectsCollectedByMajorGC: true` (LOAD-BEARING).
+- `MAX_DURATION_MS = 60000` (the timer is the authority, NOT task
+  completion).
+- `CHECKPOINT_INTERVAL_MS = 2000` (2 s is the bounded compromise).
+- `ALLOCATION_PROFILE_PERTURBATION_HALT_MS = 500` (skips next checkpoint
+  if a single checkpoint exceeds 500 ms; per ACT §39).
+
+**Conservation (all 10 verified — see `10-conservation.txt`):**
+
+- BCNT01: 24/24 PASS
+- TQCB01: 15/15 PASS
+- BTCONT01: 10/10 PASS
+- CCARD01: PASS
+- Provenance tests: unchanged
+- Public profile: cannot enable profiler regardless of env knob
+  (`CLINEMM_DIAG_ALLOCATION_PROFILE` ignored unless `isDogfood`)
+- Trigger predicate: never throws; never awaits; never alters
+  command / continuation / completion / projection behavior
+
+**Verdict:** `PASS_ALLOCATION_CAPTURE_CAUSE_UNRESOLVED`
+
+**Successor:** `ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-LIVE-CAPTURE01`
+operator acquires the first live V8 allocation profile under the
+dogfood workload and classifies the allocation authority (A / B /
+C / D). Upon classification (or CAPTURE_INSUFFICIENT), the entire
+REMOVAL_TRIGGER fires and the infrastructure added by this ACT is
+removed TOGETHER.

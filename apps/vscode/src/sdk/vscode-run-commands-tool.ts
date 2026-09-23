@@ -45,6 +45,7 @@ import {
 	DEFAULT_WAIT_BUDGET_MS,
 	MAX_RESPONSE_OUTPUT_CHARS,
 } from "./command-job-manager"
+import { triggerExtensionHostAllocationProfilerOnFirstQualifyingJob } from "./extension-host-allocation-profiler"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 
 // ---------------------------------------------------------------------------
@@ -757,6 +758,8 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					options.backgroundNotifyCoordinator &&
 					options.resolveActiveOwner
 				) {
+					// ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01: observational trigger for the V8 allocation sampler. Fires exactly once per process (state-machine guard). NEVER throws; NEVER alters command semantics.
+					triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
 					const owner = options.resolveActiveOwner()
 					if (owner) {
 						options.backgroundNotifyCoordinator.registerMarker({

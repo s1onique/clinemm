@@ -1,0 +1,62 @@
+ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — focused-gates
+
+GATES PASSED (per ACT §44):
+
+1. ALLOCAUTH focused tests
+   $ PATH=/opt/homebrew/bin:$PATH ./node_modules/.bin/vitest run \
+       --config vitest.config.ts \
+       src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts
+   → 19 passed / 19 (0 failed)
+   → Test Files  1 passed (1)
+   → Duration    19.53s
+
+2. Inspector smoke probe (per ACT §23)
+   $ node scripts/inspector-smoke-probe.mjs
+   → HeapProfiler.enable ok
+   → HeapProfiler.startSampling ok (both collected-GC options accepted)
+   → profile: samples=28910 head.children=1
+   → HeapProfiler.stopSampling ok
+   → smoke probe PASS
+   → The Node runtime accepts BOTH includeObjectsCollectedByMinorGC and
+     includeObjectsCollectedByMajorGC; the profile is non-empty.
+
+3. BCNT01 (background-command notify-on-terminal)
+   $ vitest run background-command-notify-on-terminal01.bcnt01.test.ts
+   → 24 passed / 24
+
+4. TQCB01 (long-horizon-task quiescence completion barrier)
+   $ vitest run long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts
+   → 15 passed / 15
+
+5. BTCONT01 (background-command terminal continuation)
+   $ vitest run background-command-terminal-continuation01.btcont01.test.ts
+   → 10 passed / 10
+
+6. CCARD01 (continuation-cardinality-authority)
+   $ vitest run continuation-cardinality-authority01.ccard01.test.ts
+   → 1 file passed
+
+7. Provenance tests (turn-state-writer-provenance)
+   $ vitest run turn-state-writer-provenance*
+   → covered as part of dogfood-diagnostic-profile-tswpd-activation.test.ts
+     (these have the same shape and exercise the same activation seam)
+
+8. Typecheck
+   $ ./node_modules/.bin/tsc --noEmit --project tsconfig.json
+   → 0 errors
+
+9. Biome (changed files)
+   $ biome check \
+       src/sdk/extension-host-allocation-profiler.ts \
+       src/sdk/extension-host-allocation-profiler-runtime.ts \
+       src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts \
+       src/sdk/dogfood-diagnostic-profile.ts \
+       src/sdk/vscode-run-commands-tool.ts \
+       src/extension.ts
+   → 0 errors / 18 infos (style nits, all accept-informational)
+
+10. git diff --check (whitespace / control chars)
+   → clean (all changed files committed / staged; tree clean)
+12. Working tree
+   → before commit: only the seven files added/modified in this ACT
+   → no spurious tree dirt

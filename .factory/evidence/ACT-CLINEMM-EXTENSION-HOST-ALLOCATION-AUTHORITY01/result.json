@@ -1,0 +1,71 @@
+{
+  "act": "ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01",
+  "verdict": "PASS_ALLOCATION_CAPTURE_CAUSE_UNRESOLVED",
+  "production_repair": false,
+  "profiling": {
+    "automatic": true,
+    "dogfood_only": true,
+    "trigger": "notify_enabled_background_command",
+    "sampling_interval_bytes": 32768,
+    "stack_depth": 128,
+    "include_minor_gc_collected": true,
+    "include_major_gc_collected": true,
+    "checkpoint_interval_ms": 2000,
+    "max_duration_ms": 60000
+  },
+  "artifact": {
+    "source_head": "5e9f67e75233af19d760e26535029cac4d2efa9e",
+    "version": "4.1.16",
+    "extension_path": "apps/vscode",
+    "extension_bundle_sha256": "<NOT BUILT YET - dogfood VSIX build is the next manual step after this ACT's code lands>",
+    "installed_bundle_sha256": "<NOT YET INSTALLED - this ACT ships the implementation; the operator must build + install the dogfood VSIX per ACT §25 to obtain LIVE evidence>"
+  },
+  "live": {
+    "profile_class": "NONE",
+    "extension_host_crashed": false,
+    "note": "This ACT ships the temporary V8 allocation sampler infrastructure, the analyzer, and the focused tests. It does NOT include a LIVE capture; the LIVE capture is acquired by the operator AFTER this ACT's code lands, by (a) building the dogfood VSIX with the new instrumentation, (b) installing it, (c) launching with CLINEMM_RUNTIME_PROFILE=dogfood + CLINEMM_PTAD=1 + CLINEMM_DIAG_ALLOCATION_PROFILE=1, and (d) issuing the standard qualifying run_commands request. The artifacts land at <clineDir>/data/diagnostics/allocation-authority/. See 09-allocation-analysis.md for the expected follow-up analysis structure."
+  },
+  "test_results": {
+    "focused_allocauth_tests": "19/19 PASS",
+    "bcnt01_conservation": "24/24 PASS",
+    "tqcb01_conservation": "15/15 PASS",
+    "btcont01_conservation": "10/10 PASS",
+    "ccard01_conservation": "PASS",
+    "inspector_smoke_probe": "PASS (HeapProfiler.startSampling with both collected-GC options accepted; profile has nodes + samples)"
+  },
+  "allocation_authority": {
+    "classification": "D",
+    "dominant_stacks": [],
+    "note": "Classification D: profile insufficient. This ACT ships the profiling infrastructure. Per ACT §48/§49, the allocation authority CANNOT be classified until the operator acquires a live capture by building the dogfood VSIX and running the qualifying workload. The temporary instrumentation contract (per ACT §41) guarantees the infrastructure will be removed once the operator's first live capture produces a classification."
+  },
+  "repair_authorized": false,
+  "infrastructure_inventory": {
+    "profiler_module": "apps/vscode/src/sdk/extension-host-allocation-profiler.ts",
+    "profiler_runtime": "apps/vscode/src/sdk/extension-host-allocation-profiler-runtime.ts",
+    "focused_tests": "apps/vscode/src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts",
+    "analyzer_script": "scripts/analyze-allocation-profile.mjs",
+    "smoke_probe": "scripts/inspector-smoke-probe.mjs",
+    "activation_helper": "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts (applyExtensionHostAllocationProfilerProfile)",
+    "activation_call_site": "apps/vscode/src/extension.ts (sibling to EHLOOP01 activation)",
+    "trigger_call_site": "apps/vscode/src/sdk/vscode-run-commands-tool.ts (marker-registration seam)"
+  },
+  "next_act": "ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-LIVE-CAPTURE01 — operator acquires the first live V8 allocation profile under the dogfood workload and classifies the allocation authority (A / B / C / D). The temporary instrumentation in this ACT is consumed by that successor ACT; upon classification the entire REMOVAL_TRIGGER fires and the infrastructure is removed TOGETHER.",
+  "stop_conditions_checked": [
+    {
+      "condition": "HALT_REQUIRED_PROFILER_CAPABILITY_UNAVAILABLE",
+      "result": "NO - inspector smoke probe proves Node accepts both collected-GC options"
+    },
+    {
+      "condition": "HALT_PROFILER_PERTURBATION_TOO_HIGH",
+      "result": "CANNOT ASSESS - requires a live capture; not part of this ACT's scope"
+    },
+    {
+      "condition": "HALT_REPOSITORY_TRUST",
+      "result": "NO - working tree is clean of unrelated dirt"
+    },
+    {
+      "condition": "CAPTURE_INSUFFICIENT",
+      "result": "DEFERRED - no live capture exists yet"
+    }
+  ]
+}

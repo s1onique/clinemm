@@ -1,0 +1,35 @@
+ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — Inspector smoke probe output
+
+Command:
+    node scripts/inspector-smoke-probe.mjs
+
+Output:
+    HeapProfiler.enable ok
+    HeapProfiler.startSampling ok (both collected-GC options accepted)
+    profile: samples=28910 head.children=1
+    HeapProfiler.stopSampling ok
+    smoke probe PASS
+
+Interpretation:
+    - The Node runtime (v26.0.0) accepts HeapProfiler.startSampling with
+      BOTH includeObjectsCollectedByMinorGC=true AND
+      includeObjectsCollectedByMajorGC=true. This is the load-bearing
+      assertion for ALLOCAUTH-PROTO-01.
+    - The returned profile has samples (28910 captured samples after a
+      5M-iteration allocation workload) and a non-empty head.children
+      tree. The profile shape is what scripts/analyze-allocation-profile.mjs
+      expects.
+    - stopSampling completes cleanly; no spurious errors.
+
+Note on schema:
+    The response of HeapProfiler.getSamplingProfile is wrapped in
+    { profile: { head, samples, ... } } by some CDP versions. The
+    smoke probe confirms this wrapping. The production profiler module
+    unwraps it via the unwrapProfile() helper before persisting.
+
+Conclusion:
+    ALLOCAUTH-PROTO-01 (load-bearing) PASS at the Node-runtime level.
+    The remaining ALLOCAUTH-PROTO-01 assertions (exact V8-default
+    values 32768/128 + both collected-GC options true) are exercised
+    by the focused test suite (ALLOCAUTH-PROTO-01 in
+    extension-host-allocation-authority01.allocauth01.test.ts).

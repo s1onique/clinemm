@@ -133,6 +133,7 @@ import {
 	isContinuationCardinalityAuthorityCaptureEnabled as _isContinuationCardinalityAuthorityCaptureEnabled,
 	setContinuationCardinalityAuthorityCaptureEnabled,
 } from "./continuation-cardinality-authority"
+import { applyExtensionHostAllocationProfilerPolicy } from "./extension-host-allocation-profiler"
 import {
 	isExtensionHostHotloopDiagnosticEnabled as _isExtensionHostHotloopDiagnosticEnabled,
 	setExtensionHostHotloopDiagnosticEnabled,
@@ -1033,4 +1034,47 @@ export function applyExtensionHostHotloopDiagnosticProfile(
 
 function _isExtensionHostHotloopDiagnosticEnabledForActivation(): boolean {
 	return _isExtensionHostHotloopDiagnosticEnabled()
+}
+
+// ===========================================================================
+// ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — central dogfood
+// profile resolver for the ALLOCAUTH01 (Extension Host Allocation
+// Authority) capture seam.
+//
+// CONTRACT — frozen in this ACT:
+//   - The diagnostic is gated by the explicit env knob
+//     CLINEMM_DIAG_ALLOCATION_PROFILE=<truthy>.
+//   - The env knob is honored ONLY in dogfood (the central identity bit).
+//     Public installs NEVER honor the env knob regardless of value
+//     (matches the extension-host-queue-log-policy invariant).
+//   - The module seam is
+//     ./extension-host-allocation-profiler.ts#applyExtensionHostAllocationProfilerPolicy.
+//   - The activation helper is called from extension.ts:activate
+//     (sibling to the EHLOOP01 activation); there is exactly ONE
+//     production activation path.
+//
+// HONEST STOP RULE: once the allocation authority is classified A/B/C
+// OR CAPTURE_INSUFFICIENT OR HALT_PROFILER_PERTURBATION_TOO_HIGH, this
+// resolver + activation helper + the profiler module + the trigger
+// call site + the focused tests + the analyzer script MUST be removed
+// TOGETHER.
+// ===========================================================================
+
+/**
+ * THE single production activation helper for the ALLOCAUTH01 seam.
+ * Called from extension.ts:activate (sibling to the EHLOOP01
+ * activation); there is exactly ONE production activation path,
+ * no copied orchestration in tests.
+ *
+ * Mirrors the queue-log env knob resolver in spirit:
+ *
+ *   isDogfood === true   + env knob truthy -> profiler ARMED
+ *   isDogfood === true   + env knob unset   -> profiler DISABLED
+ *   isDogfood === false  (any env)         -> profiler DISABLED (fail-closed)
+ */
+export function applyExtensionHostAllocationProfilerProfile(
+	isDogfood: boolean,
+	env: NodeJS.ProcessEnv = process.env,
+): { readonly enabled: boolean; readonly flipped: boolean } {
+	return applyExtensionHostAllocationProfilerPolicy(isDogfood, env)
 }

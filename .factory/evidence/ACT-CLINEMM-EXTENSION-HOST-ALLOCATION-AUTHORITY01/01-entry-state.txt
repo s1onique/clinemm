@@ -1,0 +1,57 @@
+ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — entry-state
+
+WORKING-TREE: clean
+SOURCE_HEAD: 5e9f67e75233af19d760e26535029cac4d2efa9e
+PARENT_ACT: ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01
+PRIOR_VERDICT: GC_RAW_CPU_SAMPLE_SHARE ≈ 44%; cwi CPU hotleaf REFUTED
+             (cwi -> enterExtensionHostHotloopHandleSessionEvent,
+              hitCount=12 = 0.031% raw; 2.189s gap at idx=0 explains
+              the 30.45% deltaShare attribution). HOTPATH02 NOT authorized.
+
+CURRENT_CAUSAL_STATE:
+  LIVE_EXTENSION_HOST_CRASH           = PROVEN
+  PROVENANCE_HOTPATH_owi              = REPAIRED / LIVE-COLLAPSED
+  CWI_CPU_HOTLEAF                     = REFUTED
+  GC_RAW_CPU_SAMPLE_SHARE             ≈ 44%
+  HOT_JS_SOURCE_BINDINGS              = ESTABLISHED
+  ALLOCATION_OWNERSHIP                = UNKNOWN
+  PRODUCTION_REPAIR                   = NOT AUTHORIZED
+
+RED_DEFINITION (per ACT §24):
+  LIVE GC PRESSURE                     = PROVEN
+  ALLOCATION OWNER                     = UNKNOWN
+  QUALIFYING ALLOCATION PROFILE        = ABSENT
+
+NEXT_ACT_MISSION (per ACT §0):
+  Acquire V8 Sampling Heap Profile data via Inspector HeapProfiler.startSampling
+  with includeObjectsCollectedByMinorGC=true and
+  includeObjectsCollectedByMajorGC=true. The CPU profile told us WHERE
+  V8 spends time, but allocation ownership is a separate V8 observable
+  and requires the allocation profiler.
+
+EVIDENCE_TYPE_NEEDED:
+  SamplingHeapProfile JSON carrying:
+    - sampled allocation bytes
+    - sample count per stack
+    - stack traces (call frame URLs + line numbers + function names)
+
+EVIDENCE_TYPE_NOT_ACCEPTABLE (per ACT §6):
+  - v8.writeHeapSnapshot()             (heap STATE, not sampling)
+  - worker.getHeapSnapshot()           (heap STATE, not sampling)
+  - HeapProfiler.takeHeapSnapshot      (heap STATE, not sampling)
+  - node --heap-prof alone             (does not include objects
+                                       collected by minor/major GC
+                                       by default; not load-bearing
+                                       for the qualifying contract)
+
+INITIAL_DELTA_FROM_BASELINE:
+  This ACT adds:
+    - apps/vscode/src/sdk/extension-host-allocation-profiler.ts        NEW
+    - apps/vscode/src/sdk/__tests__/
+        extension-host-allocation-authority01.allocauth01.test.ts     NEW
+    - scripts/analyze-allocation-profile.mjs                           NEW
+    - one helper addition to apps/vscode/src/sdk/dogfood-diagnostic-profile.ts
+    - one trigger call at the production background-handoff seam in
+      apps/vscode/src/sdk/vscode-run-commands-tool.ts
+    - one activation call at extension.ts (sibling of the EHLOOP01
+      activation helper)
