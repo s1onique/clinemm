@@ -11,11 +11,12 @@ ALLOCAUTH-CONSERVE-02  start failure => command still executes
                          the failure; the synchronous trigger never
                          throws; the host command tool sees no error).
 
-ALLOCAUTH-CONSERVE-03  checkpoint failure => job/continuation unaffected
-                         VERIFIED via ALLOCAUTH-CHECKPOINT-03 (failed
-                         getSamplingProfile -> state="failed"; capture
-                         loop terminates; the host tool already received
-                         its result and is unaffected).
+ALLOCAUTH-CONSERVE-03  transient checkpoint failure => job/continuation
+                         unaffected; ACTIVE retained; later ticks recover.
+                         VERIFIED via ALLOCAUTH-CHECKPOINT-03 (one-shot
+                         transient getSamplingProfile -> warn, transient
+                         counter ticks, state="active" still, subsequent
+                         ticks succeed and write latest files).
 
 ALLOCAUTH-CONSERVE-04  notify=false jobs preserve current semantics
                          VERIFIED by construction: the trigger predicate
@@ -42,7 +43,7 @@ ALLOCAUTH-CONSERVE-06  TQCB unchanged
 ALLOCAUTH-CONSERVE-07  CCARD unchanged
                          VERIFIED by conservation-test rerun
                          (continuation-cardinality-authority01.ccard01
-                          .test.ts PASS).
+                          .test.ts PASS 12/12).
 
 ALLOCAUTH-CONSERVE-08  terminal-card projection unchanged
                          VERIFIED by construction: the trigger call is
@@ -76,3 +77,11 @@ ALLOCAUTH-CONSERVE-10  provenance O(1) repair unchanged
                          does NOT enter any per-record / per-event path.
 
 # End of conservation checks.
+
+# Post-correction test count:
+#   ALLOCAUTH focused suite: 22/22 PASS (was 19 before HALT_ALLOCATION_FINALIZATION_BROKEN)
+#   BCNT01: 24/24 PASS
+#   TQCB01: 15/15 PASS
+#   BTCONT01: 10/10 PASS
+#   CCARD01: 12/12 PASS
+#   Smoke probe: PASS (stopSampling returns profile with samples=28994)

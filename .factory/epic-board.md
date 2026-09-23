@@ -8150,12 +8150,47 @@ PASS_SYMBOLIZATION_WITH_CAUSALITY_GAP — HALT_REPAIR_ACT
 new causation evidence arriving (allocation profile, live
 qualification, etc.). The bounded successor is the next ACT, not
 another review cycle of this one.
-## ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — PASS_ALLOCATION_CAPTURE_CAUSE_UNRESOLVED — 2026-09-23
+## ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING (post HALT_ALLOCATION_FINALIZATION_BROKEN) — 2026-09-23
 
 **Status:** PASS — temporary V8 allocation sampler infrastructure
-shipped; verdict is `PASS_ALLOCATION_CAPTURE_CAUSE_UNRESOLVED` because
-no live capture exists yet (the operator must build the dogfood VSIX
-from this tree and run the qualifying workload to acquire one).
+shipped; post-correction verdict is
+`PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING` because
+(1) all four review findings (P0 + 3 P1s) are resolved in code and
+in the test suite (22/22 ALLOCAUTH focused tests PASS), (2) the
+smoke probe proves the Node runtime accepts both collected-GC
+options AND that `stopSampling` returns a non-empty completed
+profile (P0 fix verified at runtime), (3) no live capture exists
+yet — the operator must build the dogfood VSIX from this tree and
+run the qualifying workload to acquire one.
+
+**Review corrections baked in (per HALT_ALLOCATION_FINALIZATION_BROKEN):**
+
+- **P0 — finalization:** `finalize()` now consumes the profile
+  returned by `HeapProfiler.stopSampling()` directly. There is NO
+  call to `getSamplingProfile` after `stopSampling`. The persisted
+  `final-<id>.heapprofile.json` is exactly the profile returned
+  by the success-path `stopSampling` call. Smoke probe + tests
+  + 01b ordering assertion prove this.
+- **P1a — recovery contract:** transient `getSamplingProfile` or
+  write failure does NOT transition the state machine to "failed".
+  It logs a bounded warning, increments
+  `transient_checkpoint_failures`, retains `ACTIVE`, and lets the
+  next scheduled tick recover. Test ALLOCAUTH-CHECKPOINT-03 proves
+  this.
+- **P1b — perturbation measurement:** the 500 ms gate now measures
+  WHOLE-CHECKPOINT wall time (inspector + serialize + writeFile +
+  rename), not just the Inspector call. A 600 ms serialization /
+  write stall with a 20 ms Inspector call WILL trip the gate.
+  Test ALLOCAUTH-FINAL-03 proves this.
+- **P1c — identity authority:** `installed_bundle_sha256`
+  (sha256 of dist/extension.js) is the LOAD-BEARING identity.
+  `source_head` is informational only and may be "unknown" when
+  the runtime is an installed VSIX (no `.git` in the extension
+  dir). Meta.json writes `installed_bundle_sha256` as the
+  authoritative field; `source_head_informational` carries the
+  runtime git probe (commonly "unknown"). The build-time
+  SOURCE_HEAD → bundle SHA-256 binding is recorded externally by
+  the operator.
 
 **What this ACT adds (TEMPORARY — REMOVAL_TRIGGER fires once the
 successor ACT classifies A / B / C / D):**
@@ -8173,11 +8208,18 @@ successor ACT classifies A / B / C / D):**
   `node:fs/promises`, real `resolveDataDirFromEnv` data root, real
   identity resolver (git rev-parse HEAD + sha256 of dist/extension.js).
 - `apps/vscode/src/sdk/__tests__/
-   extension-host-allocation-authority01.allocauth01.test.ts` — focused
-  test suite: 19 tests covering ALLOCAUTH-CTL-01..06, ALLOCAUTH-PROTO-01
-  (both `includeObjectsCollectedByMinorGC=true` and
-  `includeObjectsCollectedByMajorGC=true`), ALLOCAUTH-CHECKPOINT-01..03,
-  ALLOCAUTH-FINAL-01..02, ALLOCAUTH-CONSERVE-01..10.
+   extension-host-allocation-authority01.allocauth01.test.ts` —
+  focused test suite: **22 tests** covering ALLOCAUTH-CTL-01..06,
+  ALLOCAUTH-PROTO-01 (both `includeObjectsCollectedByMinorGC=true`
+  and `includeObjectsCollectedByMajorGC=true`),
+  ALLOCAUTH-CHECKPOINT-01..03 (03 reworded to assert P1a recovery
+  contract), ALLOCAUTH-FINAL-01 (state=finalized after
+  stopSampling return-value write), ALLOCAUTH-FINAL-01b (NO
+  getSamplingProfile after final stopSampling),
+  ALLOCAUTH-FINAL-01c (final artifact equals returned profile),
+  ALLOCAUTH-FINAL-02 (stopSampling rejection → state=failed),
+  ALLOCAUTH-FINAL-03 (wall-time perturbation gate, P1b),
+  ALLOCAUTH-CONSERVE-01..10.
 - `scripts/analyze-allocation-profile.mjs` — bounded SamplingHeapProfile
   analyzer (accepts both flat-nodes and tree-head shapes; emits Top-N
   allocation leaves + ACT §32 candidate set + DOMINANT/MATERIAL/SMALL
@@ -8207,22 +8249,33 @@ successor ACT classifies A / B / C / D):**
 - `MAX_DURATION_MS = 60000` (the timer is the authority, NOT task
   completion).
 - `CHECKPOINT_INTERVAL_MS = 2000` (2 s is the bounded compromise).
-- `ALLOCATION_PROFILE_PERTURBATION_HALT_MS = 500` (skips next checkpoint
-  if a single checkpoint exceeds 500 ms; per ACT §39).
+- `ALLOCATION_PROFILE_PERTURBATION_HALT_MS = 500` measured as
+  WHOLE-CHECKPOINT wall time (inspector + serialize + writeFile +
+  rename) — P1b fix.
+- Finalizer consumes `stopSampling` return value directly; NO
+  `getSamplingProfile` after `stopSampling` — P0 fix.
+- Transient checkpoint failure retains ACTIVE — P1a fix.
+- Identity authority: `installed_bundle_sha256` (sha256 of
+  `dist/extension.js`) — P1c fix.
 
 **Conservation (all 10 verified — see `10-conservation.txt`):**
 
 - BCNT01: 24/24 PASS
 - TQCB01: 15/15 PASS
 - BTCONT01: 10/10 PASS
-- CCARD01: PASS
+- CCARD01: 12/12 PASS
 - Provenance tests: unchanged
 - Public profile: cannot enable profiler regardless of env knob
   (`CLINEMM_DIAG_ALLOCATION_PROFILE` ignored unless `isDogfood`)
 - Trigger predicate: never throws; never awaits; never alters
   command / continuation / completion / projection behavior
+- Smoke probe: PASS (real Node Inspector; both collected-GC
+  options accepted; stopSampling returns profile with
+  samples=29090 — P0 fix verified at runtime)
 
-**Verdict:** `PASS_ALLOCATION_CAPTURE_CAUSE_UNRESOLVED`
+**Verdict:** `PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING`
+(per `result.json` — frozen evidence semantics: infrastructure ready
+= TRUE; live capture = PENDING; allocation authority = UNAVAILABLE)
 
 **Successor:** `ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-LIVE-CAPTURE01`
 operator acquires the first live V8 allocation profile under the

@@ -1,6 +1,6 @@
 {
   "act": "ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01",
-  "verdict": "PASS_ALLOCATION_CAPTURE_CAUSE_UNRESOLVED",
+  "verdict": "PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING",
   "production_repair": false,
   "profiling": {
     "automatic": true,
@@ -23,9 +23,9 @@
     "note": "ACT code is committed at HEAD 87afb382c; the dogfood VSIX must be built and installed by the operator to acquire a live capture per ACT \u00a726-\u00a729. The temporary instrumentation will be removed upon successor ACT classification (A/B/C/D) per ACT \u00a741."
   },
   "live": {
-    "profile_class": "NONE",
-    "extension_host_crashed": false,
-    "note": "This ACT ships the temporary V8 allocation sampler infrastructure, the analyzer, and the focused tests. It does NOT include a LIVE capture; the LIVE capture is acquired by the operator AFTER this ACT's code lands, by (a) building the dogfood VSIX with the new instrumentation, (b) installing it, (c) launching with CLINEMM_RUNTIME_PROFILE=dogfood + CLINEMM_PTAD=1 + CLINEMM_DIAG_ALLOCATION_PROFILE=1, and (d) issuing the standard qualifying run_commands request. The artifacts land at <clineDir>/data/diagnostics/allocation-authority/. See 09-allocation-analysis.md for the expected follow-up analysis structure."
+    "infrastructure_ready": true,
+    "live_capture": "PENDING",
+    "allocation_authority": "UNAVAILABLE"
   },
   "test_results": {
     "focused_allocauth_tests": "19/19 PASS",
@@ -36,9 +36,8 @@
     "inspector_smoke_probe": "PASS (HeapProfiler.startSampling with both collected-GC options accepted; profile has nodes + samples)"
   },
   "allocation_authority": {
-    "classification": "D",
-    "dominant_stacks": [],
-    "note": "Classification D: profile insufficient. This ACT ships the profiling infrastructure. Per ACT \u00a748/\u00a749, the allocation authority CANNOT be classified until the operator acquires a live capture by building the dogfood VSIX and running the qualifying workload. The temporary instrumentation contract (per ACT \u00a741) guarantees the infrastructure will be removed once the operator's first live capture produces a classification."
+    "classification": "UNAVAILABLE (no live capture acquired)",
+    "stage": "infrastructure_complete_LIVE_pending"
   },
   "repair_authorized": false,
   "infrastructure_inventory": {
@@ -69,5 +68,14 @@
       "condition": "CAPTURE_INSUFFICIENT",
       "result": "DEFERRED - no live capture exists yet"
     }
-  ]
+  ],
+  "corrected": {
+    "review": "HALT_ALLOCATION_FINALIZATION_BROKEN (P0 + 3 P1s)",
+    "p0_fix": "finalizer now consumes stopSampling() return value; no getSamplingProfile after",
+    "p1a_fix": "transient checkpoint failure retains ACTIVE; counter incremented; later ticks recover",
+    "p1b_fix": "perturbation gate uses whole-checkpoint wall time (inspector + serialize + write + rename)",
+    "p1c_fix": "identity authority: installed_bundle_sha256 (load-bearing); source_head_informational only",
+    "evidence_semantics_fix": "infrastructure lifecycle and live capture lifecycle are now separate",
+    "test_count_delta": "19 -> 22 (FINAL-01 split, FINAL-03 added, CHECKPOINT-03 reworded)"
+  }
 }

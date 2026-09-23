@@ -101,6 +101,26 @@ If a checkpoint itself stalls > 500 ms, the profiler records
 `host_unresponsive_halt: true` in `meta.json` and halts after the
 next checkpoint attempt to satisfy ACT §39.
 
+**NOTE (post HALT_ALLOCATION_FINALIZATION_BROKEN):** the 500 ms
+gate now measures **whole-checkpoint wall time** (inspector +
+JSON serialize + writeFile + rename), not the Inspector call alone.
+A 600 ms serialization/write stall with a 20 ms Inspector call MUST
+trip the gate. See P1b fix in `result.json::corrected`.
+
+**Checkpoint failure policy (post HALT_ALLOCATION_FINALIZATION_BROKEN):**
+a single transient `getSamplingProfile` rejection (or write
+rejection) MUST NOT transition the state machine to "failed". The
+loop logs a bounded warning, increments
+`transient_checkpoint_failures`, retains `ACTIVE`, and lets the
+next tick try again. See P1a fix.
+
+**Finalization policy (post HALT_ALLOCATION_FINALIZATION_BROKEN):**
+the finalizer consumes the profile returned by
+`HeapProfiler.stopSampling` directly. There MUST NOT be a call to
+`HeapProfiler.getSamplingProfile` after `stopSampling`. Calling
+`getSamplingProfile` after the sample has stopped fails in the
+success path. See P0 fix.
+
 ## Sampling options (load-bearing)
 
 Both collected-GC options are REQUIRED for the qualifying contract
@@ -175,5 +195,5 @@ REMOVAL_TRIGGER (any of):
    - schedule periodic checkpoints (CHECKPOINT_INTERVAL_MS = 2000)
    - schedule final timer at MAX_DURATION_MS = 60000
    - on checkpoint tick: getSamplingProfile -> atomic latest replacement
-   - on final tick: stopSampling -> write final artifact -> "finalized"
+   - on final tick: stopSampling -> consume its returned profile -> write final artifact -> "finalized"
    - any failure: flip to "failed"; log bounded warning; do not throw

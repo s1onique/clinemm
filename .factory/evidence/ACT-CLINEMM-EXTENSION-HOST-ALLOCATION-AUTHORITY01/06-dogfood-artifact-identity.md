@@ -25,8 +25,8 @@ $ git rev-parse HEAD
 | Path | Purpose |
 | ---- | ------- |
 | `apps/vscode/src/sdk/extension-host-allocation-profiler.ts` | Pure V8 allocation sampler module (state machine, inspector + filesystem + identity + data-root seams, async capture loop, checkpoint + finalize timers, hot-path-safe trigger) |
-| `apps/vscode/src/sdk/extension-host-allocation-profiler-runtime.ts` | Production wiring (real `node:inspector.Session`, real `node:fs/promises`, real CLINE data root resolver, real identity resolver hashing `dist/extension.js`) |
-| `apps/vscode/src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts` | Focused test suite (19 tests) |
+| `apps/vscode/src/sdk/extension-host-allocation-profiler-runtime.ts` | Production wiring (real `node:inspector.Session`, real `node:fs/promises`, real CLINE data root resolver, real identity resolver — installed_bundle_sha256 is the load-bearing identity per P1c fix; source_head_informational only) |
+| `apps/vscode/src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts` | Focused test suite (22 tests post HALT_ALLOCATION_FINALIZATION_BROKEN) |
 | `scripts/analyze-allocation-profile.mjs` | Bounded SamplingHeapProfile analyzer |
 | `scripts/inspector-smoke-probe.mjs` | Real-Node Inspector smoke probe (per ACT §23) |
 
@@ -48,7 +48,10 @@ extension.ts:activate
         → wires real node:inspector.Session factory
         → wires real node:fs/promises filesystem seam
         → wires real CLINE data-root resolver (resolveDataDirFromEnv)
-        → wires real identity resolver (git rev-parse HEAD + sha256 of dist/extension.js)
+        → wires real identity resolver:
+             * installed_bundle_sha256 (LOAD-BEARING; sha256 of dist/extension.js)
+             * source_head_informational (git rev-parse HEAD at the runtime
+               location; commonly "unknown" in an installed VSIX)
 
 vscode-run-commands-tool.ts:754  (marker-registration seam)
    → if start.state === "running" && context.metadata?.notifyOnCompletion === true

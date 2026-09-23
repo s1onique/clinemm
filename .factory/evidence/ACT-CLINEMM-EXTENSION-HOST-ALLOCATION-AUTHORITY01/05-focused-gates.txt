@@ -2,23 +2,31 @@ ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — focused-gates
 
 GATES PASSED (per ACT §44):
 
-1. ALLOCAUTH focused tests
+1. ALLOCAUTH focused tests (post HALT_ALLOCATION_FINALIZATION_BROKEN correction)
    $ PATH=/opt/homebrew/bin:$PATH ./node_modules/.bin/vitest run \
        --config vitest.config.ts \
        src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts
-   → 19 passed / 19 (0 failed)
+   → 22 passed / 22 (0 failed)
    → Test Files  1 passed (1)
-   → Duration    19.53s
+   → Duration    ~19.5s
+   → New tests added during the correction:
+       ALLOCAUTH-FINAL-01:  state=finalized after stopSampling return-value write
+       ALLOCAUTH-FINAL-01b: NO getSamplingProfile call after the final stopSampling call
+       ALLOCAUTH-FINAL-01c: final artifact contains exactly the profile returned by stopSampling
+       ALLOCAUTH-FINAL-02:  stopSampling rejects -> state=failed; latest checkpoint intact
+       ALLOCAUTH-FINAL-03:  whole-checkpoint wall time captured; perturbation gate is wall-based
+   → ALLOCAUTH-CHECKPOINT-03 reworded: transient failure retains ACTIVE (recovery contract)
 
-2. Inspector smoke probe (per ACT §23)
+2. Inspector smoke probe (per ACT §23) — POST-P0-FIX re-run
    $ node scripts/inspector-smoke-probe.mjs
    → HeapProfiler.enable ok
    → HeapProfiler.startSampling ok (both collected-GC options accepted)
-   → profile: samples=28910 head.children=1
-   → HeapProfiler.stopSampling ok
+   → profile: samples=29043 head.children=1
+   → stopSampling returned profile: samples=29090
    → smoke probe PASS
    → The Node runtime accepts BOTH includeObjectsCollectedByMinorGC and
-     includeObjectsCollectedByMajorGC; the profile is non-empty.
+     includeObjectsCollectedByMajorGC; the profile is non-empty; AND
+     stopSampling returns the completed profile (CDP contract verified).
 
 3. BCNT01 (background-command notify-on-terminal)
    $ vitest run background-command-notify-on-terminal01.bcnt01.test.ts

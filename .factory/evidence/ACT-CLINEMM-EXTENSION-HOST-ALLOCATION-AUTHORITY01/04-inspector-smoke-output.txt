@@ -3,11 +3,11 @@ ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — Inspector smoke probe outp
 Command:
     node scripts/inspector-smoke-probe.mjs
 
-Output:
+Output (live re-run after HALT_ALLOCATION_FINALIZATION_BROKEN P0 fix):
     HeapProfiler.enable ok
     HeapProfiler.startSampling ok (both collected-GC options accepted)
-    profile: samples=28910 head.children=1
-    HeapProfiler.stopSampling ok
+    profile: samples=29043 head.children=1
+    stopSampling returned profile: samples=29090
     smoke probe PASS
 
 Interpretation:
@@ -15,21 +15,29 @@ Interpretation:
       BOTH includeObjectsCollectedByMinorGC=true AND
       includeObjectsCollectedByMajorGC=true. This is the load-bearing
       assertion for ALLOCAUTH-PROTO-01.
-    - The returned profile has samples (28910 captured samples after a
+    - The returned profile has samples (29043 captured samples after a
       5M-iteration allocation workload) and a non-empty head.children
       tree. The profile shape is what scripts/analyze-allocation-profile.mjs
       expects.
+    - **stopSampling returns a non-empty profile (29090 samples).** This is
+      the Node-runtime-level verification that the P0 fix
+      (consume stopSampling's return value, do NOT call getSamplingProfile
+      after) is correct: the profile data lives in the stopSampling
+      response, exactly as the CDP contract specifies.
     - stopSampling completes cleanly; no spurious errors.
 
 Note on schema:
-    The response of HeapProfiler.getSamplingProfile is wrapped in
-    { profile: { head, samples, ... } } by some CDP versions. The
-    smoke probe confirms this wrapping. The production profiler module
-    unwraps it via the unwrapProfile() helper before persisting.
+    The response of HeapProfiler.getSamplingProfile AND
+    HeapProfiler.stopSampling are wrapped in
+    { profile: { head, samples, ... } } by CDP. The smoke probe
+    confirms both wrappings. The production profiler module
+    unwraps them via the unwrapProfile() helper before persisting.
 
 Conclusion:
-    ALLOCAUTH-PROTO-01 (load-bearing) PASS at the Node-runtime level.
-    The remaining ALLOCAUTH-PROTO-01 assertions (exact V8-default
-    values 32768/128 + both collected-GC options true) are exercised
-    by the focused test suite (ALLOCAUTH-PROTO-01 in
-    extension-host-allocation-authority01.allocauth01.test.ts).
+    ALLOCAUTH-PROTO-01 + P0-fix-runtime-verification PASS at the
+    Node-runtime level. The remaining ALLOCAUTH-PROTO-01 assertions
+    (exact V8-default values 32768/128 + both collected-GC options
+    true) are exercised by the focused test suite (ALLOCAUTH-PROTO-01
+    in extension-host-allocation-authority01.allocauth01.test.ts);
+    the stopSampling-consumes-returned-profile contract is
+    exercised by ALLOCAUTH-FINAL-01 + 01b + 01c.

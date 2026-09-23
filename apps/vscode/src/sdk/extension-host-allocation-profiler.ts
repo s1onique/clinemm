@@ -117,6 +117,10 @@ export interface AllocationProfilePerformanceCounters {
 	sampleCount: number
 	checkpointCount: number
 	longCheckpointCount: number
+	/** Transient getSamplingProfile / write failures that did NOT terminate the loop (per ACT §31 recovery contract). */
+	transientCheckpointFailures: number
+	/** Per-checkpoint wall time for the last completed tick. */
+	lastCheckpointWallMs?: number
 }
 
 let _perf: AllocationProfilePerformanceCounters = freshPerfCounters()
@@ -130,6 +134,7 @@ function freshPerfCounters(): AllocationProfilePerformanceCounters {
 		sampleCount: 0,
 		checkpointCount: 0,
 		longCheckpointCount: 0,
+		transientCheckpointFailures: 0,
 	}
 }
 
@@ -316,6 +321,7 @@ export function __resetAllocationProfilerForTests(): void {
 	_filesystem = undefined
 	_dataRootResolver = undefined
 	_identityResolver = undefined
+	_finalizeDriver = undefined
 	_warn = (message) => {
 		Logger.warn(`[allocation-profiler] ${message}`)
 	}
@@ -388,6 +394,28 @@ export function triggerExtensionHostAllocationProfilerOnFirstQualifyingJob(): Al
  *   8. On final tick: stopSampling -> final artifact -> "finalized".
  *   9. Any failure -> flip state -> "failed"; log bounded warning.
  */
+/** Test seam — exposed for ALLOCAUTH-FINAL-* deterministic tests. */
+let _finalizeDriver: (() => Promise<void>) | undefined
+
+/**
+ * Test-only seam that synchronously drives the same finalizer the
+ * MAX_DURATION_MS timer drives. Returns a promise that resolves when
+ * the finalizer has completed (either with state="finalized" or
+ * state="failed"). Required so tests do not have to wait wall-clock
+ * 60 seconds.
+ *
+ * PRECONDITION: capture loop must be in state="active". The seam is a
+ * no-op if state !== "active".
+ */
+export async function __driveFinalizerForTests(): Promise<void> {
+	const driver = _finalizeDriver
+	if (typeof driver !== "function") {
+		_warn("__driveFinalizerForTests called but no capture loop is active")
+		return
+	}
+	await driver()
+}
+
 async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 	const startedAt = new Date()
 	const factory = _inspectorSessionFactory
@@ -427,6 +455,7 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 			}
 			session = undefined
 		}
+		_finalizeDriver = undefined
 	}
 	const transitionToFailed = (reason: string): void => {
 		_state = "failed"
@@ -470,6 +499,8 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 				perf: perfSnapshot,
 				jsonMs,
 				writeMs,
+				transientCheckpointFailures: _perf.transientCheckpointFailures,
+				lastCheckpointWallMs: _perf.lastCheckpointWallMs,
 			})
 			const metaStr = JSON.stringify(meta, null, 2)
 			await filesystem.writeFile(`${latestMetaPath}.tmp`, metaStr)
@@ -497,6 +528,8 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 				},
 				jsonMs: 0,
 				writeMs: 0,
+				transientCheckpointFailures: _perf.transientCheckpointFailures,
+				lastCheckpointWallMs: _perf.lastCheckpointWallMs,
 			})
 			await filesystem.writeFile(finalMetaPath, JSON.stringify(finalMeta, null, 2))
 		}
@@ -533,7 +566,13 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 			try {
 				profile = unwrapProfile(await session!.post("HeapProfiler.getSamplingProfile"))
 			} catch (error) {
-				transitionToFailed(`getSamplingProfile: ${errorMessage(error)}`)
+				// P1a fix: transient checkpoint failure must not transition
+				// the state machine to "failed". A bounded recover catches
+				// a single hiccup and lets the next tick try again.
+				// Per ACT §31: "failed checkpoint -> does not terminate
+				// profiler; next checkpoint may succeed."
+				_perf.transientCheckpointFailures = (_perf.transientCheckpointFailures ?? 0) + 1
+				_warn(`getSamplingProfile failed (continuing, retain ACTIVE): ${errorMessage(error)}`)
 				return
 			}
 			const getMs = performance.now() - startTime
@@ -550,16 +589,27 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 			_perf.profileBytes = Math.max(_perf.profileBytes, profileBytes)
 			_perf.sampleCount = sampleCount
 			_perf.checkpointCount += 1
+			const writeStart = performance.now()
 			try {
 				await writeCheckpoint(profile, perfSnapshot)
 			} catch (error) {
-				_warn(`checkpoint write failed (continuing): ${errorMessage(error)}`)
+				// Per ACT §31 write failures are also recoverable.
+				_perf.transientCheckpointFailures = (_perf.transientCheckpointFailures ?? 0) + 1
+				_warn(`checkpoint write failed (continuing, retain ACTIVE): ${errorMessage(error)}`)
 				return
 			}
-			if (getMs > ALLOCATION_PROFILE_PERTURBATION_HALT_MS) {
+			const writeMs = performance.now() - writeStart
+			_perf.writeMs += writeMs
+			// P1b fix: gate on whole-checkpoint wall time
+			// (inspector + json + write + rename), not the Inspector call
+			// alone. The check now catches serialization/write stalls that
+			// would have previously evaded the gate.
+			const wallMs = performance.now() - startTime
+			_perf.lastCheckpointWallMs = wallMs
+			if (wallMs > ALLOCATION_PROFILE_PERTURBATION_HALT_MS) {
 				_perf.longCheckpointCount += 1
 				skippedNextCheckpoint = true
-				_warn(`checkpoint took ${getMs.toFixed(1)}ms; skipping next tick`)
+				_warn(`checkpoint wall ${wallMs.toFixed(1)}ms (inspector ${getMs.toFixed(1)}ms); skipping next tick`)
 			}
 		}
 
@@ -574,8 +624,14 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 			if (_state !== "active") return
 			_state = "stopping"
 			try {
-				await session!.post("HeapProfiler.stopSampling")
-				const profile = unwrapProfile(await session!.post("HeapProfiler.getSamplingProfile"))
+				// P0 fix (per HALT_ALLOCATION_FINALIZATION_BROKEN review):
+				// CDP contract: HeapProfiler.stopSampling returns the completed
+				// SamplingHeapProfile as `{ profile }`. Do NOT call
+				// getSamplingProfile after stopSampling — sampling has stopped
+				// and that call will fail in the success path. Persist the
+				// profile returned by stopSampling directly.
+				const stopResult = await session!.post("HeapProfiler.stopSampling")
+				const profile = unwrapProfile(stopResult)
 				await writeFinal(profile)
 				_state = "finalized"
 			} catch (error) {
@@ -590,6 +646,10 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 		if (typeof (finalTimer as { unref?: () => void }).unref === "function") {
 			;(finalTimer as { unref: () => void }).unref()
 		}
+		// Expose the finalizer to the test seam so ALLOCAUTH-FINAL-*
+		// tests can drive the same code path the 60-second timer
+		// drives, without waiting wall-clock 60 seconds.
+		_finalizeDriver = finalize
 	} catch (error) {
 		transitionToFailed(`unexpected: ${errorMessage(error)}`)
 	}
@@ -619,16 +679,22 @@ function buildCheckpointMeta(args: {
 	}
 	readonly jsonMs: number
 	readonly writeMs: number
+	readonly transientCheckpointFailures: number
+	readonly lastCheckpointWallMs?: number
 }): Record<string, unknown> {
 	return {
 		schema_version: 1,
 		capture_id: args.captureId,
 		capture_kind: "extension_host_allocation_sampling",
 		status: args.status,
-		source_head: args.identity.sourceHead,
+		// Identity authority: the bundle SHA-256 is the load-bearing
+		// identity (P1c fix). The source_head is informational only —
+		// it may be "unknown" when the runtime is an installed VSIX
+		// (no .git in extension dir).
+		installed_bundle_sha256: args.identity.extensionBundleSha256,
 		version: args.identity.version,
 		extension_path: args.identity.extensionPath,
-		extension_bundle_sha256: args.identity.extensionBundleSha256,
+		source_head_informational: args.identity.sourceHead,
 		started_at: args.startedAt.toISOString(),
 		captured_at: args.capturedAt.toISOString(),
 		checkpoint_index: args.checkpointIndex,
@@ -640,6 +706,8 @@ function buildCheckpointMeta(args: {
 		checkpoint_interval_ms: ALLOCATION_PROFILE_CHECKPOINT_INTERVAL_MS,
 		max_duration_ms: ALLOCATION_PROFILE_MAX_DURATION_MS,
 		host_unresponsive_halt: false,
+		transient_checkpoint_failures: args.transientCheckpointFailures,
+		last_checkpoint_wall_ms: args.lastCheckpointWallMs,
 		performance: {
 			get_sampling_profile_ms: args.perf.getSamplingProfileMs,
 			json_serialize_ms: args.perf.jsonSerializeMs,

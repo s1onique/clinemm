@@ -14,6 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	__driveFinalizerForTests,
 	__resetAllocationProfilerForTests,
 	ALLOCATION_PROFILE_CHECKPOINT_INTERVAL_MS,
 	ALLOCATION_PROFILE_SAMPLING_INTERVAL_BYTES,
@@ -68,10 +69,13 @@ interface FakeSession extends AllocationProfilerInspectorSession {
 	_posts: Array<{ method: string; params: Record<string, unknown> | undefined }>
 	_results: Map<string, unknown>
 	_errors: Map<string, Error>
+	/** Optional override for the next getSamplingProfile call. */
 	_onNextProfile?: () => unknown
+	/** Optional override for the next stopSampling call. */
+	_onNextStopSampling?: () => unknown
 }
 
-function makeFakeSession(): FakeSession {
+function makeFakeSession(opts?: { stopSamplingResult?: unknown }): FakeSession {
 	const session: FakeSession = {
 		_connectCalls: 0,
 		_disconnectCalls: 0,
@@ -91,8 +95,20 @@ function makeFakeSession(): FakeSession {
 			if (this._onNextProfile && method === "HeapProfiler.getSamplingProfile") {
 				return this._onNextProfile()
 			}
+			if (this._onNextStopSampling && method === "HeapProfiler.stopSampling") {
+				// One-shot then cleared.
+				const cb = this._onNextStopSampling
+				this._onNextStopSampling = undefined
+				return cb()
+			}
 			const result = this._results.get(method)
-			return result ?? { head: { sampleCount: 17 } }
+			if (result !== undefined) return result
+			if (method === "HeapProfiler.stopSampling") {
+				// Default: stopSampling returns its profile result wrapped
+				// (matches CDP). Tests can override via _onNextStopSampling.
+				return opts?.stopSamplingResult ?? { profile: { head: { sampleCount: 4242 }, samples: [] } }
+			}
+			return { head: { sampleCount: 17 } }
 		},
 		on(_event: string, _listener: (chunk: unknown) => void): void {
 			// no-op for tests
@@ -314,21 +330,38 @@ describe("ALLOCAUTH-PROTO / CHECKPOINT: protocol + checkpoint lifecycle", () => 
 		expect(perf.checkpointCount).toBeGreaterThanOrEqual(2)
 	})
 
-	it("ALLOCAUTH-CHECKPOINT-03: failed getSamplingProfile -> state=failed; trigger never threw", async () => {
-		resetAllProfilingSeams()
+	it("ALLOCAUTH-CHECKPOINT-03: single transient getSamplingProfile failure -> retain ACTIVE; transient_checkpoint_failures counter ticks", async () => {
+		const fs = resetAllProfilingSeams()
 		arm()
 		const session = makeFakeSession()
+		// Inject ONE transient failure on the FIRST getSamplingProfile
+		// call; subsequent calls must succeed. Per the ACT §31 recovery
+		// contract: "failed checkpoint -> does not terminate profiler;
+		// next checkpoint may succeed."
+		let profileCallCount = 0
 		session._onNextProfile = () => {
-			throw new Error("simulated getSamplingProfile failure")
+			profileCallCount += 1
+			// Clear the one-shot override immediately so subsequent
+			// calls return the default fake profile.
+			session._onNextProfile = undefined
+			throw new Error("simulated transient getSamplingProfile failure")
 		}
 		setAllocationProfilerInspectorSessionFactory(() => session)
 
 		triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
-		await new Promise((r) => setTimeout(r, ALLOCATION_PROFILE_CHECKPOINT_INTERVAL_MS + 500))
+		// Wait through several checkpoint intervals so at least one
+		// additional tick fires AFTER the transient failure.
+		await new Promise((r) => setTimeout(r, ALLOCATION_PROFILE_CHECKPOINT_INTERVAL_MS * 3 + 500))
+		await new Promise((r) => setImmediate(r))
 		await new Promise((r) => setImmediate(r))
 
-		expect(getAllocationProfilerState()).toBe("failed")
-		expect(getAllocationProfilerCaptureId()).toBe("test-capture-id")
+		expect(profileCallCount).toBe(1) // exactly the one-shot fired
+		expect(getAllocationProfilerState()).toBe("active") // NOT failed
+		const perf = getAllocationProfilerPerformanceCounters()
+		expect(perf.transientCheckpointFailures).toBeGreaterThanOrEqual(1)
+		// Latest file is still being written by subsequent ticks.
+		const latestWrites = fs._writes.filter((w) => w.path.includes("latest.heapprofile.json"))
+		expect(latestWrites.length).toBeGreaterThanOrEqual(1)
 	})
 })
 
@@ -341,45 +374,127 @@ describe("ALLOCAUTH-FINAL: finalize lifecycle", () => {
 		__resetAllocationProfilerForTests()
 	})
 
-	it("ALLOCAUTH-FINAL-01: checkpoint loop produces at least one getSamplingProfile + latest file", async () => {
-		const fs = resetAllProfilingSeams()
+	it("ALLOCAUTH-FINAL-01: stopSampling returns profile P -> state=finalized; driven via __driveFinalizerForTests", async () => {
+		resetAllProfilingSeams()
 		arm()
-		const session = makeFakeSession()
+		const stopProfile = { head: { sampleCount: 9999, children: [] }, samples: [1, 2, 3] }
+		const session = makeFakeSession({
+			stopSamplingResult: { profile: stopProfile },
+		})
 		setAllocationProfilerInspectorSessionFactory(() => session)
 
 		triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
-		// Wait through two checkpoint intervals to guarantee at least one tick fires.
-		await new Promise((r) => setTimeout(r, ALLOCATION_PROFILE_CHECKPOINT_INTERVAL_MS * 2 + 500))
 		await new Promise((r) => setImmediate(r))
 		await new Promise((r) => setImmediate(r))
+		expect(getAllocationProfilerState()).toBe("active")
 
-		const profilePosts = session._posts.filter((p) => p.method === "HeapProfiler.getSamplingProfile")
-		expect(profilePosts.length).toBeGreaterThanOrEqual(1)
-		const latestProfileWrites = fs._writes.filter((w) => w.path.includes("latest.heapprofile.json"))
-		expect(latestProfileWrites.length).toBeGreaterThanOrEqual(1)
-		// NOTE: a full MAX_DURATION_MS (60s) test would require a
-		// 60s sleep. We assert the structural contract here and rely
-		// on the smoke probe (scripts/inspector-smoke-probe.mjs) for
-		// end-to-end timing.
+		// Drive the FINALIZER directly (same code path the 60s timer
+		// drives, without wall-clock patience).
+		await __driveFinalizerForTests()
+
+		expect(getAllocationProfilerState()).toBe("finalized")
 	})
 
-	it("ALLOCAUTH-FINAL-02: stopSampling failure -> state=failed; cleanup disconnect", async () => {
+	it("ALLOCAUTH-FINAL-01b: no getSamplingProfile call exists AFTER the final stopSampling call", async () => {
 		resetAllProfilingSeams()
 		arm()
+		const session = makeFakeSession({
+			stopSamplingResult: { profile: { head: { sampleCount: 4242 }, samples: [] } },
+		})
+		setAllocationProfilerInspectorSessionFactory(() => session)
+
+		triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
+		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setImmediate(r))
+		await __driveFinalizerForTests()
+
+		expect(getAllocationProfilerState()).toBe("finalized")
+		const indicesOfStop = session._posts
+			.map((p, i) => (p.method === "HeapProfiler.stopSampling" ? i : -1))
+			.filter((i) => i >= 0)
+		const indicesOfGet = session._posts
+			.map((p, i) => (p.method === "HeapProfiler.getSamplingProfile" ? i : -1))
+			.filter((i) => i >= 0)
+		if (indicesOfStop.length > 0 && indicesOfGet.length > 0) {
+			const lastStop = Math.max(...indicesOfStop)
+			const lateGets = indicesOfGet.filter((i) => i > lastStop)
+			expect(lateGets.length).toBe(0)
+		}
+	})
+
+	it("ALLOCAUTH-FINAL-01c: final artifact contains exactly the profile returned by stopSampling", async () => {
+		const fs = resetAllProfilingSeams()
+		arm()
+		const stopProfile = { head: { sampleCount: 9999, children: [] }, samples: [1, 2, 3] }
+		const session = makeFakeSession({
+			stopSamplingResult: { profile: stopProfile },
+		})
+		setAllocationProfilerInspectorSessionFactory(() => session)
+
+		triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
+		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setImmediate(r))
+		await __driveFinalizerForTests()
+
+		const finalWrite = fs._writes.find((w) => w.path.includes("final-") && w.path.endsWith(".heapprofile.json"))
+		expect(finalWrite).toBeTruthy()
+		const persisted = JSON.parse(finalWrite!.data)
+		const inner = "profile" in persisted ? (persisted as { profile: unknown }).profile : persisted
+		expect((inner as { head: { sampleCount: number } }).head.sampleCount).toBe(9999)
+		// session disconnected exactly once.
+		expect(session._disconnectCalls).toBe(1)
+	})
+
+	it("ALLOCAUTH-FINAL-02: stopSampling rejects -> state=failed; session disconnects; latest checkpoint remains intact", async () => {
+		const fs = resetAllProfilingSeams()
+		arm()
 		const session = makeFakeSession()
-		session._onNextProfile = () => {
-			throw new Error("simulated stopSampling-like failure")
+		session._onNextStopSampling = () => {
+			throw new Error("simulated stopSampling failure")
 		}
 		setAllocationProfilerInspectorSessionFactory(() => session)
 
 		triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
-		await new Promise((r) => setTimeout(r, ALLOCATION_PROFILE_CHECKPOINT_INTERVAL_MS * 2 + 500))
+		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setImmediate(r))
+		expect(getAllocationProfilerState()).toBe("active")
+
+		await new Promise((r) => setTimeout(r, ALLOCATION_PROFILE_CHECKPOINT_INTERVAL_MS + 200))
+		await new Promise((r) => setImmediate(r))
+		const latestWritesBeforeFail = fs._writes.filter((w) => w.path.includes("latest.heapprofile.json"))
+		expect(latestWritesBeforeFail.length).toBeGreaterThanOrEqual(1)
+
+		await __driveFinalizerForTests()
+		expect(getAllocationProfilerState()).toBe("failed")
+		expect(session._disconnectCalls).toBe(1)
+		const latestWritesAfterFail = fs._writes.filter((w) => w.path.includes("latest.heapprofile.json"))
+		expect(latestWritesAfterFail.length).toBeGreaterThanOrEqual(latestWritesBeforeFail.length)
+	})
+
+	it("ALLOCAUTH-FINAL-03: checkpoint wall time is captured per tick; perturbation gate is wall-based", async () => {
+		const fs = resetAllProfilingSeams()
+		arm()
+		const session = makeFakeSession()
+		// Slow write path; first write stalls to push wallMs past the gate.
+		const realWrite = fs.writeFile.bind(fs)
+		let injected = false
+		fs.writeFile = async (target: string, data: string): Promise<void> => {
+			if (!injected) {
+				injected = true
+				await new Promise((r) => setTimeout(r, 600))
+			}
+			return realWrite(target, data)
+		}
+		setAllocationProfilerInspectorSessionFactory(() => session)
+
+		triggerExtensionHostAllocationProfilerOnFirstQualifyingJob()
+		await new Promise((r) => setImmediate(r))
+		await new Promise((r) => setTimeout(r, ALLOCATION_PROFILE_CHECKPOINT_INTERVAL_MS + 1500))
 		await new Promise((r) => setImmediate(r))
 
-		expect(session._connectCalls).toBe(1)
-		expect(session._posts.find((p) => p.method === "HeapProfiler.startSampling")).toBeTruthy()
-		expect(getAllocationProfilerState()).toBe("failed")
-		expect(session._disconnectCalls).toBeGreaterThanOrEqual(1)
+		const perf = getAllocationProfilerPerformanceCounters()
+		expect(typeof perf.lastCheckpointWallMs === "number").toBe(true)
+		expect(perf.longCheckpointCount).toBeGreaterThanOrEqual(1)
 	})
 })
 

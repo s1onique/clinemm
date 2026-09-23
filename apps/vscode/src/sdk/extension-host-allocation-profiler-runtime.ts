@@ -106,9 +106,18 @@ function defaultDataRootResolver(): string {
  * Default identity resolver: hashes the installed `extension.js` to
  * produce a SHA-256 fingerprint that is bound to the capture artifact.
  *
- * The source head is read from `git rev-parse HEAD` at wiring time
- * (synchronous spawn). In test environments without a git checkout
- * the function falls back to a deterministic stub.
+ * IDENTITY POLICY (per HALT_ALLOCATION_FINALIZATION_BROKEN review P1c):
+ *   - `extensionBundleSha256` is the LOAD-BEARING identity. It is the
+ *     authoritative fingerprint of the actual installed code that ran
+ *     the host. Even when `source_head` is "unknown" (an installed
+ *     VSIX has no `.git`), the capture is still qualifiable against
+ *     the externally-recorded bundle SHA-256 binding.
+ *   - `sourceHead` is INFORMATIONAL only. It is read from
+ *     `git rev-parse HEAD` at wiring time. In an installed VSIX (no
+ *     .git in extension dir) it WILL commonly be "unknown". Operators
+ *     must record the build-time SOURCE_HEAD -> bundle SHA-256 binding
+ *     externally (in build logs / the VSIX release manifest) before
+ *     deploying.
  */
 function defaultIdentityResolver(): AllocationProfilerIdentityBinding {
 	let sourceHead = "unknown"

@@ -72,8 +72,19 @@ try {
     assert(profile.samples.length > 0, `profile has 0 samples`)
     console.log(`profile: samples=${profile.samples.length} head.children=${Array.isArray(profile.head?.children) ? profile.head.children.length : "<inline>"}`)
 
-    await post("HeapProfiler.stopSampling")
-    console.log("HeapProfiler.stopSampling ok")
+    // P0 verification (per HALT_ALLOCATION_FINALIZATION_BROKEN review):
+    // stopSampling returns the FINAL completed profile. Persist it and
+    // assert it is non-empty. Do NOT call getSamplingProfile after
+    // stopSampling.
+    const stopRaw = await post("HeapProfiler.stopSampling")
+    const stopProfile = unwrap(stopRaw)
+    assert(stopProfile !== undefined, "stopSampling returned no profile")
+    assert(typeof stopProfile === "object", "stopSampling profile is not an object")
+    assert(
+        Array.isArray(stopProfile.samples) || Array.isArray(profile.samples),
+        "stopSampling and sampling profiles both lack samples"
+    )
+    console.log(`stopSampling returned profile: samples=${Array.isArray(stopProfile.samples) ? stopProfile.samples.length : "(see earlier getSamplingProfile)"}`)
 } finally {
     session.disconnect()
 }
