@@ -14,11 +14,13 @@
     "max_duration_ms": 60000
   },
   "artifact": {
-    "source_head": "5e9f67e75233af19d760e26535029cac4d2efa9e",
+    "source_head": "87afb382c",
+    "commit_sha": "87afb382c",
     "version": "4.1.16",
     "extension_path": "apps/vscode",
     "extension_bundle_sha256": "<NOT BUILT YET - dogfood VSIX build is the next manual step after this ACT's code lands>",
-    "installed_bundle_sha256": "<NOT YET INSTALLED - this ACT ships the implementation; the operator must build + install the dogfood VSIX per ACT §25 to obtain LIVE evidence>"
+    "installed_bundle_sha256": "<NOT YET INSTALLED - this ACT ships the implementation; the operator must build + install the dogfood VSIX per ACT \u00a725 to obtain LIVE evidence>",
+    "note": "ACT code is committed at HEAD 87afb382c; the dogfood VSIX must be built and installed by the operator to acquire a live capture per ACT \u00a726-\u00a729. The temporary instrumentation will be removed upon successor ACT classification (A/B/C/D) per ACT \u00a741."
   },
   "live": {
     "profile_class": "NONE",
@@ -36,7 +38,7 @@
   "allocation_authority": {
     "classification": "D",
     "dominant_stacks": [],
-    "note": "Classification D: profile insufficient. This ACT ships the profiling infrastructure. Per ACT §48/§49, the allocation authority CANNOT be classified until the operator acquires a live capture by building the dogfood VSIX and running the qualifying workload. The temporary instrumentation contract (per ACT §41) guarantees the infrastructure will be removed once the operator's first live capture produces a classification."
+    "note": "Classification D: profile insufficient. This ACT ships the profiling infrastructure. Per ACT \u00a748/\u00a749, the allocation authority CANNOT be classified until the operator acquires a live capture by building the dogfood VSIX and running the qualifying workload. The temporary instrumentation contract (per ACT \u00a741) guarantees the infrastructure will be removed once the operator's first live capture produces a classification."
   },
   "repair_authorized": false,
   "infrastructure_inventory": {
@@ -49,7 +51,7 @@
     "activation_call_site": "apps/vscode/src/extension.ts (sibling to EHLOOP01 activation)",
     "trigger_call_site": "apps/vscode/src/sdk/vscode-run-commands-tool.ts (marker-registration seam)"
   },
-  "next_act": "ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-LIVE-CAPTURE01 — operator acquires the first live V8 allocation profile under the dogfood workload and classifies the allocation authority (A / B / C / D). The temporary instrumentation in this ACT is consumed by that successor ACT; upon classification the entire REMOVAL_TRIGGER fires and the infrastructure is removed TOGETHER.",
+  "next_act": "ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-LIVE-CAPTURE01 \u2014 operator acquires the first live V8 allocation profile under the dogfood workload and classifies the allocation authority (A / B / C / D). The temporary instrumentation in this ACT is consumed by that successor ACT; upon classification the entire REMOVAL_TRIGGER fires and the infrastructure is removed TOGETHER.",
   "stop_conditions_checked": [
     {
       "condition": "HALT_REQUIRED_PROFILER_CAPABILITY_UNAVAILABLE",

@@ -1,7 +1,8 @@
 ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 — entry-state
 
 WORKING-TREE: clean
-SOURCE_HEAD: 5e9f67e75233af19d760e26535029cac4d2efa9e
+SOURCE_HEAD (entry): 5e9f67e75233af19d760e26535029cac4d2efa9e
+SOURCE_HEAD (commit): 87afb382c
 PARENT_ACT: ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01
 PRIOR_VERDICT: GC_RAW_CPU_SAMPLE_SHARE ≈ 44%; cwi CPU hotleaf REFUTED
              (cwi -> enterExtensionHostHotloopHandleSessionEvent,
@@ -44,7 +45,7 @@ EVIDENCE_TYPE_NOT_ACCEPTABLE (per ACT §6):
                                        by default; not load-bearing
                                        for the qualifying contract)
 
-INITIAL_DELTA_FROM_BASELINE:
+ACT_DELTA_FROM_BASELINE (committed at 87afb382c):
   This ACT adds:
     - apps/vscode/src/sdk/extension-host-allocation-profiler.ts        NEW
     - apps/vscode/src/sdk/__tests__/
