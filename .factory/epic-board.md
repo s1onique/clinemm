@@ -7439,3 +7439,127 @@ PASS_EXTENSION_HOST_LOGGING_HOTPATH_REPAIRED
   + CORRECTION02 closed the structural ownership P0
   + EH2 narrowed to NOT_ESTABLISHED
   + LIVE qualification PENDING
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-TURN-STATE-PROVENANCE-HOTPATH01 — CORRECTION02 — 2026-09-23
+
+Cycle 2 (the FACTORY_CAUSAL_REVIEWER mandated "Maximum one correction
+cycle"); the reviewer identified a single load-bearing P0:
+
+  HALT_PROVENANCE_RING_STILL_O_N
+    claimed O(1) steady-state append = FALSE
+    claimed zero steady-state allocations = FALSE
+    static complexity gate = FALSE_GREEN
+    LIVE qualification = NOT AUTHORIZED YET
+
+The first repair (cycle 1) had preserved the OLD compact-on-every-full-
+ring-append branch under a fresh-array spelling (`new Array(capacity)`
++ `for` loop) — only the algorithmic COST was hidden, not the
+algorithmic SHAPE. PROVHOT-STATIC-01 was a syntactic regex gate that
+could be evaded by that exact fresh-array spelling.
+
+**FIX (bounded to one branch):**
+
+apps/vscode/src/shared/turn-state-writer-provenance.ts
+  - The `else` branch on a full-ring append was the load-bearing
+    defect: it allocated `new Array(capacity)` and copied every
+    element on EVERY full-ring append. Replaced with the true O(1)
+    overwrite-at-head: `slot[head] = record; head = (head+1) %
+    capacity`.
+  - The cold-path slot-drift reconcile (taken ONLY when
+    `slot.length !== capacity`) is preserved unchanged. It runs
+    ONCE per capacity change, not per append.
+  - Added test-only counters `__testAllocCount` and
+    `__testMaxSlotLen` plus four @internal exports
+    (`_resetTurnStateWriterProvenanceTestCounters`,
+    `_getTurnStateWriterProvenanceTestCounters`,
+    `_snapshotTurnStateWriterProvenanceSlot`,
+    `_hasSlotBeenReallocatedSince`) that enable the reference-
+    identity check used by PROVHOT-O1-01.
+
+**NEW LOAD-BEARING DISCRIMINATORS:**
+
+apps/vscode/src/sdk/__tests__/turn-state-writer-provenance.hotpath01.test.ts
+  + PROVHOT-O1-01 (reference-identity at the slot): cap=256, fill,
+    then 10,000 full-ring appends. Asserts allocCount==1, maxSlotLen
+    ==256, the slot array object identity is preserved, and the
+    chronology is intact. Catches `new Array+for` and `slice+concat`
+    variants of the bug.
+  + PROVHOT-RESIZE-01: shrink/grow may reconcile ONCE on the next
+    append; subsequent appends reconcile ZERO times. Reference-
+    identity snapshot repeated at each stage.
+
+**Fault-injection validation:**
+
+  Variant 1 (new Array+for):  PROVHOT-O1-01 FAILS, PROVHOT-RESIZE-01
+    FAILS, PROVHOT-STATIC-01 PASS (false-green as reviewer warned),
+    PROVHOT-GREEN-01.A FAILS.
+  Variant 2 (slice+concat):  PROVHOT-O1-01 FAILS, PROVHOT-RESIZE-01
+    FAILS, PROVHOT-STATIC-01 FAILS, PROVHOT-GREEN-01.A/B FAIL.
+  Faults reverted; corrected code passes all 60 tests.
+
+**Test gates (all GREEN):**
+
+| Gate                                                    | Result         |
+|---------------------------------------------------------|----------------|
+| vitest turn-state-writer-provenance (all 4 files)       | 60/60 PASS     |
+|   - WPROV (existing)                                    | 35 pass        |
+|   - hotpath01 (incl PROVHOT-O1-01, PROVHOT-RESIZE-01)    | 7 pass         |
+|   - ctl01 (CTL-01..12 conservation)                     | 17 pass        |
+|   - equiv01 (10k-step adversarial vs literal-OLD)       | 1 pass         |
+| Downstream regression (RTQP05, DDP, BOCQ5)               | 34/34 PASS     |
+| tsc --noEmit -p tsconfig.json                           | 0 errors       |
+| biome lint (changed files)                              | 0 errors       |
+| Microbench: 1M appends, cap=256, OLD=238.7ms            | NEW=7.6ms => 31x speedup |
+| git diff --check (clean in scope)                       | 1 modified + 3 new |
+
+**Conservation (UNCHANGED):**
+
+materializeChronological chronology, getLatest latest-record-after-
+setSize(0), setSize shrink, setSize grow, setSize 0 no-op on
+enabled, setSize 0 with cap-N, append disabled is no-op, FII32
+repr boundaries, getTurnStateWriterProvenanceLatest vs
+materializeChronological — all 12 CTL01-* cases pass. Equivalence
+vs literal-OLD reference (10,000 random steps + setSize shocks) is
+0 mismatches.
+
+**Algorithm (corrected):**
+
+  + append_complexity_steady_state = O(1) (1 indexed assignment +
+    1 modulo + 1 integer assign; 0 per-append Array allocations)
+  + append_complexity_cold         = O(capacity), only when
+                                       slot.length has drifted from
+                                       capacity (one reconciliation
+                                       per capacity change)
+  + observable_contract_delta       = false (all CTL01 + EQUIV-01
+                                       pass)
+
+**Live qualification (DEFERRED, env-bounded — unchanged from prior
+cycle):**
+
+Sandbox lacks VS Code + X server. Live CPU-profile capture, owi
+self-time share drop from ~49% to <5% check, and the
+isProvenanceEnabled-toggle smoke are deferred to
+ACT-CLINEMM-EXTENSION-HOST-LIVE-QUALIFICATION01, which now has the
+RESOLVED hot path to qualify against.
+
+**Files updated:**
+
+- apps/vscode/src/shared/turn-state-writer-provenance.ts
+- apps/vscode/src/sdk/__tests__/turn-state-writer-provenance.hotpath01.test.ts
+- apps/vscode/src/sdk/__tests__/turn-state-writer-provenance.ctl01.test.ts
+- apps/vscode/src/sdk/__tests__/turn-state-writer-provenance.equiv01.test.ts
+- .factory/epic-board.md (this entry)
+
+Evidence (out-of-repo): /tmp/provenance-hotpath-evidence/{01..11}.*
+
+**Verdict:**
+
+PASS_PROVENANCE_HOTPATH_REPAIRED (cycle 2 of 2 — reviewer's
+maximum)
+  + PROVHOT_RING_STILL_O_N resolved
+  + 60/60 vitest + 34/34 downstream PASS
+  + 31x microbench confirms steady-state O(1)
+  + Live qualification PENDING (env-bounded) -> LIVE-QUALIFICATION01
+
