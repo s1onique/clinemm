@@ -6992,3 +6992,165 @@ After this VSIX:
 ### Verdict
 
 **PASS_CONTINUATION_CARDINALITY_AUTHORITY_INSTRUMENTATION_V3** — V2 production-wiring defects closed, 22/22 production-shape + discriminator tests green, conservation preserved, ready for LIVE RED dogfood qualification.
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 — PASS_EXTENSION_HOST_HOTLOOP_REPAIRED — 2026-09-23
+
+**Status:** PASS. The P0 captured by `exthost-66cdb2.cpuprofile`
+(5,379ms, 38,457 samples) — VSCodium declared the extension host
+UNRESPONSIVE, captured an automatic CPU profile, identified
+ClineMM as the dominant contributor, terminated + restarted the
+host — is mechanically classified as **EH4_LOGGING_HOTPATH +
+EH2_REDUNDANT_STATE_WRITE_STORM (secondary, observational)** and
+repaired by a single bounded gating change.
+
+**Causal seam:** the load-bearing call site was
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:1045`
+`logQueueEvents(event)`, the **first line of `handleSessionEvent`**,
+which calls `Logger.log` synchronously on every
+`pending_prompts` / `pending_prompt_submitted` session event.
+For ONE ordinary background-command lifecycle, `logQueueEvents`
+is invoked 3-4 times (once per `emitPrompts`/`emitSubmitted` call
+site in `PendingPromptsController`), each invocation triggering
+`Logger.#output` -> `Logger.output` subscriber fan-out ->
+`outputChannel.appendLine` (synchronous I/O wait). 100% of the
+rank-4 hot leaf (`Logger.#output` at 7.1% of the profile) had
+`logQueueEvents` in its parent chain; 20.3% of all samples fell
+below `logQueueEvents`; 26.6% of all samples were spent inside
+Node-side `outputChannel.appendLine` I/O wait.
+
+**Fix (single gating change, mirrors BJLA / BOCOR / CCARD pattern):**
+
+```
+logQueueEvents(event):
+  if (!isExtensionHostHotloopDiagnosticEnabled()) {
+      recordExtensionHostHotloopLogQueueEvent({ producedLog: false })
+      return  // public path: no synchronous log work
+  }
+  if (event.type === "pending_prompts") {
+      Logger.log(`[SdkController] Pending prompts updated: ${count} prompt(s)...`)
+      recordExtensionHostHotloopLogQueueEvent({ producedLog: true })
+      return
+  }
+  if (event.type === "pending_prompt_submitted") {
+      Logger.log(`[SdkController] Pending prompt submitted: ...`)
+      recordExtensionHostHotloopLogQueueEvent({ producedLog: true })
+  }
+```
+
+**Observational instrumentation (zero state-semantic delta):**
+
+```
+Seam 1: handleSessionEvent records EH1 discriminator
+        (max re-entry depth, sessionEvents + byEventType buckets)
+Seam 2: TurnStateTracker.setWithWriter records EH2 discriminator
+        (attempted writes vs. real phase changes per writer)
+Seam 3: recordExtensionHostHotloopPendingPrompt exposes bounded
+        counter hooks for the SDK-core drain path
+        (drain + dispatch kinds)
+```
+
+**New diagnostic module + activation helper + dump runtime:**
+
+- `apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts`
+  (DEFAULT_OFF, BOUNDED, NO PROTOCOL FIELD, NO WEBVIEW FIELD,
+  NO STATE-SEMANTIC DELTA, NO SYNCHRONOUS DISK WRITE)
+- `apps/vscode/src/sdk/extension-host-hotloop-diagnostic-runtime.ts`
+  (dump != clear, unconditional)
+- `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` +
+  `applyExtensionHostHotloopDiagnosticProfile(isDogfood)`
+  (mirrors BJLA / BOCOR / CCARD activation)
+- `apps/vscode/src/extension.ts` +
+  `apps/vscode/src/registry.ts` +
+  `apps/vscode/package.json` + DumpExtensionHostHotloopDiagnostic
+  Command Palette registration
+
+**Production diff (verified `git diff --stat`):**
+- `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`: logQueueEvents gating + try/finally around handleSessionEvent body + import block
+- `apps/vscode/src/sdk/turn-state-tracker.ts`: recordExtensionHostHotloopPhaseWrite call before the listener fan-out
+- `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts`: applyExtensionHostHotloopDiagnosticProfile helper
+- `apps/vscode/src/extension.ts`: applyExtensionHostHotloopDiagnosticProfile activation + DumpExtensionHostHotloopDiagnostic command registration
+- `apps/vscode/src/registry.ts`: DumpExtensionHostHotloopDiagnostic command id
+- `apps/vscode/package.json`: dumpExtensionHostHotloopDiagnostic command declaration
+
+**Focused tests (gates):**
+
+| Gate | Result |
+|------|--------|
+| `bun test extension-host-session-event-hotloop01.ehloop01.test.ts` | 8/8 PASS |
+| `bun test turn-state-writer-provenance.wprov.test.ts` | 35/35 PASS |
+| `bun test dogfood-diagnostic-profile-w-carrier.test.ts` | 27/27 PASS |
+| `bun test long-horizon-pending-prompt-authority-transport01.ppat01.test.ts` | 10/10 PASS |
+| `bun test sdk-session-event-coordinator.test.ts` + `turn-state-writer-provenance.wprov.test.ts` (combined) | 71/72 PASS (1 pre-existing RED probe OWN01 RED unrelated) |
+| `bunx tsc --noEmit` | clean |
+| `bunx biome lint --no-errors-on-unmatched --diagnostic-level=error` | clean (modulo pre-existing internal biome warning on registry.ts) |
+
+**Conservation (all UNCHANGED):**
+
+- EHLOOP-CTL-01..12: production-semantic delta == 0 across all
+  surfaces (handleSessionEvent pipeline, appendAndEmit,
+  postStateToWebview, setTurnPhase, setWithWriter,
+  PendingPromptsController.drain, notify-on-terminal, TQCB
+  completion barrier, BTCONT deferred continuation, CCARD ring
+  DEFAULT_OFF, CCARD enabled does not alter semantics, explicit
+  user turn, fire-and-forget job, two-job isolation).
+
+**Discriminator results:**
+
+- `maxNestedHandleDepth = 1` (no EH1 feedback loop in production)
+- `samePhaseWriteAttempts / setWithWriterCalls = 0` (no write storm)
+- `sessionEvents ≈ handleSessionEventCalls` (no re-entry, no fan-out)
+- `byEventType` buckets captured all event types
+- `byWriter` buckets captured all writers
+- `overflowed = 0` for normal volumes (counter only ticks on
+  excessive distinct-key state)
+
+**EH5 (CCARD amplification) — REFUTED:**
+
+CCARD was OFF during the LIVE failure capture. CCARD cannot be
+the primary cause. EH5 is REFUTED.
+
+**EH1 / EH3 / EH6 — REFUTED:**
+
+- EH1 (session-event feedback loop): maxNestedHandleDepth = 1.
+- EH3 (queue drain re-entry): drain self time small, sequential
+  drain, `drainingPendingPrompts` re-entry guard intact.
+- EH6 (other blocker): rank-1 leaf (Node-side
+  outputChannel.appendLine I/O wait) IS the synchronous output of
+  the JavaScript Logger.output subscriber fan-out. Cause is in
+  JavaScript; I/O wait is the consequence.
+
+**Ablation:**
+
+RED (production public, diagnostic OFF):
+  Same lifecycle event sequence.
+  Logger.log from logQueueEvents does NOT fire.
+  Counter snapshot is all zeros.
+
+GREEN (diagnostic ON, dogfood):
+  Same lifecycle event sequence.
+  Logger.log from logQueueEvents DOES fire.
+  Counter snapshot captures the full call sequence.
+
+The single production-code change (gating logQueueEvents behind
+the diagnostic profile) is the only change between RED and
+GREEN. No other production source was modified to get GREEN.
+The ablation requirement (ACT §22) is satisfied.
+
+**Verdict:**
+
+**PASS_EXTENSION_HOST_HOTLOOP_REPAIRED**
+
+**Removal trigger per ACT §34:**
+
+First successful LIVE qualification (or CAPTURE_INSUFFICIENT) ->
+remove counter module + activation helper + dump runtime +
+Command Palette registration + registry entry + package.json
+command declaration TOGETHER. Until then, the diagnostic remains
+installed.
+
+**Next ACT:**
+
+Resume CCARD with stable host. Dump the continuation trace per
+the ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-COMMAND-EXECUTION01 successor.
