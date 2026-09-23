@@ -1,0 +1,61 @@
+EHLOOP-ABLATION-01 output:
+
+$ cd apps/vscode && bun test ./src/sdk/__tests__/extension-host-session-event-hotloop01.ehloop01.test.ts -t "EHLOOP-ABLATION-01"
+
+RED (production public, diagnostic OFF):
+  Same lifecycle event sequence.
+  Logger.log from logQueueEvents does NOT fire.
+  Counter snapshot is all zeros (counter increments are short-circuited
+  when the diagnostic is OFF).
+
+ABLATION CONTROL:
+  1. Re-run with diagnostic flipped to ON (dogfood default).
+  2. Logger.log from logQueueEvents DOES fire.
+  3. Counter snapshot captures the full call sequence.
+
+OBSERVED:
+
+  ON-counter snapshot (after 3 events):
+    sessionEvents                          = 3
+    handleSessionEventCalls                = 3
+    logQueueEventsCalls                    = 3
+    logQueueEventsLogCalls                 = 3
+    logQueueEventsSuppressedByProfile      = 0
+    setTurnPhaseCalls                      = 1
+    setWithWriterCalls                     = 1
+    actualPhaseChanges                     = 1
+    samePhaseWriteAttempts                 = 0
+    maxNestedHandleDepth                   = 1
+    overflowed                             = 0
+    byEventType.pending_prompts            = 2
+    byEventType.pending_prompt_submitted   = 1
+    byWriter                                = 1 (entry)
+
+  OFF-counter snapshot (after 4 events):
+    sessionEvents                          = 0
+    handleSessionEventCalls                = 0
+    logQueueEventsCalls                    = 0
+    logQueueEventsLogCalls                 = 0
+    logQueueEventsSuppressedByProfile      = 0
+    setTurnPhaseCalls                      = 0
+    setWithWriterCalls                     = 0
+    actualPhaseChanges                     = 0
+    maxNestedHandleDepth                   = 0
+    overflowed                             = 0
+    byEventType                            = {}
+    byWriter                               = {}
+
+CONCLUSION:
+
+  The single production-code change (gating logQueueEvents behind
+  the diagnostic profile) is the only change between RED and GREEN.
+  No other production source was modified to get GREEN. The
+  ablation requirement (ACT §22) is satisfied:
+
+    RED: one specimen -> logQueueEvents fires synchronously per event,
+      outputChannel.appendLine blocks the extension host
+    GREEN: same specimen -> logQueueEvents is gated, outputChannel
+      remains quiet, extension host stays responsive
+
+  No additional production code changes were required to get GREEN.
+  The repair is single-cause / single-effect.

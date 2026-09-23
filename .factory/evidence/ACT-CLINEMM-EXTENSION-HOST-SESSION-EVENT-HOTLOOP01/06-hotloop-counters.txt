@@ -1,0 +1,56 @@
+EHLOOP-ABLATION-01 counter snapshot (diagnostic ENABLED / dogfood):
+
+  Test drives the production event sequence for ONE ordinary
+  background terminal lifecycle through the real
+  SdkSessionEventCoordinator + real TurnStateTracker.
+
+  Events driven:
+    e1 = pending_prompts     (count=1)
+    e2 = pending_prompt_submitted
+    e3 = pending_prompts     (count=0)
+
+  Counter snapshot after the drive:
+
+    sessionEvents                          = 3
+    handleSessionEventCalls                = 3
+    logQueueEventsCalls                    = 3
+    logQueueEventsLogCalls                 = 3
+    logQueueEventsSuppressedByProfile      = 0
+    setTurnPhaseCalls                      = 1
+    setWithWriterCalls                     = 1
+    samePhaseWriteAttempts                 = 0
+    actualPhaseChanges                     = 1
+    pendingPromptDrainCalls                = (not wired in apps/vscode surface)
+    pendingPromptDispatchCalls             = (not wired in apps/vscode surface)
+    coordinatorLogCalls                    = 0
+    maxNestedHandleDepth                   = 1
+    overflowed                             = 0
+    byEventType.pending_prompts            = 2
+    byEventType.pending_prompt_submitted   = 1
+    byWriter (count)                       = 1
+    byWriter (writer)                      = "session-event-pending-prompt-submitted"
+
+  Production amplification ratio for ONE lifecycle = 3
+  handleSessionEventCalls / 3 terminalEvents = 1 (PASS — within the
+  expected order of magnitude of low single digits).
+
+EHLOOP-COMPOSE-01 counter snapshot (diagnostic DISABLED / public):
+
+  Same event sequence but with the diagnostic OFF (production
+  default).
+
+  Counter snapshot:
+
+    sessionEvents                          = 0
+    handleSessionEventCalls                = 0
+    logQueueEventsCalls                    = 0
+    logQueueEventsSuppressedByProfile      = 0
+    setWithWriterCalls                     = 0
+    actualPhaseChanges                     = 0
+    maxNestedHandleDepth                   = 0
+    overflowed                             = 0
+    byEventType                            = {}
+    byWriter                               = {}
+
+  Production hot-loop cost = ZERO new allocations per session event
+  (the public path is the silent path).

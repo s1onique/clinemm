@@ -126,13 +126,17 @@ import {
 	setBackgroundJobLivenessAuthorityCaptureEnabled,
 } from "./background-job-liveness-authority"
 import {
+	isBackgroundOwnerCorrelationCaptureEnabled as _isBackgroundOwnerCorrelationCaptureEnabled,
+	setBackgroundOwnerCorrelationCaptureEnabled,
+} from "./background-owner-correlation"
+import {
 	isContinuationCardinalityAuthorityCaptureEnabled as _isContinuationCardinalityAuthorityCaptureEnabled,
 	setContinuationCardinalityAuthorityCaptureEnabled,
 } from "./continuation-cardinality-authority"
 import {
-	isBackgroundOwnerCorrelationCaptureEnabled as _isBackgroundOwnerCorrelationCaptureEnabled,
-	setBackgroundOwnerCorrelationCaptureEnabled,
-} from "./background-owner-correlation"
+	isExtensionHostHotloopDiagnosticEnabled as _isExtensionHostHotloopDiagnosticEnabled,
+	setExtensionHostHotloopDiagnosticEnabled,
+} from "./extension-host-hotloop-diagnostic"
 import {
 	isTaskHeaderSelectorInputCaptureEnabled as _isTaskHeaderSelectorInputCaptureEnabled,
 	setTaskHeaderSelectorInputCaptureEnabled,
@@ -911,4 +915,68 @@ export function applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfood
 
 function _isContinuationCardinalityAuthorityCaptureEnabledForActivation(): boolean {
 	return _isContinuationCardinalityAuthorityCaptureEnabled()
+}
+
+// ===========================================================================
+// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 — central dogfood
+// profile resolver for the EHLOOP01 (Extension Host Hotloop) capture
+// seam.
+//
+// CONTRACT — frozen in this ACT (mirrors BJLA / BOCOR / CCARD; no env
+// override layer):
+//   - There is NO new env var. NO override matrix. NO parser.
+//     Per the Factory reviewer precedent, the diagnostic is enabled
+//     STRICTLY by the central dogfood profile:
+//       isDogfood === true  -> counters ON
+//       isDogfood === false -> counters OFF (public default)
+//   - The module seam is
+//     ./extension-host-hotloop-diagnostic.ts#isExtensionHostHotloopDiagnosticEnabled.
+//     The resolver arms it via
+//     setExtensionHostHotloopDiagnosticEnabled(enabled).
+//   - The activation helper is called from extension.ts:activate
+//     (sibling to the existing BJLA / BOCOR / CCARD activations);
+//     there is exactly ONE production activation path.
+//
+// HONEST STOP RULE (mirrors BJLA / BOCOR / CCARD):
+//   Once the extension-host hot-loop repair is GREEN on LIVE
+//   qualification (PASS_EXTENSION_HOST_HOTLOOP_REPAIRED or any
+//   PASS_* equivalent) OR CAPTURE_INSUFFICIENT OR
+//   HALT_CAUSE_NOT_ESTABLISHED, this resolver + activation helper +
+//   the EHLOOP counter module + the host-side dump runtime + the
+//   Command Palette registration + the registry entry + the
+//   package.json command declaration MUST be removed TOGETHER.
+// ===========================================================================
+
+/**
+ * THE single production activation helper for the EHLOOP01 seam.
+ * Called from extension.ts:activate (sibling to the BJLA / BOCOR /
+ * CCARD activations); there is exactly ONE production activation
+ * path, no copied orchestration in tests.
+ *
+ * Mirrors BJLA / BOCOR / CCARD: enable/disable is strictly:
+ *
+ *   isDogfood === true  -> ON
+ *   isDogfood === false -> OFF
+ *
+ * No new env knob. No parser. No override matrix.
+ */
+export function applyExtensionHostHotloopDiagnosticProfile(isDogfood: boolean): {
+	readonly enabled: boolean
+	readonly flipped: boolean
+} {
+	const was = _isExtensionHostHotloopDiagnosticEnabledForActivation()
+	const should = isDogfood
+	if (should && !was) {
+		setExtensionHostHotloopDiagnosticEnabled(true)
+		return { enabled: true, flipped: true }
+	}
+	if (!should && was) {
+		setExtensionHostHotloopDiagnosticEnabled(false)
+		return { enabled: false, flipped: true }
+	}
+	return { enabled: should, flipped: false }
+}
+
+function _isExtensionHostHotloopDiagnosticEnabledForActivation(): boolean {
+	return _isExtensionHostHotloopDiagnosticEnabled()
 }

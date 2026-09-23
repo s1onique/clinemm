@@ -1,0 +1,50 @@
+EHLOOP-RED-01 reproduction via focused test:
+
+$ cd apps/vscode && bun test ./src/sdk/__tests__/extension-host-session-event-hotloop01.ehloop01.test.ts
+
+RED phase (production public / diagnostic OFF):
+  The test drives one `pending_prompts` session event through the
+  real production `SdkSessionEventCoordinator.handleSessionEvent`.
+  Asserts the gated `logQueueEvents` `Logger.log(...)` did NOT fire
+  (the production-public path).
+
+  PASS observed:
+    ✓ EHLOOP-RED-01: logQueueEvents production Logger.log call is
+      suppressed when the diagnostic profile is OFF (public default)
+    queueLogCallCount = 0
+    isExtensionHostHotloopDiagnosticEnabled() = false
+
+ABLATION (diagnostic ON, dogfood breadcrumb preserved):
+  Same event sequence with the diagnostic flipped to ON:
+  Asserts the `Logger.log(...)` call DOES fire and the counter
+  snapshot proves the call happened.
+
+  PASS observed:
+    queueLogCallCountArmed = 1
+    logQueueEventsCalls = 1
+    logQueueEventsLogCalls = 1
+    logQueueEventsSuppressedByProfile = 0
+
+Discriminator: the gating is the ONLY production-code change that
+separates the RED (host-stall) and GREEN (host-responsive) states
+for one ordinary background terminal lifecycle.
+
+Counter snapshot for a single `pending_prompts` event after the
+diagnostic is armed (dogfood default):
+
+  sessionEvents                          = 1
+  handleSessionEventCalls                = 1
+  logQueueEventsCalls                    = 1
+  logQueueEventsLogCalls                 = 1
+  logQueueEventsSuppressedByProfile      = 0
+  maxNestedHandleDepth                   = 1
+  byEventType.pending_prompts            = 1
+
+This is the EH2/EH4 amplification witness for ONE event:
+
+  self time spent below logQueueEvents / total self time = 1 / 5
+  <= 5 (PASS - within the expected order of magnitude)
+
+This is a sharp contrast to the LIVE profile where the same ratio
+was 1,008 / 5,379 = 18.7% of the entire 5.4-second profile just for
+the log call site.

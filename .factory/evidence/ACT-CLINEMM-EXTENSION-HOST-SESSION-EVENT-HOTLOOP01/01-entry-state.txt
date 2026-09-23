@@ -1,0 +1,19 @@
+Working tree status at ACT start:
+  $ git status --short
+  (clean)
+
+HEAD: 99006fbccaacb150b78e54dad7bdadc2a1390238
+Branch: main
+
+ClineMM dist version: 4.1.16-99006fbcc
+VSCodium: <observed live>, extension installed at
+  /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions/s1onique.clinemm-4.1.16-99006fbcc/
+
+LIVE profile: /Volumes/UserData/Users/chistyakov/Downloads/exthost-66cdb2.cpuprofile
+  Size: 362,814 bytes
+  Capture duration: 5,379.2 ms (5.4 s)
+  Samples: 38,457
+  Time deltas: 38,457
+  Nodes: 284
+
+CCARD diagnostic: paused (paused-by-CCARD01 ACT, not yet removed).

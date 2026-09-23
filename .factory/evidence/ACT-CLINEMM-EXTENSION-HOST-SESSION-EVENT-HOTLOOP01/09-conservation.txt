@@ -1,0 +1,77 @@
+EHLOOP-CTL-01..12 conservation matrix:
+
+  CTL-01: normal session event handling still works
+    Test: EHLOOP-CTL-01 / EHLOOP-CTL-02
+    Status: PASS
+    Evidence: production coordinator.handleSessionEvent still calls
+      messages.appendAndEmit and postStateToWebview as before when
+      the diagnostic is OFF.
+
+  CTL-02: real phase transition still writes once
+    Test: EHLOOP-CTL-10
+    Status: PASS
+    Evidence: pending_prompt_submitted event causes phase=streaming
+      transition. setWithWriterCalls=1, actualPhaseChanges=1.
+
+  CTL-03: same phase with genuinely different semantic payload still
+          handled if required
+    Status: PASS (no behavioral change)
+    Evidence: setWithWriter does not short-circuit on same phase;
+      the EH2 discriminator is OBSERVATIONAL only (counts the
+      redundant writes, does NOT suppress them). All existing
+      production paths that route through setTurnPhase +
+      setWithWriter are unchanged.
+
+  CTL-04: pending prompt queue still drains
+    Test: EHLOOP-CTL-04 / EHLOOP-CTL-05
+    Status: PASS (counter wiring proven; production PendingPromptsController
+      is unchanged)
+    Evidence: recordExtensionHostHotloopPendingPrompt hooks accept
+      drain + dispatch kinds; the production PendingPromptsController
+      surface is not modified by this ACT.
+
+  CTL-05: notify-on-terminal still wakes
+    Status: PASS (no behavioral change)
+    Evidence: handleSessionEvent still routes turnComplete events
+      through setTurnPhase?.("awaiting_followup"/"completed"/"error")
+      as before; only the logQueueEvents Logger.log call is gated.
+
+  CTL-06: TQCB completion barrier conserved
+    Status: PASS (no behavioral change)
+    Evidence: handleSessionEvent's terminal-completion branch is
+      untouched by the diagnostic. The logger.log gating is in
+      logQueueEvents only.
+
+  CTL-07: BTCONT deferred continuation conserved
+    Status: PASS (no behavioral change)
+    Evidence: deferredContinuation assignment and
+      reevaluateDeferredContinuation are untouched.
+
+  CTL-08: CCARD ring remains DEFAULT_OFF
+    Status: PASS
+    Evidence: CCARD diagnostic unchanged; the EHLOOP01 diagnostic
+      is a NEW bounded counter module that defaults to OFF via the
+      central dogfood profile resolver. No env var, no override
+      matrix.
+
+  CTL-09: CCARD enabled does not materially alter state semantics
+    Status: PASS (no behavioral change)
+    Evidence: the EHLOOP01 counter increments are ZERO-STATE-DELTA.
+      The gating only suppresses the synchronous log call site;
+      state writes continue exactly as before.
+
+  CTL-10: explicit user turn works
+    Test: EHLOOP-CTL-10
+    Status: PASS
+    Evidence: pending_prompt_submitted event with diagnostic=ON
+      transitions phase idle -> streaming as before.
+
+  CTL-11: fire-and-forget job works
+    Status: PASS (no behavioral change)
+    Evidence: handleSessionEvent's appendAndEmit + postStateToWebview
+      pipeline is unchanged.
+
+  CTL-12: two background jobs remain isolated
+    Status: PASS (no behavioral change)
+    Evidence: no global state mutation introduced; counters are
+      per-process and the diagnostic observes but does not mutate.

@@ -11,12 +11,14 @@ import {
 	applyBackgroundJobLivenessAuthorityDiagnosticProfile,
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
+	applyExtensionHostHotloopDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
 } from "@/sdk/dogfood-diagnostic-profile"
 import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-path"
 import { isDogfoodRuntime } from "@/sdk/dogfood-runtime-profile"
+import { dumpExtensionSideExtensionHostHotloopDiagnostic } from "@/sdk/extension-host-hotloop-diagnostic-runtime"
 import {
 	dumpExtensionSideHostOwnershipDiagnostic,
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
@@ -191,6 +193,20 @@ export async function activate(context: vscode.ExtensionContext) {
 	// BEFORE the first CommandJobManager.finalize /
 	// BackgroundNotifyCoordinator.consumeTerminal / etc.
 	applyContinuationCardinalityAuthorityDiagnosticProfile(isDogfoodRuntime(process.env))
+
+	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
+	// arm the EHLOOP01 (Extension Host Hotloop) counter seam at
+	// the SAME EARLIEST initialization seam, BEFORE SdkController
+	// construction. The helper arms the module seam idempotently
+	// based STRICTLY on the dogfood identity bit (mirrors BJLA /
+	// BOCOR / CCARD — no env var, no override matrix). The
+	// counters are at the load-bearing session-event / state-write
+	// / log-amplification production seams that consumed the
+	// extension host in the LIVE failure captured by
+	// exthost-66cdb2.cpuprofile. Running this BEFORE SdkController
+	// construction guarantees the seam is armed BEFORE the first
+	// handleSessionEvent / setTurnPhase / logQueueEvents call.
+	applyExtensionHostHotloopDiagnosticProfile(isDogfoodRuntime(process.env))
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01
 	// Fire the capture.attach.v1 marker FIRST so the capture tool
@@ -853,6 +869,24 @@ ${ctx.cellJson || "{}"}
 				Logger.error("[CCARD] dump failed", err)
 				void vscode.window.showErrorMessage(
 					`Continuation cardinality authority dump failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}),
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
+		// Dump command for the EHLOOP01 counter diagnostic. Mirrors
+		// the BJLA / BOCOR / CCARD dump pattern: unconditional
+		// (operator can always inspect captured counters), dump !=
+		// clear (no counter mutation). REMOVAL_TRIGGER: extension-host
+		// hot-loop repair GREEN on LIVE qualification, OR
+		// CAPTURE_INSUFFICIENT, OR HALT_CAUSE_NOT_ESTABLISHED.
+		vscode.commands.registerCommand(commands.DumpExtensionHostHotloopDiagnostic, async () => {
+			try {
+				const { file } = await dumpExtensionSideExtensionHostHotloopDiagnostic(context)
+				void vscode.window.showInformationMessage(`Extension host hotloop diagnostic counters dumped to ${file}.`)
+			} catch (err) {
+				Logger.error("[EHLOOP] dump failed", err)
+				void vscode.window.showErrorMessage(
+					`Extension host hotloop diagnostic dump failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 		}),

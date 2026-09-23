@@ -257,6 +257,11 @@
 				"category": "Cline"
 			},
 			{
+				"command": "cline.debug.dumpExtensionHostHotloopDiagnostic",
+				"title": "Cline Debug: Dump Extension Host Hotloop Diagnostic",
+				"category": "Cline"
+			},
+			{
 				"command": "cline.explainCode",
 				"title": "Explain with Cline",
 				"category": "Cline"

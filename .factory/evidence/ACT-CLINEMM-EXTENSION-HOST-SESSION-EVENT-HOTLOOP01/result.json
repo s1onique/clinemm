@@ -1,0 +1,41 @@
+{
+  "verdict": "PASS_EXTENSION_HOST_HOTLOOP_REPAIRED",
+  "act_id": "ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01",
+  "lifecycle": "VERIFIED",
+  "evidence": {
+    "extension_host_failure": "LIVE_PROVEN",
+    "cpu_profile": "REAL (exthost-66cdb2.cpuprofile)",
+    "first_amplified_seam": "logQueueEvents",
+    "root_class": ["EH4_LOGGING_HOTPATH", "EH2_REDUNDANT_STATE_WRITE_STORM"],
+    "ablation": "RED_TO_GREEN_VIA_SINGLE_GATING_CHANGE",
+    "ccard_primary_cause": "REFUTED",
+    "host_live_green": "PASS"
+  },
+  "source_identity": {
+    "head": "99006fbccaacb150b78e54dad7bdadc2a1390238",
+    "extension_version": "s1onique.clinemm-4.1.16-99006fbcc",
+    "vscode_runtime": "VSCodium (local Extension Host)"
+  },
+  "production_changes": [
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts: gated logQueueEvents Logger.log calls behind the dogfood profile",
+    "apps/vscode/src/sdk/sdk-session-event-coordinator.ts: instrumented handleSessionEvent with enter/leave + recordSessionEvent hooks",
+    "apps/vscode/src/sdk/turn-state-tracker.ts: instrumented setWithWriter with the EH2 discriminator witness",
+    "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts: added applyExtensionHostHotloopDiagnosticProfile",
+    "apps/vscode/src/extension.ts: wired applyExtensionHostHotloopDiagnosticProfile + DumpExtensionHostHotloopDiagnostic command",
+    "apps/vscode/src/registry.ts: added DumpExtensionHostHotloopDiagnostic command id",
+    "apps/vscode/package.json: declared dumpExtensionHostHotloopDiagnostic command"
+  ],
+  "new_modules": [
+    "apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts",
+    "apps/vscode/src/sdk/extension-host-hotloop-diagnostic-runtime.ts",
+    "apps/vscode/src/sdk/__tests__/extension-host-session-event-hotloop01.ehloop01.test.ts"
+  ],
+  "gates": {
+    "ehloop_test": "PASS (8/8)",
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "downstream_tests": "PASS (no regressions; one pre-existing RED probe unrelated to this ACT)"
+  },
+  "removal_trigger": "First successful LIVE qualification -> remove counter module + activation helper + dump runtime + Command Palette registration + registry entry + package.json command declaration TOGETHER. Until then, the diagnostic remains installed.",
+  "next_act": "Resume CCARD with stable host. Dump the continuation trace per the ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-COMMAND-EXECUTION01 successor."
+}

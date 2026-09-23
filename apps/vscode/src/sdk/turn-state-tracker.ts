@@ -4,6 +4,7 @@ import {
 	type TurnStateWriterIdentity,
 	type TurnStateWriterProvenanceRecord,
 } from "@shared/turn-state-writer-provenance"
+import { recordExtensionHostHotloopPhaseWrite } from "./extension-host-hotloop-diagnostic"
 import type { MessageIdMinter } from "./message-id-minter"
 
 // Authoritative UI-mode tracker for the current agent turn.
@@ -101,6 +102,16 @@ export class TurnStateTracker {
 		this.phase = phase
 		this.anchorTs = anchorTs
 		this.seq = this.minter.nextSeq()
+
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
+		// Record the EH2 discriminator witness BEFORE the diagnostic
+		// stamp and listener fan-out. The diagnostic must capture
+		// every attempted write (whether or not the phase actually
+		// changed) so the redundancy ratio is honest.
+		recordExtensionHostHotloopPhaseWrite({
+			changed: previousPhase !== phase,
+			writer: identity.writerId,
+		})
 
 		const record: TurnStateWriterProvenanceRecord = {
 			capturedAt: Date.now(),

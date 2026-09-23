@@ -9,6 +9,13 @@ import { isClineManagedProvider } from "@/shared/utils/cline"
 import { getDiagnosticHostId, getDiagnosticManagerId } from "./background-job-liveness-authority"
 import { type BackgroundOwnerCorrelationActiveJob, captureBackgroundOwnerCorrelationRecord } from "./background-owner-correlation"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
+import {
+	enterExtensionHostHotloopHandleSessionEvent,
+	isExtensionHostHotloopDiagnosticEnabled,
+	leaveExtensionHostHotloopHandleSessionEvent,
+	recordExtensionHostHotloopLogQueueEvent,
+	recordExtensionHostHotloopSessionEvent,
+} from "./extension-host-hotloop-diagnostic"
 import type { MessageTranslatorState, TranslationResult } from "./message-translator"
 import { translateSessionEvent } from "./message-translator"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
@@ -409,459 +416,483 @@ export class SdkSessionEventCoordinator {
 	}
 
 	async handleSessionEvent(event: CoreSessionEvent): Promise<void> {
-		this.logQueueEvents(event)
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
+		// Enter/leave the depth tracker so the EH1 discriminator can
+		// detect synchronous re-entry. Both functions short-circuit
+		// when the diagnostic is OFF (the public default).
+		enterExtensionHostHotloopHandleSessionEvent()
+		recordExtensionHostHotloopSessionEvent(event.type)
+		try {
+			this.logQueueEvents(event)
 
-		const activeSession = this.options.sessions.getActiveSession()
-		if (!activeSession || event.payload.sessionId !== activeSession.sessionId) {
-			Logger.debug(
-				`[SdkController] Ignoring stale SDK event for session ${event.payload.sessionId}; active=${activeSession?.sessionId ?? "none"}`,
-			)
-			return
-		}
+			const activeSession = this.options.sessions.getActiveSession()
+			if (!activeSession || event.payload.sessionId !== activeSession.sessionId) {
+				Logger.debug(
+					`[SdkController] Ignoring stale SDK event for session ${event.payload.sessionId}; active=${activeSession?.sessionId ?? "none"}`,
+				)
+				return
+			}
 
-		if (event.type === "pending_prompts") {
-			this.options.postStateToWebview().catch((err) => {
-				Logger.error("[SdkController] Failed to post pending-prompt state update:", err)
-			})
-		}
+			if (event.type === "pending_prompts") {
+				this.options.postStateToWebview().catch((err) => {
+					Logger.error("[SdkController] Failed to post pending-prompt state update:", err)
+				})
+			}
 
-		const result = this.translateSessionEvent(event, this.options.messageTranslatorState)
-		const agentFailure = this.getAgentFailureTelemetry(event)
-		if (agentFailure && !this.options.messageTranslatorState.isSuppressedToolApprovalDenial(agentFailure.error)) {
-			this.options.captureProviderApiError?.({
-				sessionId: agentFailure.sessionId,
-				error: agentFailure.error,
-				errorType: agentFailure.errorType,
-				failurePhase: PROVIDER_FAILURE_PHASE.STREAMING,
-			})
-		}
-		if (event.type === "pending_prompt_submitted") {
-			this.options.beginProviderFailureTelemetryTurn?.()
-			this.options.messageTranslatorState.clearTurnOutcome()
-			this.options.sessions.setRunning(true)
-			this.options.setTurnPhase?.(PROVIDER_FAILURE_PHASE.STREAMING, undefined, "session-event-pending-prompt-submitted")
-		}
-		const zeroCostPromise = this.zeroCostForFreeClineModel(result)
-		if (zeroCostPromise) {
-			await zeroCostPromise
-		}
+			const result = this.translateSessionEvent(event, this.options.messageTranslatorState)
+			const agentFailure = this.getAgentFailureTelemetry(event)
+			if (agentFailure && !this.options.messageTranslatorState.isSuppressedToolApprovalDenial(agentFailure.error)) {
+				this.options.captureProviderApiError?.({
+					sessionId: agentFailure.sessionId,
+					error: agentFailure.error,
+					errorType: agentFailure.errorType,
+					failurePhase: PROVIDER_FAILURE_PHASE.STREAMING,
+				})
+			}
+			if (event.type === "pending_prompt_submitted") {
+				this.options.beginProviderFailureTelemetryTurn?.()
+				this.options.messageTranslatorState.clearTurnOutcome()
+				this.options.sessions.setRunning(true)
+				this.options.setTurnPhase?.(PROVIDER_FAILURE_PHASE.STREAMING, undefined, "session-event-pending-prompt-submitted")
+			}
+			const zeroCostPromise = this.zeroCostForFreeClineModel(result)
+			if (zeroCostPromise) {
+				await zeroCostPromise
+			}
 
-		if (!activeSession.isRunning && result.messages.length > 0) {
-			result.messages = result.messages.filter(
-				(m) => !(m.type === "ask" && (m.ask === "completion_result" || m.ask === "resume_completed_task")),
-			)
-		}
+			if (!activeSession.isRunning && result.messages.length > 0) {
+				result.messages = result.messages.filter(
+					(m) => !(m.type === "ask" && (m.ask === "completion_result" || m.ask === "resume_completed_task")),
+				)
+			}
 
-		if (result.messages.length > 0) {
-			this.options.messages.appendAndEmit(result.messages, event)
-		}
+			if (result.messages.length > 0) {
+				this.options.messages.appendAndEmit(result.messages, event)
+			}
 
-		if (activeSession) {
-			if (result.sessionEnded || result.turnComplete) {
-				// Authoritative UI phase at turn end. If the completion tool was used this turn
-				// the phase is "completed" (green box + Start New Task); otherwise the agent
-				// simply stopped and is waiting for the user ("awaiting_followup"). Error turns
-				// are surfaced as the error phase. The webview reads this, not the array tail.
-				//
-				// EXCEPTION: a turn-complete from a turn that was cancelled (cancelTask set phase
-				// "resumable" and aborted) is a straggler. Overwriting it here would clobber
-				// "resumable" with "awaiting_followup"/"completed" and the footer would lose the
-				// Resume Task button (showing the scroll-arrow default instead), so the cancel-set
-				// phase is preserved. Check the phase itself, not just isRunning: when the SDK
-				// drains a queued prompt at turn end, the PREVIOUS turn's send promise settles
-				// after the new turn already started and its completion bookkeeping flips
-				// isRunning back to false mid-turn (see fireAndForgetSend). Keying on isRunning
-				// alone made the queued turn's real completion look like this straggler, leaving
-				// the phase stuck on "streaming" (endless Thinking).
-				if (!activeSession.isRunning && this.options.getTurnPhase?.() === "resumable") {
-					Logger.debug("[SdkController] turn-complete straggler after cancel; preserving resumable phase")
-				} else if (this.options.messageTranslatorState.wasErrorSeen()) {
-					// The turn surfaced a provider error (ask:"api_req_failed" was emitted) —
-					// offer error recovery (Retry / Start New Task), not the followup state.
-					this.options.setTurnPhase?.("error", undefined, "session-event-turn-complete-error")
-				} else if (this.options.messageTranslatorState.wasAttemptCompletionSeen()) {
-					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a completion tool
-					// was declared but we still need to confirm a terminal response was
-					// actually committed. Without this gate, a `done` arriving after a
-					// `content_start` for attempt_completion but BEFORE its `content_end`
-					// (CRA03) would promote the turn to "completed" with only a partial
-					// completion_result as the user-visible terminal content. The
-					// translator sets terminalResponseCommittedThisTurn at the completion
-					// tool's content_end; if it didn't, refuse the promotion.
-					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
-						// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
-						// C9 — submit_and_exit_seen capture. Fires when the
-						// completion tool's terminal response was committed
-						// AND the turn-end path is promoting phase. The
-						// host-side capture gate makes this a complete
-						// no-op when OFF.
-						captureContinuationCardinalityAuthorityRecord({
-							stage: "submit_and_exit_seen",
-							origin: "pending_prompt_drain",
-							sessionId: activeSession.sessionId,
-							taskId: this.options.getTask?.()?.taskId,
-						})
-						// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
-						// Completion-barrier guard. The completion commit is HELD iff
-						// an outstanding autonomous obligation exists for the active
-						// (sessionId, taskId). The barrier is conservative: it
-						// consults the same predicate as LHOWA01's awaiting_followup
-						// deferral (queued prompt + active notify marker). When HELD,
-						// a DeferredCompletionBarrier marker is registered so the
-						// terminal-idle re-evaluation
-						// (reevaluateDeferredCompletionBarrier) can fire the held
-						// commit when all obligations resolve. Per the recon
-						// (04-background-obligation-map.md §5), only
-						// notifyOnCompletion=true obligations are completion-
-						// relevant; a notify=false background job (fire-and-forget
-						// daemon, dev server, etc.) does NOT block completion.
-						//
-						// Fail-closed authority for the pending-prompt transport
-						// (PPAT01 invariant): when the authority is UNAVAILABLE
-						// (`available === false`) we MUST treat it as "do not
-						// know, hold completion" — NEVER as "0, allow completion".
-						// The completion-barrier must match the established Q5
-						// deferral authority exactly; relaxing it here would
-						// re-open the same fail-open defect PPAT closed for
-						// awaiting_followup (TQCB01 P1 correction).
-						const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
-							activeSession.sessionId,
-						) ?? {
-							available: false,
-						}
-						const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
-						const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
-						const activeNotifyCount =
-							this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ?? 0
-						const outstandingAutonomousWork =
-							pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
-
-						if (outstandingAutonomousWork) {
-							// Register the deferred-completion-barrier marker.
-							// Same epoch + task + session identity triple as
-							// deferredContinuation (BTCONT01). Cleared on commit
-							// or on epoch supersession.
-							Logger.warn(
-								`[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has outstanding autonomous work (pendingPrompts=${pendingPromptsKnown}, activeNotify=${activeNotifyCount}); holding completion (TQCB01 barrier)`,
-							)
-							this.deferredCompletionBarrier = {
-								sessionId: activeSession.sessionId,
-								taskId: this.options.getTask?.()?.taskId,
-								epoch: this.options.messageTranslatorState.getMinter().epoch,
-								deferredAt: Date.now(),
-							}
-						} else {
+			if (activeSession) {
+				if (result.sessionEnded || result.turnComplete) {
+					// Authoritative UI phase at turn end. If the completion tool was used this turn
+					// the phase is "completed" (green box + Start New Task); otherwise the agent
+					// simply stopped and is waiting for the user ("awaiting_followup"). Error turns
+					// are surfaced as the error phase. The webview reads this, not the array tail.
+					//
+					// EXCEPTION: a turn-complete from a turn that was cancelled (cancelTask set phase
+					// "resumable" and aborted) is a straggler. Overwriting it here would clobber
+					// "resumable" with "awaiting_followup"/"completed" and the footer would lose the
+					// Resume Task button (showing the scroll-arrow default instead), so the cancel-set
+					// phase is preserved. Check the phase itself, not just isRunning: when the SDK
+					// drains a queued prompt at turn end, the PREVIOUS turn's send promise settles
+					// after the new turn already started and its completion bookkeeping flips
+					// isRunning back to false mid-turn (see fireAndForgetSend). Keying on isRunning
+					// alone made the queued turn's real completion look like this straggler, leaving
+					// the phase stuck on "streaming" (endless Thinking).
+					if (!activeSession.isRunning && this.options.getTurnPhase?.() === "resumable") {
+						Logger.debug("[SdkController] turn-complete straggler after cancel; preserving resumable phase")
+					} else if (this.options.messageTranslatorState.wasErrorSeen()) {
+						// The turn surfaced a provider error (ask:"api_req_failed" was emitted) —
+						// offer error recovery (Retry / Start New Task), not the followup state.
+						this.options.setTurnPhase?.("error", undefined, "session-event-turn-complete-error")
+					} else if (this.options.messageTranslatorState.wasAttemptCompletionSeen()) {
+						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: a completion tool
+						// was declared but we still need to confirm a terminal response was
+						// actually committed. Without this gate, a `done` arriving after a
+						// `content_start` for attempt_completion but BEFORE its `content_end`
+						// (CRA03) would promote the turn to "completed" with only a partial
+						// completion_result as the user-visible terminal content. The
+						// translator sets terminalResponseCommittedThisTurn at the completion
+						// tool's content_end; if it didn't, refuse the promotion.
+						if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
 							// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
-							// C10 — task_completion_committed capture. Fires
-							// at the actual completion commit seam (the
-							// canonical phase transition). One record per
-							// user-visible COMPLETED. The host-side capture
-							// gate makes this a complete no-op when OFF.
+							// C9 — submit_and_exit_seen capture. Fires when the
+							// completion tool's terminal response was committed
+							// AND the turn-end path is promoting phase. The
+							// host-side capture gate makes this a complete
+							// no-op when OFF.
 							captureContinuationCardinalityAuthorityRecord({
-								stage: "task_completion_committed",
+								stage: "submit_and_exit_seen",
 								origin: "pending_prompt_drain",
 								sessionId: activeSession.sessionId,
 								taskId: this.options.getTask?.()?.taskId,
 							})
-							this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
-						}
-					} else {
-						// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01-CORRECTION01:
-						// symmetric to the CPL01 "done-without-completion" liveness
-						// case. The completion tool's `content_start` was observed
-						// (so `attemptCompletionSeen === true`) but its `content_end`
-						// never arrived (or arrived without a recognized terminal
-						// result), and the agent-run termination fired
-						// `finishRun("completed")` — either via the
-						// session-termination fallback at
-						// `sdk/packages/agents/src/agent-runtime.ts:1313-1336` after
-						// the completion-reminder loop exhausted, or via an external
-						// termination that arrived between `content_start` and
-						// `content_end` (race / canceled / malformed stream). The
-						// runtime has no runnable successor: no completion-tool
-						// content_end to deliver, no retry scheduled, no completion
-						// continuation loop, no pending prompt. The only truthful
-						// projection is the same user-owned incomplete yield as CPL01:
-						// `awaiting_followup`. The completion CONTENT authority
-						// contract is UNCHANGED — no `completion_result` row is
-						// synthesized (the partial `completion_result` row that
-						// `content_start` emitted remains partial, with `partial:
-						// true`).
-						//
-						// Distinction from the original CRA03 straggler guard: the
-						// CRA03 reasoning (left runtime-owned "streaming") was about
-						// the IN-PROGRESS case, before `done` — the model could still
-						// iterate to deliver a proper `content_end`. Once `done` has
-						// fired, the run is over: there is no in-progress work to
-						// keep runtime-owned.
-						Logger.warn(
-							"[SdkController] attempt_completion declared but no terminal response committed; yielding turn as awaiting_followup (liveness)",
-						)
-						this.options.setTurnPhase?.(
-							"awaiting_followup",
-							undefined,
-							"session-event-turn-complete-awaiting-followup-liveness",
-						)
-					}
-				} else {
-					// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the
-					// completion CONTENT authority contract — a `completion_result`
-					// (or `plan_completion_result`) row may ONLY be synthesized from
-					// a committed terminal response. Without that authority the
-					// user-visible terminal content is whatever intermediate
-					// debugging row was last — the LIVE screenshot witness. The
-					// translator does NOT fall back to the last assistant
-					// text/reasoning or stranded partial: the `done` handler at
-					// `apps/vscode/src/sdk/message-translator.ts:1921-1930`
-					// explicitly does not synthesize a `completion_result` from
-					// prior text. The CRA02-empty case (no assistant content
-					// committed this turn) leaves the flag false and refuses the
-					// promotion.
-					//
-					// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: the PHASE
-					// transition is independent of the CONTENT authority. The
-					// TaskHeader state label is a pure projection from
-					// `turnState.phase` (`apps/vscode/webview-ui/src/components/
-					// chat/task-header/TaskHeaderTelemetry.tsx` + the
-					// `taskHeaderStateLabel` helper), so leaving
-					// `phase = "streaming"` for the done-without-completion case
-					// stuck the visible header on "Working" forever with no
-					// model/tool/approval in flight. The EXISTING phase-enum
-					// contract for this case is `awaiting_followup` (see
-					// `apps/vscode/src/shared/ExtensionMessage.ts:355`,
-					// "done-without-completion"). `turnAllowsFollowup()` returns
-					// true for `awaiting_followup`, so the composer stays enabled
-					// and CRA13 user follow-up auto-drain continues to work. The
-					// completion authority contract is UNCHANGED: no
-					// `completion_result` row is synthesized here.
-					if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
-						this.options.setTurnPhase?.(
-							"awaiting_followup",
-							undefined,
-							"session-event-turn-complete-awaiting-followup",
-						)
-					} else {
-						// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: explicit
-						// user-owned incomplete yield for the done-without-
-						// completion case. The phase is no longer runtime-owned
-						// (no work is in flight) but no terminal content was
-						// committed — `awaiting_followup` truthfully projects
-						// "the agent stopped without an explicit completion
-						// declaration; the user can respond."
-						// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5
-						// composition seam (resume Waiting Q5 RED/repair):
-						// the post-terminal-02 specimen
-						// (`cmd_mtj6kki83r1bmrfz`,
-						// `taskId=1788297479245_hv9w5`, `epoch=4`,
-						// `host_status=aborted`,
-						// `turnState.phase=awaiting_followup`) captured the
-						// symptom family where the runtime promoted the active
-						// session's phase to `awaiting_followup` while a
-						// background command it owned was still alive. The
-						// `hasRunningBackgroundJobForOwner(activeSession.sessionId)`
-						// query (delegated by `SdkController` to
-						// `VscodeSessionHost.hasRunningBackgroundJobForOwner`)
-						// gates this transition: when the active session still
-						// owns a RUNNING `CommandJob`, the transition is
-						// suppressed (the phase stays at whatever the prior
-						// phase was - typically `streaming`). The suppression
-						// is the smallest correct repair at the composition
-						// seam: it preserves the "Proceed While Running"
-						// affordance without inventing a replacement phase.
-						// Per the Factory reviewer's directive, "do NOT yet
-						// freeze the specific phase A *must* become" - this
-						// branch only asserts `phase !== awaiting_followup`;
-						// the actual state-machine semantics are the umbrella
-						// Q5 next cycle's concern.
-						//
-						// When `hasRunningBackgroundJobForOwner` is not wired
-						// (e.g. tests that omit the option), behavior is
-						// unchanged: unconditional `awaiting_followup`.
-						const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
-						// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 /
-						// CORRECTION01:
-						// Read the two NEW canonical projections of
-						// autonomous-work state at the Q5 decision boundary.
-						// Together with `ownerStillRunning`, they form the
-						// complete `outstandingAutonomousWork` predicate that
-						// determines whether `awaiting_followup` is the truthful
-						// phase (Shape F — genuine operator handoff) or a
-						// false-positive that should defer (Shapes A / B / D / E).
-						//
-						// CORRECTION01: pendingPromptCountRead is now an
-						// availability-aware union. `{ available: false }`
-						// means authority for this read is unavailable
-						// (Hub session has never been initialized on this
-						// host). That is NOT the same as "queue is empty"
-						// — it must produce a deferred outcome, not a
-						// committed `awaiting_followup`. `available: true &&
-						// count > 0` keeps the existing defer behavior;
-						// `available: true && count === 0` is the only
-						// state in which `awaiting_followup` may be
-						// committed. Defaulting an unwired option to
-						// `{ available: false }` keeps the Q5 logic
-						// fail-closed against an unwired adapter.
-						const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
-							activeSession.sessionId,
-						) ?? {
-							available: false,
-						}
-						// For BOCOR diagnostic capture we record a
-						// tri-valued projection: `true` / `false` /
-						// `"unavailable"`. The boolean
-						// `pendingPromptsKnown > 0` collapses the
-						// availability union into the existing
-						// outstandingAutonomousWork semantics for downstream
-						// consumers (BOCOR schema is additive).
-						const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
-						const activeNotifyCount =
-							this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ?? 0
-						// CORRECTION01: when `pendingPromptCountRead.available
-						// === false`, authority is unavailable — this MUST
-						// not be read as "queue is empty". We treat
-						// authority-unavailable as "outstanding work
-						// cannot be ruled out" → defer (the same code
-						// path as `pendingPromptsKnown > 0`). Only the
-						// `available: true && count === 0` case permits
-						// commit of `awaiting_followup`.
-						const pendingPromptAuthorityUnknown = pendingPromptCountRead.available === false
-						const outstandingAutonomousWork =
-							ownerStillRunning || pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
-						// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
-						// capture ONE decision-boundary observation right
-						// BEFORE the if/else resolves. The capture is gated
-						// ONLY by the BOCOR module seam (default OFF in public,
-						// ON in dogfood via the central profile resolver).
-						// Zero semantic delta when the seam is OFF —
-						// `captureBackgroundOwnerCorrelationRecord` returns
-						// immediately and the if/else evaluates exactly as
-						// before.
-						//
-						// The record captures the LIVE tuple:
-						//   queriedOwnerSessionId = activeSession.sessionId
-						//   activeJobs           = closed-runtime snapshot of
-						//                            every job in the active map
-						//   guardAvailable        = whether the production
-						//                            SdkController wired the option
-						//   guardResult          = the exact boolean the guard
-						//                            returned
-						//   candidateWriterId    = always
-						//     session-event-turn-complete-resumable-straggler-preserve
-						//
-						// Mechanical classification (see ACT sec 27):
-						//   OC1 producer owner stamp defect
-						//     activeJobs[N].ownerSessionId is null/undefined
-						//     AND guardResult === false
-						//   OC2 active session identity drift
-						//     activeJobs[N].ownerSessionId !== activeSession.sessionId
-						//     AND guardResult === false
-						//   OC3 guard unavailable
-						//     guardAvailable === false (option not wired)
-						//   Contradiction
-						//     owner matches AND guard === true AND result === false
-						captureBackgroundOwnerCorrelationRecord({
-							event: "background_owner_correlation_decision",
-							capturedAt: Date.now(),
-							taskId: this.options.getTask?.()?.taskId ?? null,
-							sessionEventSessionId: typeof event.payload?.sessionId === "string" ? event.payload.sessionId : null,
-							activeSessionId: activeSession.sessionId,
-							currentPhase: "streaming",
-							candidatePhase: "awaiting_followup",
-							guardAvailable: typeof this.options.hasRunningBackgroundJobForOwner === "function",
-							queriedOwnerSessionId: activeSession.sessionId,
-							guardResult: typeof ownerStillRunning === "boolean" ? ownerStillRunning : null,
-							activeJobs: this.options.getActiveJobOwnershipSnapshot?.() ?? [],
-							candidateWriterId: "session-event-turn-complete-resumable-straggler-preserve",
-							// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
-							// BJLA diagnostic enrichment — add managerInstance /
-							// hostInstance correlation tokens to the Q5 BOCOR
-							// record. Both default to null when the BJLA
-							// capture seam is OFF; the existing BOCOR schema
-							// remains valid for all downstream consumers that
-							// ignore the new fields.
-							managerInstance: this.resolveActiveManagerInstance(),
-							hostInstance: this.resolveActiveHostInstance(),
-							// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 /
-							// CORRECTION01:
-							// Enrich the BOCOR record with the two NEW canonical
-							// autonomous-work projections. Existing consumers that
-							// do not read these fields are unaffected (the schema
-							// is additive). CORRECTION01 captures BOTH the
-							// availability-aware `pendingPromptCountRead`
-							// (the raw discriminated union) AND the legacy
-							// `pendingPromptCount` (the known-count scalar;
-							// 0 when authority is unavailable, for additive
-							// backward compatibility).
-							pendingPromptCount: pendingPromptsKnown,
-							pendingPromptCountRead,
-							pendingPromptAuthorityUnknown,
-							activeNotifyCount,
-							outstandingAutonomousWork,
-						})
-						if (outstandingAutonomousWork) {
-							Logger.warn(
-								`[SdkController] done with no committed terminal response but active session ${activeSession.sessionId} has outstanding autonomous work (running=${ownerStillRunning}, pendingPrompts=${pendingPromptsKnown}${pendingPromptAuthorityUnknown ? "/authority-unavailable" : ""}, activeNotify=${activeNotifyCount}); suppressing awaiting_followup transition (LHOWA01 boundary)`,
-							)
-							// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
-							// record the bounded deferred-continuation marker
-							// so the terminal-idle consumer can re-evaluate
-							// the suppression exactly once. The marker
-							// carries {sessionId, taskId, epoch} so a late
-							// terminal event for an older deferral cannot
-							// mutate a newer turn (BTCONT-CTL-03 epoch
-							// supersession). Any existing marker is OVERWRITTEN
-							// - there is at most ONE pending continuation per
-							// coordinator instance, matching the
-							// session-event-turn-complete-resumable-straggler-preserve
-							// writer's exactly-one-commit-per-turn contract.
-							this.deferredContinuation = {
-								sessionId: activeSession.sessionId,
-								taskId: this.options.getTask?.()?.taskId,
-								epoch: this.options.messageTranslatorState.getMinter().epoch,
-								deferredAt: Date.now(),
+							// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
+							// Completion-barrier guard. The completion commit is HELD iff
+							// an outstanding autonomous obligation exists for the active
+							// (sessionId, taskId). The barrier is conservative: it
+							// consults the same predicate as LHOWA01's awaiting_followup
+							// deferral (queued prompt + active notify marker). When HELD,
+							// a DeferredCompletionBarrier marker is registered so the
+							// terminal-idle re-evaluation
+							// (reevaluateDeferredCompletionBarrier) can fire the held
+							// commit when all obligations resolve. Per the recon
+							// (04-background-obligation-map.md §5), only
+							// notifyOnCompletion=true obligations are completion-
+							// relevant; a notify=false background job (fire-and-forget
+							// daemon, dev server, etc.) does NOT block completion.
+							//
+							// Fail-closed authority for the pending-prompt transport
+							// (PPAT01 invariant): when the authority is UNAVAILABLE
+							// (`available === false`) we MUST treat it as "do not
+							// know, hold completion" — NEVER as "0, allow completion".
+							// The completion-barrier must match the established Q5
+							// deferral authority exactly; relaxing it here would
+							// re-open the same fail-open defect PPAT closed for
+							// awaiting_followup (TQCB01 P1 correction).
+							const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
+								activeSession.sessionId,
+							) ?? {
+								available: false,
+							}
+							const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
+							const pendingPromptsKnown =
+								pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+							const activeNotifyCount =
+								this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ??
+								0
+							const outstandingAutonomousWork =
+								pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+
+							if (outstandingAutonomousWork) {
+								// Register the deferred-completion-barrier marker.
+								// Same epoch + task + session identity triple as
+								// deferredContinuation (BTCONT01). Cleared on commit
+								// or on epoch supersession.
+								Logger.warn(
+									`[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has outstanding autonomous work (pendingPrompts=${pendingPromptsKnown}, activeNotify=${activeNotifyCount}); holding completion (TQCB01 barrier)`,
+								)
+								this.deferredCompletionBarrier = {
+									sessionId: activeSession.sessionId,
+									taskId: this.options.getTask?.()?.taskId,
+									epoch: this.options.messageTranslatorState.getMinter().epoch,
+									deferredAt: Date.now(),
+								}
+							} else {
+								// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
+								// C10 — task_completion_committed capture. Fires
+								// at the actual completion commit seam (the
+								// canonical phase transition). One record per
+								// user-visible COMPLETED. The host-side capture
+								// gate makes this a complete no-op when OFF.
+								captureContinuationCardinalityAuthorityRecord({
+									stage: "task_completion_committed",
+									origin: "pending_prompt_drain",
+									sessionId: activeSession.sessionId,
+									taskId: this.options.getTask?.()?.taskId,
+								})
+								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 							}
 						} else {
+							// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01-CORRECTION01:
+							// symmetric to the CPL01 "done-without-completion" liveness
+							// case. The completion tool's `content_start` was observed
+							// (so `attemptCompletionSeen === true`) but its `content_end`
+							// never arrived (or arrived without a recognized terminal
+							// result), and the agent-run termination fired
+							// `finishRun("completed")` — either via the
+							// session-termination fallback at
+							// `sdk/packages/agents/src/agent-runtime.ts:1313-1336` after
+							// the completion-reminder loop exhausted, or via an external
+							// termination that arrived between `content_start` and
+							// `content_end` (race / canceled / malformed stream). The
+							// runtime has no runnable successor: no completion-tool
+							// content_end to deliver, no retry scheduled, no completion
+							// continuation loop, no pending prompt. The only truthful
+							// projection is the same user-owned incomplete yield as CPL01:
+							// `awaiting_followup`. The completion CONTENT authority
+							// contract is UNCHANGED — no `completion_result` row is
+							// synthesized (the partial `completion_result` row that
+							// `content_start` emitted remains partial, with `partial:
+							// true`).
+							//
+							// Distinction from the original CRA03 straggler guard: the
+							// CRA03 reasoning (left runtime-owned "streaming") was about
+							// the IN-PROGRESS case, before `done` — the model could still
+							// iterate to deliver a proper `content_end`. Once `done` has
+							// fired, the run is over: there is no in-progress work to
+							// keep runtime-owned.
 							Logger.warn(
-								"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
+								"[SdkController] attempt_completion declared but no terminal response committed; yielding turn as awaiting_followup (liveness)",
 							)
 							this.options.setTurnPhase?.(
 								"awaiting_followup",
 								undefined,
-								"session-event-turn-complete-resumable-straggler-preserve",
+								"session-event-turn-complete-awaiting-followup-liveness",
 							)
 						}
+					} else {
+						// ACT-CLINEMM-COMPLETION-RESPONSE-AUTHORITY-LIVE-RECON01: the
+						// completion CONTENT authority contract — a `completion_result`
+						// (or `plan_completion_result`) row may ONLY be synthesized from
+						// a committed terminal response. Without that authority the
+						// user-visible terminal content is whatever intermediate
+						// debugging row was last — the LIVE screenshot witness. The
+						// translator does NOT fall back to the last assistant
+						// text/reasoning or stranded partial: the `done` handler at
+						// `apps/vscode/src/sdk/message-translator.ts:1921-1930`
+						// explicitly does not synthesize a `completion_result` from
+						// prior text. The CRA02-empty case (no assistant content
+						// committed this turn) leaves the flag false and refuses the
+						// promotion.
+						//
+						// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: the PHASE
+						// transition is independent of the CONTENT authority. The
+						// TaskHeader state label is a pure projection from
+						// `turnState.phase` (`apps/vscode/webview-ui/src/components/
+						// chat/task-header/TaskHeaderTelemetry.tsx` + the
+						// `taskHeaderStateLabel` helper), so leaving
+						// `phase = "streaming"` for the done-without-completion case
+						// stuck the visible header on "Working" forever with no
+						// model/tool/approval in flight. The EXISTING phase-enum
+						// contract for this case is `awaiting_followup` (see
+						// `apps/vscode/src/shared/ExtensionMessage.ts:355`,
+						// "done-without-completion"). `turnAllowsFollowup()` returns
+						// true for `awaiting_followup`, so the composer stays enabled
+						// and CRA13 user follow-up auto-drain continues to work. The
+						// completion authority contract is UNCHANGED: no
+						// `completion_result` row is synthesized here.
+						if (this.options.messageTranslatorState.wasTerminalResponseCommittedThisTurn()) {
+							this.options.setTurnPhase?.(
+								"awaiting_followup",
+								undefined,
+								"session-event-turn-complete-awaiting-followup",
+							)
+						} else {
+							// ACT-CLINEMM-COMPLETION-PROTOCOL-LIVENESS01: explicit
+							// user-owned incomplete yield for the done-without-
+							// completion case. The phase is no longer runtime-owned
+							// (no work is in flight) but no terminal content was
+							// committed — `awaiting_followup` truthfully projects
+							// "the agent stopped without an explicit completion
+							// declaration; the user can respond."
+							// ACT-CLINEMM-RUNTIME-TASK-PROGRESSION-RECON01 / Q5
+							// composition seam (resume Waiting Q5 RED/repair):
+							// the post-terminal-02 specimen
+							// (`cmd_mtj6kki83r1bmrfz`,
+							// `taskId=1788297479245_hv9w5`, `epoch=4`,
+							// `host_status=aborted`,
+							// `turnState.phase=awaiting_followup`) captured the
+							// symptom family where the runtime promoted the active
+							// session's phase to `awaiting_followup` while a
+							// background command it owned was still alive. The
+							// `hasRunningBackgroundJobForOwner(activeSession.sessionId)`
+							// query (delegated by `SdkController` to
+							// `VscodeSessionHost.hasRunningBackgroundJobForOwner`)
+							// gates this transition: when the active session still
+							// owns a RUNNING `CommandJob`, the transition is
+							// suppressed (the phase stays at whatever the prior
+							// phase was - typically `streaming`). The suppression
+							// is the smallest correct repair at the composition
+							// seam: it preserves the "Proceed While Running"
+							// affordance without inventing a replacement phase.
+							// Per the Factory reviewer's directive, "do NOT yet
+							// freeze the specific phase A *must* become" - this
+							// branch only asserts `phase !== awaiting_followup`;
+							// the actual state-machine semantics are the umbrella
+							// Q5 next cycle's concern.
+							//
+							// When `hasRunningBackgroundJobForOwner` is not wired
+							// (e.g. tests that omit the option), behavior is
+							// unchanged: unconditional `awaiting_followup`.
+							const ownerStillRunning =
+								this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
+							// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 /
+							// CORRECTION01:
+							// Read the two NEW canonical projections of
+							// autonomous-work state at the Q5 decision boundary.
+							// Together with `ownerStillRunning`, they form the
+							// complete `outstandingAutonomousWork` predicate that
+							// determines whether `awaiting_followup` is the truthful
+							// phase (Shape F — genuine operator handoff) or a
+							// false-positive that should defer (Shapes A / B / D / E).
+							//
+							// CORRECTION01: pendingPromptCountRead is now an
+							// availability-aware union. `{ available: false }`
+							// means authority for this read is unavailable
+							// (Hub session has never been initialized on this
+							// host). That is NOT the same as "queue is empty"
+							// — it must produce a deferred outcome, not a
+							// committed `awaiting_followup`. `available: true &&
+							// count > 0` keeps the existing defer behavior;
+							// `available: true && count === 0` is the only
+							// state in which `awaiting_followup` may be
+							// committed. Defaulting an unwired option to
+							// `{ available: false }` keeps the Q5 logic
+							// fail-closed against an unwired adapter.
+							const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
+								activeSession.sessionId,
+							) ?? {
+								available: false,
+							}
+							// For BOCOR diagnostic capture we record a
+							// tri-valued projection: `true` / `false` /
+							// `"unavailable"`. The boolean
+							// `pendingPromptsKnown > 0` collapses the
+							// availability union into the existing
+							// outstandingAutonomousWork semantics for downstream
+							// consumers (BOCOR schema is additive).
+							const pendingPromptsKnown =
+								pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+							const activeNotifyCount =
+								this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ??
+								0
+							// CORRECTION01: when `pendingPromptCountRead.available
+							// === false`, authority is unavailable — this MUST
+							// not be read as "queue is empty". We treat
+							// authority-unavailable as "outstanding work
+							// cannot be ruled out" → defer (the same code
+							// path as `pendingPromptsKnown > 0`). Only the
+							// `available: true && count === 0` case permits
+							// commit of `awaiting_followup`.
+							const pendingPromptAuthorityUnknown = pendingPromptCountRead.available === false
+							const outstandingAutonomousWork =
+								ownerStillRunning ||
+								pendingPromptAuthorityUnknown ||
+								pendingPromptsKnown > 0 ||
+								activeNotifyCount > 0
+							// ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
+							// capture ONE decision-boundary observation right
+							// BEFORE the if/else resolves. The capture is gated
+							// ONLY by the BOCOR module seam (default OFF in public,
+							// ON in dogfood via the central profile resolver).
+							// Zero semantic delta when the seam is OFF —
+							// `captureBackgroundOwnerCorrelationRecord` returns
+							// immediately and the if/else evaluates exactly as
+							// before.
+							//
+							// The record captures the LIVE tuple:
+							//   queriedOwnerSessionId = activeSession.sessionId
+							//   activeJobs           = closed-runtime snapshot of
+							//                            every job in the active map
+							//   guardAvailable        = whether the production
+							//                            SdkController wired the option
+							//   guardResult          = the exact boolean the guard
+							//                            returned
+							//   candidateWriterId    = always
+							//     session-event-turn-complete-resumable-straggler-preserve
+							//
+							// Mechanical classification (see ACT sec 27):
+							//   OC1 producer owner stamp defect
+							//     activeJobs[N].ownerSessionId is null/undefined
+							//     AND guardResult === false
+							//   OC2 active session identity drift
+							//     activeJobs[N].ownerSessionId !== activeSession.sessionId
+							//     AND guardResult === false
+							//   OC3 guard unavailable
+							//     guardAvailable === false (option not wired)
+							//   Contradiction
+							//     owner matches AND guard === true AND result === false
+							captureBackgroundOwnerCorrelationRecord({
+								event: "background_owner_correlation_decision",
+								capturedAt: Date.now(),
+								taskId: this.options.getTask?.()?.taskId ?? null,
+								sessionEventSessionId:
+									typeof event.payload?.sessionId === "string" ? event.payload.sessionId : null,
+								activeSessionId: activeSession.sessionId,
+								currentPhase: "streaming",
+								candidatePhase: "awaiting_followup",
+								guardAvailable: typeof this.options.hasRunningBackgroundJobForOwner === "function",
+								queriedOwnerSessionId: activeSession.sessionId,
+								guardResult: typeof ownerStillRunning === "boolean" ? ownerStillRunning : null,
+								activeJobs: this.options.getActiveJobOwnershipSnapshot?.() ?? [],
+								candidateWriterId: "session-event-turn-complete-resumable-straggler-preserve",
+								// ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01:
+								// BJLA diagnostic enrichment — add managerInstance /
+								// hostInstance correlation tokens to the Q5 BOCOR
+								// record. Both default to null when the BJLA
+								// capture seam is OFF; the existing BOCOR schema
+								// remains valid for all downstream consumers that
+								// ignore the new fields.
+								managerInstance: this.resolveActiveManagerInstance(),
+								hostInstance: this.resolveActiveHostInstance(),
+								// ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 /
+								// CORRECTION01:
+								// Enrich the BOCOR record with the two NEW canonical
+								// autonomous-work projections. Existing consumers that
+								// do not read these fields are unaffected (the schema
+								// is additive). CORRECTION01 captures BOTH the
+								// availability-aware `pendingPromptCountRead`
+								// (the raw discriminated union) AND the legacy
+								// `pendingPromptCount` (the known-count scalar;
+								// 0 when authority is unavailable, for additive
+								// backward compatibility).
+								pendingPromptCount: pendingPromptsKnown,
+								pendingPromptCountRead,
+								pendingPromptAuthorityUnknown,
+								activeNotifyCount,
+								outstandingAutonomousWork,
+							})
+							if (outstandingAutonomousWork) {
+								Logger.warn(
+									`[SdkController] done with no committed terminal response but active session ${activeSession.sessionId} has outstanding autonomous work (running=${ownerStillRunning}, pendingPrompts=${pendingPromptsKnown}${pendingPromptAuthorityUnknown ? "/authority-unavailable" : ""}, activeNotify=${activeNotifyCount}); suppressing awaiting_followup transition (LHOWA01 boundary)`,
+								)
+								// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-CONTINUATION01:
+								// record the bounded deferred-continuation marker
+								// so the terminal-idle consumer can re-evaluate
+								// the suppression exactly once. The marker
+								// carries {sessionId, taskId, epoch} so a late
+								// terminal event for an older deferral cannot
+								// mutate a newer turn (BTCONT-CTL-03 epoch
+								// supersession). Any existing marker is OVERWRITTEN
+								// - there is at most ONE pending continuation per
+								// coordinator instance, matching the
+								// session-event-turn-complete-resumable-straggler-preserve
+								// writer's exactly-one-commit-per-turn contract.
+								this.deferredContinuation = {
+									sessionId: activeSession.sessionId,
+									taskId: this.options.getTask?.()?.taskId,
+									epoch: this.options.messageTranslatorState.getMinter().epoch,
+									deferredAt: Date.now(),
+								}
+							} else {
+								Logger.warn(
+									"[SdkController] done with no committed terminal response; yielding turn as awaiting_followup (liveness)",
+								)
+								this.options.setTurnPhase?.(
+									"awaiting_followup",
+									undefined,
+									"session-event-turn-complete-resumable-straggler-preserve",
+								)
+							}
+						}
 					}
+
+					this.options.sessions.setRunning(false)
 				}
 
-				this.options.sessions.setRunning(false)
+				if (result.usage && activeSession.startResult) {
+					Promise.resolve(
+						this.options.taskHistory.updateTaskUsage(
+							this.options.getTask()?.taskId ?? this.options.sessions.getActiveSession()?.sessionId,
+							result.usage,
+						),
+					).catch((error) => {
+						Logger.error("[SdkController] Failed to persist task usage:", error)
+					})
+				}
 			}
 
-			if (result.usage && activeSession.startResult) {
-				Promise.resolve(
-					this.options.taskHistory.updateTaskUsage(
-						this.options.getTask()?.taskId ?? this.options.sessions.getActiveSession()?.sessionId,
-						result.usage,
-					),
-				).catch((error) => {
-					Logger.error("[SdkController] Failed to persist task usage:", error)
+			// Post state when there are messages to ship OR when the turn ended. A clean turn end's
+			// `done` event carries no transcript message, yet the authoritative phase just changed to
+			// completed/awaiting_followup/error above; without posting here the webview would stay on
+			// the prior phase (footer stuck on the streaming/scroll state). The webview reducer gates
+			// turnState by seq, so an extra no-message post is safe.
+			if (
+				result.messages.length > 0 ||
+				result.sessionEnded ||
+				result.turnComplete ||
+				event.type === "pending_prompt_submitted"
+			) {
+				this.options.postStateToWebview().catch((err) => {
+					Logger.error("[SdkController] Failed to post state after event:", err)
 				})
 			}
-		}
-
-		// Post state when there are messages to ship OR when the turn ended. A clean turn end's
-		// `done` event carries no transcript message, yet the authoritative phase just changed to
-		// completed/awaiting_followup/error above; without posting here the webview would stay on
-		// the prior phase (footer stuck on the streaming/scroll state). The webview reducer gates
-		// turnState by seq, so an extra no-message post is safe.
-		if (
-			result.messages.length > 0 ||
-			result.sessionEnded ||
-			result.turnComplete ||
-			event.type === "pending_prompt_submitted"
-		) {
-			this.options.postStateToWebview().catch((err) => {
-				Logger.error("[SdkController] Failed to post state after event:", err)
-			})
+		} finally {
+			// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
+			// Leave the depth tracker. The try/finally guarantees the
+			// depth counter returns to its prior value even if the
+			// coordinator throws (an exception in the body must NOT
+			// permanently inflate maxNestedHandleDepth).
+			leaveExtensionHostHotloopHandleSessionEvent()
 		}
 	}
 
@@ -1043,11 +1074,36 @@ export class SdkSessionEventCoordinator {
 	}
 
 	private logQueueEvents(event: CoreSessionEvent): void {
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
+		// The synchronous `Logger.log(...)` calls in this method were
+		// the single dominant source of extension-host CPU time in the
+		// LIVE failure captured by exthost-66cdb2.cpuprofile
+		// (20.3% of all samples fell below this call site, including
+		// the synchronous `Logger.#output` -> subscriber fan-out ->
+		// `outputChannel.appendLine` I/O wait). The
+		// `pending_prompts` event is emitted from many production
+		// call sites (enqueue, update, delete, consumeSteer,
+		// discardQueue, drain shift, drain requeue) — for ONE
+		// ordinary background-command lifecycle this method is
+		// invoked multiple times, and the unconditional
+		// `outputChannel.appendLine` synchronously stalls the
+		// extension-host thread.
+		//
+		// The gating preserves the breadcrumb for dogfood (where
+		// operators need the queue-mutation trail) while suppressing
+		// it from public builds (where the breadcrumb has no
+		// consumer). Counter increments are ALWAYS bounded and cheap
+		// (one numeric increment when the diagnostic is enabled).
+		if (!isExtensionHostHotloopDiagnosticEnabled()) {
+			recordExtensionHostHotloopLogQueueEvent({ producedLog: false })
+			return
+		}
 		if (event.type === "pending_prompts") {
 			const count = event.payload.prompts.length
 			Logger.log(
 				`[SdkController] Pending prompts updated: ${count} prompt(s) in queue for session ${event.payload.sessionId}`,
 			)
+			recordExtensionHostHotloopLogQueueEvent({ producedLog: true })
 			return
 		}
 
@@ -1055,6 +1111,7 @@ export class SdkSessionEventCoordinator {
 			Logger.log(
 				`[SdkController] Pending prompt submitted: "${event.payload.prompt.substring(0, 80)}" for session ${event.payload.sessionId}`,
 			)
+			recordExtensionHostHotloopLogQueueEvent({ producedLog: true })
 		}
 	}
 }

@@ -111,6 +111,20 @@ const ClineCommands = {
 	// cardinality to 1, OR CAPTURE_INSUFFICIENT, OR
 	// HALT_RED_NOT_REPRODUCED, OR successor evidence supersedes it.
 	DumpContinuationCardinalityAuthority: prefix + ".debug.dumpContinuationCardinalityAuthority",
+	// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01:
+	// Dump command for the EHLOOP01 (Extension Host Hotloop) counter
+	// diagnostic. Mirrors the BJLA / BOCOR / CCARD dump pattern:
+	// unconditional (operator can always inspect captured counters),
+	// dump != clear (no counter mutation). The dump serializes the
+	// bounded counter snapshot to
+	// <globalStorageUri>/extension-host-hotloop-diagnostic.json.
+	// No toggle command (the diagnostic enablement is owned by
+	// `applyExtensionHostHotloopDiagnosticProfile` in
+	// dogfood-diagnostic-profile.ts). REMOVAL_TRIGGER: extension-host
+	// hot-loop repair GREEN on LIVE qualification, OR
+	// CAPTURE_INSUFFICIENT, OR HALT_CAUSE_NOT_ESTABLISHED, OR
+	// successor evidence supersedes it.
+	DumpExtensionHostHotloopDiagnostic: prefix + ".debug.dumpExtensionHostHotloopDiagnostic",
 	// Jupyter Notebook commands
 	JupyterGenerateCell: prefix + ".jupyterGenerateCell",
 	JupyterExplainCell: prefix + ".jupyterExplainCell",
