@@ -1,0 +1,44 @@
+ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01 — entry state
+==========================================================================
+
+Date: 2026-09-23
+Reviewer disposition: HALT_CWI_HOTNESS_ATTRIBUTION_INVALID
+Reviewer team: V8 profiling engineer + Factory causal reviewer
+Predecessor: ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02
+
+Mission (verbatim):
+-------------------
+Do NOT modify enterExtensionHostHotloopHandleSessionEvent.
+Before HOTPATH02, produce one tiny evidence artifact:
+For every one of the 11 cwi samples, record:
+   sample index
+   sample node id
+   timeDelta[i]
+   timeDelta[i+1] if relevant to your attribution algorithm
+   preceding sample
+   following sample
+Then report:
+   min delta
+   median delta
+   p95
+   max delta
+   sum attributed to cwi
+
+Also calculate unweighted sample shares for the top leaves and tabulate
+hits vs sampleShare vs deltaShare so anomalous attribution is exposed.
+
+Acceptance criteria:
+   IF 10 ordinary ~1ms samples + 1 pathological ~2180ms gap THEN
+      CWI_CPU_HOTLEAF = REFUTED
+      CWI_ADJACENT_TO_STALL = PROVEN
+   ELSE
+      admit cwi actually burned ~30% CPU (currently not credible).
+
+Sources:
+-------
+profile       : /Volumes/UserData/Users/chistyakov/Downloads/exthost-402d7f.cpuprofile
+                 331,216 bytes
+                 post-provenance-repair live crash capture
+                 SHA: same artifact referenced by prior ACT
+repro script  : /tmp/timedelta_validate.js
+invocation    : /opt/homebrew/bin/node /tmp/timedelta_validate.js

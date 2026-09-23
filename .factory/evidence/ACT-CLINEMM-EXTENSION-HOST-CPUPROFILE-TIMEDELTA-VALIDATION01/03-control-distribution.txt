@@ -1,0 +1,44 @@
+ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01 — control distribution table
+==========================================================================================
+
+Sanity-check:  same statistics computed for control leaves that genuinely
+proportionally correlate hits-to-deltaShare.
+
+Control stats (microsecond units, computed via /opt/homebrew/bin/node):
+
+(garbage collector)  node id 67
+   hits = 17012    min=79us       p50=129us      p95=135us      max=1257us
+   sum  = 2,213,817 us = 2213.817 ms
+   sampleShare = 17012/38582 = 44.093%      deltaShare = 30.78%
+
+Rnl                  node id 37
+   hits =  2726    min=112us      p50=129us      p95=134us      max=1898us
+   sum  =   354,752 us =  354.752 ms
+   sampleShare = 2726/38582 = 7.065%        deltaShare = 4.93%
+
+drain                node id  4
+   hits =  2120    min=80us       p50=129us      p95=134us      max=197us
+   sum  =   273,886 us =  273.886 ms
+   sampleShare = 2120/38582 = 5.495%        deltaShare = 3.80%
+
+r_                   node id 36
+   hits =  1788    min=106us      p50=129us      p95=134us      max=245us
+   sum  =   232,001 us =  232.001 ms
+   sampleShare = 1788/38582 = 4.634%        deltaShare = 3.22%
+
+cwi (re-listed for direct comparison)
+   hits =    12    min=128us      p50=128us      p95=130us      max=2189353us
+   sum  = 2,191,353 us = 2191.353 ms
+   sampleShare = 12/38582 = 0.031%         deltaShare = 30.45%
+
+key observation:
+   max delta for all controls ≤ 1898 us = 1.898 ms.
+   max delta for cwi                = 2189353 us = 2189.353 ms.
+   ratio cwi-max / control-max       = 1154x   (1143x larger than the largest control).
+   ratio cwi-max / cwi-p95           = 16841x  (17000x larger than its own 95th percentile).
+
+Empirical fact:
+   cwi's "30.45%" deltaShare comes ENTIRELY from ONE outlier sample
+   whose td is 1.7 million microseconds beyond what any other sample
+   in the profile exhibits. Without that one sample, cwi's contribution
+   to the profile is statistically negligible (sum = 1.4 ms = 0.0195% of profile).

@@ -1,0 +1,75 @@
+ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01 — causal interpretation
+====================================================================================
+
+Empirical facts (proven by the raw cpuprofile data):
+----------------------------------------------------
+F1. idx=0 is the FIRST sample of the profile.
+F2. samples[0] = 15 = node id of cwi.
+F3. timeDeltas[0] = 2,189,353 us = 2189.353 ms.
+F4. There is no sample at samples[-1] to attribute this interval to.
+F5. By the "timeDelta attributed to top-of-stack leaf" convention,
+    the entire 2189.353 ms interval is credited to cwi at idx=0.
+F6. The next 11 cwi samples are at indices 972, 1867, 5651, 7538, 9196,
+    18840, 24510, 24609, 27878, 37217, 37993.
+F7. Each of those 11 samples has timeDelta 128-130 us. None exceed 130 us.
+F8. The maximum single-delta for ANY control leaf (GC, Rnl, drain, r_)
+    is at most 1898 us = 1.898 ms.
+F9. 2189.353 ms (cwi idx=0) is 1154x larger than the max control delta.
+
+Why F1-F9 cannot mean "cwi burned 2189 ms":
+--------------------------------------------
+   cwi is inlined at the hot-path entry of handleSessionEvent.
+   Its body is THREE integer mutations:
+      _nestedDepth++
+      _counters.handleSessionEventCalls++
+      _counters.maxNestedHandleDepth = _nestedDepth
+   The body executes in microseconds. It cannot be on top of stack
+   for 2.2 seconds of CPU; the V8 sampling clock would have
+   interrupted it long before that.
+
+Three (and only three) explanations are consistent with F1-F9:
+--------------------------------------------------------------
+(1) Capture-start lag.
+    The cpuprofile writer started recording 2.2 s AFTER cwi's call first
+    reached the top of stack. This is consistent with the profiler
+    attaching mid-extension-activation, and explains the entire 30.45%
+    attribution as a writer artifact.
+(2) Profile-writer gap.
+    The cpuprofile writer itself froze the event loop for 2.2 s while
+    writing the profile metadata, with cwi still on top of stack from
+    the dispatch that triggered the freeze (e.g. a session event
+    arriving during write serialization). CPU during that 2.2 s is
+    NOT attributed to cwi; it is just unattributed or attributed to
+    whatever native code the writer invoked.
+(3) Sampling suspension.
+    V8's sampling thread was briefly suspended (e.g. GC initialization,
+    inspector attach, etc.) for 2.2 s. cwi remained on top of stack
+    throughout. CPU during the suspension is NOT attributed to cwi.
+
+In ALL THREE cases, the ~2189 ms is NOT cwi's CPU cost. The "30.45% of
+profile" attribution to cwi is an artifact of the inter-sample gap
+landing adjacent to (specifically, on) a cwi stack frame at idx=0.
+
+Diagnostic verdict:
+-------------------
+CWI_CPU_HOTLEAF                = REFUTED
+CWI_ADJACENT_TO_STALL          = PROVEN
+cwi_real_self_time (gap excluded)  = 1.403 ms across 11 ordinary samples
+                                = 0.0195% of profile
+                                << 1 sample share, ditto delta share
+
+What remains true from the prior ACT (HOTLEAF-SYMBOLIZATION02):
+--------------------------------------------------------------
+   cwi source identity       = enterExtensionHostHotloopHandleSessionEvent
+                               apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts:147-154
+   call site                  = apps/vscode/src/sdk/sdk-session-event-coordinator.ts:424
+   gating                     = `if (!_enabled) return` at line 148, set by dogfood profile
+   that symbolization DID correctly identify the function that owns the
+   one pathological sample. It did NOT correctly establish that cwi
+   explains the post-provenance-repair crash.
+
+What changes from the prior ACT:
+-------------------------------
+   Prior: "cwi shows 30.45% self-time → JIT-inlining + delta attribution"
+   Now:   "cwi shows 30.45% deltaShare because ONE anomalous gap landed on
+          a cwi sample at idx=0; the function itself shows no CPU hotness."

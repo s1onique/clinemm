@@ -7742,3 +7742,189 @@ with 7 files: `01-entry-state.txt`, `02-cpuprofile-402d7f-hotspots.txt`,
 Production bundle and dev build live in `/tmp/d92235e67/extension/dist/extension.js`
 and `/tmp/extension_smap.js` (NOT git-tracked; reproducible from the
 listed commit SHA `d92235e67`).
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01 — PASS_CWI_CPU_HOTLEAF_REFUTED — 2026-09-23
+
+Cycle: 1 of 1 (no source-of-truth changes; pure accounting validation).
+
+**Disposition adopted in full:**
+`HALT_CWI_HOTNESS_ATTRIBUTION_INVALID` (V8 profiling engineer +
+Factory causal reviewer).
+
+**Why this ACT exists.** The prior ACT
+(`PASS_HOTLEAF_cwi_SYMBOLIZED`) bound `cwi` to its exact source
+function (binding = PASS, unchanged) but used
+delta-weighted `timeDeltas` to claim cwi burned ~30% of the CPU.
+11 / 38,582 = 0.0285% of samples is not consistent with ~30% of CPU
+consumption for a function that only does three integer increments.
+Reviewer's hypothesis: one pathological inter-sample gap adjacent to a
+cwi sample accounts for the entire attribution. This ACT proves the
+hypothesis without modifying any production code.
+
+**Empirical findings (raw inspection, no inference):**
+
+```
+profile top-level keys : nodes, startTime, endTime, samples, timeDeltas
+nodes                  : 180
+samples                : 38,582
+timeDeltas             : 38,582
+duration               : 7,194.81 ms
+
+cwi stats (ALL 12 samples):
+    hitCount = 12          (prior ACT miscounted as 11)
+    sampleShare = 0.031%   (12/38582)
+    deltaShare  = 30.45%   (post-weighted)
+    min/p50/p95/max/td_sum (us): 128 / 128 / 130 / 2189353 / 2191353
+cwi stats EXCLUDING the pathological first-sample gap (idx=0):
+    hitCount = 11
+    min/p50/p95/max/td_sum (us): 128 / 128 / 129 / 130 / 1403
+    share of profile = 0.0195%  (vs claimed 30.45% — a 1561x error)
+
+cwi sample at idx=0:
+    timeDelta = 2,189,353 us = 2189.353 ms
+    surrounding samples:
+        idx=-1: (none — first sample of profile)
+        idx=1: lwi @ 243 us
+        idx=2: lwi @ 129 us
+        idx=3: drain @ 128 us
+    This is the ONLY sample in the entire 38582-sample profile whose
+    timeDelta exceeds 1.898 ms. Every other sample, including the
+    (garbage collector) leaves, maxes out at 1.898 ms (Rnl), with
+    GC's max = 1.257 ms.
+
+pathological-gap contribution to cwi's sum:
+    2189.353 / 2191.353 = 99.94% of cwi's deltaShare comes from ONE
+    anomalous inter-sample gap at idx=0.
+
+control-leaf max-deltas (for direct comparison):
+    (garbage collector)  : 1.257 ms
+    Rnl                  : 1.898 ms
+    drain                : 0.197 ms
+    r_                   : 0.245 ms
+
+cwi max / control max ratio: 2189.353 / 1.898 = 1154x.
+```
+
+**Ranked top-13 leaves:**
+
+| rank | function                           |  hits | sampleShare | deltaShare |
+|-----:|:------------------------------------|------:|-------------:|-----------:|
+|    1 | `(garbage collector)               `|17,012 |    44.093%   |    30.78%  |
+|    2 | `cwi                               `|    12 |    **0.031%**| **30.45%**|
+|    3 | `Rnl                               `| 2,726 |     7.065%   |     4.93%  |
+|    4 | `drain                             `| 2,120 |     5.495%   |     3.80%  |
+|    5 | `r_                                `| 1,788 |     4.634%   |     3.22%  |
+|    6 | `e_                                `| 1,327 |     3.439%   |     2.39%  |
+|    7 | `Gyi                               `| 1,251 |     3.242%   |     2.24%  |
+|    8 | `e_                                `| 1,146 |     2.970%   |     2.06%  |
+|    9 | `e_                                `| 1,090 |     2.825%   |     1.96%  |
+|   10 | `setWithWriter                     `|   976 |     2.530%   |     1.75%  |
+|   11 | `processTicksAndRejections         `|   919 |     2.382%   |     1.65%  |
+|   12 | `handleSessionEvent                `|   692 |     1.794%   |     1.24%  |
+|   13 | `onSessionEvent                    `|   521 |     1.350%   |     0.93%  |
+
+For ranks 1, 3-13 the `sampleShare/deltaShare` ratio is constant at
+~1.44 (V8 sampling overhead bias; expected and stable). For rank 2
+(`cwi`) the ratio is **0.00102** — the inversion is the
+fingerprint of a single anomalous delta being attributed to whatever
+leaf happened to sit on top of stack at idx=0.
+
+**Three (and only three) explanations are consistent with the data:**
+
+1. **Capture-start lag.** The cpuprofile writer started recording 2.2s
+   after the first cwi call landed at top of stack (e.g. profiler
+   attached mid-extension-activation). 2.189ms is writer-attachment
+   lag, not cwi CPU.
+2. **Profile-writer gap.** The cpuprofile writer froze the host
+   event loop for 2.2s during metadata serialization, with cwi at
+   top of stack from the dispatch that triggered the write. CPU
+   during that 2.2s is writer/native, not cwi.
+3. **Sampling suspension.** V8's sampling thread briefly paused for
+   2.2s (e.g. GC init / inspector attach). cwi remained on top of
+   stack; suspension time is not attributed to cwi work.
+
+All three explanations agree: **the 2.189ms is NOT cwi's CPU cost**.
+The "30.45% of profile" attribution to cwi is an artifact of one
+inter-sample gap landing adjacent to (specifically, on) a cwi stack
+frame at idx=0.
+
+**Verdict (reviewer's disposition adopted in full):**
+
+```
+PASS_CWI_CPU_HOTLEAF_REFUTED
+  + cwi = 30.45% CPU                                      REFUTED
+  + cwi hitCount = 12 / 38,582 = 0.031% raw sample share  PROVEN
+  + delta-weighted attribution driven by one anomalous gap PROVEN
+  + cwi adjacent-to-stall, NOT adjacent-to-CPU-burn       PROVEN
+  + cwi source binding (prior ACT)                        PASS (unchanged)
+  + diagnostic module TEMPORARY status                    UNCHANGED
+  + HOTPATH02                                             NOT_AUTHORIZED
+```
+
+**What retraction was made:**
+
+The prior ACT (`HOTLEAF-SYMBOLIZATION02`) emitted a causal claim about
+the `-50` column delta:
+
+> "V8 anchors leaf-frame columns exactly 50 bytes before the function."
+
+The empirical observation (all six siblings exhibit a uniform -50
+column delta) is RETAINED. The causal explanation (V8 anchors to
+previous function's end byte-for-byte) is RETRACTED. The binding
+`cwi = enterExtensionHostHotloopHandleSessionEvent` does NOT depend
+on the causal explanation (binding relied on function-name uniqueness
++ token-by-token body decode). Recording classified as **P2
+non-blocking** for downstream investigators.
+
+**Conservation (UNCHANGED):**
+
+- Production code: NOT modified. Pure accounting.
+- Tests: NOT added (no behavior change).
+- Production bundle: NOT re-emitted.
+- Provenance repair: STILL EFFECTIVE (owi 0.037%, intact from
+  `ACT-CLINEMM-EXTENSION-HOST-TURN-STATE-PROVENANCE-HOTPATH01/CORRECTION02`).
+- EHLOOP01 policy module: STILL PERMANENT
+  (`apps/vscode/src/sdk/extension-host-queue-log-policy.ts`).
+- Diagnostic module: STILL TEMPORARY observation-only
+  (`apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts`).
+- REMOVAL_TRIGGER for diagnostic module: STILL PENDING first
+  successful LIVE qualification per
+  `ACT-CLINEMM-EXTENSION-HOST-LIVE-QUALIFICATION01`.
+
+**NEXT ACT** (separate run; this ACT does NOT authorize modification
+of cwi or the diagnostic module):
+
+```
+ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01
+cycle 1 of 1
+goal:
+   bind Rnl@extension.js:15:21885     → one exact source function/expression
+   bind r_@extension.js:15:21185      → one exact source function/expression
+   bind e_@extension.js:1:2250        → one exact source function/expression
+   bind drain@extension.js:2549:11684 → one exact source function/expression
+   bind Gyi@extension.js:4422:25      → one exact source function/expression
+method:
+   (1) production-bundle body correlation  (production vsix SHA d92235e67)
+   (2) sourcemap rebuild sanity check
+   (3) per-leaf hitCount/sampleShare/deltaShare/max-delta table
+out of scope:
+   any modification to enterExtensionHostHotloopHandleSessionEvent
+   any modification to any leaf function
+   any modification to the EHLOOP01 diagnostic module
+```
+
+**Files updated:**
+
+- .factory/acts/ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01.md (new)
+- .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01/{01..06,result.json} (7 files)
+- .factory/epic-board.md (this entry)
+
+**Evidence:**
+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01/`
+with 7 files: `01-entry-state.txt`, `02-cwi-sample-table.txt`,
+`03-control-distribution.txt`, `04-top-leaves-ranks.txt`,
+`05-causal-interpretation.txt`, `06-column-quirk-retraction.txt`,
+`result.json` (JSON-valid). Repro script at `/tmp/timedelta_validate.js`
+(NOT git-tracked; reproducible from the cpuprofile bytes).

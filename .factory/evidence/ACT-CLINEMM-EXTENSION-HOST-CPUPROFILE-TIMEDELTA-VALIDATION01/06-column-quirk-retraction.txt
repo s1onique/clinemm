@@ -1,0 +1,43 @@
+ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01 — column-quirk retraction
+=======================================================================================
+
+The prior ACT (`HOTLEAF-SYMBOLIZATION02`) emitted a causal explanation for
+the `-50` column offset observed in the EHLOOP01 diagnostic module cluster:
+
+   "V8 anchors leaf-frame columns exactly 50 bytes before the function.
+    This is V8's column-anchor behavior for short, JIT-inlined function
+    declarations emitted back-to-back by esbuild on a single source line."
+
+Empirical fact retained:
+   All six siblings (S1e/lwi/cwi/dwi/Hmt/pwi) AND the qYu/jEr/uwi siblings
+   exhibit a `-50` column delta from their actual `function X` offset in
+   the production bundle. This is a stable property of the diagnostic
+   module cluster as captured in exthost-402d7f.cpuprofile.
+
+Causal claim retracted:
+   The byte-precision "-50 bytes = previous function's end" attribution
+   to "V8's column-anchor behavior for short, JIT-inlined function
+   declarations" is speculation, not empirically proven. The ESM
+   extension host emits these functions as variable assignments and
+   function declarations respectively, and V8's column reporting
+   algorithm for minified bodies is documented at
+   https://chromedevtools.github.io/devtools-protocol/tot/Profiler/#type-CallFrame
+   but does not support a byte-precision "−50" prediction.
+
+Disposition:
+   EMPIRICAL observation (all observed sibling locations exhibit a -50 offset)  : RETAINED
+   CAUSAL explanation (V8 anchors to previous function's end byte-for-byte)    : RETRACTED
+
+Impact on prior ACT verdict:
+   The binding `cwi = enterExtensionHostHotloopHandleSessionEvent` does NOT
+   depend on the column-quirk explanation. The binding depended on:
+      (a) function-name uniqueness (qYu/S1e/jEr/uwi/lwi/cwi/dwi/Hmt/pwi),
+      (b) token-by-token body decode against the production bundle.
+   Both (a) and (b) remain valid. Only the auxiliary explanation of "why
+   does V8 say col=4773" is weakened, and the binding stands without it.
+
+Recording (non-blocking P2):
+   The factual observation (all six siblings show -50 column delta) is
+   reproducible from the cpuprofile and the production bundle byte range
+   4241-5301. It is recorded as P2 (non-blocking) for downstream
+   investigators.

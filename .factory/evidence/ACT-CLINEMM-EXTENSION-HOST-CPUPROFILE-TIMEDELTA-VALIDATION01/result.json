@@ -1,0 +1,59 @@
+{
+  "act_id": "ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01",
+  "status": "PASS",
+  "date": "2026-09-23",
+  "predecessor": "ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLEAF-SYMBOLIZATION02",
+  "reviewer_disposition": "HALT_CWI_HOTNESS_ATTRIBUTION_INVALID",
+  "production_code_changed": false,
+  "profile": {
+    "path": "/Volumes/UserData/Users/chistyakov/Downloads/exthost-402d7f.cpuprofile",
+    "size_bytes": 331216,
+    "total_samples": 38582,
+    "duration_us": 7194810,
+    "duration_ms": 7194.81,
+    "node_id_of_cwi": 15
+  },
+  "cwi_stats_full": {
+    "hitCount": 12,
+    "raw_sample_share_pct": 0.031,
+    "delta_share_pct": 30.45,
+    "min_delta_ms": 0.128,
+    "p50_delta_ms": 0.128,
+    "p95_delta_ms": 0.130,
+    "max_delta_ms": 2189.353,
+    "sum_delta_ms": 2191.353,
+    "outlier_count_eq1": 1
+  },
+  "cwi_stats_excluding_outlier": {
+    "hitCount": 11,
+    "min_delta_ms": 0.128,
+    "p50_delta_ms": 0.128,
+    "p95_delta_ms": 0.129,
+    "max_delta_ms": 0.130,
+    "sum_delta_ms": 1.403,
+    "share_of_profile_pct": 0.0195
+  },
+  "control_leaves": [
+    {"name": "(garbage collector)", "hitCount": 17012, "sample_share_pct": 44.093, "delta_share_pct": 30.78, "max_delta_ms": 1.257, "sum_delta_ms": 2213.817, "node_id": 67},
+    {"name": "Rnl", "hitCount": 2726, "sample_share_pct": 7.065, "delta_share_pct": 4.93, "max_delta_ms": 1.898, "sum_delta_ms": 354.752, "node_id": 37},
+    {"name": "drain", "hitCount": 2120, "sample_share_pct": 5.495, "delta_share_pct": 3.80, "max_delta_ms": 0.197, "sum_delta_ms": 273.886, "node_id": 4},
+    {"name": "r_", "hitCount": 1788, "sample_share_pct": 4.634, "delta_share_pct": 3.22, "max_delta_ms": 0.245, "sum_delta_ms": 232.001, "node_id": 36}
+  ],
+  "diagnostic_verdict": {
+    "CWI_CPU_HOTLEAF": "REFUTED",
+    "CWI_ADJACENT_TO_STALL": "PROVEN",
+    "cwi_bound_as": "enterExtensionHostHotloopHandleSessionEvent",
+    "diagnostic_module_status": "observation-only TEMPORARY (UNCHANGED)",
+    "hotpath02_status": "NOT_AUTHORIZED"
+  },
+  "next_act": "ACT-CLINEMM-EXTENSION-HOST-RNL-DRAIN-LEAF-SYMBOLIZATION01",
+  "files_created": [
+    "01-entry-state.txt",
+    "02-cwi-sample-table.txt",
+    "03-control-distribution.txt",
+    "04-top-leaves-ranks.txt",
+    "05-causal-interpretation.txt",
+    "06-column-quirk-retraction.txt",
+    "result.json"
+  ]
+}

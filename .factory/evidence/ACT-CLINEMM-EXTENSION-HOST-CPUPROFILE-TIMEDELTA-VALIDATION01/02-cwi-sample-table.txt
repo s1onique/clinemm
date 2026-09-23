@@ -1,0 +1,45 @@
+ACT-CLINEMM-EXTENSION-HOST-CPUPROFILE-TIMEDELTA-VALIDATION01 — per-cwi-sample table
+=====================================================================================
+
+node id cwi = 15  (cwi@extension.js:1:4773)
+cwi hitCount     = 12            (note: prior ACT miscounted as 11)
+cwi totalSamples = 38,582
+cwi raw sampleShare = 12/38582 = 0.000311 = 0.031% (was reported as 0.0285% in prior ACT)
+
+Per-cwi-sample table:
+
+idx       td(us)    td(ms)    | prev_id/name                                              | next_id/name
+-------   -------   --------  | ----------------------------------------------------------- | ---------------------------------------------
+   0    2189353    2189.353   | (none — first sample of profile)                          | 16 lwi@extension.js:1:4639
+ 972       128       0.128    | 37 Rnl@extension.js:15:21885                              | ?  Gyi@extension.js:4422:25
+1867       128       0.128    | ? enqueue@extension.js:2549:9467                           | ?  e_@extension.js:1:2250
+5651       128       0.128    | ? setWithWriter@extension.js:4468:37927                    | 1  (program)@:-1:-1
+7538       129       0.129    | 4 drain@extension.js:2549:11684                            | ?  Mc@extension.js:229:61130
+9196       129       0.129    | 37 Rnl@extension.js:15:21885                              | ?  Gyi@extension.js:4422:25
+18840      128       0.128    | 36 r_@extension.js:15:21185                                | 36 r_@extension.js:15:21185
+24510      129       0.129    | 37 Rnl@extension.js:15:21885                              | ?  setWithWriter@extension.js:4468:37927
+24609      129       0.129    | ? onSessionEvent@extension.js:4469:7730                    | 36 r_@extension.js:15:21185
+27878      128       0.128    | ? getSessionOrThrow@extension.js:2549:50604                | 4  drain@extension.js:2549:11684
+37217      130       0.130    | ? knl@extension.js:15:21433                                | 37 Rnl@extension.js:15:21885
+37993      128       0.128    | ? enqueue@extension.js:2549:10897                          | 37 Rnl@extension.js:15:21885
+
+Distribution summary (microsecond units computed via /opt/homebrew/bin/node):
+
+cwi (all 12 samples):
+   n    = 12
+   min  = 128 us        = 0.128 ms
+   p50  = 128 us        = 0.128 ms
+   p95  = 130 us        = 0.130 ms
+   max  = 2,189,353 us  = 2189.353 ms
+   sum  = 2,191,353 us  = 2191.353 ms
+
+cwi EXCLUDING idx=0 (the pathological first-sample gap):
+   n    = 11
+   min  = 128 us        = 0.128 ms
+   p50  = 128 us        = 0.128 ms
+   p95  = 129 us        = 0.129 ms
+   max  = 130 us        = 0.130 ms
+   sum  = 1,403 us      = 1.403 ms
+
+Pathological-gap contribution: 2,189,353 us / 2,191,353 us = 99.9357% of the
+sum, attributable to a SINGLE sample (idx=0).
