@@ -7154,3 +7154,154 @@ installed.
 
 Resume CCARD with stable host. Dump the continuation trace per
 the ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-COMMAND-EXECUTION01 successor.
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 / CORRECTION01 — PASS_EXTENSION_HOST_LOGGING_HOTPATH_REPAIRED — 2026-09-23
+
+**Status:** PASS (bounded correction applied; LIVE qualification
+PENDING operator-driven).
+
+**Reviewer verdict that triggered CORRECTION01:**
+HALT_EHLOOP_DOGFOOD_REPAIR_FALSE_GREEN.
+
+**Three P0 contradictions in V1:**
+
+  P0-A. Repair was DISABLED exactly where the LIVE failure
+         occurred. V1 used isExtensionHostHotloopDiagnosticEnabled()
+         as the production-soundness gate for the synchronous
+         Logger.log breadcrumb. That gate is itself defaulted ON
+         by the dogfood profile. The LIVE failure was captured
+         in the dogfood profile
+         (CLINEMM_RUNTIME_PROFILE=dogfood, installed build
+         s1onique.clinemm-4.1.16-99006fbcc). The repair
+         therefore required the gate to be OFF in the exact
+         runtime where the LIVE failure was captured.
+
+  P0-B. Ablation reversed RED/GREEN. V1 said "diagnostic OFF =
+         repaired, diagnostic ON = expensive". The LIVE failure
+         WAS in diagnostic ON. The discriminator was inverted
+         relative to the real problem.
+
+  P0-C. Temporary diagnostic became repair authority.
+         logQueueEvents was using the diagnostic enablement bit
+         as its production-soundness gate. Per the V1
+         REMOVAL_TRIGGER, the diagnostic is removed
+         post-qualification; that removal would silently
+         resurrect the hot path.
+
+**P1 misclassification:** EH2_REDUNDANT_STATE_WRITE_STORM was
+listed as a root class in V1, but the V1 packet itself
+observed setWithWriterCalls=302 with ~0.5 writes per
+handleSessionEvent and explicitly stated "NOT a write storm".
+The classification was overstated.
+
+**CORRECTION01 (this commit) — the bounded correction:**
+
+The V1 single gate is split into TWO independent gates:
+
+```
+Gate 1 (counters / phase writes): defaulted by dogfood. Cheap.
+     The diagnostic may be removed post-qualification without
+     affecting production soundness.
+
+Gate 2 (synchronous queue-log breadcrumb): DEFAULT OFF in every
+     profile. Honored ONLY in dogfood when the operator
+     explicitly sets CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=<truthy>.
+     Public installs can never grant this regardless of env.
+```
+
+The two are decoupled so removing the diagnostic does NOT
+silently re-arm the hot path. The permanent production rule
+is encoded in the runtime side, not in the diagnostic.
+
+**Code changes (production):**
+
+apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts
+  + new module-level state _queueLogEnabled (default false)
+  + new accessors isExtensionHostHotloopQueueLogEnabled()
+  + new mutator setExtensionHostHotloopQueueLogEnabled()
+  + new counter recordExtensionHostHotloopQueueLogPermitted()
+  + module docstring documents the two-gate invariant
+
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+  * logQueueEvents consults isExtensionHostHotloopQueueLogEnabled()
+    (independent of the diagnostic enablement bit) BEFORE any
+    Logger.log call.
+
+apps/vscode/src/sdk/dogfood-diagnostic-profile.ts
+  * applyExtensionHostHotloopDiagnosticProfile now resolves TWO
+    gates from the environment:
+      - CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC (diagnostic on/off)
+      - CLINEMM_DIAG_HOTLOOP_QUEUE_LOG (queue-log opt-in)
+
+**Tests (13/13 PASS, was 8/8):**
+
++ EHLOOP-PROFILE-01: dogfood -> counters ON, log OFF
++ EHLOOP-PROFILE-02: dogfood + CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1 -> log fires
++ EHLOOP-PROFILE-03: public + env override -> never granted
++ EHLOOP-PROFILE-04: dogfood + CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC=0
+* EHLOOP-RED-01 rewritten: real dogfood, no opt-in -> log suppressed
++ EHLOOP-RED-02: public profile -> log suppressed
+* EHLOOP-ABLATION-01 rewritten: same installed dogfood profile; only
+    the queue-log opt-in changes the breadcrumb (3 rounds A/B/C)
+* EHLOOP-CTL-09 rewritten: counters armed does not imply log fires
+CTL-01/02/04/05/08/10: controls preserved from V1
+
+**Conservation (UNCHANGED):**
+
+handleSessionEvent pipeline, appendAndEmit, postStateToWebview,
+setTurnPhase, setWithWriter, PendingPromptsController.drain,
+notify-on-terminal, TQCB completion barrier, BTCONT deferred
+continuation, CCARD ring DEFAULT_OFF, CCARD enabled does not
+alter semantics, explicit user turn, fire-and-forget job,
+two-job isolation - all unchanged.
+
+**Classification narrowing:**
+
+EH2_REDUNDANT_STATE_WRITE_STORM = NOT_ESTABLISHED
+(observational only). setWithWriter instrumentation remains;
+no write is suppressed at that seam.
+
+**Gates:**
+
+| Gate | Result |
+|------|--------|
+| bun test extension-host-session-event-hotloop01.ehloop01.test.ts | 13/13 PASS (was 8/8) |
+| bun test (focused regression: WPROV + dogfood + sdk-session-event-coordinator) | 103/104 PASS (1 pre-existing OWN01 RED probe unrelated) |
+| bun --bun bunx tsc --noEmit (apps/vscode) | clean |
+
+**Removal trigger (corrected):**
+
+Post-qualification: remove counter module + activation helper
++ dump runtime + Command Palette registration + registry entry
++ package.json command declaration TOGETHER. The permanent
+production rule (queue-log opt-in is DEFAULT OFF in every
+profile) remains in logQueueEvents regardless of whether the
+diagnostic is removed. The removal therefore cannot resurrect
+the hot path.
+
+**LIVE qualification (PENDING, operator-driven):**
+
+Per ACT §36 with the corrected HEAD installed:
+  CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_PTAD=1 \\
+      code --extensionDevelopmentPath=...
+
+Run a 30-second specimen at least twice. Acceptance:
+  - dogfood profile remains enabled
+  - queue log hot path is suppressed/bounded
+  - no UNRESPONSIVE warning
+  - no automatic CPU profile
+  - no Extension Host restart
+
+Then Developer: Show Running Extensions -> record a 10-20s
+profile; compare against exthost-66cdb2.cpuprofile; the
+logQueueEvents -> Logger.#output -> appendLine stack should
+collapse materially.
+
+**Verdict:**
+
+PASS_EXTENSION_HOST_LOGGING_HOTPATH_REPAIRED
+  + bounded correction to remove the three P0 contradictions
+  + EH2 narrowed to NOT_ESTABLISHED
+  + LIVE qualification PENDING
