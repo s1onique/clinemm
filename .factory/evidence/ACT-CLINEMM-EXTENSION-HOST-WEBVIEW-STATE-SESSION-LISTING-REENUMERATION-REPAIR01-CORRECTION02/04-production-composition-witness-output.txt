@@ -1,0 +1,56 @@
+WVSL-COMPOSE-REAL-01 focused test output:
+
+$ bun test src/sdk/__tests__/webview-state-session-listing-cache-coherence-real-production-composition.wvsl-compose-real.test.ts
+
+bun test v1.3.13 (bf2e2cec)
+
+src/sdk/__tests__/webview-state-session-listing-cache-coherence-real-production-composition.wvsl-compose-real.test.ts:
+
+✓ WVSL-COMPOSE-REAL-01 — real production-class event bus → SdkTaskHistory invalidation
+    > WVSL-COMPOSE-REAL-01a: session_snapshot + status on real bus → cache invalidates
+        [1.41ms]
+    > WVSL-COMPOSE-REAL-01b: status-only emit invalidates cache (single-channel proof)
+        [0.45ms]
+    > WVSL-COMPOSE-REAL-01c: ended event invalidates cache (terminate path)
+        [0.29ms]
+    > WVSL-COMPOSE-REAL-01d: chunk event does NOT invalidate cache on the real bus
+        [0.27ms]
+    > WVSL-COMPOSE-REAL-01e: real bus cleanup — unsubscribe removes listeners
+        [0.12ms]
+
+ 5 pass
+ 0 fail
+ 17 expect() calls
+Ran 5 tests across 1 file. [674.00ms]
+
+WVSL-AUTHORITY (PRE_REPAIR_BEHAVIOR converted):
+$ bun test src/sdk/__tests__/webview-state-session-listing-cache-coherence.wvsl-authority.test.ts
+
+ 7 pass
+ 0 fail
+ 26 expect() calls
+
+WVSL01 + WVSL-AUTHORITY + WVSL-COMPOSE-REAL-01 (all focused):
+$ bun test \
+    src/sdk/__tests__/webview-state-session-listing-reenumeration-repair01.wvsl01.test.ts \
+    src/sdk/__tests__/webview-state-session-listing-cache-coherence.wvsl-authority.test.ts \
+    src/sdk/__tests__/webview-state-session-listing-cache-coherence-real-production-composition.wvsl-compose-real.test.ts
+
+ 27 pass
+ 0 fail
+ 81 expect() calls
+
+Full default suite:
+$ bun run test:unit
+
+ Files: 85   Pass: 1168   Fail: 0
+ All unit test files passed.
+
+Typecheck:
+$ bun x tsc --noEmit
+exit 0
+
+Biome lint:
+$ bun run lint
+ Checked 1980 files in 1265ms. No fixes applied.
+ (0 issues)

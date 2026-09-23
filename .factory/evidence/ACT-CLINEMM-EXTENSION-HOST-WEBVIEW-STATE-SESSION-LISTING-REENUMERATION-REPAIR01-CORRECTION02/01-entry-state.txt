@@ -1,0 +1,35 @@
+ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02
+Entry state
+
+Halt received:
+  HALT_CACHE_COHERENCE_EVENT_BRIDGE_NOT_PRODUCTION_PROVEN (P0)
+  (subordinate to HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN)
+
+Reviewer complaints:
+  P0-1 "REAL persistence seam is not real production persistence":
+       The WVSL-AUTHORITY test set uses a hand-rolled FileBackedSessionStore
+       + a VscodeSessionHost shim, NOT the production FileSessionService /
+       LocalRuntimeHost chain. The reviewer classifies this as
+       SYNTHETIC_REAL backing-store coherence reproduction rather than real.
+  P0-2 "GREEN manually supplies the event whose existence is load-bearing":
+       The REPAIR tests do emitHostEvent() to provide the runtime event
+       the production host would emit. This proves
+         IF a whitelisted CoreSessionEvent arrives after the mutation
+         THEN SdkTaskHistory invalidates correctly
+       but does NOT prove every production mutation necessarily emits one
+       of {status, session_snapshot, ended} after persistence is
+       authoritative through the exact host subscription.
+  P1-1 default suite red: 1161/1163 PASS / 2 FAIL — intentional RED
+       AUTHORITY pair kept in default `bun run test:unit`; violates
+       "deliberately failing evidence must not remain in the default gate".
+  P1-2 `dispose()` retains entries in mutationSubscriptions Map after
+       their unsubscribe callback runs (only deletes when host ===
+       cachedHistoryHost); mild hygiene, not a runtime correctness bug
+       because the whole SdkTaskHistory is being disposed.
+  P2-1 the 5-min TTL is described as a "memory bound" — that wording is
+       misleading (expiry itself does not free the retained array).
+  P2-2 trailing whitespace + EOF residue (git diff --check).
+
+Existing repair state at this entry:
+  CORRECTION01 already applied, 15/15 WVSL01 + 5/7 WVSL-AUTHORITY GREEN
+  with 2 RED documenting the halt prediction.

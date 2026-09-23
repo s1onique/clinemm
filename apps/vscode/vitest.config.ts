@@ -69,6 +69,19 @@ export default defineConfig({
 		// streams isolated.
 		exclude: [
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
+			// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02:
+			// real production-class event bus (RuntimeHostEventBus)
+			// composition witness. The deep-relative import is intentional
+			// (resolves the real production class under bun:test), but the
+			// base tsconfig rootDir and the missing @cline-internal/core
+			// alias here make vitest's resolver fail. The file runs under
+			// bun:test in the default suite. See
+			// webview-state-session-listing-cache-coherence-real-production-composition.wvsl-compose-real.test.ts
+			// for the full rationale and the equivalent of the
+			// `real-local-to-shadow-bridge.c24-c-correction01` bridge
+			// witness (which would also be unavailable under this base
+			// config).
+			"src/sdk/__tests__/webview-state-session-listing-cache-coherence-real-production-composition.wvsl-compose-real.test.ts",
 			"src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts",
 			"src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts",
 			// ACT-CLINEMM-ASYNC-COMMAND-TURN-LIVENESS01-CORRECTION01:

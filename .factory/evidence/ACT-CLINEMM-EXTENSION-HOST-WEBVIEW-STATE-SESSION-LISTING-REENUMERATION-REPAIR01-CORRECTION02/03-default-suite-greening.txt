@@ -1,0 +1,28 @@
+ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02
+Default-suite greening
+
+Before CORRECTION02:
+  bun run test:unit -> 84 files, 1161 PASS, 2 FAIL
+  The 2 FAIL were:
+    WVSL-AUTHORITY-01 (out-of-band create) — RED by design
+    WVSL-AUTHORITY-02 (out-of-band status flip) — RED by design
+  Status: violates Factory test rule "deliberately failing evidence
+  must not remain in the default gate".
+
+After CORRECTION02:
+  bun run test:unit -> 85 files, 1168 PASS, 0 FAIL
+  The 2 previously-RED tests became 2 PASSING-WITNESS tests:
+    AUTHORITY-01 / PRE_REPAIR_BEHAVIOR
+    AUTHORITY-02 / PRE_REPAIR_BEHAVIOR
+  Each witnesses TWO halves:
+    (a) persistence-only mutation leaves cache stale (the witness)
+    (b) coherence event brings cache fresh (the closing proof)
+  The combined intentional-RED evidence lives now in:
+    .factory/evidence/.../REPAIR01-CORRECTION01/
+      03-authority-output.txt (the original RED reproduction record)
+      04-repair-output.txt (the COUNTER-evidence)
+  and now in:
+    .factory/evidence/.../REPAIR01-CORRECTION02/
+      result.json (this ACT's verdict)
+  So the RED evidence is preserved (outside the default suite) AND
+  the default suite is green.

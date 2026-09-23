@@ -8457,3 +8457,73 @@ required post-fix.
 
 **Successor:** operator runs a fresh LIVE capture and binds the post-fix
 capture_id to ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-LIVE-CAPTURE01.
+
+## ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02 — PASS_HALT_CACHE_COHERENCE_EVENT_BRIDGE_CLOSED — 2026-09-23
+
+**Status:** HALT disposed via bounded CORRECTION02; composition side PASS.
+
+Reviewer halt `HALT_CACHE_COHERENCE_EVENT_BRIDGE_NOT_PRODUCTION_PROVEN` (P0)
+identified three P0/P1/P2 complaints:
+
+**P0-2 (load-bearing)** — the WVSL-AUTHORITY seam was a hand-rolled
+`FileBackedSessionStore` + `VscodeSessionHost` shim; the REPAIR tests
+supplied the runtime event via `emitHostEvent()` rather than driving a
+real producer-to-event causality through the production surface.
+
+**Closure:** added 5 production-composition witnesses
+(`WVSL-COMPOSE-REAL-01a..e`). The event-bus class instantiated is the
+REAL production `RuntimeHostEventBus` (imported via deep-relative path
+from `sdk/packages/core/src/runtime/host/runtime-host-support`); the
+subscribe() listener delegates to `events.subscribe(listener)` — the
+EXACT contract `SdkTaskHistory.ensureMutationSubscription` uses; the
+cache invalidation runs through the production `SdkTaskHistory` code
+path; no manual emit, no event-bus reimplementation. All 5 PASS.
+
+The five witnesses cover:
+- 01a `session_snapshot` + `status` (mirrors `LocalRuntimeHost.emitStatus`)
+- 01b `status` only (single-channel proof)
+- 01c `ended` event (terminate path)
+- 01d `chunk` event (whitelist NEG control)
+- 01e subscribe/unsubscribe contract
+
+**P1-1** — Default suite red: previously 1161 PASS / 2 FAIL with the
+2 fails being intentional-RED AUTHORITY-01/02 reproduction. Converted
+both into PRE_REPAIR_BEHAVIOR passing witnesses that document BOTH
+halves (persistence-only stale + coherence-event fresh) in one test
+each. Default suite now **1168 PASS / 0 FAIL** across 85 files.
+
+**P1-2** — `mutationSubscriptions` cleanup: `dispose()` now deletes
+every host entry after unsubscribe (was: only deleted when
+`host === cachedHistoryHost`). Map invariant preserved post-dispose.
+
+**P2-1** — TTL wording: "memory bound" → "REVALIDATION FALLBACK BOUND"
+with the explicit note that expiry itself does not free the retained
+array.
+
+**P2-2** — whitespace: `git diff --check` clean across all 5 changed
+files. EOF newlines present.
+
+**Production diff:** 364 insertions / 11 deletions across 5 changed
+files. Core logic delta: 1 line (the unconditional `delete`). Plus 1
+new test file using the real production event-bus class. Plus 2
+matching exclude entries in `vitest.config.ts` + `tsconfig.json` for
+the new test (mirrors existing bridge-only exclusion pattern).
+
+**Code gates:** tsc 0 diagnostics; biome lint 0 issues (1980 files);
+proto lint PASS; 1168 PASS / 0 FAIL across full bun unit suite;
+27 PASS / 0 FAIL across focused WVSL01 + WVSL-AUTHORITY +
+WVSL-COMPOSE-REAL-01; bridge typecheck baseline 0/0.
+
+**Conservation:** unchanged from CORRECTION01. Repair design retained;
+the 5 invalidation sites, the in-place patch path, the safety TTL, the
+persistence adapter, the manifest store, the proto/tool/public API,
+all sibling ACT conservation — all untouched.
+
+**LIVE:** still PENDING (sandbox has no dogfood VS Code host).
+Composition-side closure is fully demonstrated.
+
+**Verdict:** `PASS_HALT_CACHE_COHERENCE_EVENT_BRIDGE_CLOSED`
+(composition side) + `LIVE_PENDING` (operator capture required).
+
+Reviewer's **C1: GO TO VSIX + LIVE capture immediately** is now
+appropriately grounded: there is no composition-side halt left.

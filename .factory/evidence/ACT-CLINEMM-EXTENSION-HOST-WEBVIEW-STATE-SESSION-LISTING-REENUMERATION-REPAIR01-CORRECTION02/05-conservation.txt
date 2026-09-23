@@ -1,0 +1,38 @@
+ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02
+Conservation
+
+This ACT is a CORRECTION02 bounded repair; conservation is the
+intersection of CORRECTION01's conservation (verified) plus this
+ACT's additional fixes:
+
+CORRECTION01 retained (unchanged):
+- 5 invalidation sites (dispose, updateSession write-failed,
+  updateCachedSessionRecord on index === -1, deleteSession,
+  cacheTaskSize)
+- in-place patch on updateCachedSessionRecord on index >= 0
+- safety TTL value (5*60*1_000 ms)
+- UnifiedSessionPersistenceService.listSessions
+- SessionManifestStore.readSessionManifestTitle
+- proto/schema, public tool surface, public API surface
+
+CORRECTION02 adds:
+- 1 line of production code (mutationSubscriptions.delete(host)
+  unconditionally in dispose loop)
+- Wording fix in the TTL docstring (REVALIDATION FALLBACK BOUND)
+- 1 new test file (319 lines, all bun-test, all new functionality)
+- 1 modified test file (wvsl-authority): AUTHORITY-01/02 converted
+  to PRE_REPAIR_BEHAVIOR passing witnesses (no semantic delta to the
+  repair)
+- 2 config exclude entries (vitest.config.ts + tsconfig.json) for
+  the new test file (mirrors existing pattern for bridge-only tests)
+
+Untouched from the broader app:
+- SLAC01, ALLOCAUTH01, BCNT01, TQCB01, BTCONT01, CCARD01
+- command-job-manager, background-notify-coordinator,
+  pending-prompts-controller, terminal-card projection
+- allocation profiler, slac counters
+- async-local-storage caller context, state-post-debouncer
+- getTaskHistory gRPC RPC (passes through the same cache)
+- LocalRuntimeHost, FileSessionService, the entire SDK source
+- RuntimeHostEventBus (production class is referenced by import, not
+  modified)

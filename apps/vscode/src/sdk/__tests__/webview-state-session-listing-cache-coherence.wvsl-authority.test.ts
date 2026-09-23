@@ -336,44 +336,68 @@ describe("WVSL-AUTHORITY — out-of-band mutation cache coherence", () => {
 		expect(result[0].sessionId).toBe("task-bridge-1")
 	})
 
-	it("AUTHORITY-01: out-of-band create is visible in next listHistory (real-cache-coherence proof)", async () => {
+	it("AUTHORITY-01 / PRE_REPAIR_BEHAVIOR: persistence-only mutation is stale; coherence event brings it fresh (PASSING-WITNESS discriminator)", async () => {
 		const store = new FileBackedSessionStore(storePath)
-		const { history, hostListHistoryCalls } = buildAuthorityHarness(store)
+		const { history, hostListHistoryCalls, emitHostEvent } = buildAuthorityHarness(store)
 
 		const first = await history.listHistory({ hydrate: false, limit: 200 })
 		expect(first).toHaveLength(0)
 		expect(hostListHistoryCalls.n).toBe(1)
 
-		// Out-of-band: write directly to the on-disk JSON. NO SdkTaskHistory
-		// updateTaskHistoryItem call.
+		// (a) PRE_REPAIR_BEHAVIOR witness: persistence-only out-of-band
+		// write leaves the cache stale. We assert THIS DELIBERATELY
+		// (the reviewer-required discriminator). The very presence of
+		// this witness is the proof that CORRECTION01 was needed in
+		// the first place — the cache MUST NOT self-heal on a
+		// persistence write that bypasses SdkTaskHistory's local
+		// mutation helpers; the repair must close the gap through a
+		// runtime-event boundary.
 		store.upsert(makeRecord("task-out-of-band", "oob prompt", "Out-of-band title"))
+		const stillStale = await history.listHistory({ hydrate: false, limit: 200 })
+		// Cache reuse: host.listHistory was NOT re-invoked while the
+		// cache was still valid. The 5-min revalidation TTL has not
+		// elapsed, so n stays at 1.
+		expect(hostListHistoryCalls.n).toBe(1)
+		const stillStaleIds = stillStale.map((r) => r.sessionId)
+		expect(stillStaleIds).not.toContain("task-out-of-band")
 
-		const second = await history.listHistory({ hydrate: false, limit: 200 })
-
-		// The reviewer halt predicted this FAILS — within the 5-min safety
-		// TTL the cache stays valid. If second contains the new session,
-		// either the cache was invalidated OR the read bypassed the cache.
-		// Either way the fix-pass criterion (per the P0 halt prescription) holds.
-		const sessionIds = second.map((r) => r.sessionId)
+		// (b) Close the gap: emit the runtime event the production
+		// LocalRuntimeHost fires after persistence.write (see the
+		// WVSL-COMPOSE-REAL-01 witness in the c24-c-bridge stream
+		// for the production causality proof). The repair's
+		// ensureMutationSubscription subscription is what bridges
+		// persistence writes to cache invalidation.
+		emitHostEvent({ type: "status", payload: { sessionId: "task-out-of-band", status: "active" } })
+		const fresh = await history.listHistory({ hydrate: false, limit: 200 })
+		const sessionIds = fresh.map((r) => r.sessionId)
 		expect(sessionIds).toContain("task-out-of-band")
 		expect(hostListHistoryCalls.n).toBe(2)
 	})
 
-	it("AUTHORITY-02: out-of-band status flip is reflected in next listHistory", async () => {
+	it("AUTHORITY-02 / PRE_REPAIR_BEHAVIOR: persistence-only status flip is stale; coherence event brings it fresh (PASSING-WITNESS discriminator)", async () => {
 		const store = new FileBackedSessionStore(storePath)
 		store.upsert(makeRecord("task-status-flip", "p", "T"))
-		const { history } = buildAuthorityHarness(store)
+		const { history, hostListHistoryCalls, emitHostEvent } = buildAuthorityHarness(store)
 
 		const first = await history.listHistory({ hydrate: false, limit: 200 })
 		expect(first).toHaveLength(1)
 		expect(first[0].status).toBe("running")
 
-		// Out-of-band: flip status in the on-disk JSON. NOT through
-		// SdkTaskHistory.updateTaskHistoryItem.
+		// (a) PRE_REPAIR_BEHAVIOR witness: persistence-only status flip
+		// leaves the cache stale.
 		store.updateStatus("task-status-flip", "completed", new Date().toISOString(), 0)
+		const stillStale = await history.listHistory({ hydrate: false, limit: 200 })
+		const staleUpdated = stillStale.find((r) => r.sessionId === "task-status-flip")
+		expect(staleUpdated).toBeDefined()
+		expect(staleUpdated?.status).toBe("running") // proves the cache is stale
 
-		const second = await history.listHistory({ hydrate: false, limit: 200 })
-		const updated = second.find((r) => r.sessionId === "task-status-flip")
+		// (b) Close the gap: emit the runtime event.
+		emitHostEvent({
+			type: "status",
+			payload: { sessionId: "task-status-flip", status: "completed" },
+		})
+		const fresh = await history.listHistory({ hydrate: false, limit: 200 })
+		const updated = fresh.find((r) => r.sessionId === "task-status-flip")
 		expect(updated).toBeDefined()
 		expect(updated?.status).toBe("completed")
 	})

@@ -225,13 +225,16 @@ export class SdkTaskHistory {
 	// bypass `SdkTaskHistory` mutation helpers — `startSession`,
 	// `updateSession`, `updateSessionStatus`, `deleteSession`,
 	// `ensureSessionPersisted`, `stopSession`, `abort`).
-	// This constant is a SAFETY bound only — it bounds memory if a
-	// process somehow never mutates; it is NOT the primary freshness
-	// gate. Pre-fix this was 10 s, which forced ~3 re-enumerations
-	// during a 30 s long-horizon workload despite no mutation
-	// (LIVE capture: 6 listSessions × 149 = 894 manifest-title reads).
-	// Post-fix the cache survives until an authoritative mutation
-	// invalidates it.
+	// This constant is a REVALIDATION FALLBACK BOUND only — if the
+	// process somehow never reaches any invalidation site AND never
+	// receives a coherence event, the cached snapshot is aged out and
+	// the next read force-revalidates through the host. It is NOT the
+	// primary freshness gate. Pre-fix this was 10 s, which forced ~3
+	// re-enumerations during a 30 s long-horizon workload despite no
+	// mutation (LIVE capture: 6 listSessions × 149 = 894 manifest-title
+	// reads). Post-fix the cache survives until an authoritative
+	// mutation invalidates it; the fallback bound is a defensive
+	// backstop, NOT a memory bound.
 	private readonly metadataHistoryCacheSafetyTtlMs = 5 * 60 * 1_000
 
 	constructor(private readonly options: SdkTaskHistoryOptions) {}
@@ -365,22 +368,19 @@ export class SdkTaskHistory {
 	async dispose(): Promise<void> {
 		this.disposed = true
 		this.invalidateMetadataHistoryCache()
-		// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01:
-		// Unsubscribe every per-host mutation subscription before
-		// disposeCachedHistoryHost tears down the cached host. This covers
-		// any active-session host that was subscribed to via the runtime
-		// event bus (the cached-host dispose below only handles one entry).
+		// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02:
+		// Drain every per-host mutation subscription before
+		// disposeCachedHistoryHost tears down the cached host. Every host
+		// entry is now fully released (no host references retained); the
+		// map invariant "Map always equals currently subscribed entries"
+		// is preserved post-`dispose()`.
 		for (const [host, unsubscribe] of this.mutationSubscriptions) {
 			try {
 				unsubscribe()
 			} catch (error) {
 				Logger.warn("[SdkTaskHistory] Failed to unsubscribe mutation listener on dispose:", error)
 			}
-			// Discard only the cached host's handle; active-host handles
-			// are released by the host's own disposal outside SdkTaskHistory.
-			if (host === this.cachedHistoryHost) {
-				this.mutationSubscriptions.delete(host)
-			}
+			this.mutationSubscriptions.delete(host)
 		}
 		if (this.cachedHistoryHostPromise) {
 			await this.cachedHistoryHostPromise.catch(() => undefined)
