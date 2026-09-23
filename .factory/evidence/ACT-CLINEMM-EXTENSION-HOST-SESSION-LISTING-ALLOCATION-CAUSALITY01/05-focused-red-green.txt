@@ -1,0 +1,80 @@
+Focused Red/Green Evidence — ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01
+
+## 1. Test plan (per ACT §16-§19)
+
+The ACT prescribes the following test families:
+
+| Family | File | Owner |
+| --- | --- | --- |
+| SLAC-COMPOSE-01 | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
+| SLAC-CTL-{01..04} | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
+| SLAC-MANIFEST-{01..03} | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
+| ALLOC-PERSIST-{01..08} | existing extension-host-allocation-authority01.allocauth01.test.ts (unchanged) | predecessor ACT |
+
+## 2. Red gate (per ACT §33)
+
+Before LIVE capture, the focused test families MUST pass under the
+diagnostic policy (dogfood + env opt-in).
+
+Each test asserts:
+- Real production listSessions implementation, OR
+- Real production readSessionManifestTitle implementation, OR
+- Real diagnostic sink installed via the production wiring
+- Diagnostic counters incremented exactly once per real call
+- Diagnostic disabled → counters unchanged
+- Diagnostic enabled → counters reflect real cardinality
+
+## 3. RED status (this evidence file)
+
+Tests will be authored in step 5 of this ACT. Until then, the
+focused test suite does not yet exist on HEAD and the diagnostic
+counter wiring is verified manually via:
+  - `@cline/core` build: PASS (counter wiring in
+    `UnifiedSessionPersistenceService.listSessions`,
+    `reconcileDeadSessions`, and
+    `SessionManifestStore.readSessionManifestTitle`)
+  - `@cline/core` SDK tests: 13/14 pass (1 pre-existing failure
+    unrelated to this ACT)
+  - `apps/vscode` typecheck: PASS (no new diagnostics)
+  - production wiring:
+    - `extension-host-allocation-profiler.ts` hooks: installed
+    - `extension-host-allocation-profiler-runtime.ts` wires the hooks
+      at activation via `installExtensionHostAllocationProfilerRuntime`
+    - `SdkController.getStateToPostToWebview` and
+      `SdkController.getTaskHistory` wrap `listHistory` calls in
+      `withListSessionsCaller`
+
+## 4. GREEN status (will be appended after focused tests are authored)
+
+The focused test suite (slac01.test.ts) MUST satisfy:
+- SLAC-COMPOSE-01: one real list operation increments
+  listSessionsCalls by 1; for K manifests whose titles are
+  actually read, readSessionManifestTitleCalls increments by K;
+  diagnostic OFF → counters unchanged.
+- SLAC-CTL-01: one consumer call → listSessionsCalls = 1,
+  caller bucket = 1 (caller class as expected).
+- SLAC-CTL-02: two distinct consumers → listSessionsCalls = 2,
+  each caller bucket exact (one for each caller).
+- SLAC-CTL-03: no call → all counters = 0.
+- SLAC-CTL-04: diagnostic disabled → production result identical,
+  counters = 0.
+- SLAC-MANIFEST-01: one manifest → readManifestTitleCalls = 1,
+  uniqueManifestIds = 1.
+- SLAC-MANIFEST-02: same unchanged manifest read twice →
+  calls = 2, unique = 1, repeated = 1.
+- SLAC-MANIFEST-03: changed manifest → must NOT be classified as
+  redundant.
+
+## 5. Status of this evidence (this commit)
+
+This file documents the **pre-test state**:
+  - counter wiring: COMPLETE
+  - lifecycle hooks: COMPLETE
+  - snapshot embedding: COMPLETE
+  - production caller wrapping: COMPLETE
+  - focused test suite: TO BE WRITTEN
+
+The focused test suite is intentionally authored AFTER the
+diagnostic infrastructure is proven by typecheck + SDK tests so
+that the suite itself is a thin façade over already-verified
+production seams.

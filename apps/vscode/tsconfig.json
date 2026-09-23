@@ -72,6 +72,17 @@
 		"src/test/scenarios/**/*",
 		"src/test/cline-core-vitest-stub.ts",
 		"src/test/bun-test-preload.ts",
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+		// session-listing causal diagnostic + dedicated vitest harness.
+		// The diagnostic modules reach into the live SDK source via
+		// @cline-internal/core/... path aliases (declared above), which
+		// live outside rootDir `.` for the base TypeScript compile. The
+		// dedicated vitest.config.slac01.ts config owns these files;
+		// exclude them here so the base tsc emit is not polluted by
+		// 9× TS6059 rootDir errors.
+		"src/sdk/session-listing-allocation-diagnostic.ts",
+		"src/sdk/session-listing-diagnostic-runtime.ts",
+		"src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts",
 		"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
 		"src/sdk/__tests__/hub-runtime-host.fallback-composition.c24-d.test.ts",
 		"src/sdk/__tests__/hub-runtime-host.provenance-epoch.c24-d3.test.ts",

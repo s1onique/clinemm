@@ -1,0 +1,42 @@
+Entry state — ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01
+
+Working tree (read at ACT start): clean
+HEAD at ACT start:  adebb62c2 (origin/main)
+
+Predecessor ACT verdict:
+  ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01
+  -> PASS_ALLOCATION_INFRASTRUCTURE_READY_LIVE_CAPTURE_PENDING
+
+Frozen LIVE allocation observation (from the predecessor capture):
+  profile_class             = LIVE_CHECKPOINT
+  allocation_samples       = 1,121
+  sampled_allocation_bytes = 46,864,564 (~44.69 MiB)
+  listSessions subtree     = ~9.98 MiB (~21.3% of capture)
+  readSessionManifestTitle = ~3.85 MiB
+  Buffer.toString          = ~5.20 MiB
+  anonymous extension.js   = ~5.48 MiB
+  installed_bundle_sha256  = source for the bundle SHA-256 was present
+
+Profiling environment (predecessor):
+  CLINEMM_DIAG_ALLOCATION_PROFILE = 1
+  CLINEMM_RUNTIME_PROFILE          = dogfood
+  CLINEMM_PTAD                     = 1
+  Qualifying workload              = background command w/ notify=true
+                                     (30-second sleep)
+
+Permanent-diagnostic disposition:
+  EXTENSION_HOST_ALLOCATION_PROFILER
+      lifecycle     = PERMANENT_DIAGNOSTIC
+      default       = OFF
+      enablement    = explicit env + dogfood profile
+      semantics     = observational
+      persistence   = bounded
+      public API    = none
+      protocol delta= none
+      REMOVAL_TRIGGER = SUPERSEDED (no cleanup ACT scheduled)
+
+Goal of this ACT:
+  Determine why session enumeration / manifest processing accounts for
+  the dominant ClineMM-owned sampled allocation during the qualifying
+  30-second background-command workload. Measure real production
+  cardinality; do not optimize listSessions yet.

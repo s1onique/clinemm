@@ -34,7 +34,14 @@ import {
 	setAllocationProfilerFilesystem,
 	setAllocationProfilerIdentityResolver,
 	setAllocationProfilerInspectorSessionFactory,
+	setSessionListingCausalityLifecycleHooks,
 } from "./extension-host-allocation-profiler"
+import {
+	armSessionListingCausalityForCapture,
+	disarmSessionListingCausalityDiagnostic,
+	installSessionListingCausalityDiagnostic,
+	snapshotSessionListingCausalityDiagnostic,
+} from "./session-listing-diagnostic-runtime"
 
 /**
  * Default inspector session factory: returns a thin adapter around
@@ -186,7 +193,6 @@ function defaultIdentityResolver(): AllocationProfilerIdentityBinding {
 		extensionBundleSha256,
 	}
 }
-
 /**
  * THE single production wiring call. Invoked exactly once at
  * extension-host activation IF AND ONLY IF the profiler policy
@@ -194,10 +200,25 @@ function defaultIdentityResolver(): AllocationProfilerIdentityBinding {
  *
  * Idempotent: subsequent calls are no-ops because the resolver
  * mutators simply overwrite the seams with the same factories.
+ *
+ * ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+ * Also installs the session-listing causal diagnostic lifecycle
+ * hooks (per ACT §5): the diagnostic counters are RESET on arm,
+ * DISARMED on disarm, and the snapshot is embedded in the
+ * checkpoint / final meta.json payload.
  */
 export function installExtensionHostAllocationProfilerRuntime(): void {
 	setAllocationProfilerInspectorSessionFactory(defaultInspectorSessionFactory)
 	setAllocationProfilerFilesystem(defaultFilesystem)
 	setAllocationProfilerDataRootResolver(defaultDataRootResolver)
 	setAllocationProfilerIdentityResolver(defaultIdentityResolver)
+	// Install the session-listing causal diagnostic lifecycle hooks
+	// (per ACT §13 / §14). The sink itself is installed lazily by
+	// `installSessionListingCausalityDiagnostic` below.
+	installSessionListingCausalityDiagnostic()
+	setSessionListingCausalityLifecycleHooks({
+		onArmCapture: armSessionListingCausalityForCapture,
+		onDisarmCapture: disarmSessionListingCausalityDiagnostic,
+		captureSnapshotFn: snapshotSessionListingCausalityDiagnostic,
+	})
 }

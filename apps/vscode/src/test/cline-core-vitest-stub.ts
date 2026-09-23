@@ -631,3 +631,23 @@ export async function loginOpenAICodex(): Promise<OAuthCredentials> {
 // re-export is the minimum additional surface to unlock the runtime
 // registration assertions (submit_and_exit tool + completionPolicy.requireCompletionTool).
 export { DefaultRuntimeBuilder } from "../../../../sdk/packages/core/src/runtime/orchestration/runtime-builder"
+
+// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+// Re-export the session-listing causal-diagnostic sink surface
+// from the live source so the focused vitest suite
+// (apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts)
+// can drive the production wiring without bumping the @cline/core
+// stub alias to a bundled version. Same pattern as the trusted-internal
+// aliases above.
+export {
+	__resetActiveListSessionsCallerForTests,
+	__resetSessionListingDiagnosticSinkForTests,
+	consumeActiveListSessionsCaller,
+	getSessionListingDiagnosticSink,
+	peekActiveListSessionsCaller,
+	SessionListingCallerClass,
+	type SessionListingCallerClassValue,
+	type SessionListingDiagnosticSink,
+	setActiveListSessionsCaller,
+	setSessionListingDiagnosticSink,
+} from "../../../../sdk/packages/core/src/session/services/session-listing-diagnostic-sink"

@@ -1,0 +1,75 @@
+{
+  "act": "ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01",
+  "primary_purpose": "causal_discrimination",
+  "status": "infra_complete_no_live_capture",
+  "live_input": {
+    "profile_class": "LIVE_CHECKPOINT",
+    "allocation_samples": 1121,
+    "sampled_allocation_bytes": 46864564,
+    "allocation_authority": "session_listing_manifest_subsystem"
+  },
+  "profiler": {
+    "lifecycle": "PERMANENT_DIAGNOSTIC",
+    "default_off": true,
+    "env_gated": true,
+    "dogfood_only": true,
+    "amendment": "ACT-CLINEMM-EXTENSION-HOST-ALLOCATION-AUTHORITY01 REMOVAL_TRIGGER superseded; the V8 allocation profiler is now permanent diagnostic infrastructure, not forensic scaffolding scheduled for deletion."
+  },
+  "counter_only_diagnostic": {
+    "module": "apps/vscode/src/sdk/session-listing-allocation-diagnostic.ts",
+    "sink": "sdk/packages/core/src/session/services/session-listing-diagnostic-sink.ts",
+    "runtime": "apps/vscode/src/sdk/session-listing-diagnostic-runtime.ts",
+    "hot_path_overhead": "single boolean check (zero allocation when disabled)"
+  },
+  "production_seams_instrumented": {
+    "listSessions": "sdk/packages/core/src/session/services/persistence-service.ts:507-532",
+    "reconcileDeadSessions": "sdk/packages/core/src/session/services/persistence-service.ts:534-552",
+    "readSessionManifestTitle": "sdk/packages/core/src/session/stores/session-manifest-store.ts:124-167"
+  },
+  "production_callers_classified": [
+    {
+      "class": "WEBVIEW_STATE_PROJECTION",
+      "callsite": "apps/vscode/src/sdk/SdkController.ts:5101-5115",
+      "context": "SdkController.getStateToPostToWebview → taskHistory.listHistory"
+    },
+    {
+      "class": "SESSION_LIST_RPC",
+      "callsite": "apps/vscode/src/sdk/SdkController.ts:4429-4447",
+      "context": "SdkController.getTaskHistory (TaskService.GetTaskHistory gRPC handler)"
+    }
+  ],
+  "cardinality": {
+    "list_sessions_calls": null,
+    "query_all_calls": null,
+    "read_manifest_title_calls": null,
+    "unique_manifest_ids": null,
+    "repeated_manifest_reads": null
+  },
+  "classification": "CAPTURE_INSUFFICIENT",
+  "necessity": "NOT_PROVEN",
+  "repair_authorized": false,
+  "next_act": "ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-LIVE-CAPTURE01 (operator workload under CLINEMM_DIAG_ALLOCATION_PROFILE=1 to produce the first real capture)",
+  "focused_tests": {
+    "slac01": "10/10 PASS",
+    "allocauth01_conserved": "25/25 PASS"
+  },
+  "code_gate": {
+    "typecheck_apps_vscode": "PASS",
+    "sdk_build": "PASS",
+    "sdk_tests_session_persistence": "13/14 PASS (1 pre-existing failure unrelated to this ACT)"
+  },
+  "stop_conditions_checked": {
+    "counters_do_not_exercise_listSessions": "NO — counters wired into UnifiedSessionPersistenceService.listSessions, reconcileDeadSessions, SessionManifestStore.readSessionManifestTitle",
+    "diagnostic_disabled_production_unchanged": "YES — single boolean check on hot path",
+    "instrumentation_perturbs_host": "NO — counter increments are number++; no JSON, no Logger, no Error.stack",
+    "RED_cardinality_irreproducible": "PENDING — live capture required (operator action)",
+    "no_candidate_survives_discriminator": "PENDING — operator capture required",
+    "unexpected_tracked_dirt": "NO"
+  },
+  "structural_findings": {
+    "listSessions_production_path": "SDK wrapper at sdk/packages/core/src/session/services/persistence-service.ts:507 fans out Promise.all over manifest titles; structural allocation driver confirmed.",
+    "getStateToPostToWebview_calls_listHistory_uncoditionally": "CONFIRMED at apps/vscode/src/sdk/SdkController.ts:5101; this is the load-bearing webview_state_projection caller.",
+    "getTaskHistory_calls_listHistory_uncoditionally": "CONFIRMED at apps/vscode/src/sdk/SdkController.ts:4434; the load-bearing session_list_rpc caller.",
+    "existing_metadataHistoryCache_too_short": "SdkTaskHistory.metadataHistoryCache is 10s TTL, much shorter than the 30-second workload window (apps/vscode/src/sdk/sdk-task-history.ts:211). Will NOT amortize the long-horizon load."
+  }
+}

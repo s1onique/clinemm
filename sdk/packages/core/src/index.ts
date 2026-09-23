@@ -912,6 +912,18 @@ export type {
 	RootSessionArtifacts,
 } from "./session/services/session-service";
 export { CoreSessionService } from "./session/services/session-service";
+export {
+	SessionListingCallerClass,
+	type SessionListingCallerClassValue,
+	consumeActiveListSessionsCaller,
+	getSessionListingDiagnosticSink,
+	peekActiveListSessionsCaller,
+	setActiveListSessionsCaller,
+	setSessionListingDiagnosticSink,
+	type SessionListingDiagnosticSink,
+	__resetActiveListSessionsCallerForTests,
+	__resetSessionListingDiagnosticSinkForTests,
+} from "./session/services/session-listing-diagnostic-sink";
 export type {
 	CoreSessionCheckpointSnapshot,
 	CoreSessionSnapshot,

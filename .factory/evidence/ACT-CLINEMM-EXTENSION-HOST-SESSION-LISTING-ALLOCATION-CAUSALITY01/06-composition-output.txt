@@ -1,0 +1,40 @@
+ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01
+composition output (per ACT section 16 SLAC-COMPOSE-01)
+
+The composition witnesses the REAL production listSessions /
+readSessionManifestTitle paths reaching the diagnostic counters. It
+does NOT increment counters directly; it observes them via the
+materializeSessionListingCausalitySnapshot() observation surface —
+the same payload embedded in the meta.json checkpoint / final.
+
+The composition is verified end-to-end by the SLAC01 focused test suite
+(see 05-focused-red-green.txt) — 10/10 PASS using the production
+sink interface installed via the production runtime wiring.
+
+PRODUCTION SEAM 1 — listSessions
+  File: sdk/packages/core/src/session/services/persistence-service.ts:507-532
+  The real wrapper. Counter wiring (line 519-525) reads the
+  transient caller-class slot via consumeActiveListSessionsCaller()
+  and dispatches to the sink.
+
+PRODUCTION SEAM 2 — reconcileDeadSessions
+  File: sdk/packages/core/src/session/services/persistence-service.ts:534-552
+  Three queryAll events per listSessions (one per status bucket).
+
+PRODUCTION SEAM 3 — readSessionManifestTitle
+  File: sdk/packages/core/src/session/stores/session-manifest-store.ts:124-167
+  Six recordTitleRead call sites covering readFile/JSON/metadata
+  paths and the final "title present" / "title missing" outcomes.
+
+CALLER-CLASSIFICATION SEAMS (apps/vscode/src/sdk/SdkController.ts)
+  - Line 5101 (getStateToPostToWebview): WEBVIEW_STATE_PROJECTION
+  - Line 4434 (getTaskHistory): SESSION_LIST_RPC
+
+WHAT ONE listSessions(L) CALL OBSERVES (forward-derivation):
+  +1 listSessionsCalls
+  +K readSessionManifestTitleCalls (K = rows returned)
+  +3 queryAllCalls (one per status bucket)
+  +K identity counter updates (unique vs repeat split)
+
+The SLAC01 test suite (10/10 PASS) verifies the same composition
+with REAL production seams (no fake session subsystem).

@@ -34,6 +34,10 @@ import { withSessionHistoryOriginMetadata } from "../history-origin";
 import type { SessionCompactionState } from "../models/session-compaction";
 import type { SessionRow } from "../models/session-row";
 import { SessionManifestStore } from "../stores/session-manifest-store";
+import {
+	consumeActiveListSessionsCaller,
+	getSessionListingDiagnosticSink,
+} from "./session-listing-diagnostic-sink";
 import { TeamChildSessionManager } from "../team";
 
 export type { PersistedSessionUpdateInput, SessionPersistenceAdapter };
@@ -507,6 +511,13 @@ export class UnifiedSessionPersistenceService {
 	async listSessions(limit = 200): Promise<SessionRow[]> {
 		const requestedLimit = Math.max(1, Math.floor(limit));
 		const scanLimit = Math.min(requestedLimit * 5, 2000);
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+		// Diagnostic sink notification — single optional-callback indirection
+		// when the sink is undefined. ZERO-COST when disabled (per ACT §12).
+		const _sink = getSessionListingDiagnosticSink();
+		if (_sink?.recordListSessionsCall) {
+			_sink.recordListSessionsCall(consumeActiveListSessionsCaller());
+		}
 		await this.reconcileDeadSessions(scanLimit);
 
 		const rows = (await this.adapter.listSessions({ limit: scanLimit })).slice(
@@ -533,14 +544,19 @@ export class UnifiedSessionPersistenceService {
 
 	async reconcileDeadSessions(limit = 2000): Promise<number> {
 		const requestedLimit = Math.max(1, Math.floor(limit));
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+		// Notify the diagnostic sink of each per-bucket adapter query.
+		const recordQueryAll =
+			getSessionListingDiagnosticSink()?.recordQueryAllCall;
 		const rows = (
 			await Promise.all(
-				(["idle", "running", "pending"] as const).map((status) =>
-					this.adapter.listSessions({
+				(["idle", "running", "pending"] as const).map((status) => {
+					recordQueryAll?.();
+					return this.adapter.listSessions({
 						limit: requestedLimit,
 						status,
-					}),
-				),
+					});
+				}),
 			)
 		).flat();
 		let reconciled = 0;

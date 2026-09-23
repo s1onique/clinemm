@@ -102,6 +102,33 @@ export type AllocationProfilerTriggerResult =
 
 let _state: AllocationProfilerState = "disabled"
 
+/**
+ * ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+ * Optional lifecycle hooks for the session-listing causal
+ * diagnostic. Installed by the runtime wiring module at extension
+ * activation; default values are no-ops so the profiler works
+ * correctly when no diagnostic runtime is installed.
+ */
+let _onArmCapture: (() => void) | undefined
+let _onDisarmCapture: (() => void) | undefined
+let _captureSnapshotFn: (() => unknown) | undefined
+
+export function setSessionListingCausalityLifecycleHooks(hooks: {
+	readonly onArmCapture?: () => void
+	readonly onDisarmCapture?: () => void
+	readonly captureSnapshotFn?: () => unknown
+}): void {
+	_onArmCapture = hooks.onArmCapture
+	_onDisarmCapture = hooks.onDisarmCapture
+	_captureSnapshotFn = hooks.captureSnapshotFn
+}
+
+export function __resetSessionListingCausalityLifecycleHooksForTests(): void {
+	_onArmCapture = undefined
+	_onDisarmCapture = undefined
+	_captureSnapshotFn = undefined
+}
+
 /** Capture identity for the current process. */
 let _captureId: string | undefined
 
@@ -361,6 +388,13 @@ export function triggerExtensionHostAllocationProfilerOnFirstQualifyingJob(): Al
 	const captureId = _captureIdFactory()
 	_captureId = captureId
 
+	// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+	// Diagnostic counters are RESET at trigger() so the capture
+	// window exactly matches the allocation profile window (per
+	// ACT section 14). The hook is no-op when the runtime is not
+	// installed.
+	_onArmCapture?.()
+
 	// Spawn the capture loop WITHOUT awaiting. The hot-path returns
 	// immediately; the loop runs in the background.
 	void runAllocationCaptureLoop(captureId).catch((error) => {
@@ -459,6 +493,9 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 	}
 	const transitionToFailed = (reason: string): void => {
 		_state = "failed"
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+		// Disarm the diagnostic when the capture fails.
+		_onDisarmCapture?.()
 		_warn(`capture failed: ${reason}`)
 		cleanup()
 	}
@@ -501,6 +538,10 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 				writeMs,
 				transientCheckpointFailures: _perf.transientCheckpointFailures,
 				lastCheckpointWallMs: _perf.lastCheckpointWallMs,
+				// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+				// Snapshot the diagnostic counters during the cold
+				// -second checkpoint (per ACT section 13).
+				sessionListingCausality: _captureSnapshotFn?.(),
 			})
 			const metaStr = JSON.stringify(meta, null, 2)
 			await filesystem.writeFile(`${latestMetaPath}.tmp`, metaStr)
@@ -530,6 +571,9 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 				writeMs: 0,
 				transientCheckpointFailures: _perf.transientCheckpointFailures,
 				lastCheckpointWallMs: _perf.lastCheckpointWallMs,
+				// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+				// Final-snapshot the diagnostic counters.
+				sessionListingCausality: _captureSnapshotFn?.(),
 			})
 			await filesystem.writeFile(finalMetaPath, JSON.stringify(finalMeta, null, 2))
 		}
@@ -634,6 +678,9 @@ async function runAllocationCaptureLoop(captureId: string): Promise<void> {
 				const profile = unwrapProfile(stopResult)
 				await writeFinal(profile)
 				_state = "finalized"
+				// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+				// Disarm the diagnostic on successful finalize.
+				_onDisarmCapture?.()
 			} catch (error) {
 				transitionToFailed(`finalize: ${errorMessage(error)}`)
 			} finally {
@@ -681,6 +728,13 @@ function buildCheckpointMeta(args: {
 	readonly writeMs: number
 	readonly transientCheckpointFailures: number
 	readonly lastCheckpointWallMs?: number
+	/**
+	 * ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+	 * Read-only causal-counter snapshot, embedded in the meta.json
+	 * sidecar. Optional; omitted entirely when the diagnostic
+	 * runtime is not installed.
+	 */
+	readonly sessionListingCausality?: unknown
 }): Record<string, unknown> {
 	return {
 		schema_version: 1,
@@ -715,6 +769,12 @@ function buildCheckpointMeta(args: {
 			profile_bytes: args.perf.profileBytes,
 			sample_count: args.perf.sampleCount,
 		},
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+		// Counter-only causal diagnostic for the session-listing /
+		// manifest-title subtree. Embedded read-only on the existing
+		// 2-second checkpoint (per ACT section 13). The hook is no-op
+		// when the diagnostic runtime is not installed (default).
+		...(args.sessionListingCausality !== undefined ? { session_listing_causality: args.sessionListingCausality } : {}),
 	}
 }
 

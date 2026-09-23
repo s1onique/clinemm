@@ -31,6 +31,7 @@ import {
 	SessionManifestSchema,
 } from "../models/session-manifest";
 import type { SessionRow } from "../models/session-row";
+import { getSessionListingDiagnosticSink } from "../services/session-listing-diagnostic-sink";
 import { writeFileAtomic } from "./atomic-file";
 
 function isNotFoundError(error: unknown): boolean {
@@ -126,14 +127,20 @@ export class SessionManifestStore {
 	): Promise<string | undefined> {
 		const manifestPath = this.artifacts.sessionManifestPath(sessionId, false);
 		let raw: string;
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+		// Diagnostic sink notification. ZERO-COST when the sink is undefined.
+		const recordTitleRead =
+			getSessionListingDiagnosticSink()?.recordReadSessionManifestTitleCall;
 		try {
 			raw = await readFile(manifestPath, "utf8");
 		} catch {
+			recordTitleRead?.(sessionId, false);
 			return undefined;
 		}
 		try {
 			const parsed = JSON.parse(raw) as unknown;
 			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+				recordTitleRead?.(sessionId, false);
 				return undefined;
 			}
 			const metadata = (parsed as { metadata?: unknown }).metadata;
@@ -142,11 +149,15 @@ export class SessionManifestStore {
 				typeof metadata !== "object" ||
 				Array.isArray(metadata)
 			) {
+				recordTitleRead?.(sessionId, false);
 				return undefined;
 			}
 			const title = (metadata as { title?: unknown }).title;
-			return typeof title === "string" ? title : undefined;
+			const result = typeof title === "string" ? title : undefined;
+			recordTitleRead?.(sessionId, typeof result === "string");
+			return result;
 		} catch {
+			recordTitleRead?.(sessionId, false);
 			return undefined;
 		}
 	}

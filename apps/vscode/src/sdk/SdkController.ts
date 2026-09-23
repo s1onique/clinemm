@@ -151,6 +151,7 @@ import {
 	SessionAutoApprovalStore,
 	stripRequiresApproval,
 } from "./session-auto-approval"
+import { SessionListingCallerClass, withListSessionsCaller } from "./session-listing-diagnostic-runtime"
 import { buildDisabledWorkflowNames, expandSlashCommands } from "./slash-command-expansion"
 import { StatePostDebouncer } from "./state-post-debouncer"
 import { captureTaskHeaderSelectorInput } from "./task-header-selector-input-capture"
@@ -4429,11 +4430,17 @@ export class Controller {
 		const limit = request.limit > 0 ? Math.min(request.limit, 100) : 50
 		const offset = request.offset > 0 ? request.offset : 0
 		const workspacePath = currentWorkspaceOnly ? await this.getWorkspaceRoot() : undefined
-		const sessionHistory = await this.taskHistory.listHistory({
-			hydrate: false,
-			limit: limit + 1,
-			offset,
-		})
+		// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+		// Wrap the listHistory call with a SESSION_LIST_RPC attribution
+		// so the diagnostic can distinguish this RPC-driven call from
+		// the unconditional webview_state_projection callsite above.
+		const sessionHistory = await withListSessionsCaller(SessionListingCallerClass.SESSION_LIST_RPC, () =>
+			this.taskHistory.listHistory({
+				hydrate: false,
+				limit: limit + 1,
+				offset,
+			}),
+		)
 
 		let filteredTasks = sessionHistory.filter((item) => {
 			const ts = dateStringToTimestamp(item.updatedAt ?? item.endedAt ?? item.startedAt)
@@ -5098,7 +5105,15 @@ export class Controller {
 						}
 					: {}),
 			})
-			const sdkTaskHistory = (await this.taskHistory.listHistory({ limit: 100, hydrate: false }))
+			// ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01:
+			// Wrap the listHistory call with a caller-class attribution so
+			// the diagnostic can attribute listSessions counts to this entry
+			// point. The wrapper is allocation-light and short-circuits when
+			// the diagnostic is not enabled (per ACT section 12).
+			const sdkTaskHistory = await withListSessionsCaller(SessionListingCallerClass.WEBVIEW_STATE_PROJECTION, () =>
+				this.taskHistory.listHistory({ limit: 100, hydrate: false }),
+			)
+			const sdkTaskHistoryMapped = sdkTaskHistory
 				.map(sessionHistoryRecordToHistoryItem)
 				.filter((item) => item.ts && item.task)
 				.sort((a, b) => b.ts - a.ts)
@@ -5110,7 +5125,7 @@ export class Controller {
 			for (const item of legacyTaskHistory) {
 				mergedTaskHistoryById.set(item.id, item)
 			}
-			for (const item of sdkTaskHistory) {
+			for (const item of sdkTaskHistoryMapped) {
 				mergedTaskHistoryById.set(item.id, item)
 			}
 
