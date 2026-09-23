@@ -10,23 +10,27 @@
  * The wiring:
  *   1. Installs the sink IF AND ONLY IF the allocation profiler is armed.
  *   2. Provides `withListSessionsCaller(class, fn)` — the production-side
- *      helper that sets the transient caller-class slot SYNCHRONOUSLY
- *      before invoking the wrapped call.
+ *      helper that runs the wrapped call inside an AsyncLocalStorage
+ *      scope tagged with `class`. The deep `await`s inside the wrapped
+ *      promise read back the SAME class via
+ *      `consumeActiveListSessionsCaller()`.
  *   3. Wires the diagnostic lifecycle to the allocation profiler.
  *
- * ZERO-COST WHEN DISABLED (per ACT §12):
+ * OVERHEAD (per ACT §12 + HALT_SLAC_DIAGNOSTIC_AUTHORITY_FALSE_GREEN P1):
  *   When the allocation profiler is NOT armed, this module does NOT
- *   install the sink. The SDK wrappers' `getSessionListingDiagnosticSink()`
- *   returns `undefined`.
+ *   install the sink. The SDK wrappers'
+ *   `getSessionListingDiagnosticSink()` returns `undefined`, so the
+ *   hot-path cost is one optional-property read + nothing else.
  */
 
 import {
 	__resetActiveListSessionsCallerForTests,
 	__resetSessionListingDiagnosticSinkForTests,
+	consumeActiveListSessionsCaller as _consumeActiveListSessionsCaller,
+	runInListSessionsCallerContext as _runInListSessionsCallerContext,
 	SessionListingCallerClass,
 	type SessionListingCallerClassValue,
 	type SessionListingDiagnosticSink,
-	setActiveListSessionsCaller,
 	setSessionListingDiagnosticSink,
 } from "@cline/core"
 
@@ -39,12 +43,14 @@ import {
 	resetSessionListingCausalityCounters,
 } from "./session-listing-allocation-diagnostic"
 
-export {
-	buildSessionListingDiagnosticSink,
-	setSessionListingDiagnosticSink,
-	setActiveListSessionsCaller,
-	type SessionListingDiagnosticSink,
-}
+export { buildSessionListingDiagnosticSink, setSessionListingDiagnosticSink, type SessionListingDiagnosticSink }
+
+/**
+ * Diagnostic-only re-export so callers that wrap
+ * `withListSessionsCaller` can read back the SAME `caller` value
+ * via the SAME module instance that issued the run.
+ */
+export { _consumeActiveListSessionsCaller as consumeActiveListSessionsCaller }
 
 // =============================================================================
 // Lifecycle: install / uninstall the sink
@@ -75,16 +81,16 @@ export function uninstallSessionListingCausalityDiagnostic(): void {
  * reaches `UnifiedSessionPersistenceService.listSessions`) with a
  * caller-class attribution.
  *
- * RACE SAFETY (per ACT §11):
- *   - `setActiveListSessionsCaller(caller)` is invoked SYNCHRONOUSLY
- *     before `fn()` is invoked. Under JS's single-threaded model,
- *     this guarantees the SDK wrapper reads the slot we just set.
- *   - The `await` happens INSIDE `fn()` (the wrapped promise), not
- *     between the set and the call.
+ * RACE SAFETY (per HALT_SLAC_DIAGNOSTIC_AUTHORITY_FALSE_GREEN P0-2):
+ *   - `runInListSessionsCallerContext(caller, fn)` runs `fn` inside
+ *     an AsyncLocalStorage scope. The Node.js AsyncLocalStorage
+ *     primitive is explicitly designed to preserve a store value
+ *     across `await` boundaries within a single async chain.
+ *   - Distinct concurrent callers each see their own class — the
+ *     ALS store is RE-ENTRANT, not a process-global mutable slot.
  */
 export async function withListSessionsCaller<T>(caller: SessionListingCallerClassValue, fn: () => Promise<T>): Promise<T> {
-	setActiveListSessionsCaller(caller)
-	return await fn()
+	return await _runInListSessionsCallerContext(caller, fn)
 }
 
 // =============================================================================

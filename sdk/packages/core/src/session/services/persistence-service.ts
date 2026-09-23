@@ -34,11 +34,11 @@ import { withSessionHistoryOriginMetadata } from "../history-origin";
 import type { SessionCompactionState } from "../models/session-compaction";
 import type { SessionRow } from "../models/session-row";
 import { SessionManifestStore } from "../stores/session-manifest-store";
+import { TeamChildSessionManager } from "../team";
 import {
 	consumeActiveListSessionsCaller,
 	getSessionListingDiagnosticSink,
 } from "./session-listing-diagnostic-sink";
-import { TeamChildSessionManager } from "../team";
 
 export type { PersistedSessionUpdateInput, SessionPersistenceAdapter };
 

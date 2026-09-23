@@ -918,7 +918,7 @@ export {
 	consumeActiveListSessionsCaller,
 	getSessionListingDiagnosticSink,
 	peekActiveListSessionsCaller,
-	setActiveListSessionsCaller,
+	runInListSessionsCallerContext,
 	setSessionListingDiagnosticSink,
 	type SessionListingDiagnosticSink,
 	__resetActiveListSessionsCallerForTests,

@@ -12,13 +12,25 @@
  * wiring time. When the sink is undefined (default), the production
  * methods incur ONE additional `undefined`-check + nothing else.
  *
- * Caller classification uses a transient module-scoped slot: the
- * extension host sets `setActiveListSessionsCaller(class)` BEFORE
- * calling `listHistory`, and the SDK wrappers read it via
- * `consumeActiveListSessionsCaller()` so the actual
- * `recordListSessionsCall(caller)` invocation carries the right
- * class without modifying any production signature.
+ * Caller-class correlation (per HALT_SLAC_DIAGNOSTIC_AUTHORITY_FALSE_GREEN P0-2):
+ *   - Uses `AsyncLocalStorage` to thread the active caller class
+ *     through the async call chain. The producer
+ *     (`withListSessionsCaller(class, fn)` in
+ *     `apps/vscode/src/sdk/session-listing-diagnostic-runtime.ts`)
+ *     runs the wrapped promise inside
+ *     `listSessionsCallerContext.run(class, fn)` so every
+ *     suspended continuation (including the deep `await`s inside
+ *     `listHistory → listSessions`) reads back the SAME class.
+ *   - The consumer (`consumeActiveListSessionsCaller()`) reads
+ *     the currently-stored class from the ALS store. This is
+ *     documented as safe across `await` boundaries per Node.js
+ *     AsyncLocalStorage semantics.
+ *   - There is no longer a process-global transient slot: if the
+ *     caller never ran `withListSessionsCaller`, the consumer
+ *     reads UNKNOWN, which is what we want for untyped traffic.
  */
+
+import { AsyncLocalStorage } from "node:async_hooks"
 
 /**
  * Caller-class integer constants. MUST stay in sync with the
@@ -82,60 +94,55 @@ export function __resetSessionListingDiagnosticSinkForTests(): void {
 }
 
 // =============================================================================
-// Transient caller-class slot (per ACT §11)
+// AsyncLocalStorage-based caller-class correlation (per ACT §11, corrected P0-2)
 // =============================================================================
 
 /**
- * Transient active-listSessions caller class. The extension host
- * sets this immediately before calling `listHistory`; the SDK
- * wrappers consume it (one-shot read) when the actual
- * `recordListSessionsCall` fires.
- *
- * RACE SAFETY: this slot is safe under JS's single-threaded
- * execution model provided the production-side helper
+ * AsyncLocalStorage that propagates the active-listSessions caller
+ * class through the async call chain. The producer
  * (`withListSessionsCaller(class, fn)` in
  * `apps/vscode/src/sdk/session-listing-diagnostic-runtime.ts`)
- * invokes `setActiveListSessionsCaller` SYNCHRONOUSLY before
- * returning the wrapped promise. The set MUST happen in the same
- * synchronous block as the awaited call so no other async chain
- * can interleave between the set and the SDK wrapper's read.
+ * scopes the wrapped promise inside `listSessionsCallerContext.run`,
+ * so every `await` suspension inside `fn` (including the deep
+ * `await this.manifestStore.readSessionManifestTitle(row.sessionId)`
+ * inside `Promise.all`) sees the SAME `caller` value via
+ * `consumeActiveListSessionsCaller()`. Distinct concurrent
+ * callers each see their own.
  */
-let _activeListSessionsCaller: SessionListingCallerClassValue = SessionListingCallerClass.UNKNOWN
+const listSessionsCallerContext = new AsyncLocalStorage<SessionListingCallerClassValue>()
 
 /**
- * Set the caller class that the NEXT `listSessions` invocation
- * should be attributed to.
- */
-export function setActiveListSessionsCaller(
-	caller: SessionListingCallerClassValue,
-): void {
-	_activeListSessionsCaller = caller
-}
-
-/**
- * Consume the caller class for the current `listSessions`
- * invocation. Returns UNKNOWN if no caller was set.
- *
- * Calling this RESETS the slot back to UNKNOWN so a missed reset
- * cannot leak the wrong class into a later call.
+ * Consume the caller class that the CURRENT `listSessions`
+ * invocation should be attributed to. Reads from the ALS store;
+ * falls back to UNKNOWN if no producer is in the call chain.
  */
 export function consumeActiveListSessionsCaller(): SessionListingCallerClassValue {
-	const cls = _activeListSessionsCaller
-	_activeListSessionsCaller = SessionListingCallerClass.UNKNOWN
-	return cls
+	return listSessionsCallerContext.getStore() ?? SessionListingCallerClass.UNKNOWN
 }
 
 /**
- * Peek the caller class WITHOUT consuming. Used by callers that
- * want to chain multiple calls without losing the class. Tests only.
+ * Run `fn` inside an AsyncLocalStorage scope tagged with `caller`.
+ * Replaces the deprecated transient-slot setter.
+ */
+export function runInListSessionsCallerContext<T>(
+	caller: SessionListingCallerClassValue,
+	fn: () => Promise<T>,
+): Promise<T> {
+	return listSessionsCallerContext.run(caller, fn)
+}
+
+/**
+ * Peek the caller class WITHOUT consuming. Used by diagnostic-only
+ * test code that wants to inspect the ALS store directly.
  */
 export function peekActiveListSessionsCaller(): SessionListingCallerClassValue {
-	return _activeListSessionsCaller
+	return consumeActiveListSessionsCaller()
 }
 
 /**
- * Test seam — reset the slot.
+ * Test seam — clear ALS state for the current execution chain.
+ * Production NEVER calls this.
  */
 export function __resetActiveListSessionsCallerForTests(): void {
-	_activeListSessionsCaller = SessionListingCallerClass.UNKNOWN
+	listSessionsCallerContext.enterWith(SessionListingCallerClass.UNKNOWN)
 }

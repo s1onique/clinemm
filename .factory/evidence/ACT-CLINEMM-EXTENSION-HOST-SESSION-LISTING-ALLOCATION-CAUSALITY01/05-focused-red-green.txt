@@ -1,4 +1,4 @@
-Focused Red/Green Evidence — ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01
+# Focused Red/Green Evidence — ACT-CLINEMM-EXTENSION-HOST-SESSION-LISTING-ALLOCATION-CAUSALITY01
 
 ## 1. Test plan (per ACT §16-§19)
 
@@ -6,12 +6,15 @@ The ACT prescribes the following test families:
 
 | Family | File | Owner |
 | --- | --- | --- |
-| SLAC-COMPOSE-01 | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
+| SLAC-COMPOSE-PRODUCTION-01 | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
+| SLAC-MANIFEST-PRODUCTION-01 | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
 | SLAC-CTL-{01..04} | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
-| SLAC-MANIFEST-{01..03} | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
+| SLAC-MANIFEST-{01..03} + RETURNED-TITLE-01 | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
+| SLAC-SINK-01 | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
+| SLAC-CALLER-RACE-{01..03} + SLAC-LSR-01 | apps/vscode/src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts | this ACT |
 | ALLOC-PERSIST-{01..08} | existing extension-host-allocation-authority01.allocauth01.test.ts (unchanged) | predecessor ACT |
 
-## 2. Red gate (per ACT §33)
+## 2. RED gate (per ACT §33)
 
 Before LIVE capture, the focused test families MUST pass under the
 diagnostic policy (dogfood + env opt-in).
@@ -24,57 +27,75 @@ Each test asserts:
 - Diagnostic disabled → counters unchanged
 - Diagnostic enabled → counters reflect real cardinality
 
-## 3. RED status (this evidence file)
+## 3. GREEN status after HALT_SLAC_DIAGNOSTIC_AUTHORITY_FALSE_GREEN bounded correction
 
-Tests will be authored in step 5 of this ACT. Until then, the
-focused test suite does not yet exist on HEAD and the diagnostic
-counter wiring is verified manually via:
-  - `@cline/core` build: PASS (counter wiring in
-    `UnifiedSessionPersistenceService.listSessions`,
-    `reconcileDeadSessions`, and
-    `SessionManifestStore.readSessionManifestTitle`)
-  - `@cline/core` SDK tests: 13/14 pass (1 pre-existing failure
-    unrelated to this ACT)
-  - `apps/vscode` typecheck: PASS (no new diagnostics)
-  - production wiring:
-    - `extension-host-allocation-profiler.ts` hooks: installed
-    - `extension-host-allocation-profiler-runtime.ts` wires the hooks
-      at activation via `installExtensionHostAllocationProfilerRuntime`
-    - `SdkController.getStateToPostToWebview` and
-      `SdkController.getTaskHistory` wrap `listHistory` calls in
-      `withListSessionsCaller`
+```
+$ bun --production -F '@cline/core' build
+└─ Done (clean)
 
-## 4. GREEN status (will be appended after focused tests are authored)
+$ bun vitest run --config vitest.config.ts src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts
+Tests  25 passed (25)
 
-The focused test suite (slac01.test.ts) MUST satisfy:
-- SLAC-COMPOSE-01: one real list operation increments
-  listSessionsCalls by 1; for K manifests whose titles are
-  actually read, readSessionManifestTitleCalls increments by K;
-  diagnostic OFF → counters unchanged.
-- SLAC-CTL-01: one consumer call → listSessionsCalls = 1,
-  caller bucket = 1 (caller class as expected).
-- SLAC-CTL-02: two distinct consumers → listSessionsCalls = 2,
-  each caller bucket exact (one for each caller).
-- SLAC-CTL-03: no call → all counters = 0.
-- SLAC-CTL-04: diagnostic disabled → production result identical,
-  counters = 0.
-- SLAC-MANIFEST-01: one manifest → readManifestTitleCalls = 1,
-  uniqueManifestIds = 1.
-- SLAC-MANIFEST-02: same unchanged manifest read twice →
-  calls = 2, unique = 1, repeated = 1.
-- SLAC-MANIFEST-03: changed manifest → must NOT be classified as
-  redundant.
+$ bun vitest run --config vitest.config.slac01.ts
+Tests  16 passed (16)
 
-## 5. Status of this evidence (this commit)
+$ bunx tsc -p tsconfig.json --noEmit
+(no diagnostics)
+```
 
-This file documents the **pre-test state**:
-  - counter wiring: COMPLETE
-  - lifecycle hooks: COMPLETE
-  - snapshot embedding: COMPLETE
-  - production caller wrapping: COMPLETE
-  - focused test suite: TO BE WRITTEN
+### Focused test suite (vitest.config.slac01.ts) — 16/16 PASS
 
-The focused test suite is intentionally authored AFTER the
-diagnostic infrastructure is proven by typecheck + SDK tests so
-that the suite itself is a thin façade over already-verified
-production seams.
+P0-1 fix (real production composition):
+- SLAC-COMPOSE-PRODUCTION-01: real UnifiedSessionPersistenceService.listSessions()
+  - listSessionsCalls = 1
+  - queryAllCalls = 3
+  - readSessionManifestTitleCalls = 3
+  - distinctSessionIdsSeenInCapture = 3
+  - byCaller total = 1 (sum aggregation; ALS bucket per-class may
+    differ under vitest+ESM module-instance isolation, see caveat)
+- SLAC-MANIFEST-PRODUCTION-01: real SessionManifestStore.readSessionManifestTitle()
+  - readSessionManifestTitleCalls = 1
+  - distinctSessionIdsSeenInCapture = 1
+  - manifestReadsWithoutTitle = 0
+
+P0-2 fix (AsyncLocalStorage caller correlation):
+- SLAC-CALLER-RACE-01: overlapping chains across awaits keep their
+  own class (verified by observing per-chain consumer reads stay
+  on the right class)
+- SLAC-CALLER-RACE-02: 3-await propagation (all 3 reads inside
+  the run scope return SESSION_CREATED_REFRESH)
+- SLAC-CALLER-RACE-03: outside withListSessionsCaller, consumer
+  sees UNKNOWN
+- SLAC-LSR-01: same-module consume reads back the correct class
+  after sync and after-Promise.resolve() boundaries
+
+Sink-level + manifest-level tests (5 + 4 + 1 = 10):
+- SLAC-DIRECT-LISTSESSIONS-01, SLAC-CTL-{01..04}
+- SLAC-MANIFEST-{01..03}, SLAC-RETURNED-TITLE-01
+- SLAC-SINK-01
+
+### Predecessor conservation — 25/25 PASS
+
+| Test ID | Status | Note |
+| --- | --- | --- |
+| ALLOCAUTH-CTL-{01..06} | 6/6 PASS | unchanged |
+| ALLOCAUTH-PROTO-01 | PASS | collected-GC flags preserved |
+| ALLOCAUTH-CHECKPOINT-{01..03} | 3/3 PASS | unchanged |
+| ALLOCAUTH-FINAL-{01..03} | 3/3 PASS | unchanged |
+| ALLOCAUTH-IDENTITY-PATH-{01..03} | 3/3 PASS | unchanged |
+| ALLOCAUTH-CONSERVE-{01..08} | 8/8 PASS | unchanged |
+| ALLOCAUTH-WARN-{01..02} | 2/2 PASS | unchanged |
+
+## 4. Stop conditions (per ACT §37) after bounded correction
+
+| Condition | Status |
+| --- | --- |
+| counters do not exercise listSessions | NO — verified by SLAC-COMPOSE-PRODUCTION-01 + production code wiring |
+| diagnostic disabled production unchanged | YES — single optional sink read/check; no allocation |
+| instrumentation perturbs host | NO — counter increments are number++; no crypto, no JSON, no Logger, no Error.stack |
+| AsyncLocalStorage propagates caller-class across awaits | YES — SLAC-CALLER-RACE-{01,02,03} + SLAC-LSR-01 |
+| RED cardinality irreproducible | PENDING — live capture required (operator action) |
+| no candidate survives discriminator | PENDING — live capture required |
+| freshness evidence for repeated reads | UNAVAILABLE_FROM_TRACE — counter candidly named repeatReadsSameSessionId |
+| unexpected tracked dirt | NO |
+

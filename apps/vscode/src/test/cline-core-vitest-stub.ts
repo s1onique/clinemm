@@ -645,9 +645,9 @@ export {
 	consumeActiveListSessionsCaller,
 	getSessionListingDiagnosticSink,
 	peekActiveListSessionsCaller,
+	runInListSessionsCallerContext,
 	SessionListingCallerClass,
 	type SessionListingCallerClassValue,
 	type SessionListingDiagnosticSink,
-	setActiveListSessionsCaller,
 	setSessionListingDiagnosticSink,
 } from "../../../../sdk/packages/core/src/session/services/session-listing-diagnostic-sink"
