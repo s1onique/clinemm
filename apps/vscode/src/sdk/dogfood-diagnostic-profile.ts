@@ -135,10 +135,9 @@ import {
 } from "./continuation-cardinality-authority"
 import {
 	isExtensionHostHotloopDiagnosticEnabled as _isExtensionHostHotloopDiagnosticEnabled,
-	isExtensionHostHotloopQueueLogEnabled as _isExtensionHostHotloopQueueLogEnabled,
 	setExtensionHostHotloopDiagnosticEnabled,
-	setExtensionHostHotloopQueueLogEnabled,
 } from "./extension-host-hotloop-diagnostic"
+import { applyExtensionHostQueueLogPolicy } from "./extension-host-queue-log-policy"
 import {
 	isTaskHeaderSelectorInputCaptureEnabled as _isTaskHeaderSelectorInputCaptureEnabled,
 	setTaskHeaderSelectorInputCaptureEnabled,
@@ -960,13 +959,14 @@ function _isContinuationCardinalityAuthorityCaptureEnabledForActivation(): boole
  *   isDogfood === true  -> diagnostic ON (counters / phase writes)
  *   isDogfood === false -> diagnostic OFF
  *
- * Two distinct gates are resolved (CORRECTION01):
+ * Two distinct gates are resolved (CORRECTION01 / CORRECTION02):
  *
  *   1. Diagnostic enablement (counters + nested depth + phase write
  *      witness). Defaulted by the dogfood profile. The
  *      `CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC` env knob can force OFF
  *      (truthy disable: 0/off/false) regardless of profile, but
  *      cannot force ON in public (matches ACT §18 invariant).
+ *      Owned by THIS module.
  *
  *   2. Synchronous queue-log opt-in (the breadcrumb Logger.log
  *      inside SdkSessionEventCoordinator.logQueueEvents). DEFAULT
@@ -975,9 +975,14 @@ function _isContinuationCardinalityAuthorityCaptureEnabledForActivation(): boole
  *      is set. Public installs cannot enable this regardless of
  *      env var (per ACT §18 + the LIVE failure provenance).
  *
- * The two gates are decoupled so removing the diagnostic (per
- * REMOVAL_TRIGGER in extension-host-hotloop-diagnostic.ts) does
- * NOT silently re-arm the synchronous breadcrumb hot path.
+ *      As of CORRECTION02, this gate is OWNED by the permanent
+ *      policy module `extension-host-queue-log-policy.ts`. This
+ *      helper merely DELEGATES Gate 2 to that module via
+ *      `applyExtensionHostQueueLogPolicy(isDogfood, env)`. The
+ *      diagnostic no longer owns the production-soundness gate.
+ *
+ *      Removing the diagnostic does NOT remove this gate. The gate
+ *      is permanent for the lifetime of the extension host.
  */
 export function applyExtensionHostHotloopDiagnosticProfile(
 	isDogfood: boolean,
@@ -1013,33 +1018,16 @@ export function applyExtensionHostHotloopDiagnosticProfile(
 	}
 
 	// Gate 2 — synchronous queue-log opt-in (the production soundness
-	// gate). DEFAULT OFF. Public never granted. Dogfood requires
-	// CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=<truthy>.
-	const qlWas = _isExtensionHostHotloopQueueLogEnabled()
-	let qlShould = false
-	if (isDogfood) {
-		const qlEnvRaw = env["CLINEMM_DIAG_HOTLOOP_QUEUE_LOG"]
-		if (typeof qlEnvRaw === "string" && qlEnvRaw.length > 0) {
-			const normalized = qlEnvRaw.trim().toLowerCase()
-			if (normalized === "1" || normalized === "true" || normalized === "yes") {
-				qlShould = true
-			}
-		}
-	}
-	let qlFlipped = false
-	if (qlShould && !qlWas) {
-		setExtensionHostHotloopQueueLogEnabled(true)
-		qlFlipped = true
-	} else if (!qlShould && qlWas) {
-		setExtensionHostHotloopQueueLogEnabled(false)
-		qlFlipped = true
-	}
+	// gate). Delegated to the PERMANENT policy module
+	// (extension-host-queue-log-policy.ts). The diagnostic does NOT
+	// own this gate; it merely calls the permanent resolver.
+	const qlResult = applyExtensionHostQueueLogPolicy(isDogfood, env)
 
 	return {
 		enabled: diagShould,
 		flipped: diagFlipped,
-		queueLogEnabled: qlShould,
-		queueLogFlipped: qlFlipped,
+		queueLogEnabled: qlResult.enabled,
+		queueLogFlipped: qlResult.flipped,
 	}
 }
 

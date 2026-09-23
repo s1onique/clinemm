@@ -1,9 +1,9 @@
 /**
  * ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01
  *
- * Extension-host hot-loop diagnostic counters. Production-seam
- * counters that pin the load-bearing witness for the EHLOOP01 /
- * extension-host-stability qualification.
+ * TEMPORARY Extension-host hot-loop diagnostic counters.
+ * Production-seam counters that pin the load-bearing witness for
+ * the EHLOOP01 / extension-host-stability qualification.
  *
  * The counters measure:
  *
@@ -24,11 +24,46 @@
  *   - NO STATE-SEMANTIC DELTA: counters NEVER change observable behavior.
  *   - NO SYNCHRONOUS DISK WRITE: counters are RAM-only.
  *
- * REMOVAL_TRIGGER (per ACT §34): once the host-stability repair is
- * GREEN on LIVE qualification, OR CAPTURE_INSUFFICIENT is declared,
- * the counter module + the activation helper + the host-side dump
- * runtime + the Command Palette registration + the package.json
- * command declaration MUST be removed TOGETHER.
+ * ============================================================================
+ * THIS MODULE OWERS OBSERVATION ONLY (CORRECTION02).
+ * ============================================================================
+ *
+ * As of CORRECTION02, this module owns NO production-soundness gate.
+ * The synchronous `Logger.log` breadcrumb in `logQueueEvents` is gated
+ * by the PERMANENT policy module
+ * `extension-host-queue-log-policy.ts`. The diagnostic merely observes
+ * whether the breadcrumb fired (via `logQueueEventsCalls`,
+ * `logQueueEventsLogCalls`, `logQueueEventsSuppressedByProfile`) — it
+ * does not decide whether it can fire.
+ *
+ * This separation means removing the diagnostic post-qualification
+ * (per REMOVAL_TRIGGER below) does NOT touch the production policy.
+ *
+ * REMOVAL_TRIGGER (per ACT §34, refined in CORRECTION02):
+ *   Once the host-stability repair is GREEN on LIVE qualification, OR
+ *   CAPTURE_INSUFFICIENT is declared, the following MUST be removed
+ *   TOGETHER:
+ *
+ *     - this counter module (extension-host-hotloop-diagnostic.ts)
+ *     - the activation helper (applyExtensionHostHotloopDiagnosticProfile
+ *       in dogfood-diagnostic-profile.ts — but ONLY the diagnostic-
+ *       enablement half; the queue-log half stays and migrates to a
+ *       permanent call site if needed)
+ *     - the host-side dump runtime
+ *     - the Command Palette registration
+ *     - the registry entry
+ *     - the package.json command declaration
+ *
+ *   What MUST remain after removal:
+ *
+ *     - extension-host-queue-log-policy.ts (PERMANENT)
+ *     - applyExtensionHostQueueLogPolicy() invocations in the
+ *       dogfood profile resolver (PERMANENT)
+ *     - shouldEmitExtensionHostQueueLog() consulted in logQueueEvents
+ *       (PERMANENT)
+ *
+ *   See EHLOOP-REMOVAL-01 for the structural test that pins this
+ *   invariant.
  */
 
 const MAX_BUCKETS = 32
@@ -58,33 +93,6 @@ let _counters: ExtensionHostHotloopCounters = freshCounters()
 
 let _nestedDepth = 0
 
-// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 (CORRECTION01):
-//
-// Permanent production rule. The synchronous `Logger.log` breadcrumb
-// inside `SdkSessionEventCoordinator.logQueueEvents` is gated behind
-// this independent opt-in (NOT the diagnostic enablement bit). It is
-// DEFAULT_OFF in every profile — public, dogfood, or otherwise —
-// because the call site has been demonstrated (CPU profile
-// exthost-66cdb2.cpuprofile) to monopolize the extension-host thread
-// while the dogfood profile is enabled.
-//
-// Two distinct gates:
-//
-//   _enabled             — counters + per-event buckets + nested
-//                           depth tracker. Cheap (bounded Maps,
-//                           numeric increments). Bound to dogfood.
-//
-//   _queueLogEnabled     — synchronous Logger.log breadcrumb inside
-//                           logQueueEvents. The dogfood profile does
-//                           NOT enable this. Operators must opt in
-//                           explicitly via the env knob
-//                           CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=<truthy>
-//                           (only honored in dogfood).
-//
-// The two are decoupled so removing the temporary diagnostic does not
-// resurrect the hot path.
-let _queueLogEnabled = false
-
 function freshCounters(): ExtensionHostHotloopCounters {
 	return {
 		sessionEvents: 0,
@@ -112,20 +120,6 @@ export function isExtensionHostHotloopDiagnosticEnabled(): boolean {
 
 export function setExtensionHostHotloopDiagnosticEnabled(enabled: boolean): void {
 	_enabled = enabled
-}
-
-// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 (CORRECTION01):
-// Independent opt-in for the synchronous Logger.log breadcrumb inside
-// logQueueEvents. DEFAULT_OFF in every profile. See module docstring
-// for the rationale (this gate is decoupled from the diagnostic
-// enablement so removing the diagnostic does not silently re-arm the
-// hot path).
-export function isExtensionHostHotloopQueueLogEnabled(): boolean {
-	return _queueLogEnabled
-}
-
-export function setExtensionHostHotloopQueueLogEnabled(enabled: boolean): void {
-	_queueLogEnabled = enabled
 }
 
 export function resetExtensionHostHotloopDiagnostic(): void {
@@ -168,29 +162,6 @@ export function recordExtensionHostHotloopLogQueueEvent(opts: { readonly produce
 	if (!_enabled) return
 	_counters.logQueueEventsCalls++
 	if (opts.producedLog) {
-		_counters.logQueueEventsLogCalls++
-	} else {
-		_counters.logQueueEventsSuppressedByProfile++
-	}
-}
-
-// ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 (CORRECTION01):
-// Records whether the synchronous Logger.log breadcrumb in
-// logQueueEvents was permitted by the queue-log opt-in gate
-// (independent of the diagnostic enablement).
-//
-//   permitted === true  -> Logger.log fires (queueLogEnabled was on).
-//   permitted === false -> Logger.log was suppressed by the
-//                           permanent production rule (queueLogEnabled
-//                           was off; the dogfood profile does NOT
-//                           grant this).
-//
-// This counter is captured even when the diagnostic is OFF so the
-// post-mortem can always confirm the permanent rule held during a
-// LIVE failure (no opt-in knob change can shift the witness).
-export function recordExtensionHostHotloopQueueLogPermitted(permitted: boolean): void {
-	if (!_enabled) return
-	if (permitted) {
 		_counters.logQueueEventsLogCalls++
 	} else {
 		_counters.logQueueEventsSuppressedByProfile++

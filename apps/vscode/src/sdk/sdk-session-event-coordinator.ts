@@ -12,11 +12,11 @@ import { captureContinuationCardinalityAuthorityRecord } from "./continuation-ca
 import {
 	enterExtensionHostHotloopHandleSessionEvent,
 	isExtensionHostHotloopDiagnosticEnabled,
-	isExtensionHostHotloopQueueLogEnabled,
 	leaveExtensionHostHotloopHandleSessionEvent,
 	recordExtensionHostHotloopLogQueueEvent,
 	recordExtensionHostHotloopSessionEvent,
 } from "./extension-host-hotloop-diagnostic"
+import { shouldEmitExtensionHostQueueLog } from "./extension-host-queue-log-policy"
 import type { MessageTranslatorState, TranslationResult } from "./message-translator"
 import { translateSessionEvent } from "./message-translator"
 import { PROVIDER_FAILURE_ERROR_TYPE, PROVIDER_FAILURE_PHASE, type ProviderFailureTelemetry } from "./provider-failure-telemetry"
@@ -1090,13 +1090,16 @@ export class SdkSessionEventCoordinator {
 		// `outputChannel.appendLine` synchronously stalls the
 		// extension-host thread.
 		//
-		// PERMANENT PRODUCTION RULE (CORRECTION01):
-		// The synchronous breadcrumb is gated behind an INDEPENDENT
-		// opt-in (`isExtensionHostHotloopQueueLogEnabled`) that is
+		// PERMANENT PRODUCTION RULE (CORRECTION01 / CORRECTION02):
+		// The synchronous breadcrumb is gated behind
+		// `shouldEmitExtensionHostQueueLog()` (a function owned by
+		// the PERMANENT policy module
+		// `./extension-host-queue-log-policy.ts`). The function is
 		// DEFAULT_OFF in every profile — public, dogfood, or
 		// otherwise. The dogfood profile does NOT grant this. The
 		// diagnostic enablement (counters / nested depth / phase
-		// write witness) is a separate, cheaper gate.
+		// write witness) is a separate, cheaper gate, and does NOT
+		// own this decision.
 		//
 		// Decoupling rationale: the dogfood profile IS the environment
 		// where the LIVE failure was captured (exthost-66cdb2.cpuprofile,
@@ -1104,8 +1107,9 @@ export class SdkSessionEventCoordinator {
 		// that depends on the diagnostic enablement bit to also be
 		// the production-soundness gate would, after the diagnostic
 		// is removed, leave the hot path UNREPAIRED. The two gates
-		// must therefore be independent.
-		if (!isExtensionHostHotloopQueueLogEnabled()) {
+		// must therefore be independent, AND the production gate must
+		// live outside the diagnostic module entirely.
+		if (!shouldEmitExtensionHostQueueLog()) {
 			// Permanent default: synchronous breadcrumb suppressed.
 			// Counters (when armed) record the suppression so the
 			// post-mortem can verify the permanent rule held.

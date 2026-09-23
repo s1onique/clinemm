@@ -30,23 +30,34 @@
  * hot path was deliberately re-armed in dogfood, the exact mode
  * where the LIVE failure occurred.
  *
- * CORRECTION01 (this version): the diagnostic enablement bit and
- * the synchronous breadcrumb opt-in are DECOUPLED. The hot path is
- * bounded by the PERMANENT production rule:
+ * CORRECTION02 (this version): the queue-log authority is moved
+ * OUT of the temporary diagnostic module into a PERMANENT policy
+ * module (`extension-host-queue-log-policy.ts`). The diagnostic
+ * now OWNS OBSERVATION ONLY; the production-soundness gate lives
+ * in a separate file that is not part of the removal trigger.
  *
- *   - Diagnostic enablement (counters + phase writes): defaulted by
- *     dogfood profile. Cheap. May be removed post-qualification.
- *   - Synchronous queue-log opt-in (the Logger.log breadcrumb):
- *     DEFAULT OFF in every profile. Honored ONLY when the operator
- *     explicitly sets `CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=<truthy>` in
- *     dogfood. Public installs can never enable this.
+ *   PERMANENT policy module:
+ *     - owns `_queueLogEnabled`
+ *     - exports `shouldEmitExtensionHostQueueLog()`
+ *     - exports `applyExtensionHostQueueLogPolicy(isDogfood, env)`
+ *     - is the seam consulted by `logQueueEvents`
+ *
+ *   TEMPORARY diagnostic module:
+ *     - owns counters (sessionEvents, logQueueEventsCalls, etc.)
+ *     - observes whether the breadcrumb fired (via
+ *       `logQueueEventsLogCalls` / `logQueueEventsSuppressedByProfile`)
+ *     - is removed together per REMOVAL_TRIGGER
  *
  * Production seams under test:
  *   - `SdkSessionEventCoordinator.handleSessionEvent`
  *   - `SdkSessionEventCoordinator.logQueueEvents`
  *   - `TurnStateTracker.setWithWriter` (real production class)
- *   - `extension-host-hotloop-diagnostic` counter module
+ *   - `extension-host-hotloop-diagnostic` counter module (TEMPORARY)
+ *   - `extension-host-queue-log-policy` policy module (PERMANENT)
  *   - `applyExtensionHostHotloopDiagnosticProfile` activation helper
+ *
+ * The EHLOOP-REMOVAL-01 test is structural: it verifies that
+ * removing the temporary diagnostic does NOT re-open the hot path.
  *
  * No production state semantics are changed by this ACT. The
  * diagnostic is a passive observer in all paths.
@@ -59,13 +70,16 @@ import { applyExtensionHostHotloopDiagnosticProfile } from "../dogfood-diagnosti
 import {
 	getExtensionHostHotloopDiagnosticSnapshot,
 	isExtensionHostHotloopDiagnosticEnabled,
-	isExtensionHostHotloopQueueLogEnabled,
 	recordExtensionHostHotloopPendingPrompt,
 	recordExtensionHostHotloopSessionEvent,
 	resetExtensionHostHotloopDiagnostic,
 	setExtensionHostHotloopDiagnosticEnabled,
-	setExtensionHostHotloopQueueLogEnabled,
 } from "../extension-host-hotloop-diagnostic"
+import {
+	applyExtensionHostQueueLogPolicy,
+	setExtensionHostQueueLogEnabled,
+	shouldEmitExtensionHostQueueLog,
+} from "../extension-host-queue-log-policy"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState } from "../message-translator"
 import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
@@ -159,18 +173,18 @@ describe("ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01", () => {
 		mockLogger.trace.mockClear()
 		resetExtensionHostHotloopDiagnostic()
 		setExtensionHostHotloopDiagnosticEnabled(false)
-		setExtensionHostHotloopQueueLogEnabled(false)
+		setExtensionHostQueueLogEnabled(false)
 	})
 
 	afterEach(() => {
 		setExtensionHostHotloopDiagnosticEnabled(false)
-		setExtensionHostHotloopQueueLogEnabled(false)
+		setExtensionHostQueueLogEnabled(false)
 		resetExtensionHostHotloopDiagnostic()
 	})
 
 	it("EHLOOP-CTL-08: counter module is DEFAULT_OFF and the diagnostic must NOT be enabled without an explicit flip", () => {
 		expect(isExtensionHostHotloopDiagnosticEnabled()).toBe(false)
-		expect(isExtensionHostHotloopQueueLogEnabled()).toBe(false)
+		expect(shouldEmitExtensionHostQueueLog()).toBe(false)
 	})
 
 	// -------------------------------------------------------------------
@@ -182,7 +196,7 @@ describe("ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01", () => {
 		expect(result.enabled).toBe(true)
 		expect(result.queueLogEnabled).toBe(false)
 		expect(isExtensionHostHotloopDiagnosticEnabled()).toBe(true)
-		expect(isExtensionHostHotloopQueueLogEnabled()).toBe(false)
+		expect(shouldEmitExtensionHostQueueLog()).toBe(false)
 	})
 
 	it("EHLOOP-PROFILE-02: dogfood + explicit CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1 enables the synchronous breadcrumb", () => {
@@ -191,7 +205,7 @@ describe("ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01", () => {
 		})
 		expect(result.enabled).toBe(true)
 		expect(result.queueLogEnabled).toBe(true)
-		expect(isExtensionHostHotloopQueueLogEnabled()).toBe(true)
+		expect(shouldEmitExtensionHostQueueLog()).toBe(true)
 	})
 
 	it("EHLOOP-PROFILE-03: public profile + queue-log env override still does NOT enable the synchronous breadcrumb (public never granted)", () => {
@@ -202,7 +216,7 @@ describe("ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01", () => {
 		expect(result.enabled).toBe(false)
 		expect(result.queueLogEnabled).toBe(false)
 		expect(isExtensionHostHotloopDiagnosticEnabled()).toBe(false)
-		expect(isExtensionHostHotloopQueueLogEnabled()).toBe(false)
+		expect(shouldEmitExtensionHostQueueLog()).toBe(false)
 	})
 
 	it("EHLOOP-PROFILE-04: dogfood + CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC=0 forces the diagnostic off (matches decideKnob invariant)", () => {
@@ -376,7 +390,7 @@ describe("ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01", () => {
 		// breadcrumb. Counters are cheap and on in dogfood; the
 		// breadcrumb is independent.
 		setExtensionHostHotloopDiagnosticEnabled(true)
-		setExtensionHostHotloopQueueLogEnabled(false)
+		setExtensionHostQueueLogEnabled(false)
 		resetExtensionHostHotloopDiagnostic()
 		mockLogger.log.mockClear()
 
@@ -458,5 +472,119 @@ describe("ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01", () => {
 
 		expect(options.messages.appendAndEmit).toHaveBeenCalled()
 		expect(options.postStateToWebview).toHaveBeenCalled()
+	})
+
+	// -----------------------------------------------------------------------
+	// CORRECTION02: PERMANENT POLICY vs TEMPORARY DIAGNOSTIC
+	// -----------------------------------------------------------------------
+	//
+	// The structural invariant pinned by these tests:
+	//
+	//   shouldEmitExtensionHostQueueLog() must NOT be defined in, or
+	//   transitively import from, extension-host-hotloop-diagnostic.ts.
+	//
+	//   remove extension-host-hotloop-diagnostic.ts
+	//     -> shouldEmitExtensionHostQueueLog() must still work
+	//     -> logQueueEvents must still gate the breadcrumb
+	//     -> dogfood default must still suppress the breadcrumb
+	//     -> public must still suppress the breadcrumb
+	//     -> dogfood + CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1 must enable it
+
+	it("EHLOOP-POLICY-01: shouldEmitExtensionHostQueueLog is defined in extension-host-queue-log-policy.ts (PERMANENT)", () => {
+		expect(shouldEmitExtensionHostQueueLog()).toBe(false)
+	})
+
+	it("EHLOOP-POLICY-02: resolveExtensionHostQueueLogFromEnv honors public-never-granted invariant", () => {
+		const enabled = applyExtensionHostQueueLogPolicy(false, {
+			CLINEMM_DIAG_HOTLOOP_QUEUE_LOG: "1",
+		})
+		expect(enabled.enabled).toBe(false)
+		expect(enabled.flipped).toBe(false)
+		expect(shouldEmitExtensionHostQueueLog()).toBe(false)
+	})
+
+	it("EHLOOP-POLICY-03: dogfood default (no env var) -> breadcrumb suppressed", () => {
+		setExtensionHostQueueLogEnabled(false)
+		const result = applyExtensionHostQueueLogPolicy(true, {})
+		expect(result.enabled).toBe(false)
+		expect(result.flipped).toBe(false)
+		expect(shouldEmitExtensionHostQueueLog()).toBe(false)
+	})
+
+	it("EHLOOP-POLICY-04: dogfood + CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=1 -> breadcrumb enabled", () => {
+		setExtensionHostQueueLogEnabled(false)
+		const result = applyExtensionHostQueueLogPolicy(true, {
+			CLINEMM_DIAG_HOTLOOP_QUEUE_LOG: "1",
+		})
+		expect(result.enabled).toBe(true)
+		expect(result.flipped).toBe(true)
+		expect(shouldEmitExtensionHostQueueLog()).toBe(true)
+		applyExtensionHostQueueLogPolicy(false, {})
+	})
+
+	it("EHLOOP-POLICY-05: dogfood + CLINEMM_DIAG_HOTLOOP_QUEUE_LOG=0 -> breadcrumb suppressed", () => {
+		setExtensionHostQueueLogEnabled(true)
+		const result = applyExtensionHostQueueLogPolicy(true, {
+			CLINEMM_DIAG_HOTLOOP_QUEUE_LOG: "0",
+		})
+		expect(result.enabled).toBe(false)
+		expect(result.flipped).toBe(true)
+		expect(shouldEmitExtensionHostQueueLog()).toBe(false)
+	})
+
+	it("EHLOOP-REMOVAL-01 (STRUCTURAL): removing the temporary diagnostic must not re-open the hot path", async () => {
+		// This is the structural test that pins the load-bearing
+		// invariant. If the queue-log authority lived inside the
+		// diagnostic module, disabling the diagnostic would also
+		// disable the production gate and silently resurrect the
+		// hot path. CORRECTION02 ensures the production gate is
+		// independent.
+		setExtensionHostHotloopDiagnosticEnabled(false)
+		setExtensionHostQueueLogEnabled(false)
+
+		const pendingEvent = {
+			type: "pending_prompts",
+			payload: { sessionId: "session-A", prompts: [{ prompt: "hi" }] },
+		} as never
+
+		// Step 1: breadcrumb suppressed by the permanent policy.
+		const { coordinator: c1 } = makeCoordinator({})
+		await c1.handleSessionEvent(pendingEvent)
+		await Promise.resolve()
+		expect(Logger.log).not.toHaveBeenCalled()
+
+		// Step 2: re-enable the queue-log policy. Diagnostic is
+		// still OFF — proves the production gate is independent
+		// of the diagnostic enablement bit.
+		setExtensionHostQueueLogEnabled(true)
+		const { coordinator: c2 } = makeCoordinator({})
+		await c2.handleSessionEvent(pendingEvent)
+		await Promise.resolve()
+		expect(Logger.log).toHaveBeenCalled()
+
+		// cleanup
+		setExtensionHostQueueLogEnabled(false)
+	})
+
+	it("EHLOOP-REMOVAL-02 (STRUCTURAL): the diagnostic module no longer exports the queue-log authority", () => {
+		const diagnosticModule = require("../extension-host-hotloop-diagnostic") as Record<string, unknown>
+		expect("isExtensionHostHotloopQueueLogEnabled" in diagnosticModule).toBe(false)
+		expect("setExtensionHostHotloopQueueLogEnabled" in diagnosticModule).toBe(false)
+		expect("recordExtensionHostHotloopQueueLogPermitted" in diagnosticModule).toBe(false)
+
+		const policyModule = require("../extension-host-queue-log-policy") as Record<string, unknown>
+		expect("shouldEmitExtensionHostQueueLog" in policyModule).toBe(true)
+		expect("setExtensionHostQueueLogEnabled" in policyModule).toBe(true)
+		expect("applyExtensionHostQueueLogPolicy" in policyModule).toBe(true)
+	})
+
+	it("EHLOOP-REMOVAL-03 (STRUCTURAL): the coordinator imports the policy module (not the diagnostic)", async () => {
+		const fs = await import("node:fs/promises")
+		const path = await import("node:path")
+		const coordinatorPath = path.join(__dirname, "..", "sdk-session-event-coordinator.ts")
+		const source = await fs.readFile(coordinatorPath, "utf8")
+		expect(source).toMatch(/from\s+["']\.\/extension-host-queue-log-policy["']/)
+		expect(source).toMatch(/shouldEmitExtensionHostQueueLog\s*\(\s*\)/)
+		expect(source).not.toMatch(/isExtensionHostHotloopQueueLogEnabled/)
 	})
 })
