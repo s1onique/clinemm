@@ -7305,3 +7305,137 @@ PASS_EXTENSION_HOST_LOGGING_HOTPATH_REPAIRED
   + bounded correction to remove the three P0 contradictions
   + EH2 narrowed to NOT_ESTABLISHED
   + LIVE qualification PENDING
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-SESSION-EVENT-HOTLOOP01 / CORRECTION02 — PASS_EXTENSION_HOST_LOGGING_HOTPATH_REPAIRED — 2026-09-23
+
+**Status:** PASS (structural ownership P0 closed; LIVE qualification
+PENDING operator-driven).
+
+**Reviewer verdict that triggered CORRECTION02:**
+HALT_EHLOOP_REPAIR_AUTHORITY_STILL_BOUND_TO_TEMP_DIAGNOSTIC.
+
+**The remaining P0 (structural ownership):**
+
+CORRECTION01 placed _queueLogEnabled + isExtensionHostHotloopQueueLogEnabled + setExtensionHostHotloopQueueLogEnabled + recordExtensionHostHotloopQueueLogPermitted INSIDE extension-host-hotloop-diagnostic.ts (the temporary file). The dogfood profile resolver mutated that state. logQueueEvents imported isExtensionHostHotloopQueueLogEnabled from the same module.
+
+The closure claimed:
+
+  remove extension-host-hotloop-diagnostic.ts
+  BUT logQueueEvents keeps using isExtensionHostHotloopQueueLogEnabled()
+
+That either fails to compile, or forces a later cleanup edit that silently resurrects the hot path. In Factory terms, the repair authority was still coupled to forensic scaffolding.
+
+**CORRECTION02 — ownership split:**
+
+```
+extension-host-queue-log-policy.ts          (PERMANENT, NEW)
+  shouldEmitExtensionHostQueueLog()         <- production gate
+  setExtensionHostQueueLogEnabled()
+  resolveExtensionHostQueueLogFromEnv()
+  applyExtensionHostQueueLogPolicy()
+
+extension-host-hotloop-diagnostic.ts        (TEMPORARY, narrowed)
+  counters only. No production gate.
+```
+
+**Code changes (production):**
+
+apps/vscode/src/sdk/extension-host-queue-log-policy.ts (NEW, PERMANENT):
+  + module-level state _queueLogEnabled (PERMANENT, default false)
+  + shouldEmitExtensionHostQueueLog()    <- production gate
+  + setExtensionHostQueueLogEnabled()
+  + resolveExtensionHostQueueLogFromEnv(isDogfood, env)
+  + applyExtensionHostQueueLogPolicy(isDogfood, env)
+  + Module docstring documents the load-bearing invariant
+    ('the diagnostic does NOT own this gate; this module does').
+
+apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts:
+  - removed _queueLogEnabled
+  - removed isExtensionHostHotloopQueueLogEnabled
+  - removed setExtensionHostHotloopQueueLogEnabled
+  - removed recordExtensionHostHotloopQueueLogPermitted
+  * module docstring: 'OWNS OBSERVATION ONLY'
+  * REMOVAL_TRIGGER refined to list what stays vs what goes
+
+apps/vscode/src/sdk/dogfood-diagnostic-profile.ts:
+  * removed isExtensionHostHotloopQueueLogEnabled import
+  * removed setExtensionHostHotloopQueueLogEnabled import
+  + import applyExtensionHostQueueLogPolicy from permanent policy
+  * Gate 2 logic now delegates to applyExtensionHostQueueLogPolicy
+  * docstring updated: Gate 2 is OWNED by permanent policy module
+
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts:
+  * removed isExtensionHostHotloopQueueLogEnabled import
+  + import shouldEmitExtensionHostQueueLog from permanent policy
+  * logQueueEvents now consults shouldEmitExtensionHostQueueLog()
+  * inline comment updated to reference the permanent module
+
+**Tests (21/21 PASS, was 13/13):**
+
++ EHLOOP-POLICY-01..05 — permanent policy module contract
++ EHLOOP-REMOVAL-01 (STRUCTURAL) — disabling the diagnostic does
+      NOT silence the production gate (and vice versa)
++ EHLOOP-REMOVAL-02 (STRUCTURAL) — diagnostic module no longer
+      exports the legacy queue-log symbols
++ EHLOOP-REMOVAL-03 (STRUCTURAL) — coordinator source imports
+      from the permanent policy module
+
+**Post-removal state (now feasible):**
+
+REMOVE TOGETHER:
+  - apps/vscode/src/sdk/extension-host-hotloop-diagnostic.ts
+  - apps/vscode/src/sdk/extension-host-hotloop-diagnostic-runtime.ts
+  - the diagnostic-enablement half of applyExtensionHostHotloopDiagnosticProfile
+  - the host-side dump command
+  - the registry entry
+  - the package.json command declaration
+
+KEEP FOREVER:
+  + apps/vscode/src/sdk/extension-host-queue-log-policy.ts
+  + the applyExtensionHostQueueLogPolicy delegation in dogfood-diagnostic-profile.ts
+  + shouldEmitExtensionHostQueueLog() consultation in logQueueEvents
+
+The production gate survives the diagnostic removal cleanly.
+
+**Gates:**
+
+| Gate | Result |
+|------|--------|
+| bun test extension-host-session-event-hotloop01.ehloop01.test.ts | 21/21 PASS (was 13/13) |
+| bun test focused regression | 111/112 PASS (1 pre-existing OWN01 RED probe unrelated) |
+| bun --bun bunx tsc --noEmit (apps/vscode) | clean |
+
+**Conservation (UNCHANGED):**
+
+handleSessionEvent pipeline, appendAndEmit, postStateToWebview, setTurnPhase, setWithWriter, PendingPromptsController.drain, notify-on-terminal, TQCB completion barrier, BTCONT deferred continuation, CCARD ring DEFAULT_OFF, CCARD enabled does not alter semantics, explicit user turn, fire-and-forget job, two-job isolation - all unchanged.
+
+**Classification (UNCHANGED from CORRECTION01):**
+
+EH1_LOG_QUEUE_EVENTS_SYNCHRONOUS_BREADCRUMB_STALL = ESTABLISHED.
+EH2_REDUNDANT_STATE_WRITE_STORM = NOT_ESTABLISHED (observational only).
+
+**LIVE qualification (PENDING, operator-driven):**
+
+Per ACT §36 with the corrected HEAD installed:
+  CLINEMM_RUNTIME_PROFILE=dogfood CLINEMM_PTAD=1 \
+      code --extensionDevelopmentPath=...
+
+Run a 30-second specimen at least twice. Acceptance:
+  - dogfood profile remains enabled
+  - queue log hot path is suppressed/bounded (regardless of
+    diagnostic state — REMOVAL-01 invariant)
+  - no UNRESPONSIVE warning
+  - no automatic CPU profile
+  - no Extension Host restart
+
+Then Developer: Show Running Extensions -> record a 10-20s profile; compare against exthost-66cdb2.cpuprofile; the logQueueEvents -> Logger.#output -> appendLine stack should collapse materially.
+
+**Verdict:**
+
+PASS_EXTENSION_HOST_LOGGING_HOTPATH_REPAIRED
+  + bounded CORRECTION01 closed P0-A / P0-B runtime-mode inversion
+  + CORRECTION02 closed the structural ownership P0
+  + EH2 narrowed to NOT_ESTABLISHED
+  + LIVE qualification PENDING
