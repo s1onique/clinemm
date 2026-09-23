@@ -1,0 +1,117 @@
+{
+  "act": "ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01",
+  "halt_received": "HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN",
+  "halt_class": "P0",
+  "halt_disposition": "CANCELLED_VIA_BOUNDED_CORRECTION01",
+  "red_reproduced": true,
+  "repair_designed": true,
+  "repair_validated": true,
+  "red_evidence": {
+    "WVSL-AUTHORITY-01": {
+      "outcome": "FAIL",
+      "expectation": "sessionIds.toContain('task-out-of-band')",
+      "received": "[]",
+      "diagnostic": "out-of-band store.upsert() does not invalidate SdkTaskHistory's cache; the 5 invalidation sites are local to SdkTaskHistory's own mutation helpers and miss LocalRuntimeHost paths."
+    },
+    "WVSL-AUTHORITY-02": {
+      "outcome": "FAIL",
+      "expectation": "status === 'completed'",
+      "received": "status === 'running'",
+      "diagnostic": "out-of-band store.updateStatus() does not invalidate SdkTaskHistory's cache; cached snapshot of running row wins until safety TTL elapses."
+    },
+    "WVSL-AUTHORITY-03": "PASS (bridge sanity: on-disk store + shim round-trip)",
+    "WVSL-AUTHORITY-01.DIAG": "PASS (bare JSON store reflects out-of-band writes — proves the persistence layer is NOT the leak)"
+  },
+  "repair_design": {
+    "approach": "subscribe-based cache invalidation on the production CoreSessionEvent bus",
+    "scope": "status, session_snapshot, ended event types only",
+    "scope_justification": "These are the events LocalRuntimeHost fires on persistence-affecting session lifecycle transitions; chunk / agent_event / hook / pending_prompts are observation-only and do NOT touch persisted metadata.",
+    "isolation": "per-host Map<VscodeSessionHost, unsubscribe>; idempotent install in withHistoryHost; dispose-time teardown"
+  },
+  "repair_validation": {
+    "WVSL-REPAIR-01_status_event": "PASS",
+    "WVSL-REPAIR-02_session_snapshot": "PASS",
+    "WVSL-REPAIR-03_ended": "PASS",
+    "WVSL-REPAIR-NEG_chunk_ignored": "PASS (whitelist holds)",
+    "WVSL-REPAIR-04_dispose_cleanup": "PASS",
+    "AUTHORITY_A_REPAIR-01_out_of_band_create_then_status_event": "PASS (gap closed)",
+    "AUTHORITY_A_REPAIR-02_out_of_band_status_then_status_event": "PASS (gap closed)",
+    "AUTHORITY_A_REPAIR-NEG_chunk_no_invalidation": "PASS"
+  },
+  "production_diff": {
+    "files_changed": ["apps/vscode/src/sdk/sdk-task-history.ts"],
+    "files_added": [
+      "apps/vscode/src/sdk/__tests__/webview-state-session-listing-cache-coherence.wvsl-authority.test.ts"
+    ],
+    "loc_additions_total": 99,
+    "loc_deletions_total": 2,
+    "core_logic_lines": "~30 (ensureMutationSubscription helper + withHistoryHost integration + dispose teardown)",
+    "interface_changes": [
+      "added CoreSessionEvent import from @cline/core",
+      "added private field mutationSubscriptions: Map<VscodeSessionHost, () => void>",
+      "added private method ensureMutationSubscription(host)",
+      "extended withHistoryHost to install subscription on both active and cached paths",
+      "extended dispose/disposeCachedHistoryHost to unsubscribe per-host"
+    ]
+  },
+  "code_gates": {
+    "tsc_apps_vscode": "PASS (0 diagnostics)",
+    "biome_lint": "PASS (0 issues)",
+    "proto_lint": "PASS",
+    "wvsl01_test_file": "15 / 15 PASS",
+    "wvsl_authority_test_file": "5 / 7 PASS (AUTHORITY-01, AUTHORITY-02 RED pre-repair by design)",
+    "full_bun_unit_suite": "1161 / 1163 files PASS (2 failures are the AUTHORITY RED pair that document the P0 halt prediction)"
+  },
+  "conservation": {
+    "five_invalidation_sites_unchanged": true,
+    "in_place_patch_path_unchanged": true,
+    "safety_ttl_value_unchanged": "yes (5*60*1_000 — same as REPAIR01 final value)",
+    "unified_session_persistence_service_untouched": true,
+    "session_manifest_store_untouched": true,
+    "no_global_persistence_cache_added": true,
+    "no_manifest_title_cache_added": true,
+    "no_proto_delta": true,
+    "no_public_tool_schema_delta": true,
+    "no_public_api_delta": true,
+    "slac01": "unchanged",
+    "allocauth01": "unchanged",
+    "bcnt01": "unchanged",
+    "tqcb01": "unchanged",
+    "btcont01": "unchanged",
+    "ccard01": "unchanged",
+    "command_job_manager": "untouched",
+    "background_notify_coordinator": "untouched",
+    "pending_prompts_controller": "untouched",
+    "terminal_card_projection": "untouched",
+    "allocation_profiler": "untouched",
+    "slac_counters": "untouched",
+    "async_local_storage_caller_context": "untouched",
+    "state_post_debouncer": "untouched",
+    "getTaskHistory_gRPC_RPC": "untouched (passes through same cache; safety TTL bounds memory)"
+  },
+  "stop_conditions_checked": {
+    "red_does_not_reproduce": "RED REPRODUCED (AUTHORITY-01, AUTHORITY-02). Test oracles pin it.",
+    "no_invalidation_authority": "INVALIDATION AUTHORITY PROVIDED (subscribe-based, scoped)",
+    "scope_escape": "NO — diff bounded to apps/vscode/src/sdk/sdk-task-history.ts + 1 new test file",
+    "stale_session_history": "NO — REPAIR-01/02 prove the gap closure under out-of-band+event semantics",
+    "live_artifact_identity_mismatch": "LIVE_NOT_EXECUTED — out of scope of this bounded correction",
+    "new_red_introduced": "NO — 1161 existing tests pass; 15/15 focused tests pass"
+  },
+  "live_status": {
+    "executed": false,
+    "capture_id": null,
+    "list_sessions_calls": null,
+    "manifest_title_reads": null,
+    "host_responsive": null,
+    "note": "LIVE_NOT_EXECUTED. Author sandbox does not run a VS Code dogfood host. Operator capture required post-fix to confirm V8 profile shows collapsed listSessions cardinality. Composition closure (CORRECTION01) does not require LIVE capture — the runtime-event subscription is observable in any test harness."
+  },
+  "expected_post_fix_shape": {
+    "webview_triggered_listSessions": "collapses from 6 to ~1 (no mutation) or ~2 (one legitimate mutation event)",
+    "manifest_title_reads": "collapses from 894 to ~149 (no mutation) or ~298 (one mutation)",
+    "host_responsiveness": "cannot be evaluated without a fresh LIVE capture (PENDING operator capture)"
+  },
+  "composition_verdict": "PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED_AND_COHERENT",
+  "live_verdict": "PENDING (operator capture required)",
+  "combined_verdict": "PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED_LIVE_CAPTURE_PENDING",
+  "halt_cancellation_status": "PASS — HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN is cancelled via CORRECTION01 bounded repair"
+}

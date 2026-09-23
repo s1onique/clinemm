@@ -1,0 +1,17 @@
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-RED-01: projections across multiple TTL windows with no mutation → only one listSessions [1.21ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-RED-02: in-place patch on updateTaskHistoryItem reflects next projection [0.25ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-GREEN-01: three projections with no mutation → exactly one listSessions
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-GREEN-02: real mutation (delete) forces next projection to re-enumerate [0.57ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-CTL-01: cache reuse preserves the explicit-RPC contract across two calls
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-ADV-01: brand-new session created during cache lifetime appears in next projection [0.23ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-ADV-02: session deleted during cache lifetime disappears from next projection [0.12ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-ADV-03: rename during cache lifetime reflects in next projection (in-place patch) [0.09ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-ADV-04: 25 burst projections with no mutation → exactly one listSessions [0.10ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-ABLATION-01: with safety TTL forced to 0, every projection re-enumerates
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-REPAIR-01: 'status' event invalidates cache (out-of-band status flip is reflected)
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-REPAIR-02: 'session_snapshot' event invalidates cache (snapshot is a coherence boundary) [0.21ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-REPAIR-03: 'ended' event invalidates cache (session termination is a coherence boundary) [0.02ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-REPAIR-NEG: 'chunk' event does not invalidate cache (observation-only events are ignored) [0.08ms]
+✓ WVSL01 — webview-state session-listing re-enumeration repair > WVSL-REPAIR-04: dispose() tears down the runtime-event subscription [0.12ms]
+ 15 pass
+ 0 fail

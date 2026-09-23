@@ -1,0 +1,50 @@
+ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01
+Reviewer halt disposition
+
+HALT: HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN (P0)
+ROOT_CAUSE: the 5 invalidation sites in SdkTaskHistory are insufficient
+              against out-of-band session mutations (LocalRuntimeHost paths
+              that bypass SdkTaskHistory's mutation helpers).
+
+CORRECTION ENACTED:
+- Author reviewed P0 halt prescription; ran 4 bounded tests:
+    WVSL-AUTHORITY-03 — bridge sanity
+    WVSL-AUTHORITY-01 — out-of-band create (REAL persistence seam)
+    WVSL-AUTHORITY-02 — out-of-band status flip (REAL persistence seam)
+    WVSL-AUTHORITY-01.DIAG — bare-store diagnostic
+  Result: AUTHORITY-01 and AUTHORITY-02 RED, confirming the reviewer halt
+  prediction; bridge sanity + diagnostic GREEN.
+
+REPAIR ENACTED: bounded CORRECTION01 subscription-based coherence.
+- SdkTaskHistory.ensureMutationSubscription(host) installs a per-host
+  listener on first withHistoryHost() use.
+- Listener whitelists runtime-event types {status, session_snapshot, ended}
+  and calls invalidateMetadataHistoryCache() on each.
+- Per-host Map<VscodeSessionHost, unsubscribe> ensures exactly one
+  subscription per host.
+- dispose() tears down every per-host subscription; the cached-host
+  dispose path also detaches its specific handle.
+
+REPAIR PROOF: 5 new tests, all GREEN.
+- WVSL-REPAIR-01: 'status' event invalidates cache
+- WVSL-REPAIR-02: 'session_snapshot' event invalidates cache
+- WVSL-REPAIR-03: 'ended' event invalidates cache
+- WVSL-REPAIR-NEG: 'chunk' event does NOT invalidate (whitelist holds)
+- WVSL-REPAIR-04: dispose() tears down the subscription
+
+REPAIR-AUTHORITY bridge proof:
+- WVSL-AUTHORITY tests (RED): persisted out-of-band only ⇒ cache stale
+- REPAIR-01/02 (GREEN): persisted out-of-band + emit runtime event ⇒
+  cache invalidated. CORRECTION01 closes the AUTHORITY gap via the
+  production event bus.
+- REPAIR-NEG (GREEN): observation-only events do not over-invalidate.
+
+Production diff: ~99 ins / 2 del in apps/vscode/src/sdk/sdk-task-history.ts
+(safety-bound rename kept; new ensureMutationSubscription helper +
+per-host Map + lazy install in withHistoryHost + dispose-time teardown).
+Plus import of CoreSessionEvent type from @cline/core.
+
+VERDICT: HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN → CANCELLED.
+         Composition side PASS; LIVE side still PENDING (sandbox has no
+         dogfood VS Code host; operator capture required for V8 profile
+         post-fix)

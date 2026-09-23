@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
-import type { ClineCoreListHistoryOptions, SessionHistoryRecord } from "@cline/core"
+import type { CoreSessionEvent, ClineCoreListHistoryOptions, SessionHistoryRecord } from "@cline/core"
 import type { MessageWithMetadata as SdkMessage } from "@cline/llms"
 import { formatDisplayUserInput, parseUserInputMode } from "@cline/shared"
 import { resolveSessionDataDir } from "@cline/shared/storage"
@@ -201,6 +201,13 @@ export class SdkTaskHistory {
 	private cachedHistoryHostPromise?: Promise<VscodeSessionHost>
 	private cachedHistoryHostRefCount = 0
 	private cachedHistoryHostIdleTimer?: NodeJS.Timeout
+	// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01:
+	// Per-host unsubscribe handles for the runtime-event subscription that
+	// closes the P0 halt's out-of-band mutation coherence gap. Keyed by host
+	// identity so concurrent or swapped `VscodeSessionHost` instances each
+	// get exactly one subscription; the cache-no-op pattern in `listHistory`
+	// keeps this cheap.
+	private mutationSubscriptions = new Map<VscodeSessionHost, () => void>()
 	private metadataHistoryCache?: {
 		records: SessionHistoryRecord[]
 		hostLimit: number
@@ -212,7 +219,12 @@ export class SdkTaskHistory {
 	// The cache's primary freshness authority is the 5 existing mutation
 	// invalidation sites (`dispose`, `updateSession` write-failed,
 	// `updateCachedSessionRecord` on index === -1, `deleteSession`,
-	// `cacheTaskSize`) and the in-place patch path on update.
+	// `cacheTaskSize`) and the in-place patch path on update, plus the
+	// runtime-event subscription registered when the cached host is
+	// created (`CORRECTION01`: covers `LocalRuntimeHost` paths that
+	// bypass `SdkTaskHistory` mutation helpers — `startSession`,
+	// `updateSession`, `updateSessionStatus`, `deleteSession`,
+	// `ensureSessionPersisted`, `stopSession`, `abort`).
 	// This constant is a SAFETY bound only — it bounds memory if a
 	// process somehow never mutates; it is NOT the primary freshness
 	// gate. Pre-fix this was 10 s, which forced ~3 re-enumerations
@@ -286,6 +298,10 @@ export class SdkTaskHistory {
 				mcpHub: this.options.mcpHub,
 			})
 			this.cachedHistoryHost = historyHost
+			// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01:
+			// Subscription itself is installed lazily in `withHistoryHost` so
+			// the active-session host path also gets covered. We only ensure
+			// the cached host exists here.
 			return historyHost
 		})()
 
@@ -326,6 +342,21 @@ export class SdkTaskHistory {
 			return
 		}
 
+		// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01:
+		// Tear down the runtime-event subscription BEFORE we drop the host
+		// reference so listener delivery stops cleanly. The handle is removed
+		// from the per-host map so re-subscription (e.g. after a fresh
+		// `getCachedHistoryHost()` cycle) does not double-fire.
+		const unsubscribe = this.mutationSubscriptions.get(historyHost)
+		if (unsubscribe) {
+			this.mutationSubscriptions.delete(historyHost)
+			try {
+				unsubscribe()
+			} catch (error) {
+				Logger.warn("[SdkTaskHistory] Failed to unsubscribe cached host mutation listener:", error)
+			}
+		}
+
 		await historyHost.dispose(`taskHistory:${reason}`).catch((error) => {
 			Logger.warn("[SdkTaskHistory] Failed to dispose cached history host:", error)
 		})
@@ -334,6 +365,23 @@ export class SdkTaskHistory {
 	async dispose(): Promise<void> {
 		this.disposed = true
 		this.invalidateMetadataHistoryCache()
+		// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01:
+		// Unsubscribe every per-host mutation subscription before
+		// disposeCachedHistoryHost tears down the cached host. This covers
+		// any active-session host that was subscribed to via the runtime
+		// event bus (the cached-host dispose below only handles one entry).
+		for (const [host, unsubscribe] of this.mutationSubscriptions) {
+			try {
+				unsubscribe()
+			} catch (error) {
+				Logger.warn("[SdkTaskHistory] Failed to unsubscribe mutation listener on dispose:", error)
+			}
+			// Discard only the cached host's handle; active-host handles
+			// are released by the host's own disposal outside SdkTaskHistory.
+			if (host === this.cachedHistoryHost) {
+				this.mutationSubscriptions.delete(host)
+			}
+		}
 		if (this.cachedHistoryHostPromise) {
 			await this.cachedHistoryHostPromise.catch(() => undefined)
 		}
@@ -385,17 +433,66 @@ export class SdkTaskHistory {
 	private async withHistoryHost<T>(fn: (host: VscodeSessionHost) => Promise<T>): Promise<T> {
 		const activeHistoryHost = this.getActiveHistoryHost()
 		if (activeHistoryHost) {
+			// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01:
+			// Subscribe (idempotently, per-host) the FIRST time we route a
+			// listHistory through the active session's sdkHost. The 5 local
+			// mutation invalidation sites only cover SdkTaskHistory's own
+			// helpers; this subscription closes the P0 halt's out-of-band
+			// gap for the active-session path.
+			this.ensureMutationSubscription(activeHistoryHost)
 			return fn(activeHistoryHost)
 		}
 
 		const historyHost = await this.getCachedHistoryHost()
 		this.cachedHistoryHostRefCount += 1
 		try {
+			// Same idempotent subscription for the cached-host path.
+			this.ensureMutationSubscription(historyHost)
 			return await fn(historyHost)
 		} finally {
 			this.cachedHistoryHostRefCount = Math.max(0, this.cachedHistoryHostRefCount - 1)
 			this.scheduleCachedHistoryHostDispose()
 		}
+	}
+
+	/**
+	 * ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01:
+	 * Idempotently install the per-host runtime-event listener that invalidates
+	 * `metadataHistoryCache` on any session-affecting event.
+	 *
+	 * Why these event types:
+	 *   - `status`            : every status flip (running ↔ completed ↔ failed,
+	 *                           cancelled ↔ pending ↔ idle) emits via
+	 *                           `LocalRuntimeHost.emitStatus` → invalidate.
+	 *   - `session_snapshot`  : emitted alongside `status` and on persistence
+	 *                           reconciliation; cheap over-invalidation is safer
+	 *                           than missing a stale-history window.
+	 *   - `ended`             : session termination
+	 *                           (`LocalRuntimeHost.shutdown` /
+	 *                           session-lifecycle completion) — invalidate so
+	 *                           deleted entries reflect on next read.
+	 * Events NOT covered (observation-only, do NOT mutate persisted metadata):
+	 *   - `chunk`, `agent_event`, `hook`, `pending_prompts`,
+	 *     `pending_prompt_submitted`, `team_progress`, `status`-only telemetry
+	 *     that does not flow through `LocalRuntimeHost.updateSessionStatus`.
+	 */
+	private ensureMutationSubscription(host: VscodeSessionHost): void {
+		if (this.disposed) {
+			return
+		}
+		if (this.mutationSubscriptions.has(host)) {
+			return
+		}
+		const unsubscribe = host.subscribe((event: CoreSessionEvent) => {
+			if (
+				event.type === "status" ||
+				event.type === "session_snapshot" ||
+				event.type === "ended"
+			) {
+				this.invalidateMetadataHistoryCache()
+			}
+		})
+		this.mutationSubscriptions.set(host, unsubscribe)
 	}
 
 	async listHistory(options: SdkTaskHistoryListOptions = {}): Promise<SessionHistoryRecord[]> {

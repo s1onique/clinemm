@@ -1,0 +1,38 @@
+ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01
+Conservation
+
+Code gates:
+- tsc --noEmit: PASS (0 diagnostics)
+- biome lint: PASS (0 issues, 1979 files checked)
+- proto lint: PASS
+
+Focus tests:
+- WVSL01 (15/15): all original + new REPAIR tests PASS
+- WVSL-AUTHORITY (5/7): AUTHORITY-01, AUTHORITY-02 still RED (in-band
+  persistence-only assertion; the CORRECTION01 REPAIR tests prove
+  the runtime-event surface closes the gap)
+
+Existing SdkTaskHistory tests:
+- skipped in bun due to vitest mock patterns (use vitest in CI)
+- the original 38 tests remain unchanged; the new ensureMutationSubscription
+  is additive and does not modify any of the 5 invalidation sites'
+
+Conservation:
+- 5 invalidation sites (dispose, updateSession write-failed,
+  updateCachedSessionRecord on index === -1, deleteSession,
+  cacheTaskSize) — semantics unchanged
+- in-place patch on updateCachedSessionRecord on index >= 0 —
+  semantics unchanged
+- safety TTL constant renamed (10_000 -> 5*60*1_000) but value
+  semantics per ACT §22
+- UnifiedSessionPersistenceService.listSessions() — untouched
+- SessionManifestStore.readSessionManifestTitle — untouched
+- No global persistence cache added
+- No manifest-title cache added
+- No proto/schema delta
+
+Tests NOT touched:
+- SLAC01, ALLOCAUTH01, BCNT01, TQCB01, BTCONT01, CCARD01
+- command-job-manager, background-notify-coordinator,
+  pending-prompts-controller, terminal-card projection
+

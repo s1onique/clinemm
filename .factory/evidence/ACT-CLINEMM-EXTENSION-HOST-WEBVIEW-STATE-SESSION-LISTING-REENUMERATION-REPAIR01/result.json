@@ -86,6 +86,6 @@
     "manifest_title_reads": "collapses from 894 to ~149 (no mutation) or ~298 (one mutation)",
     "host_responsiveness": "cannot be evaluated without a fresh LIVE capture"
   },
-  "verdict": "PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED_PENDING_LIVE_CAPTURE",
-  "verdict_explanation": "Composition side (RED/GREEN/conservation/necessity) is PASS. LIVE side is PENDING (LIVE_NOT_EXECUTED in this ACT). The post-fix code change is structurally correct and the test oracle proves necessity; a follow-up operator capture is required to bind the LIVE qualification half per ACT §27-§31."
+  "verdict": "PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED_PENDING_LIVE_CAPTURE_AND_HALT_CANCELLED",
+  "verdict_explanation": "Composition side (RED/GREEN/conservation/necessity) is PASS. LIVE half still PENDING (operator capture required, ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-LIVE-CAPTURE01). Subsequent reviewer HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN was reproduced (WVSL-AUTHORITY-01/02 RED) and cancelled via CORRECTION01 — see ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01."
 }

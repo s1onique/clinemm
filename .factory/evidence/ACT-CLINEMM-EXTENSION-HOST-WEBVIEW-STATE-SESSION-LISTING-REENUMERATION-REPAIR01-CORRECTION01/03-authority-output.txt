@@ -1,0 +1,50 @@
+bun test v1.3.13 (bf2e2cec)
+
+src/sdk/__tests__/webview-state-session-listing-cache-coherence.wvsl-authority.test.ts:
+Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+      at warnOnDeactivatedColors (internal:tty:33:24)
+      at getColorDepth (internal:tty:42:39)
+      at shouldColorize (internal:util/colors:14:109)
+      at refresh (internal:util/colors:18:31)
+      at internal:util/colors (internal:util/colors:24:16)
+      at internal:assert/assertion_error (internal:assert/assertion_error:2:187)
+      at loadAssertionError (node:assert:28:96)
+
+✓ WVSL-AUTHORITY — out-of-band mutation cache coherence > AUTHORITY-03: backing store + shim round-trip (bridge sanity) [1.21ms]
+353 | 		// The reviewer halt predicted this FAILS — within the 5-min safety
+354 | 		// TTL the cache stays valid. If second contains the new session,
+355 | 		// either the cache was invalidated OR the read bypassed the cache.
+356 | 		// Either way the fix-pass criterion (per the P0 halt prescription) holds.
+357 | 		const sessionIds = second.map((r) => r.sessionId)
+358 | 		expect(sessionIds).toContain("task-out-of-band")
+                           ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "task-out-of-band"
+Received: []
+
+      at <anonymous> (/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/webview-state-session-listing-cache-coherence.wvsl-authority.test.ts:358:22)
+✗ WVSL-AUTHORITY — out-of-band mutation cache coherence > AUTHORITY-01: out-of-band create is visible in next listHistory (real-cache-coherence proof) [0.69ms]
+373 | 		store.updateStatus("task-status-flip", "completed", new Date().toISOString(), 0)
+374 | 
+375 | 		const second = await history.listHistory({ hydrate: false, limit: 200 })
+376 | 		const updated = second.find((r) => r.sessionId === "task-status-flip")
+377 | 		expect(updated).toBeDefined()
+378 | 		expect(updated?.status).toBe("completed")
+                                ^
+error: expect(received).toBe(expected)
+
+Expected: "completed"
+Received: "running"
+
+      at <anonymous> (/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/webview-state-session-listing-cache-coherence.wvsl-authority.test.ts:378:27)
+✗ WVSL-AUTHORITY — out-of-band mutation cache coherence > AUTHORITY-02: out-of-band status flip is reflected in next listHistory [0.45ms]
+✓ WVSL-AUTHORITY — out-of-band mutation cache coherence > AUTHORITY-01.DIAG: bare JSON store reflects out-of-band writes (no-cache diagnostic) [0.39ms]
+✓ WVSL-AUTHORITY — out-of-band mutation cache coherence > REPAIR-01: out-of-band create + 'status' event invalidates the cache (CORRECTION01 closes the AUTHORITY gap) [0.36ms]
+✓ WVSL-AUTHORITY — out-of-band mutation cache coherence > REPAIR-02: out-of-band status flip + 'status' event invalidates the cache [0.35ms]
+✓ WVSL-AUTHORITY — out-of-band mutation cache coherence > REPAIR-NEG: 'chunk' event does not invalidate cache (observation-only events are ignored) [0.24ms]
+
+ 5 pass
+ 2 fail
+ 21 expect() calls
+Ran 7 tests across 1 file. [693.00ms]

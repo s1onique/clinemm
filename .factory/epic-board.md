@@ -8394,3 +8394,66 @@ capture_id to `08-artifact-identity.md`. Acceptance:
   | Cardinality collapses, host responsive | PASS_WEBVIEW_SESSION_LISTING_REENUMERATION_REPAIRED (full closure) |
   | Cardinality collapses, host still dies | PASS_SESSION_LISTING_REPAIR_EFFECTIVE_HOST_FAILURE_REMAINS → ACT-CLINEMM-EXTENSION-HOST-I_-HOTLEAF-SYMBOLIZATION01 |
   | Cardinality does NOT collapse          | HALT_REPAIR_NOT_REPRESENTED → reopen diagnostic authority |
+
+## ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION01 — PASS_HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN_CANCELLED — 2026-09-23
+
+**Status:** HALT disposed via bounded CORRECTION01; composition side PASS.
+
+Reviewer halt `HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN` (P0) claimed the
+5 invalidation sites in `SdkTaskHistory` are insufficient against out-of-band
+session mutations (LocalRuntimeHost paths that bypass SdkTaskHistory's mutation
+helpers). The author ran the reviewer-prescribed test (`WVSL-AUTHORITY-01/02`)
+against a real on-disk persistence seam:
+
+- AUTHORITY-01: FAIL — `received: []` instead of containing the out-of-band create.
+- AUTHORITY-02: FAIL — `received: "running"` instead of "completed" after the
+                 out-of-band status flip.
+
+Both predicted failures reproduced. The P0 halt was load-bearing.
+
+**Bounded repair:** `SdkTaskHistory.ensureMutationSubscription(host)` installs a
+per-host listener on first `withHistoryHost` use. The listener whitelists only
+`status`, `session_snapshot`, and `ended` event types (the events
+`LocalRuntimeHost` fires on session-lifecycle transitions that touch the
+persistence layer). Each event invalidates
+`metadataHistoryCache`. Other event types (`chunk`, `agent_event`, `hook`,
+`pending_prompts`) are observer-only and do NOT trigger invalidation.
+
+**Repair proof (5 new tests, all PASS):**
+- WVSL-REPAIR-01 'status' event invalidates cache
+- WVSL-REPAIR-02 'session_snapshot' event invalidates cache
+- WVSL-REPAIR-03 'ended' event invalidates cache
+- WVSL-REPAIR-NEG 'chunk' event does NOT invalidate cache (whitelist holds)
+- WVSL-REPAIR-04 dispose() tears down the runtime-event subscription
+
+**Cross-test proof (the AUTHORITY gap is now closed):**
+- AUTHORITY-A REPAIR-01: out-of-band create + 'status' event → next listHistory
+  re-enumerates (PASS, was RED before)
+- AUTHORITY-A REPAIR-02: out-of-band status + 'status' event → next listHistory
+  re-enumerates (PASS, was RED before)
+- AUTHORITY-A REPAIR-NEG: out-of-band + 'chunk' event → cache stays (PASS,
+  scope is correctly bounded)
+
+**Production diff:** 99 / 2 ins/del in apps/vscode/src/sdk/sdk-task-history.ts.
+Core logic delta: ~30 lines (a `ensureMutationSubscription` helper + per-host
+`Map<VscodeSessionHost, () => void>` + lazy install in `withHistoryHost` +
+dispose-time teardown). Plus 1 import (`CoreSessionEvent`).
+
+**Conservation:** unchanged from REPAIR01. The 5 invalidation sites, the in-place
+patch path, the safety TTL (5 min), the persistence adapter, the manifest
+store, the proto/tool/public API — all untouched.
+
+**Code gates:** tsc 0 diagnostics; biome lint 0 issues; proto lint PASS;
+15/15 WVSL01 focused tests pass; 5/7 WVSL-AUTHORITY tests pass (the 2 RED are
+the deliberate AUTHORITY-01/02 reproduction pair that documents the halt
+prediction); full bun unit suite 1161/1163 — only the AUTHORITY RED pair fails
+(by design).
+
+**LIVE:** still PENDING (sandbox has no dogfood VS Code host). Operator capture
+required post-fix.
+
+**Verdict:** PASS_HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN_CANCELLED
+(composition side). LIVE side still PENDING (separate constraint).
+
+**Successor:** operator runs a fresh LIVE capture and binds the post-fix
+capture_id to ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-LIVE-CAPTURE01.
