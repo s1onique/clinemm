@@ -1,0 +1,4 @@
+# Build artifacts. Source is tracked; binaries are rebuilt by
+# `go build ./...` on demand.
+clinemm-live-capture
+*.exe

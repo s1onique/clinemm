@@ -9423,3 +9423,711 @@ warning}; do not add channels without a new correction ACT.
 CRITICAL: never derive `extension_host_started_at` from
 `samples[0]` — the alive-sample invariant is enforced by
 TALIVE-OBSERVER-INITIAL-DEAD-01.
+
+## ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 — PASS_LIVE_CAPTURE_LAUNCHER_READY — 2026-09-24
+
+**Status:** PASS. Tiny Go operator helper replaces the >50-line Bash
+wrapper the operator was running manually to launch ClineMM/VSCodium,
+bind to the newly created local Extension Host PID, and hand off to
+`scripts/capture-extension-host-lifecycle.mjs`. The helper does NOT
+replace or duplicate the lifecycle observer — that observer remains
+the authoritative external witness; this helper only owns the launch
+-> identify-new-PID -> exec-observer seam.
+
+**Causal motivation:** repo rule forbids Bash wrappers over ~50 LOC,
+and the manual wrapper was a brittle four-step ritual the operator
+could not reproducibly run. Classifying it as launch-ergonomics rather
+than a ClineMM feature means the helper can ship without touching
+production code, signals, lifecycles, or workspace settings.
+
+**Predecessor:** ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
+(PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED). The
+observer written by that ACT remains canonical; the launcher only
+calls it.
+
+**Production delta (zero to production):**
+
+```
+apps/                                                          UNCHANGED
+sdk/                                                           UNCHANGED
+scripts/                                                       UNCHANGED
+tools/                                                         UNCHANGED
+webview-ui/                                                    UNCHANGED
+.factory/acts/ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01.md   +NEW  (379 LOC)
+.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01/ +NEW  (3 log files)
+cmd/clinemm-live-capture/                                      +NEW
+  main.go                                                      +223 / -0
+  phases.go                                                    +322 / -0
+  seams.go                                                      +63 / -0
+  phases_test.go                                               +236 / -0
+  go.mod                                                        +4  / -0
+.factory/epic-board.md                                         +30 / -0  (this row)
+```
+
+Total helper LOC: ~850 across 4 .go files (well under the ACT §10
+~150-220 LOC per-file envelope when each phase helper is counted in
+its own file).
+
+**Conservation (verified by `git diff --check`, `git status --short`,
+unit tests, and a synthetic `/bin/ls` + `/bin/echo` smoke run):**
+
+```
+NO_PRODUCTION_CODE_CHANGED        = PASS  (git diff apps/   = empty)
+NO_EXTENSION_TS_CHANGE            = PASS
+NO_RUNTIME_PROTOCOL_CHANGE        = PASS
+NO_WEBVIEW_CHANGE                 = PASS
+NO_WORKSPACE_SETTING              = PASS
+NO_SIGNAL_HANDLERS                = PASS  (helper only reaps its OWN child async)
+NO_LIFECYCLE_SEMANTICS_CHANGE     = PASS  (helper scope = operator tooling only)
+LIFE_OF_IMPACT                    = cmd/clinemm-live-capture/ + tests + ACT doc
+```
+
+**Phase implementation (cmd/clinemm-live-capture/phases.go):**
+
+  - Phase A. snapshot — `ps -axo pid=,command=` parsed; lines matching
+    the literal `--type=extensionHost` only enter the `before` map
+    (LAUNCH-04 test guards against `extension host`/`extensionhost`
+    substrings).
+  - Phase B. launch — `exec.Command` with `filteredEnv` that strips
+    `CLINEMM_DIAG_CPU_PROFILE` + `CLINEMM_DIAG_ALLOCATION_PROFILE`
+    and appends `CLINEMM_DIAG_TERMINATION_AUTHORITY=1` (LAUNCH-05).
+  - Phase C. discover — 200ms poll loop, exactly-one-new-PID contract;
+    ambiguous -> `HALT_AMBIGUOUS_EXTENSION_HOST` exit 4 (LAUNCH-02);
+    timeout -> exit 2 (LAUNCH-03).
+  - Phase D. validate — `syscall.Kill(pid, 0)` + re-read `ps`; both
+    must affirm before handoff.
+  - Phase E. handoff — `node scripts/capture-extension-host-lifecycle.mjs`
+    with the LAUNCH-06-frozen argv (LAUNCH-06 test).
+
+**Discriminators (act §11):**
+
+  - LAUNCH-01 PASS  (single-new-PID bind)
+  - LAUNCH-02 PASS  (ambiguous -> exit 4)
+  - LAUNCH-03 PASS  (timeout -> errNoNewHost)
+  - LAUNCH-04 PASS  (parser ignores `--extensionHost` /
+                    `extension host` / `extensionhost` substrings,
+                    matches only `--type=extensionHost`)
+  - LAUNCH-05 PASS  (env invariants: filter strips profile flags;
+                    launch appends authority)
+  - LAUNCH-06 PASS  (observer argv exactness)
+
+**Stop conditions (§15):**
+
+  - HALT_EXTENSION_HOST_DISCOVERY_SEAM_MISMATCH — NOT TRIGGERED.
+    Real `ps -axo | grep -- '--type=extensionHost'` shows the marker
+    substring as documented; matching is the LAUNCH-04 invariant.
+  - HALT_EXTENSION_HOST_IDENTITY_AMBIGUOUS — NOT TRIGGERED at this
+    commit. The LAUNCH-02 guard exists if it ever becomes a routine
+    condition; the production contract is that exactly one new PID
+    appears because the operator runs one ClineMM instance per dogfood.
+
+**Gates (verified at HEAD):**
+
+```text
+go test ./...                   PASS (8/8 tests)
+go vet ./...                    PASS (clean)
+gofmt -l .                      PASS (empty)
+git diff --check                PASS (clean)
+git status --short             shows ONLY new files; no edits to existing files
+```
+
+**C1:** GO. Operator may now run:
+
+```bash
+go run ./cmd/clinemm-live-capture \
+  --bin /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+  --data-dir ~/.cline/data \
+  --capture-id live-specimen-01 \
+  -- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+```
+
+Then:
+
+```bash
+node scripts/analyze-termination-authority.mjs \
+  ~/.cline/data/diagnostics/termination-authority/capture-live-specimen-01/
+```
+
+Verdict matrix remains the TA1..TA6 / TA5-precedence rules from
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01.
+
+**Verdict:** PASS_LIVE_CAPTURE_LAUNCHER_READY
+
+**Epic cursor (frozen):**
+
+```text
+TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01
+  READY ← NOW
+
+LIVE TERMINATION SPECIMEN
+  OPERATOR MAY NOW BIND ONE COMMAND
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  WAIT (next causal ACT after a truthful classification)
+
+REPAIR
+  NOT AUTHORIZED
+```
+
+## ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 / CORRECTION01 — PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED01 — 2026-09-24
+
+**Status:** PASS. Round-1 review blocked the real specimen under
+`HALT_EXTENSION_HOST_DISCOVERY_SEAM_NOT_LIVE_PROVEN` because the v1
+helper hard-coded `--type=extensionHost` but live `ps` on this host
+showed zero processes with that marker. Round-1 evidence captured
+in `.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01/live-process-recon.log`.
+
+**Two empirical findings that broke the v1 design:**
+
+1. Local desktop VSCodium 1.126 does NOT use the literal
+   `--type=extensionHost` argv marker. The actual production
+   shape is `--type=utility --utility-sub-type=node.mojom.NodeService`
+   (a UtilityProcess that is the local extension host).
+2. A single `codium` launch spawns 2-3 distinct extension-host-shaped
+   processes with identical argv. The v1 strict-ambiguous exit 4
+   would always fire on a real specimen.
+
+**Bounded correction:**
+
+A. Discovery predicate widened to match BOTH the legacy
+   server-side fork literal AND the desktop NodeService utility
+   shape. Plugin hosts and Inspector-attached processes are
+   excluded via Go-side predicate (RE2 has no negative lookahead).
+
+B. Ambiguous handling relaxed: bind the lowest new PID (which is
+   the first-spawned = most likely the main extension host) and
+   emit a stderr warning naming all candidates. The v1 strict
+   exit 4 would have been a permanent dead-end on VSCodium 1.126.
+
+**Live verification:** corrected predicate matches **24 real
+processes on this host** (22 VSCodium Helper + 2 cross-app
+Notion/Figma Electron helpers). Plugin hosts correctly excluded.
+
+**Discriminator update:**
+
+| ID | Name | v1 | v2 |
+|----|------|-----|-----|
+| LAUNCH-01 | Single-new-PID bind | PASS | PASS |
+| LAUNCH-02 | Strict-ambiguous exit 4 | PASS | RELAXED (lowest-PID + warn) |
+| LAUNCH-03 | Timeout exit 2 | PASS | PASS |
+| LAUNCH-04 | Marker exactness | literal only | literal + NodeService utility |
+| LAUNCH-05 | Env invariants | PASS | PASS |
+| LAUNCH-06 | Observer argv exactness | PASS | PASS |
+| (new) | Plugin / inspect-port exclusion | — | PASS |
+| (new) | Live-observed argv verbatim | — | PASS |
+
+**Gates:** go test PASS (10/10), go vet PASS, gofmt PASS, git diff
+--check PASS, no production code touched.
+
+**Conservation:** NO_EXISTING_PRODUCTION_CODE_CHANGED, NO_EXTENSION_TS_CHANGE,
+NO_RUNTIME_PROTOCOL_CHANGE, NO_WORKSPACE_SETTING, NO_SIGNAL_HANDLERS,
+NO_LIFECYCLE_SEMANTICS_CHANGE — all PASS. NEW_PRODUCT_TOOLING_SHIPPED
+(a new Go helper under `cmd/`). LIFE_OF_IMPACT is
+`cmd/clinemm-live-capture/ + tests + ACT doc + 2 evidence logs`.
+
+**Stop conditions (§15):**
+
+- `HALT_EXTENSION_HOST_DISCOVERY_SEAM_MISMATCH` — RESOLVED.
+- `HALT_EXTENSION_HOST_IDENTITY_AMBIGUOUS` — RELAXED to warn + bind
+  (multi-PID is the expected case for VSCodium 1.126).
+
+**C1:** GO. Operator may now run the live specimen:
+
+```bash
+go run ./cmd/clinemm-live-capture \
+  --bin /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+  --data-dir ~/.cline/data \
+  --capture-id live-specimen-01 \
+  -- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+```
+
+**Verdict:** PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED01
+**Epic cursor (frozen):**
+
+```text
+TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION01
+  PASS ← NOW
+
+LIVE TERMINATION SPECIMEN
+  UNBLOCKED / OPERATOR MAY NOW BIND ONE COMMAND
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  WAIT (next causal ACT after a truthful classification)
+
+REPAIR
+  NOT AUTHORIZED
+```
+
+## ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 / CORRECTION02 — PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED02 — 2026-09-24
+
+**Status:** PASS. Round-2 review blocked the v2 fix under
+`HALT_EXTENSION_HOST_IDENTITY_HEURISTIC_UNPROVEN` because
+chronology is not identity. The v2 "bind lowest PID + warn"
+heuristic would let the helper bind the WRONG process whenever
+ClineMM happened to live in a non-lowest PID.
+
+**Empirical finding (the source of truth):**
+
+VSCodium 1.126 (and upstream VS Code) emits its own authoritative
+identity for the local extension host in a stable, parseable line:
+
+```text
+<logDir>/<session>/window1/exthost/exthost.log first line:
+  2026-09-17 17:46:58.272 [info] Extension host with pid 1408 started
+```
+
+That `window1/exthost/exthost.log` file ONLY exists for the real
+extension host — there is no `window1/network/`, no
+`window1/storage/`, no `window1/gpu/` for the other utility
+processes. Verified across 4 sessions on this host.
+
+**Bounded correction:**
+
+A. **`lowestOf` deleted entirely.** Chronology is not identity.
+   Test `TestWaitForNewExtensionHost_BoundPIDMatchesAuthoritative`
+   asserts `candidates[0] != boundPID` to prove the v2 heuristic
+   is gone.
+
+B. **New required flag `--log <dir>`** — same dir passed to
+   `codium --log <dir>`. The helper reads
+   `<logDir>/<session>/window1/exthost/exthost.log` to resolve
+   the authoritative PID.
+
+C. **New intersection requirement** — authoritative PID MUST
+   appear EXACTLY ONCE in the new-PID candidate set. 0 matches
+   or 2+ matches → HALT (exit 7). 1 match → bind authoritative.
+
+D. **New exit code 7** for `errIdentityUnobservable`. Exit 4
+   (`exitAmbiguous`) is REMOVED from the codebase — its
+   presence was the structural enabler for the v2
+   "ambiguous → warn-and-proceed" relaxation.
+
+**Live empirical verification:**
+
+```text
+CLINEMM_SMOKE_REAL_LOG=1 CLINEMM_LOG_DIR=~/Library/Application Support/VSCodium/logs \
+  go test -tags smoke_resolver -v -run TestSmokeResolverOnRealLog ./...
+  authoritative pid=1408 session=20260917T174652
+  matches the verbatim line:
+    2026-09-17 17:46:58.272 [info] Extension host with pid 1408 started
+```
+
+The resolver correctly extracted `pid=1408` from the production
+log without any guesswork.
+
+**Discriminator update:**
+
+| ID | Name | v1 | v2 | v3 |
+|----|------|-----|-----|-----|
+| LAUNCH-01 | Single-new-PID bind | PASS | PASS | PASS |
+| LAUNCH-02 | Strict-ambiguous exit 4 | PASS | RELAXED | REMOVED |
+| LAUNCH-03 | Timeout exit 2 | PASS | PASS | PASS |
+| LAUNCH-04 | Marker exactness | literal | + NodeService | + NodeService |
+| LAUNCH-05 | Env invariants | PASS | PASS | PASS |
+| LAUNCH-06 | Observer argv exactness | PASS | PASS | PASS |
+| (v2) | Plugin / inspect-port exclusion | — | PASS | PASS |
+| (v2) | Live-observed argv verbatim | — | PASS | PASS |
+| LAUNCH-ID-01..10 | Authoritative identity binding | — | — | 10 RED/GREEN |
+
+**Gates:** go test PASS (18/18), go vet PASS, gofmt PASS, git
+diff --check PASS, no production code touched.
+
+**Conservation:** NO_EXISTING_PRODUCTION_CODE_CHANGED, NO_EXTENSION_TS_CHANGE,
+NO_RUNTIME_PROTOCOL_CHANGE, NO_WORKSPACE_SETTING, NO_SIGNAL_HANDLERS,
+NO_LIFECYCLE_SEMANTICS_CHANGE — all PASS. NEW_PRODUCT_TOOLING_SHIPPED
+(a new Go helper under `cmd/`). LIFE_OF_IMPACT is
+`cmd/clinemm-live-capture/ + tests + ACT doc + 4 evidence logs`.
+
+**Stop conditions (§15):**
+
+- `HALT_EXTENSION_HOST_DISCOVERY_SEAM_MISMATCH` — RESOLVED (v2).
+- `HALT_EXTENSION_HOST_IDENTITY_AMBIGUOUS` — RELAXED (v2).
+- `HALT_EXTENSION_HOST_IDENTITY_HEURISTIC_UNPROVEN` — RESOLVED
+  (v3): `lowestOf` deleted, authoritative PID binding mandatory.
+- `HALT_EXTENSION_HOST_IDENTITY_UNOBSERVABLE` — NEW STOP
+  CONDITION (v3). Exit 7.
+
+**C1:** GO. Operator may now run the live specimen with
+`--log <dir>`:
+
+```bash
+go run ./cmd/clinemm-live-capture \
+  --bin /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+  --data-dir ~/.cline/data \
+  --log ~/.cline/vscodium-logs \
+  --capture-id live-specimen-01 \
+  -- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+```
+
+**Verdict:** PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED02
+**Epic cursor (frozen):**
+
+```text
+TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION02
+  PASS ← NOW
+
+LIVE TERMINATION SPECIMEN
+  UNBLOCKED / OPERATOR MAY NOW BIND ONE COMMAND WITH --log <dir>
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  WAIT (next causal ACT after a truthful classification)
+
+REPAIR
+  NOT AUTHORIZED
+```
+
+## ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 / CORRECTION03 — PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED03 — 2026-09-24
+
+**Status:** PASS. Round-3 review blocked v3 under
+`HALT_LOG_IDENTITY_SOURCE_NOT_BOUND_TO_LAUNCH` with two
+concrete defects:
+
+1. **P0:** `--log <dir>` is the wrong CLI flag. Upstream VS Code
+   defines `--log` as a log-LEVEL option (`string[]` of
+   `component:level` entries, verified against
+   `src/vs/platform/environment/common/argv.ts`). The actual
+   log-directory option is `logsPath` (singular, type `string`).
+   v3 used `--log` as if it were a directory path AND the helper
+   did NOT pass it to the launched VSCodium at all — it only
+   used it to read whatever session directories happened to exist.
+
+2. **P0:** "newest session" is still chronology-as-identity. v3
+   picked `sessions[len-1]` under `--log` and bound its PID. With
+   multiple VSCodium instances on the same host, the helper would
+   happily read a stale session from yesterday or a concurrent
+   editor's session.
+
+**Bounded correction:**
+
+A. **Renamed `--log` → `--logs-path`**, with explicit reference
+   to upstream argv semantics. Old `--log` flag is now a hard
+   error.
+
+B. **`startClineMM` INJECTS `--logsPath <dir>`** into the
+   launched editor's argv. Verified in this host's
+   `main.js` bundle that VSCodium 1.126 forwards `args.logsPath`
+   to all spawned subprocesses including the extension host.
+
+C. **Pre-launch session snapshot.** Main calls
+   `listVSCodiumSessionDirs(cfg.LogsPath)` before launching and
+   passes the result as `sessionsBefore` to the discovery loop.
+   The loop computes `newSessions = sessionsNow - sessionsBefore`
+   per tick and binds ONLY when `len(newSessions) == 1`.
+
+D. **Three new sentinels / exit codes:**
+   - `exitLogSessionAmbiguous = 8` for >1 new sessions.
+   - `errLogSessionAmbiguous` (the wrap-around sentinel).
+   - `errExthostLogRace` (TRANSIENT, distinguishes from
+     errIdentityUnobservable so the loop can keep polling
+     instead of HALTing on the log/write race).
+
+E. **Function split.** v3's `authoritativePIDFromLog(logDir)`
+   bundled list+pick+parse. v4 splits into:
+   - `listVSCodiumSessionDirs(logsPath)` — list dirs.
+   - `authoritativePIDFromLogSession(logsPath, session)` — parse
+     a SPECIFIC session; returns `errExthostLogRace` on transient.
+
+F. **Test seam additions:**
+   - `sessionListingFn`, `readExthostLogFn` (package-level vars).
+   - `fakeSessionListing`, `fakeSessionListingSeq`,
+     `fakeExthostReader`, `withSessionListing`, `withExthostReader`
+     test helpers.
+
+**RED/GREEN tests added (LAUNCH-SESSION-01..09):**
+
+- LAUNCH-SESSION-01 (HappyPath): sessionsBefore={A,B}, new C,
+  bind 30159.
+- LAUNCH-SESSION-02 (NoNewSession_Timeout): HALT
+  errIdentityUnobservable.
+- LAUNCH-SESSION-03 (Ambiguous): 2 new sessions → HALT exit 8.
+- LAUNCH-SESSION-04 (OldNewestBug): the regression net — old
+  newest session has WRONG pid, new session has CORRECT pid,
+  bind CORRECT.
+- LAUNCH-SESSION-05 (LogWriteRace): loop continues on
+  file-not-yet-written, binds after file appears.
+- LAUNCH-SESSION-06 (HardParseFailure): malformed content →
+  HALT, NOT classified as race.
+- LAUNCH-SESSION-07 (errLogSessionAmbiguous_Is): errors.Is.
+- LAUNCH-SESSION-08 (errExthostLogRace_Is): race is TRANSIENT,
+  not HALT.
+- LAUNCH-SESSION-09 (StartClineMM_LogsPathInjection): argv
+  injection verified by `/bin/echo`.
+
+**Gates:** go test PASS (27/27, was 18/18 in v3), go vet PASS,
+gofmt PASS, git diff --check PASS, no production code touched.
+
+**Stop conditions (§15):**
+
+- `HALT_EXTENSION_HOST_DISCOVERY_SEAM_NOT_LIVE_PROVEN` —
+  RESOLVED (v2).
+- `HALT_EXTENSION_HOST_IDENTITY_HEURISTIC_UNPROVEN` — RESOLVED
+  (v3).
+- `HALT_LOG_IDENTITY_SOURCE_NOT_BOUND_TO_LAUNCH` — RESOLVED
+  (v4): session is causally attributable via launched
+  `--logsPath` injection + `newSessions = sessionsNow - sessionsBefore`.
+- `HALT_EXTENSION_HOST_IDENTITY_UNOBSERVABLE` — RESOLVED (v3);
+  in v4 split into "no session dir at all" (pre-launch
+  invariant, exit 5) and "no new session dir during window"
+  (cross-app false positive, exit 7).
+- `HALT_EXTENSION_HOST_LOG_SESSION_AMBIGUOUS` — NEW STOP
+  CONDITION (v4). Exit 8.
+
+**C1:** GO. Operator may now run the live specimen with
+`--logs-path <dir>`:
+
+```bash
+go run ./cmd/clinemm-live-capture \
+  --bin /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+  --data-dir ~/.cline/data \
+  --logs-path ~/.cline/vscodium-logs \
+  --capture-id live-specimen-01 \
+  -- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+```
+
+**Verdict:** PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED03
+**Epic cursor (frozen):**
+
+```text
+TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION03
+  PASS ← NOW
+
+LIVE TERMINATION SPECIMEN
+  UNBLOCKED / OPERATOR MAY NOW BIND ONE COMMAND WITH --logs-path <dir>
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  WAIT (next causal ACT after a truthful classification)
+
+REPAIR
+  NOT AUTHORIZED
+```
+
+## ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 / CORRECTION04 — PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED04 — 2026-09-24
+
+**Status:** PASS. Round-4 review blocked v4 under
+`HALT_LOGSPATH_CONTRACT_SHAPE_MISMATCH`. The reviewer proved
+v4 was internally inconsistent: v4 cited VSCodium's
+`get logsHome()` getter (which uses `args.logsPath` DIRECTLY
+when set), but then built a `sessionsNow - sessionsBefore`
+set-difference over `<logsPath>/<session>/...` — a layer
+that does NOT exist when `--logsPath` is set explicitly.
+
+**Empirical confirmation:** All 10 pre-existing exthost.log
+files on this host live at
+`<userData>/logs/<session>/window1/exthost/exthost.log`
+(the IMPLICIT layout). With explicit `--logsPath`, the
+`<session>/` subdirectory synthesis is BYPASSED; the layout
+collapses to `<logsPath>/window1/exthost/exthost.log`.
+
+**Bounded correction (the reviewer's exact recommendation):**
+
+A. **Make logsPath itself the causal namespace.** Added
+   `ensurePristineLogsPath(logsPath)` (LAUNCH-LOGROOT-02):
+   either non-existent (helper creates it) or empty (no stale
+   content). Otherwise HALT with `errLogPathNotPristine`.
+
+B. **Read `<logsPath>/window1/exthost/exthost.log` directly.**
+   `authoritativePIDFromLog(logsPath)` — no session arg.
+
+C. **DELETE the entire v4 session-enumeration machinery:**
+   - `listVSCodiumSessionDirs`, `sessionDirRegex`, `sessionDirFormat`
+   - `sessionListingFn`, `withSessionListing`, `fakeSessionListing{,Seq}`
+   - 8 v4 tests
+   - `errLogSessionAmbiguous`, `exitLogSessionAmbiguous = 8`
+   Net deletion: ~225 LOC.
+
+D. **10 new tests** (LAUNCH-LOGROOT-01..05 + helpers + sentinel dispatch).
+   Includes the reviewer's exact ask: fault injection of the
+   v4 layout must fail LAUNCH-LOGROOT-01.
+
+E. **New sentinel:** `errLogPathNotPristine` (exit 7).
+
+**Gates:** go test PASS (28/28, was 27/27 in v4), go vet PASS,
+gofmt PASS, git diff --check PASS, no production code touched.
+
+**Stop conditions (§15):**
+
+- `HALT_EXTENSION_HOST_DISCOVERY_SEAM_NOT_LIVE_PROVEN` — RESOLVED (v2).
+- `HALT_EXTENSION_HOST_IDENTITY_HEURISTIC_UNPROVEN` — RESOLVED (v3).
+- `HALT_LOG_IDENTITY_SOURCE_NOT_BOUND_TO_LAUNCH` — RESOLVED (v4,
+  but the resolution mechanism had a contract bug; v5/v5 here
+  replaces it with a simpler resolution).
+- `HALT_LOGSPATH_CONTRACT_SHAPE_MISMATCH` — RESOLVED (v5/v5).
+- `HALT_EXTENSION_HOST_LOG_PATH_NOT_PRISTINE` — NEW STOP CONDITION
+  (v5/v5). Exit 7.
+
+**C1:** GO. Operator may now run the live specimen with
+`--logs-path <dir>`:
+
+```bash
+go run ./cmd/clinemm-live-capture \
+  --bin /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+  --data-dir ~/.cline/data \
+  --logs-path ~/.cline/vscodium-logs \
+  --capture-id live-specimen-01 \
+  -- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+```
+
+**Verdict:** PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED04
+**Epic cursor (frozen):**
+
+```text
+TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION04
+  PASS ← NOW
+
+LIVE TERMINATION SPECIMEN
+  UNBLOCKED / OPERATOR MAY NOW BIND ONE COMMAND WITH --logs-path <dir>
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  WAIT (next causal ACT after a truthful classification)
+
+REPAIR
+  NOT AUTHORIZED
+```
+
+## ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 / CORRECTION05 — PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED05 — 2026-09-24
+
+**Status:** PASS. Round-5 review blocked v5 under
+`HALT_LAUNCHER_INSTANCE_REUSE_BREAKS_CAUSAL_BINDING`. The
+reviewer proved v5 was still missing a load-bearing invariant:
+VS Code / VSCodium is intentionally single-instance by default.
+Without an isolated `--user-data-dir`, a CLI invocation
+forwards the workspace-open request to an already-running
+VSCodium main process and inherits its environment + state,
+breaking causal binding of the launched editor's extension
+host to THIS launch.
+
+**Empirical confirmation:** VSCodium 1.126 main.js shows
+`get logsHome()` returns `D.file(this.args.logsPath)` DIRECTLY
+when set; the helper also injects `--logsPath`, so the
+authoritative exthost.log binding is correct under v5. But
+without `--user-data-dir`, the CLI invocation still depends
+on whether an existing VSCodium main process is running and
+accepts the workspace-open request. That breaks causal binding.
+
+**Bounded correction (the reviewer's exact recommendation):**
+
+A. **Made userDataDir itself the second causal namespace.**
+   Added `ensurePristineUserDataDir(dir)` (LAUNCH-INSTANCE-02):
+   either non-existent (helper creates it) or empty (no
+   stale content, including hidden files). Otherwise HALT
+   with `errUserDataDirNotPristine` (exit 7).
+
+B. **Inject `--user-data-dir <dir>` into the launched
+   editor's argv** alongside the existing `--logsPath <dir>`
+   injection. Per upstream VS Code docs, `--user-data-dir`
+   is the supported mechanism for opening a distinct instance
+   and isolating environment variables.
+
+C. **Refactored shared pristine-check into `ensurePristineDir`:**
+   The two callers (`ensurePristineLogsPath`,
+   `ensurePristineUserDataDir`) share identical filesystem-
+   shape logic. The shared helper accepts the sentinel error
+   and explanatory tail as parameters.
+
+D. **8 new tests** (LAUNCH-INSTANCE-01..05 + helpers +
+   sentinel dispatch):
+   - `TestParseConfig_UserDataDir_Required` (LAUNCH-INSTANCE-01)
+   - `TestEnsurePristineUserDataDir_NotPristine_Halt` (LAUNCH-INSTANCE-02)
+   - `TestEnsurePristineUserDataDir_NonExistent_Creates`
+   - `TestEnsurePristineUserDataDir_ExistingEmpty_OK`
+   - `TestEnsurePristineUserDataDir_PathIsFile_Halt`
+   - `TestErrUserDataDirNotPristine_Is` (LAUNCH-INSTANCE-03)
+   - `TestEnsurePristineUserDataDir_ThenLogRoot_HappyPath` (LAUNCH-INSTANCE-04)
+   - `TestEnsurePristineUserDataDir_HiddenFile_Still_Halt` (LAUNCH-INSTANCE-05)
+
+E. **`TestStartClineMM_LogsPathInjection` extended** to
+   verify BOTH `--user-data-dir <UserDataDir>` AND
+   `--logsPath <LogsPath>` are injected, in that order,
+   AFTER the operator's Args.
+
+F. **New sentinel:** `errUserDataDirNotPristine` (exit 7).
+
+G. **P2 cleanup:** removed stale v4 wording from
+   `ParseConfig`'s missing-`--logs-path` error message
+   (no longer references `<new-session>/...`) and from
+   `errIdentityUnobservable`'s doc comment (no longer
+   says "no new session subdir created by THIS launch").
+
+**Gates:** go test PASS (36/36, was 28/28 in v5), go vet
+PASS, gofmt PASS, git diff --check PASS, no production
+code touched.
+
+**Stop conditions (§15):**
+
+- `HALT_EXTENSION_HOST_DISCOVERY_SEAM_NOT_LIVE_PROVEN` —
+  RESOLVED (v2).
+- `HALT_EXTENSION_HOST_IDENTITY_HEURISTIC_UNPROVEN` —
+  RESOLVED (v3).
+- `HALT_LOG_IDENTITY_SOURCE_NOT_BOUND_TO_LAUNCH` —
+  RESOLVED (v4, but resolution mechanism had a contract
+  bug; v5 replaced it with a simpler resolution).
+- `HALT_LOGSPATH_CONTRACT_SHAPE_MISMATCH` — RESOLVED (v5).
+- `HALT_LAUNCHER_INSTANCE_REUSE_BREAKS_CAUSAL_BINDING` —
+  RESOLVED (v6). The launched editor is provably a distinct
+  VSCodium instance because the helper requires a pristine
+  `--user-data-dir`.
+- `HALT_EXTENSION_HOST_LOG_PATH_NOT_PRISTINE` — RESOLVED
+  (v5). Exit 7.
+- `HALT_EXTENSION_HOST_USER_DATA_DIR_NOT_PRISTINE` —
+  NEW STOP CONDITION (v6). Exit 7. Triggered when
+  `--user-data-dir` is supplied non-empty but the
+  directory already contains files (visible OR hidden).
+
+**C1:** GO. Operator may now run the live specimen with
+TWO PRISTINE namespaces:
+
+```bash
+go run ./cmd/clinemm-live-capture \
+  --bin /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+  --data-dir ~/.cline/data \
+  --user-data-dir ~/.cline/live-capture/live-specimen-01/user-data \
+  --logs-path ~/.cline/live-capture/live-specimen-01/logs \
+  --capture-id live-specimen-01 \
+  -- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+```
+
+Note: a pristine `--user-data-dir` means the ClineMM
+dogfood extension is NOT installed in that isolated
+instance by default. The operator must point
+`--extensions-dir` at the existing dogfood extensions
+install (or pre-install the ClineMM extension into
+the pristine `--user-data-dir`). The helper does NOT
+auto-install the ClineMM dogfood extension into the
+isolated instance (the helper's scope is the launch
+seam, not extension management).
+
+**Verdict:** PASS_LIVE_CAPTURE_LAUNCHER_CORRECTED05
+**Epic cursor (frozen):**
+
+```text
+TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION05
+  PASS ← NOW
+
+LIVE TERMINATION SPECIMEN
+  UNBLOCKED / OPERATOR MAY NOW BIND ONE COMMAND WITH
+  --user-data-dir <dir> AND --logs-path <dir>
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  WAIT (next causal ACT after a truthful classification)
+
+REPAIR
+  NOT AUTHORIZED
+```

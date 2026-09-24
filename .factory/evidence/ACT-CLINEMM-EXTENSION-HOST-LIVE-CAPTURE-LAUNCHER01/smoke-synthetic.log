@@ -1,0 +1,47 @@
+=== smoke-synthetic.log (v6 — CORRECTION05) ===
+Generated: 2026-09-24T16:10:18Z
+ACT: ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01
+
+
+--- 1. v6 binary help ---
+Usage of clinemm-live-capture:
+  -bin string
+    	absolute path to the ClineMM/VSCodium binary (required)
+  -cadence duration
+    	observer polling cadence (default 400ms)
+  -capture-id string
+    	optional capture id override (default: live-YYYYMMDD-HHMMSS)
+  -data-dir string
+    	CLINE_DATA_DIR override
+  -duration duration
+
+--- 2. v6 missing --user-data-dir is rejected ---
+clinemm-live-capture: --user-data-dir <dir> is required (v6 CORRECTION05: VS Code / VSCodium is intentionally single-instance by default; without a pristine --user-data-dir the CLI invocation may forward to an already-running main process, which would inherit that instance's environment and extension state -- breaking causal binding of the launched editor's extension host to THIS launch)
+usage: clinemm-live-capture --bin <path> --data-dir <path> --user-data-dir <dir> --logs-path <dir> [--capture-id <id>] [--cadence 400ms] [--duration 60s] [--timeout 20s] -- <codium-args...>
+exit=0
+
+--- 3. v6 pristine user-data-dir: empty OK ---
+CLINEMM_LAUNCHED pid=19175
+usage: sleep seconds
+no new extension-host PID appeared before timeout
+exit=2
+
+--- 4. v6 pristine user-data-dir: non-empty REJECTED ---
+HALT_EXTENSION_HOST_USER_DATA_DIR_NOT_PRISTINE: /tmp/c06-udd-dirty is not empty (1 entries: [old.json]) -- refusing to launch because a non-empty --user-data-dir may indicate an existing VSCodium instance that would forward this CLI invocation to its main process, breaking causal binding of the launched editor's extension host to THIS launch (see VS Code upstream docs: --user-data-dir is the supported mechanism for opening a distinct instance)
+exit=7
+
+--- 5. v6 pristine user-data-dir: hidden file STILL REJECTED ---
+HALT_EXTENSION_HOST_USER_DATA_DIR_NOT_PRISTINE: /tmp/c06-udd-hidden is not empty (1 entries: [.DS_Store]) -- refusing to launch because a non-empty --user-data-dir may indicate an existing VSCodium instance that would forward this CLI invocation to its main process, breaking causal binding of the launched editor's extension host to THIS launch (see VS Code upstream docs: --user-data-dir is the supported mechanism for opening a distinct instance)
+exit=7
+
+--- 6. v6 pristine user-data-dir: NON-EXISTENT OK (creates it) ---
+CLINEMM_LAUNCHED pid=19188
+usage: sleep seconds
+no new extension-host PID appeared before timeout
+exit=2
+
+--- 7. v6 pristine logs-path: still REJECTED if non-empty (cross-check v5 invariant) ---
+HALT_EXTENSION_HOST_LOG_PATH_NOT_PRISTINE: /tmp/c06-logs-dirty is not empty (1 entries: [old.log]) -- refusing to launch because we cannot prove which files came from this launch vs. a stale session
+exit=7
+
+--- cleanup ---

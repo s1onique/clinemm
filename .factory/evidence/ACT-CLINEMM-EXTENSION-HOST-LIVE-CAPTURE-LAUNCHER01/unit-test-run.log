@@ -1,0 +1,95 @@
+=== RUN   TestWaitForNewExtensionHost_BindSingleNewPID
+--- PASS: TestWaitForNewExtensionHost_BindSingleNewPID (0.00s)
+=== RUN   TestParser_ExactMarkerOnly
+--- PASS: TestParser_ExactMarkerOnly (0.00s)
+=== RUN   TestParser_LiveObservedShape
+--- PASS: TestParser_LiveObservedShape (0.00s)
+=== RUN   TestParser_PluginExclusion
+--- PASS: TestParser_PluginExclusion (0.00s)
+=== RUN   TestFilteredEnv_RemovesBothProfileFlags
+--- PASS: TestFilteredEnv_RemovesBothProfileFlags (0.00s)
+=== RUN   TestObserverArgv_ExactOrder
+--- PASS: TestObserverArgv_ExactOrder (0.00s)
+=== RUN   TestWaitForNewExtensionHost_Timeout
+--- PASS: TestWaitForNewExtensionHost_Timeout (0.00s)
+=== RUN   TestParser_LeadingWhitespace
+--- PASS: TestParser_LeadingWhitespace (0.00s)
+=== RUN   TestWaitForNewExtensionHost_AuthoritativeBind
+identity-bound: authoritative pid=30159 (from logsPath=/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-Pd89Vn/TestWaitForNewExtensionHost_AuthoritativeBind4039753518/001); new candidates=[30157 30158 30159]; cross-app false-positive guard PASS
+--- PASS: TestWaitForNewExtensionHost_AuthoritativeBind (0.00s)
+=== RUN   TestWaitForNewExtensionHost_AuthoritativeUnobservable_NoLog
+--- PASS: TestWaitForNewExtensionHost_AuthoritativeUnobservable_NoLog (0.00s)
+=== RUN   TestWaitForNewExtensionHost_AuthoritativeUnobservable_NoExthostLog
+--- PASS: TestWaitForNewExtensionHost_AuthoritativeUnobservable_NoExthostLog (0.20s)
+=== RUN   TestWaitForNewExtensionHost_AuthoritativeNonMatch
+--- PASS: TestWaitForNewExtensionHost_AuthoritativeNonMatch (0.00s)
+=== RUN   TestParser_AuthoritativeLog_ParsesExthostLog
+--- PASS: TestParser_AuthoritativeLog_ParsesExthostLog (0.00s)
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat/empty
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat/missing_pid
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat/wrong_verb
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat/wrong_log_level
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat/pid_is_not_numeric
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat/extra_whitespace
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat/truncated_timestamp
+=== RUN   TestParser_AuthoritativeLog_RejectsBadFormat/not_extension_host
+--- PASS: TestParser_AuthoritativeLog_RejectsBadFormat (0.00s)
+    --- PASS: TestParser_AuthoritativeLog_RejectsBadFormat/empty (0.00s)
+    --- PASS: TestParser_AuthoritativeLog_RejectsBadFormat/missing_pid (0.00s)
+    --- PASS: TestParser_AuthoritativeLog_RejectsBadFormat/wrong_verb (0.00s)
+    --- PASS: TestParser_AuthoritativeLog_RejectsBadFormat/wrong_log_level (0.00s)
+    --- PASS: TestParser_AuthoritativeLog_RejectsBadFormat/pid_is_not_numeric (0.00s)
+    --- PASS: TestParser_AuthoritativeLog_RejectsBadFormat/extra_whitespace (0.00s)
+    --- PASS: TestParser_AuthoritativeLog_RejectsBadFormat/truncated_timestamp (0.00s)
+    --- PASS: TestParser_AuthoritativeLog_RejectsBadFormat/not_extension_host (0.00s)
+=== RUN   TestErrIdentityUnobservable_Is
+--- PASS: TestErrIdentityUnobservable_Is (0.00s)
+=== RUN   TestWaitForNewExtensionHost_BoundPIDMatchesAuthoritative
+identity-bound: authoritative pid=55555 (from logsPath=/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-Pd89Vn/TestWaitForNewExtensionHost_BoundPIDMatchesAuthoritative2674003819/001); new candidates=[700 800 900 1200 55555]; cross-app false-positive guard PASS
+--- PASS: TestWaitForNewExtensionHost_BoundPIDMatchesAuthoritative (0.00s)
+=== RUN   TestErrExthostLogRace_Is
+--- PASS: TestErrExthostLogRace_Is (0.00s)
+=== RUN   TestStartClineMM_LogsPathInjection
+--- PASS: TestStartClineMM_LogsPathInjection (0.00s)
+=== RUN   TestWaitForNewExtensionHost_LogRoot_HappyPath
+identity-bound: authoritative pid=30159 (from logsPath=/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-Pd89Vn/TestWaitForNewExtensionHost_LogRoot_HappyPath2238298261/001); new candidates=[30157 30158 30159]; cross-app false-positive guard PASS
+--- PASS: TestWaitForNewExtensionHost_LogRoot_HappyPath (0.00s)
+=== RUN   TestWaitForNewExtensionHost_LogRoot_FaultInjectionV4Layout
+--- PASS: TestWaitForNewExtensionHost_LogRoot_FaultInjectionV4Layout (0.20s)
+=== RUN   TestEnsurePristineLogsPath_NotPristine_Halt
+--- PASS: TestEnsurePristineLogsPath_NotPristine_Halt (0.00s)
+=== RUN   TestEnsurePristineLogsPath_NonExistent_Creates
+--- PASS: TestEnsurePristineLogsPath_NonExistent_Creates (0.00s)
+=== RUN   TestEnsurePristineLogsPath_ExistingEmpty_OK
+--- PASS: TestEnsurePristineLogsPath_ExistingEmpty_OK (0.00s)
+=== RUN   TestEnsurePristineLogsPath_PathIsFile_Halt
+--- PASS: TestEnsurePristineLogsPath_PathIsFile_Halt (0.00s)
+=== RUN   TestWaitForNewExtensionHost_LogRoot_LogWriteRace
+identity-bound: authoritative pid=30159 (from logsPath=/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-Pd89Vn/TestWaitForNewExtensionHost_LogRoot_LogWriteRace4089768389/001); new candidates=[30157 30158 30159]; cross-app false-positive guard PASS
+--- PASS: TestWaitForNewExtensionHost_LogRoot_LogWriteRace (0.41s)
+=== RUN   TestWaitForNewExtensionHost_LogRoot_MalformedFirstLine
+--- PASS: TestWaitForNewExtensionHost_LogRoot_MalformedFirstLine (0.00s)
+=== RUN   TestEnsurePristineLogsPath_ThenLogRoot_HappyPath
+identity-bound: authoritative pid=30159 (from logsPath=/private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/clinemm-sandbox-temp-Pd89Vn/TestEnsurePristineLogsPath_ThenLogRoot_HappyPath2012627307/001/live-specimen-01); new candidates=[30157 30158 30159]; cross-app false-positive guard PASS
+--- PASS: TestEnsurePristineLogsPath_ThenLogRoot_HappyPath (0.00s)
+=== RUN   TestErrLogPathNotPristine_Is
+--- PASS: TestErrLogPathNotPristine_Is (0.00s)
+=== RUN   TestParseConfig_UserDataDir_Required
+--- PASS: TestParseConfig_UserDataDir_Required (0.00s)
+=== RUN   TestEnsurePristineUserDataDir_NotPristine_Halt
+--- PASS: TestEnsurePristineUserDataDir_NotPristine_Halt (0.00s)
+=== RUN   TestEnsurePristineUserDataDir_NonExistent_Creates
+--- PASS: TestEnsurePristineUserDataDir_NonExistent_Creates (0.00s)
+=== RUN   TestEnsurePristineUserDataDir_ExistingEmpty_OK
+--- PASS: TestEnsurePristineUserDataDir_ExistingEmpty_OK (0.00s)
+=== RUN   TestEnsurePristineUserDataDir_PathIsFile_Halt
+--- PASS: TestEnsurePristineUserDataDir_PathIsFile_Halt (0.00s)
+=== RUN   TestErrUserDataDirNotPristine_Is
+--- PASS: TestErrUserDataDirNotPristine_Is (0.00s)
+=== RUN   TestEnsurePristineUserDataDir_ThenLogRoot_HappyPath
+--- PASS: TestEnsurePristineUserDataDir_ThenLogRoot_HappyPath (0.00s)
+=== RUN   TestEnsurePristineUserDataDir_HiddenFile_Still_Halt
+--- PASS: TestEnsurePristineUserDataDir_HiddenFile_Still_Halt (0.00s)
+PASS
+ok  	github.com/cline/clinemm/cmd/clinemm-live-capture	1.024s

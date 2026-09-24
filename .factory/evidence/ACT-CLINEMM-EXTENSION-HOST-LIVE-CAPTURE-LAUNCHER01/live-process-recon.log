@@ -1,0 +1,123 @@
+=== LIVE RECON for ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 ===
+captured at: 2026-09-24T10:49:40Z
+host: Darwin MacBook-Pro-3.local 23.6.0 Darwin Kernel Version 23.6.0: Thu Dec 19 20:47:16 PST 2024; root:xnu-10063.141.1.703.2~1/RELEASE_ARM64_T6031 arm64 arm Darwin
+codium: 1.126.04524
+
+=== Step 1: did ps -axo | grep -- "--type=extensionHost" find anything? ===
+non-grep, non-launcher matches: 0
+
+=== Step 2: all VSCodium Helper children across all live VSCodium instances ===
+      1 ppid=92038 pid=92085 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=92038 pid=92073 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=92038 pid=92072 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=92038 pid=92071 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=92038 pid=92070 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=92038 pid=92068 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=network.mojom.NetworkService
+      1 ppid=92038 pid=92067 base=VSCodium                         type=--type=gpu-process     sub=
+      1 ppid=89234 pid=89806 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=89234 pid=89254 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=89234 pid=89251 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=89234 pid=89250 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=89234 pid=89249 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=89234 pid=89248 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=network.mojom.NetworkService
+      1 ppid=89234 pid=89247 base=VSCodium                         type=--type=gpu-process     sub=
+      1 ppid=83230 pid=83319 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=83230 pid=83247 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=83230 pid=83246 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=83230 pid=83245 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=83230 pid=83244 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=83230 pid=83243 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=network.mojom.NetworkService
+      1 ppid=83230 pid=83242 base=VSCodium                         type=--type=gpu-process     sub=
+      1 ppid=73981 pid=9244 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=73981 pid=74393 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=73981 pid=74180 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=73981 pid=74007 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=73981 pid=73994 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=73981 pid=73993 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=network.mojom.NetworkService
+      1 ppid=73981 pid=73992 base=VSCodium                         type=--type=gpu-process     sub=
+      1 ppid=73851 pid=74020 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=73851 pid=73886 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=73851 pid=73885 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=73851 pid=73884 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=73851 pid=73865 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=73851 pid=73864 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=network.mojom.NetworkService
+      1 ppid=73851 pid=73863 base=VSCodium                         type=--type=gpu-process     sub=
+      1 ppid=67295 pid=67547 base=VSCodium                         type=--type=renderer        sub=
+      1 ppid=67295 pid=67415 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=67295 pid=67414 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=67295 pid=67313 base=VSCodium                         type=--type=utility         sub=--utility-sub-type=node.mojom.NodeService
+      1 ppid=67295 pid=67312 base=VSCodium                         type=--type=renderer        sub=
+
+=== Step 3: processes whose argv contains "extension" as a word (case insensitive) ===
+ 1315 /System/Library/ExtensionKit/Extensions/WallpaperVideoExtension.appex/Contents/MacOS/WallpaperVideoExtension
+ 1360 /System/Library/Input Methods/PressAndHold.app/Contents/PlugIns/PAH_Extension.appex/Contents/MacOS/PAH_Extension -AppleLanguages ("en-RU", "ru-RU")
+ 1874 /Applications/WireGuard.app/Contents/PlugIns/WireGuardNetworkExtension.appex/Contents/MacOS/WireGuardNetworkExtension -AppleLanguages ("en-RU", "ru-RU")
+ 6266 /System/Library/PrivateFrameworks/SafariFoundation.framework/Versions/A/XPCServices/CredentialProviderExtensionHelper.xpc/Contents/MacOS/CredentialProviderExtensionHelper
+20397 /System/Applications/Calendar.app/Contents/PlugIns/CalendarWidgetExtension.appex/Contents/MacOS/CalendarWidgetExtension
+21253 awk -Fextension {print}
+31954 /System/Library/Frameworks/ExtensionFoundation.framework/Versions/A/XPCServices/extensionkitservice.xpc/Contents/MacOS/extensionkitservice
+38838 /System/Library/Frameworks/QuickLookThumbnailing.framework/Versions/A/PlugIns/ThumbnailExtension_macOS.appex/Contents/MacOS/ThumbnailExtension_macOS -AppleLanguages ("en-RU", "ru-RU")
+86834 /System/Library/Frameworks/ExtensionFoundation.framework/Versions/A/XPCServices/extensionkitservice.xpc/Contents/MacOS/extensionkitservice
+87958 /System/Library/CoreServices/Screen Time.app/Contents/PlugIns/ScreenTimeWidgetExtension.appex/Contents/MacOS/ScreenTimeWidgetExtension
+
+=== Step 4: existing observer locateExtensionHostPid regex shape ===
+async function locateExtensionHostPid() {
+	// Returns { pid, command } for the most-recently started process
+	// whose command line mentions "extension" / "extensionHost" /
+	// "Extension Host".
+	if (process.platform === "darwin") {
+		try {
+			const { stdout } = await execFileP("ps", ["-A", "-o", "pid=,command="])
+			const candidates = stdout
+				.split("\n")
+				.map((l) => l.trim())
+				.filter((l) => l.length > 0)
+				.map((l) => {
+					const m = /^(\d+)\s+(.*)$/.exec(l)
+					return m ? { pid: Number(m[1]), command: m[2] } : null
+				})
+				.filter((x) => x && /(extension[ _-]?host|extensionhost)/i.test(x.command))
+			if (candidates.length > 0) {
+				// Highest PID is the most-recently-spawned (monotonic).
+				candidates.sort((a, b) => b.pid - a.pid)
+				return candidates[0]
+			}
+		} catch {
+			/* fallthrough */
+		}
+	}
+	// Fallback: child of current process whose command mentions "extension".
+	try {
+		const ourPid = process.pid
+		const { stdout } = await execFileP("pgrep", ["-P", String(ourPid), "-l"])
+		const lines = stdout.split("\n").map((l) => l.trim()).filter((l) => l.length > 0)
+		for (const line of lines.reverse()) {
+			if (/extension/i.test(line)) {
+				const m = /^(\d+)\s+(.*)$/.exec(line)
+				if (m) return { pid: Number(m[1]), command: m[2] }
+			}
+		}
+	} catch {
+		/* fallthrough */
+	}
+	return null
+}
+
+=== Step 5: the 5 ps samples that the helper currently treats as the marker ===
+(none found)
+
+=== Step 6: actual argv shapes observed (top 5 unique type/sub-type combinations) ===
+     35 --type=utility --utility-sub-type=node.mojom.NodeService
+     15 --type=renderer --utility-sub-type=node.mojom.NodeService
+     11 --type=utility --utility-sub-type=network.mojom.NetworkService
+     11 --type=renderer --utility-sub-type=network.mojom.NetworkService
+     11 --type=gpu-process --utility-sub-type=node.mojom.NodeService
+
+=== Step 7: V2 predicate (with Plugin/inspect-port exclusions) -- live match count ===
+MATCH:  1884 /Applications/Notion.app/Contents/Frameworks/Notion Helper.app/Contents/MacOS/Notion Helper --type=utility --utility-sub-type=node.mojom.NodeService --lang=en-GB --service-sandbox-type=none --us...(truncated)
+MATCH:  1959 /Applications/Figma.app/Contents/Frameworks/Figma Helper.app/Contents/MacOS/Figma Helper --type=utility --utility-sub-type=node.mojom.NodeService --lang=en-GB --service-sandbox-type=none --user-...(truncated)
+MATCH: 11032 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper --type=utility --utility-sub-type=node.mojom.NodeService --lang=en-GB --service-sandbox-type=non...(truncated)
+MATCH: 11033 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper --type=utility --utility-sub-type=node.mojom.NodeService --lang=en-GB --service-sandbox-type=non...(truncated)
+MATCH: 30057 /Applications/VSCodium.app/Contents/Frameworks/VSCodium Helper.app/Contents/MacOS/VSCodium Helper --type=utility --utility-sub-type=node.mojom.NodeService --lang=en-GB --service-sandbox-type=non...(truncated)
+
+total_matches=24
