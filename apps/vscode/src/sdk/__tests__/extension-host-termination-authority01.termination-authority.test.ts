@@ -3,29 +3,36 @@
  *
  * Focused test suite for the Extension Host termination witness.
  *
- * Discriminators covered (per ACT §13 / §15):
- *   TATRM-CONSERVE-01  disabled-zero-semantic-delta
- *   TATRM-POLICY-01    public + knob=1 -> DISABLED (fail-closed)
- *   TATRM-POLICY-02    dogfood + knob=1 -> ARMED
- *   TATRM-POLICY-03    dogfood + knob unset -> DISABLED
- *   TATRM-INSTALL-01   install installs exactly the documented listeners
- *   TATRM-INSTALL-02   install is idempotent
- *   TATRM-INSTALL-03   install on DISABLED state is a no-op
- *   TATRM-EVENT-01     beforeExit captures code
- *   TATRM-EVENT-02     uncaughtExceptionMonitor captures bounded reason
- *   TATRM-EVENT-03     unhandledRejection captures bounded reason
- *   TATRM-EVENT-04     warning captures bounded name + first line
- *   TATRM-EVENT-05     SIGTERM records as sighup signal kind
- *   TATRM-EVENT-06     event cap honored (dropped counter increments)
- *   TATRM-EVENT-07     bounded lines preserve JSONL single-line format
- *   TATRM-VERDICT-01   TA-D1 -> TA1 (explicit process exit)
- *   TATRM-VERDICT-02   TA-D2 -> TA2 (native crash report present)
- *   TATRM-VERDICT-03   TA-D3 -> TA3 (external termination reported)
- *   TATRM-VERDICT-04   TA-D4 -> TA4 (resource exhaustion reported)
- *   TATRM-VERDICT-05   death observed but inconclusive -> TA5
- *   TATRM-VERDICT-06   nothing observed -> TA6
- *   TATRM-RUNTIME-01   default filesystem seam uses appendFile
- *   TATRM-RUNTIME-02   macOS crash report summarizer collapses load-bearing fields
+ * Discriminators covered (per ACT §13 / §15 + CORRECTION01):
+ *   TATRM-CONSERVE-01        disabled-zero-semantic-delta
+ *   TATRM-CONSERVE-SIGNAL-01 witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
+ *   TATRM-CONSERVE-REJECTION-01 witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
+ *   TATRM-CONSERVE-SIGNAL-MUTATION-01 a temporary SIGTERM listener survives the witness
+ *   TATRM-POLICY-01          public + knob=1 -> DISABLED (fail-closed)
+ *   TATRM-POLICY-02          dogfood + knob=1 -> ARMED
+ *   TATRM-POLICY-03          dogfood + knob unset -> DISABLED
+ *   TATRM-INSTALL-01         install installs EXACTLY the safe-list
+ *                            (beforeExit, uncaughtExceptionMonitor, warning, exit)
+ *   TATRM-INSTALL-02         install is idempotent
+ *   TATRM-INSTALL-03         install on DISABLED state is a no-op
+ *   TATRM-EVENT-01           beforeExit captures code
+ *   TATRM-EVENT-02           uncaughtExceptionMonitor captures bounded reason
+ *   TATRM-EVENT-04           warning captures bounded name + first line
+ *   TATRM-EVENT-06           event cap honored (dropped counter increments)
+ *   TATRM-EVENT-07           bounded lines preserve JSONL single-line format
+ *   TATRM-VERDICT-01         TA-D1 -> TA1 (explicit process exit)
+ *   TATRM-VERDICT-02         TA-D2 -> TA2 (native crash report present)
+ *   TATRM-VERDICT-03         TA-D3 -> TA3 (external termination reported)
+ *   TATRM-VERDICT-04         TA-D4 -> TA4 (resource exhaustion reported)
+ *   TATRM-VERDICT-05         death observed but inconclusive -> TA5
+ *   TATRM-VERDICT-06         nothing observed -> TA6
+ *   TATRM-VERDICT-07         TA1 is overridden by TA2 when a crash report exists
+ *   TATRM-RUNTIME-01         writeParentLifecycle writes parent-lifecycle.json
+ *   TATRM-RUNTIME-02         macOS crash report summarizer collapses load-bearing fields
+ *   TATRM-RUNTIME-03         writeCrashReportSummary falls back on parse error
+ *   TATRM-RUNTIME-04         writeCrashReportSummary writes structured summary on real-format report
+ *   TATRM-RECOVERY-01        __resetTerminationAuthorityForTests clears all state
+ *   TATRM-RECOVERY-02        getTerminationAuthoritySnapshot returns a defensive copy
  */
 
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
@@ -119,9 +126,7 @@ function stableCounters(seed: Partial<TerminationAuthorityCounters> = {}): Termi
 		processExitCode: undefined,
 		processBeforeExitObserved: false,
 		uncaughtExceptionMonitorObserved: false,
-		unhandledRejectionObserved: false,
 		warningObserved: false,
-		processSignalObserved: undefined,
 		...seed,
 	}
 }
@@ -213,10 +218,18 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / install seam", ()
 		__resetTerminationAuthorityForTests()
 	})
 
-	it("TATRM-INSTALL-01: install installs exactly the documented listeners", () => {
+	it("TATRM-INSTALL-01: install installs exactly the safe-list listeners", () => {
 		// Arms the witness, binds the writer + data root seams, then
 		// runs install(). We monkey-patch `process.on` to capture every
 		// registration BEFORE the install call.
+		//
+		// CORRECTION01: the safe-list is FROZEN to exactly the channels
+		// that are provably observational for process-termination
+		// attribution. The witness MUST NOT install any other listener
+		// (signal handlers, unhandledRejection, rejectionHandled, etc.)
+		// because installing one would alter process-termination
+		// semantics (Node's default disposition is suppressed when a
+		// listener is registered).
 		const pre = makeFakeProcess()
 		const originalOn = process.on.bind(process)
 		const captured: Array<{ event: string; nArgs: number }> = []
@@ -245,28 +258,26 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / install seam", ()
 				await new Promise((resolve) => setImmediate(resolve))
 				const installed = getTerminationAuthorityState() === "installed"
 				expect(installed).toBe(true)
-				const expectEvents = [
-					"beforeExit",
-					"uncaughtExceptionMonitor",
-					"unhandledRejection",
-					"rejectionHandled",
-					"warning",
-					"SIGHUP",
-					"SIGINT",
-					"SIGTERM",
-					"SIGPIPE",
-					"exit",
-				]
-				for (const ev of expectEvents) {
+				// FROZEN SAFE-LIST: every event the witness installs MUST
+				// appear in this set; nothing else may.
+				const EXPECTED = new Set(["beforeExit", "uncaughtExceptionMonitor", "warning", "exit"])
+				// Every captured event must be in the expected set.
+				for (const c of captured) {
+					expect(EXPECTED.has(c.event)).toBe(true)
+				}
+				// And every expected event must be present.
+				for (const ev of EXPECTED) {
 					expect(captured.find((c) => c.event === ev)).toBeDefined()
 				}
-				// SIGBREAK is win32-only; SIGWINCH is non-win32. Pick
-				// whichever the running platform actually has.
-				if (process.platform === "win32") {
-					expect(captured.find((c) => c.event === "SIGBREAK")).toBeDefined()
-				} else {
-					expect(captured.find((c) => c.event === "SIGWINCH")).toBeDefined()
+				// Negative assertion: the witness MUST NOT register any
+				// signal listener.
+				for (const sig of ["SIGHUP", "SIGINT", "SIGTERM", "SIGPIPE", "SIGBREAK", "SIGWINCH"]) {
+					expect(captured.find((c) => c.event === sig)).toBeUndefined()
 				}
+				// Negative assertion: the witness MUST NOT register
+				// unhandledRejection / rejectionHandled.
+				expect(captured.find((c) => c.event === "unhandledRejection")).toBeUndefined()
+				expect(captured.find((c) => c.event === "rejectionHandled")).toBeUndefined()
 				void pre
 			})
 		} finally {
@@ -365,21 +376,6 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / event capture", (
 		expect(evt.stack_head === undefined || typeof evt.stack_head === "string").toBe(true)
 	})
 
-	it("TATRM-EVENT-03: unhandledRejection captures bounded reason", async () => {
-		await setupInstalled()
-		const before = getTerminationAuthoritySnapshot().counters.observedEventCount
-		const err = new Error("rejected")
-		process.emit("unhandledRejection" as never, err as never)
-		const after = getTerminationAuthoritySnapshot().counters
-		expect(after.observedEventCount).toBe(before + 1)
-		expect(after.unhandledRejectionObserved).toBe(true)
-		const events = getTerminationAuthorityEvents()
-		const evt = events[events.length - 1]
-		expect(evt.kind).toBe("unhandledRejection")
-		expect(evt.reason_kind).toBe("Error")
-		expect(evt.reason_first_line).toBe("rejected")
-	})
-
 	it("TATRM-EVENT-04: warning captures bounded name + first line", async () => {
 		await setupInstalled()
 		const before = getTerminationAuthoritySnapshot().counters.observedEventCount
@@ -395,18 +391,6 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / event capture", (
 		expect(evt.kind).toBe("warning")
 		expect(evt.warning_name).toBe("Error")
 		expect(typeof evt.reason_first_line).toBe("string")
-	})
-
-	it("TATRM-EVENT-05: SIGTERM records as sigterm signal kind", async () => {
-		await setupInstalled()
-		const before = getTerminationAuthoritySnapshot().counters.observedEventCount
-		process.emit("SIGTERM" as never)
-		const after = getTerminationAuthoritySnapshot().counters
-		expect(after.observedEventCount).toBe(before + 1)
-		expect(after.processSignalObserved).toBe("sigterm")
-		const events = getTerminationAuthorityEvents()
-		const evt = events[events.length - 1]
-		expect(evt.kind).toBe("sigterm")
 	})
 
 	it("TATRM-EVENT-06: event cap honored (dropped counter increments)", async () => {
@@ -425,6 +409,10 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / event capture", (
 		// We assert that no recorded event contains a newline in its
 		// serialized JSON form. If a future contributor forgets to
 		// bound `reason_first_line`, this would fail.
+		//
+		// CORRECTION01: switched the trigger from `unhandledRejection`
+		// (which the witness no longer observes) to `warning` — the
+		// bounded-line guarantee is independent of the channel.
 		const w = makeFakeWriter()
 		setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
 		const mod = require("../extension-host-termination-authority") as {
@@ -434,7 +422,7 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / event capture", (
 		applyExtensionHostTerminationAuthorityPolicy(true, { [CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV]: "1" })
 		await installTerminationAuthorityWitness()
 		const err = new Error("line1\nline2\nline3")
-		process.emit("unhandledRejection" as never, err as never)
+		process.emit("warning" as never, err as never)
 		const writes = w._writes.filter((wr) => wr.path.endsWith("host-self-events.jsonl"))
 		expect(writes.length).toBeGreaterThan(0)
 		const last = writes[writes.length - 1].line
@@ -443,10 +431,88 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / event capture", (
 		// Before the trailing newline, no other newline allowed.
 		const trimmed = last.slice(0, -1)
 		expect(trimmed.includes("\n")).toBe(false)
-		// And reason_first_line should NOT equal "line1 line2 line3" (it
-		// would if the boundLine were not bounding newlines->spaces).
+		// And reason_first_line should be "line1 line2 line3" (the
+		// boundLine helper collapses newlines to spaces — proves the
+		// bounded-line guarantee is preserved end-to-end).
 		const json = JSON.parse(trimmed)
 		expect(json.reason_first_line).toBe("line1 line2 line3")
+	})
+
+	// =============================================================================
+	// CORRECTION01 — Semantic-inertia discriminators
+	//
+	// These assert the witness does NOT install listeners on channels
+	// that would alter Node's default process-termination semantics.
+	// The conservation gate is at the boundary between "observational
+	// only" (allowed) and "process-lifecycle altering" (forbidden).
+	// =============================================================================
+
+	it("TATRM-CONSERVE-SIGNAL-01: witness enabled -> SIGTERM/SIGINT/SIGHUP listenerCount unchanged", async () => {
+		// Capture baseline BEFORE install.
+		const baseTerm = process.listenerCount("SIGTERM")
+		const baseInt = process.listenerCount("SIGINT")
+		const baseHup = process.listenerCount("SIGHUP")
+		// Arm + install the witness.
+		setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
+		const w = makeFakeWriter()
+		const mod = require("../extension-host-termination-authority") as {
+			setTerminationAuthorityWriter: (w: FakeWriter) => void
+		}
+		mod.setTerminationAuthorityWriter(w as unknown as never)
+		applyExtensionHostTerminationAuthorityPolicy(true, { [CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV]: "1" })
+		await installTerminationAuthorityWitness()
+		// Assert that the count of listeners on each unsafe channel
+		// is unchanged. This proves installing the witness does NOT
+		// register a signal handler.
+		expect(process.listenerCount("SIGTERM")).toBe(baseTerm)
+		expect(process.listenerCount("SIGINT")).toBe(baseInt)
+		expect(process.listenerCount("SIGHUP")).toBe(baseHup)
+	})
+
+	it("TATRM-CONSERVE-REJECTION-01: witness enabled -> unhandledRejection/rejectionHandled listenerCount unchanged", async () => {
+		// Capture baseline BEFORE install.
+		const baseUnh = process.listenerCount("unhandledRejection")
+		const baseHandled = process.listenerCount("rejectionHandled")
+		// Arm + install the witness.
+		setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
+		const w = makeFakeWriter()
+		const mod = require("../extension-host-termination-authority") as {
+			setTerminationAuthorityWriter: (w: FakeWriter) => void
+		}
+		mod.setTerminationAuthorityWriter(w as unknown as never)
+		applyExtensionHostTerminationAuthorityPolicy(true, { [CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV]: "1" })
+		await installTerminationAuthorityWitness()
+		// Assert that the witness did NOT register an unhandledRejection
+		// or rejectionHandled listener. Installing either would alter
+		// Node's default `--unhandled-rejections=throw` behavior.
+		expect(process.listenerCount("unhandledRejection")).toBe(baseUnh)
+		expect(process.listenerCount("rejectionHandled")).toBe(baseHandled)
+	})
+
+	it("TATRM-CONSERVE-SIGNAL-MUTATION-01: pre-existing SIGTERM listener survives the witness", async () => {
+		// Stronger mutation check (per operator directive): manually add
+		// a SIGTERM listener BEFORE install, then verify the witness
+		// does NOT add another one. If the witness ever regresses to
+		// registering SIGTERM, this discriminator fails (the listener
+		// count would grow from baseTerm to baseTerm+1).
+		const noop = (): void => undefined
+		process.on("SIGTERM", noop)
+		const baseTerm = process.listenerCount("SIGTERM")
+		try {
+			setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
+			const w = makeFakeWriter()
+			const mod = require("../extension-host-termination-authority") as {
+				setTerminationAuthorityWriter: (w: FakeWriter) => void
+			}
+			mod.setTerminationAuthorityWriter(w as unknown as never)
+			applyExtensionHostTerminationAuthorityPolicy(true, { [CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV]: "1" })
+			await installTerminationAuthorityWitness()
+			// The witness's contribution to SIGTERM-listener count is 0,
+			// so the post-install count equals the pre-install count.
+			expect(process.listenerCount("SIGTERM")).toBe(baseTerm)
+		} finally {
+			process.removeListener("SIGTERM", noop)
+		}
 	})
 })
 

@@ -65,23 +65,6 @@ function pickEventField(events, kind, field) {
 	return undefined
 }
 
-function pickSignalKind(events) {
-	for (let i = events.length - 1; i >= 0; i--) {
-		const e = events[i]
-		if (
-			e?.kind === "sighup" ||
-			e?.kind === "sigint" ||
-			e?.kind === "sigterm" ||
-			e?.kind === "sigpipe" ||
-			e?.kind === "sigbreak" ||
-			e?.kind === "sigwinch"
-		) {
-			return e.kind
-		}
-	}
-	return undefined
-}
-
 function computeVerdict(input) {
 	const {
 		counters,
@@ -95,9 +78,7 @@ function computeVerdict(input) {
 		process_exit_code: counters.processExitCode,
 		process_exit_at: counters.processExitObservedAt,
 		uncaught_exception_monitor_observed: counters.uncaughtExceptionMonitorObserved,
-		unhandled_rejection_observed: counters.unhandledRejectionObserved,
 		warning_observed: counters.warningObserved,
-		signal_observed: counters.processSignalObserved,
 		native_crash_report_present: nativeCrashReportPresent,
 		external_termination_reported: externalTerminationReported,
 		resource_exhaustion_reported: resourceExhaustionReported,
@@ -205,9 +186,7 @@ async function main() {
 		processExitCode: pickEventField(events, "exit", "exit_code"),
 		processBeforeExitObserved: events.some((e) => e.kind === "beforeExit"),
 		uncaughtExceptionMonitorObserved: events.some((e) => e.kind === "uncaughtExceptionMonitor"),
-		unhandledRejectionObserved: events.some((e) => e.kind === "unhandledRejection"),
 		warningObserved: events.some((e) => e.kind === "warning"),
-		processSignalObserved: pickSignalKind(events),
 	}
 
 	const processExitedNormally = parentLifecycle?.process_exited_cleanly === true

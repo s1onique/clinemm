@@ -25,24 +25,52 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Termination Witness Contra
     (TERMINATION_AUTHORITY_MAX_EVENTS=512) protects against unbounded
     log-flooding processes.
 
-## Captured channels (frozen)
+## Captured channels (frozen; CORRECTION01 safe-list)
 
-    process.on("beforeExit")                   -- observation only
-    process.on("exit")                         -- observation only, sync flush
-    process.on("uncaughtExceptionMonitor")     -- observation only, NOT fatal
-    process.on("unhandledRejection")           -- observation only
-    process.on("rejectionHandled")             -- observation only
-    process.on("warning")                      -- observation only
-    process.on("SIGHUP")                       -- observation only
-    process.on("SIGINT")                       -- observation only
-    process.on("SIGTERM")                      -- observation only
-    process.on("SIGPIPE")                      -- observation only
-    process.on("SIGBREAK") [win32 only]        -- observation only
-    process.on("SIGWINCH") [non-win32 only]    -- observation only
+The witness observes ONLY channels that are provably observational
+for process-termination attribution. The frozen safe-list is exactly:
+
+    process.on("beforeExit")               -- observation only
+    process.on("exit")                     -- observation only, sync flush
+    process.on("uncaughtExceptionMonitor") -- observation only, NOT fatal
+    process.on("warning")                  -- observation only
 
 The fatal handler `uncaughtException` (NOT `Monitor`) is deliberately
 NOT installed. Adding or removing a fatal handler is exactly the kind
 of semantic delta this ACT forbids.
+
+The following channels are DELIBERATELY NOT observed because installing
+a listener would alter Node's default process-termination semantics:
+
+    process.on("unhandledRejection")
+    process.on("rejectionHandled")
+    process.on("SIGHUP")
+    process.on("SIGINT")
+    process.on("SIGTERM")
+    process.on("SIGPIPE")
+    process.on("SIGBREAK")    [win32 only]
+    process.on("SIGWINCH")    [non-win32 only]
+
+Rationale (per Node.js docs):
+  - SIGHUP/SIGINT/SIGTERM/SIGPIPE/SIGBREAK/SIGWINCH: Node's default
+    disposition for each (e.g. terminate the process for SIGINT/SIGTERM)
+    is active ONLY when no listener is installed. Adding a listener
+    suppresses that default and changes whether the Extension Host
+    dies from a signal — the exact authority we are trying to measure.
+  - unhandledRejection: Node's default `--unhandled-rejections=throw`
+    behavior (which raises an uncaught exception if no listener is
+    installed) is suppressed once a listener is registered. Installing
+    a listener therefore changes default fatal behavior.
+  - rejectionHandled: not load-bearing for termination attribution.
+  - uncaughtException: fatal-handler; explicitly forbidden.
+
+Discriminators:
+  TATRM-CONSERVE-SIGNAL-01
+    witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
+  TATRM-CONSERVE-REJECTION-01
+    witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
+  TATRM-CONSERVE-SIGNAL-MUTATION-01
+    a pre-existing SIGTERM listener survives the witness install
 
 ## Constants (frozen; tuning requires a new ACT)
 

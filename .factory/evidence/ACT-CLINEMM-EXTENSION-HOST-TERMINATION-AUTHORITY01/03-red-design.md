@@ -25,22 +25,25 @@ CLINEMM_DIAG_TERMINATION_AUTHORITY=1 + dogfood. So:
 
 ## Discriminators this ACT must satisfy
 
-TATRM-CONSERVE-01  disabled-zero-semantic-delta
+TATRM-CONSERVE-01              disabled-zero-semantic-delta
+TATRM-CONSERVE-SIGNAL-01       witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
+TATRM-CONSERVE-REJECTION-01    witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
+TATRM-CONSERVE-SIGNAL-MUTATION-01  a pre-existing SIGTERM listener survives the witness install
+
 TATRM-POLICY-01    public + knob=1 -> DISABLED (fail-closed)
 TATRM-POLICY-02    dogfood + knob=1 -> ARMED
 TATRM-POLICY-03    dogfood + knob unset -> DISABLED
 TATRM-POLICY-04    dogfood + knob=true|yes|YES|  True accepted
 TATRM-POLICY-05    dogfood + knob=false|no|off|0|empty refused
 
-TATRM-INSTALL-01   install installs exactly the documented listeners
+TATRM-INSTALL-01   install installs EXACTLY the safe-list
+                    (beforeExit, uncaughtExceptionMonitor, warning, exit)
 TATRM-INSTALL-02   install is idempotent
 TATRM-INSTALL-03   install on DISABLED state is a no-op
 
 TATRM-EVENT-01     beforeExit captures code
 TATRM-EVENT-02     uncaughtExceptionMonitor captures bounded reason
-TATRM-EVENT-03     unhandledRejection captures bounded reason
 TATRM-EVENT-04     warning captures bounded name + first line
-TATRM-EVENT-05     SIGTERM records as sigterm signal kind
 TATRM-EVENT-06     event cap honored (dropped counter increments)
 TATRM-EVENT-07     bounded lines preserve JSONL single-line format
 

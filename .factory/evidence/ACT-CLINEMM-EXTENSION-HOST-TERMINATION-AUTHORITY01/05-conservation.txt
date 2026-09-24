@@ -55,3 +55,44 @@ The DEFAULT_OFF state was verified by:
                       accessor surface cannot mutate module state
                       by accident (verified by TATRM-RECOVERY-02).
 
+CORRECTION01 — Semantic-inertia discriminators (per operator directive):
+
+  TATRM-CONSERVE-SIGNAL-01
+                      The witness installs NO listener on
+                      SIGHUP / SIGINT / SIGTERM. Verified by:
+                      process.listenerCount("SIGTERM"|"SIGINT"|"SIGHUP")
+                      is unchanged after installTerminationAuthorityWitness().
+                      Installing any of these listeners would suppress
+                      Node's default disposition (terminate on SIGINT/SIGTERM),
+                      which is the exact authority we are trying to measure.
+
+  TATRM-CONSERVE-REJECTION-01
+                      The witness installs NO listener on
+                      unhandledRejection / rejectionHandled.
+                      Verified by listenerCount delta=0. Installing
+                      unhandledRejection would suppress Node's default
+                      `--unhandled-rejections=throw` behavior (which
+                      raises an uncaught exception if no listener is
+                      installed) and thereby change default fatal
+                      behavior.
+
+  TATRM-CONSERVE-SIGNAL-MUTATION-01
+                      Stronger mutation check: a pre-existing SIGTERM
+                      listener (added before install) survives the
+                      witness install with no additional listener
+                      registered. This proves the witness never
+                      regresses to registering SIGTERM even under
+                      mutation of the surrounding environment.
+
+These three discriminators form the load-bearing boundary between
+"observational only" (allowed) and "process-lifecycle altering"
+(forbidden). The safe-list is FROZEN to exactly:
+
+    beforeExit
+    exit
+    uncaughtExceptionMonitor
+    warning
+
+Any future ACT that wants to add a new channel MUST be a separate
+correction ACT and MUST prove the new channel is observational for
+process-termination attribution.

@@ -27,7 +27,7 @@
  *   TA5 — process death observed but authority unresolved
  *   TA6 — crash not reproduced
  *
- * DESIGN CONSTRAINTS (frozen per ACT §5/§8):
+ * DESIGN CONSTRAINTS (frozen per ACT §5/§8 + CORRECTION01):
  *   - DEFAULT_OFF: witness installs only when CLINEMM_DIAG_TERMINATION_AUTHORITY
  *     is truthy.
  *   - DOGFOOD_ONLY: the env knob is honored ONLY in dogfood. Public
@@ -44,7 +44,15 @@
  *   - NO TASK-SEMANTIC DELTA: process events are observations only;
  *     the witness NEVER calls process.exit(), NEVER swallows
  *     uncaughtException, NEVER replaces the fatal-exception path.
- *   - uncaughtExceptionMonitor is observational only (per Node docs).
+ *   - SEMANTIC INERTIA (per CORRECTION01): the witness observes ONLY
+ *     channels that are provably observational. The frozen safe-list
+ *     is exactly:
+ *       beforeExit, exit, uncaughtExceptionMonitor, warning
+ *     All signal channels (SIGHUP/SIGINT/SIGTERM/SIGPIPE/SIGBREAK/
+ *     SIGWINCH) and unhandledRejection + rejectionHandled are
+ *     DELIBERATELY NOT observed because installing a listener would
+ *     alter process-termination semantics. See the TerminationAuthority
+ *     EventKind union for the full rationale.
  *
  * REMOVAL_TRIGGER / RETAIN_AS_DIAGNOSTIC (per the operator's directive
  * accompanying this ACT): the prior CPU profiler's old removal
@@ -135,20 +143,31 @@ export type TerminationAuthorityState = "disabled" | "armed" | "installed"
  * Discriminator union for a single host-self event observed through
  * one of the Node `process.on(...)` channels. The kind is the source
  * channel; the payload is bounded by schema below.
+ *
+ * FROZEN SAFE-LIST (per CORRECTION01):
+ *   The witness observes ONLY channels that are provably observational
+ *   for process-termination attribution. Specifically:
+ *
+ *     - beforeExit          (observation only)
+ *     - exit                (observation only; sync flush before death)
+ *     - uncaughtExceptionMonitor  (observational; Node guarantees this
+ *                                  does not change eventual crash)
+ *     - warning             (observation only)
+ *
+ *   The following channels are DELIBERATELY NOT observed because
+ *   installing a listener would alter process-termination semantics:
+ *
+ *     - unhandledRejection  (default `--unhandled-rejections=throw`
+ *                            becomes effective ONLY if no listener is
+ *                            installed)
+ *     - rejectionHandled     (default no-op; not load-bearing)
+ *     - SIGHUP / SIGINT / SIGTERM / SIGPIPE / SIGBREAK / SIGWINCH
+ *                           (default Node dispositions for these
+ *                            signals are active ONLY when no listener
+ *                            is installed)
+ *     - uncaughtException   (fatal-handler; explicitly forbidden)
  */
-export type TerminationAuthorityEventKind =
-	| "beforeExit"
-	| "exit"
-	| "uncaughtExceptionMonitor"
-	| "unhandledRejection"
-	| "warning"
-	| "sighup"
-	| "sigint"
-	| "sigterm"
-	| "sigpipe"
-	| "sigbreak"
-	| "sigwinch"
-	| "rejectionHandled"
+export type TerminationAuthorityEventKind = "beforeExit" | "exit" | "uncaughtExceptionMonitor" | "warning"
 
 /**
  * Bounded shape of one self-event row. We do NOT serialize full
@@ -197,9 +216,7 @@ export interface TerminationAuthorityCounters {
 	processExitCode: number | undefined
 	processBeforeExitObserved: boolean
 	uncaughtExceptionMonitorObserved: boolean
-	unhandledRejectionObserved: boolean
 	warningObserved: boolean
-	processSignalObserved: TerminationAuthorityEventKind | undefined
 }
 
 /**
@@ -252,9 +269,7 @@ function freshCounters(): TerminationAuthorityCounters {
 		processExitCode: undefined,
 		processBeforeExitObserved: false,
 		uncaughtExceptionMonitorObserved: false,
-		unhandledRejectionObserved: false,
 		warningObserved: false,
-		processSignalObserved: undefined,
 	}
 }
 
@@ -459,9 +474,17 @@ export function __resetTerminationAuthorityForTests(): void {
  *     Calling on "disabled" is a no-op + a bounded warn.
  *   - NEVER throws. Idempotent: a second install() is a no-op.
  *   - NEVER alters command / continuation / completion semantics.
- *   - Installs ONLY observational listeners; NEVER calls process.exit().
- *   - Does NOT install `uncaughtException` (fatal-handler) — only
- *     `uncaughtExceptionMonitor` (observational), per ACT §5B.
+ *   - Installs ONLY the documented observational listeners (frozen
+ *     safe-list per CORRECTION01):
+ *       beforeExit, uncaughtExceptionMonitor, warning, exit
+ *     Does NOT install signal listeners (SIGHUP/SIGINT/SIGTERM/
+ *     SIGPIPE/SIGBREAK/SIGWINCH) because installing one removes
+ *     Node's default disposition for that signal. Does NOT install
+ *     unhandledRejection because installing one removes the default
+ *     `--unhandled-rejections=throw` behavior. Does NOT install
+ *     `uncaughtException` (fatal-handler) — only
+ *     `uncaughtExceptionMonitor` (observational), per Node docs.
+ *   - NEVER calls process.exit().
  */
 export async function installTerminationAuthorityWitness(): Promise<void> {
 	if (_state !== "armed") {
@@ -543,21 +566,8 @@ export async function installTerminationAuthorityWitness(): Promise<void> {
 		if (kind === "uncaughtExceptionMonitor") {
 			_counters.uncaughtExceptionMonitorObserved = true
 		}
-		if (kind === "unhandledRejection") {
-			_counters.unhandledRejectionObserved = true
-		}
 		if (kind === "warning") {
 			_counters.warningObserved = true
-		}
-		if (
-			kind === "sighup" ||
-			kind === "sigint" ||
-			kind === "sigterm" ||
-			kind === "sigpipe" ||
-			kind === "sigbreak" ||
-			kind === "sigwinch"
-		) {
-			_counters.processSignalObserved = kind
 		}
 		if (persistedDir) {
 			void writer(eventsPath, `${JSON.stringify(event)}\n`).catch((err) => {
@@ -579,13 +589,6 @@ export async function installTerminationAuthorityWitness(): Promise<void> {
 			warning_name: boundLine(String(origin)),
 		})
 	})
-	process.on("unhandledRejection", (reason) => {
-		const classified = classifyReason(reason)
-		record("unhandledRejection", classified)
-	})
-	process.on("rejectionHandled", () => {
-		record("rejectionHandled", {})
-	})
 	process.on("warning", (warning) => {
 		record("warning", {
 			warning_name: boundLine(warning?.name ?? "Warning"),
@@ -593,25 +596,6 @@ export async function installTerminationAuthorityWitness(): Promise<void> {
 			stack_head: boundStackHead(warning?.stack),
 		})
 	})
-
-	// Signal observers — observational only. We do NOT install
-	// SIGINT/SIGTERM handlers in NODE-default mode that would call
-	// process.exit(); that would alter process shutdown semantics.
-	// The presence of the listener is for ATTRIBUTION only.
-	const signalHandler = (kind: TerminationAuthorityEventKind) => (): void => {
-		record(kind, {})
-	}
-	process.on("SIGHUP", signalHandler("sighup"))
-	process.on("SIGINT", signalHandler("sigint"))
-	process.on("SIGTERM", signalHandler("sigterm"))
-	process.on("SIGPIPE", signalHandler("sigpipe"))
-	if (process.platform === "win32") {
-		process.on("SIGBREAK", signalHandler("sigbreak"))
-	}
-	if (process.platform !== "win32") {
-		// Linux/macOS have SIGWINCH; on Windows it's not defined.
-		process.on("SIGWINCH", signalHandler("sigwinch"))
-	}
 
 	// `exit` listener MUST run synchronously to flush its event
 	// before the process exits. Process exit listeners complete
@@ -703,9 +687,7 @@ export function computeTerminationAuthorityVerdict(input: {
 		process_exit_code: counters.processExitCode,
 		process_exit_at: counters.processExitObservedAt,
 		uncaught_exception_monitor_observed: counters.uncaughtExceptionMonitorObserved,
-		unhandled_rejection_observed: counters.unhandledRejectionObserved,
 		warning_observed: counters.warningObserved,
-		signal_observed: counters.processSignalObserved,
 		native_crash_report_present: nativeCrashReportPresent,
 		external_termination_reported: externalTerminationReported,
 		resource_exhaustion_reported: resourceExhaustionReported,
@@ -788,9 +770,7 @@ export interface TerminationAuthorityVerdict {
 		process_exit_code: number | undefined
 		process_exit_at: string | undefined
 		uncaught_exception_monitor_observed: boolean
-		unhandled_rejection_observed: boolean
 		warning_observed: boolean
-		signal_observed: TerminationAuthorityEventKind | undefined
 		native_crash_report_present: boolean
 		external_termination_reported: boolean
 		resource_exhaustion_reported: boolean
