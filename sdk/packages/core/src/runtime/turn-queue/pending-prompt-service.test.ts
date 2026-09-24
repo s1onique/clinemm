@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CoreSessionEvent } from "../../types/events";
 import type { ActiveSession } from "../../types/session";
 import {
@@ -371,5 +371,289 @@ describe("PendingPromptService", () => {
 			expect(event.type).not.toBe("agent_run_completed");
 			expect(event.type).not.toBe("agent_run_started");
 		}
+	});
+
+	// =====================================================================
+	// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01
+	// =====================================================================
+	//
+	// AB-DELIVERY-01 (structural): When the
+	// CLINEMM_OOM_DISC01_ABLATE_DELIVERY ablation seam is engaged,
+	// the REAL PendingPromptsController.drain boundary MUST NOT
+	// forward `next.delivery` into the deps.send(...) payload, but
+	// MUST continue to forward `next.jobId`. This is the load-bearing
+	// proof that the ablation is exactly the single-field removal
+	// the ACT authorizes — no other field may change. The test
+	// exercises the REAL controller (not a duplicate of the
+	// payload-construction helper) by stubbing send and observing
+	// the captured input.
+	//
+	// AB-DELIVERY-02 (conservation): With the ablation seam OFF
+	// (production default), the controller forwards `delivery`
+	// exactly as the current production seam does. This guards
+	// against an accidental baseline drift in the seam during
+	// refactors; if this test ever fails post-hoc, the ACT's
+	// ablation result cannot be interpreted as a clean single-field
+	// removal.
+	describe("AB-DELIVERY-01: ablation seam drops next.delivery but preserves next.jobId", () => {
+		const ORIGINAL_ENV = process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+		afterEach(() => {
+			if (ORIGINAL_ENV === undefined) {
+				delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+			} else {
+				process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY = ORIGINAL_ENV;
+			}
+		});
+
+		it("under ablation: deps.send input has NO delivery field BUT has jobId field", async () => {
+			process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY = "1";
+			const sessionId = "sess-ab-delivery-01";
+			const session = {
+				sessionId,
+				pendingPrompts: [
+					{
+						id: "pending-1",
+						prompt: "the only queued prompt",
+						delivery: "queue",
+						jobId: "job-1",
+					},
+				],
+				aborting: false,
+				drainingPendingPrompts: false,
+				status: "completed",
+				agent: { canStartRun: () => true },
+			} as unknown as ActiveSession;
+
+			const sendCalls: Array<{
+				sessionId: string;
+				prompt: string;
+				jobId?: string;
+				delivery?: "queue" | "steer";
+			}> = [];
+			const send = vi.fn(async (input: {
+				sessionId: string;
+				prompt: string;
+				jobId?: string;
+				delivery?: "queue" | "steer";
+			}) => {
+				sendCalls.push(input);
+			});
+			const onEnqueue = vi.fn();
+			const onBeforeDrain = vi.fn();
+			const onBeforeDispatch = vi.fn();
+			const controller = new PendingPromptsController({
+				getSession: () => session,
+				emit: () => {},
+				send,
+				onEnqueue,
+				onBeforeDrain,
+				onBeforeDispatch,
+			});
+
+			await controller.drain(sessionId);
+
+			// Send must have been called exactly once.
+			expect(sendCalls).toHaveLength(1);
+			const call = sendCalls[0];
+			expect(call).toBeDefined();
+			// Structural assertion: delivery is NOT in the payload
+			// under ablation. jobId IS.
+			expect(Object.prototype.hasOwnProperty.call(call, "delivery")).toBe(
+				false,
+			);
+			expect(call?.jobId).toBe("job-1");
+			// The C5/C6 hooks still observe the originating delivery
+			// (they read it from the entry, not the deps.send payload)
+			// — this is intentional and is part of the
+			// production-shape conservation guarantee for the
+			// diagnostic hooks.
+			expect(onBeforeDrain.mock.calls[0]?.[0]?.delivery).toBe("queue");
+			expect(onBeforeDispatch.mock.calls[0]?.[0]?.delivery).toBe("queue");
+			expect(onBeforeDrain.mock.calls[0]?.[0]?.jobId).toBe("job-1");
+			expect(onBeforeDispatch.mock.calls[0]?.[0]?.jobId).toBe("job-1");
+		});
+
+		it("AB-DELIVERY-02: with ablation OFF, deps.send input forwards delivery exactly as production", async () => {
+			delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+			const sessionId = "sess-ab-delivery-02";
+			const session = {
+				sessionId,
+				pendingPrompts: [
+					{
+						id: "pending-1",
+						prompt: "the only queued prompt",
+						delivery: "queue",
+						jobId: "job-1",
+					},
+				],
+				aborting: false,
+				drainingPendingPrompts: false,
+				status: "completed",
+				agent: { canStartRun: () => true },
+			} as unknown as ActiveSession;
+
+			const sendCalls: Array<{
+				sessionId: string;
+				prompt: string;
+				jobId?: string;
+				delivery?: "queue" | "steer";
+			}> = [];
+			const send = vi.fn(async (input: {
+				sessionId: string;
+				prompt: string;
+				jobId?: string;
+				delivery?: "queue" | "steer";
+			}) => {
+				sendCalls.push(input);
+			});
+			const controller = new PendingPromptsController({
+				getSession: () => session,
+				emit: () => {},
+				send,
+			});
+
+			await controller.drain(sessionId);
+
+			// Conservation: the production-equivalent path forwards
+			// BOTH delivery and jobId exactly as the current
+			// production seam does. If this changes, the ablation
+			// cannot be interpreted as a clean single-field removal.
+			expect(sendCalls).toHaveLength(1);
+			const call = sendCalls[0];
+			expect(call?.delivery).toBe("queue");
+			expect(call?.jobId).toBe("job-1");
+		});
+	});
+
+	// =====================================================================
+	// AB-ATTEST-01 (positive Extension Host attestation)
+	// =====================================================================
+	//
+	// CORRECTION01 §3 — Establish positive attestation that the running
+	// process is bound to the expected ablation state. The constructor
+	// emits ONE line to process.stderr:
+	//
+	//   [CLINEMM_OOM_DISC01_ATTEST] subject=<sha|unknown|unset>
+	//                              ablation_active=true|false
+	//                              env_present="1"|"<unset>"
+	//                              eh_pid=<int>
+	//                              ppid=<int|unknown>
+	//                              constructed_at=<ISO>
+	//
+	// The test spies on process.stderr.write, parses the emitted line,
+	// and asserts the structural fields. This guarantees the live-specimen
+	// operator can pair `ablation_active=true|false` with the Extension
+	// Host PID they record — a positive proof that the live-run
+	// actually exercised the configured ablation (not a stale copy,
+	// not a different process).
+	//
+	// Historical pitfall (now documented in the production code):
+	// `declare const CLINEMM_OOM_DISC01_SUBJECT_HEAD` is a TypeScript
+	// type-only declaration; at runtime the identifier is `undefined`
+	// unless esbuild `--define:CLINEMM_OOM_DISC01_SUBJECT_HEAD='...'` was
+	// applied. A direct reference would throw `ReferenceError: ... is
+	// not defined`, which `try { ... } catch {}` silently swallowed,
+	// making the test fail mysteriously with `n_calls=0`. The lookup
+	// now goes through `globalThis as { ... }.CLINEMM_..._SUBJECT_HEAD`
+	// so the absence is observable as the literal token `<runtime-unset>`
+	// rather than a silent swallowed error.
+	describe("AB-ATTEST-01: controller emits a parseable positive attestation at construction", () => {
+		const ORIGINAL_ENV = process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+		afterEach(() => {
+			if (ORIGINAL_ENV === undefined) {
+				delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+			} else {
+				process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY = ORIGINAL_ENV;
+			}
+			vi.restoreAllMocks();
+		});
+
+		function parseAttestLine(spy: ReturnType<typeof vi.spyOn>): {
+			subject: string;
+			ablationActive: boolean;
+			envPresent: string;
+			ehPid: number;
+			ppid: string;
+			constructedAt: string;
+		} | null {
+			const calls = spy.mock.calls;
+			for (const callArgs of calls) {
+				const line = String(callArgs[0] ?? "");
+				if (!line.startsWith("[CLINEMM_OOM_DISC01_ATTEST]")) continue;
+				const subject = /subject=(\S+)/.exec(line)?.[1] ?? "";
+				const ablationActive =
+					/ablation_active=(true|false)/.exec(line)?.[1] === "true";
+				const envPresent = /env_present=(".*?"|\S+)/.exec(line)?.[1] ?? "";
+				const ehPidRaw = /eh_pid=(\d+)/.exec(line)?.[1] ?? "";
+				const ppid = /ppid=(\S+)/.exec(line)?.[1] ?? "";
+				const constructedAt = /constructed_at=(\S+)/.exec(line)?.[1] ?? "";
+				return {
+					subject,
+					ablationActive,
+					envPresent,
+					ehPid: Number.parseInt(ehPidRaw, 10),
+					ppid,
+					constructedAt,
+				};
+			}
+			return null;
+		}
+
+		it("with env=1, ablation_active=true and eh_pid is the live process pid", () => {
+			process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY = "1";
+			const spy = vi
+				.spyOn(process.stderr, "write")
+				.mockImplementation(() => true);
+			new PendingPromptsController({
+				getSession: () => undefined,
+				emit: () => {},
+				send: async () => undefined,
+			});
+			const parsed = parseAttestLine(spy);
+			expect(parsed, "must have emitted at least one [CLINEMM_OOM_DISC01_ATTEST] line").not.toBeNull();
+			expect(parsed!.ablationActive).toBe(true);
+			expect(parsed!.envPresent).toBe("1");
+			expect(parsed!.ehPid).toBe(process.pid);
+			expect(parsed!.constructedAt).toMatch(
+				/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/,
+			);
+		});
+
+		it("with env unset, ablation_active=false and eh_pid is the live process pid", () => {
+			delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+			const spy = vi
+				.spyOn(process.stderr, "write")
+				.mockImplementation(() => true);
+			new PendingPromptsController({
+				getSession: () => undefined,
+				emit: () => {},
+				send: async () => undefined,
+			});
+			const parsed = parseAttestLine(spy);
+			expect(parsed, "must have emitted at least one [CLINEMM_OOM_DISC01_ATTEST] line").not.toBeNull();
+			expect(parsed!.ablationActive).toBe(false);
+			expect(parsed!.envPresent).toBe("<unset>");
+			expect(parsed!.ehPid).toBe(process.pid);
+		});
+
+		it("attestation subject token is one of {<sha>, <unknown>, <runtime-unset>}", () => {
+			delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+			const spy = vi
+				.spyOn(process.stderr, "write")
+				.mockImplementation(() => true);
+			new PendingPromptsController({
+				getSession: () => undefined,
+				emit: () => {},
+				send: async () => undefined,
+			});
+			const parsed = parseAttestLine(spy);
+			expect(parsed).not.toBeNull();
+			expect(
+				parsed!.subject === "<unknown>" ||
+					parsed!.subject === "<runtime-unset>" ||
+					/^[0-9a-f]{7,40}$/.test(parsed!.subject),
+				`subject token ${JSON.stringify(parsed!.subject)} is not in the allowed set`,
+			).toBe(true);
+		});
 	});
 });
