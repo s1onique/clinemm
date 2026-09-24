@@ -575,3 +575,250 @@ the reactive CPU profile. Both remain pending the bridge ACT.
 - Pre-fix: 31 cases in focused vitest suite + 1168 cases in default bun suite
 - Post-fix: 42 cases in focused vitest suite (11 new discriminators) + 1168 cases in default bun suite (zero regression)
 - RED→GREEN proof: `TALIVE-TA6-NEGATIVE-WITNESS-01` fails against pre-fix classifier; passes against post-fix classifier
+
+---
+
+# CORRECTION01 — HALT_EXTERNAL_LIFECYCLE_FALSE_SURVIVAL_ON_INITIAL_MISS
+
+## C0. Why this correction exists
+
+The runtime-forensics reviewer identified a new P0 in the exact
+evidence path that authorizes TA6 — the external lifecycle observer
+delivered in iteration 01.
+
+The observer sampled the requested PID once on entry and wrote
+`extension_host_started_at = samples[0]?.at` if any sample was
+recorded. When the requested PID is stale/already-dead when
+observation begins:
+
+```text
+samples[0].at exists (a sample was recorded)
+samples[0].alive == false (the PID was never alive during the window)
+lastAlive stays false throughout
+extension_host_started_at = samples[0].at   # despite sample being dead
+extension_host_terminated = false
+extension_host_restarted = false
+observation_window_completed = true
+```
+
+The classifier then sees an apparently valid affirmative negative
+witness and returns **TA6 NOT_REPRODUCED** even though the observer
+**never saw the Extension Host alive at all**. This recreates the
+exact epistemic failure this ACT was intended to remove.
+
+A P1 was folded into the same correction: restart detection
+previously ran ONLY on the first dead sample. After that,
+`lastAlive = false`, so subsequent iterations never re-checked for
+a replacement PID. If the replacement Extension Host appeared
+~600 ms after the death sample, the observer recorded
+`terminated=true, restarted=false` for the rest of the window even
+though a restart did occur.
+
+## C1. Bounded corrections (no architecture review)
+
+### Observer fix (P0)
+
+```js
+// Before (LIVE-CLASSIFICATION01 / 01):
+extension_host_started_at: samples[0]?.at ?? null,
+
+// After (CORRECTION01):
+let firstAliveSampleAt = null
+// ... in the sampling loop:
+if (sample.alive) {
+    lastAlive = true
+    if (firstAliveSampleAt === null) {
+        firstAliveSampleAt = nowIso
+    }
+}
+// ...
+extension_host_started_at: firstAliveSampleAt,
+extension_host_observed_alive: firstAliveSampleAt !== null,
+```
+
+When no alive sample is ever recorded, both `extension_host_started_at`
+and `extension_host_observed_alive` are null/false. The analyzer's
+predicate fails the `parentLifecycleObservedAlive` gate and TA6 is
+unreachable.
+
+### Observer fix (P1)
+
+```js
+// Before: replacement-PID search only ran once on first dead sample
+// After: every iteration while terminated && !restarted
+if (observedTerminated && !observedRestarted) {
+    const replacement = await locateExtensionHostPid()
+    if (replacement && replacement.pid !== originalPid) {
+        seenReplacementPid.value = replacement.pid
+        observedRestarted = true
+        restartPid = replacement.pid
+        restartAt = new Date().toISOString()
+    }
+}
+```
+
+### Classifier fix (P0)
+
+```ts
+// New optional input field on computeTerminationAuthorityVerdict
+readonly parentLifecycleObservedAlive?: boolean
+
+// TA6 branch now requires ALL THREE:
+if (parentLifecyclePresent && affirmativeNegativeWitness && parentLifecycleObservedAlive && !nativeCrashReportPresent) {
+    return { classification: "TA6", ... }
+}
+```
+
+The field defaults to TRUE for backward compatibility with legacy
+callers (the in-process exit-listener verdict flush).
+
+### Analyzer fix (P0)
+
+```js
+const parentLifecycleObservedAlive =
+    parentLifecycle !== null &&
+    (parentLifecycle.extension_host_observed_alive === true ||
+     (typeof parentLifecycle.extension_host_started_at === "string" &&
+      typeof parentLifecycle.extension_host_pid === "number" &&
+      Array.isArray(parentLifecycle.samples) &&
+      parentLifecycle.samples.some(
+          s => s && s.pid === parentLifecycle.extension_host_pid && s.alive === true)))
+```
+
+Adds `derived_from.parent_lifecycle_observed_alive` provenance
+field for forensics.
+
+## C2. Required discriminators
+
+```text
+TALIVE-OBSERVER-INITIAL-DEAD-01
+
+given:
+  parent-lifecycle recorded with N samples
+  all samples for the bound PID have alive == false
+  extension_host_started_at = null (post-fix observer)
+  extension_host_observed_alive = false (post-fix observer)
+
+expected:
+  parentLifecycleObservedAlive = false
+  affirmativeNegativeWitness = false
+  verdict = TA5 CAPTURE_INSUFFICIENT
+```
+
+```text
+TALIVE-OBSERVER-SEEN-ALIVE-01
+
+given:
+  at least one sample with alive == true for the bound PID
+  completed window
+  no death/restart
+
+expected:
+  parentLifecycleObservedAlive = true
+  affirmativeNegativeWitness = true
+  verdict = TA6 NOT_REPRODUCED
+```
+
+```text
+TALIVE-OBSERVER-INITIAL-DEAD-02 (backward-compat guard)
+
+given:
+  parentLifecyclePresent = true
+  affirmativeNegativeWitness = true
+  parentLifecycleObservedAlive = omitted (legacy caller)
+
+expected:
+  default parentLifecycleObservedAlive = true
+  verdict = TA6 NOT_REPRODUCED  (unchanged)
+```
+
+## C3. RED→GREEN proof (verified by git stash round-trip)
+
+Pre-fix:
+
+```
+$ git stash push apps/vscode/src/sdk/extension-host-termination-authority.ts
+Saved working directory and index state WIP on main: a0fc3d16a ...
+
+$ vitest run -t "__RED_PROOF_TALIVE_OBSERVER_INITIAL_DEAD_01"
+
+ FAIL  src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts >
+        __RED_PROOF_TALIVE_OBSERVER_INITIAL_DEAD_01:
+        should fail pre-CORRECTION01
+ AssertionError: expected 'TA6' to be 'TA5' // Object.is equality
+ Expected: "TA5"
+ Received: "TA6"
+```
+
+Post-fix:
+
+```
+$ git stash pop
+Dropped refs/stash@{0} (...)
+
+$ vitest run -t "TALIVE-OBSERVER"
+ Tests  3 passed | 42 skipped (45)
+```
+
+## C4. End-to-end analyzer proof (synthetic-stale-pid-initial-dead)
+
+The synthetic bundle
+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01/synthetic-stale-pid-initial-dead/`
+contains a real observer capture with `--pid 99999999` (a stale
+PID; the observer correctly records 6 samples with
+`alive: false`, `extension_host_started_at: null`,
+`extension_host_observed_alive: false`).
+
+```
+$ node scripts/analyze-termination-authority.mjs \
+    .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01/synthetic-stale-pid-initial-dead
+
+TA5    CAPTURE_INSUFFICIENT    no host-self events observed AND external parent-side witness absent or non-affirming -- absence of evidence is NOT evidence of absence; capture is insufficient to claim NOT_REPRODUCED
+```
+
+The verdict.json's `derived_from.parent_lifecycle_observed_alive`
+is explicitly `false`, recording WHY TA6 was rejected.
+
+## C5. Updated test count (post-CORRECTION01)
+
+- Pre-CORRECTION01: 42 cases in focused vitest suite + 1168 cases in default bun suite
+- Post-CORRECTION01: 45 cases in focused vitest suite (+3 CORRECTION01 discriminators) + 1168 cases in default bun suite (zero regression)
+- RED→GREEN proof: `TALIVE-OBSERVER-INITIAL-DEAD-01` fails against pre-CORRECTION01 classifier; passes against post-CORRECTION01 classifier
+
+## C6. Updated production delta (post-CORRECTION01)
+
+### Modified files
+
+- `apps/vscode/src/sdk/extension-host-termination-authority.ts` — pure classifier signature gains optional `parentLifecycleObservedAlive?` input (defaults to TRUE for backward-compat); TA6 branch now requires ALL of (parentLifecyclePresent, affirmativeNegativeWitness, parentLifecycleObservedAlive)
+- `apps/vscode/src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts` — +3 discriminators (TALIVE-OBSERVER-INITIAL-DEAD-01, TALIVE-OBSERVER-INITIAL-DEAD-02, TALIVE-OBSERVER-SEEN-ALIVE-01); verdictFor helper accepts the new input
+- `scripts/capture-extension-host-lifecycle.mjs` — extension_host_started_at derived from first alive sample; extension_host_observed_alive explicit flag; replacement-PID search moves from once-on-first-dead-sample to per-iteration while terminated && !restarted; stdout includes observed_alive=N
+- `scripts/analyze-termination-authority.mjs` — computes parentLifecycleObservedAlive from samples[]/extension_host_observed_alive; new derived_from.parent_lifecycle_observed_alive provenance
+
+### New evidence files
+
+- `.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01/synthetic-stale-pid-initial-dead/{meta.json,host-self-events.jsonl,parent-lifecycle.json,verdict.json,README.md}` — real observer capture with stale PID + analyzer TA5 verdict
+
+### Updated evidence files
+
+- `02-witness-contract.md` — schema documentation updated with extension_host_observed_alive; TA6 predicate updated with parent_lifecycle_observed_alive gate; CORRECTION01 observer invariants documented
+- `03-red-design.md` — CORRECTION01 section added with defect description, RED discriminator, pre/post-fix RED proof, P1 fold-in
+- `04-focused-gates.txt` — test count updated to 45; RED proof captured; 4-shape analyzer smoke (incl. CORRECTION01 P0)
+- `05-conservation.txt` — 4 input fields on pure classifier; observer CORRECTION01 invariants; test count updated; mutation-resistance section extended
+- `result.json` — verdict renamed to PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED; history extended with CORRECTION01 entry; HALT_EXTERNAL_LIFECYCLE_FALSE_SURVIVAL_ON_INITIAL_MISS added to stop_conditions_checked
+
+## C7. Completion verdict (post-CORRECTION01)
+
+`PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED`
+
+The CORRECTION01 P0 (false-TA6 on initial-dead PID) is mechanically
+classified and repaired. The CORRECTION01 P1 (delayed restart
+detection) is folded into the same correction. The 3 new
+discriminators all PASS. Zero regression in 1168/1168 bun default
+suite. The 16 pre-existing vitest infra failures remain unchanged
+and out of scope.
+
+The next live specimen will classify truthfully even when the
+requested PID is stale/already-dead when observation begins.
+
+Per the reviewer's directive: C1 GO directly to the live specimen
+with no further pre-capture review unless another new P0 appears.

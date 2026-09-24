@@ -16,6 +16,7 @@ fallthroughs to TA5 (CAPTURE_INSUFFICIENT) — never TA6.
   "observation_window_completed": true,
   "extension_host_pid": 12345,
   "extension_host_started_at": "2026-09-24T09:30:00.500Z",
+  "extension_host_observed_alive": true,
   "unresponsive_observed": false,
   "unresponsive_at": null,
   "extension_host_terminated": false,
@@ -39,7 +40,8 @@ Required fields (all others may be null when unknown):
   observation_window_completed_at    (ISO timestamp | null)
   observation_window_completed       (boolean)
   extension_host_pid                 (number)
-  extension_host_started_at          (ISO timestamp | null)
+  extension_host_started_at          (ISO timestamp | null)  -- CORRECTION01: null when no alive sample was ever recorded
+  extension_host_observed_alive      (boolean)                -- CORRECTION01: explicit alive-observation invariant
   extension_host_terminated          (boolean)
   extension_host_restarted           (boolean)
   samples                            (array, capped at 2048)
@@ -54,13 +56,36 @@ parent_lifecycle is non-null
   AND parent_lifecycle.observation_window_completed === true
   AND typeof parent_lifecycle.extension_host_pid === "number"
   AND typeof parent_lifecycle.extension_host_started_at === "string"
+  AND parent_lifecycle_observed_alive === true                          -- CORRECTION01 (P0)
   AND parent_lifecycle.extension_host_terminated === false
   AND parent_lifecycle.extension_host_restarted === false
   AND native_crash_report_present === false
 ```
 
-Any weaker shape (no parent_lifecycle, or non-affirming parent_lifecycle,
-or matching crash report) -> TA5.
+where:
+
+```text
+parent_lifecycle_observed_alive =
+    parent_lifecycle.extension_host_observed_alive === true
+    OR (typeof parent_lifecycle.extension_host_started_at === "string"
+        AND typeof parent_lifecycle.extension_host_pid === "number"
+        AND parent_lifecycle.samples.some(
+            s => s && s.pid === parent_lifecycle.extension_host_pid && s.alive === true
+        ))
+```
+
+CORRECTION01 invariant (P0 — false-TA6 on initial-dead PID): a
+parent-lifecycle whose ONLY sample for the bound PID has alive=false
+MUST NOT authorize TA6. The observer derives
+`extension_host_started_at` from the FIRST sample with `pid == bound AND
+alive == true`, NOT from `samples[0]`. When no sample ever satisfies
+that, both `extension_host_started_at` and `extension_host_observed_alive`
+are null/false, and the analyzer's predicate fails the
+`parent_lifecycle_observed_alive` gate.
+
+Any weaker shape (no parent_lifecycle, non-affirming parent_lifecycle,
+parent_lifecycle recorded but no alive sample observed, or matching
+crash report) -> TA5.
 
 ## Crash report PID binding
 
@@ -108,6 +133,22 @@ node scripts/capture-extension-host-lifecycle.mjs \
 - Never inspects the in-process witness's files; never modifies
   the host; never opens the host; never installs any signal
   listener; never infers signal from exit code
+
+### CORRECTION01 invariants
+
+- `extension_host_started_at` is derived from the FIRST sample with
+  `pid == extension_host_pid AND alive == true`, NOT from `samples[0]`.
+  When the requested PID is stale/already-dead when observation
+  begins, `samples[0]` exists but `samples[0].alive == false`; deriving
+  `started_at` from a dead-sample timestamp would falsely authorize
+  TA6. The corrected observer sets `extension_host_started_at = null`
+  when no alive sample is ever recorded, AND sets the explicit
+  `extension_host_observed_alive = false` flag for the analyzer to
+  consume.
+- Replacement-PID search is performed EVERY iteration while
+  `terminated && !restarted`, not only on the first dead sample
+  (P1 — delayed restart detection). Handles the case where the
+  replacement Extension Host appears >cadence after the death sample.
 
 ### Failure handling
 

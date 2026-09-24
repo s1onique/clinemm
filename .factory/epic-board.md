@@ -9149,6 +9149,8 @@ C1: GO directly to the live specimen.
   warning}; do not add channels without a new correction ACT.
 ```
 
+## ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED — 2026-09-24
+
 ## ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED — 2026-09-24
 
 **Status:** PASS / TA6 false-negative classifier defect REPAIRED /
@@ -9169,16 +9171,17 @@ specimens.
 **Predecessor:** ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01
 + 02 prior specimens (A: TA6, B: TA6).
 
-**Production delta:**
+**Production delta (post-CORRECTION01):**
 
 ```
-apps/vscode/src/sdk/extension-host-termination-authority.ts                       +62 / -15
+apps/vscode/src/sdk/extension-host-termination-authority.ts                       +28 / -2
 apps/vscode/src/sdk/__tests__/extension-host-termination-authority01.
-  termination-authority.test.ts                                                   +178 / -14
-scripts/analyze-termination-authority.mjs                                         +76 / -18
-scripts/capture-extension-host-lifecycle.mjs                                      +NEW  433 LOC
-.factory/acts/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01.md     +NEW  577 LOC
-.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01/    +NEW  9 evidence files
+  termination-authority.test.ts                                                   +94 / -1
+scripts/analyze-termination-authority.mjs                                         +29 / -6
+scripts/capture-extension-host-lifecycle.mjs                                      +57 / -12
+.factory/acts/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01.md     +247 / -0  (824 LOC)
+.factory/epic-board.md                                                            +78 / -13
+.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01/    +NEW  synthetic-stale-pid-initial-dead/{meta.json, host-self-events.jsonl, parent-lifecycle.json, verdict.json, README.md}
 ```
 
 **Causal seam:** `computeTerminationAuthorityVerdict` in
@@ -9268,12 +9271,14 @@ TALIVE-TA3-EXPLICIT-01            watchdog/host kill -> TA3
 TALIVE-TA4-EXPLICIT-01            OOM/resource evidence -> TA4
 ```
 
-**Synthetic capture-bundle smoke (3 shapes):**
+**Synthetic capture-bundle smoke (4 shapes post-CORRECTION01):**
 
 ```
-synthetic-affirmative-survival/  verdict=TA6 NOT_REPRODUCED  (correct)
-synthetic-death-restart/         verdict=TA5 CAPTURE_INSUFFICIENT  (correct)
-synthetic-no-witness/            verdict=TA5 CAPTURE_INSUFFICIENT  (correct, was TA6 pre-fix)
+synthetic-affirmative-survival/   verdict=TA6 NOT_REPRODUCED  (correct)
+synthetic-death-restart/          verdict=TA5 CAPTURE_INSUFFICIENT  (correct)
+synthetic-no-witness/             verdict=TA5 CAPTURE_INSUFFICIENT  (correct, was TA6 pre-fix)
+synthetic-stale-pid-initial-dead/ verdict=TA5 CAPTURE_INSUFFICIENT  (correct, was TA6 pre-CORRECTION01)
+                                 derived_from.parent_lifecycle_observed_alive=false
 ```
 
 **Conservation (all UNCHANGED):**
@@ -9303,6 +9308,9 @@ synthetic-no-witness/            verdict=TA5 CAPTURE_INSUFFICIENT  (correct, was
   {exit, uncaughtExceptionMonitor, warning}
 - No helper / no protocol / no plist / no production code change to
   the host
+- External observer's `extension_host_started_at` is NEVER taken
+  from `samples[0]` blindly; the alive-sample invariant is enforced
+  by TALIVE-OBSERVER-INITIAL-DEAD-01
 
 **Lower layers UNTOUCHED:** CommandJobManager.
 BackgroundNotifyCoordinator. Q5 long-horizon predicate. pending-
@@ -9311,7 +9319,49 @@ BTCONT01 deferred continuation marker. Hub ordering. wake prompt
 format. CPU profiler REMOVAL_TRIGGER (SUPERSEDED, retained).
 In-process witness safe-list.
 
-**Verdict:** PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED
+**Verdict:** PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED
+
+**CORRECTION01 — HALT_EXTERNAL_LIFECYCLE_FALSE_SURVIVAL_ON_INITIAL_MISS**
+
+The runtime-forensics reviewer identified a new P0 in the exact
+evidence path that authorizes TA6: the external observer delivered
+in iteration 01 derived `extension_host_started_at = samples[0]?.at`
+unconditionally. When the requested PID was stale/already-dead when
+observation began, `samples[0]` existed but `samples[0].alive ==
+false`; the field was nonetheless non-null and the analyzer's
+predicate authorized TA6 — recreating the exact epistemic failure
+this ACT was intended to remove. A P1 (delayed restart detection)
+was folded into the same correction: replacement-PID search ran only
+once on the first dead sample, so a replacement Extension Host
+appearing >cadence after the death sample was missed.
+
+Bounded corrections (no architecture review):
+
+- Observer (P0): `extension_host_started_at` now derived from the
+  FIRST sample with `pid == bound AND alive == true` (not from
+  `samples[0]`). New `extension_host_observed_alive` boolean field.
+  Stdout includes `observed_alive=N` for operator verification.
+- Observer (P1): replacement-PID search moved from
+  once-on-first-dead-sample to per-iteration while
+  `terminated && !restarted`.
+- Classifier (P0): new optional input field
+  `parentLifecycleObservedAlive?` (defaults to TRUE for backward
+  compatibility). TA6 branch now requires ALL of
+  `(parentLifecyclePresent AND affirmativeNegativeWitness AND
+  parentLifecycleObservedAlive)` instead of just the first two.
+- Analyzer (P0): computes `parentLifecycleObservedAlive` from
+  `parent_lifecycle.extension_host_observed_alive === true` OR
+  `(started_at is string AND samples.some(s => s.pid == bound &&
+  s.alive == true))`. New `derived_from.parent_lifecycle_observed_alive`
+  provenance field.
+
+RED→GREEN proof (verified by git stash round-trip on entry HEAD
+a0fc3d16a): pre-fix `__RED_PROOF_TALIVE_OBSERVER_INITIAL_DEAD_01`
+fails with `AssertionError: expected 'TA6' to be 'TA5'`; post-fix
+TALIVE-OBSERVER-* all PASS. End-to-end analyzer proof via the new
+`synthetic-stale-pid-initial-dead/` capture bundle (real observer
+capture with `--pid 99999999`; analyzer produces TA5
+CAPTURE_INSUFFICIENT with `derived_from.parent_lifecycle_observed_alive=false`).
 
 **Epic cursor (frozen):**
 
@@ -9335,6 +9385,15 @@ TERMINATION-LIVE-CLASSIFICATION01
   RED->GREEN proof verified via git stash round-trip
   1168/1168 bun default suite zero regression
   3-shape synthetic capture-bundle smoke verified
+  CLOSED
+  v
+  / CORRECTION01 — HALT_EXTERNAL_LIFECYCLE_FALSE_SURVIVAL_ON_INITIAL_MISS
+  PASS / TA6 false-TA6-on-initial-dead-PID REPAIRED (observer P0)
+        delayed-restart-detection REPAIRED (observer P1)
+  3 new discriminators PASS (TALIVE-OBSERVER-*)
+  RED->GREEN proof verified via git stash round-trip
+  4-shape synthetic capture-bundle smoke verified
+  1168/1168 bun default suite zero regression
   CLOSED  ← NOW
 
 PREFAILURE-TO-REACTIVE-BRIDGE01
@@ -9348,7 +9407,11 @@ BACKGROUND / "Your turn"
 **C1:** OPERATOR RUN — start
 `scripts/capture-extension-host-lifecycle.mjs` FIRST (--pid
 <observed Extension Host PID> --cadence-ms 400 --duration-ms
-60000 --data-dir ~/.cline/data --capture-id <id>), then run the
+60000 --data-dir ~/.cline/data --capture-id <id>). The observer
+correctly handles the stale-PID case (writes
+`extension_host_started_at: null`, `extension_host_observed_alive:
+false`, and the analyzer produces TA5 CAPTURE_INSUFFICIENT with
+`derived_from.parent_lifecycle_observed_alive=false`). Then run the
 failing workload (notify-enabled background), then
 `node scripts/analyze-termination-authority.mjs ~/.cline/data/diagnostics/termination-authority/capture-<id>`.
 Per the verdict matrix on §18 of the ACT spec, follow-on ACT is
@@ -9357,3 +9420,6 @@ watchdog logs / memory pressure). If TA1..TA4 -> targeted causal
 successor ACT. If TA6 -> NOT_REPRODUCED; no repair. CRITICAL: the
 in-process safe-list is exactly {exit, uncaughtExceptionMonitor,
 warning}; do not add channels without a new correction ACT.
+CRITICAL: never derive `extension_host_started_at` from
+`samples[0]` — the alive-sample invariant is enforced by
+TALIVE-OBSERVER-INITIAL-DEAD-01.

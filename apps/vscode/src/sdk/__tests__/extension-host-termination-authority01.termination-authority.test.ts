@@ -4,7 +4,8 @@
  * Focused test suite for the Extension Host termination witness.
  *
  * Discriminators covered (per ACT §13 / §15 + CORRECTION01 + CORRECTION02
- * + ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01):
+ * + ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
+ * + LIVE-CLASSIFICATION01 / CORRECTION01):
  *   TATRM-CONSERVE-01        disabled-zero-semantic-delta
  *   TATRM-CONSERVE-SIGNAL-01 witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
  *   TATRM-CONSERVE-REJECTION-01 witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
@@ -46,6 +47,9 @@
  *   TALIVE-TA2-WRONG-PID-01     crash report PID differs -> NOT TA2
  *   TALIVE-TA3-EXPLICIT-01      parent reports watchdog/host kill -> TA3
  *   TALIVE-TA4-EXPLICIT-01      external death + explicit OOM/resource evidence -> TA4
+ *   TALIVE-OBSERVER-INITIAL-DEAD-01 parent-lifecycle recorded but no alive sample observed -> TA5 (CORRECTION01 P0)
+ *   TALIVE-OBSERVER-INITIAL-DEAD-02 default parentLifecycleObservedAlive=true preserves legacy caller (backward-compat guard, CORRECTION01)
+ *   TALIVE-OBSERVER-SEEN-ALIVE-01 at least one alive sample + completed window + no death/restart -> TA6 (CORRECTION01 positive guard)
  *   TATRM-RUNTIME-01         writeParentLifecycle writes parent-lifecycle.json
  *   TATRM-RUNTIME-02         macOS crash report summarizer collapses load-bearing fields
  *   TATRM-RUNTIME-03         writeCrashReportSummary falls back on parse error
@@ -612,6 +616,14 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / verdict classifie
 			// "PID disappeared, replacement appeared" shape to
 			// TA5 (death observed but authority unresolved).
 			externalLifecycleProvesDeath: boolean
+			// CORRECTION01 (P0 — false-TA6 on initial-dead PID):
+			// parent-lifecycle.json's external observer MUST have
+			// recorded at least one alive sample for the bound
+			// PID. When the requested PID was stale/dead when
+			// observation began, this is FALSE. Required for TA6
+			// in addition to affirmativeNegativeWitness. Default
+			// TRUE preserves legacy callers.
+			parentLifecycleObservedAlive: boolean
 		}> = {},
 	) {
 		const counters = stableCounters(overrides.counters ?? {})
@@ -627,6 +639,7 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / verdict classifie
 			parentLifecyclePresent: overrides.parentLifecyclePresent ?? true,
 			affirmativeNegativeWitness: overrides.affirmativeNegativeWitness ?? false,
 			externalLifecycleProvesDeath: overrides.externalLifecycleProvesDeath ?? false,
+			parentLifecycleObservedAlive: overrides.parentLifecycleObservedAlive ?? true,
 		})
 	}
 
@@ -857,6 +870,86 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / verdict classifie
 			nativeCrashReportPresent: false,
 		})
 		expect(v.classification).toBe("TA4")
+	})
+
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 /
+	// CORRECTION01 (P0 — false-TA6 on initial-dead PID)
+	//
+	// Background: the new external observer must record at least one
+	// alive sample for the bound PID before parent-lifecycle.json can
+	// authorize TA6. When the requested PID is stale/already-dead when
+	// observation begins, samples[0] exists but samples[0].alive ==
+	// false; the observer now writes extension_host_started_at = null
+	// AND extension_host_observed_alive = false; the analyzer passes
+	// parentLifecycleObservedAlive = false; the classifier requires
+	// all three of (present + affirmative + observed-alive) for TA6.
+	//
+	// Pre-CORRECTION01: TA6 NOT_REPRODUCED on initial-dead PID
+	// (false-negative for the very existence of the bug this ACT was
+	//  intended to remove).
+	// Post-CORRECTION01: TA5 CAPTURE_INSUFFICIENT.
+	// -------------------------------------------------------------------------
+
+	it("TALIVE-OBSERVER-INITIAL-DEAD-01: parent-lifecycle recorded but no alive sample ever observed -> TA5 (NOT TA6)", () => {
+		// This is the RED discriminator for CORRECTION01. The
+		// scenario: the requested --pid was already dead when
+		// observation began; the observer recorded N samples all
+		// with alive=false; extension_host_started_at is null;
+		// extension_host_observed_alive is false; the analyzer
+		// passes parentLifecycleObservedAlive = false.
+		//
+		// Required (post-fix): TA5 CAPTURE_INSUFFICIENT.
+		// Required (pre-fix): TA6 NOT_REPRODUCED — false-negative
+		// for the very existence of the bug this ACT was meant to
+		// remove.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			affirmativeNegativeWitness: true,
+			parentLifecycleObservedAlive: false,
+			externalLifecycleProvesDeath: false,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA5")
+		expect(v.label).toBe("CAPTURE_INSUFFICIENT")
+	})
+
+	it("TALIVE-OBSERVER-SEEN-ALIVE-01: at least one alive sample for bound PID + completed window + no death/restart -> TA6", () => {
+		// The complementary positive discriminator: when the
+		// external observer saw at least one alive sample for the
+		// bound PID, the window completed without death or
+		// restart, and no native crash report exists, the result
+		// is TA6. This guards against an over-correction that
+		// would deny TA6 even when the observer genuinely saw the
+		// Extension Host alive.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			affirmativeNegativeWitness: true,
+			parentLifecycleObservedAlive: true,
+			externalLifecycleProvesDeath: false,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA6")
+		expect(v.label).toBe("NOT_REPRODUCED")
+	})
+
+	it("TALIVE-OBSERVER-INITIAL-DEAD-02: default parentLifecycleObservedAlive=true preserves legacy caller behavior -> TA6", () => {
+		// Backward-compat: the in-process exit-listener verdict
+		// flush does not supply parentLifecycleObservedAlive;
+		// the field defaults to TRUE and the legacy caller can
+		// still reach TA6 when its other inputs warrant.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			affirmativeNegativeWitness: true,
+			// parentLifecycleObservedAlive omitted -> default TRUE
+			externalLifecycleProvesDeath: false,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA6")
+		expect(v.label).toBe("NOT_REPRODUCED")
 	})
 })
 

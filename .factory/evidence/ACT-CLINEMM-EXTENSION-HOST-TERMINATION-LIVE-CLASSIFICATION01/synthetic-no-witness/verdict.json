@@ -11,16 +11,17 @@
     "resource_exhaustion_reported": false
   },
   "capture_id": "no-witness",
-  "capture_dir": "/tmp/clinemm-test3/diagnostics/termination-authority/capture-no-witness",
+  "capture_dir": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01/synthetic-no-witness",
   "derived_from": {
     "host_self_events": 0,
     "parent_lifecycle_present": true,
     "macos_crash_summary_present": false,
     "affirmative_negative_witness": false,
+    "parent_lifecycle_observed_alive": false,
     "external_lifecycle_proves_death": false,
     "crash_report_pid_matches": false,
     "crash_report_ts_in_window": false,
     "crash_report_unrelated_reason": "no_crash_summary"
   },
-  "computed_at": "2026-09-24T09:28:25.835Z"
+  "computed_at": "2026-09-24T09:57:35.271Z"
 }

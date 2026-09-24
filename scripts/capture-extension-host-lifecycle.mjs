@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
  * ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
+ * / CORRECTION01 — bounded
  *
  * External lifecycle observer for the VS Code / VSCodium Extension
  * Host process. Runs OUTSIDE the Extension Host (Node process, not
@@ -16,6 +17,25 @@
  * observation_window_started/completed and
  * extension_host_started/terminated/restarted) required for a TA6
  * classification.
+ *
+ * CORRECTION01 invariants (P0 — false-TA6 on initial-dead PID):
+ *
+ *   - extension_host_started_at is derived from the FIRST sample
+ *     with `pid == extension_host_pid AND alive == true`, NOT
+ *     from samples[0]. When the requested PID is stale / already
+ *     dead when observation begins, samples[0] exists but
+ *     samples[0].alive == false. Deriving started_at from a
+ *     dead-sample timestamp would falsely authorize TA6.
+ *
+ *   - When no sample ever shows alive == true,
+ *     extension_host_started_at MUST be null. The analyzer
+ *     predicate for affirmativeNegativeWitness then fails the
+ *     `extension_host_started_at is string` check and TA6 is
+ *     unreachable.
+ *
+ *   - Replacement-PID search is performed every iteration
+ *     while terminated && !restarted, NOT only on the first
+ *     dead sample (CORRECTION01 P1 — delayed restart detection).
  *
  * USAGE
  *
@@ -337,6 +357,12 @@ async function main() {
 	let unresponsiveAt = null
 	let lastAlive = initial?.alive ?? false
 
+	// CORRECTION01: track the timestamp of the FIRST alive sample
+	// for the bound PID. extension_host_started_at is derived from
+	// this, NOT from samples[0] (which may exist for an initial
+	// dead PID and would falsely authorize TA6).
+	let firstAliveSampleAt = null
+
 	const startMs = Date.now()
 	const endMs = startMs + opts.durationMs
 
@@ -360,21 +386,29 @@ async function main() {
 			}
 			if (sample.alive) {
 				lastAlive = true
+				// CORRECTION01: capture first alive timestamp.
+				if (firstAliveSampleAt === null) {
+					firstAliveSampleAt = nowIso
+				}
 			} else if (lastAlive) {
 				// First sample showing the original PID as gone.
 				observedTerminated = true
 				terminatedAt = nowIso
 				lastAlive = false
-				// Look for a replacement PID (the highest PID whose
-				// command mentions "extension host" / "extensionhost"
-				// other than originalPid).
-				const replacement = await locateExtensionHostPid()
-				if (replacement && replacement.pid !== originalPid) {
-					seenReplacementPid.value = replacement.pid
-					observedRestarted = true
-					restartPid = replacement.pid
-					restartAt = nowIso
-				}
+			}
+		}
+		// CORRECTION01 (P1): replacement-PID search is performed
+		// EVERY iteration while terminated && !restarted, not
+		// only on the first dead sample. Handles the case where
+		// the replacement Extension Host appears >cadence after
+		// the death sample.
+		if (observedTerminated && !observedRestarted) {
+			const replacement = await locateExtensionHostPid()
+			if (replacement && replacement.pid !== originalPid) {
+				seenReplacementPid.value = replacement.pid
+				observedRestarted = true
+				restartPid = replacement.pid
+				restartAt = new Date().toISOString()
 			}
 		}
 		// Bounded loop exit on definitive termination.
@@ -405,7 +439,18 @@ async function main() {
 		observation_window_completed_at: observationWindowCompletedAt,
 		observation_window_completed: observationWindowCompleted,
 		extension_host_pid: originalPid,
-		extension_host_started_at: samples[0]?.at ?? null,
+		// CORRECTION01: derive from first alive sample, NOT samples[0].
+		// When the requested PID is stale/dead, firstAliveSampleAt is
+		// null and extension_host_started_at stays null — analyzer's
+		// affirmativeNegativeWitness predicate then requires this to
+		// be a string and falsifies TA6.
+		extension_host_started_at: firstAliveSampleAt,
+		// CORRECTION01: also surface a sample-level witness field so
+		// the analyzer can independently verify the alive-observation
+		// invariant without relying solely on the started_at field.
+		// `extension_host_observed_alive` is true iff at least one
+		// recorded sample has pid == extension_host_pid AND alive == true.
+		extension_host_observed_alive: firstAliveSampleAt !== null,
 		unresponsive_observed: unresponsiveObserved,
 		unresponsive_at: unresponsiveAt,
 		extension_host_terminated: observedTerminated,
@@ -425,7 +470,7 @@ async function main() {
 
 	await writePayloadAtomic(join(captureDir, "parent-lifecycle.json"), payload)
 	process.stdout.write(
-		`parent-lifecycle.json written: pid=${originalPid} terminated=${observedTerminated} restarted=${observedRestarted} samples=${samples.length}\n`,
+		`parent-lifecycle.json written: pid=${originalPid} terminated=${observedTerminated} restarted=${observedRestarted} observed_alive=${firstAliveSampleAt !== null} samples=${samples.length}\n`,
 	)
 }
 

@@ -1,4 +1,5 @@
-ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Conservation
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
+/ CORRECTION01 — Conservation
 
 ## Frozen design constraints (per ACT-TERMINATION-AUTHORITY01 §5/§8 + CORRECTION01/02)
 
@@ -15,13 +16,21 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Conservation
 
 ### Pure classifier (extension-host-termination-authority.ts)
 
-    ADDED (post-fix):
-      - 3 new optional input fields on computeTerminationAuthorityVerdict:
+    ADDED (post-CORRECTION01):
+      - 4 new optional input fields on computeTerminationAuthorityVerdict:
           parentLifecyclePresent?: boolean
           affirmativeNegativeWitness?: boolean
           externalLifecycleProvesDeath?: boolean
-        All three default to false / true (per backward-compat) and
+          parentLifecycleObservedAlive?: boolean   (CORRECTION01)
+        All four default to false / true (per backward-compat) and
         do NOT alter the witness installation surface.
+
+    TA6 branch updated: requires parentLifecycleObservedAlive (CORRECTION01).
+    Pre-CORRECTION01: TA6 required only (parentLifecyclePresent AND
+    affirmativeNegativeWitness). Post-CORRECTION01: TA6 requires
+    (parentLifecyclePresent AND affirmativeNegativeWitness AND
+    parentLifecycleObservedAlive). The new field's default value of
+    TRUE preserves prior behavior for callers that pre-date this ACT.
 
     UNCHANGED:
       - TerminationAuthorityEventKind union = {exit, uncaughtExceptionMonitor, warning}
@@ -50,12 +59,43 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Conservation
     lifecycle.mjs) is a NEW standalone Node script that does NOT
     modify the runtime module.
 
+### External observer (scripts/capture-extension-host-lifecycle.mjs)
+
+    ADDED (this ACT):
+      - 433-LOC standalone Node script
+      - Polls Extension Host PID via ps(1) outside the host process
+      - Writes parent-lifecycle.json via temp-then-rename atomic
+      - Bounded by 2048-sample ring
+      - Default 400 ms cadence (within ACT §7 250-500 ms range)
+      - macOS-aware (omits rss field that requires entitlement)
+
+    CORRECTION01 (P0 — false-TA6 on initial-dead PID):
+      - extension_host_started_at is derived from the FIRST sample
+        with pid == bound AND alive == true, NOT from samples[0].
+      - When no alive sample is ever recorded, the field stays
+        null AND a new field extension_host_observed_alive is set
+        to false.
+      - The stdout message includes observed_alive=N for operator
+        verification.
+
+    CORRECTION01 (P1 — delayed restart detection):
+      - Replacement-PID search is now performed on EVERY iteration
+        while terminated && !restarted (previously only on the
+        first dead sample).
+      - Handles the case where the replacement Extension Host
+        appears >cadence after the death sample.
+
 ### Analyzer (scripts/analyze-termination-authority.mjs)
 
     ADDED (post-fix):
       - 3 new input fields propagated to computeVerdict:
           parentLifecyclePresent, affirmativeNegativeWitness,
           externalLifecycleProvesDeath
+      - CORRECTION01: parentLifecycleObservedAlive is computed from
+        the parent-lifecycle samples[] (or via
+        extension_host_observed_alive flag) and propagated to
+        computeVerdict. New derived_from.parent_lifecycle_observed_alive
+        provenance field for forensics.
       - Crash report PID binding (crash_summary.pid ==
         parent_lifecycle.extension_host_pid)
       - Crash report window binding (crash_summary.parsed_at inside
@@ -72,11 +112,16 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Conservation
 
 ### Tests (extension-host-termination-authority01.termination-authority.test.ts)
 
-    ADDED (post-fix): +11 discriminators (TALIVE-* + updated
-      TATRM-VERDICT-06 + extended verdictFor helper)
+    ADDED (post-CORRECTION01): +14 discriminators (+11 from
+      LIVE-CLASSIFICATION01 + 3 from CORRECTION01:
+        TALIVE-OBSERVER-INITIAL-DEAD-01
+        TALIVE-OBSERVER-INITIAL-DEAD-02
+        TALIVE-OBSERVER-SEEN-ALIVE-01)
     UNCHANGED: TATRM-VERDICT-01..05, 07; TATRM-CONSERVE-*;
       TATRM-POLICY-*; TATRM-INSTALL-*; TATRM-EVENT-*; TATRM-RUNTIME-*;
       TATRM-RECOVERY-*
+    Test file total: 45 cases (+14 vs pre-fix ACT-AUTHORITY01/CORRECTION02,
+                            +3 vs LIVE-CLASSIFICATION01 pre-CORRECTION01)
 
 ## No permanent public API / proto / webview / workspace setting
 
@@ -108,9 +153,24 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Conservation
       - TALIVE-TA6-AFFIRMATIVE-01..02 cover the affirmative case
         (positive regression guard).
 
+    The CORRECTION01 P0 (false-TA6 on initial-dead PID) defect is
+    mechanically repaired and mutation-resistant:
+      - TALIVE-OBSERVER-INITIAL-DEAD-01 fails on pre-CORRECTION01
+        with `expected 'TA6' to be 'TA5'`; passes on post-CORRECTION01.
+        Any future regression that re-derives
+        extension_host_started_at from samples[0] or drops the
+        parentLifecycleObservedAlive gate trips this test.
+      - TALIVE-OBSERVER-SEEN-ALIVE-01 covers the positive case
+        (observer genuinely saw the Extension Host alive).
+      - TALIVE-OBSERVER-INITIAL-DEAD-02 is a backward-compat guard:
+        legacy callers that omit parentLifecycleObservedAlive
+        continue to reach TA6 (default TRUE preserves prior behavior).
+
 ## Conservation gates (all PASS)
 
-    focused classifier tests           PASS (12 new + 7 preserved)
+    focused classifier tests           PASS (14 new + 7 preserved,
+                                              3 of which are
+                                              CORRECTION01)
     termination witness conservation   PASS (5 new + 11 preserved
                                                  + 16 pre-existing
                                                    infra failures)
@@ -120,4 +180,4 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Conservation
     tsc --noEmit                       EXIT=0
     biome check (changed files)        0 errors / 0 warnings
     git diff --check                   clean
-    analyzer end-to-end smoke          3/3 shapes correct
+    analyzer end-to-end smoke          4/4 shapes correct (incl. CORRECTION01)

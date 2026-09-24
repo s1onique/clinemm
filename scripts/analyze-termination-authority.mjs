@@ -292,19 +292,40 @@ async function main() {
 	// observation_window_started_at, observation_window_completed_at,
 	// observation_window_completed, extension_host_pid,
 	// extension_host_started_at, extension_host_terminated,
-	// extension_host_restarted — see scripts/capture-extension-host-
-	// lifecycle.mjs §5). The affirmative negative witness is true
-	// ONLY when the new shape explicitly confirms the observation
-	// window started AND completed AND the extension host was started
-	// (non-null extension_host_started_at) AND was NOT terminated AND
-	// was NOT restarted.
+	// extension_host_restarted, extension_host_observed_alive,
+	// samples[] — see scripts/capture-extension-host-lifecycle.mjs
+	// §5). The affirmative negative witness is true ONLY when the
+	// new shape explicitly confirms the observation window started
+	// AND completed AND the extension host was observed alive at
+	// least once (extension_host_started_at is a string AND/OR
+	// extension_host_observed_alive == true AND/OR at least one
+	// sample matches the bound PID with alive == true) AND was
+	// NOT terminated AND was NOT restarted.
+	//
+	// CORRECTION01 (P0 — false-TA6 on initial-dead PID): the
+	// observed-alive invariant is required. A parent-lifecycle.json
+	// whose only sample for the bound PID is alive:false must NOT
+	// authorize TA6.
 	const parentLifecyclePresent = parentLifecycle !== null
+	const parentLifecycleObservedAlive =
+		parentLifecycle !== null &&
+		(parentLifecycle.extension_host_observed_alive === true ||
+			(typeof parentLifecycle.extension_host_started_at === "string" &&
+				typeof parentLifecycle.extension_host_pid === "number" &&
+				Array.isArray(parentLifecycle.samples) &&
+				parentLifecycle.samples.some(
+					(s) =>
+						s &&
+						s.pid === parentLifecycle.extension_host_pid &&
+						s.alive === true,
+				)))
 	const affirmativeNegativeWitness =
 		parentLifecycle !== null &&
 		typeof parentLifecycle.observation_window_started_at === "string" &&
 		parentLifecycle.observation_window_completed === true &&
 		typeof parentLifecycle.extension_host_pid === "number" &&
 		typeof parentLifecycle.extension_host_started_at === "string" &&
+		parentLifecycleObservedAlive &&
 		parentLifecycle.extension_host_terminated === false &&
 		parentLifecycle.extension_host_restarted === false
 	const externalLifecycleProvesDeath =
@@ -336,6 +357,8 @@ async function main() {
 			macos_crash_summary_present: crashSummary !== null,
 			// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
 			affirmative_negative_witness: affirmativeNegativeWitness,
+			// CORRECTION01: provenance for the observed-alive invariant.
+			parent_lifecycle_observed_alive: parentLifecycleObservedAlive,
 			external_lifecycle_proves_death: externalLifecycleProvesDeath,
 			crash_report_pid_matches: pidMatches,
 			crash_report_ts_in_window: tsInWindow,

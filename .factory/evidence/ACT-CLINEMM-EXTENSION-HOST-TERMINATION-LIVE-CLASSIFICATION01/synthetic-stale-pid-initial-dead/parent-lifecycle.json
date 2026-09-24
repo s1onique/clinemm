@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "observation_window_started_at": "2026-09-24T09:52:44.911Z",
+  "observation_window_completed_at": "2026-09-24T09:52:46.458Z",
+  "observation_window_completed": true,
+  "extension_host_pid": 99999999,
+  "extension_host_started_at": null,
+  "extension_host_observed_alive": false,
+  "unresponsive_observed": false,
+  "unresponsive_at": null,
+  "extension_host_terminated": false,
+  "terminated_at": null,
+  "exit_code": null,
+  "signal": null,
+  "process_gone_reason": null,
+  "extension_host_restarted": false,
+  "restart_pid": null,
+  "restart_at": null,
+  "samples": [
+    {
+      "at": "2026-09-24T09:52:44.916Z",
+      "pid": 99999999,
+      "alive": false,
+      "rss_bytes": null,
+      "cpu_pct": null,
+      "thread_count": null,
+      "ppid": null,
+      "command": null
+    },
+    {
+      "at": "2026-09-24T09:52:45.225Z",
+      "pid": 99999999,
+      "alive": false,
+      "rss_bytes": null,
+      "cpu_pct": null,
+      "thread_count": null,
+      "ppid": null,
+      "command": null
+    },
+    {
+      "at": "2026-09-24T09:52:45.533Z",
+      "pid": 99999999,
+      "alive": false,
+      "rss_bytes": null,
+      "cpu_pct": null,
+      "thread_count": null,
+      "ppid": null,
+      "command": null
+    },
+    {
+      "at": "2026-09-24T09:52:45.841Z",
+      "pid": 99999999,
+      "alive": false,
+      "rss_bytes": null,
+      "cpu_pct": null,
+      "thread_count": null,
+      "ppid": null,
+      "command": null
+    },
+    {
+      "at": "2026-09-24T09:52:46.149Z",
+      "pid": 99999999,
+      "alive": false,
+      "rss_bytes": null,
+      "cpu_pct": null,
+      "thread_count": null,
+      "ppid": null,
+      "command": null
+    },
+    {
+      "at": "2026-09-24T09:52:46.458Z",
+      "pid": 99999999,
+      "alive": false,
+      "rss_bytes": null,
+      "cpu_pct": null,
+      "thread_count": null,
+      "ppid": null,
+      "command": null
+    }
+  ]
+}

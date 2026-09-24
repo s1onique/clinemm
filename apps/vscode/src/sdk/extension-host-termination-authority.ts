@@ -716,6 +716,19 @@ export function computeTerminationAuthorityVerdict(input: {
 	// then replacement appeared" shape to TA5 (death observed but
 	// authority unresolved) when no explicit authority exists.
 	readonly externalLifecycleProvesDeath?: boolean
+	// CORRECTION01 (P0 — false-TA6 on initial-dead PID): the
+	// external observer MUST record at least one alive sample for
+	// the bound PID before parent-lifecycle.json can authorize
+	// TA6. When the requested PID is stale/already-dead when
+	// observation begins, the observer now writes
+	// extension_host_started_at = null and
+	// extension_host_observed_alive = false; the analyzer maps
+	// that to parentLifecycleObservedAlive = false. Defaults to
+	// TRUE for backward compatibility with the prior call site
+	// (in-process exit-listener verdict flush) and with the
+	// legacy affirmative-negative-witness callers that pre-date
+	// the CORRECTION01 invariant.
+	readonly parentLifecycleObservedAlive?: boolean
 }): TerminationAuthorityVerdict {
 	const { counters, processExitedNormally, nativeCrashReportPresent, externalTerminationReported, resourceExhaustionReported } =
 		input
@@ -730,6 +743,11 @@ export function computeTerminationAuthorityVerdict(input: {
 	const parentLifecyclePresent = input.parentLifecyclePresent ?? true
 	const affirmativeNegativeWitness = input.affirmativeNegativeWitness ?? false
 	const externalLifecycleProvesDeath = input.externalLifecycleProvesDeath ?? false
+	// CORRECTION01: extract observed-alive invariant. Default TRUE
+	// preserves prior behavior for legacy callers; the mjs
+	// analyzer explicitly supplies this from the parent-lifecycle
+	// samples[].
+	const parentLifecycleObservedAlive = input.parentLifecycleObservedAlive ?? true
 	const evidence_summary = {
 		process_exit_observed: counters.processExitObserved,
 		process_exit_code: counters.processExitCode,
@@ -825,12 +843,20 @@ export function computeTerminationAuthorityVerdict(input: {
 	// the defaults keep the pre-fix behavior. When the caller
 	// supplies parentLifecyclePresent=false (the mjs analyzer
 	// found no parent-lifecycle.json) the classifier falls to TA5.
-	if (parentLifecyclePresent && affirmativeNegativeWitness && !nativeCrashReportPresent) {
+	//
+	// CORRECTION01 (P0 — false-TA6 on initial-dead PID):
+	// parentLifecycleObservedAlive MUST be true for TA6. The
+	// default is true (preserves legacy behavior); the mjs
+	// analyzer computes it from the parent-lifecycle samples[].
+	// When the requested PID was stale/dead when observation
+	// began, the observer never recorded a sample with alive=true
+	// and parentLifecycleObservedAlive is false -> TA5.
+	if (parentLifecyclePresent && affirmativeNegativeWitness && parentLifecycleObservedAlive && !nativeCrashReportPresent) {
 		return {
 			classification: "TA6",
 			label: "NOT_REPRODUCED",
 			summary:
-				"external witness confirms completed observation window with no Extension Host death or restart; no matching native crash report",
+				"external witness confirms completed observation window with at least one alive sample for the bound PID, no Extension Host death or restart; no matching native crash report",
 			evidence_summary: {
 				...evidence_summary,
 				process_exit_observed: false,

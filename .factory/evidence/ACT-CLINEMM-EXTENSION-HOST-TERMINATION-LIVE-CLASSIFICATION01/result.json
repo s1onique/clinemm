@@ -1,7 +1,7 @@
 {
   "act": "ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01",
   "primary_purpose": "evidence_acquisition",
-  "verdict": "PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED",
+  "verdict": "PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED",
   "history": [
     {
       "iteration": "01 initial",
@@ -10,13 +10,30 @@
       "halt_addressed": true,
       "halt_addressed_summary": "The TA6 NOT_REPRODUCED fallthrough when host_self_events=[] AND parent_lifecycle is absent is invalid. The corrected classifier requires an affirmative external negative witness. The external lifecycle observer (scripts/capture-extension-host-lifecycle.mjs) is the canonical source of the affirmative negative witness for future live specimens.",
       "fixes_applied": [
-        "P0: apps/vscode/src/sdk/extension-host-termination-authority.ts — computeTerminationAuthorityVerdict signature accepts 3 new optional input fields (parentLifecyclePresent?, affirmativeNegativeWitness?, externalLifecycleProvesDeath?). The TA6 fallthrough is replaced by TA5 when the affirmative negative witness is missing. New TA-D7 fallthrough (no host events + no external authority + no affirmative negative witness) returns TA5.",
-        "P0: scripts/analyze-termination-authority.mjs — computeVerdict mirrors the pure-module update; main() reads the new schema fields from parent-lifecycle.json; crash report is bound to the failed Extension Host by PID + observation window; derived_from.crash_report_unrelated_reason records pid_mismatch or timestamp_outside_window.",
-        "P0: scripts/capture-extension-host-lifecycle.mjs — NEW (433 LOC). External Node observer that polls the Extension Host PID via ps(1); writes parent-lifecycle.json with schema_version=1; macOS-aware (omits rss field that requires entitlement); locates the host PID via ps -A filter or pgrep fallback; bounded by 2048-sample ring.",
-        "P0: apps/vscode/src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts — +11 new discriminators (TALIVE-*). Updated TATRM-VERDICT-06 to reflect the affirmative-negative-witness contract. Test file total: 42 cases (+11 vs prior ACT-TERMINATION-AUTHORITY01/CORRECTION02).",
+        "P0: apps/vscode/src/sdk/extension-host-termination-authority.ts \u2014 computeTerminationAuthorityVerdict signature accepts 3 new optional input fields (parentLifecyclePresent?, affirmativeNegativeWitness?, externalLifecycleProvesDeath?). The TA6 fallthrough is replaced by TA5 when the affirmative negative witness is missing. New TA-D7 fallthrough (no host events + no external authority + no affirmative negative witness) returns TA5.",
+        "P0: scripts/analyze-termination-authority.mjs \u2014 computeVerdict mirrors the pure-module update; main() reads the new schema fields from parent-lifecycle.json; crash report is bound to the failed Extension Host by PID + observation window; derived_from.crash_report_unrelated_reason records pid_mismatch or timestamp_outside_window.",
+        "P0: scripts/capture-extension-host-lifecycle.mjs \u2014 NEW (433 LOC). External Node observer that polls the Extension Host PID via ps(1); writes parent-lifecycle.json with schema_version=1; macOS-aware (omits rss field that requires entitlement); locates the host PID via ps -A filter or pgrep fallback; bounded by 2048-sample ring.",
+        "P0: apps/vscode/src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts \u2014 +11 new discriminators (TALIVE-*). Updated TATRM-VERDICT-06 to reflect the affirmative-negative-witness contract. Test file total: 42 cases (+11 vs prior ACT-TERMINATION-AUTHORITY01/CORRECTION02).",
         "P1: RED->GREEN proof verified by git stash round-trip on entry HEAD 80f76a484: TALIVE-TA6-NEGATIVE-WITNESS-01 fails against pre-fix classifier (expected TA5, received TA6); passes against post-fix classifier."
       ],
       "summary": "TA6 false-negative classifier defect REPAIRED. External lifecycle observer SHIPPED. The 11 new discriminators all PASS. Zero regression in 1168/1168 bun default suite. 16 pre-existing vitest infra failures (z.object transform defect) are documented and out of scope per ACT-TERMINATION-AUTHORITY01/CORRECTION02's explicit verdict. The next live specimen will classify truthfully."
+    },
+    {
+      "iteration": "01 / CORRECTION01",
+      "result": "PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED",
+      "halt": "HALT_EXTERNAL_LIFECYCLE_FALSE_SURVIVAL_ON_INITIAL_MISS",
+      "halt_addressed": true,
+      "halt_addressed_summary": "The external observer previously derived extension_host_started_at from samples[0] (unconditional) - a stale/already-dead requested PID would yield samples[0].at != null despite samples[0].alive == false, falsely authorizing TA6. CORRECTION01 makes the observer derive started_at from the FIRST sample with pid == bound AND alive == true, sets extension_host_observed_alive explicitly, and gates the classifier's TA6 branch on parentLifecycleObservedAlive. The P1 (delayed restart detection) is folded into the same correction: replacement-PID search now runs on every iteration while terminated && !restarted.",
+      "fixes_applied": [
+        "P0: scripts/capture-extension-host-lifecycle.mjs - extension_host_started_at now derived from first alive sample (firstAliveSampleAt). When no alive sample is ever recorded, started_at is null AND extension_host_observed_alive is false. Stdout now includes observed_alive=N for operator verification.",
+        "P1: scripts/capture-extension-host-lifecycle.mjs - replacement-PID search moved from a once-on-first-dead-sample block to a per-iteration check while (observedTerminated && !observedRestarted). Handles replacement Extension Host appearing >cadence after the death sample.",
+        "P0: scripts/analyze-termination-authority.mjs - computes parentLifecycleObservedAlive from parent-lifecycle.extension_host_observed_alive OR (started_at is string AND samples.some(s => s.pid == bound && s.alive == true)). Passes the new value to computeVerdict. Adds derived_from.parent_lifecycle_observed_alive provenance.",
+        "P0: apps/vscode/src/sdk/extension-host-termination-authority.ts - computeTerminationAuthorityVerdict signature gains optional parentLifecycleObservedAlive? (defaults to TRUE for backward-compat). TA6 branch now requires ALL of (parentLifecyclePresent AND affirmativeNegativeWitness AND parentLifecycleObservedAlive) instead of just the first two.",
+        "P0: apps/vscode/src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts - +3 new discriminators: TALIVE-OBSERVER-INITIAL-DEAD-01 (RED -> GREEN), TALIVE-OBSERVER-INITIAL-DEAD-02 (backward-compat guard), TALIVE-OBSERVER-SEEN-ALIVE-01 (positive guard). verdictFor helper accepts the new input. Test file total: 45 cases (+3 vs LIVE-CLASSIFICATION01 pre-CORRECTION01).",
+        "P1 RED->GREEN proof: git stash round-trip on entry HEAD a0fc3d16a. Pre-fix __RED_PROOF_TALIVE_OBSERVER_INITIAL_DEAD_01 fails with 'AssertionError: expected TA6 to be TA5'. Post-fix TALIVE-OBSERVER-* all PASS.",
+        "P1 synthetic bundle: .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01/synthetic-stale-pid-initial-dead/ - real observer capture with --pid 99999999; analyzer produces TA5 CAPTURE_INSUFFICIENT with derived_from.parent_lifecycle_observed_alive=false."
+      ],
+      "summary": "CORRECTION01 P0 (false-TA6 on initial-dead PID) REPAIRED. The external observer now derives extension_host_started_at from the first alive sample; the classifier gates TA6 on parentLifecycleObservedAlive. The P1 (delayed restart detection) is folded into the same correction. The 3 new discriminators all PASS. Zero regression in 1168/1168 bun default suite. The 16 pre-existing vitest infra failures remain unchanged and out of scope. The next live specimen will classify truthfully even when the requested PID is stale."
     }
   ],
   "stop_conditions_checked": [
@@ -34,15 +51,19 @@
     },
     {
       "condition": "NOT_REPRODUCED (TA6)",
-      "result": "DEFERRED - next live specimen is operator-run per ACT §13"
+      "result": "DEFERRED - next live specimen is operator-run per ACT \u00a713"
     },
     {
       "condition": "CAPTURE_INSUFFICIENT (TA5)",
       "result": "PREDICTED - if the next specimen reproduces only 'PID disappeared -> replacement PID appeared' with no explicit authority, the correct closure is TA5 CAPTURE_INSUFFICIENT (NOT another speculative repair)"
+    },
+    {
+      "condition": "HALT_EXTERNAL_LIFECYCLE_FALSE_SURVIVAL_ON_INITIAL_MISS",
+      "result": "ADDRESSED (CORRECTION01) - observer derives started_at from first alive sample; classifier gates TA6 on parentLifecycleObservedAlive"
     }
   ],
-  "classification": "PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED",
+  "classification": "PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED",
   "live_specimen_authorized": true,
   "repair_authorized": false,
-  "next_act": "OPERATOR RUN: start scripts/capture-extension-host-lifecycle.mjs FIRST (--pid <observed Extension Host PID> --cadence-ms 400 --duration-ms 60000 --data-dir ~/.cline/data --capture-id <id>). Then run the failing workload (notify-enabled background). Then node scripts/analyze-termination-authority.mjs ~/.cline/data/diagnostics/termination-authority/capture-<id>. Per the verdict matrix on §18 of the ACT spec, follow-on ACT is selected. If TA5 -> more evidence acquisition (parent-side watchdog logs / memory pressure / etc.). If TA1..TA4 -> targeted causal successor ACT (EXIT-CAUSALITY01 / NATIVE-CRASH-SYMBOLIZATION01 / WATCHDOG-IPC-AUTHORITY01 / RESOURCE-CAUSALITY01). If TA6 -> NOT_REPRODUCED; no repair. CRITICAL: the safe-list is exactly {exit, uncaughtExceptionMonitor, warning}; do not add channels without a new correction ACT."
+  "next_act": "OPERATOR RUN: start scripts/capture-extension-host-lifecycle.mjs FIRST (--pid <observed Extension Host PID> --cadence-ms 400 --duration-ms 60000 --data-dir ~/.cline/data --capture-id <id>). The observer correctly handles the stale-PID case (extension_host_started_at = null, extension_host_observed_alive = false, verdict = TA5). Then run the failing workload (notify-enabled background). Then node scripts/analyze-termination-authority.mjs ~/.cline/data/diagnostics/termination-authority/capture-<id>. Per the verdict matrix on ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 section 18, follow-on ACT is selected. If TA5 -> more evidence acquisition (parent-side watchdog logs / memory pressure / etc.). If TA1..TA4 -> targeted causal successor ACT (EXIT-CAUSALITY01 / NATIVE-CRASH-SYMBOLIZATION01 / WATCHDOG-IPC-AUTHORITY01 / RESOURCE-CAUSALITY01). If TA6 -> NOT_REPRODUCED; no repair. CRITICAL: the safe-list is exactly {exit, uncaughtExceptionMonitor, warning}; do not add channels without a new correction ACT. CRITICAL: never derive extension_host_started_at from samples[0] - the alive-sample invariant is enforced by TALIVE-OBSERVER-INITIAL-DEAD-01."
 }

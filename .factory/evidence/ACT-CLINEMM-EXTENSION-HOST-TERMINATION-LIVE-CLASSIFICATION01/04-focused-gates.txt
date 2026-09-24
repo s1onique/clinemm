@@ -1,4 +1,5 @@
-ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Focused Gates
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
+/ CORRECTION01 — Focused Gates
 
 ## Typecheck (post-fix)
     cd apps/vscode && PATH="/opt/homebrew/bin:$PATH" ./node_modules/.bin/tsc --noEmit
@@ -24,12 +25,13 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Focused Gates
 
 ## Focused vitest suite (post-fix)
     File: src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts
-    Cases: 42 across 6 describe blocks (+11 vs pre-fix ACT-AUTHORITY01/CORRECTION02)
+    Cases: 45 across 6 describe blocks (+14 vs pre-fix ACT-AUTHORITY01/CORRECTION02,
+            +3 vs LIVE-CLASSIFICATION01 pre-CORRECTION01)
        - conservation (5)
        - policy (5)
        - install seam (3)
        - event capture (5)
-       - verdict classifier (18)  [+11 vs pre-fix; all PASS]
+       - verdict classifier (21)  [+14 vs ACT-AUTHORITY01/CORRECTION02; all PASS]
        - runtime + summarizer (4)
        - recovery (2)
 
@@ -46,6 +48,11 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Focused Gates
        TALIVE-TA2-WRONG-PID-01:                PASS
        TALIVE-TA3-EXPLICIT-01:                 PASS
        TALIVE-TA4-EXPLICIT-01:                 PASS
+
+    NEW discriminators from LIVE-CLASSIFICATION01 / CORRECTION01 (all PASS):
+       TALIVE-OBSERVER-INITIAL-DEAD-01:        PASS  (CORRECTION01 P0 RED -> GREEN)
+       TALIVE-OBSERVER-INITIAL-DEAD-02:        PASS  (CORRECTION01 backward-compat guard)
+       TALIVE-OBSERVER-SEEN-ALIVE-01:          PASS  (CORRECTION01 positive guard)
 
     PRE-EXISTING discriminators (still PASS; unchanged):
        TATRM-VERDICT-01, 02, 03, 04, 05, 07:   PASS
@@ -71,20 +78,52 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Focused Gates
          TATRM-CONSERVE-BEFOREEXIT-01
          TATRM-RUNTIME-01..04
 
-## External lifecycle observer smoke
+## CORRECTION01 RED proof (verified via git stash round-trip on entry HEAD a0fc3d16a)
 
+    RED test (pre-fix):
+    $ git stash push apps/vscode/src/sdk/extension-host-termination-authority.ts
+    Saved working directory and index state WIP on main: a0fc3d16a ...
+
+    $ PATH="/opt/homebrew/bin:$PATH" ./node_modules/.bin/vitest run \
+        --config vitest.config.ts \
+        src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts \
+        -t "__RED_PROOF_TALIVE_OBSERVER_INITIAL_DEAD_01"
+
+    AssertionError: expected 'TA6' to be 'TA5' // Object.is equality
+    Expected: "TA5"
+    Received: "TA6"
+
+    Test Files  1 failed (1)
+    Tests  1 failed | 42 skipped (43)
+
+    GREEN test (post-fix):
+    $ git stash pop
+    Dropped refs/stash@{0} (...)
+
+    $ PATH="/opt/homebrew/bin:$PATH" ./node_modules/.bin/vitest run \
+        --config vitest.config.ts \
+        src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts \
+        -t "TALIVE-OBSERVER"
+
+    Tests  3 passed | 42 skipped (45)
+
+## External lifecycle observer smoke (CORRECTION01)
+
+    # Alive PID (current shell process):
     PATH="/opt/homebrew/bin:$PATH" node scripts/capture-extension-host-lifecycle.mjs \
-      --capture-id test-observer --pid $$ --cadence-ms 200 \
-      --duration-ms 1500 --data-dir /tmp/clinemm-test
+      --capture-id alive-smoke --pid <alive_pid> --cadence-ms 200 \
+      --duration-ms 1500 --data-dir /tmp/correction01
 
-    parent-lifecycle.json written: pid=38238 terminated=false restarted=false samples=9
-    EXIT=0
+    parent-lifecycle.json written: pid=<N> terminated=false restarted=false observed_alive=true samples=6
 
-    Output schema verified: schema_version=1, observation_window_completed=true,
-    extension_host_pid=N, extension_host_terminated=false, extension_host_restarted=false,
-    samples[] present.
+    # Stale PID (does not exist):
+    PATH="/opt/homebrew/bin:$PATH" node scripts/capture-extension-host-lifecycle.mjs \
+      --capture-id stale-smoke --pid 99999999 --cadence-ms 200 \
+      --duration-ms 1500 --data-dir /tmp/correction01
 
-## Analyzer end-to-end smoke (3 shapes)
+    parent-lifecycle.json written: pid=99999999 terminated=false restarted=false observed_alive=false samples=6
+
+## Analyzer end-to-end smoke (4 shapes post-CORRECTION01)
 
     Shape 1: parent-lifecycle.json present + affirmative (TA6 path)
       -> TA6 NOT_REPRODUCED  (correct)
@@ -92,12 +131,21 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Focused Gates
     Shape 2: parent-lifecycle.json present + death-restart (TA5 path)
       -> TA5 CAPTURE_INSUFFICIENT  (correct)
 
-    Shape 3: parent-lifecycle.json ABSENT (the RED case, now correct)
+    Shape 3: parent-lifecycle.json ABSENT (the original RED case, now correct)
       -> TA5 CAPTURE_INSUFFICIENT  (correct, was TA6 in pre-fix)
 
+    Shape 4: parent-lifecycle.json present but stale PID / no alive sample observed
+              (CORRECTION01 P0 case)
+      -> TA5 CAPTURE_INSUFFICIENT  (correct, was TA6 in pre-CORRECTION01)
+      -> derived_from.parent_lifecycle_observed_alive = false
+
 ## Summary
-    All post-fix discriminators PASS.
+    All post-fix discriminators PASS (45/45 pure-function cases).
     Zero regression in bun default suite (1168/1168).
     16 pre-existing vitest infra failures (documented, out of scope).
     RED->GREEN proof for TALIVE-TA6-NEGATIVE-WITNESS-01 verified by
     git stash round-trip on entry HEAD 80f76a484.
+    RED->GREEN proof for TALIVE-OBSERVER-INITIAL-DEAD-01 verified by
+    git stash round-trip on entry HEAD a0fc3d16a.
+    Observer end-to-end smoke (alive PID + stale PID) PASS.
+    Analyzer end-to-end smoke (4 shapes) PASS.
