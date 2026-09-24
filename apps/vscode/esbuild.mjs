@@ -133,17 +133,24 @@ if (process.env.OTEL_METRIC_EXPORT_INTERVAL) {
 	buildEnvVars["process.env.OTEL_METRIC_EXPORT_INTERVAL"] = JSON.stringify(process.env.OTEL_METRIC_EXPORT_INTERVAL)
 }
 
-// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 (CORRECTION01):
+// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01
+// (CORRECTION01 + CORRECTION02):
 // When CLINEMM_OOM_DISC01_SUBJECT_HEAD is set in the build env,
 // inline it into the bundle so the Extension Host attestation can
-// report the git HEAD that produced the dogfood VSIX. The lookup
-// in pending-prompt-service.ts goes through `globalThis.<name>`,
-// so the define must use that exact identifier (not `process.env.<name>`).
+// report the git HEAD that produced the dogfood VSIX. The lookup in
+// pending-prompt-service.ts reads `globalThis.<name>` — esbuild's
+// `define` mechanism substitutes by EXACT expression match, so the
+// key MUST be the literal `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`
+// expression, NOT the bare identifier. (Using the bare identifier as
+// the key would leave the runtime lookup intact — the attestation
+// would then emit `<runtime-unset>` even though the build was correct;
+// this was caught as HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE in
+// CORRECTION02 review.)
 // When the env var is unset (default), no define is injected and
 // the runtime falls back to the literal token `<runtime-unset>`,
 // making the build provenance observable in the operator log.
 if (process.env.CLINEMM_OOM_DISC01_SUBJECT_HEAD) {
-	buildEnvVars["CLINEMM_OOM_DISC01_SUBJECT_HEAD"] = JSON.stringify(process.env.CLINEMM_OOM_DISC01_SUBJECT_HEAD)
+	buildEnvVars["globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD"] = JSON.stringify(process.env.CLINEMM_OOM_DISC01_SUBJECT_HEAD)
 }
 // Base configuration shared between extension and standalone builds
 const baseConfig = {
