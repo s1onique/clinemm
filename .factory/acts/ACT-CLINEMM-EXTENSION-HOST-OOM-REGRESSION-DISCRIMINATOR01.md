@@ -177,3 +177,119 @@ semantics.
 ├── 05-live-ablation.md
 └── result.json
 ```
+
+---
+
+# CORRECTION01 — Bundle Built, Positive Attestation Wired
+
+## What changed in CORRECTION01
+
+1. **SUBJECT_HEAD checkpoint:** the ablation-seam commit plus a
+   thin `apps/vscode/esbuild.mjs` change to wire the
+   `CLINEMM_OOM_DISC01_SUBJECT_HEAD` build-time define were
+   committed together, then a single dogfood VSIX was built from
+   that SUBJECT_HEAD.
+
+   | Field           | Value                                                                                |
+   |-----------------|--------------------------------------------------------------------------------------|
+   | SUBJECT_HEAD    | `2edd6249855b4413b3a45da3717176958dbcf31c`                                            |
+   | Version         | `4.1.16`                                                                              |
+   | VSIX path       | `dist/dogfood/clinemm-4.1.16-2edd62498.vsix`                                          |
+   | VSIX size       | `14627848` bytes (~13.95 MB)                                                          |
+   | VSIX sha256     | `fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd`                   |
+
+2. **Identical VSIX bytes for both specimens:** the ABLATED and
+   RESTORED specimens use IDENTICAL VSIX bytes. The ablation is
+   toggled entirely by the env var
+   `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` at launch time. No rebuild
+   between specimens.
+
+3. **Positive Extension Host attestation (AB-ATTEST-01):** the
+   constructor of `PendingPromptsController` now emits ONE line on
+   `process.stderr` with the exact prefix
+   `[CLINEMM_OOM_DISC01_ATTEST]` and key/value fields
+   `subject=... ablation_active=... env_present=... eh_pid=...
+   ppid=... constructed_at=...`, bound to `process.pid`. Three
+   AB-ATTEST-01 tests verify the structural shape in production and
+   ablation modes.
+
+4. **Bundle identity verified:** the bundled `extension.js` contains
+   the runtime lookup `process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY`,
+   the esbuild-inlined `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`,
+   and the `[CLINEMM_OOM_DISC01_ATTEST]` line marker. Verified by
+   `grep -o` on extracted `extension.js`.
+
+5. **Vitest exit codes captured:** production mode → 0
+   (15/15 PASS); ablation mode → 1 (14/15 + 1 expected RED on
+   CCARD-WIRE-01). The vitest-pool worker-termination `EPERM`
+   observed in this dev environment is a sandbox-specific
+   worker-shutdown quirk; the suite exit code matches the assertion
+   result, NOT the EPERM. Separately characterized in
+   `04-focused-gates.txt`.
+
+6. **No additional queue/steer semantics altered:** the only
+   production-code change is the conditional spread of `next.delivery`
+   at the `PendingPromptsController.drain` boundary, plus the
+   constructor attestation emission. All other forwarding (jobId,
+   onBeforeDispatch, C4/C5/C6/C7 hooks) is preserved.
+
+## Historical pitfall fixed
+
+`declare const CLINEMM_OOM_DISC01_SUBJECT_HEAD` is a TypeScript-only
+construct; at runtime the identifier is `undefined` unless esbuild
+`--define:CLINEMM_OOM_DISC01_SUBJECT_HEAD='...'` was applied. A direct
+reference throws `ReferenceError: ... is not defined`, which
+`try { ... } catch {}` silently swallowed, making the AB-ATTEST-01
+test fail mysteriously with `n_calls=0` even though
+`vi.spyOn(process.stderr, "write")` was correctly set up. The lookup
+now goes through
+`(globalThis as { CLINEMM_OOM_DISC01_SUBJECT_HEAD?: string }).CLINEMM_OOM_DISC01_SUBJECT_HEAD`
+so the absence is observable as the literal token `<runtime-unset>`
+rather than a silent swallowed error. The same lesson is documented
+in the test file's `describe` block for AB-ATTEST-01.
+
+## Verdict (CORRECTION01)
+
+**PASS_DISCRIMINATORS_INSTALLED_BUNDLE_BUILT_LIVE_SPECIMEN_READY**
+
+The bundle is built, the attestation is wired, and the live
+specimen is ready to run. The same VSIX bytes are used for ABLATED
+and RESTORED; only the env var at launch differs.
+
+**Repair authorized:** FALSE
+
+The closure of this ACT remains: operator runs the live specimen
+and applies one of the three downstream verdicts
+(`PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM`,
+`PASS_DELIVERY_PROPAGATION_REFUTED`, or `NOT_REPRODUCED`).
+
+## Artifacts (CORRECTION01)
+
+```
+.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/
+├── 01-entry-state.md
+├── 02-single-commit-boundary.txt
+├── 03-ablation-diff.txt
+├── 04-focused-gates.txt
+├── 04a-focused-gates-production-mode-full.txt
+├── 04b-focused-gates-ablation-mode-full.txt
+├── 04c-sdk-core-typecheck.txt
+├── 04d-apps-vscode-typecheck.txt
+├── 04e-git-diff-check.txt
+├── 05-live-ablation.md
+├── 06-bundle-identity.txt    # CORRECTION01: bundled VSIX sha256 + identity
+└── result.json               # CORRECTION01: subject_head + positive_attestation + bundled_vsix + halt_conditions
+```
+
+Build artifact (NOT in .factory, lives in dist/dogfood/):
+
+```
+dist/dogfood/clinemm-4.1.16-2edd62498.vsix
+  ├── SUBJECT_HEAD: 2edd62498
+  ├── Version:     4.1.16
+  ├── Size:        14627848 bytes
+  ├── sha256:      fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd
+  └── Verified to contain: CLINEMM_OOM_DISC01_ABLATE_DELIVERY (runtime lookup)
+                           CLINEMM_OOM_DISC01_SUBJECT_HEAD (esbuild define)
+                           CLINEMM_OOM_DISC01_ATTEST (line marker)
+```
