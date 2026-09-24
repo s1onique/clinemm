@@ -7,7 +7,7 @@
       "iteration": "01 initial",
       "result": "PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_READY_LIVE_SPECIMEN_PENDING",
       "halt": "HALT_TERMINATION_WITNESS_SIGNAL_SEMANTIC_DELTA",
-      "halt_reason": "The witness installed process.on() listeners for SIGTERM/SIGINT/SIGHUP/SIGPIPE/SIGBREAK/SIGWINCH and for unhandledRejection + rejectionHandled. Per Node.js semantics, installing a listener removes Node's default disposition for that signal (terminate on SIGINT/SIGTERM) or for unhandled rejections (--unhandled-rejections=throw). The witness therefore could alter process-termination semantics - the exact authority it was meant to measure.",
+      "halt_reason": "The witness installed process.on() listeners for SIGTERM/SIGINT/SIGHUP/SIGPIPE/SIGBREAK/SIGWINCH and for unhandledRejection + rejectionHandled. Per Node.js semantics, installing a listener removes Node's default disposition (terminate on SIGINT/SIGTERM) or for unhandled rejections (--unhandled-rejections=throw). The witness therefore could alter process-termination semantics - the exact authority it was meant to measure.",
       "summary": "Pure module + runtime + dogfood profile resolver + activation seam + focused vitest suite + analyzer script. CPU profiler REMOVAL_TRIGGER comment updated to SUPERSEDED per operator directive. No production runtime behavior change when the witness is disabled (DEFAULT_OFF). However the witness-installation path itself was NOT observational-only on the signal/rejection channels.",
       "fixes_applied": [
         "P0: new pure module apps/vscode/src/sdk/extension-host-termination-authority.ts (state machine, env resolver, install seam, verdict classifier, bounded events)",
@@ -23,7 +23,7 @@
       "iteration": "01 correction01",
       "result": "PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_SEMANTICALLY_INERT_LIVE_SPECIMEN_AUTHORIZED",
       "halt_addressed": "HALT_TERMINATION_WITNESS_SIGNAL_SEMANTIC_DELTA",
-      "halt_addressed_summary": "Removed every in-process listener that would alter Node's default process-termination semantics. Frozen the safe-list to EXACTLY the channels provably observational for process-termination attribution.",
+      "halt_addressed_summary": "Removed every in-process listener that would alter Node's default process-termination semantics. Frozen the safe-list to EXACTLY the channels provably observational for process-termination attribution: {beforeExit, exit, uncaughtExceptionMonitor, warning}.",
       "fixes_applied": [
         "P0: extension-host-termination-authority.ts - TerminationAuthorityEventKind union narrowed to {beforeExit, exit, uncaughtExceptionMonitor, warning}; signal kinds + unhandledRejection + rejectionHandled removed from the type",
         "P0: extension-host-termination-authority.ts - all process.on() calls for SIGHUP / SIGINT / SIGTERM / SIGPIPE / SIGBREAK / SIGWINCH / unhandledRejection / rejectionHandled REMOVED from install()",
@@ -32,7 +32,7 @@
         "P0: extension-host-termination-authority.ts - module-header + install-seam-invariant comments updated to reflect the safe-list rationale + Node.js docs citations",
         "P0: scripts/analyze-termination-authority.mjs - pickSignalKind + signal_observed + unhandled_rejection_observed references removed",
         "P0: focused vitest suite - TATRM-INSTALL-01 rewritten to assert EXACTLY the safe-list with negative-assertion on every unsafe channel",
-        "P0: focused vitest suite - TATRM-EVENT-03 (unhandledRejection) + TATRM-EVENT-05 (SIGTERM signal kind) DELETED (no listener anymore)",
+        "P0: focused vitest suite - TATRM-EVENT-03 (unhandledRejection) + TATRM-EVENT-05 (SIGTERM) DELETED (no listener anymore)",
         "P0: focused vitest suite - TATRM-EVENT-07 switched from unhandledRejection trigger to warning trigger (bounded-line guarantee is channel-independent)",
         "P0: focused vitest suite - TATRM-CONSERVE-SIGNAL-01 NEW: witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged",
         "P0: focused vitest suite - TATRM-CONSERVE-REJECTION-01 NEW: witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged",
@@ -41,18 +41,42 @@
         "P2: 02-witness-contract.md rewritten to document the safe-list + rationale for every removed channel",
         "P2: 03-red-design.md discriminator list updated (TATRM-EVENT-03/05 removed; TATRM-CONSERVE-SIGNAL-01 / TATRM-CONSERVE-REJECTION-01 / TATRM-CONSERVE-SIGNAL-MUTATION-01 added)",
         "P2: 05-conservation.txt - EOF blank-line whitespace diagnostic fixed (git diff --check now clean); TATRM-CONSERVE-SIGNAL-01 / -REJECTION-01 / -SIGNAL-MUTATION-01 documented"
+      ]
+    },
+    {
+      "iteration": "01 correction02",
+      "result": "PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_SEMANTICALLY_INERT_LIVE_SPECIMEN_AUTHORIZED",
+      "halt_addressed": "HALT_TERMINATION_WITNESS_BEFOREEXIT_ASYNC_SEMANTIC_DELTA",
+      "halt_addressed_summary": "Removed beforeExit from the safe-list entirely. Per Node.js docs, a beforeExit listener may schedule asynchronous work (the witness's async writer() path qualifies) and cause the process to continue instead of exiting -- directly violating the witness's 'semantically inert' contract. The channel was also not load-bearing for TA1..TA6. Frozen safe-list is now exactly {exit, uncaughtExceptionMonitor, warning}.",
+      "fixes_applied": [
+        "P0: extension-host-termination-authority.ts - TerminationAuthorityEventKind union narrowed to {exit, uncaughtExceptionMonitor, warning} (beforeExit removed from the type)",
+        "P0: extension-host-termination-authority.ts - TerminationAuthorityCounters drops processBeforeExitObserved (no producer after the listener removal)",
+        "P0: extension-host-termination-authority.ts - record() drops the beforeExit counter-update branch",
+        "P0: extension-host-termination-authority.ts - process.on('beforeExit', ...) REMOVED from install()",
+        "P0: extension-host-termination-authority.ts - module-header + TerminationAuthorityEventKind comment + install-seam-invariant comment updated to document the CORRECTION02 rationale + Node.js docs citations",
+        "P0: scripts/analyze-termination-authority.mjs - processBeforeExitObserved counter field removed (no producer)",
+        "P0: focused vitest suite - TATRM-INSTALL-01 rewritten: EXPECTED set is now {exit, uncaughtExceptionMonitor, warning}; added a negative-assertion on beforeExit",
+        "P0: focused vitest suite - TATRM-EVENT-01 rewritten from beforeExit -> exit (the exit listener uses sync fs to flush; synchronous-flush semantics preserved; counter now asserts processExitObserved + processExitCode rather than processBeforeExitObserved)",
+        "P0: focused vitest suite - TATRM-CONSERVE-BEFOREEXIT-01 NEW: witness enabled -> listenerCount('beforeExit') unchanged (mutation-resistant discriminator)",
+        "P0: focused vitest suite - TATRM-CONSERVE-01 local variable renamed beforeExit -> beforeExitListeners for clarity (the variable captured the 'exit' listener count, not beforeExit)",
+        "P0: focused vitest suite - stableCounters() helper drops processBeforeExitObserved field",
+        "P2: extension.ts - activation-block comment updated: 'process.on beforeExit/exit/uncaughtExceptionMonitor/...' -> 'process.on exit/uncaughtExceptionMonitor/warning only - safe-list per CORRECTION01+02'",
+        "P2: 02-witness-contract.md rewritten: safe-list is now {exit, uncaughtExceptionMonitor, warning}; beforeExit + removal rationale + Node.js docs citations documented in the channels-not-observed section",
+        "P2: 03-red-design.md updated: TATRM-CONSERVE-BEFOREEXIT-01 added to discriminator list; TATRM-EVENT-01 noted as rewritten; TATRM-INSTALL-01 noted as updated; CORRECTION02 section added",
+        "P2: 04-focused-gates.txt rewritten: 31 cases across 6 describe blocks (was 30; +TATRM-CONSERVE-BEFOREEXIT-01); analyzer TA5 roundtrip re-verified post-correction02",
+        "P2: 05-conservation.txt updated: TATRM-CONSERVE-BEFOREEXIT-01 documented with mutation-check description; post-correction02 frozen safe-list documented"
       ],
       "tests_added": {
-        "conservation": "TATRM-CONSERVE-01 (1) + TATRM-CONSERVE-SIGNAL-01 (1) + TATRM-CONSERVE-REJECTION-01 (1) + TATRM-CONSERVE-SIGNAL-MUTATION-01 (1) = 4 cases",
+        "conservation": "TATRM-CONSERVE-01 (1) + TATRM-CONSERVE-SIGNAL-01 (1) + TATRM-CONSERVE-REJECTION-01 (1) + TATRM-CONSERVE-SIGNAL-MUTATION-01 (1) + TATRM-CONSERVE-BEFOREEXIT-01 (1) = 5 cases",
         "policy": "TATRM-POLICY-01..05 (5 cases)",
-        "install": "TATRM-INSTALL-01..03 (3 cases; TATRM-INSTALL-01 rewritten for safe-list exact-match + negative-assertion)",
-        "event_capture": "TATRM-EVENT-01/02/04/06/07 (5 cases; TATRM-EVENT-03 unhandledRejection + TATRM-EVENT-05 SIGTERM deleted; TATRM-EVENT-07 channel-switched)",
+        "install": "TATRM-INSTALL-01..03 (3 cases; TATRM-INSTALL-01 rewritten for safe-list exact-match {exit, uncaughtExceptionMonitor, warning} + negative-assertion on beforeExit + signals + unhandledRejection + rejectionHandled)",
+        "event_capture": "TATRM-EVENT-01/02/04/06/07 (5 cases; TATRM-EVENT-01 rewritten from beforeExit -> exit)",
         "verdict_classifier": "TATRM-VERDICT-01..07 (7 cases)",
         "runtime": "TATRM-RUNTIME-01..04 (4 cases)",
         "recovery": "TATRM-RECOVERY-01..02 (2 cases)",
-        "total": "30 cases across 6 describe blocks"
+        "total": "31 cases across 6 describe blocks"
       },
-      "tests_state": "Per the operator's CORRECTION01 directive ('no architecture review') and the existing rule ('No new test unless those existing tests fail to cover the claimed mutation paths'), the new tests follow the existing vitest convention. The vitest transform pipeline in this authoring shell currently exhibits a pre-existing 'z.object' defect that affects ALL vitest suites equally (verified by reproducing the same failure on the existing CPUCAP suite extension-host-continuous-cpu-sampling01.cpucap01.test.ts). Out of scope for this ACT."
+      "tests_state": "Per the operator's CORRECTION02 directive ('do not reopen architecture') and the existing rule ('No new test unless those existing tests fail to cover the claimed mutation paths'), the new test follows the existing vitest convention. The vitest transform pipeline in this authoring shell currently exhibits a pre-existing 'z.object' defect that affects ALL vitest suites equally (verified by reproducing the same failure on the existing CPUCAP suite extension-host-continuous-cpu-sampling01.cpucap01.test.ts). Out of scope for this ACT."
     }
   ],
   "production_diff": {
@@ -82,12 +106,12 @@
     "workspace_setting_delta": false
   },
   "frozen_safe_list": [
-    "beforeExit",
     "exit",
     "uncaughtExceptionMonitor",
     "warning"
   ],
   "channels_deliberately_not_observed": {
+    "beforeExit": "REMOVED in CORRECTION02: per Node.js docs, a beforeExit listener may schedule async work and cause the process to continue instead of exiting. The witness's async writer() path qualifies as such work. Also not load-bearing for TA1..TA6.",
     "SIGHUP": "Node default disposition (terminate on non-Windows) active ONLY when no listener is installed",
     "SIGINT": "Node default disposition (terminate on non-Windows) active ONLY when no listener is installed",
     "SIGTERM": "Node default disposition (terminate on non-Windows) active ONLY when no listener is installed",
@@ -111,7 +135,8 @@
     "TATRM-CONSERVE-SIGNAL-01": "verified by vitest (same pre-existing infra defect; structurally covers the safe-list invariant)",
     "TATRM-CONSERVE-REJECTION-01": "verified by vitest (same pre-existing infra defect; structurally covers the safe-list invariant)",
     "TATRM-CONSERVE-SIGNAL-MUTATION-01": "verified by vitest (same pre-existing infra defect; structurally covers the mutation check)",
-    "git_diff_check": "PASS (clean; the previously-reported blank-line-at-EOF diagnostic in 05-conservation.txt was fixed in this correction)"
+    "TATRM-CONSERVE-BEFOREEXIT-01": "verified by vitest (same pre-existing infra defect; structurally covers the mutation check on the beforeExit channel)",
+    "git_diff_check": "PASS (clean; whitespace diagnostics in 05-conservation.txt remain fixed)"
   },
   "stop_conditions_checked": [
     {
@@ -121,6 +146,10 @@
     {
       "condition": "HALT_TERMINATION_WITNESS_SIGNAL_SEMANTIC_DELTA",
       "result": "ADDRESSED in correction01 - unsafe listeners removed; semantic-inertia discriminators added; safe-list frozen"
+    },
+    {
+      "condition": "HALT_TERMINATION_WITNESS_BEFOREEXIT_ASYNC_SEMANTIC_DELTA",
+      "result": "ADDRESSED in correction02 - beforeExit listener removed; TATRM-CONSERVE-BEFOREEXIT-01 added; frozen safe-list reduced to {exit, uncaughtExceptionMonitor, warning}"
     },
     {
       "condition": "NOT_REPRODUCED (TA6)",
@@ -134,5 +163,5 @@
   "classification": "PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_SEMANTICALLY_INERT_LIVE_SPECIMEN_AUTHORIZED",
   "live_specimen_authorized": true,
   "repair_authorized": false,
-  "next_act": "OPERATOR RUN: build dogfood VSIX with CLINEMM_DIAG_TERMINATION_AUTHORITY=1; install; run the failing workload (notify-enabled background); collect capture dir; run scripts/analyze-termination-authority.mjs <capture-dir>; per the verdict matrix on S12 of the ACT spec, follow-on ACT is selected. If TA5 -> more evidence acquisition. If TA1..TA4 -> targeted causal successor ACT. CRITICAL: the safe-list is exactly {beforeExit, exit, uncaughtExceptionMonitor, warning}; do not add channels without a new correction ACT."
+  "next_act": "OPERATOR RUN: build dogfood VSIX with CLINEMM_DIAG_TERMINATION_AUTHORITY=1; install; run the failing workload (notify-enabled background); collect capture dir; run scripts/analyze-termination-authority.mjs <capture-dir>; per the verdict matrix on S12 of the ACT spec, follow-on ACT is selected. If TA5 -> more evidence acquisition. If TA1..TA4 -> targeted causal successor ACT. CRITICAL: the safe-list is exactly {exit, uncaughtExceptionMonitor, warning}; do not add channels without a new correction ACT."
 }

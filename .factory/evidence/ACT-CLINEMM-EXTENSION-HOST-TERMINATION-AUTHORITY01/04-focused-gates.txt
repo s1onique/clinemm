@@ -1,10 +1,10 @@
 ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Focused Gates
 
-## Typecheck (post-correction01)
+## Typecheck (post-correction02)
     cd apps/vscode && bunx tsc --noEmit
-    EXIT=0   (verified 2026-09-24 after correction01)
+    EXIT=0   (verified 2026-09-24 after correction02)
 
-## Biome (post-correction01)
+## Biome (post-correction02)
     cd apps/vscode && bunx biome check src/sdk/extension-host-termination-authority.ts \
                                        src/sdk/extension-host-termination-authority-runtime.ts \
                                        src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts \
@@ -12,30 +12,33 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Focused Gates
                                        src/sdk/dogfood-diagnostic-profile.ts \
                                        src/sdk/extension-host-cpu-profiler.ts \
                                        src/sdk/extension-host-cpu-profiler-runtime.ts
-    PASS (0 errors, 0 warnings -- verified 2026-09-24 after correction01)
+    PASS (0 errors, 0 warnings -- verified 2026-09-24 after correction02)
+    Note: scripts/analyze-termination-authority.mjs is intentionally not
+    in biome's include path (the scripts/ directory is outside
+    apps/vscode's biome config); this is pre-existing and not a
+    regression.
 
 ## Unit (bun:test runner via test:unit)
     cd apps/vscode && bun run test:unit
-    1168/1168 PASS, 0 FAIL   (verified 2026-09-24 after correction01)
-    Zero regression vs pre-correction01 (same 1168/1168 PASS).
+    1168/1168 PASS, 0 FAIL   (verified 2026-09-24 after correction02)
+    Zero regression vs pre-correction02 (same 1168/1168 PASS).
 
-## Git diff --check (post-correction01)
+## Git diff --check (post-correction02)
     git diff --check
     PASS (no whitespace or line-ending errors)
-    -- The previously-reported blank-line-at-EOF diagnostic in
-       05-conservation.txt was fixed in correction01 (trailing
-       whitespace stripped; exactly one trailing newline).
 
-## Focused vitest suite (post-correction01)
+## Focused vitest suite (post-correction02)
     File: src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts
-    Cases: 30 across 6 describe blocks
-       - conservation (4 cases including TATRM-CONSERVE-SIGNAL-01,
-         TATRM-CONSERVE-REJECTION-01, TATRM-CONSERVE-SIGNAL-MUTATION-01)
+    Cases: 31 across 6 describe blocks
+       - conservation (5 cases: TATRM-CONSERVE-01, TATRM-CONSERVE-SIGNAL-01,
+         TATRM-CONSERVE-REJECTION-01, TATRM-CONSERVE-SIGNAL-MUTATION-01,
+         TATRM-CONSERVE-BEFOREEXIT-01 [CORRECTION02])
        - policy (5)
        - install seam (3; TATRM-INSTALL-01 rewritten for safe-list
-         exact-match + negative-assertion)
-       - event capture (5; TATRM-EVENT-03 unhandledRejection +
-         TATRM-EVENT-05 SIGTERM deleted; TATRM-EVENT-07 channel-switched)
+         exact-match {exit, uncaughtExceptionMonitor, warning} +
+         negative-assertion on beforeExit + signals + unhandledRejection)
+       - event capture (5; TATRM-EVENT-01 rewritten to use exit channel
+         in place of the removed beforeExit channel)
        - verdict classifier (7)
        - runtime + summarizer (4)
        - recovery (2)
@@ -54,7 +57,7 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Focused Gates
     infrastructure defect is pre-existing; bypassing it is out of
     scope for this ACT.
 
-## Pre-capture analyzer smoke (post-correction01)
+## Pre-capture analyzer smoke (post-correction02)
     node scripts/analyze-termination-authority.mjs
       (FAILS with USAGE / IO error since no capture dir is supplied;
        expected for a standalone smoke)
@@ -66,7 +69,7 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Focused Gates
     end-to-end TA6 roundtrip:
       mkdir + meta.json + empty host-self-events.jsonl
       -> TA6 NOT_REPRODUCED (exit 3)
-    end-to-end TA5 roundtrip (synthesized, pre-correction01):
-      3 events (beforeExit + uncaughtExceptionMonitor + warning)
+    end-to-end TA5 roundtrip (synthesized, post-correction02):
+      3 events (uncaughtExceptionMonitor + 2x warning; no exit)
       -> TA5 CAPTURE_INSUFFICIENT (exit 2)
     Both write verdict.json correctly.

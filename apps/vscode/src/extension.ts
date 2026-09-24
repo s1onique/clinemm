@@ -267,7 +267,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// listeners BEFORE the first run_commands invocation reaches
 	// the trigger seam at vscode-run-commands-tool.ts:765. Per ACT
 	// §5: the witness installs ONLY observational listeners
-	// (process.on beforeExit/exit/uncaughtExceptionMonitor/...);
+	// (process.on exit/uncaughtExceptionMonitor/warning only — safe-list per CORRECTION01+02);
 	// it does NOT alter command / continuation / completion
 	// semantics; it does NOT call process.exit().
 	applyExtensionHostTerminationAuthorityProfile(isDogfoodRuntime(process.env), process.env)

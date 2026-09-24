@@ -44,15 +44,21 @@
  *   - NO TASK-SEMANTIC DELTA: process events are observations only;
  *     the witness NEVER calls process.exit(), NEVER swallows
  *     uncaughtException, NEVER replaces the fatal-exception path.
- *   - SEMANTIC INERTIA (per CORRECTION01): the witness observes ONLY
- *     channels that are provably observational. The frozen safe-list
- *     is exactly:
- *       beforeExit, exit, uncaughtExceptionMonitor, warning
+ *   - SEMANTIC INERTIA (per CORRECTION01 + CORRECTION02): the
+ *     witness observes ONLY channels that are provably observational
+ *     AND cannot keep the process alive on their own. The frozen
+ *     safe-list is exactly:
+ *       exit, uncaughtExceptionMonitor, warning
  *     All signal channels (SIGHUP/SIGINT/SIGTERM/SIGPIPE/SIGBREAK/
  *     SIGWINCH) and unhandledRejection + rejectionHandled are
  *     DELIBERATELY NOT observed because installing a listener would
- *     alter process-termination semantics. See the TerminationAuthority
- *     EventKind union for the full rationale.
+ *     alter process-termination semantics. `beforeExit` was REMOVED
+ *     in CORRECTION02 because, per Node.js docs, a `beforeExit`
+ *     listener may schedule asynchronous work (the witness's async
+ *     `writer()` path qualifies) and cause the process to continue
+ *     instead of exiting — directly violating the witness contract.
+ *     See the TerminationAuthorityEventKind union for the full
+ *     rationale.
  *
  * REMOVAL_TRIGGER / RETAIN_AS_DIAGNOSTIC (per the operator's directive
  * accompanying this ACT): the prior CPU profiler's old removal
@@ -144,19 +150,30 @@ export type TerminationAuthorityState = "disabled" | "armed" | "installed"
  * one of the Node `process.on(...)` channels. The kind is the source
  * channel; the payload is bounded by schema below.
  *
- * FROZEN SAFE-LIST (per CORRECTION01):
+ * FROZEN SAFE-LIST (per CORRECTION01 + CORRECTION02):
  *   The witness observes ONLY channels that are provably observational
- *   for process-termination attribution. Specifically:
+ *   for process-termination attribution AND cannot keep the process
+ *   alive on their own. Specifically:
  *
- *     - beforeExit          (observation only)
- *     - exit                (observation only; sync flush before death)
+ *     - exit                (observation only; sync flush before death;
+ *                            Node guarantees this does not extend the
+ *                            process lifetime — only synchronous
+ *                            operations are allowed in `exit`)
  *     - uncaughtExceptionMonitor  (observational; Node guarantees this
  *                                  does not change eventual crash)
- *     - warning             (observation only)
+ *     - warning             (observation only; non-load-bearing for
+ *                            termination attribution)
  *
  *   The following channels are DELIBERATELY NOT observed because
  *   installing a listener would alter process-termination semantics:
  *
+ *     - beforeExit          (REMOVED in CORRECTION02: per Node.js docs,
+ *                            a beforeExit listener may schedule
+ *                            asynchronous work (e.g. the witness's own
+ *                            async `writer()` path) and cause the
+ *                            process to continue instead of exiting.
+ *                            Even when not strictly required, the
+ *                            channel is not load-bearing for TA1..TA6.)
  *     - unhandledRejection  (default `--unhandled-rejections=throw`
  *                            becomes effective ONLY if no listener is
  *                            installed)
@@ -167,7 +184,7 @@ export type TerminationAuthorityState = "disabled" | "armed" | "installed"
  *                            is installed)
  *     - uncaughtException   (fatal-handler; explicitly forbidden)
  */
-export type TerminationAuthorityEventKind = "beforeExit" | "exit" | "uncaughtExceptionMonitor" | "warning"
+export type TerminationAuthorityEventKind = "exit" | "uncaughtExceptionMonitor" | "warning"
 
 /**
  * Bounded shape of one self-event row. We do NOT serialize full
@@ -214,7 +231,6 @@ export interface TerminationAuthorityCounters {
 	processExitObserved: boolean
 	processExitObservedAt: string | undefined
 	processExitCode: number | undefined
-	processBeforeExitObserved: boolean
 	uncaughtExceptionMonitorObserved: boolean
 	warningObserved: boolean
 }
@@ -267,7 +283,6 @@ function freshCounters(): TerminationAuthorityCounters {
 		processExitObserved: false,
 		processExitObservedAt: undefined,
 		processExitCode: undefined,
-		processBeforeExitObserved: false,
 		uncaughtExceptionMonitorObserved: false,
 		warningObserved: false,
 	}
@@ -475,11 +490,13 @@ export function __resetTerminationAuthorityForTests(): void {
  *   - NEVER throws. Idempotent: a second install() is a no-op.
  *   - NEVER alters command / continuation / completion semantics.
  *   - Installs ONLY the documented observational listeners (frozen
- *     safe-list per CORRECTION01):
- *       beforeExit, uncaughtExceptionMonitor, warning, exit
- *     Does NOT install signal listeners (SIGHUP/SIGINT/SIGTERM/
- *     SIGPIPE/SIGBREAK/SIGWINCH) because installing one removes
- *     Node's default disposition for that signal. Does NOT install
+ *     safe-list per CORRECTION01 + CORRECTION02):
+ *       exit, uncaughtExceptionMonitor, warning
+ *     Does NOT install `beforeExit` (REMOVED in CORRECTION02: it can
+ *     schedule asynchronous work and keep the process alive). Does
+ *     NOT install signal listeners (SIGHUP/SIGINT/SIGTERM/SIGPIPE/
+ *     SIGBREAK/SIGWINCH) because installing one removes Node's
+ *     default disposition for that signal. Does NOT install
  *     unhandledRejection because installing one removes the default
  *     `--unhandled-rejections=throw` behavior. Does NOT install
  *     `uncaughtException` (fatal-handler) — only
@@ -560,9 +577,6 @@ export async function installTerminationAuthorityWitness(): Promise<void> {
 		_counters.observedEventCount += 1
 		_counters.lastEventKind = kind
 		_counters.lastEventObservedAt = observedAt
-		if (kind === "beforeExit") {
-			_counters.processBeforeExitObserved = true
-		}
 		if (kind === "uncaughtExceptionMonitor") {
 			_counters.uncaughtExceptionMonitorObserved = true
 		}
@@ -579,9 +593,6 @@ export async function installTerminationAuthorityWitness(): Promise<void> {
 		}
 	}
 
-	process.on("beforeExit", (code) => {
-		record("beforeExit", { exit_code: code })
-	})
 	process.on("uncaughtExceptionMonitor", (err, origin) => {
 		const classified = classifyReason(err)
 		record("uncaughtExceptionMonitor", {

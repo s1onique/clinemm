@@ -16,7 +16,7 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Termination Witness Contra
       | (installTerminationAuthorityWitness)
       v
     installed
-      | (process signal/channel observed)
+      | (process channel observed)
       v
     stays installed (events appended)
 
@@ -25,23 +25,35 @@ ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Termination Witness Contra
     (TERMINATION_AUTHORITY_MAX_EVENTS=512) protects against unbounded
     log-flooding processes.
 
-## Captured channels (frozen; CORRECTION01 safe-list)
+## Captured channels (frozen; CORRECTION01 + CORRECTION02 safe-list)
 
 The witness observes ONLY channels that are provably observational
-for process-termination attribution. The frozen safe-list is exactly:
+for process-termination attribution AND cannot keep the process
+alive on their own. The frozen safe-list is exactly:
 
-    process.on("beforeExit")               -- observation only
     process.on("exit")                     -- observation only, sync flush
+                                             (Node guarantees the
+                                             process is not kept
+                                             alive by this listener)
     process.on("uncaughtExceptionMonitor") -- observation only, NOT fatal
-    process.on("warning")                  -- observation only
+                                             (observational sibling
+                                             of the fatal handler;
+                                             Node guarantees this
+                                             does not change the
+                                             eventual crash)
+    process.on("warning")                  -- observation only,
+                                             non-load-bearing for
+                                             termination attribution
 
 The fatal handler `uncaughtException` (NOT `Monitor`) is deliberately
 NOT installed. Adding or removing a fatal handler is exactly the kind
 of semantic delta this ACT forbids.
 
-The following channels are DELIBERATELY NOT observed because installing
-a listener would alter Node's default process-termination semantics:
+The following channels are DELIBERATELY NOT observed because
+installing a listener would alter Node's default process-termination
+semantics OR enable the witness to keep the process alive:
 
+    process.on("beforeExit")          [REMOVED in CORRECTION02]
     process.on("unhandledRejection")
     process.on("rejectionHandled")
     process.on("SIGHUP")
@@ -63,14 +75,30 @@ Rationale (per Node.js docs):
     a listener therefore changes default fatal behavior.
   - rejectionHandled: not load-bearing for termination attribution.
   - uncaughtException: fatal-handler; explicitly forbidden.
+  - beforeExit [REMOVED in CORRECTION02]: per Node.js docs, a
+    `beforeExit` listener may schedule asynchronous work and cause the
+    process to continue instead of exiting. The witness's own async
+    `writer()` path qualifies as such work (it calls
+    `node:fs/promises` appendFile). Adding a `beforeExit` listener
+    could therefore (a) keep the Extension Host alive longer than it
+    would otherwise run, AND (b) cause `beforeExit` to fire more than
+    once, both of which directly violate the witness contract. The
+    channel is also not load-bearing for TA1..TA6 — TA1 depends on
+    `exit`, not `beforeExit`; TA2/3/4 are detected by external
+    evidence; TA5/6 fall through without `beforeExit` information.
 
-Discriminators:
+Discriminators (per CORRECTION01 + CORRECTION02):
   TATRM-CONSERVE-SIGNAL-01
     witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
   TATRM-CONSERVE-REJECTION-01
     witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
   TATRM-CONSERVE-SIGNAL-MUTATION-01
     a pre-existing SIGTERM listener survives the witness install
+  TATRM-CONSERVE-BEFOREEXIT-01
+    witness enabled -> listenerCount("beforeExit") unchanged
+    (CORRECTION02: proves the witness never installed a beforeExit
+    listener; mutation-resistant — a future regression that re-adds
+    one will fail this discriminator.)
 
 ## Constants (frozen; tuning requires a new ACT)
 
@@ -85,19 +113,19 @@ Discriminators:
 ## Bounded event shape (frozen)
 
     {
-      kind: TerminationAuthorityEventKind,
+      kind: TerminationAuthorityEventKind,   // "exit" | "uncaughtExceptionMonitor" | "warning"
       observed_at: ISO timestamp string,
       pid: number,
       uptime_ms: number,
       seq: number,
       // one-of per channel:
-      exit_code?: number,
-      signal?: string,
-      reason_kind?: string,
-      reason_first_line?: string,
-      warning_name?: string,
-      stack_head?: string,
-      reason_typeof?: string,
+      exit_code?: number,                    // "exit" only
+      signal?: string,                       // "exit" only
+      reason_kind?: string,                  // "uncaughtExceptionMonitor" only
+      reason_first_line?: string,            // "uncaughtExceptionMonitor" + "warning"
+      warning_name?: string,                 // "uncaughtExceptionMonitor" + "warning"
+      stack_head?: string,                   // "uncaughtExceptionMonitor" + "warning"
+      reason_typeof?: string,                // "uncaughtExceptionMonitor" only
     }
 
 ## Artifact directory (frozen per ACT §8)

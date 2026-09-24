@@ -25,10 +25,12 @@ CLINEMM_DIAG_TERMINATION_AUTHORITY=1 + dogfood. So:
 
 ## Discriminators this ACT must satisfy
 
-TATRM-CONSERVE-01              disabled-zero-semantic-delta
-TATRM-CONSERVE-SIGNAL-01       witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
-TATRM-CONSERVE-REJECTION-01    witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
-TATRM-CONSERVE-SIGNAL-MUTATION-01  a pre-existing SIGTERM listener survives the witness install
+TATRM-CONSERVE-01                disabled-zero-semantic-delta
+TATRM-CONSERVE-SIGNAL-01         witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
+TATRM-CONSERVE-REJECTION-01      witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
+TATRM-CONSERVE-SIGNAL-MUTATION-01   a pre-existing SIGTERM listener survives the witness install
+TATRM-CONSERVE-BEFOREEXIT-01 [+]  witness enabled -> listenerCount("beforeExit") unchanged
+                                   (CORRECTION02)
 
 TATRM-POLICY-01    public + knob=1 -> DISABLED (fail-closed)
 TATRM-POLICY-02    dogfood + knob=1 -> ARMED
@@ -37,11 +39,11 @@ TATRM-POLICY-04    dogfood + knob=true|yes|YES|  True accepted
 TATRM-POLICY-05    dogfood + knob=false|no|off|0|empty refused
 
 TATRM-INSTALL-01   install installs EXACTLY the safe-list
-                    (beforeExit, uncaughtExceptionMonitor, warning, exit)
+                    (exit, uncaughtExceptionMonitor, warning) [-beforeExit in CORRECTION02]
 TATRM-INSTALL-02   install is idempotent
 TATRM-INSTALL-03   install on DISABLED state is a no-op
 
-TATRM-EVENT-01     beforeExit captures code
+TATRM-EVENT-01     exit captures code [rewritten in CORRECTION02 from beforeExit]
 TATRM-EVENT-02     uncaughtExceptionMonitor captures bounded reason
 TATRM-EVENT-04     warning captures bounded name + first line
 TATRM-EVENT-06     event cap honored (dropped counter increments)
@@ -62,6 +64,31 @@ TATRM-RUNTIME-04   writeCrashReportSummary writes structured summary on real-for
 
 TATRM-RECOVERY-01  __resetTerminationAuthorityForTests clears all state
 TATRM-RECOVERY-02  getTerminationAuthoritySnapshot returns a defensive copy
+
+## CORRECTION02 — bounded beforeExit removal
+
+The CORRECTION01 safe-list included `beforeExit`. The ClineMM
+maintainer flagged that the witness's generic `record()` path
+performs an async append (via `writer(eventsPath, line).catch(...)`),
+and a `beforeExit` listener that schedules async work is exactly the
+shape Node.js documents as keeping the process alive. This violates
+the witness's "semantically inert" contract.
+
+CORRECTION02 removes `beforeExit` from the safe-list entirely:
+
+  Frozen safe-list (post-CORRECTION02):
+    exit
+    uncaughtExceptionMonitor
+    warning
+
+`exit` is the synchronous-flush channel Node guarantees cannot keep
+the process alive. `uncaughtExceptionMonitor` is observational-only
+and explicitly cannot change the eventual crash. `warning` is a
+non-load-bearing diagnostic channel.
+
+The bounded-line / event-cap / verdict-classifier guarantees are
+channel-independent and remain verified by TATRM-EVENT-06,
+TATRM-EVENT-07, and TATRM-VERDICT-01..07 respectively.
 
 ## RED tests in this ACT
 

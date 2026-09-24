@@ -3,19 +3,24 @@
  *
  * Focused test suite for the Extension Host termination witness.
  *
- * Discriminators covered (per ACT §13 / §15 + CORRECTION01):
+ * Discriminators covered (per ACT §13 / §15 + CORRECTION01 + CORRECTION02):
  *   TATRM-CONSERVE-01        disabled-zero-semantic-delta
  *   TATRM-CONSERVE-SIGNAL-01 witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
  *   TATRM-CONSERVE-REJECTION-01 witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
  *   TATRM-CONSERVE-SIGNAL-MUTATION-01 a temporary SIGTERM listener survives the witness
+ *   TATRM-CONSERVE-BEFOREEXIT-01 witness enabled -> listenerCount("beforeExit") unchanged
+ *                            (CORRECTION02: beforeExit was REMOVED from the
+ *                            safe-list because a listener may schedule
+ *                            async work and keep the process alive)
  *   TATRM-POLICY-01          public + knob=1 -> DISABLED (fail-closed)
  *   TATRM-POLICY-02          dogfood + knob=1 -> ARMED
  *   TATRM-POLICY-03          dogfood + knob unset -> DISABLED
  *   TATRM-INSTALL-01         install installs EXACTLY the safe-list
- *                            (beforeExit, uncaughtExceptionMonitor, warning, exit)
+ *                            (exit, uncaughtExceptionMonitor, warning)
  *   TATRM-INSTALL-02         install is idempotent
  *   TATRM-INSTALL-03         install on DISABLED state is a no-op
- *   TATRM-EVENT-01           beforeExit captures code
+ *   TATRM-EVENT-01           exit captures code (CORRECTION02: was
+ *                            beforeExit before the channel was removed)
  *   TATRM-EVENT-02           uncaughtExceptionMonitor captures bounded reason
  *   TATRM-EVENT-04           warning captures bounded name + first line
  *   TATRM-EVENT-06           event cap honored (dropped counter increments)
@@ -124,7 +129,6 @@ function stableCounters(seed: Partial<TerminationAuthorityCounters> = {}): Termi
 		processExitObserved: false,
 		processExitObservedAt: undefined,
 		processExitCode: undefined,
-		processBeforeExitObserved: false,
 		uncaughtExceptionMonitorObserved: false,
 		warningObserved: false,
 		...seed,
@@ -152,15 +156,15 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / conservation", ()
 		// Run with the REAL process to count listeners. The default
 		// state is disabled; calling install() MUST be a no-op.
 		const beforeSigterm = process.listenerCount("SIGTERM")
-		const beforeExit = process.listenerCount("exit")
+		const beforeExitListeners = process.listenerCount("exit")
 		const beforeUCEM = process.listenerCount("uncaughtExceptionMonitor")
 		void installTerminationAuthorityWitness()
 		const afterSigterm = process.listenerCount("SIGTERM")
-		const afterExit = process.listenerCount("exit")
+		const afterExitListeners = process.listenerCount("exit")
 		const afterUCEM = process.listenerCount("uncaughtExceptionMonitor")
 
 		expect(afterSigterm).toBe(beforeSigterm)
-		expect(afterExit).toBe(beforeExit)
+		expect(afterExitListeners).toBe(beforeExitListeners)
 		expect(afterUCEM).toBe(beforeUCEM)
 		expect(getTerminationAuthorityState()).toBe("disabled")
 		expect(getTerminationAuthorityCaptureId()).toBeUndefined()
@@ -223,13 +227,16 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / install seam", ()
 		// runs install(). We monkey-patch `process.on` to capture every
 		// registration BEFORE the install call.
 		//
-		// CORRECTION01: the safe-list is FROZEN to exactly the channels
-		// that are provably observational for process-termination
-		// attribution. The witness MUST NOT install any other listener
-		// (signal handlers, unhandledRejection, rejectionHandled, etc.)
-		// because installing one would alter process-termination
-		// semantics (Node's default disposition is suppressed when a
-		// listener is registered).
+		// CORRECTION01 + CORRECTION02: the safe-list is FROZEN to exactly
+		// the channels that are provably observational for
+		// process-termination attribution AND cannot keep the process
+		// alive on their own. The witness MUST NOT install any other
+		// listener (signal handlers, unhandledRejection, rejectionHandled,
+		// beforeExit, etc.) because installing one would alter
+		// process-termination semantics — either by suppressing Node's
+		// default disposition (signals / unhandled rejection) or by
+		// enabling new async work (beforeExit can schedule work and
+		// keep the process alive).
 		const pre = makeFakeProcess()
 		const originalOn = process.on.bind(process)
 		const captured: Array<{ event: string; nArgs: number }> = []
@@ -258,9 +265,12 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / install seam", ()
 				await new Promise((resolve) => setImmediate(resolve))
 				const installed = getTerminationAuthorityState() === "installed"
 				expect(installed).toBe(true)
-				// FROZEN SAFE-LIST: every event the witness installs MUST
-				// appear in this set; nothing else may.
-				const EXPECTED = new Set(["beforeExit", "uncaughtExceptionMonitor", "warning", "exit"])
+				// FROZEN SAFE-LIST (per CORRECTION02): every event the
+				// witness installs MUST appear in this set; nothing else
+				// may. `beforeExit` was REMOVED in CORRECTION02 because
+				// a listener may schedule async work and keep the
+				// process alive.
+				const EXPECTED = new Set(["exit", "uncaughtExceptionMonitor", "warning"])
 				// Every captured event must be in the expected set.
 				for (const c of captured) {
 					expect(EXPECTED.has(c.event)).toBe(true)
@@ -278,6 +288,10 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / install seam", ()
 				// unhandledRejection / rejectionHandled.
 				expect(captured.find((c) => c.event === "unhandledRejection")).toBeUndefined()
 				expect(captured.find((c) => c.event === "rejectionHandled")).toBeUndefined()
+				// CORRECTION02: the witness MUST NOT register a
+				// beforeExit listener — that channel can schedule
+				// async work and keep the process alive.
+				expect(captured.find((c) => c.event === "beforeExit")).toBeUndefined()
 				void pre
 			})
 		} finally {
@@ -345,16 +359,24 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / event capture", (
 		return installTerminationAuthorityWitness()
 	}
 
-	it("TATRM-EVENT-01: beforeExit captures code", async () => {
+	it("TATRM-EVENT-01: exit captures code (CORRECTION02: was beforeExit before the channel was removed)", async () => {
+		// CORRECTION02: `beforeExit` was REMOVED from the safe-list
+		// because a listener may schedule async work and keep the
+		// process alive. The exit-channel test was rewritten to use
+		// the `exit` channel directly. Note: the `exit` listener uses
+		// SYNC fs to flush, so emitting it here captures synchronously
+		// (the ring buffer + counters are updated before emit returns
+		// because the listener body runs synchronously inside emit).
 		await setupInstalled()
 		const before = getTerminationAuthoritySnapshot().counters.observedEventCount
-		process.emit("beforeExit" as never, 7 as never)
+		process.emit("exit" as never, 7 as never)
 		const after = getTerminationAuthoritySnapshot().counters
 		expect(after.observedEventCount).toBe(before + 1)
-		expect(after.processBeforeExitObserved).toBe(true)
+		expect(after.processExitObserved).toBe(true)
+		expect(after.processExitCode).toBe(7)
 		const events = getTerminationAuthorityEvents()
 		const evt = events[events.length - 1]
-		expect(evt.kind).toBe("beforeExit")
+		expect(evt.kind).toBe("exit")
 		expect(evt.exit_code).toBe(7)
 	})
 
@@ -513,6 +535,30 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / event capture", (
 		} finally {
 			process.removeListener("SIGTERM", noop)
 		}
+	})
+
+	it("TATRM-CONSERVE-BEFOREEXIT-01: witness enabled -> beforeExit listenerCount unchanged (CORRECTION02)", async () => {
+		// CORRECTION02: the safe-list was reduced to exactly
+		// {exit, uncaughtExceptionMonitor, warning}. `beforeExit` was
+		// REMOVED because, per Node.js docs, a `beforeExit` listener
+		// may schedule asynchronous work (the witness's async `writer`
+		// path qualifies) and cause the process to continue instead of
+		// exiting — directly violating the witness contract.
+		//
+		// This discriminator asserts that `listenerCount("beforeExit")`
+		// is unchanged after install. A future contributor who
+		// regresses by re-adding a beforeExit listener will trip this
+		// test.
+		const baseBeforeExit = process.listenerCount("beforeExit")
+		setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
+		const w = makeFakeWriter()
+		const mod = require("../extension-host-termination-authority") as {
+			setTerminationAuthorityWriter: (w: FakeWriter) => void
+		}
+		mod.setTerminationAuthorityWriter(w as unknown as never)
+		applyExtensionHostTerminationAuthorityPolicy(true, { [CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV]: "1" })
+		await installTerminationAuthorityWitness()
+		expect(process.listenerCount("beforeExit")).toBe(baseBeforeExit)
 	})
 })
 

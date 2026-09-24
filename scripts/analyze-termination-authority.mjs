@@ -184,7 +184,6 @@ async function main() {
 		processExitObserved: events.some((e) => e.kind === "exit"),
 		processExitObservedAt: pickEventField(events, "exit", "observed_at"),
 		processExitCode: pickEventField(events, "exit", "exit_code"),
-		processBeforeExitObserved: events.some((e) => e.kind === "beforeExit"),
 		uncaughtExceptionMonitorObserved: events.some((e) => e.kind === "uncaughtExceptionMonitor"),
 		warningObserved: events.some((e) => e.kind === "warning"),
 	}

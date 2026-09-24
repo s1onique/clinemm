@@ -55,7 +55,7 @@ The DEFAULT_OFF state was verified by:
                       accessor surface cannot mutate module state
                       by accident (verified by TATRM-RECOVERY-02).
 
-CORRECTION01 — Semantic-inertia discriminators (per operator directive):
+CORRECTION01 -- Semantic-inertia discriminators (per operator directive):
 
   TATRM-CONSERVE-SIGNAL-01
                       The witness installs NO listener on
@@ -86,13 +86,40 @@ CORRECTION01 — Semantic-inertia discriminators (per operator directive):
 
 These three discriminators form the load-bearing boundary between
 "observational only" (allowed) and "process-lifecycle altering"
-(forbidden). The safe-list is FROZEN to exactly:
+(forbidden) for the SIG/REJECTION dimension.
 
-    beforeExit
+CORRECTION02 -- beforeExit removal discriminator:
+
+  TATRM-CONSERVE-BEFOREEXIT-01
+                      The witness installs NO listener on
+                      "beforeExit". Verified by:
+                      process.listenerCount("beforeExit") is unchanged
+                      after installTerminationAuthorityWitness().
+                      A beforeExit listener may schedule asynchronous
+                      work (the witness's async writer() path qualifies)
+                      and cause the process to continue instead of
+                      exiting -- directly violating the witness
+                      contract. The channel is also not load-bearing
+                      for TA1..TA6 (TA1 depends on exit, not
+                      beforeExit; TA2/3/4 are detected by external
+                      evidence; TA5/6 fall through without
+                      beforeExit information).
+
+  Mutation check built into the discriminator:
+      - listenerCount is captured BEFORE install() runs.
+      - install() is called under a writer + data-root seam.
+      - listenerCount is captured AFTER install() completes.
+      - The witness's contribution is provably 0; if a future
+        contributor re-adds a beforeExit listener, the post-install
+        count will be pre-install + 1 and the discriminator fails.
+
+Post-CORRECTION02 the safe-list is FROZEN to exactly:
+
     exit
     uncaughtExceptionMonitor
     warning
 
 Any future ACT that wants to add a new channel MUST be a separate
 correction ACT and MUST prove the new channel is observational for
-process-termination attribution.
+process-termination attribution AND cannot keep the process alive
+on its own.
