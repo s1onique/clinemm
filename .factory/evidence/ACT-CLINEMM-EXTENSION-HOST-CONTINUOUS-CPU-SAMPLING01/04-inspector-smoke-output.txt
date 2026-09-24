@@ -1,0 +1,5 @@
+Profiler.enable ok
+Profiler.setSamplingInterval ok (interval=1000us)
+Profiler.start ok
+Profiler.stop returned profile: nodes=6 samples=881 timeDeltas=881
+smoke probe PASS

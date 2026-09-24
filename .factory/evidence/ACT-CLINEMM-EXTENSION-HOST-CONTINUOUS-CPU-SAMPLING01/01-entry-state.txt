@@ -1,0 +1,104 @@
+ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01 — Entry State
+
+ENTRY_HEAD: 7ecc521b24ec56de34e18e50b54ad5745dd3fd3f
+ENTRY_SUBJECT_HEAD: ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02
+
+FROZEN CURRENT CAUSAL STATE (per ACT §1):
+
+    WVSL_SESSION_LISTING_REPAIR
+      = LIVE_EFFECTIVE / PARTIAL
+
+    before:
+      listSessionsCalls               = 6
+      readSessionManifestTitleCalls   = 894
+
+    after:
+      listSessionsCalls               = 2
+      readSessionManifestTitleCalls   = 304
+
+    HOST_UNRESPONSIVE
+      = STILL_REPRODUCED
+
+    ALLOCATION_PROFILER_OFF
+      = CRASH STILL REPRODUCED
+
+    ROOT_CAUSE
+      = UNRESOLVED
+
+This ACT closes the branch:
+
+    allocation sampler itself causes the crash
+
+as a NECESSARY-cause hypothesis.
+
+The allocation profiler remains valid evidence (it is just no longer a
+candidate root cause).
+
+NEW LIVE FACT FOR THIS ACT:
+
+    HOST_CRASH_WITH_ALLOCATION_PROFILER_ON   = REPRODUCED (proven prior)
+    HOST_CRASH_WITH_ALLOCATION_PROFILER_OFF  = REPRODUCED (proven prior)
+
+Therefore:
+
+    ALLOCATION_PROFILER_NECESSARY_FOR_CRASH = FALSE
+
+DESIRED NEW EVIDENCE TYPE FOR THIS ACT:
+
+    PRE-FAILURE CPU PROFILE SEGMENTS
+    (collected in-process BEFORE the host becomes unresponsive)
+
+EPISTEMIC GAP THIS ACT FILLS:
+
+    The reactive VSCodium emergency profiler attaches AFTER the stall
+    has begun and only captures the dying tail. We need a profiler
+    that is ALREADY RUNNING when the workload starts so it can
+    capture the hot leaf that triggered the unresponsive state.
+
+WHY VSCODIUM'S BUILT-IN PROFILER IS INSUFFICIENT (per ACT §2):
+
+    Reactive profiling chronology:
+        stall begins
+      → host becomes unresponsive
+      → VS Code decides to attach profiler
+      → host dies before useful profile is captured
+
+    This ACT's chronology:
+        arm → workload → sample before stall
+
+That is the missing evidence seam.
+
+DESIGN CONSTRAINTS (frozen per ACT §5-§6):
+
+    DEFAULT_OFF
+    DOGFOOD_ONLY
+    EXPLICIT_ENV_OPT_IN: CLINEMM_DIAG_CPU_PROFILE=1
+    NO WORKSPACE SETTING
+    NO WEBVIEW FIELD
+    NO PROTOCOL FIELD
+    NO TASK-SEMANTIC DELTA
+
+TRIGGER AUTHORITY (per ACT §6):
+
+    ARM at extension activation
+    START on first qualifying notify-enabled managed background command
+
+    (SAME proven production seam as the allocation profiler; independent
+    state machine.)
+
+ALLOWED VERDICTS:
+
+    PASS_CPU_CAPTURE_SINGLE_HOTLEAF       (CP1)
+    PASS_CPU_CAPTURE_SHARED_ANCESTRY      (CP2)
+    PASS_CPU_CAPTURE_GC_DOMINANT          (CP3)
+    PASS_CPU_CAPTURE_CAUSE_UNRESOLVED     (CP5)
+    PASS_CPU_CAPTURE_PROFILER_PERTURBATION_IDENTIFIED (CP4)
+
+    CAPTURE_INSUFFICIENT
+    HALT_REQUIRED_CPU_PROFILER_CAPABILITY_UNAVAILABLE
+    HALT_CPU_PROFILER_PERTURBATION_TOO_HIGH
+    HALT_REPOSITORY_TRUST
+
+NO REPAIRED verdict is permitted in this ACT.
+
+REPAIR AUTHORIZATION AT CLOSURE: FALSE

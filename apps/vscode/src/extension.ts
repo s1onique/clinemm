@@ -12,6 +12,7 @@ import {
 	applyBackgroundOwnerCorrelationDiagnosticProfile,
 	applyContinuationCardinalityAuthorityDiagnosticProfile,
 	applyExtensionHostAllocationProfilerProfile,
+	applyExtensionHostCpuProfilerProfile,
 	applyExtensionHostHotloopDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
@@ -21,6 +22,8 @@ import { configureDogfoodCaptureStorage } from "@/sdk/dogfood-runtime-capture-pa
 import { isDogfoodRuntime } from "@/sdk/dogfood-runtime-profile"
 import { getAllocationProfilerState } from "@/sdk/extension-host-allocation-profiler"
 import { installExtensionHostAllocationProfilerRuntime } from "@/sdk/extension-host-allocation-profiler-runtime"
+import { getCpuProfilerState } from "@/sdk/extension-host-cpu-profiler"
+import { installExtensionHostCpuProfilerRuntime } from "@/sdk/extension-host-cpu-profiler-runtime"
 import { dumpExtensionSideExtensionHostHotloopDiagnostic } from "@/sdk/extension-host-hotloop-diagnostic-runtime"
 import {
 	dumpExtensionSideHostOwnershipDiagnostic,
@@ -228,6 +231,23 @@ export async function activate(context: vscode.ExtensionContext) {
 	// public installs and for dogfood installs without the env knob.
 	if (getAllocationProfilerState() === "armed") {
 		installExtensionHostAllocationProfilerRuntime()
+	}
+
+	// ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01:
+	// arm the CPUCAP01 (Extension Host Continuous CPU Profiler) seam
+	// at the SAME EARLIEST initialization seam, BEFORE SdkController
+	// construction. The helper transitions the profiler to "armed" if
+	// and only if dogfood is true AND the operator has set
+	// CLINEMM_DIAG_CPU_PROFILE=<truthy>. Public installs never arm
+	// the profiler regardless of the env knob (fail-closed). The CPU
+	// profiler is INDEPENDENT of the allocation profiler — both can
+	// be armed at once, or neither, or just one. Running this BEFORE
+	// SdkController construction guarantees the profiler is armed
+	// BEFORE the first run_commands invocation reaches the trigger
+	// seam at vscode-run-commands-tool.ts:765.
+	applyExtensionHostCpuProfilerProfile(isDogfoodRuntime(process.env), process.env)
+	if (getCpuProfilerState() === "armed") {
+		installExtensionHostCpuProfilerRuntime()
 	}
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01

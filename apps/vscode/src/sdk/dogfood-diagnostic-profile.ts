@@ -134,6 +134,7 @@ import {
 	setContinuationCardinalityAuthorityCaptureEnabled,
 } from "./continuation-cardinality-authority"
 import { applyExtensionHostAllocationProfilerPolicy } from "./extension-host-allocation-profiler"
+import { applyExtensionHostCpuProfilerPolicy } from "./extension-host-cpu-profiler"
 import {
 	isExtensionHostHotloopDiagnosticEnabled as _isExtensionHostHotloopDiagnosticEnabled,
 	setExtensionHostHotloopDiagnosticEnabled,
@@ -1077,4 +1078,33 @@ export function applyExtensionHostAllocationProfilerProfile(
 	env: NodeJS.ProcessEnv = process.env,
 ): { readonly enabled: boolean; readonly flipped: boolean } {
 	return applyExtensionHostAllocationProfilerPolicy(isDogfood, env)
+}
+
+// ===========================================================================
+// ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01
+// ---------------------------------------------------------------------------
+// Sibling helper to applyExtensionHostAllocationProfilerProfile. The CPU
+// profiler is INDEPENDENT of the allocation profiler (per ACT §5) — both
+// share the same dogfood gate + env-knob pattern but use distinct env
+// vars (CLINEMM_DIAG_CPU_PROFILE vs CLINEMM_DIAG_ALLOCATION_PROFILE) and
+// distinct state machines.
+//
+// CONTRACT (mirrors the allocation helper exactly):
+//
+//   isDogfood === true   + env knob truthy -> profiler ARMED
+//   isDogfood === true   + env knob unset   -> profiler DISABLED
+//   isDogfood === false  (any env)         -> profiler DISABLED (fail-closed)
+//
+// HONEST STOP RULE: once CPU authority is classified CP1..CP5 OR
+// CAPTURE_INSUFFICIENT OR HALT_CPU_PROFILER_PERTURBATION_TOO_HIGH, this
+// resolver + activation helper + the profiler module + the trigger
+// call site + the focused tests + the analyzer script MUST be removed
+// TOGETHER.
+// ===========================================================================
+
+export function applyExtensionHostCpuProfilerProfile(
+	isDogfood: boolean,
+	env: NodeJS.ProcessEnv = process.env,
+): { readonly enabled: boolean; readonly flipped: boolean } {
+	return applyExtensionHostCpuProfilerPolicy(isDogfood, env)
 }

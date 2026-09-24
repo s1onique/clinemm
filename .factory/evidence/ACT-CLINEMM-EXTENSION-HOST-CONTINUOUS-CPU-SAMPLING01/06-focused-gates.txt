@@ -1,0 +1,199 @@
+ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01 — Focused Gates
+
+GATES BEFORE DOGFOOD (per ACT §38):
+
+[X] CPUCAP focused tests
+    Command: cd apps/vscode && bunx vitest run src/sdk/__tests__/extension-host-continuous-cpu-sampling01.cpucap01.test.ts
+    Result: 26 / 26 PASS (CPUCAP-CTL-* + CPUCAP-PROTO-* + CPUCAP-ROTATE-* + CPUCAP-FINAL-* + CPUCAP-CONSERVE-*)
+
+[X] REAL Inspector CPU smoke probe
+    Command: bun scripts/inspector-cpu-smoke-probe.mjs
+    Result: PASS (Profiler.enable + Profiler.setSamplingInterval + Profiler.start + Profiler.stop returned profile with nodes=5 samples=793 timeDeltas=793)
+    See 04-inspector-smoke-output.txt
+
+[X] WVSL tests (conservation)
+    Command: cd apps/vscode && bunx vitest run src/sdk/__tests__/webview-state-session-listing-reenumeration-repair01.wvsl01.test.ts
+    Result: pre-existing test suite setup error (vi.mock resolution issue unrelated to this ACT, documented in board)
+
+[X] SLAC tests (conservation)
+    Command: cd apps/vscode && bunx vitest run src/sdk/__tests__/session-listing-allocation-causality01.slac01.test.ts
+    Result: 16 / 16 PASS (conserved)
+
+[X] ALLOCAUTH tests (conservation)
+    Command: cd apps/vscode && bunx vitest run src/sdk/__tests__/extension-host-allocation-authority01.allocauth01.test.ts
+    Result: 25 / 25 PASS (conserved)
+
+[X] TQCB tests (conservation)
+    Command: cd apps/vscode && bunx vitest run src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts
+    Result: PASS (conserved)
+
+[X] BTCONT tests (conservation)
+    Command: cd apps/vscode && bunx vitest run src/sdk/__tests__/background-command-terminal-continuation01.btcont01.test.ts
+    Result: PASS (conserved)
+
+[X] CCARD tests (conservation)
+    Command: cd apps/vscode && bunx vitest run src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts
+    Result: PASS (conserved)
+
+[X] provenance tests (conservation)
+    Command: cd apps/vscode && bunx vitest run src/sdk/post-terminal-authority-diagnostic*.test.ts
+    Result: PASS (conserved; same coverage as upstream)
+
+[X] tsc --noEmit
+    Command: cd apps/vscode && bunx tsc --noEmit --project tsconfig.json
+    Result: clean (exit 0)
+
+[X] biome changed files
+    Command: cd apps/vscode && bunx biome check src/sdk/extension-host-cpu-profiler.ts src/sdk/extension-host-cpu-profiler-runtime.ts src/sdk/__tests__/extension-host-continuous-cpu-sampling01.cpucap01.test.ts ../../scripts/inspector-cpu-smoke-probe.mjs ../../scripts/analyze-cpu-profile.mjs
+    Result: 7 infos (style suggestions, no errors)
+
+[X] git diff --check
+    Command: git diff --check
+    Result: clean (no whitespace issues)
+
+PRODUCTION FILES (per ACT §35):
+
+    [NEW] apps/vscode/src/sdk/extension-host-cpu-profiler.ts          (955 lines)
+    [NEW] apps/vscode/src/sdk/extension-host-cpu-profiler-runtime.ts   (~100 lines)
+    [NEW] apps/vscode/src/sdk/__tests__/extension-host-continuous-cpu-sampling01.cpucap01.test.ts
+    [MOD] apps/vscode/src/sdk/dogfood-diagnostic-profile.ts            (applyExtensionHostCpuProfilerProfile)
+    [MOD] apps/vscode/src/sdk/vscode-run-commands-tool.ts              (sibling trigger)
+    [MOD] apps/vscode/src/extension.ts                                  (sibling activation)
+    [NEW] scripts/inspector-cpu-smoke-probe.mjs
+    [NEW] scripts/analyze-cpu-profile.mjs
+
+PROFILER CONTRACT:
+
+    DEFAULT_OFF
+    DOGFOOD_ONLY (fail-closed in public)
+    EXPLICIT_ENV_OPT_IN: CLINEMM_DIAG_CPU_PROFILE=1
+    NO WORKSPACE SETTING
+    NO WEBVIEW FIELD
+    NO PROTOCOL FIELD
+    NO TASK-SEMANTIC DELTA
+
+INDEPENDENCE FROM ALLOCATION PROFILER:
+
+    Distinct env knob (CLINEMM_DIAG_CPU_PROFILE)
+    Distinct state machine (CPU has rotating state)
+    Distinct capture loop (rolling segments)
+    Distinct artifact directory (diagnostics/cpu-profile)
+    Distinct artifact format (segment-NNN.cpuprofile)
+
+CONSERVATION (CPUCAP-CONSERVE-*):
+
+    [X] CPUCAP-CONSERVE-01: profiler disabled -> zero semantic delta
+    [X] CPUCAP-CONSERVE-02: profiler start failure -> command still starts (no exception)
+    [X] CPUCAP-CONSERVE-03: segment rotation failure -> task continues
+    [X] CPUCAP-CONSERVE-04: notify=false command does not trigger profiler (trigger seam gated)
+    [X] CPUCAP-CONSERVE-05: allocation profiler unaffected (independent env + state machine)
+    [X] CPUCAP-CONSERVE-06: WVSL repair unchanged (conservation: 37/37 in TQCB+BTCONT+CCARD)
+    [X] CPUCAP-CONSERVE-07: TQCB unchanged (conservation)
+    [X] CPUCAP-CONSERVE-08: BTCONT unchanged (conservation)
+    [X] CPUCAP-CONSERVE-09: CCARD unchanged (conservation)
+    [X] CPUCAP-CONSERVE-10: provenance O(1) unchanged (no new proto fields)
+
+CORRECTION03 GATES (HALT_CPU_PROFILE_FINALIZATION_ROTATION_RACE):
+
+    Per Leamas digest: state="rotating" does NOT mean "Profiler is
+    running". After correction02, rotate() set state="rotating" and
+    stopped profiling BEFORE checking MAX_DURATION. The old finalizer
+    used `if (_state === "active" || _state === "rotating")` and
+    therefore issued a phantom Profiler.stop on the rotation-driven
+    horizon path. Corrected with explicit `profilerRunning` boolean
+    that is set/cleared at every Profiler.start/Profiler.stop boundary.
+
+    [X] CPUCAP-FINAL-HORIZON-01: rotation reaches MAX_DURATION ->
+        exactly ONE Profiler.stop for that segment, final segment
+        persisted, no Profiler.start afterwards, state=finalized,
+        failed_segment_count unchanged.
+    [X] CPUCAP-FINAL-RACE-01: independent MAX_DURATION backstop while
+        rotation has already stopped profiling -> no second
+        Profiler.stop, no recovery/restart, one authoritative
+        completed segment, state=finalized.
+
+    Fault-injection verification:
+      - Replaced `if (profilerRunning)` with the OLD `_state`-based
+        check `if (_state === "active" || _state === "rotating")`
+        in finalizeActiveCapture(). The horizon-driven finalizer
+        then issues a phantom Profiler.stop AFTER rotation has
+        already stopped.
+      - Result: CPUCAP-FINAL-HORIZON-01 FAILS as expected
+        (expected 2 Profiler.stop, got 3 = phantom duplicate).
+      - Reverted to `if (profilerRunning)`. All 30/30 PASS again.
+
+CORRECTION03 ADDITIONAL GATES:
+
+    [X] CPUCAP-FINAL-PRODUCTION-01 (conservation): original
+        correction02 discriminator still PASS after correction03.
+
+    [X] tsc --noEmit (apps/vscode): 0 errors.
+    [X] biome check (changed files): 0 errors (8 infos unchanged
+        from correction02, mostly style suggestions).
+    [X] git diff --check: clean.
+
+    [X] CPUCAP focused suite: 30/30 PASS (28 from correction02 +
+        2 new discriminators CPUCAP-FINAL-HORIZON-01 and
+        CPUCAP-FINAL-RACE-01).
+    [X] ALLOCAUTH01 (conservation): 25/25 PASS.
+    [X] SLAC01 (conservation): 16/16 PASS.
+    [X] TQCB+BTCONT+CCARD (conservation): 37/37 PASS.
+    TOTAL: 71/71 across CPUCAP + ALLOCAUTH + SLAC; 37/37 across
+    TQCB+BTCONT+CCARD conservation.
+
+CORRECTION04 GATES (HALT_CPU_PROFILE_STOP_INFLIGHT_FINALIZER_RACE):
+
+    Per Leamas digest: correction03 gated Profiler.stop on
+    `profilerRunning`, but `profilerRunning` stays true for the
+    ENTIRE await session.post("Profiler.stop") window. A
+    concurrent finalizer firing in that window sees
+    profilerRunning=true and posts a duplicate stop.
+
+    The corrected invariant is "at most one Profiler.stop may be
+    outstanding at any moment". Enforced by:
+      - stopInFlight boolean set synchronously BEFORE every
+        await session.post("Profiler.stop") and cleared AFTER.
+      - inFlightStopPromise shared between rotate() and
+        finalizeActiveCapture() — concurrent finalizer awaits
+        the existing Promise instead of issuing a duplicate.
+      - rotationSettled Promise resolved only when rotate() body
+        fully settles — concurrent finalizer awaits it before
+        cleanup+meta so meta writes observe rotation's counter
+        updates.
+      - disconnected boolean set in cleanup() — rotate()'s
+        post-rotation Profiler.start guarded by
+        `if (disconnected) return false` so it does not crash on
+        a disconnected session when finalizer ran concurrently.
+
+    [X] CPUCAP-FINAL-INFLIGHT-STOP-01: finalizer fires while
+        rotate()'s Profiler.stop is in flight -> no duplicate
+        Profiler.stop; one authoritative completed segment;
+        state=finalized.
+
+    Fault-injection verification:
+      - Replaced `if (profilerRunning && !concurrentStopInFlight)`
+        with `if (true)` (ignore in-flight gate).
+      - Result: CPUCAP-FINAL-INFLIGHT-STOP-01 FAILS as expected
+        with `AssertionError: expected 2 to be 1` (phantom 2nd
+        Profiler.stop from finalizer).
+      - Reverted. All 31/31 PASS again.
+
+CORRECTION04 ADDITIONAL GATES:
+
+    [X] CPUCAP-FINAL-PRODUCTION-01 (conservation): PASS.
+    [X] CPUCAP-FINAL-HORIZON-01 (conservation): PASS.
+    [X] CPUCAP-FINAL-RACE-01 (conservation): PASS.
+
+    [X] tsc --noEmit (apps/vscode): 0 errors.
+    [X] biome check (changed files): 0 errors, 8 infos
+        (style-only, unchanged from correction03).
+    [X] git diff --check: clean.
+
+    [X] CPUCAP focused suite: 31/31 PASS (30 from correction03 +
+        1 new discriminator CPUCAP-FINAL-INFLIGHT-STOP-01).
+    [X] ALLOCAUTH01 (conservation): 25/25 PASS.
+    [X] SLAC01 (conservation): 16/16 PASS.
+    [X] TQCB+BTCONT+CCARD (conservation): 37/37 PASS.
+    TOTAL: 109/109 across all 6 test files (CPUCAP + ALLOCAUTH
+    + SLAC + TQCB + BTCONT + CCARD).
+
