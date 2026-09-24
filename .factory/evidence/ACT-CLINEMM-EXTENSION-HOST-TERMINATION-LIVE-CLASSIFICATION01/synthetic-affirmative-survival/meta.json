@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "act": "ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01",
+  "capture_id": "test-observer",
+  "state": "installed",
+  "installed_at": "2026-09-24T09:27:53.000Z",
+  "counters": {
+    "armedAt": null,
+    "installedAt": "2026-09-24T09:27:53.000Z",
+    "observedEventCount": 0,
+    "droppedEventCount": 0,
+    "lastEventKind": null,
+    "lastEventObservedAt": null,
+    "processExitObserved": false,
+    "processExitObservedAt": null,
+    "processExitCode": null,
+    "uncaughtExceptionMonitorObserved": false,
+    "warningObserved": false
+  }
+}

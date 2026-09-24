@@ -1,0 +1,26 @@
+{
+  "classification": "TA5",
+  "label": "CAPTURE_INSUFFICIENT",
+  "summary": "process death observed but termination authority unresolved by current evidence",
+  "evidence_summary": {
+    "process_exit_observed": false,
+    "uncaught_exception_monitor_observed": false,
+    "warning_observed": false,
+    "native_crash_report_present": false,
+    "external_termination_reported": false,
+    "resource_exhaustion_reported": false
+  },
+  "capture_id": "death-restart",
+  "capture_dir": "/tmp/clinemm-test2/diagnostics/termination-authority/capture-death-restart",
+  "derived_from": {
+    "host_self_events": 0,
+    "parent_lifecycle_present": true,
+    "macos_crash_summary_present": false,
+    "affirmative_negative_witness": false,
+    "external_lifecycle_proves_death": true,
+    "crash_report_pid_matches": false,
+    "crash_report_ts_in_window": false,
+    "crash_report_unrelated_reason": "no_crash_summary"
+  },
+  "computed_at": "2026-09-24T09:28:22.130Z"
+}

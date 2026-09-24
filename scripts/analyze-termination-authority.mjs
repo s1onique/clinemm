@@ -9,8 +9,14 @@
  * and:
  *
  *   1) Loads host-self-events.jsonl (in-process events)
- *   2) Loads parent-lifecycle.json (operator-supplied parent-side data)
- *   3) Loads macos-crash-report-summary.json (operator-supplied summary)
+ *   2) Loads parent-lifecycle.json (operator-supplied parent-side data;
+ *      ACT-LIVE-CLASSIFICATION01: also reads the new
+ *      affirmative-negative-witness fields
+ *      observation_window_started/completed + extension_host_started/
+ *      terminated/restarted when present)
+ *   3) Loads macos-crash-report-summary.json (operator-supplied summary;
+ *      ACT-LIVE-CLASSIFICATION01: now PID-bound + window-bound before
+ *      counting toward TA2)
  *   4) Reads meta.json for identity + counter provenance
  *   5) Computes TerminationAuthorityVerdict via the same pure
  *      function used by the in-process witness
@@ -26,8 +32,15 @@
  * Exit code:
  *   0   TA1/TA2/TA3/TA4 (terminal authority proven)
  *   2   TA5  CAPTURE_INSUFFICIENT -- more evidence acquisition ACT
- *   3   TA6  NOT_REPRODUCED
+ *   3   TA6  NOT_REPRODUCED -- only when an affirmative external
+ *        negative witness is present (parent-lifecycle.json confirms
+ *        a completed observation window with no Extension Host death
+ *        or restart, AND no matching native crash report)
  *   4   USAGE / IO error
+ *
+ * ACT-LIVE-CLASSIFICATION01 invariant: TA6 requires an affirmative
+ * external negative witness. Without parent-lifecycle.json (or with
+ * a non-affirming parent-lifecycle) the fallthrough is TA5.
  *
  * The exit code is informational; the verdict.json file is the
  * load-bearing artifact. A future analyzer can compose multiple
@@ -72,6 +85,12 @@ function computeVerdict(input) {
 		nativeCrashReportPresent,
 		externalTerminationReported,
 		resourceExhaustionReported,
+		// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01:
+		// New TA6-affirmative-negative-witness fields, propagated
+		// from the parent-lifecycle.json contents by main().
+		parentLifecyclePresent,
+		affirmativeNegativeWitness,
+		externalLifecycleProvesDeath,
 	} = input
 	const evidence_summary = {
 		process_exit_observed: counters.processExitObserved,
@@ -115,7 +134,14 @@ function computeVerdict(input) {
 			evidence_summary: { ...evidence_summary, resource_exhaustion_reported: true },
 		}
 	}
-	if (counters.observedEventCount > 0 || counters.processExitObserved) {
+	// TA-D5: death observed but authority unresolved. ACT-
+	// LIVE-CLASSIFICATION01: also captures the "PID disappeared
+	// then replacement appeared, no explicit authority" shape.
+	if (
+		counters.observedEventCount > 0 ||
+		counters.processExitObserved ||
+		(externalLifecycleProvesDeath && !nativeCrashReportPresent && !externalTerminationReported && !resourceExhaustionReported)
+	) {
 		return {
 			classification: "TA5",
 			label: "CAPTURE_INSUFFICIENT",
@@ -123,10 +149,25 @@ function computeVerdict(input) {
 			evidence_summary,
 		}
 	}
+	// TA-D6: not reproduced. Requires an AFFIRMATIVE external
+	// negative witness (parentLifecyclePresent=true AND
+	// affirmativeNegativeWitness=true AND no matching crash).
+	if (parentLifecyclePresent && affirmativeNegativeWitness && !nativeCrashReportPresent) {
+		return {
+			classification: "TA6",
+			label: "NOT_REPRODUCED",
+			summary: "external witness confirms completed observation window with no Extension Host death or restart; no matching native crash report",
+			evidence_summary: { ...evidence_summary, process_exit_observed: false },
+		}
+	}
+	// TA5 fallthrough: absence of evidence is NOT evidence of
+	// absence. Never classify TA6 without an affirmative external
+	// negative witness.
 	return {
-		classification: "TA6",
-		label: "NOT_REPRODUCED",
-		summary: "no host-self events and no external evidence -- crash did not reproduce during capture window",
+		classification: "TA5",
+		label: "CAPTURE_INSUFFICIENT",
+		summary:
+			"no host-self events observed AND external parent-side witness absent or non-affirming -- absence of evidence is NOT evidence of absence; capture is insufficient to claim NOT_REPRODUCED",
 		evidence_summary: { ...evidence_summary, process_exit_observed: false },
 	}
 }
@@ -189,8 +230,49 @@ async function main() {
 	}
 
 	const processExitedNormally = parentLifecycle?.process_exited_cleanly === true
+	// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01:
+	// Crash report binding. A crash report only counts toward TA2
+	// when (a) the report parsed cleanly, (b) the report's PID
+	// matches the Extension Host PID we observed in the parent-
+	// lifecycle, AND (c) the report timestamp falls inside the
+	// observation window. Otherwise: UNRELATED_CRASH_REPORT — set
+	// nativeCrashReportPresent=false and the classifier falls
+	// through to TA5 (which is the conservative outcome: we don't
+	// classify TA2 for a report we can't bind to the failed host).
+	const observedExtensionHostPid =
+		typeof parentLifecycle?.extension_host_pid === "number"
+			? parentLifecycle.extension_host_pid
+			: undefined
+	const windowStartMs = parentLifecycle?.observation_window_started_at
+		? Date.parse(parentLifecycle.observation_window_started_at)
+		: undefined
+	const windowEndMs = parentLifecycle?.observation_window_completed_at
+		? Date.parse(parentLifecycle.observation_window_completed_at)
+		: undefined
+	// macOS report timestamps look like "2026-09-24 03:14:15.006 +0000".
+	// The parser preserves them as-is; we attempt a parse but treat
+	// any failure as "unable to bind".
+	const reportTsRaw = crashSummary?.parsed_at || crashSummary?.timestamp || null
+	const reportTsMs = reportTsRaw ? Date.parse(reportTsRaw) : undefined
+	const reportPid =
+		crashSummary && typeof crashSummary.pid === "number" ? crashSummary.pid : undefined
+	const pidMatches =
+		observedExtensionHostPid !== undefined &&
+		reportPid !== undefined &&
+		observedExtensionHostPid === reportPid
+	const tsInWindow =
+		windowStartMs !== undefined &&
+		windowEndMs !== undefined &&
+		reportTsMs !== undefined &&
+		!Number.isNaN(reportTsMs) &&
+		reportTsMs >= windowStartMs &&
+		reportTsMs <= windowEndMs
 	const nativeCrashReportPresent =
-		!!crashSummary && crashSummary.ok === true && !!crashSummary.exception_type
+		!!crashSummary &&
+		crashSummary.ok === true &&
+		!!crashSummary.exception_type &&
+		pidMatches &&
+		tsInWindow
 	const externalTerminationReported =
 		!!parentLifecycle &&
 		(parentLifecycle.termination_kind === "watchdog" ||
@@ -203,12 +285,43 @@ async function main() {
 			parentLifecycle.exit_reason === "oom" ||
 			parentLifecycle.exit_reason === "killed_oom")
 
+	// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01:
+	// TA6-affirmative-negative-witness fields. The parent-lifecycle
+	// may be in either the LEGACY shape (just process_exited_cleanly
+	// / termination_kind / etc.) or the NEW shape (with
+	// observation_window_started_at, observation_window_completed_at,
+	// observation_window_completed, extension_host_pid,
+	// extension_host_started_at, extension_host_terminated,
+	// extension_host_restarted — see scripts/capture-extension-host-
+	// lifecycle.mjs §5). The affirmative negative witness is true
+	// ONLY when the new shape explicitly confirms the observation
+	// window started AND completed AND the extension host was started
+	// (non-null extension_host_started_at) AND was NOT terminated AND
+	// was NOT restarted.
+	const parentLifecyclePresent = parentLifecycle !== null
+	const affirmativeNegativeWitness =
+		parentLifecycle !== null &&
+		typeof parentLifecycle.observation_window_started_at === "string" &&
+		parentLifecycle.observation_window_completed === true &&
+		typeof parentLifecycle.extension_host_pid === "number" &&
+		typeof parentLifecycle.extension_host_started_at === "string" &&
+		parentLifecycle.extension_host_terminated === false &&
+		parentLifecycle.extension_host_restarted === false
+	const externalLifecycleProvesDeath =
+		parentLifecycle !== null &&
+		(parentLifecycle.extension_host_terminated === true ||
+			parentLifecycle.extension_host_restarted === true)
+
 	const verdict = computeVerdict({
 		counters,
 		processExitedNormally,
 		nativeCrashReportPresent,
 		externalTerminationReported,
 		resourceExhaustionReported,
+		// New (LIVE-CLASSIFICATION01):
+		parentLifecyclePresent,
+		affirmativeNegativeWitness,
+		externalLifecycleProvesDeath,
 		installedAt: counters.installedAt ?? new Date(),
 		captureId: meta?.capture_id ?? "unknown",
 	})
@@ -221,6 +334,22 @@ async function main() {
 			host_self_events: events.length,
 			parent_lifecycle_present: parentLifecycle !== null,
 			macos_crash_summary_present: crashSummary !== null,
+			// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
+			affirmative_negative_witness: affirmativeNegativeWitness,
+			external_lifecycle_proves_death: externalLifecycleProvesDeath,
+			crash_report_pid_matches: pidMatches,
+			crash_report_ts_in_window: tsInWindow,
+			crash_report_unrelated_reason: !nativeCrashReportPresent
+				? !crashSummary
+					? "no_crash_summary"
+					: !crashSummary.ok || !crashSummary.exception_type
+						? "crash_summary_malformed"
+						: !pidMatches
+							? "pid_mismatch"
+							: !tsInWindow
+								? "timestamp_outside_window"
+								: null
+				: null,
 		},
 		computed_at: new Date().toISOString(),
 	}

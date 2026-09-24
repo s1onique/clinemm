@@ -9148,3 +9148,212 @@ C1: GO directly to the live specimen.
   CRITICAL: safe-list is exactly {exit, uncaughtExceptionMonitor,
   warning}; do not add channels without a new correction ACT.
 ```
+
+## ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED — 2026-09-24
+
+**Status:** PASS / TA6 false-negative classifier defect REPAIRED /
+external lifecycle observer SHIPPED. The two prior live specimens
+(A and B) both classified as TA6 NOT_REPRODUCED on insufficient
+evidence — absence of in-process `exit` events combined with an
+absent operator-supplied `parent-lifecycle.json` caused the
+classifier to fall through to TA6 unconditionally. That is invalid:
+absence of evidence from a process that may have been killed is NOT
+evidence that it survived. TA6 now requires an affirmative external
+negative witness (parent-lifecycle.json explicitly confirms a
+completed observation window with no Extension Host death or
+restart). The new external lifecycle observer
+(`scripts/capture-extension-host-lifecycle.mjs`) is the canonical
+source of the affirmative negative witness for future live
+specimens.
+
+**Predecessor:** ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01
++ 02 prior specimens (A: TA6, B: TA6).
+
+**Production delta:**
+
+```
+apps/vscode/src/sdk/extension-host-termination-authority.ts                       +62 / -15
+apps/vscode/src/sdk/__tests__/extension-host-termination-authority01.
+  termination-authority.test.ts                                                   +178 / -14
+scripts/analyze-termination-authority.mjs                                         +76 / -18
+scripts/capture-extension-host-lifecycle.mjs                                      +NEW  433 LOC
+.factory/acts/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01.md     +NEW  577 LOC
+.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01/    +NEW  9 evidence files
+```
+
+**Causal seam:** `computeTerminationAuthorityVerdict` in
+`apps/vscode/src/sdk/extension-host-termination-authority.ts:684-855`
+previously had an unconditional TA6 fallthrough after the TA-D5
+guard. The fallthrough did not consult any external evidence — so a
+capture dir with empty `host-self-events.jsonl` and absent
+`parent-lifecycle.json` always classified as TA6, even though the
+process may have been killed. The fix introduces 3 new optional
+input fields (`parentLifecyclePresent`, `affirmativeNegativeWitness`,
+`externalLifecycleProvesDeath`) and replaces the unconditional TA6
+fallthrough with a TA5 fallthrough (rule 7) when the affirmative
+negative witness is missing.
+
+**The 3 new input fields are backward-compatible** — defaults are
+`true/false/false` respectively, preserving the prior behavior for
+callers that don't supply them (e.g. the in-process exit-listener
+verdict flush, which has no external witness context). The mjs
+analyzer supplies the explicit values from the actual
+parent-lifecycle.json contents.
+
+**External lifecycle observer:**
+`scripts/capture-extension-host-lifecycle.mjs` polls the Extension
+Host PID from outside the process via `ps -p <pid> -o pid=,ppid=,pcpu=,command=`
+on macOS / Linux. Default cadence 400ms (within the ACT §7 range of
+250-500ms). Writes `parent-lifecycle.json` with `schema_version=1`
+and the load-bearing fields (`observation_window_started_at`,
+`observation_window_completed_at`, `observation_window_completed`,
+`extension_host_pid`, `extension_host_started_at`,
+`extension_host_terminated`, `extension_host_restarted`,
+`restart_pid`, `restart_at`). macOS-aware: omits `rss` field
+(requires entitlement that sandboxed shells lack). Linux-aware: emits
+`rss` + `nthread`.
+
+**Crash report PID binding:** The analyzer now binds a macOS crash
+report to the failed Extension Host by PID + observation-window
+timestamp. A report only counts toward TA2 when
+`report.pid == parent_lifecycle.extension_host_pid` AND
+`report.parsed_at inside [observation_window_started_at,
+observation_window_completed_at]`. Otherwise:
+`nativeCrashReportPresent=false`, verdict falls to TA5, and
+`derived_from.crash_report_unrelated_reason` records `pid_mismatch`
+or `timestamp_outside_window`. This prevents TA2 misclassification
+on unrelated Electron crash reports found by `ls ~/Library/Logs/DiagnosticReports/`.
+
+**RED→GREEN proof (mutation-resistant):**
+
+```
+$ git stash push apps/vscode/src/sdk/extension-host-termination-authority.ts
+$ PATH="/opt/homebrew/bin:$PATH" ./node_modules/.bin/vitest run \
+    --config vitest.config.ts \
+    src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts \
+    -t "TALIVE-TA6-NEGATIVE-WITNESS-01"
+ FAIL  ... / TALIVE-TA6-NEGATIVE-WITNESS-01: ... -> TA5 (NOT TA6)
+ AssertionError: expected 'TA6' to be 'TA5'
+ Expected: "TA5"
+ Received: "TA6"
+
+$ git stash pop
+$ ... same vitest command ...
+ Tests  1 passed | 41 skipped (42)
+```
+
+The single-bit causal chain:
+
+```
+pre-fix + RED input   -> TA6  (FAIL test)
+post-fix + RED input  -> TA5  (PASS test)
+pre-fix + GREEN input -> TA6  (PASS test)
+post-fix + GREEN input-> TA6  (PASS test)
+```
+
+**RED→GREEN discriminators (all PASS post-fix):**
+
+```
+TATRM-VERDICT-06                  (updated contract — affirmative negative witness)
+TALIVE-TA6-NEGATIVE-WITNESS-01    RED discriminator for the defect
+TALIVE-TA6-NEGATIVE-WITNESS-02    parent-lifecycle present but NOT affirming
+TALIVE-TA6-AFFIRMATIVE-01         completed window + no death + no crash -> TA6
+TALIVE-TA6-AFFIRMATIVE-02         completed window + crash report -> TA2 (overrides)
+TALIVE-TA5-DEATH-UNRESOLVED-01    external death + no authority -> TA5
+TALIVE-TA5-DEATH-UNRESOLVED-02    external death + watchdog -> TA3
+TALIVE-TA5-DEATH-UNRESOLVED-03    external death + resource -> TA4
+TALIVE-TA2-PID-BINDING-01         crash report PID matches -> TA2
+TALIVE-TA2-WRONG-PID-01           crash report PID differs -> NOT TA2
+TALIVE-TA3-EXPLICIT-01            watchdog/host kill -> TA3
+TALIVE-TA4-EXPLICIT-01            OOM/resource evidence -> TA4
+```
+
+**Synthetic capture-bundle smoke (3 shapes):**
+
+```
+synthetic-affirmative-survival/  verdict=TA6 NOT_REPRODUCED  (correct)
+synthetic-death-restart/         verdict=TA5 CAPTURE_INSUFFICIENT  (correct)
+synthetic-no-witness/            verdict=TA5 CAPTURE_INSUFFICIENT  (correct, was TA6 pre-fix)
+```
+
+**Conservation (all UNCHANGED):**
+
+- bun scripts/run-bun-unit-tests.ts: 1168/1168 PASS, zero regression
+- tsc --noEmit: EXIT=0
+- biome check (changed files): 0 errors / 0 warnings
+- git diff --check: clean
+- 16 pre-existing focused-vitest failures (z.object transform
+  defect) documented in ACT-AUTHORITY01 result.json; not a
+  regression of this ACT
+- No new permanent public API / proto field / webview state /
+  workspace setting
+
+**Stop rules honored:**
+
+- Extension Host hot-path NOT repaired (out of scope; blocked on
+  stable termination classification)
+- Reactive CPU profile NOT symbolized/repaired (blocked on bridge
+  ACT)
+- `exthost-92df5a.cpuprofile` (38,073 samples,
+  REACTIVE_AFTER_UNRESPONSIVE) preserved; labeled REAL / LIVE /
+  REACTIVE_AFTER_UNRESPONSIVE_DETECTION
+- Causal relation between hot profile and death: HYPOTHESIS_ONLY
+  (not promoted)
+- In-process witness safe-list preserved exactly
+  {exit, uncaughtExceptionMonitor, warning}
+- No helper / no protocol / no plist / no production code change to
+  the host
+
+**Lower layers UNTOUCHED:** CommandJobManager.
+BackgroundNotifyCoordinator. Q5 long-horizon predicate. pending-
+prompt transport. terminal-card projection. PWAOR abort ownership.
+BTCONT01 deferred continuation marker. Hub ordering. wake prompt
+format. CPU profiler REMOVAL_TRIGGER (SUPERSEDED, retained).
+In-process witness safe-list.
+
+**Verdict:** PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED
+
+**Epic cursor (frozen):**
+
+```text
+CONTINUOUS-CPU-SAMPLING01
+  CLOSED / retained as diagnostic substrate
+
+CPU-CAPTURE01
+  CLOSED / CP5 / repair_authorized=false
+
+TERMINATION-AUTHORITY01
+  iteration01 -> CORRECTION01 -> CORRECTION02
+  CLOSED / infrastructure semantically inert
+  classifier TA6 semantics found defective
+  defect REPAIRED in TERMINATION-LIVE-CLASSIFICATION01
+
+TERMINATION-LIVE-CLASSIFICATION01
+  PASS / TA6 false-negative classifier defect REPAIRED
+  external lifecycle observer SHIPPED
+  11 new discriminators PASS
+  RED->GREEN proof verified via git stash round-trip
+  1168/1168 bun default suite zero regression
+  3-shape synthetic capture-bundle smoke verified
+  CLOSED  ← NOW
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  BLOCKED on stable termination classification (UNBLOCKED NOW)
+  next causal ACT after a truthful classification
+
+BACKGROUND / "Your turn"
+  WAIT
+```
+
+**C1:** OPERATOR RUN — start
+`scripts/capture-extension-host-lifecycle.mjs` FIRST (--pid
+<observed Extension Host PID> --cadence-ms 400 --duration-ms
+60000 --data-dir ~/.cline/data --capture-id <id>), then run the
+failing workload (notify-enabled background), then
+`node scripts/analyze-termination-authority.mjs ~/.cline/data/diagnostics/termination-authority/capture-<id>`.
+Per the verdict matrix on §18 of the ACT spec, follow-on ACT is
+selected. If TA5 -> more evidence acquisition (parent-side
+watchdog logs / memory pressure). If TA1..TA4 -> targeted causal
+successor ACT. If TA6 -> NOT_REPRODUCED; no repair. CRITICAL: the
+in-process safe-list is exactly {exit, uncaughtExceptionMonitor,
+warning}; do not add channels without a new correction ACT.

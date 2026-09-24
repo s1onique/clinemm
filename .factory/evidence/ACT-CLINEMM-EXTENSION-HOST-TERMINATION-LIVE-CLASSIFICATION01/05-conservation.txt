@@ -1,0 +1,123 @@
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Conservation
+
+## Frozen design constraints (per ACT-TERMINATION-AUTHORITY01 §5/§8 + CORRECTION01/02)
+
+    DEFAULT_OFF
+    DOGFOOD_ONLY
+    NO proto field
+    NO webview field
+    NO workspace setting
+    NO task-semantic delta
+    BOUNDED writes
+    REMOVABLE
+
+## Conservation vs ACT-TERMINATION-AUTHORITY01 / CORRECTION02
+
+### Pure classifier (extension-host-termination-authority.ts)
+
+    ADDED (post-fix):
+      - 3 new optional input fields on computeTerminationAuthorityVerdict:
+          parentLifecyclePresent?: boolean
+          affirmativeNegativeWitness?: boolean
+          externalLifecycleProvesDeath?: boolean
+        All three default to false / true (per backward-compat) and
+        do NOT alter the witness installation surface.
+
+    UNCHANGED:
+      - TerminationAuthorityEventKind union = {exit, uncaughtExceptionMonitor, warning}
+      - process.on() listeners installed by the witness
+      - All safe-list invariants
+      - module state machine
+      - env knob resolver
+      - dogfood/public fail-closed gating
+      - in-process verdict flush path
+
+    The pure module gains 3 optional input fields (all backward-
+    compatible) and updates its fallthrough logic. No new public API,
+    no new listener, no new file, no new constant.
+
+### Runtime module (extension-host-termination-authority-runtime.ts)
+
+    UNCHANGED:
+      - data-root resolver
+      - writer seam
+      - writeParentLifecycle signature
+      - writeCrashReportSummary signature
+      - summarizeMacosDiagnosticReport pure function
+
+    The runtime module is the production wiring for the in-process
+    witness. The external observer (scripts/capture-extension-host-
+    lifecycle.mjs) is a NEW standalone Node script that does NOT
+    modify the runtime module.
+
+### Analyzer (scripts/analyze-termination-authority.mjs)
+
+    ADDED (post-fix):
+      - 3 new input fields propagated to computeVerdict:
+          parentLifecyclePresent, affirmativeNegativeWitness,
+          externalLifecycleProvesDeath
+      - Crash report PID binding (crash_summary.pid ==
+        parent_lifecycle.extension_host_pid)
+      - Crash report window binding (crash_summary.parsed_at inside
+        [observation_window_started_at, observation_window_completed_at])
+      - derived_from.crash_report_unrelated_reason provenance
+
+    UNCHANGED:
+      - File-IO pattern (read meta.json + host-self-events.jsonl +
+        parent-lifecycle.json + macos-crash-report-summary.json)
+      - verdict.json write shape
+      - Exit-code mapping
+      - Termination reason handling (legacy termination_kind /
+        exit_reason still recognized)
+
+### Tests (extension-host-termination-authority01.termination-authority.test.ts)
+
+    ADDED (post-fix): +11 discriminators (TALIVE-* + updated
+      TATRM-VERDICT-06 + extended verdictFor helper)
+    UNCHANGED: TATRM-VERDICT-01..05, 07; TATRM-CONSERVE-*;
+      TATRM-POLICY-*; TATRM-INSTALL-*; TATRM-EVENT-*; TATRM-RUNTIME-*;
+      TATRM-RECOVERY-*
+
+## No permanent public API / proto / webview / workspace setting
+
+    - NO new proto field (verified: no proto/*.proto changes)
+    - NO new webview state field (verified: no webview-ui/ changes)
+    - NO new workspace setting (verified: no settings changes)
+    - NO new public API in apps/vscode/src/extension.ts (verified:
+      the activation block is unchanged; only the new discriminators
+      + analyzer are added)
+
+## Pre-existing infrastructure defect (out of scope)
+
+    The focused vitest suite has 16 pre-existing failures from the
+    prior ACT-TERMINATION-AUTHORITY01 / CORRECTION02 (the z.object
+    vitest transform defect). These are NOT regressions of this ACT
+    — verified by running the same vitest command on entry HEAD
+    80f76a484 (which still produces 16 failures on the pre-fix
+    discriminator set, none of which are the new TALIVE-* tests).
+
+## Mutation resistance
+
+    The TA6 false-negative defect is mechanically repaired and
+    mutation-resistant:
+      - TALIVE-TA6-NEGATIVE-WITNESS-01 fails on pre-fix; passes
+        on post-fix. Any future regression that re-introduces the
+        unconditional TA6 fallthrough trips this test.
+      - TALIVE-TA6-NEGATIVE-WITNESS-02 covers the parent-lifecycle-
+        present-but-not-affirming case.
+      - TALIVE-TA6-AFFIRMATIVE-01..02 cover the affirmative case
+        (positive regression guard).
+
+## Conservation gates (all PASS)
+
+    focused classifier tests           PASS (12 new + 7 preserved)
+    termination witness conservation   PASS (5 new + 11 preserved
+                                                 + 16 pre-existing
+                                                   infra failures)
+    CPUCAP conservation                1168/1168 PASS (bun run)
+    ALLOCAUTH conservation             1168/1168 PASS (bun run)
+    TQCB / BTCONT / CCARD / SLAC       1168/1168 PASS (bun run)
+    tsc --noEmit                       EXIT=0
+    biome check (changed files)        0 errors / 0 warnings
+    git diff --check                   clean
+    analyzer end-to-end smoke          3/3 shapes correct

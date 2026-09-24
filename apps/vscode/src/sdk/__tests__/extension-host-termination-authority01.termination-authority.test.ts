@@ -3,7 +3,8 @@
  *
  * Focused test suite for the Extension Host termination witness.
  *
- * Discriminators covered (per ACT §13 / §15 + CORRECTION01 + CORRECTION02):
+ * Discriminators covered (per ACT §13 / §15 + CORRECTION01 + CORRECTION02
+ * + ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01):
  *   TATRM-CONSERVE-01        disabled-zero-semantic-delta
  *   TATRM-CONSERVE-SIGNAL-01 witness enabled -> listenerCount(SIGTERM/INT/HUP) unchanged
  *   TATRM-CONSERVE-REJECTION-01 witness enabled -> listenerCount(unhandledRejection/rejectionHandled) unchanged
@@ -30,8 +31,21 @@
  *   TATRM-VERDICT-03         TA-D3 -> TA3 (external termination reported)
  *   TATRM-VERDICT-04         TA-D4 -> TA4 (resource exhaustion reported)
  *   TATRM-VERDICT-05         death observed but inconclusive -> TA5
- *   TATRM-VERDICT-06         nothing observed -> TA6
+ *   TATRM-VERDICT-06         affirmative negative witness -> TA6 (LIVE-CLASSIFICATION)
  *   TATRM-VERDICT-07         TA1 is overridden by TA2 when a crash report exists
+ *   TALIVE-TA6-NEGATIVE-WITNESS-01 no parent-lifecycle + no crash report -> TA5
+ *                            (LIVE-CLASSIFICATION: absence of evidence is NOT
+ *                            evidence of absence)
+ *   TALIVE-TA6-NEGATIVE-WITNESS-02 parent-lifecycle present but not affirming survival -> TA5
+ *   TALIVE-TA6-AFFIRMATIVE-01  completed window + no death + no crash -> TA6
+ *   TALIVE-TA6-AFFIRMATIVE-02  completed window + crash report present -> TA2
+ *   TALIVE-TA5-DEATH-UNRESOLVED-01 external PID disappearance + restart, no authority -> TA5
+ *   TALIVE-TA5-DEATH-UNRESOLVED-02 external death + watchdog -> TA3
+ *   TALIVE-TA5-DEATH-UNRESOLVED-03 external death + resource -> TA4
+ *   TALIVE-TA2-PID-BINDING-01   crash report PID matches failed Extension Host -> TA2
+ *   TALIVE-TA2-WRONG-PID-01     crash report PID differs -> NOT TA2
+ *   TALIVE-TA3-EXPLICIT-01      parent reports watchdog/host kill -> TA3
+ *   TALIVE-TA4-EXPLICIT-01      external death + explicit OOM/resource evidence -> TA4
  *   TATRM-RUNTIME-01         writeParentLifecycle writes parent-lifecycle.json
  *   TATRM-RUNTIME-02         macOS crash report summarizer collapses load-bearing fields
  *   TATRM-RUNTIME-03         writeCrashReportSummary falls back on parse error
@@ -576,6 +590,28 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / verdict classifie
 			nativeCrashReportPresent: boolean
 			externalTerminationReported: boolean
 			resourceExhaustionReported: boolean
+			// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01:
+			// parentLifecyclePresent defaults to TRUE for backward
+			// compatibility with the original test suite (which
+			// pre-dates the affirmative-negative-witness invariant).
+			// The new LIVE-CLASSIFICATION discriminators set it to
+			// FALSE explicitly to exercise the TA5 fallthrough.
+			parentLifecyclePresent: boolean
+			// New: externalLifecycleProvesExtensionHostStarted. Set
+			// true ONLY when parent-lifecycle.json affirmatively
+			// records observation_window_started=true AND
+			// observation_window_completed=true AND
+			// extension_host_started=true AND
+			// extension_host_terminated=false AND
+			// extension_host_restarted=false. Required for TA6.
+			affirmativeNegativeWitness: boolean
+			// New: externalLifecycleProvesDeath — true when
+			// parent-lifecycle.json records
+			// extension_host_terminated=true or
+			// extension_host_restarted=true. Used to route the
+			// "PID disappeared, replacement appeared" shape to
+			// TA5 (death observed but authority unresolved).
+			externalLifecycleProvesDeath: boolean
 		}> = {},
 	) {
 		const counters = stableCounters(overrides.counters ?? {})
@@ -588,6 +624,9 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / verdict classifie
 			nativeCrashReportPresent: overrides.nativeCrashReportPresent ?? false,
 			externalTerminationReported: overrides.externalTerminationReported ?? false,
 			resourceExhaustionReported: overrides.resourceExhaustionReported ?? false,
+			parentLifecyclePresent: overrides.parentLifecyclePresent ?? true,
+			affirmativeNegativeWitness: overrides.affirmativeNegativeWitness ?? false,
+			externalLifecycleProvesDeath: overrides.externalLifecycleProvesDeath ?? false,
 		})
 	}
 
@@ -640,8 +679,18 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / verdict classifie
 		expect(v.label).toBe("CAPTURE_INSUFFICIENT")
 	})
 
-	it("TATRM-VERDICT-06: nothing observed -> TA6", () => {
-		const v = verdictFor({ counters: { observedEventCount: 0 } })
+	it("TATRM-VERDICT-06: affirmative negative witness (parent-lifecycle says window completed + no death) -> TA6", () => {
+		// Post-CORRECTION-LIVE-CLASSIFICATION: TA6 requires an
+		// AFFIRMATIVE negative witness. Without it the fallthrough
+		// is TA5 (CAPTURE_INSUFFICIENT). The original TATRM-VERDICT-06
+		// was a false-negative case that the LIVE-CLASSIFICATION ACT
+		// fixes — the new invariant is exercised by
+		// TALIVE-TA6-NEGATIVE-WITNESS-01 below.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			affirmativeNegativeWitness: true,
+		})
 		expect(v.classification).toBe("TA6")
 		expect(v.label).toBe("NOT_REPRODUCED")
 	})
@@ -654,6 +703,160 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / verdict classifie
 			nativeCrashReportPresent: true,
 		})
 		expect(v.classification).toBe("TA2")
+	})
+
+	// -------------------------------------------------------------------------
+	// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
+	// TA6-affirmative-negative-witness invariants.
+	//
+	// Background: the prior classifier fell through to TA6 whenever
+	// there were no host-self events AND no external evidence
+	// channels. That is invalid because absence of evidence from a
+	// process that may have been killed is NOT evidence that it
+	// survived. TA6 now requires an affirmative external negative
+	// witness; without it the fallthrough is TA5.
+	// -------------------------------------------------------------------------
+
+	it("TALIVE-TA6-NEGATIVE-WITNESS-01: no host events + no parent-lifecycle + no crash report -> TA5 (NOT TA6)", () => {
+		// This is the RED discriminator for the false-negative defect
+		// identified by ACT §3. Pre-fix: TA6 NOT_REPRODUCED.
+		// Required (post-fix): TA5 CAPTURE_INSUFFICIENT.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: false,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA5")
+		expect(v.label).toBe("CAPTURE_INSUFFICIENT")
+	})
+
+	it("TALIVE-TA6-NEGATIVE-WITNESS-02: no host events + parent-lifecycle present but NOT affirming survival -> TA5", () => {
+		// Parent-lifecycle present is not by itself sufficient. It
+		// must AFFIRMATIVELY confirm the window completed + no
+		// death. Anything weaker than that is TA5.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			affirmativeNegativeWitness: false,
+		})
+		expect(v.classification).toBe("TA5")
+	})
+
+	it("TALIVE-TA6-AFFIRMATIVE-01: completed external window + no death + no crash -> TA6 NOT_REPRODUCED", () => {
+		// The complementary positive discriminator: when the
+		// external witness explicitly confirms a completed window
+		// without extension host death or restart, AND no native
+		// crash report exists, the result is TA6 (truly not
+		// reproduced).
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			affirmativeNegativeWitness: true,
+			externalLifecycleProvesDeath: false,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA6")
+		expect(v.label).toBe("NOT_REPRODUCED")
+	})
+
+	it("TALIVE-TA6-AFFIRMATIVE-02: completed window + crash report present -> TA2 (not TA6)", () => {
+		// Affirmative survival witness does NOT override a matching
+		// native crash report: TA2 wins.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			affirmativeNegativeWitness: true,
+			nativeCrashReportPresent: true,
+		})
+		expect(v.classification).toBe("TA2")
+	})
+
+	it("TALIVE-TA5-DEATH-UNRESOLVED-01: external PID disappearance + restart, no explicit authority -> TA5", () => {
+		// The "PID disappeared then replacement PID appeared"
+		// shape with NO matching crash report AND NO watchdog/host
+		// attribution AND NO resource attribution is TA5 (death
+		// reproduced but authority unresolved) — NOT TA6.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			externalLifecycleProvesDeath: true,
+			affirmativeNegativeWitness: false,
+			nativeCrashReportPresent: false,
+			externalTerminationReported: false,
+			resourceExhaustionReported: false,
+		})
+		expect(v.classification).toBe("TA5")
+		expect(v.label).toBe("CAPTURE_INSUFFICIENT")
+	})
+
+	it("TALIVE-TA5-DEATH-UNRESOLVED-02: external death + watchdog attribution -> TA3 (overrides generic death)", () => {
+		// When externalLifecycleProvesDeath is true AND a parent/
+		// watchdog attribution is present, TA3 wins over TA5.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			externalLifecycleProvesDeath: true,
+			externalTerminationReported: true,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA3")
+	})
+
+	it("TALIVE-TA5-DEATH-UNRESOLVED-03: external death + resource attribution -> TA4 (overrides generic death)", () => {
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: true,
+			externalLifecycleProvesDeath: true,
+			resourceExhaustionReported: true,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA4")
+	})
+
+	it("TALIVE-TA2-PID-BINDING-01: crash report PID matches failed Extension Host -> TA2", () => {
+		// The TA2 path is preserved. PID-binding is enforced
+		// UPSTREAM by the analyzer (the mjs script verifies
+		// report.pid == observed Extension Host PID AND timestamp
+		// inside the window before setting nativeCrashReportPresent
+		// = true). At the pure function boundary the classifier
+		// still gates on nativeCrashReportPresent.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			nativeCrashReportPresent: true,
+		})
+		expect(v.classification).toBe("TA2")
+	})
+
+	it("TALIVE-TA2-WRONG-PID-01: crash report PID differs (would be filtered upstream) -> NOT TA2", () => {
+		// The pure classifier does not know about PIDs; it
+		// receives nativeCrashReportPresent=false when the upstream
+		// analyzer rejects an unrelated crash report. The
+		// discrimination that matters here is that the verdict is
+		// NOT TA2 — it falls through to TA5/TA6.
+		const v = verdictFor({
+			counters: { observedEventCount: 0 },
+			parentLifecyclePresent: false,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).not.toBe("TA2")
+	})
+
+	it("TALIVE-TA3-EXPLICIT-01: parent reports watchdog/host kill -> TA3", () => {
+		const v = verdictFor({
+			counters: { observedEventCount: 0, processExitObserved: false },
+			externalTerminationReported: true,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA3")
+	})
+
+	it("TALIVE-TA4-EXPLICIT-01: external death + explicit OOM/resource evidence -> TA4", () => {
+		const v = verdictFor({
+			counters: { observedEventCount: 0, processExitObserved: false },
+			resourceExhaustionReported: true,
+			nativeCrashReportPresent: false,
+		})
+		expect(v.classification).toBe("TA4")
 	})
 })
 

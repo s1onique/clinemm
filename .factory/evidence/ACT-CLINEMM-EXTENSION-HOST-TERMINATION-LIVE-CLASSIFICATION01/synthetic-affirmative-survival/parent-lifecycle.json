@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "observation_window_started_at": "2026-09-24T09:28:05.796Z",
+  "observation_window_completed_at": "2026-09-24T09:28:07.478Z",
+  "observation_window_completed": true,
+  "extension_host_pid": 38323,
+  "extension_host_started_at": "2026-09-24T09:28:05.801Z",
+  "unresponsive_observed": false,
+  "unresponsive_at": null,
+  "extension_host_terminated": false,
+  "terminated_at": null,
+  "exit_code": null,
+  "signal": null,
+  "process_gone_reason": null,
+  "extension_host_restarted": false,
+  "restart_pid": null,
+  "restart_at": null,
+  "samples": [
+    {
+      "at": "2026-09-24T09:28:05.801Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    },
+    {
+      "at": "2026-09-24T09:28:06.006Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    },
+    {
+      "at": "2026-09-24T09:28:06.219Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    },
+    {
+      "at": "2026-09-24T09:28:06.431Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    },
+    {
+      "at": "2026-09-24T09:28:06.644Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    },
+    {
+      "at": "2026-09-24T09:28:06.852Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    },
+    {
+      "at": "2026-09-24T09:28:07.059Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    },
+    {
+      "at": "2026-09-24T09:28:07.267Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    },
+    {
+      "at": "2026-09-24T09:28:07.478Z",
+      "pid": 38323,
+      "alive": true,
+      "rss_bytes": null,
+      "cpu_pct": 0,
+      "thread_count": null,
+      "ppid": 25078,
+      "command": "/bin/zsh -c rm -rf /tmp/clinemm-test && PATH=\"/opt/homebrew/bin:$PATH\" node scripts/capture-extension-host-lifecycle.mjs --capture-id test-observer --pid $$ --cadence-ms 200 --duration-ms 1500 --data-dir /tmp/clinemm-test 2>&1 | tail -5"
+    }
+  ]
+}

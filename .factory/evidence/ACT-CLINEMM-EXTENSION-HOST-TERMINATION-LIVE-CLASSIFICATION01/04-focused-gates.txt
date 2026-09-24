@@ -1,0 +1,103 @@
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Focused Gates
+
+## Typecheck (post-fix)
+    cd apps/vscode && PATH="/opt/homebrew/bin:$PATH" ./node_modules/.bin/tsc --noEmit
+    EXIT=0   (verified 2026-09-24)
+
+## Biome (post-fix)
+    cd apps/vscode && PATH="/opt/homebrew/bin:$PATH" \
+      ./node_modules/.bin/biome check \
+        src/sdk/extension-host-termination-authority.ts \
+        src/sdk/extension-host-termination-authority-runtime.ts \
+        src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts \
+        src/extension.ts
+    PASS (0 errors, 0 warnings -- verified 2026-09-24)
+
+## Unit (bun:test runner via test:unit)
+    cd apps/vscode && PATH="/opt/homebrew/bin:$PATH" bun scripts/run-bun-unit-tests.ts
+    1168/1168 PASS, 0 FAIL   (verified 2026-09-24)
+    Zero regression vs pre-fix HEAD (same 1168/1168 PASS).
+
+## Git diff --check (post-fix)
+    git diff --check
+    PASS (no whitespace or line-ending errors)
+
+## Focused vitest suite (post-fix)
+    File: src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts
+    Cases: 42 across 6 describe blocks (+11 vs pre-fix ACT-AUTHORITY01/CORRECTION02)
+       - conservation (5)
+       - policy (5)
+       - install seam (3)
+       - event capture (5)
+       - verdict classifier (18)  [+11 vs pre-fix; all PASS]
+       - runtime + summarizer (4)
+       - recovery (2)
+
+    NEW discriminators (post-fix, all PASS):
+       TATRM-VERDICT-06:                       PASS  (updated contract)
+       TALIVE-TA6-NEGATIVE-WITNESS-01:         PASS  (RED -> GREEN)
+       TALIVE-TA6-NEGATIVE-WITNESS-02:         PASS
+       TALIVE-TA6-AFFIRMATIVE-01:              PASS
+       TALIVE-TA6-AFFIRMATIVE-02:              PASS
+       TALIVE-TA5-DEATH-UNRESOLVED-01:         PASS
+       TALIVE-TA5-DEATH-UNRESOLVED-02:         PASS
+       TALIVE-TA5-DEATH-UNRESOLVED-03:         PASS
+       TALIVE-TA2-PID-BINDING-01:              PASS
+       TALIVE-TA2-WRONG-PID-01:                PASS
+       TALIVE-TA3-EXPLICIT-01:                 PASS
+       TALIVE-TA4-EXPLICIT-01:                 PASS
+
+    PRE-EXISTING discriminators (still PASS; unchanged):
+       TATRM-VERDICT-01, 02, 03, 04, 05, 07:   PASS
+
+    PRE-EXISTING failures (unrelated, documented in ACT-AUTHORITY01):
+       The vitest transform pipeline in this authoring shell
+       currently exhibits a pre-existing `z.object` defect that
+       affects ALL vitest suites equally (verified by reproducing
+       the same 'TypeError: undefined is not an object
+       (evaluating z.object)' error on the existing CPUCAP suite).
+       The defect affects the suites that touch module-state +
+       process listeners + on-disk IO. It does NOT affect the
+       pure-function tests (verdict classifier + recovery + the
+       pure summarizeMacosDiagnosticReport). All NEW discriminators
+       in this ACT are pure-function tests and PASS.
+
+       Affected (16 pre-existing failures, NOT regressions):
+         TATRM-INSTALL-01..03
+         TATRM-EVENT-01, 02, 04, 06, 07
+         TATRM-CONSERVE-SIGNAL-01
+         TATRM-CONSERVE-REJECTION-01
+         TATRM-CONSERVE-SIGNAL-MUTATION-01
+         TATRM-CONSERVE-BEFOREEXIT-01
+         TATRM-RUNTIME-01..04
+
+## External lifecycle observer smoke
+
+    PATH="/opt/homebrew/bin:$PATH" node scripts/capture-extension-host-lifecycle.mjs \
+      --capture-id test-observer --pid $$ --cadence-ms 200 \
+      --duration-ms 1500 --data-dir /tmp/clinemm-test
+
+    parent-lifecycle.json written: pid=38238 terminated=false restarted=false samples=9
+    EXIT=0
+
+    Output schema verified: schema_version=1, observation_window_completed=true,
+    extension_host_pid=N, extension_host_terminated=false, extension_host_restarted=false,
+    samples[] present.
+
+## Analyzer end-to-end smoke (3 shapes)
+
+    Shape 1: parent-lifecycle.json present + affirmative (TA6 path)
+      -> TA6 NOT_REPRODUCED  (correct)
+
+    Shape 2: parent-lifecycle.json present + death-restart (TA5 path)
+      -> TA5 CAPTURE_INSUFFICIENT  (correct)
+
+    Shape 3: parent-lifecycle.json ABSENT (the RED case, now correct)
+      -> TA5 CAPTURE_INSUFFICIENT  (correct, was TA6 in pre-fix)
+
+## Summary
+    All post-fix discriminators PASS.
+    Zero regression in bun default suite (1168/1168).
+    16 pre-existing vitest infra failures (documented, out of scope).
+    RED->GREEN proof for TALIVE-TA6-NEGATIVE-WITNESS-01 verified by
+    git stash round-trip on entry HEAD 80f76a484.

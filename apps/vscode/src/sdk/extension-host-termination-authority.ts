@@ -690,9 +690,46 @@ export function computeTerminationAuthorityVerdict(input: {
 	readonly nativeCrashReportPresent: boolean
 	readonly externalTerminationReported: boolean
 	readonly resourceExhaustionReported: boolean
+	// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01
+	// New (post-fix): parent-lifecycle evidence presence.
+	// When FALSE, the classifier MUST NOT classify as TA6 even when
+	// there are no host-self events. Absence of evidence from the
+	// external witness is NOT evidence that the process survived.
+	// Defaults to TRUE for backward compatibility with the prior
+	// call site in extension-host-termination-authority.ts:651
+	// (the in-process exit listener) which runs without an external
+	// witness and where TA6 was a legitimate "no events captured"
+	// outcome for that single-process scope.
+	readonly parentLifecyclePresent?: boolean
+	// New (post-fix): the affirmative negative witness. Set true
+	// ONLY when parent-lifecycle.json explicitly confirms
+	// observation_window_started=true AND
+	// observation_window_completed=true AND
+	// extension_host_started=true AND
+	// extension_host_terminated=false AND
+	// extension_host_restarted=false. Required for TA6.
+	readonly affirmativeNegativeWitness?: boolean
+	// New (post-fix): external lifecycle proves death/restart.
+	// Set true when parent-lifecycle.json explicitly records
+	// extension_host_terminated=true OR
+	// extension_host_restarted=true. Routes the "PID disappeared
+	// then replacement appeared" shape to TA5 (death observed but
+	// authority unresolved) when no explicit authority exists.
+	readonly externalLifecycleProvesDeath?: boolean
 }): TerminationAuthorityVerdict {
 	const { counters, processExitedNormally, nativeCrashReportPresent, externalTerminationReported, resourceExhaustionReported } =
 		input
+	// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01:
+	// New TA6-affirmative-negative-witness invariant. Backward-
+	// compatible defaults (parentLifecyclePresent=true,
+	// affirmativeNegativeWitness=false, externalLifecycleProvesDeath
+	// =false) preserve the prior classifier behavior for callers
+	// that pre-date this ACT (e.g. the in-process exit-listener
+	// verdict flush). The mjs analyzer supplies the explicit
+	// values per its actual parent-lifecycle.json contents.
+	const parentLifecyclePresent = input.parentLifecyclePresent ?? true
+	const affirmativeNegativeWitness = input.affirmativeNegativeWitness ?? false
+	const externalLifecycleProvesDeath = input.externalLifecycleProvesDeath ?? false
 	const evidence_summary = {
 		process_exit_observed: counters.processExitObserved,
 		process_exit_code: counters.processExitCode,
@@ -750,8 +787,20 @@ export function computeTerminationAuthorityVerdict(input: {
 		}
 	}
 
-	// TA-D5: death observed but authority unresolved.
-	if (counters.observedEventCount > 0 || counters.processExitObserved) {
+	// TA-D5: death observed but authority unresolved. Covers two
+	// shapes:
+	//   (a) host-self events captured but no explicit authority
+	//       (was the original TA-D5 fallthrough)
+	//   (b) external lifecycle proves death/restart (PID
+	//       disappeared, replacement appeared) but no explicit
+	//       authority is bound — ACT-LIVE-CLASSIFICATION01:
+	//       this is NOT TA6 (TA6 is reserved for the affirmative
+	//       negative-witness shape).
+	if (
+		counters.observedEventCount > 0 ||
+		counters.processExitObserved ||
+		(externalLifecycleProvesDeath && !nativeCrashReportPresent && !externalTerminationReported && !resourceExhaustionReported)
+	) {
 		return {
 			classification: "TA5",
 			label: "CAPTURE_INSUFFICIENT",
@@ -760,11 +809,45 @@ export function computeTerminationAuthorityVerdict(input: {
 		}
 	}
 
-	// TA-D6: nothing to classify against.
+	// TA-D6: not reproduced.
+	//
+	// ACT-LIVE-CLASSIFICATION01 invariant: TA6 requires an
+	// AFFIRMATIVE external negative witness. Without
+	// parent-lifecycle.json confirming observation_window_started
+	// AND observation_window_completed AND extension_host_started
+	// AND extension_host_terminated=false AND
+	// extension_host_restarted=false, the fallthrough is TA5 (not
+	// TA6). Absence of evidence from a process that may have been
+	// killed is NOT evidence that it survived.
+	//
+	// Backward-compat: when the caller does not supply the new
+	// fields at all (the in-process exit-listener verdict flush)
+	// the defaults keep the pre-fix behavior. When the caller
+	// supplies parentLifecyclePresent=false (the mjs analyzer
+	// found no parent-lifecycle.json) the classifier falls to TA5.
+	if (parentLifecyclePresent && affirmativeNegativeWitness && !nativeCrashReportPresent) {
+		return {
+			classification: "TA6",
+			label: "NOT_REPRODUCED",
+			summary:
+				"external witness confirms completed observation window with no Extension Host death or restart; no matching native crash report",
+			evidence_summary: {
+				...evidence_summary,
+				process_exit_observed: false,
+			},
+		}
+	}
+
+	// TA5 fallthrough (no host events + no external authority +
+	// no affirmative negative witness): absence of evidence is
+	// not evidence of absence. The classifier refuses to call
+	// TA6 when the external witness is missing OR did not
+	// affirmatively confirm a completed window without death.
 	return {
-		classification: "TA6",
-		label: "NOT_REPRODUCED",
-		summary: "no host-self events and no external evidence — crash did not reproduce during capture window",
+		classification: "TA5",
+		label: "CAPTURE_INSUFFICIENT",
+		summary:
+			"no host-self events observed AND external parent-side witness absent or non-affirming — absence of evidence is NOT evidence of absence; capture is insufficient to claim NOT_REPRODUCED",
 		evidence_summary: {
 			...evidence_summary,
 			process_exit_observed: false,

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "observation_window_started_at": "2026-09-24T09:30:00.000Z",
+  "observation_window_completed_at": "2026-09-24T09:30:30.000Z",
+  "observation_window_completed": true,
+  "extension_host_pid": 99999,
+  "extension_host_started_at": "2026-09-24T09:30:00.000Z",
+  "unresponsive_observed": false,
+  "unresponsive_at": null,
+  "extension_host_terminated": true,
+  "terminated_at": "2026-09-24T09:30:15.000Z",
+  "exit_code": null,
+  "signal": null,
+  "process_gone_reason": "pid_disappeared_and_replacement_observed",
+  "extension_host_restarted": true,
+  "restart_pid": 88888,
+  "restart_at": "2026-09-24T09:30:16.000Z",
+  "samples": []
+}

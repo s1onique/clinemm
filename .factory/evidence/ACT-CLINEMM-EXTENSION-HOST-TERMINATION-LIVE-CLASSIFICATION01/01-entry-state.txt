@@ -1,0 +1,92 @@
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01 — Entry State
+
+ENTRY_HEAD: 80f76a484 (ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / CORRECTION02)
+ENTRY_SUBJECT_HEAD: ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01
+
+FROZEN CURRENT CAUSAL STATE (per ACT §1):
+
+    HOST_FAILURE                              = REAL / LIVE / REPRODUCED
+    PREARMED_CPU_CAPTURE                      = CP5
+      no dominant ClineMM JS hot leaf
+      pre-failure segments overwhelmingly idle
+      GC not dominant
+      profiler perturbation not excessive
+    REACTIVE_VSCODE_CPU_PROFILE               = REAL / LIVE
+      38,073 samples
+      acquired after VS Code detected Extension Host unresponsiveness
+      ClineMM-heavy + GC-heavy
+      source-level causality NOT YET PROVEN
+    TERMINATION_WITNESS                       = default-off, dogfood-only
+      safe-list = {exit, uncaughtExceptionMonitor, warning}
+    CURRENT LIVE ANALYZER RESULTS             = specimen A & B -> TA6 NOT_REPRODUCED
+    TA6_TRUST                                 = REJECTED unless external evidence affirmatively proves the observation window completed without Extension Host death
+    ROOT_CAUSE                                = UNRESOLVED
+    REPAIR_AUTHORIZED                         = FALSE
+
+NEW LIVE FACT FOR THIS ACT:
+
+    The classifier fallthrough to TA6 when both
+    host_self_events=[] AND parent_lifecycle is absent is
+    INVALID. TA6 must require an affirmative external negative
+    witness. Two prior specimens (A and B) were misclassified
+    because the operator-supplied parent-lifecycle.json was
+    absent (no external witness was running) and no host-self
+    exit event was emitted by the in-process witness (the
+    process died before the JS event loop could dispatch it).
+
+    The fix is bounded: 3 new optional input fields on
+    computeTerminationAuthorityVerdict (parentLifecyclePresent,
+    affirmativeNegativeWitness, externalLifecycleProvesDeath).
+    The mjs analyzer propagates these from the actual
+    parent-lifecycle.json contents. The pure module stays
+    backward-compatible for the in-process exit listener
+    verdict flush (which has no external witness context).
+
+    The external lifecycle observer
+    (scripts/capture-extension-host-lifecycle.mjs) is the
+    canonical source of the affirmative negative witness for
+    future live specimens.
+
+DESIRED NEW EVIDENCE TYPE FOR THIS ACT:
+
+    TA6 CORRECTNESS  +  EXTERNAL LIFECYCLE WITNESS
+
+    Whether TA6 is correctly classified only when an external
+    witness affirmatively confirms the observation window
+    completed without Extension Host death or restart. The
+    witness itself observes the Extension Host PID from outside
+    the process (poll-based; bounded; never inspects the host).
+
+WHY THIS ACT (not another live specimen):
+
+    The live specimens (A, B) cannot be re-classified truthfully
+    without an external witness. The external witness is now
+    installed. The classifier is corrected. The next live
+    specimen is operator-run on the dogfood VSCodium + failing
+    workload per ACT §13.
+
+WHY A NEW EXTERNAL OBSERVER (not extending the in-process witness):
+
+    An in-process observer cannot prove a hard-death (SIGKILL,
+    kernel panic, OOM kill, watchdog kill, parent kill). The
+    Node.js docs explicitly recommend an external monitor when
+    reliable detection of process failure is required. The
+    in-process witness is intentionally narrow (safe-list =
+    {exit, uncaughtExceptionMonitor, warning}); expanding it to
+    cover hard-death modes would alter process-termination
+    semantics (the exact defect the prior CORRECTION01/02
+    corrected). The external observer is the canonical seam.
+
+DESIGN CONSTRAINTS (frozen per ACT §5/§8):
+
+    EXTERNAL observer (not bound to the in-process witness)
+    BOUNDED writes (parent-lifecycle.json is single JSON file;
+    samples capped at 2048 rows)
+    POLLING CADENCE bounded (default 400ms; ACT §7 range
+    250-500ms)
+    NO PROCESS INTERFERENCE (observer only reads ps)
+    NO SIGNAL INFERENCE FROM EXIT CODE (Node + POSIX semantics
+    forbid that mapping)
+    NO INSTRUMENTATION OF CLINEMM (the observer is generic; it
+    does not know about ClineMM)
+    NO WORKSPACE SETTING / NO WEBVIEW FIELD / NO PROTO FIELD
