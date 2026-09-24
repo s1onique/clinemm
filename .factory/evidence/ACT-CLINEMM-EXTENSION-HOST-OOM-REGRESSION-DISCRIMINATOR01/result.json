@@ -1,5 +1,5 @@
 {
-  "act": "ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01",
+  "act": "ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01",
   "primary_purpose": "causality / necessity",
   "entry_head": "97a2efcb07632420666d53f6bd296313bfcf5fba",
   "good_artifact": "d1ecf48dc",
@@ -34,7 +34,7 @@
       "result_production_mode": "PASS (test sets env var internally, so production env doesn't matter)",
       "result_ablation_mode": "PASS",
       "red_proof_load_bearing": true,
-      "red_proof_evidence": "temporarily reverted the seam — AB-DELIVERY-01 failed with 'hasOwnProperty(\"delivery\") = true' (expected: false). After restoring the seam: PASS."
+      "red_proof_evidence": "temporarily reverted the seam \u2014 AB-DELIVERY-01 failed with 'hasOwnProperty(\"delivery\") = true' (expected: false). After restoring the seam: PASS."
     },
     "ab_delivery_02": {
       "purpose": "conservation: with ablation OFF, deps.send input forwards delivery exactly as production",
@@ -44,30 +44,42 @@
     "ccard_wire_01": {
       "purpose": "existing production-shape test: pins sendCalls[0]?.delivery === 'queue'",
       "result_production_mode": "PASS",
-      "result_ablation_mode": "FAIL (expected RED — proves ablation drops delivery correctly)"
+      "result_ablation_mode": "FAIL (expected RED \u2014 proves ablation drops delivery correctly)"
+    },
+    "ab_attest_01": {
+      "purpose": "positive attestation: the constructor emits a parseable [CLINEMM_OOM_DISC01_ATTEST] line on process.stderr with ablation_active=true|false and eh_pid=process.pid",
+      "result_production_mode": "PASS (3 tests)",
+      "result_ablation_mode": "PASS (3 tests)",
+      "load_bearing_evidence": "with env var unset, ablation_active=false; with env var set, ablation_active=true; eh_pid matches process.pid in both modes; subject token is one of {<sha>, <unknown>, <runtime-unset>}"
     }
   },
   "focused_gates": {
-    "pending_prompt_service_test_production_mode": "12/12 PASS",
-    "pending_prompt_service_test_ablation_mode": "11/12 PASS + 1 expected RED (CCARD-WIRE-01)",
+    "pending_prompt_service_test_production_mode": "15/15 PASS, vitest exit code 0",
+    "pending_prompt_service_test_ablation_mode": "14/15 PASS + 1 expected RED (CCARD-WIRE-01), vitest exit code 1",
     "sdk_core_typecheck": "67 pre-existing errors in unrelated files; 0 new errors in touched files",
     "apps_vscode_typecheck": "exit 0, empty output (clean)",
-    "git_diff_check": "empty (clean)"
+    "git_diff_check": "empty (clean)",
+    "vitest_pool_worker_termination_eperm": "observed in this dev environment (sandbox-specific worker-shutdown quirk); suite exit code matches assertion result, NOT EPERM"
   },
   "live_specimen": {
     "status": "READY_FOR_OPERATOR_RUN",
     "performed_in_this_session": false,
     "reason": "this dev environment lacks VSCodium, isolated user-data dir, and the ClineMM Nix wrapper required to execute the same operator launch path as the historical BAD=99006fbcc reproduction",
-    "contract_artifact": ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md"
+    "contract_artifact": ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md",
+    "bundle_artifact": ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/06-bundle-identity.txt"
   },
   "repair_authorized": false,
   "verdict": "DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR",
-  "next_step": "operator runs the live specimen per 05-live-ablation.md. If ABLATED survives and RESTORED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM (separate bounded repair ACT authorized). If ABLATED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_REFUTED (no repair; successor discriminator = CCARD diagnostic activation as a whole). If both survive: NOT_REPRODUCED.",
+  "next_step": "operator runs the live specimen per 05-live-ablation.md using the bundled VSIX at dist/dogfood/clinemm-4.1.16-2edd62498.vsix. If ABLATED survives and RESTORED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM (separate bounded repair ACT authorized). If ABLATED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_REFUTED (no repair; successor discriminator = CCARD diagnostic activation as a whole). If both survive: NOT_REPRODUCED.",
   "halt_conditions_evaluated": {
-    "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED — git status --short was empty at entry",
-    "HALT_REGRESSION_SEAM_NO_LONGER_PRESENT": "NOT_TRIGGERED — the historical next.delivery forwarding is intact at HEAD line ~509",
-    "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED — RED is reproducible (CCARD-WIRE-01 fails under ablation as expected); the production-shape baseline (env var unset) passes CCARD-WIRE-01",
-    "CAPTURE_INSUFFICIENT": "NOT_TRIGGERED — code-level discriminators are complete and load-bearing"
+    "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED \u2014 git status --short was empty at entry",
+    "HALT_REGRESSION_SEAM_NO_LONGER_PRESENT": "NOT_TRIGGERED \u2014 the historical next.delivery forwarding is intact at HEAD line ~509",
+    "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED \u2014 RED is reproducible (CCARD-WIRE-01 fails under ablation as expected); the production-shape baseline (env var unset) passes CCARD-WIRE-01",
+    "CAPTURE_INSUFFICIENT": "NOT_TRIGGERED \u2014 code-level discriminators are complete and load-bearing",
+    "HALT_VSIX_BYTES_DIFFER_BETWEEN_SPECIMENS": "NOT_TRIGGERED \u2014 single VSIX built once (sha256 fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd); env var toggles at launch",
+    "HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE": "NOT_TRIGGERED \u2014 verified by grep on extracted extension.js (CLINEMM_OOM_DISC01_SUBJECT_HEAD define present, runtime lookup present)",
+    "HALT_ATTESTATION_NOT_EMITTED": "NOT_TRIGGERED \u2014 AB-ATTEST-01 verifies emission from the controller constructor",
+    "HALT_QUEUE_STEER_SEMANTICS_ALTERED": "NOT_TRIGGERED \u2014 only the conditional spread of next.delivery is touched; all other forwarding preserved per AB-DELIVERY-02"
   },
   "factory_cursor": {
     "NATIVE_OOM": "PROVEN",
@@ -78,7 +90,39 @@
     "REGRESSION_COMMIT": "99006fbcc",
     "SUSPECT_DELTA": "next.delivery propagation",
     "NECESSITY": "DISCRIMINATORS_INSTALLED_LIVE_PENDING",
-    "REPAIR_AUTHORIZED": false
+    "REPAIR_AUTHORIZED": false,
+    "SUBJECT_HEAD": "2edd62498"
   },
-  "timestamp": "2026-09-24T21:38:38Z"
+  "timestamp": "2026-09-25T02:39:00Z",
+  "subject_head": "2edd6249855b4413b3a45da3717176958dbcf31c",
+  "positive_attestation": {
+    "type": "constructor-emitted stderr line",
+    "line_prefix": "[CLINEMM_OOM_DISC01_ATTEST]",
+    "fields": [
+      "subject=<sha|unknown|unset>",
+      "ablation_active=true|false",
+      "env_present=\"1\"|<unset>",
+      "eh_pid=<int>",
+      "ppid=<int|unknown>",
+      "constructed_at=<ISO>"
+    ],
+    "purpose": "positive proof that the live run actually exercised the configured ablation (not a stale copy, not a different process); bound to the Extension Host PID via process.pid",
+    "subject_head_source": "esbuild --define:CLINEMM_OOM_DISC01_SUBJECT_HEAD='<sha>' injected at build time"
+  },
+  "bundled_vsix": {
+    "subject_head": "2edd62498",
+    "version": "4.1.16",
+    "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-2edd62498.vsix",
+    "size_bytes": 14627848,
+    "sha256": "fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd",
+    "built_via": "vsce package (manually invoked; sandbox workaround for better-sqlite3 postinstall)",
+    "package_files": 52,
+    "bundle_contains": [
+      "CLINEMM_OOM_DISC01_ABLATE_DELIVERY (runtime lookup)",
+      "CLINEMM_OOM_DISC01_SUBJECT_HEAD (esbuild --define inlined)",
+      "CLINEMM_OOM_DISC01_ATTEST (line marker)"
+    ],
+    "ablated_restored_use_identical_bytes": true,
+    "toggle_mechanism": "env var at launch time (no rebuild between specimens)"
+  }
 }
