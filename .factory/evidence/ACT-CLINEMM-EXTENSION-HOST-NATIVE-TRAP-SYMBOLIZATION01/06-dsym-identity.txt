@@ -1,0 +1,29 @@
+MATCHING dSYM IDENTITY
+======================
+
+# Crash image (usedImages[2])
+name = Electron Framework
+arch = arm64
+uuid = 4c4c445a-5555-3144-a15d-57158a209f31
+
+# dSYM candidate: upstream Electron release asset
+asset_name    = electron-v42.2.0-darwin-arm64-dsym.tar.xz
+upstream_url  = https://github.com/electron/electron/releases/download/v42.2.0/electron-v42.2.0-darwin-arm64-dsym.tar.xz
+sha256_upstream = 5a341581905b84ae62b4f7664c0fd950ec78fef172042dd8b55dc2a8d9aea66a
+sha256_local    = 5a341581905b84ae62b4f7664c0fd950ec78fef172042dd8b55dc2a8d9aea66a
+sha256_match    = true
+
+# Extracted bundle
+bundle_path      = /tmp/electron-dsym/Electron Framework.dSYM
+dwarf_object     = /tmp/electron-dsym/Electron Framework.dSYM/Contents/Resources/DWARF/Electron Framework
+-rw-r--r-- 1 chistyakov wheel 5907695940 May 19 20:07 /tmp/electron-dsym/Electron Framework.dSYM/Contents/Resources/DWARF/Electron Framework
+dwarf_sha256    = 359ac885373a87fc1ce1b0a631c00670ff2bce33f61349501d6152911b4b7786
+dwarf_byte_size = 5907695940
+
+# UUID of extracted dSYM (via xcrun dwarfdump --uuid)
+UUID: 4C4C445A-5555-3144-A15D-57158A209F31 (arm64) /tmp/electron-dsym/Electron Framework.dSYM/Contents/Resources/DWARF/Electron Framework
+
+# Compare to crash image UUID
+crash.uuid   = 4c4c445a-5555-3144-a15d-57158a209f31
+dsym.uuid    = 4C4C445A-5555-3144-A15D-57158A209F31
+DSYM_UUID_MATCH = PROVEN

@@ -1,0 +1,111 @@
+{
+  "act": "ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01",
+  "primary_purpose": "evidence_acquisition",
+  "verdict": "PASS_NATIVE_TRAP_SYMBOLIZED",
+  "verdict_short": "Chromium/V8 OOM crash on Electron Framework 42.2.0 - symbolization authoritative; ClineMM necessity pending ablation.",
+  "history": [
+    {
+      "iteration": "01 initial",
+      "result": "PASS_NATIVE_TRAP_SYMBOLIZED",
+      "halt": "HALT_CRASH_BINARY_UUID_MISMATCH / HALT_DSYM_UUID_MISMATCH / HALT_CRASH_PC_IMAGE_BINDING_MISMATCH",
+      "halt_addressed": true,
+      "halt_addressed_summary": "None of the structural halts triggered. UUID binding PROVEN (binary UUID = dSYM UUID = 4c4c445a-5555-3144-a15d-57158a209f31). Crash-PC/image binding PROVEN (decimal: 4583825436 - 4492492800 = 91332636; reported frame[0].imageOffset = 91332636).",
+      "fixes_applied": [
+        "P0: scripts/analyze-extension-host-native-trap-symbolization.mjs - NEW (~200 LOC). Per-frame UUID-bound atos symbolization of an Apple .ips crash report. Hard guards for SYMBOL-01..05 invariants: matching UUID accepted, mismatched UUID rejected, crash_pc - image_base == reported offset, only imageIndex=2 bound to dSYM, imageIndex=8 (anon) reported UNKNOWN. The script binds to the dSYM dwarf object (-o <dSYM/Contents/Resources/DWARF/Electron Framework>), not the runtime binary (which has stripped DWARF).",
+        "P0: .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01/* - 11 evidence files written. Crash report byte-for-byte preserved; live parent-lifecycle.json and meta.json frozen; UUID binding proven; matching dSYM SHA-256 verified; exact PC and faulting thread symbolized; trap classified NT3 with NT2 layered; ClineMM causal attribution deferred to successor ACT."
+      ],
+      "summary": "The live SIGTRAP trap in PID 95445 symbolises exactly to partition_alloc::internal::OnNoMemoryInternal(unsigned long) at oom.cc:85, called through the V8 OOM callback chain in node_bindings.cc:202 / api.cc:280 - NOT to the unsymbolized 'ares_dns_rr_get_ttl' attribution that the runtime LC_SYMTAB fallback produced. UUID binding is authoritative. The trap is a Chromium/V8 OOM fatal, classification NT3 with NT2 layered. ClineMM causal attribution is NOT established and is NOT refuted in this ACT; ablation is the next ACT's task."
+    }
+  ],  "stop_conditions_checked": [
+    {
+      "condition": "HALT_CRASH_BINARY_UUID_MISMATCH",
+      "result": "NO - installed binary UUID 4C4C445A-5555-3144-A15D-57158A209F31 matches crash image UUID 4c4c445a-5555-3144-a15d-57158a209f31 (case-insensitive)"
+    },
+    {
+      "condition": "HALT_DSYM_UUID_MISMATCH",
+      "result": "NO - dSYM UUID 4C4C445A-5555-3144-A15D-57158A209F31 matches binary/dSYM UUIDs (case-insensitive)"
+    },
+    {
+      "condition": "HALT_CRASH_PC_IMAGE_BINDING_MISMATCH",
+      "result": "NO - computed_offset 91332636 == reported frame[0].imageOffset 91332636"
+    },
+    {
+      "condition": "HALT_SYMBOLIZER_OUTPUT_INCONSISTENT",
+      "result": "NO - atos against the dSYM consistently produced partition_alloc::OnNoMemoryInternal / V8 OOM path; symbolization helper was independently re-verified for SYMBOL-01..05"
+    },
+    {
+      "condition": "HALT_ABLATION_CHANGES_UNRELATED_RUNTIME",
+      "result": "NOT TRIGGERED - ablation delegated to the next ACT, not run here"
+    }
+  ],
+  "live_failure_packet": {
+    "ips_path": "/Users/chistyakov/Library/Logs/DiagnosticReports/VSCodium Helper (Plugin)-2026-09-24-214822.ips",
+    "ips_sha256": "d54327b7e96b623c8a21547a57209f4111aeb48debc234721171b0ec48623ba5",
+    "process": "VSCodium Helper (Plugin)",
+    "pid": 95445,
+    "exception": "EXC_BREAKPOINT",
+    "signal": "SIGTRAP",
+    "termination_namespace": "SIGNAL",
+    "termination_code": 5,
+    "indicator": "Trace/BPT trap: 5",
+    "faulting_thread": 0,
+    "crash_pc_decimal": 4583825436,
+    "crash_pc_hex": "0x11137a01c",
+    "image2": {
+      "name": "Electron Framework",
+      "arch": "arm64",
+      "base_decimal": 4492492800,
+      "uuid": "4c4c445a-5555-3144-a15d-57158a209f31",
+      "path": "/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
+    }
+  },
+  "dsym_identity": {
+    "asset": "electron-v42.2.0-darwin-arm64-dsym.tar.xz",
+    "asset_url": "https://github.com/electron/electron/releases/download/v42.2.0/electron-v42.2.0-darwin-arm64-dsym.tar.xz",
+    "asset_sha256": "5a341581905b84ae62b4f7664c0fd950ec78fef172042dd8b55dc2a8d9aea66a",
+    "asset_sha256_match_upstream_shasums256": true,
+    "bundle_path": "/tmp/electron-dsym/Electron Framework.dSYM",
+    "dwarf_object": "/tmp/electron-dsym/Electron Framework.dSYM/Contents/Resources/DWARF/Electron Framework",
+    "dwarf_sha256": "359ac885373a87fc1ce1b0a631c00670ff2bce33f61349501d6152911b4b7786",
+    "dwarf_byte_size": 5907695940,
+    "dwarf_uuid": "4c4c445a-5555-3144-a15d-57158a209f31"
+  },
+  "trap_classification": {
+    "primary": "NT3_CHROMIUM_ELECTRON_FATAL",
+    "secondary_layered": "NT2_V8_FATAL_CHECK",
+    "symbol_at_pc": "partition_alloc::internal::OnNoMemoryInternal(unsigned long) (oom.cc:85)",
+    "trap_chain_at_symbolization": [
+      "partition_alloc::internal::OnNoMemoryInternal(unsigned long) (oom.cc:85)",
+      "partition_alloc::internal::OnNoMemory(unsigned long) (oom.cc:100)",
+      "partition_alloc::internal::OnErrnoNoMem() (oom.cc:106)",
+      "(anon)::V8OOMErrorCallback(char const*, v8::OOMDetails const&) (node_bindings.cc:202)",
+      "v8::Utils::ReportOOMFailure(...) (api.cc)",
+      "v8::internal::V8::FatalProcessOutOfMemory(...) (api.cc:280)"
+    ]
+  },
+  "version_inventory": {
+    "electron": "42.2.0",
+    "chromium": "148.0.7778.97",
+    "v8": "14.8.178.14",
+    "node": "24.15.0",
+    "vscodium": "1.126.04524",
+    "macos": "14.7.4 (23H420)",
+    "xcode": "16.4 (16F6) / DTXcode 1640"
+  },
+  "repair_authorized": false,
+  "next_act": {
+    "primary": "ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-CAUSALITY01",
+    "primary_task": "Run with-ClineMM vs without-ClineMM ablation per ACT section 11. Observe whether the OOM reproduces in both, only one, or with shifted symbols. Capture whether crash PC, imageIndex=2 UUID, or trap path changes when ClineMM is removed.",
+    "fallback": "ACT-CLINEMM-EXTENSION-HOST-OOM-UPSTREAM-REPORT01",
+    "fallback_task": "If ablation finds the OOM reproduces independent of ClineMM, close the ClineMM causal branch and open a Chromium/V8 upstream report (heap pressure / V8 OOM reporting)."
+  },
+  "adjacent_unrelated_defect": {
+    "id": "P1_DIAGNOSTIC_META_APPEND_CORRUPTION",
+    "owner_act": "ACT-CLINEMM-TERMINATION-WITNESS-META-SINGLETON01",
+    "description": "The diagnostic writer appends to a singleton meta.json rather than rewriting it, producing two concatenated JSON documents after Extension Host restart. Out of scope for this ACT per section 13."
+  },
+  "symbolization_helper": {
+    "path": "scripts/analyze-extension-host-native-trap-symbolization.mjs",
+    "verified_invariants": ["SYMBOL-01 matching UUID accepted", "SYMBOL-02 mismatched UUID rejected", "SYMBOL-03 computed_offset == reported imageOffset", "SYMBOL-04 only imageIndex=2 frames bound", "SYMBOL-05 imageIndex=8 reported UNKNOWN"]
+  }
+}

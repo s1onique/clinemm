@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "act": "ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01",
+  "capture_id": "live-20260924-214650",
+  "state": "installed",
+  "installed_at": "2026-09-24T18:46:52.928Z",
+  "counters": {
+    "armedAt": "2026-09-24T18:46:52.920Z",
+    "installedAt": "2026-09-24T18:46:52.928Z",
+    "observedEventCount": 0,
+    "droppedEventCount": 0,
+    "processExitObserved": false,
+    "uncaughtExceptionMonitorObserved": false,
+    "warningObserved": false
+  }
+}{
+  "schema_version": 1,
+  "act": "ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01",
+  "capture_id": "live-20260924-214650",
+  "state": "installed",
+  "installed_at": "2026-09-24T18:48:23.434Z",
+  "counters": {
+    "armedAt": "2026-09-24T18:48:23.424Z",
+    "installedAt": "2026-09-24T18:48:23.434Z",
+    "observedEventCount": 0,
+    "droppedEventCount": 0,
+    "processExitObserved": false,
+    "uncaughtExceptionMonitorObserved": false,
+    "warningObserved": false
+  }
+}

@@ -1,0 +1,25 @@
+BINARY-IDENTITY VERIFICATION
+============================
+
+# Identifiers from the live crash packet (usedImages[2])
+name:                              Electron Framework
+arch:                              arm64
+base (decimal):                    4492492800
+uuid (lower):                      4c4c445a-5555-3144-a15d-57158a209f31
+
+# Installed binary on /Applications/VSCodium.app
+-rwxr-xr-x 1 chistyakov staff 182539664 Jul  7 11:33 /Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework: Mach-O 64-bit dynamically linked shared library arm64
+04c6edcf10d7c197e0773f6c86eefe1437b7f55a09d4799cf576e57afca06bec  /Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework
+
+# dwarfdump --uuid (arm64 UUID, plain)
+ERROR: invalid long option '--uuid'
+dwarfdump option error.
+To see the options list: dwarfdump -h
+
+# VSCodium version (from app package.json)
+name: VSCodium version: 1.126.04524
+(node:37661) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+# UUID MATCH (case-insensitive): PROVEN

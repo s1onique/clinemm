@@ -1,0 +1,58 @@
+LOCAL dSYM DISCOVERY
+====================
+
+# mdfind by filename
+/Users/chistyakov_old/Projects/guessing_game/target/debug/deps/guessing_game-94ca0188ee416f3d.dSYM
+/Users/chistyakov_old/Projects/rust-koans/target/debug/deps/koans-7f85d8178783dc74.dSYM
+/Users/chistyakov_old/Projects/rust-koans/target/debug/deps/koans-d967b55f11a5911a.dSYM
+/Users/chistyakov_old/Projects/rust-koans/target/debug/build/koans-cba5368609e6a5d1/build_script_build-cba5368609e6a5d1.dSYM
+/Users/chistyakov_old/Projects/trpl-ebook/target/release/build/kernel32-sys-72bc68efd3a36233/build_script_build.dSYM
+/Users/chistyakov_old/Projects/rzsnapper/target/debug/deps/rzsnapper-00478da927936c68.dSYM
+/Users/chistyakov_old/Projects/rzsnapper/target/debug/deps/rzsnapper-43a5330ef5b0e149.dSYM
+/Volumes/UserData/Users/chistyakov/go/pkg/mod/github.com/google/pprof@v0.0.0-20260115054156-294ebfa9ad83/internal/binutils/testdata/exe_mac_64.dSYM
+/Volumes/UserData/Users/chistyakov/go/pkg/mod/github.com/google/pprof@v0.0.0-20260115054156-294ebfa9ad83/internal/binutils/testdata/lib_mac_64.dSYM
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/KGB/tovarisch/zig-out/bin/tovarisch-test.dSYM
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/polyc/evidence/ACT-POLYC-LLVM-LOCAL-MEM2REG01/capi/capi_probe.dSYM
+/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/polyc/evidence/ACT-POLYC-LLVM-LOCAL-MEM2REG01/capi/errpath_probe.dSYM
+
+# filtered candidates
+(no .dSYM matching Electron or VSCodium via mdfind)
+
+# find under candidate dirs
+(none)
+
+# Spot-check: companion symbols beside the framework?
+total 0
+drwxr-xr-x  7 chistyakov staff 224 Aug  4 00:09 .
+drwxr-xr-x 10 chistyakov staff 320 Jul  7 11:28 ..
+lrwxr-xr-x  1 chistyakov staff  35 Aug  4 00:09 Electron Framework -> Versions/Current/Electron Framework
+lrwxr-xr-x  1 chistyakov staff  24 Aug  4 00:09 Helpers -> Versions/Current/Helpers
+lrwxr-xr-x  1 chistyakov staff  26 Aug  4 00:09 Libraries -> Versions/Current/Libraries
+lrwxr-xr-x  1 chistyakov staff  26 Aug  4 00:09 Resources -> Versions/Current/Resources
+drwxr-xr-x  4 chistyakov staff 128 Aug  4 00:09 Versions
+
+# Any dSYM sibling at the framework path?
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/_CodeSignature
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id_FEMININE.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw_MASCULINE.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw_NEUTER.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he_NEUTER.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru_NEUTER.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk_FEMININE.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_MASCULINE.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th_MASCULINE.lproj
+/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_FEMININE.lproj
+
+# Apple "Spotlight" symbol source URLs (informational only - NOT used here)
+   https://developer.apple.com/download/apple-sdks/
+

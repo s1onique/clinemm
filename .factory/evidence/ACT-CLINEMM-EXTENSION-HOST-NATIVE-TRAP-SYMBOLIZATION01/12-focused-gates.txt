@@ -1,0 +1,84 @@
+FOCUSED GATES  (ACT §15)
+========================
+
+This ACT added two script-level files. Both pass focused tests.
+
+Files added
+----------
+  scripts/analyze-extension-host-native-trap-symbolization.mjs
+      Purpose: per-frame UUID-bound atos symbolization of an Apple .ips
+      crash report. Reads crash report + matching dSYM, runs atos, writes
+      08-faulting-thread-symbolization.json.
+
+  scripts/__tests__/analyze-extension-host-native-trap-symbolization.test.mjs
+      Purpose: focused tests covering SYMBOL-01..05 invariants.
+
+Self-test result (P1 bounded correction)
+----------------------------------------
+Default gate does NOT regenerate
+.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01/08-faulting-thread-symbolization.json
+
+The one-time real symbolization artifact is byte-for-byte preserved:
+
+  $ shasum -a 256 .../08-faulting-thread-symbolization.json
+  a7648bbfdccbf04f509244a1501120fd7dc20c06476030f1537e4dfdb29fec7c  ...
+
+Focused test runtime: 17s (well under 30s hard ceiling; under 10s ideal for
+the no-atos parts; the one atos call for SYMBOL-01 dominates).
+
+Assertions covered
+------------------
+  SYMBOL-01 (matching UUID accepted, exact-PC atos smoke):
+    - binary UUID == crash UUID (xcrun dwarfdump)
+    - dSYM UUID == crash UUID (xcrun dwarfdump)
+    - binary UUID == dSYM UUID
+    - atos for crash PC 0x11137a01c returns
+      partition_alloc::internal::OnNoMemoryInternal
+
+  SYMBOL-02 (mismatched UUID rejected):
+    - script exits non-zero
+    - explicit HALT_CRASH_BINARY_UUID_MISMATCH
+    - halt occurs BEFORE any output JSON is produced
+      (asserts no atos traversal happens for the wrong UUID)
+
+  SYMBOL-03 (crash_pc - image_base == reported frame[0].imageOffset):
+    - arithmetic-only over the preserved artifact (no atos)
+
+  SYMBOL-04 (only imageIndex=2 frames BIND_APPLIED):
+    - data-only over the preserved artifact (no atos)
+
+  SYMBOL-05 (imageIndex=8 anonymous frames UNKNOWN_NO_GUESS, never guessed):
+    - data-only over the preserved artifact (no atos)
+
+  Frame 0 attribution:
+    - atos_symbol names OnNoMemoryInternal (NOT ares_dns_rr_get_ttl)
+
+How to run the focused tests
+----------------------------
+  $ node scripts/__tests__/analyze-extension-host-native-trap-symbolization.test.mjs
+
+How to (re)run the full 40-frame operator-only symbolization
+-----------------------------------------------------------
+Full 40-frame symbolization is a one-time forensic operator command.
+It is NOT in the default gate. Estimate: ~10 minutes on Apple silicon
+because each atos call against the 5.9 GB dSYM dwarf is several
+seconds long.
+
+  $ node scripts/analyze-extension-host-native-trap-symbolization.mjs \
+      --ips '.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01/VSCodium Helper (Plugin)-2026-09-24-214822.ips' \
+      --dsym-dwarf '/tmp/electron-dsym/Electron Framework.dSYM/Contents/Resources/DWARF/Electron Framework' \
+      --binary-path '/Applications/VSCodium.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework' \
+      --out '/some/where' \
+      --ips-sha256 'd54327b7e96b623c8a21547a57209f4111aeb48debc234721171b0ec48623ba5'
+
+Working tree gates
+------------------
+  $ git diff --check
+  (no output; passes)
+
+  $ git status --short
+  ?? .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01/
+  ?? scripts/__tests__/
+  ?? scripts/analyze-extension-host-native-trap-symbolization.mjs
+
+No edits to existing files. No edits to ClineMM production code.

@@ -1,0 +1,14 @@
+EXACT PC SYMBOLIZATION (UUID-bound)
+===================================
+
+# Inputs (decimal, derived via printf)
+image_base_dec = 4492492800
+crash_pc_dec   = 4583825436
+image_base_hex = 0x10bc60000
+crash_pc_hex   = 0x11137a01c
+
+# atos call (Apple documented workflow)
+atos -arch arm64 -o /tmp/electron-dsym/Electron Framework.dSYM/Contents/Resources/DWARF/Electron Framework -l 0x10bc60000 0x11137a01c
+
+# atos output verbatim
+partition_alloc::internal::OnNoMemoryInternal(unsigned long) (in Electron Framework) (oom.cc:85)

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "verdict": "NT3_CHROMIUM_ELECTRON_FATAL (with NT2_V8_FATAL_CHECK layered)",
+  "primary_classification": "NT3_CHROMIUM_ELECTRON_FATAL",
+  "secondary_layered": "NT2_V8_FATAL_CHECK",
+  "rationale": "faultingThread=0 PC maps to partition_alloc::internal::OnNoMemoryInternal(unsigned long) at oom.cc:85 (Chromium PartitionAlloc). The trap path is V8::FatalProcessOutOfMemory -> v8::Utils::ReportOOMFailure -> (Electron)V8OOMErrorCallback -> partition_alloc::OnErrnoNoMem -> partition_alloc::OnNoMemory -> partition_alloc::OnNoMemoryInternal -> __builtin_trap (SIGTRAP). This is a deliberate, immediate OOM crash installed by Chromium (partition_alloc/oom.cc) and surfaced through V8's OOM reporting layer (api.cc). It is NOT a Node CHECK nor a third-party native addon.",
+  "trap_chain_recovered_by_atos": [
+    "frame 0  partition_alloc::internal::OnNoMemoryInternal(unsigned long)  (oom.cc:85)",
+    "frame 1  partition_alloc::internal::OnNoMemoryInternal(unsigned long)  (oom.cc:85)  [duplicate, common at ImmediateCrash]",
+    "frame 2  partition_alloc::internal::OnNoMemory(unsigned long)         (oom.cc:100)",
+    "frame 3  partition_alloc::internal::OnErrnoNoMem()                     (oom.cc:106)",
+    "frame 4  (anon)::V8OOMErrorCallback(char const*, v8::OOMDetails const&) (node_bindings.cc:202)",
+    "frame 5  v8::Utils::ReportOOMFailure(v8::internal::Isolate*, char const*, v8::OOMDetails const&) (api.cc)",
+    "frame 6  v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) (api.cc:280)"
+  ],
+  "rejected_unsymbolized_allegations": {
+    "ares_dns_rr_get_ttl": "False attribution. The runtime Electron Framework binary has stripped DWARF; the LC_SYMTAB fallback produced the nearest public c-ares symbol whose starting address happens to share the same offset parity with the trap PC area. atos against the UUID-matched dSYM produces a wholly different (and correct) symbol table.",
+    "fontations_ffi$cxxbridge1$194$BridgeMappingIndex$operator$sizeof": "Same explanation. Not in causal path.",
+    "rust_png$cxxbridge1$194$ResultOfReader$err": "Same explanation. Not in causal path.",
+    "c-ares (libc-ares.dylib)": "Image 0 is `vscode_fs.node` and image 1 is `spdlog.node`. No c-ares image appears in usedImages. The c-ares naming was a coincidence of symbol-table address overlap."
+  },
+  "image8_disposition": "UNKNOWN (anonymous zero-base image, base=0, no symbol identity manufactured). Frames 12..19 fall inside this image and are explicitly marked UNKNOWN_NO_GUESS in 08-faulting-thread-symbolization.json per the SYMBOL-05 invariant.",
+  "necessity_status_against_clinemm_at_this_stage": "PENDING_ABLATION. The trap is a runtime OOM fatal with a clear Chromium/V8 causal path; before attributing (or denying) ClineMM causality, this ACT must compare A. with-ClineMM and B. without-ClineMM on the same installed Electron binary and same workload to determine whether the OOM is ClineMM-triggered or only ClineMM-adjacent in time.",
+  "repair_authorized_for_clinemm": false,
+  "next_action_required": "ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-CAUSALITY01 (controlled ablation between with-ClineMM and without-ClineMM workloads, observing whether the OOM reproduces and whether its image/UUID/symbol signature changes). If the OOM is independent of ClineMM, the repair branch is closed and the work tracks as ACT-CLINEMM-EXTENSION-HOST-OOM-UPSTREAM-REPORT01 (Chromium/V8/Electron upstream).
+}

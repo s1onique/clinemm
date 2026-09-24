@@ -1,0 +1,36 @@
+CRASH PC <-> IMAGE BINDING (decimal proof)
+=========================================
+
+# Inputs from the live crash packet
+crash_pc (decimal)             = 4583825436   (.ips exception.rawCodes[1])
+imageIndex                     = 2
+image2.name                    = Electron Framework
+image2.arch                    = arm64
+image2.base (decimal)          = 4492492800   (.ips usedImages[2].base)
+image2.uuid                    = 4c4c445a-5555-3144-a15d-57158a209f31 (lower)
+
+# Computed offset (imageOffset expected by .ips frames)
+computed_offset (decimal)      = 91332636
+computed_offset (hex)          = 0x571a01c
+
+# .ips frames[0] on faultingThread=0 (imageIndex=2)
+reported.imageOffset (decimal) = 91332636
+reported.symbol                = ares_dns_rr_get_ttl  (NOT trustworthy pre-atos)
+
+# Hex representation, derived (NOT hardcoded)
+hex.image_base                 = 0x10bc60000
+hex.crash_pc                   = 0x11137a01c
+
+# Equality check
+crash_pc - image_base ==
+reported.frame[0].imageOffset  ?
+
+  4583825436
+- 4492492800
+--------
+  91332636
+                                    vs reported: 91332636
+                                    MATCH
+
+# Verdict
+CRASH_PC_IMAGE_BINDING        = PROVEN

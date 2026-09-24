@@ -1,0 +1,58 @@
+# Entry State — ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01
+
+## ACT metadata
+
+- ACT id: ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01
+- Primary purpose: evidence acquisition / causal discrimination only (no ClineMM production repair).
+- Successor ACT precondition: `ACT-CLINEMM-EXTENSION-HOST-TERMINATION-LIVE-CLASSIFICATION01` PASS_TERMINATION_AUTHORITY_CLASSIFIER_REPAIRED_LIVE_WITNESS_INSTALLED_OBSERVER_INITIAL_DEAD_GUARDED.
+- Working tree: clean of unrelated dirt (`git status --short` → empty).
+- Entry HEAD: `5fc537e0072659efb6e2a51a808bce6c6fab7e2a`
+- Entry commit subject: `fix: compose termination evidence under one capture id`
+
+## Headline verdict (this ACT)
+
+```
+ENTRY_HEAD                         = 5fc537e0072659efb6e2a51a808bce6c6fab7e2a
+REAL_FAILURE_REPRODUCED            = true (live .ips on 2026-09-24T18:48:22Z)
+FAILED_EXTENSION_HOST_PID          = 95445
+DSYM_UUID_MATCH                    = PROVEN (binary UUID = dSYM UUID = 4c4c445a-5555-3144-a15d-57158a209f31)
+CRASH_PC_IMAGE_BINDING             = PROVEN (crash_pc - image_base == reported frame[0].imageOffset)
+EXACT_PC_SYMBOL                    = partition_alloc::internal::OnNoMemoryInternal(unsigned long) (oom.cc:85)
+TRAP_CLASSIFICATION                = NT3_CHROMIUM_ELECTRON_FATAL (with NT2 layered)
+PARENT_LIFECYCLE                   = WINDOW_MISSED_TERMINAL_BOUNDARY (observer ends 18:47:52Z; crash at 18:48:22Z)
+
+REPAIR_AUTHORIZED                  = false
+SUCCESSOR_ACT                      = ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-CAUSALITY01
+                                   (or, if ablation finds no ClineMM necessity,
+                                    ACT-CLINEMM-EXTENSION-HOST-OOM-UPSTREAM-REPORT01)
+```
+
+## Live crash packet (frozen, sha256 verified)
+
+- Path: `/Users/chistyakov/Library/Logs/DiagnosticReports/VSCodium Helper (Plugin)-2026-09-24-214822.ips`
+- sha256: `d54327b7e96b623c8a21547a57209f4111aeb48debc234721171b0ec48623ba5`
+- Duplicate preserved byte-for-byte in this evidence directory.
+- process: `VSCodium Helper (Plugin)` (PID `95445`)
+- exception: `EXC_BREAKPOINT / SIGTRAP`, codes `0x0000000000000001, 0x000000011137a01c`
+- termination: `SIGNAL` namespace, code `5`, indicator `Trace/BPT trap: 5`, by `exc handler` PID `95445`
+- faultingThread: `0`, name `node.CrUtilityMain`, queue `com.apple.main-thread`
+- crash PC: `0x11137a01c` (decimal `4583825436`)
+- image 2: `Electron Framework` · arm64 · base `4492492800` · UUID `4c4c445a-5555-3144-a15d-57158a209f31`
+
+## Live capture (frozen, byte-for-byte)
+
+- Source: `/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/diagnostics/termination-authority/capture-live-20260924-214650/`
+  - `parent-lifecycle.json` (147 samples, observation window 18:46:52..18:47:52, host observed alive at window end, crash at 18:48:22 — window misses terminal boundary)
+  - `meta.json` (two concatenated JSON documents — the documented `P1_DIAGNOSTIC_META_APPEND_CORRUPTION` defect; out of scope for this ACT)
+
+## Where this ACT stops (per C1)
+
+> **C1: GO for symbolization/evidence acquisition. Production repair remains unauthorized.**
+
+This ACT produces:
+1. UUID-bound symbolization authority (binary UUID proven; matching dSYM downloaded and SHA-256 verified against upstream SHASUMS256.txt).
+2. Exact PC symbol: `partition_alloc::internal::OnNoMemoryInternal(unsigned long)` at `oom.cc:85`.
+3. Trap classification NT3 with NT2 layered.
+4. Causal attribution status: pending ablation.
+
+It does **not** authorize any ClineMM production seam repair and it does **not** run ablation against live VSCodium (deferred to successor ACT per ACT §11 + scope).

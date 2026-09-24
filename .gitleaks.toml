@@ -97,3 +97,27 @@ regexes = [
 paths = [
   '''\.factory/evidence/ACT-CLINEMM-HELPER-SUPERVISED-COMMAND-CONTAINMENT01/.*\.json$''',
 ]
+
+# ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01 evidence
+# contains a frozen Apple .ips crash report. macOS crash reports
+# include a `crashReporterKey` field — a per-install anonymous UUID
+# generated on first launch by the host application (VSCodium in
+# this case) and used solely to deduplicate upstream crash
+# submissions. It is NOT a credential: it has no network service
+# bound to it from the crash reporter, it is not transmitted by the
+# chain under examination, and it grants no authority to a remote
+# party. It is reported as "legacy unique id identifying a logical
+# installation of an application" in Apple's documentation and is
+# regenerated when the host application's data dir is reset.
+# Allowlisted to follow the established ACT-specific scoped pattern
+# so the pre-commit gate does not block legitimate forensic
+# evidence preservation.
+[[allowlists]]
+description = "ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01 frozen .ips crash-reporter installation UUID (anonymous per-install marker, not a credential)"
+targetRules = ["generic-api-key"]
+regexes = [
+  '''"crashReporterKey"\s*:\s*"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"''',
+]
+paths = [
+  '''\.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01/.*\.ips$''',
+]
