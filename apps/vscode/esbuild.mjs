@@ -132,6 +132,19 @@ if (process.env.OTEL_EXPORTER_OTLP_HEADERS) {
 if (process.env.OTEL_METRIC_EXPORT_INTERVAL) {
 	buildEnvVars["process.env.OTEL_METRIC_EXPORT_INTERVAL"] = JSON.stringify(process.env.OTEL_METRIC_EXPORT_INTERVAL)
 }
+
+// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 (CORRECTION01):
+// When CLINEMM_OOM_DISC01_SUBJECT_HEAD is set in the build env,
+// inline it into the bundle so the Extension Host attestation can
+// report the git HEAD that produced the dogfood VSIX. The lookup
+// in pending-prompt-service.ts goes through `globalThis.<name>`,
+// so the define must use that exact identifier (not `process.env.<name>`).
+// When the env var is unset (default), no define is injected and
+// the runtime falls back to the literal token `<runtime-unset>`,
+// making the build provenance observable in the operator log.
+if (process.env.CLINEMM_OOM_DISC01_SUBJECT_HEAD) {
+	buildEnvVars["CLINEMM_OOM_DISC01_SUBJECT_HEAD"] = JSON.stringify(process.env.CLINEMM_OOM_DISC01_SUBJECT_HEAD)
+}
 // Base configuration shared between extension and standalone builds
 const baseConfig = {
 	bundle: true,
