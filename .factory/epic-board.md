@@ -8860,3 +8860,130 @@ TERMINATION-AUTHORITY01
   -> analyze-termination-authority.mjs <capture-dir>
   -> TA1..TA6 -> follow-on ACT selected by verdict matrix
 ```
+
+## ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / CORRECTION01 — PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_SEMANTICALLY_INERT_LIVE_SPECIMEN_AUTHORIZED — 2026-09-24
+
+**HALT addressed:** HALT_TERMINATION_WITNESS_SIGNAL_SEMANTIC_DELTA
+**Status:** PASS / LIVE_SPECIMEN_AUTHORIZED
+
+### What changed (CORRECTION01)
+
+Per the operator directive's HALT:
+
+> On Node.js, installing a listener for SIGTERM/SIGINT/SIGHUP removes
+> Node's default disposition (terminate the process). Installing a
+> listener for unhandledRejection removes Node's default
+> --unhandled-rejections=throw. So on the macOS specimen this witness
+> could literally change whether the Extension Host dies from a signal
+> — the exact authority we are trying to measure.
+
+The witness was reduced to ONLY the channels provably observational
+for process-termination attribution:
+
+```
+FROZEN SAFE-LIST:
+  beforeExit
+  exit
+  uncaughtExceptionMonitor
+  warning
+
+DELIBERATELY NOT OBSERVED:
+  SIGHUP, SIGINT, SIGTERM, SIGPIPE, SIGBREAK, SIGWINCH,
+  unhandledRejection, rejectionHandled,
+  uncaughtException  (fatal-handler; always forbidden)
+```
+
+### Code changes (production)
+
+```text
+apps/vscode/src/sdk/extension-host-termination-authority.ts:
+  - TerminationAuthorityEventKind union narrowed to {beforeExit, exit,
+    uncaughtExceptionMonitor, warning}
+  - TerminationAuthorityCounters drops processSignalObserved +
+    unhandledRejectionObserved (no producers after the listener removal)
+  - TerminationAuthorityVerdict.evidence_summary drops signal_observed +
+    unhandled_rejection_observed
+  - install() removes every process.on() for the unsafe channels
+  - record() drops the corresponding counter-update branches
+  - module-header + install-seam-invariant comments updated to reflect
+    the safe-list + Node.js docs citations
+
+scripts/analyze-termination-authority.mjs:
+  - pickSignalKind + signal_observed + unhandled_rejection_observed
+    references removed
+```
+
+### Test changes
+
+```text
+apps/vscode/src/sdk/__tests__/extension-host-termination-authority01
+  .termination-authority.test.ts:
+  - TATRM-INSTALL-01 rewritten: asserts EXACTLY the safe-list +
+    negative-assertion on every unsafe channel
+  - TATRM-EVENT-03 (unhandledRejection) DELETED
+  - TATRM-EVENT-05 (SIGTERM) DELETED
+  - TATRM-EVENT-07 channel-switched: warning (bounded-line guarantee
+    is channel-independent)
+  - TATRM-CONSERVE-SIGNAL-01 NEW: SIGTERM/INT/HUP listenerCount unchanged
+  - TATRM-CONSERVE-REJECTION-01 NEW: unhandledRejection/rejectionHandled
+    listenerCount unchanged
+  - TATRM-CONSERVE-SIGNAL-MUTATION-01 NEW: a pre-existing SIGTERM
+    listener survives the witness install (stronger mutation check)
+  - stableCounters() helper: drops the obsolete counter fields
+  - Total: 30 cases across 6 describe blocks
+```
+
+### Evidence files updated
+
+```text
+02-witness-contract.md  rewritten: safe-list + rationale for every
+                        removed channel + Node.js docs citations
+03-red-design.md       discriminator list updated (TATRM-EVENT-03/05
+                        removed; TATRM-CONSERVE-SIGNAL-01 /
+                        TATRM-CONSERVE-REJECTION-01 /
+                        TATRM-CONSERVE-SIGNAL-MUTATION-01 added)
+04-focused-gates.txt   rewritten to reflect the post-correction01
+                        gates (tsc 0, biome 0, 1168/1168 PASS,
+                        git diff --check clean, analyzer smoke OK)
+05-conservation.txt    EOF blank-line whitespace diagnostic fixed
+                        (git diff --check now clean); three
+                        TATRM-CONSERVE-* discriminators documented
+result.json             rewritten with halt_addressed = HALT_
+                        TERMINATION_WITNESS_SIGNAL_SEMANTIC_DELTA
+                        and frozen_safe_list + channels_deliberately
+                        _not_observed sections
+```
+
+### Final gates (post-correction01)
+
+- Typecheck (`bunx tsc --noEmit`): **0 errors**
+- Biome check (changed files): **0 errors, 0 warnings**
+- Bun:test unit suite (`test:unit`): **1168/1168 PASS, 0 fails**
+- `git diff --check`: **clean** (the prior blank-line-at-EOF
+  diagnostic in 05-conservation.txt was fixed)
+- Focused vitest suite: follows the same vitest convention as the
+  existing CPUCAP / ALLOCAUTH / EHLOOP suites; blocked by the same
+  pre-existing `z.object` vitest transform defect (verified by
+  reproducing on CPUCAP). Out of scope.
+- Analyzer end-to-end smoke (post-correction01): TA6 roundtrip OK
+  (exit 3, verdict.json written).
+
+### Epic cursor (closed + next)
+
+```text
+TERMINATION-AUTHORITY01
+  iteration01
+    -> HALT_TERMINATION_WITNESS_SIGNAL_SEMANTIC_DELTA
+    -> CORRECTION01 applied: safe-list frozen to {beforeExit, exit,
+       uncaughtExceptionMonitor, warning}; semantic-inertia
+       discriminators added; verdict schema shrunk accordingly
+  CLOSED / infrastructure semantically inert / LIVE_SPECIMEN_AUTHORIZED
+
+[OPERATOR LIVE SPECIMEN PENDING]
+  CLINEMM_DIAG_TERMINATION_AUTHORITY=1 + failing notify-enabled workload
+  -> analyze-termination-authority.mjs <capture-dir>
+  -> TA1..TA6 -> follow-on ACT selected by verdict matrix on §12
+  CRITICAL: safe-list is exactly {beforeExit, exit,
+  uncaughtExceptionMonitor, warning}; do not add channels without a
+  new correction ACT.
+```
