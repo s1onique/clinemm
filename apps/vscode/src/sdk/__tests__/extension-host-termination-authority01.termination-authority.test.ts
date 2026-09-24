@@ -56,6 +56,58 @@
  *   TATRM-RUNTIME-04         writeCrashReportSummary writes structured summary on real-format report
  *   TATRM-RECOVERY-01        __resetTerminationAuthorityForTests clears all state
  *   TATRM-RECOVERY-02        getTerminationAuthoritySnapshot returns a defensive copy
+ *
+ *   ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / CORRECTION08 —
+ *   HALT_TERMINATION_CAPTURE_ID_SPLIT (P0 — capture composition defect).
+ *   The Go launcher (`cmd/clinemm-live-capture`) already owns the
+ *   authoritative capture ID and uses it for the parent-lifecycle
+ *   observer's directory. The in-process Node witness previously
+ *   generated its own ID via `_captureIdFactory()`, producing two
+ *   separate `capture-<id>/` namespaces for the same run. The
+ *   analyzer cannot compose them. The fix is a private diagnostic
+ *   env var (`CLINEMM_DIAG_TERMINATION_CAPTURE_ID`) that the Go
+ *   launcher sets; the Node witness uses it when present.
+ *
+ *   CAPTURE-COMPOSE-01       env=valid-id -> in-process witness uses
+ *                            exactly that ID (analyzer can now read
+ *                            one composed capture-<id>/ directory).
+ *   CAPTURE-COMPOSE-02       env unset -> existing
+ *                            `_captureIdFactory()` behavior preserved
+ *                            (conservation).
+ *   CAPTURE-COMPOSE-03       env value contains '/' -> falls back to
+ *                            factory (fail-closed; env var MUST NOT
+ *                            become a path traversal seam).
+ *   CAPTURE-COMPOSE-04       env value contains '..' -> falls back to
+ *                            factory (fail-closed).
+ *   CAPTURE-COMPOSE-05       env value empty string -> falls back to
+ *                            factory.
+ *   CAPTURE-COMPOSE-06       env value > MAX_CAPTURE_ID_LEN -> falls
+ *                            back to factory (fail-closed).
+ *   CAPTURE-COMPOSE-07       env value contains '\' -> falls back to
+ *                            factory (fail-closed; covers Windows
+ *                            backslash even though production
+ *                            targets POSIX).
+ *   CAPTURE-COMPOSE-08       env value contains NUL byte -> falls back
+ *                            to factory (fail-closed).
+ *   CAPTURE-COMPOSE-09       env value contains a space (outside the
+ *                            frozen character class) -> falls back to
+ *                            factory (fail-closed).
+ *   CAPTURE-COMPOSE-10       resolver pure: env read directly from
+ *                            passed env object (no side effects on
+ *                            module state); the SAME env object
+ *                            consulted at install time.
+ *   CAPTURE-COMPOSE-11       install skipped on DISABLED state does
+ *                            NOT consult env (the env resolver is
+ *                            only invoked once the witness arms).
+ *   CAPTURE-COMPOSE-12       unsafe env value -> install() falls
+ *                            back to factory + emits bounded warn
+ *                            (no silent acceptance; the operator
+ *                            sees the rejection).
+ *   CAPTURE-COMPOSE-13       resolver REFUSES any value containing
+ *                            whitespace (exact byte-for-byte
+ *                            identity or REFUSE; CORRECTION09
+ *                            tightening of the trim-and-accept
+ *                            behavior).
  */
 
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
@@ -66,6 +118,7 @@ import {
 	__resetTerminationAuthorityForTests,
 	applyExtensionHostTerminationAuthorityPolicy,
 	CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV,
+	CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV,
 	computeTerminationAuthorityVerdict,
 	getTerminationAuthorityCaptureId,
 	getTerminationAuthorityEventCount,
@@ -73,9 +126,12 @@ import {
 	getTerminationAuthoritySnapshot,
 	getTerminationAuthorityState,
 	installTerminationAuthorityWitness,
+	resolveOperatorTerminationCaptureIdFromEnv,
 	resolveTerminationAuthorityKnobFromEnv,
 	setTerminationAuthorityCaptureIdFactory,
 	setTerminationAuthorityDataRootResolver,
+	setTerminationAuthorityWarn,
+	TERMINATION_AUTHORITY_MAX_CAPTURE_ID_LEN,
 	TERMINATION_AUTHORITY_MAX_EVENTS,
 	type TerminationAuthorityCounters,
 } from "../extension-host-termination-authority"
@@ -1093,5 +1149,332 @@ describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / recovery", () => 
 		;(s1.counters as { observedEventCount: number }).observedEventCount = 9999
 		const s3 = getTerminationAuthoritySnapshot()
 		expect(s3.counters.observedEventCount).toBe(0)
+	})
+})
+
+// =============================================================================
+// CORRECTION08 — Capture composition (HALT_TERMINATION_CAPTURE_ID_SPLIT)
+//
+// The Go launcher (`cmd/clinemm-live-capture`) already owns an
+// authoritative capture ID and uses it for the parent-lifecycle
+// observer's directory. The in-process Node witness previously
+// generated its own ID via `_captureIdFactory()`, producing two
+// separate `capture-<id>/` namespaces for the same run. The analyzer
+// cannot compose them. The fix is a private diagnostic env var
+// (`CLINEMM_DIAG_TERMINATION_CAPTURE_ID`) that the Go launcher sets;
+// the Node witness uses it when present, falling back to the factory
+// otherwise.
+//
+// Conservation gates are CAPTURE-COMPOSE-02 (env unset => factory
+// preserved) and CAPTURE-COMPOSE-11 (install on DISABLED state must
+// not consult env).
+// =============================================================================
+
+describe("ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / CORRECTION08 capture composition", () => {
+	// The resolver consults process.env directly inside install().
+	// We use a captured-factory assertion for CAPTURE-COMPOSE-01
+	// (env-set wins) and CAPTURE-COMPOSE-02 (env unset => factory
+	// wins). The unsafe-value tests (CAPTURE-COMPOSE-03..09) use the
+	// pure resolver directly because the production code path would
+	// warn but produce the same observable capture ID from the
+	// factory fallback — the load-bearing assertion is that the
+	// resolver REFUSES the unsafe value, not what the factory
+	// happens to produce.
+	let beforeEachCleanup: (() => void) | undefined
+	beforeEach(() => {
+		__resetTerminationAuthorityForTests()
+		// Save/restore the env var so a leak from another describe
+		// block does not contaminate these tests.
+		const saved = process.env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]
+		beforeEachCleanup = () => {
+			if (saved === undefined) {
+				delete process.env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]
+			} else {
+				process.env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV] = saved
+			}
+		}
+	})
+	afterEach(() => {
+		if (beforeEachCleanup) beforeEachCleanup()
+		__resetTerminationAuthorityForTests()
+	})
+
+	it("CAPTURE-COMPOSE-01: env=valid-id -> in-process witness uses exactly that ID (analyzer can now read one composed capture-<id>/ directory)", async () => {
+		// Mirrors the live-specimen evidence path: the Go launcher
+		// generates `live-YYYYMMDD-HHMMSS`, sets
+		// `CLINEMM_DIAG_TERMINATION_CAPTURE_ID=live-20260924-203917`
+		// on the child env, and the in-process Node witness must
+		// land under the SAME `capture-live-20260924-203917/`
+		// directory the external lifecycle observer writes
+		// `parent-lifecycle.json` to.
+		const SHARED_ID = "live-20260924-203917"
+		process.env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV] = SHARED_ID
+		// The factory would produce a DIFFERENT ID. We assert
+		// that the env-supplied ID wins.
+		setTerminationAuthorityCaptureIdFactory(() => "factory-leaked-id-must-not-win")
+		setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
+		const w = makeFakeWriter()
+		const mod = require("../extension-host-termination-authority") as {
+			setTerminationAuthorityWriter: (w: FakeWriter) => void
+		}
+		mod.setTerminationAuthorityWriter(w as unknown as never)
+		applyExtensionHostTerminationAuthorityPolicy(true, {
+			[CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV]: "1",
+		})
+		await installTerminationAuthorityWitness()
+		expect(getTerminationAuthorityState()).toBe("installed")
+		expect(getTerminationAuthorityCaptureId()).toBe(SHARED_ID)
+		// And: meta.json was written under the composed directory.
+		const metaWrite = w._writes.find((wr) => wr.path.endsWith("/meta.json"))
+		expect(metaWrite).toBeDefined()
+		expect(metaWrite?.path).toContain(`/capture-${SHARED_ID}/meta.json`)
+	})
+
+	it("CAPTURE-COMPOSE-02: env unset -> existing _captureIdFactory() behavior preserved (conservation)", async () => {
+		// Conservation gate: a future contributor who BREAKS the
+		// factory fallback path (e.g. by removing the `?? _captureIdFactory()`
+		// branch) trips this test.
+		delete process.env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]
+		const FACTORY_ID = "factory-only-id-when-env-unset"
+		setTerminationAuthorityCaptureIdFactory(() => FACTORY_ID)
+		setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
+		const w = makeFakeWriter()
+		const mod = require("../extension-host-termination-authority") as {
+			setTerminationAuthorityWriter: (w: FakeWriter) => void
+		}
+		mod.setTerminationAuthorityWriter(w as unknown as never)
+		applyExtensionHostTerminationAuthorityPolicy(true, {
+			[CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV]: "1",
+		})
+		await installTerminationAuthorityWitness()
+		expect(getTerminationAuthorityCaptureId()).toBe(FACTORY_ID)
+	})
+
+	it("CAPTURE-COMPOSE-03: env value contains '/' -> resolver REFUSES (fail-closed; env var MUST NOT become a path traversal seam)", () => {
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "../../etc/passwd",
+			}),
+		).toBeUndefined()
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "live-20260924/../escape",
+			}),
+		).toBeUndefined()
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "/abs/path/attempt",
+			}),
+		).toBeUndefined()
+	})
+
+	it("CAPTURE-COMPOSE-04: env value contains '..' -> resolver REFUSES (fail-closed)", () => {
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "live..id",
+			}),
+		).toBeUndefined()
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "..",
+			}),
+		).toBeUndefined()
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "a..b..c",
+			}),
+		).toBeUndefined()
+	})
+
+	it("CAPTURE-COMPOSE-05: env value empty string (or whitespace-only) -> resolver REFUSES (caller falls back to factory)", () => {
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "",
+			}),
+		).toBeUndefined()
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "   ",
+			}),
+		).toBeUndefined()
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "\t\n",
+			}),
+		).toBeUndefined()
+	})
+
+	it("CAPTURE-COMPOSE-06: env value > MAX_CAPTURE_ID_LEN -> resolver REFUSES (fail-closed; bounded)", () => {
+		const oversized = "a".repeat(TERMINATION_AUTHORITY_MAX_CAPTURE_ID_LEN + 1)
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: oversized,
+			}),
+		).toBeUndefined()
+		// And: exactly MAX_CAPTURE_ID_LEN is accepted.
+		const exact = "a".repeat(TERMINATION_AUTHORITY_MAX_CAPTURE_ID_LEN)
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: exact,
+			}),
+		).toBe(exact)
+	})
+
+	it("CAPTURE-COMPOSE-07: env value contains '\\' -> resolver REFUSES (fail-closed; covers Windows-style separators)", () => {
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "live\\20260924",
+			}),
+		).toBeUndefined()
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "..\\..\\escape",
+			}),
+		).toBeUndefined()
+	})
+
+	it("CAPTURE-COMPOSE-08: env value contains NUL byte -> resolver REFUSES (fail-closed)", () => {
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "live-id\x00escape",
+			}),
+		).toBeUndefined()
+	})
+
+	it("CAPTURE-COMPOSE-09: env value outside the frozen character class -> resolver REFUSES (fail-closed)", () => {
+		// The frozen character class is `[A-Za-z0-9_-]+`. Anything
+		// else (spaces, punctuation, dots beyond the `..` case,
+		// unicode, control characters) is rejected.
+		const UNSAFE = [
+			"live id with space",
+			"live.id.with.dot",
+			"live:id",
+			"live*id",
+			"live?query",
+			"live#frag",
+			"live%enc",
+			"live@{",
+			"中文id",
+			"live\tid", // tab
+			"live\nid", // newline
+		]
+		for (const v of UNSAFE) {
+			expect(
+				resolveOperatorTerminationCaptureIdFromEnv({
+					[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: v,
+				}),
+			).toBeUndefined()
+		}
+	})
+
+	it("CAPTURE-COMPOSE-10: resolver accepts the live launcher's canonical ID format (live-YYYYMMDD-HHMMSS and reasonable variants)", () => {
+		// Live launcher default: `live-20260924-203917`.
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "live-20260924-203917",
+			}),
+		).toBe("live-20260924-203917")
+		// Operator override: `--capture-id live-specimen-01`.
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "live-specimen-01",
+			}),
+		).toBe("live-specimen-01")
+		// ULID-shaped IDs.
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "01HXYZ1234567890ABCDEFGH",
+			}),
+		).toBe("01HXYZ1234567890ABCDEFGH")
+		// v9 CORRECTION09: surrounding whitespace is REFUSED, not
+		// trimmed. The accepted value MUST match byte-for-byte the
+		// value the Go launcher used for the external observer,
+		// otherwise the analyzer cannot compose two halves whose
+		// namespaces diverge.
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "  live-trimmed  ",
+			}),
+		).toBeUndefined()
+	})
+
+	it("CAPTURE-COMPOSE-13: resolver REFUSES any value containing whitespace (exact byte-for-byte identity or REFUSE)", () => {
+		// v9 CORRECTION09 tightening. The resolver used to `.trim()`
+		// the supplied value and accept the trimmed form. That
+		// allowed a divergence between the Go launcher's argv
+		// `--capture-id "  foo  "` (which writes `capture-  foo  /`)
+		// and the Node resolver's trimmed `"foo"` (which would
+		// land at `capture-foo/`) — exactly the kind of split
+		// that the analyzer cannot compose. The new contract is
+		// exact byte-for-byte identity or REFUSE; the operator
+		// sees the bounded warn and can fix the source.
+		const WHITESPACE_PADDED = [
+			"  live-leading", // leading
+			"live-trailing  ", // trailing
+			"\tlive-tab", // leading tab
+			"live-tab\t", // trailing tab
+			"live\nnewline", // internal LF
+			"live id", // internal space
+			"live\tid", // internal tab
+			" \t\n\r live-multi ", // multi-ws
+		]
+		for (const v of WHITESPACE_PADDED) {
+			expect(
+				resolveOperatorTerminationCaptureIdFromEnv({
+					[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: v,
+				}),
+			).toBeUndefined()
+		}
+		// Sanity: a value with NO whitespace is still accepted.
+		expect(
+			resolveOperatorTerminationCaptureIdFromEnv({
+				[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]: "live-20260924-203917",
+			}),
+		).toBe("live-20260924-203917")
+	})
+
+	it("CAPTURE-COMPOSE-11: install on DISABLED state does NOT consult env (the env resolver is only invoked once the witness arms)", async () => {
+		// Conservation gate for the env-resolver scope: the env
+		// var MUST NOT perturb the disabled -> disabled path.
+		// Setting it and calling install() without arming must
+		// leave state disabled and capture ID undefined.
+		process.env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV] = "should-not-be-consulted"
+		const w = makeFakeWriter()
+		const mod = require("../extension-host-termination-authority") as {
+			setTerminationAuthorityWriter: (w: FakeWriter) => void
+		}
+		mod.setTerminationAuthorityWriter(w as unknown as never)
+		setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
+		// Do NOT call applyExtensionHostTerminationAuthorityPolicy.
+		await installTerminationAuthorityWitness()
+		expect(getTerminationAuthorityState()).toBe("disabled")
+		expect(getTerminationAuthorityCaptureId()).toBeUndefined()
+		// And no meta.json was written.
+		const metaWrite = w._writes.find((wr) => wr.path.endsWith("/meta.json"))
+		expect(metaWrite).toBeUndefined()
+	})
+
+	it("CAPTURE-COMPOSE-12: when env value is UNSAFE, install() falls back to factory and emits a bounded warn (no silent acceptance)", async () => {
+		// The full production path: install() with an unsafe env
+		// value must (a) refuse the env value, (b) fall back to
+		// the factory, (c) emit a bounded warn so the operator
+		// sees the rejected value. We assert all three.
+		process.env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV] = "../../etc/passwd"
+		const FACTORY_ID = "factory-fallback-after-unsafe-env"
+		const warns: string[] = []
+		setTerminationAuthorityCaptureIdFactory(() => FACTORY_ID)
+		setTerminationAuthorityDataRootResolver(() => "/tmp/clinemm-ta")
+		setTerminationAuthorityWarn((m) => warns.push(m))
+		const w = makeFakeWriter()
+		const mod = require("../extension-host-termination-authority") as {
+			setTerminationAuthorityWriter: (w: FakeWriter) => void
+		}
+		mod.setTerminationAuthorityWriter(w as unknown as never)
+		applyExtensionHostTerminationAuthorityPolicy(true, {
+			[CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV]: "1",
+		})
+		await installTerminationAuthorityWitness()
+		expect(getTerminationAuthorityCaptureId()).toBe(FACTORY_ID)
+		expect(warns.some((m) => m.includes(CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV))).toBe(true)
 	})
 })

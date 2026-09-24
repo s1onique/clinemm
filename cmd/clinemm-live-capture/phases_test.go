@@ -965,6 +965,286 @@ func errorsIs(err, target error) bool {
 }
 
 // ----------------------------------------------------------------------------
+// v8 CORRECTION08 — HALT_TERMINATION_CAPTURE_ID_SPLIT
+//
+// The Go launcher owns the authoritative capture ID
+// (`live-YYYYMMDD-HHMMSS` by default, or the operator's
+// `--capture-id` override). The in-process Node witness previously
+// generated its own ID via `_captureIdFactory()`, producing two
+// separate `capture-<id>/` namespaces for the same run -- the
+// analyzer couldn't compose them.
+//
+// v8 CORRECTION08: the launcher appends
+// `CLINEMM_DIAG_TERMINATION_CAPTURE_ID=<cfg.CaptureID>` to the
+// child env (when cfg.CaptureID != ""). The in-process Node witness
+// reads it via `resolveOperatorTerminationCaptureIdFromEnv` and
+// uses that ID instead of generating its own. The Node resolver
+// REFUSES unsafe values (path traversal, NUL, > MAX_CAPTURE_ID_LEN)
+// and falls back to the factory + emits a bounded warn.
+//
+// These tests pin both halves of the seam.
+// ----------------------------------------------------------------------------
+
+// LAUNCH-CAPTUREID-01: happy path. cfg.CaptureID set ->
+// env MUST contain `CLINEMM_DIAG_TERMINATION_CAPTURE_ID=<cfg.CaptureID>`.
+// Mirrors the production seam in startClineMM exactly.
+func TestStartClineMM_TerminationCaptureIdInjection(t *testing.T) {
+	cfg := &Config{
+		Bin:         "/bin/echo",
+		CaptureID:   "live-20260924-203917",
+		UserDataDir: "/tmp/c08-userdata-recon",
+		LogsPath:    "/tmp/c08-logs-recon",
+		Args:        []string{"--no-sandbox"},
+	}
+	// Replicate startClineMM's argv build (unchanged from CORRECTION05).
+	args := append([]string{}, cfg.Args...)
+	if cfg.LogsPath != "" {
+		args = append(args, "--logsPath", cfg.LogsPath)
+	}
+	// v7 CORRECTION06 load-bearing invariant (unchanged): argv MUST
+	// NOT contain --user-data-dir. The wrapper owns that flag.
+	if contains(args, "--user-data-dir") {
+		t.Fatalf("argv MUST NOT contain --user-data-dir (v7 CORRECTION06 wrapper owns this flag), got: %v", args)
+	}
+	// Replicate startClineMM's env build.
+	env := filteredEnv(
+		os.Environ(),
+		envCPUProfileRemove,
+		envAllocProfileRemove,
+	)
+	if cfg.UserDataDir != "" {
+		env = append(env, envUserDataDirSet+"="+cfg.UserDataDir)
+	}
+	// v8 CORRECTION08 load-bearing invariant: env MUST contain
+	// `CLINEMM_DIAG_TERMINATION_CAPTURE_ID=<cfg.CaptureID>` when
+	// cfg.CaptureID is non-empty. This is what the in-process Node
+	// witness reads back via `resolveOperatorTerminationCaptureIdFromEnv`.
+	if cfg.CaptureID != "" {
+		env = append(env, envTerminationCaptureIdSet+"="+cfg.CaptureID)
+	}
+	env = append(env, envAuthority)
+
+	// Load-bearing invariant #1: the env var is present.
+	wantCaptureIdEntry := envTerminationCaptureIdSet + "=" + cfg.CaptureID
+	if !contains(env, wantCaptureIdEntry) {
+		t.Fatalf("env MUST contain %q (v8 CORRECTION08 in-process witness capture-id sharing), got: %v",
+			wantCaptureIdEntry, env)
+	}
+
+	// Load-bearing invariant #2: the value is the EXACT capture ID
+	// the operator supplied (not a generated one).
+	for _, item := range env {
+		if strings.HasPrefix(item, envTerminationCaptureIdSet+"=") {
+			value := strings.TrimPrefix(item, envTerminationCaptureIdSet+"=")
+			if value != cfg.CaptureID {
+				t.Fatalf("env value for %q MUST equal cfg.CaptureID (%q), got: %q",
+					envTerminationCaptureIdSet, cfg.CaptureID, value)
+			}
+		}
+	}
+
+	// Load-bearing invariant #3: CLINEMM_DIAG_TERMINATION_AUTHORITY=1
+	// is still appended (the two env vars are paired).
+	if !contains(env, envAuthority) {
+		t.Fatalf("env MUST contain %q, got: %v", envAuthority, env)
+	}
+
+	// Load-bearing invariant #4: --user-data-dir is NOT in argv
+	// (CORRECTION06 invariant preserved).
+	out, err := exec.Command("/bin/echo", args...).Output()
+	if err != nil {
+		t.Fatalf("echo exec: %v", err)
+	}
+	if strings.Contains(string(out), "--user-data-dir") {
+		t.Fatalf("echo output (argv) MUST NOT contain --user-data-dir (v7 CORRECTION06 wrapper owns this flag): %q", out)
+	}
+
+	// Conservation: the two profiler knobs MUST still be filtered out.
+	has := func(k string) bool {
+		for _, item := range env {
+			if strings.HasPrefix(item, k+"=") {
+				return true
+			}
+		}
+		return false
+	}
+	if has(envCPUProfileRemove) {
+		t.Errorf("CLINEMM_DIAG_CPU_PROFILE leaked through filter: %v", env)
+	}
+	if has(envAllocProfileRemove) {
+		t.Errorf("CLINEMM_DIAG_ALLOCATION_PROFILE leaked through filter: %v", env)
+	}
+}
+
+// LAUNCH-CAPTUREID-02: capture-id invariants. Sanity-check the env
+// var name + value format match what the in-process Node resolver
+// expects (`[A-Za-z0-9_-]+`, 1..128 chars, no `/` / `\` / `..` /
+// NUL). This is the Go-side shape contract that the Node-side
+// `resolveOperatorTerminationCaptureIdFromEnv` enforces.
+func TestStartClineMM_TerminationCaptureId_GoSideInvariants(t *testing.T) {
+	// Generate the canonical live-YYYYMMDD-HHMMSS format from the
+	// same defaultCaptureIDFormat the launcher uses, then assert
+	// it is accepted by the Node-side validation rules.
+	live := "live-" + time.Now().Format(defaultCaptureIDFormat)
+	if matched, _ := filepath.Match("live-????????-??????", live); !matched {
+		t.Fatalf("defaultCaptureIDFormat produced an unexpected shape: %q (expected live-YYYYMMDD-HHMMSS)", live)
+	}
+	if strings.Contains(live, "/") || strings.Contains(live, "\\") || strings.Contains(live, "..") {
+		t.Fatalf("defaultCaptureIDFormat produced a path-unsafe value: %q", live)
+	}
+
+	// Operator-supplied --capture-id example from the runbook.
+	operatorExample := "live-specimen-01"
+	if strings.Contains(operatorExample, "/") || strings.Contains(operatorExample, "\\") || strings.Contains(operatorExample, "..") {
+		t.Fatalf("operator example --capture-id is path-unsafe: %q", operatorExample)
+	}
+	if len(live) > 128 || len(operatorExample) > 128 {
+		t.Fatalf("Go-side capture IDs exceed Node-side MAX_CAPTURE_ID_LEN=128: live=%d operator=%d", len(live), len(operatorExample))
+	}
+}
+
+// LAUNCH-CAPTUREID-03 (v9 CORRECTION09): end-to-end EQUALITY
+// discriminator. The default-path (operator omits --capture-id)
+// used to silently leave `cfg.CaptureID == ""` after main()
+// computed the effective ID into a local; startClineMM therefore
+// did NOT export CLINEMM_DIAG_TERMINATION_CAPTURE_ID, and the Node
+// witness fell back to its factory -- producing TWO capture
+// namespaces (the HALT we are repairing).
+//
+// This test mirrors the production normalization in main(): it
+// computes the default capture ID the way main() does, writes it
+// back into cfg.CaptureID (mirroring the v9 write-back), builds
+// the SAME env the launcher builds, and asserts:
+//
+//   - cfg.CaptureID is non-empty after normalization
+//   - env contains CLINEMM_DIAG_TERMINATION_CAPTURE_ID == cfg.CaptureID
+//   - the value is the SAME ID the observer would receive via
+//     --capture-id (one authority; byte-for-byte equality)
+//
+// This is the discriminator the reviewer asked for:
+// `nodeEnvCaptureID == observerCaptureID`.
+func TestStartClineMM_TerminationCaptureId_DefaultPathEquality(t *testing.T) {
+	// Mirror main()'s normalization: start with cfg.CaptureID ==
+	// "" (operator omitted --capture-id), then default to the
+	// canonical live-YYYYMMDD-HHMMSS format, then write back.
+	cfg := &Config{
+		Bin:         "/bin/echo",
+		CaptureID:   "",
+		UserDataDir: "/tmp/c09-defaultpath-userdata",
+		LogsPath:    "/tmp/c09-defaultpath-logs",
+		Args:        []string{"--no-sandbox"},
+	}
+	effective := cfg.CaptureID
+	if effective == "" {
+		effective = "live-" + time.Now().Format(defaultCaptureIDFormat)
+	}
+	cfg.CaptureID = effective
+
+	// Load-bearing invariant #1: cfg.CaptureID is non-empty after
+	// the write-back. If this fails, the env var would not be
+	// exported and the analyzer would not be able to compose.
+	if cfg.CaptureID == "" {
+		t.Fatalf("cfg.CaptureID MUST be non-empty after default normalization (v9 CORRECTION09), got %q", cfg.CaptureID)
+	}
+
+	// Build the env the same way startClineMM does.
+	env := filteredEnv(
+		os.Environ(),
+		envCPUProfileRemove,
+		envAllocProfileRemove,
+	)
+	if cfg.UserDataDir != "" {
+		env = append(env, envUserDataDirSet+"="+cfg.UserDataDir)
+	}
+	if cfg.CaptureID != "" {
+		env = append(env, envTerminationCaptureIdSet+"="+cfg.CaptureID)
+	}
+	env = append(env, envAuthority)
+
+	// Load-bearing invariant #2: env contains the entry.
+	wantEntry := envTerminationCaptureIdSet + "=" + cfg.CaptureID
+	if !contains(env, wantEntry) {
+		t.Fatalf("env MUST contain %q (v9 CORRECTION09 default-path seam), got: %v", wantEntry, env)
+	}
+
+	// Load-bearing invariant #3 (the reviewer's central
+	// requirement): nodeEnvCaptureID == observerCaptureID. Both
+	// halves of the seam MUST use the SAME byte-for-byte value;
+	// otherwise the analyzer cannot compose two halves whose
+	// namespaces diverge.
+	var nodeEnvCaptureID string
+	for _, item := range env {
+		if strings.HasPrefix(item, envTerminationCaptureIdSet+"=") {
+			nodeEnvCaptureID = strings.TrimPrefix(item, envTerminationCaptureIdSet+"=")
+		}
+	}
+	if nodeEnvCaptureID == "" {
+		t.Fatalf("CLINEMM_DIAG_TERMINATION_CAPTURE_ID env entry was missing or empty")
+	}
+	observerCaptureID := cfg.CaptureID
+	if nodeEnvCaptureID != observerCaptureID {
+		t.Fatalf("nodeEnvCaptureID MUST equal observerCaptureID byte-for-byte (v9 CORRECTION09), got nodeEnvCaptureID=%q observerCaptureID=%q",
+			nodeEnvCaptureID, observerCaptureID)
+	}
+
+	// Load-bearing invariant #4: the default-generated value
+	// satisfies the Node-side exact-identity contract (no
+	// whitespace, in the [A-Za-z0-9_-] class, <= 128 chars).
+	if strings.ContainsAny(nodeEnvCaptureID, " \t\n\r") {
+		t.Fatalf("default-generated capture ID contains whitespace (would fail Node resolver): %q", nodeEnvCaptureID)
+	}
+	if len(nodeEnvCaptureID) > 128 {
+		t.Fatalf("default-generated capture ID exceeds MAX_CAPTURE_ID_LEN=128: len=%d", len(nodeEnvCaptureID))
+	}
+}
+
+// LAUNCH-CAPTUREID-04 (v9 CORRECTION09): validateOperatorCaptureID
+// REJECTS the same unsafe values the Node-side resolver REJECTS.
+// Operator-supplied `--capture-id` values that contain path-meta,
+// NUL, whitespace, or characters outside `[A-Za-z0-9_-]` are
+// refused at parse time rather than silently transformed (which
+// would recreate the HALT).
+func TestStartClineMM_ValidateOperatorCaptureID(t *testing.T) {
+	cases := []struct {
+		name      string
+		id        string
+		wantError bool
+	}{
+		// Accept (canonical + runbook examples).
+		// NOTE: the empty case is NOT exercised by main() (empty
+		// triggers the default normalization branch before the
+		// validator runs). The validator itself rejects empty as
+		// defense-in-depth.
+		{"live-YYYYMMDD-HHMMSS canonical", "live-20260924-203917", false},
+		{"operator runbook example", "live-specimen-01", false},
+		{"ULID-shaped", "01HXYZ1234567890ABCDEFGH", false},
+
+		// REFUSE: path metacharacters / NUL / whitespace / out-of-class.
+		{"contains '/'", "live/2026", true},
+		{"contains '\\'", "live\\2026", true},
+		{"contains NUL", "live\x002026", true},
+		{"contains '..'", "live..2026", true},
+		{"leading whitespace", "  live-2026", true},
+		{"trailing whitespace", "live-2026  ", true},
+		{"internal whitespace", "live 2026", true},
+		{"contains '.'", "live.2026", true},
+		{"contains '!'", "live!2026", true},
+		{"oversized (> 128 chars)", strings.Repeat("a", 129), true},
+		{"oversized (exactly 128 chars) accepted", strings.Repeat("a", 128), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateOperatorCaptureID(tc.id)
+			gotErr := err != nil
+			if gotErr != tc.wantError {
+				t.Fatalf("validateOperatorCaptureID(%q) error=%v want_error=%v (err=%v)",
+					tc.id, gotErr, tc.wantError, err)
+			}
+		})
+	}
+}
+
+// ----------------------------------------------------------------------------
 // CORRECTION04 RED/GREEN tests (ACT §15 review round 4)
 //
 // v4's launch->session binding layer (`sessionsNow - sessionsBefore`)

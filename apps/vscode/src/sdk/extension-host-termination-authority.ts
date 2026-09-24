@@ -85,6 +85,50 @@ import { Logger } from "@/shared/services/Logger"
 export const CLINEMM_DIAG_TERMINATION_AUTHORITY_ENV = "CLINEMM_DIAG_TERMINATION_AUTHORITY"
 
 /**
+ * Env var name for an operator-supplied capture ID. The Go launcher
+ * (`cmd/clinemm-live-capture`) already owns the authoritative capture
+ * ID (`live-YYYYMMDD-HHMMSS`) and uses it for the parent lifecycle
+ * observer's `parent-lifecycle.json` directory. The in-process Node
+ * witness independently generated its own capture ID via
+ * `_captureIdFactory()`, producing two separate `capture-<id>/`
+ * namespaces for the same run -- making the analyzer's compose step
+ * fail because it expects ONE composed directory.
+ *
+ * CORRECTION08 (P0 — `HALT_TERMINATION_CAPTURE_ID_SPLIT`):
+ * When set, the in-process witness uses this ID instead of generating
+ * its own. The analyzer then reads a single directory containing
+ * `meta.json` (in-process), `host-self-events.jsonl` (in-process),
+ * `parent-lifecycle.json` (external observer), and the verdict.
+ *
+ * CONTRACT (frozen):
+ *   - unset / empty      -> existing `_captureIdFactory()` behavior
+ *                           preserved (CAPTURE-COMPOSE-02 conservation)
+ *   - valid bounded ID   -> in-process witness uses that exact ID
+ *   - unsafe value
+ *     (`/`, `\`, `..`,
+ *      null byte,
+ *      or > MAX_CAPTURE_ID_LEN)
+ *                        -> fail-closed: falls back to
+ *                           `_captureIdFactory()` and emits a bounded
+ *                           warn. The env var MUST NOT become a path
+ *                           traversal seam. (CAPTURE-COMPOSE-03..06)
+ *
+ * The Go launcher (`cmd/clinemm-live-capture/startClineMM`) sets
+ * `CLINEMM_DIAG_TERMINATION_CAPTURE_ID=<captureID>` alongside
+ * `CLINEMM_DIAG_TERMINATION_AUTHORITY=1` and
+ * `CLINEMM_USER_DATA_DIR=<dir>` so the in-process witness and the
+ * external lifecycle observer share the same `capture-<id>/` namespace.
+ */
+export const CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV = "CLINEMM_DIAG_TERMINATION_CAPTURE_ID"
+
+/**
+ * Hard upper bound on the operator-supplied capture ID. The Go
+ * launcher's `live-YYYYMMDD-HHMMSS` shape is 18 chars; this bound is
+ * conservative for future format changes (e.g. adding a suffix).
+ */
+export const TERMINATION_AUTHORITY_MAX_CAPTURE_ID_LEN = 128
+
+/**
  * Subdirectory under the Cline data root where artifacts land.
  * MUST NOT collide with `diagnostics/cpu-profile/` (CPU profiler) or
  * `diagnostics/allocation-profile/` (allocation profiler). The
@@ -324,6 +368,90 @@ export function resolveTerminationAuthorityKnobFromEnv(isDogfood: boolean, env: 
 	return normalized === "1" || normalized === "true" || normalized === "yes"
 }
 
+/**
+ * Resolve the operator-supplied capture ID from the env (if any).
+ *
+ * CONTRACT (frozen per CORRECTION08 + CORRECTION09):
+ *   - env var unset / empty         -> returns undefined (caller falls
+ *                                      back to `_captureIdFactory()`)
+ *   - env var set to a valid ID
+ *     (matches `^[A-Za-z0-9_-]+$`,
+ *      1..MAX_CAPTURE_ID_LEN chars,
+ *      no `/`, no `\`, no `..`, no NUL,
+ *      no leading/trailing/internal whitespace) -> returns that
+ *                                      EXACT ID byte-for-byte
+ *   - env var set to anything else   -> returns undefined; caller
+ *                                      falls back to the factory.
+ *                                      The function NEVER throws;
+ *                                      it NEVER logs; it is a pure
+ *                                      resolver. The caller surfaces
+ *                                      a bounded `_warn` so the
+ *                                      operator can see the unsafe
+ *                                      value without the env var
+ *                                      becoming a path traversal
+ *                                      seam.
+ *
+ * CORRECTION09 tightening: the resolver used to `.trim()` the
+ * supplied value and accept the trimmed form. That allowed a
+ * divergence between the Go launcher's argv `--capture-id "  foo  "`
+ * (which writes `capture-  foo  /`) and the Node resolver's
+ * trimmed `"foo"` (which would land at `capture-foo/`) — exactly
+ * the kind of split that the analyzer cannot compose. The new
+ * contract is exact byte-for-byte identity or REFUSE; the operator
+ * sees the bounded warn and can fix the source.
+ *
+ * Validation rationale: the capture ID flows into
+ * `<dataRoot>/diagnostics/termination-authority/capture-<id>/<files>`.
+ * Rejecting `/`, `\`, `..`, NUL, and whitespace closes the obvious
+ * traversal vectors and forces producer identity. The character
+ * class `[A-Za-z0-9_-]` covers the Go launcher's
+ * `live-YYYYMMDD-HHMMSS` format and any reasonable future shape
+ * (e.g. `live-YYYYMMDD-HHMMSS-<rand>`, ULIDs, etc.) without
+ * permitting path metacharacters or shell metacharacters.
+ *
+ * This function NEVER throws. It NEVER logs. It NEVER touches the
+ * filesystem. It is a pure resolver.
+ */
+export function resolveOperatorTerminationCaptureIdFromEnv(env: NodeJS.ProcessEnv): string | undefined {
+	const raw = env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]
+	if (typeof raw !== "string") {
+		return undefined
+	}
+	// CORRECTION09: empty / whitespace-only / oversized / path-meta /
+	// NUL are all REFUSE-and-fall-back. We do NOT silently trim:
+	// the captured value MUST match byte-for-byte the value the Go
+	// launcher used to build `capture-<id>/` on the external
+	// observer side, otherwise the analyzer cannot compose the
+	// two halves.
+	if (raw.length === 0) {
+		return undefined
+	}
+	if (raw.length > TERMINATION_AUTHORITY_MAX_CAPTURE_ID_LEN) {
+		return undefined
+	}
+	if (raw.includes("\0")) {
+		return undefined
+	}
+	// Any whitespace (leading, trailing, or internal) is REFUSED.
+	// The character-class regex below already excludes all
+	// whitespace, but we keep an explicit early reject for
+	// readability and to short-circuit before regex.
+	if (/\s/.test(raw)) {
+		return undefined
+	}
+	if (raw.includes("/") || raw.includes("\\")) {
+		return undefined
+	}
+	if (raw.includes("..")) {
+		return undefined
+	}
+	// Conservative shape: letters, digits, underscore, hyphen.
+	if (!/^[A-Za-z0-9_-]+$/.test(raw)) {
+		return undefined
+	}
+	return raw
+}
+
 const BOUNDED_REASON_LEN = 280
 const _BOUNDED_STACK_HEAD_LEN = 280
 
@@ -517,7 +645,19 @@ export async function installTerminationAuthorityWitness(): Promise<void> {
 		_warn("install skipped: writer or dataRootResolver seam not bound (runtime wiring missing)")
 		return
 	}
-	const captureId = _captureIdFactory()
+	const rawEnvCaptureId = process.env[CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV]
+	const operatorCaptureId = resolveOperatorTerminationCaptureIdFromEnv(process.env)
+	const captureId = operatorCaptureId ?? _captureIdFactory()
+	// CORRECTION08: when the operator set the env var but the
+	// resolver REJECTED it (path-traversal / unbounded), fall back
+	// to the factory AND surface a bounded warn so the operator
+	// sees the rejection. Silent acceptance would let a typo
+	// ("live-20260924/203917") silently produce a non-composed
+	// capture directory — recreating exactly the HALT we are
+	// fixing.
+	if (rawEnvCaptureId !== undefined && operatorCaptureId === undefined) {
+		_warn(`operator capture id rejected (env=${CLINEMM_DIAG_TERMINATION_CAPTURE_ID_ENV}); falling back to factory`)
+	}
 	_captureId = captureId
 	const captureDir = `${dataRootResolver()}/${TERMINATION_AUTHORITY_ARTIFACT_SUBDIR}/capture-${captureId}`
 	const eventsPath = `${captureDir}/host-self-events.jsonl`

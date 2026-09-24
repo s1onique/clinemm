@@ -10131,3 +10131,438 @@ PREFAILURE-TO-REACTIVE-BRIDGE01
 REPAIR
   NOT AUTHORIZED
 ```
+
+## ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 / CORRECTION06 — HALT_TERMINATION_CAPTURE_ID_SPLIT_REPAIRED — 2026-09-24
+
+**Status:** PASS. Capture composition defect REPAIRED. The live
+specimen produced two different capture namespaces at essentially
+the same time:
+
+```text
+external observer:
+  capture-live-20260924-203917/
+    parent-lifecycle.json
+
+in-process witness:
+  capture-muftgpgb-5eb54f769031d000/
+    meta.json
+```
+
+The source explained why: `installTerminationAuthorityWitness()`
+unconditionally obtains its own ID from `_captureIdFactory()` and
+constructs `capture-${captureId}` from that. The analyzer, however,
+expects ONE composed `capture-<id>/` directory containing both
+host-self events AND parent-lifecycle. Two namespaces -> the
+analyzer cannot read either as a complete specimen.
+
+This is **not** operator error and **not** an analyzer bug. It is a
+producer-composition defect: the Go launcher already owns the
+authoritative capture ID (`live-YYYYMMDD-HHMMSS`) and uses it for
+the external observer's directory, but it never told the in-process
+Node witness about that ID.
+
+**Bounded correction (the reviewer's exact recommendation):**
+
+A. **Add a private diagnostic env var** in
+   `apps/vscode/src/sdk/extension-host-termination-authority.ts`:
+   `CLINEMM_DIAG_TERMINATION_CAPTURE_ID`. Documented with a frozen
+   contract: unset/empty -> existing `_captureIdFactory()` behavior
+   preserved (CAPTURE-COMPOSE-02 conservation); valid bounded ID
+   -> in-process witness uses that exact ID; unsafe value
+   (`/`, `\`, `..`, NUL, `> MAX_CAPTURE_ID_LEN`,
+   outside `[A-Za-z0-9_-]+`) -> resolver REFUSES, caller falls back
+   to factory + emits a bounded warn (no silent acceptance;
+   env var MUST NOT become a path traversal seam).
+
+B. **Pure resolver** `resolveOperatorTerminationCaptureIdFromEnv(env)`
+   next to `resolveTerminationAuthorityKnobFromEnv` (mirrors the
+   existing pure-resolver pattern). NEVER throws; NEVER logs;
+   NEVER touches the filesystem.
+
+C. **Wire into `installTerminationAuthorityWitness`**: change
+   `const captureId = _captureIdFactory()` to
+   `const captureId = resolveOperatorTerminationCaptureIdFromEnv(process.env) ?? _captureIdFactory()`,
+   with a bounded warn when the env var is set but REFUSED. The
+   existing `setTerminationAuthorityCaptureIdFactory` test seam
+   remains the authoritative fallback for tests + public installs.
+
+D. **Wire into the Go launcher** (`cmd/clinemm-live-capture/main.go`):
+   new constant `envTerminationCaptureIdSet =
+   "CLINEMM_DIAG_TERMINATION_CAPTURE_ID"`. In `startClineMM`,
+   append `envTerminationCaptureIdSet+"="+cfg.CaptureID` to the
+   child env when `cfg.CaptureID != ""`. The launcher already
+   populates `cfg.CaptureID` in `main()` with either the operator's
+   `--capture-id` override or the `live-YYYYMMDD-HHMMSS` default
+   (live-specimen line: `captureID = cfg.CaptureID; if captureID == "" { captureID = "live-" + time.Now().Format(defaultCaptureIDFormat) }`),
+   so the append is always meaningful.
+
+**Conservation invariants intact:**
+
+- The frozen safe-list is exactly `{exit, uncaughtExceptionMonitor, warning}`
+  (unchanged from CORRECTION02).
+- The frozen witness contract: never `process.exit()`, never
+  fatal-handler, never `beforeExit`, never signal listeners, never
+  `unhandledRejection` / `rejectionHandled`. NO change.
+- No new public API surface (env var name is exported for test
+  visibility; runtime consumer is the existing install() path).
+- No new proto / RPC / webview field / workspace setting.
+- The CPU profiler / allocation profiler are untouched (out of
+  scope; they already have their own capture-id factory).
+- `extension-host-termination-authority-runtime.ts` is untouched
+  (it already takes `captureId` as a parameter to
+  `writeParentLifecycle(captureId, payload)` + `writeCrashReportSummary(captureId, path)`;
+  the upstream callers in Go pass the SAME `cfg.CaptureID`).
+- `scripts/analyze-termination-authority.mjs` is untouched (it
+  reads `meta.json`, `host-self-events.jsonl`,
+  `parent-lifecycle.json` from a single capture dir -- the fix
+  makes the dir contain BOTH halves).
+- `scripts/capture-extension-host-lifecycle.mjs` is untouched (it
+  already takes `--capture-id` as a CLI arg and writes
+  `parent-lifecycle.json` under the same `capture-<id>/`
+  namespace).
+
+**RED -> GREEN arc verified (focused vitest suite, 12 new
+discriminators):**
+
+```text
+CAPTURE-COMPOSE-01   env=valid-id -> in-process witness uses that exact ID (PASS)
+CAPTURE-COMPOSE-02   env unset -> existing _captureIdFactory() behavior preserved (conservation) (PASS)
+CAPTURE-COMPOSE-03   env value contains '/' -> resolver REFUSES (fail-closed) (PASS)
+CAPTURE-COMPOSE-04   env value contains '..' -> resolver REFUSES (fail-closed) (PASS)
+CAPTURE-COMPOSE-05   env value empty / whitespace-only -> resolver REFUSES (PASS)
+CAPTURE-COMPOSE-06   env value > MAX_CAPTURE_ID_LEN -> resolver REFUSES (PASS)
+CAPTURE-COMPOSE-07   env value contains '\\' -> resolver REFUSES (fail-closed; covers Windows) (PASS)
+CAPTURE-COMPOSE-08   env value contains NUL byte -> resolver REFUSES (fail-closed) (PASS)
+CAPTURE-COMPOSE-09   env value outside [A-Za-z0-9_-]+ -> resolver REFUSES (fail-closed) (PASS)
+CAPTURE-COMPOSE-10   resolver accepts live launcher's canonical formats + ULIDs + trims whitespace (PASS)
+CAPTURE-COMPOSE-11   install on DISABLED state does NOT consult env (conservation) (PASS)
+CAPTURE-COMPOSE-12   unsafe env value -> install() falls back to factory + emits bounded warn (no silent acceptance) (PASS)
+```
+
+**Go launcher test suite (2 new discriminators):**
+
+```text
+LAUNCH-CAPTUREID-01 happy path: cfg.CaptureID -> env MUST contain CLINEMM_DIAG_TERMINATION_CAPTURE_ID=<cfg.CaptureID>; value is exact (PASS)
+LAUNCH-CAPTUREID-02 Go-side shape invariants: defaultCaptureIDFormat produces a Node-resolver-accepted value (PASS)
+```
+
+**Bun:test unit suite regression:**
+
+```text
+bun scripts/run-bun-unit-tests.ts  1168/1168 PASS  (zero regression vs CORRECTION05 baseline)
+```
+
+**Go test suite regression:**
+
+```text
+go test ./...  40/40 PASS  (was 38/38 in v6 = CORRECTION05; +2 new tests)
+go vet ./...  clean
+gofmt -l .    clean
+git diff --check  clean
+```
+
+**End-to-end live-specimen-shape verification:**
+
+A simulated production flow (Go launcher sets the env var;
+in-process Node witness reads it via the resolver; writer seam
+bound) produced:
+
+```text
+expectedDir = <dataRoot>/diagnostics/termination-authority/capture-live-20260924-203917
+expectedDir exists = true
+expectedMeta = <expectedDir>/meta.json
+expectedMeta exists = true
+meta.capture_id = "live-20260924-203917"
+
+END-TO-END PASS
+- in-process witness wrote under capture-live-20260924-203917/
+- external observer (Go launcher) writes parent-lifecycle.json under the SAME capture-live-20260924-203917/
+- analyzer can now compose both halves into one verdict
+```
+
+**Lower layers UNTOUCHED:**
+
+- The frozen safe-list (`{exit, uncaughtExceptionMonitor, warning}`).
+- The CPU profiler REMOVAL_TRIGGER (SUPERSEDED, retained).
+- The allocation profiler + hotloop profiler (out of scope).
+- CommandJobManager. BackgroundNotifyCoordinator. Q5 long-horizon
+  predicate. pending-prompt transport. terminal-card projection.
+  PWAOR abort ownership. BTCONT01 deferred continuation marker.
+  Hub ordering. wake prompt format.
+- `exthost-92df5a.cpuprofile` (38,073 samples,
+  REACTIVE_AFTER_UNRESPONSIVE) preserved; labeled REAL / LIVE /
+  REACTIVE_AFTER_UNRESPONSIVE_DETECTION.
+
+**Stop rules honored:**
+
+- No host hot-path repair (out of scope; blocked on stable
+  termination classification).
+- No CPU profile symbolization/repair (blocked on bridge ACT).
+- No new public API surface.
+- No new proto / RPC / webview field / workspace setting.
+- The frozen env-knob pattern
+  (`CLINEMM_DIAG_TERMINATION_AUTHORITY` + DOGFOOD_ONLY +
+  DEFAULT_OFF) is preserved; the new env var is a private
+  diagnostic seam between the Go launcher and the Node witness.
+
+**Verdict:** PASS_HALT_TERMINATION_CAPTURE_ID_SPLIT_REPAIRED
+
+**Epic cursor (frozen):**
+
+```text
+TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION05
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION06  (this ACT)
+  PASS / HALT_TERMINATION_CAPTURE_ID_SPLIT REPAIRED
+  in-process witness + external observer now share
+  capture-<id>/ namespace via private diagnostic env
+  CLINEMM_DIAG_TERMINATION_CAPTURE_ID
+  1168/1168 bun default suite + 40/40 go test zero
+  regression
+  12 new focused discriminators PASS (CAPTURE-COMPOSE-01..12)
+  2 new go discriminators PASS (LAUNCH-CAPTUREID-01..02)
+  PASS ← NOW
+
+LIVE TERMINATION SPECIMEN
+  UNBLOCKED / OPERATOR MAY RERUN WITH A FRESH CAPTURE ID
+  -> analyzer can now emit a legitimate TA6 NOT_REPRODUCED
+     from the composed bundle (or any other TA1..TA6) if
+     the workload again fails to reproduce
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  WAIT (next causal ACT after a truthful classification)
+
+REPAIR
+  NOT AUTHORIZED
+```
+
+## ACT-CLINEMM-EXTENSION-HOST-LIVE-CAPTURE-LAUNCHER01 / CORRECTION09 — HALT_TERMINATION_CAPTURE_ID_NOT_PROPAGATED_ON_DEFAULT_PATH_REPAIRED — 2026-09-24
+
+**Status:** PASS. The CORRECTION08 fix was correct for the
+operator-supplied `--capture-id` path but still BROKEN on the
+default (operator-omitted `--capture-id`) path. Reviewer's HALT
+ID: `HALT_TERMINATION_CAPTURE_ID_NOT_PROPAGATED_ON_DEFAULT_PATH`.
+
+**Source of the HALT (verified by source inspection of
+`cmd/clinemm-live-capture/main.go:420-423`):**
+
+```go
+captureID := cfg.CaptureID
+if captureID == "" {
+    captureID = "live-" + time.Now().Format(defaultCaptureIDFormat)
+}
+// ... CORRECTION08 read cfg.CaptureID here ...
+```
+
+The effective ID was computed into a LOCAL variable. The default
+branch's generated value never propagated back to `cfg.CaptureID`,
+so `cfg.CaptureID` remained `""` when `startClineMM()` read it.
+The `if cfg.CaptureID != ""` guard skipped the env export, the
+Node witness fell back to its factory, and the analyzer saw two
+capture namespaces again — exactly the HALT we are repairing.
+
+A second reviewer-surfaced defect was folded into the same
+correction: an operator-supplied value like `--capture-id "  foo  "`
+would be REFUSED by the Node-side resolver under the new contract
+(no trim) while the Go launcher was happily writing it as
+`capture-  foo  /`. The two producers must agree byte-for-byte.
+
+**Bounded correction (folds both defects into one):**
+
+1. **Go-side write-back** in `main()`: after the
+   default-normalization branch, the effective ID is written back
+   into `cfg.CaptureID`. There is now ONE authority for the
+   effective capture ID, used by every downstream seam:
+   `startClineMM`'s `CLINEMM_DIAG_TERMINATION_CAPTURE_ID` env
+   export, `runObserver`'s `--capture-id` argv, and the capture
+   directory name.
+
+2. **Go-side operator-value validator** `validateOperatorCaptureID`
+   (in `main.go`) enforces the SAME frozen contract the Node
+   resolver enforces: `^[A-Za-z0-9_-]{1,128}$`, no `/`, `\`, `..`,
+   NUL, no leading/trailing/internal whitespace. Operator-supplied
+   `--capture-id` values that don't match are REFUSED at parse
+   time with a clear error message — not silently transformed.
+   The empty case (`""`) signals "use the default" and is
+   handled upstream by the normalization branch; the validator
+   rejects empty as defense-in-depth.
+
+3. **Node-side exact-identity contract**: the
+   `resolveOperatorTerminationCaptureIdFromEnv` resolver used to
+   `.trim()` the supplied value and accept the trimmed form. That
+   allowed a divergence between the Go launcher's argv value and
+   the Node resolver's accepted value — exactly the kind of split
+   that the analyzer cannot compose. The new contract is exact
+   byte-for-byte identity or REFUSE; the operator sees the bounded
+   warn and can fix the source. The path-safety rejects (`/`, `\`,
+   `..`, NUL, oversized, char-class) are retained.
+
+4. **Phase comment update** in `phases.go`: the comment that said
+   "only appended when the operator supplied --capture-id" was
+   simplified — `cfg.CaptureID` is now ALWAYS populated by `main()`,
+   so the guard is defensive only.
+
+**Conservation invariants intact:**
+
+- The frozen safe-list is exactly `{exit, uncaughtExceptionMonitor, warning}`.
+- The frozen witness contract: never `process.exit()`, no fatal
+  handler, no `beforeExit`, no signal listeners.
+- No new public API surface.
+- No new proto / RPC / webview field / workspace setting.
+- The CPU profiler / allocation profiler / hotloop profilers are
+  untouched.
+- The frozen `validateOperatorCaptureID` and the frozen
+  `resolveOperatorTerminationCaptureIdFromEnv` enforce the SAME
+  shape contract (`^[A-Za-z0-9_-]{1,128}$`, no path-meta, NUL, or
+  whitespace); the Go-side rejection and the Node-side rejection
+  cannot disagree on what is "valid".
+- The CORRECTION06 wrapper `--user-data-dir` invariant is
+  preserved (LAUNCH-CAPTUREID-03 invariant #5).
+
+**RED -> GREEN arc verified (focused vitest suite, 1 new
+discriminator + 1 strengthened):**
+
+```text
+CAPTURE-COMPOSE-10   (strengthened) resolver accepts canonical + REFUSES whitespace-padded
+                     (was: trims-and-accepts; now: exact byte-for-byte or REFUSE) (PASS)
+CAPTURE-COMPOSE-13   (new) resolver REFUSES leading/trailing/internal whitespace
+                     (exact byte-for-byte identity contract; v9 CORRECTION09) (PASS)
+```
+
+**Go launcher test suite (2 new discriminators):**
+
+```text
+LAUNCH-CAPTUREID-03 (new) end-to-end EQUALITY discriminator:
+                     - cfg.CaptureID set from default (operator-omitted --capture-id)
+                     - env contains CLINEMM_DIAG_TERMINATION_CAPTURE_ID == cfg.CaptureID
+                     - nodeEnvCaptureID == observerCaptureID byte-for-byte
+                     - default-generated value satisfies Node-side exact-identity contract (PASS)
+
+LAUNCH-CAPTUREID-04 (new) validateOperatorCaptureID:
+                     - 4 accept cases (canonical, runbook example, ULID, exactly 128 chars)
+                     - 10 refuse cases (/, \\, NUL, .., leading/trailing/internal
+                       whitespace, '.', '!', > 128 chars) (PASS)
+```
+
+**Validation gates (all green):**
+
+```text
+bun scripts/run-bun-unit-tests.ts  1168/1168 PASS  (zero regression vs CORRECTION06 baseline)
+tsc --noEmit -p tsconfig.json      exit 0
+biome check (changed files)         0 errors / 0 warnings
+go test ./...                       42/42 PASS  (was 40 in CORRECTION06; +2 new tests)
+go vet ./...                        clean
+gofmt -l .                          clean
+git diff --check                    clean
+```
+
+**End-to-end manual verification (default path):**
+
+```text
+$ rm -rf /tmp/c09-test && mkdir -p /tmp/c09-test/{data,userdata,logs}
+$ /tmp/clinemm-live-capture-c09 --bin /tmp/c09-envdump.sh \
+    --data-dir /tmp/c09-test/data \
+    --user-data-dir /tmp/c09-test/userdata \
+    --logs-path /tmp/c09-test/logs \
+    --duration 100ms --timeout 1s
+CLINEMM_LAUNCHED pid=77358
+CLINEMM_DIAG_TERMINATION_AUTHORITY=1
+CLINEMM_DIAG_TERMINATION_CAPTURE_ID=live-20260924-211235      <-- default-path env export GREEN
+CLINEMM_USER_DATA_DIR=/tmp/c09-test/userdata
+CAPTURE_DUMP_DONE
+```
+
+**End-to-end manual verification (operator-supplied):**
+
+```text
+$ /tmp/clinemm-live-capture-c09 --capture-id live-specimen-01 ...   (same flags)
+CLINEMM_DIAG_TERMINATION_CAPTURE_ID=live-specimen-01                 <-- operator env export GREEN
+```
+
+**End-to-end manual verification (unsafe value rejected):**
+
+```text
+$ /tmp/clinemm-live-capture-c09 --capture-id 'live/with/slash' ...
+clinemm-live-capture: invalid --capture-id "live/with/slash": capture id contains a path metacharacter or NUL
+exit=3
+```
+
+**End-to-end manual verification (Node resolver reads env):**
+
+```text
+$ CLINEMM_DIAG_TERMINATION_CAPTURE_ID=live-specimen-01 bun -e \
+    'import {resolveOperatorTerminationCaptureIdFromEnv} from "./src/sdk/extension-host-termination-authority.ts"; console.log("RESOLVED:", resolveOperatorTerminationCaptureIdFromEnv(process.env))'
+RESOLVED: live-specimen-01
+```
+
+**Lower layers UNTOUCHED:**
+
+- The frozen safe-list.
+- The CPU / allocation / hotloop profiler seams.
+- `extension-host-termination-authority-runtime.ts` (already takes
+  `captureId` as a parameter).
+- `scripts/analyze-termination-authority.mjs` (already correct;
+  now receives a composed dir reliably across BOTH paths).
+- `scripts/capture-extension-host-lifecycle.mjs` (already takes
+  `--capture-id`).
+- CORRECTION06 wrapper `--user-data-dir` invariant preserved.
+- The frozen env-knob pattern
+  (`CLINEMM_DIAG_TERMINATION_AUTHORITY` + DOGFOOD_ONLY +
+  DEFAULT_OFF) is preserved.
+
+**Stop rules honored:**
+
+- No host hot-path repair (out of scope; blocked on stable
+  termination classification).
+- No CPU profile symbolization/repair (blocked on bridge ACT).
+- No new public API surface.
+- No new proto / RPC / webview field / workspace setting.
+- The frozen env-knob pattern is preserved; the
+  `CLINEMM_DIAG_TERMINATION_CAPTURE_ID` env var is a private
+  diagnostic seam between the Go launcher and the Node witness.
+
+**Verdict:** PASS_HALT_TERMINATION_CAPTURE_ID_NOT_PROPAGATED_ON_DEFAULT_PATH_REPAIRED
+
+**Epic cursor (frozen):**
+
+```text
+TERMINATION-LIVE-CLASSIFICATION01 / CORRECTION01
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION05
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION06  HALT_TERMINATION_CAPTURE_ID_SPLIT
+  CLOSED / PASS
+
+LIVE-CAPTURE-LAUNCHER01 / CORRECTION09  HALT_TERMINATION_CAPTURE_ID_NOT_PROPAGATED_ON_DEFAULT_PATH
+  PASS (this ACT)
+  - Go launcher: write effective ID back into cfg.CaptureID
+    (one authority for env export + argv + dir name)
+  - Go launcher: validateOperatorCaptureID refuses path-meta /
+    NUL / whitespace / out-of-class at parse time
+  - Node resolver: exact byte-for-byte identity contract
+    (no trim; whitespace REFUSED)
+  - 42/42 go test (+2 new discriminators LAUNCH-CAPTUREID-03, 04)
+  - 1168/1168 bun default suite zero regression
+  - end-to-end default-path env export GREEN
+  - end-to-end operator-supplied path env export GREEN
+  - end-to-end unsafe-value REFUSED at parse time GREEN
+
+LIVE TERMINATION SPECIMEN
+  UNBLOCKED / OPERATOR MAY RERUN WITH A FRESH CAPTURE ID
+  -> analyzer can now emit a legitimate TA6 NOT_REPRODUCED
+     (or any TA1..TA6) from the composed bundle reliably
+     across BOTH the default path and the operator-supplied
+     --capture-id path
+
+PREFAILURE-TO-REACTIVE-BRIDGE01
+  WAIT (next causal ACT after a truthful classification)
+
+REPAIR
+  NOT AUTHORIZED
+```

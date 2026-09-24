@@ -116,6 +116,21 @@ const (
 	envCPUProfileRemove   = "CLINEMM_DIAG_CPU_PROFILE"
 	envAllocProfileRemove = "CLINEMM_DIAG_ALLOCATION_PROFILE"
 
+	// v8 CORRECTION08 — HALT_TERMINATION_CAPTURE_ID_SPLIT: the
+	// Go launcher owns the authoritative capture ID; the
+	// in-process Node witness previously generated its OWN
+	// capture ID via `_captureIdFactory()`, producing two
+	// separate `capture-<id>/` namespaces for the same run.
+	// The analyzer couldn't compose them. Fix: the launcher
+	// appends `CLINEMM_DIAG_TERMINATION_CAPTURE_ID=<capture-id>`
+	// to the child env when `cfg.CaptureID != ""`, and the
+	// in-process Node witness reads it back via
+	// `resolveOperatorTerminationCaptureIdFromEnv`. The Node
+	// resolver REFUSES unsafe values (path traversal, NUL,
+	// > MAX_CAPTURE_ID_LEN) and falls back to the factory;
+	// the in-process witness then emits a bounded warn.
+	envTerminationCaptureIdSet = "CLINEMM_DIAG_TERMINATION_CAPTURE_ID"
+
 	// envUserDataDirSet is the wrapper contract: the operator's
 	// `codium-clinemm` wrapper reads $CLINEMM_USER_DATA_DIR (or
 	// falls back to its built-in $DEFAULT_DATA_DIR) and emits
@@ -405,7 +420,29 @@ func main() {
 	captureID := cfg.CaptureID
 	if captureID == "" {
 		captureID = "live-" + time.Now().Format(defaultCaptureIDFormat)
+	} else {
+		// v9 CORRECTION09 (folded P0 prevention): an operator-supplied
+		// --capture-id MUST match the SAME frozen contract the Node
+		// resolver enforces (`^[A-Za-z0-9_-]{1,128}$`, no `/`, `\`,
+		// `..`, NUL, no leading/trailing/internal whitespace). If
+		// the operator passes anything else, REFUSE rather than
+		// silently transforming -- the analyzer will not be able
+		// to compose two halves whose namespaces diverge.
+		if err := validateOperatorCaptureID(captureID); err != nil {
+			fmt.Fprintf(os.Stderr, "clinemm-live-capture: invalid --capture-id %q: %v\n", captureID, err)
+			os.Exit(exitObserverMissing)
+		}
 	}
+	// v9 CORRECTION09 (folded P0 prevention): the effective capture
+	// ID MUST be the single authority used by every downstream seam
+	// (`startClineMM`'s CLINEMM_DIAG_TERMINATION_CAPTURE_ID env
+	// export, `runObserver`'s `--capture-id` argv, and the capture
+	// directory name). Without this write-back, the default
+	// (operator-omitted `--capture-id`) path would generate the ID
+	// into a local and leave `cfg.CaptureID == ""`, causing the
+	// Node witness to fall back to its factory and produce two
+	// capture namespaces — exactly the HALT we are repairing.
+	cfg.CaptureID = captureID
 
 	// Phase A1. snapshot of existing extension-host PIDs.
 	before, err := extensionHostPIDs()
@@ -497,4 +534,44 @@ func main() {
 	code := runObserver(cfg, captureID, pid)
 	fmt.Printf("OBSERVER_EXIT=%d\n", code)
 	os.Exit(code)
+}
+
+// validateOperatorCaptureID enforces the SAME frozen contract the
+// Node-side `resolveOperatorTerminationCaptureIdFromEnv` enforces:
+//
+//	^[A-Za-z0-9_-]{1,128}$
+//
+// with no path metacharacters (`/`, `\`, `..`), no NUL, and no
+// leading/trailing/internal whitespace.
+//
+// The capture ID flows into `capture-<id>/` paths and the env var
+// `CLINEMM_DIAG_TERMINATION_CAPTURE_ID` exported to the in-process
+// Node witness. Any divergence between the Go launcher's argv value
+// and the Node resolver's accepted value would produce TWO capture
+// namespaces (the HALT this whole correction is fixing), so we
+// validate ONCE here and refuse invalid operator values rather
+// than silently transforming them.
+func validateOperatorCaptureID(s string) error {
+	if s == "" {
+		return errors.New("capture id is empty")
+	}
+	if len(s) > 128 {
+		return errors.New("capture id exceeds 128 chars")
+	}
+	if strings.ContainsAny(s, "/\\") || strings.ContainsRune(s, '\x00') {
+		return errors.New("capture id contains a path metacharacter or NUL")
+	}
+	if strings.Contains(s, "..") {
+		return errors.New("capture id contains '..'")
+	}
+	if strings.TrimSpace(s) != s || strings.ContainsAny(s, " \t\n\r\f\v") {
+		return errors.New("capture id contains whitespace")
+	}
+	// Conservative shape: letters, digits, underscore, hyphen.
+	for _, r := range s {
+		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return errors.New("capture id contains a character outside [A-Za-z0-9_-]")
+		}
+	}
+	return nil
 }

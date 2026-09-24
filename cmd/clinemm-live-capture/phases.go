@@ -151,10 +151,11 @@ func psAllPIDsFromCmd(cmd *exec.Cmd) (map[int]string, error) {
 // startClineMM execs the editor binary with the env invariants from
 // ACT §4 Phase B:
 //
-//	CLINEMM_DIAG_TERMINATION_AUTHORITY=1   SET
-//	CLINEMM_USER_DATA_DIR=<dir>           SET  (v7 CORRECTION06)
-//	CLINEMM_DIAG_CPU_PROFILE              UNSET
-//	CLINEMM_DIAG_ALLOCATION_PROFILE       UNSET
+//	CLINEMM_DIAG_TERMINATION_AUTHORITY=1                SET
+//	CLINEMM_DIAG_TERMINATION_CAPTURE_ID=<capture-id>    SET  (v8 CORRECTION08, only when cfg.CaptureID != "")
+//	CLINEMM_USER_DATA_DIR=<dir>                        SET  (v7 CORRECTION06)
+//	CLINEMM_DIAG_CPU_PROFILE                           UNSET
+//	CLINEMM_DIAG_ALLOCATION_PROFILE                    UNSET
 //
 // stdin/stdout/stderr are inherited so the editor behaves like a
 // normal foreground application.
@@ -231,6 +232,19 @@ func startClineMM(cfg *Config) (*exec.Cmd, error) {
 	// parent shell is not affected.
 	if cfg.UserDataDir != "" {
 		env = append(env, envUserDataDirSet+"="+cfg.UserDataDir)
+	}
+	// v8 CORRECTION08 + v9 CORRECTION09: share the launcher's
+	// capture ID with the in-process Node witness so both halves
+	// of the termination-authority capture land under the SAME
+	// `capture-<id>/` directory the analyzer composes. `cfg.CaptureID`
+	// is the SINGLE authority for the effective capture ID; main()
+	// always populates it (operator-supplied --capture-id, or the
+	// default `live-YYYYMMDD-HHMMSS`). The `!= ""` guard is
+	// defensive -- if it ever fires, the Node witness falls back
+	// to its factory and the analyzer would not be able to
+	// compose the two halves.
+	if cfg.CaptureID != "" {
+		env = append(env, envTerminationCaptureIdSet+"="+cfg.CaptureID)
 	}
 	env = append(env, envAuthority)
 	cmd.Env = env
