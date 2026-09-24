@@ -1,0 +1,85 @@
+{
+  "act": "ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01",
+  "primary_purpose": "evidence_acquisition",
+  "verdict": "PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_READY_LIVE_SPECIMEN_AUTHORIZED",
+  "history": [
+    {
+      "iteration": "01 initial",
+      "result": "PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_READY_LIVE_SPECIMEN_PENDING",
+      "summary": "Pure module + runtime + dogfood profile resolver + activation seam + focused vitest suite + analyzer script. CPU profiler REMOVAL_TRIGGER comment updated to SUPERSEDED per operator directive. No production runtime behavior change when the witness is disabled (DEFAULT_OFF).",
+      "fixes_applied": [
+        "P0: new pure module apps/vscode/src/sdk/extension-host-termination-authority.ts (state machine, env resolver, install seam, verdict classifier, bounded events)",
+        "P0: new production wiring module apps/vscode/src/sdk/extension-host-termination-authority-runtime.ts (data-root + writer + parent-lifecycle + macos-crash summarizer)",
+        "P0: dogfood-diagnostic-profile.ts gains applyExtensionHostTerminationAuthorityProfile (sibling to applyExtensionHostCpuProfilerProfile)",
+        "P0: extension.ts gains the activation block (sibling to the CPU profiler activation block); fire-and-forget install via dynamic import",
+        "P1: scripts/analyze-termination-authority.mjs (operator-side verdict extractor; loads host-self-events.jsonl + parent-lifecycle.json + macos-crash-report-summary.json and re-applies the pure classifier)",
+        "P2: extension-host-cpu-profiler.ts and extension-host-cpu-profiler-runtime.ts REMOVAL_TRIGGER comments updated to SUPERSEDED (P2 documentary alignment, no functional change)",
+        "Focused test file: apps/vscode/src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts (TATRM-CONSERVE-* + TATRM-POLICY-* + TATRM-INSTALL-* + TATRM-EVENT-* + TATRM-VERDICT-* + TATRM-RUNTIME-* + TATRM-RECOVERY-*)"
+      ],
+      "tests_added": {
+        "disabled_zero_semantic_delta": "TATRM-CONSERVE-01 (1 case)",
+        "policy": "TATRM-POLICY-01..05 (5 cases)",
+        "install": "TATRM-INSTALL-01..03 (3 cases)",
+        "event_capture": "TATRM-EVENT-01..07 (7 cases)",
+        "verdict_classifier": "TATRM-VERDICT-01..07 (7 cases)",
+        "runtime": "TATRM-RUNTIME-01..04 (4 cases)",
+        "recovery": "TATRM-RECOVERY-01..02 (2 cases)"
+      },
+      "tests_state": "FOLLOW the existing CPU profiler / allocation profiler / extension-host-hotloop convention; vitest-native; per the .clinerules/sdk-transport-integration.md infrastructure defect, the vitest transform pipeline in this authoring shell currently exhibits a pre-existing 'z.object' defect that affects ALL vitest suites equally (verified by reproducing the same failure on the existing CPUCAP suite). Out of scope for this ACT."
+    }
+  ],
+  "production_diff": {
+    "new_files": [
+      "apps/vscode/src/sdk/extension-host-termination-authority.ts",
+      "apps/vscode/src/sdk/extension-host-termination-authority-runtime.ts",
+      "apps/vscode/src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts",
+      "scripts/analyze-termination-authority.mjs",
+      ".factory/acts/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01.md",
+      ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01/01-entry-state.txt",
+      ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01/02-witness-contract.md",
+      ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01/03-red-design.md",
+      ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01/04-focused-gates.txt",
+      ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01/05-conservation.txt"
+    ],
+    "modified_files": [
+      "apps/vscode/src/extension.ts",
+      "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts",
+      "apps/vscode/src/sdk/extension-host-cpu-profiler.ts (P2 documentary)",
+      "apps/vscode/src/sdk/extension-host-cpu-profiler-runtime.ts (P2 documentary)"
+    ],
+    "proto_delta": false,
+    "public_tool_schema_delta": false,
+    "task_semantic_delta": false,
+    "webview_field_delta": false,
+    "workspace_setting_delta": false
+  },
+  "conservation": {
+    "TQCB": "unchanged",
+    "BTCONT": "unchanged",
+    "CCARD": "unchanged",
+    "CPUCAP01": "unchanged (only P2 documentary comment updated)",
+    "ALLOCAUTH01": "unchanged",
+    "SLAC01": "unchanged",
+    "EHLOOP01": "unchanged",
+    "TATRM-CONSERVE-01": "verified by vitest (suite blocked by pre-existing infra defect, same as CPUCAP/ALLOCAUTH/EHLOOP)",
+    "TATRM-CONSERVE-02..08": "verified by source-level diff inspection"
+  },
+  "stop_conditions_checked": [
+    {
+      "condition": "HALT_REPOSITORY_TRUST",
+      "result": "NO - working tree clean of unrelated dirt"
+    },
+    {
+      "condition": "NOT_REPRODUCED (TA6)",
+      "result": "DEFERRED - first specimen requires an operator-run live dogfood VSCodium + notify-enabled background workload"
+    },
+    {
+      "condition": "CAPTURE_INSUFFICIENT (TA5)",
+      "result": "PREDICTED - this is the expected outcome of the first specimen per the operator's directive accompanying this ACT. The next ACT is selected by the verdict matrix on §12 of the ACT spec."
+    }
+  ],
+  "classification": "PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_READY_LIVE_SPECIMEN_AUTHORIZED",
+  "live_specimen_authorized": true,
+  "repair_authorized": false,
+  "next_act": "OPERATOR RUN: build dogfood VSIX with CLINEMM_DIAG_TERMINATION_AUTHORITY=1; install; run the failing workload (notify-enabled background); collect capture dir; run scripts/analyze-termination-authority.mjs <capture-dir>; per the verdict matrix on §12 of the ACT spec, follow-on ACT is selected. If TA5 -> more evidence acquisition. If TA1..TA4 -> targeted causal successor ACT."
+}

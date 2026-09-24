@@ -1,0 +1,75 @@
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 — Entry State
+
+ENTRY_HEAD: ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01 (e09c07287)
+ENTRY_SUBJECT_HEAD: ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01
+
+FROZEN CURRENT CAUSAL STATE (per ACT §2):
+
+    HOST_CRASH                              = REAL / LIVE / REPRODUCED
+    CPU_CAPTURE01                           = CP5
+      no dominant ClineMM JS hot leaf
+      pre-failure segments overwhelmingly idle
+      GC not dominant
+      profiler perturbation not excessive
+    ALLOCATION_PROFILER_NECESSARY_FOR_CRASH = FALSE
+    WVSL_REPAIR                             = LIVE_EFFECTIVE / PARTIAL
+    ROOT_CAUSE                              = UNRESOLVED
+    REPAIR_AUTHORIZED                       = FALSE
+
+NEW LIVE FACT FOR THIS ACT (operator directive):
+
+    The old CPU profiler REMOVAL_TRIGGER is overridden. The CPU
+    profiler is RETAINED as a diagnostic substrate (default-off,
+    dogfood-only, bounded, removable only via a bounded-removal
+    ACT). Re-arming the profiler on demand is cheaper than re-
+    deriving its production seams.
+
+DESIRED NEW EVIDENCE TYPE FOR THIS ACT:
+
+    TERMINATION-AUTHORITY CLASSIFICATION (TA1..TA6)
+    Whether the JS path observed a normal exit event, the operator
+    observed a parent-side termination, a macOS crash report exists,
+    or the operator observed a resource-exhaustion report.
+    NOT a JS CPU attribution. NOT another profiler capture.
+
+EPISTEMIC GAP THIS ACT FILLS:
+
+    LIVE capture showed the host was overwhelmingly idle before
+    death. VS Code's reactive CPU profiler attached AFTER the
+    stall -- too late. Our pre-armed CPU profiler confirmed CP5:
+    no dominant JS hot leaf.
+
+    So this ACT pivots from JS CPU hotness to TERMINATION
+    AUTHORITY:
+
+        LIVE extension-host death
+          -> who/what terminated the process?
+          -> explicit JS/process exit?
+          -> native crash?
+          -> host/watchdog/external kill?
+          -> OOM / resource exhaustion?
+          -> unknown
+
+WHY A NEW DIAGNOSTIC INFRASTRUCTURE (not extending the CPU profiler):
+
+    The CPU profiler captures pre-FAILURE segments. The
+    termination question requires capturing what happened AT AND
+    AFTER failure -- including the parent-side signals the in-
+    process host cannot see.
+
+    A separate, default-off, dogfood-only process witness is the
+    load-bearing seam for this ACT.
+
+DESIGN CONSTRAINTS (frozen per ACT §5/§8):
+
+    DEFAULT_OFF
+    DOGFOOD_ONLY
+    EXPLICIT_ENV_OPT_IN: CLINEMM_DIAG_TERMINATION_AUTHORITY=1
+    NO WORKSPACE SETTING
+    NO WEBVIEW FIELD
+    NO PROTOCOL FIELD
+    NO TASK-SEMANTIC DELTA
+    NEVER installs uncaughtException (fatal handler) -- only
+      uncaughtExceptionMonitor (observational)
+    NEVER calls process.exit()
+    NEVER swallows fatal exceptions

@@ -14,10 +14,18 @@
  * seam (sibling to the ALLOCAUTH01 activation helper), and ONLY when
  * the profiler policy flipped to "armed".
  *
- * REMOVAL_TRIGGER: same as the policy module — once CPU authority is
- * classified CP1..CP5, this module + the profiler module + the trigger
- * call site + the focused tests + the analyzer script MUST be removed
- * TOGETHER.
+ * REMOVAL_TRIGGER (SUPERSEDED per ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01
+ * operator directive, 2026-09-24): The original REMOVAL_TRIGGER said
+ * the CPU profiler would be removed once CP1..CP5 was classified.
+ * The operator has now overridden that policy: the CPU profiler is
+ * RETAINED as a diagnostic substrate even after CP5 classification,
+ * because re-arming it on demand is cheaper than re-deriving its
+ * production seams. The runtime module MAY stay in the tree as a
+ * labeled diagnostic substrate once CPU authority is classified
+ * CP1..CP4, OR CAPTURE_INSUFFICIENT, OR
+ * HALT_CPU_PROFILER_PERTURBATION_TOO_HIGH. Removal now requires an
+ * explicit bounded-removal ACT. The other seams (inspector session,
+ * fs/promises, data-root resolver, identity binding) remain bound.
  */
 
 import { mkdir, rename, writeFile } from "node:fs/promises"

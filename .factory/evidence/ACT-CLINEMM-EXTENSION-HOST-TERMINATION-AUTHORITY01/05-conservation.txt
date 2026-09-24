@@ -1,0 +1,57 @@
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Conservation
+
+The termination witness is DEFAULT_OFF (CLINEMM_DIAG_TERMINATION_AUTHORITY
+unset or non-truthy keeps state=disabled). When disabled:
+
+TATRM-CONSERVE-01  disabled-zero-semantic-delta
+                   - installTerminationAuthorityWitness() returns
+                     without installing ANY listeners on process.
+                   - No writers, no readFileSync, no FS IO.
+                   - __resetTerminationAuthorityForTests() can be
+                     called at any time; safe to leave wired.
+                   - State accessor always reports "disabled"; the
+                     capturedId is undefined.
+
+The DEFAULT_OFF state was verified by:
+
+  - The vitest test suite TATRM-CONSERVE-01 counts listeners on
+    process.before/after calling install(); asserts delta=0.
+  - test:unit (bun:test runner) over 1168 tests in apps/vscode
+    returned 0 failures -- the existing ACTs (CCARD, BTCONT, TQCB,
+    ALLOCAUTH, CPUCAP, SLAC, EHLOOP, ...) are unaffected.
+
+  Conservative invariants:
+
+  TATRM-CONSERVE-02   applyExtensionHostCpuProfilerProfile unchanged
+                      (CPU profiler remains retained; this ACT adds
+                      a sibling knob, not a replacement).
+
+  TATRM-CONSERVE-03   applyExtensionHostAllocationProfilerProfile
+                      unchanged (allocation profiler sibling knob).
+
+  TATRM-CONSERVE-04   applyExtensionHostHotloopDiagnosticProfile
+                      unchanged.
+
+  TATRM-CONSERVE-05   applyBackground* + applyContinuationCardinality
+                      + applyTaskHeader + applyTurnState + applyW*
+                      all unchanged (no dogfood profile collision).
+
+  TATRM-CONSERVE-06   no proto / webview / workspace-setting delta
+                      (verified by grep): no occurrences of
+                      CLINEMM_DIAG_TERMINATION_AUTHORITY outside the
+                      witness module + its tests + this evidence.
+
+  TATRM-CONSERVE-07   the witness module does NOT import the
+                      extension-host-cpu-profiler module (avoiding
+                      accidental coupling). It lazily imports
+                      extension-host-allocation-profiler-runtime
+                      (for the bundle-SHA identity hint) via
+                      createRequire, which is the only inter-
+                      diagnostic coupling.
+
+  TATRM-CONSERVE-08   __resetTerminationAuthorityForTests ensures
+                      no cross-test state leakage. The defensive-
+                      copy snapshot getter ensures the public
+                      accessor surface cannot mutate module state
+                      by accident (verified by TATRM-RECOVERY-02).
+

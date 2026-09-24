@@ -14,6 +14,7 @@ import {
 	applyExtensionHostAllocationProfilerProfile,
 	applyExtensionHostCpuProfilerProfile,
 	applyExtensionHostHotloopDiagnosticProfile,
+	applyExtensionHostTerminationAuthorityProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
@@ -25,6 +26,8 @@ import { installExtensionHostAllocationProfilerRuntime } from "@/sdk/extension-h
 import { getCpuProfilerState } from "@/sdk/extension-host-cpu-profiler"
 import { installExtensionHostCpuProfilerRuntime } from "@/sdk/extension-host-cpu-profiler-runtime"
 import { dumpExtensionSideExtensionHostHotloopDiagnostic } from "@/sdk/extension-host-hotloop-diagnostic-runtime"
+import { getTerminationAuthorityState } from "@/sdk/extension-host-termination-authority"
+import { installExtensionHostTerminationAuthorityRuntime } from "@/sdk/extension-host-termination-authority-runtime"
 import {
 	dumpExtensionSideHostOwnershipDiagnostic,
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
@@ -248,6 +251,36 @@ export async function activate(context: vscode.ExtensionContext) {
 	applyExtensionHostCpuProfilerProfile(isDogfoodRuntime(process.env), process.env)
 	if (getCpuProfilerState() === "armed") {
 		installExtensionHostCpuProfilerRuntime()
+	}
+
+	// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01: arm the
+	// Extension Host termination witness seam at the SAME EARLIEST
+	// initialization seam, BEFORE SdkController construction. The
+	// helper transitions the witness to "armed" if and only if
+	// dogfood is true AND the operator has set
+	// CLINEMM_DIAG_TERMINATION_AUTHORITY=<truthy>. Public installs
+	// never arm the witness regardless of the env knob
+	// (fail-closed). The termination witness is INDEPENDENT of the
+	// CPU + allocation profilers -- all three can be armed at once,
+	// or none, or just one. Running this BEFORE SdkController
+	// construction guarantees the witness installs passive process
+	// listeners BEFORE the first run_commands invocation reaches
+	// the trigger seam at vscode-run-commands-tool.ts:765. Per ACT
+	// §5: the witness installs ONLY observational listeners
+	// (process.on beforeExit/exit/uncaughtExceptionMonitor/...);
+	// it does NOT alter command / continuation / completion
+	// semantics; it does NOT call process.exit().
+	applyExtensionHostTerminationAuthorityProfile(isDogfoodRuntime(process.env), process.env)
+	if (getTerminationAuthorityState() === "armed") {
+		installExtensionHostTerminationAuthorityRuntime()
+		void import("@/sdk/extension-host-termination-authority").then((mod) => {
+			// Fire-and-forget install; never throws; never awaits.
+			// The activation helper is sync-bound; install() is async
+			// only because it does mkdir + writeFile. We deliberately
+			// do NOT await here -- the activation helper returns
+			// immediately so the activation path stays unobstructed.
+			void mod.installTerminationAuthorityWitness()
+		})
 	}
 
 	// ACT-CLINEMM-APPROVAL-SPECIMEN-CAPTURE-TOOL01-CORRECTION01

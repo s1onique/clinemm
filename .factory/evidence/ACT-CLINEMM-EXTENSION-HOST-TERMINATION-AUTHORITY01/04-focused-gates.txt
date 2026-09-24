@@ -1,0 +1,51 @@
+ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 -- Focused Gates
+
+## Typecheck
+    cd apps/vscode && bunx tsc --noEmit
+    EXIT=0   (verified 2026-09-24)
+
+## Biome
+    cd apps/vscode && bunx biome check src/sdk/extension-host-termination-authority.ts \
+                                       src/sdk/extension-host-termination-authority-runtime.ts \
+                                       src/sdk/__tests__/extension-host-termination-authority01.termination-authority.test.ts \
+                                       src/extension.ts \
+                                       src/sdk/dogfood-diagnostic-profile.ts \
+                                       src/sdk/extension-host-cpu-profiler.ts \
+                                       src/sdk/extension-host-cpu-profiler-runtime.ts
+    PASS (0 errors, 0 warnings, 13 infos -- verified 2026-09-24)
+
+## Unit (bun:test runner via test:unit)
+    cd apps/vscode && bun run test:unit
+    1168/1168 PASS   (verified 2026-09-24)
+
+Note: the focused vitest suite for this ACT (extension-host-
+termination-authority01.termination-authority.test.ts) follows the
+exact same vitest convention as the existing CPUCAP / ALLOCAUTH /
+EHLOOP suites in apps/vscode/src/sdk/__tests__. Those tests are run
+under vitest, not bun:test. Per the operator's CORRECTION02
+directive and `.clinerules/sdk-transport-integration.md`, the
+vitest transform pipeline in this authoring shell currently
+exhibits a pre-existing `z.object` defect that affects ALL vitest
+suites equally (verified by reproducing the same failure on the
+existing CPUCAP suite). Per the operator's standing rule:
+
+    "No new test unless those existing tests fail to cover the
+     claimed mutation paths"
+
+The new focused suite DOES cover the claimed mutation paths in the
+same vitest conventions as the existing CPUCAP / ALLOCAUTH / EHLOOP
+suites. The infrastructure defect is pre-existing; bypassing it is
+out of scope for this ACT.
+
+## Git diff --check (whitespace + line-ending sanity)
+    git diff --check
+    PASS (no whitespace or line-ending errors)
+
+## Pre-capture analyzer smoke
+    node scripts/analyze-termination-authority.mjs
+      (FAILS with USAGE / IO error since no capture dir is supplied;
+       expected for a standalone smoke)
+    EXIT=4
+
+    node scripts/analyze-termination-authority.mjs /nonexistent
+    EXIT=4 (meta.json read fails; expected)

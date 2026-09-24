@@ -140,6 +140,7 @@ import {
 	setExtensionHostHotloopDiagnosticEnabled,
 } from "./extension-host-hotloop-diagnostic"
 import { applyExtensionHostQueueLogPolicy } from "./extension-host-queue-log-policy"
+import { applyExtensionHostTerminationAuthorityPolicy } from "./extension-host-termination-authority"
 import {
 	isTaskHeaderSelectorInputCaptureEnabled as _isTaskHeaderSelectorInputCaptureEnabled,
 	setTaskHeaderSelectorInputCaptureEnabled,
@@ -364,7 +365,7 @@ export function resolveEffectiveTurnStateWriterProvenanceD(
 	workspaceToggle: boolean | undefined,
 ): { readonly d: boolean; readonly source: "env" | "workspace" | "profile" } {
 	// Layer 1: explicit env override.
-	const raw = env["CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE"]
+	const raw = env.CLINEMM_DIAG_TURNSTATE_WRITER_PROVENANCE
 	if (typeof raw === "string" && raw.length > 0) {
 		const normalized = raw.trim().toLowerCase()
 		if (TRUTHY_DISABLE.has(normalized)) {
@@ -998,7 +999,7 @@ export function applyExtensionHostHotloopDiagnosticProfile(
 	// Gate 1 — diagnostic enablement.
 	const diagWas = _isExtensionHostHotloopDiagnosticEnabledForActivation()
 	let diagShould = isDogfood
-	const diagEnvRaw = env["CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC"]
+	const diagEnvRaw = env.CLINEMM_DIAG_HOTLOOP_DIAGNOSTIC
 	if (typeof diagEnvRaw === "string" && diagEnvRaw.length > 0) {
 		const normalized = diagEnvRaw.trim().toLowerCase()
 		if (normalized === "0" || normalized === "off" || normalized === "false") {
@@ -1107,4 +1108,34 @@ export function applyExtensionHostCpuProfilerProfile(
 	env: NodeJS.ProcessEnv = process.env,
 ): { readonly enabled: boolean; readonly flipped: boolean } {
 	return applyExtensionHostCpuProfilerPolicy(isDogfood, env)
+}
+
+// ===========================================================================
+// ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01
+// ---------------------------------------------------------------------------
+// Sibling helper to applyExtensionHostCpuProfilerProfile. The
+// termination witness is INDEPENDENT of the CPU profiler and the
+// allocation profiler (per ACT §5) -- all three share the same
+// dogfood gate + env-knob pattern but use distinct env vars
+// (CLINEMM_DIAG_TERMINATION_AUTHORITY vs CLINEMM_DIAG_CPU_PROFILE
+// vs CLINEMM_DIAG_ALLOCATION_PROFILE) and distinct state machines.
+//
+// CONTRACT (mirrors the allocation + CPU helpers exactly):
+//
+//   isDogfood === true   + env knob truthy -> witness ARMED
+//   isDogfood === true   + env knob unset   -> witness DISABLED
+//   isDogfood === false  (any env)         -> witness DISABLED (fail-closed)
+//
+// RETAIN_AS_DIAGNOSTIC: per the operator's directive accompanying
+// this ACT, this resolver + activation helper + the witness module +
+// the trigger call site + the focused tests + the analyzer script
+// MAY stay in the tree as a labeled diagnostic substrate once
+// termination authority is classified TA1..TA4.
+// ===========================================================================
+
+export function applyExtensionHostTerminationAuthorityProfile(
+	isDogfood: boolean,
+	env: NodeJS.ProcessEnv = process.env,
+): { readonly enabled: boolean; readonly flipped: boolean } {
+	return applyExtensionHostTerminationAuthorityPolicy(isDogfood, env)
 }

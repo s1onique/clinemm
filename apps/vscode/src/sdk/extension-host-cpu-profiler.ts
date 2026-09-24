@@ -45,11 +45,15 @@
  *     behavior. Profiler failure logs a bounded warning and never
  *     throws into the host call path.
  *
- * REMOVAL_TRIGGER (per ACT §41): once CPU authority is classified
- * CP1..CP5, OR capture is declared CAPTURE_INSUFFICIENT, OR profiler
- * perturbation makes evidence unusable, this module + the trigger
- * call site + the activation helper + the env knob + the focused
- * tests + the analyzer script MUST be removed TOGETHER.
+ * REMOVAL_TRIGGER (SUPERSEDED per ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01
+ * operator directive, 2026-09-24): The original REMOVAL_TRIGGER said
+ * the CPU profiler would be removed once CP1..CP5 was classified.
+ * The operator has now overridden that policy: the CPU profiler is
+ * RETAINED as a diagnostic substrate even after CP5 classification.
+ * The module + the runtime + the trigger call site + the activation
+ * helper + the env knob + the focused tests + the analyzer script
+ * MAY stay in the tree as a labeled diagnostic substrate. Removal
+ * now requires an explicit bounded-removal ACT.
  */
 
 // =============================================================================
@@ -753,7 +757,7 @@ async function runCpuCaptureLoop(captureId: string): Promise<void> {
 		// observe the same result (per ACT INFLIGHT-STOP-CORRECTION04
 		// P0 fix).
 		stopInFlight = true
-		inFlightStopPromise = session!.post("Profiler.stop")
+		inFlightStopPromise = session?.post("Profiler.stop")
 		try {
 			const stopResult = await inFlightStopPromise
 			profile = unwrapProfilerStopResult(stopResult)
@@ -779,7 +783,7 @@ async function runCpuCaptureLoop(captureId: string): Promise<void> {
 			}
 			// Try to recover by starting a fresh segment.
 			try {
-				await session!.post("Profiler.start")
+				await session?.post("Profiler.start")
 				// The recovery segment starts NOW. Re-baseline the
 				// wall-clock timestamp and re-arm sampling authority.
 				activeSegmentStartedAt = new Date()
@@ -894,7 +898,7 @@ async function runCpuCaptureLoop(captureId: string): Promise<void> {
 			return false
 		}
 		try {
-			await session!.post("Profiler.start")
+			await session?.post("Profiler.start")
 			// The new segment starts NOW. Re-baseline the wall-clock
 			// timestamp so segment-N+1's started_at is correct (per ACT
 			// SEGMENT-WALLCLOCK-CORRECTION02), and re-arm sampling
@@ -992,7 +996,7 @@ async function runCpuCaptureLoop(captureId: string): Promise<void> {
 			// Mark in-flight synchronously BEFORE the await (per
 			// ACT INFLIGHT-STOP-CORRECTION04 P0 fix).
 			stopInFlight = true
-			inFlightStopPromise = session!.post("Profiler.stop")
+			inFlightStopPromise = session?.post("Profiler.stop")
 			try {
 				const stopResult = await inFlightStopPromise
 				profile = unwrapProfilerStopResult(stopResult)
@@ -1349,8 +1353,8 @@ function buildLatestComplete(args: {
 function countSamplesInProfile(profile: unknown): number {
 	if (typeof profile !== "object" || profile === null) return 0
 	const p = profile as Record<string, unknown>
-	if (Array.isArray(p["samples"])) return p["samples"].length
-	if (typeof p["samples"] === "number") return p["samples"]
+	if (Array.isArray(p.samples)) return p.samples.length
+	if (typeof p.samples === "number") return p.samples
 	return 0
 }
 
