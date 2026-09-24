@@ -1,0 +1,33 @@
+# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
+# Bundled VSIX identity (2026-09-25)
+
+SUBJECT_HEAD       = 2edd62498
+VERSION            = 4.1.16
+VSIX_PATH          = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-2edd62498.vsix
+VSIX_SIZE_BYTES    = 14627848
+VSIX_SHA256        = fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd
+
+# Built via: /opt/homebrew/bin/node ./node_modules/.bin/vsce package
+# (vscode:prepublish ran bun run package which did
+# sync-parser-helper + protos + check-types + build:webview + lint +
+# esbuild --production with CLINEMM_OOM_DISC01_SUBJECT_HEAD=2edd62498.)
+
+# Package contents (verified via vsce --tree):
+#   52 files, 13.95 MB
+
+# Bundle contains (verified by grep on extracted extension.js):
+CLINEMM_OOM_DISC01_ABLATE_DELIVERY        runtime lookup (process.env.CL..._ABLATE_DELIVERY === "1")
+CLINEMM_OOM_DISC01_SUBJECT_HEAD           esbuild --define inlined (let r = globalThis.CL..._SUBJECT_HEAD)
+CLINEMM_OOM_DISC01_ATTEST                 line marker ([CLINEMM_OOM_DISC01_ATTEST] subject=... ablation_active=...)
+
+# Sample extracted segment (from /tmp/extracted-extension.js):
+#
+#   __ablateDeliveryPropagation=process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY==="1";
+#   constructor(e){this.deps=e;let r=globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD;
+#                  try{process.stderr.write(
+#                    `[CLINEMM_OOM_DISC01_ATTEST] subject=${r??"<runtime-unset>"} ablation_active=${this.__ablateDeliveryPropagation}
+#                     env_present=${process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY??"<unset>"} eh_pid=${process.pid}
+#                     ppid=${process.ppid??"<unknown>"} constructed_at=${new Date().toISOString()}\n`);}
+
+# ABLATED and RESTORED specimens use IDENTICAL VSIX BYTES — only the
+# CLINEMM_OOM_DISC01_ABLATE_DELIVERY env var toggles at launch.

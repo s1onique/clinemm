@@ -1,361 +1,787 @@
-diff --git a/.factory/epic-board.md b/.factory/epic-board.md
-index d4575f755..46f8d2ed8 100644
---- a/.factory/epic-board.md
-+++ b/.factory/epic-board.md
-@@ -10566,3 +10566,139 @@ PREFAILURE-TO-REACTIVE-BRIDGE01
- REPAIR
-   NOT AUTHORIZED
+diff --git a/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/03-ablation-diff.txt b/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/03-ablation-diff.txt
+index 727451901..e69de29bb 100644
+--- a/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/03-ablation-diff.txt
++++ b/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/03-ablation-diff.txt
+@@ -1,361 +0,0 @@
+-diff --git a/.factory/epic-board.md b/.factory/epic-board.md
+-index d4575f755..46f8d2ed8 100644
+---- a/.factory/epic-board.md
+-+++ b/.factory/epic-board.md
+-@@ -10566,3 +10566,139 @@ PREFAILURE-TO-REACTIVE-BRIDGE01
+- REPAIR
+-   NOT AUTHORIZED
+- ```
+-+
+-+---
+-+
+-+## ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 — DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR — 2026-09-25
+-+
+-+**Status:** DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR
+-+
+-+**Primary purpose:** causality / necessity.
+-+
+-+**Frozen evidence boundary:**
+-+
+-+```
+-+GOOD_ARTIFACT          = d1ecf48dc
+-+BAD_ARTIFACT           = 99006fbcc
+-+ENTRY_HEAD             = 97a2efcb07632420666d53f6bd296313bfcf5fba
+-+REGRESSION_COMMIT      = 99006fbccaacb150b78e54dad7bdadc2a1390238
+-+REGRESSION_COMMIT_COUNT = 1
+-+```
+-+
+-+The two-dot interval `d1ecf48dc..99006fbcc` contains exactly one
+-+commit: ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 V3
+-+production-wiring fix. The suspect delta is propagation of
+-+`next.delivery` across `PendingPromptsController.drain → deps.send →
+-+LocalRuntimeHost.runTurn`.
+-+
+-+**Ablation:**
+-+
+-+A throwaway diagnostic seam was added to
+-+`sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts`:
+-+
+-+```typescript
+-+private readonly __ablateDeliveryPropagation =
+-+    process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY === "1";
+-+```
+-+
+-+The conditional spread at the `deps.send(...)` payload in
+-+`PendingPromptsController.drain` was modified to drop the
+-+`delivery` field when the env var is set:
+-+
+-+```typescript
+-+...(this.__ablateDeliveryPropagation || next.delivery === undefined
+-+    ? {}
+-+    : { delivery: next.delivery }),
+-+```
+-+
+-+Default state: **off** (production-equivalent behavior). The env var
+-+is single-source-change, single-field scoped, and MUST NOT be enabled
+-+in production builds.
+-+
+-+**Discriminators installed:**
+-+
+-+- **AB-DELIVERY-01** (structural): exercises the REAL
+-+  `PendingPromptsController.drain` seam with `delivery: "queue"`,
+-+  `jobId: "job-1"`. Under ablation asserts that `delivery` is NOT in
+-+  the deps.send payload (via `hasOwnProperty("delivery") === false`)
+-+  but `jobId` IS. RED proof verified by temporarily reverting the
+-+  seam — test fails with `hasOwnProperty = true` (expected: false).
+-+
+-+- **AB-DELIVERY-02** (conservation): with the env var explicitly
+-+  deleted inside the test, asserts that BOTH `delivery` and `jobId`
+-+  are forwarded exactly as production does. Passes in both
+-+  production mode and ablation mode.
+-+
+-+- **Expected RED on CCARD-WIRE-01** (existing production-shape test):
+-+  under ablation, this existing test fails because it pins
+-+  `sendCalls[0]?.delivery === "queue"`. This is the load-bearing
+-+  diagnostic proving the ablation is observing the same field-removal
+-+  CCARD-WIRE-01 was originally protecting.
+-+
+-+**Focused gates:**
+-+
+-+| Gate | Result |
+-+|------|--------|
+-+| pending-prompt-service.test.ts (production mode) | 12/12 PASS |
+-+| pending-prompt-service.test.ts (ablation mode) | 11/12 PASS + 1 expected RED (CCARD-WIRE-01) |
+-+| sdk/core typecheck | 0 new errors in touched files (67 pre-existing errors in unrelated files) |
+-+| apps/vscode typecheck | exit 0, clean |
+-+| git diff --check | clean |
+-+
+-+**Live specimen:**
+-+
+-+NOT performed in this session — this dev environment lacks VSCodium,
+-+the isolated user-data dir, and the ClineMM Nix wrapper required for
+-+the same operator launch path used for the historical BAD=99006fbcc
+-+reproduction. The complete execution contract for the operator is
+-+documented in
+-+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md`.
+-+
+-+**Verdict (this session):** DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR
+-+
+-+**Repair authorized:** **FALSE**
+-+
+-+**Next step:** operator runs the live specimen per
+-+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md`.
+-+
+-+- ABLATED survives + RESTORED reproduces same native OOM →
+-+  **PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM** (separate bounded
+-+  repair ACT authorized).
+-+- ABLATED reproduces same native OOM → **PASS_DELIVERY_PROPAGATION_REFUTED**
+-+  (no repair; successor discriminator = CCARD diagnostic activation
+-+  as a whole).
+-+- Both survive → **NOT_REPRODUCED**.
+-+
+-+**Repository trust:**
+-+
+-+```
+-+$ git status --short
+-+ M sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
+-+ M sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
+-+?? .factory/acts/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01.md
+-+?? .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/
+-+```
+-+
+-+**Pre-existing baseline failures (NOT caused by this ACT):**
+-+
+-+- `LocalRuntimeHost.test.ts` and other `runtime/host/*.test.ts` files
+-+  fail to load in this dev environment with
+-+  `TypeError: undefined is not an object (evaluating 'z.custom')`
+-+  (zod resolution issue at the vitest worker boundary).
+-+- 67 pre-existing `bunx tsc --noEmit` errors in
+-+  `sdk/packages/core/` (extensions/context, extensions/tools,
+-+  command-policy, sandbox tests, etc.).
+-+
+-+These pre-date the ACT and are unrelated to the seam under test.
+-+
+-+**Halt conditions evaluated:**
+-+
+-+- `HALT_REPOSITORY_TRUST` — NOT TRIGGERED (git status --short was
+-+  empty at entry).
+-+- `HALT_REGRESSION_SEAM_NO_LONGER_PRESENT` — NOT TRIGGERED (the
+-+  historical `next.delivery` forwarding is intact at HEAD line ~509).
+-+- `HALT_RED_NOT_REPRODUCED` — NOT TRIGGERED (RED is reproducible
+-+  via CCARD-WIRE-01 expected failure under ablation; production-mode
+-+  baseline passes).
+-+- `CAPTURE_INSUFFICIENT` — NOT TRIGGERED (code-level discriminators
+-+  are complete and load-bearing; live specimen is operator-driven).
+-diff --git a/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts b/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
+-index b1b345d9a..ac19daba3 100644
+---- a/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
+-+++ b/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
+-@@ -1,4 +1,4 @@
+--import { describe, expect, it, vi } from "vitest";
+-+import { afterEach, describe, expect, it, vi } from "vitest";
+- import type { CoreSessionEvent } from "../../types/events";
+- import type { ActiveSession } from "../../types/session";
+- import {
+-@@ -372,4 +372,156 @@ describe("PendingPromptService", () => {
+- 			expect(event.type).not.toBe("agent_run_started");
+- 		}
+- 	});
+-+
+-+	// =====================================================================
+-+	// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01
+-+	// =====================================================================
+-+	//
+-+	// AB-DELIVERY-01 (structural): When the
+-+	// CLINEMM_OOM_DISC01_ABLATE_DELIVERY ablation seam is engaged,
+-+	// the REAL PendingPromptsController.drain boundary MUST NOT
+-+	// forward `next.delivery` into the deps.send(...) payload, but
+-+	// MUST continue to forward `next.jobId`. This is the load-bearing
+-+	// proof that the ablation is exactly the single-field removal
+-+	// the ACT authorizes — no other field may change. The test
+-+	// exercises the REAL controller (not a duplicate of the
+-+	// payload-construction helper) by stubbing send and observing
+-+	// the captured input.
+-+	//
+-+	// AB-DELIVERY-02 (conservation): With the ablation seam OFF
+-+	// (production default), the controller forwards `delivery`
+-+	// exactly as the current production seam does. This guards
+-+	// against an accidental baseline drift in the seam during
+-+	// refactors; if this test ever fails post-hoc, the ACT's
+-+	// ablation result cannot be interpreted as a clean single-field
+-+	// removal.
+-+	describe("AB-DELIVERY-01: ablation seam drops next.delivery but preserves next.jobId", () => {
+-+		const ORIGINAL_ENV = process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+-+		afterEach(() => {
+-+			if (ORIGINAL_ENV === undefined) {
+-+				delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+-+			} else {
+-+				process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY = ORIGINAL_ENV;
+-+			}
+-+		});
+-+
+-+		it("under ablation: deps.send input has NO delivery field BUT has jobId field", async () => {
+-+			process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY = "1";
+-+			const sessionId = "sess-ab-delivery-01";
+-+			const session = {
+-+				sessionId,
+-+				pendingPrompts: [
+-+					{
+-+						id: "pending-1",
+-+						prompt: "the only queued prompt",
+-+						delivery: "queue",
+-+						jobId: "job-1",
+-+					},
+-+				],
+-+				aborting: false,
+-+				drainingPendingPrompts: false,
+-+				status: "completed",
+-+				agent: { canStartRun: () => true },
+-+			} as unknown as ActiveSession;
+-+
+-+			const sendCalls: Array<{
+-+				sessionId: string;
+-+				prompt: string;
+-+				jobId?: string;
+-+				delivery?: "queue" | "steer";
+-+			}> = [];
+-+			const send = vi.fn(async (input: {
+-+				sessionId: string;
+-+				prompt: string;
+-+				jobId?: string;
+-+				delivery?: "queue" | "steer";
+-+			}) => {
+-+				sendCalls.push(input);
+-+			});
+-+			const onEnqueue = vi.fn();
+-+			const onBeforeDrain = vi.fn();
+-+			const onBeforeDispatch = vi.fn();
+-+			const controller = new PendingPromptsController({
+-+				getSession: () => session,
+-+				emit: () => {},
+-+				send,
+-+				onEnqueue,
+-+				onBeforeDrain,
+-+				onBeforeDispatch,
+-+			});
+-+
+-+			await controller.drain(sessionId);
+-+
+-+			// Send must have been called exactly once.
+-+			expect(sendCalls).toHaveLength(1);
+-+			const call = sendCalls[0];
+-+			expect(call).toBeDefined();
+-+			// Structural assertion: delivery is NOT in the payload
+-+			// under ablation. jobId IS.
+-+			expect(Object.prototype.hasOwnProperty.call(call, "delivery")).toBe(
+-+				false,
+-+			);
+-+			expect(call?.jobId).toBe("job-1");
+-+			// The C5/C6 hooks still observe the originating delivery
+-+			// (they read it from the entry, not the deps.send payload)
+-+			// — this is intentional and is part of the
+-+			// production-shape conservation guarantee for the
+-+			// diagnostic hooks.
+-+			expect(onBeforeDrain.mock.calls[0]?.[0]?.delivery).toBe("queue");
+-+			expect(onBeforeDispatch.mock.calls[0]?.[0]?.delivery).toBe("queue");
+-+			expect(onBeforeDrain.mock.calls[0]?.[0]?.jobId).toBe("job-1");
+-+			expect(onBeforeDispatch.mock.calls[0]?.[0]?.jobId).toBe("job-1");
+-+		});
+-+
+-+		it("AB-DELIVERY-02: with ablation OFF, deps.send input forwards delivery exactly as production", async () => {
+-+			delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
+-+			const sessionId = "sess-ab-delivery-02";
+-+			const session = {
+-+				sessionId,
+-+				pendingPrompts: [
+-+					{
+-+						id: "pending-1",
+-+						prompt: "the only queued prompt",
+-+						delivery: "queue",
+-+						jobId: "job-1",
+-+					},
+-+				],
+-+				aborting: false,
+-+				drainingPendingPrompts: false,
+-+				status: "completed",
+-+				agent: { canStartRun: () => true },
+-+			} as unknown as ActiveSession;
+-+
+-+			const sendCalls: Array<{
+-+				sessionId: string;
+-+				prompt: string;
+-+				jobId?: string;
+-+				delivery?: "queue" | "steer";
+-+			}> = [];
+-+			const send = vi.fn(async (input: {
+-+				sessionId: string;
+-+				prompt: string;
+-+				jobId?: string;
+-+				delivery?: "queue" | "steer";
+-+			}) => {
+-+				sendCalls.push(input);
+-+			});
+-+			const controller = new PendingPromptsController({
+-+				getSession: () => session,
+-+				emit: () => {},
+-+				send,
+-+			});
+-+
+-+			await controller.drain(sessionId);
+-+
+-+			// Conservation: the production-equivalent path forwards
+-+			// BOTH delivery and jobId exactly as the current
+-+			// production seam does. If this changes, the ablation
+-+			// cannot be interpreted as a clean single-field removal.
+-+			expect(sendCalls).toHaveLength(1);
+-+			const call = sendCalls[0];
+-+			expect(call?.delivery).toBe("queue");
+-+			expect(call?.jobId).toBe("job-1");
+-+		});
+-+	});
+- });
+-diff --git a/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts b/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
+-index 655d580a7..6c3293cad 100644
+---- a/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
+-+++ b/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
+-@@ -298,6 +298,25 @@ export class PendingPromptService {
+- export class PendingPromptsController {
+- 	private readonly service = new PendingPromptService();
+- 
+-+	/**
+-+	 * ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01:
+-+	 *
+-+	 * Throwaway diagnostic ablation seam. When the
+-+	 * `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` env var is set to `"1"`,
+-+	 * the controller drops the `next.delivery` field from the
+-+	 * `deps.send(...)` payload at the drain boundary. All other
+-+	 * behavior — including jobId propagation, onBeforeDispatch, the
+-+	 * C4/C5/C6/C7 hooks, and the C5/C6 capture surfaces — is
+-+	 * preserved exactly.
+-+	 *
+-+	 * Default: `false` (production-equivalent behavior).
+-+	 * The seam exists solely to host the live-specimen ablation;
+-+	 * it MUST NOT be enabled in production builds and the env var
+-+	 * MUST NOT be documented outside this ACT.
+-+	 */
+-+	private readonly __ablateDeliveryPropagation =
+-+		process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY === "1";
+-+
+- 	constructor(private readonly deps: PendingPromptsControllerDeps) {}
+- 
+- 	list(sessionId: string): SessionPendingPrompt[] {
+-@@ -487,7 +506,18 @@ export class PendingPromptsController {
+- 				// origin-discriminating information — the host's
+- 				// deriveOrigin() would fall through to `explicit_user`
+- 				// for what is actually a `pending_prompt_drain` turn.
+--				...(next.delivery !== undefined ? { delivery: next.delivery } : {}),
+-+				//
+-+				// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01:
+-+				// Throwaway diagnostic ablation seam. When
+-+				// `__ablateDeliveryPropagation` is true, the `delivery`
+-+				// field is dropped from the `deps.send(...)` payload.
+-+				// All other forwarding (jobId, onBeforeDispatch, C5/C6
+-+				// hooks) is preserved. The seam exists only to host
+-+				// the live-specimen ablation; the env var that drives
+-+				// it MUST NOT be enabled in production builds.
+-+				...(this.__ablateDeliveryPropagation || next.delivery === undefined
+-+					? {}
+-+					: { delivery: next.delivery }),
+- 				// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
+- 				// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
+- 				// Forward `next.jobId` into the SendSessionInput so the
+diff --git a/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/04-focused-gates.txt b/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/04-focused-gates.txt
+index 99d4f3319..a1b5e2c36 100644
+--- a/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/04-focused-gates.txt
++++ b/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/04-focused-gates.txt
+@@ -1,136 +1,26 @@
+-# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 — Focused Gates
+-
+-This ACT is a code-level discriminator (not a runtime one). The
+-focused gates validate (a) the ablation seam does what it claims,
+-and (b) the production path is preserved by default.
+-
+-## Gate A — pending-prompt-service.test.ts (production mode)
+-
+-```
+-$ cd sdk/packages/core && bun x vitest run --config vitest.config.ts \
+-    src/runtime/turn-queue/pending-prompt-service.test.ts
+-
+- Test Files  1 passed (1)
+-      Tests  12 passed (12)
+-```
+-
+-All 12 tests pass under the production default (env var unset).
+-- 7 PendingPromptService tests (queue semantics, dedup, consumeSteer,
+-  delete, empty-prompt rejection, enqueue-while-aborting, requeue on
+-  send-failure).
+-- 3 CCARD-WIRE tests (CCARD-WIRE-01 production-shape, CCARD-WIRE-01c
+-  backward-compat, CCARD-WIRE-02 queue-path).
+-- 2 AB-DELIVERY tests (AB-DELIVERY-01 structural, AB-DELIVERY-02
+-  conservation).
+-
+-## Gate B — pending-prompt-service.test.ts (ablation mode)
+-
+-```
+-$ cd sdk/packages/core && \
+-    CLINEMM_OOM_DISC01_ABLATE_DELIVERY=1 \
+-    bun x vitest run --config vitest.config.ts \
+-    src/runtime/turn-queue/pending-prompt-service.test.ts
+-
+-     ✓ deduplicates prompts and prioritizes steer delivery 2ms
+-     ✓ updates prompts and reorders when delivery changes 0ms
+-     ✓ consumes steer prompts before queued turns 0ms
+-     ✓ deletes prompts and reports missing prompts without mutation 0ms
+-     ✓ normalizes edited prompt text and rejects empty prompts 1ms
+-     ✓ keeps prompts enqueued while the session is aborting 2ms
+-     ✓ requeues a drained prompt when send fails 1ms
+-     × CCARD-WIRE-01: ...P0 production wiring regression... 3ms
+-     ✓ CCARD-WIRE-01c: ...backward-compat... 0ms
+-     ✓ CCARD-WIRE-02: ...queue-path... 0ms
+-       ✓ under ablation: deps.send input has NO delivery field BUT has jobId field 0ms
+-       ✓ AB-DELIVERY-02: with ablation OFF, deps.send input forwards delivery exactly as production 0ms
+-
+- Test Files  1 failed (1)
+-      Tests  1 failed | 11 passed (12)
+-```
+-
+-This is the expected RED proof:
+-- AB-DELIVERY-01 passes — confirms the new structural test catches
+-  exactly the intended ablation (no `delivery` in payload, `jobId`
+-  preserved).
+-- AB-DELIVERY-02 passes — confirms the conservation test passes
+-  when the ablation is OFF inside the test (it explicitly unsets the
+-  env var).
+-- CCARD-WIRE-01 fails — the existing production-shape test pins
+-  `sendCalls[0]?.delivery === "queue"`. Under ablation, the
+-  controller drops delivery, so CCARD-WIRE-01 fails. This is the
+-  EXPECTED RED that proves the ablation seam is correctly wired to
+-  the production boundary — NOT a regression introduced by this ACT.
+-
+-The CCARD-WIRE-01 failure is the load-bearing diagnostic: it proves
+-that AB-DELIVERY-01 is observing the same field-removal that
+-CCARD-WIRE-01 was originally protecting.
+-
+-## Gate C — sdk/core typecheck
+-
+-```
+-$ cd sdk/packages/core && bun x tsc --noEmit
+-[67 pre-existing errors in unrelated files]
+-[0 errors in pending-prompt-service.ts or pending-prompt-service.test.ts]
+-exit code: 2
+-```
+-
+-The 67 pre-existing errors are in:
+-- extensions/context/compaction*.test.ts (5 files)
+-- extensions/tools/definitions.test.ts
+-- extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+-- runtime/command-policy/* (parser-helper, parser-provenance,
+-  path-authority, structured-command-risk*)
+-- runtime/host/local-runtime-host.subscribe-runtime-events.*.test.ts
+-  (unused-import warnings)
+-- runtime/sandbox/macos/seatbelt-go-default-cache-authority01.test.ts
+-
+-NONE of these touch the seam under test. The touched files
+-introduce zero new errors. This was confirmed by `git stash`-ing the
+-ACT's edits and re-running the typecheck: the baseline output is
+-identical (67 errors, all in unrelated files).
+-
+-## Gate D — apps/vscode typecheck
+-
+-```
+-$ cd apps/vscode && bun x tsc --noEmit
+-exit code: 0
+-output: (empty)
+-```
+-
+-Clean.
+-
+-## Gate E — git diff --check
+-
+-```
+-$ git diff --check
+-(empty — clean)
+-```
+-
+-No whitespace or conflict warnings.
+-
+-## RED/GREEN contract summary
+-
+-| Mode | Env var | Test | Result |
+-|------|---------|------|--------|
+-| production | (unset) | all 12 tests | ✓ 12/12 |
+-| production | (unset) | CCARD-WIRE-01 | ✓ pass (production behavior preserved) |
+-| ablation | `=1` | AB-DELIVERY-01 | ✓ pass |
+-| ablation | `=1` | AB-DELIVERY-02 | ✓ pass (test deletes env var internally) |
+-| ablation | `=1` | CCARD-WIRE-01 | × FAIL (expected RED) |
+-
+-The CCARD-WIRE-01 expected RED is the load-bearing diagnostic. The
+-ACT's RED/GREEN contract is satisfied: the ablation seam demonstrably
+-removes ONLY `delivery` from the deps.send payload, nothing else.
+-
+-## Pre-existing baseline failures (NOT caused by this ACT)
+-
+-`LocalRuntimeHost.test.ts`, `host.test.ts`, `runtime-host.test.ts`,
+-`history.test.ts`, `local-runtime-host.c24-c-transport.test.ts`,
+-`local-runtime-host.subscribe-runtime-events.*.test.ts`,
+-`local/agent-event-bridge.test.ts`, and the apps/vscode
+-`continuation-cardinality-authority01.ccard01.test.ts` all fail to
+-load in this dev environment with `z.custom` / `z.object` /
+-`z.enum` undefined. This is a baseline condition that predates this
+-ACT and is unrelated to the seam under test. The seam under test
+-(`pending-prompt-service.ts`) does not have this issue and all 12
+-focused tests pass.
++# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
++# Focused gates (2026-09-25)
++
++GATE                                       RESULT
++---                                        ---
++production: 15/15 PASS                     PASS
++ablation: 14/15 + 1 expected RED           PASS
++vitest exit code, production               0
++vitest exit code, ablation                 1
++vitest-pool worker termination EPERM       OBSERVED (sandbox/worker-shutdown; suite exit reflects assertion result, NOT EPERM)
++sdk/core typecheck (touched files)         0 new errors (67 pre-existing errors in unrelated files)
++apps/vscode typecheck                      exit 0, clean
++git diff --check                           clean
++
++NOTES
++-----
++* vitest-pool "Failed to terminate forks worker ... EPERM" is a
++  sandbox-specific worker-shutdown quirk observed on this dev
++  environment. It is INDEPENDENT of the assertion result:
++    - production mode: 15/15 PASS, exit 0
++    - ablation mode:   14/15 + 1 expected RED (CCARD-WIRE-01), exit 1
++  The suite exit code matches the assertion result in both modes.
++* The expected RED on CCARD-WIRE-01 in ablation mode is the
++  load-bearing proof that the ablation observes the same
++  field-removal CCARD-WIRE-01 originally protected. The other 14
++  tests pass in ablation mode.
+diff --git a/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md b/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md
+index 453f51fc9..f09a8222a 100644
+--- a/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md
++++ b/.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md
+@@ -1,40 +1,53 @@
+-# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 — Live Specimen Readiness
++# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01 — Live Specimen Readiness
+ 
+ ## Status: READY_FOR_OPERATOR_RUN
+ 
+ This ACT's code-level discriminators (AB-DELIVERY-01, AB-DELIVERY-02,
+-and the expected RED on CCARD-WIRE-01) are verified. The ablation seam
+-is wired and select-able by env var. The live specimen must be run by
+-a human operator (per ACT §8) using the same VSCodium/Electron
+-runtime, sandbox, and proxy/env shape used for the historical
+-BAD=99006fbcc reproduction.
+-
+-This environment does not have the operator-required infrastructure
+-(VSCodium, isolated user-data dir, the ClineMM Nix wrapper). The
+-discriminators are complete and the live-specimen execution contract
+-is documented below for the operator.
++AB-ATTEST-01, and the expected RED on CCARD-WIRE-01) are verified. The
++ablation seam is wired and select-able by env var. The live specimen
++must be run by a human operator (per ACT §8) using the same
++VSCodium/Electron runtime, sandbox, and proxy/env shape used for the
++historical BAD=99006fbcc reproduction.
++
++## Frozen SUBJECT_HEAD and bundled VSIX
++
++This dev environment built ONE dogfood VSIX from SUBJECT_HEAD and
++recorded its identity below. The operator MUST install this VSIX
++unchanged for BOTH the ABLATED and RESTORED specimens — the ablation
++is selected entirely at launch time by the env var
++`CLINEMM_OOM_DISC01_ABLATE_DELIVERY`. No rebuild between specimens.
++
++| Field          | Value                                                                            |
++|----------------|----------------------------------------------------------------------------------|
++| SUBJECT_HEAD   | `2edd62498` (`2edd6249855b4413b3a45da3717176958dbcf31c`)                          |
++| Version        | `4.1.16`                                                                          |
++| VSIX path      | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-2edd62498.vsix` |
++| VSIX size      | `14627848` bytes (~13.95 MB)                                                     |
++| VSIX sha256    | `fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd`              |
++| Built via      | `vsce package` (manually invoked, sandbox workaround)                            |
++| Env vars at build | `CLINEMM_OOM_DISC01_SUBJECT_HEAD=2edd62498`                                    |
++| Bundled identity confirms | bundle contains: `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` runtime lookup, `CLINEMM_OOM_DISC01_SUBJECT_HEAD` define, `CLINEMM_OOM_DISC01_ATTEST` line marker |
++| Package files  | 52 (verified via vsce output)                                                    |
+ 
+ ## Live specimen execution contract
+ 
+-The operator must execute the following in sequence.
++The operator must execute the following in sequence. **The same VSIX
++bytes are used for both specimens** — only the env var toggle changes.
+ 
+-### Step 1 — Build the dogfood VSIX with this ACT's patch applied
++### Step 1 — Install the bundled VSIX
+ 
+ ```bash
+-# from repo root, with the ACT's edits staged in the working tree
+-mkdir -p dist/dogfood
+-CLINEMM_RUNTIME_PROFILE=dogfood \
+-CLINEMM_PTAD=1 \
+-DISPLAY=:1 \
+-bun esbuild.mjs && \
+-bun scripts/build-dogfood-vsix.py \
+-    --output dist/dogfood/clinemm-4.1.16-$(git rev-parse --short=8 HEAD).vsix
++# Record the SHA-256 BEFORE install; verify the installed extension
++# has the same hash after install:
++sha256sum /path/to/clinemm-4.1.16-2edd62498.vsix
++# expected: fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd
  ```
+ 
+-Record:
++Use the same VSCodium install path as the historical
++BAD=99006fbcc reproduction. Record:
+ - VSIX path
+-- VSIX sha256: `shasum -a 256 <vsix>`
+-- installed extension path/version after install
++- installed extension path/version (expected: `s1onique.clinemm 4.1.16`)
++- installed extension SHA-256 (must match the VSIX sha256)
+ 
+ ### Step 2 — Run the ABLATED specimen
+ 
+@@ -58,22 +71,42 @@ Run the same background-workload command used for the historical
+ BAD=99006fbcc reproduction. Run for at least 150 s, or the existing
+ live-capture helper's bounded duration, whichever is longer.
+ 
+-### Step 3 — Capture the run
++### Step 3 — Capture positive attestation
 +
-+---
-+
-+## ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 — DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR — 2026-09-25
-+
-+**Status:** DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR
-+
-+**Primary purpose:** causality / necessity.
-+
-+**Frozen evidence boundary:**
++When the Extension Host starts, it emits ONE line to stderr with this
++exact shape:
 +
 +```
-+GOOD_ARTIFACT          = d1ecf48dc
-+BAD_ARTIFACT           = 99006fbcc
-+ENTRY_HEAD             = 97a2efcb07632420666d53f6bd296313bfcf5fba
-+REGRESSION_COMMIT      = 99006fbccaacb150b78e54dad7bdadc2a1390238
-+REGRESSION_COMMIT_COUNT = 1
++[CLINEMM_OOM_DISC01_ATTEST] subject=<sha|unknown|unset> ablation_active=true|false env_present="1"|<unset> eh_pid=<int> ppid=<int|unknown> constructed_at=<ISO>
 +```
 +
-+The two-dot interval `d1ecf48dc..99006fbcc` contains exactly one
-+commit: ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 V3
-+production-wiring fix. The suspect delta is propagation of
-+`next.delivery` across `PendingPromptsController.drain → deps.send →
-+LocalRuntimeHost.runTurn`.
++For the ABLATED specimen, expect:
++- `subject=2edd62498` (the SUBJECT_HEAD baked into the bundle)
++- `ablation_active=true`
++- `env_present=1`
++- `eh_pid=<PID of the Electron extension host process>`
 +
-+**Ablation:**
++Capture this line. Verify `eh_pid` matches the recorded Extension Host
++PID. If `subject=<runtime-unset>`, the build did NOT inline the
++SUBJECT_HEAD — STOP, do NOT proceed (the SUBJECT_HEAD identity is
++broken).
 +
-+A throwaway diagnostic seam was added to
-+`sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts`:
-+
-+```typescript
-+private readonly __ablateDeliveryPropagation =
-+    process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY === "1";
++### Step 4 — Capture the run
+ 
+ For each run record:
+-- source HEAD (= this ACT's working tree; should be `97a2efcb0` plus
+-  the ACT's edits)
+-- VSIX path + sha256
++- source SUBJECT_HEAD (= `2edd62498`)
++- VSIX path + sha256 (`fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd`)
+ - installed extension path/version
+ - Electron Framework UUID (if available from the established
+   environment; otherwise record `<not available>`)
+-- Extension Host PID
++- Extension Host PID + the `[CLINEMM_OOM_DISC01_ATTEST]` line bound to
++  that PID (this is the positive attestation)
+ - start/end timestamps
+ - main.log relevant lines
+ - renderer.log relevant lines
+ - matching DiagnosticReport path + sha256 if crash occurs
+ 
+-### Step 4 — Classification
++### Step 5 — Classification
+ 
+ If native OOM still reproduces under ablation:
+ - classification = **PASS_DELIVERY_PROPAGATION_REFUTED**
+@@ -84,44 +117,40 @@ If Extension Host survives the full window under ablation:
+ - classification = **H1_NECESSITY_CANDIDATE** (one surviving run
+   is sufficient to justify RESTORATION testing, but NOT sufficient
+   to authorize repair)
+-- proceed to Step 5
++- proceed to Step 6
+ 
+ If crash occurs but does NOT match the same native class
+ (EXC_BREAKPOINT / SIGTRAP, code 5, VSCodium Helper (Plugin),
+ PartitionAlloc/V8 fatal OOM):
+ - classification = **CAPTURE_INSUFFICIENT** or
+   **HALT_RED_NOT_REPRODUCED**
+-- Do not count as reproduction; do not proceed to Step 5.
++- Do not count as reproduction; do not proceed to Step 6.
+ 
+-### Step 5 — RESTORE the propagation
++### Step 6 — RESTORE the propagation (no rebuild)
+ 
+-Restore ONLY the `next.delivery` propagation by:
++The same VSIX is used for both specimens. To switch from ABLATED to
++RESTORED, simply unset the env var at the next launch:
+ 
+-A) Reverting just the ablation env var:
+-   ```bash
+-   unset CLINEMM_OOM_DISC01_ABLATE_DELIVERY
+-   ```
+-   and rebuilding/reinstalling the same VSIX.
++```bash
++unset CLINEMM_OOM_DISC01_ABLATE_DELIVERY
++# Verify env is gone: printenv | grep CLINEMM_OOM_DISC01_ABLATE_DELIVERY
++# (must return nothing — if it returns, the env leaked)
 +```
+ 
+-B) (Alternative) Reverting just the seam lines in
+-   `sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts`:
+-   - The constructor block (lines ~301-318) — leave the env-var check
+-     but ensure the field check uses `next.delivery === undefined`
+-     not the OR'd flag.
+-   - The conditional spread at line ~518 — restore to the
+-     production form:
+-     ```
+-     ...(next.delivery !== undefined ? { delivery: next.delivery } : {}),
+-     ```
++The VSIX sha256 MUST NOT change between specimens — the operator
++should re-record sha256 from the on-disk VSIX to confirm.
+ 
+-Do not alter any other source or environment variable.
++After launch with the env var unset, expect the attestation line to
++show:
++- `ablation_active=false`
++- `env_present=<unset>`
+ 
+-### Step 6 — Run the RESTORED specimen
++### Step 7 — Run the RESTORED specimen
+ 
+-Repeat Step 2-3 with the propagation restored. Run for the same
++Repeat Step 2-4 with the env var unset. Run for the same
+ duration. Record identical fields.
+ 
+-### Step 7 — Classification (RESTORE outcome)
++### Step 8 — Classification (RESTORE outcome)
+ 
+ | ABLATED | RESTORED | Verdict |
+ |---------|----------|---------|
+@@ -134,10 +163,19 @@ duration. Record identical fields.
+ This ACT was run in a development environment without the
+ operator-required infrastructure (VSCodium, isolated user-data dir,
+ Nix wrapper). The ACT's discriminating power at the code level is
+-complete: the AB-DELIVERY-01 test proves the ablation does what it
+-claims; AB-DELIVERY-02 proves the production path is preserved; the
+-expected RED on CCARD-WIRE-01 proves the ablation is observing the
+-same field-removal CCARD-WIRE-01 originally protected.
++complete:
++- AB-DELIVERY-01 proves the ablation does what it claims
++- AB-DELIVERY-02 proves the production path is preserved
++- AB-ATTEST-01 proves the positive attestation is emitted and
++  parseable, bound to the live process PID
++- The expected RED on CCARD-WIRE-01 proves the ablation is
++  observing the same field-removal CCARD-WIRE-01 originally protected
++- The bundled VSIX contains the runtime lookup of
++  `process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY`, the inline of
++  `CLINEMM_OOM_DISC01_SUBJECT_HEAD`, and the `[CLINEMM_OOM_DISC01_ATTEST]`
++  line marker (verified by grepping the bundled extension.js)
++- The bundled VSIX sha256 is recorded for byte-identical ABLATED/RESTORED
++  specimens
+ 
+ The live specimen is the necessary next step to convert the code-level
+ necessity proof into a production-OOM necessity proof. The execution
+@@ -147,8 +185,31 @@ contract above is complete and unambiguous.
+ 
+ ```
+ sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts        # ablation seam installed
+-sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts # AB-DELIVERY-01 + AB-DELIVERY-02 added
++sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts # AB-DELIVERY-01 + AB-DELIVERY-02 + AB-ATTEST-01 added
++apps/vscode/esbuild.mjs                                                   # CLINEMM_OOM_DISC01_SUBJECT_HEAD define wired
++dist/dogfood/clinemm-4.1.16-2edd62498.vsix                                # BUILT ONCE, used for both ABLATED and RESTORED
+ ```
+ 
+-Both files compile clean. Both files preserve the existing
+-production behavior when the env var is unset.
++All files compile clean. All tests pass: 15/15 in production mode,
++14/15 + 1 expected RED on CCARD-WIRE-01 in ablation mode.
 +
-+The conditional spread at the `deps.send(...)` payload in
-+`PendingPromptsController.drain` was modified to drop the
-+`delivery` field when the env var is set:
++## Focused test gate results
 +
-+```typescript
-+...(this.__ablateDeliveryPropagation || next.delivery === undefined
-+    ? {}
-+    : { delivery: next.delivery }),
-+```
++| Gate | Mode | Result |
++|------|------|--------|
++| pending-prompt-service.test.ts | production | 15/15 PASS, exit 0 |
++| pending-prompt-service.test.ts | ablation | 14/15 PASS + 1 expected RED (CCARD-WIRE-01), exit 1 |
++| sdk/core typecheck | n/a | 0 new errors in touched files (67 pre-existing errors in unrelated files) |
++| apps/vscode typecheck | n/a | exit 0, clean |
++| git diff --check | n/a | clean |
++| vitest-pool worker termination | both | `EPERM: operation not permitted, kill` observed on the worker shutdown, but the suite exit code is consistent with the assertion result (0 for all-pass, 1 for any-fail). This is a sandbox/worker-shutdown quirk, NOT an assertion result. Operator-run live specimen is unaffected. |
 +
-+Default state: **off** (production-equivalent behavior). The env var
-+is single-source-change, single-field scoped, and MUST NOT be enabled
-+in production builds.
++## Halt conditions evaluated (CORRECTION01)
 +
-+**Discriminators installed:**
-+
-+- **AB-DELIVERY-01** (structural): exercises the REAL
-+  `PendingPromptsController.drain` seam with `delivery: "queue"`,
-+  `jobId: "job-1"`. Under ablation asserts that `delivery` is NOT in
-+  the deps.send payload (via `hasOwnProperty("delivery") === false`)
-+  but `jobId` IS. RED proof verified by temporarily reverting the
-+  seam — test fails with `hasOwnProperty = true` (expected: false).
-+
-+- **AB-DELIVERY-02** (conservation): with the env var explicitly
-+  deleted inside the test, asserts that BOTH `delivery` and `jobId`
-+  are forwarded exactly as production does. Passes in both
-+  production mode and ablation mode.
-+
-+- **Expected RED on CCARD-WIRE-01** (existing production-shape test):
-+  under ablation, this existing test fails because it pins
-+  `sendCalls[0]?.delivery === "queue"`. This is the load-bearing
-+  diagnostic proving the ablation is observing the same field-removal
-+  CCARD-WIRE-01 was originally protecting.
-+
-+**Focused gates:**
-+
-+| Gate | Result |
++| Halt | Status |
 +|------|--------|
-+| pending-prompt-service.test.ts (production mode) | 12/12 PASS |
-+| pending-prompt-service.test.ts (ablation mode) | 11/12 PASS + 1 expected RED (CCARD-WIRE-01) |
-+| sdk/core typecheck | 0 new errors in touched files (67 pre-existing errors in unrelated files) |
-+| apps/vscode typecheck | exit 0, clean |
-+| git diff --check | clean |
-+
-+**Live specimen:**
-+
-+NOT performed in this session — this dev environment lacks VSCodium,
-+the isolated user-data dir, and the ClineMM Nix wrapper required for
-+the same operator launch path used for the historical BAD=99006fbcc
-+reproduction. The complete execution contract for the operator is
-+documented in
-+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md`.
-+
-+**Verdict (this session):** DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR
-+
-+**Repair authorized:** **FALSE**
-+
-+**Next step:** operator runs the live specimen per
-+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md`.
-+
-+- ABLATED survives + RESTORED reproduces same native OOM →
-+  **PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM** (separate bounded
-+  repair ACT authorized).
-+- ABLATED reproduces same native OOM → **PASS_DELIVERY_PROPAGATION_REFUTED**
-+  (no repair; successor discriminator = CCARD diagnostic activation
-+  as a whole).
-+- Both survive → **NOT_REPRODUCED**.
-+
-+**Repository trust:**
-+
-+```
-+$ git status --short
-+ M sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
-+ M sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
-+?? .factory/acts/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01.md
-+?? .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/
-+```
-+
-+**Pre-existing baseline failures (NOT caused by this ACT):**
-+
-+- `LocalRuntimeHost.test.ts` and other `runtime/host/*.test.ts` files
-+  fail to load in this dev environment with
-+  `TypeError: undefined is not an object (evaluating 'z.custom')`
-+  (zod resolution issue at the vitest worker boundary).
-+- 67 pre-existing `bunx tsc --noEmit` errors in
-+  `sdk/packages/core/` (extensions/context, extensions/tools,
-+  command-policy, sandbox tests, etc.).
-+
-+These pre-date the ACT and are unrelated to the seam under test.
-+
-+**Halt conditions evaluated:**
-+
-+- `HALT_REPOSITORY_TRUST` — NOT TRIGGERED (git status --short was
-+  empty at entry).
-+- `HALT_REGRESSION_SEAM_NO_LONGER_PRESENT` — NOT TRIGGERED (the
-+  historical `next.delivery` forwarding is intact at HEAD line ~509).
-+- `HALT_RED_NOT_REPRODUCED` — NOT TRIGGERED (RED is reproducible
-+  via CCARD-WIRE-01 expected failure under ablation; production-mode
-+  baseline passes).
-+- `CAPTURE_INSUFFICIENT` — NOT TRIGGERED (code-level discriminators
-+  are complete and load-bearing; live specimen is operator-driven).
-diff --git a/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts b/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
-index b1b345d9a..ac19daba3 100644
---- a/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
-+++ b/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
-@@ -1,4 +1,4 @@
--import { describe, expect, it, vi } from "vitest";
-+import { afterEach, describe, expect, it, vi } from "vitest";
- import type { CoreSessionEvent } from "../../types/events";
- import type { ActiveSession } from "../../types/session";
- import {
-@@ -372,4 +372,156 @@ describe("PendingPromptService", () => {
- 			expect(event.type).not.toBe("agent_run_started");
- 		}
- 	});
-+
-+	// =====================================================================
-+	// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01
-+	// =====================================================================
-+	//
-+	// AB-DELIVERY-01 (structural): When the
-+	// CLINEMM_OOM_DISC01_ABLATE_DELIVERY ablation seam is engaged,
-+	// the REAL PendingPromptsController.drain boundary MUST NOT
-+	// forward `next.delivery` into the deps.send(...) payload, but
-+	// MUST continue to forward `next.jobId`. This is the load-bearing
-+	// proof that the ablation is exactly the single-field removal
-+	// the ACT authorizes — no other field may change. The test
-+	// exercises the REAL controller (not a duplicate of the
-+	// payload-construction helper) by stubbing send and observing
-+	// the captured input.
-+	//
-+	// AB-DELIVERY-02 (conservation): With the ablation seam OFF
-+	// (production default), the controller forwards `delivery`
-+	// exactly as the current production seam does. This guards
-+	// against an accidental baseline drift in the seam during
-+	// refactors; if this test ever fails post-hoc, the ACT's
-+	// ablation result cannot be interpreted as a clean single-field
-+	// removal.
-+	describe("AB-DELIVERY-01: ablation seam drops next.delivery but preserves next.jobId", () => {
-+		const ORIGINAL_ENV = process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
-+		afterEach(() => {
-+			if (ORIGINAL_ENV === undefined) {
-+				delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
-+			} else {
-+				process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY = ORIGINAL_ENV;
-+			}
-+		});
-+
-+		it("under ablation: deps.send input has NO delivery field BUT has jobId field", async () => {
-+			process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY = "1";
-+			const sessionId = "sess-ab-delivery-01";
-+			const session = {
-+				sessionId,
-+				pendingPrompts: [
-+					{
-+						id: "pending-1",
-+						prompt: "the only queued prompt",
-+						delivery: "queue",
-+						jobId: "job-1",
-+					},
-+				],
-+				aborting: false,
-+				drainingPendingPrompts: false,
-+				status: "completed",
-+				agent: { canStartRun: () => true },
-+			} as unknown as ActiveSession;
-+
-+			const sendCalls: Array<{
-+				sessionId: string;
-+				prompt: string;
-+				jobId?: string;
-+				delivery?: "queue" | "steer";
-+			}> = [];
-+			const send = vi.fn(async (input: {
-+				sessionId: string;
-+				prompt: string;
-+				jobId?: string;
-+				delivery?: "queue" | "steer";
-+			}) => {
-+				sendCalls.push(input);
-+			});
-+			const onEnqueue = vi.fn();
-+			const onBeforeDrain = vi.fn();
-+			const onBeforeDispatch = vi.fn();
-+			const controller = new PendingPromptsController({
-+				getSession: () => session,
-+				emit: () => {},
-+				send,
-+				onEnqueue,
-+				onBeforeDrain,
-+				onBeforeDispatch,
-+			});
-+
-+			await controller.drain(sessionId);
-+
-+			// Send must have been called exactly once.
-+			expect(sendCalls).toHaveLength(1);
-+			const call = sendCalls[0];
-+			expect(call).toBeDefined();
-+			// Structural assertion: delivery is NOT in the payload
-+			// under ablation. jobId IS.
-+			expect(Object.prototype.hasOwnProperty.call(call, "delivery")).toBe(
-+				false,
-+			);
-+			expect(call?.jobId).toBe("job-1");
-+			// The C5/C6 hooks still observe the originating delivery
-+			// (they read it from the entry, not the deps.send payload)
-+			// — this is intentional and is part of the
-+			// production-shape conservation guarantee for the
-+			// diagnostic hooks.
-+			expect(onBeforeDrain.mock.calls[0]?.[0]?.delivery).toBe("queue");
-+			expect(onBeforeDispatch.mock.calls[0]?.[0]?.delivery).toBe("queue");
-+			expect(onBeforeDrain.mock.calls[0]?.[0]?.jobId).toBe("job-1");
-+			expect(onBeforeDispatch.mock.calls[0]?.[0]?.jobId).toBe("job-1");
-+		});
-+
-+		it("AB-DELIVERY-02: with ablation OFF, deps.send input forwards delivery exactly as production", async () => {
-+			delete process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY;
-+			const sessionId = "sess-ab-delivery-02";
-+			const session = {
-+				sessionId,
-+				pendingPrompts: [
-+					{
-+						id: "pending-1",
-+						prompt: "the only queued prompt",
-+						delivery: "queue",
-+						jobId: "job-1",
-+					},
-+				],
-+				aborting: false,
-+				drainingPendingPrompts: false,
-+				status: "completed",
-+				agent: { canStartRun: () => true },
-+			} as unknown as ActiveSession;
-+
-+			const sendCalls: Array<{
-+				sessionId: string;
-+				prompt: string;
-+				jobId?: string;
-+				delivery?: "queue" | "steer";
-+			}> = [];
-+			const send = vi.fn(async (input: {
-+				sessionId: string;
-+				prompt: string;
-+				jobId?: string;
-+				delivery?: "queue" | "steer";
-+			}) => {
-+				sendCalls.push(input);
-+			});
-+			const controller = new PendingPromptsController({
-+				getSession: () => session,
-+				emit: () => {},
-+				send,
-+			});
-+
-+			await controller.drain(sessionId);
-+
-+			// Conservation: the production-equivalent path forwards
-+			// BOTH delivery and jobId exactly as the current
-+			// production seam does. If this changes, the ablation
-+			// cannot be interpreted as a clean single-field removal.
-+			expect(sendCalls).toHaveLength(1);
-+			const call = sendCalls[0];
-+			expect(call?.delivery).toBe("queue");
-+			expect(call?.jobId).toBe("job-1");
-+		});
-+	});
- });
-diff --git a/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts b/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
-index 655d580a7..6c3293cad 100644
---- a/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
-+++ b/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
-@@ -298,6 +298,25 @@ export class PendingPromptService {
- export class PendingPromptsController {
- 	private readonly service = new PendingPromptService();
- 
-+	/**
-+	 * ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01:
-+	 *
-+	 * Throwaway diagnostic ablation seam. When the
-+	 * `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` env var is set to `"1"`,
-+	 * the controller drops the `next.delivery` field from the
-+	 * `deps.send(...)` payload at the drain boundary. All other
-+	 * behavior — including jobId propagation, onBeforeDispatch, the
-+	 * C4/C5/C6/C7 hooks, and the C5/C6 capture surfaces — is
-+	 * preserved exactly.
-+	 *
-+	 * Default: `false` (production-equivalent behavior).
-+	 * The seam exists solely to host the live-specimen ablation;
-+	 * it MUST NOT be enabled in production builds and the env var
-+	 * MUST NOT be documented outside this ACT.
-+	 */
-+	private readonly __ablateDeliveryPropagation =
-+		process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY === "1";
-+
- 	constructor(private readonly deps: PendingPromptsControllerDeps) {}
- 
- 	list(sessionId: string): SessionPendingPrompt[] {
-@@ -487,7 +506,18 @@ export class PendingPromptsController {
- 				// origin-discriminating information — the host's
- 				// deriveOrigin() would fall through to `explicit_user`
- 				// for what is actually a `pending_prompt_drain` turn.
--				...(next.delivery !== undefined ? { delivery: next.delivery } : {}),
-+				//
-+				// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01:
-+				// Throwaway diagnostic ablation seam. When
-+				// `__ablateDeliveryPropagation` is true, the `delivery`
-+				// field is dropped from the `deps.send(...)` payload.
-+				// All other forwarding (jobId, onBeforeDispatch, C5/C6
-+				// hooks) is preserved. The seam exists only to host
-+				// the live-specimen ablation; the env var that drives
-+				// it MUST NOT be enabled in production builds.
-+				...(this.__ablateDeliveryPropagation || next.delivery === undefined
-+					? {}
-+					: { delivery: next.delivery }),
- 				// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
- 				// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
- 				// Forward `next.jobId` into the SendSessionInput so the
++| HALT_VSIX_BYTES_DIFFER_BETWEEN_SPECIMENS | NOT TRIGGERED (single VSIX built once; env var toggled at launch) |
++| HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE | NOT TRIGGERED (verified via grep on extracted extension.js: `CLINEMM_OOM_DISC01_SUBJECT_HEAD` define, `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` runtime lookup, `CLINEMM_OOM_DISC01_ATTEST` line marker all present) |
++| HALT_ATTESTATION_NOT_EMITTED | NOT TRIGGERED (AB-ATTEST-01 verifies emission from the controller constructor) |
++| HALT_QUEUE_STEER_SEMANTICS_ALTERED | NOT TRIGGERED (only the conditional spread of `next.delivery` is touched; all other forwarding preserved per AB-DELIVERY-02) |
++| HALT_VITEST_EPERM_TREATED_AS_ASSERTION_FAILURE | NOT TRIGGERED (separately characterized: worker-shutdown EPERM is sandbox-related, not assertion-related; suite exit code matches the assertion result) |

@@ -1,43 +1,25 @@
-GOOD=d1ecf48dc
-BAD=99006fbcc
-ENTRY_HEAD=97a2efcb07632420666d53f6bd296313bfcf5fba
+# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
+# Single-commit boundary (2026-09-25)
 
-git merge-base --is-ancestor d1ecf48dc 99006fbcc:
-YES
+# The SUBJECT_HEAD commits (the changes that produced the bundled VSIX):
+$ git log --oneline 97a2efcb0..2edd62498
+2edd62498 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
+8062ac347 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
 
-git rev-list --count d1ecf48dc..99006fbcc:
-1
+# Note: the second commit (2edd62498) is a thin esbuild.mjs change
+# to wire the CLINEMM_OOM_DISC01_SUBJECT_HEAD env var into the
+# bundle define table. Both commits belong to the SUBJECT_HEAD and
+# the bundled VSIX was built from this tip.
 
-git show --no-patch --format=fuller 99006fbcc:
-commit 99006fbccaacb150b78e54dad7bdadc2a1390238
-Author:     clinemm-dev <clinemm@cline.dev>
-AuthorDate: Wed Sep 23 02:50:40 2026 +0300
-Commit:     clinemm-dev <clinemm@cline.dev>
-CommitDate: Wed Sep 23 02:50:40 2026 +0300
+# Entry HEAD (where this ACT started, pre-CORRECTION01):
+ENTRY_HEAD = 97a2efcb07632420666d53f6bd296313bfcf5fba
 
-    ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01: V3 production-wiring fix
-    
-    Three P0/P1 production-wiring defects closed:
-    
-    A. onBeforeDispatch declared on SDK contract but NOT forwarded to
-       PendingPromptsControllerDeps in LocalRuntimeHost constructor.
-       Added the missing dep-forwarding spread.
-    
-    B. C7 (onRunTurnStarted) fired at runTurn request entry — BEFORE the
-       queue/steer short-circuit — so a runTurn(delivery:'queue') request
-       manufactured a 1->2 signal. Moved C7 to fire immediately before
-       executeTurn(...).
-    
-    C. next.jobId captured at C5/C6 but NOT copied into the SendSessionInput
-       passed to runTurn. Threaded next.jobId + next.delivery into the
-       deps.send({...}) call inside drain.
-    
-    Three new production-shape regression tests (CCARD-WIRE-01/01c/02) added
-    in sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts.
-    These exercise the REAL PendingPromptsController with stubbed send;
-    CCARD-WIRE-01 fails if the onBeforeDispatch forwarding is removed.
-    
-    Conservation: BCNEX01 7/7, BCNT01 24/24, BTCONT01 10/10, AGCONT01 7/7,
-    TQCB01 15/15, PPAT01 10/10, CCARD01 12/12, QPSR01-bridge 6/6,
-    BCNT01-WIRE-bridge 1/1, SDK pending-prompt-service.test 10/10.
-    bunx tsc --noEmit clean on both apps/vscode and sdk/core.
+# CORRECTION01 SUBJECT_HEAD (where the bundled VSIX was built):
+SUBJECT_HEAD = 2edd6249855b4413b3a45da3717176958dbcf31c
+
+# Single-commit boundary between GOOD and BAD is UNCHANGED from
+# the original ACT-01 (parent's single-commit interval
+# d1ecf48dc..99006fbcc = 1 commit, the production wiring fix).
+# CORRECTION01 adds the ablation seam (env-var-gated, default off)
+# on top of HEAD, plus the positive Extension Host attestation and
+# the bundled VSIX identity.
