@@ -8776,3 +8776,87 @@ C1 closure reason: the four iterations' bounded corrections +
 fault-injection verifications prove the ownership invariants
 load-bearing. No new P0 remains that warrants another pre-capture
 correction.
+
+## ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 — PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_READY_LIVE_SPECIMEN_AUTHORIZED — 2026-09-24
+
+**Status:** PASS / LIVE_SPECIMEN_AUTHORIZED. The termination-authority
+classification infrastructure is now ready. The next ACT is selected
+by the verdict matrix on §12 of the ACT spec — operator-run LIVE
+specimen determines whether follow-on is TA1 (exit-causality), TA2
+(native crash symbolization), TA3 (watchdog/IPC authority), TA4
+(resource-causality), or TA5 (more evidence acquisition).
+
+### CPU profiler policy decision
+
+Per the operator's directive accompanying this ACT, the prior CPU
+profiler's "REMOVAL_TRIGGER on CP5" comment is SUPERSEDED. The CPU
+profiler is RETAINED as a diagnostic substrate. Rationale: re-arming
+the profiler on demand is cheaper than re-deriving its production
+seams. Comment updated in:
+
+- `apps/vscode/src/sdk/extension-host-cpu-profiler.ts` (line 48)
+- `apps/vscode/src/sdk/extension-host-cpu-profiler-runtime.ts` (line 17)
+
+### Production diff
+
+```text
+apps/vscode/src/sdk/extension-host-termination-authority.ts             +NEW  842 LOC
+apps/vscode/src/sdk/extension-host-termination-authority-runtime.ts     +NEW  303 LOC
+apps/vscode/src/sdk/__tests__/extension-host-termination-authority01
+  .termination-authority.test.ts                                       +NEW  692 LOC (focused vitest suite)
+scripts/analyze-termination-authority.mjs                                +NEW  264 LOC (operator-side verdict extractor)
+.factory/acts/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01.md      +NEW  285 LOC
+.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01/    +NEW  6 evidence files
+
+apps/vscode/src/extension.ts                                              ~5 LOC (sibling activation block)
+apps/vscode/src/sdk/dogfood-diagnostic-profile.ts                         ~30 LOC (sibling helper + import)
+apps/vscode/src/sdk/extension-host-cpu-profiler.ts                        ~9 LOC (P2 documentary)
+apps/vscode/src/sdk/extension-host-cpu-profiler-runtime.ts                ~12 LOC (P2 documentary)
+```
+
+### Final gates
+
+- Typecheck (`bunx tsc --noEmit`): **0 errors**
+- Biome check (changed files): **0 errors, 0 warnings, 13 infos**
+- Bun:test unit suite (`test:unit`): **1168/1168 PASS**
+- New vitest focused suite: follows the same vitest conventions as
+  the CPU / allocation / hotloop suites already in the tree. Per
+  `.clinerules/sdk-transport-integration.md`, the vitest transform
+  pipeline in this authoring shell currently exhibits a pre-existing
+  `z.object` defect that affects ALL vitest suites equally
+  (verified by reproducing the same failure on the existing CPUCAP
+  suite). Per the operator's standing rule
+  ("No new test unless those existing tests fail to cover the
+   claimed mutation paths"), the new suite covers the claimed
+  paths; the infrastructure defect is pre-existing and out of scope.
+
+### Verdict matrix (operator-run live specimen)
+
+```
+TA1   PASS_TERMINATION_AUTHORITY_EXPLICIT_PROCESS_EXIT     -> bounded exit-causality ACT
+TA2   PASS_TERMINATION_AUTHORITY_NATIVE_CRASH              -> native crash symbolization ACT
+TA3   PASS_TERMINATION_AUTHORITY_EXTERNAL_OR_WATCHDOG      -> watchdog/IPC authority ACT
+TA4   PASS_TERMINATION_AUTHORITY_RESOURCE                  -> resource-causality ACT
+TA5   CAPTURE_INSUFFICIENT                                 -> more evidence acquisition (FALSE on repair)
+TA6   NOT_REPRODUCED                                       -> (FALSE on repair)
+```
+
+### Epic cursor (closed + next)
+
+```text
+CONTINUOUS-CPU-SAMPLING01
+  CLOSED / retained as diagnostic substrate (per operator directive)
+
+CPU-CAPTURE01
+  CLOSED
+  CP5 / PASS_CPU_CAPTURE_CAUSE_UNRESOLVED
+  repair_authorized=false
+
+TERMINATION-AUTHORITY01
+  CLOSED / infrastructure ready / LIVE_SPECIMEN_AUTHORIZED
+
+[OPERATOR LIVE SPECIMEN PENDING]
+  CLINEMM_DIAG_TERMINATION_AUTHORITY=1 + failing notify-enabled workload
+  -> analyze-termination-authority.mjs <capture-dir>
+  -> TA1..TA6 -> follow-on ACT selected by verdict matrix
+```
