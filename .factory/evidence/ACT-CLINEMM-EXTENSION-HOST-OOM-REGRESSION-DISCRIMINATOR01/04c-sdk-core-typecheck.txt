@@ -1,0 +1,67 @@
+src/extensions/context/compaction.test.ts(290,43): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'number | undefined'.
+src/extensions/context/compaction.working-context-authority-publish.test.ts(282,22): error TS6133: 'state' is declared but its value is never read.
+src/extensions/context/compaction.working-context-ratio.test.ts(126,2): error TS6133: 'context' is declared but its value is never read.
+src/extensions/context/compaction.working-context-ratio.test.ts(164,3): error TS2322: Type '(context: { messages: Message[]; }) => { messages?: Message[] | undefined; systemPrompt?: string | undefined; } | undefined' is not assignable to type 'ContextPipelinePrepareTurn'.
+  Type '{ messages?: Message[] | undefined; systemPrompt?: string | undefined; } | undefined' is not assignable to type 'Promise<ContextPipelinePrepareTurnResult | undefined>'.
+    Type 'undefined' is not assignable to type 'Promise<ContextPipelinePrepareTurnResult | undefined>'.
+src/extensions/tools/definitions.test.ts(738,24): error TS2322: Type '{ command: string; args: string[]; }' is not assignable to type 'string'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(21,32): error TS6133: 'beforeEach' is declared but its value is never read.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(21,44): error TS6133: 'afterEach' is declared but its value is never read.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(23,1): error TS6133: 'os' is declared but its value is never read.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(63,74): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; env?: Record<string, string> | undefined; envSemantics?: "complete" | "overlay" | undefined; }' is not assignable to parameter of type 'SpawnConfig'.
+  Types of property 'env' are incompatible.
+    Type 'Record<string, string> | undefined' is not assignable to type 'Record<string, string>'.
+      Type 'undefined' is not assignable to type 'Record<string, string>'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(123,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(209,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(229,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(248,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(267,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(289,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(307,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts(333,52): error TS2345: Argument of type '{ executable: string; args: string[]; cwd: string; }' is not assignable to parameter of type 'SpawnConfig'.
+  Property 'env' is missing in type '{ executable: string; args: string[]; cwd: string; }' but required in type 'SpawnConfig'.
+src/extensions/tools/executors/bash.supervised.test.ts(274,22): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/extensions/tools/executors/bash.supervised.test.ts(282,22): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/hub/server/hub-upgrades.test.ts(22,1): error TS6133: 'HubTransportContext' is declared but its value is never read.
+src/runtime/command-policy/command-execution-plan.test.ts(592,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+  Types of property 'mode' are incompatible.
+    Type 'string' is not assignable to type 'CommandHostMode'.
+src/runtime/command-policy/command-execution-plan.test.ts(607,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+  Types of property 'mode' are incompatible.
+    Type 'string' is not assignable to type 'CommandHostMode'.
+src/runtime/command-policy/command-execution-plan.test.ts(628,29): error TS2345: Argument of type '{ mode: string; explicitAllowRules: readonly { source: string; pattern: RegExp; }[]; workspaceRoots: never[]; tempAuthorityEvidence: { platform: "darwin"; executablePath: string; executableRealpath: string; darwinUserTempRoot: string; canonicalDarwinUserTempRoot: string; }; }' is not assignable to parameter of type '{ mode: CommandHostMode; mandatorySeatbelt?: boolean | undefined; explicitDenyRules?: readonly { source: string; pattern: RegExp; }[] | undefined; explicitAllowRules?: readonly CommandHostAllowRule[] | undefined; ... 4 more ...; temporaryExternalCanonicalRoots?: readonly string[] | undefined; }'.
+  Types of property 'mode' are incompatible.
+    Type 'string' is not assignable to type 'CommandHostMode'.
+src/runtime/command-policy/command-safe-rules.hostile-filename.test.ts(33,38): error TS6133: 'mkdirSync' is declared but its value is never read.
+src/runtime/command-policy/parser-helper/runtime.real-binary.test.ts(181,24): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+  Property 'cmd' does not exist on type '{ readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt; }'.
+src/runtime/command-policy/parser-helper/runtime.real-binary.test.ts(198,36): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+  Property 'cmd' does not exist on type '{ readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt; }'.
+src/runtime/command-policy/parser-provenance.test.ts(74,3): error TS2578: Unused '@ts-expect-error' directive.
+src/runtime/command-policy/parser-provenance.test.ts(79,4): error TS2353: Object literal may only specify known properties, and 'parserResult' does not exist in type 'EvaluateCommandRiskInput'.
+src/runtime/command-policy/path-authority.temporary-external.test.ts(56,2): error TS2304: Cannot find name 'mkdirSync'.
+src/runtime/command-policy/path-authority.temporary-external.test.ts(57,2): error TS2304: Cannot find name 'mkdirSync'.
+src/runtime/command-policy/structured-command-risk.attack-witness.test.ts(452,22): error TS6133: 'why' is declared but its value is never read.
+src/runtime/command-policy/structured-command-risk.cd-cwd-authority.test.ts(194,5): error TS6133: 'OUTSIDE_DIR' is declared but its value is never read.
+src/runtime/command-policy/structured-command-risk.cd-cwd-authority.test.ts(360,20): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+  Property 'cmd' does not exist on type '{ readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt; }'.
+src/runtime/command-policy/structured-command-risk.find-quoted-pattern.test.ts(493,38): error TS2339: Property 'cmd' does not exist on type 'StructuredStmt'.
+  Property 'cmd' does not exist on type '{ readonly kind: "and"; readonly left: StructuredStmt; readonly rhs: StructuredStmt; }'.
+src/runtime/command-policy/structured-command-risk.reader-path-authority.test.ts(114,5): error TS6133: 'CANONICAL_OUTSIDE_DIR' is declared but its value is never read.
+src/runtime/host/local-runtime-host.subscribe-runtime-events.e2f-f1-correction01.test.ts(235,10): error TS6133: 'sessionA' is declared but its value is never read.
+src/runtime/host/local-runtime-host.subscribe-runtime-events.e2f-f1-correction01.test.ts(299,10): error TS6133: 'sessionA' is declared but its value is never read.
+src/runtime/host/local-runtime-host.subscribe-runtime-events.e2f-f1-correction01.test.ts(347,10): error TS6133: 'sessionA' is declared but its value is never read.
+src/runtime/host/local-runtime-host.subscribe-runtime-events.e2f-f1-correction01.test.ts(410,10): error TS6133: 'sessionA' is declared but its value is never read.
+src/runtime/host/local-runtime-host.subscribe-runtime-events.e2f-f1.test.ts(21,32): error TS6133: 'vi' is declared but its value is never read.
+src/runtime/host/local-runtime-host.subscribe-runtime-events.e2f-f1.test.ts(22,1): error TS6133: 'LocalRuntimeHost' is declared but its value is never read.
+src/runtime/sandbox/macos/seatbelt-go-default-cache-authority01.test.ts(83,10): error TS6133: 'existsSync' is declared but its value is never read.

@@ -1,0 +1,73 @@
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core
+
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+ ❯ src/runtime/turn-queue/pending-prompt-service.test.ts (12 tests | 1 failed) 12ms
+     ✓ deduplicates prompts and prioritizes steer delivery 2ms
+     ✓ updates prompts and reorders when delivery changes 0ms
+     ✓ consumes steer prompts before queued turns 0ms
+     ✓ deletes prompts and reports missing prompts without mutation 0ms
+     ✓ normalizes edited prompt text and rejects empty prompts 1ms
+     ✓ keeps prompts enqueued while the session is aborting 2ms
+     ✓ requeues a drained prompt when send fails 1ms
+     × CCARD-WIRE-01: real PendingPromptsController fires onBeforeDrain once + onBeforeDispatch once per shift (P0 production wiring regression) 3ms
+     ✓ CCARD-WIRE-01c: controller without onBeforeDispatch option never throws and is a complete no-op for C6 (backward-compat) 0ms
+     ✓ CCARD-WIRE-02: enqueue (queue-path) does NOT fire C5/C6 hooks or call send (request != execution cardinality) 0ms
+       ✓ under ablation: deps.send input has NO delivery field BUT has jobId field 0ms
+       ✓ AB-DELIVERY-02: with ablation OFF, deps.send input forwards delivery exactly as production 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/runtime/turn-queue/pending-prompt-service.test.ts > PendingPromptService > CCARD-WIRE-01: real PendingPromptsController fires onBeforeDrain once + onBeforeDispatch once per shift (P0 production wiring regression)
+AssertionError: expected undefined to be 'queue' // Object.is equality
+
+- Expected:
+"queue"
+
++ Received:
+undefined
+
+ ❯ src/runtime/turn-queue/pending-prompt-service.test.ts:268:34
+    266|   // P1 — jobId survives the deps.send boundary:
+    267|   expect(sendCalls[0]?.jobId).toBe("job-1");
+    268|   expect(sendCalls[0]?.delivery).toBe("queue");
+       |                                  ^
+    269|   // C5/C6 observe the originating delivery context so the host
+    270|   // deriveOrigin() can map to pending_prompt_drain:
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+   Start at  00:32:24
+   Duration  238ms (transform 127ms, setup 0ms, import 168ms, tests 12ms, environment 0ms)
+
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts. Error: EPERM: operation not permitted, kill
+    at kill (native)
+[90m    at kill (node:child_process:757:26)[39m
+    at stop (/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:7)
+    at stop (/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+fb605fc5f4a26331/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:22)
+    at processTicksAndRejections (native) {
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m,
+  errno: [33m-1[39m
+}
+[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts.

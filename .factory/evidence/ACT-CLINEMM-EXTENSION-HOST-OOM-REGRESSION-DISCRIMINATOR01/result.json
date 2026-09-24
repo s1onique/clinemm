@@ -1,0 +1,84 @@
+{
+  "act": "ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01",
+  "primary_purpose": "causality / necessity",
+  "entry_head": "97a2efcb07632420666d53f6bd296313bfcf5fba",
+  "good_artifact": "d1ecf48dc",
+  "bad_artifact": "99006fbcc",
+  "regression_commit": "99006fbccaacb150b78e54dad7bdadc2a1390238",
+  "regression_commit_count": 1,
+  "merge_base_is_ancestor": true,
+  "hypothesis": "H1: propagation of next.delivery across PendingPromptsController.drain -> deps.send -> runTurn is NECESSARY for the observed Extension Host OOM regression",
+  "h1_status": "DISCRIMINATORS_READY_LIVE_PENDING",
+  "ablation_seam": {
+    "type": "env_var_gated_field_removal",
+    "env_var": "CLINEMM_OOM_DISC01_ABLATE_DELIVERY",
+    "trigger_value": "1",
+    "default_state": "off (production-equivalent)",
+    "scope": "exactly one field: next.delivery in PendingPromptsController.drain deps.send payload",
+    "preserves": [
+      "next.jobId propagation",
+      "onBeforeDispatch forwarding",
+      "C4/C5/C6 hooks",
+      "C7 placement at executeTurn boundary",
+      "all CCARD capture hooks",
+      "CCARD ring/counters",
+      "termination authority tooling",
+      "CPU profiler substrate",
+      "sandbox behavior",
+      "completion/arbitration/presentation semantics"
+    ]
+  },
+  "tests": {
+    "ab_delivery_01": {
+      "purpose": "structural: under ablation, deps.send input has NO delivery field BUT has jobId field",
+      "result_production_mode": "PASS (test sets env var internally, so production env doesn't matter)",
+      "result_ablation_mode": "PASS",
+      "red_proof_load_bearing": true,
+      "red_proof_evidence": "temporarily reverted the seam — AB-DELIVERY-01 failed with 'hasOwnProperty(\"delivery\") = true' (expected: false). After restoring the seam: PASS."
+    },
+    "ab_delivery_02": {
+      "purpose": "conservation: with ablation OFF, deps.send input forwards delivery exactly as production",
+      "result_production_mode": "PASS",
+      "result_ablation_mode": "PASS (test deletes env var internally)"
+    },
+    "ccard_wire_01": {
+      "purpose": "existing production-shape test: pins sendCalls[0]?.delivery === 'queue'",
+      "result_production_mode": "PASS",
+      "result_ablation_mode": "FAIL (expected RED — proves ablation drops delivery correctly)"
+    }
+  },
+  "focused_gates": {
+    "pending_prompt_service_test_production_mode": "12/12 PASS",
+    "pending_prompt_service_test_ablation_mode": "11/12 PASS + 1 expected RED (CCARD-WIRE-01)",
+    "sdk_core_typecheck": "67 pre-existing errors in unrelated files; 0 new errors in touched files",
+    "apps_vscode_typecheck": "exit 0, empty output (clean)",
+    "git_diff_check": "empty (clean)"
+  },
+  "live_specimen": {
+    "status": "READY_FOR_OPERATOR_RUN",
+    "performed_in_this_session": false,
+    "reason": "this dev environment lacks VSCodium, isolated user-data dir, and the ClineMM Nix wrapper required to execute the same operator launch path as the historical BAD=99006fbcc reproduction",
+    "contract_artifact": ".factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md"
+  },
+  "repair_authorized": false,
+  "verdict": "DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR",
+  "next_step": "operator runs the live specimen per 05-live-ablation.md. If ABLATED survives and RESTORED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM (separate bounded repair ACT authorized). If ABLATED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_REFUTED (no repair; successor discriminator = CCARD diagnostic activation as a whole). If both survive: NOT_REPRODUCED.",
+  "halt_conditions_evaluated": {
+    "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED — git status --short was empty at entry",
+    "HALT_REGRESSION_SEAM_NO_LONGER_PRESENT": "NOT_TRIGGERED — the historical next.delivery forwarding is intact at HEAD line ~509",
+    "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED — RED is reproducible (CCARD-WIRE-01 fails under ablation as expected); the production-shape baseline (env var unset) passes CCARD-WIRE-01",
+    "CAPTURE_INSUFFICIENT": "NOT_TRIGGERED — code-level discriminators are complete and load-bearing"
+  },
+  "factory_cursor": {
+    "NATIVE_OOM": "PROVEN",
+    "NATIVE_TRAP_SYMBOLIZATION": "PROVEN",
+    "GOOD_ARTIFACT": "d1ecf48dc",
+    "BAD_ARTIFACT": "99006fbcc",
+    "REGRESSION_COMMIT_COUNT": 1,
+    "REGRESSION_COMMIT": "99006fbcc",
+    "SUSPECT_DELTA": "next.delivery propagation",
+    "NECESSITY": "DISCRIMINATORS_INSTALLED_LIVE_PENDING",
+    "REPAIR_AUTHORIZED": false
+  },
+  "timestamp": "2026-09-24T21:38:38Z"
+}

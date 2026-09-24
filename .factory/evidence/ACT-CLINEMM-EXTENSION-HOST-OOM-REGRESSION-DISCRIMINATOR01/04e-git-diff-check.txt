@@ -1,0 +1,1 @@
+git diff --check output (empty = clean, no whitespace or conflict warnings):

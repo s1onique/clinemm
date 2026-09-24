@@ -1,0 +1,1 @@
+apps/vscode: bunx tsc --noEmit: exit 0, 0 lines

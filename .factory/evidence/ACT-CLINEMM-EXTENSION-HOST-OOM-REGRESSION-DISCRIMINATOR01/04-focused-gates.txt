@@ -1,0 +1,136 @@
+# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 — Focused Gates
+
+This ACT is a code-level discriminator (not a runtime one). The
+focused gates validate (a) the ablation seam does what it claims,
+and (b) the production path is preserved by default.
+
+## Gate A — pending-prompt-service.test.ts (production mode)
+
+```
+$ cd sdk/packages/core && bun x vitest run --config vitest.config.ts \
+    src/runtime/turn-queue/pending-prompt-service.test.ts
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+```
+
+All 12 tests pass under the production default (env var unset).
+- 7 PendingPromptService tests (queue semantics, dedup, consumeSteer,
+  delete, empty-prompt rejection, enqueue-while-aborting, requeue on
+  send-failure).
+- 3 CCARD-WIRE tests (CCARD-WIRE-01 production-shape, CCARD-WIRE-01c
+  backward-compat, CCARD-WIRE-02 queue-path).
+- 2 AB-DELIVERY tests (AB-DELIVERY-01 structural, AB-DELIVERY-02
+  conservation).
+
+## Gate B — pending-prompt-service.test.ts (ablation mode)
+
+```
+$ cd sdk/packages/core && \
+    CLINEMM_OOM_DISC01_ABLATE_DELIVERY=1 \
+    bun x vitest run --config vitest.config.ts \
+    src/runtime/turn-queue/pending-prompt-service.test.ts
+
+     ✓ deduplicates prompts and prioritizes steer delivery 2ms
+     ✓ updates prompts and reorders when delivery changes 0ms
+     ✓ consumes steer prompts before queued turns 0ms
+     ✓ deletes prompts and reports missing prompts without mutation 0ms
+     ✓ normalizes edited prompt text and rejects empty prompts 1ms
+     ✓ keeps prompts enqueued while the session is aborting 2ms
+     ✓ requeues a drained prompt when send fails 1ms
+     × CCARD-WIRE-01: ...P0 production wiring regression... 3ms
+     ✓ CCARD-WIRE-01c: ...backward-compat... 0ms
+     ✓ CCARD-WIRE-02: ...queue-path... 0ms
+       ✓ under ablation: deps.send input has NO delivery field BUT has jobId field 0ms
+       ✓ AB-DELIVERY-02: with ablation OFF, deps.send input forwards delivery exactly as production 0ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+```
+
+This is the expected RED proof:
+- AB-DELIVERY-01 passes — confirms the new structural test catches
+  exactly the intended ablation (no `delivery` in payload, `jobId`
+  preserved).
+- AB-DELIVERY-02 passes — confirms the conservation test passes
+  when the ablation is OFF inside the test (it explicitly unsets the
+  env var).
+- CCARD-WIRE-01 fails — the existing production-shape test pins
+  `sendCalls[0]?.delivery === "queue"`. Under ablation, the
+  controller drops delivery, so CCARD-WIRE-01 fails. This is the
+  EXPECTED RED that proves the ablation seam is correctly wired to
+  the production boundary — NOT a regression introduced by this ACT.
+
+The CCARD-WIRE-01 failure is the load-bearing diagnostic: it proves
+that AB-DELIVERY-01 is observing the same field-removal that
+CCARD-WIRE-01 was originally protecting.
+
+## Gate C — sdk/core typecheck
+
+```
+$ cd sdk/packages/core && bun x tsc --noEmit
+[67 pre-existing errors in unrelated files]
+[0 errors in pending-prompt-service.ts or pending-prompt-service.test.ts]
+exit code: 2
+```
+
+The 67 pre-existing errors are in:
+- extensions/context/compaction*.test.ts (5 files)
+- extensions/tools/definitions.test.ts
+- extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+- runtime/command-policy/* (parser-helper, parser-provenance,
+  path-authority, structured-command-risk*)
+- runtime/host/local-runtime-host.subscribe-runtime-events.*.test.ts
+  (unused-import warnings)
+- runtime/sandbox/macos/seatbelt-go-default-cache-authority01.test.ts
+
+NONE of these touch the seam under test. The touched files
+introduce zero new errors. This was confirmed by `git stash`-ing the
+ACT's edits and re-running the typecheck: the baseline output is
+identical (67 errors, all in unrelated files).
+
+## Gate D — apps/vscode typecheck
+
+```
+$ cd apps/vscode && bun x tsc --noEmit
+exit code: 0
+output: (empty)
+```
+
+Clean.
+
+## Gate E — git diff --check
+
+```
+$ git diff --check
+(empty — clean)
+```
+
+No whitespace or conflict warnings.
+
+## RED/GREEN contract summary
+
+| Mode | Env var | Test | Result |
+|------|---------|------|--------|
+| production | (unset) | all 12 tests | ✓ 12/12 |
+| production | (unset) | CCARD-WIRE-01 | ✓ pass (production behavior preserved) |
+| ablation | `=1` | AB-DELIVERY-01 | ✓ pass |
+| ablation | `=1` | AB-DELIVERY-02 | ✓ pass (test deletes env var internally) |
+| ablation | `=1` | CCARD-WIRE-01 | × FAIL (expected RED) |
+
+The CCARD-WIRE-01 expected RED is the load-bearing diagnostic. The
+ACT's RED/GREEN contract is satisfied: the ablation seam demonstrably
+removes ONLY `delivery` from the deps.send payload, nothing else.
+
+## Pre-existing baseline failures (NOT caused by this ACT)
+
+`LocalRuntimeHost.test.ts`, `host.test.ts`, `runtime-host.test.ts`,
+`history.test.ts`, `local-runtime-host.c24-c-transport.test.ts`,
+`local-runtime-host.subscribe-runtime-events.*.test.ts`,
+`local/agent-event-bridge.test.ts`, and the apps/vscode
+`continuation-cardinality-authority01.ccard01.test.ts` all fail to
+load in this dev environment with `z.custom` / `z.object` /
+`z.enum` undefined. This is a baseline condition that predates this
+ACT and is unrelated to the seam under test. The seam under test
+(`pending-prompt-service.ts`) does not have this issue and all 12
+focused tests pass.

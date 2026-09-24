@@ -10566,3 +10566,139 @@ PREFAILURE-TO-REACTIVE-BRIDGE01
 REPAIR
   NOT AUTHORIZED
 ```
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 — DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR — 2026-09-25
+
+**Status:** DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR
+
+**Primary purpose:** causality / necessity.
+
+**Frozen evidence boundary:**
+
+```
+GOOD_ARTIFACT          = d1ecf48dc
+BAD_ARTIFACT           = 99006fbcc
+ENTRY_HEAD             = 97a2efcb07632420666d53f6bd296313bfcf5fba
+REGRESSION_COMMIT      = 99006fbccaacb150b78e54dad7bdadc2a1390238
+REGRESSION_COMMIT_COUNT = 1
+```
+
+The two-dot interval `d1ecf48dc..99006fbcc` contains exactly one
+commit: ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01 V3
+production-wiring fix. The suspect delta is propagation of
+`next.delivery` across `PendingPromptsController.drain → deps.send →
+LocalRuntimeHost.runTurn`.
+
+**Ablation:**
+
+A throwaway diagnostic seam was added to
+`sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts`:
+
+```typescript
+private readonly __ablateDeliveryPropagation =
+    process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY === "1";
+```
+
+The conditional spread at the `deps.send(...)` payload in
+`PendingPromptsController.drain` was modified to drop the
+`delivery` field when the env var is set:
+
+```typescript
+...(this.__ablateDeliveryPropagation || next.delivery === undefined
+    ? {}
+    : { delivery: next.delivery }),
+```
+
+Default state: **off** (production-equivalent behavior). The env var
+is single-source-change, single-field scoped, and MUST NOT be enabled
+in production builds.
+
+**Discriminators installed:**
+
+- **AB-DELIVERY-01** (structural): exercises the REAL
+  `PendingPromptsController.drain` seam with `delivery: "queue"`,
+  `jobId: "job-1"`. Under ablation asserts that `delivery` is NOT in
+  the deps.send payload (via `hasOwnProperty("delivery") === false`)
+  but `jobId` IS. RED proof verified by temporarily reverting the
+  seam — test fails with `hasOwnProperty = true` (expected: false).
+
+- **AB-DELIVERY-02** (conservation): with the env var explicitly
+  deleted inside the test, asserts that BOTH `delivery` and `jobId`
+  are forwarded exactly as production does. Passes in both
+  production mode and ablation mode.
+
+- **Expected RED on CCARD-WIRE-01** (existing production-shape test):
+  under ablation, this existing test fails because it pins
+  `sendCalls[0]?.delivery === "queue"`. This is the load-bearing
+  diagnostic proving the ablation is observing the same field-removal
+  CCARD-WIRE-01 was originally protecting.
+
+**Focused gates:**
+
+| Gate | Result |
+|------|--------|
+| pending-prompt-service.test.ts (production mode) | 12/12 PASS |
+| pending-prompt-service.test.ts (ablation mode) | 11/12 PASS + 1 expected RED (CCARD-WIRE-01) |
+| sdk/core typecheck | 0 new errors in touched files (67 pre-existing errors in unrelated files) |
+| apps/vscode typecheck | exit 0, clean |
+| git diff --check | clean |
+
+**Live specimen:**
+
+NOT performed in this session — this dev environment lacks VSCodium,
+the isolated user-data dir, and the ClineMM Nix wrapper required for
+the same operator launch path used for the historical BAD=99006fbcc
+reproduction. The complete execution contract for the operator is
+documented in
+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md`.
+
+**Verdict (this session):** DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR
+
+**Repair authorized:** **FALSE**
+
+**Next step:** operator runs the live specimen per
+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md`.
+
+- ABLATED survives + RESTORED reproduces same native OOM →
+  **PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM** (separate bounded
+  repair ACT authorized).
+- ABLATED reproduces same native OOM → **PASS_DELIVERY_PROPAGATION_REFUTED**
+  (no repair; successor discriminator = CCARD diagnostic activation
+  as a whole).
+- Both survive → **NOT_REPRODUCED**.
+
+**Repository trust:**
+
+```
+$ git status --short
+ M sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts
+ M sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts
+?? .factory/acts/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01.md
+?? .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/
+```
+
+**Pre-existing baseline failures (NOT caused by this ACT):**
+
+- `LocalRuntimeHost.test.ts` and other `runtime/host/*.test.ts` files
+  fail to load in this dev environment with
+  `TypeError: undefined is not an object (evaluating 'z.custom')`
+  (zod resolution issue at the vitest worker boundary).
+- 67 pre-existing `bunx tsc --noEmit` errors in
+  `sdk/packages/core/` (extensions/context, extensions/tools,
+  command-policy, sandbox tests, etc.).
+
+These pre-date the ACT and are unrelated to the seam under test.
+
+**Halt conditions evaluated:**
+
+- `HALT_REPOSITORY_TRUST` — NOT TRIGGERED (git status --short was
+  empty at entry).
+- `HALT_REGRESSION_SEAM_NO_LONGER_PRESENT` — NOT TRIGGERED (the
+  historical `next.delivery` forwarding is intact at HEAD line ~509).
+- `HALT_RED_NOT_REPRODUCED` — NOT TRIGGERED (RED is reproducible
+  via CCARD-WIRE-01 expected failure under ablation; production-mode
+  baseline passes).
+- `CAPTURE_INSUFFICIENT` — NOT TRIGGERED (code-level discriminators
+  are complete and load-bearing; live specimen is operator-driven).
