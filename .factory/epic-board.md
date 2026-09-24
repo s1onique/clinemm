@@ -8662,3 +8662,117 @@ All three halts in the chain are now cancelled:
 - `HALT_STALE_SESSION_HISTORY_AUTHORITY_UNPROVEN` (CORRECTION01)
 - `HALT_CACHE_COHERENCE_EVENT_BRIDGE_NOT_PRODUCTION_PROVEN` (CORRECTION02 first pass)
 - `HALT_EVENT_PRODUCER_EDGE_STILL_UNPROVEN` (this ACT, composed-evidence closure)
+
+
+## ACT-CLINEMM-EXTENSION-HOST-CONTINUOUS-CPU-SAMPLING01 — PASS_CPU_CAPTURE_INFRASTRUCTURE_READY_LIVE_CAPTURE_AUTHORIZED — 2026-09-24
+
+**Status:** PASS / LIVE_CAPTURE_AUTHORIZED. The CPU continuous sampling
+infrastructure is now race-correct under all four bounded corrections.
+Successor ACT ACT-CLINEMM-EXTENSION-HOST-CPU-CAPTURE01 is unblocked.
+
+### Four iterations
+
+- **iteration01** — HALT_CPU_PROFILE_FINALIZATION_FALSE_GREEN: the
+  test seam did not exercise the production max-duration path; the
+  finalizer was a parallel codepath, not the single authority.
+  RESOLVED by iteration02.
+
+- **iteration02** — bounded correction: single
+  `finalizeActiveCapture()` owns the final Profiler.stop; both
+  MAX_DURATION timer AND test seam call it; `failed_segment_count`
+  schema added; wall-clock `started_at`; single serialization.
+  28/28 PASS. RESOLVED `HALT_CPU_PROFILE_FINALIZATION_FALSE_GREEN`.
+
+- **iteration03** — HALT_CPU_PROFILE_FINALIZATION_ROTATION_RACE:
+  `_state === "rotating"` does NOT mean Profiler is running; the
+  horizon path issued a phantom Profiler.stop. Fixed with explicit
+  `profilerRunning` boolean; `finalizing` lock; `serialize_ms` and
+  final-segment `started_at` P1 fixes folded in. 30/30 PASS.
+  RESOLVED `HALT_CPU_PROFILE_FINALIZATION_ROTATION_RACE`.
+
+- **iteration04** — HALT_CPU_PROFILE_STOP_INFLIGHT_FINALIZER_RACE:
+  `profilerRunning` stays true during the entire
+  `await session.post("Profiler.stop")` window. A concurrent
+  finalizer firing in that window saw `profilerRunning === true`
+  and posted a duplicate Profiler.stop. `CPUCAP-FINAL-RACE-01` did
+  not prove this because it awaited the rotation to completion
+  first. Fixed with `stopInFlight` boolean + `inFlightStopPromise`
+  shared between `rotate()` and `finalizeActiveCapture()`;
+  `rotationSettled` Promise for the finalizer to await before
+  cleanup+meta; `disconnected` guard on rotate()'s post-rotation
+  Profiler.start. 31/31 PASS. RESOLVED
+  `HALT_CPU_PROFILE_STOP_INFLIGHT_FINALIZER_RACE`.
+
+### Ownership invariants (load-bearing)
+
+- **sampling authority**: `profilerRunning` boolean — set true
+  after every successful Profiler.start, false after every
+  Profiler.stop. Complementary signal (NOT load-bearing for stop
+  issuance).
+- **outstanding-stop authority**: `stopInFlight` boolean +
+  `inFlightStopPromise` — set true synchronously BEFORE every
+  `await session.post("Profiler.stop")` and false synchronously
+  AFTER. The ONLY load-bearing gate that guarantees "at most one
+  Profiler.stop may be outstanding".
+- **rotation completion**: `rotationSettled: Promise<void>`
+  resolved only when rotate() body fully settles (persist,
+  counter updates, disconnected-aware post-rotation Profiler.start).
+  Finalizer's deferred path awaits it before cleanup+meta so meta
+  writes observe rotation's final _perf state.
+- **finalization ownership**: `finalizing` boolean set at
+  finalizeActiveCapture entry; rotate() aborts on
+  finalizing=true.
+- **disconnected-session state**: `disconnected` boolean set in
+  cleanup(); rotate()'s post-rotation Profiler.start guarded by
+  `if (disconnected) return false`.
+
+### Final gates
+
+- CPUCAP focused: **31/31 PASS** (28 from iteration02 + 2 from
+  iteration03 + 1 new CPUCAP-FINAL-INFLIGHT-STOP-01)
+- ALLOCAUTH01 conservation: 25/25 PASS
+- SLAC01 conservation: 16/16 PASS
+- TQCB+BTCONT+CCARD conservation: 37/37 PASS
+- TOTAL: **109/109 PASS** across all 6 test files
+- tsc --noEmit (apps/vscode): 0 errors
+- biome check: 0 errors, 8 infos (style-only)
+- git diff --check: clean
+
+### Three fault-injection verifications
+
+- **CPUCAP-FINAL-PRODUCTION-01**: bypass production Profiler.stop
+  → test FAILS → reverted → PASS.
+- **CPUCAP-FINAL-HORIZON-01**: replace `if (profilerRunning)` with
+  old `_state`-based check → test FAILS with `expected 3 to be 2`
+  (phantom 3rd Profiler.stop) → reverted → PASS.
+- **CPUCAP-FINAL-INFLIGHT-STOP-01**: replace
+  `if (profilerRunning && !concurrentStopInFlight)` with
+  `if (true)` → test FAILS with `expected 2 to be 1` (phantom 2nd
+  Profiler.stop from finalizer) → reverted → PASS.
+
+### Successor boundary (exact, per Leamas digest)
+
+> Run **one clean production-shaped dogfood specimen** with:
+> `CLINEMM_RUNTIME_PROFILE=dogfood`, `CLINEMM_PTAD=1`,
+> `CLINEMM_DIAG_CPU_PROFILE=1`; leave
+> `CLINEMM_DIAG_ALLOCATION_PROFILE` **unset** for the first
+> specimen. Use the already-frozen workload:
+> `sh -c 'echo STARTED; sleep 30; echo FINISHED'`. Enforce the
+> artifact identity invariant
+> `packaged_extension_sha == installed_extension_sha == meta.installed_bundle_sha256`
+> — otherwise `CAPTURE_INSUFFICIENT`. Inspect the **last three
+> complete segments**, not just the final one. Classify
+> CP1–CP5. If the winning leaf is mangled/minified, the next ACT
+> is **symbolization, not repair**. Repair authorization remains
+> **FALSE** until the source-level function is bound.
+
+### Verdict
+
+`PASS_CPU_CAPTURE_INFRASTRUCTURE_READY_LIVE_CAPTURE_AUTHORIZED`
+
+Repair: unauthorized. Live capture: authorized.
+
+C1 closure reason: the four iterations' bounded corrections +
+fault-injection verifications prove the ownership invariants
+load-bearing. No new P0 remains that warrants another pre-capture
+correction.
