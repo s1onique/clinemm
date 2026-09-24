@@ -8987,3 +8987,164 @@ TERMINATION-AUTHORITY01
   uncaughtExceptionMonitor, warning}; do not add channels without a
   new correction ACT.
 ```
+
+## ACT-CLINEMM-EXTENSION-HOST-TERMINATION-AUTHORITY01 / CORRECTION02 — PASS_TERMINATION_AUTHORITY_INFRASTRUCTURE_SEMANTICALLY_INERT_LIVE_SPECIMEN_AUTHORIZED — 2026-09-24
+
+**HALT addressed:** HALT_TERMINATION_WITNESS_BEFOREEXIT_ASYNC_SEMANTIC_DELTA
+**Status:** PASS / LIVE_SPECIMEN_AUTHORIZED (C1: GO directly to the live specimen)
+
+### What changed (CORRECTION02)
+
+Per the operator directive's HALT:
+
+> Node explicitly documents that a `beforeExit` listener may schedule
+> asynchronous work, and doing so can cause the process to continue
+> instead of exiting. The witness's generic `record()` path performs an
+> async append (`void writer(eventsPath, ...).catch(...)`), and
+> `beforeExit` uses that same `record()` path. So this interleaving is
+> possible:
+>   event loop becomes empty
+>     -> beforeExit fires
+>     -> witness schedules async fs.appendFile()
+>     -> new async work exists
+>     -> process stays alive
+>     -> beforeExit may fire again later
+> That directly violates the stated "semantically inert" witness
+> contract. By contrast, the `exit` listener is safe for synchronous
+> final evidence because Node says the process cannot be kept alive
+> from `exit`, and only synchronous operations are allowed there.
+
+Per the operator's preference, the witness removes `beforeExit`
+entirely. The frozen safe-list is now EXACTLY:
+
+```
+FROZEN SAFE-LIST (post-CORRECTION02):
+  exit
+  uncaughtExceptionMonitor
+  warning
+```
+
+### Code changes (production)
+
+```text
+apps/vscode/src/sdk/extension-host-termination-authority.ts:
+  - TerminationAuthorityEventKind union narrowed to {exit,
+    uncaughtExceptionMonitor, warning}
+  - TerminationAuthorityCounters drops processBeforeExitObserved
+    (no producer after the listener removal)
+  - record() drops the beforeExit counter-update branch
+  - process.on("beforeExit", ...) REMOVED from install()
+  - module-header + TerminationAuthorityEventKind comment +
+    install-seam-invariant comment updated to document the
+    CORRECTION02 rationale + Node.js docs citations
+
+scripts/analyze-termination-authority.mjs:
+  - processBeforeExitObserved counter field removed
+    (no producer)
+```
+
+### Test changes
+
+```text
+apps/vscode/src/sdk/__tests__/extension-host-termination-authority01
+  .termination-authority.test.ts:
+  - TATRM-INSTALL-01 rewritten: EXPECTED set is now
+    {exit, uncaughtExceptionMonitor, warning}; added a
+    negative-assertion on beforeExit
+  - TATRM-EVENT-01 rewritten from beforeExit -> exit (the exit
+    listener uses sync fs to flush; synchronous-flush semantics
+    preserved; counter now asserts processExitObserved +
+    processExitCode rather than processBeforeExitObserved)
+  - TATRM-CONSERVE-BEFOREEXIT-01 NEW: witness enabled ->
+    listenerCount("beforeExit") unchanged (mutation-resistant
+    discriminator; future regressions that re-add a beforeExit
+    listener trip this test)
+  - TATRM-CONSERVE-01 local variable renamed beforeExit ->
+    beforeExitListeners for clarity (the variable captured the
+    'exit' listener count, not beforeExit)
+  - stableCounters() helper drops processBeforeExitObserved field
+  - Total: 31 cases across 6 describe blocks (was 30 in CORRECTION01;
+    +1 = TATRM-CONSERVE-BEFOREEXIT-01)
+```
+
+### Activation-seam comment update
+
+```text
+apps/vscode/src/extension.ts (line 270):
+  before: "process.on beforeExit/exit/uncaughtExceptionMonitor/..."
+  after:  "process.on exit/uncaughtExceptionMonitor/warning only
+          -- safe-list per CORRECTION01+02"
+```
+
+### Evidence files updated
+
+```text
+02-witness-contract.md  rewritten: safe-list is now
+                        {exit, uncaughtExceptionMonitor, warning};
+                        beforeExit + removal rationale + Node.js
+                        docs citations documented in the
+                        channels-not-observed section
+03-red-design.md       TATRM-CONSERVE-BEFOREEXIT-01 added to
+                        discriminator list; TATRM-EVENT-01 noted as
+                        rewritten; TATRM-INSTALL-01 noted as updated;
+                        CORRECTION02 section added
+04-focused-gates.txt   rewritten: 31 cases across 6 describe blocks;
+                        analyzer TA5 roundtrip re-verified
+                        post-correction02
+05-conservation.txt    TATRM-CONSERVE-BEFOREEXIT-01 documented with
+                        mutation-check description; post-correction02
+                        frozen safe-list documented
+result.json             rewritten with halt_addressed =
+                        HALT_TERMINATION_WITNESS_BEFOREEXIT_ASYNC_
+                        SEMANTIC_DELTA and frozen_safe_list =
+                        {exit, uncaughtExceptionMonitor, warning}
+                        and channels_deliberately_not_observed
+                        .beforeExit section
+```
+
+### Final gates (post-correction02)
+
+- Typecheck (`bunx tsc --noEmit`): **0 errors**
+- Biome check (changed files): **0 errors, 0 warnings**
+- Bun:test unit suite (`test:unit`): **1168/1168 PASS, 0 fails**
+  (zero regression vs CORRECTION01)
+- `git diff --check`: **clean** (no whitespace or line-ending errors)
+- Focused vitest suite: **31 cases across 6 describe blocks** (was 30
+  in CORRECTION01; +1 = TATRM-CONSERVE-BEFOREEXIT-01); follows the
+  same vitest convention as the existing CPUCAP/ALLOCAUTH/EHLOOP
+  suites; blocked by the same pre-existing `z.object` vitest transform
+  defect (verified by reproducing on
+  extension-host-continuous-cpu-sampling01.cpucap01.test.ts). Out of
+  scope.
+- Analyzer end-to-end smoke (post-correction02):
+    - TA6 roundtrip: PASS (exit 3, verdict.json written)
+    - TA5 roundtrip (synthesized, post-correction02 with 1
+      uncaughtExceptionMonitor + 2 warning events): PASS (exit 2,
+      CAPTURE_INSUFFICIENT, verdict.json written)
+
+### Epic cursor (closed + next)
+
+```text
+TERMINATION-AUTHORITY01
+  iteration01
+    -> HALT_TERMINATION_WITNESS_SIGNAL_SEMANTIC_DELTA
+    -> CORRECTION01 applied: safe-list frozen to {beforeExit, exit,
+       uncaughtExceptionMonitor, warning}; semantic-inertia
+       discriminators added; verdict schema shrunk accordingly
+  correction01
+    -> HALT_TERMINATION_WITNESS_BEFOREEXIT_ASYNC_SEMANTIC_DELTA
+    -> CORRECTION02 applied: beforeExit REMOVED entirely; safe-list
+       frozen to {exit, uncaughtExceptionMonitor, warning};
+       TATRM-CONSERVE-BEFOREEXIT-01 added; TATRM-EVENT-01 rewritten
+       from beforeExit -> exit
+  CLOSED / infrastructure semantically inert / LIVE_SPECIMEN_AUTHORIZED
+
+C1: GO directly to the live specimen.
+  [OPERATOR LIVE SPECIMEN PENDING]
+    CLINEMM_DIAG_TERMINATION_AUTHORITY=1 + failing notify-enabled
+    background workload
+    -> analyze-termination-authority.mjs <capture-dir>
+    -> TA1..TA6 -> follow-on ACT selected by verdict matrix on §12
+  CRITICAL: safe-list is exactly {exit, uncaughtExceptionMonitor,
+  warning}; do not add channels without a new correction ACT.
+```
