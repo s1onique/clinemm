@@ -10702,3 +10702,138 @@ These pre-date the ACT and are unrelated to the seam under test.
   baseline passes).
 - `CAPTURE_INSUFFICIENT` — NOT TRIGGERED (code-level discriminators
   are complete and load-bearing; live specimen is operator-driven).
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01 — PASS_DISCRIMINATORS_INSTALLED_BUNDLE_BUILT_LIVE_SPECIMEN_READY — 2026-09-25
+
+**Disposition:** DISCRIMINATORS_INSTALLED → BUNDLE_BUILT →
+LIVE_SPECIMEN_READY (closure deferred to operator).
+
+**SUBJECT_HEAD and bundled VSIX (one-time build, identical bytes for
+both specimens):**
+
+| Field           | Value                                                                                |
+|-----------------|--------------------------------------------------------------------------------------|
+| SUBJECT_HEAD    | `2edd6249855b4413b3a45da3717176958dbcf31c`                                            |
+| Version         | `4.1.16`                                                                              |
+| VSIX path       | `dist/dogfood/clinemm-4.1.16-2edd62498.vsix`                                          |
+| VSIX size       | `14627848` bytes (~13.95 MB)                                                          |
+| VSIX sha256     | `fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd`                   |
+| Built via       | `vsce package` (manual invocation; sandbox workaround for better-sqlite3 postinstall) |
+| Package files   | 52                                                                                    |
+
+ABALTED and RESTORED specimens use IDENTICAL VSIX BYTES — the
+ablation is toggled entirely by the env var
+`CLINEMM_OOM_DISC01_ABLATE_DELIVERY` at launch time. No rebuild
+between specimens.
+
+**Positive Extension Host attestation (AB-ATTEST-01):**
+
+The constructor of `PendingPromptsController` emits ONE line on
+`process.stderr` with the exact prefix
+`[CLINEMM_OOM_DISC01_ATTEST]` and the key/value fields:
+
+```
+[CLINEMM_OOM_DISC01_ATTEST] subject=<sha|unknown|unset> ablation_active=true|false env_present="1"|<unset> eh_pid=<int> ppid=<int|unknown> constructed_at=<ISO>
+```
+
+Bound to `process.pid` so the live-specimen operator can pair
+`ablation_active=true|false` with the recorded Extension Host PID.
+
+The bundled VSIX contains the runtime lookup
+`process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY`, the esbuild-inlined
+`globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`, and the
+`[CLINEMM_OOM_DISC01_ATTEST]` line marker (verified by grep on
+extracted `extension.js`).
+
+**SUBJECT_HEAD define (esbuild):**
+
+`apps/vscode/esbuild.mjs` wires
+`CLINEMM_OOM_DISC01_SUBJECT_HEAD=<sha>` into the bundle define table
+when the env var is set at build time. The runtime lookup goes
+through `globalThis.<name>` (not `process.env.<name>`) because the
+constructor must be tolerant of TypeScript-only declarations that have
+no runtime symbol unless substituted.
+
+**Focused gates (CORRECTION01):**
+
+| Gate | Mode | Result | Exit code |
+|------|------|--------|-----------|
+| pending-prompt-service.test.ts | production | 15/15 PASS | 0 |
+| pending-prompt-service.test.ts | ablation | 14/15 PASS + 1 expected RED (CCARD-WIRE-01) | 1 |
+| sdk/core typecheck | n/a | 0 new errors in touched files (67 pre-existing in unrelated files) | n/a |
+| apps/vscode typecheck | n/a | exit 0, clean | 0 |
+| git diff --check | n/a | clean | n/a |
+| vitest-pool worker-termination EPERM | both | OBSERVED (sandbox-specific); suite exit code matches assertion result, NOT EPERM | n/a |
+
+**Historical pitfall (documented in production code):**
+
+`declare const CLINEMM_OOM_DISC01_SUBJECT_HEAD` is a TypeScript-only
+construct; at runtime the identifier is `undefined` unless esbuild
+`--define:CLINEMM_OOM_DISC01_SUBJECT_HEAD='...'` was applied. A direct
+reference would throw `ReferenceError: ... is not defined`, which
+`try { ... } catch {}` silently swallowed, making the AB-ATTEST-01
+test fail mysteriously with `n_calls=0`. The lookup now goes through
+`globalThis as { ... }.CLINEMM_..._SUBJECT_HEAD` so the absence is
+observable as the literal token `<runtime-unset>` rather than a silent
+swallowed error.
+
+**Halt conditions evaluated (CORRECTION01):**
+
+- `HALT_VSIX_BYTES_DIFFER_BETWEEN_SPECIMENS` — NOT TRIGGERED
+  (single VSIX sha256 `fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd`;
+  env var toggles at launch).
+- `HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE` — NOT TRIGGERED
+  (verified by grep on extracted `extension.js`: define + runtime
+  lookup + line marker all present).
+- `HALT_ATTESTATION_NOT_EMITTED` — NOT TRIGGERED
+  (AB-ATTEST-01 verifies emission from the controller constructor).
+- `HALT_QUEUE_STEER_SEMANTICS_ALTERED` — NOT TRIGGERED
+  (only the conditional spread of `next.delivery` is touched; all
+  other forwarding preserved per AB-DELIVERY-02).
+- `HALT_VITEST_EPERM_TREATED_AS_ASSERTION_FAILURE` — NOT TRIGGERED
+  (separately characterized: worker-shutdown EPERM is sandbox-related,
+  not assertion-related; suite exit code matches the assertion result).
+
+**Verdict:** PASS_DISCRIMINATORS_INSTALLED_BUNDLE_BUILT_LIVE_SPECIMEN_READY
+
+**Repair authorized:** FALSE
+
+**Next step:** operator runs the live specimen per
+`.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/05-live-ablation.md`
+using the bundled VSIX at
+`dist/dogfood/clinemm-4.1.16-2edd62498.vsix`. The ABLATED and
+RESTORED specimens use IDENTICAL VSIX bytes (sha256
+`fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd`); the
+operator toggles `CLINEMM_OOM_DISC01_ABLATE_DELIVERY=1` for ABLATED
+and unsets it for RESTORED. The positive attestation line in each
+specimen's stderr confirms `ablation_active=true|false` bound to the
+recorded Extension Host PID.
+
+**Repository trust (CORRECTION01):**
+
+```
+$ git status --short
+(empty)
+
+$ git log --oneline -6
+589455b11 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01: result.json update
+414e9b166 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01: evidence + bundle identity
+e6f2d6ab5 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01: evidence + board
+2edd62498 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
+8062ac347 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
+97a2efcb0 ACT-CLINEMM-EXTENSION-HOST-NATIVE-TRAP-SYMBOLIZATION01: PASS_NATIVE_TRAP_SYMBOLIZED
+```
+
+**Production code changes (CORRECTION01):**
+
+```
+sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts        # AB-DELIVERY-01/02 + AB-ATTEST-01
+sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.test.ts # AB-DELIVERY-01/02 + AB-ATTEST-01
+apps/vscode/esbuild.mjs                                                   # CLINEMM_OOM_DISC01_SUBJECT_HEAD define wired
+```
+
+No other queue/steer semantics changed. Diagnostic mode is
+DEFAULT_OFF; the env var MUST NOT be set in production builds and
+MUST NOT be documented outside this ACT.
