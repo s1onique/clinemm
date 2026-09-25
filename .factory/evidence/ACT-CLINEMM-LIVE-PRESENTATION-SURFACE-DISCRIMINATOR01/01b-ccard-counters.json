@@ -1,4 +1,11 @@
 {
+  "_provenance": {
+    "source_file": "01a-ccard.NORMALIZED_DERIVED.jsonl",
+    "source_kind": "NORMALIZED_DERIVED_FROM_LIVE (synthetic; see 00-raw-trace-status.md)",
+    "not_raw": true,
+    "load_bearing_for_cardinality": true,
+    "load_bearing_for_classification": false
+  },
   "total_records": 13,
   "terminal_committed": 1,
   "notify_consume_enter": 1,
@@ -24,9 +31,9 @@
   "task_completion_committed": 1,
   "wake_C4_to_C8_jobId_correlation": "identical (J on seq 4..10)",
   "classification": {
-    "WAKE_CARDINALITY": "HEALTHY",
-    "EXECUTION_CARDINALITY": "EXPLAINED",
+    "WAKE_CARDINALITY": "HEALTHY (structural; synthetic-trace derived)",
+    "EXECUTION_CARDINALITY": "EXPLAINED (structural; synthetic-trace derived)",
     "TASK_COMPLETION_COMMIT": 1,
-    "PRESENTATION_CARDINALITY": "UNKNOWN"
+    "PRESENTATION_CARDINALITY": "UNRESOLVED (cannot bind visible UI to persisted messages without raw operator dump)"
   }
 }

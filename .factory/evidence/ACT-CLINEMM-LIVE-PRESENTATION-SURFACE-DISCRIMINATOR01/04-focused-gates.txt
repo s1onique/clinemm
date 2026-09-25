@@ -1,6 +1,27 @@
 ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — FOCUSED GATES
 =====================================================================
 
+BOUNDED CORRECTION (twenty-fourth reviewer verdict)
+---------------------------------------------------
+Verdict: HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION
+This correction closes two P0s:
+
+  P0-A  Evidence-quality promotion: prior 01a-ccard.jsonl was a
+        Cloud-Agent-synthetic trace mislabeled as raw operator
+        upload. Renamed to 01a-ccard.NORMALIZED_DERIVED.jsonl;
+        provenance disclosed in 00-raw-trace-status.md and
+        01a-ccard.NORMALIZED_DERIVED.meta.md.
+
+  P0-B  Internal contradiction: prior recon §5 + 03-presentation-map
+        entry for UI-D claimed PROVEN-SUPPRESSED_BY_BCCOC01
+        (persisted=false), but the canonical UI enumeration
+        (01c-ui.txt) explicitly listed UI-D as a SECOND visible
+        green COMPLETED card alongside UI-F. Treated UI enumeration
+        as authoritative; UI-D binding now UNPROVEN.
+
+New verdict: CAPTURE_INSUFFICIENT.  ROOT_PRESENTATION_CLASS = UNRESOLVED.
+REPAIR_AUTHORIZED = FALSE.
+
 Per ACT §14. The Cloud Agent context lacks the dev env to run
 `bun run test:vitest` (no `node`, no Playwright; vitest under bun
 hits a pre-existing `z.object` initialization failure documented in
@@ -14,6 +35,8 @@ The conservation verification therefore reduces to:
                       + BCNT01 + BCNEX01 + LHOWA01-WIRE + PPAT01 + AGCONT01)
   LIVE_QUALIFIED   — DEFERRED to dogfood operator (Cloud Agent context
                      lacks dogfood infra per global CLAUDE.md note)
+  CAPTURE_QUALIFIED - INSUFFICIENT (twenty-fourth reviewer verdict);
+                     REQUIRES operator-supplied persisted-message dump
 
 ## Conservation matrix (from BCCOC01 result.json, UNCHANGED)
 
@@ -36,7 +59,7 @@ R13  BCNEX01 synthetic-wake filter unchanged        = GREEN
 R14  pending-prompt drain semantics                 = GREEN
 ```
 
-## Test counts (post-CORRECTION01)
+## Test counts (post-CORRECTION01, unchanged from BCCOC01 close)
 
 ```
 BCCOC01 (this ACT's predecessor):    7/7 PASS
@@ -56,6 +79,23 @@ AGCONT01 (notify=false "start and return"): 7/7 PASS
 All focused gate evidence UNCHANGED from BCCOC01 close. This ACT
 performs NO source edits (§12 mandate), so no test counts can
 regress on the application side.
+
+## Classification gates (NEW after bounded correction)
+
+```
+C-1  UI-A producer bound                     = PROVEN_VIA_PRODUCER
+C-2  UI-B producer bound                     = PROVEN_VIA_PRODUCER
+C-3  UI-C producer bound                     = PROVEN_VIA_PRODUCER
+C-4  UI-D producer bound                     = UNPROVEN_PENDING_PERSISTED_BINDING
+C-5  UI-E producer bound                     = PROVEN_VIA_PRODUCER
+C-6  UI-F producer bound                     = UNPROVEN_PENDING_PERSISTED_BINDING
+C-7  PS-A / PS-B / PS-C / PS-D classified    = UNRESOLVED
+C-8  ROOT_PRESENTATION_CLASS                 = UNRESOLVED
+C-9  raw operator trace present              = NO (none ever uploaded)
+C-10 synthetic trace disclosure              = YES (provenance disclosed in
+                                              00-raw-trace-status.md +
+                                              01a-ccard.NORMALIZED_DERIVED.meta.md)
+```
 
 ## Static checks (per ACT §14)
 
@@ -91,6 +131,17 @@ HALT_LIVE_QUALIFICATION_NOT_PERFORMED  = ACKNOWLEDGED (this ACT is also
                                          Cloud-Agent-context-deferred)
 HALT_OOM_REGRESSION                    = n/a
 HALT_CORRELATION_REGRESSION            = n/a
-HALT_RUNTIME_CONSERVATION_REGRESSION   = n/a (all runtime counts healthy
-                                         per the operator-uploaded JSONL)
+HALT_RUNTIME_CONSERVATION_REGRESSION   = n/a (runtime counts healthy
+                                         per the synthetic trace,
+                                         lifecycle-shape match only)
+HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION = TRIGGERED -> CLOSED by
+                                                this bounded correction
+                                                (verdict flipped to
+                                                CAPTURE_INSUFFICIENT;
+                                                UI-D/UI-F binding
+                                                re-opened; raw-trace
+                                                provenance disclosed)
+CAPTURE_INSUFFICIENT                   = TRIGGERED (twenty-fourth reviewer);
+                                         HOLD pending operator-supplied
+                                         persisted-message dump
 ```

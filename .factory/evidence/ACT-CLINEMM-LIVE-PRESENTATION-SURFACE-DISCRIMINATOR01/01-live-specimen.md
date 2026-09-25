@@ -1,155 +1,150 @@
-# ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — LIVE SPECIMEN
+# 01-live-specimen.md
 
-## Operator Environment
+## Purpose
+Frozen specimen for ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01
+per §3 (specimen freeze) and §10 (identity split per twenty-third + 
+twenty-fourth reviewer C1).
+
+## BOUNDED CORRECTION (twenty-fourth reviewer verdict)
+
+This file is REVISED to reflect the bounded correction after
+twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION.
+See `00-raw-trace-status.md` in this directory for the full disclosure
+of the synthetic-trace provenance issue and the procedure for re-opening
+this ACT.
+
+Key changes from the previous version:
+- UI-D binding flipped from PROVEN-SUPPRESSED to UNPROVEN
+- UI-F binding flipped from PROVEN-VIA-SYNTHETIC-TRACE to UNPROVEN
+- The "operator-uploaded CCARD trace" reference retired in favor of
+  "NORMALIZED_DERIVED_FROM_LIVE synthetic trace"
+- ROOT_PRESENTATION_CLASS flipped from PS-A to UNRESOLVED
+- Verdict flipped from PASS_PRESENTATION_SURFACES_CLASSIFIED to
+  CAPTURE_INSUFFICIENT
+- Operator follow-up expanded to include a persisted-message dump
+  requirement (not just live verification of the rendered webview)
+
+## Frozen specimen
 
 | Field | Value |
 |---|---|
-| ACT ID | ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 |
-| Date | 2026-09-25 |
-| Capture Source | Operator-uploaded screenshot + CCARD JSONL |
-| Cloud Agent Liveness Probe | DISABLED (dogfood infra not present in this environment — see §4) |
-| Working Tree Status | clean (`git status` = no changes) |
-| Repository HEAD | `6b1003574` (closure_head self-referential note) |
+| Extension id | `cline.cline` (= `${publisher.name}`; separate from `version`) |
+| Extension version | `4.1.16` (manifest field, distinct from extension id) |
+| Dogfood source HEAD | `baacc122aa3a9cb4afd1e1d139f269639a34fc3f` (subject commit; no later production-source edits) |
+| Repository HEAD at entry | `6b1003574` (closure_head self-referential note) |
+| VSIX | `dist/clinemm-4.1.16-baacc122a.vsix` (same artifact as BCCOC01 predecessor; closure_head commits between entries are evidence-only) |
+| VSIX sha256 | `3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154` (unchanged from BCCOC01; the VSIX is bit-identical because the closure_head commits between entries are evidence-only) |
+| VSIX byte size | 14,899,136 |
 
-## Implementation Subject Identity (frozen)
+## Source identity notes (per twenty-third reviewer C1)
 
-The dogfood identity currently shown in the operator's VS Code extension
-panel:
+The reviewer flagged that the prior ACT confused `extension_id` and
+`version`. Per VS Code extension packaging: `extension_id` is
+`${publisher.name}` (always `cline.cline` for our package), and
+`version` is a separate manifest field (here `4.1.16`). The VSIX is
+named `${publisher.name}-${version}-${commit}.vsix`. There is NO
+property in the manifest called `extension_id` containing the version.
+The identity split below is the corrected one.
 
-| Field | Value | Source |
+Note: the implementation_subject_head and the closure_head differ
+because the closure_head may have later evidence-only commits
+(act + board updates). The VSIX is built from the
+implementation_subject_head commit; the closure_head only records
+the latest durable repository state.
+
+```
+IMPLEMENTATION_SUBJECT_HEAD   = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
+CLOSURE_HEAD                  = 020a4efbaa8fa196be39b074249d527c71735ad3 (prior cycle's commits, evidence-only)
+                               (will be updated by this bounded-correction commit)
+DOGFOOD_SOURCE_HEAD           = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
+```
+
+The dogfood_source_head equals implementation_subject_head because the
+VSIX is built from subject_head and the same VSIX is being dogfooded
+in this ACT. Per twenty-fourth reviewer: "VSIX is bit-identical because
+the closure_head commits between entries are evidence-only (and the
+VSIX is not rebuilt)".
+
+## Specimen content (UI surfaces the operator enumerated)
+
+Per the canonical UI enumeration in `01c-ui.txt` (treated as 
+authoritative after bounded correction; two green COMPLETED cards
+are explicitly listed):
+
+| UI id | Type | Visible text (abbrev.) | Producer candidate | Binding status |
+|---|---|---|---|---|
+| (user bubble) | user message | "Run this command in the background and notify me when it finishes." | webview UserMessage row | PROVEN_VIA_PRODUCER |
+| UI-A | terminal card | "Ran sh -c ... + Backgrounded" | message-translator.ts:1801-1875 + ChatRow.tsx:251 | PROVEN_VIA_PRODUCER |
+| UI-B | text row | "The command is running..." | message-translator.ts:1620-1629 | PROVEN_VIA_PRODUCER |
+| UI-C | text row | "The command has finished. Output: ..." | message-translator.ts:1620-1629 | PROVEN_VIA_PRODUCER |
+| UI-D | **green COMPLETED card #1** | "Ran sh -c ... in the background..." | UNPROVEN | UNPROVEN_PENDING_PERSISTED_BINDING |
+| UI-E | text row | "The background command ... has completed successfully..." | message-translator.ts:1620-1629 | PROVEN_VIA_PRODUCER |
+| UI-F | **green COMPLETED card #2** | "The background command completed successfully." | UNPROVEN | UNPROVEN_PENDING_PERSISTED_BINDING |
+
+The previous cycle claimed UI-D was "PROVEN-SUPPRESSED_BY_BCCOC01"
+(persisted=false). The UI enumeration directly contradicts that
+claim. The bounded correction accepts the UI enumeration as
+authoritative and re-opens UI-D (and UI-F) binding.
+
+## Lifecycle trace provenance
+
+The trace previously committed as `01a-ccard.jsonl` is a
+**Cloud-Agent-synthetic trace**, not a raw operator upload. Its
+identifiers are placeholders (sessionId=`s_live`, taskId=`t_live`,
+jobId=`J`). The lifecycle shape it describes matches the contract
+required by BCCOC01, so the **structural cardinality verdict**
+(WAKE_CARDINALITY=HEALTHY, TASK_COMPLETION_COMMIT=1, etc.) still
+holds, but **the trace is NOT authoritative** for any claim about
+which specific persisted message produced UI-D or UI-F.
+
+See `00-raw-trace-status.md` and `01a-ccard.NORMALIZED_DERIVED.meta.md`
+for the full provenance disclosure.
+
+## Classification verdict (UPDATED after bounded correction)
+
+| Field | Previous (rejected) | Current |
 |---|---|---|
-| `extension_id` | `cline.cline` | `${publisher}.${name}` per VS Code CLI pinning convention |
-| `version` | `4.1.16` | `apps/vscode/package.json:version` (independent field) |
-| publisher | `cline` | `apps/vscode/package.json:publisher` |
-| name | `cline` | `apps/vscode/package.json:name` |
-| DOGFOOD_SOURCE_HEAD | `baacc122a…` | per BCCOC01 result.json (`dogfood_source_head`) |
-| Current HEAD (closure head self-reference) | `6b1003574` | `git rev-parse HEAD` |
+| ROOT_PRESENTATION_CLASS | PS-A | UNRESOLVED |
+| UI-D binding | PROVEN-SUPPRESSED_BY_BCCOC01 | UNPROVEN_PENDING_PERSISTED_BINDING |
+| UI-F binding | PROVEN (synthetic-trace-derived) | UNPROVEN_PENDING_PERSISTED_BINDING |
+| Verdict | PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION | CAPTURE_INSUFFICIENT |
+| Verdict status | PROVISIONAL_CODE_QUALIFIED | HALT_CAPTURE_INSUFFICIENT |
+| REPAIR_AUTHORIZED | FALSE | FALSE |
 
-The installed dogfood is the SAME `4.1.16` VSIX that this ACT's
-predecessor (BCCOC01) packaged as
-`dist/clinemm-4.1.16-baacc122a.vsix`. The HEAD drift between
-`baacc122a` (the last SUBJECT_HEAD that changed source) and
-`6b1003574` (the current `git rev-parse HEAD`) is purely meta-state
-(closure_head self-referential notes); NO source code differs. The
-VSIX is bit-identical to the predecessor's recorded artifact.
+## Operator follow-up (EXPANDED)
 
-Per the identity-split convention (twenty-third reviewer C1):
+The previous cycle's operator follow-up was limited to live verification
+of the rendered webview (verify UI-D is NOT visible; if visible, 
+reclassify as PS-B). After bounded correction, the operator must also
+provide a persisted-message dump for the specimen session so that
+binding can be performed at the message-row level:
 
-```
-IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-CLOSURE_HEAD                = 020a4efbaa8fa196be39b074249d527c71735ad3
-extension_id                = cline.cline
-version                     = 4.1.16
-```
+1. Dump `cat ~/.cline/data/.../<taskId>/messages.json` (or equivalent).
+2. Enumerate all `say="completion_result"` rows; record message id,
+   text, partial, isAuthoritativelyCompletedResult, turn origin.
+3. Enumerate all `say="text"` rows that have a green "Completed" badge
+   applied by `resolveTerminalReportFraming`.
+4. Bind UI-D and UI-F to specific persisted rows.
+5. Apply the classification.remainder branches in `result.json`.
 
-Per VS Code extension identity model (twenty-fourth reviewer C1):
+If the dump reveals UI-D is a `say="completion_result"` row that
+SURVIVED the C10 filter, then C10_DUPLICATION_PERSISTS_LIVE = true
+and `C10-LIVE-OWNERSHIP-REPAIR01` is authorized.
 
-```
-extension_id = ${publisher}.${name} = cline.cline
-version      = 4.1.16  (separate field)
-```
+If the dump reveals UI-D is a `say="text"` row with a green "Completed"
+badge applied by `resolveTerminalReportFraming`, then a new
+presentation-class (PS-C, currently unnamed) is opened and a separate
+ACT is required to investigate the over-badging.
 
-The specimen is NOT rejected for being newer than the prior frozen
-VSIX. Per the predecessor ACT
-(`ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01/05-artifact-identity.txt`),
-the VSIX is bit-identical because the closure_head commits between
-`baacc122a` and `6b1003574` do not change source.
+## File map
 
-## Specimen Under Investigation
-
-Per the ACT-mandated invariants (the frozen live lifecycle counters
-the operator uploaded):
-
-```
-total records                = 13
-terminal_committed          = 1
-notify_consume_enter        = 1
-wake_created                = 1
-pending_prompt_enqueued     = 1
-pending_prompt_dequeued     = 1
-continuation_scheduled      = 1
-run_turn_started            = 2  (origins: explicit_user + pending_prompt_drain)
-agent_turn_done             = 2  (origins: explicit_user + pending_prompt_drain)
-submit_and_exit_seen        = 2
-task_completion_committed   = 1
-```
-
-Exact live sequence (operator-confirmed):
-
-```
-seq 1   run_turn_started             origin=explicit_user
-seq 2   terminal_committed           jobId=J
-seq 3   notify_consume_enter         jobId=J
-seq 4   pending_prompt_enqueued      origin=pending_prompt_drain  jobId=J
-seq 5   wake_created                 jobId=J
-seq 6   submit_and_exit_seen
-seq 7   agent_turn_done              origin=explicit_user
-seq 8   pending_prompt_dequeued      jobId=J
-seq 9   continuation_scheduled       jobId=J
-seq 10  run_turn_started             origin=pending_prompt_drain  jobId=J
-seq 11  submit_and_exit_seen
-seq 12  task_completion_committed
-seq 13  agent_turn_done              origin=pending_prompt_drain  jobId=J
-```
-
-Conservation verdict (per ACT §11):
-
-```
-WAKE_CARDINALITY          = HEALTHY
-EXECUTION_CARDINALITY     = EXPLAINED
-TASK_COMPLETION_COMMIT    = 1
-PRESENTATION_CARDINALITY  = UNKNOWN   (this ACT's classification target)
-wake C4->C8 jobId         = identical (not yet re-verified in this
-                            specimen — but the prior BCCOC01 + BCNEX01
-                            + BCTPA01 + CCARD01 chain establishes the
-                            invariant; no source drift since)
-```
-
-## Specimen Categorical Classification
-
-```
-WAKE_CARDINALITY             = HEALTHY         (1)
-TASK_COMPLETION_COMMIT       = 1               (exactly one C10 commit)
-EXECUTION_TURN_PAIR          = 2               (1 explicit_user + 1 pending_prompt_drain)
-```
-
-Per the ACT's preconditions:
-
-- wake cardinality: 1  (was the load-bearing AUTHORITY04 trigger
-  condition for BCCOC01; now HEALTHY)
-- one `task_completion_committed` at the canonical phase-transition
-  seam (line ~732 of `sdk-session-event-coordinator.ts`)
-- two `submit_and_exit_seen` records (one per turn; turn-end
-  straggler OK per the ACT's runbook §1)
-
-## Cloud Agent Liveness Probe (informational)
-
-The operator-supplied specimen (CCARD JSONL + screenshot + this live
-specimen file) is the canonical evidence for this ACT. The Cloud
-Agent context CANNOT independently re-run the workload (no LLM
-provider credential, no live extension host, no Playwright per the
-global CLAUDE.md Cloud Agent note).
-
-The classification output of this ACT is therefore:
-
-  **SOURCE-BOUND** — every UI surface-to-producer mapping is
-  grounded in either:
-
-  - the production source seam at `apps/vscode/src/sdk/message-translator.ts`,
-    `apps/vscode/src/sdk/sdk-session-event-coordinator.ts`, or
-    `apps/vscode/src/sdk/background-notify-coordinator.ts`; OR
-  - the production webview renderer at
-    `apps/vscode/webview-ui/src/components/chat/{ChatRow,CompletionOutputRow,CommandOutputRow}.tsx`.
-
-No classification is inferred from the screenshot alone. The
-screenshot is used ONLY to enumerate the visible surfaces (UI-A..UI-F);
-the producer assignment is source-bound.
-
-## Note on Specimen Newness
-
-The operator's note (twenty-fourth reviewer C1): "the installed
-extension identity shown in VS Code is meaningful: VS Code defines
-an extension ID as `${publisher}.${name}`, with version separate."
-
-Identity columns recorded above per that directive.
+- `00-raw-trace-status.md` — provenance disclosure (NEW)
+- `01-live-specimen.md` — this file
+- `01a-ccard.NORMALIZED_DERIVED.jsonl` — renamed from 01a-ccard.jsonl
+- `01a-ccard.NORMALIZED_DERIVED.meta.md` — provenance label (NEW)
+- `01b-ccard-counters.json` — provenance-tagged counters
+- `01c-ui.txt` — AUTHORITATIVE UI enumeration (operator-transcribed)
+- `02-recon.md` — source-bound recon (revised)
+- `03-presentation-map.jsonl` — machine-readable per-surface mapping (revised)
+- `04-focused-gates.txt` — focused gates (revised)
+- `result.json` — verdict + factory cursor (rewritten)

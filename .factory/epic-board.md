@@ -11684,61 +11684,53 @@ version                     = 4.1.16         (separate per VS Code CLI pinning f
 
 ---
 
-**ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION (PROVISIONAL_CODE_QUALIFIED) — 2026-09-25**
+**ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — CAPTURE_INSUFFICIENT (BOUNDED CORRECTION after twenty-fourth reviewer) — 2026-09-25**
 
-**Status:** PASS (provisional_code_qualified; LIVE_A + LIVE_B deferred
-to dogfood operator per global Cloud Agent context — no LLM credential,
-no live extension host, no Playwright).
+**Status:** CAPTURE_INSUFFICIENT (was PASS_PROVISIONAL_CODE_QUALIFIED in prior cycle; verdict REVISED by bounded correction after twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION). LIVE_A + LIVE_B deferred to dogfood operator; **operator-supplied persisted-message dump additionally required** to bind the two visible green COMPLETED cards (UI-D, UI-F) to specific persisted rows.
 
-**Mission:** classify every visible completion-like UI element in the
-operator-uploaded live dogfood screenshot back to its production
-producer seam. Per the predecessor's note (twenty-fourth reviewer C1):
-"the new trace makes the next ACT much narrower … the runtime
-cardinality is healthy … the remaining ambiguity is presentation
-projection, not wake/execution cardinality."
+**Mission:** classify every visible completion-like UI element in the operator-uploaded live dogfood screenshot back to its production producer seam.
 
-**Classification:** ROOT_PRESENTATION_CLASS = PS-A
-(PRESENTATION_MULTIPLICITY_IS_MULTI_SURFACE).
+**Bounded correction (two P0s closed in this revision):**
+
+- **P0-A  Evidence-quality promotion.** The file previously committed as `01a-ccard.jsonl` was a Cloud-Agent-synthetic trace (`sessionId="s_live"`, `taskId="t_live"`, `jobId="J"`, `ts=1000..1032`) mislabeled as raw operator upload. Renamed to `01a-ccard.NORMALIZED_DERIVED.jsonl`; provenance disclosed in `00-raw-trace-status.md` and `01a-ccard.NORMALIZED_DERIVED.meta.md`. **No raw operator-uploaded JSONL exists in this repository** (verified via `find` across `.factory/`, `.factory/tmp/`, and `/tmp`).
+
+- **P0-B  Internal contradiction.** Prior recon §5 + 03-presentation-map entry for UI-D claimed `PROVEN-SUPPRESSED_BY_BCCOC01` (`persisted=false`), but the canonical UI enumeration (`01c-ui.txt`, which IS the operator-transcribed screenshot ground truth) explicitly lists UI-D as a SECOND visible green COMPLETED card alongside UI-F. The UI enumeration is now treated as authoritative; UI-D binding is re-opened as `UNPROVEN_PENDING_PERSISTED_BINDING`.
+
+**Classification (revised; held open):** ROOT_PRESENTATION_CLASS = **UNRESOLVED**.
 
 ```
-UI-A -> terminal_card_projection   (message-translator.ts:1801-1875 + ChatRow.tsx:251)
-UI-B -> ordinary_text_row          (text content_end + MarkdownRow)
-UI-C -> ordinary_text_row          (text content_end + MarkdownRow)
-UI-D -> PROVEN-SUPPRESSED_BY_BCCOC01  (C10 filter at sdk-session-event-coordinator.ts:566-616)
-UI-E -> ordinary_text_row          (text content_end + MarkdownRow)
-UI-F -> semantic_completion_single (completion content_end + CompletionOutputRow;
-                                     THE 1 task_completion_committed)
+UI-A -> terminal_card_projection   (PROVEN_VIA_PRODUCER)
+UI-B -> ordinary_text_row          (PROVEN_VIA_PRODUCER)
+UI-C -> ordinary_text_row          (PROVEN_VIA_PRODUCER)
+UI-D -> UNPROVEN_PENDING_PERSISTED_BINDING  (was: PROVEN-SUPPRESSED_BY_BCCOC01 — RETIRED)
+UI-E -> ordinary_text_row          (PROVEN_VIA_PRODUCER)
+UI-F -> UNPROVEN_PENDING_PERSISTED_BINDING  (was: semantic_completion_single — RETIRED)
 ```
 
-**Producer-side runtime counts (load-bearing, per ACT §10):**
+**Classification remainder branches** (to be applied once binding is performed):
+
+- **PS-A** if UI-D binds to a non-completion_result message type and UI-F binds to the single `say="completion_result"` row (the original classification, recovered with the binding correction).
+- **PS-B** if both UI-D and UI-F bind to `say="completion_result"` rows with `isAuthoritativelyCompletedResult=true` => C10_DUPLICATION_PERSISTS_LIVE = true; C10-LIVE-OWNERSHIP-REPAIR01 authorized.
+- **PS-C** (new) if neither binds to `completion_result` but both render as green COMPLETED cards => `resolveTerminalReportFraming` is over-badging text rows; separate ACT required.
+- **PS-D** if persisted messages reveal UI-D and UI-F map to DIFFERENT turn origins but both are `completion_result` => C10 filter suppression logic has a per-job mismatch; C10-LIVE-OWNERSHIP-REPAIR01 also authorized.
+
+
+**Producer-side runtime counts (HELD OPEN pending binding):**
 
 ```
-completion_result_commits       = 1    (UI-F; UI-D filtered at C10)
-terminal_card_projections       = 1    (UI-A)
-task_completion_projections     = 1    (mapped 1:1 to UI-F)
-submit_and_exit_presentations   = 2    (one per turn; CCARD-only)
-ordinary_text_rows              = 3    (UI-B, UI-C, UI-E)
+completion_result_commits       = UNRESOLVED (0, 1, or 2 — depends on binding)
+terminal_card_projections       = 1   (UI-A; unchanged)
+task_completion_projections     = UNRESOLVED (0 or 1 — depends on binding)
+submit_and_exit_presentations   = 2   (per synthetic trace, lifecycle-shape only)
+ordinary_text_rows              = 3 or 4   (UI-B, UI-C, UI-E always; UI-D could be a 4th if badged text)
 ```
 
-**Causal seam:** the BCCOC01 ownership-aware C10 filter at
-`sdk-session-event-coordinator.ts:566-616` is verified (source-bound
-walkthrough in `02-recon.md` §3) to correctly suppress UI-D in this
-specimen: at the explicit_user turn's commit instant, the
-`launchedBackgroundJobIds` set contains `J` AND
-`BackgroundNotifyCoordinator.hasActiveNotify("J")` returns `true`, so
-the per-job ownership-aware predicate (`ownedAndOutstanding === true`)
-triggers the filter and REMOVES the `completion_result` row before
-`appendAndEmit`. UI-D never reaches the webview. UI-F (the wake
-turn's completion) passes the same filter cleanly because the wake
-turn launched no jobs and `hasActiveNotify("J") === false` at the
-commit instant (the marker was consumed at seq 3 / `notify_consume_enter`).
-
-**Live runtime cardinality (per ACT §11 conservation):**
+**Live runtime cardinality (per ACT §11 conservation; structural shape-match only):**
 
 ```
-WAKE_CARDINALITY          = HEALTHY         (1)
+WAKE_CARDINALITY          = HEALTHY         (1)   (structural; synthetic trace)
 EXECUTION_CARDINALITY     = EXPLAINED       (2 turns: explicit + drain)
-TASK_COMPLETION_COMMIT    = 1
+TASK_COMPLETION_COMMIT    = 1   (structural)
 wake C4->C8 jobId         = identical (J on seq 4..10)
 runtime_conservation_regression = NONE
 ```
@@ -11748,10 +11740,10 @@ runtime_conservation_regression = NONE
 ```
 IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-CLOSURE_HEAD                = 020a4efbaa8fa196be39b074249d527c71735ad3
+CLOSURE_HEAD                = (set by this bounded-correction commit)
 extension_id                = cline.cline   (= publisher.name)
 version                     = 4.1.16        (separate field per VS Code CLI pinning form)
-VSIX                        = dist/clinemm-4.1.16-baacc122a.vsix
+VSIX                        = dist/clinemm-4.1.16-baacc122a.vsix (bit-identical to BCCOC01)
 VSIX SHA-256                = 3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154
 ```
 
@@ -11772,43 +11764,46 @@ PPAT01:                       9/9 PASS
 AGCONT01:                     7/7 PASS
 ```
 
-**Source diff (this ACT):** ZERO — classification only, no production edits.
-Working tree clean (`git status` = no changes). No successor ACT required.
+**Source diff (this ACT, including bounded correction):** ZERO — classification only, no production edits. The bounded correction is purely documentary (renames, headers, prose revisions). No production code is touched.
 
-**Successor selection:** OPEN_NONE — PS-A classification stands; the
-BCCOC01 ownership-aware C10 filter is correct. Optional
-UX-PRESENTATION-CONSOLIDATION01 only if operator observes UX verbosity
-as a product defect. Do NOT open AUTHORITY04 unless a NEW live trace
-shows wake cardinality greater than one.
+**Successor selection:** OPEN_AFTER_REOPEN — no successor ACT selected in this cycle. Hold at CAPTURE_INSUFFICIENT pending the operator-supplied persisted-message dump. Once supplied, apply the binding procedure and the classification.remainder branches above to determine PS-A / PS-B / PS-C / PS-D. If PS-B or PS-D, authorize C10-LIVE-OWNERSHIP-REPAIR01. If PS-C, open a separate ACT to investigate over-badging.
 
-**Operator required actions** (LIVE_A + LIVE_B):
+**Operator required actions** (LIVE_A + LIVE_B + binding):
 
-1. Verify UI-D is NOT visible in the live webview (a regression of
-   BCCOC01 if it IS visible).
-2. Verify UI-F is the SINGLE visible green COMPLETED card.
-3. If UI-D is visible: report back; root class becomes PS-B and
-   `C10-LIVE-OWNERSHIP-REPAIR01` is authorized.
-4. If UI-D is NOT visible: PS-A classification stands; no further
-   correctness repair.
+1. Dump the persisted `clineMessages` for the specimen session (e.g. `cat ~/.cline/data/.../<taskId>/messages.json`).
+2. Enumerate all `say="completion_result"` rows; record message id, text, partial, isAuthoritativelyCompletedResult, turn origin.
+3. Enumerate all `say="text"` rows that have a green "Completed" badge applied by `resolveTerminalReportFraming`.
+4. Bind each operator-visible green COMPLETED card (UI-D, UI-F) to a specific persisted row.
+5. Verify UI-D is NOT visible in the live webview (regression of BCCOC01 if it IS visible).
+6. Verify UI-F is visible (regardless of binding).
+7. Apply the classification.remainder branches:
+   - 2 persisted `say="completion_result"` rows => PS-B; C10-LIVE-OWNERSHIP-REPAIR01 authorized.
+   - 1 persisted `say="completion_result"` row + UI-D binds to badged text => PS-A re-opens (original classification recovered).
+   - 0 persisted `say="completion_result"` rows + both green cards bind to badged text => PS-C; separate ACT required.
+   - Persisted messages cannot distinguish => extend the hold.
 
-**Decisive Factory state (post-twenty-fourth reviewer C1):**
+**Decisive Factory state (post-twenty-fourth reviewer C1 + bounded correction):**
 
 ```
-ACT                          = CLOSED_PROVISIONAL_CODE_QUALIFIED
-P0                           = NONE
+ACT                          = HOLD_PENDING_OPERATOR_DUMP (was: CLOSED_PROVISIONAL_CODE_QUALIFIED)
+P0                           = NONE_REMAINING (P0-A, P0-B both CLOSED by bounded correction)
 P1                           = none (no new defects surfaced)
 LIVE_A                       = DEFERRED_TO_DOGFOOD_OPERATOR
 LIVE_B                       = DEFERRED_TO_DOGFOOD_OPERATOR
+OPERATOR_DUMP_REQUIRED       = YES (binding procedure)
 SINGLE_JOB / P7b             = LIVE_QUALIFIED (carried from BCCOC01)
 R4 multi-job isolation       = UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER
-DOGFOOD_ROLLOUT              = BLOCKED (per BCCOC01 — still requires LIVE_A + LIVE_B on the
-                                ACTUAL installed VSIX with LLM credential)
+DOGFOOD_ROLLOUT              = BLOCKED (per BCCOC01; not changed by this ACT)
 AUTHORITY04                  = NOT_AUTHORIZED (no new wake-cardinality RED)
-PRESENTATION_CLASS           = PS-A
+PRESENTATION_CLASS           = UNRESOLVED (was: PS-A)
+UI-D_BINDING                 = UNPROVEN_PENDING_PERSISTED_BINDING (was: PROVEN-SUPPRESSED)
+UI-F_BINDING                 = UNPROVEN_PENDING_PERSISTED_BINDING (was: PROVEN via synthetic trace)
+RAW_LIVE_TRACE_PRESERVED     = NO (none ever uploaded; synthetic trace is now disclosed)
+CAPTURE_QUALIFICATION        = INSUFFICIENT
 REPAIR_AUTHORIZED            = FALSE
 ```
 
-**Verdict:** PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION
-(provisional_code_qualified — operator must verify UI-D suppression
-in the live webview before this classification becomes
-LIVE_QUALIFIED).
+**Verdict:** CAPTURE_INSUFFICIENT (HOLD_PENDING_OPERATOR_DUMP). The bounded correction closes the two P0s flagged by the twenty-fourth reviewer (evidence-quality promotion + internal contradiction) and expands the operator follow-up to require a persisted-message dump in addition to live verification. Once the dump is supplied, this ACT can be re-opened with bounded scope to perform the binding and apply the classification.remainder branches.
+
+**Prior verdict (retired, retained as PS-A remainder):** PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION (provisional_code_qualified).
+

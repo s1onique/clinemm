@@ -1,6 +1,25 @@
 # ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — RECON
 
-## Purpose
+## BOUNDED CORRECTION (twenty-fourth reviewer verdict)
+
+This file is REVISED to reflect the bounded correction after
+twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION.
+See `00-raw-trace-status.md` in this directory for the full provenance
+disclosure. Key change in this recon:
+
+  - §3 ("Why UI-D is filtered") is RETIRED as a classification argument.
+    The previous cycle used it to claim UI-D is "PROVEN-SUPPRESSED",
+    which directly contradicts the canonical UI enumeration (01c-ui.txt)
+    that lists UI-D as a visible green COMPLETED card alongside UI-F.
+  - §5 ("Why the operator's screenshot may still appear to show UI-D")
+    is RETIRED; the possibility it dismissed ("the screenshot's UI-D is
+    actually the wake turn's projection") is now taken seriously and
+    re-opened as the binding question.
+  - The new §3 is "UI-D and UI-F binding" — a neutral walkthrough
+    that enumerates candidate producers without claiming proof for
+    either side.
+
+## Purpose (unchanged)
 
 Per ACT §4, classify every visible completion-like UI surface in the
 operator-uploaded screenshot back to its production producer. The
@@ -35,93 +54,94 @@ through UI-F) plus one auxiliary: the user message bubble above them
 
 ## UI surface classification (per ACT §4 mandatory table)
 
+NOTE: the previous cycle claimed UI-D as PROVEN-SUPPRESSED. This table
+treats UI-D and UI-F as UNPROVEN_PENDING_PERSISTED_BINDING until the
+operator supplies a persisted-message dump.
+
 | UI id | visible text/type | producer function | ClineMessage shape | lifecycle stage | turn origin | jobId available? | persisted? | user-visible authority |
 |---|---|---|---|---|---|---|---|---|
-| **User bubble** | "Run this command in the background and notify me when it finishes." | webview `UserMessage` row — emitted from `setRunning` / user-message commit (NOT a `say=` row) | `ask: "user"` or `say: "user_feedback"` (per webview routing) | pre-turn | explicit_user | n/a | YES | user input → drives the originating turn |
-| **UI-A** | "Ran sh -c 'echo STARTED; sleep 30; echo FINISHED' in the background" + status pill "Backgrounded" | `message-translator.ts:1801-1875` (run_commands `content_end`) → row stamped `say="command"`, `commandExecutionDisposition="backgrounded"`; webview route `ChatRow.tsx:251` (`isCommandMessage=true`) → `<CommandOutputRow>` | `{type:"say", say:"command", text:"<cmd>\n<<<COMMAND_OUTPUT_STRING>>>\n<envelope>", partial:false, commandExecutionDisposition:"backgrounded", commandCompleted:false}` | mid-explicit_user turn (after tool call starts, before turn ends) | explicit_user | YES (`{status:"running", jobId:"J"}` envelope embedded in `text`) | YES (persisted on completion of the run_commands tool) | terminal-card projection (NOT an assistant completion) |
-| **UI-B** | "The command is running in the background..." | `message-translator.ts:1620-1629` (text `content_end`) → row stamped `say="text"`; webview route `ChatRow.tsx` `case "text"` → `<MarkdownRow>` | `{type:"say", say:"text", text:"The command is running in the background...", partial:false}` | mid-explicit_user turn (model emitted prose before/after the tool call) | explicit_user | n/a (prose; no jobId) | YES (persisted as assistant text) | ordinary assistant text (NOT a completion) |
-| **UI-C** | "The command has finished. Output: ..." | `message-translator.ts:1620-1629` (text `content_end`) → row stamped `say="text"`; webview route `ChatRow.tsx` `case "text"` → `<MarkdownRow>` | `{type:"say", say:"text", text:"The command has finished. Output: ...", partial:false}` | mid-explicit_user turn OR model-emitted transitional prose | explicit_user | n/a (prose; no jobId) | YES (persisted as assistant text) | ordinary assistant text |
-| **UI-D** | green COMPLETED card with "Ran sh -c ... in the background..." | `message-translator.ts:1761-1795` (completion tool `content_end`) → row stamped `say="completion_result"`, `isAuthoritativelyCompletedResult:true`; webview route `ChatRow.tsx:1102-1125` → `<CompletionOutputRow>` + `resolveTerminalReportFraming(...)` → renders "✓ Completed" badge | `{type:"say", say:"completion_result", text:"Ran sh -c 'echo STARTED; sleep 30; echo FINISHED' in the background...", partial:false, isAuthoritativelyCompletedResult:true}` | end of explicit_user turn (commit attempt) — BUT filtered by C10 ownership-aware filter at `sdk-session-event-coordinator.ts:566-616` IF `hasActiveNotify(jobId)` is true for an owned job | explicit_user | inferred from `MessageTranslatorState.launchedBackgroundJobIds` (TURN-scoped carrier, NOT per-completion) | YES (persisted IF it survives the C10 filter) | semantic completion candidate (filtered or committed exactly once) |
-| **UI-E** | "The background command ... has completed successfully..." | `message-translator.ts:1620-1629` (text `content_end`) → row stamped `say="text"`; webview route `ChatRow.tsx` `case "text"` → `<MarkdownRow>` | `{type:"say", say:"text", text:"The background command ... has completed successfully...", partial:false}` | end of pending_prompt_drain turn (model-emitted prose after consuming the wake prompt) | pending_prompt_drain | n/a (prose; no jobId) | YES (persisted as assistant text) | ordinary assistant text (NOT a completion) |
-| **UI-F** | green COMPLETED card with "The background command completed successfully." | `message-translator.ts:1761-1795` (completion tool `content_end`) → row stamped `say="completion_result"`, `isAuthoritativelyCompletedResult:true`; webview route `ChatRow.tsx:1102-1125` → `<CompletionOutputRow>` + `resolveTerminalReportFraming(...)` → renders "✓ Completed" badge | `{type:"say", say:"completion_result", text:"The background command completed successfully.", partial:false, isAuthoritativelyCompletedResult:true}` | end of pending_prompt_drain turn — committed at the canonical C10 phase transition (`sdk-session-event-coordinator.ts:732`: `setTurnPhase("completed", ..., "session-event-turn-complete-completed")`); capture: `task_completion_committed` | pending_prompt_drain | inferred from `MessageTranslatorState.launchedBackgroundJobIds` (likely empty for the wake turn — wake turn launched no jobs) | YES (persisted as the terminal completion row) | semantic completion (the single `task_completion_committed` in the specimen maps to this row) |
+| **User bubble** | "Run this command in the background and notify me when it finishes." | webview `UserMessage` row — emitted from `setRunning` / user-message commit (NOT a `say=` row) | `ask: "user"` or `say: "user_feedback"` (per webview routing) | pre-turn | explicit_user | n/a | YES | user_input |
+| **UI-A** | "Ran sh -c ... in the background..." + status pill "Backgrounded"/"Running" | `message-translator.ts:1801-1875` (run_commands `content_end`) → row stamped `say="command"`, `commandExecutionDisposition:backgrounded`; webview route `ChatRow.tsx:251` → `<CommandOutputRow>` | `{type:"say", say:"command", commandExecutionDisposition:"backgrounded", text:"<cmd>\\n<<<COMMAND_OUTPUT_STRING>>>\\n{envelope:{status:'running', jobId:'J'}}"}` | mid-explicit_user (right after the run_commands call returns) | explicit_user | J (envelope-embedded) | YES (persisted) | terminal_card_projection |
+| **UI-B** | "The command is running in the background..." | `message-translator.ts:1620-1629` (text `content_end`) → row stamped `say="text"`; webview route `ChatRow.tsx` `case "text"` → `<MarkdownRow>` | `{type:"say", say:"text", text:"The command is running in the background...", partial:false}` | mid-explicit_user turn (model emitted prose before/after the tool call) | explicit_user | n/a (prose; no jobId) | YES (persisted as assistant text) | ordinary_text_row |
+| **UI-C** | "The command has finished. Output: ..." | `message-translator.ts:1620-1629` (text `content_end`) → row stamped `say="text"`; webview route `ChatRow.tsx` `case "text"` → `<MarkdownRow>` | `{type:"say", say:"text", text:"The command has finished. Output: ...", partial:false}` | mid-explicit_user turn OR model-emitted transitional prose | explicit_user | n/a (prose; no jobId) | YES (persisted as assistant text) | ordinary_text_row |
+| **UI-D** | green COMPLETED card with "Ran sh -c ... in the background..." | UNPROVEN. Two candidate producers: (a) `message-translator.ts:1761-1795` (completion tool `content_end`) + C10 filter pass-through → row stamped `say="completion_result"`, `isAuthoritativelyCompletedResult:true`; webview route `ChatRow.tsx:1102-1125` → `<CompletionOutputRow>` + `resolveTerminalReportFraming(...)` → renders "✓ Completed" badge. (b) Unrelated producer (e.g. badged text row from `resolveTerminalReportFraming` on a `say="text"` row). | (a) `{type:"say", say:"completion_result", text:"...", partial:false, isAuthoritativelyCompletedResult:true}` or (b) `{type:"say", say:"text", text:"...", partial:false}` with `resolveTerminalReportFraming` returning a "completed" badge | end of explicit_user turn OR mid-explicit_user (model-emitted recap) | explicit_user (claimed) | (a) J in `launchedBackgroundJobIds` carrier (TURN-scoped) or (b) n/a | UNPROVEN (depends on producer) | UNPROVEN_PENDING_PERSISTED_BINDING |
+| **UI-E** | "The background command ... has completed successfully..." | `message-translator.ts:1620-1629` (text `content_end`) → row stamped `say="text"`; webview route `ChatRow.tsx` `case "text"` → `<MarkdownRow>` | `{type:"say", say:"text", text:"The background command ... has completed successfully...", partial:false}` | end of pending_prompt_drain turn (model-emitted prose after consuming the wake prompt) | pending_prompt_drain | n/a (prose; no jobId) | YES (persisted as assistant text) | ordinary_text_row |
+| **UI-F** | green COMPLETED card with "The background command completed successfully." | UNPROVEN. Two candidate producers: (a) `message-translator.ts:1761-1795` (completion tool `content_end`) + C10 filter pass-through → row stamped `say="completion_result"`, `isAuthoritativelyCompletedResult:true`; webview route `ChatRow.tsx:1102-1125` → `<CompletionOutputRow>` + `resolveTerminalReportFraming(...)` → renders "✓ Completed" badge. (b) Second completion_result from a duplicate commit (regression of BCCOC01). | (a) `{type:"say", say:"completion_result", text:"...", partial:false, isAuthoritativelyCompletedResult:true}` | end of pending_prompt_drain turn OR end of explicit_user turn (regression) | pending_prompt_drain (claimed) or explicit_user (regression) | (a) inferred from `MessageTranslatorState.launchedBackgroundJobIds` (likely empty for the wake turn) | UNPROVEN (depends on producer) | semantic_completion_candidate; exact producer UNPROVEN |
 
-## Producer-side runtime counts (per ACT §10)
+## §3 — UI-D and UI-F binding (REVISED, neutral walkthrough)
 
-These counts are INFERRED from the operator's live CCARD JSONL,
-not from a live trace re-run in this environment.
+The previous cycle's §3 ("Why UI-D is filtered") is RETIRED. The
+current §3 enumerates the candidate producers for both green COMPLETED
+cards without claiming proof for either side.
 
-```
-completion_result_commits       = 1    (UI-F; UI-D was filtered at C10)
-terminal_card_projections       = 1    (UI-A)
-task_completion_projections     = 1    (mapped 1:1 to UI-F)
-submit_and_exit_presentations   = 2    (one per turn; CCARD-only,
-                                        not user-visible chrome)
-ordinary_text_rows              = 3    (UI-B, UI-C, UI-E)
-```
+### UI-D candidate producers
 
-## §3 — Why UI-D is filtered (and why UI-F is committed)
+1. **Candidate D.1 — completion_result SURVIVED the C10 filter (regression)**
+   - Producer: `message-translator.ts:1761-1795` (completion tool
+     `content_end`) + C10 filter pass-through at
+     `sdk-session-event-coordinator.ts:566-616`.
+   - For this candidate to be true, `ownedAndOutstanding` must be
+     `false` at the explicit_user turn's commit instant. That would
+     require either (a) `launchedBackgroundJobIds` to be empty, or
+     (b) `hasActiveNotify(J)` to return `false` for the owned job.
+   - The synthetic trace has `launchedBackgroundJobIds` containing `J`
+     AND `hasActiveNotify(J)===true`, which would predicate
+     `ownedAndOutstanding===true` and FILTER this candidate.
+   - **Hypothesis PS-B trigger**: if the real persisted dump shows
+     UI-D is a `say="completion_result"` row, then either the C10
+     filter was bypassed (regression of BCCOC01) OR the carrier
+     states differed from the synthetic trace.
 
-Per the BCCOC01 ownership-aware C10 filter at
-`sdk-session-event-coordinator.ts:566-616`:
+2. **Candidate D.2 — text row badged by resolveTerminalReportFraming**
+   - Producer: `message-translator.ts:1620-1629` (text `content_end`)
+     + `resolveTerminalReportFraming(...)` (terminalReportFraming.ts:131-156)
+     returning a "completed" badge.
+   - For this candidate to be true, a text row must have been
+     badged as "Completed" by `resolveTerminalReportFraming`. That
+     would require the text content to match the framing
+     predicates (typically terminal-state recap prose).
+   - **Hypothesis PS-C trigger**: if the real persisted dump shows
+     UI-D is a `say="text"` row with a green "Completed" badge,
+     then `resolveTerminalReportFraming` is over-badging text rows,
+     and a new presentation-class (PS-C, currently unnamed) opens.
 
-```ts
-if (result.messages.length > 0) {
-    const hasCompletionResult = result.messages.some((m) => m.say === "completion_result")
-    if (hasCompletionResult) {
-        if (this.options.hasActiveNotify) {
-            // Per-job ownership-aware filter
-            const ownedJobIds = this.options.messageTranslatorState.getLaunchedBackgroundJobIds()
-            let ownedAndOutstanding = false
-            for (const jid of ownedJobIds) {
-                if (this.options.hasActiveNotify(jid)) {
-                    ownedAndOutstanding = true
-                    break
-                }
-            }
-            if (ownedAndOutstanding) {
-                result.messages = result.messages.filter((m) => m.say !== "completion_result")
-            }
-        }
-    }
-}
-```
+### UI-F candidate producers
 
-Walked against the live trace:
+1. **Candidate F.1 — pending_prompt_drain completion_result (the wake turn's terminal commit)**
+   - Producer: `message-translator.ts:1761-1795` (completion tool
+     `content_end`) + C10 filter pass-through.
+   - For this candidate to be true, the wake turn must commit a
+     completion_result row, which the synthetic trace records as
+     seq 11 + the C10 phase transition captures `task_completion_committed`
+     at seq 12.
+   - **Hypothesis PS-A/PS-D remainder**: if UI-D is D.2 (badged text)
+     AND UI-F is F.1 (completion_result), then the original PS-A claim
+     holds (one semantic completion + one misidentified text).
 
-1. **explicit_user turn (seq 1..7)**:
-   - seq 6: completion tool `content_end` at `message-translator.ts:1761-1795`
-     → emits `say="completion_result"` row (UI-D candidate).
-   - At this instant, `launchedBackgroundJobIds` contains `J`
-     (registered at `vscode-run-commands-tool.ts:768-772`).
-   - At this instant, `BackgroundNotifyCoordinator.hasActiveNotify("J")`
-     returns `true` (seq 3 fired; seq 8 hasn't).
-   - **C10 filter predicate**: `ownedAndOutstanding === true` → the
-     `completion_result` row is REMOVED. **UI-D does NOT reach the webview.**
-   - seq 12: `task_completion_committed` would have been eligible here
-     BUT the deferred-completion-barrier (`TQCB01`) holds it because
-     `outstandingAutonomousWork=true` while the wake prompt is still
-     in the queue. The `setTurnPhase("completed", ...)` writer is
-     deferred until `reevaluateDeferredCompletionBarrier()` fires
-     after seq 8.
+2. **Candidate F.2 — second completion_result from a duplicate commit (regression)**
+   - Producer: same as F.1 but from a DIFFERENT turn (e.g. a
+     re-commit of explicit_user's completion_result because the C10
+     filter did not suppress it for some reason).
+   - **Hypothesis PS-B/D trigger**: if UI-F is also a
+     `say="completion_result"` row with `isAuthoritativelyCompletedResult:true`
+     from a different turn origin than the wake turn, then
+     C10_DUPLICATION_PERSISTS_LIVE = true and
+     C10-LIVE-OWNERSHIP-REPAIR01 is authorized.
 
-2. **pending_prompt_drain turn (seq 10..13)**:
-   - seq 11: completion tool `content_end` → emits `say="completion_result"`
-     row (UI-F candidate).
-   - At this instant, `launchedBackgroundJobIds` is EMPTY (wake turn
-     launched no jobs).
-   - At this instant, `hasActiveNotify("J")` returns `false` (marker
-     consumed at seq 3).
-   - **C10 filter predicate**: `ownedAndOutstanding === false` → the
-     `completion_result` row PASSES the filter. **UI-F reaches the webview.**
-   - seq 12: `task_completion_committed` is captured at
-     `sdk-session-event-coordinator.ts:726-731`.
+### What is needed to bind
 
-This accounts for **exactly one** `task_completion_committed`
-(seq 12) and **exactly one** visible green COMPLETED card (UI-F).
-UI-D is filtered by the BCCOC01 ownership-aware C10 filter — this
-is the load-bearing repair the predecessor ACT made.
+To distinguish D.1 vs D.2 and F.1 vs F.2, the operator must supply
+the persisted `clineMessages` for the specimen session. Specifically:
 
-## §4 — Live runtime cardinality walk
+  - A JSON dump of all messages in the specimen task, OR
+  - A grep for `say="completion_result"` in the persisted messages
+    file, showing message id, text, partial, isAuthoritativelyCompletedResult,
+    and turn origin.
+
+The ACT cannot bind without this dump. The synthetic trace is a
+shape witness; it is not an authoritative binding.
+
+## §4 — Live runtime cardinality walk (unchanged from previous cycle)
 
 Per ACT §11, the live lifecycle must remain:
 
@@ -138,32 +158,88 @@ task_completion_committed = 1   ✓  (seq 12)
 wake C4->C8 jobId         = identical (J on seq 4..10)   ✓
 ```
 
-All conservation invariants hold per the operator-uploaded JSONL.
-No regressions detected.
+**IMPORTANT**: these counts are derived from the synthetic trace
+(`01a-ccard.NORMALIZED_DERIVED.jsonl`). They describe the LIFECYCLE
+SHAPE that this ACT's contract requires; they are not a witness that
+the contract was satisfied in a real run. Runtime cardinality from
+the synthetic trace is load-bearing for the conservation matrix only
+(WAKE_CARDINALITY=HEALTHY); it is NOT load-bearing for any
+presentation-class claim.
 
-## §5 — Why the operator's screenshot may still appear to show UI-D
+## §5 — Previous-cycle "why screenshot may still show UI-D" — RETIRED
 
-The user's note (twenty-fourth reviewer) described the screenshot
-as containing MULTIPLE completion-like elements. Per §3, the C10
-filter should suppress the explicit_user turn's `completion_result`
-(UI-D). If the screenshot ACTUALLY shows UI-D, that means either:
+The previous cycle's §5 attempted to reconcile the UI-D visibility
+with the suppression claim by listing three possibilities:
 
-1. The C10 filter did NOT suppress UI-D in this specimen
-   (regression of BCCOC01), OR
-2. The screenshot's UI-D is actually the wake turn's projection
-   (UI-F mislabeled), OR
-3. The operator's screenshot description needs further
-   disambiguation.
+  1. The C10 filter did NOT suppress UI-D (regression of BCCOC01).
+  2. The screenshot's UI-D is actually the wake turn's projection
+     (UI-F mislabeled).
+  3. The operator's screenshot description needs further disambiguation.
 
-The ACT's classification is **PROVEN FOR UI-F** (the single
-`task_completion_committed` is the load-bearing discriminator — there
-is no other production seam that can produce a phase transition to
-`completed` with `task_completion_committed` capture, and the CCARD
-JSONL shows exactly one such capture).
+The bounded correction accepts that ALL THREE are equally plausible
+without a persisted-message binding. §3 above enumerates the
+candidate producers for each visible green card.
 
-For UI-D, the classification is **PROVEN-SUPPRESSED** by the
-source-bound walkthrough in §3. The screenshot showing UI-D would
-be a REGRESSION of BCCOC01. The ACT does NOT authorize a repair in
-this cycle — the operator should verify the actual rendering of UI-D
-in the next live cycle with an active dogfood + LLM credential (a
-state the Cloud Agent context cannot reach).
+## §6 — Producer-side runtime counts (REVISED provenance)
+
+Previous count (REJECTED):
+```
+completion_result_commits       = 1   (UI-F; UI-D was filtered at C10)
+terminal_card_projections       = 1   (UI-A)
+task_completion_projections     = 1   (mapped 1:1 to UI-F)
+submit_and_exit_presentations   = 2   (one per turn; CCARD-only,
+                                        not user-visible chrome)
+ordinary_text_rows              = 3   (UI-B, UI-C, UI-E)
+```
+
+This count was load-bearing for the PS-A verdict. After bounded
+correction, the count is **HELD OPEN**:
+
+```
+completion_result_commits       = UNRESOLVED (0, 1, or 2 — depends on binding)
+terminal_card_projections       = 1   (UI-A; unchanged)
+task_completion_projections     = UNRESOLVED (0 or 1 — depends on binding)
+submit_and_exit_presentations   = 2   (per the synthetic trace, lifecycle-shape only)
+ordinary_text_rows              = 3 or 4   (UI-B, UI-C, UI-E always; UI-D could be a 4th if badged text)
+```
+
+The previous PS-A classification relied on `completion_result_commits=1`,
+which the synthetic trace happens to satisfy but which the operator's
+UI enumeration contradicts. Both cannot be true; the operator's dump
+is the tie-breaker.
+
+## §7 — Operator required actions (EXPANDED)
+
+The previous cycle's operator follow-up was:
+
+  - Verify UI-D is NOT visible in the live webview (regression of
+    BCCOC01 if it IS).
+  - Verify UI-F is the SINGLE visible green COMPLETED card.
+  - If UI-D is visible, root class becomes PS-B and
+    C10-LIVE-OWNERSHIP-REPAIR01 is authorized.
+
+The bounded correction EXPANDS this to also require a persisted-message
+dump:
+
+  1. Dump the persisted `clineMessages` for the specimen session
+     (e.g. `cat ~/.cline/data/.../<taskId>/messages.json`).
+  2. Enumerate all `say="completion_result"` rows; record message id,
+     text, partial, isAuthoritativelyCompletedResult, turn origin.
+  3. Enumerate all `say="text"` rows that have a green "Completed"
+     badge applied by `resolveTerminalReportFraming`.
+  4. Bind each operator-visible green COMPLETED card (UI-D, UI-F)
+     to a specific persisted row.
+  5. Apply the classification.remainder branches in `result.json`:
+     - If 2 persisted `say="completion_result"` rows with
+       `isAuthoritativelyCompletedResult=true`: PS-B = true,
+       `C10-LIVE-OWNERSHIP-REPAIR01` authorized.
+     - If 1 persisted `say="completion_result"` row and UI-D binds
+       to a `say="text"` row with a green badge: PS-A re-opens (the
+       previous cycle's classification is recovered with the binding
+       correction).
+     - If 0 persisted `say="completion_result"` rows and both green
+       cards bind to `say="text"` rows with badges: new class
+       PS-C (over-badging of text rows by
+       `resolveTerminalReportFraming`); separate ACT required.
+     - If persisted history cannot distinguish: CAPTURE_INSUFFICIENT
+       holds; extend the hold.
