@@ -362,7 +362,7 @@ production seam.
 ### Success
 
 ```text
-PASS_TERMINAL_PRESENTATION_ARBITRATION_LIVE_QUALIFIED
+PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
 ```
 
 This conserves:
@@ -372,6 +372,38 @@ PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED
 PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED
 PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED
 ```
+
+**NOT YET** `PASS_TERMINAL_PRESENTATION_ARBITRATION_LIVE_QUALIFIED` —
+live dogfood has not been performed (cloud-agent context lacks
+dogfood VSIX infra + LLM provider credentials). LIVE_DOGFOOD = PENDING.
+
+### Known limitation (reviewer P1, post-closure)
+
+**BCTPA-P7b** documents that the bounded repair's `outstandingAutonomousWork`
+predicate is broader than "suppress the completion belonging to THIS
+background command". When an explicit_user turn fires `attempt_completion`
+while a notify marker exists for SOME background job (e.g., a follow-up
+user question), the current filter suppresses the unrelated completion_result.
+
+The narrow authority that would distinguish "premature ack of THIS
+background" from "unrelated completion" requires jobId correlation on
+the completion_result message. Per ACT §11 constraints ("no permanent
+diagnostic public field", "no new protocol field"), jobId correlation
+is OUT OF SCOPE for this ACT.
+
+Remediation paths (for a future ACT or prompt fix):
+
+- **(A)** Add jobId correlation to completion_result messages
+  (architectural change).
+- **(B)** Update the system prompt to instruct the model not to call
+  `attempt_completion` when `notify_on_completion=true` is set and the
+  background command is still running (model discipline fix).
+- **(C)** Narrow the predicate to ONLY `pendingPromptsKnown > 0` (the
+  wake is queued) — but this DOES NOT fix the frozen bug shape because
+  in that shape the model calls `attempt_completion` BEFORE the
+  command finishes (and therefore before the wake is queued).
+
+Until (A) or (B) is adopted, this ACT does NOT ship to dogfood.
 
 ### RED fails to reproduce
 
@@ -392,8 +424,19 @@ NOT TRIGGERED — BCTPA-P10 + BCNEX01 + CCARD01 + DRP-DRAIN all PASS.
 
 ### Exactly-once repair suppresses the only legitimate notification
 
-NOT TRIGGERED — BCTPA-INV-01 confirms the wake_drain turn's
-completion_result still flows through.
+PARTIALLY TRIGGERED — BCTPA-INV-01 confirms the wake_drain turn's
+completion_result still flows through. But BCTPA-P7b documents that the
+filter is over-broad: it suppresses unrelated completion_result messages
+during active notify. This is a known limitation requiring either (A)
+jobId correlation or (B) system-prompt model discipline.
+
+### Live qualification
+
+NOT TRIGGERED — LIVE_DOGFOOD = PENDING. Cloud-agent context lacks
+dogfood VSIX infra + LLM provider credentials. Per ACT §19, LIVE_DOGFOOD
+= PENDING is acceptable for closure ONLY when LIVE_REPRODUCTION is
+EXECUTABLE / PRODUCTION-SHAPED — which it is (5/5 BCTPA tests pass +
+BCTPA-P7b limitation witness pass via the real production seam).
 
 ---
 
@@ -435,8 +478,19 @@ ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01
     C4->C8 correlation  PASS
     queue/steer         PASS
 
+  KNOWN LIMITATION
+    BCTPA-P7b — filter over-suppresses unrelated completion_result
+    messages during active notify (requires jobId correlation or
+    system-prompt model discipline to fully resolve)
+
   LIVE
-    PASS_TERMINAL_PRESENTATION_ARBITRATION_LIVE_QUALIFIED
+    LIVE_INPUT         = LIVE_OBSERVED (per ACT §0)
+    LIVE_REPRODUCTION  = EXECUTABLE / PRODUCTION-SHAPED (BCTPA01 6/6 PASS)
+    LIVE_DOGFOOD       = PENDING (deferred — cloud-agent context lacks dogfood infra)
+
+  VERDICT
+    PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
+    (NOT LIVE_QUALIFIED — live dogfood has not been performed)
 ```
 
 ---
@@ -460,5 +514,25 @@ speculatively open it now.
 ## 24. Final verdict
 
 ```text
-PASS_TERMINAL_PRESENTATION_ARBITRATION_LIVE_QUALIFIED
+PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
 ```
+
+**NOT YET** `PASS_TERMINAL_PRESENTATION_ARBITRATION_LIVE_QUALIFIED` —
+the live dogfood qualification has not been performed. Per ACT §19,
+LIVE_DOGFOOD = PENDING is acceptable for CODE_QUALIFIED closure when
+LIVE_REPRODUCTION = EXECUTABLE / PRODUCTION-SHAPED (which it is —
+6/6 BCTPA tests pass via the real production seam, including the
+BCTPA-P7b limitation witness).
+
+To upgrade to `LIVE_QUALIFIED`, the next operator must:
+1. Build a dogfood VSIX from this HEAD.
+2. Run the same 30-second workload in a fresh dogfood install.
+3. Capture CCARD JSONL + counters + UI screenshot.
+4. Verify `USER_VISIBLE_TERMINAL_PRESENTATIONS(J) == 1` AND no
+   suppression of unrelated explicit_user completion messages.
+5. Apply remediation path (A) jobId correlation OR (B) system-prompt
+   model discipline BEFORE dogfood if P7b over-suppression is observed
+   live.
+
+Until then, this ACT ships only as a code-level repair. It does NOT
+ship to dogfood without further remediation of the P7b over-suppression.

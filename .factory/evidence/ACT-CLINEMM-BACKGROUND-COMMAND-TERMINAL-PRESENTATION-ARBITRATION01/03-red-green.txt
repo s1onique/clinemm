@@ -39,24 +39,59 @@ Output (vitest):
   → explicit_user + wake_drain → exactly 1 user-visible presentation
 ```
 
+## Known limitation (reviewer P1, post-closure) — RED witness
+
+```text
+BCTPA-P7b: filter over-suppresses unrelated completion_result
+           messages during active notify
+
+  Given:
+    activeNotifyCount > 0 for background job J
+    explicit_user turn fires attempt_completion for unrelated work
+    the completion is NOT the premature ack of J
+
+  Current behavior: completion_result IS suppressed (BROAD)
+  Desired behavior: completion_result flows through (NARROW)
+
+  Current filter predicate:
+    outstandingAutonomousWork =
+      pendingPromptAuthorityUnknown ||
+      pendingPromptsKnown > 0 ||
+      activeNotifyCount > 0
+
+  This fires for ANY active notify marker, regardless of whether the
+  current completion belongs to that specific job. Without jobId
+  correlation on completion_result messages, the filter cannot
+  distinguish "premature ack of THIS background" from "unrelated
+  completion".
+
+  Test asserts the over-suppression IS real (RED witness for the
+  limitation). Remediation requires either (A) jobId correlation or
+  (B) system-prompt model discipline — both out of ACT §11 scope.
+```
+
+Output (vitest):
+
+```
+✓ BCTPA-P7b (KNOWN LIMITATION): unrelated explicit-user completion_result
+  during active notify IS currently suppressed (reviewer P1)
+```
+
 ## Conservation matrix (per ACT §12)
 
 ```
 ✓ BCTPA-P1: terminal AFTER originating turn finishes → 1 presentation
-✓ BCTPA-P7: explicit user turn concurrent with terminal wake → unrelated user response NOT suppressed
+✓ BCTPA-P7: explicit user turn concurrent with terminal wake → unrelated user response NOT suppressed (text/reasoning rows)
+✗ BCTPA-P7b: unrelated explicit-user completion_result during active notify → CURRENTLY OVER-SUPPRESSED (known limitation, RED witness)
 ✓ BCTPA-P10: correlation conservation — jobId threads through both turns
 ```
 
 ## Test counts
 
 ```text
-PRE-REPAIR:
-  Test Files  1 failed (1)
-  Tests       1 failed | 4 passed (5)   ← BCTPA-GREEN-01 was failing before the filter was applied
-
-POST-REPAIR:
+POST-REPAIR (current HEAD):
   Test Files  1 passed (1)
-  Tests       5 passed (5)
+  Tests       6 passed (6)   ← BCTPA-P7b is RED witness (asserts limitation is real)
 ```
 
 ## Conservation suites (broader regression)
@@ -98,10 +133,26 @@ git diff --check               → 0 errors
 Discriminator flips 2 → 1 on the bounded predicate
 (`outstandingAutonomousWork`).
 
+## Live qualification
+
+```text
+LIVE_INPUT         = LIVE_OBSERVED (per ACT §0)
+LIVE_REPRODUCTION  = EXECUTABLE / PRODUCTION-SHAPED (BCTPA01 6/6 PASS)
+LIVE_DOGFOOD       = PENDING (deferred — cloud-agent context lacks dogfood infra)
+
+VERDICT            = PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
+                     (NOT LIVE_QUALIFIED — live dogfood has not been performed)
+
+DOES NOT SHIP TO DOGFOOD until P7b limitation is remediated
+(remediation path A or B — see ACT.md §19).
+```
+
 ## Conservation:
 
 ```text
 OOM repair          PASS (no regression — verify)
 C4->C8 correlation  PASS (BCTPA-P10 + prior CCARD/BCNEX01 suites)
 queue/steer         PASS (no regression — verify via prior drain-semantics suite)
+P7 text rows        PASS (only completion_result is filtered)
+P7b completion      BROAD — over-suppresses unrelated completions (reviewer P1)
 ```

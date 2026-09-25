@@ -699,6 +699,82 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 			expect(textRows.some((r) => r.text.includes("final answer to your follow-up"))).toBe(true)
 		})
 
+		// =========================================================================
+		// BCTPA-P7b: KNOWN LIMITATION (reviewer P1, post-closure)
+		// =========================================================================
+		//
+		// This test documents a known semantic gap in the bounded
+		// repair: the `outstandingAutonomousWork` predicate is broader
+		// than "suppress the completion belonging to THIS background
+		// command". It fires for ANY active notify marker, regardless
+		// of whether the current completion_result message is for
+		// that specific background job.
+		//
+		// When an explicit_user turn fires attempt_completion while a
+		// notify marker exists for SOME background job (e.g., the user
+		// asked a follow-up question while a previous background
+		// command is still running), the current filter suppresses the
+		// unrelated completion_result. The user sees no completion box
+		// for their question even though no background work is blocking
+		// it.
+		//
+		// The narrow authority that ACTUALLY identifies "this completion
+		// is for the backgrounded job" is jobId correlation — the tool
+		// invocation that produced the running background would carry
+		// its jobId, and the agent's attempt_completion in the SAME
+		// turn would be linked to that jobId. Without jobId correlation
+		// at C10 (out of scope per ACT §11: "no permanent diagnostic
+		// public field", "no new protocol field"), the filter cannot
+		// distinguish "premature ack of THIS background" from
+		// "unrelated completion".
+		//
+		// This test is CURRENTLY FAILING (RED) — it documents the
+		// limitation. The bounded repair chose to fix the frozen bug
+		// shape (which requires the broad predicate) at the cost of
+		// over-suppressing P7b. The remediation paths are:
+		//
+		//   (A) Add jobId correlation to completion_result messages
+		//       (architectural change, out of ACT scope).
+		//
+		//   (B) Update the system prompt to instruct the model not to
+		//       call attempt_completion when notify_on_completion=true
+		//       is set and the background command is still running
+		//       (model discipline fix, not framework fix).
+		//
+		//   (C) Narrow the predicate to ONLY `pendingPromptsKnown > 0`
+		//       (the wake is queued) — but this DOES NOT fix the frozen
+		//       bug shape because in that shape the model calls
+		//       attempt_completion BEFORE the command finishes (and
+		//       therefore before the wake is queued).
+		//
+		// Until (A) or (B) is adopted, this ACT does NOT ship to
+		// dogfood. Verdict downgraded from LIVE_QUALIFIED to
+		// CODE_QUALIFIED. LIVE_DOGFOOD = PENDING.
+		// =========================================================================
+		it("BCTPA-P7b (KNOWN LIMITATION): unrelated explicit-user completion_result during active notify IS currently suppressed (reviewer P1)", async () => {
+			const harness = makeHarness()
+
+			// Marker is already registered by makeHarness. Now
+			// drive a UNRELATED explicit-user turn that calls
+			// attempt_completion WITHOUT having invoked any
+			// background command (e.g., the user asked an unrelated
+			// question and the agent answered it).
+			await driveAttemptCompletion(harness, {
+				turnId: "unrelated_explicit_user",
+				isRunningDuringTurn: true,
+				resultText: "Here's the answer to your unrelated question.",
+			})
+
+			// The marker is STILL present (we haven't consumed it).
+			expect(harness.notifyCoordinator.activeNotifyCountForOwner(harness.activeSessionId, harness.activeTaskId)).toBe(1)
+
+			// The unrelated completion_result IS suppressed by the
+			// current broad predicate. This documents the known
+			// limitation (reviewer P1).
+			const visible = visibleCompletionRows(harness)
+			expect(visible.length).toBe(0)
+		})
+
 		it("BCTPA-P10: correlation conservation — jobId threads through both turns", async () => {
 			// Conservation: the same jobId appears in the
 			// consumeTerminal input AND the wake prompt AND the

@@ -11314,8 +11314,29 @@ terminal_presented  1   ← was 2 pre-fix, now 1 post-fix
   LIVE_DOGFOOD = PENDING (deferred — cloud-agent context lacks API-key + dogfood VSIX infra;
     mirrors prior ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 pattern)
 
+**KNOWN LIMITATION (reviewer P1, post-closure):**
+  BCTPA-P7b — the bounded repair's `outstandingAutonomousWork` predicate
+  is broader than "suppress the completion belonging to THIS background
+  command". When an explicit_user turn fires `attempt_completion` while
+  a notify marker exists for SOME background job (e.g., a follow-up user
+  question), the current filter suppresses the unrelated completion_result.
+  Without jobId correlation on completion_result messages (out of ACT §11
+  scope), the filter cannot distinguish "premature ack of THIS background"
+  from "unrelated completion".
+
+  Remediation paths (for a future ACT):
+    (A) Add jobId correlation to completion_result messages (architectural)
+    (B) System-prompt model discipline: don't call attempt_completion
+        when notify_on_completion=true is set and background is running
+    (C) Narrow predicate to ONLY pendingPromptsKnown > 0 (does NOT fix
+        the frozen bug shape — wake isn't queued yet when model calls
+        attempt_completion in turn 1)
+
+  Until (A) or (B) is adopted, this ACT does NOT ship to dogfood.
+
 **Verdict:**
-  PASS_TERMINAL_PRESENTATION_ARBITRATION_LIVE_QUALIFIED
+  PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
+  (NOT LIVE_QUALIFIED — live dogfood has not been performed)
 
 **Conservation of prior verdicts:**
   PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED
