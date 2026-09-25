@@ -35,17 +35,37 @@ Key changes:
   (SHA-256 2a82c0028ad4a39e78c54bcab01ce1502582d9994b555626584ee72f9ec892c1)
 - Synthetic trace relabeled 01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.jsonl
 - Runtime cardinality verdict upgraded from STRUCTURAL to LIVE
-- New LIVE-trace insight: submit_and_exit_seen=2 with BOTH origins
-  = pending_prompt_drain; therefore explicit_user did NOT call the
-  completion tool and did NOT emit a say="completion_result" row.
-- UI-D candidate D.1 (completion_result SURVIVED C10) is ELIMINATED
-  by the LIVE trace; remaining candidates: D.2 (badged text),
-  D.3 (phantom duplicate of wake's completion_result),
-  D.4 (terminal_card re-rendered with badge)
-- PS-B remainder (two completion_result rows) is ELIMINATED by the
-  LIVE trace; remaining remainders: PS-A, PS-C, PS-D, PS-E
-- Round 2 verdict: CAPTURE_INSUFFICIENT (UNCHANGED); runtime
-  cardinality: LIVE; PS-B: ELIMINATED
+- Round 2 attempted to read `submit_and_exit_seen.origin` as causal
+  turn identity and ELIMINATED D.1, F.2, and PS-B. This inference is
+  RETRACTED in round 3 (see below) because `origin` is a diagnostic
+  classification, not a proven causal turn identity.
+
+### Round 3 (twenty-sixth reviewer verdict HALT_SUBMIT_AND_EXIT_ORIGIN_MISINTERPRETED)
+
+Key changes:
+- New evidence rule recorded:
+  ```
+  submit_and_exit_seen.origin
+    = diagnostic origin classification
+    != proven run-turn identity
+  ```
+- Chronology of submit_and_exit_seen recorded:
+  - seq 6 at=1790335477643 → CHRONOLOGICALLY_ASSOCIATED_WITH_EXPLICIT_USER
+    + NOT_CAUSALLY_BOUND (falls inside explicit_user turn interval
+    run_turn_started seq 1 ... agent_turn_done seq 7; 65 ms before
+    pending_prompt_dequeued seq 8)
+  - seq 11 at=1790335481227 → CHRONOLOGICALLY_ASSOCIATED_WITH_PENDING_PROMPT_DRAIN
+    + NOT_CAUSALLY_BOUND (falls inside pending_prompt_drain turn
+    interval run_turn_started seq 10 ... agent_turn_done seq 13;
+    0 ms before task_completion_committed seq 12)
+- D.1 RESTORED as POSSIBLE (round 2 ELIMINATION retracted)
+- F.2 RESTORED as POSSIBLE (round 2 ELIMINATION retracted)
+- PS-B remainder RESTORED as POSSIBLE (round 2 ELIMINATION retracted)
+- SUBMIT_EXIT_TURN_BINDING = UNPROVEN (new field)
+- Operator dump requirement REVISED: enumerate ALL say="completion_result"
+  rows (count expected: 0, 1, or 2; not assumed to be 1)
+- Round 3 verdict: CAPTURE_INSUFFICIENT (UNCHANGED); runtime
+  cardinality: LIVE (UNCHANGED); SUBMIT_EXIT_TURN_BINDING: UNPROVEN
 
 ## Frozen specimen
 
@@ -83,7 +103,7 @@ The identity split below is the corrected one.
 
 ```
 IMPLEMENTATION_SUBJECT_HEAD   = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-CLOSURE_HEAD                  = (set by this round-2 bounded-correction commit)
+CLOSURE_HEAD                  = (set by this round-3 bounded-correction commit)
 DOGFOOD_SOURCE_HEAD           = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 ```
 
@@ -103,9 +123,9 @@ cards are explicitly listed):
 | UI-A | terminal card | "Ran sh -c ... + Backgrounded" | message-translator.ts:1801-1875 + ChatRow.tsx:251 | PROVEN_VIA_PRODUCER |
 | UI-B | text row | "The command is running..." | message-translator.ts:1620-1629 | PROVEN_VIA_PRODUCER |
 | UI-C | text row | "The command has finished. Output: ..." | message-translator.ts:1620-1629 | PROVEN_VIA_PRODUCER |
-| UI-D | **green COMPLETED card #1** | "Ran sh -c ... in the background..." | UNPROVEN — 3 remaining candidates (D.1 ELIMINATED_BY_LIVE_TRACE) | UNPROVEN_PENDING_PERSISTED_BINDING |
+| UI-D | **green COMPLETED card #1** | "Ran sh -c ... in the background..." | UNPROVEN — 4 candidates POSSIBLE (D.1 RESTORED in round 3; D.2, D.3, D.4) | UNPROVEN_PENDING_PERSISTED_BINDING |
 | UI-E | text row | "The background command ... has completed successfully..." | message-translator.ts:1620-1629 | PROVEN_VIA_PRODUCER |
-| UI-F | **green COMPLETED card #2** | "The background command completed successfully." | UNPROVEN — F.1 (wake turn's completion_result) | UNPROVEN_PENDING_PERSISTED_BINDING |
+| UI-F | **green COMPLETED card #2** | "The background command completed successfully." | UNPROVEN — 2 candidates POSSIBLE (F.1 wake turn's completion_result; F.2 second completion_result RESTORED in round 3) | UNPROVEN_PENDING_PERSISTED_BINDING |
 
 ## LIVE runtime cardinality (UPGRADED after round 2)
 
@@ -120,78 +140,118 @@ run_turn_started          = 2   ✓  (seq 1 explicit_user + seq 10 pending_promp
 agent_turn_done           = 2   ✓  (seq 7 explicit_user + seq 13 pending_prompt_drain)
 task_completion_committed = 1   ✓  (seq 12)
 wake C4->C8 jobId         = identical (cmd_mugvhy92x7rm527e on seq 4, 5, 8, 9, 10)   ✓
-submit_and_exit_seen      = 2   (BOTH origin=pending_prompt_drain; explicit_user did
-                                NOT call the completion tool)
+submit_and_exit_seen      = 2   (BOTH origin label=pending_prompt_drain;
+                                CHRONOLOGICALLY: seq 6 inside explicit_user
+                                turn interval; seq 11 inside pending_prompt_drain
+                                turn interval; SUBMIT_EXIT_TURN_BINDING=UNPROVEN)
 ```
 
 All numbers computed from 01a-ccard.LIVE_RAW.jsonl (round-2 ingested).
 
-## LIVE-trace insight (NEW after round 2)
+## LIVE-trace insight (REVISED in round 3)
 
-The LIVE trace's `submit_and_exit_seen` pattern (count=2 with
-BOTH origins=pending_prompt_drain) proves that the explicit_user
-turn did NOT call the completion tool and did NOT emit a
-`say="completion_result"` row. This ELIMINATES UI-D's candidate
-D.1 (completion_result SURVIVED C10 filter) and ELIMINATES the
-PS-B remainder (which required two completion_result rows).
+(Round 2 — RETRACTED in round 3):
 
-Remaining candidates for UI-D:
+  The LIVE trace's `submit_and_exit_seen` pattern (count=2 with
+  BOTH origins=pending_prompt_drain) was originally read as proving
+  that the explicit_user turn did NOT call the completion tool and
+  did NOT emit a `say="completion_result"` row, ELIMINATING UI-D's
+  candidate D.1 and the PS-B remainder.
+
+(Round 3 — CURRENT):
+
+  Evidence rule (NEW):
+  ```
+  submit_and_exit_seen.origin
+    = diagnostic origin classification
+    != proven run-turn identity
+  ```
+
+  Chronology of submit_and_exit_seen records (from LIVE_RAW):
+  - seq 6 at=1790335477643 → CHRONOLOGICALLY_ASSOCIATED_WITH_EXPLICIT_USER
+    + NOT_CAUSALLY_BOUND (falls inside explicit_user turn interval
+    run_turn_started seq 1 ... agent_turn_done seq 7; 65 ms BEFORE
+    pending_prompt_dequeued seq 8)
+  - seq 11 at=1790335481227 → CHRONOLOGICALLY_ASSOCIATED_WITH_PENDING_PROMPT_DRAIN
+    + NOT_CAUSALLY_BOUND (falls inside pending_prompt_drain turn
+    interval run_turn_started seq 10 ... agent_turn_done seq 13;
+    0 ms before task_completion_committed seq 12)
+
+  Under the corrected rule, no presentation-class candidate can be
+  eliminated on the basis of the submit_and_exit_seen pattern.
+
+Remaining candidates for UI-D (all POSSIBLE):
+- D.1: completion_result from explicit_user turn (RESTORED in round 3)
 - D.2: badged text row by `resolveTerminalReportFraming`
 - D.3: phantom duplicate of wake turn's completion_result
 - D.4: terminal_card (UI-A) re-rendered with "Completed" badge after wake
 
-Remaining candidate for UI-F:
+Remaining candidates for UI-F (all POSSIBLE):
 - F.1: wake turn's completion_result at seq 11
+- F.2: second completion_result interpretation (RESTORED in round 3)
+
+PS-B remainder: POSSIBLE (RESTORED in round 3). Two completion_results,
+one per turn, remains consistent with the LIVE trace.
 
 ## Classification verdict (current)
 
-| Field | Round 1 (retired) | Round 2 (current) |
-|---|---|---|
-| ROOT_PRESENTATION_CLASS | UNRESOLVED | UNRESOLVED |
-| UI-D binding | UNPROVEN_PENDING_PERSISTED_BINDING (D.1, D.2 candidates) | UNPROVEN_PENDING_PERSISTED_BINDING (D.2, D.3, D.4 — D.1 ELIMINATED_BY_LIVE_TRACE) |
-| UI-F binding | UNPROVEN_PENDING_PERSISTED_BINDING (F.1, F.2 candidates) | UNPROVEN_PENDING_PERSISTED_BINDING (F.1 only — F.2 ELIMINATED_BY_LIVE_TRACE) |
-| RUNTIME_CARDINALITY | STRUCTURAL (synthetic-trace derived) | LIVE (computed from 01a-ccard.LIVE_RAW.jsonl) |
-| WAKE_CARDINALITY | STRUCTURAL | LIVE |
-| EXECUTION_CARDINALITY | STRUCTURAL | LIVE |
-| C4->C8 jobId correlation | STRUCTURAL | LIVE |
-| RAW_LIVE_TRACE_PRESERVED | NO (incorrect) | YES (ingested byte-identical) |
-| Verdict | CAPTURE_INSUFFICIENT | CAPTURE_INSUFFICIENT |
-| REPAIR_AUTHORIZED | FALSE | FALSE |
+| Field | Round 1 (retired) | Round 2 (retired) | Round 3 (current) |
+|---|---|---|---|
+| ROOT_PRESENTATION_CLASS | UNRESOLVED | UNRESOLVED | UNRESOLVED |
+| UI-D binding | UNPROVEN_PENDING_PERSISTED_BINDING (D.1, D.2 candidates) | UNPROVEN_PENDING_PERSISTED_BINDING (D.2, D.3, D.4 — D.1 ELIMINATED_BY_LIVE_TRACE) | UNPROVEN_PENDING_PERSISTED_BINDING (4 candidates POSSIBLE: D.1 RESTORED, D.2, D.3, D.4) |
+| UI-F binding | UNPROVEN_PENDING_PERSISTED_BINDING (F.1, F.2 candidates) | UNPROVEN_PENDING_PERSISTED_BINDING (F.1 only — F.2 ELIMINATED_BY_LIVE_TRACE) | UNPROVEN_PENDING_PERSISTED_BINDING (2 candidates POSSIBLE: F.1, F.2 RESTORED) |
+| RUNTIME_CARDINALITY | STRUCTURAL (synthetic-trace derived) | LIVE (computed from 01a-ccard.LIVE_RAW.jsonl) | LIVE (UNCHANGED from round 2) |
+| WAKE_CARDINALITY | STRUCTURAL | LIVE | LIVE |
+| EXECUTION_CARDINALITY | STRUCTURAL | LIVE | LIVE |
+| C4->C8 jobId correlation | STRUCTURAL | LIVE | LIVE |
+| RAW_LIVE_TRACE_PRESERVED | NO (incorrect) | YES (ingested byte-identical) | YES (UNCHANGED from round 2) |
+| SUBMIT_EXIT_TURN_BINDING | (not yet defined) | (implied causal) | UNPROVEN (origin label != causal turn identity) |
+| PS-A | POSSIBLE | POSSIBLE (recoverable) | POSSIBLE |
+| PS-B | POSSIBLE | ELIMINATED_BY_LIVE_TRACE (round 2) | POSSIBLE (round 3 restore) |
+| PS-C | POSSIBLE | POSSIBLE | POSSIBLE |
+| PS-D | (not yet defined) | POSSIBLE (new) | POSSIBLE |
+| PS-E | (not yet defined) | POSSIBLE (new) | POSSIBLE |
+| Verdict | CAPTURE_INSUFFICIENT | CAPTURE_INSUFFICIENT | CAPTURE_INSUFFICIENT |
+| REPAIR_AUTHORIZED | FALSE | FALSE | FALSE |
 
-## Operator follow-up (EXPANDED after round 2)
+## Operator follow-up (EXPANDED after round 3)
 
 1. Dump the persisted `clineMessages` for taskId=`1790335441241_5g7oe`
    (e.g. `cat ~/.cline/data/tasks/1790335441241_5g7oe/messages.json`).
-2. Enumerate all `say="completion_result"` rows; record message id,
+2. Enumerate ALL `say="completion_result"` rows (count expected:
+   0, 1, or 2 — NOT assumed to be 1). For each row: record message id,
    text, partial, isAuthoritativelyCompletedResult, turn origin.
-   LIVE trace predicts exactly 1 such row (at seq 11, from
-   pending_prompt_drain).
 3. Enumerate all `say="text"` rows that have a green "Completed" badge
    applied by `resolveTerminalReportFraming`.
 4. Bind UI-D and UI-F to specific persisted rows.
 5. Apply the classification.remainder branches in `result.json`:
    - If UI-D = badged text (D.2) AND UI-F = wake turn's completion_result (F.1):
      PS-A re-opens (original classification recovered).
+   - If UI-D = completion_result from explicit_user turn (D.1) AND
+     UI-F = completion_result from pending_prompt_drain turn (F.1):
+     PS-B re-opens (two completion_results; C10 did not suppress UI-D).
    - If UI-D = phantom duplicate of wake's completion_result (D.3):
      PS-D remainder (webview-side state propagation has a duplicate-render
      defect; UNKNOWN new class).
    - If UI-D = terminal_card re-render (D.4):
      PS-E remainder (renderer over-badging terminal_card; UNKNOWN new class).
-   - PS-B remainder is ELIMINATED (only one completion_result exists).
+   - If F.2 holds (two completion_results) but UI-D binds to
+     something else (D.2/D.3/D.4): PS-C or PS-D or PS-E applies
+     with PS-B-style multiplicity.
    - If persisted history cannot distinguish: CAPTURE_INSUFFICIENT
      holds; extend the hold.
 
 ## File map (REVISED)
 
-- `00-raw-trace-status.md` — REVISED: raw trace ingested + LIVE insight on submit_and_exit_seen pattern
-- `01-live-specimen.md` — this file
-- `01a-ccard.LIVE_RAW.jsonl` — NEW (round 2): raw operator-uploaded live JSONL
+- `00-raw-trace-status.md` — REVISED (round 3): adds evidence rule + chronology block; RETRACTS round-2 inference; RESTORES D.1/F.2/PS-B as POSSIBLE
+- `01-live-specimen.md` — this file (REVISED round 3)
+- `01a-ccard.LIVE_RAW.jsonl` — round 2: raw operator-uploaded live JSONL (UNCHANGED in round 3)
 - `01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.jsonl` — RENAMED from 01a-ccard.NORMALIZED_DERIVED.jsonl (round 2)
 - `01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.meta.md` — provenance label (REVISED)
-- `01b-ccard-counters.LIVE_RAW.json` — NEW (round 2): raw operator-uploaded counters
-- `01b-ccard-counters.json` — REVISED: computed from LIVE_RAW
+- `01b-ccard-counters.LIVE_RAW.json` — round 2: raw operator-uploaded counters (UNCHANGED in round 3)
+- `01b-ccard-counters.json` — round 2: computed from LIVE_RAW (UNCHANGED in round 3)
 - `01c-ui.txt` — AUTHORITATIVE UI enumeration (operator-transcribed; lists 2 green COMPLETED cards)
-- `02-recon.md` — source-bound recon (REVISED to reflect LIVE trace)
-- `03-presentation-map.jsonl` — machine-readable per-surface mapping (REVISED: D.1 ELIMINATED_BY_LIVE_TRACE; D.3 + D.4 added)
-- `04-focused-gates.txt` — focused gates (REVISED: runtime cardinality upgraded to LIVE)
-- `result.json` — verdict + factory cursor (REWRITTEN with LIVE counters and insight)
+- `02-recon.md` — source-bound recon (REVISED round 3: D.1 RESTORED; F.2 RESTORED; PS-B RESTORED)
+- `03-presentation-map.jsonl` — machine-readable per-surface mapping (REVISED round 3: D.1 RESTORED; F.2 RESTORED)
+- `04-focused-gates.txt` — focused gates (REVISED round 3: SUBMIT_EXIT_TURN_BINDING = UNPROVEN; C-12 gate added)
+- `result.json` — verdict + factory cursor (REWRITTEN round 3 with round-3 history entry)

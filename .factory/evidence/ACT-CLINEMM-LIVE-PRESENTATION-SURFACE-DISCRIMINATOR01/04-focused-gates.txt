@@ -29,22 +29,52 @@ Round 2 (twenty-fifth reviewer verdict HALT_RAW_LIVE_TRACE_NOT_INGESTED):
   Round 2 verdict: CAPTURE_INSUFFICIENT (UNCHANGED; PRESENTATION_CLASS
         still UNRESOLVED until binding is performed).
 
-NEW INSIGHT FROM LIVE TRACE
----------------------------
+NEW INSIGHT FROM LIVE TRACE (round 2; round 3 REVISED)
+------------------------------------------------------
 
-The LIVE_RAW trace's `submit_and_exit_seen = 2` with BOTH origins =
-`pending_prompt_drain` proves that the explicit_user turn did NOT
-call the completion tool. Therefore UI-D's candidate D.1
-(completion_result SURVIVED C10) is ELIMINATED_BY_LIVE_TRACE. The
-remaining UI-D candidates are:
+(Round 2 — RETRACTED in round 3; retained for history):
 
-  D.2  text row badged by resolveTerminalReportFraming
-  D.3  phantom duplicate of wake turn's completion_result
-  D.4  terminal_card (UI-A) re-rendered with "Completed" badge after wake
+  The LIVE_RAW trace's `submit_and_exit_seen = 2` with BOTH origins =
+  `pending_prompt_drain` was originally read as: "the explicit_user
+  turn did NOT call the completion tool; therefore D.1 and PS-B are
+  ELIMINATED_BY_LIVE_TRACE." Round 3 (twenty-sixth reviewer) shows
+  this inference is unsound: the origin label is a diagnostic
+  classification, NOT a proven causal turn identity.
 
-PS-B remainder (two completion_result rows) is ELIMINATED_BY_LIVE_TRACE
-because the LIVE trace has exactly one completion_result across the
-session.
+(Round 3 — CURRENT):
+
+  The LIVE_RAW trace's two `submit_and_exit_seen` records both carry
+  `origin=pending_prompt_drain` BUT their wall-clock chronology places
+  each one inside its respective turn interval:
+    seq 6  at=1790335477643  INSIDE explicit_user turn
+                              (run_turn_started seq 1 ... agent_turn_done seq 7)
+                              65 ms BEFORE pending_prompt_dequeued seq 8
+    seq 11 at=1790335481227  INSIDE pending_prompt_drain turn
+                              (run_turn_started seq 10 ... agent_turn_done seq 13)
+                              0 ms before task_completion_committed seq 12
+
+  Evidence rule (NEW):
+    submit_and_exit_seen.origin = diagnostic origin classification
+    submit_and_exit_seen.origin != proven run-turn identity
+
+  Under the corrected rule, the LIVE trace is consistent with EACH
+  submit_and_exit_seen belonging to its chronological turn. Therefore
+  no presentation-class candidate can be eliminated on the basis of
+  the submit_and_exit_seen pattern. All candidates remain POSSIBLE
+  pending persisted-message binding.
+
+  UI-D candidates (round 3 — all POSSIBLE):
+    D.1  completion_result from explicit_user turn (RESTORED in round 3)
+    D.2  text row badged by resolveTerminalReportFraming
+    D.3  phantom duplicate of wake turn's completion_result
+    D.4  terminal_card (UI-A) re-rendered with "Completed" badge after wake
+
+  UI-F candidates (round 3 — all POSSIBLE):
+    F.1  wake turn's completion_result (seq 11)
+    F.2  second completion_result interpretation (RESTORED in round 3)
+
+  PS-B remainder (two completion_result rows): POSSIBLE (RESTORED in round 3).
+  The LIVE trace is consistent with two completion_results, one per turn.
 
 Per ACT §14. The Cloud Agent context lacks the dev env to run
 `bun run test:vitest` (no `node`, no Playwright; vitest under bun
@@ -116,25 +146,36 @@ TASK_COMPLETION_COMMIT  = 1 (LIVE; seq 12)
 WAKE_C4_C8_CORRELATION  = identical (cmd_mugvhy92x7rm527e on seq 4, 5, 8, 9, 10)
 TERMINAL_COMMITTED      = 1 (LIVE; seq 2)
 NOTIFY_CONSUME_ENTER    = 1 (LIVE; seq 3)
-SUBMIT_AND_EXIT_SEEN    = 2 (BOTH with origin=pending_prompt_drain;
-                             explicit_user did NOT call the completion tool)
+SUBMIT_AND_EXIT_SEEN    = 2 (BOTH with origin label=pending_prompt_drain;
+                             seq 6 INSIDE explicit_user turn interval;
+                             seq 11 INSIDE pending_prompt_drain turn interval;
+                             SUBMIT_EXIT_TURN_BINDING = UNPROVEN)
 ```
 
-## Classification gates (REVISED after LIVE ingestion)
+## Classification gates (REVISED after round-3 chronology restore)
 
 ```
 C-1  UI-A producer bound                     = PROVEN_VIA_PRODUCER
 C-2  UI-B producer bound                     = PROVEN_VIA_PRODUCER
 C-3  UI-C producer bound                     = PROVEN_VIA_PRODUCER
 C-4  UI-D producer bound                     = UNPROVEN_PENDING_PERSISTED_BINDING
-                                                (D.1 ELIMINATED_BY_LIVE_TRACE;
-                                                 D.2/D.3/D.4 remain)
+                                                (4 candidates POSSIBLE:
+                                                 D.1 completion_result from
+                                                 explicit_user turn (round 3
+                                                 restore),
+                                                 D.2 badged text,
+                                                 D.3 phantom duplicate,
+                                                 D.4 terminal_card re-render)
 C-5  UI-E producer bound                     = PROVEN_VIA_PRODUCER
 C-6  UI-F producer bound                     = UNPROVEN_PENDING_PERSISTED_BINDING
-                                                (F.1 wake turn's completion_result;
-                                                 single plausible candidate)
+                                                (2 candidates POSSIBLE:
+                                                 F.1 wake turn's completion_result,
+                                                 F.2 second completion_result
+                                                 (round 3 restore))
 C-7  PS-A / PS-B / PS-C / PS-D / PS-E classified = UNRESOLVED
-                                                    (PS-B ELIMINATED_BY_LIVE_TRACE)
+                                                    (NO branch eliminated in
+                                                     round 3; PS-B RESTORED as
+                                                     POSSIBLE)
 C-8  ROOT_PRESENTATION_CLASS                 = UNRESOLVED
 C-9  raw operator trace present              = YES (01a-ccard.LIVE_RAW.jsonl;
                                                   SHA-256 d7302ae9...d24f1)
@@ -143,6 +184,15 @@ C-10 synthetic trace disclosure              = YES (provenance disclosed in
                                                   01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.meta.md)
 C-11 raw counters file present               = YES (01b-ccard-counters.LIVE_RAW.json;
                                                   SHA-256 2a82c002...92c1)
+C-12 submit_and_exit_seen turn binding       = UNPROVEN
+                                                  (origin label != causal
+                                                   turn identity; seq 6
+                                                   chronologically inside
+                                                   explicit_user turn;
+                                                   seq 11 chronologically
+                                                   inside pending_prompt_drain
+                                                   turn; causal identity
+                                                   not proven by origin)
 ```
 
 ## Static checks (per ACT §14)

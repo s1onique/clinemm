@@ -2,21 +2,26 @@
 ======================
 
 REVISED per twenty-fifth reviewer verdict
-HALT_RAW_LIVE_TRACE_NOT_INGESTED. This bounded correction ingests
-the raw operator-uploaded live CCARD trace that was attached to the
-conversation but had not yet been ingested into the repository.
+HALT_RAW_LIVE_TRACE_NOT_INGESTED, then revised again per
+twenty-sixth reviewer verdict HALT_SUBMIT_AND_EXIT_ORIGIN_MISINTERPRETED.
+
+Round 2 (twenty-fifth) ingested the raw operator-uploaded live CCARD
+trace byte-identical. Round 3 (twenty-sixth) retracts the round-2
+inference that submit_and_exit_seen.origin identifies the execution
+turn. The origin label is a diagnostic classification, NOT a proven
+turn-identity assertion. See "Evidence rule" section below.
 
 Purpose
 -------
 Disclose the provenance of the trace used in this ACT so that no
 reader can mistake a normalized / synthetic derivative for the
-authoritative live evidence.
+authoritative live evidence, and so that no reader can mistake a
+diagnostic origin label for a proven causal turn identity.
 
-Status of raw operator-uploaded JSONL (REVISED)
-----------------------------------------------
+Status of raw operator-uploaded JSONL (UNCHANGED from round 2)
+-------------------------------------------------------------
 
-**The raw operator-uploaded JSONL HAS been ingested into this ACT
-in this bounded correction.**
+**The raw operator-uploaded JSONL HAS been ingested into this ACT.**
 
 The raw live CCARD trace was uploaded in the conversation context as
 `~/Downloads/continuation-cardinality-authority.jsonl` and
@@ -47,27 +52,121 @@ The previously-committed synthetic trace (now relabeled
 historical record of the prior cycle's hypothesis but is NOT
 authoritative.
 
-Why P0-A was only partially closed in the previous bounded correction
-----------------------------------------------------------------------
+Evidence rule (NEW, round 3; twenty-sixth reviewer)
+---------------------------------------------------
 
-The previous bounded correction (twenty-fourth reviewer verdict)
-correctly noted that the file committed in this ACT as
-`01a-ccard.jsonl` was a synthetic trace mislabeled as raw operator
-upload. It then incorrectly claimed "no raw operator-uploaded JSONL
-exists in this repository" and "RAW_SOURCE = NONE" /
-"AUTHORITATIVE_LIVE_TRACE = MISSING".
+```
+submit_and_exit_seen.origin
+  = diagnostic origin classification
+  != proven run-turn identity
+```
 
-The truth is that the raw trace WAS uploaded in the conversation
-context but had not been ingested into the repository. The search
-across `.factory/`, `.factory/tmp/`, and `/tmp` was correct for
-those locations, but it failed to also check the operator's
-`~/Downloads/continuation*` upload directory.
+The `origin` field on a JSONL record labels what diagnostic path
+produced the record, not which Cline / SDK turn causally owns the
+record. Two submit_and_exit_seen records in this session both carry
+`origin="pending_prompt_drain"`, but that does NOT prove both belong
+to the later `pending_prompt_drain` turn. Provenance labels and
+causal turn identity are different concepts and must not be
+conflated. This is the Factory distinction the ACT has been
+protecting throughout its history.
 
-This second bounded correction (twenty-fifth reviewer verdict)
-rectifies that omission.
+Round-3 chronology of submit_and_exit_seen events (from LIVE_RAW)
+-----------------------------------------------------------------
 
-What is now actually proven
----------------------------
+```
+seq 1   at=1790335441430  run_turn_started(explicit_user)
+seq 2   at=1790335474709  terminal_committed         origin=background_terminal
+seq 3   at=1790335474710  notify_consume_enter       origin=background_terminal
+seq 4   at=1790335474711  pending_prompt_enqueued    origin=pending_prompt_drain
+seq 5   at=1790335474711  wake_created               origin=background_terminal
+seq 6   at=1790335477643  submit_and_exit_seen       origin=pending_prompt_drain
+seq 7   at=1790335477708  agent_turn_done            origin=explicit_user
+seq 8   at=1790335477709  pending_prompt_dequeued    origin=pending_prompt_drain
+seq 9   at=1790335477709  continuation_scheduled     origin=pending_prompt_drain
+seq 10  at=1790335477709  run_turn_started(pending_prompt_drain)
+seq 11  at=1790335481227  submit_and_exit_seen       origin=pending_prompt_drain
+seq 12  at=1790335481227  task_completion_committed  origin=pending_prompt_drain
+seq 13  at=1790335481256  agent_turn_done            origin=pending_prompt_drain
+```
+
+Labeled:
+
+```
+seq 6 (at=1790335477643):
+  CHRONOLOGICALLY_ASSOCIATED_WITH_EXPLICIT_USER
+  NOT_CAUSALLY_BOUND
+  Reason: seq 6 at=1790335477643 falls chronologically INSIDE the
+  explicit_user turn interval (run_turn_started seq 1 at=1790335441430
+  ... agent_turn_done seq 7 at=1790335477708). It is 65 ms BEFORE
+  pending_prompt_dequeued seq 8 at=1790335477709 (the start of the
+  pending_prompt_drain turn). The origin label says
+  "pending_prompt_drain"; the wall-clock chronology says the
+  event happened during the explicit_user turn. The label and
+  the chronology are not equal. The chronology is sufficient to
+  establish that seq 6 is not causally executed by the later
+  pending_prompt_drain turn; causal identity beyond that is
+  NOT proven.
+
+seq 11 (at=1790335481227):
+  CHRONOLOGICALLY_ASSOCIATED_WITH_PENDING_PROMPT_DRAIN
+  NOT_CAUSALLY_BOUND
+  Reason: seq 11 at=1790335481227 falls chronologically INSIDE the
+  pending_prompt_drain turn interval (run_turn_started seq 10
+  at=1790335477709 ... agent_turn_done seq 13 at=1790335481256).
+  Also: seq 12 task_completion_committed at=1790335481227 is
+  exactly 0 ms after seq 11, which is strong (though not
+  dispositive) evidence that seq 11 is the completion-tool
+  observation for the pending_prompt_drain turn.
+```
+
+Consequence for round-2 inference (RETRACTED in round 3)
+--------------------------------------------------------
+
+Round 2 claimed (incorrectly under the evidence rule above):
+
+> submit_and_exit_seen=2 with both origin=pending_prompt_drain
+> proves the explicit_user turn did NOT call the completion tool
+> and did NOT emit a say="completion_result" row.
+> Therefore D.1, F.2, and PS-B are ELIMINATED.
+
+Round 3 retracts that chain of inference. The corrected reading is:
+
+  - submit_and_exit_seen=2 is LIVE.
+  - submit_and_exit_seen=2 with both `origin="pending_prompt_drain"`
+    is LIVE.
+  - The wall-clock chronology of submit_and_exit_seen records
+    relative to run_turn_started / agent_turn_done records is LIVE.
+  - From the chronology, seq 6 is chronologically inside the
+    explicit_user turn and seq 11 is chronologically inside the
+    pending_prompt_drain turn.
+  - From the chronology alone, we CANNOT conclude "only one
+    completion_result exists". Two completion_results — one per
+    turn — remains consistent with the LIVE trace.
+  - We CANNOT eliminate D.1, F.2, or PS-B on the basis of the
+    submit_and_exit_seen origin labels.
+  - We CANNOT promote them either, because the chronology does
+    not by itself prove causal turn-identity.
+
+Restored candidate set after round 3:
+
+```
+UI-D:
+  D.1 completion_result from explicit_user turn       POSSIBLE  (round 3 restore)
+  D.2 badged text row from resolveTerminalReportFraming POSSIBLE
+  D.3 phantom projection of wake turn's completion_result POSSIBLE
+  D.4 terminal_card re-rendered with badge after wake POSSIBLE
+
+UI-F:
+  F.1 wake turn's completion_result (seq 11)           POSSIBLE
+  F.2 second completion_result interpretation         POSSIBLE  (round 3 restore)
+
+PS-A / PS-B / PS-C / PS-D / PS-E:
+  UNRESOLVED  (no branch can be selected without persisted
+               message binding)
+```
+
+What is now actually proven (LIVE; round 2; unchanged in round 3)
+-----------------------------------------------------------------
 
   - RUNTIME_CARDINALITY        = LIVE (computed from the raw
                                     operator-uploaded JSONL; not
@@ -78,90 +177,51 @@ What is now actually proven
                                     scheduled; all on
                                     cmd_mugvhy92x7rm527e)
   - C4->C8 jobId correlation   = LIVE (identical: cmd_mugvhy92x7rm527e
-                                    on seq 4, 5, 8, 9, 10)
-  - TASK_COMPLETION_COMMIT     = LIVE (1 capture; seq 12)
-  - TERMINAL_COMMITTED         = LIVE (1 capture; seq 2)
-  - NOTIFY_CONSUME_ENTER       = LIVE (1 capture; seq 3)
+                                    on seq 4,5,8,9,10)
   - RUN_TURN_STARTED           = LIVE (2; explicit_user at seq 1 +
                                     pending_prompt_drain at seq 10)
   - AGENT_TURN_DONE            = LIVE (2; explicit_user at seq 7 +
                                     pending_prompt_drain at seq 13)
-  - SUBMIT_AND_EXIT_SEEN       = LIVE (2; BOTH with origin=
-                                    pending_prompt_drain at seq 6 and
-                                    seq 11; the explicit_user turn
-                                    did NOT call the completion tool
-                                    and therefore did NOT produce a
-                                    say="completion_result" row)
+  - SUBMIT_AND_EXIT_SEEN       = LIVE (2 records; one chronologically
+                                    inside explicit_user turn, one
+                                    chronologically inside
+                                    pending_prompt_drain turn;
+                                    causal turn identity NOT proven
+                                    by origin label)
+  - TASK_COMPLETION_COMMITTED  = LIVE (1; seq 12 at=1790335481227,
+                                    exactly 0 ms after seq 11)
   - PRESENTATION_CLASS         = UNRESOLVED (cannot classify
-                                    PS-A / PS-B / PS-C / PS-D without
-                                    binding the two visible green
-                                    COMPLETED cards to actual
+                                    PS-A / PS-B / PS-C / PS-D / PS-E
+                                    without binding the two visible
+                                    green COMPLETED cards to actual
                                     persisted Cline messages)
   - UI-D PRODUCER              = UNPROVEN_PENDING_PERSISTED_BINDING
-                                    (the LIVE trace's
-                                    submit_and_exit_seen being on
-                                    pending_prompt_drain twice means
-                                    explicit_user did NOT emit a
-                                    completion_result; UI-D must
-                                    therefore be either badged text
-                                    by resolveTerminalReportFraming
-                                    (D.2), or something else entirely)
+                                    (4 candidates POSSIBLE: D.1, D.2,
+                                    D.3, D.4)
   - UI-F PRODUCER              = UNPROVEN_PENDING_PERSISTED_BINDING
-                                    (most likely the wake turn's
-                                    completion_result at seq 11, but
-                                    needs persisted-message binding
-                                    to confirm)
-  - RAW_LIVE_TRACE_PRESERVED   = YES (ingested in this correction)
+                                    (2 candidates POSSIBLE: F.1, F.2)
+  - RAW_LIVE_TRACE_PRESERVED   = YES (ingested in round 2)
+  - SUBMIT_EXIT_TURN_BINDING   = UNPROVEN (origin label not equal to
+                                    causal turn identity)
   - REPAIR_AUTHORIZED          = FALSE
 
-Key insight from the LIVE trace that the synthetic trace obscured
-----------------------------------------------------------------
-
-The previous cycle's synthetic trace had
-`submit_and_exit_seen = 2` with origins `[explicit_user, pending_
-prompt_drain]`. The LIVE trace has `submit_and_exit_seen = 2` with
-origins `[pending_prompt_drain, pending_prompt_drain]` (verified by
-the operator-uploaded counters file).
-
-This means **the explicit_user turn did NOT call the completion
-tool**. It produced `agent_turn_done` at seq 7 without ever
-emitting a `say="completion_result"` row. So UI-D (the first visible
-green COMPLETED card) **cannot** be an explicit_user
-`completion_result` row — that row simply does not exist in the
-specimen session.
-
-This significantly narrows the candidate producers for UI-D:
-
-  - Candidate D.1 (completion_result SURVIVED C10) is ELIMINATED
-    by the LIVE trace's `submit_and_exit_seen` pattern.
-  - Candidate D.2 (badged text row from resolveTerminalReportFraming)
-    becomes the PRIOR candidate.
-  - A new candidate D.3 emerges: the wake turn's completion_result
-    row (seq 11) is the only completion_result in the session, so
-    UI-D could be a *phantom* projection — the same single row
-    rendered twice by different webview consumers, or the webview
-    receiving the row's update twice.
-  - A new candidate D.4 emerges: the green COMPLETED card could be
-    rendered from a non-completion_result surface (e.g. the
-    `terminal_card` UI-A getting re-rendered with a "Completed"
-    badge after wake).
-
-Binding to persisted messages remains the only way to disambiguate.
-
 Required operator inputs to re-open (UNCHANGED)
------------------------------------------------
+----------------------------------------------
 
   - The persisted Cline messages (`clineMessages`) for the specimen
     session `taskId=1790335441241_5g7oe`, either as a JSON dump or
     a `cat` of the relevant
     `~/.cline/data/tasks/<taskId>/messages.json`. The operator
     should identify:
-      * message id (or timestamp + sequence) of each
-        `say="completion_result"` row (expected: exactly 1),
-      * its `text` field,
-      * its `partial` flag,
-      * its `isAuthoritativelyCompletedResult` flag,
-      * the turn that produced it (expected: pending_prompt_drain).
+      * ALL `say="completion_result"` rows (record count, not
+        assumption of 1);
+      * their `text` field, `partial` flag, and
+        `isAuthoritativelyCompletedResult` flag;
+      * the persisted-message id / timestamp of each;
+      * the persisted-message id / timestamp of each `say="text"`
+        row near a "Completed" badge;
+      * the persisted-message id / timestamp of the terminal_card
+        re-render candidate (D.4).
 
   - The persisted SDK conversation history (`apiConversationHistory`)
     for the same session, so the wake turn's assistant turn can be
@@ -173,28 +233,29 @@ Required operator inputs to re-open (UNCHANGED)
 
 Once these are supplied, the ACT can be re-opened with bounded
 scope: bind each green COMPLETED card to a specific persisted
-message record, then classify.
+message record, then classify using the four branches above.
 
-Status of this correction
--------------------------
+Status of round 3 bounded correction
+------------------------------------
 
-This bounded correction:
+This bounded correction (twenty-sixth reviewer verdict):
 
-  - Ingests the raw live JSONL as `01a-ccard.LIVE_RAW.jsonl`
-    (byte-identical; SHA-256 verified).
-  - Ingests the raw live counters as `01b-ccard-counters.LIVE_RAW.json`.
-  - Renames the synthetic file to `01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.jsonl`
-    with updated provenance label.
-  - Recomputes `01b-ccard-counters.json` from the LIVE_RAW file.
-  - Updates the recon / result / presentation-map / focused-gates /
-    ACT body / epic board to reflect:
-      - WAKE_CARDINALITY = LIVE (upgraded from STRUCTURAL)
-      - RUNTIME_CARDINALITY = LIVE (upgraded from STRUCTURAL)
-      - C4->C8 jobId = LIVE (upgraded from STRUCTURAL)
-      - PRESENTATION_CLASS = UNRESOLVED (UNCHANGED; binding still
-        requires persisted-message dump)
-      - VERDICT = CAPTURE_INSUFFICIENT (UNCHANGED)
-      - REPAIR_AUTHORIZED = FALSE (UNCHANGED)
+  - KEEPS the raw files and LIVE cardinality upgrades exactly as
+    ingested in round 2.
+  - RETRACTS the round-2 inference that
+    `submit_and_exit_seen.origin` identifies the execution turn.
+  - RESTORES D.1, F.2, and PS-B as POSSIBLE candidates.
+  - ADDS the explicit evidence rule
+    (`submit_and_exit_seen.origin != proven run-turn identity`).
+  - RECORDS the round-3 chronology of both submit_and_exit_seen
+    events and labels them
+    CHRONOLOGICALLY_ASSOCIATED_WITH_EXPLICIT_USER /
+    CHRONOLOGICALLY_ASSOCIATED_WITH_PENDING_PROMPT_DRAIN +
+    NOT_CAUSALLY_BOUND.
+  - KEEPS the reopen condition unchanged (persisted-message dump
+    for taskId=1790335441241_5g7oe).
+  - KEEPS VERDICT = CAPTURE_INSUFFICIENT.
+  - KEEPS REPAIR_AUTHORIZED = FALSE.
 
 No production code is modified.
 
