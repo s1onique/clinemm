@@ -206,11 +206,22 @@ function makeHarness(options: { simulatePreFix?: boolean } = {}): Harness {
 	// drives the activeNotifyCountForOwner predicate that the
 	// deferred-completion-barrier (and this ACT's repair filter) consult.
 	//
+	// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	// At the same seam as `registerMarker` the production code calls
+	// `messageTranslatorState.recordLaunchedBackgroundJob(jobId)` so the
+	// C10 completion-result filter can narrow the over-broad
+	// `activeNotifyCount > 0` predicate to per-job ownership. The test
+	// harness mirrors the production wiring so the frozen-bug test
+	// (BCTPA-INV-01) and the P7b GREEN test (the inverse assertion)
+	// exercise the same ownership-aware path the production runtime
+	// exercises.
+	//
 	// `simulatePreFix: true` skips the marker registration so the
 	// filter's outstandingAutonomousWork predicate is always false,
 	// reproducing the pre-fix bug shape (both completion rows visible).
 	if (!options.simulatePreFix) {
 		notifyCoordinator.registerMarker({ jobId, sessionId: activeSessionId, taskId: activeTaskId })
+		translatorState.recordLaunchedBackgroundJob(jobId)
 	}
 
 	const appendAndEmit = vi.fn()
@@ -244,6 +255,14 @@ function makeHarness(options: { simulatePreFix?: boolean } = {}): Harness {
 		getPendingPromptCount: (ownerSessionId: string | undefined) =>
 			sdkHost.pendingPrompts("count", { sessionId: ownerSessionId ?? "" }),
 		getActiveNotifyCount: () => notifyCoordinator.activeNotifyCountForOwner(activeSessionId, activeTaskId),
+		// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+		// Per-job liveness probe — the test harness mimics the production
+		// seam at SdkController.ts:2293-2301 (the narrow per-job lookup
+		// against the coordinator's notificationMarkers Map). Wired
+		// here so the C10 filter can distinguish "completion belongs to
+		// a job THIS turn launched AND that job is still outstanding"
+		// from "unrelated completion K".
+		hasActiveNotify: (jobId: string) => notifyCoordinator.hasActiveNotify(jobId),
 	} as never)
 
 	return {
@@ -281,6 +300,18 @@ async function driveAttemptCompletion(
 		turnId: string
 		isRunningDuringTurn: boolean
 		resultText: string
+		/**
+		 * ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+		 * When true (default), simulate the production turn-boundary
+		 * reset by emitting a `pending_prompt_submitted` event at the
+		 * start of this turn (which calls `clearTurnOutcome()` at
+		 * `sdk-session-event-coordinator.ts:455`). Set to false for
+		 * the very first call in a test where the harness has
+		 * pre-recorded the per-turn ownership hint via
+		 * `recordLaunchedBackgroundJob(jobId)` (simulating the
+		 * same-turn run_commands + attempt_completion flow).
+		 */
+		simulateTurnBoundary?: boolean
 	},
 ): Promise<void> {
 	// Toggle session.isRunning for the duration of this turn.
@@ -295,6 +326,29 @@ async function driveAttemptCompletion(
 		startResult: { sessionId: harness.activeSessionId },
 		isRunning: params.isRunningDuringTurn,
 	})
+
+	// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	// Simulate the production turn-boundary reset that
+	// `pending_prompt_submitted` triggers at
+	// `sdk-session-event-coordinator.ts:453-456` (which calls
+	// `messageTranslatorState.clearTurnOutcome()` BEFORE the agent's
+	// tool calls). The harness fires the canonical event rather
+	// than calling `clearTurnOutcome()` directly so it exercises
+	// the exact production code path that does the clearing.
+	//
+	// Default ON for the "this is a NEW turn" case; OFF for the
+	// "this is the FIRST turn after makeHarness pre-recorded the
+	// ownership hint" case (the frozen-bug BCTPA-INV-01 case).
+	if (params.simulateTurnBoundary !== false) {
+		await harness.coordinator.handleSessionEvent({
+			type: "pending_prompt_submitted",
+			payload: {
+				sessionId: harness.activeSessionId,
+				id: `pp-${params.turnId}`,
+				prompt: `<<user_input>>${params.resultText}<<end>><<state>>2<<end>>`,
+			},
+		} as unknown as CoreSessionEvent)
+	}
 
 	// content_start: tool=attempt_completion (or submit_and_exit).
 	await harness.coordinator.handleSessionEvent({
@@ -506,11 +560,18 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 			// agent calls attempt_completion with an INTERMEDIATE
 			// result text ("started the command"). The marker is
 			// still present (notify marker has NOT been consumed
-			// yet).
+			// yet). `simulateTurnBoundary: false` because the
+			// harness's `makeHarness` already pre-recorded the
+			// ownership hint for THIS turn via
+			// `recordLaunchedBackgroundJob(jobId)`; firing
+			// `pending_prompt_submitted` here would clear it and
+			// the C10 filter would let the premature completion
+			// through (the BCTPA-P7b false-RED case).
 			await driveAttemptCompletion(harness, {
 				turnId: "explicit_user",
 				isRunningDuringTurn: true,
 				resultText: "I've started the command in the background. It will take about 30 seconds.",
+				simulateTurnBoundary: false,
 			})
 
 			// Sanity: after turn 1, active notify count is STILL 1
@@ -700,58 +761,33 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 		})
 
 		// =========================================================================
-		// BCTPA-P7b: KNOWN LIMITATION (reviewer P1, post-closure)
+		// BCTPA-P7b: CLOSED via ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01
 		// =========================================================================
 		//
-		// This test documents a known semantic gap in the bounded
-		// repair: the `outstandingAutonomousWork` predicate is broader
-		// than "suppress the completion belonging to THIS background
-		// command". It fires for ANY active notify marker, regardless
-		// of whether the current completion_result message is for
-		// that specific background job.
+		// Predecessor ACT
+		// (ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01)
+		// documented this as a known limitation (RED witness). The
+		// bounded repair there used the over-broad aggregate
+		// `activeNotifyCount > 0` predicate at C10, which suppressed
+		// unrelated completion K.
 		//
-		// When an explicit_user turn fires attempt_completion while a
-		// notify marker exists for SOME background job (e.g., the user
-		// asked a follow-up question while a previous background
-		// command is still running), the current filter suppresses the
-		// unrelated completion_result. The user sees no completion box
-		// for their question even though no background work is blocking
-		// it.
+		// The successor ACT (this one) narrows the C10 filter to
+		// per-job ownership: the completion_result is suppressed
+		// IFF it belongs to a background job THIS turn launched AND
+		// that job's marker is still outstanding. When the unrelated
+		// explicit_user turn K calls `attempt_completion`, the turn
+		// boundary (simulated by `clearTurnOutcome()` at the start of
+		// `driveAttemptCompletion`) clears the prior turn's
+		// `launchedBackgroundJobIds` — so K's ownership hint is empty
+		// and K's completion_result flows through.
 		//
-		// The narrow authority that ACTUALLY identifies "this completion
-		// is for the backgrounded job" is jobId correlation — the tool
-		// invocation that produced the running background would carry
-		// its jobId, and the agent's attempt_completion in the SAME
-		// turn would be linked to that jobId. Without jobId correlation
-		// at C10 (out of scope per ACT §11: "no permanent diagnostic
-		// public field", "no new protocol field"), the filter cannot
-		// distinguish "premature ack of THIS background" from
-		// "unrelated completion".
-		//
-		// This test is CURRENTLY FAILING (RED) — it documents the
-		// limitation. The bounded repair chose to fix the frozen bug
-		// shape (which requires the broad predicate) at the cost of
-		// over-suppressing P7b. The remediation paths are:
-		//
-		//   (A) Add jobId correlation to completion_result messages
-		//       (architectural change, out of ACT scope).
-		//
-		//   (B) Update the system prompt to instruct the model not to
-		//       call attempt_completion when notify_on_completion=true
-		//       is set and the background command is still running
-		//       (model discipline fix, not framework fix).
-		//
-		//   (C) Narrow the predicate to ONLY `pendingPromptsKnown > 0`
-		//       (the wake is queued) — but this DOES NOT fix the frozen
-		//       bug shape because in that shape the model calls
-		//       attempt_completion BEFORE the command finishes (and
-		//       therefore before the wake is queued).
-		//
-		// Until (A) or (B) is adopted, this ACT does NOT ship to
-		// dogfood. Verdict downgraded from LIVE_QUALIFIED to
-		// CODE_QUALIFIED. LIVE_DOGFOOD = PENDING.
+		// This is the precise bidirectional discriminator:
+		//   - Frozen bug (premature J) → SUPPRESS (BCTPA-INV-01)
+		//   - Unrelated K (P7b)        → VISIBLE  (BCTPA-P7b GREEN)
+		// Both must hold simultaneously; the prior ACT's broad
+		// predicate failed the second invariant.
 		// =========================================================================
-		it("BCTPA-P7b (KNOWN LIMITATION): unrelated explicit-user completion_result during active notify IS currently suppressed (reviewer P1)", async () => {
+		it("BCTPA-P7b (CLOSED): unrelated explicit-user completion_result during active notify IS visible (ownership-aware C10 filter)", async () => {
 			const harness = makeHarness()
 
 			// Marker is already registered by makeHarness. Now
@@ -768,11 +804,17 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 / B
 			// The marker is STILL present (we haven't consumed it).
 			expect(harness.notifyCoordinator.activeNotifyCountForOwner(harness.activeSessionId, harness.activeTaskId)).toBe(1)
 
-			// The unrelated completion_result IS suppressed by the
-			// current broad predicate. This documents the known
-			// limitation (reviewer P1).
+			// The unrelated completion_result is VISIBLE — the
+			// per-turn ownership hint was cleared at the turn
+			// boundary (mirrors production's
+			// `pending_prompt_submitted` calling
+			// `clearTurnOutcome()`) and this turn did not launch
+			// any background jobs. The ownership-aware C10 filter
+			// at `sdk-session-event-coordinator.ts:514-622` does
+			// NOT suppress.
 			const visible = visibleCompletionRows(harness)
-			expect(visible.length).toBe(0)
+			expect(visible.length).toBe(1)
+			expect(visible[0]?.text).toContain("Here's the answer to your unrelated question.")
 		})
 
 		it("BCTPA-P10: correlation conservation — jobId threads through both turns", async () => {
