@@ -534,6 +534,59 @@ export class MessageTranslatorState {
 	}
 
 	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	 * Turn-local ownership hint — the set of `jobId`s launched by the
+	 * current turn's `run_commands(notifyOnCompletion=true)` invocation.
+	 * Populated by `recordLaunchedBackgroundJob(jobId)` at the SAME seam
+	 * that calls `BackgroundNotifyCoordinator.registerMarker({jobId, ...})`
+	 * (`vscode-run-commands-tool.ts:755-816`). Consulted by the C10
+	 * completion-result filter in `SdkSessionEventCoordinator` to narrow
+	 * the over-broad `activeNotifyCount > 0` predicate to "the completion
+	 * belongs to a job THIS turn launched AND that job is still
+	 * outstanding".
+	 *
+	 * Internal-only; cleared by `clearTurnOutcome()` (and therefore by the
+	 * `pending_prompt_submitted` boundary at
+	 * `sdk-session-event-coordinator.ts:455`). NEVER serialized to the
+	 * webview, NEVER persisted, NEVER exposed through the SDK wire or
+	 * proto. The lifetime is exactly one turn.
+	 */
+	private launchedBackgroundJobIds = new Set<string>()
+
+	/**
+	 * Record a `jobId` launched by this turn's `run_commands(notify=true)`
+	 * backgrounded handoff. Idempotent. Internal-only.
+	 */
+	recordLaunchedBackgroundJob(jobId: string): void {
+		if (!jobId || typeof jobId !== "string") {
+			return
+		}
+		this.launchedBackgroundJobIds.add(jobId)
+	}
+
+	/**
+	 * Return the (readonly) view of the `jobId`s launched by this turn.
+	 * The C10 filter consults this to decide whether a `completion_result`
+	 * message is owned by this turn; if the set is empty, the filter
+	 * does NOT suppress (the completion belongs to unrelated work —
+	 * this is the desired P7b behavior).
+	 */
+	getLaunchedBackgroundJobIds(): readonly string[] {
+		return Array.from(this.launchedBackgroundJobIds)
+	}
+
+	/**
+	 * Remove a `jobId` from the per-turn ownership hint. Called when a
+	 * background job is consumed (e.g. by the wake drain) so subsequent
+	 * turns that share the same translator lifetime don't see the
+	 * drained job as still owned. Normally the per-turn reset handles
+	 * this; this explicit remove is the deterministic escape hatch.
+	 */
+	consumeLaunchedBackgroundJob(jobId: string): void {
+		this.launchedBackgroundJobIds.delete(jobId)
+	}
+
+	/**
 	 * Clear turn-outcome signals (`attemptCompletionSeen`, the turn-final text candidate).
 	 * Called at a new user turn / task boundary so each turn's phase is computed fresh; it is
 	 * intentionally separate from the per-iteration `reset()` so the completion signal persists
@@ -543,6 +596,7 @@ export class MessageTranslatorState {
 		this.attemptCompletionSeen = false
 		this.errorSeen = false
 		this.terminalResponseCommittedThisTurn = false
+		this.launchedBackgroundJobIds.clear()
 	}
 }
 

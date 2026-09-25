@@ -180,6 +180,18 @@ export interface SdkSessionLifecycleOptions {
 	 * and discards).
 	 */
 	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	 *
+	 * Per-turn ownership-recording hook forwarded to the shared
+	 * host's `createVscodeExtraTools` so the run_commands tool can
+	 * record `jobId`s launched by THIS turn. The host (production:
+	 * `SdkController`) wires this to
+	 * `messageTranslatorState.recordLaunchedBackgroundJob(jobId)`.
+	 * OPTIONAL — when omitted the run_commands tool falls back to
+	 * fire-and-forget behavior with zero state delta.
+	 */
+	recordLaunchedBackgroundJob?: (jobId: string) => void
 }
 
 export class SdkSessionLifecycle {
@@ -665,6 +677,9 @@ export class SdkSessionLifecycle {
 				// `start.state === "running" onRuntimeError: this.options.onRuntimeError,onRuntimeError: this.options.onRuntimeError, notifyOnCompletion === true`.
 				backgroundNotifyCoordinator: this.options.backgroundNotifyCoordinator,
 				resolveActiveOwner: this.options.resolveActiveOwner,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+				// forward the per-turn ownership-recording hook.
+				recordLaunchedBackgroundJob: this.options.recordLaunchedBackgroundJob,
 			})
 				.then((sdkHost) => {
 					this.ensureSharedHostSubscription(sdkHost)

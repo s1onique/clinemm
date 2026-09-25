@@ -148,6 +148,23 @@ export interface VscodeRunCommandsToolOptions {
 	 * host sees.
 	 */
 	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	 *
+	 * OPTIONAL hook fired at the SAME seam as the marker registration
+	 * below — i.e., when `start.state === "running" &&
+	 * notifyOnCompletion === true` and the owner is resolvable. The
+	 * hook receives the just-allocated `jobId` so the
+	 * MessageTranslatorState (the turn-local ownership hint consulted by
+	 * the C10 completion-result filter in
+	 * `SdkSessionEventCoordinator`) can record which jobs were launched
+	 * by THIS turn. The hook is OPTIONAL — production code MUST continue
+	 * to work when it is omitted (the BCTPA-P7b RED witness then
+	 * remains observable as a degraded mode, mirroring the
+	 * `backgroundNotifyCoordinator` option's "fire-and-forget path with
+	 * zero state delta" pattern).
+	 */
+	recordLaunchedBackgroundJob?: (jobId: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -770,6 +787,16 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 							sessionId: owner.sessionId,
 							taskId: owner.taskId,
 						})
+						// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+						// Record this jobId in the per-turn
+						// `MessageTranslatorState` ownership hint at the
+						// SAME seam as the marker registration so the C10
+						// completion-result filter knows this completion
+						// belongs to a job THIS turn launched. The hook is
+						// optional — production code MUST continue to work
+						// when it is omitted (the BCTPA-P7b RED witness
+						// then remains observable as a degraded mode).
+						options.recordLaunchedBackgroundJob?.(start.jobId)
 						// Attach the per-job wake consumer to the
 						// terminalPromise. The listener fetches
 						// terminal classification via manager.status

@@ -397,6 +397,29 @@ export class BackgroundNotifyCoordinator {
 		return count
 	}
 
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	 * Exact per-job liveness probe — returns true iff there is currently
+	 * an outstanding notify marker for the given `jobId`. The replacement
+	 * for the over-broad aggregate `activeNotifyCountForOwner(...) > 0`
+	 * predicate at the C10 completion-result filter (see
+	 * `sdk-session-event-coordinator.ts:514-535`). The underlying map is
+	 * already keyed by `jobId`, so this is a constant-time lookup with
+	 * no new state, no new protocol field, and no new persistence.
+	 *
+	 * Internal-only (process-ephemeral). Exposed narrowly to the
+	 * SdkSessionEventCoordinator via the `hasActiveNotify` option.
+	 */
+	hasActiveNotify(jobId: string): boolean {
+		if (!jobId || typeof jobId !== "string") {
+			return false
+		}
+		if (this.disposed) {
+			return false
+		}
+		return this.notificationMarkers.has(jobId)
+	}
+
 	heldCountForOwner(sessionId: string, taskId: string | undefined): number {
 		return this.heldTerminalResults.get(ownerKey(sessionId, taskId))?.length ?? 0
 	}

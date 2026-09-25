@@ -735,15 +735,13 @@ export function buildSdkControllerEnqueueTerminalWake(options: {
 			// capture hooks observe jobId === undefined and
 			// deriveOrigin falls through to "explicit_user" at
 			// C7/C8.
-			void active.sdkHost
-				.send({ sessionId, prompt, delivery: "queue", jobId })
-				.catch((error: unknown) => {
-					options.logger.warn(
-						`[SdkController] enqueueTerminalWake send() rejected for sessionId=${sessionId}: ${
-							error instanceof Error ? error.message : String(error)
-						}`,
-					)
-				})
+			void active.sdkHost.send({ sessionId, prompt, delivery: "queue", jobId }).catch((error: unknown) => {
+				options.logger.warn(
+					`[SdkController] enqueueTerminalWake send() rejected for sessionId=${sessionId}: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				)
+			})
 		} catch (error) {
 			options.logger.warn(
 				`[SdkController] enqueueTerminalWake send() threw for sessionId=${sessionId}: ${
@@ -1605,6 +1603,20 @@ export class Controller {
 				if (!active) return undefined
 				return { sessionId: active.sessionId, taskId: this.task?.taskId }
 			},
+			// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+			// Per-turn ownership-recording hook. The run_commands tool
+			// calls this at the same seam as
+			// `backgroundNotifyCoordinator.registerMarker` (the C9
+			// -> marker seam at
+			// `vscode-run-commands-tool.ts:768-816`); the host
+			// forwards the `jobId` to
+			// `MessageTranslatorState.recordLaunchedBackgroundJob` so
+			// the C10 completion-result filter can narrow the
+			// over-broad `activeNotifyCount > 0` aggregate to per-job
+			// ownership.
+			recordLaunchedBackgroundJob: (jobId: string) => {
+				this.messageTranslatorState.recordLaunchedBackgroundJob(jobId)
+			},
 			// ACT-CLINEMM-TASK-HEADER-RUNTIME-ERROR-COUNTER01: mirror the
 			// runtime-error sink through to the shared host so the live
 			// primary-session CommandJobManager surfaces structured EPERM /
@@ -2292,6 +2304,13 @@ export class Controller {
 			// session does not match.
 			getActiveNotifyCount: (ownerSessionId, taskId) =>
 				this.backgroundNotifyCoordinator?.activeNotifyCountForOwner(ownerSessionId ?? "", taskId) ?? 0,
+			// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+			// Per-job liveness probe consumed by the C10
+			// completion-result filter (the message-level filter at
+			// `sdk-session-event-coordinator.ts:514-535`). Returns
+			// false when the coordinator is not yet wired (early
+			// lifecycle) or when the marker map is empty.
+			hasActiveNotify: (jobId: string) => this.backgroundNotifyCoordinator?.hasActiveNotify(jobId) ?? false,
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder

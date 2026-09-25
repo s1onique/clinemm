@@ -173,6 +173,23 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * downstream consumers (and tests) remain deterministic.
 	 */
 	getActiveSessionHost?: () => { readonly sdkHost?: object | undefined } | undefined
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	 *
+	 * Exact per-job liveness probe consulted at the C10
+	 * completion-result filter (the message-level filter at
+	 * `sdk-session-event-coordinator.ts:514-535`). Returns true iff
+	 * there is currently an outstanding BackgroundNotifyCoordinator
+	 * marker for the given `jobId`. Wired by `SdkController` to a
+	 * thin adapter that delegates to
+	 * `BackgroundNotifyCoordinator.hasActiveNotify(jobId)`.
+	 *
+	 * Optional: when absent, the C10 filter falls back to the
+	 * over-broad aggregate `activeNotifyCount > 0` predicate (the
+	 * pre-repair P7b behavior). Tests that omit this option remain
+	 * deterministic.
+	 */
+	hasActiveNotify?: (jobId: string) => boolean
 }
 
 /**
@@ -511,25 +528,90 @@ export class SdkSessionEventCoordinator {
 			// say:"tool", etc.) flow through unchanged — the user can
 			// still see the agent's intermediate answers / tool results
 			// for the originating turn (BCTPA-P7 conservation).
+			//
+			// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+			// The narrowest acceptable filter is now per-message:
+			//
+			//   for each completion_result C:
+			//     let ownedJobIds = messageTranslatorState.getLaunchedBackgroundJobIds()
+			//     let ownedJobId  = ownedJobIds.find(jid => hasActiveNotify(jid))
+			//     suppress(C) iff ownedJobId !== undefined
+			//
+			// This replaces the over-broad
+			// `outstandingAutonomousWork = activeNotifyCount > 0 || ...`
+			// predicate that over-suppressed unrelated completion K
+			// (the predecessor BCTPA-P7b RED). The new filter does NOT
+			// suppress when:
+			//   (a) the turn launched no background jobs (ownedJobIds
+			//       is empty), OR
+			//   (b) all owned jobs have already had their markers
+			//       consumed (no `hasActiveNotify` for any owned jobId),
+			// OR both.
+			//
+			// This is the desired narrow behavior:
+			//   - frozen bug (premature J): ownedJobIds=[J],
+			//     hasActiveNotify(J)=true → SUPPRESS ✓
+			//   - wake completion for J: ownedJobIds=[] (the wake turn
+			//     didn't launch any job) → VISIBLE ✓
+			//   - P7b unrelated K: ownedJobIds=[] → VISIBLE ✓
+			//   - J1/J2 cross-job: per-job ownership means an unrelated
+			//     alive marker (e.g. J2) does NOT suppress J1's
+			//     completion (the J1 marker is consumed) → ISOLATED ✓
+			//
+			// Fallback: when `hasActiveNotify` is NOT wired (the option
+			// is absent) the filter falls back to the over-broad
+			// aggregate predicate so the BCTPA-P7b RED witness remains
+			// observable in tests that omit the seam. This is the same
+			// shape as the LHOWA01 / PPAT optional wiring.
 			if (result.messages.length > 0) {
-				const completionMessages: Array<{ say?: string; type?: string; ask?: string }> = []
-				for (const m of result.messages) {
-					if (m.say === "completion_result") {
-						completionMessages.push({ say: m.say, type: m.type })
-					}
-				}
-				if (completionMessages.length > 0) {
-					const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
-						activeSession.sessionId,
-					) ?? { available: false }
-					const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
-					const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
-					const activeNotifyCount =
-						this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ?? 0
-					const outstandingAutonomousWork =
-						pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
-					if (outstandingAutonomousWork) {
-						result.messages = result.messages.filter((m) => m.say !== "completion_result")
+				const hasCompletionResult = result.messages.some((m) => m.say === "completion_result")
+				if (hasCompletionResult) {
+					if (this.options.hasActiveNotify) {
+						// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+						// Per-job ownership-aware filter. The narrow
+						// predicate only suppresses when an OWNED
+						// job is still outstanding (per the
+						// `hasActiveNotify(jobId)` exact lookup). The
+						// predecessor BCTPA-P7b over-broad predicate
+						// was the AGGREGATE `activeNotifyCount > 0` —
+						// it suppressed for ANY unrelated background
+						// work. The new filter does NOT consult the
+						// aggregate (which would defeat the per-job
+						// correlation). This is the load-bearing
+						// conservation matrix item R4 ("J2 active
+						// does not suppress completion belonging to
+						// completed J1").
+						const ownedJobIds = this.options.messageTranslatorState.getLaunchedBackgroundJobIds()
+						let ownedAndOutstanding = false
+						for (const jid of ownedJobIds) {
+							if (this.options.hasActiveNotify(jid)) {
+								ownedAndOutstanding = true
+								break
+							}
+						}
+						if (ownedAndOutstanding) {
+							result.messages = result.messages.filter((m) => m.say !== "completion_result")
+						}
+					} else {
+						// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+						// `hasActiveNotify` is not wired — fall back to
+						// the over-broad aggregate predicate so the
+						// BCTPA-P7b RED witness remains observable for
+						// tests that omit the seam (this preserves the
+						// predecessor behavior for any test harness that
+						// does not opt into the per-job lookup).
+						const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
+							activeSession.sessionId,
+						) ?? { available: false }
+						const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
+						const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+						const activeNotifyCount =
+							this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ?? 0
+						const outstandingAutonomousWork =
+							pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+						if (outstandingAutonomousWork) {
+							result.messages = result.messages.filter((m) => m.say !== "completion_result")
+						}
 					}
 				}
 			}

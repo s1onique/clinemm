@@ -209,6 +209,23 @@ export interface VscodeSessionHostOptions {
 	 * containment_failed + N4 lifetime guard).
 	 */
 	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	 *
+	 * Per-turn ownership-recording hook consulted at the same
+	 * seam as `backgroundNotifyCoordinator` /
+	 * `resolveActiveOwner`. The session host does NOT own
+	 * MessageTranslatorState — that state lives on
+	 * `SdkController` — so this hook is a thin pass-through to
+	 * the host. Production code wires it to
+	 * `this.messageTranslatorState.recordLaunchedBackgroundJob(jobId)`
+	 * in the SdkController.
+	 *
+	 * OPTIONAL: when omitted, the tool falls back to the
+	 * fire-and-forget path with zero state delta (mirroring
+	 * `backgroundNotifyCoordinator` / `resolveActiveOwner`).
+	 */
+	recordLaunchedBackgroundJob?: (jobId: string) => void
 }
 
 /**
@@ -370,6 +387,10 @@ export class VscodeSessionHost implements SdkSessionHost {
 				// path (notify=false default is preserved).
 				backgroundNotifyCoordinator: options.backgroundNotifyCoordinator,
 				resolveActiveOwner: options.resolveActiveOwner,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+				// pass-through of the per-turn ownership-recording hook.
+				// Same optional-wiring shape as `resolveActiveOwner`.
+				recordLaunchedBackgroundJob: options.recordLaunchedBackgroundJob,
 			})
 			return {
 				...inputWithRemoteConfig,

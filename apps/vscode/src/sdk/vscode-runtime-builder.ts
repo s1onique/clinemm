@@ -4,8 +4,8 @@ import type { VscodeTerminalManager } from "@/hosts/vscode/terminal/VscodeTermin
 import type { McpHub } from "@/services/mcp/McpHub"
 import { resolveMcpServerTimeoutMs } from "@/services/mcp/timeout"
 import { Logger } from "@/shared/services/Logger"
-import { CommandJobManager, DEFAULT_EXECUTION_DEADLINE_MS, DEFAULT_WAIT_BUDGET_MS } from "./command-job-manager"
 import type { CommandJobState } from "./command-job-manager"
+import { CommandJobManager, DEFAULT_EXECUTION_DEADLINE_MS, DEFAULT_WAIT_BUDGET_MS } from "./command-job-manager"
 import { createCancelCommandTool, createCommandStatusTool } from "./command-status-tool"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { createVscodeRunCommandsTool, VSCODE_FOREGROUND_RUN_COMMANDS_TIMEOUT_MS } from "./vscode-run-commands-tool"
@@ -103,6 +103,22 @@ export interface VscodeExtraToolsOptions {
 	 * owner_absent and discards).
 	 */
 	resolveActiveOwner?: () => { sessionId: string; taskId: string | undefined } | undefined
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+	 *
+	 * Per-turn ownership-recording hook consulted at the same
+	 * seam as `resolveActiveOwner` / `backgroundNotifyCoordinator`
+	 * above. The host (production: `SdkController`) wires this to
+	 * `MessageTranslatorState.recordLaunchedBackgroundJob(jobId)`
+	 * so the C10 completion-result filter can narrow the
+	 * over-broad `activeNotifyCount > 0` aggregate predicate to
+	 * per-job ownership.
+	 *
+	 * OPTIONAL: when omitted, the tool falls back to the
+	 * fire-and-forget path with zero state delta (mirroring the
+	 * `backgroundNotifyCoordinator` optional wiring).
+	 */
+	recordLaunchedBackgroundJob?: (jobId: string) => void
 }
 
 export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExtraToolsOptions): Promise<AgentTool[]> {
@@ -158,6 +174,12 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 				// them, the tool defaults to fire-and-forget.
 				backgroundNotifyCoordinator: options.backgroundNotifyCoordinator,
 				resolveActiveOwner: options.resolveActiveOwner,
+				// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
+				// pass-through of the per-turn ownership-recording hook.
+				// The hook is consulted at the same seam as the marker
+				// registration above (the C9 -> marker seam at
+				// `vscode-run-commands-tool.ts:768-816`).
+				recordLaunchedBackgroundJob: options.recordLaunchedBackgroundJob,
 			}),
 		)
 		// Expose the follow-up API only for the background path —
