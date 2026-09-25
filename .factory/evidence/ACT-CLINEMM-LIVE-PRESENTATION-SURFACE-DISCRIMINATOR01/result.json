@@ -34,13 +34,17 @@
     "extension_id": "cline.cline",
     "version": "4.1.16",
     "implementation_subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
-    "closure_head": "ebc9ea3aa (this ACT's round-2 commit; will be updated by closure_head commit)",
+    "closure_head": "6ae05212d",
     "dogfood_source_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
     "session_id": "1790335441241_5g7oe",
     "task_id": "1790335441241_5g7oe",
     "job_id": "cmd_mugvhy92x7rm527e",
     "prompt_id": "pending_1790335474710_Reppe",
-    "time_range_ms": {"first_at": 1790335441430, "last_at": 1790335481256, "span_ms": 39826}
+    "time_range_ms": {
+      "first_at": 1790335441430,
+      "last_at": 1790335481256,
+      "span_ms": 39826
+    }
   },
   "runtime_cardinality": {
     "source": "01a-ccard.LIVE_RAW.jsonl (raw operator upload; SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1)",
@@ -51,11 +55,25 @@
     "pending_prompt_enqueued": 1,
     "pending_prompt_dequeued": 1,
     "continuation_scheduled": 1,
-    "run_turn_started": {"explicit_user": 1, "pending_prompt_drain": 1},
-    "agent_turn_done": {"explicit_user": 1, "pending_prompt_drain": 1},
-    "submit_and_exit_seen": {"total": 2, "by_origin": {"pending_prompt_drain": 2}},
+    "run_turn_started": {
+      "explicit_user": 1,
+      "pending_prompt_drain": 1
+    },
+    "agent_turn_done": {
+      "explicit_user": 1,
+      "pending_prompt_drain": 1
+    },
+    "submit_and_exit_seen": {
+      "total": 2,
+      "by_origin": {
+        "pending_prompt_drain": 2
+      }
+    },
     "task_completion_committed": 1,
-    "wake_C4_to_C8_jobId": {"identical": true, "value": "cmd_mugvhy92x7rm527e"},
+    "wake_C4_to_C8_jobId": {
+      "identical": true,
+      "value": "cmd_mugvhy92x7rm527e"
+    },
     "WAKE_CARDINALITY": "LIVE",
     "EXECUTION_CARDINALITY": "LIVE",
     "RUNTIME_CONSERVATION_REGRESSION": false,
@@ -104,9 +122,24 @@
       "visible_text": "green COMPLETED card: Ran sh -c ... in the background...",
       "live_trace_constraints": "the explicit_user turn did NOT call the completion tool (submit_and_exit_seen=2 with both origins=pending_prompt_drain); so D.1 (completion_result SURVIVED C10) is ELIMINATED",
       "remaining_candidates": [
-        {"candidate": "D.2", "producer": "text row badged by resolveTerminalReportFraming", "cline_message_shape": "{type:say, say:text, partial:false}", "hypothesis_class": "PS-C"},
-        {"candidate": "D.3", "producer": "phantom duplicate of wake turn's completion_result", "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}", "hypothesis_class": "PS-D"},
-        {"candidate": "D.4", "producer": "terminal_card (UI-A) re-rendered with 'Completed' badge after wake", "cline_message_shape": "{type:say, say:command, commandExecutionDisposition:backgrounded}", "hypothesis_class": "PS-C (over-badging)"}
+        {
+          "candidate": "D.2",
+          "producer": "text row badged by resolveTerminalReportFraming",
+          "cline_message_shape": "{type:say, say:text, partial:false}",
+          "hypothesis_class": "PS-C"
+        },
+        {
+          "candidate": "D.3",
+          "producer": "phantom duplicate of wake turn's completion_result",
+          "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
+          "hypothesis_class": "PS-D"
+        },
+        {
+          "candidate": "D.4",
+          "producer": "terminal_card (UI-A) re-rendered with 'Completed' badge after wake",
+          "cline_message_shape": "{type:say, say:command, commandExecutionDisposition:backgrounded}",
+          "hypothesis_class": "PS-C (over-badging)"
+        }
       ],
       "user_visible_authority": "UNRESOLVED (3 remaining candidates)"
     },
@@ -122,7 +155,13 @@
       "visible_text": "green COMPLETED card: The background command completed successfully.",
       "live_trace_constraints": "F.1 (wake turn's completion_result at seq 11) is the single plausible candidate given the LIVE trace's pattern",
       "remaining_candidates": [
-        {"candidate": "F.1", "producer": "message-translator.ts:1761-1795 (completion content_end) + ChatRow.tsx:1102-1125 (CompletionOutputRow + resolveTerminalReportFraming)", "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}", "live_evidence": "LIVE_RAW seq 11 submit_and_exit_seen (origin=pending_prompt_drain) + LIVE_RAW seq 12 task_completion_committed", "hypothesis_class": "PS-A or PS-C (depending on UI-D binding)"}
+        {
+          "candidate": "F.1",
+          "producer": "message-translator.ts:1761-1795 (completion content_end) + ChatRow.tsx:1102-1125 (CompletionOutputRow + resolveTerminalReportFraming)",
+          "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
+          "live_evidence": "LIVE_RAW seq 11 submit_and_exit_seen (origin=pending_prompt_drain) + LIVE_RAW seq 12 task_completion_committed",
+          "hypothesis_class": "PS-A or PS-C (depending on UI-D binding)"
+        }
       ],
       "user_visible_authority": "semantic_completion candidate; exact producer UNPROVEN"
     }
@@ -191,7 +230,7 @@
     "01b-ccard-counters.LIVE_RAW.json": "NEW: raw operator-uploaded counters file (byte-identical; SHA-256 2a82c0028ad4a39e78c54bcab01ce1502582d9994b555626584ee72f9ec892c1)",
     "01b-ccard-counters.json": "REVISED: computed from LIVE_RAW (sessionId, jobId, taskId, promptId, time_range_ms, stages, wake_C4_to_C8_jobId_correlation)",
     "01c-ui.txt": "AUTHORITATIVE enumeration of visible UI surfaces (operator-transcribed; lists 2 green COMPLETED cards)",
-    "02-recon.md": "REVISED: §3 + §5 + §6 + §7 reflect LIVE trace (D.1 ELIMINATED; new D.3 + D.4 candidates; PS-B remainder eliminated)",
+    "02-recon.md": "REVISED: \u00a73 + \u00a75 + \u00a76 + \u00a77 reflect LIVE trace (D.1 ELIMINATED; new D.3 + D.4 candidates; PS-B remainder eliminated)",
     "03-presentation-map.jsonl": "REVISED: UI-D D.1 ELIMINATED_BY_LIVE_TRACE; remaining D.2/D.3/D.4; UI-F narrowed to F.1",
     "04-focused-gates.txt": "REVISED: WAKE_CARDINALITY=LIVE; C-4/C-6 = UNPROVEN_PENDING_PERSISTED_BINDING (unchanged status; provenance upgraded)",
     "result.json": "this file"

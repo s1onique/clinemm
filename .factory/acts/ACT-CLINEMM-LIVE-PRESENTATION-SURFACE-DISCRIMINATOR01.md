@@ -213,7 +213,7 @@ extension_id                = cline.cline (= ${publisher.name})
 version                     = 4.1.16 (separate manifest field)
 IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-CLOSURE_HEAD                = (set by this round-2 bounded-correction commit)
+CLOSURE_HEAD                = 6ae05212d (this round-2 bounded-correction commit)
 
 Live session identity (NEW after round 2):
 sessionId                   = 1790335441241_5g7oe
