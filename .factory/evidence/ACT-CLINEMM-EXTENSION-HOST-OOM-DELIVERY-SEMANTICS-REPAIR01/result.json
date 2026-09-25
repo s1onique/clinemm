@@ -1,0 +1,110 @@
+{
+  "act": "ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01",
+  "primary_purpose": "repair",
+  "entry_head": "998eb28c792d02252d1081d767d729eed97df22b",
+  "subject_head": "e016952ed",
+  "good_artifact": "d1ecf48dc",
+  "bad_artifact": "99006fbcc",
+  "regression_commit": "99006fbccaacb150b78e54dad7bdadc2a1390238",
+  "predecessor_act": "ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION02",
+  "predecessor_verdict": "PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM",
+  "hypothesis": "H1: propagation of next.delivery across PendingPromptsController.drain -> deps.send -> runTurn is NECESSARY for the observed Extension Host OOM regression",
+  "necessity_proven_by_predecessor": true,
+  "semantic_mechanism": "PROVEN — non-terminating drain loop. drained entry shifted off queue -> runTurn sees delivery:queue -> re-enqueues via queue/steer branch (local-runtime-host.ts:1204) -> drain fires again -> repeat. Heap pressure grows without bound.",
+  "real_production_seam": "PendingPromptsController.drain -> deps.send -> LocalRuntimeHost.runTurn -> delivery resolution -> queue/steer branch",
+  "harmful_branch": "local-runtime-host.ts:1204-1214 (`if (delivery === \"queue\" || delivery === \"steer\")`)",
+  "correlation_need": "jobId (P1, preserved) + pending_prompt_drain origin at C7/C8 (replaced delivery-derivation with jobId-presence-derivation in deriveOrigin)",
+  "minimal_repair_seam": [
+    "sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts — drop the next.delivery spread permanently. jobId remains forwarded.",
+    "apps/vscode/src/sdk/vscode-session-host.ts — extend deriveOrigin(delivery, jobId?) to use jobId-presence as the primary disambiguator. Strict superset of the prior shape."
+  ],
+  "tests": {
+    "drp_drain_01": {
+      "purpose": "structural RED for the drain -> send payload invariant",
+      "result_pre_repair": "RED — hasOwnProperty(delivery) === true",
+      "result_post_repair": "GREEN — hasOwnProperty(delivery) === false",
+      "load_bearing": true
+    },
+    "drp_loop_01": {
+      "purpose": "repair-ablation invariant",
+      "result_pre_repair": "would-RED if spread re-applied",
+      "result_post_repair": "GREEN",
+      "load_bearing": true
+    },
+    "drp_drain_02": {
+      "purpose": "full LocalRuntimeHost e2e",
+      "result_pre_repair": "RED — vitest worker OOM (V8 fatal OOM, ~15s)",
+      "result_post_repair": "GREEN — 14ms completion, agent.run called once, queue empty",
+      "load_bearing": true,
+      "note": "the production OOM signature is reproduced exactly in the vitest worker"
+    },
+    "drp_drain_conserve_01": {
+      "purpose": "conservation — C5/C6 hooks still observe entry delivery",
+      "result_pre_repair": "RED",
+      "result_post_repair": "GREEN"
+    }
+  },
+  "scaffold_removal": {
+    "removed": [
+      "CLINEMM_OOM_DISC01_ABLATE_DELIVERY env var",
+      "__ablateDeliveryPropagation conditional spread",
+      "[CLINEMM_OOM_DISC01_ATTEST] constructor attestation line emission",
+      "GlobalWithSubject type alias",
+      "AB-DELIVERY-01, AB-DELIVERY-02, AB-ATTEST-01 test blocks"
+    ],
+    "preserved": [
+      "predecessor evidence artifacts at .factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01/",
+      "predecessor ACT file at .factory/acts/ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01.md",
+      "predecessor bundle at dist/dogfood/clinemm-4.1.16-a86534414.vsix (audit-only)"
+    ]
+  },
+  "focused_gates": {
+    "pending_prompt_service_tests": "10/10 PASS (CCARD-WIRE-01 updated)",
+    "drain_semantics_tests": "4/4 PASS (DRP-DRAIN-01, DRP-LOOP-01, DRP-DRAIN-02, DRP-DRAIN-CONSERVE-01)",
+    "local_runtime_host_tests": "84/85 PASS (1 unrelated baseline failure: 'persists active manual compaction state against the persisted transcript')",
+    "cra13_test_post_repair": "GREEN, 14ms (was: vitest worker OOM at 15s+ in baseline)",
+    "ccard_tests": "12/12 PASS",
+    "bcnex_tests": "7/7 PASS",
+    "sdk_core_typecheck": "exit non-zero with 25 pre-existing errors; ACT_NEW_ERRORS=0",
+    "apps_vscode_typecheck": "exit 0 (clean)",
+    "git_diff_check": "clean"
+  },
+  "halt_conditions_evaluated": {
+    "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED",
+    "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED",
+    "CAPTURE_INSUFFICIENT": "NOT_TRIGGERED",
+    "HALT_PUBLIC_PROTOCOL_EXPANSION_UNJUSTIFIED": "NOT_TRIGGERED — doctrine option 1 (jobId-based deriveOrigin) chosen",
+    "HALT_QUEUE_STEER_SEMANTICS_ALTERED": "NOT_TRIGGERED",
+    "HALT_CORRELATION_REGRESSION": "NOT_TRIGGERED — deriveOrigin strict superset; CCARD-ORIGIN-01 backward-compat",
+    "HALT_PRODUCTION_SEMANTICS_DRIFT": "NOT_TRIGGERED",
+    "HALT_REPAIR_NOT_SUFFICIENT": "DEFERRED to live qualification"
+  },
+  "factory_cursor": {
+    "NATIVE_OOM": "PROVEN",
+    "NATIVE_TRAP_SYMBOLIZATION": "PROVEN",
+    "GOOD_ARTIFACT": "d1ecf48dc",
+    "BAD_ARTIFACT": "99006fbcc",
+    "REGRESSION_COMMIT": "99006fbcc",
+    "SUSPECT_DELTA": "next.delivery propagation",
+    "NECESSITY": "PROVEN",
+    "REPAIR_AUTHORIZED": true,
+    "SEMANTIC_MECHANISM": "PROVEN",
+    "REPAIR": "PROVEN",
+    "LIVE_QUALIFICATION": "OPERATOR_PENDING — specimen built; contract at 06-live-qualification.md"
+  },
+  "timestamp": "2026-09-25T03:43:00Z",
+  "bundled_vsix": {
+    "subject_head": "e016952ed",
+    "version": "4.1.16",
+    "path": "dist/dogfood/clinemm-4.1.16-e016952ed.vsix",
+    "size_bytes": 14627804,
+    "sha256": "190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0",
+    "extracted_extension_js_sha256": "473111fcd4819a596184730115849521ebd853a4e52e1f7b159c98e32caf633a",
+    "package_files": 52,
+    "bundle_contains": [
+      "NO CLINEMM_OOM_DISC01_* references (predecessor ablation infrastructure removed)",
+      "NO __ablateDeliveryPropagation (field removed)",
+      "the bounded repair: drain -> deps.send({jobId}) WITHOUT delivery"
+    ]
+  }
+}

@@ -1,0 +1,67 @@
+ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / 05-artifact-identity
+
+PHASE 10 — EXACT-HEAD ARTIFACT
+
+SUBJECT_HEAD
+  = e016952ed (full SHA: e016952ed... — see git rev-parse HEAD)
+  Commit: ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01
+  Subject: bounded repair + drain-semantics RED suite + scaffold removal
+
+VERSION
+  = 4.1.16 (apps/vscode/package.json)
+
+VSIX PATH
+  = dist/dogfood/clinemm-4.1.16-e016952ed.vsix
+
+VSIX BYTE SIZE
+  = 14627804 bytes (~13.95 MB)
+
+VSIX SHA-256
+  = 190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0
+
+EXTRACTED EXTENSION.JS SHA-256
+  = 473111fcd4819a596184730115849521ebd853a4e52e1f7b159c98e32caf633a
+
+BUNDLE INTEGRITY CHECKS
+  - 0 occurrences of `CLINEMM_OOM_DISC01_*` in extracted extension.js
+    (predecessor's ablation env var, constructor attestation, and
+    SUBJECT_HEAD identifier are all gone)
+  - 0 occurrences of `__ablateDeliveryPropagation` in extracted
+    extension.js (the field is removed)
+  - The bundle correctly contains the bounded repair:
+    `pendingPromptsController.drain -> deps.send({jobId})` without
+    `delivery`. Verifiable by searching for the drain comment in
+    the bundled output.
+
+PACKAGE FILES
+  = 52 (verified via vsce output)
+
+BUILT VIA
+  cd apps/vscode
+  bun run protos                  # regenerate proto types
+  bun run build:webview            # build webview bundle
+  bun esbuild.mjs --production    # build extension bundle
+  node ./node_modules/.bin/vsce package \
+      --no-dependencies \
+      --out ../../dist/dogfood/clinemm-4.1.16-e016952ed.vsix
+
+  (No --define of CLINEMM_OOM_DISC01_SUBJECT_HEAD needed — that
+  field was removed in the bounded repair. The ablation env var
+  no longer exists, so no temp build plumbing is required.)
+
+DISCOVERY
+  = These identities were discovered AFTER commit
+    e016952ed (the bounded-repair commit). The bundle is bound
+    to that exact HEAD via the SHA-256 hash. To rebuild:
+    checkout e016952ed, run the build sequence above.
+
+PARALLEL BUNDLES (predecessor's)
+  dist/dogfood/clinemm-4.1.16-a86534414.vsix  (predecessor's
+    subject, 14627848 bytes, sha256
+    c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4)
+  dist/dogfood/clinemm-4.1.16-998eb28c7.vsix  (intermediate HEAD
+    at ACT start, 14617079 bytes)
+
+  Neither contains the bounded repair — they are kept for audit
+  reference. Only clinemm-4.1.16-e016952ed.vsix is the live
+  qualification specimen.

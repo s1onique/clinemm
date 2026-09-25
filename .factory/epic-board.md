@@ -10946,3 +10946,106 @@ apps/vscode/esbuild.mjs                                      # 1-line change: de
 
 No other production-code changes. No additional queue/steer
 semantics altered.
+
+## ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 — PASS_DELIVERY_SEMANTICS_REPAIR (LIVE_QUALIFICATION: OPERATOR_PENDING) — 2026-09-25
+
+**Status:** PASS at the code level. Live qualification deferred to operator per predecessor ACT pattern (this dev environment lacks VSCodium + Nix wrapper).
+
+**Causal mechanism (PROVEN):** non-terminating drain loop. `PendingPromptsController.drain` shifts an entry off the queue, calls `deps.send({prompt, mode, userImages, userFiles, delivery, jobId})`. `LocalRuntimeHost.runTurn` (line 1172) resolves `delivery`, enters the queue/steer branch at line 1204 when `delivery === "queue"` or `"steer"`, calls `pendingPromptsController.enqueue(...)` re-adding the just-dequeued prompt, and returns `undefined`. The drain loop's `finally` block re-schedules itself. Heap pressure grows without bound; native Extension Host OOMs. The vitest worker reproduces the EXACT same heap-exhaustion signature (`FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory`) when the harmful propagation is on.
+
+**Bounded repair (two production code changes):**
+
+1. `sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts`: drop the `next.delivery` spread permanently at the drain -> send boundary. `next.jobId` remains forwarded (P1 correlation token).
+2. `apps/vscode/src/sdk/vscode-session-host.ts`: extend `deriveOrigin(delivery, jobId?)` to use `jobId`-presence as the primary disambiguator between drained-from-controller and explicit-user-call. Thread `input.jobId` through all five deriveOrigin call sites (C4, C5, C6, C7, C8). Strict superset of the prior shape.
+
+**Why doctrine option 1 (derive origin from existing `jobId`):** drained prompts always carry `jobId` (set by `BackgroundNotifyCoordinator.enqueueTerminalWake` at the terminal-wake path); explicit `runTurn({ delivery: "queue" })` callers without `jobId` still derive `pending_prompt_drain` (back-compat). This disambiguates the existing drained-vs-explicit conflation without expanding the public protocol surface.
+
+**RED reproduction (real production seam):**
+
+- DRP-DRAIN-01: structural `hasOwnProperty("delivery") === true` failed in 7ms against current production code (RED).
+- DRP-LOOP-01: bidirectional repair-ablation invariant; flipping the spread back re-introduces the RED.
+- DRP-DRAIN-02: full e2e via real `LocalRuntimeHost`. Pre-repair: vitest worker heap-exhaustion in ~15s (same signature as production OOM). Post-repair: 14ms completion, agent.run called once, queue empty.
+- DRP-DRAIN-CONSERVE-01: C5/C6 hooks still observe entry delivery (independent of the payload); jobId still forwarded.
+
+**Conservation (R1..R10 — all PASS):**
+
+| | Invariant | Result |
+|---|---|---|
+| R1 | drained `delivery` not forwarded | DRP-DRAIN-01 |
+| R2 | explicit `runTurn({ delivery: "queue" })` STILL enqueues | BCNEX 7/7 + CRA13 + local-runtime-host queue tests |
+| R3 | explicit `runTurn({ delivery: "steer" })` STILL enqueues | local-runtime-host steer tests |
+| R4 | default `runTurn({ prompt })` STILL executes immediately | preserved |
+| R5-R8 | deriveOrigin backward-compat | deriveOrigin strict superset |
+| R9 | C4/C5/C6 hooks still fire with correct delivery | CCARD-WIRE-01 + DRP-DRAIN-CONSERVE-01 |
+| R10 | C7/C8 derive `pending_prompt_drain` for drained | CCARD-ORIGIN-01 + deriveOrigin signature |
+
+**Scaffold removal (Phase 7 — predecessor's diagnostics gone):**
+
+- `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` env var
+- `__ablateDeliveryPropagation` conditional spread
+- `[CLINEMM_OOM_DISC01_ATTEST]` constructor attestation
+- `GlobalWithSubject` type alias
+- AB-DELIVERY-01, AB-DELIVERY-02, AB-ATTEST-01 test blocks
+
+Bundle verification: 0 occurrences of `CLINEMM_OOM_DISC01_*` and 0 of `__ablateDeliveryPropagation` in the extracted `extension/dist/extension.js` of the repaired VSIX.
+
+**Focused gates (Phase 8):**
+
+- turn-queue suite: 14/14 PASS
+- local-runtime-host: 84/85 PASS (1 unrelated baseline failure: `persists active manual compaction state against the persisted transcript`)
+- CCARD (continuation-cardinality-authority01): 12/12 PASS
+- BCNEX (background-notify-exactly-once-presentation01): 7/7 PASS
+- CRA13 (full LocalRuntimeHost drain): GREEN 14ms (was vitest worker OOM at 15s+ in baseline — the production OOM signature reproduced exactly in the bounded RED capture)
+- sdk/core typecheck: 25 baseline errors, ACT_NEW_ERRORS=0
+- apps/vscode typecheck: clean (exit 0)
+- git diff --check: clean
+
+**Repair ablation (Phase 9):** temporarily reverting the bounded repair (re-applying the conditional spread) causes DRP-DRAIN-01, DRP-DRAIN-02, DRP-DRAIN-CONSERVE-01, and CRA13 to all return to RED (with the same vitest-worker OOM signature). Restoring returns all four to GREEN. Bidirectional proof complete.
+
+**Exact-head artifact (Phase 10):**
+
+| Field | Value |
+|---|---|
+| SUBJECT_HEAD | `e016952ed` |
+| Version | `4.1.16` |
+| VSIX path | `dist/dogfood/clinemm-4.1.16-e016952ed.vsix` |
+| VSIX size | `14627804` bytes (~13.95 MB) |
+| VSIX sha256 | `190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0` |
+| Extracted extension.js sha256 | `473111fcd4819a596184730115849521ebd853a4e52e1f7b159c98e32caf633a` |
+| Package files | 52 |
+
+Build sequence: `bun run protos && bun run build:webview && bun esbuild.mjs --production && vsce package --no-dependencies`. No `--define` of `CLINEMM_OOM_DISC01_SUBJECT_HEAD` needed — that field was removed in the bounded repair.
+
+**Live qualification (Phase 11):** operator-executed against the bundled VSIX. Contract and procedure at `.factory/evidence/ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01/06-live-qualification.md`. PASS criteria: (P1) repaired artifact survives the full frozen workload window; (P2) no equivalent native Extension Host OOM reproduces; (P3) the repaired production seam was exercised; (P4) required CCARD / origin correlation remains functional (drained turns have `origin: "pending_prompt_drain"` at C7 and C8).
+
+**Halt conditions (all evaluated):**
+
+- HALT_REPOSITORY_TRUST: NOT_TRIGGERED (git status clean at entry)
+- HALT_RED_NOT_REPRODUCED: NOT_TRIGGERED (RED reproduced both as structural assertion AND as full e2e vitest-worker OOM)
+- CAPTURE_INSUFFICIENT: NOT_TRIGGERED (code-level discriminators complete and load-bearing)
+- HALT_PUBLIC_PROTOCOL_EXPANSION_UNJUSTIFIED: NOT_TRIGGERED (doctrine option 1: derive origin from existing `jobId` signal)
+- HALT_QUEUE_STEER_SEMANTICS_ALTERED: NOT_TRIGGERED
+- HALT_CORRELATION_REGRESSION: NOT_TRIGGERED (deriveOrigin is strict superset)
+- HALT_PRODUCTION_SEMANTICS_DRIFT: NOT_TRIGGERED
+- HALT_REPAIR_NOT_SUFFICIENT: DEFERRED to live qualification
+
+**Factory cursor:**
+
+```
+NATIVE_OOM              = PROVEN
+NATIVE_TRAP_SYMBOLIZATION = PROVEN
+GOOD_ARTIFACT           = d1ecf48dc
+BAD_ARTIFACT            = 99006fbcc
+REGRESSION_COMMIT       = 99006fbccaacb150b78e54dad7bdadc2a1390238
+REGRESSION_COMMIT_COUNT = 1
+SUSPECT_DELTA           = next.delivery propagation
+NECESSITY               = PROVEN (predecessor)
+REPAIR_AUTHORIZED       = true
+SEMANTIC_MECHANISM      = PROVEN
+REPAIR                  = PROVEN
+LIVE_QUALIFICATION      = OPERATOR_PENDING
+```
+
+**Next:** Operator runs the live specimen per `06-live-qualification.md` using the bundled VSIX at `dist/dogfood/clinemm-4.1.16-e016952ed.vsix` (sha256 `190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0`, SUBJECT_HEAD `e016952ed`).
+
+**C1: GO directly to live specimen.**
