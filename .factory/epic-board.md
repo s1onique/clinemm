@@ -11106,3 +11106,94 @@ Pre-CORRECTION01 specimen `dist/dogfood/clinemm-4.1.16-e016952ed.vsix` (sha256 `
 - LIVE_QUALIFICATION: OPERATOR_PENDING (specimen now `dist/dogfood/clinemm-4.1.16-0a97b445c.vsix`)
 
 **Next:** Operator runs the CORRECTION01 specimen per `06-live-qualification.md`. The P1 review round is closed; no CORRECTION02 unless a new P0 emerges.
+
+## ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 — PASS_CONTINUATION_CORRELATION_RESTORED — 2026-09-25
+
+**Status:** PASS. C4→C8 correlation is restored via a bounded three-seam repair. The OOM repair (CORRECTION01) is untouched. Live qualification P4 remains OPERATOR_PENDING — a NEW live qualification against the new artifact is the successor step.
+
+**Background:** Live qualification of the CORRECTION01 specimen (`dist/dogfood/clinemm-4.1.16-0a97b445c.vsix`) failed P4: drained turns had `origin: "explicit_user"` at C7/C8 (expected `pending_prompt_drain`). The CCARD JSONL showed `wake_created` records carrying `jobId` but `pending_prompt_enqueued`/`pending_prompt_dequeued`/`continuation_scheduled` records WITHOUT `jobId`. The correlation token was absent from the observable C4/C5/C6 capture records — a wider failure than the C7 deriveOrigin precedence alone.
+
+**Recon (real production seams inspected):**
+
+```
+BackgroundNotifyCoordinator.consumeTerminal  (jobId in scope, captured in wake_created)
+  ↓ calls this.options.enqueueTerminalWake({sessionId, prompt})     <-- TYPE LOSS here
+buildSdkControllerEnqueueTerminalWake         (destructures {sessionId, prompt})
+  ↓ calls active.sdkHost.send({sessionId, prompt, delivery: "queue"})  <-- jobId omitted
+SdkSessionHost.send (pass-through)
+  ↓
+LocalRuntimeHost.runTurn(input)               input.jobId === undefined for terminal wakes
+  ↓
+PendingPromptsController.enqueue(entry with no jobId)
+```
+
+The `BackgroundNotifyCoordinator.enqueueTerminalWake` callback signature (`background-notify-coordinator.ts:281`) was `(input: { sessionId; prompt }) => void` — TYPE LOSS at boundary #4. The host implementation at `SdkController.ts:720` destructured only the typed fields (boundary #5). The host's `sdkHost.send(...)` call at `SdkController.ts:730` omitted `jobId` (boundary #6) even though `SendSessionInput.jobId?: string` (runtime-host.ts:274) permitted it.
+
+**Classification:** `F. MULTIPLE_LOSS`. Three independently broken seams (the minimal connected chain):
+- (a) Callback type at boundary #4
+- (b) Host destructure at boundary #5
+- (c) Host send call at boundary #6
+
+**RED discriminator (real production seam):**
+
+`apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts` — drives the REAL `BackgroundNotifyCoordinator.consumeTerminal` → REAL `buildSdkControllerEnqueueTerminalWake` → REAL `sdkHost.send` chain with a unique sentinel jobId. PRE-FIX: 2/2 tests FAIL with `AssertionError: expected undefined to be 'ccard-corr-loss-sentinel'`. POST-FIX: 2/2 tests PASS.
+
+**Bounded repair (3 files, 88 lines added, 10 removed):**
+
+```
+apps/vscode/src/sdk/background-notify-coordinator.ts
+  - line ~281: callback type widened to carry `jobId?: string`
+  - line ~489 (held path): supplies `jobId: h.jobId` to enqueueTerminalWake
+  - line ~523 (immediate path): supplies `jobId: input.jobId` to enqueueTerminalWake
+
+apps/vscode/src/sdk/SdkController.ts
+  - line ~720: callback type widened
+  - line ~739: destructure includes jobId
+  - line ~739: sdkHost.send({ sessionId, prompt, delivery: "queue", jobId })
+
+apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01
+  .bcnt01-wire-03-real-callback.c24-c-bridge.test.ts
+  - Added one new test "forwards the originating jobId to
+    sdkHost.send" that asserts the production send(...) call
+    receives `{ sessionId, prompt, delivery, jobId }`.
+```
+
+**Constraint compliance (ACT §7):**
+
+- [x] no new public protocol field — `jobId` was already on `SendSessionInput` (P1 from the predecessor ACT); the callback contract is internal to apps/vscode.
+- [x] delivery NOT restored across drain → send (OOM repair's load-bearing deletion preserved).
+- [x] OOM repair NOT touched (derivation at boundaries #4-#6, not in `pending-prompt-service` or `vscode-session-host` deriveOrigin).
+- [x] queue/steer execution semantics unchanged.
+- [x] deriveOrigin precedence unchanged (the existing deriveOrigin handles `delivery === undefined && jobId !== undefined` → `pending_prompt_drain`; the repair simply makes jobId reach that branch).
+- [x] preservation invariants intact: `delivery=="queue"` → `pending_prompt_drain`; `delivery=="steer"` → `deferred_continuation`; `delivery==undefined && jobId!=undefined` → `pending_prompt_drain` (NOW reachable for terminal wakes); `delivery==undefined && jobId==undefined` → `explicit_user`.
+
+**Gates:**
+
+| Gate | Result |
+|---|---|
+| SDK turn-queue suites (pending-prompt-service.test.ts + drain-semantics.test.ts) | 14/14 PASS |
+| LocalRuntimeHost suite (local-runtime-host.test.ts) | 84/85 PASS (1 pre-existing baseline failure — `currentWorkingContextEstimate` drift; verified via git stash before/after) |
+| apps/vscode CCARD + BCNEX + derive-origin-precedence | 21/21 PASS |
+| apps/vscode CCCL01 + bcnt01-wire-03-real-callback (bridge config) | 10/10 PASS |
+| apps/vscode `bun run check-types` | exit 0 |
+| `git diff --check` | clean |
+| ACT-owned diagnostics | 0 |
+
+**Causal claim:** bounded to executable evidence. RED → GREEN transition after applying the bounded repair to boundaries #4-#6. Verified via git stash before/after.
+
+**Verdict:** `PASS_CONTINUATION_CORRELATION_RESTORED`. This ACT ends here.
+
+**DO NOT yet claim:** `PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED` — that requires a successor live qualification against a NEW exact-head dogfood VSIX (the CORRECTION01 specimen + this correlation fix).
+
+**Next (DEFERRED):**
+
+`ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY04` (or next unused board identifier). Primary purpose: causality / cardinality for the two-wake scenario. The live JSONL also shows two `wake_created` records and additional post-terminal turns — that may be a separate cardinality defect that requires trustworthy C4→C8 identity to diagnose. Correlation is now trustworthy so the next ACT can reliably answer:
+- why were two wakes created?
+- which job produced each?
+- which wake was legitimate?
+- which turn, if any, was manufactured?
+
+**Factory cursor (post-this-ACT):**
+- REPAIR (OOM): PROVEN (CORRECTION00, CORRECTION01)
+- REPAIR (CORRELATION): APPLIED (this ACT — boundaries #4-#6)
+- LIVE_QUALIFICATION: OPERATOR_PENDING — needs new exact-head VSIX

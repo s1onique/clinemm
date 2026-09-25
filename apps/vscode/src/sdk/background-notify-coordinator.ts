@@ -277,8 +277,24 @@ export interface BackgroundNotifyCoordinatorOptions {
 	 * MUST be safe to call with `sessionId` of a session that no
 	 * longer exists (the implementation must discard in that
 	 * case).
+	 *
+	 * ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
+	 * `jobId` is the originating background command's correlation
+	 * token. The coordinator supplies it on every wake (held-batch
+	 * path and immediate path) so the host can thread it through
+	 * `sdkHost.send({ jobId })` -> `LocalRuntimeHost.runTurn` ->
+	 * the CCARD capture hooks at C4/C5/C6/C7/C8. Without this
+	 * field the wake is delivered to the queue but the capture
+	 * ring sees `origin = "explicit_user"` at C7/C8 because
+	 * deriveOrigin cannot fall back to `pending_prompt_drain` via
+	 * jobId presence.
+	 *
+	 * Optional in the type because legacy test harnesses that
+	 * mirror this contract don't necessarily thread a jobId; in
+	 * production `BackgroundNotifyCoordinator.consumeTerminal`
+	 * ALWAYS supplies jobId (every wake has a jobId).
 	 */
-	enqueueTerminalWake: (input: { sessionId: string; prompt: string }) => void
+	enqueueTerminalWake: (input: { sessionId: string; prompt: string; jobId?: string }) => void
 	/**
 	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02:
 	 *
@@ -475,6 +491,12 @@ export class BackgroundNotifyCoordinator {
 					exitCode: h.exitCode,
 					outputTail: h.outputTail,
 				}),
+				// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
+				// thread the originating jobId through the
+				// transport seam so the host can forward it to
+				// sdkHost.send(...). Without this the wake is
+				// delivered but loses its correlation identity.
+				jobId: h.jobId,
 			})
 			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
 			// C3 — wake_created capture (held-batch path). One record
@@ -503,6 +525,10 @@ export class BackgroundNotifyCoordinator {
 				exitCode: input.exitCode,
 				outputTail: input.outputTail,
 			}),
+			// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
+			// thread the originating jobId through the transport
+			// seam so the host can forward it to sdkHost.send(...).
+			jobId: input.jobId,
 		})
 		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
 		// C3 — wake_created capture (current-terminal path). One

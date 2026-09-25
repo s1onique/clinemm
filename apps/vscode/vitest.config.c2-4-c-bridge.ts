@@ -323,6 +323,17 @@ export default defineConfig({
 			"src/sdk/__tests__/save-current-identity-inversion.mpwc01.test.ts",
 			"src/sdk/__tests__/factory-resume-effective-connection.mpwc01.test.ts",
 			"src/sdk/__tests__/bound-profile-missing-instance.mpwc02.test.ts",
+			// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 /
+			// CCCL01: bounded RED discriminator for the live
+			// qualification P4 failure. Drives the REAL
+			// `BackgroundNotifyCoordinator.consumeTerminal` ->
+			// REAL `buildSdkControllerEnqueueTerminalWake` ->
+			// REAL `sdkHost.send` chain with a unique sentinel
+			// jobId. PRE-FIX this assertion FAILS because the
+			// enqueueTerminalWake callback contract at
+			// `background-notify-coordinator.ts:281` does NOT
+			// carry jobId.
+			"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

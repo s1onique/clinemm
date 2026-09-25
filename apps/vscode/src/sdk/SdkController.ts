@@ -716,8 +716,8 @@ export function buildSdkControllerEnqueueTerminalWake(options: {
 	 * Tests inject a recording sink to assert swallow semantics.
 	 */
 	logger: { warn: (message: string) => void }
-}): (input: { sessionId: string; prompt: string }) => void {
-	return ({ sessionId, prompt }) => {
+}): (input: { sessionId: string; prompt: string; jobId?: string }) => void {
+	return ({ sessionId, prompt, jobId }) => {
 		const active = options.getActiveSession()
 		if (!active || active.sessionId !== sessionId) {
 			// Owner has been replaced between marker
@@ -727,13 +727,23 @@ export function buildSdkControllerEnqueueTerminalWake(options: {
 			return
 		}
 		try {
-			void active.sdkHost.send({ sessionId, prompt, delivery: "queue" }).catch((error: unknown) => {
-				options.logger.warn(
-					`[SdkController] enqueueTerminalWake send() rejected for sessionId=${sessionId}: ${
-						error instanceof Error ? error.message : String(error)
-					}`,
-				)
-			})
+			// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
+			// forward the originating jobId to sdkHost.send so
+			// LocalRuntimeHost.runTurn receives it on
+			// SendSessionInput.jobId. Without this, the wake
+			// reaches PendingPromptsController but the C4/C5/C6
+			// capture hooks observe jobId === undefined and
+			// deriveOrigin falls through to "explicit_user" at
+			// C7/C8.
+			void active.sdkHost
+				.send({ sessionId, prompt, delivery: "queue", jobId })
+				.catch((error: unknown) => {
+					options.logger.warn(
+						`[SdkController] enqueueTerminalWake send() rejected for sessionId=${sessionId}: ${
+							error instanceof Error ? error.message : String(error)
+						}`,
+					)
+				})
 		} catch (error) {
 			options.logger.warn(
 				`[SdkController] enqueueTerminalWake send() threw for sessionId=${sessionId}: ${

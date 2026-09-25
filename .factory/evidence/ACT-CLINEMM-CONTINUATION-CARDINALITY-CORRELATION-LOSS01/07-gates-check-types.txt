@@ -1,0 +1,12 @@
+[1m[34mCompiling Protocol Buffers...[39m[22m
+[36mProcessing 24 proto files from[39m /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/proto
+Generated ProtoBus files at:
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/webview-ui/src/services/grpc-client.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/protobus-service-types.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/protobus-services.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/standalone/protobus-server-setup.ts
+Generated Host Bridge client files at:
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/host-bridge-client-types.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/standalone/host-bridge-clients.ts
+- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/hostbridge-grpc-service-config.ts
+Formatted 329 files in 47ms. Fixed 1 file.

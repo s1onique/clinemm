@@ -1,0 +1,61 @@
+{
+  "act": "ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01",
+  "primary_purpose": "reproduction / causal evidence acquisition",
+  "verdict": "PASS_CONTINUATION_CORRELATION_RESTORED",
+  "specimen": {
+    "subject_head": "0a97b445c",
+    "vsix": "dist/dogfood/clinemm-4.1.16-0a97b445c.vsix",
+    "sha256": "ab4ddfffe825826a573b47b553407aaa40e921dad67c798ee369f5d245ab2037"
+  },
+  "live_failure": {
+    "pending_prompt_enqueued_count": 2,
+    "pending_prompt_dequeued_count": 2,
+    "continuation_scheduled_count": 2,
+    "run_turn_started_count": 4,
+    "agent_turn_done_count": 4,
+    "wake_created_records_have_jobId": true,
+    "c4_c5_c6_records_have_jobId": false,
+    "c7_c8_origin": "explicit_user",
+    "expected_origin": "pending_prompt_drain"
+  },
+  "classification": {
+    "loss_class": "F. MULTIPLE_LOSS",
+    "first_loss_boundary": "enqueueTerminalWake callback type signature (SdkController.ts:281)",
+    "related_boundaries": [
+      "buildSdkControllerEnqueueTerminalWake destructure (SdkController.ts:720)",
+      "active.sdkHost.send call site (SdkController.ts:730)"
+    ]
+  },
+  "repair": {
+    "files_modified": [
+      "apps/vscode/src/sdk/background-notify-coordinator.ts",
+      "apps/vscode/src/sdk/SdkController.ts",
+      "apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire-03-real-callback.c24-c-bridge.test.ts",
+      "apps/vscode/vitest.config.c2-4-c-bridge.ts"
+    ],
+    "files_added": [
+      "apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts"
+    ],
+    "boundaries_repaired": [4, 5, 6],
+    "oom_repair_touched": false,
+    "delivery_preserved_across_drain_send": false,
+    "new_public_protocol_field": false,
+    "lines_added": 88,
+    "lines_removed": 10
+  },
+  "gates": {
+    "sdk_turn_queue": "14/14 PASS",
+    "local_runtime_host": "84/85 PASS (1 pre-existing baseline failure)",
+    "ccard_bcnex_derive_origin": "21/21 PASS",
+    "cccl_bcnt_wire_bridge": "10/10 PASS",
+    "apps_vscode_typecheck": "PASS",
+    "git_diff_check": "PASS",
+    "act_owned_diagnostics": 0
+  },
+  "next_act": "ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY04",
+  "next_act_purpose": "causality / cardinality for two-wake scenario",
+  "live_qualification": "NOT YET PERFORMED (requires dogfood VSIX re-build + live re-run)",
+  "do_not_claim_yet": [
+    "PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED"
+  ]
+}

@@ -128,6 +128,37 @@ describe("BCNT-WIRE-03 - REAL buildSdkControllerEnqueueTerminalWake factory", ()
 		expect(deps.warn).not.toHaveBeenCalled()
 	})
 
+	it("ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01: forwards the originating jobId to sdkHost.send", async () => {
+		const { session, send } = makeFakeSession("sess-jobid-thread")
+		deps.setActive(session)
+
+		const wake = buildSdkControllerEnqueueTerminalWake({
+			getActiveSession: deps.getActiveSession,
+			logger: { warn: (msg: string) => deps.warn(msg) },
+		})
+
+		wake({
+			sessionId: "sess-jobid-thread",
+			prompt: "State: exited, ExitCode: 0",
+			jobId: "test-jobid-correlation-token",
+		})
+
+		await new Promise((resolve) => setImmediate(resolve))
+		await new Promise((resolve) => setImmediate(resolve))
+
+		expect(send).toHaveBeenCalledTimes(1)
+		// SendSessionInput.jobId is threaded through. Vitest's
+		// toHaveBeenCalledWith ignores undefined keys, so the
+		// expected shape matches exactly what the host must send.
+		expect(send).toHaveBeenCalledWith({
+			sessionId: "sess-jobid-thread",
+			prompt: "State: exited, ExitCode: 0",
+			delivery: "queue",
+			jobId: "test-jobid-correlation-token",
+		})
+		expect(deps.warn).not.toHaveBeenCalled()
+	})
+
 	it("silent-drops when active sessionId != wake sessionId", async () => {
 		const { session, send } = makeFakeSession("sess-A")
 		deps.setActive(session)
