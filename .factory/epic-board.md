@@ -11887,9 +11887,9 @@ TypeScript clean (`tsc --noEmit -p tsconfig.json` exit 0). git diff --check clea
 **Conservation (R1..R15 per ACT §14):** all SATISFIED.
 
 ```
-IMPLEMENTATION_SUBJECT_HEAD = (pending; to be filled at GREEN commit)
-CLOSURE_HEAD                = (pending; to be filled at GREEN commit)
-DOGFOOD_SOURCE_HEAD         = (pending; to be filled at GREEN commit)
+IMPLEMENTATION_SUBJECT_HEAD = 4e9f3912b (GREEN_AND_ABLATION commit)
+CLOSURE_HEAD                = 4e9f3912b (GREEN_AND_ABLATION commit)
+DOGFOOD_SOURCE_HEAD         = 4e9f3912b (this ACT; LIVE-A..D deferred to operator)
 ```
 
 **Decisive Factory state:**
