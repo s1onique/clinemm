@@ -19,35 +19,50 @@ is selected entirely at launch time by the env var
 
 | Field          | Value                                                                            |
 |----------------|----------------------------------------------------------------------------------|
-| SUBJECT_HEAD   | `2edd62498` (`2edd6249855b4413b3a45da3717176958dbcf31c`)                          |
+| SUBJECT_HEAD   | `a86534414` (`a8653441492bc6d4490b902849d6847b84972421`)                          |
 | Version        | `4.1.16`                                                                          |
-| VSIX path      | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-2edd62498.vsix` |
+| VSIX path      | `/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-a86534414.vsix` |
 | VSIX size      | `14627848` bytes (~13.95 MB)                                                     |
-| VSIX sha256    | `fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd`              |
-| Built via      | `vsce package` (manually invoked, sandbox workaround)                            |
-| Env vars at build | `CLINEMM_OOM_DISC01_SUBJECT_HEAD=2edd62498`                                    |
-| Bundled identity confirms | bundle contains: `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` runtime lookup, `CLINEMM_OOM_DISC01_SUBJECT_HEAD` define, `CLINEMM_OOM_DISC01_ATTEST` line marker |
+| VSIX sha256    | `c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4`               |
+| Built via      | `vsce package` (manually invoked, sandbox workaround; prepublish skipped to preserve the bake-in) |
+| Env vars at build | `CLINEMM_OOM_DISC01_SUBJECT_HEAD=a86534414`                                    |
+| Bundled identity confirms | extracted `extension/dist/extension.js` shows: `let r="a86534414";` (literal SHA baked in) and NO `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD` (define substituted the runtime lookup) |
 | Package files  | 52 (verified via vsce output)                                                    |
+
+### Step 1 — Install the bundled VSIX
+
+```bash
+# CORRECTION02 P1: the installed extension is normally extracted
+# content (not a VSIX archive), so its directory/content hash cannot
+# meaningfully equal the VSIX archive hash. Use:
+#
+#   VSIX_SHA256_before_ABLATED  = sha256sum dist/dogfood/clinemm-4.1.16-a86534414.vsix
+#   VSIX_SHA256_before_RESTORED = sha256sum dist/dogfood/clinemm-4.1.16-a86534414.vsix
+# (must be identical — this is the "identical VSIX bytes for both
+# specimens" invariant; verified again at RESTORED launch time)
+#
+# For installed-extension content identity:
+#   VSIX_EXTRACTED_SHA256       = sha256sum dist/dogfood/extension/dist/extension.js
+#                                  (extracted from the VSIX archive)
+#   INSTALLED_EXTENSION_SHA256  = sha256sum <installed-extension>/dist/extension.js
+#   require VSIX_EXTRACTED_SHA256 == INSTALLED_EXTENSION_SHA256
+#
+# expected VSIX sha256: c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4
+```
+
+Use the same VSCodium install path as the historical
+BAD=99006fbcc reproduction. Record:
+- VSIX path + sha256 (must be identical before ABLATED and before RESTORED)
+- installed extension path/version (expected: `s1onique.clinemm 4.1.16`)
+- VSIX-extracted `extension/dist/extension.js` sha256
+- installed-extension `extension/dist/extension.js` sha256
+  (must equal the VSIX-extracted sha256 — proves the install path
+  didn't transform the bundle)
 
 ## Live specimen execution contract
 
 The operator must execute the following in sequence. **The same VSIX
 bytes are used for both specimens** — only the env var toggle changes.
-
-### Step 1 — Install the bundled VSIX
-
-```bash
-# Record the SHA-256 BEFORE install; verify the installed extension
-# has the same hash after install:
-sha256sum /path/to/clinemm-4.1.16-2edd62498.vsix
-# expected: fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd
-```
-
-Use the same VSCodium install path as the historical
-BAD=99006fbcc reproduction. Record:
-- VSIX path
-- installed extension path/version (expected: `s1onique.clinemm 4.1.16`)
-- installed extension SHA-256 (must match the VSIX sha256)
 
 ### Step 2 — Run the ABLATED specimen
 
@@ -81,7 +96,7 @@ exact shape:
 ```
 
 For the ABLATED specimen, expect:
-- `subject=2edd62498` (the SUBJECT_HEAD baked into the bundle)
+- `subject=a86534414` (the SUBJECT_HEAD baked into the bundle)
 - `ablation_active=true`
 - `env_present=1`
 - `eh_pid=<PID of the Electron extension host process>`
@@ -89,13 +104,15 @@ For the ABLATED specimen, expect:
 Capture this line. Verify `eh_pid` matches the recorded Extension Host
 PID. If `subject=<runtime-unset>`, the build did NOT inline the
 SUBJECT_HEAD — STOP, do NOT proceed (the SUBJECT_HEAD identity is
-broken).
+broken). If `subject=<unknown>`, the SUBJECT_HEAD was baked in but
+the build did not substitute the globalThis lookup (this would mean
+the operator's VSIX was rebuilt by a different process — STOP).
 
 ### Step 4 — Capture the run
 
 For each run record:
-- source SUBJECT_HEAD (= `2edd62498`)
-- VSIX path + sha256 (`fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd`)
+- source SUBJECT_HEAD (= `a86534414`)
+- VSIX path + sha256 (`c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4`)
 - installed extension path/version
 - Electron Framework UUID (if available from the established
   environment; otherwise record `<not available>`)
@@ -210,6 +227,70 @@ All files compile clean. All tests pass: 15/15 in production mode,
 |------|--------|
 | HALT_VSIX_BYTES_DIFFER_BETWEEN_SPECIMENS | NOT TRIGGERED (single VSIX built once; env var toggled at launch) |
 | HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE | NOT TRIGGERED (verified via grep on extracted extension.js: `CLINEMM_OOM_DISC01_SUBJECT_HEAD` define, `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` runtime lookup, `CLINEMM_OOM_DISC01_ATTEST` line marker all present) |
+| HALT_ATTESTATION_NOT_EMITTED | NOT TRIGGERED (AB-ATTEST-01 verifies emission from the controller constructor) |
+| HALT_QUEUE_STEER_SEMANTICS_ALTERED | NOT TRIGGERED (only the conditional spread of `next.delivery` is touched; all other forwarding preserved per AB-DELIVERY-02) |
+| HALT_VITEST_EPERM_TREATED_AS_ASSERTION_FAILURE | NOT TRIGGERED (separately characterized: worker-shutdown EPERM is sandbox-related, not assertion-related; suite exit code matches the assertion result) |
+
+## CORRECTION02 — bundle identity verified
+
+### P0: SUBJECT_HEAD bake-in (CORRECTION02 reviewer concern)
+
+The original `esbuild.mjs` change used the bare-identifier key
+`CLINEMM_OOM_DISC01_SUBJECT_HEAD` for the `define` entry, but the
+production code reads the expression
+`globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`. esbuild's `define`
+substitutes by exact expression match, so the bare-identifier key
+left the runtime lookup intact. The bundled attestation would have
+emitted `subject=<runtime-unset>` even when the build was correct.
+
+**Fix (CORRECTION02):** change the define key to the literal
+expression:
+
+```js
+buildEnvVars["globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD"] = JSON.stringify(process.env.CLINEMM_OOM_DISC01_SUBJECT_HEAD)
+```
+
+### P1: installed-extension hash wording
+
+The previous live contract said "installed extension SHA-256 must
+match the VSIX SHA-256". The installed extension is normally
+extracted content (not a VSIX archive), so its directory/content
+hash cannot meaningfully equal the VSIX archive hash. The contract
+was changed to:
+- VSIX sha256 (before ABLATED) must equal VSIX sha256 (before RESTORED)
+  — proves identical VSIX bytes for both specimens.
+- VSIX-extracted `extension/dist/extension.js` sha256 must equal
+  installed-extension `extension/dist/extension.js` sha256 — proves
+  the install path didn't transform the bundle.
+
+### P2: documentary whitespace errors in `03-ablation-diff.txt`
+
+Not addressed (NON-BLOCKING per reviewer — documentary evidence residue
+in a historical artifact). Out of scope for this correction cycle.
+
+### Required load-bearing checks (CORRECTION02)
+
+After the new SUBJECT_HEAD is committed and the new VSIX is built:
+
+| Check | Result |
+|-------|--------|
+| 4. Literal SUBJECT_HEAD SHA occurs in attestation code | PASS — extracted `extension.js` shows `let r="a86534414";` (literal SHA baked in) |
+| 5. Attestation path does NOT retain `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD` | PASS — esbuild's `define` substituted the runtime lookup (verified by grep, 0 matches) |
+
+The constructor segment in the bundled VSIX:
+
+```js
+__ablateDeliveryPropagation=process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY==="1";
+constructor(e){this.deps=e;let r="a86534414";
+try{process.stderr.write(`[CLINEMM_OOM_DISC01_ATTEST] subject=${r??"<runtime-unset>"} ...`);}
+```
+
+## Halt conditions evaluated (CORRECTION02)
+
+| Halt | Status |
+|------|--------|
+| HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE | RESOLVED (CORRECTION02) — esbuild define key now matches the production expression; verified by `let r="a86534414";` in the bundled extension.js (0 matches for `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`) |
+| HALT_VSIX_BYTES_DIFFER_BETWEEN_SPECIMENS | NOT TRIGGERED (single VSIX built once; env var toggled at launch) |
 | HALT_ATTESTATION_NOT_EMITTED | NOT TRIGGERED (AB-ATTEST-01 verifies emission from the controller constructor) |
 | HALT_QUEUE_STEER_SEMANTICS_ALTERED | NOT TRIGGERED (only the conditional spread of `next.delivery` is touched; all other forwarding preserved per AB-DELIVERY-02) |
 | HALT_VITEST_EPERM_TREATED_AS_ASSERTION_FAILURE | NOT TRIGGERED (separately characterized: worker-shutdown EPERM is sandbox-related, not assertion-related; suite exit code matches the assertion result) |

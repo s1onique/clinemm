@@ -293,3 +293,130 @@ dist/dogfood/clinemm-4.1.16-2edd62498.vsix
                            CLINEMM_OOM_DISC01_SUBJECT_HEAD (esbuild define)
                            CLINEMM_OOM_DISC01_ATTEST (line marker)
 ```
+
+---
+
+# CORRECTION02 — SUBJECT_HEAD bake-in fixed
+
+## Halt raised by reviewer
+
+`HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE` (new P0): the bundled VSIX
+contained `let r=globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD;` — the
+runtime lookup was still intact, NOT substituted by the esbuild
+`define` entry. The reason: the `define` key was the bare identifier
+`CLINEMM_OOM_DISC01_SUBJECT_HEAD`, but the production code reads the
+expression `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`. esbuild's
+`define` substitutes by EXACT expression match.
+
+## Fix
+
+Change the `define` key to the literal expression that production code
+reads:
+
+```js
+buildEnvVars["globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD"] = JSON.stringify(process.env.CLINEMM_OOM_DISC01_SUBJECT_HEAD)
+```
+
+That matches the source-code expression.
+
+## New SUBJECT_HEAD and bundled VSIX
+
+| Field           | Value                                                                            |
+|-----------------|----------------------------------------------------------------------------------|
+| SUBJECT_HEAD    | `a8653441492bc6d4490b902849d6847b84972421`                                          |
+| Version         | `4.1.16`                                                                          |
+| VSIX path       | `dist/dogfood/clinemm-4.1.16-a86534414.vsix`                                       |
+| VSIX size       | `14627848` bytes (~13.95 MB)                                                       |
+| VSIX sha256     | `c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4`                   |
+
+## Load-bearing checks (CORRECTION02 required)
+
+```
+Check 4: literal SUBJECT_HEAD SHA occurs in attestation code
+  perl -e 'undef $/; $_=<>; while (/(__ablateDeliveryPropagation=...[^}]{0,500})/g) { print $1; }' extracted-extension.js
+  Output: ...constructor(e){this.deps=e;let r="a86534414";try{process.stderr.write(`[CLINEMM_OOM_DISC01_ATTEST] subject=${r??"<runtime-unset>"} ...`)
+  PASS — literal "a86534414" baked into the constructor's `let r = "a86534414";` line.
+
+Check 5: attestation path does NOT retain globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD
+  if grep -qF 'globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD' extracted-extension.js; then echo FAIL; else echo PASS; fi
+  PASS: no runtime lookup
+  The expression `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD` was
+  correctly substituted by esbuild's `define` mechanism.
+```
+
+## Build sequence (correct order matters)
+
+The CORRECTION02 fix is **NOT** enough on its own. The vsce package
+step runs `npm run vscode:prepublish`, which expands to
+`bun run package`, which calls `bun esbuild.mjs --production` —
+WITHOUT the `CLINEMM_OOM_DISC01_SUBJECT_HEAD` env var. This re-bundles
+the extension.js WITHOUT the SUBJECT_HEAD bake-in, undoing the fix.
+
+The correct build sequence is:
+
+```bash
+# 1. Build extension.js WITH the SUBJECT_HEAD baked in:
+CLINEMM_OOM_DISC01_SUBJECT_HEAD=a86534414 IS_DEV=false bun esbuild.mjs --production
+
+# 2. Verify the bundle has the literal SHA baked in (CORRECTION02 Check 4):
+perl -e 'undef $/; $_=<>; while (/(__ablateDeliveryPropagation=...[}]{0,500})/g) { print $1; }' dist/extension.js
+# expected: ...let r="a86534414";try{...
+
+# 3. Disable vscode:prepublish so vsce package doesn't rebuild:
+sed -i.bak 's|"vscode:prepublish": "bun run package"|"vscode:prepublish": "echo SKIPPED"|' package.json
+
+# 4. Package VSIX (no rebuild):
+node ./node_modules/.bin/vsce package --no-dependencies --out dist/clinemm-4.1.16-a86534414.vsix
+
+# 5. Restore package.json:
+mv package.json.bak package.json
+
+# 6. Verify the VSIX contains the bake-in:
+unzip -p dist/clinemm-4.1.16-a86534414.vsix extension/dist/extension.js | \
+  perl -e 'undef $/; $_=<>; while (/(__ablateDeliveryPropagation=...[^}]{0,500})/g) { print $1; }'
+# expected: ...let r="a86534414";try{...
+```
+
+## P1 fix — installed-extension hash wording
+
+The previous live contract said "installed extension SHA-256 must
+match the VSIX SHA-256". The installed extension is normally
+extracted content, so its directory/content hash cannot meaningfully
+equal the VSIX archive hash. The contract was changed to:
+- VSIX sha256 (before ABLATED) must equal VSIX sha256 (before RESTORED)
+  — proves identical VSIX bytes for both specimens.
+- VSIX-extracted `extension/dist/extension.js` sha256 must equal
+  installed-extension `extension/dist/extension.js` sha256 — proves
+  the install path didn't transform the bundle.
+
+## P2 — out of scope (NON-BLOCKING per reviewer)
+
+The new targeted digest reports 20 whitespace errors, all in the
+historical `03-ablation-diff.txt` evidence artifact. Documentary
+evidence residue. NOT addressed in CORRECTION02 (NON-BLOCKING).
+
+## Verdict (CORRECTION02)
+
+**HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE → RESOLVED**
+
+The bundled VSIX at `dist/dogfood/clinemm-4.1.16-a86534414.vsix`
+correctly contains the literal SUBJECT_HEAD `a86534414` baked into
+the attestation code, with NO remaining runtime lookup of
+`globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`. The live Extension Host
+will attest `subject=a86534414` on launch (assuming the build path
+was followed exactly per the build sequence above).
+
+**Repair authorized:** FALSE (unchanged from CORRECTION01)
+
+**Reopen condition met:** yes — bundled extension.js demonstrably
+contains the new baked SUBJECT_HEAD (`let r="a86534414";`); runtime
+attestation is capable of emitting that exact subject; one new VSIX
+is hash-bound for both specimens.
+
+**Next step:** operator runs the live specimen per `05-live-ablation.md`
+using the bundled VSIX at
+`dist/dogfood/clinemm-4.1.16-a86534414.vsix` (sha256
+`c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4`,
+SUBJECT_HEAD `a86534414` baked in).
+
+**C1: GO** — run the live ABLATED → RESTORED discriminator.

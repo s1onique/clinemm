@@ -1,5 +1,5 @@
 {
-  "act": "ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01",
+  "act": "ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION02",
   "primary_purpose": "causality / necessity",
   "entry_head": "97a2efcb07632420666d53f6bd296313bfcf5fba",
   "good_artifact": "d1ecf48dc",
@@ -70,14 +70,14 @@
   },
   "repair_authorized": false,
   "verdict": "DISCRIMINATORS_INSTALLED_LIVE_SPECIMEN_READY_FOR_OPERATOR",
-  "next_step": "operator runs the live specimen per 05-live-ablation.md using the bundled VSIX at dist/dogfood/clinemm-4.1.16-2edd62498.vsix. If ABLATED survives and RESTORED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM (separate bounded repair ACT authorized). If ABLATED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_REFUTED (no repair; successor discriminator = CCARD diagnostic activation as a whole). If both survive: NOT_REPRODUCED.",
+  "next_step": "operator runs the live specimen per 05-live-ablation.md using the bundled VSIX at dist/dogfood/clinemm-4.1.16-a86534414.vsix (sha256 c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4, SUBJECT_HEAD a86534414 baked in). If ABLATED survives and RESTORED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_NECESSARY_FOR_OOM (separate bounded repair ACT authorized). If ABLATED reproduces same native OOM: PASS_DELIVERY_PROPAGATION_REFUTED. If both survive: NOT_REPRODUCED.",
   "halt_conditions_evaluated": {
     "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED \u2014 git status --short was empty at entry",
     "HALT_REGRESSION_SEAM_NO_LONGER_PRESENT": "NOT_TRIGGERED \u2014 the historical next.delivery forwarding is intact at HEAD line ~509",
     "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED \u2014 RED is reproducible (CCARD-WIRE-01 fails under ablation as expected); the production-shape baseline (env var unset) passes CCARD-WIRE-01",
     "CAPTURE_INSUFFICIENT": "NOT_TRIGGERED \u2014 code-level discriminators are complete and load-bearing",
     "HALT_VSIX_BYTES_DIFFER_BETWEEN_SPECIMENS": "NOT_TRIGGERED \u2014 single VSIX built once (sha256 fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd); env var toggles at launch",
-    "HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE": "NOT_TRIGGERED \u2014 verified by grep on extracted extension.js (CLINEMM_OOM_DISC01_SUBJECT_HEAD define present, runtime lookup present)",
+    "HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE": "RESOLVED (CORRECTION02) \u2014 esbuild define key changed from bare identifier CLINEMM_OOM_DISC01_SUBJECT_HEAD to literal expression globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD; verified by let r=\"a86534414\"; in the bundled extension.js (0 matches for globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD)",
     "HALT_ATTESTATION_NOT_EMITTED": "NOT_TRIGGERED \u2014 AB-ATTEST-01 verifies emission from the controller constructor",
     "HALT_QUEUE_STEER_SEMANTICS_ALTERED": "NOT_TRIGGERED \u2014 only the conditional spread of next.delivery is touched; all other forwarding preserved per AB-DELIVERY-02"
   },
@@ -89,12 +89,12 @@
     "REGRESSION_COMMIT_COUNT": 1,
     "REGRESSION_COMMIT": "99006fbcc",
     "SUSPECT_DELTA": "next.delivery propagation",
-    "NECESSITY": "DISCRIMINATORS_INSTALLED_LIVE_PENDING",
+    "NECESSITY": "DISCRIMINATORS_INSTALLED_LIVE_PENDING_CORRECTION02_BUNDLE_BAKED_IN",
     "REPAIR_AUTHORIZED": false,
-    "SUBJECT_HEAD": "2edd62498"
+    "SUBJECT_HEAD": "a86534414"
   },
-  "timestamp": "2026-09-25T02:39:00Z",
-  "subject_head": "2edd6249855b4413b3a45da3717176958dbcf31c",
+  "timestamp": "2026-09-25T02:59:00Z",
+  "subject_head": "a8653441492bc6d4490b902849d6847b84972421",
   "positive_attestation": {
     "type": "constructor-emitted stderr line",
     "line_prefix": "[CLINEMM_OOM_DISC01_ATTEST]",
@@ -110,19 +110,25 @@
     "subject_head_source": "esbuild --define:CLINEMM_OOM_DISC01_SUBJECT_HEAD='<sha>' injected at build time"
   },
   "bundled_vsix": {
-    "subject_head": "2edd62498",
+    "subject_head": "a86534414",
     "version": "4.1.16",
-    "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-2edd62498.vsix",
+    "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-a86534414.vsix",
     "size_bytes": 14627848,
-    "sha256": "fa7e3ae6eb36a779c345f0a55f88e3cc60c74c06b628483ce203b110ccb24bdd",
-    "built_via": "vsce package (manually invoked; sandbox workaround for better-sqlite3 postinstall)",
+    "sha256": "c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4",
+    "built_via": "esbuild --production (with CLINEMM_OOM_DISC01_SUBJECT_HEAD=a86534414) followed by vsce package with prepublish skipped",
     "package_files": 52,
     "bundle_contains": [
       "CLINEMM_OOM_DISC01_ABLATE_DELIVERY (runtime lookup)",
-      "CLINEMM_OOM_DISC01_SUBJECT_HEAD (esbuild --define inlined)",
-      "CLINEMM_OOM_DISC01_ATTEST (line marker)"
+      "CLINEMM_OOM_DISC01_ATTEST (line marker)",
+      "literal SHA a86534414 baked into let r=...",
+      "NO globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD (esbuild define substituted the runtime lookup)"
     ],
     "ablated_restored_use_identical_bytes": true,
-    "toggle_mechanism": "env var at launch time (no rebuild between specimens)"
+    "toggle_mechanism": "env var at launch time (no rebuild between specimens)",
+    "correction02_load_bearing_checks": {
+      "check_4_literal_sha_in_attestation_code": "PASS",
+      "check_5_no_runtime_globalThis_lookup": "PASS",
+      "evidence": "extracted extension.js contains: let r=\"a86534414\"; (literal SHA baked in) and 0 matches for globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD"
+    }
   }
 }

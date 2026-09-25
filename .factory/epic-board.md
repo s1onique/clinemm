@@ -10837,3 +10837,112 @@ apps/vscode/esbuild.mjs                                                   # CLIN
 No other queue/steer semantics changed. Diagnostic mode is
 DEFAULT_OFF; the env var MUST NOT be set in production builds and
 MUST NOT be documented outside this ACT.
+
+---
+
+## ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION02 — HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE → RESOLVED — 2026-09-25
+
+**Disposition:** HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE → RESOLVED.
+Live A/B authorized (`C1: GO`).
+
+**P0 root cause:** the bundled VSIX still contained
+`let r=globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD;` — the runtime
+lookup was intact, NOT substituted by the esbuild `define` entry.
+Reason: the `define` key was the bare identifier
+`CLINEMM_OOM_DISC01_SUBJECT_HEAD`, but production code reads the
+expression `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`. esbuild's
+`define` substitutes by EXACT expression match, so the bare-identifier
+key left the runtime lookup intact. The live attestation would have
+emitted `subject=<runtime-unset>` even when the build was correct.
+
+**P0 fix:** change the `define` key to the literal expression that
+production code reads.
+
+```js
+// apps/vscode/esbuild.mjs
+buildEnvVars["globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD"] =
+    JSON.stringify(process.env.CLINEMM_OOM_DISC01_SUBJECT_HEAD)
+```
+
+After the fix, the bundled extension.js contains
+`let r="a86534414";` (literal SHA baked in) and zero references to
+`globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD`.
+
+**New SUBJECT_HEAD and bundled VSIX:**
+
+| Field           | Value                                                                            |
+|-----------------|----------------------------------------------------------------------------------|
+| SUBJECT_HEAD    | `a86534414` (`a8653441492bc6d4490b902849d6847b84972421`)                            |
+| Version         | `4.1.16`                                                                          |
+| VSIX path       | `dist/dogfood/clinemm-4.1.16-a86534414.vsix`                                       |
+| VSIX size       | `14627848` bytes (~13.95 MB)                                                       |
+| VSIX sha256     | `c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4`                   |
+
+**CORRECTION02 load-bearing checks (REQUIRED by review):**
+
+| Check | Result |
+|-------|--------|
+| 4. Literal SUBJECT_HEAD SHA occurs in attestation code | PASS — extracted `extension.js` shows `let r="a86534414";` |
+| 5. Attestation path does NOT retain `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD` | PASS — 0 matches for `globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD` |
+
+**Build sequence (correct order matters):** the vsce package step runs
+`npm run vscode:prepublish`, which calls `bun esbuild.mjs --production`
+WITHOUT the env var, undoing the bake-in. The correct sequence:
+1. Build extension.js WITH `CLINEMM_OOM_DISC01_SUBJECT_HEAD=<sha>` set.
+2. Verify the bake-in (Check 4).
+3. Temporarily disable `vscode:prepublish` in package.json.
+4. Run `vsce package --no-dependencies`.
+5. Restore package.json.
+6. Verify the VSIX contains the bake-in.
+
+**P1 fix (also addressed):** the live contract wording about
+"installed extension SHA-256 must match VSIX SHA-256" was wrong
+(installed content is extracted, not the VSIX archive). Rewritten
+to:
+- VSIX sha256 (before ABLATED) == VSIX sha256 (before RESTORED) —
+  proves identical VSIX bytes for both specimens.
+- VSIX-extracted `extension/dist/extension.js` sha256 == installed
+  `extension/dist/extension.js` sha256 — proves install path didn't
+  transform the bundle.
+
+**P2 (out of scope per reviewer):** 20 whitespace errors in
+historical `03-ablation-diff.txt` (documentary residue). NOT
+addressed (NON-BLOCKING).
+
+**Reopen condition:** yes — bundled extension.js demonstrably
+contains the new baked SUBJECT_HEAD; runtime attestation is capable
+of emitting that exact subject; one new VSIX is hash-bound for both
+specimens.
+
+**Verdict:** HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE → RESOLVED
+
+**Repair authorized:** FALSE (unchanged from CORRECTION01)
+
+**C1: GO** — run the live ABLATED → RESTORED discriminator using the
+bundled VSIX at `dist/dogfood/clinemm-4.1.16-a86534414.vsix`
+(sha256 `c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4`,
+SUBJECT_HEAD `a86534414` baked in).
+
+**Repository trust (CORRECTION02):**
+
+```
+$ git status --short
+(empty)
+
+$ git log --oneline -6
+a86534414 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION02
+8141e1a7b ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01: ACT file update
+5f4cc4180 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01: board entry
+589455b11 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01: result.json update
+414e9b166 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01: evidence + bundle identity
+e6f2d6ab5 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01: evidence + board
+```
+
+**Production code changes (CORRECTION02):**
+
+```
+apps/vscode/esbuild.mjs                                      # 1-line change: define key now matches the source-code expression
+```
+
+No other production-code changes. No additional queue/steer
+semantics altered.

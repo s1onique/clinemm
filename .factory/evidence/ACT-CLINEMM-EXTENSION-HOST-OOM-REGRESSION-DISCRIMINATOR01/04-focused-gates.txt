@@ -1,4 +1,4 @@
-# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
+# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION02
 # Focused gates (2026-09-25)
 
 GATE                                       RESULT
@@ -11,6 +11,9 @@ vitest-pool worker termination EPERM       OBSERVED (sandbox/worker-shutdown; su
 sdk/core typecheck (touched files)         0 new errors (67 pre-existing errors in unrelated files)
 apps/vscode typecheck                      exit 0, clean
 git diff --check                           clean
+bundled VSIX SUBJECT_HEAD bake-in          PASS (let r="a86534414" literal in extracted extension.js)
+bundled VSIX globalThis lookup removal     PASS (0 matches for globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD in extracted extension.js)
+VSIX sha256                                c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4
 
 NOTES
 -----
@@ -24,3 +27,12 @@ NOTES
   load-bearing proof that the ablation observes the same
   field-removal CCARD-WIRE-01 originally protected. The other 14
   tests pass in ablation mode.
+* The CORRECTION02 fix changed the esbuild define key from the
+  bare identifier "CLINEMM_OOM_DISC01_SUBJECT_HEAD" to the literal
+  expression "globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD". This
+  matches the production-code lookup pattern. The bundled
+  extension.js now contains the literal SHA baked in
+  (let r="a86534414") and zero references to
+  globalThis.CLINEMM_OOM_DISC01_SUBJECT_HEAD (esbuild substituted
+  the runtime lookup). The live attestation will emit
+  subject=a86534414 when launched.

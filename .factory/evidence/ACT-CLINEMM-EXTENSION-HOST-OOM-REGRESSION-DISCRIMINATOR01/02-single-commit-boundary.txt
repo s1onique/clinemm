@@ -1,25 +1,23 @@
-# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
+# ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION02
 # Single-commit boundary (2026-09-25)
 
 # The SUBJECT_HEAD commits (the changes that produced the bundled VSIX):
-$ git log --oneline 97a2efcb0..2edd62498
+$ git log --oneline 97a2efcb0..a86534414
+a86534414 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION02
 2edd62498 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
 8062ac347 ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION01
 
-# Note: the second commit (2edd62498) is a thin esbuild.mjs change
-# to wire the CLINEMM_OOM_DISC01_SUBJECT_HEAD env var into the
-# bundle define table. Both commits belong to the SUBJECT_HEAD and
-# the bundled VSIX was built from this tip.
+# CORRECTION02 = the SUBJECT_HEAD-tied esbuild.mjs fix that resolved
+# HALT_SUBJECT_HEAD_NOT_BAKED_INTO_BUNDLE (bare-identifier define key
+# changed to literal expression key, matching the source-code
+# `globalThis.<name>` lookup pattern).
 
 # Entry HEAD (where this ACT started, pre-CORRECTION01):
 ENTRY_HEAD = 97a2efcb07632420666d53f6bd296313bfcf5fba
 
-# CORRECTION01 SUBJECT_HEAD (where the bundled VSIX was built):
-SUBJECT_HEAD = 2edd6249855b4413b3a45da3717176958dbcf31c
+# CORRECTION02 SUBJECT_HEAD (where the bundled VSIX was built):
+SUBJECT_HEAD = a8653441492bc6d4490b902849d6847b84972421
 
 # Single-commit boundary between GOOD and BAD is UNCHANGED from
 # the original ACT-01 (parent's single-commit interval
 # d1ecf48dc..99006fbcc = 1 commit, the production wiring fix).
-# CORRECTION01 adds the ablation seam (env-var-gated, default off)
-# on top of HEAD, plus the positive Extension Host attestation and
-# the bundled VSIX identity.
