@@ -63,6 +63,36 @@
       },
       "reopen_condition": "UNCHANGED (persisted clineMessages dump for taskId=1790335441241_5g7oe)",
       "verdict_at_round_close": "CAPTURE_INSUFFICIENT (PRESENTATION_CLASS remains UNRESOLVED; 4 UI-D candidates POSSIBLE; 2 UI-F candidates POSSIBLE; PS-A/B/C/D/E all UNRESOLVED)"
+    },
+    {
+      "round": 4,
+      "after_reviewer": "twenty-seventh",
+      "verdict": "HALT_ROUND3_RESULT_JSON_STALE_CLASSIFICATION",
+      "scope": "result.json only (bounded correction per twenty-seventh reviewer prescription)",
+      "p0s_closed": [
+        "P0-D round3-result-json-stale-classification: bounded fix of result.json so the machine-readable classification matches the round-3 human-readable ACT/recon (twenty-seventh reviewer identified that the durable classification artifact still encoded round-2 ELIMINATED state in five machine-readable phrases while the history entries correctly retracted them)"
+      ],
+      "fields_revised_in_this_round": [
+        "presentation_map.UI-D.live_trace_constraints: replaced Round-2 'explicit_user did NOT call the completion tool ... D.1 ELIMINATED' with Round-3 UNPROVEN + chronology rule (seq 6 inside explicit_user interval, 65 ms before drain)",
+        "presentation_map.UI-D.remaining_candidates: added D.1 (completion_result from explicit_user turn)",
+        "presentation_map.UI-D.user_visible_authority: '3 remaining candidates' -> '4 remaining candidates; restored by round-3 bounded correction'",
+        "presentation_map.UI-F.live_trace_constraints: replaced Round-2 'F.1 is the single plausible candidate' with 'F.1 one possible candidate; F.2 RESTORED; no claim of single plausible candidate from LIVE_RAW'",
+        "presentation_map.UI-F.remaining_candidates: added F.2 (second completion_result interpretation)",
+        "presentation_map.UI-F.user_visible_authority: 'semantic_completion candidate; exact producer UNPROVEN' -> 'UNRESOLVED (2 remaining candidates; restored by round-3 bounded correction)'",
+        "classification: added SUBMIT_EXIT_TURN_BINDING=UNPROVEN + completion_result_count=UNRESOLVED; PS_A/PS_B/PS_C/PS_D/PS_E all marked POSSIBLE; PS_B_remainder reverted from ELIMINATED_BY_LIVE_TRACE to POSSIBLE (RESTORED by round-3 bounded correction); added all_remainder_branches_possible summary",
+        "reopen_conditions.binding_procedure: removed 'LIVE_RAW predicts exactly 1 row at seq 11'; replaced with 'expected count = 0, 1, or 2'; removed 'PS-B eliminated'; final branch list includes PS-B"
+      ],
+      "fields_unchanged_in_this_round": [
+        "bounded_correction_history rounds 1-3 (audit trail preserved as-is; Round-2 retractions remain visible)",
+        "runtime_cardinality (WAKE_CARDINALITY=LIVE; EXECUTION_CARDINALITY=LIVE; SUBMIT_EXIT_TURN_BINDING=UNPROVEN)",
+        "specimen (closure_head, raw trace, time range)",
+        "halts entries (HALT_SUBMIT_AND_EXIT_ORIGIN_MISINTERPRETED stays CLOSED)",
+        "evidence_files (all revisions from round 3 stay in place)",
+        "factory_cursor (PRESENTATION_MAP, NEXT, ROOT_PRESENTATION_CLASS)",
+        "verdict (still CAPTURE_INSUFFICIENT)"
+      ],
+      "reopen_condition": "UNCHANGED (persisted clineMessages dump for taskId=1790335441241_5g7oe)",
+      "verdict_at_round_close": "CAPTURE_INSUFFICIENT (machine-readable classification now matches human-readable ACT/recon; 4 UI-D + 2 UI-F candidates POSSIBLE; PS-A/B/C/D/E all POSSIBLE)"
     }
   ],
   "specimen": {
@@ -159,8 +189,15 @@
     "UI-D": {
       "binding_status": "UNPROVEN_PENDING_PERSISTED_BINDING",
       "visible_text": "green COMPLETED card: Ran sh -c ... in the background...",
-      "live_trace_constraints": "the explicit_user turn did NOT call the completion tool (submit_and_exit_seen=2 with both origins=pending_prompt_drain); so D.1 (completion_result SURVIVED C10) is ELIMINATED",
+      "live_trace_constraints": "SUBMIT_EXIT_TURN_BINDING = UNPROVEN. submit_and_exit_seen.origin is a diagnostic origin label and does NOT prove run-turn identity. LIVE_RAW seq 6 submit_and_exit_seen (origin_label=pending_prompt_drain) falls chronologically INSIDE the explicit_user turn interval (run_turn_started seq 1 ... agent_turn_done seq 7), 65 ms before pending_prompt_dequeued seq 8, so a completion_result from the explicit_user turn is NOT eliminated by the live trace. No claim about exactly-one completion_result can be made from the LIVE_RAW.",
       "remaining_candidates": [
+        {
+          "candidate": "D.1",
+          "producer": "completion_result SURVIVED C10 from the explicit_user turn (origin_label of submit_and_exit_seen seq 6 is diagnostic pending_prompt_drain; chronology does NOT exclude this candidate)",
+          "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
+          "live_evidence_association": "submit_and_exit_seen seq 6 (at=1790335477643) is chronologically inside the explicit_user turn interval",
+          "hypothesis_class": "PS-B (paired with F.2) or PS-A (paired with F.1, depending on F binding)"
+        },
         {
           "candidate": "D.2",
           "producer": "text row badged by resolveTerminalReportFraming",
@@ -180,7 +217,7 @@
           "hypothesis_class": "PS-C (over-badging)"
         }
       ],
-      "user_visible_authority": "UNRESOLVED (3 remaining candidates)"
+      "user_visible_authority": "UNRESOLVED (4 remaining candidates; restored by round-3 bounded correction)"
     },
     "UI-E": {
       "binding_status": "PROVEN_VIA_PRODUCER",
@@ -192,7 +229,7 @@
     "UI-F": {
       "binding_status": "UNPROVEN_PENDING_PERSISTED_BINDING",
       "visible_text": "green COMPLETED card: The background command completed successfully.",
-      "live_trace_constraints": "F.1 (wake turn's completion_result at seq 11) is the single plausible candidate given the LIVE trace's pattern",
+      "live_trace_constraints": "SUBMIT_EXIT_TURN_BINDING = UNPROVEN. submit_and_exit_seen.origin is a diagnostic origin label and does NOT prove run-turn identity. LIVE_RAW seq 11 submit_and_exit_seen (origin_label=pending_prompt_drain) falls chronologically INSIDE the pending_prompt_drain turn interval (run_turn_started seq 10 ... agent_turn_done seq 13), 0 ms before task_completion_committed seq 12. F.1 (wake turn's completion_result) is one possible candidate; F.2 (a second completion_result interpretation) is RESTORED as POSSIBLE by round-3 bounded correction. No claim that F.1 is the single plausible candidate can be made from the LIVE_RAW.",
       "remaining_candidates": [
         {
           "candidate": "F.1",
@@ -200,18 +237,28 @@
           "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
           "live_evidence": "LIVE_RAW seq 11 submit_and_exit_seen (origin=pending_prompt_drain) + LIVE_RAW seq 12 task_completion_committed",
           "hypothesis_class": "PS-A or PS-C (depending on UI-D binding)"
+        },
+        {
+          "candidate": "F.2",
+          "producer": "second completion_result interpretation (e.g. wake turn plus an explicit_user-side completion_result from seq 6; restored by round-3 bounded correction)",
+          "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
+          "live_evidence_association": "submit_and_exit_seen seq 6 (at=1790335477643) is chronologically inside the explicit_user turn interval and could indicate a second completion_result",
+          "hypothesis_class": "PS-B (paired with D.1)"
         }
       ],
-      "user_visible_authority": "semantic_completion candidate; exact producer UNPROVEN"
+      "user_visible_authority": "UNRESOLVED (2 remaining candidates; restored by round-3 bounded correction)"
     }
   },
   "classification": {
     "ROOT_PRESENTATION_CLASS": "UNRESOLVED",
-    "PS_A_remainder": "if UI-D is D.2 (badged text) and UI-F is F.1 (the sole completion_result), then PS-A re-opens (original claim recovered); RECLASSIFY_POSSIBLE",
-    "PS_B_remainder": "ELIMINATED_BY_LIVE_TRACE (the LIVE trace shows only one completion_result in the session; PS-B required two)",
-    "PS_C_remainder": "if UI-D is D.2 (badged text), then over-badging of text rows by resolveTerminalReportFraming; UNKNOWN new class",
-    "PS_D_remainder": "if UI-D is D.3 (phantom duplicate of wake turn's completion_result), then webview-side state propagation has a duplicate-render defect; UNKNOWN new class",
-    "PS_E_remainder": "if UI-D is D.4 (terminal_card re-rendered with badge), then some renderer is over-badging terminal_card UI; UNKNOWN new class"
+    "SUBMIT_EXIT_TURN_BINDING": "UNPROVEN (origin label is diagnostic, not causal turn identity)",
+    "completion_result_count": "UNRESOLVED (do not predict exactly 1 from LIVE_RAW; expected count = 0, 1, or 2)",
+    "PS_A_remainder": "POSSIBLE: if UI-D is D.2 (badged text) and UI-F is F.1 (a completion_result), then PS-A re-opens (original claim recovered); RECLASSIFY_POSSIBLE",
+    "PS_B_remainder": "POSSIBLE (RESTORED by round-3 bounded correction): if UI-D is D.1 (completion_result from explicit_user turn) and UI-F is F.2 (second completion_result interpretation), then two completion_results exist (one per turn); LIVE_RAW does NOT eliminate this branch because submit_and_exit_seen.origin is diagnostic and seq 6 falls inside the explicit_user turn interval",
+    "PS_C_remainder": "POSSIBLE: if UI-D is D.2 (badged text), then over-badging of text rows by resolveTerminalReportFraming; UNKNOWN new class",
+    "PS_D_remainder": "POSSIBLE: if UI-D is D.3 (phantom duplicate of wake turn's completion_result), then webview-side state propagation has a duplicate-render defect; UNKNOWN new class",
+    "PS_E_remainder": "POSSIBLE: if UI-D is D.4 (terminal_card re-rendered with badge), then some renderer is over-badging terminal_card UI; UNKNOWN new class",
+    "all_remainder_branches_possible": "PS-A, PS-B, PS-C, PS-D, PS-E are all POSSIBLE; final classification depends on persisted clineMessages dump for taskId=1790335441241_5g7oe"
   },
   "reopen_conditions": {
     "operator_required_inputs": [
@@ -220,10 +267,10 @@
       "webview extensionState.clineMessages snapshot if it differs"
     ],
     "binding_procedure": [
-      "enumerate all say='completion_result' rows; record message id, text, partial, isAuthoritativelyCompletedResult, turn origin (LIVE_RAW predicts exactly 1 row at seq 11)",
+      "enumerate ALL say='completion_result' rows; record message id, text, partial, isAuthoritativelyCompletedResult, turn origin (LIVE_RAW does NOT predict exactly 1 row; expected count = 0, 1, or 2; round-3 correction retracted the LIVE_RAW 'exactly one completion_result' inference because submit_and_exit_seen.origin is diagnostic, not causal turn identity)",
       "enumerate all say='text' rows with green 'Completed' badge (per resolveTerminalReportFraming output)",
       "for each operator-visible green COMPLETED card (UI-D, UI-F), find the matching persisted row",
-      "classify per the classification.remainder branches above (PS-A, PS-C, PS-D, or PS-E; PS-B eliminated)"
+      "classify per the classification.remainder branches above (PS-A, PS-B, PS-C, PS-D, or PS-E; ALL five POSSIBLE per round-3 bounded correction)"
     ]
   },
   "verdict": "CAPTURE_INSUFFICIENT",
@@ -259,7 +306,8 @@
     "HALT_RUNTIME_CONSERVATION_REGRESSION": "n/a",
     "HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION": "TRIGGERED (twenty-fourth reviewer) -> CLOSED by round-1 bounded correction",
     "HALT_RAW_LIVE_TRACE_NOT_INGESTED": "TRIGGERED (twenty-fifth reviewer) -> CLOSED by round-2 bounded correction (raw trace ingested byte-identical)",
-    "HALT_SUBMIT_AND_EXIT_ORIGIN_MISINTERPRETED": "TRIGGERED (twenty-sixth reviewer) -> CLOSED by round-3 bounded correction (origin-vs-turn-identity distinction recorded; D.1/F.2/PS-B restored as POSSIBLE)"
+    "HALT_SUBMIT_AND_EXIT_ORIGIN_MISINTERPRETED": "TRIGGERED (twenty-sixth reviewer) -> CLOSED by round-3 bounded correction (origin-vs-turn-identity distinction recorded; D.1/F.2/PS-B restored as POSSIBLE)",
+    "HALT_ROUND3_RESULT_JSON_STALE_CLASSIFICATION": "TRIGGERED (twenty-seventh reviewer) -> CLOSED by round-4 bounded correction (result.json machine-readable classification now matches round-3 human-readable ACT/recon; UI-D D.1 + UI-F F.2 + classification PS_B_remainder + binding_procedure LIVE_RAW exactly-1 prediction all updated)"
   },
   "evidence_files": {
     "00-raw-trace-status.md": "REVISED (round 3): adds evidence rule + chronology block; RETRACTS round-2 inference that submit_and_exit_seen.origin identifies execution turn; RESTORES D.1/F.2/PS-B as POSSIBLE",
