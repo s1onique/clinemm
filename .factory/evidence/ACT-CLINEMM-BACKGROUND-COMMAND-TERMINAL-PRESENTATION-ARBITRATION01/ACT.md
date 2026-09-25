@@ -443,54 +443,69 @@ BCTPA-P7b limitation witness pass via the real production seam).
 ## 20. Factory cursor
 
 ```text
-ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01
+PRESENTATION_DUPLICATION_ROOT_CAUSE
+  PROVEN at C10
+  (completion_result commit seam has no job-specific identity,
+   so the filter cannot distinguish premature ack of J from
+   an unrelated explicit-user completion while J is still running)
 
-  LIVE_INPUT
-    one explicit_user request
-    one background job
-    one terminal commit
-    one wake
+CURRENT REPAIR
+  CODE_QUALIFIED
+  fixes frozen bug shape (terminal_commit=1, terminal_presented=1)
+  NOT SAFE FOR DOGFOOD due P7b over-suppression
 
-  ROOT_CAUSE
-    E. PRESENTATION_COMMIT_DUPLICATED
-    (the originating explicit_user turn's attempt_completion pushes
-     a say:"completion_result" row via appendAndEmit BEFORE the
-     deferred-completion-barrier can hold the phase; the subsequent
-     wake_drain turn's attempt_completion pushes a SECOND row)
+NEXT MISSING INVARIANT
+  job-specific presentation ownership correlation
 
-  PRESENTATION_AUTHORITY
-    TERMINAL_WAKE_TURN
+NEXT ACT (NOT YET AUTHORIZED — see §24c for handoff contract)
+  ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01
+  narrow: repair / ownership correlation at C10
 
-  REPAIR
-    Extended the existing message filter at
-    apps/vscode/src/sdk/sdk-session-event-coordinator.ts:467-535
-    to suppress say:"completion_result" rows when
-    outstandingAutonomousWork is true for the active session/task
-    (same predicate as the deferred-completion-barrier)
+  PRIMARY QUESTION
+    How can completion_result commit carry enough existing/internal
+    provenance to distinguish "premature completion for background
+    job J" from "unrelated legitimate explicit-user completion while
+    J is still running"?
 
-  CARDINALITY
-    terminal_commit     1
-    wake_created        <=1 (1 in this specimen)
-    terminal_presented  1   (was 2 pre-fix, now 1 post-fix)
+  DESIRED PREDICATE
+    suppress completion_result IFF
+      completion belongs to background job J
+      AND J still has outstanding autonomous work
+
+  REPAIR ORDER (per reviewer)
+    (A) job-specific correlation/ownership at the completion commit
+        seam = architectural fix = SHIP-BLOCKING for dogfood
+    (B) system-prompt model discipline = mitigation only (not
+        framework-level invariant; can be ignored, can drift)
+    (C) narrow to pendingPromptsKnown > 0 only = INSUFFICIENT
+        for the frozen bug shape (wake isn't queued yet when model
+        calls attempt_completion in turn 1)
+
+  RED first with current P7b shape
+    background job J active;
+    unrelated explicit-user completion K;
+    current: K suppressed;
+    desired: K visible.
 
   CONSERVATION
-    OOM repair          PASS
-    C4->C8 correlation  PASS
-    queue/steer         PASS
+    original premature completion for J still suppressed;
+    wake completion for J visible;
+    unrelated completion K visible;
+    multi-job J1/J2 isolated;
+    OOM/correlation/wake cardinality unchanged.
 
-  KNOWN LIMITATION
-    BCTPA-P7b — filter over-suppresses unrelated completion_result
-    messages during active notify (requires jobId correlation or
-    system-prompt model discipline to fully resolve)
+AUTHORITY04
+  NOT AUTHORIZED
 
-  LIVE
-    LIVE_INPUT         = LIVE_OBSERVED (per ACT §0)
-    LIVE_REPRODUCTION  = EXECUTABLE / PRODUCTION-SHAPED (BCTPA01 6/6 PASS)
-    LIVE_DOGFOOD       = PENDING (deferred — cloud-agent context lacks dogfood infra)
+DOGFOOD
+  BLOCKED until ownership correlation repair
 
-  VERDICT
-    PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
-    (NOT LIVE_QUALIFIED — live dogfood has not been performed)
+CLASSIFICATION (per reviewer C1)
+  P0  none
+  P1  BCTPA-P7b documented limitation (no longer hidden, no longer
+      over-qualified; not reopened per Factory non-recursive policy)
+  P2  blank-line-at-EOF residue in two captured output artifacts
+      (documentary; non-blocking)
 ```
 
 ---
@@ -514,25 +529,98 @@ speculatively open it now.
 ## 24. Final verdict
 
 ```text
-PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
+PASS_WITH_NONBLOCKING_RESIDUE
+  = PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
+  + reviewer C1 closed at nonblocking residue
 ```
 
-**NOT YET** `PASS_TERMINAL_PRESENTATION_ARBITRATION_LIVE_QUALIFIED` —
-the live dogfood qualification has not been performed. Per ACT §19,
-LIVE_DOGFOOD = PENDING is acceptable for CODE_QUALIFIED closure when
-LIVE_REPRODUCTION = EXECUTABLE / PRODUCTION-SHAPED (which it is —
-6/6 BCTPA tests pass via the real production seam, including the
-BCTPA-P7b limitation witness).
+This ACT is **closed cleanly at CODE_QUALIFIED**. The P7b limitation
+is handed off to a successor ACT — it is **not** reopened here, per
+Factory non-recursive policy. The ACT achieved its bounded epistemic
+purpose: identified C10, demonstrated the 2→1 discriminator, exposed
+the next missing authority signal (job-specific correlation), and
+prevented dogfood rollout until that authority is repaired.
 
-To upgrade to `LIVE_QUALIFIED`, the next operator must:
-1. Build a dogfood VSIX from this HEAD.
-2. Run the same 30-second workload in a fresh dogfood install.
-3. Capture CCARD JSONL + counters + UI screenshot.
-4. Verify `USER_VISIBLE_TERMINAL_PRESENTATIONS(J) == 1` AND no
-   suppression of unrelated explicit_user completion messages.
-5. Apply remediation path (A) jobId correlation OR (B) system-prompt
-   model discipline BEFORE dogfood if P7b over-suppression is observed
-   live.
+## 24a. Non-recursive closure rationale
 
-Until then, this ACT ships only as a code-level repair. It does NOT
-ship to dogfood without further remediation of the P7b over-suppression.
+- The bounded repair is correct for the **frozen bug shape**
+  (`terminal_commit=1, wake_created=1, terminal_presented=1`).
+- The BCTPA-P7b witness is RED (asserts limitation is real) and is
+  deliberately kept in the test suite — it is the load-bearing
+  contract that tells the successor ACT exactly what to repair.
+- Attempting to fix P7b from inside this ACT would violate ACT §11
+  scope ("no new protocol field", "no UI dedupe", "no permanent
+  diagnostic public field"). The required change is internal
+  correlation ownership at the completion commit seam — that is
+  architectural, requires recon, and belongs in its own narrow ACT.
+
+## 24b. P2 residue
+
+Two blank-line-at-EOF findings in captured output artifacts
+(01-live-specimen.md and 04-green-output.txt). Documentary residue,
+non-blocking, not reopened.
+
+## 24c. Handoff contract for successor ACT
+
+```text
+SUCCESSOR_ACT
+  ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01
+
+STATUS
+  NOT YET AUTHORIZED — must follow established recon → BOUNDED REPAIR
+  pattern with its own factory cursor, evidence directory, and
+  max-review-fix-cycle.
+
+PRIMARY_QUESTION
+  How can completion_result commit carry enough existing/internal
+  provenance to distinguish "premature completion for background
+  job J" from "unrelated legitimate explicit-user completion while
+  J is still running"?
+
+DESIRED_PREDICATE
+  suppress completion_result IFF
+    completion belongs to background job J
+    AND J still has outstanding autonomous work
+
+REPAIR_ORDER (per reviewer C1)
+  (A) job-specific correlation/ownership at the completion commit
+      seam = architectural fix = SHIP-BLOCKING for dogfood
+  (B) system-prompt model discipline = mitigation only (NOT a
+      framework invariant; do NOT use as the sole justification
+      for dogfood rollout)
+  (C) narrow to pendingPromptsKnown > 0 only = INSUFFICIENT
+      for frozen bug shape (wake isn't queued yet when model
+      calls attempt_completion in turn 1)
+
+RED_BASELINE (must reproduce before any fix)
+  background job J active;
+  unrelated explicit-user completion K;
+  current: K suppressed (BCTPA-P7b);
+  desired: K visible.
+
+CONSERVATION_REQUIREMENTS
+  original premature completion for J still suppressed;
+  wake completion for J visible;
+  unrelated completion K visible;
+  multi-job J1/J2 isolated;
+  OOM/correlation/wake cardinality unchanged.
+
+INHERITED_EVIDENCE (must be reused)
+  apps/vscode/src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts
+    (BCTPA-RED-01, BCTPA-INV-01, BCTPA-P7b all stay; only the
+     P7b assertion flips from "is suppressed" to "is visible")
+
+NOT_IN_SCOPE (per ACT §11, escalates to PROTOCOL_ACT if needed)
+  no new permanent public protocol field on completion_result;
+  no UI dedupe heuristic;
+  no string-match on message content.
+  (internal correlation / ownership hint IS allowed.)
+
+EVIDENCE_PACKET_FOR_THIS_ACT
+  apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+    handleSessionEvent message filter (line ~467-535)
+  apps/vscode/src/sdk/continuation-cardinality-authority.ts
+    outstandingAutonomousWork predicate
+  apps/vscode/src/sdk/pending-prompt-service.ts
+    pendingPromptsKnown / activeNotifyCount accounting
+```

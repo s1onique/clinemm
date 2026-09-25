@@ -140,11 +140,16 @@ LIVE_INPUT         = LIVE_OBSERVED (per ACT §0)
 LIVE_REPRODUCTION  = EXECUTABLE / PRODUCTION-SHAPED (BCTPA01 6/6 PASS)
 LIVE_DOGFOOD       = PENDING (deferred — cloud-agent context lacks dogfood infra)
 
-VERDICT            = PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
-                     (NOT LIVE_QUALIFIED — live dogfood has not been performed)
+VERDICT            = PASS_WITH_NONBLOCKING_RESIDUE
+                   = PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
+                     + reviewer C1 closed at nonblocking residue
 
-DOES NOT SHIP TO DOGFOOD until P7b limitation is remediated
-(remediation path A or B — see ACT.md §19).
+DOES NOT SHIP TO DOGFOOD until ownership correlation is repaired
+via path (A) — see ACT.md §24c handoff contract.
+
+SUCCESSOR_ACT (NOT YET AUTHORIZED):
+  ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01
+  narrow: repair / ownership correlation at C10
 ```
 
 ## Conservation:

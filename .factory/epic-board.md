@@ -11324,19 +11324,39 @@ terminal_presented  1   ← was 2 pre-fix, now 1 post-fix
   scope), the filter cannot distinguish "premature ack of THIS background"
   from "unrelated completion".
 
-  Remediation paths (for a future ACT):
-    (A) Add jobId correlation to completion_result messages (architectural)
-    (B) System-prompt model discipline: don't call attempt_completion
-        when notify_on_completion=true is set and background is running
-    (C) Narrow predicate to ONLY pendingPromptsKnown > 0 (does NOT fix
-        the frozen bug shape — wake isn't queued yet when model calls
-        attempt_completion in turn 1)
+  Remediation paths (per reviewer C1):
+    (A) Add jobId correlation at the completion commit seam
+        = ARCHITECTURAL FIX = SHIP-BLOCKING for dogfood
+    (B) System-prompt model discipline = MITIGATION ONLY (not a
+        framework invariant; can be ignored, can drift)
+    (C) Narrow predicate to ONLY pendingPromptsKnown > 0
+        = INSUFFICIENT for frozen bug shape (wake isn't queued yet
+        when model calls attempt_completion in turn 1)
 
-  Until (A) or (B) is adopted, this ACT does NOT ship to dogfood.
+  Until (A) is adopted, this ACT does NOT ship to dogfood. Path (B)
+  is NOT a sufficient justification for dogfood rollout.
 
-**Verdict:**
+**Verdict (reviewer C1, PASS_WITH_NONBLOCKING_RESIDUE):**
   PASS_TERMINAL_PRESENTATION_ARBITRATION_CODE_QUALIFIED
-  (NOT LIVE_QUALIFIED — live dogfood has not been performed)
+  (NOT LIVE_QUALIFIED — live dogfood has not been performed;
+   not reopened per Factory non-recursive policy)
+
+**Non-recursive closure rationale:**
+  ACT achieved its bounded epistemic purpose: identified C10, demonstrated
+  the 2→1 discriminator, exposed the next missing authority signal
+  (job-specific correlation), and prevented dogfood rollout until that
+  authority is repaired.
+
+**Successor ACT (NOT YET AUTHORIZED):**
+  ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01
+  Narrow: repair / ownership correlation at C10
+  Primary question: how can completion_result commit carry enough
+  existing/internal provenance to distinguish premature completion for
+  background job J from unrelated legitimate explicit-user completion
+  while J is still running?
+  RED baseline: BCTPA-P7b (active notify + unrelated completion K,
+  current K suppressed, desired K visible).
+  Handoff contract: see ACT.md §24c.
 
 **Conservation of prior verdicts:**
   PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED
