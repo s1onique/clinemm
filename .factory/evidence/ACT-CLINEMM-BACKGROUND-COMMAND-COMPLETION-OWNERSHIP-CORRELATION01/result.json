@@ -1,7 +1,7 @@
 {
   "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01",
   "verdict": "PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED",
-  "subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
+  "subject_head": "5b0936a2ae400a9b0581bb002e44f7d81486f73a",
   "predecessor": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01",
   "predecessor_verdict": "PASS_WITH_NONBLOCKING_RESIDUE",
   "red": {
@@ -95,7 +95,7 @@
     "02-red-green.txt": "pre-repair RED, post-repair GREEN, conservation matrix R1-R14, test counts",
     "03-repair-ablation.txt": "load-bearing ablation — 3 over-suppression tests revert to RED when ownership-aware filter is replaced by predecessor's broad predicate; frozen-bug suppression tests remain GREEN",
     "04-focused-gates.txt": "all §18 gate tests pass (296/296 PASS, excluding the pre-existing RED OWN01)",
-    "05-artifact-identity.txt": "SUBJECT_HEAD=baacc122aa3a9cb4afd1e1d139f269639a34fc3f, version=4.1.16, VSIX=dist/clinemm-4.1.16-baacc122a.vsix (14,899,136 bytes; SHA-256=3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154), extracted extension.js SHA-256=8cccc3c4739088a45e2cdcd1e4d003208652b025b2deae18fd5b4dd7d42427a2",
+    "05-artifact-identity.txt": "SUBJECT_HEAD=5b0936a2ae400a9b0581bb002e44f7d81486f73a, version=4.1.16, VSIX=dist/clinemm-4.1.16-5b0936a2a.vsix (14,899,136 bytes; SHA-256=3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154), extracted extension.js SHA-256=8cccc3c4739088a45e2cdcd1e4d003208652b025b2deae18fd5b4dd7d42427a2",
     "06-live-qualification.md": "LIVE_A + LIVE_B command-level scripts; Cloud Agent context deferred to dogfood operator"
   }
 }

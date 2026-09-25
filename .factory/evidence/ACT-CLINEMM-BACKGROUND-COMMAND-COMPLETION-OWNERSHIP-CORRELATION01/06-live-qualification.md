@@ -39,7 +39,7 @@ qualify the production code path through:
 
 **Equivalent production command**:
 
-1. Install the VSIX from `dist/clinemm-4.1.16-baacc122a.vsix`
+1. Install the VSIX from `dist/clinemm-4.1.16-5b0936a2a.vsix`
    into a live VS Code instance with an LLM provider credential.
 2. In a workspace, ask the model to:
    > Run `sleep 30` as a background command and notify me when it
