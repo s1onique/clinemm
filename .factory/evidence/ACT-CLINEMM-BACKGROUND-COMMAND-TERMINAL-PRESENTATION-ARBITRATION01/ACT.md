@@ -566,10 +566,10 @@ non-blocking, not reopened.
 SUCCESSOR_ACT
   ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01
 
-STATUS
-  NOT YET AUTHORIZED — must follow established recon → BOUNDED REPAIR
-  pattern with its own factory cursor, evidence directory, and
-  max-review-fix-cycle.
+STATUS (per reviewer C1, GO)
+  AUTHORIZED — reviewer explicitly stated "C1: GO. Authorize.
+  Do not add another pre-execution review cycle unless a new P0
+  appears."
 
 PRIMARY_QUESTION
   How can completion_result commit carry enough existing/internal
@@ -581,6 +581,18 @@ DESIRED_PREDICATE
   suppress completion_result IFF
     completion belongs to background job J
     AND J still has outstanding autonomous work
+
+FIRST_TASK = RECON (not schema design)
+  Inspect existing internal signals BEFORE adding any field:
+    - tool-call identity
+    - turn state
+    - task/job ownership
+    - message translator state
+    - other existing correlation tokens
+  If an existing internal signal suffices, use it.
+  If not, add the SMALLEST internal ownership hint.
+  Do NOT escalate to a public protocol change unless the internal
+  seam genuinely cannot carry the identity.
 
 REPAIR_ORDER (per reviewer C1)
   (A) job-specific correlation/ownership at the completion commit
@@ -597,6 +609,11 @@ RED_BASELINE (must reproduce before any fix)
   unrelated explicit-user completion K;
   current: K suppressed (BCTPA-P7b);
   desired: K visible.
+
+VITEST_OBSERVATION
+  vi.fn call tracking is appropriate for observing whether
+  appendAndEmit received or did not receive the completion row
+  at this boundary.
 
 CONSERVATION_REQUIREMENTS
   original premature completion for J still suppressed;
@@ -623,4 +640,28 @@ EVIDENCE_PACKET_FOR_THIS_ACT
     outstandingAutonomousWork predicate
   apps/vscode/src/sdk/pending-prompt-service.ts
     pendingPromptsKnown / activeNotifyCount accounting
+```
+
+## 24d. State transitions
+
+| State | Value |
+|-------|-------|
+| This ACT | CLOSED (PASS_WITH_NONBLOCKING_RESIDUE) |
+| Next ACT | ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 |
+| Next ACT status | AUTHORIZED (reviewer C1: GO; no further pre-execution review cycle) |
+| Authority04 | NOT_AUTHORIZED (orthogonal; separately authorized if pursued) |
+| Dogfood | BLOCKED until ownership correlation repair |
+| Working tree | clean |
+| Typecheck | clean |
+| Diff-check | clean |
+
+## 24e. Factory cursor (matches reviewer block)
+
+```text
+PRESENTATION_DUPLICATION_ROOT_CAUSE = PROVEN_AT_C10
+CURRENT_REPAIR                     = CODE_QUALIFIED
+DOGFOOD                            = BLOCKED
+MISSING_INVARIANT                  = JOB_SPECIFIC_PRESENTATION_OWNERSHIP
+NEXT_ACT                           = COMPLETION_OWNERSHIP_CORRELATION01
+AUTHORITY04                        = NOT_AUTHORIZED
 ```

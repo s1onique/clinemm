@@ -11347,7 +11347,7 @@ terminal_presented  1   ← was 2 pre-fix, now 1 post-fix
   (job-specific correlation), and prevented dogfood rollout until that
   authority is repaired.
 
-**Successor ACT (NOT YET AUTHORIZED):**
+**Successor ACT (AUTHORIZED — reviewer C1 GO):**
   ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01
   Narrow: repair / ownership correlation at C10
   Primary question: how can completion_result commit carry enough
@@ -11357,6 +11357,35 @@ terminal_presented  1   ← was 2 pre-fix, now 1 post-fix
   RED baseline: BCTPA-P7b (active notify + unrelated completion K,
   current K suppressed, desired K visible).
   Handoff contract: see ACT.md §24c.
+  First task = RECON (not schema design). Inspect existing internal
+  signals before adding any field:
+    - tool-call identity
+    - turn state
+    - task/job ownership
+    - message translator state
+    - other existing correlation tokens
+  If an existing internal signal suffices, use it. If not, add the
+  SMALLEST internal ownership hint. Do NOT escalate to a public
+  protocol change unless the internal seam genuinely cannot carry
+  the identity.
+  Vitest `vi.fn` call tracking is appropriate for observing
+  whether `appendAndEmit` received or did not receive the completion
+  row at this boundary.
+
+**CURRENT ACT (CLOSED — PASS_WITH_NONBLOCKING_RESIDUE):**
+  Final commit: cd3392e78 (FINAL: reviewer C1 classification).
+  No further revisions to this ACT's evidence packet.
+  Working tree clean, typecheck clean, diff-check clean.
+
+**Factory cursor (matches reviewer block):**
+```text
+PRESENTATION_DUPLICATION_ROOT_CAUSE = PROVEN_AT_C10
+CURRENT_REPAIR                     = CODE_QUALIFIED
+DOGFOOD                            = BLOCKED
+MISSING_INVARIANT                  = JOB_SPECIFIC_PRESENTATION_OWNERSHIP
+NEXT_ACT                           = COMPLETION_OWNERSHIP_CORRELATION01
+AUTHORITY04                        = NOT_AUTHORIZED
+```
 
 **Conservation of prior verdicts:**
   PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED
