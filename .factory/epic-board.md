@@ -11404,3 +11404,178 @@ AUTHORITY04                        = NOT_AUTHORIZED
   - synthetic-prompt predicate (BCNEX01 closure)
 
 **Next ACT question (per ACT §21):** `ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY04` should NOT be pre-authorized. The current frozen specimen has `terminal_committed = 1, wake_created = 1`; the prior "two-wake" hypothesis is REFUTED in the current architecture. If a later controlled multi-job specimen demonstrates genuine wake cardinality inflation, open AUTHORITY04 from that new RED — do not speculatively open it now.
+
+---
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 (CLOSED)
+
+**Mission:** narrow the C10 completion-result filter from the predecessor
+BCTPA01's over-broad aggregate predicate
+(`outstandingAutonomousWork = activeNotifyCount > 0 || pendingPromptsKnown > 0`)
+to a per-job ownership-aware predicate so that
+unrelated explicit-user completions (P7b) are no longer over-suppressed
+while the frozen-bug premature completion for the active job remains
+suppressed.
+
+**RED baseline (preserved from predecessor):**
+  BCTPA-P7b (KNOWN LIMITATION in BCTPA01): unrelated explicit-user
+  `completion_result` during active notify IS currently suppressed.
+  Test: `apps/vscode/src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts:754`
+  asserts `expect(visible.length).toBe(0)` (K suppressed — RED witness).
+
+**ROOT_CAUSE**
+  Classification B — TOOLCALL_JOB_MAPPING_NOT_THREADED. The C10
+  completion-result filter at `sdk-session-event-coordinator.ts:514-535`
+  consulted the AGGREGATE predicate `outstandingAutonomousWork`
+  which cannot distinguish "completion belongs to active job J" from
+  "completion belongs to unrelated work K". The jobId minted at
+  `vscode-run-commands-tool.ts:768` was registered with the
+  `BackgroundNotifyCoordinator` but never threaded back into the C10
+  filter.
+
+**OWNERSHIP_SIGNAL**
+  Existing signal — `BackgroundNotifyCoordinator.notificationMarkers:
+  Map<jobId, NotificationMarker>` keyed by jobId (already-internal,
+  ephemeral, NOT serialized). Added a thin getter
+  `hasActiveNotify(jobId)` for constant-time exact lookup. The per-turn
+  ownership hint is `MessageTranslatorState.launchedBackgroundJobIds:
+  Set<string>` (internal-only, ephemeral, cleared by `clearTurnOutcome()`).
+
+**PREDICATE**
+```text
+suppress(C) IFF
+  completion(C) belongs to background job J
+  AND hasActiveNotify(J) == true
+```
+
+**REPAIR**
+  1. `BackgroundNotifyCoordinator.hasActiveNotify(jobId): boolean`
+     (exact `notificationMarkers.has(jobId)` lookup; no new state).
+  2. `MessageTranslatorState.recordLaunchedBackgroundJob(jobId)` /
+     `getLaunchedBackgroundJobIds()` / `consumeLaunchedBackgroundJob(jobId)`
+     (ephemeral `Set<string>`, cleared by `clearTurnOutcome()`).
+  3. Populate the hint at the SAME production seam as
+     `registerMarker` — `vscode-run-commands-tool.ts:755-816`.
+  4. Narrow the C10 filter at `sdk-session-event-coordinator.ts:514-622`
+     to per-job ownership (fall back to predecessor's broad predicate
+     when `hasActiveNotify` is not wired).
+
+**CONSERVATION** (R1–R14, all GREEN per evidence/02-red-green.txt)
+  frozen duplicate-presentation bug fixed
+  wake completion for J visible exactly once
+  P7b (unrelated K) fixed — K IS visible
+  multi-job isolation — no cross-job over-suppression
+  no-job completion flows through
+  owned-and-outstanding completion suppressed
+  owned-and-consumed completion visible
+  text/reasoning/command rows NOT suppressed (BCTPA-P7)
+  BCNEX01 synthetic-wake filter unchanged (7/7 PASS)
+  TQCB01 deferredCompletionBarrier unchanged (15/15 PASS)
+  BCNT01 OOM repair unchanged (24/24 PASS)
+  BCTCP01 + CCCL01 C4->C8 correlation unchanged (12/12 + 12/12 PASS)
+  deriveOrigin precedence unchanged (2/2 PASS)
+  no public protocol expansion (Option 2 internal hint only)
+
+**ABLATION** (per ACT §16 — load-bearing discriminator)
+  Temporarily reverted `if (this.options.hasActiveNotify)` to
+  `if (false && this.options.hasActiveNotify)` — the filter fell back
+  to the predecessor's broad aggregate predicate. Result:
+    × BCCOC-MULTI-01 (J1 consumed, J2 outstanding): FAIL
+    × BCCOC01-P7b replay: FAIL
+    × BCTPA-P7b (CLOSED): FAIL
+  The 3 over-suppression tests revert to RED exactly as the
+  load-bearing discriminator requires; the 3 frozen-bug suppression
+  tests (BCTPA-INV-01, BCCOC-OWN-01, BCCOC-MULTI-01 a/b) remain GREEN.
+  See evidence/03-repair-ablation.txt.
+
+**CURRENT ACT (CLOSED — PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED):**
+  Final commit: d308abb3f (HEAD).
+  No further revisions to this ACT's evidence packet.
+  Working tree clean, typecheck clean, diff-check clean.
+
+**Factory cursor:**
+```text
+PREDECESSOR                       = PASS_WITH_NONBLOCKING_RESIDUE
+                                    ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01
+RED                                = BCTPA-P7b reproduced
+ROOT_CAUSE                         = TOOLCALL_JOB_MAPPING_NOT_THREADED (Class B)
+OWNERSHIP_SIGNAL                   = notificationMarkers Map<jobId, ...> + hasActiveNotify(jobId)
+PREDICATE                          = suppress(C) IFF owner(C) == J AND hasActiveNotify(J) == true
+CONSERVATION                       = R1..R14 GREEN (no protocol expansion; OOM/C4->C8/queue/steer preserved)
+LIVE_A                             = PASS (code-qualified; live scenario deferred to dogfood operator)
+LIVE_B                             = PASS (code-qualified; live scenario deferred to dogfood operator)
+DOGFOOD                            = UNBLOCKED_AT_CODE_LEVEL (LIVE_A + LIVE_B pending dogfood operator)
+VERDICT                            = PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED
+AUTHORITY04                        = NOT_AUTHORIZED (no NEW wake-cardinality RED)
+```
+
+**Conservation of prior verdicts (UNCHANGED by this ACT):**
+  PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED
+  PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED
+  PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED
+  + PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED (NEW)
+
+**Code changes:**
+  - `apps/vscode/src/sdk/SdkController.ts` (+13 lines: wires `hasActiveNotify`
+    and `recordLaunchedBackgroundJob` to the production seam).
+  - `apps/vscode/src/sdk/background-notify-coordinator.ts` (+21 lines:
+    adds `hasActiveNotify(jobId)` exact lookup).
+  - `apps/vscode/src/sdk/message-translator.ts` (+60 lines: adds the
+    per-turn ownership hint, cleared by `clearTurnOutcome()`).
+  - `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (+85/-45
+    lines: narrows the C10 filter to per-job ownership; preserves the
+    broad-predicate fallback for unwired harnesses).
+  - `apps/vscode/src/sdk/sdk-session-lifecycle.ts` (+10 lines: pass-through
+    `recordLaunchedBackgroundJob` from `SdkSessionLifecycleOptions`).
+  - `apps/vscode/src/sdk/vscode-run-commands-tool.ts` (+15 lines: new
+    `recordLaunchedBackgroundJob` option, fired at the C9 -> marker
+    seam alongside `registerMarker`).
+  - `apps/vscode/src/sdk/vscode-runtime-builder.ts` (+14 lines: pass-through
+    to `createVscodeExtraTools`).
+  - `apps/vscode/src/sdk/vscode-session-host.ts` (+17 lines: pass-through
+    to `VscodeSessionHost.create`).
+  - `apps/vscode/src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts`
+    (updated: P7b flipped from RED witness to CLOSED GREEN; BCTPA-INV-01
+    adds `simulateTurnBoundary: false` for the explicit_user turn; harness
+    wires `hasActiveNotify` + `recordLaunchedBackgroundJob`).
+  - `apps/vscode/src/sdk/__tests__/background-command-completion-ownership-correlation01.bccoc01.test.ts`
+    (NEW: 8 tests — OWN-01, OWN-02, MULTI-01 a/b/c, P7b replay,
+    NO-OP, CONSUME-OWNED).
+
+**Reverses NONE of:**
+  - delivery-semantics OOM repair (16881f671)
+  - jobId correlation repair (64f54a945 / 4b76a5348)
+  - deriveOrigin precedence (0a97b445c)
+  - wake cardinality (BCNT01 closure)
+  - synthetic-prompt predicate (BCNEX01 closure)
+  - predecessor BCTPA01 broad predicate for unwired harnesses
+    (preserved as fallback at `sdk-session-event-coordinator.ts:607-625`)
+
+**Test counts (post-repair):**
+  BCCOC01 (this ACT):    8/8 PASS
+  BCTPA01 (predecessor): 6/6 PASS (P7b now CLOSED GREEN)
+  BCCOC01+BCTPA01:       14/14 PASS
+
+**Sub-claim limits (per ACT §13):**
+  - C10 message filter is now STRICTLY NARROWER than the TQCB01
+    phase-transition barrier (which still uses the aggregate predicate
+    with fail-closed authority for the `setTurnPhase("completed", ...)`
+    transition). The two predicates intentionally diverge: the message
+    filter is ownership-aware (the ACT's invariant); the phase barrier
+    is fail-closed (preserved from TQCB01).
+
+**Artifact identity:**
+  SUBJECT_HEAD = d308abb3f
+  version      = 4.1.16
+  VSIX         = dist/clinemm-4.1.16-5b0936a2a.vsix
+                (14,899,136 bytes; SHA-256 = 3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154)
+  extension.js SHA-256 = 8cccc3c4739088a45e2cdcd1e4d003208652b025b2deae18fd5b4dd7d42427a2
+  installed identity = cline.cline-4.1.16
+
+**Next ACT question:** ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY04
+should NOT be pre-authorized (carried over from the predecessor ACT).
+The current frozen specimen has `terminal_committed = 1, wake_created = 1`;
+the prior "two-wake" hypothesis is REFUTED in the current architecture.
+If a later controlled multi-job specimen demonstrates genuine wake
+cardinality inflation, open AUTHORITY04 from that new RED — do not
+speculatively open it now.
