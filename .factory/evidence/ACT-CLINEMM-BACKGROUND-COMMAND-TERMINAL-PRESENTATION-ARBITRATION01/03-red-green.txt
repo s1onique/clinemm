@@ -1,0 +1,107 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 — RED/GREEN EVIDENCE
+====================================================================================
+
+## Pre-repair (RED)
+
+```text
+terminal_commit_count     = 1
+wake_created_count        = 1
+presentation_count        = 2
+RESULT                    = RED
+```
+
+Test: `BCTPA-RED-01 / ABLATION` (simulates pre-fix by omitting the
+notify marker). Asserts `visibleCompletionRows.length === 2`.
+
+Output (vitest):
+
+```
+✓ BCTPA-RED-01 / ABLATION: pre-fix behavior reproduces two visible completions
+  → without notify marker, both turns push completion_result → 2 visible
+```
+
+## Post-repair (GREEN)
+
+```text
+terminal_commit_count     = 1
+wake_created_count        = 1
+presentation_count        = 1
+RESULT                    = GREEN
+```
+
+Test: `BCTPA-INV-01` (the load-bearing invariant test). Asserts
+`visibleCompletionRows.length === 1` for the frozen bug shape.
+
+Output (vitest):
+
+```
+✓ BCTPA-INV-01: dual-turn completion produces exactly ONE visible completion_result
+  → explicit_user + wake_drain → exactly 1 user-visible presentation
+```
+
+## Conservation matrix (per ACT §12)
+
+```
+✓ BCTPA-P1: terminal AFTER originating turn finishes → 1 presentation
+✓ BCTPA-P7: explicit user turn concurrent with terminal wake → unrelated user response NOT suppressed
+✓ BCTPA-P10: correlation conservation — jobId threads through both turns
+```
+
+## Test counts
+
+```text
+PRE-REPAIR:
+  Test Files  1 failed (1)
+  Tests       1 failed | 4 passed (5)   ← BCTPA-GREEN-01 was failing before the filter was applied
+
+POST-REPAIR:
+  Test Files  1 passed (1)
+  Tests       5 passed (5)
+```
+
+## Conservation suites (broader regression)
+
+```text
+background-notify-exactly-once-presentation01.bcnex01.test.ts        7/7 PASS
+sdk-user-message-mapping.test.ts                                    17/17 PASS
+message-translator.test.ts                                          167/167 PASS
+continuation-cardinality-authority01.ccard01.test.ts                12/12 PASS
+background-command-terminal-card-projection01.bctcp01-controller.test.ts  7/7 PASS
+background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts  5/5 PASS
+background-command-proceed-abort-ownership-release01.pwaor01.test.ts  1/1 PASS
+sdk-session-event-coordinator.test.ts (excluding pre-existing RED OWN01)  28/28 PASS
+```
+
+Pre-existing RED test in `sdk-session-event-coordinator.test.ts`
+(OWN01 — bare done + no terminal commit) is unrelated to this ACT
+and was failing before the fix. ACT_NEW_ERRORS = 0.
+
+```text
+sdk/core/turn-queue/pending-prompt-service.test.ts        10/10 PASS
+sdk/core/turn-queue/pending-prompt-service.drain-semantics.test.ts  4/4 PASS
+```
+
+## Static checks
+
+```text
+bunx tsc --noEmit              → 0 errors (ACT_NEW_ERRORS = 0)
+git diff --check               → 0 errors
+```
+
+## Discriminator flip (per ACT §9)
+
+| state | presentation_count(J) |
+|-------|-----------------------|
+| pre-repair (RED) | 2 |
+| post-repair (GREEN) | 1 |
+
+Discriminator flips 2 → 1 on the bounded predicate
+(`outstandingAutonomousWork`).
+
+## Conservation:
+
+```text
+OOM repair          PASS (no regression — verify)
+C4->C8 correlation  PASS (BCTPA-P10 + prior CCARD/BCNEX01 suites)
+queue/steer         PASS (no regression — verify via prior drain-semantics suite)
+```

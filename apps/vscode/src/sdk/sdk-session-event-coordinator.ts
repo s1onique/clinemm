@@ -467,6 +467,73 @@ export class SdkSessionEventCoordinator {
 				)
 			}
 
+			// ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01:
+			// Presentation arbitration at the message commit seam.
+			//
+			// When a background command with notifyOnCompletion=true is
+			// still alive (active notify marker present for the active
+			// session/task), the originating explicit_user turn's
+			// attempt_completion is an INTERMEDIATE state — it
+			// acknowledges "I've started the command" but does NOT
+			// own the terminal command result. The wake_drain turn is
+			// the legitimate terminal presentation authority (it has
+			// the actual command output).
+			//
+			// Without this filter, BOTH turns would each push one
+			// say:"completion_result" row via appendAndEmit, producing
+			// two user-visible completion boxes for ONE logical
+			// terminal event (frozen CCARD:
+			//   terminal_committed = 1, wake_created = 1,
+			//   run_turn_started = 2, agent_turn_done = 2,
+			//   task_completion_committed = 1, visible = 2).
+			//
+			// The predicate is the SAME `outstandingAutonomousWork`
+			// the deferredCompletionBarrier (TQCB01) already uses at
+			// line ~553 — the load-bearing identity is "this turn's
+			// completion attempt is premature because autonomous work
+			// for this (sessionId, taskId) is still pending". When
+			// the wake drains the pending prompt and the marker is
+			// consumed, `outstandingAutonomousWork` flips to false
+			// and the wake_drain turn's completion_result passes
+			// through unchanged.
+			//
+			// Fail-closed authority: when `getPendingPromptCount`
+			// returns `{ available: false }` we treat it as
+			// authority-unavailable (do not know, hold completion) —
+			// same shape as the TQCB01 barrier. This prevents a
+			// fail-open defect where a stale/uninitialized queue
+			// mirror would otherwise authorize completion with
+			// autonomous work still pending remotely (the Q5/PPAT
+			// invariant).
+			//
+			// Only completion_result rows are filtered. Non-completion
+			// assistant text rows (say:"text", say:"reasoning", say:"command",
+			// say:"tool", etc.) flow through unchanged — the user can
+			// still see the agent's intermediate answers / tool results
+			// for the originating turn (BCTPA-P7 conservation).
+			if (result.messages.length > 0) {
+				const completionMessages: Array<{ say?: string; type?: string; ask?: string }> = []
+				for (const m of result.messages) {
+					if (m.say === "completion_result") {
+						completionMessages.push({ say: m.say, type: m.type })
+					}
+				}
+				if (completionMessages.length > 0) {
+					const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
+						activeSession.sessionId,
+					) ?? { available: false }
+					const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
+					const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+					const activeNotifyCount =
+						this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ?? 0
+					const outstandingAutonomousWork =
+						pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+					if (outstandingAutonomousWork) {
+						result.messages = result.messages.filter((m) => m.say !== "completion_result")
+					}
+				}
+			}
+
 			if (result.messages.length > 0) {
 				this.options.messages.appendAndEmit(result.messages, event)
 			}

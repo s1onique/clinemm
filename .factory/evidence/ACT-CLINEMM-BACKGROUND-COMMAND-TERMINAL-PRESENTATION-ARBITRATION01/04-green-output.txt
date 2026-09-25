@@ -1,0 +1,10 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts (5 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  09:54:42
+   Duration  2.00s (transform 1.15s, setup 1.72s, import 178ms, tests 5ms, environment 0ms)
+

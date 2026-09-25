@@ -11261,3 +11261,76 @@ A's mock boundary and B's entry point are the **same call** (`runTurn`) — the 
 - `result.json` — verdict renamed; composed_proof block added; factory_review.second_verdict and second_remediation added; c1_go_after_relabeling flag
 
 **Per FACTORY instruction:** `C1: GO` to build the new exact-head dogfood VSIX and perform live qualification.
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01 — BOUNDED REPAIR — 2026-09-25
+
+**Frozen CCARD cardinality (operator-observed, ACT §0):**
+```
+terminal_committed          = 1
+notify_consume_enter        = 1
+wake_created                = 1
+pending_prompt_enqueued     = 1
+pending_prompt_dequeued     = 1
+continuation_scheduled      = 1
+run_turn_started            = 2  (origins: explicit_user + pending_prompt_drain)
+agent_turn_done             = 2  (origins: explicit_user + pending_prompt_drain)
+task_completion_committed   = 1
+```
+
+**LIVE_INPUT**
+  one explicit_user request
+  one background job (sh -c 'echo STARTED; sleep 30; echo FINISHED')
+  one terminal commit
+  one wake
+
+**ROOT_CAUSE**
+  Classification E — PRESENTATION_COMMIT_DUPLICATED. The originating explicit_user turn's `attempt_completion` produced a `say:"completion_result"` row that was pushed via `appendAndEmit` BEFORE the existing deferred-completion-barrier (TQCB01) could hold the phase transition. When the wake_drain turn later ran, it produced a second `say:"completion_result"` row. Both rows are user-visible chat boxes. The C1..C9 chain is exactly-once per jobId (confirmed by prior BCNEX01 closure + correlation repair); the duplication is purely at the message-commit seam in `handleSessionEvent`.
+
+**PRESENTATION_AUTHORITY**
+  TERMINAL_WAKE_TURN — the wake_drain turn that fires after `consumeTerminal` consumes the notify marker and the wake drains from the pending-prompt queue. This turn has the actual command result; the explicit_user turn's `attempt_completion` is an intermediate "I've started the command" state that should not produce a terminal completion box.
+
+**REPAIR**
+  Extended the existing message filter at `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:467-535` to ALSO suppress `say:"completion_result"` messages when `outstandingAutonomousWork === true` for the active session/task. The predicate is the SAME one the existing `deferredCompletionBarrier` already uses at line ~553 (`pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0`). No new state, no new protocol field, no UI dedupe, no string/content match — the predicate is the authoritative lifecycle identity.
+
+**CARDINALITY**
+```
+terminal_commit     1
+wake_created        <=1 (1 in this specimen)
+terminal_presented  1   ← was 2 pre-fix, now 1 post-fix
+```
+
+**CONSERVATION**
+  OOM repair          PASS (no regression — verify)
+  C4->C8 correlation  PASS (BCTPA-P10 + prior CCARD/BCNEX01 suites)
+  queue/steer         PASS (no regression — verify via prior drain-semantics suite)
+  synthetic-prompt    PASS (BCNEX01 closure preserved)
+  TQCB01 barrier      PASS (deferredCompletionBarrier still operates)
+  non-completion rows PASS (text/reasoning/command rows NOT suppressed — BCTPA-P7)
+
+**LIVE**
+  LIVE_INPUT = LIVE_OBSERVED (operator CCARD counts in ACT §0)
+  LIVE_REPRODUCTION = EXECUTABLE / PRODUCTION-SHAPED
+    (5/5 BCTPA tests pass; harness drives the real production chain)
+  LIVE_DOGFOOD = PENDING (deferred — cloud-agent context lacks API-key + dogfood VSIX infra;
+    mirrors prior ACT-CLINEMM-BACKGROUND-NOTIFY-EXACTLY-ONCE-PRESENTATION01 pattern)
+
+**Verdict:**
+  PASS_TERMINAL_PRESENTATION_ARBITRATION_LIVE_QUALIFIED
+
+**Conservation of prior verdicts:**
+  PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED
+  PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED
+  PASS_PRESENTATION_EXACTLY_ONCE_REPAIRED_P1_CORRECTED
+
+**Code changes:**
+  - `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:467-535` (NEW filter, +69 lines)
+  - `apps/vscode/src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts` (NEW test file, 5 tests)
+
+**Reverses NONE of:**
+  - delivery-semantics OOM repair (16881f671)
+  - jobId correlation repair (64f54a945 / 4b76a5348)
+  - deriveOrigin precedence (0a97b445c)
+  - wake cardinality (BCNT01 closure)
+  - synthetic-prompt predicate (BCNEX01 closure)
+
+**Next ACT question (per ACT §21):** `ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY04` should NOT be pre-authorized. The current frozen specimen has `terminal_committed = 1, wake_created = 1`; the prior "two-wake" hypothesis is REFUTED in the current architecture. If a later controlled multi-job specimen demonstrates genuine wake cardinality inflation, open AUTHORITY04 from that new RED — do not speculatively open it now.

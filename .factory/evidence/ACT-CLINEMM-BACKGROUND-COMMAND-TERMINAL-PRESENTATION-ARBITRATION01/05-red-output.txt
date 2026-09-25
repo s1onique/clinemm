@@ -1,0 +1,15 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ❯ src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts (5 tests | 1 failed) 9ms
+       ✓ explicit_user + wake_drain BOTH push say:completion_result → 2 user-visible presentations 3ms
+       × with outstandingAutonomousWork predicate active, only the wake_drain turn's completion_result is presented 4ms
+       ✓ BCTPA-P1: terminal AFTER originating turn finishes → 1 presentation 0ms
+       ✓ BCTPA-P7: explicit user turn concurrent with terminal wake → unrelated user response NOT suppressed 0ms
+       ✓ BCTPA-P10: correlation conservation — jobId threads through both turns 0ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  09:39:01
+   Duration  2.38s (transform 1.28s, setup 1.99s, import 265ms, tests 9ms, environment 0ms)
+

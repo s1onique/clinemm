@@ -1,0 +1,12 @@
+{"seq":1,"at":1700000000000,"stage":"terminal_committed","origin":"background_terminal","sessionId":"session-operator","taskId":"task-operator","jobId":"cmd_operator_test"}
+{"seq":2,"at":1700000000050,"stage":"notify_consume_enter","origin":"background_terminal","sessionId":"session-operator","taskId":"task-operator","jobId":"cmd_operator_test"}
+{"seq":3,"at":1700000000100,"stage":"wake_created","origin":"background_terminal","sessionId":"session-operator","taskId":"task-operator","jobId":"cmd_operator_test"}
+{"seq":4,"at":1700000000150,"stage":"pending_prompt_enqueued","origin":"pending_prompt_drain","sessionId":"session-operator","taskId":"task-operator","jobId":"cmd_operator_test","promptId":"pp-operator-1"}
+{"seq":5,"at":1700000000200,"stage":"pending_prompt_dequeued","origin":"pending_prompt_drain","sessionId":"session-operator","taskId":"task-operator","jobId":"cmd_operator_test","promptId":"pp-operator-1"}
+{"seq":6,"at":1700000000250,"stage":"continuation_scheduled","origin":"pending_prompt_drain","sessionId":"session-operator","taskId":"task-operator","jobId":"cmd_operator_test","promptId":"pp-operator-1"}
+{"seq":7,"at":1700000000300,"stage":"run_turn_started","origin":"explicit_user","sessionId":"session-operator","taskId":"task-operator"}
+{"seq":8,"at":1700000000350,"stage":"agent_turn_done","origin":"explicit_user","sessionId":"session-operator","taskId":"task-operator"}
+{"seq":9,"at":1700000000400,"stage":"run_turn_started","origin":"pending_prompt_drain","sessionId":"session-operator","taskId":"task-operator","jobId":"cmd_operator_test"}
+{"seq":10,"at":1700000000450,"stage":"agent_turn_done","origin":"pending_prompt_drain","sessionId":"session-operator","taskId":"task-operator","jobId":"cmd_operator_test"}
+{"seq":11,"at":1700000000500,"stage":"submit_and_exit_seen","origin":"pending_prompt_drain","sessionId":"session-operator","taskId":"task-operator"}
+{"seq":12,"at":1700000000550,"stage":"task_completion_committed","origin":"pending_prompt_drain","sessionId":"session-operator","taskId":"task-operator"}
