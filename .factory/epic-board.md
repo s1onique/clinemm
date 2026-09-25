@@ -11676,7 +11676,7 @@ opening a separate de-scope ACT).
 **Identity split (post-twenty-third reviewer):**
 ```
 IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-CLOSURE_HEAD                = 502b15536075072c075dd618ea8c68b4607e2bf3
+CLOSURE_HEAD                = 409f48e4b33f6d346113d06d6141b7943b27dd17
 DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 extension_id                = cline.cline   (publisher.name; fixed identifier)
 version                     = 4.1.16         (separate per VS Code CLI pinning form)
