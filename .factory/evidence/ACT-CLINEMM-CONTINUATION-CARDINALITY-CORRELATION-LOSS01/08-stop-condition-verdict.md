@@ -26,8 +26,10 @@ PASS_CONTINUATION_CORRELATION_RESTORED.
 
 ### Achieved
 
-The CCCL-RED-01 sentinel test (real production seam) demonstrates
-that ONE sentinel jobId is observably identical across:
+The CCCL01-E2E real-host sentinel witness
+(`apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts`)
+demonstrates that ONE sentinel jobId is observably identical across
+the REAL production chain end-to-end:
 
   terminal wake (BackgroundNotifyCoordinator.consumeTerminal)
     -> enqueueTerminalWake callback (boundary #4 fixed)
@@ -41,6 +43,8 @@ that ONE sentinel jobId is observably identical across:
        jobId preserved through deps.send payload line 503)
     -> C7 (onRunTurnStarted; jobId preserved; origin =
          pending_prompt_drain via deriveOrigin's jobId fallback)
+    -> executeTurn -> AgentRuntime.run (jobId-confirmation via
+       agent-stub call args; delivery NOT in those args)
     -> C8 (onAgentTurnDone; same derivation as C7)
 
 Each stage's preservation is exercised by real production source
@@ -51,13 +55,15 @@ Each stage's preservation is exercised by real production source
   - the canonical capture ring at `vscode-session-host.ts:445-453`
     + `local-runtime-host.ts:1227-1233`
 
-### CCCL-RED-02 (held-then-drained)
+The CCCL01 producer-side witness (the original RED) demonstrates
+that the SENTINEL reaches `sdkHost.send(...)` from
+`BackgroundNotifyCoordinator.consumeTerminal`. CCCL01-E2E
+demonstrates that the same SENTINEL reaches C8.
 
-The held-then-drained path is exercised by `CCCL-RED-02`. Two
-sentinels (J1, J2) are routed through the held-batch loop
-(consumeTerminal) and the immediate-drain path. Both reach
-`sdkHost.send(...)` with their respective jobIds, preserving
-identity through the queue.
+CCCL01-E2E-02 (the RED discriminator) proves the seam is sensitive
+to producer jobId: when the producer omits jobId, every C4-C8
+record observes `jobId === undefined` and C7/C8 origin falls
+through to `"explicit_user"` -- the exact pre-fix failure mode.
 
 ## Verdict
 
@@ -92,16 +98,22 @@ was legitimate, and which turn, if any, was manufactured?
 
   OOM_REPAIR                  = KEEP (untouched)
   OOM_REPAIR_LIVE_QUALIFIED   = FALSE (still requires live re-run)
-  P4_CORRELATION              = RESTORED (RED discriminator passes;
-                                       real production seams confirm
-                                       jobId flows C4->C8)
+  P4_CORRELATION              = RESTORED (real-host RED discriminator
+                                       passes; real production chain
+                                       confirms jobId flows C4->C8
+                                       with C7/C8 origin =
+                                       pending_prompt_drain)
   REPAIR_OF_CORRELATION_LOSS  = APPLIED
   CORRELATION_LOSS_CLASS      = F. MULTIPLE_LOSS
     - boundary #4 (callback type)
     - boundary #5 (host destructure)
     - boundary #6 (host send call)
   REPAIR_BOUNDARIES           = #4, #5, #6
-  DISCRIMINATOR               = CCCL-RED-01, CCCL-RED-02
+  DISCRIMINATORS              = CCCL01, CCCL01-E2E-01, CCCL01-E2E-02
   CAUSAL_CLAIM                = bound to executable evidence:
                                  RED -> GREEN transition after
-                                 bounded repair of #4-#6.
+                                 bounded repair of #4-#6; one
+                                 sentinel observed at C4, C5, C6,
+                                 C7, C8 with identical jobId and
+                                 deriveOrigin(delivery=undefined,
+                                 jobId=SENTINEL) = pending_prompt_drain.

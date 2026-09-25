@@ -216,6 +216,13 @@
 		// the consumer (which is test-only and is run via vitest under
 		// `bun run test:vitest`) breaks the leak while leaving every
 		// vitest, bun, and integration test harness unaffected.
-		"src/sdk/__tests__/seatbelt-network-live-downstream-recon01.c1-observer.test.ts"
+		"src/sdk/__tests__/seatbelt-network-live-downstream-recon01.c1-observer.test.ts",
+		// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 /
+		// CCCL01-E2E: end-to-end REAL-host sentinel witness. Imports
+		// `@cline-internal/core/runtime/host/local-runtime-host`
+		// (resolves under tsconfig.c2-4-c-bridge.json only). Excluded
+		// here so `bun run check-types` does not see the
+		// base-config-incompatible import path.
+		"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts"
 	]
 }

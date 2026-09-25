@@ -334,6 +334,20 @@ export default defineConfig({
 			// `background-notify-coordinator.ts:281` does NOT
 			// carry jobId.
 			"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 /
+			// CCCL01-E2E: end-to-end REAL-host sentinel witness
+			// closing the FACTORY reviewer gap on
+			// HALT_CORRELATION_END_TO_END_NOT_PROVEN. Drives the
+			// REAL LocalRuntimeHost with real capture hooks and
+			// asserts the same SENTINEL jobId is observed at
+			// C4 (onEnqueue), C5 (onBeforeDrain), C6
+			// (onBeforeDispatch), C7 (onRunTurnStarted), C8
+			// (onAgentTurnDone) -- i.e. from
+			// PendingPromptsController.enqueue all the way
+			// through drain and the agent_turn_done capture
+			// fires -- with no manufactured cardinality growth
+			// and an empty queue at settle.
+			"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

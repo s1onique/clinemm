@@ -11197,3 +11197,39 @@ apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01
 - REPAIR (OOM): PROVEN (CORRECTION00, CORRECTION01)
 - REPAIR (CORRELATION): APPLIED (this ACT — boundaries #4-#6)
 - LIVE_QUALIFICATION: OPERATOR_PENDING — needs new exact-head VSIX
+
+## ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 — POST-REVIEW CLOSURE — 2026-09-25
+
+**Status:** Re-reviewed by FACTORY against `HALT_CORRELATION_END_TO_END_NOT_PROVEN` (P0). Verdict unchanged at the conditional level: the bounded repair is correct, but the original CCCL01 RED terminated at the `sdkHost.send` mock — vitest mocks legitimately prove the arguments passed to that mock, but they do not prove downstream behavior that was never executed. The ACT's stated stop condition was stronger than the executable evidence produced.
+
+**Remediation applied (this commit):**
+
+Added `apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts` — a bounded real-host sentinel witness that drives the REAL `LocalRuntimeHost.runTurn` → `PendingPromptsController.enqueue` → `drain` → second `runTurn` → `executeTurn` → `agent_turn_done` chain with real capture hooks (mirroring the production wiring in `vscode-session-host.ts:445-509`).
+
+Tests:
+- **CCCL01-E2E-01**: with the bounded repair applied, ONE sentinel jobId traverses the REAL chain end-to-end. All five C4-C8 records carry `jobId === SENTINEL`. C7/C8 `deriveOrigin(delivery=undefined, jobId=SENTINEL) === "pending_prompt_drain"`. Agent.run called exactly once. Queue empty at settle. Session idle. `delivery` NOT forwarded into the agent stub (preserves the OOM repair invariant).
+- **CCCL01-E2E-02**: RED discriminator. Drives `runTurn({ delivery: "queue" })` WITHOUT a jobId — simulates the pre-fix producer shape (sdkHost.send omitted jobId). All five C4-C8 records observe `jobId === undefined` and C7/C8 origin = `"explicit_user"` (the exact pre-fix failure mode the live qualification P4 observed).
+
+Result: **2/2 PASS** in 52ms.
+
+**Causal claim scope (corrected):**
+
+Original ACT promoted "composed proof" (producer→send sentinel + downstream structural/unit tests + source inspection) into "one observably identical sentinel trace". That composition is now backed by ONE end-to-end executable witness (CCCL01-E2E-01). The CCCL01-E2E-02 RED discriminator proves the witness is genuinely exercising the seam (the capture ring is sensitive to whether the producer carries jobId).
+
+**Gates (post-review):**
+
+| Gate | Result |
+|---|---|
+| SDK turn-queue | 14/14 PASS |
+| LocalRuntimeHost | 75/85 PASS (10 pre-existing baseline failures; unrelated) |
+| apps/vscode CCARD + BCNEX + derive-origin-precedence | 21/21 PASS |
+| bridge CCCL01 + CCCL01-E2E + bcnt01-wire-03-real-callback | 12/12 PASS |
+| `bun run check-types` | exit 0 |
+| `git diff --check` | clean |
+| ACT-owned diagnostics | 0 |
+
+**Final verdict:** `PASS_CONTINUATION_CORRELATION_RESTORED`. The stop condition (one sentinel C4→C8 with identical jobId and C7/C8 origin = pending_prompt_drain) is now backed by executable evidence at the production boundary.
+
+**DO NOT yet claim:** `PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED` — still requires a successor live qualification against a NEW exact-head dogfood VSIX (the CORRECTION01 specimen + this ACT's correlation fix).
+
+**Next (DEFERRED, unchanged):** `ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY04` (or next unused board identifier). Primary purpose: causality / cardinality for the two-wake scenario.

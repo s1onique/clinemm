@@ -256,6 +256,15 @@ export default defineConfig({
 			// transitively requires the `@cline/core` real bundle
 			// aliasing not available under the base config.
 			"src/sdk/__tests__/model-profile-composition.mpqs01.test.ts",
+			// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01
+			// / CCCL01-E2E: end-to-end REAL-host sentinel witness.
+			// Imports `@cline-internal/core/runtime/host/local-runtime-host`
+			// to drive the REAL LocalRuntimeHost +
+			// PendingPromptsController chain. The base config's
+			// `@cline/core` stub alias cannot resolve this import;
+			// the test runs under vitest.config.c2-4-c-bridge.ts
+			// which has the alias.
+			"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

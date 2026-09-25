@@ -2,6 +2,12 @@
   "act": "ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01",
   "primary_purpose": "reproduction / causal evidence acquisition",
   "verdict": "PASS_CONTINUATION_CORRELATION_RESTORED",
+  "factory_review": {
+    "review_date": "2026-09-25",
+    "initial_verdict": "HALT_CORRELATION_END_TO_END_NOT_PROVEN (P0)",
+    "reviewer_note": "Original CCCL01 RED terminated at the sdkHost.send mock; downstream PendingPromptsController.enqueue -> drain -> second runTurn -> executeTurn -> agent_turn_done path was not exercised. ACT's stated stop condition (one sentinel C4->C8) was stronger than the executable evidence produced.",
+    "remediation": "Added CCCL01-E2E real-host sentinel witness that drives the REAL LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue -> drain -> second runTurn -> executeTurn chain with the real capture hooks (mirroring the production wiring in vscode-session-host.ts) and asserts the SAME SENTINEL jobId is observed at C4/C5/C6/C7/C8 with C7/C8 origin = pending_prompt_drain."
+  },
   "specimen": {
     "subject_head": "0a97b445c",
     "vsix": "dist/dogfood/clinemm-4.1.16-0a97b445c.vsix",
@@ -20,7 +26,7 @@
   },
   "classification": {
     "loss_class": "F. MULTIPLE_LOSS",
-    "first_loss_boundary": "enqueueTerminalWake callback type signature (SdkController.ts:281)",
+    "first_loss_boundary": "enqueueTerminalWake callback type signature (background-notify-coordinator.ts:281)",
     "related_boundaries": [
       "buildSdkControllerEnqueueTerminalWake destructure (SdkController.ts:720)",
       "active.sdkHost.send call site (SdkController.ts:730)"
@@ -31,23 +37,33 @@
       "apps/vscode/src/sdk/background-notify-coordinator.ts",
       "apps/vscode/src/sdk/SdkController.ts",
       "apps/vscode/src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01-wire-03-real-callback.c24-c-bridge.test.ts",
-      "apps/vscode/vitest.config.c2-4-c-bridge.ts"
+      "apps/vscode/vitest.config.c2-4-c-bridge.ts",
+      "apps/vscode/vitest.config.ts",
+      "apps/vscode/tsconfig.json"
     ],
     "files_added": [
-      "apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts"
+      "apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts",
+      "apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts"
     ],
     "boundaries_repaired": [4, 5, 6],
     "oom_repair_touched": false,
     "delivery_preserved_across_drain_send": false,
     "new_public_protocol_field": false,
-    "lines_added": 88,
-    "lines_removed": 10
+    "lines_added_initial": 88,
+    "lines_added_e2e_witness": 590,
+    "lines_removed_initial": 10
+  },
+  "witnesses": {
+    "cccl01_producer_to_send": "PASS (sentinel reaches sdkHost.send)",
+    "cccl01_e2e_real_host": "PASS (sentinel traverses REAL LocalRuntimeHost -> PendingPromptsController.enqueue -> drain -> runTurn -> executeTurn -> agent_turn_done; identical jobId observed at C4/C5/C6/C7/C8)",
+    "cccl01_e2e_nojobid_discriminator": "PASS (when producer omits jobId, all five stages observe jobId === undefined and deriveOrigin returns explicit_user -- the pre-fix failure mode)"
   },
   "gates": {
     "sdk_turn_queue": "14/14 PASS",
-    "local_runtime_host": "84/85 PASS (1 pre-existing baseline failure)",
+    "local_runtime_host": "75/85 PASS (10 pre-existing baseline failures -- unrelated)",
     "ccard_bcnex_derive_origin": "21/21 PASS",
-    "cccl_bcnt_wire_bridge": "10/10 PASS",
+    "cccl_bcnt_wire_bridge": "10/10 PASS (CCCL01 + bcnt01-wire-03)",
+    "cccl_e2e_real_host": "2/2 PASS",
     "apps_vscode_typecheck": "PASS",
     "git_diff_check": "PASS",
     "act_owned_diagnostics": 0

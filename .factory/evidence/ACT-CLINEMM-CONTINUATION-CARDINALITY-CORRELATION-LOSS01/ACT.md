@@ -4,11 +4,20 @@ PRIMARY PURPOSE: reproduction / causal evidence acquisition
 
 ## Status
 
-**IN PROGRESS.**
+**PASS_CONTINUATION_CORRELATION_RESTORED.**
 
 This ACT recovers trustworthy C4→C8 correlation evidence after the
 bounded OOM repair (`ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01
 / CORRECTION01`) failed live qualification P4.
+
+The ACT was re-reviewed on 2026-09-25 against the FACTORY
+`HALT_CORRELATION_END_TO_END_NOT_PROVEN` verdict. The reviewer
+correctly noted the original CCCL01 RED terminated at the
+`sdkHost.send` mock and did not exercise the downstream
+`PendingPromptsController.enqueue` -> `drain` -> second `runTurn` ->
+`executeTurn` -> `agent_turn_done` path. The ACT now closes that gap
+with a new bounded real-host sentinel witness (see
+`apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts`).
 
 Do NOT reopen the OOM repair. The OOM repair's executable code-level
 evidence is preserved (see `apps/vscode/src/sdk/vscode-session-host.ts:422-509`
