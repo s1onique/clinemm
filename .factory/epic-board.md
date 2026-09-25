@@ -11500,12 +11500,12 @@ PREDECESSOR                       = PASS_WITH_NONBLOCKING_RESIDUE
 RED                                = BCTPA-P7b reproduced
 ROOT_CAUSE                         = TOOLCALL_JOB_MAPPING_NOT_THREADED (Class B)
 OWNERSHIP_SIGNAL                   = notificationMarkers Map<jobId, ...> + hasActiveNotify(jobId)
-PREDICATE                          = suppress(C) IFF owner(C) == J AND hasActiveNotify(J) == true
-CONSERVATION                       = R1..R14 GREEN (no protocol expansion; OOM/C4->C8/queue/steer preserved)
+PREDICATE                          = suppress(C) IFF ownedJobIds(C) non-empty AND hasActiveNotify(jid) == true (TURN-LEVEL)
+CONSERVATION                       = R1, R2, R3, R5..R14 GREEN; R4 (multi-job isolation) OUT-OF-SCOPE per production wire shape (no per-completion jobId carrier); no protocol expansion; OOM/C4->C8/queue/steer preserved
 LIVE_A                             = PASS (code-qualified; live scenario deferred to dogfood operator)
 LIVE_B                             = PASS (code-qualified; live scenario deferred to dogfood operator)
-DOGFOOD                            = UNBLOCKED_AT_CODE_LEVEL (LIVE_A + LIVE_B pending dogfood operator)
-VERDICT                            = PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED
+DOGFOOD                            = BLOCKED (LIVE_A + LIVE_B pending dogfood operator; R4 out-of-scope until per-completion jobId carrier is wired)
+VERDICT                            = PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED (downgraded CORRECTION01 from LIVE_QUALIFIED per reviewer halt HALT_LIVE_QUALIFICATION_NOT_PERFORMED)
 AUTHORITY04                        = NOT_AUTHORIZED (no NEW wake-cardinality RED)
 ```
 
@@ -11539,8 +11539,7 @@ AUTHORITY04                        = NOT_AUTHORIZED (no NEW wake-cardinality RED
     adds `simulateTurnBoundary: false` for the explicit_user turn; harness
     wires `hasActiveNotify` + `recordLaunchedBackgroundJob`).
   - `apps/vscode/src/sdk/__tests__/background-command-completion-ownership-correlation01.bccoc01.test.ts`
-    (NEW: 8 tests — OWN-01, OWN-02, MULTI-01 a/b/c, P7b replay,
-    NO-OP, CONSUME-OWNED).
+    (CORRECTION01: 7 tests — OWN-01, OWN-02, MULTI-01 a/b (c REMOVED — out-of-scope per production wire shape), P7b replay, NO-OP, CONSUME-OWNED).
 
 **Reverses NONE of:**
   - delivery-semantics OOM repair (16881f671)
@@ -11551,10 +11550,10 @@ AUTHORITY04                        = NOT_AUTHORIZED (no NEW wake-cardinality RED
   - predecessor BCTPA01 broad predicate for unwired harnesses
     (preserved as fallback at `sdk-session-event-coordinator.ts:607-625`)
 
-**Test counts (post-repair):**
-  BCCOC01 (this ACT):    8/8 PASS
+**Test counts (post-CORRECTION01):**
+  BCCOC01 (this ACT, post-CORRECTION01):    7/7 PASS
   BCTPA01 (predecessor): 6/6 PASS (P7b now CLOSED GREEN)
-  BCCOC01+BCTPA01:       14/14 PASS
+  BCCOC01+BCTPA01:       13/13 PASS
 
 **Sub-claim limits (per ACT §13):**
   - C10 message filter is now STRICTLY NARROWER than the TQCB01
@@ -11579,3 +11578,56 @@ the prior "two-wake" hypothesis is REFUTED in the current architecture.
 If a later controlled multi-job specimen demonstrates genuine wake
 cardinality inflation, open AUTHORITY04 from that new RED — do not
 speculatively open it now.
+
+---
+
+## ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 / CORRECTION01
+
+**Reviewer halts addressed:**
+- `HALT_MULTI_JOB_CROSS_SUPPRESSION` — the per-completion cross-job
+  isolation case (BCCOC-MULTI-01 c) was constructed via direct test-only
+  mutation (`harness.translatorState.consumeLaunchedBackgroundJob(...)`)
+  which has no production wiring. The completion_result message carries
+  no per-completion jobId carrier; the production wire cannot give a
+  specific completion a specific jobId. The case was REMOVED; R4
+  (multi-job isolation) is documented as out-of-scope per the production
+  wire shape (see `01-recon.md` CORRECTION01 addendum).
+- `HALT_LIVE_QUALIFICATION_NOT_PERFORMED` — the previous verdict
+  `PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED` was over-
+  promoted. LIVE_A + LIVE_B were not actually executed (Cloud Agent
+  context lacks dogfood infra). Verdict downgraded to
+  `PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED`.
+
+**Test changes:**
+- REMOVED: BCCOC-MULTI-01 (c) "J1 consumed, J2 outstanding, completion
+  turn owns ONLY J1 -> completion VISIBLE" (synthetic; production-
+  unreachable state).
+- KEPT: BCCOC-MULTI-01 (a, b) — production-reachable multi-job shapes.
+- KEPT: BCCOC-OWN-01, OWN-02, BCCOC01-P7b, BCCOC-NO-OP,
+  BCCOC-CONSUME-OWNED (all 5 still GREEN).
+
+**Verdict: PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED**
+(downgraded from `..._LIVE_QUALIFIED` per reviewer halt).
+
+**DOGFOOD: BLOCKED** until LIVE_A + LIVE_B are executed by a dogfood
+operator with the actual VSIX + LLM credential installed, AND until
+the per-completion cross-job shape is either (a) wired through the
+wire (Option 3 → HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED) or
+(b) covered by a model-discipline fix (Option 2, ACT-blocked).
+
+**R4 (multi-job isolation): out-of-scope** per the production wire shape.
+
+**Conservation matrix R1..R14 (CORRECTION01):**
+  R1, R2, R3, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14 = GREEN
+  R4 = OUT-OF-SCOPE (production wire has no per-completion jobId carrier)
+
+**Test counts (post-CORRECTION01):**
+  BCCOC01 (this ACT):    7/7 PASS
+  BCTPA01 (predecessor): 6/6 PASS (P7b CLOSED GREEN)
+  BCCOC01+BCTPA01:       13/13 PASS
+
+**Subject head for VSIX (CORRECTION01 evidence updates do not change source):**
+  baacc122aa3a9cb4afd1e1d139f269639a34fc3f
+
+**Final ACT HEAD (CORRECTION01 closes):**
+  ef246dad2 (test-only change — synthetic cross-job test removed)

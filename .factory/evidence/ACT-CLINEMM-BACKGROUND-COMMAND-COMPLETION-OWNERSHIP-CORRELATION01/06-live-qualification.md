@@ -155,3 +155,22 @@ The predecessor ACT's P0 verdict (LIVE_QUALIFIED) is therefore
 The author's HALT_CORRELATION_REGRESSION is not triggered
 (§22 — none of the pre-existing P0 halts fires). The
 ACT_NEW_ERRORS counter is 0.
+
+---
+
+## CORRECTION01: verdict downgrade
+
+Per reviewer halt `HALT_LIVE_QUALIFICATION_NOT_PERFORMED`, the
+previous verdict `PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED`
+was over-promoted. The Cloud Agent context lacks dogfood infra (no
+live VS Code extension host, no LLM provider credential, no
+Playwright), so LIVE_A + LIVE_B were not actually executed.
+
+The supported verdict is:
+
+```text
+PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED
+```
+
+Dogfood remains BLOCKED until LIVE_A + LIVE_B are executed by a
+dogfood operator with the actual VSIX + LLM credential installed.

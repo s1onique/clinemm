@@ -86,3 +86,57 @@ Broad conservation (full §18 surface):
 
 Total conservation (excluding the documented pre-existing RED OWN01):
   ~296/296 PASS
+
+---
+
+## CORRECTION01: focused gates update
+
+### Test counts (post-CORRECTION01)
+
+```text
+BCCOC01 (this ACT)             7/7 PASS
+BCTPA01 (predecessor)          6/6 PASS
+BCCOC01 + BCTPA01             13/13 PASS
+```
+
+### Conservation matrix R4 downgrade (per reviewer halt)
+
+R4 (multi-job isolation, "no cross-job over-suppression") is
+downgraded from GREEN (with synthetic test) to **out-of-scope per
+the production wire shape**. See `01-recon.md` CORRECTION01
+addendum. The bounded repair correctly handles all
+production-reachable shapes:
+
+| shape                                                            | result    |
+|-----------------------------------------------------------------|-----------|
+| frozen bug (premature J)                                       | suppressed ✓ |
+| wake completion (J marker consumed)                             | visible   ✓ |
+| P7b (unrelated K, new turn, no background jobs)                  | visible   ✓ |
+| multi-job, both alive (production-reachable parallel run_commands) | suppressed ✓ |
+| multi-job, J1 outstanding + J2 consumed (turn-scoped state)     | suppressed ✓ |
+| no-job completion (normal flow)                                 | visible   ✓ |
+| owned job consumed (e.g., wake_drain)                            | visible   ✓ |
+
+### Verdict downgrade (per reviewer halt `HALT_LIVE_QUALIFICATION_NOT_PERFORMED`)
+
+Previous verdict over-promoted LIVE_QUALIFIED. Corrected to:
+
+```text
+PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED
+```
+
+LIVE_A + LIVE_B remain pending dogfood operator verification
+(Cloud Agent context lacks dogfood infra per the global CLAUDE.md
+note). The bounded repair IS code-qualified; the cross-job R4
+limitation does NOT block dogfood — it documents a wire-shape
+constraint that the dogfood operator can verify empirically by
+running the production LLM-driven flow.
+
+### Pre-existing RED tests
+
+`src/sdk/sdk-session-event-coordinator.test.ts > OWN01 RED` remains
+the only documented pre-existing RED; unrelated to this ACT and
+unchanged by the CORRECTION01.
+
+ACT_NEW_ERRORS = 0 (verified by `bunx tsc --noEmit` exit 0 +
+`git diff --check` exit 0).

@@ -244,3 +244,81 @@ git diff --check               -> 0 errors
 ```
 
 ACT_NEW_ERRORS = 0.
+
+---
+
+## CORRECTION01: test count + cross-job R4 downgrade
+
+### Test count update (REMOVED the synthetic cross-job case)
+
+The previously-asserted "J1 consumed, J2 outstanding, completion turn
+owns ONLY J1 -> completion VISIBLE" test (BCCOC-MULTI-01 case c)
+is REMOVED in CORRECTION01 because it constructed a state via direct
+test-only mutation (`harness.translatorState.consumeLaunchedBackgroundJob("cmd_bccoc_J2b")`)
+that production cannot reach through any wired seam. See
+`01-recon.md` CORRECTION01 addendum for the full reasoning.
+
+```text
+Post-CORRECTION01 (current HEAD):
+  BCCOC01 (this ACT)             7/7 PASS
+  BCTPA01 (predecessor)          6/6 PASS
+  BCCOC01 + BCTPA01             13/13 PASS
+```
+
+### Conservation matrix CORRECTION01 update
+
+| Item | Before CORRECTION01 | After CORRECTION01 |
+|------|---------------------|---------------------|
+| R1 — frozen bug still fixed                       | GREEN | GREEN |
+| R2 — terminal wake completion preserved          | GREEN | GREEN |
+| R3 — P7b fixed                                   | GREEN | GREEN |
+| R4 — multi-job isolation                         | GREEN (synthetic test) | **out-of-scope** (production wire has no per-completion jobId carrier) |
+| R5 — no-job completion                           | GREEN | GREEN |
+| R6 — exact job still outstanding                  | GREEN | GREEN |
+| R7 — exact job completed                          | GREEN | GREEN |
+| R8 — text/reasoning untouched                     | GREEN | GREEN |
+| R9 — synthetic wake prompt filtering unchanged   | GREEN | GREEN |
+| R10 — deferredCompletionBarrier unchanged         | GREEN | GREEN |
+| R11 — OOM repair unchanged                       | GREEN | GREEN |
+| R12 — C4→C8 jobId correlation unchanged          | GREEN | GREEN |
+| R13 — deriveOrigin precedence unchanged          | GREEN | GREEN |
+| R14 — no public protocol expansion              | GREEN | GREEN |
+
+### Downgraded verdict (per reviewer halt `HALT_LIVE_QUALIFICATION_NOT_PERFORMED`)
+
+The previous verdict `PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED`
+was over-promoted. LIVE_A + LIVE_B were not actually executed (the
+Cloud Agent context lacks dogfood infra per the global CLAUDE.md
+note). The supported verdict is:
+
+```text
+PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED
+```
+
+Dogfood remains BLOCKED at the code level until LIVE_A + LIVE_B are
+actually executed by the dogfood operator. R4 is out-of-scope per
+the production wire shape; the operator (or a future ACT) must
+either (a) thread a per-completion jobId through the wire, or
+(b) apply a system-prompt model-discipline fix — both outside this
+ACT's scope.
+
+### Test list (post-CORRECTION01, 13 tests pass)
+
+```
+BCCOC01 (this ACT):
+  BCCOC-OWN-01: explicit_user turn that owns J with marker alive -> completion SUPPRESSED
+  BCCOC-OWN-02: wake_drain turn after consumeTerminal -> completion VISIBLE
+  BCCOC-MULTI-01 (a): both J1 and J2 outstanding (production-reachable) -> completion SUPPRESSED
+  BCCOC-MULTI-01 (b): J1 outstanding, J2 consumed -> completion SUPPRESSED (only J1 ownership matters)
+  BCCOC01-P7b REPLAY: unrelated completion K while active notify for J -> K IS visible
+  BCCOC-NO-OP: empty ownership hint + no marker -> completion flows through
+  BCCOC-CONSUME-OWNED: owned job has marker consumed -> completion flows through
+
+BCTPA01 (predecessor):
+  BCTPA-RED-01 / ABLATION: pre-fix behavior reproduces two visible completions
+  BCTPA-INV-01: dual-turn completion produces exactly ONE visible completion_result
+  BCTPA-P1: terminal AFTER originating turn finishes -> 1 presentation
+  BCTPA-P7: explicit user turn concurrent with terminal wake -> unrelated user response NOT suppressed
+  BCTPA-P7b (CLOSED): unrelated explicit-user completion_result during active notify IS visible
+  BCTPA-P10: correlation conservation — jobId threads through both turns
+```

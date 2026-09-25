@@ -302,3 +302,98 @@ It DOES add:
 
 All four are bounded to the existing internal seams, no wire impact,
 no public API impact, no persistence impact.
+
+## CORRECTION01 addendum: per-completion ownership is not reachable from the current production wire
+
+After the bounded repair landed and was reviewed
+(`d308abb3f ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-CORRELATION01`,
+reviewer halt `HALT_MULTI_JOB_CROSS_SUPPRESSION`), this addendum
+documents the production-reachability limit that the bounded repair
+inherits from the wire shape.
+
+The bounded repair's carrier:
+
+```ts
+MessageTranslatorState.launchedBackgroundJobIds: Set<string>
+```
+
+is populated at the C9 -> marker seam
+(`vscode-run-commands-tool.ts:755-816`) alongside
+`BackgroundNotifyCoordinator.registerMarker({jobId, ...})`. It
+records EVERY job the turn launched, and is cleared by
+`clearTurnOutcome()` at the next turn boundary
+(`sdk-session-event-coordinator.ts:455`, fired on
+`pending_prompt_submitted`).
+
+This carrier answers: **"what jobs did this turn launch?"**
+
+It does NOT answer: **"which specific job does THIS completion_result
+message belong to?"** The completion_result message
+(`message-translator.ts:1782-1795`) carries no `jobId`, no
+`toolCallId`, no per-completion identity carrier. The `toolCallId`
+on `content_start` / `content_end` for the attempt_completion tool
+is a separate, completion-tool-specific identifier that has no
+mapping back to any run_commands `jobId`.
+
+Therefore, the per-completion invariant:
+
+```text
+suppress(C) iff owner(C) == J AND outstanding(J)
+```
+
+is NOT reachable from the current production wire. What IS reachable
+is the TURN-LEVEL invariant:
+
+```text
+suppress(C) iff
+  this turn launched at least one background job J
+  AND hasActiveNotify(J) == true for some such J
+```
+
+This turn-level invariant correctly handles:
+- Frozen-bug premature J (BCCOC-OWN-01 / BCTPA-INV-01): Set has
+  [J], J alive, suppress. ✓
+- Wake completion for J (BCCOC-OWN-02): Set cleared by wake turn
+  boundary, no suppress. ✓
+- P7b unrelated K (BCCOC01-P7b / BCTPA-P7b CLOSED): Set cleared by
+  K turn boundary, no suppress. ✓
+
+This turn-level invariant CORRECTLY suppresses (no over-suppress
+risk in realistic production shape) for the multi-job case:
+- Turn T launches J1, J2 via two run_commands(notify=true). Both
+  are still RUNNING when the model emits attempt_completion (notify
+  = true returns RUNNING; the model cannot know it has "finished"
+  one inline). Both markers alive, Set has [J1, J2], filter
+  suppresses. The attempt_completion is premature for BOTH; the
+  wake_drain turn for whichever job finishes first will present the
+  terminal completion.
+
+The previously-asserted "J1 consumed, J2 outstanding, completion
+meant for J1 should be visible" case is NOT reachable from
+production with the current wire shape. The test that asserted it
+(case (c) in BCCOC-MULTI-01) is REMOVED in CORRECTION01.
+
+### What would be required to make R4 (per-completion cross-job
+isolation) reachable
+
+Two options, neither in CORRECTION01 scope:
+
+1. **Option A (wire change, ACT-blocked):** thread the completion's
+   owning jobId through the wire — `ClineMessage` would need a new
+   field like `ownedBackgroundJobId?: string` populated at the
+   attempt_completion content_end seam (the `toolCallId` does not
+   suffice; we would need a new internal `currentCompletionOwnedJobId`
+   state slot on `MessageTranslatorState` that the model somehow
+   declares, e.g., via a special tool-call convention or via a
+   side-channel between `run_commands` and `attempt_completion`).
+   The ACT explicitly excludes this in its scope ("no public protocol
+   expansion"; Option 3 is `HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED`).
+
+2. **Option B (semantic, model-discipline, ACT-blocked):** instruct
+   the system prompt to emit attempt_completion immediately per job
+   (do not batch multiple run_commands into one attempt_completion).
+   Same flavor as the predecessor's remediation path (B).
+
+CORRECTION01 narrows R4 from "isolated" to "out-of-scope per the
+production wire shape". The other conservation matrix items
+(R1/R2/R3/R5/R6/R7/R8/R9/R10/R11/R12/R13/R14) remain GREEN.

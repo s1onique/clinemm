@@ -1,7 +1,19 @@
 {
   "act_id": "ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01",
-  "verdict": "PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED",
-  "subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
+  "verdict": "PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED",
+  "verdict_history": [
+    {
+      "verdict": "PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED",
+      "subject_head": "baacc122a",
+      "downgraded_in": "CORRECTION01"
+    },
+    {
+      "verdict": "PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED",
+      "subject_head": "CORRECTION01",
+      "reason": "downgraded per reviewer halt HALT_LIVE_QUALIFICATION_NOT_PERFORMED (LIVE_A + LIVE_B not executed; Cloud Agent context lacks dogfood infra). R4 (cross-job isolation) also downgraded to out-of-scope per reviewer halt HALT_MULTI_JOB_CROSS_SUPPRESSION (the synthetic test constructed state production cannot reach)."
+    }
+  ],
+  "subject_head": "CORRECTION01",
   "predecessor": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01",
   "predecessor_verdict": "PASS_WITH_NONBLOCKING_RESIDUE",
   "red": {
@@ -13,17 +25,18 @@
   },
   "root_cause": "Class B — TOOLCALL_JOB_MAPPING_NOT_THREADED. The C10 completion-result filter at sdk-session-event-coordinator.ts:514-535 consulted the AGGREGATE predicate `outstandingAutonomousWork = activeNotifyCount > 0 || pendingPromptsKnown > 0 || pendingPromptAuthorityUnknown` which cannot distinguish 'completion belongs to active job J' from 'completion belongs to unrelated work K'. The jobId minted at vscode-run-commands-tool.ts:768 was registered with the BackgroundNotifyCoordinator but never threaded back into the C10 filter.",
   "ownership_signal": "existing signal — `BackgroundNotifyCoordinator.notificationMarkers: Map<jobId, NotificationMarker>` keyed by jobId (already-internal, ephemeral, NOT serialized). Added a thin getter `hasActiveNotify(jobId)` for constant-time exact lookup.",
+  "carrier_limit": "the carrier `MessageTranslatorState.launchedBackgroundJobIds: Set<string>` is TURN-scoped ('all jobs launched by this turn'), NOT completion-scoped ('the job that THIS specific completion_result belongs to'). The completion_result message carries no jobId / toolCallId linking it to a specific run_commands invocation. Therefore the per-completion invariant `suppress(C) iff owner(C) == J AND outstanding(J)` is NOT reachable from the current production wire shape; what IS reachable is the TURN-LEVEL invariant `suppress(C) iff this turn launched at least one background job J AND hasActiveNotify(J) == true`.",
   "predicate": {
     "before": "outstandingAutonomousWork = activeNotifyCount > 0 || pendingPromptsKnown > 0 || pendingPromptAuthorityUnknown",
-    "after": "suppress(C) IFF owned(C) is defined AND hasActiveNotify(owned(C)) == true",
-    "ownership_hint_carrier": "MessageTranslatorState.launchedBackgroundJobIds: Set<string> (internal-only, ephemeral, cleared by clearTurnOutcome())",
+    "after": "suppress(C) iff ownedJobIds(C) is non-empty AND hasActiveNotify(jid) == true for some jid in ownedJobIds(C)",
+    "ownership_hint_carrier": "MessageTranslatorState.launchedBackgroundJobIds: Set<string> (TURN-scoped, internal-only, ephemeral, cleared by clearTurnOutcome())",
     "ownership_hint_writer": "vscode-run-commands-tool.ts:790 (at the SAME seam as registerMarker)"
   },
   "conservation": {
     "R1_frozen_bug_fixed": true,
     "R2_wake_completion_visible": true,
     "R3_P7b_fixed": true,
-    "R4_multi_job_isolation": true,
+    "R4_multi_job_isolation": "out-of-scope (production wire has no per-completion jobId carrier; the turn-level invariant correctly suppresses the production-reachable multi-job shape where both jobs are alive)",
     "R5_no_job_completion_visible": true,
     "R6_owned_outstanding_suppressed": true,
     "R7_owned_consumed_visible": true,
@@ -36,12 +49,12 @@
     "R14_no_public_protocol_expansion": true
   },
   "live_a": {
-    "shape": "code-qualified (vitest RED/GREEN + ablation pass); live scenario deferred to dogfood operator per the Cloud Agent context constraint documented in 06-live-qualification.md"
+    "shape": "code-qualified; LIVE scenario deferred to dogfood operator (per the Cloud Agent context constraint documented in 06-live-qualification.md)"
   },
   "live_b": {
-    "shape": "code-qualified (vitest RED/GREEN + ablation pass); live scenario deferred to dogfood operator per the Cloud Agent context constraint documented in 06-live-qualification.md"
+    "shape": "code-qualified; LIVE scenario deferred to dogfood operator (per the Cloud Agent context constraint documented in 06-live-qualification.md)"
   },
-  "dogfood": "UNBLOCKED_AT_CODE_LEVEL (LIVE_A + LIVE_B pending dogfood operator verification)",
+  "dogfood": "BLOCKED (LIVE_A + LIVE_B pending dogfood operator; R4 out-of-scope until per-completion jobId carrier is wired through the wire or a model-discipline fix is applied)",
   "new_errors": 0,
   "files_changed": [
     "apps/vscode/src/sdk/SdkController.ts",
@@ -57,8 +70,8 @@
   ],
   "test_counts": {
     "BCTPA01_predecessor": "6/6 PASS",
-    "BCCOC01_this_act": "8/8 PASS",
-    "BCTPA01_BCCOC01_combined": "14/14 PASS",
+    "BCCOC01_this_act": "7/7 PASS",
+    "BCTPA01_BCCOC01_combined": "13/13 PASS",
     "BCNEX01": "7/7 PASS",
     "BCNT01": "24/24 PASS",
     "TQCB01": "15/15 PASS",
@@ -82,20 +95,27 @@
     "HALT_REPOSITORY_TRUST": "n/a",
     "HALT_RED_NOT_REPRODUCED": "n/a (P7b reproduced at entry; flipped to GREEN post-repair)",
     "CAPTURE_INSUFFICIENT": "n/a",
-    "HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED": "n/a (Option 2 internal hint used)",
+    "HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED": "n/a (Option 2 internal hint used; per-completion jobId carrier not pursued because R4 documented as out-of-scope)",
     "HALT_OWNERSHIP_SIGNAL_NOT_STABLE": "n/a (Map<jobId, NotificationMarker> already keyed)",
-    "HALT_MULTI_JOB_CROSS_SUPPRESSION": "n/a (BCCOC-MULTI-01 GREEN, R4 verified)",
+    "HALT_MULTI_JOB_CROSS_SUPPRESSION": "ACKNOWLEDGED (the synthetic cross-job test constructed state production cannot reach via any wired seam; the production-reachable multi-job shape is correctly handled by the turn-level invariant; R4 downgraded to out-of-scope per production wire-shape constraint; test removed in CORRECTION01)",
     "HALT_PRESENTATION_LOSS": "n/a (BCTPA-INV-01 GREEN, R1 verified)",
     "HALT_OOM_REGRESSION": "n/a (BCNT01 + drain-semantics GREEN, R11 verified)",
     "HALT_CORRELATION_REGRESSION": "n/a (BCLP01 + CCCL01 + C4->C8 chain GREEN, R12 verified)",
-    "HALT_OWNERSHIP_CORRELATION_NOT_SUFFICIENT": "n/a (ablation step 03-repair-ablation.txt proves the new correlation identity is load-bearing specifically for over-suppression)"
+    "HALT_OWNERSHIP_CORRELATION_NOT_SUFFICIENT": "n/a for the per-turn shape (frozen-bug + P7b CLOSED + wake completion visible). For per-completion cross-job shape (R4), the halt was converted into a documented limitation (see 01-recon.md CORRECTION01 addendum) because the production wire does not carry per-completion jobId identity.",
+    "HALT_LIVE_QUALIFICATION_NOT_PERFORMED": "ACKNOWLEDGED (verdict downgraded from PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED to PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED; LIVE_A + LIVE_B remain pending dogfood operator)"
   },
   "evidence": {
-    "01-recon.md": "candidate signal table; recon conclusion EXISTING_SIGNAL_SUFFICIENT=false INTERNAL_HINT_REQUIRED=true PUBLIC_PROTOCOL_REQUIRED=false; causal classification B",
-    "02-red-green.txt": "pre-repair RED, post-repair GREEN, conservation matrix R1-R14, test counts",
+    "01-recon.md": "candidate signal table; recon conclusion EXISTING_SIGNAL_SUFFICIENT=false INTERNAL_HINT_REQUIRED=true PUBLIC_PROTOCOL_REQUIRED=false; causal classification B; CORRECTION01 addendum documents the production-wire-shape constraint that prevents the per-completion cross-job invariant R4",
+    "02-red-green.txt": "pre-repair RED, post-repair GREEN, conservation matrix R1-R14 with R4 downgraded to out-of-scope, test counts (13/13 PASS post-CORRECTION01)",
     "03-repair-ablation.txt": "load-bearing ablation — 3 over-suppression tests revert to RED when ownership-aware filter is replaced by predecessor's broad predicate; frozen-bug suppression tests remain GREEN",
-    "04-focused-gates.txt": "all §18 gate tests pass (296/296 PASS, excluding the pre-existing RED OWN01)",
-    "05-artifact-identity.txt": "SUBJECT_HEAD=baacc122aa3a9cb4afd1e1d139f269639a34fc3f, version=4.1.16, VSIX=dist/clinemm-4.1.16-baacc122a.vsix (14,899,136 bytes; SHA-256=3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154), extracted extension.js SHA-256=8cccc3c4739088a45e2cdcd1e4d003208652b025b2deae18fd5b4dd7d42427a2",
-    "06-live-qualification.md": "LIVE_A + LIVE_B command-level scripts; Cloud Agent context deferred to dogfood operator"
+    "04-focused-gates.txt": "all production-reachable gate tests pass (13/13 BCCOC01+BCTPA01); R4 documented as out-of-scope per production wire shape",
+    "05-artifact-identity.txt": "SUBJECT_HEAD=baacc122aa3a9cb4afd1e1d139f269639a34fc3f (initial repair commit; the CORRECTION01 evidence-update commits do not change source code), version=4.1.16, VSIX=dist/clinemm-4.1.16-baacc122a.vsix (14,899,136 bytes; SHA-256=3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154), extracted extension.js SHA-256=8cccc3c4739088a45e2cdcd1e4d003208652b025b2deae18fd5b4dd7d42427a2",
+    "06-live-qualification.md": "LIVE_A + LIVE_B command-level scripts; Cloud Agent context deferred to dogfood operator; CORRECTION01 verdict downgrade to CODE_QUALIFIED"
+  },
+  "correction01_changes": {
+    "removed": "BCCOC-MULTI-01 (c): 'J1 consumed, J2 outstanding, completion turn owns ONLY J1 -> completion VISIBLE' (the test constructed state via `harness.translatorState.consumeLaunchedBackgroundJob('cmd_bccoc_J2b')` which is not a production seam; the production wire does not give a specific completion_result a specific jobId)",
+    "downgraded_R4": "out-of-scope per production wire shape (the completion_result message carries no per-completion identity carrier)",
+    "downgraded_verdict": "PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED -> PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED",
+    "preserved_R1_R3_R5_R14": "GREEN (frozen bug, P7b fix, no-job completion, no protocol expansion, etc.)"
   }
 }

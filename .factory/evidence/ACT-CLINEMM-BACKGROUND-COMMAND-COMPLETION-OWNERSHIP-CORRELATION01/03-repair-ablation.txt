@@ -89,3 +89,38 @@ This is the exact §16 discriminator:
 The ablation was reverted (the `if (false && ...)` was removed
 back to `if (this.options.hasActiveNotify)`). Post-revert all 14
 tests pass; ACT_NEW_ERRORS = 0; typecheck clean.
+
+---
+
+## CORRECTION01: ablation update
+
+The original ablation table (above) shows 3 tests that flip from PASS
+to FAIL when the ownership-aware filter is replaced by the
+predecessor's broad predicate. After CORRECTION01 the
+"cross-job isolation" test (BCCOC-MULTI-01 c) was REMOVED because
+it constructed state production cannot reach (see
+`01-recon.md` CORRECTION01 addendum).
+
+The remaining 2 tests that prove the ownership-aware filter is
+load-bearing specifically for over-suppression are:
+- BCTPA-P7b (CLOSED) — the inherited RED witness.
+- BCCOC01-P7b replay — explicit GREEN preservation.
+
+The BCCOC-MULTI-01 a/b tests (both jobs alive → suppress; J1
+outstanding + J2 consumed → suppress) are PRODUCTION-REACHABLE
+multi-job shapes that prove the turn-level invariant. They are
+included in the ablation result (they PASS both before and after
+ablation — both the ownership-aware filter and the predecessor's
+broad predicate correctly suppress these shapes).
+
+The discriminator (per ACT §15) is now:
+
+| state                                       | pre-repair | post-repair |
+|---------------------------------------------|------------|-------------|
+| P7b unrelated K visible                     | false      | true        |
+| premature J suppressed                     | true       | true        |
+| wake J visible                              | true       | true        |
+
+Both discriminators pass post-repair. The cross-job R4 (per-
+completion isolation) is out-of-scope per the production wire
+shape and is documented in `01-recon.md` CORRECTION01 addendum.

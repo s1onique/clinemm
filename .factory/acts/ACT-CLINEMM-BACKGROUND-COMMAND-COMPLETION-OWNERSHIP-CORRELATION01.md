@@ -200,3 +200,90 @@ This upgrades the predecessor's DOGFOOD verdict:
 See evidence/result.json for the full machine-readable artifact.
 See evidence/05-artifact-identity.txt for the VSIX identity.
 
+
+---
+
+## CORRECTION01 addendum (verdict downgrade)
+
+Per reviewer halt (`HALT_MULTI_JOB_CROSS_SUPPRESSION` and
+`HALT_LIVE_QUALIFICATION_NOT_PERFORMED`), the bounded repair's
+verdict is downgraded:
+
+  Before CORRECTION01:
+    VERDICT = PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED
+    R4 (multi-job isolation) = GREEN (synthetic test)
+    DOGFOOD = UNBLOCKED_AT_CODE_LEVEL
+
+  After CORRECTION01:
+    VERDICT = PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED
+    R4 (multi-job isolation) = out-of-scope (production wire has
+                                  no per-completion jobId carrier;
+                                  the synthetic test constructed state
+                                  production cannot reach)
+    DOGFOOD = BLOCKED (until LIVE_A + LIVE_B are executed by a
+                    dogfood operator AND until the per-completion
+                    cross-job shape is either wired through the wire
+                    or covered by a model-discipline fix)
+
+### Why R4 is out-of-scope
+
+The carrier `MessageTranslatorState.launchedBackgroundJobIds:
+Set<string>` is TURN-scoped (records ALL jobs the turn launched),
+not completion-scoped (records the SPECIFIC job that THIS specific
+completion_result belongs to). The production wire does not give a
+specific completion_result a specific jobId (the completion_result
+message carries `text`, `ts`, `partial`,
+`isAuthoritativelyCompletedResult`, but no `jobId` / `toolCallId`
+linking it to a specific run_commands invocation).
+
+The TURN-level invariant
+`suppress(C) iff ownedJobIds(C) is non-empty AND hasActiveNotify(jid) == true`
+correctly handles all production-reachable shapes:
+- frozen bug (premature J) — suppressed ✓
+- wake completion (J marker consumed) — visible ✓
+- P7b (unrelated K, new turn, no background jobs) — visible ✓
+- multi-job, both alive (parallel run_commands in same turn) — suppressed ✓
+- multi-job, J1 outstanding + J2 consumed (turn-scoped state) — suppressed ✓
+- no-job completion (normal flow) — visible ✓
+- owned job consumed (e.g., wake_drain) — visible ✓
+
+The per-completion cross-job invariant
+`suppress(C) iff owner(C) == J AND outstanding(J)`
+would require either (a) a wire change to thread per-completion
+jobId (out of this ACT's scope; Option 3 → HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED),
+or (b) a model-discipline fix in the system prompt (Option 2 →
+ACT-blocked).
+
+### Downgrade rationale (per reviewer halt)
+
+The bounded repair correctly fixes:
+- R1 (frozen bug)
+- R2 (wake completion visible)
+- R3 (P7b — the predecessor reviewer's P1 RED witness)
+- R5 (no-job completion)
+- R6 (owned-and-outstanding suppressed)
+- R7 (owned-and-consumed visible)
+- R8 (text/reasoning untouched)
+- R9 (synthetic wake filter unchanged)
+- R10 (TQCB01 unchanged)
+- R11 (OOM repair unchanged)
+- R12 (C4→C8 correlation unchanged)
+- R13 (deriveOrigin precedence unchanged)
+- R14 (no public protocol expansion)
+
+These 13 of 14 conservation items are GREEN and STABLE. R4
+(per-completion cross-job isolation) is documented as out-of-scope
+per the production wire shape.
+
+The verdict downgrade from `_LIVE_QUALIFIED` to `_CODE_QUALIFIED`
+is correct per the reviewer's halt: the previous verdict over-
+promoted LIVE qualification without actually executing LIVE_A + LIVE_B.
+The Cloud Agent context lacks dogfood infra (no live VS Code
+extension host, no LLM provider credential); the bounded repair IS
+code-qualified but live verification remains pending dogfood operator.
+
+### ACT_NEW_ERRORS = 0
+
+The bounded repair adds no new errors; typecheck is clean
+(`bunx tsc --noEmit` exit 0); `git diff --check` exit 0; 13/13 tests
+PASS at the post-CORRECTION01 HEAD.
