@@ -5,7 +5,7 @@
     "applied_after": "twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION",
     "p0s_closed": [
       "P0-A evidence-quality-promotion: prior 01a-ccard.jsonl was a synthetic trace mislabeled as raw operator upload. Renamed to 01a-ccard.NORMALIZED_DERIVED.jsonl; provenance disclosed in 00-raw-trace-status.md and 01a-ccard.NORMALIZED_DERIVED.meta.md.",
-      "P0-B internal-contradiction: prior recon §5 + 03-presentation-map entry for UI-D claimed PROVEN-SUPPRESSED but the canonical UI enumeration (01c-ui.txt) explicitly listed UI-D as a second visible green COMPLETED card alongside UI-F. Treated UI enumeration as authoritative. UI-D binding now marked UNPROVEN."
+      "P0-B internal-contradiction: prior recon \u00a75 + 03-presentation-map entry for UI-D claimed PROVEN-SUPPRESSED but the canonical UI enumeration (01c-ui.txt) explicitly listed UI-D as a second visible green COMPLETED card alongside UI-F. Treated UI enumeration as authoritative. UI-D binding now marked UNPROVEN."
     ],
     "verdict": "CAPTURE_INSUFFICIENT"
   },
@@ -15,7 +15,7 @@
     "extension_id": "cline.cline",
     "version": "4.1.16",
     "implementation_subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
-    "closure_head": "baacc122a (subject) | this ACT's commits to be added",
+    "closure_head": "ebc9ea3aa",
     "dogfood_source_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f"
   },
   "runtime_cardinality": {
@@ -26,8 +26,14 @@
     "pending_prompt_enqueued": 1,
     "pending_prompt_dequeued": 1,
     "continuation_scheduled": 1,
-    "run_turn_started": {"explicit_user": 1, "pending_prompt_drain": 1},
-    "agent_turn_done": {"explicit_user": 1, "pending_prompt_drain": 1},
+    "run_turn_started": {
+      "explicit_user": 1,
+      "pending_prompt_drain": 1
+    },
+    "agent_turn_done": {
+      "explicit_user": 1,
+      "pending_prompt_drain": 1
+    },
     "submit_and_exit_seen": 2,
     "task_completion_committed": 1,
     "wake_C4_to_C8_jobId": "identical (J on seq 4..10)",
@@ -86,7 +92,7 @@
         {
           "producer": "unrelated (e.g. say='text' with green-card CSS class applied by resolveTerminalReportFraming)",
           "cline_message_shape": "{type:say, say:text, partial:false}",
-          "hypothesis_if_persisted": "a non-completion_result row that the terminal-report framing decided to badge as '✓ Completed' anyway"
+          "hypothesis_if_persisted": "a non-completion_result row that the terminal-report framing decided to badge as '\u2713 Completed' anyway"
         }
       ],
       "user_visible_authority": "UNRESOLVED (could be completion_result, could be badged text, could be webview artifact)"
@@ -177,7 +183,7 @@
     "01b-ccard-counters.json": "computed counters (unchanged numbers; provenance noted in body)",
     "01c-ui.txt": "AUTHORITATIVE enumeration of visible UI surfaces (operator-transcribed; lists 2 green COMPLETED cards)",
     "01c-ui.png": "REMOVED (was actually ASCII text, not a PNG; misleading)",
-    "02-recon.md": "source-bound recon; UI surface table; §3 + §5 reconciled with the bounded correction",
+    "02-recon.md": "source-bound recon; UI surface table; \u00a73 + \u00a75 reconciled with the bounded correction",
     "03-presentation-map.jsonl": "machine-readable per-surface producer mapping (UI-D + UI-F marked UNPROVEN_PENDING_PERSISTED_BINDING)",
     "04-focused-gates.txt": "conservation matrix; static checks; pre-existing failures",
     "result.json": "this file"

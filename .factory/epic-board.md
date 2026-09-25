@@ -11740,7 +11740,7 @@ runtime_conservation_regression = NONE
 ```
 IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-CLOSURE_HEAD                = (set by this bounded-correction commit)
+CLOSURE_HEAD                = ebc9ea3aa (this bounded-correction commit)
 extension_id                = cline.cline   (= publisher.name)
 version                     = 4.1.16        (separate field per VS Code CLI pinning form)
 VSIX                        = dist/clinemm-4.1.16-baacc122a.vsix (bit-identical to BCCOC01)
