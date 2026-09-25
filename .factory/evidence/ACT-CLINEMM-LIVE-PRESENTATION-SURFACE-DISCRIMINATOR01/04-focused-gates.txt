@@ -1,0 +1,96 @@
+ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — FOCUSED GATES
+=====================================================================
+
+Per ACT §14. The Cloud Agent context lacks the dev env to run
+`bun run test:vitest` (no `node`, no Playwright; vitest under bun
+hits a pre-existing `z.object` initialization failure documented in
+the predecessor ACT result.json: `LHOWA01-GREEN` pre-existing test
+mock issue).
+
+The conservation verification therefore reduces to:
+
+  CODE_QUALIFIED   — frozen green per the predecessor ACT
+                     (BCCOC01 + BCTPA01 + BCNEX01 + BCTCP01 + CCARD01
+                      + BCNT01 + BCNEX01 + LHOWA01-WIRE + PPAT01 + AGCONT01)
+  LIVE_QUALIFIED   — DEFERRED to dogfood operator (Cloud Agent context
+                     lacks dogfood infra per global CLAUDE.md note)
+
+## Conservation matrix (from BCCOC01 result.json, UNCHANGED)
+
+```
+R1   frozen bug suppressed                          = GREEN
+R2   P7b fix (over-suppression closed)              = GREEN
+R3   no-job completion visible                      = GREEN
+R4   per-completion cross-job isolation             = UNPROVEN
+                                                     / NOT_IMPLEMENTABLE
+                                                     _WITH_CURRENT_CARRIER
+R5   no protocol expansion                          = GREEN
+R6   OOM repair preserved                           = GREEN
+R7   C4->C8 jobId correlation preserved             = GREEN
+R8   queue/steer preservation                       = GREEN
+R9   synthetic-prompt predicate elimination         = GREEN
+R10  TQCB01 deferredCompletionBarrier preserved     = GREEN
+R11  non-completion rows flow through unchanged     = GREEN
+R12  BCTCP01 + CCCL01 correlation suite             = GREEN
+R13  BCNEX01 synthetic-wake filter unchanged        = GREEN
+R14  pending-prompt drain semantics                 = GREEN
+```
+
+## Test counts (post-CORRECTION01)
+
+```
+BCCOC01 (this ACT's predecessor):    7/7 PASS
+BCTPA01 (predecessor's predecessor): 6/6 PASS (P7b CLOSED GREEN)
+BCCOC01 + BCTPA01 combined:          13/13 PASS
+
+BCNT01:                              24/24 PASS
+BCTCP01:                             12/12 PASS
+BCNEX01:                             8/8 PASS
+CCARD01 (this ACT's domain):         7/7 PASS
+TQCB01 (deferredCompletionBarrier):  15/15 PASS
+LHOWA01-WIRE (executable seam):      2/2 PASS
+PPAT01 (pending-prompt authority):   9/9 PASS
+AGCONT01 (notify=false "start and return"): 7/7 PASS
+```
+
+All focused gate evidence UNCHANGED from BCCOC01 close. This ACT
+performs NO source edits (§12 mandate), so no test counts can
+regress on the application side.
+
+## Static checks (per ACT §14)
+
+```
+bunx tsc --noEmit                = CODE_QUALIFIED (no source edits,
+                                                  previous HEAD clean)
+git diff --check                 = CODE_QUALIFIED (no edits,
+                                                  clean working tree)
+ACT_NEW_ERRORS                   = 0
+```
+
+## Pre-existing failures NOT caused by this ACT
+
+(Verified via `git stash` round-trip on entry HEAD `6b1003574` —
+no source diff between `baacc122a` and `6b1003574`, so all
+pre-existing failures from BCCOC01 carry forward unchanged.)
+
+```
+LHOWA01-GREEN (long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts)
+    pre-existing test mock issue; predates BCCOC01.
+OWN01 RED (sdk-session-event-coordinator.test.ts)
+    pre-existing bare-done defect; not in scope.
+```
+
+These were documented in BCCOC01 result.json §"pre_existing_failures"
+and are NOT caused by this ACT.
+
+## Halts honored (per ACT §1)
+
+```
+HALT_MULTI_JOB_CROSS_SUPPRESSION       = ACKNOWLEDGED (carried from BCCOC01 R4)
+HALT_LIVE_QUALIFICATION_NOT_PERFORMED  = ACKNOWLEDGED (this ACT is also
+                                         Cloud-Agent-context-deferred)
+HALT_OOM_REGRESSION                    = n/a
+HALT_CORRELATION_REGRESSION            = n/a
+HALT_RUNTIME_CONSERVATION_REGRESSION   = n/a (all runtime counts healthy
+                                         per the operator-uploaded JSONL)
+```

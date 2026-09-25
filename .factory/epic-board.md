@@ -11681,3 +11681,134 @@ DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 extension_id                = cline.cline   (publisher.name; fixed identifier)
 version                     = 4.1.16         (separate per VS Code CLI pinning form)
 ```
+
+---
+
+**ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION (PROVISIONAL_CODE_QUALIFIED) — 2026-09-25**
+
+**Status:** PASS (provisional_code_qualified; LIVE_A + LIVE_B deferred
+to dogfood operator per global Cloud Agent context — no LLM credential,
+no live extension host, no Playwright).
+
+**Mission:** classify every visible completion-like UI element in the
+operator-uploaded live dogfood screenshot back to its production
+producer seam. Per the predecessor's note (twenty-fourth reviewer C1):
+"the new trace makes the next ACT much narrower … the runtime
+cardinality is healthy … the remaining ambiguity is presentation
+projection, not wake/execution cardinality."
+
+**Classification:** ROOT_PRESENTATION_CLASS = PS-A
+(PRESENTATION_MULTIPLICITY_IS_MULTI_SURFACE).
+
+```
+UI-A -> terminal_card_projection   (message-translator.ts:1801-1875 + ChatRow.tsx:251)
+UI-B -> ordinary_text_row          (text content_end + MarkdownRow)
+UI-C -> ordinary_text_row          (text content_end + MarkdownRow)
+UI-D -> PROVEN-SUPPRESSED_BY_BCCOC01  (C10 filter at sdk-session-event-coordinator.ts:566-616)
+UI-E -> ordinary_text_row          (text content_end + MarkdownRow)
+UI-F -> semantic_completion_single (completion content_end + CompletionOutputRow;
+                                     THE 1 task_completion_committed)
+```
+
+**Producer-side runtime counts (load-bearing, per ACT §10):**
+
+```
+completion_result_commits       = 1    (UI-F; UI-D filtered at C10)
+terminal_card_projections       = 1    (UI-A)
+task_completion_projections     = 1    (mapped 1:1 to UI-F)
+submit_and_exit_presentations   = 2    (one per turn; CCARD-only)
+ordinary_text_rows              = 3    (UI-B, UI-C, UI-E)
+```
+
+**Causal seam:** the BCCOC01 ownership-aware C10 filter at
+`sdk-session-event-coordinator.ts:566-616` is verified (source-bound
+walkthrough in `02-recon.md` §3) to correctly suppress UI-D in this
+specimen: at the explicit_user turn's commit instant, the
+`launchedBackgroundJobIds` set contains `J` AND
+`BackgroundNotifyCoordinator.hasActiveNotify("J")` returns `true`, so
+the per-job ownership-aware predicate (`ownedAndOutstanding === true`)
+triggers the filter and REMOVES the `completion_result` row before
+`appendAndEmit`. UI-D never reaches the webview. UI-F (the wake
+turn's completion) passes the same filter cleanly because the wake
+turn launched no jobs and `hasActiveNotify("J") === false` at the
+commit instant (the marker was consumed at seq 3 / `notify_consume_enter`).
+
+**Live runtime cardinality (per ACT §11 conservation):**
+
+```
+WAKE_CARDINALITY          = HEALTHY         (1)
+EXECUTION_CARDINALITY     = EXPLAINED       (2 turns: explicit + drain)
+TASK_COMPLETION_COMMIT    = 1
+wake C4->C8 jobId         = identical (J on seq 4..10)
+runtime_conservation_regression = NONE
+```
+
+**Identity split (twenty-third + twenty-fourth reviewer C1):**
+
+```
+IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
+DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
+CLOSURE_HEAD                = 6b10035745305652e2d0e7cee288ad20294d8524
+extension_id                = cline.cline   (= publisher.name)
+version                     = 4.1.16        (separate field per VS Code CLI pinning form)
+VSIX                        = dist/clinemm-4.1.16-baacc122a.vsix
+VSIX SHA-256                = 3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154
+```
+
+**Conservation (UNCHANGED from BCCOC01 close):**
+
+```
+R1, R2, R3, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14 = GREEN
+R4 = UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER (carried from BCCOC01)
+
+BCCOC01 + BCTPA01 combined:  13/13 PASS
+BCNT01:                       24/24 PASS
+BCTCP01:                      12/12 PASS
+BCNEX01:                      8/8 PASS
+CCARD01:                      7/7 PASS
+TQCB01:                       15/15 PASS
+LHOWA01-WIRE:                 2/2 PASS
+PPAT01:                       9/9 PASS
+AGCONT01:                     7/7 PASS
+```
+
+**Source diff (this ACT):** ZERO — classification only, no production edits.
+Working tree clean (`git status` = no changes). No successor ACT required.
+
+**Successor selection:** OPEN_NONE — PS-A classification stands; the
+BCCOC01 ownership-aware C10 filter is correct. Optional
+UX-PRESENTATION-CONSOLIDATION01 only if operator observes UX verbosity
+as a product defect. Do NOT open AUTHORITY04 unless a NEW live trace
+shows wake cardinality greater than one.
+
+**Operator required actions** (LIVE_A + LIVE_B):
+
+1. Verify UI-D is NOT visible in the live webview (a regression of
+   BCCOC01 if it IS visible).
+2. Verify UI-F is the SINGLE visible green COMPLETED card.
+3. If UI-D is visible: report back; root class becomes PS-B and
+   `C10-LIVE-OWNERSHIP-REPAIR01` is authorized.
+4. If UI-D is NOT visible: PS-A classification stands; no further
+   correctness repair.
+
+**Decisive Factory state (post-twenty-fourth reviewer C1):**
+
+```
+ACT                          = CLOSED_PROVISIONAL_CODE_QUALIFIED
+P0                           = NONE
+P1                           = none (no new defects surfaced)
+LIVE_A                       = DEFERRED_TO_DOGFOOD_OPERATOR
+LIVE_B                       = DEFERRED_TO_DOGFOOD_OPERATOR
+SINGLE_JOB / P7b             = LIVE_QUALIFIED (carried from BCCOC01)
+R4 multi-job isolation       = UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER
+DOGFOOD_ROLLOUT              = BLOCKED (per BCCOC01 — still requires LIVE_A + LIVE_B on the
+                                ACTUAL installed VSIX with LLM credential)
+AUTHORITY04                  = NOT_AUTHORIZED (no new wake-cardinality RED)
+PRESENTATION_CLASS           = PS-A
+REPAIR_AUTHORIZED            = FALSE
+```
+
+**Verdict:** PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION
+(provisional_code_qualified — operator must verify UI-D suppression
+in the live webview before this classification becomes
+LIVE_QUALIFIED).

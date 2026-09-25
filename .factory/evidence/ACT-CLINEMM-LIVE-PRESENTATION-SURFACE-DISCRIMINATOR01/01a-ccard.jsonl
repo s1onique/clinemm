@@ -1,0 +1,13 @@
+{"seq":1,"stage":"run_turn_started","origin":"explicit_user","sessionId":"s_live","taskId":"t_live","jobId":null,"ts":1000}
+{"seq":2,"stage":"terminal_committed","origin":"background_terminal","sessionId":"s_live","taskId":"t_live","jobId":"J","ts":1005}
+{"seq":3,"stage":"notify_consume_enter","origin":"background_terminal","sessionId":"s_live","taskId":"t_live","jobId":"J","ts":1006}
+{"seq":4,"stage":"pending_prompt_enqueued","origin":"pending_prompt_drain","sessionId":"s_live","taskId":"t_live","jobId":"J","ts":1007}
+{"seq":5,"stage":"wake_created","origin":"pending_prompt_drain","sessionId":"s_live","taskId":"t_live","jobId":"J","ts":1008}
+{"seq":6,"stage":"submit_and_exit_seen","origin":"explicit_user","sessionId":"s_live","taskId":"t_live","jobId":null,"ts":1010}
+{"seq":7,"stage":"agent_turn_done","origin":"explicit_user","sessionId":"s_live","taskId":"t_live","jobId":null,"ts":1011}
+{"seq":8,"stage":"pending_prompt_dequeued","origin":"pending_prompt_drain","sessionId":"s_live","taskId":"t_live","jobId":"J","ts":1015}
+{"seq":9,"stage":"continuation_scheduled","origin":"pending_prompt_drain","sessionId":"s_live","taskId":"t_live","jobId":"J","ts":1016}
+{"seq":10,"stage":"run_turn_started","origin":"pending_prompt_drain","sessionId":"s_live","taskId":"t_live","jobId":"J","ts":1017}
+{"seq":11,"stage":"submit_and_exit_seen","origin":"pending_prompt_drain","sessionId":"s_live","taskId":"t_live","jobId":null,"ts":1030}
+{"seq":12,"stage":"task_completion_committed","origin":"pending_prompt_drain","sessionId":"s_live","taskId":"t_live","jobId":null,"ts":1031}
+{"seq":13,"stage":"agent_turn_done","origin":"pending_prompt_drain","sessionId":"s_live","taskId":"t_live","jobId":"J","ts":1032}

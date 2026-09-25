@@ -1,0 +1,32 @@
+{
+  "total_records": 13,
+  "terminal_committed": 1,
+  "notify_consume_enter": 1,
+  "wake_created": 1,
+  "pending_prompt_enqueued": 1,
+  "pending_prompt_dequeued": 1,
+  "continuation_scheduled": 1,
+  "run_turn_started": {
+    "total": 2,
+    "by_origin": {
+      "explicit_user": 1,
+      "pending_prompt_drain": 1
+    }
+  },
+  "agent_turn_done": {
+    "total": 2,
+    "by_origin": {
+      "explicit_user": 1,
+      "pending_prompt_drain": 1
+    }
+  },
+  "submit_and_exit_seen": 2,
+  "task_completion_committed": 1,
+  "wake_C4_to_C8_jobId_correlation": "identical (J on seq 4..10)",
+  "classification": {
+    "WAKE_CARDINALITY": "HEALTHY",
+    "EXECUTION_CARDINALITY": "EXPLAINED",
+    "TASK_COMPLETION_COMMIT": 1,
+    "PRESENTATION_CARDINALITY": "UNKNOWN"
+  }
+}

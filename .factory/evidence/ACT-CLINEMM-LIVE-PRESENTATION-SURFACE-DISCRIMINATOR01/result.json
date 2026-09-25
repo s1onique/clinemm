@@ -1,0 +1,175 @@
+{
+  "act_id": "ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01",
+  "purpose": "live reproduction / presentation-surface classification",
+  "specimen": {
+    "source": "operator-uploaded",
+    "extension_id": "cline.cline",
+    "version": "4.1.16",
+    "implementation_subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
+    "closure_head": "6b10035745305652e2d0e7cee288ad20294d8524",
+    "dogfood_source_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
+    "vsix_path": "dist/clinemm-4.1.16-baacc122a.vsix",
+    "vsix_sha256": "3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154",
+    "vsix_byte_size": 14899136
+  },
+  "runtime_cardinality": {
+    "terminal_committed": 1,
+    "notify_consume_enter": 1,
+    "wake_created": 1,
+    "pending_prompt_enqueued": 1,
+    "pending_prompt_dequeued": 1,
+    "continuation_scheduled": 1,
+    "run_turn_started": {"explicit_user": 1, "pending_prompt_drain": 1},
+    "agent_turn_done": {"explicit_user": 1, "pending_prompt_drain": 1},
+    "submit_and_exit_seen": 2,
+    "task_completion_committed": 1,
+    "wake_C4_to_C8_jobId": "identical (J on seq 4..10)",
+    "WAKE_CARDINALITY": "HEALTHY",
+    "EXECUTION_CARDINALITY": "EXPLAINED",
+    "PRESENTATION_CARDINALITY": "UNKNOWN_BEFORE_THIS_ACT"
+  },
+  "presentation_map": {
+    "UI-A": {
+      "visible_text": "Ran sh -c ... + Backgrounded status pill",
+      "producer": "message-translator.ts:1801-1875 + ChatRow.tsx:251 (CommandOutputRow)",
+      "cline_message_shape": "{type:say, say:command, commandExecutionDisposition:backgrounded, text:'<cmd>\\n<<<COMMAND_OUTPUT_STRING>>>\\n{envelope}'}",
+      "lifecycle_stage": "mid-explicit_user",
+      "turn_origin": "explicit_user",
+      "jobId": "J (envelope-embedded)",
+      "persisted": true,
+      "user_visible_authority": "terminal_card_projection"
+    },
+    "UI-B": {
+      "visible_text": "The command is running in the background...",
+      "producer": "message-translator.ts:1620-1629 (text content_end) + ChatRow.tsx case text",
+      "cline_message_shape": "{type:say, say:text, partial:false}",
+      "lifecycle_stage": "mid-explicit_user",
+      "turn_origin": "explicit_user",
+      "jobId": null,
+      "persisted": true,
+      "user_visible_authority": "ordinary_text_row"
+    },
+    "UI-C": {
+      "visible_text": "The command has finished. Output: ...",
+      "producer": "message-translator.ts:1620-1629 (text content_end) + ChatRow.tsx case text",
+      "cline_message_shape": "{type:say, say:text, partial:false}",
+      "lifecycle_stage": "mid-explicit_user",
+      "turn_origin": "explicit_user",
+      "jobId": null,
+      "persisted": true,
+      "user_visible_authority": "ordinary_text_row"
+    },
+    "UI-D": {
+      "visible_text": "green COMPLETED card (filtered)",
+      "producer": "message-translator.ts:1761-1795 + C10 filter at sdk-session-event-coordinator.ts:566-616",
+      "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
+      "lifecycle_stage": "end-of-explicit_user (FILTERED)",
+      "turn_origin": "explicit_user",
+      "jobId": "J (launchedBackgroundJobIds carrier)",
+      "persisted": false,
+      "user_visible_authority": "PROVEN-SUPPRESSED_BY_BCCOC01",
+      "filter_proof": "ownedAndOutstanding=true at C10 commit instant"
+    },
+    "UI-E": {
+      "visible_text": "The background command ... has completed successfully...",
+      "producer": "message-translator.ts:1620-1629 (text content_end) + ChatRow.tsx case text",
+      "cline_message_shape": "{type:say, say:text, partial:false}",
+      "lifecycle_stage": "end-of-pending_prompt_drain",
+      "turn_origin": "pending_prompt_drain",
+      "jobId": null,
+      "persisted": true,
+      "user_visible_authority": "ordinary_text_row"
+    },
+    "UI-F": {
+      "visible_text": "green COMPLETED card (committed)",
+      "producer": "message-translator.ts:1761-1795 + ChatRow.tsx:1102-1125 (CompletionOutputRow + resolveTerminalReportFraming)",
+      "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
+      "lifecycle_stage": "end-of-pending_prompt_drain (COMMITTED)",
+      "turn_origin": "pending_prompt_drain",
+      "jobId": null,
+      "persisted": true,
+      "user_visible_authority": "semantic_completion_single_task_completion_committed",
+      "commit_proof": "sdk-session-event-coordinator.ts:732 setTurnPhase('completed', ..., 'session-event-turn-complete-completed')"
+    }
+  },
+  "producer_runtime_counts": {
+    "completion_result_commits": 1,
+    "terminal_card_projections": 1,
+    "task_completion_projections": 1,
+    "submit_and_exit_presentations": 2,
+    "ordinary_text_rows": 3,
+    "_note": "Counts INFERRED from operator-uploaded CCARD JSONL + source-bound walkthrough in 02-recon.md."
+  },
+  "live_load_bearing_assertion": {
+    "completion_result_commits": 1,
+    "terminal_card_projections": 1,
+    "task_completion_projections": 1,
+    "submit_and_exit_presentations": 2,
+    "ordinary_text_rows": 3
+  },
+  "root_presentation_class": "PS-A",
+  "root_presentation_class_definition": "ONE completion_result + independent projections",
+  "root_presentation_class_verdict": "PRESENTATION_MULTIPLICITY_IS_MULTI_SURFACE",
+  "ps_a_implication": "The C10 ownership repair (BCCOC01) is correct; the multi-element visible UI is the EXPECTED layering of (a) terminal card (UI-A), (b) ordinary assistant text (UI-B, UI-C, UI-E), and (c) one green COMPLETED card (UI-F). The remaining UI-D candidate is filtered at C10 by BCCOC01 and does NOT reach the webview.",
+  "ui_d_caveat": "If the operator's screenshot ACTUALLY renders UI-D as a visible green COMPLETED card (a regression of BCCOC01), then the class is PS-B (C10_DUPLICATION_PERSISTS_LIVE) — operator-side live verification required.",
+  "successor_act": {
+    "selection": "PS-A — no UX correctness repair needed",
+    "open": null,
+    "rationale": "Source-bound classification confirms one semantic completion_result (UI-F) + terminal_card_projection (UI-A) + 3 ordinary_text_rows. The 'multi-element' UI is multi-surface, not multi-completion."
+  },
+  "verdict": "PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION",
+  "verdict_status": "PROVISIONAL_CODE_QUALIFIED",
+  "verdict_provisional_reason": "Cloud Agent context cannot re-run the workload (no LLM credential, no live extension host, no Playwright). Operator-uploaded CCARD JSONL + screenshot are canonical evidence.",
+  "live_qualification_status": {
+    "live_a": "DEFERRED_TO_DOGFOOD_OPERATOR",
+    "live_b": "DEFERRED_TO_DOGFOOD_OPERATOR",
+    "operator_required_actions": [
+      "verify UI-D is NOT visible in the live webview (regression of BCCOC01 if it IS)",
+      "verify UI-F is the SINGLE visible green COMPLETED card",
+      "if UI-D is visible, root class becomes PS-B and C10-LIVE-OWNERSHIP-REPAIR01 is authorized"
+    ]
+  },
+  "conservation": {
+    "WAKE_CARDINALITY": "HEALTHY",
+    "EXECUTION_CARDINALITY": "EXPLAINED",
+    "RUNTIME_CONSERVATION_REGRESSION": false,
+    "OOM_REPAIR": "UNCHANGED (BCNT01 24/24)",
+    "C4_C8_CORRELATION": "UNCHANGED (BCTCP01+CCCL01)",
+    "queue_steer": "UNCHANGED (BCNEX01 8/8)",
+    "TQCB01_BARRIER": "UNCHANGED (15/15)",
+    "non_completion_rows": "UNCHANGED (BCTPA-P7)"
+  },
+  "halts": {
+    "HALT_REPOSITORY_TRUST": "n/a",
+    "HALT_RED_NOT_REPRODUCED": "n/a",
+    "CAPTURE_INSUFFICIENT": "n/a (this ACT IS the capture)",
+    "HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED": "n/a (no edits)",
+    "HALT_PRESENTATION_LOSS": "n/a",
+    "HALT_OOM_REGRESSION": "n/a",
+    "HALT_CORRELATION_REGRESSION": "n/a",
+    "HALT_OWNERSHIP_CORRELATION_NOT_SUFFICIENT": "n/a (BCCOC01 already closed)",
+    "HALT_LIVE_QUALIFICATION_NOT_PERFORMED": "ACKNOWLEDGED",
+    "HALT_RUNTIME_CONSERVATION_REGRESSION": "n/a"
+  },
+  "evidence_files": {
+    "01-live-specimen.md": "frozen live specimen; identity split per twenty-third + twenty-fourth reviewer C1",
+    "01a-ccard.jsonl": "operator-uploaded CCARD trace (13 records, transcribed)",
+    "01b-ccard-counters.json": "computed counters",
+    "01c-ui.txt": "enumeration of visible UI surfaces",
+    "02-recon.md": "source-bound recon; UI surface table; §3 walkthrough of UI-D suppression",
+    "03-presentation-map.jsonl": "machine-readable per-surface producer mapping",
+    "04-focused-gates.txt": "conservation matrix; static checks; pre-existing failures",
+    "result.json": "this file"
+  },
+  "successor_selection": "OPEN_NONE — no further correctness repair authorized (PS-A classification)",
+  "factory_cursor": {
+    "PREDECESSOR": "PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED (BCCOC01)",
+    "RUNTIME_CARDINALITY": "HEALTHY",
+    "JOB_CORRELATION": "HEALTHY",
+    "PRESENTATION_MAP": "UI-A: terminal_card | UI-B/C/E: ordinary_text | UI-D: PROVEN-SUPPRESSED_BY_BCCOC01 | UI-F: semantic_completion_single",
+    "COMPLETION_RESULT_COMMITS": 1,
+    "ROOT_PRESENTATION_CLASS": "PS-A",
+    "REPAIR_AUTHORIZED": false,
+    "NEXT": "operator live verification of UI-D suppression; no successor ACT unless operator reports UI-D is visible"
+  }
+}
