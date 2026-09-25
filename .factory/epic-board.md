@@ -11847,3 +11847,70 @@ REPAIR_AUTHORIZED            = FALSE
 - Original cycle: PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION (PS-A; retired after twenty-fourth reviewer).
 - Round 1: CAPTURE_INSUFFICIENT (held open; refined in round 2).
 - Round 2: CAPTURE_INSUFFICIENT (held open; refined in round 3; ELIMINATIONS retracted in round 3).
+
+---
+
+## ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 — GREEN_AND_ABLATION (operator-driven dogfood + LIVE-A..D DEFERRED) — 2026-09-26
+
+**Status:** GREEN_AND_ABLATION (seam-level PASS; operator-driven LIVE-A..D deferred to dogfood per 08-live-qualification.md).
+
+**Predecessor:** ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 (operator-supplied persisted dump unblocked the live transcript that this ACT repairs).
+
+**Mission:** Repair the proven double-terminal-completion lifecycle for notify-owned background jobs. The authoritative persisted session shows submit_and_exit count = 2 for jobId `cmd_mugvhy92x7rm527e`.
+
+**Live root cause:** Two semantic terminal completion authorities are claimed for ONE notify-owned background job. The originating turn synchronously waits the job to terminal state via `command_status(J, waitMs=30000)` and calls `submit_and_exit #1`. The wake-driven turn runs `submit_and_exit #2`. submit_and_exit count for J = 2.
+
+**Production seam race:** BackgroundNotifyCoordinator's `enqueueTerminalWake` is FIRE-AND-FORGET (SdkController.ts:738 `void active.sdkHost.send(...).catch(...)`). The originating turn's `command_status → resolveObligation` (Path B) runs synchronously while the wake is still in the fire-and-forget hop. The Path B `discardQueuedWake` calls `host.pendingPrompts.list()` synchronously (empty list — wake hasn't landed), returns `not_found`, and the wake later lands and fires a second autonomous turn.
+
+**H1 selected (H1 vs H2 vs H3):** command_status(J, waitMs>0) for notify-owned active J returns state=running with `notification: "pending"` and SUPPRESSES Path B resolveObligation. Wake is the sole terminal-completion authority. Conservation: R4 (non-blocking read) + R5 (non-notify) + R6 (multi-job) all preserved.
+
+**Repair artifact:** `apps/vscode/src/sdk/command-status-tool.ts` (H1 consult on `BackgroundNotifyCoordinator.hasActiveNotify(jobId)`).
+
+**Tests (54 total, all pass):**
+
+```
+BNCA-RED-01       (RED):    2 tests pass  (fire-and-forget race reproduced)
+BNCA-GREEN-01     (GREEN):  3 tests pass  (H1 contract + R4 + R5)
+BNCA-ABLATION-01  (proof):  2 tests pass  (load-bearing necessity)
+TQCB01            (gate):  15 tests pass  (dual-delivery arbitration conserved)
+BCNEX01           (gate):   7 tests pass  (exactly-once presentation conserved)
+BCCOC01           (gate):   7 tests pass  (ownership correlation conserved)
+BCTPA01           (gate):   6 tests pass  (presentation arbitration conserved)
+CCARD01           (gate):  12 tests pass  (continuation cardinality conserved)
+TOTAL                       54 tests pass
+```
+
+TypeScript clean (`tsc --noEmit -p tsconfig.json` exit 0). git diff --check clean.
+
+**Halts:** all NOT_TRIGGERED — see result.json.
+
+**Conservation (R1..R15 per ACT §14):** all SATISFIED.
+
+```
+IMPLEMENTATION_SUBJECT_HEAD = (pending; to be filled at GREEN commit)
+CLOSURE_HEAD                = (pending; to be filled at GREEN commit)
+DOGFOOD_SOURCE_HEAD         = (pending; to be filled at GREEN commit)
+```
+
+**Decisive Factory state:**
+
+```
+ACT                          = GREEN_AND_ABLATION
+P0                           = NONE_REMAINING
+P1                           = none (no new defects surfaced)
+LIVE_A..D                    = DEFERRED_TO_DOGFOOD_OPERATOR (per 08-live-qualification.md)
+TERMINAL_COMPLETION_AUTHORITY = H1 (wake owns terminal completion for notify-owned J)
+SEMANTIC_COMPLETION_CARDINALITY = exactly 1 per notify-owned job
+WAKE_CARDINALITY             = LIVE  (Path A listener fires once)
+EXECUTION_CARDINALITY        = LIVE
+SUBMIT_EXIT_TURN_BINDING     = UNPROVEN (round-3 of predecessor; unchanged)
+RAW_LIVE_TRACE               = LIVE  (operator-supplied dump captured)
+RUNTIME_CARDINALITY          = LIVE
+CONSERVATION                 = R1..R15 all SATISFIED
+REPAIR_AUTHORIZED            = TRUE  (this ACT)
+REPAIR_NECESSITY             = PROVEN (BNCA-ABLATION-01)
+```
+
+**Verdict:** GREEN_AND_ABLATION. Operator-driven dogfood + LIVE-A..D pending per 08-live-qualification.md.
+
+**§17 C10 ablation (deferred):** whether the C10 completion-result filter is still necessary post-H1 is a separate bounded ACT. The H1 repair does not touch the C10 filter; the existing presentation-suppression remains as a conservation measure.

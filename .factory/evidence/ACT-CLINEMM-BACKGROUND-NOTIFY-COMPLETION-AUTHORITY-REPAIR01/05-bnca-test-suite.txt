@@ -1,0 +1,5 @@
+ ✓ src/sdk/__tests__/background-notify-completion-authority-fire-and-forget-red01.bnca-red01.test.ts (2 tests) 3ms
+ ✓ src/sdk/__tests__/background-notify-completion-authority-h1-green01.bnca-green01.test.ts (3 tests) 8217ms
+ ✓ src/sdk/__tests__/background-notify-completion-authority-ablation01.bnca-ablation01.test.ts (2 tests) 8636ms
+ Test Files  3 passed (3)
+      Tests  7 passed (7)

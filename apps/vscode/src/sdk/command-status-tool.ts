@@ -20,9 +20,9 @@
  * capability boundaries.
  */
 import { type AgentTool, createTool } from "@cline/shared"
+import { Logger } from "@/shared/services/Logger"
 import type { BackgroundNotifyCoordinator } from "./background-notify-coordinator"
 import { CommandJobManager, MAX_STATUS_WAIT_MS } from "./command-job-manager"
-import { Logger } from "@/shared/services/Logger"
 
 export interface CommandStatusInput {
 	jobId: string
@@ -42,6 +42,16 @@ export interface CommandStatusOutput {
 	exitCode?: number
 	signal?: string
 	error?: string
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 (H1):
+	 * When `"pending"`, the originating turn attempted a blocking wait
+	 * on a notify-owned background job. The wake-driven turn owns
+	 * terminal-completion authority for this jobId. The model MUST NOT
+	 * call `submit_and_exit` claiming this jobId's terminal result;
+	 * the wake will provide the terminal result. Absent on non-notify
+	 * jobs and on non-blocking (waitMs==0) status reads.
+	 */
+	notification?: "pending"
 }
 
 export interface CancelCommandInput {
@@ -124,10 +134,7 @@ export interface CreateCommandStatusToolOptions {
  * canonical Path B source). Idempotent — the coordinator's
  * `resolveObligation` is itself idempotent.
  */
-export function createCommandStatusTool(
-	manager: CommandJobManager,
-	options: CreateCommandStatusToolOptions = {},
-): AgentTool {
+export function createCommandStatusTool(manager: CommandJobManager, options: CreateCommandStatusToolOptions = {}): AgentTool {
 	return createTool({
 		name: "command_status",
 		description:
@@ -161,7 +168,47 @@ export function createCommandStatusTool(
 			} catch (error) {
 				return [{ ok: false, error: error instanceof Error ? error.message : String(error) }]
 			}
-			const waitMs = Math.max(0, Math.min(typed.waitMs ?? 0, MAX_STATUS_WAIT_MS))
+			const requestedWaitMs = Math.max(0, Math.min(typed.waitMs ?? 0, MAX_STATUS_WAIT_MS))
+
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01
+			// (H1): for a notify-owned active job, the originating turn
+			// MUST NOT synchronously wait the job to terminal state. The
+			// wake-driven turn is the sole terminal-completion authority.
+			// The originating turn's blocking-wait attempt is the live
+			// defect that produces two `submit_and_exit` completions for
+			// ONE notify-owned background job. See `02-recon.md` and
+			// `04-authority-discriminator.md` for the full causal
+			// analysis.
+			//
+			// H1 short-circuit contract:
+			//   - when `BackgroundNotifyCoordinator.hasActiveNotify(J)`
+			//     returns true AND `waitMs > 0`, fall back to a
+			//     non-blocking snapshot (manager.status with waitMs=0).
+			//   - the snapshot is returned truthfully (state may be
+			//     "running" or already terminal if the listener is
+			//     microtasks behind).
+			//   - Path B (resolveObligation) is SUPPRESSED for this
+			//     call. The wake listener owns the marker drain; if the
+			//     marker is still present the wake is pending, if the
+			//     marker is gone the wake has already fired or the
+			//     listener is microtasks from firing.
+			//   - the response carries `notification: "pending"` as a
+			//     structured signal that the wake owns terminal
+			//     completion for this jobId.
+			//
+			// H1 invariant: under the H1 contract the originating turn
+			// cannot claim `submit_and_exit` for J's terminal completion
+			// via this code path. The wake is the single authority.
+			//
+			// Conservation (R4/R5): `command_status(J, waitMs == 0)`
+			// and command_status on a NON-notify-owned job both pass
+			// through unchanged. notify=false default produces zero
+			// state delta.
+			const notifyOwned =
+				!!options.backgroundNotifyCoordinator && options.backgroundNotifyCoordinator.hasActiveNotify(typed.jobId)
+			const suppressPathB = notifyOwned && requestedWaitMs > 0
+			const waitMs = suppressPathB ? 0 : requestedWaitMs
+
 			const status = await manager.status({ jobId: typed.jobId, waitMs })
 			if (!status.ok) {
 				return [{ ok: false, error: `unknown_job: ${typed.jobId}` }]
@@ -181,7 +228,17 @@ export function createCommandStatusTool(
 			// it does not own. This matches the Path A consumeTerminal
 			// owner-mismatch check at
 			// `background-notify-coordinator.ts:382-388`.
+			//
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01
+			// (H1): when the originating turn's call is the notify-owned
+			// blocking-wait shape (waitMs>0 + hasActiveNotify=true),
+			// Path B is SUPPRESSED. The wake listener owns the marker
+			// drain. Suppressing Path B eliminates the fire-and-forget
+			// race between consumeTerminal (Path A) and
+			// resolveObligation (Path B) — both call paths can no longer
+			// race to drain the marker for the same originating turn.
 			if (
+				!suppressPathB &&
 				options.backgroundNotifyCoordinator &&
 				options.resolveActiveOwner &&
 				snap.state !== "running" &&
@@ -212,6 +269,13 @@ export function createCommandStatusTool(
 					stdout: snap.stdout,
 					stderr: snap.stderr,
 					outputTruncated: snap.outputTruncated,
+					// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01
+					// (H1): when the originating turn attempted a
+					// notify-owned blocking wait, signal that the wake
+					// owns terminal completion. The model MUST NOT call
+					// `submit_and_exit` claiming this jobId's terminal
+					// result; the wake will provide the terminal result.
+					...(suppressPathB ? { notification: "pending" as const } : {}),
 					...(snap.exitCode !== undefined ? { exitCode: snap.exitCode } : {}),
 					...(snap.signal !== undefined ? { signal: snap.signal } : {}),
 				},

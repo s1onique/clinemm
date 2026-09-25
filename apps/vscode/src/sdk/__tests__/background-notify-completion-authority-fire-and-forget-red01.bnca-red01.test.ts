@@ -124,8 +124,6 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 			jobId,
 			sessionId,
 			taskId,
-			notifyOnCompletion: true,
-			createdAtMs: 0,
 		})
 
 		// Path A fires (mirroring the listener after terminalPromise).
@@ -211,8 +209,6 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 			jobId,
 			sessionId,
 			taskId,
-			notifyOnCompletion: true,
-			createdAtMs: 0,
 		})
 		coordinator.consumeTerminal({
 			jobId,

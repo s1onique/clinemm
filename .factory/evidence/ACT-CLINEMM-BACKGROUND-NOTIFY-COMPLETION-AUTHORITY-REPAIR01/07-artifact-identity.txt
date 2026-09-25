@@ -1,0 +1,44 @@
+ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01
+
+IMPLEMENTATION_SUBJECT_HEAD   = (pending; to be filled at GREEN commit)
+CLOSURE_HEAD                  = (pending; to be filled at GREEN commit)
+DOGFOOD_SOURCE_HEAD           = (pending; to be filled at GREEN commit)
+
+# Repair artifact (the bounded code change):
+#   apps/vscode/src/sdk/command-status-tool.ts
+#   - Added H1 short-circuit consult on BackgroundNotifyCoordinator.hasActiveNotify(jobId).
+#   - For notify-owned active J with waitMs > 0:
+#     * manager.status called with waitMs=0 (no blocking)
+#     * Path B (resolveObligation) suppressed
+#     * Output carries notification: "pending"
+#   - All other paths unchanged (R4 non-blocking read; R5 non-notify; R6 multi-job).
+#   - CommandStatusOutput interface extended with optional `notification?: "pending"`.
+
+# New tests:
+#   apps/vscode/src/sdk/__tests__/background-notify-completion-authority-fire-and-forget-red01.bnca-red01.test.ts
+#   apps/vscode/src/sdk/__tests__/background-notify-completion-authority-h1-green01.bnca-green01.test.ts
+#   apps/vscode/src/sdk/__tests__/background-notify-completion-authority-ablation01.bnca-ablation01.test.ts
+
+# Frozen evidence (unchanged):
+#   01-authoritative-live-transcript.md
+#   01a-clineMessages.LIVE_RAW.json (SHA-256 fe1b6bc7791a50483a3faed1790f149e98bfc48c8407b4266ea803719034ae36)
+#   02-recon.md
+#   04-authority-discriminator.md
+
+# Test outcomes (under the H1 fix):
+#   BNCA-RED-01   (fire-and-forget discard race reproduction):    2 tests ✓
+#   BNCA-GREEN-01 (H1 contract + conservation):                   3 tests ✓
+#   BNCA-ABLATION-01 (load-bearing necessity proof):              2 tests ✓
+#   TQCB01 (conservation — existing dual-delivery arbitration):  15 tests ✓
+#   BCNEX01 (conservation — exactly-once presentation):          7 tests ✓
+#   BCCOC01 (conservation — ownership correlation):              7 tests ✓
+#   BCTPA01 (conservation — presentation arbitration):          6 tests ✓
+#   CCARD01 (conservation — continuation cardinality):           12 tests ✓
+#   Total: 47 focused-gate tests + 7 BNCA tests = 54 tests, all passing.
+
+# Conservative (NOT exercised in this ACT but documented):
+#   - Live dogfood VSIX build is out of scope for this session (no UI harness invocation).
+#   - §17 C10 ablation (whether the C10 completion-result filter is still needed) is
+#     documented in 04-authority-discriminator.md as a downstream question. The H1
+#     repair does not touch the C10 filter; the existing presentation-suppression
+#     remains in place as a conservation measure.

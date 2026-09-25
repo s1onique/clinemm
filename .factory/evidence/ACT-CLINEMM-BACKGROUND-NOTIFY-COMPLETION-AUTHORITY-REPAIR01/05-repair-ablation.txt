@@ -1,0 +1,6 @@
+ ✓ src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts (12 tests) 5ms
+ ✓ src/sdk/__tests__/background-notify-exactly-once-presentation01.bcnex01.test.ts (7 tests) 4ms
+ ✓ src/sdk/__tests__/background-command-completion-ownership-correlation01.bccoc01.test.ts (7 tests) 6ms
+ ✓ src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts (6 tests) 6ms
+ ✓ src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts (15 tests) 2130ms
+      Tests  47 passed (47)
