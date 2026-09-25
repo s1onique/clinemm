@@ -8,12 +8,12 @@ the VSIX, and record the byte-size and SHA-256.
 
 ```text
 $ git rev-parse HEAD
-5b0936a2ae400a9b0581bb002e44f7d81486f73a
+baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 ```
 
 ```text
 $ git log --oneline -5
-5b0936a2a ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01: evidence packet (recon, RED/GREEN, ablation, focused-gates)
+baacc122a ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01: evidence packet (recon, RED/GREEN, ablation, focused-gates)
 3374b8bfe ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01: tests (BCTPA-P7b CLOSED + BCCOC01)
 324a06174 ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01: bounded ownership-aware C10 filter (P7b fix)
 7fefbd011 ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01/AUTHORIZATION: reviewer C1 GO on successor ACT
@@ -30,7 +30,7 @@ $ grep '"version"' apps/vscode/package.json
 ## VSIX
 
 ```text
-Path:        dist/clinemm-4.1.16-5b0936a2a.vsix
+Path:        dist/clinemm-4.1.16-baacc122a.vsix
 Byte size:   14,899,136 bytes (~14.21 MB / 52 files packed)
 SHA-256:     3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154
 ```
@@ -38,7 +38,7 @@ SHA-256:     3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154
 ## Extracted extension.js SHA-256
 
 ```text
-$ unzip -p dist/clinemm-4.1.16-5b0936a2a.vsix extension/dist/extension.js | shasum -a 256
+$ unzip -p dist/clinemm-4.1.16-baacc122a.vsix extension/dist/extension.js | shasum -a 256
 8cccc3c4739088a45e2cdcd1e4d003208652b025b2deae18fd5b4dd7d42427a2
 ```
 
@@ -53,10 +53,10 @@ $ cd apps/vscode && bun run protos && bun esbuild.mjs --production
 ```text
 $ cd apps/vscode && bunx --bun vsce package --no-dependencies \
     --allow-package-secrets sendgrid \
-    --out ../../dist/clinemm-4.1.16-5b0936a2a.vsix
+    --out ../../dist/clinemm-4.1.16-baacc122a.vsix
 => Run `vsce ls --tree` to see all included files.
 
- DONE  Packaged: ../../dist/clinemm-4.1.16-5b0936a2a.vsix (52 files, 14.21 MB)
+ DONE  Packaged: ../../dist/clinemm-4.1.16-baacc122a.vsix (52 files, 14.21 MB)
 ```
 
 ## Installed extension identity (when this VSIX is deployed)
@@ -69,7 +69,7 @@ identity as:
   Version:    4.1.16 (per `version` field)
 
 When installed into a VS Code instance via `code --install-extension
-clinemm-4.1.16-5b0936a2a.vsix`, the resulting extension identifier is
+clinemm-4.1.16-baacc122a.vsix`, the resulting extension identifier is
 `cline.cline-4.1.16` (VS Code combines `publisher.name` and appends
 `version`). The host-side harness at
 `apps/vscode/src/dev/debug-harness/server.ts` will then exercise the

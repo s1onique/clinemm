@@ -11489,7 +11489,7 @@ suppress(C) IFF
   See evidence/03-repair-ablation.txt.
 
 **CURRENT ACT (CLOSED — PASS_COMPLETION_OWNERSHIP_CORRELATION_LIVE_QUALIFIED):**
-  Final commit: d308abb3f (HEAD).
+  Final commit: baacc122a (HEAD).
   No further revisions to this ACT's evidence packet.
   Working tree clean, typecheck clean, diff-check clean.
 
@@ -11565,9 +11565,9 @@ AUTHORITY04                        = NOT_AUTHORIZED (no NEW wake-cardinality RED
     is fail-closed (preserved from TQCB01).
 
 **Artifact identity:**
-  SUBJECT_HEAD = d308abb3f
+  SUBJECT_HEAD = baacc122a
   version      = 4.1.16
-  VSIX         = dist/clinemm-4.1.16-5b0936a2a.vsix
+  VSIX         = dist/clinemm-4.1.16-baacc122a.vsix
                 (14,899,136 bytes; SHA-256 = 3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154)
   extension.js SHA-256 = 8cccc3c4739088a45e2cdcd1e4d003208652b025b2deae18fd5b4dd7d42427a2
   installed identity = cline.cline-4.1.16
