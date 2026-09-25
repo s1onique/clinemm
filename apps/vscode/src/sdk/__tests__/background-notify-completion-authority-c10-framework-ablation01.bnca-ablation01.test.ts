@@ -76,8 +76,10 @@ function makeHarness(): ProductionHarness {
 	let wasWakeDeliveredOverride: ((jobId: string) => boolean) | null = null
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: () => {
+		enqueueTerminalWake: async () => {
 			// Wake delivered to PendingPromptsController.
+
+			return { kind: "delivered" as const }
 		},
 		now: () => Date.now(),
 	})

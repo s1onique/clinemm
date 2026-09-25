@@ -91,9 +91,11 @@ function makeHarness(): ProductionHarness {
 	let completionCommitCount = 0
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: () => {
+		enqueueTerminalWake: async () => {
 			// Wake sink: no-op for this test (Path A drained the
 			// marker; the wake doesn't matter for the C10 assertion).
+
+			return { kind: "delivered" as const }
 		},
 		now: () => Date.now(),
 	})

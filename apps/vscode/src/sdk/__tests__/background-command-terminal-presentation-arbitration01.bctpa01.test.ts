@@ -195,8 +195,10 @@ function makeHarness(options: { simulatePreFix?: boolean } = {}): Harness {
 	let now = 0
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: ({ sessionId, prompt, jobId: jid }) => {
+		enqueueTerminalWake: async ({ sessionId, prompt, jobId: jid }) => {
 			queue.enqueue({ sessionId, prompt, ...(jid !== undefined ? { jobId: jid } : {}) })
+
+			return { kind: "delivered" as const }
 		},
 		now: () => ++now,
 	})

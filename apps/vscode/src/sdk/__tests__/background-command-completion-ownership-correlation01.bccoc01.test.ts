@@ -99,7 +99,7 @@ function makeHarness(options: MakeHarnessOptions = {}): Harness {
 	let now = 0
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: () => {},
+		enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
 		now: () => ++now,
 	})
 	for (const jid of jobIds) {

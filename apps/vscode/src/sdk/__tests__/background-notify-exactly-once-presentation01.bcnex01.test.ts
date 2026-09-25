@@ -162,8 +162,10 @@ function makeHarness(): Harness {
 	let now = 0
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: ({ sessionId, prompt }) => {
+		enqueueTerminalWake: async ({ sessionId, prompt }) => {
 			queue.enqueue({ sessionId, prompt })
+
+			return { kind: "delivered" as const }
 		},
 		now: () => ++now,
 	})

@@ -11880,7 +11880,7 @@ BCNEX01           (gate):   7 tests pass  (exactly-once presentation conserved)
 BCCOC01           (gate):   7 tests pass  (ownership correlation conserved)
 BCTPA01           (gate):   6 tests pass  (presentation arbitration conserved)
 CCARD01           (gate):  12 tests pass  (continuation cardinality conserved)
-TOTAL                       60 tests pass (13 BNCA + 47 conservation)
+TOTAL                       67 tests pass (20 BNCA + 47 conservation); 0 errors; 0 unhandled rejections
 ```
 
 TypeScript clean (`tsc --noEmit -p tsconfig.json` exit 0). git diff --check clean.
@@ -11932,6 +11932,31 @@ New tests:
 - BNCA-FRAMEWORK-01 (3 tests — GREEN: wake-delivered SUPPRESSES, wake-discarded ALLOWS, no notify ALLOWS)
 - BNCA-FRAMEWORK-ABLATION-01 (2 tests — load-bearing necessity proof: fix ON suppresses, fix OFF commits)
 
+```
+
+
+**Bounded correction ROUND 3 (reviewer HALT_WAKE_DELIVERY_ACK_PROMOTED):**
+
+ROUND 2 conflated wake-dispatch REQUESTED with DELIVERED because the production transport at `SdkController.ts:738` is fire-and-forget `void active.sdkHost.send(...).catch(...)`. The coordinator marked `wakeDeliveredJobIds(J) = true` at the moment of synchronous callback invocation, not when the async send actually landed. If the async send later rejected, the originating turn had already been SUPPRESSED and NO wake-driven turn would ever fire — semantic terminal completion count for J dropped to 0 (the opposite cardinality failure).
+
+ROUND 3 (one bounded correction, no architecture change) splits the tracker into the explicit three-state contract documented above. The C10 barrier consults FIVE per-job cases (was THREE). The production transport at `SdkController.ts:738` changed from fire-and-forget to a real `Promise<{ kind: 'delivered' | 'rejected' | 'session_gone' }>` that awaits `sdkHost.send` and forwards the ack outcome. New tests `BNCA-FRAMEWORK-DISPATCH-FAILED-01` (3 tests) and `BNCA-FRAMEWORK-DISPATCH-FAILED-ABLATION-01` (4 tests) prove the load-bearing property: fix ON holds during ack-pending and ALLOWS after ack-failed (semantic count for J is 1); fix OFF bypasses both gates (silent defect).
+
+Clean executable gate (no `Errors 1` / no `HostProvider not setup` artifacts): the HostProvider telemetry mock was added to TQCB01 to remove the unhandled-rejection noise that previously corrupted the conservation run.
+
+```
+LIVE_DEFECT                              = PROVEN
+DOUBLE_SUBMIT_AND_EXIT                   = LIVE
+FIRE_AND_FORGET_RACE                     = REPRODUCED
+H1_COMMAND_STATUS_SHORT_CIRCUIT          = EXECUTED_GREEN (kept as defense-in-depth)
+FRAMEWORK_C10_COMPLETION_COMMIT_BARRIER  = EXECUTED_GREEN (load-bearing)
+H1_PREVENTS_ORIGIN_COMPLETION            = PROVEN (model MAY ignore; framework SUPPRESSES)
+HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY = CLOSED_BY_BOUNDED_CORRECTION_ROUND_2
+WAKE_OWNERS_TERMINAL_COMPLETION          = ENFORCED_AT_FRAMEWORK_SEAM
+SEMANTIC_COMPLETION_CARDINALITY_=1       = PROVEN_FOR_DELIVERED_AND_LOST_WAKE_BOTH
+WAKE_DELIVERY_ACK_PROMOTED               = CLOSED_BY_BOUNDED_CORRECTION_ROUND_3 (three-state contract)
+WAKE_LOST_NO_COMPLETION_FAILURE_MODE     = CLOSED (case-4 ALLOW when dispatch fails)
+CLEAN_EXECUTABLE_GATE                    = PROVEN (0 errors / 0 unhandled rejections)
+REPAIR_AUTHORIZED_FOR_LIVE_CLOSE         = TRUE
 ```
 LIVE_DEFECT                              = PROVEN
 DOUBLE_SUBMIT_AND_EXIT                   = LIVE

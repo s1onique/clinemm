@@ -37,10 +37,7 @@ import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
-import {
-	SdkSessionEventCoordinator,
-	type SdkSessionEventCoordinatorOptions,
-} from "../sdk-session-event-coordinator"
+import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
 vi.mock("@/shared/services/Logger", () => ({
@@ -158,16 +155,15 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 	let now = 0
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: ({ sessionId, prompt }) => wakeSink.enqueue({ sessionId, prompt }),
+		enqueueTerminalWake: ({ sessionId, prompt }) =>
+			Promise.resolve(wakeSink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 		now: () => ++now,
 	})
 
-	const getPendingPromptCount = vi.fn(
-		(_sessionId?: string): number => 0,
-	) as ReturnType<typeof vi.fn> & ((sessionId?: string) => number)
-	const getActiveNotifyCount = vi.fn(
-		(_sessionId?: string, _taskId?: string): number => 0,
-	) as ReturnType<typeof vi.fn> & ((sessionId?: string, taskId?: string) => number)
+	const getPendingPromptCount = vi.fn((_sessionId?: string): number => 0) as ReturnType<typeof vi.fn> &
+		((sessionId?: string) => number)
+	const getActiveNotifyCount = vi.fn((_sessionId?: string, _taskId?: string): number => 0) as ReturnType<typeof vi.fn> &
+		((sessionId?: string, taskId?: string) => number)
 
 	const coordinator = new SdkSessionEventCoordinator({
 		messageTranslatorState: translatorState,
@@ -193,9 +189,7 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		getTurnPhase: () => tracker.currentPhase,
 		translateSessionEvent,
 		hasRunningBackgroundJobForOwner: () => manager.hasRunningBackgroundJobForOwner(activeSessionId),
-		getPendingPromptCount: getPendingPromptCount as unknown as (
-			sessionId: string | undefined,
-		) => number,
+		getPendingPromptCount: getPendingPromptCount as unknown as (sessionId: string | undefined) => number,
 		getActiveNotifyCount: getActiveNotifyCount as unknown as (
 			sessionId: string | undefined,
 			taskId: string | undefined,
@@ -232,10 +226,7 @@ const agentEvent = (sessionId: string, event: Record<string, unknown>): CoreSess
 		},
 	}) as CoreSessionEvent
 
-async function emitDoneWithoutCompletion(
-	coordinator: SdkSessionEventCoordinator,
-	sessionId: string,
-): Promise<void> {
+async function emitDoneWithoutCompletion(coordinator: SdkSessionEventCoordinator, sessionId: string): Promise<void> {
 	const doneEvent = agentEvent(sessionId, {
 		type: "done",
 		reason: "completed",
@@ -319,9 +310,7 @@ describe("ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / LHOWA01", () =
 			expect(h.wakeSink.pendingCountForSession(h.activeSessionId)).toBe(1)
 
 			// 3. Wire the Q5 guard chain to consult the real sink.
-			h.getPendingPromptCount.mockImplementation(() =>
-				h.wakeSink.pendingCountForSession(h.activeSessionId),
-			)
+			h.getPendingPromptCount.mockImplementation(() => h.wakeSink.pendingCountForSession(h.activeSessionId))
 
 			// 4. The Q5 composition seam should now DEFER because
 			// pendingPromptCount > 0. The phase stays at "streaming"

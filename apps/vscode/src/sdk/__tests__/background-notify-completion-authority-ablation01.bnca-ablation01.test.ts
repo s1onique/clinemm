@@ -111,8 +111,10 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-ABL
 		let now = 0
 		const notifyCoordinator = new BackgroundNotifyCoordinator({
 			resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-			enqueueTerminalWake: ({ sessionId, prompt }) => {
+			enqueueTerminalWake: async ({ sessionId, prompt }) => {
 				void wakeSink.enqueue({ sessionId, prompt })
+
+				return { kind: "delivered" as const }
 			},
 			discardQueuedWake: ({ sessionId, jobId }) => {
 				const entries = wakeSink.list(sessionId)

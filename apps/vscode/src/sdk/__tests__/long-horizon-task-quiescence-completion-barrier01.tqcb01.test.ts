@@ -21,10 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BackgroundNotifyCoordinator, type ResolveObligationDecision } from "../background-notify-coordinator"
 import { MessageIdMinter } from "../message-id-minter"
 import { MessageTranslatorState, translateSessionEvent } from "../message-translator"
-import {
-	SdkSessionEventCoordinator,
-	type SdkSessionEventCoordinatorOptions,
-} from "../sdk-session-event-coordinator"
+import { SdkSessionEventCoordinator, type SdkSessionEventCoordinatorOptions } from "../sdk-session-event-coordinator"
 import { TurnStateTracker } from "../turn-state-tracker"
 
 vi.mock("@/shared/services/Logger", () => ({
@@ -44,6 +41,22 @@ vi.mock("@/core/storage/StateManager", () => ({
 			getGlobalStateKey: () => undefined,
 			setGlobalState: vi.fn(),
 		}),
+	},
+}))
+
+// The real telemetry proxy lazily initializes TelemetryService, which requires
+// a HostProvider that unit tests don't set up. Without this mock, the dynamic
+// `discardQueuedWakeForJobIdOnHost` import at line ~892 pulls in SdkController
+// -> telemetryService -> TelemetryService.create() -> HostProvider.env, which
+// throws an unhandled rejection at the end of the test run.
+// CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED): fix the unhandled rejection
+// so the conservation gate produces a CLEAN executable evidence (no
+// `Errors 1` artifact).
+vi.mock("@services/telemetry", () => ({
+	TerminalUserInterventionAction: { PROCESS_WHILE_RUNNING: "process_while_running" },
+	telemetryService: {
+		captureTerminalUserIntervention: () => {},
+		captureTerminalExecution: () => {},
 	},
 }))
 
@@ -150,13 +163,12 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 	const discardCalls: Array<{ sessionId: string; jobId: string }> = []
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: ({ sessionId, prompt }) => wakeSink.enqueue({ sessionId, prompt }),
+		enqueueTerminalWake: ({ sessionId, prompt }) =>
+			Promise.resolve(wakeSink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 		discardQueuedWake: ({ sessionId, jobId }) => {
 			discardCalls.push({ sessionId, jobId })
 			const removed = wakeSink.discardByJobId(sessionId, jobId)
-			return removed
-				? { kind: "discarded", jobId, promptId: undefined }
-				: { kind: "not_found", jobId }
+			return removed ? { kind: "discarded", jobId, promptId: undefined } : { kind: "not_found", jobId }
 		},
 		now: () => ++now,
 	})
@@ -199,14 +211,15 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		// be held. The harness returns a `PendingPromptCountRead`
 		// shape (matching the production type) so the
 		// availability-aware predicate can be exercised.
-		getPendingPromptCount: opts.pendingPromptAuthorityAvailable === false
-			? (() => ({ available: false as const }) as unknown as PendingPromptCountRead)
-			: (() => ({ available: true as const, count: 0 }) as unknown as PendingPromptCountRead),
+		getPendingPromptCount:
+			opts.pendingPromptAuthorityAvailable === false
+				? () => ({ available: false as const }) as unknown as PendingPromptCountRead
+				: () => ({ available: true as const, count: 0 }) as unknown as PendingPromptCountRead,
 		getActiveNotifyCount: ((sessionId?: string, taskId?: string): number =>
-			notifyCoordinator.activeNotifyCountForOwner(
-				sessionId ?? activeSessionId,
-				taskId ?? activeTaskId,
-			)) as unknown as (sessionId: string | undefined, taskId: string | undefined) => number,
+			notifyCoordinator.activeNotifyCountForOwner(sessionId ?? activeSessionId, taskId ?? activeTaskId)) as unknown as (
+			sessionId: string | undefined,
+			taskId: string | undefined,
+		) => number,
 	} as unknown as SdkSessionEventCoordinatorOptions)
 
 	return {
@@ -819,15 +832,11 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			}
 			list(sessionId: string): Array<{ id: string; prompt: string }> {
 				this.listCalls.push({ sessionId })
-				return this.items
-					.filter((q) => q.sessionId === sessionId)
-					.map((q) => ({ id: q.id, prompt: q.prompt }))
+				return this.items.filter((q) => q.sessionId === sessionId).map((q) => ({ id: q.id, prompt: q.prompt }))
 			}
 			delete(input: { sessionId: string; promptId: string }): void {
 				this.deleteCalls.push(input)
-				const idx = this.items.findIndex(
-					(q) => q.sessionId === input.sessionId && q.id === input.promptId,
-				)
+				const idx = this.items.findIndex((q) => q.sessionId === input.sessionId && q.id === input.promptId)
 				if (idx >= 0) {
 					this.items.splice(idx, 1)
 				}
@@ -842,10 +851,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 
 		function makeRealSdkHost(queue: RealQueue) {
 			return {
-				pendingPrompts: (
-					action: "list" | "delete",
-					input: { sessionId: string; promptId?: string },
-				) => {
+				pendingPrompts: (action: "list" | "delete", input: { sessionId: string; promptId?: string }) => {
 					if (action === "list") {
 						return queue.list(input.sessionId)
 					}
@@ -910,7 +916,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			// SdkController.ts:1204-1206 (CORRECTION02 wiring).
 			const notifyCoordinator = new BackgroundNotifyCoordinator({
 				resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-				enqueueTerminalWake: ({ sessionId, prompt }) => {
+				enqueueTerminalWake: async ({ sessionId, prompt }) => {
 					// Transport-side enqueue for the harness:
 					// deposit into the production-shaped
 					// `sdkHost.pendingPrompts` queue. This is
@@ -919,6 +925,8 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 					// the canonical queue visible to
 					// `pendingPrompts("list")`.
 					queue.enqueue({ sessionId, prompt })
+
+					return { kind: "delivered" as const }
 				},
 				discardQueuedWake: ({ sessionId, jobId }) => {
 					// PRODUCTION ADAPTER UNDER TEST.
@@ -1016,9 +1024,7 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 
 			const listedAfter = queue.list(activeSessionId)
 			expect(listedAfter.length).toBe(0)
-			expect(
-				queue.containsPrompt(activeSessionId, (p) => p.includes(`Job: ${start.jobId}`)),
-			).toBe(false)
+			expect(queue.containsPrompt(activeSessionId, (p) => p.includes(`Job: ${start.jobId}`))).toBe(false)
 
 			// 7. ASSERTION 3 — the coordinator's
 			//    `wakeEnqueuedJobIds` tracker no longer

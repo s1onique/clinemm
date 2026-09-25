@@ -177,7 +177,8 @@ function makeHarness(opts: HarnessOptions = {}): Harness {
 			sessionId: currentSessionId,
 			taskId: currentTaskId,
 		}),
-		enqueueTerminalWake: ({ sessionId, prompt }) => sink.enqueue({ sessionId, prompt }),
+		enqueueTerminalWake: ({ sessionId, prompt }) =>
+			Promise.resolve(sink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 		recordNotifyDecision: (record) => decisions.push(record),
 		// Deterministic timestamps so FIFO ordering is reproducible.
 		now: (() => {
@@ -742,7 +743,8 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 					sessionId: "session-bcnt01-natural",
 					taskId: "task-bcnt01-natural",
 				}),
-				enqueueTerminalWake: ({ sessionId, prompt }) => sink.enqueue({ sessionId, prompt }),
+				enqueueTerminalWake: ({ sessionId, prompt }) =>
+					Promise.resolve(sink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 				recordNotifyDecision: () => {},
 			})
 			try {
@@ -826,7 +828,8 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 					sessionId: "session-bcnt01-deadline01",
 					taskId: "task-bcnt01-deadline01",
 				}),
-				enqueueTerminalWake: ({ sessionId, prompt }) => sink.enqueue({ sessionId, prompt }),
+				enqueueTerminalWake: ({ sessionId, prompt }) =>
+					Promise.resolve(sink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 				recordNotifyDecision: () => {},
 			})
 			try {
@@ -898,7 +901,8 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 					sessionId: "session-bcnt01-deadline02",
 					taskId: "task-bcnt01-deadline02",
 				}),
-				enqueueTerminalWake: ({ sessionId, prompt }) => sink.enqueue({ sessionId, prompt }),
+				enqueueTerminalWake: ({ sessionId, prompt }) =>
+					Promise.resolve(sink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 				recordNotifyDecision: () => {},
 			})
 			realCoordinator.registerMarker({
@@ -948,7 +952,8 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 					sessionId: "session-bcnt01-fast",
 					taskId: "task-bcnt01-fast",
 				}),
-				enqueueTerminalWake: ({ sessionId, prompt }) => sink.enqueue({ sessionId, prompt }),
+				enqueueTerminalWake: ({ sessionId, prompt }) =>
+					Promise.resolve(sink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 				recordNotifyDecision: (record) => decisions.push(record),
 			})
 			try {
@@ -1049,10 +1054,10 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			//     Logger.warn
 			const coordinator = new CoordinatorCtor({
 				resolveActiveOwner: () => (activeSession ? { sessionId: activeSession.sessionId, taskId } : undefined),
-				enqueueTerminalWake: ({ sessionId: wakeSessionId, prompt }) => {
+				enqueueTerminalWake: async ({ sessionId: wakeSessionId, prompt }) => {
 					const active = activeSession
 					if (!active || active.sessionId !== wakeSessionId) {
-						return
+						return { kind: "delivered" as const }
 					}
 					try {
 						void active.sdkHost
@@ -1071,6 +1076,8 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 							}`,
 						)
 					}
+
+					return { kind: "delivered" as const }
 				},
 			})
 			coordinator.registerMarker({
@@ -1121,12 +1128,14 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			const coordinator = new CoordinatorCtor({
 				resolveActiveOwner: () =>
 					activeSession ? { sessionId: activeSession.sessionId, taskId: "task-bcnt01-wire02" } : undefined,
-				enqueueTerminalWake: ({ sessionId: wakeSessionId, prompt }) => {
+				enqueueTerminalWake: async ({ sessionId: wakeSessionId, prompt }) => {
 					const active = activeSession
 					if (!active || active.sessionId !== wakeSessionId) {
-						return
+						return { kind: "delivered" as const }
 					}
 					void active.sdkHost.send({ sessionId: wakeSessionId, prompt, delivery: "queue" })
+
+					return { kind: "delivered" as const }
 				},
 			})
 			// Marker was registered for the OLD session. The
@@ -1174,7 +1183,10 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01", () => {
 			const sink = new TestPendingPromptsSink()
 			const coordinator = new CoordinatorCtor({
 				resolveActiveOwner: () => ({ sessionId, taskId }),
-				enqueueTerminalWake: ({ sessionId: wakeSessionId, prompt }) => sink.enqueue({ sessionId: wakeSessionId, prompt }),
+				enqueueTerminalWake: ({ sessionId: wakeSessionId, prompt }) =>
+					Promise.resolve(sink.enqueue({ sessionId: wakeSessionId, prompt })).then(() => ({
+						kind: "delivered" as const,
+					})),
 				recordNotifyDecision: () => {},
 			})
 			try {

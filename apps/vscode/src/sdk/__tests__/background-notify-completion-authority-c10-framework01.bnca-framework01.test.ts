@@ -99,9 +99,11 @@ function makeHarness(): ProductionHarness {
 	let completionCommitCount = 0
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: () => {
+		enqueueTerminalWake: async () => {
 			// Wake delivered to PendingPromptsController (mirror of
 			// SdkController.ts:738 fire-and-forget send).
+
+			return { kind: "delivered" as const }
 		},
 		now: () => Date.now(),
 	})

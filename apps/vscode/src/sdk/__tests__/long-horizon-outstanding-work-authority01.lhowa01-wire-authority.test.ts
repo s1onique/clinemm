@@ -171,7 +171,8 @@ function makeWireHarness(opts: { activeSessionId?: string; activeTaskId?: string
 	let now = 0
 	const notifyCoordinator = new BackgroundNotifyCoordinator({
 		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-		enqueueTerminalWake: ({ sessionId, prompt }) => queue.enqueue({ sessionId, prompt }),
+		enqueueTerminalWake: ({ sessionId, prompt }) =>
+			Promise.resolve(queue.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 		now: () => ++now,
 	})
 

@@ -197,10 +197,11 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * completion-commit seam (the
 	 * `setTurnPhase("completed", ...)` barrier at
 	 * `sdk-session-event-coordinator.ts:691-733`). Returns true
-	 * iff Path A has successfully enqueued a wake into
-	 * PendingPromptsController for the given `jobId`. When true,
-	 * the originating turn's completion commit is SUPPRESSED
-	 * because the wake-driven turn owns terminal completion for J.
+	 * iff Path A's async transport has resolved with "delivered"
+	 * for the given `jobId` (i.e. the wake actually landed in
+	 * PendingPromptsController). When true, the originating
+	 * turn's completion commit is SUPPRESSED because the
+	 * wake-driven turn owns terminal completion for J.
 	 *
 	 * Wired by `SdkController` to a thin adapter that delegates
 	 * to `BackgroundNotifyCoordinator.wasWakeDelivered(jobId)`.
@@ -212,6 +213,44 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * flight). Tests that omit this option remain deterministic.
 	 */
 	wasWakeDelivered?: (jobId: string) => boolean
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Per-job wake-dispatch-requested probe consulted at the C10
+	 * completion-commit seam. Returns true iff the host's
+	 * `enqueueTerminalWake(...)` callback was invoked for the
+	 * given `jobId` BUT the async delivery ack has not yet
+	 * resolved (dispatch in flight).
+	 *
+	 * When true, the C10 barrier HOLDS the originating turn's
+	 * completion commit (waiting for the ack to resolve). This
+	 * is the three-state contract boundary: REQUESTED ≠
+	 * DELIVERED ≠ FAILED.
+	 *
+	 * Wired by `SdkController` to a thin adapter that delegates
+	 * to `BackgroundNotifyCoordinator.wasWakeDispatchRequested(jobId)`.
+	 */
+	wasWakeDispatchRequested?: (jobId: string) => boolean
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Per-job wake-dispatch-failed probe consulted at the C10
+	 * completion-commit seam. Returns true iff the host's async
+	 * transport resolved with "rejected" or "session_gone" for
+	 * the given `jobId` (the wake is LOST; no wake-driven turn
+	 * will fire).
+	 *
+	 * When true, the C10 barrier ALLOWS the originating turn's
+	 * completion commit so the originator becomes the canonical
+	 * terminal-completion authority for J (semantic completion
+	 * count is 1, not 0).
+	 *
+	 * Wired by `SdkController` to a thin adapter that delegates
+	 * to `BackgroundNotifyCoordinator.wasWakeDispatchFailed(jobId)`.
+	 */
+	wasWakeDispatchFailed?: (jobId: string) => boolean
 	/**
 	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
 	 *
@@ -434,10 +473,21 @@ export class SdkSessionEventCoordinator {
 		if (launchedBackgroundJobIds.length > 0) {
 			for (const jid of launchedBackgroundJobIds) {
 				if (this.options.hasActiveNotify?.(jid)) {
+					// Case 1: marker alive.
+					perJobOutstandingNotifyWork = true
+				} else if (
+					this.options.wasWakeDispatchRequested?.(jid) === true &&
+					this.options.wasWakeDelivered?.(jid) !== true &&
+					this.options.wasWakeDispatchFailed?.(jid) !== true
+				) {
+					// CORRECTION03: dispatch REQUESTED, ack pending.
 					perJobOutstandingNotifyWork = true
 				} else if (this.options.wasWakeDelivered?.(jid)) {
+					// Case 3: wake-driven turn owns completion.
 					perJobSuppressOriginatingCompletion = true
 				}
+				// Case 4 (wasWakeDispatchFailed): ALLOW. Wake lost.
+				// Case 5 (isWakeAuthoritySettled via discard): ALLOW.
 			}
 		}
 		const outstandingAutonomousWork =
@@ -815,21 +865,36 @@ export class SdkSessionEventCoordinator {
 										// Case 1: wake authority in flight
 										// (Path A will enqueue).
 										perJobOutstandingNotifyWork = true
+									} else if (
+										this.options.wasWakeDispatchRequested?.(jid) === true &&
+										this.options.wasWakeDelivered?.(jid) !== true &&
+										this.options.wasWakeDispatchFailed?.(jid) !== true
+									) {
+										// CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+										// dispatch REQUESTED, ack pending. HOLD until
+										// ack resolves. Load-bearing fix: prior ROUND 2
+										// conflated REQUESTED with DELIVERED which would
+										// SUPPRESS the originator while wake was still
+										// in flight — a lost wake would produce 0
+										// completions for J.
+										perJobOutstandingNotifyWork = true
 									} else if (this.options.wasWakeDelivered?.(jid)) {
-										// Case 2: wake-driven turn owns
-										// terminal completion for this
-										// jobId. The originator MUST NOT
-										// commit its own completion —
-										// SUPPRESS (barrier held forever
-										// for this jobId).
+										// Case 3: wake-driven turn owns terminal
+										// completion for this jobId. SUPPRESS (barrier
+										// held forever for this jobId).
 										perJobSuppressOriginatingCompletion = true
 									}
-									// Case 3: isWakeAuthoritySettled
-									// would mean originator may commit,
-									// but the originator has already
-									// entered this branch (commitment
-									// attempt) — we still ALLOW if no
-									// other predicate holds.
+									// Case 4 (wasWakeDispatchFailed): ALLOW. We do
+									// NOT set perJobOutstandingNotifyWork and do NOT
+									// set perJobSuppressOriginatingCompletion. The wake
+									// is lost; the originator must commit; semantic
+									// completion count for J becomes exactly 1.
+									//
+									// Case 5 (isWakeAuthoritySettled via discard):
+									// originator may commit. We do NOT set either
+									// flag here — the originating turn has already
+									// entered this branch (commitment attempt) and
+									// will be ALLOWED if no other predicate holds.
 								}
 							}
 							const outstandingAutonomousWork =

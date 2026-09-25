@@ -716,39 +716,56 @@ export function buildSdkControllerEnqueueTerminalWake(options: {
 	 * Tests inject a recording sink to assert swallow semantics.
 	 */
 	logger: { warn: (message: string) => void }
-}): (input: { sessionId: string; prompt: string; jobId?: string }) => void {
+}): (input: { sessionId: string; prompt: string; jobId?: string }) => Promise<{
+	kind: "delivered" | "rejected" | "session_gone"
+}> {
 	return ({ sessionId, prompt, jobId }) => {
 		const active = options.getActiveSession()
 		if (!active || active.sessionId !== sessionId) {
 			// Owner has been replaced between marker
 			// registration and terminal completion —
-			// silent drop is the documented v1 contract
-			// for cross-task/cross-session notification.
-			return
+			// session_gone is the documented v1 contract for
+			// cross-task/cross-session notification. The
+			// BackgroundNotifyCoordinator treats this as a
+			// DISPATCH_FAILURE (CORRECTION03
+			// HALT_WAKE_DELIVERY_ACK_PROMOTED): the wake is
+			// LOST, the originator MUST be ALLOWED to commit
+			// its own completion so semantic completion count
+			// for J remains exactly 1 (not 0).
+			return Promise.resolve({ kind: "session_gone" })
 		}
-		try {
-			// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
-			// forward the originating jobId to sdkHost.send so
-			// LocalRuntimeHost.runTurn receives it on
-			// SendSessionInput.jobId. Without this, the wake
-			// reaches PendingPromptsController but the C4/C5/C6
-			// capture hooks observe jobId === undefined and
-			// deriveOrigin falls through to "explicit_user" at
-			// C7/C8.
-			void active.sdkHost.send({ sessionId, prompt, delivery: "queue", jobId }).catch((error: unknown) => {
+		// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
+		// forward the originating jobId to sdkHost.send so
+		// LocalRuntimeHost.runTurn receives it on
+		// SendSessionInput.jobId. Without this, the wake
+		// reaches PendingPromptsController but the C4/C5/C6
+		// capture hooks observe jobId === undefined and
+		// deriveOrigin falls through to "explicit_user" at
+		// C7/C8.
+		//
+		// CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED): the
+		// production transport at this seam is fire-and-forget
+		// `void ... .catch(...)`. We now AWAIT the promise
+		// and forward the ack back to the coordinator via the
+		// returned Promise<EnqueueTerminalWakeOutcome>. The
+		// coordinator uses the ack to drive the three-state
+		// tracker (REQUESTED → DELIVERED | FAILED).
+		return active.sdkHost
+			.send({ sessionId, prompt, delivery: "queue", jobId })
+			.then(() => ({ kind: "delivered" as const }))
+			.catch((error: unknown) => {
+				// ACT-CLINEMM-CONTINUATION-CARDINALITY-AUTHORITY01
+				// / CORRECTION02: dispatch failure → DISPATCH_FAILED.
+				// The coordinator will ALLOW the originator's
+				// completion (so semantic completion count for J is
+				// exactly 1, not 0).
 				options.logger.warn(
 					`[SdkController] enqueueTerminalWake send() rejected for sessionId=${sessionId}: ${
 						error instanceof Error ? error.message : String(error)
 					}`,
 				)
+				return { kind: "rejected" as const }
 			})
-		} catch (error) {
-			options.logger.warn(
-				`[SdkController] enqueueTerminalWake send() threw for sessionId=${sessionId}: ${
-					error instanceof Error ? error.message : String(error)
-				}`,
-			)
-		}
 	}
 }
 
@@ -2318,6 +2335,21 @@ export class Controller {
 			// false when the coordinator is not yet wired (early
 			// lifecycle).
 			wasWakeDelivered: (jobId: string) => this.backgroundNotifyCoordinator?.wasWakeDelivered(jobId) ?? false,
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+			// CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+			// Per-job wake-dispatch-requested probe consumed by
+			// the C10 barrier. Returns true iff the wake callback
+			// was invoked but the async ack has NOT YET resolved.
+			wasWakeDispatchRequested: (jobId: string) =>
+				this.backgroundNotifyCoordinator?.wasWakeDispatchRequested(jobId) ?? false,
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+			// CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+			// Per-job wake-dispatch-failed probe consumed by the
+			// C10 barrier. Returns true iff the wake is LOST
+			// (transport rejection or session gone). When true,
+			// the C10 barrier ALLOWS the originating turn's
+			// completion so semantic completion count for J is 1.
+			wasWakeDispatchFailed: (jobId: string) => this.backgroundNotifyCoordinator?.wasWakeDispatchFailed(jobId) ?? false,
 			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
 			// Per-job wake-authority settled probe consumed by the
 			// C10 completion-commit barrier. Returns false when the

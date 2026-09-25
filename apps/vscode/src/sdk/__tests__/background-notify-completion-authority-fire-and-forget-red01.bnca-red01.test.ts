@@ -97,8 +97,10 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 		const coordinator = new BackgroundNotifyCoordinator({
 			resolveActiveOwner: () => ({ sessionId, taskId }),
 			// Fire-and-forget enqueue: mirror of SdkController.ts:738
-			enqueueTerminalWake: ({ sessionId, prompt }) => {
+			enqueueTerminalWake: async ({ sessionId, prompt }) => {
 				void sink.enqueue({ sessionId, prompt })
+
+				return { kind: "delivered" as const }
 			},
 			// Mirror of discardQueuedWakeForJobIdOnHost: list() sync,
 			// delete() NOT awaited.
@@ -183,9 +185,11 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-RED
 
 		const coordinator = new BackgroundNotifyCoordinator({
 			resolveActiveOwner: () => ({ sessionId, taskId }),
-			enqueueTerminalWake: ({ sessionId, prompt }) => {
+			enqueueTerminalWake: async ({ sessionId, prompt }) => {
 				const id = `pending_${++nextId}`
 				sinkEntries.push({ sessionId, prompt, id })
+
+				return { kind: "delivered" as const }
 			},
 			discardQueuedWake: ({ sessionId, jobId }) => {
 				const idx = sinkEntries.findIndex(

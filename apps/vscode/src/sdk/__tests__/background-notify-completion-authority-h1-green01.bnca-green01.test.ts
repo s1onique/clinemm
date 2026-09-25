@@ -108,7 +108,8 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-GRE
 		let now = 0
 		const notifyCoordinator = new BackgroundNotifyCoordinator({
 			resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-			enqueueTerminalWake: ({ sessionId, prompt }) => wakeSink.enqueue({ sessionId, prompt }),
+			enqueueTerminalWake: ({ sessionId, prompt }) =>
+				Promise.resolve(wakeSink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 			discardQueuedWake: ({ sessionId, jobId }) => {
 				const removed = wakeSink.discardByJobId(sessionId, jobId)
 				return removed
@@ -216,7 +217,8 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-GRE
 		let now = 0
 		const notifyCoordinator = new BackgroundNotifyCoordinator({
 			resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-			enqueueTerminalWake: ({ sessionId, prompt }) => wakeSink.enqueue({ sessionId, prompt }),
+			enqueueTerminalWake: ({ sessionId, prompt }) =>
+				Promise.resolve(wakeSink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 			now: () => ++now,
 		})
 
@@ -268,7 +270,8 @@ describe("ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 / BNCA-GRE
 		let now = 0
 		const notifyCoordinator = new BackgroundNotifyCoordinator({
 			resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
-			enqueueTerminalWake: ({ sessionId, prompt }) => wakeSink.enqueue({ sessionId, prompt }),
+			enqueueTerminalWake: ({ sessionId, prompt }) =>
+				Promise.resolve(wakeSink.enqueue({ sessionId, prompt })).then(() => ({ kind: "delivered" as const })),
 			now: () => ++now,
 		})
 

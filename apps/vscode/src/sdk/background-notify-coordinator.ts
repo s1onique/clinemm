@@ -113,6 +113,26 @@ export type ConsumeTerminalDecision =
 	| { kind: "drained"; jobId: string; drainedCount: number; enqueuedNow: boolean }
 
 /**
+ * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+ * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+ *
+ * Transport-layer dispatch-ack outcomes. OUT OF BAND for
+ * `ConsumeTerminalDecision` (the latter is about marker-layer
+ * arbitration; wake-dispatch ack is about transport-layer
+ * acceptance). Recorded into the same `NotifyDecisionRecord`
+ * audit sink under the `wake_dispatch_*` kind prefix.
+ */
+export type WakeDispatchDecision =
+	| "wake_dispatch_delivered"
+	| "wake_dispatch_rejected"
+	| "wake_dispatch_session_gone"
+	| "wake_dispatch_sync_throw"
+	| "wake_dispatch_promise_rejected"
+
+/** Decision kind union for `NotifyDecisionRecord.decision`. */
+export type NotifyDecisionKind = ConsumeTerminalDecision["kind"] | WakeDispatchDecision
+
+/**
  * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
  *
  * Distinct resolution paths are tracked explicitly so the runtime can
@@ -256,7 +276,7 @@ export type NotifyDecisionRecord = {
 	jobId: string
 	sessionId: string
 	taskId: string | undefined
-	decision: ConsumeTerminalDecision["kind"]
+	decision: NotifyDecisionKind
 	reason: string | undefined
 	heldCount: number
 	activeNotifyCount: number
@@ -293,8 +313,47 @@ export interface BackgroundNotifyCoordinatorOptions {
 	 * mirror this contract don't necessarily thread a jobId; in
 	 * production `BackgroundNotifyCoordinator.consumeTerminal`
 	 * ALWAYS supplies jobId (every wake has a jobId).
+	 *
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * The return value is the dispatch acknowledgment. The
+	 * coordinator distinguishes three states:
+	 *
+	 *   1. INVOKED → DISPATCH_REQUESTED: the callback was
+	 *      invoked synchronously. The wake is REQUESTED but
+	 *      NOT YET DELIVERED to PendingPromptsController.
+	 *      The C10 barrier HOLDS the originating turn's
+	 *      completion commit until the acknowledgment resolves.
+	 *
+	 *   2. `Promise<{ kind: "delivered" }>` → DELIVERED: the
+	 *      host's underlying transport (sdkHost.send) accepted
+	 *      the wake and routed it to PendingPromptsController.
+	 *      The wake-driven turn is the canonical terminal
+	 *      completion authority for J — the originating turn's
+	 *      completion commit MUST be SUPPRESSED.
+	 *
+	 *   3. `Promise<{ kind: "rejected" | "session_gone" }>` →
+	 *      DISPATCH_FAILED: the wake is LOST (transport
+	 *      rejection, session gone, etc.). No wake-driven turn
+	 *      will fire. The C10 barrier MUST ALLOW the originating
+	 *      turn's completion commit so the originator becomes
+	 *      the canonical authority for J (otherwise the
+	 *      semantic terminal completion count would drop to 0).
+	 *
+	 * Honoring the boundary: the previous ROUND 2 conflated
+	 * REQUESTED with DELIVERED. The production transport at
+	 * `SdkController.ts:738` is fire-and-forget
+	 * `void active.sdkHost.send(...).catch(...)` — the
+	 * coordinator had no signal that the async send had
+	 * actually landed. This three-state contract makes the
+	 * boundary explicit at the type level.
 	 */
-	enqueueTerminalWake: (input: { sessionId: string; prompt: string; jobId?: string }) => void
+	enqueueTerminalWake: (input: {
+		sessionId: string
+		prompt: string
+		jobId?: string
+	}) => Promise<{ kind: "delivered" | "rejected" | "session_gone" }>
 	/**
 	 * ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 / CORRECTION02:
 	 *
@@ -402,43 +461,104 @@ export class BackgroundNotifyCoordinator {
 	 */
 	private readonly wakeAuthoritySettledJobIds = new Set<string>()
 	/**
-	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
 	 *
-	 * Per-job wake-delivered tracker. A jobId is added here
-	 * ONLY when Path A successfully enqueued the wake into
-	 * PendingPromptsController. This is the SOLE source of
-	 * authority for "wake-driven turn will own terminal
-	 * completion for J" — when this set contains J, the
-	 * originating turn's C10 completion commit MUST be
-	 * SUPPRESSED (not deferred, but redirected) so the
-	 * wake-driven turn becomes the canonical authority.
+	 * Per-job wake-DISPATCH-REQUESTED tracker. A jobId is added
+	 * here synchronously when `enqueueTerminalWake(...)` is
+	 * invoked — at that moment the wake is REQUESTED but NOT
+	 * YET DELIVERED to PendingPromptsController. The async
+	 * ack (`Promise<{ kind: "delivered" | "rejected" | "session_gone" }>`)
+	 * then either promotes the jobId to `wakeDeliveredJobIds`
+	 * (delivered) or `wakeDispatchFailedJobIds` (rejected /
+	 * session_gone).
 	 *
-	 * Distinction from `wakeAuthoritySettledJobIds`:
+	 * Honoring the boundary: the prior ROUND 2 conflated
+	 * REQUESTED with DELIVERED because the production transport
+	 * at `SdkController.ts:738` is fire-and-forget
+	 * `void active.sdkHost.send(...).catch(...)`. The
+	 * coordinator had no acknowledgment signal so it marked the
+	 * job as "delivered" at the moment of callback invocation.
+	 * When the async send later rejected, the originating turn's
+	 * completion had already been SUPPRESSED — cardinality
+	 * dropped to 0 (HALT_WAKE_DELIVERY_ACK_PROMOTED).
 	 *
-	 *   `wakeAuthoritySettledJobIds` ⊇ `wakeDeliveredJobIds`
-	 *   (a jobId settled via discard is settled but NOT
-	 *   delivered; the originating turn may then commit).
+	 * The three tracker design fixes this:
 	 *
-	 * The C10 barrier consults both:
+	 *   - `wakeDispatchRequestedJobIds` (this set): set
+	 *     synchronously at callback invocation.
+	 *   - `wakeDeliveredJobIds`: set when the host calls
+	 *     `markWakeDelivered(J)` after the underlying async
+	 *     transport resolves with "delivered".
+	 *   - `wakeDispatchFailedJobIds`: set when the host calls
+	 *     `markWakeDispatchFailed(J)` after the underlying
+	 *     async transport rejects or the session is gone.
+	 *
+	 * C10 barrier consults:
 	 *
 	 *   for each notify-owned jobId J launched by THIS turn:
 	 *     if hasActiveNotify(J):
-	 *       # wake authority is in flight (Path A will enqueue)
+	 *       # wake authority in flight (Path A will request)
 	 *       HOLD until settled
+	 *     elif wakeDispatchRequestedJobIds.has(J)
+	 *          && !wakeDeliveredJobIds.has(J)
+	 *          && !wakeDispatchFailedJobIds.has(J):
+	 *       # ACK in flight: dispatch requested, no settle yet
+	 *       HOLD (waiting for ack to resolve)
 	 *     elif wakeDeliveredJobIds.has(J):
-	 *       # wake-driven turn owns completion — the originating
-	 *       # turn's completion commit MUST be SUPPRESSED.
-	 *       SUPPRESS (the wake-driven turn is the authority)
+	 *       # Wake-driven turn owns completion for J.
+	 *       # Originating turn MUST be SUPPRESSED.
+	 *       SUPPRESS
+	 *     elif wakeDispatchFailedJobIds.has(J):
+	 *       # Wake LOST. No wake-driven turn will fire.
+	 *       # Originating turn MUST be ALLOWED to commit
+	 *       # (otherwise semantic completion count drops to 0).
+	 *       ALLOW (and record via recordNotifyDecision)
 	 *     elif wakeAuthoritySettledJobIds.has(J):
-	 *       # Path B won (wake was discarded OR marker drained
-	 *       # without enqueueing); originating turn may commit.
+	 *       # Path B won (wake discarded OR marker drained
+	 *       # without enqueueing); originator may commit.
 	 *       ALLOW
 	 *     else:
-	 *       # Race window: marker gone but settle not yet
-	 *       # recorded. Conservative HOLD.
+	 *       # Race window: marker gone but no settle. Conservative.
 	 *       HOLD
 	 */
+	private readonly wakeDispatchRequestedJobIds = new Set<string>()
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Per-job wake-delivered tracker. A jobId is added here
+	 * ONLY when the host's async transport resolves with
+	 * "delivered" — i.e. the wake actually landed in
+	 * PendingPromptsController and a wake-driven turn is
+	 * forthcoming. This is the SOLE source of authority for
+	 * "wake-driven turn WILL own terminal completion for J" —
+	 * when this set contains J, the originating turn's C10
+	 * completion commit MUST be SUPPRESSED (not deferred, but
+	 * redirected) so the wake-driven turn becomes the canonical
+	 * authority.
+	 *
+	 * Populated by `markWakeDelivered(jobId)` which the host
+	 * MUST call after the underlying `sdkHost.send(...)` resolves
+	 * successfully.
+	 */
 	private readonly wakeDeliveredJobIds = new Set<string>()
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Per-job wake-dispatch-failed tracker. A jobId is added
+	 * here when the host's async transport resolves with
+	 * "rejected" or "session_gone" — i.e. the wake is LOST.
+	 * No wake-driven turn will fire for J. The originating
+	 * turn MUST be ALLOWED to commit its own completion so the
+	 * semantic terminal completion count for J is 1 (not 0).
+	 *
+	 * Populated by `markWakeDispatchFailed(jobId)` which the
+	 * host MUST call after the underlying `sdkHost.send(...)`
+	 * rejects or the session is gone.
+	 */
+	private readonly wakeDispatchFailedJobIds = new Set<string>()
 	private readonly options: Required<Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">> &
 		Pick<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">
 	private disposed = false
@@ -505,12 +625,12 @@ export class BackgroundNotifyCoordinator {
 	}
 
 	/**
-	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
 	 *
-	 * Wake-delivered probe — returns true iff Path A has
-	 * successfully enqueued a wake into
-	 * PendingPromptsController for the given `jobId`. The C10
-	 * completion-commit barrier at
+	 * Wake-delivered probe — returns true iff Path A's async
+	 * transport has resolved with "delivered" for `jobId`. The
+	 * C10 completion-commit barrier at
 	 * `sdk-session-event-coordinator.ts:691-733` consults this
 	 * to SUPPRESS the originating turn's `submit_and_exit` when
 	 * the wake-driven turn owns terminal completion for J.
@@ -519,8 +639,9 @@ export class BackgroundNotifyCoordinator {
 	 *
 	 *   - `hasActiveNotify(J)` → marker is alive (wake authority
 	 *     in flight; barrier HOLDS originating turn).
-	 *   - `wasWakeDelivered(J)` → marker gone AND wake was
-	 *     delivered to pendingPrompts (wake-driven turn is the
+	 *   - `wasWakeDelivered(J)` → marker gone AND host
+	 *     acknowledged the wake was delivered to
+	 *     PendingPromptsController (wake-driven turn is the
 	 *     authority; originating turn's completion is
 	 *     SUPPRESSED).
 	 *
@@ -536,6 +657,114 @@ export class BackgroundNotifyCoordinator {
 			return false
 		}
 		return this.wakeDeliveredJobIds.has(jobId)
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Wake-dispatch-requested probe — returns true iff the
+	 * host's enqueueTerminalWake callback was invoked for
+	 * `jobId` BUT the async delivery ack has NOT YET resolved.
+	 * During this in-flight window, the C10 barrier HOLDS the
+	 * originating turn's completion commit (waiting for ack).
+	 *
+	 * Once the ack resolves the jobId moves out of this set
+	 * into either `wakeDeliveredJobIds` (delivered) or
+	 * `wakeDispatchFailedJobIds` (rejected/session_gone).
+	 *
+	 * Internal-only (process-ephemeral). Exposed narrowly to
+	 * the SdkSessionEventCoordinator via the
+	 * `wasWakeDispatchRequested` option.
+	 */
+	wasWakeDispatchRequested(jobId: string): boolean {
+		if (!jobId || typeof jobId !== "string") {
+			return false
+		}
+		if (this.disposed) {
+			return false
+		}
+		return this.wakeDispatchRequestedJobIds.has(jobId)
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Wake-dispatch-failed probe — returns true iff the host's
+	 * async transport resolved with "rejected" or "session_gone"
+	 * for `jobId`. The wake is LOST; no wake-driven turn will
+	 * fire. The C10 barrier ALLOWS the originating turn's
+	 * completion commit so the semantic terminal completion
+	 * count for J is 1 (not 0).
+	 *
+	 * Internal-only (process-ephemeral). Exposed narrowly to
+	 * the SdkSessionEventCoordinator via the
+	 * `wasWakeDispatchFailed` option.
+	 */
+	wasWakeDispatchFailed(jobId: string): boolean {
+		if (!jobId || typeof jobId !== "string") {
+			return false
+		}
+		if (this.disposed) {
+			return false
+		}
+		return this.wakeDispatchFailedJobIds.has(jobId)
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Host-driven mutator: promote a dispatch-requested jobId
+	 * to "delivered" once the underlying async transport
+	 * (sdkHost.send) resolves successfully. Removes the jobId
+	 * from `wakeDispatchRequestedJobIds` and adds it to
+	 * `wakeDeliveredJobIds`. The C10 barrier will then SUPPRESS
+	 * the originating turn (wake-driven turn owns).
+	 *
+	 * Returns true iff the jobId was transitioned. Safe to call
+	 * for a jobId that was never dispatch-requested (no-op
+	 * false). Safe to call after dispose (no-op false).
+	 */
+	markWakeDelivered(jobId: string): boolean {
+		if (!jobId || typeof jobId !== "string" || this.disposed) {
+			return false
+		}
+		if (!this.wakeDispatchRequestedJobIds.has(jobId)) {
+			return false
+		}
+		this.wakeDispatchRequestedJobIds.delete(jobId)
+		this.wakeDeliveredJobIds.add(jobId)
+		return true
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Host-driven mutator: promote a dispatch-requested jobId
+	 * to "dispatch_failed" once the underlying async transport
+	 * rejects or the session is gone. Removes the jobId from
+	 * `wakeDispatchRequestedJobIds` and adds it to
+	 * `wakeDispatchFailedJobIds`. The C10 barrier will then
+	 * ALLOW the originating turn to commit (no wake-driven turn
+	 * will fire for J).
+	 *
+	 * Returns true iff the jobId was transitioned. Safe to call
+	 * for a jobId that was never dispatch-requested (no-op
+	 * false). Safe to call after dispose (no-op false).
+	 */
+	markWakeDispatchFailed(jobId: string): boolean {
+		if (!jobId || typeof jobId !== "string" || this.disposed) {
+			return false
+		}
+		if (!this.wakeDispatchRequestedJobIds.has(jobId)) {
+			return false
+		}
+		this.wakeDispatchRequestedJobIds.delete(jobId)
+		this.wakeDispatchFailedJobIds.add(jobId)
+		return true
 	}
 
 	/**
@@ -566,6 +795,138 @@ export class BackgroundNotifyCoordinator {
 
 	heldCountForOwner(sessionId: string, taskId: string | undefined): number {
 		return this.heldTerminalResults.get(ownerKey(sessionId, taskId))?.length ?? 0
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+	 * CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+	 *
+	 * Synchronously invoke the host's `enqueueTerminalWake`
+	 * callback and update the three trackers
+	 * (`wakeDispatchRequestedJobIds`,
+	 * `wakeDeliveredJobIds`, `wakeDispatchFailedJobIds`,
+	 * `wakeEnqueuedJobIds`, `wakeAuthoritySettledJobIds`) based
+	 * on the async ack.
+	 *
+	 * This method honors the three-state boundary that the
+	 * production transport (`SdkController.ts:738` fire-and-forget
+	 * `void active.sdkHost.send(...).catch(...)`) previously
+	 * obscured. The tracker state machine is:
+	 *
+	 *   1. Synchronously: add to `wakeDispatchRequestedJobIds`
+	 *      (REQUESTED — callback was invoked).
+	 *   2. Synchronously: add to `wakeEnqueuedJobIds` (Path B
+	 *      dual-delivery arbitration must be able to discard
+	 *      this wake later).
+	 *   3. Synchronously: add to `wakeAuthoritySettledJobIds`
+	 *      (settled-at-marker layer; Path B has a discard
+	 *      boundary here).
+	 *   4. Async `Promise.then(outcome)`:
+	 *      - `delivered` → markWakeDelivered(J). Wake is in
+	 *        PendingPromptsController. C10 SUPPRESSES origin.
+	 *      - `rejected | session_gone` → markWakeDispatchFailed(J).
+	 *        Wake is LOST. C10 ALLOWS origin.
+	 *
+	 * Note: this method MUST NOT throw. The async dispatch
+	 * errors are recorded via `recordNotifyDecision` instead of
+	 * propagating, to match the swallow contract documented on
+	 * `BackgroundNotifyCoordinatorOptions.enqueueTerminalWake`.
+	 */
+	private dispatchAndTrackWake(input: {
+		sessionId: string
+		taskId: string | undefined
+		jobId: string
+		terminalState: CommandJobState
+		reason: string | undefined
+		exitCode: number | undefined
+		outputTail: string | undefined
+	}): void {
+		// ACT-CLINEMM-CONTINUATION-CARDINALITY-AUTHORITY01:
+		// C3 — wake_created capture. One record per wake
+		// dispatched. When the capture seam is OFF (default)
+		// this is a complete no-op.
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "wake_created",
+			origin: "background_terminal",
+			jobId: input.jobId,
+			sessionId: input.sessionId,
+			taskId: input.taskId,
+		})
+		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+		// CORRECTION02: dual-delivery arbitration. Track the
+		// wake synchronously so a later Path B can supersede.
+		this.wakeEnqueuedJobIds.add(input.jobId)
+		// CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED):
+		// dispatch REQUESTED, ack pending. The C10 barrier
+		// HOLDS until ack resolves.
+		this.wakeDispatchRequestedJobIds.add(input.jobId)
+		// CORRECTION02: wake authority settled at the marker
+		// layer. Path B has a discard boundary here.
+		this.wakeAuthoritySettledJobIds.add(input.jobId)
+		// Synchronously invoke the host's dispatch callback.
+		// The Promise<EnqueueTerminalWakeOutcome> ack tells us
+		// whether the wake actually landed.
+		let promise: Promise<{ kind: "delivered" | "rejected" | "session_gone" }>
+		try {
+			promise = this.options.enqueueTerminalWake({
+				sessionId: input.sessionId,
+				prompt: formatTerminalWakePrompt({
+					jobId: input.jobId,
+					terminalState: input.terminalState,
+					reason: input.reason,
+					exitCode: input.exitCode,
+					outputTail: input.outputTail,
+				}),
+				// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
+				// thread the originating jobId through the
+				// transport seam so the host can forward it to
+				// sdkHost.send(...).
+				jobId: input.jobId,
+			})
+		} catch (error) {
+			// Synchronous throw from the dispatch callback —
+			// treat as session_gone (lost wake). The wake
+			// authority is FAILED; C10 must ALLOW originator.
+			this.markWakeDispatchFailed(input.jobId)
+			this.recordDecision(
+				input.jobId,
+				"wake_dispatch_sync_throw",
+				error instanceof Error ? error.message : String(error),
+				0,
+				0,
+			)
+			return
+		}
+		// Async ack resolution — update trackers WITHOUT
+		// throwing (the swallow contract applies here too).
+		promise
+			.then((outcome) => {
+				if (outcome.kind === "delivered") {
+					this.markWakeDelivered(input.jobId)
+				} else {
+					// rejected | session_gone → wake is LOST.
+					// C10 must ALLOW originator to commit.
+					this.markWakeDispatchFailed(input.jobId)
+					this.recordDecision(
+						input.jobId,
+						outcome.kind === "session_gone" ? "wake_dispatch_session_gone" : "wake_dispatch_rejected",
+						`outcome=${outcome.kind}`,
+						0,
+						0,
+					)
+				}
+			})
+			.catch((error: unknown) => {
+				// Promise itself rejected — wake is LOST.
+				this.markWakeDispatchFailed(input.jobId)
+				this.recordDecision(
+					input.jobId,
+					"wake_dispatch_promise_rejected",
+					error instanceof Error ? error.message : String(error),
+					0,
+					0,
+				)
+			})
 	}
 
 	consumeTerminal(input: {
@@ -649,94 +1010,26 @@ export class BackgroundNotifyCoordinator {
 		const held = this.heldTerminalResults.get(ownerK) ?? []
 		held.sort((a, b) => a.createdAtMs - b.createdAtMs)
 		for (const h of held) {
-			this.options.enqueueTerminalWake({
-				sessionId: activeOwner.sessionId,
-				prompt: formatTerminalWakePrompt({
-					jobId: h.jobId,
-					terminalState: h.terminalState,
-					reason: h.reason,
-					exitCode: h.exitCode,
-					outputTail: h.outputTail,
-				}),
-				// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
-				// thread the originating jobId through the
-				// transport seam so the host can forward it to
-				// sdkHost.send(...). Without this the wake is
-				// delivered but loses its correlation identity.
-				jobId: h.jobId,
-			})
-			// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
-			// C3 — wake_created capture (held-batch path). One record
-			// per wake actually delivered. When the capture seam is
-			// OFF (default) this is a complete no-op.
-			captureContinuationCardinalityAuthorityRecord({
-				stage: "wake_created",
-				origin: "background_terminal",
-				jobId: h.jobId,
+			this.dispatchAndTrackWake({
 				sessionId: activeOwner.sessionId,
 				taskId: activeOwner.taskId,
+				jobId: h.jobId,
+				terminalState: h.terminalState,
+				reason: h.reason,
+				exitCode: h.exitCode,
+				outputTail: h.outputTail,
 			})
-			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
-			// CORRECTION02: dual-delivery arbitration. Track each
-			// wake so a later Path B (resolveObligation) can
-			// supersede it.
-			this.wakeEnqueuedJobIds.add(h.jobId)
-			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
-			// held-batch wake delivery: wake authority for h.jobId
-			// is SETTLED (delivered to PendingPromptsController).
-			this.wakeAuthoritySettledJobIds.add(h.jobId)
-			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
-			// wake-driven turn is the canonical terminal-completion
-			// authority for h.jobId — the originating turn's C10
-			// completion commit MUST be SUPPRESSED (the wake-driven
-			// turn will fire its own submit_and_exit).
-			this.wakeDeliveredJobIds.add(h.jobId)
 		}
 		this.heldTerminalResults.delete(ownerK)
-		this.options.enqueueTerminalWake({
-			sessionId: activeOwner.sessionId,
-			prompt: formatTerminalWakePrompt({
-				jobId: input.jobId,
-				terminalState: input.terminalState,
-				reason: input.reason,
-				exitCode: input.exitCode,
-				outputTail: input.outputTail,
-			}),
-			// ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01:
-			// thread the originating jobId through the transport
-			// seam so the host can forward it to sdkHost.send(...).
-			jobId: input.jobId,
-		})
-		// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
-		// C3 — wake_created capture (current-terminal path). One
-		// record per wake actually delivered. When the capture seam
-		// is OFF (default) this is a complete no-op.
-		captureContinuationCardinalityAuthorityRecord({
-			stage: "wake_created",
-			origin: "background_terminal",
-			jobId: input.jobId,
+		this.dispatchAndTrackWake({
 			sessionId: activeOwner.sessionId,
 			taskId: activeOwner.taskId,
+			jobId: input.jobId,
+			terminalState: input.terminalState,
+			reason: input.reason,
+			exitCode: input.exitCode,
+			outputTail: input.outputTail,
 		})
-		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
-		// CORRECTION02: dual-delivery arbitration. Track the current
-		// wake too (defensive — Path B on the same jobId will be a
-		// no-op marker drain, but if any other path enqueued this
-		// wake earlier, it MUST be tracked).
-		this.wakeEnqueuedJobIds.add(input.jobId)
-		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
-		// the wake for input.jobId has been delivered to
-		// PendingPromptsController (Path A); the wake authority
-		// for this jobId is now SETTLED. The C10 barrier at
-		// `sdk-session-event-coordinator.ts:691-733` releases
-		// the originating turn's held completion once all
-		// notify-owned jobIds' wake authorities are settled.
-		this.wakeAuthoritySettledJobIds.add(input.jobId)
-		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
-		// wake-driven turn is the canonical terminal-completion
-		// authority for input.jobId — the originating turn's
-		// C10 completion commit MUST be SUPPRESSED.
-		this.wakeDeliveredJobIds.add(input.jobId)
 		const drainedCount = held.length + 1
 		this.recordDecision(input.jobId, "drained", undefined, 0, 0)
 		return {
@@ -898,6 +1191,11 @@ export class BackgroundNotifyCoordinator {
 		// only within a single session lifetime).
 		this.wakeAuthoritySettledJobIds.clear()
 		this.wakeDeliveredJobIds.clear()
+		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 /
+		// CORRECTION03 (HALT_WAKE_DELIVERY_ACK_PROMOTED): the
+		// three new ack-state trackers are process-ephemeral too.
+		this.wakeDispatchRequestedJobIds.clear()
+		this.wakeDispatchFailedJobIds.clear()
 	}
 
 	diagnosticMarkerCount(): number {
@@ -932,7 +1230,7 @@ export class BackgroundNotifyCoordinator {
 
 	private recordDecision(
 		jobId: string,
-		decision: ConsumeTerminalDecision["kind"],
+		decision: NotifyDecisionKind,
 		reason: string | undefined,
 		heldCount: number,
 		activeNotifyCount: number,

@@ -5,7 +5,7 @@
   "predecessor": {
     "act_id": "ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01",
     "verdict": "CAPTURE_INSUFFICIENT (resolved by operator-supplied dump)",
-    "evidence": "01a-clineMessages.LIVE_RAW.json (SHA-256 fe1b6bc7791a50483a3faed1790f149e98bfc48c8407b4266ea803719034ae36) — operator-supplied persisted dump proves submit_and_exit count = 2 for jobId cmd_mugvhy92x7rm527e."
+    "evidence": "01a-clineMessages.LIVE_RAW.json (SHA-256 fe1b6bc7791a50483a3faed1790f149e98bfc48c8407b4266ea803719034ae36) \u2014 operator-supplied persisted dump proves submit_and_exit count = 2 for jobId cmd_mugvhy92x7rm527e."
   },
   "frozen_session": {
     "sessionId": "1790335441241_5g7oe",
@@ -18,12 +18,14 @@
     "01-authoritative-live-transcript.md": "Causal chain and defect statement",
     "01a-clineMessages.LIVE_RAW.json": "12,002 bytes; SHA-256 fe1b6bc7791a50483a3faed1790f149e98bfc48c8407b4266ea803719034ae36; bytes-identical to operator-supplied dump",
     "02-recon.md": "Production seam inventory and earliest safe authority boundary",
-    "03-red-reproduction.txt": "BNCA-RED-01 + BNCA-RED-02 vitest output (3 tests pass) — proves the fire-and-forget discard race at the coordinator seam AND the C10 framework seam",
+    "03-red-reproduction.txt": "BNCA-RED-01 + BNCA-RED-02 vitest output (3 tests pass) \u2014 proves the fire-and-forget discard race at the coordinator seam AND the C10 framework seam",
     "04-authority-discriminator.md": "H1 vs H2 vs H3 evaluation and selection (H1 advisory chosen as complement to framework fix)",
     "05-bnca-test-suite.txt": "BNCA-GREEN-01 + BNCA-ABLATION-01 + BNCA-FRAMEWORK-01 + BNCA-FRAMEWORK-ABLATION-01 vitest output (10 tests pass)",
     "05-repair-ablation.txt": "Focused-gates vitest output (TQCB+BCNEX+BCCOC+BCTPA+CCARD = 47 tests pass)",
     "07-artifact-identity.txt": "IMPLEMENTATION_SUBJECT_HEAD + repair artifact description (per-job wake-delivered + wake-authority settled probes wired into BackgroundNotifyCoordinator; C10 barrier consults them in SdkSessionEventCoordinator)",
-    "08-live-qualification.md": "LIVE-A..D scenarios deferred to operator-driven dogfood"
+    "08-live-qualification.md": "LIVE-A..D scenarios deferred to operator-driven dogfood",
+    "06-bnca-suite-clean.txt": "ROUND 3 clean BNCA evidence (8 test files, 20 tests, 0 errors, 0 unhandled rejections)",
+    "06-conservation-clean.txt": "ROUND 3 clean conservation evidence (5 test files, 47 tests, 0 errors, 0 unhandled rejections; HostProvider telemetry mock added to TQCB01 to eliminate unhandled-rejection artifact from prior run)"
   },
   "red_proof": {
     "test_bnca_red_01": {
@@ -39,14 +41,14 @@
   },
   "selected_authority_model": {
     "name": "H1 advisory + framework-level C10 barrier",
-    "description": "Two complementary mechanisms close the live defect at the framework seam: (a) H1 advisory in command_status returns `notification: \"pending\"` for notify-owned active jobs with waitMs>0, suppressing Path B resolveObligation. (b) Framework-level barrier at the C10 completion-commit seam consults `BackgroundNotifyCoordinator.hasActiveNotify(jobId)` (HOLD when marker alive) and `BackgroundNotifyCoordinator.wasWakeDelivered(jobId)` (SUPPRESS when wake delivered to pendingPrompts — wake-driven turn owns completion). The barrier is enforced at the `setTurnPhase(\"completed\", ...)` call, NOT at the tool surface — the model CANNOT bypass it.",
+    "description": "Two complementary mechanisms close the live defect at the framework seam: (a) H1 advisory in command_status returns `notification: \"pending\"` for notify-owned active jobs with waitMs>0, suppressing Path B resolveObligation. (b) Framework-level barrier at the C10 completion-commit seam consults `BackgroundNotifyCoordinator.hasActiveNotify(jobId)` (HOLD when marker alive) and `BackgroundNotifyCoordinator.wasWakeDelivered(jobId)` (SUPPRESS when wake delivered to pendingPrompts \u2014 wake-driven turn owns completion). The barrier is enforced at the `setTurnPhase(\"completed\", ...)` call, NOT at the tool surface \u2014 the model CANNOT bypass it.",
     "implementation_seams": [
       "apps/vscode/src/sdk/command-status-tool.ts (H1 advisory, ~70 lines added)",
       "apps/vscode/src/sdk/background-notify-coordinator.ts (wakeAuthoritySettledJobIds + wakeDeliveredJobIds trackers, wasWakeDelivered + isWakeAuthoritySettled probes, ~80 lines added)",
       "apps/vscode/src/sdk/sdk-session-event-coordinator.ts (per-job consult in C10 barrier admission + reevaluation, ~60 lines added)",
       "apps/vscode/src/sdk/SdkController.ts (wiring of new options, ~12 lines added)"
     ],
-    "rationale": "The H1 advisory is a comment-only convention the model MAY ignore — not load-bearing. The framework-level C10 barrier enforces the invariant at the lifecycle seam (`setTurnPhase(\"completed\", ...)`) where the originating turn's `submit_and_exit` is committed. The barrier consults the per-job wake-delivered probe and SUPPRESSES the originating completion when the wake was delivered (the wake-driven turn owns terminal completion). Conservation: R4 (non-blocking read) + R5 (non-notify) + R6 (multi-job) all preserved."
+    "rationale": "The H1 advisory is a comment-only convention the model MAY ignore \u2014 not load-bearing. The framework-level C10 barrier enforces the invariant at the lifecycle seam (`setTurnPhase(\"completed\", ...)`) where the originating turn's `submit_and_exit` is committed. The barrier consults the per-job wake-delivered probe and SUPPRESSES the originating completion when the wake was delivered (the wake-driven turn owns terminal completion). Conservation: R4 (non-blocking read) + R5 (non-notify) + R6 (multi-job) all preserved."
   },
   "conservation_matrix": {
     "R1_one_notify_owned_job_completion_eq_1": "SATISFIED (framework-level C10 barrier suppresses originating completion when wake delivered; wake-driven turn is sole authority post-repair; load-bearing proof: BNCA-FRAMEWORK-ABLATION-01-RED shows live defect re-emerges when fix is removed)",
@@ -67,17 +69,19 @@
   },
   "test_results": {
     "BNCA-RED-01 (fire-and-forget discard race reproduction)": "2 tests pass",
-    "BNCA-RED-02 (C10 framework RED — pinning the load-bearing seam)": "1 test pass",
-    "BNCA-FRAMEWORK-01 (framework-level C10 barrier GREEN — wake-delivered SUPPRESSES originating completion)": "3 tests pass",
-    "BNCA-FRAMEWORK-ABLATION-01 (load-bearing necessity proof — fix ON suppresses, fix OFF commits)": "2 tests pass",
-    "BNCA-GREEN-01 (H1 advisory contract + R4 + R5)": "3 tests pass",
+    "BNCA-RED-02 (C10 framework RED \u2014 pinning the load-bearing seam)": "1 test pass",
+    "BNCA-GREEN-01 (H1 advisory contract + R4 + R5 conservation)": "3 tests pass",
     "BNCA-ABLATION-01 (H1 advisory load-bearing necessity proof)": "2 tests pass",
-    "TQCB01 (conservation — dual-delivery arbitration)": "15 tests pass",
-    "BCNEX01 (conservation — exactly-once presentation)": "7 tests pass",
-    "BCCOC01 (conservation — ownership correlation)": "7 tests pass",
-    "BCTPA01 (conservation — presentation arbitration)": "6 tests pass",
-    "CCARD01 (conservation — continuation cardinality)": "12 tests pass",
-    "TOTAL": "60 tests, all passing"
+    "BNCA-FRAMEWORK-01 (framework-level C10 barrier GREEN \u2014 wake-delivered SUPPRESSES, wake-discarded ALLOWS)": "3 tests pass",
+    "BNCA-FRAMEWORK-ABLATION-01 (ROUND 2 load-bearing necessity proof)": "2 tests pass",
+    "BNCA-FRAMEWORK-DISPATCH-FAILED-01 (ROUND 3 GREEN \u2014 case-2 HOLD, case-3 SUPPRESS, case-4 ALLOW)": "3 tests pass",
+    "BNCA-FRAMEWORK-DISPATCH-FAILED-ABLATION-01 (ROUND 3 load-bearing necessity proof)": "4 tests pass",
+    "TQCB01 (conservation \u2014 dual-delivery arbitration)": "15 tests pass",
+    "BCNEX01 (conservation \u2014 exactly-once presentation)": "7 tests pass",
+    "BCCOC01 (conservation \u2014 ownership correlation)": "7 tests pass",
+    "BCTPA01 (conservation \u2014 presentation arbitration)": "6 tests pass",
+    "CCARD01 (conservation \u2014 continuation cardinality)": "12 tests pass",
+    "TOTAL": "67 tests pass (20 BNCA + 47 conservation); 0 errors; 0 unhandled rejections"
   },
   "halts": {
     "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED (working tree clean at ACT entry; git diff --check clean post-repair)",
@@ -90,19 +94,28 @@
     "HALT_OOM_REGRESSION": "NOT_TRIGGERED (drain semantics not touched)",
     "HALT_CORRELATION_REGRESSION": "NOT_TRIGGERED (jobId threading unchanged)",
     "HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED": "NOT_TRIGGERED (CommandStatusOutput extended with optional field; no protocol change)",
-    "HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY": "CLOSED_BY_FRAMEWORK_LEVEL_C10_BARRIER (the H1 advisory alone is comment-only and the model MAY ignore it; the load-bearing enforcement is the framework-level C10 barrier that SUPPRESSES the originating turn's `setTurnPhase(\"completed\", ...)` when `wasWakeDelivered(J) === true`. BNCA-FRAMEWORK-01a proves SUPPRESS; BNCA-FRAMEWORK-ABLATION-01-RED proves the live defect re-emerges when the framework fix is removed. The model cannot bypass the framework barrier.)"
+    "HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY": "CLOSED_BY_FRAMEWORK_LEVEL_C10_BARRIER (the H1 advisory alone is comment-only and the model MAY ignore it; the load-bearing enforcement is the framework-level C10 barrier that SUPPRESSES the originating turn's `setTurnPhase(\"completed\", ...)` when `wasWakeDelivered(J) === true`. BNCA-FRAMEWORK-01a proves SUPPRESS; BNCA-FRAMEWORK-ABLATION-01-RED proves the live defect re-emerges when the framework fix is removed. The model cannot bypass the framework barrier.)",
+    "HALT_WAKE_DELIVERY_ACK_PROMOTED": "CLOSED_BY_BOUNDED_CORRECTION_ROUND_3 (HALT_WAKE_DELIVERY_ACK_PROMOTED: the new authoritative fact is not actually authoritative \u2014 the prior ROUND 2 conflated wake-dispatch REQUESTED with wake DELIVERED at the moment of synchronous callback invocation. The production transport at SdkController.ts:738 is fire-and-forget `void active.sdkHost.send(...).catch(...)`; the coordinator had no ack signal so it marked the job as 'delivered' at callback invocation, not at the moment the wake actually landed. If the async send later rejected, the originating turn had already been SUPPRESSED and NO wake-driven turn would ever fire \u2014 semantic terminal completion count dropped to 0 (the opposite cardinality failure). ROUND 3 split the tracker into the explicit three-state contract: REQUESTED (set synchronously at callback invocation) / DELIVERED (set after async ack resolves with 'delivered') / FAILED (set after async ack resolves with 'rejected' or 'session_gone'). The C10 barrier consults all three states. Case 4 (wasWakeDispatchFailed) ALLOWS the originating turn's completion so semantic count for J is exactly 1 even when the wake is LOST. Case 2 (wasWakeDispatchRequested && !delivered && !failed) HOLDS the barrier while the ack is in flight (instead of incorrectly SUPPRESSING as ROUND 2 did). Production transport at SdkController.ts:738 changed from fire-and-forget to a real Promise<{ kind: 'delivered' | 'rejected' | 'session_gone' }> that awaits the underlying sdkHost.send and forwards the ack outcome to the coordinator. BNCA-FRAMEWORK-DISPATCH-FAILED-01 (3 tests) proves: case 4 (dispatch-FAILED) ALLOWS, case 2 (dispatch-REQUESTED) HOLDS, case 3 (dispatch-DELIVERED) SUPPRESSES. BNCA-FRAMEWORK-DISPATCH-FAILED-ABLATION-01 (4 tests) proves the ROUND 3 fix is load-bearing: fix ON holds during ack-pending and allows after ack-failed; fix OFF (wasWakeDispatchFailed probe unwired) does not hold \u2014 the originator commits immediately, which is exactly the silent defect ROUND 2 introduced."
   },
   "halt_history": [
     {
       "halt": "HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY",
       "raised_at_round": "first reviewer (factory expert panel)",
-      "raised_observation": "The H1 advisory fix is comment-only — the model MAY still invoke `submit_and_exit` claiming the notify-owned job's terminal result. The post-repair graph still permits two lifecycle completion calls. The GREEN does not test the load-bearing invariant: `semantic_terminal_completion_count(J) == 1`. The conclusion 'wake is sole terminal-completion authority post-repair' exceeds the implementation.",
-      "required_repair": "Reopen the authority design at a framework-level lifecycle seam. Make completion ownership framework-enforced — at the seam where `submit_and_exit` commits task completion. The key invariant: notify-owned J with outstanding wake authority ⇒ originating run cannot commit a terminal task completion for J.",
+      "raised_observation": "The H1 advisory fix is comment-only \u2014 the model MAY still invoke `submit_and_exit` claiming the notify-owned job's terminal result. The post-repair graph still permits two lifecycle completion calls. The GREEN does not test the load-bearing invariant: `semantic_terminal_completion_count(J) == 1`. The conclusion 'wake is sole terminal-completion authority post-repair' exceeds the implementation.",
+      "required_repair": "Reopen the authority design at a framework-level lifecycle seam. Make completion ownership framework-enforced \u2014 at the seam where `submit_and_exit` commits task completion. The key invariant: notify-owned J with outstanding wake authority \u21d2 originating run cannot commit a terminal task completion for J.",
       "closed_at_round": "bounded correction (this ACT update)",
-      "closed_observation": "BNCA-FRAMEWORK-01a (production wire: real SdkSessionEventCoordinator + real BackgroundNotifyCoordinator + real command_status tool) drives the full causal chain: notify-owned J → originating turn's submit_and_exit → framework SUPPRESSES the `setTurnPhase(\"completed\", ...)` because the wake was delivered. The deferredCompletionBarrier is set; completionCommitCount === 0. BNCA-FRAMEWORK-ABLATION-01-RED proves the live defect re-emerges when the framework fix is removed (completionCommitCount === 1). The model CANNOT bypass the framework barrier."
+      "closed_observation": "BNCA-FRAMEWORK-01a (production wire: real SdkSessionEventCoordinator + real BackgroundNotifyCoordinator + real command_status tool) drives the full causal chain: notify-owned J \u2192 originating turn's submit_and_exit \u2192 framework SUPPRESSES the `setTurnPhase(\"completed\", ...)` because the wake was delivered. The deferredCompletionBarrier is set; completionCommitCount === 0. BNCA-FRAMEWORK-ABLATION-01-RED proves the live defect re-emerges when the framework fix is removed (completionCommitCount === 1). The model CANNOT bypass the framework barrier."
+    },
+    {
+      "halt": "HALT_WAKE_DELIVERY_ACK_PROMOTED",
+      "raised_at_round": "factory expert (twenty-ninth reviewer; this ACT update)",
+      "raised_observation": "The framework-level C10 direction is the correct seam (ROUND 2 was right in principle). It fixes the previous model-dependence problem conceptually. But the new authoritative fact `wakeDeliveredJobIds means wake successfully enqueued into PendingPromptsController` is NOT actually authoritative. The production transport at SdkController.ts:738 is fire-and-forget `void active.sdkHost.send(...).catch(...)`. The coordinator marks the job as settled/delivered at its own `enqueueTerminalWake(...)` seam; that seam does not provide evidence that the asynchronous send has actually landed in PendingPromptsController. If the async send later fails / session disappears / enqueue rejects, no wake-driven turn runs, and the semantic terminal completion count for J drops to 0. Separately: ACT-owned evidence cannot simultaneously say `Errors 1` and `all passing` \u2014 re-run or explicitly classify the diagnostic against a proven baseline.",
+      "required_repair": "One bounded correction. (a) Make the state names and authority reflect an acknowledged boundary: dispatch-requested \u2260 delivery-acknowledged. Either make `enqueueTerminalWake` await/return a real acknowledgment that the pending prompt was accepted, or retain the fire-and-forget transport but keep the originating completion HOLD until some existing production seam proves the wake landed. A failed delivery must settle toward a path that can still commit the originating completion rather than suppressing it forever. (b) Add the missing discriminator: wake dispatch requested \u2192 transport fails before PendingPrompts acceptance \u2192 originating completion is NOT lost \u2192 semantic completion count == 1. (c) Re-run a clean executable gate (no `Errors 1` artifacts) so evidence is honest.",
+      "closed_at_round": "bounded correction ROUND 3 (this ACT update)",
+      "closed_observation": "ROUND 3 changes the production transport at SdkController.ts:738 from fire-and-forget to a real Promise<{ kind: 'delivered' | 'rejected' | 'session_gone' }>. The BackgroundNotifyCoordinator now tracks THREE states explicitly: wakeDispatchRequestedJobIds (set synchronously at callback invocation), wakeDeliveredJobIds (set when host calls markWakeDelivered after async ack resolves with 'delivered'), wakeDispatchFailedJobIds (set when host calls markWakeDispatchFailed after async ack resolves with 'rejected' / 'session_gone'). The C10 barrier consults FIVE per-job cases (was THREE before): (1) hasActiveNotify \u2192 HOLD, (2) wasWakeDispatchRequested && !delivered && !failed \u2192 HOLD (was wrongly SUPPRESSED in ROUND 2), (3) wasWakeDelivered \u2192 SUPPRESS, (4) wasWakeDispatchFailed \u2192 ALLOW (closes the zero-completion failure mode), (5) isWakeAuthoritySettled (via discard) \u2192 ALLOW. New tests: BNCA-FRAMEWORK-DISPATCH-FAILED-01 (3 tests) \u2014 case 4 ALLOWS, case 2 HOLDS, case 3 SUPPRESSES; BNCA-FRAMEWORK-DISPATCH-FAILED-ABLATION-01 (4 tests) \u2014 fix ON holds during ack-pending and allows after ack-failed; fix OFF bypasses case-2 HOLD and the case-4 ALLOW gate (which is what ROUND 2 produced \u2014 the silent defect). Clean executable gate: 67 tests pass (20 BNCA + 47 conservation), 0 errors / 0 unhandled rejections (the HostProvider telemetry mock added to TQCB01 eliminates the unhandled-rejection noise artifact from the prior run)."
     }
   ],
-  "verdict_at_round_close": "GREEN_AND_ABLATION_PASS — proceed to operator-driven dogfood/live qualification (§19/§20 deferred per 08-live-qualification.md). The HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY from the first reviewer is CLOSED at the bounded correction (BNCA-FRAMEWORK-01 + BNCA-FRAMEWORK-ABLATION-01 prove the framework-level C10 barrier enforces the invariant).",
+  "verdict_at_round_close": "GREEN_AND_ABLATION_PASS \u2014 HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY closed at ROUND 2 (framework C10 barrier) and HALT_WAKE_DELIVERY_ACK_PROMOTED closed at ROUND 3 (three-state contract: REQUESTED / DELIVERED / FAILED with C10 barrier consults all three). The previously-unproven invariant `semantic_terminal_completion_count(J) == 1` is now proven at the framework seam for both delivered AND lost-wake cases. Clean executable gate (no Errors / UnhandledRejection artifacts). Operator-driven dogfood VSIX build + live qualification LIVE-A..D deferred per 08-live-qualification.md.",
   "phase": "GREEN_AND_ABLATION",
   "factory_cursor": {
     "NEXT": "Operator-driven dogfood VSIX build + live qualification LIVE-A..D per 08-live-qualification.md. Once live qualification passes, this ACT closes PASS_BACKGROUND_NOTIFY_COMPLETION_AUTHORITY_LIVE_QUALIFIED.",
