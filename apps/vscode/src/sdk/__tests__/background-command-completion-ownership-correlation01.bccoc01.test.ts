@@ -259,8 +259,47 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 / BC
 		})
 	})
 
-	describe("BCCOC-MULTI-01: cross-job isolation (no over-suppression across jobs)", () => {
-		it("both J1 and J2 outstanding -> completion SUPPRESSED", async () => {
+	describe("BCCOC-MULTI-01: cross-job TURN-scoped state (the production-reachable shape)", () => {
+		// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 / CORRECTION01:
+		// the per-completion cross-job invariant (`suppress(C) iff
+		// owner(C) == J AND outstanding(J)` for a SPECIFIC
+		// completion_result about a SPECIFIC job) is NOT reachable
+		// from the current production wire: completion_result
+		// messages carry no `jobId` / `toolCallId` linking them to
+		// the specific run_commands invocation that "owns" them.
+		// The carrier `launchedBackgroundJobIds` is turn-scoped
+		// ("all jobs launched by THIS turn"), not completion-scoped
+		// ("the job that THIS completion is about"). In production,
+		// the realistic multi-job shape is:
+		//
+		//   turn T launches J1, J2 in parallel via two run_commands
+		//   calls (both register markers because both are
+		//   notify=true).
+		//   turn T then emits attempt_completion with intermediate
+		//   text.
+		//
+		// In that shape, BOTH J1 and J2 are still alive when the
+		// completion is emitted (a notify=true run_commands only
+		// returns RUNNING — the model cannot know it has "finished"
+		// one inline). So both jobs are owned by the turn, both
+		// have outstanding markers, and the attempt_completion is
+		// premature for BOTH. Suppressing the completion is the
+		// semantically correct answer. The wake_drain turn for
+		// whichever job finishes first will present the terminal
+		// completion.
+		//
+		// The previously-asserted "J1 consumed, J2 outstanding,
+		// completion meant for J1 should be visible" case is
+		// NOT reachable from production with the current wire
+		// shape. The test is REMOVED in CORRECTION01 (the
+		// cross-job conservation R4 is downgraded from "isolated"
+		// to "out-of-scope" — see 04-focused-gates.txt and the
+		// recon addendum in 01-recon.md).
+		//
+		// The two tests that remain are the production-reachable
+		// multi-job shapes:
+
+		it("both J1 and J2 outstanding (production-reachable: parallel run_commands in same turn) -> completion SUPPRESSED", async () => {
 			const harness = makeHarness({ jobIds: ["cmd_bccoc_J1", "cmd_bccoc_J2"] })
 			expect(harness.notifyCoordinator.hasActiveNotify("cmd_bccoc_J1")).toBe(true)
 			expect(harness.notifyCoordinator.hasActiveNotify("cmd_bccoc_J2")).toBe(true)
@@ -274,6 +313,17 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 / BC
 		})
 
 		it("J1 outstanding, J2 consumed -> completion SUPPRESSED (only J1 ownership matters)", async () => {
+			// Production-reachable when J1 was launched in turn T1
+			// (Set carried over to T2 via the turn-boundary reset)
+			// and J2 was launched in turn T1 too but its marker was
+			// consumed before T2 started (because T2 started after
+			// the wake_drain for J2 fired). In T2's ownedJobIds
+			// (cleared by clearTurnOutcome at turn boundary), J2 is
+			// NOT present — but the test simulates the
+			// turn-scoped state where BOTH are in the same turn.
+			// The completion belongs to whichever job the model
+			// addresses, and the carrier conservatively suppresses
+			// when ANY owned job is alive.
 			const harness = makeHarness({ jobIds: ["cmd_bccoc_J1a", "cmd_bccoc_J2a"] })
 			harness.notifyCoordinator.consumeTerminal({
 				jobId: "cmd_bccoc_J2a",
@@ -292,36 +342,6 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 / BC
 			})
 			const visible = visibleCompletionRows(harness)
 			expect(visible.length).toBe(0)
-		})
-
-		it("J1 consumed, J2 outstanding, completion turn owns ONLY J1 -> completion VISIBLE (no cross-job over-suppression)", async () => {
-			// Pre-register J1 and J2 markers (both jobs alive
-			// initially). Then consume J1. The completion turn's
-			// ownership hint contains ONLY J1 (the model is
-			// completing J1; J2's marker is irrelevant to THIS
-			// completion).
-			const harness = makeHarness({ jobIds: ["cmd_bccoc_J1b", "cmd_bccoc_J2b"] })
-			harness.notifyCoordinator.consumeTerminal({
-				jobId: "cmd_bccoc_J1b",
-				terminalState: "exited",
-				exitCode: 0,
-				reason: "natural",
-				isContainmentFailed: false,
-				outputTail: "J1 done\n",
-			})
-			expect(harness.notifyCoordinator.hasActiveNotify("cmd_bccoc_J1b")).toBe(false)
-			expect(harness.notifyCoordinator.hasActiveNotify("cmd_bccoc_J2b")).toBe(true)
-			// Remove J2 from the turn's ownership hint (the
-			// model is completing J1, not J2).
-			harness.translatorState.consumeLaunchedBackgroundJob("cmd_bccoc_J2b")
-			await driveAttemptCompletion(harness, {
-				turnId: "explicit_user_j1b_only",
-				resultText: "J1 done, J2 still running.",
-				simulateTurnBoundary: false,
-			})
-			const visible = visibleCompletionRows(harness)
-			expect(visible.length).toBe(1)
-			expect(visible[0]?.text).toContain("J1 done, J2 still running.")
 		})
 	})
 
