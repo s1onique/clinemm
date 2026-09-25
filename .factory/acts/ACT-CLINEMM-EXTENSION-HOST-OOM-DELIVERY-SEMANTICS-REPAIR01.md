@@ -1,11 +1,13 @@
-# ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01
+# ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / CORRECTION01
 
 **PRIMARY PURPOSE**: repair
 
 ## Status
 
-PASS_DELIVERY_SEMANTICS_REPAIR (live qualification deferred to
-operator per predecessor ACT pattern — see 06-live-qualification.md).
+PASS_DELIVERY_SEMANTICS_REPAIR (CORRECTION01 — P1 deriveOrigin
+precedence fix + conservation assertions). Live qualification
+deferred to operator per predecessor ACT pattern — see
+06-live-qualification.md.
 
 ## Frozen evidence
 
@@ -13,7 +15,7 @@ operator per predecessor ACT pattern — see 06-live-qualification.md).
 GOOD_ARTIFACT              = d1ecf48dc
 BAD_ARTIFACT               = 99006fbcc
 ENTRY_HEAD                 = 998eb28c792d02252d1081d767d729eed97df22b
-SUBJECT_HEAD               = e016952ed (this ACT's commit)
+SUBJECT_HEAD               = 0a97b445c (CORRECTION01)
 REGRESSION_COMMIT          = 99006fbccaacb150b78e54dad7bdadc2a1390238
 REGRESSION_COMMIT_COUNT    = 1
 PREDECESSOR_ACT            = ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01 / CORRECTION02
@@ -74,6 +76,56 @@ the prior shape — drained prompts now derive
 `pending_prompt_drain` from `jobId`-presence; explicit
 `runTurn({ delivery: "queue" })` callers without jobId still
 derive `pending_prompt_drain` (back-compat).
+
+### CORRECTION01 — deriveOrigin precedence
+
+A reviewer (P1 boundary check) flagged that the initial ordering
+of the new `deriveOrigin(delivery, jobId?)` precedence put
+`jobId` BEFORE `delivery`. That re-classified the previously
+stable case `deriveOrigin("steer", "job-1")` from
+`deferred_continuation` to `pending_prompt_drain` — a semantic
+regression that exceeded the OOM repair's required boundary.
+
+CORRECTION01 changes the precedence to: `delivery` first,
+`jobId` second fallback. Historical `delivery` semantics are
+preserved exactly:
+
+```
+if (delivery === "queue") return "pending_prompt_drain"
+if (delivery === "steer") return "deferred_continuation"
+if (jobId !== undefined) return "pending_prompt_drain"
+return "explicit_user"
+```
+
+C4/C5/C6 still call `deriveOrigin` with the entry-level
+`delivery` they always did — historical semantics are unchanged.
+C7/C8 call `deriveOrigin` with `delivery === undefined` (the
+bounded repair dropped it at the drain -> send boundary) and
+`jobId` set (terminal-wake path) — the jobId fallback recovers
+`pending_prompt_drain` without re-classifying steer+jobId.
+
+The CORRECTION01 conservation test:
+`apps/vscode/src/sdk/__tests__/derive-origin-precedence.test.ts`
+pins the precedence invariant two ways:
+1. Source-order assertion: `delivery === "queue"` <
+   `delivery === "steer"` < `jobId !== undefined` <
+   `return "explicit_user"` (a future contributor who
+   re-orders branches trips this).
+2. Exhaustive truth table mirroring the production closure
+   (the specific P1 discriminator case `deriveOrigin("steer",
+   "job-1") -> deferred_continuation` is asserted explicitly).
+
+CORRECTION01 gate results (post-P1-fix):
+- `apps/vscode` `bunx tsc --noEmit`: exit 0 (clean)
+- CCARD + BCNEX + derive-origin-precedence combined:
+  21/21 PASS
+- sdk/core turn-queue: 14/14 PASS (unchanged)
+- sdk/core typecheck: 25 baseline errors, ACT_NEW_ERRORS=0
+
+The exact-head artifact was rebuilt on the CORRECTION01
+SUBJECT_HEAD (`0a97b445c`); the pre-CORRECTION01 specimen
+(`e016952ed`) is preserved as audit-only at
+`dist/dogfood/clinemm-4.1.16-e016952ed.vsix`.
 
 ## RED (real production seam, structural + e2e)
 
@@ -155,6 +207,8 @@ repaired bundle.
 | CRA13 (full LocalRuntimeHost drain) | GREEN, 14ms (was OOM at 15s+) |
 | CCARD (continuation-cardinality-authority01) | 12/12 PASS |
 | BCNEX (background-notify-exactly-once-presentation01) | 7/7 PASS |
+| **derive-origin-precedence** (CORRECTION01 P1) | **2/2 PASS** |
+| CCARD + BCNEX + derive-origin-precedence combined | **21/21 PASS** |
 | sdk/core typecheck | exit non-zero, 25 baseline errors, ACT_NEW_ERRORS=0 |
 | apps/vscode typecheck | exit 0 (clean) |
 | git diff --check | clean |
@@ -178,13 +232,19 @@ load-bearing.
 
 | Field | Value |
 |---|---|
-| SUBJECT_HEAD | `e016952ed` |
+| SUBJECT_HEAD | `0a97b445c` (CORRECTION01) |
 | Version | `4.1.16` |
-| VSIX path | `dist/dogfood/clinemm-4.1.16-e016952ed.vsix` |
-| VSIX size | `14627804` bytes (~13.95 MB) |
-| VSIX sha256 | `190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0` |
-| Extracted extension.js sha256 | `473111fcd4819a596184730115849521ebd853a4e52e1f7b159c98e32caf633a` |
+| VSIX path | `dist/dogfood/clinemm-4.1.16-0a97b445c.vsix` |
+| VSIX size | `14627805` bytes (~13.95 MB) |
+| VSIX sha256 | `ab4ddfffe825826a573b47b553407aaa40e921dad67c798ee369f5d245ab2037` |
+| Extracted extension.js sha256 | `26c353a3f071e34fa0bea9351e06faf9ce802ed06597dd0d8f2ba9dff3433c9c` |
 | Package files | 52 |
+
+Pre-CORRECTION01 specimen (superseded; audit-only):
+- `dist/dogfood/clinemm-4.1.16-e016952ed.vsix`
+  (14627804 bytes, sha256
+  `190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0`)
+- P1 deriveOrigin precedence was wrong; audit only.
 
 Build sequence (no `--define` of `CLINEMM_OOM_DISC01_SUBJECT_HEAD`
 needed — that field was removed in the bounded repair):
@@ -196,7 +256,7 @@ bun run build:webview
 bun esbuild.mjs --production
 node ./node_modules/.bin/vsce package \
     --no-dependencies \
-    --out ../../dist/dogfood/clinemm-4.1.16-e016952ed.vsix
+    --out ../../dist/dogfood/clinemm-4.1.16-0a97b445c.vsix
 ```
 
 ## Live qualification (Phase 11)

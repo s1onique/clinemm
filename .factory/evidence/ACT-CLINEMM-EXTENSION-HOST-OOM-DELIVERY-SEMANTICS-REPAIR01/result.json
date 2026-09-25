@@ -1,8 +1,8 @@
 {
-  "act": "ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01",
+  "act": "ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / CORRECTION01",
   "primary_purpose": "repair",
   "entry_head": "998eb28c792d02252d1081d767d729eed97df22b",
-  "subject_head": "e016952ed",
+  "subject_head": "0a97b445c",
   "good_artifact": "d1ecf48dc",
   "bad_artifact": "99006fbcc",
   "regression_commit": "99006fbccaacb150b78e54dad7bdadc2a1390238",
@@ -94,12 +94,12 @@
   },
   "timestamp": "2026-09-25T03:43:00Z",
   "bundled_vsix": {
-    "subject_head": "e016952ed",
+    "subject_head": "0a97b445c",
     "version": "4.1.16",
-    "path": "dist/dogfood/clinemm-4.1.16-e016952ed.vsix",
-    "size_bytes": 14627804,
-    "sha256": "190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0",
-    "extracted_extension_js_sha256": "473111fcd4819a596184730115849521ebd853a4e52e1f7b159c98e32caf633a",
+    "path": "dist/dogfood/clinemm-4.1.16-0a97b445c.vsix",
+    "size_bytes": 14627805,
+    "sha256": "ab4ddfffe825826a573b47b553407aaa40e921dad67c798ee369f5d245ab2037",
+    "extracted_extension_js_sha256": "26c353a3f071e34fa0bea9351e06faf9ce802ed06597dd0d8f2ba9dff3433c9c",
     "package_files": 52,
     "bundle_contains": [
       "NO CLINEMM_OOM_DISC01_* references (predecessor ablation infrastructure removed)",

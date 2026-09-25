@@ -2,27 +2,33 @@ ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / 05-artifact-identit
 
 PHASE 10 — EXACT-HEAD ARTIFACT
 
-SUBJECT_HEAD
-  = e016952ed (full SHA: e016952ed... — see git rev-parse HEAD)
-  Commit: ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01
-  Subject: bounded repair + drain-semantics RED suite + scaffold removal
+SUBJECT_HEAD (post-CORRECTION01)
+  = 0a97b445c (full SHA: 0a97b445c... — see git rev-parse HEAD)
+  Commit: ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / CORRECTION01
+  Subject: P1 deriveOrigin precedence fix + conservation assertions
+
+SUBJECT_HEAD (pre-CORRECTION01, superseded)
+  = e016952ed (CORRECTION01 — see git log)
 
 VERSION
   = 4.1.16 (apps/vscode/package.json)
 
-VSIX PATH
-  = dist/dogfood/clinemm-4.1.16-e016952ed.vsix
+LIVE-QUALIFICATION SPECIMEN (post-CORRECTION01)
+  VSIX PATH                  = dist/dogfood/clinemm-4.1.16-0a97b445c.vsix
+  VSIX BYTE SIZE             = 14627805 bytes (~13.95 MB)
+  VSIX SHA-256               = ab4ddfffe825826a573b47b553407aaa40e921dad67c798ee369f5d245ab2037
+  EXTRACTED EXTENSION.JS SHA = 26c353a3f071e34fa0bea9351e06faf9ce802ed06597dd0d8f2ba9dff3433c9c
 
-VSIX BYTE SIZE
-  = 14627804 bytes (~13.95 MB)
+SUPERSEDED SPECIMEN (pre-CORRECTION01)
+  VSIX PATH                  = dist/dogfood/clinemm-4.1.16-e016952ed.vsix
+  VSIX BYTE SIZE             = 14627804 bytes
+  VSIX SHA-256               = 190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0
+  EXTRACTED EXTENSION.JS SHA = 473111fcd4819a596184730115849521ebd853a4e52e1f7b159c98e32caf633a
+  Status: superseded by CORRECTION01 — deriveOrigin precedence
+  was P1-broken (jobId-first re-classified steer+jobId as
+  pending_prompt_drain). Audit-only.
 
-VSIX SHA-256
-  = 190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0
-
-EXTRACTED EXTENSION.JS SHA-256
-  = 473111fcd4819a596184730115849521ebd853a4e52e1f7b159c98e32caf633a
-
-BUNDLE INTEGRITY CHECKS
+BUNDLE INTEGRITY CHECKS (post-CORRECTION01)
   - 0 occurrences of `CLINEMM_OOM_DISC01_*` in extracted extension.js
     (predecessor's ablation env var, constructor attestation, and
     SUBJECT_HEAD identifier are all gone)
@@ -32,6 +38,10 @@ BUNDLE INTEGRITY CHECKS
     `pendingPromptsController.drain -> deps.send({jobId})` without
     `delivery`. Verifiable by searching for the drain comment in
     the bundled output.
+  - The bundle correctly contains the deriveOrigin precedence
+    fix: delivery first, jobId second fallback, explicit_user
+    default. Verifiable by searching for `delivery === "queue"`
+    before `jobId !== undefined` in the bundled output.
 
 PACKAGE FILES
   = 52 (verified via vsce output)
@@ -43,7 +53,7 @@ BUILT VIA
   bun esbuild.mjs --production    # build extension bundle
   node ./node_modules/.bin/vsce package \
       --no-dependencies \
-      --out ../../dist/dogfood/clinemm-4.1.16-e016952ed.vsix
+      --out ../../dist/dogfood/clinemm-4.1.16-0a97b445c.vsix
 
   (No --define of CLINEMM_OOM_DISC01_SUBJECT_HEAD needed — that
   field was removed in the bounded repair. The ablation env var
@@ -51,17 +61,25 @@ BUILT VIA
 
 DISCOVERY
   = These identities were discovered AFTER commit
-    e016952ed (the bounded-repair commit). The bundle is bound
+    0a97b445c (the CORRECTION01 commit). The bundle is bound
     to that exact HEAD via the SHA-256 hash. To rebuild:
-    checkout e016952ed, run the build sequence above.
+    checkout 0a97b445c, run the build sequence above.
 
-PARALLEL BUNDLES (predecessor's)
+PARALLEL BUNDLES
   dist/dogfood/clinemm-4.1.16-a86534414.vsix  (predecessor's
     subject, 14627848 bytes, sha256
     c65347a2bb3578fcdd0787a0d00b404f5156689dbbd85419a8d56f0e15aca3d4)
+    — audit-only, ablation-attached predecessor bundle.
   dist/dogfood/clinemm-4.1.16-998eb28c7.vsix  (intermediate HEAD
-    at ACT start, 14617079 bytes)
+    at ACT start, 14617079 bytes) — audit-only, ENTRY_HEAD.
+  dist/dogfood/clinemm-4.1.16-e016952ed.vsix  (CORRECTION01
+    predecessor, 14627804 bytes, sha256
+    190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0)
+    — superseded by CORRECTION01; the P1 deriveOrigin
+    precedence bug is fixed in clinemm-4.1.16-0a97b445c.vsix.
+  dist/dogfood/clinemm-4.1.16-0a97b445c.vsix  — LIVE QUALIFICATION
+    SPECIMEN. CORRECTION01 with the P1 deriveOrigin precedence
+    fix and conservation assertions.
 
-  Neither contains the bounded repair — they are kept for audit
-  reference. Only clinemm-4.1.16-e016952ed.vsix is the live
-  qualification specimen.
+Only clinemm-4.1.16-0a97b445c.vsix is the current live
+qualification specimen.

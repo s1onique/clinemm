@@ -13,12 +13,14 @@ predecessor ACT pattern (see
 live qualification is operator-executed against the bundled VSIX.
 
 SPECIMEN
-  = dist/dogfood/clinemm-4.1.16-e016952ed.vsix
-  SUBJECT_HEAD = e016952ed
+  = dist/dogfood/clinemm-4.1.16-0a97b445c.vsix
+  SUBJECT_HEAD = 0a97b445c (post-CORRECTION01)
   Version      = 4.1.16
-  sha256        = 190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0
-  Size          = 14627804 bytes (~13.95 MB)
-  Built on      = 2026-09-25 from the bounded-repair commit
+  sha256        = ab4ddfffe825826a573b47b553407aaa40e921dad67c798ee369f5d245ab2037
+  Size          = 14627805 bytes (~13.95 MB)
+  Built on      = 2026-09-25 from the CORRECTION01 commit (P1
+                  deriveOrigin precedence fix + conservation
+                  assertions)
 
 REQUIRED EVIDENCE
   LIVE                       = PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED
@@ -29,13 +31,13 @@ PROCEDURE
   1. Install the bundled VSIX:
      - Same VSCodium install path used for the historical
        BAD=99006fbcc reproduction.
-     - VSIX path: dist/dogfood/clinemm-4.1.16-e016952ed.vsix
-     - sha256: 190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0
+     - VSIX path: dist/dogfood/clinemm-4.1.16-0a97b445c.vsix
+     - sha256: ab4ddfffe825826a573b47b553407aaa40e921dad67c798ee369f5d245ab2037
      - After install, the extension should be at version 4.1.16.
 
   2. Record the installed extension's
      `extension/dist/extension.js` sha256 and confirm it equals
-     the extracted VSIX sha256 (473111fcd4819a596184730115849521ebd853a4e52e1f7b159c98e32caf633a).
+     the extracted VSIX sha256 (26c353a3f071e34fa0bea9351e06faf9ce802ed06597dd0d8f2ba9dff3433c9c).
      Proves the install path didn't transform the bundle.
 
   3. Run the SAME production-shaped workload that produced

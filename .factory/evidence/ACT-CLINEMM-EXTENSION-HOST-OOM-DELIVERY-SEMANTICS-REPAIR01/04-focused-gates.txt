@@ -2,7 +2,37 @@ ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / 04-focused-gates
 
 PHASE 8 — FOCUSED GATES
 
-Captured at 2026-09-25, on the bounded-repair SUBJECT_HEAD.
+Captured at 2026-09-25, on the CORRECTION01 SUBJECT_HEAD
+(0a97b445c). The P1 deriveOrigin precedence fix adds:
+
+============================================================
+GATE 0 (CORRECTION01) — apps/vscode deriveOrigin precedence
+============================================================
+
+Command:
+  cd apps/vscode && bunx vitest run \
+    src/sdk/__tests__/derive-origin-precedence.test.ts
+
+Result:
+  Test Files  1 passed (1)
+  Tests       2 passed (2)
+
+Covered:
+  - source-order assertion: `delivery === "queue"` <
+    `delivery === "steer"` < `jobId !== undefined` <
+    `return "explicit_user"`
+  - exhaustive truth table:
+    - deriveOrigin(undefined, "job-1")    -> pending_prompt_drain
+    - deriveOrigin("queue",  undefined)    -> pending_prompt_drain
+    - deriveOrigin("queue",  "job-1")     -> pending_prompt_drain
+    - deriveOrigin("steer",  undefined)    -> deferred_continuation
+    - deriveOrigin("steer",  "job-1")     -> deferred_continuation (P1 fix)
+    - deriveOrigin(undefined, undefined)   -> explicit_user
+
+The P1 boundary check is now load-bearing: a future contributor
+who re-orders the branches (e.g. putting jobId first) trips this
+test. The "steer + jobId = deferred_continuation" case is the
+specific P1 discriminator.
 
 ============================================================
 GATE 1 — sdk/packages/core turn-queue suite
@@ -87,6 +117,22 @@ CCARD-ORIGIN-01 (the load-bearing C7/C8 origin test for the
 repaired contract) PASSES with the new deriveOrigin signature.
 CCARD-DISCRIMINATOR-01 (C5=1 with C6=2 fingerprint) PASSES
 unchanged.
+
+============================================================
+GATE 5b (CORRECTION01) — apps/vscode CCARD + BCNEX + derive-origin-precedence combined
+============================================================
+
+Command:
+  cd apps/vscode && bunx vitest run \
+    src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts \
+    src/sdk/__tests__/background-notify-exactly-once-presentation01.bcnex01.test.ts \
+    src/sdk/__tests__/derive-origin-precedence.test.ts
+
+Result:
+  Test Files  3 passed (3)
+  Tests       21 passed (21)
+
+All affected apps/vscode gates GREEN post-CORRECTION01.
 
 ============================================================
 GATE 6 — apps/vscode BCNEX tests (legitimate external queue

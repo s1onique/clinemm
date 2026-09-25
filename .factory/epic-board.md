@@ -11049,3 +11049,60 @@ LIVE_QUALIFICATION      = OPERATOR_PENDING
 **Next:** Operator runs the live specimen per `06-live-qualification.md` using the bundled VSIX at `dist/dogfood/clinemm-4.1.16-e016952ed.vsix` (sha256 `190f929bc240ed079575fd676481dbdd5f90f520b12fd886a7b0b3a176aaf6a0`, SUBJECT_HEAD `e016952ed`).
 
 **C1: GO directly to live specimen.**
+
+## ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / CORRECTION01 — P1 deriveOrigin precedence fix — 2026-09-25
+
+**Status:** PASS_DELIVERY_SEMANTICS_REPAIR (P1 review boundary addressed). Live qualification contract unchanged — see `06-live-qualification.md`.
+
+**P1 finding:** the initial CORRECTION-free deriveOrigin precedence put `jobId` BEFORE `delivery`. That re-classified the previously-stable case `deriveOrigin("steer", "job-1")` from `deferred_continuation` to `pending_prompt_drain` — a semantic regression that exceeded the OOM repair's required boundary. The P1 fix:
+
+```diff
+ const deriveOrigin = (
+   delivery: "queue" | "steer" | undefined,
+   jobId?: string,
+ ): "pending_prompt_drain" | "deferred_continuation" | "explicit_user" => {
+-  if (jobId !== undefined) return "pending_prompt_drain"
+   if (delivery === "queue") return "pending_prompt_drain"
+   if (delivery === "steer") return "deferred_continuation"
++  if (jobId !== undefined) return "pending_prompt_drain"
+   return "explicit_user"
+ }
+```
+
+`delivery` first, `jobId` second fallback. Historical `delivery` semantics preserved exactly. C4/C5/C6 still observe entry-level `delivery` unchanged; C7/C8 derive `pending_prompt_drain` from `jobId`-presence for the drained turn whose `delivery` was intentionally dropped at the repair boundary.
+
+**Conservation test (new file):**
+`apps/vscode/src/sdk/__tests__/derive-origin-precedence.test.ts` — 2 tests:
+1. Source-order assertion (delivery first, then jobId, then explicit_user). Trip a future contributor who re-orders.
+2. Exhaustive truth table mirroring the production closure, with the specific P1 discriminator `deriveOrigin("steer", "job-1") === "deferred_continuation"` asserted explicitly.
+
+**Gates (CORRECTION01, post-P1-fix):**
+
+| Gate | Result |
+|---|---|
+| `apps/vscode` `bunx tsc --noEmit` | exit 0 (clean) |
+| CCARD + BCNEX + derive-origin-precedence combined | 21/21 PASS |
+| sdk/core turn-queue | 14/14 PASS (unchanged) |
+| sdk/core typecheck | 25 baseline errors, ACT_NEW_ERRORS=0 |
+
+**Exact-head artifact (post-CORRECTION01 rebuild):**
+
+| Field | Value |
+|---|---|
+| SUBJECT_HEAD | `0a97b445c` (CORRECTION01) |
+| VSIX | `dist/dogfood/clinemm-4.1.16-0a97b445c.vsix` |
+| Size | 14627805 bytes (~13.95 MB) |
+| VSIX sha256 | `ab4ddfffe825826a573b47b553407aaa40e921dad67c798ee369f5d245ab2037` |
+| Extracted extension.js sha256 | `26c353a3f071e34fa0bea9351e06faf9ce802ed06597dd0d8f2ba9dff3433c9c` |
+| Package files | 52 |
+
+Pre-CORRECTION01 specimen `dist/dogfood/clinemm-4.1.16-e016952ed.vsix` (sha256 `190f929b…aaf6a0`) preserved as audit-only — superseded by CORRECTION01.
+
+**Halt conditions:** all from CORRECTION00 still NOT_TRIGGERED; P1 fixed; no new P0 surfaced.
+
+**Factory cursor (CORRECTION01):**
+- REPAIR: PROVEN (CORRECTION00)
+- REPAIR: PROVEN (CORRECTION01 — P1 deriveOrigin precedence)
+- LIVE_QUALIFICATION: OPERATOR_PENDING (specimen now `dist/dogfood/clinemm-4.1.16-0a97b445c.vsix`)
+
+**Next:** Operator runs the CORRECTION01 specimen per `06-live-qualification.md`. The P1 review round is closed; no CORRECTION02 unless a new P0 emerges.
