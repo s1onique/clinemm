@@ -420,26 +420,35 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// default is zero-overhead.
 			pendingPromptCapture: (() => {
 				// ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01:
-				// Origin derivation now uses `jobId` presence as the
-				// primary disambiguator between drained-from-controller
-				// and explicit-user-call. Under the bounded repair,
-				// `next.delivery` is no longer forwarded from drain to
-				// `runTurn` (that was the harmful execution-control
-				// re-application); drained prompts arrive at `runTurn`
-				// with `delivery === undefined` and `jobId` set
-				// (terminal-wake path). Explicit
-				// `runTurn({ delivery: "queue" })` calls without jobId
-				// still produce `pending_prompt_drain` for back-compat.
-				// `deriveOrigin` is a strict superset of the prior
-				// shape and disambiguates the existing drained-vs-
-				// explicit conflation.
+				// Origin derivation preserves historical `delivery`
+				// semantics as the PRIMARY disambiguator and uses
+				// `jobId` presence only as the FALLBACK for C7/C8
+				// where `delivery` has intentionally disappeared
+				// (the bounded repair drops the drain -> send
+				// `delivery` propagation; drained prompts arrive at
+				// `runTurn` with `delivery === undefined` and `jobId`
+				// set, terminal-wake path).
+				//
+				// C4/C5/C6 still observe entry-level `delivery` and
+				// call deriveOrigin with the same `delivery` value
+				// they always did — historical semantics are
+				// preserved exactly. C7/C8 call deriveOrigin with
+				// `delivery === undefined` and `jobId` set, where
+				// the jobId fallback recovers `pending_prompt_drain`.
+				//
+				// Order matters: `delivery` first, `jobId` second.
+				// Putting jobId first would re-classify
+				// `deriveOrigin("steer", "job-1")` from
+				// `deferred_continuation` to `pending_prompt_drain`
+				// — a semantic regression that exceeds the OOM
+				// repair's required boundary.
 				const deriveOrigin = (
 					delivery: "queue" | "steer" | undefined,
 					jobId?: string,
 				): "pending_prompt_drain" | "deferred_continuation" | "explicit_user" => {
-					if (jobId !== undefined) return "pending_prompt_drain"
 					if (delivery === "queue") return "pending_prompt_drain"
 					if (delivery === "steer") return "deferred_continuation"
+					if (jobId !== undefined) return "pending_prompt_drain"
 					return "explicit_user"
 				}
 				return {
