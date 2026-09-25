@@ -1,0 +1,13 @@
+{"seq":1,"at":1790335441430,"stage":"run_turn_started","origin":"explicit_user","sessionId":"1790335441241_5g7oe"}
+{"seq":2,"at":1790335474709,"stage":"terminal_committed","origin":"background_terminal","jobId":"cmd_mugvhy92x7rm527e"}
+{"seq":3,"at":1790335474710,"stage":"notify_consume_enter","origin":"background_terminal","jobId":"cmd_mugvhy92x7rm527e"}
+{"seq":4,"at":1790335474711,"stage":"pending_prompt_enqueued","origin":"pending_prompt_drain","sessionId":"1790335441241_5g7oe","jobId":"cmd_mugvhy92x7rm527e","promptId":"pending_1790335474710_Reppe"}
+{"seq":5,"at":1790335474711,"stage":"wake_created","origin":"background_terminal","sessionId":"1790335441241_5g7oe","taskId":"1790335441241_5g7oe","jobId":"cmd_mugvhy92x7rm527e"}
+{"seq":6,"at":1790335477643,"stage":"submit_and_exit_seen","origin":"pending_prompt_drain","sessionId":"1790335441241_5g7oe","taskId":"1790335441241_5g7oe"}
+{"seq":7,"at":1790335477708,"stage":"agent_turn_done","origin":"explicit_user","sessionId":"1790335441241_5g7oe"}
+{"seq":8,"at":1790335477709,"stage":"pending_prompt_dequeued","origin":"pending_prompt_drain","sessionId":"1790335441241_5g7oe","jobId":"cmd_mugvhy92x7rm527e","promptId":"pending_1790335474710_Reppe"}
+{"seq":9,"at":1790335477709,"stage":"continuation_scheduled","origin":"pending_prompt_drain","sessionId":"1790335441241_5g7oe","jobId":"cmd_mugvhy92x7rm527e","promptId":"pending_1790335474710_Reppe"}
+{"seq":10,"at":1790335477709,"stage":"run_turn_started","origin":"pending_prompt_drain","sessionId":"1790335441241_5g7oe","jobId":"cmd_mugvhy92x7rm527e"}
+{"seq":11,"at":1790335481227,"stage":"submit_and_exit_seen","origin":"pending_prompt_drain","sessionId":"1790335441241_5g7oe","taskId":"1790335441241_5g7oe"}
+{"seq":12,"at":1790335481227,"stage":"task_completion_committed","origin":"pending_prompt_drain","sessionId":"1790335441241_5g7oe","taskId":"1790335441241_5g7oe"}
+{"seq":13,"at":1790335481256,"stage":"agent_turn_done","origin":"pending_prompt_drain","sessionId":"1790335441241_5g7oe","jobId":"cmd_mugvhy92x7rm527e"}

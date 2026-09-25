@@ -1,47 +1,67 @@
 {
   "act_id": "ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01",
   "purpose": "live reproduction / presentation-surface classification",
-  "bounded_correction": {
-    "applied_after": "twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION",
-    "p0s_closed": [
-      "P0-A evidence-quality-promotion: prior 01a-ccard.jsonl was a synthetic trace mislabeled as raw operator upload. Renamed to 01a-ccard.NORMALIZED_DERIVED.jsonl; provenance disclosed in 00-raw-trace-status.md and 01a-ccard.NORMALIZED_DERIVED.meta.md.",
-      "P0-B internal-contradiction: prior recon \u00a75 + 03-presentation-map entry for UI-D claimed PROVEN-SUPPRESSED but the canonical UI enumeration (01c-ui.txt) explicitly listed UI-D as a second visible green COMPLETED card alongside UI-F. Treated UI enumeration as authoritative. UI-D binding now marked UNPROVEN."
-    ],
-    "verdict": "CAPTURE_INSUFFICIENT"
-  },
+  "bounded_correction_history": [
+    {
+      "round": 1,
+      "after_reviewer": "twenty-fourth",
+      "verdict": "HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION",
+      "p0s_closed": [
+        "P0-A evidence-quality-promotion: prior 01a-ccard.jsonl was a synthetic trace mislabeled as raw operator upload. Renamed to 01a-ccard.NORMALIZED_DERIVED.jsonl; provenance disclosed in 00-raw-trace-status.md.",
+        "P0-B internal-contradiction: prior recon + 03-presentation-map entry for UI-D claimed PROVEN-SUPPRESSED but the canonical UI enumeration (01c-ui.txt) listed UI-D as a second visible green COMPLETED card alongside UI-F. Treated UI enumeration as authoritative. UI-D binding now marked UNPROVEN."
+      ],
+      "p0_partially_remaining": [
+        "P0-A re-opened by twenty-fifth reviewer: the raw live JSONL was uploaded in the conversation context (~/Downloads/continuation*) but had not been ingested. The 'no raw operator upload exists' claim was technically correct for .factory but missed the chat upload."
+      ],
+      "verdict_at_round_close": "CAPTURE_INSUFFICIENT"
+    },
+    {
+      "round": 2,
+      "after_reviewer": "twenty-fifth",
+      "verdict": "HALT_RAW_LIVE_TRACE_NOT_INGESTED",
+      "p0s_closed": [
+        "P0-A fully closed: raw operator-uploaded JSONL ingested byte-identical as 01a-ccard.LIVE_RAW.jsonl (SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1); raw counters ingested as 01b-ccard-counters.LIVE_RAW.json. Synthetic trace relabeled 01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.jsonl."
+      ],
+      "p2s_recorded": [
+        "git diff --check shows 8 whitespace/EOF issues (documentary; NON-BLOCKING; batch later per reviewer)."
+      ],
+      "verdict_at_round_close": "CAPTURE_INSUFFICIENT (PRESENTATION_CLASS remains UNRESOLVED)"
+    }
+  ],
   "specimen": {
-    "source_kind": "operator-transcribed surface enumeration + Cloud-Agent-synthetic lifecycle trace",
-    "raw_uploaded_trace_present": false,
+    "source_kind": "operator-uploaded live CCARD JSONL (ingested in round 2)",
+    "raw_uploaded_trace_present": true,
     "extension_id": "cline.cline",
     "version": "4.1.16",
     "implementation_subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
-    "closure_head": "ebc9ea3aa",
-    "dogfood_source_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f"
+    "closure_head": "ebc9ea3aa (this ACT's round-2 commit; will be updated by closure_head commit)",
+    "dogfood_source_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
+    "session_id": "1790335441241_5g7oe",
+    "task_id": "1790335441241_5g7oe",
+    "job_id": "cmd_mugvhy92x7rm527e",
+    "prompt_id": "pending_1790335474710_Reppe",
+    "time_range_ms": {"first_at": 1790335441430, "last_at": 1790335481256, "span_ms": 39826}
   },
   "runtime_cardinality": {
-    "source": "01a-ccard.NORMALIZED_DERIVED.jsonl (synthetic; lifecycle-shape witness only)",
+    "source": "01a-ccard.LIVE_RAW.jsonl (raw operator upload; SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1)",
+    "load_bearing": "AUTHORITATIVE_LIVE",
     "terminal_committed": 1,
     "notify_consume_enter": 1,
     "wake_created": 1,
     "pending_prompt_enqueued": 1,
     "pending_prompt_dequeued": 1,
     "continuation_scheduled": 1,
-    "run_turn_started": {
-      "explicit_user": 1,
-      "pending_prompt_drain": 1
-    },
-    "agent_turn_done": {
-      "explicit_user": 1,
-      "pending_prompt_drain": 1
-    },
-    "submit_and_exit_seen": 2,
+    "run_turn_started": {"explicit_user": 1, "pending_prompt_drain": 1},
+    "agent_turn_done": {"explicit_user": 1, "pending_prompt_drain": 1},
+    "submit_and_exit_seen": {"total": 2, "by_origin": {"pending_prompt_drain": 2}},
     "task_completion_committed": 1,
-    "wake_C4_to_C8_jobId": "identical (J on seq 4..10)",
-    "WAKE_CARDINALITY": "HEALTHY (structural)",
-    "EXECUTION_CARDINALITY": "EXPLAINED (structural)",
+    "wake_C4_to_C8_jobId": {"identical": true, "value": "cmd_mugvhy92x7rm527e"},
+    "WAKE_CARDINALITY": "LIVE",
+    "EXECUTION_CARDINALITY": "LIVE",
+    "RUNTIME_CONSERVATION_REGRESSION": false,
     "PRESENTATION_CARDINALITY": "UNRESOLVED",
-    "load_bearing_for_classification": false,
-    "load_bearing_for_cardinality": true
+    "load_bearing_for_cardinality": true,
+    "load_bearing_for_classification": false
   },
   "ui_enumeration_authoritative": {
     "source": "01c-ui.txt",
@@ -82,20 +102,13 @@
     "UI-D": {
       "binding_status": "UNPROVEN_PENDING_PERSISTED_BINDING",
       "visible_text": "green COMPLETED card: Ran sh -c ... in the background...",
-      "candidate_producers": [
-        {
-          "producer": "message-translator.ts:1761-1795 + C10 filter at sdk-session-event-coordinator.ts:566-616",
-          "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
-          "hypothesis_if_persisted": "explicit_user turn's completion_result row that SURVIVED the C10 filter (regression of BCCOC01)",
-          "hypothesis_if_filtered": "filtered as before; the second visible card is actually a webview-side re-render artifact or a different message type misidentified"
-        },
-        {
-          "producer": "unrelated (e.g. say='text' with green-card CSS class applied by resolveTerminalReportFraming)",
-          "cline_message_shape": "{type:say, say:text, partial:false}",
-          "hypothesis_if_persisted": "a non-completion_result row that the terminal-report framing decided to badge as '\u2713 Completed' anyway"
-        }
+      "live_trace_constraints": "the explicit_user turn did NOT call the completion tool (submit_and_exit_seen=2 with both origins=pending_prompt_drain); so D.1 (completion_result SURVIVED C10) is ELIMINATED",
+      "remaining_candidates": [
+        {"candidate": "D.2", "producer": "text row badged by resolveTerminalReportFraming", "cline_message_shape": "{type:say, say:text, partial:false}", "hypothesis_class": "PS-C"},
+        {"candidate": "D.3", "producer": "phantom duplicate of wake turn's completion_result", "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}", "hypothesis_class": "PS-D"},
+        {"candidate": "D.4", "producer": "terminal_card (UI-A) re-rendered with 'Completed' badge after wake", "cline_message_shape": "{type:say, say:command, commandExecutionDisposition:backgrounded}", "hypothesis_class": "PS-C (over-badging)"}
       ],
-      "user_visible_authority": "UNRESOLVED (could be completion_result, could be badged text, could be webview artifact)"
+      "user_visible_authority": "UNRESOLVED (3 remaining candidates)"
     },
     "UI-E": {
       "binding_status": "PROVEN_VIA_PRODUCER",
@@ -107,57 +120,50 @@
     "UI-F": {
       "binding_status": "UNPROVEN_PENDING_PERSISTED_BINDING",
       "visible_text": "green COMPLETED card: The background command completed successfully.",
-      "candidate_producers": [
-        {
-          "producer": "message-translator.ts:1761-1795 (completion content_end) + ChatRow.tsx:1102-1125 (CompletionOutputRow)",
-          "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
-          "hypothesis_if_persisted": "the pending_prompt_drain turn's completion_result row (task_completion_committed = the wake turn's terminal commit)"
-        },
-        {
-          "producer": "second completion_result from a duplicate commit (regression of BCCOC01)",
-          "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}",
-          "hypothesis_if_persisted": "explicit_user's completion_result that the C10 filter did NOT suppress for some reason"
-        }
+      "live_trace_constraints": "F.1 (wake turn's completion_result at seq 11) is the single plausible candidate given the LIVE trace's pattern",
+      "remaining_candidates": [
+        {"candidate": "F.1", "producer": "message-translator.ts:1761-1795 (completion content_end) + ChatRow.tsx:1102-1125 (CompletionOutputRow + resolveTerminalReportFraming)", "cline_message_shape": "{type:say, say:completion_result, isAuthoritativelyCompletedResult:true, partial:false}", "live_evidence": "LIVE_RAW seq 11 submit_and_exit_seen (origin=pending_prompt_drain) + LIVE_RAW seq 12 task_completion_committed", "hypothesis_class": "PS-A or PS-C (depending on UI-D binding)"}
       ],
       "user_visible_authority": "semantic_completion candidate; exact producer UNPROVEN"
     }
   },
   "classification": {
     "ROOT_PRESENTATION_CLASS": "UNRESOLVED",
-    "PS_A_remainder": "if UI-D binds to a non-completion_result message type and UI-F is the sole completion_result, then this is the original PS-A claim (UI-D misclassified by enumeration); RECLASSIFY_POSSIBLE",
-    "PS_B_remainder": "if both UI-D and UI-F bind to say='completion_result' with isAuthoritativelyCompletedResult=true, then C10_DUPLICATION_PERSISTS_LIVE = true; C10-LIVE-OWNERSHIP-REPAIR01 authorized",
-    "PS_C_remainder": "if neither binds to completion_result but both render as green COMPLETED cards, then some other producer (resolveTerminalReportFraming? terminalCardProjection?) is over-badging text rows; UNKNOWN new class",
-    "PS_D_remainder": "if persisted messages reveal UI-D and UI-F map to DIFFERENT turn origins but both are completion_result, then the C10 filter suppression logic has a per-job mismatch; C10-LIVE-OWNERSHIP-REPAIR01 also authorized"
+    "PS_A_remainder": "if UI-D is D.2 (badged text) and UI-F is F.1 (the sole completion_result), then PS-A re-opens (original claim recovered); RECLASSIFY_POSSIBLE",
+    "PS_B_remainder": "ELIMINATED_BY_LIVE_TRACE (the LIVE trace shows only one completion_result in the session; PS-B required two)",
+    "PS_C_remainder": "if UI-D is D.2 (badged text), then over-badging of text rows by resolveTerminalReportFraming; UNKNOWN new class",
+    "PS_D_remainder": "if UI-D is D.3 (phantom duplicate of wake turn's completion_result), then webview-side state propagation has a duplicate-render defect; UNKNOWN new class",
+    "PS_E_remainder": "if UI-D is D.4 (terminal_card re-rendered with badge), then some renderer is over-badging terminal_card UI; UNKNOWN new class"
   },
   "reopen_conditions": {
     "operator_required_inputs": [
-      "persisted clineMessages for the specimen session as JSON dump or 'cat ~/.cline/data/.../<taskId>/messages.json'",
+      "persisted clineMessages for taskId=1790335441241_5g7oe as JSON dump or 'cat ~/.cline/data/tasks/1790335441241_5g7oe/messages.json'",
       "persisted apiConversationHistory for the same session",
       "webview extensionState.clineMessages snapshot if it differs"
     ],
     "binding_procedure": [
-      "enumerate all say='completion_result' rows; record message id, text, partial, isAuthoritativelyCompletedResult, turn origin",
+      "enumerate all say='completion_result' rows; record message id, text, partial, isAuthoritativelyCompletedResult, turn origin (LIVE_RAW predicts exactly 1 row at seq 11)",
       "enumerate all say='text' rows with green 'Completed' badge (per resolveTerminalReportFraming output)",
-      "for each operator-visible green COMPLETED card, find the matching persisted row",
-      "classify per the classification.remainder branches above"
+      "for each operator-visible green COMPLETED card (UI-D, UI-F), find the matching persisted row",
+      "classify per the classification.remainder branches above (PS-A, PS-C, PS-D, or PS-E; PS-B eliminated)"
     ]
   },
   "verdict": "CAPTURE_INSUFFICIENT",
-  "verdict_status": "HALT_CAPTURE_INSUFFICIENT (twenty-fourth reviewer)",
-  "verdict_provisional_reason": "Cannot classify PS-A / PS-B / PS-C / PS-D without binding the two operator-visible green COMPLETED cards to actual persisted Cline messages. The raw operator-uploaded CCARD trace required for binding is not present in this repository; the previously committed JSONL is a Cloud-Agent-synthetic trace and is not authoritative.",
+  "verdict_status": "HALT_CAPTURE_INSUFFICIENT (twenty-fourth reviewer); round-2 partially upgraded runtime cardinality from STRUCTURAL to LIVE",
+  "verdict_provisional_reason": "Cannot classify PS-A / PS-B / PS-C / PS-D / PS-E without binding the two operator-visible green COMPLETED cards to actual persisted Cline messages. The raw live CCARD trace is now ingested (01a-ccard.LIVE_RAW.jsonl) but the persisted-message dump is still required.",
   "live_qualification_status": {
     "live_a": "DEFERRED_TO_DOGFOOD_OPERATOR",
     "live_b": "DEFERRED_TO_DOGFOOD_OPERATOR",
     "additional_required": [
-      "operator must dump the persisted messages for the specimen session so that UI-D and UI-F can be bound to specific rows"
+      "operator must dump the persisted messages for taskId=1790335441241_5g7oe so that UI-D and UI-F can be bound to specific rows"
     ]
   },
   "conservation": {
-    "WAKE_CARDINALITY": "HEALTHY (structural; based on synthetic trace)",
-    "EXECUTION_CARDINALITY": "EXPLAINED (structural)",
+    "WAKE_CARDINALITY": "LIVE (computed from 01a-ccard.LIVE_RAW.jsonl)",
+    "EXECUTION_CARDINALITY": "LIVE",
     "RUNTIME_CONSERVATION_REGRESSION": false,
     "OOM_REPAIR": "UNCHANGED (BCNT01 24/24)",
-    "C4_C8_CORRELATION": "UNCHANGED (BCTCP01+CCCL01)",
+    "C4_C8_CORRELATION": "LIVE (identical: cmd_mugvhy92x7rm527e on seq 4,5,8,9,10)",
     "queue_steer": "UNCHANGED (BCNEX01 8/8)",
     "TQCB01_BARRIER": "UNCHANGED (15/15)",
     "non_completion_rows": "UNCHANGED (BCTPA-P7)"
@@ -173,29 +179,32 @@
     "HALT_OWNERSHIP_CORRELATION_NOT_SUFFICIENT": "n/a (BCCOC01 already closed; this ACT IS the presentation-classification step that depends on the ownership correlation)",
     "HALT_LIVE_QUALIFICATION_NOT_PERFORMED": "ACKNOWLEDGED",
     "HALT_RUNTIME_CONSERVATION_REGRESSION": "n/a",
-    "HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION": "TRIGGERED (twenty-fourth reviewer); CLOSED by this bounded correction (UI-D binding changed from PROVEN-SUPPRESSED to UNPROVEN_PENDING_PERSISTED_BINDING; synthetic trace renamed + provenance disclosed)"
+    "HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION": "TRIGGERED (twenty-fourth reviewer) -> CLOSED by round-1 bounded correction",
+    "HALT_RAW_LIVE_TRACE_NOT_INGESTED": "TRIGGERED (twenty-fifth reviewer) -> CLOSED by round-2 bounded correction (raw trace ingested byte-identical)"
   },
   "evidence_files": {
-    "00-raw-trace-status.md": "NEW: provenance disclosure for the synthetic CCARD trace; required operator inputs to re-open",
-    "01-live-specimen.md": "frozen live specimen; identity split per twenty-third + twenty-fourth reviewer C1",
-    "01a-ccard.NORMALIZED_DERIVED.jsonl": "RENAMED from 01a-ccard.jsonl; 13 synthetic records; provenance disclosed in sibling .meta.md",
-    "01a-ccard.NORMALIZED_DERIVED.meta.md": "NEW: provenance label for the renamed JSONL",
-    "01b-ccard-counters.json": "computed counters (unchanged numbers; provenance noted in body)",
+    "00-raw-trace-status.md": "REVISED: raw trace provenance + LIVE counters + insight on submit_and_exit_seen pattern",
+    "01-live-specimen.md": "REVISED: bounded correction header + LIVE trace specimen (sessionId, taskId, jobId, promptId, time range)",
+    "01a-ccard.LIVE_RAW.jsonl": "NEW: raw operator-uploaded live CCARD JSONL (byte-identical; SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1)",
+    "01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.jsonl": "RENAMED from 01a-ccard.NORMALIZED_DERIVED.jsonl (round 1) -> further renamed (round 2); NOT authoritative; HISTORICAL only",
+    "01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.meta.md": "RENAMED + revised provenance label",
+    "01b-ccard-counters.LIVE_RAW.json": "NEW: raw operator-uploaded counters file (byte-identical; SHA-256 2a82c0028ad4a39e78c54bcab01ce1502582d9994b555626584ee72f9ec892c1)",
+    "01b-ccard-counters.json": "REVISED: computed from LIVE_RAW (sessionId, jobId, taskId, promptId, time_range_ms, stages, wake_C4_to_C8_jobId_correlation)",
     "01c-ui.txt": "AUTHORITATIVE enumeration of visible UI surfaces (operator-transcribed; lists 2 green COMPLETED cards)",
-    "01c-ui.png": "REMOVED (was actually ASCII text, not a PNG; misleading)",
-    "02-recon.md": "source-bound recon; UI surface table; \u00a73 + \u00a75 reconciled with the bounded correction",
-    "03-presentation-map.jsonl": "machine-readable per-surface producer mapping (UI-D + UI-F marked UNPROVEN_PENDING_PERSISTED_BINDING)",
-    "04-focused-gates.txt": "conservation matrix; static checks; pre-existing failures",
+    "02-recon.md": "REVISED: §3 + §5 + §6 + §7 reflect LIVE trace (D.1 ELIMINATED; new D.3 + D.4 candidates; PS-B remainder eliminated)",
+    "03-presentation-map.jsonl": "REVISED: UI-D D.1 ELIMINATED_BY_LIVE_TRACE; remaining D.2/D.3/D.4; UI-F narrowed to F.1",
+    "04-focused-gates.txt": "REVISED: WAKE_CARDINALITY=LIVE; C-4/C-6 = UNPROVEN_PENDING_PERSISTED_BINDING (unchanged status; provenance upgraded)",
     "result.json": "this file"
   },
   "successor_selection": "OPEN_AFTER_REOPEN; no further correctness repair authorized in this cycle",
   "factory_cursor": {
     "PREDECESSOR": "PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED (BCCOC01)",
-    "RUNTIME_CARDINALITY": "HEALTHY (structural only)",
-    "JOB_CORRELATION": "HEALTHY",
-    "PRESENTATION_MAP": "UI-A/B/C/E: PROVEN_VIA_PRODUCER | UI-D/UI-F: UNPROVEN_PENDING_PERSISTED_BINDING (each has two candidate producers; cannot distinguish without persisted messages)",
+    "RUNTIME_CARDINALITY": "LIVE (computed from 01a-ccard.LIVE_RAW.jsonl)",
+    "JOB_CORRELATION": "LIVE (identical: cmd_mugvhy92x7rm527e)",
+    "PRESENTATION_MAP": "UI-A/B/C/E: PROVEN_VIA_PRODUCER | UI-D: UNPROVEN_PENDING_PERSISTED_BINDING (3 remaining candidates: D.2 badged text, D.3 phantom duplicate, D.4 terminal_card re-render; D.1 ELIMINATED_BY_LIVE_TRACE) | UI-F: UNPROVEN_PENDING_PERSISTED_BINDING (1 remaining candidate: F.1 wake turn's completion_result at seq 11)",
     "ROOT_PRESENTATION_CLASS": "UNRESOLVED",
     "REPAIR_AUTHORIZED": false,
-    "NEXT": "operator must (a) dump persisted clineMessages for the specimen session, (b) bind each operator-visible green COMPLETED card to a persisted row, (c) re-classify per classification.remainder branches"
+    "RAW_LIVE_TRACE_INGESTED": true,
+    "NEXT": "operator must (a) dump persisted clineMessages for taskId=1790335441241_5g7oe, (b) bind each operator-visible green COMPLETED card to a persisted row, (c) apply classification.remainder branches (PS-A, PS-C, PS-D, or PS-E; PS-B eliminated)"
   }
 }

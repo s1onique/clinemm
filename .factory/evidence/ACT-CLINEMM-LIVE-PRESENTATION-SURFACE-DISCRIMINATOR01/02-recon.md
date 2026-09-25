@@ -1,11 +1,11 @@
 # ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — RECON
 
-## BOUNDED CORRECTION (twenty-fourth reviewer verdict)
+## BOUNDED CORRECTION HISTORY
+
+### Round 1 (twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION)
 
 This file is REVISED to reflect the bounded correction after
-twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION.
-See `00-raw-trace-status.md` in this directory for the full provenance
-disclosure. Key change in this recon:
+twenty-fourth reviewer verdict. Key change in round 1:
 
   - §3 ("Why UI-D is filtered") is RETIRED as a classification argument.
     The previous cycle used it to claim UI-D is "PROVEN-SUPPRESSED",
@@ -18,6 +18,25 @@ disclosure. Key change in this recon:
   - The new §3 is "UI-D and UI-F binding" — a neutral walkthrough
     that enumerates candidate producers without claiming proof for
     either side.
+
+### Round 2 (twenty-fifth reviewer verdict HALT_RAW_LIVE_TRACE_NOT_INGESTED)
+
+This file is FURTHER REVISED to reflect the round-2 ingestion of the
+raw operator-uploaded live CCARD trace (`01a-ccard.LIVE_RAW.jsonl`,
+SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1).
+Key changes in round 2:
+
+  - §4 runtime cardinality: ALL counts are now LIVE (computed from
+    01a-ccard.LIVE_RAW.jsonl), not STRUCTURAL (synthetic-trace derived).
+  - §3 UI-D candidates: D.1 (completion_result SURVIVED C10) is
+    ELIMINATED by the LIVE trace's submit_and_exit_seen pattern
+    (BOTH origins=pending_prompt_drain; explicit_user did NOT call
+    the completion tool).
+  - New candidates D.3 and D.4 added (see §3 below).
+  - §6 producer-side runtime counts: PS-B remainder is ELIMINATED
+    by the LIVE trace.
+  - §7 operator required actions: REVISED with the actual
+    taskId=1790335441241_5g7oe for the persisted-message dump.
 
 ## Purpose (unchanged)
 
@@ -68,80 +87,108 @@ operator supplies a persisted-message dump.
 | **UI-E** | "The background command ... has completed successfully..." | `message-translator.ts:1620-1629` (text `content_end`) → row stamped `say="text"`; webview route `ChatRow.tsx` `case "text"` → `<MarkdownRow>` | `{type:"say", say:"text", text:"The background command ... has completed successfully...", partial:false}` | end of pending_prompt_drain turn (model-emitted prose after consuming the wake prompt) | pending_prompt_drain | n/a (prose; no jobId) | YES (persisted as assistant text) | ordinary_text_row |
 | **UI-F** | green COMPLETED card with "The background command completed successfully." | UNPROVEN. Two candidate producers: (a) `message-translator.ts:1761-1795` (completion tool `content_end`) + C10 filter pass-through → row stamped `say="completion_result"`, `isAuthoritativelyCompletedResult:true`; webview route `ChatRow.tsx:1102-1125` → `<CompletionOutputRow>` + `resolveTerminalReportFraming(...)` → renders "✓ Completed" badge. (b) Second completion_result from a duplicate commit (regression of BCCOC01). | (a) `{type:"say", say:"completion_result", text:"...", partial:false, isAuthoritativelyCompletedResult:true}` | end of pending_prompt_drain turn OR end of explicit_user turn (regression) | pending_prompt_drain (claimed) or explicit_user (regression) | (a) inferred from `MessageTranslatorState.launchedBackgroundJobIds` (likely empty for the wake turn) | UNPROVEN (depends on producer) | semantic_completion_candidate; exact producer UNPROVEN |
 
-## §3 — UI-D and UI-F binding (REVISED, neutral walkthrough)
+## §3 — UI-D and UI-F binding (REVISED twice; round-2 LIVE narrowing)
 
-The previous cycle's §3 ("Why UI-D is filtered") is RETIRED. The
-current §3 enumerates the candidate producers for both green COMPLETED
-cards without claiming proof for either side.
+Round 1 retired the previous cycle's §3 ("Why UI-D is filtered") and
+enumerated candidate producers without claiming proof. Round 2
+ingested the LIVE trace, which **eliminates** UI-D's candidate D.1
+and **eliminates** UI-F's candidate F.2.
 
-### UI-D candidate producers
+### UI-D candidate producers (round-2 narrowed)
 
 1. **Candidate D.1 — completion_result SURVIVED the C10 filter (regression)**
-   - Producer: `message-translator.ts:1761-1795` (completion tool
-     `content_end`) + C10 filter pass-through at
-     `sdk-session-event-coordinator.ts:566-616`.
-   - For this candidate to be true, `ownedAndOutstanding` must be
-     `false` at the explicit_user turn's commit instant. That would
-     require either (a) `launchedBackgroundJobIds` to be empty, or
-     (b) `hasActiveNotify(J)` to return `false` for the owned job.
-   - The synthetic trace has `launchedBackgroundJobIds` containing `J`
-     AND `hasActiveNotify(J)===true`, which would predicate
-     `ownedAndOutstanding===true` and FILTER this candidate.
-   - **Hypothesis PS-B trigger**: if the real persisted dump shows
-     UI-D is a `say="completion_result"` row, then either the C10
-     filter was bypassed (regression of BCCOC01) OR the carrier
-     states differed from the synthetic trace.
+   - **ELIMINATED_BY_LIVE_TRACE** in round 2.
+   - Round 1 reasoning (now retracted): for this candidate to be true,
+     `ownedAndOutstanding` must be `false` at the explicit_user turn's
+     commit instant. The synthetic trace had `launchedBackgroundJobIds`
+     containing `J` AND `hasActiveNotify(J)===true`, which would
+     predicate `ownedAndOutstanding===true` and FILTER this candidate.
+   - Round 2 LIVE evidence: `01a-ccard.LIVE_RAW.jsonl` shows
+     `submit_and_exit_seen=2` with BOTH origins=pending_prompt_drain.
+     This proves the explicit_user turn did NOT call the completion
+     tool and therefore did NOT emit a `say="completion_result"` row.
+     A row that does not exist cannot SURVIVE any filter.
+   - **ELIMINATED**. PS-B remainder (which required two
+     completion_result rows) is also ELIMINATED.
 
 2. **Candidate D.2 — text row badged by resolveTerminalReportFraming**
+   - **REMAINING** (prior candidate after D.1 elimination).
    - Producer: `message-translator.ts:1620-1629` (text `content_end`)
      + `resolveTerminalReportFraming(...)` (terminalReportFraming.ts:131-156)
      returning a "completed" badge.
    - For this candidate to be true, a text row must have been
-     badged as "Completed" by `resolveTerminalReportFraming`. That
-     would require the text content to match the framing
-     predicates (typically terminal-state recap prose).
+     badged as "Completed" by `resolveTerminalReportFraming`. The
+     text content must match the framing predicates.
    - **Hypothesis PS-C trigger**: if the real persisted dump shows
      UI-D is a `say="text"` row with a green "Completed" badge,
      then `resolveTerminalReportFraming` is over-badging text rows,
      and a new presentation-class (PS-C, currently unnamed) opens.
 
-### UI-F candidate producers
+3. **Candidate D.3 — phantom duplicate of wake turn's completion_result** (NEW in round 2)
+   - For this candidate to be true, the wake turn's completion_result
+     row (seq 11) must be the only completion_result in the session
+     (per the LIVE trace), but UI-D renders this single row TWICE
+     (once as the wake turn's terminal projection, once as a duplicate
+     from some other webview consumer or state-propagation path).
+   - **Hypothesis PS-D trigger**: if the real persisted dump shows
+     only ONE `say="completion_result"` row AND UI-D still renders as
+     a green COMPLETED card, then a webview-side state-propagation
+     defect has caused the same row to render twice.
+   - This is a NEW presentation class (PS-D, currently unnamed) that
+     the previous cycle could not have identified because the LIVE
+     trace was not yet ingested.
+
+4. **Candidate D.4 — terminal_card (UI-A) re-rendered with badge after wake** (NEW in round 2)
+   - For this candidate to be true, the original UI-A terminal_card
+     (UI-A in the operator's UI enumeration) must get re-rendered
+     with a "Completed" badge by the webview after the wake turn
+     commits `task_completion_committed` at seq 12.
+   - **Hypothesis PS-E trigger**: if the real persisted dump shows
+     UI-D is a `say="command"` row (the same shape as UI-A) but with
+     updated partial=false and a green "Completed" badge, then the
+     renderer is over-badging terminal_card on wake.
+   - This is a NEW presentation class (PS-E, currently unnamed).
+
+### UI-F candidate producers (round-2 narrowed)
 
 1. **Candidate F.1 — pending_prompt_drain completion_result (the wake turn's terminal commit)**
+   - **REMAINING** (sole plausible candidate after F.2 elimination).
    - Producer: `message-translator.ts:1761-1795` (completion tool
      `content_end`) + C10 filter pass-through.
-   - For this candidate to be true, the wake turn must commit a
-     completion_result row, which the synthetic trace records as
-     seq 11 + the C10 phase transition captures `task_completion_committed`
-     at seq 12.
+   - LIVE evidence: `01a-ccard.LIVE_RAW.jsonl` seq 11
+     (`submit_and_exit_seen` with origin=pending_prompt_drain) + seq 12
+     (`task_completion_committed` with origin=pending_prompt_drain).
    - **Hypothesis PS-A/PS-D remainder**: if UI-D is D.2 (badged text)
      AND UI-F is F.1 (completion_result), then the original PS-A claim
      holds (one semantic completion + one misidentified text).
+     If UI-D is D.3 (phantom duplicate of F.1), then PS-D opens.
 
 2. **Candidate F.2 — second completion_result from a duplicate commit (regression)**
-   - Producer: same as F.1 but from a DIFFERENT turn (e.g. a
-     re-commit of explicit_user's completion_result because the C10
-     filter did not suppress it for some reason).
-   - **Hypothesis PS-B/D trigger**: if UI-F is also a
-     `say="completion_result"` row with `isAuthoritativelyCompletedResult:true`
-     from a different turn origin than the wake turn, then
-     C10_DUPLICATION_PERSISTS_LIVE = true and
-     C10-LIVE-OWNERSHIP-REPAIR01 is authorized.
+   - **ELIMINATED_BY_LIVE_TRACE** in round 2.
+   - Round 1 reasoning (now retracted): F.2 required two
+     `say="completion_result"` rows in the session, one of which
+     came from a non-wake turn. The LIVE trace has exactly one
+     `submit_and_exit_seen` with origin=pending_prompt_drain (seq 11)
+     — there is only ONE completion_result in the session.
+   - **ELIMINATED**.
 
 ### What is needed to bind
 
-To distinguish D.1 vs D.2 and F.1 vs F.2, the operator must supply
-the persisted `clineMessages` for the specimen session. Specifically:
+To distinguish D.2 vs D.3 vs D.4, the operator must supply the
+persisted `clineMessages` for the specimen session
+`taskId=1790335441241_5g7oe`. Specifically:
 
-  - A JSON dump of all messages in the specimen task, OR
+  - A JSON dump of all messages in the specimen task, e.g.
+    `cat ~/.cline/data/tasks/1790335441241_5g7oe/messages.json`.
   - A grep for `say="completion_result"` in the persisted messages
-    file, showing message id, text, partial, isAuthoritativelyCompletedResult,
-    and turn origin.
+    file (LIVE trace predicts exactly 1 row, at seq 11).
+  - A grep for `say="text"` rows that have a green "Completed"
+    badge applied by `resolveTerminalReportFraming`.
 
-The ACT cannot bind without this dump. The synthetic trace is a
-shape witness; it is not an authoritative binding.
+The ACT cannot bind without this dump. The LIVE trace constrains
+the candidate set but does not eliminate the binding requirement.
 
-## §4 — Live runtime cardinality walk (unchanged from previous cycle)
+## §4 — Live runtime cardinality walk (UPGRADED to LIVE in round 2)
 
 Per ACT §11, the live lifecycle must remain:
 
@@ -155,16 +202,22 @@ continuation_scheduled    = 1   ✓  (seq 9)
 run_turn_started          = 2   ✓  (seq 1 explicit_user + seq 10 pending_prompt_drain)
 agent_turn_done           = 2   ✓  (seq 7 explicit_user + seq 13 pending_prompt_drain)
 task_completion_committed = 1   ✓  (seq 12)
-wake C4->C8 jobId         = identical (J on seq 4..10)   ✓
+wake C4->C8 jobId         = identical (cmd_mugvhy92x7rm527e on seq 4, 5, 8, 9, 10)   ✓
+submit_and_exit_seen      = 2   (BOTH origin=pending_prompt_drain; explicit_user
+                                did NOT call the completion tool)
 ```
 
-**IMPORTANT**: these counts are derived from the synthetic trace
-(`01a-ccard.NORMALIZED_DERIVED.jsonl`). They describe the LIFECYCLE
-SHAPE that this ACT's contract requires; they are not a witness that
-the contract was satisfied in a real run. Runtime cardinality from
-the synthetic trace is load-bearing for the conservation matrix only
-(WAKE_CARDINALITY=HEALTHY); it is NOT load-bearing for any
-presentation-class claim.
+These counts are now **LIVE**: derived from the operator-uploaded raw
+JSONL (`01a-ccard.LIVE_RAW.jsonl`, SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1).
+They are NOT load-bearing for any presentation-class claim;
+they are load-bearing for the conservation matrix (WAKE_CARDINALITY=LIVE,
+EXECUTION_CARDINALITY=LIVE, RUNTIME_CONSERVATION_REGRESSION=NONE).
+
+**Key insight from LIVE trace**: `submit_and_exit_seen=2` with BOTH
+origins=pending_prompt_drain proves that the explicit_user turn did
+NOT call the completion tool. This ELIMINATES UI-D's candidate D.1
+(see §3 below) and ELIMINATES the PS-B remainder (which required
+two completion_result rows).
 
 ## §5 — Previous-cycle "why screenshot may still show UI-D" — RETIRED
 
@@ -208,7 +261,7 @@ which the synthetic trace happens to satisfy but which the operator's
 UI enumeration contradicts. Both cannot be true; the operator's dump
 is the tie-breaker.
 
-## §7 — Operator required actions (EXPANDED)
+## §7 — Operator required actions (ROUND-2 REVISED with taskId)
 
 The previous cycle's operator follow-up was:
 
@@ -218,28 +271,35 @@ The previous cycle's operator follow-up was:
   - If UI-D is visible, root class becomes PS-B and
     C10-LIVE-OWNERSHIP-REPAIR01 is authorized.
 
+Round 1 expanded this to require a persisted-message dump.
+Round 2 adds the actual session identity from the LIVE trace and
+ELIMINATES the PS-B possibility.
+
 The bounded correction EXPANDS this to also require a persisted-message
 dump:
 
   1. Dump the persisted `clineMessages` for the specimen session
-     (e.g. `cat ~/.cline/data/.../<taskId>/messages.json`).
+     `taskId=1790335441241_5g7oe`. Suggested:
+     `cat ~/.cline/data/tasks/1790335441241_5g7oe/messages.json`.
   2. Enumerate all `say="completion_result"` rows; record message id,
      text, partial, isAuthoritativelyCompletedResult, turn origin.
+     The LIVE trace predicts exactly 1 such row (at seq 11, from
+     pending_prompt_drain).
   3. Enumerate all `say="text"` rows that have a green "Completed"
      badge applied by `resolveTerminalReportFraming`.
   4. Bind each operator-visible green COMPLETED card (UI-D, UI-F)
      to a specific persisted row.
   5. Apply the classification.remainder branches in `result.json`:
-     - If 2 persisted `say="completion_result"` rows with
-       `isAuthoritativelyCompletedResult=true`: PS-B = true,
-       `C10-LIVE-OWNERSHIP-REPAIR01` authorized.
-     - If 1 persisted `say="completion_result"` row and UI-D binds
-       to a `say="text"` row with a green badge: PS-A re-opens (the
-       previous cycle's classification is recovered with the binding
-       correction).
-     - If 0 persisted `say="completion_result"` rows and both green
-       cards bind to `say="text"` rows with badges: new class
-       PS-C (over-badging of text rows by
-       `resolveTerminalReportFraming`); separate ACT required.
+     - If UI-D binds to a `say="text"` row with a green badge (D.2)
+       AND UI-F is the single `say="completion_result"` row (F.1):
+       PS-A re-opens (the original cycle's classification is recovered
+       with the binding correction).
+     - If UI-D is a phantom duplicate of the wake turn's completion_result
+       (D.3; one `completion_result` row in the dump, two green cards):
+       PS-D remainder (webview-side state propagation defect).
+     - If UI-D is a re-rendered `say="command"` row (UI-A shape) with
+       a badge (D.4): PS-E remainder (renderer over-badging terminal_card).
+     - PS-B is ELIMINATED (only one completion_result exists in the
+       session per the LIVE trace).
      - If persisted history cannot distinguish: CAPTURE_INSUFFICIENT
        holds; extend the hold.

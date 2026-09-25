@@ -1,26 +1,50 @@
 ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — FOCUSED GATES
 =====================================================================
 
-BOUNDED CORRECTION (twenty-fourth reviewer verdict)
----------------------------------------------------
-Verdict: HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION
-This correction closes two P0s:
+BOUNDED CORRECTION HISTORY
+--------------------------
 
+Round 1 (twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION):
   P0-A  Evidence-quality promotion: prior 01a-ccard.jsonl was a
-        Cloud-Agent-synthetic trace mislabeled as raw operator
-        upload. Renamed to 01a-ccard.NORMALIZED_DERIVED.jsonl;
-        provenance disclosed in 00-raw-trace-status.md and
-        01a-ccard.NORMALIZED_DERIVED.meta.md.
-
+        Cloud-Agent-synthetic trace mislabeled as raw operator upload.
+        Renamed to 01a-ccard.NORMALIZED_DERIVED.jsonl; provenance
+        disclosed in 00-raw-trace-status.md.
   P0-B  Internal contradiction: prior recon §5 + 03-presentation-map
         entry for UI-D claimed PROVEN-SUPPRESSED_BY_BCCOC01
         (persisted=false), but the canonical UI enumeration
-        (01c-ui.txt) explicitly listed UI-D as a SECOND visible
-        green COMPLETED card alongside UI-F. Treated UI enumeration
-        as authoritative; UI-D binding now UNPROVEN.
+        (01c-ui.txt) explicitly listed UI-D as a SECOND visible green
+        COMPLETED card alongside UI-F. Treated UI enumeration as
+        authoritative; UI-D binding now UNPROVEN.
+  Round 1 verdict: CAPTURE_INSUFFICIENT.  ROOT_PRESENTATION_CLASS = UNRESOLVED.
+  REPAIR_AUTHORIZED = FALSE.
 
-New verdict: CAPTURE_INSUFFICIENT.  ROOT_PRESENTATION_CLASS = UNRESOLVED.
-REPAIR_AUTHORIZED = FALSE.
+Round 2 (twenty-fifth reviewer verdict HALT_RAW_LIVE_TRACE_NOT_INGESTED):
+  P0-A fully closed: raw operator-uploaded JSONL ingested byte-identical
+        as 01a-ccard.LIVE_RAW.jsonl (SHA-256
+        d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1);
+        raw counters ingested as 01b-ccard-counters.LIVE_RAW.json.
+        Synthetic trace relabeled
+        01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.jsonl.
+  Runtime cardinality upgraded from STRUCTURAL to LIVE.
+  Round 2 verdict: CAPTURE_INSUFFICIENT (UNCHANGED; PRESENTATION_CLASS
+        still UNRESOLVED until binding is performed).
+
+NEW INSIGHT FROM LIVE TRACE
+---------------------------
+
+The LIVE_RAW trace's `submit_and_exit_seen = 2` with BOTH origins =
+`pending_prompt_drain` proves that the explicit_user turn did NOT
+call the completion tool. Therefore UI-D's candidate D.1
+(completion_result SURVIVED C10) is ELIMINATED_BY_LIVE_TRACE. The
+remaining UI-D candidates are:
+
+  D.2  text row badged by resolveTerminalReportFraming
+  D.3  phantom duplicate of wake turn's completion_result
+  D.4  terminal_card (UI-A) re-rendered with "Completed" badge after wake
+
+PS-B remainder (two completion_result rows) is ELIMINATED_BY_LIVE_TRACE
+because the LIVE trace has exactly one completion_result across the
+session.
 
 Per ACT §14. The Cloud Agent context lacks the dev env to run
 `bun run test:vitest` (no `node`, no Playwright; vitest under bun
@@ -80,21 +104,45 @@ All focused gate evidence UNCHANGED from BCCOC01 close. This ACT
 performs NO source edits (§12 mandate), so no test counts can
 regress on the application side.
 
-## Classification gates (NEW after bounded correction)
+## Runtime cardinality gates (UPGRADED after LIVE ingestion)
+
+```
+WAKE_CARDINALITY        = LIVE (1 wake_created; 1 pending_prompt_enqueued;
+                              1 pending_prompt_dequeued; 1 continuation_scheduled;
+                              all on cmd_mugvhy92x7rm527e)
+EXECUTION_CARDINALITY   = LIVE (2 run_turn_started: explicit_user + pending_prompt_drain)
+RUNTIME_CONSERVATION_REGRESSION = NONE
+TASK_COMPLETION_COMMIT  = 1 (LIVE; seq 12)
+WAKE_C4_C8_CORRELATION  = identical (cmd_mugvhy92x7rm527e on seq 4, 5, 8, 9, 10)
+TERMINAL_COMMITTED      = 1 (LIVE; seq 2)
+NOTIFY_CONSUME_ENTER    = 1 (LIVE; seq 3)
+SUBMIT_AND_EXIT_SEEN    = 2 (BOTH with origin=pending_prompt_drain;
+                             explicit_user did NOT call the completion tool)
+```
+
+## Classification gates (REVISED after LIVE ingestion)
 
 ```
 C-1  UI-A producer bound                     = PROVEN_VIA_PRODUCER
 C-2  UI-B producer bound                     = PROVEN_VIA_PRODUCER
 C-3  UI-C producer bound                     = PROVEN_VIA_PRODUCER
 C-4  UI-D producer bound                     = UNPROVEN_PENDING_PERSISTED_BINDING
+                                                (D.1 ELIMINATED_BY_LIVE_TRACE;
+                                                 D.2/D.3/D.4 remain)
 C-5  UI-E producer bound                     = PROVEN_VIA_PRODUCER
 C-6  UI-F producer bound                     = UNPROVEN_PENDING_PERSISTED_BINDING
-C-7  PS-A / PS-B / PS-C / PS-D classified    = UNRESOLVED
+                                                (F.1 wake turn's completion_result;
+                                                 single plausible candidate)
+C-7  PS-A / PS-B / PS-C / PS-D / PS-E classified = UNRESOLVED
+                                                    (PS-B ELIMINATED_BY_LIVE_TRACE)
 C-8  ROOT_PRESENTATION_CLASS                 = UNRESOLVED
-C-9  raw operator trace present              = NO (none ever uploaded)
+C-9  raw operator trace present              = YES (01a-ccard.LIVE_RAW.jsonl;
+                                                  SHA-256 d7302ae9...d24f1)
 C-10 synthetic trace disclosure              = YES (provenance disclosed in
-                                              00-raw-trace-status.md +
-                                              01a-ccard.NORMALIZED_DERIVED.meta.md)
+                                                  00-raw-trace-status.md +
+                                                  01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.meta.md)
+C-11 raw counters file present               = YES (01b-ccard-counters.LIVE_RAW.json;
+                                                  SHA-256 2a82c002...92c1)
 ```
 
 ## Static checks (per ACT §14)
@@ -105,6 +153,7 @@ bunx tsc --noEmit                = CODE_QUALIFIED (no source edits,
 git diff --check                 = CODE_QUALIFIED (no edits,
                                                   clean working tree)
 ACT_NEW_ERRORS                   = 0
+P2_DOCUMENTARY_WHITESPACE_EOF    = 8 (NON-BLOCKING; batch later per reviewer)
 ```
 
 ## Pre-existing failures NOT caused by this ACT
@@ -132,15 +181,12 @@ HALT_LIVE_QUALIFICATION_NOT_PERFORMED  = ACKNOWLEDGED (this ACT is also
 HALT_OOM_REGRESSION                    = n/a
 HALT_CORRELATION_REGRESSION            = n/a
 HALT_RUNTIME_CONSERVATION_REGRESSION   = n/a (runtime counts healthy
-                                         per the synthetic trace,
-                                         lifecycle-shape match only)
-HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION = TRIGGERED -> CLOSED by
-                                                this bounded correction
-                                                (verdict flipped to
-                                                CAPTURE_INSUFFICIENT;
-                                                UI-D/UI-F binding
-                                                re-opened; raw-trace
-                                                provenance disclosed)
+                                         per the LIVE_RAW operator upload;
+                                         39826 ms span; all cardinality
+                                         invariants hold)
+HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION = TRIGGERED (round 1) -> CLOSED
+HALT_RAW_LIVE_TRACE_NOT_INGESTED       = TRIGGERED (round 2) -> CLOSED
+                                                (raw trace ingested byte-identical)
 CAPTURE_INSUFFICIENT                   = TRIGGERED (twenty-fourth reviewer);
                                          HOLD pending operator-supplied
                                          persisted-message dump

@@ -1,39 +1,87 @@
 {
-  "_provenance": {
-    "source_file": "01a-ccard.NORMALIZED_DERIVED.jsonl",
-    "source_kind": "NORMALIZED_DERIVED_FROM_LIVE (synthetic; see 00-raw-trace-status.md)",
-    "not_raw": true,
-    "load_bearing_for_cardinality": true,
-    "load_bearing_for_classification": false
+  "total": 13,
+  "sessionId": "1790335441241_5g7oe",
+  "jobId": "cmd_mugvhy92x7rm527e",
+  "taskId": "1790335441241_5g7oe",
+  "promptId": "pending_1790335474710_Reppe",
+  "time_range_ms": {
+    "first_at": 1790335441430,
+    "last_at": 1790335481256,
+    "span_ms": 39826
   },
-  "total_records": 13,
-  "terminal_committed": 1,
-  "notify_consume_enter": 1,
-  "wake_created": 1,
-  "pending_prompt_enqueued": 1,
-  "pending_prompt_dequeued": 1,
-  "continuation_scheduled": 1,
-  "run_turn_started": {
-    "total": 2,
-    "by_origin": {
-      "explicit_user": 1,
-      "pending_prompt_drain": 1
+  "stages": {
+    "run_turn_started": {
+      "count": 2,
+      "origins": [
+        "explicit_user",
+        "pending_prompt_drain"
+      ]
+    },
+    "terminal_committed": {
+      "count": 1,
+      "origins": [
+        "background_terminal"
+      ]
+    },
+    "notify_consume_enter": {
+      "count": 1,
+      "origins": [
+        "background_terminal"
+      ]
+    },
+    "pending_prompt_enqueued": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "wake_created": {
+      "count": 1,
+      "origins": [
+        "background_terminal"
+      ]
+    },
+    "submit_and_exit_seen": {
+      "count": 2,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "agent_turn_done": {
+      "count": 2,
+      "origins": [
+        "explicit_user",
+        "pending_prompt_drain"
+      ]
+    },
+    "pending_prompt_dequeued": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "continuation_scheduled": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "task_completion_committed": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
     }
   },
-  "agent_turn_done": {
-    "total": 2,
-    "by_origin": {
-      "explicit_user": 1,
-      "pending_prompt_drain": 1
-    }
-  },
-  "submit_and_exit_seen": 2,
-  "task_completion_committed": 1,
-  "wake_C4_to_C8_jobId_correlation": "identical (J on seq 4..10)",
-  "classification": {
-    "WAKE_CARDINALITY": "HEALTHY (structural; synthetic-trace derived)",
-    "EXECUTION_CARDINALITY": "EXPLAINED (structural; synthetic-trace derived)",
-    "TASK_COMPLETION_COMMIT": 1,
-    "PRESENTATION_CARDINALITY": "UNRESOLVED (cannot bind visible UI to persisted messages without raw operator dump)"
+  "wake_C4_to_C8_jobId_correlation": {
+    "wake_records_seq_range": [
+      4,
+      10
+    ],
+    "distinct_jobIds": [
+      "cmd_mugvhy92x7rm527e"
+    ],
+    "identical": true,
+    "value": "cmd_mugvhy92x7rm527e"
   }
 }

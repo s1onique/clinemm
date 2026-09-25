@@ -1,0 +1,67 @@
+{
+  "total": 13,
+  "stages": {
+    "terminal_committed": {
+      "count": 1,
+      "origins": [
+        "background_terminal"
+      ]
+    },
+    "notify_consume_enter": {
+      "count": 1,
+      "origins": [
+        "background_terminal"
+      ]
+    },
+    "wake_created": {
+      "count": 1,
+      "origins": [
+        "background_terminal"
+      ]
+    },
+    "pending_prompt_enqueued": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "pending_prompt_dequeued": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "continuation_scheduled": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "run_turn_started": {
+      "count": 2,
+      "origins": [
+        "explicit_user",
+        "pending_prompt_drain"
+      ]
+    },
+    "agent_turn_done": {
+      "count": 2,
+      "origins": [
+        "explicit_user",
+        "pending_prompt_drain"
+      ]
+    },
+    "submit_and_exit_seen": {
+      "count": 2,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    },
+    "task_completion_committed": {
+      "count": 1,
+      "origins": [
+        "pending_prompt_drain"
+      ]
+    }
+  }
+}

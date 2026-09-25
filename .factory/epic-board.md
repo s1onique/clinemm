@@ -11684,70 +11684,93 @@ version                     = 4.1.16         (separate per VS Code CLI pinning f
 
 ---
 
-**ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — CAPTURE_INSUFFICIENT (BOUNDED CORRECTION after twenty-fourth reviewer) — 2026-09-25**
+**ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01 — CAPTURE_INSUFFICIENT (BOUNDED CORRECTION ROUND 2 after twenty-fifth reviewer) — 2026-09-25**
 
-**Status:** CAPTURE_INSUFFICIENT (was PASS_PROVISIONAL_CODE_QUALIFIED in prior cycle; verdict REVISED by bounded correction after twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION). LIVE_A + LIVE_B deferred to dogfood operator; **operator-supplied persisted-message dump additionally required** to bind the two visible green COMPLETED cards (UI-D, UI-F) to specific persisted rows.
+**Status:** CAPTURE_INSUFFICIENT (was PASS_PROVISIONAL_CODE_QUALIFIED; then CAPTURE_INSUFFICIENT after round 1; verdict held at CAPTURE_INSUFFICIENT after round 2 but with runtime cardinality upgraded from STRUCTURAL to LIVE). LIVE_A + LIVE_B deferred to dogfood operator; **operator-supplied persisted-message dump additionally required** to bind the two visible green COMPLETED cards (UI-D, UI-F) to specific persisted rows.
 
 **Mission:** classify every visible completion-like UI element in the operator-uploaded live dogfood screenshot back to its production producer seam.
 
-**Bounded correction (two P0s closed in this revision):**
+**Bounded correction history:**
 
-- **P0-A  Evidence-quality promotion.** The file previously committed as `01a-ccard.jsonl` was a Cloud-Agent-synthetic trace (`sessionId="s_live"`, `taskId="t_live"`, `jobId="J"`, `ts=1000..1032`) mislabeled as raw operator upload. Renamed to `01a-ccard.NORMALIZED_DERIVED.jsonl`; provenance disclosed in `00-raw-trace-status.md` and `01a-ccard.NORMALIZED_DERIVED.meta.md`. **No raw operator-uploaded JSONL exists in this repository** (verified via `find` across `.factory/`, `.factory/tmp/`, and `/tmp`).
+  **Round 1 (twenty-fourth reviewer verdict HALT_LIVE_EVIDENCE_CONTRADICTS_CLASSIFICATION)** closed:
 
-- **P0-B  Internal contradiction.** Prior recon §5 + 03-presentation-map entry for UI-D claimed `PROVEN-SUPPRESSED_BY_BCCOC01` (`persisted=false`), but the canonical UI enumeration (`01c-ui.txt`, which IS the operator-transcribed screenshot ground truth) explicitly lists UI-D as a SECOND visible green COMPLETED card alongside UI-F. The UI enumeration is now treated as authoritative; UI-D binding is re-opened as `UNPROVEN_PENDING_PERSISTED_BINDING`.
+    - P0-A (partial) Evidence-quality promotion: prior 01a-ccard.jsonl was a Cloud-Agent-synthetic trace mislabeled as raw operator upload. Renamed to 01a-ccard.NORMALIZED_DERIVED.jsonl; provenance disclosed.
+    - P0-B Internal contradiction: prior recon claimed UI-D PROVEN-SUPPRESSED but the canonical UI enumeration (01c-ui.txt) listed UI-D as a SECOND visible green COMPLETED card. UI-D binding re-opened as UNPROVEN_PENDING_PERSISTED_BINDING.
 
-**Classification (revised; held open):** ROOT_PRESENTATION_CLASS = **UNRESOLVED**.
+  **Round 2 (twenty-fifth reviewer verdict HALT_RAW_LIVE_TRACE_NOT_INGESTED)** closed:
+
+    - P0-A (full) Raw operator-uploaded live CCARD JSONL ingested byte-identical as `01a-ccard.LIVE_RAW.jsonl` (SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1) and counters as `01b-ccard-counters.LIVE_RAW.json` (SHA-256 2a82c0028ad4a39e78c54bcab01ce1502582d9994b555626584ee72f9ec892c1). Synthetic trace relabeled `01a-ccard.SYNTHETIC_HYPOTHESIS_ONLY.jsonl` (NOT authoritative).
+
+  **LIVE-trace insight (NEW round 2)**: `submit_and_exit_seen=2` with BOTH origins=pending_prompt_drain proves the explicit_user turn did NOT call the completion tool. Therefore:
+    - UI-D candidate D.1 (completion_result SURVIVED C10) is ELIMINATED_BY_LIVE_TRACE.
+    - UI-F candidate F.2 (second completion_result) is ELIMINATED_BY_LIVE_TRACE.
+    - **PS-B remainder ELIMINATED_BY_LIVE_TRACE**.
+    - UI-D has 3 remaining candidates: D.2 (badged text), D.3 (phantom duplicate), D.4 (terminal_card re-render).
+    - UI-F has 1 remaining candidate: F.1 (wake turn's completion_result at seq 11).
+
+**Classification (held open):** ROOT_PRESENTATION_CLASS = **UNRESOLVED**.
 
 ```
 UI-A -> terminal_card_projection   (PROVEN_VIA_PRODUCER)
 UI-B -> ordinary_text_row          (PROVEN_VIA_PRODUCER)
 UI-C -> ordinary_text_row          (PROVEN_VIA_PRODUCER)
-UI-D -> UNPROVEN_PENDING_PERSISTED_BINDING  (was: PROVEN-SUPPRESSED_BY_BCCOC01 — RETIRED)
+UI-D -> UNPROVEN_PENDING_PERSISTED_BINDING  (D.1 ELIMINATED_BY_LIVE_TRACE;
+                                              3 candidates: D.2/D.3/D.4)
 UI-E -> ordinary_text_row          (PROVEN_VIA_PRODUCER)
-UI-F -> UNPROVEN_PENDING_PERSISTED_BINDING  (was: semantic_completion_single — RETIRED)
+UI-F -> UNPROVEN_PENDING_PERSISTED_BINDING  (F.2 ELIMINATED_BY_LIVE_TRACE;
+                                              1 candidate: F.1)
 ```
 
-**Classification remainder branches** (to be applied once binding is performed):
+**Classification remainder branches** (to apply once binding is performed):
 
-- **PS-A** if UI-D binds to a non-completion_result message type and UI-F binds to the single `say="completion_result"` row (the original classification, recovered with the binding correction).
-- **PS-B** if both UI-D and UI-F bind to `say="completion_result"` rows with `isAuthoritativelyCompletedResult=true` => C10_DUPLICATION_PERSISTS_LIVE = true; C10-LIVE-OWNERSHIP-REPAIR01 authorized.
-- **PS-C** (new) if neither binds to `completion_result` but both render as green COMPLETED cards => `resolveTerminalReportFraming` is over-badging text rows; separate ACT required.
-- **PS-D** if persisted messages reveal UI-D and UI-F map to DIFFERENT turn origins but both are `completion_result` => C10 filter suppression logic has a per-job mismatch; C10-LIVE-OWNERSHIP-REPAIR01 also authorized.
+  - **PS-A** if UI-D = D.2 (badged text) and UI-F = F.1 (the sole completion_result): PS-A re-opens (original classification recovered with binding correction).
+  - **PS-C** if UI-D = D.2 AND UI-F is also badged text: over-badging of text rows by `resolveTerminalReportFraming`.
+  - **PS-D** if UI-D = D.3 (phantom duplicate of wake's completion_result): webview-side state-propagation duplicate-render defect.
+  - **PS-E** if UI-D = D.4 (terminal_card re-rendered with badge after wake): renderer over-badging terminal_card.
+  - **PS-B ELIMINATED** (only one completion_result in the session per LIVE trace).
 
-
-**Producer-side runtime counts (HELD OPEN pending binding):**
-
-```
-completion_result_commits       = UNRESOLVED (0, 1, or 2 — depends on binding)
-terminal_card_projections       = 1   (UI-A; unchanged)
-task_completion_projections     = UNRESOLVED (0 or 1 — depends on binding)
-submit_and_exit_presentations   = 2   (per synthetic trace, lifecycle-shape only)
-ordinary_text_rows              = 3 or 4   (UI-B, UI-C, UI-E always; UI-D could be a 4th if badged text)
-```
-
-**Live runtime cardinality (per ACT §11 conservation; structural shape-match only):**
+**Producer-side runtime counts (LIVE; computed from 01a-ccard.LIVE_RAW.jsonl):**
 
 ```
-WAKE_CARDINALITY          = HEALTHY         (1)   (structural; synthetic trace)
-EXECUTION_CARDINALITY     = EXPLAINED       (2 turns: explicit + drain)
-TASK_COMPLETION_COMMIT    = 1   (structural)
-wake C4->C8 jobId         = identical (J on seq 4..10)
-runtime_conservation_regression = NONE
+terminal_committed         = 1   (seq 2)
+notify_consume_enter       = 1   (seq 3)
+wake_created               = 1   (seq 5)
+pending_prompt_enqueued    = 1   (seq 4)
+pending_prompt_dequeued    = 1   (seq 8)
+continuation_scheduled     = 1   (seq 9)
+run_turn_started           = 2   (seq 1 explicit_user + seq 10 pending_prompt_drain)
+agent_turn_done            = 2   (seq 7 explicit_user + seq 13 pending_prompt_drain)
+submit_and_exit_seen       = 2   (BOTH origin=pending_prompt_drain; seq 6 + seq 11)
+task_completion_committed  = 1   (seq 12)
+wake C4->C8 jobId          = identical (cmd_mugvhy92x7rm527e on seq 4,5,8,9,10)
 ```
 
-**Identity split (twenty-third + twenty-fourth reviewer C1):**
+**Identity (twenty-third + twenty-fourth reviewer C1):**
 
 ```
 IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-CLOSURE_HEAD                = ebc9ea3aa (this bounded-correction commit)
-extension_id                = cline.cline   (= publisher.name)
-version                     = 4.1.16        (separate field per VS Code CLI pinning form)
+CLOSURE_HEAD                = (set by this round-2 bounded-correction commit)
+
+Live session identity (NEW round 2):
+sessionId                   = 1790335441241_5g7oe
+taskId                      = 1790335441241_5g7oe
+jobId                       = cmd_mugvhy92x7rm527e
+promptId                    = pending_1790335474710_Reppe
+time_range_ms               = 1790335441430 .. 1790335481256 (39826 ms)
+
+extension_id                = cline.cline (= publisher.name)
+version                     = 4.1.16 (separate field per VS Code CLI pinning form)
 VSIX                        = dist/clinemm-4.1.16-baacc122a.vsix (bit-identical to BCCOC01)
 VSIX SHA-256                = 3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154
+
+Raw trace identity (NEW round 2):
+01a-ccard.LIVE_RAW.jsonl    SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1
+                            (byte-identical to operator's chat upload)
+01b-ccard-counters.LIVE_RAW.json  SHA-256 2a82c0028ad4a39e78c54bcab01ce1502582d9994b555626584ee72f9ec892c1
 ```
 
-**Conservation (UNCHANGED from BCCOC01 close):**
+**Conservation (UNCHANGED from BCCOC01 close; LIVE-UPGRADED in round 2):**
 
 ```
 R1, R2, R3, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14 = GREEN
@@ -11762,48 +11785,59 @@ TQCB01:                       15/15 PASS
 LHOWA01-WIRE:                 2/2 PASS
 PPAT01:                       9/9 PASS
 AGCONT01:                     7/7 PASS
+
+WAKE_CARDINALITY   = LIVE  (was STRUCTURAL in round 1)
+EXECUTION_CARDINALITY = LIVE
+C4->C8 jobId       = LIVE
+runtime_conservation_regression = NONE
 ```
 
-**Source diff (this ACT, including bounded correction):** ZERO — classification only, no production edits. The bounded correction is purely documentary (renames, headers, prose revisions). No production code is touched.
+**P2 documentary residue (NON-BLOCKING; per twenty-fifth reviewer):** 8 whitespace/EOF issues from `git diff --check`; batch later.
 
-**Successor selection:** OPEN_AFTER_REOPEN — no successor ACT selected in this cycle. Hold at CAPTURE_INSUFFICIENT pending the operator-supplied persisted-message dump. Once supplied, apply the binding procedure and the classification.remainder branches above to determine PS-A / PS-B / PS-C / PS-D. If PS-B or PS-D, authorize C10-LIVE-OWNERSHIP-REPAIR01. If PS-C, open a separate ACT to investigate over-badging.
+**Source diff (this ACT, including both rounds of bounded correction):** ZERO — classification only, no production edits. Both rounds of bounded correction are purely documentary.
+
+**Successor selection:** OPEN_AFTER_REOPEN — no successor ACT selected. Hold at CAPTURE_INSUFFICIENT pending operator-supplied persisted-message dump. Once supplied, apply the binding procedure and the classification.remainder branches above to determine PS-A / PS-C / PS-D / PS-E.
 
 **Operator required actions** (LIVE_A + LIVE_B + binding):
 
-1. Dump the persisted `clineMessages` for the specimen session (e.g. `cat ~/.cline/data/.../<taskId>/messages.json`).
-2. Enumerate all `say="completion_result"` rows; record message id, text, partial, isAuthoritativelyCompletedResult, turn origin.
+1. Dump the persisted `clineMessages` for taskId=`1790335441241_5g7oe` (e.g. `cat ~/.cline/data/tasks/1790335441241_5g7oe/messages.json`).
+2. Enumerate all `say="completion_result"` rows; record message id, text, partial, isAuthoritativelyCompletedResult, turn origin. LIVE trace predicts exactly 1 such row (at seq 11, from pending_prompt_drain).
 3. Enumerate all `say="text"` rows that have a green "Completed" badge applied by `resolveTerminalReportFraming`.
 4. Bind each operator-visible green COMPLETED card (UI-D, UI-F) to a specific persisted row.
-5. Verify UI-D is NOT visible in the live webview (regression of BCCOC01 if it IS visible).
-6. Verify UI-F is visible (regardless of binding).
+5. Verify UI-D is NOT visible in the live webview (regression of BCCOC01 if it IS visible) — note: D.1 ELIMINATED_BY_LIVE_TRACE so this is no longer the deciding question.
+6. Verify UI-F is visible.
 7. Apply the classification.remainder branches:
-   - 2 persisted `say="completion_result"` rows => PS-B; C10-LIVE-OWNERSHIP-REPAIR01 authorized.
-   - 1 persisted `say="completion_result"` row + UI-D binds to badged text => PS-A re-opens (original classification recovered).
-   - 0 persisted `say="completion_result"` rows + both green cards bind to badged text => PS-C; separate ACT required.
+   - UI-D = badged text (D.2) + UI-F = wake turn's completion_result (F.1) => PS-A re-opens.
+   - UI-D = phantom duplicate (D.3) => PS-D (webview-side state-propagation defect).
+   - UI-D = terminal_card re-render (D.4) => PS-E (renderer over-badging terminal_card).
+   - PS-B ELIMINATED.
    - Persisted messages cannot distinguish => extend the hold.
 
-**Decisive Factory state (post-twenty-fourth reviewer C1 + bounded correction):**
+**Decisive Factory state (post-twenty-fifth reviewer C1 + bounded correction rounds 1 + 2):**
 
 ```
 ACT                          = HOLD_PENDING_OPERATOR_DUMP (was: CLOSED_PROVISIONAL_CODE_QUALIFIED)
-P0                           = NONE_REMAINING (P0-A, P0-B both CLOSED by bounded correction)
+P0                           = NONE_REMAINING (P0-A, P0-B both CLOSED across rounds 1 + 2)
 P1                           = none (no new defects surfaced)
 LIVE_A                       = DEFERRED_TO_DOGFOOD_OPERATOR
 LIVE_B                       = DEFERRED_TO_DOGFOOD_OPERATOR
-OPERATOR_DUMP_REQUIRED       = YES (binding procedure)
+OPERATOR_DUMP_REQUIRED       = YES (binding procedure; taskId=1790335441241_5g7oe)
 SINGLE_JOB / P7b             = LIVE_QUALIFIED (carried from BCCOC01)
 R4 multi-job isolation       = UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER
 DOGFOOD_ROLLOUT              = BLOCKED (per BCCOC01; not changed by this ACT)
 AUTHORITY04                  = NOT_AUTHORIZED (no new wake-cardinality RED)
-PRESENTATION_CLASS           = UNRESOLVED (was: PS-A)
-UI-D_BINDING                 = UNPROVEN_PENDING_PERSISTED_BINDING (was: PROVEN-SUPPRESSED)
-UI-F_BINDING                 = UNPROVEN_PENDING_PERSISTED_BINDING (was: PROVEN via synthetic trace)
-RAW_LIVE_TRACE_PRESERVED     = NO (none ever uploaded; synthetic trace is now disclosed)
-CAPTURE_QUALIFICATION        = INSUFFICIENT
+PRESENTATION_CLASS           = UNRESOLVED (PS-B ELIMINATED_BY_LIVE_TRACE)
+UI-D_BINDING                 = UNPROVEN_PENDING_PERSISTED_BINDING (3 candidates: D.2, D.3, D.4)
+UI-F_BINDING                 = UNPROVEN_PENDING_PERSISTED_BINDING (1 candidate: F.1)
+RAW_LIVE_TRACE_PRESERVED     = YES (ingested in round 2; byte-identical to operator upload)
+WAKE_CARDINALITY             = LIVE (round 2 upgrade from STRUCTURAL)
+RUNTIME_CARDINALITY          = LIVE
+CAPTURE_QUALIFICATION        = INSUFFICIENT (binding still required)
 REPAIR_AUTHORIZED            = FALSE
 ```
 
-**Verdict:** CAPTURE_INSUFFICIENT (HOLD_PENDING_OPERATOR_DUMP). The bounded correction closes the two P0s flagged by the twenty-fourth reviewer (evidence-quality promotion + internal contradiction) and expands the operator follow-up to require a persisted-message dump in addition to live verification. Once the dump is supplied, this ACT can be re-opened with bounded scope to perform the binding and apply the classification.remainder branches.
+**Verdict:** CAPTURE_INSUFFICIENT (HOLD_PENDING_OPERATOR_DUMP). Round 1 (twenty-fourth reviewer) closed P0-A partially and P0-B fully. Round 2 (twenty-fifth reviewer) closed P0-A fully by ingesting the raw live trace byte-identical, upgraded runtime cardinality from STRUCTURAL to LIVE, and eliminated UI-D candidate D.1, UI-F candidate F.2, and the PS-B remainder based on the LIVE trace's `submit_and_exit_seen` pattern. Operator follow-up still requires a persisted-message dump for taskId=1790335441241_5g7oe to bind UI-D and UI-F to specific persisted rows and apply the classification.remainder branches (PS-A, PS-C, PS-D, or PS-E).
 
-**Prior verdict (retired, retained as PS-A remainder):** PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION (provisional_code_qualified).
-
+**Prior verdicts (retired):**
+- Original cycle: PASS_PRESENTATION_SURFACES_CLASSIFIED_MULTI_PROJECTION (PS-A; retired after twenty-fourth reviewer).
+- Round 1: CAPTURE_INSUFFICIENT (held open; refined in round 2).
