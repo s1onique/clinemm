@@ -38,7 +38,7 @@ Per the identity-split convention (twenty-third reviewer C1):
 ```
 IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
-CLOSURE_HEAD                = 6b10035745305652e2d0e7cee288ad20294d8524
+CLOSURE_HEAD                = 020a4efbaa8fa196be39b074249d527c71735ad3
 extension_id                = cline.cline
 version                     = 4.1.16
 ```

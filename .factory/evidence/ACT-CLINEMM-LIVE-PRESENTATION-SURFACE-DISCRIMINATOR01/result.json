@@ -6,7 +6,7 @@
     "extension_id": "cline.cline",
     "version": "4.1.16",
     "implementation_subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
-    "closure_head": "6b10035745305652e2d0e7cee288ad20294d8524",
+    "closure_head": "020a4efbaa8fa196be39b074249d527c71735ad3",
     "dogfood_source_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
     "vsix_path": "dist/clinemm-4.1.16-baacc122a.vsix",
     "vsix_sha256": "3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154",
