@@ -1,6 +1,137 @@
+(node:13277) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+(node:13278) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13282) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13281) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13280) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13279) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
  ✓ src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts (12 tests) 5ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
  ✓ src/sdk/__tests__/background-notify-exactly-once-presentation01.bcnex01.test.ts (7 tests) 4ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-notify-exactly-once-presentation01.bcnex01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
  ✓ src/sdk/__tests__/background-command-completion-ownership-correlation01.bccoc01.test.ts (7 tests) 6ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-command-completion-ownership-correlation01.bccoc01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
  ✓ src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts (6 tests) 6ms
- ✓ src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts (15 tests) 2130ms
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+ ✓ src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts (15 tests) 2405ms
+       ✓ TQCB-COMPOSE-PATH-B-01: real command_status → marker resolution (production wiring)  399ms
+       ✓ TQCB-COMPOSE-DUAL-DELIVERY-01: real command_status drives the real SdkController discard adapter → real host.pendingPrompts('delete')  1999ms
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: HostProvider not setup. Call HostProvider.initialize() first.
+ ❯ HostProvider.get src/hosts/host-provider.ts:104:10
+    102|  public static get(): HostProvider {
+    103|   if (!HostProvider.instance) {
+    104|    throw new Error("HostProvider not setup. Call HostProvider.initiali…
+       |          ^
+    105|   }
+    106|   return HostProvider.instance
+ ❯ HostProvider.get env [as env] src/hosts/host-provider.ts:126:23
+ ❯ TelemetryService.create src/services/telemetry/TelemetryService.ts:352:42
+ ❯ Proxy.<anonymous> src/services/telemetry/index.ts:46:38
+
+This error originated in "src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "TQCB-COMPOSE-PATH-B-01: real command_status → marker resolution (production wiring)". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  5 passed (5)
       Tests  47 passed (47)
+     Errors  1 error
+   Start at  01:15:07
+   Duration  4.94s (transform 7.81s, setup 10.68s, import 1.22s, tests 2.43s, environment 0ms)
+
+[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts. Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
+    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
+    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
+    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async Promise.all (index 4)
+    at Pool.cancel (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3509:3)
+    at Pool.close (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3516:3)
+    at async Promise.all (index 0) {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: kill EPERM
+[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m
+Emitted 'error' event at:
+    at ChildProcess.emitWorkerError (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3011:22)
+[90m    at ChildProcess.emit (node:events:509:20)[39m
+[90m    at ChildProcess.kill (node:internal/child_process:535:12)[39m
+    at Timeout._onTimeout (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3111:48)
+[90m    at listOnTimeout (node:internal/timers:605:17)[39m
+[90m    at processTimers (node:internal/timers:541:7)[39m {
+  errno: [33m-1[39m,
+  code: [32m'EPERM'[39m,
+  syscall: [32m'kill'[39m
+}
+
+Node.js v26.0.0

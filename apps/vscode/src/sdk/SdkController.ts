@@ -2311,6 +2311,18 @@ export class Controller {
 			// false when the coordinator is not yet wired (early
 			// lifecycle) or when the marker map is empty.
 			hasActiveNotify: (jobId: string) => this.backgroundNotifyCoordinator?.hasActiveNotify(jobId) ?? false,
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+			// Per-job wake-delivered probe consumed by the C10
+			// completion-commit barrier
+			// (`sdk-session-event-coordinator.ts:691-733`). Returns
+			// false when the coordinator is not yet wired (early
+			// lifecycle).
+			wasWakeDelivered: (jobId: string) => this.backgroundNotifyCoordinator?.wasWakeDelivered(jobId) ?? false,
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+			// Per-job wake-authority settled probe consumed by the
+			// C10 completion-commit barrier. Returns false when the
+			// coordinator is not yet wired (early lifecycle).
+			isWakeAuthoritySettled: (jobId: string) => this.backgroundNotifyCoordinator?.isWakeAuthoritySettled(jobId) ?? false,
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder

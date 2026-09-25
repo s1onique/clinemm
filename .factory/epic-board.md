@@ -11866,18 +11866,21 @@ REPAIR_AUTHORIZED            = FALSE
 
 **Repair artifact:** `apps/vscode/src/sdk/command-status-tool.ts` (H1 consult on `BackgroundNotifyCoordinator.hasActiveNotify(jobId)`).
 
-**Tests (54 total, all pass):**
+**Tests (60 total, all pass):**
 
 ```
 BNCA-RED-01       (RED):    2 tests pass  (fire-and-forget race reproduced)
-BNCA-GREEN-01     (GREEN):  3 tests pass  (H1 contract + R4 + R5)
-BNCA-ABLATION-01  (proof):  2 tests pass  (load-bearing necessity)
+BNCA-RED-02       (RED):    1 test  pass  (C10 framework seam pinned)
+BNCA-FRAMEWORK-01 (GREEN):  3 tests pass  (framework-level C10 barrier: wake-delivered SUPPRESSES, wake-discarded ALLOWS)
+BNCA-FRAMEWORK-ABLATION-01 (proof): 2 tests pass  (load-bearing necessity: fix ON suppresses, fix OFF commits)
+BNCA-GREEN-01     (GREEN):  3 tests pass  (H1 advisory contract + R4 + R5)
+BNCA-ABLATION-01  (proof):  2 tests pass  (H1 advisory load-bearing necessity)
 TQCB01            (gate):  15 tests pass  (dual-delivery arbitration conserved)
 BCNEX01           (gate):   7 tests pass  (exactly-once presentation conserved)
 BCCOC01           (gate):   7 tests pass  (ownership correlation conserved)
 BCTPA01           (gate):   6 tests pass  (presentation arbitration conserved)
 CCARD01           (gate):  12 tests pass  (continuation cardinality conserved)
-TOTAL                       54 tests pass
+TOTAL                       60 tests pass (13 BNCA + 47 conservation)
 ```
 
 TypeScript clean (`tsc --noEmit -p tsconfig.json` exit 0). git diff --check clean.
@@ -11914,3 +11917,30 @@ REPAIR_NECESSITY             = PROVEN (BNCA-ABLATION-01)
 **Verdict:** GREEN_AND_ABLATION. Operator-driven dogfood + LIVE-A..D pending per 08-live-qualification.md.
 
 **§17 C10 ablation (deferred):** whether the C10 completion-result filter is still necessary post-H1 is a separate bounded ACT. The H1 repair does not touch the C10 filter; the existing presentation-suppression remains as a conservation measure.
+
+**Bounded correction ROUND 2 (reviewer HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY):**
+
+The H1 advisory alone is comment-only — the model MAY still call `submit_and_exit` claiming the notify-owned job's terminal result. The factory expert halt required framework-enforced ownership at the lifecycle seam. The bounded correction adds:
+
+- `BackgroundNotifyCoordinator.wakeAuthoritySettledJobIds` + `wakeDeliveredJobIds` trackers; `wasWakeDelivered(jobId)` + `isWakeAuthoritySettled(jobId)` probes (BackgroundNotifyCoordinator.ts).
+- C10 completion-commit barrier at `sdk-session-event-coordinator.ts:691-733` consults the per-job probes: SUPPRESSES originating completion when `wasWakeDelivered(J) === true` (wake-driven turn owns terminal completion); HOLDS when `hasActiveNotify(J) === true` (marker alive).
+- Same predicate at `reevaluateDeferredCompletionBarrier`.
+- Wired in `SdkController.ts`.
+
+New tests:
+- BNCA-RED-02 (1 test — pins defect at C10 framework seam)
+- BNCA-FRAMEWORK-01 (3 tests — GREEN: wake-delivered SUPPRESSES, wake-discarded ALLOWS, no notify ALLOWS)
+- BNCA-FRAMEWORK-ABLATION-01 (2 tests — load-bearing necessity proof: fix ON suppresses, fix OFF commits)
+
+```
+LIVE_DEFECT                              = PROVEN
+DOUBLE_SUBMIT_AND_EXIT                   = LIVE
+FIRE_AND_FORGET_RACE                     = REPRODUCED
+H1_COMMAND_STATUS_SHORT_CIRCUIT          = EXECUTED_GREEN
+FRAMEWORK_C10_COMPLETION_COMMIT_BARRIER  = EXECUTED_GREEN (load-bearing)
+H1_PREVENTS_ORIGIN_COMPLETION            = PROVEN (model MAY ignore; framework SUPPRESSES)
+HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY = CLOSED_BY_BOUNDED_CORRECTION_ROUND_2
+WAKE_OWNERS_TERMINAL_COMPLETION          = ENFORCED_AT_FRAMEWORK_SEAM
+SEMANTIC_COMPLETION_CARDINALITY_=1       = PROVEN
+REPAIR_AUTHORIZED_FOR_LIVE_CLOSE         = TRUE
+```

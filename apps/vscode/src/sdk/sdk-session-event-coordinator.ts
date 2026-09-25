@@ -190,6 +190,45 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * deterministic.
 	 */
 	hasActiveNotify?: (jobId: string) => boolean
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+	 *
+	 * Per-job wake-delivered probe consulted at the C10
+	 * completion-commit seam (the
+	 * `setTurnPhase("completed", ...)` barrier at
+	 * `sdk-session-event-coordinator.ts:691-733`). Returns true
+	 * iff Path A has successfully enqueued a wake into
+	 * PendingPromptsController for the given `jobId`. When true,
+	 * the originating turn's completion commit is SUPPRESSED
+	 * because the wake-driven turn owns terminal completion for J.
+	 *
+	 * Wired by `SdkController` to a thin adapter that delegates
+	 * to `BackgroundNotifyCoordinator.wasWakeDelivered(jobId)`.
+	 *
+	 * Optional: when absent, the C10 barrier falls back to the
+	 * pre-repair TQCB01 predicate (originating turn's completion
+	 * is held until marker drains, then released — which produces
+	 * the live double-completion defect when the wake is in
+	 * flight). Tests that omit this option remain deterministic.
+	 */
+	wasWakeDelivered?: (jobId: string) => boolean
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+	 *
+	 * Per-job wake-authority settled probe consulted at the C10
+	 * completion-commit seam. Returns true iff the wake authority
+	 * for the given `jobId` has been committed to a terminal
+	 * sink (delivered to PendingPromptsController OR discarded
+	 * via `discardQueuedWake`).
+	 *
+	 * Wired by `SdkController` to a thin adapter that delegates
+	 * to `BackgroundNotifyCoordinator.isWakeAuthoritySettled(jobId)`.
+	 *
+	 * Optional: when absent, the C10 barrier falls back to the
+	 * pre-repair TQCB01 predicate (same rationale as
+	 * `wasWakeDelivered`).
+	 */
+	isWakeAuthoritySettled?: (jobId: string) => boolean
 }
 
 /**
@@ -382,8 +421,42 @@ export class SdkSessionEventCoordinator {
 		const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
 		const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
 		const activeNotifyCount = this.options.getActiveNotifyCount?.(activeSession.sessionId, taskId) ?? 0
-		const outstandingAutonomousWork = pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+		// Per-job wake-authority consult on each notify-owned
+		// jobId launched by THIS turn. The same predicate as
+		// the C10 barrier admission guard. The barrier re-
+		// evaluation MUST also consult this so a held completion
+		// does not fire when the wake-driven turn is the canonical
+		// authority.
+		const launchedBackgroundJobIds = this.options.messageTranslatorState.getLaunchedBackgroundJobIds()
+		let perJobOutstandingNotifyWork = false
+		let perJobSuppressOriginatingCompletion = false
+		if (launchedBackgroundJobIds.length > 0) {
+			for (const jid of launchedBackgroundJobIds) {
+				if (this.options.hasActiveNotify?.(jid)) {
+					perJobOutstandingNotifyWork = true
+				} else if (this.options.wasWakeDelivered?.(jid)) {
+					perJobSuppressOriginatingCompletion = true
+				}
+			}
+		}
+		const outstandingAutonomousWork =
+			pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0 || perJobOutstandingNotifyWork
 		if (outstandingAutonomousWork) return
+		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+		// If the wake-driven turn owns terminal completion for any
+		// notify-owned jobId launched by this turn, the originating
+		// turn's completion commit is SUPPRESSED — the deferred
+		// marker is held forever (the wake-driven turn will commit
+		// its own `completed` phase transition when it runs). The
+		// epoch supersession check above will eventually clear the
+		// deferred marker when the wake-driven turn ends.
+		if (perJobSuppressOriginatingCompletion) {
+			Logger.warn(
+				`[SdkController] outstanding obligations resolved for session ${activeSession.sessionId} but wake-driven turn owns terminal completion; suppressing originating completion commit (BNCA barrier)`,
+			)
+			return
+		}
 
 		// All four conservation checks pass: commit the held
 		// completion transition exactly once.
@@ -699,16 +772,82 @@ export class SdkSessionEventCoordinator {
 							const activeNotifyCount =
 								this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ??
 								0
+							// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+							// Per-job wake-authority consult on each
+							// notify-owned jobId launched by THIS turn.
+							// The originator's completion commit is HELD
+							// whenever any launched jobId has an
+							// outstanding wake authority that is not yet
+							// settled, AND is SUPPRESSED (barrier held
+							// forever for that jobId) when the wake was
+							// delivered (the wake-driven turn owns
+							// terminal completion for J).
+							//
+							// The C10 barrier consults THREE per-job
+							// states via BackgroundNotifyCoordinator:
+							//
+							//   1. `hasActiveNotify(J)` → marker alive
+							//      ⇒ wake authority in flight (Path A
+							//      will enqueue) ⇒ HOLD until settled.
+							//   2. `wasWakeDelivered(J)` → marker gone
+							//      AND wake enqueued ⇒ wake-driven turn
+							//      owns completion ⇒ SUPPRESS (the
+							//      originator MUST NOT commit; the
+							//      wake-driven turn will).
+							//   3. `isWakeAuthoritySettled(J)` → marker
+							//      gone AND wake settled (delivered or
+							//      discarded) ⇒ originator may commit.
+							//
+							// The barrier predicate is OR'd with the
+							// existing TQCB01 aggregate. When ANY of
+							// the per-job predicates reports "hold" the
+							// barrier holds; when the wake was delivered
+							// (case 2) the originator's completion is
+							// SUPPRESSED entirely (the deferred marker
+							// stays forever for that jobId; the
+							// wake-driven turn will commit instead).
+							const launchedBackgroundJobIds = this.options.messageTranslatorState.getLaunchedBackgroundJobIds()
+							let perJobOutstandingNotifyWork = false
+							let perJobSuppressOriginatingCompletion = false
+							if (launchedBackgroundJobIds.length > 0) {
+								for (const jid of launchedBackgroundJobIds) {
+									if (this.options.hasActiveNotify?.(jid)) {
+										// Case 1: wake authority in flight
+										// (Path A will enqueue).
+										perJobOutstandingNotifyWork = true
+									} else if (this.options.wasWakeDelivered?.(jid)) {
+										// Case 2: wake-driven turn owns
+										// terminal completion for this
+										// jobId. The originator MUST NOT
+										// commit its own completion —
+										// SUPPRESS (barrier held forever
+										// for this jobId).
+										perJobSuppressOriginatingCompletion = true
+									}
+									// Case 3: isWakeAuthoritySettled
+									// would mean originator may commit,
+									// but the originator has already
+									// entered this branch (commitment
+									// attempt) — we still ALLOW if no
+									// other predicate holds.
+								}
+							}
 							const outstandingAutonomousWork =
-								pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+								pendingPromptAuthorityUnknown ||
+								pendingPromptsKnown > 0 ||
+								activeNotifyCount > 0 ||
+								perJobOutstandingNotifyWork
+							const suppressOriginatingCompletion = perJobSuppressOriginatingCompletion
 
-							if (outstandingAutonomousWork) {
+							if (outstandingAutonomousWork || suppressOriginatingCompletion) {
 								// Register the deferred-completion-barrier marker.
 								// Same epoch + task + session identity triple as
 								// deferredContinuation (BTCONT01). Cleared on commit
 								// or on epoch supersession.
 								Logger.warn(
-									`[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has outstanding autonomous work (pendingPrompts=${pendingPromptsKnown}, activeNotify=${activeNotifyCount}); holding completion (TQCB01 barrier)`,
+									suppressOriginatingCompletion
+										? `[SdkController] submit_and_exit suppressed for session ${activeSession.sessionId}: wake-driven turn owns terminal completion for one or more notify-owned jobs launched by this turn (BNCA barrier)`
+										: `[SdkController] submit_and_exit requested but active session ${activeSession.sessionId} has outstanding autonomous work (pendingPrompts=${pendingPromptsKnown}, activeNotify=${activeNotifyCount}); holding completion (TQCB01 barrier)`,
 								)
 								this.deferredCompletionBarrier = {
 									sessionId: activeSession.sessionId,

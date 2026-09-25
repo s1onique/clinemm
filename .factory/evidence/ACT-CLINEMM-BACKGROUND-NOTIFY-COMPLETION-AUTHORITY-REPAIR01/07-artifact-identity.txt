@@ -42,3 +42,88 @@ DOGFOOD_SOURCE_HEAD           = 4e9f3912b (this ACT; LIVE-A..D deferred to opera
 #     documented in 04-authority-discriminator.md as a downstream question. The H1
 #     repair does not touch the C10 filter; the existing presentation-suppression
 #     remains in place as a conservation measure.
+
+
+# =============================================================================
+# BOUNDED CORRECTION ROUND 2 — HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY
+# =============================================================================
+
+# Reviewer halt: "The H1 advisory fix is comment-only — the model MAY still
+# invoke `submit_and_exit` claiming the notify-owned job's terminal result.
+# The GREEN does not test the load-bearing invariant. The conclusion 'wake
+# is sole terminal-completion authority post-repair' exceeds the
+# implementation."
+
+# Resolution: added a framework-level C10 completion-commit barrier that
+# enforces the invariant at the lifecycle seam where `submit_and_exit`
+# commits task completion. The model CANNOT bypass this barrier.
+
+# Framework-level C10 barrier (the load-bearing enforcement):
+
+#   apps/vscode/src/sdk/background-notify-coordinator.ts
+#     - Added `wakeAuthoritySettledJobIds: Set<string>` (per-job
+#       wake-authority settled tracker; populated by Path A's
+#       `enqueueTerminalWake` and by Path B's `resolveObligation`
+#       when `discardQueuedWake` returns `discarded`).
+#     - Added `wakeDeliveredJobIds: Set<string>` (per-job
+#       wake-delivered tracker; populated ONLY by Path A when
+#       the wake is enqueued into PendingPromptsController).
+#     - Added `wasWakeDelivered(jobId)` probe (returns true iff
+#       the wake for J was delivered to pendingPrompts; consulted
+#       by the C10 barrier to SUPPRESS the originating turn's
+#       completion when the wake-driven turn owns terminal
+#       completion for J).
+#     - Added `isWakeAuthoritySettled(jobId)` probe (returns true
+#       iff the wake authority for J has been committed to a
+#       terminal sink: delivered OR discarded).
+#     - Updated `resolveObligation` to mark
+#       `wakeAuthoritySettledJobIds` when the marker is drained
+#       (whether or not a wake was enqueued).
+#
+#   apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+#     - Added `wasWakeDelivered` and `isWakeAuthoritySettled`
+#       options to `SdkSessionEventCoordinatorOptions`.
+#     - Extended the C10 completion-commit barrier admission
+#       guard at line ~691-733 with a per-job consult:
+#         perJobOutstandingNotifyWork = launchedBackgroundJobIds.some(j => hasActiveNotify(j))
+#         perJobSuppressOriginatingCompletion = launchedBackgroundJobIds.some(j => wasWakeDelivered(j))
+#       The barrier holds when ANY notify-owned jobId has
+#       outstanding wake authority; the originating completion
+#       is SUPPRESSED when ANY notify-owned jobId had its wake
+#       delivered.
+#     - Extended `reevaluateDeferredCompletionBarrier` with the
+#       same per-job consult.
+#
+#   apps/vscode/src/sdk/SdkController.ts
+#     - Wired `wasWakeDelivered` and `isWakeAuthoritySettled`
+#       options to `BackgroundNotifyCoordinator` accessors.
+
+# H1 advisory (kept as complementary defense-in-depth):
+#   apps/vscode/src/sdk/command-status-tool.ts (unchanged from
+#   previous round; H1 advisory is now explicitly labeled as
+#   "complementary but NOT sufficient" per the
+#   HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY review).
+
+# New tests:
+#   apps/vscode/src/sdk/__tests__/background-notify-completion-authority-c10-red01.bnca-red01.test.ts
+#     (1 test — pinning the load-bearing defect at the C10 framework seam)
+#   apps/vscode/src/sdk/__tests__/background-notify-completion-authority-c10-framework01.bnca-framework01.test.ts
+#     (3 tests — framework-level C10 barrier GREEN: wake-delivered SUPPRESSES
+#      originating completion; wake-discarded ALLOWS originating completion;
+#      no notify-owned jobs ALLOWS originating completion)
+#   apps/vscode/src/sdk/__tests__/background-notify-completion-authority-c10-framework-ablation01.bnca-ablation01.test.ts
+#     (2 tests — load-bearing necessity proof: fix ON suppresses, fix OFF commits)
+
+# Test outcomes (under the bounded correction):
+#   BNCA-RED-01   (fire-and-forget discard race reproduction):                  2 tests ✓
+#   BNCA-RED-02   (C10 framework RED — pinning the load-bearing seam):         1 test  ✓
+#   BNCA-FRAMEWORK-01 (framework-level C10 barrier GREEN):                    3 tests ✓
+#   BNCA-FRAMEWORK-ABLATION-01 (load-bearing necessity proof):                2 tests ✓
+#   BNCA-GREEN-01 (H1 advisory contract + conservation):                      3 tests ✓
+#   BNCA-ABLATION-01 (H1 advisory load-bearing necessity proof):             2 tests ✓
+#   TQCB01 (conservation — existing dual-delivery arbitration):              15 tests ✓
+#   BCNEX01 (conservation — exactly-once presentation):                      7 tests  ✓
+#   BCCOC01 (conservation — ownership correlation):                          7 tests  ✓
+#   BCTPA01 (conservation — presentation arbitration):                      6 tests  ✓
+#   CCARD01 (conservation — continuation cardinality):                       12 tests ✓
+#   Total: 47 focused-gate tests + 13 BNCA tests = 60 tests, all passing.

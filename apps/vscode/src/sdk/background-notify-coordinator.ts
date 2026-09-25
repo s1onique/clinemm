@@ -355,6 +355,90 @@ export class BackgroundNotifyCoordinator {
 	 * before runTurn can consume it.
 	 */
 	private readonly wakeEnqueuedJobIds = new Set<string>()
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+	 *
+	 * Per-job wake-authority settled tracker. A jobId is added
+	 * here when its terminal wake authority has been committed
+	 * to a terminal sink — either enqueued into
+	 * PendingPromptsController (Path A) OR discarded via
+	 * `discardQueuedWake` (Path B superseded). The originating
+	 * turn's C10 completion commit (`setTurnPhase("completed",
+	 * ...)`) MUST be HELD at the
+	 * `sdk-session-event-coordinator.ts:691-733` seam for any
+	 * notify-owned jobId launched by this turn whose wake
+	 * authority is NOT yet settled.
+	 *
+	 * Why this matters (live defect — SHA-256
+	 * fe1b6bc7...4ae36, taskId=1790335441241_5g7oe):
+	 *
+	 *   1. originating turn launches notify-owned J
+	 *   2. originating turn calls `command_status(J, waitMs=30000)`
+	 *      — Path B `resolveObligation` drains the marker
+	 *      synchronously
+	 *   3. Path A's `consumeTerminal` had ALREADY enqueued a
+	 *      wake via the fire-and-forget
+	 *      `void active.sdkHost.send(...).catch(...)` (SdkController.ts:738)
+	 *      but the wake is still in flight
+	 *   4. Path B's `discardQueuedWake` runs synchronously and
+	 *      sees an empty queue — returns `not_found`
+	 *   5. The wake later lands in PendingPromptsController and
+	 *      fires a wake-driven autonomous turn
+	 *   6. Both the originating turn AND the wake-driven turn
+	 *      call `submit_and_exit` for the same jobId — the live
+	 *      defect (count = 2)
+	 *
+	 * The framework-level barrier at C10 closes the race
+	 * window between step 2 (marker drained, wake in flight) and
+	 * step 6 (wake-driven turn would otherwise fire): the
+	 * originating turn's completion commit is HELD until the
+	 * wake authority for J is SETTLED (either delivered to
+	 * pendingPrompts OR definitively discarded).
+	 *
+	 * The H1 advisory in `command_status` is complementary but
+	 * NOT sufficient — it's a comment-only convention the model
+	 * MAY ignore. The `wakeAuthoritySettledJobIds` consult at
+	 * C10 is the load-bearing framework enforcement.
+	 */
+	private readonly wakeAuthoritySettledJobIds = new Set<string>()
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+	 *
+	 * Per-job wake-delivered tracker. A jobId is added here
+	 * ONLY when Path A successfully enqueued the wake into
+	 * PendingPromptsController. This is the SOLE source of
+	 * authority for "wake-driven turn will own terminal
+	 * completion for J" — when this set contains J, the
+	 * originating turn's C10 completion commit MUST be
+	 * SUPPRESSED (not deferred, but redirected) so the
+	 * wake-driven turn becomes the canonical authority.
+	 *
+	 * Distinction from `wakeAuthoritySettledJobIds`:
+	 *
+	 *   `wakeAuthoritySettledJobIds` ⊇ `wakeDeliveredJobIds`
+	 *   (a jobId settled via discard is settled but NOT
+	 *   delivered; the originating turn may then commit).
+	 *
+	 * The C10 barrier consults both:
+	 *
+	 *   for each notify-owned jobId J launched by THIS turn:
+	 *     if hasActiveNotify(J):
+	 *       # wake authority is in flight (Path A will enqueue)
+	 *       HOLD until settled
+	 *     elif wakeDeliveredJobIds.has(J):
+	 *       # wake-driven turn owns completion — the originating
+	 *       # turn's completion commit MUST be SUPPRESSED.
+	 *       SUPPRESS (the wake-driven turn is the authority)
+	 *     elif wakeAuthoritySettledJobIds.has(J):
+	 *       # Path B won (wake was discarded OR marker drained
+	 *       # without enqueueing); originating turn may commit.
+	 *       ALLOW
+	 *     else:
+	 *       # Race window: marker gone but settle not yet
+	 *       # recorded. Conservative HOLD.
+	 *       HOLD
+	 */
+	private readonly wakeDeliveredJobIds = new Set<string>()
 	private readonly options: Required<Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">> &
 		Pick<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">
 	private disposed = false
@@ -418,6 +502,66 @@ export class BackgroundNotifyCoordinator {
 			return false
 		}
 		return this.notificationMarkers.has(jobId)
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+	 *
+	 * Wake-delivered probe — returns true iff Path A has
+	 * successfully enqueued a wake into
+	 * PendingPromptsController for the given `jobId`. The C10
+	 * completion-commit barrier at
+	 * `sdk-session-event-coordinator.ts:691-733` consults this
+	 * to SUPPRESS the originating turn's `submit_and_exit` when
+	 * the wake-driven turn owns terminal completion for J.
+	 *
+	 * Distinction from `hasActiveNotify`:
+	 *
+	 *   - `hasActiveNotify(J)` → marker is alive (wake authority
+	 *     in flight; barrier HOLDS originating turn).
+	 *   - `wasWakeDelivered(J)` → marker gone AND wake was
+	 *     delivered to pendingPrompts (wake-driven turn is the
+	 *     authority; originating turn's completion is
+	 *     SUPPRESSED).
+	 *
+	 * Internal-only (process-ephemeral). Exposed narrowly to
+	 * the SdkSessionEventCoordinator via the `wasWakeDelivered`
+	 * option.
+	 */
+	wasWakeDelivered(jobId: string): boolean {
+		if (!jobId || typeof jobId !== "string") {
+			return false
+		}
+		if (this.disposed) {
+			return false
+		}
+		return this.wakeDeliveredJobIds.has(jobId)
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+	 *
+	 * Wake-authority settled probe — returns true iff the wake
+	 * authority for `jobId` has been committed to a terminal
+	 * sink (delivered to PendingPrompts OR discarded via
+	 * `discardQueuedWake`). The C10 barrier consults this to
+	 * decide whether the originating turn may commit (settled
+	 * via discard → originating turn wins) or MUST continue to
+	 * hold (settled via delivery → wake-driven turn wins;
+	 * unsettled → race window, hold).
+	 *
+	 * Internal-only (process-ephemeral). Exposed narrowly to
+	 * the SdkSessionEventCoordinator via the
+	 * `isWakeAuthoritySettled` option.
+	 */
+	isWakeAuthoritySettled(jobId: string): boolean {
+		if (!jobId || typeof jobId !== "string") {
+			return false
+		}
+		if (this.disposed) {
+			return false
+		}
+		return this.wakeAuthoritySettledJobIds.has(jobId)
 	}
 
 	heldCountForOwner(sessionId: string, taskId: string | undefined): number {
@@ -537,6 +681,16 @@ export class BackgroundNotifyCoordinator {
 			// wake so a later Path B (resolveObligation) can
 			// supersede it.
 			this.wakeEnqueuedJobIds.add(h.jobId)
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+			// held-batch wake delivery: wake authority for h.jobId
+			// is SETTLED (delivered to PendingPromptsController).
+			this.wakeAuthoritySettledJobIds.add(h.jobId)
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+			// wake-driven turn is the canonical terminal-completion
+			// authority for h.jobId — the originating turn's C10
+			// completion commit MUST be SUPPRESSED (the wake-driven
+			// turn will fire its own submit_and_exit).
+			this.wakeDeliveredJobIds.add(h.jobId)
 		}
 		this.heldTerminalResults.delete(ownerK)
 		this.options.enqueueTerminalWake({
@@ -570,6 +724,19 @@ export class BackgroundNotifyCoordinator {
 		// no-op marker drain, but if any other path enqueued this
 		// wake earlier, it MUST be tracked).
 		this.wakeEnqueuedJobIds.add(input.jobId)
+		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+		// the wake for input.jobId has been delivered to
+		// PendingPromptsController (Path A); the wake authority
+		// for this jobId is now SETTLED. The C10 barrier at
+		// `sdk-session-event-coordinator.ts:691-733` releases
+		// the originating turn's held completion once all
+		// notify-owned jobIds' wake authorities are settled.
+		this.wakeAuthoritySettledJobIds.add(input.jobId)
+		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+		// wake-driven turn is the canonical terminal-completion
+		// authority for input.jobId — the originating turn's
+		// C10 completion commit MUST be SUPPRESSED.
+		this.wakeDeliveredJobIds.add(input.jobId)
 		const drainedCount = held.length + 1
 		this.recordDecision(input.jobId, "drained", undefined, 0, 0)
 		return {
@@ -614,6 +781,17 @@ export class BackgroundNotifyCoordinator {
 		}
 		if (marker) {
 			this.notificationMarkers.delete(input.jobId)
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+			// Path B drained the marker. The wake authority for
+			// this jobId is settled iff no wake was ever enqueued
+			// by Path A (Path A will see no_marker and not enqueue
+			// a wake — there is nothing to wait for). If Path A
+			// DID enqueue a wake, settle is determined by the
+			// discard callback below (its result decides whether
+			// the wake is definitively gone or still in flight).
+			if (!this.wakeEnqueuedJobIds.has(input.jobId)) {
+				this.wakeAuthoritySettledJobIds.add(input.jobId)
+			}
 		}
 
 		// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 /
@@ -653,6 +831,23 @@ export class BackgroundNotifyCoordinator {
 				discardedWake = decision.kind === "discarded"
 			} else {
 				discardedWake = true // host callback omitted: tracker updated, no queue mutation
+			}
+			// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+			// Wake authority for input.jobId is SETTLED iff the
+			// discard definitively removed the wake from the
+			// queue. When the discard returned `not_found`
+			// (fire-and-forget wake not yet landed, the LIVE
+			// race window) we DO NOT mark settled — the wake is
+			// in flight and the originating turn's completion
+			// must remain held. When the host callback was
+			// omitted, the tracker is authoritative (no queue
+			// to mutate), so settle is conservative-true.
+			//
+			// The C10 barrier consults `wakeAuthoritySettledJobIds`
+			// to release the held completion once all
+			// notify-owned jobIds' wake authorities are settled.
+			if (discardedWake || !this.options.discardQueuedWake) {
+				this.wakeAuthoritySettledJobIds.add(input.jobId)
 			}
 		}
 
@@ -697,6 +892,12 @@ export class BackgroundNotifyCoordinator {
 		// process-ephemeral (matches the coordinator's EPHEMERAL_ONLY
 		// contract).
 		this.wakeEnqueuedJobIds.clear()
+		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
+		// the wake-authority settled + wake-delivered trackers
+		// are process-ephemeral (the C10 barrier consults them
+		// only within a single session lifetime).
+		this.wakeAuthoritySettledJobIds.clear()
+		this.wakeDeliveredJobIds.clear()
 	}
 
 	diagnosticMarkerCount(): number {
