@@ -247,6 +247,7 @@ version                     = 4.1.16 (separate manifest field)
 IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 CLOSURE_HEAD                = f186c7e38 (this round-3 bounded-correction commit)
+CLOSURE_HEAD                = ce6f6caff (this round-4 bounded-correction commit)
 
 Live session identity (NEW after round 2):
 sessionId                   = 1790335441241_5g7oe

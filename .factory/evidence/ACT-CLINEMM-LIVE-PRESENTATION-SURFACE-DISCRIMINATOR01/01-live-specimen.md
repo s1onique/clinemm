@@ -104,6 +104,7 @@ The identity split below is the corrected one.
 ```
 IMPLEMENTATION_SUBJECT_HEAD   = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 CLOSURE_HEAD                  = f186c7e38 (this round-3 bounded-correction commit)
+CLOSURE_HEAD                  = ce6f6caff (this round-4 bounded-correction commit)
 DOGFOOD_SOURCE_HEAD           = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
 ```
 
