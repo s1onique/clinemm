@@ -161,11 +161,75 @@ CLOSED_BY_BOUNDED_CORRECTION_ROUND_2:
   HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY (framework C10 barrier at
   `setTurnPhase("completed", ...)` enforces ownership)
 
-CLOSED_BY_BOUNDED_CORRECTION_ROUND_3 (this ACT):
+CLOSED_BY_BOUNDED_CORRECTION_ROUND_3:
   HALT_WAKE_DELIVERY_ACK_PROMOTED (three-state contract at the
   transport seam: REQUESTED / DELIVERED / FAILED are explicit; C10
   barrier consults all three states; zero-completion failure mode is
   closed).
+
+### ROUND 3b (HALT_EXECUTABLE_GATE_NOT_CLEAN — runner teardown)
+
+The previous ROUND 3 clean-evidence artifacts (`06-bnca-suite-clean.txt`
+and `06-conservation-clean.txt`) ran under Vitest 4.1.10's default
+`forks` pool, which on this host terminates via an uncaught Node
+`Error: kill EPERM` from `Timeout._onTimeout` in Vitest's worker-shutdown
+path. The summary line showed `20 passed` / `47 passed` but the process
+exited through an unhandled Node error — the gate was not actually
+clean. Re-ran the full 13-file closed-loop gate (8 BNCA + 5 conservation
+closed-loop: TQCB01 + BCNEX01 + BCCOC01 + BCTPA01 + CCARD01) under
+`--pool=vmThreads --testTimeout=30000` in a single vitest invocation.
+`vmThreads` runs each test file in a Node Worker Thread (no fork), so
+the fork-shutdown `kill EPERM` path is not exercised.
+
+Old polluted artifacts deleted; replaced by
+`06-bnca-and-conservation-clean-vmthreads.txt`.
+
+### ROUND 3c (HALT_GATE_EXIT_NOT_BOUND_TO_RAW_ARTIFACT — captured runner status)
+
+Reviewer correctly caught that the ROUND 3b artifact's hand-authored
+header CLAIMED `EXIT: process exit code 0` and `0 errors | 0 unhandled`
+as metadata, but the raw captured vitest output itself ended at the
+summary/duration line and contained no shell-captured `GATE-exit=...`
+and no captured error-scan line. `result.json` then asserted those
+values were "captured independently", which was metadata about
+metadata. Factory's evidence policy requires the raw artifact to
+contain the exit status as captured lines, not as text claims.
+
+Re-ran the same 13-file `vmThreads` gate through a shell wrapper that
+writes the vitest stdout AND the actual process status (`GATE-exit=0`)
+AND the error-scan result (`ERROR_SCAN_RC=1`, `ERROR_SCAN_MATCHES=0`)
+into the SAME raw artifact as captured lines, durably bound to the
+file. No production, test, authority, or pool change.
+
+The artifact body of `06-bnca-and-conservation-clean-vmthreads.txt`
+(lines 32-41) now contains the CAPTURED-RUNNER-STATUS block:
+
+```
+================================================================================
+CAPTURED-RUNNER-STATUS (durably bound to this raw artifact)
+================================================================================
+GATE-exit=0
+EXIT_TS=2026-09-25T23:26:55Z
+ERROR_SCAN_RC=1
+ERROR_SCAN_MATCHES=0
+VITEST_TEST_FILES_LINE= Test Files  13 passed (13)
+VITEST_TESTS_LINE=      Tests  67 passed (67)
+CAPTURED-LINES-COUNT=73
+```
+
+`GATE-exit=0` is captured from `${PIPESTATUS[0]}` after the vitest pipe
+returned. `ERROR_SCAN_RC=1` confirms grep found no matches (grep
+returns 1 on no match). `ERROR_SCAN_MATCHES=0` is the matching-line
+count. `EXIT_TS` is the UTC timestamp of the capture.
+
+CLOSED_BY_BOUNDED_CORRECTION_ROUND_3b:
+  HALT_EXECUTABLE_GATE_NOT_CLEAN (vmThreads pool; runner exits cleanly
+  via Worker Threads instead of forked child processes)
+
+CLOSED_BY_BOUNDED_CORRECTION_ROUND_3c:
+  HALT_GATE_EXIT_NOT_BOUND_TO_RAW_ARTIFACT (runner exit status and
+  error-scan result durably bound to the raw artifact as captured
+  shell lines, not hand-authored metadata)
 
 ## What was NOT done (deferred)
 
@@ -196,8 +260,7 @@ The §17 C10 ablation is then in scope as a separate bounded ACT.
     04-authority-discriminator.md
     05-bnca-test-suite.txt
     05-repair-ablation.txt
-    06-bnca-suite-clean.txt           (ROUND 3 clean evidence)
-    06-conservation-clean.txt         (ROUND 3 clean evidence)
+    06-bnca-and-conservation-clean-vmthreads.txt  (ROUND 3c clean evidence with durably-captured runner status)
     07-artifact-identity.txt
     08-live-qualification.md
     result.json

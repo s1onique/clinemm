@@ -11936,3 +11936,37 @@ REPAIR_AUTHORIZED_FOR_LIVE_CLOSE = TRUE
 ```
 
 DOGFOOD_AUTHORIZED = TRUE (per 08-live-qualification.md, live A..D deferred to operator).
+
+
+**Bounded correction ROUND 3c (reviewer HALT_GATE_EXIT_NOT_BOUND_TO_RAW_ARTIFACT — captured runner status):**
+
+Reviewer caught that the ROUND 3b artifact's hand-authored header claimed `EXIT: process exit code 0` and `0 errors | 0 unhandled` as metadata, but the raw captured vitest output itself ended at the summary/duration line and contained no shell-captured `GATE-exit=...` and no captured error-scan line. `result.json` then asserted those values were "captured independently", which was metadata about metadata. Factory's evidence policy requires the raw artifact to contain the exit status as captured lines, not as text claims.
+
+ROUND 3c fix (runner-level only, NOT a test-logic or authority change): re-ran the same 13-file `vmThreads` gate through a shell wrapper that writes the vitest stdout AND the actual process status (`GATE-exit=0`) AND the error-scan result (`ERROR_SCAN_RC=1`, `ERROR_SCAN_MATCHES=0`) into the SAME raw artifact as captured lines. The artifact body of `06-bnca-and-conservation-clean-vmthreads.txt` lines 32-41 now contains the CAPTURED-RUNNER-STATUS block:
+
+```
+================================================================================
+CAPTURED-RUNNER-STATUS (durably bound to this raw artifact)
+================================================================================
+GATE-exit=0
+EXIT_TS=2026-09-25T23:26:55Z
+ERROR_SCAN_RC=1
+ERROR_SCAN_MATCHES=0
+VITEST_TEST_FILES_LINE= Test Files  13 passed (13)
+VITEST_TESTS_LINE=      Tests  67 passed (67)
+CAPTURED-LINES-COUNT=73
+```
+
+`GATE-exit=0` is captured from `${PIPESTATUS[0]}` after the vitest pipe returned. `ERROR_SCAN_RC=1` confirms grep found no matches (grep returns 1 on no match). `ERROR_SCAN_MATCHES=0` is the matching-line count.
+
+```
+THREE_STATE_AUTHORITY_CONTRACT   = PASS
+DELIVERY_FAILURE_CONSERVATION    = PASS
+MODEL_INDEPENDENT_C10_BARRIER    = PASS
+VMTHREADS_ASSERTIONS             = 67 PASS
+RUNNER_BODY_ERRORS               = NONE OBSERVED (captured ERROR_SCAN_MATCHES=0)
+PROCESS_EXIT_ZERO                = ARTIFACT-BOUND (captured GATE-exit=0 at artifact line 35)
+HALT_EXECUTABLE_GATE_NOT_CLEAN   = CLOSED_BY_BOUNDED_CORRECTION_ROUND_3b
+HALT_GATE_EXIT_NOT_BOUND_TO_RAW_ARTIFACT = CLOSED_BY_BOUNDED_CORRECTION_ROUND_3c
+REPAIR_AUTHORIZED_FOR_LIVE_CLOSE = TRUE
+```
