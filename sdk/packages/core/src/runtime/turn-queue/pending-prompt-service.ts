@@ -13,26 +13,6 @@ import type {
 
 export type PendingPromptDelivery = "queue" | "steer";
 
-/**
- * ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01:
- *
- * Subject HEAD string for live-specimen attestation. Set at build time
- * by esbuild `--define:CLINEMM_OOM_DISC01_SUBJECT_HEAD='"<sha>"'`
- * (production build sets this to `<unknown>` so the value is never
- * misleading). At runtime, if unset, the constructor falls back to
- * `<runtime-unset>` so the absence is observable rather than silent.
- *
- * NOTE: `declare const` is a TypeScript-only construct. The runtime
- * presence of this identifier depends on whether the build process
- * substituted it (via esbuild `--define`). When undefined, the
- * constructor MUST NOT throw a ReferenceError. The lookup goes
- * through `(globalThis as { CLINEMM_OOM_DISC01_SUBJECT_HEAD?: string }).CLINEMM_OOM_DISC01_SUBJECT_HEAD`
- * to make the absence observable.
- */
-type GlobalWithSubject = {
-	CLINEMM_OOM_DISC01_SUBJECT_HEAD?: string;
-};
-
 export interface PendingPromptEntry {
 	id: string;
 	prompt: string;
@@ -318,51 +298,7 @@ export class PendingPromptService {
 export class PendingPromptsController {
 	private readonly service = new PendingPromptService();
 
-	/**
-	 * ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01:
-	 *
-	 * Throwaway diagnostic ablation seam. When the
-	 * `CLINEMM_OOM_DISC01_ABLATE_DELIVERY` env var is set to `"1"`,
-	 * the controller drops the `next.delivery` field from the
-	 * `deps.send(...)` payload at the drain boundary. All other
-	 * behavior — including jobId propagation, onBeforeDispatch, the
-	 * C4/C5/C6/C7 hooks, and the C5/C6 capture surfaces — is
-	 * preserved exactly.
-	 *
-	 * Default: `false` (production-equivalent behavior).
-	 * The seam exists solely to host the live-specimen ablation;
-	 * it MUST NOT be enabled in production builds and the env var
-	 * MUST NOT be documented outside this ACT.
-	 */
-	private readonly __ablateDeliveryPropagation =
-		process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY === "1";
-
-	constructor(private readonly deps: PendingPromptsControllerDeps) {
-		// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01:
-		// Positive Extension Host attestation. Emitted ONCE per
-		// controller construction, bound to the current process PID
-		// so the live-specimen operator can pair the line to a
-		// confirmed Extension Host PID (not the launcher PID).
-		// Writes to process.stderr so the line appears in the
-		// Electron extension host's stderr stream regardless of any
-		// console redirection. Output key/value shape is
-		// grep-friendly for tail | awk.
-		const subjectHead = (globalThis as GlobalWithSubject)
-			.CLINEMM_OOM_DISC01_SUBJECT_HEAD;
-		try {
-			process.stderr.write(
-				`[CLINEMM_OOM_DISC01_ATTEST] ` +
-					`subject=${subjectHead ?? "<runtime-unset>"} ` +
-					`ablation_active=${this.__ablateDeliveryPropagation} ` +
-					`env_present=${process.env.CLINEMM_OOM_DISC01_ABLATE_DELIVERY ?? "<unset>"} ` +
-					`eh_pid=${process.pid} ` +
-					`ppid=${process.ppid ?? "<unknown>"} ` +
-					`constructed_at=${new Date().toISOString()}\n`,
-			);
-		} catch {
-			// never propagate; attestation is best-effort
-		}
-	}
+	constructor(private readonly deps: PendingPromptsControllerDeps) {}
 
 	list(sessionId: string): SessionPendingPrompt[] {
 		return this.service.list(this.deps.getSession(sessionId));
@@ -542,35 +478,28 @@ export class PendingPromptsController {
 				...(next.mode ? { mode: next.mode } : {}),
 				userImages: next.userImages,
 				userFiles: next.userFiles,
-				// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
-				// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
-				// Forward `next.delivery` so the receiving `runTurn` can
-				// observe the original delivery context (queue/steer)
-				// at the execution boundary (C7). Without this, the
-				// drained prompt's C7 record would lose its
-				// origin-discriminating information — the host's
-				// deriveOrigin() would fall through to `explicit_user`
-				// for what is actually a `pending_prompt_drain` turn.
+				// ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01:
 				//
-				// ACT-CLINEMM-EXTENSION-HOST-OOM-REGRESSION-DISCRIMINATOR01:
-				// Throwaway diagnostic ablation seam. When
-				// `__ablateDeliveryPropagation` is true, the `delivery`
-				// field is dropped from the `deps.send(...)` payload.
-				// All other forwarding (jobId, onBeforeDispatch, C5/C6
-				// hooks) is preserved. The seam exists only to host
-				// the live-specimen ablation; the env var that drives
-				// it MUST NOT be enabled in production builds.
-				...(this.__ablateDeliveryPropagation || next.delivery === undefined
-					? {}
-					: { delivery: next.delivery }),
-				// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01
-				// (production wiring fix per FACTORY HALT_CCARD_V2_PRODUCTION_WIRING_FALSE_GREEN):
-				// Forward `next.jobId` into the SendSessionInput so the
-				// jobId correlation token survives the real
-				// `deps.send` boundary. Without this forwarding the
-				// C6→C7 jobId correlation is lost — C7 (run_turn_started)
-				// would observe `delivery` but never the originating
-				// jobId, defeating the C4→C5→C6→C7→C8 traceability.
+				// Forwarding `next.delivery` from an already-draining
+				// pending prompt back into `runTurn` re-applies
+				// queue/steer execution semantics at the wrong
+				// lifecycle boundary — `LocalRuntimeHost.runTurn`
+				// line 1204 re-enqueues the just-dequeued prompt via
+				// the queue/steer branch. That semantic
+				// re-application is the bounded mechanism that causes
+				// pathological cardinality growth leading to the
+				// native Extension Host OOM observed at
+				// BAD_ARTIFACT=99006fbcc. The drained prompt's
+				// `delivery` is captured at C4/C5/C6 via the
+				// `onEnqueue` / `onBeforeDrain` / `onBeforeDispatch`
+				// hooks (which read `delivery` from the entry, not
+				// the `deps.send` payload) — those hooks are
+				// unaffected. C7/C8 derive origin from `jobId`
+				// presence instead (see
+				// `apps/vscode/src/sdk/vscode-session-host.ts`
+				// `deriveOrigin(delivery, jobId)`).
+				//
+				// The `delivery` field is NOT forwarded. `jobId` IS.
 				...(next.jobId !== undefined ? { jobId: next.jobId } : {}),
 			});
 			// A turn that resolves with an error finish ran (the prompt is in

@@ -419,9 +419,25 @@ export class VscodeSessionHost implements SdkSessionHost {
 			// when OFF every callback is a no-op, so the production
 			// default is zero-overhead.
 			pendingPromptCapture: (() => {
+				// ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01:
+				// Origin derivation now uses `jobId` presence as the
+				// primary disambiguator between drained-from-controller
+				// and explicit-user-call. Under the bounded repair,
+				// `next.delivery` is no longer forwarded from drain to
+				// `runTurn` (that was the harmful execution-control
+				// re-application); drained prompts arrive at `runTurn`
+				// with `delivery === undefined` and `jobId` set
+				// (terminal-wake path). Explicit
+				// `runTurn({ delivery: "queue" })` calls without jobId
+				// still produce `pending_prompt_drain` for back-compat.
+				// `deriveOrigin` is a strict superset of the prior
+				// shape and disambiguates the existing drained-vs-
+				// explicit conflation.
 				const deriveOrigin = (
 					delivery: "queue" | "steer" | undefined,
+					jobId?: string,
 				): "pending_prompt_drain" | "deferred_continuation" | "explicit_user" => {
+					if (jobId !== undefined) return "pending_prompt_drain"
 					if (delivery === "queue") return "pending_prompt_drain"
 					if (delivery === "steer") return "deferred_continuation"
 					return "explicit_user"
@@ -430,7 +446,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 					onEnqueue: (input) => {
 						captureContinuationCardinalityAuthorityRecord({
 							stage: "pending_prompt_enqueued",
-							origin: deriveOrigin(input.delivery),
+							origin: deriveOrigin(input.delivery, input.jobId),
 							sessionId: input.sessionId,
 							promptId: input.promptId,
 							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
@@ -442,7 +458,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 						// dispatch.
 						captureContinuationCardinalityAuthorityRecord({
 							stage: "pending_prompt_dequeued",
-							origin: deriveOrigin(input.delivery),
+							origin: deriveOrigin(input.delivery, input.jobId),
 							sessionId: input.sessionId,
 							promptId: input.promptId,
 							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
@@ -456,17 +472,18 @@ export class VscodeSessionHost implements SdkSessionHost {
 						// fingerprint).
 						captureContinuationCardinalityAuthorityRecord({
 							stage: "continuation_scheduled",
-							origin: deriveOrigin(input.delivery),
+							origin: deriveOrigin(input.delivery, input.jobId),
 							sessionId: input.sessionId,
 							promptId: input.promptId,
 							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 						})
 					},
 					onRunTurnStarted: (input) => {
-						// C7 — origin derived from actual delivery.
+						// C7 — origin derived from actual delivery +
+						// jobId presence (post-repair disambiguator).
 						captureContinuationCardinalityAuthorityRecord({
 							stage: "run_turn_started",
-							origin: deriveOrigin(input.delivery),
+							origin: deriveOrigin(input.delivery, input.jobId),
 							sessionId: input.sessionId,
 							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 						})
@@ -475,7 +492,7 @@ export class VscodeSessionHost implements SdkSessionHost {
 						// C8 — same derivation as C7.
 						captureContinuationCardinalityAuthorityRecord({
 							stage: "agent_turn_done",
-							origin: deriveOrigin(input.delivery),
+							origin: deriveOrigin(input.delivery, input.jobId),
 							sessionId: input.sessionId,
 							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 						})

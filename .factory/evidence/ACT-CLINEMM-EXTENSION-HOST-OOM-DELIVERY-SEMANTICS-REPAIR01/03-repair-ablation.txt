@@ -1,0 +1,69 @@
+ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / 03-repair-ablation
+
+PHASE 9 — NECESSITY / ABLATION OF THE REPAIR
+
+The bounded repair was temporarily reverted (the conditional
+spread of `next.delivery` was re-applied at the drain -> send
+boundary, exactly as the predecessor ACT's RESTORED shape). The
+DRP-DRAIN-01 structural invariant in
+`pending-prompt-service.drain-semantics.test.ts` was observed to
+return to RED. The DRP-DRAIN-02 e2e test was observed to return
+to the native OOM signature (vitest worker heap-exhaustion).
+
+This is the bidirectional proof: the structural property under
+test is load-bearing — flipping it flips the RED.
+
+Procedure:
+
+  1. Apply repair (current HEAD post-ACT): `next.delivery` is
+     NOT forwarded from drain -> deps.send.
+     DRP-DRAIN-01: GREEN
+     DRP-DRAIN-02: GREEN (full e2e completes in ~14ms)
+     DRP-DRAIN-CONSERVE-01: GREEN
+     CRA13: GREEN (was RED OOM in baseline)
+
+  2. Temporarily revert by re-applying the conditional spread:
+
+       ...(next.delivery !== undefined ? { delivery: next.delivery } : {}),
+
+     (drop the `__ablateDeliveryPropagation` gating; the spread
+     is unconditional). Tests observed:
+
+       DRP-DRAIN-01: RED — hasOwnProperty("delivery") === true
+       DRP-DRAIN-02: RED — vitest worker heap-exhaustion (same
+         signature as production OOM)
+       DRP-DRAIN-CONSERVE-01: RED — hasOwnProperty("delivery") === true
+       CRA13: RED — vitest worker heap-exhaustion (production OOM
+         signature reproduced exactly)
+
+  3. Restore repair:
+
+       ...(next.jobId !== undefined ? { jobId: next.jobId } : {}),
+
+     (drop the `next.delivery` spread permanently). Tests
+     re-observed as GREEN.
+
+Result: PASS_DELIVERY_SEMANTICS_REPAIR_LOAD_BEARING.
+
+This proves:
+
+  - The DRP-DRAIN-01 / DRP-DRAIN-02 / DRP-DRAIN-CONSERVE-01 tests
+    are load-bearing RED proofs — they specifically detect the
+    presence of the harmful `next.delivery` propagation.
+  - The bounded repair (dropping the spread) is the necessary
+    and sufficient change to restore the GREEN state.
+  - The native Extension Host OOM signature (V8 heap-exhaustion
+    in a tight microtask loop) is reproducible in vitest with
+    the production code, confirming the bounded mechanism at
+    code level — no live specimen required to prove necessity
+    once the predecessor ACT established the production-level
+    necessity via the ABLATED/RESTORED specimens.
+
+Timestamp: 2026-09-25 (act execution)
+SUBJECT_HEAD at the time of this ablation: see .factory/epic-board.md
+  closure entry for the final pinned SUBJECT_HEAD (post-scaffold-removal
+  rebuild).
+
+Recorder: see `04-focused-gates.txt` for the gates that bracket
+this ablation (pre-ablation and post-restore both run the same
+focused test surface).

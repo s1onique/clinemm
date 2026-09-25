@@ -1,0 +1,153 @@
+ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01 / 04-focused-gates
+
+PHASE 8 — FOCUSED GATES
+
+Captured at 2026-09-25, on the bounded-repair SUBJECT_HEAD.
+
+============================================================
+GATE 1 — sdk/packages/core turn-queue suite
+============================================================
+
+Command:
+  cd sdk/packages/core && bunx vitest run src/runtime/turn-queue/
+
+Result:
+  Test Files  2 passed (2)
+  Tests       14 passed (14)
+
+Covered:
+  - src/runtime/turn-queue/pending-prompt-service.test.ts
+    (10 tests — including the updated CCARD-WIRE-01 which now
+    asserts `delivery` is NOT in deps.send payload)
+  - src/runtime/turn-queue/pending-prompt-service.drain-semantics.test.ts
+    (4 tests — DRP-DRAIN-01, DRP-LOOP-01, DRP-DRAIN-02,
+    DRP-DRAIN-CONSERVE-01, all GREEN post-repair)
+
+============================================================
+GATE 2 — sdk/packages/core local-runtime-host suite
+============================================================
+
+Command:
+  cd sdk/packages/core && bunx vitest run src/runtime/host/local-runtime-host.test.ts
+
+Result:
+  Test Files  1 failed (1)
+  Tests       1 failed | 84 passed (85)
+
+Pre-existing failure (not introduced by this ACT):
+  - "persists active manual compaction state against the
+    persisted transcript" — verified on baseline via
+    `git stash -u` (failure reproduces without my changes)
+
+Conservation:
+  - CRA13 (auto-drains a delivery:'queue' follow-up):
+    14ms (was: vitest worker heap-exhaustion at 15s+ in baseline).
+    The OOM signature is closed; the test now exercises the
+    post-repair full chain end-to-end.
+  - All other queue/steer tests: 84/84 PASS.
+
+============================================================
+GATE 3 — sdk/packages/core typecheck
+============================================================
+
+Command:
+  cd sdk/packages/core && bun run typecheck
+
+Result:
+  25 errors total — all pre-existing in unrelated files
+  (extensions/tools/, runtime/command-policy/, etc.)
+  ACT_NEW_ERRORS = 0
+
+Baseline reproduction:
+  git stash -u → same 25 errors → confirms all baseline
+
+============================================================
+GATE 4 — apps/vscode typecheck
+============================================================
+
+Command:
+  cd apps/vscode && bunx tsc --noEmit
+
+Result:
+  EXIT: 0 (clean — no errors)
+
+============================================================
+GATE 5 — apps/vscode CCARD tests
+============================================================
+
+Command:
+  cd apps/vscode && bunx vitest run \
+    src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts
+
+Result:
+  Test Files  1 passed (1)
+  Tests       12 passed (12)
+
+CCARD-ORIGIN-01 (the load-bearing C7/C8 origin test for the
+repaired contract) PASSES with the new deriveOrigin signature.
+CCARD-DISCRIMINATOR-01 (C5=1 with C6=2 fingerprint) PASSES
+unchanged.
+
+============================================================
+GATE 6 — apps/vscode BCNEX tests (legitimate external queue
+caller path)
+============================================================
+
+Command:
+  cd apps/vscode && bunx vitest run \
+    src/sdk/__tests__/background-notify-exactly-once-presentation01.bcnex01.test.ts
+
+Result:
+  Test Files  1 passed (1)
+  Tests       7 passed (7)
+
+BackgroundNotifyCoordinator.enqueueTerminalWake →
+sdkHost.send({ delivery: "queue" }) → runTurn → queue/steer
+branch → enqueue → drain → agent.run: chain preserved exactly.
+
+============================================================
+GATE 7 — git diff --check
+============================================================
+
+Command:
+  git diff --check
+
+Result:
+  (clean — no whitespace errors introduced)
+
+============================================================
+SUMMARY
+============================================================
+
+  ACT_NEW_ERRORS         = 0
+  BASELINE_ERRORS        = 25 typecheck + 1 local-runtime-host test
+  CONSERVATION           = 84/84 PASS on local-runtime-host (queue/steer paths)
+                          12/12 PASS on CCARD tests
+                          7/7 PASS on BCNEX tests
+                          CRA13 (which OOMs in baseline) now completes in 14ms
+
+All conservation R1..R10 invariants from the ACT doctrine are
+satisfied by the bounded repair:
+
+  R1 — drained prompt's delivery NOT forwarded ✓ (DRP-DRAIN-01)
+  R2 — explicit runTurn({ delivery: "queue" }) STILL enqueues
+       (BCNEX01 + CRA13 + local-runtime-host queue tests)
+  R3 — explicit runTurn({ delivery: "steer" }) STILL enqueues
+       with steer semantics (BCNT01 + BC steer tests)
+  R4 — default runTurn({ prompt }) STILL executes immediately
+       (no delivery = immediate path; preserved by absence of
+       the new branching)
+  R5 — deriveOrigin(undefined, jobId) returns pending_prompt_drain
+       (CCARD-ORIGIN-01 backward-compat — was already passing
+       with delivery-based derivation; new path is a strict
+       superset)
+  R6 — deriveOrigin("queue", undefined) returns pending_prompt_drain
+       (back-compat — preserved by the new derivation)
+  R7 — deriveOrigin("steer", undefined) returns deferred_continuation
+       (back-compat — preserved)
+  R8 — deriveOrigin(undefined, undefined) returns explicit_user
+       (back-compat — preserved)
+  R9 — C4/C5/C6 hooks still fire with correct delivery (independent
+       of the payload; CCARD-WIRE-01 + DRP-DRAIN-CONSERVE-01)
+  R10 — C7/C8 derive pending_prompt_drain for drained prompts
+       (CCARD-ORIGIN-01 + new deriveOrigin signature)
