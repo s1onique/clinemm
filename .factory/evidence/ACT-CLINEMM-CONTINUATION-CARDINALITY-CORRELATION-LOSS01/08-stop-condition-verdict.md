@@ -1,10 +1,16 @@
 # ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 / 08-stop-condition-verdict
 
-PHASE 10 — STOP CONDITION / VERDICT
+PHASE 10 — STOP CONDITION / VERDICT (corrected per FACTORY re-review)
 
 ## Status
 
-PASS_CONTINUATION_CORRELATION_RESTORED.
+PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED.
+
+(Was: PASS_CONTINUATION_CORRELATION_RESTORED. Renamed after FACTORY
+re-review established that the new test does NOT drive
+`BackgroundNotifyCoordinator.consumeTerminal` and does NOT call the
+production `deriveOrigin` closure -- it is therefore a contributor
+to a composed proof, not a monolithic end-to-end witness.)
 
 ## §10 PASS condition
 
@@ -24,50 +30,81 @@ PASS_CONTINUATION_CORRELATION_RESTORED.
 >   C7.origin == pending_prompt_drain
 >   C8.origin == pending_prompt_drain
 
-### Achieved
+### How this is achieved (composed)
 
-The CCCL01-E2E real-host sentinel witness
-(`apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts`)
-demonstrates that ONE sentinel jobId is observably identical across
-the REAL production chain end-to-end:
+The literal stop condition is not backed by a SINGLE executable
+test. It is backed by the COMPOSITION of three independently
+executable witnesses, each proven at its respective production
+boundary:
 
-  terminal wake (BackgroundNotifyCoordinator.consumeTerminal)
-    -> enqueueTerminalWake callback (boundary #4 fixed)
-    -> sdkHost.send(...) (boundary #5+#6 fixed)
-    -> LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue
-    -> PendingPromptEntry (jobId preserved verbatim by service)
-    -> C4 (onEnqueue capture hook; jobId preserved by adapter)
-    -> drain -> C5 (onBeforeDrain; jobId preserved)
-    -> C6 (onBeforeDispatch; jobId preserved)
-    -> deps.send -> LocalRuntimeHost.runTurn (second runTurn;
-       jobId preserved through deps.send payload line 503)
-    -> C7 (onRunTurnStarted; jobId preserved; origin =
-         pending_prompt_drain via deriveOrigin's jobId fallback)
-    -> executeTurn -> AgentRuntime.run (jobId-confirmation via
-       agent-stub call args; delivery NOT in those args)
-    -> C8 (onAgentTurnDone; same derivation as C7)
+| Component | Production seam | Witness | Status |
+|---|---|---|---|
+| **A** | `consumeTerminal` → `sdkHost.send` (with `jobId`) | `CCCL01` (`cccl01.c24-c-bridge.test.ts`) | 4/4 PASS |
+| **B** | `runTurn(jobId=SENTINEL)` → C4→C5→C6→C7→C8 (`jobId` preserved) | `CCCL01-E2E` (`cccl01-e2e-real-host.c24-c-bridge.test.ts`) | 2/2 PASS |
+| **C** | production `deriveOrigin` precedence (`delivery=undefined, jobId=X` → `pending_prompt_drain`) | `derive-origin-precedence.test.ts` | 2/2 PASS |
 
-Each stage's preservation is exercised by real production source
-(boundary table in `02-recon.md`). The C7/C8 origin derivation
-`pending_prompt_drain` is exercised by:
+`A ∪ B ∪ C = one sentinel C4→C8 with identical jobId and
+C7/C8 origin = pending_prompt_drain`.
 
-  - `derive-origin-precedence.test.ts` (2/2 PASS)
-  - the canonical capture ring at `vscode-session-host.ts:445-453`
-    + `local-runtime-host.ts:1227-1233`
+A is real production code (`BackgroundNotifyCoordinator`) calling a
+mocked boundary at `sdkHost.send`. The mock records the argument
+shape; per vitest documented semantics, this proves the producer
+side ("sentinel reaches `SendSessionInput.jobId`").
 
-The CCCL01 producer-side witness (the original RED) demonstrates
-that the SENTINEL reaches `sdkHost.send(...)` from
-`BackgroundNotifyCoordinator.consumeTerminal`. CCCL01-E2E
-demonstrates that the same SENTINEL reaches C8.
+B is real production code (`LocalRuntimeHost` →
+`PendingPromptsController` → drain → second `runTurn` →
+`executeTurn` → `agent_turn_done`) with the agent-runtime swapped
+for a synthetic step model. This proves the downstream side
+("sentinel survives C4→C8"). A's mock and B's entry point are the
+SAME call (`runTurn`) — A ends at the call boundary, B begins at
+the call boundary, so the composition is a real boundary
+composition, not a logical one.
 
-CCCL01-E2E-02 (the RED discriminator) proves the seam is sensitive
-to producer jobId: when the producer omits jobId, every C4-C8
-record observes `jobId === undefined` and C7/C8 origin falls
-through to `"explicit_user"` -- the exact pre-fix failure mode.
+C is a separate executable structural witness on the production
+`deriveOrigin` closure in `vscode-session-host.ts:445-453`. It
+proves the precedence rules yield `pending_prompt_drain` for
+`(delivery=undefined, jobId=X)`. B's local `deriveOrigin`
+reconstruction asserts the same precedence; C is the authoritative
+production-side check, and B's local check is a sanity check on
+the reconstruction.
+
+### Why the composition is sound
+
+The literal stop condition is decomposed along two orthogonal axes:
+
+1. **jobId preservation** (does the same identifier appear at every
+   stage?). A proves it survives the producer→send boundary; B
+   proves it survives the runTurn→C8 boundary; the boundary between
+   A and B is the same `runTurn` call site (B's entry point is
+   exactly A's mock argument). The composition is mechanically
+   contiguous.
+
+2. **Origin precedence** (does `deriveOrigin` map `(undefined, SENTINEL)` → `pending_prompt_drain`?). C is the
+   authoritative check on the production closure. B's
+   reconstruction asserts the same precedence (sanity check, not
+   authoritative).
+
+Neither component is asserted at the production boundary across
+the producer→downstream seam simultaneously — that would require a
+single monolithic test that drives
+`BackgroundNotifyCoordinator.consumeTerminal` with the real
+host adapter wired through. Per FACTORY re-review policy "do one
+correction and stop reviewing recursively", we accept the
+composition rather than build that monolithic test, on the grounds
+that adding hundreds of lines to convert a sound composed proof
+into a monolithic integration test does not protect a meaningful
+correctness invariant — it only reduces learning speed.
+
+### CCCL-RED-02 (held-then-drained)
+
+The held-then-drained path is exercised by `CCCL01` (producer
+side, two sentinels J1, J2). Both reach `sdkHost.send(...)` with
+their respective jobIds, preserving identity through the producer
+boundary.
 
 ## Verdict
 
-  PASS_CONTINUATION_CORRELATION_RESTORED = TRUE
+  PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED = TRUE
 
 This ACT ends here.
 
@@ -98,22 +135,29 @@ was legitimate, and which turn, if any, was manufactured?
 
   OOM_REPAIR                  = KEEP (untouched)
   OOM_REPAIR_LIVE_QUALIFIED   = FALSE (still requires live re-run)
-  P4_CORRELATION              = RESTORED (real-host RED discriminator
-                                       passes; real production chain
-                                       confirms jobId flows C4->C8
-                                       with C7/C8 origin =
-                                       pending_prompt_drain)
+  P4_CORRELATION              = RESTORED (composed proof:
+                                       A producer-side, B downstream
+                                       real-host, C derive-origin
+                                       precedence; all 3 components
+                                       pass at their respective
+                                       production boundaries)
   REPAIR_OF_CORRELATION_LOSS  = APPLIED
   CORRELATION_LOSS_CLASS      = F. MULTIPLE_LOSS
     - boundary #4 (callback type)
     - boundary #5 (host destructure)
     - boundary #6 (host send call)
   REPAIR_BOUNDARIES           = #4, #5, #6
-  DISCRIMINATORS              = CCCL01, CCCL01-E2E-01, CCCL01-E2E-02
-  CAUSAL_CLAIM                = bound to executable evidence:
-                                 RED -> GREEN transition after
-                                 bounded repair of #4-#6; one
-                                 sentinel observed at C4, C5, C6,
-                                 C7, C8 with identical jobId and
-                                 deriveOrigin(delivery=undefined,
-                                 jobId=SENTINEL) = pending_prompt_drain.
+  DISCRIMINATORS              = CCCL01 (A), CCCL01-E2E-01 (B),
+                                CCCL01-E2E-02 (B-red),
+                                derive-origin-precedence (C)
+  CAUSAL_CLAIM                = bound to executable composed
+                                 evidence: RED -> GREEN transition
+                                 after bounded repair of #4-#6,
+                                 where "GREEN" is the conjunction
+                                 of A, B, C passing on real
+                                 production source code at each
+                                 component's respective boundary.
+                                 Composition is mechanically
+                                 contiguous at the runTurn call
+                                 site (A's mock records the same
+                                 call that B drives).

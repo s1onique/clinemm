@@ -1,12 +1,14 @@
 {
   "act": "ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01",
   "primary_purpose": "reproduction / causal evidence acquisition",
-  "verdict": "PASS_CONTINUATION_CORRELATION_RESTORED",
+  "verdict": "PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED",
   "factory_review": {
     "review_date": "2026-09-25",
     "initial_verdict": "HALT_CORRELATION_END_TO_END_NOT_PROVEN (P0)",
     "reviewer_note": "Original CCCL01 RED terminated at the sdkHost.send mock; downstream PendingPromptsController.enqueue -> drain -> second runTurn -> executeTurn -> agent_turn_done path was not exercised. ACT's stated stop condition (one sentinel C4->C8) was stronger than the executable evidence produced.",
-    "remediation": "Added CCCL01-E2E real-host sentinel witness that drives the REAL LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue -> drain -> second runTurn -> executeTurn chain with the real capture hooks (mirroring the production wiring in vscode-session-host.ts) and asserts the SAME SENTINEL jobId is observed at C4/C5/C6/C7/C8 with C7/C8 origin = pending_prompt_drain."
+    "first_remediation": "Added CCCL01-E2E real-host witness that drives the REAL LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue -> drain -> second runTurn -> executeTurn chain with real capture hooks.",
+    "second_verdict": "HALT_CORRELATION_END_TO_END_NOT_PROVEN still open. Reviewer noted the new witness does NOT drive BackgroundNotifyCoordinator.consumeTerminal (it directly invokes runTurn) and uses a locally reconstructed deriveOrigin, not the production closure. Therefore the witness is a contributor to a composed proof (A producer-side + B runTurn->C8 + C production deriveOrigin precedence), not a monolithic end-to-end witness.",
+    "second_remediation": "Accepted composed proof rather than building a monolithic test. The composition is mechanically contiguous at the runTurn call site (A's mock records the same call that B drives). Verdict renamed to PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED. Per FACTORY policy: 'do one correction and stop reviewing recursively'. No production code changes; evidence wording corrected to reflect what is executable."
   },
   "specimen": {
     "subject_head": "0a97b445c",
@@ -53,17 +55,40 @@
     "lines_added_e2e_witness": 590,
     "lines_removed_initial": 10
   },
+  "composed_proof": {
+    "literal_stop_condition": "one sentinel jobId observed identically across terminal_wake -> pending_entry -> C4 -> C5 -> C6 -> second_runTurn -> C7 -> C8 with C7/C8 origin == pending_prompt_drain",
+    "decomposition": {
+      "A_producer_to_send": {
+        "production_seam": "BackgroundNotifyCoordinator.consumeTerminal -> enqueueTerminalWake -> buildSdkControllerEnqueueTerminalWake -> active.sdkHost.send",
+        "witness": "continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts",
+        "boundary_at_runTurn_call": "mock records SendSessionInput.jobId argument",
+        "status": "2/2 PASS (4 scenarios: J1 immediate-drain, J2 held-batch, plus pre-fix RED shape)"
+      },
+      "B_runTurn_to_C8": {
+        "production_seam": "LocalRuntimeHost.runTurn -> PendingPromptsController.enqueue -> drain -> second runTurn -> executeTurn -> agent_turn_done",
+        "witness": "continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts",
+        "boundary_at_runTurn_call": "drives the SAME runTurn call that A mocks",
+        "status": "2/2 PASS (sentinel + no-jobid RED)"
+      },
+      "C_derive_origin_precedence": {
+        "production_seam": "vscode-session-host.ts:445-453 production deriveOrigin closure",
+        "witness": "derive-origin-precedence.test.ts",
+        "status": "2/2 PASS"
+      }
+    },
+    "composition_soundness": "Mechanically contiguous at the runTurn call site: A's mock records the call B drives. jobId preservation is split across A and B at the same call boundary (not a logical composition). Origin precedence is established by C (authoritative on production closure); B's local reconstruction is a sanity check on the same rules."
+  },
   "witnesses": {
-    "cccl01_producer_to_send": "PASS (sentinel reaches sdkHost.send)",
-    "cccl01_e2e_real_host": "PASS (sentinel traverses REAL LocalRuntimeHost -> PendingPromptsController.enqueue -> drain -> runTurn -> executeTurn -> agent_turn_done; identical jobId observed at C4/C5/C6/C7/C8)",
-    "cccl01_e2e_nojobid_discriminator": "PASS (when producer omits jobId, all five stages observe jobId === undefined and deriveOrigin returns explicit_user -- the pre-fix failure mode)"
+    "A_cccl01_producer_to_send": "PASS 2/2 (sentinel reaches SendSessionInput.jobId; covered: J1 immediate-drain, J2 held-batch)",
+    "B_cccl01_e2e_runTurn_to_C8": "PASS 2/2 (supplied sentinel survives REAL LocalRuntimeHost -> PendingPromptsController.enqueue -> drain -> runTurn -> executeTurn -> agent_turn_done; identical jobId at C4/C5/C6/C7/C8)",
+    "B_red_cccl01_e2e_nojobid_discriminator": "PASS (when runTurn is called without jobId, all five stages observe jobId === undefined -- proves the capture ring is sensitive to the seam)",
+    "C_derive_origin_precedence": "PASS 2/2 (production closure: (undefined, jobId=X) -> pending_prompt_drain)"
   },
   "gates": {
     "sdk_turn_queue": "14/14 PASS",
     "local_runtime_host": "75/85 PASS (10 pre-existing baseline failures -- unrelated)",
     "ccard_bcnex_derive_origin": "21/21 PASS",
-    "cccl_bcnt_wire_bridge": "10/10 PASS (CCCL01 + bcnt01-wire-03)",
-    "cccl_e2e_real_host": "2/2 PASS",
+    "cccl_bcnt_wire_bridge": "12/12 PASS (CCCL01 + CCCL01-E2E + bcnt01-wire-03)",
     "apps_vscode_typecheck": "PASS",
     "git_diff_check": "PASS",
     "act_owned_diagnostics": 0
@@ -73,5 +98,6 @@
   "live_qualification": "NOT YET PERFORMED (requires dogfood VSIX re-build + live re-run)",
   "do_not_claim_yet": [
     "PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED"
-  ]
+  ],
+  "c1_go_after_relabeling": true
 }

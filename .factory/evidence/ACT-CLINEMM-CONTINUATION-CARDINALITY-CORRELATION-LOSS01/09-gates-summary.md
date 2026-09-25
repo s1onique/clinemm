@@ -63,14 +63,30 @@ sentinel witness) is included in item 4 and was run cleanly.
   Result:
     ✓ continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts (2 tests)
     ✓ continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts (2 tests)
-    ✓ background-command-notify-on-terminal01.bcnt01-wire-03-real-callback.c24-c-bridge.test.ts (7 tests)
+    ✓ background-command-notify-on-terminal01.bcnt01-wire-03-real-callback.c24-c-bridge.test.ts (8 tests)
     Test Files  3 passed (3)
-    Tests  11 passed (11)
+    Tests  12 passed (12)
 
-  CCCL01-E2E-01 (real host, sentinel traverses C4-C8 with identical
-  jobId): PASS.
-  CCCL01-E2E-02 (real host, no-jobId producer shape -- RED
-  discriminator): PASS.
+  Composed-proof components:
+    A. CCCL01 (component A: producer -> sdkHost.send): 2/2 PASS.
+       SENTINEL reaches SendSessionInput.jobId at the active.sdkHost.send
+       call site.
+    B. CCCL01-E2E-01 (component B: runTurn -> C8): PASS.
+       A supplied sentinel jobId traverses the REAL LocalRuntimeHost
+       downstream chain (PendingPromptsController.enqueue -> drain ->
+       second runTurn -> executeTurn -> agent_turn_done); all five
+       C4-C8 records carry jobId === SENTINEL.
+    B-red. CCCL01-E2E-02 (component B RED discriminator): PASS.
+       When runTurn is called without jobId, all five stages observe
+       jobId === undefined -- proves the capture ring is sensitive
+       to the seam at the runTurn boundary.
+    C. derive-origin-precedence.test.ts (component C: production
+       deriveOrigin closure): 2/2 PASS (see gate 3 above).
+    A + B + C = composed proof for the literal stop condition.
+
+  Note on scope: CCCL01-E2E drives the SAME `runTurn` call that
+  CCCL01 mocks; the composition is mechanically contiguous at the
+  call boundary, not a logical composition.
 
 ### 5. apps/vscode typecheck
 

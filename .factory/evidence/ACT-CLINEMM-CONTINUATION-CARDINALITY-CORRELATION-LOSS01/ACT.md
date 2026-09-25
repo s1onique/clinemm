@@ -4,7 +4,7 @@ PRIMARY PURPOSE: reproduction / causal evidence acquisition
 
 ## Status
 
-**PASS_CONTINUATION_CORRELATION_RESTORED.**
+**PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED.**
 
 This ACT recovers trustworthy C4→C8 correlation evidence after the
 bounded OOM repair (`ACT-CLINEMM-EXTENSION-HOST-OOM-DELIVERY-SEMANTICS-REPAIR01
@@ -15,9 +15,20 @@ The ACT was re-reviewed on 2026-09-25 against the FACTORY
 correctly noted the original CCCL01 RED terminated at the
 `sdkHost.send` mock and did not exercise the downstream
 `PendingPromptsController.enqueue` -> `drain` -> second `runTurn` ->
-`executeTurn` -> `agent_turn_done` path. The ACT now closes that gap
-with a new bounded real-host sentinel witness (see
-`apps/vscode/src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts`).
+`executeTurn` -> `agent_turn_done` path. The ACT then added a
+bounded real-host sentinel witness (CCCL01-E2E) that drives the
+REAL downstream chain.
+
+A second FACTORY pass established that the new witness does NOT
+drive `BackgroundNotifyCoordinator.consumeTerminal` (it directly
+invokes `runTurn`) and uses a locally reconstructed `deriveOrigin`,
+not the production closure. Therefore the witness is a contributor
+to a COMPOSED proof, not a monolithic end-to-end witness. The
+verdict was renamed from `PASS_CONTINUATION_CORRELATION_RESTORED`
+to `PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED`. Per FACTORY
+policy "do one correction and stop reviewing recursively", the
+composition is accepted rather than expanded into a monolithic
+test. See `08-stop-condition-verdict.md` for the decomposition.
 
 Do NOT reopen the OOM repair. The OOM repair's executable code-level
 evidence is preserved (see `apps/vscode/src/sdk/vscode-session-host.ts:422-509`
@@ -104,15 +115,19 @@ it; both would yield the same observable.)
 
 ## Verdict
 
-  PASS_CONTINUATION_CORRELATION_RESTORED
+  PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED
 
   CORRELATION_LOSS_CLASS = F. MULTIPLE_LOSS
   REPAIR_BOUNDARIES      = #4, #5, #6 (callback type, host destructure, host send call)
-  CAUSAL_CLAIM           = bound to executable evidence (RED -> GREEN)
+  CAUSAL_CLAIM           = bound to executable composed evidence
+                            (RED -> GREEN; A producer-side + B
+                            runTurn->C8 + C deriveOrigin
+                            precedence; mechanically contiguous at
+                            the runTurn call site)
 
   OOM_REPAIR                  = KEEP (untouched)
   OOM_REPAIR_LIVE_QUALIFIED   = FALSE (still requires live re-run with new artifact)
-  P4_CORRELATION              = RESTORED
+  P4_CORRELATION              = RESTORED (composed)
   REPAIR_OF_CORRELATION_LOSS  = APPLIED
 
 ## Final state

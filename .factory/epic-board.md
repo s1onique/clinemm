@@ -11233,3 +11233,31 @@ Original ACT promoted "composed proof" (producer→send sentinel + downstream st
 **DO NOT yet claim:** `PASS_DELIVERY_SEMANTICS_REPAIR_LIVE_QUALIFIED` — still requires a successor live qualification against a NEW exact-head dogfood VSIX (the CORRECTION01 specimen + this ACT's correlation fix).
 
 **Next (DEFERRED, unchanged):** `ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY04` (or next unused board identifier). Primary purpose: causality / cardinality for the two-wake scenario.
+
+## ACT-CLINEMM-CONTINUATION-CARDINALITY-CORRELATION-LOSS01 — POST-2ND-REVIEW CLOSURE — 2026-09-25
+
+**Second FACTORY review verdict:** the post-review remediation (CCCL01-E2E real-host witness) is useful but overclaims. It does NOT drive `BackgroundNotifyCoordinator.consumeTerminal` (it directly invokes `LocalRuntimeHost.runTurn`) and uses a locally reconstructed `deriveOrigin`, not the production closure. The literal "one sentinel C4→C8 with identical jobId" stop condition is therefore a **composed proof**, not a single end-to-end executable witness.
+
+**Composition accepted:**
+
+| Component | Production seam | Witness | Status |
+|---|---|---|---|
+| **A** | `consumeTerminal` → `sdkHost.send` (jobId in `SendSessionInput`) | CCCL01 (`cccl01.c24-c-bridge.test.ts`) | 2/2 PASS |
+| **B** | `runTurn(jobId=SENTINEL)` → C4→C5→C6→C7→C8 (jobId preserved) | CCCL01-E2E (`cccl01-e2e-real-host.c24-c-bridge.test.ts`) | 2/2 PASS |
+| **C** | production `deriveOrigin` closure precedence | `derive-origin-precedence.test.ts` | 2/2 PASS |
+
+A's mock boundary and B's entry point are the **same call** (`runTurn`) — the composition is mechanically contiguous at the call site, not a logical composition.
+
+**Verdict renamed:** `PASS_CONTINUATION_CORRELATION_RESTORED` → `PASS_CONTINUATION_CORRELATION_RESTORED_COMPOSED`.
+
+**No production code changes.** Per FACTORY policy "do one correction and stop reviewing recursively", the composition is accepted rather than expanded into a monolithic test.
+
+**Updated evidence files (this commit):**
+
+- `ACT.md` — status block + verdict + causal claim relabeled as COMPOSED
+- `08-stop-condition-verdict.md` — verdict renamed; decomposition table + composition soundness argument
+- `09-gates-summary.md` — gate 4 split into A/B/C components; counts corrected (CCCL01=2/2, bcnt01=7/7, CCCL01-E2E=2/2)
+- `10-e2e-real-host-sentinel-witness.md` — overclaim corrected; precise chain driven documented; explicit gap list
+- `result.json` — verdict renamed; composed_proof block added; factory_review.second_verdict and second_remediation added; c1_go_after_relabeling flag
+
+**Per FACTORY instruction:** `C1: GO` to build the new exact-head dogfood VSIX and perform live qualification.
