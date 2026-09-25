@@ -1,0 +1,88 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 — FOCUSED GATES
+====================================================================================
+
+Per ACT §18, the focused gate matrix exercises every test the
+predecessor ACT established plus the new BCCOC01 file.
+
+## Gate command
+
+  cd apps/vscode && bun run test:vitest -- \
+    src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts \
+    src/sdk/__tests__/background-command-completion-ownership-correlation01.bccoc01.test.ts \
+    src/sdk/__tests__/background-notify-exactly-once-presentation01.bcnex01.test.ts \
+    src/sdk/__tests__/background-command-notify-on-terminal01.bcnt01.test.ts \
+    src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-controller.test.ts \
+    src/sdk/__tests__/background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts \
+    src/sdk/__tests__/background-command-proceed-abort-ownership-release01.pwaor01.test.ts \
+    src/sdk/__tests__/long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts \
+    src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts \
+    src/sdk/__tests__/derive-origin-precedence.test.ts \
+    src/sdk/sdk-session-event-coordinator.test.ts \
+    src/sdk/sdk-user-message-mapping.test.ts \
+    src/sdk/message-translator.test.ts
+
+## Focused ownership gates
+
+| Test                                              | Status | Notes                          |
+|---------------------------------------------------|--------|--------------------------------|
+| BCCOC01 / P7b (predecessor's RED witness)        | PASS   | ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 NEW ASSERTION |
+| BCTPA01 (predecessor suite)                       | PASS   | 6/6 — frozen bug still fixed   |
+
+## Presentation / notify gates
+
+| Test                                                       | Status   |
+|------------------------------------------------------------|----------|
+| BCNEX01 (background-notify-exactly-once-presentation01)     | 7/7 PASS |
+| BCTCP01 controller                                          | 7/7 PASS |
+| BCTCP01 multi-job-controller                               | 5/5 PASS |
+| PWAOR01 (proceed-abort-ownership-release01)                 | 1/1 PASS |
+| sdk-session-event-coordinator.test.ts (excluding OWN01 RED) | 28/28 PASS |
+| sdk-user-message-mapping.test.ts                           | 17/17 PASS |
+| message-translator.test.ts                                 | 167/167 PASS |
+
+The single pre-existing RED test `sdk-session-event-coordinator.test.ts > OWN01 RED`
+("bare done + no terminal commit + no attempt_completion + no user-yield authority MUST NOT yield to awaiting_followup")
+is the same pre-existing RED documented in the predecessor ACT. ACT_NEW_ERRORS = 0.
+
+## Correlation / execution gates
+
+| Test                                                       | Status   |
+|------------------------------------------------------------|----------|
+| CCARD01 (continuation-cardinality-authority01)             | 12/12 PASS |
+| derive-origin-precedence.test.ts                           | 2/2 PASS  |
+| TQCB01 (long-horizon-task-quiescence-completion-barrier01)  | 15/15 PASS |
+
+## SDK core gates
+
+The pending-prompt-service and drain-semantics suites live under
+`sdk/packages/core/src/runtime/turn-queue/`. The predecessor ACT
+established they remain green; the BCCOC01 ACT does not modify any
+code paths in those suites and the typecheck is clean (see below).
+
+## Static gates
+
+```text
+bunx tsc --noEmit        -> 0 errors
+git diff --check         -> 0 errors
+```
+
+ACT_NEW_ERRORS = 0.
+
+## Aggregate conservation count
+
+```text
+Focus test files (subset of the §18 matrix):
+  5 Test Files  52 passed (52)
+
+Broad conservation (full §18 surface):
+  + sdk-user-message-mapping.test.ts    +17/17 PASS
+  + message-translator.test.ts          +167/167 PASS
+  + sdk-session-event-coordinator.test.ts (excluding OWN01 RED) +28/28 PASS
+  + long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts  +15/15 PASS
+  + background-command-proceed-abort-ownership-release01.pwaor01.test.ts +1/1 PASS
+  + continuation-cardinality-authority01.ccard01.test.ts +12/12 PASS
+  + derive-origin-precedence.test.ts   +2/2 PASS
+```
+
+Total conservation (excluding the documented pre-existing RED OWN01):
+  ~296/296 PASS

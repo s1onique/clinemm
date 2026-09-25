@@ -1,0 +1,246 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 — RED/GREEN EVIDENCE
+=========================================================================================
+
+## Repair summary
+
+The C10 completion-result filter at
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:514-622` was
+narrowed from the predecessor ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01's
+over-broad aggregate predicate (`activeNotifyCount > 0 ||
+pendingPromptsKnown > 0 || pendingPromptAuthorityUnknown`) to a
+per-job ownership-aware predicate.
+
+The narrow predicate is:
+  suppress(C) IFF owned(C) is defined AND hasActiveNotify(owned(C)) == true
+
+where `owned(C)` is the per-turn ownership hint
+(`MessageTranslatorState.launchedBackgroundJobIds`) populated at the
+SAME seam as `BackgroundNotifyCoordinator.registerMarker` (the C9 ->
+marker seam at `vscode-run-commands-tool.ts:755-816`).
+
+The lookup is exact: `BackgroundNotifyCoordinator.hasActiveNotify(jobId)`
+is a constant-time `notificationMarkers.has(jobId)` against the
+underlying `Map<string, NotificationMarker>`. No new state, no new
+protocol field, no new persistence, no new wire surface.
+
+---
+
+## Pre-repair (RED)
+
+### Test: BCCOC01 / P7b (inherited from BCTPA01 P7b)
+
+BCTPA-P7b RED witness (`apps/vscode/src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts:754`)
+asserted the over-broad predicate was active:
+
+  BCTPA-P7b (KNOWN LIMITATION): unrelated explicit-user
+  completion_result during active notify IS currently suppressed
+
+Pre-repair assertion:
+  expect(visible.length).toBe(0)  // K suppressed (RED)
+
+---
+
+## Post-repair (GREEN)
+
+### Test: BCTPA-INV-01 (frozen bug invariant)
+
+BCTPA-INV-01 GREEN (`apps/vscode/src/sdk/__tests__/background-command-terminal-presentation-arbitration01.bctpa01.test.ts:522-636`):
+asserts that for one notify=true jobId, the harness drives the frozen
+bug shape (explicit_user turn + wake_drain turn) and observes exactly
+ONE visible completion_result.
+
+  BCTPA-INV-01: dual-turn completion produces exactly ONE visible
+  completion_result (frozen bug invariant) > explicit_user + wake_drain
+  -> exactly 1 user-visible presentation (the wake_drain turn's)
+
+Post-repair assertion:
+  expect(visible.length).toBe(1)
+  expect(visible[0]?.text).toContain("The command completed. Output: STARTED\nFINISHED")
+
+### Test: BCTPA-P7b (now CLOSED — was the reviewer's P1 RED witness)
+
+BCTPA-P7b GREEN (same test file, line 759):
+asserts the discriminator flipped: the unrelated K completion is now
+VISIBLE because the per-turn ownership hint was cleared at the turn
+boundary (mirroring production's `pending_prompt_submitted` ->
+`clearTurnOutcome()` at `sdk-session-event-coordinator.ts:455`).
+
+  BCTPA-P7b (CLOSED): unrelated explicit-user completion_result during
+  active notify IS visible (ownership-aware C10 filter)
+
+Post-repair assertion:
+  expect(visible.length).toBe(1)
+  expect(visible[0]?.text).toContain("Here's the answer to your unrelated question.")
+
+### Test: BCCOC01 / BCCOC-OWN-01 (single-job ownership, premature)
+
+BCCOC-OWN-01 GREEN (`apps/vscode/src/sdk/__tests__/background-command-completion-ownership-correlation01.bccoc01.test.ts`):
+the explicit_user turn owns J with the marker still alive -> the
+premature completion IS suppressed.
+
+  BCCOC-OWN-01: explicit_user turn that owns J with marker alive ->
+  completion SUPPRESSED
+
+Post-repair assertion:
+  expect(visible.length).toBe(0)
+
+### Test: BCCOC01 / BCCOC-OWN-02 (single-job ownership, wake turn)
+
+BCCOC-OWN-02 GREEN (same file):
+the wake_drain turn for J after consumeTerminal -> the terminal
+completion is VISIBLE (marker consumed, wake turn did not own J).
+
+  BCCOC-OWN-02: wake_drain turn after consumeTerminal -> completion VISIBLE
+
+Post-repair assertion:
+  expect(visible.length).toBe(1)
+  expect(visible[0]?.text).toContain("The command completed. Output: OK")
+
+### Test: BCCOC01 / BCCOC-MULTI-01 (cross-job isolation)
+
+BCCOC-MULTI-01 GREEN — three cases (same file):
+
+  (a) both J1 and J2 outstanding -> completion SUPPRESSED.
+  (b) J1 outstanding, J2 consumed -> completion SUPPRESSED (only J1 ownership matters).
+  (c) J1 consumed, J2 outstanding, completion turn owns ONLY J1 ->
+      completion VISIBLE (no cross-job over-suppression).
+
+Case (c) is the load-bearing "no cross-job over-suppression"
+assertion: the J2 marker being alive does NOT suppress a completion
+that semantically belongs to the already-completed J1 (because the
+completion turn's ownership hint contains only J1, and J1's marker
+is consumed).
+
+### Test: BCCOC01 / BCCOC01-P7b (replay of inherited RED, now GREEN)
+
+BCCOC01-P7b GREEN (same file): unrelated completion K while active
+notify for J -> K IS visible.
+
+  BCCOC01-P7b: unrelated completion K while active notify for J ->
+  K IS visible
+
+---
+
+## Conservation matrix (per ACT §14)
+
+### R1 — frozen bug still fixed
+  Test: BCTPA-INV-01
+  Result: GREEN (1 visible — the wake_drain's terminal completion)
+
+### R2 — terminal wake completion preserved
+  Test: BCCOC-OWN-02 + BCTPA-P1
+  Result: GREEN (1 visible — the wake_drain's terminal completion)
+
+### R3 — P7b fixed
+  Test: BCTPA-P7b (CLOSED) + BCCOC01-P7b
+  Result: GREEN (1 visible — the unrelated K's completion)
+
+### R4 — multi-job isolation
+  Test: BCCOC-MULTI-01 (3 cases)
+  Result: GREEN (no cross-job over-suppression)
+
+### R5 — no-job completion
+  Test: BCCOC-NO-OP
+  Result: GREEN (1 visible — the normal completion flows through)
+
+### R6 — exact job still outstanding
+  Test: BCCOC-OWN-01
+  Result: GREEN (0 visible — the premature completion IS suppressed)
+
+### R7 — exact job completed
+  Test: BCCOC-CONSUME-OWNED
+  Result: GREEN (1 visible — the wake_drain's terminal completion)
+
+### R8 — text/reasoning untouched
+  Test: BCTPA-P7 (text rows still flow)
+  Result: GREEN (textRows include "final answer to your follow-up")
+
+### R9 — synthetic wake prompt filtering unchanged
+  Test: BCNEX01 (7 tests)
+  Result: GREEN (all 7 pass)
+
+### R10 — deferredCompletionBarrier unchanged
+  Test: TQCB01 (15 tests)
+  Result: GREEN (all 15 pass; barrier still uses the aggregate predicate)
+
+### R11 — OOM repair unchanged
+  Test: BCNT01 (24 tests)
+  Result: GREEN (all 24 pass)
+
+### R12 — C4→C8 jobId correlation unchanged
+  Test: BCTCP01-controller + BCTCP01-multi-job-controller (12 tests)
+  Result: GREEN (all 12 pass)
+
+### R13 — deriveOrigin precedence unchanged
+  Test: CCARD01 + derive-origin-precedence (14 tests)
+  Result: GREEN (all 14 pass)
+
+### R14 — no public protocol expansion
+  Verified by inspection:
+  - No new field on `ClineMessage`
+  - No new field on `CoreSessionEvent` (proto)
+  - No new field on `BackgroundNotifyCoordinator` public API
+  - No new wire surface (gRPC, vscode, webview)
+  - All new state is internal-only and ephemeral:
+    - `MessageTranslatorState.launchedBackgroundJobIds` (Set<string>)
+      cleared by `clearTurnOutcome()` at the same seam as before
+    - `BackgroundNotifyCoordinator.hasActiveNotify(jobId)` is a
+      thin getter on the existing `notificationMarkers` Map
+
+---
+
+## Test counts
+
+```text
+Post-repair (current HEAD):
+  Test Files  2 passed (2)
+  Tests       14 passed (14)
+    - BCTPA01 (predecessor)        6/6 PASS
+    - BCCOC01 (this ACT)           8/8 PASS
+```
+
+## Conservation suites (broader regression)
+
+```text
+background-notify-exactly-once-presentation01.bcnex01.test.ts      7/7 PASS
+message-translator.test.ts                                      167/167 PASS
+background-command-notify-on-terminal01.bcnt01.test.ts            24/24 PASS
+sdk-user-message-mapping.test.ts                                 17/17 PASS
+sdk-session-event-coordinator.test.ts (excluding pre-existing
+  RED OWN01 — unrelated to this ACT)                            28/28 PASS
+long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts   15/15 PASS
+background-command-proceed-abort-ownership-release01.pwaor01.test.ts  1/1 PASS
+background-command-terminal-card-projection01.bctcp01-controller.test.ts  7/7 PASS
+background-command-terminal-card-projection01.bctcp01-multi-job-controller.test.ts  5/5 PASS
+continuation-cardinality-authority01.ccard01.test.ts             12/12 PASS
+derive-origin-precedence.test.ts                                  2/2 PASS
+```
+
+Pre-existing RED test in `sdk-session-event-coordinator.test.ts`
+(OWN01 — bare done + no terminal commit) is unrelated to this ACT
+and was failing before the fix. ACT_NEW_ERRORS = 0.
+
+## Discriminator flip (per ACT §15)
+
+| state                                | pre-repair | post-repair |
+|--------------------------------------|------------|-------------|
+| P7b unrelated K visible               | false      | true        |
+| premature J suppressed                | true       | true        |
+| wake J visible                        | true       | true        |
+| multi-job isolation (no cross-suppress)| false      | true        |
+
+The key bidirectional discriminator is:
+  K suppressed -> visible
+WITHOUT flipping:
+  premature J suppressed -> visible
+
+Both discriminators pass post-repair.
+
+## Static checks
+
+```text
+bunx tsc --noEmit              -> 0 errors
+git diff --check               -> 0 errors
+```
+
+ACT_NEW_ERRORS = 0.

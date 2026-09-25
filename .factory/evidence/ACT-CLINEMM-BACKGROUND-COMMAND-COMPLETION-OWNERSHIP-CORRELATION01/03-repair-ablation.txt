@@ -1,0 +1,91 @@
+ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01 — REPAIR ABLATION
+====================================================================================
+
+Per ACT §16: temporarily revert the ownership-aware portion of the
+C10 filter to confirm the new correlation identity is LOAD-BEARING
+specifically for over-suppression, not just another unrelated refactor.
+
+## Procedure
+
+Replaced the `if (this.options.hasActiveNotify) { ... }` branch at
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:569` with
+`if (false && this.options.hasActiveNotify) { ... }`, forcing the
+filter to fall back to the over-broad aggregate predicate
+(`activeNotifyCount > 0`) for every test. The fallback predicate
+itself is the PREDECESSOR's broad predicate (the BCTPA01 repair).
+No other line was modified; the test fixtures, harness, and
+`BackgroundNotifyCoordinator.hasActiveNotify` API surface remained
+unchanged.
+
+## Result: post-ablation, the predecessor BCTPA-P7b RED witness
+         REPRODUCES (and the BCCOC01-P7b replay + the cross-job
+         isolation test fail with the exact same shape), while
+         the frozen-bug BCTPA-INV-01 invariant remains superficially
+         fixed by the predecessor's broad predicate.
+
+```text
+14 tests total:
+  BCCOC01 (this ACT):
+    × BCCOC-MULTI-01: J1 consumed, J2 outstanding, completion turn owns
+      ONLY J1 -> completion VISIBLE (no cross-job over-suppression)
+    × BCCOC01-P7b REPLAY: unrelated completion K while active notify
+      for J -> K IS visible
+    (other 6 BCCOC tests pass)
+  BCTPA01 (predecessor):
+    × BCTPA-P7b (CLOSED): unrelated explicit-user completion_result
+      during active notify IS visible (ownership-aware C10 filter)
+    (other 5 BCTPA tests pass)
+
+Post-ablation:
+  Test Files  2 failed (2)
+  Tests       3 failed | 11 passed (14)
+```
+
+## Discrimination table
+
+| test                                            | post-repair | post-ablation | load-bearing? |
+|-------------------------------------------------|-------------|---------------|---------------|
+| BCTPA-RED-01 (no marker, both visible)         | PASS        | PASS          | n/a (no marker) |
+| BCTPA-INV-01 (frozen bug, 1 visible)           | PASS        | PASS          | n/a (predecessor repair) |
+| BCTPA-P1 (terminal after turn finishes, 1 visible) | PASS    | PASS          | n/a |
+| BCTPA-P7 (text rows not suppressed)              | PASS        | PASS          | n/a |
+| BCTPA-P7b (CLOSED) — unrelated K visible         | PASS        | FAIL          | YES |
+| BCTPA-P10 (jobId correlation)                   | PASS        | PASS          | n/a |
+| BCCOC-OWN-01 (premature J suppressed)            | PASS        | PASS          | n/a (broad predicate suffices) |
+| BCCOC-OWN-02 (wake J visible)                   | PASS        | PASS          | n/a |
+| BCCOC-MULTI-01 (a) both outstanding, suppress    | PASS        | PASS          | n/a |
+| BCCOC-MULTI-01 (b) J1 outstanding, suppress      | PASS        | PASS          | n/a |
+| BCCOC-MULTI-01 (c) J1 consumed, J2 alive, VISIBLE | PASS      | FAIL          | YES |
+| BCCOC01-P7b replay                               | PASS        | FAIL          | YES |
+| BCCOC-NO-OP                                      | PASS        | PASS          | n/a |
+| BCCOC-CONSUME-OWNED                              | PASS        | PASS          | n/a |
+
+The 3 tests that flipped from PASS to FAIL on ablation are exactly
+the over-suppression tests the ACT was designed to close:
+
+  - BCTPA-P7b (CLOSED): the inherited RED witness.
+  - BCCOC01-P7b replay: explicit GREEN preservation.
+  - BCCOC-MULTI-01 (c): the cross-job isolation test (R4).
+
+The frozen-bug suppression tests (BCTPA-INV-01, BCCOC-OWN-01,
+BCCOC-MULTI-01 a/b) REMAIN green under ablation because the
+predecessor's broad predicate already correctly suppresses when
+J's marker is alive. The ablation proves that the new correlation
+identity (per-job ownership) is load-bearing specifically for the
+over-suppression defect — not for the suppression defect itself.
+
+This is the exact §16 discriminator:
+
+  With ownership-aware repair:
+    P7b GREEN, OWN-01 GREEN, OWN-02 GREEN, MULTI-01 GREEN
+
+  With ownership-awareness removed and old broad predicate restored:
+    P7b returns RED
+
+  While frozen bug remains superficially fixed (BCTPA-INV-01 PASS).
+
+## Reverted state
+
+The ablation was reverted (the `if (false && ...)` was removed
+back to `if (this.options.hasActiveNotify)`). Post-revert all 14
+tests pass; ACT_NEW_ERRORS = 0; typecheck clean.
