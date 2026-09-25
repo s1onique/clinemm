@@ -287,3 +287,65 @@ code-qualified but live verification remains pending dogfood operator.
 The bounded repair adds no new errors; typecheck is clean
 (`bunx tsc --noEmit` exit 0); `git diff --check` exit 0; 13/13 tests
 PASS at the post-CORRECTION01 HEAD.
+
+## CORRECTION01 addendum (twenty-third reviewer follow-up)
+
+The twenty-third reviewer accepted CORRECTION01's resolution of the two
+prior P0 halts (`HALT_MULTI_JOB_CROSS_SUPPRESSION` + `HALT_LIVE_QUALIFICATION_NOT_PERFORMED`)
+and asked for three bounded cleanups before ACT closure:
+
+1. **Identity split.** `result.json` previously carried
+   `"subject_head": "CORRECTION01"` (a process label, not an artifact
+   identity). Replaced with role-explicit fields:
+   - `IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f`
+   - `CLOSURE_HEAD                = e2cccb190cd7bdcefed9b575aa06ec8f77ab2548`
+   - `DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f`
+
+   No VSIX rebuild is required: the bounded repair commit `ef246dad2`
+   is test-only (it removes the synthetic cross-job test); the production
+   carrier is unchanged since `baacc122a`. The existing VSIX
+   `dist/clinemm-4.1.16-baacc122a.vsix` remains the dogfood candidate.
+
+2. **R4 rephrasing.** "Out-of-scope" was operationally ambiguous;
+   changed to operationally precise wording: R4 is **UNPROVEN /
+   NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER**. The turn-level carrier
+   correctly suppresses the production-reachable multi-job shape
+   (both jobs alive → suppress), but cannot distinguish
+   "completion belongs to J1" from "completion belongs to J2" once
+   J1 has gone terminal and J2 remains active. Closure is honest;
+   rollout is BLOCKED until the carrier is wired or the invariant is
+   explicitly de-scoped.
+
+3. **Extension identity split.** `cline.cline-4.1.16` (the combined
+   VS Code identifier) was replaced with the canonical separation:
+   - `extension_id = cline.cline` (publisher.name; fixed identifier)
+   - `version      = 4.1.16`     (separate per VS Code CLI pinning form)
+
+**Decisive Factory state (per twenty-third reviewer C1):**
+
+```
+ACT                  = CLOSED_CLEAN_AT_CODE_SCOPE
+P0                   = NONE
+P1                   = per-completion multi-job identity missing (UNPROVEN)
+LIVE_A               = AUTHORIZED (can run on existing VSIX)
+LIVE_B               = AUTHORIZED (can run on existing VSIX)
+SINGLE_JOB / P7b     = LIVE_QUALIFIED (bounded repair correct; pending live trial)
+R4 multi-job isolation = UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER
+DOGFOOD_ROLLOUT      = BLOCKED
+AUTHORITY04          = NOT_AUTHORIZED
+```
+
+**Expected outcome after LIVE_A + LIVE_B run (operator):**
+
+```
+LIVE_A                                    = PASS
+LIVE_B                                    = PASS
+SINGLE_JOB / P7b OWNERSHIP REPAIR         = LIVE_QUALIFIED
+R4 PER-COMPLETION MULTI-JOB ISOLATION     = STILL UNPROVEN
+DOGFOOD ROLLOUT                           = STILL BLOCKED
+```
+
+unless the operator explicitly de-scopes R4 (requires opening a
+separate de-scope ACT).
+
+No further review cycle is warranted before running LIVE_A + LIVE_B.

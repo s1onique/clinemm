@@ -70,8 +70,8 @@ identity as:
 
 When installed into a VS Code instance via `code --install-extension
 clinemm-4.1.16-baacc122a.vsix`, the resulting extension identifier is
-`cline.cline-4.1.16` (VS Code combines `publisher.name` and appends
-`version`). The host-side harness at
+`extension_id = cline.cline` (publisher.name; fixed identifier)
+`version = 4.1.16` (separate per VS Code CLI version pinning form `publisher.extension`). The host-side harness at
 `apps/vscode/src/dev/debug-harness/server.ts` will then exercise the
 `SdkSessionEventCoordinator.handleSessionEvent` path with the new
 ownership-aware C10 filter at line 514-622 (the

@@ -9,11 +9,15 @@
     },
     {
       "verdict": "PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED",
-      "subject_head": "CORRECTION01",
+      "implementation_subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
+  "closure_head": "e2cccb190cd7bdcefed9b575aa06ec8f77ab2548",
+  "dogfood_source_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
       "reason": "downgraded per reviewer halt HALT_LIVE_QUALIFICATION_NOT_PERFORMED (LIVE_A + LIVE_B not executed; Cloud Agent context lacks dogfood infra). R4 (cross-job isolation) also downgraded to out-of-scope per reviewer halt HALT_MULTI_JOB_CROSS_SUPPRESSION (the synthetic test constructed state production cannot reach)."
     }
   ],
-  "subject_head": "CORRECTION01",
+  "implementation_subject_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
+  "closure_head": "e2cccb190cd7bdcefed9b575aa06ec8f77ab2548",
+  "dogfood_source_head": "baacc122aa3a9cb4afd1e1d139f269639a34fc3f",
   "predecessor": "ACT-CLINEMM-BACKGROUND-COMMAND-TERMINAL-PRESENTATION-ARBITRATION01",
   "predecessor_verdict": "PASS_WITH_NONBLOCKING_RESIDUE",
   "red": {
@@ -36,7 +40,7 @@
     "R1_frozen_bug_fixed": true,
     "R2_wake_completion_visible": true,
     "R3_P7b_fixed": true,
-    "R4_multi_job_isolation": "out-of-scope (production wire has no per-completion jobId carrier; the turn-level invariant correctly suppresses the production-reachable multi-job shape where both jobs are alive)",
+    "R4_multi_job_isolation": "UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER (production wire has no per-completion jobId carrier; the turn-level carrier correctly suppresses the production-reachable multi-job shape where both jobs are alive, but cannot distinguish 'completion belongs to J1' from 'completion belongs to J2' once J1 has gone terminal and J2 remains active)",
     "R5_no_job_completion_visible": true,
     "R6_owned_outstanding_suppressed": true,
     "R7_owned_consumed_visible": true,

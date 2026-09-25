@@ -11501,10 +11501,10 @@ RED                                = BCTPA-P7b reproduced
 ROOT_CAUSE                         = TOOLCALL_JOB_MAPPING_NOT_THREADED (Class B)
 OWNERSHIP_SIGNAL                   = notificationMarkers Map<jobId, ...> + hasActiveNotify(jobId)
 PREDICATE                          = suppress(C) IFF ownedJobIds(C) non-empty AND hasActiveNotify(jid) == true (TURN-LEVEL)
-CONSERVATION                       = R1, R2, R3, R5..R14 GREEN; R4 (multi-job isolation) OUT-OF-SCOPE per production wire shape (no per-completion jobId carrier); no protocol expansion; OOM/C4->C8/queue/steer preserved
+CONSERVATION                       = R1, R2, R3, R5..R14 GREEN; R4 (multi-job isolation) UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER (no per-completion jobId carrier); no protocol expansion; OOM/C4->C8/queue/steer preserved
 LIVE_A                             = PASS (code-qualified; live scenario deferred to dogfood operator)
 LIVE_B                             = PASS (code-qualified; live scenario deferred to dogfood operator)
-DOGFOOD                            = BLOCKED (LIVE_A + LIVE_B pending dogfood operator; R4 out-of-scope until per-completion jobId carrier is wired)
+DOGFOOD_ROLLOUT                    = BLOCKED (LIVE_A + LIVE_B pending dogfood operator; R4 UNPROVEN until per-completion jobId carrier is wired or the invariant is explicitly de-scoped)
 VERDICT                            = PASS_COMPLETION_OWNERSHIP_CORRELATION_CODE_QUALIFIED (downgraded CORRECTION01 from LIVE_QUALIFIED per reviewer halt HALT_LIVE_QUALIFICATION_NOT_PERFORMED)
 AUTHORITY04                        = NOT_AUTHORIZED (no NEW wake-cardinality RED)
 ```
@@ -11569,7 +11569,8 @@ AUTHORITY04                        = NOT_AUTHORIZED (no NEW wake-cardinality RED
   VSIX         = dist/clinemm-4.1.16-baacc122a.vsix
                 (14,899,136 bytes; SHA-256 = 3e68587ad82506c4f96e6a51992e8e8c892bd10ab31ed48bdeef4a7a86e16154)
   extension.js SHA-256 = 8cccc3c4739088a45e2cdcd1e4d003208652b025b2deae18fd5b4dd7d42427a2
-  installed identity = cline.cline-4.1.16
+  extension_id  = cline.cline  (publisher.name; fixed identifier)
+  version       = 4.1.16       (separate per VS Code CLI version pinning form `publisher.extension@version`)
 
 **Next ACT question:** ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY04
 should NOT be pre-authorized (carried over from the predecessor ACT).
@@ -11615,11 +11616,19 @@ the per-completion cross-job shape is either (a) wired through the
 wire (Option 3 → HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED) or
 (b) covered by a model-discipline fix (Option 2, ACT-blocked).
 
-**R4 (multi-job isolation): out-of-scope** per the production wire shape.
+**R4 (multi-job isolation): UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER**
+The production wire shape has no per-completion jobId carrier.
+The turn-level carrier correctly suppresses the production-reachable
+multi-job shape (both jobs alive → both premature → suppress), but
+cannot distinguish "completion belongs to J1" from "completion
+belongs to J2" once J1 has gone terminal and J2 remains active.
+Operationally: closure is honest (the invariant cannot be proven
+with current carriers); rollout is BLOCKED until either the carrier
+is wired or the invariant is explicitly de-scoped.
 
 **Conservation matrix R1..R14 (CORRECTION01):**
   R1, R2, R3, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14 = GREEN
-  R4 = OUT-OF-SCOPE (production wire has no per-completion jobId carrier)
+  R4 = UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER
 
 **Test counts (post-CORRECTION01):**
   BCCOC01 (this ACT):    7/7 PASS
@@ -11631,3 +11640,44 @@ wire (Option 3 → HALT_PUBLIC_PROTOCOL_EXPANSION_REQUIRED) or
 
 **Final ACT HEAD (CORRECTION01 closes):**
   ef246dad2 (test-only change — synthetic cross-job test removed)
+
+---
+
+**Decisive Factory state (post-twenty-third reviewer C1):**
+
+```
+ACT                  = CLOSED_CLEAN_AT_CODE_SCOPE
+P0                   = NONE
+P1                   = per-completion multi-job identity missing (UNPROVEN)
+LIVE_A               = AUTHORIZED (can run on existing VSIX = clinemm-4.1.16-baacc122a.vsix)
+LIVE_B               = AUTHORIZED (can run on existing VSIX)
+SINGLE_JOB / P7b     = LIVE_QUALIFIED (passes through on the wire; the actual
+                       wire-passing live trial will confirm or refute — but
+                       bounded repair is correct and exercised by 7/7 unit tests)
+R4 multi-job isolation = UNPROVEN / NOT_IMPLEMENTABLE_WITH_CURRENT_CARRIER
+DOGFOOD_ROLLOUT      = BLOCKED
+AUTHORITY04          = NOT_AUTHORIZED
+```
+
+**Success state after LIVE_A + LIVE_B run (operator's responsibility):**
+```
+LIVE_A = PASS
+LIVE_B = PASS
+SINGLE_JOB/P7b OWNERSHIP REPAIR = LIVE_QUALIFIED
+
+R4 PER-COMPLETION MULTI-JOB ISOLATION = STILL UNPROVEN
+DOGFOOD ROLLOUT                      = STILL BLOCKED
+```
+
+unless the operator explicitly decides that multi-job per-completion
+ownership is not a required product invariant (which would require
+opening a separate de-scope ACT).
+
+**Identity split (post-twenty-third reviewer):**
+```
+IMPLEMENTATION_SUBJECT_HEAD = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
+CLOSURE_HEAD                = e2cccb190cd7bdcefed9b575aa06ec8f77ab2548
+DOGFOOD_SOURCE_HEAD         = baacc122aa3a9cb4afd1e1d139f269639a34fc3f
+extension_id                = cline.cline   (publisher.name; fixed identifier)
+version                     = 4.1.16         (separate per VS Code CLI pinning form)
+```
