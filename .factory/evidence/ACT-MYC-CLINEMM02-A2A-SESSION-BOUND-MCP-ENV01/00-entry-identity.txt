@@ -1,0 +1,326 @@
+00-entry-identity.txt
+=====================
+
+ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 entry identity.
+
+entry_head          : ab71b439f (terminal SW-CM sequence commit; clean working tree)
+act_id              : ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01
+sequence            : main production backlog (SW-CM01..04 all PASS)
+                     -> A2A-SESSION-BOUND-MCP-ENV (this)
+                     -> B-LIVE-SESSION-PROPAGATION01 (real myc dogfood, two live sessions)
+                     -> C-LIFECYCLE (manual prime/remember/recall, no automation yet)
+                     -> M03 adversarial memory qualification
+                     -> M04 Factory MEMLAB comparison
+                     -> M05 sustained multi-project dogfood
+predecessor         : SW-CM sequence (PASS, all four) at ab71b439f; no prior MYC / CLINEMM02 / MEMLAB ACT exists
+successor           : ACT-MYC-CLINEMM02-B-LIVE-SESSION-PROPAGATION01 (only after PASS_SESSION_BOUND_MCP_ENV)
+domain_scope        : generic session-bound MCP env entry (fromSession:"sessionId")
+                     + session-scoped STDIO child lifecycle when config contains fromSession
+                     + compatibility for static/global MCP (no regression for env=record<string,string>)
+production_change_target : YES — bounded production change in apps/vscode/src/services/mcp/{schemas,McpHub}.ts
+                            and a per-session child-ownership map extension to McpHub. No MYC production change.
+
+architecture_decision : PER_SESSION_STDIO_CHILD_FOR_SESSION_BOUND_CONFIG_ONLY
+                         (NOT active-session rebind; NOT global one-child-per-session).
+
+session_id_source   : fromSession: "sessionId"  (the only typed source for now;
+                     future fromSession values: taskId, conversationId, workspaceId — added only with real consumer).
+
+verdict_string      : PASS_SESSION_BOUND_MCP_ENV
+
+adversarial_matrix  :
+  A2A-01  legacy string env            PASS; global child behavior unchanged
+  A2A-02  {value}                       PASS
+  A2A-03  {fromEnv}                     PASS
+  A2A-04  {fromSession:"sessionId"}     PASS; session-bound process
+  A2A-05  missing fromEnv + required    REJECT before spawn
+  A2A-06  missing session ctx + required REJECT before spawn
+  A2A-07  malformed multi-source object SCHEMA REJECT
+  A2A-08  sessions A and B              two child PIDs; env A != env B
+  A2A-09  reconnect A                   new A child retains A identity; B child unaffected
+  A2A-10  two env var names both        both materialize same session identity;
+          source sessionId              proves no MYC_SESSION_ID hardcode
+  A2A-11  resolver projection purity    source config unchanged after materialization
+  A2A-12  static server while A/B       exactly one global child;
+          coexist                       proves no regression to ordinary MCP lifecycle
+  A2A-13  session A teardown            kills/disposes only A-scoped child;
+                                         B survives (lifecycle isolation)
+  A2A-14  session-bound startup DEFER   settings load sees fromSession entry,
+                                         no active session: child count = 0,
+                                         NO session-bound transport spawned,
+                                         webview surfaces configured-but-pending
+  A2A-15  PRODUCTION ACQUISITION        real session A MCP access seam
+          (discriminator)               (vscode-runtime-builder.ts:47 ->
+                                         McpHub.callTool -> findConnection ->
+                                         connectToServer) acquires server ->
+                                         child whoami.session === A.sessionId
+                                         reached via REAL call site, not direct
+                                         invocation of the new overload
+  A2A-16  PRODUCTION TEARDOWN           drive SdkSessionLifecycle.endActiveSession
+          (discriminator)               -> trackSessionStop -> Promise.all([
+                                           sdkHost.stop(sessionId),
+                                           mcpHub.disconnectSession(sessionId),
+                                         ]): A child terminated (PID dead);
+                                         A session-map entry removed; B PID
+                                         unchanged; B whoami still succeeds.
+                                         Mirror of A2A-15 for the release side.
+
+evidence_promise    : proof reaches inside the spawned STDIO MCP child
+                     (real `process.env` / fixture MCP tool that returns {pid, session}),
+                     not just helper-computed values.
+
+static_compat_promise : upstream Cline byte-for-byte config compatibility preserved:
+                          env = { "API_KEY": "abc" }  is valid; no migration required.
+
+amendments_after_review (HALT_SESSION_BOUND_MCP_ACQUISITION_SEAM_NOT_IDENTIFIED):
+  - The acquisition seam is REAL:
+    apps/vscode/src/sdk/vscode-runtime-builder.ts:40-48
+    McpHubToolProvider.callTool(request) where
+      request.context: AgentToolContext
+      AgentToolContext.sessionId: string  (sdk/packages/shared/src/agent.ts:388)
+    Production chain populating AgentToolContext.sessionId:
+      ClineCore / AgentRuntime (agent-runtime.ts:2436)
+        -> AgentToolContext { sessionId: this.config.sessionId }
+          -> tool.execute(input, context)
+            -> McpHubToolProvider.callTool(request)
+    sessionId is in the typed channel end-to-end today.
+  - The diff must thread request.context?.sessionId through
+    vscode-runtime-builder.ts:47 and McpHub.callTool into
+    findConnection. Without this, A2A proves only that the
+    API supports session context, not that ClineMM uses it.
+  - Startup semantics REVISED (was contradictory in v1):
+      static config          -> spawn globally at startup (today's contract)
+      session-bound config   -> DEFER; validate and store template only;
+                                NO spawn on settings load
+      session first acquires -> spawn per-session child
+      session teardown       -> dispose that per-session child only
+  - Schema hygiene (P1):
+      One exported McpEnvEntrySchema in schemas.ts, reused at
+      all four sites (lines 36, 99, 125, 147) — not four
+      independent union copies.
+  - Matrix extended from 13 rows to 15 rows (round 1); then
+    from 15 rows to 16 rows (round 2; A2A-16 PRODUCTION
+    TEARDOWN — see below); then from 16 rows to 18 rows
+    (round 3; A2A-17 PRODUCTION DISCOVERY + A2A-18
+    DISCOVERY ISOLATION — see amendments_after_review_round3):
+      + A2A-14 SESSION-BOUND STARTUP DEFER
+        settings load sees fromSession entry, no active session:
+        child count = 0, NO session-bound transport spawned,
+        webview surfaces configured-but-pending.
+      + A2A-15 PRODUCTION ACQUISITION (discriminator)
+        real session A MCP access seam
+        (vscode-runtime-builder.ts:47 -> McpHub.callTool ->
+         findConnection -> connectToServer) acquires server
+        -> child whoami.session === A.sessionId
+        reached via REAL call site, not direct invocation
+        of the new overload in isolation.
+
+amendments_after_review_round2 (HALT_SESSION_BOUND_MCP_TEARDOWN_SEAM_NOT_IDENTIFIED):
+  - The teardown seam is REAL:
+    apps/vscode/src/sdk/sdk-session-lifecycle.ts:591-611
+      private trackSessionStop(sdkHost, sessionId, reason)
+        -> sdkHost.stop(sessionId)
+    SdkSessionLifecycle ALREADY holds an mcpHub reference
+    (SdkSessionLifecycleOptions.mcpHub: McpHub at line 29,
+     wired at SdkController.ts:1574-1575:
+        this.sessions = new SdkSessionLifecycle({ mcpHub: this.mcpHub, ... })
+    sessionId is unambiguously available at the teardown
+    seam: activeSession.sessionId (typed string).
+  - Production callers of endActiveSession (verified live):
+      - sdk-followup-coordinator.ts:356   ("followupTargetChanged")
+      - SdkController.ts:2527              ("remoteConfigToggle")
+      - sdk-task-control-coordinator.ts:151 ("clearTask")
+      - sdk-session-auto-approval-coordinator.ts:292 ("sessionAutoApprovalOverrideFailure")
+      - startNewSession internal path     (sdk-followup-coordinator.ts:276)
+    All reach trackSessionStop -> sdkHost.stop(sessionId).
+  - The required diff at sdk-session-lifecycle.ts:591-611:
+      const mcpHubDisconnect = this.options.mcpHub
+        .disconnectSession(sessionId)
+        .catch(error => Logger.warn(...))
+      const stopPromise = Promise.all([sdkHost.stop(sessionId), mcpHubDisconnect])
+                                  .then(() => {...})
+                                  .catch(error => Logger.warn(...))
+                                  .finally(...)
+    Both settle inside the existing pendingStops machinery
+    (wedge-free).
+  - Compaction-coordinator path (sdk-compaction-coordinator.ts:341-343):
+    extract the same teardown pattern into a single private
+    helper (tearDownSession) on SdkSessionLifecycle; reuse it
+    from both trackSessionStop and the compaction temp-host
+    path. Single canonical seam.
+  - P1/P2 callersite-scoping correction:
+      "thread sessionContext through all 8 callsites" is
+      rescoped. The existing 8 internal callsites (McpHub.ts:
+      1248, 1263, 1324, 1349, 1506, 1541, 1650, and the
+      closure at 627) KEEP their current session-agnostic
+      shape (pass nothing). Only the real session acquisition
+      callsite (vscode-runtime-builder.ts:47) and the real
+      session teardown callsite (sdk-session-lifecycle.ts:591)
+      carry sessionId. connectToServer(name, config, source,
+      sessionContext?) keeps the optional parameter; the
+      undefined path is the unchanged default.
+  - Matrix extended from 15 rows to 16 rows:
+      + A2A-16 PRODUCTION TEARDOWN (discriminator)
+        Drive the real production teardown seam:
+          SdkSessionLifecycle.endActiveSession("test")
+            -> trackSessionStop(activeSession.sdkHost,
+                                activeSession.sessionId,
+                                "test")
+              -> Promise.all([
+                   sdkHost.stop(sessionId),
+                   mcpHub.disconnectSession(sessionId),
+                 ])
+        Expected:
+          - A child terminated (PID dead; process.exit observed)
+          - A session-map entry removed from McpHub.sessionConnections
+          - B PID unchanged
+          - B whoami still succeeds
+        Mirror of A2A-15 for the release side. A2A-13 is the
+        unit/lifecycle test for the API; A2A-16 proves ClineMM
+        actually calls it on session teardown.
+
+amendments_after_review_round3
+  - HALT_SESSION_BOUND_MCP_DISCOVERY_SEAM_NOT_IDENTIFIED
+    identified: production MCP tool discovery seam
+    (= how session-bound server's tool schema reaches the
+     model before any tool call is issued) is real and
+    already carries sessionId — NO new production-callersite
+    expansion is needed.
+
+    SESSION_MCP_DISCOVERY_SEAM =
+      apps/vscode/src/sdk/vscode-session-host.ts:359
+        prepareStartSessionInput(input: ClineCoreStartInput)
+          input.config.sessionId is the building session's id
+            (CoreSessionConfig.sessionId, types/config.ts:259-268;
+             already populated by sdk-task-start-coordinator.ts:148
+             via createSessionId() before startInput reaches
+             prepareStartSessionInput)
+          -> createVscodeExtraTools(options.mcpHub, { sessionId })
+            -> for each server in mcpHub.getServers():
+                 createMcpTools({ serverName, provider })
+                   -> provider.listTools(serverName)
+                                                      [NEW: thread
+                                                       sessionId]
+                        if sessionId !== undefined:
+                          mcpHub.ensureSessionConnection(serverName,
+                                                        { sessionId })
+                            -> connectToServer(name, config,
+                                               source,
+                                               { sessionContext:
+                                                 { sessionId } })
+                              -> StdioClientTransport.spawn(env)
+                              -> Client.connect() -> client.listTools()
+                        mcpHub.getServers()
+                        server.tools ?? []
+  - Diff surface (small, additive, 3 spots):
+      1. vscode-session-host.ts:359 prepareStartSessionInput:
+         const sessionIdForMcp = inputWithRemoteConfig.config
+                                              .sessionId?.trim()
+         pass to createVscodeExtraTools(options.mcpHub,
+                                        { ..., sessionId: sessionIdForMcp })
+      2. vscode-runtime-builder.ts:51 VscodeExtraToolsOptions:
+         + sessionId?: string  (with ACT-anchored JSDoc)
+      3. vscode-runtime-builder.ts:19/22/40 McpHubToolProvider:
+         + constructor(mcpHub, sessionId?: string)
+         + listTools(name): if (this.sessionId !== undefined)
+                             await this.mcpHub
+                                 .ensureSessionConnection(name,
+                                     { sessionId: this.sessionId })
+         + callTool(request): forward this.sessionId to mcpHub.callTool
+  - Static-compat: when sessionId is undefined (Hub/Remote,
+    CLI, legacy test harnesses, pre-ACT ClineMM desktop app),
+    the new optional parameter is unused; behavior is
+    bit-equivalent to pre-ACT. ensureSessionConnection
+    short-circuits when the server template lacks fromSession.
+  - Production-callersite scoping (round-3 tightening):
+    three production seams carry sessionId:
+      (a) acquire  : vscode-runtime-builder.ts:47
+                     (callTool; reads AgentToolContext.sessionId)
+      (b) discover : vscode-runtime-builder.ts:124  [NEW]
+                     (createVscodeExtraTools; reads
+                      input.config.sessionId = CoreSessionConfig.sessionId)
+      (c) release  : sdk-session-lifecycle.ts:591
+                     (trackSessionStop; reads
+                      activeSession.sessionId)
+    Three different immediate object fields, but all three
+    carry the SAME session identity lineage — the host-owned
+    id created by SdkController.initTask as
+    taskSessionId = createSessionId() and propagated via
+    startInput.config.sessionId to (a) (carried through into
+    AgentToolContext at call time), (b) (read directly in
+    prepareStartSessionInput), and (c) (read off the active
+    session at stop time). No new plumbing in SdkController;
+    no synchronous getActiveSession() race.
+  - Matrix extended from 16 rows to 18 rows:
+      + A2A-17 PRODUCTION DISCOVERY (discriminator)
+        Drive the real production discovery seam:
+          SdkController.initTask(...)
+            -> SdkSessionLifecycle.startNewSession(
+                 { config: { sessionId: "A" } }, token)
+              -> sdkHost.start(input)
+                -> prepareStartSessionInput(input)
+                  -> createVscodeExtraTools(mcpHub,
+                                            { sessionId: "A" })
+                    -> McpHubToolProvider.listTools(
+                         "session-bound-server")
+                      -> ensureSessionConnection(
+                           "session-bound-server",
+                           { sessionId: "A" })
+                        -> connectToServer(
+                             "session-bound-server",
+                             parsedConfig,
+                             "internal",
+                             { sessionContext: { sessionId: "A" } })
+                          -> StdioClientTransport.spawn(env)
+                          -> Client.connect() -> client.listTools()
+                          -> server.tools = [...] (cached)
+                    -> returned descriptor: AgentTool("whoami")
+        Expected:
+          - BEFORE: sessionConnections.get("A") has no entry for
+            session-bound-server (deferred startup held).
+          - AFTER: sessionConnections.get("A")
+                            .get("session-bound-server").client
+                                  is connected; PID is alive;
+                                  server.tools includes whoami.
+          - The `whoami` descriptor appears in the AgentTool[]
+            returned by createMcpTools -> model context.
+          - Subsequent production callTool (A2A-15 chain) hits
+            the SAME child; fixture reports session="A".
+      + A2A-18 DISCOVERY ISOLATION (discriminator)
+        Drive the production discovery seam twice — once
+        with sessionId:"A", once with sessionId:"B":
+          - sessionConnections.get("A").get("server").pid !=
+            sessionConnections.get("B").get("server").pid
+          - Both serverTools lists contain the same whoami
+            descriptor (same schema, different child).
+          - A's discovery does NOT reuse B's child; calling
+            mcpHub.disconnectSession("A") does not affect B.
+  - A2A-17/18 must use the real production discovery seam
+    (NOT a direct invocation of McpHubToolProvider.listTools
+     or McpHub.connectToServer in isolation).
+
+verdict_string      : PASS_SESSION_BOUND_MCP_ENV
+status              : C1_GO_IMPLEMENT_NOW
+
+reviewer_verdict    : C1: GO.  All three review halts closed:
+                       HALT_SESSION_BOUND_MCP_ACQUISITION_SEAM_NOT_IDENTIFIED = CLOSED
+                       HALT_SESSION_BOUND_MCP_TEARDOWN_SEAM_NOT_IDENTIFIED    = CLOSED
+                       HALT_SESSION_BOUND_MCP_DISCOVERY_SEAM_NOT_IDENTIFIED   = CLOSED
+                       verdict: ARCHITECTURE_DECISION          = PASS
+                                 STATIC_MCP_COMPATIBILITY       = PASS
+                                 STARTUP_DEFER                  = PASS
+                                 PRODUCTION_DISCOVERY           = PASS
+                                 PRODUCTION_ACQUISITION         = PASS
+                                 PRODUCTION_TEARDOWN            = PASS
+                                 CHILD_SIDE_WITNESS_DESIGN      = PASS
+                                 PRODUCTION_REACHABILITY        = PASS
+                       P2 wording note (not a halt): three seams
+                       carry the same session identity lineage,
+                       not the same immediate object field —
+                       acquisition reads AgentToolContext.sessionId,
+                       release reads activeSession.sessionId,
+                       discovery reads input.config.sessionId.
+                       Do not spend a correction cycle on this.
+                       Next review is RED/GREEN/ablation/runtime
+                       evidence, NOT another plan revision.
+

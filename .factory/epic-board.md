@@ -12610,3 +12610,125 @@ Test file (`sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals
 - `unnecessary_resource_inline_count = 0`, `cross_skill_guide_content_leak_count = 0`, `disabled_skill_content_leak_count = 0`, `refresh_accuracy = 1.0`, `configured_agent_scope_accuracy = 1.0`.
 **Second-pass halt review:** HALT_RESOURCE_METRICS_PROMOTED raised by reviewer; resolved by evidence-only correction (no test/production code touched). All metric names now honest; resource artifact rows use `reference_present=true, dedicated_resource_discovery_seam=false, loaded=false, load_status=NOT_ATTEMPTED`. See `result.json.correction_history[0]` for full audit.
 **Successor:** SW-CM sequence closed. Main production backlog. No runtime defect reproduced. No bounded repair ACT opened.
+
+---
+
+## ACT-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 — OPEN — 2026-09-26
+
+**Status:** OPEN. Architecture decision frozen (C1). Recon + plan written; awaiting implementation.
+
+**MAIN_PRODUCTION_CURSOR = ACT-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01**
+
+**Why this jumps the queue:** real myc requires `session = process authority` for its MCP child; today's ClineMM `McpHub` is a single global instance per `SdkController` with no `sessionId` reaching `StdioClientTransport.spawn`. This is the production move that unlocks real ClineMM dogfood against real myc.
+
+**Architecture decision (frozen):**
+```
+PER_SESSION_STDIO_CHILD_FOR_SESSION_BOUND_CONFIG_ONLY
+
+static server      => connection identity = serverName           (preserved)
+session-bound      => connection identity = serverName + sessionId  (new)
+
+activation predicate:
+  config contains any entry shaped as { fromSession: "sessionId" }
+```
+
+Rejected alternatives (recorded):
+- **(b) active-session rebind** — mutable global state; cannot satisfy concurrent A+B sessions; same authority ambiguity as the BackgroundNotifyCoordinator hazard that BTCONT01 / TQCB01 already eliminated.
+- **globally per-session for every MCP server** — unbounded blast radius; breaks the upstream public contract expectation that ordinary MCP servers are singletons.
+- **provider-specific `MYC_SESSION_ID` string match** — feature is `fromSession:"sessionId"`, not `MYC_SESSION_ID`. Genericity is the design constraint.
+
+**Resolved acquisition seam (per review):** `apps/vscode/src/sdk/vscode-runtime-builder.ts:40-48 McpHubToolProvider.callTool(request)` already carries `request.context?: AgentToolContext`, and `AgentToolContext.sessionId` (`sdk/packages/shared/src/agent.ts:388`) is populated by the real production chain `AgentRuntime → tool.execute → McpHubToolProvider`. A2A MUST thread `request.context?.sessionId` through to `McpHub.callTool` so A2A-15 (PRODUCTION ACQUISITION) is reachable end-to-end through the real call site — not via direct invocation of the new `connectToServer` overload.
+
+**Resolved teardown seam (per round-2 review):** `apps/vscode/src/sdk/sdk-session-lifecycle.ts:591-611 trackSessionStop(sdkHost, sessionId, reason)` is the canonical "session is going away" site. `SdkSessionLifecycle` ALREADY holds the `mcpHub` reference (interface field at line 29; wired at `SdkController.ts:1574-1575 new SdkSessionLifecycle({ mcpHub: this.mcpHub, ... })`). `sessionId` is `activeSession.sessionId` (typed `string`). Live production callers of `endActiveSession` (verified): `sdk-followup-coordinator.ts:356` (followupTargetChanged), `SdkController.ts:2527` (remoteConfigToggle), `sdk-task-control-coordinator.ts:151` (clearTask), `sdk-session-auto-approval-coordinator.ts:292` (sessionAutoApprovalOverrideFailure). Required diff at `trackSessionStop`: run `mcpHub.disconnectSession(sessionId)` in parallel with `sdkHost.stop(sessionId)` via `Promise.all([...])` inside the existing `pendingStops` machinery (wedge-free). A2A MUST include this diff so A2A-16 (PRODUCTION TEARDOWN) is reachable end-to-end through the real teardown seam — not via direct invocation of `mcpHub.disconnectSession(A)` in isolation. Compaction-coordinator temp-host path (`sdk-compaction-coordinator.ts:341-343`) is folded into the same canonical seam via a private `tearDownSession` helper.
+
+**Resolved discovery seam (per round-3 review):** `apps/vscode/src/sdk/vscode-session-host.ts:359 prepareStartSessionInput(input: ClineCoreStartInput)` is the canonical "session is being built; populate its tools" site. `input.config.sessionId` ALREADY carries the building session's id (`CoreSessionConfig.sessionId`, `sdk/packages/core/src/types/config.ts:259-268`) because `SdkSessionLifecycle.startNewSession(startInput, token)` (`sdk-session-lifecycle.ts:366`) reads it off `startInput.config.sessionId?.trim()` BEFORE awaiting `sdkHost.start(input)`, and `SdkController.initTask` populates `startInput.config.sessionId` with `taskSessionId = createSessionId()` (`sdk-task-start-coordinator.ts:148`). So at the moment `prepareStartSessionInput` runs, the building session's id is ALREADY on the input — no synchronous `getActiveSession()`, no race, no new `SdkController` plumbing. The discovery chain is: `prepareStartSessionInput(input)` reads `input.config.sessionId` → `createVscodeExtraTools(mcpHub, { sessionId })` (`vscode-runtime-builder.ts:124`) → `new McpHubToolProvider(mcpHub, sessionId)` (NEW ctor arg) → for each server, `provider.listTools(name)` (`vscode-runtime-builder.ts:22`) → IF `sessionId !== undefined` THEN `mcpHub.ensureSessionConnection(name, { sessionId })` (NEW; short-circuits for static configs whose template lacks `fromSession`) → `connectToServer(name, config, source, { sessionContext: { sessionId } })` → `StdioClientTransport.start(env)` → `Client.connect()` → `client.listTools()` → `server.tools = [...]` (cached). Subsequent A2A-15 production `callTool` hits the SAME child because the provider's `this.sessionId` and the session-map key are the same identity. A2A MUST include this diff so A2A-17 (PRODUCTION DISCOVERY) and A2A-18 (DISCOVERY ISOLATION) are reachable end-to-end through the real discovery seam — not via direct invocation of `McpHubToolProvider.listTools` or `McpHub.connectToServer` in isolation.
+
+**Startup semantics (frozen per review):** static configs spawn globally as today; session-bound configs DEFER (validate and store template only — NO child spawned at settings load). First real session acquisition spawns the per-session child.
+
+**Schema hygiene (P1 per review):** one exported `McpEnvEntrySchema` in `schemas.ts`, reused at lines 36, 99, 125, 147 — not four independent copies of the union.
+
+**Caller-site scoping (P1/P2 correction per round-2 review; round-3 tightening; round-3 reviewer P2 wording fix):** the existing 8 internal `connectToServer` callsites in `McpHub.ts` (1248, 1263, 1324, 1349, 1506, 1541, 1650, and the closure at 627) KEEP their current session-agnostic shape. Three production seams carry sessionId — three different immediate object fields, but the SAME session identity lineage (the host-owned id created by `SdkController.initTask` as `taskSessionId = createSessionId()` and propagated via `startInput.config.sessionId`):
+
+| seam     | file:line                          | role                                       | reads from                          |
+|----------|------------------------------------|--------------------------------------------|-------------------------------------|
+| acquire  | `vscode-runtime-builder.ts:47`     | `McpHubToolProvider.callTool`              | `AgentToolContext.sessionId`        |
+| discover | `vscode-runtime-builder.ts:124`    | `createVscodeExtraTools` (NEW per round 3) | `input.config.sessionId` (`CoreSessionConfig.sessionId`) |
+| release  | `sdk-session-lifecycle.ts:591`     | `trackSessionStop`                         | `activeSession.sessionId`           |
+
+`connectToServer(name, config, source, sessionContext?)` keeps the optional parameter; the `undefined` path is the unchanged default. `McpHubToolProvider`'s new ctor `(mcpHub, sessionId?)` is the only place the optional session identity is captured for the lifetime of the provider — both `listTools` and `callTool` close over the same `this.sessionId`.
+
+**Reviewer verdict (round 3, C1: GO):**
+```
+HALT_SESSION_BOUND_MCP_ACQUISITION_SEAM_NOT_IDENTIFIED = CLOSED
+HALT_SESSION_BOUND_MCP_TEARDOWN_SEAM_NOT_IDENTIFIED    = CLOSED
+HALT_SESSION_BOUND_MCP_DISCOVERY_SEAM_NOT_IDENTIFIED   = CLOSED
+
+ARCHITECTURE_DECISION          = PASS
+STATIC_MCP_COMPATIBILITY       = PASS
+STARTUP_DEFER                  = PASS
+PRODUCTION_DISCOVERY           = PASS
+PRODUCTION_ACQUISITION         = PASS
+PRODUCTION_TEARDOWN            = PASS
+CHILD_SIDE_WITNESS_DESIGN      = PASS
+PRODUCTION_REACHABILITY        = PASS
+
+C1 = GO
+```
+Execute the implementation ACT. Next review is RED/GREEN/ablation/runtime evidence, NOT another plan revision. P2 wording (acquisition reads `AgentToolContext.sessionId`, release reads `activeSession.sessionId`, discovery reads `input.config.sessionId`): same identity lineage, three immediate object fields — do not spend a correction cycle on this. MCP-SDK lifecycle check by reviewer: STDIO `Client.connect()` spawns and owns the server process; `listTools()` obtains the model-facing tool definitions; `callTool()` executes the chosen tool; STDIO is explicitly client-spawned subprocess ownership. Implementation caution (not a halt): the MCP SDK caches/uses tool metadata after `listTools()` and may validate against it; preserving one `Client` per `(serverName, sessionId)` from discovery through subsequent calls is exactly the right design.
+
+**Frozen env-entry union (additive to flat `record<string,string>`):**
+```ts
+type McpEnvEntry =
+  | string
+  | { value: string;        required?: boolean }
+  | { fromEnv: string;      required?: boolean }
+  | { fromSession: "sessionId"; required?: boolean }
+```
+
+**Adversarial matrix (18 rows, frozen):** A2A-01 legacy string env PASS; A2A-02 {value}; A2A-03 {fromEnv}; A2A-04 {fromSession:"sessionId"}; A2A-05 missing fromEnv + required REJECT; A2A-06 missing session ctx + required REJECT; A2A-07 multi-source SCHEMA REJECT; A2A-08 A+B concurrent (two PIDs, envs distinct); A2A-09 reconnect A (new PID, A's identity, B untouched); A2A-10 genericity (two env names both source sessionId, both materialize same identity); A2A-11 resolver projection purity (rawEnv referential equality); A2A-12 static while A/B coexist (one global + one each for session-bound); A2A-13 lifecycle isolation (`disconnectSession("A")` kills only A's child, B survives); **A2A-14 SESSION-BOUND STARTUP DEFER** (settings load with `fromSession` and no active session: child count = 0, NO transport spawned, webview surfaces configured-but-pending); **A2A-15 PRODUCTION ACQUISITION** (real production call site at `vscode-runtime-builder.ts:47` → `McpHub.callTool` → `findConnection` → `connectToServer` → `StdioClientTransport.start` → `Client.connect` → `client.callTool({name:"whoami"})` reaches per-session child, NOT a direct call to `connectToServer` overload); **A2A-16 PRODUCTION TEARDOWN** (real production teardown seam at `sdk-session-lifecycle.ts:591-611 trackSessionStop` → `Promise.all([sdkHost.stop(sessionId), mcpHub.disconnectSession(sessionId)])` reaches per-session teardown; A child terminates, A session-map entry removed, B PID unchanged, B `whoami` still succeeds; NOT a direct call to `mcpHub.disconnectSession(A)` in isolation); **A2A-17 PRODUCTION DISCOVERY** (real production discovery seam at `vscode-session-host.ts:359 prepareStartSessionInput` → `createVscodeExtraTools(mcpHub, {sessionId})` → `McpHubToolProvider.listTools` → `ensureSessionConnection({sessionId})` → `connectToServer({sessionContext})` → `StdioClientTransport.start` → `Client.connect` → `client.listTools` → returned descriptor appears in `createMcpTools`'s `AgentTool[]`; fixture's `whoami` is reachable from `server.tools` BEFORE any tool call, subsequent production `callTool` hits the SAME child and reports `session === sessionId`; NOT a direct call to `McpHubToolProvider.listTools` in isolation); **A2A-18 DISCOVERY ISOLATION** (drive production discovery twice with sessionId A and B; distinct PIDs land in `sessionConnections.get("A")` and `sessionConnections.get("B")`; same `whoami` schema appears in both tool lists; A's discovery does NOT reuse B's child).
+
+**Load-bearing proof requirement:** evidence reaches inside the spawned STDIO MCP child via a deterministic fixture (`__fixtures__/session-id-echo/whoami.mjs`) whose `whoami` tool returns `{pid, session, session_keys}` from `process.env`. Parent-side helper-computed values are NOT evidence for A2A-04/08/09/10/13/15/16/17/18.
+
+**Static-compat promise:** upstream Cline's flat `env = { "API_KEY": "abc" }` continues to parse and round-trip identically. No migration required.
+
+**Out of scope (for this ACT):** any MYC production change; lifecycle automation; SDK wiring (ACT-B); additional `fromSession` values beyond `sessionId`; OAuth/SSE/StreamableHTTP transports; `${env:VAR}` syntax.
+
+**Recon + plan:** `.factory/evidence/ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01/{01-recon.md,plan.md,00-entry-identity.txt}`
+
+**Predicted production seams:**
+- `apps/vscode/src/services/mcp/schemas.ts` (env-union schema, XOR by disjoint union members)
+- `apps/vscode/src/services/mcp/McpHub.ts:386, 484-493` (resolver + per-session child map; 8 callsites threaded)
+- `apps/vscode/src/services/mcp/types.ts` (if `McpConnection` shape changes)
+- `apps/vscode/src/services/mcp/__fixtures__/session-id-echo/whoami.mjs` (new fixture)
+- `apps/vscode/src/services/mcp/__tests__/session-bound-mcp-env01.a2a.test.ts` (new tests)
+
+**Conservation gates (must all be UNCHANGED before PASS):**
+- SW-CM04 base corpus: 16/94
+- SW-CM01..03 base corpus
+- SW-CM04 bridge corpus: 1/5
+- `McpHub.connectFailure` test
+- `${env:VAR}` expansion test
+- `git diff --stat ab71b439f..HEAD -- apps/myc` MUST be empty (no MYC touch)
+
+**Sequence after this ACT:**
+```
+A2A-SESSION-BOUND-MCP-ENV01 (this) → PASS_SESSION_BOUND_MCP_ENV
+   ↓
+B-LIVE-SESSION-PROPAGATION01  — two real live ClineMM sessions
+                                with real myc MCP server:
+                                  A.pid != B.pid
+                                  A.MYC_SESSION_ID == ClineSessionA
+                                  B.MYC_SESSION_ID == ClineSessionB
+                                  memory written in A != session authority B
+                                  reconnect A preserves A, leaves B untouched
+   ↓
+C-LIFECYCLE  — manual prime/remember/recall; no automation yet
+   ↓
+M03 adversarial memory qualification
+   ↓
+M04 Factory MEMLAB comparison
+   ↓
+M05 sustained multi-project dogfood (real work, several days)
+```
+
+**Successor:** ACT-MYC-CLINEMM02-B-LIVE-SESSION-PROPAGATION01 (only after PASS_SESSION_BOUND_MCP_ENV).
