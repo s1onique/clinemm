@@ -271,3 +271,90 @@ sections 5-9 of the ACT specification.
 
 No production code changes planned in this ACT beyond what the ablation
 decision requires (§10 or §11).
+
+---
+
+## BOUNDED CORRECTION ROUND 1 (added after halt review)
+
+The factory reviewer's `HALT_C10_ABLATION_NOT_ISOLATED` flagged that the
+ROUND 0 ablation mechanism (falsifying `hasActiveNotify` /
+`getActiveNotifyCount`) was contaminated because both SEAM A AND SEAM B
+consult those predicates. See:
+
+  * SEAM A consults `hasActiveNotify` at L710
+    (`this.options.hasActiveNotify(jid)`).
+  * SEAM A consults `getActiveNotifyCount` at L731 (over-broad fallback).
+  * SEAM B consults `hasActiveNotify` at L475
+    (`this.options.hasActiveNotify?.(jid)`).
+  * SEAM B consults `getActiveNotifyCount` at L491 (`activeNotifyCount`).
+
+To make the ablation isolated, the bounded correction adds a
+**SEAM-A-only** test gate:
+
+```
+apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+  L194..L221  // new option-bag method declaration
+  L744..L758  // narrow branch consults shouldFilterCompletionResult when wired
+  L773..L787  // over-broad fallback consults shouldFilterCompletionResult when wired
+```
+
+New option-bag method:
+
+```ts
+shouldFilterCompletionResult?: (ownedJobIds: readonly string[]) => boolean
+```
+
+This is consulted EXCLUSIVELY by SEAM A; SEAM B continues to read
+`hasActiveNotify` / `wasWakeDelivered` / `isWakeAuthoritySettled` /
+`getActiveNotifyCount` through their unchanged option-bag methods.
+Production wires nothing (predicate is undefined at runtime), so the
+filter falls through to the production-real narrow per-jid lookup
+or the over-broad aggregate fallback. External behavior is
+unchanged; this is a TEST-ONLY insertion.
+
+The harness's mutable `c10FilterDecision` cell drives this predicate
+via the coordinator's closure. `setC10Filter(harness, true)` installs
+the production-real lookup; `setC10Filter(harness, false)` installs a
+`() => false` constant that neuters SEAM A without touching SEAM B.
+
+### Canonical wake-delivered discriminator (bounded correction acceptance)
+
+```
+J registered
+consumeTerminal(J)
+  -> notifyCoordinator.dispatchAndTrackWake(J)
+    -> wakeDispatchRequested += {J}
+    -> host.enqueueTerminalWake({kind:"delivered"}) -> returns {kind:"delivered"}
+    -> markWakeDelivered(J)        # wasWakeDelivered += {J}; wakeDispatchRequested -= {J}
+                                  # marker (hasActiveNotify) drops to false
+Re-register the marker (notifyCoordinator.registerMarker(J))
+  -> hasActiveNotify(J) === true again (so SEAM A observes an owned
+                                 outstanding marker AT emit time)
+                                 wasWakeDelivered stays true (immutable
+                                 historical state) so SEAM B still holds
+                                 the originating commit.
+Originating turn emits `done`:
+
+  SEAM A ON :
+    shouldFilterCompletionResult returns true (real lookup)
+    ownedAndOutstanding = true
+    filter runs, completion_result rows dropped
+    result.messages.length === 0 for completion_result
+    appendAndEmit receives 0 completion_result rows
+    deferredCompletionBarrier marker SET (SEAM B holds lifecycle)
+
+  SEAM A OFF:
+    shouldFilterCompletionResult returns false
+    filter skipped, completion_result rows pass through
+    appendAndEmit receives 2 raw rows (partial + final), 1 visible box
+    deferredCompletionBarrier marker SET (SEAM B holds lifecycle, identical)
+
+  DIFFERENCE attributable ONLY to SEAM A. SEAM B's lifecycle decision
+  is identical across both cases.
+```
+
+This is the LOAD-BEARING criterion called out by
+`HALT_C10_ABLATION_NOT_ISOLATED`. The pair
+`C10-ABLATION-01-NOTIFY-ON` + `C10-ABLATION-01-NOTIFY-OFF` satisfies it
+exactly: framework_completion_commits===0 in BOTH cases; the
+message-layer outcome differs (0 vs 2 rows).

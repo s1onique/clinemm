@@ -6,45 +6,99 @@
  * (SEAM A) NEUTRALIZED, observe whether the persisted/rendered
  * completion_result row cardinality regresses.
  *
- * The ablation mechanism: each test harness has a per-test switch
- * `c10FilterEnabled: boolean`. When `c10FilterEnabled === false`, the
- * harness overrides the option-bag methods that SEAM A consults:
+ * The ablation mechanism: the harness ALWAYS wires the
+ * `shouldFilterCompletionResult` (TEST-ONLY) option-bag method on
+ * `SdkSessionEventCoordinator`. This is the SEAM-A-only gate added
+ * by ACT-CLINEMM-C10-FILTER-ABLATION01's bounded correction
+ * ROUND 1 in response to `HALT_C10_ABLATION_NOT_ISOLATED` (the
+ * ROUND 0 ablation was contaminated because it falsified
+ * `hasActiveNotify` / `getActiveNotifyCount`, which SEAM B also
+ * consults).
  *
- *   - `hasActiveNotify(jobId)`     -> always false
- *   - `getActiveNotifyCount(...)`  -> always 0
- *   - `getLaunchedBackgroundJobIds()` -> always []
- *   - `getPendingPromptCount(...)` -> always { available: true, count: 0 }
+ * `shouldFilterCompletionResult(ownedJobIds)` is consulted EXCLUSIVELY
+ * by the SEAM-A filter branch (`sdk-session-event-coordinator.ts` at
+ * the completion-result message filter). It is NOT consulted by SEAM B
+ * (the framework-level completion-commit barrier at
+ * `setTurnPhase("completed", ...)`), which continues to read the real
+ * `hasActiveNotify` / `wasWakeDelivered` / etc. state through its own
+ * option-bag methods. This is the property the bounded correction
+ * makes load-bearing: turning SEAM A OFF does not contaminate SEAM B's
+ * lifecycle decision.
  *
- * This neutralizes ALL of SEAM A's predicates (both narrow per-job
- * and over-broad aggregate branches) WITHOUT modifying the production
- * code. SEAM B is untouched.
+ * The harness exposes a mutable closure `harness.c10FilterDecision`
+ * that the test can flip mid-run:
  *
- * Discriminators (per ACT §4):
- *   D1 semantic task completion cardinality == 1   -> tracker.currentPhase
- *   D2 persisted completion_result row cardinality -> result.messages.filter(say=="completion_result")
- *   D3 visible duplicate completion presentation   -> distinct ts in those rows
- *   D4 non-notify completion behavior              -> per-job ownership returns false
- *   D5 lost-wake behavior                         -> wasWakeDispatchFailed -> ALLOW
- *   D6 multi-job notify isolation                 -> per-job ownership is narrow
- *   D7 ordinary explicit_user completion behavior  -> no background work
+ *   - `setC10Filter(harness, true)`  -> c10FilterDecision = real per-job check
+ *                                       (consults `notifyCoordinator.hasActiveNotify`
+ *                                       for each owned jobId)
+ *   - `setC10Filter(harness, false)` -> c10FilterDecision = () => false
+ *                                       (SEAM A neutered; SEAM B unchanged)
+ *
+ * The discriminator (per ACT §4..§8):
+ *   D1 semantic task completion cardinality == 0 (wake delivered)
+ *                              / == 1 (ordinary)   -> tracker.currentPhase
+ *                                              + completionCommitCount
+ *   D2 persisted completion_result row cardinality
+ *                                       -> result.messages.filter(say=="completion_result")
+ *   D3 visible duplicate completion presentation
+ *                                       -> distinct ts in those rows
+ *
+ * The CANONICAL DISCRIMINATOR (the one the bounded correction
+ * requires):
+ *
+ *   setup:
+ *     J registered
+ *     J's terminal fires
+ *     consumeTerminal(J) -> host.enqueueTerminalWake({kind:"delivered"})
+ *                        -> notifyCoordinator.markWakeDelivered(J)
+ *                        -> hasActiveNotify(J) === false
+ *                        -> wasWakeDelivered(J) === true
+ *     originating turn attempts completion
+ *
+ *   SEAM A ON  : c10FilterDecision returns true (real predicate)
+ *                ownedAndOutstanding = true
+ *                filter runs
+ *                completion_result row FILTERED
+ *                appendAndEmit receives 0 completion_result rows
+ *   SEAM A OFF : c10FilterDecision returns false
+ *                ownedAndOutstanding = false
+ *                filter skipped
+ *                completion_result row VISIBLE
+ *                appendAndEmit receives 2 raw / 1 visible box
+ *
+ *   SEAM B in both runs:
+ *                outstandingAutonomousWork = activeNotifyCount (0) > 0 ? ... = false
+ *                perJobSuppressOriginatingCompletion = wasWakeDelivered(J) === true
+ *                return early (originating commit SUPPRESSED)
+ *                completionCommitCount === 0 in both
+ *
+ * This is the LOAD-BEARING discriminator per the bounded correction:
+ * the SEAM-A-ON case and SEAM-A-OFF case differ ONLY in the message
+ * filter, NOT in the framework barrier's decision.
  *
  * The hypothesis (proved or disproved here):
  *
- *   H1: with SEAM B ON and SEAM A OFF, in the canonical notify-owned
- *       background job lifecycle, the originating turn's completion_result
- *       row is NOT suppressed (because SEAM A is OFF) and the wake-driven
- *       turn's completion_result row IS emitted. That produces TWO
- *       completion_result rows in `clineMessages` (one from each turn)
- *       even though SEAM B enforces task-phase exactly-once. SEAM A is
- *       therefore NECESSARY.
+ *   H1: with SEAM B ON (wake delivered -> completion suppressed) and
+ *       SEAM A OFF, the originating turn's completion_result row is
+ *       NOT stripped (because SEAM A is OFF). The wake-driven turn's
+ *       own completion_result row IS later emitted by its own turn.
+ *       Result: TWO completion_result rows reach `appendAndEmit` (one
+ *       from the originating turn that should have been suppressed,
+ *       one from the wake-driven turn that owns terminal completion).
+ *       SEAM A is therefore NECESSARY for the message-layer
+ *       uniqueness invariant (independent of SEAM B's framework
+ *       lifecycle cardinality).
  *
- *   H2 (alternative): with SEAM A OFF, the originating turn's `done`
- *       event never produces a completion_result row at all because
- *       SEAM B holds the completion AND the message-filter is no longer
- *       needed. SEAM A is therefore REDUNDANT.
+ *   H2 (alternative): SEAM A is fully redundant with SEAM B. The
+ *       completion_result row never reaches appendAndEmit regardless
+ *       of SEAM A's state because SEAM B holds the originating turn
+ *       in deferred state and the message layer is unobservably
+ *       thin during that hold.
  *
- * The result of this matrix tells us which invariant (if any) SEAM A
- * still protects.
+ * The canonical discriminator proves or disproves H1 unambiguously:
+ * if the OFF case has a non-zero count of completion_result rows in
+ * appendAndEmit (2 raw / 1 visible box) AND the ON case has zero,
+ * H1 holds and SEAM A is necessary.
  */
 
 import type { CoreSessionEvent, SupervisableShellProcess } from "@cline/core"
@@ -141,13 +195,27 @@ interface Harness {
 	activeTaskId: string
 	appendAndEmit: ReturnType<typeof vi.fn>
 	completionCommitCount: () => number
-	// Reference to the option bag so tests can swap predicates mid-run
-	// for the SAME coordinator instance (the framework barrier (SEAM B)
-	// continues to consult the REAL coordinator state).
-	optionsRef: {
-		hasActiveNotify?: (j: string) => boolean
-		getActiveNotifyCount?: (sessionId: string | undefined, taskId: string | undefined) => number
-	}
+	/**
+	 * Mutable closure that backs the SEAM-A-only filter gate. The
+	 * default consults the REAL `notifyCoordinator.hasActiveNotify`
+	 * per owned jobId (production behavior). Tests flip it via
+	 * `setC10Filter`. SEAM B does NOT consult this — it reads
+	 * `hasActiveNotify` / `wasWakeDelivered` / `isWakeAuthoritySettled`
+	 * through the coordinator's option-bag methods directly.
+	 *
+	 * The coordinator's `shouldFilterCompletionResult` option-bag
+	 * method dispatches through the same underlying mutable cell
+	 * (see `writeC10`); the test's `setC10Filter(h, off)` swap is
+	 * observed immediately by the coordinator's next call.
+	 */
+	c10FilterDecision: (ownedJobIds: readonly string[]) => boolean
+	/**
+	 * Cell-mutator for the c10FilterDecision closure. `setC10Filter`
+	 * calls this so the swap is observed by the coordinator's
+	 * `shouldFilterCompletionResult` closure (which captures the
+	 * same `let` variable by reference).
+	 */
+	writeC10: (next: (ownedJobIds: readonly string[]) => boolean) => void
 }
 
 function makeHarness(): Harness {
@@ -176,6 +244,29 @@ function makeHarness(): Harness {
 		},
 		now: () => ++now,
 	})
+
+	// ACT-CLINEMM-C10-FILTER-ABLATION01 (bounded correction
+	// ROUND 1): the c10FilterDecision is a SINGLE mutable closure
+	// cell that backs both the coordinator's `shouldFilterCompletionResult`
+	// option-bag dispatch AND the harness's `c10FilterDecision`
+	// property (they reference the SAME function). Tests reassign
+	// it via `setC10Filter`; the production seam reads it through
+	// the same cell on the next call.
+	let c10FilterDecision: (ownedJobIds: readonly string[]) => boolean = (ownedJobIds) => {
+		// Production-real narrow per-jid lookup: filter iff any
+		// owned job has an active notify marker alive.
+		for (const jid of ownedJobIds) {
+			if (notifyCoordinator.hasActiveNotify(jid)) {
+				return true
+			}
+		}
+		return false
+	}
+	// Wrapper helper so the harness field tracks the variable.
+	const readC10 = (ownedJobIds: readonly string[]) => c10FilterDecision(ownedJobIds)
+	const writeC10 = (next: (ownedJobIds: readonly string[]) => boolean) => {
+		c10FilterDecision = next
+	}
 
 	const appendAndEmit = vi.fn()
 	const coordinator = new SdkSessionEventCoordinator({
@@ -211,16 +302,17 @@ function makeHarness(): Harness {
 		hasActiveNotify: (j: string) => notifyCoordinator.hasActiveNotify(j),
 		wasWakeDelivered: (j: string) => notifyCoordinator.wasWakeDelivered(j),
 		isWakeAuthoritySettled: (j: string) => notifyCoordinator.isWakeAuthoritySettled(j),
+		// ACT-CLINEMM-C10-FILTER-ABLATION01 (bounded correction
+		// ROUND 1): the SEAM-A-only ablation gate. This option-bag
+		// closure reads the LOCAL `c10FilterDecision` variable
+		// (declared with `let` above), so `setC10Filter`'s
+		// REASSIGNMENT of that variable is observed on the
+		// coordinator's next call. SEAM B is unaffected because
+		// SEAM B reads `hasActiveNotify` / `wasWakeDelivered`
+		// directly from the option-bag methods above — none of
+		// those reference `c10FilterDecision`.
+		shouldFilterCompletionResult: (ownedJobIds: readonly string[]) => c10FilterDecision(ownedJobIds),
 	} as never)
-
-	const optionsRef = (
-		coordinator as unknown as {
-			options: {
-				hasActiveNotify?: (j: string) => boolean
-				getActiveNotifyCount?: (sessionId: string | undefined, taskId: string | undefined) => number
-			}
-		}
-	).options
 
 	return {
 		coordinator,
@@ -233,38 +325,159 @@ function makeHarness(): Harness {
 		activeTaskId,
 		appendAndEmit,
 		completionCommitCount: () => completionCommitCount,
-		optionsRef,
+		// Exposed mirror of the mutable `c10FilterDecision` cell.
+		// Reading this returns the CURRENT function. The
+		// authoritative REWRITE happens via `writeC10`
+		// (which mutates the same `let` that the coordinator's
+		// `shouldFilterCompletionResult` closure captures).
+		c10FilterDecision: readC10,
+		writeC10,
 	}
 }
 
 /**
- * Neutralize SEAM A (message-layer completion_result filter) by overriding
- * the option-bag methods that the production filter consults. SEAM B
- * (framework-level completion-commit barrier) is untouched.
+ * Variant of `makeHarness` for the LOST-WAKE matrix where the
+ * host's `enqueueTerminalWake` returns a non-delivered outcome
+ * (`"rejected"` or `"session_gone"`). The downstream coordinator
+ * state transitions to "wake_dispatch_failed" (marker drained,
+ * wasWakeDispatchFailed=true), and SEAM B ALLOWs the originating
+ * completion commit per the BNCA dispatch-failed matrix.
  *
- * The narrow per-job branch in production (`hasActiveNotify(jid)`) is
- * suppressed by overriding `hasActiveNotify` to return false. The
- * over-broad aggregate fallback (`getActiveNotifyCount`, etc.) is
- * suppressed by overriding those too. The translator state
- * `getLaunchedBackgroundJobIds` is unaffected (production never
- * overrides it).
+ * Default (`makeHarness`) returns `"delivered"`.
+ */
+function makeHarnessWithOutcome(outcome: "delivered" | "rejected" | "session_gone"): Harness {
+	const minter = new MessageIdMinter()
+	const tracker = new TurnStateTracker(minter)
+	const translatorState = new MessageTranslatorState(minter)
+	const activeSessionId = "session-c10-ablation"
+	const activeTaskId = "task-c10-ablation"
+
+	const supervisor = fakeSupervisor()
+	const manager = new CommandJobManager({
+		maxWaitBudgetMs: 50,
+		spawnFactory: () => supervisor,
+	})
+
+	const queue = new TestPendingPromptQueue()
+	const sdkHost = makeSdkHost(queue)
+
+	let now = 0
+	let completionCommitCount = 0
+	const notifyCoordinator = new BackgroundNotifyCoordinator({
+		resolveActiveOwner: () => ({ sessionId: activeSessionId, taskId: activeTaskId }),
+		enqueueTerminalWake: async ({ sessionId, prompt, jobId: jid }) => {
+			// Only enqueue when the host actually delivered the wake.
+			// A "rejected" / "session_gone" outcome models a wake that
+			// never landed in PendingPromptsController; the queue must
+			// not reflect such "phantom" prompts (otherwise the SEAM B
+			// pending-prompt-count path would still see
+			// `pendingPromptsKnown > 0` and refuse to commit).
+			if (outcome === "delivered") {
+				queue.enqueue({ sessionId, prompt, ...(jid !== undefined ? { jobId: jid } : {}) })
+			}
+			return { kind: outcome }
+		},
+		now: () => ++now,
+	})
+
+	let c10FilterDecision: (ownedJobIds: readonly string[]) => boolean = (ownedJobIds) => {
+		for (const jid of ownedJobIds) {
+			if (notifyCoordinator.hasActiveNotify(jid)) {
+				return true
+			}
+		}
+		return false
+	}
+	const readC10 = (ownedJobIds: readonly string[]) => c10FilterDecision(ownedJobIds)
+	const writeC10 = (next: (ownedJobIds: readonly string[]) => boolean) => {
+		c10FilterDecision = next
+	}
+
+	const appendAndEmit = vi.fn()
+	const coordinator = new SdkSessionEventCoordinator({
+		messageTranslatorState: translatorState,
+		sessions: {
+			getActiveSession: () => ({
+				sessionId: activeSessionId,
+				sdkHost,
+				unsubscribe: vi.fn(),
+				startResult: { sessionId: activeSessionId },
+				isRunning: false,
+			}),
+			setRunning: vi.fn(),
+		},
+		messages: { appendAndEmit },
+		taskHistory: { updateTaskUsage: vi.fn() },
+		getTask: () => ({ taskId: activeTaskId }) as never,
+		postStateToWebview: vi.fn().mockResolvedValue(undefined),
+		setTurnPhase: ((phase, anchorTs, writerId) => {
+			if (phase === "completed") {
+				completionCommitCount += 1
+			}
+			tracker.setWithWriter(phase, anchorTs, {
+				writerId: (writerId ?? "unknown-legacy-writer") as never,
+			})
+		}) as NonNullable<SdkSessionEventCoordinatorOptions["setTurnPhase"]>,
+		getTurnPhase: () => tracker.currentPhase,
+		translateSessionEvent,
+		hasRunningBackgroundJobForOwner: () => manager.hasRunningBackgroundJobForOwner(activeSessionId),
+		getPendingPromptCount: (ownerSessionId: string | undefined) =>
+			sdkHost.pendingPrompts("count", { sessionId: ownerSessionId ?? "" }),
+		getActiveNotifyCount: () => notifyCoordinator.activeNotifyCountForOwner(activeSessionId, activeTaskId),
+		hasActiveNotify: (j: string) => notifyCoordinator.hasActiveNotify(j),
+		wasWakeDelivered: (j: string) => notifyCoordinator.wasWakeDelivered(j),
+		isWakeAuthoritySettled: (j: string) => notifyCoordinator.isWakeAuthoritySettled(j),
+		shouldFilterCompletionResult: (ownedJobIds: readonly string[]) => c10FilterDecision(ownedJobIds),
+	} as never)
+
+	return {
+		coordinator,
+		tracker,
+		translatorState,
+		manager,
+		notifyCoordinator,
+		queue,
+		activeSessionId,
+		activeTaskId,
+		appendAndEmit,
+		completionCommitCount: () => completionCommitCount,
+		c10FilterDecision: readC10,
+		writeC10,
+	}
+}
+
+/**
+ * SEAM-A-only ablation switch. Flips the `c10FilterDecision`
+ * closure the harness wires into `shouldFilterCompletionResult`.
+ *
+ * - `setC10Filter(harness, true)`  -> filter ON (production-real
+ *   narrow per-jid lookup via real `hasActiveNotify`).
+ * - `setC10Filter(harness, false)` -> filter OFF (always returns
+ *   false; SEAM A neutered).
+ *
+ * SEAM B is unaffected because `setC10Filter` does NOT touch the
+ * `hasActiveNotify` / `wasWakeDelivered` /
+ * `isWakeAuthoritySettled` / `getActiveNotifyCount` option-bag
+ * methods that SEAM B consults. SEAM B continues to read the REAL
+ * coordinator state through the same option-bag handlers both
+ * before and after the flip.
  */
 function setC10Filter(harness: Harness, enabled: boolean): void {
 	if (enabled) {
-		// Restore the real coordinator-backed predicates (default).
-		harness.optionsRef.hasActiveNotify = (j: string) => harness.notifyCoordinator.hasActiveNotify(j)
-		harness.optionsRef.getActiveNotifyCount = (sessionId, taskId) =>
-			harness.notifyCoordinator.activeNotifyCountForOwner(
-				sessionId ?? harness.activeSessionId,
-				taskId ?? harness.activeTaskId,
-			)
+		// Production-real narrow per-jid lookup.
+		harness.writeC10((ownedJobIds) => {
+			for (const jid of ownedJobIds) {
+				if (harness.notifyCoordinator.hasActiveNotify(jid)) {
+					return true
+				}
+			}
+			return false
+		})
 	} else {
-		// Disable C10: force ALL message-filter predicates to the
-		// "no outstanding work" answer. SEAM B consults the REAL
-		// coordinator state through `wasWakeDelivered` /
-		// `wasWakeDispatchRequested` / etc. (those are preserved).
-		harness.optionsRef.hasActiveNotify = (_j: string) => false
-		harness.optionsRef.getActiveNotifyCount = (_sessionId, _taskId) => 0
+		// SEAM A neutered — always returns false. SEAM B still reads
+		// the REAL coordinator state via `hasActiveNotify` /
+		// `wasWakeDelivered` on the option-bag (untouched).
+		harness.writeC10((_ownedJobIds) => false)
 	}
 }
 
@@ -374,8 +587,8 @@ function summarizeCompletionBoxes(appendAndEmit: ReturnType<typeof vi.fn>): Visi
 //   notifyOnCompletion=true, slow job, originating turn, wake-driven turn
 // -----------------------------------------------------------------------------
 
-describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-01 (matrix A — notify lifecycle)", () => {
-	it("C10-ABLATION-01-NOTIFY-ON: originating completion is FILTERED (one visible box, wake-driven turn owns completion)", async () => {
+describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-01 (matrix A — canonical wake-delivered discriminator)", () => {
+	it("C10-ABLATION-01-NOTIFY-ON: wake delivered + marker held at emit, SEAM A ON -> completion_result FILTERED, framework_commit=0", async () => {
 		const h = makeHarness()
 		setC10Filter(h, true)
 
@@ -387,6 +600,31 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-01 (matrix A — noti
 		})
 		h.translatorState.recordLaunchedBackgroundJob(jobId)
 
+		// Drive Path A: consumeTerminal -> host.enqueueTerminalWake
+		// returns {kind:"delivered"} -> markWakeDelivered(J).
+		h.notifyCoordinator.consumeTerminal({
+			jobId,
+			terminalState: "exited",
+			exitCode: 0,
+			reason: undefined,
+			isContainmentFailed: false,
+			outputTail: "ok",
+		})
+		await new Promise((r) => setImmediate(r))
+		expect(h.notifyCoordinator.wasWakeDelivered(jobId)).toBe(true)
+		expect(h.notifyCoordinator.hasActiveNotify(jobId)).toBe(false)
+
+		// Re-register so SEAM A observes an owned outstanding
+		// marker at emit time. wasWakeDelivered stays true so
+		// SEAM B still holds the originating commit.
+		h.notifyCoordinator.registerMarker({
+			jobId,
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+		expect(h.notifyCoordinator.hasActiveNotify(jobId)).toBe(true)
+		expect(h.notifyCoordinator.wasWakeDelivered(jobId)).toBe(true)
+
 		await emitCompletionTurn(h, {
 			turnId: "orig",
 			resultText: "Started, will report back.",
@@ -397,18 +635,16 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-01 (matrix A — noti
 		expect(visible.totalRows).toBe(0)
 		expect(visible.finalRows).toBe(0)
 
+		// SEAM B holds the originating commit (wake delivered).
+		expect(h.completionCommitCount()).toBe(0)
+		expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeDefined()
+
 		h.notifyCoordinator.dispose()
 		await h.manager.dispose()
 	}, 15_000)
 
-	it("C10-ABLATION-01-NOTIFY-OFF: originating completion is VISIBLE (filter disabled, framework barrier still ON)", async () => {
+	it("C10-ABLATION-01-NOTIFY-OFF: wake delivered + marker held at emit, SEAM A OFF -> completion_result VISIBLE, framework_commit=0 (CANONICAL DISCRIMINATOR)", async () => {
 		const h = makeHarness()
-		// SEAM A OFF, SEAM B ON. The originating turn's done event
-		// still reaches the completion phase decision. SEAM B sees
-		// wakeDelivered == false (no wake delivered in this harness),
-		// so the framework ALLOWs the lifecycle commit. SEAM A
-		// being off means the originating completion_result row is
-		// NOT filtered.
 		setC10Filter(h, false)
 
 		const jobId = "cmd_ablation01_notify_off"
@@ -419,6 +655,25 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-01 (matrix A — noti
 		})
 		h.translatorState.recordLaunchedBackgroundJob(jobId)
 
+		h.notifyCoordinator.consumeTerminal({
+			jobId,
+			terminalState: "exited",
+			exitCode: 0,
+			reason: undefined,
+			isContainmentFailed: false,
+			outputTail: "ok",
+		})
+		await new Promise((r) => setImmediate(r))
+		expect(h.notifyCoordinator.wasWakeDelivered(jobId)).toBe(true)
+		expect(h.notifyCoordinator.hasActiveNotify(jobId)).toBe(false)
+
+		// Re-register to give SEAM A's predicate something to filter.
+		h.notifyCoordinator.registerMarker({
+			jobId,
+			sessionId: h.activeSessionId,
+			taskId: h.activeTaskId,
+		})
+
 		await emitCompletionTurn(h, {
 			turnId: "orig",
 			resultText: "Started, will report back.",
@@ -426,20 +681,26 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-01 (matrix A — noti
 		})
 
 		const visible = summarizeCompletionBoxes(h.appendAndEmit)
-		// With SEAM A off: 2 raw rows (partial + final), 1 visible box.
+		// SEAM A OFF: filter skipped entirely. completion_result
+		// row passes through appendAndEmit.
 		expect(visible.totalRows).toBe(2)
 		expect(visible.finalRows).toBe(1)
 		expect(visible.partialRows).toBe(1)
 		expect(visible.distinctTs).toBe(1)
 
-		// Framework barrier still allowS lifecycle commit (no wake).
-		expect(h.completionCommitCount()).toBe(1)
+		// SEAM B holds the originating commit (identical to the
+		// SEAM-A-ON case above — `completionCommitCount===0`).
+		// This is the bounded correction's isolation property:
+		// SEAM B's decision is the SAME in both cases; ONLY the
+		// message-layer filter differs.
+		expect(h.completionCommitCount()).toBe(0)
+		expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeDefined()
 
 		h.notifyCoordinator.dispose()
 		await h.manager.dispose()
 	}, 15_000)
 
-	it("C10-ABLATION-01-NOTIFY-OFF-MULTI: TWO notify-owned jobs in flight, SEAM A OFF -> TWO completion_result rows visible per originating turn (per-job isolation lost)", async () => {
+	it("C10-ABLATION-01-NOTIFY-OFF-MULTI: TWO wakes delivered (per-job), SEAM A OFF -> completion_result VISIBLE, framework_commit=0", async () => {
 		const h = makeHarness()
 		setC10Filter(h, false)
 
@@ -450,6 +711,19 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-01 (matrix A — noti
 		h.translatorState.recordLaunchedBackgroundJob(j1)
 		h.translatorState.recordLaunchedBackgroundJob(j2)
 
+		// Drive Path A wake delivery for both J1 and J2.
+		for (const jid of [j1, j2]) {
+			h.notifyCoordinator.consumeTerminal({
+				jobId: jid,
+				terminalState: "exited",
+				exitCode: 0,
+				reason: undefined,
+				isContainmentFailed: false,
+				outputTail: "ok",
+			})
+		}
+		await new Promise((r) => setImmediate(r))
+
 		await emitCompletionTurn(h, {
 			turnId: "orig",
 			resultText: "Both commands launched.",
@@ -457,10 +731,12 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-01 (matrix A — noti
 		})
 
 		const visible = summarizeCompletionBoxes(h.appendAndEmit)
-		// SEAM A off: completion_result row leaks through.
+		// SEAM A off: completion_result row leaks through even though
+		// SEAM B holds the originating commit (both wakes delivered).
 		expect(visible.totalRows).toBe(2)
 		expect(visible.finalRows).toBe(1)
 		expect(visible.distinctTs).toBe(1)
+		expect(h.completionCommitCount()).toBe(0)
 
 		h.notifyCoordinator.dispose()
 		await h.manager.dispose()
@@ -503,7 +779,7 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-02 (matrix B — non-
 
 describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-03 (matrix C — lost wake)", () => {
 	it("C10-ABLATION-03-LOST-WAKE: dispatch FAILED -> originating completion ALLOWED with SEAM A OFF (zero completion / duplicate / stuck barrier)", async () => {
-		const h = makeHarness()
+		const h = makeHarnessWithOutcome("rejected")
 		setC10Filter(h, false)
 
 		const jobId = "cmd_ablation03_lost_wake"
@@ -513,9 +789,23 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-03 (matrix C — lost
 			taskId: h.activeTaskId,
 		})
 		h.translatorState.recordLaunchedBackgroundJob(jobId)
-		// Mark dispatch FAILED on the coordinator (the lost-wake case
-		// per BNCA dispatch-failed matrix).
-		h.notifyCoordinator.markWakeDispatchFailed(jobId)
+		// Drive Path A with outcome=rejected: the host callback
+		// resolves with {kind:"rejected"}, which causes the
+		// coordinator to call markWakeDispatchFailed(J). The
+		// marker is drained and the wake is definitively lost
+		// (no wake-driven turn will fire).
+		h.notifyCoordinator.consumeTerminal({
+			jobId,
+			terminalState: "exited",
+			exitCode: 0,
+			reason: undefined,
+			isContainmentFailed: false,
+			outputTail: "ok",
+		})
+		await new Promise((r) => setImmediate(r))
+		expect(h.notifyCoordinator.wasWakeDispatchFailed(jobId)).toBe(true)
+		expect(h.notifyCoordinator.wasWakeDelivered(jobId)).toBe(false)
+		expect(h.notifyCoordinator.hasActiveNotify(jobId)).toBe(false)
 
 		await emitCompletionTurn(h, {
 			turnId: "orig",
@@ -524,9 +814,8 @@ describe("ACT-CLINEMM-C10-FILTER-ABLATION01 / C10-ABLATION-03 (matrix C — lost
 		})
 
 		const visible = summarizeCompletionBoxes(h.appendAndEmit)
-		// SEAM A off + dispatch FAILED -> filter off path
-		// does not filter anyway (filter predicates are all
-		// overridden to 0). Completion_result row visible.
+		// SEAM A off + wake LOST -> filter off path does not
+		// filter anyway. Completion_result row visible.
 		expect(visible.totalRows).toBe(2)
 		expect(visible.finalRows).toBe(1)
 		expect(visible.distinctTs).toBe(1)

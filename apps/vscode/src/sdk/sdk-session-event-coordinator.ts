@@ -191,6 +191,35 @@ export interface SdkSessionEventCoordinatorOptions {
 	 */
 	hasActiveNotify?: (jobId: string) => boolean
 	/**
+	 * ACT-CLINEMM-C10-FILTER-ABLATION01:
+	 *
+	 * TEST-ONLY option-bag method that directly gates the C10
+	 * message-layer completion_result filter. Returns true iff the
+	 * filter should drop the `say:"completion_result"` rows from
+	 * `result.messages` before they reach `appendAndEmit`.
+	 *
+	 * When present, this method is consulted EXCLUSIVELY by the
+	 * SEAM-A filter at
+	 * `sdk-session-event-coordinator.ts` (the message-layer
+	 * branch at L692..L738). It is NOT consulted by SEAM B
+	 * (the framework-level completion-commit barrier at
+	 * `setTurnPhase("completed", ...)`), which continues to read
+	 * the real `hasActiveNotify` / `wasWakeDelivered` / etc.
+	 * state through the normal option-bag methods.
+	 *
+	 * This predicate is the seam-a-only ablation switch required
+	 * by the C10-ABLATION review (HALTC10-ABLATION-NOT-ISOLATED):
+	 * turning it OFF does NOT contaminate SEAM B's lifecycle
+	 * decision because SEAM B reads the real coordinator state
+	 * regardless of what this returns.
+	 *
+	 * Optional: when absent, SEAM A falls back to its standard
+	 * `hasActiveNotify(jobId)` per-jid lookup followed by the
+	 * over-broad aggregate fallback. Tests that omit this option
+	 * observe the production behavior unchanged.
+	 */
+	shouldFilterCompletionResult?: (ownedJobIds: readonly string[]) => boolean
+	/**
 	 * ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
 	 *
 	 * Per-job wake-delivered probe consulted at the C10
@@ -689,6 +718,7 @@ export class SdkSessionEventCoordinator {
 			if (result.messages.length > 0) {
 				const hasCompletionResult = result.messages.some((m) => m.say === "completion_result")
 				if (hasCompletionResult) {
+					const ownedJobIds = this.options.messageTranslatorState.getLaunchedBackgroundJobIds()
 					if (this.options.hasActiveNotify) {
 						// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
 						// Per-job ownership-aware filter. The narrow
@@ -704,12 +734,23 @@ export class SdkSessionEventCoordinator {
 						// conservation matrix item R4 ("J2 active
 						// does not suppress completion belonging to
 						// completed J1").
-						const ownedJobIds = this.options.messageTranslatorState.getLaunchedBackgroundJobIds()
-						let ownedAndOutstanding = false
-						for (const jid of ownedJobIds) {
-							if (this.options.hasActiveNotify(jid)) {
-								ownedAndOutstanding = true
-								break
+						//
+						// ACT-CLINEMM-C10-FILTER-ABLATION01: when the
+						// test-only `shouldFilterCompletionResult`
+						// predicate is wired, it gates this branch
+						// directly without contaminating SEAM B
+						// (which reads `hasActiveNotify` through its
+						// own option-bag calls).
+						let ownedAndOutstanding: boolean
+						if (this.options.shouldFilterCompletionResult) {
+							ownedAndOutstanding = this.options.shouldFilterCompletionResult(ownedJobIds)
+						} else {
+							ownedAndOutstanding = false
+							for (const jid of ownedJobIds) {
+								if (this.options.hasActiveNotify(jid)) {
+									ownedAndOutstanding = true
+									break
+								}
 							}
 						}
 						if (ownedAndOutstanding) {
@@ -723,15 +764,28 @@ export class SdkSessionEventCoordinator {
 						// tests that omit the seam (this preserves the
 						// predecessor behavior for any test harness that
 						// does not opt into the per-job lookup).
-						const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
-							activeSession.sessionId,
-						) ?? { available: false }
-						const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
-						const pendingPromptsKnown = pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
-						const activeNotifyCount =
-							this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ?? 0
-						const outstandingAutonomousWork =
-							pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+						//
+						// ACT-CLINEMM-C10-FILTER-ABLATION01: same
+						// gating as the narrow branch — when the
+						// test-only `shouldFilterCompletionResult`
+						// predicate is wired, it gates this branch
+						// directly without contaminating SEAM B.
+						let outstandingAutonomousWork: boolean
+						if (this.options.shouldFilterCompletionResult) {
+							outstandingAutonomousWork = this.options.shouldFilterCompletionResult(ownedJobIds)
+						} else {
+							const pendingPromptCountRead: PendingPromptCountRead = this.options.getPendingPromptCount?.(
+								activeSession.sessionId,
+							) ?? { available: false }
+							const pendingPromptAuthorityUnknown = pendingPromptCountRead.available !== true
+							const pendingPromptsKnown =
+								pendingPromptCountRead.available === true ? pendingPromptCountRead.count : 0
+							const activeNotifyCount =
+								this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ??
+								0
+							outstandingAutonomousWork =
+								pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+						}
 						if (outstandingAutonomousWork) {
 							result.messages = result.messages.filter((m) => m.say !== "completion_result")
 						}

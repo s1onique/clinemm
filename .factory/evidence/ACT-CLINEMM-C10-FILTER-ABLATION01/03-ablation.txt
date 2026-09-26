@@ -1,4 +1,4 @@
-(node:29678) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:37648) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
   - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
@@ -6,28 +6,23 @@ Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
  RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
 
-(node:29679) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:37648) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
- ✓ src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts (8 tests) 5ms
+ ✓ src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts (8 tests) 7ms
 
  Test Files  1 passed (1)
       Tests  8 passed (8)
-   Start at  13:54:29
-   Duration  1.99s (transform 1.14s, setup 1.71s, import 170ms, tests 5ms, environment 0ms)
+   Start at  14:21:56
+   Duration  2.14s (transform 1.17s, setup 1.84s, import 210ms, tests 7ms, environment 10ms)
 
-[vitest-pool]: Failed to terminate forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts. Error: kill EPERM
-[90m    at ChildProcess.kill (node:internal/child_process:535:26)[39m
-    at ForksPoolWorker.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3112:8)
-    at file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:118
-    at Traces.$ (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/traces.DT5aQ62U.js:142:27)
-    at PoolRunner.stop (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:2990:23)
-[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
-    at async Promise.all (index 0)
-    at Pool.cancel (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3509:3)
-    at Pool.close (file:///Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/[4m.bun[24m/vitest@4.1.10+452d8aa94eeb3631/node_modules/[4mvitest[24m/dist/chunks/cli-api.BK8pd4xc.js:3516:3)
-    at async Promise.all (index 0) {
-  errno: [33m-1[39m,
-  code: [32m'EPERM'[39m,
-  syscall: [32m'kill'[39m
-}
-[vitest-pool]: Timeout terminating forks worker for test files /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts.
+
+================================================================================
+ACT-CLINEMM-C10-FILTER-ABLATION01 ablation run (vmThreads, bounded correction ROUND 1)
+================================================================================
+ENTRY_HEAD=6e4c70b5f24f701c5a68226fc185bb4966ce6d57
+POOL=vmThreads
+VITEST_TEST_FILES_LINE= Test Files  1 passed (1)
+VITEST_TESTS_LINE=      Tests  8 passed (8)
+VITEST_ABLATION_RC=0
+ERROR_SCAN_RC=1         (grep returned no matches — clean vmThreads run)
+ERROR_SCAN_MATCHES=0
