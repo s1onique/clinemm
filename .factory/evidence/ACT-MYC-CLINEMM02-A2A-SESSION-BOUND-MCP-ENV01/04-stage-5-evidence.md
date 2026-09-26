@@ -91,7 +91,46 @@ actually touch (`connections`, `clientVersion`, `telemetryService`,
 | Stage 2 — Resolver GREEN   | ✅ GREEN (commit 3ee2f0bc3) |
 | Stage 3 — A2A-04 child witness | ✅ GREEN (commit 3ee2f0bc3) |
 | Stage 4 — A/B isolation rows | ✅ GREEN (commit ceb4c801f) |
-| Stage 5 — Production seams | ✅ GREEN (this commit) |
+| Stage 5 — Production seams (seam-level) | ✅ GREEN (commit 12ff01021) |
+| Stage 5 — HALT correction (production-shape) | ✅ GREEN (commit 88e557414) |
 | Stage 6 — Conservation gate | ⏳ pending |
 | Stage 7 — Closure | ⏳ pending |
+
+## HALT correction: production-shape evidence (commit 88e557414)
+
+Resolves `HALT_SESSION_ID_NOT_WIRED_INTO_PRODUCTION_DISCOVERY`. The
+Stage 5 commit (12ff01021) wired the seam-level plumbing
+(`McpHub.ensureSessionConnection`, `McpHub.disconnectSession`,
+`McpHubToolProvider(sessionId?)`, `createVscodeExtraTools({sessionId})`,
+`sdk-session-lifecycle.trackSessionStop`) and proved each leg with
+direct construction. The halt correctly observed that
+`vscode-session-host.ts` was NOT modified, so the production caller
+never reached the seams.
+
+The halt correction lands:
+
+1. `vscode-session-host.ts:382` (NEW) — captures
+   `inputWithRemoteConfig.config.sessionId?.trim()` from the canonical
+   `ClineCoreStartInput.config` upstream.
+2. `vscode-session-host.ts:413` (NEW) — forwards
+   `sessionId: sessionIdForMcp` into `createVscodeExtraTools(...)`.
+3. `apps/vscode/src/services/mcp/__tests__/sessionIdEcho.productionShape.test.ts`
+   (NEW, 8 cases) — drives the production call chains:
+   - **A2A-14 settings-load path**: real `McpHub.updateServerConnections(...)`
+     with a session-bound template; `ensureSessionConnection(name, {})`
+     returns `undefined` AND `sessionConnections.size === 0`.
+   - **A2A-16 lifecycle caller**: real `SdkSessionLifecycle.startNewSession`
+     → `endActiveSession` (the narrowest externally callable entry that
+     reaches `trackSessionStop`); asserts BOTH `mcpHub.disconnectSession("session-A")`
+     AND `sdkHost.stop("session-A")` fire on the production `Promise.all`
+     pair; coexisting B child survives; re-acquire of A spawns a new PID.
+   - **A2A-17/18 production-shape host discovery**: real
+     `VscodeSessionHost.create` → `bootstrap.applyToStartSessionInput({config: {sessionId}})`
+     → produced MCP tool's `execute()` reaches the spawned per-session
+     child with `payload.session === sessionId` and `payload.pid !== process.pid`;
+     two distinct sessionIds produce two distinct PIDs.
+
+Full unit suite: 89 files, 1204 pass / 0 fail. Zero regressions in
+pre-existing McpHub.* suites. New vitest suite: 8/8 pass. tsc clean.
+Biome clean.
 

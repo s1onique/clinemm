@@ -12704,7 +12704,12 @@ type McpEnvEntry =
   - `McpHub.sessionConnections: Map<sessionId, Map<serverName, McpConnection>>` + `ensureSessionConnection` + `disconnectSession` + `callTool(..., sessionId?)`
   - `McpHubToolProvider(mcpHub, sessionId?)` + `createVscodeExtraTools(mcpHub, {sessionId})`
   - `sdk-session-lifecycle.trackSessionStop` wraps `Promise.all([sdkHost.stop, mcpHub.disconnectSession])`
-- Full unit suite: **89 files, 1204 pass / 0 fail.** Zero regressions in pre-existing `McpHub.*` or `schemas.test.ts` suites.
+- **HALT correction (commit 88e557414, HALT_SESSION_ID_NOT_WIRED_INTO_PRODUCTION_DISCOVERY).** Wires `input.config.sessionId` through `prepareStartSessionInput` into `createVscodeExtraTools` (`vscode-session-host.ts:382, 413`). Adds `sessionIdEcho.productionShape.test.ts` (8 cases) driving the production call chains:
+  - A2A-14: `McpHub.updateServerConnections(...)` real settings-load → `ensureSessionConnection(name, {})` returns `undefined`, no per-session spawn.
+  - A2A-16: `SdkSessionLifecycle.startNewSession → endActiveSession` real lifecycle caller → `mcpHub.disconnectSession("session-A")` AND `sdkHost.stop("session-A")` both asserted on the production seam; coexisting B child survives.
+  - A2A-17/18: `VscodeSessionHost.create → bootstrap.applyToStartSessionInput({config: {sessionId}})` → produced MCP tool's `execute()` reaches the spawned per-session child with `payload.session === sessionId` and `payload.pid !== process.pid`; two distinct sessionIds produce two distinct PIDs.
+  Side effects: `cline-core-vitest-stub.ts` re-exports `createMcpTools`; `sdk-session-lifecycle.test.ts` makeLifecycle helper updated to include `disconnectSession` (conservation-gate fix from pre-existing debt in `12ff01021`).
+- Full unit suite: **89 files, 1204 pass / 0 fail.** Zero regressions in pre-existing `McpHub.*` or `schemas.test.ts` suites. New vitest suite: 8/8 pass.
 - Typecheck (`tsc --noEmit --project tsconfig.json`): exit 0. Biome: clean.
 - Stage 6 (conservation gate: `apps/myc` unchanged, all pre-existing tests still pass) and Stage 7 (closure artifacts: `result.json`, ACT status update) queued.
 
