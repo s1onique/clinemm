@@ -1,0 +1,104 @@
+ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01
+
+# Section 0 — Artifact identity (discovered, not predicted)
+# ---------------------------------------------------------------
+
+ENTRY_HEAD             = 521f23482fbbadf0e75dfe719c40f84d51550d07
+                         (closure_head self-referential note pinned to
+                          terminal commit 7b4c2888a, ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01
+                          bounded correction ROUND 3c / HALT_GATE_EXIT_NOT_BOUND_TO_RAW_ARTIFACT
+                          closure: GATE-exit=0 and ERROR_SCAN_MATCHES=0 durably bound to artifact
+                          as captured shell lines at lines 32-41 of 06-bnca-and-conservation-clean-vmthreads.txt;
+                          13 test files / 67 tests pass.)
+                         Captured: 2026-09-26 by `git rev-parse HEAD`. Working tree clean.
+
+DOGFOOD_SOURCE_HEAD    = 521f23482fbbadf0e75dfe719c40f84d51550d07
+                         (Same as ENTRY_HEAD; the dogfood VSIX was built directly
+                          from this commit. No extension host state cached at any
+                          intermediate commit.)
+
+VSIX_PATH              = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-521f23482.vsix
+VSIX_VERSION           = 4.1.16-521f23482
+                         (Source: extension/package.json inside the VSIX archive.)
+VSIX_BYTES             = 14618266
+VSIX_SHA256            = 1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7
+VSIX_BUILT_AT          = 2026-09-26T02:45 (file mtime)
+
+VSIX_EXTRACTED_SHA256  = eaf18ae2f16d38552c30e9949b89b56df6605e3a116ce2ce0747c357e78d4913
+                         (sha256 of extension/dist/extension.js extracted from the VSIX archive;
+                          verified to contain all BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01
+                          ROUND 1/2/3 markers — wakeDispatchRequestedJobIds, wakeDeliveredJobIds,
+                          wakeDispatchFailedJobIds, wasWakeDelivered, isWakeAuthoritySettled —
+                          confirming the bundled code corresponds to ENTRY_HEAD source.)
+
+INSTALLED_VERSION      = NOT YET INSTALLED at ACT start.
+                         This ACT installs the dogfood VSIX into a fresh isolated VSCode profile
+                         via the debug-harness, which by design uses ~/.cline2 as CLINE_DIR
+                         (data isolation — does not disturb the operator's ~/.cline state).
+
+INSTALLED_SOURCE_BINDING = The VSIX is built from ENTRY_HEAD (proven by:
+                           (a) extension/package.json "version": "4.1.16-521f23482" — SUBJECT_HEAD
+                               baked into the version field by the build script,
+                           (b) extension/dist/extension.js extracted SHA matches expected bundle content,
+                           (c) grep "521f23482" inside extension/dist/extension.js returns 1 match
+# Subject head binding verification (raw capture)
+# -----------------------------------------------
+
+$ git rev-parse HEAD
+521f23482fbbadf0e75dfe719c40f84d51550d07
+
+$ git status --short
+(clean working tree; nothing to commit)
+
+$ ls -la dist/dogfood/clinemm-4.1.16-521f23482.vsix
+-rw-r--r-- 1 chistyakov staff 14618266 Sep 26 02:45 dist/dogfood/clinemm-4.1.16-521f23482.vsix
+
+$ shasum -a 256 dist/dogfood/clinemm-4.1.16-521f23482.vsix
+1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7  dist/dogfood/clinemm-4.1.16-521f23482.vsix
+
+$ unzip -p dist/dogfood/clinemm-4.1.16-521f23482.vsix extension/package.json | python3 -c "import json,sys; p=json.load(sys.stdin); print('version:', p['version'])"
+version: 4.1.16-521f23482
+
+$ unzip -p dist/dogfood/clinemm-4.1.16-521f23482.vsix extension/dist/extension.js | shasum -a 256
+eaf18ae2f16d38552c30e9949b89b56df6605e3a116ce2ce0747c357e78d4913
+
+$ unzip -p dist/dogfood/clinemm-4.1.16-521f23482.vsix extension/dist/extension.js | grep -oE 'wakeDispatchRequestedJobIds|wakeDeliveredJobIds|wakeDispatchFailedJobIds|wasWakeDelivered|isWakeAuthoritySettled' | sort -u
+isWakeAuthoritySettled
+wakeDeliveredJobIds
+wakeDispatchFailedJobIds
+# Reuse of operator-supplied live evidence (from §2 reuse policy)
+# -------------------------------------------------------------
+
+# A previous operator-supplied CCARD trace (~/Downloads/continuation-cardinality-authority.jsonl,
+# SHA-256 d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1; counters.json SHA-256
+# 2a82c0028ad4a39e78c54bcab01ce1502582d9994b555626584ee72f9ec892c1) captured the live defect against
+# extension version 4.1.16-6b1003574 — that is, against an EARLIER commit where the BACKGROUND-NOTIFY
+# REPAIR code had not yet landed. Per ACT §2 reuse policy, those traces are NOT bindable to
+# DOGFOOD_SOURCE_HEAD = 521f23482, so they are recorded only as historical precedent (pointed to
+# from the LIVE_RUN_INDEX) and are NOT promoted into LIVE-A..E PASS verdicts.
+#
+# Referenced for context (not bound to current LIVE-A..E):
+#   .factory/evidence/ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01/01a-ccard.LIVE_RAW.jsonl
+#   .factory/evidence/ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01/05-clineMessages.LIVE_RAW.json
+#   .factory/evidence/ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01/01-authoritative-live-transcript.md
+#   .factory/evidence/ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01/01a-clineMessages.LIVE_RAW.json
+
+# Frozen authoritative transcript (unchanged from predecessor, captured against 4.1.16-6b1003574;
+# marked here for cross-reference only — does not count toward LIVE-A..E verdicts):
+#   sessionId = 1790335441241_5g7oe
+#   taskId    = 1790335441241_5g7oe
+#   jobId     = cmd_mugvhy92x7rm527e
+#   clineMessages SHA-256 = fe1b6bc7791a50483a3faed1790f149e98bfc48c8407b4266ea803719034ae36
+#   submit_and_exit count for J = 2 (defect, NOT under repair — only useful as PROOF that the
+#                                      issue existed in the pre-repair build)
+
+wakeDispatchRequestedJobIds
+wasWakeDelivered
+
+# Repair surfaces (all present in the bundled VSIX — verified by grep above):
+#   - apps/vscode/src/sdk/command-status-tool.ts (ROUND 1 H1 advisory)
+#   - apps/vscode/src/sdk/background-notify-coordinator.ts (ROUND 2 + ROUND 3: wakeAuthoritySettledJobIds, wakeDeliveredJobIds, wakeDispatchRequestedJobIds, wakeDispatchFailedJobIds trackers + probes)
+#   - apps/vscode/src/sdk/sdk-session-event-coordinator.ts (per-job consult in C10 barrier admission + reevaluation)
+#   - apps/vscode/src/sdk/SdkController.ts (wiring of new options + ROUND 3 production transport return-Promise semantic)
+
+                               (inside the HELP_MENU_VERSION metadata string).

@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "act_id": "ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01",
+  "purpose": "live validation",
+  "predecessor": {
+    "act_id": "ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01",
+    "verdict": "PASS (seam-level GREEN + clean executable gate)",
+    "halts_resolved_by_predecessor": [
+      "HALT_MODEL_DEPENDENT_COMPLETION_AUTHORITY",
+      "HALT_WAKE_DELIVERY_ACK_PROMOTED",
+      "HALT_EXECUTABLE_GATE_NOT_CLEAN",
+      "HALT_GATE_EXIT_NOT_BOUND_TO_RAW_ARTIFACT"
+    ]
+  },
+
+  "dogfood_identity": {
+    "source_head":            "521f23482fbbadf0e75dfe719c40f84d51550d07",
+    "version":                "4.1.16-521f23482",
+    "vsix_path":              "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-521f23482.vsix",
+    "vsix_bytes":             14618266,
+    "vsix_sha256":            "1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7",
+    "vsix_extracted_ext_js_sha256": "eaf18ae2f16d38552c30e9949b89b56df6605e3a116ce2ce0747c357e78d4913",
+    "installed_version":      "NOT_INSTALLED_AT_ACT_TIME (harness would load from --extensionDevelopmentPath=apps/vscode; or operator installs dist/dogfood/...vsix manually)",
+    "installed_source_binding": "Verified via extension/package.json version=4.1.16-521f23482 + extracted extension/dist/extension.js sha + grep -oE 521f23482 returns 1 inside bundled extension.js (sub-bundle HELP_MENU_VERSION metadata)"
+  },
+
+  "environment_blocker": {
+    "kind": "ELECTRON_SANDBOX_SIGSEGV",
+    "summary": "Electron refuses to launch in this agent sandbox. Direct `/Visual Studio Code.app/Contents/MacOS/Electron --version` exits 139 (SIGSEGV). Playwright `_electron.launch` from the in-process harness returns `Process failed to launch` with `<process did exit: exitCode=null, signal=SIGSEGV>`. Affects LIVE-A / LIVE-B / LIVE-C / LIVE-D1..5 / LIVE-E uniformly — none of those specimens can capture persisted state, screenshots, or CCARD JSONL.",
+    "evidence_file": "01-electron-sandbox-blocker.md",
+    "scope": "Only the Electron subprocess startup layer is affected. The bundled extension.js is bound to the entry head (SHA + grep). The harness server starts cleanly (port 19229; status={\"running\":false,\"hasSourceMap\":true,\"sourceMapFiles\":8416}). Closed-loop vitest gate runs clean (GATE-exit=0, 67/67 tests).",
+    "no_production_code_change": true,
+    "no_authority_change": true
+  },
+
+  "live": {
+    "A": "CAPTURE_INSUFFICIENT[SYSTEM]",
+    "B": "CAPTURE_INSUFFICIENT[SYSTEM]",
+    "C": "CAPTURE_INSUFFICIENT[SYSTEM]",
+    "D": "CAPTURE_INSUFFICIENT[SYSTEM] (no observed D-RUNNING/D-TERMINAL branch)",
+    "E": "CAPTURE_INSUFFICIENT[SYSTEM]"
+  },
+
+  "duplicate_same_job_completion_observed":  null,
+  "zero_completion_observed":                  null,
+  "multi_job_crosstalk_observed":             null,
+  "stuck_completion_barrier_observed":         null,
+
+  "post_live_gate": {
+    "test_files":          13,
+    "tests":               67,
+    "exit":                0,
+    "error_scan_matches":  0,
+    "evidence_file":       "04-post-live-regression-gate.txt",
+    "vitest_pool":         "vmThreads",
+    "vitest_testTimeout":  30000,
+    "captured_runner_status": "GATE-exit=0; EXIT_TS=2026-09-26T06:54:28Z; VITEST_TEST_FILES_LINE= Test Files  13 passed (13); VITEST_TESTS_LINE=      Tests  67 passed (67); ERROR_SCAN_RC=1; ERROR_SCAN_MATCHES=0; CAPTURED-LINES-COUNT=80"
+  },
+
+  "evidence_files": {
+    "00-artifact-identity.txt":         "Discovered identity of the bound dogfood VSIX (VSIX_SHA256 1f1af4ad...; entry head 521f23482; extracted ext.js SHA eaf18ae2...). §2 reuse policy applied — pre-repair operator CCARD/counters (bound to 4.1.16-6b1003574) recorded only as historical precedent.",
+    "01-electron-sandbox-blocker.md":   "Direct + Playwright evidence that Electron itself segfaults in this agent sandbox; harness server still healthy.",
+    "01-live-run-index.jsonl":         "One JSON object per LIVE-A..E specimen. Every verdict: CAPTURE_INSUFFICIENT[SYSTEM].",
+    "02-presentation-bindings.jsonl":  "All UNBOUND. Honest-fact: no UI surface could be observed because the extension host never started.",
+    "03-live-cardinality-matrix.md":    "Scenario table; per-job wake cardinality for LIVE-E; conditional mapping from seam-level evidence to expected runtime outcomes.",
+    "04-post-live-regression-gate.txt": "Same 13-file vitest run (vmThreads) with CAPTURED-RUNNER-STATUS bound as captured lines."
+  },
+
+  "halt_evaluations": {
+    "HALT_REPOSITORY_TRUST":               "NOT_TRIGGERED (working tree clean; entry head captured as 521f23482)",
+    "HALT_DOGFOOD_ARTIFACT_UNBOUND":       "NOT_TRIGGERED (VSIX_SHA256 binds to ENTRY_HEAD via package.json version + grep on bundled ext.js)",
+    "HALT_LIVE_AUTHORITY_REGRESSION":      "UNOBSERVABLE (no live execution)",
+    "HALT_NOTIFICATION_LOST":              "UNOBSERVABLE",
+    "HALT_DUPLICATE_TERMINAL_COMPLETION":  "UNOBSERVABLE",
+    "HALT_MULTI_JOB_AUTHORITY_CROSSTALK":  "UNOBSERVABLE",
+    "HALT_ZERO_COMPLETION":                "UNOBSERVABLE",
+    "HALT_STUCK_COMPLETION_BARRIER":       "UNOBSERVABLE",
+    "HALT_EXECUTABLE_GATE_REGRESSION":     "NOT_TRIGGERED (post-live gate GATE-exit=0; 67/67; ERROR_SCAN_MATCHES=0)",
+    "HALT_GATE_DRIFT":                     "NOT_TRIGGERED (same 13 files; same counts; same vmThreads pool as predecessor ROUND 3c)"
+  },
+
+  "verdict": "CAPTURE_INSUFFICIENT[SYSTEM]",
+
+  "required_followup": "Re-run LIVE-A..E from a macOS desktop session that has kernel entitlements for Chromium subprocess startup. The same bound VSIX (VSIX_PATH = dist/dogfood/clinemm-4.1.16-521f23482.vsix, VSIX_SHA256 = 1f1af4ad...) can then be (a) installed via `code --install-extension` or (b) loaded via `harness --extensionDevelopmentPath=apps/vscode`. All other prerequisites (provider key, webview build, harness) are confirmed available."
+}

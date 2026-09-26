@@ -11969,4 +11969,126 @@ PROCESS_EXIT_ZERO                = ARTIFACT-BOUND (captured GATE-exit=0 at artif
 HALT_EXECUTABLE_GATE_NOT_CLEAN   = CLOSED_BY_BOUNDED_CORRECTION_ROUND_3b
 HALT_GATE_EXIT_NOT_BOUND_TO_RAW_ARTIFACT = CLOSED_BY_BOUNDED_CORRECTION_ROUND_3c
 REPAIR_AUTHORIZED_FOR_LIVE_CLOSE = TRUE
+HALT_EXECUTABLE_GATE_NOT_CLEAN   = CLOSED_BY_BOUNDED_CORRECTION_ROUND_3b
+HALT_GATE_EXIT_NOT_BOUND_TO_RAW_ARTIFACT = CLOSED_BY_BOUNDED_CORRECTION_ROUND_3c
+REPAIR_AUTHORIZED_FOR_LIVE_CLOSE = TRUE
+```
+
+---
+
+## ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01 — CAPTURE_INSUFFICIENT[SYSTEM] (Electron sandbox blocker) — 2026-09-26
+
+**Status:** CAPTURE_INSUFFICIENT[SYSTEM]. Live UI / persisted `clineMessages` / CCARD JSONL / screenshot capture was unreachable in this agent sandbox because the bundled Electron binary itself segfaults (exit 139 / SIGSEGV) before it can host the extension. Closed-loop executable gate re-run clean. No production code change.
+
+**Predecessor:** ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 (GATE-exit=0, 67/67, ERROR_SCAN_MATCHES=0; ZERO P0 halts remaining).
+
+**Mission:** Live-qualify the repaired background-notify completion authority against the exact installed dogfood artifact. ACT §3..§7 require launching the bound VSIX inside a real VSCode extension host, sending prompts A/B/C/D×5/E through the chat UI, and observing wall-clock lifecycle / wake / completion events. **None of these can be executed from this runner.**
+
+**Environment blocker (NEW evidence — not in predecessor):**
+
+- Direct `/Visual Studio Code.app/Contents/MacOS/Electron --version` exits 139 (SIGSEGV). No sigterm, no sigkill — the Chromium subprocess kernel requirement is unavailable in this sandbox.
+- Same outcome via Playwright `_electron.launch` from the harness:
+  `<process did exit: exitCode=null, signal=SIGSEGV>` + `Error: kill EPERM`.
+- Harness **server** is healthy (`status()` returns expected shape; 8416 source-map files loaded); only the Electron launch path is broken.
+
+**Artifact identity (bound, not predicted):**
+
+```
+ENTRY_HEAD             = 521f23482fbbadf0e75dfe719c40f84d51550d07
+DOGFOOD_SOURCE_HEAD    = 521f23482fbbadf0e75dfe719c40f84d51550d07
+VSIX_PATH              = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-521f23482.vsix
+VSIX_VERSION           = 4.1.16-521f23482
+VSIX_BYTES             = 14618266
+VSIX_SHA256            = 1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7
+VSIX_EXTRACTED_SHA256  = eaf18ae2f16d38552c30e9949b89b56df6605e3a116ce2ce0747c357e78d4913
+                         (extension/dist/extension.js; contains wakeDispatchRequestedJobIds / wakeDeliveredJobIds /
+                          wakeDispatchFailedJobIds / wasWakeDelivered / isWakeAuthoritySettled —
+                          all ROUND 1/2/3 markers present)
+INSTALLED_VERSION      = NOT INSTALLED at ACT start (harness would load via --extensionDevelopmentPath,
+                         or operator installs the VSIX manually from a desktop session)
+INSTALLED_SOURCE_BINDING = extension/package.json "version":"4.1.16-521f23482" — SUBJECT_HEAD baked into version field
+```
+
+**Live specimens (each row's verdict):**
+
+```
+LIVE-A  = CAPTURE_INSUFFICIENT[SYSTEM]   (one notify-owned slow job)
+LIVE-B  = CAPTURE_INSUFFICIENT[SYSTEM]   (notify + non-blocking status read)
+LIVE-C  = CAPTURE_INSUFFICIENT[SYSTEM]   (non-notify blocking wait — R5 conservation)
+LIVE-D  = CAPTURE_INSUFFICIENT[SYSTEM]   (5× fast-exit race; no observed D-RUNNING/D-TERMINAL branch)
+LIVE-E  = CAPTURE_INSUFFICIENT[SYSTEM]   (two notify-owned jobs; no J20/J40 isolation observed)
+```
+
+**Cardinality (UNOBSERVABLE for all live specimens):**
+
+- terminal_committed(J)        UNOBS (all scenarios)
+- wake_created(J)              UNOBS
+- submit_and_exit              UNOBS
+- duplicate terminal UI        UNOBS
+- semantic completion count    UNOBS
+- multi-job J20/J40 wake       UNOBS
+- stuck HOLD / zero completion UNOBS
+- agent_turn_done              UNOBS
+
+**Closed-loop gate re-run (preserved; this ACT did NOT touch tests):**
+
+`04-post-live-regression-gate.txt` — vitest vmThreads same 13 files:
+
+```
+RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+... (file-by-file green) ...
+ Test Files  13 passed (13)
+      Tests  67 passed (67)
+   Start at  09:54:16
+   Duration  11.70s (transform 15.70s, setup 36.13s, import 3.21s, tests 25.20s, environment 243ms)
+
+GATE-exit=0
+EXIT_TS=2026-09-26T06:54:28Z
+VITEST_TEST_FILES_LINE= Test Files  13 passed (13)
+VITEST_TESTS_LINE=      Tests  67 passed (67)
+ERROR_SCAN_RC=1
+ERROR_SCAN_MATCHES=0
+CAPTURED-LINES-COUNT=80
+```
+
+`GATE-exit=0`, ERROR_SCAN_MATCHES=0 — no assertion count drift, no runner teardown failures.
+
+**§2 reuse policy applied to operator-supplied prior live evidence:**
+
+The operator-supplied CCARD/counters (`~/Downloads/continuation-cardinality-authority.{jsonl,counters.json}`, SHA d7302ae9...d24f1 / 2a82c002...892c1) + persisted `clineMessages` (`05-clineMessages.LIVE_RAW.json`, SHA fe1b6bc7...4ae36) captured the live defect against **extension version 4.1.16-6b1003574** — an EARLIER commit where BACKGROUND-NOTIFY REPAIR code had not landed. Per §2 reuse policy, those traces are NOT bindable to DOGFOOD_SOURCE_HEAD=521f23482 (40 commits older; no ROUND 1/2/3 fixes). Recorded only as historical precedent; NOT promoted into LIVE-A..E verdicts.
+
+**Halts evaluated:**
+
+```
+HALT_REPOSITORY_TRUST               NOT_TRIGGERED (clean working tree; ENTRY_HEAD captured)
+HALT_DOGFOOD_ARTIFACT_UNBOUND       NOT_TRIGGERED (VSIX_SHA256 binds to ENTRY_HEAD via package.json version + bundled ext.js grep + extracted SHA)
+HALT_LIVE_AUTHORITY_REGRESSION      UNOBSERVABLE (no live execution reachable)
+HALT_NOTIFICATION_LOST              UNOBSERVABLE
+HALT_DUPLICATE_TERMINAL_COMPLETION  UNOBSERVABLE
+HALT_MULTI_JOB_AUTHORITY_CROSSTALK  UNOBSERVABLE
+HALT_ZERO_COMPLETION                UNOBSERVABLE
+HALT_STUCK_COMPLETION_BARRIER       UNOBSERVABLE
+HALT_EXECUTABLE_GATE_REGRESSION     NOT_TRIGGERED (post-live gate GATE-exit=0; 67/67; ERROR_SCAN_MATCHES=0)
+HALT_GATE_DRIFT                     NOT_TRIGGERED (same 13 files; same 67 tests; same vmThreads pool as ROUND 3c)
+```
+
+**Decisive Factory state:**
+
+```
+ACT                       = CAPTURE_INSUFFICIENT[SYSTEM]
+P0                        = NONE_REMAINING (no NEW defect surfaced; pre-existing halts stay CLOSED_BY_BOUNDED_CORRECTION_ROUND_{3,3b,3c})
+LIVE_A..E                 = CAPTURE_INSUFFICIENT[SYSTEM] (Electron sandbox SIGSEGV blocks extension-host execution)
+ENVIRONMENT_BLOCKER       = ELECTRON_SANDBOX_SIGSEGV (kernel-level; reproducible 139 exit on direct Electron invocation)
+DOGFOOD_BINDING           = BOUND (VSIX_SHA256 1f1af4ad2e... → ENTRY_HEAD 521f23482)
+TEST_INTEGRITY            = PRESERVED (same 13 files / 67 tests / vmThreads pool / runner status durably bound)
+REPAIR_AUTHORIZED         = unchanged from predecessor (no live regression observed; no production code change)
+REPAIR_NECESSITY          = unchanged from predecessor
+REQUIRED_FOLLOWUP         = re-run LIVE-A..E from a macOS desktop session with kernel entitlements for Chromium subprocess startup,
+                            against the same bound VSIX (dist/dogfood/clinemm-4.1.16-521f23482.vsix, sha256=1f1af4ad...)
+```
+
+**Verdict:** CAPTURE_INSUFFICIENT[SYSTEM].
+
+Not promoted to PASS — no live extension-host execution was reachable. Not classified as HALT_REGRESSION — no NEW defect surfaced. The predecessor ACT's seam-level evidence remains the load-bearing proof that the framework-level C10 completion-commit barrier covers the load-bearing invariants (R1..R15). The closed-loop executable gate stays clean. Production code untouched.
+
 ```
