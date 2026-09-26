@@ -1,0 +1,74 @@
+{
+  "act": "ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01",
+  "halt_received": [
+    "HALT_SESSION_ID_NOT_WIRED_INTO_PRODUCTION_DISCOVERY (cancelled by 88e557414)",
+    "HALT_SESSION_BOUND_STARTUP_DEFER_NOT_PROVEN (cancelled by 7647d0413)"
+  ],
+  "halt_class": "P0",
+  "halt_disposition": "CANCELLED_VIA_BOUNDED_PRODUCTION_FIXES",
+  "halt_cancellations": {
+    "HALT_SESSION_ID_NOT_WIRED_INTO_PRODUCTION_DISCOVERY": {
+      "resolved_by_commit": "88e557414",
+      "summary": "Wired input.config.sessionId through vscode-session-host.prepareStartSessionInput into createVscodeExtraTools. Added sessionIdEcho.productionShape.test.ts (8 cases) driving the production call chains: A2A-14 settings-load path, A2A-16 SdkSessionLifecycle.startNewSession → endActiveSession, A2A-17/18 bootstrap.applyToStartSessionInput. All four rows reach production seams end-to-end.",
+      "side_effects": [
+        "cline-core-vitest-stub.ts re-exports createMcpTools from @cline/core/extensions/mcp/tools so the production pipeline runs under vitest.",
+        "sdk-session-lifecycle.test.ts makeLifecycle helper updated to include disconnectSession (conservation-gate fix from pre-existing debt in 12ff01021)."
+      ]
+    },
+    "HALT_SESSION_BOUND_STARTUP_DEFER_NOT_PROVEN": {
+      "resolved_by_commit": "7647d0413",
+      "summary": "McpHub.updateServerConnections now detects hasSessionBoundTemplate(name, config) on the raw incoming config BEFORE calling connectToServer. For session-bound templates, it pushes a configured-but-pending entry (status: pending-session, transport: null, client: null) and skips the spawn entirely; StdioClientTransport is never constructed. Flat-env templates still follow the legacy global-connect path unchanged. A2A-14 rewritten: connectToServer is now a sinon.spy() (records invocations without doing real work); the production method's defer gate is asserted by callCount === 0 AND the pending entry's status/transport shape. A new second it-case pins the static control (flat-env template) to confirm legacy behavior is preserved. McpServer.status extends to include pending-session (apps/vscode internal sentinel); the wire conversion maps it to DISCONNECTED on the legacy proto enum.",
+      "test_witness_load_bearing_assertions": [
+        "connectToServer.callCount === 0 for session-bound template",
+        "hub.connections[0].server.status === 'pending-session'",
+        "hub.connections[0].transport === null",
+        "hub.connections[0].client === null",
+        "ensureSessionConnection(name, {}) === undefined",
+        "sessionConnections.size === 0",
+        "control case: connectToServer.callCount === 1 + status === 'connected' + transport !== null"
+      ]
+    }
+  },
+  "code_gates": {
+    "tsc_apps_vscode": "PASS (0 diagnostics)",
+    "biome_lint": "PASS (pre-commit hook clean on staged files)",
+    "bun_run_bun_unit_tests": "89 files, 1204 PASS, 0 FAIL",
+    "vitest_mcp_lifecycle_sessionhost": "4 files, 49 tests PASS (incl. rewritten A2A-14)",
+    "production_diff": {
+      "files_changed": [
+        "apps/vscode/src/services/mcp/McpHub.ts (+77/-X)",
+        "apps/vscode/src/services/mcp/__tests__/sessionIdEcho.productionShape.test.ts (+80/-X)",
+        "apps/vscode/src/shared/mcp.ts (+1/-1 status union extended)",
+        "apps/vscode/src/shared/proto-conversions/mcp/mcp-server-conversion.ts (+10 wire conversion)",
+        "apps/vscode/src/sdk/vscode-session-host.ts (+20 HALT 1)",
+        "apps/vscode/src/sdk/sdk-session-lifecycle.test.ts (+1 HALT 1 fixup)",
+        "apps/vscode/src/test/cline-core-vitest-stub.ts (+6 HALT 1 stub re-export)",
+        "apps/vscode/vitest.config.ts (+4 HALT 1 include)"
+      ],
+      "files_added": [
+        "apps/vscode/src/services/mcp/__tests__/sessionIdEcho.productionShape.test.ts (NEW)"
+      ]
+    }
+  },
+  "conservation": {
+    "apps_myc_unchanged": true,
+    "no_proto_delta": true,
+    "production_diff_is_minimal": true,
+    "zero_regressions_in_pre_existing_tests": true,
+    "no_runtime_test_execution_introduced": true
+  },
+  "stages": {
+    "stage_1_schema_red_to_green": "GREEN (commit 3ee2f0bc3)",
+    "stage_2_resolver_green": "GREEN (commit 3ee2f0bc3)",
+    "stage_3_a2a_04_child_witness": "GREEN (commit 3ee2f0bc3)",
+    "stage_4_ab_isolation_rows": "GREEN (commit ceb4c801f)",
+    "stage_5_production_seams_seam_level": "GREEN (commit 12ff01021)",
+    "stage_5_halt_1_production_shape_discovery_release": "GREEN (commit 88e557414)",
+    "stage_5_halt_2_startup_defer_contract": "GREEN (commit 7647d0413)",
+    "stage_6_conservation_gate": "GREEN (apps/myc empty diff vs ab71b439f + all pre-existing suites pass)",
+    "stage_7_closure_artifacts": "GREEN (this result.json + ACT file status CLOSED)"
+  },
+  "halt_cancellation_status": "PASS — Both halts cancelled via bounded production fixes. The session-bound env contract (defer on settings-load, lazy spawn on per-session call, eager reconnect-removal on session stop) is now load-bearing proven end-to-end across the production call chain (McpHub.updateServerConnections → connectToServer short-circuit, SdkSessionLifecycle.startNewSession → endActiveSession → trackSessionStop, vscode-session-host.prepareStartSessionInput → createVscodeExtraTools({sessionId}) → McpHubToolProvider(sessionId) → ensureSessionConnection → StdioClientTransport spawn).",
+  "composition_verdict": "PASS_A2A_SESSION_BOUND_MCP_ENV_AFTER_2_HALT_CORRECTIONS",
+  "combined_verdict": "PASS_SESSION_BOUND_MCP_ENV_CONTRACT_PROVEN_END_TO_END_WITH_DEFER_ACROSS_PRODUCTION_CALL_CHAINS"
+}
