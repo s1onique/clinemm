@@ -12593,3 +12593,20 @@ This was the simplest available runner fix and was confirmed compatible with the
 - This board entry
 
 Test file (`sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts`) and corpus (`02-trigger-corpus.jsonl`) UNCHANGED.
+
+## ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01 — PASS_GUIDE_SUFFICIENCY_PROGRESSIVE_DISCLOSURE_RUNTIME — 2026-09-26
+**Sequence position:** SW-CM04 → SW-CM01 (PASS) → SW-CM02 (PASS) → SW-CM03 (this) → main production backlog. SW-CM sequence is now COMPLETE.
+**Recon:** `.factory/evidence/ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01/01-recon.md`
+**Test file (1, untracked):** `sdk/packages/core/src/extensions/tools/__tests__/guide-sufficiency-progressive-disclosure01.swcm03.test.ts`
+- 23 tests / 4 describe blocks (A=12 guide payload, B=3 resource references vs inlining, C=4 refresh+precedence, D=4 configured-agent skill scope).
+- All 23 tests PASS in `bun test --isolate`. 0 ACT-owned typecheck diagnostics. 0 biome issues.
+- Production code modified: NONE. `git status --short` shows only untracked files; no tracked source modifications.
+**Metrics (after HALT_RESOURCE_METRICS_PROMOTED bounded correction):**
+- `guide_identity_accuracy = 1.0` (denominator 19)
+- `guide_sufficiency_rate = 1.0` (denominator 12: 5 must-contain + 7 must-not-contain)
+- `resource_reference_presence_accuracy = 1.0` (denominator 7)
+- `resource_discovery_accuracy = NOT_APPLICABLE` — ClineMM has no dedicated resource-discovery seam (per recon); previously misreported as 1.0.
+- `required_resource_load_rate = NOT_APPLICABLE` — required_resource_load_cases = 0 (zero-denominator; resource loading is the model's responsibility downstream of this ACT); previously misreported as 1.0.
+- `unnecessary_resource_inline_count = 0`, `cross_skill_guide_content_leak_count = 0`, `disabled_skill_content_leak_count = 0`, `refresh_accuracy = 1.0`, `configured_agent_scope_accuracy = 1.0`.
+**Second-pass halt review:** HALT_RESOURCE_METRICS_PROMOTED raised by reviewer; resolved by evidence-only correction (no test/production code touched). All metric names now honest; resource artifact rows use `reference_present=true, dedicated_resource_discovery_seam=false, loaded=false, load_status=NOT_ATTEMPTED`. See `result.json.correction_history[0]` for full audit.
+**Successor:** SW-CM sequence closed. Main production backlog. No runtime defect reproduced. No bounded repair ACT opened.
