@@ -1,0 +1,48 @@
+{
+  "act_id": "ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01",
+  "fixture_skills": [
+    {
+      "id": "minimal-guide",
+      "purpose": "S1: guide sufficient on its own; no external resources",
+      "test_coverage": ["A1", "A4", "A9", "A10", "A11", "A12", "C1", "C4"]
+    },
+    {
+      "id": "one-resource",
+      "purpose": "S2: guide references docs/detail.md but doesn't inline contents",
+      "test_coverage": ["A2", "A6", "B1"]
+    },
+    {
+      "id": "two-resource-selective",
+      "purpose": "S3: guide references common.md and advanced.md",
+      "test_coverage": ["A7"]
+    },
+    {
+      "id": "script-backed",
+      "purpose": "S4: guide requires scripts/helper.sh invocation",
+      "test_coverage": ["A8"]
+    },
+    {
+      "id": "skill-a-config",
+      "purpose": "S5_left: docs/config.md isolated to skill-a scope",
+      "test_coverage": ["A5", "B2", "B3"]
+    },
+    {
+      "id": "skill-b-config",
+      "purpose": "S5_right: docs/config.md isolated to skill-b scope (D5 isolation)",
+      "test_coverage": ["A5", "B3"]
+    },
+    {
+      "id": "disabled-skill",
+      "purpose": "S6: frontmatter disabled=true; body MUST NOT leak into executor output",
+      "test_coverage": ["A3"]
+    },
+    {
+      "id": "conflict-skill",
+      "purpose": "C3 only: same id across two skill directories, last directory wins",
+      "test_coverage": ["C3"]
+    }
+  ],
+  "marker_convention": "GUIDE_MARKER=<skill-name> appears literally in every fixture body. Markers prove actual content loading because each fixture carries its own distinct marker.",
+  "disabled_skill_convention": "S6 uses frontmatter `disabled: true`. The body text 'should-never-load' is a canary string and ABSENCE of it in the loaded payload proves the disabled gate works.",
+  "resource_discussion": "ClineMM has NO automatic resource discovery. Resources are referenced by literal text in the body and must be loaded by generic file tools. SW-CM03 therefore asserts on path-as-text presence (positive) and on resource-content absence (negative for D6)."
+}

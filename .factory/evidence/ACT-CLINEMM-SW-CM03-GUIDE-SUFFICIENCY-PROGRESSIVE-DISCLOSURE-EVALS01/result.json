@@ -1,0 +1,181 @@
+{
+	"act_id": "ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01",
+	"purpose": "guide sufficiency and progressive disclosure characterization, downstream of skill invocation",
+	"entry_head": "2ede285e2",
+	"predecessor_act": "ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01",
+	"predecessor_verdict": "PASS_HANDLER_TOOL_ROUTING_EVALS",
+	"sequence_position": "SW-CM04 -> SW-CM01 -> SW-CM02 -> SW-CM03 (this) -> [main backlog]",
+	"production_seam": {
+		"skill_lookup": "sdk/packages/core/src/extensions/config/user-instruction-plugin.ts:106-172 resolveSkillRecord (exact-id; bareName suffix match; normalizes via normalizeSkillToken)",
+		"skill_parse": "sdk/packages/core/src/extensions/config/user-instruction-config-loader.ts:285-315 parseSkillConfigFromMarkdown (frontmatter YAML + body)",
+		"skill_body_load": "UnifiedConfigFileWatcher.discoverFiles in user-instruction-config-loader.ts:527-552 (single-pass: SKILL.md -> SkillConfig.instructions verbatim)",
+		"skill_result_injection": "createUserInstructionSkillsExecutor at user-instruction-plugin.ts:174-217 returns <command-name>...</command-name>[\\n<command-args>...</command-args>]\\n<command-instructions>\\n[Description: ...\\n\\n]{skill.instructions}\\n</command-instructions>",
+		"resource_discovery": "ABSENT in ClineMM (see recon) - no auto-discovery, no skill-root URI, no resource enumeration",
+		"resource_load": "ABSENT as a dedicated seam; resources accessed via generic file tools",
+		"refresh": "watcher.refreshType('skill') - UnifiedConfigFileWatcher re-walks directories; lazy configuredSkills getter picks up the new snapshot on next access",
+		"precedence": "Last-loaded-directory wins per UnifiedConfigFileWatcher snapshot keyed by normalizeName(skill.name); directories array ordered by resolveSkillsConfigSearchPaths",
+		"configured_agent_skill_scope": "runtime-builder.ts:594-617 injects createSkillsExecutor(agent.skills) with allowedSkillNames; filter via isSkillAllowed at user-instruction-plugin.ts:51-73",
+		"createSkillsTool": "sdk/packages/core/src/extensions/tools/definitions.ts:992-1042 - tool.execute({skill,args}, ctx) -> withTimeout(executor(...), timeoutMs)"
+	},
+	"test_layout": {
+		"file_1": {
+			"path": "sdk/packages/core/src/extensions/tools/__tests__/guide-sufficiency-progressive-disclosure01.swcm03.test.ts",
+			"purpose": "post-invocation guide sufficiency, progressive disclosure, configured-agent skill scope (one file because Section D's child-runtime observation reuses the same mock+runtime-builder machinery; a second file would not add evidence)",
+			"tests": 23,
+			"describe_blocks": 4,
+			"sections": {
+				"A_guide_payload_post_execute": 12,
+				"B_resource_refs_vs_contents_D5D6": 3,
+				"C_refresh_precedence_D7D8": 4,
+				"D_configured_agent_skill_scope_D9": 4
+			}
+		}
+	},
+	"corpus": {
+		"cases": 23,
+		"passed": 23,
+		"failed": 0,
+		"not_applicable": 0,
+		"distribution": {
+			"A_guide_payload_post_execute": 12,
+			"B_resource_references_vs_inlined_contents": 3,
+			"C_refresh_via_disk_edit_C2_new_dir_C3_directory_precedence_C4_id_case_normalization": 4,
+			"D_child_runtime_skills_tool_D1_desc_D2_route_D3_two_allowlist_D4_no_skills_tool": 4
+		}
+	},
+	"metrics": {
+		"guide_identity_accuracy": 1.0,
+		"guide_sufficiency_rate": 1.0,
+		"resource_reference_presence_accuracy": 1.0,
+		"resource_discovery_accuracy": "NOT_APPLICABLE",
+		"required_resource_load_rate": "NOT_APPLICABLE",
+		"unnecessary_resource_inline_count": 0,
+		"cross_skill_guide_content_leak_count": 0,
+		"disabled_skill_content_leak_count": 0,
+		"refresh_accuracy": 1.0,
+		"configured_agent_scope_accuracy": 1.0
+	},
+	"metric_definitions": {
+		"guide_identity_accuracy": "(guide identity assertions passed) / (guide identity assertions total). Denominator = 19. Proves: invoked skill resolves to the SKILL.md it should.",
+		"guide_sufficiency_rate": "(cases where the payload contained or correctly excluded the required fact) / (cases that required a specific fact in the body). Denominator = 12 (5 positive must-contain + 7 negative must-not-contain). 5 + 7 = 12; 12/12 pass.",
+		"resource_reference_presence_accuracy": "(cases where the resource path appears as literal text in the body) / (resource cases). Denominator = 7. Proves: skill bodies reference resources by path.",
+		"resource_discovery_accuracy": "NOT_APPLICABLE — ClineMM has no dedicated resource-discovery seam (see recon).",
+		"required_resource_load_rate": "NOT_APPLICABLE — required_resource_load_cases = 0. A zero-denominator quantity is undefined, not 100%. Resource loading is the model's responsibility downstream of this ACT.",
+		"unnecessary_resource_inline_count": "Count of cases where resource contents were inlined into a returned guide payload. Should be 0.",
+		"cross_skill_guide_content_leak_count": "Count of cases where skill-a's body included skill-b's markers / content.",
+		"disabled_skill_content_leak_count": "Count of cases where a disabled skill's body was loaded.",
+		"refresh_accuracy": "(refresh tests where new content was visible after watcher.refreshType('skill')) / (refresh tests). Denominator = 4.",
+		"configured_agent_scope_accuracy": "(D1-D4 tests) / 4. Captured child skills tool description lists only allowed names; executor routes correctly; absent when unconfigured."
+	},
+	"correction_history": [
+		{
+			"halt_id": "HALT_RESOURCE_METRICS_PROMOTED",
+			"raised_at": "second-pass review",
+			"issues": [
+				"resource_discovery_accuracy was reported as 1.0 but the recon establishes there is no dedicated resource-discovery seam in ClineMM — body_text_only_reference=true is not equivalent to discovered-by-seam.",
+				"required_resource_load_rate was reported as 1.0 with required_resource_load_cases=0. A zero-denominator rate is undefined, not 100%.",
+				"cross_skill_resource_leak_count was an over-broad label; the actual observations are about GUIDE content (markers + body text), not resource content (since resources are never loaded by the runtime)."
+			],
+			"applied_corrections": [
+				"Renamed resource_discovery_accuracy -> resource_reference_presence_accuracy and changed resource artifact rows from {discovered:true,loaded:false} to {reference_present:true,dedicated_resource_discovery_seam:false,loaded:false,load_status:'NOT_ATTEMPTED'}.",
+				"Set resource_discovery_accuracy = NOT_APPLICABLE (ClineMM has no such seam).",
+				"Set required_resource_load_rate = NOT_APPLICABLE (denominator is zero; resource loading is downstream of the runtime, delegated to the model + generic file tools).",
+				"Renamed cross_skill_resource_leak_count -> cross_skill_guide_content_leak_count to match what is actually being asserted.",
+				"Renamed unnecessary_resource_load_count -> unnecessary_resource_inline_count for the same reason.",
+				"Recomputed guide_sufficiency_rate against the actual sufficiency-bearing denominator (12 cases: 5 must-contain + 7 must-not-contain). 12/12 pass.",
+				"Added metric_definitions block to the result.json with explicit denominators and what each metric does / does not prove.",
+				"Added guide_sufficiency_enumeration block to 06-sufficiency-metrics.json with explicit case-id, test-path line, required_fact/required_absence, and result for each load-bearing case."
+			],
+			"no_test_change": true,
+			"no_production_change": true,
+			"tests_rerun": "not_required (no test code changed; evidence-only correction)"
+		}
+	],
+	"failures": [],
+	"production_change": false,
+	"tracked_file_changes": 0,
+	"new_untracked_files": 1,
+	"live_model_eval": {
+		"status": "DEFERRED",
+		"reason": "No provider credentials in this sandbox. SW-CM03 is intentionally model-independent: every assertion reads back the SKILL.md payload text the runtime delivers to the model. 'Did the model choose the right skill?' is SW-CM01 territory; 'did the runtime deliver the right guide?' is SW-CM03."
+	},
+	"gates": {
+		"files": 1,
+		"tests": 23,
+		"exit": 0,
+		"error_scan_matches": 0,
+		"command": "cd sdk/packages/core && bun test --isolate src/extensions/tools/__tests__/guide-sufficiency-progressive-disclosure01.swcm03.test.ts",
+		"runner_version": "bun test v1.3.13 (bf2e2cec)",
+		"substrate_conservation": {
+			"swcm01_file": "22 pass / 1 fail (pre-existing localeCompare sort-order flake under bun test; the SW-CM01 ACT closure artifact used vitest-vmThreads; not a regression - this ACT does not modify swcm01.swcm01.test.ts or its inputs). Tracked in substrate note but does not block SW-CM03 verdict.",
+			"swcm02_file": "12 pass / 0 fail (no regression; same runtime-builder mock + child-runtime capture pattern reused here in Section D)",
+			"configured_agent_execution_file": "2 pass / 0 fail (no regression)",
+			"isolation_requirement": "Pre-existing SW-CM02 halt register notes that multi-file vi.mock can leak across files without --isolate. SW-CM03 uses a single-file layout (no shared mock between Section A/B/C and Section D), but --isolate was used anyway for substrate-comparison consistency."
+		},
+		"typecheck": "PASS (ACT_OWNED_NEW_DIAGNOSTICS=0 - the new test file contributes zero tsc diagnostics. Pre-existing baseline noise in compaction.test.ts/definitions.test.ts/bash.supervised*.test.ts/command-execution-plan.test.ts is NOT introduced by this ACT.)",
+		"lint": "PASS (BIOME_RC=0; biome lint reports 'Checked 1 file in 33ms. No fixes applied.' with 0 errors / 0 warnings / 0 infos. Non-null assertions were replaced with `as unknown as { execute: (input, ctx) => Promise<string> }` casts; unused bodyOfSkill helper was removed; final state is clean.)",
+		"diff_check": "PASS (DIFF_CHECK_RC=0; only 1 new untracked test file + .factory/evidence/ACT-CLINEMM-SW-CM03-* directory are new; no tracked-file modifications)"
+	},
+	"domains_covered": {
+		"guide_body_loading": "covered (A1, A2, A3, A4, A5, A9, A11, A12, B1, B2, B3)",
+		"args_preservation": "covered (A10)",
+		"resource_references_literal_only": "covered (A6, A7, A8)",
+		"resource_eager_load_none": "covered (A6, A8, B1) - explicit positive not-toContain assertions",
+		"cross_skill_isolation": "covered (A5, B2, B3)",
+		"disabled_skill_no_body_leak": "covered (A3)",
+		"refresh_via_disk_edit": "covered (C1)",
+		"refresh_via_new_dir_addition": "covered (C2)",
+		"directory_precedence_last_wins": "covered (C3)",
+		"id_case_normalization": "covered (C4)",
+		"configured_agent_child_skill_scope": "covered (D1, D2, D3, D4) - observed via REAL DefaultRuntimeBuilder.build + vi.mock(session-runtime-orchestrator) capturing the sub-agent's AgentConfig.skills tool"
+	},
+	"production_change_detail": "NONE. This ACT only adds (a) one new test file (untracked) and (b) the ACT-owned evidence directory (untracked). No tracked source file in sdk/, apps/, or any other path was modified. No fixtures were written into a real skills directory.",
+	"halt_register": [
+		{
+			"halt_id": "HALT_RESOURCE_METRICS_PROMOTED",
+			"first_seen": "second-pass review",
+			"status": "RESOLVED",
+			"resolution_type": "evidence_only_correction",
+			"summary": "resource_discovery_accuracy and required_resource_load_rate were promoted beyond what was observed. ClineMM has no dedicated resource-discovery seam (per recon) and resource loading is delegated to the model + generic file tools. Metric was renamed to resource_reference_presence_accuracy with an honest denominator of 7, and resource_discovery_accuracy / required_resource_load_rate are now reported as NOT_APPLICABLE with explicit zero-denominator justification. cross_skill_resource_leak_count was renamed to cross_skill_guide_content_leak_count and unnecessary_resource_load_count to unnecessary_resource_inline_count to match the actual observations. guide_sufficiency_rate was recomputed against its real denominator (12 cases: 5 must-contain + 7 must-not-contain). No test code or production code was changed.",
+			"see_correction_history_for_detail": true
+		}
+	],
+	"halt_reviewed": [
+		"HALT_RESOURCE_METRICS_PROMOTED (raised in second pass; resolved by evidence-only correction; no test code or production code touched)"
+	],
+	"boundary_observations": {
+		"cline_peculiarity_resource_loader_absent": "ClineMM does NOT implement the upstream three-level progressive-disclosure model. There is no L3 'resource' loader. The entire SKILL.md body - including any paths to scripts/docs/etc. - is delivered as instructions text. SW-CM03's resource-minimality assertions therefore target (a) literal-text reference presence (the model can see the path), and (b) absence of inlined resource contents (no eager load). Per-resource loading is the model's responsibility via generic file tools - scope-defers to model-evals, deferred per Section 20.",
+		"alias_canonicalization_observed_in_child": "Section D2 (configured-agent skills: [review] -> child skills tool) demonstrates the same SW-CM02 B5 invariant: skill allowlist is honored end-to-end at the child runtime. No alias canonicalization is needed because child sees only 'skills' as the executor name.",
+		"id_normalization_lowercases_via_unified_config_file_watcher": "Section C4 confirms POSTGRES-OPERATIONS resolves to the same skill as postgres-operations. This matches the upstream open issue's intent: skill lookup is case-insensitive at the watcher resolution layer."
+	},
+	"discriminator_outcomes": {
+		"D1_WRONG_GUIDE": "PASS_CURRENT - A4/A5/B3 (own marker present, unrelated markers absent)",
+		"D2_GUIDE_NOT_LOADED": "PASS_CURRENT - A1 (body present, marker present)",
+		"D3_DISABLED_GUIDE_LEAK": "PASS_CURRENT - A3 (disabled body MUST NOT contain its marker or required fact)",
+		"D4_RESOURCE_NOT_DISCOVERABLE": "NOT_APPLICABLE - resource loader is absent by design; body text references paths as literal strings (A6/A7/A8)",
+		"D5_GUIDE_CROSSTALK": "PASS_CURRENT - A5/B2/B3 (skill-a never surfaces skill-b's GUIDE_MARKER and vice versa). Note: this asserts guide-content isolation, not resource content isolation (no resource loading happens at the runtime layer in ClineMM).",
+		"D6_GUIDE_NO_RESOURCE_EAGER_INLINE": "PASS_CURRENT - A6/A8/B1 (no RESOURCE_MARKER lines in returned payload, no inlined resource content). Proves runtime does NOT inline resources; the model is responsible for fetching them via generic file tools.",
+		"D7_STALE_GUIDE": "PASS_CURRENT - C1 (V2 visible after refreshType)",
+		"D8_PRECEDENCE_DEFECT": "PASS_CURRENT - C3 (later directory wins), C4 (case normalization)",
+		"D9_CONFIGURED_AGENT_SCOPE_BYPASS": "PASS_CURRENT - D1/D2/D3/D4 (child skills tool scope = allowlist exactly)",
+		"D10_GUIDE_CONTENT_INSUFFICIENT": "OUT_OF_SCOPE - content quality is downstream of this ACT (separate ACT-CLINEMM-SKILL-GUIDE-CONTENT-QUALITY01 if needed)"
+	},
+	"verdict": "PASS_GUIDE_SUFFICIENCY_PROGRESSIVE_DISCLOSURE_RUNTIME",
+	"verdict_basis": "PASS_GUIDE_SUFFICIENCY_PROGRESSIVE_DISCLOSURE_RUNTIME holds AFTER the HALT_RESOURCE_METRICS_PROMOTED correction. The guide runtime characterization is unaffected: 23/23 tests still pass with 0 ACT-owned diagnostics and 0 production changes. Resource metrics were corrected (resource_reference_presence_accuracy with explicit denominator of 7, resource_discovery_accuracy and required_resource_load_rate set to NOT_APPLICABLE, guide_sufficiency_rate recomputed against actual denominator of 12 cases). The ACT's evidence model is now honest: it does not promote a non-existent dedicated resource-discovery seam to 1.0, and it does not report 1.0 against a zero-denominator rate.",
+	"successor": "main production backlog - SW-CM sequence is complete (SW-CM01 trigger, SW-CM02 routing, SW-CM03 guide/resource, SW-CM04 continuation)",
+	"final_state_capture": {
+		"command": "cd sdk/packages/core && bun test --isolate src/extensions/tools/__tests__/guide-sufficiency-progressive-disclosure01.swcm03.test.ts",
+		"result": "23 pass / 0 fail / 71 expect() calls",
+		"biome_check": "1 file Checked. No fixes applied. BIOME_RC=0; 0 errors / 0 warnings / 0 infos.",
+		"tsc_check_ACT_owned": "0 diagnostics in the new test file",
+		"diff_check": "0 tracked-file modifications; 1 new untracked test file plus this evidence directory"
+	},
+	"notes": [
+		"This ACT is the third leg of the SW-CM sequence. SW-CM01 measured trigger-side; SW-CM02 measured routing; SW-CM03 measures what flows back to the model after routing.",
+		"The configured-agent skill-scope observation in Section D uses the same vi.mock('./session-runtime-orchestrator') pattern as the SW-CM02 B4-B7 tests, but here the asserted property is the description-suffix of the CHILD's skills tool (filtered by the agent.skills allowlist) AND the captured child skills tool's execute() response for both known and unknown skill names - a uniform integration that exercises the same production child-construction seam for an additional surface.",
+		"ClineMM's peculiarity: the runtime exposes progressivity SIMPLER than upstream - there is no dedicated L3 'resource' loader in ClineMM. Skill bodies reference resource paths as literal text; loading each resource is the model's responsibility via generic file tools. The runtime does NOT inline resource contents into the guide payload - this is observable as the absence of any RESOURCE_MARKER lines in the returned XML (D6).",
+		"Model sufficiency (did the model pick the right resource to read?) is not in this ACT's purview. SW-CM03 is deterministic on disk fixtures and PASS does not require any provider invocation.",
+		"lint: initial biome check returned 9 sortable items (1 fixable import-sort + 2 fixable non-null-assertion warnings + 6 infos). After auto-fix + manual edit + final cast refactor: 0 warnings, 0 errors, 0 infos.",
+		"Second-pass correction (HALT_RESOURCE_METRICS_PROMOTED): the previous closure reported resource_discovery_accuracy=1.0 and required_resource_load_rate=1.0 (zero denominator). Both have been corrected to NOT_APPLICABLE with explicit semantic justification (ClineMM has no dedicated resource-discovery seam; resource loading is downstream of this ACT and is the model's responsibility). A new honest metric, resource_reference_presence_accuracy, was introduced with denominator 7. The guide_sufficiency_rate denominator was recomputed against the actual 12 cases that bear on required-fact presence/absence (5 must-contain + 7 must-not-contain). No test code or production code was modified. The 23/23 test pass result is unaffected."
+	]
+}

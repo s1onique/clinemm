@@ -1,0 +1,80 @@
+{
+  "act_id": "ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01",
+  "metrics": {
+    "guide_identity_accuracy": 1.0,
+    "guide_sufficiency_rate": 1.0,
+    "resource_reference_presence_accuracy": 1.0,
+    "resource_discovery_accuracy": "NOT_APPLICABLE",
+    "required_resource_load_rate": "NOT_APPLICABLE",
+    "unnecessary_resource_inline_count": 0,
+    "cross_skill_guide_content_leak_count": 0,
+    "disabled_skill_content_leak_count": 0,
+    "refresh_accuracy": 1.0,
+    "configured_agent_scope_accuracy": 1.0
+  },
+  "denominators": {
+    "guide_identity_cases": 19,
+    "guide_sufficiency_cases": 12,
+    "guide_sufficiency_positive_cases": 5,
+    "guide_sufficiency_negative_cases": 7,
+    "resource_reference_presence_cases": 7,
+    "resource_discovery_cases": 0,
+    "required_resource_load_cases": 0,
+    "refresh_cases": 4,
+    "configured_agent_scope_cases": 4
+  },
+  "guide_sufficiency_enumeration": {
+    "positive_must_contain": [
+      {"case_id": "A1", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:350", "required_fact": "REQUIRED_FACT=alpha", "result": "PASS"},
+      {"case_id": "C1-after", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:601", "required_fact": "REQUIRED_FACT=alpha-v2", "result": "PASS"},
+      {"case_id": "C2", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:625", "required_fact": "REQUIRED_FACT=delta", "result": "PASS"},
+      {"case_id": "C3", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:673", "required_fact": "REQUIRED_FACT=second", "result": "PASS"},
+      {"case_id": "D1-ok", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:957", "required_fact": "REQUIRED_FACT=review-only", "result": "PASS"}
+    ],
+    "negative_must_not_contain": [
+      {"case_id": "A3-disabled", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:379", "required_absence": "REQUIRED_FACT=should-never-load", "result": "PASS"},
+      {"case_id": "C1-stale-alpha", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:602", "required_absence": "REQUIRED_FACT=alpha\\n", "result": "PASS"},
+      {"case_id": "C3-first-wins-rejected", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:674", "required_absence": "REQUIRED_FACT=first", "result": "PASS"},
+      {"case_id": "D1-no-deploy-marker", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:959", "required_absence": "GUIDE_MARKER=deploy", "result": "PASS"},
+      {"case_id": "D2-no-database-marker", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:1016", "required_absence": "GUIDE_MARKER=database", "result": "PASS"},
+      {"case_id": "D3-no-database-marker", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:1023", "required_absence": "GUIDE_MARKER=database", "result": "PASS"},
+      {"case_id": "D4-no-skill-tool-result", "test_path": "guide-sufficiency-progressive-disclosure01.swcm03.test.ts:1029+", "required_absence": "any GUIDE_MARKER in dbOut (rejected error only)", "result": "PASS"}
+    ],
+    "rate_calculation": "(5 positive_pass + 7 negative_pass) / 12 = 1.0"
+  },
+  "resource_reference_presence_enumeration": {
+    "total_reference_cases": 7,
+    "all_reference_text_present": true,
+    "cases": [
+      {"case_id": "B1-R1", "resource": "docs/detail.md"},
+      {"case_id": "B2-R1", "resource": "docs/config.md (skill-b's path)"},
+      {"case_id": "B3-R1", "resource": "docs/config.md (joint inv)"},
+      {"case_id": "A6-R1", "resource": "docs/detail.md"},
+      {"case_id": "A7-R1", "resource": "docs/common.md"},
+      {"case_id": "A7-R2", "resource": "docs/advanced.md"},
+      {"case_id": "A8-R1", "resource": "scripts/helper.sh"}
+    ],
+    "what_this_metric_proves": "The SKILL.md body mentions each resource path as literal text in every fixture case.",
+    "what_this_metric_does_NOT_prove": "Any dedicated resource discovery seam. ClineMM has no such seam (see recon)."
+  },
+  "notes": [
+    "guide_identity_accuracy = (all guide identity assertions passed) / (total guide identity assertions). The 19 cases all assert exact-guide-loaded for the named skill (identity per name).",
+    "guide_sufficiency_rate = (cases where the payload contained or correctly excluded the required fact) / (cases that required a specific fact in the body). Denominator = 12 (5 positive + 7 negative). The remaining 11 of 23 tests assert other invariants (ordering, idempotency, args preservation, route, no inlining, marker presence, allowlist behavior) and are NOT in the guide-sufficiency denominator.",
+    "resource_reference_presence_accuracy = (cases where the resource path appears as literal text in the body) / (resource cases). All 7 cases pass.",
+    "resource_discovery_accuracy = NOT_APPLICABLE — ClineMM has NO dedicated resource-discovery seam. The previous version of this file claimed 1.0 here, which conflated 'path appears as literal text in body' with 'discovered by a discovery seam'. The metric has been renamed and a new honest metric (resource_reference_presence_accuracy) introduced.",
+    "required_resource_load_rate = NOT_APPLICABLE — required_resource_load_cases = 0. A zero-denominator quantity cannot legitimately equal 1.0 (it is undefined, not 100%). The previous version of this file asserted 1.0 by definition, which is a contradiction. The model's responsibility for resource loading is downstream of this ACT.",
+    "unnecessary_resource_inline_count = 0 — no resource contents were inlined into any returned guide payload. Each test asserts positively via not.toContain on resource content markers.",
+    "cross_skill_guide_content_leak_count = 0 — B2 and B3 verify skill-a does NOT surface skill-b's GUIDE_MARKER / resource markers and vice versa.",
+    "disabled_skill_content_leak_count = 0 — A3 verifies the disabled-skill body MUST NOT load (positive + negative assertions on its marker and required_fact).",
+    "refresh_accuracy = (refresh tests where new content was visible after refreshType) / (refresh tests). C1+C2+C3+C4 all green.",
+    "configured_agent_scope_accuracy = (D1-D4 tests) / 4 — ALL FOUR green. Captured child skills tool description lists only allowed names; child skills tool executor routes correctly; allowed skills visible, unknown skills rejected; absent when root skills disabled."
+  ],
+  "guide_content_sufficiency_separate": {
+    "S1_minimal_guide": {"required_fact":"alpha","delivered":"alpha","sufficient":true},
+    "S2_one_resource": {"required_fact":"beta (in docs/detail.md)","delivered":"docs/detail.md reference only","sufficient_pointer_present":true,"decisions_deferred_to_model":true},
+    "S3_two_resource": {"required_fact":"common-vs-advanced distinction","delivered":"both paths referenced, marker indicates common-vs-advanced","sufficient_pointer_present":true,"decisions_deferred_to_model":true},
+    "S4_script_backed": {"required_fact":"scripts/helper.sh invocation","delivered":"literal path present","sufficient_pointer_present":true,"decisions_deferred_to_model":true},
+    "S5_skill_a_skill_b": {"required_fact":"identity per name","delivered":"exact GUIDE_MARKER per skill","sufficient":true},
+    "S6_disabled": {"required_fact":"never loaded","delivered":"rejection error","sufficient_pointer_present":true}
+  }
+}

@@ -1,0 +1,8 @@
+[0m[32m✓[0m [0mD: configured-agent skill-scope via real DefaultRuntimeBuilder[2m >[0m[1m D2: child skills tool routes a known skill to the SKILL.md body and rejects unknown skills[0m [0m[2m[7.53ms[0m[2m][0m
+[0m[32m✓[0m [0mD: configured-agent skill-scope via real DefaultRuntimeBuilder[2m >[0m[1m D3: configured-agent with two allowed skills sees both; a third skill is rejected[0m [0m[2m[4.08ms[0m[2m][0m
+[0m[32m✓[0m [0mD: configured-agent skill-scope via real DefaultRuntimeBuilder[2m >[0m[1m D4: configured-agent without skills AND root skills off → child has no skills tool[0m [0m[2m[2.53ms[0m[2m][0m
+
+[0m[32m 23 pass[0m
+[0m[2m 0 fail[0m
+ 71 expect() calls
+Ran 23 tests across 1 file. [0m[2m[[1m653.00ms[0m[2m][0m

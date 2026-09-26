@@ -1,0 +1,182 @@
+ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01
+============================================================
+
+Predecessor
+-----------
+ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01 : PASS_HANDLER_TOOL_ROUTING_EVALS
+                                                                   at terminal commit
+                                                                   2ede285e2.
+
+Pool (gate-of-record)
+---------------------
+bun test v1.3.13 (the canonical monorepo gate runner for vitest-style
+*.test.ts files in this repo; the vitest fork pool has zod ESM transform
+quirks in the current sandbox where this ACT was run; the SW-CM02 closure
+record used bun-test as gate-of-record identically).
+
+File under qualification
+------------------------
+sdk/packages/core/src/extensions/tools/__tests__/
+    guide-sufficiency-progressive-disclosure01.swcm03.test.ts
+
+Sections
+--------
+A: guide payload via createSkillsTool(executor).execute(...) (12 tests)
+B: resource references vs resource contents (D5/D6) (3 tests)
+C: refresh + precedence (D7/D8) (4 tests)
+D: configured-agent skill-scope via real DefaultRuntimeBuilder (4 tests)
+
+  total = 23 tests / 4 describe blocks
+
+Production seams driven
+-----------------------
+  createSkillsTool                          at
+      sdk/packages/core/src/extensions/tools/definitions.ts:992
+  createUserInstructionSkillsExecutor       at
+      sdk/packages/core/src/extensions/config/user-instruction-plugin.ts:174
+  DefaultRuntimeBuilder.build               at
+      sdk/packages/core/src/runtime/orchestration/runtime-builder.ts:365
+  vi.mock('./session-runtime-orchestrator') (Section D — captures
+  AgentConfig passed to the sub-agent's SessionRuntime; same pattern as
+  runtime-builder.configured-agent-execution.test.ts and the SW-CM02 file)
+
+Command
+-------
+cd sdk/packages/core
+bun test --isolate src/extensions/tools/__tests__/guide-sufficiency-progressive-disclosure01.swcm03.test.ts
+
+Result
+------
+  Test Files  1 passed (1)
+       Tests  23 passed (23)
+  expect() calls  71
+    Duration  655.00ms (transform, setup, import, tests all in <10s)
+
+Per-section breakdown
+---------------------
+  A (guide payload)                   : 12/12 pass
+  B (resource references/contents)    :  3/3  pass
+  C (refresh + precedence)            :  4/4  pass
+  D (configured-agent skill-scope)    :  4/4  pass
+
+Discriminator coverage
+----------------------
+  D1 WRONG_GUIDE                          : proven-correct (B1-A5, B3)
+  D2 GUIDE_NOT_LOADED                      : proven-correct (A1)
+  D3 DISABLED_GUIDE_LEAK                   : proven-correct (A3)
+  D4 RESOURCE_NOT_DISCOVERABLE             : n/a — ClineMM has no resource
+                                              auto-discovery by design; SKILL.md
+                                              body holds path references only.
+  D5 RESOURCE_CROSSTALK                    : proven-correct (A5, B2, B3)
+  D6 RESOURCE_EAGER_LOAD                   : proven-correct (A6, B1, A7, A8)
+  D7 STALE_GUIDE                           : proven-correct (C1)
+  D8 PRECEDENCE_DEFECT                     : proven-correct (C3, C4)
+  D9 CONFIGURED_AGENT_SCOPE_BYPASS         : proven-correct (D1, D2, D3, D4)
+  D10 GUIDE_CONTENT_INSUFFICIENT           : not_assessed (out of scope —
+                                              this ACT does not modify
+                                              production guides; content-quality
+                                              ACT is downstream).
+
+Substrate conservation (ACT-OWNED file)
+---------------------------------------
+  swcm03 file in isolation             : 23/23 pass
+
+Cross-file substrate
+--------------------
+  swcm01 file (skill-trigger-evals01.swcm01.test.ts)
+                  : 22 pass / 1 fail (pre-existing localeCompare flake in
+                    'D1 — enabled names appear sorted alphabetically';
+                    Bun test produces a different alphabetical sort
+                    ordering than vitest-vmThreads which the SW-CM01
+                    closure artifact used. This ACT does NOT modify
+                    swcm01.swcm01.test.ts or its inputs, so the failure
+                    is not a regression. Recorded under the SW-CM01 ACT
+                    entry as a runner/pool artifact, not introduced by
+                    SW-CM03.)
+
+  swcm02 file (runtime-builder.routing-evals.swcm02.test.ts)
+                  : 12/12 pass (no regression).
+
+  configured-agent-execution test      :  2/2  pass (no regression).
+
+Production change
+-----------------
+  Tracked-file changes : 0
+  New untracked files : 1
+                          sdk/packages/core/src/extensions/tools/__tests__/
+                            guide-sufficiency-progressive-disclosure01.swcm03.test.ts
+  Production source modified by this ACT:
+                          NONE.
+
+Typecheck (ACT-owned diagnostics in the new file)
+--------------------------------------------------
+   SDK core package: bun biome lint passes with 0 warnings
+                       on the new test file.
+                       Repo-wide tsc has pre-existing baseline noise in
+                       compaction.test.ts / definitions.test.ts /
+                       bash.supervised*.test.ts /
+                       command-execution-plan.test.ts
+                       (NOT introduced by this ACT).
+
+Lint
+----
+   biome lint on the new file : 0 errors / 0 warnings / 0 infos (BIOME_RC=0; informational — no auto-fixes issued)
+                                  (sort-import-order informational).
+
+Diff check
+----------
+   git status --short after this ACT : only the 1 new test file
+                                       and the .factory/evidence/
+                                       directory are untracked.
+                                       No tracked-file modifications.
+
+ClineMM peculiarity recorded
+-----------------------------
+   ClineMM does NOT implement the upstream three-level progressive
+   disclosure (L1 metadata / L2 SKILL.md body / L3 resources). It
+   collapses L2 + L3: `SkillConfig.instructions` is the entire
+   single-pass body of SKILL.md. There is no `resources:` field, no
+   skill-root URI, no auto-discovery of sub-files. Resource references
+   appear as literal text in the body and must be loaded by generic
+   file tools. SW-CM03 honors this by asserting on body-text-reference
+   (path appears) AND on no-body-inlining (resource contents absent).
+
+Verdict
+-------
+PASS_GUIDE_SUFFICIENCY_PROGRESSIVE_DISCLOSURE_RUNTIME
+GATE_EXIT=0
+ERROR_SCAN_MATCHES=0
+
+Second-pass bounded correction (HALT_RESOURCE_METRICS_PROMOTED)
+--------------------------------------------------------------
+  Reviewer noted: resource_discovery_accuracy=1.0 and
+  required_resource_load_rate=1.0 (zero denominator) were promoted
+  beyond what was observed. ClineMM has no dedicated resource-discovery
+  seam (per recon) and resource loading is delegated to the model +
+  generic file tools.
+
+  Evidence-only correction applied (no test or production code touched):
+
+    Before                                          After
+    ---------------------------------------------  ---------------------------------------------
+    resource_discovery_accuracy = 1.0              resource_reference_presence_accuracy = 1.0
+                                                   resource_discovery_accuracy = NOT_APPLICABLE
+    required_resource_load_rate = 1.0              required_resource_load_rate = NOT_APPLICABLE
+    cross_skill_resource_leak_count = 0            cross_skill_guide_content_leak_count = 0
+    unnecessary_resource_load_count = 0            unnecessary_resource_inline_count = 0
+    guide_sufficiency_rate = 1.0 (over 23)         guide_sufficiency_rate = 1.0 (over 12: 5 must-contain
+                                                    + 7 must-not-contain)
+
+  Resource artifact rows:
+    Before:  {"discovered": true, "loaded": false}
+    After:   {"reference_present": true,
+              "dedicated_resource_discovery_seam": false,
+              "loaded": false,
+              "load_status": "NOT_ATTEMPTED"}
+
+  Verdict is unchanged (PASS_GUIDE_SUFFICIENCY_PROGRESSIVE_DISCLOSURE_RUNTIME):
+  the correction makes the evidence model honest about what was actually
+  measured, NOT promoted.
+
+  No test code or production code was modified. Tests do not need to be
+  re-run because no code changed; substrate check above is the same 23/23.

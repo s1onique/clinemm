@@ -1,0 +1,24 @@
+00-entry-identity.txt
+=====================
+
+ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01 entry identity.
+
+entry_head    : 2ede285e2 (terminal SW-CM02 commit; no new commits yet)
+act_id        : ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01
+sequence      : SW-CM04 -> SW-CM01 -> SW-CM02 -> SW-CM03 (this)
+predecessor   : ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01 (PASS_HANDLER_TOOL_ROUTING_EVALS at 2ede285e2)
+successor     : return to main production backlog if PASS; bounded repair ACTs if reproduce
+domain_scope  : guide sufficiency + progressive-disclosure after skill invocation
+production_change_target : NO (characterization only)
+
+second_pass
+-----------
+halt          : HALT_RESOURCE_METRICS_PROMOTED (raised at second-pass review)
+resolution    : evidence-only correction (no test code or production code changed)
+corrected_metrics:
+  - resource_discovery_accuracy      -> renamed to resource_reference_presence_accuracy (denominator=7)
+  - required_resource_load_rate      -> NOT_APPLICABLE (zero denominator; resource loading is downstream)
+  - cross_skill_resource_leak_count  -> renamed to cross_skill_guide_content_leak_count
+  - unnecessary_resource_load_count  -> renamed to unnecessary_resource_inline_count
+  - guide_sufficiency_rate denominator recomputed: 12 cases (5 must-contain + 7 must-not-contain) instead of 23
+final_verdict : PASS_GUIDE_SUFFICIENCY_PROGRESSIVE_DISCLOSURE_RUNTIME (unchanged; evidence now honest)
