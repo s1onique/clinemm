@@ -509,7 +509,3 @@ and `.factory/epic-board.md` per Factory convention.
   with a real consumer.
 - Changes to OAuth / SSE / StreamableHTTP transports.
 - Changes to the `${env:VAR}` expansion syntax.
-
-
-
-

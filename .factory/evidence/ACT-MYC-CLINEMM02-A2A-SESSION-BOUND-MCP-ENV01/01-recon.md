@@ -862,5 +862,3 @@ Recon is complete. The architecture decision is frozen. The
 production seams are identified. The matrix is enumerated. The
 fixture approach is fixed. The forward dependencies are recorded.
 Proceeding to implementation per `plan.md`.
-
-
