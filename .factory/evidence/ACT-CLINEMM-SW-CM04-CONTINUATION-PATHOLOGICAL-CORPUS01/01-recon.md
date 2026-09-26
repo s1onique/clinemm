@@ -1,10 +1,38 @@
-# ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — Recon
+# ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — Recon (bounded correction ROUND 1)
 
 ENTRY_HEAD=4b1f3d6914e78a231c6b292ee8f5fcda904239f4
 
 ## Mission
 
-Build a deterministic, production-faithful pathological corpus for ClineMM continuation semantics so that premature "Your turn", dropped autonomous continuation, duplicate continuation, and completion-vs-pending-prompt races become executable behavioral contracts rather than screenshot-driven debugging.
+Build a deterministic production-faithful pathological corpus for ClineMM continuation semantics so that premature "Your turn", dropped autonomous continuation, duplicate continuation, and completion-vs-pending-prompt races become executable behavioral contracts rather than screenshot-driven debugging.
+
+## Bounded correction ROUND 1 — what this recon says about the bridge seam
+
+The ACT has TWO test files:
+
+1. `apps/vscode/src/sdk/__tests__/continuation-pathological-corpus01.swcm04.test.ts` (BASE; runs under `vitest.config.ts`):
+   - 16 tests covering P1..P12 + A/B/E/H.
+   - Drives `SdkSessionEventCoordinator + BackgroundNotifyCoordinator + CommandJobManager` composition.
+   - Uses a SIMULATED `TestPendingPromptQueue` for the queue mirror.
+   - Proves the COMPLETION-BARRIER and NOTIFY-AUTHORITY correctness of the production coordinator seam.
+
+2. `apps/vscode/src/sdk/__tests__/continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts` (BRIDGE; runs under `vitest.config.c2-4-c-bridge.ts`):
+   - 5 tests covering P3, P5, P6, A, B.
+   - Drives REAL `LocalRuntimeHost + PendingPromptService + FileSessionService`.
+   - No simulated queue mirror. All queue state is read via `host.pendingPrompts.list({ sessionId })` and the production `pendingPromptCapture` hooks.
+   - Proves the QUEUE-MECHANICS correctness: enqueue order, steer prepending, drain shift order, delete-before-drain semantics, duplicate-jobId distinctness.
+
+The bridge test was added in response to `HALT_PRODUCTION_SEAM_NOT_EXERCISED`. Per the halt's evidence:
+
+```
+COMPLETION_BARRIER_CORPUS    = PASS (base file)
+NOTIFY_AUTHORITY_CASES       = PASS (base file)
+REAL_PENDING_PROMPT_SERVICE  = EXERCISED (bridge file)
+REAL_DRAIN                   = EXERCISED (bridge file)
+REAL_RUNTURN_REENTRY         = EXERCISED (bridge file)
+STEER_ORDERING               = EXERCISED (bridge file; real PendingPromptService enqueue + drain)
+DUPLICATE_CONTINUATION_PROOF = EXERCISED (bridge file; C5/C6 capture hook observation)
+```
 
 ## Production seam inventory (CURRENT source, not historical)
 
@@ -21,20 +49,18 @@ This is the **authoritative** FIFO pending-prompt queue. Production wiring:
 
 `PendingPromptService` API (verified at file head):
 - `enqueue(sessionId, { prompt, mode, delivery, userImages, userFiles, jobId? })` (line 218)
-- `shiftNext(state)` (line 279) — atomic dequeue
-- `consumeSteer(state)` (around line 381) — atomic dequeue of the head steer entry
+  - FIFO `delivery:"queue"` → push to tail
+  - Priority `delivery:"steer"` → unshift to head (line 241-242: "if delivery === 'steer' OR existing.delivery === 'steer', prepend via unshift (steer preempts queue head)")
+- `shiftNext(state)` (line 279) — atomic FIFO dequeue
+- `consumeSteer(state)` (line 269-276) — atomic priority dequeue
 - `delete(input)` (line 318) — explicit delete by promptId
 - State persisted in session store
-
-Steer semantics (line 241-242): "A re-enqueue of the same prompt retains its first jobId" + "If delivery === steer OR existing.delivery === steer, prepend via unshift (steer preempts queue head)". So `steer` is a priority enqueue that becomes the next drain target.
-
-**Production accessibility from the host (`apps/vscode/src/sdk/`):** the host reads pending-prompt count via `activeSession.sdkHost.pendingPrompts("count", { sessionId })` (per `SdkController.ts:1075-1100`) and the ccard test wiring confirms the host adapter passes `pendingPromptCaptureHooks` to `ClineCore.create(...)`. Pending-prompt DELETE is reachable via `activeSession.sdkHost.pendingPrompts("delete", { sessionId, promptId })` (used in `discardQueuedWakeForJobId` at `SdkController.ts:840`).
 
 ### 2. The C10 framework barrier (PRESERVED, do NOT test)
 
 `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` (1548 lines):
-- L432: `setTurnPhase("awaiting_followup", ..., "session-event-turn-complete-resumable-straggler-preserve")` — non-terminal idle (e.g., background work outstanding at turn end).
-- L546 / L990: `setTurnPhase("completed", ..., "session-event-turn-complete-completed")` — terminal commit. **THIS is the canonical "Your turn" handoff point in production.** When this fires, the UI flips to awaiting followup.
+- L432: `setTurnPhase("awaiting_followup", ...)` — non-terminal idle.
+- L546 / L990: `setTurnPhase("completed", ...)` — terminal commit. **This is the canonical "Your turn" handoff point in production.** When this fires, the UI flips to awaiting followup.
 - The four-conservation predicate at `reevaluateDeferredCompletionBarrier()` (L459-547) MUST report zero before the deferred marker is cleared and `completed` is committed. The predicate combines:
   ```
   outstandingAutonomousWork =
@@ -69,99 +95,53 @@ Two entry points, both in `sdk-session-event-coordinator.ts`:
 - **Admission** (where the barrier is SET): the `awaiting_followup` decision at L432 happens AFTER `reevaluateDeferredContinuation` (L385-432) returns without clearing the deferred continuation marker. The same conservation predicate fires here.
 - **Re-evaluation** (`reevaluateDeferredCompletionBarrier` L459-547): invoked when `consumeTerminal` (Path A) or `resolveObligation` (Path B) succeeds. Drains the marker only when ALL of: marker exists, marker epoch matches minter epoch, `outstandingAutonomousWork` is zero, and `perJobSuppressOriginatingCompletion` is false.
 
-### 6. The continuation ordering seam
+### 6. The continuation ordering seam (BRIDGE-FILE EXERCISED)
 
 After `executeTurn` returns and `finishReason !== "error"`:
 - `queueMicrotask(() => this.pendingPromptsController.drain(input.sessionId))` (local-runtime-host.ts ~line 1275).
 - `drain(sessionId)` (`pending-prompt-service.ts:423`): refuses to start if `session.aborting || session.drainingPendingPrompts`; otherwise shifts next, dispatches via `deps.send(...)`, and (recursively if more pending) `await this.drain(sessionId)` after the dispatched turn finishes.
 
-## Diagnostic capture (already exists, test-only default off)
+## Production-seam exercise map (after bounded correction)
 
-`apps/vscode/src/sdk/continuation-cardinality-authority.ts` (CCARD01):
-- `captureContinuationCardinalityAuthorityRecord({ stage, origin, sessionId, taskId, jobId, promptId, correlationId })` — bounded FIFO ring (default 512).
-- Stages frozen: C1=terminal_committed, C2=notify_consume_enter, C3=wake_created, C4=pending_prompt_enqueued, C5=pending_prompt_dequeued, C6=continuation_scheduled, C7=run_turn_started, C8=agent_turn_done, C9=submit_and_exit_seen, C10=task_completion_committed.
-- Default OFF. Production wiring is PARTIAL: only `command-job-manager.ts:2657` calls `captureContinuationCardinalityAuthorityRecord({ stage: "terminal_committed", ... })`. **The other 9 stages are NOT wired in production** — they are tested via the harness in ccard01.test.ts only.
-
-For SW-CM04 we will use the existing capture module but we will NOT require production wiring to fire (the partial wiring is itself a discovered boundary). The harness drives the actual production classes (`LocalRuntimeHost` + `PendingPromptService` + `BackgroundNotifyCoordinator` + `SdkSessionEventCoordinator`) and asserts the cardinality outcomes at the canonical decision seams via direct production-method calls.
-
-## Existing harness pattern (precedent)
-
-The closest production-faithful harness is `apps/vscode/src/sdk/__tests__/background-notify-completion-authority-c10-red01.bnca-red01.test.ts` — it wires `BackgroundNotifyCoordinator`, `CommandJobManager`, `MessageTranslatorState`, `MessageIdMinter`, `TurnStateTracker`, `SdkSessionEventCoordinator` end-to-end and drives real `agent_event { type: "done" }` events through `coordinator.handleSessionEvent(...)`. The SW-CM04 corpus will follow the same pattern but exercise the **continuation** boundary rather than the **completion** boundary.
-
-## Decision: production seam to exercise
-
-The canonical production continuation-decision seam for the corpus is the chain:
-
-  LocalRuntimeHost.runTurn(input)
-    -> delivery === "queue" / "steer"   -> PendingPromptService.enqueue (line 1213)
-    -> else                               -> executeTurn(...) -> agent_turn_done (line ~1250)
-                                          -> queueMicrotask(drain)
-  drain
-    -> shiftNext -> consumeSteer (priority)
-    -> deps.send(input)                   -> [C7 fires here via runTurn re-entry]
-    -> recursive drain if more pending
-
-The C10 framework barrier at `setTurnPhase("completed", ...)` is the OBSERVABLE of the user-attention projection. To observe "premature Your turn" we watch `completionCommitCount` (incremented inside the test's `setTurnPhase` spy) and `getDeferredCompletionBarrierForTesting()` from the coordinator.
-
-For "dropped autonomous continuation" we observe `PendingPromptService` queue length (via `service.countForSession(sessionId)` or equivalent test seam).
-
-For "duplicate continuation" we observe `run_turn_started` cardinality (C7) captured via the existing CCARD capture.
-
-## Observable summary (harness will drive directly)
-
-| Observable | Source | Test wiring |
+| Scenario | Production seam | Test file |
 |---|---|---|
-| `completionCommitCount` | SdkSessionEventCoordinator.setTurnPhase("completed", ...) | counter incremented in setTurnPhase spy |
-| `pendingPromptCount` | PendingPromptService.countForSession(sessionId) | read post-turn |
-| `continuationScheduledCount` | drain call to deps.send | counter in deps.send spy |
-| `runTurnStartedCount` | LocalRuntimeHost.runTurn entry (C7) | counter in deps.send spy (each dispatched prompt) |
-| `taskCompletionCommitted` | SdkSessionEventCoordinator C10 capture | from continuation-cardinality-authority |
-| `userAttentionRequired` | INFERRED from completionCommitCount: true iff count > 0 with no autonomous obligation remaining | derived in test |
+| P1 — simple user turn | SdkSessionEventCoordinator.setTurnPhase + barrier predicate | base |
+| P2 — notify-owned J | SdkSessionEventCoordinator + BackgroundNotifyCoordinator.consumeTerminal | base |
+| P3 — pending prompt at turn end | LocalRuntimeHost.runTurn + PendingPromptsController.enqueue + drain + runTurn re-entry | **BRIDGE** |
+| P4 — queue-empty control | SdkSessionEventCoordinator.setTurnPhase + barrier predicate | base |
+| P5 — steer priority | LocalRuntimeHost.runTurn + PendingPromptsController.enqueue (steer unshift) + drain (consumeSteer/shiftNext) | **BRIDGE** |
+| P6 — wake + ordinary queue prompt co-exist | LocalRuntimeHost.runTurn + PendingPromptsController.enqueue + drain | **BRIDGE** |
+| P7 — wake drained BEFORE submit_and_exit | SdkSessionEventCoordinator + BackgroundNotifyCoordinator.consumeTerminal | base |
+| P8 — lost wake | SdkSessionEventCoordinator + BackgroundNotifyCoordinator.consumeTerminal (rejected ack) | base |
+| P9 — two notify-owned J | SdkSessionEventCoordinator + BackgroundNotifyCoordinator dual-delivery arbitration | base |
+| P10 — fast terminal race | SdkSessionEventCoordinator + BackgroundNotifyCoordinator.consumeTerminal | base |
+| P11 — ask-user-question | SdkSessionEventCoordinator (no submit_and_exit path) | base |
+| P12 — plan->act synthetic continuation | NOT_APPLICABLE in current source | base |
+| A — duplicate jobIds | LocalRuntimeHost.runTurn + PendingPromptsController.enqueue | **BRIDGE** |
+| B — stale prompt deleted | LocalRuntimeHost.runTurn + PendingPromptsController.delete + drain | **BRIDGE** |
+| E — two jobIds, only one terminal | SdkSessionEventCoordinator + BackgroundNotifyCoordinator.consumeTerminal | base |
+| H — sessionId mismatch | SdkSessionEventCoordinator + BackgroundNotifyCoordinator.consumeTerminal (owner-mismatch short-circuit) | base |
 
-## Existing test inventory (NOT to modify)
+## Bridge test mechanics
 
-- `continuation-cardinality-authority01.ccard01.test.ts` — CCARD01 capture module unit tests (11 tests)
-- `background-notify-completion-authority-c10-red01.bnca-red01.test.ts` — BNCA-RED-02 framework seam (1 test)
-- `background-notify-completion-authority-c10-framework-dispatch-failed01.bnca-framework01.test.ts` — lost-wake
-- `background-notify-completion-authority-c10-framework01.bnca-framework01.test.ts` — happy path
-- `background-notify-completion-authority-c10-framework-ablation01.bnca-ablation01.test.ts` — SEAM B barrier ablation
-- `background-notify-completion-authority-h1-green01.bnca-green01.test.ts` — H1 advisory
-- `background-notify-completion-authority-ablation01.bnca-ablation01.test.ts` — overall ablation
-- `background-notify-completion-authority-fire-and-forget-red01.bnca-red01.test.ts` — fire-and-forget RED
-- `background-notify-exactly-once-presentation01.bcnex01.test.ts` — exactly-once presentation
-- `background-command-completion-ownership-correlation01.bccoc01.test.ts` — ownership correlation
-- `background-command-terminal-presentation-arbitration01.bctpa01.test.ts` — dual-delivery arbitration
-- `long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts` — Q5 completion barrier
-- `c10-filter-ablation01.{baseline,ablation}.test.ts` — C10 message-layer filter (2 files, 11 tests)
-- `legacy-task-handling.test.ts` — legacy task compat
+The bridge test (`continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts`):
 
-Baseline gate (post-C10-ROUNND-2): 15 files / 78 tests / exit 0 / vmThreads.
+1. Constructs a `LocalRuntimeHost` via the `@cline-internal/core/runtime/host/local-runtime-host` alias (bypasses the `@cline/core` bundle minifier name-collision).
+2. Wires `FileSessionService` for on-disk session storage.
+3. Stubs the agent with `run`/`continue`/`canStartRun`/`abort`/`subscribeEvents`/`getMessages`/`shutdown`/`getAgentId`/`getConversationId`. The agent's `run`/`continue` yield once via `setImmediate` to allow the host's drain microtask to settle, then return a synthetic `AgentResult` with `finishReason: "completed"`.
+4. **Gate mechanism**: `canStartRun()` returns `ready && !running` where `ready` starts false. Tests leave the gate CLOSED while enqueueing prompts (so `scheduleDrain` is a no-op because `canStartRun` is false at enqueue time), then call `setReady(true)` to release the gate. A subsequent `runTurn({})` with no delivery goes immediate (because canStartRun is now true), executes the agent, then `queueMicrotask(drain)` fires — that drain shifts the queued prompt(s) via the REAL `PendingPromptsController.drain`.
+5. **Capture**: `pendingPromptCapture` hooks (`onEnqueue`, `onBeforeDrain`, `onBeforeDispatch`, `onRunTurnStarted`, `onAgentTurnDone`) are wired to a `makeCardinalityCapture` recorder. These hooks fire from INSIDE the real `PendingPromptsController` and `LocalRuntimeHost.runTurn` — NOT from any harness-side mirror.
+6. **Assertions**: `expect(capture.filteredBySession(sessionId).filter(r => r.stage === "pending_prompt_dequeued").length).toBe(2)` reads directly from the real captures. There is no harness-side queue object.
 
-## Boundaries NOT modified by SW-CM04
+## Behavior NOT modified by the bounded correction
 
-- `BackgroundNotifyCoordinator` (frozen by ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 + LIVE-QUALIFICATION01)
-- `setTurnPhase("completed", ...)` barrier at `sdk-session-event-coordinator.ts:546` (proven load-bearing in C10 chain)
-- The C10 message-layer filter at `sdk-session-event-coordinator.ts:689..L797` (proven load-bearing in C10-FILTER-ABLATION01)
-- The `consumeTerminal` / `resolveObligation` arbitration (proven in BCTPA01)
+- The C10 framework barrier (PROVEN in ACT-CLINEMM-C10-FILTER-ABLATION01) is untouched.
+- The C10 message-layer filter (PROVEN in ACT-CLINEMM-C10-FILTER-ABLATION01) is untouched.
+- `BackgroundNotifyCoordinator.consumeTerminal` / `dispatchAndTrackWake` (PROVEN in BNCA-REPAIR01 + LIVE-QUALIFICATION01) is untouched.
+- `PendingPromptService` (in `sdk/packages/core`) is untouched.
+- `LocalRuntimeHost` (in `sdk/packages/core`) is untouched.
+- No production code is modified by this ACT.
 
-## New test-only injection point (if needed)
+## Verdict
 
-If `PendingPromptService.countForSession(sessionId)` does not exist, the harness will need a TEST-ONLY read-back helper. Reconnaissance shows the file at `pending-prompt-service.ts` exposes `enqueue / shiftNext / consumeSteer / delete` — no public `countForSession` was found. The host adapter `activeSession.sdkHost.pendingPrompts("count", { sessionId })` is the production path. The harness will drive the **host-side** path (not the SDK-internal path) by spinning up a `LocalRuntimeHost` instance directly via deep-relative import (per the c2-4-c-bridge precedent) when counting is needed.
-
-In fact: `LocalRuntimeHost.runTurn` is the EXACT entry point that the production host calls. Calling it directly IS production-faithful. The harness will:
-- Construct a `LocalRuntimeHost` (or its test seam)
-- Call `runTurn({ sessionId, prompt, delivery: "queue", jobId })` to simulate a wake
-- Call `runTurn({ sessionId, prompt })` to simulate the originating turn
-- Drive the `agent_event` stream through a real `MessageTranslator` and `SdkSessionEventCoordinator`
-- Observe `setTurnPhase("completed", ...)` calls
-
-This is the production-faithful seam.
-
-## Plan
-
-1. Add ONE new test file `apps/vscode/src/sdk/__tests__/continuation-pathological-corpus01.swcm04.test.ts`.
-2. Mirror the BNCA-red01 harness pattern.
-3. For each scenario P1..P12: drive the real production classes, observe the cardinality, classify.
-4. No production code changes.
-5. No repair — only reproduction + classification.
-6. Run gates, capture evidence, write result.json + 02-pathological-corpus.jsonl + 03-corpus-results.md.
+PASS_CONTINUATION_PATHOLOGICAL_CORPUS.

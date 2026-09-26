@@ -3,12 +3,18 @@ ENTRY_BRANCH=main
 ENTRY_WORKING_TREE_CLEAN=yes
 ACT_ID=ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01
 ACT_PURPOSE=reproduction / behavioral qualification
+ACT_BOUNDED_CORRECTION_ROUND=1 (resolves HALT_PRODUCTION_SEAM_NOT_EXERCISED)
+HALT_REVIEWED=HALT_PRODUCTION_SEAM_NOT_EXERCISED
+HALT_RESOLUTION=Added a new c24-c-bridge test file `continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts` that drives the REAL PendingPromptService + REAL drain + REAL LocalRuntimeHost.runTurn re-entry for the queue-mechanics scenarios (P3, P5, P6, A, B). The companion file `continuation-pathological-corpus01.swcm04.test.ts` continues to drive the SdkSessionEventCoordinator + BackgroundNotifyCoordinator + CommandJobManager composition for the completion-barrier / notify-authority scenarios (P1, P2, P4, P7, P8, P9, P10, P11, P12, E, H). The bridge test runs under `vitest.config.c2-4-c-bridge.ts` (excluded from the base config); the existing companion file is unchanged. Production code is NOT modified. The bridge test uses a `gate.setReady()` mechanism to keep `canStartRun() === false` while enqueueing, then opens the gate and triggers drain via a fresh user turn whose `queueMicrotask(drain)` callback fires the real drain loop. Captures the real C4 (pending_prompt_enqueued), C5 (pending_prompt_dequeued), C6 (continuation_scheduled), C7 (run_turn_started), C8 (agent_turn_done) cardinality through the production `pendingPromptCapture` hooks.
 PREDECESSOR=ACT-CLINEMM-C10-FILTER-ABLATION01=PASS_C10_ABLATION_RETAINED (bounded correction ROUND 2)
 HARNESS_DIR=apps/vscode/src/sdk/__tests__/
-NEW_TEST_FILE=apps/vscode/src/sdk/__tests__/continuation-pathological-corpus01.swcm04.test.ts
-NEW_TESTS=1 file / 16 tests
-PRODUCTION_SEAM=apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L546/L990/L1024 (setTurnPhase("completed", ...) deferred-completion-barrier admission guard)
-RUNNER=vitest --pool=vmThreads --testTimeout=30000
+NEW_TEST_FILES=2 (continuation-pathological-corpus01.swcm04.test.ts base + .swcm04.c24-c-bridge.test.ts bridge)
+NEW_TESTS=2 files / 21 tests total (16 base + 5 bridge)
+PRODUCTION_SEAM=apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L546/L990/L1024 (setTurnPhase("completed", ...) deferred-completion-barrier admission guard) — base file
+PRODUCTION_SEAM_BRIDGE=sdk/packages/core/src/runtime/host/local-runtime-host.ts:1172 runTurn + pending-prompt-service.ts drain/shiftNext — bridge file
+RUNNER=vitest --pool=vmThreads --testTimeout=30000 (base) + vitest --config vitest.config.c2-4-c-bridge.ts (bridge)
 EXPECTED_BASELINE_BEFORE_NEW_TESTS=15 files / 78 tests (C10-FILTER-ABLATION01 closure)
+DELTA=+2 files (base + bridge), +21 tests
 ACT_EXIT_CORPUS_STATUS=15 PASS_CURRENT, 1 NOT_APPLICABLE (P12 plan->act synthetic continuation), 0 FAIL_CURRENT
-VERDICT=PASS_CONTINUATION_PATHOLOGICAL_CORPUS
+BRIDGE_QUEUE_MECHANICS=P3 PASS_CURRENT, P5 PASS_CURRENT, P6 PASS_CURRENT, A PASS_CURRENT, B PASS_CURRENT
+VERDICT=PASS_CONTINUATION_PATHOLOGICAL_CORPUS (HALT_PRODUCTION_SEAM_NOT_EXERCISED RESOLVED)

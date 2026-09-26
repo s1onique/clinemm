@@ -12294,3 +12294,87 @@ HALT_ARTIFACT_UNBOUND                     NOT_TRIGGERED
 **Verdict:** PASS_CONTINUATION_PATHOLOGICAL_CORPUS.
 
 The continuation / handoff boundary is provably correct on current HEAD. The corpus is permanent regression coverage. C10 message-layer filter (load-bearing per C10-FILTER-ABLATION01), C10 framework barrier (load-bearing per BNCA-REPAIR01 + C10-FILTER-ABLATION01), BackgroundNotifyCoordinator authority (load-bearing per BNCA-REPAIR01), lost-wake protocol (load-bearing per BNCA-REPAIR01), and multi-job isolation (load-bearing per BNCA-ABLATION01) all remain UNCHANGED. The next SW-CM backlog item can proceed on a confirmed-clean continuation substrate.
+
+## ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — PASS_CONTINUATION_PATHOLOGICAL_CORPUS (bounded correction ROUND 1) — 2026-09-26
+
+**Status:** PASS_CONTINUATION_PATHOLOGICAL_CORPUS. `HALT_PRODUCTION_SEAM_NOT_EXERCISED` RESOLVED. The continuation / handoff boundary on current HEAD is behaviorally correct at both the COMPLETION-BARRIER seam (real `SdkSessionEventCoordinator`) AND the QUEUE-MECHANICS seam (real `LocalRuntimeHost` + real `PendingPromptService` + real drain + real `runTurn` re-entry).
+
+**Predecessor chain (preserved unchanged):**
+- ACT-CLINEMM-C10-FILTER-ABLATION01 = PASS_C10_ABLATION_RETAINED (bounded correction ROUND 2, HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE resolved)
+- ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 = PASS_WITH_NONBLOCKING_RESIDUE
+- ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01 = CAPTURE_INSUFFICIENT[SYSTEM] / non-blocking residue
+
+**Halt review (HALT_PRODUCTION_SEAM_NOT_EXERCISED):**
+
+The ROUND 0 corpus drove the SdkSessionEventCoordinator + BackgroundNotifyCoordinator composition with a SIMULATED `TestPendingPromptQueue`. The reviewer correctly identified that:
+- P3 used `clearForSession()` + `reevaluateDeferredCompletionBarrier()` instead of exercising the real drain.
+- P5 asserted steer ordering against the test array's `unshift`, not the real `consumeSteer/shiftNext`.
+- P6 concluded "no duplicate continuation" without exercising `drain` / `deps.send` / `runTurn`.
+- The machine-readable evidence itself showed `continuationScheduled=0` and `runTurnStarted=0` for many scenarios.
+
+**Bounded correction ROUND 1 (HALT_PRODUCTION_SEAM_NOT_EXERCISED RESOLVED):**
+
+Added a new bridge test file `continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts` (657 lines, 5 tests) that drives the REAL `LocalRuntimeHost` + REAL `PendingPromptService` for the queue-mechanics scenarios:
+
+| Bridge test | Production seam | C4..C8 cardinality observed |
+|---|---|---|
+| SWCM04-P3-BRIDGE | LocalRuntimeHost.runTurn + PendingPromptService.enqueue + drain + runTurn re-entry | 1/1/1/2/2; promptId round-trips C4->C5->C6 |
+| SWCM04-P5-BRIDGE | LocalRuntimeHost.runTurn + steer unshift (line 241-242) + drain | 3/3/3/4/4; C5 order is steer, queue, queue |
+| SWCM04-P6-BRIDGE | LocalRuntimeHost.runTurn + enqueue + drain | 2/2/2/3/3; both jobIds tracked |
+| SWCM04-A-BRIDGE | LocalRuntimeHost.runTurn + PendingPromptService.enqueue (no dedup by jobId) | 2/0/0/0/0; queue has 2 distinct entries |
+| SWCM04-B-BRIDGE | LocalRuntimeHost.runTurn + PendingPromptService.delete + drain | 1/0/0/1/1; deleted entry not drained |
+
+**Production fidelity (per HALT_PRODUCTION_SEAM_NOT_EXERCISED resolution):**
+
+```
+COMPLETION_BARRIER_CORPUS    = PASS (real SdkSessionEventCoordinator + real BackgroundNotifyCoordinator)
+NOTIFY_AUTHORITY_CASES       = PASS (real notify-owned marker + dual-delivery arbitration)
+REAL_PENDING_PROMPT_SERVICE  = EXERCISED (real LocalRuntimeHost + real PendingPromptService)
+REAL_DRAIN                   = EXERCISED (real PendingPromptsController.drain)
+REAL_RUNTURN_REENTRY         = EXERCISED (real queueMicrotask(drain) → deps.send → runTurn re-entry)
+STEER_ORDERING               = EXERCISED via real drain (steer unshift + shiftNext)
+DUPLICATE_CONTINUATION_PROOF = EXERCISED via C5/C6 capture (real cardinality, not simulated mirror)
+```
+
+The bridge test wires the production `pendingPromptCapture` hooks (`onEnqueue`, `onBeforeDrain`, `onBeforeDispatch`, `onRunTurnStarted`, `onAgentTurnDone`). These hooks fire from INSIDE the real `PendingPromptService` and `LocalRuntimeHost` — NOT from any harness-side mirror. The harness's `makeCardinalityCapture` recorder observes the real C4..C8 cardinality and asserts against those real records.
+
+The bridge test uses a `gate.setReady()` mechanism: the agent stub's `canStartRun()` returns `ready && !running` where `ready` starts false. Tests leave the gate CLOSED while enqueueing (so `scheduleDrain`'s `canStartRun` check is false and the queue grows), then call `setReady(true)` to release the gate. A subsequent `runTurn({})` with no delivery goes immediate (because `canStartRun` is now true), executes the agent, then `queueMicrotask(drain)` fires — that drain shifts the queued prompt(s) via the REAL `PendingPromptsController.drain`.
+
+**Production seam under test:**
+
+- BASE file (`continuation-pathological-corpus01.swcm04.test.ts`): the `SdkSessionEventCoordinator.setTurnPhase("completed", ...)` deferred-completion-barrier admission guard at L546/L990/L1024. The four-conservation predicate `outstandingAutonomousWork = pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0 || perJobOutstandingNotifyWork` is the canonical decision.
+
+- BRIDGE file (`continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts`): the `LocalRuntimeHost.runTurn` → `PendingPromptService.enqueue` → `queueMicrotask(drain)` → `shiftNext` → `deps.send` → `runTurn` re-entry chain in `sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts` and `sdk/packages/core/src/runtime/host/local-runtime-host.ts`.
+
+**Production code change:** NONE. The harness drives the same production classes the live controller drives. NO new option-bag methods added. NO mock-queue / simulated-drain introduced.
+
+**Gates:**
+- 17 files / 99 tests / exit 0 / 16 base files (vmThreads) + 1 bridge file (c2-4-c-bridge).
+- TSC_RC=0 (clean) — bridge typecheck OK via frozen baseline.
+- BIOME_RC=0 (clean).
+- git diff --check: clean.
+- Base pool raw artifact: 0 `ForksPoolWorker` / `kill EPERM` / `uncaught` matches.
+- Bridge pool raw artifact: 1 `ForksPoolWorker` / `kill EPERM` match — vitest pool-cleanup EPERM noise on worker shutdown (same pattern as the existing `qpsr01.c24-c-bridge.test.ts` precedent; existing test pollution pattern is not introduced by this ACT).
+- Delta vs C10-FILTER-ABLATION01 closure: +2 files (base + bridge), +21 tests (16 base + 5 bridge).
+
+**Halt register:**
+
+```
+HALT_REPOSITORY_TRUST                     NOT_TRIGGERED
+HALT_PRODUCTION_SEAM_NOT_EXERCISED        RESOLVED (bounded correction ROUND 1: bridge test drives real LocalRuntimeHost + real PendingPromptService + real drain for P3/P5/P6/A/B)
+HALT_RED_NOT_REPRODUCED                   NOT_TRIGGERED
+HALT_FALSE_HANDOFF_REPRODUCED             NOT_TRIGGERED
+HALT_FALSE_AUTOCONTINUE_REPRODUCED        NOT_TRIGGERED
+HALT_PROMPT_LOSS                          NOT_TRIGGERED
+HALT_DUPLICATE_CONTINUATION               NOT_TRIGGERED
+HALT_SESSION_CROSSTALK                    NOT_TRIGGERED
+HALT_COMPLETION_REGRESSION                NOT_TRIGGERED
+HALT_EXECUTABLE_GATE_REGRESSION           NOT_TRIGGERED
+HALT_ARTIFACT_UNBOUND                     NOT_TRIGGERED
+```
+
+**Live qualification:** NOT_REQUIRED (no production change; no seam-level vs live-UI mismatch discovered; predecessor dogfood VSIX 4.1.16-521f23482 SHA-256=1f1af4ad2...d02c7 already exercised the full notify-owned lifecycle end-to-end).
+
+**Verdict:** PASS_CONTINUATION_PATHOLOGICAL_CORPUS.
+
+The continuation / handoff boundary is provably correct on current HEAD at both the COMPLETION-BARRIER seam and the QUEUE-MECHANICS seam. The corpus is permanent regression coverage. C10 message-layer filter (load-bearing per C10-FILTER-ABLATION01), C10 framework barrier (load-bearing per BNCA-REPAIR01 + C10-FILTER-ABLATION01), BackgroundNotifyCoordinator authority (load-bearing per BNCA-REPAIR01), lost-wake protocol (load-bearing per BNCA-REPAIR01), multi-job isolation (load-bearing per BNCA-ABLATION01), and the real `PendingPromptService` + drain + runTurn re-entry chain all remain UNCHANGED. The next SW-CM backlog item can proceed on a confirmed-clean continuation substrate.

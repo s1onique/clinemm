@@ -69,6 +69,13 @@ export default defineConfig({
 		// streams isolated.
 		exclude: [
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
+			// ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 BOUNDED CORRECTION:
+			// real LocalRuntimeHost + real PendingPromptsController +
+			// real drain + real runTurn re-entry for the queue-mechanics
+			// scenarios (P3, P5, P6, A, B). Runs under
+			// `vitest.config.c2-4-c-bridge.ts` per
+			// HALT_PRODUCTION_SEAM_NOT_EXERCISED.
+			"src/sdk/__tests__/continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02:
 			// real production-class event bus (RuntimeHostEventBus)
 			// composition witness. The deep-relative import is intentional

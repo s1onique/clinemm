@@ -2,18 +2,26 @@
   "act_id": "ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01",
   "purpose": "reproduction / behavioral qualification",
   "entry_head": "4b1f3d6914e78a231c6b292ee8f5fcda904239f4",
+  "bounded_correction_round": 1,
+  "halt_reviewed": "HALT_PRODUCTION_SEAM_NOT_EXERCISED",
+  "halt_resolution": "Companion test file `continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts` added. It drives the REAL PendingPromptService + REAL drain + REAL LocalRuntimeHost.runTurn re-entry for the queue-mechanics scenarios (P3, P5, P6, A, B). The companion file `continuation-pathological-corpus01.swcm04.test.ts` continues to drive the SdkSessionEventCoordinator + BackgroundNotifyCoordinator + CommandJobManager composition for the completion-barrier / notify-authority scenarios (P1, P2, P4, P7, P8, P9, P10, P11, P12, E, H). The bridge test runs under `vitest.config.c2-4-c-bridge.ts` (excluded from the base config). Production code is NOT modified. The bridge test uses a `gate.setReady()` mechanism to keep `canStartRun() === false` while enqueueing, then opens the gate and triggers drain via a fresh user turn whose `queueMicrotask(drain)` callback fires the real drain loop. Captures the real C4 (pending_prompt_enqueued), C5 (pending_prompt_dequeued), C6 (continuation_scheduled), C7 (run_turn_started), C8 (agent_turn_done) cardinality through the production `pendingPromptCapture` hooks. The harness asserts CARDINALITY and ORDER from those REAL captures, not from any simulated mirror.",
   "production_seam": {
     "file": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
-    "function": "setTurnPhase(\"completed\", ...) at L546 + L990 + L1024 (deferred-completion-barrier admission guard)",
+    "function": "setTurnPhase(\"completed\", ...) at L546 + L990 + L1024 (deferred-completion-barrier admission guard) — COMPLETION-BARRIER scenarios",
     "decision": "outstandingAutonomousWork = pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0 || perJobOutstandingNotifyWork. When true at originating turn's done event: register deferredCompletionBarrier marker; do NOT call setTurnPhase(\"completed\", ...). When the marker is later cleared by reevaluateDeferredCompletionBarrier (Path A wake-consume or Path B resolveObligation) with all four conservation rules passing, commit setTurnPhase(\"completed\", ...) EXACTLY ONCE."
+  },
+  "production_seam_bridge": {
+    "file": "sdk/packages/core/src/runtime/host/local-runtime-host.ts + sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts",
+    "function": "LocalRuntimeHost.runTurn + PendingPromptsController.enqueue / drain / shiftNext — QUEUE-MECHANICS scenarios",
+    "decision": "Real production PendingPromptService enqueues with delivery:'queue' or delivery:'steer'; the steer unshift semantics at line 241-242 prepend a steer entry to the head; drain.shiftNext pulls FIFO after consumeSteer; queueMicrotask(drain) at line 1275 of local-runtime-host.ts fires the recursive drain after each executeTurn."
   },
   "corpus": {
     "P1": "PASS_CURRENT",
     "P2": "PASS_CURRENT",
-    "P3": "PASS_CURRENT",
+    "P3": "PASS_CURRENT (real PendingPromptService; gate-controlled drain; C4..C8 cardinality observed from production capture hooks)",
     "P4": "PASS_CURRENT",
-    "P5": "PASS_CURRENT",
-    "P6": "PASS_CURRENT",
+    "P5": "PASS_CURRENT (real steer unshift + real drain; dequeue order steer,queue,queue observed via C5 capture)",
+    "P6": "PASS_CURRENT (real enqueue + real drain; no duplicate continuation; dequeue=2, runTurnStarted=3 verified)",
     "P7": "PASS_CURRENT",
     "P8": "PASS_CURRENT",
     "P9": "PASS_CURRENT",
@@ -22,32 +30,36 @@
     "P12": "NOT_APPLICABLE"
   },
   "adversarial_corpus": {
-    "A_duplicate_jobIds": "PASS_CURRENT",
-    "B_stale_prompt_deleted": "PASS_CURRENT",
+    "A_duplicate_jobIds": "PASS_CURRENT (real PendingPromptService; two distinct queue entries; jobId correlation observed via C4 capture since list() snapshot omits jobId)",
+    "B_stale_prompt_deleted": "PASS_CURRENT (real pendingPrompts.delete via production service; queue empty after delete; drain fires but dequeues nothing)",
     "E_two_jobIds_one_terminal": "PASS_CURRENT",
     "H_sessionId_mismatch": "PASS_CURRENT"
   },
   "failures": [],
   "production_change": false,
-  "production_change_summary": "NO production code modified. NO production wiring changed. NO new option-bag methods added. The harness drives the SAME production classes the live controller drives: SdkSessionEventCoordinator, BackgroundNotifyCoordinator, CommandJobManager, MessageTranslatorState, TurnStateTracker, MessageIdMinter. The test queue simulates PendingPromptService.enqueue behavior (queue / steer / FIFO / unshift).",
+  "production_change_summary": "NO production code modified. NO production wiring changed. The harness drives the SAME production classes the live controller drives: SdkSessionEventCoordinator + BackgroundNotifyCoordinator + CommandJobManager + MessageTranslatorState + TurnStateTracker + MessageIdMinter (base file); LocalRuntimeHost + PendingPromptService + FileSessionService (bridge file). NO new option-bag methods added; NO mock-queue / simulated-drain introduced.",
   "central_invariant": "outstandingAutonomousWork === true => setTurnPhase(\"completed\", ...) MUST NOT fire; deferredCompletionBarrier MUST be set. outstandingAutonomousWork === false (after obligations resolve) => setTurnPhase(\"completed\", ...) MUST fire EXACTLY ONCE.",
-  "invariant_proof": "All 12 applicable scenarios (P1..P11, A, B, E, H) observe the invariant. The harness's setTurnPhase spy counts the EXACT number of \"completed\" commits. The harness's getDeferredCompletionBarrierForTesting() observes the marker's sessionId/taskId/epoch triple. The harness's queue.countForSession(sessionId) observes the live pending-prompt count, which is read via the SAME getPendingPromptCount callback the coordinator uses in production.",
+  "queue_mechanics_invariant": "real PendingPromptService.enqueue with delivery:'queue' appends FIFO; delivery:'steer' unshifts to head (line 241-242); drain.shiftNext is FIFO after consumeSteer; each executeTurn fires queueMicrotask(drain); each drain entry is dispatched exactly once via deps.send.",
+  "invariant_proof": "All 12 applicable scenarios (P1..P11, A, B, E, H) observe the invariants. The base harness's setTurnPhase spy counts the EXACT number of 'completed' commits. The base harness's getDeferredCompletionBarrierForTesting() observes the marker's sessionId/taskId/epoch triple. The bridge harness's capture records the REAL C4..C8 cardinality from the production hooks; assertions compare against those real records (not against a simulated mirror).",
   "gates": {
-    "test_files": 16,
-    "tests": 94,
+    "test_files": 17,
+    "tests": 99,
     "exit": 0,
-    "typecheck": "PASS",
-    "lint": "PASS",
+    "typecheck": "PASS (TSC_RC=0; bridge typecheck OK via frozen baseline)",
+    "lint": "PASS (BIOME_RC=0)",
     "diff_check": "PASS",
     "error_scan_patterns": "ForksPoolWorker|kill EPERM|uncaught",
-    "error_scan_matches": 0,
-    "raw_artifact": ".factory/evidence/ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01/04-focused-gates.raw.txt",
+    "error_scan_matches_base": 0,
+    "error_scan_matches_bridge": 1,
+    "error_scan_notes": "The bridge pool shows 1 ForksPoolWorker / kill EPERM match in its raw output. This is vitest pool-cleanup noise on the existing bridge config (the qpsr01 bridge test shows the same pattern; existing precedent). All 5 bridge tests PASS with exit 0; the EPERM appears during worker shutdown only.",
+    "raw_artifact_base": ".factory/evidence/ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01/05-focused-gates-base.raw.txt",
+    "raw_artifact_bridge": ".factory/evidence/ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01/05-focused-gates-bridge.raw.txt",
     "previous_baseline": "15 files / 78 tests (C10-FILTER-ABLATION01 closure)",
-    "delta": "+1 file, +16 tests"
+    "delta": "+2 files (base + bridge), +21 tests (16 base + 5 bridge)"
   },
   "halt_register": {
     "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED",
-    "HALT_PRODUCTION_SEAM_NOT_EXERCISED": "NOT_TRIGGERED",
+    "HALT_PRODUCTION_SEAM_NOT_EXERCISED": "RESOLVED (bounded correction ROUND 1: bridge test drives real LocalRuntimeHost + real PendingPromptService + real drain for P3/P5/P6/A/B)",
     "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED",
     "HALT_FALSE_HANDOFF_REPRODUCED": "NOT_TRIGGERED",
     "HALT_FALSE_AUTOCONTINUE_REPRODUCED": "NOT_TRIGGERED",
@@ -60,7 +72,7 @@
   },
   "live": {
     "status": "NOT_REQUIRED",
-    "rationale": "No production code changed. Per ACT §15, live qualification is only required if the corpus discovers a seam-level vs. live-UI mismatch. The corpus found NO defects, so no live qualification is needed. The predecessor dogfood VSIX (`dist/dogfood/clinemm-4.1.16-521f23482.vsix`, SHA256=1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7) bound to ENTRY_HEAD 521f23482 (post-C10-ROUND-2, pre-corpus) exercised the full notify-owned lifecycle end-to-end."
+    "rationale": "No production code changed. The bounded correction adds a bridge test file (no production edits). The bridge test exercises the real PendingPromptService + real LocalRuntimeHost chain via @cline-internal/core aliases; it does NOT exercise the live VS Code UI. Predecessor dogfood VSIX (4.1.16-521f23482 SHA-256=1f1af4ad2...d02c7) bound to ENTRY_HEAD 521f23482 (post-C10-ROUND-2, pre-corpus) already exercised the full notify-owned lifecycle end-to-end."
   },
   "dependencies_preserved_unchanged": {
     "C10_message_layer_filter": "RETAINED (ACT-CLINEMM-C10-FILTER-ABLATION01 PASS_C10_ABLATION_RETAINED, bounded correction ROUND 2)",

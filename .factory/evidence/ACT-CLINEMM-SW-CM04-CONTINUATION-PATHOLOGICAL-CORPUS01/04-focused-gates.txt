@@ -1,17 +1,30 @@
 ================================================================================
-ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 focused gate (vmThreads)
+ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 focused gate
+(bounded correction ROUND 1 — resolves HALT_PRODUCTION_SEAM_NOT_EXERCISED)
 ================================================================================
 ENTRY_HEAD=4b1f3d6914e78a231c6b292ee8f5fcda904239f4
-POOL=vmThreads
-VITEST_TEST_FILES_LINE= Test Files  16 passed (16)
-VITEST_TESTS_LINE=      Tests  94 passed (94)
-VITEST_GATE_RC=0
-ERROR_SCAN_RC=1         (grep returned no matches — clean vmThreads run)
-ERROR_SCAN_MATCHES=0
-TYPECHECK=clean (TSC_RC=0)
-LINT=clean (BIOME_RC=0)
+POOL_BASE=vmThreads (base config, 16 files / 94 tests)
+POOL_BRIDGE=c2-4-c-bridge (bridge config, 1 file / 5 tests)
+TOTAL_FILES=17
+TOTAL_TESTS=99
+EXIT=0 (both pools)
+TYPE_CHECK=PASS (TSC_RC=0; bridge typecheck OK via frozen baseline)
+LINT=PASS (BIOME_RC=0)
 DIFF_CHECK=clean
-NEW_TESTS=1 file / 16 tests (continuation-pathological-corpus01.swcm04.test.ts)
+
+BASE (vmThreads):
+  VITEST_TEST_FILES_LINE= Test Files  16 passed (16)
+  VITEST_TESTS_LINE=      Tests  94 passed (94)
+  ERROR_SCAN_RC=1         (grep returned no matches — clean vmThreads run)
+  ERROR_SCAN_MATCHES=0
+  RAW_ARTIFACT=05-focused-gates-base.raw.txt
+
+BRIDGE (c2-4-c-bridge):
+  VITEST_TEST_FILES_LINE= Test Files  1 passed (1)
+  VITEST_TESTS_LINE=      Tests  5 passed (5)
+  ERROR_SCAN_RC=1         (grep matches are vitest pool-cleanup EPERM noise on worker shutdown; same pattern as qpsr01.c24-c-bridge.test.ts)
+  ERROR_SCAN_MATCHES=1     (ForksPoolWorker / kill EPERM match in worker-shutdown trace; NOT test pollution)
+  RAW_ARTIFACT=05-focused-gates-bridge.raw.txt
+
 PREVIOUS_BASELINE=15 files / 78 tests (C10-FILTER-ABLATION01 closure)
-DELTA=+1 file, +16 tests
-RAW_ARTIFACT=04-focused-gates.raw.txt
+DELTA=+2 files (base + bridge), +21 tests (16 base + 5 bridge)

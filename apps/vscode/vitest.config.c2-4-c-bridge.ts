@@ -79,6 +79,15 @@ export default defineConfig({
 			// post-completed-`AgentResult` finalization, but did NOT
 			// exercise the real AgentRuntime inside the host.
 			"src/sdk/__tests__/skipped-command-host-recovery.shrc01.test.ts",
+			// ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 BOUNDED CORRECTION:
+			// real LocalRuntimeHost + real PendingPromptsController +
+			// real drain + real runTurn re-entry. The companion
+			// file (`continuation-pathological-corpus01.swcm04.test.ts`)
+			// drives the completion-barrier boundary with a simulated
+			// queue; this bridge file drives the queue-mechanics
+			// scenarios (P3, P5, P6, A, B) against the real
+			// production classes per HALT_PRODUCTION_SEAM_NOT_EXERCISED.
+			"src/sdk/__tests__/continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01:
 			// real LocalRuntimeHost + real PendingPromptsController +
 			// real FileSessionService + real SessionVersioningService;
