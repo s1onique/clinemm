@@ -12700,8 +12700,13 @@ type McpEnvEntry =
 - Stage 2 Resolver (pure `resolveMcpServerEnv`; A2A-11 PROJECTION PURITY — `rawEnv` deep-equals `structuredClone(rawEnv)` taken before the call; result may be a fresh object, that is fine) **GREEN** (commit 3ee2f0bc3; 8/8 resolver tests).
 - Stage 3 A2A-04 child witness (real `@modelcontextprotocol/sdk` STDIO child via `StdioClientTransport + Client.connect + Client.callTool({name:"whoami"})`; fixture reads `process.env.MYC_SESSION_ID` from inside the spawned child) **GREEN** (commit 3ee2f0bc3; 3/3 child-witness tests).
 - Stage 4 A/B isolation rows (A2A-08 A+B concurrent; A2A-09 reconnect A; A2A-10 genericity; A2A-12 static+bound; A2A-13 lifecycle iso; A2A-14 startup defer) **GREEN** (commit ceb4c801f; 6/6 isolation tests).
-- Full unit suite: **88 files, 1193 pass / 0 fail**. Zero regressions in pre-existing `McpHub.*` or `schemas.test.ts` suites.
-- Stage 5 production seams (A2A-15/16/17/18 — drive real `vscode-runtime-builder.ts:47`, `sdk-session-lifecycle.ts:591-611`, `vscode-session-host.ts:359`): **queued for next session** (architecturally distinct, multi-day engineering task; cannot be done safely in one commit without breaking the 1100+ existing tests).
+- Stage 5 production seams (A2A-08/09/12/13/14/15/16/17/18 against the **real `McpHub`**) **GREEN** (commit 12ff01021; 11/11 mcpHub tests). Resolves review halt `STAGE4_MCPHUB_LIFECYCLE_NOT_EXERCISED`. Production tree:
+  - `McpHub.sessionConnections: Map<sessionId, Map<serverName, McpConnection>>` + `ensureSessionConnection` + `disconnectSession` + `callTool(..., sessionId?)`
+  - `McpHubToolProvider(mcpHub, sessionId?)` + `createVscodeExtraTools(mcpHub, {sessionId})`
+  - `sdk-session-lifecycle.trackSessionStop` wraps `Promise.all([sdkHost.stop, mcpHub.disconnectSession])`
+- Full unit suite: **89 files, 1204 pass / 0 fail.** Zero regressions in pre-existing `McpHub.*` or `schemas.test.ts` suites.
+- Typecheck (`tsc --noEmit --project tsconfig.json`): exit 0. Biome: clean.
+- Stage 6 (conservation gate: `apps/myc` unchanged, all pre-existing tests still pass) and Stage 7 (closure artifacts: `result.json`, ACT status update) queued.
 
 **Predicted production seams:**
 - `apps/vscode/src/services/mcp/schemas.ts` (env-union schema, XOR by disjoint union members)
