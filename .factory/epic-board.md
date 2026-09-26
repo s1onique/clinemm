@@ -12695,6 +12695,14 @@ type McpEnvEntry =
 
 **Recon + plan:** `.factory/evidence/ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01/{01-recon.md,plan.md,00-entry-identity.txt}`
 
+**Execution status (post-C1:GO):**
+- Stage 1 Schema (EnvEntrySchema additive union; XOR by disjoint union members; legacy string round-trip preserved) **GREEN** (commit 3ee2f0bc3; 8/8 schema tests).
+- Stage 2 Resolver (pure `resolveMcpServerEnv`; A2A-11 PROJECTION PURITY — `rawEnv` deep-equals `structuredClone(rawEnv)` taken before the call; result may be a fresh object, that is fine) **GREEN** (commit 3ee2f0bc3; 8/8 resolver tests).
+- Stage 3 A2A-04 child witness (real `@modelcontextprotocol/sdk` STDIO child via `StdioClientTransport + Client.connect + Client.callTool({name:"whoami"})`; fixture reads `process.env.MYC_SESSION_ID` from inside the spawned child) **GREEN** (commit 3ee2f0bc3; 3/3 child-witness tests).
+- Stage 4 A/B isolation rows (A2A-08 A+B concurrent; A2A-09 reconnect A; A2A-10 genericity; A2A-12 static+bound; A2A-13 lifecycle iso; A2A-14 startup defer) **GREEN** (commit ceb4c801f; 6/6 isolation tests).
+- Full unit suite: **88 files, 1193 pass / 0 fail**. Zero regressions in pre-existing `McpHub.*` or `schemas.test.ts` suites.
+- Stage 5 production seams (A2A-15/16/17/18 — drive real `vscode-runtime-builder.ts:47`, `sdk-session-lifecycle.ts:591-611`, `vscode-session-host.ts:359`): **queued for next session** (architecturally distinct, multi-day engineering task; cannot be done safely in one commit without breaking the 1100+ existing tests).
+
 **Predicted production seams:**
 - `apps/vscode/src/services/mcp/schemas.ts` (env-union schema, XOR by disjoint union members)
 - `apps/vscode/src/services/mcp/McpHub.ts:386, 484-493` (resolver + per-session child map; 8 callsites threaded)

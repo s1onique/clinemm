@@ -83,4 +83,4 @@ Stages 4–7 are deferred to subsequent commits:
   release, `vscode-session-host.ts:359` discovery — NOT direct hub calls.
 - **Stage 6 — Conservation gate**: one mechanical check that all 18 rows from
   `01-recon.md` are covered by Stages 1–5.
-- **Stage 7 — Closure**: durable handoff.
+- **Stage 7 — Closure**: durable handoff..factory/evidence/ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01/02-stage-1-3-evidence.md
