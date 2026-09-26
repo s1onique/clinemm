@@ -1,0 +1,66 @@
+[0m[1mbun test [0m[2mv1.3.13 (bf2e2cec)[0m
+[0m
+src/runtime/routing/handler-tool-routing-evals01.swcm02.test.ts:
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B1-rf: read_files routes to read_files executor[0m [0m[2m[7.35ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B1-rc: run_commands routes to run_commands executor[0m [0m[2m[0.62ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B1-ed: editor routes to editor executor[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B1-ap: apply_patch routes to apply_patch executor[0m [0m[2m[0.71ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B1-sc: search_codebase routes to search_codebase executor[0m [0m[2m[0.42ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B1-sk: skills routes to skills executor exactly once[0m [0m[2m[0.26ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B1-sae: submit_and_exit routes to submit_and_exit executor[0m [0m[2m[0.21ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B1-aq: ask_question routes to ask_question executor[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B2-rf-rc: distinct names route to distinct executors[0m [0m[2m[0.25ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B3-rf-rfile: read_files and read_file are distinct handlers[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B4-sc-sf: search_codebase and search_files are distinct handlers[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B5-unknown: unknown tool name registry-misses[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B7-sk: skills routes to skills (no other builtin)[0m [0m[2m[0.40ms[0m[2m][0m
+[0m[32m✓[0m [0mB-series: canonical name resolution (real AgentRuntime)[2m >[0m[1m B8-handler-error: handler throwing ENOENT surfaces as tool_execution_error[0m
+[0m[32m✓[0m [0mS10: exact-name adversarial (no fuzzy / no canonicalization at dispatch)[2m >[0m[1m S10-adversarial: "read" registry-misses (registered as "read_files")[0m [0m[2m[0.50ms[0m[2m][0m
+[0m[32m✓[0m [0mS10: exact-name adversarial (no fuzzy / no canonicalization at dispatch)[2m >[0m[1m S10-adversarial: "read-files" registry-misses (registered as "read_files")[0m [0m[2m[0.02ms[0m[2m][0m
+[0m[32m✓[0m [0mS10: exact-name adversarial (no fuzzy / no canonicalization at dispatch)[2m >[0m[1m S10-adversarial: "READ_FILES" registry-misses (registered as "read_files")[0m [0m[2m[0.26ms[0m[2m][0m
+[0m[32m✓[0m [0mS10: exact-name adversarial (no fuzzy / no canonicalization at dispatch)[2m >[0m[1m S10-adversarial: "read_files_" registry-misses (registered as "read_files")[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mS10: exact-name adversarial (no fuzzy / no canonicalization at dispatch)[2m >[0m[1m S10-adversarial: "/read_files" registry-misses (registered as "read_files")[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m [0mS10: exact-name adversarial (no fuzzy / no canonicalization at dispatch)[2m >[0m[1m S10-adversarial: " read_files" registry-misses (registered as "read_files")[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m [0mS10: exact-name adversarial (no fuzzy / no canonicalization at dispatch)[2m >[0m[1m S10-adversarial: "read_files " registry-misses (registered as "read_files")[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mS10: exact-name adversarial (no fuzzy / no canonicalization at dispatch)[2m >[0m[1m S10-adversarial: "	read_files
+" registry-misses (registered as "read_files")[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "use_skill" registry-misses[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "attempt_completion" registry-misses[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "bash" registry-misses[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "execute_command" registry-misses[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "list_code_definition_names" registry-misses[0m [0m[2m[0.08ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "list_files" registry-misses[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "replace_in_file" registry-misses[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "apply_diff" registry-misses[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "write_to_file" registry-misses[0m [0m[2m[0.11ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "read_file" routes to its own handler (read_file)[0m [0m[2m[0.12ms[0m[2m][0m
+[0m[32m✓[0m [0mS11: alias canonicalization does NOT silently re-route at top-level dispatch[2m >[0m[1m S11-alias: "search_files" routes to its own handler (search_files)[0m [0m[2m[0.22ms[0m[2m][0m
+[0m[32m✓[0m [0mS12: skill routing[2m >[0m[1m S12-sk: skills handler runs when invoked with a skill name[0m [0m[2m[0.19ms[0m[2m][0m
+[0m[32m✓[0m [0mS12: skill routing[2m >[0m[1m S12-sk-collision: dispatcher does not fan-out across same-name collisions[0m [0m[2m[0.23ms[0m[2m][0m
+[0m[32m✓[0m [0mS14: custom tool dispatch (direct tools[] registration)[2m >[0m[1m S14-al: alpha_lookup routes to alpha_lookup executor[0m [0m[2m[0.18ms[0m[2m][0m
+[0m[32m✓[0m [0mS14: custom tool dispatch (direct tools[] registration)[2m >[0m[1m S14-bl: beta_lookup routes to beta_lookup executor[0m [0m[2m[0.20ms[0m[2m][0m
+[0m[32m✓[0m [0mS14: custom tool dispatch (direct tools[] registration)[2m >[0m[1m S14-al+bl: parallel alpha_lookup and beta_lookup do not cross-talk[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mS16: tool policy (approval path only)[2m >[0m[1m S16-approval: host approves; the registered handler runs with same handler identity[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0mS16: tool policy (approval path only)[2m >[0m[1m S16-no-policy: without policy entry, run_commands handler runs without approval[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mS18: argument preservation[2m >[0m[1m S18-deep: deep nesting + unicode + mixed types reach executor verbatim[0m [0m[2m[0.23ms[0m[2m][0m
+[0m[32m✓[0m [0mS18: argument preservation[2m >[0m[1m S18-tcid: toolCallId propagates through context to executor[0m [0m[2m[0.07ms[0m[2m][0m
+[0m[32m✓[0m [0mS19: context preservation (sessionId/conversationId isolation)[2m >[0m[1m S19-A: session A's context reaches session A's executor[0m [0m[2m[0.09ms[0m[2m][0m
+[0m[32m✓[0m [0mS19: context preservation (sessionId/conversationId isolation)[2m >[0m[1m S19-A+B: parallel A and B runtimes see their own context[0m [0m[2m[0.16ms[0m[2m][0m
+[0m[32m✓[0m [0mS20: parallel result correlation[2m >[0m[1m S20: two parallel tool calls produce independent outcomes keyed by toolCallId[0m [0m[2m[0.17ms[0m[2m][0m
+[0m[32m✓[0m [0mS21: error routing[2m >[0m[1m E1-unknown: unknown name → tool_not_found (handler does NOT fire)[0m [0m[2m[0.13ms[0m[2m][0m
+[0m[32m✓[0m [0mS21: error routing[2m >[0m[1m E2-enoent: handler throwing ENOENT → tool_execution_error (handler DID fire)[0m [0m[2m[0.15ms[0m[2m][0m
+[0m[32m✓[0m [0mS21: error routing[2m >[0m[1m E3-opaque: handler throwing opaque Error → tool_execution_error[0m [0m[2m[0.14ms[0m[2m][0m
+
+[0m[32m 48 pass[0m
+[0m[2m 0 fail[0m
+ 83 expect() calls
+Ran 48 tests across 1 file. [0m[2m[[1m719.00ms[0m[2m][0m

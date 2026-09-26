@@ -1,0 +1,22 @@
+00-entry-identity.txt
+=====================
+
+ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01 entry identity.
+
+entry_head    : 2ede285e2 (terminal commit at ACT open; no new commits added)
+act_id        : ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01
+act_class     : eval-qualification
+sequence      : SW-CM04 -> SW-CM01 -> SW-CM02 (this) -> SW-CM03
+predecessor   : ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01 (resolved at terminal commit 2ede285e2)
+successor     : ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01 (post-resolution)
+domain_scope  : runtime handler/tool/subsystem routing characterization
+halt_register : [
+                  C1 round 1: HALT_PRODUCTION_ROUTING_SEAM_NOT_EXERCISED   (RESOLVED)
+                  C1 round 2: HALT_CONFIGURED_AGENT_PRODUCTION_SEAM_NOT_EXERCISED  (RESOLVED)
+                ]
+result_class  : PASS_HANDLER_TOOL_ROUTING_EVALS
+production_change : false
+tracked_file_changes : 0
+new_test_files :
+  - sdk/packages/agents/src/runtime/routing/handler-tool-routing-evals01.swcm02.test.ts (48 tests)
+  - sdk/packages/core/src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts (12 tests)

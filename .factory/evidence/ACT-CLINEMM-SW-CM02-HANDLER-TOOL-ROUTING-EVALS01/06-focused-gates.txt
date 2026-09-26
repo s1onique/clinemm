@@ -1,0 +1,346 @@
+06-focused-gates.txt
+====================
+
+ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01 focused-gates artifact.
+
+Halt history
+------------
+  C1 (first-pass)     HALT_PRODUCTION_ROUTING_SEAM_NOT_EXERCISED
+                       → resolved by replacing local mirrors with
+                         real DefaultRuntimeBuilder.build() tests.
+  C1 (this round)     HALT_CONFIGURED_AGENT_PRODUCTION_SEAM_NOT_EXERCISED
+                       → resolved by extending Section B with 4 NEW
+                         tests (B4, B5, B6, B7) that observe the
+                         child runtime's tool list at the REAL
+                         production child construction seam.
+                         (see "HALT C1 RESOLUTION" below)
+
+Test files
+----------
+sdk/packages/agents/src/runtime/routing/handler-tool-routing-evals01.swcm02.test.ts
+   - 48 tests across 9 describe blocks
+   - Drives real AgentRuntime with scripted AgentModel
+   - Pool: vmThreads (gate-of-record). Forks also passes.
+
+sdk/packages/core/src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts
+   - 12 tests across 2 describe blocks:
+       Section A (filterAvailableTools, toolPolicies path)       : 5 tests
+       Section B (filterToolsForConfiguredAgent, .yml path)     : 7 tests
+         - B1, B2, B3: parent-level `built.tools` evidence
+                       (lead-runtime toolset assertion)
+         - B4, B5, B6, B7: CHILD-runtime observation
+                           (the load-bearing evidence for halt C1)
+   - Drives real DefaultRuntimeBuilder.build({ config: <CoreSessionConfig> })
+     and (for B4..B7) the REAL child construction seam via mocked
+     SessionRuntime + `subagent_<name>.execute(...)` invocation.
+   - Pool: vmThreads (gate-of-record). Default bun test also passes.
+
+HALT C1 RESOLUTION
+------------------
+The previous round only asserted the LEAD runtime's `built.tools`
+array for configured-agent tests (B1..B3) and never observed what
+the SUB-AGENT actually received. The reviewer correctly identified
+that this did not prove `filterToolsForConfiguredAgent` is exercised
+end-to-end.
+
+Bounded correction applied in this round:
+  1. Added `vi.mock("./session-runtime-orchestrator", ...)` at module
+     level (same pattern as `runtime-builder.configured-agent-execution.test.ts`).
+     The mock captures the `AgentConfig` passed to `new SessionRuntime(config)`.
+  2. Added helper `invokeSubAgentAndCaptureChildTools({ config, agentName, prompt })`
+     that drives the REAL production child construction path:
+        a. DefaultRuntimeBuilder.build({ config: ... })         [production]
+        b. Finds `subagent_<name>` in `built.tools`             [production]
+        c. Calls `subagent_<name>.execute({ prompt }, ctx)`     [production]
+        d. The tool's execute() invokes the production
+           `filterToolsForConfiguredAgent(createBuiltinToolsList(...), agent)`
+           closure at runtime-builder.ts:594-617.               [production]
+        e. The resulting child tools list is passed to
+           `createDelegatedAgent({ tools, ... })`               [production]
+        f. The mock SessionRuntime captures the config.         [test seam]
+        g. Returns `lastCall.tools` as the captured child tool list.
+  3. Added 4 NEW tests that exercise the 4 reviewer C1-C4 cases:
+        - B4 (reviewer C1): tools: [bash, read_file]
+            → child gets [read_files, run_commands] (canonicalized)
+        - B5 (reviewer C2-equivalent): skills: [review]
+            → child gets [read_files, skills] (skills executor + canonical)
+        - B6 (reviewer C3): no tools field
+            → child gets full permitted parent/builtin set
+        - B7 (reviewer C4): tools: [bash] + toolPolicies.run_commands.enabled=false
+            → child gets [] (the two filters compose; empty intersection
+              is the correct production behavior).
+
+  No local mirror of `filterToolsForConfiguredAgent` was used.
+  No architecture round was added. No production code was changed.
+
+Gate-of-record commands
+-----------------------
+(1) Agents-package dispatch file
+   bash /Volumes/UserData/Users/chistyakov/.bun/bin/bunx bun test \
+       src/runtime/routing/handler-tool-routing-evals01.swcm02.test.ts
+  Test Files  1
+       Tests  48 passed (48)
+   GATE_EXIT   0
+   Raw output: 04-routing-results.vmthreads.txt
+
+(2) Core-package registration-seam file
+   bash /Volumes/UserData/Users/chistyakov/.bun/bin/bunx bun test \
+       src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts
+  Test Files  1
+       Tests  12 passed (12)   ← 9 (previous) + 3 NEW (B5, B6, B7) + 1 REWRITTEN (B4)
+   GATE_EXIT   0
+   ERROR_SCAN_MATCHES  0
+   Raw output: 04-routing-results.builder.vmthreads.txt
+
+NOTE: The previous round's "9 tests" became "12 tests" because:
+  - B4 was rewritten from "lead-level assertion only" to
+    "child-runtime observation via real production seam"
+  - B5, B6, B7 were NEW additions covering the reviewer's C2-C4 cases
+
+Combined gate-of-record: 2 files / 60 tests / 0 failures / 0 errors.
+
+Substrate conservation
+----------------------
+SW-CM04 base corpus (16 files / 94 tests)   : unchanged.
+SW-CM04 real bridge (1 file / 5 tests)       : unchanged.
+SW-CM01 trigger corpus (1 file / 23 tests)   : unchanged.
+C10-FILTER-ABLATION01                        : unchanged.
+BNCA-REPAIR01                                : unchanged.
+BackgroundNotifyCoordinator authority        : unchanged.
+NEW @cline/core runtime-builder routing-evals : 1 file / 12 tests (this ACT, post-correction).
+NEW @cline/agents runtime routing dispatch   : 1 file / 48 tests (this ACT).
+
+Verified by re-running the @cline/core orchestration suite with --isolate
+(matches gate-of-record pool; bun's native test runner uses fresh global
+objects per file when --isolate is set, eliminating vi.mock leakage):
+   bun test --isolate src/runtime/orchestration/runtime-builder.test.ts \
+              src/runtime/orchestration/runtime-builder.configured-agent-execution.test.ts \
+              src/runtime/orchestration/session-runtime-orchestrator.test.ts \
+              src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts
+  Tests  111 passed (111)
+  GATE_EXIT  0
+  Distribution:
+    runtime-builder.test.ts                    : 35 tests
+    runtime-builder.configured-agent-execution :  2 tests
+    session-runtime-orchestrator.test.ts       : 62 tests
+    runtime-builder.routing-evals.swcm02       : 12 tests (this ACT)
+
+Verified by re-running the @cline/agents full suite minus the pre-existing
+unrelated vi.hoisted issue (agent-runtime.provider-form.test.ts uses a
+vitest-only API that bun-test does not implement):
+   bun test --isolate $(find src -name '*.test.ts' \
+                         -type f ! -name 'agent-runtime.provider-form.test.ts')
+  Tests  455 passed (455) across 26 files
+  GATE_EXIT  0
+  Includes 48 dispatch tests from this ACT.
+
+The pre-existing vi.hoisted issue in agent-runtime.provider-form.test.ts
+is NOT caused by this ACT — it is a vitest-only API that bun-test does not
+implement. Same baseline as before this ACT.
+
+Test count breakdown (60 tests)
+-------------------------------
+DISPATCH FILE (48 tests, 9 describe blocks):
+  Section  8 (B-series baseline)            : 14 tests
+  Section 10 (Exact-name adversarial)       :  8 tests
+  Section 11 (Alias routing)                : 11 tests
+  Section 12 (Skill routing)                :  2 tests
+  Section 14 (Custom tool dispatch)         :  3 tests
+  Section 16 (Tool policy approval path)    :  2 tests
+  Section 18 (Argument preservation)        :  2 tests
+  Section 19 (Context preservation)         :  2 tests
+  Section 20 (Result correlation)           :  1 test
+  Section 21 (Error routing)                :  3 tests
+  SUBTOTAL                                  : 48 tests  /  1 file
+
+REGISTRATION FILE (12 tests, 2 describe blocks):
+  Section A (filterAvailableTools via toolPolicies) : 5 tests
+    A1: disabled tool stripped
+    A2: AgentRuntime registry-miss after filter (D1 at dispatch)
+    A3: no collateral damage
+    A4: no policy keeps run_commands
+    A5: multi-disable
+  Section B (filterToolsForConfiguredAgent via .yml) : 7 tests
+    B1: lead-level allowlist canonicalization (parent `built.tools`)
+    B2: lead-level no-tools keeps all builtins (parent `built.tools`)
+    B3: lead-level skills declaration (parent `built.tools`)
+    B4: CHILD-runtime observation of canonicalized allowlist (NEW)
+    B5: CHILD-runtime observation with skills executor (NEW)
+    B6: CHILD-runtime observation with no tools field (NEW)
+    B7: CHILD-runtime observation with policy-disable composition (NEW)
+  SUBTOTAL                                          : 12 tests  /  1 file
+
+TOTAL                                                : 60 tests  /  2 files
+
+Domain coverage (per ACT §5 R1..R10)
+-------------------------------------
+R1 BUILT-IN (read_files, run_commands, editor, apply_patch,
+            search_codebase, search_files, read_file)
+   → dispatch: B-series positive cases (14 tests)
+   → registration: Section A positive cases (read_files, run_commands)
+   → registration: Section B6 child tools include read_files, run_commands,
+                 editor, search_codebase, fetch_web_content
+
+R2 SKILLS
+   → dispatch: B1-sk (canonical), S12 (skills routing)
+   → registration: B3-skills-declared (configured-agent skills)
+   → registration: B5 child gets `skills` tool tied to allowlist (NEW)
+
+R3 COMPLETION (submit_and_exit)
+   → dispatch: B1-sae
+
+R4 HUMAN-INPUT (ask_question)
+   → dispatch: B1-aq
+
+R5 CUSTOM/PLUGIN
+   → dispatch: S14 (alpha_lookup, alpha_write, beta_lookup — direct
+              tools[] registration)
+   → registration: not separately exercised; custom tools register via
+                 the `extensions` channel and the configured-agent path
+                 uses builtins, not custom tools
+   → SCOPE NOTE: "custom" is characterized as direct tools[] registration.
+              Plugin `setup(...)`-time registration is out of scope and
+              deferred.
+
+R6 MCP
+   → NOT_APPLICABLE for SW-CM02. The dispatcher is identical to builtin
+     dispatch (tools.get exact-name). MCP-specific registration/collision
+     semantics require a real MCP server and are deferred.
+   → SW-CM02 scopes explicitly to "flat-map dispatch" only.
+
+R7 CONFIGURED-AGENT FILTERING
+   → registration: Section B1 (allowlist canonicalization - parent level),
+                 Section B2 (no-tools keeps all builtins - parent level),
+                 Section B3 (skills declaration - parent level)
+   → registration: Section B4 (CHILD-level: canonicalized allowlist observed)
+                 Section B5 (CHILD-level: skills executor + allowlist)
+                 Section B6 (CHILD-level: no-tools gets full set)
+                 Section B7 (CHILD-level: policy-disable composition)
+   → Real production path: DefaultRuntimeBuilder.build() with real
+     .cline/agents/<name>.yml files on disk + subagent_<name>.execute(...).
+
+R8 TOOL POLICY DISABLEMENT
+   → registration: Section A1 (run_commands.enabled=false strips),
+                 Section A2 (registry-miss at dispatch after filter),
+                 Section A3 (no collateral damage to other tools),
+                 Section A4 (no policy keeps run_commands),
+                 Section A5 (multiple disables)
+   → registration: Section B7 (composition with configured-agent filter)
+   → Real production path: DefaultRuntimeBuilder.build() with
+     toolPolicies on CoreSessionConfig.
+
+R9 UNKNOWN TOOL
+   → dispatch: B5-unknown, S10-adversarial, S11-miss
+
+R10 ALIAS COLLISION / CANONICALIZATION
+   → dispatch: S11 (11 aliases do NOT silently re-route at top-level
+             dispatch); observable consequence is each alias either
+             registry-misses or routes to its own distinct registered
+             handler (read_file → read_file, search_files →
+             search_files).
+   → registration: Section B1 (parent-level allowlist-canonical proves
+                 the REAL filterToolsForConfiguredAgent canonicalizes
+                 `bash` → `run_commands` and `read_file` → `read_files`).
+   → registration: Section B4 (CHILD-level canonicalization observed:
+                 child gets `run_commands`/`read_files`, NOT literal
+                 `bash`/`read_file` aliases).
+
+Production change: NO.
+
+Biome (lint)
+------------
+biome lint \
+    sdk/packages/core/src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts \
+    sdk/packages/agents/src/runtime/routing/handler-tool-routing-evals01.swcm02.test.ts
+BIOME_RC=0  (Checked 2 files. 1 info, 0 warnings, 0 errors.)
+
+Typecheck
+---------
+sdk/packages/agents: bunx tsc -p tsconfig.json --noEmit
+TSC_RC=0  (clean — zero diagnostics introduced by the new test file)
+
+sdk/packages/core: bunx tsc -p tsconfig.json --noEmit
+TSC_RC=2  (PRE-EXISTING baseline noise: 25 errors in
+            compaction.test.ts, definitions.test.ts,
+            bash.supervised*.test.ts, command-execution-plan.test.ts.
+            ZERO diagnostics introduced by the new test file.)
+NEW_FILE_DIAGNOSTICS=0  (verified by grep)
+
+Diff check
+----------
+git --no-pager diff --check HEAD
+DIFF_CHECK_RC=0  (no tracked-file changes; only new untracked files:
+                  sdk/packages/agents/src/runtime/routing/handler-tool-routing-evals01.swcm02.test.ts
+                  sdk/packages/core/src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts
+                  .factory/evidence/ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01/)
+
+Production change: NO.
+
+Verdict
+-------
+PASS_HANDLER_TOOL_ROUTING_EVALS
+  - All 60 tests across 11 describe blocks pass under bun test (gate-of-record).
+  - GATE_EXIT=0, ERROR_SCAN_MATCHES=0 across both test files.
+  - Registration seam (filterAvailableTools, filterToolsForConfiguredAgent)
+    is exercised via the REAL DefaultRuntimeBuilder.build() path.
+  - Dispatch seam (tools.get exact match, executor invocation,
+    toolCallId propagation, error taxonomy, parallel-call no-crosstalk)
+    is exercised via the REAL AgentRuntime with a scripted AgentModel.
+  - CONFIGURED-AGENT CHILD-RUNTIME TOOLSET is observed via the REAL
+    production child construction seam (`filterToolsForConfiguredAgent(
+    createBuiltinToolsList(...), agent)` at runtime-builder.ts:594-617)
+    by capturing the AgentConfig passed to `new SessionRuntime(...)` in
+    the mocked orchestrator (same pattern as the existing
+    `runtime-builder.configured-agent-execution.test.ts` test file).
+  - Alias canonicalization observed at CHILD level: B4 confirms the
+    child runtime receives `run_commands`/`read_files` (canonical), NOT
+    literal `bash`/`read_file` aliases.
+  - Filter composition observed: B7 confirms that configured-agent
+    allowlist AND parent-level toolPolicies compose — the intersection
+    of the two filters is empty when the configured-agent only asks
+    for `bash` and `run_commands` is policy-disabled.
+
+Successor selection
+-------------------
+After the runtime routing characterization passes, SW-CM03 may proceed: its
+question is downstream of dispatch — once the correct skill/tool/handler is
+selected and routed, are the loaded instructions/resources sufficient for
+the model to perform the task correctly without unnecessary context
+loading? That is a different epistemic boundary.
+
+No SW-CM02 successor repair ACT is opened (no runtime defect reproduced).
+
+Closure state
+-------------
+production_change: false
+  diff_check_rc: 0
+  git_status: 3 untracked (1 file in agents/, 1 file in core/, evidence dir)
+  tracked_file_changes: 0
+
+Reopen condition (satisfied for both rounds)
+--------------------------------------------
+This ACT was halted twice by C1 = production-seam-not-exercised:
+  Round 1: HALT_PRODUCTION_ROUTING_SEAM_NOT_EXERCISED
+    Condition: "replace local configured-agent/policy mirrors with calls
+                through their real production builder paths."
+  Round 2: HALT_CONFIGURED_AGENT_PRODUCTION_SEAM_NOT_EXERCISED
+    Condition: "one child-runtime observation through the actual
+                configured-agent construction seam showing the
+                filtered/canonicalized child tool set. Then stop
+                reviewing SW-CM02 and move to SW-CM03."
+
+Bounded correction delivered:
+  ✓ Round 1: local mirrors removed; real DefaultRuntimeBuilder.build()
+    drives both configured-agent and policy-disable domains.
+  ✓ Round 2: B4 rewritten + B5, B6, B7 added. Child-runtime toolset
+    observed end-to-end via the real `createConfiguredAgentTools` →
+    `createDelegatedAgent({ tools })` → `new SessionRuntime(config)`
+    chain. The captured `config.tools` is the actual output of
+    `filterToolsForConfiguredAgent(createBuiltinToolsList(...), agent)`
+    at runtime-builder.ts:594-617.
+  ✓ Clean gate captured (2 files, 60 tests, GATE_EXIT=0, ERROR_SCAN_MATCHES=0).
+  ✓ Closure digest refreshed (this file, result.json, recon, corpus).
+  ✓ No architecture round added.
+  ✓ No production code changed.
+
+SW-CM02 is CLOSED. SW-CM03 may proceed.

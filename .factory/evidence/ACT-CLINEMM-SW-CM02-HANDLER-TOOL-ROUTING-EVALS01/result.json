@@ -1,0 +1,125 @@
+{
+  "act_id": "ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01",
+  "purpose": "runtime handler/tool/subsystem routing qualification",
+  "entry_head": "2ede285e2",
+  "predecessor_act": "ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01",
+  "sequence_position": "SW-CM04 -> SW-CM01 -> SW-CM02 (this) -> SW-CM03",
+  "halt_register": [
+    {
+      "halt_id": "HALT_PRODUCTION_ROUTING_SEAM_NOT_EXERCISED",
+      "halt_class": "C1",
+      "halted_after": "first-pass submission",
+      "halt_reason": "first-pass test file held local mirrors of CONFIGURED_AGENT_TOOL_NAME_ALIASES and filterToolsForConfiguredAgentLocal. configured_agent and policy_disabled domains were overclaimed as production-tested when only the dispatch layer (AgentRuntime) was driven end-to-end.",
+      "reopen_condition": "replace the local configured-agent/policy mirrors with calls through their real production builder paths (DefaultRuntimeBuilder.build), rerun the same clean gate, and refresh the closure digest.",
+      "bounded_correction_applied_round": 1
+    },
+    {
+      "halt_id": "HALT_CONFIGURED_AGENT_PRODUCTION_SEAM_NOT_EXERCISED",
+      "halt_class": "C1",
+      "halted_after": "first-pass correction (round 1)",
+      "halt_reason": "B1..B3 in registration file only inspected the LEAD runtime's `built.tools` array, never the SUB-AGENT's toolset. The reviewer correctly identified that the configured-agent child construction seam (`filterToolsForConfiguredAgent(createBuiltinToolsList(...), agent)` at runtime-builder.ts:594-617) was not directly observed end-to-end. CONFIGURED_AGENT_CHILD_TOOLSET and ALIAS_CANONICALIZATION_IN_CHILD were UNPROVEN.",
+      "reopen_condition": "one child-runtime observation through the actual configured-agent construction seam showing the filtered/canonicalized child tool set.",
+      "bounded_correction_applied_round": 2
+    }
+  ],
+  "production_seam": {
+    "registry": "AgentRuntime.tools = new Map<string, AgentTool> at sdk/packages/agents/src/agent-runtime.ts:590; populated in initialize() at L1414-1429 by literal tool.name insertion (no canonicalization).",
+    "alias": "CONFIGURED_AGENT_TOOL_NAME_ALIASES at sdk/packages/core/src/runtime/orchestration/runtime-builder.ts:95-107. SCOPE BOUNDARY: only fires inside filterToolsForConfiguredAgent (L114-129), NOT at top-level AgentRuntime dispatch.",
+    "policy": "filterAvailableTools at runtime-builder.ts:88-93 (policy enabled=false AND user disabledToolNames); applied at registration time so disabled tools are absent from the runtime Map. Wrapped around createBuiltinToolsList (L167) and applied again at L756 (finalTools).",
+    "dispatch": "prepareToolExecution at agent-runtime.ts:2848-2920 with this.tools.get(toolCall.toolName) at L2851 (EXACT match). executePreparedTool at agent-runtime.ts:3282 calls prepared.tool.execute(prepared.input, ctx). Registry miss branch at L3272-3276.",
+    "result_correlation": "AgentToolContext.toolCallId stamped at dispatch site from prepared.toolCall.toolCallId (L3288). onToolRuntimeOutcome hook at sdk/packages/shared/src/agent.ts:842-849 fires with AgentToolRuntimeOutcomeHookContext carrying the original toolCall.toolCallId and the outcome payload.",
+    "registration_seam_real_path": "DefaultRuntimeBuilder.build(input) at sdk/packages/core/src/runtime/orchestration/runtime-builder.ts:365. Returns BuiltRuntime.tools at L806 (finalTools = filterAvailableTools(tools, effectiveToolPolicies)). The configured-agent filter (filterToolsForConfiguredAgent) is called at L596 inside the sub-agent tool factory closure.",
+    "dispatch_seam_real_path": "AgentRuntime constructor at sdk/packages/agents/src/agent-runtime.ts:862 (takes AgentRuntimeConfig). tools[] -> initialize() -> Map.set(tool.name, tool). prepareToolExecution -> this.tools.get(name) -> executePreparedTool -> onToolRuntimeOutcome hook.",
+    "child_construction_seam_real_path": "createConfiguredAgentTools at sdk/packages/core/src/extensions/tools/team/configured-agent-tool.ts:152. Tool execute() calls options.createSubAgentTools(config, input, ctx) at L166-167 \u2014 the closure defined at runtime-builder.ts:594-617 that runs `filterToolsForConfiguredAgent(createBuiltinToolsList(...), agent)`. Result passed to createDelegatedAgent({ tools, ... }) at L169. createDelegatedAgent at sdk/packages/core/src/extensions/tools/team/delegated-agent.ts:149 calls `new SessionRuntime(config)` \u2014 captured by the test's vi.mock to inspect `config.tools`."
+  },
+  "domains": {
+    "builtin": "covered by dispatch-side B-series (read_files, run_commands, editor, apply_patch, search_codebase, search_files, read_file, skills, submit_and_exit, ask_question \u2014 14 tests), registration-side Section A (run_commands, editor, read_files \u2014 5 tests), and registration-side Section B6 (child runtime receives read_files, run_commands, editor, search_codebase, fetch_web_content).",
+    "skills": "covered by dispatch B1-sk, S12-sk, S12-sk-collision; registration B3-skills-declared (parent-level); registration B5-child-skills-with-executor (child-level: skills executor tied to allowlist).",
+    "completion": "covered by dispatch B1-sae (submit_and_exit).",
+    "human_input": "covered by dispatch B1-aq (ask_question).",
+    "custom": "covered by dispatch S14 (alpha_lookup, alpha_write, beta_lookup \u2014 direct tools[] registration, 3 tests). Scope: dispatch characterization only. Plugin setup()-time registration is out of scope and deferred. SCOPE-NARROWED from 'custom/plugin' to 'custom (direct registration)' per reviewer halt C1 round 1.",
+    "mcp": "NOT_APPLICABLE for SW-CM02 \u2014 dispatcher is identical to builtin dispatch (tools.get exact-name). MCP-specific registration/collision semantics require a real MCP server and are deferred. SW-CM02 scopes explicitly to flat-map dispatch only.",
+    "configured_agent": "covered by REGISTRATION SECTION B (7 tests). The REAL production path is exercised: DefaultRuntimeBuilder.build({ config: { enableSpawnAgent: true, ... } }) with real .cline/agents/<name>.yml files on disk. B1-B3 assert parent-level `built.tools`; B4-B7 invoke the configured-agent tool (subagent_<name>.execute(...)) and observe the captured `agentConstructorSpy.mock.calls.at(-1)[0].tools` \u2014 the actual child runtime's tool list produced by `filterToolsForConfiguredAgent(createBuiltinToolsList(...), agent)` at runtime-builder.ts:594-617. Child-runtime evidence covers canonicalization (B4: bash->run_commands, read_file->read_files), skills executor injection (B5), no-allowlist defaults (B6), and filter composition with toolPolicies (B7).",
+    "policy": "covered by REGISTRATION SECTION A (5 tests) for parent-level filter and REGISTRATION SECTION B7 (1 test) for child-level filter composition. The REAL production path is exercised: DefaultRuntimeBuilder.build({ config: { toolPolicies: { run_commands: { enabled: false } } } }) at L595/L603. B7 specifically tests that toolPolicies applied at the parent level compose correctly with the configured-agent allowlist filter \u2014 when the allowlist is `bash` (canonical: run_commands) AND run_commands is policy-disabled, the child receives an empty toolset (correct intersection behavior)."
+  },
+  "test_layout": {
+    "file_1": {
+      "path": "sdk/packages/agents/src/runtime/routing/handler-tool-routing-evals01.swcm02.test.ts",
+      "purpose": "Dispatch-layer evidence \u2014 real AgentRuntime end-to-end",
+      "tests": 48,
+      "describe_blocks": 9,
+      "covers": "D5..D9 (executor dispatch, argument preservation, context isolation, result correlation, collision precedence)"
+    },
+    "file_2": {
+      "path": "sdk/packages/core/src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts",
+      "purpose": "Registration-seam evidence \u2014 real DefaultRuntimeBuilder.build() end-to-end + child-runtime observation via real production child construction seam",
+      "tests": 12,
+      "describe_blocks": 2,
+      "covers": "D1..D4 (registry omission, alias misresolution, policy misapplication, configured-agent filter defect) \u2014 with BOTH parent-level and child-level assertions for the configured-agent filter."
+    }
+  },
+  "corpus": {
+    "cases": 60,
+    "passed": 60,
+    "failed": 0,
+    "distribution": {
+      "canonical_builtins_dispatch": 14,
+      "adversarial_exact_name_dispatch": 8,
+      "aliases_dispatch": 11,
+      "skills_dispatch": 2,
+      "custom_dispatch": 3,
+      "policy_approval_path_dispatch": 2,
+      "args_context_correlation_dispatch": 4,
+      "parallel_correlation_dispatch": 1,
+      "error_taxonomy_dispatch": 3,
+      "filter_available_tools_registration": 5,
+      "filter_configured_agent_parent_level_registration": 3,
+      "filter_configured_agent_child_runtime_registration": 4
+    }
+  },
+  "failures": [],
+  "production_change": false,
+  "gates": {
+    "files": 2,
+    "tests": 60,
+    "exit": 0,
+    "error_scan_matches": 0,
+    "dispatch_file_pool": "bun test (gate-of-record); vitest vmThreads / forks also passes 48/48",
+    "registration_file_pool": "bun test (gate-of-record); vitest default forks pool also passes 12/12",
+    "typecheck_agents": "PASS (TSC_RC=0; zero diagnostics introduced by the new test file)",
+    "typecheck_core": "PASS for new file (NEW_FILE_DIAGNOSTICS=0). Pre-existing 25 diagnostics in compaction.test.ts / definitions.test.ts / bash.supervised*.test.ts / command-execution-plan.test.ts are baseline noise NOT introduced by this ACT.",
+    "lint": "PASS (BIOME_RC=0; 1 info, 0 warnings, 0 errors across both new test files)",
+    "diff_check": "PASS (DIFF_CHECK_RC=0; only new untracked files; no tracked-file changes)",
+    "substrate_conservation": {
+      "agents_full_suite_minus_pre_existing_vi_hoisted": "26 files / 455 tests pass (no regressions). The pre-existing vi.hoisted issue in agent-runtime.provider-form.test.ts is a vitest-only API that bun-test does not implement \u2014 NOT caused by this ACT.",
+      "core_orchestration_suite_with_isolate": "4 files / 111 tests pass (no regressions) \u2014 runtime-builder.test.ts (35), runtime-builder.configured-agent-execution.test.ts (2), session-runtime-orchestrator.test.ts (62), runtime-builder.routing-evals.swcm02.test.ts (12)."
+    }
+  },
+  "discriminators_observed": {
+    "D1_registry_omission": "Reproduced as expected at the registration seam (filterAvailableTools strips run_commands) and at dispatch (tool_not_found outcome). NOT a defect \u2014 documented behavior. Coverage: A1, A2.",
+    "D2_alias_misresolution": "Not reproduced at top-level dispatch (alias scope-boundary enforced). S11 confirms each of 11 documented aliases does NOT silently re-route at the dispatcher. At the configured-agent filter seam: B1 (parent-level canonicalization) and B4 (CHILD-level canonicalization via real production seam) confirm canonicalization.",
+    "D3_policy_misapplication": "Not reproduced. filterAvailableTools correctly removes tools whose toolPolicies[name].enabled=false. Verified end-to-end via the REAL DefaultRuntimeBuilder.build() path. Coverage: A1-A5.",
+    "D4_configured_agent_filter_defect": "Not reproduced. filterToolsForConfiguredAgent correctly scopes the sub-agent tool list per the configured-agent's tools allowlist. Verified end-to-end via the REAL DefaultRuntimeBuilder.build({ enableSpawnAgent: true }) path with real .yml files. Coverage: B1, B2, B3 (parent-level) and B4, B5, B6, B7 (child-level via real production seam).",
+    "D5_executor_dispatch_defect": "Not reproduced. tools.get returns exactly the registered tool. S10 adversarial cases (substring, hyphen, uppercase, trailing underscore, leading slash, whitespace padding) all registry-miss.",
+    "D6_argument_corruption": "Not reproduced. S18-deep witnesses a deeply-nested + unicode + mixed-type input payload arrives at the executor verbatim.",
+    "D7_context_crosstalk": "Not reproduced. S19-A and S19-A+B confirm sessionId/conversationId isolation.",
+    "D8_result_correlation_defect": "Not reproduced. S20 produces independent outcomes keyed by toolCallId with no swap.",
+    "D9_collision_precedence_defect": "Not reproduced. S12-sk-collision confirms distinct names route independently; same-name registrations are last-registration-wins (deterministic)."
+  },
+  "verdict": "PASS_HANDLER_TOOL_ROUTING_EVALS",
+  "successor_act": "ACT-CLINEMM-SW-CM03-GUIDE-SUFFICIENCY-PROGRESSIVE-DISCLOSURE-EVALS01",
+  "live_provider_credential_required": false,
+  "production_seam_exercised": true,
+  "child_runtime_seam_observed": true,
+  "halt_register_status": {
+    "HALT_PRODUCTION_ROUTING_SEAM_NOT_EXERCISED": "RESOLVED in correction round 1",
+    "HALT_CONFIGURED_AGENT_PRODUCTION_SEAM_NOT_EXERCISED": "RESOLVED in correction round 2"
+  },
+  "notes": [
+    "All 60 tests across 11 describe blocks pass under `bun test` (gate-of-record). Default vitest forks pool also passes both files with the documented post-suite ForksPoolWorker kill EPERM artifact (NOT a test failure).",
+    "No live model credentials used. SW-CM02 is a runtime dispatch characterization; the model's tool-selection decision is upstream of this boundary and not in scope (per ACT \u00a723).",
+    "Post-reviewer-halt round 1: local mirrors of CONFIGURED_AGENT_TOOL_NAME_ALIASES, resolveConfiguredAgentToolName, and filterToolsForConfiguredAgentLocal were REMOVED from the dispatch test file. The configured-agent and policy-disable domains are exercised through the REAL DefaultRuntimeBuilder.build() production path.",
+    "Post-reviewer-halt round 2 (current): B4 was REWRITTEN and B5, B6, B7 were ADDED to observe the SUB-AGENT runtime's toolset. The child-runtime observation is achieved by invoking the configured-agent tool (`subagent_<name>.execute(...)`) and capturing the AgentConfig passed to `new SessionRuntime(config)` via `vi.mock('./session-runtime-orchestrator', ...)` \u2014 the SAME pattern as the pre-existing `runtime-builder.configured-agent-execution.test.ts`. The captured `config.tools` is the actual output of `filterToolsForConfiguredAgent(createBuiltinToolsList(...), agent)` at runtime-builder.ts:594-617 \u2014 the production child construction seam.",
+    "Production change: NO. diff_check_rc=0 confirms only new untracked files; no tracked-file changes."
+  ]
+}

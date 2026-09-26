@@ -1,0 +1,29 @@
+[0m[1mbun test [0m[2mv1.3.13 (bf2e2cec)[0m
+[0m
+src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts:
+[0m[33mWarning[0m[2m:[0m [1mThe 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.[0m
+[0m      [2mat [0m[0m[1m[3mwarnOnDeactivatedColors[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m33[0m[2m:[33m24[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mgetColorDepth[0m[2m ([0m[0m[36minternal:tty[0m[2m:[0m[33m42[0m[2m:[33m39[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mshouldColorize[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m14[0m[2m:[33m109[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mrefresh[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m18[0m[2m:[33m31[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:util/colors[0m[2m ([0m[0m[36minternal:util/colors[0m[2m:[0m[33m24[0m[2m:[33m16[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3minternal:assert/assertion_error[0m[2m ([0m[0m[36minternal:assert/assertion_error[0m[2m:[0m[33m2[0m[2m:[33m187[0m[2m)[0m
+[0m      [2mat [0m[0m[1m[3mloadAssertionError[0m[2m ([0m[0m[36mnode:assert[0m[2m:[0m[33m28[0m[2m:[33m96[0m[2m)[0m
+
+[0m[32m✓[0m [0mA: filterAvailableTools via DefaultRuntimeBuilder.build({ toolPolicies })[2m >[0m[1m A1-disabled-tool: toolPolicies.run_commands.enabled=false strips run_commands from runtime.tools[0m [0m[2m[[1m167.92ms[0m[2m][0m
+[0m[32m✓[0m [0mA: filterAvailableTools via DefaultRuntimeBuilder.build({ toolPolicies })[2m >[0m[1m A2-disabled-tool-dispatch: AgentRuntime with the filtered list registry-misses run_commands[0m [0m[2m[6.34ms[0m[2m][0m
+[0m[32m✓[0m [0mA: filterAvailableTools via DefaultRuntimeBuilder.build({ toolPolicies })[2m >[0m[1m A3-policy-only-on-target: toolPolicies on run_commands does NOT strip unrelated tools[0m [0m[2m[1.92ms[0m[2m][0m
+[0m[32m✓[0m [0mA: filterAvailableTools via DefaultRuntimeBuilder.build({ toolPolicies })[2m >[0m[1m A4-disabled-tool-no-effect: toolPolicies with enabled=true (or absent) keeps run_commands[0m [0m[2m[1.58ms[0m[2m][0m
+[0m[32m✓[0m [0mA: filterAvailableTools via DefaultRuntimeBuilder.build({ toolPolicies })[2m >[0m[1m A5-multi-disable: toolPolicies disabling two tools removes both[0m [0m[2m[1.39ms[0m[2m][0m
+[0m[32m✓[0m [0mB: filterToolsForConfiguredAgent via DefaultRuntimeBuilder.build({ enableSpawnAgent: true })[2m >[0m[1m B1-allowlist-canonical: configured agent with `tools: [bash, read_file]` canonicalizes aliases to {run_commands, read_files}[0m [0m[2m[[1m13.24ms[0m[2m][0m
+[0m[32m✓[0m [0mB: filterToolsForConfiguredAgent via DefaultRuntimeBuilder.build({ enableSpawnAgent: true })[2m >[0m[1m B2-no-tools: configured agent with no `tools:` line keeps all builtins[0m [0m[2m[2.96ms[0m[2m][0m
+[0m[32m✓[0m [0mB: filterToolsForConfiguredAgent via DefaultRuntimeBuilder.build({ enableSpawnAgent: true })[2m >[0m[1m B3-skills-declared: configured agent with `skills: [foo]` adds `skills` to its sub-agent allowlist[0m [0m[2m[3.71ms[0m[2m][0m
+[0m[32m✓[0m [0mB: filterToolsForConfiguredAgent via DefaultRuntimeBuilder.build({ enableSpawnAgent: true })[2m >[0m[1m B4-child-canonical: with `tools: [bash, read_file]`, child receives canonicalized {run_commands, read_files} only[0m [0m[2m[3.62ms[0m[2m][0m
+[0m[32m✓[0m [0mB: filterToolsForConfiguredAgent via DefaultRuntimeBuilder.build({ enableSpawnAgent: true })[2m >[0m[1m B5-child-skills-with-executor: with `skills: [review]`, child receives a `skills` tool tied to the configured-agent's allowlist[0m [0m[2m[5.58ms[0m[2m][0m
+[0m[32m✓[0m [0mB: filterToolsForConfiguredAgent via DefaultRuntimeBuilder.build({ enableSpawnAgent: true })[2m >[0m[1m B6-child-no-tools: with no `tools:` line, child receives full permitted parent/builtin set[0m [0m[2m[2.66ms[0m[2m][0m
+[0m[32m✓[0m [0mB: filterToolsForConfiguredAgent via DefaultRuntimeBuilder.build({ enableSpawnAgent: true })[2m >[0m[1m B7-child-policy-disable: with `tools: [bash]` AND toolPolicies.run_commands.enabled=false, child does NOT receive run_commands[0m [0m[2m[2.61ms[0m[2m][0m
+
+[0m[32m 12 pass[0m
+[0m[2m 0 fail[0m
+ 45 expect() calls
+Ran 12 tests across 1 file. [0m[2m[[1m707.00ms[0m[2m][0m

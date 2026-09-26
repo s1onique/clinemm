@@ -1,0 +1,24 @@
+{
+  "$schema": "ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01/03-alias-map.json",
+  "source": "sdk/packages/core/src/runtime/orchestration/runtime-builder.ts:95-107 (CONFIGURED_AGENT_TOOL_NAME_ALIASES)",
+  "scope_boundary": "Only fires inside filterToolsForConfiguredAgent (L114-129). NOT at top-level AgentRuntime dispatch.",
+  "canonical_resolution_helper": "resolveConfiguredAgentToolName at runtime-builder.ts:109-112: input.trim().toLowerCase() then map lookup. Unknown names pass through unchanged.",
+  "real_seam_exercised_parent_level": "sdk/packages/core/src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts > Section B1-B3 (parent-level built.tools observation: B1 verifies that `tools: [bash, read_file]` in a real .cline/agents/<name>.yml yields a parent-level lead runtime where the configured-agent tool is registered).",
+  "real_seam_exercised_child_level": "sdk/packages/core/src/runtime/orchestration/runtime-builder.routing-evals.swcm02.test.ts > Section B4 (CHILD-runtime observation: invokes subagent_reviewer.execute(...) and captures the AgentConfig.tools that the production filterToolsForConfiguredAgent(createBuiltinToolsList(...), agent) produced for the sub-agent. Asserts the child gets [read_files, run_commands] — canonical names — and does NOT contain literal `bash` or `read_file` aliases).",
+  "dispatch_seam_observable_consequence": "At top-level dispatch, none of the documented aliases silently re-route. Each alias either registry-misses (because the alias name is not registered as a tool) or routes to its own distinct registered handler (read_file -> read_file, search_files -> search_files). Verified in sdk/packages/agents/src/runtime/routing/handler-tool-routing-evals01.swcm02.test.ts > Section 11 (S11-alias cases for all 11 documented aliases).",
+  "entries": {
+    "apply_diff": "editor",
+    "attempt_completion": "submit_and_exit",
+    "bash": "run_commands",
+    "execute_command": "run_commands",
+    "list_code_definition_names": "search_codebase",
+    "list_files": "run_commands",
+    "read_file": "read_files",
+    "replace_in_file": "editor",
+    "search_files": "search_codebase",
+    "use_skill": "skills",
+    "write_to_file": "editor"
+  },
+  "count": 11,
+  "note_on_read_file_and_search_files": "Two entries (read_file and search_files) are registered in the @cline/agents default bundle as DISTINCT tools, not aliases. At the configured-agent filter, they canonicalize to the sibling name (read_file -> read_files, search_files -> search_codebase). At top-level dispatch, they are dispatched exactly to their own registered handler (read_file -> read_file executor, search_files -> search_files executor). B4-child-canonical verifies that `tools: [bash, read_file]` canonicalizes to `[run_commands, read_files]` in the CHILD runtime's toolset — i.e. the configured-agent filter does NOT preserve the alias naming."
+}
