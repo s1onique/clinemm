@@ -1,0 +1,38 @@
+{
+  "act_id": "ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01",
+  "live_metrics_status": "CAPTURE_INSUFFICIENT",
+  "reason": "No provider credentials available in this sandbox. Live model execution per ACT Section 13 not possible.",
+  "metrics": {
+    "precision": null,
+    "recall": null,
+    "exact_match_rate": null,
+    "no_skill_accuracy": null,
+    "overlap_acceptability_rate": null,
+    "paraphrase_consistency_rate": null,
+    "disabled_skill_violation_count": null,
+    "explicit_invocation_success_rate": null
+  },
+  "production_seam_observables": {
+    "trigger_surface_contents": "skill NAMES only (alphabetical sort, disabled filter applied)",
+    "descriptions_leak_to_trigger_surface": false,
+    "disabled_skills_visible_to_model": false,
+    "tool_call_accepts_enabled_skill": true,
+    "tool_call_rejects_unknown_skill": true,
+    "tool_call_rejects_disabled_skill": true,
+    "schema_validation_rejects_empty_name": true,
+    "slash_command_no_match_passthrough": true,
+    "slash_command_match_skills_tool_available_passthrough": true,
+    "slash_command_match_no_skills_tool_textual_expansion": true,
+    "snapshot_refresh_after_filesystem_change": true
+  },
+  "production_seam_observable_disqualifiers": [
+    "D1 metadata omission: NOT REPRODUCED (enabled names reach tool.description)",
+    "D2 enablement defect: NOT REPRODUCED (disabled skills filtered from tool.description)",
+    "D5 tool-call rejection: NOT REPRODUCED (unknown/disabled both rejected with informative errors)",
+    "D6 stale skill catalog: NOT REPRODUCED (refreshType("skill") updates snapshot)",
+    "D7 explicit invocation parser defect: NOT REPRODUCED (slash command correctly resolves with both expandSkillCommands branches)"
+  ],
+  "description_ablation_required": false,
+  "description_ablation_reason": "Description-driven miss (D3/D4) is only observable via live model execution. Without live metrics, there is nothing to ablate. The trigger surface observable from production seams contains ONLY skill NAMES — descriptions are not in scope at the trigger boundary, so a description-ablation study would be vacuous in ClineMM's current architecture.",
+  "notes": "Per ACT Section 25, the verdict for this sandbox run is CAPTURE_INSUFFICIENT. The runtime-seam characterization (D1/D2/D5/D6/D7 all negative — no runtime defect) is recorded as the load-bearing evidence; the model-driven metrics (precision/recall/paraphrase consistency/overlap acceptability/disabled_violation/explicit_invocation_success) are deferred to a future run with provider credentials."
+}

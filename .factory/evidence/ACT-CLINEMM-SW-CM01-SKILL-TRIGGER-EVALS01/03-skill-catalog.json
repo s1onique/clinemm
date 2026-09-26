@@ -1,0 +1,55 @@
+{
+  "act_id": "ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01",
+  "purpose": "fixture skill catalog (6 skills, deliberate overlap) for SW-CM01 trigger evals",
+  "fixture_count": 6,
+  "skills": [
+    {
+      "id": "postgres-operations",
+      "name": "postgres-operations",
+      "description": "PostgreSQL administration, SQL diagnostics, table/index sizing, query performance, vacuum, locks and database operations.",
+      "kind": "skill",
+      "disabled_default": false
+    },
+    {
+      "id": "kubernetes-operations",
+      "name": "kubernetes-operations",
+      "description": "Kubernetes workloads, pods, deployments, StatefulSets, Services, PVCs, events, kubectl diagnostics and cluster operations.",
+      "kind": "skill",
+      "disabled_default": false
+    },
+    {
+      "id": "kubernetes-postgres",
+      "name": "kubernetes-postgres",
+      "description": "PostgreSQL running on Kubernetes, including StatefulSets, persistent volumes, failover and operator-managed database clusters.",
+      "kind": "skill",
+      "disabled_default": false
+    },
+    {
+      "id": "release-notes",
+      "name": "release-notes",
+      "description": "Generate release notes and changelogs from commits or pull requests.",
+      "kind": "skill",
+      "disabled_default": false
+    },
+    {
+      "id": "spreadsheet-analysis",
+      "name": "spreadsheet-analysis",
+      "description": "Analyze CSV/XLSX tabular data, statistics and spreadsheet transformations.",
+      "kind": "skill",
+      "disabled_default": false
+    },
+    {
+      "id": "aws-deployment",
+      "name": "aws-deployment",
+      "description": "Deploy or update applications and infrastructure on AWS.",
+      "kind": "skill",
+      "disabled_default": false
+    }
+  ],
+  "design_notes": [
+    "S1 (postgres-operations) and S3 (kubernetes-postgres) and S2 (kubernetes-operations) overlap intentionally: O01..O20 measure precision under description ambiguity.",
+    "Trigger surface in ClineMM is the SKILL NAME ONLY (definitions.ts:1027-1039 — only `name` is projected into the tool description; descriptions are loaded only after the model invokes the tool).",
+    "E005 tests the parse failure mode: typed slash command uses 'aws-deploy' but canonical name is 'aws-deployment'; the runtime must NOT find a match.",
+    "D001..D003 test enabled/disabled symmetry: when the skill is in the fixture catalog but disabled=true, it must NOT appear in the model's Available skills list and the tool must reject its invocation."
+  ]
+}

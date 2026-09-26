@@ -1,0 +1,82 @@
+{
+  "act_id": "ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01",
+  "purpose": "skill trigger-selection behavioral qualification",
+  "entry_head": "8b8ece1c8",
+  "predecessor_act": "ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01",
+  "sequence_position": "SW-CM04 -> SW-CM01 (this) -> SW-CM02 -> SW-CM03",
+  "production_seam": {
+    "skill_discovery": "apps/vscode/src/core/context/instructions/user-instructions/skills.ts (VSCode legacy path); sdk/packages/core/src/extensions/config/user-instruction-config-loader.ts (SDK runtime path)",
+    "skill_enablement": "apps/vscode/src/core/controller/file/toggleSkill.ts -> setSkillDisabledInFrontmatter() (writes SKILL.md frontmatter `disabled: true`); sdk/packages/core/src/extensions/config/user-instruction-plugin.ts:75-104 filters `disabled===true`",
+    "skill_metadata_seam": "sdk/packages/core/src/extensions/tools/definitions.ts:1027-1039 — Object.defineProperty(tool, 'description', { get }) projects ONLY skill NAMES into the tool description; descriptions deferred until tool invocation. Static base description preserved verbatim from definitions.ts:998-1004.",
+    "skill_trigger_tool": "name='skills' (alias from upstream 'use_skill' via runtime-builder.ts:105 CONFIGURED_AGENT_TOOL_NAME_ALIASES). Schema SkillsInputSchema={skill,args?}. Zod-validated at definitions.ts:1014.",
+    "skill_trigger_execution_seam": "sdk/packages/core/src/extensions/config/user-instruction-plugin.ts:174-217 createUserInstructionSkillsExecutor() returns a SkillsExecutorWithMetadata. resolveSkillRecord (L106-172) does exact-id match then bareName suffix match. Errors: disabled / ambiguous / not-found / no-skills-available. Idempotency guard via runningSkills Set.",
+    "explicit_invocation_seam": "sdk/packages/core/src/extensions/config/runtime-commands.ts:115-144 resolveRuntimeSlashCommandFromWatcher() matches /^\\/(\\S+)/, normalizes via normalizeRuntimeCommandName (L23-35), and honors `expandSkillCommands` option (false when skills tool is available = typed input passes through to the model for tool invocation; true when skills tool is unavailable = textually expand). Workflows ALWAYS expand. apps/vscode/src/sdk/slash-command-expansion.ts is the VSCode-side mid-message expansion.",
+    "model_selection_boundary": "The `skills` tool description string is the trigger surface. Model sees ONLY skill names (alphabetical) plus the static base description. Descriptions of individual skills are loaded only AFTER the tool is invoked."
+  },
+  "corpus": {
+    "prompts": 131,
+    "positive": 25,
+    "negative": 22,
+    "overlap": 20,
+    "paraphrase_intents": 10,
+    "paraphrase_rows": 50,
+    "explicit_invocation": 8,
+    "enabled_disabled_pairs": 6,
+    "skills": 6,
+    "live_attempts": 0
+  },
+  "metrics": {
+    "live_metrics_status": "CAPTURE_INSUFFICIENT",
+    "precision": null,
+    "recall": null,
+    "exact_match_rate": null,
+    "no_skill_accuracy": null,
+    "overlap_acceptability_rate": null,
+    "paraphrase_consistency_rate": null,
+    "disabled_skill_violation_count": null,
+    "explicit_invocation_success_rate": null
+  },
+  "production_seam_observables": {
+    "trigger_surface_contents": "skill NAMES only (alphabetical sort, disabled filter applied)",
+    "descriptions_leak_to_trigger_surface": false,
+    "disabled_skills_visible_to_model": false,
+    "tool_call_accepts_enabled_skill": true,
+    "tool_call_rejects_unknown_skill": true,
+    "tool_call_rejects_disabled_skill": true,
+    "schema_validation_rejects_empty_name": true,
+    "slash_command_no_match_passthrough": true,
+    "slash_command_match_skills_tool_available_passthrough": true,
+    "slash_command_match_no_skills_tool_textual_expansion": true,
+    "snapshot_refresh_after_filesystem_change": true,
+    "snapshot_refresh_after_frontmatter_toggle": true,
+    "D1_reproduced": false,
+    "D2_reproduced": false,
+    "D5_reproduced": false,
+    "D6_reproduced": false,
+    "D7_reproduced": false
+  },
+  "failures": [],
+  "description_ablation": {
+    "performed": false,
+    "classification": "NOT_REQUIRED",
+    "reason": "No live model metrics exist to ablate against. The trigger surface observable from production seams contains ONLY skill NAMES — descriptions are not in scope at the trigger boundary, so a description ablation would be vacuous in ClineMM's current architecture."
+  },
+  "production_change": false,
+  "gates": {
+    "new_files": 1,
+    "new_tests": 23,
+    "test_exit_code": 1,
+    "test_exit_explanation": "vitest exit=1 is the post-suite ForksPoolWorker kill EPERM cleanup noise after all tests pass (same as SW-CM04 base pool). All 23 tests pass.",
+    "typecheck": "PASS (zero new diagnostics in new file; pre-existing TSC_RC=2 baseline in other files unchanged)",
+    "lint": "PASS (BIOME_RC=0; checked 1 file)",
+    "diff_check": "PASS (DIFF_CHECK_RC=0; no tracked-file changes; only new untracked files)",
+    "pre_existing_unrelated_failures": 2,
+    "pre_existing_unrelated_failed_tests": 6,
+    "pre_existing_unrelated_files": [
+      "src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts (3 tests; pre-existing)",
+      "src/extensions/tools/executors/editor.realpath-authority.test.ts (3 tests; pre-existing)"
+    ]
+  },
+  "verdict": "PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT",
+  "successor_act": "ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01 (after a future run with provider credentials enables live model evals)"
+}

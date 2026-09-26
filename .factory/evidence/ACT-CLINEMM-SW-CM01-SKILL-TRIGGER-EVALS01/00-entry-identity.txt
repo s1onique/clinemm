@@ -1,0 +1,9 @@
+ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01
+entry_head=8b8ece1c8
+predecessor=ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01
+sequence=SW-CM04 -> SW-CM01 -> SW-CM02 -> SW-CM03
+purpose=behavioral evaluation / trigger-selection qualification
+production_change=no
+verdict=PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT
+run_date=2026-09-26
+sandbox=clinemm (no provider credentials)

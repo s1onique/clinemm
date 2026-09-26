@@ -12464,3 +12464,80 @@ HALT_ARTIFACT_UNBOUND                     NOT_TRIGGERED
 **Verdict:** PASS_CONTINUATION_PATHOLOGICAL_CORPUS (bounded correction ROUND 2 — bridge gate clean).
 
 The continuation / handoff boundary is provably correct on current HEAD at both the COMPLETION-BARRIER seam and the QUEUE-MECHANICS seam, and the bridge load-bearing executable gate is now CLEAN (`BRIDGE_GATE_EXIT=0`, `ACT_OWNED_NEW_DIAGNOSTICS=0`). The corpus remains permanent regression coverage.
+---
+
+## ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01 — PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT — 2026-09-26
+
+**Status:** PASS (runtime seam characterized). Live model evals: CAPTURE_INSUFFICIENT in this sandbox (no provider credentials).
+
+**Sequence position:** SW-CM04 → SW-CM01 (this) → SW-CM02 → SW-CM03. SW-CM04 is closed and not reopened; SW-CM01 next in sequence.
+
+**Mission:**
+Build a production-faithful evaluation corpus for ClineMM skill triggering. Measure whether the model/runtime:
+1. triggers the correct skill when the request clearly requires it;
+2. does NOT trigger a skill for unrelated requests;
+3. chooses correctly among overlapping skill descriptions;
+4. behaves consistently across paraphrases;
+5. respects enabled/disabled skill state;
+6. distinguishes explicit skill invocation from automatic selection.
+
+This ACT is about TRIGGER SELECTION ONLY — handler/tool routing belongs to SW-CM02; guide sufficiency belongs to SW-CM03.
+
+**Causal seam (the load-bearing observation):**
+- The trigger surface in ClineMM is the `skills` tool description string, constructed at `sdk/packages/core/src/extensions/tools/definitions.ts:1027-1039` via `Object.defineProperty(tool, "description", { get })`. The dynamic suffix is `Available skills: <sorted enabled names>.` — and crucially **ONLY NAMES** are projected; descriptions live inside SKILL.md and load only AFTER the model invokes the tool.
+- This is a stronger progressive-disclosure than upstream Cline documents (upstream says "name + description"; ClineMM narrows to "name only" at the trigger boundary).
+- The model has no view of skill descriptions at trigger time. Its decision is driven by request text vs skill name strings vs the generic base tool description prose.
+
+**Recon (load-bearing):** `.factory/evidence/ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01/01-recon.md`
+- `SKILL_DISCOVERY_SEAM` = `apps/vscode/src/core/context/instructions/user-instructions/skills.ts` (legacy VSCode) + `sdk/packages/core/src/extensions/config/user-instruction-config-loader.ts` (SDK runtime).
+- `SKILL_ENABLEMENT_SEAM` = `setSkillDisabledInFrontmatter` (`skills.ts:67-82`, ENG-1995 — sidebar toggle must also write the frontmatter `disabled` flag) → `UserInstructionConfigWatcher` parses `disabled` → `getConfiguredSkillsFromWatcher` + `listAvailableSkillNames` filter at `user-instruction-plugin.ts:75-104`.
+- `SKILL_METADATA_SEAM` = `definitions.ts:1027-1039` — projects only `name` (with `!disabled` filter). Static base description preserved verbatim.
+- `SKILL_TRIGGER_TOOL` = `skills` (alias from upstream `use_skill` via `runtime-builder.ts:105`); schema `SkillsInputSchema={skill,args?}`; Zod-validated.
+- `SKILL_TRIGGER_EXECUTION_SEAM` = `createUserInstructionSkillsExecutor` (`user-instruction-plugin.ts:174-217`) with `resolveSkillRecord` (L106-172) doing exact-id match → bareName suffix match → disabled / ambiguous / not-found / no-skills-available errors. Idempotency guard via `runningSkills: Set<string>`.
+- `EXPLICIT_INVOCATION_SEAM` = `resolveRuntimeSlashCommandFromWatcher` (`runtime-commands.ts:115-144`); branches on `expandSkillCommands` option (`false` when skills tool is available = typed input passes through; `true` when no skills tool = textually expand). Workflows ALWAYS expand.
+- `MODEL_SELECTION_BOUNDARY` = the `skills` tool description string; model sees ONLY skill NAMES (alphabetical).
+
+**Corpus:** `.factory/evidence/ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01/02-trigger-corpus.jsonl`
+- 131 rows total: 25 positive + 22 negative + 20 overlap + 50 paraphrase (10 intents × 5) + 8 explicit-invocation + 6 enabled/disabled.
+- 6 fixture skills with deliberate overlap (`postgres-operations`, `kubernetes-operations`, `kubernetes-postgres`, `release-notes`, `spreadsheet-analysis`, `aws-deployment`).
+- Skill catalog: `.factory/evidence/ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01/03-skill-catalog.json`.
+- All MUST/MAY/MUST_NOT labels are within the fixture set (validated by Python JSONL parser).
+- Oracle labels per ACT Section 6 (MUST/MAY/MUST_NOT) — avoids turning legitimate ambiguity into false failure.
+
+**Production-seam tests:** `sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts` — 23 tests, all passing. Drives REAL `UserInstructionConfigWatcher` + REAL `createUserInstructionSkillsExecutor` + REAL `createSkillsTool` over a temp skills directory.
+
+Discriminator coverage:
+- **D1 (metadata omission)** — covered: enabled names reach `tool.description`, sorted alphabetically, `Available skills:` suffix present.
+- **D2 (enablement defect)** — covered: disabled sibling skill does NOT appear in `tool.description`; `executor.configuredSkills` marks disabled entry.
+- **D3 (trigger surface boundary)** — covered: NONE of the six fixture description strings (or any 25-char head) leak into `tool.description`; static base description preserved verbatim.
+- **D5 (tool-call rejection)** — covered: enabled → `<command-name>` payload with description+instructions; unknown → `Skill "X" not found. Available skills: ...`; disabled → `Skill "X" is configured but disabled.`; empty name → Zod rejection.
+- **D6 (stale skill catalog)** — covered: `refreshType("skill")` updates the snapshot after filesystem rename / addition / frontmatter toggle.
+- **D7 (explicit invocation parser defect)** — covered: `expandSkillCommands=false` keeps typed input unchanged (skills-tool-available path); `expandSkillCommands=true` textually expands (no-skills-tool path); unknown slash commands pass through; `/aws-deploy` (non-canonical name) does NOT match `aws-deployment`.
+
+**No runtime defect reproduced** across D1/D2/D5/D6/D7.
+
+**Live model evals:** `05-model-eval-raw.jsonl` records CAPTURE_INSUFFICIENT (no `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `CLINE_API_KEY` in this sandbox). Per ACT Section 13 (Provider Evidence Promotion) and Section 25 (CAPTURE_INSUFFICIENT), synthetic/mocked model responses MUST NOT be promoted as live evidence.
+
+**Description ablation:** `07-description-ablation.jsonl` records `NOT_REQUIRED`. The trigger surface observable from production seams contains ONLY skill NAMES — descriptions are not in scope at the trigger boundary, so a description ablation would be vacuous in ClineMM's current architecture. Per ACT Section 18, ablations require live metrics to compare against.
+
+**Gates:**
+- New files: 1
+- New tests: 23
+- `Test Files  1 passed (1)` / `Tests  23 passed (23)` (vitest exit=1 is the post-suite `ForksPoolWorker kill EPERM` cleanup noise after all tests pass — same pattern as SW-CM04 base pool).
+- `BIOME_RC=0` (1 file checked, no fixes applied).
+- `TSC_RC=2` baseline — zero new diagnostics introduced by the new test file (`grep -c 'skill-trigger-evals01' /tmp/swcm01-tsc.log` returns 0). 68 pre-existing diagnostic lines are in unrelated files.
+- `DIFF_CHECK_RC=0`; `git status --short` shows only untracked files: `.factory/evidence/ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01/` and `sdk/packages/core/src/extensions/tools/__tests__/`. NO production code modified.
+- Pre-existing failures NOT caused by this ACT: `src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts` (3) and `src/extensions/tools/executors/editor.realpath-authority.test.ts` (3). Confirmed identical on unmodified base via `git stash` (no local changes to save) → identical failure pattern.
+
+**Substrate conservation (all UNCHANGED):**
+- SW-CM04 base corpus: 16 files / 94 tests.
+- SW-CM04 real bridge: 1 file / 5 tests.
+- C10-FILTER-ABLATION01: unchanged.
+- BNCA-REPAIR01: unchanged.
+- BackgroundNotifyCoordinator authority: unchanged.
+
+**Production change:** NO.
+
+**Verdict:** PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT.
+
+**Successor:** SW-CM02 — `ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01` (after a future run with provider credentials enables live model evals). No SW-CM01 successor repair ACT is opened (no runtime defect reproduced).

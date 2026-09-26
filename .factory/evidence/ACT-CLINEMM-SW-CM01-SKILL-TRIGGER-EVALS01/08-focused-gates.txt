@@ -1,0 +1,100 @@
+08-focused-gates.txt
+===================
+
+ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01 focused-gates artifact.
+
+Test file
+---------
+sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
+
+Pool
+----
+forks (default for sdk/packages/core/vitest.config.ts; SW-CM04-style
+vmThreads override not needed — no worker-thread-only APIs in this test).
+
+Command
+-------
+bunx vitest run --config vitest.config.ts --project @cline/core \
+    src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
+
+Result
+------
+Test Files  1 passed (1)
+Tests       23 passed (23)
+Duration    ~150ms
+Exit code   1 (vitest post-suite ForksPoolWorker kill EPERM cleanup noise,
+             same pattern as SW-CM04 base pool; all 23 tests pass BEFORE
+             the EPERM worker-cleanup fires).
+
+Raw output is in 04-runtime-contract-tests.raw.txt.
+
+Substrate conservation
+----------------------
+SW-CM04 base corpus (16 files / 94 tests)   : unchanged (this ACT adds
+                                               a NEW file in the base
+                                               vitest scope; the existing
+                                               SW-CM04 bridge pool is not
+                                               touched).
+SW-CM04 real bridge (1 file / 5 tests)       : unchanged.
+C10-FILTER-ABLATION01                        : unchanged.
+BNCA-REPAIR01                                : unchanged.
+BackgroundNotifyCoordinator authority        : unchanged.
+
+Pre-existing failures (NOT caused by this ACT, NOT in scope to repair)
+-----------------------------------------------------------------------
+src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts
+        : 3 tests failed  (pre-existing; same failures on the unmodified
+          base — confirmed via `git stash` with no local changes to
+          save, then rerun; identical failure pattern)
+src/extensions/tools/executors/editor.realpath-authority.test.ts
+        : 3 tests failed  (pre-existing; same as above)
+
+These 6 pre-existing failures are out of scope for SW-CM01 trigger evals.
+
+Biome
+-----
+bun biome lint sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
+BIOME_RC=0  (Checked 1 file in 38ms. No fixes applied.)
+
+Typecheck
+---------
+sdk/packages/core tsc --noEmit -p tsconfig.json
+TSC_RC=2 (pre-existing baseline; zero new diagnostics introduced by
+          skill-trigger-evals01.swcm01.test.ts — `grep -c
+          'skill-trigger-evals01' /tmp/swcm01-tsc.log` returns 0).
+The 68 pre-existing diagnostic lines are all in other files unrelated to
+this ACT.
+
+Diff check
+----------
+git --no-pager diff --check HEAD
+DIFF_CHECK_RC=0  (no production code modified; only new untracked files).
+
+Tracked-file diff
+-----------------
+$ git status --short
+?? .factory/evidence/ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01/
+?? sdk/packages/core/src/extensions/tools/__tests__/
+
+Production change: NO.
+
+Verdict
+-------
+PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT
+  - Production-seam characterization: PASS (23/23 tests; no runtime
+    defect reproduced across D1/D2/D5/D6/D7 discriminators).
+  - Live model evals: CAPTURE_INSUFFICIENT (no provider credentials in
+    this sandbox). Per ACT Section 25, deferred to a future run.
+
+Successor selection
+-------------------
+Per ACT Section 26: SW-CM01's trigger boundary is now characterized for
+the runtime seam. Live model metrics require a sandbox with provider
+credentials.
+
+In a future run with provider credentials, the next step is SW-CM02
+(ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01): once the model has
+selected a skill, does Cline route to the correct handler/tool/subsystem?
+
+No runtime defect was reproduced in this ACT, so no SW-CM01 successor
+repair ACT is opened.

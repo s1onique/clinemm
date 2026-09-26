@@ -1,0 +1,92 @@
+04-runtime-contract-tests.txt
+============================
+
+Production-seam characterization of the ClineMM SKILL TRIGGER boundary.
+
+Approach
+--------
+1. Built a temp skills directory containing 6 fixture SKILL.md files
+   (postgres-operations, kubernetes-operations, kubernetes-postgres,
+    release-notes, spreadsheet-analysis, aws-deployment).
+2. Constructed a REAL `UserInstructionConfigWatcher` pointed at the temp
+   dir via the production `createUserInstructionConfigWatcher` factory.
+3. Constructed a REAL `SkillsExecutorWithMetadata` via the production
+   `createUserInstructionSkillsExecutor` factory.
+4. Constructed a REAL `skills` tool via the production `createSkillsTool`
+   factory.
+5. Asserted the trigger surface invariants described in
+   `.factory/evidence/ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01/01-recon.md`.
+
+Test file
+---------
+sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
+
+Pool
+----
+forks (default for sdk/packages/core/vitest.config.ts)
+
+Summary
+-------
+Test Files: 1 passed (1)
+Tests:      23 passed (23)
+Duration:   ~150ms
+Exit code:  vitest exits 1 due to a post-suite `ForksPoolWorker kill EPERM`
+            cleanup error that fires AFTER all tests pass (same pattern as
+            the existing SW-CM04 base pool). All 23 tests themselves pass;
+            the EPERM noise does not affect test results.
+
+Discriminator coverage
+----------------------
+D1 (metadata omission) — covered:
+  • "tool.description contains every enabled skill name"
+  • "tool.description contains the 'Available skills: ...' suffix"
+  • "enabled names appear sorted alphabetically in the suffix"
+  • "executor.configuredSkills carries id/name/disabled for every fixture skill"
+
+D2 (enablement defect) — covered:
+  • "a disabled sibling skill does not appear in tool.description"
+  • "executor.configuredSkills marks the disabled entry as disabled=true"
+
+D3 (trigger surface boundary) — covered:
+  • "no fixture skill description string appears in tool.description"
+  • "the static base description is preserved verbatim"
+
+D5 (tool-call rejection) — covered:
+  • "known enabled skill returns <command-name> payload with description + instructions"
+  • "unknown skill name returns the 'not found' error and lists available skills"
+  • "disabled skill returns the 'configured but disabled' error"
+  • "schema validation rejects empty skill name"
+
+D6 (stale skill catalog) — covered:
+  • "renaming an SKILL.md file on disk updates the description after refreshType"
+  • "adding a new SKILL.md file on disk extends the description after refreshType"
+  • "toggling a SKILL.md frontmatter disabled flag updates availability"
+
+D7 (explicit invocation parser) — covered:
+  • "expandSkillCommands=false (skills-tool-available path) returns the typed input unchanged"
+  • "expandSkillCommands=true (no-skills-tool path) textually expands matched skills"
+  • "non-skill prefix leaves input unchanged"   (e.g. /aws-deploy — not canonical)
+  • "unknown slash command passes through unchanged"
+  • "input without leading slash passes through unchanged"
+  • "collapses leading // to / then tries to match"
+  • "invoking the skill tool with a slash-parsed name returns its payload"
+  • "invoking the skill tool with the unmatched name returns 'not found'"
+
+Boundary confirmation
+--------------------
+The ACT's load-bearing invariant is that the trigger surface contains ONLY
+the skill NAMES. Tests D3 above confirm this: NONE of the six fixture
+description strings (or any 25-char head of them) appear in tool.description.
+The base description ("Execute a skill within the main conversation. ...
+When a skill matches the user's request, invoking this tool is a blocking
+requirement before any other response. Never mention a skill without
+invoking this tool.") is preserved verbatim.
+
+No runtime defect detected (D1/D2/D5/D6/D7) for the production seam.
+Description-driven miss (D3/D4) is observable only via live model execution
+— see `05-model-eval-raw.jsonl` and `06-trigger-metrics.json` for the
+CAPTURE_INSUFFICIENT report.
+
+Raw output
+----------
+Full vitest output preserved in `04-runtime-contract-tests.raw.txt`.
