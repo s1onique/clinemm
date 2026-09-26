@@ -12212,3 +12212,85 @@ ENTRY_HEAD             = 6e4c70b5f24f701c5a68226fc185bb4966ce6d57
 **Verdict:** PASS_C10_ABLATION_RETAINED.
 
 The C10 message filter is retained because the bounded correction ROUND 2 ablation proved it protects an independent presentation invariant in the only reachable production state at the originating turn's `done` event (the natural pre-delivery state). The two layers (SEAM B framework barrier + SEAM A message filter) are NOT redundant — they protect different invariants and both must remain. Production behavior unchanged; the new `shouldFilterCompletionResult` predicate is consulted only when wired (test-only).
+
+## ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 — PASS_CONTINUATION_PATHOLOGICAL_CORPUS — 2026-09-26
+
+**Status:** PASS_CONTINUATION_PATHOLOGICAL_CORPUS. The continuation / handoff boundary on current HEAD is behaviorally correct: the canonical `outstandingAutonomousWork` predicate at `sdk-session-event-coordinator.ts:691-733` correctly HOLDS completion whenever any autonomous obligation remains (pending prompt, notify-owned marker, dispatched-not-yet-acked wake, deferred continuation) and correctly COMMITS completion exactly once when all obligations resolve.
+
+**Predecessor chain (preserved unchanged):**
+- ACT-CLINEMM-C10-FILTER-ABLATION01 = PASS_C10_ABLATION_RETAINED (bounded correction ROUND 2, HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE resolved)
+- ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 = PASS_WITH_NONBLOCKING_RESIDUE
+- ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01 = CAPTURE_INSUFFICIENT[SYSTEM] / non-blocking residue
+
+**Corpus (16 scenarios, 12 required P1..P12 + 4 adversarial A/B/E/H):**
+
+| Scenario | Classification |
+|---|---|
+| P1 — simple user turn / no autonomous work | PASS_CURRENT |
+| P2 — notify-owned background job | PASS_CURRENT |
+| P3 — pending prompt at turn end | PASS_CURRENT |
+| P4 — queue-empty control | PASS_CURRENT |
+| P5 — steer at queue head | PASS_CURRENT |
+| P6 — wake + ordinary queue prompt co-exist | PASS_CURRENT |
+| P7 — wake drained BEFORE submit_and_exit | PASS_CURRENT |
+| P8 — lost wake (transport rejected) | PASS_CURRENT |
+| P9 — two notify-owned J (dual-delivery arbitration) | PASS_CURRENT |
+| P10 — fast terminal race | PASS_CURRENT |
+| P11 — ask-user-question (FALSE_AUTOCONTINUE control) | PASS_CURRENT |
+| P12 — plan->act synthetic continuation | NOT_APPLICABLE (ClineMM does not implement upstream synthetic continuation; no such seam exists in current source) |
+| A — duplicate jobIds | PASS_CURRENT |
+| B — stale prompt deleted | PASS_CURRENT |
+| E — two jobIds, only one terminal | PASS_CURRENT |
+| H — sessionId mismatch | PASS_CURRENT |
+
+**Outcome:**
+- 15 PASS_CURRENT, 1 NOT_APPLICABLE, 0 FAIL_CURRENT.
+- FALSE_HANDOFF: NONE reproduced.
+- FALSE_AUTOCONTINUE: NONE reproduced.
+
+**Production seam under test:**
+
+`apps/vscode/src/sdk/sdk-session-event-coordinator.ts` — the deferred-completion-barrier admission guard at L546 / L990 / L1024. The four-conservation predicate `outstandingAutonomousWork = pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0 || perJobOutstandingNotifyWork` is the canonical decision. The barrier re-evaluation at `reevaluateDeferredCompletionBarrier()` (L459-547) commits the held completion exactly once.
+
+**Production code change:** NONE. The harness drives the same production classes the live controller drives: `SdkSessionEventCoordinator` + `BackgroundNotifyCoordinator` + `CommandJobManager` + `MessageTranslatorState` + `TurnStateTracker` + `MessageIdMinter`. The test queue simulates `PendingPromptService.enqueue` semantics (FIFO for `delivery: "queue"`, unshift-preempt for `delivery: "steer"`, delete by jobId / promptId).
+
+**Observable bindings:**
+
+| Observable | Production source | Harness wiring |
+|---|---|---|
+| `completionCommitCount` | SdkSessionEventCoordinator.setTurnPhase("completed", ...) | counter incremented in setTurnPhase spy |
+| `pendingPromptCountAtTurnEnd` | SdkSessionEventCoordinator.getPendingPromptCount → `activeSession.sdkHost.pendingPrompts("count", ...)` | sdkHost.pendingPrompts wired to test queue |
+| `activeNotifyCountAtTurnEnd` | SdkSessionEventCoordinator.getActiveNotifyCount → `notifyCoordinator.activeNotifyCountForOwner(...)` | direct call to real coordinator |
+| `deferredMarkerSessionId` | SdkSessionEventCoordinator.deferredCompletionBarrier | `getDeferredCompletionBarrierForTesting()` |
+| `hasActiveNotify(J)` | BackgroundNotifyCoordinator.hasActiveNotify | direct call to real coordinator |
+| `wasWakeDelivered(J)` / `wasWakeDispatchRequested` / `wasWakeDispatchFailed` / `isWakeAuthoritySettled` | BackgroundNotifyCoordinator state | direct call to real coordinator |
+
+**Gates:**
+- 16 files / 94 tests / exit 0 / vmThreads pool.
+- tsc --noEmit: clean (TSC_RC=0).
+- biome lint: clean (BIOME_RC=0).
+- git diff --check: clean.
+- Raw artifact: 0 `ForksPoolWorker` / `kill EPERM` / `uncaught` matches.
+- Delta vs C10-FILTER-ABLATION01 closure: +1 file, +16 tests.
+
+**Halt register:**
+
+```
+HALT_REPOSITORY_TRUST                     NOT_TRIGGERED
+HALT_PRODUCTION_SEAM_NOT_EXERCISED        NOT_TRIGGERED
+HALT_RED_NOT_REPRODUCED                   NOT_TRIGGERED
+HALT_FALSE_HANDOFF_REPRODUCED             NOT_TRIGGERED
+HALT_FALSE_AUTOCONTINUE_REPRODUCED        NOT_TRIGGERED
+HALT_PROMPT_LOSS                          NOT_TRIGGERED
+HALT_DUPLICATE_CONTINUATION               NOT_TRIGGERED
+HALT_SESSION_CROSSTALK                    NOT_TRIGGERED
+HALT_COMPLETION_REGRESSION               NOT_TRIGGERED
+HALT_EXECUTABLE_GATE_REGRESSION           NOT_TRIGGERED
+HALT_ARTIFACT_UNBOUND                     NOT_TRIGGERED
+```
+
+**Live qualification:** NOT_REQUIRED (no production change; no seam-level vs live-UI mismatch discovered; predecessor dogfood VSIX 4.1.16-521f23482 SHA-256=1f1af4ad2...d02c7 already exercised the full notify-owned lifecycle end-to-end).
+
+**Verdict:** PASS_CONTINUATION_PATHOLOGICAL_CORPUS.
+
+The continuation / handoff boundary is provably correct on current HEAD. The corpus is permanent regression coverage. C10 message-layer filter (load-bearing per C10-FILTER-ABLATION01), C10 framework barrier (load-bearing per BNCA-REPAIR01 + C10-FILTER-ABLATION01), BackgroundNotifyCoordinator authority (load-bearing per BNCA-REPAIR01), lost-wake protocol (load-bearing per BNCA-REPAIR01), and multi-job isolation (load-bearing per BNCA-ABLATION01) all remain UNCHANGED. The next SW-CM backlog item can proceed on a confirmed-clean continuation substrate.

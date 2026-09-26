@@ -1,0 +1,17 @@
+================================================================================
+ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 focused gate (vmThreads)
+================================================================================
+ENTRY_HEAD=4b1f3d6914e78a231c6b292ee8f5fcda904239f4
+POOL=vmThreads
+VITEST_TEST_FILES_LINE= Test Files  16 passed (16)
+VITEST_TESTS_LINE=      Tests  94 passed (94)
+VITEST_GATE_RC=0
+ERROR_SCAN_RC=1         (grep returned no matches — clean vmThreads run)
+ERROR_SCAN_MATCHES=0
+TYPECHECK=clean (TSC_RC=0)
+LINT=clean (BIOME_RC=0)
+DIFF_CHECK=clean
+NEW_TESTS=1 file / 16 tests (continuation-pathological-corpus01.swcm04.test.ts)
+PREVIOUS_BASELINE=15 files / 78 tests (C10-FILTER-ABLATION01 closure)
+DELTA=+1 file, +16 tests
+RAW_ARTIFACT=04-focused-gates.raw.txt

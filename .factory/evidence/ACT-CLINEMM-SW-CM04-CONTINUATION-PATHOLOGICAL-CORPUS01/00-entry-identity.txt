@@ -1,0 +1,14 @@
+ENTRY_HEAD=4b1f3d6914e78a231c6b292ee8f5fcda904239f4
+ENTRY_BRANCH=main
+ENTRY_WORKING_TREE_CLEAN=yes
+ACT_ID=ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01
+ACT_PURPOSE=reproduction / behavioral qualification
+PREDECESSOR=ACT-CLINEMM-C10-FILTER-ABLATION01=PASS_C10_ABLATION_RETAINED (bounded correction ROUND 2)
+HARNESS_DIR=apps/vscode/src/sdk/__tests__/
+NEW_TEST_FILE=apps/vscode/src/sdk/__tests__/continuation-pathological-corpus01.swcm04.test.ts
+NEW_TESTS=1 file / 16 tests
+PRODUCTION_SEAM=apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L546/L990/L1024 (setTurnPhase("completed", ...) deferred-completion-barrier admission guard)
+RUNNER=vitest --pool=vmThreads --testTimeout=30000
+EXPECTED_BASELINE_BEFORE_NEW_TESTS=15 files / 78 tests (C10-FILTER-ABLATION01 closure)
+ACT_EXIT_CORPUS_STATUS=15 PASS_CURRENT, 1 NOT_APPLICABLE (P12 plan->act synthetic continuation), 0 FAIL_CURRENT
+VERDICT=PASS_CONTINUATION_PATHOLOGICAL_CORPUS

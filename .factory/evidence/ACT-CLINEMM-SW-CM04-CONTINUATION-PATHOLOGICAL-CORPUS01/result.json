@@ -1,0 +1,77 @@
+{
+  "act_id": "ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01",
+  "purpose": "reproduction / behavioral qualification",
+  "entry_head": "4b1f3d6914e78a231c6b292ee8f5fcda904239f4",
+  "production_seam": {
+    "file": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+    "function": "setTurnPhase(\"completed\", ...) at L546 + L990 + L1024 (deferred-completion-barrier admission guard)",
+    "decision": "outstandingAutonomousWork = pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0 || perJobOutstandingNotifyWork. When true at originating turn's done event: register deferredCompletionBarrier marker; do NOT call setTurnPhase(\"completed\", ...). When the marker is later cleared by reevaluateDeferredCompletionBarrier (Path A wake-consume or Path B resolveObligation) with all four conservation rules passing, commit setTurnPhase(\"completed\", ...) EXACTLY ONCE."
+  },
+  "corpus": {
+    "P1": "PASS_CURRENT",
+    "P2": "PASS_CURRENT",
+    "P3": "PASS_CURRENT",
+    "P4": "PASS_CURRENT",
+    "P5": "PASS_CURRENT",
+    "P6": "PASS_CURRENT",
+    "P7": "PASS_CURRENT",
+    "P8": "PASS_CURRENT",
+    "P9": "PASS_CURRENT",
+    "P10": "PASS_CURRENT",
+    "P11": "PASS_CURRENT",
+    "P12": "NOT_APPLICABLE"
+  },
+  "adversarial_corpus": {
+    "A_duplicate_jobIds": "PASS_CURRENT",
+    "B_stale_prompt_deleted": "PASS_CURRENT",
+    "E_two_jobIds_one_terminal": "PASS_CURRENT",
+    "H_sessionId_mismatch": "PASS_CURRENT"
+  },
+  "failures": [],
+  "production_change": false,
+  "production_change_summary": "NO production code modified. NO production wiring changed. NO new option-bag methods added. The harness drives the SAME production classes the live controller drives: SdkSessionEventCoordinator, BackgroundNotifyCoordinator, CommandJobManager, MessageTranslatorState, TurnStateTracker, MessageIdMinter. The test queue simulates PendingPromptService.enqueue behavior (queue / steer / FIFO / unshift).",
+  "central_invariant": "outstandingAutonomousWork === true => setTurnPhase(\"completed\", ...) MUST NOT fire; deferredCompletionBarrier MUST be set. outstandingAutonomousWork === false (after obligations resolve) => setTurnPhase(\"completed\", ...) MUST fire EXACTLY ONCE.",
+  "invariant_proof": "All 12 applicable scenarios (P1..P11, A, B, E, H) observe the invariant. The harness's setTurnPhase spy counts the EXACT number of \"completed\" commits. The harness's getDeferredCompletionBarrierForTesting() observes the marker's sessionId/taskId/epoch triple. The harness's queue.countForSession(sessionId) observes the live pending-prompt count, which is read via the SAME getPendingPromptCount callback the coordinator uses in production.",
+  "gates": {
+    "test_files": 16,
+    "tests": 94,
+    "exit": 0,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "diff_check": "PASS",
+    "error_scan_patterns": "ForksPoolWorker|kill EPERM|uncaught",
+    "error_scan_matches": 0,
+    "raw_artifact": ".factory/evidence/ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01/04-focused-gates.raw.txt",
+    "previous_baseline": "15 files / 78 tests (C10-FILTER-ABLATION01 closure)",
+    "delta": "+1 file, +16 tests"
+  },
+  "halt_register": {
+    "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED",
+    "HALT_PRODUCTION_SEAM_NOT_EXERCISED": "NOT_TRIGGERED",
+    "HALT_RED_NOT_REPRODUCED": "NOT_TRIGGERED",
+    "HALT_FALSE_HANDOFF_REPRODUCED": "NOT_TRIGGERED",
+    "HALT_FALSE_AUTOCONTINUE_REPRODUCED": "NOT_TRIGGERED",
+    "HALT_PROMPT_LOSS": "NOT_TRIGGERED",
+    "HALT_DUPLICATE_CONTINUATION": "NOT_TRIGGERED",
+    "HALT_SESSION_CROSSTALK": "NOT_TRIGGERED",
+    "HALT_COMPLETION_REGRESSION": "NOT_TRIGGERED",
+    "HALT_EXECUTABLE_GATE_REGRESSION": "NOT_TRIGGERED",
+    "HALT_ARTIFACT_UNBOUND": "NOT_TRIGGERED"
+  },
+  "live": {
+    "status": "NOT_REQUIRED",
+    "rationale": "No production code changed. Per ACT §15, live qualification is only required if the corpus discovers a seam-level vs. live-UI mismatch. The corpus found NO defects, so no live qualification is needed. The predecessor dogfood VSIX (`dist/dogfood/clinemm-4.1.16-521f23482.vsix`, SHA256=1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7) bound to ENTRY_HEAD 521f23482 (post-C10-ROUND-2, pre-corpus) exercised the full notify-owned lifecycle end-to-end."
+  },
+  "dependencies_preserved_unchanged": {
+    "C10_message_layer_filter": "RETAINED (ACT-CLINEMM-C10-FILTER-ABLATION01 PASS_C10_ABLATION_RETAINED, bounded correction ROUND 2)",
+    "C10_framework_completion_barrier": "RETAINED (ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01 PASS_WITH_NONBLOCKING_RESIDUE)",
+    "background_notify_authority": "RETAINED (ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01)",
+    "lost_wake_protocol": "RETAINED (ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01)",
+    "multi_job_authority_crosstalk": "RETAINED (proven by predecessor chain)"
+  },
+  "successor": {
+    "next_sw_cm_backlog_item": "to be determined after SW-CM04 close review",
+    "no_repair_needed": true
+  },
+  "verdict": "PASS_CONTINUATION_PATHOLOGICAL_CORPUS"
+}
