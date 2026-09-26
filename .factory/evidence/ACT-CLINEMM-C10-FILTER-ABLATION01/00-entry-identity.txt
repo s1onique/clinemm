@@ -3,12 +3,12 @@ ENTRY_BRANCH=main
 ENTRY_WORKING_TREE_CLEAN=yes
 ACT_ID=ACT-CLINEMM-C10-FILTER-ABLATION01
 ACT_PURPOSE=necessity / ablation / simplification
-ACT_BOUNDED_CORRECTION_ROUND=1
-ACT_HALT_REVIEWED=HALT_C10_ABLATION_NOT_ISOLATED
-ACT_HALT_RESOLUTION=SEAM-A-only predicate `shouldFilterCompletionResult` added to SdkSessionEventCoordinatorOptions; harness's mutable c10FilterDecision cell drives it without touching SEAM B's option-bag methods. SEAM B reads real coordinator state regardless of SEAM A's filter switch.
+ACT_BOUNDED_CORRECTION_ROUND=2
+ACT_HALT_REVIEWED=HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE
+ACT_HALT_RESOLUTION=Replaced synthetic re-armed post-delivery discriminator with NATURAL PRE-DELIVERY discriminator. New `captureCoordinatorStateFor(h, jobId)` helper captures all five probes (hasActiveNotify, wasWakeDispatchRequested, wasWakeDelivered, wasWakeDispatchFailed, isWakeAuthoritySettled) at SEAM A evaluation point. NO consumeTerminal, NO markWakeDelivered, NO re-registration. Canonical discriminator passes in the natural pre-delivery state (marker alive, job still running). SEAM-A-only isolation mechanism (shouldFilterCompletionResult option-bag method, c10FilterDecision cell, setC10Filter flip helper) is unchanged from ROUND 1.
 PREDECESSOR_REPAIR=PASS_WITH_NONBLOCKING_RESIDUE
 PREDECESSOR_LIVE_QUAL=CAPTURE_INSUFFICIENT[SYSTEM]_NONBLOCKING
-ABLATION_TARGET=apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L689..L739 (message-layer completion_result filter; now consults shouldFilterCompletionResult when wired)
+ABLATION_TARGET=apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L689..L797 (message-layer completion_result filter; consults shouldFilterCompletionResult when wired)
 PRESERVED_TARGET=apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L385..L422,L474..L509,L769..L790 (framework-level completion-commit barrier at setTurnPhase("completed", ...))
 HARNESS_DIR=apps/vscode/src/sdk/__tests__/
 RUNNER=vitest --pool=vmThreads --testTimeout=30000

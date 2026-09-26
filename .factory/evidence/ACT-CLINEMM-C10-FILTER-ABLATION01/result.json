@@ -1,34 +1,41 @@
 {
   "act_id": "ACT-CLINEMM-C10-FILTER-ABLATION01",
   "purpose": "necessity / ablation / simplification",
-  "bounded_correction_round": 1,
-  "halt_reviewed": "HALT_C10_ABLATION_NOT_ISOLATED",
-  "halt_resolution": "SEAM-A-only predicate `shouldFilterCompletionResult` added to SdkSessionEventCoordinatorOptions. Harness's mutable `c10FilterDecision` cell drives it without touching SEAM B's option-bag methods (hasActiveNotify / wasWakeDelivered / isWakeAuthoritySettled / getActiveNotifyCount unchanged). SEAM B reads REAL coordinator state regardless of SEAM A's filter switch.",
+  "bounded_correction_round": 2,
+  "halt_reviewed": "HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE",
+  "halt_resolution": "Replaced the synthetic re-armed post-delivery discriminator with a NATURAL PRE-DELIVERY discriminator. The canonical chronology is the 'frozen bug / premature J' case (originating turn emits `done` while the background job is still running). NO consumeTerminal, NO markWakeDelivered, NO re-registration. The harness's new `captureCoordinatorStateFor(h, jobId)` helper captures all five probes (hasActiveNotify, wasWakeDispatchRequested, wasWakeDelivered, wasWakeDispatchFailed, isWakeAuthoritySettled) at the moment SEAM A is about to evaluate, and asserts the natural pre-delivery values identical across ON and OFF.",
   "entry_head": "6e4c70b5f24f701c5a68226fc185bb4966ce6d57",
   "c10_seam": {
     "file": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
     "function": "handleSessionEvent -> result.messages filter block (the message-layer completion_result filter)",
-    "predicate_lines": "L718..L797 (after bounded-correction ROUND 1): both narrow per-jid branch and over-broad aggregate fallback consult options.shouldFilterCompletionResult(ownedJobIds) when wired; production wiring absent; falls back to production-real lookup.",
+    "predicate_lines": "L718..L797: both narrow per-jid branch and over-broad aggregate fallback consult options.shouldFilterCompletionResult(ownedJobIds) when wired; production wiring absent; falls back to production-real lookup.",
     "effect": "filters say:'completion_result' rows from result.messages before appendAndEmit (preserves framework lifecycle phase + persistence layer presentation)"
   },
   "framework_authority_barrier": {
     "status": "PRESERVED_EXACTLY",
     "file": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
-    "effect": "setTurnPhase('completed', ...) lifecycle commit refused when any notify-owned launched jobId has wake authority delivered. Deferred-completion-barrier marker is set. reevaluateDeferredCompletionBarrier() drains it once obligations resolve.",
+    "effect": "setTurnPhase('completed', ...) lifecycle commit refused when any notify-owned launched jobId has wake authority delivered or in flight. Deferred-completion-barrier marker is set. reevaluateDeferredCompletionBarrier() drains it once obligations resolve.",
     "untouched_by_ablation": true
   },
   "ablation_canonical_discriminator": {
     "setup": {
+      "natural_pre_delivery_state": true,
       "marker_registered": true,
-      "consume_terminal_drives_path_a": true,
-      "host_enqueue_terminal_wake_outcome": "delivered",
-      "post_wake_state": {"wasWakeDelivered": true, "hasActiveNotify": false, "wakeDispatchRequested_then_drained": true},
-      "marker_reregistered_at_emit_time": true,
-      "rationale": "SEAM A observes owned outstanding marker at emit (per-jid narrow; per the bounded correction criterion). SEAM B observes wasWakeDelivered=true (immutable historical state). The two layers see the same wake state but consult DIFFERENT predicates — isolating SEAM A from SEAM B."
+      "consume_terminal_drives_path_a": false,
+      "marker_reregistered_at_emit_time": false,
+      "rationale": "The originating turn emits `done` while the background job is still running; the wake has not yet been dispatched because the job has not yet exited. This is the FROZEN BUG / PREMATURE J case at sdk-session-event-coordinator.ts:704-706. The marker is alive; the narrow per-jid `hasActiveNotify(jid)` predicate CAN fire. SEAM A and SEAM B both consult the same state, but apply different predicates (SEAM A drops the message-layer row; SEAM B holds the framework-level phase commit via deferred barrier)."
+    },
+    "state_at_seam_a": {
+      "hasActiveNotify": true,
+      "wasWakeDispatchRequested": false,
+      "wasWakeDelivered": false,
+      "wasWakeDispatchFailed": false,
+      "isWakeAuthoritySettled": false,
+      "identical_across_on_and_off": true
     },
     "c10_on_results": {"framework_completion_commits": 0, "completion_result_rows": 0, "visible_boxes": 0, "deferredCompletionBarrier_set": true},
     "c10_off_results": {"framework_completion_commits": 0, "completion_result_rows": 2, "visible_boxes": 1, "deferredCompletionBarrier_set": true},
-    "isolation_proof": "framework_completion_commits is IDENTICAL across ON and OFF (both 0). completion_result_rows differ (0 vs 2). The difference is attributable ONLY to the message-layer filter."
+    "isolation_proof": "state_at_seam_a is IDENTICAL across ON and OFF (all five probes captured and asserted). framework_completion_commits is IDENTICAL (both 0). completion_result_rows differ (0 vs 2). The difference is attributable ONLY to the message-layer filter."
   },
   "other_matrices": {
     "matrix_B_non_notify": "ordinary completion, no notify marker; both ON/OFF show 2 raw / 1 visible box and completionCommitCount=1.",
@@ -38,8 +45,8 @@
   },
   "decision": {
     "c10_necessary": true,
-    "protected_invariant": "prevents second persisted completion_result row while framework phase completion remains exactly one (independent of the framework-level completion-commit barrier at setTurnPhase(completed))",
-    "isolation": "Ablation isolates the SEAM-A message filter from the SEAM-B framework barrier. C10 ON / OFF cases differ ONLY on the message filter (both have completionCommitCount=0 in the canonical wake-delivered setup)."
+    "protected_invariant": "in the natural pre-delivery state (marker alive, job still running), the narrow hasActiveNotify(jid) predicate suppresses the originating turn's completion_result row before appendAndEmit; this is independent of the framework-level completion-commit barrier (which only HOLDS the originating commit via the deferred barrier but does not strip the message-layer row)",
+    "isolation": "Ablation isolates the SEAM-A message filter from the SEAM-B framework barrier. C10 ON / OFF cases differ ONLY on the message filter (both have completionCommitCount=0 in the canonical natural pre-delivery setup)."
   },
   "production_change": {
     "removed_c10": false,
@@ -55,7 +62,7 @@
     "test_count": 11,
     "baseline_cases": 3,
     "ablation_cases": 8,
-    "canonical_discriminator_in_ablation_test": "C10-ABLATION-01-NOTIFY-ON (ON) + C10-ABLATION-01-NOTIFY-OFF (OFF). Both have framework_completion_commits=0; differ only on the message filter (0 rows vs 2 raw / 1 visible box)."
+    "canonical_discriminator_in_ablation_test": "C10-ABLATION-01-NOTIFY-ON (ON) + C10-ABLATION-01-NOTIFY-OFF (OFF). Both have framework_completion_commits=0; differ only on the message filter (0 rows vs 2 raw / 1 visible box). state_at_seam_a captured for all five probes; identical between ON and OFF."
   },
   "gates": {
     "runner_pool": "vmThreads",
@@ -71,7 +78,21 @@
   },
   "live": {
     "status": "NOT_REQUIRED",
-    "rationale": "C10 message filter retained because ablation proved necessity. No production code behavior changed in this ACT. Predecessor ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01 dogfood VSIX (VSIX_SHA256=1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7) bound to predecessor ENTRY_HEAD 521f23482 is the most recent live qualification; no new dogfood required solely for retention per ACT §14."
+    "rationale": "C10 message filter retained because ablation proved necessity in the natural pre-delivery state. No production code behavior changed in this ACT. Predecessor ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01 dogfood VSIX (VSIX_SHA256=1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7) bound to predecessor ENTRY_HEAD 521f23482 is the most recent live qualification; no new dogfood required solely for retention per ACT §14."
+  },
+  "halt_register": {
+    "HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE": "RESOLVED (bounded correction ROUND 2: natural pre-delivery state with marker alive; state_at_seam_a captured for all five probes and asserted identical across ON and OFF)",
+    "HALT_C10_ABLATION_NOT_ISOLATED": "RESOLVED (ROUND 1: SEAM-A-only predicate + canonical wake-delivered discriminator)",
+    "HALT_FOCUSED_GATE_CLEAN": "RESOLVED (--pool=vmThreads artifact; 0 ForksPoolWorker / kill EPERM / uncaught matches)",
+    "HALT_REPOSITORY_TRUST": "NOT_TRIGGERED",
+    "HALT_SEAM_B_REGRESSION": "NOT_TRIGGERED",
+    "HALT_ZERO_COMPLETION": "NOT_TRIGGERED",
+    "HALT_DUPLICATE_TERMINAL_COMPLETION": "NOT_TRIGGERED",
+    "HALT_NOTIFICATION_LOST": "NOT_TRIGGERED",
+    "HALT_MULTI_JOB_AUTHORITY_CROSSTALK": "NOT_TRIGGERED",
+    "HALT_OOM_REGRESSION": "NOT_TRIGGERED",
+    "HALT_EXECUTABLE_GATE_REGRESSION": "NOT_TRIGGERED",
+    "HALT_ARTIFACT_UNBOUND": "NOT_TRIGGERED"
   },
   "verdict": "PASS_C10_ABLATION_RETAINED",
   "predecessor_evidence": {

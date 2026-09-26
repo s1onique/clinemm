@@ -358,3 +358,125 @@ This is the LOAD-BEARING criterion called out by
 `C10-ABLATION-01-NOTIFY-ON` + `C10-ABLATION-01-NOTIFY-OFF` satisfies it
 exactly: framework_completion_commits===0 in BOTH cases; the
 message-layer outcome differs (0 vs 2 rows).
+
+---
+
+## BOUNDED CORRECTION ROUND 2 (added after halt review 2)
+
+The factory reviewer's `HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE`
+flagged that the ROUND 1 discriminator manufactured an
+unreachable production state by:
+
+1. Driving the wake to delivery (which drains `notificationMarkers`
+   and sets `wasWakeDelivered=true`).
+2. **Re-registering** the marker purely for the test, so
+   `hasActiveNotify(J) === true` at the originating turn's
+   `done` event.
+
+The reviewer is correct: this state
+(`hasActiveNotify=true` AND `wasWakeDelivered=true`) is
+unreachable in production. `markWakeDelivered` only operates on
+`wakeDispatchRequestedJobIds` and `wakeDeliveredJobIds`; it
+never re-arms `notificationMarkers`. The `notificationMarkers`
+deletion in `consumeTerminal` (line 959) is the terminal event
+for the marker — there is no production code path that re-adds
+it after a successful wake delivery.
+
+### The actual reachable state at SEAM A evaluation
+
+The originating turn's `done` event arrives BEFORE the
+background job's terminal event in the canonical
+`notifyOnCompletion=true` flow. The recon already documents
+this at L704-706 as the "frozen bug (premature J)" case:
+
+```
+frozen bug (premature J):
+  ownedJobIds = [J]
+  hasActiveNotify(J) = true  ← job still running; wake not yet dispatched
+```
+
+In this state:
+
+```
+hasActiveNotify(J)            = true   (marker alive; job still running)
+wasWakeDispatchRequested(J)   = false  (consumeTerminal has NOT fired)
+wasWakeDelivered(J)           = false
+wasWakeDispatchFailed(J)      = false
+isWakeAuthoritySettled(J)     = false
+```
+
+This is the only reachable state at the originating turn's
+`done` event where SEAM A's narrow `hasActiveNotify(jid)`
+predicate can fire. After `consumeTerminal` drains the marker,
+the predicate cannot suppress.
+
+### Bounded correction ROUND 2: natural pre-delivery discriminator
+
+The harness adds a state-capture helper:
+
+```ts
+function captureCoordinatorStateFor(h, jobId): CoordinatorStateAtSeamA {
+  return {
+    hasActiveNotify:          h.notifyCoordinator.hasActiveNotify(jobId),
+    wasWakeDispatchRequested: h.notifyCoordinator.wasWakeDispatchRequested(jobId),
+    wasWakeDelivered:         h.notifyCoordinator.wasWakeDelivered(jobId),
+    wasWakeDispatchFailed:    h.notifyCoordinator.wasWakeDispatchFailed(jobId),
+    isWakeAuthoritySettled:   h.notifyCoordinator.isWakeAuthoritySettled(jobId),
+  }
+}
+```
+
+The MATRIX A canonical tests now use the natural pre-delivery
+state — NO `consumeTerminal`, NO `markWakeDelivered`, NO
+re-registration. The harness captures the state at the moment
+SEAM A is about to evaluate and asserts ALL FIVE probes have
+the natural pre-delivery values, identical across ON and OFF.
+
+```
+  state_at_seam_a (BOTH runs):
+    hasActiveNotify            = true
+    wasWakeDispatchRequested   = false
+    wasWakeDelivered           = false
+    wasWakeDispatchFailed      = false
+    isWakeAuthoritySettled     = false
+```
+
+### Discriminator outcome (ROUND 2)
+
+  ON : hasActiveNotify(J)=true (natural pre-delivery)
+       SEAM A narrow per-jid lookup fires
+       completion_result row dropped from result.messages
+       0 rows reach appendAndEmit
+       SEAM B per-job: perJobOutstandingNotifyWork=true
+                       outstandingAutonomousWork=true
+                       deferred barrier SET
+                       setTurnPhase("completed") NOT called
+                       completionCommitCount === 0
+
+  OFF: hasActiveNotify(J)=true (natural pre-delivery)
+       c10FilterDecision returns false (SEAM A neutered)
+       completion_result row NOT dropped
+       2 rows / 1 visible box reach appendAndEmit
+       SEAM B per-job: perJobOutstandingNotifyWork=true
+                       outstandingAutonomousWork=true
+                       deferred barrier SET
+                       setTurnPhase("completed") NOT called
+                       completionCommitCount === 0 (IDENTICAL)
+
+  DIFFERENCE attributable ONLY to SEAM A. SEAM B's lifecycle
+  decision is identical across both cases.
+
+### Outcome classification per halt
+
+```
+A. hasActiveNotify(J) is still true when SEAM A runs ✓
+   -> C10 can genuinely be load-bearing; prove ON=0 rows, OFF=2 rows.
+   -> VERIFIED. ON has 0 rows; OFF has 2 rows / 1 visible box.
+      SEAM A is load-bearing in the natural pre-delivery state.
+```
+
+The halt specified: "If B occurs, do not immediately repair
+C10. First classify the real invariant and timing." ROUND 2
+demonstrates outcome A in the canonical pre-delivery
+chronology (the only reachable production state at the
+originating turn's `done` event).

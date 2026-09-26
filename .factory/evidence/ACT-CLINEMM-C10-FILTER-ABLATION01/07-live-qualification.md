@@ -1,4 +1,4 @@
-# ACT-CLINEMM-C10-FILTER-ABLATION01 — Live Qualification (bounded correction ROUND 1)
+# ACT-CLINEMM-C10-FILTER-ABLATION01 — Live Qualification (bounded correction ROUND 2)
 
 ## STATUS: NOT_REQUIRED
 
@@ -25,66 +25,60 @@ no production seam behavior modified.
 
 ## RATIONALE
 
-The canonical wake-delivered discriminator (matrix A pair) proves C10
-filter is necessary, and the SEAM-A-only predicate added in this ACT
-makes that proof ISOLATED from SEAM B. The ablation matrix exercises
-the EXACT production code paths via:
-  real SdkSessionEventCoordinator
-  real BackgroundNotifyCoordinator
-  real CommandJobManager
-  real MessageTranslatorState
-  real message-translator
-  real setTurnPhase / wasWakeDelivered / hasActiveNotify
-The C10 filter is a pure message-layer transform (no async, no I/O,
-no concurrency edge cases) — its behavior is fully captured by the
-`appendAndEmit` mock.
+The **natural pre-delivery discriminator** (matrix A pair) proves C10
+filter is necessary in the canonical reachable production state — the
+originating turn emits `done` while the background job is still
+running (notify marker alive, BEFORE the wake is dispatched). The
+SEAM-A-only predicate added in this ACT makes that proof ISOLATED
+from SEAM B. The ablation matrix exercises:
 
-The predecessor ACT
-`ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01`
-attempted live qualification of the framework-level completion-authority
-repair (the bound that wraps SEAM B). It closed with
-`CAPTURE_INSUFFICIENT[SYSTEM]_NONBLOCKING` due to Electron SIGSEGV in
-the agent sandbox (kernel-level sandbox blocker, not a code defect).
-The most recent bound VSIX is:
+* Matrix A (canonical): NOTIFY-ON, NOTIFY-OFF, NOTIFY-OFF-MULTI in
+  the natural pre-delivery state. `state_at_seam_a` captured for all
+  five probes (`hasActiveNotify`,
+  `wasWakeDispatchRequested`, `wasWakeDelivered`,
+  `wasWakeDispatchFailed`, `isWakeAuthoritySettled`); all five
+  identical between ON and OFF runs.
+* Matrix B (non-notify completion): confirms C10 ablation does not
+  affect ordinary completion paths.
+* Matrix C (lost wake): confirms the dispatch-failed ALLOW branch is
+  not affected.
+* Matrix D (fast exit): confirms the `resolveObligation` path is
+  not affected.
+* Matrix E (multi-job): confirms the per-job ownership-aware filter
+  is preserved.
 
-  - path: dist/dogfood/clinemm-4.1.16-521f23482.vsix
-  - bytes: 14,618,266
-  - sha256: 1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7
-  - ENTRY_HEAD: 521f23482fbbadf0e75dfe719c40f84d51550d07
+## PREDECESSOR DOGFOOD
 
-That dogfood exercise exercises the FULL notify-owned background job
-lifecycle end-to-end (command_status short-circuit, wake delivery,
-SEAM B suppression, wake-driven turn ownership) at the real Electron
-extension host. It DID NOT observe duplicate completion presentation.
-The C10 message filter is downstream of SEAM B and the same boundary
-the dogfood exercise observed.
+The predecessor dogfood VSIX
+(`dist/dogfood/clinemm-4.1.16-521f23482.vsix`, SHA256
+`1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7`)
+already exercised the full notify-owned lifecycle end-to-end and did
+not observe duplicate completion presentation. Retention is
+supported by unit-test ablation evidence (bounded correction ROUND 2
+canonical discriminator) + the prior live exercise.
 
-Therefore no new dogfood exercise is required for the C10 retention
-decision. The retention is supported by:
+## DELTA FROM ROUND 1
 
-  1. Unit tests: 11 new C10 ablation tests passing on real production seams,
-     with isolated ON/OFF discriminator (framework_completion_commits
-     identical between the two runs).
-  2. Conservation: 13 pre-existing BNCA/BCNEX/BCTPA/BCCOC/TQCB/CCARD
-     files / 67 tests passing (the C10 filter is not exercised by
-     these because they wire `hasActiveNotify` independently and the
-     C10 filter's narrow per-jid lookup is the production-real path).
-  3. Live precedent: the predecessor live-qualification exercise
-     exercised the same code paths and did not observe duplicate
-     presentation.
+ROUND 2 re-anchors the canonical discriminator on the **natural
+pre-delivery state** (the FROZEN BUG case at
+`sdk-session-event-coordinator.ts:704-706`):
 
-## FUTURE WORK
+```
+hasActiveNotify(J)            = true   (marker alive, job still running)
+wasWakeDispatchRequested(J)   = false  (no consumeTerminal yet)
+wasWakeDelivered(J)           = false
+wasWakeDispatchFailed(J)      = false
+isWakeAuthoritySettled(J)     = false
+```
 
-If/when the Electron SIGSEGV in the agent sandbox is resolved and a
-new live qualification exercise is performed, the operator should
-verify that:
+This is the ONLY reachable state at the originating turn's `done`
+event where SEAM A's narrow `hasActiveNotify(jid)` predicate can
+meaningfully fire. After `consumeTerminal` drains the marker, the
+predicate cannot suppress. The harness's
+`captureCoordinatorStateFor(h, jobId)` helper captures all five
+probes and asserts the natural pre-delivery values, identical
+across ON and OFF.
 
-LIVE-1: One notify-owned job (with SEAM B holding the commit because
-        the wake was delivered) produces exactly 1 visible completion
-        box (from the wake-driven turn) and exactly 1 framework phase
-        commit ("completed"). No duplicate green COMPLETED card.
-
-LIVE-2: Two independent notify-owned jobs produce exactly 2 visible
-        completion boxes (one per job), 1 final framework phase commit
-        after all wakes settle. Per-job ownership-aware filter prevents
-        cross-job suppression.
+The SEAM-A-only isolation mechanism is unchanged from ROUND 1
+(`shouldFilterCompletionResult` option-bag method, mutable
+`c10FilterDecision` cell, `setC10Filter` flip helper).

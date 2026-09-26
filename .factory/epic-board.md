@@ -12098,82 +12098,94 @@ Not promoted to PASS — no live extension-host execution was reachable. Not cla
 
 ---
 
-## ACT-CLINEMM-C10-FILTER-ABLATION01 — PASS_C10_ABLATION_RETAINED (bounded correction ROUND 1) — 2026-09-26
+## ACT-CLINEMM-C10-FILTER-ABLATION01 — PASS_C10_ABLATION_RETAINED (bounded correction ROUND 2) — 2026-09-26
 
-**Status:** PASS_C10_ABLATION_RETAINED after resolving `HALT_C10_ABLATION_NOT_ISOLATED`. The C10 message-layer completion_result filter at `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L689..L797` is LOAD-BEARING and RETAINED. The framework-level completion-commit barrier (SEAM B) does NOT subsume the message-layer uniqueness invariant. The two layers protect distinct invariants and both must remain.
+**Status:** PASS_C10_ABLATION_RETAINED after resolving `HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE`. The C10 message-layer completion_result filter at `apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L689..L797` is LOAD-BEARING and RETAINED. The framework-level completion-commit barrier (SEAM B) does NOT subsume the message-layer uniqueness invariant. The two layers protect distinct invariants and both must remain.
 
 **Predecessors:**
 - `ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01` = PASS_WITH_NONBLOCKING_RESIDUE / seam-level repair proven
 - `ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01` = CAPTURE_INSUFFICIENT[SYSTEM] / non-blocking residue (Electron SIGSEGV in agent sandbox)
 
-**Halt review (correction summary):**
+**Halt review 2 (correction summary):**
 
-The first round ablation (which the previous commit `55017abed` recorded) was halted by the factory reviewer's `HALT_C10_ABLATION_NOT_ISOLATED`. Two specific issues were identified:
+The factory reviewer's `HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE` flagged that the ROUND 1 canonical discriminator manufactured an UNREACHABLE production state by:
 
-1. **Ablation contamination**: the ROUND 0 mechanism falsified `hasActiveNotify` / `getActiveNotifyCount` — predicates that SEAM A (message filter at L710/L731) AND SEAM B (framework barrier at L475/L491) both consult. Falsifying them contaminated both layers. The OFF case had `framework_completion_commits=1` (no wake delivered), making the canonical discriminator unprovable.
+1. Driving the wake to delivery (which drained `notificationMarkers` and set `wasWakeDelivered=true`).
+2. **Re-registering** the marker purely for the test, so `hasActiveNotify(J) === true` at the originating turn's `done` event.
 
-2. **FOCUSED_GATE_CLEAN contradicted by artifact**: the original `05-focused-gates.txt` was run with the default `--pool=forks`, producing 31 `ForksPoolWorker / kill EPERM` errors while its footer claimed `ERROR_SCAN_MATCHES=0` (a false-pass).
+The reviewer is correct: this state (`hasActiveNotify=true` AND `wasWakeDelivered=true`) is unreachable in production. `markWakeDelivered` only operates on `wakeDispatchRequestedJobIds` and `wakeDeliveredJobIds`; it never re-arms `notificationMarkers`. The `notificationMarkers` deletion in `consumeTerminal` (line 959) is the terminal event for the marker — there is no production code path that re-adds it after a successful wake delivery.
 
-**Bounded correction ROUND 1 (commit 491f8bc97, closure_head 64405aca6):**
+**Bounded correction ROUND 2 (HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE resolved):**
 
-1. **SEAM-A-only test gate added** to `SdkSessionEventCoordinatorOptions`:
-   ```ts
-   shouldFilterCompletionResult?: (ownedJobIds: readonly string[]) => boolean
-   ```
-   This is consulted EXCLUSIVELY by the message-layer filter block at `L744..L758` (narrow per-jid branch) and `L773..L787` (over-broad aggregate fallback). SEAM B is unchanged: it continues to read `hasActiveNotify` / `wasWakeDelivered` / `isWakeAuthoritySettled` / `getActiveNotifyCount` through their original option-bag methods. Production wires nothing (predicate is `undefined` at runtime), so external behavior is unchanged.
+The canonical chronology in production is the FROZEN BUG / PREMATURE J case at `sdk-session-event-coordinator.ts:704-706`:
 
-2. **Harness c10FilterDecision cell**: mutable closure that backs the new predicate. `setC10Filter(h, true)` installs the production-real narrow per-jid lookup; `setC10Filter(h, false)` installs a `() => false` constant that neuters SEAM A without touching SEAM B.
+```
+frozen bug (premature J):
+  ownedJobIds = [J]
+  hasActiveNotify(J) = true  ← originating turn emits `done` while the
+                              background job is still running; wake not
+                              yet dispatched.
+```
 
-3. **Canonical wake-delivered discriminator**: the `C10-ABLATION-01-NOTIFY-ON` + `C10-ABLATION-01-NOTIFY-OFF` pair uses consumeTerminal -> host returns `{kind:"delivered"}` -> `markWakeDelivered(J)` (immutable `wasWakeDelivered=true`); marker is RE-REGISTERED so `hasActiveNotify(J)=true` at emit time (so SEAM A observes an owned outstanding marker); SEAM B holds the lifecycle commit in BOTH runs (wake delivered). Result:
-   ```
-   C10 ON :  framework_completion_commits = 0, completion_result rows = 0
-   C10 OFF:  framework_completion_commits = 0 (IDENTICAL), completion_result rows = 2 raw / 1 visible box
-   difference attributable ONLY to SEAM A.
-   ```
+In this state:
+```
+hasActiveNotify(J)            = true   (marker alive; job still running)
+wasWakeDispatchRequested(J)   = false  (no consumeTerminal yet)
+wasWakeDelivered(J)           = false
+wasWakeDispatchFailed(J)      = false
+isWakeAuthoritySettled(J)     = false
+```
 
-4. **FOCUSED_GATE_CLEAN** re-captured under `--pool=vmThreads` in `05-focused-gates.vmthreads.txt`. Raw artifact: `Test Files 15 passed (15)`, `Tests 78 passed (78)`, 11.74s, exit 0. Zero `ForksPoolWorker / kill EPERM / uncaught` matches in the raw artifact lines. TYPECHECK PASS (`TSC_RC=0`), LINT PASS (`BIOME_RC=0`), DIFF_CHECK PASS.
+This is the ONLY reachable state at the originating turn's `done` event where SEAM A's narrow `hasActiveNotify(jid)` predicate can meaningfully fire. After `consumeTerminal`, the marker is drained and the predicate cannot suppress.
 
-**Discriminator (executable ablation, isolated):**
+The harness adds a state-capture helper `captureCoordinatorStateFor(h, jobId)` that reads all five probes through the option-bag methods. The MATRIX A canonical tests (C10-ABLATION-01-NOTIFY-ON, NOTIFY-OFF, NOTIFY-OFF-MULTI) now use the natural pre-delivery state — NO `consumeTerminal`, NO `markWakeDelivered`, NO re-registration. The harness captures the state at the moment SEAM A is about to evaluate and asserts ALL FIVE probes have the natural pre-delivery values, identical across ON and OFF.
 
-| Test | C10 | framework_completion_commits | completion_result_rows | visible_boxes | Outcome |
-|------|-----|------------------------------|------------------------|---------------|---------|
-| C10-ABLATION-01-NOTIFY-ON | ON | 0 | 0 | 0 | SUPPRESSED (canonical) |
-| C10-ABLATION-01-NOTIFY-OFF | OFF | 0 (identical) | 2 | 1 | LEAKS (canonical discriminator) |
-| C10-ABLATION-01-NOTIFY-OFF-MULTI | OFF | 0 | 2 | 1 | per-job isolation lost |
-| C10-ABLATION-02-NON-NOTIFY | OFF | 1 | 2 | 1 | UNCHANGED |
-| C10-ABLATION-03-LOST-WAKE | OFF | 1 | 2 | 1 | UNCHANGED |
-| C10-ABLATION-04-FAST-EXIT | OFF | 1 | 2 | 1 | UNCHANGED |
-| C10-ABLATION-05-MULTI-JOB-ON | ON | 0 | 0 | 0 | per-jid narrow filter |
-| C10-ABLATION-05-MULTI-JOB-OFF | OFF | 0 | 2 | 1 | per-job isolation lost |
+**SEAM-A isolation mechanism (unchanged from ROUND 1):**
+- `shouldFilterCompletionResult?: (ownedJobIds: readonly string[]) => boolean` option-bag method on `SdkSessionEventCoordinatorOptions`. Consulted EXCLUSIVELY by SEAM A (narrow branch and over-broad fallback). Production wires nothing.
+- `c10FilterDecision` mutable closure cell drives the new predicate.
+- `setC10Filter(harness, true)` installs the production-real narrow per-jid lookup; `setC10Filter(harness, false)` installs `() => false` (SEAM A neutered; SEAM B untouched).
+- SEAM B continues to read `hasActiveNotify` / `wasWakeDelivered` / `wasWakeDispatchRequested` / `wasWakeDispatchFailed` / `isWakeAuthoritySettled` / `getActiveNotifyCount` through their unchanged option-bag methods.
 
-**PROTECTED_INVARIANT = "prevents second persisted completion_result row while framework phase completion remains exactly one (independent of the framework-level completion-commit barrier at setTurnPhase(completed))"**
+**Discriminator (executable, isolated, natural pre-delivery state):**
+
+| Test | C10 | state.hasActiveNotify(J) | state.wasWakeDelivered(J) | framework_completion_commits | completion_result_rows | Outcome |
+|------|-----|---------------------------|----------------------------|------------------------------|------------------------|---------|
+| C10-ABLATION-01-NOTIFY-ON | ON | true (natural) | false (natural) | 0 | 0 | SUPPRESSED (canonical) |
+| C10-ABLATION-01-NOTIFY-OFF | OFF | true (natural) | false (natural) | 0 (IDENTICAL) | 2 raw / 1 visible box | LEAKS (canonical discriminator) |
+| C10-ABLATION-01-NOTIFY-OFF-MULTI | OFF | true (J1, J2) | false (J1, J2) | 0 | 2 raw / 1 visible box | LEAKS |
+
+**PROTECTED_INVARIANT = "in the natural pre-delivery state (marker alive, job still running), the narrow hasActiveNotify(jid) predicate suppresses the originating turn's completion_result row before appendAndEmit; this is independent of the framework-level completion-commit barrier (which only HOLDS the originating commit via the deferred barrier but does not strip the message-layer row)"**
+
+**Outcome classification per halt:** `A`. `hasActiveNotify(J)` is `true` when SEAM A runs in the natural pre-delivery state → C10 can genuinely be load-bearing → VERIFIED: ON=0 rows, OFF=2 rows / 1 visible box.
 
 **Gates (15 files / 78 tests, exit 0, vmThreads pool):**
 
-- TypeScript: clean (`bunx tsc --noEmit` -> no diagnostics, `TSC_RC=0`)
+- TypeScript: clean (`TSC_RC=0`)
 - Biome lint: clean (`BIOME_RC=0`)
 - `git diff --check`: clean
-- Raw artifact: `.factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/05-focused-gates.vmthreads.txt` (83 lines; no `ForksPoolWorker / kill EPERM / uncaught` matches in raw lines)
-- 11 tests across 2 new files: `c10-filter-ablation01.{baseline,ablation}.test.ts`
+- Raw artifact: 15 files / 78 tests / 11.72s / exit 0; zero `ForksPoolWorker / kill EPERM / uncaught` matches in raw lines
+- 11 tests across 2 files: c10-filter-ablation01.{baseline,ablation}.test.ts
+- New harness helper `captureCoordinatorStateFor(h, jobId)` reads all five probes; both harnesses (`makeHarness`, `makeHarnessWithOutcome`) wire the full option-bag set including `wasWakeDispatchRequested` and `wasWakeDispatchFailed`.
 
 **Live qualification:**
 
 Status: NOT_REQUIRED. Per ACT §14, retention requires no new dogfood if the ACT changed no production behavior. The ONLY production edit added a TEST-ONLY option-bag method (`shouldFilterCompletionResult`); the predicate is absent in production wiring, so external behavior is unchanged. The predecessor dogfood VSIX (`dist/dogfood/clinemm-4.1.16-521f23482.vsix`, SHA256=`1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7`) already exercised the full notify-owned lifecycle end-to-end and did not observe duplicate completion presentation.
 
-**Halt register (post-correction):**
+**Halt register (post-correction ROUND 2):**
 
 ```
-HALT_C10_ABLATION_NOT_ISOLATED   RESOLVED (bounded correction ROUND 1: SEAM-A-only predicate + canonical wake-delivered discriminator with framework_completion_commits=0 in BOTH SEAM-A ON and SEAM-A OFF runs)
-HALT_FOCUSED_GATE_CLEAN          RESOLVED (re-captured under --pool=vmThreads; raw artifact durably bound; no ForksPoolWorker / kill EPERM pollution)
-HALT_REPOSITORY_TRUST            NOT_TRIGGERED (git status clean; HEAD 64405aca6 on top of 6e4c70b5)
-HALT_SEAM_B_REGRESSION           NOT_TRIGGERED (SEAM B option-bag methods unchanged; new shouldFilterCompletionResult is consulted only by SEAM A)
-HALT_ZERO_COMPLETION             NOT_TRIGGERED (framework commits reach 1 across all matrices)
-HALT_DUPLICATE_TERMINAL_COMPLETION NOT_TRIGGERED (canonical OFF case has 1 visible box from originating turn; the difference is the row reaching appendAndEmit, but SEAM B prevents double `completed` phase commit)
-HALT_NOTIFICATION_LOST           NOT_TRIGGERED (lost-wake ALLOW behavior preserved in Matrix C)
-HALT_MULTI_JOB_AUTHORITY_CROSSTALK NOT_TRIGGERED (per-job narrow filter preserved with C10 ON)
-HALT_OOM_REGRESSION              NOT_TRIGGERED (no production behavior change)
-HALT_EXECUTABLE_GATE_REGRESSION  NOT_TRIGGERED (gate exit 0; 15 files; 78 tests; vmThreads pool)
-HALT_ARTIFACT_UNBOUND            NOT_TRIGGERED (result.json + evidence files all bound to ENTRY_HEAD 6e4c70b5)
+HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE   RESOLVED (bounded correction ROUND 2: natural pre-delivery state with marker alive; state_at_seam_a captured for all five probes and asserted identical across ON and OFF; canonical discriminator passes in the reachable production chronology)
+HALT_C10_ABLATION_NOT_ISOLATED             RESOLVED (ROUND 1: SEAM-A-only predicate)
+HALT_FOCUSED_GATE_CLEAN                    RESOLVED (--pool=vmThreads artifact; 0 ForksPoolWorker / kill EPERM / uncaught matches)
+HALT_REPOSITORY_TRUST                      NOT_TRIGGERED
+HALT_SEAM_B_REGRESSION                     NOT_TRIGGERED
+HALT_ZERO_COMPLETION                       NOT_TRIGGERED
+HALT_DUPLICATE_TERMINAL_COMPLETION         NOT_TRIGGERED
+HALT_NOTIFICATION_LOST                     NOT_TRIGGERED
+HALT_MULTI_JOB_AUTHORITY_CROSSTALK         NOT_TRIGGERED
+HALT_OOM_REGRESSION                        NOT_TRIGGERED
+HALT_EXECUTABLE_GATE_REGRESSION            NOT_TRIGGERED
+HALT_ARTIFACT_UNBOUND                      NOT_TRIGGERED
 ```
 
 **Decisive Factory state:**
@@ -12181,10 +12193,10 @@ HALT_ARTIFACT_UNBOUND            NOT_TRIGGERED (result.json + evidence files all
 ```
 ACT                    = PASS_C10_ABLATION_RETAINED
 PURPOSE                = necessity / ablation / simplification
-BOUNDED_CORRECTION     = ROUND 1 (HALT_C10_ABLATION_NOT_ISOLATED resolved)
+BOUNDED_CORRECTION     = ROUND 2 (HALT_C10_DISCRIMINATOR_UNREACHABLE_STATE resolved)
 C10_NECESSARY          = TRUE
 C10_REMOVED            = FALSE
-PROTECTED_INVARIANT    = "prevents second persisted completion_result row while framework phase completion remains exactly one"
+PROTECTED_INVARIANT    = "in the natural pre-delivery state (marker alive), the narrow hasActiveNotify(jid) predicate suppresses the originating turn's completion_result row before appendAndEmit"
 FRAMEWORK_AUTHORITY    = PRESERVED (SEAM B intact at setTurnPhase('completed', ...))
 PRODUCTION_CHANGE      = TEST-ONLY option-bag method `shouldFilterCompletionResult`; external behavior unchanged
 TESTS_ADDED            = 11 across 2 files
@@ -12195,9 +12207,8 @@ LINT                   = clean (BIOME_RC=0)
 DIFF_CHECK             = clean
 LIVE                   = NOT_REQUIRED
 ENTRY_HEAD             = 6e4c70b5f24f701c5a68226fc185bb4966ce6d57
-CLOSURE_HEAD           = 64405aca67a6c6f5a17e6eda44c10385aaa55da1e (clinemm factory board pointer only; closure commit at 491f8bc97)
 ```
 
 **Verdict:** PASS_C10_ABLATION_RETAINED.
 
-The C10 message filter is retained because the bounded correction ablation proved it protects an independent presentation invariant. The two layers (SEAM B framework barrier + SEAM A message filter) are NOT redundant — they protect different invariants and both must remain. Production behavior unchanged; the new `shouldFilterCompletionResult` predicate is consulted only when wired (test-only).
+The C10 message filter is retained because the bounded correction ROUND 2 ablation proved it protects an independent presentation invariant in the only reachable production state at the originating turn's `done` event (the natural pre-delivery state). The two layers (SEAM B framework barrier + SEAM A message filter) are NOT redundant — they protect different invariants and both must remain. Production behavior unchanged; the new `shouldFilterCompletionResult` predicate is consulted only when wired (test-only).

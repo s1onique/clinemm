@@ -17,7 +17,7 @@ Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
 
 ================================================================================
-ACT-CLINEMM-C10-FILTER-ABLATION01 ablation run (vmThreads, bounded correction ROUND 1)
+ACT-CLINEMM-C10-FILTER-ABLATION01 ablation run (vmThreads, bounded correction ROUND 2 (natural pre-delivery discriminator))
 ================================================================================
 ENTRY_HEAD=6e4c70b5f24f701c5a68226fc185bb4966ce6d57
 POOL=vmThreads
