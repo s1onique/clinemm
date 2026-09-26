@@ -1,0 +1,22 @@
+ARTIFACT_IDENTITY_NOTE=no production code changed in this ACT
+SUBJECT_HEAD=6e4c70b5f24f701c5a68226fc185bb4966ce6d57
+PRODUCTION_CHANGE=none
+TESTS_ADDED=
+  apps/vscode/src/sdk/__tests__/c10-filter-ablation01.baseline.test.ts
+  apps/vscode/src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts
+TESTS_ADDED_FILES=2
+TESTS_ADDED_COUNT=11
+EVIDENCE_FILES=
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/00-entry-identity.txt
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/01-recon.md
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/02-baseline.txt
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/02-ablation-message-cardinality.jsonl
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/03-ablation.txt
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/04-decision.md
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/05-focused-gates.txt
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/05b-typecheck.txt
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/05c-lint.txt
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/07-live-qualification.md
+  .factory/evidence/ACT-CLINEMM-C10-FILTER-ABLATION01/result.json
+
+VERDICT=PASS_C10_ABLATION_RETAINED

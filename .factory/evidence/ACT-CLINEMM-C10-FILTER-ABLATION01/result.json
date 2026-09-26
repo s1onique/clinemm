@@ -1,0 +1,62 @@
+{
+  "act_id": "ACT-CLINEMM-C10-FILTER-ABLATION01",
+  "purpose": "necessity / ablation / simplification",
+  "entry_head": "6e4c70b5f24f701c5a68226fc185bb4966ce6d57",
+  "c10": {
+    "file": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts",
+    "function": "handleSessionEvent -> done branch -> result.messages filter block",
+    "predicate": "if (result.messages.some(m => m.say === \"completion_result\")) { if (this.options.hasActiveNotify) { per-job narrow: hasActiveNotify(ownedJid) } else { over-broad aggregate: outstandingAutonomousWork } }",
+    "effect": "filters say:\"completion_result\" rows from result.messages before appendAndEmit (preserves framework lifecycle phase + persistence layer presentation)"
+  },
+  "framework_authority_barrier": {
+    "status": "PRESERVED",
+    "file": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L385..L422,L474..L509,L769..L790",
+    "effect": "setTurnPhase(\"completed\", ...) lifecycle commit refused when any notify-owned launched jobId has wake authority delivered"
+  },
+  "ablation": {
+    "c10_on": {
+      "framework_completion_commits": "0 (notify-owned originating completion SUPPRESSED)",
+      "completion_result_rows": "0 raw rows, 0 visible boxes"
+    },
+    "c10_off": {
+      "framework_completion_commits": "1 (lifecycle commit ALLOWED, no wake delivered)",
+      "completion_result_rows": "2 raw rows (partial + final), 1 visible box that should have been SUPPRESSED in the canonical wake-driven case"
+    }
+  },
+  "decision": {
+    "c10_necessary": true,
+    "protected_invariant": "prevents second persisted completion_result row while framework phase completion remains exactly one (independent of the framework-level completion-commit barrier at setTurnPhase(completed))"
+  },
+  "production_change": {
+    "removed_c10": false
+  },
+  "tests_added": {
+    "files": [
+      "apps/vscode/src/sdk/__tests__/c10-filter-ablation01.baseline.test.ts",
+      "apps/vscode/src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts"
+    ],
+    "test_count": 11,
+    "baseline_cases": 3,
+    "ablation_cases": 8
+  },
+  "gates": {
+    "test_files": 15,
+    "tests": 78,
+    "exit": 0,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "diff_check": "PASS"
+  },
+  "live": {
+    "status": "NOT_REQUIRED",
+    "rationale": "C10 message filter retained because ablation proved necessity. No production code changed in this ACT. Predecessor ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01 dogfood VSIX (VSIX_SHA256=1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7) bound to predecessor ENTRY_HEAD 521f23482 is the most recent live qualification; no new dogfood required solely for retention per ACT §14."
+  },
+  "verdict": "PASS_C10_ABLATION_RETAINED",
+  "predecessor_evidence": {
+    "repair_act": "ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01",
+    "live_qual_act": "ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01",
+    "live_qual_status": "CAPTURE_INSUFFICIENT[SYSTEM]_NONBLOCKING (Electron SIGSEGV in agent sandbox)",
+    "live_qual_vsix_sha256": "1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7",
+    "live_qual_vsix_bytes": 14618266
+  }
+}

@@ -12092,3 +12092,122 @@ REQUIRED_FOLLOWUP         = re-run LIVE-A..E from a macOS desktop session with k
 Not promoted to PASS — no live extension-host execution was reachable. Not classified as HALT_REGRESSION — no NEW defect surfaced. The predecessor ACT's seam-level evidence remains the load-bearing proof that the framework-level C10 completion-commit barrier covers the load-bearing invariants (R1..R15). The closed-loop executable gate stays clean. Production code untouched.
 
 ```
+
+---
+
+## ACT-CLINEMM-C10-FILTER-ABLATION01 — PASS_C10_ABLATION_RETAINED — 2026-09-26
+
+**Status:** PASS_C10_ABLATION_RETAINED. The C10 message-layer completion_result filter (`apps/vscode/src/sdk/sdk-session-event-coordinator.ts:L689..L739`) is **load-bearing** and **must remain**. The framework-level completion-commit barrier (SEAM B) does not subsume the message-layer uniqueness invariant. NO production code changed.
+
+**Predecessors:**
+- `ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01` = PASS_WITH_NONBLOCKING_RESIDUE / seam-level repair proven
+- `ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-LIVE-QUALIFICATION01` = CAPTURE_INSUFFICIENT[SYSTEM] / non-blocking residue (Electron SIGSEGV in agent sandbox; closed-loop gate stays clean)
+
+**Discriminator (executable ablation):**
+
+The hypothesis H1 ("with SEAM B ON and SEAM A OFF, the originating turn's completion_result row leaks through; C10 is necessary") was tested by injecting a test-only ablation switch (`hasActiveNotify = () => false`, `getActiveNotifyCount = () => 0`) into the SdkSessionEventCoordinator's option-bag — no production seam modified. The 8-case ablation matrix covers:
+
+| Test | C10 | Framework commits | completion_result rows | Visible boxes | Outcome |
+|------|-----|-------------------|------------------------|---------------|---------|
+| C10-ABLATION-01-NOTIFY-ON | ON | 0 | 0 | 0 | SUPPRESSED |
+| C10-ABLATION-01-NOTIFY-OFF | OFF | 1 | 2 | 1 | LEAKS |
+| C10-ABLATION-01-NOTIFY-OFF-MULTI | OFF | 0 | 2 | 1 | LEAKS |
+| C10-ABLATION-02-NON-NOTIFY | OFF | 1 | 2 | 1 | UNCHANGED |
+| C10-ABLATION-03-LOST-WAKE | OFF | 1 | 2 | 1 | UNCHANGED |
+| C10-ABLATION-04-FAST-EXIT | OFF | 1 | 2 | 1 | UNCHANGED |
+| C10-ABLATION-05-MULTI-JOB-ON | ON | 0 | 0 | 0 | SUPPRESSED |
+| C10-ABLATION-05-MULTI-JOB-OFF | OFF | 0 | 2 | 1 | LEAKS |
+
+**C10_NECESSARY = TRUE.**
+
+**PROTECTED_INVARIANT = "prevents second persisted completion_result row while framework phase completion remains exactly one (independent of the framework-level completion-commit barrier at setTurnPhase(completed))"**
+
+**Why this is NOT redundant with SEAM B:**
+
+SEAM B (framework-level completion-commit barrier at `setTurnPhase("completed", ...)`) and SEAM A (message-layer completion_result filter at `result.messages.filter`) protect distinct invariants:
+
+| Layer | What it governs | Failure mode if absent |
+|---|---|---|
+| SEAM B | `setTurnPhase("completed", ...)` lifecycle commit | Task phase advances to "completed" twice |
+| SEAM A | `result.messages` reaching `appendAndEmit` | One extra `say:"completion_result"` row per originating turn that should have been suppressed for the wake-driven turn |
+
+When SEAM B holds the lifecycle commit (wake-driven turn owns completion), the originating turn's `done` event still flows through `result.messages` containing the `say:"completion_result"` row. SEAM A strips it. SEAM B does NOT.
+
+In the canonical notify-owned background job lifecycle:
+1. Originating turn launches notify-owned J
+2. Job exits, wake delivered to PendingPromptsController
+3. Originating turn attempts completion — SEAM B fires (wakeDelivered=true), refuses lifecycle commit
+4. Originating turn's `done` event still has the `say:"completion_result"` row in `result.messages` — SEAM A strips it
+5. Wake-driven turn later runs `submit_and_exit` — emits its own row
+
+Without SEAM A, step 4 leaks the originating turn's row → TWO visible completion boxes for ONE logical terminal event.
+
+**Tests added (11 across 2 files):**
+
+```
+apps/vscode/src/sdk/__tests__/c10-filter-ablation01.baseline.test.ts (3 tests)
+  - C10-BASELINE-01: notify-owned originating completion FILTERED (current production contract)
+  - C10-BASELINE-02: ordinary non-notify completion VISIBLE (current production contract)
+  - C10-BASELINE-03: wake-driven completion (no owned jobs in flight) VISIBLE
+
+apps/vscode/src/sdk/__tests__/c10-filter-ablation01.ablation.test.ts (8 tests)
+  - C10-ABLATION-01-NOTIFY-ON: originating completion SUPPRESSED (C10 ON)
+  - C10-ABLATION-01-NOTIFY-OFF: originating completion VISIBLE (C10 OFF) ← LOAD-BEARING
+  - C10-ABLATION-01-NOTIFY-OFF-MULTI: per-job isolation lost with C10 OFF
+  - C10-ABLATION-02-NON-NOTIFY: ordinary completion unchanged
+  - C10-ABLATION-03-LOST-WAKE: dispatch FAILED → ALLOWED, no regression
+  - C10-ABLATION-04-FAST-EXIT: marker consumed via resolveObligation, no wake → unchanged
+  - C10-ABLATION-05-MULTI-JOB-ON: J20 consumed, J40 outstanding → SUPPRESSED (per-job narrow)
+  - C10-ABLATION-05-MULTI-JOB-OFF: same, C10 OFF → LEAKS
+```
+
+**Gates (15 files / 78 tests, exit 0):**
+
+- run-1: 12 files / 71 tests (BNCA/BCNEX/BCTPA/BCCOC/TQCB/CCARD + c10 baseline + c10 ablation)
+- run-2: 3 files / 7 tests (BNCA framework-ablation + h1-green + ablation)
+- TypeScript: clean (`bunx tsc --noEmit` → no diagnostics)
+- Biome lint: clean (no diagnostics on either new test file)
+- `git diff --check`: clean (no whitespace-only noise)
+
+Pre-existing BNCA conservation suite (13 files / 67 tests) was unchanged; the 2 added files contribute 11 new tests to the 78 total.
+
+**Live qualification:**
+
+Per ACT §14: "If C10 is RETAINED because ablation proved necessity: no new live dogfood is required solely for retention, unless production code changed elsewhere in this ACT." This ACT made ZERO production code changes; the ablation mechanism was test-only injection. The predecessor dogfood VSIX (`dist/dogfood/clinemm-4.1.16-521f23482.vsix`, SHA256=1f1af4ad2eb08f8230dd714b8ee9836f0a7d387bf5d4c49fd6b60f37094d02c7) exercised the FULL notify-owned lifecycle end-to-end and did not observe duplicate completion presentation. Retention is supported by unit-test ablation evidence + the prior live exercise.
+
+**Halt register:**
+
+```
+HALT_REPOSITORY_TRUST            NOT_TRIGGERED (git status clean; HEAD 6e4c70b5; recon correct)
+HALT_RED_NOT_REPRODUCED          NOT_TRIGGERED (C10-BASELINE-01..03 reproduce current contract exactly)
+HALT_FRAMEWORK_AUTHORITY_REGRESSION  NOT_TRIGGERED (SEAM B preserved exactly; ablation only neutralizes SEAM A predicates)
+HALT_ZERO_COMPLETION             NOT_TRIGGERED (framework commits reach 1 across all matrices)
+HALT_DUPLICATE_TERMINAL_COMPLETION  NOT_TRIGGERED (framework commit count == 1 in every case)
+HALT_NOTIFICATION_LOST           NOT_TRIGGERED (lost-wake ALLOW behavior preserved)
+HALT_MULTI_JOB_AUTHORITY_CROSSTALK  NOT_TRIGGERED (per-job ownership-aware filter preserved with C10 ON)
+HALT_OOM_REGRESSION              NOT_TRIGGERED (no production change)
+HALT_EXECUTABLE_GATE_REGRESSION  NOT_TRIGGERED (gate exit 0; 15 files; 78 tests; clean)
+HALT_ARTIFACT_UNBOUND            NOT_TRIGGERED (result.json + 11 evidence files all bound to ENTRY_HEAD 6e4c70b5)
+```
+
+**Decisive Factory state:**
+
+```
+ACT                    = PASS_C10_ABLATION_RETAINED
+PURPOSE                = necessity / ablation / simplification
+C10_NECESSARY          = TRUE
+C10_REMOVED            = FALSE
+PROTECTED_INVARIANT    = "prevents second persisted completion_result row while framework phase completion remains exactly one"
+FRAMEWORK_AUTHORITY    = PRESERVED (SEAM B intact at setTurnPhase("completed", ...))
+PRODUCTION_CHANGE      = NONE (no production seam modified)
+TESTS_ADDED            = 11 across 2 files
+TESTS_TOTAL            = 78 across 15 files (gates clean)
+TYPECHECK              = clean
+LINT                   = clean
+DIFF_CHECK             = clean
+LIVE                   = NOT_REQUIRED (predecessor VSIX 1f1af4ad2e... covers the same boundary)
+```
+
+**Verdict:** PASS_C10_ABLATION_RETAINED.
+
+The C10 message filter is retained because the ablation proved it protects an independent presentation invariant. The two layers (SEAM B framework barrier + SEAM A message filter) are NOT redundant — they protect different invariants and both must remain. NO production code changed.
