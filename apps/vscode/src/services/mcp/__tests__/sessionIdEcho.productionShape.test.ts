@@ -29,7 +29,6 @@ import type { ClineCoreStartInput } from "@cline/core"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import sinon from "sinon"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { McpHubToolProvider } from "@/sdk/vscode-runtime-builder"
 import { McpHub } from "../McpHub"
 import type { McpConnection } from "../types"
 
@@ -99,14 +98,51 @@ function createHub(
 	return hub as McpHub
 }
 
-async function whoamiViaProvider(
-	provider: { callTool(req: { serverName: string; toolName: string }): Promise<unknown> },
-	serverName: string,
+/**
+ * ACT-MYC-CLINEMM02-A-CORRECTION01:
+ * Drive the FULL production session-start seam — `bootstrap.applyToStartSessionInput`
+ * (the lambda the real `VscodeSessionHost` passes to `ClineCore.create`) is the
+ * canonical entry that threads `input.config.sessionId` into
+ * `createVscodeExtraTools({sessionId})`. The MCP tool built by that path
+ * carries the real production `McpHubToolProvider` (constructed with the
+ * real sessionId) and `tool.execute()` is the real production entry that
+ * reaches `McpHub.ensureSessionConnection` → spawn per-session child.
+ *
+ * This helper is the load-bearing bridge between A2A-17/18 (which use it for
+ * the discovery seam) and A2A-16 (which uses it for the lifecycle teardown
+ * case). It explicitly replaces the prior pattern of `new McpHubToolProvider(hub, sid)`
+ * for ALL production-shape tests in this file.
+ */
+async function whoamiViaProductionToolFor(
+	bootstrap: { applyToStartSessionInput: (i: ClineCoreStartInput) => Promise<ClineCoreStartInput> },
+	sessionId: string,
 ): Promise<{ pid: number; session: string | null }> {
-	const res = (await provider.callTool({ serverName, toolName: "whoami" })) as {
-		content: Array<{ type: string; text?: string }>
+	// Re-run the real `prepareStartSessionInput` lambda with the given sessionId.
+	// The lambda extracts `input.config.sessionId?.trim()` (production code at
+	// vscode-session-host.ts:380) and threads it into createVscodeExtraTools,
+	// which constructs the real McpHubToolProvider with that sessionId.
+	const prepared = await bootstrap.applyToStartSessionInput({
+		source: undefined,
+		config: {
+			sessionId,
+			cwd: "/workspace",
+			extraTools: [],
+		} as unknown as ClineCoreStartInput["config"],
+	})
+	const mcpTool = (prepared.config.extraTools as Array<{ name?: string }>).find((t) => t?.name?.includes?.("session-id-echo"))
+	if (!mcpTool) {
+		throw new Error(
+			`[production-seam] session-id-echo MCP tool not found in extraTools for sessionId=${sessionId}; extraTools=${JSON.stringify(
+				(prepared.config.extraTools as Array<{ name?: string }>).map((t) => t?.name),
+			)}`,
+		)
 	}
-	const text = res.content.find((c) => c.type === "text")?.text
+	// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+	const result = await (mcpTool as any).execute({}, { agentId: "test-agent", iteration: 0 })
+	// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+	const text = ((result as any)?.content as Array<{ type: string; text?: string }>)?.find(
+		(c: { type: string }) => c.type === "text",
+	)?.text
 	return JSON.parse(text!)
 }
 
@@ -302,41 +338,24 @@ describe("A2A-17/18: prepareStartSessionInput forwards sessionId into McpHubTool
 		})
 		const prepare = mockClineCoreCreate.latestPrepare()
 		expect(prepare).toBeDefined()
-		const bootstrap = await prepare!()
+		const bootstrap = await prepare()
 
-		// (1) Drive the production host start seam with sessionId=A. The
-		//     bootstrap applies the host-side wiring: vscode-session-host.ts
-		//     line 382 captures `input.config.sessionId?.trim()` and line
-		//     413 threads it into `createVscodeExtraTools`. We assert
-		//     `prepared.config.extraTools` contains the per-session MCP tool.
-		const prepared = await bootstrap.applyToStartSessionInput({
-			source: undefined,
-			config: { sessionId: "session-A", cwd: "/workspace", extraTools: [] } as unknown as ClineCoreStartInput["config"],
-		})
-
-		// (2) Find the per-session MCP tool in the prepared input. The tool's
-		//     execute handler was constructed via the REAL
-		//     createVscodeExtraTools → createMcpTools → provider.callTool
-		//     pipeline, where the provider was created with `sessionId="session-A"`.
+		// Drive the production seam end-to-end:
+		//   bootstrap.applyToStartSessionInput({sessionId: "session-A"})
+		//     → prepareStartSessionInput lambda
+		//     → input.config.sessionId?.trim() captured at
+		//       vscode-session-host.ts:380
+		//     → createVscodeExtraTools({sessionId: "session-A"}) at
+		//       vscode-session-host.ts:413
+		//     → McpHubToolProvider(hub, "session-A")
+		//     → produced tool.execute()
+		//     → mcpHub.callTool → ensureSessionConnection → spawn per-session child
 		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const extraTools = prepared.config.extraTools as Array<any>
-		expect(extraTools.length).toBeGreaterThan(0)
-		const mcpTool = extraTools.find((t) => t?.name?.includes?.("session-id-echo"))
-		expect(mcpTool).toBeDefined()
-
-		// (3) Invoke via the production AgentTool.execute signature. The
-		//     provider routes callTool → mcpHub.callTool(name, toolName,
-		//     args, ulid, signal, "session-A") → ensureSessionConnection
-		//     spawns the per-session child with MYC_SESSION_ID="session-A".
-		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const result = await mcpTool.execute({}, { agentId: "test-agent", iteration: 0 } as any)
-		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const payload = (result as any)?.output ?? result
-		const text = (payload?.content as Array<{ type: string; text?: string }>)?.find(
-			(c: { type: string }) => c.type === "text",
-		)?.text
-		expect(text).toBeDefined()
-		const parsed = JSON.parse(text!)
+		const parsed = (await whoamiViaProductionToolFor(
+			// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+			bootstrap as any,
+			"session-A",
+		)) as { pid: number; session: string | null }
 		expect(parsed.pid).not.toBe(process.pid)
 		expect(parsed.session).toBe("session-A")
 	})
@@ -349,38 +368,23 @@ describe("A2A-17/18: prepareStartSessionInput forwards sessionId into McpHubTool
 			telemetry: {} as any,
 		})
 		const prepare = mockClineCoreCreate.latestPrepare()
-		const bootstrap = await prepare!()
+		expect(prepare).toBeDefined()
+		const bootstrap = await prepare()
 
-		const preparedA = await bootstrap.applyToStartSessionInput({
-			source: undefined,
-			config: { sessionId: "session-A", cwd: "/workspace", extraTools: [] } as unknown as ClineCoreStartInput["config"],
-		})
-		const preparedB = await bootstrap.applyToStartSessionInput({
-			source: undefined,
-			config: { sessionId: "session-B", cwd: "/workspace", extraTools: [] } as unknown as ClineCoreStartInput["config"],
-		})
-
+		// Drive both sessionIds through the production seam. NO direct
+		// McpHubToolProvider construction.
 		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const toolA = (preparedA.config.extraTools as Array<any>).find((t) => t?.name?.includes?.("session-id-echo"))
+		const parsedA = (await whoamiViaProductionToolFor(
+			// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+			bootstrap as any,
+			"session-A",
+		)) as { pid: number; session: string | null }
 		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const toolB = (preparedB.config.extraTools as Array<any>).find((t) => t?.name?.includes?.("session-id-echo"))
-		expect(toolA).toBeDefined()
-		expect(toolB).toBeDefined()
-
-		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const resA = await toolA.execute({}, { agentId: "test-agent", iteration: 0 } as any)
-		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const resB = await toolB.execute({}, { agentId: "test-agent", iteration: 0 } as any)
-		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const textA = ((resA as any)?.content as Array<{ type: string; text?: string }>)?.find(
-			(c: { type: string }) => c.type === "text",
-		)?.text
-		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		const textB = ((resB as any)?.content as Array<{ type: string; text?: string }>)?.find(
-			(c: { type: string }) => c.type === "text",
-		)?.text
-		const parsedA = JSON.parse(textA!)
-		const parsedB = JSON.parse(textB!)
+		const parsedB = (await whoamiViaProductionToolFor(
+			// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+			bootstrap as any,
+			"session-B",
+		)) as { pid: number; session: string | null }
 
 		expect(parsedA.session).toBe("session-A")
 		expect(parsedB.session).toBe("session-B")
@@ -482,9 +486,16 @@ describe("A2A-16: SdkSessionLifecycle.endActiveSession tears down the per-sessio
 		const stopSpy = sinon.spy()
 		fakeInner.stop = stopSpy
 
-		// (2) Drive the production-shape acquire.
-		const provider = new McpHubToolProvider(hub, "session-A")
-		const beforeTeardown = await whoamiViaProvider(provider, "session-id-echo")
+		// (2) Drive the production-shape acquire through the REAL
+		//     prepareStartSessionInput lambda (production seam) — NOT a
+		//     direct `new McpHubToolProvider(hub, "session-A")` construction.
+		//     The bootstrap was installed by ClineCore.create during
+		//     lifecycle.startNewSession; re-applying it for "session-A"
+		//     produces a tool whose execute() reaches the per-session child.
+		const prepare = mockClineCoreCreate.latestPrepare()
+		expect(prepare).toBeDefined()
+		const bootstrap = await prepare()
+		const beforeTeardown = await whoamiViaProductionToolFor(bootstrap, "session-A")
 		expect(beforeTeardown.session).toBe("session-A")
 		expect(hub.sessionConnections.get("session-A")?.size).toBe(1)
 
@@ -517,12 +528,29 @@ describe("A2A-16: SdkSessionLifecycle.endActiveSession tears down the per-sessio
 		const stopSpy = sinon.spy()
 		fakeInner.stop = stopSpy
 
-		await new McpHubToolProvider(hub, "session-A").callTool({ serverName: "session-id-echo", toolName: "whoami" })
-		await new McpHubToolProvider(hub, "session-B").callTool({ serverName: "session-id-echo", toolName: "whoami" })
+		// (2) Drive BOTH A and B through the production tool seam — the
+		//     real `bootstrap.applyToStartSessionInput({config:{sessionId:X}})`
+		//     lambda threads the sessionId into createVscodeExtraTools →
+		//     McpHubToolProvider(sessionId). NO direct McpHubToolProvider
+		//     construction.
+		const prepare = mockClineCoreCreate.latestPrepare()
+		expect(prepare).toBeDefined()
+		const bootstrap = await prepare()
 
+		const seenA = await whoamiViaProductionToolFor(bootstrap, "session-A")
+		const seenB = await whoamiViaProductionToolFor(bootstrap, "session-B")
+
+		expect(seenA.session).toBe("session-A")
+		expect(seenB.session).toBe("session-B")
+		expect(seenA.pid).not.toBe(seenB.pid)
+		expect(seenA.pid).not.toBe(process.pid)
+		expect(seenB.pid).not.toBe(process.pid)
 		expect(hub.sessionConnections.size).toBe(2)
 
-		// Tear down A only.
+		// Tear down A only — A is the active session; B is a coexisting
+		// per-session child whose ownership is NOT bound to the lifecycle
+		// (production invariant: only the active session's lifecycle owns
+		// the release).
 		await lifecycle.endActiveSession("teardown-A", { awaitStop: true, timeoutMs: 5000 })
 
 		expect(hub.sessionConnections.get("session-A")).toBeUndefined()
@@ -532,7 +560,7 @@ describe("A2A-16: SdkSessionLifecycle.endActiveSession tears down the per-sessio
 		expect(stopSpy.calledWith("session-A")).toBe(true)
 	})
 
-	it("reconnect: after endActiveSession, ensureSessionConnection(A) spawns a new child", async () => {
+	it("reconnect: after endActiveSession, the production tool spawns a new child for the same sessionId", async () => {
 		const hub = createHub({ MYC_SESSION_ID: { fromSession: "sessionId" } })
 		await installStaticConfig(hub)
 		mockClineCoreCreate.reset()
@@ -543,22 +571,28 @@ describe("A2A-16: SdkSessionLifecycle.endActiveSession tears down the per-sessio
 			config: { sessionId: "session-A", cwd: "/workspace" } as unknown as ClineCoreStartInput["config"],
 		})
 
-		const provider = new McpHubToolProvider(hub, "session-A")
-		const pidBefore = (await whoamiViaProvider(provider, "session-id-echo")).pid
+		const prepare = mockClineCoreCreate.latestPrepare()
+		expect(prepare).toBeDefined()
+		const bootstrap = await prepare()
+		const before = await whoamiViaProductionToolFor(bootstrap, "session-A")
 
 		await lifecycle.endActiveSession("teardown-A", { awaitStop: true, timeoutMs: 5000 })
 
 		// Re-claim with the same sessionId (matches A2A-09 row but driven
-		// through the production lifecycle).
+		// through the production lifecycle + production tool seam).
 		await lifecycle.startNewSession({
 			config: { sessionId: "session-A", cwd: "/workspace" } as unknown as ClineCoreStartInput["config"],
 		})
-		const provider2 = new McpHubToolProvider(hub, "session-A")
-		const pidAfter = (await whoamiViaProvider(provider2, "session-id-echo")).pid
 
-		expect(pidAfter).not.toBe(pidBefore)
-		expect(pidAfter).not.toBe(process.pid)
+		const prepare2 = mockClineCoreCreate.latestPrepare()
+		expect(prepare2).toBeDefined()
+		const bootstrap2 = await prepare2()
+		const after = await whoamiViaProductionToolFor(bootstrap2, "session-A")
 
-		await hub.disconnectSession("session-A")
+		expect(after.pid).not.toBe(before.pid)
+		expect(after.pid).not.toBe(process.pid)
+		expect(after.session).toBe("session-A")
+
+		await lifecycle.endActiveSession("reconnect-cleanup", { awaitStop: true, timeoutMs: 5000 })
 	})
 })
