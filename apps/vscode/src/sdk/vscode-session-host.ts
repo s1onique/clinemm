@@ -365,6 +365,21 @@ export class VscodeSessionHost implements SdkSessionHost {
 				? await remoteConfigIntegration.applyToStartSessionInput(input)
 				: input
 			const requestedTerminalExecutionMode = StateManager.get().getGlobalStateKey("vscodeTerminalExecutionMode")
+			// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5 (HALT correction).
+			// Forward the canonical sessionId (set upstream by
+			// `sdk-task-start-coordinator.ts:148 createSessionId()` and threaded
+			// through `SdkController` into `ClineCore.startSession(input.config)`)
+			// into `createVscodeExtraTools` so the `McpHubToolProvider` is
+			// constructed with a non-undefined `sessionId` and routes every
+			// `listTools` / `callTool` through `McpHub.ensureSessionConnection`.
+			// Without this seam the new option exists but the actual session-start
+			// caller does not supply it, leaving deferred session-bound MCP servers
+			// undiscoverable to the model.
+			//
+			// Trim whitespace defensively — the upstream sessionId is canonical,
+			// but a stray whitespace from an older session payload would silently
+			// collapse to the static fallback path. Empty string falls through.
+			const sessionIdForMcp = inputWithRemoteConfig.config.sessionId?.trim()
 			const extraTools = await createVscodeExtraTools(options.mcpHub, {
 				cwd: inputWithRemoteConfig.config.cwd,
 				getTerminalManager: options.getTerminalManager,
@@ -391,6 +406,11 @@ export class VscodeSessionHost implements SdkSessionHost {
 				// pass-through of the per-turn ownership-recording hook.
 				// Same optional-wiring shape as `resolveActiveOwner`.
 				recordLaunchedBackgroundJob: options.recordLaunchedBackgroundJob,
+				// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5 (HALT correction).
+				// Wire the sessionId captured above (line 382) so the McpHubToolProvider
+				// constructed inside `createVscodeExtraTools` reaches `McpHub.ensureSessionConnection`
+				// for every listTools/callTool during this session.
+				sessionId: sessionIdForMcp,
 			})
 			return {
 				...inputWithRemoteConfig,

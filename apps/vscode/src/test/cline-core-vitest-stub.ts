@@ -126,6 +126,12 @@ export function createShellExecutor() {
 }
 
 export { augmentMcpTimeoutError } from "../../../../sdk/packages/core/src/extensions/mcp/timeout"
+// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5 HALT correction.
+// Re-export the real createMcpTools so the production-shape host-discovery
+// test (src/services/mcp/__tests__/sessionIdEcho.productionShape.test.ts)
+// can drive the REAL createVscodeExtraTools → createMcpTools pipeline
+// without spinning up a real SDK host.
+export { createMcpTools } from "../../../../sdk/packages/core/src/extensions/mcp/tools"
 // The real createShellTool, so tests exercise the actual description
 // building and shell classification (getShellKind) rather than a stub that
 // would have to duplicate those invariants.

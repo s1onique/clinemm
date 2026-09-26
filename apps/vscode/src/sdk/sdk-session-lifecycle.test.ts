@@ -679,7 +679,7 @@ describe("SdkSessionLifecycle", () => {
 function makeLifecycle(overrides: Partial<ConstructorParameters<typeof SdkSessionLifecycle>[0]> = {}) {
 	return new SdkSessionLifecycle({
 		// biome-ignore lint/suspicious/noExplicitAny: focused fake for lifecycle unit test
-		mcpHub: {} as any,
+		mcpHub: { disconnectSession: vi.fn().mockResolvedValue(undefined) } as any,
 		requestToolApproval: vi.fn(),
 		askQuestion: vi.fn(),
 		onSessionEvent: vi.fn(),
