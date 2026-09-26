@@ -21,19 +21,17 @@ Test file
 ---------
 sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
 
-Pool
-----
-forks (default for sdk/packages/core/vitest.config.ts)
+Pool (CORRECTED — see "Bounded correction" below)
+-------------------------------------------------
+vmThreads (worker-thread isolation)
 
 Summary
 -------
 Test Files: 1 passed (1)
 Tests:      23 passed (23)
-Duration:   ~150ms
-Exit code:  vitest exits 1 due to a post-suite `ForksPoolWorker kill EPERM`
-            cleanup error that fires AFTER all tests pass (same pattern as
-            the existing SW-CM04 base pool). All 23 tests themselves pass;
-            the EPERM noise does not affect test results.
+Duration:   152ms
+Exit code:  0
+Error scan: 0 matches for "EPERM" / "kill EPERM" / "Unhandled 'error'"
 
 Discriminator coverage
 ----------------------
@@ -89,4 +87,29 @@ CAPTURE_INSUFFICIENT report.
 
 Raw output
 ----------
-Full vitest output preserved in `04-runtime-contract-tests.raw.txt`.
+Gate-of-record: `04-runtime-contract-tests.vmthreads.txt` (vmThreads,
+GATE_EXIT=0, ERROR_SCAN_MATCHES=0).
+
+Forensic comparison only: `04-runtime-contract-tests.raw.txt`
+(forks-pool run that exited 1 with post-suite EPERM cleanup noise AFTER
+all 23 tests passed — runner artifact, not a test failure).
+
+Bounded correction (per factory reviewer HALT_SKILL_TRIGGER_GATE_NOT_CLEAN)
+---------------------------------------------------------------------------
+The earlier forks-pool run exited 1 with a post-suite
+`ForksPoolWorker kill EPERM` cleanup error AFTER all 23 tests passed —
+confirmed as a runner artifact, not a test failure. Re-ran the same
+23 tests under `--pool=vmThreads` (vitest worker-thread isolation,
+documented alternative to the default forks pool).
+
+The vmThreads run supersedes the forks-pool exit-1 for the gate verdict:
+- Test logic unchanged
+- Production code unchanged
+- Corpus unchanged
+- Pool changed only
+
+vmThreads result:
+    Test Files  1 passed (1)
+    Tests       23 passed (23)
+    GATE_EXIT   0
+    ERROR_SCAN_MATCHES  0

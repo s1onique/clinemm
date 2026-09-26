@@ -1,0 +1,17 @@
+(node:9453) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+
+(node:9453) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ |@cline/core| src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts (23 tests) 152ms
+
+ Test Files  1 passed (1)
+      Tests  23 passed (23)
+   Start at  16:06:21
+   Duration  1.85s (transform 892ms, setup 0ms, import 1.61s, tests 152ms, environment 10ms)
+

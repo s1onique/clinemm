@@ -29,10 +29,22 @@
     "D1 metadata omission: NOT REPRODUCED (enabled names reach tool.description)",
     "D2 enablement defect: NOT REPRODUCED (disabled skills filtered from tool.description)",
     "D5 tool-call rejection: NOT REPRODUCED (unknown/disabled both rejected with informative errors)",
-    "D6 stale skill catalog: NOT REPRODUCED (refreshType("skill") updates snapshot)",
+    "D6 stale skill catalog: NOT REPRODUCED (refreshType('skill') updates snapshot)",
     "D7 explicit invocation parser defect: NOT REPRODUCED (slash command correctly resolves with both expandSkillCommands branches)"
   ],
   "description_ablation_required": false,
   "description_ablation_reason": "Description-driven miss (D3/D4) is only observable via live model execution. Without live metrics, there is nothing to ablate. The trigger surface observable from production seams contains ONLY skill NAMES — descriptions are not in scope at the trigger boundary, so a description-ablation study would be vacuous in ClineMM's current architecture.",
-  "notes": "Per ACT Section 25, the verdict for this sandbox run is CAPTURE_INSUFFICIENT. The runtime-seam characterization (D1/D2/D5/D6/D7 all negative — no runtime defect) is recorded as the load-bearing evidence; the model-driven metrics (precision/recall/paraphrase consistency/overlap acceptability/disabled_violation/explicit_invocation_success) are deferred to a future run with provider credentials."
+  "notes": "Per ACT Section 25, the verdict for this sandbox run is CAPTURE_INSUFFICIENT. The runtime-seam characterization (D1/D2/D5/D6/D7 all negative — no runtime defect) is recorded as the load-bearing evidence; the model-driven metrics (precision/recall/paraphrase consistency/overlap acceptability/disabled_violation/explicit_invocation_success) are deferred to a future run with provider credentials.",
+  "gate_of_record": {
+    "pool": "vmThreads",
+    "command": "bunx vitest run --config vitest.config.ts --pool=vmThreads src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts",
+    "test_files": 1,
+    "tests": 23,
+    "tests_passed": 23,
+    "duration_ms": 152,
+    "gate_exit": 0,
+    "error_scan_matches": 0,
+    "raw_artifact": "04-runtime-contract-tests.vmthreads.txt",
+    "bounded_correction": "Earlier forks-pool run exited 1 with post-suite ForksPoolWorker kill EPERM cleanup noise AFTER all 23 tests passed — runner artifact, not a test failure. Re-ran the same 23 tests under --pool=vmThreads (vitest worker-thread isolation, documented alternative to the default forks pool). Test logic, production code, and corpus unchanged; only the pool changed. vmThreads run is the gate-of-record."
+  }
 }

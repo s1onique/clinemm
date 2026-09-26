@@ -12541,3 +12541,55 @@ Discriminator coverage:
 **Verdict:** PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT.
 
 **Successor:** SW-CM02 — `ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01` (after a future run with provider credentials enables live model evals). No SW-CM01 successor repair ACT is opened (no runtime defect reproduced).
+
+---
+
+## ACT-CLINEMM-SW-CM01-SKILL-TRIGGER-EVALS01 — BOUNDED CORRECTION ROUND 1 — HALT_SKILL_TRIGGER_GATE_NOT_CLEAN RESOLVED — 2026-09-26
+
+**Status:** PASS_SKILL_TRIGGER_RUNTIME_SEAM_CHARACTERIZED / LIVE_MODEL_EVAL_DEFERRED. HALT_SKILL_TRIGGER_GATE_NOT_CLEAN RESOLVED.
+
+**Trigger:** Factory reviewer halt over vitest exit=1 in the original forks-pool run (post-suite `ForksPoolWorker kill EPERM` cleanup noise that fired AFTER all 23 tests passed). Reviewer correctly observed that an exit-1 cannot be called a passing gate.
+
+**Bounded correction action (no production change; no test-logic change; no corpus change; only the pool changed):**
+
+Re-ran the same 23 tests under vitest's documented worker-thread pool:
+
+```bash
+bunx vitest run \
+  --config vitest.config.ts \
+  --pool=vmThreads \
+  src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
+```
+
+Result (`04-runtime-contract-tests.vmthreads.txt`):
+- Test Files: 1 passed (1)
+- Tests: 23 passed (23)
+- Duration: 152ms
+- GATE_EXIT: 0
+- ERROR_SCAN_MATCHES: 0  (no EPERM / kill EPERM / Unhandled 'error' anywhere)
+
+This was the simplest available runner fix and was confirmed compatible with the test: the test uses filesystem temp dirs, promises, watcher refresh, and normal tool execution — none of which depend on child-process-only APIs (process.chdir / process.send).
+
+**Verdict policy (per reviewer):**
+- `RUNTIME_TRIGGER_SEAM = PASS`
+- `LIVE_MODEL_METRICS = CAPTURE_INSUFFICIENT` (unchanged — still no provider credentials in this sandbox; per ACT Section 13, synthetic/mocked model responses MUST NOT be promoted as live evidence)
+- Combined verdict: PASS_SKILL_TRIGGER_RUNTIME_SEAM_CHARACTERIZED_LIVE_MODEL_EVAL_DEFERRED
+
+**Successor:** SW-CM02 may proceed. Its question is downstream runtime routing after a skill/tool choice has already been made; the missing live precision/recall numbers do not block runtime routing characterization.
+
+**Substrate conservation:** unchanged. SW-CM04 base corpus / SW-CM04 bridge / C10-FILTER-ABLATION01 / BNCA-REPAIR01 / BackgroundNotifyCoordinator authority all UNCHANGED.
+
+**Production change:** NO.
+
+**Halt register update:** HALT_SKILL_TRIGGER_GATE_NOT_CLEAN = RESOLVED (bounded correction ROUND 1). bounded_correction_round bumped to 1.
+
+**Files updated this round:**
+- `04-runtime-contract-tests.vmthreads.txt` (NEW — gate-of-record)
+- `04-runtime-contract-tests.txt` (corrected to point at vmThreads as gate-of-record)
+- `04-runtime-contract-tests.raw.txt` (preserved for forensic comparison; superseded)
+- `06-trigger-metrics.json` (gate_of_record block added; pre-existing JSON bug from earlier in this ACT — unescaped quotes around `refreshType("skill")` — fixed in passing)
+- `08-focused-gates.txt` (pool switched to vmThreads; verdict string updated)
+- `result.json` (test_exit_code: 0; pool: vmThreads; halt_register block added with HALT_SKILL_TRIGGER_GATE_NOT_CLEAN = RESOLVED)
+- This board entry
+
+Test file (`sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts`) and corpus (`02-trigger-corpus.jsonl`) UNCHANGED.

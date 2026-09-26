@@ -7,26 +7,26 @@ Test file
 ---------
 sdk/packages/core/src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
 
-Pool
-----
-forks (default for sdk/packages/core/vitest.config.ts; SW-CM04-style
-vmThreads override not needed — no worker-thread-only APIs in this test).
+Pool (CORRECTED — see "Bounded correction")
+-------------------------------------------
+vmThreads (worker-thread isolation).
 
 Command
 -------
-bunx vitest run --config vitest.config.ts --project @cline/core \
+bunx vitest run --config vitest.config.ts --pool=vmThreads \
     src/extensions/tools/__tests__/skill-trigger-evals01.swcm01.test.ts
 
 Result
 ------
 Test Files  1 passed (1)
 Tests       23 passed (23)
-Duration    ~150ms
-Exit code   1 (vitest post-suite ForksPoolWorker kill EPERM cleanup noise,
-             same pattern as SW-CM04 base pool; all 23 tests pass BEFORE
-             the EPERM worker-cleanup fires).
+Duration    152ms
+GATE_EXIT   0
+ERROR_SCAN_MATCHES  0  (no "EPERM" / "kill EPERM" / "Unhandled 'error'"
+                        anywhere in the captured output)
 
-Raw output is in 04-runtime-contract-tests.raw.txt.
+Gate-of-record raw output is in
+04-runtime-contract-tests.vmthreads.txt.
 
 Substrate conservation
 ----------------------
@@ -50,6 +50,22 @@ src/extensions/tools/executors/editor.realpath-authority.test.ts
         : 3 tests failed  (pre-existing; same as above)
 
 These 6 pre-existing failures are out of scope for SW-CM01 trigger evals.
+
+Bounded correction (per factory reviewer HALT_SKILL_TRIGGER_GATE_NOT_CLEAN)
+---------------------------------------------------------------------------
+Earlier forks-pool run exited 1 with post-suite ForksPoolWorker kill
+EPERM cleanup noise AFTER all 23 tests passed — a runner artifact, not
+a test failure. Re-ran the same 23 tests under --pool=vmThreads
+(worker-thread isolation; vitest documented alternative to the default
+forks pool). Test logic, production code, and corpus unchanged; only
+the pool changed.
+
+vmThreads result (gate-of-record):
+    Test Files          1 passed (1)
+    Tests               23 passed (23)
+    Duration            152ms
+    GATE_EXIT           0
+    ERROR_SCAN_MATCHES  0
 
 Biome
 -----
@@ -80,21 +96,21 @@ Production change: NO.
 
 Verdict
 -------
-PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT
-  - Production-seam characterization: PASS (23/23 tests; no runtime
-    defect reproduced across D1/D2/D5/D6/D7 discriminators).
+PASS_SKILL_TRIGGER_RUNTIME_SEAM_CHARACTERIZED / LIVE_MODEL_EVAL_DEFERRED
+  - Runtime seam characterization: PASS (23/23 tests; GATE_EXIT=0;
+    ERROR_SCAN_MATCHES=0; no runtime defect reproduced across D1/D2/D5/
+    D6/D7 discriminators).
   - Live model evals: CAPTURE_INSUFFICIENT (no provider credentials in
-    this sandbox). Per ACT Section 25, deferred to a future run.
+    this sandbox; per ACT Section 25, deferred to a future run).
+
+The live-model half of SW-CM01 remains CAPTURE_INSUFFICIENT; the
+runtime-seam half is fully characterized.
 
 Successor selection
 -------------------
-Per ACT Section 26: SW-CM01's trigger boundary is now characterized for
-the runtime seam. Live model metrics require a sandbox with provider
-credentials.
+After the runner correction, SW-CM02 may proceed: its question is
+downstream runtime routing after a skill/tool choice has already been
+made, and the missing live precision/recall numbers do not block
+runtime routing characterization.
 
-In a future run with provider credentials, the next step is SW-CM02
-(ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01): once the model has
-selected a skill, does Cline route to the correct handler/tool/subsystem?
-
-No runtime defect was reproduced in this ACT, so no SW-CM01 successor
-repair ACT is opened.
+No SW-CM01 successor repair ACT is opened (no runtime defect reproduced).

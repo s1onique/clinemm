@@ -65,8 +65,9 @@
   "gates": {
     "new_files": 1,
     "new_tests": 23,
-    "test_exit_code": 1,
-    "test_exit_explanation": "vitest exit=1 is the post-suite ForksPoolWorker kill EPERM cleanup noise after all tests pass (same as SW-CM04 base pool). All 23 tests pass.",
+    "test_exit_code": 0,
+    "pool": "vmThreads",
+    "test_exit_explanation": "Gate-of-record is the vmThreads re-run after bounded correction. The earlier forks-pool run exited 1 with post-suite ForksPoolWorker kill EPERM cleanup noise AFTER all 23 tests passed (runner artifact, not a test failure). Re-ran the same 23 tests under --pool=vmThreads (vitest worker-thread isolation). GATE_EXIT=0, ERROR_SCAN_MATCHES=0.",
     "typecheck": "PASS (zero new diagnostics in new file; pre-existing TSC_RC=2 baseline in other files unchanged)",
     "lint": "PASS (BIOME_RC=0; checked 1 file)",
     "diff_check": "PASS (DIFF_CHECK_RC=0; no tracked-file changes; only new untracked files)",
@@ -75,8 +76,21 @@
     "pre_existing_unrelated_files": [
       "src/extensions/tools/executors/bash.supervised.bash-startup-env.test.ts (3 tests; pre-existing)",
       "src/extensions/tools/executors/editor.realpath-authority.test.ts (3 tests; pre-existing)"
-    ]
+    ],
+    "gate_of_record_raw_artifact": "04-runtime-contract-tests.vmthreads.txt",
+    "forensic_comparison_raw_artifact": "04-runtime-contract-tests.raw.txt (forks-pool exit-1; superseded by vmThreads run)"
   },
-  "verdict": "PASS_SKILL_TRIGGER_EVALS_RUNTIME_SEAM_CHARACTERIZED_LIVE_CAPTURE_INSUFFICIENT",
-  "successor_act": "ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01 (after a future run with provider credentials enables live model evals)"
+  "runtime_seam_verdict": "PASS_SKILL_TRIGGER_RUNTIME_SEAM_CHARACTERIZED",
+  "live_model_verdict": "DEFERRED (CAPTURE_INSUFFICIENT in this sandbox; no provider credentials)",
+  "verdict": "PASS_SKILL_TRIGGER_RUNTIME_SEAM_CHARACTERIZED_LIVE_MODEL_EVAL_DEFERRED",
+  "halt_register": [
+    {
+      "halt_id": "HALT_SKILL_TRIGGER_GATE_NOT_CLEAN",
+      "status": "RESOLVED",
+      "bounded_correction_round": 1,
+      "bounded_correction_action": "Re-ran the same 23 tests under --pool=vmThreads (vitest worker-thread isolation, documented alternative to the default forks pool). Test logic unchanged; production code unchanged; corpus unchanged; only the pool changed. Result: GATE_EXIT=0, ERROR_SCAN_MATCHES=0, 23/23 passing.",
+      "resolved_by": "vmThreads re-run supersedes forks-pool exit-1 as gate-of-record"
+    }
+  ],
+  "successor_act": "ACT-CLINEMM-SW-CM02-HANDLER-TOOL-ROUTING-EVALS01 (proceeds after this correction; missing live precision/recall numbers do not block runtime routing characterization)"
 }
