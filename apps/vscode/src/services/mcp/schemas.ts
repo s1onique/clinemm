@@ -14,6 +14,42 @@ const AutoApproveSchema = z.array(z.string()).default([])
 const ReadTimeoutSchema = z.preprocess(resolveMcpTimeoutSeconds, z.number()).optional().default(DEFAULT_MCP_TIMEOUT_SECONDS)
 export const McpTimeoutSecondsSchema = z.number().finite().min(MIN_MCP_TIMEOUT_SECONDS).max(MAX_MCP_TIMEOUT_SECONDS)
 
+/**
+ * ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 — Stage 1 schema.
+ *
+ * Each `env` entry on a stdio MCP server config may be EITHER:
+ *   - a plain string (legacy, constant value)
+ *   - `{ value: string }`                     — explicit constant
+ *   - `{ fromEnv: string }`                   — copy from a key in the process env
+ *   - `{ fromSession: "sessionId" }`          — copy the active Cline session id
+ *
+ * `required` (boolean, default false) when true turns a missing source into a
+ * schema REJECTION at parse time — so the user sees the misconfiguration in
+ * the settings UI rather than as a runtime crash inside the spawned child.
+ *
+ * XOR semantics: a single entry may carry exactly ONE source. A2A-07 forbids
+ * mixing `value` with `fromEnv` / `fromSession`, or `fromEnv` with `fromSession`,
+ * on the same entry — the schema rejects these up front.
+ */
+const EnvEntrySchema = z
+	.object({
+		value: z.string().optional(),
+		fromEnv: z.string().optional(),
+		fromSession: z.literal("sessionId").optional(),
+		required: z.boolean().optional(),
+	})
+	.refine(
+		(e) => {
+			const sources = [e.value !== undefined, e.fromEnv !== undefined, e.fromSession !== undefined].filter(Boolean).length
+			return sources === 1
+		},
+		{ message: "EnvEntry must declare exactly one of `value`, `fromEnv`, or `fromSession`." },
+	)
+
+const EnvValueSchema = z.union([z.string(), EnvEntrySchema])
+
+export { EnvEntrySchema }
+
 export const BaseConfigSchema = z.object({
 	autoApprove: AutoApproveSchema.optional(),
 	disabled: z.boolean().optional(),
@@ -33,7 +69,7 @@ const nestedStdioTransportSchema = z.object({
 	command: z.string().min(1),
 	args: z.array(z.string()).optional(),
 	cwd: z.string().optional(),
-	env: z.record(z.string(), z.string()).optional(),
+	env: z.record(z.string(), EnvValueSchema).optional(),
 })
 
 const nestedSseTransportSchema = z.object({
@@ -96,7 +132,7 @@ const createServerTypeSchema = () => {
 			command: z.string(),
 			args: z.array(z.string()).optional(),
 			cwd: z.string().optional(),
-			env: z.record(z.string(), z.string()).optional(),
+			env: z.record(z.string(), EnvValueSchema).optional(),
 			// Allow other fields for backward compatibility
 			url: z.string().optional(),
 			headers: z.record(z.string(), z.string()).optional(),
@@ -122,7 +158,7 @@ const createServerTypeSchema = () => {
 			// Allow other fields for backward compatibility
 			command: z.string().optional(),
 			args: z.array(z.string()).optional(),
-			env: z.record(z.string(), z.string()).optional(),
+			env: z.record(z.string(), EnvValueSchema).optional(),
 		})
 			.transform((data) => {
 				// Support both type and transportType fields
@@ -144,7 +180,7 @@ const createServerTypeSchema = () => {
 			// Allow other fields for backward compatibility
 			command: z.string().optional(),
 			args: z.array(z.string()).optional(),
-			env: z.record(z.string(), z.string()).optional(),
+			env: z.record(z.string(), EnvValueSchema).optional(),
 		})
 			.transform((data) => {
 				// Support both type and transportType fields

@@ -1,0 +1,9 @@
+[63/87] ok   16 pass / 0 fail     src/services/mcp/__tests__/envResolver.test.ts
+[64/87] ok   2 pass / 0 fail      src/services/mcp/__tests__/McpHub.timeoutReconnect.test.ts
+[65/87] ok   19 pass / 0 fail     src/services/mcp/__tests__/McpHub.toolListChange.test.ts
+[66/87] ok   15 pass / 0 fail     src/services/mcp/__tests__/schemas.test.ts
+[67/87] ok   3 pass / 0 fail      src/services/mcp/__tests__/sessionIdEcho.test.ts
+[68/87] ok   4 pass / 0 fail      src/services/telemetry/rollout-metadata.test.ts
+[69/87] ok   13 pass / 0 fail     src/services/telemetry/__tests__/TelemetryService.metrics.test.ts
+[70/87] ok   6 pass / 0 fail      src/services/telemetry/providers/opentelemetry/__tests__/OpenTelemetryTelemetryProvider.test.ts
+Files: 87   Pass: 1187   Fail: 0   Time: 35.2s

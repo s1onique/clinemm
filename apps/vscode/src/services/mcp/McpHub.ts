@@ -487,8 +487,16 @@ export class McpHub {
 						cwd: expandedConfig.cwd,
 						env: {
 							...getDefaultEnvironment(),
+							// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 1: the env
+							// record was widened to allow object entries (string | EnvEntry).
+							// The legacy acquire path (no session context) still uses the
+							// record as a flat string map; the schema-level additive union
+							// means object entries are possible but ignored on this path
+							// until Stage 5 threads resolveMcpServerEnv through the
+							// production seam. Stage 3 child witness verifies the resolver
+							// end-to-end independently of McpHub.
 							...(expandedConfig.env || {}), // Now has expanded environment variables
-						},
+						} as Record<string, string>,
 						stderr: "pipe",
 					})
 
