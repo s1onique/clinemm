@@ -16,7 +16,7 @@ export {
 export type McpServer = {
 	name: string
 	config: string
-	status: "connected" | "connecting" | "disconnected"
+	status: "connected" | "connecting" | "disconnected" | "pending-session"
 	error?: string
 	tools?: McpTool[]
 	resources?: McpResource[]

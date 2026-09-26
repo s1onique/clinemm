@@ -411,29 +411,37 @@ export class McpHub {
 	 * `{ fromSession: ... }` entry, i.e. it is session-bound and
 	 * needs a per-session child instead of (or in addition to) the
 	 * static child.
+	 *
+	 * If `cfgHint` is provided, it is used in place of the stored
+	 * config (e.g. during settings-load BEFORE `connectToServer`
+	 * has stored an entry). Otherwise the entry currently in
+	 * `connections` is the source of truth.
 	 */
-	private hasSessionBoundTemplate(name: string): boolean {
-		const staticConn = this.findConnection(name, "internal")
-		if (!staticConn) {
-			return false
-		}
-		try {
-			const cfg = JSON.parse(staticConn.server.config) as McpServerConfig
-			if (cfg.type !== "stdio") {
-				// Per-session projection is stdio-only for Stage 5 (the
-				// schema-level additive union on `env` is a no-op for
-				// SSE/StreamableHTTP because those transports don't
-				// consume a per-child env map).
+	private hasSessionBoundTemplate(name: string, cfgHint?: McpServerConfig): boolean {
+		let cfg: McpServerConfig | undefined = cfgHint
+		if (!cfg) {
+			const staticConn = this.findConnection(name, "internal")
+			if (!staticConn) {
 				return false
 			}
-			const envRecord = cfg.env as Record<string, string | { fromSession?: string }> | undefined
-			if (!envRecord) {
+			try {
+				cfg = JSON.parse(staticConn.server.config) as McpServerConfig
+			} catch {
 				return false
 			}
-			return Object.values(envRecord).some((entry) => typeof entry === "object" && entry !== null && "fromSession" in entry)
-		} catch {
+		}
+		if (cfg.type !== "stdio") {
+			// Per-session projection is stdio-only for Stage 5 (the
+			// schema-level additive union on `env` is a no-op for
+			// SSE/StreamableHTTP because those transports don't
+			// consume a per-child env map).
 			return false
 		}
+		const envRecord = cfg.env as Record<string, string | { fromSession?: string }> | undefined
+		if (!envRecord) {
+			return false
+		}
+		return Object.values(envRecord).some((entry) => typeof entry === "object" && entry !== null && "fromSession" in entry)
 	}
 
 	/**
@@ -1518,11 +1526,40 @@ export class McpHub {
 			if (!currentConnection) {
 				// New server
 				try {
-					if (config.type === "stdio") {
-						this.setupFileWatcher(name, config)
+					// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5 HALT correction:
+					// A2A-14 STARTUP DEFER. When the incoming config carries a
+					// `{ fromSession: ... }` entry, store the template in `connections`
+					// as a configured-but-pending entry (no Client, no
+					// StdioClientTransport, no child process) so subsequent calls
+					// into ensureSessionConnection(name, { sessionId }) can lazily
+					// spawn per-session children. Do NOT call connectToServer here:
+					// the legacy global-connect path would eagerly spawn the static
+					// child against unresolved env values, which the defer contract
+					// forbids.
+					if (this.hasSessionBoundTemplate(name, config)) {
+						this.connections = this.connections.filter((conn) => conn.server.name !== name)
+						const pendingConn: McpConnection = {
+							server: {
+								name,
+								config: JSON.stringify(config),
+								status: "pending-session",
+								disabled: false,
+							},
+							client: null as unknown as Client,
+							transport: null as unknown as Transport,
+						}
+						this.connections.push(pendingConn)
+						if (config.type === "stdio") {
+							this.setupFileWatcher(name, config)
+						}
+						connectionChangesOccurred = true
+					} else {
+						if (config.type === "stdio") {
+							this.setupFileWatcher(name, config)
+						}
+						await this.connectToServer(name, config, "internal")
+						connectionChangesOccurred = true
 					}
-					await this.connectToServer(name, config, "internal")
-					connectionChangesOccurred = true
 				} catch (error) {
 					Logger.error(`Failed to connect to new MCP server ${name}:`, error)
 					// connectToServer registered a disconnected entry carrying

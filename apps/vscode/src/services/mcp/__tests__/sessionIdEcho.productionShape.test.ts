@@ -49,25 +49,46 @@ function makeClient(): Client {
  * Injects only the state the new methods touch, plus stubs for the
  * private side-effect methods that updateServerConnections reaches into.
  */
-function createHub(env: Record<string, string | { fromSession?: string }>): McpHub {
+function createHub(
+	env: Record<string, string | { fromSession?: string }>,
+	opts: { connectToServer?: "spy" | "fakeConnected" } = {},
+): McpHub {
 	// biome-ignore lint/suspicious/noExplicitAny: focused test seam
 	const hub: any = Object.create(McpHub.prototype)
 	hub.telemetryService = { captureMcpToolCall: sinon.stub() }
 	hub.clientVersion = "test-0.0.0"
 	hub.connections = []
 	hub.sessionConnections = new Map<string, Map<string, McpConnection>>()
-	hub.connectToServer = sinon.stub().callsFake(async (name: string, cfg: unknown) => {
-		hub.connections.push({
-			server: {
-				name,
-				config: JSON.stringify(cfg),
-				status: "connected",
-				disabled: false,
-			},
-			client: makeClient(),
-			transport: {} as McpConnection["transport"],
+	// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5 HALT correction:
+	// connectToServer is the legacy global-connect method that constructs
+	// the StdioClientTransport and spawns the child process. We want to
+	// record invocations without doing the real work. A plain sinon.spy()
+	// works: the production updateServerConnections now short-circuits
+	// to a pending-session entry whenever the template contains a
+	// `{fromSession: ...}` entry, BEFORE reaching the spy. The assertion
+	// `connectToServer.callCount === 0` therefore proves the defer
+	// contract — the production method can no longer be sneaking past
+	// the defer gate and spawning a child invisibly.
+	//
+	// For the legacy-flat-env control case we install a sinon.stub that
+	// mimics the connected-entry shape (so the second A2A-14 case still
+	// observes the connected transport).
+	if (opts.connectToServer === "fakeConnected") {
+		hub.connectToServer = sinon.stub().callsFake(async (name: string, cfg: unknown) => {
+			hub.connections.push({
+				server: {
+					name,
+					config: JSON.stringify(cfg),
+					status: "connected",
+					disabled: false,
+				},
+				client: makeClient(),
+				transport: {} as McpConnection["transport"],
+			})
 		})
-	})
+	} else {
+		hub.connectToServer = sinon.spy()
+	}
 	hub.removeAllFileWatchers = sinon.stub()
 	hub.setupFileWatcher = sinon.stub()
 	hub.notifyWebviewOfServerChanges = sinon.stub().resolves(undefined)
@@ -94,7 +115,7 @@ async function whoamiViaProvider(
 // =========================================================================
 
 describe("A2A-14: McpHub.updateServerConnections (settings-load path) defers per-session spawns", () => {
-	it("static child connects; ensureSessionConnection(name, {}) returns undefined; no per-session spawns", async () => {
+	it("session-bound template: connectToServer NOT invoked; pending entry stored; no spawned child", async () => {
 		const hub = createHub({ MYC_SESSION_ID: { fromSession: "sessionId" } })
 
 		// Drive the production settings-load entry. updateServerConnections is
@@ -114,23 +135,33 @@ describe("A2A-14: McpHub.updateServerConnections (settings-load path) defers per
 			},
 		})
 
-		// (1) Static entry was added — production updateServerConnections calls
-		//     connectToServer for each new server.
+		// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5 HALT correction:
+		// A2A-14 STARTUP DEFER contract:
+		//   (1) connectToServer was NOT invoked. The legacy global-connect path
+		//       that constructs StdioClientTransport and spawns the child was
+		//       deferred.
 		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
-		expect((hub as any).connectToServer.callCount).toBe(1)
+		expect((hub as any).connectToServer.callCount).toBe(0)
+		//   (2) A configured-but-pending entry was stored in `connections` so
+		//       that subsequent ensureSessionConnection(name, {sessionId})
+		//       can lazily spawn per-session children.
 		expect(hub.connections.length).toBe(1)
 		expect(hub.connections[0].server.name).toBe("session-id-echo")
+		expect(hub.connections[0].server.status).toBe("pending-session")
+		expect(hub.connections[0].server.disabled).toBe(false)
+		expect(hub.connections[0].transport).toBeNull()
+		expect(hub.connections[0].client).toBeNull()
 
-		// (2) No session-bound spawn before a session exists. STARTUP DEFER.
+		//   (3) No session-bound spawn before a session exists. STARTUP DEFER.
 		const deferred = await hub.ensureSessionConnection("session-id-echo", {})
 		expect(deferred).toBeUndefined()
 
-		// (3) Crucially: the per-session map is still empty.
+		//   (4) Crucially: the per-session map is still empty.
 		expect(hub.sessionConnections.size).toBe(0)
 	})
 
-	it("ensureSessionConnection with a non-fromSession server returns the static connection", async () => {
-		const hub = createHub({ MYC_SESSION_ID: "literal-value" })
+	it("flat-env template (legacy control): connectToServer IS invoked; static entry stored; ensureSessionConnection returns it", async () => {
+		const hub = createHub({ MYC_SESSION_ID: "literal-value" }, { connectToServer: "fakeConnected" })
 		await hub.updateServerConnections({
 			"session-id-echo": {
 				type: "stdio" as const,
@@ -140,6 +171,15 @@ describe("A2A-14: McpHub.updateServerConnections (settings-load path) defers per
 				env: { MYC_SESSION_ID: "literal-value" } as Record<string, string>,
 			},
 		})
+
+		// Static control: the flat-env legacy path still eagerly follows the
+		// global connection route via connectToServer.
+		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+		expect((hub as any).connectToServer.callCount).toBe(1)
+		expect(hub.connections.length).toBe(1)
+		expect(hub.connections[0].server.name).toBe("session-id-echo")
+		expect(hub.connections[0].server.status).toBe("connected")
+		expect(hub.connections[0].transport).toBeDefined()
 
 		const fallback = await hub.ensureSessionConnection("session-id-echo", {})
 		expect(fallback).toBeDefined()

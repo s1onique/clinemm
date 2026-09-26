@@ -1,10 +1,10 @@
 import {
+	McpServerStatus,
 	McpPrompt as ProtoMcpPrompt,
 	McpPromptArgument as ProtoMcpPromptArgument,
 	McpResource as ProtoMcpResource,
 	McpResourceTemplate as ProtoMcpResourceTemplate,
 	McpServer as ProtoMcpServer,
-	McpServerStatus,
 	McpTool as ProtoMcpTool,
 } from "@shared/proto/cline/mcp"
 import { McpOAuthAuthStatus, McpPrompt, McpPromptArgument, McpResource, McpResourceTemplate, McpServer, McpTool } from "../../mcp"
@@ -17,6 +17,14 @@ function convertMcpStatusToProto(status: McpServer["status"]): McpServerStatus {
 		case "connecting":
 			return McpServerStatus.MCP_SERVER_STATUS_CONNECTING
 		case "disconnected":
+		// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5 HALT correction:
+		// "pending-session" is the STARTUP DEFER sentinel — the template is
+		// stored in `connections` but no Client/Transport is constructed yet
+		// (the legacy wire enum does not model it). It round-trips back
+		// to the webview as DISCONNECTED.
+		// biome-ignore lint/suspicious/noFallthroughSwitchClause: documented fallback
+		case "pending-session":
+		default:
 			return McpServerStatus.MCP_SERVER_STATUS_DISCONNECTED
 	}
 }
