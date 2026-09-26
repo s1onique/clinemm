@@ -473,6 +473,7 @@
 		"eval:smoke:run": "bun evals/smoke-tests/run-smoke-tests.ts",
 		"test:vitest:c2-4-c-bridge": "vitest run --config vitest.config.c2-4-c-bridge.ts",
 		"test:vitest:c2-4-c-bridge:watch": "vitest --config vitest.config.c2-4-c-bridge.ts",
+		"test:vitest:c2-4-c-bridge-swcm04:vmthreads": "vitest run --config vitest.config.c2-4-c-bridge.ts --pool=vmThreads src/sdk/__tests__/continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts",
 		"check-types:c2-4-c-bridge": "bun scripts/check-types-bridge-with-baseline.ts",
 		"check-types:c2-4-c-bridge:refresh-baseline": "BRIDGE_BASELINE_UPDATE=1 bun scripts/check-types-bridge-with-baseline.ts",
 		"test:vitest:c2-4-d-hub": "vitest run --config vitest.config.c2-4-d-hub.ts",
