@@ -92,11 +92,12 @@ actually touch (`connections`, `clientVersion`, `telemetryService`,
 | Stage 3 — A2A-04 child witness | ✅ GREEN (commit 3ee2f0bc3) |
 | Stage 4 — A/B isolation rows | ✅ GREEN (commit ceb4c801f) |
 | Stage 5 — Production seams (seam-level) | ✅ GREEN (commit 12ff01021) |
-| Stage 5 — HALT correction (production-shape) | ✅ GREEN (commit 88e557414) |
+| Stage 5 — HALT 1 (production-shape discovery/release wiring) | ✅ GREEN (commit 88e557414) |
+| Stage 5 — HALT 2 (settings-load STARTUP DEFER contract) | ✅ GREEN (commit 7647d0413) |
 | Stage 6 — Conservation gate | ⏳ pending |
 | Stage 7 — Closure | ⏳ pending |
 
-## HALT correction: production-shape evidence (commit 88e557414)
+## HALT correction 1: discovery/release production-shape (commit 88e557414)
 
 Resolves `HALT_SESSION_ID_NOT_WIRED_INTO_PRODUCTION_DISCOVERY`. The
 Stage 5 commit (12ff01021) wired the seam-level plumbing
@@ -107,7 +108,7 @@ direct construction. The halt correctly observed that
 `vscode-session-host.ts` was NOT modified, so the production caller
 never reached the seams.
 
-The halt correction lands:
+The HALT 1 correction lands:
 
 1. `vscode-session-host.ts:382` (NEW) — captures
    `inputWithRemoteConfig.config.sessionId?.trim()` from the canonical
@@ -116,9 +117,13 @@ The halt correction lands:
    `sessionId: sessionIdForMcp` into `createVscodeExtraTools(...)`.
 3. `apps/vscode/src/services/mcp/__tests__/sessionIdEcho.productionShape.test.ts`
    (NEW, 8 cases) — drives the production call chains:
-   - **A2A-14 settings-load path**: real `McpHub.updateServerConnections(...)`
+   - **A2A-14 settings-load path** (initial form): real `McpHub.updateServerConnections(...)`
      with a session-bound template; `ensureSessionConnection(name, {})`
      returns `undefined` AND `sessionConnections.size === 0`.
+     (NOTE: this initial form was later superseded by HALT 2 below —
+     it accidentally installed a sinon.stub that exercised the legacy
+     path; the HALT 2 rewrite replaces it with a `sinon.spy()` and
+     asserts `connectToServer.callCount === 0`.)
    - **A2A-16 lifecycle caller**: real `SdkSessionLifecycle.startNewSession`
      → `endActiveSession` (the narrowest externally callable entry that
      reaches `trackSessionStop`); asserts BOTH `mcpHub.disconnectSession("session-A")`
@@ -130,7 +135,58 @@ The halt correction lands:
      child with `payload.session === sessionId` and `payload.pid !== process.pid`;
      two distinct sessionIds produce two distinct PIDs.
 
+## HALT correction 2: STARTUP DEFER contract (commit 7647d0413)
+
+Resolves `HALT_SESSION_BOUND_STARTUP_DEFER_NOT_PROVEN`. HALT 1's
+A2A-14 had a false-green: the test stub replaced `connectToServer`
+with `sinon.stub().callsFake(...)` that pushed a fake connected
+entry into `hub.connections` and asserted
+`connectToServer.callCount === 1`. The test accidentally proved
+the legacy global-connect path was being EXERCISED for a
+session-bound template, not deferred. The HALT correctly
+observed this and demanded a bounded production fix.
+
+The HALT 2 correction lands:
+
+1. `McpHub.updateServerConnections` new-server branch:
+   - BEFORE calling `connectToServer(name, config, "internal")`,
+     call `hasSessionBoundTemplate(name, config)` on the raw
+     incoming config.
+   - When the template contains a `{fromSession: ...}` env entry,
+     push a configured-but-pending entry into `this.connections`
+     (`status: "pending-session"`, `transport: null`,
+     `client: null`) and skip the spawn entirely.
+     `StdioClientTransport` is never constructed.
+   - When the template has only flat string env entries,
+     fall through to the legacy `connectToServer` path
+     unchanged. The static control is preserved.
+2. `McpHub.hasSessionBoundTemplate(name, cfgHint?)` — accepts an
+   optional raw incoming config (so the new-server branch can
+   check the template before any entry exists in `connections`).
+   The legacy call site (`ensureSessionConnection`) keeps
+   working without the hint.
+3. `shared/mcp.ts`: `McpServer.status` literal extends to include
+   `"pending-session"` (apps/vscode internal sentinel).
+4. `shared/proto-conversions/mcp/mcp-server-conversion.ts`:
+   `convertMcpStatusToProto("pending-session")` →
+   `MCP_SERVER_STATUS_DISCONNECTED` on the wire (preserves the
+   legacy wire enum).
+5. `sessionIdEcho.productionShape.test.ts` A2A-14 rewritten:
+   - `connectToServer` is now a `sinon.spy()` (records
+     invocations without doing real work; cannot be mistaken
+     for the real method).
+   - `createHub(env, { connectToServer: "fakeConnected" })`
+     opts in to a `sinon.stub().callsFake(...)` for the
+     legacy-control case only.
+   - The session-bound assertion is now load-bearing:
+     `connectToServer.callCount === 0` AND the pending entry's
+     status/transport shape AND `ensureSessionConnection(name, {})`
+     returns `undefined` AND `sessionConnections.size === 0`.
+   - The legacy-control case asserts `connectToServer.callCount === 1`,
+     `status === "connected"`, `transport !== null` — pins the
+     unchanged behavior on the flat-env path.
+
 Full unit suite: 89 files, 1204 pass / 0 fail. Zero regressions in
-pre-existing McpHub.* suites. New vitest suite: 8/8 pass. tsc clean.
-Biome clean.
+pre-existing McpHub.* suites. New vitest suite: 8/8 pass.
+tsc clean. Biome clean.
 

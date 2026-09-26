@@ -1,19 +1,21 @@
 ## ACT-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 — IN PROGRESS — opened 2026-09-26
 
-**Status:** C1: GO. Stages 1–5 + HALT correction GREEN. Stage 6 (conservation gate) + Stage 7 (closure) queued.
+**Status:** C1: GO. Stages 1–5 + 2 HALT corrections GREEN. Stage 6 (conservation gate) + Stage 7 (closure) queued.
 
 **Execution snapshot:**
 - Commit `3ee2f0bc3`: Stage 1 schema additive union, Stage 2 pure resolver, Stage 3 A2A-04 child witness. 16+3+8+15 tests, all GREEN.
 - Commit `ceb4c801f`: Stage 4 A/B isolation rows (A2A-08/09/10/12/13/14). 6/6 isolation tests pass.
 - Commit `12ff01021`: Stage 5 production seams — McpHub session lifecycle (`sessionConnections`, `ensureSessionConnection`, `disconnectSession`, `callTool(..., sessionId?)`), `McpHubToolProvider(sessionId?)`, `createVscodeExtraTools({sessionId})`, `sdk-session-lifecycle.trackSessionStop` wrapping `Promise.all([sdkHost.stop, mcpHub.disconnectSession])`. 11 new tests (sessionIdEcho.mcpHub.test.ts).
-- Commit `f98864dc2`: durable state snapshot.
-- Commit `88e557414`: **HALT correction (HALT_SESSION_ID_NOT_WIRED_INTO_PRODUCTION_DISCOVERY).** Wires `input.config.sessionId` through `prepareStartSessionInput` into `createVscodeExtraTools` (`vscode-session-host.ts:382, 413`). Adds `sessionIdEcho.productionShape.test.ts` (8 cases) driving the production call chains:
-  - A2A-14: `McpHub.updateServerConnections(...)` (real settings-load path) → `ensureSessionConnection(name, {})` returns `undefined`, `sessionConnections.size === 0`.
-  - A2A-16: `SdkSessionLifecycle.startNewSession → endActiveSession` (real lifecycle caller) → `mcpHub.disconnectSession("session-A")` AND `sdkHost.stop("session-A")` both asserted; coexisting B child survives.
-  - A2A-17: `VscodeSessionHost.create → bootstrap.applyToStartSessionInput({config: {sessionId}})` → produced MCP tool's `execute()` reaches the spawned per-session child with `payload.session === "session-A"` and `payload.pid !== process.pid`.
-  - A2A-18: Two consecutive applies with sessionIds A and B → two distinct per-session children with distinct PIDs.
-  Also: `cline-core-vitest-stub.ts` re-exports `createMcpTools` so the production pipeline runs under vitest; `sdk-session-lifecycle.test.ts` makeLifecycle helper updated to include `disconnectSession` (pre-existing debt from commit `12ff01021` that the conservation gate exposed).
-- Full unit suite: **89 files, 1204 pass / 0 fail.** Zero regressions in pre-existing `McpHub.*` tests (24+2+5+21+2+19 pass). New vitest suite: 8/8 pass.
+- Commit `f98864dc2`: durable state snapshot (post Stage 5).
+- Commit `88e557414`: **HALT correction 1 (HALT_SESSION_ID_NOT_WIRED_INTO_PRODUCTION_DISCOVERY).** Wires `input.config.sessionId` through `prepareStartSessionInput` into `createVscodeExtraTools` (`vscode-session-host.ts:382, 413`). Adds `sessionIdEcho.productionShape.test.ts` first version (8 cases) covering A2A-14/16/17/18 against production call chains. Discovery/release end-to-end proven.
+- Commit `6c59011e1`: durable state snapshot (post HALT 1).
+- Commit `7647d0413`: **HALT correction 2 (HALT_SESSION_BOUND_STARTUP_DEFER_NOT_PROVEN).** The first HALT-correction A2A-14 had a false-green — its `connectToServer` sinon.stub pushed a fake connected entry and asserted `callCount === 1`, accidentally proving the legacy global-connect path was EXERCISED rather than deferred. Bounded production fix:
+  - `McpHub.updateServerConnections` new-server branch: detects `hasSessionBoundTemplate(name, config)` BEFORE calling `connectToServer`; for session-bound templates, pushes a configured-but-pending entry (`status: "pending-session"`, `transport: null`, `client: null`) and does NOT construct `StdioClientTransport`. Flat-env templates still follow the legacy global-connect path unchanged.
+  - `McpHub.hasSessionBoundTemplate(name, cfgHint?)` — accepts optional raw config so the new-server branch can check the template before any entry exists.
+  - `shared/mcp.ts`: `McpServer.status` extends to include `"pending-session"` (apps/vscode internal sentinel).
+  - `shared/proto-conversions/mcp/mcp-server-conversion.ts`: `convertMcpStatusToProto("pending-session") → DISCONNECTED` on the wire (preserves legacy enum).
+  - `sessionIdEcho.productionShape.test.ts` A2A-14 rewritten: `connectToServer` is now a `sinon.spy()` (records invocations without doing real work); the production method's defer gate is asserted by `callCount === 0` AND the pending entry's status/transport shape. A new second `it` case pins the static control (flat-env template) to confirm legacy behavior is preserved.
+- Full unit suite: **89 files, 1204 pass / 0 fail.** Zero regressions. New vitest suite: 8/8 pass (incl. rewritten A2A-14).
 - Typecheck: `tsc --noEmit --project tsconfig.json` exit 0. Biome clean.
 - Evidence: `.factory/evidence/ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01/{02-stage-1-3-evidence,03-stage-4-evidence,04-stage-5-evidence}.md`.
 
