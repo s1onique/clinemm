@@ -127,6 +127,15 @@
 		// ACT-CLINEMM-QUEUED-PROMPT-STOP-RESUME-INTEGRITY01 / QPSR01:
 		// Stop/Resume integrity discriminator. Bridge-only.
 		"src/sdk/__tests__/queued-prompt-stop-resume-integrity.qpsr01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-SW-CM04-CONTINUATION-PATHOLOGICAL-CORPUS01 /
+		// BOUNDED CORRECTION ROUND 1:
+		// real LocalRuntimeHost + real PendingPromptService + real
+		// drain + real runTurn re-entry. The bridge test
+		// (continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts)
+		// drives the queue-mechanics scenarios (P3, P5, P6, A, B).
+		// Bridge-only (uses `@cline-internal/core/...` aliases
+		// declared in `tsconfig.c2-4-c-bridge.json` only).
+		"src/sdk/__tests__/continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01:
 		// Real production wire bridge test — runs under
 		// tsconfig.c2-4-c-bridge.json + vitest.config.c2-4-c-bridge.ts
