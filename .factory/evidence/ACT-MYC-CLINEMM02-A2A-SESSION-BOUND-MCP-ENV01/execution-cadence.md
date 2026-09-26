@@ -70,12 +70,21 @@ A2A-07 rejects the multi-source entry; flat `env` round-trips byte-for-byte.
   - `{ fromSession: "sessionId" }` → look up `sessionCtx.sessionId`, REJECT if
     `required && !sessionCtx.sessionId`
   - multi-source: schema rejected upstream (Stage 1)
-- **Projection purity invariant (A2A-11):** if no `fromSession` entry is present,
-  `resolveEnv` must return the *same* object reference it would have returned
-  before session context was threaded through. Implement via rawEnv referential
-  equality: skip copying when no projection is needed. Test asserts
-  `Object.is(result, template) === true` when there are no `fromSession` entries
-  in the template and `sessionCtx` is undefined.
+- **Purity invariant (A2A-11 PROJECTION PURITY):** the function MUST NOT mutate
+  `rawEnv`. It returns a fresh `env` object (a copy that materializes
+  `{fromSession}` entries from `sessionCtx` and `{fromEnv}` entries from
+  `rawEnv`). The result may be a fresh object — **reference identity of the
+  result with any other object is NOT required and NOT tested.**
+  Test contract (reviewer-corrected, replaces the prior `Object.is` clause):
+  ```
+  before = structuredClone(rawEnv)
+  result  = resolveMcpServerEnv(rawEnv, ...)
+  assert deepEqual(rawEnv, before)   // rawEnv unchanged
+  // result may be a fresh object — that is fine
+  ```
+  This matches the canonical wording in `plan.md:134-136`: "the function
+  MUST NOT mutate `rawEnv`. It returns a fresh `env` object. Test asserts
+  referential equality of `rawEnv` before/after."
 ### Stage 3 — First child witness (A2A-04)
 
 This is the **load-bearing child-side proof**: the first end-to-end test that
@@ -237,7 +246,8 @@ Then open `ACT-MYC-CLINEMM02-B-LIVE-SESSION-PROPAGATION01` for real myc dogfood.
   - A2A-01..A2A-03 GREEN
   - A2A-05 missing `fromEnv` + `required` REJECT
   - A2A-06 missing `sessionCtx.sessionId` + `required` REJECT
-  - A2A-11 projection purity: same reference returned.
+  - A2A-11 PROJECTION PURITY: `rawEnv` deep-equals `structuredClone(rawEnv)`
+    taken before the call; result may be a fresh object, that is fine.
 - Output: `05-schema-test-output.txt` (resolver tests folded in).
 
 **Gate:** A2A-01..03, A2A-05, A2A-06, A2A-11 pass against the pure resolver.
