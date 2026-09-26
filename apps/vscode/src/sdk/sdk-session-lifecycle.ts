@@ -590,8 +590,19 @@ export class SdkSessionLifecycle {
 	 */
 	private trackSessionStop(sdkHost: SdkSessionHost, sessionId: string, reason: string): Promise<void> {
 		const startedAt = Date.now()
-		const stopPromise = sdkHost
-			.stop(sessionId)
+		// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5:
+		// Production release seam. Teardown the per-session MCP child
+		// owned by `sessionId` in parallel with `sdkHost.stop(sessionId)`
+		// — both must settle before this stop is considered complete.
+		// The MCP teardown sits inside Promise.all so a failure in
+		// either cannot wedge `pendingStops`.
+		const mcpHub = this.options.mcpHub
+		const stopPromise = Promise.all([
+			sdkHost.stop(sessionId),
+			mcpHub.disconnectSession(sessionId).catch((error: unknown) => {
+				Logger.warn(`[SdkController] Failed to disconnect MCP session ${sessionId} (${reason}):`, error)
+			}),
+		])
 			.then(() => {
 				const elapsed = Date.now() - startedAt
 				if (elapsed > 250) {

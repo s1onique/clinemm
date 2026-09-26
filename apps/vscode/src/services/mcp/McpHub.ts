@@ -41,6 +41,7 @@ import { ShowMessageType } from "@/shared/proto/host/window"
 import { Logger } from "@/shared/services/Logger"
 import { expandEnvironmentVariables } from "@/utils/envExpansion"
 import type { TelemetryService } from "../telemetry/TelemetryService"
+import { type EnvTemplate, resolveMcpServerEnv } from "./envResolver"
 import { McpOAuthManager } from "./McpOAuthManager"
 import { StreamableHttpReconnectHandler } from "./StreamableHttpReconnectHandler"
 import { McpSettingsSchema, McpTimeoutSecondsSchema, ServerConfigSchema } from "./schemas"
@@ -84,6 +85,26 @@ export class McpHub {
 	private fileWatchers: Map<string, FSWatcher> = new Map()
 	connections: McpConnection[] = []
 	isConnecting = false
+
+	// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5:
+	// Per-session MCP child connections. Outer key is `sessionId`, inner
+	// key is `serverName`. Each entry is a fully-owned `McpConnection`
+	// (Client + Transport) spawned for that specific session, distinct
+	// from the static `connections` array which holds session-agnostic
+	// server instances.
+	//
+	// Lifecycle invariants:
+	//   * Static connection for `name` ALWAYS exists in `connections`
+	//     when the server has a template (the static path is unchanged).
+	//   * Per-session children are LAZY: they spawn on the first call
+	//     to `ensureSessionConnection(name, { sessionId })` that names
+	//     that server + session.
+	//   * `disconnectSession(sessionId)` tears down every per-session
+	//     child for that id; the static connection survives.
+	//   * When the template contains any `{ fromSession: ... }` entry
+	//     and the caller does NOT supply a sessionId, the resolver
+	//     returns only legacy keys and no spawn happens (A2A-14 defer).
+	sessionConnections: Map<string /* sessionId */, Map<string /* serverName */, McpConnection>> = new Map()
 	/**
 	 * Fingerprint of the connection-relevant view of the settings file as of the
 	 * watcher's last reconciliation.
@@ -381,6 +402,177 @@ export class McpHub {
 
 	private findConnection(name: string, _source: "rpc" | "internal"): McpConnection | undefined {
 		return this.connections.find((conn) => conn.server.name === name)
+	}
+
+	/**
+	 * ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5.
+	 *
+	 * True iff the server's stored config contains at least one
+	 * `{ fromSession: ... }` entry, i.e. it is session-bound and
+	 * needs a per-session child instead of (or in addition to) the
+	 * static child.
+	 */
+	private hasSessionBoundTemplate(name: string): boolean {
+		const staticConn = this.findConnection(name, "internal")
+		if (!staticConn) {
+			return false
+		}
+		try {
+			const cfg = JSON.parse(staticConn.server.config) as McpServerConfig
+			if (cfg.type !== "stdio") {
+				// Per-session projection is stdio-only for Stage 5 (the
+				// schema-level additive union on `env` is a no-op for
+				// SSE/StreamableHTTP because those transports don't
+				// consume a per-child env map).
+				return false
+			}
+			const envRecord = cfg.env as Record<string, string | { fromSession?: string }> | undefined
+			if (!envRecord) {
+				return false
+			}
+			return Object.values(envRecord).some((entry) => typeof entry === "object" && entry !== null && "fromSession" in entry)
+		} catch {
+			return false
+		}
+	}
+
+	/**
+	 * ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5.
+	 *
+	 * Discover / acquire seam: get (or lazily spawn) the per-session
+	 * child for `serverName` under `sessionId`. Returns `undefined`
+	 * when:
+	 *   - `opts.sessionId` is undefined AND the server is
+	 *     session-bound (A2A-14 STARTUP DEFER: settings load must
+	 *     not spawn children);
+	 *   - the static server is unknown;
+	 *   - the server's transport type is not stdio.
+	 *
+	 * Otherwise lazily spawns a `StdioClientTransport` + `Client`
+	 * pair with `resolveMcpServerEnv(template.env, process.env,
+	 * { sessionId })` applied, stores the result in
+	 * `sessionConnections`, and returns it.
+	 *
+	 * Throws on transport/connect failure. The caller is responsible
+	 * for invoking `disconnectSession(sessionId)` to tear down.
+	 */
+	async ensureSessionConnection(serverName: string, opts: { sessionId?: string } = {}): Promise<McpConnection | undefined> {
+		const sessionId = opts.sessionId
+		const staticConn = this.findConnection(serverName, "internal")
+		if (!staticConn) {
+			return undefined
+		}
+		const isSessionBound = this.hasSessionBoundTemplate(serverName)
+
+		// A2A-14 STARTUP DEFER.
+		if (!sessionId && isSessionBound) {
+			return undefined
+		}
+
+		// Static-only server, or static + no per-session call:
+		// return the static connection unchanged. The legacy callTool
+		// path also reaches this branch when sessionId is absent.
+		if (!sessionId) {
+			return staticConn
+		}
+
+		// Session-bound + sessionId: look up the per-session child.
+		let perSessionMap = this.sessionConnections.get(sessionId)
+		if (!perSessionMap) {
+			perSessionMap = new Map()
+			this.sessionConnections.set(sessionId, perSessionMap)
+		}
+		const existing = perSessionMap.get(serverName)
+		if (existing && existing.client && !existing.server.error) {
+			return existing
+		}
+
+		// Spawn a fresh per-session child.
+		const cfg = JSON.parse(staticConn.server.config) as McpServerConfig
+		if (cfg.type !== "stdio") {
+			return undefined
+		}
+		const rawTemplateEnv = (cfg.env ?? {}) as EnvTemplate
+		const resolvedEnv = resolveMcpServerEnv(rawTemplateEnv, process.env, { sessionId })
+		// Per the resolver contract (A2A-11), the result is always
+		// `Record<string, string>` when no `MissingEnvSourceError` is thrown.
+		const resolvedEnvString = resolvedEnv as Record<string, string>
+
+		const transport = new StdioClientTransport({
+			command: cfg.command,
+			args: cfg.args,
+			cwd: cfg.cwd,
+			env: {
+				...getDefaultEnvironment(),
+				...resolvedEnvString,
+			},
+			stderr: "pipe",
+		})
+		const client = new Client({ name: "Cline", version: this.clientVersion }, { capabilities: {} })
+		const timeoutMs = resolveMcpServerTimeoutMs(staticConn.server.config)
+		try {
+			await client.connect(transport, { timeout: timeoutMs })
+		} catch (error) {
+			// Close any half-open transport before propagating the
+			// failure so the OS subprocess is reaped.
+			try {
+				await transport.close()
+			} catch {
+				/* best effort */
+			}
+			Logger.error(`[McpHub] ensureSessionConnection connect failed for ${serverName} (session=${sessionId}):`, error)
+			throw error
+		}
+		const perSessionConn: McpConnection = {
+			server: {
+				name: serverName,
+				config: staticConn.server.config,
+				status: "connected",
+				disabled: false,
+				tools: staticConn.server.tools,
+				resources: staticConn.server.resources,
+				resourceTemplates: staticConn.server.resourceTemplates,
+				prompts: staticConn.server.prompts,
+			},
+			client,
+			transport,
+		}
+		perSessionMap.set(serverName, perSessionConn)
+		return perSessionConn
+	}
+
+	/**
+	 * ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5.
+	 *
+	 * Release seam: tear down every per-session child owned by
+	 * `sessionId`. The static `connections` are untouched.
+	 * Idempotent — calling on an unknown session id is a no-op.
+	 *
+	 * Used by `sdk-session-lifecycle.trackSessionStop` to run
+	 * alongside `sdkHost.stop(sessionId)` so the per-session MCP
+	 * child is reaped at the same moment the SDK session is.
+	 */
+	async disconnectSession(sessionId: string): Promise<void> {
+		const perSessionMap = this.sessionConnections.get(sessionId)
+		if (!perSessionMap) {
+			return
+		}
+		// Drop the map entry FIRST so any in-flight
+		// `ensureSessionConnection` racing on the same id cannot
+		// observe a half-torn-down child.
+		this.sessionConnections.delete(sessionId)
+		for (const [serverName, conn] of perSessionMap) {
+			try {
+				if (conn.transport) {
+					await conn.transport.close()
+				}
+				if (conn.client) {
+					await conn.client.close()
+				}
+			} catch (error) {
+				Logger.error(`[McpHub] disconnectSession(${sessionId}) close failed for ${serverName}:`, error)
+			}
+		}
 	}
 
 	private async connectToServer(
@@ -1684,12 +1876,32 @@ export class McpHub {
 		toolArguments: Record<string, unknown> | undefined,
 		ulid: string,
 		signal?: AbortSignal,
+		// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5.
+		// When supplied, routes the call through a per-session child
+		// (resolved/served by `ensureSessionConnection`) instead of the
+		// static `connections` entry. Backwards compatible: omitted
+		// => unchanged legacy acquire path.
+		sessionId?: string,
 	): Promise<McpToolCallResponse> {
-		const connection = this.connections.find((conn) => conn.server.name === serverName)
-		if (!connection) {
-			throw new Error(
-				`No connection found for server: ${serverName}. Please make sure to use MCP servers available under 'Connected MCP Servers'.`,
-			)
+		// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5:
+		// Per-session acquire path. When `sessionId` is supplied, route
+		// through `ensureSessionConnection` (which lazily spawns a
+		// per-session child using `resolveMcpServerEnv` and stores it
+		// in `sessionConnections`). Otherwise, fall through to the
+		// unchanged static connection path below.
+		let connection: McpConnection | undefined
+		if (sessionId !== undefined) {
+			connection = await this.ensureSessionConnection(serverName, { sessionId })
+			if (!connection) {
+				throw new Error(`No per-session connection available for server: ${serverName} (session=${sessionId}).`)
+			}
+		} else {
+			connection = this.connections.find((conn) => conn.server.name === serverName)
+			if (!connection) {
+				throw new Error(
+					`No connection found for server: ${serverName}. Please make sure to use MCP servers available under 'Connected MCP Servers'.`,
+				)
+			}
 		}
 
 		if (connection.server.disabled) {

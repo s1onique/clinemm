@@ -64,8 +64,8 @@ describe("Stage 4 — A/B isolation rows (each row isolated, drives real fixture
 		ra.pid.should.not.equal(rb.pid)
 		ra.pid.should.not.equal(process.pid)
 		rb.pid.should.not.equal(process.pid)
-		ra.session.should.equal("session-A")
-		rb.session.should.equal("session-B")
+		ra.session!.should.equal("session-A")
+		rb.session!.should.equal("session-B")
 	})
 
 	it("A2A-09: reconnect A under same id => new PID, identity preserved, B untouched", async () => {
@@ -85,10 +85,10 @@ describe("Stage 4 — A/B isolation rows (each row isolated, drives real fixture
 		const ra2 = await whoami(a2.client)
 
 		ra2.pid.should.not.equal(ra1.pid)
-		ra2.session.should.equal("session-A")
+		ra2.session!.should.equal("session-A")
 		const rbAfter = await whoami(b.client)
 		rbAfter.pid.should.equal(rb.pid)
-		rbAfter.session.should.equal("session-B")
+		rbAfter.session!.should.equal("session-B")
 	})
 
 	it("A2A-10: two env names both { fromSession:'sessionId' } materialize the SAME identity", () => {
@@ -131,7 +131,7 @@ describe("Stage 4 — A/B isolation rows (each row isolated, drives real fixture
 
 		const rb1 = await whoami(b.client)
 		rb1.pid.should.equal(rb0.pid)
-		rb1.session.should.equal("session-B")
+		rb1.session!.should.equal("session-B")
 		ra0.pid.should.not.equal(rb1.pid)
 	})
 

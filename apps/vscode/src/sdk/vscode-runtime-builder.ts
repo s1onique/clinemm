@@ -17,9 +17,45 @@ interface McpToolDescriptor {
 }
 
 export class McpHubToolProvider {
-	constructor(private readonly mcpHub: McpHub) {}
+	// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5.
+	// Captured at construction so every listTools/callTool routed
+	// through the same provider reaches the per-session child owned
+	// by this id, instead of falling through to the static
+	// `connections` array.
+	constructor(
+		private readonly mcpHub: McpHub,
+		private readonly sessionId?: string,
+	) {}
 
 	async listTools(serverName: string): Promise<readonly McpToolDescriptor[]> {
+		// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5.
+		// Discover seam. When `sessionId` is set, route through
+		// `ensureSessionConnection` so the per-session child is
+		// spawned (lazily) and its `listTools()` result is the source
+		// of truth for this provider. Falls back to the cached
+		// `server.tools` on the static connection when no session
+		// context is supplied (A2A-14 STARTUP DEFER path).
+		if (this.sessionId !== undefined) {
+			const conn = await this.mcpHub.ensureSessionConnection(serverName, { sessionId: this.sessionId })
+			if (!conn) {
+				return []
+			}
+			const tools = await conn.client?.listTools?.().catch(() => undefined)
+			if (tools && Array.isArray((tools as { tools?: unknown[] }).tools)) {
+				return (tools as { tools: Array<{ name: string; description?: string; inputSchema?: unknown }> }).tools.map(
+					(tool) => ({
+						name: tool.name,
+						description: tool.description ?? undefined,
+						inputSchema: (tool.inputSchema as Record<string, unknown>) ?? {
+							type: "object",
+							properties: {},
+						},
+					}),
+				)
+			}
+			// Per-session child exists but listTools returned no
+			// tools (or threw) — fall through to the cached snapshot.
+		}
 		const servers = this.mcpHub.getServers()
 		const server = servers.find((entry) => entry.name === serverName)
 		if (!server) {
@@ -44,7 +80,21 @@ export class McpHubToolProvider {
 		context?: AgentToolContext
 	}): Promise<unknown> {
 		const ulid = `sdk-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-		return this.mcpHub.callTool(request.serverName, request.toolName, request.arguments ?? {}, ulid, request.context?.signal)
+		// ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5.
+		// Acquire seam. Pass the constructor-captured `sessionId` (if
+		// any) through to `mcpHub.callTool`, which routes through
+		// `ensureSessionConnection` to lazily spawn / reuse the
+		// per-session child. When no session id was captured at
+		// provider construction time, the legacy static path
+		// runs unchanged.
+		return this.mcpHub.callTool(
+			request.serverName,
+			request.toolName,
+			request.arguments ?? {},
+			ulid,
+			request.context?.signal,
+			this.sessionId,
+		)
 	}
 }
 
@@ -119,10 +169,25 @@ export interface VscodeExtraToolsOptions {
 	 * `backgroundNotifyCoordinator` optional wiring).
 	 */
 	recordLaunchedBackgroundJob?: (jobId: string) => void
+	/**
+	 * ACT-MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 Stage 5.
+	 *
+	 * Session identity owned by the host (production:
+	 * `SdkController` populates this from `startInput.config.sessionId`
+	 * which `sdk-task-start-coordinator.ts:148` set via
+	 * `createSessionId()`). When set, the McpHubToolProvider routes
+	 * every `listTools` / `callTool` through `McpHub.ensureSessionConnection`
+	 * which lazily spawns a per-session child using
+	 * `resolveMcpServerEnv(template.env, process.env, { sessionId })`.
+	 *
+	 * When omitted, the provider falls back to the unchanged static
+	 * `mcpHub.getServers()` path.
+	 */
+	sessionId?: string
 }
 
 export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExtraToolsOptions): Promise<AgentTool[]> {
-	const provider = new McpHubToolProvider(mcpHub)
+	const provider = new McpHubToolProvider(mcpHub, options?.sessionId)
 	const mcpTools = await Promise.all(
 		mcpHub.getServers().map(async (server) => {
 			try {
