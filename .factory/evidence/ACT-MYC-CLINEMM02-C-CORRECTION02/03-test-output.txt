@@ -1,0 +1,25 @@
+ACT-MYC-CLINEMM02-C-CORRECTION02 — Test output summary
+
+RED witness (prior code, identity-join bug):
+  Test Files  1 failed (1)
+       Tests  2 failed (2)
+  × RED-R5: prime stored under HOST_SESSION_ID is NOT found by beforeModel when runtime uses AGENT_CONVERSATION_ID
+  × RED-R6: prime must be injected even when conversationId is auto-generated (no synthetic id equality)
+  AssertionError: expected 'hello' to contain '{"pid":...,"session":"host-session-red-001",...}'
+  Received: "hello"
+
+GREEN witness (corrected code, identity-join fixed):
+  Test Files  2 passed (2)
+       Tests  6 passed (6)
+  ✓ src/sdk/__tests__/myc-prime-automation.identity-join.red.c24-c-bridge.test.ts (2 tests) 241ms
+  ✓ src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts (4 tests) 370ms
+
+  R5: prime stored under HOST_SESSION_ID IS found by beforeModel when runtime uses AGENT_CONVERSATION_ID
+  R6: prime injected even when conversationId is auto-generated (no synthetic id equality)
+  R1 (prior CORRECTION01): prime text in first model request (synthetic-id fixture)
+  R2 (prior CORRECTION01): prime text appears exactly once across iterations
+  R3 (prior CORRECTION01): no synthetic injection when prime unavailable
+  R4 (prior CORRECTION01): singleton populated before first model request (race closed)
+
+Test file: apps/vscode/src/sdk/__tests__/myc-prime-automation.identity-join.red.c24-c-bridge.test.ts (NEW, 2 tests)
+Production fix: 4 files (2 production SDK, 1 production apps/vscode, 1 test file).

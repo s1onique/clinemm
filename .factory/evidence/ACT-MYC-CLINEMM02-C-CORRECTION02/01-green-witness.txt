@@ -1,0 +1,11 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/myc-prime-automation.identity-join.red.c24-c-bridge.test.ts (2 tests) 241ms
+ ✓ src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts (4 tests) 370ms
+
+ Test Files  2 passed (2)
+      Tests  6 passed (6)
+   Start at  08:15:06
+   Duration  4.62s (transform 4.86s, setup 0ms, import 8.30s, tests 610ms, environment 0ms)
+

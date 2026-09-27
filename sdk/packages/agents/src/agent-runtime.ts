@@ -1036,6 +1036,12 @@ export class AgentRuntime {
 			agentRole: this.state.agentRole,
 			parentAgentId: this.state.parentAgentId,
 			conversationId: this.config.conversationId?.trim() || undefined,
+			// ACT-MYC-CLINEMM02-C-CORRECTION02 — surface the host-owned
+			// session id (sourced from AgentRuntimeConfig.sessionId,
+			// populated from CoreSessionConfig.sessionId in production).
+			// Distinct from `conversationId` (auto-generated transcript id).
+			// Hooks that look up host-owned records MUST use this field.
+			sessionId: this.config.sessionId?.trim() || undefined,
 			runId: this.state.runId,
 			status: this.state.status,
 			iteration: this.state.iteration,

@@ -1,4 +1,115 @@
 
+
+## ACT-MYC-CLINEMM02-C-CORRECTION02 — PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED — 2026-09-27
+
+**Status:** PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED. Closes the reviewer-flagged `HALT_SESSION_IDENTITY_JOIN_UNPROVEN` from the prior ACT-MYC-CLINEMM02-C-CORRECTION01. Production-shaped RED captured and turned GREEN; per-session injection state bounded (P1 reviewer note addressed in same bounded cycle); no scope creep into absorb / close-session / anchor-touch (still DEFERRED).
+
+**Reviewer's P0 verdict (verbatim):**
+> "But the digest exposes a **new P0** in the load-bearing identity join.
+> Producer and consumer use different IDs. ... `runMycPrimeOnSessionStart()` stores the result keyed by the **host sessionId** ... But the new `beforeModel` consumer does `const sessionId = ctx.snapshot.conversationId`. ... The model-visible tests artificially make them equal ... So R1/R2 prove: IF host sessionId == AgentRuntime conversationId THEN injection works. They do **not** prove the production invariant: real host sessionId → prime recorder key → real runtime request → matching lookup key."
+> "There are only three acceptable outcomes: A. Production guarantees H == C → prove that equivalence at the real construction seam. B. Production carries H into runtime state/config separately → consume that canonical H in beforeModel. C. No such mapping exists → explicitly thread canonical host sessionId into the runtime/hook context."
+> "Do **not** simply rename `conversationId` or assume equality."
+
+**Reviewer's P1 (bounded, addressed in same cycle):**
+> "One secondary residue: `primeInjectedSessionIds` is an unbounded module-level `Set`. I classify that **P1**, not P0: clear it on session teardown or replace it with lifecycle-bounded state during the same bounded correction if trivial; don't create another review round for it."
+
+**Outcome chosen: B + C** — host sessionId already exists on `AgentRuntimeConfig.sessionId` (sourced from `CoreSessionConfig.sessionId` via `agent-runtime-config-builder.ts:104`); the missing piece was its surface in the runtime snapshot.
+
+**Production identity layers (REAL, from source):**
+
+| Layer               | Source                                                                                         | Example                                       |
+|---------------------|------------------------------------------------------------------------------------------------|-----------------------------------------------|
+| Host `sessionId`    | `CoreSessionConfig.sessionId` → `AgentRuntimeConfig.sessionId` (line 104)                      | `"host-session-X"` (assigned by host)         |
+| Agent `conversationId` | `ConversationStore.createConversationId()` → `AgentRuntimeConfig.conversationId`              | `"conv_<Date.now()>_<random>"`                |
+
+`AgentRuntimeConfig.sessionId` docblock (`sdk/packages/shared/src/agents/types.ts:894-911`) explicitly distinguishes them: `"sessionId is stable for hub subscriptions ... can differ from conversationId, which tracks the agent transcript"`.
+
+**Load-bearing join (REAL, from source):**
+- `CoreSessionConfig.sessionId` (`sdk/packages/core/src/types/config.ts:259-268`) — host-owned lifecycle id, distinct from agent conversation id.
+- `agent-runtime-config-builder.ts:104` — `sessionId: input.sessionId ?? agentConfig.sessionId` threads the host id into the runtime config.
+- `agent-runtime.ts:1033-1073` — `snapshot()` now surfaces `sessionId: this.config.sessionId?.trim() || undefined` (CORRECTION02 addition).
+- `apps/vscode/src/sdk/sdk-session-lifecycle.ts:470-475` — `startResult.sessionId` (= host sessionId) is the key passed to `runMycPrimeOnSessionStart`.
+- `apps/vscode/src/sdk/myc-prime-automation.ts:77,197-216` — `lastResultBySessionId: Map<string, MycPrimeResult>` keyed by host sessionId.
+- `apps/vscode/src/sdk/hooks-adapter.ts:202` — `beforeModel` lookup key is now `ctx.snapshot.sessionId ?? ctx.snapshot.conversationId` (CORRECTION02 fix). Fallback only for hand-built partial snapshots / pre-CORRECTION02 test fixtures.
+
+**Production invariant (frozen, post-correction):**
+```
+hostSessionId       = CoreSessionConfig.sessionId
+                    -> SdkSessionLifecycle.startNewSession reads startInput.config.sessionId
+                    -> sdkHost.start returns startResult.sessionId
+                    -> SdkController wires startResult.sessionId as the prime recorder KEY
+                    -> CoreSessionConfig.sessionId -> AgentRuntimeConfig.sessionId
+                       (agent-runtime-config-builder.ts:104)
+                    -> AgentRuntime.snapshot().sessionId = this.config.sessionId
+                       (agent-runtime.ts:1039-1044)
+                    -> beforeModel hook reads snapshot.sessionId
+                    -> finds the prime recorded under that key
+                    -> injects <prime_packet> on iteration 1
+
+conversationId      = ConversationStore.createConversationId() = `conv_<ts>_<rand>`
+                    -> AgentRuntimeConfig.conversationId
+                    -> AgentRuntime.snapshot().conversationId
+                    -> still used for transcript correlation (NOT for prime lookup)
+```
+
+**Production diff (4 files, 1 new test):**
+- `sdk/packages/shared/src/agent.ts` (MODIFIED, +30 lines): added `sessionId?: string` to `AgentRuntimeStateSnapshot` (additive-optional, documented as distinct from `conversationId`). Same additive-optional pattern used for `currentWorkingContextEstimate`, `execution`, `recovery`.
+- `sdk/packages/agents/src/agent-runtime.ts` (MODIFIED, +6 lines): `snapshot()` populates `sessionId: this.config.sessionId?.trim() || undefined` at lines 1039-1044.
+- `apps/vscode/src/sdk/hooks-adapter.ts` (MODIFIED, +20/-2 lines): `beforeModel` lookup key changed from `ctx.snapshot.conversationId` to `ctx.snapshot.sessionId ?? ctx.snapshot.conversationId`. `primeInjectedSessionIds` is now `Map<string, true>` (was unbounded `Set<string>`). New exported `clearPrimeInjectionStateForSession(sessionId)` for per-session teardown.
+- `apps/vscode/src/sdk/sdk-session-lifecycle.ts` (MODIFIED, +7 lines): `endActiveSession()` calls `clearPrimeInjectionStateForSession(activeSession.sessionId)` so the Map stays bounded by `O(active sessions)`, not `O(host lifetime)`. Idempotent (no-op on already-cleared ids).
+- `apps/vscode/src/sdk/__tests__/myc-prime-automation.identity-join.red.c24-c-bridge.test.ts` (NEW, 2 tests): production-shaped RED → GREEN witness using REAL `buildAgentHooks` + REAL `AgentRuntime` + REAL `myc-prime-echo` fixture, with `hostSessionId = "host-session-red-001"` and `AGENT_CONVERSATION_ID = "conv_<...>"` — DIFFERENT identity layers (not synthetic equality).
+- `apps/vscode/vitest.config.c2-4-c-bridge.ts` and `apps/vscode/tsconfig.c2-4-c-bridge.json` include the new test file in the bridge config.
+
+**RED→GREEN witnesses:**
+- RED (`00-red-witness.txt`): 2/2 tests FAIL on prior code. `expected 'hello' to contain '{"pid":...,"session":"host-session-red-001",...}' Received: "hello"` — proves the lookup key is the wrong identity layer.
+- GREEN (`01-green-witness.txt`): 6/6 tests PASS after fix:
+  - identity-join.red R5 (production-shaped, host != conversation): GREEN
+  - identity-join.red R6 (production-shaped, auto-generated conv): GREEN
+  - model-visible R1 (prime in first request): GREEN
+  - model-visible R2 (exactly once across iterations): GREEN
+  - model-visible R3 (no synthetic when prime unavailable): GREEN
+  - model-visible R4 (singleton populated before first request): GREEN
+
+**Cardinality invariants (frozen, post-correction):**
+- `startNewSession` fires prime exactly once + injects exactly once per non-superseded install.
+- `AgentRuntime.beforeModel` injects prime exactly once per session (iteration gate + per-session Map dedupe).
+- `Map<sessionId, true>` cleared on `endActiveSession` → bounded by `O(active sessions)`, NOT `O(host lifetime)`. (P1 reviewer note addressed.)
+- Resume (`LocalRuntimeHost.restore`) does not go through `startNewSession` → does not re-prime.
+- `replaceActiveSession` does go through `startNewSession` → re-primes AND re-injects (different sessionId in the Map).
+- Fence-superseded starts return `{status: "superseded"}` before activeSession install → no prime, no injection.
+
+**Failure semantics:** DEGRADED_WITH_DIAGNOSTIC. `beforeModel` never throws (try/catch wrapping); records no-op when singleton has no usable text; logs `Logger.warn` on any error. `await runMycPrimeOnSessionStart` in `startNewSession` is fail-safe (the helper itself never throws — `myc-prime-automation.ts:148-187`).
+
+**Conservation:**
+- bun unit gate: `Files: 91 / Pass: 1220 / Fail: 0` (UNCHANGED from prior ACT baseline; the 2 new tests run under vitest c24-c-bridge, not bun:test).
+- typecheck (apps/vscode): `bun run check-types` exit 0.
+- typecheck (c24-c-bridge): 2 ADDED diagnostics (env artifact from `@grpc/grpc-js@1.14.4` vs `1.14.5` version drift in fresh `bun install`); both diagnostics are in `apps/vscode/src/services/telemetry/providers/opentelemetry/OpenTelemetryExporterFactory.ts` — a file with ZERO edits in this ACT. Pre-existing environment artifact, NOT a regression in CORRECTION02's code.
+- 16 prior ACT bun tests (lifecycle01 12 + lifecycle02 4) still GREEN.
+- 11/11 `sessionIdEcho.mcpHub.test.ts` A2A-08..18 still GREEN.
+- 4 prior c24-c-bridge tests (model-visible R1..R4) still GREEN (CORRECTION01's synthetic-id fixture continues to pass via `?? conversationId` fallback — by construction).
+- 2 new c24-c-bridge tests (identity-join R5, R6) GREEN.
+
+**Scope exclusions honored (per reviewer "bounded one fix cycle"):**
+- No changes to myc implementation / DB / retrieval semantics.
+- No changes to MCP wire protocol / session-bound transport.
+- No changes to absorb / close-session / anchor-touch (still DEFERRED with documented reasons).
+- No new global session registry.
+- No new public session protocol field.
+- No duplicate memory layer / custom transcript database.
+- No changes to `ExtensionState` shape (`mycPrimeAutomation` unchanged).
+- No changes to `CoreSessionConfig` shape (`sessionId` field already existed).
+
+**Reopen condition (frozen):**
+```text
+HOST_SESSION_ID=H
+PRIME_RECORDER_KEY=H
+RUNTIME_LOOKUP_KEY=H
+MODEL_REQUEST_CONTAINS_PRIME=true
+```
+with executable evidence through the real
+`CoreSessionConfig.sessionId` → `AgentRuntimeConfig.sessionId` →
+`AgentRuntime.snapshot().sessionId` → `beforeModel` lookup chain.
+
 ## ACT-MYC-CLINEMM02-C-CORRECTION01 — PASS_PRIME_AUTOMATION_VISIBLE — 2026-09-27
 
 **Status:** PASS_PRIME_AUTOMATION_VISIBLE. Closes the reviewer-flagged `HALT_PRIME_NOT_CONSUMED` from the prior ACT: prime text is now model-visible (injected into the FIRST model request of the session, exactly once). One bounded fix cycle; no scope creep into absorb / close-session / anchor-touch (still DEFERRED with documented reasons).

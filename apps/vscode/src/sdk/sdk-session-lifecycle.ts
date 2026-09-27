@@ -14,6 +14,7 @@ import type { RuntimeErrorIncident } from "@/shared/ExtensionMessage"
 import { Logger } from "@/shared/services/Logger"
 import type { ActiveSession } from "./cline-session-factory"
 import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
+import { clearPrimeInjectionStateForSession } from "./hooks-adapter"
 import type { SdkForegroundCommandCoordinator } from "./sdk-foreground-command-coordinator"
 import { buildToolPolicies } from "./sdk-tool-policies"
 import type { SdkSessionHost } from "./session-host"
@@ -277,6 +278,14 @@ export class SdkSessionLifecycle {
 		if (!activeSession) {
 			return undefined
 		}
+
+		// ACT-MYC-CLINEMM02-C-CORRECTION02 (P1 bounded map): drop the
+		// per-session prime-injection flag when the host session ends
+		// (new install / replace / fence-supersede). Without this,
+		// `primeInjectedSessionIds` would grow unbounded across the
+		// host's lifetime. Idempotent: safe to call even if the
+		// session was never primed.
+		clearPrimeInjectionStateForSession(activeSession.sessionId)
 
 		this.safeUnsubscribe(activeSession, reason)
 		const stopPromise = this.trackSessionStop(activeSession.sdkHost, activeSession.sessionId, reason)

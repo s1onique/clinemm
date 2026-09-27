@@ -54,6 +54,12 @@ export default defineConfig({
 			// which the base `@cline/core` stub alias cannot
 			// resolve.
 			"src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts",
+			// ACT-MYC-CLINEMM02-C-CORRECTION02 — RED witness for
+			// the host-sessionId → AgentRuntime identity-join bug.
+			// Real buildAgentHooks + real AgentRuntime + real
+			// myc-prime-echo fixture; uses DIFFERENT hostSessionId
+			// and conversationId to mirror production.
+			"src/sdk/__tests__/myc-prime-automation.identity-join.red.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
 			"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts",
