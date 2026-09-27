@@ -80,6 +80,15 @@ export default defineConfig({
 			// `vitest.config.c2-4-c-bridge.ts` per
 			// HALT_PRODUCTION_SEAM_NOT_EXERCISED.
 			"src/sdk/__tests__/continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01 / PPRD01:
+			// real LocalRuntimeHost + real PendingPromptsController +
+			// real drain + real runTurn re-entry for the
+			// completesRun-then-drain invariant. Runs under
+			// `vitest.config.c2-4-c-bridge.ts` because the test
+			// uses the @cline-internal/core/.../local-runtime-host
+			// deep-relative alias to bypass the @cline/core bundle
+			// minifier name-collision.
+			"src/sdk/__tests__/pending-prompt-drain-after-completing-run.pprd01.c24-c-bridge.test.ts",
 			// ACT-CLINEMM-EXTENSION-HOST-WEBVIEW-STATE-SESSION-LISTING-REENUMERATION-REPAIR01-CORRECTION02:
 			// real production-class event bus (RuntimeHostEventBus)
 			// composition witness. The deep-relative import is intentional

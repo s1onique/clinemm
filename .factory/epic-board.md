@@ -14284,3 +14284,207 @@ READY_FOR_MYC_CLINEMM05=false
 6. Read the diagnostic and the wire capture; copy into `.factory/evidence/ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01/`.
 
 No further instrumentation is required before the live run — the existing scaffolds (ACQUISITION / LOOKUP / INJECTION / CAPTURE recorders + CLINE_CAPTURE_* recipe) are sufficient.
+## ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01 — VERDICT=NOT_REPRODUCED — 2026-09-28
+
+**Status:** `NOT_REPRODUCED` on the drain subsystem. Two regression-lock bridge tests (`PPRD-01-BRIDGE`, `PPRD-02-BRIDGE`) PASS on production code. No production source changed. Three config files updated (tsconfig.json, vitest.config.ts, vitest.config.c2-4-c-bridge.ts) to include the new bridge test in the c2-4-c bridge channel and exclude it from the base channel. One new test file (268 lines, real `LocalRuntimeHost` + real `PendingPromptsController` + real drain + real `runTurn` re-entry). Ten evidence files in `.factory/evidence/ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01/`.
+
+```text
+VERDICT                          = NOT_REPRODUCED
+QUEUE_DRAIN_PRODUCTION_CHANGE    = false
+BRIDGE_REGRESSION_LOCKS          = PASS (PPRD-01, PPRD-02)
+PRODUCTION_CODE_CHANGED          = false
+```
+
+**Live RED counter shape (read-only, does NOT trigger ACT body):**
+
+```text
+LIVE_RED_SESSION_ID              = 1790544756725_zx4dj
+LIVE_RED_PROMPT_ID               = null (no live JSONL capture on disk)
+LIVE_RED_ENQUEUED                = 1
+LIVE_RED_DEQUEUED                = 0
+LIVE_RED_CONTINUATION_SCHEDULED  = 0
+LIVE_RED_TASK_COMPLETION_COMMITTED = 0
+```
+
+**Production seams (recon, no edits):**
+
+```text
+PENDING_PROMPT_STORE             = sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts:298 (PendingPromptsController)
+PENDING_PROMPT_ENQUEUE_SEAM      = PendingPromptsController.enqueue (line 329) → service.enqueue + emit + onEnqueue + scheduleDrain
+PENDING_PROMPT_DRAIN_ENTRY       = PendingPromptsController.scheduleDrain (line 409) — gated on session.agent.canStartRun()
+PENDING_PROMPT_DEQUEUE_SEAM      = PendingPromptsController.drain (line 423) — shiftNext + emit + onBeforeDrain + onBeforeDispatch + deps.send
+PENDING_PROMPT_SCHEDULER_SEAM    = two entry points: scheduleDrain from enqueue (line 375) + runTurn post-turn drain microtask (local-runtime-host.ts:1268)
+ACTIVE_RUN_GUARD                 = session.agent.canStartRun() == !this.running && !this.shutdownCalled
+REENTRANCY_GUARD                 = session.drainingPendingPrompts
+```
+
+**QUEUE_DELIVERY_CONTRACT:** `delivery:'queue'` = store only. `scheduleDrain` fires only if `canStartRun()=true`. No autonomous-drain guarantee.
+
+**Conservation (text-confirmed):**
+
+- `bun x vitest run --config apps/vscode/vitest.config.c2-4-c-bridge.ts apps/vscode/src/sdk/__tests__/pending-prompt-drain-after-completing-run.pprd01.c24-c-bridge.test.ts` = 2/2 PASS (PPRD-01, PPRD-02).
+- BCB C3 (background-completion bridge) = 24 tests PASS.
+- BCB C4 (consumer-availability) = PASS.
+- BCCA = PASS.
+- CCARD = PASS.
+- BNCA framework + ablation = PASS.
+- Bridge typecheck = 0 diagnostics vs frozen baseline.
+- `tsc -p tsconfig.json --noEmit` (apps/vscode) = CLEAN.
+
+## NEW LIVE EVIDENCE (THE ACTUAL DELIVERABLE FROM THIS RUN)
+
+The same run that captured PPRD01's verdict then produced a real BCB finalization prompt for session `1790545638594_95udl` with seven held `cmd_mukd*` jobIds, explicitly instructing the agent to consume them via `command_status`. The runtime's tool surface available to this agent does NOT include `command_status`. `0/7` observations consumed.
+
+```text
+finalization prompt generation     = PASS
+enqueue                            = PASS
+drain                              = PASS
+continuation delivery              = PASS
+
+command_status (provider-visible)  = ABSENT
+held_observations                  = 7
+observations_consumed              = 0
+
+NEXT_P0 = HALT_FINALIZATION_CONSUMER_ABSENT_IN_REAL_TURN
+```
+
+**Discriminator:** The PPRD bridge stubs the agent (`tools: []`) and a counter-backed agent stand-in. That is correct to prove `enqueue → drain → dispatch` but CANNOT prove the dispatched finalization turn has `command_status` available. Bridge pass and live failure are fully compatible.
+
+**Causal chain (live-witness):**
+
+```text
+held terminal observations
+↓
+BCB creates finalization prompt
+↓
+prompt IS autonomously delivered
+↓
+finalization turn starts
+↓
+command_status is absent from model-visible tools
+↓
+0/7 observations consumed
+↓
+submit_and_exit still gets invoked (runtime forces terminal tool)
+↓
+BCB remains unresolved
+```
+
+**Why the earlier "consumer availability" fix didn't reach live:**
+
+```text
+A. running extension is stale and does not contain 0a5369661
+B. options.commandJobManager is undefined in this actual session/runtime
+C. finalization continuation uses a different runtime-builder/toolset path
+D. command_status is created but later filtered/disabled by tool policy
+E. tool exists internally but is lost during AgentRuntime construction
+```
+
+All five must be discriminated before any production change.
+
+**Next ACT:** `ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01`. Required capture set:
+
+```text
+SOURCE_HEAD
+DOGFOOD_SOURCE_HEAD
+VSIX_SHA256
+INSTALLED_VERSION
+
+sessionId
+finalization promptId
+
+executionMode
+commandJobManager_present
+
+runtime_builder_tool_names
+agent_runtime_tool_names
+provider_bound_tool_names
+
+command_status_created
+command_status_policy_enabled
+command_status_provider_visible
+```
+
+**Decisive invariant:**
+
+```text
+finalization prompt requires command_status
+⇒
+provider-visible tool names contains "command_status"
+```
+
+**Stop conditions** (each terminates with the named HALT and bounds the repair scope):
+
+```text
+HALT_STALE_DOGFOOD_ARTIFACT          — rebuild/install only, no code change
+HALT_FINALIZATION_COMMAND_JOB_MANAGER_MISSING — options.commandJobManager=undefined; repair in runtime assembly
+HALT_FINALIZATION_TOOL_POLICY_FILTER — tool exists but is filtered later
+HALT_TOOL_AVAILABILITY_CLAIM_CONTRADICTED — tool present but model still claims unavailable; investigate tool-schema/name mapping
+```
+
+**Evidence:** `.factory/evidence/ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01/00-entry.txt` … `08-final-report.md`, `result.json`. ACT body / new ACT stub at `.factory/acts/ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01.md` (created in the same commit).
+
+**This ACT package is committed before the new ACT starts (per the reviewer's prior cycle that flagged the dirty-tree hazard). The next ACT opens against a clean tree.**
+
+## ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01 — STUB OPENED — 2026-09-28
+
+**Primary purpose:** Trace one real BCB finalization continuation from installed-artifact identity (VSIX sha256) through runtime-builder inputs to the actual provider-visible tool names, and explain why `command_status` is absent on the dispatched finalization turn despite the prior "consumer availability" fix (which widened `if (options.commandJobManager)` regardless of `executionMode`).
+
+**Scope:** DIAGNOSE only. No runtime-side edits in this ACT. Repair is gated on a HALT classification.
+
+**Five hypotheses to discriminate (from the PPRD01 closure row):**
+
+```text
+A. STALE_DOGFOOD_ARTIFACT       — running extension build lacks the consumer-availability fix
+B. COMMAND_JOB_MANAGER_MISSING  — options.commandJobManager=undefined in this session/runtime path
+C. DIFFERENT_RUNTIME_BUILDER    — finalization continuation constructs AgentRuntime via a different code path
+D. TOOL_POLICY_FILTER           — command_status is built but later filtered/disabled by tool policy
+E. TOOL_LOST_IN_AGENT_RUNTIME   — tool exists internally but is dropped during AgentRuntime construction
+```
+
+**Required captures (one per cell, written under `.factory/evidence/ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01/`):**
+
+```text
+SOURCE_HEAD (this commit, no production edits expected)
+DOGFOOD_SOURCE_HEAD
+VSIX_SHA256 (output of `shasum -a 256 dist/clinemm-*.vsix`)
+INSTALLED_VERSION (output of `code --list-extensions-version cline` / equivalent)
+
+sessionId            = 1790545638594_95udl (live witness)
+finalization promptId
+executionMode        = (backgroundExec | foreground)
+commandJobManager_present (boolean)
+
+runtime_builder_tool_names      (set<string>)
+agent_runtime_tool_names        (set<string>)
+provider_bound_tool_names       (set<string>)
+
+command_status_created          (boolean)
+command_status_policy_enabled   (boolean)
+command_status_provider_visible (boolean)
+```
+
+**Decisive invariant:**
+
+```text
+finalization prompt mentions "command_status"
+⇒
+"command_status" ∈ provider_bound_tool_names
+```
+
+**Stop conditions (one of these is the outcome):**
+
+| HALT | Meaning | Repair scope |
+|------|---------|--------------|
+| `HALT_STALE_DOGFOOD_ARTIFACT` | Installed VSIX sha256 ≠ current `SOURCE_HEAD` build artifact | rebuild + reinstall only |
+| `HALT_FINALIZATION_COMMAND_JOB_MANAGER_MISSING` | `options.commandJobManager=undefined` at the runtime-builder seam | repair in runtime assembly |
+| `HALT_FINALIZATION_TOOL_POLICY_FILTER` | Created + policy-disabled | remove policy filter for this tool |
+| `HALT_TOOL_AVAILABILITY_CLAIM_CONTRADICTED` | Tool present in provider-bound set; model still claims unavailable | investigate tool-schema/name mapping |
+
+**Conservation:** No production-source edits permitted during diagnostic capture. The fix lands in a successor ACT scoped to the named HALT.
+
+**Disposition:** Awaiting operator run; diagnostics are observable from this cloud-agent shell if and only if the substrate provides the captures listed above.
+
+**Falsifiability:** If, after a clean install and full restart, the finalization continuation reports `provider_bound_tool_names` = `{command_status, ...}` AND the agent still claims `command_status` is unavailable, the invariant is falsified and the diagnosis shifts to `HALT_TOOL_AVAILABILITY_CLAIM_CONTRADICTED` (model/tool-schema mapping, not tool registration).
+
+No further instrumentation required before the live diagnostic; the captures are read-only from the installed artifact and one fresh finalization-turn trace.

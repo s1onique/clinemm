@@ -1,0 +1,9 @@
+ENTRY_HEAD=8f1b23e73b3f7af311810e2e1193a33e4b13c8d4
+
+git status --short (clean)
+$ git rev-parse HEAD
+8f1b23e73b3f7af311810e2e1193a33e4b13c8d4
+$ git show --no-patch --oneline HEAD
+8f1b23e73 ACT-MYC-CLINEMM04-LIVE-QUALIFICATION: ACT body md (verdict, code-level evidence, conservation, target verdict, successor)
+
+No unexpected tracked dirt. Working tree clean.

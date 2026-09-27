@@ -1,0 +1,17 @@
+PPRD01 RED/GREEN
+
+Test file: apps/vscode/src/sdk/__tests__/pending-prompt-drain-after-completing-run.pprd01.c24-c-bridge.test.ts
+Bridge config: apps/vscode/vitest.config.c2-4-c-bridge.ts (added the new test file to `include:` list)
+
+Test output:
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  01:10:13
+   Duration  3.66s (transform 1.96s, setup 0ms, import 3.25s, tests 100ms, environment 0ms)
+
+Two tests:
+1. PPRD-01-BRIDGE: queued finalization prompt + trigger turn -> drain -> dequeue (enqueue=1, dequeue=1, dispatched=1)
+2. PPRD-02-BRIDGE: same shape with isolate host (enqueue=1, dequeue=1, dispatched=1, agent ran twice)
+
+BOTH TESTS PASS in production code.
+

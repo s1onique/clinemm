@@ -1,0 +1,58 @@
+{
+  "act": "ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01",
+  "subject_head": "8f1b23e73b3f7af311810e2e1193a33e4b13c8d4",
+  "verdict": "NO_PRODUCTION_CHANGE_NEEDED",
+
+  "ENTRY_HEAD": "8f1b23e73b3f7af311810e2e1193a33e4b13c8d4",
+  "SUBJECT_HEAD": "8f1b23e73b3f7af311810e2e1193a33e4b13c8d4",
+
+  "LIVE_RED_SESSION_ID": "1790544756725_zx4dj",
+  "LIVE_RED_PROMPT_ID": null,
+
+  "LIVE_RED_ENQUEUED": 1,
+  "LIVE_RED_DEQUEUED": 0,
+  "LIVE_RED_CONTINUATION_SCHEDULED": 0,
+  "LIVE_RED_TASK_COMPLETION_COMMITTED": 0,
+
+  "PENDING_PROMPT_STORE": "sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts (PendingPromptsController)",
+  "PENDING_PROMPT_ENQUEUE_SEAM": "PendingPromptsController.enqueue (line 329) — calls service.enqueue + emit + onEnqueue + scheduleDrain",
+  "PENDING_PROMPT_DRAIN_ENTRY": "PendingPromptsController.scheduleDrain (line 409) — gated on session.agent.canStartRun()",
+  "PENDING_PROMPT_DEQUEUE_SEAM": "PendingPromptsController.drain (line 423) — shiftNext + emit + onBeforeDrain + onBeforeDispatch + deps.send",
+  "PENDING_PROMPT_SCHEDULER_SEAM": "Two entry points: scheduleDrain from enqueue (line 375) + runTurn post-turn drain microtask (local-runtime-host.ts:1268-1272)",
+  "TURN_DONE_SEAM": "LocalRuntimeHost.runTurn line 1268: queueMicrotask(() => pendingPromptsController.drain(sessionId))",
+
+  "QUEUE_DELIVERY_CONTRACT": "delivery:'queue' = store only; scheduleDrain fires only if canStartRun()=true; no autonomous drain guarantee.",
+  "QUEUE_ENQUEUE_REQUESTS_DRAIN": true,
+
+  "ROOT_CAUSE": "Live defect counter state (enqueued=1, dequeued=0, continuation_scheduled=0) was NOT reproducible in the bridge test harness (PPRD-01, PPRD-02 pass on production code). Production analysis shows the post-turn drain microtask at local-runtime-host.ts:1268 should dequeue the prompt after the BCB chain's enqueue. No live capture JSONL exists for the sessionId to confirm the live state. Without a reproducible RED, no production code change is warranted; the existing drain scheduling is correct for the analyzed case. The two new bridge tests are regression locks for future changes to the drain order.",
+
+  "REPAIR": "None (no production change). Two regression-lock tests added: PPRD-01-BRIDGE, PPRD-02-BRIDGE.",
+
+  "PPRD_01": "PASS",
+  "PPRD_02": "PASS",
+
+  "BCB_C3": "PASS (24 tests across correction01-correction04)",
+  "BCB_C4": "PASS",
+  "BCCA": "PASS (background-completion-consumer-availability tests)",
+  "CCARD": "PASS (continuation-cardinality tests)",
+  "BNCA_FRAMEWORK": "PASS",
+  "BNCA_ABLATION": "PASS",
+
+  "TYPECHECK": "PASS (apps/vscode/bunx tsc --noEmit -> exit 0)",
+  "VSCODE_PREPUBLISH": "NOT_RUN (no production code changes; ACT is test/config-only; standard gate applies unchanged)",
+  "DIFF_CHECK": "PASS (git status --short shows only config + test files; no production source touched)",
+
+  "LIVE_ENQUEUED": null,
+  "LIVE_DEQUEUED": null,
+  "LIVE_CONTINUATION_SCHEDULED": null,
+  "LIVE_COMMAND_STATUS_CONSUMED": null,
+  "LIVE_TASK_COMPLETION_COMMITTED": null,
+  "LIVE_OPERATOR_MESSAGES": null,
+  "LIVE_WORKING_AFTER_COMMIT": null,
+  "LIVE_CANCEL_AFTER_COMMIT": null,
+
+  "PRODUCTION_CODE_CHANGED": false,
+  "MYC_CODE_CHANGED": false,
+
+  "READY_TO_RESUME_MYC_LIVE_DIAG": "BLOCKED — ACT-MYC-CLINEMM04-LIVE-QUALIFICATION should resume only after the live defect is captured again with fresh live artifacts (JSONL CCARD/CCAP). The two new PPRD bridge tests provide a regression lock against future regressions but do not modify the production code."
+}

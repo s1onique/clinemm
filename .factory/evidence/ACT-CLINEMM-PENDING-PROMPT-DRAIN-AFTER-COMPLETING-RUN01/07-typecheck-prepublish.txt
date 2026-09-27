@@ -1,0 +1,15 @@
+PPRD01 TYPECHECK + PREPUBLISH
+
+$ cd apps/vscode && bunx tsc --noEmit
+exit=0
+(zero errors)
+
+The new test file `src/sdk/__tests__/pending-prompt-drain-after-completing-run.pprd01.c24-c-bridge.test.ts`
+is added to `apps/vscode/tsconfig.json` exclude list (bridge-only) and
+`apps/vscode/vitest.config.ts` exclude list (base config doesn't run bridge tests).
+
+`apps/vscode/vitest.config.c2-4-c-bridge.ts` is updated to include the new test.
+
+PREPUBLISH NOTE: This ACT adds no production code changes, only test files
+and config entries. The standard `bun run package` (`vscode:prepublish`) gate
+applies unchanged.

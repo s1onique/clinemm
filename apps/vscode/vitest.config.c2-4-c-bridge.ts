@@ -370,6 +370,15 @@ export default defineConfig({
 			// fires -- with no manufactured cardinality growth
 			// and an empty queue at settle.
 			"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01 / PPRD01:
+			// real-host RED witness for the BCB finalization-prompt drain
+			// defect. Drives the REAL LocalRuntimeHost + REAL
+			// PendingPromptsController + real drain + real runTurn
+			// re-entry chain. The held-completion prompt is enqueued
+			// via the real queue/steer short-circuit and the test
+			// asserts the post-turn drain microtask (line 1268)
+			// actually dequeues and dispatches it.
+			"src/sdk/__tests__/pending-prompt-drain-after-completing-run.pprd01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

@@ -1,0 +1,41 @@
+# 00-entry.txt — ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01
+
+opened:    2026-09-28
+opened_by: ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01 closure follow-up
+source:    .factory/acts/ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01.md
+predecessor_verdict: ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01 = NOT_REPRODUCED (drain subsystem OK; consumer-availability surfaced live)
+
+live_witness_sessionId:    1790545638594_95udl
+live_witness_held_jobIds:  cmd_mukdnd5p8gtdc9p6, cmd_mukdnsrlor2ld8tq, cmd_mukdp9dpan2e96ly,
+                           cmd_mukdi7gv7joftvk4, cmd_mukdilnj6xvjvxv1, cmd_mukdizds4u8oz5jj,
+                           cmd_mukdw6hndjc4ktrt
+observations_consumed:     0 of 7
+command_status_present_in_provider_bound_tool_names: PENDING
+
+ENTRY_HEAD:                (filled at closure — PENDING)
+SUBJECT_HEAD:              (filled at closure — PENDING; expected equal to ENTRY_HEAD since this ACT is DIAGNOSE-only)
+
+capture_state:
+  SOURCE_HEAD                     = PENDING (will record this commit)
+  DOGFOOD_SOURCE_HEAD             = PENDING
+  VSIX_SHA256                     = PENDING (output of `shasum -a 256 dist/clinemm-*.vsix`)
+  INSTALLED_VERSION               = PENDING
+
+  finalization_sessionId          = 1790545638594_95udl (LIVE WITNESS)
+  finalization_promptId           = PENDING
+
+  executionMode                   = PENDING (backgroundExec | foreground)
+  commandJobManager_present       = PENDING
+
+  runtime_builder_tool_names      = PENDING (set<string>)
+  agent_runtime_tool_names        = PENDING (set<string>)
+  provider_bound_tool_names       = PENDING (set<string>)
+
+  command_status_created          = PENDING (boolean)
+  command_status_policy_enabled   = PENDING (boolean)
+  command_status_provider_visible = PENDING (boolean)
+
+diagnostic_hypotheses_A_to_E:    PENDING
+halt_classification:             PENDING
+
+stop_conditions_met:             PENDING (one of four HALTs OR all data captured and verdict assigned)

@@ -1,0 +1,27 @@
+PPRD01 CONSERVATION
+
+Gate 1: bridge config tests (run via vitest.config.c2-4-c-bridge.ts)
+  - pending-prompt-drain-after-completing-run.pprd01.c24-c-bridge.test.ts: 2 tests PASS
+  - continuation-pathological-corpus01.swcm04.c24-c-bridge.test.ts: 5 tests PASS
+  - continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts: 1 test PASS
+
+Gate 2: base config BCB tests (run via vitest.config.ts)
+  - background-completion-barrier01.bcb01.test.ts: 14 tests PASS
+  - background-completion-barrier01-correction*.test.ts: 24 tests PASS
+  - background-notify-completion-authority-c10-framework*.test.ts: pass
+  - continuation-cardinality-authority01.ccard01.test.ts: pass
+  - continuation-cardinality-correlation-loss01.cccl01.c24-c-bridge.test.ts: pass
+
+Gate 3: pre-existing failures (NOT caused by this ACT)
+  - async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts: 2/3 tests fail at HEAD (pre-existing, unrelated)
+  - acl02-runtime-seam.c24-c-bridge.test.ts: failures observed, pre-existing
+  These are in the c24-c-bridge config but are pre-existing RED witnesses for related acts, not caused by PPRD01 changes.
+
+Gate 4: typecheck (apps/vscode/tsc --noEmit)
+  - exit code 0
+  - 0 errors
+
+Gate 5: pending-prompt / drain infrastructure
+  - No production code changes were made.
+  - The two new tests verify the load-bearing invariant.
+
