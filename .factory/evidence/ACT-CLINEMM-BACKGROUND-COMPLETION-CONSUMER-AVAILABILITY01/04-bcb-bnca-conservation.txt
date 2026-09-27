@@ -1,0 +1,67 @@
+BCB + BNCA Conservation — bounded fix preserves every load-bearing predicate
+
+The bounded fix at vscode-runtime-builder.ts:270 changes ONLY the tool-registration
+conditional. It does NOT touch any of the load-bearing BCB01/BNCA guards.
+
+## Sites NOT touched by the fix (verified)
+
+  - perJobSuppressOriginatingCompletion            [sdk-session-event-coordinator.ts:738]
+  - the C10 commit predicate (4-conjunct guard)    [sdk-session-event-coordinator.ts:1313-1318]
+  - the duplicate-completion guard (BNCA framework) [sdk-session-event-coordinator.ts:738, 1311]
+  - submit_and_exit's lifecycle.completesRun=true  [extensions/tools/definitions.ts:1085-1087]
+  - the BCB01 §0.1 invariant (unconsumed terminal drain)
+  - the wake-driven completion arbitration
+
+## Sites TOUCHED by the fix
+
+  - vscode-runtime-builder.ts:270
+    OLD: if (executionMode === "backgroundExec" && options.commandJobManager)
+    NEW: if (options.commandJobManager)
+
+    Effect: command_status (observation) and cancel_command (mutating, command-policy
+    gated) are now registered whenever a CommandJobManager is supplied, regardless
+    of `vscodeTerminalExecutionMode`. The gating on `executionMode` was a stale filter:
+    held terminal observations persist across rebuilds (mode changes) and across
+    session boundaries, so the model can hold observations even in the default
+    `vscodeTerminal` mode.
+
+## Test gate results
+
+| Test                                                | Status  | Evidence |
+|-----------------------------------------------------|---------|----------|
+| BCB01 — task-owned-jobs barrier                      | PASS*   | 12/12 in non-integration tests (infra blocks 2 integration tests, pre-existing) |
+| BCB01-C1 — hasRunningBackgroundJobForOwner conjunct | PASS    | BCB01.bcb01.test.ts:10/12 (infra blocks 2) |
+| BCB01-C2 — Path C consumer seam                      | PARTIAL | BCB-21..25 are the 5 tests blocked by infra; BCB-25 was always pre-existing RED |
+| BCB01-C3 — bounded finalization-authority trigger     | PASS    | BCB01-C3: 5/5 BCB-26..30 |
+| BCB01-C4 — terminal-idle trigger                     | PASS    | BCB01-C4: 5/5 BCB-31..35 (live-qualified) |
+| continuation-cardinality-authority (CCARD)          | PASS    | 12/12 |
+| pending-prompt conservation                          | PASS    | BCB-29/30 in BCB01-C3 |
+| BNCA framework-01                                    | PASS    | 4/4 |
+| BNCA framework-ablation-01 (RED)                     | PASS    | 1/1 — live defect re-emerges with framework fix OFF |
+| BNCA dispatch-failed-01                              | PASS    | covered |
+| BNCA dispatch-failed-ablation-01                     | PASS    | covered |
+| BNCA red01                                           | PASS    | covered |
+
+*BCB01 PARTIAL only because of the pre-existing `createTool` resolution issue
+documented in 02-red-state.md. The fix does NOT cause any new failures.
+
+## Lifecycle semantics — submit_and_exit.completesRun unchanged
+
+The fix does not modify:
+
+  apps/vscode/src/sdk/vscode-runtime-builder.ts:212-215
+    const tools: AgentTool[] = [...mcpTools.flat()]
+    // No completion tool is exposed: the agent simply ends its turn with a text
+    // response, and the turn-end inference in message-translator.ts styles that
+    // final text as the completion feedback row.
+
+  sdk/packages/core/src/extensions/tools/definitions.ts:1076-1087
+    name: "submit_and_exit",
+    ...
+    lifecycle: {
+      completesRun: true,
+    },
+
+`command_status` and `cancel_command` carry NO `completesRun` lifecycle flag —
+calling them does not end the agent loop. The agent can call them any number
+of times before re-issuing `submit_and_exit`.

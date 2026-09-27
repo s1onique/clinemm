@@ -247,10 +247,27 @@ export async function createVscodeExtraTools(mcpHub: McpHub, options?: VscodeExt
 				recordLaunchedBackgroundJob: options.recordLaunchedBackgroundJob,
 			}),
 		)
-		// Expose the follow-up API only for the background path —
-		// foreground commands use the existing "Proceed While Running"
-		// button and don't need a separate status tool.
-		if (executionMode === "backgroundExec" && options.commandJobManager) {
+		// ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01:
+		// Expose `command_status` and `cancel_command` whenever a
+		// `commandJobManager` is provided. The original gate
+		// `executionMode === "backgroundExec"` was a stale filter: the
+		// BCB01 finalization prompt (background-notify-coordinator.ts:289-294)
+		// unconditionally instructs the model to call `command_status`
+		// for held jobIds, but held observations persist across rebuilds
+		// (mode changes) and across session boundaries — so the model
+		// can hold observations even in the default `vscodeTerminal` mode.
+		// Without the tool, the model falls back to `run_commands`, which
+		// cannot consume the BCB observation; submit_and_exit re-holds
+		// and a self-amplifying continuation loop emerges.
+		//
+		// `commandJobManager` is the source of truth for whether
+		// background jobs exist. When it is present, the model must
+		// have a real consumer for the corresponding terminal observations.
+		//
+		// `command_status` is observation-only (no command-policy gating).
+		// `cancel_command` is mutating and remains gated through the
+		// command-policy adapter in sdk-tool-policies.ts.
+		if (options.commandJobManager) {
 			// Observation only — auto-approved; safe to expose.
 			// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
 			// thread the BackgroundNotifyCoordinator + active-owner

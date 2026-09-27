@@ -1,0 +1,12 @@
+TYPECHECK=clean
+
+PATH=/Volumes/UserData/Users/chistyakov/.bun/bin:$PATH bun run --filter='./apps/vscode' check-types
+
+Result: exit 0
+
+The fix introduces no type errors. The conditional change at
+vscode-runtime-builder.ts:270 is type-equivalent (the `&&` clause
+just narrowed the type but did not change the variable).
+
+DIFF_CHECK=clean
+git diff --check  # no whitespace errors

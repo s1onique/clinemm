@@ -1,0 +1,34 @@
+ACT=ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01
+
+ENTRY_HEAD=a289bc3df920289dfed75bd38d6e38c199f3d3ab
+SUBJECT_HEAD=6abd73a15f32b3f15c8dad3a86493c42d287c76c
+HEAD_SUBJECT=docs(factory): ACT-CLINEMM-BACKGROUND-COMPLETION-LIVE01 — PASS_LIVE_FINALIZATION_MECHANISM (BCB01 live-qualified via incidental six-job event)
+
+WORKING_TREE=clean (only untracked is FINAL-COMMIT01 closure artifacts; the new ACT creates fresh evidence dir)
+
+LINEAGE=
+  a289bc3df docs(factory): ACT-CLINEMM-BACKGROUND-COMPLETION-LIVE01 (pass-through doc commit)
+  6abd73a15 ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01..04 closed chain (PASS_TRIGGER_AT_TERMINAL_IDLE)
+  00a221007 ACT-MYC-CLINEMM03-LIVE-DIAG01 (default-off live prime diagnostics)
+  06e098c96 ACT-MYC-CLINEMM02-C-CORRECTION02 (closure verification artifact + C1:GO propagation)
+
+PRECONDITION=
+  ACT-CLINEMM-BACKGROUND-COMPLETION-FINAL-COMMIT01=HALT_RED_NOT_REPRODUCED (rejected the spec's hypothesis that the BCB finalization turn cannot commit; the actual code at HEAD does commit task_completion_committed=1 when the continuation fires)
+
+NEW_LIVE_FAILURE_OBSERVED=
+  pending_prompt_enqueued    = 3
+  continuation_scheduled     = 3
+  run_turn_started           = 6
+  submit_and_exit_seen       = 5
+  task_completion_committed  = 0
+
+  transcript excerpt:
+    runtime continuation prompt: "For each held jobId above, issue ONE command_status tool call..."
+    model response: "I don't have access to the actual command_status tool"
+    then: model runs shell commands instead
+    then: those shell commands create more task-owned background work
+    then: submit_and_exit is held again
+    then: another completion continuation
+    repeat
+
+EVIDENCE_PRECONDITIONS=ok (no halt)

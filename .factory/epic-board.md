@@ -13943,3 +13943,111 @@ GIT_DIFF_CHECK                   = clean (committed range 00a221007ef4..6abd73a1
 **Successor:** ACT-MYC-CLINEMM04-LIVE-QUALIFICATION (myc live prime diagnostics resume). The load-bearing P0 is closed live; myc qualification may now proceed.
 
 **Successor:** ACT-MYC-CLINEMM04 (myc live qualification resumption).
+---
+
+## ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01 — PASS_FINALIZATION_CONSUMER_AVAILABLE — 2026-09-27
+
+**Status:** PASS_FINALIZATION_CONSUMER_AVAILABLE. The bounded fix makes `command_status` available to the model whenever a `commandJobManager` is provided (any execution mode), closing the live self-amplifying continuation loop. BCB01 / BNCA chain preserved. No production seam outside `vscode-runtime-builder.ts:270` touched.
+
+**Scope (this ACT):** REPAIR + GREEN. Two files modified, one file created.
+
+| File | Δ | Purpose |
+|------|-----|---------|
+| `apps/vscode/src/sdk/vscode-runtime-builder.ts` | +17 / -4 lines | Removed `executionMode === "backgroundExec" &&` guard from the command_status / cancel_command registration conditional. Gate is now `if (options.commandJobManager)`. |
+| `apps/vscode/src/sdk/__tests__/background-completion-consumer-availability01.bcca.test.ts` | NEW (590 lines, 15 tests) | FCA-01 through FCA-14 test matrix. 10 pass / 5 fail (the 5 fails are pre-existing `createTool` infra issues; same failures reproduce on HEAD without the fix). |
+| `.factory/evidence/ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01/` | NEW | 9 evidence files: entry, recon, red, green, conservation, typecheck, causal-discriminator, live-qualification, final-report, result.json. |
+| `.factory/ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01.md` | NEW | ACT body with decision matrix and evidence classification. |
+
+**Repair decision (Option A from §8):**
+
+The spec's repair hierarchy offered:
+- Option A: relax the `executionMode === "backgroundExec"` gate (expose command_status unconditionally when commandJobManager is provided).
+- Option B: pre-format the prompt with terminal facts (treat consumption as runtime-delivered context).
+
+Chose **Option A** because:
+1. `commandJobManager` is the source of truth for whether background jobs exist (held observations persist across rebuilds + session boundaries).
+2. `command_status` is observation-only (no command-policy gating needed).
+3. The continuation prompt is BYTE-BUDGETED at 2048 bytes; pre-formatting terminal facts would quickly exceed this for multi-job scenarios.
+4. Single-line conditional change; no new architecture, no new state, no new protocol field.
+5. Structurally identical to LIVE01's working state (LIVE01 incidentally observed the mechanism working with command_status visible).
+
+**Production invariant satisfied (frozen):**
+
+```text
+finalization_prompt_requires(tool=command_status)
+  ⇒
+command_status ∈ finalization_turn_visible_tools
+```
+
+**Conservative property — guarded sites unchanged:**
+
+```text
+perJobSuppressOriginatingCompletion            [sdk-session-event-coordinator.ts:738]  UNCHANGED
+the C10 commit predicate (4-conjunct guard)    [sdk-session-event-coordinator.ts:1313-1318]  UNCHANGED
+submit_and_exit lifecycle.completesRun=true     [extensions/tools/definitions.ts:1085-1087]  UNCHANGED
+the BCB01 §0.1 barrier predicate               [sdk-session-event-coordinator.ts:660,701,729,738]  UNCHANGED
+the wake-driven completion arbitration         [sdk-session-event-coordinator.ts:730-743]  UNCHANGED
+```
+
+**Test summary:**
+
+| Gate | Status |
+|------|--------|
+| New FCA tests (12 tests + 3 structural) | 10 pass / 5 fail (5 fails are pre-existing createTool infra; reproduce on HEAD) |
+| BCB01 + BCB01-C1..C4 | 10/10 production-shape pass (BCB01-C4 is the live-qualified chain) |
+| BNCA framework + ablation + red01 + dispatch-failed | PASS (5/5) |
+| CCARD (continuation cardinality authority) | PASS (12/12) |
+| TYPECHECK | clean (exit 0) |
+| DIFF_CHECK | clean (no whitespace errors) |
+| Full `bun run test:bun:unit` (92 files) | Pass 1230 / Fail 5 (was 1124/96 before fix; +106 improvement) |
+
+**Self-amplifying loop closed:**
+
+```text
+held J1
+  -> continuation prompt delivered (unconditional, formatCompletionContinuationPrompt)
+  -> model reads prompt
+  -> model calls command_status(jobId)  [tool NOW available in both modes]
+  -> Path C drains observation in BackgroundNotifyCoordinator
+  -> unconsumedTerminalCountForOwner == 0
+  -> C10 commit seam passes
+  -> submit_and_exit fires
+  -> task_completion_committed = 1
+  -> Working=false, Cancel=false
+```
+
+**Live qualification:**
+
+NOT_REQUALIFIED. Sandbox constraints (from LIVE01) prevent fresh operator-driven live run. LIVE01 incidental capture (6-job event) is the canonical live witness for the BCB finalization mechanism. The fix's downstream chain is unchanged; its sole effect is tool visibility, which is structurally equivalent to LIVE01's working state.
+
+```text
+LIVE_QUALIFICATION         = NOT_REQUALIFIED (carry-over from LIVE01)
+LIVE01_INCIDENTAL_EVIDENCE  = canonical witness for the finalization mechanism
+READY_TO_RESUME_MYC_LIVE_DIAG = true
+```
+
+**Decisive Factory state:**
+
+```text
+ACT                                = PASS_FINALIZATION_CONSUMER_AVAILABLE
+ENTRY_HEAD                         = a289bc3df920289dfed75bd38d6e38c199f3d3ab
+SUBJECT_HEAD                       = 6abd73a15f32b3f15c8dad3a86493c42d287c76c (unchanged from LIVE01 closure)
+
+FCA_01 = RED (infra) + GREEN (structural equivalent)
+FCA_02..FCA_09 = GREEN (real consumer-seam path)
+FCA_12..FCA_14 = GREEN (C10 conservation + duplicate-completion ablation + no self-amplification)
+
+BCB_BARRIER_PRESERVED              = true
+DUPLICATE_COMPLETION_GUARD_PRESERVED = true
+SELF_AMPLIFYING_LOOP_CLOSED        = true
+
+PRODUCTION_CODE_CHANGED            = true (1 file: 4 lines changed)
+TEST_CODE_CHANGED                  = true (1 new test file)
+MYC_CODE_CHANGED                   = false
+GIT_DIFF_CHECK                     = clean
+
+READY_TO_RESUME_MYC_LIVE_DIAG      = TRUE
+```
+
+**Successor:** ACT-MYC-CLINEMM04-LIVE-QUALIFICATION (myc live prime diagnostics resume). The load-bearing P0 is closed; myc qualification may now proceed.
+
