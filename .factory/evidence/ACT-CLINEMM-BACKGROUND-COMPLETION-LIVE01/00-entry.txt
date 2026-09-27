@@ -1,0 +1,32 @@
+ACT=ACT-CLINEMM-BACKGROUND-COMPLETION-LIVE01
+COMMIT_RANGE=00a221007ef4..6abd73a15f32
+ENTRY_HEAD=6abd73a15f32b3f15c8dad3a86493c42d287c76c
+ENTRY_HEAD_SHORT=6abd73a15
+HEAD_SUBJECT="ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01..04 closed chain (PASS_TRIGGER_AT_TERMINAL_IDLE)"
+
+WORKING_TREE=clean
+WORKING_TREE_UNTRACKED=none expected (.factory/evidence/ write target is pre-allocated)
+GIT_DIFF_CHECK_CLEAN=true (clean per `git diff --check` on range)
+
+RANGE_DELTA_STAT=18 files, 5087 insertions(+), 41 deletions(-)
+PRODUCTION_SEAMS=5
+  - apps/vscode/src/sdk/SdkController.ts
+  - apps/vscode/src/sdk/background-notify-coordinator.ts
+  - apps/vscode/src/sdk/command-status-tool.ts
+  - apps/vscode/src/sdk/sdk-session-event-coordinator.ts
+  - apps/vscode/src/sdk/vscode-run-commands-tool.ts
+
+BCB01_CHAIN_PRIOR_CLAIMS=
+  PRODUCER                         = PASS
+  BARRIER                          = PASS
+  CONSUMER                         = PASS
+  COALESCED_CONTINUATION           = PASS
+  INITIAL_DONE_TRIGGER             = PASS
+  TERMINAL_IDLE_TRIGGER            = PASS
+  DEDUPE_MEMORY_BOUND              = PASS
+
+PRECONDITION_FOR_THIS_ACT=
+  ACT_CORRECTION04_VERDICT         = PASS_TRIGGER_AT_TERMINAL_IDLE
+  CLOSED_AT                        = 6abd73a15f32b3f15c8dad3a86493c42d287c76c
+
+HALT_PRECONDITIONS                = none (entry allowed)

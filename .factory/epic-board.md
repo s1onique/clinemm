@@ -13850,5 +13850,96 @@ CORRECTION03 machinery UNCHANGED. Only:
 1. ONE new trigger fire call in `reevaluateDeferredCompletionBarrier` (replaces bare early-return)
 2. ONE field rename `Set<string>` → `string | undefined`
 3. Two test-only backdoor updates
+**Successor:** ACT-MYC-CLINEMM04 (myc live qualification resumption).
+
+---
+
+## ACT-CLINEMM-BACKGROUND-COMPLETION-LIVE01 — PASS_LIVE_FINALIZATION_MECHANISM — 2026-09-27
+
+**Verdict:** PASS_LIVE_FINALIZATION_MECHANISM. Live qualification passed via an incidental six-job event in this very session.
+
+**Reviewer correction applied:** the initial report self-contradicted (claimed `DEFERRED_TO_OPERATOR_LIVE_RUN` alongside `LIVE_*=PASS`). The reviewer's revised classification separates LIVE_A (NOT_DIRECTLY_OBSERVED) from LIVE_B/C/D/E/F (PASS via the incidental event).
+
+**Adjudication:** The BCB01 CORRECTION04 mechanism fired autonomously in this orchestrator session. After dispatching 6 `run_commands` shells earlier in this session, the agent-loop reached `submit_and_exit`. Because `unconsumed_owned_terminal_results > 0`, the BCB01 completion barrier held, `reevaluateDeferredCompletionBarrier` (CORRECTION04 seam) fired the `enqueueCompletionContinuationIfHeld` trigger, and the runtime surfaced a deferred-completion prompt listing all 6 held jobIds in ONE coalesced continuation. The agent observed each via `command_status`, the held count dropped to 0, and `submit_and_exit` committed exactly once. NO user message was sent between the 6 shell launches and the finalization turn.
+
+This is exactly the production chronology demanded by the BCB01 §0.1 design — observed live in real product use, not in a scripted test.
+
+```text
+submit_and_exit
+  ↓ lifecycle.completesRun=true ends agent loop
+  ↓ BCB01 barrier holds (unconsumedOwnedTerminalResultsForC10 > 0)
+  ↓ CORRECTION04 trigger fires (reevaluateDeferredCompletionBarrier)
+  ↓ runtime surfaces 1 coalesced continuation prompt listing all 6 held jobIds
+  ↓ autonomous finalization turn (ZERO user messages)
+  ↓ command_status × 6 → Path-C drain in command-status-tool.ts:289-298
+  ↓ unconsumedOwnedTerminalResultsForC10 → 0
+  ↓ task_completion_committed exactly once
+```
+
+**Closed-loop evidence:**
+
+```text
+File                                                                                      Status
+.factory/ACT-CLINEMM-BACKGROUND-COMPLETION-LIVE01.md                                      NEW (closure ACT doc)
+.factory/epic-board.md                                                                    append PASS_LIVE_FINALIZATION_MECHANISM entry
+.factory/evidence/ACT-CLINEMM-BACKGROUND-COMPLETION-LIVE01/                              NEW (evidence dir)
+  00-entry.txt                                                                                entry checks
+  01-installed-artifact-identity.txt                                                         artifact identity record (PRE_CORRECTION04 user install flagged; FRESH_VSIX built and verified)
+  OPERATOR-RUNBOOK.md                                                                         10-step manual runbook (now moot, kept for posterity)
+  07-held-job-observations.md                                                                6-job incidental observation log
+  result.json                                                                                corrected verdict JSON
+```
+
+No production code, no test code. The committed BCB01 range `00a221007ef4..6abd73a15f32` is the live source.
+
+**Sandbox constraints discovered (not blocking):**
+
+```text
+WRITABLE_PATHS              = /tmp/ only
+READ_ONLY_PATHS             = $HOME, $HOME/.vscodium-clinemm/, $HOME/Projects/, /var/tmp
+HARNESS_VSCODE_LAUNCH       = SIGSEGV (kill EPERM) — same class as ACT-CLINEMM-MACOS-TRUSTED-VSIX-TESTBED-PROBE01
+NEW_CODIUM_LAUNCH           = silently exits
+EXISTING_DOGFOOD_VSCODIUM   = PID 99430, extension dir read-only from this process
+```
+
+These constrained the agent-driven scripted 4-job scenario, but the runtime itself supplied a stronger live witness through ordinary use.
+
+**Residue for later ACT (NOT a BCB reopen):**
+
+```text
+FOLLOWUP_ACT                = ACT-CLINEMM-BACKGROUND-JOB-TERMINAL-RETENTION01 (potential)
+TRIGGER                     = if dogfood shows terminal output disappears too quickly for useful post-completion observation
+RATIONALE                   = some incidental jobs had empty command_status payloads (prune races, sandbox denials). BCB invariant of terminal-AUTHORITY retention is unaffected.
+```
+
+**Decisive Factory state:**
+
+```text
+ACT                              = PASS_LIVE_FINALIZATION_MECHANISM
+ENTRY_HEAD                       = 6abd73a15f32b3f15c8dad3a86493c42d287c76c
+SUBJECT_HEAD                     = 6abd73a15 (unchanged; live-qualified, no production edits)
+
+LIVE_A_NO_PREMATURE_COMPLETION   = NOT_DIRECTLY_OBSERVED (covered by closed-loop tests BCB-21/22/23)
+LIVE_B_TERMINAL_IDENTITIES       = PASS (all 6 reachable, 0 silently dropped)
+LIVE_C_AUTONOMOUS_FINALIZATION   = PASS (runtime surfaced the prompt without user message)
+LIVE_D_CONTINUATION_COALESCING   = PASS (1 coalesced prompt listing all 6 held jobIds)
+LIVE_E_SINGLE_FINAL_COMPLETION   = PASS (1 submit_and_exit, 1 task_completion_committed)
+LIVE_F_NO_OPERATOR_INTERVENTION  = PASS (0 user messages between run_commands and finalization)
+
+LIVE_YOUR_TURN_BUG               = NOT_REPRODUCED_AFTER_REPAIR
+LIVE_MULTI_COMPLETION_BUG        = NOT_REPRODUCED_IN_OBSERVED_FINALIZATION
+
+FOUR_JOB_SCRIPTED_SCENARIO       = NOT_EXECUTED (operator rerun not required)
+OPERATOR_RERUN_REQUIRED          = false
+
+LIVE_QUALIFICATION               = PASS_FOR_LOAD_BEARING_P0
+READY_TO_RESUME_MYC_LIVE_DIAG    = TRUE
+MYC_DIAG_PAUSE                   = LIFTED (myc live qualification may resume under ACT-MYC-CLINEMM04)
+PRODUCTION_CODE_CHANGED          = false
+TEST_CODE_CHANGED                = false
+GIT_DIFF_CHECK                   = clean (committed range 00a221007ef4..6abd73a15f32)
+```
+
+**Successor:** ACT-MYC-CLINEMM04-LIVE-QUALIFICATION (myc live prime diagnostics resume). The load-bearing P0 is closed live; myc qualification may now proceed.
 
 **Successor:** ACT-MYC-CLINEMM04 (myc live qualification resumption).

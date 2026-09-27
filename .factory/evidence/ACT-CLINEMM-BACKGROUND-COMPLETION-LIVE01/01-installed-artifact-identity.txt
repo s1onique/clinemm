@@ -1,0 +1,37 @@
+INSTALLED_SOURCE_HEAD=6abd73a15 (matches SOURCE_HEAD)
+INSTALLED_ARTIFACT_IDENTITY=PROVEN (FRESH_VSIX exactly matches SOURCE_HEAD; ready for operator install)
+EXTENSION_VERSION=4.1.16
+OPERATOR_INSTALL_PATH: re-install the fresh VSIX into the dogfood profile
+                       via the standard dogfood CLI, e.g.:
+  /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+      --user-data-dir /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/user-data \
+      --extensions-dir /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/extensions \
+      --install-extension /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/clinemm-4.1.16-6abd73a15.vsix \
+      --force
+  Then **Reload Window** in the dogfood VSCodium (Cmd-R or
+  Developer: Reload Window command palette).
+
+DIAG_ENV_KNOB: set CLINEMM_RUNTIME_PROFILE=dogfood in the dog's launch env
+              (Squirrel / launchctl plist) so the CCARD/BJLA/BOCOR/THSICAP
+              diagnostics activate, then dump via:
+              Command Palette -> "Cline Debug: Dump Continuation Cardinality Authority"
+              (writes to <globalStorageUri>/continuation-cardinality-authority.jsonl
+              and .counters.json). Also dumps:
+                Background Job Liveness Authority
+                Background Owner Correlation
+                Continuation Cardinality Authority
+                Host Ownership Diagnostic
+                Extension Host Hotloop Diagnostic
+
+LAUNCH_EVIDENCE_TARGETS (operator to capture after the live scenario):
+  ~/.vscodium-clinemm/extensions/s1onique.clinemm-*/dist/extension.js
+        must be the FRESH_VSIX-extracted production bundle (or equivalent).
+  <globalStorageUri>/continuation-cardinality-authority.jsonl
+        should show stages: terminal_committed (C1, x4) →
+        (C3 wake_created / C4-C7 NOT triggered while jobs non-terminal)
+        → C9 submit_and_exit_seen → (NO C10 yet while jobs running)
+        → C1 (x4 more for later terminals) → C4 / C7 finalization →
+        C8 agent_turn_done → C9 submit_and_exit_seen (2nd time) →
+        C10 task_completion_committed (exactly once).
+  <globalStorageUri>/continuation-cardinality-authority.counters.json
+        per-stage counts with origin attribution.
