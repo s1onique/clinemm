@@ -56,9 +56,10 @@
  *   isolation with proper module setup.
  */
 
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
+import { readFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { join } from "node:path"
 
 /**
  * Integration-gate probe.
@@ -127,11 +128,12 @@ const INTEGRATION_AVAILABLE: boolean = (() => {
 	if (FORCE_INTEGRATION) return true
 	try {
 		// Synchronous require is valid in this file's CommonJS-like
-		// load ordering under bun:test. We use eval("require") so the
-		// transformer doesn't choke on it; this is at file-load time
-		// (before any test runs).
-		// eslint-disable-next-line @typescript-eslint/no-require-imports, no-eval
-		const req = eval("require") as NodeJS.Require
+		// load ordering under bun:test. Use the Node-blessed ESM-to-CJS
+		// bridge `createRequire(import.meta.url)` rather than eval("require")
+		// so Biome's security/noGlobalEval lint (and the bundler's tree-shake
+		// pass during vscode:prepublish) is happy. This still runs at
+		// file-load time, before any test executes.
+		const req = createRequire(import.meta.url) as NodeJS.Require
 		const core = req("@cline/core") as {
 			createShellTool?: (cfg: unknown) => { name?: string }
 		}
@@ -188,84 +190,90 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 		 * than RED; the structural-source tests FCA-01d/e prove the same
 		 * invariant at the source level.
 		 */
-		it.skipIf(!INTEGRATION_AVAILABLE)("FCA-01: continuation prompt requires command_status; toolset has command_status", async () => {
-			const mcpHub = makeMcpHubStub()
-			const manager = new CommandJobManager()
-			const notifyCoordinator = new BackgroundNotifyCoordinator({
-				resolveActiveOwner: () => undefined,
-				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
-				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
-			})
+		it.skipIf(!INTEGRATION_AVAILABLE)(
+			"FCA-01: continuation prompt requires command_status; toolset has command_status",
+			async () => {
+				const mcpHub = makeMcpHubStub()
+				const manager = new CommandJobManager()
+				const notifyCoordinator = new BackgroundNotifyCoordinator({
+					resolveActiveOwner: () => undefined,
+					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
+					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				})
 
-			// Default mode: vscodeTerminal — the failing live config.
-			const tools = await createVscodeExtraTools(mcpHub as never, {
-				cwd: process.cwd(),
-				getTerminalManager: makeFakeTerminalManager,
-				vscodeTerminalExecutionMode: "vscodeTerminal",
-				commandJobManager: manager,
-				backgroundNotifyCoordinator: notifyCoordinator,
-				resolveActiveOwner: () => undefined,
-			})
+				// Default mode: vscodeTerminal — the failing live config.
+				const tools = await createVscodeExtraTools(mcpHub as never, {
+					cwd: process.cwd(),
+					getTerminalManager: makeFakeTerminalManager,
+					vscodeTerminalExecutionMode: "vscodeTerminal",
+					commandJobManager: manager,
+					backgroundNotifyCoordinator: notifyCoordinator,
+					resolveActiveOwner: () => undefined,
+				})
 
-			const names = tools.map((tool) => tool.name)
-			// The continuation prompt (formatCompletionContinuationPrompt below)
-			// tells the model: "For each held jobId above, issue ONE
-			// `command_status` tool call". The invariant:
-			//   finalization_prompt_requires(command_status)
-			//     ⇒
-			//   command_status ∈ finalization_turn_visible_tools
-			// In default config, command_status MUST be visible.
-			expect(names).toContain("command_status")
-			expect(names).toContain("cancel_command")
-			expect(names).toContain("run_commands")
+				const names = tools.map((tool) => tool.name)
+				// The continuation prompt (formatCompletionContinuationPrompt below)
+				// tells the model: "For each held jobId above, issue ONE
+				// `command_status` tool call". The invariant:
+				//   finalization_prompt_requires(command_status)
+				//     ⇒
+				//   command_status ∈ finalization_turn_visible_tools
+				// In default config, command_status MUST be visible.
+				expect(names).toContain("command_status")
+				expect(names).toContain("cancel_command")
+				expect(names).toContain("run_commands")
 
-			// Verify the prompt itself really does require command_status.
-			const prompt = formatCompletionContinuationPrompt({
-				heldJobIds: ["cmd_test_1"],
-				sessionId: "session-fca01",
-				taskId: "task-fca01",
-			})
-			expect(prompt).toMatch(/command_status/)
+				// Verify the prompt itself really does require command_status.
+				const prompt = formatCompletionContinuationPrompt({
+					heldJobIds: ["cmd_test_1"],
+					sessionId: "session-fca01",
+					taskId: "task-fca01",
+				})
+				expect(prompt).toMatch(/command_status/)
 
-			await manager.dispose()
-			notifyCoordinator.dispose()
-		})
+				await manager.dispose()
+				notifyCoordinator.dispose()
+			},
+		)
 
-		it.skipIf(!INTEGRATION_AVAILABLE)("FCA-01b: prompt/tool contract is satisfiable — no missing-tool contract violation", async () => {
-			const prompt = formatCompletionContinuationPrompt({
-				heldJobIds: ["cmd_test_a", "cmd_test_b"],
-				sessionId: "session-fca01b",
-				taskId: "task-fca01b",
-			})
-			expect(prompt).toMatch(/command_status/)
-			expect(prompt).toMatch(/submit_and_exit/)
+		it.skipIf(!INTEGRATION_AVAILABLE)(
+			"FCA-01b: prompt/tool contract is satisfiable — no missing-tool contract violation",
+			async () => {
+				const prompt = formatCompletionContinuationPrompt({
+					heldJobIds: ["cmd_test_a", "cmd_test_b"],
+					sessionId: "session-fca01b",
+					taskId: "task-fca01b",
+				})
+				expect(prompt).toMatch(/command_status/)
+				expect(prompt).toMatch(/submit_and_exit/)
 
-			const mcpHub = makeMcpHubStub()
-			const manager = new CommandJobManager()
-			const notifyCoordinator = new BackgroundNotifyCoordinator({
-				resolveActiveOwner: () => undefined,
-				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
-				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
-			})
+				const mcpHub = makeMcpHubStub()
+				const manager = new CommandJobManager()
+				const notifyCoordinator = new BackgroundNotifyCoordinator({
+					resolveActiveOwner: () => undefined,
+					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
+					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				})
 
-			const tools = await createVscodeExtraTools(mcpHub as never, {
-				cwd: process.cwd(),
-				getTerminalManager: makeFakeTerminalManager,
-				vscodeTerminalExecutionMode: "vscodeTerminal",
-				commandJobManager: manager,
-				backgroundNotifyCoordinator: notifyCoordinator,
-				resolveActiveOwner: () => undefined,
-			})
-			const visible = new Set(tools.map((tool) => tool.name))
+				const tools = await createVscodeExtraTools(mcpHub as never, {
+					cwd: process.cwd(),
+					getTerminalManager: makeFakeTerminalManager,
+					vscodeTerminalExecutionMode: "vscodeTerminal",
+					commandJobManager: manager,
+					backgroundNotifyCoordinator: notifyCoordinator,
+					resolveActiveOwner: () => undefined,
+				})
+				const visible = new Set(tools.map((tool) => tool.name))
 
-			// submit_and_exit is gated separately by an upstream capability flag
-			// (enableSubmitAndExit) wired by the runtime builder — not by this seam.
-			// BCCA01 only governs the host-owned follow-up tools.
-			expect(visible.has("command_status")).toBe(true)
+				// submit_and_exit is gated separately by an upstream capability flag
+				// (enableSubmitAndExit) wired by the runtime builder — not by this seam.
+				// BCCA01 only governs the host-owned follow-up tools.
+				expect(visible.has("command_status")).toBe(true)
 
-			await manager.dispose()
-			notifyCoordinator.dispose()
-		})
+				await manager.dispose()
+				notifyCoordinator.dispose()
+			},
+		)
 	})
 
 	describe("Case B: explicit `backgroundExec` execution mode (the LIVE01 observed case)", () => {
@@ -273,30 +281,33 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 		 * FCA-01c — INTEGRATION test (calls createVscodeExtraTools).
 		 * Gated by the createTool infra probe; see FCA-01 comment.
 		 */
-		it.skipIf(!INTEGRATION_AVAILABLE)("FCA-01c: command_status visible when backgroundExec mode is set explicitly", async () => {
-			const mcpHub = makeMcpHubStub()
-			const manager = new CommandJobManager()
-			const notifyCoordinator = new BackgroundNotifyCoordinator({
-				resolveActiveOwner: () => undefined,
-				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
-				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
-			})
+		it.skipIf(!INTEGRATION_AVAILABLE)(
+			"FCA-01c: command_status visible when backgroundExec mode is set explicitly",
+			async () => {
+				const mcpHub = makeMcpHubStub()
+				const manager = new CommandJobManager()
+				const notifyCoordinator = new BackgroundNotifyCoordinator({
+					resolveActiveOwner: () => undefined,
+					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
+					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				})
 
-			const tools = await createVscodeExtraTools(mcpHub as never, {
-				cwd: process.cwd(),
-				getTerminalManager: makeFakeTerminalManager,
-				vscodeTerminalExecutionMode: "backgroundExec",
-				commandJobManager: manager,
-				backgroundNotifyCoordinator: notifyCoordinator,
-				resolveActiveOwner: () => undefined,
-			})
-			const names = tools.map((tool) => tool.name)
-			expect(names).toContain("command_status")
-			expect(names).toContain("cancel_command")
+				const tools = await createVscodeExtraTools(mcpHub as never, {
+					cwd: process.cwd(),
+					getTerminalManager: makeFakeTerminalManager,
+					vscodeTerminalExecutionMode: "backgroundExec",
+					commandJobManager: manager,
+					backgroundNotifyCoordinator: notifyCoordinator,
+					resolveActiveOwner: () => undefined,
+				})
+				const names = tools.map((tool) => tool.name)
+				expect(names).toContain("command_status")
+				expect(names).toContain("cancel_command")
 
-			await manager.dispose()
-			notifyCoordinator.dispose()
-		})
+				await manager.dispose()
+				notifyCoordinator.dispose()
+			},
+		)
 	})
 
 	describe("FCA-02 — single held non-notify terminal observation", () => {
@@ -315,9 +326,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				sessionId: owner.sessionId,
 				taskId: owner.taskId,
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(1)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(1)
 
 			const activeBefore = manager.activeCount
 			notifyCoordinator.consumeNonNotifyTerminalObservation({
@@ -325,9 +334,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				sessionId: owner.sessionId,
 				taskId: owner.taskId,
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(0)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(0)
 			expect(manager.activeCount).toBe(activeBefore)
 
 			await manager.dispose()
@@ -353,9 +360,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 					taskId: owner.taskId,
 				})
 			}
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(4)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(4)
 
 			const activeBefore = manager.activeCount
 			for (const jobId of jobIds) {
@@ -365,9 +370,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 					taskId: owner.taskId,
 				})
 			}
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(0)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(0)
 			expect(manager.activeCount).toBe(activeBefore)
 
 			await manager.dispose()
@@ -391,9 +394,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				sessionId: owner.sessionId,
 				taskId: owner.taskId,
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(1)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(1)
 
 			const activeBefore = manager.activeCount
 			notifyCoordinator.consumeNonNotifyTerminalObservation({
@@ -401,9 +402,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				sessionId: owner.sessionId,
 				taskId: owner.taskId,
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(0)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(0)
 			expect(manager.activeCount).toBe(activeBefore)
 
 			await manager.dispose()
@@ -426,18 +425,14 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				sessionId: owner.sessionId,
 				taskId: owner.taskId,
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(1)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(1)
 
 			notifyCoordinator.consumeNonNotifyTerminalObservation({
 				jobId: "cmd_fca05_pruned",
 				sessionId: owner.sessionId,
 				taskId: owner.taskId,
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(0)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(0)
 
 			await manager.dispose()
 			notifyCoordinator.dispose()
@@ -465,9 +460,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				sessionId: "s-attacker",
 				taskId: "t-attacker",
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner("s-owner", "t-owner"),
-			).toBe(1)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner("s-owner", "t-owner")).toBe(1)
 
 			// Right owner → drains.
 			notifyCoordinator.consumeNonNotifyTerminalObservation({
@@ -475,9 +468,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				sessionId: "s-owner",
 				taskId: "t-owner",
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner("s-owner", "t-owner"),
-			).toBe(0)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner("s-owner", "t-owner")).toBe(0)
 
 			await manager.dispose()
 			notifyCoordinator.dispose()
@@ -504,17 +495,13 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 				sessionId: owner.sessionId,
 				taskId: owner.taskId,
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(0)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(0)
 			notifyCoordinator.consumeNonNotifyTerminalObservation({
 				jobId: "cmd_fca07_dup",
 				sessionId: owner.sessionId,
 				taskId: owner.taskId,
 			})
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(0)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(0)
 
 			await manager.dispose()
 			notifyCoordinator.dispose()
@@ -527,33 +514,36 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 		 * The structural FCA-12b test proves the same invariant at the
 		 * source level.
 		 */
-		it.skipIf(!INTEGRATION_AVAILABLE)("FCA-12a: bounded fix only exposes command_status; submit_and_exit is gated elsewhere", async () => {
-			const mcpHub = makeMcpHubStub()
-			const manager = new CommandJobManager()
-			const notifyCoordinator = new BackgroundNotifyCoordinator({
-				resolveActiveOwner: () => undefined,
-				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
-				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
-			})
+		it.skipIf(!INTEGRATION_AVAILABLE)(
+			"FCA-12a: bounded fix only exposes command_status; submit_and_exit is gated elsewhere",
+			async () => {
+				const mcpHub = makeMcpHubStub()
+				const manager = new CommandJobManager()
+				const notifyCoordinator = new BackgroundNotifyCoordinator({
+					resolveActiveOwner: () => undefined,
+					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
+					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				})
 
-			const tools = await createVscodeExtraTools(mcpHub as never, {
-				cwd: process.cwd(),
-				getTerminalManager: makeFakeTerminalManager,
-				vscodeTerminalExecutionMode: "vscodeTerminal",
-				commandJobManager: manager,
-				backgroundNotifyCoordinator: notifyCoordinator,
-				resolveActiveOwner: () => undefined,
-			})
+				const tools = await createVscodeExtraTools(mcpHub as never, {
+					cwd: process.cwd(),
+					getTerminalManager: makeFakeTerminalManager,
+					vscodeTerminalExecutionMode: "vscodeTerminal",
+					commandJobManager: manager,
+					backgroundNotifyCoordinator: notifyCoordinator,
+					resolveActiveOwner: () => undefined,
+				})
 
-			const names = tools.map((tool) => tool.name)
-			expect(names).toContain("command_status")
-			expect(names).not.toContain("submit_and_exit")
-			expect(names).toContain("run_commands")
-			expect(names).toContain("cancel_command")
+				const names = tools.map((tool) => tool.name)
+				expect(names).toContain("command_status")
+				expect(names).not.toContain("submit_and_exit")
+				expect(names).toContain("run_commands")
+				expect(names).toContain("cancel_command")
 
-			await manager.dispose()
-			notifyCoordinator.dispose()
-		})
+				await manager.dispose()
+				notifyCoordinator.dispose()
+			},
+		)
 	})
 
 	describe("FCA-14 — no self-amplification", () => {
@@ -582,9 +572,7 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 			})
 
 			expect(manager.activeCount - activeBefore).toBe(0)
-			expect(
-				notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId),
-			).toBe(0)
+			expect(notifyCoordinator.unconsumedTerminalCountForOwner(owner.sessionId, owner.taskId)).toBe(0)
 
 			await manager.dispose()
 			notifyCoordinator.dispose()
@@ -596,41 +584,42 @@ describe("BCCA01 — BCB finalization turn consumer availability", () => {
 		 * FCA-13a — INTEGRATION test (calls createVscodeExtraTools).
 		 * Gated by the createTool infra probe; see FCA-01 comment.
 		 */
-		it.skipIf(!INTEGRATION_AVAILABLE)("FCA-13a: command_status tool exposed, but no completesRun lifecycle leaks", async () => {
-			const mcpHub = makeMcpHubStub()
-			const manager = new CommandJobManager()
-			const notifyCoordinator = new BackgroundNotifyCoordinator({
-				resolveActiveOwner: () => undefined,
-				enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
-				discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
-			})
+		it.skipIf(!INTEGRATION_AVAILABLE)(
+			"FCA-13a: command_status tool exposed, but no completesRun lifecycle leaks",
+			async () => {
+				const mcpHub = makeMcpHubStub()
+				const manager = new CommandJobManager()
+				const notifyCoordinator = new BackgroundNotifyCoordinator({
+					resolveActiveOwner: () => undefined,
+					enqueueTerminalWake: () => Promise.resolve({ kind: "delivered" as const }),
+					discardQueuedWake: () => ({ kind: "not_found" as const, jobId: "" }),
+				})
 
-			const tools = await createVscodeExtraTools(mcpHub as never, {
-				cwd: process.cwd(),
-				getTerminalManager: makeFakeTerminalManager,
-				vscodeTerminalExecutionMode: "vscodeTerminal",
-				commandJobManager: manager,
-				backgroundNotifyCoordinator: notifyCoordinator,
-				resolveActiveOwner: () => undefined,
-			})
+				const tools = await createVscodeExtraTools(mcpHub as never, {
+					cwd: process.cwd(),
+					getTerminalManager: makeFakeTerminalManager,
+					vscodeTerminalExecutionMode: "vscodeTerminal",
+					commandJobManager: manager,
+					backgroundNotifyCoordinator: notifyCoordinator,
+					resolveActiveOwner: () => undefined,
+				})
 
-			const statusTool = tools.find((t) => t.name === "command_status")
-			expect(statusTool).toBeDefined()
-			expect(
-				(statusTool as { lifecycle?: { completesRun?: boolean } } | undefined)?.lifecycle
-					?.completesRun,
-			).toBeFalsy()
+				const statusTool = tools.find((t) => t.name === "command_status")
+				expect(statusTool).toBeDefined()
+				expect(
+					(statusTool as { lifecycle?: { completesRun?: boolean } } | undefined)?.lifecycle?.completesRun,
+				).toBeFalsy()
 
-			const cancelTool = tools.find((t) => t.name === "cancel_command")
-			expect(cancelTool).toBeDefined()
-			expect(
-				(cancelTool as { lifecycle?: { completesRun?: boolean } } | undefined)?.lifecycle
-					?.completesRun,
-			).toBeFalsy()
+				const cancelTool = tools.find((t) => t.name === "cancel_command")
+				expect(cancelTool).toBeDefined()
+				expect(
+					(cancelTool as { lifecycle?: { completesRun?: boolean } } | undefined)?.lifecycle?.completesRun,
+				).toBeFalsy()
 
-			await manager.dispose()
-			notifyCoordinator.dispose()
-		})
+				await manager.dispose()
+				notifyCoordinator.dispose()
+			},
+		)
 	})
 
 	// ============================================================================
