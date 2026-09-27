@@ -2,7 +2,7 @@
   "act": "ACT-MYC-CLINEMM02-C-CORRECTION02",
   "verdict": "PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED",
   "entry_head": "0b952d00574bdf232204af17c2bd7673b8dbdbd5",
-  "subject_head": "0b952d00574bdf232204af17c2bd7673b8dbdbd5",
+  "subject_head": "git rev-parse HEAD (closure ACT is inside the closure commit; use `git log --oneline -- .factory/acts/ACT-MYC-CLINEMM02-C-CORRECTION02.md` to resolve)",
   "halt_resolved": [
     "HALT_SESSION_IDENTITY_JOIN_UNPROVEN",
     "HALT_TYPECHECK_GATE_NOT_GREEN (cache-pollution normalization; outcome A)"

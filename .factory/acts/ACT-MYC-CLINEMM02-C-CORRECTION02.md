@@ -3,9 +3,11 @@
 ACT=ACT-MYC-CLINEMM02-C-CORRECTION02
 VERDICT=PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED
 ENTRY_HEAD=0b952d00574bdf232204af17c2bd7673b8dbdbd5
-SUBJECT_HEAD=0b952d00574bdf232204af17c2bd7673b8dbdbd5
+SUBJECT_HEAD=`git rev-parse HEAD` (the commit that contains this ACT file; use `git log --oneline -- .factory/acts/ACT-MYC-CLINEMM02-C-CORRECTION02.md` to resolve; the closure ACT is inside the closure commit, so the SHA moves with `--amend`; the substantive content of this ACT does not depend on a frozen SHA)
 HALT_RESOLVED=HALT_SESSION_IDENTITY_JOIN_UNPROVEN
 HALT_RESOLVED_2=HALT_TYPECHECK_GATE_NOT_GREEN (cache-pollution normalization; outcome A; see 06-normalization.md)
+
+> Note on SHAs: the implementation commit is `0b952d005`. The closure-artifacts commit family (`85e39da38` → `0f50d3bf9` → amended to `439732a60`) updates the closure prose; each `--amend` keeps the file content but moves the SHA. `ENTRY_HEAD` is recorded as a real SHA (the implementation commit). For SUBJECT, use `git log --oneline -- .factory/acts/ACT-MYC-CLINEMM02-C-CORRECTION02.md` — this is the deterministic lookup the reviewer can re-run. Per reviewer terminal-cleanup note, the previous "see `git log -1`" indirection is replaced by an explicit `git log -- <path>` recipe.
 
 ## Reopen closure (post-cache-normalization)
 
