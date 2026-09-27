@@ -1,0 +1,51 @@
+LIVE PRIME RESULT:
+
+PRIME_REQUEST_COUNT=PENDING_OPERATOR_LIVE_RUN
+PRIME_RESULT_STATUS=PENDING_OPERATOR_LIVE_RUN
+PRIME_RESULT_SESSION_ID=PENDING_OPERATOR_LIVE_RUN
+PRIME_RESULT_CONTAINS_SENTINEL=PENDING_OPERATOR_LIVE_RUN
+
+WHEN THE OPERATOR RUNS LIVE-A..LIVE-I, the following existing
+observability points fire automatically (no new instrumentation):
+
+  ACQUISITION (apps/vscode/src/sdk/myc-prime-automation.ts:118-225)
+    - startMycPrimeLiveDiag(sessionId) at entry of runMycPrimeOnSessionStart
+    - recordMycPrimeLiveAcquisition(sessionId, {attempted, serverDetected,
+      status: ok|failed|skipped, textPresent, textBytes, error?}) at every
+      exit branch
+    - recorded by `lastResultBySessionId.set(...)` (production singleton)
+
+  LOOKUP (apps/vscode/src/sdk/hooks-adapter.ts:218-235)
+    - recordMycPrimeLiveLookup(sessionId, {attempted,
+      snapshotSessionIdPresent, matchedRecordedSession,
+      recordedPrimeFound, iteration})
+
+  INJECTION (apps/vscode/src/sdk/hooks-adapter.ts:236-378)
+    - recordMycPrimeLiveInjection(sessionId, {attempted, injected, reason,
+      packetBytes?, iteration}) at each branch
+    - reasons: ok | iteration_not_first | no_session_id |
+               no_recorded_prime | prime_empty | already_injected
+    - on `injected=true`: stamps captureId=`mycprime-${sessionId}-${ts}`
+      onto request.options.metadata AND
+      recordMycPrimeLiveCapture(sessionId, {captureId, aiSdkPromptObserved:true})
+
+ENABLE VIA:
+  export CLINEMM_MYC_PRIME_DIAG=1
+  export CLINE_CAPTURE_PROVIDER_REQUEST=full
+  export CLINE_CAPTURE_WIRE=true
+  export CLINE_CAPTURE_CLEANUP=off
+  export CLINE_CAPTURE_DIR=/tmp/clinemm-myc-prime-captures
+  (Existing recipe from ACT-MYC-CLINEMM03.)
+
+READOUT:
+  getMycPrimeLiveDiag(sessionId) -> {acquisition, lookup, injection, capture?}
+  WHERE_TO_FIND wire capture:
+    ${CLINE_CAPTURE_DIR}/wire/*.json  (matched by captureId)
+    ${CLINE_CAPTURE_DIR}/ai-sdk/*.json (matched by captureId)
+
+POST-RUN VERIFICATION:
+  The diagnostic carries textBytes (UTF-8 length) and packetBytes, but
+  NEVER the prime text itself. The operator confirms
+    PRIME_RESULT_CONTAINS_SENTINEL=true
+  by grepping the wire capture for the SENTINEL_TOKEN they seeded and
+  the literal `<prime_packet source="myc" session="..." ts="...">` block.

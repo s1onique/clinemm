@@ -1,0 +1,50 @@
+CONSERVATION — CODE-LEVEL PROOFS
+
+DEGRADED_WITH_DIAGNOSTIC:
+  - runMycPrimeOnSessionStart NEVER throws; every error path records
+     status="failed" + error message and emits Logger.warn
+     (myc-prime-automation.ts:200-225). The session proceeds normally.
+  - beforeModel NEVER throws; the try/catch swallows the error and
+     returns undefined (hooks-adapter.ts:374-380). Existing flow
+     continues without the prime packet.
+  - if no myc MCP server is configured, status="skipped" with an
+     explanatory error message; nothing else in the system notices
+     (myc-prime-automation.ts:135-149).
+  - if the prime result has empty / non-text content, status="failed"
+     with an explanatory message; Logger.warn is emitted
+     (myc-prime-automation.ts:175-189).
+
+THESE ARE EXERCISED BY:
+  - myc-prime-automation.lifecycle01.test.ts (12 pass / 0 fail):
+      covers absent server, empty response, callTool exception,
+      success path.
+  - McpHub.connectFailure.test.ts (2 pass / 0 fail):
+      covers stdio-spawn failure.
+  - McpHub.timeoutReconnect.test.ts (2 pass / 0 fail):
+      covers timeouts / reconnects.
+
+NO PRODUCTION CODE CHANGED IN THIS ACT:
+  git status --short is empty after the operator's manual packaging
+  step (which the operator performs outside this session per their
+  explicit instruction). The current commit is 7cbca60b0 (the
+  CORRECTION03 BCCA test probe swap).
+
+PRODUCTION_CODE_CHANGED=false (this ACT adds zero production code)
+TEST_CODE_CHANGED=false
+MYC_CODE_CHANGED=false
+
+BCB CONSERVATION (per ACT §21):
+  No edits to:
+    - BackgroundNotifyCoordinator
+    - SdkSessionEventCoordinator completion logic
+    - command_status
+    - run_commands
+    - BNCA suppression
+    - completion continuation
+  Confirmed: `git diff ee5529010..HEAD -- apps/vscode/src/sdk/SdkSessionEventCoordinator.ts
+  apps/vscode/src/sdk/BackgroundNotifyCoordinator.ts` is empty.
+
+LIFECYCLE EXPANSION (per ACT §19):
+  No edits to absorb-session, close-session, anchor touch,
+  compaction integration, post-edit integration.
+  Confirmed by file grep on this ACT — no production source diffs.

@@ -1,0 +1,60 @@
+MYC_BINARY_IDENTITY:
+
+MYC_BINARY=/Volumes/UserData/Users/chistyakov/.myc/bin/myc
+  (PATH did not contain `myc`; resolved from prior ACT convention)
+
+MYC_VERSION=myc 0.3.14 (schema 1)
+
+`myc --help` confirms:
+  - `init`           create workspace
+  - `models list/fetch/rm`
+  - `model add/update/list/show/disable/enable`
+  - `create` / `task` / `bug` / `epic` / `msg` / `comment`
+  - `update`         update fields of a node
+  - `claim/release/close/move`
+  - `attempt start/finish/link/list/show/reclass/recost`
+  - `report models`
+  - `show / list`
+  - `dep add/rm/tree/why`
+  - `myc mcp`        start MCP server on stdio (NDJSON JSON-RPC 2.0)
+                    "agent" profile: 13 tools (work: prime/ready/update/recall/remember/show/link;
+                                       code: code_search/code_grep/code_symbol/callers/skeleton/code_map)
+
+`myc mcp --help` confirms:
+  Flags: --profile agent (default) | leader | full
+  Tools exposed to the agent include: `prime`, `ready`, `update`, `recall`,
+  `remember`, `show`, `link` (work tier).
+
+`myc remember --help` confirms supported syntax:
+  Flags:
+    --tag <string>           comma-separated tags
+    --anchor <string>        bind an anchor file[:a-b]
+    --layer <string>         L0|L1|L2|L3 (default L1)
+    --acl <string>           private|team|restricted|agent
+    --source <string>        provenance
+    --no-absorb              do not queue absorb classification
+    --global                 write to ~/.myc instead of project
+    --as <string>            actor (default $MYC_ACTOR/$USER)
+    --reach <string>         session | project
+    --session <string>       session identity (default $MYC_SESSION_ID/$CLAUDE_SESSION_ID)
+  Usage: `myc remember [args] [flags]`; positional fact or '-' for stdin.
+
+`myc recall --help` confirms supported syntax:
+  -n/--limit, --offset, --budget (default 2000),
+  --kind, --tag, --layer, --since, --anchor, --mode (hybrid|vec|bm25),
+  --why, --reach, --repo, --session, --embed-timeout, --sources.
+
+MYC_MCP_SERVER_NAME=myc       (canonical name per MYC_MCP_SERVER_NAMES)
+MYC_MCP_COMMAND=/Volumes/UserData/Users/chistyakov/.myc/bin/myc
+MYC_MCP_ARGS=["mcp"]
+MYC_FROM_SESSION_CONFIG={"fromSession": "sessionId", "required": true}
+
+  The EnvEntry schema at
+  apps/vscode/src/services/mcp/schemas.ts:34-47 accepts exactly one of
+  {value | fromEnv | fromSession} and validates the source. The
+  {fromSession: "sessionId", required: true} shape is a first-class
+  production schema value (proved by schemas.test.ts: 15 pass / 0 fail).
+  When `required: true`, a missing session id at MCP-spawn time is a
+  schema-level rejection (the user sees the misconfiguration in the
+  MCP UI), so MYC_SESSION_ID can NEVER be silently absent at the
+  child stdio process boundary.

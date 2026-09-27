@@ -1,0 +1,9 @@
+{"boundary": "acquisition", "file": "apps/vscode/src/sdk/myc-prime-automation.ts", "lines": "118,153,191,213", "recorder": "recordMycPrimeLiveAcquisition"}
+{"boundary": "lookup",        "file": "apps/vscode/src/sdk/hooks-adapter.ts",              "lines": "220-235",                "recorder": "recordMycPrimeLiveLookup"}
+{"boundary": "injection",     "file": "apps/vscode/src/sdk/hooks-adapter.ts",              "lines": "201-209,245-256,265-272,279-285,343-367", "recorder": "recordMycPrimeLiveInjection"}
+{"boundary": "capture",       "file": "apps/vscode/src/sdk/hooks-adapter.ts",              "lines": "355-359",                "recorder": "recordMycPrimeLiveCapture"}
+{"boundary": "metadata_stamp","file": "apps/vscode/src/sdk/hooks-adapter.ts",              "lines": "339-360",                "recorder": "result.options.metadata={...captureId, sessionId, iteration, mycPrimeDiag:true}"}
+{"boundary": "recorder",      "file": "apps/vscode/src/sdk/myc-prime-automation.ts",      "lines": "62,247-261",              "recorder": "lastResultBySessionId (module-level singleton, real production state)"}
+{"boundary": "dedupe",        "file": "apps/vscode/src/sdk/hooks-adapter.ts",              "lines": "39,243-264",              "recorder": "primeInjectedSessionIds (per-session bounded Map)"}
+{"boundary": "lookup_key",    "file": "apps/vscode/src/sdk/hooks-adapter.ts",              "lines": "218",                    "recorder": "ctx.snapshot.sessionId ?? ctx.snapshot.conversationId (CORRECTION02)"}
+{"boundary": "sessionId_propagation", "file": "apps/vscode/src/services/mcp/McpHub.ts",     "lines": "see sessionIdEcho.*.test.ts", "recorder": "ensureSessionConnection(sessionId) -> spawns stdio child with MYC_SESSION_ID injected"}

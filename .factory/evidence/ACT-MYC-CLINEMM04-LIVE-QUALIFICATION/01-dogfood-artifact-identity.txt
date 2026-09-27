@@ -1,0 +1,36 @@
+DOGFOOD_ARTIFACT_IDENTITY:
+
+DOGFOOD_SOURCE_HEAD=UNBUILT (user instructed: "Don't package anything, I will do it manually")
+EXTENSION_VERSION=4.1.16 (from apps/vscode/package.json)
+VSIX_PATH=NONE (no new build)
+VSIX_BYTE_SIZE=N/A
+VSIX_SHA256=N/A
+INSTALLED_EXTENSION_VERSION=N/A
+
+EXISTING_DIST_ARTIFACTS_AT_REPO_ROOT (NOT bound to 7cbca60b0 — informational only):
+  dist/clinemm-4.1.10-0841353f0.vsix
+  dist/clinemm-4.1.16-6abd73a15.vsix   (BCB01-CORRECTION02 era, NOT 7cbca60b0)
+  dist/clinemm-4.1.16-baacc122a.vsix
+  dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix
+  dist/clinemm-4.1.16-bocor.vsix
+  dist/clinemm-4.1.16-dogfood-c47e219f7.vsix
+  dist/clinemm-exact-head.vsix          (most likely the last dogfood install)
+  dist/clinemm-r0recon-correction02.vsix
+  dist/clinemm-r0recon-f89983f72.vsix
+  dist/clinemm-r0recon-findglobfix.vsix
+
+HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN=true
+
+REASON:
+  ACT §2 requires the dogfood artifact to be built from EXACT SOURCE_HEAD (7cbca60b0),
+  with VSIX_PATH, VSIX_BYTE_SIZE, VSIX_SHA256, INSTALLED_EXTENSION_VERSION bound to
+  that source. The user explicitly instructed not to package anything in this run.
+  The pre-existing dist/*.vsix files in the repo are bound to OTHER commits
+  (e.g. clinemm-exact-head.vsix is from a prior dogfood cycle, not from 7cbca60b0).
+  Without a freshly-built VSIX from 7cbca60b0 the artifact → source binding is
+  unproven, and the ACT §2 explicit halt ("HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN")
+  applies.
+
+  Per user direction the manual packaging is performed outside this session and
+  must be repeated at the operator's bench; the resulting VSIX + SHA-256 must be
+  re-recorded before the live run.

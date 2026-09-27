@@ -1,0 +1,9 @@
+{"step": "LIVE-A", "status": "LIVE_UNOBSERVABLE", "reason": "no live child process; ClineMM not running"}
+{"step": "LIVE-B", "status": "LIVE_UNOBSERVABLE", "reason": "no live trigger; ClineMM not running"}
+{"step": "LIVE-C", "status": "LIVE_UNOBSERVABLE", "reason": "no live result; cannot observe real prime text"}
+{"step": "LIVE-D", "status": "LIVE_UNOBSERVABLE", "reason": "no live run; getMycPrimeResult cannot be sampled"}
+{"step": "LIVE-E", "status": "LIVE_UNOBSERVABLE", "reason": "no live runtime; snapshot.conversationId vs sessionId cannot be observed"}
+{"step": "LIVE-F", "status": "LIVE_UNOBSERVABLE", "reason": "no live model request; prime_packet injection cannot be sampled"}
+{"step": "LIVE-G", "status": "LIVE_UNOBSERVABLE", "reason": "no live provider call; provider-bound request cannot be captured"}
+{"step": "LIVE-H", "status": "LIVE_UNOBSERVABLE", "reason": "no live model"}
+{"step": "LIVE-I", "status": "LIVE_UNOBSERVABLE", "reason": "no live loop; prime call count cannot be observed"}

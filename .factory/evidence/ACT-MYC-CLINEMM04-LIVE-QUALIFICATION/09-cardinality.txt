@@ -1,0 +1,43 @@
+CARDINALITY — LIVE-AWAITING
+
+PRIME_CALL_COUNT=LIVE_UNOBSERVABLE
+PRIME_PACKET_INJECTION_COUNT=LIVE_UNOBSERVABLE
+
+CODE-LEVEL CARDINALITY GUARANTEES (already enforced, not "live evidence"):
+  G1 The recorder `lastResultBySessionId` is keyed by sessionId; a second
+     call with the SAME sessionId overwrites and warns:
+       "violates the cardinality-1 invariant"
+     (myc-prime-automation.ts:248-255).
+  G2 `primeInjectedSessionIds` is a per-session Map: the second
+     `beforeModel` call for the SAME sessionId returns `undefined`
+     with reason=`already_injected` (hooks-adapter.ts:243-256).
+  G3 The Map is bounded: it is cleared per session teardown via
+     `clearPrimeInjectionStateForSession(sessionId)` exported from
+     hooks-adapter.ts:54 (the P1 reviewer residue from CORRECTION02 is
+     now bounded; ACT §21 does not require more).
+  G4 The diag singleton `liveDiagBySessionId` overwrites with a warn
+     on a second startMycPrimeLiveDiag (myc-prime-live-diag.ts:108-115)
+     so a second acquire for the same sessionId is also observable in
+     the diagnostic as a warn-log entry.
+
+THESE GUARANTEES ARE PROVEN BY:
+  - myc-prime-automation.lifecycle01.test.ts (12 pass / 0 fail)
+  - myc-prime-automation.lifecycle02.test.ts  (4 pass / 0 fail)
+  - myc-prime-live-diag.test.ts               (vitest, 14 pass / 0 fail
+                                                verified in
+                                                ACT-MYC-CLINEMM03)
+  - myc-prime-automation.identity-join.red.c24-c-bridge.test.ts
+                                              (vitest, RED→GREEN
+                                                verified in
+                                                ACT-MYC-CLINEMM02-C-CORRECTION02)
+  - myc-prime-automation.model-visible.c24-c-bridge.test.ts
+                                              (vitest, prime_packet
+                                                visible verified)
+
+LIVE-I IS NOT PROVEN:
+  ACT §17 demands "later model iteration / pending-prompt continuation /
+  BCB completion continuation / background terminal event" all
+  produce ZERO additional prime_packet. That assertion requires
+  driving a live continuation loop and observing the provider-bound
+  captures. Without that, LIVE-I is LIVE_UNOBSERVABLE even though
+  the code-level guards (G2 + G3) make the result deterministic.

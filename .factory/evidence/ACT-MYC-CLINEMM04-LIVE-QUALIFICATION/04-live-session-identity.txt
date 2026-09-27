@@ -1,0 +1,65 @@
+LIVE_SESSION_IDENTITY:
+
+LIVE_SESSION_ID=PENDING_OPERATOR_LIVE_RUN
+MYC_CHILD_SESSION_ID=PENDING_OPERATOR_LIVE_RUN
+
+REAL_MYC_CLI:
+  /Volumes/UserData/Users/chistyakov/.myc/bin/myc --version  -> "myc 0.3.14 (schema 1)"
+  /Volumes/UserData/Users/chistyakov/.myc/bin/myc mcp --help -> NDJSON JSON-RPC 2.0 server on stdio
+
+MANUAL_MYC_PRIME=PENDING_OPERATOR_LIVE_RUN
+
+ENVIRONMENT_NOTES:
+  - This session is headless. `code` exists at
+    /Applications/Visual Studio Code.app/Contents/Resources/app/bin/code (1.117.0).
+  - `bun` exists at /opt/homebrew/bin/bun (1.3.14).
+  - PATH did not include either of them at session start.
+  - User instructed: "Don't package anything, I will do it manually,
+    provide a report if you are finished with code and tests."
+
+CANNOT_BE_EXECUTED_BY_THIS_SESSION:
+  §2 dogfood artifact (VSIX build/package/install)
+  §6 sentinel seed (would leak token via model-visible transcript)
+  §8 fresh real ClineMM task (no MCP-bound provider in this session)
+  §9 LIVE-A child env propagation (no live child)
+  §10 LIVE-B automatic prime (no live trigger)
+  §11 LIVE-C real prime data (no live result)
+  §12 LIVE-D recorder identity (no live run)
+  §13 LIVE-E snapshot.conversationId vs sessionId (no live runtime)
+  §14 LIVE-F prime_packet injection (no live model request)
+  §15 LIVE-G provider-bound request (no live provider call)
+  §16 LIVE-H behavioral witness (no live model)
+  §17 LIVE-I cardinality (no live loop)
+
+CLASSIFICATION_FOR_EACH=LIVE_UNOBSERVABLE
+  Per ACT §7 ("For any boundary the current diagnostics cannot safely
+  observe: LIVE_UNOBSERVABLE. Do not infer it as proven."), each
+  above step is classified LIVE_UNOBSERVABLE rather than inferred
+  from synthetic evidence.
+
+WHAT_THIS_SESSION_DID_PROVE (CODE-LEVEL only):
+  C1 my-prime-lifecycle bridge     myc-prime-automation.lifecycle01.test.ts (12 pass / 0 fail)
+  C2 my-prime-lifecycle bridge     myc-prime-automation.lifecycle02.test.ts  (4 pass / 0 fail)
+  C3 sessionId MCP propagation     sessionIdEcho.test.ts                    (3 pass / 0 fail)
+  C4 sessionId isolation           sessionIdEcho.isolation.test.ts          (6 pass / 0 fail)
+  C5 McpHub.callTool sessionId     sessionIdEcho.mcpHub.test.ts             (11 pass / 0 fail)
+  C6 EnvEntry schema (fromSession) schemas.test.ts                          (15 pass / 0 fail)
+  C7 envResolver                   envResolver.test.ts                      (16 pass / 0 fail)
+  C8 MCP reconnection / list-change/timeout/refresh/delete
+                                  McpHub.*.test.ts                         (~71 pass / 0 fail total)
+  C9 default green gate            bun scripts/run-bun-unit-tests.ts        (1230 pass / 0 fail)
+
+  Tests in (C1..C9) above are unit-level tests of production code paths.
+  They prove the seams are correctly wired. They do NOT substitute for
+  a live operator-driven run — they cannot observe process.env
+  MYC_SESSION_ID at the actual stdio child, nor capture a real
+  provider-bound request.
+
+OUT-OF-SCOPE-TESTS-INTENTIONALLY_NOT_RERUN (per ACT §25):
+  - ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01 chain
+  - All BCB01 / BNCA / CCARD suites
+  - Full e2e / integration suites
+  (These are explicitly out of scope. The full bun:unit run that just
+  executed DID include background-completion-consumer-availability01
+  (10 pass / 0 fail), which is the test the CORRECTION03 commit
+  repaired. That file is now green.)
