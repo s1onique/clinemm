@@ -1,4 +1,110 @@
 
+## ACT-MYC-CLINEMM02-C-CORRECTION01 — PASS_PRIME_AUTOMATION_VISIBLE — 2026-09-27
+
+**Status:** PASS_PRIME_AUTOMATION_VISIBLE. Closes the reviewer-flagged `HALT_PRIME_NOT_CONSUMED` from the prior ACT: prime text is now model-visible (injected into the FIRST model request of the session, exactly once). One bounded fix cycle; no scope creep into absorb / close-session / anchor-touch (still DEFERRED with documented reasons).
+
+**P0s addressed:**
+
+| ID | Summary | Fix |
+|----|---------|-----|
+| P0.1 | automatic prime had no memory effect on the agent | Added `beforeModel` hook to `buildAgentHooks` that injects the cached prime packet into the first model request's messages, wrapped in `<prime_packet>...</prime_packet>` tags |
+| P0.2 | no RED→GREEN witness | Captured explicit RED (R1: prime text not in model messages; R2: prime text appears 0 times across iterations); turned same tests GREEN |
+| P0.3 | fire-and-forget race between prime and first model request | Changed `startNewSession` trigger from `void this.options.onMycPrimeRequested?.({...})` to `await ...`. `SdkController` callback now RETURNS the promise (no longer `void`-discarded) |
+
+**Load-bearing injection seam (REAL, from source):**
+- `AgentRuntime.generateAssistantMessage` at `sdk/packages/agents/src/agent-runtime.ts:1930-1949` — the `beforeModel` hook array. Each hook receives `{snapshot, request}` and can return `{messages: [...]}` to REPLACE the request messages (lines 1937-1939). The runtime clones defensively, so the hook cannot mutate state.
+- `buildAgentHooks` at `apps/vscode/src/sdk/hooks-adapter.ts:97-304` — the production function SdkController wires into `CoreSessionConfig.hooks` via `cline-session-factory.ts:1217`. The new `beforeModel` lives here.
+
+**Production diff (3 production files, 1 test file):**
+- `apps/vscode/src/sdk/hooks-adapter.ts` (MODIFIED, +70 lines): new `beforeModel` hook. Reads `ctx.snapshot.conversationId`, looks up singleton via `getMycPrimeResult(sessionId)`, on `iteration === 1` returns `{messages: [...original, <prime_packet user message>]}`. Per-session dedupe via module-level `Set<string>`. Iteration gate. Never throws. New export `__resetPrimeInjectionStateForTests()`.
+- `apps/vscode/src/sdk/sdk-session-lifecycle.ts` (MODIFIED, +1/-1 lines): widened `onMycPrimeRequested` callback signature to `void | Promise<unknown>`; changed `void` trigger to `await`.
+- `apps/vscode/src/sdk/SdkController.ts` (MODIFIED, +1/-1 lines): `onMycPrimeRequested` callback now RETURNS the promise (was discarding via `void`).
+- `apps/vscode/src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts` (NEW, 4 tests): real `buildAgentHooks` + real `AgentRuntime` + real `myc-prime-echo` fixture; R1 (prime in first request), R2 (exactly once across iterations), R3 (no synthetic injection when prime unavailable), R4 (singleton populated before first model request).
+
+**Cardinality invariants (frozen, post-correction):**
+- `startNewSession` fires prime exactly once + injects exactly once per non-superseded install.
+- `AgentRuntime.beforeModel` injects prime exactly once per session (iteration gate + per-session Set dedupe).
+- Resume (`LocalRuntimeHost.restore`) does not go through `startNewSession` → does not re-prime.
+- `replaceActiveSession` does go through `startNewSession` → re-primes AND re-injects (different sessionId in the per-session Set).
+- Fence-superseded starts return `{status: "superseded"}` before activeSession install → do not fire prime, do not inject.
+
+**Failure semantics:** DEGRADED_WITH_DIAGNOSTIC. `beforeModel` never throws (try/catch wrapping); records no-op when singleton has no usable text; logs `Logger.warn` on any error. `await runMycPrimeOnSessionStart` in startNewSession is fail-safe (the helper itself never throws).
+
+**Conservation:**
+- bun unit gate: `Files: 91 / Pass: 1220 / Fail: 0` (UNCHANGED from prior ACT baseline).
+- typecheck (apps/vscode): `bun run check-types` exit 0.
+- typecheck (c24-c-bridge): `bun scripts/check-types-bridge-with-baseline.ts` exit 0, 0 diagnostics vs. frozen baseline.
+- 16 prior ACT bun tests (lifecycle01 12 + lifecycle02 4) still GREEN.
+- 11/11 `sessionIdEcho.mcpHub.test.ts` A2A-08..18 still GREEN.
+- 4 new c24-c-bridge tests (model-visible R1..R4) GREEN.
+
+**RED → GREEN chronology:**
+1. RED captured: R1 fails with "expected 'hello' to contain '{...pid, session, session_keys, ...}'"; R2 fails with "+0 to be 1".
+2. Investigated real seams via ClineMM source: `beforeModel` at `agent-runtime.ts:1930-1949` is the only place that mutates messages sent to the provider.
+3. Implemented: awaited prime in `startNewSession`, returned promise from `SdkController` callback, added `beforeModel` to `buildAgentHooks`.
+4. GREEN captured: all 4 model-visible tests pass; the request message text now contains `<prime_packet source="myc" session="<id>" ts="<ts>">\n{prime JSON}\n</prime_packet>`.
+
+**Scope exclusions honored:** no changes to myc implementation / DB / retrieval semantics; no changes to MCP wire protocol / session-bound transport; no changes to absorb / close-session / anchor-touch (still DEFERRED); no new global session registry; no new public session protocol field; no duplicate memory layer.
+
+---
+
+## ACT-MYC-CLINEMM02-C — PASS_PRIME_AUTOMATION — 2026-09-27
+
+**Status:** PASS_PRIME_AUTOMATION. The four candidate lifecycle operations (`prime` on session start, `absorb` on compaction, `close-session` on afterRun, `anchor touch` on afterTool) were classified against four required attributes (real ClineMM seam, real myc operation, bounded observable input, safe failure behavior). Only **prime** satisfies all four. Absorb / close-session / anchor-touch are DEFERRED — see `.factory/evidence/ACT-MYC-CLINEMM02-C/01-recon.md` for the per-operation trace.
+
+**Causal seam (REAL, from source):**
+- `SdkSessionLifecycle.startNewSession` at `apps/vscode/src/sdk/sdk-session-lifecycle.ts:300-441`. Fires after `this.activeSession = {...}` is installed (line 420-432). The `prepare` hook on `ClineCore.start()` runs BEFORE this (and is the seam used by `MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01` to thread `sessionId` into `McpHubToolProvider`). Prime fires AFTER activeSession is installed, at the canonical "new session is live" moment.
+
+**Myc API surface (REAL, from installed `/Volumes/UserData/Users/chistyakov/.myc/bin/myc`):**
+- `myc prime`: CLI ✓ + MCP `prime` ✓ — SESSION_ID_IMPLICIT_VIA_ENV = true (reads `$MYC_SESSION_ID`).
+- `myc absorb`: CLI only. CALLABLE_VIA_MCP = false.
+- `myc absorb-session`: CLI only. Reads transcripts from `--transcript <path>` (file path) — no canonical-transcript API at runtime seam.
+- `myc anchor touch`: CLI only. No args. Fire-and-forget append to `.myc/anchor-dirty.log`.
+- "close-session": **ABSENT**. `myc close` closes a TASK node; Cline session ≠ myc task. No real operation maps to "this Cline session is going away".
+
+**Production diff (smallest safe slice):**
+- `apps/vscode/src/sdk/myc-prime-automation.ts` (NEW, 222 lines): `runMycPrimeOnSessionStart` helper + module-level singleton recorder. Conventional names: `["myc", "myc-mcp"]`. Resolves the MCP server from `mcpHub.getServers()` or override. Failure modes: `failed` (thrown / empty / non-text) and `skipped` (no myc server). Never throws. Always emits `Logger.warn` on failure.
+- `apps/vscode/src/sdk/sdk-session-lifecycle.ts` (MODIFIED, +30 lines): new optional `onMycPrimeRequested` callback on `SdkSessionLifecycleOptions`; fires `void this.options.onMycPrimeRequested({sessionId, cwd})` AFTER `this.activeSession` install. Fire-and-forget by design.
+- `apps/vscode/src/sdk/SdkController.ts` (MODIFIED, +15 lines): wires `onMycPrimeRequested: ({sessionId, cwd}) => void runMycPrimeOnSessionStart(...)` into `new SdkSessionLifecycle({...})`. Adds `computeMycPrimeAutomationProjection()` pure projection read from the recorder; threads into `ExtensionState.mycPrimeAutomation` inside `getStateToPostToWebview`.
+- `apps/vscode/src/shared/ExtensionMessage.ts` (MODIFIED): new optional `mycPrimeAutomation?: { sessionId, status, text?, error?, ts }` field on `ExtensionState`.
+- `apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx` (MODIFIED): default `mycPrimeAutomation: undefined` in the initial state.
+- `apps/vscode/src/services/mcp/__fixtures__/myc-prime-echo/server.mjs` (NEW): real stdio MCP child that exposes one tool `prime` returning `{ pid, session, session_keys, called_with_session, called_with_repo, called_with_format, myrc_args }`. Mirrors the prior ACT's `session-id-echo` fixture pattern.
+
+**Cardinality invariants (frozen):**
+- `startNewSession` fires prime exactly once per non-superseded install.
+- Resume (`LocalRuntimeHost.restore`) does NOT go through `startNewSession` → does NOT re-prime. Resume does not re-prime.
+- `replaceActiveSession` DOES go through `startNewSession` (with `awaitStop: true`) → fires prime AGAIN.
+- Fence-superseded starts return `{status: "superseded"}` BEFORE `this.activeSession` is installed → do NOT fire prime.
+- Helper singleton: at most one entry per `sessionId`. Duplicate calls overwrite AND log a warning (C10).
+
+**Failure semantics:** DEGRADED_WITH_DIAGNOSTIC. `runMycPrimeOnSessionStart` never throws; records `status: "failed"` + error message; emits `Logger.warn`. Lifecycle returns `started` regardless.
+
+**Visibility scope:** Prime result exposed on `ExtensionState.mycPrimeAutomation` for diagnostic observability. NOT injected into model's initial context in this ACT (requires `StartSessionBootstrap` shape change → REQUIRES_SEPARATE_DESIGN). Future ACTs may use `mycPrimeAutomation` as a seed for model-visible context.
+
+**RED → GREEN chronology:**
+1. Recon (01-recon.md): all four candidates classified.
+2. Helper + fixture implemented FIRST (TDD-style).
+3. lifecycle01.test.ts (12 tests, C1..C10 + sanity) — GREEN against real fixture. C2 proves `payload.session === sessionId` (real env arrived in spawned child).
+4. Lifecycle trigger wired (sdk-session-lifecycle.ts onMycPrimeRequested).
+5. State posting wired (SdkController.computeMycPrimeAutomationProjection).
+6. lifecycle02.test.ts (4 tests, T1..T4) — GREEN at the production seam. T1 proves `calls.length === 1` after `startNewSession`; T4 proves failed prime does NOT block lifecycle.
+
+**Conservation:**
+- Bun unit gate: `Files: 91 Pass: 1220 Fail: 0 Time: 33.4s` (16 new tests added; baseline was 1204).
+- Typecheck: `tsc --noEmit` exit 0.
+- A2A pre-existing failures (`sessionIdEcho.productionShape.test.ts` 5 tests, `SdkController.test.ts` 3 tests): verified to pre-exist on entry HEAD `c4d2ceecf` via `git stash` round-trip. NOT caused by this ACT.
+- Prior ACT A2A tests (`sessionIdEcho.mcpHub.test.ts` 11 tests): still GREEN.
+
+**Pre-existing failures NOT caused by this ACT** (verified via `git stash` round-trip on entry HEAD):
+- `sessionIdEcho.productionShape.test.ts > A2A-17/18: prepareStartSessionInput forwards sessionId into McpHubToolProvider` (2 failures) — pre-existing.
+- `sessionIdEcho.productionShape.test.ts > A2A-16: SdkSessionLifecycle.endActiveSession tears down the per-session MCP child via trackSessionStop` (3 failures) — pre-existing.
+- `SdkController.test.ts > SDK remote-config coordination` (3 failures) — pre-existing; fixtures need workspaceState stub.
+
+**Verdict:** PASS_PRIME_AUTOMATION. ABSORB / CLOSE_SESSION / ANCHOR_TOUCH all DEFERRED.
+
+**Stop condition met (per ACT section 18):** The smallest safe automatic lifecycle slice passes; STOP.
+
+
 ## ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01 — PASS_TASK_QUIESCENCE_COMPLETION_BARRIER_REPAIRED — 2026-09-22
 
 **Status:** PASS. The premature task completion defect (Shape D / LIVE bug) — where `submit_and_exit` commits COMPLETED while a notify-enabled background job is still RUNNING, leading to a duplicate autonomous continuation when the queued terminal wake arrives AFTER completion — is mechanically classified as **TQ1_NO_COMPLETION_BARRIER + TQ3_RESULT_OBSERVATION_NOT_CONNECTED** and repaired by a single bounded change set.

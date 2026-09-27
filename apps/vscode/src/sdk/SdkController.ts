@@ -93,6 +93,7 @@ import { createProviderCatalog, toSdkProviderConfig } from "./model-catalog/cata
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
+import { getMycPrimeResult, runMycPrimeOnSessionStart } from "./myc-prime-automation"
 import { buildExtensionSnapshotFromState } from "./post-terminal-authority-diagnostic-builder"
 import { isPostTerminalAuthorityDiagnosticEffectivelyEnabled } from "./post-terminal-authority-diagnostic-runtime"
 import { createProductionModelProfilesOwner, type ModelProfilesOwnerDeps } from "./profile-store/owner"
@@ -1580,6 +1581,30 @@ export class Controller {
 			// task-operation fence before installing activeSession. This is
 			// the load-bearing check that closes the parent race window.
 			isOperationCurrent: (token) => this.taskOperationFence.isCurrent(token),
+			// ACT-MYC-CLINEMM02-C: session-start prime trigger. Fires
+			// AFTER `activeSession` is installed by
+			// `SdkSessionLifecycle.startNewSession`. Fire-and-forget —
+			// the lifecycle does NOT await the returned Promise, so
+			// the callTool round-trip never delays initTask/reinit.
+			// Failures are recorded on the module-level recorder
+			// (`myc-prime-automation.ts`) and surfaced via
+			// ACT-MYC-CLINEMM02-C-CORRECTION01: RETURN the
+			// `runMycPrimeOnSessionStart(...)` promise (do NOT
+			// discard it via `void`) so the lifecycle's
+			// `await this.options.onMycPrimeRequested?.({...})`
+			// actually waits for the prime round-trip to complete
+			// before returning `started`. Under the prior ACT code
+			// the callback discarded the promise (`void ...`) and
+			// `await undefined` returned synchronously — leaving
+			// the race the reviewer flagged. Failures are recorded
+			// on the module-level recorder and surfaced via
+			// `ExtensionState.mycPrimeAutomation` for observability.
+			onMycPrimeRequested: ({ sessionId, cwd }) =>
+				runMycPrimeOnSessionStart({
+					sessionId,
+					cwd,
+					mcpHub: this.mcpHub,
+				}),
 			editorExecutor: (input, cwd, context) => this.diffEdits.executeEditorTool(input, cwd, context),
 			applyPatchExecutor: (input, cwd, context) => this.diffEdits.executeApplyPatchTool(input, cwd, context),
 			// The SDK's built-in reader resolves relative paths against the extension
@@ -5077,6 +5102,31 @@ export class Controller {
 		this.turnStateTracker.setWithWriter(requestedPhase, undefined, this.writerIdentity("controller-epoch-transition-reseed"))
 	}
 
+	/**
+	 * ACT-MYC-CLINEMM02-C: pure projection of the latest recorded
+	 * `myc prime` result for the active session. Returns the result
+	 * untouched when present; returns undefined when no prime has
+	 * run for the active session yet (or when no session is
+	 * active). Never throws; never awaits.
+	 */
+	private computeMycPrimeAutomationProjection(): ExtensionState["mycPrimeAutomation"] {
+		const active = this.sessions.getActiveSession()
+		if (!active) {
+			return undefined
+		}
+		const result = getMycPrimeResult(active.sessionId)
+		if (!result) {
+			return undefined
+		}
+		return {
+			sessionId: result.sessionId,
+			status: result.status,
+			text: result.text,
+			error: result.error,
+			ts: result.ts,
+		}
+	}
+
 	async getStateToPostToWebview(): Promise<ExtensionState> {
 		// Build the base ExtensionState from StateManager, then layer the SDK's
 		// task history on top.
@@ -5362,6 +5412,13 @@ export class Controller {
 				// canonical projection (it already returns the strip-or-
 				// undefined shape the wire field expects).
 				taskTelemetry: this.taskTelemetry.get(),
+				// ACT-MYC-CLINEMM02-C: session-start prime automation
+				// projection. Read the latest recorded prime result for
+				// the active session id (the module-level singleton in
+				// `./myc-prime-automation.ts`). Pure read; never awaited
+				// (prime runs in the background; the state push observes
+				// whatever has been recorded so far).
+				mycPrimeAutomation: this.computeMycPrimeAutomationProjection(),
 				// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 				// Project the EFFECTIVE diagnostic-knob state to the
 				// webview. The TaskHeader indicator renders the active

@@ -92,6 +92,24 @@ export interface SdkSessionLifecycleOptions {
 	}
 	onDidBecomeIdle?: () => void
 	/**
+	 * ACT-MYC-CLINEMM02-C: session-start prime trigger.
+	 *
+	 * Invoked by `SdkSessionLifecycle.startNewSession` AFTER
+	 * `this.activeSession` is installed (the canonical "new session
+	 * is live" seam). The host (production: `SdkController`) wires
+	 * this to a callback that runs `runMycPrimeOnSessionStart` over
+	 * the session-bound MCP transport. The lifecycle does NOT
+	 * depend on myc availability — when the host omits this option
+	 * (or it returns a Promise that rejects), the session proceeds
+	 * unchanged.
+	 *
+	 * Fire-and-forget by design: the lifecycle does NOT await the
+	 * returned Promise. Prime runs in the background so the
+	 * lifecycle's caller (initTask / reinit) is not delayed by the
+	 * callTool round-trip.
+	 */
+	onMycPrimeRequested?: (input: { sessionId: string; cwd?: string }) => void | Promise<unknown>
+	/**
 	 * ACT-CLINEMM-RUNTIME-TASK-PROGRESSION01: lifecycle callback for the
 	 * background `run_commands` path. Forwarded to the host so the
 	 * run_commands tool can flip the projection when it returns RUNNING
@@ -436,6 +454,23 @@ export class SdkSessionLifecycle {
 		// brand-new session id. This is the authoritative consumption
 		// site; the store's getOverride() is pure and never consumes.
 		this.options.consumePendingOverride?.(startResult.sessionId)
+
+		// ACT-MYC-CLINEMM02-C-CORRECTION01: session-start prime automation.
+		// The active session is now installed. AWAIT the `myc prime`
+		// invocation over the session-bound MCP transport BEFORE the
+		// lifecycle returns `started`. This closes the reviewer-flagged
+		// race: under the prior ACT code the prime ran fire-and-forget,
+		// so the first model request could race ahead of the callTool
+		// round-trip — the model never saw the prime text even though
+		// the singleton was eventually populated. The helper is
+		// fail-safe (records `status: "failed"` + emits Logger.warn)
+		// so a missing/broken myc config never blocks the session.
+		// Awaiting only adds the callTool latency to the session-start
+		// path (~100-500ms in the happy path; bounded by the MCP timeout).
+		await this.options.onMycPrimeRequested?.({
+			sessionId: startResult.sessionId,
+			cwd: startInput.config?.cwd,
+		})
 
 		return { status: "started", startResult, sdkHost }
 	}

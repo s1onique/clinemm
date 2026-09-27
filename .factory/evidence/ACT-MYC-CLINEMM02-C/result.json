@@ -1,0 +1,51 @@
+{
+  "act_id": "ACT-MYC-CLINEMM02-C",
+  "status": "PASS_PRIME_AUTOMATION_ONLY",
+  "verdict": "PASS_PRIME_AUTOMATION",
+  "entry_head": "c4d2ceecf3de216f775b1657220e90d702fc7984",
+  "subject_head": "c4d2ceecf3de216f775b1657220e90d702fc7984",
+  "scope": "smallest safe prime automation (C1..C10); absorb / close-session / anchor-touch deferred",
+  "tests_added": 16,
+  "tests_total_after": 1220,
+  "files_total_after": 91,
+  "test_failures_introduced": 0,
+  "test_failures_pre_existing": {
+    "sessionIdEcho.productionShape.test.ts": 5,
+    "SdkController.test.ts": 3
+  },
+  "typecheck": "exit 0",
+  "production_files_added": [
+    "apps/vscode/src/sdk/myc-prime-automation.ts",
+    "apps/vscode/src/services/mcp/__fixtures__/myc-prime-echo/server.mjs"
+  ],
+  "production_files_modified": [
+    "apps/vscode/src/sdk/sdk-session-lifecycle.ts",
+    "apps/vscode/src/sdk/SdkController.ts",
+    "apps/vscode/src/shared/ExtensionMessage.ts",
+    "apps/vscode/webview-ui/src/context/ExtensionStateContext.tsx",
+    "apps/vscode/vitest.config.ts"
+  ],
+  "evidence_files": [
+    "00-entry-identity.txt",
+    "01-recon.md",
+    "02-design.md",
+    "03-test-output.txt",
+    "04-bun-unit-gate.txt",
+    "05-typecheck.txt",
+    "result.json"
+  ],
+  "lifecycle_classification": {
+    "prime_on_session_start": "SUPPORTED",
+    "absorb_on_compaction": "DEFERRED",
+    "close_session_on_after_run": "DEFERRED",
+    "anchor_touch_on_after_tool": "DEFERRED"
+  },
+  "failure_semantics": "DEGRADED_WITH_DIAGNOSTIC",
+  "cardinality": {
+    "session_start": "exactly 1 per non-superseded startNewSession",
+    "resume": "0 (does not go through startNewSession)",
+    "replace_active_session": "1 (does go through startNewSession)",
+    "hook_reentry": "1 (helper is idempotent; overwrites singleton)"
+  },
+  "live_qualification": "SYNTHETIC_REAL via lifecycle-owner test T1; production seam (SdkSessionLifecycle.startNewSession) drives the helper against the real McpHub + real stdio fixture."
+}

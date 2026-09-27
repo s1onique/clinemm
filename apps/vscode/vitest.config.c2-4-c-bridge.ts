@@ -47,6 +47,13 @@ export default defineConfig({
 		// include these (and the bridge config does not include
 		// the base tests), so the two streams are isolated.
 		include: [
+			// ACT-MYC-CLINEMM02-C-CORRECTION01 — RED witness for
+			// prime model-visibility. Real buildAgentHooks + real
+			// AgentRuntime + real myc-prime-echo fixture. Lives
+			// here (bridge) because it imports `@cline/agents`
+			// which the base `@cline/core` stub alias cannot
+			// resolve.
+			"src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/real-local-to-shadow-bridge.c24-c-correction01.test.ts",
 			"src/sdk/__tests__/acl02-runtime-seam.c24-c-bridge.test.ts",
 			"src/sdk/__tests__/async-command-ownership-discriminator.aco01.c24-c-bridge.test.ts",

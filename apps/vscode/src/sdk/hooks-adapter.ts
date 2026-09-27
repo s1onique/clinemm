@@ -7,12 +7,14 @@
 //   PostToolUse      -> afterTool
 //   TaskComplete     -> afterRun when completed
 //   TaskCancel       -> afterRun when aborted
+//   beforeModel      -> inject the session-start prime packet (ACT-MYC-CLINEMM02-C-CORRECTION01)
 //
 // Deferred hooks (NOT wired here): TaskResume, TaskError, SessionShutdown,
 // PreCompact, Notification.
 
 import type {
 	AgentAfterToolContext,
+	AgentBeforeModelContext,
 	AgentBeforeToolContext,
 	AgentHooks,
 	AgentRunLifecycleContext,
@@ -23,6 +25,23 @@ import { Logger } from "@shared/services/Logger"
 import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
+import { getMycPrimeResult } from "./myc-prime-automation"
+
+// Per-session flag: once we have injected the prime for a given sessionId
+// at iteration 1, subsequent iterations MUST NOT re-inject (the runtime
+// has already seen the text and would treat a second injection as
+// duplicate context). The Set is keyed by the canonical conversation id
+// (= sessionId).
+const primeInjectedSessionIds = new Set<string>()
+
+/**
+ * Test-only: clear the per-session injection tracker. The RED witness
+ * for ACT-MYC-CLINEMM02-C-CORRECTION01 calls this in beforeEach so
+ * each test starts with a clean injection state. NOT for production use.
+ */
+export function __resetPrimeInjectionStateForTests(): void {
+	primeInjectedSessionIds.clear()
+}
 
 export type HookMessageEmitter = (message: ClineMessage) => void
 
@@ -112,6 +131,83 @@ export function buildAgentHooks(
 				return taskStartControl
 			}
 			return runUserPromptSubmit(ctx, hooksEnabled, createFactory, emitHookMessage)
+		},
+
+		// ACT-MYC-CLINEMM02-C-CORRECTION01: inject the session-start
+		// `myc prime` packet into the FIRST model request so the agent
+		// has model-visible memory of the prime. Subsequent iterations
+		// must NOT re-inject (the prime text is already part of the
+		// conversation history after iteration 1). The singleton is
+		// populated by `SdkSessionLifecycle.startNewSession`'s awaited
+		// `onMycPrimeRequested` callback BEFORE the lifecycle returns
+		// `started` — so this hook always finds a recorded result by
+		// the time the first model request fires.
+		//
+		// Failure modes (all DEGRADED_WITH_DIAGNOSTIC, never throw):
+		//   - no myc prime recorded (status="skipped"/"failed"/"ok" but
+		//     no text)   -> no messages replacement; pass through.
+		//   - sessionId already injected -> no messages replacement.
+		//   - runtime iteration > 1     -> no messages replacement.
+		async beforeModel(
+			ctx: AgentBeforeModelContext,
+		): Promise<{ messages?: readonly import("@cline/shared").AgentMessage[] } | undefined> {
+			try {
+				// Iteration gate: only inject on the very first model
+				// request of the run. Later iterations would duplicate
+				// the prime (it is already in the conversation).
+				if (ctx.snapshot.iteration > 1) {
+					return undefined
+				}
+				const sessionId = ctx.snapshot.conversationId
+				if (!sessionId) {
+					return undefined
+				}
+				// Per-session dedupe: even if iteration=1 fires twice
+				// (defensive), only inject once.
+				if (primeInjectedSessionIds.has(sessionId)) {
+					return undefined
+				}
+				const recorded = getMycPrimeResult(sessionId)
+				if (!recorded || recorded.status !== "ok" || !recorded.text) {
+					// No usable prime text. Mark the session as
+					// "considered" so we don't keep polling every
+					// iteration (the singleton will keep returning
+					// undefined / failed). This is also what closes
+					// the loop for R3 (no myc server -> no synthetic
+					// injection on subsequent turns).
+					primeInjectedSessionIds.add(sessionId)
+					return undefined
+				}
+				primeInjectedSessionIds.add(sessionId)
+				// Build a synthetic user message that carries the
+				// prime packet. The runtime will REPLACE the request
+				// messages with this returned array (per
+				// agent-runtime.ts:1937-1939: `if (result?.messages)
+				// { request = { ...request, messages: cloneMessages(result.messages) } }`).
+				// We therefore must include the ORIGINAL messages
+				// (the user's prompt) so the model still sees it.
+				const primeMessage = {
+					id: `prime-${sessionId}-${recorded.ts}`,
+					role: "user" as const,
+					content: [
+						{
+							type: "text" as const,
+							text:
+								`<prime_packet source="myc" session="${sessionId}" ts="${recorded.ts}">\n` +
+								recorded.text +
+								`\n</prime_packet>`,
+						},
+					],
+					createdAt: recorded.ts,
+				}
+				return {
+					messages: [...ctx.request.messages, primeMessage],
+				}
+			} catch (error) {
+				// Never throw — DEGRADED_WITH_DIAGNOSTIC.
+				Logger.warn("[HooksAdapter] beforeModel prime injection failed:", error)
+				return undefined
+			}
 		},
 
 		async beforeTool(

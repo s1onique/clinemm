@@ -1,0 +1,10 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ✓ src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts (4 tests) 352ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  07:54:03
+   Duration  4.13s (transform 2.35s, setup 0ms, import 3.67s, tests 352ms, environment 0ms)
+

@@ -1,6 +1,6 @@
+import type { TemporaryExternalPathAuthority } from "@cline/core"
 import { DEFAULT_AUTO_APPROVAL_SETTINGS } from "@shared/AutoApprovalSettings"
 import { DEFAULT_BROWSER_SETTINGS } from "@shared/BrowserSettings"
-import type { TemporaryExternalPathAuthority } from "@cline/core"
 import { DEFAULT_PLATFORM, type ExtensionState } from "@shared/ExtensionMessage"
 import {
 	disablePostTerminalAuthorityDiagnostic,
@@ -451,6 +451,10 @@ export const ExtensionStateContextProvider: React.FC<{
 		// getStateToPostToWebview; this is the initial value used
 		// until the first state push lands.
 		clinemmTemporaryExternalPathAuthorities: [] as TemporaryExternalPathAuthority[],
+		// ACT-MYC-CLINEMM02-C: session-start prime automation.
+		// Default absent until the first state push from the host
+		// projects the active session's recorded prime result.
+		mycPrimeAutomation: undefined,
 		globalSkillsToggles: {},
 		localSkillsToggles: {},
 

@@ -1,0 +1,11 @@
+ACT-MYC-CLINEMM02-C entry identity
+==================================
+
+ENTRY_HEAD: c4d2ceecf3de216f775b1657220e90d702fc7984
+SUBJECT_BRANCH: main (clean)
+GIT_STATUS: clean working tree
+
+Prior ACTs:
+  MYC-CLINEMM02-A (CLOSED)
+  MYC-CLINEMM02-B (CLOSED)
+  MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01 (CLOSED, HALT corrections applied)

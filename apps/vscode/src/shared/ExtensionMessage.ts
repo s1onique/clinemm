@@ -137,6 +137,33 @@ export interface ExtensionState {
 	 */
 	taskTelemetry?: TaskHeaderTelemetryStrip
 	/**
+	 * ACT-MYC-CLINEMM02-C: session-start `myc prime` automation
+	 * projection. Read-only mirror of the latest recorded prime
+	 * result for the active session (see
+	 * `apps/vscode/src/sdk/myc-prime-automation.ts`).
+	 *
+	 * Wire contract: present iff a session is active AND a prime has
+	 * been recorded for it. Statuses:
+	 *   - `"pending"`  reserved (not currently emitted by any path)
+	 *   - `"ok"`       prime returned a non-empty text result
+	 *   - `"failed"`   prime threw / returned empty / non-text content
+	 *                   (with `error` carrying the underlying message)
+	 *   - `"skipped"`  no `myc` MCP server configured (with `error`
+	 *                   explaining why)
+	 *
+	 * The prime result is NOT injected into the model's initial
+	 * context in this ACT (that requires a `StartSessionBootstrap`
+	 * shape change — `REQUIRES_SEPARATE_DESIGN`). It is exposed
+	 * purely for diagnostic observability on the wire.
+	 */
+	mycPrimeAutomation?: {
+		sessionId: string
+		status: "pending" | "ok" | "failed" | "skipped"
+		text?: string
+		error?: string
+		ts: number
+	}
+	/**
 	 * ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-AND-APPROVAL-LIVE-CAPTURE01:
 	 * effective diagnostic-knob state for the current extension host
 	 * runtime. Computed host-side by

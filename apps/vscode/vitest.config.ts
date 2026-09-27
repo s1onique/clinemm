@@ -276,6 +276,16 @@ export default defineConfig({
 			// the test runs under vitest.config.c2-4-c-bridge.ts
 			// which has the alias.
 			"src/sdk/__tests__/continuation-cardinality-correlation-loss01.cccl01-e2e-real-host.c24-c-bridge.test.ts",
+			// ACT-MYC-CLINEMM02-C: session-start prime automation tests.
+			// These are bun:test suites (run under `bun run test:unit`).
+			// They cannot run under vitest because they `import from
+			// "bun:test"` (vitest's transformer does not resolve that
+			// module specifier). See
+			// `.factory/evidence/ACT-MYC-CLINEMM02-C/04-bun-unit-gate.txt`
+			// for the bun:test gate that proves the same code path
+			// under the bun runtime.
+			"src/sdk/__tests__/myc-prime-automation.lifecycle01.test.ts",
+			"src/sdk/__tests__/myc-prime-automation.lifecycle02.test.ts",
 		],
 		// Several suites lazily `await import()` their subject inside the first test
 		// (needed so vi.mock factories apply first). That import pulls in heavy

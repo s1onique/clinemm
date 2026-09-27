@@ -1,0 +1,10 @@
+ACT-MYC-CLINEMM02-C-CORRECTION01 — typecheck (post-correction)
+
+$ cd apps/vscode && bun run check-types
+Formatted 329 files in 31ms. Fixed 1 file.
+bunx tsc --project tsconfig.vscode-compat.json --noEmit
+(exit 0)
+
+$ cd apps/vscode && bun scripts/check-types-bridge-with-baseline.ts
+[check-types-bridge-with-baseline] OK — 0 diagnostic(s) match the frozen baseline.
+(exit 0)

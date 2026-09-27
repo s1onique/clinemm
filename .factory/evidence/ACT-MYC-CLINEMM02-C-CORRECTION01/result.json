@@ -1,0 +1,69 @@
+{
+  "act_id": "ACT-MYC-CLINEMM02-C-CORRECTION01",
+  "parent_act": "ACT-MYC-CLINEMM02-C",
+  "verdict": "PASS_PRIME_AUTOMATION_VISIBLE",
+  "halt_at_entry": "HALT_PRIME_NOT_CONSUMED",
+  "halt_p0s_addressed": [
+    {
+      "id": "P0.1",
+      "summary": "automatic prime had no memory effect on the agent",
+      "fix": "added beforeModel hook in buildAgentHooks that injects the prime packet into the first model request's messages, replacing the singleton-only observability"
+    },
+    {
+      "id": "P0.2",
+      "summary": "no RED witness",
+      "fix": "captured explicit RED (R1+R2 fail with 'hello' vs '{...prime JSON...}'); turned same tests GREEN with the await + beforeModel fix"
+    },
+    {
+      "id": "P0.3",
+      "summary": "fire-and-forget race between prime and first model request",
+      "fix": "changed startNewSession trigger from `void ...` to `await ...`; SdkController callback returns the promise (no longer discards via `void`); lifecycle now blocks until prime resolves"
+    }
+  ],
+  "entry_head": "c4d2ceecf3de216f775b1657220e90d702fc7984",
+  "subject_head": "see `git log --oneline -1` after the ACT commit is amended",
+  "scope": "bounded one-cycle fix: make the already-retrieved prime packet causally available to the first appropriate model request; close the fire-and-forget race; capture a real RED->GREEN witness",
+  "tests_added": 4,
+  "tests_total_after": 1220,
+  "files_total_after": 91,
+  "test_failures_introduced": 0,
+  "test_failures_pre_existing": {
+    "sessionIdEcho.productionShape.test.ts": 5,
+    "SdkController.test.ts": 3
+  },
+  "typecheck": "exit 0 (apps/vscode + c24-c-bridge)",
+  "production_files_added": [
+    "apps/vscode/src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts"
+  ],
+  "production_files_modified": [
+    "apps/vscode/src/sdk/sdk-session-lifecycle.ts",
+    "apps/vscode/src/sdk/SdkController.ts",
+    "apps/vscode/src/sdk/hooks-adapter.ts",
+    "apps/vscode/vitest.config.c2-4-c-bridge.ts",
+    "apps/vscode/tsconfig.c2-4-c-bridge.json"
+  ],
+  "evidence_files": [
+    "00-red-witness.txt",
+    "01-green-witness.txt",
+    "02-design.md",
+    "03-test-output.txt",
+    "04-bun-unit-gate.txt",
+    "05-typecheck.txt",
+    "result.json"
+  ],
+  "lifecycle_classification": {
+    "prime_on_session_start": "SUPPORTED — model-visible",
+    "absorb_on_compaction": "DEFERRED (no canonical transcript hook in ClineMM)",
+    "close_session_on_after_run": "DEFERRED (no matching myc operation)",
+    "anchor_touch_on_after_tool": "DEFERRED (no reliable durable-file identity seam)"
+  },
+  "failure_semantics": "DEGRADED_WITH_DIAGNOSTIC (never throws; beforeModel never throws; lifecycle await is fail-safe)",
+  "cardinality": {
+    "session_start": "exactly 1 prime invocation + exactly 1 model-visible injection per non-superseded startNewSession",
+    "resume": "0 (does not go through startNewSession)",
+    "replace_active_session": "1 (does go through startNewSession)",
+    "fence_superseded": "0 (returns before activeSession install)",
+    "injection_per_session": "exactly 1 across all iterations (iteration gate + per-session Set dedupe)"
+  },
+  "live_qualification": "SYNTHETIC_REAL: real buildAgentHooks + real AgentRuntime + real myc-prime-echo fixture. Real session-bound MCP transport with MYC_SESSION_ID env injection. Real beforeModel injection on iteration 1."
+}

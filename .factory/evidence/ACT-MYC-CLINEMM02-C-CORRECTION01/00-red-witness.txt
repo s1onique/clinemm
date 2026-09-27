@@ -1,0 +1,18 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+stdout | src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts > ACT-MYC-CLINEMM02-C-CORRECTION01 — prime must be model-visible > R1: prime text appears in the FIRST model request when singleton is pre-populated
+[R1] primeText= "{\"pid\":40787,\"session\":\"red-session-001\",\"session_keys\":[\"MYC_SESSION_ID\"],\"called_with_session\":\"red-session-001\",\"called_with_repo\":null,\"called_with_format\":\"agent\",\"myrc_args\":{\"session\":\"red-session-001\",\"format\":\"agent\"}}"
+[R1] t= "hello" includes prime? false
+
+ ❯ src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts (4 tests | 2 failed) 410ms
+     × R1: prime text appears in the FIRST model request when singleton is pre-populated 151ms
+     × R2: prime text appears exactly once across iterations 130ms
+     ✓ R3: when prime is unavailable, model request is unchanged 1ms
+     ✓ R4: first model request fires after prime singleton is populated (race closed) 127ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  07:47:47
+   Duration  5.06s (transform 2.61s, setup 0ms, import 4.54s, tests 410ms, environment 0ms)
+

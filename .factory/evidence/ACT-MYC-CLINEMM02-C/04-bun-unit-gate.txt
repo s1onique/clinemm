@@ -1,0 +1,20 @@
+[76/91] ok   24 pass / 0 fail     src/shared/__tests__/getApiMetrics.test.ts
+[77/91] ok   11 pass / 0 fail     src/services/mcp/__tests__/sessionIdEcho.mcpHub.test.ts
+[78/91] ok   4 pass / 0 fail      src/shared/combineApiRequests.test.ts
+[79/91] ok   60 pass / 0 fail     src/shared/remote-config/__tests__/schema.test.ts
+[80/91] ok   8 pass / 0 fail      src/shared/storage/__tests__/provider-keys.test.ts
+[81/91] ok   33 pass / 0 fail     src/shared/storage/__tests__/state-keys.test.ts
+[82/91] ok   1 pass / 0 fail      src/test/grpc-handler.test.ts
+[83/91] ok   4 pass / 0 fail      src/test/hook-management-integration.test.ts
+[84/91] ok   8 pass / 0 fail      src/test/services/ClineAccountService.test.ts
+[85/91] ok   26 pass / 0 fail     src/test/hook-management.test.ts
+[86/91] ok   9 pass / 0 fail      src/test/services/search/file-search.test.ts
+[87/91] ok   24 pass / 0 fail     src/utils/__tests__/envExpansion.test.ts
+[88/91] ok   33 pass / 0 fail     src/test/shell.test.ts
+[89/91] ok   5 pass / 0 fail      src/test/services/auth-callback-url.test.ts
+[90/91] ok   29 pass / 0 fail     src/utils/__tests__/model-utils.test.ts
+[91/91] ok   6 pass / 0 fail      src/utils/__tests__/git.test.ts
+
+──────────────────────────────────────────────
+Files: 91   Pass: 1220   Fail: 0   Time: 33.4s
+All unit test files passed.

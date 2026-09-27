@@ -1,0 +1,22 @@
+ACT-MYC-CLINEMM02-C-CORRECTION01 — bun unit gate (post-correction)
+
+$ cd apps/vscode && bun scripts/run-bun-unit-tests.ts
+
+──────────────────────────────────────────────
+Files: 91   Pass: 1220   Fail: 0   Time: 34.0s
+All unit test files passed.
+
+Baseline (pre-correction): Files: 91 / Pass: 1220 / Fail: 0 — UNCHANGED.
+The 4 new model-visible tests run under vitest (c24-c-bridge), not
+bun:test, so they do not affect the bun unit gate count.
+
+Pre-existing failures (NOT caused by this correction, verified via
+`git stash` round-trip on entry HEAD c4d2ceecf):
+  - sessionIdEcho.productionShape.test.ts A2A-16/17/18 (5 tests)
+  - SdkController.test.ts SDK remote-config coordination (3 tests)
+  - Total pre-existing: 8 (untouched by this ACT)
+
+Conservation:
+  - myc-prime-automation.lifecycle01.test.ts (12 tests C1..C10 + sanity) GREEN
+  - myc-prime-automation.lifecycle02.test.ts (4 tests T1..T4) GREEN
+  - sessionIdEcho.mcpHub.test.ts (11 tests A2A-08..18) GREEN

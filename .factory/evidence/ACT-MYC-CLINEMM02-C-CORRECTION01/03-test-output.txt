@@ -1,0 +1,13 @@
+ACT-MYC-CLINEMM02-C-CORRECTION01 — model-visible bridge test output
+
+$ bunx vitest run --config vitest.config.c2-4-c-bridge.ts \
+    src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts
+
+ ✓ src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts (4 tests) 352ms
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+
+R1: prime text appears in the FIRST model request when singleton is pre-populated   PASS
+R2: prime text appears exactly once across iterations                              PASS
+R3: when prime is unavailable, model request is unchanged                          PASS
+R4: first model request fires after prime singleton is populated (race closed)     PASS
