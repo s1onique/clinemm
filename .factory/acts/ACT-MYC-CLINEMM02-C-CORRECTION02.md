@@ -2,12 +2,17 @@
 
 ACT=ACT-MYC-CLINEMM02-C-CORRECTION02
 VERDICT=PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED
+REVIEWER_VERDICT=C1_GO (MYC_CLINEMM02_C=CLOSED, READY_FOR_NEXT_ACT=true)
 ENTRY_HEAD=0b952d00574bdf232204af17c2bd7673b8dbdbd5
 SUBJECT_HEAD=`git rev-parse HEAD` (the commit that contains this ACT file; use `git log --oneline -- .factory/acts/ACT-MYC-CLINEMM02-C-CORRECTION02.md` to resolve; the closure ACT is inside the closure commit, so the SHA moves with `--amend`; the substantive content of this ACT does not depend on a frozen SHA)
 HALT_RESOLVED=HALT_SESSION_IDENTITY_JOIN_UNPROVEN
 HALT_RESOLVED_2=HALT_TYPECHECK_GATE_NOT_GREEN (cache-pollution normalization; outcome A; see 06-normalization.md)
 
-> Note on SHAs: the implementation commit is `0b952d005`. The closure-artifacts commit family (`85e39da38` → `0f50d3bf9` → amended to `439732a60`) updates the closure prose; each `--amend` keeps the file content but moves the SHA. `ENTRY_HEAD` is recorded as a real SHA (the implementation commit). For SUBJECT, use `git log --oneline -- .factory/acts/ACT-MYC-CLINEMM02-C-CORRECTION02.md` — this is the deterministic lookup the reviewer can re-run. Per reviewer terminal-cleanup note, the previous "see `git log -1`" indirection is replaced by an explicit `git log -- <path>` recipe.
+> Note on SHAs: the implementation commit is `0b952d005`. The closure-artifacts commit family (`85e39da38` → `0f50d3bf9` → amended to `439732a60` → amended to `0e6300235419...`) updates the closure prose; each `--amend` keeps the file content but moves the SHA. `ENTRY_HEAD` is recorded as a real SHA (the implementation commit). For SUBJECT, use `git log --oneline -- .factory/acts/ACT-MYC-CLINEMM02-C-CORRECTION02.md` — this is the deterministic lookup the reviewer can re-run. Per reviewer terminal-cleanup note, the previous "see `git log -1`" indirection is replaced by an explicit `git log -- <path>` recipe.
+
+> Reviewer non-blocking residue (P2, recorded but not blocking closure): Leamas `.factory/gate-summary.json` binding invalid/unbound + generator/subject binding stale + `production_without_tests=true` in the two-commit terminal-cleanup range are all packaging-metadata artifacts that do NOT affect the executable gate evidence (which lives in the ACT evidence files). Per reviewer: "do not reopen `02-C` to fix Leamas packaging metadata."
+
+> LIVE_QUALIFICATION=SYNTHETIC_REAL (not LIVE): real buildAgentHooks + real AgentRuntime + real myc-prime-echo stdio fixture, but not a live installed `myc` invocation feeding an actual model request. Per reviewer: "doesn't reopen `02-C`; it simply belongs in the next qualification/dogfood phase."
 
 ## Reopen closure (post-cache-normalization)
 

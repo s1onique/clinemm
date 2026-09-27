@@ -2,7 +2,9 @@
 
 ## ACT-MYC-CLINEMM02-C-CORRECTION02 — PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED — 2026-09-27
 
-**Status:** PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED. Closes the reviewer-flagged `HALT_SESSION_IDENTITY_JOIN_UNPROVEN` from the prior ACT-MYC-CLINEMM02-C-CORRECTION01. Production-shaped RED captured and turned GREEN; per-session injection state bounded (P1 reviewer note addressed in same bounded cycle); no scope creep into absorb / close-session / anchor-touch (still DEFERRED).
+**Status:** PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED. ✅ C1: GO (reviewer verdict `PASS_WITH_NONBLOCKING_RESIDUE`; `MYC_CLINEMM02_C=CLOSED`, `READY_FOR_NEXT_ACT=true`). Closes the reviewer-flagged `HALT_SESSION_IDENTITY_JOIN_UNPROVEN` from the prior ACT-MYC-CLINEMM02-C-CORRECTION01, AND closes `HALT_TYPECHECK_GATE_NOT_GREEN` via outcome A (cache-only normalization removes `node_modules/.bun/@grpc+grpc-js@1.14.5` — pulled in by THIS ACT's own `bun install` cycle, not by any package.json — restoring the genuine locked state). Production-shaped RED captured and turned GREEN (2 new identity-join c24-c-bridge tests with `hostSessionId != conversationId`); per-session injection state bounded (P1 reviewer note addressed in same bounded cycle); no scope creep into absorb / close-session / anchor-touch (still DEFERRED). P2 non-blocking residue (Leamas `.factory/gate-summary.json` binding invalid + `production_without_tests=true` in 2-commit terminal-cleanup range) does NOT affect executable gate evidence and is correctly classified as packaging metadata, not reopen material.
+
+**LIVE_QUALIFICATION=SYNTHETIC_REAL** (real `buildAgentHooks` + real `AgentRuntime` + real `myc-prime-echo` stdio fixture; **not** a live installed `myc` invocation feeding an actual model request). LIVE dogfood qualification belongs in the next ACT (`MYC-CLINEMM03`).
 
 **Reviewer's P0 verdict (verbatim):**
 > "But the digest exposes a **new P0** in the load-bearing identity join.
@@ -109,6 +111,27 @@ MODEL_REQUEST_CONTAINS_PRIME=true
 with executable evidence through the real
 `CoreSessionConfig.sessionId` → `AgentRuntimeConfig.sessionId` →
 `AgentRuntime.snapshot().sessionId` → `beforeModel` lookup chain.
+
+---
+
+**Reviewer C1 verdict (verbatim):**
+> `MYC_CLINEMM02_C=CLOSED` / `VERDICT=PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED` / `READY_FOR_NEXT_ACT=true` / `C1: GO. MYC-CLINEMM02-C is closed.`
+
+**Successor:** `ACT-MYC-CLINEMM03` (LIVE dogfood qualification using a live installed `myc` invocation feeding an actual model request — not the SYNTHETIC_REAL fixture-based proof that this ACT establishes). P2 Leamas packaging-metadata refresh (`.factory/gate-summary.json` binding invalid + generator/subject binding stale + `production_without_tests=true` in this 2-commit terminal-cleanup range) is also dispositioned in `MYC-CLINEMM03` — reviewer explicit: "do not reopen `02-C` to fix Leamas packaging metadata."
+
+**Disposition of each candidate automation:**
+```
+automatic prime:
+  session-bound          PASS    (MYC-CLINEMM02-A2A-SESSION-BOUND-MCP-ENV01)
+  model-visible          PASS    (MYC-CLINEMM02-C-CORRECTION01)
+  identity join          PASS    (MYC-CLINEMM02-C-CORRECTION02, this ACT)
+  exactly-once bounded   PASS    (MYC-CLINEMM02-C-CORRECTION02 P1, this ACT)
+  degraded failure       PASS    (MYC-CLINEMM02-C-CORRECTION01)
+
+absorb                  DEFERRED (semantic gaps remain)
+close-session           DEFERRED (operation ABSENT in myc)
+anchor-touch            DEFERRED (CLI-only; not in MCP tool surface)
+```
 
 ---
 
