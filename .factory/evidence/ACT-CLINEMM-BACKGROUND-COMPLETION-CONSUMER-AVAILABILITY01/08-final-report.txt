@@ -2,7 +2,7 @@ ACT=ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01
 VERDICT=PASS_FINALIZATION_CONSUMER_AVAILABLE
 
 ENTRY_HEAD=a289bc3df920289dfed75bd38d6e38c199f3d3ab
-SUBJECT_HEAD=6abd73a15f32b3f15c8dad3a86493c42d287c76c
+SUBJECT_HEAD=0a53696616373c494eb58923813f8a549f2264e0
 
 LIVE_FAILURE=REAL (recurrent; 5 submit_and_exit / 0 task_completion_committed
             on session 1790540096194_2ybl8 in default vscodeTerminal mode,
@@ -38,9 +38,9 @@ REPAIR_STRATEGY=OPTION_A
   - Gate is now solely on `options.commandJobManager` (the source of truth
     for whether background jobs exist).
 
-FCA_01=RED (pre-existing infra: createTool undefined under bun:test)
-FCA_01b=RED (same infra)
-FCA_01c=RED (same infra)
+FCA_01=SKIP [infra] (post-CORRECTION01: createShellTool probe returns createTool=undefined under bun:test + mock.module; the integration test gates via it.skipIf(!INTEGRATION_AVAILABLE). Source-level equivalent FCA-01d is GREEN.)
+FCA_01b=SKIP [infra] (same)
+FCA_01c=SKIP [infra] (same)
 FCA_01d=GREEN (structural — proves the fix is in place)
 FCA_01e=GREEN (structural — proves command_status + cancel_command are registered)
 FCA_02=GREEN (real consumption + zero new background jobs)
@@ -56,10 +56,9 @@ FCA_10=N/A — generic ordinary turn toolset is unchanged (the fix only relaxes
             a filter; no new tools are added)
 FCA_11=N/A — notify=true path (Path A wake-driven) is unchanged (BCB01 chain
             is untouched)
-FCA_12=GREEN (C10 conservation — submit_and_exit gated elsewhere;
-            perJobSuppressOriginatingCompletion untouched)
-FCA_13=GREEN (duplicate-completion ablation stays load-bearing;
-            command_status has no completesRun lifecycle)
+FCA_12a=SKIP [infra] (post-CORRECTION01: same gating; source-level equivalent FCA-12b is GREEN)
+FCA_12b=GREEN (structural — proves submit_and_exit is not in the follow-up API block)
+FCA_13=SKIP [infra] (post-CORRECTION01: same gating)
 FCA_14=GREEN (no self-amplification: consumption creates zero background jobs)
 
 SELF_AMPLIFICATION_RED=qualitatively established (transcript + recon):
