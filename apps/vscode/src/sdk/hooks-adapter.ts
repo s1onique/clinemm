@@ -26,6 +26,12 @@ import { HookFactory } from "@/core/hooks/hook-factory"
 import { getHooksEnabledSafe } from "@/core/hooks/hooks-utils"
 import type { StateManager } from "@/core/storage/StateManager"
 import { getMycPrimeResult } from "./myc-prime-automation"
+import {
+	isMycPrimeLiveDiagEnabled,
+	recordMycPrimeLiveCapture,
+	recordMycPrimeLiveInjection,
+	recordMycPrimeLiveLookup,
+} from "./myc-prime-live-diag"
 
 // Per-session flag: once we have injected the prime for a given sessionId
 // at iteration 1, subsequent iterations MUST NOT re-inject (the runtime
@@ -185,12 +191,35 @@ export function buildAgentHooks(
 		//   - runtime iteration > 1     -> no messages replacement.
 		async beforeModel(
 			ctx: AgentBeforeModelContext,
-		): Promise<{ messages?: readonly import("@cline/shared").AgentMessage[] } | undefined> {
+		): Promise<
+			{ messages?: readonly import("@cline/shared").AgentMessage[]; options?: Record<string, unknown> } | undefined
+		> {
 			try {
 				// Iteration gate: only inject on the very first model
 				// request of the run. Later iterations would duplicate
 				// the prime (it is already in the conversation).
 				if (ctx.snapshot.iteration > 1) {
+					if (isMycPrimeLiveDiagEnabled()) {
+						const sid = ctx.snapshot.sessionId ?? ctx.snapshot.conversationId
+						if (sid) {
+							recordMycPrimeLiveLookup(sid, {
+								attempted: true,
+								snapshotSessionIdPresent: ctx.snapshot.sessionId !== undefined,
+								matchedRecordedSession: getMycPrimeResult(sid) !== undefined,
+								recordedPrimeFound: (() => {
+									const r = getMycPrimeResult(sid)
+									return Boolean(r && r.status === "ok" && r.text)
+								})(),
+								iteration: ctx.snapshot.iteration,
+							})
+							recordMycPrimeLiveInjection(sid, {
+								attempted: true,
+								injected: false,
+								reason: "iteration_not_first",
+								iteration: ctx.snapshot.iteration,
+							})
+						}
+					}
 					return undefined
 				}
 				// CORRECTION02: use the HOST sessionId, not the
@@ -201,21 +230,79 @@ export function buildAgentHooks(
 				// from `AgentRuntimeConfig.sessionId`).
 				const sessionId = ctx.snapshot.sessionId ?? ctx.snapshot.conversationId
 				if (!sessionId) {
+					if (isMycPrimeLiveDiagEnabled()) {
+						recordMycPrimeLiveLookup("__no_session__", {
+							attempted: true,
+							snapshotSessionIdPresent: false,
+							matchedRecordedSession: false,
+							recordedPrimeFound: false,
+							iteration: ctx.snapshot.iteration,
+						})
+						recordMycPrimeLiveInjection("__no_session__", {
+							attempted: true,
+							injected: false,
+							reason: "no_session_id",
+							iteration: ctx.snapshot.iteration,
+						})
+					}
 					return undefined
+				}
+				// ACT-MYC-CLINEMM03-LIVE-DIAG01: observe the recorder
+				// lookup BEFORE deciding injection. This is the
+				// discriminator between
+				//   acquisition=ok & lookup.recordedPrimeFound=false
+				// (identity/join boundary; HALT_LIVE_PRIME_LOOKUP_MISS)
+				// and
+				//   acquisition=ok & lookup.recordedPrimeFound=true
+				// (correct identity, recorder populated).
+				if (isMycPrimeLiveDiagEnabled()) {
+					const recordedForLookup = getMycPrimeResult(sessionId)
+					const primeFoundForLookup = Boolean(
+						recordedForLookup && recordedForLookup.status === "ok" && recordedForLookup.text,
+					)
+					recordMycPrimeLiveLookup(sessionId, {
+						attempted: true,
+						snapshotSessionIdPresent: ctx.snapshot.sessionId !== undefined,
+						matchedRecordedSession: recordedForLookup !== undefined,
+						recordedPrimeFound: primeFoundForLookup,
+						iteration: ctx.snapshot.iteration,
+					})
 				}
 				// Per-session dedupe: even if iteration=1 fires twice
 				// (defensive), only inject once.
 				if (primeInjectedSessionIds.has(sessionId)) {
+					if (isMycPrimeLiveDiagEnabled()) {
+						recordMycPrimeLiveInjection(sessionId, {
+							attempted: true,
+							injected: false,
+							reason: "already_injected",
+							iteration: ctx.snapshot.iteration,
+						})
+					}
 					return undefined
 				}
 				const recorded = getMycPrimeResult(sessionId)
-				if (!recorded || recorded.status !== "ok" || !recorded.text) {
-					// No usable prime text. Mark the session as
-					// "considered" so we don't keep polling every
-					// iteration (the singleton will keep returning
-					// undefined / failed). This is also what closes
-					// the loop for R3 (no myc server -> no synthetic
-					// injection on subsequent turns).
+				if (!recorded) {
+					if (isMycPrimeLiveDiagEnabled()) {
+						recordMycPrimeLiveInjection(sessionId, {
+							attempted: true,
+							injected: false,
+							reason: "no_recorded_prime",
+							iteration: ctx.snapshot.iteration,
+						})
+					}
+					primeInjectedSessionIds.set(sessionId, true)
+					return undefined
+				}
+				if (recorded.status !== "ok" || !recorded.text) {
+					if (isMycPrimeLiveDiagEnabled()) {
+						recordMycPrimeLiveInjection(sessionId, {
+							attempted: true,
+							injected: false,
+							reason: "prime_empty",
+							iteration: ctx.snapshot.iteration,
+						})
+					}
 					primeInjectedSessionIds.set(sessionId, true)
 					return undefined
 				}
@@ -227,23 +314,70 @@ export function buildAgentHooks(
 				// { request = { ...request, messages: cloneMessages(result.messages) } }`).
 				// We therefore must include the ORIGINAL messages
 				// (the user's prompt) so the model still sees it.
+				const packetText =
+					`<prime_packet source="myc" session="${sessionId}" ts="${recorded.ts}">\n` +
+					recorded.text +
+					`\n</prime_packet>`
 				const primeMessage = {
 					id: `prime-${sessionId}-${recorded.ts}`,
 					role: "user" as const,
 					content: [
 						{
 							type: "text" as const,
-							text:
-								`<prime_packet source="myc" session="${sessionId}" ts="${recorded.ts}">\n` +
-								recorded.text +
-								`\n</prime_packet>`,
+							text: packetText,
 						},
 					],
 					createdAt: recorded.ts,
 				}
-				return {
+				const result: {
+					messages: typeof ctx.request.messages
+					options?: Record<string, unknown>
+				} = {
 					messages: [...ctx.request.messages, primeMessage],
 				}
+				// ACT-MYC-CLINEMM03-LIVE-DIAG01: when diagnostic mode
+				// is enabled, stamp a stable captureId onto the
+				// request metadata so downstream provider-capture
+				// stages (CLINE_CAPTURE_PROVIDER_REQUEST=full,
+				// CLINE_CAPTURE_WIRE=true) write files keyed by this
+				// id. Existing metadata is PRESERVED by structural
+				// merge: existing keys (`existing`, etc.) survive
+				// intact; only `captureId`, `sessionId`, `iteration`,
+				// and `mycPrimeDiag` are added/overridden.
+				if (isMycPrimeLiveDiagEnabled()) {
+					const captureId = `mycprime-${sessionId}-${recorded.ts}`
+					const existingOptions =
+						ctx.request.options && typeof ctx.request.options === "object"
+							? (ctx.request.options as Record<string, unknown>)
+							: {}
+					const existingMetadata =
+						existingOptions.metadata && typeof existingOptions.metadata === "object"
+							? (existingOptions.metadata as Record<string, unknown>)
+							: {}
+					const mergedMetadata: Record<string, unknown> = {
+						...existingMetadata,
+						captureId,
+						sessionId,
+						iteration: ctx.snapshot.iteration,
+						mycPrimeDiag: true,
+					}
+					result.options = {
+						...existingOptions,
+						metadata: mergedMetadata,
+					}
+					recordMycPrimeLiveInjection(sessionId, {
+						attempted: true,
+						injected: true,
+						reason: "ok",
+						packetBytes: Buffer.byteLength(packetText, "utf8"),
+						iteration: ctx.snapshot.iteration,
+					})
+					recordMycPrimeLiveCapture(sessionId, {
+						captureId,
+						aiSdkPromptObserved: true,
+					})
+				}
+				return result
 			} catch (error) {
 				// Never throw — DEGRADED_WITH_DIAGNOSTIC.
 				Logger.warn("[HooksAdapter] beforeModel prime injection failed:", error)

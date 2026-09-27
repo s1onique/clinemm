@@ -25,6 +25,7 @@
 
 import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
+import { recordMycPrimeLiveAcquisition, startMycPrimeLiveDiag } from "./myc-prime-live-diag"
 
 /**
  * Conventional server names for the `myc` MCP server. The user names
@@ -121,6 +122,9 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 	const { sessionId, cwd, mcpHub, signal, serverName: serverNameOverride, budget, repo } = input
 	const ts = Date.now()
 	const serverName = resolveMycServerName(mcpHub, serverNameOverride)
+	// ACT-MYC-CLINEMM03-LIVE-DIAG01: ensure a fresh diagnostic entry for
+	// every prime acquisition attempt. No-op when diag is disabled.
+	startMycPrimeLiveDiag(sessionId)
 
 	if (!serverName) {
 		const result: MycPrimeResult = {
@@ -130,6 +134,18 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			ts,
 		}
 		recordMycPrimeResult(result)
+		// ACT-MYC-CLINEMM03-LIVE-DIAG01: observe acquisition outcome. The
+		// diagnostic entry is already initialized by
+		// `startMycPrimeLiveDiag` above. This call is a no-op when diag
+		// is disabled.
+		recordMycPrimeLiveAcquisition(sessionId, {
+			attempted: true,
+			serverDetected: false,
+			status: "skipped",
+			textPresent: false,
+			textBytes: 0,
+			error: result.error,
+		})
 		// Not an error — silent skip when myc is not configured.
 		return result
 	}
@@ -161,6 +177,20 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 				ts,
 			}
 			recordMycPrimeResult(result)
+			// ACT-MYC-CLINEMM03-LIVE-DIAG01: observe empty / non-text
+			// response. `serverDetected=true` is required so the live
+			// diagnostic distinguishes "no myc server configured" from
+			// "myc server responded empty" — these collapse to the same
+			// `status="failed"` for the recorder but are different
+			// broken boundaries (Case A above).
+			recordMycPrimeLiveAcquisition(sessionId, {
+				attempted: true,
+				serverDetected: true,
+				status: "failed",
+				textPresent: false,
+				textBytes: 0,
+				error: result.error,
+			})
 			Logger.warn("[MycPrimeAutomation] prime returned empty response:", response)
 			return result
 		}
@@ -171,6 +201,16 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			ts,
 		}
 		recordMycPrimeResult(result)
+		// ACT-MYC-CLINEMM03-LIVE-DIAG01: observe successful non-empty
+		// prime. `textBytes` records size only — the prime text itself
+		// is NEVER stored in the diagnostic.
+		recordMycPrimeLiveAcquisition(sessionId, {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: Buffer.byteLength(text, "utf8"),
+		})
 		return result
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error)
@@ -181,6 +221,17 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			ts,
 		}
 		recordMycPrimeResult(result)
+		// ACT-MYC-CLINEMM03-LIVE-DIAG01: observe caught failure. The
+		// helper itself never throws, so a `recordMycPrimeLiveAcquisition`
+		// after the catch is safe even on the unhappy path.
+		recordMycPrimeLiveAcquisition(sessionId, {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			error: result.error,
+		})
 		Logger.warn(`[MycPrimeAutomation] prime failed for session=${sessionId}:`, error)
 		return result
 	}

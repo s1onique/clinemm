@@ -1,3 +1,64 @@
+## ACT-MYC-CLINEMM03-LIVE-DIAG01 — PASS_LIVE_DIAG_SCAFFOLD_BUILT — 2026-09-27
+
+**Status:** PASS_LIVE_DIAG_SCAFFOLD_BUILT. Default-off live diagnostic scaffolds the four observation boundaries (acquisition → lookup → injection → provider-capture) without mutating the prime-injection causal chain or adding any new injection seam. No repair attempted; no behavior change when `CLINEMM_MYC_PRIME_DIAG` is unset (production default). The exact boundary that breaks in the live Codium session becomes operator-observable in the next dogfood run.
+
+**Scope (this ACT):** OBSERVE ONLY. Three files modified, two new files added.
+
+| File | Δ | Purpose |
+|------|---|---------|
+| `apps/vscode/src/sdk/myc-prime-live-diag.ts` | NEW (280 lines) | env-flag-gated module-level singleton. Exported recorders: `startMycPrimeLiveDiag`, `recordMycPrimeLiveAcquisition`, `recordMycPrimeLiveLookup`, `recordMycPrimeLiveInjection`, `recordMycPrimeLiveCapture`, `isMycPrimeLiveDiagEnabled`. Records ONLY numeric/boolean/status metadata — prime text, recalled memory, prompts, request bodies, paths are NEVER stored. |
+| `apps/vscode/src/sdk/myc-prime-automation.ts` | +51 lines | `runMycPrimeOnSessionStart` now calls `startMycPrimeLiveDiag(sessionId)` at entry and `recordMycPrimeLiveAcquisition(sessionId, {...})` at each of the four branches (`skipped` no-server-config / `failed` empty-response / `ok` / `failed` exception). `serverDetected` is recorded separately from `status` so the diagnostic distinguishes "no myc server configured" (Case-A skeleton A) from "myc server responded empty" (Case-A skeleton B). |
+| `apps/vscode/src/sdk/hooks-adapter.ts` | +147 / -13 lines | `beforeModel` now records `recordMycPrimeLiveLookup` before each injection decision and `recordMycPrimeLiveInjection` at every non-injection branch (with a discriminated `reason`: `iteration_not_first` / `no_session_id` / `already_injected` / `no_recorded_prime` / `prime_empty`) plus the success branch (with `reason: "ok"` and `packetBytes`). On `injected=true`, stamps a stable `captureId` onto the request metadata so downstream provider-capture files correlate. Existing request metadata keys are preserved by structural merge. |
+| `apps/vscode/src/sdk/__tests__/myc-prime-live-diag.test.ts` | NEW (440 lines) | 14 vitest tests. D9.a–D9.d verify the env-flag default-off contract and the per-value semantics. D1..D8 + D10 + the R3-shape skipped-prime smoke drive the production `buildAgentHooks.beforeModel` end-to-end. |
+| `.factory/acts/ACT-MYC-CLINEMM03-LIVE-DIAG01.md` | NEW | ACT body with decision matrix, env-flag recipe, evidence classification. |
+
+**Default-off contract (verified D9.a–D9.d):**
+
+```text
+CLINEMM_MYC_PRIME_DIAG=1      -> enabled  (singleton populates)
+CLINEMM_MYC_PRIME_DIAG=0      -> disabled
+unset (production default)    -> disabled
+```
+
+When disabled, every recorder call short-circuits on a single boolean — no allocator traffic, no Map.insert, no Date.now(), no log line, no request mutation. Production path-of-execution bit-identical to `06e098c96` (ACT-MYC-CLINEMM02-C-CORRECTION02 closure head).
+
+**Decision matrix (the cause-of-failure triangles ACT §12 — diagnostic built; classification awaits operator dogfood):**
+
+| Case | Status signature | Verdict (operator confirms) |
+|------|------------------|----------------------------|
+| A | `acquisition.status != "ok"` | `HALT_LIVE_PRIME_ACQUISITION` |
+| B | `acquisition.status == "ok"` & `lookup.recordedPrimeFound == false` | `HALT_LIVE_PRIME_LOOKUP_MISS` (same HALT ACT-02-C-CORRECTION01 reopened on) |
+| C | `lookup.recordedPrimeFound == true` & `injection.injected == false` (with reason) | `HALT_LIVE_PRIME_INJECTION_SKIPPED` |
+| D | `injection.injected == true` & `ai_sdk_prompt` capture lacks `<prime_packet>` | `HALT_PRIME_DROPPED_BEFORE_AI_SDK_PROMPT` |
+| E | `ai_sdk_prompt` capture has it & `wire_request` lacks it | `HALT_PRIME_DROPPED_IN_PROVIDER_SERIALIZATION` |
+| F | `wire_request` capture has it | `PASS_LIVE_PRIME_INJECTION` |
+
+**Conservation (text-confirmed):**
+
+- `tsc --noEmit` (apps/vscode)          = CLEAN
+- `tsc -p tsconfig.c2-4-c-bridge.json` = 0 diagnostics (vs frozen baseline)
+- `biome lint` (4 touched files)       = CLEAN
+- `git diff --check`                   = CLEAN
+- Focused vitest (`myc-prime-live-diag.test.ts`) = 14/14 PASS
+- `git stash --include-untracked` round-trip on `myc-prime-automation.model-visible.c24-c-bridge.test.ts`, `myc-prime-automation.identity-join.red.c24-c-bridge.test.ts`, and `services/mcp/__tests__/sessionIdEcho.productionShape.test.ts`: identical pre-existing failure counts before and after this ACT. **NO REGRESSION**.
+
+**Live qualification status (this ACT):** `LIVE_UNOBSERVABLE` from the cloud-agent environment. Cloud IDE sandboxes cannot spawn the `myc-prime-echo` stdio fixture (EPERM on fork) AND cannot launch Codium. Both limits are environmental and pre-existing. The live Codium step belongs to the operator-run dogfood session, where the env-flag recipe below discriminates the broken boundary in one ClineMM task:
+
+```bash
+export CLINEMM_MYC_PRIME_DIAG=1
+export CLINE_CAPTURE_PROVIDER_REQUEST=full
+export CLINE_CAPTURE_WIRE=true
+export CLINE_CAPTURE_CLEANUP=off
+export CLINE_CAPTURE_DIR=/tmp/clinemm-myc-prime-captures
+```
+
+**Hard scope honors:** no rewrite of `beforeModel`; no change to session identity plumbing; no new injection seam; no changes to myc, absorb, close-session, or anchor-touch (still DEFERRED). Diagnostic is forensic scaffolding per ACT §14, eligible for removal on the first of {root cause isolated, capture insufficient, successor evidence supersedes}.
+
+**Next ACT:** `ACT-MYC-CLINEMM03-LIVE-DIAG01-OPERATOR01` (or operator-driven decision on a follow-up REPAIR ACT) — once the env-flag recipe produces a diagnostic entry from a live Codium session, the §12 decision matrix yields the exact HALT (or PASS) for the next bounded cycle.
+
+---
+
+
 
 
 ## ACT-MYC-CLINEMM02-C-CORRECTION02 — PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED — 2026-09-27
