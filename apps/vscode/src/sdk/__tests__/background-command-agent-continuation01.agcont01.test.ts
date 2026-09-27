@@ -470,11 +470,23 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01", () =>
 	})
 
 	//
-	// CONTROL 3 — "start and return" semantic: model finishes turn
-	// WITH an attempt_completion (no deferral). User gets Your turn.
-	// Later terminal event must NOT trigger re-entry (conservation C2).
+	// CONTROL 3 — "start and return" semantic (BCB01 inverted):
+	// model finishes turn WITH an attempt_completion tool call
+	// while a background job is STILL RUNNING. Under the prior
+	// TQCB01 P1-2 contract, the C10 completion barrier did NOT
+	// extend to notify=false (fire-and-forget) running jobs, so
+	// completion committed prematurely and the live defect
+	// HALT_BACKGROUND_TERMINAL_REENTERS_COMPLETED_TASK fired.
 	//
-	it("AGCONT-CTL-03: start-and-return task does NOT trigger agent re-entry on later terminal", async () => {
+	// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01 closes the hole:
+	// a task-owned background job (notify=true OR notify=false)
+	// blocks completion until terminal. So this test now asserts
+	// the BCB01 GREEN: phase stays at the prior `streaming`
+	// value, the C10 completion-barrier marker is set, the
+	// terminal-idle hook releases the held completion, and the
+	// conservation C2 (no agent re-entry) still holds.
+	//
+	it("AGCONT-CTL-03: start-and-return task HOLDS completion until background job terminates (BCB01)", async () => {
 		const h = makeHarness()
 		h.tracker.setWithWriter("streaming", undefined, {
 			writerId: "task-start-init-task",
@@ -484,9 +496,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01", () =>
 		const start = await startBackgroundJob(h.manager, h.activeSessionId, h)
 
 		// 2. model completes its turn cleanly with an attempt_completion
-		// tool call BEFORE yielding. This is the "start and return"
-		// semantic: no Q5 deferral because the model voluntarily
-		// yielded via a clean completion.
+		// tool call BEFORE yielding.
 		await h.coordinator.handleSessionEvent(
 			agentEvent(h.activeSessionId, {
 				type: "content_start",
@@ -506,24 +516,25 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-AGENT-CONTINUATION01 / AGCONT01", () =>
 		)
 		await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)
 
-		// Phase: completed (canonical, NOT deferred) — when the model
-		// calls attempt_completion the canonical turn-state writer
-		// commits "completed" (NOT "awaiting_followup"). This is the
-		// GREEN outcome of the "start and return" semantic.
-		expect(h.tracker.currentPhase).toBe("completed")
-
-		// No deferred continuation marker for this turn
-		const marker = h.coordinator.getDeferredContinuationForTesting()
-		expect(marker).toBeUndefined()
+		// BCB01 GREEN: completion is HELD because a task-owned
+		// background job is still running. Phase stays at streaming
+		// (the prior phase), and the C10 completion-barrier marker
+		// is set.
+		expect(h.tracker.currentPhase).not.toBe("completed")
+		expect(h.tracker.currentPhase).toBe("streaming")
+		expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeDefined()
 
 		// 3. later, the background job terminates naturally
 		const terminal = await terminateJobAndAwait(h.manager, start)
 		expect(terminal.becameIdle).toBe(true)
 
-		// The BTCONT01 bridge may or may not be triggered (depends on
-		// previousRunning state). The deferredContinuation marker is
-		// undefined so the bridge is a no-op (the marker check fails).
+		// BTCONT01 bridge fires on the >0->0 cardinal transition.
+		// The barrier re-evaluates: running-owned-job aggregate is
+		// now zero AND outstandingAutonomousWork is zero AND the
+		// held completion commits exactly once.
 		h.notifyTerminalIdleIfIdle(terminal.becameIdle)
+
+		expect(h.tracker.currentPhase).toBe("completed")
 
 		// *** CONSERVATION C2 ASSERTION ***
 		// The agent runtime is NOT re-invoked. A user-driven "start

@@ -889,6 +889,28 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 					// collapsing every terminal into "Completed".
 					start.terminalPromise.then(({ jobId, terminalState }) => {
 						notifyBackgroundStateChange(false, jobId, terminalState)
+						// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+						// For non-notify fire-and-forget jobs (the
+						// `notifyOnCompletion !== true` branch above did
+						// NOT call `registerMarker`), record the
+						// terminal identity with the
+						// BackgroundNotifyCoordinator so the BCB01 §0.1
+						// second conjunct (unconsumed terminal results
+						// == 0) is observable. The wake itself is
+						// suppressed by user opt-out, but the owning
+						// agent must still observe the terminal fact
+						// (via `command_status` or the finalization
+						// turn) before completion commits.
+						if (!notifyRequested && options.backgroundNotifyCoordinator && options.resolveActiveOwner) {
+							const owner = options.resolveActiveOwner()
+							if (owner) {
+								options.backgroundNotifyCoordinator.recordNonNotifyTerminalObservation({
+									jobId,
+									sessionId: owner.sessionId,
+									taskId: owner.taskId,
+								})
+							}
+						}
 					})
 					// ACT-CLINEMM-BACKGROUND-COMMAND-PROCEED-WHILE-RUNNING-ABORT-OWNERSHIP-RELEASE01:
 					// The foreground->background handoff is irrevocably true

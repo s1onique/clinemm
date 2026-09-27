@@ -75,7 +75,11 @@ import { arePathsEqual, getDesktopDir } from "@/utils/path"
 import { ClineAccountService } from "./account-service"
 import { buildActivityPublicationV1Record } from "./activity-publication-v1"
 import { AuthService, LogoutReason } from "./auth-service"
-import { BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX, BackgroundNotifyCoordinator } from "./background-notify-coordinator"
+import {
+	BACKGROUND_TERMINAL_WAKE_PROMPT_PREFIX,
+	BackgroundNotifyCoordinator,
+	formatCompletionContinuationPrompt,
+} from "./background-notify-coordinator"
 import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
@@ -767,6 +771,80 @@ export function buildSdkControllerEnqueueTerminalWake(options: {
 				)
 				return { kind: "rejected" as const }
 			})
+	}
+}
+
+/**
+ * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+ *
+ * Build the SdkController-owned `enqueueCompletionContinuation` callback
+ * used by `SdkSessionEventCoordinator` to drive EXACTLY ONE
+ * coalesced-continuation turn when the BCB01 §0.1 barrier holds
+ * completion against unconsumed owned terminal results.
+ *
+ * This is the bounded finalization-authority mechanism closing the
+ * reviewer's `HALT_FINALIZATION_AUTHORITY_NOT_PROVEN` halt. The
+ * runtime's `submit_and_exit` is `lifecycle.completesRun === true` —
+ * the runtime calls `finishRun("completed", ...)` on first non-error
+ * result and ends the agent loop. The deferred-completion-barrier
+ * marker CANNOT retroactively continue the just-ended run; the only
+ * bounded path back to the model is via `sdkHost.send({ delivery:
+ * "queue" })` (the same transport the per-job `enqueueTerminalWake`
+ * uses for notify=true wakes).
+ *
+ * Shape differences from `enqueueTerminalWake`:
+ *   - The prompt is `formatCompletionContinuationPrompt(...)` (the
+ *     COALESCED form, not per-job). The prompt lists ALL held jobIds
+ *     in one message so the model can issue parallel
+ *     `command_status` calls per held jobId in a single turn.
+ *   - `jobId: undefined` — this is a coalesced prompt, not a per-job
+ *     wake. The wake-cardinality capture (C4..C8) is N/A; the
+ *     continuation is an EXPLICIT_USER prompt with a deterministic
+ *     structured-prompt marker (the `COMPLETION_CONTINUATION_PROMPT_PREFIX`
+ *     fingerprint).
+ *   - The coordinator calls this AT MOST ONCE per session/epoch
+ *     (tracked via `completionContinuationSentForEpoch`) — bounded
+ *     fire rate, no per-job amplification.
+ *
+ * The contract is identical to `enqueueTerminalWake` from the
+ * runtime's perspective:
+ *   1. Look up the active session via `getActiveSession()`.
+ *   2. If there is no active session, OR if the active session's
+ *      sessionId does not match the wake sessionId, return early
+ *      (silent drop — the `session_gone` outcome).
+ *   3. Otherwise call `active.sdkHost.send({ sessionId, prompt,
+ *      delivery: "queue" })`.
+ */
+export function buildSdkControllerEnqueueCompletionContinuation(options: {
+	getActiveSession: () => ActiveSession | undefined
+	logger: { warn: (message: string) => void }
+}): (input: { sessionId: string; taskId: string | undefined; heldJobIds: readonly string[] }) => Promise<{
+	kind: "delivered" | "rejected" | "session_gone" | "no_held_job_ids"
+}> {
+	return async ({ sessionId, taskId, heldJobIds }) => {
+		if (heldJobIds.length === 0) {
+			return Promise.resolve({ kind: "no_held_job_ids" })
+		}
+		const active = options.getActiveSession()
+		if (!active || active.sessionId !== sessionId) {
+			return Promise.resolve({ kind: "session_gone" })
+		}
+		const prompt = formatCompletionContinuationPrompt({
+			heldJobIds,
+			sessionId,
+			taskId,
+		})
+		try {
+			await active.sdkHost.send({ sessionId, prompt, delivery: "queue" })
+			return { kind: "delivered" as const }
+		} catch (error: unknown) {
+			options.logger.warn(
+				`[SdkController] enqueueCompletionContinuation send() rejected for sessionId=${sessionId} heldJobIds=${heldJobIds.length}: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			)
+			return { kind: "rejected" as const }
+		}
 	}
 }
 
@@ -2346,6 +2424,41 @@ export class Controller {
 			// session does not match.
 			getActiveNotifyCount: (ownerSessionId, taskId) =>
 				this.backgroundNotifyCoordinator?.activeNotifyCountForOwner(ownerSessionId ?? "", taskId) ?? 0,
+			// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+			// Unconsumed terminal-result counter consumed by both
+			// the re-evaluation seam
+			// (`sdk-session-event-coordinator.ts:reevaluateDeferredCompletionBarrier`)
+			// and the C10 completion-commit barrier. Returns 0
+			// when the coordinator is not yet wired (early
+			// lifecycle) or when no owned terminal identities are
+			// outstanding for the owner. Production MUST wire this
+			// to maintain the BCB01 §0.1 second conjunct
+			// (`unconsumed_owned_terminal_results == 0`).
+			getUnconsumedOwnedTerminalResultCount: (ownerSessionId) => {
+				const activeSession = this.sessions.getActiveSession()
+				if (!activeSession) return 0
+				const taskId = this.task?.taskId
+				return (
+					this.backgroundNotifyCoordinator?.unconsumedTerminalCountForOwner(
+						ownerSessionId ?? activeSession.sessionId,
+						taskId,
+					) ?? 0
+				)
+			},
+			// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+			// List-form sibling of `getUnconsumedOwnedTerminalResultCount`.
+			// Used by the completion-continuation enqueue trigger to
+			// build the coalesced prompt's held-jobIds list.
+			getUnconsumedOwnedTerminalJobIds: (ownerSessionId, taskId) => {
+				const activeSession = this.sessions.getActiveSession()
+				if (!activeSession) return []
+				return (
+					this.backgroundNotifyCoordinator?.unconsumedOwnedTerminalJobIdsForOwner(
+						ownerSessionId ?? activeSession.sessionId,
+						taskId,
+					) ?? []
+				)
+			},
 			// ACT-CLINEMM-BACKGROUND-COMMAND-COMPLETION-OWNERSHIP-CORRELATION01:
 			// Per-job liveness probe consumed by the C10
 			// completion-result filter (the message-level filter at
@@ -2380,6 +2493,19 @@ export class Controller {
 			// C10 completion-commit barrier. Returns false when the
 			// coordinator is not yet wired (early lifecycle).
 			isWakeAuthoritySettled: (jobId: string) => this.backgroundNotifyCoordinator?.isWakeAuthoritySettled(jobId) ?? false,
+			// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+			// Bounded finalization-authority mechanism. When the
+			// BCB01 §0.1 barrier holds completion against unconsumed
+			// owned terminal results, the coordinator calls this
+			// AT MOST ONCE per session/epoch to enqueue a coalesced
+			// continuation turn via `sdkHost.send({ delivery:
+			// "queue" })`. The prompt instructs the model to call
+			// `command_status` for each held jobId and re-issue
+			// `submit_and_exit`.
+			enqueueCompletionContinuation: buildSdkControllerEnqueueCompletionContinuation({
+				getActiveSession: () => this.sessions?.getActiveSession(),
+				logger: Logger,
+			}),
 		})
 		// Subscribe to MCP tool list changes so we can restart the SDK session
 		// when servers are added/removed/reconnected. The SDK's DefaultSessionBuilder

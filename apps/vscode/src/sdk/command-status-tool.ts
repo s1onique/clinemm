@@ -246,6 +246,10 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 			) {
 				const activeOwner = options.resolveActiveOwner()
 				if (activeOwner) {
+					// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+					// Path A — drain the live notify marker if any (the
+					// notify=true obligation). This is the existing
+					// notify-owned drain path.
 					const decision = options.backgroundNotifyCoordinator.resolveObligation({
 						jobId: typed.jobId,
 						sessionId: activeOwner.sessionId,
@@ -255,6 +259,47 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 					if (decision.kind === "resolved") {
 						Logger.warn(
 							`[command_status] Path B resolution drained marker for jobId=${typed.jobId} (session=${activeOwner.sessionId}); terminal-state=${snap.state}`,
+						)
+					}
+					// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION02:
+					// Path C — drain the non-notify (fire-and-forget)
+					// terminal observation if any. This is the bounded
+					// production consumer seam that closes the
+					// `HALT_NON_NOTIFY_CONSUMER_NOT_WIRED` reviewer halt.
+					//
+					// The act of returning the terminal snapshot to the
+					// agent IS the consumption event — `command_status`
+					// is the only production path through which a
+					// notify=false owner learns about a terminal
+					// job (the wake itself is suppressed per user
+					// opt-out). The drain is idempotent
+					// (`consumeNonNotifyTerminalObservation` deletes
+					// by jobId; if no observation exists it is a
+					// no-op).
+					//
+					// Owner-mismatch check is enforced by
+					// `BackgroundNotifyCoordinator.consumeNonNotifyTerminalObservation`,
+					// which validates that the (jobId, sessionId,
+					// taskId) triple matches the registered owner
+					// before deleting. A stale cross-session
+					// observation cannot drain a marker it does not
+					// own; the active-owner check above ensures the
+					// `(sessionId, taskId)` triple we pass is the
+					// SAME owner that registered the observation.
+					// This matches the Path A owner-mismatch check
+					// at `background-notify-coordinator.ts:382-388`.
+					// The drain is keyed by `jobId`, so a single
+					// observation is consumed exactly once across
+					// parallel `command_status` callers (no global
+					// "any owner" drain).
+					if (!options.backgroundNotifyCoordinator.hasActiveNotify(typed.jobId)) {
+						options.backgroundNotifyCoordinator.consumeNonNotifyTerminalObservation({
+							jobId: typed.jobId,
+							sessionId: activeOwner.sessionId,
+							taskId: activeOwner.taskId,
+						})
+						Logger.warn(
+							`[command_status] Path C drained non-notify terminal observation for jobId=${typed.jobId} (session=${activeOwner.sessionId}); terminal-state=${snap.state}`,
 						)
 					}
 				}

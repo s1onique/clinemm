@@ -31,7 +31,7 @@
  * after the wake has been delivered to the next turn.
  */
 
-import { type CoreSessionEvent, type SupervisableShellProcess } from "@cline/core"
+import { type CoreSessionEvent, type PendingPromptCountRead, type SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { BackgroundNotifyCoordinator } from "../background-notify-coordinator"
 import { CommandJobManager } from "../command-job-manager"
@@ -128,7 +128,7 @@ interface ProductionHarness {
 	wakeSink: TestPendingPromptsSink
 	activeSessionId: string
 	activeTaskId: string
-	getPendingPromptCount: ReturnType<typeof vi.fn> & ((sessionId?: string) => number)
+	getPendingPromptCount: ReturnType<typeof vi.fn> & ((sessionId?: string) => PendingPromptCountRead)
 	getActiveNotifyCount: ReturnType<typeof vi.fn> & ((sessionId?: string, taskId?: string) => number)
 	registerMarker: (jobId: string) => void
 }
@@ -160,8 +160,19 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		now: () => ++now,
 	})
 
-	const getPendingPromptCount = vi.fn((_sessionId?: string): number => 0) as ReturnType<typeof vi.fn> &
-		((sessionId?: string) => number)
+	// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01:
+	// PendingPromptCountRead is now an availability-aware discriminated
+	// union (CORRECTION01 of LHOWA01 / PPAT01). The LHOWA01 harness
+	// must return `{ available: true, count: <number> }` so the Q5
+	// seam's authority check evaluates correctly. The default mock
+	// returns `available: true, count: 0`; test bodies override via
+	// `mockImplementation` to project a real sink count.
+	const getPendingPromptCount = vi.fn(
+		(_sessionId?: string): PendingPromptCountRead => ({
+			available: true as const,
+			count: 0,
+		}),
+	) as ReturnType<typeof vi.fn> & ((sessionId?: string) => PendingPromptCountRead)
 	const getActiveNotifyCount = vi.fn((_sessionId?: string, _taskId?: string): number => 0) as ReturnType<typeof vi.fn> &
 		((sessionId?: string, taskId?: string) => number)
 
@@ -189,7 +200,7 @@ function makeHarness(opts: MakeHarnessOptions = {}): ProductionHarness {
 		getTurnPhase: () => tracker.currentPhase,
 		translateSessionEvent,
 		hasRunningBackgroundJobForOwner: () => manager.hasRunningBackgroundJobForOwner(activeSessionId),
-		getPendingPromptCount: getPendingPromptCount as unknown as (sessionId: string | undefined) => number,
+		getPendingPromptCount: getPendingPromptCount as unknown as (sessionId: string | undefined) => PendingPromptCountRead,
 		getActiveNotifyCount: getActiveNotifyCount as unknown as (
 			sessionId: string | undefined,
 			taskId: string | undefined,
@@ -310,7 +321,10 @@ describe("ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / LHOWA01", () =
 			expect(h.wakeSink.pendingCountForSession(h.activeSessionId)).toBe(1)
 
 			// 3. Wire the Q5 guard chain to consult the real sink.
-			h.getPendingPromptCount.mockImplementation(() => h.wakeSink.pendingCountForSession(h.activeSessionId))
+			h.getPendingPromptCount.mockImplementation(() => ({
+				available: true as const,
+				count: h.wakeSink.pendingCountForSession(h.activeSessionId),
+			}))
 
 			// 4. The Q5 composition seam should now DEFER because
 			// pendingPromptCount > 0. The phase stays at "streaming"
@@ -373,7 +387,7 @@ describe("ACT-CLINEMM-LONG-HORIZON-OUTSTANDING-WORK-AUTHORITY01 / LHOWA01", () =
 
 			// No background job. No queued prompt. No notify markers.
 			expect(h.manager.hasRunningBackgroundJobForOwner(h.activeSessionId)).toBe(false)
-			expect(h.getPendingPromptCount()).toBe(0)
+			expect(h.getPendingPromptCount()).toEqual({ available: true, count: 0 })
 			expect(h.getActiveNotifyCount()).toBe(0)
 
 			await emitDoneWithoutCompletion(h.coordinator, h.activeSessionId)

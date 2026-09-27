@@ -137,12 +137,33 @@ interface MakeHarnessOptions {
 	 */
 	pendingPromptAuthorityAvailable?: boolean
 	/**
-	 * TQCB01 P1-2 (notify=false fire-and-forget): when true, the
-	 * harness simulates an unrelated notify=false background
-	 * job that is STILL RUNNING at re-evaluation time. The
-	 * completion-barrier re-evaluation MUST NOT block on this
-	 * job — only notify=true obligations are completion-
-	 * relevant.
+	 * TQCB01 P1-2 (notify=false fire-and-forget) —
+	 * SUPERSEDED by ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01.
+	 *
+	 * The frozen TQCB01 P1-2 contract was that a notify=false
+	 * (fire-and-forget) background job is NOT completion-relevant
+	 * and MUST NOT block completion. The
+	 * HALT_BACKGROUND_TERMINAL_REENTERS_COMPLETED_TASK live defect
+	 * exploited this invariant: 4 fire-and-forget background jobs
+	 * did not engage the completion barrier; the originating turn
+	 * committed completion prematurely; each terminal then became
+	 * a wake-driven continuation that emitted its own
+	 * submit_and_exit → 5 user-visible completions.
+	 *
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01 §0.1 freezes
+	 * the new product contract:
+	 *
+	 *   BACKGROUND != DETACHED
+	 *
+	 *   An ordinary background job is task-owned. A task MUST
+	 *   NOT commit final completion while any task-owned
+	 *   background job is non-terminal.
+	 *
+	 * `simulateNotifyFalseSiblingRunning` is retained for
+	 * test-fidelity to the BCB01 RED path, but the assertion is
+	 * now INVERTED: the completion barrier MUST extend to block
+	 * completion until the notify=false sibling terminates (see
+	 * the BCB01 test suite for the GREEN contract).
 	 */
 	simulateNotifyFalseSiblingRunning?: boolean
 }
@@ -511,13 +532,26 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 		// TQCB01 P1-2 correction: notify=false sibling job
 		// (fire-and-forget) MUST NOT block completion.
 		// =====================================================================
-		it("TQCB-CTL-MIXED-FIRE-AND-FORGET: notify=true J resolved + notify=false D running → completion releases", async () => {
+		it("TQCB-CTL-MIXED-FIRE-AND-FORGET: notify=true J resolved + notify=false D running → completion STILL HELD (BCB01 closes the TQCB01 P1-2 loophole)", async () => {
+			// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01 §0.1/§11:
+			// this test was a CONSERVATION test for the TQCB01
+			// P1-2 contract ("notify=false fire-and-forget does
+			// not block completion"). That contract is OBSOLETE:
+			// the live HALT_BACKGROUND_TERMINAL_REENTERS_COMPLETED_TASK
+			// defect showed that a notify=false sibling running
+			// alongside a notify=true marker WAS the live defect.
+			//
+			// The new contract: a running notify=false (or
+			// notify=true) task-owned job, SIMULATED via
+			// `simulateNotifyFalseSiblingRunning=true`, blocks
+			// completion until it terminates. This test now
+			// asserts the BCB01 GREEN.
 			const h = makeHarness({ simulateNotifyFalseSiblingRunning: true })
 			h.tracker.setWithWriter("streaming", undefined, {
 				writerId: "task-start-init-task",
 			})
 			h.registerMarker("J-mixed")
-			// Marker → held.
+			// Marker → held (notify=true).
 			await emitCompletionTurn(h.coordinator, h.activeSessionId, h.translatorState)
 			expect(h.tracker.currentPhase).not.toBe("completed")
 			expect(h.completionCommitCount()).toBe(0)
@@ -535,12 +569,24 @@ describe("TQCB01 — completion barrier over notify-enabled background obligatio
 			})
 			expect(h.notifyCoordinator.activeNotifyCountForOwner(h.activeSessionId, h.activeTaskId)).toBe(0)
 
-			// Terminal-idle re-eval: notify=false sibling
-			// MUST NOT block.
+			// Terminal-idle re-eval: the BCB01 barrier now
+			// extends to the running-owned-job aggregate. The
+			// notify=false sibling D is STILL RUNNING → the
+			// barrier MUST still hold.
 			h.coordinator.reevaluateDeferredCompletionBarrier()
-			expect(h.tracker.currentPhase).toBe("completed")
-			expect(h.completionCommitCount()).toBe(1)
-			expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeUndefined()
+			expect(h.completionCommitCount()).toBe(0)
+			expect(h.tracker.currentPhase).not.toBe("completed")
+			expect(h.coordinator.getDeferredCompletionBarrierForTesting()).toBeDefined()
+
+			// Simulate D draining (the harness option is
+			// sticky-true; a follow-up transition to false
+			// confirms the BCB01 barrier release).
+			// The harness's `hasRunningBackgroundJobForOwner`
+			// returns `opts.simulateNotifyFalseSiblingRunning
+			// === true`. There is no built-in flip — but the
+			// barrier release is already proven by the BCB01
+			// suite (BCB-01..12) which directly manipulates the
+			// `ownedJobs` array.
 
 			h.notifyCoordinator.dispose()
 		}, 15_000)

@@ -223,6 +223,103 @@ export function formatTerminalWakePrompt(input: {
 }
 
 /**
+ * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+ *
+ * Single-source-of-truth prefix for the COALESCED completion-barrier
+ * continuation prompt produced by `formatCompletionContinuationPrompt`.
+ * The continuation prompt is the bounded finalization-authority
+ * mechanism: when the runtime's `submit_and_exit` is held by the BCB01
+ * barrier (the model just called `submit_and_exit` but owned terminal
+ * observations for notify=false jobs are still unconsumed), the
+ * controller enqueues EXACTLY ONE continuation turn per epoch carrying
+ * this prefix, instructing the model to call `command_status` for each
+ * held jobId before re-issuing `submit_and_exit`.
+ *
+ * Stable identity, runtime-generated, not user input. Distinguishes the
+ * coalesced-continuation prompt from the per-job `formatTerminalWakePrompt`
+ * wakes (notify=true path A) AND from arbitrary user text. The
+ * synthetic-prompt predicate in `sdk-user-message-mapping.ts` matches
+ * on a conjunctive fingerprint (this prefix AND the heldJobIds list
+ * line), not on user-supplied text.
+ */
+export const COMPLETION_CONTINUATION_PROMPT_PREFIX =
+	"A deferred completion is requesting observation of unconsumed terminal results before re-issuing submit_and_exit."
+
+/**
+ * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+ *
+ * Pure formatter for the COALESCED completion-barrier continuation
+ * prompt. Single-source-of-truth so the model sees a deterministic,
+ * easy-to-cite shape across every held-completion case.
+ *
+ * The output is a SINGLE prompt listing ALL held jobIds (the coalesced
+ * shape), with a fixed instructional footer asking the model to:
+ *
+ *   1. Issue one `command_status` tool call per held jobId
+ *      (parallel; the per-job observation will drain on canonical
+ *      terminal output).
+ *   2. After observing ALL held jobIds, re-issue `submit_and_exit`
+ *      with the verified final summary.
+ *
+ * Bounded: the formatter never exceeds COMPLETION_CONTINUATION_PROMPT_MAX_BYTES.
+ * Truncation behavior: if the heldJobIds list is too long, the list is
+ * truncated with an explicit "[+N more]" suffix so the model is never
+ * told to enumerate jobs that aren't actually held (the truncation
+ * mark is the source of truth — the runtime observes the full set via
+ * `unconsumedTerminalCountForOwner` re-evaluation after each
+ * `command_status`).
+ */
+export const COMPLETION_CONTINUATION_PROMPT_MAX_BYTES = 2048
+
+export function formatCompletionContinuationPrompt(input: {
+	readonly heldJobIds: readonly string[]
+	readonly sessionId: string
+	readonly taskId: string | undefined
+}): string {
+	const heldJobIds = input.heldJobIds
+	const header = [
+		COMPLETION_CONTINUATION_PROMPT_PREFIX,
+		"",
+		`Session: ${input.sessionId}`,
+		`Task: ${input.taskId ?? "(none)"}`,
+		`Held terminal observations: ${heldJobIds.length}`,
+		"",
+		"Held jobIds:",
+	].join("\n")
+	const footer = [
+		"",
+		"For each held jobId above, issue ONE `command_status` tool call (you may issue them in parallel).",
+		"After observing every held jobId, re-issue `submit_and_exit` with the final verified summary.",
+		"Do NOT synthesize any `submit_and_exit` completion row before every held observation has been consumed.",
+	].join("\n")
+	const fixedOverhead = `${header}\n${footer}`
+	const fixedBytes = Buffer.byteLength(fixedOverhead, "utf8")
+	if (fixedBytes > COMPLETION_CONTINUATION_PROMPT_MAX_BYTES) {
+		return truncateToByteCap(fixedOverhead, COMPLETION_CONTINUATION_PROMPT_MAX_BYTES)
+	}
+	const listBudget = COMPLETION_CONTINUATION_PROMPT_MAX_BYTES - fixedBytes
+	const lines: string[] = []
+	let consumed = 0
+	let truncatedCount = 0
+	for (const jid of heldJobIds) {
+		const line = `  - ${jid}\n`
+		const lineBytes = Buffer.byteLength(line, "utf8")
+		if (consumed + lineBytes > listBudget) {
+			truncatedCount = heldJobIds.length - lines.length
+			break
+		}
+		lines.push(line)
+		consumed += lineBytes
+	}
+	if (truncatedCount > 0) {
+		lines.push(
+			`  - [+${truncatedCount} more held jobIds — call command_status with each held jobId observed via this prompt's prefix]\n`,
+		)
+	}
+	return header + "\n" + lines.join("") + footer
+}
+
+/**
  * Truncate `s` so that `Buffer.byteLength(s, "utf8") <= maxBytes`.
  *
  * Truncates at a code-point boundary so we never produce a partial
@@ -559,6 +656,16 @@ export class BackgroundNotifyCoordinator {
 	 * rejects or the session is gone.
 	 */
 	private readonly wakeDispatchFailedJobIds = new Set<string>()
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+	 * Non-notify (fire-and-forget) terminal-observation tracker,
+	 * keyed by `jobId`. Each value carries the owning
+	 * `(sessionId, taskId)` triple so the CORRECTION02 consumer
+	 * seam can verify owner identity before draining. The owning
+	 * agent must still observe each terminal fact before the
+	 * BCB01 §0.1 completion commit is allowed.
+	 */
+	private readonly nonNotifyTerminalObservations = new Map<string, { sessionId: string; taskId: string | undefined }>()
 	private readonly options: Required<Omit<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">> &
 		Pick<BackgroundNotifyCoordinatorOptions, "recordNotifyDecision" | "discardQueuedWake">
 	private disposed = false
@@ -599,6 +706,153 @@ export class BackgroundNotifyCoordinator {
 			}
 		}
 		return count
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+	 * Unconsumed terminal-result counter for an owner.
+	 *
+	 * Sums three disjoint sources of "the agent that owns these
+	 * terminal jobs has not yet observed the terminal facts":
+	 *
+	 *   1. Live notify markers (Path A in flight / Path B
+	 *      obligation pending) for notify=true jobs.
+	 *   2. Held terminal results (terminal came in while other
+	 *      notify jobs were still in flight; will be flushed on
+	 *      the last drain).
+	 *   3. Non-notify (fire-and-forget) terminal identities
+	 *      registered via `recordNonNotifyTerminalObservation` —
+	 *      the wake itself was suppressed by user opt-out
+	 *      (`notifyOnCompletion !== true`), but the BCB01 §0.1
+	 *      invariant requires the owning agent to observe the
+	 *      terminal fact before commit (otherwise the agent's
+	 *      final answer would silently ignore completed
+	 *      fire-and-forget jobs).
+	 *
+	 * Each of these is decremented by an explicit consume call
+	 * (see `consumeNonNotifyTerminalObservation`,
+	 * `consumeTerminal`, `resolveObligation`) when the
+	 * corresponding authority settles.
+	 */
+	unconsumedTerminalCountForOwner(sessionId: string, taskId: string | undefined): number {
+		const key = ownerKey(sessionId, taskId)
+		let liveMarkers = 0
+		for (const marker of this.notificationMarkers.values()) {
+			if (ownerKey(marker.sessionId, marker.taskId) === key) {
+				liveMarkers++
+			}
+		}
+		const held = this.heldTerminalResults.get(key)?.length ?? 0
+		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION02:
+		// non-notify observations are now keyed by jobId with an
+		// owner triple stored as value, so the count is summed
+		// across all observations owned by this (sessionId, taskId).
+		let nonNotify = 0
+		for (const obs of this.nonNotifyTerminalObservations.values()) {
+			if (ownerKey(obs.sessionId, obs.taskId) === key) {
+				nonNotify++
+			}
+		}
+		return liveMarkers + held + nonNotify
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+	 *
+	 * List-form sibling of `unconsumedTerminalCountForOwner`. Returns
+	 * the union of `jobId`s that contributed to the count, in stable
+	 * insertion order (notificationMarkers first, then heldTerminalResults,
+	 * then nonNotifyTerminalObservations). Used by the completion-
+	 * continuation prompt formatter so the model can issue parallel
+	 * `command_status` calls for each held jobId in one turn.
+	 *
+	 * NOT a stable identity guarantee: the returned array is a snapshot
+	 * at call time. After the model observes a subset, the coordinator
+	 * may register / consume more observations in the same epoch.
+	 * The continuation prompt's truncation suffix ("[+N more]") is the
+	 * source of truth — if the list is truncated, the model knows to
+	 * issue additional `command_status` calls based on the held count.
+	 */
+	unconsumedOwnedTerminalJobIdsForOwner(sessionId: string, taskId: string | undefined): string[] {
+		const key = ownerKey(sessionId, taskId)
+		const result: string[] = []
+		for (const marker of this.notificationMarkers.values()) {
+			if (ownerKey(marker.sessionId, marker.taskId) === key) {
+				result.push(marker.jobId)
+			}
+		}
+		const held = this.heldTerminalResults.get(key)
+		if (held !== undefined) {
+			for (const tn of held) {
+				result.push(tn.jobId)
+			}
+		}
+		for (const [jobId, obs] of this.nonNotifyTerminalObservations) {
+			if (ownerKey(obs.sessionId, obs.taskId) === key) {
+				result.push(jobId)
+			}
+		}
+		return result
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+	 * Register a non-notify (fire-and-forget) terminal
+	 * observation. Called by the production
+	 * `vscode-run-commands-tool.ts:890` seam at the moment a
+	 * fire-and-forget job reaches terminal state.
+	 *
+	 * The wake itself is suppressed per the user's
+	 * `notifyOnCompletion !== true` opt-out. The terminal
+	 * IDENTITY (jobId, sessionId, taskId, exitCode, terminalState)
+	 * is still authoritative for the BCB01 §0.1 second
+	 * conjunct — the owning agent must observe it before commit.
+	 *
+	 * Idempotency: re-registering the same jobId for the same
+	 * (sessionId, taskId) is a no-op (it is already in the set).
+	 */
+	recordNonNotifyTerminalObservation(input: { jobId: string; sessionId: string; taskId: string | undefined }): void {
+		if (this.disposed) return
+		if (!input.jobId || typeof input.jobId !== "string") return
+		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION02:
+		// key by jobId with owner triple as value (the consumer
+		// seam needs the owner triple to verify owner-mismatch).
+		// Idempotency: re-registering the same jobId is a no-op
+		// (Map.set is idempotent on key).
+		this.nonNotifyTerminalObservations.set(input.jobId, {
+			sessionId: input.sessionId,
+			taskId: input.taskId,
+		})
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION02:
+	 * Consume a non-notify terminal observation. Called by the
+	 * owning turn when it observes the terminal fact (the canonical
+	 * production caller is `command_status` Path C at
+	 * `command-status-tool.ts:289-298` — the act of returning the
+	 * terminal snapshot to the agent IS the consumption event).
+	 *
+	 * Owner-mismatch semantics: the consumer MUST supply the same
+	 * `(sessionId, taskId)` triple that was used to register the
+	 * observation. If the triples don't match, the consume is
+	 * skipped — a stale cross-session observation cannot drain a
+	 * marker it does not own. This matches the Path A
+	 * owner-mismatch check at
+	 * `background-notify-coordinator.ts:382-388`.
+	 *
+	 * Idempotency: consuming a jobId that was never registered
+	 * (or was already consumed) is a no-op.
+	 */
+	consumeNonNotifyTerminalObservation(input: { jobId: string; sessionId: string; taskId: string | undefined }): void {
+		if (this.disposed) return
+		if (!input.jobId || typeof input.jobId !== "string") return
+		const existing = this.nonNotifyTerminalObservations.get(input.jobId)
+		if (!existing) return
+		if (ownerKey(existing.sessionId, existing.taskId) !== ownerKey(input.sessionId, input.taskId)) {
+			return
+		}
+		this.nonNotifyTerminalObservations.delete(input.jobId)
 	}
 
 	/**
@@ -1196,6 +1450,11 @@ export class BackgroundNotifyCoordinator {
 		// three new ack-state trackers are process-ephemeral too.
 		this.wakeDispatchRequestedJobIds.clear()
 		this.wakeDispatchFailedJobIds.clear()
+		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+		// non-notify terminal observations are process-ephemeral
+		// (the BCB01 §0.1 barrier consults them only within a single
+		// session lifetime).
+		this.nonNotifyTerminalObservations.clear()
 	}
 
 	diagnosticMarkerCount(): number {
@@ -1208,6 +1467,17 @@ export class BackgroundNotifyCoordinator {
 			total += arr.length
 		}
 		return total
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+	 * Diagnostic counter — total number of non-notify terminal
+	 * observations currently held across all owners. Used by the
+	 * live-debug harness (`myc-prime-live-diag`) for the BCB01
+	 * consumption-counter invariant.
+	 */
+	diagnosticNonNotifyTerminalObservationCount(): number {
+		return this.nonNotifyTerminalObservations.size
 	}
 
 	/**

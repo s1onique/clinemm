@@ -80,6 +80,60 @@ export interface SdkSessionEventCoordinatorOptions {
 	 */
 	hasRunningBackgroundJobForOwner?: (ownerSessionId: string | undefined) => boolean
 	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+	 *
+	 * Synchronous accessor for the count of UNCONSUMED terminal
+	 * result identities for an owner. This is the second conjunct
+	 * of the BCB01 §0.1 frozen invariant:
+	 *
+	 *   task_completion_committed
+	 *     ⇒ owned_background_jobs_nonterminal == 0
+	 *       AND unconsumed_owned_terminal_results == 0
+	 *
+	 * Wired by `SdkController` to a thin adapter that delegates to
+	 * `BackgroundNotifyCoordinator.unconsumedTerminalCountForOwner`
+	 * (which itself sums live notify markers + held terminal
+	 * results + non-notify terminal observations for the owner).
+	 *
+	 * Consumed by both the re-evaluation seam
+	 * (`reevaluateDeferredCompletionBarrier` at ~L522) and the
+	 * C10 completion-commit barrier (~L982) — completion is held
+	 * if the count is > 0, exactly like the running-job check.
+	 *
+	 * Optional: when absent, the count defaults to 0 (legacy
+	 * fail-open behavior matching the pre-CORRECTION01 state).
+	 * Tests that omit this option preserve pre-CORRECTION01
+	 * behavior. Production MUST wire this to maintain the BCB01
+	 * §0.1 invariant.
+	 */
+	getUnconsumedOwnedTerminalResultCount?: (ownerSessionId: string | undefined) => number
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+	 *
+	 * List-form sibling of `getUnconsumedOwnedTerminalResultCount`.
+	 * Returns the union of `jobId`s that contributed to the count
+	 * in stable insertion order (notificationMarkers first, then
+	 * heldTerminalResults, then nonNotifyTerminalObservations).
+	 *
+	 * Wired by `SdkController` to a thin adapter that delegates
+	 * to
+	 * `BackgroundNotifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner`.
+	 *
+	 * Consumed by the completion-continuation enqueue trigger to
+	 * build the coalesced prompt's held-jobIds list. The list
+	 * instructs the model to issue parallel `command_status` tool
+	 * calls — one per held jobId — to drain BCB01 §0.1 second
+	 * conjunct via Path B (notify=true) and Path C
+	 * (non-notify, fire-and-forget).
+	 *
+	 * Optional: when absent, `enqueueCompletionContinuationIfHeld`
+	 * falls back to `getUnconsumedOwnedTerminalResultCount` and
+	 * only fires the continuation if the count > 0 (without
+	 * listing specific jobIds). Tests that omit this option
+	 * observe the legacy fire-rate-only behavior.
+	 */
+	getUnconsumedOwnedTerminalJobIds?: (sessionId: string, taskId: string | undefined) => readonly string[]
+	/**
 	 * ACT-CLINEMM-BACKGROUND-COMMAND-OWNER-CORRELATION-CAPTURE01:
 	 *
 	 * INTERNAL read-only diagnostic accessor that returns the
@@ -297,6 +351,57 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * `wasWakeDelivered`).
 	 */
 	isWakeAuthoritySettled?: (jobId: string) => boolean
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+	 *
+	 * The bounded finalization-authority seam. When the BCB01 §0.1
+	 * barrier holds completion against unconsumed owned terminal
+	 * results AND the active session's runtime has already called
+	 * `finishRun("completed", ...)` (the `submit_and_exit` tool's
+	 * `lifecycle.completesRun === true` semantics end the agent
+	 * loop on first non-error result), the coordinator calls this
+	 * callback AT MOST ONCE per (sessionId, epoch) to enqueue a
+	 * coalesced continuation turn via
+	 * `activeSession.sdkHost.send({ delivery: "queue" })`.
+	 *
+	 * The continuation prompt lists ALL held jobIds (snapshot from
+	 * `BackgroundNotifyCoordinator.unconsumedOwnedTerminalJobIdsForOwner`)
+	 * and instructs the model to issue parallel `command_status`
+	 * calls per held jobId, then re-issue `submit_and_exit`. After
+	 * the model observes each held jobId, the BCB01 second conjunct
+	 * (`unconsumed_owned_terminal_results == 0`) resolves and the
+	 * held completion commits exactly once via
+	 * `reevaluateDeferredCompletionBarrier`.
+	 *
+	 * Firing policy:
+	 *   - Bounded: AT MOST ONE call per `(sessionId, epoch)`,
+	 *     tracked via internal `completionContinuationSentForEpoch`.
+	 *   - Idempotent across multiple `done` events for the same
+	 *     epoch (the message-translator's translator emits one
+	 *     `turnComplete` per event; the coordinator deduplicates).
+	 *   - The coordinator SUPPRESSES the call if no deferred-
+	 *     completion-barrier marker is registered (i.e. completion
+	 *     was allowed to commit normally).
+	 *   - The coordinator SUPPRESSES the call if
+	 *     `unconsumedOwnedTerminalResultCount == 0` (i.e. no
+	 *     observations are held; the barrier is held by a different
+	 *     authority — running jobs, queued prompts, or active notify
+	 *     markers — and continuation is not the right intervention).
+	 *
+	 * Optional: when absent, the BCB01 barrier remains in
+	 * `deferredCompletionBarrier` state and the held completion is
+	 * released by `reevaluateDeferredCompletionBarrier` (only when
+	 * the barrier state drains, e.g. via terminal-idle event).
+	 * Tests that omit this option observe the pre-CORRECTION03
+	 * behavior (no continuation enqueue).
+	 */
+	enqueueCompletionContinuation?: (input: {
+		sessionId: string
+		taskId: string | undefined
+		heldJobIds: readonly string[]
+	}) => Promise<{
+		kind: "delivered" | "rejected" | "session_gone" | "no_held_job_ids"
+	}>
 }
 
 /**
@@ -354,6 +459,26 @@ export class SdkSessionEventCoordinator {
 	 * `deferredContinuation` (BTCONT01).
 	 */
 	private deferredCompletionBarrier: DeferredCompletionBarrier | undefined
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03 /
+	 * CORRECTION04:
+	 *
+	 * Bounded single-key marker for the completion-continuation
+	 * enqueue. Stores the LAST `(sessionId, taskId, epoch)` triple
+	 * for which the continuation was enqueued; any future trigger
+	 * with the same triple is suppressed. A single string slot is
+	 * `O(1)` memory regardless of coordinator lifetime — the
+	 * earlier Set-based implementation grew unboundedly across
+	 * epoch advances (P1 halt surfaced by
+	 * HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION).
+	 *
+	 * Format: `${sessionId}|${taskId ?? "(none)"}|${epoch}`.
+	 * On epoch supersession, the next trigger's key is naturally
+	 * different (the new epoch), so the dedupe correctly allows
+	 * the next continuation. No explicit cleanup needed.
+	 */
+	private lastCompletionContinuationSessionEpoch: string | undefined
 
 	constructor(private readonly options: SdkSessionEventCoordinatorOptions) {
 		this.translateSessionEvent = options.translateSessionEvent ?? translateSessionEvent
@@ -521,6 +646,86 @@ export class SdkSessionEventCoordinator {
 		}
 		const outstandingAutonomousWork =
 			pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0 || perJobOutstandingNotifyWork
+		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01: extend the
+		// barrier predicate to include the running task-owned
+		// background-job aggregate (the CommandJobManager primitive
+		// `hasRunningBackgroundJobForOwner(activeSession.sessionId)`).
+		// This closes the live
+		// HALT_BACKGROUND_TERMINAL_REENTERS_COMPLETED_TASK defect:
+		// the predecessor TQCB01 barrier only consulted notify=true
+		// markers, so notify=false (fire-and-forget) jobs did not
+		// block completion and 4 such jobs each produced a
+		// wake-driven submit_and_exit.
+		const ownerStillRunning = this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
+		if (ownerStillRunning) return
+		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+		// extend the barrier predicate to include the second
+		// conjunct of the BCB01 §0.1 frozen invariant:
+		// `unconsumed_owned_terminal_results == 0`. This catches
+		// the case where a task-owned job has REACHED terminal
+		// state but the agent has not yet observed the terminal
+		// fact (notify=true wake in flight / held; notify=false
+		// observation registered but not consumed). Without this
+		// check, completion would commit against a held terminal
+		// identity, silently truncating the conversation's
+		// information content. Wired to
+		// `BackgroundNotifyCoordinator.unconsumedTerminalCountForOwner`
+		// by SdkController.
+		const unconsumedOwnedTerminalResultCount =
+			this.options.getUnconsumedOwnedTerminalResultCount?.(activeSession.sessionId) ?? 0
+		// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION04:
+		// Trigger the bounded coalesced continuation at the terminal-
+		// idle / Q5 re-evaluation transition (not just at the
+		// initial-done path that the CORRECTION03 trigger fired at).
+		// This closes the live chronology described in
+		// HALT_FINALIZATION_TRIGGER_AT_WRONG_TRANSITION: the model
+		// called `submit_and_exit` while a notify=false job was
+		// still RUNNING (so `unconsumedOwnedTerminalResultsForC10 ===
+		// 0` at submit time and the CORRECTION03 trigger did NOT
+		// fire), then the job became terminal and
+		// `reevaluateDeferredCompletionBarrier` was driven by the
+		// terminal-idle event. With this fix, that terminal-idle
+		// re-evaluation fires the coalesced continuation once
+		// (deduped by `(sessionId, taskId, epoch)`), giving the
+		// model a bounded opportunity to call `command_status` for
+		// each held jobId and re-issue `submit_and_exit`.
+		//
+		// The trigger is fire-and-forget (`void ...`) so the
+		// re-evaluation function never blocks on the host's
+		// ack. Once the continuation is delivered, the next turn
+		// drains the prompt via PendingPromptsController, observes
+		// the held terminal facts via Path B / Path C, and the
+		// BCB01 second conjunct resolves to 0 — at which point
+		// the held completion commits exactly once via the
+		// existing setTurnPhase("completed", ...) path below.
+		if (unconsumedOwnedTerminalResultCount > 0) {
+			// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+			// Bounded finalization-authority trigger. Fire AT MOST
+			// ONCE per `(sessionId, epoch)`. The dedupe key uses
+			// the marker's epoch (the same epoch the barrier
+			// was registered under) so the continuation is bound
+			// to the just-held submit_and_exit's epoch.
+			void this.enqueueCompletionContinuationIfHeld(activeSession.sessionId, unconsumedOwnedTerminalResultCount, taskId)
+				.then((outcome) => {
+					if (outcome.kind === "delivered") {
+						Logger.warn(
+							`[SdkController] completion continuation turn enqueued from terminal-idle re-evaluation for session=${activeSession.sessionId} heldJobIds=${outcome.heldJobIds.length} (epoch=${outcome.continuationSessionEpoch})`,
+						)
+					} else if (outcome.kind === "no_held_job_ids") {
+						Logger.warn(
+							`[SdkController] completion continuation suppressed at terminal-idle re-evaluation for session=${activeSession.sessionId}: count>0 but getUnconsumedOwnedTerminalJobIds returned 0 (count-based fallback)`,
+						)
+					}
+				})
+				.catch((error) => {
+					Logger.warn(
+						`[SdkController] completion continuation enqueue at terminal-idle re-evaluation failed for session=${activeSession.sessionId}: ${
+							error instanceof Error ? error.message : String(error)
+						}`,
+					)
+				})
+			return
+		}
 		if (outstandingAutonomousWork) return
 		// ACT-CLINEMM-BACKGROUND-NOTIFY-COMPLETION-AUTHORITY-REPAIR01:
 		// If the wake-driven turn owns terminal completion for any
@@ -544,6 +749,132 @@ export class SdkSessionEventCoordinator {
 		)
 		this.deferredCompletionBarrier = undefined
 		this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+	 *
+	 * Bounded finalization-authority trigger. Fires the
+	 * `options.enqueueCompletionContinuation` callback AT MOST
+	 * ONCE per `(sessionId, epoch)` pair when ALL of the
+	 * following hold:
+	 *
+	 *   1. The BCB01 §0.1 deferred-completion-barrier marker is
+	 *      registered (the runtime's `submit_and_exit` is HELD).
+	 *   2. The trigger cause is the BCB01 §0.1 second conjunct
+	 *      (`unconsumedOwnedTerminalResultsForC10 > 0`). Running
+	 *      jobs alone (without terminal observations) is NOT
+	 *      sufficient — terminal-idle will eventually release the
+	 *      barrier when the last job reaches terminal.
+	 *   3. The held-observer accessor (or the count fallback)
+	 *      reports at least one jobId to include in the prompt.
+	 *   4. No continuation has been enqueued for the current
+	 *      `(sessionId, epoch)` yet (the dedupe set).
+	 *
+	 * Idempotency: the dedupe set is keyed by
+	 * `${sessionId}|${taskId ?? "(none)"}|${epoch}`. A new epoch
+	 * produces a new key, so successive held-completion cycles
+	 * (e.g. the model observes some held jobIds, the barrier
+	 * re-holds on a new batch, etc.) each get exactly one
+	 * continuation. The earlier marker cleanup on epoch
+	 * supersession (the fresh-key semantic) guarantees the
+	 * dedupe set never explodes unbounded.
+	 *
+	 * The method returns the enqueue outcome (`delivered`,
+	 * `rejected`, `session_gone`, `no_held_job_ids`, `not_held`,
+	 * `already_sent`, `no_callback`) so callers / tests can
+	 * verify behavior without consulting the dedupe set.
+	 */
+	enqueueCompletionContinuationIfHeld(
+		activeSessionId: string,
+		unconsumedOwnedTerminalResultsForC10: number,
+		taskId: string | undefined,
+	): Promise<
+		| {
+				kind: "delivered"
+				heldJobIds: readonly string[]
+				continuationSessionEpoch: string
+		  }
+		| { kind: "rejected"; heldJobIds: readonly string[]; continuationSessionEpoch: string }
+		| { kind: "session_gone" }
+		| { kind: "no_held_job_ids"; heldJobIds: readonly string[] }
+		| { kind: "not_held" }
+		| { kind: "already_sent"; continuationSessionEpoch: string }
+		| { kind: "no_callback" }
+	> {
+		if (!this.options.enqueueCompletionContinuation) {
+			return Promise.resolve({ kind: "no_callback" })
+		}
+		if (unconsumedOwnedTerminalResultsForC10 <= 0) {
+			return Promise.resolve({ kind: "not_held" })
+		}
+		// Only fire when the deferred-completion-barrier marker is
+		// the active hold (not running-job-only holds or queued-
+		// prompt-only holds).
+		if (!this.deferredCompletionBarrier) {
+			return Promise.resolve({ kind: "not_held" })
+		}
+		const epoch = this.options.messageTranslatorState.getMinter().epoch
+		const continuationSessionEpoch = `${activeSessionId}|${taskId ?? "(none)"}|${epoch}`
+		if (this.lastCompletionContinuationSessionEpoch === continuationSessionEpoch) {
+			return Promise.resolve({ kind: "already_sent", continuationSessionEpoch })
+		}
+		const heldJobIds = this.options.getUnconsumedOwnedTerminalJobIds?.(activeSessionId, taskId) ?? []
+		if (heldJobIds.length === 0) {
+			// The count-based fallback path can produce a 0-length
+			// list. In that case we suppress the continuation:
+			// the runtime will eventually reach a steady state
+			// (terminal-idle + reevaluateDeferredCompletionBarrier).
+			return Promise.resolve({ kind: "no_held_job_ids", heldJobIds })
+		}
+		// Mark BEFORE await so a synchronous re-entry cannot
+		// double-fire. O(1) memory regardless of coordinator
+		// lifetime (P1 halt fix: replaces the unbounded Set).
+		this.lastCompletionContinuationSessionEpoch = continuationSessionEpoch
+		return this.options
+			.enqueueCompletionContinuation({
+				sessionId: activeSessionId,
+				taskId,
+				heldJobIds,
+			})
+			.then((outcome) => {
+				if (outcome.kind === "delivered") {
+					return { kind: "delivered" as const, heldJobIds, continuationSessionEpoch }
+				}
+				if (outcome.kind === "rejected") {
+					return { kind: "rejected" as const, heldJobIds, continuationSessionEpoch }
+				}
+				if (outcome.kind === "session_gone") {
+					return { kind: "session_gone" as const }
+				}
+				return { kind: "no_held_job_ids" as const, heldJobIds }
+			})
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03 /
+	 * CORRECTION04:
+	 *
+	 * test-only backdoor exposing the dedupe marker so the trigger
+	 * tests (BCB-26..BCB-30) can verify "exactly once" semantics
+	 * without depending on indirect queue-observation side-effects.
+	 * Returns true iff the coordinator has already fired the
+	 * continuation enqueue for the given `(sessionId, taskId, epoch)`
+	 * triple.
+	 */
+	wasCompletionContinuationSentForTesting(sessionId: string, taskId: string | undefined, epoch: number): boolean {
+		const key = `${sessionId}|${taskId ?? "(none)"}|${epoch}`
+		return this.lastCompletionContinuationSessionEpoch === key
+	}
+
+	/**
+	 * ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION04:
+	 * test-only backdoor to clear the dedupe marker (e.g. to
+	 * simulate a fresh epoch without rebuilding the full
+	 * coordinator).
+	 */
+	clearCompletionContinuationSentForTesting(): void {
+		this.lastCompletionContinuationSessionEpoch = undefined
 	}
 
 	/**
@@ -956,9 +1287,35 @@ export class SdkSessionEventCoordinator {
 								pendingPromptsKnown > 0 ||
 								activeNotifyCount > 0 ||
 								perJobOutstandingNotifyWork
+							// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01: extend the
+							// C10 completion-commit barrier predicate to include
+							// the running task-owned background-job aggregate (the
+							// CommandJobManager primitive
+							// `hasRunningBackgroundJobForOwner(activeSession.sessionId)`).
+							// This closes the live
+							// HALT_BACKGROUND_TERMINAL_REENTERS_COMPLETED_TASK
+							// defect: the predecessor TQCB01 barrier only
+							// consulted notify=true markers, so notify=false
+							// (fire-and-forget) jobs did not block completion.
+							const ownerStillRunningForC10 =
+								this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
+							// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION01:
+							// extend the C10 barrier predicate to include the
+							// second conjunct of the BCB01 §0.1 frozen invariant.
+							// Even with running_jobs == 0, completion is held
+							// if unconsumed_owned_terminal_results > 0 — the
+							// agent must observe the terminal facts (notify=true
+							// wake OR notify=false observation) before commit.
+							const unconsumedOwnedTerminalResultsForC10 =
+								this.options.getUnconsumedOwnedTerminalResultCount?.(activeSession.sessionId) ?? 0
 							const suppressOriginatingCompletion = perJobSuppressOriginatingCompletion
 
-							if (outstandingAutonomousWork || suppressOriginatingCompletion) {
+							if (
+								outstandingAutonomousWork ||
+								ownerStillRunningForC10 ||
+								unconsumedOwnedTerminalResultsForC10 > 0 ||
+								suppressOriginatingCompletion
+							) {
 								// Register the deferred-completion-barrier marker.
 								// Same epoch + task + session identity triple as
 								// deferredContinuation (BTCONT01). Cleared on commit
@@ -973,6 +1330,32 @@ export class SdkSessionEventCoordinator {
 									taskId: this.options.getTask?.()?.taskId,
 									epoch: this.options.messageTranslatorState.getMinter().epoch,
 									deferredAt: Date.now(),
+								}
+								// ACT-CLINEMM-BACKGROUND-COMPLETION-BARRIER01-CORRECTION03:
+								// Bounded finalization-authority trigger (see
+								// `enqueueCompletionContinuationIfHeld` docstring).
+								// Fire AT MOST ONCE per (sessionId, epoch) when the
+								// BCB01 §0.1 second conjunct is the hold cause.
+								if (unconsumedOwnedTerminalResultsForC10 > 0 && !suppressOriginatingCompletion) {
+									void this.enqueueCompletionContinuationIfHeld(
+										activeSession.sessionId,
+										unconsumedOwnedTerminalResultsForC10,
+										this.options.getTask?.()?.taskId,
+									)
+										.then((outcome) => {
+											if (outcome.kind === "delivered") {
+												Logger.warn(
+													`[SdkController] completion continuation turn enqueued for session=${activeSession.sessionId} heldJobIds=${outcome.heldJobIds.length} (epoch=${outcome.continuationSessionEpoch})`,
+												)
+											}
+										})
+										.catch((error) => {
+											Logger.warn(
+												`[SdkController] completion continuation enqueue failed: ${
+													error instanceof Error ? error.message : String(error)
+												}`,
+											)
+										})
 								}
 							} else {
 								// ACT-CLINEMM-LONG-HORIZON-CONTINUATION-CARDINALITY-AUTHORITY01:
