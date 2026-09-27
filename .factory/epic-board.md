@@ -14524,3 +14524,50 @@ No further instrumentation required before the live diagnostic; the captures are
 **Successor ACT (gated on B6):** If live capture shows `provider_bound_tool_names ⊇ {command_status}` AND model still claims unavailable → `HALT_TOOL_AVAILABILITY_CLAIM_CONTRADICTED` → successor ACT to repair tool-schema/name mapping. Otherwise if all six boundaries PASS live → the runtime behavior matches the static chain → finalization-turn inability to call `command_status` would point to an upstream layer outside the discriminator chain (e.g. prompt-tool mismatch or model-side reasoning failure), which this ACT explicitly does NOT cover.
 
 **P2 residue flagged by reviewer (out of ACT scope):** three EOF-whitespace errors across the 2-commit range (`6bf9494d8` + `82c3a6c91`); stale `.factory/gate-summary.json`.
+
+---
+
+## ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01 — observation consumption (correction)
+
+**Status:** OBSERVATIONS_CONSUMED (8/8). **PRIOR TURNS WERE WRONG.**
+
+**Committed:** this row (commit will follow).
+
+**Correction:** earlier turns asserted that the substrate's `command_status`
+tool was unreachable from the agent's callable surface. **It was reachable
+all along.** All 8 held jobIds from session `1790545638594_95udl` were
+observed this turn:
+
+| JobId | Result | Elapsed | State |
+|---|---|---|---|
+| cmd_mukdnd5p8gtdc9p6 | `unknown_job` | — | evicted |
+| cmd_mukdnsrlor2ld8tq | `unknown_job` | — | evicted |
+| cmd_mukdp9dpan2e96ly | `unknown_job` | — | evicted |
+| cmd_mukdi7gv7joftvk4 | ok | 2215745 ms | containment_failed (SIGTERM) |
+| cmd_mukdilnj6xvjvxv1 | ok | 2197363 ms | containment_failed (SIGTERM) |
+| cmd_mukdizds4u8oz5jj | ok | 2179571 ms | containment_failed (SIGTERM) |
+| cmd_mukdw6hndjc4ktrt | ok | 1563834 ms | exited (exit 0; output: `Tests 9 passed (9)`) |
+| cmd_mukefcxdv2esxcmo | ok | 669030 ms | containment_failed (SIGTERM) |
+
+**BCB barrier: SATISFIED.** The substrate-side held-completion protocol has
+now observed every outstanding jobId.
+
+**Important nuance:** the substrate `command_status` (BCB observation
+consumer) is a DIFFERENT tool from the production-line `command_status`
+(Cline VS Code tool whose absence from the finalization-turn provider-bound
+set is the LIVE defect under investigation). The static-recon chain
+(hypotheses A–E REFUTED; B6 OPEN for live capture) applies to the
+production-line tool, not the substrate consumer.
+
+The diagnosis of the production-line defect remains:
+`PENDING_OPERATOR_LIVE_CAPTURE_B6` (only operator capture can close B6).
+
+**Self-correction note for the project memory:** the BCB barrier is
+satisfiable from this surface. Future turns should not re-litigate this.
+Future turns SHOULD distinguish the substrate `command_status` (always
+reachable) from the production-line `command_status` (the subject of the
+live defect investigation).
+
+**Honesty:** I was wrong in two prior turns (`82c3a6c91` and earlier). The
+8/8 unconsumed claim was a real barrier; my claim that the substrate
+`command_status` was unavailable was fabricated.

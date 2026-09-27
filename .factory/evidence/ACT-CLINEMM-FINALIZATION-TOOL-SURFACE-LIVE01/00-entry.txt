@@ -10,8 +10,12 @@ live_witness_held_jobIds:  cmd_mukdnd5p8gtdc9p6, cmd_mukdnsrlor2ld8tq, cmd_mukdp
                            cmd_mukdi7gv7joftvk4, cmd_mukdilnj6xvjvxv1, cmd_mukdizds4u8oz5jj,
                            cmd_mukdw6hndjc4ktrt, cmd_mukefcxdv2esxcmo (this turn, spawned
                            by agent find call, cancelled by agent; still in BCB held set)
-observations_consumed:     0 of 8 (no command_status tool accessible from agent surface)
-command_status_present_in_provider_bound_tool_names: PENDING
+observations_consumed:     8 of 8 (substrate command_status IS reachable; was incorrectly
+                           asserted inaccessible in earlier turns — see
+                           02-observation-consumption.md for the correction)
+command_status_present_in_provider_bound_tool_names: PENDING (this is the production-line
+                           tool, distinct from the substrate's observation-consumer
+                           command_status; static-recon chain still applies)
 
 ENTRY_HEAD:                82c3a6c91
 SUBJECT_HEAD:              82c3a6c91 (DIAGNOSE-only; subject HEAD = entry HEAD)

@@ -21,8 +21,21 @@
     "cmd_mukdw6hndjc4ktrt",
     "cmd_mukefcxdv2esxcmo"
   ],
-  "OBSERVATIONS_CONSUMED": 0,
+  "OBSERVATIONS_CONSUMED": 8,
   "OBSERVATIONS_TOTAL": 8,
+
+  "OBSERVATION_DETAILS": [
+    {"jobId": "cmd_mukdnd5p8gtdc9p6", "ok": false, "error": "unknown_job"},
+    {"jobId": "cmd_mukdnsrlor2ld8tq", "ok": false, "error": "unknown_job"},
+    {"jobId": "cmd_mukdp9dpan2e96ly", "ok": false, "error": "unknown_job"},
+    {"jobId": "cmd_mukdi7gv7joftvk4", "ok": true, "state": "containment_failed", "elapsedMs": 2215745, "signal": "SIGTERM"},
+    {"jobId": "cmd_mukdilnj6xvjvxv1", "ok": true, "state": "containment_failed", "elapsedMs": 2197363, "signal": "SIGTERM"},
+    {"jobId": "cmd_mukdizds4u8oz5jj", "ok": true, "state": "containment_failed", "elapsedMs": 2179571, "signal": "SIGTERM"},
+    {"jobId": "cmd_mukdw6hndjc4ktrt", "ok": true, "state": "exited", "elapsedMs": 1563834, "exitCode": 0, "stdout_truncated": "Test Files  3 passed (3) / Tests  9 passed (9)"},
+    {"jobId": "cmd_mukefcxdv2esxcmo", "ok": true, "state": "containment_failed", "elapsedMs": 669030, "signal": "SIGTERM"}
+  ],
+
+  "PRIOR_TURN_CORRECTION": "Earlier turns (82c3a6c91 and prior) incorrectly asserted the substrate command_status tool was unreachable. It IS reachable and was used to consume all 8 held observations this turn. See 02-observation-consumption.md.",
 
   "EXECUTION_MODE": "vscodeTerminal (default; OPTIONAL capture pending)",
   "COMMANDJOB_MANAGER_PRESENT": "TRUE_BY_STATIC_RECON",
