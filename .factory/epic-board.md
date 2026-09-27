@@ -14488,3 +14488,39 @@ finalization prompt mentions "command_status"
 **Falsifiability:** If, after a clean install and full restart, the finalization continuation reports `provider_bound_tool_names` = `{command_status, ...}` AND the agent still claims `command_status` is unavailable, the invariant is falsified and the diagnosis shifts to `HALT_TOOL_AVAILABILITY_CLAIM_CONTRADICTED` (model/tool-schema mapping, not tool registration).
 
 No further instrumentation required before the live diagnostic; the captures are read-only from the installed artifact and one fresh finalization-turn trace.
+
+---
+
+## ACT-CLINEMM-FINALIZATION-TOOL-SURFACE-LIVE01 — static-recon update
+
+**Status:** STATIC_RECON_COMPLETE — operator live capture of B6 required to close.
+
+**Committed at:** `82c3a6c91` (on top of `6bf9494d8`).
+
+**Discriminator B0..B6 outcomes:**
+
+| Boundary | Verdict | Evidence |
+|---|---|---|
+| B0 installed artifact contains `0a5369661` consumer fix | REFUTED-by-A | `git merge-base --is-ancestor 0a5369661 7cbca60b0` returns 0 |
+| B1 `commandJobManager_present` | REFUTED-by-B | static chain `vscode-session-host.ts:276` |
+| B2 `command_status_created` | REFUTED-by-C | static chain `vscode-runtime-builder.ts:270` |
+| B3 `command_status_policy_enabled` | REFUTED-by-D | unlisted in `sdk-tool-policies.ts` |
+| B4 `AgentRuntime.tools ⊇ {command_status}` | REFUTED-by-E | static chain `agent-runtime.ts:1422-1423` |
+| B5 `provider_bound ⊇ {command_status}` | REFUTED-by-E | static chain `agent-runtime.ts:1904-1908` |
+| **B6 model invokes `command_status`** | **OPEN** | **live capture required** |
+
+**Captured (static-only):**
+
+| Field | Value |
+|---|---|
+| `VSIX_SHA256` | `273f5d5155efb0560ed4b9459151074c996b494f5a2f9b4d0737d90f01d47f1b` |
+| `INSTALLED_VERSION` | `4.1.16` |
+| `DOGFOOD_SOURCE_HEAD` | `7cbca60b0` (named-commit of live-witness VSIX) |
+| Live witness sessionId | `1790545638594_95udl` |
+| Held observations | 8 / 8 unconsumed (no `command_status` in agent-callable surface) |
+
+**Halt classification:** `PENDING_OPERATOR_LIVE_CAPTURE_B6`.
+
+**Successor ACT (gated on B6):** If live capture shows `provider_bound_tool_names ⊇ {command_status}` AND model still claims unavailable → `HALT_TOOL_AVAILABILITY_CLAIM_CONTRADICTED` → successor ACT to repair tool-schema/name mapping. Otherwise if all six boundaries PASS live → the runtime behavior matches the static chain → finalization-turn inability to call `command_status` would point to an upstream layer outside the discriminator chain (e.g. prompt-tool mismatch or model-side reasoning failure), which this ACT explicitly does NOT cover.
+
+**P2 residue flagged by reviewer (out of ACT scope):** three EOF-whitespace errors across the 2-commit range (`6bf9494d8` + `82c3a6c91`); stale `.factory/gate-summary.json`.

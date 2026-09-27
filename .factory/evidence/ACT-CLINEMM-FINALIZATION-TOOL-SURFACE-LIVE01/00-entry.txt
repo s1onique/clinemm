@@ -13,30 +13,47 @@ live_witness_held_jobIds:  cmd_mukdnd5p8gtdc9p6, cmd_mukdnsrlor2ld8tq, cmd_mukdp
 observations_consumed:     0 of 8 (no command_status tool accessible from agent surface)
 command_status_present_in_provider_bound_tool_names: PENDING
 
-ENTRY_HEAD:                (filled at closure — PENDING)
-SUBJECT_HEAD:              (filled at closure — PENDING; expected equal to ENTRY_HEAD since this ACT is DIAGNOSE-only)
+ENTRY_HEAD:                82c3a6c91
+SUBJECT_HEAD:              82c3a6c91 (DIAGNOSE-only; subject HEAD = entry HEAD)
 
 capture_state:
-  SOURCE_HEAD                     = PENDING (will record this commit)
-  DOGFOOD_SOURCE_HEAD             = PENDING
-  VSIX_SHA256                     = PENDING (output of `shasum -a 256 dist/clinemm-*.vsix`)
-  INSTALLED_VERSION               = PENDING
+  SOURCE_HEAD                     = 82c3a6c91de087a7e6a4aaac58d27758d2a9d7c4
+  DOGFOOD_SOURCE_HEAD             = 7cbca60b0 (named-commit of live-witness VSIX;
+                                              0a5369661 IS ancestor — fix IS in artifact)
+  VSIX_SHA256                     = 273f5d5155efb0560ed4b9459151074c996b494f5a2f9b4d0737d90f01d47f1b
+  INSTALLED_VERSION               = 4.1.16 (apps/vscode/package.json)
 
   finalization_sessionId          = 1790545638594_95udl (LIVE WITNESS)
-  finalization_promptId           = PENDING
+  finalization_promptId           = PENDING (cannot extract from this surface)
 
-  executionMode                   = PENDING (backgroundExec | foreground)
-  commandJobManager_present       = PENDING
+  executionMode                   = vscodeTerminal (default per VscodeSessionHost.create
+                                                 when no override; OPTIONAL capture)
+  commandJobManager_present       = TRUE (static recon: always instantiated at
+                                          vscode-session-host.ts:276 inside
+                                          getTerminalManager block; static recon only)
 
-  runtime_builder_tool_names      = PENDING (set<string>)
-  agent_runtime_tool_names        = PENDING (set<string>)
-  provider_bound_tool_names       = PENDING (set<string>)
+  runtime_builder_tool_names      = PENDING (static: set per createVscodeExtraTools
+                                             contract — see 01-static-recon.md B2/B4/B5)
+  agent_runtime_tool_names        = PENDING (static: tools Map keys include command_status)
+  provider_bound_tool_names       = PENDING (static: [..this.tools.values()] mapped
+                                             unconditionally to request.tools)
 
-  command_status_created          = PENDING (boolean)
-  command_status_policy_enabled   = PENDING (boolean)
-  command_status_provider_visible = PENDING (boolean)
+  command_status_created          = TRUE_BY_STATIC_RECON
+  command_status_policy_enabled   = TRUE_BY_STATIC_RECON (SDK default for unlisted)
+  command_status_provider_visible = TRUE_BY_STATIC_RECON (no policy filter at request build)
 
-diagnostic_hypotheses_A_to_E:    PENDING
-halt_classification:             PENDING
+diagnostic_hypotheses_A_to_E:
+  A_STALE_DOGFOOD_ARTIFACT        = REFUTED (0a5369661 ancestor of 7cbca60b0)
+  B_COMMAND_JOB_MANAGER_MISSING   = REFUTED (static chain confirms CommandJobManager
+                                            instantiation + threading)
+  C_DIFFERENT_RUNTIME_BUILDER     = REFUTED (single production call site
+                                            vscode-session-host.ts:383)
+  D_TOOL_POLICY_FILTER            = REFUTED (command_status unlisted; SDK default = enabled)
+  E_TOOL_LOST_IN_AGENT_RUNTIME    = REFUTED at registration AND at provider-bound set
 
-stop_conditions_met:             PENDING (one of four HALTs OR all data captured and verdict assigned)
+halt_classification:             PENDING_OPERATOR_CAPTURE (only B6 remains:
+                                                            live confirmation that
+                                                            the model received the tool)
+
+stop_conditions_met:             PARTIAL (static recon closes 5 of 6 boundaries;
+                                         live capture closes B6)

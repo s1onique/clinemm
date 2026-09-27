@@ -4,7 +4,9 @@
 
 **Primary purpose:** Trace one real BCB finalization continuation from installed-artifact identity (`VSIX_SHA256`) through the `runtime-builder` inputs to the actual provider-visible tool names, and explain why `command_status` is absent on the dispatched finalization turn despite the prior "consumer-availability" fix (which widened `if (options.commandJobManager)` regardless of `executionMode`).
 
-**Live witness:** session `1790545638594_95udl` with seven held `cmd_mukd*` jobIds. `0/7` observations consumed because the runtime's tool surface available to this agent does NOT include `command_status`.
+**Live witness:** session `1790545638594_95udl` with seven held `cmd_mukd*` jobIds. `0/8` observations consumed (the 8th, `cmd_mukefcxdv2esxcmo`, was spawned by this agent's own `find` call and is itself proof of the same defect) because the runtime's tool surface available to this agent does NOT include `command_status`.
+
+**Static-recon status (committed at `82c3a6c91`):** Hypotheses A–E all REFUTED by the static chain (see `01-static-recon.md`). Only B6 (`TOOL_AVAILABILITY_CLAIM_CONTRADICTED`) remains — requires operator live capture.
 
 **Scope:** DIAGNOSE only. No production-side edits in this ACT. Repair is gated on the named HALT classification.
 
