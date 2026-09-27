@@ -63,11 +63,28 @@ bundling/import-resolution order in bun:test differs from a plain `bun -e`
 script and from vitest's module-isolation model. Net result: at the moment
 `createShellTool` dereferences `createTool`, the binding is `undefined`.
 
-This is a known bun:test runner limitation, not a defect in
-`@cline/shared`, `@cline/core`, or `vscode-runtime-builder.ts`. The `LIVE01`
-incidental capture, the BCB01 closure, and `createVscodeRunCommandsTool`'s
-production path are all unaffected because they execute OUTSIDE the bun:test
-process.
+This is a **test-topology interaction** specific to the current combination
+of (a) `mock.module(...)` registration order at file-load time and (b)
+`@cline/shared`'s bundled ESM `export { createTool } from "./tools/create"`
+re-export chain. The evidence here proves:
+
+```text
+CURRENT_BCCA_TEST_TOPOLOGY + bun:test + current mock.module/import ordering
+  → createTool unavailable
+```
+
+It does **NOT** yet prove `bun:test itself has an irreducible bug`. Bun's
+documented behavior explicitly supports `mock.module()` for ESM/CommonJS
+and recommends preloading mocks when import/evaluation ordering matters —
+the right long-term fix is likely a Bun preload / module-isolation tweak,
+not a kernel-of-the-bun fix. (This is recorded as a separate non-blocking
+P1 backlog item: `repair BCCA integration test topology using Bun preload
+/ module isolation, then remove the five skipIf gates`.)
+
+It is **not** a defect in `@cline/shared`, `@cline/core`, or
+`vscode-runtime-builder.ts`. The `LIVE01` incidental capture, the BCB01
+closure, and `createVscodeRunCommandsTool`'s production path are all
+unaffected because they execute OUTSIDE the bun:test process.
 
 ## Mitigation applied (CORRECTION01)
 

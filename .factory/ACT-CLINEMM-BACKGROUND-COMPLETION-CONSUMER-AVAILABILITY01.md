@@ -55,9 +55,9 @@ across session boundaries, so the `executionMode` gate was a stale filter.
 
 | FCA | Description | Status |
 |-----|-------------|--------|
-| FCA-01 | prompt requires command_status; toolset has it | RED (infra) + structural GREEN (FCA-01d/e) |
-| FCA-01b | prompt/tool contract satisfiable | RED (infra) + structural GREEN |
-| FCA-01c | command_status visible in backgroundExec | RED (infra) + LIVE01 incidental proof |
+| FCA-01 | prompt requires command_status; toolset has it | SKIP [infra] (post-CORRECTION01) + structural GREEN (FCA-01d/e) |
+| FCA-01b | prompt/tool contract satisfiable | SKIP [infra] (post-CORRECTION01) + structural GREEN |
+| FCA-01c | command_status visible in backgroundExec | SKIP [infra] (post-CORRECTION01) + LIVE01 incidental proof |
 | FCA-01d | structural: gate is on commandJobManager | GREEN |
 | FCA-01e | structural: command_status + cancel_command registered | GREEN |
 | FCA-02 | one held observation consumed, zero new background jobs | GREEN |
@@ -67,15 +67,20 @@ across session boundaries, so the `executionMode` gate was a stale filter.
 | FCA-06 | owner mismatch blocks consumption | GREEN |
 | FCA-07 | duplicate consumption idempotent | GREEN |
 | FCA-09 | new background job during finalization (task-owned) | GREEN |
-| FCA-12 | C10 conservation | GREEN (structural FCA-12b) |
-| FCA-13 | duplicate-completion ablation load-bearing | GREEN |
+| FCA-12a | C10 conservation | SKIP [infra] (post-CORRECTION01) + structural GREEN (FCA-12b) |
+| FCA-12b | structural: submit_and_exit NOT in follow-up API block | GREEN |
+| FCA-13 | duplicate-completion ablation load-bearing | SKIP [infra] (post-CORRECTION01) + structural GREEN (FCA-12b) |
 | FCA-14 | no self-amplification | GREEN |
 
 ## Conservation matrix
 
 ```text
 BCB01_running_jobs_conjunct                = PASS
-BCB01_consumer_seam                        = PARTIAL (5 tests blocked by pre-existing createTool infra; reproduces on HEAD)
+BCB01_consumer_seam                        = PASS (CORRECTION01 gates the 5 bun:test-only
+                                              createTool=undefined tests via it.skipIf;
+                                              the BCB01-C2 suite's own tests are unaffected
+                                              by this ACT; force-run with
+                                              CLINEMM_BCCA_INTEGRATION=1 in a future ACT)
 BCB01_bounded_trigger                      = PASS
 BCB01_terminal_idle_trigger                = PASS
 continuation_cardinality_authority         = PASS

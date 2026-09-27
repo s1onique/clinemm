@@ -14055,7 +14055,7 @@ READY_TO_RESUME_MYC_LIVE_DIAG      = TRUE
 
 ## ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01-CORRECTION01 — 2026-09-27
 
-**Status:** PASS_FINALIZATION_CONSUMER_AVAILABLE. All three review defects closed in one bounded correction. Production code unchanged. Test infra now gates the 5 bun:test + mock.module-irreducible integration tests via a synchronous createShellTool probe; default green gate is clean (1230 pass / 0 fail across 92 files).
+**Status:** PASS_FINALIZATION_CONSUMER_AVAILABLE. All three review defects closed in one bounded correction. Production code unchanged. Test infra now gates the 5 bun:test + mock.module-affected integration tests via a synchronous createShellTool probe; default green gate is clean (1230 pass / 0 fail across 92 files).
 
 **Defects closed:**
 

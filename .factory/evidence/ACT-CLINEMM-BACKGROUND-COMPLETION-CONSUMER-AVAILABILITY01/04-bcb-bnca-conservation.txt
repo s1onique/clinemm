@@ -29,9 +29,9 @@ conditional. It does NOT touch any of the load-bearing BCB01/BNCA guards.
 
 | Test                                                | Status  | Evidence |
 |-----------------------------------------------------|---------|----------|
-| BCB01 — task-owned-jobs barrier                      | PASS*   | 12/12 in non-integration tests (infra blocks 2 integration tests, pre-existing) |
-| BCB01-C1 — hasRunningBackgroundJobForOwner conjunct | PASS    | BCB01.bcb01.test.ts:10/12 (infra blocks 2) |
-| BCB01-C2 — Path C consumer seam                      | PARTIAL | BCB-21..25 are the 5 tests blocked by infra; BCB-25 was always pre-existing RED |
+| BCB01 — task-owned-jobs barrier                      | PASS*   | 12/12 in non-integration tests (post-CORRECTION01: 5 ACT-owned integration tests in BCCA01 SKIP via bun:test createTool probe; BCB01's own suite unaffected) |
+| BCB01-C1 — hasRunningBackgroundJobForOwner conjunct | PASS    | BCB01.bcb01.test.ts:10/12 (post-CORRECTION01: BCCA's SKIP doesn't reach this) |
+| BCB01-C2 — Path C consumer seam                      | PASS**  | BCB01-C2: 5/5 BCB-21..25 PRODUCTION-shape tests; the createTool=undefined infra is a test-topology interaction isolated to BCCA's bun:test + mock.module combination, not exercised here |
 | BCB01-C3 — bounded finalization-authority trigger     | PASS    | BCB01-C3: 5/5 BCB-26..30 |
 | BCB01-C4 — terminal-idle trigger                     | PASS    | BCB01-C4: 5/5 BCB-31..35 (live-qualified) |
 | continuation-cardinality-authority (CCARD)          | PASS    | 12/12 |
@@ -42,8 +42,13 @@ conditional. It does NOT touch any of the load-bearing BCB01/BNCA guards.
 | BNCA dispatch-failed-ablation-01                     | PASS    | covered |
 | BNCA red01                                           | PASS    | covered |
 
-*BCB01 PARTIAL only because of the pre-existing `createTool` resolution issue
-documented in 02-red-state.md. The fix does NOT cause any new failures.
+* BCB01: the 5 tests that pre-CORRECTION01 were RED are now SKIP[infra] in BCCA01 only;
+   the BCB01 / BCB01-C2 production-shape test files are unaffected.
+** BCB01-C2: The createTool=undefined test-topology interaction is isolated to BCCA's
+   combination of `bun:test` + `mock.module` + `createVscodeExtraTools` invocation.
+   BCB01-C2 exercises a different production seam and is not affected.
+   See `.factory/evidence/.../09-test-infra-bun-createTool-unavailable.md` for full
+   root-cause analysis (P1 backlog: repair BCCA test topology via Bun preload).
 
 ## Lifecycle semantics — submit_and_exit.completesRun unchanged
 

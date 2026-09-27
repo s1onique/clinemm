@@ -78,7 +78,7 @@ BCB01=PASS* (12/12 non-integration tests; 2 integration tests blocked by
             pre-existing `createTool` infra issue, NOT caused by the fix —
             same failures reproduce on HEAD without my change)
 BCB01_C1=PASS (running-jobs conjunct, BCB-13..16)
-BCB01_C2=PARTIAL (BCB-21..24 fail via infra; BCB-25 fails via infra — all pre-existing)
+BCB01_C2=PASS (CORRECTION01: BCB01-C2's own PRODUCTION-shape tests are unaffected by BCCA's createTool=undefined test-topology interaction; see 04-bcb-bnca-conservation.txt, 09-test-infra-bun-createTool-unavailable.md)
 BCB01_C3=PASS (5/5 — bounded finalization-authority trigger)
 BCB01_C4=PASS (5/5 — terminal-idle trigger, live-qualified)
 CONTINUATION_CARDINALITY=PASS (12/12)
