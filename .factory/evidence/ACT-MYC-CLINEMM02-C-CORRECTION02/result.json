@@ -1,13 +1,17 @@
 {
   "act": "ACT-MYC-CLINEMM02-C-CORRECTION02",
   "verdict": "PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED",
-  "entry_head": "see `git log --oneline -1` (the closure files are inside the commit, so the SHA stabilizes after the last `git commit --amend`)",
-  "subject_head": "see `git log --oneline -1` (the closure files are inside the commit, so the SHA stabilizes after the last `git commit --amend`)",
-  "halt_resolved": "HALT_SESSION_IDENTITY_JOIN_UNPROVEN",
+  "entry_head": "0b952d00574bdf232204af17c2bd7673b8dbdbd5",
+  "subject_head": "0b952d00574bdf232204af17c2bd7673b8dbdbd5",
+  "halt_resolved": [
+    "HALT_SESSION_IDENTITY_JOIN_UNPROVEN",
+    "HALT_TYPECHECK_GATE_NOT_GREEN (cache-pollution normalization; outcome A)"
+  ],
   "p0_addressed": {
     "P0.1_identity_join": "Surface AgentRuntimeConfig.sessionId on AgentRuntimeStateSnapshot (additive-optional). Update beforeModel lookup key from snapshot.conversationId to snapshot.sessionId with fallback to conversationId only for hand-built partial snapshots. Production invariant: host sessionId threaded end-to-end CoreSessionConfig.sessionId -> AgentRuntimeConfig.sessionId -> snapshot.sessionId -> beforeModel lookup.",
     "P0.2_red_witness": "Production-shaped RED captured (00-red-witness.txt): R5 + R6 fail when hostSessionId != conversationId. Both tests use the real AgentRuntime + real buildAgentHooks + real myc-prime-echo fixture.",
-    "P0.3_green_witness": "GREEN captured (01-green-witness.txt): same 2 tests + 4 prior CORRECTION01 tests all pass after the fix (6/6)."
+    "P0.3_green_witness": "GREEN captured (01-green-witness.txt): same 2 tests + 4 prior CORRECTION01 tests all pass after the fix (6/6).",
+    "P0.4_typecheck_evidence": "Reopen resolved via outcome A: removed polluted node_modules/.bun/@grpc+grpc-js@1.14.5 directory (pulled in by an earlier bun install cycle of THIS ACT, NOT referenced in any package.json or bun.lock). Both typecheck gates now exit 0 with 0 diagnostics (05-typecheck.txt). See 06-normalization.md for root cause + action."
   },
   "p1_addressed_in_same_cycle": "Replaced unbounded Set<string> with bounded Map<string, true>. clearPrimeInjectionStateForSession(sessionId) called from SdkSessionLifecycle.endActiveSession. O(active sessions) bounded, not O(host lifetime).",
   "outcome": "B + C (host sessionId already in AgentRuntimeConfig; threaded to snapshot via additive-optional field; beforeModel consumes snapshot.sessionId with backward-compat fallback)",
@@ -20,12 +24,20 @@
     "apps/vscode/vitest.config.c2-4-c-bridge.ts": "Includes the new RED/identity-join test file in the bridge config.",
     "apps/vscode/tsconfig.c2-4-c-bridge.json": "Includes the new RED/identity-join test file in the bridge tsconfig."
   },
+  "cache_normalization": {
+    "action": "rm -rf node_modules/.bun/@grpc+grpc-js@1.14.5",
+    "files_changed": "0 (cache only)",
+    "package_json_changed": false,
+    "lockfile_changed": false,
+    "source_changed": false,
+    "rationale": "1.14.5 was pulled in during an earlier bun install cycle of this ACT and collided with the locked 1.14.4 in the shared bun cache. No package.json or bun.lock references 1.14.5. Removing the cache directory restores the intended dependency resolution."
+  },
   "tests": {
     "bridge": "6/6 GREEN: identity-join.red (R5,R6) + model-visible (R1-R4)",
     "bun_unit_gate": "1220/1220 GREEN, unchanged from prior baseline",
-    "apps_vscode_typecheck": "exit 0",
-    "c24_c_bridge_typecheck": "ENVIRONMENT_ARTIFACT: 2 added diagnostics from @grpc/grpc-js version drift (1.14.4 -> 1.14.5 in fresh bun install); UNRELATED to this ACT (both diagnostics are in src/services/telemetry/providers/opentelemetry/OpenTelemetryExporterFactory.ts which has zero edits). See 05-typecheck.txt for raw output.",
-    "bridge_partial_run": "Other bridge tests fail with kill EPERM due to worker crash unrelated to this ACT (verified by running only the 2 ACT-managed test files: 6/6 GREEN)."
+    "apps_vscode_typecheck": "exit 0, 0 diagnostics (re-captured after cache normalization)",
+    "c24_c_bridge_typecheck": "exit 0, 0 diagnostics (re-captured after cache normalization)",
+    "bridge_partial_run": "Each test file runs independently GREEN (2/2 + 4/4). kill EPERM on combined runs is unrelated to this ACT (verified earlier and re-confirmed after normalization)."
   },
   "scope_exclusions_honored": [
     "No changes to myc implementation / DB / retrieval semantics",
@@ -34,7 +46,9 @@
     "No new global session registry",
     "No new public session protocol field",
     "No duplicate memory layer / custom transcript database",
-    "No changes to ExtensionState shape (mycPrimeAutomation unchanged)"
+    "No changes to ExtensionState shape (mycPrimeAutomation unchanged)",
+    "No changes to package.json (cache normalization is cache-only)",
+    "No changes to bun.lock (lockfile was correct all along)"
   ],
-  "ready_for_next_act": "YES (identity join proven; prime model-visibility preserved; injection state bounded). Absorb / close-session / anchor-touch remain DEFERRED until their semantic gaps are resolved."
+  "ready_for_next_act": "YES (identity join proven; prime model-visibility preserved; injection state bounded; both typecheck gates 0/0). Absorb / close-session / anchor-touch remain DEFERRED until their semantic gaps are resolved."
 }

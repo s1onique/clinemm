@@ -1,30 +1,37 @@
-[1m[34mCompiling Protocol Buffers...[39m[22m
-[36mProcessing 24 proto files from[39m /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/proto
-Generated ProtoBus files at:
-- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/webview-ui/src/services/grpc-client.ts
-- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/protobus-service-types.ts
-- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/protobus-services.ts
-- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/standalone/protobus-server-setup.ts
-Generated Host Bridge client files at:
-- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/host-bridge-client-types.ts
-- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/standalone/host-bridge-clients.ts
-- /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/src/generated/hosts/vscode/hostbridge-grpc-service-config.ts
-Formatted 329 files in 33ms. Fixed 1 file.
-src/services/telemetry/providers/opentelemetry/OpenTelemetryExporterFactory.ts(57,6): error TS2322: Type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/channel-credentials").ChannelCredentials' is not assignable to type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/channel-credentials").ChannelCredentials'.
-  Types of property 'compose' are incompatible.
-    Type '(callCredentials: import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/call-credentials").CallCredentials) => import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_module...' is not assignable to type '(callCredentials: import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/call-credentials").CallCredentials) => import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_module...'.
-      Types of parameters 'callCredentials' and 'callCredentials' are incompatible.
-        Type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/call-credentials").CallCredentials' is not assignable to type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/call-credentials").CallCredentials'.
-          The types returned by 'generateMetadata(...)' are incompatible between these types.
-            Type 'Promise<import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/metadata").Metadata>' is not assignable to type 'Promise<import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/metadata").Metadata>'.
-              Type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/metadata").Metadata' is not assignable to type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/metadata").Metadata'.
-                Property 'internalRepr' is protected but type 'Metadata' is not a class derived from 'Metadata'.
-src/services/telemetry/providers/opentelemetry/OpenTelemetryExporterFactory.ts(123,6): error TS2322: Type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/channel-credentials").ChannelCredentials' is not assignable to type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/channel-credentials").ChannelCredentials'.
-  Types of property 'compose' are incompatible.
-    Type '(callCredentials: import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/call-credentials").CallCredentials) => import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_module...' is not assignable to type '(callCredentials: import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/call-credentials").CallCredentials) => import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_module...'.
-      Types of parameters 'callCredentials' and 'callCredentials' are incompatible.
-        Type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/call-credentials").CallCredentials' is not assignable to type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/call-credentials").CallCredentials'.
-          The types returned by 'generateMetadata(...)' are incompatible between these types.
-            Type 'Promise<import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/metadata").Metadata>' is not assignable to type 'Promise<import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/metadata").Metadata>'.
-              Type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.5/node_modules/@grpc/grpc-js/build/src/metadata").Metadata' is not assignable to type 'import("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/node_modules/.bun/@grpc+grpc-js@1.14.4/node_modules/@grpc/grpc-js/build/src/metadata").Metadata'.
-                Property 'internalRepr' is protected but type 'Metadata' is not a class derived from 'Metadata'.
+=================================================
+ACT-MYC-CLINEMM02-C-CORRECTION02 — Typecheck Gate
+Re-captured after bun cache normalization (see 06-normalization.md).
+=================================================
+
+Gate 1 — apps/vscode baseline (bun run check-types)
+---------------------------------------------------
+Command: bun run check-types
+Output (cleaned of ANSI):
+  $ bun run protos && bunx tsc --noEmit && bun run check-types:compat && cd webview-ui && bunx tsc --noEmit
+  $ node scripts/build-proto.mjs
+  Compiling Protocol Buffers...
+  Processing 24 proto files from /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/proto
+  Generated ProtoBus files at:
+  - webview-ui/src/services/grpc-client.ts
+  - src/generated/hosts/vscode/protobus-service-types.ts
+  - src/generated/hosts/vscode/protobus-services.ts
+  - src/generated/hosts/standalone/protobus-server-setup.ts
+  Generated Host Bridge client files at:
+  - src/generated/hosts/host-bridge-client-types.ts
+  - src/generated/hosts/standalone/host-bridge-clients.ts
+  - src/generated/hosts/vscode/hostbridge-grpc-service-config.ts
+  $ biome format --config-path ./biome.jsonc src/shared/proto src/core/controller src/hosts/ webview-ui/src/services src/generated --write --no-errors-on-unmatched
+  Formatted 329 files in 37ms. Fixed 1 file.
+  $ bunx tsc --project tsconfig.vscode-compat.json --noEmit
+  (no diagnostics)
+  $ cd webview-ui && bunx tsc --noEmit
+  (no diagnostics)
+EXIT=0
+
+Gate 2 — c24-c-bridge typecheck (bunx tsc -p tsconfig.c2-4-c-bridge.json --noEmit)
+--------------------------------------------------------------------------------
+Command: cd apps/vscode && bunx tsc -p tsconfig.c2-4-c-bridge.json --noEmit
+Output: (no diagnostics)
+EXIT=0
+
+DIAGNOSTIC COUNT: 0 (both gates)

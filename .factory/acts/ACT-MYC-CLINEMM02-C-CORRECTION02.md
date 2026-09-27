@@ -1,10 +1,33 @@
-# ACT-MYC-CLINEMM02-C-CORRECTION02 — Identity Join Proven + Bounded
+# ACT-MYC-CLINEMM02-C-CORRECTION02 — Identity Join Proven + Bounded + Typecheck=0
 
 ACT=ACT-MYC-CLINEMM02-C-CORRECTION02
 VERDICT=PASS_IDENTITY_JOIN_PROVEN_AND_BOUNDED
-ENTRY_HEAD=see `git log --oneline -1` (the closure files are inside the commit, so the SHA stabilizes after the last `git commit --amend`)
-SUBJECT_HEAD=see `git log --oneline -1` (the closure files are inside the commit, so the SHA stabilizes after the last `git commit --amend`)
+ENTRY_HEAD=0b952d00574bdf232204af17c2bd7673b8dbdbd5
+SUBJECT_HEAD=0b952d00574bdf232204af17c2bd7673b8dbdbd5
 HALT_RESOLVED=HALT_SESSION_IDENTITY_JOIN_UNPROVEN
+HALT_RESOLVED_2=HALT_TYPECHECK_GATE_NOT_GREEN (cache-pollution normalization; outcome A; see 06-normalization.md)
+
+## Reopen closure (post-cache-normalization)
+
+Reviewer reopened on `HALT_TYPECHECK_GATE_NOT_GREEN`: the previous
+`05-typecheck.txt` reported 2 `TS2322` diagnostics in
+`apps/vscode/src/services/telemetry/providers/opentelemetry/OpenTelemetryExporterFactory.ts:57,123`
+caused by `@grpc/grpc-js@1.14.4` colliding with `@grpc/grpc-js@1.14.5`
+in the workspace's shared bun cache. The 1.14.5 was pulled in during
+an earlier `bun install` cycle of THIS ACT (no package.json file
+references 1.14.5). Per reviewer path A, normalizing the cache to
+match the lockfile (the smallest possible revert) brings both
+typecheck gates to **0 diagnostics, exit 0**:
+
+- `bun run check-types` exit 0 (apps/vscode baseline)
+- `bunx tsc -p tsconfig.c2-4-c-bridge.json --noEmit` exit 0 (bridge)
+
+See `06-normalization.md` for the captured root cause, normalization
+action, and gate re-run.
+
+No source file was modified. No package.json was modified. No
+lockfile was rewritten. Only the polluted bun-cache directory
+`node_modules/.bun/@grpc+grpc-js@1.14.5` was removed.
 
 ## Reviewer verdict (verbatim)
 

@@ -110,6 +110,32 @@ with executable evidence through the real
 `CoreSessionConfig.sessionId` → `AgentRuntimeConfig.sessionId` →
 `AgentRuntime.snapshot().sessionId` → `beforeModel` lookup chain.
 
+---
+
+## HALT_TYPECHECK_GATE_NOT_GREEN — resolved (cache normalization, outcome A) — same commit
+
+**Status:** RESOLVED via outcome A (clean locked environment → typecheck=0). No code change; cache-only normalization.
+
+**Root cause:** The workspace's shared bun cache (`node_modules/.bun/`) contained a polluted `@grpc+grpc-js@1.14.5` directory pulled in during an earlier `bun install` cycle of THIS ACT. `bun.lock` pins 1.14.4; no package.json in the workspace references 1.14.5. With both 1.14.4 and 1.14.5 type packages present, TypeScript emitted 2 `TS2322` diagnostics at `OpenTelemetryExporterFactory.ts:57,123` (a file with ZERO edits in this ACT) where two `ChannelCredentials` types collided.
+
+**Normalization action (cache-only, 0 files changed in repo):**
+```bash
+rm -rf node_modules/.bun/@grpc+grpc-js@1.14.5
+ls node_modules/.bun/ | grep grpc-js
+# @grpc+grpc-js@1.14.4   (locked)
+# @grpc+grpc-js@1.9.16   (transitive)
+```
+
+**Re-run gates (post-normalization):**
+- `bun run check-types` exit 0, 0 diagnostics (apps/vscode baseline)
+- `bunx tsc -p tsconfig.c2-4-c-bridge.json --noEmit` exit 0, 0 diagnostics (bridge)
+- bun unit gate: 1220/1220 GREEN (unchanged)
+- bridge tests: 6/6 GREEN (unchanged; R1-R4 + R5-R6)
+
+**Why path A is honest, not path B:** The 1.14.5 was NOT a pre-existing baseline diagnostic at entry HEAD `c4d2ceecf` — it was introduced by my own `bun install` cycle during this ACT. The diagnostics were therefore not "demonstrated pre-existing on the true pre-ACT baseline". The reviewer explicitly rejected that classification ("ACT environment changed → new diagnostics appeared → call them pre-existing because touched code is elsewhere" is "not acceptable"). Outcome A (cache normalization removes the pollution; genuine locked state is typecheck=0) is the correct classification.
+
+See `06-normalization.md` for the full captured root cause + action + gate re-run.
+
 ## ACT-MYC-CLINEMM02-C-CORRECTION01 — PASS_PRIME_AUTOMATION_VISIBLE — 2026-09-27
 
 **Status:** PASS_PRIME_AUTOMATION_VISIBLE. Closes the reviewer-flagged `HALT_PRIME_NOT_CONSUMED` from the prior ACT: prime text is now model-visible (injected into the FIRST model request of the session, exactly once). One bounded fix cycle; no scope creep into absorb / close-session / anchor-touch (still DEFERRED with documented reasons).
