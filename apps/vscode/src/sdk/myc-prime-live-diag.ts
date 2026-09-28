@@ -213,6 +213,22 @@ export interface MycPrimeLiveDiagReadoutEvent {
 	readonly packetBytes?: number
 	/** Bound to `capture.captureId` for the capture event. */
 	readonly captureId?: string
+	// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: bounded
+	// acquisition-failure discriminators, serialized on the `acquisition`
+	// event only. All three are bounded enum values — never free-form
+	// strings. Together with `status` they let a downstream post-mortem
+	// identify the first failed operation without reading prime text,
+	// response payloads, MCP server names, session ids, paths, or
+	// secrets. `errorCode` and `toolFound` are deliberately OMITTED
+	// from the readout (they are captured in-process for forensic
+	// post-mortem, but are implicit in the (phase, failureClass) pair
+	// and would otherwise blow the DLR-03.b size budget).
+	/** Bound to `acquisition.phase` for the acquisition event. */
+	readonly phase?: MycPrimeLiveAcquisitionPhase
+	/** Bound to `acquisition.failureClass` for the acquisition event (only when failed). */
+	readonly failureClass?: MycPrimeLiveAcquisitionFailureClass
+	/** Bound to `acquisition.sessionConnectionStatus` for the acquisition event. */
+	readonly sessionConnectionStatus?: MycPrimeLiveAcquisitionSessionConnStatus
 }
 
 /**
@@ -229,6 +245,63 @@ export type MycPrimeLiveInjectionReason =
 	| "already_injected"
 
 export type MycPrimeLiveAcquisitionStatus = "ok" | "failed" | "skipped"
+
+/**
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: bounded enum
+ * for the SEAM inside the prime acquisition path that an observation
+ * point reached. Five discrete seams in the production call chain:
+ *
+ *   1. registration_lookup : resolveMycServerName              (myc-prime-automation.ts:81-95)
+ *   2. session_connection  : mcpHub.callTool -> ensureSessionConnection (McpHub.ts:467-720)
+ *   3. tool_discovery      : (reserved for future wire-list-tools path; NOT exercised by current code)
+ *   4. tool_call           : connection.client.request({method:"tools/call", ...}) (McpHub.ts:2178-2191)
+ *   5. result_parse        : first text-block text extraction   (myc-prime-automation.ts:166-170)
+ *
+ * Exhaustive enumeration so a downstream post-mortem can identify
+ * the SEAM without reading the prime text or the response payload.
+ */
+export type MycPrimeLiveAcquisitionPhase =
+	| "registration_lookup"
+	| "session_connection"
+	| "tool_discovery"
+	| "tool_call"
+	| "result_parse"
+
+/**
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: bounded enum
+ * for the SPECIFIC failure mode inside the phase. Each value maps
+ * to a single production code site so a discriminator tree can
+ * identify the failing operation without consulting the error string.
+ */
+export type MycPrimeLiveAcquisitionFailureClass =
+	// registration_lookup
+	| "no_myc_server"
+	// session_connection
+	| "no_static_connection"
+	| "unsupported_transport"
+	| "spawn_failed"
+	| "connect_timeout"
+	| "init_probe_failed"
+	| "session_deferred_no_id"
+	// tool_discovery
+	| "tool_not_found"
+	// tool_call
+	| "client_request_failed"
+	| "tool_returned_error"
+	| "tool_timeout"
+	// result_parse
+	| "empty_text"
+	| "non_text_response"
+	| "missing_content"
+
+/**
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: bounded enum
+ * for the post-call `ensureSessionConnection` outcome. Carries the
+ * shape needed to discriminate "lazy child spawned" from "lazy child
+ * reused" from "no child available" — independent of the failureClass
+ * that gets attached to the `phase`.
+ */
+export type MycPrimeLiveAcquisitionSessionConnStatus = "not_attempted" | "spawned" | "reused" | "unavailable" | "deferred"
 
 /**
  * One entry per host session id. The entry is keyed by the same id used
@@ -316,6 +389,50 @@ export interface MycPrimeLiveDiagnostic {
 		/** Truncated message on failure; NEVER the prime text. */
 		error?: string
 		ts?: number
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: the
+		// bounded (phase, failureClass) pair that identifies the FIRST
+		// failed operation inside `runMycPrimeOnSessionStart`. All five
+		// fields below are bounded enum values — never free-form strings
+		// — and the in-process entry plus the readout event are the only
+		// surfaces that may carry them. None of them leak prime text,
+		// response payloads, MCP server names, paths, or secrets.
+		/**
+		 * The SEAM inside the prime acquisition path that the
+		 * observation reached. One of five discrete phases
+		 * (see `MycPrimeLiveAcquisitionPhase`). Required on every
+		 * `recordMycPrimeLiveAcquisition` call.
+		 */
+		phase?: MycPrimeLiveAcquisitionPhase
+		/**
+		 * The SPECIFIC failure mode inside the phase. Required when
+		 * `status === "failed"`; omitted when `status === "ok"` or
+		 * `status === "skipped"` (skipped has only `phase` set, no
+		 * failureClass because it is not a failure).
+		 */
+		failureClass?: MycPrimeLiveAcquisitionFailureClass
+		/**
+		 * Optional bounded MCP `ErrorCode` value (e.g. `"MethodNotFound"`,
+		 * `"InternalError"`, `"-32001"` for `McpTimeoutError`). Carried
+		 * for forensic post-mortem only — NOT serialized to the readout.
+		 * Always paired with a `failureClass` that already carries the
+		 * semantic equivalent in human-readable form.
+		 */
+		errorCode?: string
+		/**
+		 * The outcome of `ensureSessionConnection` from the perspective
+		 * of the prime acquisition call. Required on every
+		 * `recordMycPrimeLiveAcquisition` call (uses
+		 * `"not_attempted"` when the helper short-circuited at
+		 * `registration_lookup`).
+		 */
+		sessionConnectionStatus?: MycPrimeLiveAcquisitionSessionConnStatus
+		/**
+		 * True only after a successful `tools/call` (i.e. when
+		 * `status === "ok"`). False otherwise. Carried for forensic
+		 * post-mortem only — NOT serialized to the readout (it is
+		 * implicit in `status === "ok"`).
+		 */
+		toolFound?: boolean
 	}
 	readonly lookup: {
 		attempted: boolean
@@ -642,6 +759,22 @@ export function recordMycPrimeLiveAcquisition(
 		textPresent: boolean
 		textBytes: number
 		error?: string
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: bounded
+		// acquisition-failure discriminators. All five fields below are
+		// bounded enums (or bounded short strings). They are NOT logged
+		// in the legacy "error" string — the discriminated (phase,
+		// failureClass) pair is the structured alternative to the
+		// truncated error message.
+		/** SEAM inside the prime acquisition path. Required. */
+		phase: MycPrimeLiveAcquisitionPhase
+		/** Specific failure mode inside the phase. Required when status==="failed". */
+		failureClass?: MycPrimeLiveAcquisitionFailureClass
+		/** Optional bounded MCP ErrorCode. NOT serialized to the readout. */
+		errorCode?: string
+		/** Outcome of ensureSessionConnection. Required. */
+		sessionConnectionStatus: MycPrimeLiveAcquisitionSessionConnStatus
+		/** True only after a successful tools/call. NOT serialized to the readout. */
+		toolFound: boolean
 	},
 ): void {
 	if (!isMycPrimeLiveDiagEnabled()) return
@@ -652,12 +785,26 @@ export function recordMycPrimeLiveAcquisition(
 	entry.acquisition.textPresent = fields.textPresent
 	entry.acquisition.textBytes = fields.textBytes
 	entry.acquisition.error = fields.error
+	entry.acquisition.phase = fields.phase
+	entry.acquisition.failureClass = fields.failureClass
+	entry.acquisition.errorCode = fields.errorCode
+	entry.acquisition.sessionConnectionStatus = fields.sessionConnectionStatus
+	entry.acquisition.toolFound = fields.toolFound
 	entry.acquisition.ts = Date.now()
+	// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: the readout
+	// line carries the three bounded discriminators that are safe to
+	// serialize (no payload, no error string). `errorCode` and
+	// `toolFound` are in-process only — they would only re-state
+	// information already implicit in (phase, failureClass) and would
+	// otherwise blow the DLR-03.b size budget.
 	appendReadoutLine({
 		ts: new Date().toISOString(),
 		event: "acquisition",
 		sessionId,
 		status: fields.status,
+		phase: fields.phase,
+		failureClass: fields.failureClass,
+		sessionConnectionStatus: fields.sessionConnectionStatus,
 	})
 }
 
@@ -784,6 +931,13 @@ function freshEntry(sessionId: string): _MycPrimeLiveDiagEntry {
 			status: "failed",
 			textPresent: false,
 			textBytes: 0,
+			// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01:
+			// unobserved defaults — the recorder fills them in.
+			phase: undefined,
+			failureClass: undefined,
+			errorCode: undefined,
+			sessionConnectionStatus: undefined,
+			toolFound: undefined,
 		},
 		lookup: {
 			attempted: false,

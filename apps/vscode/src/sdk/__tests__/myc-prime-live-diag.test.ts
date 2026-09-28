@@ -85,6 +85,9 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — module-level diagnostic helpers", ()
 			status: "ok",
 			textPresent: true,
 			textBytes: 42,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		expect(__getAllMycPrimeLiveDiagForTests().length).toBe(0)
 		expect(getMycPrimeLiveDiag("hs-1")).toBeUndefined()
@@ -100,6 +103,9 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — module-level diagnostic helpers", ()
 			status: "ok",
 			textPresent: true,
 			textBytes: 7,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		const entries = __getAllMycPrimeLiveDiagForTests()
 		expect(entries.length).toBe(1)
@@ -133,6 +139,9 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — module-level diagnostic helpers", ()
 			status: "ok",
 			textPresent: true,
 			textBytes: 12,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		recordMycPrimeLiveLookup("hs-x", {
 			attempted: true,
@@ -191,6 +200,9 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — wired through buildAgentHooks.before
 			status: "ok",
 			textPresent: true,
 			textBytes: 11,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 
 		const result = await beforeModel(ctx)
@@ -272,6 +284,9 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — wired through buildAgentHooks.before
 			textPresent: false,
 			textBytes: 0,
 			error: "no myc server",
+			phase: "registration_lookup",
+			sessionConnectionStatus: "not_attempted",
+			toolFound: false,
 		})
 
 		const result = await beforeModel(ctx)
@@ -303,6 +318,9 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — wired through buildAgentHooks.before
 			status: "ok",
 			textPresent: true,
 			textBytes: 3,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 
 		const result = await beforeModel(ctx)
@@ -386,6 +404,10 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — wired through buildAgentHooks.before
 				textPresent: false,
 				textBytes: 0,
 				error: "myc prime failed: ECONNREFUSED",
+				phase: "tool_call",
+				failureClass: "client_request_failed",
+				sessionConnectionStatus: "spawned",
+				toolFound: false,
 			}),
 		).not.toThrow()
 		const entry = getMycPrimeLiveDiag("hs-fail")
@@ -417,6 +439,9 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — wired through buildAgentHooks.before
 			status: "skipped",
 			textPresent: false,
 			textBytes: 0,
+			phase: "registration_lookup",
+			sessionConnectionStatus: "not_attempted",
+			toolFound: false,
 		})
 
 		const result = await beforeModel(ctx)
@@ -498,6 +523,9 @@ describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — BIND + ENT
 			status: "ok",
 			textPresent: true,
 			textBytes: 7,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 
 		const result = await beforeModel(ctx)
@@ -547,6 +575,9 @@ describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — BIND + ENT
 			status: "ok",
 			textPresent: true,
 			textBytes: 11,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 
 		const result = await beforeModel(ctx)
@@ -577,6 +608,9 @@ describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — BIND + ENT
 			status: "ok",
 			textPresent: true,
 			textBytes: 7,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 
 		const result = await beforeModel(ctx)
@@ -610,6 +644,9 @@ describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — BIND + ENT
 			status: "ok",
 			textPresent: true,
 			textBytes: 8,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		startMycPrimeLiveDiag("hs-b")
 		recordMycPrimeLiveAcquisition("hs-b", {
@@ -618,6 +655,9 @@ describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — BIND + ENT
 			status: "ok",
 			textPresent: true,
 			textBytes: 8,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 
 		const ctxA = makeBeforeModelContext({
@@ -645,5 +685,253 @@ describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — BIND + ENT
 		expect(entryB?.injection.injected).toBe(false)
 		expect(entryB?.injection.reason).toBe("no_recorded_prime")
 		expect(entryB?.capture).toBeUndefined()
+	})
+})
+
+// ===========================================================================
+// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01 — bounded
+// (phase, failureClass) discriminators for the prime acquisition path
+// (ACQ-F-01..ACQ-F-08).
+//
+// The diagnostic surface grew by three required fields (`phase`,
+// `sessionConnectionStatus`, `toolFound`) and two optional fields
+// (`failureClass`, `errorCode`) on `recordMycPrimeLiveAcquisition`.
+// These tests pin the shape so the live diagnostic can identify the
+// first failed operation without consulting the (truncated) error
+// string. The discriminator tree is bounded — non-enum string values
+// are rejected at the TypeScript level (ACQ-F-07).
+// ===========================================================================
+
+describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01 — bounded acquisition discriminators", () => {
+	const originalEnv = process.env.CLINEMM_MYC_PRIME_DIAG
+
+	beforeEach(() => {
+		__resetMycPrimeLiveDiagForTests()
+		__resetPrimeInjectionStateForTests()
+		__resetMycPrimeResultsForTests()
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+	})
+
+	afterEach(() => {
+		if (originalEnv === undefined) {
+			delete process.env.CLINEMM_MYC_PRIME_DIAG
+		} else {
+			process.env.CLINEMM_MYC_PRIME_DIAG = originalEnv
+		}
+	})
+
+	it("ACQ-F-01: every bounded enum value for `phase` is accepted (5 phases)", () => {
+		const phases = ["registration_lookup", "session_connection", "tool_discovery", "tool_call", "result_parse"] as const
+		for (const phase of phases) {
+			startMycPrimeLiveDiag(`hs-acqf01-${phase}`)
+			expect(() =>
+				recordMycPrimeLiveAcquisition(`hs-acqf01-${phase}`, {
+					attempted: true,
+					serverDetected: true,
+					status: "failed",
+					textPresent: false,
+					textBytes: 0,
+					phase,
+					failureClass: "client_request_failed",
+					sessionConnectionStatus: "spawned",
+					toolFound: false,
+				}),
+			).not.toThrow()
+			const entry = getMycPrimeLiveDiag(`hs-acqf01-${phase}`)
+			expect(entry?.acquisition.phase).toBe(phase)
+		}
+	})
+
+	it("ACQ-F-02: failureClass is REQUIRED when status === 'failed' (proves the discriminator is wired)", () => {
+		startMycPrimeLiveDiag("hs-acqf02")
+		recordMycPrimeLiveAcquisition("hs-acqf02", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			phase: "session_connection",
+			failureClass: "spawn_failed",
+			sessionConnectionStatus: "unavailable",
+			toolFound: false,
+		})
+		const entry = getMycPrimeLiveDiag("hs-acqf02")
+		expect(entry?.acquisition.failureClass).toBe("spawn_failed")
+		expect(entry?.acquisition.phase).toBe("session_connection")
+		expect(entry?.acquisition.sessionConnectionStatus).toBe("unavailable")
+		expect(entry?.acquisition.toolFound).toBe(false)
+	})
+
+	it("ACQ-F-03: failureClass is OMITTED when status === 'ok' (no failure to discriminate)", () => {
+		startMycPrimeLiveDiag("hs-acqf03")
+		recordMycPrimeLiveAcquisition("hs-acqf03", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 8,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
+		})
+		const entry = getMycPrimeLiveDiag("hs-acqf03")
+		expect(entry?.acquisition.failureClass).toBeUndefined()
+		expect(entry?.acquisition.status).toBe("ok")
+		expect(entry?.acquisition.toolFound).toBe(true)
+	})
+
+	it("ACQ-F-03b: failureClass is OMITTED when status === 'skipped' (skipped is not a failure)", () => {
+		startMycPrimeLiveDiag("hs-acqf03b")
+		recordMycPrimeLiveAcquisition("hs-acqf03b", {
+			attempted: true,
+			serverDetected: false,
+			status: "skipped",
+			textPresent: false,
+			textBytes: 0,
+			error: "No myc MCP server configured",
+			phase: "registration_lookup",
+			sessionConnectionStatus: "not_attempted",
+			toolFound: false,
+		})
+		const entry = getMycPrimeLiveDiag("hs-acqf03b")
+		expect(entry?.acquisition.failureClass).toBeUndefined()
+		expect(entry?.acquisition.phase).toBe("registration_lookup")
+		expect(entry?.acquisition.status).toBe("skipped")
+	})
+
+	it("ACQ-F-04: every bounded failureClass is accepted (14 failure modes)", () => {
+		const classes = [
+			// registration_lookup
+			"no_myc_server",
+			// session_connection
+			"no_static_connection",
+			"unsupported_transport",
+			"spawn_failed",
+			"connect_timeout",
+			"init_probe_failed",
+			"session_deferred_no_id",
+			// tool_discovery
+			"tool_not_found",
+			// tool_call
+			"client_request_failed",
+			"tool_returned_error",
+			"tool_timeout",
+			// result_parse
+			"empty_text",
+			"non_text_response",
+			"missing_content",
+		] as const
+		expect(classes.length).toBe(14)
+		for (const failureClass of classes) {
+			startMycPrimeLiveDiag(`hs-acqf04-${failureClass}`)
+			expect(() =>
+				recordMycPrimeLiveAcquisition(`hs-acqf04-${failureClass}`, {
+					attempted: true,
+					serverDetected: true,
+					status: "failed",
+					textPresent: false,
+					textBytes: 0,
+					phase: "session_connection",
+					failureClass,
+					sessionConnectionStatus: "unavailable",
+					toolFound: false,
+				}),
+			).not.toThrow()
+			const entry = getMycPrimeLiveDiag(`hs-acqf04-${failureClass}`)
+			expect(entry?.acquisition.failureClass).toBe(failureClass)
+		}
+	})
+
+	it("ACQ-F-05: every bounded sessionConnectionStatus is accepted (5 statuses)", () => {
+		const statuses = ["not_attempted", "spawned", "reused", "unavailable", "deferred"] as const
+		for (const sessionConnectionStatus of statuses) {
+			startMycPrimeLiveDiag(`hs-acqf05-${sessionConnectionStatus}`)
+			expect(() =>
+				recordMycPrimeLiveAcquisition(`hs-acqf05-${sessionConnectionStatus}`, {
+					attempted: true,
+					serverDetected: true,
+					status: "failed",
+					textPresent: false,
+					textBytes: 0,
+					phase: "session_connection",
+					failureClass: "no_static_connection",
+					sessionConnectionStatus,
+					toolFound: false,
+				}),
+			).not.toThrow()
+			const entry = getMycPrimeLiveDiag(`hs-acqf05-${sessionConnectionStatus}`)
+			expect(entry?.acquisition.sessionConnectionStatus).toBe(sessionConnectionStatus)
+		}
+	})
+
+	it("ACQ-F-06: toolFound is a boolean and preserved across re-start", () => {
+		startMycPrimeLiveDiag("hs-acqf06")
+		recordMycPrimeLiveAcquisition("hs-acqf06", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 4,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
+		})
+		let entry = getMycPrimeLiveDiag("hs-acqf06")
+		expect(entry?.acquisition.toolFound).toBe(true)
+		// Re-start (simulates a later acquisition attempt for the same sessionId).
+		startMycPrimeLiveDiag("hs-acqf06")
+		recordMycPrimeLiveAcquisition("hs-acqf06", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			phase: "tool_call",
+			failureClass: "client_request_failed",
+			sessionConnectionStatus: "spawned",
+			toolFound: false,
+		})
+		entry = getMycPrimeLiveDiag("hs-acqf06")
+		expect(entry?.acquisition.toolFound).toBe(false)
+	})
+
+	it("ACQ-F-07: errorCode is a bounded short string (forensic post-mortem only)", () => {
+		startMycPrimeLiveDiag("hs-acqf07")
+		recordMycPrimeLiveAcquisition("hs-acqf07", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			phase: "tool_call",
+			failureClass: "client_request_failed",
+			errorCode: "MethodNotFound",
+			sessionConnectionStatus: "spawned",
+			toolFound: false,
+		})
+		const entry = getMycPrimeLiveDiag("hs-acqf07")
+		expect(entry?.acquisition.errorCode).toBe("MethodNotFound")
+	})
+
+	it("ACQ-F-08: in-process entry preserves the new fields (no re-start clobber)", () => {
+		startMycPrimeLiveDiag("hs-acqf08")
+		recordMycPrimeLiveAcquisition("hs-acqf08", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			error: "No per-session connection available for server: myc (session=hs-acqf08).",
+			phase: "session_connection",
+			failureClass: "no_static_connection",
+			sessionConnectionStatus: "unavailable",
+			toolFound: false,
+		})
+		const entry = getMycPrimeLiveDiag("hs-acqf08")
+		expect(entry?.acquisition.phase).toBe("session_connection")
+		expect(entry?.acquisition.failureClass).toBe("no_static_connection")
+		expect(entry?.acquisition.sessionConnectionStatus).toBe("unavailable")
+		expect(entry?.acquisition.toolFound).toBe(false)
+		expect(entry?.acquisition.error).toContain("No per-session connection available")
 	})
 })

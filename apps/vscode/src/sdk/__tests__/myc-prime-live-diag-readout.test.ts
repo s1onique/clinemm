@@ -145,6 +145,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-01: default-off inva
 			status: "ok",
 			textPresent: true,
 			textBytes: 9,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		recordMycPrimeLiveLookup("hs-dlr-01", {
 			attempted: true,
@@ -179,6 +182,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-01: default-off inva
 			status: "ok",
 			textPresent: true,
 			textBytes: 9,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		await drainMicrotasks()
 		expect(lines).toEqual([])
@@ -198,6 +204,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-01: default-off inva
 			status: "ok",
 			textPresent: true,
 			textBytes: 9,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		expect(__getAllMycPrimeLiveDiagForTests().length).toBe(1)
 	})
@@ -245,6 +254,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-02: ordered bounded 
 			status: "ok",
 			textPresent: true,
 			textBytes: 11,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		// LOOKUP
 		recordMycPrimeLiveLookup(sessionId, {
@@ -414,6 +426,13 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-03: no prime text le
 			textPresent: false,
 			textBytes: 0,
 			error: "myc server unreachable",
+			// serverDetected:false pins this to the registration
+			// phase — the server is not even visible to the helper,
+			// so session_connection / tool_call are not reached.
+			phase: "registration_lookup",
+			failureClass: "no_myc_server",
+			sessionConnectionStatus: "not_attempted",
+			toolFound: false,
 		})
 		await drainMicrotasks()
 		expect(lines.length).toBe(1)
@@ -462,6 +481,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-04: multi-session is
 			status: "ok",
 			textPresent: true,
 			textBytes: 7,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		recordMycPrimeLiveLookup("S1", {
 			attempted: true,
@@ -489,6 +511,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-04: multi-session is
 			status: "ok",
 			textPresent: true,
 			textBytes: 7,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		recordMycPrimeLiveLookup("S2", {
 			attempted: true,
@@ -619,6 +644,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-05: write failure ne
 			status: "ok",
 			textPresent: true,
 			textBytes: 7,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		recordMycPrimeLiveLookup("hs-dlr-05b", {
 			attempted: true,
@@ -833,6 +861,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-06: production write
 			status: "ok",
 			textPresent: true,
 			textBytes: 9,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		recordMycPrimeLiveLookup("hs-dlr-06c", {
 			attempted: true,
@@ -954,6 +985,9 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-07: production write
 			status: "ok",
 			textPresent: true,
 			textBytes: 7,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		recordMycPrimeLiveLookup("hs-dlr-07", {
 			attempted: true,
@@ -995,6 +1029,10 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-07: production write
 
 		// Sanity: bounded event shape preserved on every line.
 		// No prime text, no witness, no prompt, no path.
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: the
+		// bounded event shape grew by 3 fields (phase, failureClass,
+		// sessionConnectionStatus) for the `acquisition` event only.
+		// All three are bounded enum values — no payload content.
 		for (const e of events) {
 			expect(typeof e.ts).toBe("string")
 			expect(typeof e.event).toBe("string")
@@ -1016,6 +1054,10 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-07: production write
 							"reason",
 							"packetBytes",
 							"captureId",
+							// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01 additions
+							"phase",
+							"failureClass",
+							"sessionConnectionStatus",
 						].includes(k),
 					),
 			).toBe(true)
@@ -1088,5 +1130,218 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-07: production write
 		const goodEvent = JSON.parse(goodLines[0])
 		expect(goodEvent.sessionId).toBe("hs-dlr-07b-second")
 		expect(goodEvent.event).toBe("bind")
+	})
+})
+
+// ===========================================================================
+// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01 — bounded
+// (phase, failureClass) discriminators on the JSONL readout.
+// (DLR-AF-01..DLR-AF-05)
+//
+// The readout carries three new bounded fields on the `acquisition`
+// event: `phase`, `failureClass`, `sessionConnectionStatus`. The
+// off-path invariant (DLR-03.b) is preserved: the readout never
+// carries payload content, prime text, response content, MCP server
+// names, paths, or secrets. `errorCode` and `toolFound` are
+// in-process only and are NEVER serialized to the readout (they
+// would re-state information already implicit in (phase,
+// failureClass) and would otherwise blow the size budget).
+// ===========================================================================
+
+describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01 — acquisition-failure discriminators on the readout", () => {
+	const originalEnv = process.env.CLINEMM_MYC_PRIME_DIAG
+
+	beforeEach(() => {
+		__resetMycPrimeLiveDiagForTests()
+		__resetMycPrimeLiveDiagReadoutForTests()
+		__resetPrimeInjectionStateForTests()
+		__resetMycPrimeResultsForTests()
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+	})
+
+	afterEach(() => {
+		if (originalEnv === undefined) {
+			delete process.env.CLINEMM_MYC_PRIME_DIAG
+		} else {
+			process.env.CLINEMM_MYC_PRIME_DIAG = originalEnv
+		}
+	})
+
+	it("DLR-AF-01: acquisition readout carries `phase` (no payload, no error string)", async () => {
+		const { writer, lines } = capturingWriter()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => "/tmp/dlraf01")
+		setMycPrimeLiveDiagReadoutWriter(writer)
+		recordMycPrimeLiveAcquisition("hs-dlraf01", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			error: "ECONNREFUSED 127.0.0.1:31337",
+			phase: "tool_call",
+			failureClass: "client_request_failed",
+			sessionConnectionStatus: "spawned",
+			toolFound: false,
+		})
+		await drainMicrotasks()
+		expect(lines.length).toBe(1)
+		const evt = JSON.parse(lines[0])
+		expect(evt.event).toBe("acquisition")
+		expect(evt.phase).toBe("tool_call")
+		expect(evt.failureClass).toBe("client_request_failed")
+		expect(evt.sessionConnectionStatus).toBe("spawned")
+		expect(lines.join("\n")).not.toContain("ECONNREFUSED")
+		expect(lines.join("\n")).not.toContain("127.0.0.1")
+	})
+
+	it("DLR-AF-02: failureClass is OMITTED when status is 'ok' (no failure to discriminate)", async () => {
+		const { writer, lines } = capturingWriter()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => "/tmp/dlraf02")
+		setMycPrimeLiveDiagReadoutWriter(writer)
+		recordMycPrimeLiveAcquisition("hs-dlraf02", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 8,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
+		})
+		await drainMicrotasks()
+		expect(lines.length).toBe(1)
+		const evt = JSON.parse(lines[0])
+		expect(evt.status).toBe("ok")
+		expect(evt.phase).toBe("tool_call")
+		expect(evt.failureClass).toBeUndefined()
+	})
+
+	it("DLR-AF-03: skipped-prime carries phase=registration_lookup with no failureClass", async () => {
+		const { writer, lines } = capturingWriter()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => "/tmp/dlraf03")
+		setMycPrimeLiveDiagReadoutWriter(writer)
+		recordMycPrimeLiveAcquisition("hs-dlraf03", {
+			attempted: true,
+			serverDetected: false,
+			status: "skipped",
+			textPresent: false,
+			textBytes: 0,
+			error: "No myc MCP server configured (looked for myc, myc-mcp).",
+			phase: "registration_lookup",
+			sessionConnectionStatus: "not_attempted",
+			toolFound: false,
+		})
+		await drainMicrotasks()
+		expect(lines.length).toBe(1)
+		const evt = JSON.parse(lines[0])
+		expect(evt.status).toBe("skipped")
+		expect(evt.phase).toBe("registration_lookup")
+		expect(evt.sessionConnectionStatus).toBe("not_attempted")
+		expect(evt.failureClass).toBeUndefined()
+		expect(lines.join("\n")).not.toContain("No myc MCP server configured")
+	})
+
+	it("DLR-AF-04: errorCode and toolFound are NEVER serialized to the readout (in-process only)", async () => {
+		const { writer, lines } = capturingWriter()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => "/tmp/dlraf04")
+		setMycPrimeLiveDiagReadoutWriter(writer)
+		recordMycPrimeLiveAcquisition("hs-dlraf04", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			phase: "tool_call",
+			failureClass: "client_request_failed",
+			errorCode: "MethodNotFound",
+			sessionConnectionStatus: "spawned",
+			toolFound: false,
+		})
+		await drainMicrotasks()
+		expect(lines.length).toBe(1)
+		const evt = JSON.parse(lines[0])
+		expect(evt.errorCode).toBeUndefined()
+		expect(evt.toolFound).toBeUndefined()
+		// The in-process entry still carries them.
+		const entry = getMycPrimeLiveDiag("hs-dlraf04")
+		expect(entry?.acquisition.errorCode).toBe("MethodNotFound")
+		expect(entry?.acquisition.toolFound).toBe(false)
+	})
+
+	it("DLR-AF-05: H2 vs H4 vs H5 discrimination round-trip (three RED scenarios)", async () => {
+		const { writer, lines } = capturingWriter()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => "/tmp/dlraf05")
+		setMycPrimeLiveDiagReadoutWriter(writer)
+
+		// H2 — session_connection unavailable
+		recordMycPrimeLiveAcquisition("hs-dlraf05-h2", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			error: "No per-session connection available for server: myc (session=hs-dlraf05-h2).",
+			phase: "session_connection",
+			failureClass: "no_static_connection",
+			sessionConnectionStatus: "unavailable",
+			toolFound: false,
+		})
+
+		// H4 — tool_call client request failed
+		recordMycPrimeLiveAcquisition("hs-dlraf05-h4", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			error: "myc prime failed: TypeError: connection.client.request is not a function",
+			phase: "tool_call",
+			failureClass: "client_request_failed",
+			sessionConnectionStatus: "spawned",
+			toolFound: false,
+		})
+
+		// H5 — result_parse empty text
+		recordMycPrimeLiveAcquisition("hs-dlraf05-h5", {
+			attempted: true,
+			serverDetected: true,
+			status: "failed",
+			textPresent: false,
+			textBytes: 0,
+			error: "myc prime returned an empty/non-text response (cwd=/workspace).",
+			phase: "result_parse",
+			failureClass: "empty_text",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
+		})
+
+		await drainMicrotasks()
+		expect(lines.length).toBe(3)
+		const events = lines.map((l) => JSON.parse(l))
+
+		const h2 = events.find((e) => e.sessionId === "hs-dlraf05-h2")
+		const h4 = events.find((e) => e.sessionId === "hs-dlraf05-h4")
+		const h5 = events.find((e) => e.sessionId === "hs-dlraf05-h5")
+
+		// H2: connection never came up, tool never found
+		expect(h2?.phase).toBe("session_connection")
+		expect(h2?.failureClass).toBe("no_static_connection")
+		expect(h2?.sessionConnectionStatus).toBe("unavailable")
+
+		// H4: connection came up, tool call threw
+		expect(h4?.phase).toBe("tool_call")
+		expect(h4?.failureClass).toBe("client_request_failed")
+		expect(h4?.sessionConnectionStatus).toBe("spawned")
+
+		// H5: connection came up, tool call succeeded, parser failed
+		expect(h5?.phase).toBe("result_parse")
+		expect(h5?.failureClass).toBe("empty_text")
+		expect(h5?.sessionConnectionStatus).toBe("spawned")
+
+		// No error string ever leaves the readout
+		const joined = lines.join("\n")
+		expect(joined).not.toContain("No per-session connection available")
+		expect(joined).not.toContain("TypeError")
+		expect(joined).not.toContain("empty/non-text")
 	})
 })

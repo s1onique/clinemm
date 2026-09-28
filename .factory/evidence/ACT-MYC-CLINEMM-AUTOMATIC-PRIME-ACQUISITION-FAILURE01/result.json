@@ -1,0 +1,129 @@
+{
+  "act": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01",
+  "verdict": "PASS_DIAGNOSTIC_EXPANSION",
+  "entry_head": "a0d496408fbd96c097ef09f5b1f0d351de893dee",
+  "implementation_head": "UNCOMMITTED",
+  "closure_head": "UNCOMMITTED",
+  "subject_head": "UNCOMMITTED",
+
+  "diagnostics_default_off": true,
+  "production_semantics_changed": false,
+  "helper_throw_behavior_preserved": true,
+  "recorder_behavior_preserved": true,
+
+  "acquisition_phase_tags_added": [
+    "registration_lookup",
+    "session_connection",
+    "tool_discovery",
+    "tool_call",
+    "result_parse"
+  ],
+  "acquisition_failureclass_tags_added": [
+    "no_myc_server",
+    "no_static_connection",
+    "unsupported_transport",
+    "spawn_failed",
+    "connect_timeout",
+    "init_probe_failed",
+    "session_deferred_no_id",
+    "tool_not_found",
+    "client_request_failed",
+    "tool_returned_error",
+    "tool_timeout",
+    "empty_text",
+    "non_text_response",
+    "missing_content"
+  ],
+  "acquisition_sessionconnstatus_tags_added": [
+    "not_attempted",
+    "spawned",
+    "reused",
+    "unavailable",
+    "deferred"
+  ],
+
+  "readout_event_fields_added": [
+    "phase",
+    "failureClass",
+    "sessionConnectionStatus"
+  ],
+  "readout_in_process_only_fields_added": [
+    "errorCode",
+    "toolFound"
+  ],
+  "readout_no_payload_invariant_preserved": true,
+  "readout_size_budget_bounded": true,
+
+  "red_test_file": "apps/vscode/src/sdk/__tests__/myc-prime-automation.acquisition-failure01.red.test.ts",
+  "red_test_count": 10,
+  "red_test_result": "10/10 PASS",
+  "red_test_h_coverage": ["H1", "H2", "H4", "H5", "H6"],
+
+  "diagnostic_test_file": "apps/vscode/src/sdk/__tests__/myc-prime-live-diag.test.ts",
+  "diagnostic_test_count": 28,
+  "diagnostic_test_result": "28/28 PASS",
+  "diagnostic_new_tests": "ACQ-F-01..ACQ-F-08 (9 tests)",
+
+  "readout_test_file": "apps/vscode/src/sdk/__tests__/myc-prime-live-diag-readout.test.ts",
+  "readout_test_count": 21,
+  "readout_test_result": "21/21 PASS",
+  "readout_new_tests": "DLR-AF-01..DLR-AF-05 (5 tests)",
+
+  "dogfood_profile_test_file": "apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-myc-clinemm01.test.ts",
+  "dogfood_profile_test_count": 39,
+  "dogfood_profile_test_result": "39/39 PASS",
+
+  "full_unit_suite": {
+    "files": 93,
+    "tests": 1240,
+    "fail": 0
+  },
+
+  "typecheck": "GREEN",
+  "typecheck_command": "bunx tsc --noEmit -p tsconfig.json",
+  "biome_check": "CLEAN (info-level advisories only, matching existing lifecycle02 convention)",
+  "git_diff_check": "CLEAN",
+
+  "production_files_modified": 2,
+  "test_files_modified": 3,
+  "test_files_added": 1,
+  "act_documents_added": 4,
+
+  "files_modified_production": [
+    "apps/vscode/src/sdk/myc-prime-automation.ts",
+    "apps/vscode/src/sdk/myc-prime-live-diag.ts"
+  ],
+  "files_modified_test": [
+    "apps/vscode/src/sdk/__tests__/myc-prime-live-diag.test.ts",
+    "apps/vscode/src/sdk/__tests__/myc-prime-live-diag-readout.test.ts",
+    "apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-myc-clinemm01.test.ts"
+  ],
+  "files_added_test": [
+    "apps/vscode/src/sdk/__tests__/myc-prime-automation.acquisition-failure01.red.test.ts"
+  ],
+  "files_added_act": [
+    ".factory/acts/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01.md",
+    ".factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01/00-recon.md",
+    ".factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01/01-discriminator.md",
+    ".factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01/10-final-report.md",
+    ".factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01/result.json"
+  ],
+
+  "first_division": "AUTOMATIC_PRIME_ACQUISITION_FAILED",
+  "boundary": "AUTOMATIC_PRIME_ACQUISITION",
+
+  "live_session_id": "PENDING (operator-driven)",
+  "live_run_id": "PENDING",
+  "live_iteration": 1,
+
+  "hook_execution": "PASS (verified by RUN03; BIND + ENTER recorders unchanged)",
+  "session_identity": "PASS (verified by RUN03)",
+  "lookup_identity": "PASS (verified by RUN03)",
+  "auto_prime_acquisition": "AWAIT_LIVE_DISCRIMINATOR (this ACT expanded the diagnostic surface; the next dogfood run will identify the specific H-value via the (phase, failureClass) pair in events.jsonl)",
+
+  "diagnostic_residue": "BIND_N=0 while ENTER_N=1 (RUN03) is recorded as a separate P2 diagnostic residue item (BIND event is not reliable in this runtime); not addressed by this ACT",
+
+  "production_patch_applied": false,
+  "ready_for_repair_act": true,
+  "next_act_h_value": "DETERMINED_BY_LIVE_RUN"
+}

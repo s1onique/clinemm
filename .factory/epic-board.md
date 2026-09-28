@@ -15919,3 +15919,177 @@ the boundary classification. The on-disk trace is now trustworthy
 for §17: six detached record writes appear in causal order, the
 bounded event shape is preserved, the file materializes on first
 use, and a single failed op does not poison subsequent evidence.
+
+---
+
+## ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01 — PASS_DIAGNOSTIC_EXPANSION — 2026-09-29
+
+**Status:** Diagnostic surface expansion complete. The bounded `(phase,
+failureClass)` discriminator tree is wired through the real production
+seam and proven RED-shaped for H1..H6 + the diagnostic-OFF bit-identical
+invariant. No production repair attempted in this ACT — the
+successor ACT is identified by the H-value emitted by the next live
+run via `<dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl`.
+
+```text
+VERDICT      = PASS_DIAGNOSTIC_EXPANSION
+ENTRY_HEAD   = a0d496408fbd96c097ef09f5b1f0d351de893dee
+IMPL_HEAD    = UNCOMMITTED (a0d49640 + 2 production files + 1 new test file + 4 new ACT docs)
+DOGFOOD_VSIX = PENDING (next live run emits the H-value)
+```
+
+### What was added
+
+Three bounded enum types + 5 new fields on
+`recordMycPrimeLiveAcquisition`:
+
+```text
+MycPrimeLiveAcquisitionPhase       (5 values):
+  registration_lookup | session_connection | tool_discovery |
+  tool_call | result_parse
+
+MycPrimeLiveAcquisitionFailureClass (14 values):
+  no_myc_server | no_static_connection | unsupported_transport |
+  spawn_failed | connect_timeout | init_probe_failed |
+  session_deferred_no_id | tool_not_found |
+  client_request_failed | tool_returned_error | tool_timeout |
+  empty_text | non_text_response | missing_content
+
+MycPrimeLiveAcquisitionSessionConnStatus (5 values):
+  not_attempted | spawned | reused | unavailable | deferred
+```
+
+Five phase-tagged call sites in `runMycPrimeOnSessionStart`:
+1. registration short-circuit → `phase=registration_lookup`, `toolFound=false`
+2. result-parse failure → `phase=result_parse`, `failureClass ∈ {empty_text, non_text_response, missing_content}`
+3. result-parse success → `phase=tool_call`, `toolFound=true`
+4. caught failure (session_connection) → `phase=session_connection`, `failureClass=no_static_connection` (via error-prefix heuristic on `"No per-session connection available"`)
+5. caught failure (tool_call) → `phase=tool_call`, `failureClass=client_request_failed`
+
+Readout event extended by 3 bounded fields (`phase`, `failureClass`,
+`sessionConnectionStatus`). `errorCode` and `toolFound` are
+in-process only (forensic post-mortem) — NOT serialized to events.jsonl.
+The DLR-03.b invariant (no prime text, no payload content, no error
+string in the readout) is preserved.
+
+### What was NOT done
+
+- No production semantics change. The off-path is bit-identical to
+  the pre-ACT path; AF-RED-10 proves this with a hard assertion
+  (`getMycPrimeLiveDiag(sessionId)` returns undefined when
+  diagnostics are disabled).
+- No new env flag. Reused the existing `CLINEMM_MYC_PRIME_DIAG`
+  env var + the central dogfood profile resolver.
+- No redesign of the existing diagnostic surface. Extended it
+  minimally.
+- No modification of `McpHub.ts`, `sdk-session-lifecycle.ts`,
+  `hooks-adapter.ts`, `SdkController.ts`, or `extension.ts`.
+- No production repair of the prime acquisition path. The diagnostic
+  expansion is the deliverable; the bounded repair is the
+  responsibility of a successor ACT identified by the H-value of
+  the next live run.
+- No retries, sleeps, polling, or fallback-to-manual-tool
+  (per ACT §8).
+
+### Production files changed
+
+```text
+apps/vscode/src/sdk/myc-prime-live-diag.ts         +154 -20  (3 new enums + 5 new fields + signature extension)
+apps/vscode/src/sdk/myc-prime-automation.ts        +117 -10  (5 phase-tagged call sites + parseErrorCode discriminator + error-prefix heuristic)
+```
+
+2 production files (within §7 budget of 1–3).
+
+### Test files changed
+
+```text
+apps/vscode/src/sdk/__tests__/myc-prime-live-diag.test.ts                  +288 -0  (32 call-site updates + 9 new ACQ-F tests)
+apps/vscode/src/sdk/__tests__/myc-prime-live-diag-readout.test.ts           +255 -0  (11 call-site updates + 5 new DLR-AF tests + DLR-07 shape update)
+apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-myc-clinemm01.test.ts  +3 -0  (1 call-site update)
+apps/vscode/src/sdk/__tests__/myc-prime-automation.acquisition-failure01.red.test.ts  NEW (576 lines, 10 AF-RED tests)
+```
+
+3 test files modified + 1 new RED reproduction file.
+
+### Conservation (PASS)
+
+```text
+myc-prime-live-diag.test.ts                                                       28/28 PASS (19 pre-existing + 9 ACQ-F)
+myc-prime-live-diag-readout.test.ts                                                21/21 PASS (16 pre-existing + 5 DLR-AF)
+dogfood-diagnostic-profile-myc-clinemm01.test.ts                                  39/39 PASS
+myc-prime-automation.acquisition-failure01.red.test.ts                            10/10 PASS (NEW — RED reproduction)
+myc-prime-automation.lifecycle01.test.ts                                           12/12 PASS (unchanged GREEN path)
+myc-prime-automation.lifecycle02.test.ts                                            4/4  PASS (unchanged GREEN path)
+myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts                          4/4  PASS (unchanged)
+myc-prime-automation.identity-join.red.c24-c-bridge.test.ts                        2/2  PASS (unchanged)
+apps/vscode full bun unit suite                                                 1240/1240 PASS (93 test files)
+apps/vscode tsc --noEmit                                                            0 errors
+biome check (4 test files + 2 production files)                                      0 errors (info-level advisories matching existing convention)
+git diff --check                                                                    clean
+```
+
+### Reachable (phase, failureClass) pairs
+
+The discriminator tree exposes 7 reachable pairs through the real
+production seam today (plus 4 reserved values for future ACTs):
+
+```text
+registration_lookup + <none> (skipped)        -> H1 (no_myc_server)
+registration_lookup + <none> (skipped)        -> H6 (myc disabled)
+session_connection  + no_static_connection   -> H2 (ensureSessionConnection returned undefined — see McpHub.ts:2221 / 500-502)
+result_parse        + empty_text              -> H5 (text === "" or not a string)
+result_parse        + non_text_response       -> H5 (no {type:"text"} block, or McpHub normalized undefined to [])
+result_parse        + missing_content         -> reserved (McpHub normalizes undefined to [])
+tool_call           + client_request_failed   -> H4 (client.request threw — see McpHub.ts:2204)
+tool_call           + tool_returned_error     -> reserved (isError:true response)
+tool_call           + tool_timeout            -> reserved (per-call timeout)
+session_connection  + unsupported_transport   -> reserved (would need richer error envelope from McpHub)
+session_connection  + spawn_failed            -> reserved
+session_connection  + connect_timeout         -> reserved
+session_connection  + init_probe_failed       -> reserved
+session_connection  + session_deferred_no_id  -> reserved (A2A-14 STARTUP DEFER unreachable because runMycPrimeOnSessionStart always passes sessionId)
+tool_discovery      + tool_not_found          -> reserved (current code fuses tool_discovery into session_connection)
+```
+
+### Successor ACT recipe
+
+```bash
+# 1. Run a fresh ClineMM dogfood session with CLINEMM_MYC_PRIME_DIAG=1
+#    (or rely on dogfood auto-on).
+# 2. After the session runs, read:
+cat <dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl | grep '"event":"acquisition"'
+# 3. The first acquisition event with status="failed" carries the
+#    (phase, failureClass) pair that identifies the H-value.
+# 4. The successor ACT reproduces that H-value against the real
+#    production seam (similar to AF-RED-01..08) and proposes the
+#    bounded repair at the matching seam.
+```
+
+### Diagnostic residue (NOT addressed by this ACT)
+
+```text
+BIND_N=0 while ENTER_N=1 in RUN03 -> BIND event recorder is not
+reliable in this runtime (the recordMycPrimeLiveBind call inside
+buildAgentHooks silently no-ops despite the diagnostic being
+enabled). Recorded as a separate P2 item. Does NOT block this
+ACT's acquisition repair chain (ENTER is executable evidence that
+the hook exists).
+```
+
+### Files
+
+- **modified** `apps/vscode/src/sdk/myc-prime-live-diag.ts`
+- **modified** `apps/vscode/src/sdk/myc-prime-automation.ts`
+- **modified** `apps/vscode/src/sdk/__tests__/myc-prime-live-diag.test.ts`
+- **modified** `apps/vscode/src/sdk/__tests__/myc-prime-live-diag-readout.test.ts`
+- **modified** `apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-myc-clinemm01.test.ts`
+- **new** `apps/vscode/src/sdk/__tests__/myc-prime-automation.acquisition-failure01.red.test.ts`
+- **new** `.factory/acts/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01.md`
+- **new** `.factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01/00-recon.md`
+- **new** `.factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01/01-discriminator.md`
+- **new** `.factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01/10-final-report.md`
+- **new** `.factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01/result.json`
+
+Total production source delta: 2 files modified (within §7 budget
+of 1–3 files). Total test delta: 3 files modified + 1 new file.
+ACT documentation: 5 new files.

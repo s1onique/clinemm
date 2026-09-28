@@ -138,6 +138,13 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 		// diagnostic entry is already initialized by
 		// `startMycPrimeLiveDiag` above. This call is a no-op when diag
 		// is disabled.
+		//
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: tag the
+		// observation with `phase=registration_lookup` (no
+		// failureClass — skipped is not a failure, so the absence of
+		// failureClass is itself a discriminator). The session-bound
+		// MCP child was never reached, so
+		// `sessionConnectionStatus="not_attempted"`.
 		recordMycPrimeLiveAcquisition(sessionId, {
 			attempted: true,
 			serverDetected: false,
@@ -145,6 +152,9 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			textPresent: false,
 			textBytes: 0,
 			error: result.error,
+			phase: "registration_lookup",
+			sessionConnectionStatus: "not_attempted",
+			toolFound: false,
 		})
 		// Not an error — silent skip when myc is not configured.
 		return result
@@ -165,11 +175,31 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 	try {
 		const response = await mcpHub.callTool(serverName, "prime", args, ulid, signal, sessionId)
 		const content = (response as { content?: unknown }).content
-		const firstTextBlock = Array.isArray(content)
-			? (content as Array<{ type?: string; text?: string }>).find((c) => c?.type === "text")
-			: undefined
-		const text = firstTextBlock?.text
-		if (typeof text !== "string" || text.length === 0) {
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01:
+		// discriminate the three result-parse failure modes (H5):
+		//   - missing_content: response.content is undefined or non-array
+		//   - non_text_response: content array has no {type:"text"} block
+		//   - empty_text: text-block exists but text === "" or not a string
+		// The previous code collapsed all three into a single
+		// `status="failed"` + `error="myc prime returned an empty/non-text
+		// response..."` and was indistinguishable from H4 tool_call
+		// failures at the readout level.
+		const parseErrorCode = !Array.isArray(content)
+			? "missing_content"
+			: (() => {
+					const firstTextBlock = content.find((c) => c?.type === "text") as
+						| { type?: string; text?: unknown }
+						| undefined
+					if (!firstTextBlock) {
+						return "non_text_response"
+					}
+					const text = firstTextBlock.text
+					if (typeof text !== "string" || text.length === 0) {
+						return "empty_text"
+					}
+					return undefined
+				})()
+		if (parseErrorCode) {
 			const result: MycPrimeResult = {
 				sessionId,
 				status: "failed",
@@ -183,6 +213,14 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			// "myc server responded empty" — these collapse to the same
 			// `status="failed"` for the recorder but are different
 			// broken boundaries (Case A above).
+			//
+			// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: tag
+			// the observation with `phase=result_parse` and the
+			// discriminating `failureClass` so H5 has its own
+			// discriminator distinct from H4 (tool_call failures). The
+			// session-bound child was reached (so
+			// `sessionConnectionStatus="spawned"`); the tool was found
+			// (so `toolFound=true`); only the result parser failed.
 			recordMycPrimeLiveAcquisition(sessionId, {
 				attempted: true,
 				serverDetected: true,
@@ -190,8 +228,43 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 				textPresent: false,
 				textBytes: 0,
 				error: result.error,
+				phase: "result_parse",
+				failureClass: parseErrorCode,
+				sessionConnectionStatus: "spawned",
+				toolFound: true,
 			})
 			Logger.warn("[MycPrimeAutomation] prime returned empty response:", response)
+			return result
+		}
+		// The closure above classified `parseErrorCode` as undefined for
+		// the success branch. Re-derive the text so the existing
+		// downstream code path can stay bit-identical.
+		const firstTextBlock = (content as Array<{ type?: string; text?: string }>).find((c) => c?.type === "text")
+		const text = firstTextBlock?.text
+		if (typeof text !== "string" || text.length === 0) {
+			// Defensive: should be unreachable because parseErrorCode was
+			// undefined; covered separately to preserve the existing
+			// type-narrowing invariant for `text`.
+			const result: MycPrimeResult = {
+				sessionId,
+				status: "failed",
+				error: `myc prime returned an empty/non-text response (cwd=${cwd ?? "<unset>"}).`,
+				ts,
+			}
+			recordMycPrimeResult(result)
+			recordMycPrimeLiveAcquisition(sessionId, {
+				attempted: true,
+				serverDetected: true,
+				status: "failed",
+				textPresent: false,
+				textBytes: 0,
+				error: result.error,
+				phase: "result_parse",
+				failureClass: "empty_text",
+				sessionConnectionStatus: "spawned",
+				toolFound: true,
+			})
+			Logger.warn("[MycPrimeAutomation] prime returned empty response (defensive):", response)
 			return result
 		}
 		const result: MycPrimeResult = {
@@ -204,12 +277,23 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 		// ACT-MYC-CLINEMM03-LIVE-DIAG01: observe successful non-empty
 		// prime. `textBytes` records size only — the prime text itself
 		// is NEVER stored in the diagnostic.
+		//
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: tag
+		// the success observation with `toolFound=true` and
+		// `sessionConnectionStatus="spawned"` so a downstream post-mortem
+		// can confirm the tool was reached. `phase="tool_call"` is
+		// the boundary the observation reached (the result parser then
+		// succeeds — no `failureClass` is set because the call
+		// succeeded).
 		recordMycPrimeLiveAcquisition(sessionId, {
 			attempted: true,
 			serverDetected: true,
 			status: "ok",
 			textPresent: true,
 			textBytes: Buffer.byteLength(text, "utf8"),
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		return result
 	} catch (error) {
@@ -224,6 +308,25 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 		// ACT-MYC-CLINEMM03-LIVE-DIAG01: observe caught failure. The
 		// helper itself never throws, so a `recordMycPrimeLiveAcquisition`
 		// after the catch is safe even on the unhappy path.
+		//
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: tag
+		// the failure observation. Without splitting the `phase` and
+		// `failureClass` here, this catch was the SINGLE collapse point
+		// for H2 (session_connection failure: ensureSessionConnection
+		// throws) and H4 (tool_call failure: client.request throws or
+		// returns isError:true). The discriminator tree now requires
+		// this catch to disambiguate. We do that by inspecting the
+		// error message — a sufficient heuristic until a future ACT
+		// threads a richer error envelope from McpHub (which would
+		// carry error.code). For now: any thrown error from the
+		// callTool path is H4 by default (the callTool call itself
+		// is what threw). H2 errors are caught and re-thrown by
+		// callTool with a "No per-session connection available"
+		// prefix; we use that prefix to discriminate.
+		const isSessionConnectionUnavailable =
+			typeof message === "string" && message.startsWith("No per-session connection available")
+		const phase = isSessionConnectionUnavailable ? "session_connection" : "tool_call"
+		const failureClass = isSessionConnectionUnavailable ? "no_static_connection" : "client_request_failed"
 		recordMycPrimeLiveAcquisition(sessionId, {
 			attempted: true,
 			serverDetected: true,
@@ -231,6 +334,10 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 			textPresent: false,
 			textBytes: 0,
 			error: result.error,
+			phase,
+			failureClass,
+			sessionConnectionStatus: "unavailable",
+			toolFound: false,
 		})
 		Logger.warn(`[MycPrimeAutomation] prime failed for session=${sessionId}:`, error)
 		return result

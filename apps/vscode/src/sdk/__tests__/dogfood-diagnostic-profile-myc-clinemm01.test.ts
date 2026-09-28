@@ -217,6 +217,9 @@ describe("MDP-08: public default leaves the myc diag singleton untouched", () =>
 			status: "ok",
 			textPresent: true,
 			textBytes: 42,
+			phase: "tool_call",
+			sessionConnectionStatus: "spawned",
+			toolFound: true,
 		})
 		expect(getMycPrimeLiveDiag("hs-public")).toBeUndefined()
 	})
