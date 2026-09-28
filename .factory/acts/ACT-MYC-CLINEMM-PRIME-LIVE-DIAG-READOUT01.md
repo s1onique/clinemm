@@ -305,3 +305,78 @@ NEXT_ACT = operator-driven dogfood run (RUN03) +
 ```
 
 No second review loop unless the new evidence exposes a new P0.
+
+---
+
+## CORRECTION01 — 2026-09-28
+
+Reviewer audit (ClineMM / diagnostics / Factory reviewer) caught a
+**P0 in the evidence-acquisition path**. The original ACT claimed the
+readout path is "created lazily by the first `appendFile` call", but
+Node's `appendFile` does NOT create the parent directory. On a clean
+dogfood profile where `<dataRoot>/diagnostics/myc-prime-live-diag/`
+does not yet exist, the first append would reject with `ENOENT`. The
+detached `.catch()` in `appendReadoutLine` would correctly prevent
+semantic damage, but the sink would silently produce zero evidence —
+straight back to `CAPTURE_INSUFFICIENT`.
+
+### Bounded fix
+
+One file (`apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts`):
+
+```diff
++import path from "node:path"
+ ...
+ const defaultWriter: MycPrimeLiveDiagReadoutWriter = async (target, line) => {
+   const fsPromises = await import("node:fs/promises")
++  await fsPromises.mkdir(path.dirname(target), { recursive: true })
+   await fsPromises.appendFile(target, line, "utf8")
+ }
+```
+
+The docstring in the same file was also corrected (it was the source
+of the false claim). The read-only API surface in
+`myc-prime-live-diag.ts`, the activation seam in `extension.ts`, and
+the seam setter API are all unchanged. The writer Promise is still
+detached at the call site; the failure mode is identical (rejected
+Promise reaches the warn seam); DLR-06.b proves this against the
+production writer.
+
+### RED → GREEN test
+
+DLR-06 (3 sub-cases, vitest) — filesystem-level test that exercises
+the **PRODUCTION** writer (not a spy) against a real on-disk temp
+data root whose diagnostic subdir does not yet exist. PRE-FIX: subdir
+does not exist, `stat` throws ENOENT. POST-FIX: subdir is created,
+`events.jsonl` exists, exactly one valid JSON line present. Re-pins
+DLR-01.a (default-off still zero-I/O with the production writer
+bound) and DLR-05.a (write failure still non-fatal when the
+production writer rejects against an unresolvable data root).
+
+### Verdict
+
+```text
+VERDICT                       = PASS_READOUT_PARENT_MATERIALIZATION
+P0_READOUT_PARENT_DIR_MISSING = CLOSED
+PRODUCTION_SEMANTICS_CHANGED  = false
+DIAGNOSTIC_IO_CHANGED         = true (mkdir-on-first-use added)
+MYC_CODE_CHANGED              = false
+READY_FOR_RUN03               = true
+```
+
+### Conservation (CORRECTION01)
+
+```text
+myc-prime-live-diag-readout.test.ts                 14/14 GREEN
+myc-prime-live-live-diag.test.ts                    19/19 GREEN
+dogfood-diagnostic-profile.test.ts                  30/30 GREEN
+dogfood-diagnostic-profile-myc-clinemm01.test.ts    39/39 GREEN
+  focused 4-file vitest sweep                     102/102 GREEN
+bun run test:unit                                 1230/1230 GREEN
+apps/vscode tsc --noEmit                                    0 errors
+git diff --check                                             clean
+biome lint                                                   0 errors
+```
+
+See `.factory/evidence/ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01/`
+for the full `result.json` and `10-final-report.md`.

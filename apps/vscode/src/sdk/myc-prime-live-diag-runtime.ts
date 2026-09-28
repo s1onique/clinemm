@@ -1,5 +1,5 @@
 /**
- * ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01
+ * ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 (CORRECTION01)
  *
  * Production wiring for the default-off JSONL readout sink added to
  * `myc-prime-live-diag.ts`. This module owns the production-only
@@ -19,11 +19,25 @@
  *
  *   <dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl
  *
- * Where `<dataRoot>` is `resolveDataDirFromEnv()`. The subdir is
- * created lazily by the first `appendFile` call; this module does
- * NOT eagerly mkdir (the diagnostic is default-off, so eagerly
- * materializing an empty directory in production would be an
- * invariant violation).
+ * Where `<dataRoot>` is `resolveDataDirFromEnv()`. The diagnostic
+ * subdirectory `diagnostics/myc-prime-live-diag/` is created by the
+ * production writer on first use (mkdir recursive, then appendFile);
+ * this module does NOT eagerly mkdir at install time (the diagnostic
+ * is default-off, so eagerly materializing an empty directory in
+ * production would be an invariant violation).
+ *
+ * CORRECTION01 (P0 readout-parent-dir): the original writer was
+ * `appendFile(target, line)` only. Node's `appendFile` creates the
+ * FILE if missing but does NOT create the parent directory; on a
+ * clean dogfood profile where the subdir does not exist yet, the
+ * first append would reject with ENOENT. The detached `.catch`
+ * correctly prevented semantic damage, but the sink would silently
+ * produce no evidence — straight back to CAPTURE_INSUFFICIENT.
+ * The fix: mkdir(parent, {recursive: true}) BEFORE appendFile. The
+ * call site in `myc-prime-live-diag.ts` does not await the writer
+ * Promise either before or after this fix, so `beforeModel` is
+ * never blocked; the failure mode is identical (rejected Promise
+ * reaches the warn seam).
  *
  * REMOVAL TRIGGER (per ACT removal rules): the readout sink is a
  * bounded forensic scaffolding. When telemetry later wants any of
@@ -31,6 +45,7 @@
  * — do NOT silently promote this sink into product telemetry.
  */
 
+import path from "node:path"
 import { resolveDataDirFromEnv } from "@/shared/storage/storage-context"
 import {
 	type MycPrimeLiveDiagReadoutDataRootResolver,
@@ -41,13 +56,19 @@ import {
 
 /**
  * Default filesystem seam for the readout JSONL sink. Production =
- * `node:fs/promises` `appendFile` (line-oriented JSONL). The writer
- * is intentionally Promise-returning so the pure module can dispatch
+ * `node:fs/promises` `mkdir(parent, {recursive:true})` followed by
+ * `appendFile(target, line)` (line-oriented JSONL). The writer is
+ * intentionally Promise-returning so the pure module can dispatch
  * it detached; the call site in `myc-prime-live-diag.ts` does not
  * await the Promise.
+ *
+ * CORRECTION01: mkdir is required because Node's appendFile does
+ * NOT create the parent directory. Without it, a clean dogfood
+ * profile would silently produce no evidence.
  */
 const defaultWriter: MycPrimeLiveDiagReadoutWriter = async (target, line) => {
 	const fsPromises = await import("node:fs/promises")
+	await fsPromises.mkdir(path.dirname(target), { recursive: true })
 	await fsPromises.appendFile(target, line, "utf8")
 }
 

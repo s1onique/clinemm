@@ -23,6 +23,9 @@
  * isolation, and write-failure does not block the model request.
  */
 
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import type { AgentBeforeModelContext } from "@cline/shared"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import type { StateManager } from "@/core/storage/StateManager"
@@ -50,6 +53,7 @@ import {
 	setMycPrimeLiveDiagReadoutWarn,
 	setMycPrimeLiveDiagReadoutWriter,
 } from "@/sdk/myc-prime-live-diag"
+import { installMycPrimeLiveDiagReadoutRuntime } from "@/sdk/myc-prime-live-diag-runtime"
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -637,5 +641,224 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-05: write failure ne
 		expect(callCount).toBe(6)
 		expect(warned.length).toBe(6)
 		expect(warned.every((m) => m.includes("always fails"))).toBe(true)
+	})
+})
+
+// ===========================================================================
+// DLR-06: production writer materializes parent dir on a clean dogfood
+// profile (CORRECTION01)
+//
+// The DLR-01..DLR-05 suite replaces the writer with an in-memory spy,
+// so no filesystem topology is exercised. That gap is the only reason
+// the original ACT slipped through with a P0 in the evidence-acquisition
+// path: on a clean profile the parent dir did not exist, Node's
+// `appendFile` rejected with ENOENT, the detached `.catch` swallowed
+// the failure, and the sink produced zero evidence.
+//
+// DLR-06 fixes that by exercising the PRODUCTION writer (not a spy)
+// against a real on-disk temp data root whose diagnostic subdir
+// does not yet exist. PRE-FIX: events.jsonl absent (the original ACT
+// would have produced nothing). POST-FIX: the parent dir is created
+// and exactly one valid JSON line is present.
+//
+// This also re-pins DLR-01.a (default-off still zero-I/O — the
+// production writer is bound but the diagnostic is OFF) and DLR-05.a
+// (write failure still non-fatal — the production writer rejects
+// when given a path whose data root cannot be resolved; the recorder
+// does not throw and the warn seam surfaces the failure).
+// ===========================================================================
+
+describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-06: production writer materializes parent dir", () => {
+	const originalEnv = process.env.CLINEMM_MYC_PRIME_DIAG
+	const tempDirs: string[] = []
+
+	async function createTempDataRoot(): Promise<string> {
+		const dir = await mkdtemp(join(tmpdir(), "dlr06-readout-"))
+		tempDirs.push(dir)
+		return dir
+	}
+
+	afterEach(async () => {
+		await Promise.all(tempDirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
+		if (originalEnv === undefined) {
+			delete process.env.CLINEMM_MYC_PRIME_DIAG
+		} else {
+			process.env.CLINEMM_MYC_PRIME_DIAG = originalEnv
+		}
+	})
+
+	beforeEach(() => {
+		__resetMycPrimeLiveDiagForTests()
+		__resetMycPrimeLiveDiagReadoutForTests()
+		__resetPrimeInjectionStateForTests()
+		__resetMycPrimeResultsForTests()
+		delete process.env.CLINEMM_MYC_PRIME_DIAG
+	})
+
+	it("DLR-06.a: production writer creates diagnostics/myc-prime-live-diag/ + events.jsonl on a clean profile", async () => {
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+		expect(isMycPrimeLiveDiagEnabled()).toBe(true)
+
+		// Install the PRODUCTION wiring (real `node:fs/promises`
+		// writer + real `resolveDataDirFromEnv` resolver), then
+		// override ONLY the data root resolver to point at the
+		// temp dir. This is the same end-to-end shape that
+		// `extension.ts:activate` installs in production; the
+		// only thing we swap is the writable root.
+		installMycPrimeLiveDiagReadoutRuntime()
+		const dataRoot = await createTempDataRoot()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => dataRoot)
+
+		const target = resolveMycPrimeLiveDiagReadoutPath()
+		expect(target).toBe(join(dataRoot, MYC_PRIME_LIVE_DIAG_READOUT_SUBDIR, MYC_PRIME_LIVE_DIAG_READOUT_FILENAME))
+		expect(target).toBe(join(dataRoot, "diagnostics/myc-prime-live-diag/events.jsonl"))
+		// The resolver is bound, so `target` is non-null. Narrow for
+		// the post-fix filesystem calls below.
+		if (target === null) throw new Error("target is null despite bound resolver")
+
+		// PRE-FIX invariant: the subdir does not exist yet.
+		// `stat` would throw ENOENT. We assert by `stat` on the
+		// subdir explicitly; this is the DLR-06 RED.
+		const subdir = join(dataRoot, MYC_PRIME_LIVE_DIAG_READOUT_SUBDIR)
+		await expect(stat(subdir)).rejects.toMatchObject({ code: "ENOENT" })
+
+		// Fire one diagnostic event. The recorder dispatches the
+		// writer Promise detached; we must await enough microtasks
+		// (and the real mkdir+appendFile) to settle.
+		recordMycPrimeLiveBind("hs-dlr-06")
+		for (let i = 0; i < 32; i++) {
+			await Promise.resolve()
+		}
+		// Give the real fs a chance: appendFile is a real syscall.
+		await new Promise((r) => setTimeout(r, 50))
+
+		// POST-FIX invariants: the parent subdir exists, the
+		// events.jsonl file exists, and it contains exactly one
+		// valid JSON line.
+		const subdirStat = await stat(subdir)
+		expect(subdirStat.isDirectory()).toBe(true)
+		const fileStat = await stat(target)
+		expect(fileStat.isFile()).toBe(true)
+		const contents = await readFile(target, "utf8")
+		const lines = contents.split("\n").filter((l) => l.length > 0)
+		expect(lines.length).toBe(1)
+
+		const event = JSON.parse(lines[0])
+		expect(event.event).toBe("bind")
+		expect(event.sessionId).toBe("hs-dlr-06")
+		expect(event.iteration).toBe(0)
+		// Bounded-event-shape re-pin: no prime text, no witness,
+		// no prompt, no path. The shape is a closed set of
+		// {ts, event, sessionId, iteration} for a bind event.
+		expect(typeof event.ts).toBe("string")
+		expect(Object.keys(event).sort()).toEqual(["event", "iteration", "sessionId", "ts"])
+	})
+
+	it("DLR-06.b: a failing production writer (e.g. unresolvable data root) is swallowed by the warn seam", async () => {
+		// Re-pins DLR-05.a against the PRODUCTION writer topology:
+		// if the writer rejects, the recorder does NOT throw, the
+		// warn seam receives the failure, and the in-process
+		// diagnostic entry still reflects the full chain.
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+		recordMycPrimeResult(okPrime("hs-dlr-06b", "<real-prime>"))
+
+		// Install the PRODUCTION writer; point the resolver at a
+		// path that does not exist AND cannot be created (a
+		// regular file whose "diagnostics" subdir cannot be
+		// created). We create a file first, then point at the
+		// file path. resolvePath will yield
+		// <file>/diagnostics/myc-prime-live-diag/events.jsonl, so
+		// mkdir of the file's child dir will reject with ENOTDIR.
+		const badRoot = join(tmpdir(), `dlr06b-readout-${Date.now()}.notdir`)
+		const { writeFile } = await import("node:fs/promises")
+		await writeFile(badRoot, "I am a file, not a directory\n", "utf8")
+		tempDirs.push(badRoot)
+
+		installMycPrimeLiveDiagReadoutRuntime()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => badRoot)
+
+		const warned: string[] = []
+		setMycPrimeLiveDiagReadoutWarn((m) => warned.push(m))
+
+		const hooks = buildAgentHooks(createStateManager(), undefined, undefined, "hs-dlr-06b")
+		const beforeModel = hooks.beforeModel
+		if (!beforeModel) throw new Error("beforeModel missing")
+		const ctx = makeBeforeModelContext({
+			snapshot: { ...makeBeforeModelContext().snapshot, sessionId: "hs-dlr-06b" },
+		})
+		// beforeModel MUST resolve even though every writer call
+		// will reject against this bad data root.
+		const result = await beforeModel(ctx)
+		expect(result).toBeDefined()
+		expect(result?.messages?.length).toBe(2)
+		const text = (result?.messages?.[1]?.content?.[0] as { text?: string })?.text ?? ""
+		expect(text).toContain("real-prime")
+		expect(text).toContain("<prime_packet")
+
+		// Drain microtasks AND a real tick so detached Promises
+		// reach the warn seam.
+		for (let i = 0; i < 32; i++) {
+			await Promise.resolve()
+		}
+		await new Promise((r) => setTimeout(r, 50))
+
+		expect(warned.length).toBeGreaterThan(0)
+		// The in-process entry must still reflect the full GREEN
+		// chain — the readout failure must NOT bleed into the
+		// in-process record.
+		const entry = getMycPrimeLiveDiag("hs-dlr-06b")
+		expect(entry?.injection.injected).toBe(true)
+		expect(entry?.injection.reason).toBe("ok")
+	})
+
+	it("DLR-06.c: diagnostic OFF keeps the bound production writer at zero I/O (DLR-01 re-pin)", async () => {
+		// Same shape as DLR-06.a but with the diagnostic OFF: the
+		// production writer is bound (it would create the dir and
+		// write the line if reached), but the recorder
+		// short-circuits on `isMycPrimeLiveDiagEnabled()` BEFORE
+		// dispatching anything. The data root stays untouched.
+		delete process.env.CLINEMM_MYC_PRIME_DIAG
+		expect(isMycPrimeLiveDiagEnabled()).toBe(false)
+
+		installMycPrimeLiveDiagReadoutRuntime()
+		const dataRoot = await createTempDataRoot()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => dataRoot)
+
+		// Drive every recorder; none should reach the writer.
+		recordMycPrimeLiveBind("hs-dlr-06c")
+		recordMycPrimeLiveEnter("hs-dlr-06c", "hs-dlr-06c", 1)
+		recordMycPrimeLiveAcquisition("hs-dlr-06c", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 9,
+		})
+		recordMycPrimeLiveLookup("hs-dlr-06c", {
+			attempted: true,
+			snapshotSessionIdPresent: true,
+			matchedRecordedSession: true,
+			recordedPrimeFound: true,
+			iteration: 1,
+			lookupKey: "hs-dlr-06c",
+		})
+		recordMycPrimeLiveInjection("hs-dlr-06c", {
+			attempted: true,
+			injected: true,
+			reason: "ok",
+			packetBytes: 256,
+			iteration: 1,
+		})
+		recordMycPrimeLiveCapture("hs-dlr-06c", { captureId: "cap-dlr06c", aiSdkPromptObserved: true })
+
+		for (let i = 0; i < 32; i++) {
+			await Promise.resolve()
+		}
+		await new Promise((r) => setTimeout(r, 50))
+
+		// No parent dir, no file, no in-process entries.
+		const subdir = join(dataRoot, MYC_PRIME_LIVE_DIAG_READOUT_SUBDIR)
+		await expect(stat(subdir)).rejects.toMatchObject({ code: "ENOENT" })
+		expect(__getAllMycPrimeLiveDiagForTests()).toEqual([])
 	})
 })

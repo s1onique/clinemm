@@ -15698,3 +15698,87 @@ PRIME_INJECTION_GUARD, POST_HOOK_REQUEST_COMPOSITION_LOSS,
 NOT_REPRODUCED_LIVE).
 
 That live trace authorizes exactly one repair ACT.
+
+## ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01-CORRECTION01 — PASS_READOUT_PARENT_MATERIALIZATION — 2026-09-28
+
+**Status:** P0 in evidence-acquisition path CLOSED. Production
+writer now creates the parent directory on first use; production
+semantics otherwise bit-identical; DLR-06 (filesystem-level) added.
+Ready for RUN03.
+
+```text
+VERDICT = PASS_READOUT_PARENT_MATERIALIZATION
+P0_READOUT_PARENT_DIR_MISSING = CLOSED
+ENTRY_HEAD = 72dd7520d (pre-correction)
+IMPL_HEAD = uncommitted (1 production modified + 1 test modified)
+```
+
+### What changed
+
+Reviewer audit on `72dd7520d` caught that the original writer
+(`appendFile` only) would reject with `ENOENT` on a clean dogfood
+profile where `<dataRoot>/diagnostics/myc-prime-live-diag/` does
+not yet exist. The detached `.catch()` in `appendReadoutLine` would
+correctly prevent semantic damage, but the sink would silently
+produce zero evidence — straight back to `CAPTURE_INSUFFICIENT`.
+
+Bounded fix in `apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts`:
+
+```diff
++import path from "node:path"
+ ...
+ const defaultWriter: MycPrimeLiveDiagReadoutWriter = async (target, line) => {
+   const fsPromises = await import("node:fs/promises")
++  await fsPromises.mkdir(path.dirname(target), { recursive: true })
+   await fsPromises.appendFile(target, line, "utf8")
+ }
+```
+
+The docstring in the same file was also corrected (it was the source
+of the false claim). No other production code changed.
+
+### New filesystem-level test: DLR-06
+
+DLR-06 (3 sub-cases, vitest) exercises the **PRODUCTION** writer
+(not a spy) against a real on-disk temp data root whose diagnostic
+subdir does not yet exist. Re-pins DLR-01.a (default-off still
+zero-I/O) and DLR-05.a (write failure still non-fatal).
+
+### Conservation (CORRECTION01)
+
+```text
+myc-prime-live-diag-readout.test.ts                 14/14 GREEN (6 tests, 14 assertions)
+myc-prime-live-diag.test.ts                         19/19 GREEN
+dogfood-diagnostic-profile.test.ts                  30/30 GREEN
+dogfood-diagnostic-profile-myc-clinemm01.test.ts    39/39 GREEN
+  focused 4-file vitest sweep                     102/102 GREEN
+bun run test:unit                                 1230/1230 GREEN across 92 files
+apps/vscode tsc --noEmit                                    0 errors
+git diff --check                                             clean
+```
+
+### Hard invariants
+
+```text
+DEFAULT_OFF = true (unchanged)
+SEMANTIC_DELTA_WHEN_DISABLED = 0 (unchanged)
+PRIME_CONTENT_LOGGED = false (DLR-03 + DLR-06.a)
+WITNESS_CONTENT_LOGGED = false (DLR-03)
+PROMPT_CONTENT_LOGGED = false (DLR-03)
+PUBLIC_API_CHANGED = false
+MCP_PROTOCOL_CHANGED = false
+MYC_CODE_CHANGED = false
+BEFORE_MODEL_NEVER_AWAITED = true (DLR-05 + DLR-06.b)
+WRITE_FAILURE_NEVER_BLOCKS = true (DLR-05 + DLR-06.b)
+PRODUCTION_WRITER_MATERIALIZES_PARENT_DIR = true (DLR-06.a)
+DIAGNOSTIC_OFF_ZERO_IO_WITH_PRODUCTION_WRITER_BOUND = true (DLR-06.c)
+```
+
+### Next ACT
+
+RUN03 — operator-driven installed-Codium dogfood with diagnostics
+enabled and a fresh READY witness. The on-disk trace at
+`<dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl` is now
+authoritative (the parent dir is created on first use). Apply the
+§17 discriminator tree to the captured `MYC_SESSION_ID` to emit the
+boundary classification.
