@@ -2,7 +2,9 @@
   "act": "ACT-CLINEMM-POST-CONSUMPTION-COMPLETION-AUTHORITY01",
   "verdict": "PASS_POST_CONSUMPTION_COMPLETION_AUTHORITY",
   "entry_head": "645da59f3ac39f45cf465f38279ecb0e59545b92",
-  "subject_head": "PENDING-COMMIT (will be recorded by closure commit)",
+  "implementation_head": "4dd630fe153bec58f97c7612fe1bd11ea51f0768",
+  "closure_head": "05527add14fa70fbe0756bee6b54a8515ccffa0e",
+  "subject_head": "4dd630fe153bec58f97c7612fe1bd11ea51f0768",
   "live_red_session_id": "1790582070333_vq1sf",
   "live_red_task_id": "(held containment_failed job, deferredCompletionBarrier registered)",
   "live_submit_and_exit_seen": 2,
@@ -50,5 +52,14 @@
   "production_code_changed": "apps/vscode/src/sdk/command-status-tool.ts (+44)",
   "new_test_file": "apps/vscode/src/sdk/__tests__/post-consumption-completion-authority01.pcca01.test.ts (NEW)",
   "myc_code_changed": false,
-  "ready_for_myc_clinemm04": true
+  "ready_for_myc_clinemm04": true,
+  "_review_artifact_identity_correction": {
+    "review": "closure-correction after ACT-CLINEMM-POST-CONSUMPTION-COMPLETION-AUTHORITY01 review",
+    "defect": "HALT_ACT_ARTIFACT_NOT_BOUND_TO_SOURCE — result.json/00-entry.txt bound SUBJECT_HEAD to the pre-fix entry HEAD instead of the implementation HEAD",
+    "fix": "rebound subject_head to 4dd630fe1... (the commit that actually carries the production repair + tests); added explicit implementation_head + closure_head fields. Production and tests were NOT modified.",
+    "commits": {
+      "implementation": "4dd630fe153bec58f97c7612fe1bd11ea51f0768",
+      "evidence": "05527add14fa70fbe0756bee6b54a8515ccffa0e"
+    }
+  }
 }
