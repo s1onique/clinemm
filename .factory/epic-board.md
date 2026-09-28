@@ -15472,3 +15472,104 @@ injected=true, ai_sdk_prompt absent → downstream request-composition loss
 
 Do NOT patch production code in this ACT. Do NOT build another synthetic
 harness. Acquire the missing live-boundary evidence first.
+
+## ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — PENDING_LIVE_RUN — 2026-09-28
+
+**Status:** Implementation complete; LIVE-typed evidence acquisition
+pending the operator-driven installed-Codium dogfood run.
+
+```text
+VERDICT = PENDING_LIVE_RUN
+ENTRY_HEAD  = 27868d9f1214e099bd444101f1c8ef8ed3869de9
+IMPL_HEAD   = 5c6f3c09fe054f3a2aee01e7aedcf68926e6f268
+DOGFOOD_VSIX = PENDING (next step in the §11/§12 contract)
+```
+
+### What was added
+
+Two new default-off diagnostic observation points to the EXISTING
+`myc-prime-live-diag` surface (no new env flag, no new architecture,
+no new diagnostic framework):
+
+- `recordMycPrimeLiveBind(sessionId)` fires at `buildAgentHooks`
+  time; proves the runtime was given a hook bag for the canonical
+  host sessionId. **Detects Case A
+  (PRODUCTION_HOOK_ASSEMBLY_OR_INSTALLATION)**.
+- `recordMycPrimeLiveEnter(hostSessionId, snapshotSessionId,
+  iteration)` fires at the very top of `beforeModel` body, before
+  any short-circuit; proves the runtime invoked `beforeModel`.
+  **Detects Case B (PRODUCTION_RUNTIME_SESSION_IDENTITY)**.
+
+Plus one field extension to the existing
+`recordMycPrimeLiveLookup` — `lookupKey` — so a post-capture join
+can tell `snapshot.sessionId` lookups from `conversationId`
+fallbacks. **Detects Case B (key mismatch) and Case C (correct
+key, recorder miss)**.
+
+Plus structural preservation in `startMycPrimeLiveDiag` — `bind`
+and `enter` survive a re-start, otherwise
+`runMycPrimeOnSessionStart`'s call to `startMycPrimeLiveDiag`
+would clobber the BIND event recorded at `buildAgentHooks` time.
+
+### What was NOT done
+
+- No production patch. The off-path is bit-identical to the pre-ACT
+  path; LBC-01 proves this with a hard assertion.
+- No new env flag. Reused the existing `CLINEMM_MYC_PRIME_DIAG`
+  env var + the central dogfood profile resolver.
+- No new diagnostic framework. Extended the existing
+  `myc-prime-live-diag` module.
+- No synthetic RED. The predecessor's RED is REAL and on disk.
+- No dogfood VSIX. Build is the next step in §11/§12.
+
+### Production files changed
+
+```text
+apps/vscode/src/sdk/myc-prime-live-diag.ts         +212 -10
+apps/vscode/src/sdk/hooks-adapter.ts               +59 -0
+apps/vscode/src/sdk/sdk-session-config-builder.ts  +12 -0
+apps/vscode/src/sdk/__tests__/myc-prime-live-diag.test.ts  +222 -0
+```
+
+3 production files + 1 test file. Well under the §8 budget of 1–3
+production files.
+
+### Conservation (PASS)
+
+```text
+myc-prime-live-diag.test.ts                                  19/19 GREEN (14 pre-existing + 5 LBC)
+myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts     4/4   GREEN
+myc-prime-automation.identity-join.red.c24-c-bridge.test.ts  2/2   GREEN
+dogfood-diagnostic-profile-myc-clinemm01.test.ts            39/39  GREEN
+sdk-session-config-builder.test.ts                            3/3   GREEN
+myc-prime-automation.lifecycle01.test.ts                     12/12  GREEN (under bridge config)
+myc-prime-automation.lifecycle02.test.ts                      4/4   GREEN (under bridge config)
+apps/vscode tsc --noEmit                                      0 errors
+git diff --check                                              clean
+```
+
+### Pre-existing drift (independent of this ACT)
+
+```text
+turn-state-writer-provenance.wprov.test.ts WPROV07.1         1 failed (predecessor commit 27868d9f1)
+```
+
+Verified independent by `git stash` + re-run on predecessor commit.
+
+### §17 discriminator matrix (frozen)
+
+| Case | Detection |
+|------|-----------|
+| A: PRODUCTION_HOOK_ASSEMBLY_OR_INSTALLATION | `entry.bind === undefined` for the operator's captured MYC_SESSION_ID S |
+| B: PRODUCTION_RUNTIME_SESSION_IDENTITY | `entry.bind?.sessionId === S` AND `entry.enter?.sessionId !== S` |
+| C: PRIME_RECORDER_LIFETIME_OR_INSTANCE | `entry.enter?.sessionId === S` AND `entry.lookup.recordedPrimeFound === false` (key matches, recorder empty) |
+| D: PRIME_INJECTION_GUARD | `entry.injection.injected === false` AND `entry.injection.reason` narrows the branch |
+| E: POST_HOOK_REQUEST_COMPOSITION_LOSS | `entry.injection.injected === true` AND on-disk provider capture has 0 prime packets |
+| F: NOT_REPRODUCED_LIVE | `entry.injection.injected === true` AND on-disk provider capture has 1 prime packet |
+
+### Ready for ACT-MYC-CLINEMM06
+
+`false` — the LIVE-typed evidence is the responsibility of the next
+ACT (`ACT-MYC-CLINEMM-LIVE-BOUNDARY-CAPTURE01-RUN02`), which runs
+the operator-driven dogfood session per §11-§17 of
+`.factory/acts/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01.md`.
