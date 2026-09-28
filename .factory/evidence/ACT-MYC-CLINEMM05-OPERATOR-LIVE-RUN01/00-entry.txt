@@ -1,0 +1,261 @@
+ACT=ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01
+VERDICT=PENDING_OPERATOR_LIVE_RUN
+  (Clinemm can prove identity steps; LIVE-A..LIVE-L require the
+   operator at the Codium UI per ACT §5.)
+
+========================================================================
+SECTION 2 — ENTRY IDENTITY
+========================================================================
+
+SOURCE_HEAD=89249175c71fcbc059d26d54f5c50f7f6dbd3373
+ENTRY_HEAD =89249175c71fcbc059d26d54f5c50f7f6dbd3373
+SUBJECT_HEAD=89249175c71fcbc059d26d54f5c50f7f6dbd3373
+WORKING_TREE_CLEAN=true  (git status --short returned no output)
+
+git log -3 --oneline:
+  89249175c fix(mcp): bound per-session post-connect discovery
+  c7f020142 epic-board: ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01 PASS_BOUNDED_MCP_BOOTSTRAP
+  e941f11ec ACT-MYC-CLINEMM04-LIVE-QUALIFICATION: re-run on 8fdde3fb5 with VSIX bound to .vscodium-cline + operator recipe + prior-run snapshot preservation
+
+HALT_UNEXPECTED_TRACKED_DIRT=false.
+
+Required feature presence on source HEAD (89249175c):
+
+  AUTOSTART01 startup projection                       PASS
+    Per ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 commit 046b4ab30:
+    McpHub.ensureSessionConnection reconciles the deferred template
+    status to "connected" when a per-session child spawns.
+
+  AUTOSTART01 CORRECTION01 teardown projection         PASS
+    Per ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01 commit
+    99ff0b356: symmetric teardown returns the projection to
+    pending-session/deferred when no other legitimate session is
+    alive.
+
+  FINALIZATION-RUN-BOOTSTRAP-STALL01 bounded discovery PASS
+    HEAD commit 89249175c: +95/-18 in
+    apps/vscode/src/services/mcp/McpHub.ts.
+
+    The pre-repair code used Promise.allSettled over
+    client.listTools/listResources/listResourceTemplates/listPrompts.
+    Promise.allSettled prevents a REJECTION from aborting the aggregate
+    but does NOT prevent a promise that never SETTLES — a misbehaving
+    child whose resources/list opens a half-open JSON-RPC stream and
+    never responds would hang createVscodeExtraTools →
+    prepareStartSessionInput → ClineCore.startSession forever.
+
+    The repaired path uses capability-aware, per-request-timeout
+    client.request({ method }, Schema, { timeout: timeoutMs }) calls
+    gated on client.getServerCapabilities(); unadvertised probes are
+    skipped, MethodNotFound returns [], other failures log and return
+    undefined. The same resolveMcpServerTimeoutMs(staticConn.server.
+    config) authority the static connectToServer path uses — no new
+    timeout constant. Test seam: finalizationRunBootstrapStall01 test
+    + frbs-stallable fixture exercises listResources,
+    listResourceTemplates, listPrompts, listTools stalls; RED→GREEN
+    ablation proved by git stash round-trip.
+
+========================================================================
+SECTION 3 — INSTALLED ARTIFACT BINDING
+========================================================================
+
+DOGFOOD_SOURCE_HEAD        = 89249175c71fcbc059d26d54f5c50f7f6dbd3373
+INSTALLED_EXTENSION_VERSION = 4.1.16-89249175c
+VSIX_PATH                  = /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-89249175c.vsix
+VSIX_BYTE_SIZE             = 14625242
+VSIX_SHA256                = d5399a250acdcf1c824404094360f7059259db74682f106e02be4719f5dca040
+INSTALLED_EXTENSION_PATH   = /Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions/s1onique.clinemm-4.1.16-89249175c/
+INSTALLED_PROFILE          = /Volumes/UserData/Users/chistyakov/.vscodium-cline
+INSTALLED_PKG_JSON_NAME    = clinemm
+INSTALLED_PKG_JSON_VERSION = 4.1.16-89249175c
+
+SHA256-verified identity of dist/dogfood/clinemm-4.1.16-89249175c.vsix:
+  d5399a250acdcf1c824404094360f7059259db74682f106e02be4719f5dca040
+
+Load-bearing repair content presence in VSIX:
+  89249175c's McpHub.ts patch is in the bundled dist/extension.js
+  shipped by the VSIX (verified by `vsce package` deriving from the
+  HEAD source tree at packaging time). The extension installation
+  directory was created on Sep 28 16:08 — matching the HEAD commit
+  timestamp.
+
+HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN = false.
+
+========================================================================
+SECTION 4 — PREDECESSOR EVIDENCE CLASSIFICATION (preserved)
+========================================================================
+
+PREDECESSOR_LIVE_RED =
+  REAL:
+    run #2 started
+    no run #2 done
+    no task completion
+  Source: ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/04-live-session-identity.txt
+  Frozen counters at the stuck boundary:
+    run_turn_started=2, agent_turn_done=1,
+    task_completion_committed=0.
+
+PREDECESSOR_ROOT_CAUSE_PROOF =
+  SYNTHETIC_REAL:
+    stalled resources/list reproduces same bootstrap stall
+    ablation restores RED
+  Source: ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01 board row
+  (.factory/epic-board.md lines 15280..15358).
+  RED→GREEN→ablation provenance documented there.
+
+The real live chronology was:
+  submit
+    → enqueue
+    → done #1
+    → dequeue
+    → continuation scheduled
+    → run #2
+    → no done #2
+    → no commit
+
+This ACT does NOT rewrite the prior ACT as live-qualified. It runs
+fresh against the installed build s1onique.clinemm-4.1.16-89249175c
+and expects the finalization run to reach agent_turn_done #2 +
+task_completion_committed=1.
+
+========================================================================
+SECTION 5 — OPERATOR BOUNDARY (declared; operator owns UI)
+========================================================================
+
+OPERATOR_STARTED_CODIUM  = (PENDING_OPERATOR_LIVE_RUN)
+CLINEMM_STARTED_CODIUM   = false  (this session did NOT launch Codium)
+TEST_HARNESS_USED        = false  (no debug-harness / Playwright invoked)
+
+ClineMM-owned for this ACT:
+  - Source-of-truth frozen-source verification (§2 entry identity)
+  - Source-of-truth installed-artifact identity verification (§3)
+  - Operator/clinemm authority boundary declaration (§5)
+  - Predecessor evidence classification preservation (§4)
+  - No code / test / myc changes (§24)
+  - Minimal git gates at end (§25)
+
+Operator-owned for this ACT (ClineMM MUST NOT do these):
+  - Launch / restart Codium against .vscodium-cline
+  - Open dogfood profile
+  - Press Start New Task
+  - Inspect MCP panel / chat panel UI
+  - Seed the sentinel via the supported myc remember ... shape
+    (sentinel isolation rule: must NOT be exposed to any model-visible
+    transcript; this session has no operator-only terminal)
+  - Type the mundane prompt
+  - Read out getMycPrimeLiveDiag via Command Palette or ext.evaluate
+  - Open $CLINE_CAPTURE_DIR/ai-sdk/*.json and grep for sentinel +
+    prime_packet block
+  - Click X / Trash icon to close chat
+
+========================================================================
+SECTION 6 — COLD-START PRECONDITION (operator observes)
+========================================================================
+
+LIVE_PRE_SESSION_UI_STATE       = (PENDING_OPERATOR_LIVE_RUN)
+LIVE_PRE_SESSION_CHILD_PRESENT  = (PENDING_OPERATOR_LIVE_RUN)
+MANUAL_MCP_RESTART_COUNT        = 0
+
+Expected after a fully-quit Codium relaunch on the .vscodium-cline
+profile with the installed build s1onique.clinemm-4.1.16-89249175c:
+  myc runtime state              = pending-session / deferred
+  myc tools surfaced to webview  = 0
+  myc child stdio process        = NOT spawned
+    (verify with `pgrep -f 'myc mcp'` -> empty)
+
+If a child already exists before any session starts:
+  HALT_SESSION_BOUND_MCP_PREMATURE_SPAWN
+
+========================================================================
+SECTIONS 7..21 — LIVE-A..LIVE-L: PENDING_OPERATOR_LIVE_RUN
+========================================================================
+
+Each LIVE_* step requires operator interaction with the Codium webview
+UI or the operator's bench terminal for the sentinel seed. Clinemm
+records the expected target and the failure boundary; the operator
+populates the actual values during the live run.
+
+Expected targets (per ACT §26 success composition):
+
+  Codium restart
+    → myc deferred, no child
+    → Start New Task S
+    → child auto-starts
+    → child session = S
+    → MCP panel connected
+    → no Restart click
+    → automatic prime exactly once
+    → prime contains sentinel
+    → recorder session = S
+    → beforeModel lookup hit
+    → injection count = 1
+    → provider-bound packet count = 1
+    → sentinel present provider-bound
+    → second run, if created, reaches agent_turn_done
+    → task_completion_committed = 1
+    → exactly one visible completion
+    → Working false
+    → Cancel false
+    → session teardown
+    → MCP deferred again
+
+The key regression target for this ACT (vs prior LIVE04) is:
+  run_turn_started #2 → agent_turn_done #2 → task_completion_committed=1
+If the run again hangs between run_turn_started #2 and agent_turn_done #2:
+  HALT_FINALIZATION_RUN_BOOTSTRAP_STALL_REPRODUCED
+
+========================================================================
+SECTION 22 — RAW-CAPTURE HYGIENE (rule; enforced when populated)
+========================================================================
+
+Do NOT commit full provider payloads. Commit only derived evidence:
+  capture path
+  capture ID
+  session ID
+  stage
+  mode
+  prime packet count
+  sentinel present boolean
+  SHA-256 of raw capture
+
+No secrets or unrelated prompt text. The Sentinel token is itself a
+test secret and must not be committed; only the boolean
+PROVIDER_BOUND_SENTINEL_PRESENT is committed.
+
+========================================================================
+SECTION 24 — NO CODE/TEST/MYC CHANGES (frozen)
+========================================================================
+
+PRODUCTION_CODE_CHANGED = false
+TEST_CODE_CHANGED       = false
+MYC_CODE_CHANGED        = false
+
+Confirmed at session start: git status --short returned no output.
+This ACT deliberately performs no source edits. If a live defect is
+exposed, the operator halts and a separate repair ACT is opened;
+this ACT does NOT fix the defect.
+
+========================================================================
+SECTION 25 — MINIMAL REPO GATES (at session end)
+========================================================================
+
+$ git status --short   # expect empty (modulo this evidence dir, untracked)
+$ git diff --check     # expect clean
+
+Both hold at this point in the ACT (no source edits made).
+
+========================================================================
+TARGET VERDICT
+========================================================================
+
+The §29 target verdict requires the operator to populate §6..§22.
+This session pre-stages §2..§5, §22, §24, §25. The operator-owned
+sections (LIVE-A..LIVE-L, completion conservation, MCP teardown)
+remain PENDING_OPERATOR_LIVE_RUN until the operator runs the recipe
+in:
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/
+    .factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/
+    11-operator-recipe.txt
+against the installed build s1onique.clinemm-4.1.16-89249175c.
+
+READY_FOR_MYC_CLINEMM06 = (depends on operator's PASS / HALT verdict)

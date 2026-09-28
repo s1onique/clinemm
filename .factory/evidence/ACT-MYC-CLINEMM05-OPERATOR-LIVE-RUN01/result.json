@@ -1,0 +1,177 @@
+{
+  "act": "ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01",
+  "verdict": "PENDING_OPERATOR_LIVE_RUN",
+  "subject_head": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+  "entry_head": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+  "source_head": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+  "predecessor_act": "ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01 (PASS_BOUNDED_MCP_BOOTSTRAP)",
+  "predecessor_evidence_chain": [
+    "ACT-MYC-CLINEMM04-LIVE-QUALIFICATION (INCOMPLETE_LIVE_AWAITING_OPERATOR, prior-run-snapshot/)",
+    "ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01 (PASS_BOUNDED_MCP_BOOTSTRAP, RED->GREEN->ablation, 4 FRBS cases)"
+  ],
+  "rationale": "This session pre-stages the source-of-truth identity steps (entry identity, installed artifact identity, operator/clinemm authority boundary, predecessor evidence classification, zero code changes, minimal git gates) and writes the operator-owned evidence scaffolding (LIVE-A..LIVE-L, sentinel seed, provider-bound prime packet, completion conservation, MCP teardown). The operator drives the live run against installed build s1onique.clinemm-4.1.16-89249175c per the recipe at .factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/11-operator-recipe.txt. ACT section 5 forbids ClineMM/automated harness from launching Codium or driving the UI; ACT section 7 forbids Clinemm from seeding a sentinel token. Therefore LIVE_* fields remain PENDING_OPERATOR_LIVE_RUN until the operator completes the live run.",
+
+  "halt_unexpected_tracked_dirt": false,
+  "halt_installed_artifact_identity_unproven": false,
+  "halt_session_bound_mcp_premature_spawn": false,
+  "halt_live_session_mcp_not_started": false,
+  "halt_live_mcp_projection_stale": false,
+  "halt_live_mcp_session_id_mismatch": false,
+  "halt_automatic_prime_not_invoked": false,
+  "halt_real_myc_prime_failed": false,
+  "halt_myc_prime_retrieval_semantics": false,
+  "halt_prime_recorder_identity_mismatch": false,
+  "halt_live_identity_join_regression": false,
+  "halt_prime_recorder_lookup_miss": false,
+  "halt_prime_not_model_visible": false,
+  "halt_duplicate_prime_injection": false,
+  "halt_provider_capture_not_active": false,
+  "halt_prime_packet_lost_before_provider": false,
+  "halt_finalization_run_bootstrap_stall_reproduced": false,
+  "halt_completion_conservation_regression": false,
+  "halt_live_mcp_teardown_projection_stale": false,
+  "halt_live_mcp_child_leak": false,
+  "halt_manual_mcp_restart_still_required": false,
+
+  "production_code_changed": false,
+  "test_code_changed": false,
+  "myc_code_changed": false,
+  "git_status_clean": true,
+
+  "frozen_source_state": {
+    "git_status_clean": true,
+    "git_rev_parse_head": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+    "git_log_minus_3": [
+      "89249175c fix(mcp): bound per-session post-connect discovery",
+      "c7f020142 epic-board: ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01 PASS_BOUNDED_MCP_BOOTSTRAP",
+      "e941f11ec ACT-MYC-CLINEMM04-LIVE-QUALIFICATION: re-run on 8fdde3fb5 with VSIX bound to .vscodium-cline + operator recipe + prior-run snapshot preservation"
+    ],
+    "required_features_present": {
+      "AUTOSTART01_startup_projection": true,
+      "AUTOSTART01_CORRECTION01_teardown_projection": true,
+      "FINALIZATION_RUN_BOOTSTRAP_STALL01_bounded_discovery_repair": true
+    }
+  },
+
+  "installed_artifact": {
+    "DOGFOOD_SOURCE_HEAD": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+    "EXTENSION_VERSION": "4.1.16",
+    "DOGFOOD_VSIX_PATH": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-89249175c.vsix",
+    "DOGFOOD_VSIX_BYTE_SIZE": 14625242,
+    "DOGFOOD_VSIX_SHA256": "d5399a250acdcf1c824404094360f7059259db74682f106e02be4719f5dca040",
+    "INSTALLED_PROFILE": "/Volumes/UserData/Users/chistyakov/.vscodium-cline",
+    "INSTALLED_EXTENSION_VERSION": "4.1.16-89249175c",
+    "INSTALLED_EXTENSION_PATH": "/Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions/s1onique.clinemm-4.1.16-89249175c/",
+    "INSTALLED_BINDING_VERIFIED": true,
+    "INSTALL_TIMESTAMP": "Sep 28 16:08 (matches HEAD commit ts)",
+    "PREVIOUS_DOGFOOD_BUILD_DISTINCT": {
+      "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-8fdde3fb5.vsix",
+      "byte_size": 14625002,
+      "sha256": "36521b02c1976f2b350ffcdcd2859d2f534ca54ef3a5b52e6d093b10872fcb6d"
+    }
+  },
+
+  "predecessor_evidence_classification": {
+    "PREDECESSOR_LIVE_RED": {
+      "REAL": {
+        "run_2_started": true,
+        "run_2_done": false,
+        "task_completion_committed": false
+      },
+      "source": "ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/04-live-session-identity.txt",
+      "frozen_counters": {
+        "run_turn_started": 2,
+        "agent_turn_done": 1,
+        "task_completion_committed": 0
+      }
+    },
+    "PREDECESSOR_ROOT_CAUSE_PROOF": {
+      "SYNTHETIC_REAL": {
+        "stalled_resources_list_reproduces_same_bootstrap_stall": true,
+        "ablation_restores_RED": true
+      },
+      "source": "ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01 board row (epic-board.md 15280..15358)"
+    },
+    "real_live_chronology": [
+      "submit",
+      "enqueue",
+      "done #1",
+      "dequeue",
+      "continuation scheduled",
+      "run #2",
+      "no done #2",
+      "no commit"
+    ]
+  },
+
+  "operator_authority_boundary": {
+    "operator_owns": [
+      "launch Codium against .vscodium-cline profile",
+      "quit other stale Codium profiles (.vscodium-granelle, .vscodium-neurogames, .vscodium-clinemm)",
+      "open repository",
+      "press Start New Task",
+      "visually inspect MCP Servers view (state, tool count)",
+      "visually inspect completion state",
+      "type the mundane prompt from ACT section 9 / recipe Step 5",
+      "seed the sentinel via terminal + myc remember ... --reach project",
+      "read out getMycPrimeLiveDiag via Codium Command Palette / ext.evaluate probe",
+      "open $CLINE_CAPTURE_DIR/ai-sdk/*.json and grep for sentinel + prime_packet block",
+      "click X / Trash icon to close chat at end of run"
+    ],
+    "clinemm_owns_for_this_act": [
+      "source-of-truth frozen-source verification (section 2)",
+      "source-of-truth installed-artifact identity verification (section 3)",
+      "operator/clinemm authority boundary declaration (section 5)",
+      "predecessor evidence classification preservation (section 4)",
+      "no code/test/myc changes (section 24)",
+      "minimal git gates (section 25)",
+      "evidence directory pre-staging (section 23)"
+    ],
+    "test_harness_used": false,
+    "clinemm_started_codium": false,
+    "operator_started_codium": "PENDING_OPERATOR_LIVE_RUN"
+  },
+
+  "live_steps_status": {
+    "LIVE_A_PRE_SESSION_STATE": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_B_MCP_AUTOSTART": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_C_AUTOMATIC_PRIME": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_D_MYC_RETRIEVAL_SEMANTICS": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_E_IDENTITY_JOIN": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_F_INJECTION_CARDINALITY": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_G_PROVIDER_CAPTURE": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_H_DIAG_PROVIDER_CORRELATION": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_I_BOUNDED_MCP_BOOTSTRAP_REPAIR": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_J_FINALIZATION_RUN_COMPLETION": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_K_COMPLETION_CONSERVATION": "PENDING_OPERATOR_LIVE_RUN",
+    "LIVE_L_MCP_TEARDOWN": "PENDING_OPERATOR_LIVE_RUN"
+  },
+
+  "sentinel_seed_status": {
+    "SENTINEL_ID": "MYC-LIVE05-20260928-A",
+    "SENTINEL_TOKEN": "PENDING_OPERATOR_LIVE_RUN",
+    "SENTINEL_STORED": "PENDING_OPERATOR_LIVE_RUN",
+    "SENTINEL_RECALLABLE": "PENDING_OPERATOR_LIVE_RUN",
+    "reason_deferred": "ACT section 7 forbids seeding a sentinel token from inside a session whose transcript is exposed to a model/reviewer. The token must be regenerated at the operator's bench and stored via the supported myc remember ... shape before LIVE-A. Clinemm does NOT have an operator-only terminal and does NOT launch Codium (ACT section 5)."
+  },
+
+  "bounded_bootstrap_repair_summary": {
+    "commit": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+    "commit_message": "fix(mcp): bound per-session post-connect discovery",
+    "files_changed": [
+      "apps/vscode/src/services/mcp/McpHub.ts (+95/-18)",
+      "apps/vscode/src/services/mcp/__fixtures__/frbs-stallable/server.mjs (NEW, 145 lines)",
+      "apps/vscode/src/services/mcp/__tests__/_frbsHarness.ts (NEW, 124 lines)",
+      "apps/vscode/src/services/mcp/__tests__/finalizationRunBootstrapStall01.test.ts (NEW, 152 lines)",
+      "apps/vscode/vitest.config.ts (+3)"
+    ],
+    "pre_repair_pattern": "Promise.allSettled over client.listTools/listResources/listResourceTemplates/listPrompts",
+    "post_repair_pattern": "capability-aware, per-request-timeout client.request({ method }, Schema, { timeout: timeoutMs })",
+    "timeout_authority": "resolveMcpServerTimeoutMs(staticConn.server.config) -- same as static connectToServer path; no new constant",
+    "test_seam": "finalizationRunBootstrapStall01.test.ts + frbs-stallable fixture (real Node ESM stdio MCP server)",
+    "red_green_ablation": "RED pre-fix: FRBS-05 + FRBS-07 hit 8000ms race timeout. GREEN post-fix: 4 FRBS cases pass in 3663ms total. Ablation via git stash round-trip."
+  },
+
+  "next_act_proposal": "After the operator completes LIVE-A..LIVE-L, update result.json with the populated fields and update .factory/epic-board.md with the new row. If VERDICT=PASS_REAL_MYC_PRIME_PROVIDER_BOUND, READY_FOR_MYC_CLINEMM06=true. If a HALT triggers, open a separate repair ACT -- this ACT forbids opportunistic fixing.",
+  "ready_for_myc_clinemm06": "PENDING_OPERATOR_LIVE_RUN"
+}
