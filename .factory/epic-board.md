@@ -15276,3 +15276,83 @@ from the operator's terminal observations plus a single file inspection
 at `${CLINE_CAPTURE_DIR}/ai-sdk/*.json`.
 
 `READY_FOR_MYC_CLINEMM05 = true.`
+
+## ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01 — PASS_BOUNDED_MCP_BOOTSTRAP — 2026-09-28
+
+**Status:** PASS_BOUNDED_MCP_BOOTSTRAP. The live P0 captured during
+`ACT-MYC-CLINEMM04-LIVE-QUALIFICATION` (the finalization continuation
+run hangs between `run_turn_started #2` and `agent_turn_done #2`) is
+repaired at the McpHub.ensureSessionConnection post-connect discovery
+seam.
+
+**Live RED preserved:** `.factory/evidence/ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01/`
+- continuation-cardinality-authority(20260928-121720).jsonl — session 1790593144726_t7cp7
+- continuation-cardinality-authority.counters(20260928-121719).json
+- background-job-liveness-authority(8).jsonl
+- Screenshot 2026-09-28 at 15.15.50.png (Working / Cancel state)
+
+**Counts at the stuck boundary:** run_turn_started=2, agent_turn_done=1,
+task_completion_committed=0. The continuation subsystem (BCB +
+PendingPromptsController + continuation_scheduled) successfully handed
+the second run off. The defect lived strictly between `run_turn_started
+#2` and `agent_turn_done #2`, inside the second run's bootstrap.
+
+**Root cause:** the AUTOSTART01 post-connect discovery at McpHub.ts:539-546
+used `Promise.allSettled([client.listTools?.(), client.listResources?.(),
+client.listResourceTemplates?.(), client.listPrompts?.()])`. While
+`Promise.allSettled` prevents a rejection from aborting the aggregate,
+it does NOT prevent a promise that never settles — a misbehaving child
+whose `resources/list` opens a half-open JSON-RPC stream and never
+responds blocks the aggregate forever, and transitively blocks
+createVscodeExtraTools → prepareStartSessionInput → ClineCore.startSession.
+
+**Repair (apps/vscode/src/services/mcp/McpHub.ts, +95/-18):**
+- Replaced the unbounded `Promise.allSettled` aggregate with four
+  capability-aware, per-request-timeout `client.request({ method }, Schema,
+  { timeout: timeoutMs })` calls — the same pattern the static
+  `connectToServer` path already uses via `fetchToolsList` /
+  `fetchResourcesList` / `fetchResourceTemplatesList` /
+  `fetchPromptsList`.
+- Capability-aware skip: `client.getServerCapabilities()` gates each
+  probe; an unadvertised capability is skipped entirely (returns `[]`).
+- Method-not-found returns `[]` (not undefined); other failures log and
+  return `undefined` (the existing downstream fallback applies).
+- Per-call timeout reuses `resolveMcpServerTimeoutMs(staticConn.server.config)`
+  — the same authority the static `connectToServer` path uses. No new
+  timeout constant.
+
+**Test seam:** `apps/vscode/src/services/mcp/__tests__/finalizationRunBootstrapStall01.test.ts`
++ `apps/vscode/src/services/mcp/__tests__/_frbsHarness.ts` +
+`apps/vscode/src/services/mcp/__fixtures__/frbs-stallable/server.mjs`.
+The fixture is a real Node ESM stdio MCP server controlled by
+`FRBS_STALL_KIND` (none / listResources / listResourceTemplates /
+listPrompts / listTools). It completes `initialize` + the un-stalled
+probes normally and stalling the chosen probe by `await new Promise(() => {})`
+exactly.
+
+**RED → GREEN → ABLATION:**
+- RED (pre-fix): FRBS-05 + FRBS-07 hit the 8000ms race timeout.
+- GREEN (post-fix): all 4 FRBS cases pass in 3663ms total.
+  FRBS-05 listResources stalls → bootstrap completes in 1131ms (the
+  per-server timeoutMs=1s fires, McpError(RequestTimeout) is caught,
+  bootstrap continues).
+  FRBS-07 second run (post disconnectSession) → completes in 2270ms.
+- Ablation: `git stash` of the McpHub.ts patch reproduces RED;
+  `git stash pop` restores GREEN.
+
+**Conservation (34 / 34 PASS):**
+- mcpSessionAutostart01 10/10 (AUTOSTART01 seam preserved)
+- sessionIdEcho.productionShape 8/8 (A2A-18 production shape preserved)
+- vscode-session-host 9/9, vscode-runtime-builder 1/1, settingsLock 2/2
+- finalizationRunBootstrapStall01 4/4 (new ACT)
+
+**Gates:** `bun run check-types` PASS, `git diff --check` PASS.
+`bun run vscode:prepublish` deferred to operator live-dogfood step
+(ACT §37).
+
+**Live dogfood:** DEFERRED. Operator runs LIVE04 against the rebuilt
+VSIX; expected trace: `run_turn_started #2` followed by
+`agent_turn_done #2` and `task_completion_committed=1`. Successor ACT:
+`ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01`.
+
+`READY_FOR_MYC_CLINEMM05 = true.`
