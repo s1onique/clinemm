@@ -1,0 +1,358 @@
+OPERATOR_RECIPE — live qualification run for ACT-MYC-CLINEMM04
+
+Audience: the human who owns the keyboard and screen.
+Pre-state: this session has pre-staged the dogfood VSIX (4.1.16-8fdde3fb5)
+and verified it is installed in the `.vscodium-cline` profile. The
+operator only needs to drive the Codium UI; this session owns nothing else.
+
+═══════════════════════════════════════════════════════════════════
+STEP 0 — sanity (one terminal, no Codium)
+═══════════════════════════════════════════════════════════════════
+
+  $ cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+  $ git status --short         # expect empty
+  $ git rev-parse HEAD         # expect 8fdde3fb5
+
+  $ shasum -a 256 dist/dogfood/clinemm-4.1.16-8fdde3fb5.vsix
+    # expect: 36521b02c1976f2b350ffcdcd2859d2f534ca54ef3a5b52e6d093b10872fcb6d
+
+  $ ls /Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions/
+    # expect a directory named s1onique.clinemm-4.1.16-8fdde3fb5 present
+
+  $ /Volumes/UserData/Users/chistyakov/.myc/bin/myc --version
+    # expect: myc 0.3.14 (schema 1)
+
+═══════════════════════════════════════════════════════════════════
+STEP 1 — generate the sentinel (operator's bench, never in transcript)
+═══════════════════════════════════════════════════════════════════
+
+Run these in a fresh terminal window that no AI will ever see:
+
+  TOKEN=$(uuidgen | cut -c1-12)
+  echo "TOKEN=$TOKEN"      # write this down somewhere you will not forget
+
+  cd <clinemm-workspace>     # same repo as ACT
+  /Volumes/UserData/Users/chistyakov/.myc/bin/myc remember \
+    "MYC-LIVE04-20260928-B = ${TOKEN}" \
+    --tag clinemm-live04 --layer L1 --reach project
+
+  /Volumes/UserData/Users/chistyakov/.myc/bin/myc recall "MYC-LIVE04-20260928-B"
+    # expect: at least one hit containing the token
+
+After this, write into:
+  .factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/03-sentinel-seed.txt
+- SENTINEL_TOKEN=<the value of $TOKEN>
+- SENTINEL_STORED=true
+- SENTINEL_RECALLABLE=true
+
+═══════════════════════════════════════════════════════════════════
+STEP 2 — quit any running Codium that is NOT .vscodium-cline
+═══════════════════════════════════════════════════════════════════
+
+The .vscodium-granelle, .vscodium-neurogames, .vscodium-clinemm
+profiles were caught running with stale clinemm builds. They must NOT
+be the target. If you want them closed:
+
+  # Quit them via Activity Monitor, or
+  osascript -e 'tell application "VSCodium" to quit'
+
+DO NOT install any older VSIX over the .vscodium-cline profile's
+s1onique.clinemm-4.1.16-8fdde3fb5 directory.
+
+═══════════════════════════════════════════════════════════════════
+STEP 3 — launch Codium against the .vscodium-cline profile
+═══════════════════════════════════════════════════════════════════
+
+  export CLINEMM_RUNTIME_PROFILE=dogfood
+  export CLINEMM_MYC_PRIME_DIAG=1
+  export CLINE_CAPTURE_PROVIDER_REQUEST=full
+  export CLINE_CAPTURE_DIR=/tmp/clinemm-myc-prime-captures
+  # (Do NOT set CLINE_CAPTURE_WIRE — keep wire capture OFF per ACT §4.)
+
+  mkdir -p "$CLINE_CAPTURE_DIR"
+  rm -rf "$CLINE_CAPTURE_DIR"/*    # start with an empty capture dir
+
+  /Applications/VSCodium.app/Contents/Resources/app/bin/codium \
+    --user-data-dir=/Volumes/UserData/Users/chistyakov/.vscodium-cline/user-data \
+    --extensions-dir=/Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions \
+    /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm &
+
+  # wait for the window to come up; click "Later" on any update prompt.
+
+═══════════════════════════════════════════════════════════════════
+STEP 4 — LIVE-A: pre-session state
+═══════════════════════════════════════════════════════════════════
+
+Open the Cline sidebar. Open the MCP Servers view.
+
+  EXPECTED:
+    myc enabled                       = true
+    myc runtime state                 = pending-session / deferred
+    myc tools surfaced to webview     = 0 (no session yet)
+    myc child stdio process           = NOT spawned (use `pgrep -f myc`
+                                       to confirm zero myc mcp children)
+
+  RECORD:
+    LIVE_PRE_SESSION_UI_STATE=pending-session/deferred
+    LIVE_PRE_SESSION_CHILD_PRESENT=false
+    MANUAL_RESTART_COUNT=0
+
+  If myc child already exists at this point:
+    HALT_SESSION_BOUND_MCP_PREMATURE_SPAWN
+
+═══════════════════════════════════════════════════════════════════
+STEP 5 — send a fresh real task (the mundane prompt)
+═══════════════════════════════════════════════════════════════════
+
+In the Cline chat input, type exactly this prompt:
+
+  Inspect the repository briefly and tell me the most relevant
+  engineering context for continuing work. Do not modify files. Avoid
+  long-running commands.
+
+Press Enter. The task should start a NEW session. Note the session
+ID from the URL or the session-listing view.
+
+DO NOT type any of:  myc  memory  prime  sentinel  amber-circuit-5927
+DO NOT manually invoke any myc MCP tool.
+
+  RECORD:
+    LIVE_SESSION_ID=S
+
+═══════════════════════════════════════════════════════════════════
+STEP 6 — LIVE-B: MCP autostart qualification (no Restart Server!)
+═══════════════════════════════════════════════════════════════════
+
+Within ~2 seconds of pressing Enter, observe the MCP Servers view:
+
+  EXPECTED:
+    myc runtime state                 = connected (still zero Restart click)
+    myc tools surfaced to webview     > 0 (work tier: prime/ready/update/recall/...)
+
+From a parallel terminal:
+
+  $ pgrep -lf 'myc mcp' | head -5
+    # expect: at least one `/Volumes/UserData/Users/chistyakov/.myc/bin/myc mcp`
+    # that was NOT there in step 4.
+
+  $ MYC_PID=$(pgrep -f 'myc mcp' | head -1)
+  $ ps -o pid,ppid,command -p $MYC_PID
+  $ ps eww -p $MYC_PID | tr ' ' '\n' | grep -E '^(MYC_SESSION_ID|MYC_ACTOR|MYC_REACH)='
+    # expect: MYC_SESSION_ID=<S>
+
+  RECORD:
+    LIVE_POST_SESSION_UI_STATE=connected
+    LIVE_MYC_CHILD_STARTED=true
+    LIVE_MYC_CHILD_SESSION_ID=S
+    LIVE_MYC_TOOL_COUNT=<N>
+    LIVE_MANUAL_RESTART_COUNT=0
+
+  If UI stayed pending/deferred but child IS connected:
+    HALT_LIVE_MCP_PROJECTION_STALE
+  If child is not present:
+    HALT_LIVE_SESSION_MCP_NOT_STARTED
+  If child MYC_SESSION_ID != S:
+    HALT_LIVE_MCP_SESSION_ID_MISMATCH
+
+═══════════════════════════════════════════════════════════════════
+The result should contain four sections:
+
+  acquisition: {
+    attempted: true,
+    serverDetected: true,
+    status: "ok",
+    textPresent: true,
+    textBytes: <N>
+  }
+  lookup: {
+    attempted: true,
+    snapshotSessionIdPresent: true,
+    matchedRecordedSession: true,
+    recordedPrimeFound: true,
+    iteration: <N>
+  }
+  injection: {
+    attempted: true,
+    injected: true,
+    reason: "ok",
+    packetBytes: <N>,
+    iteration: 1
+  }
+  capture: {
+    captureId: "mycprime-<S>-<ts>",
+    aiSdkPromptObserved: true
+  }
+
+  RECORD:
+    PRIME_REQUEST_COUNT=1
+    PRIME_ATTEMPTED=true
+    PRIME_RESULT_STATUS=success
+    PRIME_RESULT_BYTES=<textBytes>
+    PRIME_RESULT_SESSION_ID=S
+    MYC_DIAG_CAPTURE_ID=<captureId>
+
+  If absent:
+    HALT_AUTOMATIC_PRIME_NOT_INVOKED
+
+═══════════════════════════════════════════════════════════════════
+STEP 9 — provider-bound capture (LIVE-G / H / I / J)
+═══════════════════════════════════════════════════════════════════
+
+  $ ls -la /tmp/clinemm-myc-prime-captures/
+    # expect: at least one capture file
+  $ find /tmp/clinemm-myc-prime-captures -type f -name '*.json' | head
+
+  $ ls /tmp/clinemm-myc-prime-captures/ai-sdk/
+    # expect: at least one file with the captureId above as substring
+
+Read the file:
+
+  $ cat /tmp/clinemm-myc-prime-captures/ai-sdk/<file>.json | jq . > /tmp/json.dump
+  $ grep -c '<prime_packet source="myc" session="' /tmp/json.dump
+    # expect: 1 (exactly one prime_packet block across the file)
+  $ grep -c "$TOKEN" /tmp/json.dump
+    # expect: 1 (sentinel token appears exactly once)
+
+  RECORD (DO NOT commit the full payload):
+    PROVIDER_CAPTURE_PRESENT=true
+    PROVIDER_CAPTURE_STAGE=ai_sdk_prompt
+    PROVIDER_CAPTURE_MODE=full
+    PROVIDER_CAPTURE_ID=<captureId>
+    PROVIDER_CAPTURE_SESSION_ID=S
+    PROVIDER_BOUND_PRIME_PACKET_COUNT=1
+    PROVIDER_BOUND_PRIME_PACKET_SESSION_ID=S
+    PROVIDER_BOUND_SENTINEL_PRESENT=true
+    PROVIDER_CAPTURE_RAW_SHA256=$(shasum -a 256 <file>.json | cut -d' ' -f1)
+
+  If provider capture is absent:
+    HALT_PROVIDER_CAPTURE_NOT_ACTIVE
+  If injection says 1 but capture says 0:
+    HALT_PRIME_PACKET_LOST_BEFORE_PROVIDER
+  If prime packet count > 1 across the file:
+    HALT_DUPLICATE_PRIME_INJECTION
+
+
+═══════════════════════════════════════════════════════════════════
+STEP 10 — LIVE-L: ordinary completion conservation
+═══════════════════════════════════════════════════════════════════
+
+Once the model has responded and the task shows completed:
+
+  EXPECTED:
+    VISIBLE_COMPLETION_COUNT=1
+    WORKING_AFTER_COMPLETION=false
+    CANCEL_AFTER_COMPLETION=false
+    PERSISTENT_YOUR_TURN=false
+
+  If any of these regress:
+    HALT_COMPLETION_CONSERVATION_REGRESSION
+
+═══════════════════════════════════════════════════════════════════
+STEP 11 — LIVE-M: MCP teardown
+═══════════════════════════════════════════════════════════════════
+
+Open the MCP Servers view again.
+
+  EXPECTED:
+    myc runtime state                 = pending-session / deferred
+═══════════════════════════════════════════════════════════════════
+STEP 13 — write up result.json
+═══════════════════════════════════════════════════════════════════
+
+Update .factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/result.json
+with the recorded facts above. The ACT §30 template lists every field.
+
+Set VERDICT to PASS_REAL_MYC_PRIME_PROVIDER_BOUND if and only if every
+gate in ACT §28 passed:
+
+  Codium restart
+    ↓
+  myc deferred, zero child                LIVE_PRE_SESSION_UI_STATE=pending-session
+    ↓
+  Start session S
+    ↓
+  myc child auto-spawned                  LIVE_MYC_CHILD_STARTED=true
+    ↓
+  MYC_SESSION_ID=S                        child's process env matches S
+    ↓
+  MCP panel connected                     LIVE_POST_SESSION_UI_STATE=connected
+    ↓
+  automatic prime exactly once            PRIME_REQUEST_COUNT=1
+    ↓
+  prime recorder key=S                    acquisition.recordedPrime.snapshotSessionId == S
+    ↓
+  snapshot sessionId=S                    lookup.snapshotSessionIdPresent==true
+    ↓
+  beforeModel lookup hit                  lookup.recordedPrimeFound==true
+    ↓
+  prime packet injection exactly once     injection.injected==true && iteration==1
+    ↓
+  correlated provider-bound ai_sdk_prompt ai-sdk/<file>.json exists with captureId
+    ↓
+  prime packet exactly once               PROVIDER_BOUND_PRIME_PACKET_COUNT=1
+    ↓
+  sentinel present                        PROVIDER_BOUND_SENTINEL_PRESENT=true
+    ↓
+  normal single task completion           VISIBLE_COMPLETION_COUNT=1
+    ↓
+  session teardown
+    ↓
+  MCP panel deferred again                LIVE_POST_DISCONNECT_UI_STATE=pending-session
+
+If any gate fails, set VERDICT to the matching HALT_<exact_boundary>
+and stop. The qualification ACT forbids opportunistic fixing.
+
+═══════════════════════════════════════════════════════════════════
+STEP 14 — finalize
+═══════════════════════════════════════════════════════════════════
+
+  cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm
+  git status --short         # expect empty (still no code changes)
+  git diff --check           # expect clean
+
+Commit the result.json + the updated evidence files, and update
+.factory/epic-board.md with the new row.
+
+Then send the operator's PASS / HALT verdict upstream.
+
+    myc tools surfaced to webview     = 0 (no session active)
+    myc child stdio process           = NOT spawned
+      (verify with `pgrep -f 'myc mcp'` -> empty)
+
+  Record:
+    LIVE_POST_DISCONNECT_UI_STATE=pending-session/deferred
+    LIVE_POST_DISCONNECT_CHILD_PRESENT=false
+
+  If it stayed green:
+    HALT_LIVE_MCP_TEARDOWN_PROJECTION_STALE
+  If child is still alive:
+    HALT_LIVE_MCP_CHILD_LEAK
+
+═══════════════════════════════════════════════════════════════════
+STEP 12 — close the chat
+═══════════════════════════════════════════════════════════════════
+
+Click the "X" on the chat tab to close it (or use the task Trash icon
+in the history view). Wait ~2 seconds. Confirm the child is gone.
+
+STEP 7 — wait for the task to finish (the model should respond once)
+═══════════════════════════════════════════════════════════════════
+
+The model should write back a short paragraph about the repo. Wait
+for the "task complete" indicator in the chat panel.
+
+DO NOT keep firing follow-up messages. ONE mundane prompt only.
+
+═══════════════════════════════════════════════════════════════════
+STEP 8 — diagnostic snapshot (LIVE-C / D / E / F)
+═══════════════════════════════════════════════════════════════════
+
+Open Codium's Command Palette and run (or use a temporary probe
+extension / `ext.evaluate` if you must):
+
+  > Cline: Show Current Task Diagnostics
+
+Or paste into a Node REPL hooked to the extension host:
+
+  const { getMycPrimeLiveDiag } = require('./out/src/sdk/myc-prime-live-diag');
+  console.log(JSON.stringify(getMycPrimeLiveDiag(<S>), null, 2));

@@ -1,36 +1,54 @@
 DOGFOOD_ARTIFACT_IDENTITY:
 
-DOGFOOD_SOURCE_HEAD=UNBUILT (user instructed: "Don't package anything, I will do it manually")
-EXTENSION_VERSION=4.1.16 (from apps/vscode/package.json)
-VSIX_PATH=NONE (no new build)
-VSIX_BYTE_SIZE=N/A
-VSIX_SHA256=N/A
-INSTALLED_EXTENSION_VERSION=N/A
+DOGFOOD_SOURCE_HEAD=8fdde3fb5e8508ef76064df95346ebade9a1783b (git rev-parse HEAD)
+EXTENSION_VERSION=4.1.16 (apps/vscode/package.json)
+DOGFOOD_VSIX_PATH=/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-8fdde3fb5.vsix
+DOGFOOD_VSIX_BYTE_SIZE=14625002
+DOGFOOD_VSIX_SHA256=36521b02c1976f2b350ffcdcd2859d2f534ca54ef3a5b52e6d093b10872fcb6d
+DOGFOOD_VSIX_BUILT_AT=2026-09-28T13:42 (file mtime)
 
-EXISTING_DIST_ARTIFACTS_AT_REPO_ROOT (NOT bound to 7cbca60b0 — informational only):
-  dist/clinemm-4.1.10-0841353f0.vsix
-  dist/clinemm-4.1.16-6abd73a15.vsix   (BCB01-CORRECTION02 era, NOT 7cbca60b0)
-  dist/clinemm-4.1.16-baacc122a.vsix
-  dist/clinemm-4.1.16-bjla-cancellation-provenance01.vsix
-  dist/clinemm-4.1.16-bocor.vsix
-  dist/clinemm-4.1.16-dogfood-c47e219f7.vsix
-  dist/clinemm-exact-head.vsix          (most likely the last dogfood install)
-  dist/clinemm-r0recon-correction02.vsix
-  dist/clinemm-r0recon-f89983f72.vsix
-  dist/clinemm-r0recon-findglobfix.vsix
+INSTALLED_LOCATION=/Volumes/UserData/Users/chistyakov/.vscodium-cline/extensions/s1onique.clinemm-4.1.16-8fdde3fb5
+INSTALLED_PROFILE=.vscodium-cline
+INSTALLED_EXTENSION_VERSION=4.1.16-8fdde3fb5
 
-HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN=true
+INSTALL_BINDING_VERIFIED=true
+  The installed extension directory name "s1onique.clinemm-4.1.16-8fdde3fb5"
+  matches DOGFOOD_SOURCE_HEAD (8fdde3fb5) exactly. The on-disk
+  extension/package.json version field reads "4.1.16-8fdde3fb5".
 
-REASON:
-  ACT §2 requires the dogfood artifact to be built from EXACT SOURCE_HEAD (7cbca60b0),
-  with VSIX_PATH, VSIX_BYTE_SIZE, VSIX_SHA256, INSTALLED_EXTENSION_VERSION bound to
-  that source. The user explicitly instructed not to package anything in this run.
-  The pre-existing dist/*.vsix files in the repo are bound to OTHER commits
-  (e.g. clinemm-exact-head.vsix is from a prior dogfood cycle, not from 7cbca60b0).
-  Without a freshly-built VSIX from 7cbca60b0 the artifact → source binding is
-  unproven, and the ACT §2 explicit halt ("HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN")
-  applies.
+AUTOSTART01+CORRECTION01_HOOKS_PRESENT_IN_VSIX=true
+  Verified by grep -aoE on the esbuild bundle at
+  .vsix-peek/extension/dist/extension.js (extension bundled as single
+  minified file). All four production hooks present:
+    ensureSessionConnection         (startup projection)
+    disconnectSession               (used by CORRECTION01 symmetric teardown)
+    hasSurvivingPerSessionConnection (multi-session-safe helper)
+    prepareStartSessionInput        (discovery seam)
 
-  Per user direction the manual packaging is performed outside this session and
-  must be repeated at the operator's bench; the resulting VSIX + SHA-256 must be
-  re-recorded before the live run.
+DIAGNOSTIC_PROFILE_HOOKS_PRESENT_IN_VSIX=true
+  EnvVar hooks present (string-grep on extension.js):
+    CLINEMM_RUNTIME_PROFILE      (apps/vscode/src/sdk/dogfood-runtime-profile.ts)
+    CLINEMM_MYC_PRIME_DIAG       (apps/vscode/src/sdk/dogfood-diagnostic-profile.ts:1192)
+    CLINE_CAPTURE_PROVIDER_REQUEST
+    CLINE_CAPTURE_WIRE
+    CLINE_CAPTURE_DIR
+  Source-level diagnostic recorders (minified, but reachable in source):
+    startMycPrimeLiveDiag       apps/vscode/src/sdk/dogfood-diagnostic-profile.ts
+    recordMycPrimeLiveAcquisition apps/vscode/src/sdk/myc-prime-automation.ts:118-225
+    recordMycPrimeLiveLookup    apps/vscode/src/sdk/hooks-adapter.ts:218-235
+    recordMycPrimeLiveInjection apps/vscode/src/sdk/hooks-adapter.ts:236-378
+    recordMycPrimeLiveCapture   apps/vscode/src/sdk/hooks-adapter.ts:355-359
+    getMycPrimeLiveDiag         apps/vscode/src/sdk/myc-prime-live-diag.ts
+
+REQUIRED_PROMPTS_BOUND_TO_HEAD=true
+  AUTOSTART startup projection                -> 046b4ab30 -> HEAD
+  AUTOSTART CORRECTION01 teardown projection  -> 99ff0b356 -> HEAD
+  completion-presentation repair              -> cf14d6b63 / 645da8aa3
+  post-consumption containment_failed repair  -> 4dd630fe1 / 832336361
+  dogfood diagnostic profile                  -> 8a7e5b4a0
+
+HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN=false
+  (Both the VSIX identity (HEAD-bound, sha256-recording) and the
+   installed-extension identity (matching folder name + package.json
+   version) are proven. ACT §2 PASSES its identity-gate. Operator
+   still owns the LIVE-A..LIVE-M run.)

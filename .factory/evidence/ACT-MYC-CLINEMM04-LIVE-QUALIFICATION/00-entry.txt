@@ -1,16 +1,49 @@
 ACT=ACT-MYC-CLINEMM04-LIVE-QUALIFICATION
 
-ENTRY_HEAD=7cbca60b0c7a00307cb20f83a098c160a7e46f5f
-SUBJECT_HEAD=7cbca60b0c7a00307cb20f83a098c160a7e46f5f
-SOURCE_HEAD=7cbca60b0c7a00307cb20f83a098c160a7e46f5f
+ENTRY_HEAD=8fdde3fb5e8508ef76064df95346ebade9a1783b
+SUBJECT_HEAD=8fdde3fb5e8508ef76064df95346ebade9a1783b
+SOURCE_HEAD=8fdde3fb5e8508ef76064df95346ebade9a1783b
 
-SUBJECT_COMMIT_MESSAGE= test(vscode): replace BCCA eval probe with createRequire
+SUBJECT_COMMIT_MESSAGE= ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01: closure board row
 PREVIOUS_PRODUCTION_HEAD=ee5529010 (ACT-CLINEMM-BACKGROUND-COMPLETION-CONSUMER-AVAILABILITY01-CORRECTION02)
 
 ENTRY_VERIFICATION:
-  git status --short -> (empty, working tree clean)
-  git rev-parse HEAD  -> 7cbca60b0c7a00307cb20f83a098c160a7e46f5f
-  git log -1 --oneline -> 7cbca60b0 test(vscode): replace BCCA eval probe with createRequire
+  git status --short             -> (empty, working tree clean)
+  git rev-parse HEAD             -> 8fdde3fb5e8508ef76064df95346ebade9a1783b
+  git log -1 --oneline           -> 8fdde3fb5 ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01: closure board row
+
+NEW_HEADS_SINCE_PRIOR_LIVE04_RESULT:
+  HEAD                            = 8fdde3fb5  (ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01 closure board row)
+  HEAD~1                          = 99ff0b356  (symmetric teardown projection + evidence reclassification)
+  HEAD~2                          = b7b52f462  (closure artifacts board + evidence)
+  HEAD~3                          = 046b4ab30  (reconcile deferred template status to connected when per-session child spawns)
+  PRIOR LIVE04 SUBJECT_HEAD       = 7cbca60b0
+
+PREFLIGHT (per ACT §1.5):
+  AUTOSTART01 result.json entry_head = 5cb95e88e (entry head of the
+    AUTOSTART01 ACT itself; 7cbca60b0 was a downstream BCCA test probe
+    swap that does NOT change MCP/prime/wiring seams.)
+  AUTOSTART01 CORRECTION01 landed as commits 99ff0b356 +
+    8fdde3fb5 on top of 5cb95e88e.
+  AUTOSTART01+CORRECTION01 implementation binding documented in
+    .factory/evidence/ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01/result.json
+    under files_changed:
+      apps/vscode/src/services/mcp/McpHub.ts             +148/-5
+      apps/vscode/vitest.config.ts                       +6
+      apps/vscode/src/services/mcp/__tests__/
+        mcpSessionAutostart01.test.ts                    NEW (408 lines)
+  HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN = false
+    (VSIX from HEAD is built, signed, and installed in .vscodium-cline;
+     see 01-dogfood-artifact-identity.txt for details.)
 
 UNEXPECTED_TRACKED_DIRT=none
 HALT_UNEXPECTED_TRACKED_DIRT=false
+
+PRESERVATION_NOTE:
+  Prior LIVE04 evidence files from the 7cbca60b0 run are preserved in
+  this directory (00..10), with their LIVE_UNOBSERVABLE classifications
+  intact, per ACT §25 "preserve its history explicitly rather than
+  overwriting evidence silently". This file (00-entry.txt) has been
+  updated to reflect the new HEAD; the prior 00-entry.txt content is
+  archived in `.factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/
+  prior-run-snapshot/00-entry.prior-7cbca60b0.txt` for transparency.

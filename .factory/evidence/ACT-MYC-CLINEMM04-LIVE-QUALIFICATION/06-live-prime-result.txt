@@ -5,7 +5,9 @@ PRIME_RESULT_STATUS=PENDING_OPERATOR_LIVE_RUN
 PRIME_RESULT_SESSION_ID=PENDING_OPERATOR_LIVE_RUN
 PRIME_RESULT_CONTAINS_SENTINEL=PENDING_OPERATOR_LIVE_RUN
 
-WHEN THE OPERATOR RUNS LIVE-A..LIVE-I, the following existing
+RE-RUN HEAD: 8fdde3fb5 (was 7cbca60b0 on the prior LIVE04 record).
+
+WHEN THE OPERATOR RUNS LIVE-A..LIVE-M, the following existing
 observability points fire automatically (no new instrumentation):
 
   ACQUISITION (apps/vscode/src/sdk/myc-prime-automation.ts:118-225)
@@ -29,23 +31,53 @@ observability points fire automatically (no new instrumentation):
       onto request.options.metadata AND
       recordMycPrimeLiveCapture(sessionId, {captureId, aiSdkPromptObserved:true})
 
-ENABLE VIA:
+  CAPTURE (apps/vscode/src/sdk/hooks-adapter.ts:355-359)
+    - recordMycPrimeLiveCapture is called on the FIRST successful
+      injection. It records the captureId so the operator can find the
+      matching ai-sdk/<file>.json from $CLINE_CAPTURE_DIR.
+
+ENABLE VIA (LIVE PROFILE):
+  export CLINEMM_RUNTIME_PROFILE=dogfood
   export CLINEMM_MYC_PRIME_DIAG=1
   export CLINE_CAPTURE_PROVIDER_REQUEST=full
-  export CLINE_CAPTURE_WIRE=true
-  export CLINE_CAPTURE_CLEANUP=off
+  # NOTE: per ACT §4, CLINE_CAPTURE_WIRE is intentionally OFF;
+  # the operator must NOT set it. The dogfood profile makes
+  # CLINE_CAPTURE_PROVIDER_REQUEST enough.
   export CLINE_CAPTURE_DIR=/tmp/clinemm-myc-prime-captures
-  (Existing recipe from ACT-MYC-CLINEMM03.)
+  export CLINE_CAPTURE_CLEANUP=off
+
+  CLINEMM_RUNTIME_PROFILE=dogfood causes the dogfood profile to be
+  detected (apps/vscode/src/sdk/dogfood-runtime-profile.ts), which:
+    - turns on `mycPrimeDiagnostics` automatically
+    - sets captureMode='full' for CLINE_CAPTURE_PROVIDER_REQUEST
+  This is why the operator MUST NOT manually set those env vars; the
+  dogfood profile owns them.
 
 READOUT:
   getMycPrimeLiveDiag(sessionId) -> {acquisition, lookup, injection, capture?}
-  WHERE_TO_FIND wire capture:
-    ${CLINE_CAPTURE_DIR}/wire/*.json  (matched by captureId)
+  WHERE_TO_FIND provider capture:
     ${CLINE_CAPTURE_DIR}/ai-sdk/*.json (matched by captureId)
+    (NOT wire/*.json — wire capture is OFF in this run.)
 
 POST-RUN VERIFICATION:
   The diagnostic carries textBytes (UTF-8 length) and packetBytes, but
   NEVER the prime text itself. The operator confirms
     PRIME_RESULT_CONTAINS_SENTINEL=true
-  by grepping the wire capture for the SENTINEL_TOKEN they seeded and
-  the literal `<prime_packet source="myc" session="..." ts="...">` block.
+  by grepping the ai-sdk/<file>.json payload for the SENTINEL_TOKEN
+  they seeded (Step 1 in 11-operator-recipe.txt) and for the literal
+  `<prime_packet source="myc" session="..." ts="...">` block. The
+  decisive content proof is:
+        persisted memory
+        → myc prime
+        → prime packet
+        → actual model-bound ai_sdk_prompt
+  No model quotation is required.
+
+DIAGNOSTIC_PROFILE_HOOKS_IN_VSIX=VERIFIED
+  The 8fdde3fb5 esbuild bundle at
+  dist/dogfood/clinemm-4.1.16-8fdde3fb5.vsix contains all six
+  env-var strings (CLINEMM_RUNTIME_PROFILE, CLINEMM_MYC_PRIME_DIAG,
+  CLINE_CAPTURE_PROVIDER_REQUEST, CLINE_CAPTURE_WIRE,
+  CLINE_CAPTURE_DIR, CLINE_CAPTURE_CLEANUP) and the four
+  production hooks (ensureSessionConnection, disconnectSession,
+  hasSurvivingPerSessionConnection, prepareStartSessionInput).

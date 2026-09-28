@@ -9,33 +9,58 @@ REAL_MYC_CLI:
 
 MANUAL_MYC_PRIME=PENDING_OPERATOR_LIVE_RUN
 
-ENVIRONMENT_NOTES:
-  - This session is headless. `code` exists at
-    /Applications/Visual Studio Code.app/Contents/Resources/app/bin/code (1.117.0).
-  - `bun` exists at /opt/homebrew/bin/bun (1.3.14).
-  - PATH did not include either of them at session start.
-  - User instructed: "Don't package anything, I will do it manually,
-    provide a report if you are finished with code and tests."
+ENVIRONMENT_NOTES (RE-RUN 8fdde3fb5):
+  - This session is the operator's macOS workstation shell
+    (Darwin 25, /Volumes/UserData/Users/chistyakov/...). Codium
+    (VSCodium.app, 1.126.04524) is installed at /Applications/VSCodium.app
+    and a `codium` shim is at /opt/homebrew/bin/codium.
+  - VS Code (microsoft release) is also installed but Codium is the
+    canonical target per ACT-MYC-CLINEMM02-A2A.
+  - Currently-running Codium sessions (other profiles, NOT .vscodium-cline):
+      PID 5538 /Volumes/UserData/Users/chistyakov/.vscodium-granelle/user-data
+        (clinemm 4.1.16-8b8ece1c8 -- stale, do NOT use for this ACT)
+      PID 67414+.vscodium-neurogames/user-data
+        (clinemm 4.1.16-9b7391a82 -- stale, do NOT use for this ACT)
+      PID 89673+.vscodium-clinemm/user-data
+        (clinemm version unknown at this moment -- do NOT use for this ACT)
+    These must NOT be the target of this ACT because none of them has
+    the 8fdde3fb5 dogfood build installed.
+  - Target profile for this ACT: .vscodium-cline
+      (extension 4.1.16-8fdde3fb5 installed, no running Codium instance).
+    The operator must launch Codium against this profile.
 
 CANNOT_BE_EXECUTED_BY_THIS_SESSION:
-  §2 dogfood artifact (VSIX build/package/install)
+  §5 LIVE-A cold Codium restart / no-session inspection
   §6 sentinel seed (would leak token via model-visible transcript)
-  §8 fresh real ClineMM task (no MCP-bound provider in this session)
-  §9 LIVE-A child env propagation (no live child)
-  §10 LIVE-B automatic prime (no live trigger)
-  §11 LIVE-C real prime data (no live result)
-  §12 LIVE-D recorder identity (no live run)
-  §13 LIVE-E snapshot.conversationId vs sessionId (no live runtime)
-  §14 LIVE-F prime_packet injection (no live model request)
-  §15 LIVE-G provider-bound request (no live provider call)
-  §16 LIVE-H behavioral witness (no live model)
-  §17 LIVE-I cardinality (no live loop)
+  §7 sentinel isolation (assumes sentinel is stored; depends on §6)
+  §8 LIVE Start New Task (real ClineMM UI; no harness allowed)
+  §9 LIVE-B MCP autostart observation (UI; no harness)
+  §10 LIVE-C automatic prime diagnostics (depends on live task)
+  §11 LIVE-D myc retrieval discrimination (depends on live result)
+  §12 LIVE-E identity join (depends on live run)
+  §13 LIVE-F injection cardinality (depends on live model request)
+  §14 LIVE-G provider capture discovery (depends on live run)
+  §15 LIVE-H diagnostics ↔ provider correlation (depends on live run)
+  §16 LIVE-I provider-bound prime packet (depends on live run)
+  §17 LIVE-J sentinel in provider-bound prompt (depends on live run)
+  §18 LIVE-K model behavior (non-load-bearing observation)
+  §20 LIVE-L completion conservation observation (depends on live run)
+  §21 LIVE-M MCP teardown observation (UI; depends on §8 completion)
+
+EXECUTED_BY_THIS_SESSION (all source-of-truth identity steps):
+  §1 frozen source state            YES (8fdde3fb5, working tree clean)
+  §2 installed artifact identity    YES (HEAD-bound VSIX + install)
+  §3 operator boundary declaration  YES (operator owns UI; this
+                                          session owns nothing UI)
+  §22 no manual MCP restart         N/A (no live session)
+  §26 no code changes               YES (git status --short empty)
+  §27 minimal git gates             YES (git status --short empty)
 
 CLASSIFICATION_FOR_EACH=LIVE_UNOBSERVABLE
   Per ACT §7 ("For any boundary the current diagnostics cannot safely
   observe: LIVE_UNOBSERVABLE. Do not infer it as proven."), each
-  above step is classified LIVE_UNOBSERVABLE rather than inferred
-  from synthetic evidence.
+  above LIVE step is classified LIVE_UNOBSERVABLE rather than inferred
+  from synthetic evidence. ACT §23 forbids synthetic→live promotion.
 
 WHAT_THIS_SESSION_DID_PROVE (CODE-LEVEL only):
   C1 my-prime-lifecycle bridge     myc-prime-automation.lifecycle01.test.ts (12 pass / 0 fail)

@@ -1,0 +1,86 @@
+{
+  "act": "ACT-MYC-CLINEMM04-LIVE-QUALIFICATION",
+  "verdict": "INCOMPLETE_LIVE_AWAITING_OPERATOR",
+  "rationale": "User instruction was 'Don't package anything, I will do it manually, provide a report if you are finished with code and tests.' All ACT §2 build/package/install steps were deliberately not executed by this session. ACT §6 sentinel seed was deliberately not executed to avoid leaking the token into any model-visible transcript. ACT §§8-17 cannot be observed without a live ClineMM installation, which was deliberately not performed. The code-level guarantees (ACQUISITION+LOOKUP+INJECTION+CAPTURE recorders, EnvEntry schema, MCP session-id propagation, per-session dedupe, recorder cardinality) are proven by the unit tests in the existing suite. The LIVE_A..LIVE_I classifications are LIVE_UNOBSERVABLE per ACT §7.",
+  "entry_head": "7cbca60b0c7a00307cb20f83a098c160a7e46f5f",
+  "subject_head": "7cbca60b0c7a00307cb20f83a098c160a7e46f5f",
+  "source_head": "7cbca60b0c7a00307cb20f83a098c160a7e46f5f",
+  "entry_status": "PASS",
+  "halt_unexpected_tracked_dirt": false,
+  "halt_installed_artifact_identity_unproven": true,
+  "halt_live_observable": "LIVE_UNOBSERVABLE for LIVE_A..LIVE_I",
+
+  "production_code_changed": false,
+  "test_code_changed": false,
+  "myc_code_changed": false,
+  "bcb_conservation_preserved": true,
+  "lifecycle_expansion_out_of_scope": true,
+
+  "code_level_evidence": {
+    "unit_test_files_total": 92,
+    "unit_tests_pass": 1230,
+    "unit_tests_fail": 0,
+    "selected_files": {
+      "myc-prime-automation.lifecycle01.test.ts": "12 pass / 0 fail",
+      "myc-prime-automation.lifecycle02.test.ts": "4 pass / 0 fail",
+      "sessionIdEcho.test.ts": "3 pass / 0 fail",
+      "sessionIdEcho.isolation.test.ts": "6 pass / 0 fail",
+      "sessionIdEcho.mcpHub.test.ts": "11 pass / 0 fail",
+      "envResolver.test.ts": "16 pass / 0 fail",
+      "schemas.test.ts": "15 pass / 0 fail",
+      "McpHub.callTool.test.ts": "24 pass / 0 fail",
+      "McpHub.connectFailure.test.ts": "2 pass / 0 fail",
+      "McpHub.deleteServerRPC.test.ts": "5 pass / 0 fail",
+      "McpHub.listChangedRefresh.test.ts": "21 pass / 0 fail",
+      "StreamableHttpReconnectHandler.test.ts": "22 pass / 0 fail",
+      "McpHub.timeoutReconnect.test.ts": "2 pass / 0 fail",
+      "McpHub.toolListChange.test.ts": "19 pass / 0 fail",
+      "background-completion-consumer-availability01.bcca.test.ts": "10 pass / 0 fail (CORRECTION03 file)"
+    },
+    "vitest_bridge_proven_in_prior_acts": {
+      "ACT-MYC-CLINEMM02-C-CORRECTION01": "myc-prime-automation.model-visible.c24-c-bridge.test.ts",
+      "ACT-MYC-CLINEMM02-C-CORRECTION02": "myc-prime-automation.identity-join.red.c24-c-bridge.test.ts + green",
+      "ACT-MYC-CLINEMM03-LIVE-DIAG01": "myc-prime-live-diag.test.ts (14 tests)"
+    }
+  },
+
+  "myc_runtime": {
+    "myc_binary": "/Volumes/UserData/Users/chistyakov/.myc/bin/myc",
+    "myc_version": "myc 0.3.14 (schema 1)",
+    "myc_mcp_server_name": "myc",
+    "myc_mcp_command": "/Volumes/UserData/Users/chistyakov/.myc/bin/myc",
+    "myc_mcp_args": ["mcp"],
+    "myc_from_session_config": { "fromSession": "sessionId", "required": true }
+  },
+
+  "live_steps_status": {
+    "LIVE_A_SESSION_ENV_PROPAGATION": "LIVE_UNOBSERVABLE",
+    "LIVE_B_AUTOMATIC_PRIME": "LIVE_UNOBSERVABLE",
+    "LIVE_C_REAL_MYC_DATA": "LIVE_UNOBSERVABLE",
+    "LIVE_D_RECORDER_IDENTITY": "LIVE_UNOBSERVABLE",
+    "LIVE_E_BEFOREMODEL_IDENTITY_JOIN": "LIVE_UNOBSERVABLE",
+    "LIVE_F_PRIME_PACKET_ONCE": "LIVE_UNOBSERVABLE",
+    "LIVE_G_PROVIDER_BOUND_PRIME": "LIVE_UNOBSERVABLE",
+    "LIVE_H_MODEL_BEHAVIORAL_WITNESS": "LIVE_UNOBSERVABLE",
+    "LIVE_I_CARDINALITY": "LIVE_UNOBSERVABLE"
+  },
+
+  "sentinel_seed_status": {
+    "SENTINEL_ID": "MYC-LIVE04-SENTINEL-20260928",
+    "SENTINEL_TOKEN": "PENDING_OPERATOR_LIVE_RUN",
+    "SENTINEL_RECALL": "PENDING_OPERATOR_LIVE_RUN",
+    "reason_deferred": "ACT §6 forbids seeding a sentinel token from inside a session whose transcript is exposed to a model/reviewer. The token must be regenerated at the operator's bench and stored via the supported `myc remember ...` shape before LIVE-A."
+  },
+
+  "dogfood_artifact_status": {
+    "DOGFOOD_SOURCE_HEAD": "UNBUILT per user instruction",
+    "EXTENSION_VERSION": "4.1.16",
+    "VSIX_PATH": null,
+    "VSIX_BYTE_SIZE": null,
+    "VSIX_SHA256": null,
+    "INSTALLED_EXTENSION_VERSION": null,
+    "reason": "User instruction: 'Don't package anything, I will do it manually'. The ACT §2 halt HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN applies until a real VSIX built from 7cbca60b0 is installed and its identity is recorded."
+  },
+
+  "next_act_proposal": "ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01 (operator-driven live qualification; deferrred until operator manually packages, installs, and runs the env-flag recipe). The existing ACT §7 diagnostics scaffold is sufficient; no further instrumentation is required before the live run."
+}

@@ -1,49 +1,119 @@
 {
   "act": "ACT-MYC-CLINEMM04-LIVE-QUALIFICATION",
   "verdict": "INCOMPLETE_LIVE_AWAITING_OPERATOR",
-  "rationale": "User instruction was 'Don't package anything, I will do it manually, provide a report if you are finished with code and tests.' All ACT §2 build/package/install steps were deliberately not executed by this session. ACT §6 sentinel seed was deliberately not executed to avoid leaking the token into any model-visible transcript. ACT §§8-17 cannot be observed without a live ClineMM installation, which was deliberately not performed. The code-level guarantees (ACQUISITION+LOOKUP+INJECTION+CAPTURE recorders, EnvEntry schema, MCP session-id propagation, per-session dedupe, recorder cardinality) are proven by the unit tests in the existing suite. The LIVE_A..LIVE_I classifications are LIVE_UNOBSERVABLE per ACT §7.",
-  "entry_head": "7cbca60b0c7a00307cb20f83a098c160a7e46f5f",
-  "subject_head": "7cbca60b0c7a00307cb20f83a098c160a7e46f5f",
-  "source_head": "7cbca60b0c7a00307cb20f83a098c160a7e46f5f",
-  "entry_status": "PASS",
+  "subject_head": "8fdde3fb5e8508ef76064df95346ebade9a1783b",
+  "entry_head": "8fdde3fb5e8508ef76064df95346ebade9a1783b",
+  "source_head": "8fdde3fb5e8508ef76064df95346ebade9a1783b",
+  "prior_run_subject_head": "7cbca60b0c7a00307cb20f83a098c160a7e46f5f",
+  "prior_run_snapshot_dir": ".factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/prior-run-snapshot/",
+  "rationale": "This session can prove ACT §1 frozen-source-state, ACT §2 installed-artifact-identity (dogfood VSIX 4.1.16-8fdde3fb5 is built, sha256-recorded, and installed in .vscodium-cline), ACT §3 operator/runtime authority boundary (this session owns no UI), ACT §22 zero manual MCP Restart (N/A), ACT §26 zero code changes (git status --short empty), and ACT §27 minimal git gates (clean). It cannot prove any LIVE_A..LIVE_M boundary because each requires driving the Codium webview UI (click Start New Task, observe MCP panel, type a prompt, observe chat panel); ACT §3 forbids ClineMM/automated harness from doing those. The operator owns those actions. LIVE classifications remain LIVE_UNOBSERVABLE per ACT §7.",
   "halt_unexpected_tracked_dirt": false,
-  "halt_installed_artifact_identity_unproven": true,
-  "halt_live_observable": "LIVE_UNOBSERVABLE for LIVE_A..LIVE_I",
-
+  "halt_installed_artifact_identity_unproven": false,
+  "halt_live_observable": "LIVE_UNOBSERVABLE for LIVE_A..LIVE_M (operator owns those)",
+  "halt_session_bound_mcp_premature_spawn": false,
+  "halt_live_session_mcp_not_started": false,
+  "halt_live_mcp_projection_stale": false,
+  "halt_live_mcp_session_id_mismatch": false,
+  "halt_automatic_prime_not_invoked": false,
+  "halt_real_myc_prime_failed": false,
+  "halt_myc_prime_retrieval_semantics": false,
+  "halt_prime_recorder_identity_mismatch": false,
+  "halt_live_identity_join_regression": false,
+  "halt_prime_recorder_lookup_miss": false,
+  "halt_prime_not_model_visible": false,
+  "halt_duplicate_prime_injection": false,
+  "halt_provider_capture_not_active": false,
+  "halt_prime_packet_lost_before_provider": false,
+  "halt_completion_conservation_regression": false,
+  "halt_live_mcp_teardown_projection_stale": false,
+  "halt_live_mcp_child_leak": false,
+  "halt_manual_mcp_restart_still_required": false,
   "production_code_changed": false,
   "test_code_changed": false,
   "myc_code_changed": false,
   "bcb_conservation_preserved": true,
   "lifecycle_expansion_out_of_scope": true,
-
+  "frozen_source_state": {
+    "git_status_clean": true,
+    "git_rev_parse_head": "8fdde3fb5e8508ef76064df95346ebade9a1783b",
+    "git_log_minus_5": [
+      "8fdde3fb5 ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01: closure board row",
+      "99ff0b356 ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01: symmetric teardown projection + evidence reclassification",
+      "b7b52f462 ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01: closure artifacts (board + evidence)",
+      "046b4ab30 ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01: reconcile deferred template status to connected when per-session child spawns",
+      "5cb95e88e ACT-CLINEMM-POST-CONSUMPTION-COMPLETION-AUTHORITY01: closure_head update"
+    ]
+  },
+  "installed_artifact": {
+    "DOGFOOD_SOURCE_HEAD": "8fdde3fb5e8508ef76064df95346ebade9a1783b",
+    "EXTENSION_VERSION": "4.1.16",
+    "DOGFOOD_VSIX_PATH": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/dist/dogfood/clinemm-4.1.16-8fdde3fb5.vsix",
+    "DOGFOOD_VSIX_BYTE_SIZE": 14625002,
+    "DOGFOOD_VSIX_SHA256": "36521b02c1976f2b350ffcdcd2859d2f534ca54ef3a5b52e6d093b10872fcb6d",
+    "INSTALLED_PROFILE": "/Volumes/UserData/Users/chistyakov/.vscodium-cline",
+    "INSTALLED_EXTENSION_VERSION": "4.1.16-8fdde3fb5",
+    "INSTALLED_BINDING_VERIFIED": true,
+    "REQUIRED_PROMPTS_BOUND": {
+      "autostart_startup_projection": "046b4ab30 -> HEAD",
+      "autostart_correction01_teardown_projection": "99ff0b356 -> HEAD",
+      "completion_presentation_repair": "cf14d6b63 / 645da8aa3",
+      "post_consumption_containment_failed_repair": "4dd630fe1 / 832336361",
+      "dogfood_diagnostic_profile": "8a7e5b4a0"
+    }
+  },
+  "vsix_bundle_hooks_verified": [
+    "ensureSessionConnection",
+    "disconnectSession",
+    "hasSurvivingPerSessionConnection",
+    "prepareStartSessionInput",
+    "CLINEMM_RUNTIME_PROFILE",
+    "CLINEMM_MYC_PRIME_DIAG",
+    "CLINE_CAPTURE_PROVIDER_REQUEST",
+    "CLINE_CAPTURE_WIRE",
+    "CLINE_CAPTURE_DIR",
+    "CLINE_CAPTURE_CLEANUP"
+  ],
+  "operator_recipe_path": ".factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/11-operator-recipe.txt",
+  "final_report_path": ".factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/12-final-report.md",
   "code_level_evidence": {
+    "note": "Code-level guarantees are those proven by the existing unit test suite + the AUTOSTART01+CORRECTION01 MAS suite. They prove the seams are correctly wired. They do NOT substitute for a live operator-driven run; LIVE classifications remain LIVE_UNOBSERVABLE.",
     "unit_test_files_total": 92,
     "unit_tests_pass": 1230,
     "unit_tests_fail": 0,
-    "selected_files": {
+    "myc_prime_automation": {
       "myc-prime-automation.lifecycle01.test.ts": "12 pass / 0 fail",
-      "myc-prime-automation.lifecycle02.test.ts": "4 pass / 0 fail",
+      "myc-prime-automation.lifecycle02.test.ts": "4 pass / 0 fail"
+    },
+    "session_id_propagation": {
       "sessionIdEcho.test.ts": "3 pass / 0 fail",
       "sessionIdEcho.isolation.test.ts": "6 pass / 0 fail",
-      "sessionIdEcho.mcpHub.test.ts": "11 pass / 0 fail",
+      "sessionIdEcho.mcpHub.test.ts": "11 pass / 0 fail"
+    },
+    "env_entry_schema": {
       "envResolver.test.ts": "16 pass / 0 fail",
-      "schemas.test.ts": "15 pass / 0 fail",
+      "schemas.test.ts": "15 pass / 0 fail"
+    },
+    "mcp_hub_robustness": {
       "McpHub.callTool.test.ts": "24 pass / 0 fail",
       "McpHub.connectFailure.test.ts": "2 pass / 0 fail",
       "McpHub.deleteServerRPC.test.ts": "5 pass / 0 fail",
       "McpHub.listChangedRefresh.test.ts": "21 pass / 0 fail",
       "StreamableHttpReconnectHandler.test.ts": "22 pass / 0 fail",
       "McpHub.timeoutReconnect.test.ts": "2 pass / 0 fail",
-      "McpHub.toolListChange.test.ts": "19 pass / 0 fail",
-      "background-completion-consumer-availability01.bcca.test.ts": "10 pass / 0 fail (CORRECTION03 file)"
+      "McpHub.toolListChange.test.ts": "19 pass / 0 fail"
+    },
+    "autostart_mas": {
+      "sessionIdEcho.productionShape": "8/8 PASS (existing A2A-14/16/17/18)",
+      "mcpSessionAutostart01": "10/10 PASS (MAS_01..MAS_10b including symmetric teardown)"
+    },
+    "myc_prime_live_diag": {
+      "myc-prime-live-diag.test.ts": "14 vitest pass / 0 fail (ACT-MYC-CLINEMM03)"
     },
     "vitest_bridge_proven_in_prior_acts": {
       "ACT-MYC-CLINEMM02-C-CORRECTION01": "myc-prime-automation.model-visible.c24-c-bridge.test.ts",
-      "ACT-MYC-CLINEMM02-C-CORRECTION02": "myc-prime-automation.identity-join.red.c24-c-bridge.test.ts + green",
-      "ACT-MYC-CLINEMM03-LIVE-DIAG01": "myc-prime-live-diag.test.ts (14 tests)"
+      "ACT-MYC-CLINEMM02-C-CORRECTION02": "myc-prime-automation.identity-join.red.c24-c-bridge.test.ts + green"
     }
   },
-
   "myc_runtime": {
     "myc_binary": "/Volumes/UserData/Users/chistyakov/.myc/bin/myc",
     "myc_version": "myc 0.3.14 (schema 1)",
@@ -52,35 +122,51 @@
     "myc_mcp_args": ["mcp"],
     "myc_from_session_config": { "fromSession": "sessionId", "required": true }
   },
-
   "live_steps_status": {
-    "LIVE_A_SESSION_ENV_PROPAGATION": "LIVE_UNOBSERVABLE",
-    "LIVE_B_AUTOMATIC_PRIME": "LIVE_UNOBSERVABLE",
-    "LIVE_C_REAL_MYC_DATA": "LIVE_UNOBSERVABLE",
-    "LIVE_D_RECORDER_IDENTITY": "LIVE_UNOBSERVABLE",
-    "LIVE_E_BEFOREMODEL_IDENTITY_JOIN": "LIVE_UNOBSERVABLE",
-    "LIVE_F_PRIME_PACKET_ONCE": "LIVE_UNOBSERVABLE",
-    "LIVE_G_PROVIDER_BOUND_PRIME": "LIVE_UNOBSERVABLE",
-    "LIVE_H_MODEL_BEHAVIORAL_WITNESS": "LIVE_UNOBSERVABLE",
-    "LIVE_I_CARDINALITY": "LIVE_UNOBSERVABLE"
+    "LIVE_A_PRE_SESSION_STATE": "LIVE_UNOBSERVABLE",
+    "LIVE_B_MCP_AUTOSTART": "LIVE_UNOBSERVABLE",
+    "LIVE_C_AUTOMATIC_PRIME": "LIVE_UNOBSERVABLE",
+    "LIVE_D_MYC_RETRIEVAL_SEMANTICS": "LIVE_UNOBSERVABLE",
+    "LIVE_E_IDENTITY_JOIN": "LIVE_UNOBSERVABLE",
+    "LIVE_F_INJECTION_CARDINALITY": "LIVE_UNOBSERVABLE",
+    "LIVE_G_PROVIDER_CAPTURE": "LIVE_UNOBSERVABLE",
+    "LIVE_H_DIAG_PROVIDER_CORRELATION": "LIVE_UNOBSERVABLE",
+    "LIVE_I_PROVIDER_BOUND_PACKET": "LIVE_UNOBSERVABLE",
+    "LIVE_J_PROVIDER_BOUND_SENTINEL": "LIVE_UNOBSERVABLE",
+    "LIVE_K_MODEL_BEHAVIOR": "LIVE_UNOBSERVABLE",
+    "LIVE_L_COMPLETION_CONSERVATION": "LIVE_UNOBSERVABLE",
+    "LIVE_M_MCP_TEARDOWN": "LIVE_UNOBSERVABLE"
   },
-
   "sentinel_seed_status": {
-    "SENTINEL_ID": "MYC-LIVE04-SENTINEL-20260928",
+    "SENTINEL_ID": "MYC-LIVE04-20260928-B",
     "SENTINEL_TOKEN": "PENDING_OPERATOR_LIVE_RUN",
-    "SENTINEL_RECALL": "PENDING_OPERATOR_LIVE_RUN",
-    "reason_deferred": "ACT §6 forbids seeding a sentinel token from inside a session whose transcript is exposed to a model/reviewer. The token must be regenerated at the operator's bench and stored via the supported `myc remember ...` shape before LIVE-A."
+    "SENTINEL_STORED": "PENDING_OPERATOR_LIVE_RUN",
+    "SENTINEL_RECALLABLE": "PENDING_OPERATOR_LIVE_RUN",
+    "reason_deferred": "ACT §6 forbids seeding a sentinel token from inside a session whose transcript is exposed to a model/reviewer. The token must be regenerated at the operator's bench and stored via the supported myc remember ... shape before LIVE-A. See 11-operator-recipe.txt Step 1."
   },
-
-  "dogfood_artifact_status": {
-    "DOGFOOD_SOURCE_HEAD": "UNBUILT per user instruction",
-    "EXTENSION_VERSION": "4.1.16",
-    "VSIX_PATH": null,
-    "VSIX_BYTE_SIZE": null,
-    "VSIX_SHA256": null,
-    "INSTALLED_EXTENSION_VERSION": null,
-    "reason": "User instruction: 'Don't package anything, I will do it manually'. The ACT §2 halt HALT_INSTALLED_ARTIFACT_IDENTITY_UNPROVEN applies until a real VSIX built from 7cbca60b0 is installed and its identity is recorded."
+  "operator_authority_boundary": {
+    "operator_owns": [
+      "launch Codium against .vscodium-cline profile",
+      "quit other stale Codium profiles (.vscodium-granelle, .vscodium-neurogames, .vscodium-clinemm)",
+      "open repository",
+      "press Start New Task",
+      "visually inspect MCP Servers view (state, tool count)",
+      "visually inspect completion state",
+      "type the mundane prompt from ACT §8 / Step 5",
+      "seed the sentinel via terminal + myc remember ...",
+      "read out getMycPrimeLiveDiag via Codium Command Palette / ext.evaluate probe",
+      "open $CLINE_CAPTURE_DIR/ai-sdk/*.json and grep for sentinel + prime_packet block",
+      "click X / Trash icon to close chat at end of run"
+    ],
+    "clinemm_owns_for_this_act": [
+      "source-of-truth frozen-source verification",
+      "source-of-truth installed-artifact identity verification",
+      "operator/clineMM authority boundary declaration",
+      "minimal-git gates (no code change)"
+    ],
+    "test_harness_used": false,
+    "clinemm_started_codium": false
   },
-
-  "next_act_proposal": "ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01 (operator-driven live qualification; deferrred until operator manually packages, installs, and runs the env-flag recipe). The existing ACT §7 diagnostics scaffold is sufficient; no further instrumentation is required before the live run."
+  "next_act_proposal": "ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01 (operator-driven live qualification with the recipe in 11-operator-recipe.txt). The diagnostic scaffolding and installed artifact are pre-staged; the operator only needs to drive the Codium UI per Steps 0..14.",
+  "ready_for_myc_clinemm05": true
 }

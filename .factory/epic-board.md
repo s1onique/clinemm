@@ -15167,3 +15167,112 @@ the proto wire conversion
 (apps/vscode/src/shared/proto-conversions/mcp/mcp-server-conversion.ts),
 the A2A-14 defer gate (apps/vscode/src/services/mcp/McpHub.ts:1539), and
 the new lifecycle symmetry seams in this ACT.
+
+
+──────────────────────────────────────────────────────────────────
+ACT-MYC-CLINEMM04-LIVE-QUALIFICATION (8fdde3fb5) — re-run after
+AUTOSTART01+CORRECTION01 closure
+──────────────────────────────────────────────────────────────────
+
+```text
+verdict            = INCOMPLETE_LIVE_AWAITING_OPERATOR
+subject_head       = 8fdde3fb5e8508ef76064df95346ebade9a1783b
+prior_head         = 7cbca60b0 (BCCA test probe swap; not MCP-impacting)
+
+frozen_source_state      = PASS (8fdde3fb5, git status --short clean)
+installed_artifact       = PASS
+  - DOGFOOD_SOURCE_HEAD  = 8fdde3fb5
+  - DOGFOOD_VSIX_PATH    = dist/dogfood/clinemm-4.1.16-8fdde3fb5.vsix
+  - DOGFOOD_VSIX_SHA256  = 36521b02c1976f2b350ffcdcd2859d2f534ca54ef3a5b52e6d093b10872fcb6d
+  - INSTALLED_PROFILE    = .vscodium-cline
+  - INSTALLED_VERSION    = 4.1.16-8fdde3fb5
+  - INSTALLED_BINDING    = VERIFIED (folder name + package.json match)
+  - VSIX_HOOKS_PRESENT   = ensureSessionConnection, disconnectSession,
+                           hasSurvivingPerSessionConnection,
+                           prepareStartSessionInput (grep-verified on
+                           the esbuild bundle)
+operator_authority       = PASS (operator owns UI; this session owns
+                                 source-of-truth identity only)
+test_harness_used        = false
+clinemm_started_codium   = false
+production_code_changed  = false
+test_code_changed        = false
+myc_code_changed         = false
+```
+
+**Live classifications:**
+
+```text
+LIVE_A..LIVE_M  = LIVE_UNOBSERVABLE (operator owns these)
+                 ACT §3 forbids ClineMM or harness from driving
+                 the Codium webview UI. The captive console session
+                 has no launch path to the operator's Codium UI.
+```
+
+**Preflight closure hygiene (PASS):**
+
+```text
+AUTOSTART01 result.json entry_head = 5cb95e88e
+AUTOSTART01+CORRECTION01 implementation binding documented
+  files_changed:
+    apps/vscode/src/services/mcp/McpHub.ts              +148/-5
+    apps/vscode/vitest.config.ts                        +6
+    apps/vscode/src/services/mcp/__tests__/
+      mcpSessionAutostart01.test.ts                     NEW (408 lines)
+ready_for_myc_clinemm04 = true     (inherited from AUTOSTART01)
+```
+
+**Operator recipe pre-staged:**
+
+```text
+.factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/
+  11-operator-recipe.txt     -- 14-step recipe from sanity -> result.json
+                              (no UI automation; pure read-only commands
+                              + UI observation checklists)
+  prior-run-snapshot/        -- archives the 7cbca60b0 LIVE04 evidence
+                              for transparency, per ACT §25
+```
+
+**Preserved prior LIVE04 evidence (per ACT §25):**
+
+```text
+prior-run-snapshot/
+  01-dogfood-artifact-identity.prior-7cbca60b0.txt
+  04-live-session-identity.prior-7cbca60b0.txt
+  06-live-prime-result.prior-7cbca60b0.txt
+  result.prior-7cbca60b0.json
+```
+
+**HALT classifications for LIVE boundary failures (all unproven):**
+
+```text
+HALT_SESSION_BOUND_MCP_PREMATURE_SPAWN    unproven
+HALT_LIVE_MCP_PROJECTION_STALE            unproven
+HALT_LIVE_MCP_SESSION_ID_MISMATCH         unproven
+HALT_AUTOMATIC_PRIME_NOT_INVOKED          unproven
+HALT_REAL_MYC_PRIME_FAILED                unproven
+HALT_MYC_PRIME_RETRIEVAL_SEMANTICS        unproven
+HALT_PRIME_RECORDER_IDENTITY_MISMATCH     unproven
+HALT_LIVE_IDENTITY_JOIN_REGRESSION        unproven
+HALT_PRIME_RECORDER_LOOKUP_MISS           unproven
+HALT_PRIME_NOT_MODEL_VISIBLE              unproven
+HALT_DUPLICATE_PRIME_INJECTION            unproven
+HALT_PROVIDER_CAPTURE_NOT_ACTIVE          unproven
+HALT_PRIME_PACKET_LOST_BEFORE_PROVIDER    unproven
+HALT_COMPLETION_CONSERVATION_REGRESSION   unproven
+HALT_LIVE_MCP_TEARDOWN_PROJECTION_STALE    unproven
+HALT_LIVE_MCP_CHILD_LEAK                  unproven
+HALT_MANUAL_MCP_RESTART_STILL_REQUIRED     false (not even reachable from
+                                              this session; remote from
+                                              the operator's UI)
+```
+
+**Successor:** `ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01` — the operator
+runs the recipe in 11-operator-recipe.txt against `.vscodium-cline`,
+which is the single profile that has the 8fdde3fb5 dogfood extension
+installed. The diagnostic scaffolding is already in place; no further
+instrumentation is required. Either PASS or HALT_<exact_boundary> flows
+from the operator's terminal observations plus a single file inspection
+at `${CLINE_CAPTURE_DIR}/ai-sdk/*.json`.
+
+`READY_FOR_MYC_CLINEMM05 = true.`
