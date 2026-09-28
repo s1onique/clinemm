@@ -1,0 +1,129 @@
+{
+  "act": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-INJECTION01",
+  "verdict": "HALT_LIVE_RED_MISCLASSIFIED",
+  "verdict_alt": "CAPTURE_INSUFFICIENT (or HALT_LIVE_RED_NOT_REPRODUCED_IN_SYNTHETIC_REAL)",
+  "subject_head": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+  "entry_head": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+  "source_head": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+  "predecessor_act": "ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01 (PENDING_OPERATOR_LIVE_RUN, but actual LIVE capture already on disk; see live_red_block below)",
+  "rationale": "RECLASSIFIED by reviewer P0. The closure previously asserted the LIVE05 failure was 'hypothetical' and 'operator-pending', but the actual installed-Codium capture and the agent-side messages.json were on disk and confirm a real product RED: iteration 1 of ai_sdk_prompt for run_PdCFt9iX has zero prime_packet and zero MYC-LIVE05 references in the truncated 105KB preview, while the same live session's real MCP myc_prime call subsequently returned the witness task 'add MYC-LIVE05-PRIME-WITNESS-20260928-170556' (manual myc_prime succeeded for session 1790604494785_8zlsd). My new production-shape test (myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts) drives real SdkSessionLifecycle + real runMycPrimeOnSessionStart + real recorder + real hooks-adapter + real AgentRuntime, but constructs the AgentRuntime directly with `new AgentRuntime({sessionId, hooks})` rather than going through the production host/config-builder composition (LocalRuntimeHost / VscodeSessionHost / AgentRuntimeConfig). That places the test in the SYNTHETIC_REAL class (component composition through real classes, but NOT REAL_PRODUCTION_SEAM end-to-end). The mismatch between real RED and composed GREEN is the new evidence: some production-only composition delta is load-bearing.",
+  "halt_red_not_reproduced": false,
+  "halt_live_red_misclassified": true,
+  "halt_synthetic_real_reproduction_failed": false,
+  "halt_automatic_prime_trigger_missing": false,
+  "halt_automatic_prime_acquisition_failed": false,
+  "halt_prime_recorder_session_key_mismatch": false,
+  "halt_prime_acquisition_lookup_race": false,
+  "halt_beforemodel_session_id_mismatch": false,
+  "halt_prime_injection_guard_false": false,
+  "halt_prime_packet_lost_after_beforemodel": false,
+  "capture_insufficient": true,
+  "production_code_changed": false,
+  "test_code_changed": true,
+  "fixture_added": true,
+  "myc_code_changed": false,
+  "git_status_clean": true,
+  "session_identity_chain_proven": true,
+  "live_red_block": {
+    "classification": "REAL",
+    "realness": "real installed Codium session on installed build s1onique.clinemm-4.1.16-89249175c, observed in CLINE_DIR=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/",
+    "session_id": "1790604494785_8zlsd",
+    "run_id": "run_PdCFt9iX",
+    "iteration": 1,
+    "agent_id": "agent_1790604495115_kzjlkt",
+    "conversation_id": "conv_1790604495203_buhod8d",
+    "provider_id": "minimax",
+    "model_id": "MiniMax-M3",
+    "extension_version": "4.1.16-89249175c",
+    "cline_core_version": "0.0.81",
+    "capture_stage": "ai_sdk_prompt",
+    "capture_mode": "full",
+    "capture_path": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/provider-request-captures/cap_run_PdCFt9iX_1_a0d269608b88fda2.ai_sdk_prompt.1.provider-request.json",
+    "capture_payload_bytes": 105805,
+    "capture_payload_sha256": "608a23d61f9a659ca7e747c2c0ccfef475a6511d5fd84fbde6c421d82d290499",
+    "capture_truncated": true,
+    "capture_messages_count": 2,
+    "capture_user_message_indices": [0, 1],
+    "provider_request_prime_packet_count": 0,
+    "provider_request_witness_present": false,
+    "provider_request_prime_packet_substring_count_in_truncated_preview": 0,
+    "provider_request_source_myc_substring_count_in_truncated_preview": 0,
+    "provider_request_myc_live05_substring_count_in_truncated_preview": 0,
+    "manual_mcp_prime_witness_present": true,
+    "manual_mcp_prime_witness_payload": "myc 0.3.14 · ws=clinemm sqlite · 24 nodes · idx ok · 2026-09-28T14:08:23.462Z\n# READY 1 of 1\nclinemm-w3sfqggzxq9b  P2 task  add MYC-LIVE05-PRIME-WITNESS-20260928-170556  unblocks 0\nsession 17906044 · 1 from other sessions hidden",
+    "manual_mcp_prime_session_id": "1790604494785_8zlsd",
+    "manual_mcp_prime_tool_use_id": "call_01a0e85868d67034ac4ad3ad",
+    "manual_mcp_prime_tool_result_msg_idx": 5,
+    "messages_json_path": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/sessions/1790604494785_8zlsd/1790604494785_8zlsd.messages.json",
+    "messages_json_total_count": 17,
+    "messages_json_iteration1_agent_input_tokens": 28591,
+    "messages_json_iteration1_first_prime_packet_msg_idx": null,
+    "messages_json_no_automatic_prime_in_first_user_msg": true,
+    "realness_source": "files inspected on /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/ during this ACT"
+  },
+  "synthetic_real_reproduction_block": {
+    "classification": "SYNTHETIC_REAL",
+    "realness": "test drives real SdkSessionLifecycle.startNewSession, real McpHub fixture, real runMycPrimeOnSessionStart (via onMycPrimeRequested wiring), real recorder, real hooks-adapter, real AgentRuntime; HOWEVER it bypasses the production host/config-builder composition: it constructs `new AgentRuntime({sessionId, hooks})` directly, omitting VscodeSessionHost / LocalRuntimeHost / AgentRuntimeConfig composition. That guarantees both 'runtime sessionId is correct' and 'hooks are installed' — exactly the two dimensions a production-only delta could violate.",
+    "test_files": [
+      "apps/vscode/src/sdk/__tests__/myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts"
+    ],
+    "fixtures": [
+      "apps/vscode/src/services/mcp/__fixtures__/myc-prime-auto/server.mjs"
+    ],
+    "tests_count": 4,
+    "tests_passed_on_head": 4,
+    "wall_time_ms": 368,
+    "test_api_real": "API-01, API-02, API-04, API-08",
+    "tests_structural_only_no_executable_case": ["API-03", "API-05", "API-06", "API-07"],
+    "test_proves": [
+      "real SdkSessionLifecycle awaits the configured onMycPrimeRequested callback",
+      "real recorder writes under startResult.sessionId key",
+      "real hooks-adapter.beforeModel mutates messages with the prime_packet",
+      "real AgentRuntime applies the mutated messages on the next model call"
+    ],
+    "test_does_not_prove": [
+      "real VscodeSessionHost constructs the AgentRuntime with the correct sessionId",
+      "real AgentRuntimeConfig flows sessionId from the start-coordinator input",
+      "real LocalRuntimeHost wires the same hooks-adapter into the runtime",
+      "real ClineCore is the actual end-to-end composition root"
+    ]
+  },
+  "production_files_changed": [],
+  "test_files_added": [
+    "apps/vscode/src/sdk/__tests__/myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts (NEW, 4 tests, 368ms)"
+  ],
+  "fixtures_added": [
+    "apps/vscode/src/services/mcp/__fixtures__/myc-prime-auto/server.mjs (NEW, deterministic prime echo)"
+  ],
+  "test_code_changed": true,
+  "production_code_changed": false,
+  "myc_code_changed": false,
+  "ready_for_myc_clinemm06": false,
+  "successor": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — instrument just four default-off events (myc_beforemodel_enter, myc_beforemodel_lookup, myc_beforemodel_exit, myc_provider_capture_binding) on the real installed product, no prime contents, no myc changes, no new architecture; one real dogfood run; discriminator becomes trivial (no enter → wiring defect, wrong sessionId → runtime-config identity defect, lookup miss → recorder/lifetime defect, injected=false → injection-guard defect, injected=true and ai_sdk_prompt absent → downstream request-composition loss). Do NOT patch production code yet. Do NOT build another synthetic harness. Acquire the missing live-boundary evidence first.",
+  "p0_defects": [
+    {
+      "id": "P0-LIVE-EVIDENCE-MISCLASSIFIED",
+      "summary": "Closure claimed LIVE05 was 'hypothetical / operator-pending'. Files on disk prove it is REAL: iteration 1 ai_sdk_prompt capture exists, has 0 prime_packet hits in the truncated 105KB preview (which includes the entire system prompt and both user messages), and the same session's manual MCP myc_prime returned the witness task. REAL must not be downgraded to hypothetical."
+    },
+    {
+      "id": "P0-TEST-SEAM-OVERCLAIM",
+      "summary": "Test bypasses the production host/config-builder composition by constructing `new AgentRuntime({sessionId, hooks})` directly. That guarantees the two runtime-side invariants a production-only delta could violate. The composed GREEN vs real RED is now the most important evidence. The correct classification is SYNTHETIC_REAL, not REAL_PRODUCTION_SEAM end-to-end."
+    }
+  ],
+  "p1_defects": [
+    {
+      "id": "P1-API-03-05-06-07-NO-EXECUTABLE-CASE",
+      "summary": "result.json claimed GREEN for API-03/API-05/API-06/API-07 without executable tests; those are structurally inferred from the same scenario and should be labelled STRUCTURAL/INFERRED rather than executed GREEN."
+    },
+    {
+      "id": "P1-TEST-CODE-CHANGED-FALSE",
+      "summary": "Working tree has the new test file; result.json said test_code_changed=false. Correct values: test_code_changed=true, production_code_changed=false, fixture_added=true."
+    }
+  ],
+  "p2_defects": [
+    {
+      "id": "P2-GATE-SUMMARY-RESIDUE",
+      "summary": ".factory/gate-summary.json reports source_status=invalid and binding_status=EVIDENCE_INVALID. NON-BLOCKING per policy; batch later."
+    }
+  ]
+}
