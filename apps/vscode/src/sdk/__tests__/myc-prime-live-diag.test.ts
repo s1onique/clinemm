@@ -24,9 +24,7 @@ import {
 	getMycPrimeLiveDiag,
 	isMycPrimeLiveDiagEnabled,
 	recordMycPrimeLiveAcquisition,
-	recordMycPrimeLiveBind,
 	recordMycPrimeLiveCapture,
-	recordMycPrimeLiveEnter,
 	recordMycPrimeLiveInjection,
 	recordMycPrimeLiveLookup,
 	startMycPrimeLiveDiag,
@@ -586,8 +584,7 @@ describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — BIND + ENT
 		// id the diagnostic records under `entry.capture.captureId`,
 		// so the post-capture join can read the provider capture
 		// file and find the matching diagnostic entry by id.
-		const captureId = (result?.options as { metadata?: { captureId?: string } } | undefined)?.metadata
-			?.captureId
+		const captureId = (result?.options as { metadata?: { captureId?: string } } | undefined)?.metadata?.captureId
 		expect(captureId).toBeDefined()
 		const entry = getMycPrimeLiveDiag("hs-cap")
 		expect(entry?.capture?.captureId).toBe(captureId)
