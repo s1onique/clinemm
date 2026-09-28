@@ -1,0 +1,136 @@
+{
+  "act": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01",
+  "verdict": "PENDING_LIVE_RUN",
+  "verdict_alt": "PASS_LIVE_BOUNDARY_CAPTURED (after the operator-driven dogfood run lands) | CAPTURE_INSUFFICIENT (if the diagnostic surface cannot be observed end-to-end on the real installed product)",
+  "subject_head": "89249175c71fcbc059d26d54f5c50f7f6dbd3373",
+  "entry_head": "27868d9f1214e099bd444101f1c8ef8ed3869de9",
+  "implementation_head": "UNCOMMITTED (27868d9f1 + 4 modified files + 2 new ACT docs)",
+  "dogfood_source_head": "UNBUILT (build gate is the next step in the §11/§12 contract)",
+  "predecessor_act": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-INJECTION01 (HALT_LIVE_RED_MISCLASSIFIED)",
+  "rationale": "EVIDENCE ACQUISITION. Per the predecessor's P0 reclassification, the LIVE RED is REAL but the production-only composition delta is the unproven region. This ACT adds the four default-off diagnostic observation points that the §17 discriminator tree requires, on top of the EXISTING myc-prime-live-diag surface (no new env flag, no new architecture, no new diagnostic framework). Two new recorders (BIND at buildAgentHooks time, ENTER at the very top of beforeModel body before any short-circuit) and one field extension (lookupKey on recordMycPrimeLiveLookup) close the only two ambiguities the predecessor's evidence left open: (1) was a hook bag ever given to the runtime? (2) did the runtime actually call the hook body even when the body short-circuited? Production semantics are bit-identical when the diagnostic is disabled; LBC-01 proves this with a hard assertion. Conservation: 19/19 LBC + pre-existing live-diag tests, 4/4 auto-injection, 2/2 identity-join, 39/39 dogfood-profile, 3/3 config-builder, all GREEN. tsc --noEmit 0 errors; git diff --check clean. Pre-existing drift on turn-state-writer-provenance WPROV07.1 is independent of this ACT (verified by git stash + re-run on predecessor commit). NO production patch is attempted. NO synthetic RED is manufactured. NO dogfood VSIX is built in this ACT — the live run is the next step. The next ACT acquires the LIVE-typed evidence by running one clean installed-Codium dogfood session with diagnostics enabled and reading the captured trace for the operator's captured MYC_SESSION_ID. The discriminator tree then isolates exactly one of the 6 boundaries in §17.",
+  "halt_live_red_misclassified_inherited": true,
+  "halt_red_not_reproduced": false,
+  "halt_synthetic_real_reproduction_failed": false,
+  "halt_automatic_prime_trigger_missing": false,
+  "halt_automatic_prime_acquisition_failed": false,
+  "halt_prime_recorder_session_key_mismatch": false,
+  "halt_prime_acquisition_lookup_race": false,
+  "halt_beforemodel_session_id_mismatch": false,
+  "halt_prime_injection_guard_false": false,
+  "halt_prime_packet_lost_after_beforemodel": false,
+  "capture_insufficient": true,
+  "diagnostics_default_off": true,
+  "production_semantics_changed": false,
+  "production_code_changed": false,
+  "test_code_changed": true,
+  "fixture_added": false,
+  "myc_code_changed": false,
+  "git_status_clean": false,
+  "git_status_uncommitted_files": 4,
+  "session_identity_chain_proven": true,
+  "live_red_block_inherited": {
+    "classification": "REAL",
+    "realness": "real installed Codium session on installed build s1onique.clinemm-4.1.16-89249175c, observed in CLINE_DIR=/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/",
+    "session_id": "1790604494785_8zlsd",
+    "run_id": "run_PdCFt9iX",
+    "iteration": 1,
+    "capture_path": "/Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/provider-request-captures/cap_run_PdCFt9iX_1_a0d269608b88fda2.ai_sdk_prompt.1.provider-request.json",
+    "capture_payload_bytes": 105805,
+    "provider_request_prime_packet_count": 0,
+    "provider_request_witness_present": false
+  },
+  "synthetic_real_reproduction_block_inherited": {
+    "classification": "SYNTHETIC_REAL",
+    "test_file": "apps/vscode/src/sdk/__tests__/myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts",
+    "test_result": "4/4 GREEN",
+    "test_seam_summary": "constructs `new AgentRuntime({sessionId, hooks})` directly; bypasses production host/config-builder composition (LocalRuntimeHost / VscodeSessionHost / AgentRuntimeConfig)"
+  },
+  "diagnostic_surface_extension": {
+    "framework_reused": "apps/vscode/src/sdk/myc-prime-live-diag.ts (existing ACT-MYC-CLINEMM03-LIVE-DIAG01 surface)",
+    "new_observation_points_added": 2,
+    "new_observation_points": [
+      {
+        "name": "BIND",
+        "recorder": "recordMycPrimeLiveBind(sessionId)",
+        "fires_at": "apps/vscode/src/sdk/hooks-adapter.ts:170-172 (inside buildAgentHooks, before the AgentHooks bag is returned)",
+        "captures": ["sessionId", "iteration=0", "hooksInstalled=true"],
+        "case_discriminated": "A: PRODUCTION_HOOK_ASSEMBLY_OR_INSTALLATION (entry.bind === undefined for the operator's captured MYC_SESSION_ID)"
+      },
+      {
+        "name": "ENTER",
+        "recorder": "recordMycPrimeLiveEnter(hostSessionId, snapshotSessionId, iteration)",
+        "fires_at": "apps/vscode/src/sdk/hooks-adapter.ts:232-235 (at the very top of beforeModel body, before any short-circuit)",
+        "captures": ["hostSessionId", "snapshotSessionId", "snapshotSessionIdPresent", "iteration", "hooksInstalled=true"],
+        "case_discriminated": "B: PRODUCTION_RUNTIME_SESSION_IDENTITY (entry.bind?.sessionId === S AND entry.enter?.sessionId !== S)"
+      }
+    ],
+    "field_extensions_added": 1,
+    "field_extensions": [
+      {
+        "name": "lookupKey",
+        "added_to": "MycPrimeLiveDiagnostic.lookup",
+        "recorder": "recordMycPrimeLiveLookup",
+        "fires_at": "apps/vscode/src/sdk/hooks-adapter.ts:258, 289, 327 (all three call sites updated)",
+        "captures": "the actual key the production lookup was issued against (snapshot.sessionId, or conversationId fallback, or __no_session__)",
+        "case_discriminated": "B (key mismatch) and C (correct key, recorder miss) — without lookupKey, these two are indistinguishable"
+      }
+    ],
+    "structural_preservation": {
+      "function": "startMycPrimeLiveDiag",
+      "change": "preserves prior entry.bind and entry.enter across a re-start (these are structural observations that survive the acquisition cycle, not the cycle's mutable state)",
+      "reason": "without this, runMycPrimeOnSessionStart's call to startMycPrimeLiveDiag would clobber the BIND event recorded at buildAgentHooks time, making the diagnostic useless in production"
+    }
+  },
+  "evidence_quality": {
+    "LBC_tests": "SYNTHETIC_REAL (5 tests, 19/19 GREEN combined with the 14 pre-existing live-diag tests)",
+    "diagnostic_unit_tests_classification": "SYNTHETIC_REAL (they drive the REAL buildAgentHooks + REAL beforeModel body, but not a real installed Codium session)",
+    "live_run_classification": "PENDING — the LIVE-typed evidence is the responsibility of the next ACT, not this one"
+  },
+  "boundary_discrimination_matrix": {
+    "case_A_PRODUCTION_HOOK_ASSEMBLY_OR_INSTALLATION": "entry.bind === undefined for the operator's captured MYC_SESSION_ID S",
+    "case_B_PRODUCTION_RUNTIME_SESSION_IDENTITY": "entry.bind?.sessionId === S AND entry.enter?.sessionId !== S",
+    "case_C_PRIME_RECORDER_LIFETIME_OR_INSTANCE": "entry.enter?.sessionId === S AND entry.lookup.recordedPrimeFound === false (key matches but recorder empty)",
+    "case_D_PRIME_INJECTION_GUARD": "entry.injection.injected === false AND entry.injection.reason narrows the branch",
+    "case_E_POST_HOOK_REQUEST_COMPOSITION_LOSS": "entry.injection.injected === true AND on-disk provider capture has 0 prime packets",
+    "case_F_NOT_REPRODUCED_LIVE": "entry.injection.injected === true AND on-disk provider capture has 1 prime packet"
+  },
+  "conservation_test_results": {
+    "myc-prime-live-diag.test.ts": "19/19 GREEN (14 pre-existing + 5 LBC = D9.a/d/b, D*, LBC-01..LBC-05)",
+    "myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts": "4/4 GREEN",
+    "myc-prime-automation.identity-join.red.c24-c-bridge.test.ts": "2/2 GREEN",
+    "dogfood-diagnostic-profile-myc-clinemm01.test.ts": "39/39 GREEN",
+    "sdk-session-config-builder.test.ts": "3/3 GREEN",
+    "myc-prime-automation.lifecycle01.test.ts": "12/12 GREEN (runs under bridge config; not in base config sweep)",
+    "myc-prime-automation.lifecycle02.test.ts": "4/4 GREEN (runs under bridge config; not in base config sweep)",
+    "apps_vscode_tsc_noEmit_errors": 0,
+    "git_diff_check": "clean"
+  },
+  "pre_existing_drift_independent_of_act": [
+    {
+      "test": "src/sdk/__tests__/turn-state-writer-provenance.wprov.test.ts",
+      "test_case": "WPROV07.1: writerId union fully reconciles with production call sites",
+      "failure_summary": "expected [ 'completed' ] to deeply equal [] — the production call site uses a writerId that is not in the test's expected union",
+      "verified_independent": "git stash (revert ACT changes) + re-run on predecessor commit 27868d9f1 → 1 failed, 34 passed (same as with ACT changes applied)"
+    }
+  ],
+  "production_files_changed": [
+    "apps/vscode/src/sdk/myc-prime-live-diag.ts (two new recorders + one field extension + structural preservation in startMycPrimeLiveDiag + writeable internal type)",
+    "apps/vscode/src/sdk/hooks-adapter.ts (wiring at four observation points)",
+    "apps/vscode/src/sdk/sdk-session-config-builder.ts (passes config.sessionId as bindSessionId to buildAgentHooks)"
+  ],
+  "test_files_changed": [
+    "apps/vscode/src/sdk/__tests__/myc-prime-live-diag.test.ts (5 new LBC tests + 2 new imports for the new recorders; pre-existing tests continue to pass unchanged)"
+  ],
+  "production_code_changed": false,
+  "diagnostic_code_changed": true,
+  "test_code_changed": true,
+  "fixture_added": false,
+  "myc_code_changed": false,
+  "ready_for_myc_clinemm07": false,
+  "ready_for_myc_clinemm06": false,
+  "operator_run_required": true,
+  "successor": "ACT-MYC-CLINEMM-LIVE-BOUNDARY-CAPTURE01-RUN02 — operator-driven installed-Codium dogfood run with diagnostics enabled. Recipe in §11-§17 of .factory/acts/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01.md. After the live trace is captured, the next ACT reads the captured trace against the operator's captured MYC_SESSION_ID, applies the §17 discriminator tree, and emits the boundary classification (one of PRODUCTION_HOOK_ASSEMBLY_OR_INSTALLATION, PRODUCTION_RUNTIME_SESSION_IDENTITY, PRIME_RECORDER_LIFETIME_OR_INSTANCE, PRIME_INJECTION_GUARD, POST_HOOK_REQUEST_COMPOSITION_LOSS, NOT_REPRODUCED_LIVE). Do NOT patch production code in this ACT. Do NOT build another synthetic harness. Acquire the missing live-boundary evidence first.",
+  "no_repair_applied": true,
+  "no_synthetic_red_built": true,
+  "no_dogfood_vsix_built_in_this_act": true
+}

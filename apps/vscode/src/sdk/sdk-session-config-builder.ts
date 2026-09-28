@@ -28,7 +28,17 @@ export class SdkSessionConfigBuilder {
 			config.onConsecutiveMistakeLimitReached = this.options.onConsecutiveMistakeLimitReached
 		}
 
-		config.hooks = buildAgentHooks(this.options.stateManager, this.options.emitHookMessage, input.cwd)
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01: pass
+		// the host sessionId so the BIND observation can be keyed
+		// against the canonical `CoreSessionConfig.sessionId` (== the
+		// MYC_SESSION_ID the operator captured from the running myc
+		// MCP process). No-op when the live diagnostic is disabled.
+		config.hooks = buildAgentHooks(
+			this.options.stateManager,
+			this.options.emitHookMessage,
+			input.cwd,
+			config.sessionId,
+		)
 
 		// ACT-CLINEMM-PROVIDER-INSTANCE-IDENTITY-IMPLEMENTATION01 (R5):
 		// When the caller passes the TYPED instance

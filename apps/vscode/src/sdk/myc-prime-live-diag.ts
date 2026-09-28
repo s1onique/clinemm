@@ -48,11 +48,22 @@
 //
 // When ENABLED (operator-driven live dogfood session): the singleton
 // below is populated with one entry per active host session id; the
-// entry is updated at four observation points:
-//   1. ACQUISITION -> runMycPrimeOnSessionStart  myc-prime-automation.ts
-//   2. LOOKUP      -> beforeModel               hooks-adapter.ts
-//   3. INJECTION   -> beforeModel               hooks-adapter.ts
-//   4. CAPTURE     -> beforeModel               hooks-adapter.ts
+// entry is updated at six observation points:
+//   1. BIND        -> buildAgentHooks           hooks-adapter.ts
+//   2. ENTER       -> beforeModel               hooks-adapter.ts
+//   3. ACQUISITION -> runMycPrimeOnSessionStart myc-prime-automation.ts
+//   4. LOOKUP      -> beforeModel               hooks-adapter.ts
+//   5. INJECTION   -> beforeModel               hooks-adapter.ts
+//   6. CAPTURE     -> beforeModel               hooks-adapter.ts
+//
+// BIND + ENTER were added by
+// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 to
+// discriminate the "hook never installed" / "hook installed but never
+// fired" / "hook fired with wrong sessionId" failure modes on the real
+// installed product. They are observation-only and short-circuit on
+// the same `isMycPrimeLiveDiagEnabled()` gate as the pre-existing
+// recorders; when disabled they contribute zero state writes, zero
+// log lines, and zero request mutations.
 //
 // Removal trigger (per ACT §14): the first of
 //   - root cause isolated,
@@ -107,6 +118,74 @@ export type MycPrimeLiveAcquisitionStatus = "ok" | "failed" | "skipped"
  */
 export interface MycPrimeLiveDiagnostic {
 	readonly sessionId: string
+	/**
+	 * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01: two
+	 * pre-runtime observation points that let the operator distinguish
+	 * "hook never installed" (Case A) from "hook installed but never
+	 * fired" (Case B/C/D) on the real installed product.
+	 *
+	 * `bind` fires inside `buildAgentHooks(...)` and proves the runtime
+	 * was given an `AgentHooks` bag with a `beforeModel` function. It
+	 * does NOT prove the runtime actually called it.
+	 *
+	 * `enter` fires at the very top of `beforeModel` body and proves
+	 * the runtime invoked the function. After `enter` fires, every
+	 * subsequent short-circuit (iteration>1, no sessionId, already
+	 * injected, no recorded prime, prime empty) still records the
+	 * `lookup` and `injection` observations with the appropriate
+	 * `reason` — so the post-enter discriminator tree is fully
+	 * populated.
+	 *
+	 * No prompt text, no prime text, no node ids, no paths.
+	 */
+	readonly bind?: {
+		/**
+		 * The host sessionId the producer of the hook bag was told
+		 * the runtime was for. In production this is
+		 * `CoreSessionConfig.sessionId` ==
+		 * `AgentRuntimeConfig.sessionId`. Comparing this against
+		 * the SESSION_ID the operator captured from the running
+		 * myc MCP process is the Case B discriminator (production
+		 * runtime session identity).
+		 */
+		sessionId: string
+		/**
+		 * Always `0` for the bind event — the bind happens once at
+		 * hook-bag construction time, before any model request
+		 * iteration is allocated. Iteration 0 vs iteration >0 lets
+		 * post-capture joins separate the "I built the bag" event
+		 * from the "I fired the hook" event.
+		 */
+		iteration: 0
+		/**
+		 * Hard-coded `true` — the bind event by definition only
+		 * fires when the produced bag carries a `beforeModel`
+		 * function. The discriminator for Case A is the ABSENCE
+		 * of the bind event, not a falsy `hooksInstalled`.
+		 */
+		hooksInstalled: true
+		ts?: number
+	}
+	readonly enter?: {
+		/**
+		 * The `snapshot.sessionId` value the runtime surfaced. May
+		 * be `undefined` (then the hook body falls back to
+		 * `snapshot.conversationId` and records `no_session_id`).
+		 */
+		sessionId: string | undefined
+		/**
+		 * Whether the snapshot carried an explicit `sessionId`
+		 * field. `false` means the runtime dropped it (Case B
+		 * discriminator).
+		 */
+		snapshotSessionIdPresent: boolean
+		iteration: number
+		/**
+		 * Hard-coded `true` for the same reason as `bind.hooksInstalled`.
+		 */
+		hooksInstalled: true
+		ts?: number
+	}
 	readonly acquisition: {
 		attempted: boolean
 		serverDetected: boolean
@@ -123,6 +202,16 @@ export interface MycPrimeLiveDiagnostic {
 		snapshotSessionIdPresent: boolean
 		matchedRecordedSession: boolean
 		recordedPrimeFound: boolean
+		/**
+		 * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01:
+		 * the actual key passed to `getMycPrimeResult(...)`. May
+		 * equal `snapshot.sessionId`, or `snapshot.conversationId`
+		 * (the CORRECTION02 fallback), or `"__no_session__"`.
+		 * Frozen so the operator can tell "wrong key" (Case B) from
+		 * "right key, recorder miss" (Case C) from a post-capture
+		 * join without re-reading the hook body.
+		 */
+		lookupKey?: string
 		iteration?: number
 		ts?: number
 	}
@@ -143,8 +232,19 @@ export interface MycPrimeLiveDiagnostic {
 	} | null
 }
 
+/**
+ * Writeable internal representation of the diagnostic. The public
+ * `MycPrimeLiveDiagnostic` interface uses `readonly` so external
+ * callers cannot mutate a captured entry; the recorder hot path
+ * operates on this writeable shape, then exposes it as readonly
+ * through the public type. Used by `freshEntry`, `ensureEntry`, the
+ * BIND / ENTER recorders, and the existing ACQUISITION / LOOKUP /
+ * INJECTION / CAPTURE recorders below.
+ */
+type _MycPrimeLiveDiagEntry = { -readonly [K in keyof MycPrimeLiveDiagnostic]: MycPrimeLiveDiagnostic[K] }
+
 /** Module-level singleton. Hold the live diagnostic per host session id. */
-const liveDiagBySessionId = new Map<string, MycPrimeLiveDiagnostic>()
+const liveDiagBySessionId = new Map<string, _MycPrimeLiveDiagEntry>()
 
 // added to prove WHERE the live chain breaks — not to fix it.
 /**
@@ -199,6 +299,17 @@ export function __resetMycPrimeLiveDiagForTests(): void {
 /**
  * Begin (or refresh) a diagnostic entry for `sessionId`. No-op when
  * diagnostics are disabled.
+ *
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01: the
+ * `bind` and `enter` fields from a prior entry are PRESERVED across
+ * a re-`start`. The `start` semantics are "begin a new acquisition
+ * attempt for an already-bound session"; the runtime's structural
+ * facts (the hook bag was built, the runtime invoked beforeModel)
+ * survive that re-start. All other fields are reset to their
+ * unobserved defaults so a new acquisition cycle starts from a
+ * clean slate. The existing `Logger.warn` is preserved so the prior
+ * `acquisition.status` and `injection.injected` are still surfaced
+ * for forensic post-mortem.
  */
 export function startMycPrimeLiveDiag(sessionId: string): void {
 	if (!isMycPrimeLiveDiagEnabled()) return
@@ -209,7 +320,78 @@ export function startMycPrimeLiveDiag(sessionId: string): void {
 				`(prior.acquisition.status=${prior.acquisition.status}, prior.injection.injected=${prior.injection.injected}).`,
 		)
 	}
-	liveDiagBySessionId.set(sessionId, freshEntry(sessionId))
+	const fresh = freshEntry(sessionId)
+	// Preserve structural observations across a re-start: the bind
+	// (hook bag built for this sessionId) and any pre-existing
+	// enter event are facts about the runtime, not the acquisition
+	// cycle being re-started.
+	if (prior?.bind) fresh.bind = prior.bind
+	if (prior?.enter) fresh.enter = prior.enter
+	liveDiagBySessionId.set(sessionId, fresh)
+}
+
+/**
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01: record that
+ * a host sessionId was bound into a built `AgentHooks` bag. Fires once
+ * per `buildAgentHooks(...)` call. Captures the canonical host
+ * sessionId the producer was told, so a post-capture join can compare
+ * it against the operator's captured MYC_SESSION_ID and against the
+ * later `enter.sessionId` from `beforeModel` (Case A vs Case B
+ * discriminator). No-op when diagnostics are disabled.
+ */
+export function recordMycPrimeLiveBind(sessionId: string): void {
+	if (!isMycPrimeLiveDiagEnabled()) return
+	const entry = ensureEntry(sessionId)
+	entry.bind = {
+		sessionId,
+		iteration: 0,
+		hooksInstalled: true,
+		ts: Date.now(),
+	}
+}
+
+/**
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01: record that
+ * the runtime invoked `beforeModel`. Fires once per iteration
+ * regardless of the iteration gate or the sessionId gate — the
+ * diagnostic must prove the hook body was reached even if a
+ * short-circuit fires immediately afterwards (otherwise Case A
+ * "hook never installed" and Case C "runtime fired hook but
+ * `ctx.snapshot.sessionId` was undefined" are indistinguishable).
+ *
+ * Captures:
+ *  - `sessionId` from `ctx.snapshot.sessionId` (may be undefined;
+ *    the post-short-circuit fallback path is `__no_session__`).
+ *  - `snapshotSessionIdPresent` so the join can tell "snapshot
+ *    carried sessionId" from "fallback to conversationId" without
+ *    re-reading the hook body.
+ *  - `iteration` so a multi-iteration join can isolate the first
+ *    model request (which is the only one that ever injects).
+ *
+ * No-op when diagnostics are disabled. Does NOT call `ensureEntry`
+ * with the snapshot's sessionId — that would create a stray
+ * per-iteration entry; the entry is created at the `bind` site
+ * (or at `startMycPrimeLiveDiag`) keyed by the canonical host
+ * sessionId. When `ctx.snapshot.sessionId` differs from the host
+ * sessionId, the enter event is recorded against the entry that
+ * the runtime claims it is operating on, so the Case B
+ * discriminator (wrong sessionId at runtime) reads as
+ * `enter.sessionId !== bind.sessionId`.
+ */
+export function recordMycPrimeLiveEnter(
+	hostSessionId: string,
+	snapshotSessionId: string | undefined,
+	iteration: number,
+): void {
+	if (!isMycPrimeLiveDiagEnabled()) return
+	const entry = ensureEntry(hostSessionId)
+	entry.enter = {
+		sessionId: snapshotSessionId,
+		snapshotSessionIdPresent: snapshotSessionId !== undefined,
+		iteration,
+		hooksInstalled: true,
+		ts: Date.now(),
+	}
 }
 
 export function recordMycPrimeLiveAcquisition(
@@ -242,6 +424,17 @@ export function recordMycPrimeLiveLookup(
 		matchedRecordedSession: boolean
 		recordedPrimeFound: boolean
 		iteration?: number
+		/**
+		 * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01:
+		 * the actual key the production lookup was issued against.
+		 * Defaults to `sessionId` when omitted (preserves
+		 * pre-ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01
+		 * callers' behavior). Production callers MUST pass the
+		 * post-fallback key so the discriminator can tell
+		 * `snapshot.sessionId` lookups from `conversationId`
+		 * fallbacks.
+		 */
+		lookupKey?: string
 	},
 ): void {
 	if (!isMycPrimeLiveDiagEnabled()) return
@@ -250,6 +443,7 @@ export function recordMycPrimeLiveLookup(
 	entry.lookup.snapshotSessionIdPresent = fields.snapshotSessionIdPresent
 	entry.lookup.matchedRecordedSession = fields.matchedRecordedSession
 	entry.lookup.recordedPrimeFound = fields.recordedPrimeFound
+	entry.lookup.lookupKey = fields.lookupKey ?? sessionId
 	entry.lookup.iteration = fields.iteration
 	entry.lookup.ts = Date.now()
 }
@@ -311,7 +505,7 @@ export function __getAllMycPrimeLiveDiagForTests(): readonly MycPrimeLiveDiagnos
 	return Array.from(liveDiagBySessionId.values())
 }
 
-function freshEntry(sessionId: string): MycPrimeLiveDiagnostic {
+function freshEntry(sessionId: string): _MycPrimeLiveDiagEntry {
 	return {
 		sessionId,
 		acquisition: {
@@ -334,7 +528,7 @@ function freshEntry(sessionId: string): MycPrimeLiveDiagnostic {
 	}
 }
 
-function ensureEntry(sessionId: string): MycPrimeLiveDiagnostic {
+function ensureEntry(sessionId: string): _MycPrimeLiveDiagEntry {
 	const existing = liveDiagBySessionId.get(sessionId)
 	if (existing) return existing
 	// Defensive: a recorder firing without a prior

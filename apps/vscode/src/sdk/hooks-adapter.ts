@@ -28,7 +28,9 @@ import type { StateManager } from "@/core/storage/StateManager"
 import { getMycPrimeResult } from "./myc-prime-automation"
 import {
 	isMycPrimeLiveDiagEnabled,
+	recordMycPrimeLiveBind,
 	recordMycPrimeLiveCapture,
+	recordMycPrimeLiveEnter,
 	recordMycPrimeLiveInjection,
 	recordMycPrimeLiveLookup,
 } from "./myc-prime-live-diag"
@@ -142,12 +144,32 @@ export function buildAgentHooks(
 	stateManager: StateManager,
 	emitHookMessage?: HookMessageEmitter,
 	sessionWorkspaceRoot?: string,
+	/**
+	 * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01: optional
+	 * canonical host sessionId. When provided AND the live diagnostic is
+	 * enabled, the BIND observation is recorded against this id so a
+	 * post-capture join can compare it against the operator's captured
+	 * MYC_SESSION_ID and against the later `enter.sessionId` from
+	 * `beforeModel`. When omitted (or diagnostics disabled), the
+	 * observation is a no-op — zero state writes, zero log lines, zero
+	 * request mutations. Production callers in
+	 * `sdk-session-config-builder.ts` pass `config.sessionId`.
+	 */
+	bindSessionId?: string,
 ): AgentHooks {
 	const hooksEnabled = () => getHooksEnabledSafe(stateManager.getGlobalSettingsKey("hooksEnabled"))
 	// Session-scoped discovery: the session's root is not always among the
 	// window's workspace folders (e.g. the chat-workspace fallback when no
 	// folder is open), so the factory also scans this session's own workspace.
 	const createFactory = () => new HookFactory({ sessionWorkspaceRoot })
+
+	// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01: fire the
+	// BIND observation up-front so a missing BIND event in the captured
+	// trace is unambiguous evidence of "the runtime was never given a
+	// hook bag" (Case A), not "the bag was built but never invoked".
+	if (bindSessionId) {
+		recordMycPrimeLiveBind(bindSessionId)
+	}
 
 	return {
 		async beforeRun(ctx: AgentRunLifecycleContext): Promise<AgentStopControl | undefined> {
@@ -195,6 +217,23 @@ export function buildAgentHooks(
 			{ messages?: readonly import("@cline/shared").AgentMessage[]; options?: Record<string, unknown> } | undefined
 		> {
 			try {
+				// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01:
+				// fire the ENTER observation before any short-circuit.
+				// The discriminator tree in ACT §17 needs the ENTER
+				// event to be present even when the body short-circuits
+				// on iteration>1 or missing sessionId, otherwise Case
+				// A ("hook never installed") is indistinguishable
+				// from Case C ("hook installed and fired, but
+				// `snapshot.sessionId` was undefined"). The
+				// `__no_session__` sentinel is the same key the
+				// downstream `recordMycPrimeLiveLookup`/`Injection`
+				// calls already use, so a post-capture join finds
+				// every observation under the same key.
+				if (isMycPrimeLiveDiagEnabled()) {
+					const enterKey =
+						ctx.snapshot.sessionId ?? ctx.snapshot.conversationId ?? "__no_session__"
+					recordMycPrimeLiveEnter(enterKey, ctx.snapshot.sessionId, ctx.snapshot.iteration)
+				}
 				// Iteration gate: only inject on the very first model
 				// request of the run. Later iterations would duplicate
 				// the prime (it is already in the conversation).
@@ -211,6 +250,12 @@ export function buildAgentHooks(
 									return Boolean(r && r.status === "ok" && r.text)
 								})(),
 								iteration: ctx.snapshot.iteration,
+								// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01:
+								// record the actual lookup key so a post-capture
+								// join can tell `snapshot.sessionId` lookups from
+								// `conversationId` fallbacks. In this branch
+								// `sid` is exactly the post-fallback key.
+								lookupKey: sid,
 							})
 							recordMycPrimeLiveInjection(sid, {
 								attempted: true,
@@ -237,6 +282,11 @@ export function buildAgentHooks(
 							matchedRecordedSession: false,
 							recordedPrimeFound: false,
 							iteration: ctx.snapshot.iteration,
+							// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01:
+							// the lookup key is `__no_session__` here because
+							// both `snapshot.sessionId` and
+							// `snapshot.conversationId` are absent.
+							lookupKey: "__no_session__",
 						})
 						recordMycPrimeLiveInjection("__no_session__", {
 							attempted: true,
@@ -266,6 +316,15 @@ export function buildAgentHooks(
 						matchedRecordedSession: recordedForLookup !== undefined,
 						recordedPrimeFound: primeFoundForLookup,
 						iteration: ctx.snapshot.iteration,
+						// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01:
+						// record the post-fallback lookup key. When
+						// `snapshot.sessionId` is undefined, this is
+						// `snapshot.conversationId`; when it is defined,
+						// this is `snapshot.sessionId` itself. The
+						// discriminator tree can compare `lookupKey`
+						// against `bind.sessionId` to detect a key
+						// mismatch (Case B).
+						lookupKey: sessionId,
 					})
 				}
 				// Per-session dedupe: even if iteration=1 fires twice

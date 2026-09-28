@@ -24,7 +24,9 @@ import {
 	getMycPrimeLiveDiag,
 	isMycPrimeLiveDiagEnabled,
 	recordMycPrimeLiveAcquisition,
+	recordMycPrimeLiveBind,
 	recordMycPrimeLiveCapture,
+	recordMycPrimeLiveEnter,
 	recordMycPrimeLiveInjection,
 	recordMycPrimeLiveLookup,
 	startMycPrimeLiveDiag,
@@ -426,5 +428,225 @@ describe("ACT-MYC-CLINEMM03-LIVE-DIAG01 — wired through buildAgentHooks.before
 		expect(entry?.lookup.matchedRecordedSession).toBe(true)
 		expect(entry?.lookup.recordedPrimeFound).toBe(false)
 		expect(entry?.injection.reason).toBe("prime_empty")
+	})
+})
+
+// =============================================================================
+// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01
+//   LBC-01..LBC-05 — diagnostic-correctness tests for the new BIND + ENTER
+//   observation points and the `lookupKey` discriminator. These tests prove
+//   the diagnostic itself is semantically inert (LBC-01) and that the new
+//   observation points expose the exact information the §17 discriminator
+//   tree needs. They are NOT bug-reproduction tests; the live bug
+//   reproduction is the §14 operator-driven dogfood run.
+// =============================================================================
+describe("ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 — BIND + ENTER diagnostics", () => {
+	const originalEnv = process.env.CLINEMM_MYC_PRIME_DIAG
+
+	beforeEach(() => {
+		__resetMycPrimeLiveDiagForTests()
+		__resetPrimeInjectionStateForTests()
+		__resetMycPrimeResultsForTests()
+		delete process.env.CLINEMM_MYC_PRIME_DIAG
+	})
+
+	afterEach(() => {
+		if (originalEnv === undefined) {
+			delete process.env.CLINEMM_MYC_PRIME_DIAG
+		} else {
+			process.env.CLINEMM_MYC_PRIME_DIAG = originalEnv
+		}
+	})
+
+	it("LBC-01: diagnostics OFF → buildAgentHooks + beforeModel produce ZERO new state writes", async () => {
+		// Env flag absent; module seam not armed. Recording helpers
+		// are called with the realistic production call shape, but
+		// must short-circuit on the FIRST `isMycPrimeLiveDiagEnabled()`
+		// check inside `buildAgentHooks` and `beforeModel`. The
+		// off-path MUST be bit-identical to the pre-ACT path:
+		// no bind, no enter, no capture, no options.metadata
+		// injection, no log lines, no request mutation other than
+		// the prime packet.
+		recordMycPrimeResult(okPrime("hs-test", "<real prime>"))
+		const hooks = buildAgentHooks(createStateManager(), undefined, undefined, "hs-test")
+		const beforeModel = hooks.beforeModel
+		if (!beforeModel) throw new Error("beforeModel missing")
+		const ctx = makeBeforeModelContext()
+
+		const offResult = await beforeModel(ctx)
+		expect(offResult?.messages?.length).toBe(2)
+		expect(offResult?.options).toBeUndefined()
+		// Singleton stays empty: bind, enter, lookup, injection,
+		// capture all short-circuited.
+		expect(__getAllMycPrimeLiveDiagForTests()).toEqual([])
+		expect(getMycPrimeLiveDiag("hs-test")).toBeUndefined()
+	})
+
+	it("LBC-02: beforeModel lookup HIT → enter + lookup + injection + capture all fire; no payload captured", async () => {
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+		// Pre-populate the prime recorder so the lookup will hit
+		// and the injection branch returns `{messages, options}`.
+		recordMycPrimeResult(okPrime("hs-bind", "<prime>"))
+		const hooks = buildAgentHooks(createStateManager(), undefined, undefined, "hs-bind")
+		const beforeModel = hooks.beforeModel
+		if (!beforeModel) throw new Error("beforeModel missing")
+		const ctx = makeBeforeModelContext({
+			snapshot: { ...makeBeforeModelContext().snapshot, sessionId: "hs-bind" },
+		})
+		startMycPrimeLiveDiag("hs-bind")
+		recordMycPrimeLiveAcquisition("hs-bind", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 7,
+		})
+
+		const result = await beforeModel(ctx)
+		expect(result?.messages?.length).toBe(2)
+
+		const entry = getMycPrimeLiveDiag("hs-bind")
+		// ENTER fired before any short-circuit.
+		expect(entry?.enter?.sessionId).toBe("hs-bind")
+		expect(entry?.enter?.snapshotSessionIdPresent).toBe(true)
+		expect(entry?.enter?.iteration).toBe(1)
+		expect(entry?.enter?.hooksInstalled).toBe(true)
+		// BIND fired at buildAgentHooks time.
+		expect(entry?.bind?.sessionId).toBe("hs-bind")
+		expect(entry?.bind?.iteration).toBe(0)
+		expect(entry?.bind?.hooksInstalled).toBe(true)
+		// LOOKUP hit and recorded the lookupKey.
+		expect(entry?.lookup.matchedRecordedSession).toBe(true)
+		expect(entry?.lookup.recordedPrimeFound).toBe(true)
+		expect(entry?.lookup.lookupKey).toBe("hs-bind")
+		// INJECTION recorded ok.
+		expect(entry?.injection.injected).toBe(true)
+		expect(entry?.injection.reason).toBe("ok")
+		expect(entry?.injection.packetBytes).toBeGreaterThan(0)
+		// CAPTURE bound the captureId.
+		expect(entry?.capture?.captureId).toMatch(/^mycprime-hs-bind-/)
+		// The diagnostic MUST NOT store the prime text.
+		const json = JSON.stringify(entry)
+		expect(json).not.toContain("real prime")
+		expect(json).not.toContain("<prime>")
+	})
+
+	it("LBC-03: lookup MISS → recordedPrimeFound=false, injected=false, reason='no_recorded_prime'", async () => {
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+		// Recorder singleton is EMPTY for hs-miss — the lookup will
+		// miss, the injection branch returns `undefined`, and the
+		// recorded `reason` is `no_recorded_prime`.
+		const hooks = buildAgentHooks(createStateManager(), undefined, undefined, "hs-miss")
+		const beforeModel = hooks.beforeModel
+		if (!beforeModel) throw new Error("beforeModel missing")
+		const ctx = makeBeforeModelContext({
+			snapshot: { ...makeBeforeModelContext().snapshot, sessionId: "hs-miss" },
+		})
+		startMycPrimeLiveDiag("hs-miss")
+		recordMycPrimeLiveAcquisition("hs-miss", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 11,
+		})
+
+		const result = await beforeModel(ctx)
+		expect(result).toBeUndefined()
+
+		const entry = getMycPrimeLiveDiag("hs-miss")
+		expect(entry?.enter?.sessionId).toBe("hs-miss")
+		expect(entry?.bind?.sessionId).toBe("hs-miss")
+		expect(entry?.lookup.recordedPrimeFound).toBe(false)
+		expect(entry?.lookup.lookupKey).toBe("hs-miss")
+		expect(entry?.injection.injected).toBe(false)
+		expect(entry?.injection.reason).toBe("no_recorded_prime")
+	})
+
+	it("LBC-04: provider-binding — same session + iteration are linked to a single captureId", async () => {
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+		recordMycPrimeResult(okPrime("hs-cap", "<prime>"))
+		const hooks = buildAgentHooks(createStateManager(), undefined, undefined, "hs-cap")
+		const beforeModel = hooks.beforeModel
+		if (!beforeModel) throw new Error("beforeModel missing")
+		const ctx = makeBeforeModelContext({
+			snapshot: { ...makeBeforeModelContext().snapshot, sessionId: "hs-cap" },
+		})
+		startMycPrimeLiveDiag("hs-cap")
+		recordMycPrimeLiveAcquisition("hs-cap", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 7,
+		})
+
+		const result = await beforeModel(ctx)
+		// The captureId stamped onto options.metadata is the SAME
+		// id the diagnostic records under `entry.capture.captureId`,
+		// so the post-capture join can read the provider capture
+		// file and find the matching diagnostic entry by id.
+		const captureId = (result?.options as { metadata?: { captureId?: string } } | undefined)?.metadata
+			?.captureId
+		expect(captureId).toBeDefined()
+		const entry = getMycPrimeLiveDiag("hs-cap")
+		expect(entry?.capture?.captureId).toBe(captureId)
+		expect(entry?.capture?.aiSdkPromptObserved).toBe(true)
+	})
+
+	it("LBC-05: multi-session — events are keyed independently per sessionId", async () => {
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+		// Session A: recorder populated → injection fires.
+		recordMycPrimeResult(okPrime("hs-a", "<prime-a>"))
+		// Session B: recorder empty → injection is a no-op.
+		const hooksA = buildAgentHooks(createStateManager(), undefined, undefined, "hs-a")
+		const beforeModelA = hooksA.beforeModel
+		if (!beforeModelA) throw new Error("beforeModel A missing")
+		const hooksB = buildAgentHooks(createStateManager(), undefined, undefined, "hs-b")
+		const beforeModelB = hooksB.beforeModel
+		if (!beforeModelB) throw new Error("beforeModel B missing")
+
+		startMycPrimeLiveDiag("hs-a")
+		recordMycPrimeLiveAcquisition("hs-a", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 8,
+		})
+		startMycPrimeLiveDiag("hs-b")
+		recordMycPrimeLiveAcquisition("hs-b", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 8,
+		})
+
+		const ctxA = makeBeforeModelContext({
+			snapshot: { ...makeBeforeModelContext().snapshot, sessionId: "hs-a" },
+		})
+		const ctxB = makeBeforeModelContext({
+			snapshot: { ...makeBeforeModelContext().snapshot, sessionId: "hs-b" },
+		})
+
+		await beforeModelA(ctxA)
+		await beforeModelB(ctxB)
+
+		const entryA = getMycPrimeLiveDiag("hs-a")
+		const entryB = getMycPrimeLiveDiag("hs-b")
+		expect(entryA?.bind?.sessionId).toBe("hs-a")
+		expect(entryA?.enter?.sessionId).toBe("hs-a")
+		expect(entryA?.lookup.recordedPrimeFound).toBe(true)
+		expect(entryA?.injection.injected).toBe(true)
+		expect(entryA?.injection.reason).toBe("ok")
+		expect(entryA?.capture?.captureId).toMatch(/^mycprime-hs-a-/)
+
+		expect(entryB?.bind?.sessionId).toBe("hs-b")
+		expect(entryB?.enter?.sessionId).toBe("hs-b")
+		expect(entryB?.lookup.recordedPrimeFound).toBe(false)
+		expect(entryB?.injection.injected).toBe(false)
+		expect(entryB?.injection.reason).toBe("no_recorded_prime")
+		expect(entryB?.capture).toBeUndefined()
 	})
 })
