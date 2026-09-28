@@ -1,0 +1,24 @@
+PCCA01 — RED on entry HEAD (645da59...)
+
+```
+ ✓ PCCA-02: containment_failed notify=true — command_status does NOT call resolveObligation (wake owns authority) 7ms
+ × PCCA-01: containment_failed notify=false — command_status drains observation; second submit commits 15ms
+ × PCCA-03: containment_failed non-notify idempotency — second command_status is a no-op 7ms
+ × PCCA-05: full chronology — submit_and_exit_seen=2 and task_completion_committed=1 8ms
+
+AssertionError: expected 1 to be +0 // Object.is equality
+
+  PCCA-01: expected unconsumedTerminalCountForOwner to be 0 after command_status(J, containment_failed);
+           the Path C drain is skipped for containment_failed state (the inherited guard at
+           command-status-tool.ts:245 prevents consumeNonNotifyTerminalObservation from firing).
+
+  PCCA-03: same as PCCA-01 — the first command_status does not drain; the second is a no-op
+           because there is nothing to drain a second time.
+
+  PCCA-05: full chronology matches the live RED exactly: submit #1 held, command_status returns
+           containment_failed but does not drain, submit #2 hits the BCB barrier
+           (unconsumedOwnedTerminalResultsForC10 > 0) and refuses to commit.
+
+Test Files  1 failed (1)
+Tests       3 failed | 1 passed (4)
+```

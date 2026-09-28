@@ -1,0 +1,64 @@
+PCCA01 — ABLATION
+
+The bounded repair is the new Path C' branch added at
+command-status-tool.ts:332-350. Removing it returns the new tests to
+RED, confirming the repair is load-bearing.
+
+```diff
+@@ command-status-tool.ts @@
+ if (
+   !suppressPathB &&
+   options.backgroundNotifyCoordinator &&
+   options.resolveActiveOwner &&
+   snap.state !== "running" &&
+   snap.state !== "containment_failed"     ← KEEP for notify=true Path A
+ ) {
+   ...Path A (resolveObligation, owner-mismatch check)...
+   ...Path C (consumeNonNotifyTerminalObservation)...
+ }
++// ACT-CLINEMM-POST-CONSUMPTION-COMPLETION-AUTHORITY01:
++// Path C' — drain the non-notify terminal observation EVEN when
++// snap.state === "containment_failed". ...
++if (
++  options.backgroundNotifyCoordinator &&
++  options.resolveActiveOwner &&
++  snap.state === "containment_failed"
++) {
++  const activeOwner = options.resolveActiveOwner()
++  if (activeOwner) {
++    if (!options.backgroundNotifyCoordinator.hasActiveNotify(typed.jobId)) {
++      options.backgroundNotifyCoordinator.consumeNonNotifyTerminalObservation({
++        jobId: typed.jobId,
++        sessionId: activeOwner.sessionId,
++        taskId: activeOwner.taskId,
++      })
++    }
++  }
++}
+```
+
+Ablation test result (Path C' removed, same RED test):
+
+```
+ × PCCA-01: containment_failed notify=false — command_status drains observation; second submit commits 15ms
+ ✓ PCCA-02: containment_failed notify=true — command_status does NOT call resolveObligation (wake owns authority) 7ms
+ × PCCA-03: containment_failed non-notify idempotency — second command_status is a no-op 8ms
+ × PCCA-05: full chronology — submit_and_exit_seen=2 and task_completion_committed=1 9ms
+
+ Test Files  1 failed (1)
+ Tests       3 failed | 1 passed (4)
+```
+
+PCCA-02 still PASSES — the Path B containment_failed exclusion remains
+intact for the notify=true wake-consumer authority (the wake has no
+listener for containment_failed, so Path B's skip is correct).
+
+Restoration of Path C' returns to GREEN:
+
+```
+ ✓ src/sdk/__tests__/post-consumption-completion-authority01.pcca01.test.ts (4 tests) 35ms
+ Test Files  1 passed (1)
+ Tests       4 passed (4)
+```
+
+Ablation=PASS — the repair is necessary and sufficient.

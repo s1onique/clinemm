@@ -1,0 +1,49 @@
+# 07 — Conservation matrix
+
+The PCCA01 repair is bounded: ONE production file modified
+(`command-status-tool.ts` — the Path C' drain branch added at line
+307-350), ONE new test file added
+(`post-consumption-completion-authority01.pcca01.test.ts`).
+
+All directly-relevant predecessor vitest suites still PASS:
+
+```text
+background-completion-barrier01.bcb01.test.ts                              14/14
+background-completion-barrier01-correction01.bcb01-c.test.ts                8/8
+background-completion-barrier01-correction02.bcb01-c2.test.ts               5/5
+background-completion-barrier01-correction03.bcb01-c3.test.ts               6/6
+background-completion-barrier01-correction04.bcb01-c4.test.ts               5/5
+completion-presentation-authority01.cpa01.test.ts                          14/14
+continuation-cardinality-authority01.ccard01.test.ts                       12/12
+background-notify-completion-authority-c10-red01.bnca-red01.test.ts         1/1
+background-notify-completion-authority-c10-framework01.bnca-framework01....  3/3
+background-notify-completion-authority-c10-framework-ablation01.bnca-ab...  2/2
+background-notify-completion-authority-c10-framework-dispatch-failed01....  3/3
+background-notify-completion-authority-h1-green01.bnca-green01.test.ts       3/3
+background-notify-completion-authority-fire-and-forget-red01.bnca-red01...  2/2
+background-notify-completion-authority-ablation01.bnca-ablation01.test.ts    2/2
+long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts            15/15
+long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts    5/5
+long-horizon-outstanding-work-authority01.lhowa01-wire-authority.test.ts    2/2
+pcpc-containment-product-contract.pcpc01.test.ts                           11/11
+                                                              TOTAL:    111 passing
+```
+
+Plus PCCA01 itself at 4/4.
+
+Pre-existing tooling distinction (per CPA01 result.json note):
+`background-completion-consumer-availability01.bcca.test.ts` runs under
+`bun:test`, not vitest, and is therefore not exercised from this
+vitest harness. The ACT §37 conservation matrix recognizes this.
+
+Conservation summary:
+- BCB01 / BCB01-c / BCB01-c2 / BCB01-c3 / BCB01-c4: PASS
+- BNCA framework / red / framework-ablation / dispatch-failed:
+  PASS
+- BNCA h1-green / fire-and-forget / ablation: PASS
+- CCARD01: PASS
+- CPA01: PASS
+- LHOWA01 (both): PASS
+- TQCB01: PASS
+- PCPC01 (containment product contract): PASS
+- PCCA01: PASS (4/4)

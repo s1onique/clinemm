@@ -1,0 +1,68 @@
+PCCA01 — GREEN on fix-applied HEAD
+
+The bounded repair added Path C' at
+`apps/vscode/src/sdk/command-status-tool.ts:307-350`. Result:
+
+```
+ ✓ src/sdk/__tests__/post-consumption-completion-authority01.pcca01.test.ts (4 tests) 35ms
+   ✓ PCCA-01: containment_failed notify=false — command_status drains observation; second submit commits
+   ✓ PCCA-02: containment_failed notify=true — command_status does NOT call resolveObligation (wake owns authority)
+   ✓ PCCA-03: containment_failed non-notify idempotency — second command_status is a no-op
+   ✓ PCCA-05: full chronology — submit_and_exit_seen=2 and task_completion_committed=1
+
+ Test Files  1 passed (1)
+ Tests       4 passed (4)
+```
+
+Conservation matrix (all vitest-runnable predecessors):
+
+```
+ ✓ background-completion-barrier01.bcb01.test.ts                              14/14
+ ✓ background-completion-barrier01-correction01.bcb01-c.test.ts                8/8
+ ✓ background-completion-barrier01-correction02.bcb01-c2.test.ts               5/5
+ ✓ background-completion-barrier01-correction03.bcb01-c3.test.ts               6/6
+ ✓ background-completion-barrier01-correction04.bcb01-c4.test.ts               5/5
+ ✓ completion-presentation-authority01.cpa01.test.ts                          14/14
+ ✓ continuation-cardinality-authority01.ccard01.test.ts                       12/12
+ ✓ background-notify-completion-authority-c10-red01.bnca-red01.test.ts         1/1
+ ✓ background-notify-completion-authority-c10-framework01.bnca-framework01...   3/3
+ ✓ background-notify-completion-authority-c10-framework-ablation01.bnca-ab...   2/2
+ ✓ background-notify-completion-authority-c10-framework-dispatch-failed01....   3/3
+ ✓ background-notify-completion-authority-h1-green01.bnca-green01.test.ts       3/3
+ ✓ background-notify-completion-authority-fire-and-forget-red01.bnca-red01...   2/2
+ ✓ background-notify-completion-authority-ablation01.bnca-ablation01.test.ts    2/2
+ ✓ long-horizon-task-quiescence-completion-barrier01.tqcb01.test.ts            15/15
+ ✓ long-horizon-outstanding-work-authority01.lhowa01-synthetic-real.test.ts    5/5
+ ✓ long-horizon-outstanding-work-authority01.lhowa01-wire-authority.test.ts    2/2
+ ✓ pcpc-containment-product-contract.pcpc01.test.ts                           11/11
+                                                                              --------
+                                                              PCCA01 + cons: 111 tests passing
+
+Plus CPA01 + BCB-01..04 + C10 framework + TQCB + LHOWA + PCPC + BNCA + CCARD:
+full predecessor conservation. The BCCA suite (uses bun:test, not vitest)
+is OUT_OF_CSCOPE per the existing tooling distinction; not run from vitest.
+```
+
+Typecheck (apps/vscode):
+
+```
+$ bun run check-types
+Formatted 329 files in 37ms. Fixed 1 file.
+$ bunx tsc --project tsconfig.vscode-compat.json --noEmit
+(exit 0)
+```
+
+Diff check (clean whitespace / no conflict markers):
+
+```
+$ git diff --check
+(clean)
+```
+
+Diff stat (one production file, one new test file):
+
+```
+ apps/vscode/src/sdk/command-status-tool.ts                                  | +44
+ apps/vscode/src/sdk/__tests__/post-consumption-completion-authority01.pcca01.test.ts | (new, 580 lines)
+ .factory/evidence/ACT-MYC-CLINEMM04-LIVE-QUALIFICATION/*                    | (LIVE04 exempt dirt)
+```
