@@ -142,6 +142,13 @@
 		// invariant. Bridge-only (uses `@cline-internal/core/...`
 		// aliases declared in `tsconfig.c2-4-c-bridge.json` only).
 		"src/sdk/__tests__/pending-prompt-drain-after-completing-run.pprd01.c24-c-bridge.test.ts",
+		// ACT-CLINEMM-PENDING-PROMPT-LOST-WAKEUP01 / PPLW01:
+		// real LocalRuntimeHost + real PendingPromptsController + real
+		// drain + real runTurn re-entry for the lost-wakeup race between
+		// BCB enqueue and turn ownership release. Bridge-only (uses
+		// `@cline-internal/core/...` aliases declared in
+		// `tsconfig.c2-4-c-bridge.json` only).
+		"src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts",
 		// ACT-CLINEMM-BACKGROUND-COMMAND-NOTIFY-ON-TERMINAL01 / BCNT01:
 		// Real production wire bridge test — runs under
 		// tsconfig.c2-4-c-bridge.json + vitest.config.c2-4-c-bridge.ts

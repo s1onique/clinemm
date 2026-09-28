@@ -150,7 +150,15 @@
 		// RELOAD witness. Closes R4_RELOAD_READ. Tests the
 		// lowest production reload seam (fresh ClineFileStorage
 		// from same secrets.json disk path).
-		"src/sdk/__tests__/provider-instance-identity-r4-reload-read.piif01.test.ts"
+		"src/sdk/__tests__/provider-instance-identity-r4-reload-read.piif01.test.ts",
+		// ACT-CLINEMM-PENDING-PROMPT-LOST-WAKEUP01 / PPLW01:
+		// Real-host RED witness for the lost-wakeup race between BCB
+		// enqueue and turn ownership release. Uses a controllable
+		// AgentRuntime stub whose `run` BLOCKS until signaled, so the
+		// test can deterministically force BOTH orderings:
+		// enqueue-during-run and turn-done-then-enqueue. Drives the
+		// REAL LocalRuntimeHost + REAL PendingPromptsController.
+		"src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts"
 	],
 	"exclude": [
 		"node_modules",

@@ -379,6 +379,16 @@ export default defineConfig({
 			// asserts the post-turn drain microtask (line 1268)
 			// actually dequeues and dispatches it.
 			"src/sdk/__tests__/pending-prompt-drain-after-completing-run.pprd01.c24-c-bridge.test.ts",
+			// ACT-CLINEMM-PENDING-PROMPT-LOST-WAKEUP01 / PPLW01:
+			// Real-host RED witness for the lost-wakeup race between
+			// pending-prompt enqueue and run ownership release. Uses a
+			// controllable AgentRuntime stub whose `run` BLOCKS until
+			// signaled, so the test can deterministically force BOTH
+			// orderings: enqueue-during-run and turn-done-then-enqueue.
+			// Drives the REAL LocalRuntimeHost + REAL
+			// PendingPromptsController + real drain + real runTurn
+			// re-entry chain.
+			"src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts",
 		],
 		testTimeout: 30_000,
 	},

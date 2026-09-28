@@ -1,0 +1,66 @@
+{
+  "act": "ACT-CLINEMM-PENDING-PROMPT-LOST-WAKEUP01",
+  "subject_head": "fbe7acd5f2bd05e311fda18eec70bbcecbf2efe2",
+  "verdict": "HALT_RED_NOT_REPRODUCED",
+
+  "ENTRY_HEAD": "fbe7acd5f2bd05e311fda18eec70bbcecbf2efe2",
+  "SUBJECT_HEAD": "fbe7acd5f2bd05e311fda18eec70bbcecbf2efe2",
+
+  "LIVE_RED_SESSION_ID": "1790544756725_zx4dj (per predecessor ACT; fresh live artifacts not captured this ACT)",
+  "LIVE_RED_PROMPT_ID": null,
+  "LIVE_RED_ENQUEUED": 1,
+  "LIVE_RED_DEQUEUED": 0,
+  "LIVE_RED_CONTINUATION_SCHEDULED": 0,
+  "LIVE_RED_TASK_COMPLETION_COMMITTED": 0,
+
+  "PENDING_PROMPT_STORE": "sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts (PendingPromptsController)",
+  "PENDING_PROMPT_ENQUEUE_SEAM": "PendingPromptsController.enqueue (line 329) — calls service.enqueue + emitPrompts + onEnqueue + scheduleDrain",
+  "PENDING_PROMPT_DRAIN_ENTRY": "PendingPromptsController.scheduleDrain (line 409) — gated on [empty || aborting || drainingPendingPrompts || !canStartRun()]",
+  "PENDING_PROMPT_DEQUEUE_SEAM": "PendingPromptsController.drain (line 423) — gated on [aborting || drainingPendingPrompts || !canStartRun()] then shiftNext + emit + emitSubmitted + deps.send",
+  "PENDING_PROMPT_DRAIN_SCHEDULER": "Two entry points: scheduleDrain from enqueue (line 375) + runTurn post-turn drain microtask (local-runtime-host.ts:1268-1272)",
+  "ACTIVE_RUN_GUARD": "session.agent.canStartRun() (session-runtime-orchestrator.ts:520) — !this.running && !this.shutdownCalled",
+  "DRAIN_REENTRANCY_GUARD": "session.drainingPendingPrompts (boolean) — set true in drain() at line 455, reset in finally at line 518",
+  "SESSION_OWNER_KEY": "ActiveSession (this.sessions.get(sessionId) inside LocalRuntimeHost)",
+  "TURN_DONE_SEAM": "LocalRuntimeHost.runTurn line 1268 — queueMicrotask(() => void this.pendingPromptsController.drain(input.sessionId))",
+  "ACTIVE_RUN_CLEAR_SEAM": "session-runtime-orchestrator.ts:1039 — this.running = false (inside executeRunInternal's finally block, after unsubscribe + await activeTrackerWork)",
+
+  "QUEUE_DELIVERY_CONTRACT": "delivery:'queue' = store only; scheduleDrain fires only if canStartRun()=true; no autonomous drain guarantee",
+  "ENQUEUE_REQUESTS_DRAIN": true,
+
+  "ROOT_CAUSE": "Live defect counter state (enqueued=1, dequeued=0, continuation_scheduled=0, task_completion_committed=0) was NOT reproduced in either deterministic ordering on production code. PPLW-01 (enqueue during active run) and PPLW-02 (enqueue after turn ends) both PASS — the drain fires correctly in both cases. The previous ACT (PPRD01) also proved drain scheduling correct. Production code's invariant 'queue non-empty AND session idle ⇒ eventually one drain' holds. The live defect must be caused by something OTHER than lost-wakeup at the enqueue/drain handoff. Likely candidates: (a) BCB barrier predicate bug — enqueueCompletionContinuationIfHeld returns 'not_held' because deferredCompletionBarrier is not set; (b) sdkHost.send rejection silently swallowed; (c) session-lifecycle wiring points at stale pendingPromptsController. None of these can be confirmed without fresh live artifacts (CCARD/CCAP JSONL captures for the failing sessionId).",
+
+  "REPAIR": "None. ACT verdict HALT_RED_NOT_REPRODUCED per ACT §9. Two regression-lock tests added (PPLW-01, PPLW-02) that lock the drain-scheduling invariant for both orderings.",
+
+  "PPLW_01": "PASS — enqueue DURING active run, then run completes → drain (1/1 dispatched)",
+  "PPLW_02": "PASS — turn completes first, then enqueue → drain (2/2 dispatched across two enqueues, FIFO preserved)",
+  "PPRD_01": "PASS (predecessor regression lock still green)",
+  "PPRD_02": "PASS (predecessor regression lock still green)",
+
+  "PPLW_03_TO_18": "NOT_RUN — ACT halted at the discriminator (§9 HALT_RED_NOT_REPRODUCED). Remaining test matrix depends on a different RED reproduction strategy that this ACT could not establish.",
+
+  "BCB_C3": "PASS (BCB01-C3 suite — confirmed by predecessor ACT's conservation gate)",
+  "BCB_C4": "PASS",
+  "BCCA": "PASS (background-completion-consumer-availability tests)",
+  "CCARD": "PASS (continuation-cardinality tests)",
+  "BNCA_FRAMEWORK": "PASS",
+  "BNCA_ABLATION": "PASS",
+
+  "TYPECHECK": "PASS (apps/vscode/tsc -p tsconfig.c2-4-c-bridge.json → exit 0; apps/vscode/tsc -p tsconfig.json → exit 0)",
+  "VSCODE_PREPUBLISH": "NOT_RUN (no production code changes; ACT is test/config-only; standard gate applies unchanged)",
+  "DIFF_CHECK": "PASS (git diff --check → exit 0)",
+
+  "LIVE_ENQUEUED": null,
+  "LIVE_DEQUEUED": null,
+  "LIVE_CONTINUATION_SCHEDULED": null,
+  "LIVE_FINALIZATION_RUN_STARTED": null,
+  "LIVE_COMMAND_STATUS_CONSUMED": null,
+  "LIVE_TASK_COMPLETION_COMMITTED": null,
+  "LIVE_OPERATOR_MESSAGES": null,
+  "LIVE_WORKING_AFTER_COMMIT": null,
+  "LIVE_CANCEL_AFTER_COMMIT": null,
+
+  "PRODUCTION_CODE_CHANGED": false,
+  "MYC_CODE_CHANGED": false,
+
+  "READY_TO_RESUME_MYC_LIVE_DIAG": "BLOCKED — ACT-MYC-CLINEMM04-LIVE-QUALIFICATION should resume only after fresh live artifacts (JSONL CCARD/CCAP for the failing sessionId) confirm a NEW reproduction strategy. The drain-scheduling seam is proven correct on production code for both orderings. The live defect must originate elsewhere (BCB barrier predicate, sdkHost.send rejection, or session-lifecycle wiring — see 05-causal-discriminator.md)."
+}

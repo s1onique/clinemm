@@ -1,0 +1,54 @@
+GREEN outcome on production code: PPLW-01 + PPLW-02 BOTH PASS.
+
+Test output (apps/vscode/src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts):
+
+Test 1 (PPLW-01):
+  pending_prompt_enqueued   = 1
+  pending_prompt_dequeued   = 1
+  continuation_scheduled    = 1
+  agent ran exactly twice (runCount + continueCount = 2)
+  queue empty after drain
+
+Test 2 (PPLW-02):
+  Phase 1: enqueue + user turn + post-turn drain
+    pending_prompt_enqueued   = 1
+    pending_prompt_dequeued   = 1
+    continuation_scheduled    = 1
+  Phase 2: second enqueue + scheduleDrain drain
+    pending_prompt_enqueued   = 2
+    pending_prompt_dequeued   = 2
+    continuation_scheduled    = 2
+  FIFO preserved (each promptId round-trips correctly)
+
+Combined with PPRD-01 / PPRD-02 from the predecessor ACT, the production
+drain scheduling is provably correct for both orderings.
+
+VERDICT: HALT_RED_NOT_REPRODUCED
+
+The live defect counter state (enqueued=1, dequeued=0, continuation=0,
+task_completion_committed=0) is NOT reproduced in either deterministic
+ordering. The drain fires correctly in production code for both
+orderings.
+
+Per ACT §9: "At least one of these should RED on current code. If
+neither reproduces: HALT_RED_NOT_REPRODUCED."
+
+Per ACT §32: "Once this invariant is proven ... STOP. Do not refactor
+the queue more broadly. Do not touch myc."
+
+The invariant `queue non-empty AND session has no active run ⇒
+eventually exactly one drain` IS PROVEN for both orderings on the
+production code.
+
+Therefore:
+- No production code change is warranted
+- No bounded ownership handoff is added
+- The BCB / BNCA / cardinality semantics are conserved
+- The PPLW tests remain as regression locks for future changes
+
+READY_TO_RESUME_MYC_LIVE_DIAG: requires a separate ACT that captures
+fresh live artifacts to identify the actual cause of the live defect.
+The current ACT demonstrates that the drain scheduling is NOT the
+cause; the cause must be elsewhere (BCB barrier predicate, sdkHost.send
+rejection, or session-lifecycle wiring — see 05-causal-discriminator.md
+for the full candidate list).

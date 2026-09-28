@@ -1,0 +1,18 @@
+ACT=ACT-CLINEMM-PENDING-PROMPT-LOST-WAKEUP01
+ENTRY_HEAD=fbe7acd5f2bd05e311fda18eec70bbcecbf2efe2
+SUBJECT_HEAD=fbe7acd5f2bd05e311fda18eec70bbcecbf2efe2
+WORKING_TREE_CLEAN=true
+
+LIVE_FAILURE=REAL
+BOUNDARY=PENDING_PROMPT_LOST_WAKEUP
+
+Predecessor: ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01
+  - Verdict: NO_PRODUCTION_CHANGE_NEEDED
+  - Two bridge tests (PPRD-01-BRIDGE, PPRD-02-BRIDGE) added as regression locks
+  - Both pass on production code
+  - Live defect counter state was not reproducible in that ACT's harness
+
+This ACT is a stricter reproduction attempt:
+  - Fresh live evidence confirms the defect is real
+  - Required: deterministic ordering control to force BOTH interleavings
+  - Required: a bounded ownership handoff so neither side strands the queue

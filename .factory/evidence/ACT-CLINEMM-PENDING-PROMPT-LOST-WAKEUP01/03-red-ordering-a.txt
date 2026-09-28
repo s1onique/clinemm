@@ -1,0 +1,37 @@
+PPLW-01: enqueue DURING active run, then run completes -> drain
+
+Test file: apps/vscode/src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts
+Bridge config: apps/vscode/vitest.config.c2-4-c-bridge.ts
+
+Chronology:
+  1. setReady(true)
+  2. host.runTurn("USER_SUBMIT_AND_EXIT") — kicks off the agent.run which BLOCKS on runGate
+  3. host.runTurn({delivery: "queue", prompt: "FINALIZATION: ..."}) — enqueues (C4 fires once)
+  4. signalRunComplete() — agent.run resolves
+  5. Wait for microtasks
+  6. Assert dequeue=1, dispatched=1
+
+Observed:
+  enqueued = 1
+  dequeued = 1
+  dispatched = 1
+  agent ran exactly twice (runCount + continueCount = 2)
+  queue empty after drain
+
+VERDICT FOR PPLW-01: GREEN on production code.
+
+The drain DOES fire when a prompt is enqueued during an active run. The
+scheduleDrain check at line 414 bails (because canStartRun()==false during
+the run), but the post-turn drain microtask at local-runtime-host.ts:1268
+catches the queue and dequeues it after the run ends.
+
+This is the canonical "BCB enqueue fires while submit_and_exit turn is
+still in flight" ordering. In production this is exactly what happens:
+  - BCB chain fires during runtime.run()'s run-finished event
+  - sdkHost.send({delivery:"queue"}) resolves into pendingPromptsController.enqueue
+  - scheduleDrain bails (canStartRun()==false during the run)
+  - Eventually runtime.run() returns, orchestrator's finally clears running=false
+  - runTurn reaches line 1268, queues post-turn drain microtask
+  - Post-turn drain microtask fires, drain() dequeues, dispatches continuation
+
+Production code handles this ordering correctly. No fix needed.

@@ -1,0 +1,39 @@
+Conservation: no production code changed.
+
+PRODUCTION_CODE_CHANGED=false
+MYC_CODE_CHANGED=false
+
+Diff stats:
+  apps/vscode/tsconfig.c2-4-c-bridge.json                          (+8 lines, include PPLW-01 test)
+  apps/vscode/tsconfig.json                                       (+7 lines, exclude PPLW-01 from base)
+  apps/vscode/vitest.config.c2-4-c-bridge.ts                      (+10 lines, include PPLW-01 test)
+  apps/vscode/vitest.config.ts                                    (+9 lines, exclude PPLW-01 from base)
+  apps/vscode/src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts  (NEW, 509 lines)
+
+No production source files modified:
+  - sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts: unchanged
+  - sdk/packages/core/src/runtime/host/local-runtime-host.ts: unchanged
+  - apps/vscode/src/sdk/SdkController.ts: unchanged
+  - apps/vscode/src/sdk/sdk-session-event-coordinator.ts: unchanged
+
+Conservation gates:
+  TYPECHECK=PASS (apps/vscode/tsc -p tsconfig.c2-4-c-bridge.json → exit 0)
+  TYPECHECK=PASS (apps/vscode/tsc -p tsconfig.json → exit 0)
+  DIFF_CHECK=PASS (git diff --check → exit 0)
+  PPLW_01=PASS
+  PPLW_02=PASS
+  PPRD_01=PASS (predecessor regression lock still green)
+  PPRD_02=PASS (predecessor regression lock still green)
+
+No regressions detected.
+
+VSCODE_PREPUBLISH=NOT_RUN (no production code changes; ACT is test/config-only;
+standard gate applies unchanged).
+
+BCB01 / BCB01-C* / BNCA-FRAMEWORK / CCARD: NOT_RE-RUN (out of scope; ACT is
+explicitly bounded to drain-scheduling semantics and does not modify
+production code that would affect those suites).
+
+Acoustic gate: pre-existing failures in async-command-ownership-discriminator
+suite (ACO01 / ACO03) are NOT caused by this ACT — confirmed by stashing
+my changes and re-running on HEAD.

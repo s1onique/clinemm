@@ -1,0 +1,38 @@
+PPLW-02: turn completes first (empty queue), then enqueue -> drain
+
+Test file: apps/vscode/src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts
+Bridge config: apps/vscode/vitest.config.c2-4-c-bridge.ts
+
+Chronology:
+  1. host.runTurn({delivery: "queue", prompt: "FINALIZATION_PHASE_1"}) — gate CLOSED, enqueues (C4 fires once)
+  2. setReady(true) — open gate
+  3. host.runTurn({prompt: "USER_TURN"}) — kicks off the agent.run
+  4. signalRunComplete() — agent.run resolves
+  5. userTurnResult awaits, returns
+  6. signalContinueComplete() — agent.continue() in drain resolves
+  7. Wait for microtasks
+  8. Assert dequeue=1, dispatched=1 (phase 1 drained by post-turn drain microtask)
+  9. host.runTurn({delivery: "queue", prompt: "FINALIZATION_PHASE_2"}) — second enqueue
+ 10. signalContinueComplete() — agent.continue() in second drain resolves
+ 11. Wait for microtasks
+ 12. Assert dequeue=2, dispatched=2 (phase 2 drained by scheduleDrain)
+ 13. FIFO preserved
+
+Observed:
+  enqueued = 2
+  dequeued = 2
+  dispatched = 2
+  agent ran 3 times (1 user + 2 drains via continue)
+  queue empty after drain
+  FIFO preserved
+
+VERDICT FOR PPLW-02: GREEN on production code.
+
+The post-turn drain microtask at line 1268 dequeues the queue after the
+run ends (phase 1). A subsequent BCB-style enqueue (phase 2) triggers
+scheduleDrain which fires when canStartRun()==true (session idle).
+
+Production code handles both ordering directions correctly. The invariant
+queue non-empty AND no active run ⇒ drain happens is preserved.
+
+No fix needed for the lost-wakeup hypothesis.

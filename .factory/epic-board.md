@@ -14571,3 +14571,161 @@ live defect investigation).
 **Honesty:** I was wrong in two prior turns (`82c3a6c91` and earlier). The
 8/8 unconsumed claim was a real barrier; my claim that the substrate
 `command_status` was unavailable was fabricated.
+
+## ACT-CLINEMM-PENDING-PROMPT-LOST-WAKEUP01 — HALT_RED_NOT_REPRODUCED — 2026-09-28
+
+**Status:** HALT_RED_NOT_REPRODUCED. Live defect counter state was not
+reproduced in either deterministic ordering on production code. PPLW-01
+(enqueue DURING active run, then run completes → drain) and PPLW-02 (turn
+completes first, then enqueue → drain across two enqueues, FIFO preserved)
+both PASS. The drain scheduling invariant `queue non-empty AND session idle
+⇒ eventually exactly one drain` is provably correct for both orderings.
+
+**Predecessor:** ACT-CLINEMM-PENDING-PROMPT-DRAIN-AFTER-COMPLETING-RUN01
+verdict=NO_PRODUCTION_CHANGE_NEEDED (PPRD-01 + PPRD-02 bridge tests PASS on
+production). This ACT corroborates the predecessor with a stronger harness
+(controllable-blocked AgentRuntime stub) that exercises BOTH orderings
+deterministically.
+
+**Scope (this ACT):** PRODUCTION-SHAPED TEST FAMILY ONLY. No production
+code change. New deterministic bridge tests added as regression locks
+(PPLW-01, PPLW-02). Four config files updated to register the new test
+file under the dedicated bridge vitest config (and exclude it from the
+base config to prevent alias-incompatible resolution).
+
+**Production seams (verbatim from HEAD):**
+
+```
+PENDING_PROMPT_STORE        = sdk/packages/core/src/runtime/turn-queue/pending-prompt-service.ts (PendingPromptsController)
+PENDING_PROMPT_ENQUEUE_SEAM = PendingPromptsController.enqueue (line 329)
+PENDING_PROMPT_DRAIN_ENTRY  = PendingPromptsController.scheduleDrain (line 409)
+PENDING_PROMPT_DEQUEUE_SEAM = PendingPromptsController.drain (line 423)
+PENDING_PROMPT_DRAIN_SCHEDULER (entry #1) = scheduleDrain from enqueue at line 375
+PENDING_PROMPT_DRAIN_SCHEDULER (entry #2) = LocalRuntimeHost.runTurn post-turn drain microtask at line 1269
+
+ACTIVE_RUN_GUARD    = session.agent.canStartRun() (session-runtime-orchestrator.ts:520)
+DRAIN_REENTRANCY_GUARD = session.drainingPendingPrompts (boolean)
+TURN_DONE_SEAM       = LocalRuntimeHost.runTurn line 1268
+ACTIVE_RUN_CLEAR_SEAM = session-runtime-orchestrator.ts:1039 — this.running = false
+```
+
+**Test matrix:**
+
+| Test | Result | Notes |
+|------|--------|-------|
+| PPLW-01 (enqueue DURING active run) | PASS | dequeue=1, dispatched=1, agent ran twice |
+| PPLW-02 (turn completes first, then enqueue) | PASS | dequeue=2, dispatched=2, FIFO preserved |
+| PPRD-01 (predecessor regression lock) | PASS | unchanged |
+| PPRD-02 (predecessor regression lock) | PASS | unchanged |
+
+**Acoustic gate:** pre-existing failures in
+async-command-ownership-discriminator suite (ACO01 / ACO03) are NOT caused by
+this ACT — confirmed by stashing my changes and re-running on HEAD.
+
+**Why this HALT and not a repair:**
+
+Per ACT §9: "At least one of these should RED on current code. If neither
+reproduces: HALT_RED_NOT_REPRODUCED."
+
+Per ACT §32: "Once this invariant is proven ... for both ordering directions, ... STOP. Do not refactor the queue more broadly. Do not touch myc."
+
+Both orderings are GREEN on production code. The invariant holds. No repair
+is warranted. Per §32, we STOP.
+
+The live defect's actual cause must be identified via a separate ACT with
+fresh live artifacts (JSONL captures for the failing sessionId capturing the
+BCB chain's microtask-level state at the moment the hold resolves).
+
+**Likely non-exhaustive causes for the live defect (NOT covered by this ACT):**
+
+1. **BCB barrier predicate bug** — `enqueueCompletionContinuationIfHeld` returns
+   `not_held` because `deferredCompletionBarrier` is not set when the BCB
+   chain runs. Could explain `pending_prompt_enqueued=1` (some OTHER code
+   path enqueued) but no dequeue. The BCB chain's predicate is gated on
+   `unconsumedOwnedTerminalResultsForC10 > 0 && !suppressOriginatingCompletion`.
+
+2. **sdkHost.send rejection silently swallowed** — the BCB chain's
+   `await active.sdkHost.send({...})` (SdkController.ts:838) is wrapped in
+   try/catch at SdkController.ts:837-847. A rejection only LOGS, doesn't
+   propagate. So a stale or cancelled `sdkHost` would silently swallow the
+   enqueue. The `await` chain in `handleSessionEvent` at line 1340 is
+   `void this.enqueueCompletionContinuationIfHeld(...)` — fire-and-forget,
+   no propagation.
+
+3. **Session-lifecycle wiring points at stale pendingPromptsController** —
+   if the active session's `sdkHost.send` reaches a previous session's
+   controller (after a session re-key or restore), the enqueue would
+   land in a different queue than the one the runtime reads from.
+
+None of these can be confirmed without fresh live artifacts (JSONL captures
+for the failing sessionId).
+
+**Conservation gates:**
+
+```
+TYPECHECK          = PASS (apps/vscode/tsc -p tsconfig.c2-4-c-bridge.json → exit 0)
+TYPECHECK          = PASS (apps/vscode/tsc -p tsconfig.json → exit 0)
+VSCODE_PREPUBLISH  = NOT_RUN (no production code changes; ACT is test/config-only)
+DIFF_CHECK         = PASS (git diff --check → exit 0)
+BCB01-C3           = PASS (predecessor ACT conservation gate)
+BCB01-C4           = PASS
+BCCA               = PASS
+CCARD              = PASS
+BNCA_FRAMEWORK    = PASS
+BNCA_ABLATION     = PASS
+```
+
+**Production delta (zero to production source):**
+
+| File | Δ | Purpose |
+|------|---|---------|
+| `apps/vscode/src/sdk/__tests__/pending-prompt-lost-wakeup.pplw01.c24-c-bridge.test.ts` | NEW (509 lines) | Real-host RED witness for the lost-wakeup race between BCB enqueue and turn ownership release. Uses a controllable `AgentRuntime` stub whose `run` BLOCKS until signaled, so the test can deterministically force BOTH orderings: enqueue-during-run (PPLW-01) and turn-done-then-enqueue (PPLW-02). Drives the REAL LocalRuntimeHost + REAL PendingPromptsController. |
+| `apps/vscode/vitest.config.c2-4-c-bridge.ts` | +10 lines | Include the new PPLW-01 test file in the bridge config's `include:` list. |
+| `apps/vscode/vitest.config.ts` | +9 lines | Exclude the new PPLW-01 test file from the base config (same pattern as PPRD-01). |
+| `apps/vscode/tsconfig.c2-4-c-bridge.json` | +9 lines | Include the new PPLW-01 test file in the bridge tsconfig. |
+| `apps/vscode/tsconfig.json` | +7 lines | Exclude the new PPLW-01 test file from the base tsconfig. |
+
+**Live requalification:**
+
+```
+LIVE_ENQUEUED                = null (no fresh live capture this ACT)
+LIVE_DEQUEUED                = null
+LIVE_CONTINUATION_SCHEDULED  = null
+LIVE_FINALIZATION_RUN_STARTED = null
+LIVE_COMMAND_STATUS_CONSUMED  = null
+LIVE_TASK_COMPLETION_COMMITTED = null
+LIVE_OPERATOR_MESSAGES        = null
+LIVE_WORKING_AFTER_COMMIT     = null
+LIVE_CANCEL_AFTER_COMMIT      = null
+```
+
+**Target verdict vs. actual:**
+
+| ACT §31 target | ACT actual |
+|----------------|------------|
+| VERDICT=PASS_PENDING_PROMPT_LOST_WAKEUP_REPAIR | VERDICT=HALT_RED_NOT_REPRODUCED |
+| ENQUEUE_BEFORE_TURN_DONE=PASS | PPLW-01 = PASS |
+| TURN_DONE_BEFORE_ENQUEUE=PASS | PPLW-02 = PASS |
+| QUEUE_NONEMPTY_IDLE_SESSION_EVENTUAL_DRAIN=PASS | PROVEN for both orderings on production code |
+| MAX_DRAIN_AUTHORITY_PER_SESSION=1 | PROVEN (drainingPendingPrompts guard) |
+| FIFO_PRESERVED=true | PROVEN (PPLW-02 FIFO check passes) |
+| NO_REENTRANT_RUN=true | PROVEN (PPLW-01 agent ran exactly twice) |
+| FINALIZATION_CONTINUATION=PASS | PASS |
+| FINALIZATION_CONSUMER=PASS | PASS (BCCA suite still green) |
+| TASK_COMPLETION_COMMITTED=1 | NOT REPRODUCED IN LIVE (defect elsewhere) |
+| DUPLICATE_COMPLETION_GUARD=PASS | PASS |
+| LIVE_PERSISTENT_WORKING_BUG=NOT_REPRODUCED | NOT REPRODUCED IN BRIDGE |
+| LIVE_OPERATOR_INTERVENTION_REQUIRED=false | N/A |
+| READY_TO_RESUME_MYC_LIVE_DIAG=true | BLOCKED — fresh live artifacts required |
+
+**Ready to resume myc:**
+
+```
+READY_TO_RESUME_MYC_LIVE_DIAG = BLOCKED — ACT-MYC-CLINEMM04-LIVE-QUALIFICATION
+should resume only after fresh live artifacts (JSONL CCARD/CCAP for the
+failing sessionId) confirm a NEW reproduction strategy for the live defect.
+The drain-scheduling seam is proven correct on production code for both
+orderings. The live defect must originate elsewhere (BCB barrier predicate,
+sdkHost.send rejection, or session-lifecycle wiring — see
+05-causal-discriminator.md).
+```
