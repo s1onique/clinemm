@@ -51,8 +51,18 @@ git diff --check                            clean
 asserts the body of `handleSessionEvent` does not contain "CommandJobManager".
 The function body has grown past the test header's 101-225 line range; the SEAM
 B BCB barrier at line ~1293 references "CommandJobManager primitive" in a
-comment (already at entry HEAD `8a7e5b4a02e10a5d757783a20eb128875f3a9d82`).
+comment (pre-existing at entry HEAD `8a7e5b4a02e10a5d757783a20eb128875f3a9d82`).
 Out of scope for this ACT. A future ACT may rewrite the structural pin.
+
+**Artifact identity (post-review correction, 2026-09-28):** SUBJECT_HEAD rebound from the
+pre-fix entry HEAD `8a7e5b4...` to the implementation HEAD
+`cf14d6b63a120f12be0853e8a07eb1a3435ea3d1` (production repair +
+new test file) and CLOSURE_HEAD recorded as
+`e4d0ec2784b26e6438f8b9a6ed86058da7c8e87d` (board row commit).
+Result.json now carries explicit `implementation_head`, `closure_head`, `subject_head`.
+Production and tests NOT modified by the rebind. `vscode:prepublish` run; see
+`.factory/evidence/ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01/result.json`
+`_review_artifact_identity_correction` + `vscode_prepublish_field`.
 
 **Live qualification status (this ACT):** pending. The CPA01 test pins the
 production-shaped behavior; the operator dogfood run (per ACT §34) confirms

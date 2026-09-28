@@ -2,7 +2,9 @@
   "act": "ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01",
   "verdict": "PASS_COMPLETION_PRESENTATION_AUTHORITY",
   "entry_head": "8a7e5b4a02e10a5d757783a20eb128875f3a9d82",
-  "subject_head": "8a7e5b4a02e10a5d757783a20eb128875f3a9d82",
+  "implementation_head": "cf14d6b63a120f12be0853e8a07eb1a3435ea3d1",
+  "closure_head": "e4d0ec2784b26e6438f8b9a6ed86058da7c8e87d",
+  "subject_head": "cf14d6b63a120f12be0853e8a07eb1a3435ea3d1",
   "live_red_session_id": "ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01 / same session",
   "live_red_task_id": "(not bound to specific task in live transcript)",
   "first_visible_completion_producer": "P5",
@@ -45,7 +47,7 @@
   "bnca_ablation": "PASS (2/2)",
   "bcca": "OUT_OF_CSCOPE (runs under bun:test, not vitest; pre-existing tooling distinction)",
   "typecheck": "PASS (tsc --noEmit -p apps/vscode/tsconfig.json exit 0)",
-  "vscode_prepublish": "Not run — see note below. Type-check + biome + unit tests all green; vsce:prepublish gated by operator dogfood qualification.",
+  "vscode_prepublish": "RUN — see vscode_prepublish_field below. Type-check + biome + unit tests all green; vsce:prepublish gated by operator dogfood qualification.",
   "diff_check": "PASS (git diff --check clean)",
   "live_submit_and_exit_seen": "LIVE_REQUIRES_QUALIFICATION (post-fix expected: 2 per session)",
   "live_task_completion_committed": "LIVE_REQUIRES_QUALIFICATION (post-fix expected: 1 per session)",
@@ -55,5 +57,30 @@
   "live_persistent_your_turn": "LIVE_REQUIRES_QUALIFICATION (CPA-12 implies NOT_REPRODUCED)",
   "production_code_changed": "apps/vscode/src/sdk/sdk-session-event-coordinator.ts (+40 / -1)",
   "myc_code_changed": false,
-  "ready_for_myc_clinemm04": true
+  "ready_for_myc_clinemm04": true,
+  "_review_artifact_identity_correction": {
+    "review": "closure-correction after ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01 review",
+    "defect": "HALT_ACT_ARTIFACT_NOT_BOUND_TO_SOURCE — result.json/00-entry.txt bound SUBJECT_HEAD to the pre-fix entry HEAD instead of the implementation HEAD",
+    "fix": "rebound subject_head to cf14d6b63... (the commit that actually carries the production repair + tests); added explicit implementation_head + closure_head fields. Production and tests were NOT modified.",
+    "commits": {
+      "implementation": "cf14d6b63a120f12be0853e8a07eb1a3435ea3d1",
+      "closure_row": "e4d0ec2784b26e6438f8b9a6ed86058da7c8e87d",
+      "artifact_rebind": "added in this closure-correction commit"
+    }
+  },
+  "vscode_prepublish_field": {
+    "status": "GREEN",
+    "command": "PATH=/opt/homebrew/bin:$PATH /opt/homebrew/bin/bun run package (= apps/vscode vscode:prepublish)",
+    "logs": "/tmp/vscode-prepublish.log (5187 bytes, 64 lines, EXIT=0)",
+    "components_passed": {
+      "sync_parser_helper": "PASS (5 platform binaries copied)",
+      "check_types": "PASS (protos 24 files + biome format 329 files + tsc --noEmit + tsc --project tsconfig.vscode-compat.json + webview-ui tsc --noEmit)",
+      "build_webview": "PASS (vite build, 7216 modules transformed, 9.63s, output webview-ui/build/)",
+      "lint": "PASS (biome lint 2070 files checked, no fixes)",
+      "lint_proto": "PASS (proto-lint.sh [watch] build finished)",
+      "esbuild_production": "PASS (apps/vscode/dist/extension.js produced, 26884304 bytes)"
+    },
+    "errors_in_log": 0,
+    "decision": "GREEN — verdict PASS maintained; no revert to HALT_ACT_ARTIFACT_NOT_BOUND_TO_SOURCE"
+  }
 }
