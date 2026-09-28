@@ -15357,76 +15357,118 @@ VSIX; expected trace: `run_turn_started #2` followed by
 
 `READY_FOR_MYC_CLINEMM05 = true.`
 
-## ACT-MYC-CLINEMM-AUTOMATIC-PRIME-INJECTION01 — HALT_RED_NOT_REPRODUCED — 2026-09-28
+## ACT-MYC-CLINEMM-AUTOMATIC-PRIME-INJECTION01 — HALT_LIVE_RED_MISCLASSIFIED — 2026-09-28
 
-**Status:** `HALT_RED_NOT_REPRODUCED` per ACT §28 ("If it starts GREEN: HALT_RED_NOT_REPRODUCED. Do not patch.").
+**Status:** RECLASSIFIED — initial closure was `HALT_RED_NOT_REPRODUCED`
+(production-shape RED test went GREEN on HEAD; "LIVE05 was hypothetical /
+operator-pending"). Reviewer P0 forced reclassification:
 
-The ACT's mission was to repair a hypothetical LIVE failure ("provider
-`ai_sdk_prompt` iteration 1 lacks the prime_packet despite a successful real
-`myc_prime` call returning the witness for the same session id"). The
-LIVE05 evidence is operator-pending — no operator has actually completed
-the LIVE05 walkthrough; the failure was described hypothetically.
+```text
+VERDICT = HALT_LIVE_RED_MISCLASSIFIED
+ALT     = CAPTURE_INSUFFICIENT | HALT_LIVE_RED_NOT_REPRODUCED_IN_SYNTHETIC_REAL
+```
 
-A new production-shape RED test was authored
-(`apps/vscode/src/sdk/__tests__/myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts`)
-that drives the REAL `SdkSessionLifecycle.startNewSession` → real
-`runMycPrimeOnSessionStart` → real `getMycPrimeResult` → real
-`buildAgentHooks.beforeModel` → real `AgentRuntime` chain end-to-end,
-with no test-body shortcuts (the test body never directly calls
-`runMycPrimeOnSessionStart`).
+### REAL live RED (confirmed on disk)
 
-**RED→GREEN outcome:**
+```text
+S = 1790604494785_8zlsd
+runId = run_PdCFt9iX
+iteration = 1
+capturePath = /Volumes/UserData/Users/chistyakov/.vscodium-clinemm/cline-data/provider-request-captures/cap_run_PdCFt9iX_1_a0d269608b88fda2.ai_sdk_prompt.1.provider-request.json
+captureBytes = 105805 (truncated)
+captureSha256 = 608a23d61f9a659ca7e747c2c0ccfef475a6511d5fd84fbde6c421d82d290499
+captureUserMsgCount = 2
+provider_request_prime_packet_count = 0
+provider_request_witness_present    = false
+manual_mcp_prime_witness_present    = true
+manual_mcp_prime_payload = "...add MYC-LIVE05-PRIME-WITNESS-20260928-170556..."
+```
 
-| API | Result on HEAD `89249175c` |
-|-----|------------------------------|
-| API-01 | **GREEN** — prime packet present on iteration 1, witness present, session id correct |
-| API-02 | **GREEN** — exactly one packet across iterations |
-| API-04 | **GREEN** — `snapshot.sessionId === SESSION_ID`, `conversationId` distinct |
-| API-08 | **GREEN** — no-prime case: no packet, session still runs |
+### Composed test (SYNTHETIC_REAL, not REAL_PRODUCTION_SEAM end-to-end)
 
-The production seam on HEAD is correct:
-- Prime is awaited inside `SdkSessionLifecycle.startNewSession` (CORRECTION01)
-- Recorder is keyed by `startResult.sessionId` (= `input.config.sessionId` = `taskSessionId`)
-- `AgentRuntimeConfig.sessionId` flows from `agentConfig.sessionId` = `sessionId` (allocated from `input.config.sessionId`)
-- `snapshot.sessionId` surfaces correctly via `agent-runtime.ts:1033-1044`
-- Lookup uses `snapshot.sessionId ?? snapshot.conversationId` (CORRECTION02)
+The new test drives real `SdkSessionLifecycle` + real `runMycPrimeOnSessionStart`
++ real recorder + real hooks-adapter + real `AgentRuntime`, but it constructs
+the runtime directly:
 
-No production patch is required. The new test serves as the deterministic
-regression gate for this seam — if any future change breaks the production
-wiring, the test will RED.
+```ts
+const runtime = new AgentRuntime({
+    sessionId: startResultSessionId,
+    conversationId,
+    hooks: opts.hooks,
+})
+```
 
-**Files added (2):**
-- `apps/vscode/src/services/mcp/__fixtures__/myc-prime-auto/server.mjs` (NEW) — deterministic prime echo containing `MYC-AUTO-PRIME-WITNESS-AUTO01` (independent of local myc queue)
-- `apps/vscode/src/sdk/__tests__/myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts` (NEW, 4 tests, 393ms) — production-shape end-to-end test
+That bypasses production `VscodeSessionHost` / `LocalRuntimeHost` /
+`AgentRuntimeConfig` builder composition and guarantees both runtime-side
+invariants a production-only delta could violate. Test result:
+**4/4 GREEN on HEAD `89249175c` (368ms)**.
 
-**Files NOT touched (production code):**
-- `apps/vscode/src/sdk/hooks-adapter.ts`
-- `apps/vscode/src/sdk/sdk-session-lifecycle.ts`
-- `apps/vscode/src/sdk/SdkController.ts`
-- `apps/vscode/src/sdk/myc-prime-automation.ts`
-- `sdk/packages/agents/src/agent-runtime.ts`
-- `sdk/packages/core/src/runtime/config/agent-runtime-config-builder.ts`
+### Why this matters
 
-**Conservation (PASS):**
+The disagreement `REAL_RED != SYNTHETIC_GREEN` is now the most important
+evidence: some production-only composition delta the test bypasses is
+load-bearing. The test does not refute the live bug — it narrows the search.
+
+### P0/P1 defects acknowledged and closed
+
+- **P0 LIVE-EVIDENCE-MISCLASSIFIED**: closure claimed hypothetical; on-disk
+  evidence proves REAL. Closed by reclassification.
+- **P0 TEST-SEAM-OVERCLAIM**: test is `SYNTHETIC_REAL`, not `REAL_PRODUCTION_SEAM
+  end-to-end`. Closed by reclassifying test class.
+- **P1 API-03/05/06/07 NO-EXECUTABLE-CASE**: those are `STRUCTURAL/INFERRED`,
+  not executed GREEN. Labelled correctly in `result.json`.
+- **P1 TEST-CODE-CHANGED-FALSE**: working tree has the new test; corrected to
+  `production_code_changed=false`, `test_code_changed=true`, `fixture_added=true`.
+- **P2 GATE-SUMMARY-RESIDUE**: NON-BLOCKING, batch later.
+
+### Files added (untracked durable evidence, not production code)
+
+- `apps/vscode/src/services/mcp/__fixtures__/myc-prime-auto/server.mjs`
+- `apps/vscode/src/sdk/__tests__/myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts`
+- `.factory/acts/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-INJECTION01.md` (updated with §11/§12)
+- `.factory/evidence/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-INJECTION01/{00-recon.md, 01-discriminator.md, 10-final-report.md, result.json}`
+
+### Conservation (PASS)
+
 - Manual MCP `myc_prime`: untouched
 - MCP autostart (AUTOSTART01 10/10): preserved
 - Bounded MCP bootstrap (FINALIZATION-RUN-BOOTSTRAP-STALL01 4/4): preserved
 - Completion authority (PCCA01, CPA01, BCB01-C4, CCARD): not touched
-- `MYC_CODE_CHANGED=false`
+- `MYC_CODE_CHANGED=false`, `production_code_changed=false`
 
-**Gates:**
+### Gates
+
 ```text
 typecheck       PASS (bun run check-types clean)
 diff_check      PASS (git diff --check clean; no tracked dirt)
 production_code_changed false
+test_code_changed true
+fixture_added true
 ```
 
-**Reclassified evidence classification:**
-- `existing failure` = LIVE (hypothetical; LIVE05 operator-pending)
-- `focused RED`      = SYNTHETIC_REAL (production-shape end-to-end test on real lifecycle)
-- `ablation`         = N/A (no production patch)
-- `postfix dogfood`  = DEFERRED (LIVE05 walkthrough still operator-pending)
+### Ready for ACT-MYC-CLINEMM06
 
-**Ready for ACT-MYC-CLINEMM06:** `false` — LIVE05 walkthrough must complete first.
+`false` — the next ACT is `ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01`
+(acquire live-boundary evidence; do NOT patch production yet).
 
-**Successor:** If LIVE05 ever surfaces the failure (operator runs recipe and observes provider capture lacking prime packet), this test will RED and identify the broken transition precisely. Until then, LIVE05 itself is the gate — if LIVE05 walks GREEN, no repair needed; if RED, this ACT's test pinpoints the regression.
+### Successor
+
+```text
+ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01
+```
+
+Instrument just four default-off events on the real product:
+`myc_beforemodel_enter`, `myc_beforemodel_lookup`, `myc_beforemodel_exit`,
+`myc_provider_capture_binding`. No prime contents, no myc changes, no new
+architecture. One real dogfood run. Discriminator becomes trivial:
+
+```text
+no beforemodel_enter        → hook assembly/wiring defect
+enter, wrong sessionId      → runtime config identity defect
+correct sessionId, lookup MISS → recorder/instance/lifetime defect
+lookup HIT, injected=false  → injection guard defect
+injected=true, ai_sdk_prompt absent → downstream request-composition loss
+```
+
+Do NOT patch production code in this ACT. Do NOT build another synthetic
+harness. Acquire the missing live-boundary evidence first.
