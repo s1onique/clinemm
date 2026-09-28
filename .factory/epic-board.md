@@ -15071,3 +15071,99 @@ change to the `McpServer.status` union must preserve the
 `"pending-session"` sentinel (used by `updateServerConnections:1545`,
 `ensureSessionConnection:566`, and the proto wire conversion at
 `apps/vscode/src/shared/proto-conversions/mcp/mcp-server-conversion.ts`).
+
+## ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01 — CLOSED_CLEAN — 2026-09-28
+
+**Status:** CLOSED_CLEAN_AFTER_CORRECTION01. The post-closure reviewer
+returned `PASS_WITH_ONE_BOUNDED_CORRECTION`. Two bounded changes were
+applied:
+
+1. **P1 lifecycle symmetry (MAS-10 + MAS-10b).** The initial repair
+   flipped the static deferred-template entry from "pending-session" →
+   "connected" on session-start, but the symmetric teardown was missing
+   — after `disconnectSession`, the static entry would stay stuck at
+   "connected" even when no session was active. RED-3 reproduced:
+
+   ```text
+   × MAS-10 lifecycle symmetry: connected → disconnectSession → pending-session projection
+     AssertionError: expected 'connected' to be 'pending-session'
+     (operator would see a stale green MCP panel after the task ended,
+     even with no active session — same authority model we just fixed)
+   ```
+
+   Bounded fix inside `disconnectSession` (apps/vscode/src/services/mcp/McpHub.ts):
+     - private `hasSurvivingPerSessionConnection(serverName)` helper
+     - When the LAST surviving per-session connection for a registration
+       disappears AND the static entry's status is exactly "connected",
+       revert the static entry back to "pending-session", clear the
+       session-derived tool/resource/prompt lists, and fire-and-forget
+       `notifyWebviewOfServerChanges`.
+     - Multi-session-safe via `hasSurvivingPerSessionConnection`: if
+       another session still owns the registration, the projection
+       stays connected (MAS-10b GREEN).
+
+2. **P0 evidence classification.** `result.json` previously labelled the
+   reproduction as `live_red=REPRODUCED` but no installed-Codium live
+   run was performed. The test drives **synthetic-real** (real
+   `VscodeSessionHost` + real `prepareStartSessionInput` + real `McpHub`
+   + real `StdioClientTransport` + real fixture; only `@cline/core`'s
+   `ClineCore.create` is mocked). Reclassified:
+
+   ```text
+   red_reproduction           = SYNTHETIC_REAL
+   live_operator_symptom      = REPORTED
+   live_postfix_qualification = DEFERRED — ACT-MYC-CLINEMM04
+   ```
+
+**Gates (CORRECTION01):**
+
+```text
+MAS-01, 02, 03, 04, 05, 06, 08, 09         8/8 PASS (initial)
+MAS-10 (CORRECTION01)                       PASS (was RED; symmetric reversion)
+MAS-10b (CORRECTION01 multi-session-safe)   PASS
+sessionIdEcho.productionShape                8/8 PASS (existing A2A-14/16/17/18)
+vitest MCP combined                          18/18 PASS
+bun run run-bun-unit-tests                   92 files, 1230 pass, 0 fail
+tsc --noEmit (apps/vscode)                   0 errors
+vscode:prepublish                            PASS (exitCode 0)
+git diff --check                             clean
+```
+
+**Halts received (both closed by CORRECTION01):**
+
+```text
+HALT_EVIDENCE_CLASSIFICATION  — closed by reclassification (artifact correction)
+HALT_TEARDOWN_PROJECTION_MISSING (P1) — closed by MAS-10 RED → symmetric reversion
+halt_class                     = P1_with_P0_artifact
+halt_disposition               = BOTH_CLOSED_BY_BOUNDED_CORRECTION01
+```
+
+**Operator chronology after CORRECTION01:**
+
+```text
+Codium restart
+→ before task: pending/deferred (red) — A2A-14 SETTINGS_LOAD_ZERO_SPAWN
+→ Start New Task S
+→ per-session child spawned (real stdio, MYC_SESSION_ID=S)
+→ staticConn.status flipped "pending-session" → "connected" (startup projection)
+→ tools/resources/prompts surfaced to webview
+→ operator does NOT click Restart Server
+→ task ends → disconnectSession(S)
+→ if no other session survives:
+    staticConn.status reverted "connected" → "pending-session" (teardown projection)
+    tools/resources/prompts cleared
+→ webview back to deferred sentinel — ready for the next task
+```
+
+**READY_FOR_MYC_CLINEMM04 = true.**
+
+**Honest stop rule:** the fix is bounded to two symmetric projection seams
+(startup + teardown). No public API change. No proto change. No MCP
+protocol change. No new `notifyWebviewOfServerChanges` triggers outside
+the existing per-session lifecycle (start and stop). The
+`"pending-session"` and `"connected"` sentinels must continue to be
+preserved in the `McpServer.status` union (apps/vscode/src/shared/mcp.ts),
+the proto wire conversion
+(apps/vscode/src/shared/proto-conversions/mcp/mcp-server-conversion.ts),
+the A2A-14 defer gate (apps/vscode/src/services/mcp/McpHub.ts:1539), and
+the new lifecycle symmetry seams in this ACT.
