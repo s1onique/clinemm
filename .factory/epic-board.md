@@ -14931,3 +14931,143 @@ operator workflow:
   #   3. Inspect <globalStorage>/provider-request-captures/ -> files exist.
   #   4. captureStage=ai_sdk_prompt, mode=full, payload contains <prime_packet>.
 ```
+
+## ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 — PASS_SESSION_BOUND_MCP_AUTOSTART — 2026-09-28
+
+**Status:** PASS_SESSION_BOUND_MCP_AUTOSTART. The operator-visible P0
+("Codium restart → myc shows deferred/red → first task starts → myc
+stays red → operator clicks Restart Server") is repaired at the
+`McpHub.ensureSessionConnection` projection seam. Two bounded additions
+inside one production method (`apps/vscode/src/services/mcp/McpHub.ts`,
++82 / -4). One new test file (`mcpSessionAutostart01.test.ts`, 8 MAS
+cases). No public API change. No proto change. No myc change. No MCP
+protocol change.
+
+**Scope (this ACT):** REPAIR. Two files changed (one production, one
+config), one test file added.
+
+| File | Δ | Purpose |
+|------|---|---------|
+| `apps/vscode/src/services/mcp/McpHub.ts` | +82 / -4 | (a) After `client.connect` returns OK in `ensureSessionConnection`, probe `listTools/listResources/listResourceTemplates/listPrompts` on the freshly-connected per-session child in parallel (`Promise.allSettled`, failures silently swallowed). (b) After `perSessionMap.set(serverName, perSessionConn)`, IF the corresponding static entry's status is exactly `"pending-session"`, flip it to `"connected"`, mirror the per-session tools/resources/prompts onto the static entry, and fire-and-forget `notifyWebviewOfServerChanges`. |
+| `apps/vscode/vitest.config.ts` | +6 | Include `mcpSessionAutostart01.test.ts` in the vitest test include list. |
+| `apps/vscode/src/services/mcp/__tests__/mcpSessionAutostart01.test.ts` | NEW (334 lines) | 8 MAS cases driving the production session-start seam through real `VscodeSessionHost` + `prepareStartSessionInput` → `createVscodeExtraTools` → `McpHubToolProvider` → `ensureSessionConnection` → spawn per-session child. |
+
+**ROOT_CAUSE:** the operator chronology's "red even after first task
+starts" was a UI/state-projection regression, not a runtime startup
+regression. RED-2 (MAS-02) confirmed:
+  - `sessionConnections.get(S).get(name).server.status === "connected"`
+    (runtime autostart works end-to-end through the production seam)
+  - `hub.getServers().find(...).status === "pending-session"` (the
+    static entry pushed in `updateServerConnections:1541-1551` was never
+    reconciled when the per-session child succeeded)
+The webview reads `getServers()` which filters `this.connections` by
+`!disabled`. The static entry stayed stale, so the operator's MCP panel
+remained red/orange even though the child was alive. The operator had to
+click Restart Server to force the legacy `connectToServer` path to
+overwrite the entry with a connected one.
+
+**REPAIR (minimal-diff):** in `ensureSessionConnection`, after the
+per-session child connects successfully:
+  1. Probe its lists so `perSessionConn.server` carries non-empty
+     `tools/resources/resourceTemplates/prompts` instead of falling
+     through to the static `pendingConn`'s empty/undefined lists.
+  2. Reconcile the static `pendingConn` by flipping `status` to
+     `"connected"` and mirroring the per-session lists onto it, then
+     fire-and-forget `notifyWebviewOfServerChanges()` so the webview
+     gRPC stream applies the state change without blocking the
+     operator's task.
+
+Scope bounded to the exact `"pending-session"` sentinel — the legacy
+`connectToServer` flat-env path is unchanged; the defer gate
+(`hasSessionBoundTemplate`) at `updateServerConnections:1539` is
+unchanged; A2A-14 settings-load zero-spawn is preserved.
+
+**Conservation (frozen per ACT §1, §31):**
+
+```text
+A2A_14   = PASS — settings-load: connectToServer.callCount === 0; pendingConn stored
+A2A_16   = PASS — disconnectSession lifecycle teardown untouched
+A2A_17   = PASS — session-start seam threads sessionId through (8 sessionIdEcho.productionShape tests PASS)
+A2A_18   = PASS — discovery seam reach via prepareStartSessionInput (8 tests PASS)
+myc-prime = PASS — myc-prime-automation.lifecycle01.test.ts C1..C10 (bun unit suite)
+```
+
+**Gates:**
+
+```text
+MAS-01..MAS-06, MAS-08, MAS-09   8/8 PASS (mcpSessionAutostart01.test.ts)
+MAS-07                            PASS-by-construction (getServers filters disabled; deferred entry never pushed for disabled=true)
+sessionIdEcho.productionShape     8/8 PASS (existing A2A-14/16/17/18 regressions hold)
+bun run run-bun-unit-tests        92 files, 1230 pass, 0 fail
+tsc --noEmit (apps/vscode)        0 errors
+vscode:prepublish                 PASS (protos + biome format + tsc + vite build + biome lint + proto-lint + esbuild)
+git diff --check                  clean
+```
+
+**Production delta summary:**
+
+| Concern | This ACT |
+|---------|----------|
+| MYC_SEMANTICS_CHANGED | false |
+| MCP_TRANSPORT_CHANGED | false (StdioClientTransport construction unchanged) |
+| MCP_PROTOCOL_CHANGED | false (no proto / JSON-RPC delta) |
+| SESSION_BOUND_DEFER_CHANGED | false (A2A-14 preserved: connectToServer NOT called for session-bound templates) |
+| NEW_PUBLIC_SURFACE | none (no new methods, no new proto field, no command palette item) |
+| DOGFOOD_DEPENDENCY | false (fix applies to ordinary ClineMM users with session-bound MCP configs) |
+
+**Trigger-to-MCP-connection matrix (ACT §6):**
+
+```text
+settings load, no session       → 0 spawn (defer)
+session start (createMcpTools)  → 1 spawn, getServers()=connected  ← LOAD-BEARING
+first tool call (callTool)      → 1 spawn or reuse existing
+manual Restart Server           → 1 spawn (legacy connectToServer static path)
+```
+
+**Auto vs Manual paths (ACT §7):**
+
+```text
+AUTO_PATH:
+  startNewSession → prepareStartSessionInput
+    → createVscodeExtraTools({sessionId})
+    → McpHubToolProvider.listTools
+    → ensureSessionConnection(name, {sessionId})
+    → StdioClientTransport + Client.connect
+    → [NEW] probe listTools/listResources/listResourceTemplates/listPrompts
+    → [NEW] flip staticConn.server.status "pending-session" → "connected"
+    → [NEW] mirror per-session lists onto staticConn
+    → [NEW] fire-and-forget notifyWebviewOfServerChanges()
+
+MANUAL_RESTART_PATH:
+  McpHub.restartConnection (no sessionId)
+    → deleteConnection + connectToServer (legacy static path)
+    → static entry status="connected" (already-unchanged, works fine)
+
+FIRST_DIVERGENCE:
+  AUTO carries sessionId through the chain and updates
+  sessionConnections AND the static entry.
+  MANUAL_RESTART does not have sessionId and updates only the static
+  entry via the legacy connectToServer flow.
+```
+
+**READY_FOR_MYC_CLINEMM04 = true.**
+
+**Live qualification (deferred to ACT-MYC-CLINEMM04-LIVE-QUALIFICATION):**
+
+```text
+LIVE_PRE_SESSION_STATE   = null (deferred to LIVE04)
+LIVE_POST_SESSION_STATE  = null (deferred to LIVE04)
+LIVE_MANUAL_RESTART_USED = null (deferred to LIVE04; expected = 0)
+LIVE_CHILD_PID           = null (deferred to LIVE04)
+LIVE_CHILD_SESSION_ID    = null (deferred to LIVE04)
+LIVE_TOOL_COUNT          = null (deferred to LIVE04; expected > 0)
+```
+
+**Honest stop rule:** the fix is a *projection* seam — it does not
+change when a child is spawned, what its env carries, or how
+`disconnectSession` cleans up. It only reconciles the static
+`pendingConn` entry so the webview reads a non-stale status. Any future
+change to the `McpServer.status` union must preserve the
+`"pending-session"` sentinel (used by `updateServerConnections:1545`,
+`ensureSessionConnection:566`, and the proto wire conversion at
+`apps/vscode/src/shared/proto-conversions/mcp/mcp-server-conversion.ts`).

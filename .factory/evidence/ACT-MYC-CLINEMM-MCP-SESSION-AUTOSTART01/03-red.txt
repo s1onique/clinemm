@@ -1,0 +1,44 @@
+RED-1 MAS-01 settings-load defer — PASS (GREEN baseline, A2A-14 contract held)
+RED-2 MAS-02 first-session autostart — RED REPRODUCED
+
+Test file: apps/vscode/src/services/mcp/__tests__/mcpSessionAutostart01.test.ts
+Test command: cd apps/vscode && bun run test:vitest src/services/mcp/__tests__/mcpSessionAutostart01.test.ts
+
+RED-2 failure (load-bearing):
+  AssertionError: expected 'pending-session' to be 'connected'
+  Object.is equality
+  Expected: "connected"
+  Received: "pending-session"
+  At: mcpSessionAutostart01.test.ts:193 (projected?.status === "connected")
+
+What this means:
+  - The runtime autostart chain works end-to-end through the production seam
+    (prepareStartSessionInput → createVscodeExtraTools → McpHubToolProvider →
+    createMcpTools → provider.listTools → ensureSessionConnection(name, {sessionId}) →
+    StdioClientTransport). All assertions up to line 189 PASS:
+      - child.pid !== process.pid (real child spawned)
+      - child.session === "session-A" (env propagated)
+      - hub.sessionConnections.get("session-A").get("session-id-echo").server.status === "connected"
+  - The `getServers()` projection used by the operator's MCP panel still reports
+    "pending-session" because the static entry pushed in updateServerConnections at
+    settings-load time (line 1541-1551 of McpHub.ts) is never updated when the
+    per-session child succeeds.
+  - This is H5: child actually starts, but UI/server state remains stale.
+
+The load-bearing operator-visible P0 is reproduced. The runtime fix is small:
+  After ensureSessionConnection successfully connects the per-session child,
+  update the corresponding entry in this.connections (the static pending-session
+  entry) so getServers() projects "connected".
+
+Failing tests at RED (3/6 fail):
+  × MAS-02 RED: starting a real session spawns the per-session child AND surfaces a connected status via getServers()
+  × MAS-03 manual-restart path: status flips to connected via restartConnectionRPC (test shape bug — restartConnectionRPC reads settings file; needs a different assertion shape. NOT a production regression.)
+  × MAS-05 second task/session identity — distinct MYC_SESSION_ID per session (test shape bug — disconnectSession race with vscode-session-host caching. Investigate.)
+
+Passing tests (3/6):
+  ✓ MAS-01 settings-load: defer preserved; connectToServer NOT invoked; pending entry stored
+  ✓ MAS-04 exactly one spawn on first session — no race duplicate children
+  ✓ MAS-06 reconnect same session — P2 != P1 but sessionId consistent
+
+RED harness is operational and the operator defect is reproduced end-to-end
+through the production session-start seam.

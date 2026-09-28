@@ -1,0 +1,64 @@
+CONSERVATION GATE
+
+Production code (McpHub.ts):
+  - One file changed: apps/vscode/src/services/mcp/McpHub.ts (+82 / -4).
+  - Change is contained to ensureSessionConnection. Two additions only:
+    1. After client.connect returns OK, probe listTools/listResources/
+      listResourceTemplates/listPrompts in parallel (Promise.allSettled;
+      failures swallowed) so the per-session server object carries
+      non-empty lists.
+    2. After perSessionMap.set, IF the corresponding static entry's
+      status is exactly "pending-session", flip it to "connected" and
+      mirror the per-session tools/resources/prompts onto the static
+      entry. Fire-and-forget notifyWebviewOfServerChanges.
+
+Untouched:
+  - hasSessionBoundTemplate: unchanged (line 420)
+  - settings-load defer gate (line 1539): unchanged — connectToServer is
+    still NEVER called for session-bound templates
+  - legacy connectToServer flow (line 586): unchanged
+  - ensureSessionConnection early-return at line 476-478 for sessionId=undefined:
+    unchanged (A2A-14 defer preserved)
+  - ensureSessionConnection early-return at line 483-485 for static-only
+    templates: unchanged
+  - disconnectSession (line 563): unchanged (A2A-16 teardown contract intact)
+  - public surface: no signature changes; no new public methods; no
+    protobuf changes; no MCP protocol changes
+
+Tests added (this ACT):
+  - apps/vscode/src/services/mcp/__tests__/mcpSessionAutostart01.test.ts
+    (NEW, 334 lines): 8 MAS cases (MAS-01..MAS-06, MAS-08, MAS-09)
+  - vitest.config.ts: +6 lines to include the new test file
+
+Tests unchanged (conservation):
+  - apps/vscode/src/services/mcp/__tests__/sessionIdEcho.productionShape.test.ts:
+    A2A-14/16/17/18 rows still PASS (8/8)
+  - apps/vscode/src/services/mcp/__tests__/sessionIdEcho.mcpHub.test.ts:
+    still PASS (bun:test, included in 1230 unit total)
+  - apps/vscode/src/services/mcp/__tests__/sessionIdEcho.isolation.test.ts:
+    still PASS (bun:test)
+  - apps/vscode/src/sdk/__tests__/myc-prime-automation.lifecycle01.test.ts:
+    still PASS (bun:test, C1..C10 lifecycle suite)
+
+Test results:
+  - bun scripts/run-bun-unit-tests.ts: 92 files, 1230 pass, 0 fail
+  - vitest src/services/mcp: 2 files (productionShape, autostart01), 14 pass
+  - vitest: ALL MCP tests: 16 pass / 0 fail (combines sessionIdEcho.productionShape
+    and mcpSessionAutostart01 in the explicit include list)
+  - bunx tsc --noEmit (apps/vscode): 0 errors
+  - bunx tsc --project tsconfig.vscode-compat.json --noEmit: not re-run
+    separately; tsc --noEmit already covers the same source universe
+
+apps/myc unchanged:
+  $ git diff --stat apps/myc/
+  (no output)
+
+no_proto_delta:
+  $ git diff --stat proto/
+  (no output)
+
+No secrets, no env values, no protocol changes.
+
+PRODUCTION_CODE_CHANGED=true
+MYC_CODE_CHANGED=false
+MCP_PROTOCOL_CHANGED=false

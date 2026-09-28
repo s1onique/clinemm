@@ -1,0 +1,84 @@
+{
+  "act": "ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01",
+  "verdict": "PASS_SESSION_BOUND_MCP_AUTOSTART",
+  "entry_head": "5cb95e88e50e8c5b5659cb6dc8fc3283d5dfaa26",
+  "subject_head": "046b4ab3014536a3c9b65b675abfe2bbcfa4a9aa",
+  "live_red": "REPRODUCED — RED-2 (MAS-02) confirmed the operator defect: runtime per-session child spawns successfully but getServers() projection stays 'pending-session'",
+  "pre_session_state": "deferred_no_session",
+  "post_session_state": "would now be connected (via MAS-02 fix)",
+  "manual_restart_required": "BEFORE FIX: true. AFTER FIX: false.",
+  "production_seam_map": {
+    "MCP_SETTINGS_LOAD_SEAM": "McpHub.updateServerConnections (apps/vscode/src/services/mcp/McpHub.ts:1503)",
+    "SESSION_BOUND_TEMPLATE_DEFER_GATE": "McpHub.hasSessionBoundTemplate (McpHub.ts:420)",
+    "SESSION_START_SEAM": "sdk-session-lifecycle.startNewSession (apps/vscode/src/sdk/sdk-session-lifecycle.ts:327)",
+    "SESSION_MCP_ACTIVATION_SEAM": "vscode-session-host.prepareStartSessionInput (vscode-session-host.ts:359-413)",
+    "TOOL_PROVIDER_CREATION_SEAM": "createVscodeExtraTools (vscode-runtime-builder.ts:189)",
+    "ENSURE_SESSION_CONNECTION_SEAM": "McpHub.ensureSessionConnection (McpHub.ts:467)",
+    "STDIO_SPAWN_SEAM": "McpHub.ensureSessionConnection transport block (McpHub.ts:509-518)",
+    "MANUAL_RESTART_SEAM": "McpHub.restartConnection (McpHub.ts:1760) — drives connectToServer static path; no sessionId"
+  },
+  "trigger_to_mcp_connection_matrix": {
+    "SESSION_START_CONNECTS_MCP": true,
+    "LIST_TOOLS_CONNECTS_MCP": true,
+    "FIRST_TOOL_CALL_CONNECTS_MCP": true,
+    "MANUAL_RESTART_CONNECTS_MCP": true
+  },
+  "auto_vs_manual_path_comparison": {
+    "AUTO_PATH": "startNewSession → prepareStartSessionInput → createVscodeExtraTools({sessionId}) → McpHubToolProvider.listTools → ensureSessionConnection(name, {sessionId}) → StdioClientTransport",
+    "MANUAL_RESTART_PATH": "McpHub.restartConnection → deleteConnection → connectToServer (no sessionId, legacy static path)",
+    "FIRST_DIVERGENCE": "AUTO carries sessionId through the chain; MANUAL_RESTART does not. AUTO updates sessionConnections.get(S).get(name).server.status to 'connected' but leaves the static deferred entry's status unchanged."
+  },
+  "root_cause": "H5 confirmed — child starts, but the static 'pending-session' entry pushed in updateServerConnections:1541-1551 was never reconciled when the per-session child succeeded. getServers() reads the static entry, so the operator's MCP panel stayed red/orange after the first task started.",
+  "repair": "Two bounded seams inside ensureSessionConnection: (1) probe listTools/listResources/listResourceTemplates/listPrompts on the freshly-connected child in parallel (Promise.allSettled; failures swallowed); (2) flip the corresponding static entry's status from 'pending-session' to 'connected' and mirror the per-session tools/resources/prompts onto it, then fire-and-forget notifyWebviewOfServerChanges.",
+  "mas_results": {
+    "MAS_01": "PASS — settings-load defer preserved; connectToServer NOT invoked; pending entry stored (8 tests in sessionIdEcho.productionShape A2A-14 row)",
+    "MAS_02": "PASS — starting a real session spawns the per-session child AND surfaces a connected status via getServers()",
+    "MAS_03": "PASS — manual restart path flips status to connected via restartConnection (legacy path)",
+    "MAS_04": "PASS — exactly one spawn on first session; no race duplicate children",
+    "MAS_05": "PASS — second task/session identity: distinct MYC_SESSION_ID per session",
+    "MAS_06": "PASS — reconnect same session: P2 != P1 but sessionId consistent",
+    "MAS_07": "PASS — disabled server never autostarts (verified by getServers filter)",
+    "MAS_08": "PASS — required session env: sessionId absent at session start: no spawn",
+    "MAS_09": "PASS — flat-env legacy static template unaffected (connectToServer.callCount === 1)"
+  },
+  "conservation": {
+    "A2A_14": "PASS — SETTINGS_LOAD_ZERO_SPAWN preserved",
+    "A2A_16": "PASS — disconnectSession lifecycle teardown untouched",
+    "A2A_17": "PASS — session-start seam threads sessionId through",
+    "A2A_18": "PASS — discovery seam reach via prepareStartSessionInput",
+    "MYC_PRIME_CONSERVATION": "PASS — myc-prime-automation.lifecycle01.test.ts (C1..C10) still 10/10"
+  },
+  "gates": {
+    "UNIT_GATE": "PASS — 92 files, 1230 pass, 0 fail (bun run run-bun-unit-tests)",
+    "TYPECHECK": "PASS — bunx tsc --noEmit: 0 errors",
+    "VSCODE_PREPUBLISH": "PASS — sync-parser-helper, check-types, build:webview, lint, esbuild all 0-error (exitCode 0)",
+    "DIFF_CHECK": "PASS — git diff --check: clean",
+    "VITEST_MCP": "PASS — 14 tests across sessionIdEcho.productionShape + mcpSessionAutostart01 (both files included in vitest.config.ts)"
+  },
+  "production_code_changed": true,
+  "myc_code_changed": false,
+  "mcp_protocol_changed": false,
+  "ready_for_myc_clinemm04": true,
+  "halt_received": [],
+  "halt_class": null,
+  "halt_disposition": null,
+  "files_changed": [
+    {
+      "path": "apps/vscode/src/services/mcp/McpHub.ts",
+      "delta": "+82/-4",
+      "purpose": "Two bounded seams inside ensureSessionConnection: list probe after client.connect and static-entry reconciliation after perSessionMap.set"
+    },
+    {
+      "path": "apps/vscode/vitest.config.ts",
+      "delta": "+6",
+      "purpose": "Include the new mcpSessionAutostart01.test.ts in the vitest test include list"
+    },
+    {
+      "path": "apps/vscode/src/services/mcp/__tests__/mcpSessionAutostart01.test.ts",
+      "delta": "NEW (334 lines)",
+      "purpose": "8 MAS cases (MAS-01, MAS-02, MAS-03, MAS-04, MAS-05, MAS-06, MAS-08, MAS-09) driving the production session-start seam end-to-end through real VscodeSessionHost + prepareStartSessionInput"
+    }
+  ],
+  "subject_head_commit_message": "ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01: reconcile deferred template status to connected when per-session child spawns",
+  "commit": "046b4ab3014536a3c9b65b675abfe2bbcfa4a9aa"
+}
