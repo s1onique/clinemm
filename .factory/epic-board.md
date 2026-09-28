@@ -16093,3 +16093,126 @@ the hook exists).
 Total production source delta: 2 files modified (within §7 budget
 of 1–3 files). Total test delta: 3 files modified + 1 new file.
 ACT documentation: 5 new files.
+
+---
+
+## ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 — PASS_OBSERVATION_SEAM — 2026-09-29
+
+**Status:** PASS_OBSERVATION_SEAM. The first currently-unobservable
+boundary after C7 (`run_turn_started`) is now a single bounded,
+default-off observation seam: `execute_turn_prelude_enter`. The
+seam is reachable from the same CCARD JSONL the operator already
+uses; no public API, no wire field, no React state, no retry/polling
+loop.
+
+**Live RED (REAL, frozen into `.factory/evidence/ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02/`):**
+
+```text
+sha256(continuation-cardinality-authority.jsonl) =
+  2fab1cc4c2f88162cc9e4ccd0186d0dbff48f603bd445adb1a1fc1066b9e0ddd
+sha256(background-job-liveness-authority.jsonl) =
+  1ec462d986f93a73dafa6cae4cfdab3dcb2d488c29945e8a1ca81ab963c20541
+
+live session  = 1790633775136_8mrnl  (provider=minimax, model=MiniMax-M3)
+live profile  = .vscodium-clinemm
+live version  = 4.1.16-a0d496408
+run_turn_started   = 3   (seq 1, 23, 158)
+agent_turn_done    = 2   (seq 22, 155)
+submit_and_exit_seen = 2  (seq 20, 153)
+task_completion_committed = 1  (seq 21 only)
+stall_window = T=4915775 (seq 158) … T=~4945857 (extension_shutdown)
+```
+
+**Scope (this ACT):** OBSERVATION ONLY. Three production files
+modified; one new test file; one updated existing test.
+
+| File | Δ | Purpose |
+|---|---|---|
+| `apps/vscode/src/sdk/continuation-cardinality-authority.ts` | +13 / -0 | Append `execute_turn_prelude_enter` to `ContinuationCardinalityStage` (FROZEN per §3); add the stage to the per-stage counter + origin map. |
+| `sdk/packages/core/src/runtime/host/local-runtime-host.ts` | +66 / -0 | `LocalRuntimeHostOptions.pendingPromptCapture` gains the optional `onExecuteTurnPreludeEnter` hook. `runTurn` fires it IMMEDIATELY BEFORE the `executeTurn(...)` await, AFTER the queue/steer short-circuit. |
+| `apps/vscode/src/sdk/vscode-session-host.ts` | +27 / -0 | `VscodeSessionHost.create` forwards the new hook into the host capture bag, with the same `deriveOrigin` derivation as C7/C8. |
+| `apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts` | +13 / -2 | CCARD-RED-01 emits the new stage in the canonical sequence; counter assertions extended to count=11. |
+| `apps/vscode/src/sdk/__tests__/post-continuation-run-stall02.pcrs02.test.ts` | NEW (151 lines) | PCRS02-01..05 (existence, capture, OFF no-op, prelude-stall fingerprint, prelude-hung fingerprint). |
+
+**Discriminator (post-repair):**
+
+```text
+C7 fired → execute_turn_prelude_enter fired → (no C8) →
+  EXECUTE_TURN_PRELUDE_STALL
+    (stall is inside executeAgentTurn → AgentRuntime.execute →
+     model.stream / beforeModel hooks / prepareTurn / compaction)
+
+C7 fired → (no execute_turn_prelude_enter) → (no C8) →
+  EXECUTE_TURN_PRELUDE_HUNG
+    (stall is in the prelude awaits: prepareTurnInput →
+     ensureSessionPersisted → refreshActiveSessionGitMetadata →
+     syncOAuthCredentials → markTurnRunning)
+```
+
+**Conservation (frozen per §17):** explicitly NOT touched:
+PendingPromptsController / scheduleDrain / pending-prompt enqueue
+& dequeue, BCB barrier, completion presentation filter,
+command_status consumption, MCP session bootstrap (FRBS01),
+myc, myc DB, provider capture format, MCP protocol,
+automatic-prime acquisition (myc-prime-live-diag / automation).
+
+**Gates:**
+
+```text
+PCRS02                                     5/5 PASS
+CCARD01 (CCARD-RED-01 updated)           12/12 PASS
+CPA01                                     14/14 PASS
+PCCA01                                     4/4 PASS
+BCB01                                     14/14 PASS
+swcm04 (c2-4-c-bridge config)              5/5 PASS
+tsc --noEmit -p apps/vscode/tsconfig.json  0 errors
+tsc --project tsconfig.vscode-compat.json --noEmit  0 errors
+webview tsc --noEmit                      0 errors
+biome check (apps/vscode config)           clean
+git diff --check                          clean
+bun run vscode:prepublish                 PASS
+```
+
+**Artifact identity (post-implementation):**
+
+```text
+ENTRY_HEAD       = 6a4368787e331e44d700184f8dc5280285850d66
+IMPLEMENTATION_HEAD = 4a4359bd5d25ebdac66a3b7ef5452306a6b0793b
+SUBJECT_HEAD     = IMPLEMENTATION_HEAD
+CLOSURE_HEAD     = 4a4359bd5d25ebdac66a3b7ef5452306a6b0793b (board row commit pending)
+```
+
+**Live qualification status:** PENDING_OPERATOR_LIVE_RUN. The seam
+is wired but not yet observed in a live Codium run with the dogfood
+diagnostic profile on. The next operator dogfood run will, on the
+next stall, report either EXECUTE_TURN_PRELUDE_STALL or
+EXECUTE_TURN_PRELUDE_HUNG. Recipe in
+`.factory/evidence/ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02/`
+(operator populates after the live run).
+
+**Verdict:**
+
+```text
+LIVE_RED_PRESERVED                 = true   (sha256 above)
+CONTINUATION_IDENTITY_PROVEN       = true   (sessionId match)
+FIRST_UNMATCHED_BOUNDARY_IDENTIFIED = true   (execute_turn_prelude_enter)
+RED_REPRODUCED                     = true   (PCRS02-04 + PCRS02-05)
+CAUSAL_DISCRIMINATOR               = PASS
+ABLATION                           = PASS   (PCRS02-03 + CCARD-CTL-02)
+BOUNDED_REPAIR                     = true   (3 prod files, 0 public API)
+CONSERVATION                       = PASS
+TYPECHECK                          = PASS
+VSCODE_PREPUBLISH                  = PASS
+DIFF_CHECK                         = PASS
+EXACT_HEAD_ARTIFACT_BOUND          = true
+POSTFIX_LIVE_RUN3_DONE             = PENDING_OPERATOR_LIVE_RUN
+POSTFIX_STALL                      = PENDING_OPERATOR_LIVE_RUN
+```
+
+**Successor:** once the operator drives the next live Codium run
+with the dogfood profile on, the JSONL will record either
+`C7 + prelude + C8` (no stall) or `C7 + prelude + (no C8)`
+(`EXECUTE_TURN_PRELUDE_STALL`) or `C7 + (no prelude) + (no C8)`
+(`EXECUTE_TURN_PRELUDE_HUNG`). Each branch selects a different
+bounded repair in the successor ACT.
+
