@@ -632,6 +632,19 @@ export class McpHub {
 	 * Used by `sdk-session-lifecycle.trackSessionStop` to run
 	 * alongside `sdkHost.stop(sessionId)` so the per-session MCP
 	 * child is reaped at the same moment the SDK session is.
+	 *
+	 * ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01
+	 * (MAS-10 lifecycle symmetry). When this was the LAST surviving
+	 * per-session connection for a registration that was previously
+	 * flipped from "pending-session" to "connected" by the startup
+	 * projection seam, revert the corresponding static entry back to
+	 * "pending-session" so the webview returns to the deferred
+	 * sentinel when no session is active. Multi-session-safe: the
+	 * reversion only fires when no other per-session connection for
+	 * the same registration name exists anywhere in
+	 * `sessionConnections`. If ClineMM later supports multiple
+	 * concurrent sessions, a surviving session connection keeps the
+	 * projection green.
 	 */
 	async disconnectSession(sessionId: string): Promise<void> {
 		const perSessionMap = this.sessionConnections.get(sessionId)
@@ -642,6 +655,10 @@ export class McpHub {
 		// `ensureSessionConnection` racing on the same id cannot
 		// observe a half-torn-down child.
 		this.sessionConnections.delete(sessionId)
+		// Capture the server names whose registrations we own
+		// BEFORE we close transports, so we can run the symmetric
+		// teardown projection below.
+		const ownedServerNames = Array.from(perSessionMap.keys())
 		for (const [serverName, conn] of perSessionMap) {
 			try {
 				if (conn.transport) {
@@ -654,6 +671,62 @@ export class McpHub {
 				Logger.error(`[McpHub] disconnectSession(${sessionId}) close failed for ${serverName}:`, error)
 			}
 		}
+		// Symmetric teardown projection. For every registration whose
+		// per-session map we just dropped, check whether any other
+		// session still owns a per-session connection. If none,
+		// revert the static deferred entry back to "pending-session"
+		// so the operator's MCP panel returns to the deferred sentinel
+		// when no session is active.
+		for (const serverName of ownedServerNames) {
+			const stillExists = this.hasSurvivingPerSessionConnection(serverName)
+			if (stillExists) {
+				continue
+			}
+			const staticConn = this.findConnection(serverName, "internal")
+			if (!staticConn) {
+				continue
+			}
+			// The startup projection flipped the static entry from
+			// "pending-session" to "connected" when the per-session
+			// child materialized. Revert it now that no session owns
+			// the registration.
+			if (staticConn.server.status === "connected") {
+				staticConn.server.status = "pending-session"
+				staticConn.server.error = ""
+				// Clear the session-derived tool/resource/prompt lists
+				// so the operator's tool-listing reflects the deferred
+				// sentinel (no tools are callable without an active
+				// session).
+				staticConn.server.tools = undefined
+				staticConn.server.resources = undefined
+				staticConn.server.resourceTemplates = undefined
+				staticConn.server.prompts = undefined
+				// Fire-and-forget webview notification; the operator's
+				// MCP panel re-reads the projection.
+				void this.notifyWebviewOfServerChanges().catch((error) => {
+					Logger.error(
+						`[McpHub] notifyWebviewOfServerChanges failed after disconnectSession (${serverName}, session=${sessionId}):`,
+						error,
+					)
+				})
+			}
+		}
+	}
+
+	/**
+	 * ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01.
+	 *
+	 * Multi-session helper: returns true iff at least one per-session
+	 * connection for `serverName` survives across all session ids
+	 * currently held in `sessionConnections`.
+	 */
+	private hasSurvivingPerSessionConnection(serverName: string): boolean {
+		for (const perSessionMap of this.sessionConnections.values()) {
+			if (perSessionMap.has(serverName)) {
+				return true
+			}
+		}
+		return false
 	}
 
 	private async connectToServer(

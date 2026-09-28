@@ -1,23 +1,67 @@
-GREEN — All 6 MAS cases pass.
+GREEN (initial) — 8 MAS cases pass.
 
 Test file: apps/vscode/src/services/mcp/__tests__/mcpSessionAutostart01.test.ts
 Test command: cd apps/vscode && bun run test:vitest src/services/mcp/__tests__/mcpSessionAutostart01.test.ts
 
-Results:  Test Files  1 passed (1)
-           Tests       6 passed (6)
+Results (initial):  Test Files  1 passed (1)
+                    Tests       8 passed (8)
 
-Passing tests:
+Passing tests (initial):
   ✓ MAS-01 settings-load: defer preserved; connectToServer NOT invoked; pending entry stored
   ✓ MAS-02 (load-bearing) starting a real session spawns the per-session child AND surfaces a connected status via getServers()
   ✓ MAS-03 manual-restart path: status flips to connected via restartConnection
   ✓ MAS-04 exactly one spawn on first session — no race duplicate children
   ✓ MAS-05 second task/session identity — distinct MYC_SESSION_ID per session
   ✓ MAS-06 reconnect same session — P2 != P1 but sessionId consistent
+  ✓ MAS-08 required session env — sessionId absent: no spawn
+  ✓ MAS-09 flat-env legacy static template — unaffected by autostart work
 
-REPAIR SUMMARY:
+CORRECTION01 (lifecycle symmetry):
 
-Production file: apps/vscode/src/services/mcp/McpHub.ts
-Two bounded seams inside ensureSessionConnection:
+RED reproduced for MAS-10 (1 RED test):
+  × MAS-10 lifecycle symmetry: connected → disconnectSession → pending-session projection
+    AssertionError: expected 'connected' to be 'pending-session'
+    (operator would see a stale green MCP panel after the task ended,
+    even with no active session)
+
+CORRECTION01 repair added inside disconnectSession:
+  - hasSurvivingPerSessionConnection(serverName) helper
+  - When the LAST surviving per-session connection for a registration
+    disappears AND the static entry was previously flipped to
+    "connected" by the startup projection seam, revert the static
+    entry back to "pending-session", clear the session-derived
+    tool/resource/prompt lists, and fire-and-forget
+    notifyWebviewOfServerChanges().
+  - Multi-session-safe: the reversion only fires when no other
+    per-session connection for the same registration name exists.
+
+GREEN (after CORRECTION01) — 10 MAS cases pass.
+
+Results (final):  Test Files  1 passed (1)
+                  Tests       10 passed (10)
+
+Passing tests (final):
+  ✓ MAS-01 settings-load: defer preserved; connectToServer NOT invoked; pending entry stored
+  ✓ MAS-02 (load-bearing) starting a real session spawns the per-session child AND surfaces a connected status via getServers()
+  ✓ MAS-03 manual-restart path: status flips to connected via restartConnection
+  ✓ MAS-04 exactly one spawn on first session — no race duplicate children
+  ✓ MAS-05 second task/session identity — distinct MYC_SESSION_ID per session
+  ✓ MAS-06 reconnect same session — P2 != P1 but sessionId consistent
+  ✓ MAS-08 required session env — sessionId absent: no spawn
+  ✓ MAS-09 flat-env legacy static template — unaffected by autostart work
+  ✓ MAS-10 lifecycle symmetry: connected → disconnectSession → pending-session projection
+  ✓ MAS-10b multi-session symmetry: connected for A + connected for B → disconnect A → still connected (B survives)
+
+MAS-07 status: PASS_BY_CONSTRUCTION. disabled=true is enforced via
+getServers() filter (`!server.disabled`) AND updateServerConnections
+does not push a pending entry for disabled. Asserted structurally;
+no executable test case in this ACT (out of scope for the projection
+seam under repair).
+
+REPAIR SUMMARY (combined):
+
+Production file: apps/vscode/src/services/mcp/McpHub.ts (+148 / -5 combined).
+Two bounded seams inside ensureSessionConnection (startup projection):
   1. After the per-session child connects (client.connect returns OK), call
      listTools / listResources / listResourceTemplates / listPrompts on the
      freshly-connected child in parallel (Promise.allSettled; failures
@@ -29,23 +73,34 @@ Two bounded seams inside ensureSessionConnection:
      entry. Fire-and-forget notifyWebviewOfServerChanges() so the webview
      gRPC stream applies the state change.
 
+One bounded seam inside disconnectSession (CORRECTION01 teardown projection):
+  3. For every registration whose per-session map was just dropped,
+     check hasSurvivingPerSessionConnection. If none survives AND the
+     static entry's status is exactly "connected", revert the static
+     entry back to "pending-session", clear the session-derived lists,
+     and fire-and-forget notifyWebviewOfServerChanges().
+
 Scope bounded to:
-  - exact status sentinel "pending-session" (the deferred-template entry
-    produced by updateServerConnections:1541)
+  - exact status sentinel "pending-session" / "connected" (the deferred-
+    template entry produced by updateServerConnections:1541)
   - per-session child only (the public `connectToServer` legacy path is
     untouched)
-  - fire-and-forget notification (no blocking of the session-start hot path)
+  - fire-and-forget notification (no blocking of the session-start hot
+    path or the session-stop path)
+  - multi-session-safe via hasSurvivingPerSessionConnection
 
 Conservation:
   - A2A-14 SETTINGS_LOAD_ZERO_SPAWN: preserved (connectToServer.callCount === 0)
-  - A2A-16 lifecycle teardown via disconnectSession: untouched
+  - A2A-16 lifecycle teardown via disconnectSession: transport/client close
+    path is unchanged; symmetric reversion is additive
   - A2A-17/18 session-start seam threads sessionId through to
     ensureSessionConnection: unchanged
   - per-session child cardinality (MAS-04): preserved (existing return-early
     on cached connection at line 494-496 still wins for re-issued
     listTools calls)
-  - disabled=true (MAS-07): preserved (getServers filters disabled entries;
-    updateServerConnections does not push a pending entry for disabled)
+  - disabled=true (MAS-07): preserved structurally (getServers filters
+    disabled entries; updateServerConnections does not push a pending
+    entry for disabled)
   - sessionId absent (MAS-08): preserved (line 476-478 still returns undefined
     before reaching the spawn block)
   - flat-env legacy templates: preserved (the defer-gate check at line 1539

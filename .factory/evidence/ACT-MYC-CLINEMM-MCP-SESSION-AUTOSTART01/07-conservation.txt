@@ -1,16 +1,33 @@
 CONSERVATION GATE
 
 Production code (McpHub.ts):
-  - One file changed: apps/vscode/src/services/mcp/McpHub.ts (+82 / -4).
-  - Change is contained to ensureSessionConnection. Two additions only:
-    1. After client.connect returns OK, probe listTools/listResources/
-      listResourceTemplates/listPrompts in parallel (Promise.allSettled;
-      failures swallowed) so the per-session server object carries
-      non-empty lists.
-    2. After perSessionMap.set, IF the corresponding static entry's
-      status is exactly "pending-session", flip it to "connected" and
-      mirror the per-session tools/resources/prompts onto the static
-      entry. Fire-and-forget notifyWebviewOfServerChanges.
+  - One file changed: apps/vscode/src/services/mcp/McpHub.ts
+    (+148 / -5 combined — initial repair + CORRECTION01 teardown).
+  - Changes contained to ensureSessionConnection (startup projection)
+    and disconnectSession (CORRECTION01 teardown projection).
+
+ensureSessionConnection additions (startup projection):
+  1. After client.connect returns OK, probe listTools/listResources/
+     listResourceTemplates/listPrompts in parallel (Promise.allSettled;
+     failures silently swallowed) so the per-session server object
+     carries non-empty lists.
+  2. After perSessionMap.set, IF the corresponding static entry's
+     status is exactly "pending-session", flip it to "connected" and
+     mirror the per-session tools/resources/prompts onto the static
+     entry. Fire-and-forget notifyWebviewOfServerChanges.
+
+disconnectSession additions (CORRECTION01 teardown projection):
+  3. Capture the server names whose registrations we owned BEFORE
+     closing transports.
+  4. After all transports/clients are closed, for each owned
+     registration: check hasSurvivingPerSessionConnection. If no
+     surviving per-session connection exists AND the static entry's
+     status is exactly "connected", revert the static entry back to
+     "pending-session", clear the session-derived tool/resource/prompt
+     lists, and fire-and-forget notifyWebviewOfServerChanges.
+  5. Private helper hasSurvivingPerSessionConnection(serverName):
+     iterates this.sessionConnections.values() and returns true iff
+     any per-session map holds the registration.
 
 Untouched:
   - hasSessionBoundTemplate: unchanged (line 420)
@@ -21,13 +38,19 @@ Untouched:
     unchanged (A2A-14 defer preserved)
   - ensureSessionConnection early-return at line 483-485 for static-only
     templates: unchanged
-  - disconnectSession (line 563): unchanged (A2A-16 teardown contract intact)
+  - public disconnectSession signature: unchanged; only the body is
+    extended with the symmetric teardown projection. The transport/
+    client close path is identical to A2A-16.
   - public surface: no signature changes; no new public methods; no
     protobuf changes; no MCP protocol changes
+  - private helper hasSurvivingPerSessionConnection is file-local and
+    not exported; it does not change any public surface
 
-Tests added (this ACT):
+Tests added (this ACT, including CORRECTION01):
   - apps/vscode/src/services/mcp/__tests__/mcpSessionAutostart01.test.ts
-    (NEW, 334 lines): 8 MAS cases (MAS-01..MAS-06, MAS-08, MAS-09)
+    (NEW, 408 lines): 10 MAS cases
+    (MAS-01, MAS-02, MAS-03, MAS-04, MAS-05, MAS-06, MAS-08, MAS-09,
+     MAS-10 [CORRECTION01], MAS-10b [CORRECTION01 multi-session-safe])
   - vitest.config.ts: +6 lines to include the new test file
 
 Tests unchanged (conservation):
@@ -40,14 +63,14 @@ Tests unchanged (conservation):
   - apps/vscode/src/sdk/__tests__/myc-prime-automation.lifecycle01.test.ts:
     still PASS (bun:test, C1..C10 lifecycle suite)
 
-Test results:
+Test results (final, including CORRECTION01):
   - bun scripts/run-bun-unit-tests.ts: 92 files, 1230 pass, 0 fail
-  - vitest src/services/mcp: 2 files (productionShape, autostart01), 14 pass
-  - vitest: ALL MCP tests: 16 pass / 0 fail (combines sessionIdEcho.productionShape
-    and mcpSessionAutostart01 in the explicit include list)
+  - vitest src/services/mcp: 2 files (productionShape, autostart01), 18 pass
+    (8 productionShape + 10 autostart01)
   - bunx tsc --noEmit (apps/vscode): 0 errors
   - bunx tsc --project tsconfig.vscode-compat.json --noEmit: not re-run
     separately; tsc --noEmit already covers the same source universe
+  - bun run vscode:prepublish: PASS (exitCode 0)
 
 apps/myc unchanged:
   $ git diff --stat apps/myc/

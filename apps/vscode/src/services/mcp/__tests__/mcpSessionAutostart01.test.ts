@@ -326,4 +326,78 @@ describe("ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 — autostart regression", () 
 		expect(hub2.connections[0].server.status).toBe("connected")
 		expect(hub2.sessionConnections.size).toBe(0)
 	})
+
+	it("MAS-10 lifecycle symmetry: connected → disconnectSession → pending-session projection", async () => {
+		// ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 CORRECTION01.
+		// The startup projection repair flipped the static
+		// `pendingConn` from "pending-session" → "connected" when the
+		// per-session child spawned. The symmetric teardown projection
+		// is required so the webview returns to "pending-session" when
+		// the last per-session connection for the registration
+		// disappears — otherwise the operator sees a stale green MCP
+		// panel after the task ends, even though no session is active.
+		//
+		// The check is multi-session-safe: the static projection only
+		// reverts when NO surviving per-session connection holds the
+		// registration. If ClineMM later supports multiple concurrent
+		// sessions, a surviving session connection must keep the
+		// projection green.
+		await driveSessionStart(hub, "session-A")
+		expect(hub.getServers().find((s) => s.name === "session-id-echo")?.status).toBe("connected")
+		// disconnectSession releases the per-session child.
+		await hub.disconnectSession("session-A")
+		// No surviving per-session connection → projection must revert
+		// to "pending-session" so the operator sees the deferred
+		// sentinel again.
+		expect(hub.sessionConnections.size).toBe(0)
+		expect(hub.getServers().find((s) => s.name === "session-id-echo")?.status).toBe("pending-session")
+	})
+
+	it("MAS-10b multi-session symmetry: connected for A + connected for B → disconnect A → still connected (B survives)", async () => {
+		// When two sessions both hold a per-session connection for the
+		// same registration, disconnecting one must NOT revert the
+		// static projection — the surviving session still needs the
+		// operator-visible green panel.
+		await driveSessionStart(hub, "session-A")
+		// Re-issue the second driveSessionStart for a DIFFERENT session
+		// id. Because we share a single `bootstrap` per VscodeSessionHost
+		// construction, we need to re-construct for session-B.
+		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+		await (await import("@/sdk/vscode-session-host")).VscodeSessionHost.create({
+			mcpHub: hub,
+			// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+			telemetry: {} as any,
+		})
+		const prepare = mockClineCoreCreate.latestPrepare()
+		const bootstrap = await prepare()
+		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+		const prepared = await (bootstrap as any).applyToStartSessionInput({
+			source: undefined,
+			config: {
+				sessionId: "session-B",
+				cwd: "/workspace",
+				extraTools: [],
+			} as unknown as ClineCoreStartInput["config"],
+		})
+		const mcpTool = (prepared.config.extraTools as Array<{ name?: string }>).find((t) =>
+			t?.name?.includes?.("session-id-echo"),
+		)
+		// biome-ignore lint/suspicious/noExplicitAny: focused test seam
+		await (mcpTool as any).execute({}, { agentId: "test-agent", iteration: 0 })
+
+		expect(hub.sessionConnections.size).toBe(2)
+		expect(hub.getServers().find((s) => s.name === "session-id-echo")?.status).toBe("connected")
+
+		// Disconnect A; B survives.
+		await hub.disconnectSession("session-A")
+		expect(hub.sessionConnections.has("session-A")).toBe(false)
+		expect(hub.sessionConnections.has("session-B")).toBe(true)
+		// Static projection must STILL be "connected" because B is alive.
+		expect(hub.getServers().find((s) => s.name === "session-id-echo")?.status).toBe("connected")
+
+		// Disconnect B; no session survives.
+		await hub.disconnectSession("session-B")
+		expect(hub.sessionConnections.size).toBe(0)
+		expect(hub.getServers().find((s) => s.name === "session-id-echo")?.status).toBe("pending-session")
+	})
 })

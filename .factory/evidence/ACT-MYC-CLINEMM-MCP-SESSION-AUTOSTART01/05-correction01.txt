@@ -1,0 +1,107 @@
+CORRECTION01 — bounded correction cycle (P0 evidence + P1 teardown projection)
+
+REVIEW FEEDBACK (post-closure reviewer):
+
+  P0 evidence: result.json claimed "live_red=REPRODUCED" but the test
+  drives synthetic-real (real VscodeSessionHost + real prepareStartSessionInput
+  + real McpHub + real StdioClientTransport + real fixture; only
+  @cline/core's ClineCore.create is mocked). No installed-Codium live run
+  was performed. Reclassify.
+
+  P1 lifecycle symmetry: the initial repair flipped staticConn.status from
+  "pending-session" → "connected" on session-start. The symmetric teardown
+  projection was missing — after disconnectSession, the static entry would
+  stay stuck at "connected" with no active session. Add MAS-10.
+
+CORRECTION01 SCOPE (exactly one bounded correction cycle):
+
+  1. Reclassify RED as SYNTHETIC_REAL (no source/test change needed).
+  2. Add MAS-10 + MAS-10b (lifecycle symmetry) to mcpSessionAutostart01.test.ts.
+  3. Run the new tests; MAS-10 REDs (predicted).
+  4. Add the symmetric teardown projection inside disconnectSession:
+     - hasSurvivingPerSessionConnection(serverName) private helper
+     - When the LAST surviving per-session connection for a registration
+       disappears AND the static entry's status is exactly "connected",
+       revert the static entry back to "pending-session", clear the
+       session-derived tool/resource/prompt lists, and fire-and-forget
+       notifyWebviewOfServerChanges.
+  5. Run focused MCP tests + unit gate + typecheck + vscode:prepublish.
+
+RED REPRODUCTION (MAS-10):
+
+  × MAS-10 lifecycle symmetry: connected → disconnectSession → pending-session projection
+    AssertionError: expected 'connected' to be 'pending-session'
+    At: mcpSessionAutostart01.test.ts:353
+    (operator would see a stale green MCP panel after the task ended,
+    even with no active session — same authority model we just fixed)
+
+CORRECTION01 PRODUCTION DIFF (apps/vscode/src/services/mcp/McpHub.ts):
+
+  + private hasSurvivingPerSessionConnection(serverName: string): boolean
+    Multi-session helper: iterates this.sessionConnections.values() and
+    returns true iff any per-session map holds the registration.
+  + disconnectSession body extension (BEFORE close path completes):
+    - Capture ownedServerNames BEFORE closing transports.
+    - After transports/clients are closed, for each owned registration:
+      if !hasSurvivingPerSessionConnection(serverName) AND staticConn
+      exists AND staticConn.server.status === "connected":
+        - staticConn.server.status = "pending-session"
+        - staticConn.server.error = ""
+        - Clear staticConn.server.tools/resources/resourceTemplates/prompts
+        - Fire-and-forget notifyWebviewOfServerChanges()
+
+CORRECTION01 TEST RESULTS:
+
+  After production fix:
+    bun run test:vitest src/services/mcp/__tests__/mcpSessionAutostart01.test.ts
+    Test Files  1 passed (1)
+    Tests       10 passed (10)
+    (8 initial MAS + MAS-10 + MAS-10b multi-session-safe)
+
+  Conservation:
+    bun run test:vitest src/services/mcp/__tests__/sessionIdEcho.productionShape.test.ts \
+                       src/services/mcp/__tests__/mcpSessionAutostart01.test.ts
+    Test Files  2 passed (2)
+    Tests       18 passed (18)
+
+  bun scripts/run-bun-unit-tests.ts
+    Files: 92  Pass: 1230  Fail: 0
+
+  bunx tsc --noEmit (apps/vscode): 0 errors
+  bun run vscode:prepublish: PASS (exitCode 0)
+  git diff --check: clean
+
+EVIDENCE RECLASSIFICATION:
+
+  Before (artifact wording):
+    live_red: "REPRODUCED — RED-2 (MAS-02) confirmed the operator defect..."
+
+  After (artifact wording):
+    red_reproduction: "SYNTHETIC_REAL — drives real VscodeSessionHost..."
+    live_operator_symptom: "REPORTED — operator described in the ACT prompt; not live-captured by this ACT"
+    live_postfix_qualification: "DEFERRED — ACT-MYC-CLINEMM04-LIVE-QUALIFICATION"
+
+HALTS RECEIVED:
+
+  HALT_EVIDENCE_CLASSIFICATION (artifact correction; closed by reclassification above)
+  HALT_TEARDOWN_PROJECTION_MISSING (P1 implementation gap; closed by MAS-10 RED then symmetric teardown projection)
+
+halt_class: P1_with_P0_artifact
+halt_disposition: BOTH_CLOSED_BY_BOUNDED_CORRECTION01
+
+STATUS: CLOSED_CLEAN_AFTER_CORRECTION01
+READY_FOR_MYC_CLINEMM04: true
+
+Operator chronology after this correction:
+
+  Codium restart
+  → before task: pending/deferred (red) — A2A-14 SETTINGS_LOAD_ZERO_SPAWN
+  → Start New Task S
+  → per-session child spawned (real stdio, MYC_SESSION_ID=S)
+  → staticConn.status flipped "pending-session" → "connected"
+  → tools/resources/prompts surfaced to webview
+  → operator does NOT click Restart Server
+  → task ends → disconnectSession(S)
+  → if no other session survives: staticConn.status reverted "connected" → "pending-session"
+  → tools/resources/prompts cleared
+  → webview back to deferred sentinel — ready for the next task
