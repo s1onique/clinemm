@@ -54,6 +54,9 @@ export default defineConfig({
 			// createVscodeExtraTools → McpHubToolProvider →
 			// ensureSessionConnection → spawn per-session child.
 			"src/services/mcp/__tests__/mcpSessionAutostart01.test.ts",
+			// ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01: RED reproduction
+			// proving the post-connect discovery probe is bounded.
+			"src/services/mcp/__tests__/finalizationRunBootstrapStall01.test.ts",
 			"src/shared/model-catalog/provider-helpers.test.ts",
 			"src/core/controller/models/__tests__/providerCatalogHandlers.test.ts",
 			"src/core/controller/models/__tests__/providerSwitchNormalization.test.ts",

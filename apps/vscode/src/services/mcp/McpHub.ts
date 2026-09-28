@@ -534,25 +534,87 @@ export class McpHub {
 		} = {}
 		try {
 			await client.connect(transport, { timeout: timeoutMs })
-			// Probe in parallel; failures are silently swallowed so a
-			// misbehaving child cannot break the static projection.
-			const settled = await Promise.allSettled([
-				client.listTools?.().then((r) => (r as { tools?: unknown[] })?.tools ?? undefined),
-				client.listResources?.().then((r) => (r as { resources?: unknown[] })?.resources ?? undefined),
-				client
-					.listResourceTemplates?.()
-					.then((r) => (r as { resourceTemplates?: unknown[] })?.resourceTemplates ?? undefined),
-				client.listPrompts?.().then((r) => (r as { prompts?: unknown[] })?.prompts ?? undefined),
-			])
+			// ACT-CLINEMM-FINALIZATION-RUN-BOOTSTRAP-STALL01 repair.
+			//
+			// The pre-repair path used `client.listTools?.()` /
+			// `client.listResources?.()` etc. with `Promise.allSettled`
+			// as the aggregator. `Promise.allSettled` prevents a
+			// rejection from aborting the aggregate but does NOT prevent
+			// a promise that never settles — a misbehaving child whose
+			// `resources/list` (or any other list method) opens a
+			// half-open JSON-RPC stream and never responds would hang
+			// the entire session-start path (and therefore every
+			// continuation / finalization run, exactly as captured in
+			// the LIVE04 RED).
+			//
+			// The repaired path uses the same capability-aware,
+			// per-request-timeout pattern that the static
+			// `connectToServer` path already uses (see
+			// `fetchToolsList` / `fetchResourcesList` /
+			// `fetchResourceTemplatesList` / `fetchPromptsList`
+			// below): each probe is gated on the negotiated server
+			// capabilities (so an unadvertised probe is skipped, not
+			// sent) and routed through `client.request({ method }, Schema,
+			// { timeout: timeoutMs })` so the per-server timeout
+			// applies. Failures are bounded (either a structured error
+			// or a McpTimeoutError); the per-session child stays
+			// connected and the bootstrap continues.
+			const serverCapabilities = client.getServerCapabilities?.()
+			const supportsCapability = (kind: "tools" | "resources" | "prompts"): boolean =>
+				serverCapabilities === undefined || serverCapabilities[kind] !== undefined
+			const requestToolsList = async (): Promise<McpConnection["server"]["tools"] | undefined> => {
+				if (!supportsCapability("tools")) {
+					return []
+				}
+				try {
+					const response = await client.request({ method: "tools/list" }, ListToolsResultSchema, {
+						timeout: timeoutMs,
+					})
+					return ((response as { tools?: unknown[] })?.tools ?? []) as McpConnection["server"]["tools"]
+				} catch (error) {
+					if (error instanceof McpError && error.code === ErrorCode.MethodNotFound) {
+						return []
+					}
+					Logger.error(`[McpHub] post-connect tools/list failed for ${serverName} (session=${sessionId}):`, error)
+					return undefined
+				}
+			}
+			const requestOptionalList = async <T>(
+				method: "resources/list" | "resources/templates/list" | "prompts/list",
+				schema: z.ZodType<T>,
+				field: string,
+				capabilityKind: "resources" | "prompts",
+			): Promise<T[] | undefined> => {
+				if (!supportsCapability(capabilityKind)) {
+					return []
+				}
+				try {
+					const response = await client.request({ method }, schema, { timeout: timeoutMs })
+					const value = response as Record<string, unknown>
+					const arr = value?.[field]
+					return (Array.isArray(arr) ? arr : []) as T[]
+				} catch (error) {
+					if (error instanceof McpError && error.code === ErrorCode.MethodNotFound) {
+						return []
+					}
+					Logger.error(`[McpHub] post-connect ${method} failed for ${serverName} (session=${sessionId}):`, error)
+					return undefined
+				}
+			}
 			probedLists = {
-				tools: settled[0].status === "fulfilled" ? (settled[0].value as McpConnection["server"]["tools"]) : undefined,
-				resources:
-					settled[1].status === "fulfilled" ? (settled[1].value as McpConnection["server"]["resources"]) : undefined,
-				resourceTemplates:
-					settled[2].status === "fulfilled"
-						? (settled[2].value as McpConnection["server"]["resourceTemplates"])
-						: undefined,
-				prompts: settled[3].status === "fulfilled" ? (settled[3].value as McpConnection["server"]["prompts"]) : undefined,
+				tools: await requestToolsList(),
+				resources: (await requestOptionalList("resources/list", ListResourcesResultSchema, "resources", "resources")) as
+					| McpConnection["server"]["resources"]
+					| undefined,
+				resourceTemplates: (await requestOptionalList(
+					"resources/templates/list",
+					ListResourceTemplatesResultSchema,
+					"resourceTemplates",
+					"resources",
+				)) as McpConnection["server"]["resourceTemplates"] | undefined,
+				prompts: (await requestOptionalList("prompts/list", ListPromptsResultSchema, "prompts", "prompts")) as
+					| McpConnection["server"]["prompts"]
+					| undefined,
 			}
 		} catch (error) {
 			// Close any half-open transport before propagating the
