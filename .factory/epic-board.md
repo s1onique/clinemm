@@ -15573,3 +15573,128 @@ Verified independent by `git stash` + re-run on predecessor commit.
 ACT (`ACT-MYC-CLINEMM-LIVE-BOUNDARY-CAPTURE01-RUN02`), which runs
 the operator-driven dogfood session per §11-§17 of
 `.factory/acts/ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01.md`.
+
+## ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — PASS_READOUT_INSTALLED — 2026-09-28
+
+**Status:** Default-off JSONL readout sink installed; conservation
+green; production semantics bit-identical when diagnostic is disabled.
+Operator-driven dogfood RUN03 is the next step.
+
+```text
+VERDICT = PASS_READOUT_INSTALLED
+ENTRY_HEAD  = 89249175c71fcbc059d26d54f5c50f7f6dbd3373
+IMPL_HEAD   = uncommitted (4 modified/new + 2 ACT docs)
+LIVE_TRACE  = PENDING_OPERATOR_RUN03
+```
+
+### What was added
+
+One default-off external projection of the existing
+`myc-prime-live-diag` in-process Map. The sink mirrors the
+termination-authority wiring pattern: data-root resolver seam +
+append-only writer seam + warn seam, all bound at the EARLIEST
+initialization seam in `extension.ts`.
+
+The readout lands at:
+
+```text
+<dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl
+```
+
+with one bounded JSON object per observation point:
+
+```text
+{ ts, event, sessionId, iteration?, lookupKey?,
+  recordedPrimeFound?, recordedPrimeSessionId?, status?,
+  injected?, reason?, packetBytes?, captureId? }
+```
+
+The six existing recorders (`recordMycPrimeLive{Bind,Enter,
+Acquisition,Lookup,Injection,Capture}`) now each call
+`appendReadoutLine(...)` after they update the in-process entry.
+
+### Hot-path cost
+
+| Diagnostic state | Cost |
+|------------------|------|
+| DISABLED | one boolean read (existing short-circuit) |
+| ENABLED, seams UNBOUND | one boolean read + two `typeof undefined` checks |
+| ENABLED, seams BOUND | one boolean read + one path resolution + one detached `appendFile` Promise dispatch |
+
+The Promise is NEVER awaited; the writer seam rejection is caught
+and routed to the warn seam. `beforeModel` is never blocked.
+
+### What was NOT done
+
+- No gRPC, no Command Palette command, no MCP tool, no protocol
+  change, no SQLite, no webview state, no new authority.
+- No production patch. The off-path is bit-identical to the
+  pre-ACT path; DLR-01.a/b/c prove this with hard assertions.
+- No new env flag. Reused the existing
+  `CLINEMM_MYC_PRIME_DIAG` env var + the central dogfood profile
+  resolver.
+- No new diagnostic framework. Extended the existing
+  `myc-prime-live-diag` module.
+- No synthetic RED. No dogfood VSIX. No repair.
+
+### Production files changed
+
+```text
+apps/vscode/src/sdk/myc-prime-live-diag.ts            (+~180 -0; readout seam + appendReadoutLine + 6 call sites)
+apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts    (NEW, production wiring)
+apps/vscode/src/extension.ts                          (+1 import, +1 activation call)
+apps/vscode/src/sdk/__tests__/myc-prime-live-diag-readout.test.ts  (NEW, 5 tests / 11 assertions)
+```
+
+2 production files modified, 1 new production file, 1 new test file.
+
+### Conservation (PASS)
+
+```text
+myc-prime-live-diag.test.ts                          19/19 GREEN
+myc-prime-live-diag-readout.test.ts                   11/11 GREEN (5 new DLR tests)
+dogfood-diagnostic-profile.test.ts                    30/30 GREEN
+dogfood-diagnostic-profile-myc-clinemm01.test.ts      39/39 GREEN
+bun run test:unit                                   1230/1230 GREEN across 92 files
+apps/vscode tsc --noEmit                                    0 errors
+git diff --check                                            clean
+biome lint                                                  0 errors
+```
+
+### Pre-existing drift (independent of this ACT)
+
+```text
+turn-state-writer-provenance.wprov.test.ts WPROV07.1  1 failed (verified independent by git stash on predecessor)
+```
+
+### Hard invariants — verified
+
+```text
+DEFAULT_OFF = true
+DIAGNOSTIC_DISABLED_SEMANTIC_DELTA = 0
+PRIME_CONTENT_LOGGED = false
+PUBLIC_API_CHANGED = false
+MCP_PROTOCOL_CHANGED = false
+MYC_CODE_CHANGED = false
+```
+
+### Next ACT
+
+```text
+RUN03 = operator-driven installed-Codium dogfood session with
+  diagnostics enabled (CLINEMM_MYC_PRIME_DIAG=1 OR dogfood default ON),
+  one fresh READY witness (one new sentinel).
+
+After the live trace lands, the operator reads it via:
+
+  jq -c "select(.sessionId == \"<S>\")" \
+     <dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl
+
+…and applies the §17 discriminator tree from
+ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 to emit the
+boundary classification (one of PRODUCTION_HOOK_ASSEMBLY_OR_INSTALLATION,
+PRODUCTION_RUNTIME_SESSION_IDENTITY, PRIME_RECORDER_LIFETIME_OR_INSTANCE,
+PRIME_INJECTION_GUARD, POST_HOOK_REQUEST_COMPOSITION_LOSS,
+NOT_REPRODUCED_LIVE).
+
+That live trace authorizes exactly one repair ACT.

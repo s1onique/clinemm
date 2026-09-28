@@ -34,6 +34,7 @@ import {
 	dumpExtensionSideHostOwnershipDiagnostic,
 	toggleHostOwnershipDiagnosticWorkspaceEnabled,
 } from "@/sdk/host-ownership-diagnostic-runtime"
+import { installMycPrimeLiveDiagReadoutRuntime } from "@/sdk/myc-prime-live-diag-runtime"
 import {
 	dumpExtensionSidePostTerminalAuthorityDiagnostic,
 	togglePostTerminalAuthorityDiagnosticWorkspaceEnabled,
@@ -139,6 +140,23 @@ export async function activate(context: vscode.ExtensionContext) {
 	// profile default is also enabled, per the §18 invariant — see
 	// `resolveEffectiveMycPrimeLiveDiag`).
 	applyMycPrimeLiveDiagDiagnosticProfile(isDogfoodRuntime(process.env), process.env)
+
+	// ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01: bind the JSONL
+	// readout sink (data-root resolver + append-only writer) at
+	// the SAME EARLIEST initialization seam, AFTER the M knob is
+	// armed. The sink remains a no-op while the diagnostic is OFF
+	// (the in-module `appendReadoutLine` short-circuits on the
+	// `isMycPrimeLiveDiagEnabled()` gate before doing any IO), so
+	// the public path is bit-identical to the pre-ACT path. When
+	// the diagnostic is ON in dogfood, every BIND / ENTER /
+	// ACQUISITION / LOOKUP / INJECTION / CAPTURE event appends one
+	// bounded JSON object to
+	// `<dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl`
+	// (the data root is `resolveDataDirFromEnv()`). Mirrors the
+	// `installExtensionHostTerminationAuthorityRuntime` activation
+	// sibling. No new env flag; no gRPC; no Command Palette; no MCP
+	// tool; no protocol change.
+	installMycPrimeLiveDiagReadoutRuntime()
 
 	// ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01: arm the
 	// provider-request AI-SDK prompt capture (R knob) at the SAME

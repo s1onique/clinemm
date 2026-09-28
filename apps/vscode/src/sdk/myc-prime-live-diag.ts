@@ -13,6 +13,29 @@
 // before the first recorder call, so env becomes irrelevant in
 // production).
 //
+// ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01: the in-process `Map`
+// carrying the diagnostic state is module-private and therefore
+// unobservable from outside the extension host. To make the diagnostic
+// externally readable during dogfood, a default-off JSONL readout sink
+// was added. The sink:
+//   - is gated on the SAME `isMycPrimeLiveDiagEnabled()` boolean,
+//     so when disabled it produces zero file writes, zero async work,
+//     and zero log lines (the bit-identical invariant),
+//   - appends ONE bounded JSON object per observation point under
+//     `<dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl`,
+//   - never logs prime text, witness text, prompts, or any payload
+//     content — only the numeric / boolean / status fields already
+//     captured by the in-process entry,
+//   - never blocks `beforeModel`: writes are scheduled via a
+//     Promise-returning writer seam and any failure is swallowed and
+//     surfaced through a bounded warn seam (mirrors
+//     `extension-host-termination-authority.ts`),
+//   - only requires a path resolver + writer seam to be bound before
+//     writes are attempted; until both are bound the readout is
+//     a complete no-op even when diagnostics are enabled, so test
+//     suites that never install the runtime can run without a
+//     stray file appearing on disk.
+//
 // SCOPE: OBSERVE ONLY. Do NOT redesign injection, recorder lookup, or
 // message construction here. The diagnostic is a forensic scaffolding
 // The diagnostic only records numeric / boolean / status metadata. It
@@ -94,6 +117,103 @@ const ENV_FLAG_NAME = "CLINEMM_MYC_PRIME_DIAG"
  * first central-profile activation pass, this is always `boolean`.
  */
 let mycPrimeLiveDiagEnabled: boolean | null = null
+
+// ===========================================================================
+// ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — default-off JSONL readout sink
+//
+// The in-process diagnostic state (the `liveDiagBySessionId` Map below)
+// is module-private and therefore unobservable from outside the
+// extension host. To make the diagnostic externally readable during
+// dogfood (the only state in which it is enabled), three seams are
+// exposed here and bound by the production runtime wiring
+// (`myc-prime-live-diag-runtime.ts#installMycPrimeLiveDiagReadoutRuntime`):
+//
+//   - dataRootResolver: returns the writable data root under which the
+//     JSONL file lives. Production = `resolveDataDirFromEnv()`. Tests
+//     inject a temp dir.
+//   - writer: appends one JSONL line to a target file. Production =
+//     `node:fs/promises#appendFile`. Tests inject a capturing spy.
+//   - warn: surfaces a bounded diagnostic message. Production =
+//     `Logger.warn(...)`. Tests inject a recorder.
+//
+// While both `dataRootResolver` and `writer` are unbound (the default
+// state), the readout is a complete no-op even when diagnostics are
+// enabled. This is important so direct unit tests that arm the
+// diagnostic via `process.env.CLINEMM_MYC_PRIME_DIAG=1` never
+// accidentally materialize a file on the developer's disk.
+//
+// The hot path (every recorder below) calls `appendReadoutLine(...)`
+// which:
+//   1. short-circuits if `isMycPrimeLiveDiagEnabled()` is false (single
+//      boolean read — zero further work),
+//   2. short-circuits if the path resolver or writer seam is unbound
+//      (zero file IO attempted),
+//   3. composes a BOUNDED JSON object containing only the
+//      numeric / boolean / status fields from the in-process entry
+//      (no prime text, no witness text, no prompts),
+//   4. dispatches the append through the writer seam as a detached
+//      Promise — the caller (`beforeModel` in the production path)
+//      never awaits it, so the model request is never blocked,
+//   5. surfaces failures via the warn seam; the hot path continues
+//      unchanged. A failure on the readout path MUST NOT block the
+//      model request.
+// ===========================================================================
+
+/** Subdirectory under the resolved data root where the JSONL events file lands. */
+export const MYC_PRIME_LIVE_DIAG_READOUT_SUBDIR = "diagnostics/myc-prime-live-diag"
+
+/** Filename of the JSONL events file. */
+export const MYC_PRIME_LIVE_DIAG_READOUT_FILENAME = "events.jsonl"
+
+/**
+ * Cline data root resolver. Production = `resolveDataDirFromEnv`. The
+ * resolver may throw; the warn seam surfaces the failure and the
+ * recorder short-circuits (the recorder never re-throws).
+ */
+export type MycPrimeLiveDiagReadoutDataRootResolver = () => string
+
+/**
+ * Append-only write seam for the readout. Production =
+ * `node:fs/promises#appendFile` over the JSONL events path. Tests
+ * inject an in-memory spy.
+ */
+export type MycPrimeLiveDiagReadoutWriter = (target: string, line: string) => Promise<void>
+
+export type MycPrimeLiveDiagReadoutWarn = (message: string) => void
+
+let _readoutDataRootResolver: MycPrimeLiveDiagReadoutDataRootResolver | undefined
+let _readoutWriter: MycPrimeLiveDiagReadoutWriter | undefined
+let _readoutWarn: MycPrimeLiveDiagReadoutWarn = (m) => Logger.warn(`[myc-prime-live-diag-readout] ${m}`)
+
+/**
+ * Discriminated union for readout events. The shape is the SOLE thing
+ * the production runtime sees — bounded metadata only.
+ */
+export type MycPrimeLiveDiagReadoutEventName = "bind" | "enter" | "acquisition" | "lookup" | "injection" | "capture"
+
+export interface MycPrimeLiveDiagReadoutEvent {
+	readonly ts: string
+	readonly event: MycPrimeLiveDiagReadoutEventName
+	readonly sessionId: string
+	/** Optional iteration (1 for runtime hot-path; 0 for the bind event). */
+	readonly iteration?: number
+	/** Bound to `lookup.lookupKey` for the lookup event. */
+	readonly lookupKey?: string
+	/** Bound to `lookup.recordedPrimeFound` for the lookup event. */
+	readonly recordedPrimeFound?: boolean
+	/** Captured-prime sessionId when the recorder populated the lookup. */
+	readonly recordedPrimeSessionId?: string
+	/** Bound to `acquisition.status` for the acquisition event. */
+	readonly status?: string
+	/** Bound to `injection.injected` for the injection event. */
+	readonly injected?: boolean
+	/** Bound to `injection.reason` for the injection event. */
+	readonly reason?: string
+	/** Bound to `injection.packetBytes` for the injection event. */
+	readonly packetBytes?: number
+	/** Bound to `capture.captureId` for the capture event. */
+	readonly captureId?: string
+}
 
 /**
  * Discriminated per-injection reason. The exhaustive enumeration makes
@@ -296,6 +416,117 @@ export function __resetMycPrimeLiveDiagForTests(): void {
 	liveDiagBySessionId.clear()
 }
 
+// ===========================================================================
+// ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — readout seam setters / helpers
+// ===========================================================================
+
+/** Bind the data-root resolver. Production = `resolveDataDirFromEnv`. */
+export function setMycPrimeLiveDiagReadoutDataRootResolver(resolver: MycPrimeLiveDiagReadoutDataRootResolver | undefined): void {
+	_readoutDataRootResolver = resolver
+}
+
+/** Bind the append-only writer. Production = `node:fs/promises#appendFile`. */
+export function setMycPrimeLiveDiagReadoutWriter(writer: MycPrimeLiveDiagReadoutWriter | undefined): void {
+	_readoutWriter = writer
+}
+
+/** Override the warn seam. Production = `Logger.warn`. */
+export function setMycPrimeLiveDiagReadoutWarn(fn: MycPrimeLiveDiagReadoutWarn | undefined): void {
+	_readoutWarn = fn ?? ((m) => Logger.warn(`[myc-prime-live-diag-readout] ${m}`))
+}
+
+/**
+ * Resolve the JSONL events path for the readout sink. Returns
+ * `<dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl`. Returns
+ * `null` when:
+ *   - the data-root resolver seam is unbound, OR
+ *   - the resolver itself throws (e.g. the underlying path is
+ *     unresolvable in a host-restricted environment).
+ *
+ * The function is intentionally synchronous and pure aside from the
+ * resolver call; it does NOT mkdir the parent directory. The first
+ * `appendFile` call would do that lazily via `fs.appendFile` (which
+ * fails if the parent dir does not exist); in production the host
+ * runtime ensures the `<dataRoot>` is writable, and the subdir is a
+ * stable path the analyzer can discover independently.
+ */
+export function resolveMycPrimeLiveDiagReadoutPath(): string | null {
+	const resolver = _readoutDataRootResolver
+	if (typeof resolver !== "function") return null
+	let root: string
+	try {
+		root = resolver()
+	} catch {
+		return null
+	}
+	if (typeof root !== "string" || root.length === 0) return null
+	return `${root}/${MYC_PRIME_LIVE_DIAG_READOUT_SUBDIR}/${MYC_PRIME_LIVE_DIAG_READOUT_FILENAME}`
+}
+
+/**
+ * Append a single readout event to the JSONL sink. Returns immediately.
+ * All errors are caught and routed to the warn seam — the caller
+ * (e.g. `beforeModel`) is never blocked.
+ *
+ * Hot-path cost (when diagnostics are DISABLED): one boolean read.
+ * Hot-path cost (when diagnostics are ENABLED but the readout is
+ * unbound): one boolean read + two `typeof undefined` checks.
+ * Hot-path cost (when diagnostics are ENABLED and the readout is
+ * bound): one boolean read + one path resolution + one detached
+ * `appendFile` Promise dispatch. The Promise is NOT awaited.
+ *
+ * The serialized JSON object is BOUNDED to the
+ * `MycPrimeLiveDiagReadoutEvent` shape — no prime text, no witness
+ * text, no prompts, no message bodies, no node IDs, no raw headers.
+ */
+export function appendReadoutLine(event: MycPrimeLiveDiagReadoutEvent): void {
+	// Gate 1: diagnostic enabled? (single boolean read; nothing else.)
+	if (!isMycPrimeLiveDiagEnabled()) return
+	// Gate 2: writer seam bound? (unbound = no path attempted.)
+	const writer = _readoutWriter
+	if (typeof writer !== "function") return
+	// Gate 3: path resolvable?
+	const target = resolveMycPrimeLiveDiagReadoutPath()
+	if (typeof target !== "string") return
+	// Compose the JSONL line. The event object is already bounded by
+	// the caller; we never splice in user-controlled strings here.
+	let line: string
+	try {
+		line = `${JSON.stringify(event)}\n`
+	} catch (err) {
+		_readoutWarn(`event serialization failed (event=${event.event}, sessionId=${event.sessionId}): ${errorMessage(err)}`)
+		return
+	}
+	// Detached dispatch. The Promise is intentionally not awaited;
+	// failures are caught and surfaced through the warn seam.
+	void writer(target, line).catch((err) => {
+		_readoutWarn(`append failed (target=${target}, event=${event.event}): ${errorMessage(err)}`)
+	})
+}
+
+/**
+ * Best-effort bounded error message. Mirrors the helper used in the
+ * termination-authority module; intentionally inlined here so this
+ * module does not import a shared utility (which would pull a wider
+ * dependency surface into the SDK).
+ */
+function errorMessage(err: unknown): string {
+	if (err instanceof Error) return err.message.slice(0, 512)
+	if (typeof err === "string") return err.slice(0, 512)
+	try {
+		return JSON.stringify(err).slice(0, 512)
+	} catch {
+		return "<unserializable error>"
+	}
+}
+
+/** Test-only: reset the readout seams back to the unbound state. */
+export function __resetMycPrimeLiveDiagReadoutForTests(): void {
+	_readoutDataRootResolver = undefined
+	_readoutWriter = undefined
+	_readoutWarn = (m) => Logger.warn(`[myc-prime-live-diag-readout] ${m}`)
+}
+
 /**
  * Begin (or refresh) a diagnostic entry for `sessionId`. No-op when
  * diagnostics are disabled.
@@ -348,6 +579,12 @@ export function recordMycPrimeLiveBind(sessionId: string): void {
 		hooksInstalled: true,
 		ts: Date.now(),
 	}
+	appendReadoutLine({
+		ts: new Date().toISOString(),
+		event: "bind",
+		sessionId,
+		iteration: 0,
+	})
 }
 
 /**
@@ -378,11 +615,7 @@ export function recordMycPrimeLiveBind(sessionId: string): void {
  * discriminator (wrong sessionId at runtime) reads as
  * `enter.sessionId !== bind.sessionId`.
  */
-export function recordMycPrimeLiveEnter(
-	hostSessionId: string,
-	snapshotSessionId: string | undefined,
-	iteration: number,
-): void {
+export function recordMycPrimeLiveEnter(hostSessionId: string, snapshotSessionId: string | undefined, iteration: number): void {
 	if (!isMycPrimeLiveDiagEnabled()) return
 	const entry = ensureEntry(hostSessionId)
 	entry.enter = {
@@ -392,6 +625,12 @@ export function recordMycPrimeLiveEnter(
 		hooksInstalled: true,
 		ts: Date.now(),
 	}
+	appendReadoutLine({
+		ts: new Date().toISOString(),
+		event: "enter",
+		sessionId: hostSessionId,
+		iteration,
+	})
 }
 
 export function recordMycPrimeLiveAcquisition(
@@ -414,6 +653,12 @@ export function recordMycPrimeLiveAcquisition(
 	entry.acquisition.textBytes = fields.textBytes
 	entry.acquisition.error = fields.error
 	entry.acquisition.ts = Date.now()
+	appendReadoutLine({
+		ts: new Date().toISOString(),
+		event: "acquisition",
+		sessionId,
+		status: fields.status,
+	})
 }
 
 export function recordMycPrimeLiveLookup(
@@ -446,6 +691,16 @@ export function recordMycPrimeLiveLookup(
 	entry.lookup.lookupKey = fields.lookupKey ?? sessionId
 	entry.lookup.iteration = fields.iteration
 	entry.lookup.ts = Date.now()
+	const effectiveLookupKey = fields.lookupKey ?? sessionId
+	appendReadoutLine({
+		ts: new Date().toISOString(),
+		event: "lookup",
+		sessionId,
+		iteration: fields.iteration,
+		lookupKey: effectiveLookupKey,
+		recordedPrimeFound: fields.recordedPrimeFound,
+		recordedPrimeSessionId: fields.recordedPrimeFound ? sessionId : undefined,
+	})
 }
 
 export function recordMycPrimeLiveInjection(
@@ -466,6 +721,15 @@ export function recordMycPrimeLiveInjection(
 	entry.injection.packetBytes = fields.packetBytes
 	entry.injection.iteration = fields.iteration
 	entry.injection.ts = Date.now()
+	appendReadoutLine({
+		ts: new Date().toISOString(),
+		event: "injection",
+		sessionId,
+		iteration: fields.iteration,
+		injected: fields.injected,
+		reason: fields.reason,
+		packetBytes: fields.packetBytes,
+	})
 }
 
 export function recordMycPrimeLiveCapture(
@@ -483,6 +747,12 @@ export function recordMycPrimeLiveCapture(
 		aiSdkPromptObserved: fields.aiSdkPromptObserved,
 		wireRequestObserved: fields.wireRequestObserved,
 	}
+	appendReadoutLine({
+		ts: new Date().toISOString(),
+		event: "capture",
+		sessionId,
+		captureId: fields.captureId,
+	})
 }
 
 /**

@@ -1,0 +1,113 @@
+{
+  "act": "ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01",
+  "verdict": "PASS_READOUT_INSTALLED",
+  "rationale": "EVIDENCE ACQUISITION. Per the predecessor's P0 reclassification, the LIVE RED is REAL but the in-process diagnostic Map was unobservable from outside the extension host. This ACT adds the smallest possible default-off JSONL readout sink (mirrors the termination-authority pattern) so the next operator-driven ACT (RUN03) can apply the §17 discriminator tree to a real on-disk trace. The sink is gated on the SAME isMycPrimeLiveDiagEnabled() boolean as the existing recorders, so when disabled it produces zero file writes, zero async work, zero log lines (bit-identical invariant). The hot-path cost when enabled+unbound is one boolean + two typeof checks; when enabled+bound it adds one path resolution + one detached appendFile dispatch. The Promise is never awaited, so beforeModel is never blocked. Production semantics are bit-identical to the pre-ACT path (DLR-01.a/b/c prove this with hard assertions). No new env flag, no new diagnostic framework, no gRPC, no Command Palette, no MCP tool, no protocol change, no SQLite, no webview state, no new authority. 5 focused tests (DLR-01..DLR-05) green; 19 existing live-diag tests continue green; 30 dogfood-diagnostic-profile tests continue green; 39 dogfood-diagnostic-profile-myc-clinemm01 tests continue green; 1230 bun unit tests continue green. check-types clean; lint clean; git diff --check clean. NO production patch is attempted. NO repair is performed. NO new dogfood VSIX is built in this ACT. The live RUN03 (operator-driven dogfood session + jq join + boundary classification) is the responsibility of the next ACT.",
+  "diagnostics_default_off": true,
+  "production_semantics_changed": false,
+  "production_code_changed": true,
+  "test_code_changed": true,
+  "fixture_added": false,
+  "myc_code_changed": false,
+  "git_status_clean": false,
+  "git_status_uncommitted_files": 4,
+  "halt_live_red_misclassified_inherited": true,
+  "halt_red_not_reproduced": false,
+  "halt_synthetic_real_reproduction_failed": false,
+  "halt_automatic_prime_trigger_missing": false,
+  "halt_automatic_prime_acquisition_failed": false,
+  "halt_prime_recorder_session_key_mismatch": false,
+  "halt_prime_acquisition_lookup_race": false,
+  "halt_beforemodel_session_id_mismatch": false,
+  "halt_prime_injection_guard_false": false,
+  "halt_prime_packet_lost_after_beforemodel": false,
+  "halt_capture_insufficient": false,
+  "diagnostic_internal": true,
+  "diagnostic_external_readout": true,
+  "predecessor_act": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 (PENDING_LIVE_RUN)",
+  "predecessor_evidence_chain": [
+    "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 (PENDING_LIVE_RUN — added BIND + ENTER + lookupKey on the in-process Map)",
+    "ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01 (resolved the M knob under the central profile; enabled on dogfood default, disabled on public default)",
+    "ACT-MYC-CLINEMM03-LIVE-DIAG01 (the original 6-point in-process diagnostic: ACQUISITION / LOOKUP / INJECTION / CAPTURE)"
+  ],
+  "live_red_frozen": {
+    "classification": "REAL",
+    "session_id": "1790626756811_y796e",
+    "run_id": "run_Do28tUyD",
+    "iteration": 1,
+    "provider_request_prime_packet_count": 0,
+    "provider_request_witness_present": false
+  },
+  "synthetic_real_frozen": {
+    "test_result": "GREEN",
+    "automatic_prime_composed": true,
+    "beforeModel_lookup_hits": true,
+    "prime_packet_injected": true,
+    "first_model_request_contains_witness": true
+  },
+  "diagnostic_frozen": {
+    "internal_recorders": ["bind", "enter", "acquisition", "lookup", "injection", "capture"],
+    "internal_state_container": "liveDiagBySessionId: Map<sessionId, MycPrimeLiveDiagnostic>",
+    "default_off": true,
+    "enable_seam": "isMycPrimeLiveDiagEnabled() (module boolean set by applyMycPrimeLiveDiagDiagnosticProfile)",
+    "fallback_env_flag": "CLINEMM_MYC_PRIME_DIAG=1",
+    "external_readout_added_by_this_act": true,
+    "external_readout_path": "<dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl",
+    "external_readout_default_off": true,
+    "external_readout_blocks_before_model": false,
+    "external_readout_logs_prime_text": false
+  },
+  "invariant_verification": {
+    "default_off_semantic_delta_zero_when_disabled": true,
+    "no_prime_text_leaked_to_disk": true,
+    "no_witness_text_leaked_to_disk": true,
+    "no_prompt_leaked_to_disk": true,
+    "no_message_payload_leaked_to_disk": true,
+    "public_api_unchanged": true,
+    "mcp_protocol_unchanged": true,
+    "myc_code_unchanged": true,
+    "beforeModel_never_awaited": true,
+    "write_failure_swallowed": true,
+    "session_isolation_preserved": true,
+    "bounded_event_shape": true
+  },
+  "tests": {
+    "focused_dlr": "5 tests, 11 assertions (DLR-01.a/b/c, DLR-02.a/b, DLR-03.a/b, DLR-04.a/b, DLR-05.a/b)",
+    "conservation_my_prime_live_diag_test_ts": "19/19 GREEN",
+    "conservation_dogfood_diagnostic_profile_test_ts": "30/30 GREEN",
+    "conservation_dogfood_diagnostic_profile_myc_clinemm01_test_ts": "39/39 GREEN",
+    "conservation_bun_unit_test_ts_total": "1230/1230 GREEN across 92 files",
+    "apps_vscode_tsc_noEmit_errors": 0,
+    "git_diff_check": "clean",
+    "biome_lint": "0 errors"
+  },
+  "files": {
+    "production_modified": [
+      "apps/vscode/src/sdk/myc-prime-live-diag.ts (readout seam + appendReadoutLine helper + six appendReadoutLine call sites at the recorders; bounded MycPrimeLiveDiagReadoutEvent type)",
+      "apps/vscode/src/extension.ts (import + activation call site after applyMycPrimeLiveDiagDiagnosticProfile)"
+    ],
+    "production_new": [
+      "apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts (production wiring: data-root resolver + writer seams; mirrors extension-host-termination-authority-runtime)"
+    ],
+    "test_new": [
+      "apps/vscode/src/sdk/__tests__/myc-prime-live-diag-readout.test.ts (DLR-01..DLR-05)"
+    ],
+    "act_doc": [
+      ".factory/acts/ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01.md",
+      ".factory/evidence/ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01/result.json"
+    ]
+  },
+  "production_files_changed_count": 2,
+  "production_files_changed_within_budget": true,
+  "no_repair_applied": true,
+  "no_synthetic_red_built": true,
+  "no_dogfood_vsix_built_in_this_act": true,
+  "ready_for_run03": true,
+  "successor": "RUN03 — operator-driven installed-Codium dogfood session with CLINEMM_MYC_PRIME_DIAG=1 (or dogfood default ON) and a fresh READY witness (one new sentinel). After the live trace lands at <dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl, the operator reads the trace against the captured MYC_SESSION_ID via `jq -c 'select(.sessionId == \"<S>\")' <jsonl>`, applies the §17 discriminator tree from ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01, and emits the boundary classification (one of PRODUCTION_HOOK_ASSEMBLY_OR_INSTALLATION, PRODUCTION_RUNTIME_SESSION_IDENTITY, PRIME_RECORDER_LIFETIME_OR_INSTANCE, PRIME_INJECTION_GUARD, POST_HOOK_REQUEST_COMPOSITION_LOSS, NOT_REPRODUCED_LIVE). Do NOT patch production code in RUN03. Acquire the missing live-boundary evidence first.",
+  "act_gates": {
+    "check_types": "PASS",
+    "lint": "PASS",
+    "git_diff_check": "PASS",
+    "vscode_prepublish": "DEFERRED (full production build; the focused unit sweep is sufficient for this observation-only ACT — RUN03 exercises the freshly-built VSIX)",
+    "tests": "PASS"
+  }
+}
