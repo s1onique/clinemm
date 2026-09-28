@@ -15356,3 +15356,77 @@ VSIX; expected trace: `run_turn_started #2` followed by
 `ACT-MYC-CLINEMM05-OPERATOR-LIVE-RUN01`.
 
 `READY_FOR_MYC_CLINEMM05 = true.`
+
+## ACT-MYC-CLINEMM-AUTOMATIC-PRIME-INJECTION01 — HALT_RED_NOT_REPRODUCED — 2026-09-28
+
+**Status:** `HALT_RED_NOT_REPRODUCED` per ACT §28 ("If it starts GREEN: HALT_RED_NOT_REPRODUCED. Do not patch.").
+
+The ACT's mission was to repair a hypothetical LIVE failure ("provider
+`ai_sdk_prompt` iteration 1 lacks the prime_packet despite a successful real
+`myc_prime` call returning the witness for the same session id"). The
+LIVE05 evidence is operator-pending — no operator has actually completed
+the LIVE05 walkthrough; the failure was described hypothetically.
+
+A new production-shape RED test was authored
+(`apps/vscode/src/sdk/__tests__/myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts`)
+that drives the REAL `SdkSessionLifecycle.startNewSession` → real
+`runMycPrimeOnSessionStart` → real `getMycPrimeResult` → real
+`buildAgentHooks.beforeModel` → real `AgentRuntime` chain end-to-end,
+with no test-body shortcuts (the test body never directly calls
+`runMycPrimeOnSessionStart`).
+
+**RED→GREEN outcome:**
+
+| API | Result on HEAD `89249175c` |
+|-----|------------------------------|
+| API-01 | **GREEN** — prime packet present on iteration 1, witness present, session id correct |
+| API-02 | **GREEN** — exactly one packet across iterations |
+| API-04 | **GREEN** — `snapshot.sessionId === SESSION_ID`, `conversationId` distinct |
+| API-08 | **GREEN** — no-prime case: no packet, session still runs |
+
+The production seam on HEAD is correct:
+- Prime is awaited inside `SdkSessionLifecycle.startNewSession` (CORRECTION01)
+- Recorder is keyed by `startResult.sessionId` (= `input.config.sessionId` = `taskSessionId`)
+- `AgentRuntimeConfig.sessionId` flows from `agentConfig.sessionId` = `sessionId` (allocated from `input.config.sessionId`)
+- `snapshot.sessionId` surfaces correctly via `agent-runtime.ts:1033-1044`
+- Lookup uses `snapshot.sessionId ?? snapshot.conversationId` (CORRECTION02)
+
+No production patch is required. The new test serves as the deterministic
+regression gate for this seam — if any future change breaks the production
+wiring, the test will RED.
+
+**Files added (2):**
+- `apps/vscode/src/services/mcp/__fixtures__/myc-prime-auto/server.mjs` (NEW) — deterministic prime echo containing `MYC-AUTO-PRIME-WITNESS-AUTO01` (independent of local myc queue)
+- `apps/vscode/src/sdk/__tests__/myc-prime-auto-injection01.api01-red.c24-c-bridge.test.ts` (NEW, 4 tests, 393ms) — production-shape end-to-end test
+
+**Files NOT touched (production code):**
+- `apps/vscode/src/sdk/hooks-adapter.ts`
+- `apps/vscode/src/sdk/sdk-session-lifecycle.ts`
+- `apps/vscode/src/sdk/SdkController.ts`
+- `apps/vscode/src/sdk/myc-prime-automation.ts`
+- `sdk/packages/agents/src/agent-runtime.ts`
+- `sdk/packages/core/src/runtime/config/agent-runtime-config-builder.ts`
+
+**Conservation (PASS):**
+- Manual MCP `myc_prime`: untouched
+- MCP autostart (AUTOSTART01 10/10): preserved
+- Bounded MCP bootstrap (FINALIZATION-RUN-BOOTSTRAP-STALL01 4/4): preserved
+- Completion authority (PCCA01, CPA01, BCB01-C4, CCARD): not touched
+- `MYC_CODE_CHANGED=false`
+
+**Gates:**
+```text
+typecheck       PASS (bun run check-types clean)
+diff_check      PASS (git diff --check clean; no tracked dirt)
+production_code_changed false
+```
+
+**Reclassified evidence classification:**
+- `existing failure` = LIVE (hypothetical; LIVE05 operator-pending)
+- `focused RED`      = SYNTHETIC_REAL (production-shape end-to-end test on real lifecycle)
+- `ablation`         = N/A (no production patch)
+- `postfix dogfood`  = DEFERRED (LIVE05 walkthrough still operator-pending)
+
+**Ready for ACT-MYC-CLINEMM06:** `false` — LIVE05 walkthrough must complete first.
+
+**Successor:** If LIVE05 ever surfaces the failure (operator runs recipe and observes provider capture lacking prime packet), this test will RED and identify the broken transition precisely. Until then, LIVE05 itself is the gate — if LIVE05 walks GREEN, no repair needed; if RED, this ACT's test pinpoints the regression.
