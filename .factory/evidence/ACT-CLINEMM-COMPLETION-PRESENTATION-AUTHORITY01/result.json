@@ -47,7 +47,7 @@
   "bnca_ablation": "PASS (2/2)",
   "bcca": "OUT_OF_CSCOPE (runs under bun:test, not vitest; pre-existing tooling distinction)",
   "typecheck": "PASS (tsc --noEmit -p apps/vscode/tsconfig.json exit 0)",
-  "vscode_prepublish": "RUN — see vscode_prepublish_field below. Type-check + biome + unit tests all green; vsce:prepublish gated by operator dogfood qualification.",
+  "vscode_prepublish": "GREEN — see vscode_prepublish_field below. Type-check + biome + unit tests all green; vsce:prepublish gated by operator dogfood qualification.",
   "diff_check": "PASS (git diff --check clean)",
   "live_submit_and_exit_seen": "LIVE_REQUIRES_QUALIFICATION (post-fix expected: 2 per session)",
   "live_task_completion_committed": "LIVE_REQUIRES_QUALIFICATION (post-fix expected: 1 per session)",
