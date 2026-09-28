@@ -1083,6 +1083,26 @@ export class SdkSessionEventCoordinator {
 									break
 								}
 							}
+							// ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01:
+							// the BCB barrier at SEAM B (line ~1300-1310) holds
+							// on `ownerStillRunningForC10 ||
+							// unconsumedOwnedTerminalResultsForC10 > 0`. The
+							// C10 message-layer filter (this seam) must reach
+							// the SAME conclusion about whether the task is
+							// currently authoritatively complete, otherwise a
+							// `say:"completion_result"` row leaks through while
+							// the BCB barrier correctly holds (the live P0).
+							// Reuse the SAME option-bag methods the BCB barrier
+							// already consults — no new wiring, no new state.
+							if (!ownedAndOutstanding) {
+								const ownerStillRunningForC10 =
+									this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
+								const unconsumedOwnedTerminalResultsForC10 =
+									this.options.getUnconsumedOwnedTerminalResultCount?.(activeSession.sessionId) ?? 0
+								if (ownerStillRunningForC10 || unconsumedOwnedTerminalResultsForC10 > 0) {
+									ownedAndOutstanding = true
+								}
+							}
 						}
 						if (ownedAndOutstanding) {
 							result.messages = result.messages.filter((m) => m.say !== "completion_result")
@@ -1114,8 +1134,27 @@ export class SdkSessionEventCoordinator {
 							const activeNotifyCount =
 								this.options.getActiveNotifyCount?.(activeSession.sessionId, this.options.getTask?.()?.taskId) ??
 								0
+							// ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01:
+							// the BCB barrier at SEAM B (line ~1300-1310) holds
+							// on `ownerStillRunningForC10 ||
+							// unconsumedOwnedTerminalResultsForC10 > 0` in
+							// addition to the notify-marker / pending-prompt
+							// aggregate. The C10 message-layer filter (this
+							// fallback branch, taken when `hasActiveNotify` is
+							// not wired) must reach the SAME conclusion as SEAM
+							// B, otherwise a `say:"completion_result"` row
+							// leaks through while the BCB barrier correctly
+							// holds. Reuse the SAME option-bag methods.
+							const ownerStillRunningForC10 =
+								this.options.hasRunningBackgroundJobForOwner?.(activeSession.sessionId) ?? false
+							const unconsumedOwnedTerminalResultsForC10 =
+								this.options.getUnconsumedOwnedTerminalResultCount?.(activeSession.sessionId) ?? 0
 							outstandingAutonomousWork =
-								pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0
+								pendingPromptAuthorityUnknown ||
+								pendingPromptsKnown > 0 ||
+								activeNotifyCount > 0 ||
+								ownerStillRunningForC10 ||
+								unconsumedOwnedTerminalResultsForC10 > 0
 						}
 						if (outstandingAutonomousWork) {
 							result.messages = result.messages.filter((m) => m.say !== "completion_result")

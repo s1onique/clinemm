@@ -1,0 +1,43 @@
+$ node ./node_modules/.bin/vitest run --config vitest.config.ts \
+    src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts
+
+Test Files  1 failed (1)
+     Tests  9 failed | 5 passed (14)
+
+FAIL  CPA-01 (ownerStillRunning)            — expected 1, received 0 visible completion_result rows
+FAIL  CPA-01 (unconsumedTerminalResults>0)  — expected 1, received 0 visible completion_result rows
+FAIL  CPA-03 (full live chronology)         — expected 1, received 0 visible completion_result rows
+FAIL  CPA-04 (two submits, one commit)      — expected 1, received 0 visible completion_result rows
+FAIL  CPA-09 (drain doesn't create row)     — expected 1, received 0 visible completion_result rows
+FAIL  CPA-15 (notify=false running regression) — expected 1, received 0 visible completion_result rows
+
+PASS  CPA-02 (ordinary completion)
+PASS  CPA-05 (two distinct sessions)
+PASS  CPA-06 (duplicate authority event idempotent)
+PASS  CPA-07 (final answer text preserved)
+PASS  CPA-10 (TaskHeader stays streaming while held)
+PASS  CPA-11 (ordinary commit → phase=completed)
+PASS  CPA-14 (notify=true still suppresses — predecessor BCTPA contract holds)
+PASS  CPA-16 (no-background-job ordinary task)
+
+Pattern observed (matches recon):
+- FAIL: held cases where the BCB barrier holds via ownerStillRunning or
+  unconsumedTerminal > 0 but the C10 message-layer filter does NOT
+  consult those predicates.
+- PASS: ordinary cases, predecessor BCTPA notify=true case, conservation
+  cases.
+
+Conclusion:
+  RED_REPRODUCED = TRUE
+  RED is REAL PRODUCTION SEAM (real SdkSessionEventCoordinator +
+  real MessageTranslatorState + real TurnStateTracker + real
+  BackgroundNotifyCoordinator).
+  ROOT_CAUSE = the C10 message-layer filter at
+  sdk-session-event-coordinator.ts:1049-1124 only consults notify
+  markers / pending prompt counts. It does NOT consult
+  hasRunningBackgroundJobForOwner or
+  getUnconsumedOwnedTerminalResultCount — the BCB barrier holds on
+  exactly those two extra conditions (SEAM B line 1300-1310).
+  The two seams (SEAM A message-layer, SEAM B BCB barrier) must
+  reach the SAME conclusion about whether completion is currently
+  authoritative. Today they don't.

@@ -1,0 +1,52 @@
+# 06 — GREEN (post-fix)
+
+$ node ./node_modules/.bin/vitest run --config vitest.config.ts \
+    src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts
+
+Test Files  1 passed (1)
+     Tests  14 passed (14)
+
+CPA-01: held completion must not show authoritative completion marker
+  ✓ submit_and_exit while ownerStillRunning → 0 visible rows; 0 commit
+  ✓ submit_and_exit while unconsumedOwnedTerminalResults > 0 → 0 visible rows; 0 commit
+
+CPA-02: ordinary completion
+  ✓ submit_and_exit with no background jobs → 1 visible row; 1 commit
+
+CPA-03: full live chronology
+  ✓ held submit + drain + final submit → exactly 1 row total, 1 commit
+
+CPA-04: two submit_and_exit, one commit
+  ✓ first submit held; second submit commits → 1 visible row
+
+CPA-05: two distinct sessions
+  ✓ session A held, session B free → 0 + 1 rows
+
+CPA-06: duplicate authority event (held state)
+  ✓ two done events while still held → 0 commits; 0 rows (idempotent)
+
+CPA-07: user-visible final answer text preserved
+  ✓ first answer text reaches appendAndEmit even when held; final committed row carries it
+
+CPA-09: command_status drain
+  ✓ draining does NOT itself emit a completion row
+
+CPA-10: TaskHeader stays NOT-completed while held
+  ✓ ownerStillRunning during submit → tracker.currentPhase stays streaming
+
+CPA-11: ordinary commit → phase=completed
+  ✓ ordinary completion commits phase to completed
+
+CPA-14: notify=true path conservation (predecessor BCTPA-P7b)
+  ✓ owned notify=true job + submit_and_exit → SUPPRESS
+
+CPA-15: notify=false running regression
+  ✓ owned non-notify running job + submit_and_exit → BCB barrier HOLDS; C10 filter ALSO suppresses
+
+CPA-16: no-background-job ordinary task conservation (predecessor BCB01-INT-01)
+  ✓ no owned jobs + submit_and_exit → 1 row, 1 commit
+
+COMPLETION_PRESENTATION_REQUIREMENTS_TASK_AUTHORITY = TRUE
+C_visible = C_commit for the held case (C_visible = 0, C_commit = 0)
+C_visible = C_commit for the ordinary case (C_visible = 1, C_commit = 1)
+C_visible = C_commit for the two-submit case (C_visible = 1, C_commit = 1)

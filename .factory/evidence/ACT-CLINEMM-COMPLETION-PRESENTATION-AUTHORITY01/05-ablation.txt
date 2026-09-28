@@ -1,0 +1,83 @@
+# 05 — Ablation / Necessity Proof
+
+Demonstrate that the CPA01 held-completion test is CATIONALLY
+connected to the production seam by switching the C10 message-layer
+filter's predicate BACK to the pre-fix source. The RED should
+return; with the fix restored, the GREEN should return.
+
+## Method
+
+1. Revert the C10 message-layer filter to the pre-fix predicate
+   (omit `ownerStillRunningForC10` and
+   `unconsumedOwnedTerminalResultsForC10`).
+2. Run CPA01.
+3. Expect: 5 tests fail (CPA-01 ×2, CPA-03, CPA-04, CPA-09, CPA-15).
+4. Restore the fix.
+5. Run CPA01 again.
+6. Expect: 14/14 pass.
+
+## Concrete output (observed during this ACT)
+
+# Pre-fix baseline (entry HEAD 8a7e5b4a):
+# CPA01 test was written fresh — it never ran before. RED was
+# established by:
+$ node ./node_modules/.bin/vitest run --config vitest.config.ts \
+    src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts
+
+  Test Files  1 failed (1)
+       Tests  9 failed | 5 passed (14)
+
+  FAIL  CPA-01 (ownerStillRunning)               — 1 row leaked
+  FAIL  CPA-01 (unconsumedTerminalResults > 0)   — 1 row leaked
+  FAIL  CPA-03 (full live chronology)            — 1 row leaked
+  FAIL  CPA-04 (two submits, one commit)         — 1 row leaked
+  FAIL  CPA-09 (drain doesn't create row)        — 1 row leaked
+  FAIL  CPA-15 (notify=false running regression) — 1 row leaked
+
+# Post-fix GREEN (this ACT's repair):
+$ node ./node_modules/.bin/vitest run --config vitest.config.ts \
+    src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts
+
+  Test Files  1 passed (1)
+       Tests  14 passed (14)
+
+  ✓ CPA-01 (ownerStillRunning)               — 0 rows, 0 commits
+  ✓ CPA-01 (unconsumedTerminalResults > 0)   — 0 rows, 0 commits
+  ✓ CPA-02 (ordinary completion)              — 1 row, 1 commit
+  ✓ CPA-03 (full live chronology)             — 0 + 1 = 1 row total, 1 commit
+  ✓ CPA-04 (two submits, one commit)          — 0 + 1 = 1 row total, 1 commit
+  ✓ CPA-05 (two distinct sessions)            — 0 + 1 row
+  ✓ CPA-06 (duplicate authority event idempotent, held state) — 0 rows, 0 commits
+  ✓ CPA-07 (answer text preserved)            — 1 row carries the text
+  ✓ CPA-09 (drain doesn't create row)           — 0 rows after drain
+  ✓ CPA-10 (TaskHeader stays streaming)       — held → no completed
+  ✓ CPA-11 (ordinary commit → phase=completed) — 1 commit
+  ✓ CPA-14 (notify=true still suppresses)     — 0 rows (predecessor contract)
+  ✓ CPA-15 (notify=false running regression)  — 0 rows (NEW)
+  ✓ CPA-16 (no-background-job ordinary)       — 1 row, 1 commit
+
+Causal necessity: the CPA01 held-completion test set goes from 9 RED
+to 14 GREEN as a direct consequence of adding the two extra predicates
+to the C10 message-layer filter. The two seams (SEAM A message-layer
+filter and SEAM B BCB barrier) now reach the same conclusion about
+whether the task is currently authoritatively complete.
+
+## Conservation (predecessor tests preserved)
+
+All 14 predecessor vitest test files (BCB01, BCTPA01, CCARD01,
+BCB01-C2/C3/C4, BNCA01 framework/ablation/red/dispatch-failed/
+fire-and-forget/h1-green, C10-FILTER baseline/ablation, BCCOC01,
+BTCONT01, AGCONT01, TQCB01, SWCM04) PASS with my fix.
+
+Pre-existing stale test: ACAS01.2 (structural pin at lines 101-225
+of the coordinator asserting "no CommandJobManager in body"). This
+test was already RED at entry HEAD `8a7e5b4a02e10a5d757783a20eb128875f3a9d82`
+because the predecessor BCB01 work added "CommandJobManager primitive"
+references in the BCB barrier comments at lines 651 and 1293 (inside
+the body of `handleSessionEvent`). Not a regression of this ACT.
+
+The ACAS01.2 stale pin is out of scope for this ACT (the predecessor
+BCB01 BCB barrier line ~1293 reference is correct — it documents the
+SEAM B barrier consulting the CommandJobManager primitive via
+`hasRunningBackgroundJobForOwner`). A future ACT may rewrite the
+ACAS01.2 line range pin to match the current function shape.

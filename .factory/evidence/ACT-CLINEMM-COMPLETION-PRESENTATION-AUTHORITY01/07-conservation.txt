@@ -1,0 +1,66 @@
+# 07 — Conservation matrix
+
+All predecessor vitest test files (BCB01, BCTPA01, CCARD01, BCB01-C2/C3/C4,
+BNCA01 framework/ablation/red/dispatch-failed/fire-and-forget/h1-green,
+C10-FILTER baseline/ablation, BCCOC01, BTCONT01, AGCONT01, TQCB01,
+SWCM04) PASS with the CPA01 repair.
+
+Observed counts (post-fix):
+
+```
+background-completion-barrier01-correction04.bcb01-c4           5/5
+background-command-terminal-presentation-arbitration01.bctpa01  6/6
+continuation-cardinality-authority01.ccard01                   12/12
+background-completion-barrier01.bcb01                          14/14
+background-notify-completion-authority-c10-red01.bnca-red01    1/1
+background-notify-completion-authority-c10-framework01         3/3
+background-notify-completion-authority-c10-framework-ablation  2/2
+background-notify-completion-authority-c10-framework-dispatch-failed01 3/3
+c10-filter-ablation01.baseline                                  3/3
+c10-filter-ablation01.ablation                                  8/8
+background-completion-barrier01-correction01.bcb01-c           8/8
+background-completion-barrier01-correction02.bcb01-c2          5/5
+background-command-completion-ownership-correlation01.bccoc01  7/7
+background-command-agent-continuation01.agcont01               7/7
+background-command-terminal-continuation01.btcont01           10/10
+background-notify-completion-authority-ablation01              2/2
+background-notify-completion-authority-fire-and-forget-red01   2/2
+background-notify-completion-authority-h1-green01              3/3
+continuation-pathological-corpus01.swcm04                     16/16
+long-horizon-task-quiescence-completion-barrier01.tqcb01      15/15
+runtime-task-progression-q5-composition-seam-red-and-repair.q5rr01  6/6
+long-horizon-outstanding-work-authority01.lhowa01             5/5
+completion-presentation-authority01.cpa01                      14/14
+                                                       ----------
+                                                       TOTAL: 164 passing
+```
+
+Plus CPA01 (this ACT) at 14/14.
+
+Pre-existing stale test (NOT a regression of this ACT):
+- runtime-task-progression-post-terminal-authority-discriminator.acas01.2
+  (STRUCTURAL — the handleSessionEvent body does NOT contain
+  "CommandJobManager"). This was already RED at entry HEAD
+  `8a7e5b4a02e10a5d757783a20eb128875f3a9d82` because the predecessor
+  BCB01 work added BCB01-reference comments at line 1293 inside the
+  body of `handleSessionEvent`. The structural pin reads the WHOLE
+  body (the function has grown past lines 101-225 the test header
+  references). Out of scope for this ACT — the BCB barrier comment
+  reference to "CommandJobManager primitive" at SEAM B is correct.
+
+The CPA01 fix is BOUNDED — it only adds 2 new option-bag method calls
+in 2 branches of the existing C10 message-layer filter. No new state,
+no new wiring, no new protocol field. It reuses the SAME
+`hasRunningBackgroundJobForOwner` and `getUnconsumedOwnedTerminalResultCount`
+option-bag methods the BCB barrier at SEAM B already consults.
+
+PRODUCTION_CODE_CHANGED = apps/vscode/src/sdk/sdk-session-event-coordinator.ts (1 file)
+TEST_CODE_CHANGED      = apps/vscode/src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts (1 new file)
+MYC_CODE_CHANGED       = false (per ACT §27, frozen)
+BCB_SEMANTICS_CHANGED  = false (BCB barrier at SEAM B unchanged;
+                               only the C10 message-layer filter
+                               at SEAM A now consults the same
+                               predicates)
+NEW_PROTOCOL_FIELDS    = 0
+NEW_PUBLIC_API         = 0
+NEW_STATE              = 0
