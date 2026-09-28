@@ -304,6 +304,46 @@ export function createCommandStatusTool(manager: CommandJobManager, options: Cre
 					}
 				}
 			}
+			// ACT-CLINEMM-POST-CONSUMPTION-COMPLETION-AUTHORITY01:
+			// Path C' — drain the non-notify terminal observation
+			// EVEN when `snap.state === "containment_failed"`. The
+			// `vscode-run-commands-tool.ts:892-912` non-notify record
+			// path registers the observation UNCONDITIONALLY for
+			// every terminal state, including containment_failed.
+			// Path B above keeps the containment_failed exclusion
+			// because the notify=true wake has no listener for that
+			// terminal class (the wake consumer remains the
+			// load-bearing authority for notify=true
+			// containment_failed jobs). The non-notify observation,
+			// however, has no parallel wake — the owning agent MUST
+			// observe the terminal fact (the BCB01 §0.1 second
+			// conjunct) before completion can commit. Without this
+			// branch the live chronology
+			// (HALT_POST_CONSUMPTION_COMPLETION_AUTHORITY) shows
+			// the BCB barrier held forever on
+			// `unconsumedOwnedTerminalResultsForC10 > 0` for the
+			// held containment_failed job, and the second
+			// `submit_and_exit` never reaches
+			// `task_completion_committed`.
+			//
+			// Owner-mismatch check is enforced by
+			// `BackgroundNotifyCoordinator.consumeNonNotifyTerminalObservation`
+			// (same as Path C above).
+			if (options.backgroundNotifyCoordinator && options.resolveActiveOwner && snap.state === "containment_failed") {
+				const activeOwner = options.resolveActiveOwner()
+				if (activeOwner) {
+					if (!options.backgroundNotifyCoordinator.hasActiveNotify(typed.jobId)) {
+						options.backgroundNotifyCoordinator.consumeNonNotifyTerminalObservation({
+							jobId: typed.jobId,
+							sessionId: activeOwner.sessionId,
+							taskId: activeOwner.taskId,
+						})
+						Logger.warn(
+							`[command_status] Path C' drained non-notify terminal observation for containment_failed jobId=${typed.jobId} (session=${activeOwner.sessionId})`,
+						)
+					}
+				}
+			}
 			return [
 				{
 					ok: true,
