@@ -1,0 +1,109 @@
+{
+  "act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02",
+  "verdict": "PASS_OBSERVATION_SEAM",
+  "subject_head": "4a4359bd5d25ebdac66a3b7ef5452306a6b0793b",
+  "entry_head": "6a4368787e331e44d700184f8dc5280285850d66",
+  "closure_head": "1486511158e002e984ad587cbdf298ca7ee43f6e",
+  "predecessor_act": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01 (PASS_DIAGNOSTIC_EXPANSION, HEAD 6a4368787)",
+  "rationale": "Real installed-Codium session 1790633775136_8mrnl on profile .vscodium-clinemm at version 4.1.16-a0d496408 recorded run_turn_started=3, agent_turn_done=2 (live stall). The continuation chain up to run_turn_started #3 is healthy; the run never reached agent_turn_done #3. The first currently-unobservable boundary after C7 (run_turn_started) is now a single bounded, default-off observation seam (execute_turn_prelude_enter) reachable from the existing CCARD JSONL. Live qualification by the operator is required to drive the next live run with the seam enabled; ClineMM does not launch Codium per the operator/Clinemm authority boundary.",
+  "halt_unexpected_tracked_dirt": false,
+  "halt_session_bound_mcp_premature_spawn": false,
+  "halt_live_session_mcp_not_started": false,
+  "halt_post_continuation_run_stall_unattributed": false,
+  "halt_red_not_reproduced": false,
+  "halt_live_reproduction_after_repair": false,
+  "halt_new_p0": false,
+  "halt_scope_expansion_required": false,
+  "halt_necessity_not_proven": false,
+  "halt_continuation_identity_mismatch": false,
+  "capture_insufficient": false,
+  "production_code_changed": true,
+  "test_code_changed": true,
+  "myc_code_changed": false,
+  "git_status_clean": true,
+  "frozen_source_state": {
+    "git_status_clean": true,
+    "git_rev_parse_head_at_entry": "6a4368787e331e44d700184f8dc5280285850d66",
+    "git_rev_parse_head_at_closure": "1486511158e002e984ad587cbdf298ca7ee43f6e",
+    "git_log_minus_3": [
+      "148651115 board(factory): ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 closure row",
+      "4a4359bd5 ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02: PASS_OBSERVATION_SEAM",
+      "6a4368787 ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01: PASS_DIAGNOSTIC_EXPANSION"
+    ],
+    "required_features_present": {
+      "ACT_CARDINALITY_AUTHORITY_CAPTURE_ENABLED_seam": true,
+      "execute_turn_prelude_enter_stage": true,
+      "LocalRuntimeHost_runTurn_capture_call": true
+    }
+  },
+  "live_evidence": {
+    "session_id": "1790633775136_8mrnl",
+    "task_id": "1790633775136_8mrnl",
+    "profile": ".vscodium-clinemm",
+    "installed_version": "4.1.16-a0d496408",
+    "provider": "minimax",
+    "model": "MiniMax-M3",
+    "RUN_2_START_TS_MS": 1790633775379,
+    "RUN_3_START_TS_MS": 1790634915775,
+    "RUN_3_END_TS_MS": null,
+    "EXTENSION_SHUTDOWN_TS_MS": 1790634945857,
+    "sha256": {
+      "continuation-cardinality-authority.jsonl": "2fab1cc4c2f88162cc9e4ccd0186d0dbff48f603bd445adb1a1fc1066b9e0ddd",
+      "background-job-liveness-authority.jsonl": "1ec462d986f93a73dafa6cae4cfdab3dcb2d488c29945e8a1ca81ab963c20541"
+    },
+    "evidence_dir": ".factory/evidence/ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02/",
+    "cardinality_at_stall": {
+      "terminal_committed": 152,
+      "run_turn_started": 3,
+      "agent_turn_done": 2,
+      "submit_and_exit_seen": 2,
+      "task_completion_committed": 1
+    },
+    "boundary_class": "EXECUTE_TURN_PRELUDE_STALL or EXECUTE_TURN_PRELUDE_HUNG (seam added; resolution deferred to next live operator run)"
+  },
+  "production_files_changed": [
+    "apps/vscode/src/sdk/continuation-cardinality-authority.ts (+13/-0)",
+    "sdk/packages/core/src/runtime/host/local-runtime-host.ts (+66/-0)",
+    "apps/vscode/src/sdk/vscode-session-host.ts (+27/-0)"
+  ],
+  "test_files_changed": [
+    "apps/vscode/src/sdk/__tests__/continuation-cardinality-authority01.ccard01.test.ts (+13/-2)",
+    "apps/vscode/src/sdk/__tests__/post-continuation-run-stall02.pcrs02.test.ts (NEW, 5 tests)"
+  ],
+  "observation_seam": {
+    "stage_name": "execute_turn_prelude_enter",
+    "frozen_per_act_section_3": true,
+    "capture_site": "sdk/packages/core/src/runtime/host/local-runtime-host.ts runTurn — fires IMMEDIATELY BEFORE the executeTurn(...) await, AFTER the queue/steer short-circuit",
+    "default_state": "OFF",
+    "public_api_added": 0,
+    "wire_field_added": 0,
+    "react_state_added": 0,
+    "retry_loop_added": 0,
+    "polling_loop_added": 0,
+    "queue_redesigned": false,
+    "bcb_redesigned": false,
+    "myc_changed": false
+  },
+  "discriminator_chain_post_repair": [
+    "R3-01 run_turn_started                   (already captured — seq 158)",
+    "R3-02 execute_turn_prelude_enter         (NEW — captured pre-executeTurn)",
+    "R3-03 agent_turn_done                    (already captured — absent → stall)"
+  ],
+  "verification": {
+    "PCRS02": "5/5 PASS",
+    "CCARD01": "12/12 PASS",
+    "CPA01": "14/14 PASS",
+    "PCCA01": "4/4 PASS",
+    "BCB01": "14/14 PASS",
+    "swcm04_c24_c_bridge": "5/5 PASS",
+    "tsc_apps_vscode": "0 errors",
+    "tsc_apps_vscode_compat": "0 errors",
+    "tsc_webview": "0 errors",
+    "biome_check": "clean",
+    "git_diff_check": "clean",
+    "vscode_prepublish": "PASS"
+  },
+  "live_qualification_status": "PENDING_OPERATOR_LIVE_RUN",
+  "ready_for_next_act": true,
+  "next_act_proposal": "After operator live qualification, branch by discriminator."
+}
