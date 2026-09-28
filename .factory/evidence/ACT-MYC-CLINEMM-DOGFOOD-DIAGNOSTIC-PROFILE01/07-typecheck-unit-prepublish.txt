@@ -1,0 +1,22 @@
+ACT=ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01
+GATES=
+
+# Gate 1 — focused test run
+COMMAND=bunx vitest run src/sdk/__tests__/dogfood-diagnostic-profile-myc-clinemm01.test.ts src/sdk/__tests__/myc-prime-live-diag.test.ts src/sdk/dogfood-diagnostic-profile.test.ts src/sdk/__tests__/dogfood-diagnostic-profile-thsicap-activation.test.ts src/sdk/__tests__/dogfood-diagnostic-profile-w-carrier.test.ts src/sdk/hooks-adapter.test.ts src/sdk/dogfood-runtime-profile.test.ts src/sdk/dogfood-runtime-capture-path.test.ts src/sdk/__tests__/myc-prime-automation.identity-join.red.c24-c-bridge.test.ts src/sdk/__tests__/myc-prime-automation.model-visible.c24-c-bridge.test.ts
+RESULT=PASS
+TEST_FILES=10
+TESTS_PASSED=149
+TESTS_FAILED=0
+
+# Gate 2 — full unit test sweep
+COMMAND=bun scripts/run-bun-unit-tests.ts
+RESULT=PASS
+TEST_FILES=92
+TOTAL_TESTS=1230
+FAIL=0
+TIME=41.3s
+
+# Gate 3 — typecheck
+COMMAND=bunx tsc --noEmit
+RESULT=PASS
+ERRORS=0

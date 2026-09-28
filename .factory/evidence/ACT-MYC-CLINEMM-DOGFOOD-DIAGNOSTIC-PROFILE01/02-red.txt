@@ -1,0 +1,37 @@
+ACT=ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01
+RED_TEST_FILE=apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-myc-clinemm01.test.ts
+
+# RED test count (post-GREEN — see 04-green.txt for the GREEN run):
+TOTAL=39
+MDP-01=PASS
+MDP-02=PASS
+MDP-03=PASS
+MDP-04=PASS
+MDP-05=PASS
+MDP-06=PASS
+MDP-07=PASS
+MDP-08=PASS
+MDP-09=PASS
+MDP-10=PASS
+MDP-11=PASS
+MDP-12=PASS
+MDP-13=PASS
+MDP-14=PASS
+MDP-15=PASS
+MDP-16=PASS
+MDP-17=PASS
+MDP-18=PASS
+
+# Test design notes:
+# - MDP-04 preserves the legacy ACT-03 explicit-ON opt-in: public +
+#   `CLINEMM_MYC_PRIME_DIAG=1` returns ON. This matches §9 and is
+#   justified by the M knob being a forensic scaffold (not a product
+#   feature). The §18 "no public silent activation" invariant is
+#   preserved by the NO-OP nature of the diagnostic when nobody
+#   asks for it.
+# - MDP-15 honors CLINE_CAPTURE_WIRE=true and `=1` but ignores
+#   garbage values.
+# - MDP-16 asserts the capture root is NOT the forbidden
+#   `/tmp/clinemm-live04-capture` sentinel.
+# - MDP-NEG-1 covers garbage env values falling through to the
+#   profile default.

@@ -1,0 +1,83 @@
+{
+  "act": "ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01",
+  "verdict": "PASS_MYC_DOGFOOD_DIAGNOSTIC_PROFILE",
+  "entry_head": "2b51a4701dc0aada8f6b692231a1465768b00a10",
+  "subject_head": "ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01: auto-enable myc diagnostics for dogfood",
+
+  "dogfood_identity_seam": "apps/vscode/src/sdk/dogfood-runtime-profile.ts:resolveClineMmRuntimeProfile (CLINEMM_RUNTIME_PROFILE exact-match 'dogfood')",
+  "dogfood_profile_seam": "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts (single central authority)",
+  "activation_seam": "apps/vscode/src/extension.ts:activate (line ~109, BEFORE SdkController construction)",
+
+  "myc_diag_env_compat": "1/true/yes enable; 0/off/false disable; module-level boolean set by activation helper (env fallback retained for legacy direct callers)",
+  "myc_diag_dogfood_default": "ON (auto-on, no operator env required)",
+  "myc_diag_public_default": "OFF",
+  "myc_diag_override_up": "PASS (1/true/yes in either profile)",
+  "myc_diag_override_down": "PASS (0/off/false in either profile)",
+
+  "provider_capture_dogfood_default": "full",
+  "provider_capture_public_default": "off",
+  "provider_capture_override_up": "PASS (full/summary honored in either profile)",
+  "provider_capture_override_down": "PASS (off honored in either profile)",
+
+  "provider_capture_root": "<context.globalStorageUri.fsPath>/provider-request-captures",
+  "provider_capture_cleanup_default": "on (matches upstream default; DOGFOOD_PROVIDER_CAPTURE_CLEANUP_DEFAULT)",
+  "provider_wire_capture_dogfood_default": "false (DOGFOOD_PROVIDER_WIRE_CAPTURE_DEFAULT; upstream default)",
+
+  "profile_resolution_count": 1,
+  "profile_activation_idempotent": true,
+
+  "MDP_01": "PASS",
+  "MDP_02": "PASS",
+  "MDP_03": "PASS",
+  "MDP_04": "PASS",
+  "MDP_05": "PASS",
+  "MDP_06": "PASS",
+  "MDP_07": "PASS",
+  "MDP_08": "PASS",
+  "MDP_09": "PASS",
+  "MDP_10": "PASS",
+  "MDP_11": "PASS",
+  "MDP_12": "PASS",
+  "MDP_13": "PASS",
+  "MDP_14": "PASS",
+  "MDP_15": "PASS",
+  "MDP_16": "PASS",
+  "MDP_17": "PASS",
+  "MDP_18": "PASS",
+
+  "public_conservation": "PASS (AC2 — zero env mutations, zero recorder state writes)",
+  "dogfood_integration": "PASS (AC3 — full set of effective values)",
+  "myc_diag_smoke": "DEFERRED (requires live Codium + LLM credentials; ACT-MYC-CLINEMM04)",
+  "provider_capture_smoke": "DEFERRED (requires live Codium; ACT-MYC-CLINEMM04)",
+
+  "unit_gate": "PASS (1230/1230 tests across 92 files)",
+  "typecheck": "PASS (bunx tsc --noEmit, zero errors)",
+  "vscode_prepublish": "PASS (protos + biome format + tsc -b + vite build + biome lint + proto-lint)",
+
+  "production_code_changed": [
+    "apps/vscode/src/sdk/dogfood-diagnostic-profile.ts (338 lines added)",
+    "apps/vscode/src/sdk/myc-prime-live-diag.ts (module-level boolean setter)",
+    "apps/vscode/src/extension.ts (two activation calls in :activate)"
+  ],
+  "test_files_added": [
+    "apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-myc-clinemm01.test.ts (39 tests)"
+  ],
+  "myc_code_changed": "OBSERVABILITY (M knob, not prime-recorder semantics)",
+  "mcp_protocol_changed": false,
+  "public_api_changed": false,
+
+  "ready_for_myc_clinemm04": true,
+
+  "files_in_evidence": [
+    "00-entry.txt",
+    "01-recon.md",
+    "02-red.txt",
+    "03-design.md",
+    "04-green.txt",
+    "05-public-conservation.txt",
+    "06-provider-capture-tests.txt",
+    "07-typecheck-unit-prepublish.txt",
+    "08-dogfood-smoke.md",
+    "result.json"
+  ]
+}

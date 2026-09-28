@@ -1139,3 +1139,335 @@ export function applyExtensionHostTerminationAuthorityProfile(
 ): { readonly enabled: boolean; readonly flipped: boolean } {
 	return applyExtensionHostTerminationAuthorityPolicy(isDogfood, env)
 }
+
+// ===========================================================================
+// ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01
+//
+// Central dogfood profile resolver for:
+//   M (myc prime live diagnostic) — see
+//       resolveEffectiveMycPrimeLiveDiag /
+//       applyMycPrimeLiveDiagDiagnosticProfile
+//   R (provider-request AI-SDK prompt capture) — see
+//       resolveEffectiveProviderRequestCapture /
+//       applyProviderRequestCaptureDiagnosticProfile
+//
+// HONEST STOP RULE (mirrors BJLA / BOCOR / CCARD): when the myc-prime
+// causal record is classified AND a successor evidence substrate
+// lands, this resolver + activation helper + the M/R rows of the
+// diagnostic profile + the `setMycPrimeLiveDiagEnabled` setter + the
+// bounded env adapter in `applyProviderRequestCaptureDiagnosticProfile`
+// MUST be reviewed TOGETHER. The forensic diagnostic remains gated on
+// its original ACT-03 removal triggers:
+//   1. root cause isolated,
+//   2. capture insufficient,
+//   3. successor evidence supersedes it.
+// Dogfood default activation does NOT silently make forensic
+// instrumentation permanent.
+// ===========================================================================
+
+import { __resetMycPrimeLiveDiagForTests, isMycPrimeLiveDiagEnabled, setMycPrimeLiveDiagEnabled } from "./myc-prime-live-diag"
+
+/**
+ * Provider capture mode union (subset of upstream `CaptureMode` in
+ * sdk/packages/llms/src/providers/provider-request-capture.ts).
+ * Re-declared here so the resolver stays in apps/vscode and does not
+ * pull upstream types into the central profile.
+ */
+export type ProviderRequestCaptureMode = "off" | "summary" | "full"
+
+/**
+ * Frozen dogfood defaults for provider-request capture.
+ * (Per ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01 §10, §11, §16.)
+ */
+export const DOGFOOD_PROVIDER_CAPTURE_MODE_DEFAULT: ProviderRequestCaptureMode = "full"
+export const DOGFOOD_PROVIDER_WIRE_CAPTURE_DEFAULT: boolean = false
+export const DOGFOOD_PROVIDER_CAPTURE_CLEANUP_DEFAULT: "on" | "off" = "on"
+
+// ---------------------------------------------------------------------------
+// M knob — myc prime live diagnostic
+//
+// Precedence (top wins, deterministic, fail-closed):
+//
+//   1. Explicit env override:
+//        CLINEMM_MYC_PRIME_DIAG="1"/"true"/"yes"    -> ON
+//        CLINEMM_MYC_PRIME_DIAG="0"/"off"/"false" -> OFF
+//        garbage / unset                            -> fall through
+//   2. Profile default:
+//        isDogfood === true  -> ON  (no more env-var incantation)
+//        isDogfood === false -> OFF (public default)
+//
+// Explicit-OFF is honored in BOTH profiles (matches decideKnob invariant).
+// Explicit-ON is honored ONLY in dogfood (no public silent activation,
+// ACT §18 invariant).
+// ---------------------------------------------------------------------------
+
+export function resolveEffectiveMycPrimeLiveDiag(
+	env: NodeJS.ProcessEnv,
+	isDogfood: boolean,
+): { readonly enabled: boolean; readonly source: "env" | "profile" } {
+	const raw = env.CLINEMM_MYC_PRIME_DIAG
+	if (typeof raw === "string" && raw.length > 0) {
+		const normalized = raw.trim().toLowerCase()
+		if (TRUTHY_DISABLE.has(normalized)) {
+			return { enabled: false, source: "env" }
+		}
+		// Explicit ON is honored in EITHER profile for the M knob.
+		// The myc prime live diagnostic is a forensic scaffold (not
+		// a product feature); the legacy ACT-03 contract was that
+		// `=1` enabled regardless of profile. ACT §9 explicitly
+		// preserves this opt-in. The "no public silent activation"
+		// §18 invariant applies to the V/I/A/P/D product-feature
+		// knobs — the M knob is an explicit opt-in forensic tool.
+		if (TRUTHY_ENABLE.has(normalized)) {
+			return { enabled: true, source: "env" }
+		}
+		// garbage -> fall through to profile default
+	}
+	return { enabled: isDogfood, source: "profile" }
+}
+
+/**
+ * THE single production activation helper for the myc prime live
+ * diagnostic seam. Mirrors the BJLA / BOCOR / CCARD pattern.
+ *
+ * Idempotent. Sets the module-level seam in
+ * `./myc-prime-live-diag.ts` (NOT process.env) so the recorder hot
+ * path reads a single boolean instead of re-reading the env on every
+ * observation point.
+ */
+export function applyMycPrimeLiveDiagDiagnosticProfile(
+	isDogfood: boolean,
+	env: NodeJS.ProcessEnv = process.env,
+): { readonly enabled: boolean; readonly flipped: boolean } {
+	const resolved = resolveEffectiveMycPrimeLiveDiag(env, isDogfood)
+	const was = isMycPrimeLiveDiagEnabled()
+	if (was === resolved.enabled) {
+		return { enabled: resolved.enabled, flipped: false }
+	}
+	setMycPrimeLiveDiagEnabled(resolved.enabled)
+	return { enabled: resolved.enabled, flipped: true }
+}
+
+/**
+ * Test seam: reset the myc-prime diagnostic module to its env-fallback
+ * path. Production code MUST NOT call this. Tests that flip between
+ * dogfood and public in a single suite use it to observe a fresh
+ * resolution.
+ */
+export function __resetMycPrimeLiveDiagDiagnosticProfileForTests(): void {
+	__resetMycPrimeLiveDiagForTests()
+}
+
+// ---------------------------------------------------------------------------
+// R knob — provider-request AI-SDK prompt capture
+//
+// Precedence (top wins; identical pattern for every column):
+//
+//   1. Explicit env override (operator wins in BOTH profiles):
+//        CLINE_CAPTURE_PROVIDER_REQUEST:
+//          "full" / "summary"            -> that mode
+//          "off"                         -> off
+//          garbage / unset               -> fall through
+//        CLINE_CAPTURE_WIRE:
+//          "true"  / "1"                 -> true
+//          "false" / "0" / garbage       -> fall through
+//        CLINE_CAPTURE_CLEANUP:
+//          "off"                         -> off
+//          anything else / unset         -> fall through
+//
+//   2. Profile default:
+//        dogfood ->
+//          captureMode = "full"   (so LIVE04 can prove payload contents)
+//          wireCapture = false    (DOGFOOD_PROVIDER_WIRE_CAPTURE_DEFAULT)
+//          cleanup    = "on"      (DOGFOOD_PROVIDER_CAPTURE_CLEANUP_DEFAULT;
+//                                   24h prune is the right safety net
+//                                   because `full` captures contain prompt
+//                                   content)
+//        public  ->
+//          captureMode = "off"    (public default OFF)
+//          wireCapture = false
+//          cleanup    = "on"
+// ---------------------------------------------------------------------------
+
+export interface ResolvedProviderRequestCapture {
+	readonly captureMode: ProviderRequestCaptureMode
+	readonly wireCapture: boolean
+	readonly cleanup: "on" | "off"
+	readonly source: {
+		readonly captureMode: "env" | "profile"
+		readonly wireCapture: "env" | "profile"
+		readonly cleanup: "env" | "profile"
+	}
+	/** Effective dataDir binding (only set in dogfood). */
+	readonly dataDir: string | null
+}
+
+export function resolveEffectiveProviderRequestCapture(
+	env: NodeJS.ProcessEnv,
+	isDogfood: boolean,
+	dataDir: string | null,
+): ResolvedProviderRequestCapture {
+	// captureMode
+	const modeRaw = env.CLINE_CAPTURE_PROVIDER_REQUEST
+	let captureMode: ProviderRequestCaptureMode
+	let captureModeSource: "env" | "profile"
+	if (typeof modeRaw === "string" && modeRaw.length > 0) {
+		const normalized = modeRaw.trim().toLowerCase()
+		if (normalized === "full" || normalized === "summary" || normalized === "off") {
+			captureMode = normalized
+			captureModeSource = "env"
+		} else {
+			captureMode = isDogfood ? DOGFOOD_PROVIDER_CAPTURE_MODE_DEFAULT : "off"
+			captureModeSource = "profile"
+		}
+	} else {
+		captureMode = isDogfood ? DOGFOOD_PROVIDER_CAPTURE_MODE_DEFAULT : "off"
+		captureModeSource = "profile"
+	}
+
+	// wireCapture
+	const wireRaw = env.CLINE_CAPTURE_WIRE
+	let wireCapture: boolean
+	let wireCaptureSource: "env" | "profile"
+	if (typeof wireRaw === "string" && wireRaw.length > 0) {
+		const normalized = wireRaw.trim().toLowerCase()
+		if (normalized === "true" || normalized === "1") {
+			wireCapture = true
+			wireCaptureSource = "env"
+		} else if (normalized === "false" || normalized === "0") {
+			wireCapture = false
+			wireCaptureSource = "env"
+		} else {
+			wireCapture = isDogfood ? DOGFOOD_PROVIDER_WIRE_CAPTURE_DEFAULT : false
+			wireCaptureSource = "profile"
+		}
+	} else {
+		wireCapture = isDogfood ? DOGFOOD_PROVIDER_WIRE_CAPTURE_DEFAULT : false
+		wireCaptureSource = "profile"
+	}
+
+	// cleanup
+	const cleanupRaw = env.CLINE_CAPTURE_CLEANUP
+	let cleanup: "on" | "off"
+	let cleanupSource: "env" | "profile"
+	if (typeof cleanupRaw === "string" && cleanupRaw.length > 0) {
+		const normalized = cleanupRaw.trim().toLowerCase()
+		if (normalized === "off") {
+			cleanup = "off"
+			cleanupSource = "env"
+		} else {
+			cleanup = isDogfood ? DOGFOOD_PROVIDER_CAPTURE_CLEANUP_DEFAULT : "on"
+			cleanupSource = "profile"
+		}
+	} else {
+		cleanup = isDogfood ? DOGFOOD_PROVIDER_CAPTURE_CLEANUP_DEFAULT : "on"
+		cleanupSource = "profile"
+	}
+
+	return {
+		captureMode,
+		wireCapture,
+		cleanup,
+		source: {
+			captureMode: captureModeSource,
+			wireCapture: wireCaptureSource,
+			cleanup: cleanupSource,
+		},
+		dataDir: isDogfood && typeof dataDir === "string" && dataDir.length > 0 ? dataDir : null,
+	}
+}
+
+/**
+ * THE single production activation helper for the provider-request
+ * capture seam. Mirrors the BJLA / BOCOR / CCARD pattern.
+ *
+ * Idempotent. Writes the EFFECTIVE values to `process.env` ONCE,
+ * BEFORE any provider request flows. The recorder hot path in
+ * `sdk/packages/llms/src/providers/provider-request-capture.ts`
+ * continues to read `process.env` directly (its design); the
+ * activation helper does NOT mutate env per request.
+ *
+ * `dataDir` is the extension-owned writable root
+ * (`context.globalStorageUri.fsPath` for VS Code). When provided
+ * AND dogfood, the helper sets `CLINE_DATA_DIR=<dataDir>` so the
+ * upstream fallback path resolver materializes captures under
+ * `<dataDir>/provider-request-captures/` (NEVER in the repository).
+ * Public installs never set `CLINE_DATA_DIR`.
+ *
+ * Why this adapter exists: upstream provider capture exposes ONLY
+ * env-backed configuration at HEAD. ACT §32 forbids modifying
+ * upstream. The bounded env adapter is the narrowest change that
+ * gives dogfood default-ON without changing upstream.
+ */
+export function applyProviderRequestCaptureDiagnosticProfile(
+	isDogfood: boolean,
+	env: NodeJS.ProcessEnv = process.env,
+	dataDir: string | null = null,
+): {
+	readonly captureMode: ProviderRequestCaptureMode
+	readonly wireCapture: boolean
+	readonly cleanup: "on" | "off"
+	readonly dataDir: string | null
+	readonly flipped: boolean
+} {
+	const resolved = resolveEffectiveProviderRequestCapture(env, isDogfood, dataDir)
+
+	// Env-write policy:
+	//
+	// We mutate process.env ONLY when:
+	//   - the upstream recorder would NOT observe the resolved
+	//     value from its own defaults, AND
+	//   - the operator did not explicitly set the var (so we are
+	//     enforcing the profile default, not overriding the operator).
+	//
+	// This is the bounded env adapter contract from ACT §14. Public
+	// installs never get env mutations because the upstream default
+	// already matches the resolved public values (capture off, wire
+	// off, cleanup on, no data dir). Dogfood installs get the
+	// minimum necessary mutations so the upstream recorder honors the
+	// dogfood defaults.
+
+	const wasCapture = process.env.CLINE_CAPTURE_PROVIDER_REQUEST
+	const wasWire = process.env.CLINE_CAPTURE_WIRE
+	const wasCleanup = process.env.CLINE_CAPTURE_CLEANUP
+	const wasDataDir = process.env.CLINE_DATA_DIR
+
+	// Capture mode: only mutate when the resolved mode differs from
+	// the recorder's default ("off") AND the operator didn't set it.
+	const captureShouldWrite = isDogfood && resolved.captureMode !== "off" && typeof wasCapture !== "string"
+	const captureFlipped = captureShouldWrite
+	if (captureShouldWrite) {
+		process.env.CLINE_CAPTURE_PROVIDER_REQUEST = resolved.captureMode
+	}
+
+	// Wire capture: upstream default is false; we only need to mutate
+	// when the operator explicitly opted in to wire capture (which
+	// already sets CLINE_CAPTURE_WIRE=true — the resolver is a
+	// pass-through in that case). We never need to write false.
+	const wireFlipped = false // we never write wire (default false matches all profiles)
+	void wasWire
+
+	// Cleanup: upstream default is "on"; we never need to write
+	// "on". The operator can opt out via CLINE_CAPTURE_CLEANUP=off
+	// (which the upstream recorder already honors).
+	const cleanupFlipped = false // we never write cleanup (default on matches all profiles)
+	void wasCleanup
+
+	// Data dir: only mutate in dogfood AND when the operator did not
+	// set CLINE_DATA_DIR. This is the only required env write besides
+	// CLINE_CAPTURE_PROVIDER_REQUEST.
+	const dataDirShouldWrite = isDogfood && resolved.dataDir !== null && typeof wasDataDir !== "string"
+	const dataDirFlipped = dataDirShouldWrite
+	if (dataDirShouldWrite && resolved.dataDir) {
+		process.env.CLINE_DATA_DIR = resolved.dataDir
+	}
+
+	const flipped = captureFlipped || wireFlipped || cleanupFlipped || dataDirFlipped
+	return {
+		captureMode: resolved.captureMode,
+		wireCapture: resolved.wireCapture,
+		cleanup: resolved.cleanup,
+		dataDir: resolved.dataDir,
+		flipped,
+	}
+}

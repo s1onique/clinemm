@@ -15,6 +15,8 @@ import {
 	applyExtensionHostCpuProfilerProfile,
 	applyExtensionHostHotloopDiagnosticProfile,
 	applyExtensionHostTerminationAuthorityProfile,
+	applyMycPrimeLiveDiagDiagnosticProfile,
+	applyProviderRequestCaptureDiagnosticProfile,
 	applyTaskHeaderSelectorInputCaptureDiagnosticProfile,
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	applyWCarrierTraceDiagnosticProfile,
@@ -122,6 +124,40 @@ export async function activate(context: vscode.ExtensionContext) {
 	// never the `vscode` API, so `vscode` is not imported into the
 	// SDK capture code.
 	configureDogfoodCaptureStorage(context.globalStorageUri.fsPath)
+
+	// ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01: arm the MYC
+	// prime live diagnostic (M knob) at the EARLIEST initialization
+	// seam, BEFORE SdkController construction. Mirrors the BJLA /
+	// BOCOR / CCARD pattern: dogfood default ON, public default
+	// OFF, explicit operator override always wins. The helper sets
+	// the module-level boolean in `./myc-prime-live-diag.ts` ONCE,
+	// so the recorder hot path reads a single boolean — no per-call
+	// `process.env` lookup. Explicit `CLINEMM_MYC_PRIME_DIAG=0`
+	// overrides the dogfood auto-on default down. Explicit
+	// `CLINEMM_MYC_PRIME_DIAG=1` honors the legacy operator opt-in
+	// in either profile (but is ignored in public unless the
+	// profile default is also enabled, per the §18 invariant — see
+	// `resolveEffectiveMycPrimeLiveDiag`).
+	applyMycPrimeLiveDiagDiagnosticProfile(isDogfoodRuntime(process.env), process.env)
+
+	// ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01: arm the
+	// provider-request AI-SDK prompt capture (R knob) at the SAME
+	// EARLIEST initialization seam, BEFORE the first provider
+	// request flows. Mirrors the BJLA / BOCOR / CCARD pattern with
+	// a bounded env adapter (Option B — upstream provider capture
+	// exposes ONLY env-backed configuration; ACT §32 forbids
+	// modifying upstream). In dogfood, the helper writes
+	//   CLINE_CAPTURE_PROVIDER_REQUEST=full
+	//   CLINE_CAPTURE_WIRE=false
+	//   CLINE_CAPTURE_CLEANUP=on
+	//   CLINE_DATA_DIR=<context.globalStorageUri.fsPath>
+	// ONCE so the upstream fallback path resolver materializes
+	// captures under `<dataDir>/provider-request-captures/`
+	// (NEVER in the repository). Public installs are untouched
+	// (capture remains off, no `CLINE_DATA_DIR` injection). Explicit
+	// operator values for any of those env vars WIN — the adapter
+	// only writes when the operator did NOT set the var.
+	applyProviderRequestCaptureDiagnosticProfile(isDogfoodRuntime(process.env), process.env, context.globalStorageUri.fsPath)
 
 	// ACT-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE-DIAGNOSABILITY01:
 	// Arm the legacy TSWPD ring at the EARLIEST initialization seam,

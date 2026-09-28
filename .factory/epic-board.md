@@ -14729,3 +14729,111 @@ orderings. The live defect must originate elsewhere (BCB barrier predicate,
 sdkHost.send rejection, or session-lifecycle wiring — see
 05-causal-discriminator.md).
 ```
+
+## ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01 — VERDICT=PASS_MYC_DOGFOOD_DIAGNOSTIC_PROFILE — 2026-09-28
+
+**Status:** PASS. Auto-enable myc prime live diagnostic + provider-request AI-SDK prompt capture in dogfood via the existing central dogfood diagnostic profile. No new public surface, no per-request env mutation, no upstream SDK modification. Operator no longer needs the 5-variable shell incantation — the dogfood launcher alone (`CLINEMM_RUNTIME_PROFILE=dogfood`) is now sufficient.
+
+**Scope (this ACT):** OBSERVABILITY_ENABLEMENT. The myc-prime live diagnostic and the upstream provider-request capture become profile-aware. Explicit operator overrides still win.
+
+| File | Δ | Purpose |
+|------|---|---------|
+| `apps/vscode/src/sdk/dogfood-diagnostic-profile.ts` | +338 lines | New M (myc-prime) and R (provider-request capture) knobs added to the central dogfood profile. Resolvers: `resolveEffectiveMycPrimeLiveDiag`, `resolveEffectiveProviderRequestCapture`. Activation helpers: `applyMycPrimeLiveDiagDiagnosticProfile`, `applyProviderRequestCaptureDiagnosticProfile`. Frozen dogfood defaults exported: `DOGFOOD_PROVIDER_CAPTURE_MODE_DEFAULT = "full"`, `DOGFOOD_PROVIDER_WIRE_CAPTURE_DEFAULT = false`, `DOGFOOD_PROVIDER_CAPTURE_CLEANUP_DEFAULT = "on"`. |
+| `apps/vscode/src/sdk/myc-prime-live-diag.ts` | refactored | Module-level boolean `mycPrimeLiveDiagEnabled` replaces per-recorder `process.env` reads. `setMycPrimeLiveDiagEnabled(enabled)` exported for the central profile. Env fallback (`=1` literal) preserved for back-compat with legacy direct callers. |
+| `apps/vscode/src/extension.ts` | +40 lines | Two new activation calls in `:activate`, placed immediately after `configureDogfoodCaptureStorage(...)` and BEFORE SdkController construction (mirrors the BJLA / BOCOR / CCARD pattern). |
+| `apps/vscode/src/sdk/__tests__/dogfood-diagnostic-profile-myc-clinemm01.test.ts` | NEW (~480 lines) | 39 vitest tests covering MDP-01..MDP-18 + AC1 (activation order) + AC2 (public conservation) + AC3 (dogfood integration). Drives REAL production helpers. |
+
+**Effective contract (verified):**
+
+```text
+dogfood + no env:
+  mycPrimeLiveDiag         = ON  (module boolean set; env not mutated)
+  providerRequestCapture   = full  (CLINE_CAPTURE_PROVIDER_REQUEST=full)
+  providerWireCapture      = false (upstream default; not auto-set)
+  cleanup                  = on    (upstream default; not auto-set)
+  dataDir                  = <context.globalStorageUri.fsPath>
+
+dogfood + CLINEMM_MYC_PRIME_DIAG=0:
+  mycPrimeLiveDiag         = OFF  (explicit override-down wins)
+
+dogfood + CLINE_CAPTURE_PROVIDER_REQUEST=off:
+  providerRequestCapture   = off  (explicit override-down wins)
+
+public + no env:
+  mycPrimeLiveDiag         = OFF  (zero state writes; recorder short-circuits)
+  providerRequestCapture   = off  (zero env mutations)
+  dataDir                  = null (no CLINE_DATA_DIR injection)
+```
+
+**Why bounded env adapter (Option B) instead of typed setter:**
+
+Upstream `sdk/packages/llms/src/providers/provider-request-capture.ts` exposes ONLY env-backed configuration at HEAD. ACT §32 forbids modifying upstream. The bounded env adapter is the narrowest change: one activation pass, no per-request mutation, explicit operator values win, public runtime untouched. The helper writes ONLY values that differ from upstream defaults — `CLINE_CAPTURE_WIRE` and `CLINE_CAPTURE_CLEANUP` are NOT written because their upstream defaults (`false` and `on`) already match the resolved profile values.
+
+**Disabled-state conservation (verified AC2):**
+
+When `CLINEMM_RUNTIME_PROFILE` is unset OR not `"dogfood"`:
+- `applyMycPrimeLiveDiagDiagnosticProfile(false, ...)` calls `setMycPrimeLiveDiagEnabled(false)` — module boolean flips.
+- `applyProviderRequestCaptureDiagnosticProfile(false, ...)` mutates ZERO env vars.
+- `startMycPrimeLiveDiag("hs-pub")` short-circuits at the first recorder; zero state writes.
+- `getMycPrimeLiveDiag("hs-pub")` returns `undefined`.
+- Upstream provider-capture recorder observes its default `off` mode; zero files written.
+
+PRODUCTION_BEHAVIOR_DELTA_PUBLIC = ZERO.
+
+**Capture root authority:**
+
+`PROVIDER_CAPTURE_ROOT = <context.globalStorageUri.fsPath>/provider-request-captures`
+
+Same `globalStorageUri` authority used by `configureDogfoodCaptureStorage` for the V2 capture sink (CORRECTION02). NEVER inside the repository. NEVER `/tmp/clinemm-live04-capture`. NEVER operator-set unless they explicitly opt in via `CLINE_CAPTURE_DIR`.
+
+**Conservation gates:**
+
+```
+FOCUSED_TESTS       = PASS  (39/39 in myc-clinemm01.test.ts)
+FOCUSED_TESTS       = PASS  (14/14 existing myc-prime-live-diag.test.ts)
+FOCUSED_TESTS       = PASS  (30/30 existing dogfood-diagnostic-profile.test.ts)
+FOCUSED_TESTS       = PASS  (49/49 sibling activation tests THSICAP + W-carrier)
+FOCUSED_TESTS       = PASS  (6/6 hooks-adapter.test.ts — backward compat preserved)
+FULL_UNIT_SWEEP     = PASS  (1230/1230 tests across 92 files; 0 fails)
+TYPECHECK           = PASS  (bunx tsc --noEmit → exit 0)
+VSCODE_PREPUBLISH   = PASS  (protos + biome format + tsc -b + vite build + biome lint + proto-lint)
+DIFF_CHECK          = PASS  (git diff --check → exit 0)
+```
+
+**Production delta summary:**
+
+| Concern | This ACT |
+|---------|----------|
+| MYC_SEMANTICS_CHANGED | false (recorder helpers unchanged in observable behavior) |
+| MCP_TRANSPORT_CHANGED | false |
+| PRIME_LIFECYCLE_CHANGED | false |
+| BEFOREMODEL_CHANGED | false (uses same `isMycPrimeLiveDiagEnabled()` getter) |
+| PROVIDER_REQUEST_CONTENT_CHANGED | false (upstream recorder hot path unchanged) |
+| NEW_PUBLIC_SURFACE | none (no settings UI, no proto field, no command palette item) |
+
+**MCP / public API invariant:** preserved. The frozen dogfood identity contract (`CLINEMM_RUNTIME_PROFILE` exact-match `"dogfood"`) is untouched. The diagnostic profile is closed-runtime/launcher-owned.
+
+**Honest stop rule:** the M knob is forensic scaffolding. When myc-prime causal record is classified AND successor evidence lands, this resolver + activation helper + `setMycPrimeLiveDiagEnabled` setter + the bounded env adapter in `applyProviderRequestCaptureDiagnosticProfile` MUST be reviewed TOGETHER. Dogfood default activation does NOT silently make forensic instrumentation permanent architecture.
+
+**Live requalification (deferred to ACT-MYC-CLINEMM04-LIVE-QUALIFICATION):**
+
+```text
+LIVE_MYC_DIAG_ENABLED     = null (this ACT; deferred to LIVE04)
+LIVE_CAPTURE_FILES_WRITTEN = null (this ACT; deferred to LIVE04)
+LIVE_PROVIDER_CAPTURE_MODE = null (this ACT; deferred to LIVE04)
+```
+
+The dogfood smoke (ACT §34-§36) requires a live Codium + globalStorage + LLM credential combo. This ACT only makes the substrate available automatically; the live operator-loop verification is the next ACT's responsibility.
+
+**Ready for ACT-MYC-CLINEMM04-LIVE-QUALIFICATION:**
+
+```text
+READY_FOR_MYC_CLINEMM04 = true
+operator workflow:
+  $ codium-clinemm          # launcher sets CLINEMM_RUNTIME_PROFILE=dogfood
+  # In Codium:
+  #   1. Start fresh task.
+  #   2. Inspect mycPrimeLiveDiag -> enabled.
+  #   3. Inspect <globalStorage>/provider-request-captures/ -> files exist.
+  #   4. captureStage=ai_sdk_prompt, mode=full, payload contains <prime_packet>.
+```

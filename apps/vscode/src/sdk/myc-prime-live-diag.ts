@@ -1,6 +1,18 @@
 // ACT-MYC-CLINEMM03-LIVE-DIAG01: default-off live diagnostics for the
 // ClineMM prime-injection causal chain.
 //
+// ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01: arming authority moved
+// from a per-recorder `process.env.CLINEMM_MYC_PRIME_DIAG` read to a
+// module-level boolean. The central dogfood profile
+// (`apps/vscode/src/sdk/dogfood-diagnostic-profile.ts`) resolves the
+// effective state ONCE at extension activation and calls
+// `setMycPrimeLiveDiagEnabled(true|false)`. The recorder hot path now
+// reads the module boolean, NOT `process.env`. The env-flag override is
+// preserved as a one-shot back-compat shim for direct unit tests and
+// for the legacy operator opt-in (the resolver sets the module boolean
+// before the first recorder call, so env becomes irrelevant in
+// production).
+//
 // SCOPE: OBSERVE ONLY. Do NOT redesign injection, recorder lookup, or
 // message construction here. The diagnostic is a forensic scaffolding
 // The diagnostic only records numeric / boolean / status metadata. It
@@ -11,10 +23,19 @@
 //   - provider request bodies,
 //   - node IDs, paths, or raw headers.
 //
-// Gating: an explicit opt-in env flag.
-//   CLINEMM_MYC_PRIME_DIAG=1  -> enabled
-//   CLINEMM_MYC_PRIME_DIAG=0  -> explicitly off
-//   unset (default)            -> off
+// Gating (per ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01):
+//   1. Module-level boolean (set by the central dogfood profile at
+//      activation time) — primary authority.
+//   2. Fallback to the literal env flag
+//      `CLINEMM_MYC_PRIME_DIAG` for back-compat with tests and the
+//      legacy operator opt-in.
+//
+// Precedence (handled by the central profile, not here):
+//   - Explicit env override (`=1/true/yes` ON; `=0/off/false` OFF)
+//     wins in BOTH profiles.
+//   - dogfood + no explicit override -> ON (auto-on, the live-qual
+//     operator no longer needs to set the env).
+//   - public + no explicit override  -> OFF (default).
 //
 // When DISABLED (production default, the verified working state):
 //   - zero new state writes,
@@ -44,10 +65,24 @@
 import { Logger } from "@/shared/services/Logger"
 
 /**
- * Opt-in env flag. Default off; must be the literal string `"1"` (case
- * insensitive; surrounding whitespace tolerated).
+ * Opt-in env flag. Default off; the central dogfood profile
+ * (`dogfood-diagnostic-profile.ts#resolveEffectiveMycPrimeLiveDiag`)
+ * honors both truthy (`1/true/yes`) and falsy (`0/off/false`) tokens.
+ * This module's fallback env read accepts ONLY the literal `"1"`
+ * for back-compat with the original ACT-03 forensic shim.
  */
 const ENV_FLAG_NAME = "CLINEMM_MYC_PRIME_DIAG"
+
+/**
+ * Module-level enablement seam. The central dogfood profile
+ * (`applyMycPrimeLiveDiagDiagnosticProfile`) flips this once at
+ * extension activation. The recorder hot path reads the boolean
+ * directly — no `process.env` lookup per observation point.
+ *
+ * `null` means "uninitialized; use the env fallback". After the
+ * first central-profile activation pass, this is always `boolean`.
+ */
+let mycPrimeLiveDiagEnabled: boolean | null = null
 
 /**
  * Discriminated per-injection reason. The exhaustive enumeration makes
@@ -113,17 +148,52 @@ const liveDiagBySessionId = new Map<string, MycPrimeLiveDiagnostic>()
 
 // added to prove WHERE the live chain breaks — not to fix it.
 /**
- * Read the env flag. ONLY the literal `"1"` (whitespace-trimmed,
- * case-insensitive) enables.
+ * Module-level enablement seam (primary authority). When set by the
+ * central dogfood profile, the recorder hot path reads the boolean
+ * directly — no `process.env` lookup per observation point. When
+ * unset (`null`), the env fallback below preserves the original
+ * ACT-03 operator opt-in (`CLINEMM_MYC_PRIME_DIAG=1`).
  *
- * Cost: a single `process.env` lookup + trim + lower-case + `===`.
+ * Cost: a single boolean read when the module boolean is set.
  * When disabled, every recorder below short-circuits on this single
  * boolean — zero state writes, zero request mutations, zero log lines.
  */
 export function isMycPrimeLiveDiagEnabled(): boolean {
+	if (mycPrimeLiveDiagEnabled !== null) {
+		return mycPrimeLiveDiagEnabled
+	}
+	// Fallback path: only honored when the central profile has not yet
+	// armed the seam (e.g. direct unit tests that bypass the
+	// activation helper). Once `setMycPrimeLiveDiagEnabled` has been
+	// called for the first time, this fallback is dead code.
 	const raw = process.env[ENV_FLAG_NAME]
 	if (typeof raw !== "string") return false
 	return raw.trim().toLowerCase() === "1"
+}
+
+/**
+ * Arm / disarm the module-level diagnostic seam.
+ *
+ * Called from `applyMycPrimeLiveDiagDiagnosticProfile` at extension
+ * activation. The function is idempotent: calling it twice with the
+ * same boolean produces no extra semantic effect. Calling it with
+ * `false` after an initial `true` clears the seam back to the
+ * disabled state — no leftover entries are touched (the singleton
+ * map is preserved for forensic post-mortem by the host-side dump
+ * runtime).
+ *
+ * Direct callers (other than the central profile) are FORBIDDEN in
+ * production. Test code may use `__setMycPrimeLiveDiagForTests` (see
+ * below) so test intent is auditable.
+ */
+export function setMycPrimeLiveDiagEnabled(enabled: boolean): void {
+	mycPrimeLiveDiagEnabled = enabled
+}
+
+/** Test-only: reset the module seam back to the env fallback path. */
+export function __resetMycPrimeLiveDiagForTests(): void {
+	mycPrimeLiveDiagEnabled = null
+	liveDiagBySessionId.clear()
 }
 
 /**
@@ -229,11 +299,6 @@ export function recordMycPrimeLiveCapture(
 export function getMycPrimeLiveDiag(sessionId: string): MycPrimeLiveDiagnostic | undefined {
 	if (!isMycPrimeLiveDiagEnabled()) return undefined
 	return liveDiagBySessionId.get(sessionId)
-}
-
-/** Test-only: clear every recorded entry. NOT for production use. */
-export function __resetMycPrimeLiveDiagForTests(): void {
-	liveDiagBySessionId.clear()
 }
 
 /**

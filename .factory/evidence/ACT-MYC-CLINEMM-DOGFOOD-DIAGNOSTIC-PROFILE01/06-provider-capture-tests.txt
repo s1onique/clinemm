@@ -1,0 +1,62 @@
+ACT=ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01
+SCOPE=Provider-request capture profile (R knob) RED tests
+
+# Resolver precedence
+TEST=MDP-09: public + capture env absent -> capture off
+RESULT=PASS
+TEST=MDP-10: dogfood + capture env absent -> capture full (default)
+RESULT=PASS
+TEST=MDP-11: dogfood + explicit CLINE_CAPTURE_PROVIDER_REQUEST=off -> off (env wins)
+RESULT=PASS
+TEST=MDP-12: public + explicit CLINE_CAPTURE_PROVIDER_REQUEST=full -> full (env wins)
+RESULT=PASS
+TEST=MDP-13: explicit CLINE_CAPTURE_PROVIDER_REQUEST=summary -> summary (both profiles)
+RESULT=PASS
+
+# Wire capture
+TEST=MDP-14: dogfood default -> wire capture false (DOGFOOD_PROVIDER_WIRE_CAPTURE_DEFAULT)
+RESULT=PASS
+TEST=MDP-15a: explicit CLINE_CAPTURE_WIRE=true -> true (env wins)
+RESULT=PASS
+TEST=MDP-15b: explicit CLINE_CAPTURE_WIRE=1 -> true (env wins)
+RESULT=PASS
+TEST=MDP-15c: explicit CLINE_CAPTURE_WIRE=false -> false (env wins)
+RESULT=PASS
+TEST=MDP-15d: garbage CLINE_CAPTURE_WIRE -> profile default
+RESULT=PASS
+
+# Capture root
+TEST=MDP-16: dogfood + dataDir -> dataDir binding set
+RESULT=PASS
+TEST=MDP-16b: public + dataDir -> dataDir null (no public injection)
+RESULT=PASS
+TEST=MDP-16c: tmpRoot does NOT equal /tmp/clinemm-live04-capture sentinel
+RESULT=PASS
+
+# Cleanup
+TEST=MDP-17: dogfood default -> cleanup on (DOGFOOD_PROVIDER_CAPTURE_CLEANUP_DEFAULT)
+RESULT=PASS
+TEST=MDP-17b: public default -> cleanup on
+RESULT=PASS
+TEST=MDP-18: explicit CLINE_CAPTURE_CLEANUP=off -> cleanup off (env wins)
+RESULT=PASS
+
+# Activation helper (bounded env adapter)
+TEST=applyProviderRequestCaptureDiagnosticProfile writes ONLY values that differ from upstream defaults in dogfood
+RESULT=PASS
+  - CLINE_CAPTURE_PROVIDER_REQUEST=full (upstream default "off" -> write)
+  - CLINE_CAPTURE_WIRE stays unset (upstream default false -> no write)
+  - CLINE_CAPTURE_CLEANUP stays unset (upstream default "on" -> no write)
+  - CLINE_DATA_DIR=<root> (upstream default undefined -> write)
+TEST=public default leaves ALL env vars untouched (zero mutations)
+RESULT=PASS
+TEST=operator-explicit values WIN (helper does not overwrite operator-set vars)
+RESULT=PASS
+TEST=activation is idempotent (second call returns flipped=false)
+RESULT=PASS
+
+# Activation ordering
+TEST=AC1: myc seam armed BEFORE provider capture BEFORE recorder runs
+RESULT=PASS
+TEST=AC3: dogfood integration — myc ON + capture full + wire false + cleanup on + dataDir set
+RESULT=PASS

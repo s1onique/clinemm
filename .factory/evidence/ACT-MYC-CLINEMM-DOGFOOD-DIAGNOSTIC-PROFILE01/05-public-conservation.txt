@@ -1,0 +1,25 @@
+ACT=ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01
+TEST=AC2: public conservation — zero diagnostic state when public + no env
+
+EVIDENCE:
+- `applyMycPrimeLiveDiagDiagnosticProfile(false, {})` calls
+  `setMycPrimeLiveDiagEnabled(false)` — the module boolean flips
+  to false. This is the ONLY mutation on the public path; it
+  inverts the env fallback default (which was also false but
+  re-read on every recorder call).
+- `applyProviderRequestCaptureDiagnosticProfile(false, {}, tmpRoot)`
+  mutates ZERO env vars (CLINE_CAPTURE_PROVIDER_REQUEST, _WIRE,
+  _CLEANUP, CLINE_DATA_DIR all stay undefined). flipped=false.
+- `isMycPrimeLiveDiagEnabled()` returns false on the public path.
+- `startMycPrimeLiveDiag("hs-pub")` short-circuits at the first
+  recorder and returns without writing to the singleton map.
+- `getMycPrimeLiveDiag("hs-pub")` returns undefined.
+- Upstream provider-capture recorder observes `off` (its default)
+  and writes no files.
+
+PRODUCTION_BEHAVIOR_DELTA_PUBLIC=ZERO
+LOAD_BEARING_INVARIANT=PASS
+
+# RED test proof:
+TEST=MDP-08: public + no env -> recorders are no-ops, no entries written
+RESULT=PASS
