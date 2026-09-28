@@ -64,6 +64,18 @@ export type ContinuationCardinalityStage =
 	| "pending_prompt_dequeued"
 	| "continuation_scheduled"
 	| "run_turn_started"
+	// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02:
+	// ONE new bounded enter-only stage. Fires inside
+	// LocalRuntimeHost.executeTurn at the top, BEFORE the await
+	// chain (prepareTurnInput → ensureSessionPersisted →
+	// refreshActiveSessionGitMetadata → syncOAuthCredentials →
+	// markTurnRunning → executeAgentTurn). A matching exit is
+	// implicit: the existing C8 (`agent_turn_done`) fires on
+	// success, and its absence means the run never reached
+	// executeAgentTurn's return. Adding a new value is a
+	// breaking change for downstream tests that enumerate the
+	// stage set, so this name is FROZEN per §3 of the ACT.
+	| "execute_turn_prelude_enter"
 	| "agent_turn_done"
 	| "submit_and_exit_seen"
 	| "task_completion_committed"
@@ -118,6 +130,7 @@ const stageCounters: { [K in ContinuationCardinalityStage]: PerStageCounter } = 
 	pending_prompt_dequeued: { count: 0, origins: new Set() },
 	continuation_scheduled: { count: 0, origins: new Set() },
 	run_turn_started: { count: 0, origins: new Set() },
+	execute_turn_prelude_enter: { count: 0, origins: new Set() },
 	agent_turn_done: { count: 0, origins: new Set() },
 	submit_and_exit_seen: { count: 0, origins: new Set() },
 	task_completion_committed: { count: 0, origins: new Set() },

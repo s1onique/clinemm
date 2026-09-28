@@ -330,6 +330,40 @@ export interface LocalRuntimeHostOptions {
 			delivery: "queue" | "steer" | undefined;
 			jobId?: string;
 		}) => void;
+		/**
+		 * ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 (bounded
+		 * diagnostic-only observation seam):
+		 *
+		 * Fired at the top of `executeTurn(session, input)` in
+		 * `LocalRuntimeHost`, BEFORE the await chain
+		 * (`prepareTurnInput` → `ensureSessionPersisted` →
+		 * `refreshActiveSessionGitMetadata` →
+		 * `syncOAuthCredentials` → `markTurnRunning` →
+		 * `executeAgentTurn`) begins. This is the FIRST currently-
+		 * unobservable boundary after C7 (`run_turn_started`) and
+		 * it discriminates:
+		 *
+		 *   - C7 fired → onExecuteTurnPreludeEnter fired → (no C8):
+		 *     `EXECUTE_TURN_PRELUDE_STALL` (stall is INSIDE
+		 *     `executeAgentTurn` → `AgentRuntime.execute` →
+		 *     model.stream / beforeModel hooks / prepareTurn /
+		 *     compaction).
+		 *
+		 *   - C7 fired → onExecuteTurnPreludeEnter NOT fired → (no
+		 *     C8): `EXECUTE_TURN_PRELUDE_HUNG` (stall is in the
+		 *     prelude awaits themselves).
+		 *
+		 * FROZEN per §3 of ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02.
+		 * Adding a new capture hook is a breaking change for any
+		 * production wiring that asserts the optional hook set, so
+		 * this name is fixed. When undefined (default), the
+		 * production path is a complete no-op.
+		 */
+		onExecuteTurnPreludeEnter?: (input: {
+			sessionId: string;
+			delivery: "queue" | "steer" | undefined;
+			jobId?: string;
+		}) => void;
 	};
 }
 
@@ -1226,6 +1260,38 @@ export class LocalRuntimeHost implements RuntimeHost {
 		// token is threaded through unchanged.
 		if (this.pendingPromptCaptureHooks?.onRunTurnStarted) {
 			this.pendingPromptCaptureHooks.onRunTurnStarted({
+				sessionId: input.sessionId,
+				delivery,
+				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+			});
+		}
+		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 (bounded
+		// diagnostic-only observation seam):
+		//
+		// Fires IMMEDIATELY BEFORE the `executeTurn(...)` await,
+		// AFTER the queue/steer short-circuit and AFTER the C7
+		// capture above. The C7/C8 round-trip alone cannot
+		// distinguish a stall inside `executeTurn`'s prelude
+		// (`prepareTurnInput` → `ensureSessionPersisted` →
+		// `refreshActiveSessionGitMetadata` → `syncOAuthCredentials`
+		// → `markTurnRunning` → `executeAgentTurn`) from a stall
+		// inside `executeAgentTurn` itself. This capture makes the
+		// prelude observable so the post-capture discriminator can
+		// resolve:
+		//
+		//   C7 fired → execute_turn_prelude_enter fired → (no C8):
+		//     EXECUTE_TURN_PRELUDE_STALL (stall inside
+		//     executeAgentTurn).
+		//
+		//   C7 fired → execute_turn_prelude_enter NOT fired → (no
+		//     C8): EXECUTE_TURN_PRELUDE_HUNG (stall inside the
+		//     prelude awaits themselves).
+		//
+		// Default-off; no public API; no wire field. When the
+		// optional hook is undefined (production default), the
+		// call site is a complete no-op.
+		if (this.pendingPromptCaptureHooks?.onExecuteTurnPreludeEnter) {
+			this.pendingPromptCaptureHooks.onExecuteTurnPreludeEnter({
 				sessionId: input.sessionId,
 				delivery,
 				...(input.jobId !== undefined ? { jobId: input.jobId } : {}),

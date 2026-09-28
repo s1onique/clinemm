@@ -242,6 +242,16 @@ describe("CCARD01 — continuation cardinality authority capture", () => {
 			jobId,
 		})
 		captureContinuationCardinalityAuthorityRecord({ stage: "run_turn_started", origin: "pending_prompt_drain", sessionId })
+		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02: the bounded
+		// enter-only stage for the runTurn prelude fires between
+		// C7 and the implicit C8 capture. See
+		// apps/vscode/src/sdk/continuation-cardinality-authority.ts
+		// (ContinuationCardinalityStage union).
+		captureContinuationCardinalityAuthorityRecord({
+			stage: "execute_turn_prelude_enter",
+			origin: "pending_prompt_drain",
+			sessionId,
+		})
 		captureContinuationCardinalityAuthorityRecord({ stage: "agent_turn_done", origin: "pending_prompt_drain", sessionId })
 		captureContinuationCardinalityAuthorityRecord({
 			stage: "submit_and_exit_seen",
@@ -257,9 +267,9 @@ describe("CCARD01 — continuation cardinality authority capture", () => {
 		})
 
 		const records = getContinuationCardinalityAuthorityCaptureRecords()
-		expect(records).toHaveLength(10)
+		expect(records).toHaveLength(11)
 		const counters = getContinuationCardinalityAuthorityCounters()
-		expect(counters.total).toBe(10)
+		expect(counters.total).toBe(11)
 		for (const stage of [
 			"terminal_committed",
 			"notify_consume_enter",
@@ -268,6 +278,7 @@ describe("CCARD01 — continuation cardinality authority capture", () => {
 			"pending_prompt_dequeued",
 			"continuation_scheduled",
 			"run_turn_started",
+			"execute_turn_prelude_enter",
 			"agent_turn_done",
 			"submit_and_exit_seen",
 			"task_completion_committed",

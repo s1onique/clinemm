@@ -547,6 +547,33 @@ export class VscodeSessionHost implements SdkSessionHost {
 							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 						})
 					},
+					onExecuteTurnPreludeEnter: (input: {
+						sessionId: string
+						delivery: "queue" | "steer" | undefined
+						jobId?: string
+					}) => {
+						// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02:
+						// The first currently-unobservable boundary
+						// after C7 (`run_turn_started`). Fires
+						// IMMEDIATELY BEFORE the `executeTurn(...)`
+						// await inside `LocalRuntimeHost.runTurn`,
+						// AFTER the queue/steer short-circuit. Same
+						// origin derivation as C7/C8. The pairing with
+						// C7 is the load-bearing discriminator:
+						//   C7 + execute_turn_prelude_enter + (no C8)
+						//     → EXECUTE_TURN_PRELUDE_STALL
+						//   C7 + (no execute_turn_prelude_enter) +
+						//     (no C8)
+						//     → EXECUTE_TURN_PRELUDE_HUNG
+						// Default-off (capture helper is a no-op when
+						// the CCARD seam is OFF).
+						captureContinuationCardinalityAuthorityRecord({
+							stage: "execute_turn_prelude_enter",
+							origin: deriveOrigin(input.delivery, input.jobId),
+							sessionId: input.sessionId,
+							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
+						})
+					},
 				}
 			})(),
 		})
