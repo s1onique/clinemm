@@ -1,5 +1,5 @@
 /**
- * ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 (CORRECTION01)
+ * ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 (CORRECTION01, CORRECTION02)
  *
  * Production wiring for the default-off JSONL readout sink added to
  * `myc-prime-live-diag.ts`. This module owns the production-only
@@ -39,6 +39,24 @@
  * never blocked; the failure mode is identical (rejected Promise
  * reaches the warn seam).
  *
+ * CORRECTION02 (P0 concurrent-append): the detached dispatch
+ * pattern means six recorders (BIND, ENTER, ACQUISITION, LOOKUP,
+ * INJECTION, CAPTURE) can fire in the same microtask burst and
+ * each invoke `appendFile` against the same `events.jsonl`. Node's
+ * `fs/promises` operations run on the libuv thread pool and are
+ * NOT synchronized/threadsafe; concurrent appends can interleave
+ * or produce torn JSONL lines. The diagnostic is supposed to be
+ * load-bearing causal evidence for the §17 boundary classifier,
+ * so this is a real integrity problem. The fix: serialize the
+ * production writer through a module-level `writeTail: Promise<void>`
+ * chain. Each new op is enqueued via `.then`; the chain is
+ * advanced through `.catch(() => undefined)` so a single failed
+ * write does NOT poison subsequent evidence. The Promise returned
+ * by the writer is the actual op, so the call site's existing
+ * `.catch()` still reports this write's failure to the warn seam.
+ * The call site itself is unchanged: `void writer(target, line).catch(...)`,
+ * the call site does not await, and `beforeModel` is never blocked.
+ *
  * REMOVAL TRIGGER (per ACT removal rules): the readout sink is a
  * bounded forensic scaffolding. When telemetry later wants any of
  * these counters, redesign them under ACT-MYC-CLINEMM-TELEMETRY01
@@ -55,21 +73,68 @@ import {
 } from "./myc-prime-live-diag"
 
 /**
+ * Module-level FIFO chain that serializes all defaultWriter
+ * invocations. The diagnostic is load-bearing causal evidence
+ * for the §17 boundary classifier, so the six recorders'
+ * detached writes must appear in the JSONL in exactly the
+ * order they were dispatched, with no interleaved bytes.
+ *
+ * Node's `fs/promises` operations run on the libuv thread
+ * pool and are NOT synchronized/threadsafe; two concurrent
+ * `appendFile` calls against the same path can interleave or
+ * produce torn lines. We chain them via a `then` tail so each
+ * operation only begins after the previous one has settled.
+ *
+ * The chain is advanced through `.catch(() => undefined)` so a
+ * single failed write does NOT poison all later evidence —
+ * DLR-07.b proves this.
+ *
+ * CORRECTION02: this queue lives ONLY in the production
+ * runtime file. The pure module's `appendReadoutLine` is
+ * unchanged: it still calls `void writer(target, line).catch(...)`,
+ * the call site still does not await, and `beforeModel` is
+ * never blocked.
+ */
+let writeTail: Promise<void> = Promise.resolve()
+
+/**
  * Default filesystem seam for the readout JSONL sink. Production =
  * `node:fs/promises` `mkdir(parent, {recursive:true})` followed by
- * `appendFile(target, line)` (line-oriented JSONL). The writer is
- * intentionally Promise-returning so the pure module can dispatch
- * it detached; the call site in `myc-prime-live-diag.ts` does not
- * await the Promise.
+ * `appendFile(target, line)` (line-oriented JSONL).
+ *
+ * The writer is intentionally Promise-returning so the pure module
+ * can dispatch it detached; the call site in `myc-prime-live-diag.ts`
+ * does not await the Promise. The Promise returned here is the
+ * actual op (so the caller's `.catch()` still reports THIS write's
+ * failure through the warn seam); the module-level `writeTail` is
+ * advanced to `op.catch(() => undefined)` so a single failure does
+ * not break the chain for subsequent writes.
  *
  * CORRECTION01: mkdir is required because Node's appendFile does
  * NOT create the parent directory. Without it, a clean dogfood
  * profile would silently produce no evidence.
+ *
+ * CORRECTION02: appendFile calls are serialized through `writeTail`.
+ * Without this, six concurrent appendFile calls against the same
+ * path can interleave on the libuv thread pool and produce torn
+ * JSONL lines — DLR-07.a proves the serialized case holds; DLR-07.b
+ * proves a failed write does not poison the chain.
  */
-const defaultWriter: MycPrimeLiveDiagReadoutWriter = async (target, line) => {
-	const fsPromises = await import("node:fs/promises")
-	await fsPromises.mkdir(path.dirname(target), { recursive: true })
-	await fsPromises.appendFile(target, line, "utf8")
+const defaultWriter: MycPrimeLiveDiagReadoutWriter = (target, line) => {
+	const op = writeTail
+		.catch(() => undefined)
+		.then(async () => {
+			const fsPromises = await import("node:fs/promises")
+			await fsPromises.mkdir(path.dirname(target), { recursive: true })
+			await fsPromises.appendFile(target, line, "utf8")
+		})
+	// Advance the chain through `.catch(() => undefined)` so a
+	// single failed op does not poison subsequent evidence.
+	writeTail = op.catch(() => undefined)
+	// Return the actual op so the call site's existing
+	// `.catch((err) => _readoutWarn(...))` still reports this
+	// write's failure through the warn seam.
+	return op
 }
 
 /**

@@ -380,3 +380,98 @@ biome lint                                                   0 errors
 
 See `.factory/evidence/ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01/`
 for the full `result.json` and `10-final-report.md`.
+
+---
+
+## CORRECTION02 — 2026-09-28
+
+Reviewer audit on commit `b24b3ad1b` exposed a new P0 in evidence
+integrity that CORRECTION01's DLR-06 suite did not cover: the
+detached dispatch pattern means six recorders (BIND, ENTER,
+ACQUISITION, LOOKUP, INJECTION, CAPTURE) can fire in the same
+microtask burst and each invoke `appendFile` against the same
+`events.jsonl`. Node's `fs/promises` operations run on the libuv
+thread pool and are NOT synchronized/threadsafe; concurrent appends
+can interleave on the thread pool and produce torn JSONL lines.
+
+The diagnostic is supposed to be load-bearing causal evidence for
+the §17 boundary classifier, so unserialized same-file writes cannot
+be left as-is.
+
+### Bounded fix
+
+One file (`apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts`):
+
+```diff
++let writeTail: Promise<void> = Promise.resolve()
+ ...
+-const defaultWriter: MycPrimeLiveDiagReadoutWriter = async (target, line) => {
+-  const fsPromises = await import("node:fs/promises")
+-  await fsPromises.mkdir(path.dirname(target), { recursive: true })
+-  await fsPromises.appendFile(target, line, "utf8")
+-}
++const defaultWriter: MycPrimeLiveDiagReadoutWriter = (target, line) => {
++  const op = writeTail
++    .catch(() => undefined)
++    .then(async () => {
++      const fsPromises = await import("node:fs/promises")
++      await fsPromises.mkdir(path.dirname(target), { recursive: true })
++      await fsPromises.appendFile(target, line, "utf8")
++    })
++  writeTail = op.catch(() => undefined)
++  return op
++}
+```
+
+The call site in `appendReadoutLine` is unchanged. The module-level
+`writeTail` is advanced through `.catch(() => undefined)` so a
+single failed op does NOT poison subsequent evidence.
+
+### RED → GREEN tests
+
+DLR-07 (2 sub-cases, vitest) drives the production writer through
+both invariants: causal-order preservation under concurrent dispatch
+(DLR-07.a) and failure-recovery (DLR-07.b).
+
+### Verdict
+
+```text
+VERDICT                 = PASS_READOUT_SERIALIZED
+P0_PARENT_MATERIALIZATION = CLOSED  (CORRECTION01)
+P0_CONCURRENT_APPEND      = CLOSED  (CORRECTION02)
+DIAGNOSTIC_DEFAULT_OFF    = true
+DIAGNOSTIC_WRITES_SERIALIZED  = true
+BEFOREMODEL_AWAITS_DIAGNOSTIC = false
+WRITE_FAILURE_DOES_NOT_POISON_QUEUE = true (DLR-07.b)
+PRODUCTION_SEMANTICS_CHANGED     = false
+MYC_CODE_CHANGED                  = false
+READY_FOR_RUN03                   = true
+```
+
+### Conservation (CORRECTION02)
+
+```text
+myc-prime-live-diag-readout.test.ts                 16/16 GREEN
+myc-prime-live-diag.test.ts                         19/19 GREEN
+dogfood-diagnostic-profile.test.ts                  30/30 GREEN
+dogfood-diagnostic-profile-myc-clinemm01.test.ts    39/39 GREEN
+  focused 4-file vitest sweep                     104/104 GREEN
+bun run test:unit                                 1230/1230 GREEN
+apps/vscode tsc --noEmit                                    0 errors
+git diff --check                                             clean
+biome lint                                                   0 errors (changed files)
+vscode:prepublish                                            PASS (mandatory)
+```
+
+### Next ACT
+
+The reviewer explicitly noted: "This is the last thing I would put
+in front of the live experiment unless a genuinely new P0 appears."
+
+RUN03 is the next ACT. Operator-driven installed-Codium dogfood
+session with diagnostics enabled and a fresh READY witness. Apply
+the §17 discriminator tree to the captured `MYC_SESSION_ID` to emit
+the boundary classification. The on-disk trace is now trustworthy
+for §17: six detached record writes appear in causal order, the
+bounded event shape is preserved, the file materializes on first
+use, and a single failed op does not poison subsequent evidence.

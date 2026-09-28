@@ -1,9 +1,10 @@
 {
   "act": "ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01",
-  "act_revision": "CORRECTION01",
-  "verdict": "PASS_READOUT_PARENT_MATERIALIZATION",
+  "act_revision": "CORRECTION02",
+  "verdict": "PASS_READOUT_SERIALIZED",
   "rationale_CORRECTION01": "P0_IN_EVIDENCE_ACQUISITION_PATH_CLOSED. The original ACT claimed the readout path is created lazily by the first appendFile call. That was wrong: Node's appendFile creates the FILE if missing but NOT the parent directory. On a clean dogfood profile where <dataRoot>/diagnostics/myc-prime-live-diag/ does not yet exist, the first append would reject with ENOENT. The detached .catch() in appendReadoutLine correctly prevented semantic damage, but the sink would silently produce zero evidence — straight back to CAPTURE_INSUFFICIENT. The reviewer caught this and demanded a single bounded fix: mkdir(parent, {recursive:true}) BEFORE appendFile in the production writer. This ACT (CORRECTION01) applies that fix and adds DLR-06 (a filesystem-level test that exercises the PRODUCTION writer topology against a real on-disk temp data root whose diagnostic subdir does not yet exist). PRE-FIX invariant: the subdir does not exist, stat throws ENOENT. POST-FIX invariant: the subdir is created by the writer and events.jsonl contains exactly one valid JSON line. DLR-06 also re-pins DLR-01.a (default-off still zero-I/O with the production writer bound) and DLR-05.a (write failure still non-fatal when the production writer rejects against an unresolvable data root).",
-  "rationale": "EVIDENCE ACQUISITION (REVISED). The LIVE RED is REAL (frozen) but the in-process diagnostic Map was unobservable from outside the extension host. This ACT adds the smallest possible default-off JSONL readout sink so the next operator-driven ACT (RUN03) can apply the §17 discriminator tree to a real on-disk trace. The sink is gated on the SAME isMycPrimeLiveDiagEnabled() boolean as the existing recorders, so when disabled it produces zero file writes, zero async work, zero log lines (bit-identical invariant). The hot-path cost when enabled+unbound is one boolean + two typeof checks; when enabled+bound it adds one path resolution + one detached mkdir+appendFile dispatch. The Promise is never awaited, so beforeModel is never blocked. The detached mkdir creates the parent dir lazily — the diagnostic is default-off so we do NOT eagerly materialize an empty directory in production. Production semantics are bit-identical to the pre-ACT path on the disabled code path; the only observable production change is that the on-disk directory now materializes on first use (which the previous ACT claimed it would but didn't). 6 focused tests (DLR-01..DLR-06, 14 assertions) green; 19 existing live-diag tests continue green; 30 dogfood-diagnostic-profile tests continue green; 39 dogfood-diagnostic-profile-myc-clinemm01 tests continue green; 1230 bun unit tests continue green. check-types clean; lint clean; git diff --check clean. NO new env flag, no new diagnostic framework, no gRPC, no Command Palette, no MCP tool, no protocol change, no SQLite, no webview state, no new authority. NO repair of the LIVE RED is attempted; that is RUN03's job.",
+  "rationale_CORRECTION02": "P0_IN_EVIDENCE_INTEGRITY_CLOSED. CORRECTION01 closed the parent-dir P0 but exposed a NEW P0: the detached dispatch pattern means six recorders (BIND, ENTER, ACQUISITION, LOOKUP, INJECTION, CAPTURE) can fire in the same microtask burst and each invoke appendFile against the same events.jsonl. Node's fs/promises operations run on the libuv thread pool and are NOT synchronized/threadsafe; concurrent appends can interleave or produce torn JSONL lines. The diagnostic is supposed to be load-bearing causal evidence for the §17 boundary classifier, so unserialized same-file writes cannot be left as-is. DLR-06 didn't close this because it fired only ONE event. The fix is bounded: serialize the production writer through a module-level writeTail: Promise<void> chain. Each new op is enqueued via .then; the chain is advanced through .catch(() => undefined) so a single failed write does NOT poison subsequent evidence. The Promise returned by the writer is the actual op, so the call site's existing .catch() still reports this write's failure to the warn seam. The call site itself is unchanged: void writer(target, line).catch(...), the call site does not await, and beforeModel is never blocked. DLR-07.a fires all six recorders synchronously and asserts exactly 6 ordered, intact JSON lines on disk. DLR-07.b drives the production writer with a counter-based resolver that returns a bad data root (parent is a regular file → mkdir rejects with ENOTDIR) on the first call and a good temp data root on the second call, proving the queue does NOT poison after a failed op. vscode:prepublish is now a mandatory gate (was DEFERRED in CORRECTION01's evidence); the production build was exercised end-to-end (sync-parser-helper, check-types, build:webview, lint, lint:proto, esbuild --production) and the dist/extension.js bundle contains the new writer + queue code.",
+  "rationale": "EVIDENCE ACQUISITION (REVISED). The LIVE RED is REAL (frozen) but the in-process diagnostic Map was unobservable from outside the extension host. This ACT adds the smallest possible default-off JSONL readout sink so the next operator-driven ACT (RUN03) can apply the §17 discriminator tree to a real on-disk trace. The sink is gated on the SAME isMycPrimeLiveDiagEnabled() boolean as the existing recorders, so when disabled it produces zero file writes, zero async work, zero log lines (bit-identical invariant). The hot-path cost when enabled+unbound is one boolean + two typeof checks; when enabled+bound it adds one path resolution + one detached (mkdir+appendFile) op that is enqueued onto a per-process FIFO writeTail chain so concurrent same-path appends cannot interleave. The Promise is never awaited, so beforeModel is never blocked. Production semantics are bit-identical to the pre-ACT path on the disabled code path; the only observable production change is that the on-disk directory materializes on first use (CORRECTION01) and the same-file writes are serialized in causal order (CORRECTION02). 7 focused tests (DLR-01..DLR-07, 16 assertions) green; 19 existing live-diag tests continue green; 30 dogfood-diagnostic-profile tests continue green; 39 dogfood-diagnostic-profile-myc-clinemm01 tests continue green; 1230 bun unit tests continue green. check-types clean; lint clean; git diff --check clean; vscode:prepublish exercised end-to-end and the production bundle contains the new writer + queue code. NO new env flag, no new diagnostic framework, no gRPC, no Command Palette, no MCP tool, no protocol change, no SQLite, no webview state, no new authority. NO repair of the LIVE RED is attempted; that is RUN03's job.",
   "diagnostics_default_off": true,
   "production_semantics_changed": false,
   "production_code_changed": true,
@@ -24,7 +25,9 @@
   "halt_prime_packet_lost_after_beforemodel": false,
   "halt_capture_insufficient": false,
   "halt_readout_parent_dir_missing": false,
+  "halt_concurrent_append_unserialized": false,
   "p0_readout_parent_dir_missing": "CLOSED",
+  "p0_concurrent_append": "CLOSED",
   "diagnostic_internal": true,
   "diagnostic_external_readout": true,
   "predecessor_act": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01 (PENDING_LIVE_RUN)",
@@ -75,31 +78,37 @@
     "bounded_event_shape": true,
     "production_writer_creates_parent_dir": true,
     "production_writer_failure_swallowed_dlr_06_b": true,
-    "diagnostic_off_zero_io_with_production_writer_bound": true
+    "diagnostic_off_zero_io_with_production_writer_bound": true,
+    "concurrent_appends_serialized_via_write_tail": true,
+    "causal_order_preserved_dlr_07_a": true,
+    "queue_failure_does_not_poison_subsequent_evidence_dlr_07_b": true,
+    "production_bundle_contains_writer_code": true
   },
   "tests": {
-    "focused_dlr": "6 tests, 14 assertions (DLR-01.a/b/c, DLR-02.a/b, DLR-03.a/b, DLR-04.a/b, DLR-05.a/b, DLR-06.a/b/c)",
+    "focused_dlr": "7 tests, 16 assertions (DLR-01.a/b/c, DLR-02.a/b, DLR-03.a/b, DLR-04.a/b, DLR-05.a/b, DLR-06.a/b/c, DLR-07.a/b)",
     "focused_dlr_06_CORRECTION01": "DLR-06.a: production writer creates diagnostics/myc-prime-live-diag/ + events.jsonl on a clean profile (filesystem-level test, not spy). DLR-06.b: failing production writer is swallowed by the warn seam. DLR-06.c: diagnostic OFF keeps bound production writer at zero I/O (DLR-01 re-pin).",
+    "focused_dlr_07_CORRECTION02": "DLR-07.a: 6 synchronous recorders → exactly 6 ordered, intact JSON lines on disk. Proves the per-process FIFO writeTail chain serializes concurrent appendFile calls. DLR-07.b: one failed op does not poison the queue — subsequent op still executes. Uses a counter-based resolver that returns a bad data root (parent is a regular file → mkdir rejects with ENOTDIR) on the first call and a good temp data root on the second call; the second op produces a valid line in the good root.",
     "conservation_my_prime_live_diag_test_ts": "19/19 GREEN",
     "conservation_dogfood_diagnostic_profile_test_ts": "30/30 GREEN",
     "conservation_dogfood_diagnostic_profile_myc_clinemm01_test_ts": "39/39 GREEN",
-    "conservation_focused_4_file_vitest_sweep": "102/102 GREEN (myc-prime-live-diag-readout 14 + myc-prime-live-diag 19 + dogfood-diagnostic-profile 30 + dogfood-diagnostic-profile-myc-clinemm01 39)",
+    "conservation_focused_4_file_vitest_sweep": "104/104 GREEN (myc-prime-live-diag-readout 16 + myc-prime-live-diag 19 + dogfood-diagnostic-profile 30 + dogfood-diagnostic-profile-myc-clinemm01 39)",
     "conservation_bun_unit_test_ts_total": "1230/1230 GREEN across 92 files (the vitest test is not in the bun:test corpus; it is run by test:vitest and contributes to the 4-file focused sweep above)",
     "apps_vscode_tsc_noEmit_errors": 0,
     "git_diff_check": "clean",
-    "biome_lint": "0 errors"
+    "biome_lint": "0 errors (changed files)",
+    "vscode_prepublish_mandatory_CORRECTION02": "PASS — sync-parser-helper, check-types (0 errors), build:webview (7216 modules, 10.21s), biome lint (0 errors in changed files), lint:proto (clean), esbuild --production (dist/extension.js 26.8MB, contains MYC_PRIME_LIVE_DIAG_READOUT_FILENAME constant + 'events.jsonl' + 'diagnostics/myc-prime-live-diag' substring)"
   },
   "files": {
     "production_modified": [
       "apps/vscode/src/sdk/myc-prime-live-diag.ts (readout seam + appendReadoutLine helper + six appendReadoutLine call sites at the recorders; bounded MycPrimeLiveDiagReadoutEvent type)",
       "apps/vscode/src/extension.ts (import + activation call site after applyMycPrimeLiveDiagDiagnosticProfile)",
-      "apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts (CORRECTION01: production writer now does mkdir(parent, {recursive:true}) BEFORE appendFile; docstring updated to reflect the actual Node contract; +1 import of node:path)"
+      "apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts (CORRECTION01: production writer now does mkdir(parent, {recursive:true}) BEFORE appendFile. CORRECTION02: production writer is now a synchronous function that returns a Promise — it enqueues a (mkdir+appendFile) op onto a module-level writeTail: Promise<void> chain so concurrent same-path appends are serialized. The returned Promise is the actual op, so the call site's existing .catch() still reports this write's failure to the warn seam. The writeTail chain is advanced through .catch(() => undefined) so a single failed op does not poison subsequent evidence. ~12 net lines of production change.)"
     ],
     "production_new": [
       "apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts (production wiring: data-root resolver + writer seams; mirrors extension-host-termination-authority-runtime)"
     ],
     "test_modified": [
-      "apps/vscode/src/sdk/__tests__/myc-prime-live-diag-readout.test.ts (DLR-01..DLR-05 unchanged + DLR-06.a/b/c added; +3 imports for node:fs/promises, node:os, node:path, +1 import for the production runtime wiring)"
+      "apps/vscode/src/sdk/__tests__/myc-prime-live-diag-readout.test.ts (DLR-01..DLR-06 unchanged + DLR-07.a/b added; DLR-07.a fires the full chain synchronously and asserts 6 ordered, intact JSON lines; DLR-07.b drives the production queue with a counter-based resolver that returns a bad data root on the first call and a good data root on the second, proving a single failed op does not poison subsequent evidence)"
     ],
     "act_doc": [
       ".factory/acts/ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01.md",
@@ -110,14 +119,15 @@
   "production_files_changed_within_budget": true,
   "no_repair_applied": true,
   "no_synthetic_red_built": true,
-  "no_dogfood_vsix_built_in_this_act": true,
+  "vscode_prepublish_exercised_end_to_end": true,
+  "dist_extension_js_contains_writer_code": true,
   "ready_for_run03": true,
   "successor": "RUN03 — operator-driven installed-Codium dogfood session with CLINEMM_MYC_PRIME_DIAG=1 (or dogfood default ON) and a fresh READY witness (one new sentinel). After the live trace lands at <dataRoot>/diagnostics/myc-prime-live-diag/events.jsonl, the operator reads the trace against the captured MYC_SESSION_ID via `jq -c 'select(.sessionId == \"<S>\")' <jsonl>`, applies the §17 discriminator tree from ACT-MYC-CLINEMM-AUTOMATIC-PRIME-LIVE-BOUNDARY-CAPTURE01, and emits the boundary classification (one of PRODUCTION_HOOK_ASSEMBLY_OR_INSTALLATION, PRODUCTION_RUNTIME_SESSION_IDENTITY, PRIME_RECORDER_LIFETIME_OR_INSTANCE, PRIME_INJECTION_GUARD, POST_HOOK_REQUEST_COMPOSITION_LOSS, NOT_REPRODUCED_LIVE). Do NOT patch production code in RUN03. Acquire the missing live-boundary evidence first.",
   "act_gates": {
     "check_types": "PASS",
     "lint": "PASS",
     "git_diff_check": "PASS",
-    "vscode_prepublish": "DEFERRED (the focused unit sweep is sufficient for this observation-only ACT — RUN03 exercises the freshly-built VSIX; the production change is +1 mkdir line in the existing writer)",
-    "tests": "PASS"
+    "vscode_prepublish": "PASS (mandatory in CORRECTION02: sync-parser-helper, check-types 0 errors, build:webview 7216 modules 10.21s, biome lint 0 errors, lint:proto clean, esbuild --production produced dist/extension.js 26.8MB which contains the bounded event shape constants + the new writer + queue code)",
+    "tests": "PASS (DLR-01..DLR-07: 16/16 focused vitest; 4-file focused sweep: 104/104; bun unit suite: 1230/1230)"
   }
 }

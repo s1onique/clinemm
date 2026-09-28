@@ -15782,3 +15782,140 @@ enabled and a fresh READY witness. The on-disk trace at
 authoritative (the parent dir is created on first use). Apply the
 §17 discriminator tree to the captured `MYC_SESSION_ID` to emit the
 boundary classification.
+
+## ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01-CORRECTION02 — PASS_READOUT_SERIALIZED — 2026-09-28
+
+**Status:** P0 in evidence integrity CLOSED. Production writer
+serializes concurrent appendFile calls via a per-process FIFO
+writeTail chain. DLR-07 (filesystem-level) added. vscode:prepublish
+is now a mandatory gate (was DEFERRED in CORRECTION01). Ready for
+RUN03.
+
+```text
+VERDICT = PASS_READOUT_SERIALIZED
+P0_PARENT_MATERIALIZATION = CLOSED  (CORRECTION01)
+P0_CONCURRENT_APPEND      = CLOSED  (CORRECTION02)
+DIAGNOSTIC_DEFAULT_OFF    = true
+DIAGNOSTIC_WRITES_SERIALIZED  = true
+BEFOREMODEL_AWAITS_DIAGNOSTIC = false
+WRITE_FAILURE_DOES_NOT_POISON_QUEUE = true (DLR-07.b)
+ENTRY_HEAD  = b24b3ad1b (pre-correction)
+IMPL_HEAD   = uncommitted (1 production modified + 1 test modified)
+```
+
+### What changed
+
+CORRECTION01 closed the parent-dir P0 but exposed a new P0 in
+evidence integrity: the detached dispatch pattern means six recorders
+(BIND, ENTER, ACQUISITION, LOOKUP, INJECTION, CAPTURE) can fire in
+the same microtask burst and each invoke `appendFile` against the
+same `events.jsonl`. Node's `fs/promises` operations run on the
+libuv thread pool and are NOT synchronized/threadsafe; concurrent
+appends can interleave and produce torn JSONL lines. The diagnostic
+is supposed to be load-bearing causal evidence for the §17
+boundary classifier, so unserialized same-file writes cannot be
+left as-is.
+
+Bounded fix in `apps/vscode/src/sdk/myc-prime-live-diag-runtime.ts`:
+
+```diff
++let writeTail: Promise<void> = Promise.resolve()
+ ...
+-const defaultWriter: MycPrimeLiveDiagReadoutWriter = async (target, line) => {
+-  const fsPromises = await import("node:fs/promises")
+-  await fsPromises.mkdir(path.dirname(target), { recursive: true })
+-  await fsPromises.appendFile(target, line, "utf8")
+-}
++const defaultWriter: MycPrimeLiveDiagReadoutWriter = (target, line) => {
++  const op = writeTail
++    .catch(() => undefined)
++    .then(async () => {
++      const fsPromises = await import("node:fs/promises")
++      await fsPromises.mkdir(path.dirname(target), { recursive: true })
++      await fsPromises.appendFile(target, line, "utf8")
++    })
++  writeTail = op.catch(() => undefined)
++  return op
++}
+```
+
+The call site in `appendReadoutLine` is unchanged. The Promise
+returned by the writer is the actual op, so the call site's existing
+`.catch()` still surfaces per-write failures to the warn seam. The
+module-level `writeTail` is advanced through `.catch(() => undefined)`
+so a single failed op does NOT poison subsequent evidence.
+
+### New filesystem-level test: DLR-07
+
+DLR-07 (2 sub-cases, vitest) drives the **PRODUCTION** writer
+through both invariants:
+
+| Test | Asserts |
+|------|---------|
+| DLR-07.a | 6 recorders fired synchronously (no awaits between) → exactly 6 non-empty lines in the JSONL, every line is valid JSON, the order is exactly `[bind, enter, acquisition, lookup, injection, capture]`, every sessionId is identical, every line conforms to the bounded event shape. |
+| DLR-07.b | A counter-based resolver returns a bad data root (parent is a regular file → mkdir rejects with ENOTDIR) on the first call and a good temp data root on the second call. The first op's failure is reported via the warn seam. The second op produces a valid `events.jsonl` line in the good root. This proves the queue does NOT poison after a failed op. |
+
+### vscode:prepublish is now mandatory
+
+Per the reviewer note in CORRECTION01's audit. The full prepublish
+chain ran end-to-end:
+
+```text
+sync-parser-helper              PASS
+check-types (tsc --noEmit)      PASS (0 errors)
+build:webview                   PASS (7216 modules, 10.21s)
+biome lint                      PASS (0 errors in changed files)
+lint:proto                      PASS
+esbuild --production            PASS (dist/extension.js 26.8MB;
+                                       contains MYC_PRIME_LIVE_DIAG_READOUT_FILENAME
+                                       + 'events.jsonl' + 'diagnostics/myc-prime-live-diag')
+```
+
+### Conservation (CORRECTION02)
+
+```text
+myc-prime-live-diag-readout.test.ts                 16/16 GREEN (7 tests, 16 assertions)
+myc-prime-live-diag.test.ts                         19/19 GREEN
+dogfood-diagnostic-profile.test.ts                  30/30 GREEN
+dogfood-diagnostic-profile-myc-clinemm01.test.ts    39/39 GREEN
+  focused 4-file vitest sweep                     104/104 GREEN
+bun run test:unit                                 1230/1230 GREEN across 92 files
+apps/vscode tsc --noEmit                                    0 errors
+git diff --check                                             clean
+biome lint                                                   0 errors (changed files)
+vscode:prepublish                                            PASS (mandatory)
+```
+
+### Hard invariants
+
+```text
+DEFAULT_OFF = true
+SEMANTIC_DELTA_WHEN_DISABLED = 0
+PRIME_CONTENT_LOGGED = false (DLR-03 + DLR-06.a)
+WITNESS_CONTENT_LOGGED = false (DLR-03)
+PROMPT_CONTENT_LOGGED = false (DLR-03)
+PUBLIC_API_CHANGED = false
+MCP_PROTOCOL_CHANGED = false
+MYC_CODE_CHANGED = false
+BEFORE_MODEL_NEVER_AWAITED = true (DLR-05 + DLR-06.b)
+WRITE_FAILURE_NEVER_BLOCKS = true (DLR-05 + DLR-06.b)
+PRODUCTION_WRITER_MATERIALIZES_PARENT_DIR = true (DLR-06.a)
+DIAGNOSTIC_OFF_ZERO_IO_WITH_PRODUCTION_WRITER_BOUND = true (DLR-06.c)
+CONCURRENT_APPENDS_SERIALIZED_VIA_WRITE_TAIL = true (DLR-07.a)
+CAUSAL_ORDER_PRESERVED = true (DLR-07.a)
+QUEUE_FAILURE_DOES_NOT_POISON_SUBSEQUENT_EVIDENCE = true (DLR-07.b)
+PRODUCTION_BUNDLE_CONTAINS_WRITER_CODE = true
+```
+
+### Next ACT
+
+The reviewer explicitly noted: "This is the last thing I would put
+in front of the live experiment unless a genuinely new P0 appears."
+
+**RUN03** is the next ACT. Operator-driven installed-Codium dogfood
+session with diagnostics enabled and a fresh READY witness. Apply
+the §17 discriminator tree to the captured `MYC_SESSION_ID` to emit
+the boundary classification. The on-disk trace is now trustworthy
+for §17: six detached record writes appear in causal order, the
+bounded event shape is preserved, the file materializes on first
+use, and a single failed op does not poison subsequent evidence.

@@ -862,3 +862,231 @@ describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-06: production write
 		expect(__getAllMycPrimeLiveDiagForTests()).toEqual([])
 	})
 })
+
+// ===========================================================================
+// DLR-07: production writer serializes concurrent appendFile calls
+// (CORRECTION02)
+//
+// The detached dispatch pattern means six recorders (BIND, ENTER,
+// ACQUISITION, LOOKUP, INJECTION, CAPTURE) can fire in the same
+// microtask burst. Node's `fs/promises` operations run on the libuv
+// thread pool and are NOT synchronized/threadsafe; two concurrent
+// `appendFile` calls against the same `events.jsonl` can interleave
+// on the thread pool and produce torn JSONL lines. CORRECTION02
+// serializes the production writer through a module-level
+// `writeTail: Promise<void>` chain.
+//
+// DLR-06 did not close this because it fired exactly ONE event.
+// DLR-07.a fires the full chain synchronously (no awaits between
+// recorders) and asserts:
+//   - exactly 6 non-empty lines in the JSONL
+//   - every line parses as a valid JSON object
+//   - the events appear in exactly the causal order
+//     [bind, enter, acquisition, lookup, injection, capture]
+//   - all sessionIds are identical
+//
+// DLR-07.b exercises the failure-recovery property: the queue
+// must NOT poison subsequent evidence if one op fails. We drive
+// the production writer with a counter-based resolver that returns
+// a bad data root (parent is a regular file → mkdir rejects with
+// ENOTDIR) on the first call and a good temp data root on the
+// second call. The first op's failure must be reported via the
+// warn seam, and the second op must still produce a valid
+// `events.jsonl` line in the good root.
+// ===========================================================================
+
+describe("ACT-MYC-CLINEMM-PRIME-LIVE-DIAG-READOUT01 — DLR-07: production writer serializes concurrent appendFile", () => {
+	const originalEnv = process.env.CLINEMM_MYC_PRIME_DIAG
+	const tempDirs: string[] = []
+
+	async function createTempDataRoot(): Promise<string> {
+		const dir = await mkdtemp(join(tmpdir(), "dlr07-readout-"))
+		tempDirs.push(dir)
+		return dir
+	}
+
+	afterEach(async () => {
+		await Promise.all(tempDirs.splice(0).map((d) => rm(d, { recursive: true, force: true })))
+		if (originalEnv === undefined) {
+			delete process.env.CLINEMM_MYC_PRIME_DIAG
+		} else {
+			process.env.CLINEMM_MYC_PRIME_DIAG = originalEnv
+		}
+	})
+
+	beforeEach(() => {
+		__resetMycPrimeLiveDiagForTests()
+		__resetPrimeInjectionStateForTests()
+		__resetMycPrimeResultsForTests()
+		delete process.env.CLINEMM_MYC_PRIME_DIAG
+	})
+
+	it("DLR-07.a: 6 synchronous recorders → exactly 6 ordered, intact JSON lines on disk", async () => {
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+		expect(isMycPrimeLiveDiagEnabled()).toBe(true)
+
+		// Install the PRODUCTION wiring. This binds both the
+		// production writer (with the CORRECTION02 FIFO chain) and
+		// the production data-root resolver; we then override ONLY
+		// the resolver to point at the temp dir. This is the same
+		// end-to-end shape as DLR-06.
+		installMycPrimeLiveDiagReadoutRuntime()
+		const dataRoot = await createTempDataRoot()
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => dataRoot)
+
+		const target = resolveMycPrimeLiveDiagReadoutPath()
+		expect(target).toBe(join(dataRoot, "diagnostics/myc-prime-live-diag/events.jsonl"))
+		if (target === null) throw new Error("target is null despite bound resolver")
+
+		// PRE-FIX invariant: the file does not exist yet.
+		await expect(stat(target)).rejects.toMatchObject({ code: "ENOENT" })
+
+		// Fire the full chain synchronously — NO awaits between
+		// recorders. Each recorder synchronously calls
+		// `appendReadoutLine` which calls `void writer(target, line)`,
+		// which enqueues onto `writeTail`. The queue is the
+		// CORRECTION02 invariant under test.
+		recordMycPrimeLiveBind("hs-dlr-07")
+		recordMycPrimeLiveEnter("hs-dlr-07", "hs-dlr-07", 1)
+		recordMycPrimeLiveAcquisition("hs-dlr-07", {
+			attempted: true,
+			serverDetected: true,
+			status: "ok",
+			textPresent: true,
+			textBytes: 7,
+		})
+		recordMycPrimeLiveLookup("hs-dlr-07", {
+			attempted: true,
+			snapshotSessionIdPresent: true,
+			matchedRecordedSession: true,
+			recordedPrimeFound: true,
+			iteration: 1,
+			lookupKey: "hs-dlr-07",
+		})
+		recordMycPrimeLiveInjection("hs-dlr-07", {
+			attempted: true,
+			injected: true,
+			reason: "ok",
+			packetBytes: 128,
+			iteration: 1,
+		})
+		recordMycPrimeLiveCapture("hs-dlr-07", { captureId: "cap-dlr07", aiSdkPromptObserved: true })
+
+		// Drain microtasks AND a real-tick wait so the
+		// serialized chain (6 × mkdir+appendFile ops) settles.
+		// Each op on local APFS is ~1-5ms; 6 ops × 5ms = 30ms;
+		// 200ms is a comfortable safety margin while still
+		// keeping the test fast.
+		for (let i = 0; i < 32; i++) {
+			await Promise.resolve()
+		}
+		await new Promise((r) => setTimeout(r, 200))
+
+		// POST-FIX invariants: exactly 6 non-empty lines, every
+		// line is a valid JSON object, the order is the causal
+		// order, and every sessionId is identical.
+		const contents = await readFile(target, "utf8")
+		const lines = contents.split("\n").filter((l) => l.length > 0)
+		expect(lines.length).toBe(6)
+
+		const events: MycPrimeLiveDiagReadoutEvent[] = lines.map((l) => JSON.parse(l))
+		expect(events.map((e) => e.event)).toEqual(["bind", "enter", "acquisition", "lookup", "injection", "capture"])
+		expect(events.every((e) => e.sessionId === "hs-dlr-07")).toBe(true)
+
+		// Sanity: bounded event shape preserved on every line.
+		// No prime text, no witness, no prompt, no path.
+		for (const e of events) {
+			expect(typeof e.ts).toBe("string")
+			expect(typeof e.event).toBe("string")
+			expect(typeof e.sessionId).toBe("string")
+			expect(
+				Object.keys(e)
+					.sort()
+					.every((k) =>
+						[
+							"event",
+							"sessionId",
+							"ts",
+							"iteration",
+							"lookupKey",
+							"recordedPrimeFound",
+							"recordedPrimeSessionId",
+							"status",
+							"injected",
+							"reason",
+							"packetBytes",
+							"captureId",
+						].includes(k),
+					),
+			).toBe(true)
+		}
+	})
+
+	it("DLR-07.b: one failed op does not poison the queue — subsequent op still executes", async () => {
+		process.env.CLINEMM_MYC_PRIME_DIAG = "1"
+
+		installMycPrimeLiveDiagReadoutRuntime()
+
+		// Build a "bad" data root: a regular file, so when the
+		// production writer tries to mkdir its child, mkdir
+		// rejects with ENOTDIR. (Same shape as DLR-06.b's
+		// resolution failure but driven through the queue.)
+		const badRoot = join(tmpdir(), `dlr07b-bad-${Date.now()}.notdir`)
+		const { writeFile } = await import("node:fs/promises")
+		await writeFile(badRoot, "I am a file, not a directory\n", "utf8")
+		tempDirs.push(badRoot)
+
+		// Counter-based resolver: first call returns `badRoot`,
+		// every subsequent call returns the good root. This
+		// drives a single failing op followed by a successful
+		// op, both through the same `writeTail` chain.
+		const goodRoot = await createTempDataRoot()
+		let resolverCalls = 0
+		setMycPrimeLiveDiagReadoutDataRootResolver(() => {
+			resolverCalls += 1
+			return resolverCalls === 1 ? badRoot : goodRoot
+		})
+
+		const warned: string[] = []
+		setMycPrimeLiveDiagReadoutWarn((m) => warned.push(m))
+
+		// Fire two recorders synchronously. The first resolves
+		// to <badRoot>/diagnostics/.../events.jsonl → mkdir
+		// rejects with ENOTDIR. The second resolves to
+		// <goodRoot>/diagnostics/.../events.jsonl → succeeds.
+		recordMycPrimeLiveBind("hs-dlr-07b-first")
+		recordMycPrimeLiveBind("hs-dlr-07b-second")
+
+		// Wait for the queue to drain.
+		for (let i = 0; i < 32; i++) {
+			await Promise.resolve()
+		}
+		await new Promise((r) => setTimeout(r, 200))
+
+		// The first op's failure must be reported via the warn
+		// seam. The warn text (per `appendReadoutLine`'s
+		// `_readoutWarn("append failed (target=..., event=...)")`)
+		// does NOT include the sessionId by design — to keep the
+		// log line bounded. We assert the failure was reported
+		// for the FIRST op's target (the bad root) and not for
+		// the second op's target (the good root). One warn line
+		// is emitted; the second op must have succeeded without
+		// producing a warn.
+		expect(warned.length).toBe(1)
+		expect(warned[0]).toContain(badRoot)
+		expect(warned[0]).not.toContain(goodRoot)
+
+		// The second op must have produced a valid file. This
+		// is the load-bearing assertion: if the queue had
+		// poisoned on the first op, the second op would not
+		// have run, and this file would not exist (or would
+		// not contain a complete line).
+		const goodTarget = join(goodRoot, MYC_PRIME_LIVE_DIAG_READOUT_SUBDIR, MYC_PRIME_LIVE_DIAG_READOUT_FILENAME)
+		const goodContents = await readFile(goodTarget, "utf8")
+		const goodLines = goodContents.split("\n").filter((l) => l.length > 0)
+		expect(goodLines.length).toBe(1)
+		const goodEvent = JSON.parse(goodLines[0])
+		expect(goodEvent.sessionId).toBe("hs-dlr-07b-second")
+		expect(goodEvent.event).toBe("bind")
+	})
+})
