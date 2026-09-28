@@ -1,3 +1,87 @@
+## ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01 — PASS_COMPLETION_PRESENTATION_AUTHORITY — 2026-09-28
+
+**Status:** PASS_COMPLETION_PRESENTATION_AUTHORITY. The live P0 captured during
+`ACT-MYC-CLINEMM-DOGFOOD-DIAGNOSTIC-PROFILE01` (premature `✓ Completed` appearing
+BEFORE the BCB barrier released) is repaired at the C10 message-layer filter.
+One production file (`sdk-session-event-coordinator.ts`, +40 / -1) and one test
+file (`completion-presentation-authority01.cpa01.test.ts`, 14 tests) added.
+
+**Scope (this ACT):** REPAIR. Two files changed (one production, one test).
+
+| File | Δ | Purpose |
+|------|---|---------|
+| `apps/vscode/src/sdk/sdk-session-event-coordinator.ts` | +40 / -1 | Both branches of the C10 message-layer filter (line ~1078 narrow, line ~1118 over-broad fallback) now ALSO consult `hasRunningBackgroundJobForOwner` and `getUnconsumedOwnedTerminalResultCount` — the SAME predicates the BCB barrier at SEAM B (line ~1300-1310) already consults. The two seams now reach the same conclusion about whether the task is currently authoritatively complete. |
+| `apps/vscode/src/sdk/__tests__/completion-presentation-authority01.cpa01.test.ts` | NEW (550 lines) | 14 vitest tests covering CPA-01..CPA-16. Real `SdkSessionEventCoordinator` + real `MessageTranslatorState` + real `TurnStateTracker` + real `BackgroundNotifyCoordinator`. The CPA-03 case reproduces the exact dogfood transcript chronology. |
+
+**ROOT_CAUSE:** the C10 message-layer filter (SEAM A) consulted only `hasActiveNotify`
++ `pendingPromptAuthorityUnknown || pendingPromptsKnown > 0 || activeNotifyCount > 0`.
+It did NOT consult `hasRunningBackgroundJobForOwner` or
+`getUnconsumedOwnedTerminalResultCount` — the BCB barrier (SEAM B) holds on exactly
+those two extra conditions. The two seams disagreed on whether the task was
+authoritatively complete; the filter passed the `completion_result` row through
+while the BCB barrier correctly held.
+
+**REPAIR (minimal-diff):** OR-in the same two predicates to the C10 filter. Reuse
+the SAME option-bag methods the BCB barrier already consults. No new wiring,
+no new state, no new protocol field, no public API change, no `submit_and_exit`
+lifecycle change, no BCB semantics change, no myc change.
+
+**Conservation (frozen per ACT §3):** explicitly NOT touched:
+pending prompt enqueue / dequeue, continuation scheduling, command_status
+consumer, BCB finalization prompt, held observation consumption, dogfood
+diagnostic profile, myc, agent runtime, submit_and_exit semantics.
+
+**Gates:**
+
+```text
+CPA01                                     14/14 PASS
+conservation (23 predecessor test files)   164/164 PASS
+  bcb01-c4 / bctpa01 / ccard01 / bcb01 / bnca-red01
+  bnca-framework01 / bnca-ablation01 / bnca-dispatch-failed01
+  c10-filter baseline/ablation / bcb01-c / bcb01-c2 / bccoc01
+  agcont01 / btcont01 / bnca-ablation01 / bnca-fire-and-forget-red01
+  bnca-h1-green01 / swcm04 / tqcb01 / q5rr01 / lhowa01
+tsc --noEmit -p apps/vscode/tsconfig.json  0 errors
+biome check (apps/vscode config)            clean
+git diff --check                            clean
+```
+
+**Pre-existing stale test (NOT a regression):**
+`runtime-task-progression-post-terminal-authority-discriminator.acas01.2`
+asserts the body of `handleSessionEvent` does not contain "CommandJobManager".
+The function body has grown past the test header's 101-225 line range; the SEAM
+B BCB barrier at line ~1293 references "CommandJobManager primitive" in a
+comment (already at entry HEAD `8a7e5b4a02e10a5d757783a20eb128875f3a9d82`).
+Out of scope for this ACT. A future ACT may rewrite the structural pin.
+
+**Live qualification status (this ACT):** pending. The CPA01 test pins the
+production-shaped behavior; the operator dogfood run (per ACT §34) confirms
+against a real VS Code session with a real provider. Recipe in
+`.factory/evidence/ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01/08-live-qualification.md`.
+
+**Verdict:**
+
+```text
+RUN_COMPLETION_DISTINCT_FROM_TASK_COMPLETION = TRUE
+HELD_SUBMIT_VISIBLE_COMPLETION_COUNT          = 0
+FINAL_TASK_COMPLETION_COMMITTED_COUNT         = 1
+FINAL_VISIBLE_COMPLETION_COUNT                = 1
+VISIBLE_COMPLETION_REQUIRES_TASK_AUTHORITY    = TRUE
+FINAL_ANSWER_CONTENT_PRESERVED                = TRUE
+DUPLICATE_COMPLETION_PRESENTATION             = NOT_REPRODUCED
+PERSISTENT_WORKING_BUG                        = NOT_REPRODUCED
+PERSISTENT_YOUR_TURN_BUG                      = NOT_REPRODUCED
+BCB_SEMANTICS_CHANGED                         = FALSE
+MYC_CODE_CHANGED                              = FALSE
+READY_FOR_MYC_CLINEMM04                       = TRUE
+```
+
+**Next ACT:** `ACT-MYC-CLINEMM04-LIVE-QUALIFICATION` — operator dogfood session
+to confirm `submit_and_exit_seen = 2`, `task_completion_committed = 1`,
+`user_visible_completion_presented = 1` per session in a real VS Code run.
+
+---
+
 ## ACT-MYC-CLINEMM03-LIVE-DIAG01 — PASS_LIVE_DIAG_SCAFFOLD_BUILT — 2026-09-27
 
 **Status:** PASS_LIVE_DIAG_SCAFFOLD_BUILT. Default-off live diagnostic scaffolds the four observation boundaries (acquisition → lookup → injection → provider-capture) without mutating the prime-injection causal chain or adding any new injection seam. No repair attempted; no behavior change when `CLINEMM_MYC_PRIME_DIAG` is unset (production default). The exact boundary that breaks in the live Codium session becomes operator-observable in the next dogfood run.
