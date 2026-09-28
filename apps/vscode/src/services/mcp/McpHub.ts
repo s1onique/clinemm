@@ -518,8 +518,42 @@ export class McpHub {
 		})
 		const client = new Client({ name: "Cline", version: this.clientVersion }, { capabilities: {} })
 		const timeoutMs = resolveMcpServerTimeoutMs(staticConn.server.config)
+		// ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 (RED-2 / MAS-02).
+		// Initial-list probe. Probe the per-session child for
+		// tools/resources/prompts so the static-entry mirror below
+		// (and the webview's `connections` projection) carry a
+		// non-empty tool-list the moment the child connects. Without
+		// this probe the operator sees "connected" but no tools,
+		// even though the model can already invoke them through
+		// `provider.listTools`.
+		let probedLists: {
+			tools?: McpConnection["server"]["tools"]
+			resources?: McpConnection["server"]["resources"]
+			resourceTemplates?: McpConnection["server"]["resourceTemplates"]
+			prompts?: McpConnection["server"]["prompts"]
+		} = {}
 		try {
 			await client.connect(transport, { timeout: timeoutMs })
+			// Probe in parallel; failures are silently swallowed so a
+			// misbehaving child cannot break the static projection.
+			const settled = await Promise.allSettled([
+				client.listTools?.().then((r) => (r as { tools?: unknown[] })?.tools ?? undefined),
+				client.listResources?.().then((r) => (r as { resources?: unknown[] })?.resources ?? undefined),
+				client
+					.listResourceTemplates?.()
+					.then((r) => (r as { resourceTemplates?: unknown[] })?.resourceTemplates ?? undefined),
+				client.listPrompts?.().then((r) => (r as { prompts?: unknown[] })?.prompts ?? undefined),
+			])
+			probedLists = {
+				tools: settled[0].status === "fulfilled" ? (settled[0].value as McpConnection["server"]["tools"]) : undefined,
+				resources:
+					settled[1].status === "fulfilled" ? (settled[1].value as McpConnection["server"]["resources"]) : undefined,
+				resourceTemplates:
+					settled[2].status === "fulfilled"
+						? (settled[2].value as McpConnection["server"]["resourceTemplates"])
+						: undefined,
+				prompts: settled[3].status === "fulfilled" ? (settled[3].value as McpConnection["server"]["prompts"]) : undefined,
+			}
 		} catch (error) {
 			// Close any half-open transport before propagating the
 			// failure so the OS subprocess is reaped.
@@ -537,15 +571,54 @@ export class McpHub {
 				config: staticConn.server.config,
 				status: "connected",
 				disabled: false,
-				tools: staticConn.server.tools,
-				resources: staticConn.server.resources,
-				resourceTemplates: staticConn.server.resourceTemplates,
-				prompts: staticConn.server.prompts,
+				tools: probedLists.tools ?? staticConn.server.tools,
+				resources: probedLists.resources ?? staticConn.server.resources,
+				resourceTemplates: probedLists.resourceTemplates ?? staticConn.server.resourceTemplates,
+				prompts: probedLists.prompts ?? staticConn.server.prompts,
 			},
 			client,
 			transport,
 		}
 		perSessionMap.set(serverName, perSessionConn)
+
+		// ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01 (RED-2 / MAS-02).
+		// Reconcile the static deferred-template entry pushed at
+		// settings-load time (updateServerConnections:1541) so the
+		// webview's getServers() projection — which reads `connections`
+		// directly — flips from "pending-session" to "connected" the
+		// moment the per-session child successfully connects. Without
+		// this seam the operator's MCP panel stays red/orange after the
+		// first task starts (H5 confirmed by RED-2), forcing the
+		// operator to click Restart Server even though the runtime
+		// already materialized the child.
+		//
+		// Scope is bounded: only the static entry whose status is
+		// exactly "pending-session" (i.e. the deferred-template path
+		// produced it). The per-session child already carries the
+		// authoritative `connected` status; we project it upward so the
+		// webview reads it from the same source-of-truth list.
+		if (staticConn.server.status === "pending-session") {
+			staticConn.server.status = "connected"
+			staticConn.server.error = ""
+			// Mirror the per-session tools/resources/prompts onto the
+			// static entry so the webview tool-listing updates
+			// without needing a separate refresh.
+			staticConn.server.tools = perSessionConn.server.tools
+			staticConn.server.resources = perSessionConn.server.resources
+			staticConn.server.resourceTemplates = perSessionConn.server.resourceTemplates
+			staticConn.server.prompts = perSessionConn.server.prompts
+			// Fire-and-forget: the webview gRPC stream applies the
+			// state change; we do not await it (this codepath is
+			// already on a session-start hot path and the change
+			// must not block the operator's task).
+			void this.notifyWebviewOfServerChanges().catch((error) => {
+				Logger.error(
+					`[McpHub] notifyWebviewOfServerChanges failed after ensureSessionConnection (${serverName}, session=${sessionId}):`,
+					error,
+				)
+			})
+		}
+
 		return perSessionConn
 	}
 

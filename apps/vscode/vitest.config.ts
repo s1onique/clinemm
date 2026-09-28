@@ -48,6 +48,12 @@ export default defineConfig({
 			// Production-shape tests driving VscodeSessionHost.prepareStartSessionInput,
 			// McpHub.updateServerConnections, and SdkSessionLifecycle.endActiveSession.
 			"src/services/mcp/__tests__/sessionIdEcho.productionShape.test.ts",
+			// ACT-MYC-CLINEMM-MCP-SESSION-AUTOSTART01: RED-2 reproduction
+			// driving the production session-start seam through real
+			// VscodeSessionHost + prepareStartSessionInput →
+			// createVscodeExtraTools → McpHubToolProvider →
+			// ensureSessionConnection → spawn per-session child.
+			"src/services/mcp/__tests__/mcpSessionAutostart01.test.ts",
 			"src/shared/model-catalog/provider-helpers.test.ts",
 			"src/core/controller/models/__tests__/providerCatalogHandlers.test.ts",
 			"src/core/controller/models/__tests__/providerSwitchNormalization.test.ts",
