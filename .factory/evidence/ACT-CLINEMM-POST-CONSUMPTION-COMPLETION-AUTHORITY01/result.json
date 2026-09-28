@@ -3,7 +3,7 @@
   "verdict": "PASS_POST_CONSUMPTION_COMPLETION_AUTHORITY",
   "entry_head": "645da59f3ac39f45cf465f38279ecb0e59545b92",
   "implementation_head": "4dd630fe153bec58f97c7612fe1bd11ea51f0768",
-  "closure_head": "05527add14fa70fbe0756bee6b54a8515ccffa0e",
+  "closure_head": "8323363613763a4a71f226de6fd74c5d7459aeb1",
   "subject_head": "4dd630fe153bec58f97c7612fe1bd11ea51f0768",
   "live_red_session_id": "1790582070333_vq1sf",
   "live_red_task_id": "(held containment_failed job, deferredCompletionBarrier registered)",
@@ -59,7 +59,8 @@
     "fix": "rebound subject_head to 4dd630fe1... (the commit that actually carries the production repair + tests); added explicit implementation_head + closure_head fields. Production and tests were NOT modified.",
     "commits": {
       "implementation": "4dd630fe153bec58f97c7612fe1bd11ea51f0768",
-      "evidence": "05527add14fa70fbe0756bee6b54a8515ccffa0e"
+      "evidence": "05527add14fa70fbe0756bee6b54a8515ccffa0e",
+      "closure_correction": "8323363613763a4a71f226de6fd74c5d7459aeb1"
     }
   }
 }
