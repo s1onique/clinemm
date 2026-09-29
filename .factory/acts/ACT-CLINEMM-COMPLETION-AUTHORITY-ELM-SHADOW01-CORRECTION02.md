@@ -13,7 +13,7 @@
 ```text
 ENTRY_HEAD                  = 3d3df6d4d8cf15d208c2c4d2f72fe16b56bfe28b (HEAD before this ACT)
 SUBJECT_HEAD                = 7f7e74bcbb51c5bddb5f65610e04773e82c25c2d (executable Elm kernel commit)
-CLOSURE_HEAD                = 695a73826 (board/evidence closure commit)
+CLOSURE_HEAD                = a599556ba (board/evidence closure commit)
 PRE_SUBJECT_TREE_STATE      = untracked working tree (CORRECTION01 binary vendored,
                               test file structural P0, ObservationState export P0)
 POST_SUBJECT_TREE_STATE     = tracked Elm sources, valid elm.json × 2, no orphan

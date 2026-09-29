@@ -94,7 +94,7 @@
   ],
   "identity": {
     "subject_head": "7f7e74bcbb51c5bddb5f65610e04773e82c25c2d",
-    "closure_head": "695a73826",
+    "closure_head": "a599556ba",
     "closure_replay_verified": true,
     "closure_replay_note": "BUILD=PASS, ELM_TEST=20/20 PASS, SMOKE=PASS \u2014 all reproduced from the exact committed subject."
   }
