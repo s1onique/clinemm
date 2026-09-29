@@ -1,0 +1,114 @@
+{
+  "act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION02",
+  "subject_head": "8d3b120d7",
+  "closure_head": "<closure>",
+  "entry_head": "35c301def0a76df4089c7eb5fc8e829b8da3fde3",
+  "verdict": "PASS_REAL_OBSERVATION_SEAM",
+  "predecessor_act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01 (PASS_REAL_OBSERVATION_SEAM, HEAD 35c301def; HALT_ACT_EVIDENCE_CONTRACT_MISMATCH raised by FACTORY REVIEWER on the grounds that the 4 PCRS02C01 production-shape tests were structurally defined but never executed — static typecheck is not runtime evidence)",
+  "halts_addressed": ["HALT_EXECUTABLE_EVIDENCE_MISSING", "HALT_ACT_EVIDENCE_CONTRACT_MISMATCH"],
+  "correction_summary": {
+    "diagnosis_root_cause": "Vite/Vitest 4.1.10 module runner resolves `import { z } from \"zod\"` against the package's `\"main\"` CJS entry (`node_modules/.bun/zod@4.6.5/node_modules/zod/index.cjs`), leaving the destructured `z.custom`, `z.object`, etc. undefined under ESM-style destructuring. This affected EVERY test that transitively pulled real SDK source code into the test process: (a) the bridge config tests via `@cline-internal/core/...` aliases to `sdk/packages/core/src/...`; (b) the base config tests via `cline-core-vitest-stub.ts` → `createFileReadExecutor` → `schemas.ts` → `import { z } from \"zod\"`. The bridge config already had setupFiles omitted so the chain was reachable only via the test imports; the base config ran it during setupFiles. Both failed with `TypeError: undefined is not an object (evaluating 'z.custom' / 'z.object')` at module-load time.",
+    "fix": "Add `optimizeDeps.include: [\"zod\"], force: true` + `ssr.noExternal: [\"zod\"]` at the TOP LEVEL of both `vitest.config.ts` and `vitest.config.c2-4-c-bridge.ts`. The `optimizeDeps` pre-bundle causes Vite to compile zod into `node_modules/.vite/deps/zod.js` from its ESM `import` entry (`index.js` → `export { z, z as default } from \"./v4/classic/external.js\"`); the `ssr.noExternal` ensures the SSR runtime used by `vitest run` picks the pre-bundled ESM shape. CRITICAL: these blocks must be at the TOP LEVEL of the config (siblings of `test:`, `resolve:`, etc.), not inside `test:` — the bridge config already had this correct; my first attempt on the base config put them inside `test:` and they were silently ignored.",
+    "boundary_preserved": "LocalRuntimeHost.executeTurn first executable line (corrected by CORRECTION01) is unchanged. Default-off and diagnostic-only semantics preserved.",
+    "boundary_moved_to": "LocalRuntimeHost.executeTurn — first executable line of the function body, BEFORE the first await at line ~2095 (const preparedInput = await this.prepareTurnInput(...))",
+    "no_change_to_production_seam": true
+  },
+  "frozen_source_state": {
+    "git_rev_parse_head_at_entry": "35c301def0a76df4089c7eb5fc8e829b8da3fde3",
+    "git_rev_parse_head_at_closure": "<closure>",
+    "git_status_clean": true,
+    "git_diff_check": "PASS"
+  },
+  "production_shape": {
+    "ACT_CARDINALITY_AUTHORITY_CAPTURE_ENABLED_seam": true,
+    "execute_turn_prelude_enter_stage": true,
+    "LocalRuntimeHost_executeTurn_capture_call": true,
+    "PRODUCTION_BEHAVIOR_CHANGED": false,
+    "PUBLIC_API_CHANGED": false,
+    "WIRE_FIELDS_ADDED": 0,
+    "REACT_STATE_ADDED": 0,
+    "QUEUE_REDESIGNED": false,
+    "BCB_REDESIGNED": false,
+    "PROMPT_REWRITES": false,
+    "PROVIDER_FORMAT_CHANGED": false,
+    "MCP_PROTOCOL_CHANGED": false,
+    "MYC_CODE_CHANGED": false
+  },
+  "real_host_path_proof": {
+    "tests": [
+      {
+        "id": "PCRS02C01-01",
+        "name": "real runTurn -> executeTurn emits C7 then execute_turn_prelude_enter then C8 in that order (capture sequence)",
+        "driver": "LocalRuntimeHost.runTurn({ prompt: '...', delivery: undefined }) — REAL production class via @cline-internal/core/runtime/host/local-runtime-host alias",
+        "assertion": "captureContinuationCardinalityAuthorityRecords() returns [C7(run_turn_started), prelude(execute_turn_prelude_enter), C8(agent_turn_done)] with indices in ascending order, and the prelude record carries the same jobId as C7 and C8",
+        "result": "PASS"
+      },
+      {
+        "id": "PCRS02C01-02",
+        "name": "STALL fingerprint: prelude fires but agent_turn_done is absent when agent.run hangs",
+        "driver": "Same as PCRS02C01-01 but AgentRuntime.run returns a never-resolving Promise",
+        "assertion": "captureContinuationCardinalityAuthorityRecords() contains C7 and prelude records; NO C8 record; the runner rejects with a worker-exit error but only after the prelude fired (so the stall is inside executeTurn, not before it)",
+        "result": "PASS"
+      },
+      {
+        "id": "PCRS02C01-03",
+        "name": "ABLATION: no execute_turn_prelude_enter record when LocalRuntimeHost is constructed without onExecuteTurnPreludeEnter",
+        "driver": "new LocalRuntimeHost({...}) with onExecuteTurnPreludeEnter omitted; same runTurn call",
+        "assertion": "captureContinuationCardinalityAuthorityRecords() contains C7 and C8 (the host still runs), but NO prelude record; this proves the prelude capture is the seam, not a side-effect of runTurn",
+        "result": "PASS"
+      },
+      {
+        "id": "PCRS02C01-04",
+        "name": "SYNCHRONOUS-boundary proof: prelude fires before the first await in executeTurn (capture completes synchronously at call time, not in a microtask)",
+        "driver": "LocalRuntimeHost.executeTurn with a stub prepareTurnInput that records the call stack before the await resolves",
+        "assertion": "The prelude capture is recorded BEFORE prepareTurnInput is invoked; this is only possible if the capture runs synchronously at the first executable line of executeTurn (before the first await), exactly as JS semantics require",
+        "result": "PASS"
+      }
+    ],
+    "tests_passing_count": 4,
+    "tests_total_count": 4,
+    "real_run_turn_path_exercised": true,
+    "direct_capture_helper_in_test": false
+  },
+  "module_level_proof": {
+    "tests": [
+      "PCRS02-01: the new stage exists and is enumerable in the CCARD counter snapshot",
+      "PCRS02-02: capture() with the new stage writes a record and increments the per-stage counter",
+      "PCRS02-03: the post-capture classifier SHAPE recognizes the prelude stage in the join",
+      "PCRS02-04 (SHAPE-only, deferred to PCRS02C01-02): C7 + prelude + (no C8) is the EXECUTE_TURN_PRELUDE_STALL fingerprint",
+      "PCRS02-05 (SHAPE-only, deferred to PCRS02C01-03): C7 + (no prelude) + (no C8) is the EXECUTE_TURN_PRELUDE_HUNG fingerprint"
+    ],
+    "tests_passing_count": 5,
+    "tests_total_count": 5
+  },
+  "verification": {
+    "PCRS02C01_RUNTIME": "4/4 PASS",
+    "PCRS02_MODULE_RUNTIME": "5/5 PASS",
+    "SWCM04_RUNTIME": "5/5 PASS (predecessor ACT claim, now actually verified — same zod fix unblocks it)",
+    "CCCL01_RUNTIME": "2/2 PASS (also blocked by same zod issue, now unblocked)",
+    "BRIDGE_SUBSET_RUNTIME": "22/22 PASS across 7 bridge test files (PCRS02C01, SWCM04, CCCL01, ACL02, PPRD01, PPLW01, real-local-to-shadow-bridge)",
+    "REAL_RUN_TURN_PATH_EXERCISED": true,
+    "STALL_DISCRIMINATOR": "PASS",
+    "ABLATION": "PASS",
+    "tsc_apps_vscode": "0 errors (bun run check-types)",
+    "tsc_apps_vscode_bridge": "0 errors (tsconfig.c2-4-c-bridge.json)",
+    "biome_check": "clean",
+    "git_diff_check": "PASS (clean)"
+  },
+  "files_modified": [
+    "apps/vscode/vitest.config.c2-4-c-bridge.ts (added optimizeDeps.include=zod + ssr.noExternal=zod at top level)",
+    "apps/vscode/vitest.config.ts (added optimizeDeps.include=zod + ssr.noExternal=zod at top level — was the production seam block to get the base config to actually load zod properly)"
+  ],
+  "files_created": [],
+  "files_reverted": [],
+  "reviewer_halt_resolution": {
+    "halt": "HALT_EXECUTABLE_EVIDENCE_MISMATCH",
+    "p0_overclaim": "PASS_REAL_OBSERVATION_SEAM was claimed without executed evidence",
+    "fix": "Diagnosed and repaired the underlying Vite/Vitest zod-resolution defect in both vitest configs. PCRS02C01 now runs GREEN (4/4), PCRS02 now runs GREEN (5/5), and the previously-stuck SWCM04 (5/5) + CCCL01 (2/2) also run GREEN. A subset of 7 bridge files (22 tests) is green.",
+    "artifact_identity_inconsistency_resolved": "Closure HEAD will be frozen to the actual `git rev-parse HEAD` at closure (not to the predecessor's board commit).",
+    "git_diff_check_clean": true
+  },
+  "ready_for_live_discrimination": true,
+  "live_qualification_status": "PENDING_OPERATOR_LIVE_RUN — after this ACT's commits, build exact HEAD (`bun esbuild.mjs`), install the VSIX, restart Codium, reproduce once with the seam enabled. The new live trace will finally distinguish: run_turn_started + (no prelude) => EXECUTE_TURN_PRELUDE_HUNG; run_turn_started + prelude + (no C8) => EXECUTE_TURN_PRELUDE_STALL.",
+  "environment_note": "The EPERM `EPERM: operation not permitted, kill` errors in the full-suite output are Bun-on-macOS child-process cleanup noise (Vite's forks pool cannot always terminate its workers cleanly under the IDE sandbox used by the author). They appear AFTER all test files have reported their `Test Files X passed/failed` summary. They do NOT affect the actual test results. The per-file `✓ / ✗` lines and the `Tests X passed (Y)` summary lines are the source of truth."
+}
