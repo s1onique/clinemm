@@ -4,19 +4,48 @@ import path from "node:path"
 import type { KernelHandle, KernelOutbound, ReplayEvent, ReplayResult } from "./completion-authority-elm-replay"
 import { adaptRecord } from "./completion-authority-elm-replay"
 
+// CORRECTION02: each loadKernel() call must return a fresh Elm
+// application instance with independent state. The Elm bundle's IIFE
+// registers a global `this.Elm = scope.Elm` which can only be evaluated
+// once per process (it crashes on "Your page is loading multiple
+// Elm scripts"). After the first evaluation we KEEP THE PARSED CODE
+// in module scope but never re-execute it; instead, every call to
+// loadKernel() looks up the cached `Elm` global (which the IIFE
+// attached to `globalThis` on first evaluation) and calls
+// Elm.Main.init({}) to create a fresh app. Each app has independent
+// state — Elm's worker pattern is message-driven on a per-app model.
+//
+// On the very first loadKernel() we evaluate the IIFE. On every
+// subsequent loadKernel() we read `globalThis.Elm` (set by the
+// bundle's `_Platform_export({'Main':...})(this)` line) without
+// re-executing the bundle.
+
+let _bundleEvaluated = false
+let _kernelCodeCache: { path: string; code: string } | null = null
+let _ElmRef: { Main: { init: (flags: unknown) => { ports: { inbound: { send: (n: unknown) => void }; outbound: { subscribe: (cb: (v: unknown) => void) => void } } } } } | null = null
+
+function evaluateBundleOnce(kernelPath: string): void {
+	if (_bundleEvaluated) return
+	if (!_kernelCodeCache || _kernelCodeCache.path !== kernelPath) {
+		_kernelCodeCache = { path: kernelPath, code: fs.readFileSync(kernelPath, "utf8") }
+	}
+	const scope: Record<string, unknown> = {}
+	const evaluator = new Function("scope", _kernelCodeCache.code + "; return this.Elm;")
+	evaluator(scope)
+	_ElmRef = (globalThis as { Elm?: typeof _ElmRef }).Elm ?? null
+	if (!_ElmRef) {
+		throw new Error("KERNEL_LOAD_FAIL: Elm bundle did not expose globalThis.Elm after evaluation")
+	}
+	_bundleEvaluated = true
+}
+
 export function loadKernel(kernelPath: string): KernelHandle {
 	const fullPath = path.isAbsolute(kernelPath) ? kernelPath : path.resolve(kernelPath)
-	const code = fs.readFileSync(fullPath, "utf8")
-	const scope: Record<string, unknown> = {}
-	const fn = new Function("scope", code + "; return this.Elm;")
-	const Elm = fn(scope) as {
-		Main: {
-			init: (flags: unknown) => {
-				ports: { inbound: { send: (n: unknown) => void }; outbound: { subscribe: (cb: (v: unknown) => void) => void } }
-			}
-		}
+	evaluateBundleOnce(fullPath)
+	if (!_ElmRef) {
+		throw new Error("KERNEL_LOAD_FAIL: Elm reference is null after evaluateBundleOnce")
 	}
-	const app = Elm.Main.init({})
+	const app = _ElmRef.Main.init({})
 	if (!app || !app.ports || !app.ports.inbound || !app.ports.outbound) {
 		throw new Error("KERNEL_LOAD_FAIL: Elm.Main.init did not expose ports.inbound/outbound")
 	}

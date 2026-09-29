@@ -136,21 +136,28 @@ This is the bounded correction that the factory reviewer demanded:
 
 ## Central finding (preserved from REPLAY01)
 
-**The Elm kernel is faithful — but the REAL frozen trace schema is
-THINNER than what the kernel requires.** Replay of 171 REAL historical
-events through the COMPILED Elm kernel reveals an
-`INSUFFICIENT_IDENTITY` gap at the FIRST event of every trace
-(seq=1 `run_turn_started` for R1/R3/R4). The Elm decoder expects
-`runId` / `submitId` / `completionId` / `ownerId`; the REAL schema
-carries `taskId` / `sessionId` / `jobId` / `promptId` / `origin` only.
-Of the 171 REAL events, only the 3 prompt events
-(`pending_prompt_enqueued` / `pending_prompt_dequeued` /
-`continuation_scheduled`) decode; the rest are reported as
-INSUFFICIENT_IDENTITY without further kernel evaluation.
+CORRECTION02 keeps the principal finding but removes all
+"kernel is faithful / not too coarse / could faithfully reproduce"
+claims. The verdict is precisely:
 
-**The Elm kernel itself is not too coarse; if the REAL trace
-included the identities, the kernel could faithfully reproduce
-every historical semantic effect. CORRECTION01's violation test
-proves the kernel does reject illegal transitions when given valid
-inputs (HR-09 passes). The verdict is UNPROVEN because evidence
-coverage is the bottleneck.**
+```text
+ELM_MODEL_CORRESPONDENCE = UNPROVEN
+CAPTURE_INSUFFICIENT = true
+```
+
+Replay of 171 REAL historical events through the COMPILED Elm
+kernel reveals an `INSUFFICIENT_IDENTITY` gap at the FIRST event of
+every trace (seq=1 `run_turn_started` for R1/R3/R4). The Elm
+decoder expects `runId` / `submitId` / `completionId` / `ownerId`;
+the REAL schema carries `taskId` / `sessionId` / `jobId` /
+`promptId` / `origin` only. Of the 171 REAL events, only the 3
+prompt events (`pending_prompt_enqueued` /
+`pending_prompt_dequeued` / `continuation_scheduled`) decode; the
+rest are reported as INSUFFICIENT_IDENTITY without further kernel
+evaluation.
+
+CORRECTION01's HR-09 test proves the kernel *rejects illegal
+transitions* when given valid inputs (violation classified as
+`ELM_REJECTS_TS_SEQUENCE`). CORRECTION02's KR-01 test proves
+replays are independent across kernels. **No further correspondence
+claim is supported by this ACT.**

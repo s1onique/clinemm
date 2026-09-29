@@ -131,11 +131,16 @@ export function adaptRecord(record: Record<string, unknown>): AdapterOutcome {
 					reason: "terminal_committed has no ownerId (REAL schema does not carry it)",
 				}
 			}
-			const kind = originToElmKind(origin)
-			if (kind === null) {
+			// CORRECTION02: terminalKind is a factual field on the
+			// event, NOT a derived value from `origin`. The frozen
+			// REAL traces do not carry `terminalKind`; the successor
+			// capture contract will. Until then, missing terminalKind
+			// is INSUFFICIENT_IDENTITY (NOT inferred from origin).
+			const kind = record.terminalKind
+			if (kind !== "owned" && kind !== "background_not_owned") {
 				return {
 					status: "INSUFFICIENT_IDENTITY",
-					reason: `terminal_committed origin=${origin ?? "undefined"} is not Elm TerminalKind enum ("owned" / "background_not_owned")`,
+					reason: `terminal_committed terminalKind=${String(kind)} is not Elm TerminalKind enum ("owned" / "background_not_owned")`,
 				}
 			}
 			return {
@@ -186,16 +191,6 @@ export function adaptRecord(record: Record<string, unknown>): AdapterOutcome {
 		default:
 			return { status: "UNMODELED_EVENT", reason: `stage=${stage} has no Elm Msg candidate in the closed Codec tag set` }
 	}
-}
-
-function originToElmKind(origin: string | undefined): string | null {
-	if (origin === undefined) return null
-	// Elm TerminalKind closed enum: "owned" / "background_not_owned".
-	// REAL origin is e.g. "background_terminal". The two name spaces
-	// do NOT intersect.
-	if (origin === "owned") return "owned"
-	if (origin === "background_not_owned") return "background_not_owned"
-	return null
 }
 
 // ---------- Replay driver (split to sub-modules) ----------

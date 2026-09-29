@@ -23,13 +23,13 @@
       "tsCompletionCommitted": true,
       "tsCompletionCommittedSeq": 12,
       "finalModel": {
-        "task": "active",
-        "activeRun": "run-c01",
+        "task": "idle",
+        "activeRun": null,
         "submitCount": 0,
         "committedCompletion": null,
         "presentedCompletion": null
       },
-      "deterministicSha256": "d17dd38bf038318abe7bdbccc75f8a6cd62f6d5673feee58e1e115af7c36890e"
+      "deterministicSha256": "ee20f57b1f7a441447ce550c3d735364ae35f9ff918d5d5e5e8f48b08b1ea47b"
     },
     {
       "tag": "R2",
@@ -45,13 +45,13 @@
       "tsCompletionCommitted": true,
       "tsCompletionCommittedSeq": 12,
       "finalModel": {
-        "task": "active",
-        "activeRun": "run-c01",
+        "task": "idle",
+        "activeRun": null,
         "submitCount": 0,
         "committedCompletion": null,
         "presentedCompletion": null
       },
-      "deterministicSha256": "6f8d49426d212baccf493938653b34d3fff5c62a1994cc433d92e3c75fea1cfa"
+      "deterministicSha256": "c1542f3fd7282300922d7bd33f5afe40b0b4de7284339104d02454e04ccee025"
     },
     {
       "tag": "R3",
@@ -67,13 +67,13 @@
       "tsCompletionCommitted": true,
       "tsCompletionCommittedSeq": 12,
       "finalModel": {
-        "task": "active",
-        "activeRun": "run-c01",
+        "task": "idle",
+        "activeRun": null,
         "submitCount": 0,
         "committedCompletion": null,
         "presentedCompletion": null
       },
-      "deterministicSha256": "d17dd38bf038318abe7bdbccc75f8a6cd62f6d5673feee58e1e115af7c36890e"
+      "deterministicSha256": "ee20f57b1f7a441447ce550c3d735364ae35f9ff918d5d5e5e8f48b08b1ea47b"
     },
     {
       "tag": "R4",
@@ -89,13 +89,13 @@
       "tsCompletionCommitted": true,
       "tsCompletionCommittedSeq": 21,
       "finalModel": {
-        "task": "active",
-        "activeRun": "run-c01",
+        "task": "idle",
+        "activeRun": null,
         "submitCount": 0,
         "committedCompletion": null,
         "presentedCompletion": null
       },
-      "deterministicSha256": "396131d607e7a6bb3f6e24f547bdd9e644dd3e3807d80ba06c4a7f97c1d71561"
+      "deterministicSha256": "46cf4b09a48b2f3b9348fefa558c02a0f5f9d758eb0e261dd94cb58446b27006"
     }
   ]
 }

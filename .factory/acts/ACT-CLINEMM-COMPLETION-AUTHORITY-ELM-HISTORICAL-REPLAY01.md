@@ -40,14 +40,22 @@ now closed:
 
 ## Central finding (preserved from REPLAY01)
 
-The Elm kernel is faithful but the REAL frozen trace schema is
-THINNER than what the kernel requires. Replay of 171 REAL historical
-events through the COMPILED Elm kernel reveals an
-`INSUFFICIENT_IDENTITY` gap at the FIRST event of every trace
-(seq=1 `run_turn_started` for R1/R3/R4). The Elm decoder expects
-`runId` / `submitId` / `completionId` / `ownerId`; the REAL schema
-carries `taskId` / `sessionId` / `jobId` / `promptId` / `origin` only.
-Of the 171 REAL events, only the 3 prompt events decode; the rest
+CORRECTION02 keeps the principal finding but removes all
+"kernel is faithful / not too coarse / could faithfully reproduce"
+claims. The verdict is precisely:
+
+```
+ELM_MODEL_CORRESPONDENCE = UNPROVEN
+CAPTURE_INSUFFICIENT = true
+```
+
+Replay of 171 REAL historical events through the COMPILED Elm
+kernel reveals an `INSUFFICIENT_IDENTITY` gap at the FIRST event of
+every trace (seq=1 `run_turn_started` for R1/R3/R4). The Elm
+decoder expects `runId` / `submitId` / `completionId` / `ownerId`;
+the REAL schema carries `taskId` / `sessionId` / `jobId` /
+`promptId` / `origin` only. Of the 171 REAL events, only the 3
+prompt events decode; the rest
 are reported as INSUFFICIENT_IDENTITY without further kernel
 evaluation.
 
@@ -110,8 +118,8 @@ Equivalent identities (e.g. `taskId == ownerId`,
 invariant exists and is documented; do not derive them otherwise.
 
 Then replay with the same adapter (no model changes) to confirm the
-schema gap closes. After that, re-evaluate whether the kernel
-faithfully reproduces the historical stall.
+schema gap closes. After that, re-evaluate whether the model and
+the historical stall are in correspondence.
 
 ## Files (REPLAY01 + CORRECTION01)
 

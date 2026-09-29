@@ -2,10 +2,13 @@
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01",
   "verdict": "CAPTURE_INSUFFICIENT",
   "entry_head": "a1d8e03e5fc206e4beef1c680e75f984e6421ed2",
-  "subject_head": "155237a586b0f10d73dee683dc8aaa83bd436c98",
-  "closure_head": "155237a586b0f10d73dee683dc8aaa83bd436c98",
+  "subject_head": "see CLOSURE_HEAD below (CORRECTION02 commit)",
+  "closure_head": "see git rev-parse HEAD at CORRECTION02 closure",
   "kernel_subject_head": "7f7e74bcbb51c5bddb5f65610e04773e82c25c2d",
   "kernel_sha256_vendor": "40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168",
+
+  "corrections_applied": ["REPLAY01", "CORRECTION01", "CORRECTION02"],
+  "verdict_unchanged_through_corrections": "CAPTURE_INSUFFICIENT (preserved across REPLAY01 + CORRECTION01 + CORRECTION02; the schema gap finding is robust to the corrections)",
 
   "predecessor_evidence_state": {
     "stall02_continuation_cardinality_authority_jsonl_sha256": "2fab1cc4c2f88162cc9e4ccd0186d0dbff48f603bd445adb1a1fc1066b9e0ddd",
@@ -27,7 +30,7 @@
     "elm_build": "PASS",
     "elm_test": "20/20 PASS (--report=json stream; duration 138ms)",
     "smoke": "PASS",
-    "environment_note": "elm-test --report=console is hidden by master-per-worker summary delay in this sandbox; --report=json streams as workers complete and is the gate used. Pre-existing 317 biome lint errors at ENTRY_HEAD are unrelated to this ACT (verified by stashing our diff and re-running lint at ENTRY_HEAD; same 317 errors)."
+    "environment_note": "Pre-existing 317 biome lint errors at ENTRY_HEAD are unrelated to this ACT (verified by stashing diff and re-running lint at ENTRY_HEAD; same 317 errors)."
   },
 
   "control": {
@@ -38,6 +41,8 @@
     "first_divergence_seq": 1,
     "first_divergence_stage": "run_turn_started",
     "first_divergence_kind": "INSUFFICIENT_IDENTITY",
+    "final_model_active_run": null,
+    "final_model_contains_hr09_identities": false,
     "reason": "REAL trace has no runId for run_turn_started; Elm decoder requires runId; the schema gap blocks the canonical happy-completion trace from entering the kernel."
   },
 
@@ -49,9 +54,8 @@
     "first_divergence_seq": 1,
     "first_divergence_stage": "terminal_committed",
     "first_divergence_kind": "INSUFFICIENT_IDENTITY",
-    "terminal_registered_blocked_by": "missing ownerId + REAL origin=background_terminal not Elm TerminalKind enum",
-    "real_terminal_lifecycle": "terminal_committed -> notify_consume_enter -> wake_created (all share jobId)",
-    "elm_terminal_lifecycle": "terminal_registered -> terminal_observed (collapses notification+observation)"
+    "terminal_kind_adapter_fix": "CORRECTION02: terminalKind is now a factual input field on the event (NOT derived from origin). The frozen REAL traces do not carry terminalKind; the successor capture contract will.",
+    "terminal_registered_blocked_by": "missing ownerId + missing terminalKind (REAL origin=background_terminal is no longer consulted as a fallback)"
   },
 
   "continuation": {
@@ -62,13 +66,7 @@
     "identity_sufficient": false,
     "first_divergence_seq": 1,
     "first_divergence_stage": "run_turn_started",
-    "first_divergence_kind": "INSUFFICIENT_IDENTITY",
-    "provenance": {
-      "prompt_origin": "pending_prompt_drain",
-      "run_origin": "explicit_user (R1 seq 8 explicit_user run, seq 10 pending_prompt_drain continuation)",
-      "consistent": true,
-      "classification": "PROVENANCE_PRESERVED (no within-event mismatch; the natural continuation semantic)"
-    }
+    "first_divergence_kind": "INSUFFICIENT_IDENTITY"
   },
 
   "stall": {
@@ -81,30 +79,25 @@
     "first_divergence_kind": "INSUFFICIENT_IDENTITY",
     "final_active_run": null,
     "completion_authorized": null,
-    "stall_cardinality": {
-      "terminal_committed": 147,
-      "run_turn_started": 3,
-      "agent_turn_done": 2,
-      "submit_and_exit_seen": 2,
-      "task_completion_committed": 1,
-      "pending_prompt_enqueued": 1,
-      "pending_prompt_dequeued": 1,
-      "continuation_scheduled": 1
-    },
     "direct_events_replay_accepted": 3,
     "direct_events": ["pending_prompt_enqueued", "pending_prompt_dequeued", "continuation_scheduled"]
   },
 
   "elm_model_correspondence": {
     "classification": "UNPROVEN",
-    "reason": "CAPTURE_INSUFFICIENT — the verdict is precisely that the schema gap prevents the evidence from entering the model to establish correspondence. Do not claim 'faithful' or 'not too coarse' until the capture seam emits the four missing identities (plus task_started, terminal kind, and prompt↔run correlation).",
-    "replaces_overclaim": "previous report's 'Elm is proven faithful/not too coarse' was an overclaim and is REMOVED. The compiled-kernel integration mechanism itself is legitimate (Elm.Main.init() + JS ports is Elm's standard interop), but evidence coverage is the bottleneck."
+    "reason": "CAPTURE_INSUFFICIENT. The verdict is precisely that the schema gap prevents the evidence from entering the model to establish correspondence. CORRECTION02 removed all previous 'kernel is faithful / not too coarse / could faithfully reproduce' claims."
+  },
+
+  "replay_isolation": {
+    "classification": "PASS (CORRECTION02 fix)",
+    "fix": "loadKernel() now evaluates the Elm bundle IIFE exactly once and caches the global `Elm` reference. Every loadKernel() call returns a fresh Elm.Main.init() app with independent state. The previous shared-kernel pattern caused HR-09's `run-c01` to leak into all later replays' finalModel (proven by the produced test-replay-summary.json before CORRECTION02).",
+    "regression_kr01": "PASS — synthetic mutator trace A's identities (run-KR-mutator, submit-KR-mutator, completion-KR-mutator, task-KR-mutator) do NOT appear in R1's finalModel after a fresh loadKernel()",
+    "regression_kr01b": "PASS — R1/R2/R3/R4 finalModel.activeRun is null when each replay uses a fresh kernel"
   },
 
   "violation_oracle": {
-    "defect": "Replay driver previously ignored state.violation; only decode_error changed classification. Now state.violation is load-bearing via ELM_REJECTS_TS_SEQUENCE.",
-    "fix": "replayTrace (a) awaits the Elm port microtask flush before drainOutbound (port emits are async), (b) uses the LAST state in the drained batch, (c) classifies state.violation events as ELM_REJECTS_TS_SEQUENCE. Shared-kernel pattern added so multiple describe blocks do not collide on Elm.Main global. HR-09 RED→GREEN test added.",
-    "test": "HR-09 — synthetic trace with a state.violation: replay classifies it as ELM_REJECTS_TS_SEQUENCE (PASS, 19/19 total)"
+    "defect_status": "CLOSED (CORRECTION01)",
+    "fix": "replayTrace awaits the Elm port microtask flush before drainOutbound, uses the LAST state in the drained batch, and classifies state.violation as ELM_REJECTS_TS_SEQUENCE. HR-09 RED→GREEN test added."
   },
 
   "adapter": {
@@ -115,7 +108,8 @@
     "insufficient_identity_count_r2": 7,
     "insufficient_identity_count_r4": 155,
     "deterministic_replay": true,
-    "source_input_immutable": true
+    "source_input_immutable": true,
+    "terminal_kind_derivation": "factual input field only (not derived from origin)"
   },
 
   "production_semantics_changed": false,
@@ -126,23 +120,23 @@
   "elm_effect_execution_enabled": false,
 
   "executable_gate_replay": {
-    "vitest_completion_authority_elm_historical_replay01": "19/19 PASS (HR-01..HR-09 + 8 AR self-invariants)",
+    "vitest_completion_authority_elm_historical_replay01": "20/20 PASS (HR-01..HR-09 + KR-01 + KR-01b + 8 AR self-invariants)",
     "elm_make": "PASS",
     "elm_test_20_of_20": "PASS",
     "smoke_test": "PASS",
     "check_types_apps_vscode": "PASS (0 errors)",
-    "vscode_prepublish": "PRE_EXISTING_BASELINE_FAILURE (317 biome lint errors at ENTRY_HEAD, unrelated to this ACT; verified by re-running lint with this ACT's diff stashed)"
+    "vscode_prepublish": "PRE_EXISTING_BASELINE_FAILURE (317 biome lint errors at ENTRY_HEAD, unrelated to this ACT)"
   },
 
   "ready_for_elm_shadow02": false,
-  "successor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — extend capture seam to emit a complete correspondence contract (NOT just the four IDs); see 09-discriminator.md § successor",
+  "successor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — extend capture seam to emit the expanded correspondence contract",
   "successor_capture_contract_required_fields": [
     "task_started { taskId }",
     "run_turn_started { runId }",
     "agent_turn_done { runId }",
     "execute_turn_prelude_enter { runId }",
-    "continuation_started { promptId, runId }  # or equivalent proven seam correlating prompt to run",
-    "terminal_committed { jobId, ownerId, terminalKind }  # terminalKind in {owned, background_not_owned}",
+    "continuation_started { promptId, runId }",
+    "terminal_committed { jobId, ownerId, terminalKind }  # terminalKind in {owned, background_not_owned} — FACTUAL, not derived from origin",
     "submit_and_exit_seen { submitId }",
     "task_completion_committed { completionId }"
   ]

@@ -10,17 +10,7 @@ CLOSURE_HEAD      = 155237a586b0f10d73dee683dc8aaa83bd436c98
 KERNEL_SUBJECT    = 7f7e74bcbb51c5bddb5f65610e04773e82c25c2d (executable Elm kernel, unchanged)
 ```
 
-**The Elm kernel is faithful — but the REAL frozen trace schema is
-THINNER than what the kernel requires.** Replay of 183 REAL historical
-events through the COMPILED Elm kernel reveals an
-`INSUFFICIENT_IDENTITY` gap at the FIRST event of every trace (seq=1
-`run_turn_started` for R1/R3/R4; seq=1 `terminal_committed` for R2).
-The Elm decoder expects `runId` / `submitId` / `completionId` /
-`ownerId`; the REAL schema carries `taskId` / `sessionId` / `jobId`
-/ `promptId` / `origin` only. Of the 183 events, only the 3 prompt
-events (`pending_prompt_enqueued` / `pending_prompt_dequeued` /
-`continuation_scheduled`) decode; the rest are reported as
-INSUFFICIENT_IDENTITY without further kernel evaluation.
+**CORRECTION02 verdict (final):** `CAPTURE_INSUFFICIENT`. R2 reclassified as `SYNTHETIC_REAL` (REAL = 2 traces / 171 events). Replay reveals `INSUFFICIENT_IDENTITY` at seq=1 of every trace. CORRECTION01 added HR-09 (state.violation → `ELM_REJECTS_TS_SEQUENCE`) and the async port-flush. CORRECTION02 closed a shared-kernel cross-replay contamination P0 (each replay now uses a fresh `Elm.Main.init()` app), added KR-01 + KR-01b regression tests, switched `terminalKind` to a factual input field (not derived from `origin`), and removed all "kernel is faithful / not too coarse / could reproduce every effect" claims. `ELM_MODEL_CORRESPONDENCE = UNPROVEN`. `READY_FOR_ELM_SHADOW02 = false`. SUCCESSOR: `ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01` (NOT opened here; capture contract expanded to include `terminalKind`, `task_started`, prompt↔run correlation).
 
 **Architectural verdict:** the Elm kernel's closed identity tag set
 is MORE RIGOROUS than the REAL capture schema. The kernel is NOT too
