@@ -1,7 +1,7 @@
 {
   "act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION02",
   "subject_head": "8d3b120d7",
-  "closure_head": "3b3e204c55ee977d2df28b13bf2726dffeb26231",
+  "closure_head": "78df5a9d5e399a5df50e7fa80ca549c1a964d5ba",
   "entry_head": "35c301def0a76df4089c7eb5fc8e829b8da3fde3",
   "verdict": "PASS_REAL_OBSERVATION_SEAM",
   "predecessor_act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01 (PASS_REAL_OBSERVATION_SEAM, HEAD 35c301def; HALT_ACT_EVIDENCE_CONTRACT_MISMATCH raised by FACTORY REVIEWER on the grounds that the 4 PCRS02C01 production-shape tests were structurally defined but never executed — static typecheck is not runtime evidence)",
@@ -15,7 +15,7 @@
   },
   "frozen_source_state": {
     "git_rev_parse_head_at_entry": "35c301def0a76df4089c7eb5fc8e829b8da3fde3",
-    "git_rev_parse_head_at_closure": "3b3e204c55ee977d2df28b13bf2726dffeb26231",
+    "git_rev_parse_head_at_closure": "78df5a9d5e399a5df50e7fa80ca549c1a964d5ba",
     "git_status_clean": true,
     "git_diff_check": "PASS"
   },
