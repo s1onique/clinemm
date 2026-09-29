@@ -3,7 +3,7 @@
   "verdict": "PASS_REAL_OBSERVATION_SEAM",
   "subject_head": "893b4b84550eca40809dd4c276b3afc38a0586d7",
   "entry_head": "904989e51640e7639ba2558f955172ee92e1710a",
-  "closure_head": "<closure>",
+  "closure_head": "b27583ee6c21c9595468e5114a63c864d92a8b65",
   "predecessor_act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 (PASS_OBSERVATION_SEAM, HEAD 4a4359bd5)",
   "rationale": "FACTORY REVIEWER HALT_ACT_EVIDENCE_CONTRACT_MISMATCH identified two defects in 4a4359bd5: (a) the execute_turn_prelude_enter capture was placed in LocalRuntimeHost.runTurn immediately before the await executeTurn(...) line, which only proves runTurn reached the call site — not that executeTurn entered; and (b) the PCRS02 suite synthesized stages via direct captureContinuationCardinalityAuthorityRecord calls and overclaimed PASS_OBSERVATION_SEAM without exercising the real host path. CORRECTION01 (a) MOVES the capture to the first executable line of LocalRuntimeHost.executeTurn (before the first await), which is the only placement that proves the prelude actually entered in JavaScript; (b) ADDS a real production-shape bridge test (PCRS02C01) that drives REAL LocalRuntimeHost.runTurn and proves the full C7 -> prelude -> C8 ring with the production capture helper wired through, asserts the STALL fingerprint (prelude fires, agent_turn_done absent when agent.run hangs), and ablations both with and without the prelude hook; (c) updates PCRS02-04/05 to be explicitly SHAPE-only and clearly defers the real-host proof to PCRS02C01.",
   "halt_unexpected_tracked_dirt": false,
@@ -25,7 +25,7 @@
   "frozen_source_state": {
     "git_status_clean_at_entry": true,
     "git_rev_parse_head_at_entry": "904989e51640e7639ba2558f955172ee92e1710a",
-    "git_rev_parse_head_at_closure": "<closure>",
+    "git_rev_parse_head_at_closure": "b27583ee6c21c9595468e5114a63c864d92a8b65",
     "git_log_minus_3_at_entry": [
       "904989e51 evidence(ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02): result.json",
       "148651115 board(factory): ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 closure row",
