@@ -272,6 +272,18 @@ export type MycPrimeLiveAcquisitionPhase =
  * for the SPECIFIC failure mode inside the phase. Each value maps
  * to a single production code site so a discriminator tree can
  * identify the failing operation without consulting the error string.
+ *
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01: expanded the
+ * `tool_call` sub-modes so the four typed MCP failure shapes that all
+ * previously collapsed into `client_request_failed` can now be
+ * distinguished by the (phase, failureClass) pair:
+ *
+ *   - `tool_timeout`         : McpError(code=RequestTimeout) (already present)
+ *   - `method_not_found`     : McpError(code=MethodNotFound)
+ *   - `tool_returned_error`  : response.isError === true (handler-level)
+ *   - `client_request_failed` : catch-all for any other client.request
+ *     throw (kept for back-compat with the prior ACT's discriminator
+ *     tree; AF-RED-05 still pins this path for the generic-Error case).
  */
 export type MycPrimeLiveAcquisitionFailureClass =
 	// registration_lookup
@@ -285,10 +297,11 @@ export type MycPrimeLiveAcquisitionFailureClass =
 	| "session_deferred_no_id"
 	// tool_discovery
 	| "tool_not_found"
-	// tool_call
-	| "client_request_failed"
-	| "tool_returned_error"
+	// tool_call (typed-error expansion — ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01)
 	| "tool_timeout"
+	| "method_not_found"
+	| "tool_returned_error"
+	| "client_request_failed"
 	// result_parse
 	| "empty_text"
 	| "non_text_response"

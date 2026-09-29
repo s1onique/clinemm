@@ -23,9 +23,52 @@
 //     the underlying error message, AND emits a `Logger.warn`.
 //   - The session proceeds normally; no model-visible impact.
 
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js"
 import type { McpHub } from "@/services/mcp/McpHub"
 import { Logger } from "@/shared/services/Logger"
 import { recordMycPrimeLiveAcquisition, startMycPrimeLiveDiag } from "./myc-prime-live-diag"
+
+/**
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01: typed-error
+ * discriminator. Inspects the structured `McpError` shape (and the
+ * SDK's exported `ErrorCode` enum) to classify a `client.request`
+ * throw into one of the bounded `MycPrimeLiveAcquisitionFailureClass`
+ * `tool_call` sub-modes. Returns `undefined` when the error does not
+ * carry enough structure to classify (string-prefix detection only —
+ * a back-compat path).
+ *
+ * Priority order (highest specificity first):
+ *   1. `ErrorCode.RequestTimeout` → `tool_timeout`
+ *   2. `ErrorCode.MethodNotFound`  → `method_not_found`
+ *   3. any other typed `McpError`  → `client_request_failed` (the catch-all
+ *      is preserved for back-compat with AF-RED-05; the discriminator tree
+ *      can be tightened in a future ACT to split into specific codes
+ *      like `send_failed`, `connection_closed`, etc.)
+ *   4. non-typed `Error`           → `client_request_failed`
+ *   5. undefined                   → `client_request_failed` (defensive)
+ */
+function classifyToolCallFailure(error: unknown): "tool_timeout" | "method_not_found" | "client_request_failed" {
+	if (error instanceof McpError) {
+		if (error.code === ErrorCode.RequestTimeout) {
+			return "tool_timeout"
+		}
+		if (error.code === ErrorCode.MethodNotFound) {
+			return "method_not_found"
+		}
+	}
+	return "client_request_failed"
+}
+
+/**
+ * ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01: inspect
+ * the raw MCP `tools/call` response for `isError: true`. The SDK
+ * preserves this flag at the JSON-RPC layer (it indicates a
+ * tool-handler error, NOT a transport failure). Returns the closed-set
+ * failure class iff the response is a completed-but-error result.
+ */
+function classifyToolReturnedError(response: unknown): boolean {
+	return Boolean(response && typeof response === "object" && (response as { isError?: unknown }).isError === true)
+}
 
 /**
  * Conventional server names for the `myc` MCP server. The user names
@@ -175,6 +218,37 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 	try {
 		const response = await mcpHub.callTool(serverName, "prime", args, ulid, signal, sessionId)
 		const content = (response as { content?: unknown }).content
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01:
+		// detect `response.isError === true` BEFORE the result-parse branch.
+		// A completed-but-error response is a tool-handler error at the
+		// JSON-RPC layer, NOT a transport failure. It must be classified
+		// as `phase=tool_call, failureClass=tool_returned_error`, NOT as
+		// `phase=result_parse, failureClass=non_text_response`. The
+		// response carries the SDK's structured error; the helper does
+		// not synthesize one.
+		if (classifyToolReturnedError(response)) {
+			const result: MycPrimeResult = {
+				sessionId,
+				status: "failed",
+				error: `myc prime returned an isError=true result (cwd=${cwd ?? "<unset>"}).`,
+				ts,
+			}
+			recordMycPrimeResult(result)
+			recordMycPrimeLiveAcquisition(sessionId, {
+				attempted: true,
+				serverDetected: true,
+				status: "failed",
+				textPresent: false,
+				textBytes: 0,
+				error: result.error,
+				phase: "tool_call",
+				failureClass: "tool_returned_error",
+				sessionConnectionStatus: "unavailable",
+				toolFound: false,
+			})
+			Logger.warn("[MycPrimeAutomation] prime returned isError=true response:", response)
+			return result
+		}
 		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-ACQUISITION-FAILURE01:
 		// discriminate the three result-parse failure modes (H5):
 		//   - missing_content: response.content is undefined or non-array
@@ -313,20 +387,24 @@ export async function runMycPrimeOnSessionStart(input: RunMycPrimeInput): Promis
 		// the failure observation. Without splitting the `phase` and
 		// `failureClass` here, this catch was the SINGLE collapse point
 		// for H2 (session_connection failure: ensureSessionConnection
-		// throws) and H4 (tool_call failure: client.request throws or
-		// returns isError:true). The discriminator tree now requires
-		// this catch to disambiguate. We do that by inspecting the
-		// error message — a sufficient heuristic until a future ACT
-		// threads a richer error envelope from McpHub (which would
-		// carry error.code). For now: any thrown error from the
-		// callTool path is H4 by default (the callTool call itself
-		// is what threw). H2 errors are caught and re-thrown by
-		// callTool with a "No per-session connection available"
-		// prefix; we use that prefix to discriminate.
+		// throws) and H4 (tool_call failure: client.request throws).
+		//
+		// ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01: the
+		// H4 collapse was further refined. Previously every
+		// `client.request` throw was tagged `failureClass=client_request_failed`
+		// regardless of the typed error shape. The repair uses the
+		// structured `McpError.code` discriminator (priority order:
+		// RequestTimeout → tool_timeout, MethodNotFound → method_not_found,
+		// other → client_request_failed). The H2 error path is preserved
+		// unchanged: ensureSessionConnection throws/re-throws with a
+		// "No per-session connection available" prefix; the catch
+		// discriminates that prefix BEFORE the typed-error inspector,
+		// because a session-connection error should NOT be classified
+		// as any tool_call sub-mode.
 		const isSessionConnectionUnavailable =
 			typeof message === "string" && message.startsWith("No per-session connection available")
 		const phase = isSessionConnectionUnavailable ? "session_connection" : "tool_call"
-		const failureClass = isSessionConnectionUnavailable ? "no_static_connection" : "client_request_failed"
+		const failureClass = isSessionConnectionUnavailable ? "no_static_connection" : classifyToolCallFailure(error)
 		recordMycPrimeLiveAcquisition(sessionId, {
 			attempted: true,
 			serverDetected: true,
