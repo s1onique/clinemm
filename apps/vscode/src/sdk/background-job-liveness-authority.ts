@@ -192,11 +192,11 @@ export interface BackgroundJobLivenessAuthorityJobActiveRemovedRecord {
  *
  * Mechanical classification (see
  * .factory/evidence/.../15-causal-classification.txt):
- *   - LA1 POSITIVE iff `eventName === "command_job_terminal_committed"`
+ *   - LA1 POSITIVE iff `eventName === "command_job_terminalize"`
  *     AND `postcondition === "gone"` is observed OR
  *     `eventName === "command_job_residual_detected" |
  *      "command_job_containment_failed"` is observed for the job.
- *   - LA1 NEGATIVE iff `eventName === "command_job_terminal_committed"`
+ *   - LA1 NEGATIVE iff `eventName === "command_job_terminalize"`
  *     is NOT observed for the jobId during the dump window.
  *
  * The full terminality-adjacent eventName vocabulary is defined by
@@ -213,14 +213,14 @@ export interface BackgroundJobLivenessAuthorityProcessTerminalityRecord {
 	 * semantics:
 	 *   - command_job_termination_started
 	 *   - command_job_primary_group_cleanup
-	 *   - command_job_terminal_committed
+	 *   - command_job_terminalize
 	 *   - command_job_residual_detected
 	 *   - command_job_containment_failed
 	 */
 	readonly eventName:
 		| "command_job_termination_started"
 		| "command_job_primary_group_cleanup"
-		| "command_job_terminal_committed"
+		| "command_job_terminalize"
 		| "command_job_residual_detected"
 		| "command_job_containment_failed"
 	readonly postcondition: "gone" | "alive" | "eperm" | "unknown" | null

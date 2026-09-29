@@ -54,6 +54,7 @@ import {
 	getDiagnosticHostId,
 	getDiagnosticManagerId,
 } from "./background-job-liveness-authority"
+import { setHeldContinuationPromptForSession } from "./canonical-event-subscription"
 import { type CommandJobLifecycleEvent, CommandJobManager, type CommandJobState } from "./command-job-manager"
 import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import { resolveLiveHelperOwnedPgidProvider } from "./host-helper-pgid-adapter"
@@ -527,6 +528,14 @@ export class VscodeSessionHost implements SdkSessionHost {
 							promptId: input.promptId,
 							...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
 						})
+						// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-D:
+						// Stage the held continuation prompt so the
+						// canonical `run-started` event for the same
+						// session can join it (one held prompt per
+						// session, consumed exactly once). Diagnostic-
+						// only: no effect when capture seam is OFF
+						// (the underlying helper is a no-op).
+						setHeldContinuationPromptForSession(input.sessionId, input.promptId)
 					},
 					onRunTurnStarted: (input) => {
 						// C7 — origin derived from actual delivery +

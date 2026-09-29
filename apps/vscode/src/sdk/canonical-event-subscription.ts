@@ -39,6 +39,7 @@
  * `apps/vscode/src/sdk/SdkController.ts:1661`.
  */
 import type { AgentRuntimeEvent } from "@cline/shared"
+import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import { subscribeRuntimeEventsThroughProxy } from "./runtime-events-proxy"
 import type { TaskShadowHostWiring } from "./task-state-shadow-host-wiring"
 
@@ -66,12 +67,115 @@ export function subscribeCanonicalRuntimeEventsToShadow(
 			// Stale session — ignore.
 			return
 		}
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-C/§21-D:
+		// canonical runId source. The runtime creates `runId` only
+		// inside `AgentRuntime.execute(...)`; the canonical
+		// `run-started` event is the SOLE authoritative boundary
+		// for `run_turn_started` + runId correlation. We do NOT
+		// add `runId` to `execute_turn_prelude_enter`,
+		// caller-side pre-execute C7, or `runTurn` parameters —
+		// those boundaries occur before the real runtime runId
+		// exists.
+		if (event.type === "run-started") {
+			const runId = event.snapshot?.runId
+			if (typeof runId === "string" && runId.length > 0) {
+				// ALWAYS emit run_turn_started (the SOLE
+				// authoritative runId-bearing record). The
+				// caller-side pre-execute C7 capture at
+				// vscode-session-host.onRunTurnStarted is
+				// preserved for the historical queue/dispatch
+				// invariant; this new emission is the
+				// authoritative runId-bearing one. Joining
+				// with the held continuation prompt (if any)
+				// happens below.
+				captureContinuationCardinalityAuthorityRecord({
+					stage: "run_turn_started",
+					origin: "unknown",
+					sessionId,
+					runId,
+				})
+				// Join the held continuation prompt with
+				// this run, ONLY when a factual prompt is
+				// held for THIS session. Consume exactly
+				// once. Adversarial: a held prompt for
+				// session S1 + a run-started for S2
+				// produces NO continuation_started.
+				const heldPromptId = heldContinuationPromptsBySessionId.get(sessionId)
+				if (typeof heldPromptId === "string" && heldPromptId.length > 0) {
+					heldContinuationPromptsBySessionId.delete(sessionId)
+					captureContinuationCardinalityAuthorityRecord({
+						stage: "continuation_started",
+						origin: "pending_prompt_drain",
+						sessionId,
+						promptId: heldPromptId,
+						runId,
+					})
+				}
+			}
+		}
 		wiring.observeCanonicalRuntimeEvent({
 			origin: "RUNTIME_CANONICAL",
 			sessionId,
 			event,
 		})
 	})
+}
+
+/**
+ * ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-D:
+ * DIAGNOSTIC-ONLY pending-continuation-prompt map. Keyed by factual
+ * sessionId. Written by `setHeldContinuationPromptForSession` when a
+ * `continuation_scheduled` is observed for a session, and consumed
+ * exactly once by the `run-started` event handler above when the
+ * matching runtime runId arrives for the SAME session.
+ *
+ * Hard rules (per §21-D):
+ *   - Held prompt P for session S1 + run-started for session S2
+ *     produces NO `continuation_started`.
+ *   - Once consumed, the held prompt is NOT reused for a later run.
+ *   - No held prompt + run-started for session S → `run_turn_started`
+ *     still emitted, but NO `continuation_started`.
+ *
+ * State ownership: module-level, default empty. Cleared by
+ * `clearHeldContinuationPromptForSession` on session teardown.
+ *
+ * Diagnostic-only: never read on any production code path; the
+ * `captureContinuationCardinalityAuthorityRecord` helper is a no-op
+ * when the capture seam is OFF. Zero behavioral impact when capture
+ * is disabled.
+ */
+const heldContinuationPromptsBySessionId = new Map<string, string>()
+
+/**
+ * Set the held continuation prompt for `sessionId`. Called from the
+ * `onBeforeDispatch` hook (C6 / continuation_scheduled) so a
+ * subsequent `run-started` for the same session can join them.
+ * Replaces any prior held prompt for the same session (one held
+ * prompt per session at a time).
+ */
+export function setHeldContinuationPromptForSession(sessionId: string, promptId: string): void {
+	if (typeof sessionId !== "string" || sessionId.length === 0) return
+	if (typeof promptId !== "string" || promptId.length === 0) return
+	heldContinuationPromptsBySessionId.set(sessionId, promptId)
+}
+
+/**
+ * Clear the held continuation prompt for `sessionId`. Called from
+ * the session-teardown seam so stale prompts cannot bleed into the
+ * next session.
+ */
+export function clearHeldContinuationPromptForSession(sessionId: string): void {
+	if (typeof sessionId !== "string" || sessionId.length === 0) return
+	heldContinuationPromptsBySessionId.delete(sessionId)
+}
+
+/**
+ * Test-only: inspect the held-prompt map. Production code MUST NOT
+ * read from this — the state is diagnostic-only and observable
+ * solely through the CCARD ring buffer.
+ */
+export function getHeldContinuationPromptForSession(sessionId: string): string | undefined {
+	return heldContinuationPromptsBySessionId.get(sessionId)
 }
 
 // ===========================================================================

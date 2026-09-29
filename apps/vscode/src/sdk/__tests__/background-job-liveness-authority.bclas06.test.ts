@@ -6,7 +6,7 @@
  * Mechanical invariant: when a `CommandJobManager` emits a lifecycle
  * event from the terminality-adjacent vocabulary
  * (`command_job_termination_started`, `command_job_primary_group_cleanup`,
- * `command_job_terminal_committed`, `command_job_residual_detected`,
+ * `command_job_terminalize`, `command_job_residual_detected`,
  * `command_job_containment_failed`), the BJLA ring carries a
  * `process_terminality_record` whose `postcondition` field reflects
  * the production value verbatim — `"gone" | "alive" | "eperm" | "unknown" | null`.
@@ -15,7 +15,7 @@
  * if the LIVE dump shows `process_terminality_record` with
  * `eventName === "command_job_primary_group_cleanup"` and
  * `postcondition === "gone"` for the jobId AND no
- * `eventName === "command_job_terminal_committed"` event for the same
+ * `eventName === "command_job_terminalize"` event for the same
  * jobId during the dump window, the dump is mechanical proof of a
  * premature finalization (LA1 POSITIVE).
  *
@@ -28,11 +28,11 @@
 import type { SupervisableShellProcess } from "@cline/core"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
+	type BackgroundJobLivenessAuthorityProcessTerminalityRecord,
 	clearBackgroundJobLivenessAuthorityCaptureRecords,
 	getBackgroundJobLivenessAuthorityCaptureRecords,
 	setBackgroundJobLivenessAuthorityCaptureBufferSize,
 	setBackgroundJobLivenessAuthorityCaptureEnabled,
-	type BackgroundJobLivenessAuthorityProcessTerminalityRecord,
 } from "../background-job-liveness-authority"
 import { CommandJobManager } from "../command-job-manager"
 
@@ -109,9 +109,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01 / BCLAS-06",
 				r.event === "process_terminality_record" && r.jobId === jobId,
 		)
 		expect(terminalityRecords.length).toBeGreaterThan(0)
-		const cleanupRecord = terminalityRecords.find(
-			(r) => r.eventName === "command_job_primary_group_cleanup",
-		)
+		const cleanupRecord = terminalityRecords.find((r) => r.eventName === "command_job_primary_group_cleanup")
 		expect(cleanupRecord).toBeDefined()
 		// The postcondition field is the production value verbatim.
 		// On the IDE sandboxed shell the probe may surface "eperm";
@@ -145,9 +143,7 @@ describe("ACT-CLINEMM-BACKGROUND-COMMAND-LIVENESS-AUTHORITY-SPLIT01 / BCLAS-06",
 		// which would short-circuit the LA1 NEGATIVE assertion.
 		await manager.status({ jobId, waitMs: 0 })
 		const records = getBackgroundJobLivenessAuthorityCaptureRecords()
-		const terminalityRecords = records.filter(
-			(r) => r.event === "process_terminality_record" && r.jobId === jobId,
-		)
+		const terminalityRecords = records.filter((r) => r.event === "process_terminality_record" && r.jobId === jobId)
 		expect(terminalityRecords).toHaveLength(0)
 		// But the status lookup IS captured (LA4 discriminator).
 		const statusRecords = records.filter((r) => r.event === "job_status_lookup" && r.jobId === jobId)

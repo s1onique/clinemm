@@ -122,33 +122,51 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §A: adapte
 		})
 	})
 
-	// ---- TCE-02: continuation_started adapter gap (the one legitimate RED) ----
+	// ---- TCE-02: continuation_started adapter gap (RED — §21 must add the case) ----
 	describe("TCE-02 — continuation_started adapter gap (RED — §21 must add the case)", () => {
-		test("TCE-02.RED: adaptRecord has NO case for continuation_started (UNMODELED_EVENT today)", () => {
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-E:
+		// after §21 the case EXISTS. Complete identity → DIRECT;
+		// missing identity → INSUFFICIENT_IDENTITY (never
+		// manufactured, never falls to UNMODELED_EVENT now that
+		// the case is wired).
+		test("TCE-02.GREEN: adaptRecord maps continuation_started with promptId+runId to DIRECT + preserves both identities in elmMsg", () => {
 			const outcome = adaptRecord({
 				stage: "continuation_started",
 				sessionId: "S1",
 				promptId: "P-TCE02",
 				runId: "R-TCE02",
 			})
-			expect(outcome.status).toBe("UNMODELED_EVENT")
+			expect(outcome.status).toBe("DIRECT")
+			if (outcome.status === "DIRECT") {
+				expect(outcome.elmMsg).toMatchObject({
+					tag: "continuation_started",
+					promptId: "P-TCE02",
+					runId: "R-TCE02",
+				})
+			}
 		})
-		test("TCE-02.RED: continuation_started cannot be DIRECT until §21 adds the case", () => {
+		test("TCE-02.GREEN: continuation_started with promptId but NO runId is INSUFFICIENT_IDENTITY", () => {
 			const outcome = adaptRecord({
 				stage: "continuation_started",
 				sessionId: "S1",
 				promptId: "P-TCE02",
+			})
+			expect(outcome.status).toBe("INSUFFICIENT_IDENTITY")
+		})
+		test("TCE-02.GREEN: continuation_started with runId but NO promptId is INSUFFICIENT_IDENTITY", () => {
+			const outcome = adaptRecord({
+				stage: "continuation_started",
+				sessionId: "S1",
 				runId: "R-TCE02",
 			})
-			expect(outcome.status).not.toBe("DIRECT")
+			expect(outcome.status).toBe("INSUFFICIENT_IDENTITY")
 		})
-		test("TCE-02.RED: continuation_started with promptId but NO runId — adapter cannot classify, falls to UNMODELED", () => {
+		test("TCE-02.GREEN: continuation_started with NEITHER identity is INSUFFICIENT_IDENTITY", () => {
 			const outcome = adaptRecord({
 				stage: "continuation_started",
 				sessionId: "S1",
-				promptId: "P-TCE02",
 			})
-			expect(outcome.status).toBe("UNMODELED_EVENT")
+			expect(outcome.status).toBe("INSUFFICIENT_IDENTITY")
 		})
 	})
 
@@ -187,7 +205,16 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §A: adapte
 
 	// ---- TCE-06: kernel determinism via replayTrace ----
 	describe("TCE-06 — kernel default-off / replay determinism", () => {
-		test("TCE-06.GREEN: kernel ignores UNMODELED_EVENT for terminal task-state parity (determinism)", async () => {
+		test("TCE-06.GREEN: continuation_started with complete identity is now DIRECT (no UNMODELED); traces still end at idle task-state parity", async () => {
+			// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-E:
+			// after §21 the continuation_started case exists and
+			// produces a DIRECT elmMsg (not UNMODELED_EVENT). The
+			// baseline trace omits the new event entirely; the
+			// with-capture trace appends one continuation_started
+			// with both identities. Both traces still end at
+			// `task=idle` (terminal state parity) and
+			// unmodeledEventCount drops to 0 because the case
+			// is now modeled.
 			const baseline = writeSyntheticTrace("tce06-baseline.jsonl", [
 				{ stage: "run_turn_started", sessionId: "S1", runId: "R-TCE06" },
 				{ stage: "submit_and_exit_seen", sessionId: "S1", submitId: "SUB-TCE06" },
@@ -204,9 +231,10 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §A: adapte
 			// Both traces end at the same terminal task state.
 			expect((r1.finalModel as { task?: string }).task).toBe("idle")
 			expect((r2.finalModel as { task?: string }).task).toBe("idle")
-			// The second trace includes one extra UNMODELED_EVENT (the continuation_started).
-			expect(r2.unmodeledEventCount).toBe(1)
+			// After §21, continuation_started with both identities
+			// is DIRECT — neither trace contains UNMODELED_EVENT.
 			expect(r1.unmodeledEventCount).toBe(0)
+			expect(r2.unmodeledEventCount).toBe(0)
 		})
 	})
 
@@ -332,7 +360,6 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 			captureContinuationCardinalityAuthorityRecord({
 				stage: "run_turn_started",
 				sessionId: "S-P01",
-				// @ts-expect-error — runId is not yet in the production signature
 				runId: "R-P01",
 			})
 			const ring = getContinuationCardinalityAuthorityCaptureRecords()
@@ -355,7 +382,6 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 			let threw: unknown = null
 			try {
 				captureContinuationCardinalityAuthorityRecord({
-					// @ts-expect-error — 'continuation_started' is not yet in the union
 					stage: "continuation_started",
 					sessionId: "S-P02",
 					promptId: "P-P02",
@@ -393,7 +419,6 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 			let threw: unknown = null
 			try {
 				captureContinuationCardinalityAuthorityRecord({
-					// @ts-expect-error — 'task_started' is not yet in the union
 					stage: "task_started",
 					sessionId: "S-P03",
 					taskId: "S-P03",
@@ -423,7 +448,6 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 				stage: "terminal_committed",
 				sessionId: "S-P04",
 				jobId: "J-P04",
-				// @ts-expect-error — ownerId is not yet in the signature
 				ownerId: "OWNER-P04",
 			})
 			const ring = getContinuationCardinalityAuthorityCaptureRecords()
@@ -446,13 +470,11 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 			captureContinuationCardinalityAuthorityRecord({
 				stage: "submit_and_exit_seen",
 				sessionId: "S-P05",
-				// @ts-expect-error — submitId is not yet in the signature
 				submitId: "SUB-P05-1",
 			})
 			captureContinuationCardinalityAuthorityRecord({
 				stage: "submit_and_exit_seen",
 				sessionId: "S-P05",
-				// @ts-expect-error — submitId is not yet in the signature
 				submitId: "SUB-P05-2",
 			})
 			const ring = getContinuationCardinalityAuthorityCaptureRecords()
@@ -476,13 +498,11 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §B: real p
 			captureContinuationCardinalityAuthorityRecord({
 				stage: "task_completion_committed",
 				sessionId: "S-P06",
-				// @ts-expect-error — completionId is not yet in the signature
 				completionId: "COMP-P06-1",
 			})
 			captureContinuationCardinalityAuthorityRecord({
 				stage: "task_completion_committed",
 				sessionId: "S-P06",
-				// @ts-expect-error — completionId is not yet in the signature
 				completionId: "COMP-P06-2",
 			})
 			const ring = getContinuationCardinalityAuthorityCaptureRecords()

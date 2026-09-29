@@ -86,7 +86,7 @@ export interface SdkSessionEventCoordinatorOptions {
 	 * result identities for an owner. This is the second conjunct
 	 * of the BCB01 §0.1 frozen invariant:
 	 *
-	 *   task_completion_committed
+	 *   C10 commit
 	 *     ⇒ owned_background_jobs_nonterminal == 0
 	 *       AND unconsumed_owned_terminal_results == 0
 	 *
@@ -479,6 +479,27 @@ export class SdkSessionEventCoordinator {
 	 * the next continuation. No explicit cleanup needed.
 	 */
 	private lastCompletionContinuationSessionEpoch: string | undefined
+
+	/**
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-G:
+	 * monotonic, coordinator-local counter that mints a unique
+	 * `submitId` per C9 (`submit_and_exit_seen`) event creation.
+	 * One C9 event → one submitId; two C9 events → two distinct
+	 * submitIds. BCB hold/release does NOT mint a new submitId
+	 * (the C9 is the only event-creating seam).
+	 */
+	private nextSubmitEventId = 0
+
+	/**
+	 * ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-H:
+	 * monotonic, coordinator-local counter that mints a unique
+	 * `completionId` per C10 completion event
+	 * creation. One C10 → one completionId; two real C10 commits
+	 * → two distinct completionIds. Presentation, reopen, and BCB
+	 * do NOT mint completionIds (the C10 is the only event-creating
+	 * seam).
+	 */
+	private nextCompletionCommitEventId = 0
 
 	constructor(private readonly options: SdkSessionEventCoordinatorOptions) {
 		this.translateSessionEvent = options.translateSessionEvent ?? translateSessionEvent
@@ -985,7 +1006,7 @@ export class SdkSessionEventCoordinator {
 			// terminal event (frozen CCARD:
 			//   terminal_committed = 1, wake_created = 1,
 			//   run_turn_started = 2, agent_turn_done = 2,
-			//   task_completion_committed = 1, visible = 2).
+			//   C10-commit = 1, visible = 2).
 			//
 			// The predicate is the SAME `outstandingAutonomousWork`
 			// the deferredCompletionBarrier (TQCB01) already uses at
@@ -1211,6 +1232,10 @@ export class SdkSessionEventCoordinator {
 								origin: "pending_prompt_drain",
 								sessionId: activeSession.sessionId,
 								taskId: this.options.getTask?.()?.taskId,
+								// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-G:
+								// mint a coordinator-local submitId for this C9 event.
+								// Monotonic, per-coordinator-instance. One C9 -> one submitId.
+								submitId: `submit-${activeSession.sessionId}-${++this.nextSubmitEventId}`,
 							})
 							// ACT-CLINEMM-LONG-HORIZON-TASK-QUIESCENCE-COMPLETION-BARRIER01:
 							// Completion-barrier guard. The completion commit is HELD iff
@@ -1408,6 +1433,10 @@ export class SdkSessionEventCoordinator {
 									origin: "pending_prompt_drain",
 									sessionId: activeSession.sessionId,
 									taskId: this.options.getTask?.()?.taskId,
+									// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-H:
+									// mint a coordinator-local completionId for this C10 event.
+									// Monotonic, per-coordinator-instance. One C10 -> one completionId.
+									completionId: `completion-${activeSession.sessionId}-${++this.nextCompletionCommitEventId}`,
 								})
 								this.options.setTurnPhase?.("completed", undefined, "session-event-turn-complete-completed")
 							}

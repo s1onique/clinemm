@@ -21,6 +21,18 @@
  *   C9  submit_and_exit_seen        wasAttemptCompletionSeen + content_end
  *   C10 task_completion_committed   setTurnPhase("completed", ...)
  *
+ *   ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21:
+ *   two ADDITIONAL stages, each carrying identity facts otherwise
+ *   absent from the production record:
+ *     task_started        SdkController.initTask — sessionId===taskId
+ *     continuation_started runtime-event subscription — promptId+runId
+ *                          joined from a held prompt + run-started
+ *
+ *   These are FACTUAL identity extensions, not new cardinality
+ *   counters; older stages legitimately lack the new fields. The
+ *   capture helper threads the optional fields through without
+ *   making them mandatory globally.
+ *
  * Trust binding (mirrors BJLA / BOCOR / TSWPD / THSICAP):
  *   - Default off: the module-level captureEnabled seam starts
  *     false. When disabled, every record is a complete no-op so the
@@ -79,6 +91,12 @@ export type ContinuationCardinalityStage =
 	| "agent_turn_done"
 	| "submit_and_exit_seen"
 	| "task_completion_committed"
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21:
+	// two new stages carrying factual identity extensions. See
+	// the doc block above for chronology + identity contract.
+	// These names are FROZEN: adding values is a breaking change.
+	| "task_started"
+	| "continuation_started"
 
 /**
  * Structural identity of the authority that triggered the capture.
@@ -134,6 +152,11 @@ const stageCounters: { [K in ContinuationCardinalityStage]: PerStageCounter } = 
 	agent_turn_done: { count: 0, origins: new Set() },
 	submit_and_exit_seen: { count: 0, origins: new Set() },
 	task_completion_committed: { count: 0, origins: new Set() },
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21:
+	// two new bounded stages — see stage union above for chronology
+	// and identity contract.
+	task_started: { count: 0, origins: new Set() },
+	continuation_started: { count: 0, origins: new Set() },
 }
 
 /**
@@ -183,6 +206,20 @@ export interface ContinuationCardinalityAuthorityRecord {
 	readonly promptId?: string
 	/** Caller-supplied correlation token (test seam only). */
 	readonly correlationId?: string
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21:
+	// factual identity fields. Optional everywhere — older stages
+	// legitimately lack them. The capture helper threads them
+	// through when the caller supplies a value; missing values are
+	// never manufactured. See §12: zero semantic delta when the
+	// capture seam is OFF.
+	/** Runtime runId from `AgentRuntimeStateSnapshot.runId`. */
+	readonly runId?: string
+	/** Launch-time owner sessionId for terminal_committed jobs. */
+	readonly ownerId?: string
+	/** Coordinator-local monotonic event ID for submit_and_exit_seen. */
+	readonly submitId?: string
+	/** Coordinator-local monotonic event ID for task_completion_committed. */
+	readonly completionId?: string
 }
 
 const buffer: ContinuationCardinalityAuthorityRecord[] = []
@@ -203,6 +240,13 @@ export function captureContinuationCardinalityAuthorityRecord(record: {
 	readonly jobId?: string
 	readonly promptId?: string
 	readonly correlationId?: string
+	// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21:
+	// factual identity extensions. Optional. The helper threads them
+	// through when supplied; never manufactured.
+	readonly runId?: string
+	readonly ownerId?: string
+	readonly submitId?: string
+	readonly completionId?: string
 }): void {
 	if (!captureEnabled) return
 	const origin: ContinuationCardinalityOrigin = record.origin ?? "unknown"
@@ -216,6 +260,12 @@ export function captureContinuationCardinalityAuthorityRecord(record: {
 		...(record.jobId !== undefined ? { jobId: record.jobId } : {}),
 		...(record.promptId !== undefined ? { promptId: record.promptId } : {}),
 		...(record.correlationId !== undefined ? { correlationId: record.correlationId } : {}),
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21:
+		// identity fields, threaded through only when supplied.
+		...(record.runId !== undefined ? { runId: record.runId } : {}),
+		...(record.ownerId !== undefined ? { ownerId: record.ownerId } : {}),
+		...(record.submitId !== undefined ? { submitId: record.submitId } : {}),
+		...(record.completionId !== undefined ? { completionId: record.completionId } : {}),
 	}
 	buffer.push(rec)
 	if (buffer.length > bufferSize) {

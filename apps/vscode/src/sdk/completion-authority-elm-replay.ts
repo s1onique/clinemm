@@ -188,6 +188,29 @@ export function adaptRecord(record: Record<string, unknown>): AdapterOutcome {
 			const tag = stage === "task_completion_committed" ? "task_completion_committed" : "completion_presented"
 			return { status: "DIRECT", elmMsg: { tag, completionId: String(record.completionId) } }
 		}
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-E:
+		// continuation_started: prompt ↔ run join. Both required
+		// identities must be present. Identity is NEVER manufactured —
+		// missing promptId OR missing runId is INSUFFICIENT_IDENTITY.
+		case "continuation_started": {
+			const { promptId, runId } = record
+			if (promptId === undefined || promptId === null) {
+				return {
+					status: "INSUFFICIENT_IDENTITY",
+					reason: "continuation_started has no promptId (REAL schema does not carry it)",
+				}
+			}
+			if (runId === undefined || runId === null) {
+				return {
+					status: "INSUFFICIENT_IDENTITY",
+					reason: "continuation_started has no runId (REAL schema does not carry it)",
+				}
+			}
+			return {
+				status: "DIRECT",
+				elmMsg: { tag: "continuation_started", promptId: String(promptId), runId: String(runId) },
+			}
+		}
 		default:
 			return { status: "UNMODELED_EVENT", reason: `stage=${stage} has no Elm Msg candidate in the closed Codec tag set` }
 	}

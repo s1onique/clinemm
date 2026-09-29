@@ -84,6 +84,7 @@ import { BUILTIN_SLASH_COMMANDS } from "./builtin-slash-commands"
 import { CanonicalRuntimeShadowSubscription } from "./canonical-event-subscription"
 import { type ActiveSession, buildStartSessionInput, createHistoryItemFromSession } from "./cline-session-factory"
 import type { CommandJobLifecycleEvent, CommandJobState } from "./command-job-manager"
+import { captureContinuationCardinalityAuthorityRecord } from "./continuation-cardinality-authority"
 import {
 	applyTurnStateWriterProvenanceDiagnosticProfile,
 	composeEffectiveDiagnosticKnobs,
@@ -3574,7 +3575,7 @@ export class Controller {
 		// We deliberately do NOT call `turnStateTracker.set("streaming")`
 		// here — a previous design tried to defend against the inner
 		// `clearTask()` clobbering the streaming set by re-asserting it
-		// after `taskStart.initTask` returned, but that produced TWO
+		// after the coordinator init returned, but that produced TWO
 		// writers at the same logical transition (`startNewSession` would
 		// assert streaming, then this controller would assert it again).
 		// That violates the canonical-authority invariant: ONE writer,
@@ -3584,6 +3585,24 @@ export class Controller {
 		// constructor options.
 		this.messageTranslatorState.clearTurnOutcome()
 		const sessionId = await this.taskStart.initTask(prompt, images, files, historyItem, taskSettings)
+		// ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 §21-B:
+		// Emit `task_started` to CCARD immediately after the
+		// `taskStart.initTask` returns its sessionId. The
+		// `taskId === sessionId` equivalence is already proven by
+		// the canonical task identity pipeline (the resume seam
+		// uses the same id the new-task seam did), so we thread
+		// both without inventing a second task identity. MUST
+		// precede the first `run_turn_started` capture to keep
+		// the chronology `task_started < first run_turn_started`.
+		// Capture seam OFF → complete no-op.
+		if (sessionId) {
+			captureContinuationCardinalityAuthorityRecord({
+				stage: "task_started",
+				origin: "explicit_user",
+				sessionId,
+				taskId: sessionId,
+			})
+		}
 		// ACT-CLINEMM-TASK-HEADER-TELEMETRY01-A: start (or re-start) the
 		// host-owned task-telemetry window for the new task identity, and
 		// (re-)subscribe to canonical recovery-state transitions for the
@@ -5096,7 +5115,7 @@ export class Controller {
 	 *
 	 * The gauge moves on:
 	 *   - `command_job_process_started`            — POST `active.set`  (correction07)
-	 *   - `command_job_terminal_committed`         — POST `active.delete` (correction07, clean path)
+	 *   - `command_job_terminalize`         — POST `active.delete` (correction07, clean path)
 	 *   - `command_job_containment_failed`         — POST `active.delete` (correction06, failure path)
 	 *
 	 * correction05 / Factory P0 follow-up: under the new
