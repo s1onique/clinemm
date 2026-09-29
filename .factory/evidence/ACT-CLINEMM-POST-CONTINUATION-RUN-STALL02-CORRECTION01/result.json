@@ -1,7 +1,7 @@
 {
   "act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01",
   "verdict": "PASS_REAL_OBSERVATION_SEAM",
-  "subject_head": "<subject>",
+  "subject_head": "893b4b84550eca40809dd4c276b3afc38a0586d7",
   "entry_head": "904989e51640e7639ba2558f955172ee92e1710a",
   "closure_head": "<closure>",
   "predecessor_act": "ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02 (PASS_OBSERVATION_SEAM, HEAD 4a4359bd5)",
