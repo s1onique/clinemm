@@ -38,6 +38,7 @@ export type ReplayEventStatus =
 	| "INSUFFICIENT_IDENTITY"
 	| "UNMODELED_EVENT"
 	| "DECODER_REJECTED"
+	| "ELM_REJECTS_TS_SEQUENCE"
 	| "PROVENANCE_MISMATCH"
 	| "PROVENANCE_PRESERVED"
 
@@ -94,6 +95,12 @@ export function adaptRecord(record: Record<string, unknown>): AdapterOutcome {
 	const origin = record.origin === undefined ? undefined : String(record.origin)
 
 	switch (stage) {
+		case "task_started": {
+			if (record.taskId === undefined || record.taskId === null) {
+				return { status: "INSUFFICIENT_IDENTITY", reason: "task_started has no taskId in REAL trace" }
+			}
+			return { status: "DIRECT", elmMsg: { tag: "task_started", taskId: String(record.taskId) } }
+		}
 		case "run_turn_started":
 		case "execute_turn_prelude_enter": {
 			if (record.runId === undefined || record.runId === null) {

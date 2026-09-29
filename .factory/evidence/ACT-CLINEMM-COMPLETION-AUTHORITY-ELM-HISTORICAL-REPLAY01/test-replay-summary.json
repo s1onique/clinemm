@@ -22,8 +22,14 @@
       "insufficientIdentityCount": 8,
       "tsCompletionCommitted": true,
       "tsCompletionCommittedSeq": 12,
-      "finalModel": null,
-      "deterministicSha256": "c3c78cbba8615bab75e0356ac4069ea8dad8a974a534ee1c3a79c48a8e20754a"
+      "finalModel": {
+        "task": "active",
+        "activeRun": "run-c01",
+        "submitCount": 0,
+        "committedCompletion": null,
+        "presentedCompletion": null
+      },
+      "deterministicSha256": "d17dd38bf038318abe7bdbccc75f8a6cd62f6d5673feee58e1e115af7c36890e"
     },
     {
       "tag": "R2",
@@ -38,8 +44,14 @@
       "insufficientIdentityCount": 7,
       "tsCompletionCommitted": true,
       "tsCompletionCommittedSeq": 12,
-      "finalModel": null,
-      "deterministicSha256": "2468d413a3e88d51d80c26669e76e3dcd865c84992815a8b468465b2a1d7c90d"
+      "finalModel": {
+        "task": "active",
+        "activeRun": "run-c01",
+        "submitCount": 0,
+        "committedCompletion": null,
+        "presentedCompletion": null
+      },
+      "deterministicSha256": "6f8d49426d212baccf493938653b34d3fff5c62a1994cc433d92e3c75fea1cfa"
     },
     {
       "tag": "R3",
@@ -54,8 +66,14 @@
       "insufficientIdentityCount": 8,
       "tsCompletionCommitted": true,
       "tsCompletionCommittedSeq": 12,
-      "finalModel": null,
-      "deterministicSha256": "c3c78cbba8615bab75e0356ac4069ea8dad8a974a534ee1c3a79c48a8e20754a"
+      "finalModel": {
+        "task": "active",
+        "activeRun": "run-c01",
+        "submitCount": 0,
+        "committedCompletion": null,
+        "presentedCompletion": null
+      },
+      "deterministicSha256": "d17dd38bf038318abe7bdbccc75f8a6cd62f6d5673feee58e1e115af7c36890e"
     },
     {
       "tag": "R4",
@@ -70,8 +88,14 @@
       "insufficientIdentityCount": 155,
       "tsCompletionCommitted": true,
       "tsCompletionCommittedSeq": 21,
-      "finalModel": null,
-      "deterministicSha256": "1e187f37afff621a882be0dce50609af010091b1c0c8cf44f9659f3e9b54e7f4"
+      "finalModel": {
+        "task": "active",
+        "activeRun": "run-c01",
+        "submitCount": 0,
+        "committedCompletion": null,
+        "presentedCompletion": null
+      },
+      "deterministicSha256": "396131d607e7a6bb3f6e24f547bdd9e644dd3e3807d80ba06c4a7f97c1d71561"
     }
   ]
 }

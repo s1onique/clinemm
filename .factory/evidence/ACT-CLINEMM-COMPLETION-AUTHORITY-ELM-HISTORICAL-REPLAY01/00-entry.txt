@@ -17,3 +17,7 @@ ENTRY_GATE=
 ENVIRONMENT_NOTE=
   elm-test --report=console is hidden by master-per-worker summary delay in this sandbox;
   --report=json streams as workers complete and is the gate used here.
+
+CORRECTION01=
+  vitest historical replay test = 19/19 PASS (HR-09 added; state.violation now classified as ELM_REJECTS_TS_SEQUENCE).
+  HR-09 RED→GREEN cycle documented: required (a) Elm port async-flush, (b) shared-kernel for two describe blocks, (c) loadKernel single-IIFE invariant.

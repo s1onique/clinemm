@@ -2,8 +2,8 @@
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01",
   "verdict": "CAPTURE_INSUFFICIENT",
   "entry_head": "a1d8e03e5fc206e4beef1c680e75f984e6421ed2",
-  "subject_head": "a9903bc0b69cae8c6ad7d953e7266161b503f124",
-  "closure_head": "a9903bc0b69cae8c6ad7d953e7266161b503f124",
+  "subject_head": "see CLOSURE_HEAD below (replay adapter + test commit)",
+  "closure_head": "see git rev-parse HEAD at ACT closure",
   "kernel_subject_head": "7f7e74bcbb51c5bddb5f65610e04773e82c25c2d",
   "kernel_sha256_vendor": "40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168",
 
@@ -14,8 +14,12 @@
     "background_command_terminal_presentation_arbitration_01a_live_ccard_sha256": "a61d35bc47be0711cc4a02ab0c4976321ab038974e7aeed3859090500cf6f534"
   },
   "sources": {
-    "real_traces": 3,
-    "events_total": 183,
+    "real_traces": 2,
+    "real_events": 171,
+    "synthetic_real_traces": 1,
+    "synthetic_real_events": 12,
+    "total_traces": 3,
+    "total_events": 183,
     "sha256_preserved": true
   },
 
@@ -29,6 +33,7 @@
   "control": {
     "test_id": "HR-01",
     "source_trace": "live-presentation-surface-discriminator01 / 01a-ccard.LIVE_RAW.jsonl",
+    "evidence_class": "REAL",
     "accepted": false,
     "first_divergence_seq": 1,
     "first_divergence_stage": "run_turn_started",
@@ -39,6 +44,7 @@
   "terminal_lifecycle": {
     "test_id": "HR-02",
     "source_trace": "background-command-terminal-presentation-arbitration01 / 01a-live-ccard.jsonl",
+    "evidence_class": "SYNTHETIC_REAL (CORRECTION01 reclassified from REAL; operator-synthetic timestamps)",
     "classification": "TRACE_INSUFFICIENT",
     "first_divergence_seq": 1,
     "first_divergence_stage": "terminal_committed",
@@ -51,6 +57,7 @@
   "continuation": {
     "test_id": "HR-03",
     "source_trace": "live-presentation-surface-discriminator01 / 01a-ccard.LIVE_RAW.jsonl (continuation subsequence)",
+    "evidence_class": "REAL",
     "classification": "INSUFFICIENT_IDENTITY",
     "identity_sufficient": false,
     "first_divergence_seq": 1,
@@ -67,6 +74,7 @@
   "stall": {
     "test_id": "HR-04",
     "source_trace": "post-continuation-run-stall02 / continuation-cardinality-authority.jsonl",
+    "evidence_class": "REAL",
     "classification": "INSUFFICIENT_IDENTITY",
     "first_divergence_seq": 1,
     "first_divergence_stage": "run_turn_started",
@@ -85,6 +93,18 @@
     },
     "direct_events_replay_accepted": 3,
     "direct_events": ["pending_prompt_enqueued", "pending_prompt_dequeued", "continuation_scheduled"]
+  },
+
+  "elm_model_correspondence": {
+    "classification": "UNPROVEN",
+    "reason": "CAPTURE_INSUFFICIENT — the verdict is precisely that the schema gap prevents the evidence from entering the model to establish correspondence. Do not claim 'faithful' or 'not too coarse' until the capture seam emits the four missing identities (plus task_started, terminal kind, and prompt↔run correlation).",
+    "replaces_overclaim": "previous report's 'Elm is proven faithful/not too coarse' was an overclaim and is REMOVED. The compiled-kernel integration mechanism itself is legitimate (Elm.Main.init() + JS ports is Elm's standard interop), but evidence coverage is the bottleneck."
+  },
+
+  "violation_oracle": {
+    "defect": "Replay driver previously ignored state.violation; only decode_error changed classification. Now state.violation is load-bearing via ELM_REJECTS_TS_SEQUENCE.",
+    "fix": "replayTrace (a) awaits the Elm port microtask flush before drainOutbound (port emits are async), (b) uses the LAST state in the drained batch, (c) classifies state.violation events as ELM_REJECTS_TS_SEQUENCE. Shared-kernel pattern added so multiple describe blocks do not collide on Elm.Main global. HR-09 RED→GREEN test added.",
+    "test": "HR-09 — synthetic trace with a state.violation: replay classifies it as ELM_REJECTS_TS_SEQUENCE (PASS, 19/19 total)"
   },
 
   "adapter": {
@@ -106,7 +126,7 @@
   "elm_effect_execution_enabled": false,
 
   "executable_gate_replay": {
-    "vitest_completion_authority_elm_historical_replay01": "18/18 PASS",
+    "vitest_completion_authority_elm_historical_replay01": "19/19 PASS (HR-01..HR-09 + 8 AR self-invariants)",
     "elm_make": "PASS",
     "elm_test_20_of_20": "PASS",
     "smoke_test": "PASS",
@@ -115,5 +135,15 @@
   },
 
   "ready_for_elm_shadow02": false,
-  "successor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 (extend capture seam to emit runId / submitId / completionId / ownerId in REAL trace schema; not opened here)"
+  "successor_act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — extend capture seam to emit a complete correspondence contract (NOT just the four IDs); see 09-discriminator.md § successor",
+  "successor_capture_contract_required_fields": [
+    "task_started { taskId }",
+    "run_turn_started { runId }",
+    "agent_turn_done { runId }",
+    "execute_turn_prelude_enter { runId }",
+    "continuation_started { promptId, runId }  # or equivalent proven seam correlating prompt to run",
+    "terminal_committed { jobId, ownerId, terminalKind }  # terminalKind in {owned, background_not_owned}",
+    "submit_and_exit_seen { submitId }",
+    "task_completion_committed { completionId }"
+  ]
 }

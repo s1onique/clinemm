@@ -94,6 +94,82 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — adapter s
 	})
 })
 
+// CORRECTION01: loadKernel runs the Elm bundle's IIFE which
+// registers a global `Elm.Main`. Calling loadKernel twice in the
+// same process collides on that global. Share a single kernel
+// across describe blocks via a module-level handle.
+let sharedKernel: KernelHandle | null = null
+
+function getSharedKernel(): KernelHandle {
+	if (!sharedKernel) sharedKernel = loadKernel(KERNEL_PATH)
+	return sharedKernel
+}
+
+beforeAll(() => {
+	getSharedKernel()
+})
+
+describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — CORRECTION01 violation-classification oracle", () => {
+	// The replay classifier must treat a state.violation as
+	// ELM_REJECTS_TS_SEQUENCE, not as a quiet DIRECT.
+	// Driving the kernel: task_started -> run_started(R, explicit)
+	// -> task_completion_committed(C). The third event is rejected
+	// with TaskCompletionCommittedWhileHeld ActiveRun.
+	test("HR-09 — synthetic trace with a state.violation: replay classifies it as ELM_REJECTS_TS_SEQUENCE", async () => {
+		const k = getSharedKernel()
+		const tmpTrace = path.join(
+			REPO_ROOT,
+			".factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01/synthetic-violation-trace.jsonl",
+		)
+		fs.writeFileSync(
+			tmpTrace,
+			[
+				JSON.stringify({
+					seq: 1,
+					at: 1,
+					stage: "task_started",
+					taskId: "task-c01",
+					origin: "explicit_user",
+					sessionId: "s-c01",
+				}),
+				JSON.stringify({
+					seq: 2,
+					at: 2,
+					stage: "run_turn_started",
+					runId: "run-c01",
+					origin: "explicit_user",
+					sessionId: "s-c01",
+					taskId: "task-c01",
+				}),
+				JSON.stringify({
+					seq: 3,
+					at: 3,
+					stage: "task_completion_committed",
+					completionId: "c-c01",
+					origin: "explicit_user",
+					sessionId: "s-c01",
+					taskId: "task-c01",
+				}),
+			].join("\n") + "\n",
+		)
+		try {
+			const r = await replayTrace({ kernel: k, tracePath: tmpTrace })
+			const violationEvent = r.events.find((e) => e.classification === "ELM_REJECTS_TS_SEQUENCE")
+			expect(violationEvent).toBeTruthy()
+			expect(violationEvent?.after?.violation).toBeDefined()
+			expect(r.firstDivergenceKind).toBe("ELM_REJECTS_TS_SEQUENCE")
+			expect(r.firstDivergenceStage).toBe("task_completion_committed")
+			expect(r.firstDivergenceSeq).toBe(3)
+		} finally {
+			try {
+				fs.unlinkSync(tmpTrace)
+			} catch {
+				/* best-effort */
+			}
+		}
+	})
+})
+
 describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — frozen traces replay", () => {
 	const beforeSha = {
 		stall: snapshotShaForTrace(STALL02_TRACE),
@@ -103,10 +179,7 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — frozen tr
 	let kernel: KernelHandle
 
 	beforeAll(() => {
-		kernel = loadKernel(KERNEL_PATH)
-		expect(kernel).toBeTruthy()
-		expect(typeof kernel.send).toBe("function")
-		expect(typeof kernel.drainOutbound).toBe("function")
+		kernel = getSharedKernel()
 	})
 
 	test("kernel load + ready", () => {
@@ -115,8 +188,8 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — frozen tr
 
 	const replayResults: { tag: string; result: ReplayResult }[] = []
 
-	test("HR-01 — known-good completion trace (R1 control) drives the kernel", () => {
-		const r1 = replayTrace({ kernel, tracePath: R1_CONTROL_TRACE })
+	test("HR-01 — known-good completion trace (R1 control) drives the kernel", async () => {
+		const r1 = await replayTrace({ kernel, tracePath: R1_CONTROL_TRACE })
 		replayResults.push({ tag: "R1", result: r1 })
 		// First event in R1 is `run_turn_started` which lacks the
 		// Elm-required `runId`. So the FIRST semantic divergence
@@ -131,8 +204,8 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — frozen tr
 		expect(r1.tsCompletionCommittedSeq).toBe(12)
 	})
 
-	test("HR-02 — held-terminal trace (R2) drives the kernel", () => {
-		const r2 = replayTrace({ kernel, tracePath: R2_HELD_TERMINAL_TRACE })
+	test("HR-02 — held-terminal trace (R2) drives the kernel", async () => {
+		const r2 = await replayTrace({ kernel, tracePath: R2_HELD_TERMINAL_TRACE })
 		replayResults.push({ tag: "R2", result: r2 })
 		// R2's first event is `terminal_committed` (origin=background_terminal,
 		// no runId, no ownerId). Its first schema gap is the runId
@@ -144,17 +217,17 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — frozen tr
 		expect(r2.manufacturedIdentityCount).toBe(0)
 	})
 
-	test("HR-03 — continuation sequence: same schema gap as R1", () => {
+	test("HR-03 — continuation sequence: same schema gap as R1", async () => {
 		// R3 is the continuation segment inside R1. Reuse R1 trace;
 		// the schema gap is identical (no runId on run_turn_started).
-		const r3 = replayTrace({ kernel, tracePath: R1_CONTROL_TRACE })
+		const r3 = await replayTrace({ kernel, tracePath: R1_CONTROL_TRACE })
 		replayResults.push({ tag: "R3", result: r3 })
 		expect(r3.firstDivergenceKind).toBe("INSUFFICIENT_IDENTITY")
 		expect(r3.firstDivergenceStage).toBe("run_turn_started")
 	})
 
-	test("HR-04 — known stall trace (R4) drives the kernel", () => {
-		const r4 = replayTrace({ kernel, tracePath: STALL02_TRACE })
+	test("HR-04 — known stall trace (R4) drives the kernel", async () => {
+		const r4 = await replayTrace({ kernel, tracePath: STALL02_TRACE })
 		replayResults.push({ tag: "R4", result: r4 })
 		// First event is run_turn_started with no runId.
 		expect(r4.firstDivergenceKind).toBe("INSUFFICIENT_IDENTITY")
@@ -178,9 +251,9 @@ describe("ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — frozen tr
 		expect(o.status).toBe("INSUFFICIENT_IDENTITY")
 	})
 
-	test("HR-07 — replay is deterministic: same trace twice -> byte-equivalent result", () => {
-		const a = replayTrace({ kernel, tracePath: STALL02_TRACE })
-		const b = replayTrace({ kernel, tracePath: STALL02_TRACE })
+	test("HR-07 — replay is deterministic: same trace twice -> byte-equivalent result", async () => {
+		const a = await replayTrace({ kernel, tracePath: STALL02_TRACE })
+		const b = await replayTrace({ kernel, tracePath: STALL02_TRACE })
 		expect(a.deterministicSha256).toBe(b.deterministicSha256)
 	})
 

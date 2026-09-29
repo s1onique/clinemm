@@ -30,7 +30,17 @@ export function loadKernel(kernelPath: string): KernelHandle {
 		drainOutbound: () => queue.splice(0, queue.length),
 	}
 }
-export function replayTrace(args: { kernel: KernelHandle; tracePath: string }): ReplayResult {
+// CORRECTION01: the Elm kernel delivers outbound port messages
+// asynchronously (microtask-deferred). Drain the queue only after
+// awaiting a microtask boundary, otherwise the test sees an empty
+// queue and the `after.violation` classifier misses real signals.
+const FLUSH_TICK_MS = 0
+
+async function flushKernel(): Promise<void> {
+	await new Promise<void>((resolve) => setTimeout(resolve, FLUSH_TICK_MS))
+}
+
+export async function replayTrace(args: { kernel: KernelHandle; tracePath: string }): Promise<ReplayResult> {
 	const fullPath = path.isAbsolute(args.tracePath) ? args.tracePath : path.resolve(args.tracePath)
 	const text = fs.readFileSync(fullPath, "utf8")
 	const sha256 = sha256Hex(text)
@@ -91,9 +101,17 @@ export function replayTrace(args: { kernel: KernelHandle; tracePath: string }): 
 			continue
 		}
 		args.kernel.send(outcome.elmMsg)
+		await flushKernel()
 		const out = args.kernel.drainOutbound()
 		const decodeError = out.find((o) => o.kind === "decode_error")
-		const stateOut = out.find((o) => o.kind === "state")
+		// The kernel is message-driven and synchronous: one inbound
+		// `send` produces exactly one outbound state. Use the LAST
+		// state in the queue (the most recent) as the post-state
+		// for this transition. CORRECTION01: prefer the LAST state
+		// over the FIRST so violations emitted later are not
+		// shadowed by an earlier, harmless state in the same batch.
+		const stateMessages = out.filter((o) => o.kind === "state")
+		const stateOut = stateMessages[stateMessages.length - 1]
 		const after = stateOut && stateOut.kind === "state" ? { model: stateOut.model, violation: stateOut.violation } : undefined
 		finalModel = after?.model ?? finalModel
 		if (decodeError) {
@@ -106,6 +124,28 @@ export function replayTrace(args: { kernel: KernelHandle; tracePath: string }): 
 				reason: `Elm decoder rejected ${sourceStage} mapped to ${outcome.elmMsg.tag}: ${decodeError.error}`,
 				elmMsg: outcome.elmMsg,
 				after: after ? { model: after.model, violation: after.violation } : undefined,
+			})
+			if (firstDivergenceSeq === null) {
+				firstDivergenceSeq = seq
+				firstDivergenceKind = "ELM_REJECTS_TS_SEQUENCE"
+				firstDivergenceStage = sourceStage
+			}
+			continue
+		}
+		// CORRECTION01: a state.violation is itself a load-bearing
+		// signal — the Elm kernel accepted the message but rejected
+		// the transition. Treat it as ELM_REJECTS_TS_SEQUENCE rather
+		// than a quiet DIRECT.
+		if (after && after.violation) {
+			events.push({
+				seq,
+				at: typeof record.at === "number" ? record.at : undefined,
+				sourceStage,
+				sourceOrigin,
+				classification: "ELM_REJECTS_TS_SEQUENCE",
+				reason: `Elm kernel emitted violation=${after.violation} after ${sourceStage} mapped to ${outcome.elmMsg.tag}`,
+				elmMsg: outcome.elmMsg,
+				after,
 			})
 			if (firstDivergenceSeq === null) {
 				firstDivergenceSeq = seq
