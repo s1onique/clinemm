@@ -1,3 +1,36 @@
+## ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — IN_PROGRESS — 2026-09-29
+
+**Status:** IN_PROGRESS. Halted at §18 RED test authoring after reviewer P0 correction at §5/§6.
+
+```text
+ENTRY_HEAD        = b15a91f407045c832cc7dc3a8c299c59cd7b0e20 (unchanged through session)
+SECTION_DONE      = §3 (PREDECESSOR GATE — GREEN), §4 (RECON), §5 (IDENTITY-SOURCE MAP — corrected), §6 (CAPTURE CONTRACT — corrected)
+SECTION_NEXT      = §18 (RED tests TCE-01..12)
+ELM_BUILD         = PASS (vendor recompile)
+ELM_TEST          = PASS (20/20)
+ELM_SMOKE         = PASS
+HISTORICAL_REPLAY = PASS (20/20, EXIT=0)
+TYPECHECK         = NOT_RUN
+VSCODE_PREPUBLISH = NOT_RUN
+DOGFOOD           = NOT_RUN
+ELM_MODEL_CORRESPONDENCE = UNPROVEN
+READY_FOR_ELM_SHADOW02  = false
+```
+
+**Reviewer C1 verdict:** GO (PASS_WITH_NONBLOCKING_RESIDUE).
+**Reviewer C1-P0 correction (this turn):** §5 §6 had four contradictions; corrected to:
+
+1. **`runId` lifecycle** — `LocalRuntimeHost.runTurn` does NOT take a `runId` parameter (`local-runtime-host.ts:1223`). The `runId` is created at `agent-runtime.ts:1205` (`this.state.runId = createUID("run")`) and surfaced via the runtime snapshot (`agent-runtime.ts:1045`) which propagates through `LocalRuntimeHost.subscribeRuntimeEvents`. The capture hook must be wired to the runtime snapshot, not to `runTurn` parameters.
+2. **`taskId` UNVERIFIED → PROVEN_EQUIVALENT** — `options.getTask()?.taskId = sessionId` is proven by `sdk-provider-change-coordinator.ts:144-145`. `task_started { taskId }` reuses the existing C9/C10 taskId field.
+3. **`terminalKind` ownership rule** — must inspect LAUNCH-time metadata (`job.ownerSessionId` set at job creation), NOT the current `activeSession` pointer at finalize time.
+4. **`submitId` / `completionId` → `SUBMIT_EVENT_ID` / `COMPLETION_COMMIT_EVENT_ID`** — renamed to honestly reflect that they are coordinator-local sequence counters, not pre-existing durable business IDs.
+
+**`continuation_started` design choice** — Option A (default): one `subscribeRuntimeEvents` listener emits both `continuation_started { promptId, runId }` and `run_turn_started { runId }` from the same snapshot. Option B (fallback): drop the event, recover the join via replay order. §21 decides.
+
+**Hard prohibitions (per reviewer re-emphasis + §22):** DO NOT reopen elm-test/toolchain investigation; DO NOT fix presentation; DO NOT touch Elm semantics; DO NOT change BCB/PCCA/CPA/PCRS02/PCRS02C01/CCARD invariants.
+
+**Resume state for next session:** §18 RED tests TCE-01..TCE-12. Best template ordering: TCE-07/08 (concurrent runs), TCE-01 (runId thread), TCE-02 (prompt↔run join), TCE-05/09 (terminal ownership), TCE-03/04/12 (submit/completion cardinality), TCE-06 (default-off), TCE-10/11 (adversarial correlation).
+
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — CAPTURE_INSUFFICIENT — 2026-09-29
 
 **Status:** CAPTURE_INSUFFICIENT (verdict D per §39). Replay adapter +

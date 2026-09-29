@@ -1,0 +1,48 @@
+ACT=ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01
+
+COMPLETION_AUTHORITY_CHANGED=false    # HALT before any production edit
+QUEUE_SEMANTICS_CHANGED=false         # HALT before any production edit
+PRESENTATION_SEMANTICS_CHANGED=false  # HALT before any production edit
+MCP_CHANGED=false                     # HALT before any production edit
+MYC_CODE_CHANGED=false                # HALT before any production edit
+
+§3 PREDECESSOR GATE (FINAL — all green after operator hint + reviewer correction):
+
+  ELM_BUILD                  = PASS  (elm 0.19.2 recompiled vendor/completion-authority.js to predecessor sha256 40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168)
+  ELM_TEST                   = PASS  (bash scripts/test-elm.sh -> "TEST RUN PASSED", Passed: 20, Failed: 0, Duration ~150ms. ALSO confirmed via raw elm-test invocation. CAPTURED IN /tmp/test-elm-captured.txt and /tmp/elm-test-out.txt.)
+  ELM_SMOKE                  = PASS  (node scripts/smoke-test.mjs vendor/completion-authority.js -> "PASS: kernel round-trips a tagged event sequence")
+  HISTORICAL_REPLAY_TESTS    = PASS  (bunx vitest run src/sdk/__tests__/completion-authority-elm-historical-replay01.test.ts -> Test Files 1 passed (1), Tests 20 passed (20), EXIT=0)
+
+ROOT_CAUSE_CORRECTION:
+  Original claim "194 stale workers starve elm-test" was UNPROVEN.
+  Reviewer correctly identified the framing overreached.
+  Actual findings:
+    1. pgrep -f elmTestOutput.js | wc -l -> 176 (NOT 194; prior count was estimate from concurrent fork churn)
+    2. All 176 workers run at 0.0% CPU, etime ~02:50:43 — they are SLEEPING IDLE, not resource-starving anything
+    3. They are owned by user chistyakov (me) — no privilege barrier
+    5. The "Operation not permitted" error was not a kill-permission issue; it was macOS-spawned process cleanup race
+    6. os.cpus().length = 16, so elm-test spawns 16 children per run; 176 workers = 11 prior fan-outs accumulated as harmless residue
+    7. The actual elm-test orchestrator DOES complete (Duration: 149-151ms; 20 PASSED / 0 FAILED). The hang was a tool-runner stdout-buffer artifact, not test-runner deadlock.
+  Suspected cause of the perceived hang: harness pipe-buffering masked stdout until completion; killing the process before completion erased all output. The "ELM_TEST=FAIL" verdict was the operator-tool-harness artifact, not the test runner's behaviour.
+
+PREVIOUSLY HALTED_GATES now GREEN. ACT remains halted at §3 in the sense that no production edit was made (the gate is now satisfied, but no follow-on work has been done in this session — the gate was the gating factor and is now removed, not the work itself).
+
+CCARD_CONSERVATION=NOT_RUN  (no production code change; nothing to test against)
+BCB_CONSERVATION=NOT_RUN    (no production code change; nothing to test against)
+CPA_CONSERVATION=NOT_RUN    (no production code change; nothing to test against)
+PCCA_CONSERVATION=NOT_RUN   (no production code change; nothing to test against)
+PCRS_CONSERVATION=NOT_RUN   (no production code change; nothing to test against)
+ELM_TEST=PASS
+HISTORICAL_REPLAY_CONSERVATION=PASS
+
+TYPECHECK=NOT_RUN  (no production code change; nothing to typecheck against)
+VSCODE_PREPUBLISH=NOT_RUN  (no production code change; nothing to lint)
+DIFF_CHECK=PASS  (no diff vs ENTRY_HEAD; nothing was committed)
+§5/§6 CORRECTION (this turn, reviewer P0 feedback):
+  §5 identity-source map: 4 contradictions corrected:
+    1. runId lifecycle (was wrong creation seam at runTurn; actually at agent-runtime.ts:1205)
+    2. taskId UNVERIFIED -> PROVEN_EQUIVALENT_EXISTING_ID (via sdk-provider-change-coordinator.ts:144-145)
+    3. terminalKind ownership rule (was relative to active-session-at-finalize; now relative to launch-time metadata only)
+    4. submitId/completionId renamed to SUBMIT_EVENT_ID/COMPLETION_COMMIT_EVENT_ID (coordinator-local counters, not pre-existing durable IDs)
+  §6 capture contract: annotated with §5 classifications per field; added concrete §21 implementation contract table.
+  No production code touched. No Elm kernel files edited.

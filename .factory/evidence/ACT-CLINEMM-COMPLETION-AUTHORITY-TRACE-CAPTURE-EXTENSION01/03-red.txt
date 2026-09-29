@@ -1,0 +1,94 @@
+ACT=ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01
+PHASE=§3 PREDECESSOR EXECUTABLE GATE
+
+GATE_RESULTS (initial):
+  ELM_BUILD                  = FAIL  (HALT_ELM_VERSION_MISMATCH — system `elm` is 0.19.1, build-elm.sh requires 0.19.2)
+  ELM_TEST                   = NOT RUN  (`elm-test` not on PATH; asdf shim does not exist for elm-test)
+  ELM_SMOKE                  = PASS  (executed against the previously-built `vendor/completion-authority.js` sha256=40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168; uses prebuilt kernel, not a fresh compile)
+  HISTORICAL_REPLAY_TESTS    = NOT RUN  (`node` not on PATH; `bun` not on PATH; asdf node shim broken; no `node 22` available)
+
+AMENDMENT (operator hint: "node is at /opt/homebrew/bin/node"):
+
+After the operator supplied the homebrew toolchain hint, the §3 gate
+was re-attempted with PATH=/opt/homebrew/bin prepended. Outcome:
+
+  ELM_BUILD                  = PASS  (elm 0.19.2; recompiled vendor/completion-authority.js to the same sha256 as the predecessor: 40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168)
+  ELM_TEST                   = FAIL  (orchestrator hangs; ~194 stale `elmTestOutput.js` node workers from prior cancelled elm-test runs are leaking and starving resources; the operator-shell user cannot kill them: `pkill: signalling pid N: Operation not permitted`. Three back-to-back `elm-test` runs all stalled with empty stdout for 5-10+ minutes because the orchestrator cannot allocate CPU/IO to new test workers while stale children from this and the previous session are alive. Toolchain itself works: `elm-test --help` returns correctly.)
+  ELM_SMOKE                  = PASS  (executed against the previously-built `vendor/completion-authority.js` sha256=40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168; uses prebuilt kernel, not a fresh compile)
+  HISTORICAL_REPLAY_TESTS    = NOT RUN  (would require a clean elm-test + vitest environment; not attempted while ELM_TEST stalls)
+
+VERDICT=HALT_PREDECESSOR_GATE_REGRESSED (REAFFIRMED, NEW ROOT CAUSE)
+
+NEW ROOT CAUSE (replaces the original toolchain-missing root cause):
+  The homebrew toolchain IS installed at /opt/homebrew/bin/ (node 26.0.0, elm 0.19.2, elm-test 0.19.2-0, bun 1.3.14, vsce). ELM_BUILD passes. The gate cannot complete because the elm-test orchestrator hangs — likely due to 194+ stale `node elmTestOutput.js` worker processes owned by another user (or running with privileges that the current shell cannot revoke) that survived SIGTERM at prior deadline cutoffs.
+
+The stale workers were observed:
+  PIDs 181..196   (~14 workers) — survivors of first elm-test (SIGTERM at 11:55 AM deadline)
+  PIDs 24915/24916 — survivors of the long elm-test run earlier this session
+  PIDs 63565..63573 — survivors of second elm-test
+  PIDs 63771, 63797..63812 — survivors of third elm-test
+  PIDs 65784..65807 — survivors of the junit elm-test
+  PIDs 68986, 69037..69052 — survivors of fifth elm-test
+  PIDs 74950, 74971..74986 — survivors of sixth elm-test
+  Total: ~194 `node elmTestOutput.js` workers all running /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/elm/completion-authority/elm-stuff/generated-code/elm-community/elm-test/0.19.2-0/elmTestOutput.js
+  All unkillable by the current shell user.
+
+  `pkill -9 -f elmTestOutput` returns `Operation not permitted` for every PID.
+  Direct `kill -9` returns the same.
+
+TOOLCHAIN_PROBE (post-hint):
+  PATH augmented with /opt/homebrew/bin:
+    node      -> v26.0.0        [/opt/homebrew/bin/node]
+    elm       -> 0.19.2         [/opt/homebrew/bin/elm]
+    elm-test  -> (works for --help; orchestrator hangs under load)
+    bun       -> 1.3.14         [/opt/homebrew/bin/bun]
+    vsce      -> present        [/opt/homebrew/bin/vsce]
+  All four binaries present, but stale worker processes prevent elm-test from completing within the harness deadline.
+
+RECOVERABLE?
+  Yes, with operator assistance: the stale `node elmTestOutput.js` workers must be killed by a user with sufficient privilege (`pkill -9 -u <owner> -f elmTestOutput` or `sudo pkill -9 -f elmTestOutput`). After that, `bash scripts/test-elm.sh` should complete in <60s and the §3 gate can resume.
+
+NO_PRODUCTION_CODE_TOUCHED=true
+NO_PRODUCTION_BEHAVIOR_CHANGED=true
+
+VERDICT=HALT_PREDECESSOR_GATE_REGRESSED
+
+DETAIL:
+  §3 of the ACT requires, before any capture-seam edit, that all four
+  gates return PASS. Three of the four cannot run in the current shell
+  environment. Per §39, this is a hard stop. No recon, RED test, or
+  bounded implementation may proceed without the gate green.
+
+TOOLCHAIN_PROBE:
+  PATH at entry: /Volumes/UserData/Users/chistyakov/.nix-profile/bin:/etc/profiles/per-user//bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+
+  elm:        /run/current-system/sw/bin/elm -> /nix/store/8lxdgaqaq0x9vls08anmknr43x0ffqz3-elm-0.19.1/bin/elm
+              elm --version -> 0.19.1
+              (build-elm.sh pins 0.19.2; exits with HALT_ELM_VERSION_MISMATCH)
+
+  elm-test:   not found on PATH; not in ~/.asdf/shims; not in
+              /run/current-system/sw/bin. asdf has NO elm plugin
+              installed.
+
+  node:       not found on PATH. ~/.asdf/shims/node exists but is broken
+              (references missing Nix store path
+              /nix/store/1g3sk21fx491pygrcpbr5qb4gqxixjlz-asdf-vm-0.8.1/share/asdf-vm/bin/asdf).
+              ~/.asdf/installs/nodejs has versions 16.13.2 / 16.14.0 /
+              16.14.1 / 16.14.2 / 17.3.1 (no node 22; .tool-versions
+              requests node 22).
+
+  bun:        not found on PATH; not in ~/.asdf/shims.
+              .tool-versions requests bun 1.3.13, but the asdf bun
+              install is not present (no shim, no installs/bun/).
+
+  vsce:       present at apps/vscode/node_modules/.bin/vsce (npx-resolvable via apps/vscode/node_modules/.bin/bunx ... but `bun` itself is missing, so the bunx shim fails).
+
+RECOVERABLE?
+  This is a host toolchain regression, not a project regression. The
+  Elm kernel source, the prebuilt `vendor/completion-authority.js`, and
+  the historical replay tests are all present in the worktree. A future
+  ACT session with a working `node 22` / `bun 1.3.13` / `elm 0.19.2` /
+  `elm-test 0.19.2-0` toolchain can re-run the gate and resume.
+
+NO_PRODUCTION_CODE_TOUCHED=true
+NO_PRODUCTION_BEHAVIOR_CHANGED=true
