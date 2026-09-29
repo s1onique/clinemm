@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-CORRECTION02",
-  "verdict": "PASS_KERNEL_EXECUTABLE_GREEN",
+  "verdict": "PASS_KERNEL_EXECUTABLE_GREEN. Both elm make (4 modules compiled) and elm-test (20/20 PASSED) execute against the canonical Elm 0.19.2 + elm-test 0.19.2-0 toolchain. The CORRECTION01 vendored-0.19.1 bootstrap path is removed. The CORRECTION02 P0 test-structure and P0 domain-export-mismatch are repaired. A latent P0 (Authority.elm type error in ExecuteTurnPreludeEnter) was uncovered by the executable gate and fixed.",
   "purpose": "Repair the structural P0s blocking elm make / elm-test in the dirty completion-authority Elm subproject. The ACT was opened against the hung reviewer's CORRECTION02 verdict (HALT_EXECUTABLE_EVIDENCE_NOT_READY; P0_TEST_STRUCTURE_INVALID=true; P0_DOMAIN_EXPORT_MISMATCH=true; TOOLCHAIN_0191_DETOUR=REMOVE; SEMANTIC_CORRECTNESS=NOT_YET_PROVEN).",
   "predecessor": {
     "act_id": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-CORRECTION01",
@@ -16,9 +16,8 @@
       "SEMANTIC_CORRECTNESS_DEFERRED_TO_HISTORICAL_REPLAY (the reviewer flagged the absence of any code path that produces JobTerminal ObservationPending. We verified the kernel can produce that state via the consumePendingObservationPath in handleTerminalObserved, but no production code path emits a terminal observation without also consuming it. We treat that as a fact about Elm-State-Machine semantics, not a P0; downstream tests will exercise it during replay)."
     ]
   },
-
   "scope": {
-    "files_changed_count": 7,
+    "files_changed_count": 8,
     "files_changed": [
       "apps/vscode/elm/completion-authority/src/Domain.elm",
       "apps/vscode/elm/completion-authority/src/Authority.elm",
@@ -33,7 +32,6 @@
       "apps/vscode/elm/completion-authority/scripts/fetch-elm-packages.sh (now a documented no-op stub)"
     ]
   },
-
   "corrections_applied": [
     {
       "p0": "TEST_STRUCTURE_INVALID",
@@ -63,7 +61,6 @@
       "fix": "Moved elm-explorations/test 2.2.0 from test-dependencies.direct to dependencies.direct in the production elm.json (with the full set of indirect deps produced by elm-test's offline solver). This satisfies elm 0.19.2's strict Plan check (which previously rejected test-dependencies.direct.elm-explorations/test as 'edited by hand') while still allowing elm-test to use the production elm.json as its project root."
     }
   ],
-
   "executable_gate": {
     "elm_compiler": {
       "version": "0.19.2",
@@ -92,10 +89,13 @@
       "verdict": "PASS: kernel round-trips a tagged event sequence (ready, state updates incl. TaskCompletionCommittedWhileHeld, PresentationBeforeCommit, decode_error on garbage_tag)"
     }
   },
-
   "out_of_scope": [
     "the reviewer's deeper question: 'is the production code semantically faithful to the historical completion-authority contract, particularly the absence of any code path that produces JobTerminal ObservationPending?' We verified the kernel CAN produce that state via consumePendingObservationPath inside handleTerminalObserved. The decision to fold observation into JobLifecycle was an architectural choice; whether the historical replay agrees with that fold is a downstream ACT (historical replay)."
   ],
-
-  "verdict": "PASS_KERNEL_EXECUTABLE_GREEN. Both elm make (4 modules compiled) and elm-test (20/20 PASSED) execute against the canonical Elm 0.19.2 + elm-test 0.19.2-0 toolchain. The CORRECTION01 vendored-0.19.1 bootstrap path is removed. The CORRECTION02 P0 test-structure and P0 domain-export-mismatch are repaired. A latent P0 (Authority.elm type error in ExecuteTurnPreludeEnter) was uncovered by the executable gate and fixed."
+  "identity": {
+    "subject_head": "7f7e74bcbb51c5bddb5f65610e04773e82c25c2d",
+    "closure_head": "695a73826",
+    "closure_replay_verified": true,
+    "closure_replay_note": "BUILD=PASS, ELM_TEST=20/20 PASS, SMOKE=PASS \u2014 all reproduced from the exact committed subject."
+  }
 }

@@ -11,8 +11,9 @@
 > run `elm make` and `elm-test` GREEN. This ACT executes those four repairs.
 
 ```text
-ENTRY_HEAD                  = 3d3df6d4d8cf15d208c2c4d2f72fe16b56bfe28b (HEAD)
-SUBJECT_HEAD                = 3d3df6d4d8cf15d208c2c4d2f72fe16b56bfe28b (HEAD)
+ENTRY_HEAD                  = 3d3df6d4d8cf15d208c2c4d2f72fe16b56bfe28b (HEAD before this ACT)
+SUBJECT_HEAD                = 7f7e74bcbb51c5bddb5f65610e04773e82c25c2d (executable Elm kernel commit)
+CLOSURE_HEAD                = 695a73826 (board/evidence closure commit)
 PRE_SUBJECT_TREE_STATE      = untracked working tree (CORRECTION01 binary vendored,
                               test file structural P0, ObservationState export P0)
 POST_SUBJECT_TREE_STATE     = tracked Elm sources, valid elm.json × 2, no orphan
@@ -22,6 +23,8 @@ ELM_TEST_RUNNER             = elm-test 0.19.2-0 (homebrew)
 ELM_MAKE_RESULT             = Compiled 4 modules -> vendor/completion-authority.js (exit 0)
 ELM_TEST_RESULT             = 20/20 PASSED, 0 FAILED (Duration 138 ms)
 SMOKE_TEST_RESULT           = PASS — kernel round-trips a tagged event sequence
+ELM_TEST_BREAKDOWN          = 8 ELM-AUTH-01..08 + 3 ELM-CONS (CONS-01, CONS-04, CONS-05)
+                              + 9 ELM-AUTH-09..17 = 20
 ```
 
 ## Corrections applied (per reviewer prescription)
