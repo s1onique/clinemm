@@ -46,3 +46,15 @@ DIFF_CHECK=PASS  (no diff vs ENTRY_HEAD; nothing was committed)
     4. submitId/completionId renamed to SUBMIT_EVENT_ID/COMPLETION_COMMIT_EVENT_ID (coordinator-local counters, not pre-existing durable IDs)
   §6 capture contract: annotated with §5 classifications per field; added concrete §21 implementation contract table.
   No production code touched. No Elm kernel files edited.
+
+§5/§6 SECOND-PASS CORRECTION (this turn, reviewer P0 temporal honesty feedback):
+  §5 identity-source map: 6 additional corrections added (entries 5-10):
+    5. runId on execute_turn_prelude_enter is temporal smuggling (prelude fires at local-runtime-host.ts:2136, BEFORE AgentRuntime.execute() at agent-runtime.ts:1500 mints runId) -> drop runId from prelude; CCARD buffer records it WITHOUT runId; replay adapter returns INSUFFICIENT_IDENTITY; Elm kernel never sees the event. Accepted trade: PRELUDE_STALL discriminator unobservable in replay.
+    6. runId on caller-side C7 onRunTurnStarted is temporal smuggling (hook at vscode-session-host.ts:531-540 fires BEFORE runId is minted) -> remove caller-side capture from Elm contract; replace with single subscribeRuntimeEvents listener that emits run_turn_started { runId } on the FIRST "run-started" event from runtime snapshot.
+    7. C7/C8 double-authority for run_turn_started (caller-side + snapshot listener would emit duplicates) -> SINGLE AUTHORITY on the runtime-snapshot listener.
+    8. task_started should fire at real task-creation seam (SdkController.initTask:3591, after taskStart.initTask returns sessionId at line 3586) -> the FIRST C-stage latch inside SdkSessionEventCoordinator is too late (only fires after first prompt round-trip; replay would see run_turn_started before task_started, which is structurally wrong).
+    9. Option B (replay-order inference for prompt↔run join) violates "no manufactured identity" rule -> DELETED. Only Option A (held prompt + snapshot listener emit together) remains.
+    10. terminalKind was still time-relative (first-pass rule evaluated ownership at finalize time) -> mark terminalKind as UNAVAILABLE for v1 (no launch-time immutable launchOwnershipKind field on CommandJob today); Elm kernel never sees terminal_committed in v1.
+  §6 capture contract: prelude field changed from "runId" to "(no runId) — UNAVAILABLE"; terminalKind dropped from terminal_committed; task_started seam changed from "first C-stage latch in SdkSessionEventCoordinator" to "SdkController.initTask:3591 after taskStart.initTask returns sessionId"; Option B deleted; capture contract is now temporally honest.
+  §4 recon table: rows for task_started, run_turn_started, execute_turn_prelude_enter, agent_turn_done, continuation_started, terminal_committed, submit_and_exit_seen, task_completion_committed updated to reflect the new contract.
+  No production code touched. No Elm kernel files edited. No new wire field, no new public API, no new tag in the Elm Codec.

@@ -1,10 +1,10 @@
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — IN_PROGRESS — 2026-09-29
 
-**Status:** IN_PROGRESS. Halted at §18 RED test authoring after reviewer P0 correction at §5/§6.
+**Status:** IN_PROGRESS. Halted at §18 RED test authoring after reviewer P0 corrections at §5/§6 (TWO passes total). First pass: identity-source contradictions. Second pass: temporal honesty contradictions.
 
 ```text
-ENTRY_HEAD        = b15a91f407045c832cc7dc3a8c299c59cd7b0e20 (unchanged through session)
-SECTION_DONE      = §3 (PREDECESSOR GATE — GREEN), §4 (RECON), §5 (IDENTITY-SOURCE MAP — corrected), §6 (CAPTURE CONTRACT — corrected)
+ENTRY_HEAD        = b15a91f407045c832cc7dc3a8c299c59cd7b0e20 (unchanged through both sessions)
+SECTION_DONE      = §3 (PREDECESSOR GATE — GREEN), §4 (RECON — corrected this turn), §5 (IDENTITY-SOURCE MAP — corrected this turn), §6 (CAPTURE CONTRACT — corrected this turn)
 SECTION_NEXT      = §18 (RED tests TCE-01..12)
 ELM_BUILD         = PASS (vendor recompile)
 ELM_TEST          = PASS (20/20)
@@ -15,19 +15,47 @@ VSCODE_PREPUBLISH = NOT_RUN
 DOGFOOD           = NOT_RUN
 ELM_MODEL_CORRESPONDENCE = UNPROVEN
 READY_FOR_ELM_SHADOW02  = false
+PRODUCTION_SEMANTICS_CHANGED = false
+ELM_AUTHORITY_SEMANTICS_CHANGED = false
+COMPLETION_AUTHORITY_CHANGED = false
+QUEUE_SEMANTICS_CHANGED = false
+PRESENTATION_SEMANTICS_CHANGED = false
+MCP_CODE_CHANGED = false
+MYC_CODE_CHANGED = false
 ```
 
 **Reviewer C1 verdict:** GO (PASS_WITH_NONBLOCKING_RESIDUE).
-**Reviewer C1-P0 correction (this turn):** §5 §6 had four contradictions; corrected to:
+**Reviewer C1-P0 corrections — TWO passes, both CLOSED:**
 
-1. **`runId` lifecycle** — `LocalRuntimeHost.runTurn` does NOT take a `runId` parameter (`local-runtime-host.ts:1223`). The `runId` is created at `agent-runtime.ts:1205` (`this.state.runId = createUID("run")`) and surfaced via the runtime snapshot (`agent-runtime.ts:1045`) which propagates through `LocalRuntimeHost.subscribeRuntimeEvents`. The capture hook must be wired to the runtime snapshot, not to `runTurn` parameters.
-2. **`taskId` UNVERIFIED → PROVEN_EQUIVALENT** — `options.getTask()?.taskId = sessionId` is proven by `sdk-provider-change-coordinator.ts:144-145`. `task_started { taskId }` reuses the existing C9/C10 taskId field.
+**Round 1 (committed at `50ab34c97`):** §5 §6 had four identity-source contradictions; corrected to:
+
+1. **`runId` lifecycle** — `LocalRuntimeHost.runTurn` does NOT take a `runId` parameter (`local-runtime-host.ts:1223`). The `runId` is created at `agent-runtime.ts:1500` (`this.state.runId = createUID("run")`) and surfaced via the runtime snapshot (`agent-runtime.ts:1045`) which propagates through `LocalRuntimeHost.subscribeRuntimeEvents`.
+2. **`taskId` UNVERIFIED → PROVEN_EQUIVALENT** — `options.getTask()?.taskId = sessionId` is proven by `sdk-provider-change-coordinator.ts:144-145` and 4 other rebuild seams (`applyTypedProviderConfigurationInstance:273`, `performRestartActiveSessionForProviderChange:362`, `resumeSessionFromTask:322`, `performRebuildSessionForMode:318`).
 3. **`terminalKind` ownership rule** — must inspect LAUNCH-time metadata (`job.ownerSessionId` set at job creation), NOT the current `activeSession` pointer at finalize time.
 4. **`submitId` / `completionId` → `SUBMIT_EVENT_ID` / `COMPLETION_COMMIT_EVENT_ID`** — renamed to honestly reflect that they are coordinator-local sequence counters, not pre-existing durable business IDs.
 
-**`continuation_started` design choice** — Option A (default): one `subscribeRuntimeEvents` listener emits both `continuation_started { promptId, runId }` and `run_turn_started { runId }` from the same snapshot. Option B (fallback): drop the event, recover the join via replay order. §21 decides.
+**Round 2 (THIS COMMIT — reviewer temporal honesty feedback):** §5 §6 had six additional temporal-smuggling contradictions; corrected to:
+
+5. **`runId` on `execute_turn_prelude_enter` is temporal smuggling** — prelude fires at `local-runtime-host.ts:2136` (first executable line of `executeTurn`, before first await). `AgentRuntime.execute()` mints `runId` at `agent-runtime.ts:1500`, AFTER `executeTurn`'s 5 prelude awaits. At the prelude boundary, `runId` does NOT exist. **FIX**: drop `runId` from prelude; CCARD buffer records the event WITHOUT `runId`; replay adapter returns `INSUFFICIENT_IDENTITY`; Elm kernel never sees the event. Accepted trade: PRELUDE_STALL discriminator unobservable in replay; the kernel's `activeRun` state is set by the later `run_started` handler (Authority.elm handleRunStarted at lines 150-169), which performs the same effective transition — **no authority invariant is lost**.
+
+6. **`runId` on the caller-side C7 `onRunTurnStarted` is temporal smuggling** — C7 capture fires at `vscode-session-host.ts:531-540` (threaded through `local-runtime-host.ts:1278-1284` immediately before `executeTurn(...)`). C7 fires BEFORE `executeTurn` enters, BEFORE `AgentRuntime.execute()` runs, BEFORE `runId` is minted. **FIX**: C7 caller-side capture is REPLACED by a single snapshot-listener-based `run_turn_started` event on the first `"run-started"` event from `subscribeRuntimeEvents`. ONE authority, fired at the ONLY boundary where `runId` genuinely exists.
+
+7. **C7/C8 double-authority for `run_turn_started`** — both caller-side and snapshot listener would emit the same event. **FIX**: one authority. The runtime-snapshot listener owns `run_turn_started`.
+
+8. **`task_started` should fire at the real task-creation seam** — the previous "first C-stage latch" inside `SdkSessionEventCoordinator` fires only AFTER the first prompt round-trip; replay would see `run_turn_started` BEFORE `task_started`. **FIX**: `task_started` fires at `SdkController.initTask:3591`, immediately after `taskStart.initTask(...)` returns the `sessionId` (line 3586). EARLIEST reliable task-creation seam.
+
+9. **Option B (replay-order inference for prompt↔run join) violates "no manufactured identity"** — inference from event order cannot satisfy `MANUFACTURED_IDENTITY_COUNT=0` + `explicit prompt↔run correlation`. **FIX**: Option B is DELETED. Only Option A remains: same listener emits `continuation_started` IF AND ONLY IF a held `promptId` matches the snapshot's sessionId. If no prompt is held, the event does NOT fire.
+
+10. **`terminalKind` was still derived from later session state** — first-pass rule was time-relative. **FIX**: there is NO launch-time immutable `launchOwnershipKind` field on `CommandJob` today. `terminalKind` is `UNAVAILABLE` for v1. The replay adapter already returns `INSUFFICIENT_IDENTITY` for `terminal_committed` without `terminalKind` (adapter lines 139-145); the Elm kernel never sees `terminal_committed` in v1. **Followup**: a successor ACT may add `launchOwnershipKind` to `CommandJob` at job creation time.
+
+**What this ACT will and will not capture in v1:**
+
+- **Replayed to Elm**: `task_started`, `pending_prompt_*`, `continuation_scheduled`, `run_turn_started`, `continuation_started` (when prompt is held), `agent_turn_done`, `submit_and_exit_seen`, `task_completion_committed`, `terminal_observed`, optionally `completion_presented`.
+- **Captured but DROPPED at adapter (INSUFFICIENT_IDENTITY)**: `execute_turn_prelude_enter` (no `runId`), `terminal_committed` (no `terminalKind`).
 
 **Hard prohibitions (per reviewer re-emphasis + §22):** DO NOT reopen elm-test/toolchain investigation; DO NOT fix presentation; DO NOT touch Elm semantics; DO NOT change BCB/PCCA/CPA/PCRS02/PCRS02C01/CCARD invariants.
+
+**Reviewer's directive after this temporal correction:** "go straight into TCE RED; do not review again unless a genuinely new P0 appears."
 
 **Resume state for next session:** §18 RED tests TCE-01..TCE-12. Best template ordering: TCE-07/08 (concurrent runs), TCE-01 (runId thread), TCE-02 (prompt↔run join), TCE-05/09 (terminal ownership), TCE-03/04/12 (submit/completion cardinality), TCE-06 (default-off), TCE-10/11 (adversarial correlation).
 
