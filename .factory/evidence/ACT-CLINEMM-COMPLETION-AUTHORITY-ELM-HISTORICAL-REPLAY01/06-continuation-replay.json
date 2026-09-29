@@ -1,0 +1,36 @@
+{
+  "test_id": "HR-03",
+  "source_trace": ".factory/evidence/ACT-CLINEMM-LIVE-PRESENTATION-SURFACE-DISCRIMINATOR01/01a-ccard.LIVE_RAW.jsonl",
+  "source_sha256": "d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1",
+  "events_total": 13,
+  "first_divergence_seq": 1,
+  "first_divergence_stage": "run_turn_started",
+  "first_divergence_kind": "INSUFFICIENT_IDENTITY",
+  "first_divergence_reason": "run_turn_started has no runId in REAL trace",
+  "continuation_identity_sufficient": false,
+  "continuation_first_divergence_seq": 1,
+  "continuation_first_divergence_stage": "run_turn_started",
+  "continuation_first_divergence_kind": "INSUFFICIENT_IDENTITY",
+  "manufactured_identity_count": 0,
+  "origin_rewrite_count": 0,
+  "unmodeled_event_count": 0,
+  "insufficient_identity_count": 8,
+  "ts_completion_committed": true,
+  "ts_completion_committed_seq": 12,
+  "continuation_subsequence": {
+    "prompt_origin": "pending_prompt_drain",
+    "run_origin": "explicit_user (the second run_turn_started at seq 10 in R1 is pending_prompt_drain; the agent_turn_done at seq 11 has origin=pending_prompt_drain)",
+    "prompt_run_origin_consistent": true,
+    "provenance_classification": "PROVENANCE_PRESERVED (not a within-event mismatch)"
+  },
+  "per_event": [
+    {"seq":5,"stage":"pending_prompt_enqueued","classification":"DIRECT","reason":"mapped to pending_prompt_enqueued (promptId present)"},
+    {"seq":6,"stage":"pending_prompt_dequeued","classification":"DIRECT","reason":"mapped to pending_prompt_dequeued (promptId present)"},
+    {"seq":7,"stage":"continuation_scheduled","classification":"DIRECT","reason":"mapped to continuation_scheduled (promptId present)"},
+    {"seq":8,"stage":"run_turn_started","classification":"INSUFFICIENT_IDENTITY","reason":"no runId"},
+    {"seq":9,"stage":"agent_turn_done","classification":"INSUFFICIENT_IDENTITY","reason":"no runId"},
+    {"seq":10,"stage":"run_turn_started","classification":"INSUFFICIENT_IDENTITY","reason":"no runId (the second run is the continuation)"},
+    {"seq":11,"stage":"agent_turn_done","classification":"INSUFFICIENT_IDENTITY","reason":"no runId (consumes the continuation)"}
+  ],
+  "verdict": "CONTINUATION_IDENTITY_SUFFICIENT=false (continuation prompt has promptId, but the matching continuation run/agent events have no runId; cannot correlate prompt -> run -> consume via the kernel)"
+}

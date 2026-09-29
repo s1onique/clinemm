@@ -1,0 +1,52 @@
+{
+  "test_id": "HR-04",
+  "source_trace": ".factory/evidence/ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02/continuation-cardinality-authority.jsonl",
+  "source_sha256": "2fab1cc4c2f88162cc9e4ccd0186d0dbff48f603bd445adb1a1fc1066b9e0ddd",
+  "events_total": 158,
+  "first_divergence_seq": 1,
+  "first_divergence_stage": "run_turn_started",
+  "first_divergence_kind": "INSUFFICIENT_IDENTITY",
+  "first_divergence_reason": "run_turn_started has no runId in REAL trace",
+  "stall_first_divergence_seq": 1,
+  "stall_first_divergence_stage": "run_turn_started",
+  "stall_first_divergence_kind": "INSUFFICIENT_IDENTITY",
+  "final_active_run": null,
+  "completion_authorized": null,
+  "manufactured_identity_count": 0,
+  "origin_rewrite_count": 0,
+  "unmodeled_event_count": 0,
+  "insufficient_identity_count": 155,
+  "direct_event_count": 3,
+  "direct_events": [
+    {"seq":154,"stage":"pending_prompt_enqueued","promptId":"pending_1790634915728_WJ4Cj"},
+    {"seq":156,"stage":"pending_prompt_dequeued","promptId":"pending_1790634915728_WJ4Cj"},
+    {"seq":157,"stage":"continuation_scheduled","promptId":"pending_1790634915728_WJ4Cj"}
+  ],
+  "stall_cardinality": {
+    "terminal_committed": 147,
+    "run_turn_started": 3,
+    "agent_turn_done": 2,
+    "submit_and_exit_seen": 2,
+    "task_completion_committed": 1,
+    "pending_prompt_enqueued": 1,
+    "pending_prompt_dequeued": 1,
+    "continuation_scheduled": 1
+  },
+  "ts_completion_committed": true,
+  "ts_completion_committed_seq": 21,
+  "stall_signature_events": [
+    {"seq":1,"stage":"run_turn_started","sessionId":"1790633511093_34re2","origin":"explicit_user"},
+    {"seq":20,"stage":"submit_and_exit_seen","sessionId":"1790633511093_34re2","origin":"pending_prompt_drain","taskId":"1790633511093_34re2"},
+    {"seq":21,"stage":"task_completion_committed","sessionId":"1790633511093_34re2","origin":"pending_prompt_drain","taskId":"1790633511093_34re2"},
+    {"seq":22,"stage":"agent_turn_done","sessionId":"1790633511093_34re2","origin":"explicit_user"},
+    {"seq":23,"stage":"run_turn_started","sessionId":"1790633775136_8mrnl","origin":"explicit_user"},
+    {"seq":153,"stage":"submit_and_exit_seen","sessionId":"1790633775136_8mrnl","origin":"pending_prompt_drain","taskId":"1790633775136_8mrnl"},
+    {"seq":154,"stage":"pending_prompt_enqueued","sessionId":"1790633775136_8mrnl","origin":"pending_prompt_drain","promptId":"pending_1790634915728_WJ4Cj"},
+    {"seq":155,"stage":"agent_turn_done","sessionId":"1790633775136_8mrnl","origin":"explicit_user"},
+    {"seq":156,"stage":"pending_prompt_dequeued","sessionId":"1790633775136_8mrnl","origin":"pending_prompt_drain","promptId":"pending_1790634915728_WJ4Cj"},
+    {"seq":157,"stage":"continuation_scheduled","sessionId":"1790633775136_8mrnl","origin":"pending_prompt_drain","promptId":"pending_1790634915728_WJ4Cj"},
+    {"seq":158,"stage":"run_turn_started","sessionId":"1790633775136_8mrnl","origin":"explicit_user"}
+  ],
+  "verdict": "STALL_FIRST_DIVERGENCE=run_turn_started @ seq=1 (INSUFFICIENT_IDENTITY). The known stall sequence cannot be replayed because the schema gap blocks every run_turn_started / agent_turn_done / submit_and_exit_seen / task_completion_committed / terminal_committed event from entering the Elm kernel. Only the 3 prompt events decode. The first divergence is at the very first event of the trace, which is much earlier than the stall itself.",
+  "stall_reproduced_yes_no": "NO (the stall cannot be reproduced IN the Elm kernel because the schema gap blocks the entire sequence from entering; this is consistent with CAPTURE_INSUFFICIENT verdict)"
+}

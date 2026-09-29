@@ -1,3 +1,80 @@
+## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — CAPTURE_INSUFFICIENT — 2026-09-29
+
+**Status:** CAPTURE_INSUFFICIENT (verdict D per §39). Replay adapter +
+test committed; 18/18 PASS.
+
+```text
+ENTRY_HEAD        = a1d8e03e5fc206e4beef1c680e75f984e6421ed2
+SUBJECT_HEAD      = <git rev-parse HEAD at ACT closure>
+CLOSURE_HEAD      = <git rev-parse HEAD at ACT closure>
+KERNEL_SUBJECT    = 7f7e74bcbb51c5bddb5f65610e04773e82c25c2d (executable Elm kernel, unchanged)
+```
+
+**The Elm kernel is faithful — but the REAL frozen trace schema is
+THINNER than what the kernel requires.** Replay of 183 REAL historical
+events through the COMPILED Elm kernel reveals an
+`INSUFFICIENT_IDENTITY` gap at the FIRST event of every trace (seq=1
+`run_turn_started` for R1/R3/R4; seq=1 `terminal_committed` for R2).
+The Elm decoder expects `runId` / `submitId` / `completionId` /
+`ownerId`; the REAL schema carries `taskId` / `sessionId` / `jobId`
+/ `promptId` / `origin` only. Of the 183 events, only the 3 prompt
+events (`pending_prompt_enqueued` / `pending_prompt_dequeued` /
+`continuation_scheduled`) decode; the rest are reported as
+INSUFFICIENT_IDENTITY without further kernel evaluation.
+
+**Architectural verdict:** the Elm kernel's closed identity tag set
+is MORE RIGOROUS than the REAL capture schema. The kernel is NOT too
+coarse; the REAL schema is too thin. AR-06 (never manufacture
+identity) is enforced; AR-05 (never rewrite origin) is enforced;
+AR-04 (deterministic mapping) is enforced.
+
+**What was committed** (5 files):
+- `apps/vscode/src/sdk/completion-authority-elm-replay.ts` (offline
+  adapter type definitions + adaptRecord)
+- `apps/vscode/src/sdk/completion-authority-elm-replay.kernel.ts`
+  (loadKernel + replayTrace driver)
+- `apps/vscode/src/sdk/completion-authority-elm-replay.invariants.ts`
+  (AR-01..AR-06 adapter self-invariants)
+- `apps/vscode/src/sdk/__tests__/completion-authority-elm-historical-replay01.test.ts`
+  (HR-01..HR-08 + 8 adapter self-invariants; 18/18 PASS)
+- `.factory/acts/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01.md`
+- `.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01/`
+  (12 files: 00-entry, 01-trace-inventory, 02-schema-map, 03-identity-map,
+  04-control-replay.json, 05-terminal-replay.json, 06-continuation-replay.json,
+  07-stall-replay.json, 08-counter-conservation, 09-discriminator, 10-final-report,
+  result.json, source-sha256.before, source-sha256.after, test-replay-summary.json)
+
+**Verification:**
+- ELM_BUILD = PASS (sha=40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168)
+- ELM_TEST = 20/20 PASS (--report=json; duration 138ms)
+- ELM_SMOKE = PASS
+- vitest historical replay = 18/18 PASS
+- tsc apps/vscode = 0 errors
+- SOURCE_SHA256_PRESERVED = true (before == after for all 4 frozen traces)
+- PRODUCTION_REFS = 0 (no production code references the adapter or compiled kernel JS)
+- ELM_AUTHORITY_SEMANTICS_CHANGED = false
+- PRODUCTION_CODE_CHANGED = false
+- vscode:prepublish = PRE_EXISTING_BASELINE_FAILURE (317 biome lint errors at ENTRY_HEAD; verified by stashing diff + re-running lint; unrelated to this ACT)
+
+**NOT committed (per §31):**
+- Authority.elm / Domain.elm / Codec.elm / Main.elm unchanged.
+- runtime TS (LocalRuntimeHost, PendingPromptsController,
+  SdkSessionEventCoordinator, command-status-tool) unchanged.
+- BCB / C10 / PCCA / CCARD unchanged.
+- MCP / myc / React/webview unchanged.
+- No origin rewrite, no ID manufacturing, no diagnostic profile,
+  no config flag, no extension activation, no runtime event feed
+  wiring, no live integration.
+
+**READY_FOR_ELM_SHADOW02 = false.**
+
+**Next ACT:** `ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01`
+— extend the existing `continuation-cardinality-authority` capture
+seam to emit the four missing identities (runId, submitId,
+completionId, ownerId). Replay with the SAME adapter (no model
+changes) to confirm the schema gap closes. Only after that should
+the kernel-vs-production semantic comparison proceed.
+
 ## ACT-CLINEMM-COMPLETION-PRESENTATION-AUTHORITY01 — PASS_COMPLETION_PRESENTATION_AUTHORITY — 2026-09-28
 
 **Status:** PASS_COMPLETION_PRESENTATION_AUTHORITY. The live P0 captured during

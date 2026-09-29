@@ -1,0 +1,19 @@
+ACT=ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01
+ENTRY_HEAD=a1d8e03e5fc206e4beef1c680e75f984e6421ed2
+ENTRY_TREE=CLEAN
+PREDECESSOR_SUBJECT_HEAD=7f7e74bcbb51c5bddb5f65610e04773e82c25c2d
+PRE_ENTRY_LOG=-5:
+  a1d8e03e factory: bind Elm shadow CORRECTION02 to final closure head
+  f5c6a3c57 epic-board: close completion-authority Elm shadow CORRECTION02
+  613ab6d5c factory: finalize Elm shadow CORRECTION02 closure_head reference
+  a599556ba factory: bind Elm shadow CORRECTION02 evidence to subject
+  7f7e74bcb ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-SHADOW01-CORRECTION02: executable Elm kernel
+
+ENTRY_GATE=
+  ELM_BUILD=PASS (vendor/completion-authority.js sha=40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168)
+  ELM_TEST=20/20 PASS (--report=json stream; duration 138ms; 0 failed; all CORRECTION02 cases GREEN)
+  SMOKE=PASS (kernel round-trips a tagged event sequence; 7 outbound messages; violation detected; decode_error detected)
+  SOURCE_SHA256_PRESERVED=true (post-stall02 hashes match predecessor evidence)
+ENVIRONMENT_NOTE=
+  elm-test --report=console is hidden by master-per-worker summary delay in this sandbox;
+  --report=json streams as workers complete and is the gate used here.

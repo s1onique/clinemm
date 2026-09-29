@@ -1,0 +1,77 @@
+{
+  "kernel": {
+    "path": "/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode/elm/completion-authority/vendor/completion-authority.js",
+    "sha256": "40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168"
+  },
+  "sourceShas": {
+    "stall": "2fab1cc4c2f88162cc9e4ccd0186d0dbff48f603bd445adb1a1fc1066b9e0ddd",
+    "r1": "d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1",
+    "r2": "a61d35bc47be0711cc4a02ab0c4976321ab038974e7aeed3859090500cf6f534"
+  },
+  "replays": [
+    {
+      "tag": "R1",
+      "sourceTraceSha256": "d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1",
+      "eventsTotal": 13,
+      "firstDivergenceSeq": 1,
+      "firstDivergenceKind": "INSUFFICIENT_IDENTITY",
+      "firstDivergenceStage": "run_turn_started",
+      "manufacturedIdentityCount": 0,
+      "originRewriteCount": 0,
+      "unmodeledEventCount": 0,
+      "insufficientIdentityCount": 8,
+      "tsCompletionCommitted": true,
+      "tsCompletionCommittedSeq": 12,
+      "finalModel": null,
+      "deterministicSha256": "c3c78cbba8615bab75e0356ac4069ea8dad8a974a534ee1c3a79c48a8e20754a"
+    },
+    {
+      "tag": "R2",
+      "sourceTraceSha256": "a61d35bc47be0711cc4a02ab0c4976321ab038974e7aeed3859090500cf6f534",
+      "eventsTotal": 12,
+      "firstDivergenceSeq": 1,
+      "firstDivergenceKind": "INSUFFICIENT_IDENTITY",
+      "firstDivergenceStage": "terminal_committed",
+      "manufacturedIdentityCount": 0,
+      "originRewriteCount": 0,
+      "unmodeledEventCount": 0,
+      "insufficientIdentityCount": 7,
+      "tsCompletionCommitted": true,
+      "tsCompletionCommittedSeq": 12,
+      "finalModel": null,
+      "deterministicSha256": "2468d413a3e88d51d80c26669e76e3dcd865c84992815a8b468465b2a1d7c90d"
+    },
+    {
+      "tag": "R3",
+      "sourceTraceSha256": "d7302ae909596a21d48ff491661e5f2652e831b62928fc50db2fb4837dbd24f1",
+      "eventsTotal": 13,
+      "firstDivergenceSeq": 1,
+      "firstDivergenceKind": "INSUFFICIENT_IDENTITY",
+      "firstDivergenceStage": "run_turn_started",
+      "manufacturedIdentityCount": 0,
+      "originRewriteCount": 0,
+      "unmodeledEventCount": 0,
+      "insufficientIdentityCount": 8,
+      "tsCompletionCommitted": true,
+      "tsCompletionCommittedSeq": 12,
+      "finalModel": null,
+      "deterministicSha256": "c3c78cbba8615bab75e0356ac4069ea8dad8a974a534ee1c3a79c48a8e20754a"
+    },
+    {
+      "tag": "R4",
+      "sourceTraceSha256": "2fab1cc4c2f88162cc9e4ccd0186d0dbff48f603bd445adb1a1fc1066b9e0ddd",
+      "eventsTotal": 158,
+      "firstDivergenceSeq": 1,
+      "firstDivergenceKind": "INSUFFICIENT_IDENTITY",
+      "firstDivergenceStage": "run_turn_started",
+      "manufacturedIdentityCount": 0,
+      "originRewriteCount": 0,
+      "unmodeledEventCount": 0,
+      "insufficientIdentityCount": 155,
+      "tsCompletionCommitted": true,
+      "tsCompletionCommittedSeq": 21,
+      "finalModel": null,
+      "deterministicSha256": "1e187f37afff621a882be0dce50609af010091b1c0c8cf44f9659f3e9b54e7f4"
+    }
+  ]
+}
