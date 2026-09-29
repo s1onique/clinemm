@@ -1,0 +1,80 @@
+{
+  "act": "ACT-MYC-CLINEMM-AUTOMATIC-PRIME-MCP-TOOL-CALL-REPAIR01",
+  "verdict": "PASS_TYPED_TOOL_CALL_FAILURE_DISCRIMINATOR",
+  "entry_head": "766f47ff692fd78f54ebefa751f403ffc36e1384",
+  "implementation_head": "f7811739e620c5f7238706f9d0cb494f680da3fc",
+  "subject_head": "f7811739e620c5f7238706f9d0cb494f680da3fc",
+  "closure_head": "UNCOMMITTED (board row commit, post-this-evidence)",
+
+  "diagnostics_default_off": true,
+  "production_semantics_changed": false,
+  "helper_throw_behavior_preserved": true,
+  "recorder_behavior_preserved": true,
+
+  "live_red": {
+    "session_id": "1790660487765_vfylt",
+    "auto_prime_status": "failed",
+    "auto_prime_phase": "tool_call",
+    "auto_prime_failure_class": "client_request_failed",
+    "session_connection_status": "unavailable"
+  },
+
+  "topology_verdict": "IDENTICAL",
+  "topology_auto_path_connection_authority": "session-bound ensureSessionConnection",
+  "topology_manual_path_connection_authority": "session-bound ensureSessionConnection",
+  "topology_diff_at_call_boundary": "EMPTY (same McpHub.callTool, same sessionId, same connection.client.request)",
+
+  "frozen_hypotheses_ruled_out": [
+    "H1 = AUTOMATIC_PATH_USES_WRONG_CLIENT_INSTANCE",
+    "H3 = AUTOMATIC_PATH_SKIPS_ENSURE_SESSION_CONNECTION",
+    "H5 = TOOL_LOOKUP_SUCCEEDS_BUT_CALL_TARGET_IS_NOT_CONNECTED",
+    "H7 = AUTOMATIC_PATH_USES_DIFFERENT_TIMEOUT/REQUEST_OPTIONS",
+    "H8 = MCP_TOOL_RESULT_IS_ERROR_BUT_MAPPED_AS_REQUEST_FAILURE"
+  ],
+  "frozen_hypotheses_remaining": [
+    "H2 = AUTOMATIC_PATH_CALLS_BEFORE_CLIENT_INITIALIZED",
+    "H4 = AUTOMATIC_PATH_SEES_STALE_OR_PENDING_CONNECTION",
+    "H6 = CALL_REQUEST_REJECTS_WITH_TYPE_TRANSPORT_OR_PROTOCOL_ERROR"
+  ],
+
+  "root_cause": "discriminator too coarse to identify exact MCP call-boundary defect",
+  "repair": "expand MycPrimeLiveAcquisitionFailureClass.tool_call sub-modes (tool_timeout, method_not_found, tool_returned_error) and add structured McpError.code + response.isError inspectors in runMycPrimeOnSessionStart",
+
+  "production_files_changed": [
+    "apps/vscode/src/sdk/myc-prime-live-diag.ts",
+    "apps/vscode/src/sdk/myc-prime-automation.ts"
+  ],
+  "test_files_changed": [
+    "apps/vscode/src/sdk/__tests__/myc-prime-automation.tool-call-discriminator01.red.test.ts (NEW)"
+  ],
+
+  "red_test_file": "apps/vscode/src/sdk/__tests__/myc-prime-automation.tool-call-discriminator01.red.test.ts",
+  "red_test_count": 6,
+  "red_test_pre_repair": "2 pass, 4 fail (APMCP-07, APMCP-08, APMCP-09, APMCP-10)",
+  "red_test_post_repair": "6/6 PASS",
+  "ablation": "PASS (revert → 3 RED return; restore → GREEN returns)",
+
+  "myc_code_changed": false,
+  "mcp_protocol_changed": false,
+  "sdk_protocol_changed": false,
+  "hooks_adapter_changed": false,
+
+  "conservation": {
+    "myc_prime_automation_acquisition_failure01_red": "10/10 PASS",
+    "myc_prime_live_diag": "28/28 PASS",
+    "myc_prime_live_diag_readout": "21/21 PASS",
+    "dogfood_diagnostic_profile_myc_clinemm01": "39/39 PASS",
+    "myc_prime_automation_lifecycle01": "12/12 PASS",
+    "myc_prime_automation_lifecycle02": "4/4 PASS",
+    "myc_prime_automation_identity_join_red_c24_c_bridge": "2/2 PASS",
+    "myc_prime_auto_injection01_api01_red_c24_c_bridge": "4/4 PASS",
+    "myc_prime_automation_tool_call_discriminator01_red": "6/6 PASS (NEW)",
+    "totals": "87/87 PASS across 8 test files"
+  },
+
+  "typecheck": "GREEN (apps/vscode tsc --noEmit, 0 errors)",
+  "git_diff_check": "clean",
+
+  "postfix_live_qualification": "DEFERRED (operator dogfood run; per ACT §27)",
+  "ready_for_myc_clinemm06": true
+}
