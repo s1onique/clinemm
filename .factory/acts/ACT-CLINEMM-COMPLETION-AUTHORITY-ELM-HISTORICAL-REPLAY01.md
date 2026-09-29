@@ -11,8 +11,8 @@
 
 ```text
 ENTRY_HEAD                  = a1d8e03e5fc206e4beef1c680e75f984e6421ed2
-SUBJECT_HEAD                = <git rev-parse HEAD at ACT closure>
-CLOSURE_HEAD                = <git rev-parse HEAD at ACT closure>
+SUBJECT_HEAD                = 155237a586b0f10d73dee683dc8aaa83bd436c98
+CLOSURE_HEAD                = 155237a586b0f10d73dee683dc8aaa83bd436c98
 PRE_ENTRY_TREE_STATE        = clean
 POST_SUBJECT_TREE_STATE     = tracked replay adapter (4 files) + test (1 file) + ACT evidence (12 files) + CORRECTION01 (test-only, evidence-only)
 ELM_BUILD                   = PASS (sha=40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168)
