@@ -1,6 +1,20 @@
 # ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — final report (post second-pass §5/§6 temporal-honesty correction)
 
-**Verdict:** **§3 GREEN, §4/§5/§6 written and corrected TWICE under reviewer P0 feedback (first: identity-source contradictions; second: temporal honesty).** ACT resumes at §18 (RED tests TCE-01..TCE-12) in the next session. No production code was edited; both rounds of corrections are entirely to the evidence documents.
+**Verdict:** **§3 GREEN, §4/§5/§6 written and corrected TWICE under reviewer P0 feedback (first: identity-source contradictions; second: temporal honesty).** Reviewer C1 confirmed GO on the second-pass contract (this turn). ACT resumes at §18 (RED tests TCE-01..TCE-12) in the next session. No production code was edited; both rounds of corrections are entirely to the evidence documents.
+
+**Reviewer C1 verdict on the second-pass contract:** **GO (PASS_WITH_NONBLOCKING_RESIDUE).** No new P0. All load-bearing temporal problems resolved:
+
+- `runId` recognized as nonexistent at `execute_turn_prelude_enter`; event remains useful in CCARD but is intentionally rejected by replay as `INSUFFICIENT_IDENTITY`.
+- `run_turn_started` has one authority: the first appropriate runtime snapshot after the real `runId` exists.
+- `task_started` moved to the actual task/session creation boundary before any run event.
+- prompt→run correlation is now identity-based only; replay-order Option B is gone.
+- `terminalKind` honestly `UNAVAILABLE` rather than reconstructed from later state.
+
+Reviewer: "That is much closer to the property we actually want: **Elm receives facts that existed when the corresponding production transition occurred**, not retrospective annotations."
+
+**P2 residue (NON-BLOCKING):** stale prose in `01-recon.md` summary section still says the missing identity fields include `runId` on prelude and `terminalKind` and that both gaps can be closed by adding those fields. This conflicts with the corrected detailed rows and the authoritative §6 contract, but it is now clearly documentary residue. **Batch at terminal cleanup. Do not start CORRECTION03 for it.** Unrelated existing Factory substrate (`.factory/gate-summary.json`, stale Leamas generator binding) is NOT this ACT's execution gate.
+
+**Reviewer's directive recorded:** "go straight into TCE RED; do not review again unless a genuinely new P0 appears." Reviewer also explicitly told the operator (this session) NOT to start §18 RED implementation this turn — only record the GO and the §18 RED contract specifications, then exit.
 
 ## Final §3 gate outcome
 
@@ -128,3 +142,199 @@ REVIEWER_VERDICT_P1_TERMINAL_KIND=CLOSED (UNAVAILABLE in v1; lift via successor 
 REVIEWER_VERDICT_P1_OPTION_B=CLOSED (deleted; Option A is single design)
 NEXT_PER_REVIEWER="go straight into TCE RED; do not review again unless a genuinely new P0 appears"
 ```
+
+## §18 RED test contract (specifications — implementation in the next session)
+
+The reviewer mandated **RED first, no implementation interleaving**. Order matters because TCE-07/08 (concurrent runs) pre-exercises the runId thread that TCE-01 then pins, and the prompt→run correlation in TCE-02 depends on the promptId hold established in TCE-01.
+
+### TCE-01 — real runId from runtime snapshot
+
+```text
+GIVEN runtime emits run-started snapshot R with runId
+WHEN adapter is asked to replay the resulting run_turn_started
+THEN exactly one replayable run_turn_started(runId=R) reaches the Elm kernel
+AND zero run_turn_started events with any other runId reach the kernel for that snapshot
+```
+
+### TCE-02 — explicit promptId ↔ runId join
+
+```text
+GIVEN continuation_scheduled(P, S) held in the adapter
+WHEN a matching run-started(R, S) snapshot arrives
+THEN exactly one continuation_started(P, R) reaches the kernel
+AND exactly one run_turn_started(R) reaches the kernel
+AND zero run_turn_started events with any other runId reach the kernel
+
+GIVEN no held P for S
+WHEN a run-started(R, S) snapshot arrives
+THEN zero continuation_started reaches the kernel
+AND exactly one run_turn_started(R) still reaches the kernel
+```
+
+### TCE-05 — terminalKind unavailable behavior
+
+```text
+GIVEN terminal_committed(jobId, ownerId) is captured at CCARD
+AND terminalKind is absent
+WHEN the adapter is asked to replay it
+THEN adapter returns INSUFFICIENT_IDENTITY
+AND zero terminal_committed events reach the Elm kernel
+AND CCARD still holds the raw capture (live_unreplayable, not lost)
+```
+
+### TCE-06 — diagnostic DEFAULT_OFF / zero semantic delta
+
+```text
+GIVEN capture is disabled (DEFAULT_OFF)
+WHEN any production transition that would normally be captured occurs
+THEN no new CCARD records are written
+AND no listener-induced semantic/state delta occurs in production
+AND no Elm port is invoked
+```
+
+### TCE-07/08 — concurrent run identity isolation
+
+```text
+GIVEN R1 and R2 are overlapping/concurrent
+WHEN their respective run-started snapshots arrive in any interleaving
+THEN no runId cross-assignment occurs (R1.runId never appears as R2's runId or vice versa)
+AND each run_done correlates ONLY to its own R
+AND each run_turn_started reaches the kernel with the correct runId
+```
+
+### TCE-09 — ownerId stability across finalize
+
+```text
+GIVEN a terminal job J was launched with job.ownerSessionId = S at LAUNCH-time
+WHEN finalize fires
+THEN ownerId used in terminal_committed === job.ownerSessionId
+AND ownerId is read from launch-time metadata, NOT from the active-session pointer at finalize time
+```
+
+### TCE-10 — adversarial prompt/run session mismatch
+
+```text
+GIVEN a held prompt for session S1
+WHEN a run-started snapshot arrives for session S2 (different session, not S1)
+THEN zero continuation_started reaches the kernel
+AND exactly one run_turn_started(R2) still reaches the kernel
+```
+
+### TCE-11 — stale/consumed prompt protection
+
+```text
+GIVEN a held prompt P has already been consumed (joined to its real run, or invalidated)
+WHEN any later run-started snapshot arrives (any session)
+THEN P does NOT join that later run
+AND zero continuation_started with P reaches the kernel for the later run
+```
+
+### TCE-03/04/12 — submit/completion event cardinality
+
+```text
+GIVEN two distinct submit attempts S1 and S2 (different promptId, different BCB hold)
+WHEN submit_and_exit_seen fires for both
+THEN exactly two submit_and_exit_seen events reach the kernel
+AND each carries its own SUBMIT_EVENT_ID
+AND BCB hold does NOT mint an additional SUBMIT_EVENT_ID
+
+GIVEN two distinct completion commits C1 and C2
+WHEN task_completion_committed fires for both
+THEN exactly two task_completion_committed events reach the kernel
+AND each carries its own COMPLETION_COMMIT_EVENT_ID
+```
+
+### Critical RED anti-patterns the reviewer called out
+
+**DO NOT write a RED demanding `runId` on `execute_turn_prelude_enter`.** The useful executable contract for prelude is:
+
+```text
+prelude captured (CCARD)
+runId absent (correct: runId is not yet minted)
+adapter => INSUFFICIENT_IDENTITY
+zero Elm input
+```
+
+**DO NOT write a RED requiring `terminalKind`.** Pin its intentional absence instead (TCE-05 above).
+
+### §21 implementation warning (from reviewer, recorded for next session)
+
+The Elm docs recommend a small, strong interop boundary rather than mirroring every JS function through ports. Our design now follows that principle: production captures richer factual events; the adapter decides which are sufficiently identified to cross into the Elm authority kernel. **At §21, resist adding extra fields merely to make more events replayable.** The v1 losses are legitimate and represent better evidence than synthetic completeness:
+
+```text
+execute_turn_prelude_enter → REAL capture, LIVE_UNREPLAYABLE
+terminal_committed         → REAL capture, LIVE_UNREPLAYABLE
+```
+
+### Resume ordering for next session
+
+```text
+1. TCE-07/08  (concurrent run identity isolation)
+2. TCE-01     (real runId from runtime snapshot)
+3. TCE-02     (explicit promptId ↔ runId join — depends on TCE-01)
+4. TCE-05/09  (terminalKind unavailable + ownerId stability)
+5. TCE-03/04/12 (submit/completion cardinality)
+6. TCE-06     (diagnostic DEFAULT_OFF / zero semantic delta)
+7. TCE-10/11  (adversarial session/prompt/run correlation)
+```
+
+**No implementation interleaving. All 12 REDs fail first. Only then does §21 GREEN begin.**
+
+## §18 RED TEST RESULTS (THIS COMMIT — RED-first contract verified)
+
+The §18 RED tests have been authored at `apps/vscode/src/sdk/__tests__/completion-authority-trace-capture-extension01.test.ts` (720 lines, 26 tests across 10 describe blocks). Captured output: `18-red-test-output.txt`.
+
+```text
+Test Files  1 failed (1)
+Tests       8 failed | 18 passed (26)
+```
+
+### Tests that fail (the new contracts §21 must satisfy):
+
+| # | Test | Why it fails (this is the §21 work) |
+|---|---|---|
+| TCE-02 #1 | `continuation_started` with promptId+runId → DIRECT | Adapter has no `continuation_started` case; currently `UNMODELED_EVENT` |
+| TCE-02 #2 | `continuation_started` without runId → INSUFFICIENT_IDENTITY | Same — adapter has no case; falls through to UNMODELED |
+| TCE-02 #3 | `continuation_started` without promptId → INSUFFICIENT_IDENTITY | Same |
+| TCE-07/08 | Two interleaved runs R1, R2 in finalModel.runs | Kernel finalModel only tracks `activeRun`; needs `runs: List RunRef` |
+| TCE-10 | `continuation_started` for S2 with promptId+runId → DIRECT | Same as TCE-02 |
+| TCE-11 | `continuation_started` without promptId → INSUFFICIENT_IDENTITY | Same as TCE-02 |
+| TCE-03 | Two `submit_and_exit_seen` both appear in finalModel | Kernel only keeps `submitCount`, not the submitId sequence |
+| TCE-04 | Two `task_completion_committed` both appear in finalModel | Kernel only keeps last `committedCompletion`, not the completionId sequence |
+
+### Tests that PASS (existing kernel already satisfies these contracts):
+
+| # | Test | Why it passes (already correct) |
+|---|---|---|
+| TCE-01 #1 | `run_turn_started` with runId → DIRECT + observable in finalModel | `handleRunStarted` at Authority.elm:150-169 already sets `activeRun` |
+| TCE-01 #2 | `run_turn_started` without runId → INSUFFICIENT_IDENTITY | Adapter CORRECTION02 already rejects |
+| TCE-05 #1 | `terminal_committed` without terminalKind → INSUFFICIENT_IDENTITY | CORRECTION02 already pins this |
+| TCE-05 #2 | `terminal_committed` terminalKind=owned → DIRECT | Adapter handles |
+| TCE-05 #3 | `terminal_committed` terminalKind=background_not_owned → DIRECT | Adapter handles |
+| TCE-06 | Default-off / zero semantic delta | Production has no capture module for these stages yet |
+| TCE-08 | Mismatched agent_turn_done.runId → recorded as violation | `handleAgentTurnDone` at Authority.elm:176-204 emits `RunClosedByOtherRef` |
+| TCE-09 #1 | `terminal_committed` without ownerId → INSUFFICIENT_IDENTITY | Adapter handles |
+| TCE-09 #2 | `terminal_committed` with ownerId+terminalKind → DIRECT | Adapter handles |
+| TCE-12 #1 | `submit_and_exit_seen` without submitId → INSUFFICIENT_IDENTITY | Adapter handles |
+| TCE-12 #2 | `task_completion_committed` without completionId → INSUFFICIENT_IDENTITY | Adapter handles |
+| 7× | Conservation sentinel tests | All false (PRODUCTION/ELM/COMPLETION/QUEUE/PRESENTATION/MCP/MYC) |
+
+### What §21 must do (the 8 failing REDs):
+
+1. **Adapter**: add `case "continuation_started":` to `adaptRecord` (apps/vscode/src/sdk/completion-authority-elm-replay.ts around line 165). Requires both `promptId` and `runId`; missing either → INSUFFICIENT_IDENTITY.
+2. **Kernel (Authority.elm)**: extend Model to track a sequence of runs, not just `activeRun`. After `agent_turn_done`, the run moves to a closed-runs list, not just `model.activeRun = Nothing`.
+3. **Kernel (Authority.elm)**: extend Model to track a sequence of `submitId`s and `completionId`s, not just counts and the latest one.
+
+### Conservation invariants (still `false` after RED authoring):
+
+```
+PRODUCTION_SEMANTICS_CHANGED = false  (no production code touched)
+ELM_AUTHORITY_SEMANTICS_CHANGED = false  (no Elm code touched)
+COMPLETION_AUTHORITY_CHANGED = false
+QUEUE_SEMANTICS_CHANGED = false
+PRESENTATION_SEMANTICS_CHANGED = false
+MCP_CODE_CHANGED = false
+MYC_CODE_CHANGED = false
+```
+
+The RED test file imports ONLY from `../completion-authority-elm-replay*` and the Elm kernel itself. It does NOT import any production capture module (none exists). It does NOT mutate global state.

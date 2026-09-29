@@ -1,15 +1,16 @@
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — IN_PROGRESS — 2026-09-29
 
-**Status:** IN_PROGRESS. Halted at §18 RED test authoring after reviewer P0 corrections at §5/§6 (TWO passes total). First pass: identity-source contradictions. Second pass: temporal honesty contradictions.
+**Status:** IN_PROGRESS. §18 RED tests AUTHORED this commit. Reviewer C1 GO on second-pass contract (no new P0). REDs verified to FAIL on the right 8 contracts (the new ones §21 must satisfy) and PASS on the 18 contracts the existing kernel already satisfies.
 
 ```text
-ENTRY_HEAD        = b15a91f407045c832cc7dc3a8c299c59cd7b0e20 (unchanged through both sessions)
-SECTION_DONE      = §3 (PREDECESSOR GATE — GREEN), §4 (RECON — corrected this turn), §5 (IDENTITY-SOURCE MAP — corrected this turn), §6 (CAPTURE CONTRACT — corrected this turn)
-SECTION_NEXT      = §18 (RED tests TCE-01..12)
+ENTRY_HEAD        = b15a91f407045c832cc7dc3a8c299c59cd7b0e20 (unchanged through all sessions)
+SECTION_DONE      = §3 (PREDECESSOR GATE — GREEN), §4 (RECON — corrected), §5 (IDENTITY-SOURCE MAP — corrected), §6 (CAPTURE CONTRACT — corrected), §18 (RED tests AUTHORED + RED-verified: 8 fail / 18 pass)
+SECTION_NEXT      = §21 (GREEN implementation)
 ELM_BUILD         = PASS (vendor recompile)
 ELM_TEST          = PASS (20/20)
 ELM_SMOKE         = PASS
 HISTORICAL_REPLAY = PASS (20/20, EXIT=0)
+§18 RED RUN       = 8 failed | 18 passed (26 total)  [captured at 18-red-test-output.txt]
 TYPECHECK         = NOT_RUN
 VSCODE_PREPUBLISH = NOT_RUN
 DOGFOOD           = NOT_RUN

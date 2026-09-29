@@ -1,0 +1,36 @@
+
+ RUN  v4.1.10 /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/clinemm/apps/vscode
+
+ ❯ src/sdk/__tests__/completion-authority-trace-capture-extension01.test.ts (26 tests | 8 failed) 42ms
+     ✓ run_turn_started with explicit runId maps DIRECT and is observable in finalModel.runs 8ms
+     ✓ run_turn_started WITHOUT runId is INSUFFICIENT_IDENTITY (this is the prelude-time smuggling guard) 0ms
+     × continuation_started with promptId+runId maps DIRECT to Elm msg continuation_started 3ms
+     × continuation_started WITHOUT runId is INSUFFICIENT_IDENTITY (held prompt cannot join without a real run) 0ms
+     × continuation_started WITHOUT promptId is INSUFFICIENT_IDENTITY (no manufactured identity) 0ms
+     ✓ terminal_committed with jobId+ownerId but NO terminalKind is INSUFFICIENT_IDENTITY (intentional) 0ms
+     ✓ terminal_committed with terminalKind=owned is DIRECT 0ms
+     ✓ terminal_committed with terminalKind=background_not_owned is DIRECT 0ms
+     ✓ two replays differing ONLY by a would-be capture event produce the same finalModel 3ms
+     × two interleaved run sequences with distinct runIds do not cross-assign in finalModel 8ms
+     ✓ agent_turn_done with runId NOT matching activeRun is recorded as violation (TCE-08 — cross-correlation guard) 4ms
+     ✓ terminal_committed WITHOUT ownerId is INSUFFICIENT_IDENTITY 0ms
+     ✓ terminal_committed with explicit ownerId+terminalKind maps DIRECT and ownerId is preserved 0ms
+     × continuation_started for S2 with promptId+runId is DIRECT (listener pre-validation is §21 production responsibility) 0ms
+     × continuation_started without promptId is INSUFFICIENT_IDENTITY (cannot join stale prompt) 0ms
+     × two submit_and_exit_seen with distinct submitIds map DIRECT and reach kernel as two events 5ms
+     × two task_completion_committed with distinct completionIds reach kernel as two events 6ms
+     ✓ submit_and_exit_seen WITHOUT submitId is INSUFFICIENT_IDENTITY (TCE-12) 0ms
+     ✓ task_completion_committed WITHOUT completionId is INSUFFICIENT_IDENTITY 0ms
+     ✓ PRODUCTION_SEMANTICS_CHANGED must remain false through §21 0ms
+     ✓ ELM_AUTHORITY_SEMANTICS_CHANGED must remain false through §21 0ms
+     ✓ COMPLETION_AUTHORITY_CHANGED must remain false through §21 0ms
+     ✓ QUEUE_SEMANTICS_CHANGED must remain false through §21 0ms
+     ✓ PRESENTATION_SEMANTICS_CHANGED must remain false through §21 0ms
+     ✓ MCP_CODE_CHANGED must remain false through §21 0ms
+     ✓ MYC_CODE_CHANGED must remain false through §21 0ms
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 18 passed (26)
+   Start at  18:59:56
+   Duration  1.92s (transform 1.12s, setup 1.79s, import 15ms, tests 42ms, environment 0ms)
+

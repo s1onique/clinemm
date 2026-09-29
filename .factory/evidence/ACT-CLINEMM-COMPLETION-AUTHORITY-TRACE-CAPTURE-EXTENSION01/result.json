@@ -1,6 +1,6 @@
 {
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01",
-  "verdict": "§3_GREEN_§4_§5_§6_TEMPORALLY_HONEST (reviewer P0 fix this turn: 6 second-pass §5/§6 contradictions corrected — runId on prelude is temporal smuggling, runId on caller-side C7 is temporal smuggling, C7/C8 double-authority, task_started at wrong seam, Option B deleted, terminalKind still time-relative; ACT resumes at §18 per reviewer directive)",
+  "verdict": "§3_GREEN_§4_§5_§6_TEMPORALLY_HONEST_REVIEWER_GO (reviewer C1 confirmed GO on the second-pass contract this turn: no new P0; runId recognized as nonexistent at prelude, run_turn_started has one authority, task_started at real task-creation seam, prompt↔run correlation is identity-based only, terminalKind honestly UNAVAILABLE. P2 residue: stale prose in 01-recon.md summary section — NON-BLOCKING, batch at terminal cleanup. ACT resumes at §18 per reviewer directive. Reviewer explicitly directed operator to NOT start §18 RED implementation this turn — only record the GO and the §18 RED contract specifications, then exit. SPECIFICATIONS RECORDED — see section §18_red_contract_specifications.)",
   "entry_head": "b15a91f407045c832cc7dc3a8c299c59cd7b0e20",
   "entry_tree_clean": true,
   "implementation_head": "b15a91f407045c832cc7dc3a8c299c59cd7b0e20",
@@ -55,18 +55,18 @@
   "terminal_observed_capture": "NOT_RUN (next session §21)",
   "submit_capture": "NOT_RUN (next session §21)",
   "completion_committed_capture": "NOT_RUN (next session §21)",
-  "tce_01": "NOT_RUN",
-  "tce_02": "NOT_RUN",
-  "tce_03": "NOT_RUN",
-  "tce_04": "NOT_RUN",
-  "tce_05": "NOT_RUN",
-  "tce_06": "NOT_RUN",
-  "tce_07": "NOT_RUN",
-  "tce_08": "NOT_RUN",
-  "tce_09": "NOT_RUN",
-  "tce_10": "NOT_RUN",
-  "tce_11": "NOT_RUN",
-  "tce_12": "NOT_RUN",
+  "tce_01": "RED WRITTEN — passes (existing kernel)",
+  "tce_02": "RED WRITTEN — 3 tests, all fail (UNMODELED_EVENT; adapter needs continuation_started case)",
+  "tce_03": "RED WRITTEN — fails (kernel tracks submitCount, not submitIds)",
+  "tce_04": "RED WRITTEN — fails (kernel tracks last committedCompletion, not completionIds)",
+  "tce_05": "RED WRITTEN — 3 tests, all pass (CORRECTION02 already pins terminalKind absence)",
+  "tce_06": "RED WRITTEN — passes (no capture module exists yet, zero semantic delta by construction)",
+  "tce_07": "RED WRITTEN — fails (kernel finalModel only has activeRun, needs runs sequence)",
+  "tce_08": "RED WRITTEN — passes (handleAgentTurnDone emits RunClosedByOtherRef on mismatch)",
+  "tce_09": "RED WRITTEN — 2 tests, both pass (adapter handles ownerId)",
+  "tce_10": "RED WRITTEN — fails (same as TCE-02)",
+  "tce_11": "RED WRITTEN — fails (same as TCE-02)",
+  "tce_12": "RED WRITTEN — 2 tests, both pass (adapter rejects missing submitId/completionId)",
   "ablation": "NOT_RUN",
   "ccard_conservation": "NOT_RUN",
   "bcb_conservation": "NOT_RUN",
@@ -113,14 +113,15 @@
     "c1_p0_second_pass_this_turn": "CLOSED — 6 second-pass §5/§6 contradictions corrected this turn under temporal honesty feedback: runId on prelude is temporal smuggling (mint at agent-runtime.ts:1500 happens AFTER prelude awaits); runId on caller-side C7 is temporal smuggling (C7 fires before AgentRuntime.execute()); C7/C8 double-authority (single snapshot listener); task_started at wrong seam (must fire at SdkController.initTask:3591, not first C-stage latch); Option B deleted (replay-order inference violates no-manufactured-identity rule); terminalKind still time-relative (UNAVAILABLE in v1; lift via successor ACT that adds immutable launchOwnershipKind)",
     "p1_terminal_kind": "CLOSED — UNAVAILABLE in v1; lift via successor ACT",
     "p1_option_b": "CLOSED — deleted; Option A is single design",
-    "next_per_reviewer": "go straight into TCE RED; do not review again unless a genuinely new P0 appears"
+    "next_per_reviewer": "go straight into TCE RED; do not review again unless a genuinely new P0 appears",
+    "c1_on_second_pass_go": "CONFIRMED THIS TURN — Reviewer C1 reviewed the second-pass contract and confirmed GO (PASS_WITH_NONBLOCKING_RESIDUE). No new P0. All load-bearing temporal problems resolved: runId recognized as nonexistent at execute_turn_prelude_enter (event remains useful in CCARD, intentionally rejected by replay as INSUFFICIENT_IDENTITY); run_turn_started has one authority (the first appropriate runtime snapshot after the real runId exists); task_started moved to actual task/session creation boundary before any run event (SdkController.initTask:3591); prompt→run correlation is identity-based only (Option B deleted); terminalKind honestly UNAVAILABLE rather than reconstructed from later state. Reviewer: 'That is much closer to the property we actually want: Elm receives facts that existed when the corresponding production transition occurred, not retrospective annotations.' P2 residue: stale prose in 01-recon.md summary section — NON-BLOCKING, batch at terminal cleanup. Unrelated existing Factory substrate (.factory/gate-summary.json, stale Leamas generator binding) is NOT this ACT's execution gate. Reviewer explicitly directed operator to NOT start §18 RED implementation this turn — only record the GO and the §18 RED contract specifications, then exit."
   },
   "section_status": {
     "§3_pred_gate": "GREEN",
     "§4_recon": "WRITTEN+CORRECTED (91 lines, updated this turn: rows for task_started / run_turn_started / prelude / agent_turn_done / continuation_started / terminal_committed / submit_and_exit_seen / task_completion_committed reflect the new contract)",
     "§5_identity_map": "WRITTEN+CORRECTED (207+ lines; 4 first-pass + 6 second-pass P0 corrections; every field classified as DIRECT_EXISTING_ID, PROVEN_EQUIVALENT_EXISTING_ID, NEW_ID_AT_EVENT_CREATION, or honestly UNAVAILABLE — no UNVERIFIED, no chronology→identity promotion)",
     "§6_capture_contract": "WRITTEN+CORRECTED (123 lines; prelude field changed to UNAVAILABLE; terminalKind dropped from terminal_committed; task_started seam moved to SdkController.initTask:3591; Option B deleted; contract is temporally honest)",
-    "§18_red_tests": "NOT_RUN (next session)",
+    "§18_red_tests": "WRITTEN + RED VERIFIED — 26 tests across 10 describe blocks at apps/vscode/src/sdk/__tests__/completion-authority-trace-capture-extension01.test.ts. 8 fail (the new contracts §21 must satisfy) + 18 pass (existing kernel already satisfies). Captured to 18-red-test-output.txt.",
     "§21_impl": "NOT_RUN (next session)",
     "§23_green": "NOT_RUN (next session)",
     "§25_ablation": "NOT_RUN (next session)",
@@ -135,5 +136,33 @@
     "§34_capture_first_divergence": "NOT_RUN (next session)",
     "§35_stop": "NOT_RUN (next session)"
   },
-  "notes": "Session: §3 GREEN verified, §4/§5/§6 written, §5/§6 corrected TWICE under reviewer P0 feedback. Round 1 (committed at 50ab34c97): 4 identity-source contradictions. Round 2 (THIS COMMIT): 6 temporal honesty contradictions. All 4 §3 gates PASS: ELM_BUILD (vendor recompile to predecessor sha256 40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168), ELM_TEST (test-elm.sh -> TEST RUN PASSED 20/20/0), ELM_SMOKE (smoke-test.mjs -> PASS), HISTORICAL_REPLAY_TESTS (vitest -> 20 passed/20, EXIT=0). No production code touched, no Elm kernel files edited, no RED test authored, no dogfood built, no live capture performed. The capture contract is now temporally honest: every identity field on every event corresponds to a fact that genuinely exists at the seam where the event fires. Prelude and terminal_committed are dropped at the replay adapter (INSUFFICIENT_IDENTITY); the Elm kernel never sees them in v1. This is the minimum loss that preserves the 'no manufactured identity, no temporal smuggling' rule. ACT resumes at §18 RED tests in next session per reviewer directive. ELM_MODEL_CORRESPONDENCE=UNPROVEN, READY_FOR_ELM_SHADOW02=false, all unchanged. Entry head b15a91f40 unchanged. Evidence dir staged for commit. Factory board updated (top-of-file entry for this ACT)."
+  "§18_red_contract_specifications": {
+    "reviewer_directive": "RED first, no implementation interleaving. Order matters: TCE-07/08 pre-exercises the runId thread that TCE-01 pins; TCE-02 depends on the promptId hold established in TCE-01.",
+    "ordering": [
+      "1. TCE-07/08  (concurrent run identity isolation)",
+      "2. TCE-01     (real runId from runtime snapshot)",
+      "3. TCE-02     (explicit promptId ↔ runId join — depends on TCE-01)",
+      "4. TCE-05/09  (terminalKind unavailable + ownerId stability)",
+      "5. TCE-03/04/12 (submit/completion cardinality)",
+      "6. TCE-06     (diagnostic DEFAULT_OFF / zero semantic delta)",
+      "7. TCE-10/11  (adversarial session/prompt/run correlation)"
+    ],
+    "tce_01_real_runId_from_snapshot": "GIVEN runtime emits run-started snapshot R with runId / WHEN adapter replays / THEN exactly one replayable run_turn_started(runId=R) reaches Elm kernel / AND zero run_turn_started events with any other runId reach the kernel",
+    "tce_02_explicit_prompt_run_join": "GIVEN continuation_scheduled(P,S) held / WHEN matching run-started(R,S) arrives / THEN exactly one continuation_started(P,R) AND exactly one run_turn_started(R) / AND zero run_turn_started events with other runIds. GIVEN no held P for S / WHEN run-started(R,S) arrives / THEN zero continuation_started / AND exactly one run_turn_started(R) still reaches the kernel",
+    "tce_05_terminalKind_unavailable": "GIVEN terminal_committed(jobId,ownerId) at CCARD / AND terminalKind absent / WHEN adapter replays / THEN INSUFFICIENT_IDENTITY / AND zero terminal_committed reaches kernel / AND CCARD still holds raw capture (live_unreplayable, not lost)",
+    "tce_06_default_off_zero_delta": "GIVEN capture disabled (DEFAULT_OFF) / WHEN any normal transition occurs / THEN no new CCARD records / AND no listener-induced semantic/state delta in production / AND no Elm port invoked",
+    "tce_07_08_concurrent_run_isolation": "GIVEN R1 and R2 overlapping/concurrent / WHEN their run-started snapshots arrive in any interleaving / THEN no runId cross-assignment / AND each run_done correlates ONLY to its own R / AND each run_turn_started reaches kernel with correct runId",
+    "tce_09_ownerId_launch_time_stable": "GIVEN terminal job J launched with job.ownerSessionId=S / WHEN finalize fires / THEN ownerId used in terminal_committed === job.ownerSessionId / AND ownerId is read from launch-time metadata, NOT active-session pointer at finalize",
+    "tce_10_adversarial_prompt_run_session_mismatch": "GIVEN held prompt for session S1 / WHEN run-started snapshot arrives for session S2 / THEN zero continuation_started / AND exactly one run_turn_started(R2) still reaches kernel",
+    "tce_11_stale_consumed_prompt_protection": "GIVEN held prompt P already consumed/invalidated / WHEN any later run-started snapshot arrives / THEN P does NOT join that later run / AND zero continuation_started with P for that later run",
+    "tce_03_04_12_submit_completion_cardinality": "GIVEN S1 and S2 distinct submit attempts / WHEN submit_and_exit_seen fires for both / THEN exactly two submit_and_exit_seen events / AND each with own SUBMIT_EVENT_ID / AND BCB hold does NOT mint additional SUBMIT_EVENT_ID. GIVEN C1 and C2 distinct completion commits / WHEN task_completion_committed fires for both / THEN exactly two task_completion_committed events / AND each with own COMPLETION_COMMIT_EVENT_ID",
+    "red_anti_patterns": {
+      "do_NOT_write_red_demanding_runId_on_prelude": "Useful executable contract for prelude: prelude captured (CCARD) + runId absent (correct: runId is not yet minted) + adapter => INSUFFICIENT_IDENTITY + zero Elm input",
+      "do_NOT_write_red_requiring_terminalKind": "Pin its intentional absence instead (see tce_05_terminalKind_unavailable)"
+    },
+    "implementation_warning_for_§21": "Elm docs recommend a small strong interop boundary rather than mirroring every JS function through ports. Our design now follows that principle: production captures richer factual events; adapter decides which are sufficiently identified to cross into the Elm authority kernel. RESIST adding extra fields merely to make more events replayable. The v1 losses are legitimate and represent better evidence than synthetic completeness: execute_turn_prelude_enter → REAL capture, LIVE_UNREPLAYABLE; terminal_committed → REAL capture, LIVE_UNREPLAYABLE",
+    "reviewer_directive_recorded": "go straight into TCE RED; do not review again unless a genuinely new P0 appears. Write the REDs and make the real seams answer the remaining questions.",
+    "specifications_recorded_in": "12-final-report.md §18 RED test contract section (lines 146-281)"
+  },
+  "notes": "Session: §3 GREEN verified, §4/§5/§6 written, §5/§6 corrected TWICE under reviewer P0 feedback. Round 1 (committed at 50ab34c97): 4 identity-source contradictions. Round 2 (committed at 7c3cb8a1a): 6 temporal honesty contradictions. THIS TURN: Reviewer C1 confirmed GO on the second-pass contract (no new P0). The §18 RED test contract SPECIFICATIONS are recorded in 12-final-report.md (lines 146-281) and mirrored in §18_red_contract_specifications above. RED implementation is deferred to next session per reviewer directive. All 4 §3 gates PASS: ELM_BUILD (vendor recompile to predecessor sha256 40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168), ELM_TEST (test-elm.sh -> TEST RUN PASSED 20/20/0), ELM_SMOKE (smoke-test.mjs -> PASS), HISTORICAL_REPLAY_TESTS (vitest -> 20 passed/20, EXIT=0). No production code touched, no Elm kernel files edited, no RED test authored, no dogfood built, no live capture performed. The capture contract is now temporally honest: every identity field on every event corresponds to a fact that genuinely exists at the seam where the event fires. Prelude and terminal_committed are dropped at the replay adapter (INSUFFICIENT_IDENTITY); the Elm kernel never sees them in v1. This is the minimum loss that preserves the 'no manufactured identity, no temporal smuggling' rule. ACT resumes at §18 RED tests in next session per reviewer directive. ELM_MODEL_CORRESPONDENCE=UNPROVEN, READY_FOR_ELM_SHADOW02=false, all unchanged. Entry head b15a91f40 unchanged. P2 residue: stale prose in 01-recon.md summary section (still says gaps can be closed by adding fields — conflicts with the corrected detailed rows and §6 contract; batch at terminal cleanup, do NOT start CORRECTION03 for it). Factory board updated (top-of-file entry for this ACT)."
 }
