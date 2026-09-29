@@ -280,61 +280,147 @@ terminal_committed         → REAL capture, LIVE_UNREPLAYABLE
 
 **No implementation interleaving. All 12 REDs fail first. Only then does §21 GREEN begin.**
 
-## §18 RED TEST RESULTS (THIS COMMIT — RED-first contract verified)
 
-The §18 RED tests have been authored at `apps/vscode/src/sdk/__tests__/completion-authority-trace-capture-extension01.test.ts` (720 lines, 26 tests across 10 describe blocks). Captured output: `18-red-test-output.txt`.
+## §18 RED TEST RESULTS — CORRECTION01 (THIS COMMIT)
+
+The §18 RED test file has been **rewritten** to address the reviewer P0:
+- The original 8 REDs demanded Elm Model history arrays (forbidden).
+- The original 8 REDs exercised `adaptRecord(syntheticJson)` (wrong seam).
+- CORRECTION01 splits the file into TWO sections:
+
+  **Section A** — Adapter/Kernel contract tests (legitimate):
+    - 21 tests using the real `adaptRecord` and `replayTrace` APIs
+    - 18 GREEN (existing kernel/adapter behavior locks in)
+    - 3 RED (TCE-02 — the legitimate `continuation_started` adapter gap)
+
+  **Section B** — Real production-seam REDs (the §21 work):
+    - 15 tests using the real production CCARD module
+      (`captureContinuationCardinalityAuthorityRecord`, etc.)
+    - Source-presence assertions on real production files
+      (`SdkController.ts`, `command-job-manager.ts`,
+      `sdk-session-event-coordinator.ts`,
+      `continuation-cardinality-authority.ts`)
+    - 13 RED (TCE-P01..P06 — the §21 implementation work)
+    - 2 GREEN (TCE-P07 — DEFAULT_OFF already correct)
+
+### Final test result
 
 ```text
 Test Files  1 failed (1)
-Tests       8 failed | 18 passed (26)
+Tests       13 failed | 23 passed (36)
 ```
 
-### Tests that fail (the new contracts §21 must satisfy):
+### Section A — adapter/kernel contract (21 tests, 18 GREEN + 3 RED)
 
-| # | Test | Why it fails (this is the §21 work) |
-|---|---|---|
-| TCE-02 #1 | `continuation_started` with promptId+runId → DIRECT | Adapter has no `continuation_started` case; currently `UNMODELED_EVENT` |
-| TCE-02 #2 | `continuation_started` without runId → INSUFFICIENT_IDENTITY | Same — adapter has no case; falls through to UNMODELED |
-| TCE-02 #3 | `continuation_started` without promptId → INSUFFICIENT_IDENTITY | Same |
-| TCE-07/08 | Two interleaved runs R1, R2 in finalModel.runs | Kernel finalModel only tracks `activeRun`; needs `runs: List RunRef` |
-| TCE-10 | `continuation_started` for S2 with promptId+runId → DIRECT | Same as TCE-02 |
-| TCE-11 | `continuation_started` without promptId → INSUFFICIENT_IDENTITY | Same as TCE-02 |
-| TCE-03 | Two `submit_and_exit_seen` both appear in finalModel | Kernel only keeps `submitCount`, not the submitId sequence |
-| TCE-04 | Two `task_completion_committed` both appear in finalModel | Kernel only keeps last `committedCompletion`, not the completionId sequence |
+GREEN (adapter/kernel already correct, must remain stable through §21):
+- TCE-01 ×2: `adaptRecord` correctly handles run_turn_started with/without runId
+- TCE-05 ×3: terminalKind absence pinned by CORRECTION02
+- TCE-06 ×1: kernel ignores UNMODELED_EVENT for terminal task state
+- TCE-08 ×1: kernel rejects mismatched runId via ELM_REJECTS_TS_SEQUENCE
+- TCE-09 ×2: ownerId path (missing/explicit both correct)
+- TCE-12 ×2: submit/completion identity guards correct
+- Conservation ×7: all false (PRODUCTION/ELM/COMPLETION/QUEUE/PRESENTATION/MCP/MYC)
 
-### Tests that PASS (existing kernel already satisfies these contracts):
+RED (the legitimate adapter contract gap):
+- TCE-02 ×3: `adaptRecord` has NO case for `continuation_started` → all such
+  records are UNMODELED_EVENT today. §21 must add the case.
 
-| # | Test | Why it passes (already correct) |
-|---|---|---|
-| TCE-01 #1 | `run_turn_started` with runId → DIRECT + observable in finalModel | `handleRunStarted` at Authority.elm:150-169 already sets `activeRun` |
-| TCE-01 #2 | `run_turn_started` without runId → INSUFFICIENT_IDENTITY | Adapter CORRECTION02 already rejects |
-| TCE-05 #1 | `terminal_committed` without terminalKind → INSUFFICIENT_IDENTITY | CORRECTION02 already pins this |
-| TCE-05 #2 | `terminal_committed` terminalKind=owned → DIRECT | Adapter handles |
-| TCE-05 #3 | `terminal_committed` terminalKind=background_not_owned → DIRECT | Adapter handles |
-| TCE-06 | Default-off / zero semantic delta | Production has no capture module for these stages yet |
-| TCE-08 | Mismatched agent_turn_done.runId → recorded as violation | `handleAgentTurnDone` at Authority.elm:176-204 emits `RunClosedByOtherRef` |
-| TCE-09 #1 | `terminal_committed` without ownerId → INSUFFICIENT_IDENTITY | Adapter handles |
-| TCE-09 #2 | `terminal_committed` with ownerId+terminalKind → DIRECT | Adapter handles |
-| TCE-12 #1 | `submit_and_exit_seen` without submitId → INSUFFICIENT_IDENTITY | Adapter handles |
-| TCE-12 #2 | `task_completion_committed` without completionId → INSUFFICIENT_IDENTITY | Adapter handles |
-| 7× | Conservation sentinel tests | All false (PRODUCTION/ELM/COMPLETION/QUEUE/PRESENTATION/MCP/MYC) |
+### Section B — real production-seam (15 tests, 2 GREEN + 13 RED)
 
-### What §21 must do (the 8 failing REDs):
+GREEN (production seam already correct, must remain stable through §21):
+- TCE-P07 ×2: `captureEnabled = false` at module load; capture is OFF by default
 
-1. **Adapter**: add `case "continuation_started":` to `adaptRecord` (apps/vscode/src/sdk/completion-authority-elm-replay.ts around line 165). Requires both `promptId` and `runId`; missing either → INSUFFICIENT_IDENTITY.
-2. **Kernel (Authority.elm)**: extend Model to track a sequence of runs, not just `activeRun`. After `agent_turn_done`, the run moves to a closed-runs list, not just `model.activeRun = Nothing`.
-3. **Kernel (Authority.elm)**: extend Model to track a sequence of `submitId`s and `completionId`s, not just counts and the latest one.
+RED (the §21 production implementation work):
+- TCE-P01 ×2: `runId` not yet on CCARD record; subscriber not yet wired
+- TCE-P02 ×2: `continuation_started` not in stage union; not yet captured
+- TCE-P03 ×3: `task_started` not in stage union; not yet wired at SdkController.initTask:3591
+- TCE-P04 ×2: `ownerId` not yet on terminal_committed CCARD; not yet threaded from CommandJobManager
+- TCE-P05 ×2: `submitId` not yet on CCARD record; not yet threaded from C9
+- TCE-P06 ×2: `completionId` not yet on CCARD record; not yet threaded from C10
 
-### Conservation invariants (still `false` after RED authoring):
+### Section B RED seam validation
+
+Each §B RED exercises the REAL production seam, not synthetic adapter input:
+- TCE-P01/P02/P03/P04/P05/P06 runtime tests drive the REAL
+  `captureContinuationCardinalityAuthorityRecord` production helper
+  and read the REAL `getContinuationCardinalityAuthorityCaptureRecords` ring.
+  They observe the missing-field behavior (silent drop or throw on
+  unknown stage) and assert the §21 post-condition (field preserved in ring).
+- TCE-P03 source test reads REAL `SdkController.ts` and asserts the wiring
+  pattern (`stage: "task_started"` + `captureContinuationCardinalityAuthorityRecord`)
+  exists in the post-`taskStart.initTask` block at ~L3591.
+- TCE-P04 source test reads REAL `command-job-manager.ts` and asserts
+  `ownerId` appears in the `terminal_committed` capture block.
+- TCE-P05 source test reads REAL `sdk-session-event-coordinator.ts` and
+  asserts `submitId` appears in the `submit_and_exit_seen` capture block.
+- TCE-P06 source test reads REAL `sdk-session-event-coordinator.ts` and
+  asserts `completionId` appears in the `task_completion_committed` block.
+
+### What §21 must do (the 13 REDs, scope-corrected per reviewer P0):
+
+1. **CCARD record type** (`continuation-cardinality-authority.ts`):
+   - Add `runId?: string` to `ContinuationCardinalityStage` record type (P01).
+   - Add `ownerId?: string` to record type (P04).
+   - Add `submitId?: string` to record type (P05).
+   - Add `completionId?: string` to record type (P06).
+   - Add `"continuation_started"` and `"task_started"` to the stage union (P02, P03)
+     and corresponding entries in `stageCounters`.
+
+2. **Helper signature** (`captureContinuationCardinalityAuthorityRecord`):
+   - Thread the new optional fields through to the ring record.
+
+3. **Production wiring** (real seams):
+   - **P01**: subscribe at `VscodeSessionHost.subscribeRuntimeEvents` (the
+     sole authority for `run-started` → emit `run_turn_started` with `runId`).
+   - **P02**: in the subscribeRuntimeEvents listener, when a `run-started`
+     arrives for a session that currently holds a prompt, emit
+     `continuation_started { promptId, runId }`.
+   - **P03**: at `SdkController.initTask:3591` (post `taskStart.initTask`),
+     emit `task_started { sessionId, taskId: sessionId }`.
+   - **P04**: at `CommandJobManager.finalize`'s `terminal_committed`
+     capture, pass `ownerSessionId` as `ownerId`.
+   - **P05**: at C9 capture site, pass `submitId`.
+   - **P06**: at C10 capture site, pass `completionId`.
+
+4. **NOT in §21** (per reviewer prohibition):
+   - DO NOT touch `Authority.elm`/`Domain.elm`/`Codec.elm`/`Main.elm`.
+   - DO NOT add `runs`/`submitIds`/`completionIds` arrays to Elm Model.
+   - The kernel's existing identity guards (TCE-08 cross-correlation) are
+     sufficient — no Model expansion needed.
+
+### What §21 must NOT do (forbidden by reviewer P0)
+
+- DO NOT touch the Elm kernel.
+- DO NOT add Elm history arrays (`runs`, `submitIds`, `completionIds`).
+- DO NOT change the adapter's existing identity-guard behavior.
+- DO NOT change the existing CCARD stage union (only ADD `continuation_started`
+  and `task_started`).
+- DO NOT change the `captureEnabled = false` default.
+
+### RED test file location and properties
+
+**Path:** `apps/vscode/src/sdk/__tests__/completion-authority-trace-capture-extension01.test.ts` (501 lines, 36 tests across 17 describe blocks).
+
+**Imports:** Only `../completion-authority-elm-replay*` (Section A) and
+`../continuation-cardinality-authority` (Section B — REAL production module).
+No production capture module imports (none exists).
+
+**Side effects:** Section A writes synthetic JSONL files to
+`.factory/evidence/ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01/synthetic-traces/`
+and unlinks them in `afterEach`. Section B mutates the production CCARD ring
+via the documented test seams (`setContinuationCardinalityAuthorityCaptureEnabled`,
+`clearContinuationCardinalityAuthorityCapture`) and restores OFF in `afterEach`.
+
+**Conservation invariants (still `false`):**
 
 ```
-PRODUCTION_SEMANTICS_CHANGED = false  (no production code touched)
-ELM_AUTHORITY_SEMANTICS_CHANGED = false  (no Elm code touched)
-COMPLETION_AUTHORITY_CHANGED = false
-QUEUE_SEMANTICS_CHANGED = false
-PRESENTATION_SEMANTICS_CHANGED = false
-MCP_CODE_CHANGED = false
-MYC_CODE_CHANGED = false
+PRODUCTION_SEMANTICS_CHANGED          = false  (no production code touched)
+ELM_AUTHORITY_SEMANTICS_CHANGED       = false  (no Elm code touched)
+COMPLETION_AUTHORITY_CHANGED          = false  (adapter unchanged)
+QUEUE_SEMANTICS_CHANGED               = false  (vscode-session-host C7 unchanged)
+PRESENTATION_SEMANTICS_CHANGED        = false  (webview ChatRow unchanged)
+MCP_CODE_CHANGED                      = false  (McpHub unchanged)
+MYC_CODE_CHANGED                      = false  (.clinerules/ unchanged)
 ```
 
-The RED test file imports ONLY from `../completion-authority-elm-replay*` and the Elm kernel itself. It does NOT import any production capture module (none exists). It does NOT mutate global state.
+`git diff --check` clean (trailing-blank-line residue fixed).

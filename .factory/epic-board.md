@@ -1,17 +1,19 @@
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-TRACE-CAPTURE-EXTENSION01 — IN_PROGRESS — 2026-09-29
 
-**Status:** IN_PROGRESS. §18 RED tests AUTHORED this commit. Reviewer C1 GO on second-pass contract (no new P0). REDs verified to FAIL on the right 8 contracts (the new ones §21 must satisfy) and PASS on the 18 contracts the existing kernel already satisfies.
+**Status:** IN_PROGRESS. §18 CORRECTION01 RED tests AUTHORED + RED-verified. Reviewer P0 halted the first-pass and required scope correction. The corrected RED suite replaces synthetic adapter input + Elm Model expansion with REAL production-seam REDs that exercise the actual `captureContinuationCardinalityAuthorityRecord` helper + source-presence on the production files. Reviewer directive satisfied: "if production RED reproduces → C1: GO §21; if not → HALT_RED_NOT_REPRODUCED". Production REDs DID reproduce — 13 of them, each driving the real CCARD module and the real SdkController/CommandJobManager/SessionEventCoordinator source.
 
 ```text
 ENTRY_HEAD        = b15a91f407045c832cc7dc3a8c299c59cd7b0e20 (unchanged through all sessions)
-SECTION_DONE      = §3 (PREDECESSOR GATE — GREEN), §4 (RECON — corrected), §5 (IDENTITY-SOURCE MAP — corrected), §6 (CAPTURE CONTRACT — corrected), §18 (RED tests AUTHORED + RED-verified: 8 fail / 18 pass)
-SECTION_NEXT      = §21 (GREEN implementation)
-ELM_BUILD         = PASS (vendor recompile)
+SECTION_DONE      = §3 GREEN, §4 RECON, §5 IDENTITY-SOURCE MAP, §6 CAPTURE CONTRACT, §18 RED tests CORRECTION01 (13 RED + 23 GREEN / 36 total)
+SECTION_NEXT      = §21 (GREEN implementation, no further design review)
+ELM_BUILD         = PASS
 ELM_TEST          = PASS (20/20)
 ELM_SMOKE         = PASS
-HISTORICAL_REPLAY = PASS (20/20, EXIT=0)
-§18 RED RUN       = 8 failed | 18 passed (26 total)  [captured at 18-red-test-output.txt]
-TYPECHECK         = NOT_RUN
+HISTORICAL_REPLAY = PASS (20/20)
+§18 RED RUN       = 13 failed | 23 passed (36 total)  [captured at 18-correction01-test-output.txt]
+TYPECHECK         = PASS (no errors in test file)
+GIT_DIFF_CHECK    = CLEAN (no trailing-blank-line residue)
+TYPECHECK_FULL    = NOT_RUN
 VSCODE_PREPUBLISH = NOT_RUN
 DOGFOOD           = NOT_RUN
 ELM_MODEL_CORRESPONDENCE = UNPROVEN
