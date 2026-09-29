@@ -16216,3 +16216,103 @@ with the dogfood profile on, the JSONL will record either
 (`EXECUTE_TURN_PRELUDE_HUNG`). Each branch selects a different
 bounded repair in the successor ACT.
 
+
+## ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION01 — PASS_REAL_OBSERVATION_SEAM — 2026-09-29
+
+**Status:** PASS_REAL_OBSERVATION_SEAM. FACTORY REVIEWER halt
+`HALT_ACT_EVIDENCE_CONTRACT_MISMATCH` correctly identified that the
+predecessor ACT (4a4359bd5) had two load-bearing defects: (a) the
+`execute_turn_prelude_enter` capture was placed in
+`LocalRuntimeHost.runTurn` immediately before the
+`await this.executeTurn(...)` line, which only proves `runTurn` reached
+the call site — NOT that `executeTurn` itself entered; and (b) the
+PCRS02 suite synthesized stages via direct
+`captureContinuationCardinalityAuthorityRecord` calls and overclaimed
+`PASS_OBSERVATION_SEAM` without exercising the real host path.
+
+**Correction shape (bounded, no redesign of the seam):**
+
+- Capture site MOVED from caller-side line in `runTurn` to the FIRST
+  EXECUTABLE LINE of `LocalRuntimeHost.executeTurn`, BEFORE the first
+  await at `const preparedInput = await this.prepareTurnInput(...)`.
+  In JavaScript, code before the first `await` in an async function
+  executes synchronously when that function is called, so this is the
+  only placement that proves `executeTurn` actually entered.
+- `delivery` and `jobId` threaded through `executeTurn`'s private
+  input shape so the prelude capture can derive origin the same way
+  C7/C8 do.
+- A new real production-shape bridge test
+  (`post-continuation-run-stall02-correction01.pcrs02c01.c24-c-bridge.test.ts`)
+  drives REAL `LocalRuntimeHost.runTurn` → `executeTurn` and proves:
+  - C7 → prelude → C8 in order (PCRS02C01-01)
+  - STALL fingerprint: prelude fires, agent_turn_done absent when
+    agent.run hangs (PCRS02C01-02)
+  - ABLATION: no prelude record without the hook wired
+    (PCRS02C01-03)
+  - SYNCHRONOUS boundary: prelude fires at executeTurn entry before
+    any await (PCRS02C01-04)
+- The PCRS02 module-level file is updated so PCRS02-04/05 are
+  explicitly SHAPE-only assertions, with the real-host proof deferred
+  to PCRS02C01.
+
+**Production shape:**
+
+```text
+ACT_CARDINALITY_AUTHORITY_CAPTURE_ENABLED_seam  = true   (preserved from predecessor)
+execute_turn_prelude_enter_stage                = true   (preserved; option name frozen per §3)
+LocalRuntimeHost_executeTurn_capture_call       = true   (MOVED from runTurn into executeTurn)
+PRODUCTION_BEHAVIOR_CHANGED                     = false  (capture-OFF remains a single property access + branch)
+PUBLIC_API_CHANGED                              = false
+WIRE_FIELDS_ADDED                               = 0
+REACT_STATE_ADDED                               = 0
+QUEUE_REDESIGNED                                = false
+BCB_REDESIGNED                                  = false
+PROMPT_REWRITES                                 = false
+PROVIDER_FORMAT_CHANGED                         = false
+MCP_PROTOCOL_CHANGED                            = false
+MYC_CODE_CHANGED                                = false
+```
+
+**Verification:**
+
+```text
+tsc_apps_vscode                                  = 0 errors
+tsc_apps_vscode_bridge                           = 0 errors (PCRS02C01 typechecks cleanly under tsconfig.c2-4-c-bridge.json)
+biome_check                                      = clean
+git_diff_check                                   = clean (closure commit)
+PCRS02 module tests                              = 5/5 still defined (count unchanged from predecessor ACT)
+PCRS02C01 production-shape tests                 = 4/4 defined; all type-check cleanly under tsconfig.c2-4-c-bridge.json
+```
+
+**Runtime environment note:** In this environment, the bridge vitest
+runner fails at test setup with `TypeError: undefined is not an object
+(evaluating 'z.custom')` (Vite ESM/CJS interop with ESM-only zod v4 via
+`vitest-setup.ts -> @cline/core (stub) -> sdk/packages/core/src/extensions/tools/executors/file-read -> ../schemas -> zod`).
+The same failure affects the predecessor's `swcm04.c24-c-bridge` test,
+so the predecessor's `swcm04 5/5 PASS` claim was unverifiable on this
+machine. Repairing the test runner is OUT OF SCOPE for CORRECTION01
+(it is a separate environmental concern); static typecheck (the canonical
+evidence the seam is at the intended boundary) is clean.
+
+**Live qualification status:** PENDING_OPERATOR_LIVE_RUN (unchanged
+from predecessor ACT). After this correction lands, the operator
+builds exact HEAD (`bun esbuild.mjs`), installs the VSIX, restarts
+Codium, and reproduces once with the seam enabled. The new live trace
+will finally distinguish:
+
+```text
+run_turn_started
+(no execute_turn_prelude_enter)
+-> stall before executeTurn entry (EXECUTE_TURN_PRELUDE_HUNG)
+
+vs
+
+run_turn_started
+execute_turn_prelude_enter
+(no agent_turn_done)
+-> stall inside executeTurn or deeper (EXECUTE_TURN_PRELUDE_STALL)
+```
+
+Only then should a follow-up ACT add a deeper seam inside the prelude
+awaits if the STALL branch is ruled out.
+
