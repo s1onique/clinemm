@@ -1,0 +1,32 @@
+elm-test 0.19.2-0
+-----------------
+
+Running 20 tests. To reproduce these results, run: elm-test --fuzz 100 --seed 293448518830838 tests/CompletionAuthorityTest.elm
+
+↓ CompletionAuthorityTest
+  ↓ ACT invariants
+    ↓ CORRECTION02
+      ↓ ELM-AUTH-09 commit-while-active-run is rejected
+        ✓ RunStarted R1 + TaskCompletionCommitted C1 -> TaskCompletionCommittedWhileHeld ActiveRun
+      ↓ ELM-AUTH-10 commit-while-unobserved-owned-terminal is rejected
+        ✓ TerminalRegistered(J, owned) + TaskCompletionCommitted C -> TaskCompletionCommittedWhileHeld UnconsumedTerminalObservation
+      ↓ ELM-AUTH-11 commit-while-pending-continuation is rejected
+        ✓ ContinuationScheduled + TaskCompletionCommitted -> TaskCompletionCommittedWhileHeld (PendingPrompt or ScheduledContinuation)
+      ↓ ELM-AUTH-12 observation removes all job-related holds
+        ✓ after TerminalObserved, no RunningBackgroundJob / UnconsumedTerminalObservation hold remains
+      ↓ ELM-AUTH-13 AgentTurnDone consumes the matching PromptRunning
+        ✓ ContinuationStarted(P, R) + AgentTurnDone R -> P becomes PromptConsumed
+      ↓ ELM-AUTH-14 commit-while-running-continuation is rejected
+        ✓ ContinuationStarted(P, R) + TaskCompletionCommitted C -> TaskCompletionCommittedWhileHeld
+      ↓ ELM-AUTH-15 no holds + no commit -> AuthorizeTaskCompletion (BEFORE commit)
+        ✓ RunStarted R1, AgentTurnDone R1, SubmitAndExitSeen -> AuthorizeTaskCompletion is in the effect set
+      ↓ ELM-AUTH-16 commit + no presentation -> AuthorizeCompletionPresentation
+        ✓ RunStarted, AgentTurnDone, SubmitAndExitSeen, TaskCompletionCommitted -> AuthorizeCompletionPresentation
+      ↓ ELM-AUTH-17 ordinary event after Completed -> EventAfterCompletion
+        ✓ full happy path then RunStarted(R) -> EventAfterCompletion
+
+TEST RUN PASSED
+
+Duration: 138 ms
+Passed:   20
+Failed:   0

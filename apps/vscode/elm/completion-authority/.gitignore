@@ -1,0 +1,16 @@
+# Elm build artifacts and local package cache.
+# Source files (src/, tests/, elm.json, vendor/elm, scripts/) are tracked.
+# Compiled JS is reproducible via `scripts/build-elm.sh`.
+
+# Cache of staged packages from fetch-elm-packages.sh.
+.elm-home/
+
+# Elm compiler's own scratch directory (per-project build artifacts).
+elm-stuff/
+
+# Generated JS artifacts (produced by `elm make`).
+vendor/*.js
+vendor/*.sha256
+!vendor/.gitkeep
+!vendor/elm
+!vendor/elm.sha256
