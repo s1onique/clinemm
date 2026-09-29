@@ -4,7 +4,7 @@
   "entry_head": "766f47ff692fd78f54ebefa751f403ffc36e1384",
   "implementation_head": "f7811739e620c5f7238706f9d0cb494f680da3fc",
   "subject_head": "f7811739e620c5f7238706f9d0cb494f680da3fc",
-  "closure_head": "UNCOMMITTED (board row commit, post-this-evidence)",
+  "closure_head": "eef66c9612a2c73e3952d35bcd4fbc3e52f8676e",
 
   "diagnostics_default_off": true,
   "production_semantics_changed": false,
