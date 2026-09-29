@@ -373,6 +373,23 @@ export default defineConfig({
 			reportsDirectory: "./coverage",
 		},
 	},
+	// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION02:
+	// PCRS02 module-level shape tests transitively pull zod
+	// through `import { z } from "zod"` inside SDK source
+	// modules they exercise (e.g. `@cline/shared` schema code).
+	// Vite/Vitest 4.1.10's module runner picks the CJS entry
+	// `index.cjs` over the `import` ESM entry, leaving
+	// `z.custom`, `z.object`, etc. undefined. `optimizeDeps`
+	// pre-bundles zod and `ssr.noExternal` forces the SSR
+	// runtime to take the named-export ESM shape so the
+	// destructured `z` works under ESM-style import.
+	optimizeDeps: {
+		include: ["zod"],
+		force: true,
+	},
+	ssr: {
+		noExternal: ["zod"],
+	},
 	resolve: {
 		alias: {
 			// ACT-CLINEMM-COMMAND-RISK-CLASSIFICATION02-PARSER-HELPER-SHIPPING01:

@@ -409,6 +409,26 @@ export default defineConfig({
 		],
 		testTimeout: 30_000,
 	},
+	optimizeDeps: {
+		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION02:
+		// Pre-bundle zod so Vite's module runner correctly resolves
+		// the named `import { z } from "zod"` for SDK source files
+		// pulled in via the `@cline-internal/core/...` aliases.
+		// Without this, Vite picks the CJS entry (`index.cjs`) and
+		// the named `z` arrives as a namespace whose `.custom`
+		// and `.object` properties are undefined under ESM-style
+		// destructuring, breaking every test that touches real
+		// SDK code (PCRS02C01 included).
+		include: ["zod"],
+		force: true,
+	},
+	ssr: {
+		// ACT-CLINEMM-POST-CONTINUATION-RUN-STALL02-CORRECTION02:
+		// Vite/Vitest test runs go through the SSR runtime; tell
+		// SSR to externalize zod so the resolved path is the
+		// package.json `import` ESM entry (not the `main` CJS).
+		noExternal: ["zod"],
+	},
 	resolve: {
 		alias: {
 			"@cline-internal/core/runtime/host/local-runtime-host": sdkCoreHost,
