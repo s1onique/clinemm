@@ -1,12 +1,12 @@
 ## ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01 — CAPTURE_INSUFFICIENT — 2026-09-29
 
 **Status:** CAPTURE_INSUFFICIENT (verdict D per §39). Replay adapter +
-test committed; 18/18 PASS.
+test committed; 20/20 PASS at CORRECTION02 closure.
 
 ```text
 ENTRY_HEAD        = a1d8e03e5fc206e4beef1c680e75f984e6421ed2
-SUBJECT_HEAD      = 155237a586b0f10d73dee683dc8aaa83bd436c98
-CLOSURE_HEAD      = 155237a586b0f10d73dee683dc8aaa83bd436c98
+SUBJECT_HEAD      = 303a40d9861fbd88dbb9f484f40813aa5e2d3f2d
+CLOSURE_HEAD      = 303a40d9861fbd88dbb9f484f40813aa5e2d3f2d
 KERNEL_SUBJECT    = 7f7e74bcbb51c5bddb5f65610e04773e82c25c2d (executable Elm kernel, unchanged)
 ```
 
