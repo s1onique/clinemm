@@ -5,8 +5,8 @@ test committed; 18/18 PASS.
 
 ```text
 ENTRY_HEAD        = a1d8e03e5fc206e4beef1c680e75f984e6421ed2
-SUBJECT_HEAD      = <git rev-parse HEAD at ACT closure>
-CLOSURE_HEAD      = <git rev-parse HEAD at ACT closure>
+SUBJECT_HEAD      = a9903bc0b69cae8c6ad7d953e7266161b503f124
+CLOSURE_HEAD      = a9903bc0b69cae8c6ad7d953e7266161b503f124
 KERNEL_SUBJECT    = 7f7e74bcbb51c5bddb5f65610e04773e82c25c2d (executable Elm kernel, unchanged)
 ```
 

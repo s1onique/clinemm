@@ -2,8 +2,8 @@
   "act": "ACT-CLINEMM-COMPLETION-AUTHORITY-ELM-HISTORICAL-REPLAY01",
   "verdict": "CAPTURE_INSUFFICIENT",
   "entry_head": "a1d8e03e5fc206e4beef1c680e75f984e6421ed2",
-  "subject_head": "see CLOSURE_HEAD below (replay adapter + test commit)",
-  "closure_head": "see git rev-parse HEAD at ACT closure",
+  "subject_head": "a9903bc0b69cae8c6ad7d953e7266161b503f124",
+  "closure_head": "a9903bc0b69cae8c6ad7d953e7266161b503f124",
   "kernel_subject_head": "7f7e74bcbb51c5bddb5f65610e04773e82c25c2d",
   "kernel_sha256_vendor": "40aeeb28fefcf49c4b9efae4a917e8076a9af3ebbc8caff67c1082c954d39168",
 
